@@ -63,3 +63,8 @@ BenchmarkDotNet.Artifacts/
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# Studio worktree (a separate working copy used by scheduled studio sessions)
+/.claude/worktrees/
+# Studio session lock (machine-local)
+/studio/.session.lock

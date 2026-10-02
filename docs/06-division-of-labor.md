@@ -4,6 +4,10 @@ Who does what. Claude Code writes the code, content files, and docs; the owner m
 calls, plays the game, and does anything that needs an account, a purchase, or a click in a
 GUI installer or download page.
 
+Inside "Claude", three agents split the work (see [07-studio-workflow.md](07-studio-workflow.md)):
+the **Producer** (Fable) plans, accepts, and keeps the studio's memory; **game-dev** builds;
+the **QA inspector** stress-tests. Scheduled sessions run them without the owner present.
+
 ## Claude Code builds entirely
 
 - **Simulation:** economy, units, buildings, tech tree, combat, pathfinding, fog of war,

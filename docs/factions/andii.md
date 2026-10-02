@@ -34,7 +34,7 @@ Darkness **duration +5 s**.
 | Worker | Steward | 50 | 0 | Light | 5 | Melee | 1.5 | melee | 4.0 | 14 | 65 / 0 | 1 | 14 | Hall of Night |
 | Line | Andii Blade | 170 | 3 | Heavy | 15 | Melee | 1.5 | melee | 3.4 | 14 | 80 / 25 | 1.5 | 24 | Blade Hall |
 | Ranged | Andii Longbow | 75 | 1 | Light | 11 | Pierce | 2.0 | 17 | 3.4 | 20 | 55 / 60 | 1.5 | 26 | Longbow Gallery |
-| Shock **[OPEN]** | Andii Rider | 200 | 2 | Mounted | 16 | Melee | 1.8 | melee | 6.0 | 16 | 120 / 40 | 3 | 32 | Night Stables |
+| Shock | Andii Rider | 200 | 2 | Mounted | 16 | Melee | 1.8 | melee | 6.0 | 16 | 120 / 40 | 3 | 32 | Night Stables |
 | Caster | Galain Sorcerer | 80 | 0 | Light | 12 | Magic | 2.2 | 12 | 3.2 | 16 | 130 / 65 | 3 | 36 | Galain Sanctum |
 | Heavy | Eleint-blooded Champion | 600 | 4 | Heavy | 40 | Siege | 2.5 | melee | 3.0 | 16 | 300 / 150 | 4.5 | 50 | Champion's Hall |
 | Unique | Great Raven | 90 | 0 | Light (flying) | — | — | — | — | 7.0 | 22 | 80 / 40 | 1.5 | 25 | Galain Sanctum |
@@ -43,7 +43,7 @@ Darkness **duration +5 s**.
 
 - **Andii Blade:** ×1.5 vs Mounted. Beats any template line infantry one-on-one.
 - **Andii Longbow:** the longest standard range in the game (17 m) and long sight.
-- **Andii Rider:** ×1.5 vs Light. Expensive and rare; see the open item below.
+- **Andii Rider:** ×1.5 vs Light. Expensive and rare (see the shock-slot decision below).
 - **Galain Sorcerer:** splash 1.5 m, detector 10 m. Signature ability **Darkness**.
 - **Eleint-blooded Champion:** the Andii heavy slot is a warrior, not an engine. Siege damage with
   ×2 vs all unit classes, so it is effective against units too (40 vs Light, 57 vs Heavy
@@ -60,13 +60,14 @@ Darkness **duration +5 s**.
 Darkness is larger and longer than the Whirlwind's Sandstorm but doesn't slow. Its synergy is
 with regeneration: fight inside the dark, heal inside the dark.
 
-## [OPEN] Shock slot
+## Shock slot (decided 2026-10-02: Andii Rider)
 
-The plan left open whether Andii get a shock unit at all.
+The plan left open whether Andii get a shock unit at all. Kept for the record, in case playtests
+reopen it.
 
 | Option | Pros | Cons |
 | --- | --- | --- |
-| **Andii Rider, expensive and elite (default)** | Template complete (UI, AI, counters all work); Andii can chase | Andii are infantry in the books; cavalry feels generic |
+| **Andii Rider, expensive and elite (chosen)** | Template complete (UI, AI, counters all work); Andii can chase | Andii are infantry in the books; cavalry feels generic |
 | No shock unit | Truer to the lore; stronger identity | Empty Shock Hall slot needs UI/AI special cases; no answer to raids except Longbows |
 | Replace with something non-cavalry (e.g. fast "Night Hunters" on foot) | Lore-friendly and keeps the slot | One more unique model and concept |
 

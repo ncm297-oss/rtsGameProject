@@ -59,7 +59,7 @@ table at the bottom of this page.
 | Maps | 3 hand-tuned + a seeded procedural generator |
 | Units on the field | ~100 per player, ~300-400 total |
 | Ages | 2 |
-| Resources | 2 (Gold, Wood), pending the [OPEN] item in [02](02-game-design.md#economy) |
+| Resources | 2 (Gold, Wood) |
 | Match length | 20-30 minutes at Normal difficulty |
 
 ### Explicitly out of scope ("later, maybe")
@@ -91,6 +91,12 @@ and reason) and update the affected docs in the same commit.
 | Factions | Five on a shared template: Malazan Empire, Tiste Andii, Shadow, the Whirlwind, Teblor |
 | Vertical slice | Malazan vs. Whirlwind |
 | Source control | GitHub (private) is the source of truth; Git LFS for binaries; work outside sync folders |
+| Resources | 2: Gold and Wood |
+| High ground | Yes: StarCraft 2-style vision rule (low ground can't see up) |
+| Hero units | Not in v1 |
+| Teblor ranged | Weak Javelin Thrower (no pure-melee asymmetry) |
+| Andii shock slot | Andii Rider (expensive, elite) |
+| Studio workflow | Producer (PM) agent on Fable orchestrates sessions; a separate QA inspector agent tests every change ([07](07-studio-workflow.md)) |
 
 ### Change log
 
@@ -98,6 +104,9 @@ and reason) and update the affected docs in the same commit.
 | --- | --- | --- |
 | 2026-10-02 | Building slots 9 → 10 (added Camp) | Economy needs a drop-off building separate from the Town Hall |
 | 2026-10-02 | Keyboard camera pan uses arrow keys, not WASD | WASD collides with A (attack-move), S (stop), and grid hotkeys |
+| 2026-10-02 | High-ground vision rule moved from "later, maybe" into v1 | Owner decision; terrain gains discrete elevation levels and ramps |
+| 2026-10-02 | Resources, heroes, Teblor ranged, Andii shock resolved to their defaults | Owner decision |
+| 2026-10-02 | Added the studio workflow (Producer + QA agents, scheduled sessions) | Owner wants agents to run more of the work between sessions |
 
 ## IP and naming policy
 

@@ -77,6 +77,14 @@ $env:GODOT = $exe
 & $env:GODOT --version   # expect 4.7.x.stable.mono...
 ```
 
+Apps that were already running (including the Claude desktop app) don't see a new user
+variable until they restart. So that Claude sessions always find Godot, also put the path in the
+machine-local, gitignored `.claude/settings.local.json`:
+
+```powershell
+@{ env = @{ GODOT = $exe } } | ConvertTo-Json | Set-Content -Encoding utf8 .claude\settings.local.json
+```
+
 The windowed editor is the same file name without `_console`, in the same folder. Pin it to the
 Start menu if you want to open the editor by hand (not required: Claude edits scene files as text).
 

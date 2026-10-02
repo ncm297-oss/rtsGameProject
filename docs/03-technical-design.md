@@ -140,7 +140,9 @@ rectangle (box select support for tests/AI). Buildings are also indexed in the n
 ### Navigation grid
 
 128 × 128 cells, 2 m each. Per cell: passability flags (terrain slope, building footprint, tree,
-water) and a movement cost byte (1 normal, 255 blocked). A grid `Version` counter increments
+water), a movement cost byte (1 normal, 255 blocked), and an elevation `Level` (0-2) used by the
+high-ground vision rule. The map generator builds terraced terrain: flat plateaus at multiples of
+4 m joined by ramps, with steep (impassable) plateau edges. A grid `Version` counter increments
 whenever passability changes (building placed or destroyed, tree depleted).
 
 ### Flow fields
@@ -221,6 +223,12 @@ sight every 4 ticks (staggered by index). Priority: enemies attacking me > units
 - Every 4 ticks: clear "visible" to "explored", then stamp a precomputed circle mask for each
   unit and building's sight radius, and for each detector's detection radius. Apply zone masks
   (cells inside an enemy Darkness/Sandstorm become not-visible unless the viewer is inside).
+- **High ground:** the nav grid stores a `Level` byte per cell (from map data; ramps take the
+  lower level). While stamping, a cell is marked visible only if
+  `Level[cell] <= viewerLevel || distance <= 4 m || viewer.IsFlying`. This is a per-cell compare
+  inside the existing stamping loop, not a raycast, so it costs almost nothing. Attacks fired from
+  a higher level apply a 2 s `Revealed`-to-victim flag on the attacker (visibility only for that
+  one enemy player).
 - Target validity check (used by acquisition, commands, and the AI): the target's cell is
   visible to the attacker's owner, and the target is not stealthed or is detected.
 - The AI reads the world only through a `PlayerView` facade that applies these checks.

@@ -4,7 +4,11 @@ Malazan-inspired 3D RTS. Godot 4.7 (.NET build) + C#, Windows desktop, single-pl
 Hobby/learning project: a codebase the owner understands beats a clever one.
 
 **Current milestone: M0 (environment & skeleton).** See [docs/05-roadmap.md](docs/05-roadmap.md).
-Until M0 lands the repo holds only docs. Don't write gameplay code ahead of the roadmap.
+Live status is in [studio/STATE.md](studio/STATE.md). Don't write gameplay code ahead of the roadmap.
+
+An AI studio works on this repo between the owner's sessions: `producer` (Fable) plans and
+accepts, `game-dev` builds, `qa-inspector` stress-tests. See
+[docs/07-studio-workflow.md](docs/07-studio-workflow.md). Skills: `/studio-session`, `/qa`, `/handoff`.
 
 ## Read before working
 
@@ -50,10 +54,13 @@ docs/                  design docs (source of truth for decisions)
   factions/            one page per faction
 game/                  Godot project (from M0): project.godot, RtsGame.csproj
   scenes/ scripts/ shaders/ ui/ assets/ data/
+  tests/               Godot-side test scenes (QA)
 sim/                   (from M0)
   Rts.Sim/             pure .NET 8 library: the whole game simulation + AI
-  Rts.Sim.Tests/       xUnit tests
-tools/                 asset import, map generator CLI, build/export scripts
+  Rts.Sim.Tests/       xUnit tests; Stress/ and QA/ are the QA inspector's suites
+tools/                 asset import, map generator CLI, build/export scripts; qa/ = QA tooling
+studio/                studio memory: STATE, inbox, autopilot, handoff, sessions, bugs, qa
+.claude/               agents/, skills/, settings.json (committed); worktrees/ (gitignored)
 asset-sources/         raw downloaded packs (gitignored, never committed)
 RtsGame.sln            (from M0) all C# projects
 ```
@@ -103,7 +110,12 @@ powershell -File tools/export.ps1                           # Windows release bu
 
 ## Workflow
 
-- Two machines share this repo through GitHub. `git pull` before starting, commit + push when stopping.
+- Two machines and the studio share this repo through GitHub. `git pull` before starting,
+  commit + push when stopping. The studio works in `.claude/worktrees/studio`; never edit files
+  there from an interactive session.
+- At the end of interactive work, run `/handoff` so the Producer records it for the next session.
+- Owner requests for the studio go in `studio/inbox.md`; only the Producer (or the conductor, when recording an incident) edits `studio/STATE.md`
+  and `studio/handoff.md`.
 - Small commits, imperative subject, milestone prefix: `M1: cache flow fields by target cell`.
 - Docs are the source of truth. Items tagged **[OPEN]** are the owner's call: ask, don't silently resolve.
   When a settled decision changes, update the table in `docs/01-vision.md` with the date.

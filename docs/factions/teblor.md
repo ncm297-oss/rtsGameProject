@@ -36,7 +36,7 @@ Age II, at the Bloodwood Carver, 200 G / 150 W, 45 s. Warriors and Destrier Ride
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Worker | Gatherer | 70 | 0 | Light | 6 | Melee | 1.5 | melee | 4.0 | 14 | 75 / 0 | 1 | 16 | Longhouse |
 | Line | Warrior | 320 | 2 | Giant | 22 | Melee | 1.8 | melee | 3.4 | 16 | 120 / 30 | 2 | 28 | War Lodge |
-| Ranged **[OPEN]** | Javelin Thrower | 140 | 1 | Giant | 12 | Pierce | 2.6 | 11 | 3.4 | 18 | 70 / 50 | 2 | 26 | Javelin Ground |
+| Ranged | Javelin Thrower | 140 | 1 | Giant | 12 | Pierce | 2.6 | 11 | 3.4 | 18 | 70 / 50 | 2 | 26 | Javelin Ground |
 | Shock | Destrier Rider | 360 | 2 | Mounted | 24 | Melee | 2.0 | melee | 5.6 | 16 | 160 / 60 | 3 | 36 | Stables & Kennels |
 | Caster | Shaman | 130 | 0 | Giant | 10 | Magic | 2.4 | 10 | 3.4 | 16 | 130 / 60 | 2 | 36 | Shaman's Circle |
 | Siege | Breaker | 380 | 3 | Giant | 40 | Siege | 3.0 | melee | 3.0 | 14 | 180 / 120 | 3 | 45 | Breaker's Hall |
@@ -66,11 +66,13 @@ Age II, at the Bloodwood Carver, 200 G / 150 W, 45 s. Warriors and Destrier Ride
 The aftermath slow is the trade-off: Frenzy wins fights, but a Frenzied army can't chase or
 escape right afterward.
 
-## [OPEN] Ranged unit or pure melee?
+## Ranged unit or pure melee? (decided 2026-10-02: Javelin Thrower)
+
+Kept for the record, in case playtests reopen it.
 
 | Option | Pros | Cons |
 | --- | --- | --- |
-| **Javelin Thrower, weak (default)** | Template stays complete (Ranged Hall, AI comps, UI); Teblor can hit the Andii Great Raven; some kiting answers | Less distinctive |
+| **Javelin Thrower, weak (chosen)** | Template stays complete (Ranged Hall, AI comps, UI); Teblor can hit the Andii Great Raven; some kiting answers | Less distinctive |
 | No ranged unit at all | Strong asymmetry, very Teblor | Empty Ranged Hall slot needs special cases in UI/AI; only Shamans and towers can hit flying units; hard to answer kiting |
 
 ## Buildings

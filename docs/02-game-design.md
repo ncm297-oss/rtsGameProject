@@ -58,9 +58,8 @@ can be larger than the collision radius.
 
 ## Economy
 
-**[OPEN] Number of resources.** Default: **2 (Gold and Wood)**. Alternative: Age of Empires' 4
-(food, wood, gold, stone). Two keeps the economy UI, AI, and balance small; food would add
-farms and hunting for flavor at the cost of an extra resource loop. Factions may rename
+**Two resources: Gold and Wood** (decided 2026-10-02). Age of Empires' four (food, wood, gold,
+stone) were considered; two keeps the economy UI, AI, and balance small. Factions may rename
 resources for flavor in their display text (e.g. Teblor "Bloodwood" for wood).
 
 | Rule | Value |
@@ -249,17 +248,37 @@ every tick and can modify vision. Darkness (Andii) and Sandstorm (Whirlwind) are
 - Enemy buildings seen once stay visible as "last known" ghosts in explored fog until the cell is
   seen again.
 - Vision modifiers: Darkness and Sandstorm zones hide their contents from enemies outside them
-  and blind enemies inside them.
-- **[OPEN] High-ground advantage** (StarCraft 2 style: units on lower ground can't see up a cliff
-  without a spotter). Default: **no** in v1. Terrain has slopes but no cliffs, and this rule would
-  need line-of-sight checks against height. Easy to add later as a vision rule.
+  and blind enemies inside them. High ground limits vision from below (next section).
+
+### High ground
+
+**StarCraft 2 style, in v1** (decided 2026-10-02).
+
+- Terrain has discrete **elevation levels** (4 m apart; maps use levels 0-2). Plateaus connect
+  through **ramps** (slopes of 30° or less, passable). Plateau edges steeper than 30° are
+  impassable and read as cliffs.
+- Every cell stores its level in the map data. Ramp cells count as the **lower** level they
+  connect to.
+- A unit or building sees a cell only if that cell's level is **at or below its own level**.
+  Low ground can't see up onto high ground.
+- Exceptions: flying units see every level; a cell within 4 m of the viewer is always visible
+  (you can see the lip of the ramp you're standing under); vision from your own units already on
+  the high ground works normally.
+- Attacking from high ground **reveals the attacker** to the target's owner for 2 s, so the low
+  side can shoot back or retreat instead of dying to an invisible enemy.
+- No damage bonus in v1. An Age of Empires-style elevation damage bonus is a possible tuning lever
+  later; it would be a single number in `rules.json`.
+- Consequences to design around: towers and ranged units on high ground are strong; spotting
+  high ground (Great Raven, Aptorian Stalker, a unit walking up the ramp) matters; the AI scouts
+  ramps before attacking up them.
 
 ## Map and terrain
 
 | Rule | Value |
 | --- | --- |
 | Size | 128 × 128 cells, 1 cell = 2 m (256 m × 256 m) |
-| Elevation | Heightmap; cells steeper than 30° are impassable (natural chokepoints, no cliffs) |
+| Elevation | Heightmap with discrete levels (0-2, 4 m apart) joined by ramps; slopes steeper than 30° are impassable, so plateau edges act as cliffs and ramps as chokepoints |
+| High ground | Low ground can't see up (see [High ground](#high-ground)) |
 | Trees | Block movement, choppable for wood, grouped into forests |
 | Water | Optional lakes: impassable cells, decorative |
 | Gold | 2 mines per start location, 2 per expansion, 2-3 expansions per player |
@@ -348,12 +367,15 @@ show text, a minimap ping, and a sound.
 7. **Settings:** resolution, window mode, VSync, graphics quality, master/music/SFX volume, edge
    pan speed, keybinds.
 
-## Open items summary
+## Resolved open items
 
-| Item | Default | Where |
+All open items from the planning phase were decided by the owner on 2026-10-02. New open items
+get added here with an **[OPEN]** tag until decided.
+
+| Item | Decision | Where |
 | --- | --- | --- |
 | Number of resources | 2 (Gold, Wood) | [Economy](#economy) |
-| High-ground vision advantage | No | [Vision](#vision-and-fog-of-war) |
+| High-ground vision advantage | **Yes**, StarCraft 2 style | [High ground](#high-ground) |
 | Teblor ranged unit | Weak Javelin Thrower | [factions/teblor.md](factions/teblor.md) |
 | Hero units | Not in v1 | [01-vision.md](01-vision.md#explicitly-out-of-scope-later-maybe) |
 | Andii shock slot | Andii Rider (expensive, elite) | [factions/andii.md](factions/andii.md) |

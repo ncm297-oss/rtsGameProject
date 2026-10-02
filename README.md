@@ -23,6 +23,8 @@ only. See the [roadmap](docs/05-roadmap.md).
 | [04 Art pipeline](docs/04-art-pipeline.md) | Style guide, asset sources, naming, import process, licensing log |
 | [05 Roadmap](docs/05-roadmap.md) | Milestones M0-M9 with acceptance criteria |
 | [06 Division of labor](docs/06-division-of-labor.md) | What Claude builds vs. what needs the owner or an outside service |
+| [07 Studio workflow](docs/07-studio-workflow.md) | The AI studio: Producer (PM), game-dev, QA inspector, scheduled sessions, permissions |
+| [studio/STATE.md](studio/STATE.md) | Live dashboard: what's next and what's waiting on you |
 | [CLAUDE.md](CLAUDE.md) | Rules and conventions every Claude Code session follows |
 | [SETUP.md](SETUP.md) | Installing the tools on a new machine |
 

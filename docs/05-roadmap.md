@@ -32,7 +32,7 @@ mechanics.
 - [ ] `game/project.godot` (Godot 4.7, Forward+, C#) with an empty `Main.tscn` that prints the
       sim library's version through a reference to `Rts.Sim`.
 - [ ] `dotnet build RtsGame.sln` succeeds; `dotnet test sim/Rts.Sim.Tests` passes one trivial test.
-- [ ] `& $env:GODOT --headless --path game --quit-after 60` exits 0 with no errors.
+- [ ] `& $env:GODOT --headless --path game --quit-after 600` exits 0 with no errors.
 - [ ] Commands in CLAUDE.md verified (fix any that are wrong).
 - [ ] Optional: Godot MCP server configured for Claude Code.
 
@@ -42,7 +42,7 @@ mechanics.
 
 - [ ] `World`, entity stores with generational handles, seeded RNG streams, `SimMath`, command queue, fixed tick.
 - [ ] Data loader for `game/data/` with validation; a test loads all data.
-- [ ] Nav grid with slope passability from a generated heightmap; spatial hash.
+- [ ] Terraced heightmap generator (elevation levels 0-2, ramps); nav grid with slope passability and per-cell level; spatial hash.
 - [ ] Flow fields with LRU cache; steering, separation, arrival, shoving.
 - [ ] Scenario test: 200 units ordered across a 128×128 map with obstacles all arrive within a
       time limit, none stuck, none inside blocked cells.
@@ -87,7 +87,7 @@ mechanics.
 - [ ] Damage formula with type × class table and bonuses; unit tests include the worked example.
 - [ ] Projectiles with travel time and misses; splash with falloff; friendly fire.
 - [ ] Death, corpses, building destruction and rubble.
-- [ ] Three-state fog of war per player; terrain fog shader; building ghosts.
+- [ ] Three-state fog of war per player; high-ground vision rule (low ground can't see up; attacker reveal); terrain fog shader; building ghosts.
 - [ ] Ability system (target ground, self/aura, summon) and status effects; zones.
 - [ ] Stealth and detection system (tested now, even though Shadow arrives in M8).
 - [ ] Telas Fire, Sapper Sharpers + Cusser, Sandstorm, Zealot passives all work.
@@ -101,7 +101,7 @@ mechanics.
 
 - [ ] `PlayerView` fog-filtered facade; AI cannot read hidden state (test enforces it).
 - [ ] Build order executor driven by `ai.json`; economy, production, military, ability, scout managers.
-- [ ] Expansion, defense, attack waves, retreat, rebuilding.
+- [ ] Expansion, defense, attack waves, retreat, rebuilding; scouts ramps and high ground before attacking up.
 - [ ] Easy / Normal / Hard per [02 AI](02-game-design.md#ai-opponent).
 - [ ] AI-vs-AI headless test: a 20-minute match completes without errors and one side wins.
 - [ ] Playable: the owner can win on Easy and lose to a Whirlwind AI on Hard.
@@ -128,7 +128,6 @@ mechanics.
 - [ ] Giant armor class in play; regeneration.
 - [ ] War-dog packs (multi-spawn queue item, Hamstring), Blood-oil Frenzy with aftermath slow.
 - [ ] Teblor AI build order; models and animations; balance pass vs. Malazan and Whirlwind.
-- [ ] [OPEN] ranged-unit decision made.
 
 ## M8 — Shadow
 
@@ -142,7 +141,6 @@ mechanics.
 - [ ] Flying units (Great Raven): no pathing, targeting restrictions, flying view height.
 - [ ] Champion with 2-alive limit; elite balance (cost, pop half-steps).
 - [ ] Andii AI; models; full five-faction balance pass.
-- [ ] [OPEN] shock-slot decision made.
 
 ## Later, maybe
 
@@ -152,7 +150,6 @@ Not scheduled. Each needs a deliberate decision to start (see [01 Scope caps](01
 - Walls and gates
 - In-game map editor UI
 - Campaign / scripted scenarios
-- High-ground vision rule
 - Vertex-animation-texture rendering for very large armies
 - Public release on itch.io (requires the rename pass from [01](01-vision.md#ip-and-naming-policy))
 
