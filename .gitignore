@@ -1,0 +1,65 @@
+# ---------------------------------------------------------------
+# Godot 4
+# ---------------------------------------------------------------
+# Editor/import cache: regenerated on open. Never commit.
+.godot/
+# Godot's per-machine export credentials (4.3+ keeps secrets here)
+.godot/export_credentials.cfg
+# Android build template (not used, Windows only)
+/game/android/
+# Mono/.NET crash dumps
+mono_crash.*.json
+
+# ---------------------------------------------------------------
+# .NET / C#
+# ---------------------------------------------------------------
+bin/
+obj/
+*.user
+*.suo
+*.userprefs
+TestResults/
+*.trx
+coverage*.xml
+BenchmarkDotNet.Artifacts/
+
+# ---------------------------------------------------------------
+# IDEs
+# ---------------------------------------------------------------
+.vs/
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# ---------------------------------------------------------------
+# Build output and local runs
+# ---------------------------------------------------------------
+/build/
+/exports/
+/logs/
+*.log
+
+# ---------------------------------------------------------------
+# Art pipeline
+# ---------------------------------------------------------------
+# Raw downloaded asset packs live here, unprocessed. Only the files the
+# import tooling copies into game/assets/ get committed (via Git LFS).
+/asset-sources/
+# Blender autosave/backup files
+*.blend1
+*.blend2
+
+# ---------------------------------------------------------------
+# Secrets and local config
+# ---------------------------------------------------------------
+.env
+.env.*
+*.local.json
+.claude/settings.local.json
+
+# ---------------------------------------------------------------
+# OS
+# ---------------------------------------------------------------
+Thumbs.db
+Desktop.ini
+.DS_Store
