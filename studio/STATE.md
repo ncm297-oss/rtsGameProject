@@ -7,6 +7,10 @@ _Last updated: 2026-10-02 15:30 (studio setup, before the first session)._
 
 ## Waiting on you
 
+- [ ] **Studio incident 2026-10-03-0826:** M0-1 was ACCEPTED (M0 criteria met, HOLD for your
+      sign-off) but the push to `main` was denied by the session's permission check. The work is
+      on branch `studio/2026-10-03-0826`. Merge it to `main` (fast-forward), then follow its
+      STATE.md. See [sessions/2026-10-03-0826-incident.md](sessions/2026-10-03-0826-incident.md).
 - [ ] In the Claude desktop app, open the scheduled tasks list and check that **RTS studio
       session** uses the **auto** permission mode (see
       [docs/07](../docs/07-studio-workflow.md#permissions-and-access)).
