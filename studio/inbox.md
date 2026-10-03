@@ -9,6 +9,12 @@ Commit and push after editing, from either machine (or ask Claude to).
 
 ## New
 
+- 2026-10-03 · **M0 accepted.** (Owner sign-off, relayed by Claude in an interactive session.
+  Build, 4/4 tests, and `tools/qa/smoke.ps1` were re-run green after merging session
+  2026-10-03-0826 into main.) Go ahead with M1.
+- 2026-10-03 · The "RTS studio session" routine is confirmed on **auto** permission mode; clear
+  that item from Waiting on you.
+
 ## Processed
 
 - 2026-10-02 · "High ground bonus yes, all other open items default." → Recorded in
