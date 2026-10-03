@@ -3,89 +3,41 @@
 Written by the Producer at the end of each session for the next one. The next session's
 Producer starts from this, verifies it against the repo, and then plans.
 
-_Written: 2026-10-03 08:26 (session 2026-10-03-0826, PLAN)._
+_Written: 2026-10-03 (session 2026-10-03-0826, ACCEPT)._
 
 ## Where we are
 
-Planning is done and all planning-phase open items are decided. The repo holds docs only. No
-`sim/`, `game/`, or solution exists yet. Toolchain verified live on 2026-10-03: .NET SDK
-8.0.425, Godot 4.7.2.stable.mono (console exe in `$env:GODOT`), Git 2.53, Git LFS 3.7.1.
+M0 is functionally complete: `RtsGame.sln`, `sim/Rts.Sim` (pure net8.0, warnings-as-errors),
+`sim/Rts.Sim.Tests` (xUnit, 4 tests incl. architecture guards), and `game/` (Godot 4.7.2 C#)
+build, test, import and boot green; the headless smoke prints `Rts.Sim 0.0.1`. Gate is **HOLD**
+until the owner writes `M0 accepted` in `studio/inbox.md`. Verified toolchain: .NET SDK 8.0.425,
+Godot 4.7.2.stable.mono, Git 2.53, Git LFS 3.7.1.
 
-## Current session plan
+## Next session
 
-**TASK_ID:** M0-1 · **Title:** Create the solution skeleton and verify the toolchain commands
+1. Check the inbox for `M0 accepted`. Without it, STOP (milestone HOLD); do not start M1.
+2. On sign-off: mark M0 **Done** in `docs/05-roadmap.md`, finalize the retro, set M1 to **Next**,
+   and plan **M1-1**.
 
-**Goal:** Turn the docs-only repo into a building, testing, headless-booting skeleton: a pure
-.NET sim library, its xUnit tests, and a Godot 4.7 C# project that references the sim. This is
-the whole of M0; every later milestone builds on this split.
+## Next task candidates (M1, in order)
 
-**Scope:**
-- `RtsGame.sln` at the repo root containing the three projects below.
-- `sim/Rts.Sim/Rts.Sim.csproj`: `net8.0` class library, `<Nullable>enable</Nullable>`,
-  `<TreatWarningsAsErrors>true</TreatWarningsAsErrors>`, `<LangVersion>12</LangVersion>`, no
-  package or project references. One file `SimInfo.cs` with `public static class SimInfo` and a
-  `public const string Version = "0.0.1";` plus a `///` summary.
-- `sim/Rts.Sim.Tests/Rts.Sim.Tests.csproj`: xUnit, references `Rts.Sim`. One test asserting
-  `SimInfo.Version` is non-empty / equals the expected value.
-- `game/project.godot`: Godot 4.7 config, Forward+ renderer, C# enabled,
-  `dotnet/project/solution_directory=".."`, main scene `res://scenes/Main.tscn`.
-- `game/RtsGame.csproj`: `Godot.NET.Sdk/4.7.2`, `net8.0`, nullable on, `ProjectReference` to
-  `../sim/Rts.Sim/Rts.Sim.csproj`.
-- `game/scenes/Main.tscn` (text format) with `game/scripts/Main.cs` that calls
-  `GD.Print($"Rts.Sim {SimInfo.Version}")` in `_Ready()`.
-- Run `--import` once, then the headless smoke run; commit the resulting `project.godot`
-  formatting once. `.godot/`, `bin/`, `obj/` must not be committed (already gitignored).
-- Verify every command in CLAUDE.md's Commands block except the windowed run and
-  `tools/export.ps1`. Fix wrong ones in CLAUDE.md in the same commit.
-- Update `docs/03-technical-design.md` only if the real csproj/Godot settings differ from what
-  it says (e.g. exact Sdk version string).
-- OUT of scope: any gameplay code, `World`, RNG, data folders, `tools/`, the Godot MCP server,
-  `tools/export.ps1`, installing anything, NuGet packages beyond the xUnit template defaults
-  and `Godot.NET.Sdk`.
-
-**Acceptance criteria:**
-1. `dotnet build RtsGame.sln` exits 0 with zero warnings from `Rts.Sim`.
-2. `dotnet test sim/Rts.Sim.Tests` passes (1 or more tests, 0 failed).
-3. `sim/Rts.Sim/Rts.Sim.csproj` has `net8.0`, `Nullable` enable, `TreatWarningsAsErrors` true,
-   and no `PackageReference`/`ProjectReference`; the built `Rts.Sim.dll` references no
-   `GodotSharp` assembly.
-4. `& $env:GODOT --headless --path game --import` exits 0.
-5. `& $env:GODOT --headless --path game --quit-after 600` exits 0, the log contains
-   `Rts.Sim 0.0.1`, and no line contains `ERROR`.
-6. `git status` is clean after the smoke run (no untracked generated files, no rewritten
-   `project.godot`).
-7. CLAUDE.md Commands block matches what actually works; roadmap M0 criteria 1-7 are tickable
-   with the above as evidence.
-
-**Design references:** `docs/03-technical-design.md` "Platform and versions" and the project
-table (lines 6-14, 51-59); `docs/05-roadmap.md` M0; CLAUDE.md architecture rule 1 and the
-coding conventions (file-scoped namespaces, one type per file, `Rts.Sim.*` namespaces).
-
-**Tests required:** `sim/Rts.Sim.Tests/SimInfoTests.cs` with one xUnit fact on
-`SimInfo.Version`. No other tests exist yet, so no determinism/golden runs apply.
-
-**Constraints most at risk:** rule 1 (no Godot in `Rts.Sim`), warnings-as-errors must be on
-from the first commit, `dotnet add package` needs approval nobody can give (edit csproj by
-hand; `dotnet new` templates are fine), `Godot.NET.Sdk` must be exactly 4.7.2, commit subject
-`M0: ...`. Never install software; if a tool is missing, stop and report.
-
-## QA focus
-
-- Fresh `git clone` of the session branch into a temp folder: restore + build from scratch,
-  `dotnet test` green, headless boot exits 0 and prints the version.
-- Inspect `Rts.Sim.dll` references (e.g. `System.Reflection.Metadata` or `ildasm`-free check
-  via a small script) for any `Godot*` assembly. Confirm `TreatWarningsAsErrors` really bites:
-  add a throwaway unused-variable warning in a scratch copy and confirm the build fails.
-- Run `--import` and the smoke run twice in a row; `git status` must stay clean (idempotent).
-- Grep the smoke log for `ERROR`, `WARNING`, and `Unhandled`.
-- Confirm `.godot/`, `bin/`, `obj/` are absent from the commit and `.gitattributes` LFS
-  patterns still apply (`git lfs track`).
+- **M1-1 — Sim core:** `World`, entity stores with generational handles, seeded RNG streams,
+  `SimMath` (deterministic trig), command queue, `Simulation.Tick()` at 20 Hz. Tests: handle
+  reuse/generation, RNG reproducibility by seed and stream, tick counter, command apply order.
+  Fold in BUG-0001's doc fix (CLAUDE.md smoke command -> `tools/qa/smoke.ps1`) and consider
+  `TreatWarningsAsErrors` in the test project. Keep under ~800 lines: no data loader, no terrain.
+- **M1-2 — Data loader** for `game/data/` with validation and a load-all test.
+- **M1-3 — Terraced heightmap + nav grid + spatial hash.**
+- Then flow fields/steering, scenario test, replay/determinism, perf, headless CLI.
 
 ## Watch out for
 
-- Godot generates `.godot/` and may rewrite `project.godot` formatting on first open; commit
-  the result once, then keep it stable.
-- `Godot.NET.Sdk` version must match the installed editor exactly (4.7.2).
-- `.claude/settings.local.json` is absent in the studio worktree (gitignored); the session
-  env still provides `$env:GODOT`. Fall back to
-  `[Environment]::GetEnvironmentVariable('GODOT','User')` if the shell lacks it.
+- Headless Godot does not compile C# and exits 0 even when `Main.cs` fails to load; always
+  `dotnet build` first and check the log (or run `tools/qa/smoke.ps1`). BUG-0001.
+- `$env:GODOT` can be empty in the non-interactive shell; fall back to
+  `[Environment]::GetEnvironmentVariable('GODOT','User')`.
+- `ArchitectureTests.SimSource_UsesNoForbiddenApis` greps sim source for `Godot.`, `System.Random`,
+  `DateTime`, `Stopwatch`, `Guid.NewGuid`, `HashCode.`, `Parallel.`, `Vector<`. New sim code
+  that legitimately needs a name that matches (unlikely) must adjust the test, not bypass it.
+- `.sln` Release config builds the game project in Debug (BUG-0002, S4): irrelevant until M6.
+- Open bugs: BUG-0001 (S3), BUG-0002 (S4). No S1/S2.

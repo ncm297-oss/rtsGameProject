@@ -29,3 +29,7 @@ keep trusting the exit code alone. QA added `tools/qa/smoke.ps1`, which builds, 
 and fails on `ERROR`/`Unhandled`/`Exception` lines or a missing banner (verified to return 1 on
 this repro). Suggested fix: point the CLAUDE.md smoke command (and the game-dev agent's definition
 of done) at that script, or an equivalent `tools/smoke.ps1` owned by game-dev.
+
+**Producer triage (2026-10-03-0826):** S3 confirmed, does not block M0 acceptance. Fix as a
+small item at the start of M1: make CLAUDE.md's smoke command (and the game-dev definition of
+done) run `tools/qa/smoke.ps1`, so the exit code is the gate again.
