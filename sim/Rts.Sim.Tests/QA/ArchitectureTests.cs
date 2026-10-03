@@ -17,6 +17,8 @@ public class ArchitectureTests
         (@"\bGuid\.NewGuid\b", "non-deterministic ids"),
         (@"\bHashCode\.", "HashCode is randomized per process"),
         (@"\bParallel\.|\bVector<", "no parallel loops or Vector<T> in the sim"),
+        (@"\bMath\.(Sin|Cos|Atan2|Atan)\b", "trig must go through SimMath"),
+        (@"\bMathF\.(Sin|Cos|Atan2|Atan)\b", "trig must go through SimMath"),
     };
 
     [Fact]

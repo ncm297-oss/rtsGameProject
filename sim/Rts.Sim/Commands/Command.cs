@@ -1,0 +1,28 @@
+using System.Numerics;
+
+namespace Rts.Sim.Commands;
+
+/// <summary>One player or AI instruction; the only way anything outside the sim changes sim state.</summary>
+/// <remarks><see cref="Tick"/> and <see cref="Sequence"/> are stamped by <c>Simulation.Enqueue</c>.</remarks>
+public struct Command
+{
+    /// <summary>What to do.</summary>
+    public CommandKind Kind;
+    /// <summary>Issuing player index.</summary>
+    public int Player;
+    /// <summary>Tick on which the command applies.</summary>
+    public int Tick;
+    /// <summary>Per-player issue order, used to break ties within a tick.</summary>
+    public int Sequence;
+    /// <summary>Unit type for <see cref="CommandKind.SpawnUnit"/>.</summary>
+    public int TypeId;
+    /// <summary>Target position (x, z) in meters.</summary>
+    public Vector2 Position;
+
+    /// <summary>A command that does nothing.</summary>
+    public static Command Noop(int player) => new() { Kind = CommandKind.Noop, Player = player };
+
+    /// <summary>A command that spawns one unit for <paramref name="player"/>.</summary>
+    public static Command SpawnUnit(int player, int typeId, Vector2 position) =>
+        new() { Kind = CommandKind.SpawnUnit, Player = player, TypeId = typeId, Position = position };
+}

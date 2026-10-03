@@ -1,0 +1,19 @@
+using System;
+
+namespace Rts.Sim;
+
+/// <summary>Match setup that sizes every sim buffer up front, so ticks never grow arrays.</summary>
+/// <param name="Seed">The single seed every RNG stream derives from.</param>
+/// <param name="PlayerCount">Number of players (human and AI), indexed from 0.</param>
+/// <param name="UnitCapacity">Maximum number of live units; the unit store never grows past it.</param>
+/// <param name="CommandCapacity">Maximum number of commands that can be pending at once.</param>
+public sealed record SimConfig(ulong Seed, int PlayerCount, int UnitCapacity, int CommandCapacity)
+{
+    /// <summary>Throws if any size is out of range.</summary>
+    public void Validate()
+    {
+        if (PlayerCount < 1) throw new ArgumentOutOfRangeException(nameof(PlayerCount));
+        if (UnitCapacity < 1) throw new ArgumentOutOfRangeException(nameof(UnitCapacity));
+        if (CommandCapacity < 1) throw new ArgumentOutOfRangeException(nameof(CommandCapacity));
+    }
+}
