@@ -139,7 +139,8 @@ Commit its updates: `studio: <SESSION_ID> <VERDICT> - <COMMIT_SUMMARY>`.
    If the push is refused by the permission check, don't retry it in another form: push the
    branch (`git push -u origin studio/<SESSION_ID>`), record an incident, and add "merge
    studio/<SESSION_ID> into main" to Waiting on you.
-3. `git switch --detach HEAD`, then `git branch -d studio/<SESSION_ID>`.
+3. `git switch --detach HEAD`. Leave the local session branch in place (it's merged and
+   harmless; branch deletion is blocked by the permission rules).
 
 **REJECT or ESCALATE:**
 1. If `push_to_github` is `yes`: `git push -u origin studio/<SESSION_ID>` (keeps the work).
