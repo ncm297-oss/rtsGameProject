@@ -28,3 +28,8 @@ a load-time stall of tens of seconds within the validated range is the concern.
 The bound is the product of the caps: (64 + 64) rectangles x 16 ramps x 1024 tries x 64 attempts
 = 134M ramp placements. Not reachable with sensible params; only a problem if params ever come from
 data. A tighter `RampTries`/`MaxAttempts` cap, or an overall placement budget, would fix it.
+
+**Producer triage (2026-10-03-1235):** bundle with BUG-0012 in the first commit of M1-4a:
+tighten the `Validate` caps (e.g. `RampTries` <= 128, `MaxAttempts` <= 16, plateaus <= 32) so the
+worst case stays under ~2 s, and lower `WorstCaseValidParams_StillBounded`'s guard to match.
+Does not block.

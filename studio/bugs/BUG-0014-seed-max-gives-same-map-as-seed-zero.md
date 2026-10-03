@@ -28,3 +28,7 @@ for these two seeds differ. This is inherent to the PCG reference seeding (every
 shift of another's); only this pair collides exactly. The developer noticed it but did not file it.
 Possible fix: mix the seed first (e.g. SplitMix64) before it's added to the state. That changes
 every stream, so do it before golden replays exist (M1-6).
+
+**Producer triage (2026-10-03-1235):** fix in the first commit of M1-6 (replay + golden), before
+the first golden hash is recorded: mix the seed (SplitMix64) in the `SimRng` constructor, update
+`SimRngTests` expectations in the same commit, un-skip the QA test. Does not block.

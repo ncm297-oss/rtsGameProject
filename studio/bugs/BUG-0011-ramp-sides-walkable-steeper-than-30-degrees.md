@@ -38,3 +38,10 @@ at the mouth is still `RampWidth` wide, so gameplay impact is small today; it wi
 rendering draws a 3.2 m drop that units walk down, and M4 flow fields / steering will happily path
 across it. Options: mark ramp side cells (or ramp cells whose side neighbour is more than one slope
 step lower) as blocked/cliff; or let the Producer accept it and amend docs/02. Producer's call.
+
+**Producer triage (2026-10-03-1235):** docs/02's 30° rule stands (ramps must be corridors, that
+is the chokepoint pillar). Fix per-cell, consistent with the cliffs-as-cells decision: the
+lower-level cells flanking a ramp along its length become `Cliff | Blocked` ("ramp walls"); the
+generator already keeps that one-cell ring flat and lower. Must keep the connectivity and >= 50%
+passable invariants (`MapAssert`, `MapQaChecker`). Scheduled: first commit of the next task
+(M1-4a), with BUG-0012/0013. Does not block.

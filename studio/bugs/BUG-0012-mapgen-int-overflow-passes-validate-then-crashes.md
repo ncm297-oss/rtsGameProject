@@ -38,3 +38,7 @@ numbers. `RampLength`, `RampWidth`, `EdgeMargin` and `Level2Inset` have no upper
 Fix: give each an upper bound (e.g. at most the map size) checked before the arithmetic, or compute
 in `long`; in `Heightmap`, compute `(long)width * height`. Today only code sets these params; this
 becomes S2 if map settings are ever read from data or a lobby.
+
+**Producer triage (2026-10-03-1235):** fix in the first commit of M1-4a: upper bounds on
+`RampWidth`, `RampLength`, `EdgeMargin`, `Level2Inset` (at most the map size) checked before any
+arithmetic, and `(long)width * height` in `Heightmap`. Un-skip both QA tests. Does not block.
