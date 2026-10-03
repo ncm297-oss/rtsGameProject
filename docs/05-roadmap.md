@@ -7,7 +7,7 @@ Status legend: **Next** = start here, **Planned** = not started, **Done** = acce
 
 | # | Milestone | Status | One-line goal |
 | --- | --- | --- | --- |
-| M0 | Environment & skeleton | **Next** | Tools installed, empty projects build, tests and headless boot pass |
+| M0 | Environment & skeleton | **Criteria met, awaiting sign-off** | Tools installed, empty projects build, tests and headless boot pass |
 | M1 | Core sim, no graphics | Planned | 200 units path across the map deterministically, fast |
 | M2 | Presentation | Planned | Move an army around a 3D map |
 | M3 | Economy & buildings | Planned | Build a Malazan base |
@@ -25,16 +25,19 @@ mechanics.
 
 **Done when:**
 
-- [ ] Godot 4.7.x .NET build, .NET 8 SDK, Git, and Git LFS installed per [SETUP.md](../SETUP.md);
+- [x] Godot 4.7.x .NET build, .NET 8 SDK, Git, and Git LFS installed per [SETUP.md](../SETUP.md);
       `$env:GODOT` points at the console exe.
-- [ ] `RtsGame.sln` at the repo root with `sim/Rts.Sim`, `sim/Rts.Sim.Tests`, `game/RtsGame.csproj`.
-- [ ] `Rts.Sim` targets `net8.0`, nullable on, warnings as errors, and has no Godot reference.
-- [ ] `game/project.godot` (Godot 4.7, Forward+, C#) with an empty `Main.tscn` that prints the
+- [x] `RtsGame.sln` at the repo root with `sim/Rts.Sim`, `sim/Rts.Sim.Tests`, `game/RtsGame.csproj`.
+- [x] `Rts.Sim` targets `net8.0`, nullable on, warnings as errors, and has no Godot reference.
+- [x] `game/project.godot` (Godot 4.7, Forward+, C#) with an empty `Main.tscn` that prints the
       sim library's version through a reference to `Rts.Sim`.
-- [ ] `dotnet build RtsGame.sln` succeeds; `dotnet test sim/Rts.Sim.Tests` passes one trivial test.
-- [ ] `& $env:GODOT --headless --path game --quit-after 600` exits 0 with no errors.
-- [ ] Commands in CLAUDE.md verified (fix any that are wrong).
+- [x] `dotnet build RtsGame.sln` succeeds; `dotnet test sim/Rts.Sim.Tests` passes one trivial test.
+- [x] `& $env:GODOT --headless --path game --quit-after 600` exits 0 with no errors.
+- [x] Commands in CLAUDE.md verified (fix any that are wrong).
 - [ ] Optional: Godot MCP server configured for Claude Code.
+
+_Required criteria met in session 2026-10-03-0826 (task M0-1). Awaiting owner sign-off ("M0
+accepted" in `studio/inbox.md`) before M1 starts._
 
 ## M1 — Core sim, no graphics
 
@@ -167,4 +170,15 @@ Add one section per completed milestone below.
 
 ## Retros
 
-No milestones completed yet.
+### M0 retro (2026-10-03, draft pending owner sign-off)
+- What shipped: `RtsGame.sln`; `sim/Rts.Sim` (net8.0, nullable, warnings-as-errors, no refs)
+  with `SimInfo.Version = "0.0.1"`; `sim/Rts.Sim.Tests` (xUnit, 4 tests incl. architecture
+  guards for the sim/Godot split and forbidden APIs); `game/` Godot 4.7.2 C# project whose
+  `Main.tscn` prints `Rts.Sim 0.0.1`; `tools/qa/smoke.ps1` build+import+boot gate. One studio
+  session, one dev round, QA PASS_WITH_ISSUES (S3 + S4 only).
+- What was harder than expected: headless Godot neither compiles C# nor fails (exit code) when a
+  script cannot load, so "smoke exits 0" is a weak gate on its own (BUG-0001).
+- What to change in the process or the plan: use `tools/qa/smoke.ps1` (or a game-dev-owned
+  equivalent) as the smoke gate in the definition of done; settle the `.sln` Release mapping
+  for the game project before `tools/export.ps1` (BUG-0002, M6).
+- Decisions made (also recorded in 01-vision.md): none.

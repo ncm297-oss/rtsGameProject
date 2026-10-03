@@ -76,8 +76,14 @@ dotnet test sim/Rts.Sim.Tests --filter Category!=Perf      # skip benchmarks for
 & $env:GODOT --headless --path game --import               # (re)import assets after adding files
 & $env:GODOT --headless --path game --quit-after 600       # headless smoke run, must exit 0
 & $env:GODOT --path game                                   # run the game windowed
-powershell -File tools/export.ps1                           # Windows release build -> build/
+powershell -File tools/export.ps1                           # Windows release build -> build/ (not yet written)
 ```
+
+Headless Godot does **not** compile C#: run `dotnet build RtsGame.sln` before the smoke run, or it
+loads a stale (or missing) `RtsGame.dll`. The smoke run also exits 0 when a script fails to load,
+so check its output too: it must contain `Rts.Sim <version>` and no line containing `ERROR`.
+If `$env:GODOT` is empty in a non-interactive shell, read it with
+`[Environment]::GetEnvironmentVariable('GODOT','User')`.
 
 ## Coding conventions
 
