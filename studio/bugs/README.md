@@ -36,5 +36,9 @@ bugs outrank new features.
 
 | Id | Sev | Status | Title |
 | --- | --- | --- | --- |
-| [BUG-0001](BUG-0001-smoke-exit-code-hides-script-load-failure.md) | S3 | open | Headless smoke run exits 0 when the C# script fails to load |
+| [BUG-0001](BUG-0001-smoke-exit-code-hides-script-load-failure.md) | S3 | fixed | Headless smoke run exits 0 when the C# script fails to load |
 | [BUG-0002](BUG-0002-sln-release-builds-game-debug.md) | S4 | open | RtsGame.sln Release configuration builds RtsGame in Debug |
+| [BUG-0003](BUG-0003-simmath-sin-out-of-range-for-huge-angles.md) | S3 | open | SimMath.Sin/Cos return values far outside [-1, 1] for huge angles |
+| [BUG-0004](BUG-0004-rejected-enqueue-advances-sequence.md) | S3 | open | A rejected Enqueue (queue full) still advances the player's sequence counter |
+| [BUG-0005](BUG-0005-command-sort-quadratic-under-flood.md) | S3 | open | CommandQueue insertion sort is O(n^2); 10k interleaved commands stall ~107 ms |
+| [BUG-0006](BUG-0006-spawn-accepts-non-finite-position.md) | S4 | open | SpawnUnit accepts NaN/Infinity positions into sim state |
