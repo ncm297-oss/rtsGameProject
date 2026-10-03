@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-03-0907, task M1-1 |
 | System | command queue / commands |
-| Fixed by | |
+| Fixed by | a54a4b2 (M1-2); regression test `Rts.Sim.Tests.QA.SimCoreQaTests.SpawnUnit_NonFinitePosition_NeverEntersState` |
 
 ## Repro
 Un-skip `Rts.Sim.Tests.QA.SimCoreQaTests.SpawnUnit_NonFinitePosition_NeverEntersState` (fails with
@@ -32,3 +32,5 @@ source of NaN.
 M1-2 alongside BUG-0003/0004: drop a `SpawnUnit` with a non-finite position in `Apply` (same
 policy as the store-full case), via a small `Command.IsValid`-style check that later command
 kinds reuse; un-skip `SpawnUnit_NonFinitePosition_NeverEntersState`.
+
+**QA verification (2026-10-03-1151, M1-2):** test un-skipped and green. Mutation check: deleting the `if (!command.IsValid()) return;` guard in `Simulation.Apply` in a scratch copy makes the test fail; with the fix it passes.

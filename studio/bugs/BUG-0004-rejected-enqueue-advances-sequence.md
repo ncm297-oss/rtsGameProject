@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-03-0907, task M1-1 |
 | System | command queue |
-| Fixed by | |
+| Fixed by | a54a4b2 (M1-2); regression test `Rts.Sim.Tests.QA.SimCoreQaTests.Enqueue_WhenQueueFull_LeavesStateUnchanged` |
 
 ## Repro
 1. Un-skip `Rts.Sim.Tests.QA.SimCoreQaTests.Enqueue_WhenQueueFull_LeavesStateUnchanged`.
@@ -34,3 +34,5 @@ counter. Invalid player ids are checked first and do leave state unchanged (veri
 **Producer triage (2026-10-03-0907):** S3 confirmed, does not block M1-1. Fix in the first commit
 of M1-2: stamp the sequence from `_nextSequence[player]` without incrementing, call `Add`, then
 increment; un-skip `Enqueue_WhenQueueFull_LeavesStateUnchanged`.
+
+**QA verification (2026-10-03-1151, M1-2):** test un-skipped and green. Mutation check: moving the `++` back into the stamp line (pre-fix order) in a scratch copy makes the test fail; with the fix it passes.

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-03-0907, task M1-1 |
 | System | determinism / SimMath |
-| Fixed by | |
+| Fixed by | a54a4b2 (M1-2); regression test `Rts.Sim.Tests.QA.SimCoreQaTests.SinCos_HugeFiniteAngles_StayWithinUnitRange` |
 
 ## Repro
 1. Un-skip `Rts.Sim.Tests.QA.SimCoreQaTests.SinCos_HugeFiniteAngles_StayWithinUnitRange`.
@@ -34,3 +34,5 @@ A sine outside [-1, 1] would turn a direction vector into a teleport.
 **Producer triage (2026-10-03-0907):** S3 confirmed, does not block M1-1. Fix in the first commit
 of M1-2: clamp or re-fold the reduced angle so the result is always in [-1, 1], then un-skip
 `SinCos_HugeFiniteAngles_StayWithinUnitRange`. Keep the docs/03 note that accuracy degrades.
+
+**QA verification (2026-10-03-1151, M1-2):** test un-skipped and green. Mutation check: restoring the pre-fix `SimMath.cs` (6dae281) in a scratch copy makes 5 of its InlineData cases fail (1e9, -1e9, 1e20, +-float.MaxValue); with the fix all pass.
