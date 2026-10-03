@@ -34,4 +34,7 @@ bugs outrank new features.
 
 ## Index
 
-No bugs filed yet.
+| Id | Sev | Status | Title |
+| --- | --- | --- | --- |
+| [BUG-0001](BUG-0001-smoke-exit-code-hides-script-load-failure.md) | S3 | open | Headless smoke run exits 0 when the C# script fails to load |
+| [BUG-0002](BUG-0002-sln-release-builds-game-debug.md) | S4 | open | RtsGame.sln Release configuration builds RtsGame in Debug |
