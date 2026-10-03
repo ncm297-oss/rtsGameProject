@@ -1,4 +1,5 @@
 using System;
+using Rts.Sim.Map;
 
 namespace Rts.Sim;
 
@@ -9,11 +10,16 @@ namespace Rts.Sim;
 /// <param name="CommandCapacity">Maximum number of commands that can be pending at once.</param>
 public sealed record SimConfig(ulong Seed, int PlayerCount, int UnitCapacity, int CommandCapacity)
 {
+    /// <summary>Terrain generator settings; defaults to the docs/02 128 x 128 map.</summary>
+    public MapGenParams Map { get; init; } = MapGenParams.Default;
+
     /// <summary>Throws if any size is out of range.</summary>
     public void Validate()
     {
         if (PlayerCount < 1) throw new ArgumentOutOfRangeException(nameof(PlayerCount));
         if (UnitCapacity < 1) throw new ArgumentOutOfRangeException(nameof(UnitCapacity));
         if (CommandCapacity < 1) throw new ArgumentOutOfRangeException(nameof(CommandCapacity));
+        if (Map == null) throw new ArgumentNullException(nameof(Map));
+        Map.Validate();
     }
 }

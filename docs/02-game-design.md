@@ -277,7 +277,7 @@ every tick and can modify vision. Darkness (Andii) and Sandstorm (Whirlwind) are
 | Rule | Value |
 | --- | --- |
 | Size | 128 × 128 cells, 1 cell = 2 m (256 m × 256 m) |
-| Elevation | Heightmap with discrete levels (0-2, 4 m apart) joined by ramps; slopes steeper than 30° are impassable, so plateau edges act as cliffs and ramps as chokepoints |
+| Elevation | Heightmap with discrete levels (0-2, 4 m apart) joined by ramps; slopes steeper than 30° are impassable, so plateau edges act as cliffs and ramps as chokepoints (discrete terraces: a level change without a ramp is a cliff) |
 | High ground | Low ground can't see up (see [High ground](#high-ground)) |
 | Trees | Block movement, choppable for wood, grouped into forests |
 | Water | Optional lakes: impassable cells, decorative |

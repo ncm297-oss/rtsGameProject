@@ -175,6 +175,31 @@ high-ground vision rule. The map generator builds terraced terrain: flat plateau
 4 m joined by ramps, with steep (impassable) plateau edges. A grid `Version` counter increments
 whenever passability changes (building placed or destroyed, tree depleted).
 
+**Implementation (M1-3):** `Rts.Sim.Map`. `World` builds the terrain in its constructor:
+`MapGenerator.Generate(config.Map, ref world.Rng(RngStream.MapGen))` returns a `Heightmap`
+(per-cell `Level` and height in meters), and `new NavGrid(heightmap)` derives passability.
+Fixed geometry lives in `MapConstants` (`CellSize` 2 m, `LevelHeight` 4 m, `MaxLevel` 2, max ramp
+slope tan 30°); every tunable (size, plateau counts and sizes, ramp width/length, retry bounds) is
+in `MapGenParams`, defaulting to a 128 × 128 map. The generator raises level-1 rectangles on open
+ground, level-2 rectangles inside level-1 ones, then cuts ramps (default 3 cells wide, 4 long, so
+the slope is about 22°) into plateau sides where the whole footprint plus a one-cell ring is flat
+lower ground. Representation (Producer decision, 2026-10-03): cliffs are **blocked cells**, not
+per-edge rules. A cell is a cliff when a 4-neighbor is lower and that neighbor is not a ramp
+exactly one level down, so plateau rims are blocked except at a ramp's top ("mouth"). A ramp cell
+keeps the lower level (docs/02) and its height steps evenly, strictly between the two levels; it
+joins level L to L+1 only. The outer ring of cells is blocked. Passable cells outside the largest
+4-connected region (pockets no ramp reaches) are blocked at build time, so every passable cell is
+reachable; later passability changes (M3 buildings) don't re-seal. A layout with under
+`MinPassableFraction` (50%) passable cells or with a level missing is redrawn, at most
+`MaxAttempts` times, then the generator falls back to the first layout that was passable enough,
+or a flat map: it never loops forever. Default generation takes about 4 ms. Queries (`InBounds`,
+`IsPassable`, `LevelAt`, `FlagsAt`, `CostAt`, `WorldToCell`, `CellCenter`) never allocate and read
+cells outside the map as blocked; `WorldToCell` floors (so -0.1 m is outside, not cell 0) and
+rejects NaN and infinities. Cell (x, y) covers meters [2x, 2x + 2) on each axis. Per-cell data is
+ready for 8-connected flow fields: no-corner-cutting only needs `IsPassable` on the two side cells.
+Terrain does not feed `StateHash` yet (M1-6 decides). Trees, water, gold, symmetry, and hand-made
+maps arrive in M3/M6.
+
 ### Flow fields
 
 On a move order, the group's target cell gets a flow field:
@@ -345,7 +370,10 @@ milestone that consumes it.
 Validation rules: ids are `snake_case` and unique (a unit id is unique across all factions);
 `slot` is one of the seven template slots; `armorClass`, `attack.type`, and `bonusVs` keys exist in
 the damage table; hp, speed, sight, radius, `attack.cooldown`, `trainTime`, and gather rates are
-positive; `radius` is within 0.4-1.0 m; `pop` is a multiple of 0.5; unknown JSON fields are errors
+positive; `radius` is within 0.4-1.0 m; `pop` is a multiple of 0.5; every number is checked
+against an upper bound before it is narrowed (`DataLimits`: integers at most 1,000,000, decimals at
+most 1,000,000, durations at most 3600 s), so nothing overflows to Infinity or a wrapped int
+(BUG-0007); every `requires` and `tags` entry is a `snake_case` id (BUG-0009); unknown JSON fields are errors
 (a typo must not silently fall back to a default). The only literals in C# are these schema limits,
 in `DataLimits`.
 

@@ -103,8 +103,8 @@ internal sealed class UnitJson
     public double? Pop { get; set; }
     public double? TrainTime { get; set; }
     public string? TrainedAt { get; set; }
-    public List<string>? Requires { get; set; }
-    public List<string>? Tags { get; set; }
+    public List<string?>? Requires { get; set; }
+    public List<string?>? Tags { get; set; }
 }
 
 internal sealed class AttackJson

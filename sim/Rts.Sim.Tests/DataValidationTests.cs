@@ -95,6 +95,15 @@ public class DataValidationTests
     [InlineData("pop", "1.25", "units[2].pop", "multiple of 0.5")]
     [InlineData("displayName", null, "units[2].displayName", "missing")]
     [InlineData("attack.windup", null, "units[2].attack.windup", "missing")]
+    // BUG-0007: bounds are checked before narrowing, so messages show the input, not an overflowed int.
+    [InlineData("attack.cooldown", "1e10", "units[2].attack.cooldown", "10000000000 is above the maximum 1000000")]
+    [InlineData("trainTime", "7200", "units[2].trainTime", "7200 s is above the maximum 3600 s")]
+    [InlineData("pop", "1e10", "units[2].pop", "is above the maximum")]
+    [InlineData("speed", "1e300", "units[2].speed", "is above the maximum")]
+    [InlineData("hp", "2000000000", "units[2].hp", "2000000000 is above the maximum 1000000")]
+    // BUG-0009: list entries are ids too.
+    [InlineData("requires", "[\"Age_II\"]", "units[2].requires[0]", "not snake_case")]
+    [InlineData("tags", "[\"infantry\", null]", "units[2].tags[1]", "missing")]
     public void BrokenUnitField_YieldsExactlyOneErrorNamingFileAndField(string field, string? rawJson, string path, string message)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();

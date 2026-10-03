@@ -216,7 +216,7 @@ public class DataLoaderQaTests
 
     // ---------- numeric edges: out-of-range values must be rejected, not turned into infinities ----------
 
-    [Theory(Skip = "BUG-0007: huge finite floats pass the 'positive' check and become float Infinity in GameData; un-skip when fixed")]
+    [Theory] // regression: BUG-0007
     [InlineData("speed", "1e300", "units[2].speed")]
     [InlineData("sight", "1e300", "units[2].sight")]
     [InlineData("attack.range", "1e300", "units[2].attack.range")]
@@ -231,7 +231,7 @@ public class DataLoaderQaTests
         Assert.Contains(r.Errors, e => e.File == MalazanUnits && e.Path == path);
     }
 
-    [Fact(Skip = "BUG-0007: popCap 2e9 passes validation and HalfPopCap wraps to a negative int; un-skip when fixed")]
+    [Fact] // regression: BUG-0007
     public void HugePopCap_IsRejected_NotOverflowedToNegative()
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
@@ -275,7 +275,7 @@ public class DataLoaderQaTests
         Assert.True(r.Ok, string.Join("\n", r.Errors));
     }
 
-    [Fact(Skip = "BUG-0009: null/blank entries in requires/tags are copied into GameData; un-skip when fixed")]
+    [Fact] // regression: BUG-0009
     public void NullEntryInRequiresOrTags_IsRejected()
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();

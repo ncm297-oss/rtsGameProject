@@ -244,8 +244,8 @@ public static class DataLoader
             HalfPop = Math.Max(halfPop, 0),
             TrainTicks = c.Ticks(u.TrainTime, p + ".trainTime", 1),
             TrainedAt = c.Text(u.TrainedAt, p + ".trainedAt"),
-            Requires = ImmutableArray.CreateRange(u.Requires ?? new List<string>()),
-            Tags = ImmutableArray.CreateRange(u.Tags ?? new List<string>()),
+            Requires = c.Ids(u.Requires, p + ".requires"),
+            Tags = c.Ids(u.Tags, p + ".tags"),
         };
     }
 
@@ -359,32 +359,62 @@ public static class DataLoader
             return s;
         }
 
+        /// <summary>An optional list of ids (absent means empty); every entry must pass <see cref="Id"/> (BUG-0009).</summary>
+        public ImmutableArray<string> Ids(List<string?>? values, string path)
+        {
+            if (values == null) return ImmutableArray<string>.Empty;
+            var ids = ImmutableArray.CreateBuilder<string>(values.Count);
+            for (int i = 0; i < values.Count; i++)
+            {
+                string id = Id(values[i], $"{path}[{i}]");
+                if (id.Length > 0) ids.Add(id);
+            }
+            return ids.ToImmutable();
+        }
+
+        // The numeric readers return 0 for a rejected value, so a caller's follow-up checks
+        // (radius range, half-pop, tick rounding) never report the same field twice, and an
+        // out-of-range double never narrows to float Infinity or a wrapped int (BUG-0007).
+
         public int Int(int? value, string path, int min)
         {
             if (value == null) Error(path, "missing required field");
             else if (value < min) Error(path, $"{value} is below the minimum {min}");
-            return value ?? 0;
+            else if (value > DataLimits.MaxInteger) Error(path, $"{value} is above the maximum {DataLimits.MaxInteger}");
+            else return value.Value;
+            return 0;
         }
 
         public double Pos(double? value, string path)
         {
             if (value == null) Error(path, "missing required field");
             else if (!(value > 0)) Error(path, $"{value} must be positive");
-            return value ?? 0;
+            else if (!(value <= DataLimits.MaxDecimal)) Error(path, $"{value} is above the maximum {DataLimits.MaxDecimal}");
+            else return value.Value;
+            return 0;
         }
 
         public double NonNeg(double? value, string path)
         {
             if (value == null) Error(path, "missing required field");
             else if (!(value >= 0)) Error(path, $"{value} must not be negative");
-            return value ?? 0;
+            else if (!(value <= DataLimits.MaxDecimal)) Error(path, $"{value} is above the maximum {DataLimits.MaxDecimal}");
+            else return value.Value;
+            return 0;
         }
 
         public int Ticks(double? seconds, string path, int minTicks)
         {
+            int errorsBefore = Errors.Count;
             double s = minTicks > 0 ? Pos(seconds, path) : NonNeg(seconds, path);
+            if (Errors.Count > errorsBefore) return 0;
+            if (s > DataLimits.MaxSeconds)
+            {
+                Error(path, $"{s} s is above the maximum {DataLimits.MaxSeconds} s");
+                return 0;
+            }
             int ticks = SecondsToTicks(s);
-            if (seconds > 0 && ticks < minTicks) Error(path, $"{s} s rounds to {ticks} ticks");
+            if (ticks < minTicks) Error(path, $"{s} s rounds to {ticks} ticks");
             return ticks;
         }
 
