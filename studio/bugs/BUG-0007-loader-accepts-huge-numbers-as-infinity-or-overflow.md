@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-03-1151, task M1-2 |
 | System | data loader |
-| Fixed by | |
+| Fixed by | db700c5 (M1-3); regressions `QA.DataLoaderQaTests.HugeFloat_IsRejected_NotStoredAsInfinity`, `HugePopCap_IsRejected_NotOverflowedToNegative`, `QA.DataLoaderBoundsQaTests.*`. QA verified 2026-10-03-1235: removing each upper-bound guard (Pos, NonNeg, Int, MaxSeconds) makes a test fail. |
 
 ## Repro
 1. Un-skip `Rts.Sim.Tests.QA.DataLoaderQaTests.HugeFloat_IsRejected_NotStoredAsInfinity` and

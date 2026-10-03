@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-03-1151, task M1-2 |
 | System | data loader |
-| Fixed by | |
+| Fixed by | db700c5 (M1-3); regressions `QA.DataLoaderQaTests.NullEntryInRequiresOrTags_IsRejected`, `QA.DataLoaderBoundsQaTests.RequiresAndTagsEntries_ReportTheirOwnIndexedPath`. QA verified 2026-10-03-1235: bypassing `Checker.Id` in `Checker.Ids` makes both fail. |
 
 ## Repro
 1. Un-skip `Rts.Sim.Tests.QA.DataLoaderQaTests.NullEntryInRequiresOrTags_IsRejected`.
