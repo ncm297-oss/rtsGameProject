@@ -45,7 +45,8 @@ _Required criteria met in session 2026-10-03-0826 (task M0-1). Owner signed off 
 
 - [x] `World`, entity stores with generational handles, seeded RNG streams, `SimMath`, command queue, fixed tick.
       _(session 2026-10-03-0907, task M1-1)_
-- [ ] Data loader for `game/data/` with validation; a test loads all data.
+- [x] Data loader for `game/data/` with validation; a test loads all data.
+      _(session 2026-10-03-1151, task M1-2: `DataValidationTests.ShippedData_LoadsWithNoErrors`)_
 - [ ] Terraced heightmap generator (elevation levels 0-2, ramps); nav grid with slope passability and per-cell level; spatial hash.
 - [ ] Flow fields with LRU cache; steering, separation, arrival, shoving.
 - [ ] Scenario test: 200 units ordered across a 128×128 map with obstacles all arrive within a

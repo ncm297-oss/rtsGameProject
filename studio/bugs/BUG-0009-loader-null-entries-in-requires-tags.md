@@ -26,3 +26,5 @@ that matches tags or resolves requires will hit a null or never match.
 ## Notes
 `BuildUnit` does `ImmutableArray.CreateRange(u.Requires ?? new List<string>())` with no per-entry
 check. Duplicate entries (`["infantry", "infantry"]`) are also accepted; probably harmless.
+
+**Producer triage (2026-10-03-1151):** S4 confirmed. Fix in the first commit of M1-3 alongside BUG-0007: run each `requires`/`tags` entry through `Checker.Id`, un-skip `NullEntryInRequiresOrTags_IsRejected`.

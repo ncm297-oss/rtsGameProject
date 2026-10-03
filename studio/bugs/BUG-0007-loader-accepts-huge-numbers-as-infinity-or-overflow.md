@@ -37,3 +37,5 @@ still reported): `cooldown`/`windup`/`trainTime` of `1e10` report
 reports `pop 10000000000 is not a multiple of 0.5` (overflow in `ToHalfPop`). Suggested fix: an
 upper bound per field in `DataLimits` (or at least "result must be finite and fit in int") checked
 before narrowing.
+
+**Producer triage (2026-10-03-1151):** S3 confirmed, does not block M1-2. Fix in the first commit of M1-3: finite/upper bounds in `Checker` before narrowing to float/int (add limits to `DataLimits`), then un-skip `HugeFloat_IsRejected_NotStoredAsInfinity` and `HugePopCap_IsRejected_NotOverflowedToNegative`.

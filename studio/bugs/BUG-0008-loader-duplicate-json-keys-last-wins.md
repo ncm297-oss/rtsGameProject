@@ -30,3 +30,5 @@ System.Text.Json on .NET 8 has no built-in duplicate-property rejection for POCO
 `Dictionary<,>` (the `AllowDuplicateProperties` option arrives in .NET 10). Options: pre-scan each
 file with `Utf8JsonReader` (load time only, no reflection) tracking property names per object
 depth, or read the dictionaries through a small custom converter that reports repeats.
+
+**Producer triage (2026-10-03-1151):** S3 confirmed, does not block. Needs a `Utf8JsonReader` pre-scan (~40 lines); fix with the M3 data task that adds `buildings.json`/`techs.json`, when the loader grows anyway.
