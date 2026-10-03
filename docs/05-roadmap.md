@@ -43,7 +43,8 @@ _Required criteria met in session 2026-10-03-0826 (task M0-1). Owner signed off 
 
 **Done when:**
 
-- [ ] `World`, entity stores with generational handles, seeded RNG streams, `SimMath`, command queue, fixed tick.
+- [x] `World`, entity stores with generational handles, seeded RNG streams, `SimMath`, command queue, fixed tick.
+      _(session 2026-10-03-0907, task M1-1)_
 - [ ] Data loader for `game/data/` with validation; a test loads all data.
 - [ ] Terraced heightmap generator (elevation levels 0-2, ramps); nav grid with slope passability and per-cell level; spatial hash.
 - [ ] Flow fields with LRU cache; steering, separation, arrival, shoving.

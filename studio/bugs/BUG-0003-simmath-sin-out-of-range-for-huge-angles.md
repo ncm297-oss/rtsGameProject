@@ -30,3 +30,7 @@ Not reachable by M1-1 code; it becomes reachable once anything accumulates an an
 normalizing it (e.g. a facing that integrates turn rate). Cheap fixes: clamp the reduced `r` into
 [-pi, pi] (or loop the fold), or reduce in double, or document and assert a max input magnitude.
 A sine outside [-1, 1] would turn a direction vector into a teleport.
+
+**Producer triage (2026-10-03-0907):** S3 confirmed, does not block M1-1. Fix in the first commit
+of M1-2: clamp or re-fold the reduced angle so the result is always in [-1, 1], then un-skip
+`SinCos_HugeFiniteAngles_StayWithinUnitRange`. Keep the docs/03 note that accuracy degrades.

@@ -38,3 +38,8 @@ Not reachable at M1 sizes; becomes relevant if move orders are issued per unit (
 players, plus AI). Options: per-player buckets merged in player order (O(n), no sort at all, since
 sequence is already monotonic per player), or an in-place heap/merge sort on a preallocated scratch
 buffer. Below ~1,000 commands per tick the current code is within budget, so S3 not S2.
+
+**Producer triage (2026-10-03-0907):** S3 confirmed, does not block. Defer to M1-4 (flow fields
+and steering), when the `Move` command makes per-unit floods possible. Preferred fix: per-player
+buckets merged in player order (sequence is already monotonic per player), no sort. Then un-skip
+`Flood_10000InterleavedCommands_NoFrameStall`.

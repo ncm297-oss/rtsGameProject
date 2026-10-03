@@ -30,3 +30,7 @@ recorder that only logs accepted commands would diverge from a live run that hit
 the sequence numbers get a gap. Fix: check capacity (or call `Add`) before incrementing the
 counter. Invalid player ids are checked first and do leave state unchanged (verified by
 `Enqueue_InvalidPlayer_LeavesStateUnchanged`).
+
+**Producer triage (2026-10-03-0907):** S3 confirmed, does not block M1-1. Fix in the first commit
+of M1-2: stamp the sequence from `_nextSequence[player]` without incrementing, call `Add`, then
+increment; un-skip `Enqueue_WhenQueueFull_LeavesStateUnchanged`.

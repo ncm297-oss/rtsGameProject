@@ -27,3 +27,8 @@ The position is copied verbatim into `Position` and `PrevPosition`.
 SpawnUnit is a test/dev-console command today, so S4. Worth a shared "validate command" step
 before Move/Attack/Build commands arrive in M1/M2, where a bad screen-to-ground ray is a real
 source of NaN.
+
+**Producer triage (2026-10-03-0907):** S4 confirmed, does not block. Fix in the first commit of
+M1-2 alongside BUG-0003/0004: drop a `SpawnUnit` with a non-finite position in `Apply` (same
+policy as the store-full case), via a small `Command.IsValid`-style check that later command
+kinds reuse; un-skip `SpawnUnit_NonFinitePosition_NeverEntersState`.
