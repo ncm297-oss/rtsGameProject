@@ -43,8 +43,9 @@ public sealed class Simulation
         if ((uint)command.Player >= (uint)_nextSequence.Length)
             throw new ArgumentOutOfRangeException(nameof(command), $"Unknown player {command.Player}.");
         command.Tick = World.TickNumber + 1;
-        command.Sequence = _nextSequence[command.Player]++;
-        _commands.Add(in command);
+        command.Sequence = _nextSequence[command.Player];
+        _commands.Add(in command); // throws when full; bump the counter only once accepted (BUG-0004)
+        _nextSequence[command.Player]++;
     }
 
     /// <summary>Runs one tick: applies this tick's commands in (player, sequence) order, then bumps <see cref="TickNumber"/>.</summary>
@@ -112,6 +113,8 @@ public sealed class Simulation
 
     private void Apply(in Command command)
     {
+        // Malformed input (e.g. a NaN ray cast) is dropped, like a spawn into a full store (BUG-0006).
+        if (!command.IsValid()) return;
         switch (command.Kind)
         {
             case CommandKind.Noop:

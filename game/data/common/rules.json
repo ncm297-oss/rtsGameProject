@@ -1,0 +1,12 @@
+{
+  "startingGold": 200,
+  "startingWood": 200,
+  "startingWorkers": 5,
+  "popCap": 100,
+  "workerCarry": 10,
+  "gatherRate": { "gold": 0.7, "wood": 0.6 },
+  "startMines": { "count": 2, "gold": 2500 },
+  "expansionMines": { "count": 2, "gold": 2000 },
+  "treeWood": 100,
+  "nodeSearchRadius": 20
+}

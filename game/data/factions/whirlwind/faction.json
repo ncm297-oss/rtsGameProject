@@ -1,0 +1,14 @@
+{
+  "id": "whirlwind",
+  "displayName": "The Whirlwind",
+  "description": "The Army of the Apocalypse: tribes, bandits, priests, and fanatics rising out of the holy desert. Huge, fast, poorly armored, and burning with faith.",
+  "bonus": {
+    "displayName": "Army of the Apocalypse",
+    "description": "All units cost 20% less and have 10% less health. Workers gather 15% faster."
+  },
+  "resources": {
+    "gold": { "displayName": "Gold" },
+    "wood": { "displayName": "Wood" }
+  },
+  "palette": { "primary": "#C8892E", "secondary": "#E3D3AC", "accent": "#A3192B" }
+}

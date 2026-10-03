@@ -1,0 +1,32 @@
+using System.Collections.Immutable;
+
+namespace Rts.Sim.Data;
+
+/// <summary>A unit's attack (docs/02 "Combat / Stats"), with times in ticks.</summary>
+public sealed class AttackDef
+{
+    internal AttackDef()
+    {
+    }
+
+    /// <summary>Base damage per hit.</summary>
+    public int Value { get; init; }
+    /// <summary>Damage type id into <see cref="DamageTable"/>.</summary>
+    public int DamageType { get; init; }
+    /// <summary>Ticks between attacks.</summary>
+    public int CooldownTicks { get; init; }
+    /// <summary>Ticks from attack start to the damage point.</summary>
+    public int WindupTicks { get; init; }
+    /// <summary>Range in meters, edge to edge (melee is 0.5).</summary>
+    public float Range { get; init; }
+    /// <summary>Minimum range in meters; 0 when none.</summary>
+    public float MinRange { get; init; }
+    /// <summary>Splash radius in meters; 0 when none.</summary>
+    public float Splash { get; init; }
+    /// <summary>True when splash also hits allied and own units (docs/02 "Splash and friendly fire").</summary>
+    public bool FriendlyFire { get; init; }
+    /// <summary>Projectile id, unresolved until M4; null for melee.</summary>
+    public string? Projectile { get; init; }
+    /// <summary>Damage multiplier per armor class id (1 where the data gives none).</summary>
+    public required ImmutableArray<float> BonusVs { get; init; }
+}

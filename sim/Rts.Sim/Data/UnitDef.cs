@@ -1,0 +1,54 @@
+using System.Collections.Immutable;
+
+namespace Rts.Sim.Data;
+
+/// <summary>One unit type from <c>factions/&lt;id&gt;/units.json</c>, converted to sim units (ticks, half-pop).</summary>
+public sealed class UnitDef
+{
+    internal UnitDef()
+    {
+    }
+
+    /// <summary>Dense unit id (index into <see cref="GameData.Units"/>).</summary>
+    public int Id { get; init; }
+    /// <summary>String id, e.g. <c>malazan_crossbowman</c>.</summary>
+    public required string Key { get; init; }
+    /// <summary>Owning faction id.</summary>
+    public int Faction { get; init; }
+    /// <summary>Template slot.</summary>
+    public UnitSlot Slot { get; init; }
+    /// <summary>Player-facing name.</summary>
+    public required string DisplayName { get; init; }
+    /// <summary>Player-facing tooltip text.</summary>
+    public required string Description { get; init; }
+    /// <summary>Model path under assets, unresolved until M2/M6.</summary>
+    public required string Model { get; init; }
+    /// <summary>Maximum hit points.</summary>
+    public int Hp { get; init; }
+    /// <summary>Flat armor.</summary>
+    public int Armor { get; init; }
+    /// <summary>Armor class id into <see cref="DamageTable"/>.</summary>
+    public int ArmorClass { get; init; }
+    /// <summary>The unit's attack.</summary>
+    public required AttackDef Attack { get; init; }
+    /// <summary>Movement speed in meters per tick.</summary>
+    public float SpeedPerTick { get; init; }
+    /// <summary>Sight radius in meters.</summary>
+    public float Sight { get; init; }
+    /// <summary>Collision radius in meters.</summary>
+    public float Radius { get; init; }
+    /// <summary>Gold cost.</summary>
+    public int CostGold { get; init; }
+    /// <summary>Wood cost.</summary>
+    public int CostWood { get; init; }
+    /// <summary>Population cost in half-pop units (pop 1 = 2, pop 1.5 = 3).</summary>
+    public int HalfPop { get; init; }
+    /// <summary>Ticks to train.</summary>
+    public int TrainTicks { get; init; }
+    /// <summary>Building id that trains it, unresolved until M3.</summary>
+    public required string TrainedAt { get; init; }
+    /// <summary>Building/tech ids required to train it, unresolved until M3/M4.</summary>
+    public required ImmutableArray<string> Requires { get; init; }
+    /// <summary>Free-form tags used by bonuses and targeting (e.g. <c>infantry</c>).</summary>
+    public required ImmutableArray<string> Tags { get; init; }
+}

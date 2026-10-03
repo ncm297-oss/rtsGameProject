@@ -1,0 +1,14 @@
+{
+  "id": "malazan",
+  "displayName": "Malazan Empire",
+  "description": "A pragmatic empire of professional soldiers: heavy infantry, crossbows, cadre mages, and sappers with alchemical munitions. Solid at everything, best at nothing.",
+  "bonus": {
+    "displayName": "Imperial Drill",
+    "description": "Infantry units train 20% faster and cost 10% less Gold."
+  },
+  "resources": {
+    "gold": { "displayName": "Gold" },
+    "wood": { "displayName": "Wood" }
+  },
+  "palette": { "primary": "#4B4F55", "secondary": "#6B1E1E", "accent": "#8C6B3E" }
+}

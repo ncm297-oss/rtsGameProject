@@ -19,6 +19,13 @@ public struct Command
     /// <summary>Target position (x, z) in meters.</summary>
     public Vector2 Position;
 
+    /// <summary>True when the payload is safe to apply: positional commands need a finite position.</summary>
+    public readonly bool IsValid() => Kind switch
+    {
+        CommandKind.SpawnUnit => float.IsFinite(Position.X) && float.IsFinite(Position.Y),
+        _ => true,
+    };
+
     /// <summary>A command that does nothing.</summary>
     public static Command Noop(int player) => new() { Kind = CommandKind.Noop, Player = player };
 

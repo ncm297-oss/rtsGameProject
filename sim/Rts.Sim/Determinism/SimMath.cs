@@ -38,10 +38,18 @@ public static class SimMath
     {
         // Reduce to [-pi, pi], then fold into [-pi/2, pi/2] where the polynomial is accurate.
         float r = x - MathF.Floor(x * InvTwoPi + 0.5f) * TwoPi;
+        // For |x| past ~1e8 float spacing exceeds 2pi, so r can land anywhere (or at +-inf).
+        // Clamping keeps the result a bounded, if meaningless, sine (BUG-0003); NaN stays NaN.
+        if (r > Pi) r = Pi;
+        else if (r < -Pi) r = -Pi;
         if (r > HalfPi) r = Pi - r;
         else if (r < -HalfPi) r = -Pi - r;
         float r2 = r * r;
-        return r * (1f + r2 * (S3 + r2 * (S5 + r2 * (S7 + r2 * S9))));
+        float y = r * (1f + r2 * (S3 + r2 * (S5 + r2 * (S7 + r2 * S9))));
+        // The truncated series peaks at ~1.0000035 near pi/2; keep the result a true unit value.
+        if (y > 1f) y = 1f;
+        else if (y < -1f) y = -1f;
+        return y;
     }
 
     /// <summary>Cosine of an angle in radians.</summary>

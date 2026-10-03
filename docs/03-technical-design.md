@@ -91,7 +91,11 @@ position and facing. Commands from input are stamped with the next tick number.
 is called between ticks (input) or during one (AI think), so a command never changes the tick in
 progress. The cost is at most one tick (50 ms) of input latency. Pending commands live in a
 fixed-capacity `CommandQueue` (size from `SimConfig.CommandCapacity`) that is insertion-sorted in
-place each tick, so applying commands does not allocate.
+place each tick, so applying commands does not allocate. `Enqueue` on a full queue throws and
+leaves state unchanged (the sequence counter advances only once the command is accepted). At
+apply time, `Command.IsValid()` drops malformed commands (today: a `SpawnUnit` with a NaN or
+infinite position), the same policy as a spawn into a full unit store; new command kinds add
+their checks there.
 
 The sim runs on the main thread in v1. If profiling demands it later, move `Tick()` to a worker
 thread with double-buffered snapshots. The sim's design (no Godot calls, explicit snapshot
@@ -126,7 +130,9 @@ Rules:
   runtime-computed table either). `Sin` reduces the angle to [-pi, pi] with `floor`, folds it into
   [-pi/2, pi/2], and evaluates the Taylor series to x^9 (max error ~3.6e-6; `Cos(x) = Sin(x + pi/2)`).
   Accuracy degrades for |x| beyond a few hundred radians because the reduction is done in float;
-  keep angles normalized. `Atan2` folds into one octant and uses the Abramowitz & Stegun 4.4.49
+  keep angles normalized. Past ~1e8 the reduced angle is meaningless, so it is clamped to
+  [-pi, pi] and the result to [-1, 1]: a huge input gives a bounded wrong answer, never a value
+  outside [-1, 1] or infinity (BUG-0003). NaN in gives NaN out. `Atan2` folds into one octant and uses the Abramowitz & Stegun 4.4.49
   minimax polynomial for atan on [0, 1] (max error ~1.2e-5 rad); `Atan2(0, 0)` returns 0.
   `Sqrt` wraps `MathF.Sqrt`, which is IEEE-exact. `ArchitectureTests` forbids `Math.Sin`,
   `Cos`, `Atan`, `Atan2` (and the `MathF` versions) in sim source.
@@ -282,7 +288,7 @@ game/data/
   maps/<map_id>.json         # size, seed or heightmap ref, start locations, resources, biome
 ```
 
-Example unit definition:
+Example unit definition (one entry of the `"units"` array in `units.json`):
 
 ```json
 {
@@ -315,6 +321,48 @@ Example unit definition:
 - Stats in data are the **final** faction values (the faction bonus is already applied where it's
   a flat stat change); dynamic bonuses (regen, stealth rules, gather multipliers) are faction
   modifiers in `faction.json`.
+
+### What ships today (M1)
+
+`Rts.Sim.Data.DataLoader.LoadAll(dataDir)` returns a `DataLoadResult`: either an immutable
+`GameData` or the full list of `DataError`s (file relative to `game/data/`, field path such as
+`units[2].attack.type`, message). It never throws on bad data: a missing file, malformed JSON
+(reported with line and byte), or a bad field each become one error, and every file is still
+checked. The data-validation test is `DataValidationTests.ShippedData_LoadsWithNoErrors`.
+
+Shipped files: `common/damage_table.json`, `common/rules.json`, and `faction.json` + `units.json`
+for `malazan` and `whirlwind`. All five are required. Everything else in the tree above
+(`statuses`, `buildings`, `techs`, `abilities`, `ai`, `maps`, other factions) arrives with the
+milestone that consumes it.
+
+| File | Shape |
+| --- | --- |
+| `damage_table.json` | `armorClasses: [{id, displayName}]`, `damageTypes: [{id, displayName, ignoresArmor?, multipliers: {<armorClass>: x}}]`. Every type must list every class. `ignoresArmor` (default false) is how Magic skips armor |
+| `rules.json` | docs/02 Economy table: `startingGold`, `startingWood`, `startingWorkers`, `popCap`, `workerCarry`, `gatherRate {gold, wood}` (per second), `startMines` / `expansionMines {count, gold}`, `treeWood`, `nodeSearchRadius`. Pop provided by buildings comes with `buildings.json` (M3); age costs with `techs.json` |
+| `faction.json` | `id` (must equal the folder name), `displayName`, `description`, `bonus {displayName, description}`, `resources {gold, wood: {displayName}}`, `palette {primary, secondary, accent}` as `#RRGGBB` |
+| `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge) |
+
+Validation rules: ids are `snake_case` and unique (a unit id is unique across all factions);
+`slot` is one of the seven template slots; `armorClass`, `attack.type`, and `bonusVs` keys exist in
+the damage table; hp, speed, sight, radius, `attack.cooldown`, `trainTime`, and gather rates are
+positive; `radius` is within 0.4-1.0 m; `pop` is a multiple of 0.5; unknown JSON fields are errors
+(a typo must not silently fall back to a default). The only literals in C# are these schema limits,
+in `DataLimits`.
+
+Conversions at load: durations (`cooldown`, `windup`, `trainTime`) become ticks,
+`round(seconds × 20)` (2.2 s → 44, 0.45 s → 9); speed and gather rates become per-tick values;
+`pop` and `popCap` become half-pop integers (1 → 2, 1.5 → 3). String ids become dense ints in
+ordinal-sorted order of the id strings (units across all factions, factions, armor classes,
+damage types), so ids never depend on file order or file-system enumeration. `GameData` holds
+`ImmutableArray`s indexed by those ids; `FindUnit` / `FindFaction` map a string id back by binary
+search, for load time, tests, and tooling only.
+
+Not resolved yet (kept as plain strings): `trainedAt` and `requires` (resolved when
+`buildings.json`/`techs.json` land in M3/M4), `model` (M2/M6 asset pipeline), and `projectile`
+(M4 combat). Unit passives, abilities, detection, and faction modifiers (e.g. Whirlwind's gather
+bonus) are also not in the M1 schema; they arrive with `abilities.json` / `statuses.json` and the
+systems that use them. Collision radii in the shipped units (0.4 foot, 0.7 mounted, 0.9 siege) are
+first-pass values; the faction pages don't list them.
 
 ## Rendering and presentation
 

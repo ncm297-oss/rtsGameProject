@@ -1,0 +1,32 @@
+{
+  "armorClasses": [
+    { "id": "light", "displayName": "Light" },
+    { "id": "heavy", "displayName": "Heavy" },
+    { "id": "mounted", "displayName": "Mounted" },
+    { "id": "giant", "displayName": "Giant" },
+    { "id": "structure", "displayName": "Structure" }
+  ],
+  "damageTypes": [
+    {
+      "id": "melee",
+      "displayName": "Melee",
+      "multipliers": { "light": 1.0, "heavy": 1.0, "mounted": 1.0, "giant": 1.0, "structure": 0.4 }
+    },
+    {
+      "id": "pierce",
+      "displayName": "Pierce",
+      "multipliers": { "light": 1.25, "heavy": 0.6, "mounted": 1.0, "giant": 1.25, "structure": 0.2 }
+    },
+    {
+      "id": "siege",
+      "displayName": "Siege",
+      "multipliers": { "light": 0.5, "heavy": 0.75, "mounted": 0.5, "giant": 0.75, "structure": 3.0 }
+    },
+    {
+      "id": "magic",
+      "displayName": "Magic",
+      "ignoresArmor": true,
+      "multipliers": { "light": 1.0, "heavy": 1.25, "mounted": 1.0, "giant": 1.25, "structure": 0.4 }
+    }
+  ]
+}

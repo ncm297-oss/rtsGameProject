@@ -110,7 +110,7 @@ public class SimCoreQaTests
     [InlineData(1e7f)]
     public void SinCos_LargeFiniteAngles_StayWithinUnitRange(float x) => AssertUnitRange(x);
 
-    [Theory(Skip = "BUG-0003: SimMath.Sin returns values far outside [-1, 1] (or infinity) for |x| >= ~1e8; un-skip when fixed")]
+    [Theory] // regression test for BUG-0003
     [InlineData(1e9f)]
     [InlineData(-1e9f)]
     [InlineData(1e20f)]
@@ -247,7 +247,7 @@ public class SimCoreQaTests
 
     // ---------- Commands ----------
 
-    [Fact(Skip = "BUG-0004: a rejected Enqueue (queue full) still advances the player's sequence counter; un-skip when fixed")]
+    [Fact] // regression test for BUG-0004
     public void Enqueue_WhenQueueFull_LeavesStateUnchanged()
     {
         // "Fail explicitly, not corrupt": a rejected command should not advance the player's
@@ -285,7 +285,7 @@ public class SimCoreQaTests
         Assert.Equal(1, sim.World.Units.Count);
     }
 
-    [Fact(Skip = "BUG-0006: SpawnUnit copies NaN/Infinity positions into state; un-skip when fixed")]
+    [Fact] // regression test for BUG-0006
     public void SpawnUnit_NonFinitePosition_NeverEntersState()
     {
         var sim = new Simulation(new SimConfig(1, PlayerCount: 1, UnitCapacity: 8, CommandCapacity: 8));
