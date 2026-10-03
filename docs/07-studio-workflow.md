@@ -52,28 +52,52 @@ checkout to see its work. If you and the studio change the same thing, git merge
 
 ## How sessions start
 
+On 2026-10-03 the owner authorized the Producer to **start the next session whenever it's
+ready** and to check in only at the end of the plan.
+
 | Trigger | What happens |
 | --- | --- |
-| Scheduled routine **"RTS studio session"** in the Claude desktop app | Fires at 9am, noon, 3pm, 6pm, 9pm. Exits within seconds if there's nothing to do |
-| You type `/studio-session` | Runs a session now, even if autopilot is off |
-| You work with Claude directly | Normal interactive work; finish with `/handoff` so the Producer records it and the next scheduled session continues from there |
+| **Chain** (the main path) | A session ends with the Producer's `NEXT_GATE: GO`, so the conductor re-arms the routine to fire again 3 minutes later. The studio works through the roadmap session after session |
+| **Heartbeat** | While the studio is waiting (on HOLD, cap reached), the routine falls back to 9am, noon, 3pm, 6pm, 9pm. A heartbeat run exits within seconds unless something changed (a new inbox note, a new day after the cap) |
+| **Safety net** | Each working session first re-arms the routine 4 hours out, so a crash mid-session can't stall the studio for good |
+| You type `/studio-session` | Runs a session now, even if autopilot is off; it chains afterwards like any other |
+| You work with Claude directly | Normal interactive work; finish with `/handoff` so the Producer records it |
 
-The routine only runs while the desktop app is open. A run missed while the app was closed fires
-on the next launch. Change the schedule or pause it from the app's routines/scheduled tasks
-list, or ask Claude to.
+The routine only runs while the desktop app is open (a run missed while it was closed fires on
+the next launch). `max_sessions_per_day` in `studio/autopilot.md` caps the chain.
+
+## What the Producer may decide on its own
+
+With `stop_at_milestone_end: no` and `open_decisions: producer_default` in `studio/autopilot.md`:
+
+- **Milestone sign-off:** after verifying every required criterion and the QA coverage bar
+  (Unit, Invariant fuzz, Determinism), it marks the milestone Done, writes the retro, moves on,
+  and adds a "how to try it" note under **For your review** in `studio/STATE.md`.
+- **Routine design decisions:** [OPEN] items and minor design questions get the option the docs
+  recommend, recorded in the doc and the vision change log as "Producer decision, owner may
+  revisit", and listed under **For your review**. It never reverses a decision you made.
+- **Ordering:** if a task waits on you (a download, an account), it lists it under **Waiting on
+  you** and works on the next unblocked task, even from a later milestone.
+
+Flip either setting back to require your sign-off or your decisions again.
 
 ## When the studio stops and waits for you
 
 The Producer stops the loop and adds an item to **Waiting on you** at the top of
 [studio/STATE.md](../studio/STATE.md) when:
 
-- **A milestone is complete.** It writes playtest instructions; you play, then write
-  "M<n> accepted" (plus any feedback) in the inbox.
-- An **[OPEN]** design decision or taste call is needed.
-- Something needs a download, an account, an install, or money.
+- **End of plan:** the roadmap through M9 is done, or the only work left isn't in the roadmap.
+  It summarizes where the game stands and proposes what to design next; you approve new work.
+- Every remaining task needs something only you can do: a download, an account, an install,
+  money, or a taste call that has no documented default. (Agents never do these, whatever the
+  settings say.)
 - The build is red on `main` and the cause isn't clear, or the same task was rejected twice.
-- The daily cap in `studio/autopilot.md` is reached (it resumes the next day).
+- The daily cap in `studio/autopilot.md` is reached (it resumes the next day by itself).
 - An incident happened (a crash, a git conflict it won't resolve on its own).
+
+Expected stops along the current roadmap: **M6** needs you to download the asset packs (and
+ideally do the KayKit look test), and the AI-generated models need a Meshy or Tripo account. The
+studio keeps working on other tasks while those wait.
 
 With `notify_owner: yes`, you also get a desktop notification (and on your phone, if Remote
 Control is connected).

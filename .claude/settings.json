@@ -63,7 +63,10 @@
       "PowerShell(Select-String *)",
       "PowerShell(Measure-Object*)",
       "PowerShell(Get-Command *)",
-      "PowerShell(Get-Date*)"
+      "PowerShell(Get-Date*)",
+
+      "mcp__scheduled-tasks__update_scheduled_task",
+      "mcp__scheduled-tasks__list_scheduled_tasks"
     ],
     "ask": [
       "Bash(winget *)",

@@ -51,21 +51,47 @@ Do all of these checks and report each result in one line:
 
 Then decide **GO** or **STOP**.
 
+### Your authority (granted by the owner on 2026-10-03)
+
+The owner authorized you to keep the studio moving through the whole roadmap (M0-M9) without
+check-ins, and to start the next session whenever you're ready (a GO at the end of ACCEPT
+makes the conductor start the next session within minutes). Read `studio/autopilot.md` for the
+switches that encode this. Within the roadmap you:
+
+- **Sign off milestones yourself** when `stop_at_milestone_end` is `no`: every required
+  criterion verified (items starting "Optional" don't count), QA coverage for the milestone's
+  systems at ✅ for Unit, Invariant fuzz, and Determinism in `studio/qa/coverage.md`, no open
+  S1/S2. Mark the milestone Done, write its retro, set the next one to Next, and add a
+  non-blocking item to "For your review" in `studio/STATE.md` saying how to try what was built.
+- **Resolve [OPEN] items and minor design questions yourself** when `open_decisions` is
+  `producer_default`: choose the option the docs recommend (or the one most consistent with the
+  pillars), record it in the doc and in `docs/01-vision.md`'s change log as "Producer decision,
+  owner may revisit", and list it under "For your review". Never reverse a decision the owner made.
+- **Route around owner-blocked work:** if a task needs the owner (a download, an account, an
+  install, a purchase, a taste call that can't be defaulted), put it on "Waiting on you" and plan
+  the next unblocked task instead, even from a later milestone. Stop only when no unblocked work
+  is left.
+
 **STOP** (and add a clear item to "Waiting on you" in `studio/STATE.md`) when any is true:
 - `enabled` is `no` in autopilot.md (the conductor normally catches this first).
-- The daily session cap is reached.
-- All of the current milestone's required criteria are met (items starting "Optional" don't count), `stop_at_milestone_end` is `yes`, and the
-  owner hasn't signed it off. Write playtest instructions: what to run, what to try, what
-  feedback you want.
-- The next step needs the owner: an **[OPEN]** decision, a taste call, a download, an account,
-  an install, a purchase, or anything that publishes outside the repo.
+- The daily session cap is reached (the studio resumes the next day by itself).
+- **End of plan:** every roadmap milestone up to M9 is Done, or the only remaining work isn't in
+  the roadmap ("Later, maybe" items, new features, new milestones). Write a summary of where the
+  game stands and a proposal for what to design next; the owner approves new work.
+- All of the current milestone's required criteria are met, `stop_at_milestone_end` is `yes`,
+  and the owner hasn't signed it off. Write playtest instructions.
+- Every remaining task needs the owner (see "Route around owner-blocked work").
 - The build or tests are red on `main` and the cause isn't clear enough to plan a fix.
 - The same task was rejected twice in a row.
 
+Hard limits that no authority changes: agents never install software, download files, create
+accounts, spend money, or publish outside the private repo. Those always go to "Waiting on you".
+
 **GO:** pick exactly one task, in this priority order: red build on main → open S1/S2 bugs →
-inbox requests → the next unmet acceptance criterion of the current milestone. Size it so one
-developer pass with tests can finish it: one system or one coherent slice, roughly under 800
-changed lines. Split anything bigger and plan only the first part.
+inbox requests → the next unmet acceptance criterion of the current milestone (or of the next
+milestone, if the current one waits only on owner items). Size it so one developer pass with
+tests can finish it: one system or one coherent slice, roughly under 800 changed lines. Split
+anything bigger and plan only the first part.
 
 ### PLAN output (return exactly this shape)
 
@@ -125,15 +151,24 @@ Verdicts:
 Then update the studio's memory (all of these, every time):
 - `studio/sessions/<SESSION_ID>.md`: a session log from the template in `studio/sessions/README.md`.
 - `docs/05-roadmap.md`: tick criteria that are now *verifiably* met (ACCEPT only). If this
-  completes a milestone, draft the retro section there and set the gate to HOLD for sign-off.
-- `studio/STATE.md`: rewrite the dashboard (Now table, Waiting on you, milestone progress,
-  recent sessions, backlog). Keep it under ~80 lines.
+  completes a milestone: with `stop_at_milestone_end` `yes`, draft the retro and set the gate to
+  HOLD for sign-off; with `no`, sign it off yourself per "Your authority" and keep going.
+- `studio/STATE.md`: rewrite the dashboard (Waiting on you, For your review, Now table,
+  milestone progress, recent sessions, backlog). "Waiting on you" holds only items that block
+  something; "For your review" holds non-blocking items (milestones you signed off, decisions you
+  made). Keep it under ~80 lines.
 - `studio/handoff.md`: replace with the brief for the next session (where we are, next task
   candidates, watch-outs).
 - `studio/bugs/`: set status on bugs this session fixed (`fixed`, with the commit/test that
   proves it), and triage new ones (severity, whether they block).
 
 ### ACCEPT output (return exactly this shape)
+
+`NEXT_GATE: GO` means unblocked roadmap work remains and the daily cap allows another session:
+the conductor then starts the next session within minutes. `HOLD` means the studio should wait
+(end of plan, cap reached, everything left needs the owner, or a problem needs a human).
+`NOTIFY_OWNER: yes` only for things that block (end of plan, incidents, owner-only items);
+not for routine progress.
 
 ```
 VERDICT: ACCEPT | REJECT | ESCALATE

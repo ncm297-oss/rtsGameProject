@@ -23,20 +23,42 @@ Definitions:
 - `SOURCE` = `scheduled` if the prompt that started this session says "Source: scheduled",
   otherwise `owner`.
 - `LOCK` = `REPO/studio/.session.lock` (gitignored, machine-local).
+- `TASK` = the scheduled task id `rts-studio-session`. `HEARTBEAT` = cron `0 9-21/3 * * *`.
+
+## Scheduling: how the next session gets started
+
+The Producer may start the next session whenever it's ready (owner authorization, 2026-10-03).
+You implement that by re-arming `TASK` with the `update_scheduled_task` tool
+(`mcp__scheduled-tasks__update_scheduled_task`), each call on its own:
+- **Chain** (more work is ready): `fireAt` = now + 3 minutes, ISO 8601 with offset (get it from
+  `Get-Date (Get-Date).AddMinutes(3) -Format o`).
+- **Safety net** (set at the start of real work, step 0.6): `fireAt` = now + 4 hours, so a
+  crashed session can't stall the studio forever.
+- **Heartbeat** (waiting): `cronExpression` = `HEARTBEAT`.
+
+If the tool is unavailable or refused, set `CHAIN = off`, note it in the session log, and carry
+on: the routine then keeps whatever schedule it has.
 
 ## 0. Gate checks (exit cheaply when there's nothing to do)
 
 Run these in `REPO`, before entering the worktree.
 
-1. Read `REPO/studio/autopilot.md`. If `enabled` is not `yes` and `SOURCE` is `scheduled`, reply
-   "Autopilot is disabled; exiting." and stop. An owner-started run continues anyway.
-2. If `LOCK` exists and the time written in it is less than 6 hours ago, reply "Another studio
-   session is running; exiting." and stop. Otherwise write the current time and `SESSION_ID`
-   into `LOCK` (Write tool). From here on, step 9 must run no matter what happens.
-3. Tools: `$GODOT` (Bash) / `$env:GODOT` (PowerShell) must point at an existing file, and
+1. Read `REPO/studio/autopilot.md`. If `enabled` is not `yes` and `SOURCE` is `scheduled`, set
+   the heartbeat, reply "Autopilot is disabled; exiting." and stop. An owner-started run
+   continues anyway.
+2. If `LOCK` exists and the time written in it is less than 3 hours ago, reply "Another studio
+   session is running; exiting." and stop (don't touch the schedule; that session re-arms it).
+3. Waiting check (scheduled runs only): if `REPO/studio/STATE.md` shows Gate **HOLD**, its reason
+   is not the daily cap (or the cap was hit on an earlier day), and `REPO/studio/inbox.md` has no
+   notes under **New**, nothing can have changed: set the heartbeat, reply "Studio is on HOLD
+   and the inbox is empty; exiting." and stop.
+4. Write the current time and `SESSION_ID` into `LOCK` (Write tool). From here on, step 9 must
+   run no matter what happens.
+5. Tools: `$GODOT` (Bash) / `$env:GODOT` (PowerShell) must point at an existing file, and
    `dotnet --list-sdks` must list an 8.0 SDK. If either fails, go to the incident path with
    "tools not visible to the session".
-4. `git fetch origin`. Note `BASE` = `git rev-parse origin/main`.
+6. Set the safety net (`fireAt` = now + 4 hours).
+7. `git fetch origin`. Note `BASE` = `git rev-parse origin/main`.
 
 ## 1. Enter the studio worktree
 
@@ -137,7 +159,11 @@ commit on a detached `origin/main` checkout and push if possible. Set the notifi
 1. If you entered the worktree, make sure it's clean (commit or record anything left, never
    delete it), then call `ExitWorktree` with `action: "keep"` to return to `REPO`.
 2. Delete `LOCK` from `REPO` (`rm studio/.session.lock`).
-3. If the producer returned `NOTIFY_OWNER: yes` (or an incident happened) and `notify_owner` is
+3. Re-arm the schedule (unless `CHAIN` is off):
+   - **Chain** if the producer's ACCEPT returned `NEXT_GATE: GO`, `chain_sessions` is `yes`, and
+     no incident happened.
+   - Otherwise (PLAN said STOP, `NEXT_GATE: HOLD`, or an incident): **heartbeat**.
+4. If the producer returned `NOTIFY_OWNER: yes` (or an incident happened) and `notify_owner` is
    `yes`, send one `PushNotification` with its message.
-4. Final reply, at most 6 lines: session id, task, verdict, what landed on GitHub `main`, and
-   what's waiting on the owner.
+5. Final reply, at most 6 lines: session id, task, verdict, what landed on GitHub `main`, what's
+   waiting on the owner, and when the next session starts (chained in 3 minutes, or heartbeat).
