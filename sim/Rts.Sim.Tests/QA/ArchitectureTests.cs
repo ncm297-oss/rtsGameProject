@@ -17,6 +17,12 @@ public class ArchitectureTests
         (@"\bGuid\.NewGuid\b", "non-deterministic ids"),
         (@"\bHashCode\.", "HashCode is randomized per process"),
         (@"\bParallel\.|\bVector<", "no parallel loops or Vector<T> in the sim"),
+        (@"\bMath\.(Sin|Cos|Atan2|Atan)\b", "trig must go through SimMath"),
+        (@"\bMathF\.(Sin|Cos|Atan2|Atan)\b", "trig must go through SimMath"),
+        // QA (M1-1): the rest of the CRT transcendental family, and `using static` which would let
+        // a bare `Sin(x)` bypass every pattern above.
+        (@"\bMathF?\.(Tan|Asin|Acos|SinCos|Sinh|Cosh|Tanh|Asinh|Acosh|Atanh)\b", "trig must go through SimMath"),
+        (@"\busing\s+static\s+System\.MathF?\b", "using static Math hides trig calls from this scan"),
     };
 
     [Fact]

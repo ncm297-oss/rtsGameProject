@@ -16,13 +16,12 @@ Commit and push after editing, from either machine (or ask Claude to).
   in `.claude/agents/producer.md` ("Your authority"). Please restructure STATE.md with a
   **For your review** section for non-blocking items.
 
-- 2026-10-03 · **M0 accepted.** (Owner sign-off, relayed by Claude in an interactive session.
-  Build, 4/4 tests, and `tools/qa/smoke.ps1` were re-run green after merging session
-  2026-10-03-0826 into main.) Go ahead with M1.
-- 2026-10-03 · The "RTS studio session" routine is confirmed on **auto** permission mode; clear
-  that item from Waiting on you.
-
 ## Processed
+
+- 2026-10-03 · "M0 accepted. Go ahead with M1." → M0 marked **Done** in docs/05-roadmap.md,
+  retro finalized, change log line in docs/01-vision.md, HOLD lifted; M1-1 planned in session
+  2026-10-03-0907.
+- 2026-10-03 · "Routine confirmed on auto permission mode." → Cleared from Waiting on you.
 
 - 2026-10-02 · "High ground bonus yes, all other open items default." → Recorded in
   docs/01-vision.md and docs/02-game-design.md; roadmap updated (M1 terraced terrain, M4 vision

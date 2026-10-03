@@ -3,7 +3,7 @@
 Malazan-inspired 3D RTS. Godot 4.7 (.NET build) + C#, Windows desktop, single-player vs AI.
 Hobby/learning project: a codebase the owner understands beats a clever one.
 
-**Current milestone: M0 (environment & skeleton).** See [docs/05-roadmap.md](docs/05-roadmap.md).
+**Current milestone: M1 (core sim, no graphics).** See [docs/05-roadmap.md](docs/05-roadmap.md).
 Live status is in [studio/STATE.md](studio/STATE.md). Don't write gameplay code ahead of the roadmap.
 
 An AI studio works on this repo between the owner's sessions: `producer` (Fable) plans and
@@ -74,16 +74,17 @@ dotnet build RtsGame.sln                                   # build everything
 dotnet test sim/Rts.Sim.Tests                              # sim tests, run after every sim change
 dotnet test sim/Rts.Sim.Tests --filter Category!=Perf      # skip benchmarks for a quick loop
 & $env:GODOT --headless --path game --import               # (re)import assets after adding files
-& $env:GODOT --headless --path game --quit-after 600       # headless smoke run, must exit 0
+powershell -File tools/qa/smoke.ps1                        # build + import + headless boot gate, must print PASS
 & $env:GODOT --path game                                   # run the game windowed
 powershell -File tools/export.ps1                           # Windows release build -> build/ (not yet written)
 ```
 
-Headless Godot does **not** compile C#: run `dotnet build RtsGame.sln` before the smoke run, or it
-loads a stale (or missing) `RtsGame.dll`. The smoke run also exits 0 when a script fails to load,
-so check its output too: it must contain `Rts.Sim <version>` and no line containing `ERROR`.
-If `$env:GODOT` is empty in a non-interactive shell, read it with
-`[Environment]::GetEnvironmentVariable('GODOT','User')`.
+Why the script and not a bare `& $env:GODOT --headless --path game --quit-after 600`: headless
+Godot does **not** compile C# (it loads a stale or missing `RtsGame.dll`), and it exits 0 even when
+a script fails to load. `tools/qa/smoke.ps1` builds first, then fails unless the log contains
+`Rts.Sim <version>` and no `ERROR` line. It reads `GODOT` from the user environment itself if
+`$env:GODOT` is empty in a non-interactive shell
+(`[Environment]::GetEnvironmentVariable('GODOT','User')`).
 
 ## Coding conventions
 
@@ -109,7 +110,8 @@ If `$env:GODOT` is empty in a non-interactive shell, read it with
 ## Definition of done (any task)
 
 1. `dotnet build` clean, `dotnet test` green.
-2. If `game/` changed: headless smoke run exits 0 with no `ERROR` lines in the log.
+2. If `game/` changed: `powershell -File tools/qa/smoke.ps1` prints PASS (it exits non-zero on a
+   missing `Rts.Sim <version>` banner or any `ERROR` line, which Godot's own exit code hides).
 3. If visuals changed: run windowed, take a screenshot (Godot MCP or the `--screenshot` debug
    flag once it exists), and look at it before claiming it works.
 4. Docs updated in the same commit when behavior or a decision changed.

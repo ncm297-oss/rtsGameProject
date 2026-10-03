@@ -86,6 +86,13 @@ at least 50 ms it runs one tick (max 5 ticks per frame, to avoid a death spiral 
 Views render at `alpha = accumulator / 50 ms` between each entity's previous and current
 position and facing. Commands from input are stamped with the next tick number.
 
+`TickNumber` is the number of the tick that runs on the next `Tick()` call (0 before the first).
+`Simulation.Enqueue` always stamps `TickNumber + 1` plus a per-player sequence number, whether it
+is called between ticks (input) or during one (AI think), so a command never changes the tick in
+progress. The cost is at most one tick (50 ms) of input latency. Pending commands live in a
+fixed-capacity `CommandQueue` (size from `SimConfig.CommandCapacity`) that is insertion-sorted in
+place each tick, so applying commands does not allocate.
+
 The sim runs on the main thread in v1. If profiling demands it later, move `Tick()` to a worker
 thread with double-buffered snapshots. The sim's design (no Godot calls, explicit snapshot
 output) already allows this.
@@ -99,6 +106,12 @@ Rules:
 
 - One seeded RNG (`SimRng`, xorshift/PCG) owned by `World`, with separate streams for map gen,
   combat, and each AI player, so adding a random call in one system doesn't shift the others.
+  **Implementation (M1-1):** `SimRng` is **PCG32 (XSH-RR)**: 64-bit LCG state, 32-bit output,
+  seeded like O'Neill's `pcg32_srandom_r(seed, streamId)`. Every stream uses the match seed;
+  the stream id (`RngStream.MapGen = 0`, `Combat = 1`, `Ai(player) = 2 + player`) selects the
+  LCG increment, so streams are independent sequences. `NextInt` uses Lemire's
+  multiply-and-reject (no modulo bias); `NextFloat` uses the top 24 bits, giving [0, 1).
+  `SimRng` is a mutable struct: always access it by `ref` (`ref world.Rng(RngStream.Combat)`).
 - No `System.Random`, `DateTime`, `Stopwatch`, `Guid`, `string.GetHashCode()`, or `HashCode` in
   gameplay code.
 - No iteration over `Dictionary`/`HashSet` where order affects outcomes. Entities update in
@@ -109,6 +122,17 @@ Rules:
   hardware-width-dependent code. This aims to make golden replay hashes match across the owner's
   two machines (both x64 Windows, same .NET version) too; if they don't, the replay test reports
   it and we investigate.
+  **Implementation (M1-1):** `SimMath` uses polynomials only (no lookup table, so no
+  runtime-computed table either). `Sin` reduces the angle to [-pi, pi] with `floor`, folds it into
+  [-pi/2, pi/2], and evaluates the Taylor series to x^9 (max error ~3.6e-6; `Cos(x) = Sin(x + pi/2)`).
+  Accuracy degrades for |x| beyond a few hundred radians because the reduction is done in float;
+  keep angles normalized. `Atan2` folds into one octant and uses the Abramowitz & Stegun 4.4.49
+  minimax polynomial for atan on [0, 1] (max error ~1.2e-5 rad); `Atan2(0, 0)` returns 0.
+  `Sqrt` wraps `MathF.Sqrt`, which is IEEE-exact. `ArchitectureTests` forbids `Math.Sin`,
+  `Cos`, `Atan`, `Atan2` (and the `MathF` versions) in sim source.
+- **State hash:** `Simulation.StateHash()` is 64-bit FNV-1a (`StateHasher`) over the tick number,
+  every unit slot's generation and alive flag, every live unit's fields, the free list, all RNG
+  states, per-player command sequence counters, and pending commands.
 
 ## Entity model
 

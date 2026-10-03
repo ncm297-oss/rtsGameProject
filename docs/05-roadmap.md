@@ -7,8 +7,8 @@ Status legend: **Next** = start here, **Planned** = not started, **Done** = acce
 
 | # | Milestone | Status | One-line goal |
 | --- | --- | --- | --- |
-| M0 | Environment & skeleton | **Criteria met, awaiting sign-off** | Tools installed, empty projects build, tests and headless boot pass |
-| M1 | Core sim, no graphics | Planned | 200 units path across the map deterministically, fast |
+| M0 | Environment & skeleton | **Done** (2026-10-03) | Tools installed, empty projects build, tests and headless boot pass |
+| M1 | Core sim, no graphics | **Next** | 200 units path across the map deterministically, fast |
 | M2 | Presentation | Planned | Move an army around a 3D map |
 | M3 | Economy & buildings | Planned | Build a Malazan base |
 | M4 | Combat, fog, abilities | Planned | Malazan vs. Whirlwind armies fight with abilities and fog |
@@ -36,14 +36,15 @@ mechanics.
 - [x] Commands in CLAUDE.md verified (fix any that are wrong).
 - [ ] Optional: Godot MCP server configured for Claude Code.
 
-_Required criteria met in session 2026-10-03-0826 (task M0-1). Awaiting owner sign-off ("M0
-accepted" in `studio/inbox.md`) before M1 starts._
+_Required criteria met in session 2026-10-03-0826 (task M0-1). Owner signed off ("M0 accepted",
+`studio/inbox.md`, 2026-10-03). The optional MCP item stays open and is not required._
 
 ## M1 — Core sim, no graphics
 
 **Done when:**
 
-- [ ] `World`, entity stores with generational handles, seeded RNG streams, `SimMath`, command queue, fixed tick.
+- [x] `World`, entity stores with generational handles, seeded RNG streams, `SimMath`, command queue, fixed tick.
+      _(session 2026-10-03-0907, task M1-1)_
 - [ ] Data loader for `game/data/` with validation; a test loads all data.
 - [ ] Terraced heightmap generator (elevation levels 0-2, ramps); nav grid with slope passability and per-cell level; spatial hash.
 - [ ] Flow fields with LRU cache; steering, separation, arrival, shoving.
@@ -170,7 +171,7 @@ Add one section per completed milestone below.
 
 ## Retros
 
-### M0 retro (2026-10-03, draft pending owner sign-off)
+### M0 retro (2026-10-03, signed off by the owner the same day)
 - What shipped: `RtsGame.sln`; `sim/Rts.Sim` (net8.0, nullable, warnings-as-errors, no refs)
   with `SimInfo.Version = "0.0.1"`; `sim/Rts.Sim.Tests` (xUnit, 4 tests incl. architecture
   guards for the sim/Godot split and forbidden APIs); `game/` Godot 4.7.2 C# project whose
