@@ -147,9 +147,10 @@ Chosen by the owner on 2026-10-02: **project allowlist + auto mode** for unatten
     `git rebase`, history rewriting, `git branch -D`, registry edits, execution-policy and
     Defender changes, `netsh`, permission changes (`icacls`, `takeown`), shutdown/restart, disk
     formatting, deleting from the drive root or home, reading `.env` files.
-- **Scheduled runs use auto mode:** anything not on the lists is reviewed by Claude Code's
-  safety classifier before it runs. Check the routine's permission mode in the desktop app's
-  scheduled tasks list; it should say auto.
+- **Every session in this project starts in auto mode** (`"defaultMode": "auto"` in
+  `.claude/settings.json`, added 2026-10-03 because new sessions were starting in manual mode
+  and stalling on prompts). Anything not on the lists is reviewed by Claude Code's safety
+  classifier before it runs. You can still switch a single session's mode in the app.
 - An unattended session that hits an "always asks" action can't get an answer, so the Producer
   plans around those and lists them under Waiting on you instead.
 - To loosen or tighten access later, edit `.claude/settings.json` (or ask Claude to) and commit.
