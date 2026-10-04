@@ -19,7 +19,9 @@ public sealed class Heightmap
     {
         if (width < 1) throw new ArgumentOutOfRangeException(nameof(width));
         if (height < 1) throw new ArgumentOutOfRangeException(nameof(height));
-        int n = width * height;
+        long cells = (long)width * height; // int multiplication would wrap and accept empty arrays (BUG-0012)
+        if (cells > Array.MaxLength) throw new ArgumentOutOfRangeException(nameof(width), $"{width} x {height} cells is too large");
+        int n = (int)cells;
         if (levels.Length != n) throw new ArgumentException($"expected {n} levels, got {levels.Length}", nameof(levels));
         if (elevations.Length != n) throw new ArgumentException($"expected {n} elevations, got {elevations.Length}", nameof(elevations));
         for (int i = 0; i < n; i++)

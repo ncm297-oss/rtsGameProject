@@ -1,6 +1,7 @@
 using Rts.Sim.Determinism;
 using Rts.Sim.Entities;
 using Rts.Sim.Map;
+using Rts.Sim.Spatial;
 
 namespace Rts.Sim;
 
@@ -21,6 +22,7 @@ public sealed class World
             _rngs[i] = new SimRng(config.Seed, (ulong)i);
         Heightmap = MapGenerator.Generate(config.Map, ref _rngs[RngStream.MapGen]);
         NavGrid = new NavGrid(Heightmap);
+        Spatial = new SpatialHash(config.UnitCapacity, NavGrid.Width, NavGrid.Height);
     }
 
     /// <summary>The match setup this world was built from.</summary>
@@ -31,6 +33,9 @@ public sealed class World
 
     /// <summary>Ground passability derived from <see cref="Heightmap"/>.</summary>
     public NavGrid NavGrid { get; }
+
+    /// <summary>Unit neighbour index, rebuilt by <see cref="Simulation.Tick"/> right after commands apply. Derived state.</summary>
+    public SpatialHash Spatial { get; }
 
     /// <summary>All units.</summary>
     public UnitStore Units { get; }

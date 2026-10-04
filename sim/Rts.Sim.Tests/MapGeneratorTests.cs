@@ -181,6 +181,21 @@ public class MapGeneratorTests
         new object[] { MapGenParams.Default with { MinPassableFraction = 1.5f } },
         new object[] { MapGenParams.Default with { MaxAttempts = 0 } },
         new object[] { MapGenParams.Default with { MaxAttempts = 1000 } },
+        // BUG-0012: sizes above the smaller map side, including values whose arithmetic used to wrap.
+        new object[] { MapGenParams.Default with { RampWidth = 129 } },
+        new object[] { MapGenParams.Default with { RampWidth = int.MaxValue } },
+        new object[] { MapGenParams.Default with { RampLength = 129 } },
+        new object[] { MapGenParams.Default with { RampLength = int.MaxValue } },
+        new object[] { MapGenParams.Default with { EdgeMargin = 129 } },
+        new object[] { MapGenParams.Default with { EdgeMargin = int.MaxValue } },
+        new object[] { MapGenParams.Default with { Level2Inset = 129 } },
+        new object[] { MapGenParams.Default with { Level2Inset = int.MaxValue } },
+        new object[] { MapGenParams.Default with { Width = 200, Height = 64, Level1MaxSize = 30, RampLength = 65 } }, // the smaller side counts
+        // BUG-0013: caps that bound the worst-case generation time.
+        new object[] { MapGenParams.Default with { RampTries = MapGenParams.MaxRampTries + 1 } },
+        new object[] { MapGenParams.Default with { MaxAttempts = MapGenParams.MaxMaxAttempts + 1 } },
+        new object[] { MapGenParams.Default with { Level1Plateaus = MapGenParams.MaxPlateaus + 1 } },
+        new object[] { MapGenParams.Default with { Level2Plateaus = MapGenParams.MaxPlateaus + 1 } },
     };
 
     [Theory]
@@ -199,6 +214,39 @@ public class MapGeneratorTests
     {
         MapGenParams.Default.Validate();
         Small.Validate();
+    }
+
+    [Fact]
+    public void Validate_AcceptsEveryValueAtItsCap()
+    {
+        (MapGenParams.Default with
+        {
+            RampTries = MapGenParams.MaxRampTries,
+            MaxAttempts = MapGenParams.MaxMaxAttempts,
+            Level1Plateaus = MapGenParams.MaxPlateaus,
+            Level2Plateaus = MapGenParams.MaxPlateaus,
+            Level2Inset = 128,
+        }).Validate();
+        // RampLength and RampWidth at the map side: legal, they just never fit (no ramps placed).
+        Heightmap hm = Gen(2, MapGenParams.Default with { Width = 16, Height = 16, EdgeMargin = 1, Level1MinSize = 3, Level1MaxSize = 12, Level2MinSize = 3, Level2MaxSize = 3, RampLength = 16, RampWidth = 1 });
+        Assert.Null(MapAssert.FindViolation(hm, new NavGrid(hm), requireAllLevels: false, minPassableFraction: 0f));
+    }
+
+    /// <summary>The seeds QA's 2,000-seed sweep uses (Stress.MapStressTests.SeedSweep_Wide), checked against MapAssert's 30-degree step rule.</summary>
+    [Theory]
+    [Trait("Category", "Perf")]
+    [InlineData(0UL)]
+    [InlineData(ulong.MaxValue - 999)]
+    public void ThousandSeedSweep_NoPassableStepSteeperThan30Degrees(ulong firstSeed)
+    {
+        for (int k = 0; k < 1000; k++)
+        {
+            ulong seed = unchecked(firstSeed + (ulong)k);
+            Heightmap hm = Gen(seed, MapGenParams.Default);
+            var nav = new NavGrid(hm);
+            string? bad = MapAssert.FindViolation(hm, nav, requireAllLevels: true);
+            Assert.True(bad == null, $"seed {seed}: {bad}");
+        }
     }
 
     [Fact]

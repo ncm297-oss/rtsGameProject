@@ -68,6 +68,50 @@ public class NavGridTests
         Assert.Equal(MapConstants.CostBlocked, nav.CostAt(2, 3));
     }
 
+    /// <summary>A level-1 plateau with a ramp of the given width and length running down (south) from its edge.</summary>
+    private static Heightmap PlateauWithRamp(int rampWidth, int rampLength)
+    {
+        const int w = 12;
+        int h = 4 + rampLength + 4;
+        var levels = new byte[w * h];
+        var elevations = new float[w * h];
+        for (int y = 1; y <= 3; y++)
+            for (int x = 1; x < w - 1; x++)
+            {
+                levels[y * w + x] = 1;
+                elevations[y * w + x] = H;
+            }
+        for (int k = 1; k <= rampLength; k++)
+            for (int j = 0; j < rampWidth; j++)
+                elevations[(3 + k) * w + 4 + j] = H * (rampLength + 1 - k) / (rampLength + 1);
+        return new Heightmap(w, h, levels, elevations);
+    }
+
+    [Theory]
+    [InlineData(1, 3)]
+    [InlineData(3, 4)]
+    public void RampFlanks_AreWalls_FootAndMouthStayOpen(int rampWidth, int rampLength)
+    {
+        Heightmap hm = PlateauWithRamp(rampWidth, rampLength);
+        var nav = new NavGrid(hm);
+        int left = 3, right = 4 + rampWidth, foot = 4 + rampLength;
+        for (int k = 1; k <= rampLength; k++)
+        {
+            Assert.Equal(NavFlags.Cliff | NavFlags.Blocked, nav.FlagsAt(left, 3 + k));
+            Assert.Equal(NavFlags.Cliff | NavFlags.Blocked, nav.FlagsAt(right, 3 + k));
+            for (int j = 0; j < rampWidth; j++) Assert.Equal(NavFlags.Ramp, nav.FlagsAt(4 + j, 3 + k));
+        }
+        for (int j = 0; j < rampWidth; j++)
+        {
+            Assert.Equal(NavFlags.None, nav.FlagsAt(4 + j, 3));    // mouth
+            Assert.Equal(NavFlags.None, nav.FlagsAt(4 + j, foot)); // foot
+        }
+        Assert.Equal(NavFlags.None, nav.FlagsAt(left, foot));      // diagonal to the bottom ramp cell: open ground
+        Assert.Equal(NavFlags.Cliff | NavFlags.Blocked, nav.FlagsAt(left, 3)); // rim beside the mouth
+        Assert.True(nav.IsPassable(5, 2));                          // plateau still reached through the ramp
+        Assert.Null(MapAssert.FindViolation(hm, nav, requireAllLevels: false, minPassableFraction: 0f));
+    }
+
     [Fact]
     public void TwoLevelDrop_IsCliff_EvenNextToARamp()
     {

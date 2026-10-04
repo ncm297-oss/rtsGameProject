@@ -48,7 +48,7 @@ public sealed class Simulation
         _nextSequence[command.Player]++;
     }
 
-    /// <summary>Runs one tick: applies this tick's commands in (player, sequence) order, then bumps <see cref="TickNumber"/>.</summary>
+    /// <summary>Runs one tick: applies this tick's commands in (player, sequence) order, rebuilds the spatial hash, then bumps <see cref="TickNumber"/>.</summary>
     public void Tick()
     {
         World.Units.SnapshotPrevPositions();
@@ -60,11 +60,15 @@ public sealed class Simulation
             Apply(in _commands[i]);
         _commands.RemoveFront(due);
 
+        // Neighbour index for every later phase; right after commands so this tick's spawns are queryable.
+        World.Spatial.Rebuild(World.Units);
+
         // Phase 13: cleanup.
         World.TickNumber++;
     }
 
     /// <summary>64-bit FNV-1a hash of all gameplay state: tick, units, RNG streams, and pending commands.</summary>
+    /// <remarks>Derived state (the spatial hash) is left out: it is rebuilt from the units every tick.</remarks>
     public ulong StateHash()
     {
         var h = new StateHasher();

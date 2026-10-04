@@ -63,7 +63,8 @@ to `..` so the editor uses it.
 The sim runs at a fixed **20 Hz** (`TickMs = 50`). One call to `Simulation.Tick()` runs these
 phases in this fixed order:
 
-1. **Apply commands** queued for this tick, sorted by (player, sequence number).
+1. **Apply commands** queued for this tick, sorted by (player, sequence number), then rebuild
+   the spatial hash so later phases (and this tick's spawns) see current positions.
 2. **AI think:** each AI player runs on its own cadence (default every 10 ticks, staggered by
    player index) and enqueues commands for the *next* tick, the same as a human.
 3. **Production:** training and research timers, spawning finished units at rally points.
@@ -165,6 +166,20 @@ A uniform grid of 4 m buckets (2×2 cells), rebuilt every tick with a counting s
 arrays (no allocation). Queries: units within radius, nearest enemy within radius, units in a
 rectangle (box select support for tests/AI). Buildings are also indexed in the nav grid.
 
+**Implementation (M1-4a):** `Rts.Sim.Spatial.SpatialHash`, owned by `World` (`world.Spatial`) and
+rebuilt inside `Simulation.Tick()` right after commands apply, so units spawned this tick are
+queryable by every later phase. Buckets are `BucketCells` (2) cells wide, so `BucketSize` =
+2 × `MapConstants.CellSize` = 4 m. `Rebuild` counting-sorts live slots into flat arrays sized once
+from `UnitCapacity` and the map size, copying each slot's position and owner; rebuilds and queries
+never allocate (2,500 units rebuild in about 0.06 ms). Units outside the map clamp into the nearest
+edge bucket and are still found. Queries: `QueryRadius(center, radius, Span<int>)` (match rule, in
+float: `dx*dx + dy*dy <= radius*radius`), `QueryRect(a, b, Span<int>)` (edges inclusive, corners in
+any order) and `NearestEnemy(center, radius, player, out slot)` (any other owner counts as an
+enemy until teams exist; ties go to the lowest slot). Results are slot indices in ascending order.
+A query writes at most `results.Length` slots (the lowest ones) and returns the total match count,
+so a return value above the buffer length means the buffer was too small. Negative or NaN radii
+and non-finite centers match nothing. The hash is derived state and does not feed `StateHash`.
+
 ## Pathfinding
 
 ### Navigation grid
@@ -187,12 +202,12 @@ lower ground. Representation (Producer decision, 2026-10-03): cliffs are **block
 per-edge rules. A cell is a cliff when a 4-neighbor is lower and that neighbor is not a ramp
 exactly one level down, so plateau rims are blocked except at a ramp's top ("mouth"). A ramp cell
 keeps the lower level (docs/02) and its height steps evenly, strictly between the two levels; it
-joins level L to L+1 only. The outer ring of cells is blocked. Passable cells outside the largest
+joins level L to L+1 only. The flat lower cells flanking a ramp along its length are cliffs too ("ramp walls", M1-4a, BUG-0011), so a ramp is a corridor entered only at its mouth and foot and no passable 4-neighbor step is steeper than 30°. The outer ring of cells is blocked. Passable cells outside the largest
 4-connected region (pockets no ramp reaches) are blocked at build time, so every passable cell is
 reachable; later passability changes (M3 buildings) don't re-seal. A layout with under
 `MinPassableFraction` (50%) passable cells or with a level missing is redrawn, at most
 `MaxAttempts` times, then the generator falls back to the first layout that was passable enough,
-or a flat map: it never loops forever. Default generation takes about 4 ms. Queries (`InBounds`,
+or a flat map: it never loops forever. `MapGenParams.Validate` caps every size at the smaller map side before using it in arithmetic, and caps `RampTries` (128), `MaxAttempts` (16) and plateau counts (32) so the worst valid 512 × 512 case takes under a second. Default generation takes about 4 ms. Queries (`InBounds`,
 `IsPassable`, `LevelAt`, `FlagsAt`, `CostAt`, `WorldToCell`, `CellCenter`) never allocate and read
 cells outside the map as blocked; `WorldToCell` floors (so -0.1 m is outside, not cell 0) and
 rejects NaN and infinities. Cell (x, y) covers meters [2x, 2x + 2) on each axis. Per-cell data is

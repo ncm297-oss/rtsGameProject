@@ -47,4 +47,43 @@ public class AllocationTests
         Assert.Equal(0, delta);
         Assert.Equal(101, sim.World.Units.Count);
     }
+
+    [Fact]
+    public void SpatialHash_RebuildAnd1000Queries_On500Units_AllocateNothing()
+    {
+        var sim = new Simulation(new SimConfig(Seed: 4, PlayerCount: 2, UnitCapacity: 512, CommandCapacity: 512));
+        for (int i = 0; i < 500; i++)
+            sim.Enqueue(Command.SpawnUnit(i % 2, typeId: 0, new Vector2((i * 37) % 256, (i * 91) % 256)));
+        sim.Tick();
+        sim.Tick(); // the spawns apply on tick 1
+        Spatial.SpatialHash hash = sim.World.Spatial;
+        Assert.Equal(500, hash.Count);
+        int[] buffer = new int[64]; // smaller than some results, so truncation runs too
+        int sink = RunHashQueries(sim, hash, buffer, 50); // JIT warm-up
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        sim.Tick(); // includes the rebuild
+        hash.Rebuild(sim.World.Units);
+        sink += RunHashQueries(sim, hash, buffer, 1000);
+        long delta = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.Equal(0, delta);
+        Assert.NotEqual(0, sink);
+    }
+
+    private static int RunHashQueries(Simulation sim, Spatial.SpatialHash hash, int[] buffer, int count)
+    {
+        int sink = 0;
+        for (int i = 0; i < count; i++)
+        {
+            var c = new Vector2((i * 13) % 300 - 20, (i * 29) % 300 - 20);
+            switch (i % 3)
+            {
+                case 0: sink += hash.QueryRadius(c, 2f + i % 40, buffer); break;
+                case 1: sink += hash.QueryRect(c, c + new Vector2(-30f, 25f), buffer); break;
+                default: if (hash.NearestEnemy(c, 30f, i % 2, out int slot)) sink += slot + 1; break;
+            }
+        }
+        return sink + sim.TickNumber;
+    }
 }

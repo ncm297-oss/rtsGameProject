@@ -104,12 +104,12 @@ public class MapQaTests
         yield return new object[] { "l2 inset intmax", d with { Level2Inset = int.MaxValue } };
     }
 
-    [Theory(Skip = "BUG-0012: MapGenParams.Validate overflows on int.MaxValue params and Generate crashes; un-skip when fixed")]
+    [Theory] // BUG-0012 fixed in M1-4a
     [MemberData(nameof(OverflowParams))]
     public Task OverflowParams_ValidateThrowsOrMapIsValid(string name, MapGenParams p) =>
         DegenerateParams_ValidateThrowsOrMapIsValid(name, p);
 
-    [Theory(Skip = "BUG-0012: Heightmap(width, height) computes width * height unchecked; 65536 x 65536 wraps to 0 and is accepted; un-skip when fixed")]
+    [Theory] // BUG-0012 fixed in M1-4a
     [InlineData(65536, 65536)] // width * height wraps to 0, so empty arrays would pass the length check
     [InlineData(1 << 20, 1 << 12)]
     public void Heightmap_SizeOverflow_IsRejected(int w, int h)
@@ -337,7 +337,7 @@ public class MapQaTests
 
     // ---------- design conformance ----------
 
-    [Fact(Skip = "BUG-0011: ramp sides step up to 3.2 m sideways onto the ground below (58 deg); un-skip when fixed or the docs accept it")]
+    [Fact] // BUG-0011 fixed in M1-4a (ramp walls)
     public void RampSides_NoPassableStepSteeperThan30Degrees()
     {
         // docs/02 "Map and terrain": slopes steeper than 30 degrees are impassable. Between two passable

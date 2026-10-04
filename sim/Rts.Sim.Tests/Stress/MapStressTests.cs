@@ -123,18 +123,18 @@ public class MapStressTests
         {
             Width = 512,
             Height = 512,
-            Level1Plateaus = 64,
+            Level1Plateaus = MapGenParams.MaxPlateaus,
             Level1MaxSize = 200,
-            Level2Plateaus = 64,
+            Level2Plateaus = MapGenParams.MaxPlateaus,
             RampsPerPlateau = 16,
-            RampTries = 1024,
+            RampTries = MapGenParams.MaxRampTries,
             MinPassableFraction = 1f,
-            MaxAttempts = 4, // QA measured MaxAttempts = 64 (Validate's cap) at ~35 s: BUG-0013
+            MaxAttempts = MapGenParams.MaxMaxAttempts, // Validate's caps since BUG-0013 (QA measured the old 64/1024/64 caps at ~35 s)
         };
         var sw = Stopwatch.StartNew();
         Heightmap hm = Gen(11, p, out _);
         sw.Stop();
         _out.WriteLine($"512x512 worst case: {sw.Elapsed.TotalSeconds:F2} s, flat fallback {hm.Levels.IndexOfAnyExcept((byte)0) < 0}");
-        Assert.True(sw.Elapsed.TotalSeconds < 15, $"took {sw.Elapsed.TotalSeconds:F1} s");
+        Assert.True(sw.Elapsed.TotalSeconds < 3, $"took {sw.Elapsed.TotalSeconds:F1} s");
     }
 }

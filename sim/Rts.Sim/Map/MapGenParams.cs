@@ -60,32 +60,43 @@ public sealed record MapGenParams
     /// <summary>Layouts tried before falling back (bounds generation time; it never loops forever).</summary>
     public int MaxAttempts { get; init; } = 8;
 
+    /// <summary>Largest <see cref="RampTries"/>; with the other caps it bounds the worst valid generation at about 2 s (BUG-0013).</summary>
+    public const int MaxRampTries = 128;
+
+    /// <summary>Largest <see cref="MaxAttempts"/> (BUG-0013).</summary>
+    public const int MaxMaxAttempts = 16;
+
+    /// <summary>Largest <see cref="Level1Plateaus"/> and <see cref="Level2Plateaus"/> (BUG-0013).</summary>
+    public const int MaxPlateaus = 32;
+
     /// <summary>Throws if any value is out of range or the pieces can't fit on the map.</summary>
+    /// <remarks>Every size gets an upper bound before it is used in arithmetic, so nothing can overflow (BUG-0012).</remarks>
     public void Validate()
     {
         Check(Width >= 16 && Width <= 1024, nameof(Width));
         Check(Height >= 16 && Height <= 1024, nameof(Height));
-        Check(EdgeMargin >= 1, nameof(EdgeMargin));
-        Check(RampWidth >= 1, nameof(RampWidth));
-        Check(RampLength >= 1, nameof(RampLength));
+        int minDim = Math.Min(Width, Height);
+        Check(EdgeMargin >= 1 && EdgeMargin <= minDim, nameof(EdgeMargin));
+        Check(RampWidth >= 1 && RampWidth <= minDim, nameof(RampWidth));
+        Check(RampLength >= 1 && RampLength <= minDim, nameof(RampLength));
+        Check(Level2Inset >= 1 && Level2Inset <= minDim, nameof(Level2Inset));
         // Rise of one level over the ramp plus the flat cell at each end must stay within 30 degrees.
         Check(MapConstants.LevelHeight / ((RampLength + 1) * MapConstants.CellSize) <= MapConstants.MaxRampSlope, nameof(RampLength));
         Check(RampsPerPlateau >= 1 && RampsPerPlateau <= 16, nameof(RampsPerPlateau));
-        Check(RampTries >= 1 && RampTries <= 1024, nameof(RampTries));
+        Check(RampTries >= 1 && RampTries <= MaxRampTries, nameof(RampTries));
 
         // A side needs room for the ramp mouth plus a plateau cell on each side of it.
         int minSide = Math.Max(3, RampWidth + 2);
-        int interior = Math.Min(Width, Height) - 2 * (1 + EdgeMargin);
-        Check(Level1Plateaus >= 0 && Level1Plateaus <= 64, nameof(Level1Plateaus));
+        int interior = minDim - 2 * (1 + EdgeMargin);
+        Check(Level1Plateaus >= 0 && Level1Plateaus <= MaxPlateaus, nameof(Level1Plateaus));
         Check(Level1MinSize >= minSide, nameof(Level1MinSize));
         Check(Level1MaxSize >= Level1MinSize && Level1MaxSize <= interior, nameof(Level1MaxSize));
-        Check(Level2Plateaus >= 0 && Level2Plateaus <= 64, nameof(Level2Plateaus));
-        Check(Level2Inset >= 1, nameof(Level2Inset));
+        Check(Level2Plateaus >= 0 && Level2Plateaus <= MaxPlateaus, nameof(Level2Plateaus));
         Check(Level2MinSize >= minSide, nameof(Level2MinSize));
         Check(Level2MaxSize >= Level2MinSize, nameof(Level2MaxSize));
 
         Check(MinPassableFraction >= 0f && MinPassableFraction <= 1f, nameof(MinPassableFraction));
-        Check(MaxAttempts >= 1 && MaxAttempts <= 64, nameof(MaxAttempts));
+        Check(MaxAttempts >= 1 && MaxAttempts <= MaxMaxAttempts, nameof(MaxAttempts));
     }
 
     private static void Check(bool ok, string name)

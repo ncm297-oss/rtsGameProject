@@ -14,6 +14,7 @@ public static class MapAssert
         if (nav.Width != w || nav.Height != h) return "nav grid size differs from heightmap";
         var passableLevels = new bool[MapConstants.LevelCount];
         int passable = 0;
+        float maxRise = MapConstants.MaxRampSlope * MapConstants.CellSize + 1e-4f; // docs/02: nothing steeper than 30 degrees
         for (int y = 0; y < h; y++)
         {
             for (int x = 0; x < w; x++)
@@ -43,6 +44,8 @@ public static class MapAssert
                     int dl = Math.Abs(nav.LevelAt(nx, ny) - level);
                     if (dl > 1) return $"{at} -> ({nx}, {ny}): level step {dl}";
                     if (dl == 1 && !ramp && !hm.IsRamp(nx, ny)) return $"{at} -> ({nx}, {ny}): level step without a ramp";
+                    float rise = Math.Abs(hm.ElevationAt(nx, ny) - e);
+                    if (rise > maxRise) return $"{at} -> ({nx}, {ny}): passable step rises {rise} m, steeper than 30 degrees";
                 }
             }
         }

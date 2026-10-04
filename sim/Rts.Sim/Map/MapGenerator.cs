@@ -145,7 +145,7 @@ public static class MapGenerator
     {
         Any,  // cliff edge allowed (the mouth, before the ramp opens it)
         Open, // not a cliff
-        Flat, // no lower neighbor at all, so a ramp never lands on another ramp's mouth
+        Flat, // no lower neighbor and no ramp neighbor, so a ramp never lands on another ramp's mouth, foot or walls
     }
 
     /// <summary>True if the cell is in bounds, at the given level, not a ramp, and meets the footing rule.</summary>
@@ -158,8 +158,19 @@ public static class MapGenerator
         {
             Footing.Any => true,
             Footing.Open => !NavGrid.IsCliff(levels, elevations, p.Width, p.Height, x, y),
-            _ => !HasLowerNeighbor(p, levels, x, y),
+            _ => !HasLowerNeighbor(p, levels, x, y) && !HasRampNeighbor(p, levels, elevations, x, y),
         };
+    }
+
+    // NavGrid walls the flat cells flanking a ramp (BUG-0011); keeping a new ramp's footprint and
+    // ring off cells next to an existing ramp stops one ramp's walls from closing another's foot.
+    private static bool HasRampNeighbor(MapGenParams p, byte[] levels, float[] elevations, int x, int y)
+    {
+        int w = p.Width;
+        return (x > 0 && NavGrid.IsRampCell(levels, elevations, y * w + x - 1))
+            || (x < w - 1 && NavGrid.IsRampCell(levels, elevations, y * w + x + 1))
+            || (y > 0 && NavGrid.IsRampCell(levels, elevations, (y - 1) * w + x))
+            || (y < p.Height - 1 && NavGrid.IsRampCell(levels, elevations, (y + 1) * w + x));
     }
 
     private static bool HasLowerNeighbor(MapGenParams p, byte[] levels, int x, int y)

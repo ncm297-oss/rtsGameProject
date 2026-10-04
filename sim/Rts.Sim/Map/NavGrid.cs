@@ -6,7 +6,9 @@ namespace Rts.Sim.Map;
 /// <summary>Per-cell passability, cost and elevation level for ground movement (docs/03 "Navigation grid").</summary>
 /// <remarks>
 /// Built once from a <see cref="Heightmap"/>: the outer ring of cells is blocked; a cell is a cliff
-/// (blocked) when a 4-neighbor is lower and is not a ramp exactly one level down; and passable
+/// (blocked) when a 4-neighbor is lower and is not a ramp exactly one level down; a flat cell
+/// flanking a ramp along its length is a cliff too ("ramp wall", BUG-0011), so a ramp is a corridor
+/// entered only at its top and foot and no passable step is steeper than 30 degrees; and passable
 /// cells outside the largest 4-connected region (pockets no ramp reaches) are blocked, so every
 /// passable cell is reachable from every other. Queries never allocate and treat cells outside
 /// the map as blocked. Cell (x, y) covers world meters [x*CellSize, (x+1)*CellSize) on each axis.
@@ -36,7 +38,8 @@ public sealed class NavGrid
                 int i = y * Width + x;
                 if (IsRampCell(levels, elevations, i)) _flags[i] |= NavFlags.Ramp;
                 if (x == 0 || y == 0 || x == Width - 1 || y == Height - 1) _flags[i] |= NavFlags.Blocked;
-                if (IsCliff(levels, elevations, Width, Height, x, y)) _flags[i] |= NavFlags.Cliff | NavFlags.Blocked;
+                if (IsCliff(levels, elevations, Width, Height, x, y) || IsRampWall(levels, elevations, Width, Height, x, y))
+                    _flags[i] |= NavFlags.Cliff | NavFlags.Blocked;
             }
         }
 
@@ -119,6 +122,32 @@ public sealed class NavGrid
         int below = levels[n];
         if (below >= level) return false;
         return !(below == level - 1 && IsRampCell(levels, elevations, n));
+    }
+
+    /// <summary>True for a flat cell beside a ramp cell of its own level that is not that ramp's foot ("ramp wall", BUG-0011).</summary>
+    /// <remarks>
+    /// The foot lies on the ramp's slope axis, so the cell beyond the ramp, seen from the foot, is
+    /// higher (the next ramp cell or the plateau above). Seen from a flank it is a ramp cell at the
+    /// same height or the other flank, never higher. Ramps don't store a direction; this reads it.
+    /// </remarks>
+    internal static bool IsRampWall(ReadOnlySpan<byte> levels, ReadOnlySpan<float> elevations, int width, int height, int x, int y)
+    {
+        if (IsRampCell(levels, elevations, y * width + x)) return false;
+        return FlanksRamp(levels, elevations, width, height, x, y, 1, 0)
+            || FlanksRamp(levels, elevations, width, height, x, y, -1, 0)
+            || FlanksRamp(levels, elevations, width, height, x, y, 0, 1)
+            || FlanksRamp(levels, elevations, width, height, x, y, 0, -1);
+    }
+
+    private static bool FlanksRamp(ReadOnlySpan<byte> levels, ReadOnlySpan<float> elevations, int width, int height, int x, int y, int dx, int dy)
+    {
+        int rx = x + dx, ry = y + dy;
+        if ((uint)rx >= (uint)width || (uint)ry >= (uint)height) return false;
+        int r = ry * width + rx;
+        if (levels[r] != levels[y * width + x] || !IsRampCell(levels, elevations, r)) return false;
+        int ox = rx + dx, oy = ry + dy;
+        bool foot = (uint)ox < (uint)width && (uint)oy < (uint)height && elevations[oy * width + ox] > elevations[r];
+        return !foot;
     }
 
     // Labels 4-connected passable regions and blocks all but the largest (first found on a tie).
