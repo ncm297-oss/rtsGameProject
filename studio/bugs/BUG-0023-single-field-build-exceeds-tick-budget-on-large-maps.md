@@ -40,3 +40,8 @@ docs/03 already says "time-sliced builds are future work". Options:
 - Document that maps above about 256 are unsupported.
 
 The 512 and 1024 rows stay skipped under this id. The 128 row now runs.
+
+**Producer triage (2026-10-04-0120):** S3, not blocking. Design maps are 128 (docs/02) and 256
+fits the budget (5.2 ms Debug, less in Release). Decision: document in docs/03 that maps above 256
+are unsupported for now (M1-7 perf task), and revisit time-sliced builds only if a larger map is
+ever wanted. Do not lower `MapGenParams` limits yet: the generator stress suites use 1024.

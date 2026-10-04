@@ -147,8 +147,9 @@ Rules:
 - **State hash:** `Simulation.StateHash()` is 64-bit FNV-1a (`StateHasher`) over the tick number,
   every unit slot's generation and alive flag, every live unit's fields, the free list, all RNG
   states, per-player command sequence counters, and pending commands (including a `Move`'s unit
-  handle). Derived state is left out: the spatial hash, the flow-field cache, and a unit's
-  `Speed`/`Radius` (copied from its `TypeId`'s data).
+  handle). Derived state is left out: the spatial hash and a unit's `Speed`/`Radius` (copied from
+  its `TypeId`'s data). The flow-field cache is left out today too, but under the build cap its
+  contents decide who waits, so it joins the hash with BUG-0021 (see "Flow fields").
 
 ## Entity model
 
@@ -271,7 +272,12 @@ a field whose version is stale is rebuilt on its next use; `TryGetCached` return
 per-cell step mask (which of the 8 steps are legal, shared by all fields and recomputed when the
 version changes) are allocated in the constructor: about 5 bytes × cells × capacity, 2.6 MB on the
 default map (160 MB on a 1024 × 1024 map, so capacity may need to scale with map size later). The
-cache is derived state and not hashed: a field depends only on the grid and its target.
+cache is not hashed yet. A field's *contents* depend only on the grid and its target, but since the
+build cap (below) *which* fields are cached decides which units wait a tick, so the cache's keys
+and LRU order are in effect sim state. Only `MovementSystem` touches the cache today, so same seed
++ same commands still gives the same hash; save/load or any other caller would break that
+(BUG-0021). Producer decision 2026-10-04: the next movement task hashes (and later saves) the
+cache's metadata, serves misses oldest order first, and keeps `Get` sim-only.
 
 **Build cap (BUG-0018).** Fetching a field per unit in slot order thrashed the LRU once live goals
 outnumbered its slots (goals interleaved by slot evict exactly the field the next unit needs: a
@@ -303,7 +309,7 @@ unit; a group move is one command per unit, and they share one cached field beca
 target cell. Applying it sets `State = Moving`, `Goal` = the target, and `GoalCell` = the target's
 cell; if that cell is blocked, the goal becomes the center of the nearest passable cell (the same
 rule as the field). `MovementSystem.Run` then moves each Moving unit, in (goal cell, slot) order (units don't interact
-yet, so the order changes no result): in the goal cell, within `MovementConstants.ArrivalDistance`
+yet; the order only decides which goals get a field first under the build cap, BUG-0022): in the goal cell, within `MovementConstants.ArrivalDistance`
 (`CellSize / 2` = 1 m) of the goal it arrives (Idle, velocity 0), otherwise it heads straight at the
 goal. Arrival only counts inside the goal cell, so a unit 0.85 m from its goal across a blocked
 corner walks the long way round instead of arriving (BUG-0020). Elsewhere it heads at the center of the

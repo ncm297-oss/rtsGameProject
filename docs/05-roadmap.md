@@ -50,6 +50,8 @@ _Required criteria met in session 2026-10-03-0826 (task M0-1). Owner signed off 
 - [x] Terraced heightmap generator (elevation levels 0-2, ramps); nav grid with slope passability and per-cell level; spatial hash.
       _(heightmap generator + nav grid: session 2026-10-03-1235, task M1-3; ramp walls + spatial hash: session 2026-10-03-2220, task M1-4a)_
 - [ ] Flow fields with LRU cache; steering, separation, arrival, shoving.
+      _(flow fields + LRU cache + `Move` command + build cap: session 2026-10-04-0120, task M1-4b;
+      steering, separation, arrival, shoving still open)_
 - [ ] Scenario test: 200 units ordered across a 128×128 map with obstacles all arrive within a
       time limit, none stuck, none inside blocked cells.
 - [ ] Replay format (seed + commands + checkpoint hashes); determinism test (same run twice →

@@ -45,3 +45,11 @@ Producer's 1 full run + 8 isolated reruns on f282aaf). Not planned as its own ta
 fails again on `main`, the next session's first commit hardens it as proposed above (re-measure
 the block once on failure and report both deltas); never loosen the 0-byte assert. If the second
 measurement also allocates, that is a product bug and this becomes S2.
+
+**Producer (2026-10-04-0120, M1-4b ACCEPT):** failed again, in 2 of 3 Producer runs of
+`--filter "Category!=Perf&Category!=Soak"` on b707114: `Expected: 0, Actual: 8112` bytes. The
+count is a one-time charge (10,000 spawns of a per-spawn leak would be megabytes), and the new
+spawn path reads an `ImmutableArray<UnitDef>` element, which allocates nothing. The rule above now
+applies: **the next session's first commit hardens this test** (re-measure once on failure, report
+both deltas; never loosen the 0-byte assert), together with BUG-0024's non-parallel collection.
+Still S3; it does not block M1-4b.

@@ -110,6 +110,7 @@ and reason) and update the affected docs in the same commit.
 | 2026-10-03 | M0 accepted; M1 (core sim) started | Owner sign-off after re-running build, tests and smoke on main |
 | 2026-10-03 | Producer may chain sessions, sign off milestones, and default [OPEN] items; owner check-in at end of plan | Owner authorization (see studio/autopilot.md) |
 | 2026-10-03 | Terrain cliffs are blocked nav *cells* on the plateau rim (not per-edge rules); ramps join one level to the next; the map's outer ring is blocked | Producer decision (M1-3), owner may revisit; keeps flow fields per-cell ([03 Navigation grid](03-technical-design.md#navigation-grid)) |
+| 2026-10-04 | Flow-field builds are capped per tick; the cache's keys/LRU order count as sim state (to be hashed and saved), and misses are served oldest order first | Producer decision (M1-4b, BUG-0018/0021/0022), owner may revisit; keeps the tick budget and determinism ([03 Flow fields](03-technical-design.md#flow-fields)) |
 
 ## IP and naming policy
 

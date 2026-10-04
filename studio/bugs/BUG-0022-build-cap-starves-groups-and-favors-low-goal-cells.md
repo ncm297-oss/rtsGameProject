@@ -49,3 +49,10 @@ the AI and chase orders exist.
   - Have units with no field yet step straight toward the goal or hold, rather than freeze.
   - Scale cache capacity with live goals.
 - Related: BUG-0021 (cache contents now affect results).
+
+**Producer triage (2026-10-04-0120):** S3, fix with BUG-0021 in the next movement task. Direction:
+serve misses oldest order first (a hashed per-unit `OrderTick`, sort key (OrderTick, GoalCell,
+slot) for the build pass), keep a small count cap (2 is fine against the 4 ms average budget: one
+build is ~0.7 ms Debug on the default map), and let cache capacity scale with `UnitCapacity`
+(e.g. max(32, UnitCapacity / 8); 80 KB per field on the default map) to cut rebuild churn. No
+wall-clock budget in the sim. Positions of waiting units stay put (never step without a field).

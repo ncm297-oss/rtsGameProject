@@ -46,3 +46,10 @@ LRU order), and the hash covers neither.
 - The docs/03 sentence quoted above needs updating either way. The fix round also added "units
   don't interact yet, so the order changes no result". That is no longer quite true, because the
   goal order decides who waits (see BUG-0022).
+
+**Producer triage (2026-10-04-0120):** S3 today, latent S1; agreed. docs/03 corrected in the
+ACCEPT commit (the cache is no longer called derived state). Decision (docs/01 change log): treat
+the cache's keys, versions and LRU order as sim state: hash them in `StateHash`, save them with
+save/load (fields rebuild from keys at load), and keep `Get`/`TryGetCached` sim-only (a read-only
+peek for views and AI, if ever needed). Planned as the first part of the next movement task,
+before steering builds on the cap. Un-skip the QA test when fixed.

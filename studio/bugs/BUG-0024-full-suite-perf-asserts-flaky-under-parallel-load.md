@@ -43,3 +43,12 @@ No threshold has been loosened, and none should be. Options for the Producer:
 
 The developer's report says its run was green (832/0/7). That fits a run under less load. It is
 not a sign of misreporting.
+
+**Producer triage (2026-10-04-0120):** S3 for the product, but it breaks the "main is always
+green" standard, so it is **the first commit of the next session** (with BUG-0017). Producer runs
+on b707114: `--filter Category=Perf` with `-- xUnit.ParallelizeTestCollections=false` passed
+53/53 (3 skipped) in 46 s; the non-Perf filter failed only on BUG-0017. Fix: put every
+`Category=Perf` test and every allocation-measuring test into one xUnit collection with
+`DisableParallelization = true` (they run alone after the parallel batch); keep thresholds as they
+are. Until then, the reliable check is two commands: `--filter "Category!=Perf"` and then
+`--filter Category=Perf -- xUnit.ParallelizeTestCollections=false`.
