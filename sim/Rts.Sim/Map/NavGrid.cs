@@ -31,26 +31,40 @@ public sealed class NavGrid
         _flags = new NavFlags[n];
         _cost = new byte[n];
 
-        for (int y = 0; y < Height; y++)
+        // The generator builds one of these per layout attempt, so on a 1024 x 1024 map this loop is
+        // a large share of generation time (BUG-0015); hence locals instead of properties and a fast path.
+        int w = Width, h = Height;
+        for (int y = 0; y < h; y++)
         {
-            for (int x = 0; x < Width; x++)
+            for (int x = 0; x < w; x++)
             {
-                int i = y * Width + x;
+                int i = y * w + x;
+                // An inner cell with all four neighbors at its exact height is plateau ground with no
+                // ramp around it (a ramp's height never equals a level's), so it gets no flags.
+                if (x > 0 && y > 0 && x < w - 1 && y < h - 1)
+                {
+                    float e = elevations[i];
+                    if (elevations[i - 1] == e && elevations[i + 1] == e && elevations[i - w] == e
+                        && elevations[i + w] == e && e == levels[i] * MapConstants.LevelHeight)
+                        continue;
+                }
                 if (IsRampCell(levels, elevations, i)) _flags[i] |= NavFlags.Ramp;
-                if (x == 0 || y == 0 || x == Width - 1 || y == Height - 1) _flags[i] |= NavFlags.Blocked;
-                if (IsCliff(levels, elevations, Width, Height, x, y) || IsRampWall(levels, elevations, Width, Height, x, y))
+                if (x == 0 || y == 0 || x == w - 1 || y == h - 1) _flags[i] |= NavFlags.Blocked;
+                if (IsCliff(levels, elevations, w, h, x, y) || IsRampWall(levels, elevations, w, h, x, y))
                     _flags[i] |= NavFlags.Cliff | NavFlags.Blocked;
             }
         }
 
         SealPockets();
 
+        int passable = 0;
         for (int i = 0; i < n; i++)
         {
             bool open = (_flags[i] & NavFlags.Blocked) == 0;
             _cost[i] = open ? MapConstants.CostPassable : MapConstants.CostBlocked;
-            if (open) PassableCount++;
+            if (open) passable++;
         }
+        PassableCount = passable;
     }
 
     /// <summary>Width in cells.</summary>
@@ -178,17 +192,17 @@ public sealed class NavGrid
 
     private int Flood(int start, int label, int[] region, int[] queue)
     {
-        int head = 0, tail = 0;
+        int head = 0, tail = 0, w = Width;
         queue[tail++] = start;
         region[start] = label;
         while (head < tail)
         {
             int i = queue[head++];
-            int x = i % Width, y = i / Width;
-            if (x > 0) Visit(i - 1, label, region, queue, ref tail);
-            if (x < Width - 1) Visit(i + 1, label, region, queue, ref tail);
-            if (y > 0) Visit(i - Width, label, region, queue, ref tail);
-            if (y < Height - 1) Visit(i + Width, label, region, queue, ref tail);
+            // The outer ring is always blocked, so a passable cell's 4 neighbors are all in bounds.
+            Visit(i - 1, label, region, queue, ref tail);
+            Visit(i + 1, label, region, queue, ref tail);
+            Visit(i - w, label, region, queue, ref tail);
+            Visit(i + w, label, region, queue, ref tail);
         }
         return tail;
     }

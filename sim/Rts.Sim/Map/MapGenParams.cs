@@ -60,11 +60,11 @@ public sealed record MapGenParams
     /// <summary>Layouts tried before falling back (bounds generation time; it never loops forever).</summary>
     public int MaxAttempts { get; init; } = 8;
 
-    /// <summary>Largest <see cref="RampTries"/>; with the other caps it bounds the worst valid generation at about 2 s (BUG-0013).</summary>
+    /// <summary>Largest <see cref="RampTries"/>; with the other caps it bounds the worst valid generation (BUG-0013, BUG-0015).</summary>
     public const int MaxRampTries = 128;
 
-    /// <summary>Largest <see cref="MaxAttempts"/> (BUG-0013).</summary>
-    public const int MaxMaxAttempts = 16;
+    /// <summary>Largest <see cref="MaxAttempts"/>: the default. Every attempt builds a full nav grid, so this cap is most of the worst-case time bound (BUG-0013, BUG-0015).</summary>
+    public const int MaxMaxAttempts = 8;
 
     /// <summary>Largest <see cref="Level1Plateaus"/> and <see cref="Level2Plateaus"/> (BUG-0013).</summary>
     public const int MaxPlateaus = 32;

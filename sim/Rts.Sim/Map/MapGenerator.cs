@@ -20,9 +20,10 @@ public static class MapGenerator
         p.Validate();
         Heightmap? fallback = null;
         double minPassable = (double)p.MinPassableFraction * p.Width * p.Height;
+        var scratch = new RampScratch(p); // reused by every attempt
         for (int attempt = 0; attempt < p.MaxAttempts; attempt++)
         {
-            Heightmap map = BuildLayout(p, ref rng);
+            Heightmap map = BuildLayout(p, scratch, ref rng);
             var nav = new NavGrid(map);
             if (nav.PassableCount < minPassable) continue;
             if (AllLevelsPassable(nav)) return map;
@@ -33,7 +34,25 @@ public static class MapGenerator
 
     private readonly record struct Rect(int X, int Y, int W, int H, int Level);
 
-    private static Heightmap BuildLayout(MapGenParams p, ref SimRng rng)
+    /// <summary>Per-layout bookkeeping that lets ramp tries be checked without scanning the footprint (BUG-0015).</summary>
+    private sealed class RampScratch
+    {
+        public RampScratch(MapGenParams p)
+        {
+            NotFlatSums = new int[(p.Width + 1) * (p.Height + 1)];
+            Ramps = new Rect[(p.Level1Plateaus + p.Level2Plateaus) * p.RampsPerPlateau];
+        }
+
+        /// <summary>Summed-area table of cells no footprint may use, see <see cref="BuildNotFlatSums"/>.</summary>
+        public int[] NotFlatSums { get; }
+
+        /// <summary>Cell rectangles of the ramps placed so far in this layout.</summary>
+        public Rect[] Ramps { get; }
+
+        public int RampCount { get; set; }
+    }
+
+    private static Heightmap BuildLayout(MapGenParams p, RampScratch scratch, ref SimRng rng)
     {
         int w = p.Width, h = p.Height;
         var levels = new byte[w * h];
@@ -72,13 +91,15 @@ public static class MapGenerator
         for (int i = 0; i < levels.Length; i++)
             elevations[i] = levels[i] * MapConstants.LevelHeight;
 
+        BuildNotFlatSums(p, levels, scratch.NotFlatSums);
+        scratch.RampCount = 0;
         for (int r = 0; r < rectCount; r++)
         {
             for (int k = 0; k < p.RampsPerPlateau; k++)
             {
                 for (int t = 0; t < p.RampTries; t++)
                 {
-                    if (TryPlaceRamp(p, levels, elevations, rects[r], ref rng)) break;
+                    if (TryPlaceRamp(p, levels, elevations, scratch, rects[r], ref rng)) break;
                 }
             }
         }
@@ -88,17 +109,26 @@ public static class MapGenerator
     private static void Raise(byte[] levels, int w, Rect r)
     {
         for (int y = r.Y; y < r.Y + r.H; y++)
-        {
-            for (int x = r.X; x < r.X + r.W; x++)
-                levels[y * w + x] = (byte)r.Level;
-        }
+            levels.AsSpan(y * w + r.X, r.W).Fill((byte)r.Level);
     }
 
     // A ramp runs outward from a random stretch ("mouth") of one rectangle side, down onto the
     // level below. It is placed only where the whole footprint plus a one-cell ring is open
     // lower ground and the mouth sits mid-side on plateau ground, so the only level step it
     // creates is ramp -> mouth (NavGrid's cliff rule then leaves the mouth open).
-    private static bool TryPlaceRamp(MapGenParams p, byte[] levels, float[] elevations, Rect r, ref SimRng rng)
+    //
+    // Footprint rule: every cell of the footprint plus ring is lower-level ground that is inside the
+    // border ring, has no lower 4-neighbor, and is neither a ramp cell nor a 4-neighbor of one
+    // (NavGrid walls the cells flanking a ramp, BUG-0011, so ramps must not touch). It is checked
+    // in O(1) + O(ramps placed) per try rather than cell by cell, so a try's cost doesn't grow with
+    // RampWidth x RampLength (BUG-0015):
+    //  - border and lower-neighbor cells come from a summed-area table built before any ramp is cut
+    //    (cutting ramps changes heights, never levels, so these cells don't change);
+    //  - with none of those inside, the footprint is one level: two 4-adjacent cells of different
+    //    levels would give the higher one a lower neighbor, so one cell's level stands for all;
+    //  - "a ramp cell or a 4-neighbor of one" is the cross-shaped region around each placed ramp
+    //    (its rectangle grown by one cell along x, or along y), tested by rectangle overlap.
+    private static bool TryPlaceRamp(MapGenParams p, byte[] levels, float[] elevations, RampScratch scratch, Rect r, ref SimRng rng)
     {
         int w = p.Width, h = p.Height;
         int side = rng.NextInt(0, 4);
@@ -114,19 +144,41 @@ public static class MapGenerator
         }
         int upper = r.Level, lower = r.Level - 1;
 
+        // Footprint plus ring: cells (j across the slope, k down it) with j in [-1, RampWidth] and
+        // k in [1, RampLength + 1]; its corners give its bounding rectangle.
+        int fx0 = mx - ax + dx, fy0 = my - ay + dy;
+        int fx1 = mx + p.RampWidth * ax + (p.RampLength + 1) * dx, fy1 = my + p.RampWidth * ay + (p.RampLength + 1) * dy;
+        int x0 = Math.Min(fx0, fx1), x1 = Math.Max(fx0, fx1), y0 = Math.Min(fy0, fy1), y1 = Math.Max(fy0, fy1);
+        if (x0 < 1 || y0 < 1 || x1 > w - 2 || y1 > h - 2) return false; // stay off the border ring
+        if (CountNotFlat(scratch.NotFlatSums, w, x0, y0, x1, y1) > 0) return false;
+        if (levels[y0 * w + x0] != lower) return false;
+
+        // The mouth line, plateau shoulders included (j = -1 and RampWidth), is plateau ground.
         for (int j = -1; j <= p.RampWidth; j++)
         {
-            int cx = mx + j * ax, cy = my + j * ay;
-            if (!IsGround(p, levels, elevations, cx, cy, upper, Footing.Any)) return false;
-            bool inMouth = j >= 0 && j < p.RampWidth;
-            if (inMouth && !IsGround(p, levels, elevations, cx - dx, cy - dy, upper, Footing.Open)) return false;
-            for (int k = 1; k <= p.RampLength + 1; k++)
-            {
-                int fx = cx + k * dx, fy = cy + k * dy;
-                if (fx < 1 || fy < 1 || fx > w - 2 || fy > h - 2) return false; // stay off the border ring
-                if (!IsGround(p, levels, elevations, fx, fy, lower, Footing.Flat)) return false;
-            }
+            if (!IsGround(p, levels, elevations, mx + j * ax, my + j * ay, upper, Footing.Any)) return false;
         }
+
+        // Newest first: a clash is most likely with this plateau's own earlier ramps.
+        for (int i = scratch.RampCount - 1; i >= 0; i--)
+        {
+            Rect q = scratch.Ramps[i];
+            if (Overlaps(x0, y0, x1, y1, q.X - 1, q.Y, q.X + q.W, q.Y + q.H - 1)
+                || Overlaps(x0, y0, x1, y1, q.X, q.Y - 1, q.X + q.W - 1, q.Y + q.H))
+                return false;
+        }
+
+        // Open plateau (not a cliff) behind each mouth cell. Last, as the costliest per cell.
+        for (int j = 0; j < p.RampWidth; j++)
+        {
+            if (!IsGround(p, levels, elevations, mx + j * ax - dx, my + j * ay - dy, upper, Footing.Open)) return false;
+        }
+
+        // Ramp cells: j in [0, RampWidth), k in [1, RampLength].
+        int rx0 = mx + dx, ry0 = my + dy;
+        int rx1 = mx + (p.RampWidth - 1) * ax + p.RampLength * dx, ry1 = my + (p.RampWidth - 1) * ay + p.RampLength * dy;
+        int qx = Math.Min(rx0, rx1), qy = Math.Min(ry0, ry1);
+        scratch.Ramps[scratch.RampCount++] = new Rect(qx, qy, Math.Abs(rx1 - rx0) + 1, Math.Abs(ry1 - ry0) + 1, lower);
 
         for (int j = 0; j < p.RampWidth; j++)
         {
@@ -145,7 +197,6 @@ public static class MapGenerator
     {
         Any,  // cliff edge allowed (the mouth, before the ramp opens it)
         Open, // not a cliff
-        Flat, // no lower neighbor and no ramp neighbor, so a ramp never lands on another ramp's mouth, foot or walls
     }
 
     /// <summary>True if the cell is in bounds, at the given level, not a ramp, and meets the footing rule.</summary>
@@ -154,32 +205,42 @@ public static class MapGenerator
         if ((uint)x >= (uint)p.Width || (uint)y >= (uint)p.Height) return false;
         int i = y * p.Width + x;
         if (levels[i] != level || NavGrid.IsRampCell(levels, elevations, i)) return false;
-        return footing switch
+        return footing == Footing.Any || !NavGrid.IsCliff(levels, elevations, p.Width, p.Height, x, y);
+    }
+
+    /// <summary>True if two inclusive cell rectangles share a cell.</summary>
+    private static bool Overlaps(int ax0, int ay0, int ax1, int ay1, int bx0, int by0, int bx1, int by1) =>
+        ax0 <= bx1 && bx0 <= ax1 && ay0 <= by1 && by0 <= ay1;
+
+    // Summed-area table of the cells a ramp footprint may never use that don't depend on ramps:
+    // the border ring and every cell with a lower 4-neighbor. Built per layout once the plateaus
+    // are raised. sums[(y + 1) * (w + 1) + (x + 1)] counts such cells in [0, x] x [0, y].
+    private static void BuildNotFlatSums(MapGenParams p, byte[] levels, int[] sums)
+    {
+        int w = p.Width, h = p.Height, stride = w + 1;
+        Array.Clear(sums);
+        for (int y = 0; y < h; y++)
         {
-            Footing.Any => true,
-            Footing.Open => !NavGrid.IsCliff(levels, elevations, p.Width, p.Height, x, y),
-            _ => !HasLowerNeighbor(p, levels, x, y) && !HasRampNeighbor(p, levels, elevations, x, y),
-        };
+            int rowSum = 0;
+            for (int x = 0; x < w; x++)
+            {
+                int i = y * w + x;
+                bool border = x == 0 || y == 0 || x == w - 1 || y == h - 1;
+                // Inlined lower-neighbor test (the border cells are already counted, so no bounds checks).
+                if (border || levels[i - 1] < levels[i] || levels[i + 1] < levels[i]
+                    || levels[i - w] < levels[i] || levels[i + w] < levels[i])
+                    rowSum++;
+                sums[(y + 1) * stride + x + 1] = sums[y * stride + x + 1] + rowSum;
+            }
+        }
     }
 
-    // NavGrid walls the flat cells flanking a ramp (BUG-0011); keeping a new ramp's footprint and
-    // ring off cells next to an existing ramp stops one ramp's walls from closing another's foot.
-    private static bool HasRampNeighbor(MapGenParams p, byte[] levels, float[] elevations, int x, int y)
+    /// <summary>Off-limits cells (see <see cref="BuildNotFlatSums"/>) in the inclusive cell rectangle.</summary>
+    private static int CountNotFlat(int[] sums, int w, int x0, int y0, int x1, int y1)
     {
-        int w = p.Width;
-        return (x > 0 && NavGrid.IsRampCell(levels, elevations, y * w + x - 1))
-            || (x < w - 1 && NavGrid.IsRampCell(levels, elevations, y * w + x + 1))
-            || (y > 0 && NavGrid.IsRampCell(levels, elevations, (y - 1) * w + x))
-            || (y < p.Height - 1 && NavGrid.IsRampCell(levels, elevations, (y + 1) * w + x));
-    }
-
-    private static bool HasLowerNeighbor(MapGenParams p, byte[] levels, int x, int y)
-    {
-        int level = levels[y * p.Width + x];
-        return (x > 0 && levels[y * p.Width + x - 1] < level)
-            || (x < p.Width - 1 && levels[y * p.Width + x + 1] < level)
-            || (y > 0 && levels[(y - 1) * p.Width + x] < level)
-            || (y < p.Height - 1 && levels[(y + 1) * p.Width + x] < level);
+        int stride = w + 1;
+        return sums[(y1 + 1) * stride + x1 + 1] - sums[y0 * stride + x1 + 1]
+            - sums[(y1 + 1) * stride + x0] + sums[y0 * stride + x0];
     }
 
     private static bool AllLevelsPassable(NavGrid nav)

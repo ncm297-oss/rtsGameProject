@@ -378,7 +378,7 @@ public class SpatialHashQaTests
         Assert.Equal(10, h.QueryRect(new Vector2(0, 0), new Vector2(9, 9), Span<int>.Empty));
     }
 
-    [Fact(Skip = "BUG-0016: NearestEnemy returns a NaN-positioned unit that QueryRadius excludes; un-skip when fixed")]
+    [Fact]
     public void NearestEnemy_IgnoresUnitWithNaNPosition_LikeQueryRadius()
     {
         // docs/03 + XML doc: NearestEnemy "uses the QueryRadius match rule". A NaN point fails that rule

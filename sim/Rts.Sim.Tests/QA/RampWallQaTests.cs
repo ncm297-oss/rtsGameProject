@@ -151,7 +151,7 @@ public class RampWallQaTests
             : p;
     }
 
-    [Theory(Skip = "BUG-0015: worst valid params take ~45 s (Debug) / ~7 s (Release); ramp size is uncapped. Un-skip when fixed")]
+    [Theory]
     [Trait("Category", "Perf")]
     [InlineData(false)]
     [InlineData(true)]

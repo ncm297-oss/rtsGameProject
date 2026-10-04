@@ -249,6 +249,74 @@ public class MapGeneratorTests
         }
     }
 
+    public static IEnumerable<object[]> PinnedMaps()
+    {
+        MapGenParams d = MapGenParams.Default;
+        var sets = new (string Name, MapGenParams P, ulong[] Hashes)[]
+        {
+            ("default", d, new[] { 0xAD038364261B98E4UL, 0xB561BDC4866E54C1UL, 0x663A1A6C3EC016A5UL }),
+            ("rampWidth6 long", d with { RampWidth = 6, RampLength = 9, Level1MinSize = 20, Level2MinSize = 9, Level2MaxSize = 16 },
+                new[] { 0x03EDBEED582BB778UL, 0x51F4C9340F4D48E1UL, 0xE5B2F1A8AD76F1D1UL }),
+            ("dense ramps", d with { Level1Plateaus = 20, RampsPerPlateau = 8, Level2Plateaus = 12 },
+                new[] { 0xFD3C566A74011E9AUL, 0x7E173AA42A12B668UL, 0x82EAA235AF8E7B9DUL }),
+            ("256 crowded", d with { Width = 256, Height = 256, Level1Plateaus = 32, Level2Plateaus = 32, RampsPerPlateau = 6 },
+                new[] { 0xF285EC467DB6B3FBUL, 0x74F33719D1EDBC2AUL, 0x979A2DAE6271F7CEUL }),
+            ("crowded small ramps", d with { Level1Plateaus = 32, Level2Plateaus = 32, RampsPerPlateau = 16, RampTries = 128, Level1MinSize = 5, Level1MaxSize = 20, Level2MinSize = 5, Level2MaxSize = 10, Level2Inset = 1 },
+                new[] { 0x16065A92DA6D5FFAUL, 0xBDDFEBC999498947UL, 0x2958E202885AD5A3UL }),
+        };
+        ulong[] seeds = { 1, 7, 42 };
+        foreach (var s in sets)
+            for (int i = 0; i < seeds.Length; i++)
+                yield return new object[] { s.Name, s.P, seeds[i], s.Hashes[i] };
+    }
+
+    /// <summary>BUG-0015 replaced the cell-by-cell ramp footprint scan with O(1) checks that must accept exactly the same tries.</summary>
+    /// <remarks>
+    /// Hashes come from the generator as it was before BUG-0015 (commit 4b204f6), which a scratch
+    /// copy also matched cell for cell (levels, heights, nav flags, RNG state after) on 3,000+
+    /// seeds over ten param sets. If a deliberate generator change moves them, regenerate and say why.
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(PinnedMaps))]
+    public void Generate_MatchesMapsFromBeforeTheFastRampChecks(string name, MapGenParams p, ulong seed, ulong expected)
+    {
+        Assert.True(Gen(seed, p).ContentHash() == expected, $"{name} seed {seed}: map changed");
+    }
+
+    /// <summary>BUG-0015: ramp size no longer multiplies the cost of a ramp try. These shapes took 18-67 s in Debug before.</summary>
+    [Theory]
+    [Trait("Category", "Perf")]
+    [InlineData(20, 300)]
+    [InlineData(100, 200)]
+    [InlineData(200, 100)]
+    public void WorstValidParams_1024Map_LargeRamps_UnderFiveSeconds(int rampWidth, int rampLength)
+    {
+        var p = MapGenParams.Default with
+        {
+            Width = 1024,
+            Height = 1024,
+            Level1Plateaus = MapGenParams.MaxPlateaus,
+            Level1MinSize = rampWidth + 2,
+            Level1MaxSize = 400,
+            Level2Plateaus = MapGenParams.MaxPlateaus,
+            Level2MinSize = rampWidth + 2,
+            Level2MaxSize = 300,
+            RampWidth = rampWidth,
+            RampLength = rampLength,
+            RampsPerPlateau = 16,
+            RampTries = MapGenParams.MaxRampTries,
+            MinPassableFraction = 1f, // unreachable, so every attempt runs
+            MaxAttempts = MapGenParams.MaxMaxAttempts,
+        };
+        var sw = Stopwatch.StartNew();
+        Heightmap hm = Gen(11, p);
+        var nav = new NavGrid(hm);
+        sw.Stop();
+        _out.WriteLine($"{rampWidth} x {rampLength} ramps on 1024 x 1024: {sw.Elapsed.TotalSeconds:F2} s");
+        Assert.True(sw.Elapsed.TotalSeconds < 5, $"took {sw.Elapsed.TotalSeconds:F1} s");
+        Assert.Null(MapAssert.FindViolation(hm, nav, requireAllLevels: false, minPassableFraction: 0f));
+    }
+
     [Fact]
     [Trait("Category", "Perf")]
     public void DefaultGeneration_IsUnder50Ms()

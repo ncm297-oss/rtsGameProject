@@ -172,7 +172,8 @@ public sealed class SpatialHash
                     if (_entryOwner[e] == player) continue;
                     float dx = _entryPos[e].X - center.X, dy = _entryPos[e].Y - center.Y;
                     float d2 = dx * dx + dy * dy;
-                    if (d2 > best) continue;
+                    // Written so a NaN distance is skipped, as QueryRadius's "d2 <= r2" skips it (BUG-0016).
+                    if (!(d2 <= best)) continue;
                     // Buckets are not visited in slot order, so ties need the explicit slot check.
                     if (slot < 0 || d2 < best || _entrySlot[e] < slot)
                     {
