@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-03-2220, task M1-4a |
 | System | spatial hash |
-| Fixed by | |
+| Fixed by | 558f580 (M1-4a fix round 1) |
 
 ## Repro
 1. Un-skip `Rts.Sim.Tests.QA.SpatialHashQaTests.NearestEnemy_IgnoresUnitWithNaNPosition_LikeQueryRadius`.
@@ -35,3 +35,7 @@ This can't happen today: SpawnUnit rejects non-finite positions (BUG-0006), and 
 yet. Once movement exists, though, a single NaN unit would land in bucket 0 (the map corner) and
 become "the nearest enemy" for every query whose range touches bucket 0. Fix: write the test as
 `if (!(d2 <= best)) continue;`, which mirrors QueryRadius.
+
+**QA verification (2026-10-03-2220, M1-4a fix round 1):** fixed. The un-skipped
+`NearestEnemy_IgnoresUnitWithNaNPosition_LikeQueryRadius` passes, and so does the 108-world oracle
+fuzz. Infinite distances still match an infinite radius (Inf <= Inf), the same as QueryRadius.
