@@ -269,10 +269,11 @@ public class MovementStressTests
         Assert.True(avg < 4.0, $"{distinctTargets} distinct targets: {avg:F2} ms/tick (docs/03: 500 units, average tick < 4 ms)");
     }
 
-    [Theory(Skip = "BUG-0019 scan fixed (128: ~0.8 ms); 512 still fails: the timed tick includes one 512x512 flow-field build (~10 ms Debug), see fix report")]
+    [Theory]
     [Trait("Category", "Perf")]
     [InlineData(128)]
-    [InlineData(512)]
+    [InlineData(512, Skip = "BUG-0023: the timed tick includes one 512x512 flow-field build (~10 ms Debug); the BUG-0019 scan itself is fixed")]
+    [InlineData(1024, Skip = "BUG-0023: one 1024x1024 flow-field build in the tick")]
     public void Perf_500MovesToOneCliffCell_ApplyCost(int mapSize)
     {
         var p = MapGenParams.Default with { Width = mapSize, Height = mapSize };
@@ -287,7 +288,7 @@ public class MovementStressTests
         MoveAllTo(sim, _ => corner);
         sim.Tick(); // queued for next tick
         var sw = Stopwatch.StartNew();
-        sim.Tick(); // applies 500 Moves, each resolving the blocked target with a full-map scan
+        sim.Tick(); // applies 500 Moves (each resolves the blocked target) and builds its field once
         double ms = sw.Elapsed.TotalMilliseconds;
         _out.WriteLine($"{mapSize}x{mapSize}: tick applying 500 Moves to a ring cell took {ms:F1} ms");
         Assert.True(ms < 8.0, $"{ms:F1} ms for one tick (docs/03: p99 tick < 8 ms)");

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-04-0120, task M1-4b |
 | System | pathfinding (FlowFieldCache) / movement |
-| Fixed by | |
+| Fixed by | a5f81af (M1-4b fix round 1) |
 
 ## Repro
 1. Remove the `Skip` from `Stress.MovementStressTests.Perf_500Units_DistinctTargetsInterleavedBySlot_CostPerTick`.
@@ -43,3 +43,19 @@ units by GoalCell before moving), size the cache to the number of live goals, or
 reference to their field. Even grouping alone leaves 33 builds per tick (~23 ms) when the working
 set exceeds the capacity, so the capacity policy also matters.
 Allocation stays at 0 bytes in this state (`Tick_With500Units_And64DistinctTargets_AllocatesNothing`).
+
+**QA verification (2026-10-04-0120, M1-4b fix round 1):** fixed as filed. MovementSystem now groups
+units by goal cell and builds at most one field per tick.
+- The un-skipped `Perf_500Units_DistinctTargetsInterleavedBySlot_CostPerTick` (32/33/64 targets)
+  runs in isolation at 0.92 / 0.88 / 0.84 ms per tick, with about 1 build per tick. Before the fix
+  it was about 320 ms per tick.
+- With every unit given its own goal, `Perf_BuildCap_EveryUnitItsOwnGoal_TickCost` averages
+  0.94 / 0.97 / 1.30 ms per tick for 500 / 1,000 / 2,500 units. The worst tick is 2.05 ms.
+- A steady state with 300 live goals allocates 0 bytes over 60 ticks, 60 of which build a field.
+- Two sims with 1,500 ticks of retarget bursts have equal hashes on every tick, and the cap is
+  never exceeded.
+
+The cap brings trade-offs, filed separately: BUG-0021 (the cache contents now change results but
+aren't hashed) and BUG-0022 (starvation, plus priority by goal-cell index).
+One run in the full suite measured 4.49 ms for the 33-target row because of parallel load
+(BUG-0024).

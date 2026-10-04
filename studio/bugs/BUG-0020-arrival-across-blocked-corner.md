@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-04-0120, task M1-4b |
 | System | movement (MovementSystem arrival) |
-| Fixed by | |
+| Fixed by | a5f81af (M1-4b fix round 1) |
 
 ## Repro
 1. Remove the `Skip` from `QA.MoveQaTests.DiagonalNeighborAcrossBlockedCorner_UnitDoesNotArriveThroughTheCorner`.
@@ -32,3 +32,9 @@ arrived on the first movement tick, on the wrong side of a cliff corner.
 Only diagonally-touching cells are affected (4-adjacent passable cells are always one straight step
 apart). A fix could require the unit to be in the goal cell, or in a cell with an allowed step into
 it, before the distance check counts. Matters more once attack-move and gather orders use arrival.
+
+**QA verification (2026-10-04-0120, M1-4b fix round 1):** fixed. Arrival is now checked only
+inside the goal cell. The un-skipped `DiagonalNeighborAcrossBlockedCorner_UnitDoesNotArriveThroughTheCorner`
+passes. Inside the goal cell the unit steps straight at a goal in the same convex cell, so the new
+rule can't strand it. `BuildCap_500UnitsWith500DistinctGoals_EveryUnitArrives_NoDeadlock` ends with
+all 500 units within ArrivalDistance of their goals.
