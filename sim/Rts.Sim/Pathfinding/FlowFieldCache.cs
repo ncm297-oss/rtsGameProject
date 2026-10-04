@@ -51,6 +51,15 @@ public sealed class FlowFieldCache
     /// <summary>True if an up-to-date field for the target is cached; does not count as a use.</summary>
     public bool Contains(int targetCell) => Find(targetCell) >= 0;
 
+    /// <summary>The cached, up-to-date field for the target, marked most recently used; null (and nothing built) on a miss.</summary>
+    public FlowField? TryGetCached(int targetCell)
+    {
+        int slot = Find(targetCell);
+        if (slot < 0) return null;
+        _lastUse[slot] = ++_clock;
+        return _fields[slot];
+    }
+
     /// <summary>The field leading to <paramref name="targetCell"/>: cached if current, otherwise built now, evicting the least recently used field when full.</summary>
     public FlowField Get(int targetCell)
     {

@@ -187,6 +187,24 @@ public class FlowFieldTests
     }
 
     [Fact]
+    public void NearestPassable_RingSearch_MatchesFullScanOracle()
+    {
+        // BUG-0019 replaced the full-map scan with rings outward; the answer (ties included) must not change.
+        for (ulong seed = 0; seed < 2; seed++)
+        {
+            NavGrid g = Generated(seed);
+            for (int c = 0; c < g.Width * g.Height; c += 3)
+            {
+                if (g.IsPassable(c % g.Width, c / g.Width)) continue;
+                Assert.Equal(Nearest(g, c), FlowField.NearestPassable(g, c));
+            }
+        }
+        NavGrid u = FromRows(UPocket);
+        for (int c = 0; c < u.Width * u.Height; c++)
+            Assert.Equal(Nearest(u, c), FlowField.NearestPassable(u, c));
+    }
+
+    [Fact]
     public void BlockedTarget_TieGoesToLowestRowThenColumn()
     {
         // The U's top wall at (6,2): (6,1) above and (6,3) below are both at distance 1; row 1 wins.

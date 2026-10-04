@@ -298,7 +298,7 @@ public class MoveQaTests
         Assert.Equal(TestSim.UnitTypeCount - 1, sim.World.Units.TypeId[0]);
     }
 
-    [Fact(Skip = "BUG-0020: arrival is a straight-line distance check, so it fires across a blocked corner")]
+    [Fact]
     public void DiagonalNeighborAcrossBlockedCorner_UnitDoesNotArriveThroughTheCorner()
     {
         // Two passable cells touching only at a corner whose both side cells are blocked: a unit

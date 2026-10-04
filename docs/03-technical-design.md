@@ -74,10 +74,11 @@ phases in this fixed order:
 6. **Abilities:** cast timers, effect resolution.
 7. **Orders and targeting:** order queue advance, target acquisition (staggered scans).
 8. **Pathfinding requests:** build or fetch flow fields for new move targets. (M1-4b: done
-   lazily inside phase 9: the first unit that needs a goal's field fetches it from the cache, and
-   a miss builds it right there, without allocating.)
+   inside phase 9: Moving units are sorted by (goal cell, slot), each goal's field is fetched
+   from the cache once per tick, and a miss builds it right there, without allocating, at most
+   `MovementConstants.MaxFieldBuildsPerTick` (1) builds per tick.)
 9. **Movement:** flow-field direction + steering + collision against the nav grid
-   (`MovementSystem.Run`, units in slot order).
+   (`MovementSystem.Run`, units in (goal cell, slot) order).
 10. **Combat:** attack wind-ups and cooldowns, projectile flight and impact, splash.
 11. **Damage and death:** apply queued damage, kill entities, emit death events.
 12. **Vision and detection:** recompute fog every 4 ticks (5 Hz) per player.
@@ -260,15 +261,30 @@ bucket queue on the whole-number part of the cost (Dial's algorithm: every step 
 cells in one bucket can't improve each other), which gives the same costs as a binary heap but builds
 a 128 × 128 field in about 0.7 ms in a Debug build. A blocked target cell resolves to the nearest
 passable cell by squared cell distance, ties to the lowest (y, x); `FlowField.NearestPassable` is
-that rule. Unreachable targets can't happen yet: the nav grid seals every pocket, so all passable
+that rule. It searches square rings outward from the cell and stops once a ring can't beat the
+best distance found, so its cost grows with the distance to passable ground, not the map size. Unreachable targets can't happen yet: the nav grid seals every pocket, so all passable
 cells connect. `FlowFieldCache` (on `World.FlowFields`) keeps 32 fields by default, keyed by the
 requested target cell and tagged with `NavGrid.Version`; a hit returns the same instance and marks it
 most recently used, a miss fills a free slot or rebuilds the least recently used one in place, and
-a field whose version is stale is rebuilt on its next use. Every field array, the queue, and a
+a field whose version is stale is rebuilt on its next use; `TryGetCached` returns a current field
+(marking it used) or null without building. Every field array, the queue, and a
 per-cell step mask (which of the 8 steps are legal, shared by all fields and recomputed when the
 version changes) are allocated in the constructor: about 5 bytes × cells × capacity, 2.6 MB on the
 default map (160 MB on a 1024 × 1024 map, so capacity may need to scale with map size later). The
 cache is derived state and not hashed: a field depends only on the grid and its target.
+
+**Build cap (BUG-0018).** Fetching a field per unit in slot order thrashed the LRU once live goals
+outnumbered its slots (goals interleaved by slot evict exactly the field the next unit needs: a
+full build per unit per tick, ~320 ms). Now `MovementSystem` sorts Moving units by (goal cell,
+slot) into a preallocated `World.MoveOrder` buffer, fetches each goal's field once per tick, and
+builds at most `MovementConstants.MaxFieldBuildsPerTick` = 1 field per tick (~0.7 ms on the default
+map in Debug). A unit whose field isn't cached once the cap is spent waits that tick (still Moving,
+velocity 0); units already in their goal cell need no field. Cost: when many new goals arrive in
+one tick their groups start one tick apart (32 new goals: the last starts 1.6 s late), and with
+more live goals than cache slots, the lowest goal cells rotate through the cache (one build per
+tick) while the rest wait until earlier groups arrive. A unit that never arrives (blocked forever
+until M1-4c's give-up rules) can hold its slot indefinitely. One build of a large map still costs
+more than the tick budget (512 × 512 ≈ 10 ms in Debug); time-sliced builds are future work.
 
 ### Local movement
 
@@ -286,9 +302,11 @@ cache is derived state and not hashed: a field depends only on the grid and its 
 unit; a group move is one command per unit, and they share one cached field because they share the
 target cell. Applying it sets `State = Moving`, `Goal` = the target, and `GoalCell` = the target's
 cell; if that cell is blocked, the goal becomes the center of the nearest passable cell (the same
-rule as the field). `MovementSystem.Run` then moves each Moving unit, in slot order: within
-`MovementConstants.ArrivalDistance` (`CellSize / 2` = 1 m) of the goal it arrives (Idle, velocity
-0); in the goal cell it heads straight at the goal; elsewhere it heads at the center of the
+rule as the field). `MovementSystem.Run` then moves each Moving unit, in (goal cell, slot) order (units don't interact
+yet, so the order changes no result): in the goal cell, within `MovementConstants.ArrivalDistance`
+(`CellSize / 2` = 1 m) of the goal it arrives (Idle, velocity 0), otherwise it heads straight at the
+goal. Arrival only counts inside the goal cell, so a unit 0.85 m from its goal across a blocked
+corner walks the long way round instead of arriving (BUG-0020). Elsewhere it heads at the center of the
 neighbor cell its current cell's direction points to. A straight line to that center stays inside
 the current cell, that neighbor, and (for a diagonal) the two side cells, which no-corner-cutting
 keeps passable, so it can't clip a cliff corner. The step is `min(Speed, distance to the aim

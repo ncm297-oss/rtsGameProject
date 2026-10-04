@@ -26,7 +26,11 @@ public sealed class World
         NavGrid = new NavGrid(Heightmap);
         Spatial = new SpatialHash(config.UnitCapacity, NavGrid.Width, NavGrid.Height);
         FlowFields = new FlowFieldCache(NavGrid);
+        MoveOrder = new long[config.UnitCapacity];
     }
+
+    /// <summary>Scratch for <see cref="Movement.MovementSystem"/>: Moving units keyed by (goal cell, slot); derived, not hashed.</summary>
+    internal long[] MoveOrder { get; }
 
     /// <summary>The match setup this world was built from.</summary>
     public SimConfig Config { get; }

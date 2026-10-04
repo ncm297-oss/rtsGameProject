@@ -76,6 +76,21 @@ public class FlowFieldCacheTests
     }
 
     [Fact]
+    public void TryGetCached_MissBuildsNothing_HitCountsAsAUse()
+    {
+        var cache = new FlowFieldCache(Grid, capacity: 2);
+        Assert.Null(cache.TryGetCached(Target(0)));
+        Assert.Equal(0, cache.BuildCount);
+        FlowField a = cache.Get(Target(0));
+        cache.Get(Target(1));
+        Assert.Same(a, cache.TryGetCached(Target(0))); // touch: target 1 is now the oldest
+        cache.Get(Target(2));
+        Assert.True(cache.Contains(Target(0)));
+        Assert.False(cache.Contains(Target(1)));
+        Assert.Equal(3, cache.BuildCount);
+    }
+
+    [Fact]
     public void GridVersionChange_RebuildsOnNextGet()
     {
         NavGrid grid = Generated(4); // own grid: the version bump must not leak into other tests

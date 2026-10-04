@@ -245,7 +245,7 @@ public class MovementStressTests
         Assert.True(avg < budgetMs, $"{avg:F3} ms/tick");
     }
 
-    [Theory(Skip = "BUG-0018: more live goal cells than cache slots rebuilds a field for every unit every tick")]
+    [Theory]
     [Trait("Category", "Perf")]
     [InlineData(32)]
     [InlineData(33)]
@@ -269,7 +269,7 @@ public class MovementStressTests
         Assert.True(avg < 4.0, $"{distinctTargets} distinct targets: {avg:F2} ms/tick (docs/03: 500 units, average tick < 4 ms)");
     }
 
-    [Theory(Skip = "BUG-0019: every Move to a blocked cell runs a full-map nearest-passable scan")]
+    [Theory(Skip = "BUG-0019 scan fixed (128: ~0.8 ms); 512 still fails: the timed tick includes one 512x512 flow-field build (~10 ms Debug), see fix report")]
     [Trait("Category", "Perf")]
     [InlineData(128)]
     [InlineData(512)]

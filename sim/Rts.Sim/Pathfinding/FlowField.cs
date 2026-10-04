@@ -80,29 +80,50 @@ public sealed class FlowField
     }
 
     /// <summary>The passable cell nearest to <paramref name="cell"/> by squared cell distance (ties: lowest y, then x); -1 if none.</summary>
-    /// <remarks>A full scan, O(cells); only blocked targets pay for it.</remarks>
+    /// <remarks>
+    /// Searches square rings outward and stops once a ring's nearest possible cell (r squared away)
+    /// is farther than the best found, so the cost grows with the distance to passable ground, not
+    /// with the map size.
+    /// </remarks>
     public static int NearestPassable(NavGrid grid, int cell)
     {
-        int w = grid.Width;
+        int w = grid.Width, h = grid.Height;
         int tx = cell % w, ty = cell / w;
+        int maxR = Math.Max(Math.Max(tx, w - 1 - tx), Math.Max(ty, h - 1 - ty));
         int best = -1;
         long bestD2 = long.MaxValue;
-        for (int y = 0; y < grid.Height; y++)
+        for (int r = 0; r <= maxR && (long)r * r <= bestD2; r++)
         {
-            for (int x = 0; x < w; x++)
+            for (int y = Math.Max(ty - r, 0); y <= Math.Min(ty + r, h - 1); y++)
             {
-                if (!grid.IsPassable(x, y)) continue;
-                long dx = x - tx, dy = y - ty;
-                long d2 = dx * dx + dy * dy;
-                // Strict < keeps the first cell in (y, x) scan order on a tie.
-                if (d2 < bestD2)
+                if (y == ty - r || y == ty + r)
                 {
-                    bestD2 = d2;
-                    best = y * w + x;
+                    for (int x = Math.Max(tx - r, 0); x <= Math.Min(tx + r, w - 1); x++)
+                        Consider(grid, x, y, tx, ty, ref best, ref bestD2);
+                }
+                else
+                {
+                    Consider(grid, tx - r, y, tx, ty, ref best, ref bestD2);
+                    Consider(grid, tx + r, y, tx, ty, ref best, ref bestD2);
                 }
             }
         }
         return best;
+    }
+
+    private static void Consider(NavGrid grid, int x, int y, int tx, int ty, ref int best, ref long bestD2)
+    {
+        // IsPassable is false off the grid, so ring sides past an edge drop out here.
+        if (!grid.IsPassable(x, y)) return;
+        long dx = x - tx, dy = y - ty;
+        long d2 = dx * dx + dy * dy;
+        int index = y * grid.Width + x;
+        // Rings aren't visited in (y, x) order, so a tie compares the cell index explicitly.
+        if (d2 < bestD2 || (d2 == bestD2 && index < best))
+        {
+            bestD2 = d2;
+            best = index;
+        }
     }
 
     /// <summary>

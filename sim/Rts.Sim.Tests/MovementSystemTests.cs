@@ -253,4 +253,65 @@ public class MovementSystemTests
         Assert.True(moving >= 400, $"only {moving} units still moving; the measurement is not representative");
         Assert.True(avg < 2.0, $"tick took {avg:F3} ms");
     }
+
+    [Fact]
+    public void MoreGoalsThanCacheSlots_BuildsAtMostTheCapPerTick_AndEveryUnitArrives()
+    {
+        // BUG-0018: 64 goals interleaved by slot used to rebuild a field for almost every unit, every tick.
+        Simulation sim = MoveScenario.Spawn(seed: 21, units: 128, maxCost: 15f, out int center);
+        NavGrid g = sim.World.NavGrid;
+        FlowField near = FlowField.Build(g, center);
+        var goals = new List<int>();
+        for (int c = 0; c < g.Width * g.Height && goals.Count < 64; c++)
+            if (near.CostAt(c) <= 15f) goals.Add(c);
+        Assert.Equal(64, goals.Count);
+        UnitStore u = sim.World.Units;
+        for (int i = 0; i < u.Capacity; i++)
+            sim.Enqueue(Command.Move(u.Owner[i], MoveScenario.Handle(sim, i), MoveScenario.Center(g, goals[i % goals.Count])));
+        sim.Tick();
+        int moving = u.Count;
+        for (int t = 0; t < 3000 && moving > 0; t++)
+        {
+            int before = sim.World.FlowFields.BuildCount;
+            sim.Tick();
+            Assert.True(sim.World.FlowFields.BuildCount - before <= MovementConstants.MaxFieldBuildsPerTick,
+                $"tick {t}: {sim.World.FlowFields.BuildCount - before} field builds");
+            moving = 0;
+            for (int i = 0; i < u.Capacity; i++) if (u.State[i] == UnitState.Moving) moving++;
+        }
+        Assert.Equal(0, moving);
+        for (int i = 0; i < u.Capacity; i++)
+            Assert.True(Vector2.Distance(u.Position[i], u.Goal[i]) <= MovementConstants.ArrivalDistance, $"unit {i} stopped short");
+    }
+
+    [Fact]
+    [Trait("Category", "Perf")]
+    public void FiveHundredMovesToABlockedCell_On512Map_WithFieldCached_ApplyUnderEightMilliseconds()
+    {
+        // BUG-0019: each Move to a blocked cell scanned the whole map (500 Moves took ~1 s on 512 x 512).
+        // The field is built first so the timed tick measures resolving the 500 blocked targets.
+        var map = MapGenParams.Default with { Width = 512, Height = 512 };
+        var sim = new Simulation(TestSim.Config(91, 2, 500, 1100) with { Map = map });
+        NavGrid g = sim.World.NavGrid;
+        List<int> open = FlowFieldOracle.PassableCells(g);
+        for (int i = 0; i < 500; i++) sim.Enqueue(Command.SpawnUnit(i % 2, 0, MoveScenario.Center(g, open[i * 7 % open.Count])));
+        sim.Tick();
+        sim.Tick();
+        var corner = new Vector2(0.5f, 0.5f);
+        Assert.False(g.IsPassable(0, 0));
+        // Slot 499 spawns far from the corner (slot 0 is on the first passable cell, next to it).
+        sim.Enqueue(Command.Move(1, MoveScenario.Handle(sim, 499), corner));
+        sim.Tick();
+        sim.Tick(); // applies it and builds the corner's field
+        Assert.Equal(1, sim.World.FlowFields.BuildCount);
+        MoveScenario.MoveAll(sim, corner);
+        sim.Tick();
+        int builds = sim.World.FlowFields.BuildCount;
+        var sw = Stopwatch.StartNew();
+        sim.Tick();
+        double ms = sw.Elapsed.TotalMilliseconds;
+        _out.WriteLine($"tick applying 500 Moves to a blocked cell on 512 x 512: {ms:F2} ms");
+        Assert.Equal(builds, sim.World.FlowFields.BuildCount);
+        Assert.True(ms < 8.0, $"{ms:F2} ms");
+    }
 }
