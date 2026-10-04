@@ -53,3 +53,6 @@ bugs outrank new features.
 | [BUG-0015](BUG-0015-mapgen-worst-case-still-slow-with-big-ramps.md) | S2 | fixed | Worst valid map params still take ~45 s (Debug) / ~7 s (Release): ramp size not in the time bound |
 | [BUG-0016](BUG-0016-nearest-enemy-returns-nan-positioned-unit.md) | S3 | fixed | SpatialHash.NearestEnemy returns a NaN-positioned unit that QueryRadius excludes |
 | [BUG-0017](BUG-0017-flaky-flood-allocation-test.md) | S3 | open | `Flood_10000Commands_OneTick_AllocatesNothing` failed once in 11 full suite runs, not reproduced |
+| [BUG-0018](BUG-0018-flow-field-cache-thrash-rebuilds-per-unit.md) | S2 | open | More than 32 live move goals rebuilds a flow field for every unit every tick (~320 ms/tick) |
+| [BUG-0019](BUG-0019-move-to-blocked-cell-full-map-scan.md) | S3 | open | Every Move to a blocked cell runs a full-map nearest-passable scan (500 Moves = 63 ms) |
+| [BUG-0020](BUG-0020-arrival-across-blocked-corner.md) | S3 | open | A unit "arrives" across a blocked corner: arrival is a straight-line check |
