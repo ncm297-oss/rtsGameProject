@@ -46,7 +46,9 @@ bugs outrank new features.
 | [BUG-0008](BUG-0008-loader-duplicate-json-keys-last-wins.md) | S3 | open | Duplicate JSON keys are silently resolved last-wins |
 | [BUG-0009](BUG-0009-loader-null-entries-in-requires-tags.md) | S4 | fixed | Null or blank entries in `requires` / `tags` are copied into GameData |
 | [BUG-0010](BUG-0010-loader-does-not-check-faction-slots.md) | S4 | open | A faction with no units, or a missing or doubled template slot, loads clean |
-| [BUG-0011](BUG-0011-ramp-sides-walkable-steeper-than-30-degrees.md) | S3 | open | Ramp sides are walkable: a unit can step 1.6-3.2 m sideways off a ramp (39-58 degrees) |
-| [BUG-0012](BUG-0012-mapgen-int-overflow-passes-validate-then-crashes.md) | S3 | open | MapGenParams.Validate and the Heightmap ctor overflow on huge ints; Generate then crashes |
-| [BUG-0013](BUG-0013-mapgen-worst-case-params-take-tens-of-seconds.md) | S4 | open | Map generation with params Validate allows can take ~35 s |
+| [BUG-0011](BUG-0011-ramp-sides-walkable-steeper-than-30-degrees.md) | S3 | fixed | Ramp sides are walkable: a unit can step 1.6-3.2 m sideways off a ramp (39-58 degrees) |
+| [BUG-0012](BUG-0012-mapgen-int-overflow-passes-validate-then-crashes.md) | S3 | fixed | MapGenParams.Validate and the Heightmap ctor overflow on huge ints; Generate then crashes |
+| [BUG-0013](BUG-0013-mapgen-worst-case-params-take-tens-of-seconds.md) | S4 | fixed | Map generation with params Validate allows can take ~35 s |
 | [BUG-0014](BUG-0014-seed-max-gives-same-map-as-seed-zero.md) | S4 | open | Seed ulong.MaxValue generates exactly the same map as seed 0 |
+| [BUG-0015](BUG-0015-mapgen-worst-case-still-slow-with-big-ramps.md) | S2 | open | Worst valid map params still take ~45 s (Debug) / ~7 s (Release): ramp size not in the time bound |
+| [BUG-0016](BUG-0016-nearest-enemy-returns-nan-positioned-unit.md) | S3 | open | SpatialHash.NearestEnemy returns a NaN-positioned unit that QueryRadius excludes |

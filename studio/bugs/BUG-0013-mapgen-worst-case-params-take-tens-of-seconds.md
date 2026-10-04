@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-03-1235, task M1-3 |
 | System | terrain / map generator |
-| Fixed by | |
+| Fixed by | dd63cca (M1-4a) |
 
 ## Repro
 In `Rts.Sim.Tests.Stress.MapStressTests.WorstCaseValidParams_StillBounded`, set `MaxAttempts = 64`
@@ -33,3 +33,8 @@ data. A tighter `RampTries`/`MaxAttempts` cap, or an overall placement budget, w
 tighten the `Validate` caps (e.g. `RampTries` <= 128, `MaxAttempts` <= 16, plateaus <= 32) so the
 worst case stays under ~2 s, and lower `WorstCaseValidParams_StillBounded`'s guard to match.
 Does not block.
+
+**QA verification (2026-10-03-2220, M1-4a):** this repro (512x512 at the new caps) now takes 0.87 s
+in a Debug test run, so it is fixed as filed. The caps still don't bound the worst case: wide, long
+ramps on a 1024 map (which `Validate` still allows) take ~45 s in Debug. Filed separately as
+BUG-0015.

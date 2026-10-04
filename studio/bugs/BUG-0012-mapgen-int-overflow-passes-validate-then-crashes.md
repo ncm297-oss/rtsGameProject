@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-03-1235, task M1-3 |
 | System | terrain / map generator |
-| Fixed by | |
+| Fixed by | dd63cca (M1-4a) |
 
 ## Repro
 1. Un-skip `Rts.Sim.Tests.QA.MapQaTests.OverflowParams_ValidateThrowsOrMapIsValid` and
@@ -42,3 +42,10 @@ becomes S2 if map settings are ever read from data or a lobby.
 **Producer triage (2026-10-03-1235):** fix in the first commit of M1-4a: upper bounds on
 `RampWidth`, `RampLength`, `EdgeMargin`, `Level2Inset` (at most the map size) checked before any
 arithmetic, and `(long)width * height` in `Heightmap`. Un-skip both QA tests. Does not block.
+
+**QA verification (2026-10-03-2220, M1-4a):** both skipped tests are un-skipped and green. The new
+`QA.RampWallQaTests.EveryField_AtExtremes_ValidateThrowsOrMapIsValid` sets each int field of
+`MapGenParams` to int.MinValue, -1, 0, 1, 2^30, int.MaxValue-1 and int.MaxValue. It sets
+`MinPassableFraction` to NaN, +-Infinity, -1, epsilon and 2 (111 cases in total). Every case either
+fails `Validate` with ArgumentOutOfRangeException or generates a valid map in under 10 s. There
+were no index or overflow errors.

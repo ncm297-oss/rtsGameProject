@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-03-1235, task M1-3 |
 | System | terrain / nav grid |
-| Fixed by | |
+| Fixed by | dd63cca (M1-4a) |
 
 ## Repro
 1. Un-skip `Rts.Sim.Tests.QA.MapQaTests.RampSides_NoPassableStepSteeperThan30Degrees`.
@@ -45,3 +45,11 @@ lower-level cells flanking a ramp along its length become `Cliff | Blocked` ("ra
 generator already keeps that one-cell ring flat and lower. Must keep the connectivity and >= 50%
 passable invariants (`MapAssert`, `MapQaChecker`). Scheduled: first commit of the next task
 (M1-4a), with BUG-0012/0013. Does not block.
+
+**QA verification (2026-10-03-2220, M1-4a):** `RampSides_NoPassableStepSteeperThan30Degrees` is
+un-skipped and green. The new `QA.RampWallQaTests.Sweep_NoSteepPassableStep_InvariantsHold` checks
+every passable 4-neighbour pair (<= tan 30 x 2 m) and every open diagonal pair (<= tan 30 x 2.83 m).
+It also runs `MapQaChecker` (connectivity, >= 50% passable, diagonal level leaks). It covered 1,740
+seeds across 7 param sets: default, 32x32, RampWidth 1, RampWidth 6 x length 9, dense ramps,
+160x48, and 256x256 crowded. All clean. A 1,000-seed scan of 3 sets found no blocked ramp cell and
+no seed missing a passable level, so the walls don't seal ramps off.
