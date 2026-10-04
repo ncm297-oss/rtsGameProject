@@ -175,7 +175,7 @@ public class MapQaTests
     [InlineData(ulong.MaxValue)]
     public void OtherStreams_UntouchedByMapGeneration_AcrossMapSizes(ulong seed)
     {
-        var baseCfg = new SimConfig(seed, PlayerCount: 4, UnitCapacity: 4, CommandCapacity: 4);
+        var baseCfg = TestSim.Config(seed, PlayerCount: 4, UnitCapacity: 4, CommandCapacity: 4);
         var configs = new[]
         {
             baseCfg,
@@ -201,7 +201,7 @@ public class MapQaTests
     [Fact]
     public void World_TerrainMatchesDirectGeneration_AndIsDeterministic()
     {
-        var cfg = new SimConfig(123, 2, 4, 4);
+        var cfg = TestSim.Config(123, 2, 4, 4);
         var a = new World(cfg);
         var b = new World(cfg);
         Heightmap direct = Gen(123, MapGenParams.Default, out SimRng after);

@@ -103,7 +103,7 @@ public class SimCoreStressTests
     /// <summary>Random command stream into a sim; returns hashes at every 100-tick checkpoint.</summary>
     private static ulong[] RunFuzz(ulong seed, int ticks, int players)
     {
-        var sim = new Simulation(new SimConfig(seed, players, UnitCapacity: 256, CommandCapacity: 512));
+        var sim = new Simulation(TestSim.Config(seed, players, UnitCapacity: 256, CommandCapacity: 512));
         var input = new SimRng(seed ^ 0xABCDEF, 99); // test-side RNG for the command stream
         var hashes = new ulong[ticks / 100];
         for (int t = 0; t < ticks; t++)
@@ -164,7 +164,7 @@ public class SimCoreStressTests
         // Same command stream, different world seed: RNG states differ, so hashes must differ.
         static ulong Run(ulong seed)
         {
-            var sim = new Simulation(new SimConfig(seed, 2, 64, 64));
+            var sim = new Simulation(TestSim.Config(seed, 2, 64, 64));
             for (int t = 0; t < 1000; t++)
             {
                 if (t % 50 == 0) sim.Enqueue(Command.SpawnUnit(t % 2, 1, new Vector2(t, t)));
@@ -182,13 +182,13 @@ public class SimCoreStressTests
     {
         const int players = 8;
         const int n = 10_000;
-        var sim = new Simulation(new SimConfig(1, players, UnitCapacity: 2 * n + 16, CommandCapacity: n));
+        var sim = new Simulation(TestSim.Config(1, players, UnitCapacity: 2 * n + 16, CommandCapacity: n));
         // Warm-up path.
         sim.Enqueue(Command.SpawnUnit(0, 0, Vector2.Zero));
         sim.Tick();
         sim.Tick();
         for (int i = 0; i < n; i++)
-            sim.Enqueue(Command.SpawnUnit(players - 1 - (i % players), i, new Vector2(i, 0)));
+            sim.Enqueue(Command.SpawnUnit(players - 1 - (i % players), i % TestSim.UnitTypeCount, new Vector2(i, 0)));
         long before = GC.GetAllocatedBytesForCurrentThread();
         sim.Tick();
         sim.Tick();
@@ -206,7 +206,7 @@ public class SimCoreStressTests
         double worstMs = 0;
         for (int rep = 0; rep < 3; rep++)
         {
-            var sim = new Simulation(new SimConfig(1, players, UnitCapacity: n, CommandCapacity: n));
+            var sim = new Simulation(TestSim.Config(1, players, UnitCapacity: n, CommandCapacity: n));
             sim.Tick();
             for (int i = 0; i < n; i++)
                 sim.Enqueue(Command.Noop(players - 1 - (i % players)));
@@ -248,7 +248,7 @@ public class SimCoreStressTests
     [InlineData(2500)]
     public void EmptyTick_WithManyUnits_IsCheap(int units)
     {
-        var sim = new Simulation(new SimConfig(1, 2, UnitCapacity: units, CommandCapacity: units));
+        var sim = new Simulation(TestSim.Config(1, 2, UnitCapacity: units, CommandCapacity: units));
         for (int i = 0; i < units; i++)
             sim.Enqueue(Command.SpawnUnit(i % 2, 0, new Vector2(i, i)));
         sim.Tick();

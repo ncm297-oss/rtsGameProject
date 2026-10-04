@@ -22,6 +22,16 @@ public sealed class UnitStore
     public readonly int[] Owner;
     /// <summary>Unit type id, resolved from data at load.</summary>
     public readonly int[] TypeId;
+    /// <summary>Movement speed in meters per tick, copied from the type's <c>UnitDef.SpeedPerTick</c> at spawn.</summary>
+    public readonly float[] Speed;
+    /// <summary>Collision radius in meters, copied from the type's <c>UnitDef.Radius</c> at spawn.</summary>
+    public readonly float[] Radius;
+    /// <summary>Current activity.</summary>
+    public readonly UnitState[] State;
+    /// <summary>Move destination (x, z) in meters; meaningful while <see cref="State"/> is Moving.</summary>
+    public readonly Vector2[] Goal;
+    /// <summary>Nav cell index (<c>y * Width + x</c>) whose flow field leads to <see cref="Goal"/>; -1 with no goal.</summary>
+    public readonly int[] GoalCell;
     /// <summary>Whether the slot holds a live unit.</summary>
     public readonly bool[] Alive;
     /// <summary>Per-slot generation; a handle is valid only while it matches.</summary>
@@ -40,6 +50,11 @@ public sealed class UnitStore
         Facing = new float[capacity];
         Owner = new int[capacity];
         TypeId = new int[capacity];
+        Speed = new float[capacity];
+        Radius = new float[capacity];
+        State = new UnitState[capacity];
+        Goal = new Vector2[capacity];
+        GoalCell = new int[capacity];
         Alive = new bool[capacity];
         Generation = new int[capacity];
         _freeList = new int[capacity];
@@ -80,6 +95,11 @@ public sealed class UnitStore
         Facing[index] = 0f;
         Owner[index] = 0;
         TypeId[index] = 0;
+        Speed[index] = 0f;
+        Radius[index] = 0f;
+        State[index] = UnitState.Idle;
+        Goal[index] = default;
+        GoalCell[index] = -1;
         Alive[index] = true;
         handle = new EntityHandle(index, Generation[index]);
         return true;

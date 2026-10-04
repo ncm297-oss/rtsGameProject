@@ -76,6 +76,9 @@ public sealed class NavGrid
     /// <summary>Increments whenever passability changes, so cached flow fields can tell they're stale. Nothing changes it until buildings and trees exist (M3).</summary>
     public int Version { get; private set; }
 
+    /// <summary>Test seam: marks passability as changed so cached flow fields go stale. No production caller until M3 adds buildings.</summary>
+    internal void BumpVersionForTests() => Version++;
+
     /// <summary>Number of passable cells.</summary>
     public int PassableCount { get; }
 

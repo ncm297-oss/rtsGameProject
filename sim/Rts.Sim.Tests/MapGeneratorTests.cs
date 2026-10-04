@@ -113,7 +113,7 @@ public class MapGeneratorTests
     [Fact]
     public void World_MapGeneration_DrawsOnlyFromMapGenStream()
     {
-        var bigMap = new SimConfig(Seed: 77, PlayerCount: 2, UnitCapacity: 8, CommandCapacity: 8);
+        var bigMap = TestSim.Config(Seed: 77, PlayerCount: 2, UnitCapacity: 8, CommandCapacity: 8);
         var smallMap = bigMap with { Map = Small };
         var a = new World(bigMap);
         var b = new World(smallMap);
@@ -131,7 +131,7 @@ public class MapGeneratorTests
     [Fact]
     public void World_ExposesGeneratedTerrain()
     {
-        var config = new SimConfig(Seed: 3, PlayerCount: 2, UnitCapacity: 8, CommandCapacity: 8);
+        var config = TestSim.Config(Seed: 3, PlayerCount: 2, UnitCapacity: 8, CommandCapacity: 8);
         var world = new World(config);
         Assert.Equal(128, world.Heightmap.Width);
         Assert.Equal(128, world.NavGrid.Height);
@@ -205,7 +205,7 @@ public class MapGeneratorTests
         Assert.Throws<ArgumentOutOfRangeException>(() => p.Validate());
         var rng = new SimRng(1, RngStream.MapGen);
         Assert.Throws<ArgumentOutOfRangeException>(() => MapGenerator.Generate(p, ref rng));
-        var config = new SimConfig(1, 1, 1, 1) { Map = p };
+        var config = TestSim.Config(1, 1, 1, 1) with { Map = p };
         Assert.Throws<ArgumentOutOfRangeException>(() => new World(config));
     }
 

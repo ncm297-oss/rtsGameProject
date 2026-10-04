@@ -42,7 +42,7 @@ public class SimRngTests
     [Fact]
     public void WorldStreams_AreAllDistinct()
     {
-        var world = new World(new SimConfig(Seed: 99, PlayerCount: 4, UnitCapacity: 8, CommandCapacity: 8));
+        var world = new World(TestSim.Config(Seed: 99, PlayerCount: 4, UnitCapacity: 8, CommandCapacity: 8));
         Assert.Equal(RngStream.Count(4), world.RngCount);
         var firsts = new HashSet<uint>();
         for (int s = 0; s < world.RngCount; s++)
@@ -53,7 +53,7 @@ public class SimRngTests
     [Fact]
     public void DrawingFromOneStream_LeavesOthersUnchanged()
     {
-        var config = new SimConfig(Seed: 7, PlayerCount: 2, UnitCapacity: 8, CommandCapacity: 8);
+        var config = TestSim.Config(Seed: 7, PlayerCount: 2, UnitCapacity: 8, CommandCapacity: 8);
         var untouched = new World(config);
         var drawn = new World(config);
 

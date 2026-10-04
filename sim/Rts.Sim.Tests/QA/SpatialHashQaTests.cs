@@ -288,7 +288,7 @@ public class SpatialHashQaTests
     {
         Simulation MakeSim()
         {
-            var sim = new Simulation(new SimConfig(Seed: 77, PlayerCount: 3, UnitCapacity: 700, CommandCapacity: 1024));
+            var sim = new Simulation(TestSim.Config(Seed: 77, PlayerCount: 3, UnitCapacity: 700, CommandCapacity: 1024));
             var rng = new SimRng(5, 9);
             for (int i = 0; i < 600; i++)
                 sim.Enqueue(Command.SpawnUnit(rng.NextInt(0, 3), 0, new Vector2(rng.NextFloat() * 300f - 22f, rng.NextInt(0, 64) * 4f)));
@@ -321,8 +321,8 @@ public class SpatialHashQaTests
     [Fact]
     public void ExplicitRebuild_DoesNotChangeStateHash_OrLaterTicks()
     {
-        var a = new Simulation(new SimConfig(3, 2, 64, 64));
-        var b = new Simulation(new SimConfig(3, 2, 64, 64));
+        var a = new Simulation(TestSim.Config(3, 2, 64, 64));
+        var b = new Simulation(TestSim.Config(3, 2, 64, 64));
         for (int i = 0; i < 40; i++)
         {
             a.Enqueue(Command.SpawnUnit(i % 2, 0, new Vector2(i * 3f, i * 2f)));
@@ -404,7 +404,7 @@ public class SpatialHashQaTests
     [Fact]
     public void SimTick_RebuildsAfterExternalFree_NoStaleSlot()
     {
-        var sim = new Simulation(new SimConfig(1, 2, 8, 16));
+        var sim = new Simulation(TestSim.Config(1, 2, 8, 16));
         sim.Enqueue(Command.SpawnUnit(1, 0, new Vector2(50, 50)));
         sim.Tick();
         sim.Tick();

@@ -64,7 +64,8 @@ The sim runs at a fixed **20 Hz** (`TickMs = 50`). One call to `Simulation.Tick(
 phases in this fixed order:
 
 1. **Apply commands** queued for this tick, sorted by (player, sequence number), then rebuild
-   the spatial hash so later phases (and this tick's spawns) see current positions.
+   the spatial hash so later phases (and this tick's spawns) see current positions. A `Move`
+   only records the unit's goal here; the walking happens in phases 8-9 of the same tick.
 2. **AI think:** each AI player runs on its own cadence (default every 10 ticks, staggered by
    player index) and enqueues commands for the *next* tick, the same as a human.
 3. **Production:** training and research timers, spawning finished units at rally points.
@@ -72,8 +73,11 @@ phases in this fixed order:
 5. **Status effects and zones:** expire, tick DoTs and regen, apply zone effects.
 6. **Abilities:** cast timers, effect resolution.
 7. **Orders and targeting:** order queue advance, target acquisition (staggered scans).
-8. **Pathfinding requests:** build or fetch flow fields for new move targets.
-9. **Movement:** flow-field direction + steering + collision against the nav grid.
+8. **Pathfinding requests:** build or fetch flow fields for new move targets. (M1-4b: done
+   lazily inside phase 9: the first unit that needs a goal's field fetches it from the cache, and
+   a miss builds it right there, without allocating.)
+9. **Movement:** flow-field direction + steering + collision against the nav grid
+   (`MovementSystem.Run`, units in slot order).
 10. **Combat:** attack wind-ups and cooldowns, projectile flight and impact, splash.
 11. **Damage and death:** apply queued damage, kill entities, emit death events.
 12. **Vision and detection:** recompute fog every 4 ticks (5 Hz) per player.
@@ -94,9 +98,11 @@ progress. The cost is at most one tick (50 ms) of input latency. Pending command
 fixed-capacity `CommandQueue` (size from `SimConfig.CommandCapacity`) that is insertion-sorted in
 place each tick, so applying commands does not allocate. `Enqueue` on a full queue throws and
 leaves state unchanged (the sequence counter advances only once the command is accepted). At
-apply time, `Command.IsValid()` drops malformed commands (today: a `SpawnUnit` with a NaN or
-infinite position), the same policy as a spawn into a full unit store; new command kinds add
-their checks there.
+apply time, `Command.IsValid()` drops malformed commands (today: a `SpawnUnit` or `Move` with a
+NaN or infinite position), the same policy as a spawn into a full unit store; new command kinds add
+their checks there. Checks that need the world run in `Simulation.Apply`: a `SpawnUnit` whose
+`TypeId` is not a unit in `SimConfig.Data` is dropped, and a `Move` is dropped when its unit
+handle is stale, the unit belongs to another player, or the target is outside the map.
 
 The sim runs on the main thread in v1. If profiling demands it later, move `Tick()` to a worker
 thread with double-buffered snapshots. The sim's design (no Godot calls, explicit snapshot
@@ -139,7 +145,9 @@ Rules:
   `Cos`, `Atan`, `Atan2` (and the `MathF` versions) in sim source.
 - **State hash:** `Simulation.StateHash()` is 64-bit FNV-1a (`StateHasher`) over the tick number,
   every unit slot's generation and alive flag, every live unit's fields, the free list, all RNG
-  states, per-player command sequence counters, and pending commands.
+  states, per-player command sequence counters, and pending commands (including a `Move`'s unit
+  handle). Derived state is left out: the spatial hash, the flow-field cache, and a unit's
+  `Speed`/`Radius` (copied from its `TypeId`'s data).
 
 ## Entity model
 
@@ -159,6 +167,15 @@ public readonly record struct EntityHandle(int Index, int Generation);
   int `TypeId`. Per-player modifiers (upgrades, faction bonus) are applied through a per-player
   `StatModifiers` table, never by mutating defs.
 - Order queues live in a pooled flat array (ring per unit, max 16 queued orders).
+
+**Implementation (M1-4b):** `UnitStore` has `Position`, `PrevPosition`, `Velocity` (m/tick),
+`Facing` (radians, `SimMath.Atan2` of the last step), `Owner`, `TypeId`, `Speed` (m/tick) and
+`Radius` (m), `State` (`UnitState.Idle` / `Moving`), `Goal` (m) and `GoalCell` (nav cell index of
+the goal's flow field, -1 for none), plus `Alive` and `Generation`. `Speed` and `Radius` are copied
+from `UnitDef.SpeedPerTick` / `Radius` at spawn, so movement never looks up data per tick. The
+match's data travels with the setup: `SimConfig.Data` is a required `GameData` (from
+`DataLoader.LoadAll`), exposed as `World.Data`; the sim never reads files itself. The other fields
+in the list above arrive with the systems that use them.
 
 ### Spatial hash
 
@@ -232,6 +249,27 @@ collision radius at 1 m.
 If the target cell is blocked (a building, a forest), the field targets the nearest reachable
 cell. Unreachable targets (an island) send units to the closest reachable point.
 
+**Implementation (M1-4b):** `Rts.Sim.Pathfinding`. A `FlowField` holds a float cost and a
+direction byte per cell (0-7: east, then clockwise with +y down the rows; odd numbers are
+diagonals; 255 = none). It is built by Dijkstra from the target over 8-connected cells: a straight
+step costs 1, a diagonal 1.41421, and a diagonal step needs both cells it passes between to be
+passable (no corner cutting). All passable cells cost 1 today; the nav cost byte isn't read yet.
+Each reached cell points at the neighbor that starts its shortest path, lowest direction number on a
+tie; the target, blocked cells and unreachable cells have no direction. The priority queue is a
+bucket queue on the whole-number part of the cost (Dial's algorithm: every step costs at least 1, so
+cells in one bucket can't improve each other), which gives the same costs as a binary heap but builds
+a 128 × 128 field in about 0.7 ms in a Debug build. A blocked target cell resolves to the nearest
+passable cell by squared cell distance, ties to the lowest (y, x); `FlowField.NearestPassable` is
+that rule. Unreachable targets can't happen yet: the nav grid seals every pocket, so all passable
+cells connect. `FlowFieldCache` (on `World.FlowFields`) keeps 32 fields by default, keyed by the
+requested target cell and tagged with `NavGrid.Version`; a hit returns the same instance and marks it
+most recently used, a miss fills a free slot or rebuilds the least recently used one in place, and
+a field whose version is stale is rebuilt on its next use. Every field array, the queue, and a
+per-cell step mask (which of the 8 steps are legal, shared by all fields and recomputed when the
+version changes) are allocated in the constructor: about 5 bytes × cells × capacity, 2.6 MB on the
+default map (160 MB on a 1024 × 1024 map, so capacity may need to scale with map size later). The
+cache is derived state and not hashed: a field depends only on the grid and its target.
+
 ### Local movement
 
 - **Desired velocity** = flow direction × speed, or direct steering toward the target when it
@@ -243,6 +281,23 @@ cell. Unreachable targets (an island) send units to the closest reachable point.
 - **Shoving:** idle friendly units step aside for moving ones. Holding units don't move.
 - **Collision:** hard push-out from blocked cells; soft unit-unit separation.
 - **Flying units** (Great Raven) ignore the nav grid and separation from ground units.
+
+**Implementation (M1-4b):** first half only. `Command.Move(player, unit, target)` orders one
+unit; a group move is one command per unit, and they share one cached field because they share the
+target cell. Applying it sets `State = Moving`, `Goal` = the target, and `GoalCell` = the target's
+cell; if that cell is blocked, the goal becomes the center of the nearest passable cell (the same
+rule as the field). `MovementSystem.Run` then moves each Moving unit, in slot order: within
+`MovementConstants.ArrivalDistance` (`CellSize / 2` = 1 m) of the goal it arrives (Idle, velocity
+0); in the goal cell it heads straight at the goal; elsewhere it heads at the center of the
+neighbor cell its current cell's direction points to. A straight line to that center stays inside
+the current cell, that neighbor, and (for a diagonal) the two side cells, which no-corner-cutting
+keeps passable, so it can't clip a cliff corner. The step is `min(Speed, distance to the aim
+point)`, so units slow only to land exactly on a cell center. A step whose destination cell is
+blocked or off the map is refused: the unit stays put with velocity 0 and keeps its order. A unit
+standing on blocked ground or off the map (only possible through a raw `SpawnUnit`) stops, since no
+field leads out of a blocked cell. `Velocity` is the step taken and `Facing` its `SimMath.Atan2`.
+Not yet: direct steering across adjacent cells, separation, arrival slots, shoving, giving up when
+blocked, `Stop`/`Hold`, and order queues (M1-4c and later). Units sent to one point stack on it.
 
 ## Orders and unit states
 

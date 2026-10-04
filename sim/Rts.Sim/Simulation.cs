@@ -1,7 +1,12 @@
 using System;
+using System.Numerics;
 using Rts.Sim.Commands;
+using Rts.Sim.Data;
 using Rts.Sim.Determinism;
 using Rts.Sim.Entities;
+using Rts.Sim.Map;
+using Rts.Sim.Movement;
+using Rts.Sim.Pathfinding;
 
 namespace Rts.Sim;
 
@@ -48,7 +53,7 @@ public sealed class Simulation
         _nextSequence[command.Player]++;
     }
 
-    /// <summary>Runs one tick: applies this tick's commands in (player, sequence) order, rebuilds the spatial hash, then bumps <see cref="TickNumber"/>.</summary>
+    /// <summary>Runs one tick: applies this tick's commands in (player, sequence) order, rebuilds the spatial hash, moves units, then bumps <see cref="TickNumber"/>.</summary>
     public void Tick()
     {
         World.Units.SnapshotPrevPositions();
@@ -63,12 +68,18 @@ public sealed class Simulation
         // Neighbour index for every later phase; right after commands so this tick's spawns are queryable.
         World.Spatial.Rebuild(World.Units);
 
+        // Phases 8-9: flow fields (fetched or built on demand) and movement.
+        MovementSystem.Run(World);
+
         // Phase 13: cleanup.
         World.TickNumber++;
     }
 
     /// <summary>64-bit FNV-1a hash of all gameplay state: tick, units, RNG streams, and pending commands.</summary>
-    /// <remarks>Derived state (the spatial hash) is left out: it is rebuilt from the units every tick.</remarks>
+    /// <remarks>
+    /// Derived state is left out: the spatial hash (rebuilt from the units every tick), the flow-field
+    /// cache (a field depends only on the grid and its target), and Speed/Radius (they follow from TypeId).
+    /// </remarks>
     public ulong StateHash()
     {
         var h = new StateHasher();
@@ -88,6 +99,9 @@ public sealed class Simulation
             h.Add(u.Facing[i]);
             h.Add(u.Owner[i]);
             h.Add(u.TypeId[i]);
+            h.Add((int)u.State[i]);
+            h.Add(u.Goal[i]);
+            h.Add(u.GoalCell[i]);
         }
         h.Add(u.FreeCount);
         for (int i = 0; i < u.FreeCount; i++)
@@ -111,6 +125,8 @@ public sealed class Simulation
             h.Add(c.Sequence);
             h.Add(c.TypeId);
             h.Add(c.Position);
+            h.Add(c.Unit.Index);
+            h.Add(c.Unit.Generation);
         }
         return h.Value;
     }
@@ -124,16 +140,49 @@ public sealed class Simulation
             case CommandKind.Noop:
                 break;
             case CommandKind.SpawnUnit:
-                // A full store drops the spawn: a command must never crash the sim.
-                if (World.Units.TryAlloc(out EntityHandle h))
-                {
-                    UnitStore u = World.Units;
-                    u.Position[h.Index] = command.Position;
-                    u.PrevPosition[h.Index] = command.Position;
-                    u.Owner[h.Index] = command.Player;
-                    u.TypeId[h.Index] = command.TypeId;
-                }
+                ApplySpawn(in command);
+                break;
+            case CommandKind.Move:
+                ApplyMove(in command);
                 break;
         }
+    }
+
+    private void ApplySpawn(in Command command)
+    {
+        // An unknown type or a full store drops the spawn: a command must never crash the sim.
+        GameData data = World.Data;
+        if ((uint)command.TypeId >= (uint)data.Units.Length) return;
+        if (!World.Units.TryAlloc(out EntityHandle h)) return;
+        UnitDef def = data.Units[command.TypeId];
+        UnitStore u = World.Units;
+        u.Position[h.Index] = command.Position;
+        u.PrevPosition[h.Index] = command.Position;
+        u.Owner[h.Index] = command.Player;
+        u.TypeId[h.Index] = command.TypeId;
+        u.Speed[h.Index] = def.SpeedPerTick;
+        u.Radius[h.Index] = def.Radius;
+    }
+
+    private void ApplyMove(in Command command)
+    {
+        // Dropped: a dead or recycled unit, someone else's unit, or a target off the map.
+        UnitStore u = World.Units;
+        if (!u.IsAlive(command.Unit) || u.Owner[command.Unit.Index] != command.Player) return;
+        NavGrid grid = World.NavGrid;
+        if (!grid.WorldToCell(command.Position, out int x, out int y)) return;
+        int cell = y * grid.Width + x;
+        Vector2 goal = command.Position;
+        if (!grid.IsPassable(x, y))
+        {
+            // Same rule as the flow field's blocked target: walk to the nearest passable cell's center.
+            cell = FlowField.NearestPassable(grid, cell);
+            if (cell < 0) return;
+            goal = grid.CellCenter(cell % grid.Width, cell / grid.Width);
+        }
+        int i = command.Unit.Index;
+        u.State[i] = UnitState.Moving;
+        u.Goal[i] = goal;
+        u.GoalCell[i] = cell;
     }
 }

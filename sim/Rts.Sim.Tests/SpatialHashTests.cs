@@ -299,7 +299,7 @@ public class SpatialHashTests
 
     private static Simulation SimWithUnits(int count)
     {
-        var sim = new Simulation(new SimConfig(Seed: 9, PlayerCount: 2, UnitCapacity: count + 8, CommandCapacity: count + 8));
+        var sim = new Simulation(TestSim.Config(Seed: 9, PlayerCount: 2, UnitCapacity: count + 8, CommandCapacity: count + 8));
         var rng = new SimRng(99, 0);
         for (int i = 0; i < count; i++)
             sim.Enqueue(Command.SpawnUnit(i % 2, typeId: 0, new Vector2(rng.NextFloat() * MapMeters, rng.NextFloat() * MapMeters)));
@@ -312,7 +312,7 @@ public class SpatialHashTests
     [Fact]
     public void SpawnedUnits_AreQueryableTheSameTick()
     {
-        var sim = new Simulation(new SimConfig(Seed: 1, PlayerCount: 2, UnitCapacity: 8, CommandCapacity: 8));
+        var sim = new Simulation(TestSim.Config(Seed: 1, PlayerCount: 2, UnitCapacity: 8, CommandCapacity: 8));
         sim.Enqueue(Command.SpawnUnit(1, typeId: 0, new Vector2(30f, 40f))); // stamped for tick 1
         sim.Tick();
         Assert.Equal(0, sim.World.Spatial.Count);
@@ -355,10 +355,21 @@ public class SpatialHashTests
     [Fact]
     public void Source_UsesNoHashCollectionsOrLinq()
     {
-        string file = Path.Combine(TestDataDir.RepoRoot(), "sim", "Rts.Sim", "Spatial", "SpatialHash.cs");
-        string src = File.ReadAllText(file);
-        foreach (string banned in new[] { "Dictionary", "HashSet", "System.Linq", "params " })
-            Assert.DoesNotContain(banned, src);
+        // Per-tick code: the spatial hash (M1-4a), flow fields and movement (M1-4b).
+        string sim = Path.Combine(TestDataDir.RepoRoot(), "sim", "Rts.Sim");
+        var files = new List<string> { Path.Combine(sim, "Spatial", "SpatialHash.cs") };
+        foreach (string dir in new[] { "Pathfinding", "Movement" })
+        {
+            string[] inDir = Directory.GetFiles(Path.Combine(sim, dir), "*.cs");
+            Assert.NotEmpty(inDir);
+            files.AddRange(inDir);
+        }
+        foreach (string file in files)
+        {
+            string src = File.ReadAllText(file);
+            foreach (string banned in new[] { "Dictionary", "HashSet", "System.Linq", "params " })
+                Assert.False(src.Contains(banned, StringComparison.Ordinal), $"{Path.GetFileName(file)} uses {banned}");
+        }
     }
 
     // ---------- perf ----------

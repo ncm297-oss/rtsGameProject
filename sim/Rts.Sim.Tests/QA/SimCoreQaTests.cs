@@ -210,7 +210,7 @@ public class SimCoreQaTests
         Assert.Throws<ArgumentOutOfRangeException>(() => new UnitStore(0));
         Assert.Throws<ArgumentOutOfRangeException>(() => new UnitStore(-1));
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            new Simulation(new SimConfig(1, PlayerCount: 0, UnitCapacity: 4, CommandCapacity: 4)));
+            new Simulation(TestSim.Config(1, PlayerCount: 0, UnitCapacity: 4, CommandCapacity: 4)));
     }
 
     [Fact]
@@ -252,7 +252,7 @@ public class SimCoreQaTests
     {
         // "Fail explicitly, not corrupt": a rejected command should not advance the player's
         // sequence counter (which is part of the state hash).
-        var sim = new Simulation(new SimConfig(1, PlayerCount: 2, UnitCapacity: 8, CommandCapacity: 2));
+        var sim = new Simulation(TestSim.Config(1, PlayerCount: 2, UnitCapacity: 8, CommandCapacity: 2));
         sim.Enqueue(Command.Noop(0));
         sim.Enqueue(Command.Noop(0));
         ulong before = sim.StateHash();
@@ -264,7 +264,7 @@ public class SimCoreQaTests
     [Fact]
     public void Enqueue_InvalidPlayer_LeavesStateUnchanged()
     {
-        var sim = new Simulation(new SimConfig(1, PlayerCount: 2, UnitCapacity: 8, CommandCapacity: 8));
+        var sim = new Simulation(TestSim.Config(1, PlayerCount: 2, UnitCapacity: 8, CommandCapacity: 8));
         ulong before = sim.StateHash();
         Assert.ThrowsAny<ArgumentException>(() => sim.Enqueue(Command.Noop(-1)));
         Assert.ThrowsAny<ArgumentException>(() => sim.Enqueue(Command.Noop(2)));
@@ -275,7 +275,7 @@ public class SimCoreQaTests
     [Fact]
     public void Enqueue_CallerSuppliedTickAndSequence_AreOverwritten()
     {
-        var sim = new Simulation(new SimConfig(1, PlayerCount: 1, UnitCapacity: 8, CommandCapacity: 8));
+        var sim = new Simulation(TestSim.Config(1, PlayerCount: 1, UnitCapacity: 8, CommandCapacity: 8));
         var forged = new Command { Kind = CommandKind.SpawnUnit, Player = 0, Tick = -5, Sequence = -100 };
         sim.Enqueue(forged);
         Assert.Equal(0, sim.World.Units.Count);
@@ -288,7 +288,7 @@ public class SimCoreQaTests
     [Fact] // regression test for BUG-0006
     public void SpawnUnit_NonFinitePosition_NeverEntersState()
     {
-        var sim = new Simulation(new SimConfig(1, PlayerCount: 1, UnitCapacity: 8, CommandCapacity: 8));
+        var sim = new Simulation(TestSim.Config(1, PlayerCount: 1, UnitCapacity: 8, CommandCapacity: 8));
         sim.Enqueue(Command.SpawnUnit(0, 0, new Vector2(float.NaN, float.PositiveInfinity)));
         sim.Tick();
         sim.Tick();
@@ -304,7 +304,7 @@ public class SimCoreQaTests
     [Fact]
     public void UnknownCommandKind_IsIgnoredWithoutCrash()
     {
-        var sim = new Simulation(new SimConfig(1, PlayerCount: 1, UnitCapacity: 8, CommandCapacity: 8));
+        var sim = new Simulation(TestSim.Config(1, PlayerCount: 1, UnitCapacity: 8, CommandCapacity: 8));
         sim.Enqueue(new Command { Kind = (CommandKind)999, Player = 0 });
         sim.Tick();
         sim.Tick();
@@ -317,15 +317,16 @@ public class SimCoreQaTests
     {
         const int players = 8;
         const int n = 10_000;
-        var sim = new Simulation(new SimConfig(11, players, UnitCapacity: n, CommandCapacity: n));
-        // Interleave players in a scrambled order; TypeId records the global issue index.
+        var sim = new Simulation(TestSim.Config(11, players, UnitCapacity: n, CommandCapacity: n));
+        // Interleave players in a scrambled order; Position.Y records the per-player issue index
+        // (M1-4b: TypeId must now name a real unit type, so it can no longer carry the index).
         var rng = new SimRng(1, 0);
         var issued = new int[players];
         for (int i = 0; i < n; i++)
         {
             int p = rng.NextInt(0, players);
             issued[p]++;
-            sim.Enqueue(Command.SpawnUnit(p, typeId: i, new Vector2(p, issued[p])));
+            sim.Enqueue(Command.SpawnUnit(p, typeId: i % TestSim.UnitTypeCount, new Vector2(p, issued[p])));
         }
         sim.Tick();
         sim.Tick();
@@ -338,20 +339,21 @@ public class SimCoreQaTests
             int p = u.Owner[i];
             Assert.True(p >= lastPlayer, $"slot {i}: player {p} after {lastPlayer}");
             if (p != lastPlayer) { lastPlayer = p; lastIssue = -1; }
-            Assert.True(u.TypeId[i] > lastIssue, $"slot {i}: issue {u.TypeId[i]} after {lastIssue}");
-            lastIssue = u.TypeId[i];
+            int issue = (int)u.Position[i].Y;
+            Assert.True(issue > lastIssue, $"slot {i}: issue {issue} after {lastIssue}");
+            lastIssue = issue;
         }
     }
 
     [Fact]
     public void Flood_CommandsSpreadOverTicks_EachAppliesOnItsOwnTick()
     {
-        var sim = new Simulation(new SimConfig(1, PlayerCount: 3, UnitCapacity: 4096, CommandCapacity: 64));
+        var sim = new Simulation(TestSim.Config(1, PlayerCount: 3, UnitCapacity: 4096, CommandCapacity: 64));
         for (int t = 0; t < 500; t++)
         {
             int before = sim.World.Units.Count;
             for (int k = 0; k < 5; k++)
-                sim.Enqueue(Command.SpawnUnit(k % 3, typeId: t, new Vector2(t, k)));
+                sim.Enqueue(Command.SpawnUnit(k % 3, typeId: t % TestSim.UnitTypeCount, new Vector2(t, k)));
             sim.Tick();
             // Commands enqueued before this tick apply on the following tick, not this one.
             Assert.Equal(t == 0 ? 0 : before + 5, sim.World.Units.Count);
@@ -364,9 +366,9 @@ public class SimCoreQaTests
     [Fact]
     public void Hash_FlippingOneBitOfOneFloat_ChangesHash()
     {
-        var sim = new Simulation(new SimConfig(9, PlayerCount: 2, UnitCapacity: 64, CommandCapacity: 64));
+        var sim = new Simulation(TestSim.Config(9, PlayerCount: 2, UnitCapacity: 64, CommandCapacity: 64));
         for (int i = 0; i < 20; i++)
-            sim.Enqueue(Command.SpawnUnit(i % 2, i, new Vector2(i * 1.5f, -i)));
+            sim.Enqueue(Command.SpawnUnit(i % 2, i % TestSim.UnitTypeCount, new Vector2(i * 1.5f, -i)));
         sim.Tick();
         sim.Tick();
         ulong h0 = sim.StateHash();
@@ -399,7 +401,7 @@ public class SimCoreQaTests
     public void Hash_SwappingTwoUnitsPositions_ChangesHash()
     {
         // Order sensitivity: a commutative hash would miss two units trading places.
-        var sim = new Simulation(new SimConfig(9, PlayerCount: 1, UnitCapacity: 8, CommandCapacity: 8));
+        var sim = new Simulation(TestSim.Config(9, PlayerCount: 1, UnitCapacity: 8, CommandCapacity: 8));
         sim.Enqueue(Command.SpawnUnit(0, 0, new Vector2(1, 2)));
         sim.Enqueue(Command.SpawnUnit(0, 0, new Vector2(3, 4)));
         sim.Tick();
@@ -414,7 +416,7 @@ public class SimCoreQaTests
     [Fact]
     public void Hash_IsPure_CallingItDoesNotChangeState()
     {
-        var sim = new Simulation(new SimConfig(3, PlayerCount: 2, UnitCapacity: 16, CommandCapacity: 16));
+        var sim = new Simulation(TestSim.Config(3, PlayerCount: 2, UnitCapacity: 16, CommandCapacity: 16));
         sim.Enqueue(Command.SpawnUnit(1, 2, Vector2.One));
         ulong a = sim.StateHash();
         ulong b = sim.StateHash();

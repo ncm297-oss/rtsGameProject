@@ -1,6 +1,8 @@
+using Rts.Sim.Data;
 using Rts.Sim.Determinism;
 using Rts.Sim.Entities;
 using Rts.Sim.Map;
+using Rts.Sim.Pathfinding;
 using Rts.Sim.Spatial;
 
 namespace Rts.Sim;
@@ -23,10 +25,14 @@ public sealed class World
         Heightmap = MapGenerator.Generate(config.Map, ref _rngs[RngStream.MapGen]);
         NavGrid = new NavGrid(Heightmap);
         Spatial = new SpatialHash(config.UnitCapacity, NavGrid.Width, NavGrid.Height);
+        FlowFields = new FlowFieldCache(NavGrid);
     }
 
     /// <summary>The match setup this world was built from.</summary>
     public SimConfig Config { get; }
+
+    /// <summary>Unit, faction and rules definitions (<see cref="SimConfig.Data"/>).</summary>
+    public GameData Data => Config.Data;
 
     /// <summary>Terrain levels and heights.</summary>
     public Heightmap Heightmap { get; }
@@ -36,6 +42,9 @@ public sealed class World
 
     /// <summary>Unit neighbour index, rebuilt by <see cref="Simulation.Tick"/> right after commands apply. Derived state.</summary>
     public SpatialHash Spatial { get; }
+
+    /// <summary>Flow fields for move targets, built on demand by movement. Derived state.</summary>
+    public FlowFieldCache FlowFields { get; }
 
     /// <summary>All units.</summary>
     public UnitStore Units { get; }

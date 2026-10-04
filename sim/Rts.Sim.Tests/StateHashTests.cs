@@ -1,6 +1,7 @@
 using System.Numerics;
 using Rts.Sim.Commands;
 using Rts.Sim.Determinism;
+using Rts.Sim.Entities;
 
 namespace Rts.Sim.Tests;
 
@@ -9,7 +10,7 @@ public class StateHashTests
     private const int Ticks = 1000;
 
     private static SimConfig Config(ulong seed) =>
-        new(Seed: seed, PlayerCount: 3, UnitCapacity: 128, CommandCapacity: 64);
+        TestSim.Config(Seed: seed, PlayerCount: 3, UnitCapacity: 128, CommandCapacity: 64);
 
     // A fixed script: spawns from all players on a few ticks, plus RNG draws driven by the sim's
     // own streams, so the hash covers units, RNG states, and pending commands.
@@ -83,5 +84,78 @@ public class StateHashTests
         ulong h2 = new Simulation(Config(77)).StateHash();
         Assert.Equal(h1, h2);
         Assert.NotEqual(0UL, h1);
+    }
+
+    // ---------- M1-4b: movement ----------
+
+    /// <summary>100 units walking: one group Move at tick 0, half of them re-targeted at tick 200. Hash after every tick.</summary>
+    private static ulong[] RunMoves(ulong seed)
+    {
+        Simulation sim = MoveScenario.Spawn(seed, units: 100, maxCost: 60f, out int goalCell);
+        var g = sim.World.NavGrid;
+        Vector2 goal = MoveScenario.Center(g, goalCell);
+        var hashes = new ulong[600];
+        for (int t = 0; t < hashes.Length; t++)
+        {
+            if (t == 0) MoveScenario.MoveAll(sim, goal + new Vector2(0.5f, 0.5f));
+            if (t == 200)
+            {
+                for (int i = 0; i < 100; i += 2)
+                    sim.Enqueue(Command.Move(sim.World.Units.Owner[i], MoveScenario.Handle(sim, i), goal + new Vector2(-12f, 8f)));
+            }
+            sim.Tick();
+            hashes[t] = sim.StateHash();
+        }
+        return hashes;
+    }
+
+    [Fact]
+    public void Moves_SameSeed_IdenticalHashEveryTick_DifferentSeedDiffers()
+    {
+        ulong[] a = RunMoves(21), b = RunMoves(21);
+        Assert.Equal(a, b);
+        Assert.Equal(600, a.Distinct().Count()); // the tick number alone changes the hash, but this guards a frozen sim too
+        ulong[] c = RunMoves(22);
+        Assert.NotEqual(a[^1], c[^1]);
+    }
+
+    [Fact]
+    public void Hash_CoversStateGoalGoalCellAndCommandUnit()
+    {
+        Simulation sim = MoveScenario.Spawn(5, units: 2, maxCost: 10f, out int goalCell);
+        UnitStore u = sim.World.Units;
+        ulong h0 = sim.StateHash();
+
+        u.State[1] = UnitState.Moving;
+        Assert.NotEqual(h0, sim.StateHash());
+        u.State[1] = UnitState.Idle;
+        Assert.Equal(h0, sim.StateHash());
+
+        u.Goal[1] = new Vector2(0f, float.Epsilon);
+        Assert.NotEqual(h0, sim.StateHash());
+        u.Goal[1] = default;
+        Assert.Equal(h0, sim.StateHash());
+
+        u.GoalCell[1] = goalCell;
+        Assert.NotEqual(h0, sim.StateHash());
+        u.GoalCell[1] = -1;
+        Assert.Equal(h0, sim.StateHash());
+
+        // Speed and Radius derive from TypeId, so they are deliberately not hashed.
+        u.Speed[1] += 1f;
+        u.Radius[1] += 1f;
+        Assert.Equal(h0, sim.StateHash());
+
+        // Two pending Moves that differ only in the unit's handle (index or generation) hash differently.
+        static Simulation Pending(EntityHandle h)
+        {
+            Simulation s = MoveScenario.Spawn(5, units: 2, maxCost: 10f, out _);
+            s.Enqueue(Command.Move(0, h, Vector2.One));
+            return s;
+        }
+        ulong p0 = Pending(new EntityHandle(0, 1)).StateHash();
+        Assert.NotEqual(p0, Pending(new EntityHandle(1, 1)).StateHash());
+        Assert.NotEqual(p0, Pending(new EntityHandle(0, 2)).StateHash());
+        Assert.Equal(p0, Pending(new EntityHandle(0, 1)).StateHash());
     }
 }

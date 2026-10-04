@@ -9,4 +9,9 @@
     <RootNamespace>Rts.Sim</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Test seams (e.g. NavGrid.BumpVersionForTests) stay internal instead of public setters. -->
+    <InternalsVisibleTo Include="Rts.Sim.Tests" />
+  </ItemGroup>
+
 </Project>

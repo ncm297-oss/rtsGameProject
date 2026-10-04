@@ -8,7 +8,7 @@ public class AllocationTests
 {
     private static Simulation WarmSim()
     {
-        var sim = new Simulation(new SimConfig(Seed: 3, PlayerCount: 2, UnitCapacity: 512, CommandCapacity: 256));
+        var sim = new Simulation(TestSim.Config(Seed: 3, PlayerCount: 2, UnitCapacity: 512, CommandCapacity: 256));
         // Warm-up: JIT both the empty-tick and the spawn path before measuring.
         sim.Tick();
         sim.Enqueue(Command.SpawnUnit(1, typeId: 0, Vector2.One));
@@ -36,7 +36,7 @@ public class AllocationTests
         Simulation sim = WarmSim();
         // Enqueue from both players, out of player order, so the sort has real work to do.
         for (int i = 0; i < 100; i++)
-            sim.Enqueue(Command.SpawnUnit(1 - (i % 2), typeId: i, new Vector2(i, i)));
+            sim.Enqueue(Command.SpawnUnit(1 - (i % 2), typeId: i % TestSim.UnitTypeCount, new Vector2(i, i)));
 
         // Two ticks: the first sorts the unsorted batch, the second applies it.
         long before = GC.GetAllocatedBytesForCurrentThread();
@@ -51,7 +51,7 @@ public class AllocationTests
     [Fact]
     public void SpatialHash_RebuildAnd1000Queries_On500Units_AllocateNothing()
     {
-        var sim = new Simulation(new SimConfig(Seed: 4, PlayerCount: 2, UnitCapacity: 512, CommandCapacity: 512));
+        var sim = new Simulation(TestSim.Config(Seed: 4, PlayerCount: 2, UnitCapacity: 512, CommandCapacity: 512));
         for (int i = 0; i < 500; i++)
             sim.Enqueue(Command.SpawnUnit(i % 2, typeId: 0, new Vector2((i * 37) % 256, (i * 91) % 256)));
         sim.Tick();
@@ -85,5 +85,33 @@ public class AllocationTests
             }
         }
         return sink + sim.TickNumber;
+    }
+
+    [Fact]
+    public void Tick_With500MovingUnits_AndACacheMiss_AllocatesNothing()
+    {
+        Simulation sim = MoveScenario.Spawn(seed: 13, units: 500, maxCost: float.MaxValue, out int goalCell);
+        var g = sim.World.NavGrid;
+        Vector2 goal = MoveScenario.Center(g, goalCell);
+        // Warm-up: a first group Move (JITs Apply, a cache miss and the movement loop) and some walking.
+        MoveScenario.MoveAll(sim, goal);
+        for (int i = 0; i < 10; i++) sim.Tick();
+        int builds = sim.World.FlowFields.BuildCount;
+        Vector2 next = goal + new Vector2(6f, 0f);
+        Assert.True(g.WorldToCell(next, out int nx, out int ny));
+        Assert.False(sim.World.FlowFields.Contains(ny * g.Width + nx));
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        sim.Tick();                     // a plain moving tick
+        MoveScenario.MoveAll(sim, next); // a new target cell (or its nearest passable cell): not cached
+        sim.Tick();
+        sim.Tick();                     // applies the Moves and builds the field inside the tick
+        long delta = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.Equal(0, delta);
+        Assert.Equal(builds + 1, sim.World.FlowFields.BuildCount);
+        int moving = 0;
+        for (int i = 0; i < 500; i++) if (sim.World.Units.State[i] == Entities.UnitState.Moving) moving++;
+        Assert.True(moving > 400, $"{moving} moving");
     }
 }

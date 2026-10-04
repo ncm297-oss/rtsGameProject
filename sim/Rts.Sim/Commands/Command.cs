@@ -1,4 +1,5 @@
 using System.Numerics;
+using Rts.Sim.Entities;
 
 namespace Rts.Sim.Commands;
 
@@ -18,11 +19,13 @@ public struct Command
     public int TypeId;
     /// <summary>Target position (x, z) in meters.</summary>
     public Vector2 Position;
+    /// <summary>The unit a unit order (<see cref="CommandKind.Move"/>) applies to.</summary>
+    public EntityHandle Unit;
 
     /// <summary>True when the payload is safe to apply: positional commands need a finite position.</summary>
     public readonly bool IsValid() => Kind switch
     {
-        CommandKind.SpawnUnit => float.IsFinite(Position.X) && float.IsFinite(Position.Y),
+        CommandKind.SpawnUnit or CommandKind.Move => float.IsFinite(Position.X) && float.IsFinite(Position.Y),
         _ => true,
     };
 
@@ -32,4 +35,8 @@ public struct Command
     /// <summary>A command that spawns one unit for <paramref name="player"/>.</summary>
     public static Command SpawnUnit(int player, int typeId, Vector2 position) =>
         new() { Kind = CommandKind.SpawnUnit, Player = player, TypeId = typeId, Position = position };
+
+    /// <summary>A command that sends <paramref name="player"/>'s <paramref name="unit"/> to <paramref name="target"/> (meters).</summary>
+    public static Command Move(int player, EntityHandle unit, Vector2 target) =>
+        new() { Kind = CommandKind.Move, Player = player, Unit = unit, Position = target };
 }

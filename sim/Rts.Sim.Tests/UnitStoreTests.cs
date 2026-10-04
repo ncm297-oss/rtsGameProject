@@ -97,9 +97,28 @@ public class UnitStoreTests
     }
 
     [Fact]
+    public void ReusedSlot_StartsWithMovementFieldsReset()
+    {
+        var store = new UnitStore(1);
+        EntityHandle a = store.Alloc();
+        store.Speed[0] = 0.2f;
+        store.Radius[0] = 0.5f;
+        store.State[0] = UnitState.Moving;
+        store.Goal[0] = new System.Numerics.Vector2(3f, 4f);
+        store.GoalCell[0] = 77;
+        store.Free(a);
+        store.Alloc();
+        Assert.Equal(0f, store.Speed[0]);
+        Assert.Equal(0f, store.Radius[0]);
+        Assert.Equal(UnitState.Idle, store.State[0]);
+        Assert.Equal(default, store.Goal[0]);
+        Assert.Equal(-1, store.GoalCell[0]);
+    }
+
+    [Fact]
     public void WorldStoreCapacity_ComesFromConfig()
     {
-        var world = new World(new SimConfig(Seed: 1, PlayerCount: 2, UnitCapacity: 37, CommandCapacity: 8));
+        var world = new World(TestSim.Config(Seed: 1, PlayerCount: 2, UnitCapacity: 37, CommandCapacity: 8));
         Assert.Equal(37, world.Units.Capacity);
     }
 }
