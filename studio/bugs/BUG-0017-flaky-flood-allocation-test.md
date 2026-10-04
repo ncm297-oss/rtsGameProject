@@ -39,3 +39,9 @@ failure, rerun the measured block once and report both deltas, so the message te
 runtime charge apart from a steady allocation. A related separate observation: running two test
 processes at once once pushed `SpatialHashStressTests.WorstCase_AllUnitsInOneBucket_Report` over
 its 50 ms guard. That was self-inflicted load during QA, not a bug.
+
+**Producer triage (2026-10-03-2220):** S3, does not block (1 failure in 11 QA full runs; 0 in the
+Producer's 1 full run + 8 isolated reruns on f282aaf). Not planned as its own task. Rule: if it
+fails again on `main`, the next session's first commit hardens it as proposed above (re-measure
+the block once on failure and report both deltas); never loosen the 0-byte assert. If the second
+measurement also allocates, that is a product bug and this becomes S2.
