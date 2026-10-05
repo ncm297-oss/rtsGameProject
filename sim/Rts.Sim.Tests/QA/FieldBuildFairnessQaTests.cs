@@ -94,7 +94,7 @@ public class FieldBuildFairnessQaTests
     public void Fairness_TwoBases_2000Ticks_OldestFirst_BoundedWait_PlayersEqual(int batch, bool simultaneous)
     {
         const int groupsPerPlayer = 32, unitsPerGroup = 4, ticks = 2000, cycle = 100;
-        Simulation sim = SpawnRows(4600 + (ulong)batch, 512, 2 * groupsPerPlayer * unitsPerGroup, 10, 118, out List<int>[] bases);
+        Simulation sim = SpawnRows(TestSeeds.PreMix(4600 + (ulong)batch), 512, 2 * groupsPerPlayer * unitsPerGroup, 10, 118, out List<int>[] bases); // pre-M1-6 maps
         World w = sim.World;
         NavGrid g = w.NavGrid;
         UnitStore u = w.Units;
@@ -108,7 +108,7 @@ public class FieldBuildFairnessQaTests
             if (u.Alive[i]) members[u.Owner[i] * groupsPerPlayer + seen[u.Owner[i]]++ % groupsPerPlayer].Add(i);
         Assert.All(members, m => Assert.Equal(unitsPerGroup, m.Count));
 
-        var rng = new SimRng(4600, (ulong)(batch * 2 + (simultaneous ? 1 : 0)));
+        var rng = new SimRng(TestSeeds.PreMix(4600), (ulong)(batch * 2 + (simultaneous ? 1 : 0)));
         var next = new int[2];
         var orders = new List<Order>();
         var pending = new Order?[members.Length];

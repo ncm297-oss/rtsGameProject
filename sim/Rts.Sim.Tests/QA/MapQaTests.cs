@@ -39,7 +39,7 @@ public class MapQaTests
         Assert.True(MapQaChecker.AllLevelsPassable(nav), "a level has no passable cell");
     }
 
-    [Fact(Skip = "BUG-0014: seed ulong.MaxValue gives seed 0's map (PCG seeding + Lemire rejection); un-skip when fixed")]
+    [Fact] // BUG-0014: fixed by mixing the seed in SimRng
     public void SeedMaxValue_AndSeedZero_GiveDifferentMaps()
     {
         // Different seeds -> different maps (criterion 5). Seed ulong.MaxValue is the seed most likely

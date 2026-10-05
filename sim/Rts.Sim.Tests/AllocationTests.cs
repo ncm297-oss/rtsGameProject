@@ -1,5 +1,6 @@
 using System.Numerics;
 using Rts.Sim.Commands;
+using Rts.Sim.Replays;
 
 namespace Rts.Sim.Tests;
 
@@ -118,5 +119,25 @@ public class AllocationTests
         int moving = 0;
         for (int i = 0; i < 500; i++) if (sim.World.Units.State[i] == Entities.UnitState.Moving) moving++;
         Assert.True(moving > 400, $"{moving} moving");
+    }
+    /// <summary>M1-6 criterion 7: a recorder's checkpoint hash runs inside Tick, into a preallocated buffer.</summary>
+    [Fact]
+    public void Tick_WithReplayRecorder_500TicksAnd5Checkpoints_AllocatesNothing()
+    {
+        (Simulation sim, ReplayRecorder rec) = ReplayTestRun.RecordSmall(seed: 13, ticks: 200);
+        Assert.Equal(200, sim.TickNumber);
+        Assert.Equal(2, rec.CheckpointCount); // warm: the checkpoint path has run
+        var g = sim.World.NavGrid;
+        var far = new[] { MoveScenario.Center(g, MoveScenario.CentralCell(g)) + new Vector2(30f, 0f), MoveScenario.Center(g, MoveScenario.CentralCell(g)) };
+        int run = 0;
+        Action order = () => MoveScenario.MoveAll(sim, far[run++ % 2]); // unmeasured; Enqueue is off-tick
+        Action ticks = () =>
+        {
+            for (int t = 0; t < 500; t++) sim.Tick();
+        };
+        int before = rec.CheckpointCount;
+        int runs = AllocationProbe.AssertZero(ticks, setup: order);
+        Assert.Equal(before + 5 * runs, rec.CheckpointCount);
+        Assert.Equal(200 + 500 * runs, sim.TickNumber);
     }
 }

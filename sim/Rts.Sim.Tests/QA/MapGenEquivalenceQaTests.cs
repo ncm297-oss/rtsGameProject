@@ -91,7 +91,7 @@ public class MapGenEquivalenceQaTests
         return null;
     }
 
-    /// <summary>Guards the oracle itself: it must reproduce the developer's hashes pinned from 4b204f6.</summary>
+    /// <summary>Guards the oracle itself: it must reproduce the developer's pinned hashes (taken from 4b204f6, regenerated in M1-6 for BUG-0014's seed mixing).</summary>
     [Theory]
     [MemberData(nameof(MapGeneratorTests.PinnedMaps), MemberType = typeof(MapGeneratorTests))]
     public void Oracle_ReproducesHashesPinnedFromBeforeTheFix(string name, MapGenParams p, ulong seed, ulong expected)

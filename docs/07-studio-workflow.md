@@ -63,7 +63,7 @@ Every session works on two tracks at once, coordinated by one conductor and one 
 | Track | Worktree | Owns | Works on |
 | --- | --- | --- | --- |
 | `sim` | `.claude/worktrees/studio` | `sim/`, `game/data/`, `tools/` | Game rules: M1, then the sim side of later milestones |
-| `view` | `.claude/worktrees/studio-view` | the rest of `game/`, plus read-only `sim/Rts.Sim/ViewApi/` | Presentation: M2 camera, terrain, unit views, selection, minimap, HUD, then the view side of later milestones |
+| `view` | `.claude/worktrees/studio-view` | the rest of `game/` (incl. `game/tests/`), read-only `sim/Rts.Sim/ViewApi/`, and its tests in `sim/Rts.Sim.Tests/ViewApi/` + `sim/Rts.Sim.Tests/QA/ViewApi/` | Presentation: M2 camera, terrain, unit views, selection, minimap, HUD, then the view side of later milestones |
 
 Docs and studio files are shared and merged automatically. Anything else the view needs from
 the sim goes under **Requests for the sim track** in `studio/STATE.md`, and the Producer plans it

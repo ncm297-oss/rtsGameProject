@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Immutable;
+using Rts.Sim.Determinism;
 
 namespace Rts.Sim.Data;
 
@@ -22,6 +23,107 @@ public sealed class GameData
     public required ImmutableArray<FactionDef> Factions { get; init; }
     /// <summary>Unit types of every faction, indexed by unit id (ordinal order of their string ids).</summary>
     public required ImmutableArray<UnitDef> Units { get; init; }
+
+    /// <summary>Stable 64-bit hash of every field of every definition, in id order; replays store it and refuse to play on other data.</summary>
+    /// <remarks>
+    /// FNV-1a through <see cref="StateHasher"/>, strings char by char, so it is the same in every
+    /// process. Display text is included: a replay is tied to the exact data it was recorded with.
+    /// A new field on any def must be added here (DataContentHashTests changes every field in turn).
+    /// </remarks>
+    public ulong ContentHash()
+    {
+        var h = new StateHasher();
+        DamageTable t = DamageTable;
+        AddAll(ref h, t.ArmorClassKeys);
+        AddAll(ref h, t.ArmorClassNames);
+        AddAll(ref h, t.DamageTypeKeys);
+        AddAll(ref h, t.DamageTypeNames);
+        h.Add(t.IgnoresArmor.Length);
+        foreach (bool b in t.IgnoresArmor) h.Add(b);
+        AddAll(ref h, t.Multipliers);
+
+        RulesDef r = Rules;
+        h.Add(r.StartingGold);
+        h.Add(r.StartingWood);
+        h.Add(r.StartingWorkers);
+        h.Add(r.HalfPopCap);
+        h.Add(r.WorkerCarry);
+        h.Add(r.GoldPerTick);
+        h.Add(r.WoodPerTick);
+        h.Add(r.StartMineCount);
+        h.Add(r.StartMineGold);
+        h.Add(r.ExpansionMineCount);
+        h.Add(r.ExpansionMineGold);
+        h.Add(r.TreeWood);
+        h.Add(r.NodeSearchRadius);
+
+        h.Add(Factions.Length);
+        foreach (FactionDef f in Factions)
+        {
+            h.Add(f.Id);
+            h.Add(f.Key);
+            h.Add(f.DisplayName);
+            h.Add(f.Description);
+            h.Add(f.BonusDisplayName);
+            h.Add(f.BonusDescription);
+            h.Add(f.GoldName);
+            h.Add(f.WoodName);
+            h.Add((ulong)f.PrimaryColor);
+            h.Add((ulong)f.SecondaryColor);
+            h.Add((ulong)f.AccentColor);
+            h.Add(f.Units.Length);
+            foreach (int id in f.Units) h.Add(id);
+        }
+
+        h.Add(Units.Length);
+        foreach (UnitDef u in Units)
+        {
+            h.Add(u.Id);
+            h.Add(u.Key);
+            h.Add(u.Faction);
+            h.Add((int)u.Slot);
+            h.Add(u.DisplayName);
+            h.Add(u.Description);
+            h.Add(u.Model);
+            h.Add(u.Hp);
+            h.Add(u.Armor);
+            h.Add(u.ArmorClass);
+            AttackDef a = u.Attack;
+            h.Add(a.Value);
+            h.Add(a.DamageType);
+            h.Add(a.CooldownTicks);
+            h.Add(a.WindupTicks);
+            h.Add(a.Range);
+            h.Add(a.MinRange);
+            h.Add(a.Splash);
+            h.Add(a.FriendlyFire);
+            h.Add(a.Projectile);
+            AddAll(ref h, a.BonusVs);
+            h.Add(u.SpeedPerTick);
+            h.Add(u.Sight);
+            h.Add(u.Radius);
+            h.Add(u.CostGold);
+            h.Add(u.CostWood);
+            h.Add(u.HalfPop);
+            h.Add(u.TrainTicks);
+            h.Add(u.TrainedAt);
+            AddAll(ref h, u.Requires);
+            AddAll(ref h, u.Tags);
+        }
+        return h.Value;
+    }
+
+    private static void AddAll(ref StateHasher h, ImmutableArray<string> items)
+    {
+        h.Add(items.Length);
+        foreach (string s in items) h.Add(s);
+    }
+
+    private static void AddAll(ref StateHasher h, ImmutableArray<float> items)
+    {
+        h.Add(items.Length);
+        foreach (float f in items) h.Add(f);
+    }
 
     /// <summary>Unit id for a string id, or -1.</summary>
     public int FindUnit(string key) => Find(Units, static u => u.Key, key);

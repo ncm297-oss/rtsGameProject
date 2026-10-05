@@ -81,7 +81,8 @@ public class LocalMovementStressTests
     [InlineData(2500, 4, 6000, 33)]
     public void Crowd_ToOneOrFourClosePoints_InvariantsEveryTick_AllSettle(int units, int points, int limit, int minArrivedPercent)
     {
-        Simulation sim = MoveScenario.Spawn(seed: (ulong)(900 + units + points), units: units, maxCost: units > 1000 ? 70f : 40f, out int goalCell);
+        Simulation sim = MoveScenario.Spawn(seed: TestSeeds.PreMix((ulong)(900 + units + points)), // pre-M1-6 maps the bounds were measured on
+            units: units, maxCost: units > 1000 ? 70f : 40f, out int goalCell);
         World w = sim.World;
         NavGrid g = w.NavGrid;
         Vector2 c = MoveScenario.Center(g, goalCell);

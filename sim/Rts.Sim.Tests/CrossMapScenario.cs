@@ -104,10 +104,12 @@ public sealed class CrossMapScenario
     /// <summary>
     /// Builds the scenario: <paramref name="units"/> units, type <c>i % UnitTypeCount</c> (every shipped
     /// type), owned by player 0, or alternating 0/1 when <paramref name="players"/> is 2.
+    /// <paramref name="onCreated"/> sees the new sim before any command (e.g. to attach a replay recorder).
     /// </summary>
-    public static CrossMapScenario Create(ulong seed, int units, float startRadius, int players = 1)
+    public static CrossMapScenario Create(ulong seed, int units, float startRadius, int players = 1, Action<Simulation>? onCreated = null)
     {
         var sim = new Simulation(TestSim.Config(Seed: seed, PlayerCount: players, UnitCapacity: units, CommandCapacity: 2 * units + 8));
+        onCreated?.Invoke(sim);
         NavGrid g = sim.World.NavGrid;
         int start = FlowField.NearestPassable(g, g.Height / 2 * g.Width + 1);
         FlowField fromStart = FlowField.Build(g, start);

@@ -7,6 +7,7 @@ using Rts.Sim.Entities;
 using Rts.Sim.Map;
 using Rts.Sim.Movement;
 using Rts.Sim.Pathfinding;
+using Rts.Sim.Replays;
 
 namespace Rts.Sim;
 
@@ -20,6 +21,7 @@ public sealed class Simulation
 {
     private readonly CommandQueue _commands;
     private readonly int[] _nextSequence;
+    private ReplayRecorder? _recorder;
 
     /// <summary>Creates a simulation for the given match setup.</summary>
     public Simulation(SimConfig config) : this(config, null)
@@ -56,6 +58,7 @@ public sealed class Simulation
         command.Sequence = _nextSequence[command.Player];
         _commands.Add(in command); // throws when full; bump the counter only once accepted (BUG-0004)
         _nextSequence[command.Player]++;
+        _recorder?.OnEnqueued(in command);
     }
 
     /// <summary>Runs one tick: applies this tick's commands in (player, sequence) order, rebuilds the spatial hash, moves units, then bumps <see cref="TickNumber"/>.</summary>
@@ -78,6 +81,16 @@ public sealed class Simulation
 
         // Phase 13: cleanup.
         World.TickNumber++;
+
+        // Phase 14: replay checkpoint hash, when a recorder is attached and the tick is due.
+        _recorder?.OnTicked();
+    }
+
+    /// <summary>Connects the one recorder this sim reports accepted commands and finished ticks to.</summary>
+    internal void AttachRecorder(ReplayRecorder recorder)
+    {
+        if (_recorder != null) throw new InvalidOperationException("A replay recorder is already attached.");
+        _recorder = recorder;
     }
 
     /// <summary>64-bit FNV-1a hash of all gameplay state: tick, units, RNG streams, flow-field cache metadata, and pending commands.</summary>
