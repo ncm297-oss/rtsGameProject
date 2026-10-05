@@ -1,7 +1,8 @@
 # Studio state
 
 The dashboard. The Producer rewrites it at the end of every session. **Owner: read "Waiting on
-you" first.** "For your review" is non-blocking: things the studio decided or finished on its own.
+you" first.** "For your review" (further down) is non-blocking: what the studio built or decided
+on its own, explained in terms of what you'd see in the game.
 
 _Last updated: 2026-10-05 (session 2026-10-05-1013, PLAN; backlog re-ordered per the owner's
 "Speed up" note)._
@@ -10,26 +11,6 @@ _Last updated: 2026-10-05 (session 2026-10-05-1013, PLAN; backlog re-ordered per
 
 - Nothing blocking. The studio runs on autopilot (chain sessions, self sign-off) until the end
   of the roadmap or a cap/incident stops it.
-
-## For your review
-
-- 2026-10-05 (M1-4d-1): units no longer walk through each other or stack on one point. A group
-  packs into a blob around the click point (crowded arrival), units push apart and keep right when
-  passing, and a unit that makes no progress for 1 s gives up. Producer decisions, revisit any time
-  (docs/01 change log): crowded arrival replaces formation offsets for M1 (offsets can return at M2
-  with group commands); give-up after 20 ticks; a re-issued order to the same goal cell is the same
-  order. To watch it: `dotnet test sim/Rts.Sim.Tests --filter "FiftyUnits_ToOneOpenPoint|HeadOnInOneCellCorridor" --logger "console;verbosity=detailed"`.
-  Open S3s from this task (next session): groups sent to nearby points give up too often until
-  shoving exists (BUG-0028), a Move within an arrived unit's own cell is ignored (BUG-0030), a unit
-  pinned between a standing unit and a cliff can't leave (BUG-0031).
-- 2026-10-04 (M1-4c): deterministic, fair flow-field build cap (2 per tick, oldest order first),
-  cache metadata hashed; suite green in one `dotnet test` run. Producer decisions: cap of 2; cache
-  size formula; BUG-0025/0026 fixed together after M1-4d.
-- 2026-10-04 (M1-4b): units move along cached flow fields at their JSON speed.
-- 2026-10-03 (M1-4a/3/2): ramps as corridors, spatial hash; terraced maps + nav grid; first real
-  game data in `game/data/`. Producer decision: `MaxAttempts` cap is 8.
-- Optional M0 item: Godot MCP server for Claude Code (your install; see SETUP.md). Not needed
-  before M2.
 
 ## Now
 
@@ -52,6 +33,91 @@ _Last updated: 2026-10-05 (session 2026-10-05-1013, PLAN; backlog re-ordered per
 | M0 | 7 / 7 required | **Done** 2026-10-03 (optional MCP item open) |
 | M1 | 3 / 8 (+ criterion 4: flow fields, cache, Move, build cap, separation, crowded arrival, give-up, steering done; shoving open) | In progress |
 | M2-M9 | — | Planned |
+
+## For your review
+
+Non-blocking. Each entry says what was built or decided, what you'd notice in the game, and how
+to change it. Nothing is on screen yet (graphics arrive in M2), so "what you'd see" describes how
+it will play. To change anything, write it in `studio/inbox.md`, for example "use formations
+instead of clusters" or "make giving up take 2 seconds".
+
+### Units cluster around the click point, and give up when stuck (M1-4d-1, 2026-10-05)
+
+- **What you'll see:** select 30 soldiers and right-click a spot. They walk there and pack into a
+  tight cluster centered on the click, shoulder to shoulder, rather than lining up in a formation.
+  Two units meeting in a narrow pass both step to their right and slip past each other.
+  Spam-clicking the same spot doesn't make them restart or stutter.
+- **Giving up:** a unit that makes no headway for 1 second (wedged behind a crowd, or blocked by
+  standing units) stops and stands idle instead of jittering in place forever.
+- **Producer decisions:**
+  - Clusters instead of formations for now: StarCraft-style clumping, where Age of Empires uses
+    line or box formations. Formations can come back in M2 with group commands.
+  - 1 second before giving up. Shorter feels snappier but units stop short more often; longer
+    means more pushing and shoving before they quit.
+  - Clicking the spot a unit is already heading to counts as the same order.
+- **Rough edges until the next session (shoving):** units that are standing still never step
+  aside yet. So two groups sent to spots close together bump into each other's clusters and many
+  stop short: in a stress test, 84% of 500 units sent to 4 nearby points gave up 8-16 m early
+  (BUG-0028). A unit squeezed between a standing unit and a cliff can't walk away (BUG-0031).
+  Both should go away once idle units make room for moving ones.
+- **Also open:** a short nudge order (under about 2.8 m, inside the same 2 m map cell) to a unit
+  that has already arrived is ignored (BUG-0030). It's in the debt backlog.
+
+### Pathfinding: shared arrow maps with a speed limit (M1-4b and M1-4c, 2026-10-04)
+
+- **What it is:** when you send units somewhere, the game computes one map of arrows for that
+  destination: every 2 m square points along the shortest route there. Every unit headed to that
+  spot follows the same map, so moving 200 units costs about the same as moving one. The game
+  remembers recent destinations (32 to 128, depending on how many units the game allows), so
+  re-ordering to a recent spot is instant.
+- **Speed limit (Producer decision):** at most 2 new arrow maps per tick, which is 40 per second,
+  oldest orders first. Each takes about 0.7 ms to build, and the limit keeps every tick inside its
+  time budget so the game never hitches.
+- **What you'll see:** nothing in normal play. Only in a big burst: order 32 separate groups to 32
+  different spots at the same instant and the last group starts walking about 0.8 s after the first.
+- **Why it's saved with the game (Producer decision):** which arrow maps are remembered decides
+  which units wait a tick, so that memory is saved and checked like the rest of the game state.
+  That keeps replays and saved games exact.
+- **Rough edges (debt backlog):** with more separate destinations active at once than the game
+  remembers (only in very large games with many small groups), some older groups can stall while
+  newer ones walk (BUG-0025). In same-instant order bursts, one side of the map gets served
+  0.1-0.2 s sooner on average (BUG-0026, cosmetic).
+
+### Terraced maps: plateaus, cliffs and ramps (M1-3 and M1-4a, 2026-10-03)
+
+- **What you'll see:** maps have up to three height levels (ground, 4 m and 8 m up), each a flat
+  plateau. Plateau edges are cliffs no unit can climb. The only way up is a ramp, 6 m wide and 8 m
+  long with a gentle slope, entered only at its top or bottom because its sides are walled. Ramps
+  are natural chokepoints, wide enough for about 7 foot soldiers or 4 horsemen side by side, so a
+  few defenders can hold one. In M4 the high-ground rule raises the stakes: units below can't see
+  up onto a plateau.
+- **Cliff edges (Producer decision):** the outer 2 m strip of each plateau counts as cliff, so
+  units on high ground stand about one step back from the visible edge. The alternative (walls
+  between squares) would let them stand right at the lip but makes pathfinding more complex.
+- **Safety nets:** the map's outer ring is impassable, and any patch of ground no ramp reaches is
+  sealed off, so a unit can never be stranded. The generator re-rolls a layout that comes out too
+  blocked (under half walkable) or missing a height level, up to 8 times (Producer decision), then
+  takes the best one, so map generation can't hang. A normal map takes about 4 ms to make.
+- Also added: a fast "who's near me" lookup grid that movement and later combat use. Nothing to
+  review there.
+
+### First real game data (M1-2, 2026-10-03)
+
+- **What it is:** the Malazan and Whirlwind rosters (7 units each, stats from the faction pages),
+  the damage-type table and the economy rules now live as JSON in `game/data/`. The game checks
+  every file when it starts and lists every mistake at once.
+- **Values the docs didn't specify (Producer decision, first pass):**
+  - **Body size:** 0.4 m radius for foot soldiers, 0.7 m for cavalry, 0.9 m for siege. This is the
+    one you'll notice most: it decides how tightly crowds pack and how many units fit through a
+    ramp at once.
+  - Per-unit attack wind-up times, faction color palettes, and a placeholder for "requires Age II".
+- **To change them:** edit the numbers in `game/data/factions/<faction>/units.json`, or ask the
+  studio. No code changes are needed.
+
+### Optional: Godot MCP server (M0)
+
+- A tool that lets Claude launch the game and take screenshots more easily. Not needed until M2,
+  when there's something on screen, and the game will have its own screenshot option anyway.
 
 ## Feature queue (feature sessions, in order)
 
