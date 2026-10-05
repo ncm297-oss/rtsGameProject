@@ -80,9 +80,15 @@ Run these in `REPO`, before entering the worktree.
 2. Call `EnterWorktree` with `path: WT`. All later commands and all agent prompts use `WT` as the
    working directory. If `EnterWorktree` is unavailable or fails, go to the incident path. Never
    fall back to working in the owner's checkout.
-3. In `WT`, `git status --porcelain` must be empty. If it isn't (a crashed session left work),
-   don't delete anything: incident path.
-4. `git switch --detach origin/main`.
+3. **Recovery:** if `WT` is on a `studio/<old id>` branch with commits that aren't on
+   `origin/main`, or has uncommitted changes, an earlier session died mid-way. Never delete
+   anything. Commit any uncommitted changes as `<old id>: recovered work from interrupted
+   session`, then resume that session's work instead of planning new work: read its plan from
+   `studio/handoff.md` ("Current session plan"), set `PLAN_HEAD` = `git merge-base HEAD
+   origin/main`, spawn `qa-inspector` for a full re-check of the branch (step 5), run the fix loop
+   if it fails (step 6), then go on with steps 7-9 on this branch. Mention the recovery in the
+   session log. If the plan can't be found, use the incident path.
+4. Otherwise `git switch --detach origin/main`.
 
 ## 2. Producer: PLAN
 
