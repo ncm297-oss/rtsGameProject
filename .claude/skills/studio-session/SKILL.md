@@ -104,7 +104,7 @@ commit. If `STATUS: BLOCKED`, skip to step 7 with the report.
 Spawn `qa-inspector`:
 
 > Inspect task `<TASK_ID>` in working directory `<WT>`. Session id: `<SESSION_ID>`.
-> Diff base: `<PLAN_HEAD>` (use `git diff <PLAN_HEAD>...HEAD`).
+> Diff base: `<PLAN_HEAD>` (use `git diff <PLAN_HEAD>...HEAD`). QA tier: `<QA_TIER>`.
 > Brief: `<brief>`. QA focus: `<QA focus>`. Developer report: `<report>`.
 
 Commit `<TASK_ID>: QA inspection` (tests, bug files, report).

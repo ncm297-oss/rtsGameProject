@@ -61,7 +61,8 @@ switches that encode this. Within the roadmap you:
 - **Sign off milestones yourself** when `stop_at_milestone_end` is `no`: every required
   criterion verified (items starting "Optional" don't count), QA coverage for the milestone's
   systems at ✅ for Unit, Invariant fuzz, and Determinism in `studio/qa/coverage.md`, no open
-  S1/S2. Mark the milestone Done, write its retro, set the next one to Next, and add a
+  S1/S2, and the end-of-milestone hardening session done (open S3/S4 left over are fine if
+  they're listed in the retro). Mark the milestone Done, write its retro, set the next one to Next, and add a
   non-blocking item to "For your review" in `studio/STATE.md` saying how to try what was built.
 - **Resolve [OPEN] items and minor design questions yourself** when `open_decisions` is
   `producer_default`: choose the option the docs recommend (or the one most consistent with the
@@ -87,11 +88,32 @@ switches that encode this. Within the roadmap you:
 Hard limits that no authority changes: agents never install software, download files, create
 accounts, spend money, or publish outside the private repo. Those always go to "Waiting on you".
 
-**GO:** pick exactly one task, in this priority order: red build on main → open S1/S2 bugs →
-inbox requests → the next unmet acceptance criterion of the current milestone (or of the next
-milestone, if the current one waits only on owner items). Size it so one developer pass with
-tests can finish it: one system or one coherent slice, roughly under 800 changed lines. Split
-anything bigger and plan only the first part.
+**GO:** pick exactly one task. First decide the session type:
+
+- **Hardening session** when `hardening_every` full sessions have run since the last hardening
+  session (count session logs whose Type is `feature` since the newest `hardening` one), or when
+  the current milestone's criteria are met and it hasn't had its end-of-milestone hardening
+  session yet. A hardening session works the debt backlog: open S3/S4 bugs (most valuable
+  first), flaky or slow tests, docs drift, small refactors the logs flagged. Batch as many as
+  fit the size budget. Milestone sign-off happens after its hardening session.
+- **Feature session** otherwise, in this priority order: red build on main → open S1/S2 bugs →
+  inbox requests → the next unmet acceptance criterion of the current milestone (or of the next
+  milestone, if the current one waits only on owner items).
+
+**S3/S4 bugs don't jump the queue.** In a feature session, fold one in only if the task already
+touches that code and the fix is a few lines; everything else waits for a hardening session.
+
+**Size:** when the design is clear (the docs specify it and nothing needs inventing), a task may
+be up to `max_task_lines` changed lines or one whole roadmap criterion. When there's real
+uncertainty (a new system, unclear docs, performance risk), keep it to one system or slice
+around 800 lines and plan only the first part.
+
+**QA tier:** pick one for every task and put it in the plan:
+- `full`: core simulation rules where bugs compound (movement/pathfinding, determinism,
+  combat, economy, fog/stealth, save/replay, AI decisions). The whole attack checklist.
+- `standard`: other sim or presentation code. Criteria, targeted edge cases, invariant fuzzing
+  and determinism for the systems touched.
+- `light`: data, docs, tooling, UI layout. Criteria, build/tests/smoke, docs conformance.
 
 ### PLAN output (return exactly this shape)
 
@@ -100,6 +122,8 @@ DECISION: GO | STOP
 REASON: <one line>
 TASK_ID: <milestone>-<n>, e.g. M1-3        (GO only)
 TASK_TITLE: <short imperative title>        (GO only)
+SESSION_TYPE: feature | hardening           (GO only)
+QA_TIER: full | standard | light            (GO only)
 
 ## Checks
 - Inbox: ...
@@ -107,6 +131,7 @@ TASK_TITLE: <short imperative title>        (GO only)
 - Verified claim: ...
 - Docs drift: ...
 - Open S1/S2 bugs: ...
+- Debt backlog: <open S3/S4 count>; feature sessions since last hardening: <n>/<hardening_every>
 - Sessions today: <n>/<max>
 
 ## Brief for game-dev                        (GO only)

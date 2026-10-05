@@ -112,6 +112,7 @@ and reason) and update the affected docs in the same commit.
 | 2026-10-03 | Terrain cliffs are blocked nav *cells* on the plateau rim (not per-edge rules); ramps join one level to the next; the map's outer ring is blocked | Producer decision (M1-3), owner may revisit; keeps flow fields per-cell ([03 Navigation grid](03-technical-design.md#navigation-grid)) |
 | 2026-10-04 | Flow-field builds are capped per tick; the cache's keys/LRU order count as sim state (to be hashed and saved), and misses are served oldest order first | Producer decision (M1-4b, BUG-0018/0021/0022), owner may revisit; keeps the tick budget and determinism ([03 Flow fields](03-technical-design.md#flow-fields)) |
 | 2026-10-04 | Build cap is 2 fields per tick; cache holds `clamp(units/8, 32, 128)` fields under a 64 MiB budget; same-tick ties break by goal cell (map-side bias up to ~4 ticks, BUG-0026) and over-capacity eviction stays plain LRU (BUG-0025) until a later task | Producer decision (M1-4c), owner may revisit; ~1.4 ms Debug per tick for the two builds, well inside the 4 ms budget ([03 Build cap](03-technical-design.md#flow-fields)) |
+| 2026-10-05 | Studio pace: QA depth by risk tier, S3/S4 debt worked every 4th session and at milestone end, tasks up to 1,500 lines when the design is clear | Owner decision to speed up development ([07 Pace and debt](07-studio-workflow.md#pace-and-debt-set-2026-10-05)) |
 
 ## IP and naming policy
 

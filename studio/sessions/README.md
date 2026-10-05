@@ -14,6 +14,8 @@ One file per studio session, written by the Producer at the end of the session.
 | Field | Value |
 | --- | --- |
 | Task | <TASK_ID>: <title> |
+| Type | feature / hardening |
+| QA tier | full / standard / light |
 | Verdict | ACCEPT / REJECT / ESCALATE |
 | Branch | studio/<SESSION_ID> (merged / pushed for later) |
 | Fix rounds | <n> |

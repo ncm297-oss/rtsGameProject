@@ -9,7 +9,11 @@ Commit and push after editing, from either machine (or ask Claude to).
 
 ## New
 
-(empty)
+- 2026-10-05 · **Speed up (owner):** QA depth by risk tier, S3/S4 bugs wait for a hardening
+  session every 4th session and at milestone end (S1/S2 still first), tasks up to 1,500 lines
+  when the design is clear. Rules are in `.claude/agents/producer.md`, `qa-inspector.md`, and
+  `studio/autopilot.md` (`hardening_every`, `max_task_lines`). Please re-order the backlog in
+  STATE.md accordingly and count the current M1-4c session as a hardening session.
 
 ## Processed
 

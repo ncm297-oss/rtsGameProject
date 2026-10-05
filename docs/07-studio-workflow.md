@@ -133,6 +133,18 @@ tests (`sim/Rts.Sim.Tests/Stress/` and `QA/`), so the suite gets stronger with e
 | S3 | Real bug outside the criteria | No (tracked) |
 | S4 | Polish | No (tracked) |
 
+### Pace and debt (set 2026-10-05)
+
+- **QA depth follows risk.** The Producer gives every task a tier: `full` for core simulation
+  rules where bugs compound (movement, determinism, combat, economy, fog, save/replay, AI),
+  `standard` for other code, `light` for data, docs, tooling, and UI layout.
+- **Debt has a cadence, not a veto.** S1/S2 always come first. S3/S4 bugs wait in the backlog
+  and get worked in a **hardening session** every 4th session (`hardening_every`) and once at
+  the end of every milestone, before sign-off. Inputs outside documented ranges are report
+  notes, not bugs, unless they crash or corrupt state.
+- **Bigger tasks when the design is clear:** up to 1,500 changed lines (`max_task_lines`) or one
+  whole roadmap item. Uncertain work stays small.
+
 ## Permissions and access
 
 Chosen by the owner on 2026-10-02: **project allowlist + auto mode** for unattended runs.
