@@ -299,10 +299,13 @@ velocity 0, position unchanged; it never steps without a field). Units already i
 need no field. Cost: two builds are about 1.4 ms on the default map in Debug, against the 4 ms
 average tick budget. A burst of N new goals in one tick starts its groups over ceil(N / 2) ticks
 (32 new goals: the last starts 0.8 s late), and within one burst tick ties break by goal cell, so
-the remaining positional bias is bounded by ceil(N / 2) ticks; an order never waits behind a
-newer one. A re-issued Move gets a new `OrderTick`. With more live goals than cache slots, fields
-of groups still walking are evicted and rebuilt (the evicted group's old order goes first), so
-builds keep running at the cap until enough groups arrive. A unit that never arrives (blocked
+the remaining positional bias is bounded by ceil(N / 2) ticks (BUG-0026, S4); while live goals fit
+the cache, an order never waits behind a newer one. A re-issued Move gets a new `OrderTick`. With
+more live goals than cache slots, fields of groups still walking are evicted by LRU, which in the
+build pass means by lowest goal cell touched that tick, not by order age: older groups can stall
+behind newer ones and the cap is spent on rebuilds every tick until enough groups arrive
+(BUG-0025, S3; fix candidate: evict the live field with the newest order, or wait instead of
+evicting). A unit that never arrives (blocked
 forever until the give-up rules) can hold its slot indefinitely. One build of a large map still
 costs more than the tick budget (512 × 512 ≈ 10 ms in Debug); time-sliced builds are future work.
 

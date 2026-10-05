@@ -47,3 +47,8 @@ from the code, not measured per group), while the newest orders keep theirs.
   group newer than every cached group's order (wait instead of evicting), or evict the live field
   whose group has the newest order rather than the lowest cell.
 - Related: BUG-0022 (fixed for the within-capacity case), BUG-0021.
+- **Producer triage (2026-10-04-2056):** S3, does not block M1-4c or M1-4d. Only bites with more
+  live goals than cache slots (> 64 at 512 units, > 128 at 1024+), which no current scenario
+  reaches. Fix as its own small task after M1-4d (preferred direction: when every slot holds a
+  live field, evict the one whose group has the newest order; fold BUG-0026's tie-break in). docs/03
+  "Build cap" now states the limitation instead of the false sentence.

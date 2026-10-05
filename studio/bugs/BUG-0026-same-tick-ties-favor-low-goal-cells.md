@@ -34,3 +34,8 @@ issuing orders on the same tick is the normal case once the AI exists.
 Filed so the Producer can decide whether the bound is acceptable. Possible cheaper tie-breaks:
 player order rotated by tick, or a seeded hash of the goal cell mixed with the tick. Either stays
 deterministic and removes the fixed map-side preference.
+
+**Producer triage (2026-10-04-2056):** S4, accepted for now: the bias is inside the documented
+ceil(N/2) bound and only exists for same-tick bursts. Fix together with BUG-0025 (a per-tick
+rotation of the tie-break, e.g. `(goalCell + tick * stride) mod cells`, keeps it deterministic and
+allocation-free). Must be in before M5 (AI and player issue orders on the same tick routinely).
