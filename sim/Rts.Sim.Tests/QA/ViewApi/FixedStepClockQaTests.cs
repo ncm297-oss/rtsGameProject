@@ -104,7 +104,7 @@ public class FixedStepClockQaTests
     [InlineData(double.NegativeInfinity, 1.0)]
     [InlineData(1.0 / 60, double.PositiveInfinity)]
     [InlineData(double.PositiveInfinity, 0.0)]
-    [InlineData(-1.0, -1.0, Skip = "BUG-0041: negative delta x negative speed is a positive step; un-skip when fixed")]
+    [InlineData(-1.0, -1.0)] // BUG-0041: was a positive step (5 ticks)
     [InlineData(double.Epsilon, 1.0)]
     public void NonFiniteOrNegativeInputs_AddNoTicks_AndKeepAlpha(double delta, double speed)
     {

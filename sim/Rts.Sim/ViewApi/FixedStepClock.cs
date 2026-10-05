@@ -28,6 +28,8 @@ public sealed class FixedStepClock
     /// <remarks>Zero, negative or non-finite inputs add nothing, so a paused game keeps its alpha.</remarks>
     public int Advance(double deltaSeconds, double speed)
     {
+        // Each input is checked on its own: two negatives must not multiply into a positive step (BUG-0041).
+        if (!(deltaSeconds > 0.0) || !(speed > 0.0)) return 0;
         double scaled = deltaSeconds * speed;
         if (!(scaled > 0.0) || double.IsInfinity(scaled)) return 0;
 

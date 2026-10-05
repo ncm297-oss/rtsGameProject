@@ -28,6 +28,13 @@ public partial class RtsCamera : Camera3D
         ApplyTransform();
     }
 
+    /// <summary>Moves the ground focus to sim point (x, y) in meters, clamped to the map.</summary>
+    public void SetFocus(float x, float y)
+    {
+        _focus = CameraLimits.ClampFocus(new System.Numerics.Vector2(x, y), _mapWidthCells, _mapHeightCells);
+        ApplyTransform();
+    }
+
     public override void _Ready()
     {
         RotationDegrees = new Vector3(-CameraLimits.PitchDegrees, 0f, 0f);
@@ -60,7 +67,8 @@ public partial class RtsCamera : Camera3D
         }
     }
 
-    private void SetZoom(float zoom)
+    /// <summary>Sets the zoom (meters above the focus), clamped to the camera limits.</summary>
+    public void SetZoom(float zoom)
     {
         _zoom = CameraLimits.ClampZoom(zoom);
         ApplyTransform();

@@ -825,6 +825,85 @@ Godot starts children before parents, so `Main._Ready` loads the data and then c
   `--screenshot <path> --screenshot-after <seconds>` (default 2). Bad values log a warning and are
   ignored. Example: `& $env:GODOT --path game -- --screenshot C:\temp\shot.png --screenshot-after 2`.
 
+### Implementation (M2-2)
+
+Placeholder unit views, selection and right-click move. New nodes in `Match.tscn`:
+
+```
+Match
+  SimRunner
+  World3D
+    ...TerrainView
+    UnitViews          Node3D (UnitViews.cs): one capsule MeshInstance3D per unit slot
+    SelectionRings     MultiMeshInstance3D (SelectionRings.cs): one ring instance per selected unit
+  RtsCamera
+  SelectionController  Node (SelectionController.cs): picking, selection, move orders
+    BoxLayer/Box       CanvasLayer + ColorRect drag box (mouse_filter ignore)
+  DebugOverlay         now also "sel N"
+  Screenshotter
+```
+
+- **Start armies (debug until real start locations):** `Match.Start` enqueues `SpawnUnit` for
+  `--units <n>` per player (0-1000, default 100). Player p plays faction p in data order
+  (malazan, whirlwind) until the M6 lobby and spawns its roster round-robin. Positions come from
+  the pure `ViewApi.StartLayout.Block(NavGrid, count, west, maxRadius)`: passable cell centres
+  nearest the middle of an inner column 3 cells from the map's centre line (west block for player
+  0, east for player 1), scored `dx² + dy²` (a half-disc), ties to the lower cell index, on a
+  lattice of `ceil(2·maxRadius / 2 m)` cells so bodies never overlap. No RNG; fewer positions
+  come back (with a warning) if a half of the map runs out of room. The camera starts on player
+  0's block centre. The units appear on the sim's second tick.
+- **Unit views:** `UnitViews.Bind` makes one `CapsuleMesh` per unit type (radius from
+  `UnitDef.Radius`, height `2·radius + 1 m`, 12 radial segments) and one `StandardMaterial3D` per
+  faction whose albedo is the faction's `PrimaryColor` (0xRRGGBB, sRGB). The material is per
+  faction, not per owner: with player p = faction p they are the same today, and M6's per-player
+  colour replaces it. A slot's node is created the first time the slot is alive and hidden while
+  it is dead; a respawn into the slot reuses it (and swaps the mesh if the type changed). After a
+  slot's first use nothing is created; the per-frame update of 2,000 units allocates 0 bytes and
+  costs about 0.5 ms (`game/tests/UnitViewsTest.tscn`). No physics bodies.
+- **Interpolation:** each frame, ground point = lerp(`PrevPosition`, `Position`, alpha) with
+  alpha = `SimRunner.Alpha` clamped to [0, 1] (NaN shows the current tick), so a view never runs
+  past the sim. The capsule's centre sits `height / 2` above `ViewApi.TerrainHeight.At(Heightmap,
+  x, y)`. Facing is the current tick's (no previous facing in the sim yet).
+- **Terrain height:** `TerrainHeight.At` returns the drawn surface: flat plateau cells, the ramp
+  plane on ramp cells, the point clamped onto the map, and on a cell boundary the higher-index
+  cell (floor, like `NavGrid.WorldToCell`). It and `TerrainMeshBuilder` share
+  `TerrainHeight.CellCorners`, and a test checks every cell corner and centre of 20 generated
+  maps and the 4x4 hand map against the mesh.
+- **Facing convention:** sim `Facing = Atan2(vy, vx)` points along `(cos θ, sin θ)` on the ground,
+  which is Godot `(cos θ, 0, sin θ)`. A view's forward is Godot's -Z, so its yaw about +Y is
+  `-θ - π/2` (`UnitViews.Yaw`); checked with a unit walking +x (facing 0, forward (1, 0, 0)).
+- **Selection** (input actions `select` = LMB, `command` = RMB, `select_add` = Shift): on release,
+  every own (player 0), live unit in front of the camera is projected at its body centre; its
+  pixel radius is `radius · viewportHeight / (2 · depth · tan(fov / 2))`. Less than 4 px of mouse
+  travel is a click: the nearest projected centre within max(radius, 12 px) wins, exact ties to the
+  lowest slot (`ViewApi.ScreenPicker.PickClick`). 4 px or more is a box: every centre inside,
+  edges inclusive, either corner order (`PickBox`). A plain click or box replaces the selection,
+  Shift + click toggles the unit, Shift + box adds; a plain click on no own unit clears it, a
+  Shift + click on nothing keeps it. Enemies are never candidates. The selection is a
+  `ViewApi.SelectionSet` of handles (fixed capacity, selection order kept), pruned of dead or
+  recycled handles every frame; `SelectionRings` draws one flat unshaded torus per live selected
+  unit (radius × 1.35, 6 cm above the ground).
+- **Right-click move:** the camera ray (`ProjectRayOrigin` / `ProjectRayNormal`) goes to
+  `ViewApi.GroundPicker.TryPick(Heightmap, origin, direction)`: the ray is clipped to the map's box
+  (0 to 9 m high), walked cell by cell (grid DDA), and solved exactly against each cell's surface
+  plane. A ray that enters a cell already below its surface has hit the wall on that boundary,
+  which belongs to the higher cell, so a click on a cliff face orders units to the upper plateau.
+  The hit is kept 1 mm inside its cell. Rays that miss the map return false and the click
+  enqueues nothing. Otherwise one `Command.Move(0, handle, (hit.x, hit.z))` per selected unit; an
+  order that would overflow the command queue is dropped whole with a warning. Measured against
+  a 5 mm ray march: worst error 0.02 mm at both zoom limits on ramps, plateaus and high ground.
+- **Read-only:** `game/` changes sim state only through `Simulation.Enqueue` (Match, SelectionController)
+  and `Tick` (SimRunner). The ViewApi helpers take a `Heightmap`, `NavGrid`, spans or arrays and keep
+  no sim reference.
+- **Launch flags added:** `--units <n>` (0-1000 per player, default 100) and `--zoom <m>` (start zoom,
+  clamped 20-60; for perf runs). Flag parsing never takes a token starting with `--` as a value, so
+  `--seed --speed 2` warns about `--seed` and still applies speed 2 (BUG-0041).
+- **Tests:** `ViewApi/TerrainHeightTests`, `GroundPickerTests`, `ScreenPickerTests`,
+  `SelectionSetTests`, `StartLayoutTests`, `ViewApiAllocationTests` (xUnit); headless scenes
+  `res://tests/UnitViewsTest.tscn` ("UNITVIEWS TEST PASS") and `res://tests/SelectionTest.tscn`
+  ("SELECTION TEST PASS"), run with `& $env:GODOT --headless --path game res://tests/<name>.tscn`.
+  Headless windows are 64 x 64 px, so `SelectionTest` sets the root window to 1152 x 648 first.
+
 ## AI architecture
 
 The AI lives in `Rts.Sim.Ai`, inside the sim assembly, because it must be deterministic (it uses

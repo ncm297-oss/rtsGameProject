@@ -42,7 +42,7 @@ public static class TerrainMeshBuilder
         var corners = new float[w * h * 4];
         for (int y = 0; y < h; y++)
             for (int x = 0; x < w; x++)
-                CellCorners(map, x, y, corners.AsSpan((y * w + x) * 4, 4));
+                TerrainHeight.CellCorners(map, x, y, corners.AsSpan((y * w + x) * 4, 4));
 
         var mesh = new MeshLists();
         for (int y = 0; y < h; y++)
@@ -87,45 +87,6 @@ public static class TerrainMeshBuilder
         Vector3 n = (aA + bA) > (aB + bB) ? axis : -axis;
         mesh.AddQuad(new(a.X, aBot, a.Y), new(b.X, bBot, b.Y), new(b.X, bTop, b.Y), new(a.X, aTop, a.Y), n, CliffColor);
     }
-
-    // Plateau cells are flat at their elevation. A ramp cell is a plane tilted along the axis whose
-    // two neighbours straddle its height: each edge on that axis meets a plateau neighbour at the
-    // plateau's height and a ramp neighbour halfway between the two, so the slope is continuous
-    // from the low ground to the plateau lip.
-    private static void CellCorners(Heightmap map, int x, int y, Span<float> c)
-    {
-        float e = map.ElevationAt(x, y);
-        c[0] = c[1] = c[2] = c[3] = e;
-        if (!map.IsRamp(x, y)) return;
-
-        if (Straddles(map, e, x - 1, y, x + 1, y))
-        {
-            float left = EdgeHeight(map, e, x - 1, y), right = EdgeHeight(map, e, x + 1, y);
-            c[0] = c[2] = left;
-            c[1] = c[3] = right;
-        }
-        else if (Straddles(map, e, x, y - 1, x, y + 1))
-        {
-            float top = EdgeHeight(map, e, x, y - 1), bottom = EdgeHeight(map, e, x, y + 1);
-            c[0] = c[1] = top;
-            c[2] = c[3] = bottom;
-        }
-    }
-
-    private static bool Straddles(Heightmap map, float e, int ax, int ay, int bx, int by)
-    {
-        if (!InBounds(map, ax, ay) || !InBounds(map, bx, by)) return false;
-        float ea = map.ElevationAt(ax, ay), eb = map.ElevationAt(bx, by);
-        return (ea < e && eb > e) || (ea > e && eb < e);
-    }
-
-    private static float EdgeHeight(Heightmap map, float e, int nx, int ny)
-    {
-        float en = map.ElevationAt(nx, ny);
-        return map.IsRamp(nx, ny) ? (e + en) / 2 : en;
-    }
-
-    private static bool InBounds(Heightmap map, int x, int y) => (uint)x < (uint)map.Width && (uint)y < (uint)map.Height;
 
     private sealed class MeshLists
     {
