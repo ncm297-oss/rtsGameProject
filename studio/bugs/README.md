@@ -49,7 +49,7 @@ bugs outrank new features.
 | [BUG-0011](BUG-0011-ramp-sides-walkable-steeper-than-30-degrees.md) | S3 | fixed | Ramp sides are walkable: a unit can step 1.6-3.2 m sideways off a ramp (39-58 degrees) |
 | [BUG-0012](BUG-0012-mapgen-int-overflow-passes-validate-then-crashes.md) | S3 | fixed | MapGenParams.Validate and the Heightmap ctor overflow on huge ints; Generate then crashes |
 | [BUG-0013](BUG-0013-mapgen-worst-case-params-take-tens-of-seconds.md) | S4 | fixed | Map generation with params Validate allows can take ~35 s |
-| [BUG-0014](BUG-0014-seed-max-gives-same-map-as-seed-zero.md) | S4 | open | Seed ulong.MaxValue generates exactly the same map as seed 0 |
+| [BUG-0014](BUG-0014-seed-max-gives-same-map-as-seed-zero.md) | S4 | fixed | Seed ulong.MaxValue generates exactly the same map as seed 0 |
 | [BUG-0015](BUG-0015-mapgen-worst-case-still-slow-with-big-ramps.md) | S2 | fixed | Worst valid map params still take ~45 s (Debug) / ~7 s (Release): ramp size not in the time bound |
 | [BUG-0016](BUG-0016-nearest-enemy-returns-nan-positioned-unit.md) | S3 | fixed | SpatialHash.NearestEnemy returns a NaN-positioned unit that QueryRadius excludes |
 | [BUG-0017](BUG-0017-flaky-flood-allocation-test.md) | S3 | fixed | `Flood_10000Commands_OneTick_AllocatesNothing` failed once in 11 full suite runs, not reproduced |
@@ -74,3 +74,5 @@ bugs outrank new features.
 | [BUG-0036](BUG-0036-queued-rule-guard-test-does-not-exercise-a-hold.md) | S4 | fixed | The M1-5 "jammed group still gives up" test never exercises a hold; four safety mutants of the queued rule pass the dev suite |
 | [BUG-0037](BUG-0037-idle-enemy-holding-walkers-goal-cell-is-no-wall.md) | S3 | open | An Idle enemy holding the walker's goal cell counts as its arrived groupmate, so it is no wall (walked 0.12-0.16 m into in one tick) |
 | [BUG-0038](BUG-0038-hard-wall-fallback-drops-friendly-clips.md) | S3 | open | The hard-wall fallback drops the clips of the walker's own standing units; a walker beside an enemy slides into an anchored friendly |
+| [BUG-0039](BUG-0039-more-goals-bounds-hold-on-one-map-only.md) | S3 | open | 128 units to 64 neighbouring goals: the pack rule and the 22% give-up bound hold on one map only (25/40 and 22/40 new-seed maps fail) |
+| [BUG-0040](BUG-0040-replay-tick-count-unbounded-and-in-tick-enqueue.md) | S4 | open | Replay header has no tick-count limit; phase-14 checkpoints can't match commands enqueued during a tick (M5) |

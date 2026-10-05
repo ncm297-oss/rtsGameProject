@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-03-1235, task M1-3 |
 | System | determinism / SimRng seeding |
-| Fixed by | |
+| Fixed by | 22825d3 (M1-6): `SimRng` adds `MixSeed(seed)` (SplitMix64 output function) to the state instead of the raw seed. Regression: `QA/MapQaTests.SeedMaxValue_AndSeedZero_GiveDifferentMaps` un-skipped + dev `SimRngTests.SeedMaxValue_AndSeedZero_GiveDifferentDrawsOnStream0`; QA mutation (raw seed again) fails 7 tests incl. both, and `QA/ReplayQaTests` seed-pair sweep (1,000 pairs x 18 streams, no equal or shifted streams within 64 draws) |
 
 ## Repro
 1. Un-skip `Rts.Sim.Tests.QA.MapQaTests.SeedMaxValue_AndSeedZero_GiveDifferentMaps`.
