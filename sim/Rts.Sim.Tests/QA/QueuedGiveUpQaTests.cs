@@ -45,7 +45,7 @@ public class QueuedGiveUpQaTests
     /// walls (docs/03), and the 0.2 m slits between them are far narrower than any unit, so nobody may
     /// get through. At M1-5 20-27 of 60 squeeze through per seed (1-21 under the pre-M1-5 give-up rule).
     /// </summary>
-    [Theory(Skip = "BUG-0035: walkers squeeze between two standing enemies")]
+    [Theory]
     [InlineData(1UL)]
     [InlineData(2UL)]
     [InlineData(3UL)]

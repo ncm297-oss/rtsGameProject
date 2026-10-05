@@ -356,9 +356,161 @@ public class LocalMovementTests
     }
 
     /// <summary>
-    /// M1-5: holding the count while groupmates progress must not keep a jammed group alive. Six units
-    /// of one goal in a 1-cell corridor behind an enemy that blocks it: once the queue has closed up,
-    /// nobody progresses, so every unit gives up within a bounded time.
+    /// BUG-0035: standing units are walls, also two side by side. A 2-cell gap in a cliff column is
+    /// plugged by two wide enemies standing at its cell centers (a 0.2 m slit between them); 40 units of
+    /// every type crowd at it. Every tick, a unit that was Moving at the start of the tick (so moved
+    /// only by its own step) must end it no deeper into either enemy than it already was; nobody gets
+    /// past the plug, and all give up. Before the fix, clipping the step against the second enemy slid
+    /// it back into the first, and walkers worked their way through the slit.
+    /// </summary>
+    [Theory]
+    [InlineData(1UL)]
+    [InlineData(2UL)]
+    [InlineData(3UL)]
+    public void CrowdAtAGapPluggedByTwoEnemies_NoWalkerEverGoesDeeperIntoOne_NobodyPasses(ulong seed)
+    {
+        const int crowd = 40;
+        var rows = new string[24];
+        for (int y = 0; y < 24; y++)
+        {
+            char[] r = new string('0', 48).ToCharArray();
+            if (y < 10 || y > 11) r[20] = '1';
+            rows[y] = new string(r);
+        }
+        var sim = new Simulation(TestSim.Config(Seed: seed, PlayerCount: 2, UnitCapacity: crowd + 2, CommandCapacity: 4 * crowd + 16), Rows(rows));
+        NavGrid g = sim.World.NavGrid;
+        var rng = new Determinism.SimRng(seed, 35);
+        for (int i = 0; i < crowd; i++)
+            sim.Enqueue(Command.SpawnUnit(0, i % TestSim.UnitTypeCount, new Vector2(26.1f + rng.NextFloat() * 11.8f, 14.1f + rng.NextFloat() * 15.8f)));
+        int wide = TypeWithRadius(0.9f);
+        Vector2 e0 = g.CellCenter(20, 10), e1 = g.CellCenter(20, 11);
+        sim.Enqueue(Command.SpawnUnit(1, wide, e0));
+        sim.Enqueue(Command.SpawnUnit(1, wide, e1));
+        sim.Tick();
+        sim.Tick();
+        UnitStore u = sim.World.Units;
+        // Spawns apply in player order: the enemies take the last two slots.
+        Assert.True(u.Owner[crowd] == 1 && u.Owner[crowd + 1] == 1);
+        for (int i = 0; i < crowd; i++) sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, i), g.CellCenter(36, 10)));
+        var wasMoving = new bool[crowd];
+        var depth = new float[crowd, 2];
+        int ticks = 0;
+        do
+        {
+            for (int i = 0; i < crowd; i++)
+            {
+                wasMoving[i] = u.State[i] == UnitState.Moving;
+                for (int e = 0; e < 2; e++) depth[i, e] = u.Radius[i] + u.Radius[crowd + e] - Vector2.Distance(u.Position[i], u.Position[crowd + e]);
+            }
+            sim.Tick();
+            ticks++;
+            Assert.True(u.Position[crowd] == e0 && u.Position[crowd + 1] == e1, "an enemy moved");
+            for (int i = 0; i < crowd; i++)
+            {
+                if (!wasMoving[i]) continue;
+                for (int e = 0; e < 2; e++)
+                {
+                    float now = u.Radius[i] + u.Radius[crowd + e] - Vector2.Distance(u.Position[i], u.Position[crowd + e]);
+                    Assert.True(now <= MathF.Max(depth[i, e], 0f) + 1e-4f,
+                        $"tick {ticks}: walker {i} went {now:F3} m into enemy {e} (was {depth[i, e]:F3})");
+                }
+            }
+        } while ((ticks < 2 || CountMoving(u) > 0) && ticks < 2000);
+        Assert.Equal(0, CountMoving(u));
+        int past = 0, gaveUp = 0;
+        for (int i = 0; i < crowd; i++)
+        {
+            if (u.Position[i].X > 21 * MapConstants.CellSize) past++;
+            if (u.GoalCell[i] == -1) gaveUp++;
+        }
+        _out.WriteLine($"seed {seed}: idle after {ticks} ticks, past the plug {past}, gave up {gaveUp}/{crowd}");
+        Assert.Equal(0, past);
+        Assert.Equal(crowd, gaveUp);
+    }
+
+    /// <summary>
+    /// M1-5 (BUG-0036): the queued hold must not keep a jammed crowd alive. 60 units of every type crowd
+    /// at a 1-cell gap plugged by one wide enemy, so nobody gets through. While the crowd closes up,
+    /// queued ticks do happen (asserted: a Moving unit's count held at 1-9, below the push threshold, so
+    /// only a queued tick holds it). The rule's guards are checked every tick: a Moving unit reads
+    /// StuckTicks 0 (the "made progress" signal) only right after a new best estimate, so a waiting
+    /// unit never passes the signal on, and a queued tick never raises the best. And every walker gives
+    /// up within the walk to the plug plus 10 give-up periods (about 200-250 ticks measured; dropping
+    /// a guard keeps waiters holding each other for much longer).
+    /// </summary>
+    [Theory]
+    [InlineData(1UL)]
+    [InlineData(2UL)]
+    [InlineData(3UL)]
+    [InlineData(4UL)]
+    [InlineData(5UL)]
+    public void CrowdJammedAtAGapPluggedByAnEnemy_QueuedTicksHold_ButAllGiveUpInBoundedTime(ulong seed)
+    {
+        const int crowd = 60;
+        var rows = new string[24];
+        for (int y = 0; y < 24; y++)
+        {
+            char[] r = new string('0', 48).ToCharArray();
+            if (y != 11) r[20] = '1';
+            rows[y] = new string(r);
+        }
+        var sim = new Simulation(TestSim.Config(Seed: seed, PlayerCount: 2, UnitCapacity: crowd + 1, CommandCapacity: 4 * crowd + 16), Rows(rows));
+        NavGrid g = sim.World.NavGrid;
+        var rng = new Determinism.SimRng(seed, 36);
+        for (int i = 0; i < crowd; i++)
+            sim.Enqueue(Command.SpawnUnit(0, i % TestSim.UnitTypeCount, new Vector2(24.1f + rng.NextFloat() * 13.8f, 12.1f + rng.NextFloat() * 21.8f)));
+        sim.Enqueue(Command.SpawnUnit(1, TypeWithRadius(0.9f), g.CellCenter(20, 11)));
+        sim.Tick();
+        sim.Tick();
+        UnitStore u = sim.World.Units;
+        Assert.Equal(1, u.Owner[crowd]);
+        for (int i = 0; i < crowd; i++) sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, i), g.CellCenter(36, 11)));
+        float slowest = float.MaxValue;
+        foreach (var def in TestSim.Data.Units) slowest = MathF.Min(slowest, def.SpeedPerTick);
+        // Farthest spawn to the plug: about 15 m at the slowest type's speed, then 10 give-up periods.
+        int bound = (int)(16f / slowest) + 10 * MovementConstants.GiveUpTicks;
+        var wasMoving = new bool[crowd];
+        var stuck = new int[crowd];
+        var best = new float[crowd];
+        int ticks = 0, holds = 0;
+        do
+        {
+            for (int i = 0; i < crowd; i++)
+            {
+                wasMoving[i] = u.State[i] == UnitState.Moving;
+                stuck[i] = u.StuckTicks[i];
+                best[i] = u.BestRemaining[i];
+            }
+            sim.Tick();
+            ticks++;
+            for (int i = 0; i < crowd; i++)
+            {
+                if (!wasMoving[i] || u.State[i] != UnitState.Moving) continue;
+                Assert.True(u.BestRemaining[i] <= best[i], $"tick {ticks}: unit {i}'s best estimate rose from {best[i]} to {u.BestRemaining[i]}");
+                if (u.StuckTicks[i] == 0)
+                    Assert.True(u.BestRemaining[i] < best[i], $"tick {ticks}: unit {i} reads StuckTicks 0 without a new best");
+                if (stuck[i] > 0 && stuck[i] < MovementConstants.PushAfterStuckTicks && u.StuckTicks[i] == stuck[i]) holds++;
+            }
+        } while ((ticks < 2 || CountMoving(u) > 0) && ticks < 4 * bound);
+        int gaveUp = 0, past = 0;
+        for (int i = 0; i < crowd; i++)
+        {
+            if (u.GoalCell[i] == -1) gaveUp++;
+            if (u.Position[i].X > 21 * MapConstants.CellSize) past++;
+        }
+        _out.WriteLine($"seed {seed}: idle after {ticks} ticks (bound {bound}), {holds} queued holds, gave up {gaveUp}/{crowd}, past {past}");
+        Assert.True(holds > 0, "no queued tick: the test doesn't exercise the hold");
+        Assert.Equal(0, CountMoving(u));
+        Assert.Equal(crowd, gaveUp);
+        Assert.Equal(0, past);
+        Assert.True(ticks <= bound, $"{ticks} ticks > {bound}");
+    }
+
+    /// <summary>
+    /// M1-5: six units of one goal in a 1-cell corridor behind an enemy that blocks it all give up in
+    /// a bounded time. The units ahead are blocked (zero velocity, so standing): this never queues a
+    /// tick, it only pins the plain give-up in a jammed line. The hold itself is exercised by
+    /// <see cref="CrowdJammedAtAGapPluggedByAnEnemy_QueuedTicksHold_ButAllGiveUpInBoundedTime"/>.
     /// </summary>
     [Fact]
     public void JammedQueueBehindAnEnemyInOneCellCorridor_AllGiveUp()

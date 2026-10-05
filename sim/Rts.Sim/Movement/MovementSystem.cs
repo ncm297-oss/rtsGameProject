@@ -34,6 +34,12 @@ public static class MovementSystem
     private const byte ActPush = 6;    // blocked, moving only by pushing parked units: take PlannedStep; the stuck count holds
     private const byte ActQueued = 7;  // no progress, but a groupmate just ahead made some last tick: take PlannedStep; the stuck count holds (at least 1)
 
+    // Meters a shove stops short of ShoveSpacing (SqueezeLimit): more than a position's float rounding.
+    private const float ShoveRoundingMargin = 1e-4f;
+
+    // Meters a step may go past a hard wall's limit: the float noise a clip leaves (Constrain).
+    private const float WallTolerance = 1e-5f;
+
     /// <summary>Advances every Moving unit by one tick, then moves the Idle units they shoved.</summary>
     public static void Run(World world)
     {
@@ -418,34 +424,118 @@ public static class MovementSystem
     /// further than its own step (BUG-0031: a push-out of the whole overlap pointed into a cliff and
     /// pinned the unit whatever its order). Standing units read at their start-of-tick positions;
     /// neighbors are visited in ascending slot order.
+    /// <para>
+    /// Each wall allows a half-plane of steps (into it no further than the gap), and every half-plane
+    /// holds the zero step. One clip per wall, in slot order, can carry the step back into a wall
+    /// already passed: a unit between two standing units slid along the second straight into the
+    /// first, and so worked its way through a slit far narrower than itself (BUG-0035). Hard walls
+    /// (<see cref="IsHardWall"/>: other players' units holding their ground) are therefore checked
+    /// again after the clips, and if one is still entered, the step becomes the one closest to the
+    /// desired step that every hard wall allows (<see cref="ClosestAllowed"/>): a walker never goes
+    /// deeper into an enemy, whatever else it touches. Its own army's standing units and units mid-move
+    /// keep the single clip: a walker pressed between two of them may still slip through, which crowds
+    /// of one army rely on (holding those to the exact rule too cut arrivals in the crowd tests, docs/03).
+    /// </para>
     /// </remarks>
     private static Vector2 Constrain(World world, NavGrid grid, UnitStore u, int i, Vector2 pos, Vector2 step, int[] near, int count, int goalCell, bool pushArrived)
     {
-        float ri = u.Radius[i];
+        Vector2[] normals = world.WallNormals;
+        float[] limits = world.WallLimits;
+        Vector2 desired = step;
         float stepLength = step.Length();
+        int hard = 0;
         for (int m = 0; m < count; m++)
         {
             int j = near[m];
-            if (j == i || !u.Alive[j]) continue;
-            bool idle = u.State[j] != UnitState.Moving;
-            if (idle ? u.GoalCell[j] == goalCell : u.Velocity[j] != Vector2.Zero) continue; // groupmate or walker: soft push instead
-            Vector2 toJ = u.Position[j] - pos;
-            float d2 = toJ.LengthSquared();
-            float sum = ri + u.Radius[j];
-            float reach = sum + stepLength + u.Speed[j];
-            if (d2 >= reach * reach) continue;
-            float dist = MathF.Sqrt(d2);
-            Vector2 normal = dist > 0f ? toJ / dist : -CoincidentDirection(i, j);
-            float gap = dist - sum;
-            Vector2 yield = ShoveDirection(world, u, i, j, goalCell, pushArrived, normal) * u.Speed[j];
-            if (yield != Vector2.Zero && grid.WorldToCell(u.Position[j], out int jx, out int jy)
-                && CanStep(grid, jx, jy, u.Position[j] + yield))
-                gap += Vector2.Dot(yield, normal);
+            if (!WallLimit(world, grid, u, i, pos, j, stepLength, goalCell, pushArrived, out Vector2 normal, out float limit)) continue;
             float into = Vector2.Dot(step, normal);
-            float limit = MathF.Max(gap, 0f);
             if (into > limit) step -= normal * (into - limit);
+            if (IsHardWall(u, i, j))
+            {
+                normals[hard] = normal;
+                limits[hard++] = limit;
+            }
         }
+        if (hard > 0 && !Allowed(step, normals, limits, hard))
+            step = ClosestAllowed(desired, normals, limits, hard);
         return ClampLength(step, u.Speed[i]);
+    }
+
+    /// <summary>True if <paramref name="step"/> goes along each of the first <paramref name="n"/> wall normals no further than its limit (within <see cref="WallTolerance"/>).</summary>
+    private static bool Allowed(Vector2 step, Vector2[] normals, float[] limits, int n)
+    {
+        for (int k = 0; k < n; k++)
+            if (Vector2.Dot(step, normals[k]) > limits[k] + WallTolerance) return false;
+        return true;
+    }
+
+    /// <summary>
+    /// The step closest to <paramref name="desired"/> that goes along no wall normal further than its
+    /// limit: <paramref name="desired"/> itself, its projection onto one wall's line, or the corner of
+    /// two walls' lines, whichever is allowed and closest. Zero is always allowed (no limit is negative).
+    /// </summary>
+    private static Vector2 ClosestAllowed(Vector2 desired, Vector2[] normals, float[] limits, int n)
+    {
+        if (Allowed(desired, normals, limits, n)) return desired;
+        Vector2 best = Vector2.Zero;
+        float bestD2 = desired.LengthSquared();
+        for (int k = 0; k < n; k++)
+        {
+            float over = Vector2.Dot(desired, normals[k]) - limits[k];
+            if (over <= 0f) continue;
+            Vector2 c = desired - normals[k] * over;
+            float d2 = Vector2.DistanceSquared(c, desired);
+            if (d2 < bestD2 && Allowed(c, normals, limits, n)) { best = c; bestD2 = d2; }
+        }
+        for (int k = 0; k < n; k++)
+        {
+            for (int l = k + 1; l < n; l++)
+            {
+                Vector2 a = normals[k], b = normals[l];
+                float det = a.X * b.Y - a.Y * b.X;
+                if (MathF.Abs(det) < 1e-6f) continue; // parallel: no corner
+                var c = new Vector2((limits[k] * b.Y - limits[l] * a.Y) / det, (a.X * limits[l] - b.X * limits[k]) / det);
+                float d2 = Vector2.DistanceSquared(c, desired);
+                if (d2 < bestD2 && Allowed(c, normals, limits, n)) { best = c; bestD2 = d2; }
+            }
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// True if wall <paramref name="j"/> is a hard wall to walker <paramref name="i"/>: a unit of another
+    /// player that isn't walking under an order (Idle now; holding or fighting later). See <see cref="Constrain"/>.
+    /// </summary>
+    private static bool IsHardWall(UnitStore u, int i, int j) => u.State[j] != UnitState.Moving && u.Owner[j] != u.Owner[i];
+
+    /// <summary>
+    /// For <see cref="Constrain"/>: false if neighbor <paramref name="j"/> is no wall to walker
+    /// <paramref name="i"/> (a groupmate, a walker, or out of reach of a step of
+    /// <paramref name="stepLength"/>); otherwise the unit normal toward j and how far (meters, never
+    /// negative) a step may go along it: the gap to touching, plus what j yields to a shove.
+    /// </summary>
+    private static bool WallLimit(World world, NavGrid grid, UnitStore u, int i, Vector2 pos, int j, float stepLength, int goalCell, bool pushArrived,
+        out Vector2 normal, out float limit)
+    {
+        normal = Vector2.Zero;
+        limit = 0f;
+        if (j == i || !u.Alive[j]) return false;
+        bool idle = u.State[j] != UnitState.Moving;
+        if (idle ? u.GoalCell[j] == goalCell : u.Velocity[j] != Vector2.Zero) return false; // groupmate or walker: soft push instead
+        Vector2 toJ = u.Position[j] - pos;
+        float d2 = toJ.LengthSquared();
+        float sum = u.Radius[i] + u.Radius[j];
+        float reach = sum + stepLength + u.Speed[j];
+        if (d2 >= reach * reach) return false;
+        float dist = MathF.Sqrt(d2);
+        normal = dist > 0f ? toJ / dist : -CoincidentDirection(i, j);
+        float gap = dist - sum;
+        Vector2 yield = ShoveDirection(world, u, i, j, goalCell, pushArrived, normal) * u.Speed[j];
+        if (yield != Vector2.Zero && grid.WorldToCell(u.Position[j], out int jx, out int jy)
+            && CanStep(grid, jx, jy, u.Position[j] + yield))
+            gap += Vector2.Dot(yield, normal);
+        limit = MathF.Max(gap, 0f);
+        return true;
     }
 
     /// <summary>
@@ -632,7 +722,9 @@ public static class MovementSystem
             Vector2 toK = u.Position[k] - pos;
             float dist = toK.Length();
             Vector2 normal = dist > 0f ? toK / dist : -CoincidentDirection(i, k);
-            float room = MathF.Max(dist - MovementConstants.ShoveSpacing * (u.Radius[i] + u.Radius[k]), 0f);
+            // A hair short of the spacing: a shove trimmed to land exactly on it can land a float's
+            // rounding (about 1e-5 m this far from the origin) inside it.
+            float room = MathF.Max(dist - MovementConstants.ShoveSpacing * (u.Radius[i] + u.Radius[k]) - ShoveRoundingMargin, 0f);
             if (world.ShoveStep[k] != Vector2.Zero) room *= 0.5f;
             float into = Vector2.Dot(step, normal);
             if (into > room) step -= normal * (into - room);

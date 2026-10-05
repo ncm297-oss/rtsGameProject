@@ -43,6 +43,8 @@ public sealed class World
         ShovedGoals = new int[config.UnitCapacity];
         AnchorQueue = new int[config.UnitCapacity];
         AnchorLinked = new bool[config.UnitCapacity];
+        WallNormals = new Vector2[config.UnitCapacity];
+        WallLimits = new float[config.UnitCapacity];
         float maxRadius = 0f, maxSpeed = 0f;
         for (int t = 0; t < config.Data.Units.Length; t++)
         {
@@ -73,6 +75,12 @@ public sealed class World
 
     /// <summary>Scratch for <see cref="Movement.MovementSystem"/>'s anchor re-check: which slots are linked to their point; all false between re-checks; derived, not hashed.</summary>
     internal bool[] AnchorLinked { get; }
+
+    /// <summary>Scratch for <see cref="Movement.MovementSystem"/>'s wall check: the unit normal toward each hard wall a step touches; derived, not hashed.</summary>
+    internal Vector2[] WallNormals { get; }
+
+    /// <summary>Scratch for <see cref="Movement.MovementSystem"/>'s wall check: how far a step may go along <see cref="WallNormals"/>; derived, not hashed.</summary>
+    internal float[] WallLimits { get; }
 
     /// <summary>Scratch for <see cref="Movement.MovementSystem"/>'s neighbor queries, sized to every slot so a query is never truncated; derived, not hashed.</summary>
     internal int[] Neighbors { get; }

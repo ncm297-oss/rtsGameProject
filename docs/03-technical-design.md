@@ -369,6 +369,8 @@ So separation is symmetric and no result depends on which unit is walked first. 
 - **Walls:** standing units that aren't groupmates are hard: `Constrain` removes the part of the
   step that would end inside one (collide and slide). M1-4d-2 changed two things, below: it no
   longer pushes out of an existing overlap, and friendly Idle units that can be shoved yield.
+  Other players' units that aren't walking (Idle) are *hard* walls: a step never goes deeper into
+  one, also when the unit touches several walls at once (BUG-0035, below).
 - **Step:** flow step + sidestep + push, clamped to `Speed`, then constrained. A step that would
   end in a blocked cell, off the map, or across a blocked corner is refused; the unit then tries
   sliding along the wall (the step's x or y part alone, whichever gains more toward the aim), then
@@ -419,7 +421,7 @@ So separation is symmetric and no result depends on which unit is walked first. 
   direction. Shoves accumulate in the sorted walk order, so each sum is the same every run.
 - **Apply:** after every walker has moved, each shoved unit takes its sum clamped to its own
   `Speed`, kept touching its groupmates (`KeepLinks`), trimmed so it ends no closer than `MovementConstants.ShoveSpacing` (0.5) × the radii's
-  sum to any unit standing still (half the room toward one also being shoved; without this,
+  sum (plus 0.1 mm, so float rounding of positions never lands it a hair inside) to any unit standing still (half the room toward one also being shoved; without this,
   walkers pressed friendly units on top of each other), and so its disk goes no deeper into a
   blocked side neighbor of its cell. A step that ends in a blocked cell, off the map or across a
   blocked corner is refused (it stays put). All steps are worked out before any shoved unit
@@ -490,8 +492,13 @@ last tick. "Made progress last tick" reads the neighbor's `StuckTicks == 0`: onl
 resets the count while a unit is Moving, and a queued tick holds the count at no less than 1, so a
 queued unit never passes the signal on. Every hold therefore traces back to a real progress tick, and
 each order has finitely many (each beats the best estimate by `StuckFraction` x speed), so a jammed
-group still gives up once nobody in it moves forward (a test: six units in a 1-cell corridor behind
-an enemy all give up). Back-off, push and wait ticks are unchanged. No new state: it reads the hashed
+group still gives up once nobody in it moves forward. The test that pins this
+(`CrowdJammedAtAGapPluggedByAnEnemy_QueuedTicksHold_ButAllGiveUpInBoundedTime`, BUG-0036) jams 60
+units at a 1-cell gap plugged by an enemy, asserts queued holds do happen, checks every tick that a
+Moving unit reads `StuckTicks == 0` only right after a new best and that no best ever rises, and
+bounds the time until all give up; dropping either guard of the rule fails it. (The older six units
+in a 1-cell corridor behind an enemy never queue a tick: the units ahead are blocked, so standing.)
+Back-off, push and wait ticks are unchanged. No new state: it reads the hashed
 `StuckTicks` and velocities from start-of-tick state, like the rest of the plan pass.
 
 **Measured (M1-5), the M1 headline scenario** (`ScenarioTests`, `CrossMapScenario`, Debug). An army of
@@ -523,6 +530,35 @@ unchanged. Same-owner blob crossing: 12, 43 and 29, 28 of 200. Cost: units that 
 keep walking, so the 2,500-unit tight blob averages about 3.6 ms per tick (was 2.7; the target is
 4.5 ms), 1,000 walkers crossing a 1,500-unit blob 3.3 ms (was 2.0), the enforced 200-walker row
 0.3 ms (unchanged), 500 moving units 0.14 ms (target < 4 ms).
+
+**Fix (BUG-0035): enemies are hard walls.** `Constrain` clips a step against each wall once, in
+slot order. Clipping against one wall can carry the step back into a wall already passed: a walker
+between two standing units slid along the second straight into the first, and so worked its way
+through a slit far narrower than itself. Three wide enemies plugging a 3-cell gap (0.2 m slits) let
+20-27 of 60 walkers through per seed, overlapping an enemy by up to 1.17 m. Now, after the clips,
+the step is checked against every *hard* wall it touches (a unit of another player that isn't
+walking: Idle now, holding or fighting later); if it still enters one, the step becomes the one
+closest to the desired step that all hard walls allow: the desired step, its projection onto one
+wall's line, or the corner of two walls' lines, whichever is allowed and closest (zero always is).
+No allocation: the hard walls' normals and limits go in two `World` scratch arrays. Tests: 2- and
+3-cell gaps plugged by enemies, every walker gives up and none passes; every tick, a walker ends no
+deeper into an enemy than it started the tick.
+
+The army's own standing units, and units mid-move standing for a tick (waiting for a field,
+refused), keep the single clip: a walker pressed between two of them may still slip through.
+Holding those to the exact rule too was measured and rejected: 2,500 units to 4 points (two players)
+arrived 680-854 (the floor is 825), 500 random goals gave up 38-44 (cap 35), the 64-goal row 37
+(cap 28). Holding all Idle units hard, or all enemy units including waiting ones, also failed rows.
+
+Re-measured (before, after the fix; Debug): two players, 2,500 units to 4 points arrived 923, 859
+(floor 825); 500 to 4 points 170, 182; 2,500 to 1 point 2,499, 2,499; 500 random goals gave up 30,
+30 (one player 28, 28); the 64-goal row 26, 22 (one player 23, 23); funnel fuzz 5, 5 of 6,000. The
+cross-map scenario (one player) is unchanged: all 200 arrive in 1,438-2,534 ticks over seeds 1-8,
+as is its two-owner row. One-player rows also move, by the 0.1 mm shove margin alone (above), which
+shifts trajectories chaotically: 2,500 to 4 points 1,105, 1,121; 500 to 4 points 215, 184; the
+same-owner blob crossing 43, 15 and 28, 28 of 200 (with a 0.05 mm margin instead: 1,160, 198, 12
+and 29), so these rows vary by that much from noise alone. Cost: the 2,500-unit tight blob averages
+3.8 ms per tick (target 4.5), 1,000 walkers crossing a 1,500-unit blob 3.1 ms, 500 moving 0.15 ms.
 
 ## Orders and unit states
 
