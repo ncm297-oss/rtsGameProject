@@ -7,11 +7,8 @@ _Last updated: 2026-10-05 (session 2026-10-05-0742, ACCEPT)._
 
 ## Waiting on you
 
-- **Merge `studio/2026-10-05-0742` into main** (conductor, 2026-10-05). The Producer accepted
-  M1-4d-1, but the branch conflicts with your commit 7435b3a in `docs/01-vision.md`: both append a
-  2026-10-05 row to the decision-log table. Keep both rows. The code is on the pushed branch only;
-  main has the studio notes. Gate is HOLD until it's merged (the next task builds on this code).
-  See `studio/sessions/2026-10-05-0742-incident.md`.
+- Nothing blocking. The studio runs on autopilot (chain sessions, self sign-off) until the end
+  of the roadmap or a cap/incident stops it.
 
 ## For your review
 
@@ -39,9 +36,9 @@ _Last updated: 2026-10-05 (session 2026-10-05-0742, ACCEPT)._
 | --- | --- |
 | Milestone | M1 — Core sim, no graphics (started 2026-10-03) |
 | Current task | next: **M1-4d-2 shoving + BUG-0028/0030/0031 + re-tighten assertions** (closes roadmap criterion 4); then BUG-0005 + BUG-0025/0026 small task, M1-5 scenario test |
-| Gate | **HOLD** — waiting on the owner to merge `studio/2026-10-05-0742` (merge conflict in docs/01-vision.md) |
+| Gate | **GO** (next session starts when the conductor is ready) |
 | Tools on this PC | Godot 4.7.2 .NET, .NET SDK 8.0.425, Git 2.53 + LFS 3.7; `GODOT` user variable set |
-| Build | green on `studio/2026-10-05-0742` @ 40d4a46 + ACCEPT commit 150ceda (0 warnings, 0 errors); **not on `main`** (merge conflict, see Waiting on you) |
+| Build | green on `studio/2026-10-05-0742` @ 40d4a46 + ACCEPT commit 150ceda (0 warnings, 0 errors); merged to `main` 2026-10-05 (owner-approved; docs/01 conflict resolved by keeping both rows) |
 | Tests | 962 passed / 11 skipped / 973 in one process (~2 min; known-bug skips: BUG-0005, 0008 x2, 0010 x2, 0014, 0023 x2, 0025, 0030, 0031 x3); `tools/qa/smoke.ps1` PASS. Quick loop: `--filter "Category!=Perf&Category!=Soak"` |
 | Open bugs | 11 (S1: 0, S2: 0, S3: 8, S4: 3) — none block |
 | Sessions today | 1 / 10 |

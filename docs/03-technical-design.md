@@ -78,7 +78,8 @@ phases in this fixed order:
    needs a field and has it cached is touched, and the missing ones are built oldest order first,
    without allocating, at most `MovementConstants.MaxFieldBuildsPerTick` (2) per tick; see "Build cap".)
 9. **Movement:** flow-field direction + steering + collision against the nav grid
-   (`MovementSystem.Run`, units in (goal cell, slot) order).
+   (`MovementSystem.Run`, units in (goal cell, slot) order; since M1-4d-1 every unit plans from
+   start-of-tick state before any unit moves, see "Local movement").
 10. **Combat:** attack wind-ups and cooldowns, projectile flight and impact, splash.
 11. **Damage and death:** apply queued damage, kill entities, emit death events.
 12. **Vision and detection:** recompute fog every 4 ticks (5 Hz) per player.
@@ -145,7 +146,8 @@ Rules:
   `Sqrt` wraps `MathF.Sqrt`, which is IEEE-exact. `ArchitectureTests` forbids `Math.Sin`,
   `Cos`, `Atan`, `Atan2` (and the `MathF` versions) in sim source.
 - **State hash:** `Simulation.StateHash()` is 64-bit FNV-1a (`StateHasher`) over the tick number,
-  every unit slot's generation and alive flag, every live unit's fields, the free list, all RNG
+  every unit slot's generation and alive flag, every live unit's fields (including the give-up
+  state `StuckTicks` and `BestRemaining`, since they decide when a unit stops), the free list, all RNG
   states, per-player command sequence counters, and pending commands (including a `Move`'s unit
   handle), and the flow-field cache's metadata (its clock and count, and each used slot's
   requested cell, grid version and last-use stamp, in slot order): under the build cap the cache
@@ -305,8 +307,8 @@ more live goals than cache slots, fields of groups still walking are evicted by 
 build pass means by lowest goal cell touched that tick, not by order age: older groups can stall
 behind newer ones and the cap is spent on rebuilds every tick until enough groups arrive
 (BUG-0025, S3; fix candidate: evict the live field with the newest order, or wait instead of
-evicting). A unit that never arrives (blocked
-forever until the give-up rules) can hold its slot indefinitely. One build of a large map still
+evicting). A unit that can't get through gives up after `MovementConstants.GiveUpTicks` (see
+"Local movement"), so a blocked group no longer holds its slot forever. One build of a large map still
 costs more than the tick budget (512 × 512 ≈ 10 ms in Debug); time-sliced builds are future work.
 
 ### Local movement
@@ -314,9 +316,11 @@ costs more than the tick budget (512 × 512 ≈ 10 ms in Debug); time-sliced bui
 - **Desired velocity** = flow direction × speed, or direct steering toward the target when it
   is in the same or an adjacent cell with a clear line.
 - **Separation** from nearby units (spatial hash query), weighted by overlap, boids-style.
-- **Arrival:** units in a group get target offsets in a loose formation around the click point,
-  so 30 units don't fight over one cell. They slow down near their slot and stop when arrived or
-  blocked for a short time.
+- **Arrival (crowded arrival, M1):** a unit stops within 1 m of the click point, or when it
+  touches a groupmate that already stopped there, so a group packs into a blob around the point
+  instead of 30 units fighting over one cell. Units also stop when blocked for a short time.
+  (Producer decision 2026-10-05, owner may revisit: this replaces formation offsets for M1;
+  offsets can return at M2 with group commands.)
 - **Shoving:** idle friendly units step aside for moving ones. Holding units don't move.
 - **Collision:** hard push-out from blocked cells; soft unit-unit separation.
 - **Flying units** (Great Raven) ignore the nav grid and separation from ground units.
@@ -338,8 +342,61 @@ point)`, so units slow only to land exactly on a cell center. A step whose desti
 blocked or off the map is refused: the unit stays put with velocity 0 and keeps its order. A unit
 standing on blocked ground or off the map (only possible through a raw `SpawnUnit`) stops, since no
 field leads out of a blocked cell. `Velocity` is the step taken and `Facing` its `SimMath.Atan2`.
-Not yet: direct steering across adjacent cells, separation, arrival slots, shoving, giving up when
-blocked, `Stop`/`Hold`, and order queues (M1-4d and later). Units sent to one point stack on it.
+
+**Implementation (M1-4d-1):** steering, separation, crowded arrival and giving up. `MovementSystem`
+now runs two passes over the sorted Moving units: *plan* reads only start-of-tick positions,
+states and velocities and writes each unit's outcome and step into scratch on `World`
+(`PlannedStep`, `PlannedAction`, `PlannedRemaining`); *apply* then moves units and changes states.
+So separation is symmetric and no result depends on which unit is walked first. Per unit, plan:
+
+- **Neighbors:** one `Spatial.QueryRadius` of own `Radius` + the largest radius in the data
+  (`World.MaxUnitRadius`) + `MovementConstants.AvoidRange` (1 m), into `World.Neighbors` (sized to
+  `UnitCapacity`, so never truncated). Neighbors that walked last tick are *walkers*; the rest
+  (idle, waiting for a field, refused) are *standing*. A standing Idle unit with the same
+  `GoalCell` is an arrived *groupmate*.
+- **Aim:** in the goal cell, the goal; when the goal cell is a legal 8-neighbor step (both side
+  cells passable for a diagonal), the goal itself (adjacent-cell steering: the line stays inside
+  the same cells); otherwise the next cell's center, or the one after it if a standing unit covers
+  that center (walking at it would pin the unit against it).
+- **Separation:** for each overlapping walker or groupmate, a push away weighted by overlap depth:
+  half the overlap against a walker (`SeparationShareMoving`; the walker takes the other half),
+  all of it against a groupmate (`SeparationShareStill`). The summed push is capped at the
+  deepest single share, so a packed unit doesn't overshoot.
+- **Sidestep:** a standing unit ahead, or a walker ahead coming the other way, within touching +
+  `AvoidRange` adds a sideways step away from its side (dead ahead: to the right), weighted by
+  closeness. Two units meeting head-on both step right and pass, even in a 1-cell corridor.
+- **Walls:** standing units that aren't groupmates are hard: `Constrain` removes the part of the
+  step that would end inside one and pushes out of an existing overlap (collide and slide).
+- **Step:** flow step + sidestep + push, clamped to `Speed`, then constrained. A step that would
+  end in a blocked cell, off the map, or across a blocked corner is refused; the unit then tries
+  sliding along the wall (the step's x or y part alone, whichever gains more toward the aim), then
+  the flow step alone, else stays put.
+- **Arrival:** within `ArrivalDistance` of the goal inside the goal cell, or overlapping an
+  arrived groupmate reached through a legal step (never across a blocked corner): the unit stops
+  if no neighbor's center is closer than `ArrivalSpacing` (0.6) × the radii's sum, else it backs
+  off along the push alone and tries again next tick. So a stopped unit overlaps its neighbors by
+  at most 40%, and the group packs into a blob around the point. An arrived unit keeps its
+  `GoalCell`, which is what makes it an anchor for later groupmates.
+- **Giving up:** progress is measured on an estimate of the path left: the current cell's field
+  cost (meters) less the way already made from the cell's center toward the aim. A walking tick
+  is progress if the estimate after the step beats the unit's best so far (`UnitStore.BestRemaining`)
+  by `StuckFraction` (0.25) × speed; otherwise `UnitStore.StuckTicks` counts up, and at
+  `GiveUpTicks` (20 ticks = 1 s) the unit goes Idle with `GoalCell = -1` (so it never anchors a
+  blob). A best that only falls means jostling back and forth, even across a cell edge, never
+  resets the count. Backing off counts as a stuck tick too (it leaves the best alone), so a
+  back-off refused by a wall, or one swinging in and out at a blob's edge, ends (BUG-0027): a unit
+  that reaches `GiveUpTicks` while backing off is at its goal or touching its blob, so it stops
+  there, crowded, and *keeps* its `GoalCell`. Waiting for a field counts as neither progress nor
+  stuck. A `Move` to a new goal cell resets both fields. A `Move` to the goal cell the unit already
+  has is the same order (click spam, AI refreshes; BUG-0029): an arrived (Idle) unit stays put, and
+  a Moving one takes the new point but keeps its order tick and stuck count. Units stopping off
+  the map or on blocked ground also drop their goal.
+
+Known limits until shoving (M1-4d-2): standing units never move aside, so units that gave up, or
+wait long for a field under the build cap, wall others in. Units that stop at the back-off limit can
+overlap a neighbor by more than 40% (seen at the edge of a 2,500-unit blob). With 500 units sent to 500 random goals
+about 12% give up; with 64 neighboring goals for 128 units about a third do. Measured cost (Debug):
+500 units converging on one point average about 0.1 ms per tick, 2,500 about 0.6 ms.
 
 ## Orders and unit states
 

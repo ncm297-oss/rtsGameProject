@@ -22,9 +22,14 @@ public sealed class Simulation
     private readonly int[] _nextSequence;
 
     /// <summary>Creates a simulation for the given match setup.</summary>
-    public Simulation(SimConfig config)
+    public Simulation(SimConfig config) : this(config, null)
     {
-        World = new World(config);
+    }
+
+    /// <summary>Test seam: a simulation on a hand-made map instead of the generated one.</summary>
+    internal Simulation(SimConfig config, Heightmap? map)
+    {
+        World = new World(config, map);
         _commands = new CommandQueue(config.CommandCapacity);
         _nextSequence = new int[config.PlayerCount];
     }
@@ -105,6 +110,8 @@ public sealed class Simulation
             h.Add(u.Goal[i]);
             h.Add(u.GoalCell[i]);
             h.Add(u.OrderTick[i]);
+            h.Add(u.StuckTicks[i]);
+            h.Add(u.BestRemaining[i]);
         }
         h.Add(u.FreeCount);
         for (int i = 0; i < u.FreeCount; i++)
@@ -186,9 +193,20 @@ public sealed class Simulation
             goal = grid.CellCenter(cell % grid.Width, cell / grid.Width);
         }
         int i = command.Unit.Index;
+        if (u.GoalCell[i] == cell)
+        {
+            // The order the unit already has (click spam, an AI refreshing its orders): it doesn't
+            // restart. An Idle unit that kept its goal cell has arrived and stays put; a Moving one
+            // takes the new point but keeps its order age and stuck count, so spam can't keep it
+            // Moving forever (BUG-0029).
+            if (u.State[i] == UnitState.Moving) u.Goal[i] = goal;
+            return;
+        }
         u.State[i] = UnitState.Moving;
         u.Goal[i] = goal;
         u.GoalCell[i] = cell;
         u.OrderTick[i] = World.TickNumber;
+        u.StuckTicks[i] = 0;
+        u.BestRemaining[i] = float.PositiveInfinity;
     }
 }

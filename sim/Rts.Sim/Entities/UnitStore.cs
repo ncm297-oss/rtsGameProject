@@ -30,13 +30,28 @@ public sealed class UnitStore
     public readonly UnitState[] State;
     /// <summary>Move destination (x, z) in meters; meaningful while <see cref="State"/> is Moving.</summary>
     public readonly Vector2[] Goal;
-    /// <summary>Nav cell index (<c>y * Width + x</c>) whose flow field leads to <see cref="Goal"/>; -1 with no goal.</summary>
+    /// <summary>
+    /// Nav cell index (<c>y * Width + x</c>) whose flow field leads to <see cref="Goal"/>; -1 with no goal.
+    /// Kept after arriving, so an arrived Idle unit anchors its group's blob (crowded arrival); set
+    /// to -1 when the unit gives up or stops off the map or on blocked ground.
+    /// </summary>
     public readonly int[] GoalCell;
     /// <summary>
     /// Tick number on which the unit's current Move applied; the flow-field build pass serves the
     /// oldest orders first (BUG-0022). Meaningful while Moving; arriving or stopping leaves it as is.
     /// </summary>
     public readonly int[] OrderTick;
+    /// <summary>
+    /// Consecutive ticks a Moving unit walked without progress (see <see cref="BestRemaining"/>); at
+    /// <c>MovementConstants.GiveUpTicks</c> it goes Idle. Reset by a Move, a tick with progress, and stopping.
+    /// </summary>
+    public readonly int[] StuckTicks;
+    /// <summary>
+    /// Shortest estimated path (meters) left to the goal that the unit has reached on its current
+    /// order; a tick makes progress when it beats this by <c>MovementConstants.StuckFraction</c> x
+    /// speed. Infinity until the first walking tick, after a Move, and when stopped.
+    /// </summary>
+    public readonly float[] BestRemaining;
     /// <summary>Whether the slot holds a live unit.</summary>
     public readonly bool[] Alive;
     /// <summary>Per-slot generation; a handle is valid only while it matches.</summary>
@@ -61,6 +76,8 @@ public sealed class UnitStore
         Goal = new Vector2[capacity];
         GoalCell = new int[capacity];
         OrderTick = new int[capacity];
+        StuckTicks = new int[capacity];
+        BestRemaining = new float[capacity];
         Alive = new bool[capacity];
         Generation = new int[capacity];
         _freeList = new int[capacity];
@@ -107,6 +124,8 @@ public sealed class UnitStore
         Goal[index] = default;
         GoalCell[index] = -1;
         OrderTick[index] = 0;
+        StuckTicks[index] = 0;
+        BestRemaining[index] = float.PositiveInfinity;
         Alive[index] = true;
         handle = new EntityHandle(index, Generation[index]);
         return true;

@@ -68,4 +68,61 @@ public static class MoveScenario
         }
         return -1;
     }
+
+    /// <summary>
+    /// The first pair of live Idle units whose centers are closer than <paramref name="fraction"/> x
+    /// (r_i + r_j) (the end-state pack rule of M1-4d-1), as a message; null if there is none.
+    /// </summary>
+    public static string? FirstPackViolation(World w, float fraction = 0.5f)
+    {
+        UnitStore u = w.Units;
+        for (int i = 0; i < u.Capacity; i++)
+        {
+            if (!u.Alive[i] || u.State[i] != UnitState.Idle) continue;
+            for (int j = i + 1; j < u.Capacity; j++)
+            {
+                if (!u.Alive[j] || u.State[j] != UnitState.Idle) continue;
+                float d = Vector2.Distance(u.Position[i], u.Position[j]);
+                float min = fraction * (u.Radius[i] + u.Radius[j]);
+                if (d < min) return $"units {i} and {j} are {d:F3} m apart (< {min:F3}) at {u.Position[i]} / {u.Position[j]}";
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Which units arrived under the crowded-arrival rule: Idle, still holding their goal cell, and
+    /// linked to a unit within <see cref="Movement.MovementConstants.ArrivalDistance"/> of the goal
+    /// through a chain of touching Idle units with the same goal cell.
+    /// </summary>
+    public static bool[] Arrived(World w)
+    {
+        UnitStore u = w.Units;
+        var arrived = new bool[u.Capacity];
+        var queue = new Queue<int>();
+        const float eps = 1e-4f;
+        for (int i = 0; i < u.Capacity; i++)
+        {
+            if (!u.Alive[i] || u.State[i] != UnitState.Idle || u.GoalCell[i] < 0) continue;
+            if (Vector2.Distance(u.Position[i], u.Goal[i]) <= Movement.MovementConstants.ArrivalDistance + eps)
+            {
+                arrived[i] = true;
+                queue.Enqueue(i);
+            }
+        }
+        while (queue.Count > 0)
+        {
+            int i = queue.Dequeue();
+            for (int j = 0; j < u.Capacity; j++)
+            {
+                if (arrived[j] || !u.Alive[j] || u.State[j] != UnitState.Idle || u.GoalCell[j] != u.GoalCell[i]) continue;
+                if (Vector2.Distance(u.Position[i], u.Position[j]) < u.Radius[i] + u.Radius[j] + eps)
+                {
+                    arrived[j] = true;
+                    queue.Enqueue(j);
+                }
+            }
+        }
+        return arrived;
+    }
 }
