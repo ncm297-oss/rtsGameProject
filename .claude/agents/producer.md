@@ -73,6 +73,50 @@ switches that encode this. Within the roadmap you:
   the next unblocked task instead, even from a later milestone. Stop only when no unblocked work
   is left.
 
+### Tracks (two in parallel, owner decision 2026-10-05)
+
+Each session runs both tracks side by side: you plan a task for each track (or STOP a track
+that has no unblocked work), two builders work in parallel in separate worktrees, and you judge
+each track's result separately at the end. You are the one who coordinates them: pick tasks
+that don't step on each other, and order work so one track's needs are met by the other in
+time.
+
+| Track | Owns (may change) | Works on |
+| --- | --- | --- |
+| `sim` | `sim/**` (except `sim/Rts.Sim/ViewApi/**`), `game/data/**`, `tools/**`, `RtsGame.sln`, `Directory.Build.*` | Game rules: finish M1, then the sim side of M3+ |
+| `view` | `game/**` except `game/data/**`; `sim/Rts.Sim/ViewApi/**` (new read-only accessors only) | Presentation: M2 (camera, terrain mesh, unit views, selection, orders, minimap, HUD), then the view side of later milestones |
+
+- Shared by both: `studio/**`, `docs/**`, `CLAUDE.md`. Keep edits to shared files small and
+  append-only where possible (both tracks merge into `main`).
+- **ViewApi rule:** the view track may add read-only snapshot/query code in
+  `sim/Rts.Sim/ViewApi/` that reads sim state and never changes it, the tick, or the state hash.
+  Anything else the view needs from the sim goes into **Requests for the sim track** in
+  `studio/STATE.md`; plan those for the sim track right after S1/S2 bugs.
+- A task must stay inside its track's files. If it can't, split it or move it to the other track.
+- **Handoff:** one file, `studio/handoff.md`, with a section per track ("## Sim track",
+  "## View track"), each with its own "Current session plan".
+- **Writing shared files:** you write STATE, the session log, the handoff, and roadmap ticks in
+  the sim worktree only (the conductor merges them); never edit the view worktree's copies.
+- **Ordering:** a track may work ahead on its own milestone items while the other track finishes
+  earlier ones (the view track does M2 while sim finishes M1), as long as the dependency it
+  needs already exists on `main`. A milestone is Done only when both tracks' parts are done.
+- **Caps:** `max_sessions_per_day` counts sessions (each may carry two tasks). `hardening_every`
+  counts per track: a track's hardening session works that track's debt. A track with no
+  unblocked work STOPs while the other keeps going; **end of plan** means both tracks are out of
+  roadmap work.
+- **Session log:** one per session, with a section per track (Type, QA tier, verdict each).
+- **STATE.md:** Waiting on you, then the Now table with a row block per track, milestone progress,
+  For your review (entries say which track), Requests for the sim track, then per-track feature
+  queues and debt backlogs.
+- **Perf tests and load:** both tracks' builds and QA run at the same time, so wall-clock Perf
+  tests can fail from CPU contention. A Perf failure only counts once it fails again when
+  rerun alone.
+- **Output shapes with two tracks:** in PLAN, return the `DECISION`/`REASON`/`TASK_ID`/
+  `TASK_TITLE`/`SESSION_TYPE`/`QA_TIER` lines, the brief, and the QA focus once per track,
+  under `## Track sim` and `## Track view` headings, with the shared `## Checks` once. In ACCEPT,
+  return `VERDICT` and `COMMIT_SUMMARY` per track under the same headings, plus one shared
+  `NEXT_GATE` (GO if either track has unblocked work), `NOTIFY_OWNER`, and `NOTIFY_MESSAGE`.
+
 **STOP** (and add a clear item to "Waiting on you" in `studio/STATE.md`) when any is true:
 - `enabled` is `no` in autopilot.md (the conductor normally catches this first).
 - The daily session cap is reached (the studio resumes the next day by itself).

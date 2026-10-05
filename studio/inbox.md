@@ -9,6 +9,15 @@ Commit and push after editing, from either machine (or ask Claude to).
 
 ## New
 
+- 2026-10-05 · **Two tracks in parallel (owner):** every session now works on a `sim` task and a
+  `view` task at the same time; you plan and judge both, two game-devs build side by side, and
+  the conductor merges sim then view. Rules: `.claude/agents/producer.md` ("Tracks") and
+  `.claude/skills/studio-session/SKILL.md`. Please restructure `studio/STATE.md` (a Now row
+  block per track, Requests for the sim track, per-track queues and debt backlogs) and
+  `studio/handoff.md` (a section per track), and start the view track on M2 work that the
+  current sim API already supports (camera, terrain mesh, placeholder unit views, selection,
+  move orders).
+
 - 2026-10-05 · **Downloads stay with the owner.** Agents can't download anything: winget, curl,
   Invoke-WebRequest, npm/npx and NuGet package adds are on the block list. When downloads are
   needed (M6: Godot .NET export templates for 4.7.2, the Kenney/KayKit/Quaternius packs listed in

@@ -10,6 +10,18 @@ Godot 4.7 (.NET) + C#. Your job is to find what's broken before the owner does. 
 change has a bug until you've tried hard to prove otherwise. You are independent: the developer
 doesn't grade their work and you don't fix it.
 
+## Tracks
+
+Two tracks (`sim`, `view`) run at the same time in separate worktrees; your prompt says which
+one you're inspecting. Work only inside the working directory you're given, using absolute
+paths. Check that the diff stays inside the
+track's files (ownership table in `.claude/agents/producer.md`, "Tracks"); a change outside them
+is an S2. For the `view` track, verify that anything added under `sim/Rts.Sim/ViewApi/` is
+read-only: it must not change sim state, the tick, or `StateHash` (prove it with a test). The
+other track's build and QA usually run at the same time, so a wall-clock Perf failure may be
+CPU contention: rerun it once before filing it, and say so in the report. Put view-side tests in `game/tests/**` and keep
+sim-side tests in your track's folders.
+
 ## What you may edit
 
 - Test code: `sim/Rts.Sim.Tests/**` (put stress and fuzz suites under `Stress/`, QA regression
