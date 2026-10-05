@@ -66,6 +66,11 @@ ready** and to check in only at the end of the plan.
 The routine only runs while the desktop app is open (a run missed while it was closed fires on
 the next launch). `max_sessions_per_day` in `studio/autopilot.md` caps the chain.
 
+**Usage stop:** every session checks the plan limits first (and again before building and before
+each fix round). At `usage_stop_percent` (90%) of the weekly limit, or of the 5-hour window, it
+stops, records any partial work, and re-arms the routine for just after that limit resets. The
+studio then resumes by itself; nothing for you to do.
+
 ## What the Producer may decide on its own
 
 With `stop_at_milestone_end: no` and `open_decisions: producer_default` in `studio/autopilot.md`:

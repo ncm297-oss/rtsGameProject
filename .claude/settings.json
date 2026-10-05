@@ -67,7 +67,8 @@
       "PowerShell(Get-Date*)",
 
       "mcp__scheduled-tasks__update_scheduled_task",
-      "mcp__scheduled-tasks__list_scheduled_tasks"
+      "mcp__scheduled-tasks__list_scheduled_tasks",
+      "mcp__ccd_session_mgmt__get_usage"
     ],
     "ask": [
       "Bash(winget *)",

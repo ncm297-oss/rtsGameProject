@@ -32,7 +32,7 @@ You implement that by re-arming `TASK` with the `update_scheduled_task` tool
 (`mcp__scheduled-tasks__update_scheduled_task`), each call on its own:
 - **Chain** (more work is ready): `fireAt` = now + 3 minutes, ISO 8601 with offset (get it from
   `Get-Date (Get-Date).AddMinutes(3) -Format o`).
-- **Safety net** (set at the start of real work, step 0.6): `fireAt` = now + 4 hours, so a
+- **Safety net** (set at the start of real work, step 0.7): `fireAt` = now + 4 hours, so a
   crashed session can't stall the studio forever.
 - **Heartbeat** (waiting): `cronExpression` = `HEARTBEAT`.
 
@@ -52,13 +52,22 @@ Run these in `REPO`, before entering the worktree.
    is not the daily cap (or the cap was hit on an earlier day), and `REPO/studio/inbox.md` has no
    notes under **New**, nothing can have changed: set the heartbeat, reply "Studio is on HOLD
    and the inbox is empty; exiting." and stop.
-4. Write the current time and `SESSION_ID` into `LOCK` (Write tool). From here on, step 9 must
+4. **Usage limit:** call `mcp__ccd_session_mgmt__get_usage` and read `plan.windows`. If any
+   **weekly** window's `percentUsed` is at or above `usage_stop_percent` in autopilot.md, set
+   `TASK` to `fireAt` = that window's `resetsAt` + 10 minutes (so nothing runs until the week
+   resets), reply "Weekly usage at <n>%; studio paused until <reset, local time>." and stop. If
+   the **5-hour** window is at or above it, do the same with that window's reset time. If the
+   tool is unavailable or `plan.status` isn't `ok`, carry on and note it in the session log.
+   Also check again before step 4 (game-dev) and before each fix round: if a limit has been
+   crossed, skip to step 7 so the Producer records the partial work, then stop with the same
+   `fireAt` instead of the chain or heartbeat.
+5. Write the current time and `SESSION_ID` into `LOCK` (Write tool). From here on, step 9 must
    run no matter what happens.
-5. Tools: `$GODOT` (Bash) / `$env:GODOT` (PowerShell) must point at an existing file, and
+6. Tools: `$GODOT` (Bash) / `$env:GODOT` (PowerShell) must point at an existing file, and
    `dotnet --list-sdks` must list an 8.0 SDK. If either fails, go to the incident path with
    "tools not visible to the session".
-6. Set the safety net (`fireAt` = now + 4 hours).
-7. `git fetch origin`. Note `BASE` = `git rev-parse origin/main`.
+7. Set the safety net (`fireAt` = now + 4 hours).
+8. `git fetch origin`. Note `BASE` = `git rev-parse origin/main`.
 
 ## 1. Enter the studio worktree
 
@@ -167,7 +176,8 @@ commit on a detached `origin/main` checkout and push if possible. Set the notifi
 1. If you entered the worktree, make sure it's clean (commit or record anything left, never
    delete it), then call `ExitWorktree` with `action: "keep"` to return to `REPO`.
 2. Delete `LOCK` from `REPO` (`rm studio/.session.lock`).
-3. Re-arm the schedule (unless `CHAIN` is off):
+3. Re-arm the schedule (unless `CHAIN` is off). If a usage-limit stop already set `fireAt` to a
+   reset time, leave it alone. Otherwise:
    - **Chain** if the producer's ACCEPT returned `NEXT_GATE: GO`, `chain_sessions` is `yes`, and
      no incident happened.
    - Otherwise (PLAN said STOP, `NEXT_GATE: HOLD`, or an incident): **heartbeat**.
