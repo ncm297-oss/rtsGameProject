@@ -56,7 +56,9 @@ _Required criteria met in session 2026-10-03-0826 (task M0-1). Owner signed off 
       steering: session 2026-10-05-0742, task M1-4d-1; shoving of friendly Idle units, anchor
       re-check, `Constrain` cap: session 2026-10-05-1013, task M1-4d-2. Crowd quality is below the
       Producer's targets (groups to nearby points arrive 35-44%, parked groups block chokes):
-      BUG-0032/0033, follow-up task M1-4d-3 before the scenario test relies on it.)_
+      BUG-0032/0033; the follow-up, M1-4d-3 crowd routing, is S3 debt for the M1 hardening
+      session. The scenario test below (one army, one goal) does not depend on it (Producer,
+      session 2026-10-05-1234).)_
 - [ ] Scenario test: 200 units ordered across a 128×128 map with obstacles all arrive within a
       time limit, none stuck, none inside blocked cells.
 - [ ] Replay format (seed + commands + checkpoint hashes); determinism test (same run twice →
