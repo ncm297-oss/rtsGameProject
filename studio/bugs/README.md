@@ -70,5 +70,7 @@ bugs outrank new features.
 | [BUG-0032](BUG-0032-shoving-misses-give-up-targets-even-with-one-owner.md) | S3 | open | Crowds to nearby points arrive 35-44% and random-goal give-ups 6-20%, far from the M1-4d-2 targets (filed S2; Producer: needs unit-aware routing, task M1-4d-3) |
 | [BUG-0033](BUG-0033-friendly-unit-parked-by-move-never-steps-aside.md) | S3 | open | A parked friendly *group* never steps aside in a 1-cell corridor (lone units fixed in M1-4d-2; filed S2, Producer: task M1-4d-3) |
 | [BUG-0034](BUG-0034-distinct-targets-perf-test-flaky-in-full-suite.md) | S3 | open | `Perf_500Units_DistinctTargetsInterleavedBySlot_CostPerTick(32)` failed once in a full suite run (4.45 ms vs < 4 ms) |
-| [BUG-0035](BUG-0035-walkers-squeeze-between-standing-enemies.md) | S2 | open | Walkers squeeze between two standing enemy units (0.6 m deep); 40% of a crowd walks through a 3-unit enemy plug |
-| [BUG-0036](BUG-0036-queued-rule-guard-test-does-not-exercise-a-hold.md) | S4 | open | The M1-5 "jammed group still gives up" test never exercises a hold; four safety mutants of the queued rule pass the dev suite |
+| [BUG-0035](BUG-0035-walkers-squeeze-between-standing-enemies.md) | S2 | fixed | Walkers squeeze between two standing enemy units (0.6 m deep); 40% of a crowd walks through a 3-unit enemy plug |
+| [BUG-0036](BUG-0036-queued-rule-guard-test-does-not-exercise-a-hold.md) | S4 | fixed | The M1-5 "jammed group still gives up" test never exercises a hold; four safety mutants of the queued rule pass the dev suite |
+| [BUG-0037](BUG-0037-idle-enemy-holding-walkers-goal-cell-is-no-wall.md) | S3 | open | An Idle enemy holding the walker's goal cell counts as its arrived groupmate, so it is no wall (walked 0.12-0.16 m into in one tick) |
+| [BUG-0038](BUG-0038-hard-wall-fallback-drops-friendly-clips.md) | S3 | open | The hard-wall fallback drops the clips of the walker's own standing units; a walker beside an enemy slides into an anchored friendly |

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-05-1234, task M1-5 |
 | System | movement tests (LocalMovementTests, queued-walker rule) |
-| Fixed by | |
+| Fixed by | 1e48ff1 (M1-5 fix round 1): new dev test `LocalMovementTests.CrowdJammedAtAGapPluggedByAnEnemy_QueuedTicksHold_ButAllGiveUpInBoundedTime` (5 rows) asserts holds happen and checks the guards every tick; the old corridor test's comment and docs/03 reworded |
 
 ## Repro
 In a scratch copy, mutate `sim/Rts.Sim/Movement/MovementSystem.cs` and run the dev's tests
@@ -40,3 +40,10 @@ crossing rows and the `Stress/LocalMovementStressTests` crowd rows.
 ## Notes
 No product change needed; the dev test's doc comment (and the docs/03 sentence citing it) overstate
 what it proves. Either reword them or point at the QA tests.
+
+## Verification (2026-10-05-1234, re-check round 1)
+QA re-ran the four mutants in a scratch clone against the dev tests alone
+(`LocalMovementTests` + `ScenarioTests`): no floor 6 failures, no progress-signal check 8, queued
+resets to 0 9, queued may raise the best 5. Each fails all 5 rows of the new dev test. The test
+measures 2,145-3,234 queued holds per seed and gives up in 221-277 ticks (bound 345); its doc comment
+says "about 200-250 ticks", slightly low (cosmetic).

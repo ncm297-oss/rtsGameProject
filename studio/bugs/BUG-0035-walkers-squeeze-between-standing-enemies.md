@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-05-1234, task M1-5 |
 | System | movement (MovementSystem.Constrain / WalkStep) |
-| Fixed by | |
+| Fixed by | 1e48ff1 (M1-5 fix round 1): `Constrain` re-checks hard walls (other players' units that aren't Moving) after the clips and falls back to `ClosestAllowed`. Regression: `QA/QueuedGiveUpQaTests.CrowdAtAThreeCellGapPluggedByEnemies_NobodyPassesThrough` un-skipped (5 rows) + dev `LocalMovementTests.CrowdAtAGapPluggedByTwoEnemies_NoWalkerEverGoesDeeperIntoOne_NobodyPasses` (3 rows); both fail on the pre-fix code (QA mutation: removing the fallback fails 24 tests) |
 
 ## Repro
 1. Remove the `Skip` from `QA/QueuedGiveUpQaTests.CrowdAtAThreeCellGapPluggedByEnemies_NobodyPassesThrough` (5 rows) and run
@@ -46,3 +46,16 @@ The developer tried a fix and reverted it because it broke 3 crowd tests.
 Why S2: it breaks the documented "standing units are walls" rule for enemies, and from M4 a line of
 units holding a ramp (docs/02: ramps are the chokepoints) is a core tactic; walking through it is a
 wrong game rule. It does not affect the M1-5 acceptance criteria (one owner, no plug).
+
+## Verification (2026-10-05-1234, re-check round 1)
+- The QA repro passes: seeds 1-5 let 0 of 60 through (was 25, 20, 27, 27, 23); all 60 give up in 188-281 ticks (bound 345).
+- New QA `QA/HardWallQaTests`: plugs 2-5 cells wide of radius-0.7 and 0.9 enemies with up to 0.3 m
+  jitter (7 rows) let nobody through, and no walker ever ends a tick deeper in an enemy than it began
+  it (worst 1.9e-6 m); an open-field fuzz with both armies walking among Idle enemy pairs and
+  triples (8 seeds x 1,500 ticks, ~43,000 contacts) finds no deepening above 4.7e-6 m, except where
+  the enemy holds the walker's own goal cell (BUG-0037). All 15 of these rows fail on 8012852.
+- Remaining limits, documented in docs/03 and not part of this bug: enemies that are Moving but
+  standing (waiting for a field, refused) keep the single clip; an Idle enemy holding the walker's
+  goal cell is no wall (BUG-0037); the fallback drops friendly clips (BUG-0038); shoved friendlies
+  may still end at `ShoveSpacing` (0.5 x radii) from an enemy, i.e. overlapping it by half (0.70-0.90 m
+  measured at the plug), which is the documented shove rule.
