@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-05-0742 (re-check round 1), task M1-4d-1 |
 | System | movement (MovementSystem.Constrain) |
-| Fixed by | |
+| Fixed by | 5d854cb (M1-4d-2): `Constrain` limits a step to `max(gap, 0)` along the normal, never pushing out of an existing overlap. Regression: the QA theory above un-skipped (3 rows) + `LocalMovementTests.UnitOverlappingAnEnemyStandingUnit_WithACliffBehind_WalksAway` (fails when the cap is reverted; verified by QA mutation) |
 
 ## Repro
 1. Remove the `Skip` from `QA/LocalMovementRecheckQaTests.UnitOverlappingAStandingUnit_WithACliffBehind_CanStillWalkAway` (3 rows) and run

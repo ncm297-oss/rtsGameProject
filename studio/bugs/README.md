@@ -66,7 +66,7 @@ bugs outrank new features.
 | [BUG-0028](BUG-0028-groups-to-nearby-points-give-up-en-masse.md) | S3 | open | Groups sent to nearby points give up en masse (84-87%); walkers give up against units that are only waiting |
 | [BUG-0029](BUG-0029-move-spam-makes-arrived-blob-churn.md) | S3 | fixed | Re-issuing the same Move every tick makes an arrived blob churn indefinitely |
 | [BUG-0030](BUG-0030-move-within-arrived-units-goal-cell-ignored.md) | S3 | open | A Move to another point of an arrived unit's goal cell is ignored (up to ~2.8 m) |
-| [BUG-0031](BUG-0031-unit-overlapping-standing-unit-against-cliff-pinned.md) | S3 | open | A unit overlapping a standing unit with a cliff behind it can't walk away in any direction |
-| [BUG-0032](BUG-0032-shoving-misses-give-up-targets-even-with-one-owner.md) | S2 | open | Shoving misses every criterion-6 give-up target, also with one owner (no enemies); 2,500 to 4 points is worse than no shoving |
-| [BUG-0033](BUG-0033-friendly-unit-parked-by-move-never-steps-aside.md) | S2 | open | A friendly unit parked by a Move never steps aside; it blocks a 1-cell corridor for its own army (lone units fixed in re-check 1; parked groups still block) |
+| [BUG-0031](BUG-0031-unit-overlapping-standing-unit-against-cliff-pinned.md) | S3 | fixed | A unit overlapping a standing unit with a cliff behind it can't walk away in any direction |
+| [BUG-0032](BUG-0032-shoving-misses-give-up-targets-even-with-one-owner.md) | S3 | open | Crowds to nearby points arrive 35-44% and random-goal give-ups 6-20%, far from the M1-4d-2 targets (filed S2; Producer: needs unit-aware routing, task M1-4d-3) |
+| [BUG-0033](BUG-0033-friendly-unit-parked-by-move-never-steps-aside.md) | S3 | open | A parked friendly *group* never steps aside in a 1-cell corridor (lone units fixed in M1-4d-2; filed S2, Producer: task M1-4d-3) |
 | [BUG-0034](BUG-0034-distinct-targets-perf-test-flaky-in-full-suite.md) | S3 | open | `Perf_500Units_DistinctTargetsInterleavedBySlot_CostPerTick(32)` failed once in a full suite run (4.45 ms vs < 4 ms) |

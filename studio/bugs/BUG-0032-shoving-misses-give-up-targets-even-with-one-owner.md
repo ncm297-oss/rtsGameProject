@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Severity | S2 |
+| Severity | S3 (filed S2; Producer re-triage 2026-10-05, see below) |
 | Status | open |
 | Found | 2026-10-05-1013, task M1-4d-2 |
 | System | movement (shoving, give-up rule) |
@@ -68,3 +68,14 @@ Crossing a settled blob (`ShoveQaTests.WalkersCrossing...`): mixed owners 2 / 0 
 `FieldBuildCapQaTests.BuildCap_500UnitsWith500DistinctGoals_AllStop_AtMost7PercentGiveUp_NoDeadlock`
 (<= 7%) and the stress crowd rows (>= 32% / >= 33% arrived). Whether the targets are in scope (the developer
 says they need unit-aware routing) is the Producer's call.
+
+## Producer triage (2026-10-05-1013, ACCEPT)
+S2 → S3, stays open, task M1-4d-2 accepted. The targets were the Producer's; the causes (flow
+field ignores units; units waiting for a field and enemies are walls) were outside the brief's
+own scope, so no in-scope change could reach them. Shoving as shipped is correct, safe and
+improves every row over both the base and no-shoving. Not debt for a hardening session: it is the
+next movement feature, **M1-4d-3 (crowd routing)**: a crowd cost in the flow field for cells held
+by standing units (or a per-tick local detour), units that lost their anchor walking back, and
+not counting stuck ticks against walkers blocked only by field-waiting units (BUG-0028). Carry
+the criterion-6 targets into that task and re-measure the same rows; also re-check the
+mixed-owner crossing regression (seed 73: 2/200 vs 28). Fix = targets met or re-set with a reason.

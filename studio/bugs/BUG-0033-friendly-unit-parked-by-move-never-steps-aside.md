@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Severity | S2 |
+| Severity | S3 (filed S2; Producer re-triage 2026-10-05, see below) |
 | Status | open |
 | Found | 2026-10-05-1013, task M1-4d-2 |
 | System | movement (shoving: `MovementSystem.ShoveDirection`) |
@@ -55,3 +55,12 @@ walker gave up after 115 ticks at <15.50, 4.01>; pair at <17, 5> / <18.69, 5.07>
 The developer calls this a deliberate deviation (shoving units on their point always "halves the crowd
 rows"). Criterion 1 does not limit itself to lone units; the Producer decides whether a parked group
 blocking its own army through a choke is accepted for M1.
+
+## Producer triage (2026-10-05-1013, ACCEPT)
+Lone case fixed by 16d72e8 (`PushAfterStuckTicks` rule; QA theory green x2, dev test
+`LoneParkedUnit_IsPushedOnlyAfterTheWalkerWasStuckPushAfterStuckTicks` pins the delay). The parked
+*group* remainder goes S2 → S3 and stays open: a workaround exists (move the group), no player
+exists yet, and the dev showed that freely shoving blob members halves the crowd rows, so the fix
+needs a real rule (chain shoves, or a stuck walker making a parked group yield sideways out of a
+choke and drop its goal) rather than a tweak. Scheduled with BUG-0032 in **M1-4d-3 (crowd
+routing)**. Proof of fix: un-skip `ShoveQaTests.WalkerInOneCellCorridor_PastAParkedFriendlyPair_Arrives`.

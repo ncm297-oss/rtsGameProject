@@ -35,3 +35,9 @@ Known limit per the developer and docs/03 until shoving (M1-4d-2). Filed so it i
 M1-4d-2 should (a) bring these give-up rates down and re-tighten the two loosened assertions
 (the QA test's name still says "EveryUnitArrives"; its 15% bound has ~3 points of headroom),
 and (b) consider not counting a stuck tick against a Moving unit that is only waiting for a field.
+
+## Re-check (2026-10-05-1013, M1-4d-2 accepted)
+Partly addressed by shoving: 500 to 4 points now arrives 174 (was 78), 2,500 to 4 points 891 (was
+329); the two loosened assertions were re-tightened to the measurements (7% / 22%). Still open:
+the rates are far from "most arrive" (BUG-0032 has the current table) and (b) is not done. Both go
+to task M1-4d-3 (crowd routing); close this bug there together with BUG-0032.
