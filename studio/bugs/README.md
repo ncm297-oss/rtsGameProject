@@ -62,3 +62,6 @@ bugs outrank new features.
 | [BUG-0024](BUG-0024-full-suite-perf-asserts-flaky-under-parallel-load.md) | S3 | fixed | Full suite flaky on the workstation: wall-clock Perf asserts fail under parallel load |
 | [BUG-0025](BUG-0025-over-capacity-eviction-ignores-order-age-endless-churn.md) | S3 | open | Live goals > cache slots: eviction by goal cell, not order age; older groups stall while newer walk, every build is churn |
 | [BUG-0026](BUG-0026-same-tick-ties-favor-low-goal-cells.md) | S4 | open | Same-tick order bursts: the player whose goals have low cell indexes starts 2-4 ticks sooner on average |
+| [BUG-0027](BUG-0027-back-off-never-gives-up-units-stay-moving-forever.md) | S2 | open | Back-off never counts toward giving up; crowded units stay Moving forever (refused back-off, period-2 oscillation) |
+| [BUG-0028](BUG-0028-groups-to-nearby-points-give-up-en-masse.md) | S3 | open | Groups sent to nearby points give up en masse (84-87%); walkers give up against units that are only waiting |
+| [BUG-0029](BUG-0029-move-spam-makes-arrived-blob-churn.md) | S3 | open | Re-issuing the same Move every tick makes an arrived blob churn indefinitely |
