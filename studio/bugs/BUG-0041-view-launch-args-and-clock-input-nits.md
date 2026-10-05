@@ -1,4 +1,4 @@
-# BUG-0039: View input-handling nits: clock takes negative x negative as time, a missing flag value eats the next flag, seed max prints as -1
+# BUG-0041: View input-handling nits: clock takes negative x negative as time, a missing flag value eats the next flag, seed max prints as -1
 
 | Field | Value |
 | --- | --- |

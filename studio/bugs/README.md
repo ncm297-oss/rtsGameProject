@@ -74,4 +74,4 @@ bugs outrank new features.
 | [BUG-0036](BUG-0036-queued-rule-guard-test-does-not-exercise-a-hold.md) | S4 | fixed | The M1-5 "jammed group still gives up" test never exercises a hold; four safety mutants of the queued rule pass the dev suite |
 | [BUG-0037](BUG-0037-idle-enemy-holding-walkers-goal-cell-is-no-wall.md) | S3 | open | An Idle enemy holding the walker's goal cell counts as its arrived groupmate, so it is no wall (walked 0.12-0.16 m into in one tick) |
 | [BUG-0038](BUG-0038-hard-wall-fallback-drops-friendly-clips.md) | S3 | open | The hard-wall fallback drops the clips of the walker's own standing units; a walker beside an enemy slides into an anchored friendly |
-| [BUG-0039](BUG-0039-view-launch-args-and-clock-input-nits.md) | S4 | open | View input nits: clock takes negative x negative as time, a missing flag value eats the next flag, seed max logs as -1 |
+| [BUG-0041](BUG-0041-view-launch-args-and-clock-input-nits.md) | S4 | open | View input nits: clock takes negative x negative as time, a missing flag value eats the next flag, seed max logs as -1 |
