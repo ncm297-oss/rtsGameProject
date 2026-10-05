@@ -28,6 +28,7 @@ public sealed class World
         _rngs = new SimRng[RngStream.Count(config.PlayerCount)];
         for (int i = 0; i < _rngs.Length; i++)
             _rngs[i] = new SimRng(config.Seed, (ulong)i);
+        HasGeneratedMap = map == null;
         Heightmap = map ?? MapGenerator.Generate(config.Map, ref _rngs[RngStream.MapGen]);
         NavGrid = new NavGrid(Heightmap);
         Spatial = new SpatialHash(config.UnitCapacity, NavGrid.Width, NavGrid.Height);
@@ -99,6 +100,9 @@ public sealed class World
 
     /// <summary>Scratch for <see cref="Movement.MovementSystem"/>'s build pass: goals without a cached field keyed by (oldest order tick, goal cell); derived, not hashed.</summary>
     internal long[] FieldMisses { get; }
+
+    /// <summary>False for the test seam's hand-made maps, which a replay (seed + map params) can't rebuild.</summary>
+    internal bool HasGeneratedMap { get; }
 
     /// <summary>The match setup this world was built from.</summary>
     public SimConfig Config { get; }

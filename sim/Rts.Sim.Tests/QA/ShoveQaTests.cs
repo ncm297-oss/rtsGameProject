@@ -683,9 +683,9 @@ public class ShoveQaTests
             }
             return hashes;
         }
-        ulong[] x = Run(31), y = Run(31);
+        ulong[] x = Run(TestSeeds.PreMix(31)), y = Run(TestSeeds.PreMix(31)); // pre-M1-6 maps
         for (int t = 0; t < x.Length; t++) Assert.True(x[t] == y[t], $"diverged at tick {t}");
-        Assert.NotEqual(x[^1], Run(32)[^1]);
+        Assert.NotEqual(x[^1], Run(TestSeeds.PreMix(32))[^1]);
     }
 
     /// <summary>

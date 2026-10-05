@@ -40,6 +40,19 @@ public struct StateHasher
     /// <summary>Mixes in a float by its exact bit pattern.</summary>
     public void Add(float value) => Add(BitConverter.SingleToInt32Bits(value));
 
+    /// <summary>Mixes in a string as its length then each UTF-16 char; null hashes as length -1 (never string.GetHashCode).</summary>
+    public void Add(string? value)
+    {
+        if (value == null)
+        {
+            Add(-1);
+            return;
+        }
+        Add(value.Length);
+        for (int i = 0; i < value.Length; i++)
+            Add((ulong)value[i]);
+    }
+
     /// <summary>Mixes in both components of a vector.</summary>
     public void Add(Vector2 value)
     {

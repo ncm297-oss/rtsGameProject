@@ -95,8 +95,8 @@ public class MapGeneratorTests
         var hashes = new HashSet<ulong>();
         for (ulong seed = 0; seed < 50; seed++)
             Assert.True(hashes.Add(Gen(seed, MapGenParams.Default).ContentHash()), $"seed {seed} repeats a map");
-        // Not ulong.MaxValue: PCG seeding makes that stream seed 0's shifted by one draw, and the
-        // extra first draw (0) is rejected by NextInt, so the map comes out identical to seed 0's.
+        // ulong.MaxValue gave seed 0's map before the seed was mixed (BUG-0014).
+        Assert.NotEqual(Gen(0, MapGenParams.Default).ContentHash(), Gen(ulong.MaxValue, MapGenParams.Default).ContentHash());
         Assert.NotEqual(Gen(0, MapGenParams.Default).ContentHash(), Gen(1UL << 63, MapGenParams.Default).ContentHash());
     }
 
@@ -255,15 +255,15 @@ public class MapGeneratorTests
         MapGenParams d = MapGenParams.Default;
         var sets = new (string Name, MapGenParams P, ulong[] Hashes)[]
         {
-            ("default", d, new[] { 0xAD038364261B98E4UL, 0xB561BDC4866E54C1UL, 0x663A1A6C3EC016A5UL }),
+            ("default", d, new[] { 0x03E158ACDF3A220CUL, 0x0148D3746B338EB9UL, 0x5BC8665CC64A40D0UL }),
             ("rampWidth6 long", d with { RampWidth = 6, RampLength = 9, Level1MinSize = 20, Level2MinSize = 9, Level2MaxSize = 16 },
-                new[] { 0x03EDBEED582BB778UL, 0x51F4C9340F4D48E1UL, 0xE5B2F1A8AD76F1D1UL }),
+                new[] { 0xA77F3C38B4DA84BCUL, 0xBBEC4BA1CB5E08B4UL, 0x67864254C5E84CA9UL }),
             ("dense ramps", d with { Level1Plateaus = 20, RampsPerPlateau = 8, Level2Plateaus = 12 },
-                new[] { 0xFD3C566A74011E9AUL, 0x7E173AA42A12B668UL, 0x82EAA235AF8E7B9DUL }),
+                new[] { 0xC5ADB6D24C56AC1CUL, 0x83C9311E97B7F9A1UL, 0xB687CA9E001423C4UL }),
             ("256 crowded", d with { Width = 256, Height = 256, Level1Plateaus = 32, Level2Plateaus = 32, RampsPerPlateau = 6 },
-                new[] { 0xF285EC467DB6B3FBUL, 0x74F33719D1EDBC2AUL, 0x979A2DAE6271F7CEUL }),
+                new[] { 0x68AAB979CA9981D1UL, 0xAD02B4E0148CD6EAUL, 0x6F92C636A099C4EDUL }),
             ("crowded small ramps", d with { Level1Plateaus = 32, Level2Plateaus = 32, RampsPerPlateau = 16, RampTries = 128, Level1MinSize = 5, Level1MaxSize = 20, Level2MinSize = 5, Level2MaxSize = 10, Level2Inset = 1 },
-                new[] { 0x16065A92DA6D5FFAUL, 0xBDDFEBC999498947UL, 0x2958E202885AD5A3UL }),
+                new[] { 0xD403F667960CAE90UL, 0x2C069DF524121B96UL, 0x74E2DB76D7A99557UL }),
         };
         ulong[] seeds = { 1, 7, 42 };
         foreach (var s in sets)
@@ -273,9 +273,12 @@ public class MapGeneratorTests
 
     /// <summary>BUG-0015 replaced the cell-by-cell ramp footprint scan with O(1) checks that must accept exactly the same tries.</summary>
     /// <remarks>
-    /// Hashes come from the generator as it was before BUG-0015 (commit 4b204f6), which a scratch
-    /// copy also matched cell for cell (levels, heights, nav flags, RNG state after) on 3,000+
-    /// seeds over ten param sets. If a deliberate generator change moves them, regenerate and say why.
+    /// Hashes were first taken from the generator as it was before BUG-0015 (commit 4b204f6), which a
+    /// scratch copy also matched cell for cell (levels, heights, nav flags, RNG state after) on 3,000+
+    /// seeds over ten param sets. M1-6 regenerated all 15 because BUG-0014's seed mixing changes every
+    /// seed's RNG stream; QA's PreBug0015 oracle reproduces the new values too
+    /// (MapGenEquivalenceQaTests), so the fast checks still match the old code under the new seeding.
+    /// If a deliberate generator change moves them, regenerate and say why.
     /// </remarks>
     [Theory]
     [MemberData(nameof(PinnedMaps))]

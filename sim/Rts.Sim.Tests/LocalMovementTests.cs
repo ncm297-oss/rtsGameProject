@@ -1211,7 +1211,7 @@ public class LocalMovementTests
         /// </summary>
         private static Simulation CrossingTheBlob(out Vector2[] blob)
         {
-            Simulation sim = MoveScenario.Spawn(seed: 73, units: 300, maxCost: 25f, out int goalCell, capacity: 500);
+            Simulation sim = MoveScenario.Spawn(seed: TestSeeds.PreMix(73), units: 300, maxCost: 25f, out int goalCell, capacity: 500); // pre-M1-6 map
             NavGrid g = sim.World.NavGrid;
             UnitStore u = sim.World.Units;
             Vector2 point = MoveScenario.Center(g, goalCell);

@@ -13,10 +13,10 @@ namespace Rts.Sim.Tests;
 public class ScenarioTests
 {
     /// <summary>Army size (docs/05 M1: "200 units path across the map").</summary>
-    private const int Army = 200;
+    internal const int Army = 200;
 
     /// <summary>Start region radius in path cells: at most about 200 cells of ground at the map edge, so a compact army.</summary>
-    private const float StartRadius = 12f;
+    internal const float StartRadius = 12f;
 
     private readonly ITestOutputHelper _out;
 

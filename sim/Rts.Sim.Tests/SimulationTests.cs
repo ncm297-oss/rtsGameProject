@@ -10,7 +10,7 @@ namespace Rts.Sim.Tests;
 public class SimulationTests
 {
     private static Simulation NewSim(int players = 2) =>
-        new(TestSim.Config(Seed: 42, PlayerCount: players, UnitCapacity: 64, CommandCapacity: 64));
+        new(TestSim.Config(Seed: TestSeeds.PreMix(42) /* pre-M1-6 map: open ground east of the center */, PlayerCount: players, UnitCapacity: 64, CommandCapacity: 64));
 
     [Fact]
     public void TickConstants_Are20Hz()

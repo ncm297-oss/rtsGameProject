@@ -85,7 +85,9 @@ phases in this fixed order:
 11. **Damage and death:** apply queued damage, kill entities, emit death events.
 12. **Vision and detection:** recompute fog every 4 ticks (5 Hz) per player.
 13. **Cleanup:** free dead handles, finalize the tick's event list, bump `TickNumber`.
-14. **State hash** (debug builds and tests): a 64-bit hash of all gameplay state.
+14. **State hash** (debug builds and tests): a 64-bit hash of all gameplay state. Since M1-6 an
+    attached `ReplayRecorder` hashes here when the new `TickNumber` is a multiple of its checkpoint
+    interval (see "Save/load and replays").
 
 ### Presentation timing
 
@@ -121,7 +123,11 @@ Rules:
 - One seeded RNG (`SimRng`, xorshift/PCG) owned by `World`, with separate streams for map gen,
   combat, and each AI player, so adding a random call in one system doesn't shift the others.
   **Implementation (M1-1):** `SimRng` is **PCG32 (XSH-RR)**: 64-bit LCG state, 32-bit output,
-  seeded like O'Neill's `pcg32_srandom_r(seed, streamId)`. Every stream uses the match seed;
+  seeded like O'Neill's `pcg32_srandom_r(seed, streamId)`, except that the seed first goes through
+  `SimRng.MixSeed` (SplitMix64's output function, a bijection) before it is added to the state
+  (M1-6, BUG-0014): unmixed, seed `s` and `s - 1` differ by one LCG step, so seed `ulong.MaxValue`
+  gave seed 0's stream shifted by one draw and the same map. Mixing changed every seed's streams,
+  so every map and pinned hash changed once in M1-6. Every stream uses the match seed;
   the stream id (`RngStream.MapGen = 0`, `Combat = 1`, `Ai(player) = 2 + player`) selects the
   LCG increment, so streams are independent sequences. `NextInt` uses Lemire's
   multiply-and-reject (no modulo bias); `NextFloat` uses the top 24 bits, giving [0, 1).
@@ -789,12 +795,50 @@ AiPlayer
 
 ## Save/load and replays
 
-- **Replay file:** header (format version, game version, data hash, map id, seed, player setups)
-  + command log `(tick, player, command)` + periodic state hashes. Small (KBs per match).
+- **Replay file** (M1-6, `Rts.Sim.Replays`): a `Replay` holds a header, the command log, and
+  checkpoints.
+  - Header: format version (`Replay.CurrentFormatVersion` = 1), `SimInfo.Version` (informational,
+    not checked on playback), data hash (`GameData.ContentHash()`), seed, player count, unit and
+    command capacity (both decide outcomes: the unit capacity is in the state hash and a full
+    store drops spawns), checkpoint interval, tick count, and every `MapGenParams` field. There is
+    no map id yet: the map is rebuilt from seed + params.
+  - Command log: every command `Simulation.Enqueue` accepted, as stamped (tick, player, sequence,
+    kind, type id, position, unit handle), in enqueue order. Commands stamped for a tick after the
+    recorded span are left out.
+  - Checkpoints: `(tick, StateHash())` right after each tick whose new `TickNumber` is a multiple of
+    the interval (default 100, 5 s), so exactly `tickCount / interval` of them.
+- **Recording:** `new ReplayRecorder(sim)` attaches to a sim that hasn't ticked or queued anything
+  and wasn't built on a hand-made map; one recorder per sim. `Enqueue` reports each accepted command
+  and `Tick` reports its end (phase 14). The checkpoint buffer is preallocated (default: one hour of
+  ticks), so recording adds no allocation to `Tick()`; past that it doubles. The command log doubles
+  when full inside `Enqueue`, which input calls between ticks; once the AI enqueues during a tick
+  (M5), size the recorder's command capacity for the match. `ToReplay()` snapshots the recording.
+- **Text format** (`ReplayFormat`, extension `.replay`): ASCII, LF line endings, one `key value`
+  line per header field in a fixed order, `commands N` then N lines
+  `c tick player sequence kind typeId x y unitIndex unitGeneration`, `checkpoints N` then N lines
+  `k tick hash`, `end`, and last `checksum H`: FNV-1a 64 over every byte before that line, so any
+  changed byte is caught. Integers are invariant-culture decimal in canonical form (no `+`, no
+  leading zeros); hashes are 16 uppercase hex digits; floats are their exact IEEE-754 bit pattern
+  as 8 uppercase hex digits (`0.5` is `3F000000`, NaN round-trips). `TryRead` never throws on bad
+  bytes: it returns a `ReplayError` code and no replay. Read rules (`Replay.Validate`): command
+  ticks run from 1 to the tick count without going backwards, each player's sequences count 0, 1,
+  2, ..., players are below the player count, kinds are known, no tick has more commands than the
+  command capacity, and the checkpoints are exactly the interval's multiples. Format limits: at
+  most 16 players and capacities up to 1,000,000.
+- **Playback** (`ReplayPlayer.Run(replay, data)`): refuses before any tick with
+  `FormatVersionMismatch`, another validation code, or `DataMismatch` when the data hash differs.
+  Otherwise it builds the `SimConfig`, enqueues each command when `TickNumber == command.Tick - 1`
+  in log order, checks the sim stamps it with the logged tick and sequence, hashes with its own
+  recorder, and stops at the first checkpoint whose hash differs, reporting the tick and both hashes.
+- **Data hash:** `GameData.ContentHash()` is FNV-1a (`StateHasher`) over every field of every def
+  in id order, strings char by char (never `string.GetHashCode`). Display text is included, so any
+  data edit, a balance change or a rename, refuses old replays. A test changes every field of every
+  def type in turn, so a new field that isn't hashed fails it.
 - **Save file:** a versioned binary snapshot of the full `World` (stores, RNG states, pending
   commands, AI blackboards) plus the replay log so far. Loading restores the snapshot directly.
 - If a replay's data hash doesn't match the current data, the game says it was recorded with
-  different balance data and refuses to play it (no silent desync).
+  different balance data and refuses to play it (no silent desync). The sim returns only the
+  `ReplayError.DataMismatch` code; the text comes from data (M6 playback UI).
 
 ## Testing strategy
 
@@ -809,8 +853,18 @@ AiPlayer
 | Headless smoke | Godot boots the main scene, runs an AI-vs-AI match for 600 frames, exits 0 | `game/` changes |
 | Visual check | Windowed run + screenshot inspected by Claude | Visual changes |
 
-- Golden replays live in `sim/Rts.Sim.Tests/Replays/`. Regenerate with a test flag when a
-  deliberate change alters outcomes, and explain why in the commit message.
+- Golden replays live in `sim/Rts.Sim.Tests/Replays/`. The first (M1-6) is
+  `cross_map_seed1.replay`: `CrossMapScenario` seed 1, 200 units ordered across the map, exactly
+  1,500 ticks, checkpoints every 100 (about 16 KB). `ReplayGoldenTests` plays it back and fails on
+  the first mismatching checkpoint. When a deliberate change alters outcomes (movement, tick order,
+  RNG use, any `game/data` edit), run the tests once with the environment variable
+  `RTS_REGEN_GOLDEN=1`: the test rewrites the file and then fails with "golden regenerated; rerun
+  without the flag". Rerun without it, and explain why in the commit message.
+- `DeterminismTests`: two sims with the same seed and commands keep equal hashes every 100 ticks
+  over 2,000 ticks of movement; different seeds differ by tick 100.
+- Tests whose bounds or preconditions were measured on one pre-M1-6 map pass their old seed
+  through `TestSeeds.PreMix`, which inverts `SimRng.MixSeed` so they get exactly the old streams.
+  New tests use plain seeds.
 - Perf thresholds are generous (they catch 2× regressions, not 5% noise).
 - Every `Category=Perf` test and every allocation-measuring test is in the xUnit collection
   `SerialCollection` (`DisableParallelization = true`), so it runs alone after the parallel batch;
