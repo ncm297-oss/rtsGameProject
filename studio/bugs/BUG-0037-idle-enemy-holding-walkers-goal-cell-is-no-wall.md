@@ -45,3 +45,6 @@ seed 3: 2 times, up to 0.155 m in one tick; seed 5: 2 times, 0.110 m; seed 6: 0.
   "blob", and two players racing to the same ramp top share an anchor. QA's two-owner cross-map rows
   (both players to the same goal) currently arrive as one mixed blob because of this rule; if it
   changes, those rows need re-measuring.
+
+## Producer triage (2026-10-05-1234, ACCEPT)
+S3 confirmed, not blocking M1 (no combat yet; nobody passes a plug). Scheduled for the M1 hardening session together with M1-4d-3 crowd routing (same code: `Plan`/`WallLimit`/`Constrain`). docs/03 now lists it as a known gap.

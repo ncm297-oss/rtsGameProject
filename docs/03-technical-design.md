@@ -549,6 +549,13 @@ refused), keep the single clip: a walker pressed between two of them may still s
 Holding those to the exact rule too was measured and rejected: 2,500 units to 4 points (two players)
 arrived 680-854 (the floor is 825), 500 random goals gave up 38-44 (cap 35), the 64-goal row 37
 (cap 28). Holding all Idle units hard, or all enemy units including waiting ones, also failed rows.
+Producer decision (M1-5), owner may revisit: enemies holding their ground are hard walls; the
+army's own standing units stay soft (single clip, shovable). Two known gaps, both S3 for the M1
+hardening session: an Idle enemy that holds the walker's own goal cell is treated as an arrived
+groupmate (every groupmate check reads `GoalCell` only, never `Owner`), so it is no wall and the
+walker "arrives" up to 0.16 m into it (BUG-0037); and when the hard-wall fallback fires it restarts
+from the desired step against hard walls only, so the single clip of a friendly standing unit is
+lost that tick (up to 0.14 m into an anchored friendly, BUG-0038).
 
 Re-measured (before, after the fix; Debug): two players, 2,500 units to 4 points arrived 923, 859
 (floor 825); 500 to 4 points 170, 182; 2,500 to 1 point 2,499, 2,499; 500 random goals gave up 30,

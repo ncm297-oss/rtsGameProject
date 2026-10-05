@@ -46,3 +46,6 @@ walkers went more than 1 cm deeper into a friendly unit standing on its own poin
 - S3: it trades the BUG-0035 enemy overlap for a friendly one in exactly the battle-line situation
   (a unit squeezed between its own line and the enemy's), contrary to the documented behavior. It
   does not let anyone through an enemy plug.
+
+## Producer triage (2026-10-05-1234, ACCEPT)
+S3 confirmed, not blocking M1 (no combat yet; nobody passes a plug). Scheduled for the M1 hardening session together with M1-4d-3 crowd routing (same code: `Plan`/`WallLimit`/`Constrain`). docs/03 now lists it as a known gap.

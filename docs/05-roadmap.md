@@ -59,8 +59,13 @@ _Required criteria met in session 2026-10-03-0826 (task M0-1). Owner signed off 
       BUG-0032/0033; the follow-up, M1-4d-3 crowd routing, is S3 debt for the M1 hardening
       session. The scenario test below (one army, one goal) does not depend on it (Producer,
       session 2026-10-05-1234).)_
-- [ ] Scenario test: 200 units ordered across a 128×128 map with obstacles all arrive within a
+- [x] Scenario test: 200 units ordered across a 128×128 map with obstacles all arrive within a
       time limit, none stuck, none inside blocked cells.
+      _(session 2026-10-05-1234, task M1-5: `ScenarioTests.TwoHundredUnits_AcrossTheMap_UpARamp_AllArriveWithinLimit_NoneGiveUp_NeverOnBlockedGround`
+      seeds 1-8 (200 units of every type, west edge to the farthest plateau, derived time limit,
+      per-tick blocked-ground check, 100-tick hash twins) + QA `Stress/CrossMapStressTests` seeds
+      1-50, level-2 goals, 500/1,000 units. Needed the queued-walker give-up rule; BUG-0035 (walkers
+      squeezed through enemy plugs) fixed in the same task.)_
 - [ ] Replay format (seed + commands + checkpoint hashes); determinism test (same run twice →
       same hash) and one golden replay.
 - [ ] Perf test: 500 moving units, average tick < 4 ms on the dev machine.
