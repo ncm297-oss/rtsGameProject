@@ -94,6 +94,14 @@ at least 50 ms it runs one tick (max 5 ticks per frame, to avoid a death spiral 
 Views render at `alpha = accumulator / 50 ms` between each entity's previous and current
 position and facing. Commands from input are stamped with the next tick number.
 
+Since M2-1 the accumulator is the pure class `Rts.Sim.ViewApi.FixedStepClock` (unit-tested
+without Godot): `Advance(delta, speed)` returns the ticks to run this frame and `Alpha` is in
+[0, 1). A tick fires when the accumulator is within 1 µs of 50 ms, so 60 frames of 1/60 s give
+exactly 20 ticks. When the 5-tick cap is hit, the leftover is cut to just under one tick, so the
+next normal frame runs at most one tick (the backlog is dropped, not replayed). Zero, negative,
+or non-finite deltas and speeds add nothing, so speed 0 freezes ticks and alpha. `SimRunner`
+clamps its `GameSpeed` to 0.25-8.
+
 `TickNumber` is the number of the tick that runs on the next `Tick()` call (0 before the first).
 `Simulation.Enqueue` always stamps `TickNumber + 1` plus a per-player sequence number, whether it
 is called between ticks (input) or during one (AI think), so a command never changes the tick in
@@ -767,6 +775,50 @@ Match.tscn
   the bottleneck, switch distant or numerous units to vertex-animation textures on MultiMesh.
   Only do this when profiling demands it.
 
+### Implementation (M2-1)
+
+What exists today (no unit views yet):
+
+```
+Main.tscn  (Main.cs: prints "Rts.Sim <version>", loads res://data, PushError + exit 1 on DataErrors)
+  Match    (Match.tscn, Match.cs: Start(data, options) wires everything below)
+    SimRunner        Node; owns the Simulation; FixedStepClock; Seed/PlayerCount/UnitCapacity/CommandCapacity exports (1, 2, 2000, 4096)
+    World3D
+      Sun            DirectionalLight3D with shadows
+      WorldEnvironment  procedural sky, color ambient
+      TerrainView    MeshInstance3D; ArrayMesh + vertex-color StandardMaterial3D
+    RtsCamera        Camera3D, pitch 55°, no rotation
+    DebugOverlay     CanvasLayer + Label (tick, speed, last tick ms, FPS)
+    Screenshotter    Node; --screenshot capture
+```
+
+Godot starts children before parents, so `Main._Ready` loads the data and then calls
+`Match.Start`, after every node of the match exists.
+
+- **Axes:** sim `Vector2(x, y)` on the ground maps to Godot `(x, elevation, y)`; Godot Y is up and
+  is elevation in meters. Cell `(cx, cy)` covers `[cx·2, cx·2+2] × [cy·2, cy·2+2]` m
+  (`MapConstants.CellSize = 2`, `LevelHeight = 4`).
+- **Terrain mesh:** `Rts.Sim.ViewApi.TerrainMeshBuilder.Build(Heightmap)` is pure and only reads
+  the heightmap; it returns a `TerrainMesh` (positions, normals, sRGB colors, triangle indices,
+  clockwise front faces as Godot expects). Every cell gets its own four vertices. Plateau cells are
+  flat at their elevation. A ramp cell is a plane tilted along the axis whose two neighbours
+  straddle its height; on that axis an edge meets a plateau neighbour at the plateau's height and
+  a ramp neighbour halfway between the two, so the slope runs from the low ground to the plateau lip
+  with no step. Wherever two neighbouring cells' heights differ along their shared edge, a vertical
+  wall quad fills the gap (cliffs and ramp side walls), facing the lower cell. Colors: one tint per
+  level, plus a ramp tint and a cliff tint (placeholders until biome materials). `TerrainView`
+  copies the arrays into an `ArrayMesh`.
+- **Camera:** state is a ground focus point and a zoom (height above the focus, 20-60 m, default
+  40, 4 m per wheel notch). The camera sits `zoom / tan 55°` behind the focus on +Z, looking
+  toward -Z, so screen-up is map -Z. Pan: arrow keys, an 8 px screen-edge band (off for scripted
+  screenshots and when the window is unfocused), middle-mouse drag; speed is `zoom × 1` m/s. The
+  focus is clamped to `[0, Width·2] × [0, Height·2]`. Limits live in the pure
+  `Rts.Sim.ViewApi.CameraLimits`. Input actions in `project.godot`: `camera_pan_left/right/up/down`
+  (arrows), `camera_zoom_in/out` (wheel), `camera_drag` (middle button).
+- **Launch flags** (user args after `--`): `--seed <n>`, `--speed <x>` (clamped 0.25-8),
+  `--screenshot <path> --screenshot-after <seconds>` (default 2). Bad values log a warning and are
+  ignored. Example: `& $env:GODOT --path game -- --screenshot C:\temp\shot.png --screenshot-after 2`.
+
 ## AI architecture
 
 The AI lives in `Rts.Sim.Ai`, inside the sim assembly, because it must be deterministic (it uses
@@ -818,12 +870,20 @@ AiPlayer
   Allocation tests go through `AllocationProbe.AssertZero`, which re-runs the block once after a
   non-zero count and fails only if the re-run allocates too, reporting both counts (BUG-0017,
   BUG-0024). One `dotnet test sim/Rts.Sim.Tests` is the whole check.
-- Headless Godot uses the dummy renderer, so screenshots need a windowed run. The game will
-  accept a `--screenshot <path> --screenshot-after <seconds>` debug flag (M2) so Claude can grab
-  frames without an MCP server.
+- Headless Godot uses the dummy renderer, so screenshots need a windowed run. Since M2-1 the game
+  accepts `--screenshot <path> --screenshot-after <seconds>` after `--` so Claude can grab frames
+  without an MCP server (see "Debug tooling"). Screenshots are never committed.
 
 ## Debug tooling
 
+- **Debug label** (M2-1, always on for now): top-left text with the next tick number, game speed,
+  the last `Tick()` cost in ms (`Stopwatch` in the view, never in the sim), and FPS. Dev-only text,
+  not player-facing, so it is not in data.
+- **Screenshot flag** (M2-1): `& $env:GODOT --path game -- --screenshot <path> --screenshot-after <seconds>`
+  waits that many seconds of real time (default 2), saves the viewport as PNG, and quits with
+  exit code 0 (1 if the file can't be written). Edge panning is off during it so the mouse can't
+  move the shot. Headless runs print "Screenshot unavailable in headless mode" and quit 0 without
+  an ERROR line. `--seed <n>` and `--speed <x>` pick the map and game speed.
 - **Debug overlay** (F12, dev builds): nav grid, flow field arrows for the selected group, unit
   state labels, tick time graph, entity counts.
 - **Dev console** (backtick): `spawn <unit> <n>`, `give <gold> <wood>`, `reveal`, `speed <x>`,

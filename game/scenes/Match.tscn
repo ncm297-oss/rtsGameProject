@@ -1,0 +1,65 @@
+[gd_scene load_steps=11 format=3]
+
+[ext_resource type="Script" path="res://scripts/Match.cs" id="1_match"]
+[ext_resource type="Script" path="res://scripts/SimRunner.cs" id="2_runner"]
+[ext_resource type="Script" path="res://scripts/TerrainView.cs" id="3_terrain"]
+[ext_resource type="Script" path="res://scripts/RtsCamera.cs" id="4_camera"]
+[ext_resource type="Script" path="res://scripts/DebugOverlay.cs" id="5_overlay"]
+[ext_resource type="Script" path="res://scripts/Screenshotter.cs" id="6_shot"]
+
+[sub_resource type="ProceduralSkyMaterial" id="SkyMaterial_1"]
+sky_top_color = Color(0.36, 0.52, 0.72, 1)
+sky_horizon_color = Color(0.70, 0.74, 0.78, 1)
+ground_bottom_color = Color(0.25, 0.22, 0.2, 1)
+ground_horizon_color = Color(0.70, 0.74, 0.78, 1)
+
+[sub_resource type="Sky" id="Sky_1"]
+sky_material = SubResource("SkyMaterial_1")
+
+[sub_resource type="Environment" id="Environment_1"]
+background_mode = 2
+sky = SubResource("Sky_1")
+ambient_light_source = 2
+ambient_light_color = Color(0.62, 0.66, 0.72, 1)
+ambient_light_energy = 0.8
+tonemap_mode = 2
+
+[node name="Match" type="Node3D"]
+script = ExtResource("1_match")
+
+[node name="SimRunner" type="Node" parent="."]
+script = ExtResource("2_runner")
+
+[node name="World3D" type="Node3D" parent="."]
+
+[node name="Sun" type="DirectionalLight3D" parent="World3D"]
+rotation = Vector3(-1.047198, 0.610865, 0)
+light_energy = 1.1
+shadow_enabled = true
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="World3D"]
+environment = SubResource("Environment_1")
+
+[node name="TerrainView" type="MeshInstance3D" parent="World3D"]
+script = ExtResource("3_terrain")
+
+[node name="RtsCamera" type="Camera3D" parent="."]
+fov = 50.0
+far = 1000.0
+current = true
+script = ExtResource("4_camera")
+
+[node name="DebugOverlay" type="CanvasLayer" parent="."]
+script = ExtResource("5_overlay")
+
+[node name="Label" type="Label" parent="DebugOverlay"]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 600.0
+offset_bottom = 32.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 4
+
+[node name="Screenshotter" type="Node" parent="."]
+script = ExtResource("6_shot")
