@@ -9,14 +9,14 @@ Commit and push after editing, from either machine (or ask Claude to).
 
 ## New
 
-- 2026-10-05 · **Downloads stay with the owner.** Agents can't download anything: winget, curl,
-  Invoke-WebRequest, npm/npx and NuGet package adds are on the block list. When downloads are
-  needed (M6: Godot .NET export templates for 4.7.2, the Kenney/KayKit/Quaternius packs listed in
-  docs/04-art-pipeline.md), put the exact download links under **Waiting on you** well before
-  they block work, say which folder in `asset-sources/` each zip goes in, and keep working on
-  unblocked tasks meanwhile. Add a line about this to the M6 entry in the feature queue.
-
 ## Processed
+
+- 2026-10-05 · **Downloads stay with the owner (owner):** agents never download; the Producer lists
+  the exact links (Godot 4.7.2 .NET export templates, the Kenney/KayKit/Quaternius packs from
+  docs/04) with their `asset-sources/` folders under **Waiting on you** well before M6 needs them.
+  → Acknowledged in session 2026-10-05-1234: the M6 line in STATE's feature queue carries the rule;
+  the Producer posts the full link list (with folders) under Waiting on you when M5 starts, one
+  milestone ahead, or earlier if an art look test is pulled forward. Links are already in docs/04.
 
 - 2026-10-05 · **Speed up (owner):** QA depth by risk tier, S3/S4 bugs wait for a hardening
   session every 4th session and at milestone end (S1/S2 still first), tasks up to 1,500 lines

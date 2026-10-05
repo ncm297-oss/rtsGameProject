@@ -4,7 +4,7 @@ The dashboard. The Producer rewrites it at the end of every session. **Owner: re
 you" first.** "For your review" (further down) is non-blocking: what the studio built or decided
 on its own, explained in terms of what you'd see in the game.
 
-_Last updated: 2026-10-05 (session 2026-10-05-1013, ACCEPT)._
+_Last updated: 2026-10-05 (session 2026-10-05-1234, PLAN)._
 
 ## Waiting on you
 
@@ -16,13 +16,13 @@ _Last updated: 2026-10-05 (session 2026-10-05-1013, ACCEPT)._
 | Field | Value |
 | --- | --- |
 | Milestone | M1 — Core sim, no graphics (started 2026-10-03) |
-| Current task | none (next PLAN picks; recommended M1-4d-3 crowd routing, see handoff) |
-| Gate | **GO** (chain to the next session) |
+| Current task | M1-5 cross-map scenario test: 200 units over ramps all arrive, none give up (session 2026-10-05-1234, feature, QA full) |
+| Gate | **GO** (session running) |
 | Tools on this PC | Godot 4.7.2 .NET, .NET SDK 8.0.425, Git 2.53 + LFS 3.7; `GODOT` user variable set |
-| Build | green on `studio/2026-10-05-1013` @ b447ac7 (0 warnings, 0 errors); ACCEPT, merge pending |
-| Tests | 1014 passed / 11 skipped / 1025 in one process (1 m 53 s; known-bug skips: BUG-0005, 0008 x2, 0010 x2, 0014, 0023 x2, 0025, 0030, 0033 pair); `tools/qa/smoke.ps1` PASS. Quick loop: `--filter "Category!=Perf&Category!=Soak"` |
+| Build | green on `main` @ 7805e62 (0 warnings, 0 errors) |
+| Tests | main @ 7805e62: 947 passed / 8 skipped / 0 failed without Perf (1 m 12 s); last full run 1014 / 11 skipped / 1025 (known-bug skips: BUG-0005, 0008 x2, 0010 x2, 0014, 0023 x2, 0025, 0030, 0033 pair); `tools/qa/smoke.ps1` PASS |
 | Open bugs | 13 (S1: 0, S2: 0, S3: 9, S4: 4) — none block |
-| Sessions today | 2 / 10; feature sessions since last hardening: 2 / 4 |
+| Sessions today | 3 / 10 (this one); feature sessions since last hardening: 3 / 4 incl. this one |
 | Last session | 2026-10-05-1013 · M1-4d-2 shoving + BUG-0031 · ACCEPT after 2 fix rounds (QA FAIL x3 on crowd targets; Producer re-triaged S2 → S3) |
 
 ## Milestone progress
@@ -52,7 +52,9 @@ instead of clusters" or "make giving up take 2 seconds".
     35-44% of the time (was about 16%), against the 60-80% I asked for. The causes are structural
     (pathfinding ignores units; units waiting for a path and enemies act as walls) and were
     outside this task. QA filed them as S2 (BUG-0032/0033); I set them to S3 and scheduled a
-    follow-up, M1-4d-3 crowd routing, before the scenario test.
+    follow-up, M1-4d-3 crowd routing. Update 2026-10-05-1234: that follow-up now waits for the M1
+    hardening session (your rule: S3 work goes there), and the cross-map scenario test (M1-5) goes
+    first because one army walking to one spot doesn't need it.
   - Units standing on their own click point hold it. So a parked *group* in a 1-cell corridor still
     blocks its own army until you move it (BUG-0033 remainder).
 - **Rough edge:** walkers crossing a cluster that mixes both players' units mostly give up (2 of
@@ -148,22 +150,25 @@ instead of clusters" or "make giving up take 2 seconds".
 
 ## Feature queue (feature sessions, in order)
 
-1. M1-4d-3 crowd routing: flow-field crowd cost (or local detour) so walkers go round other
-   groups' blobs; un-anchored units walk back; no stuck ticks against walkers blocked only by
-   field-waiting units; parked groups yield sideways in chokes. Closes BUG-0028/0032/0033. Carry
-   the M1-4d-2 criterion-6 targets and re-measure the same rows.
-2. M1-5 scenario test: 200 units across 128x128 with obstacles, all arrive, none stuck or in
-   blocked cells.
-3. M1-6 replay format + determinism test + one golden replay (fix BUG-0014 seed mixing in the same
+1. **M1-5 (now):** cross-map scenario test: one army of 200 units from a map edge to a plateau
+   through at least one ramp, all arrive within a derived time limit, none give up, none in blocked
+   cells, deterministic; fix the give-up rule for ramp queues if the measurement shows give-ups.
+2. M1-6 replay format + determinism test + one golden replay (fix BUG-0014 seed mixing in the same
    task: it changes every map hash, so do it before the golden exists).
-4. M1-7 perf test: 500 moving units, average tick < 4 ms; document maps > 256 as unsupported (BUG-0023).
-5. M1-8 headless CLI in `tools/` printing hashes and timings. Then the M1 hardening session and sign-off.
-6. M6 (far ahead): agents can't download. Before M6 the Producer lists under "Waiting on you" the
-   exact links for the Godot 4.7.2 .NET export templates and the Kenney/KayKit/Quaternius packs
-   (docs/04) with the `asset-sources/` folder for each, well before they block work (owner note 2026-10-05).
+3. M1-7 perf test: 500 moving units, average tick < 4 ms; document maps > 256 as unsupported (BUG-0023).
+4. M1-8 headless CLI in `tools/` printing hashes and timings. Then the M1 hardening session
+   (crowd routing first, see the debt backlog) and sign-off.
+5. M6 (far ahead): agents can't download. The Producer lists under "Waiting on you", when M5
+   starts, the exact links for the Godot 4.7.2 .NET export templates and the Kenney/KayKit/Quaternius
+   packs (docs/04) with the `asset-sources/` folder for each (owner note 2026-10-05).
 
-## Debt backlog (hardening sessions only; next one after 2 more feature sessions or at M1 end)
+## Debt backlog (hardening sessions only; next one after 1 more feature session or at M1 end)
 
+- **M1-4d-3 crowd routing (S3, most valuable, ~800 lines, QA full):** flow-field crowd cost or local
+  detour so walkers go round other groups' blobs; un-anchored units walk back; no stuck ticks
+  against walkers blocked only by field-waiting units; parked groups yield sideways in chokes.
+  Closes BUG-0028/0032/0033. Re-measure the M1-4d-2 criterion-6 rows and the mixed-owner crossing
+  (seed 73: 2/200); if a target is missed again, re-set it in docs/03 with the reason.
 - BUG-0034 (S3) `Perf_500Units_DistinctTargetsInterleavedBySlot_CostPerTick(32)` flaky (10-tick
   average; 1 in 3 full runs): average more ticks or use a median, keep the 4 ms budget.
 - BUG-0030 (S3) Move within an arrived unit's own goal cell ignored (same-order rule by
