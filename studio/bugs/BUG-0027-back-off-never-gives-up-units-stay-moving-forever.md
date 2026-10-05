@@ -46,3 +46,10 @@ forever. Spawning at one point (production buildings later) triggers it easily.
 ## Notes
 Suggested direction (developer's call): count back-off ticks toward giving up (or a separate
 cap), or let a crowded unit that cannot back off stop anyway. Keep the BUG-0020 corner rule.
+
+## QA verification (2026-10-05-0742 re-check round 1)
+Verified at 878fb62. The 4 formerly skipped tests pass: wall-hugging unit Idle after 20 ticks; 50
+coincident units to their own point all Idle at tick 39 (11 arrived, 39 gave up); 2,500 to 1 point
+all Idle at tick 802 (2,488 arrived, 12 gave up); 2,500 to 4 points all Idle at 1,120. Reverting
+the fix (back-off not counted) fails 9 tests. No stray anchors from units keeping their goal at the
+limit in 7 crowd scenarios (`QA/LocalMovementRecheckQaTests`). Side finding: BUG-0031.

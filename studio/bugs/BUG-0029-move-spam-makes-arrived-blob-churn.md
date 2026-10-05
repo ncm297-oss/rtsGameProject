@@ -28,3 +28,8 @@ check settling only after the spam stops, which hides this.
 ## Notes
 Possible direction: a Move to the unit's current goal cell/point while it is Idle and arrived
 keeps it Idle, or crowded arrival also counts Moving groupmates already standing in the blob.
+
+## QA verification (2026-10-05-0742 re-check round 1)
+Verified at 878fb62: `SettledBlob_ReorderedToSamePointEveryTick_Churn_Report` now prints "up to
+0/20 Moving, 0.0 m walked" (was 15/20, 134.9 m). A settled 500-blob given the same Move every tick
+allocates 0 bytes. Side effect of the cell-granular rule: BUG-0030.

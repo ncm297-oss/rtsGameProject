@@ -65,3 +65,5 @@ bugs outrank new features.
 | [BUG-0027](BUG-0027-back-off-never-gives-up-units-stay-moving-forever.md) | S2 | fixed | Back-off never counts toward giving up; crowded units stay Moving forever (refused back-off, period-2 oscillation) |
 | [BUG-0028](BUG-0028-groups-to-nearby-points-give-up-en-masse.md) | S3 | open | Groups sent to nearby points give up en masse (84-87%); walkers give up against units that are only waiting |
 | [BUG-0029](BUG-0029-move-spam-makes-arrived-blob-churn.md) | S3 | fixed | Re-issuing the same Move every tick makes an arrived blob churn indefinitely |
+| [BUG-0030](BUG-0030-move-within-arrived-units-goal-cell-ignored.md) | S3 | open | A Move to another point of an arrived unit's goal cell is ignored (up to ~2.8 m) |
+| [BUG-0031](BUG-0031-unit-overlapping-standing-unit-against-cliff-pinned.md) | S3 | open | A unit overlapping a standing unit with a cliff behind it can't walk away in any direction |
