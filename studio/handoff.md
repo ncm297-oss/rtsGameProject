@@ -3,6 +3,36 @@
 Written by the Producer at the end of each session for the next one. The next session's
 Producer starts from this, verifies it against the repo, and then plans.
 
+## Current session plan (2026-10-04-2056, PLAN: GO)
+
+**TASK_ID: M1-4c — Make the flow-field build cap deterministic and fair; de-flake the suite.**
+Base b4cb014 (main). Checks: build 0/0; non-Perf 791 passed / 7 skipped; Perf serial 53 / 3
+skipped; smoke PASS; no open S1/S2; sessions today 1/10 before this one.
+
+Goal: close BUG-0021/0022 (cache metadata is sim state and must be hashed; misses served oldest
+order first with a cap of 2 and a cache sized to the unit cap) and BUG-0024/0017 (the full
+one-process suite must be green on this PC). Steering/separation (M1-4d) builds on this.
+
+Scope, in order (one implement commit; report a line after part A before starting B):
+- A. Test infra only: one xUnit collection with `DisableParallelization = true` holding every
+  `Category=Perf` test and every test that reads `GC.GetAllocatedBytesForCurrentThread`
+  (whole classes may join it); thresholds unchanged. A shared allocation helper that, on a
+  non-zero delta, re-runs the measured block once and fails with both deltas; the 0-byte assert
+  stays. Run the full suite 3 times in one process: all green.
+- B. Sim: hash the cache's metadata in `StateHash` (per slot RequestedCell + Version + last-use
+  clock, plus clock and count); per-unit hashed `OrderTick` (tick the Move applied); build pass
+  serves misses by (oldest OrderTick in the goal group, GoalCell), up to
+  `MaxFieldBuildsPerTick = 2`; cache capacity from a pure `FlowFieldCache.CapacityFor(unitCapacity,
+  cellCount)` = clamp(unitCapacity / 8, 32, 128), then min with max(32, 64 MB / bytesPerField);
+  `Get`/`TryGetCached` become `internal`; `FlowFieldCache` + `MovementSystem` remarks corrected
+  ("(M1-4c)" references for steering become M1-4d). Docs/03 updated. Out of scope: save/load,
+  steering, separation, arrival slots, shoving, time-sliced builds, BUG-0005/0014/0023.
+- Budget ~250 production lines + tests. Zero allocation on the tick path (preallocated buffers for
+  the extra sort; note a (OrderTick, GoalCell, slot) key doesn't fit 64 bits: prefer a second
+  per-group miss buffer keyed (oldestOrderTick << 32 | GoalCell)).
+
+Acceptance criteria: see the Producer's PLAN output (11 items) in the session log.
+
 _Written: 2026-10-04 14:00 (session 2026-10-04-0120, ACCEPT)._
 
 ## Where we are
