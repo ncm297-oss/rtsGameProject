@@ -21,6 +21,13 @@ You will be told the working directory (usually the studio worktree). Work only 
 
 ## While you work
 
+- **Stay inside your track's files** (track given in your prompt; ownership table in
+  `.claude/agents/producer.md`, "Tracks"). The `sim` track owns `sim/**`, `game/data/**` and
+  `tools/**`; the `view` track owns the rest of `game/**` plus new read-only code in
+  `sim/Rts.Sim/ViewApi/`. The other track's builder works at the same time in its own
+  worktree, so editing its files causes merge conflicts. Work only inside the working directory
+  you're given, using absolute paths. If you need something from the other track, say so in
+  your report.
 - Stay inside the brief's scope. If you discover necessary work outside it, note it in your
   report instead of doing it. If the brief is wrong or impossible, stop and say so.
 - Write tests with the code: unit tests for every rule, scenario tests for behavior, and keep

@@ -119,8 +119,8 @@ a script fails to load. `tools/qa/smoke.ps1` builds first, then fails unless the
 ## Workflow
 
 - Two machines and the studio share this repo through GitHub. `git pull` before starting,
-  commit + push when stopping. The studio works in `.claude/worktrees/studio`; never edit files
-  there from an interactive session.
+  commit + push when stopping. The studio works in `.claude/worktrees/studio` (sim track) and
+  `.claude/worktrees/studio-view` (view track); never edit files there from an interactive session.
 - At the end of interactive work, run `/handoff` so the Producer records it for the next session.
 - Owner requests for the studio go in `studio/inbox.md`; only the Producer (or the conductor, when recording an incident) edits `studio/STATE.md`
   and `studio/handoff.md`.

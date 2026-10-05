@@ -50,6 +50,26 @@ passing.
 `.claude/worktrees/studio` (gitignored) and delivers through GitHub. Run `git pull` in your
 checkout to see its work. If you and the studio change the same thing, git merges it on pull.
 
+## Two tracks in parallel (since 2026-10-05)
+
+Every session works on two tracks at once, coordinated by one conductor and one Producer:
+
+1. The Producer (Fable) plans a task for each track together, so they don't collide.
+2. Two game-devs build them at the same time, each in its own worktree.
+3. QA inspects each; fix loops run per track.
+4. The Producer accepts or rejects each track separately.
+5. The conductor merges sim first, then view, into `main`.
+
+| Track | Worktree | Owns | Works on |
+| --- | --- | --- | --- |
+| `sim` | `.claude/worktrees/studio` | `sim/`, `game/data/`, `tools/` | Game rules: M1, then the sim side of later milestones |
+| `view` | `.claude/worktrees/studio-view` | the rest of `game/`, plus read-only `sim/Rts.Sim/ViewApi/` | Presentation: M2 camera, terrain, unit views, selection, minimap, HUD, then the view side of later milestones |
+
+Docs and studio files are shared and merged automatically. Anything else the view needs from
+the sim goes under **Requests for the sim track** in `studio/STATE.md`, and the Producer plans it
+for the sim track. A track with no unblocked work sits a session out while the other continues.
+To pause a track, write it in the inbox.
+
 ## How sessions start
 
 On 2026-10-03 the owner authorized the Producer to **start the next session whenever it's
