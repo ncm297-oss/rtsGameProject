@@ -261,7 +261,7 @@ public class MovementSystemTests
     }
 
     [Fact]
-    public void MoreGoalsThanCacheSlots_BuildsAtMostTheCapPerTick_AndEveryUnitArrives()
+    public void MoreGoalsThanCacheSlots_BuildsAtMostTheCapPerTick_AtMost20PercentGiveUp()
     {
         // BUG-0018: 64 goals interleaved by slot used to rebuild a field for almost every unit, every tick.
         Simulation sim = MoveScenario.Spawn(seed: 21, units: 128, maxCost: 15f, out int center);
@@ -287,7 +287,8 @@ public class MovementSystemTests
         }
         Assert.Equal(0, moving);
         // The 64 goals are neighboring cells, so the units wall each other in: since M1-4d-1 the ones
-        // that can't get through give up (GoalCell -1) until shoving exists (M1-4d-2).
+        // that can't get through give up (GoalCell -1). Shoving (M1-4d-2) moves only friendly Idle
+        // units, and neighboring goals here belong to alternating players: 23 of 128 give up (18%).
         bool[] arrived = MoveScenario.Arrived(sim.World);
         int arrivedCount = 0, gaveUp = 0;
         for (int i = 0; i < u.Capacity; i++)
@@ -297,7 +298,7 @@ public class MovementSystemTests
             else Assert.Fail($"unit {i} idle {Vector2.Distance(u.Position[i], u.Goal[i]):F2} m from its goal without arriving or giving up");
         }
         _out.WriteLine($"128 units, 64 neighboring goals: arrived {arrivedCount}, gave up {gaveUp}");
-        Assert.True(arrivedCount >= u.Capacity / 2, $"only {arrivedCount} arrived");
+        Assert.True(gaveUp <= u.Capacity * 20 / 100, $"{gaveUp} of {u.Capacity} gave up");
         Assert.Null(MoveScenario.FirstPackViolation(sim.World));
     }
 

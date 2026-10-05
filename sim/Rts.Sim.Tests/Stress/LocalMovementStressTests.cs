@@ -16,11 +16,18 @@ public class LocalMovementStressTests
 
     public LocalMovementStressTests(ITestOutputHelper output) => _out = output;
 
-    /// <summary>Per-tick invariants (as MovementStressTests) plus: an Idle unit that was Idle last tick has not moved.</summary>
+    /// <summary>
+    /// Per-tick invariants (as MovementStressTests) plus: an Idle unit that was Idle last tick has not
+    /// moved, unless some unit walked this tick (since M1-4d-2 walkers shove friendly Idle units aside,
+    /// at most their speed per tick, which the speed check covers). Once nothing moves, nothing jitters.
+    /// </summary>
     internal static string? CheckInvariants(World w, Vector2[] lastPos, bool[] lastIdle)
     {
         UnitStore u = w.Units;
         NavGrid g = w.NavGrid;
+        bool anyWalker = false;
+        for (int i = 0; i < u.Capacity && !anyWalker; i++)
+            if (u.Alive[i] && (!lastIdle[i] || u.State[i] == UnitState.Moving)) anyWalker = true;
         for (int i = 0; i < u.Capacity; i++)
         {
             if (!u.Alive[i]) continue;
@@ -39,7 +46,7 @@ public class LocalMovementStressTests
             if (!float.IsFinite(u.Facing[i])) return $"unit {i} facing {u.Facing[i]}";
             if (u.StuckTicks[i] < 0 || u.StuckTicks[i] >= MovementConstants.GiveUpTicks) return $"unit {i} stuck counter {u.StuckTicks[i]}";
             if (float.IsNaN(u.BestRemaining[i])) return $"unit {i} best remaining NaN";
-            if (lastIdle[i] && u.State[i] == UnitState.Idle && p != lastPos[i]) return $"idle unit {i} jittered {lastPos[i]} -> {p}";
+            if (!anyWalker && lastIdle[i] && u.State[i] == UnitState.Idle && p != lastPos[i]) return $"idle unit {i} jittered {lastPos[i]} -> {p} with no unit walking";
             lastPos[i] = p;
             lastIdle[i] = u.State[i] == UnitState.Idle;
         }
@@ -57,14 +64,21 @@ public class LocalMovementStressTests
 
     /// <summary>
     /// QA focus "Crowds": every unit to one point, or to 4 points 3 cells (6 m) apart. Invariants
-    /// every tick; all Idle within the limit; report settle ticks, arrivals and give-ups.
+    /// every tick; all Idle within the limit; at least <paramref name="minArrivedPercent"/> arrived;
+    /// report settle ticks, arrivals and give-ups.
     /// </summary>
+    /// <remarks>
+    /// The arrived bounds are the M1-4d-2 measurements less a little headroom: 500/500 and 2493/2500
+    /// to one point, 103/500 and 264/2500 to four. Owners alternate by slot, so each pair of
+    /// neighboring points belongs to different players: walkers can't shove the other player's blob
+    /// and the flow field doesn't route round it (BUG-0028).
+    /// </remarks>
     [Theory]
-    [InlineData(500, 1, 3000)]
-    [InlineData(500, 4, 3000)]
-    [InlineData(2500, 1, 6000)]
-    [InlineData(2500, 4, 6000)]
-    public void Crowd_ToOneOrFourClosePoints_InvariantsEveryTick_AllSettle(int units, int points, int limit)
+    [InlineData(500, 1, 3000, 99)]
+    [InlineData(500, 4, 3000, 18)]
+    [InlineData(2500, 1, 6000, 99)]
+    [InlineData(2500, 4, 6000, 9)]
+    public void Crowd_ToOneOrFourClosePoints_InvariantsEveryTick_AllSettle(int units, int points, int limit, int minArrivedPercent)
     {
         Simulation sim = MoveScenario.Spawn(seed: (ulong)(900 + units + points), units: units, maxCost: units > 1000 ? 70f : 40f, out int goalCell);
         World w = sim.World;
@@ -115,6 +129,7 @@ public class LocalMovementStressTests
                 shown++;
             }
         Assert.True(CountMoving(u) == 0, $"{CountMoving(u)} units still Moving after {ticks} ticks");
+        Assert.True(arrivedCount * 100 >= minArrivedPercent * units, $"{arrivedCount} of {units} arrived (< {minArrivedPercent}%)");
     }
 
     // ---------- walls and gaps ----------

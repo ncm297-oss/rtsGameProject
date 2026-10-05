@@ -156,7 +156,7 @@ public class LocalMovementQaTests
         Assert.Equal(0, CountMoving(u));
     }
 
-    /// <summary>A unit boxed in by idle units that arrived at another goal (they keep GoalCell): gives up on time.</summary>
+    /// <summary>A unit boxed in by enemy idle units that arrived at another goal (they keep GoalCell): gives up on time.</summary>
     [Fact]
     public void UnitBoxedInByArrivedUnitsOfAnotherGoal_GivesUpWithinGiveUpTicksPlusSlack()
     {
@@ -168,11 +168,14 @@ public class LocalMovementQaTests
             float a = k * MathF.PI / 4f;
             units.Add((type, center + new Vector2(MathF.Cos(a), MathF.Sin(a)) * 0.8f));
         }
-        Simulation sim = LocalMovementTests.SimOn(LocalMovementTests.Flat(32), units.Count);
-        SpawnAll(sim, units.ToArray());
+        // M1-4d-2: the ring belongs to the other player; friendly idle units would be shoved aside.
+        Simulation sim = LocalMovementTests.SimOn(LocalMovementTests.Flat(32), units.Count, players: 2);
+        for (int k = 0; k < units.Count; k++) sim.Enqueue(Command.SpawnUnit(k == 0 ? 0 : 1, units[k].Item1, units[k].Item2));
+        sim.Tick();
+        sim.Tick();
         UnitStore u = sim.World.Units;
         // The ring "arrives" at its own positions, so each keeps a real GoalCell.
-        for (int i = 1; i < units.Count; i++) sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, i), u.Position[i]));
+        for (int i = 1; i < units.Count; i++) sim.Enqueue(Command.Move(1, MoveScenario.Handle(sim, i), u.Position[i]));
         sim.Tick();
         sim.Tick();
         for (int i = 1; i < units.Count; i++) Assert.Equal(UnitState.Idle, u.State[i]);

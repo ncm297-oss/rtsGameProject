@@ -23,6 +23,14 @@ public static class MovementConstants
     /// </summary>
     public const float ArrivalSpacing = 0.6f;
 
+    /// <summary>
+    /// A shoved unit may be squeezed toward a standing neighbor until their centers are this
+    /// fraction of the two radii's sum apart, no closer (half: the pack limit). Tighter than
+    /// <see cref="ArrivalSpacing"/> so a blob can give way a little; looser lets walkers press
+    /// friendly units on top of each other.
+    /// </summary>
+    public const float ShoveSpacing = 0.5f;
+
     /// <summary>Share of an overlap a unit removes per tick against a Moving neighbor: half, since the neighbor removes the other half.</summary>
     public const float SeparationShareMoving = 0.5f;
 

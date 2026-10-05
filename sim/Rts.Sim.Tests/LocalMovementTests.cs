@@ -197,24 +197,28 @@ public class LocalMovementTests
 
     // ---------- giving up ----------
 
-    /// <summary>A unit in the middle of a ring of 8 idle units (no goal) that touch it, ordered out to the east.</summary>
+    /// <summary>
+    /// A unit (player 0) in the middle of a ring of 8 idle units (no goal) that touch it, ordered out
+    /// to the east. The ring belongs to player 1: friendly idle units would be shoved aside (M1-4d-2).
+    /// </summary>
     private static Simulation Walled(out Vector2 center)
     {
         int type = TypeWithRadius(0.4f);
         center = new Vector2(31f, 31f);
-        var units = new List<(int, Vector2)> { (type, center) };
+        Simulation sim = SimOn(Flat(32), 9, players: 2);
+        sim.Enqueue(Command.SpawnUnit(0, type, center));
         for (int k = 0; k < 8; k++)
         {
             float a = k * MathF.PI / 4f;
-            units.Add((type, center + new Vector2(MathF.Cos(a), MathF.Sin(a)) * 0.8f));
+            sim.Enqueue(Command.SpawnUnit(1, type, center + new Vector2(MathF.Cos(a), MathF.Sin(a)) * 0.8f));
         }
-        Simulation sim = SimOn(Flat(32), units.Count);
-        Spawn(sim, units.ToArray());
+        sim.Tick();
+        sim.Tick();
         return sim;
     }
 
     [Fact]
-    public void UnitWalledInByIdleUnits_GoesIdleAfterExactlyGiveUpTicks_AndDropsItsGoal()
+    public void UnitWalledInByEnemyIdleUnits_GoesIdleAfterExactlyGiveUpTicks_AndDropsItsGoal()
     {
         Simulation sim = Walled(out Vector2 center);
         UnitStore u = sim.World.Units;
@@ -444,7 +448,351 @@ public class LocalMovementTests
         Assert.True(Vector2.Distance(u.Position[0], goal) <= MovementConstants.ArrivalDistance);
     }
 
+    // ---------- shoving (M1-4d-2) ----------
+
+    private static void SpawnOwned(Simulation sim, params (int Owner, int Type, Vector2 At)[] units)
+    {
+        foreach ((int owner, int type, Vector2 at) in units) sim.Enqueue(Command.SpawnUnit(owner, type, at));
+        sim.Tick();
+        sim.Tick();
+    }
+
+    /// <summary>A 1-cell-wide (2 m) corridor along cell row 2 (y 4..6 m), cells x 1..22, cliffs above and below.</summary>
+    private static Heightmap Corridor() => Rows(
+        "000000000000000000000000",
+        "111111111111111111111111",
+        "000000000000000000000000",
+        "111111111111111111111111",
+        "000000000000000000000000");
+
+    /// <summary>A 16 x 16 map with a cliff column at cell x = 4 (x 8..10 m) on rows 1..14: the same map as the BUG-0027 test.</summary>
+    private static Heightmap CliffColumn()
+    {
+        var rows = new string[16];
+        for (int y = 0; y < 16; y++) rows[y] = y >= 1 && y <= 14 ? "0000100000000000" : new string('0', 16);
+        return Rows(rows);
+    }
+
+    /// <summary>
+    /// Criterion 1: a walker in a 1-cell corridor, with an Idle unit of its own player standing
+    /// between it and its goal, arrives. The standing unit stays Idle with no order, inside the
+    /// corridor's passable cells, and its disk never overlaps a cliff. Where the two can't pass side
+    /// by side (<paramref name="blocked"/>), the walker shoves it along ahead of itself.
+    /// </summary>
+    [Theory]
+    [InlineData(0.9f, 0.9f, true)]
+    [InlineData(0.4f, 0.9f, true)]
+    [InlineData(0.7f, 0.7f, false)]
+    [InlineData(0.9f, 0.4f, false)]
+    [InlineData(0.4f, 0.4f, false)]
+    public void WalkerInOneCellCorridor_PastAFriendlyIdleUnit_Arrives_ShovingItAlongWhenBlocked(float walkerRadius, float idleRadius, bool blocked)
+    {
+        Simulation sim = SimOn(Corridor(), 2);
+        NavGrid g = sim.World.NavGrid;
+        Vector2 start = g.CellCenter(2, 2), standing = g.CellCenter(8, 2), goal = g.CellCenter(14, 2);
+        SpawnOwned(sim, (0, TypeWithRadius(walkerRadius), start), (0, TypeWithRadius(idleRadius), standing));
+        UnitStore u = sim.World.Units;
+        sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, 0), goal));
+        sim.Tick(); // queued; the Move applies on the next tick
+        int orderTick = u.OrderTick[1];
+        float worstEdge = float.PositiveInfinity;
+        int ticks = 0;
+        do
+        {
+            sim.Tick();
+            ticks++;
+            Assert.Equal(-1, MoveScenario.FirstUnitOnBlockedGround(sim.World));
+            Assert.Equal(UnitState.Idle, u.State[1]);
+            Assert.Equal(Vector2.Zero, u.Velocity[1]);
+            // The corridor's cliffs are the rows y < 4 m and y >= 6 m: the shoved disk stays between them.
+            float edge = MathF.Min(u.Position[1].Y - idleRadius - 4f, 6f - u.Position[1].Y - idleRadius);
+            worstEdge = MathF.Min(worstEdge, edge);
+            Assert.True(edge >= -1e-4f, $"tick {ticks}: shoved unit at {u.Position[1]} overlaps the cliff by {-edge:F3} m");
+        } while (u.State[0] == UnitState.Moving && ticks < 1000);
+        _out.WriteLine($"radii {walkerRadius}/{idleRadius}: walker idle after {ticks} ticks, {Vector2.Distance(u.Position[0], goal):F2} m from its goal; shoved unit moved {Vector2.Distance(u.Position[1], standing):F2} m, closest to a cliff {worstEdge:F3} m");
+        Assert.True(Vector2.Distance(u.Position[0], goal) <= MovementConstants.ArrivalDistance, $"walker stopped at {u.Position[0]}");
+        Assert.NotEqual(-1, u.GoalCell[0]);
+        if (blocked) Assert.True(u.Position[1].X > goal.X, $"the idle unit was not shoved along: {u.Position[1]}");
+        Assert.Equal(-1, u.GoalCell[1]);
+        Assert.Equal(orderTick, u.OrderTick[1]);
+    }
+
+    /// <summary>
+    /// Criterion 2: an Idle unit standing against a cliff (or the map's blocked outer ring) is never
+    /// shoved into it. The walker pushes straight or diagonally at the wall: the shove is refused, the
+    /// standing unit never moves, the walker stops (arrives against it or gives up), and no unit
+    /// stands on blocked ground at any tick.
+    /// </summary>
+    [Theory]
+    [InlineData("cliff", 10.1f, 11f, 13.5f, 11f, 10.2f, 11f)]
+    [InlineData("cliff", 10.1f, 11f, 12.5f, 9.5f, 10.2f, 12.6f)]
+    [InlineData("ring", 2.1f, 20f, 5.5f, 20f, 2.2f, 20f)]
+    [InlineData("ring", 2.1f, 2.1f, 4.5f, 4.5f, 2.2f, 2.2f)]
+    public void IdleUnitAgainstAWall_IsNeverShovedIntoIt(string map, float sx, float sy, float wx, float wy, float gx, float gy)
+    {
+        Simulation sim = SimOn(map == "cliff" ? CliffColumn() : Flat(16), 2);
+        Vector2 standing = new(sx, sy);
+        int type = TypeWithRadius(0.4f);
+        SpawnOwned(sim, (0, type, standing), (0, type, new Vector2(wx, wy)));
+        UnitStore u = sim.World.Units;
+        sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, 1), new Vector2(gx, gy)));
+        sim.Tick();
+        int ticks = 0;
+        do
+        {
+            sim.Tick();
+            ticks++;
+            Assert.Equal(-1, MoveScenario.FirstUnitOnBlockedGround(sim.World));
+            Assert.True(u.Position[0] == standing, $"tick {ticks}: the unit against the wall moved to {u.Position[0]}");
+        } while (u.State[1] == UnitState.Moving && ticks < 10 * MovementConstants.GiveUpTicks);
+        _out.WriteLine($"{map}: walker {u.State[1]} after {ticks} ticks at {u.Position[1]}, goal cell {u.GoalCell[1]}");
+        Assert.Equal(UnitState.Idle, u.State[1]);
+        Assert.Equal(UnitState.Idle, u.State[0]);
+    }
+
+    /// <summary>
+    /// Criterion 3: an enemy Idle unit is never shoved. Walker (player 0) and standing unit (player 1)
+    /// in the 1-cell corridor: the walker can't pass, so it gives up, and the enemy never moves.
+    /// </summary>
+    [Fact]
+    public void EnemyIdleUnitInOneCellCorridor_IsNeverShoved_WalkerGivesUp()
+    {
+        Simulation sim = SimOn(Corridor(), 2, players: 2);
+        NavGrid g = sim.World.NavGrid;
+        Vector2 standing = g.CellCenter(8, 2), goal = g.CellCenter(14, 2);
+        int type = TypeWithRadius(0.9f); // too wide to pass each other in 2 m
+        SpawnOwned(sim, (0, type, g.CellCenter(2, 2)), (1, type, standing));
+        UnitStore u = sim.World.Units;
+        sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, 0), goal));
+        sim.Tick();
+        int ticks = 0;
+        do
+        {
+            sim.Tick();
+            ticks++;
+            Assert.True(u.Position[1] == standing, $"tick {ticks}: the enemy unit moved to {u.Position[1]}");
+        } while (u.State[0] == UnitState.Moving && ticks < 1000);
+        Assert.Equal(UnitState.Idle, u.State[0]);
+        Assert.Equal(-1, u.GoalCell[0]);
+        Assert.True(u.Position[0].X < standing.X, $"walker got past the enemy: {u.Position[0]}");
+    }
+
+    /// <summary>
+    /// Criterion 3: a Moving unit, walking or waiting for its field, is never moved by a shove. 128
+    /// units of one player to 64 neighboring goals: under the build cap most wait for their field
+    /// at first, standing among walkers and Idle units. Every tick, each unit that was Moving before
+    /// it and still is moved by exactly its own step (its Velocity; zero while waiting).
+    /// </summary>
+    [Fact]
+    public void MovingUnits_WalkingOrWaitingForAField_AreNeverShoved()
+    {
+        Simulation sim = MoveScenario.Spawn(seed: 21, units: 128, maxCost: 15f, out int center);
+        UnitStore u = sim.World.Units;
+        // One player, so every Idle unit is a candidate for shoving.
+        for (int i = 0; i < u.Capacity; i++) u.Owner[i] = 0;
+        NavGrid g = sim.World.NavGrid;
+        var near = Pathfinding.FlowField.Build(g, center);
+        var goals = new List<int>();
+        for (int c = 0; c < g.Width * g.Height && goals.Count < 64; c++)
+            if (near.CostAt(c) <= 15f) goals.Add(c);
+        for (int i = 0; i < u.Capacity; i++)
+            sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, i), MoveScenario.Center(g, goals[i % goals.Count])));
+        sim.Tick();
+        var wasMoving = new bool[u.Capacity];
+        var wasIdle = new bool[u.Capacity];
+        var before = new Vector2[u.Capacity];
+        int waitingChecks = 0, walkingChecks = 0, shoves = 0, ticks = 0;
+        do
+        {
+            for (int i = 0; i < u.Capacity; i++)
+            {
+                wasMoving[i] = u.State[i] == UnitState.Moving;
+                wasIdle[i] = u.State[i] == UnitState.Idle;
+                before[i] = u.Position[i];
+            }
+            sim.Tick();
+            ticks++;
+            for (int i = 0; i < u.Capacity; i++)
+            {
+                if (wasIdle[i] && u.State[i] == UnitState.Idle && u.Position[i] != before[i]) shoves++;
+                if (!wasMoving[i] || u.State[i] != UnitState.Moving) continue;
+                // The same float sum MovementSystem does: anything else (a shove) shows as a difference.
+                Assert.True(u.Position[i] == before[i] + u.Velocity[i], $"tick {ticks}: Moving unit {i} went {before[i]} -> {u.Position[i]} but stepped {u.Velocity[i]}");
+                if (u.Velocity[i] == Vector2.Zero) waitingChecks++;
+                else walkingChecks++;
+            }
+        } while (CountMoving(u) > 0 && ticks < 3000);
+        _out.WriteLine($"{ticks} ticks: {walkingChecks} walking and {waitingChecks} standing Moving unit-ticks checked; {shoves} shoves of Idle units");
+        Assert.True(waitingChecks > 100 && walkingChecks > 1000 && shoves > 20, "the scenario did not mix waiting, walking and shoving");
+    }
+
+    /// <summary>
+    /// Criterion 4: three arrived units of one goal in a row, A within ArrivalDistance of the point,
+    /// B touching A, C touching only B. A friendly walker overlapping B shoves it toward its point:
+    /// B, still touching its blob, keeps its goal; C, no longer linked to the point, drops it. Ordered
+    /// back to the point, C walks there and arrives.
+    /// </summary>
+    [Fact]
+    public void ShovedArrivedUnit_StillTouchingItsBlob_KeepsItsGoal_TheUnitLinkedThroughItDropsIt_AndCanBeSentBack()
+    {
+        Simulation sim = SimOn(Flat(32), 4);
+        NavGrid g = sim.World.NavGrid;
+        Vector2 point = new(31f, 31f);
+        Assert.True(g.WorldToCell(point, out int px, out int py));
+        int cell = py * g.Width + px;
+        Vector2 a = point + new Vector2(0.3f, 0f), b = point + new Vector2(1.05f, 0f), c = point + new Vector2(1.8f, 0f);
+        int type = TypeWithRadius(0.4f);
+        SpawnOwned(sim, (0, type, a), (0, type, b), (0, type, c), (0, type, b + new Vector2(0.35f, -0.35f)));
+        UnitStore u = sim.World.Units;
+        // A, B and C arrived at the point earlier (a test seam: their Move already played out).
+        for (int i = 0; i < 3; i++)
+        {
+            u.Goal[i] = point;
+            u.GoalCell[i] = cell;
+        }
+        bool[] before = MoveScenario.Arrived(sim.World);
+        Assert.True(before[0] && before[1] && before[2], "the row is not linked to its point");
+        // The walker overlaps B and heads away south-west.
+        sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, 3), point + new Vector2(-12f, 12f)));
+        sim.Tick();
+        sim.Tick(); // the Move applies, the walker plans, B is shoved
+        _out.WriteLine($"after the first shove: A {u.Position[0]}, B {u.Position[1]} (goal cell {u.GoalCell[1]}), C {u.Position[2]} (goal cell {u.GoalCell[2]})");
+        Assert.True(u.Position[1].X < b.X, $"B was not shoved toward its point: {u.Position[1]}");
+        Assert.Equal(b.Y, u.Position[1].Y); // only toward its point (west), never away from it
+        Assert.Equal(a, u.Position[0]);      // A holds its point
+        Assert.Equal(cell, u.GoalCell[0]);
+        Assert.Equal(cell, u.GoalCell[1]);
+        Assert.Equal(-1, u.GoalCell[2]);
+        int ticks = 0;
+        while (u.State[3] == UnitState.Moving && ticks < 1000) { sim.Tick(); ticks++; }
+        bool[] arrived = MoveScenario.Arrived(sim.World);
+        Assert.True(arrived[0] && arrived[1], "A and B are no longer linked to their point");
+        // Sent back, C walks to the blob and arrives.
+        Vector2 dropped = u.Position[2];
+        sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, 2), point));
+        sim.Tick();
+        ticks = 0;
+        do { sim.Tick(); ticks++; } while (u.State[2] == UnitState.Moving && ticks < 600);
+        _out.WriteLine($"C re-ordered: arrived after {ticks} ticks at {u.Position[2]} (from {dropped})");
+        Assert.Equal(cell, u.GoalCell[2]);
+        Assert.True(MoveScenario.Arrived(sim.World)[2], $"C stopped at {u.Position[2]}, not linked to its point");
+    }
+
+    /// <summary>
+    /// BUG-0031 (the Constrain fix, with nothing to shove): a unit hugging a cliff, overlapped by an
+    /// enemy standing unit 0.1 m east of it, walks away along the wall or east. It used to be pushed
+    /// out of the whole overlap, into the cliff, on every candidate step, and gave up.
+    /// </summary>
+    [Theory]
+    [InlineData(10.5f, 25f)]
+    [InlineData(10.5f, 3f)]
+    [InlineData(25f, 11f)]
+    public void UnitOverlappingAnEnemyStandingUnit_WithACliffBehind_WalksAway(float tx, float ty)
+    {
+        Simulation sim = SimOn(CliffColumn(), 2, players: 2);
+        int type = TypeWithRadius(0.4f);
+        Vector2 start = new(10.05f, 11f), enemy = new(10.15f, 11f);
+        SpawnOwned(sim, (0, type, start), (1, type, enemy));
+        UnitStore u = sim.World.Units;
+        Vector2 target = new(tx, ty);
+        sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, 0), target));
+        sim.Tick();
+        int ticks = 0;
+        do
+        {
+            sim.Tick();
+            ticks++;
+            Assert.Equal(-1, MoveScenario.FirstUnitOnBlockedGround(sim.World));
+        } while (u.State[0] == UnitState.Moving && ticks < 2000);
+        _out.WriteLine($"to {target}: idle after {ticks} ticks at {u.Position[0]}, goal cell {u.GoalCell[0]}");
+        Assert.Equal(enemy, u.Position[1]);
+        Assert.True(Vector2.Distance(u.Position[0], target) <= MovementConstants.ArrivalDistance, $"stopped at {u.Position[0]}");
+    }
+
     // ---------- determinism ----------
+
+    private const int Crowd = 35;
+
+    /// <summary>
+    /// A column of 5 walkers crosses a grid of 35 friendly Idle units (2 m apart, 1.2 m gaps, too
+    /// narrow for a walker of radius 0.7) down its middle column, shoving units along and aside.
+    /// Returns the sim's state hash
+    /// per tick, and per tick a hash of every unit's state in spawn-list order (not slot order), so
+    /// runs with different slot orders compare.
+    /// </summary>
+    private static (ulong[] State, ulong[] ByIdentity) RunColumnThroughIdleCrowd(bool reversed, out int shoved)
+    {
+        var spawns = new List<Vector2>();
+        for (int k = 0; k < Crowd; k++) spawns.Add(new Vector2(27f + 2f * (k % 5), 24f + 2f * (k / 5)));
+        for (int k = 0; k < 5; k++) spawns.Add(new Vector2(31f, 4f + 3f * k));
+        int n = spawns.Count;
+        Simulation sim = SimOn(Flat(32), n);
+        int crowdType = TypeWithRadius(0.4f), walkerType = TypeWithRadius(0.7f);
+        for (int k = 0; k < n; k++)
+        {
+            int id = reversed ? n - 1 - k : k;
+            sim.Enqueue(Command.SpawnUnit(0, id < Crowd ? crowdType : walkerType, spawns[id]));
+        }
+        sim.Tick();
+        sim.Tick();
+        UnitStore u = sim.World.Units;
+        int SlotOf(int k) => reversed ? n - 1 - k : k;
+        for (int k = Crowd; k < n; k++) sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, SlotOf(k)), new Vector2(31f, 58f)));
+        var state = new ulong[600];
+        var byIdentity = new ulong[state.Length];
+        for (int t = 0; t < state.Length; t++)
+        {
+            sim.Tick();
+            state[t] = sim.StateHash();
+            ulong h = 14695981039346656037UL;
+            void Mix(uint bits) { h = (h ^ bits) * 1099511628211UL; }
+            for (int k = 0; k < n; k++)
+            {
+                int i = SlotOf(k);
+                Mix(BitConverter.SingleToUInt32Bits(u.Position[i].X));
+                Mix(BitConverter.SingleToUInt32Bits(u.Position[i].Y));
+                Mix(BitConverter.SingleToUInt32Bits(u.Velocity[i].X));
+                Mix(BitConverter.SingleToUInt32Bits(u.Velocity[i].Y));
+                Mix((uint)u.State[i]);
+                Mix((uint)u.GoalCell[i]);
+            }
+            byIdentity[t] = h;
+        }
+        shoved = 0;
+        for (int k = 0; k < Crowd; k++) if (u.Position[SlotOf(k)] != spawns[k]) shoved++;
+        for (int k = Crowd; k < n; k++) Assert.Equal(UnitState.Idle, u.State[SlotOf(k)]);
+        return (state, byIdentity);
+    }
+
+    /// <summary>
+    /// Criterion 7: the column through the idle crowd hashes equal every tick when run twice, in
+    /// either spawn order, and the two spawn orders give the same states unit for unit: a shove is
+    /// the same whichever slot the shover or the shoved unit has.
+    /// </summary>
+    /// <remarks>
+    /// Not a general guarantee: a walker sums its own neighbors' pushes and wall trims in ascending
+    /// slot order (M1-4d-1), so where it touches three or more units at once the last bit of its step
+    /// can depend on slot order (a 7 x 7 grid 1.6 m apart first differed at tick 27, in the lead
+    /// walker's own velocity). Same seed and commands still give the same hash.
+    /// </remarks>
+    [Fact]
+    public void Determinism_WalkerColumnThroughIdleCrowd_SameHashEveryTick_WithReversedSpawnOrder()
+    {
+        var a = RunColumnThroughIdleCrowd(false, out int shovedA);
+        var again = RunColumnThroughIdleCrowd(false, out _);
+        var b = RunColumnThroughIdleCrowd(true, out int shovedB);
+        var bAgain = RunColumnThroughIdleCrowd(true, out _);
+        int firstDiff = -1;
+        for (int t = 0; t < a.ByIdentity.Length && firstDiff < 0; t++) if (a.ByIdentity[t] != b.ByIdentity[t]) firstDiff = t;
+        _out.WriteLine($"{shovedA} (reversed: {shovedB}) of {Crowd} idle units shoved; spawn orders first differ at tick {firstDiff} (-1: never)");
+        Assert.True(shovedA >= 5, $"only {shovedA} idle units were shoved: the column didn't cross the crowd");
+        for (int t = 0; t < a.State.Length; t++)
+        {
+            Assert.True(a.State[t] == again.State[t], $"spawn order 1 diverged at tick {t}");
+            Assert.True(b.State[t] == bAgain.State[t], $"reversed spawn order diverged at tick {t}");
+        }
+        Assert.Equal(-1, firstDiff);
+    }
 
     /// <summary>300 units in 4 groups heading for 4 nearby points, rotated every 250 ticks so the groups cross through each other's blobs.</summary>
     private static ulong[] RunCrowds(ulong seed)
@@ -525,6 +873,85 @@ public class LocalMovementTests
             if (!enforce) return; // information only (brief M1-4d-1)
             Assert.True(avg < 4.0, $"avg {avg:F2} ms (docs/03: < 4 ms)");
             Assert.True(worst < 8.0, $"worst {worst:F2} ms (< 8 ms)");
+        }
+
+        /// <summary>
+        /// 300 units (both players) settled in a blob at the map's central point, then 200 more spawned
+        /// 20-32 m west of it and ordered 18 m east of it, so they walk through the blob and shove its
+        /// friendly members. Returns the sim with the walkers' Moves applied; <paramref name="blob"/>
+        /// holds each slot's position once the blob settled.
+        /// </summary>
+        private static Simulation CrossingTheBlob(out Vector2[] blob)
+        {
+            Simulation sim = MoveScenario.Spawn(seed: 73, units: 300, maxCost: 25f, out int goalCell, capacity: 500);
+            NavGrid g = sim.World.NavGrid;
+            UnitStore u = sim.World.Units;
+            Vector2 point = MoveScenario.Center(g, goalCell);
+            MoveScenario.MoveAll(sim, point);
+            sim.Tick();
+            int t = 0;
+            do { sim.Tick(); t++; } while (CountMoving(u) > 0 && t < 3000);
+            Assert.Equal(0, CountMoving(u));
+            blob = (Vector2[])u.Position.Clone();
+            Pathfinding.FlowField field = Pathfinding.FlowField.Build(g, goalCell);
+            var west = new List<int>();
+            for (int c = 0; c < g.Width * g.Height; c++)
+                if (field.CostAt(c) >= 10f && field.CostAt(c) <= 16f && MoveScenario.Center(g, c).X < point.X - 12f) west.Add(c);
+            var rng = new Determinism.SimRng(73, 5);
+            for (int k = 0; k < 200; k++)
+            {
+                Vector2 corner = MoveScenario.Center(g, west[rng.NextInt(0, west.Count)]) - new Vector2(MapConstants.CellSize / 2);
+                sim.Enqueue(Command.SpawnUnit(k % 2, k % TestSim.UnitTypeCount, corner + new Vector2(0.05f + rng.NextFloat() * 1.9f, 0.05f + rng.NextFloat() * 1.9f)));
+            }
+            sim.Tick();
+            sim.Tick();
+            Assert.Equal(500, u.Count);
+            Vector2 target = point + new Vector2(18f, 0f);
+            for (int i = 300; i < 500; i++) sim.Enqueue(Command.Move(u.Owner[i], MoveScenario.Handle(sim, i), target));
+            sim.Tick();
+            return sim;
+        }
+
+        private static int ShovedSince(UnitStore u, Vector2[] blob)
+        {
+            int n = 0;
+            for (int i = 0; i < 300; i++) if (u.State[i] == UnitState.Idle && u.Position[i] != blob[i]) n++;
+            return n;
+        }
+
+        /// <summary>Criterion 8: 200 walkers crossing a settled 300-unit blob, shoving its members, allocate nothing.</summary>
+        [Fact]
+        public void Tick_200WalkersCrossingASettled300UnitBlob_AllocatesNothing()
+        {
+            Simulation sim = CrossingTheBlob(out Vector2[] blob);
+            for (int t = 0; t < 120; t++) sim.Tick(); // the column reaches the blob
+            int before = ShovedSince(sim.World.Units, blob);
+            Action ticks = () => { for (int t = 0; t < 20; t++) sim.Tick(); };
+            AllocationProbe.AssertZero(ticks, _out);
+            int after = ShovedSince(sim.World.Units, blob);
+            _out.WriteLine($"blob units moved by shoves: {before} before the measured ticks, {after} after; {CountMoving(sim.World.Units)} moving");
+            Assert.True(after > before, "no blob unit was shoved during the measured ticks");
+        }
+
+        /// <summary>Criterion 9: tick cost while 200 walkers cross a settled 300-unit blob (docs/03 budget: under 4 ms average).</summary>
+        [Trait("Category", "Perf")]
+        [Fact]
+        public void Perf_200WalkersCrossingASettled300UnitBlob_AvgAndWorstTick()
+        {
+            Simulation sim = CrossingTheBlob(out Vector2[] blob);
+            for (int t = 0; t < 5; t++) sim.Tick(); // warm-up (JIT, field build)
+            var times = new double[400];
+            var sw = new Stopwatch();
+            for (int t = 0; t < times.Length; t++)
+            {
+                sw.Restart();
+                sim.Tick();
+                times[t] = sw.Elapsed.TotalMilliseconds;
+            }
+            double avg = times.Average(), worst = times.Max();
+            _out.WriteLine($"200 walkers crossing a 300-unit blob: avg {avg:F2} ms, worst {worst:F2} ms, {ShovedSince(sim.World.Units, blob)} blob units shoved, {CountMoving(sim.World.Units)} still moving after {times.Length} ticks");
+            Assert.True(ShovedSince(sim.World.Units, blob) > 10, "the walkers didn't cross the blob");
+            Assert.True(avg < 4.0, $"avg {avg:F2} ms (docs/03: < 4 ms)");
         }
     }
 }

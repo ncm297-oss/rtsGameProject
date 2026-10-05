@@ -164,11 +164,11 @@ public class LocalMovementRecheckQaTests
 
     /// <summary>
     /// A unit against a cliff, overlapped by a standing unit (no goal) 0.1 m east of it, is ordered
-    /// away along the wall (north or south) or east. Constrain asks every candidate step to clear the
-    /// whole overlap with the standing unit, which points into the cliff, so every step is refused and
-    /// the unit gives up whatever the order: it is pinned until the other unit moves.
+    /// away along the wall (north or south) or east. BUG-0031: Constrain asked every candidate step to
+    /// clear the whole overlap with the standing unit, which points into the cliff, so every step was
+    /// refused and the unit gave up whatever the order (fixed in M1-4d-2).
     /// </summary>
-    [Theory(Skip = "BUG-0031: a unit overlapping a standing unit with a cliff behind it can't walk away in any direction; un-skip when fixed")]
+    [Theory]
     [InlineData(10.5f, 25f)]
     [InlineData(10.5f, 3f)]
     [InlineData(25f, 11f)]

@@ -38,19 +38,42 @@ public sealed class World
         PlannedStep = new Vector2[config.UnitCapacity];
         PlannedAction = new byte[config.UnitCapacity];
         PlannedRemaining = new float[config.UnitCapacity];
-        float maxRadius = 0f;
+        ShoveStep = new Vector2[config.UnitCapacity];
+        ShovedGoals = new int[config.UnitCapacity];
+        AnchorQueue = new int[config.UnitCapacity];
+        AnchorLinked = new bool[config.UnitCapacity];
+        float maxRadius = 0f, maxSpeed = 0f;
         for (int t = 0; t < config.Data.Units.Length; t++)
+        {
             if (config.Data.Units[t].Radius > maxRadius) maxRadius = config.Data.Units[t].Radius;
+            if (config.Data.Units[t].SpeedPerTick > maxSpeed) maxSpeed = config.Data.Units[t].SpeedPerTick;
+        }
         MaxUnitRadius = maxRadius;
+        MaxUnitSpeed = maxSpeed;
     }
 
     /// <summary>Largest unit collision radius in <see cref="Data"/>: a neighbor query of own radius plus this finds every unit that can touch.</summary>
     internal float MaxUnitRadius { get; }
 
+    /// <summary>Largest unit speed (m/tick) in <see cref="Data"/>: no unit moves further than this in one tick.</summary>
+    internal float MaxUnitSpeed { get; }
+
+    /// <summary>Scratch for <see cref="Movement.MovementSystem"/>: the shove each standing Idle unit gets from friendly walkers this tick, summed in walk order; zero again once applied; derived, not hashed.</summary>
+    internal Vector2[] ShoveStep { get; }
+
+    /// <summary>Scratch for <see cref="Movement.MovementSystem"/>: goal cells of the units a shove moved this tick, whose groups re-check their anchors; derived, not hashed.</summary>
+    internal int[] ShovedGoals { get; }
+
+    /// <summary>Scratch for <see cref="Movement.MovementSystem"/>: the slots shoved this tick, then the anchor re-check's breadth-first queue of linked units; derived, not hashed.</summary>
+    internal int[] AnchorQueue { get; }
+
+    /// <summary>Scratch for <see cref="Movement.MovementSystem"/>'s anchor re-check: which slots are linked to their point; all false between re-checks; derived, not hashed.</summary>
+    internal bool[] AnchorLinked { get; }
+
     /// <summary>Scratch for <see cref="Movement.MovementSystem"/>'s neighbor queries, sized to every slot so a query is never truncated; derived, not hashed.</summary>
     internal int[] Neighbors { get; }
 
-    /// <summary>Scratch for <see cref="Movement.MovementSystem"/>: each Moving unit's planned step, applied once every unit has planned; derived, not hashed.</summary>
+    /// <summary>Scratch for <see cref="Movement.MovementSystem"/>: each Moving unit's planned step, applied once every unit has planned, then each shoved unit's trimmed shove; derived, not hashed.</summary>
     internal Vector2[] PlannedStep { get; }
 
     /// <summary>Scratch for <see cref="Movement.MovementSystem"/>: each Moving unit's planned outcome (walk, wait, arrive, abandon); derived, not hashed.</summary>
