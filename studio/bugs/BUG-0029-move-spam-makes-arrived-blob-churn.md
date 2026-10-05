@@ -6,7 +6,7 @@
 | Status | fixed |
 | Found | 2026-10-05-0742, task M1-4d-1 |
 | System | movement (crowded arrival) |
-| Fixed by | M1-4d-1 fix round 1 (uncommitted); LocalMovementTests.ArrivedBlob_ReorderedToTheSamePointEveryTick_StaysIdleAndStill, LocalMovementTests.SameMoveSpammedEveryTick_ToAWalledInUnit_StillGivesUpOnTime, QA/MoveQaTests.Move_SpammedEveryTick_... restored |
+| Fixed by | M1-4d-1 fix round 1, commit 878fb62 (`Simulation.ApplyMove` same-goal-cell rule; QA re-check: 0/20 Moving, 0 m walked under spam); LocalMovementTests.ArrivedBlob_ReorderedToTheSamePointEveryTick_StaysIdleAndStill, LocalMovementTests.SameMoveSpammedEveryTick_ToAWalledInUnit_StillGivesUpOnTime, QA/MoveQaTests.Move_SpammedEveryTick_... restored |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~SettledBlob_ReorderedToSamePointEveryTick" --logger "console;verbosity=detailed"`
