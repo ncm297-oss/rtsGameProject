@@ -3,7 +3,74 @@
 Written by the Producer at the end of each session for the next one. The next session's
 Producer starts from this, verifies it against the repo, and then plans.
 
-_Written: 2026-10-04 (session 2026-10-04-2056, ACCEPT)._
+_Written: 2026-10-04 (session 2026-10-04-2056, ACCEPT). Current session plan added 2026-10-05-0742._
+
+## Current session plan (2026-10-05-0742): M1-4d-1 — separation, crowded arrival, stuck give-up, adjacent-cell steering
+
+Checks: inbox empty; main @ 5f960c1 clean, build 0/0, `Category!=Perf` 849 passed / 6 skipped;
+verified M1-4c claims (`MaxFieldBuildsPerTick = 2`, `Get`/`TryGetCached` internal, `World` uses
+`CapacityFor`); no docs drift; open S1/S2: none; sessions today 0/10 (first of the day).
+
+**Goal.** Units heading to one point stop stacking on it and stop walking through each other:
+soft unit-unit separation, arrival for a crowd (not just for the one unit that reaches the exact
+point), a give-up rule for units that can't make progress, and direct steering when the goal is one
+cell away. Second half of roadmap criterion 4; shoving + BUG-0005 are M1-4d-2.
+
+**Scope (IN).**
+- Separation: per Moving unit, one `Spatial.QueryRadius` (radius = own `Radius` + max data radius,
+  1.0 m, from `GameData`, not a literal) into a preallocated `World` scratch buffer; sum a push away
+  from every overlapping live unit, weighted by overlap depth; add to the flow/goal desired velocity;
+  clamp the step to `Speed`. Separation reads start-of-tick positions (two passes: compute all steps,
+  then apply) so the force is symmetric and doesn't depend on walk order.
+- Crowded arrival (Producer decision, owner may revisit): a Moving unit arrives when it is within
+  `ArrivalDistance` of its goal inside the goal cell (today's rule), OR when it overlaps an Idle unit
+  that has the same `GoalCell` and itself arrived there (`State == Idle`, same `GoalCell`), so a group
+  packs into a blob around the point instead of fighting over it. This replaces "target offsets in a
+  loose formation" in docs/03 "Local movement" for M1; formation offsets can return at M2 with group
+  commands.
+- Stuck give-up: a new hashed per-unit counter (`StuckTicks` or similar) counts consecutive ticks a
+  Moving unit moved less than a fraction of its speed; past `MovementConstants.GiveUpTicks` (~1 s = 20
+  ticks) it goes Idle. Reset by `Move` and by progress.
+- Adjacent-cell steering: when the goal cell is a legal 8-neighbor step from the current cell (no
+  corner cutting: both side cells passable), aim straight at the goal instead of the neighbor center.
+- Blocked-cell refusal stays: a combined step whose destination cell is blocked is refused (try the
+  flow step alone before giving up on the tick, so separation can't pin a unit forever).
+- Docs/03 "Local movement" implementation paragraph, StateHash paragraph, MovementConstants remarks.
+
+**Scope (OUT).** Shoving of idle units, `Stop`/`Hold`, BUG-0005 command buckets, BUG-0025/0026,
+formation offsets, flying units, path smoothing beyond the adjacent-cell case, any `game/` change.
+
+**Acceptance criteria.**
+1. 50 units ordered to one open point all go Idle within 600 ticks, no two with centers closer than
+   0.5 × (r_i + r_j) at the end (loose pack), none in a blocked cell, none off the map.
+2. 200 units across the default map (extend `TwoHundredUnits_OneMove_...`) still all arrive within the
+   current limit and are never on blocked ground.
+3. Two units walking head-on past each other in a 1-cell corridor never overlap by more than 50% of
+   the smaller radius, and both arrive.
+4. A unit whose every step is refused (walled in by idle units of another goal) goes Idle after
+   `GiveUpTicks`; a unit making progress never does; a new `Move` resets the counter.
+5. Adjacent-cell steering: a unit one diagonal cell from its goal with the corner open heads straight
+   at it; with the corner blocked it still takes the legal route (regression for BUG-0020 stays green).
+6. Determinism: two sims, same seed + commands, hash-equal every tick with 300 units in 4 crowded
+   groups for 1,000 ticks (extend `Determinism_TwoSims_...`). New per-unit state is in `StateHash`
+   (`StateHashTests` cover it).
+7. Zero allocation per tick with 500 moving units in one blob (`AllocationProbe.AssertZero`, in
+   `SerialCollection`).
+8. Perf (Serial, `Category=Perf`): 500 units converging on one point, average tick < 4 ms, worst < 8 ms;
+   report 1,000 and 2,500.
+9. `FieldBuildOrderTests` and `QA/FieldBuildFairnessQaTests` unchanged and green.
+10. docs/03 updated in the same commit; no data stat in C# (radius/speed from data; new
+    `MovementConstants` are geometry/tuning and documented).
+
+**Design references.** docs/03 "Local movement", "Spatial hash" (`QueryRadius` contract: ascending
+slots, count may exceed buffer), "Determinism", "State hash", tick phases 8-9; docs/02 "Unit collision
+radius is 0.4-1.0 m" (one size class).
+
+**Constraints at risk.** No per-tick allocation (scratch buffers on `World`, sized from
+`UnitCapacity`); no `Math.Atan2`/`Sin` (use `SimMath`); no LINQ; `Array.Sort` only on preallocated
+buffers; every Perf/alloc test in `SerialCollection`. Keep (goal cell, slot) order for the build pass.
+Budget: ~800 changed lines; if separation + arrival alone fill it, drop adjacent-cell steering to 4d-2
+and say so in the report.
 
 ## Where we are
 
