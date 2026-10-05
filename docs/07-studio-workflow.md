@@ -158,18 +158,20 @@ Chosen by the owner on 2026-10-02: **project allowlist + auto mode** for unatten
   - **Allowed without asking:** `dotnet`, Godot via `$GODOT`, non-destructive git (status,
     diff, log, add, commit, pull, fetch, push, switch, branch, merge, stash, worktree, lfs, …),
     read-only PowerShell cmdlets.
-  - **Always asks:** `winget`, downloads (`curl`, `Invoke-WebRequest`), `npx`/`npm install`,
-    `dotnet add`/`dotnet tool`, setting environment variables.
-  - **Always blocked:** force-push, deleting remote branches, `git reset --hard`, `git clean`,
+  - **Always blocked** (moved from "always asks" on 2026-10-05, when the routine switched to
+    bypass mode, which skips ask rules): `winget`, downloads (`curl`, `Invoke-WebRequest`),
+    `npx`/`npm install`, `dotnet add package`/`dotnet tool`, setting environment variables. When
+    you want one of these, run it yourself or ask Claude to lift the block for that one change.
+  - **Also always blocked:** force-push, deleting remote branches, `git reset --hard`, `git clean`,
     `git rebase`, history rewriting, `git branch -D`, registry edits, execution-policy and
     Defender changes, `netsh`, permission changes (`icacls`, `takeown`), shutdown/restart, disk
     formatting, deleting from the drive root or home, reading `.env` files.
-- **Every session in this project starts in auto mode** (`"defaultMode": "auto"` in
-  `.claude/settings.json`, added 2026-10-03 because new sessions were starting in manual mode
-  and stalling on prompts). Anything not on the lists is reviewed by Claude Code's safety
-  classifier before it runs. You can still switch a single session's mode in the app.
-- An unattended session that hits an "always asks" action can't get an answer, so the Producer
-  plans around those and lists them under Waiting on you instead.
+- **The scheduled routine runs in bypass permissions mode** (set by the owner in the routine's
+  menu, 2026-10-05): no prompts, no safety-classifier review, so the block list above is the guard
+  for unattended runs. Interactive sessions use whatever mode you pick in the app (the project's
+  `"defaultMode": "auto"` setting doesn't appear to be honored there).
+- Anything the agents may never do on their own (installs, downloads, accounts, money) is on the
+  block list, and the Producer lists such needs under Waiting on you instead.
 - To loosen or tighten access later, edit `.claude/settings.json` (or ask Claude to) and commit.
 
 ## Cost and pacing

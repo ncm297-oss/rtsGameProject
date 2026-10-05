@@ -70,7 +70,7 @@
       "mcp__scheduled-tasks__list_scheduled_tasks",
       "mcp__ccd_session_mgmt__get_usage"
     ],
-    "ask": [
+    "deny": [
       "Bash(winget *)",
       "PowerShell(winget *)",
       "Bash(curl *)",
@@ -92,9 +92,8 @@
       "PowerShell(dotnet new install*)",
       "PowerShell([Environment]::SetEnvironmentVariable*)",
       "PowerShell(setx *)",
-      "Bash(setx *)"
-    ],
-    "deny": [
+      "Bash(setx *)",
+
       "Bash(git push --force*)",
       "Bash(git push -f*)",
       "Bash(git push * -f*)",
