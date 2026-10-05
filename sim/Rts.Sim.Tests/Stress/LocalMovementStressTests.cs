@@ -68,16 +68,17 @@ public class LocalMovementStressTests
     /// report settle ticks, arrivals and give-ups.
     /// </summary>
     /// <remarks>
-    /// The arrived bounds are the M1-4d-2 measurements less a little headroom: 500/500 and 2493/2500
-    /// to one point, 103/500 and 264/2500 to four. Owners alternate by slot, so each pair of
+    /// The arrived bounds are the M1-4d-2 measurements (fix round 1) less a little headroom: 500/500
+    /// and 2493/2500 to one point, 174/500 and 891/2500 to four (criterion 6 asked for 80% / 60%,
+    /// BUG-0032). Owners alternate by slot, so each pair of
     /// neighboring points belongs to different players: walkers can't shove the other player's blob
     /// and the flow field doesn't route round it (BUG-0028).
     /// </remarks>
     [Theory]
     [InlineData(500, 1, 3000, 99)]
-    [InlineData(500, 4, 3000, 18)]
+    [InlineData(500, 4, 3000, 32)]
     [InlineData(2500, 1, 6000, 99)]
-    [InlineData(2500, 4, 6000, 9)]
+    [InlineData(2500, 4, 6000, 33)]
     public void Crowd_ToOneOrFourClosePoints_InvariantsEveryTick_AllSettle(int units, int points, int limit, int minArrivedPercent)
     {
         Simulation sim = MoveScenario.Spawn(seed: (ulong)(900 + units + points), units: units, maxCost: units > 1000 ? 70f : 40f, out int goalCell);

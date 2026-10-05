@@ -39,3 +39,19 @@ The parked unit never moves, and the walker gives up in front of it.
 - The developer measured that shoving arrived units straight away un-anchored whole blobs (114 /
   238 arrived vs 161 / 499). A fix needs a rule that lets parked units yield without wrecking
   blobs (for example yield sideways out of a corridor and drop the goal, as the brief allows).
+
+## Re-check round 1 (2026-10-05-1013, fix 16d72e8)
+Partly fixed. A *lone* parked unit is now pushed once the walker has been stuck for
+`PushAfterStuckTicks` (10) ticks: both rows of `ShoveQaTests.WalkerInOneCellCorridor_PastAFriendlyUnitParkedThereByAMove_Arrives`
+pass (walker arrives after 256 / 259 ticks; the parked unit is pushed 12.8 m along the corridor and drops its goal).
+Mutation-checked: dropping the lone-anchor push or the stuck-count hold fails it.
+
+Still open: a parked *group* still never yields. Repro: un-skip
+`ShoveQaTests.WalkerInOneCellCorridor_PastAParkedFriendlyPair_Arrives`. Two radius-0.9 units of player 0
+ordered to the same point in the 1-cell corridor (both arrived), a third walks past:
+```
+walker gave up after 115 ticks at <15.50, 4.01>; pair at <17, 5> / <18.69, 5.07>, goal cells 56 / 56
+```
+The developer calls this a deliberate deviation (shoving units on their point always "halves the crowd
+rows"). Criterion 1 does not limit itself to lone units; the Producer decides whether a parked group
+blocking its own army through a choke is accepted for M1.

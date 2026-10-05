@@ -49,3 +49,22 @@ to nearby points should mostly arrive.
   the flow field ignores units, so walkers aim straight through blobs.
 - Whether the targets are reachable inside the brief's scope (no shoving Moving units or enemies,
   no flow-field changes) is the Producer's call; the numbers above are the evidence.
+
+## Re-check round 1 (2026-10-05-1013, fix 16d72e8)
+Still open. Re-measured by QA (same tests), 2 players / 1 player:
+
+| Row | Target | Round 1 | Fix round 1 |
+| --- | --- | --- | --- |
+| 500 x 500 goals, gave up | <= 3% | 46 / 51 | 30 (6.0%) / 28 (5.6%) |
+| 128 x 64 goals, gave up | <= 5% | 23 / 21 | 26 (20.3%) / 23 (18.0%) |
+| 500 to 4 points, arrived | >= 80% | 103 / 161 | 174 (34.8%) / 219 (43.8%) |
+| 2,500 to 4 points, arrived | >= 60% | 264 / 499 | 891 (35.6%) / 996 (39.8%) |
+
+Better than base on every row; every target is still missed. The 128 x 64 row with two players got worse
+(23 -> 26), and the developer loosened its own bound 20% -> 22% (`MoreGoalsThanCacheSlots_..._AtMost22PercentGiveUp`).
+Crossing a settled blob (`ShoveQaTests.WalkersCrossing...`): mixed owners 2 / 0 of 200 arrive (seeds 73 / 75;
+28 / 0 before shoving), same owner 12 / 29 (round 1: 94 / 99). docs/03 now states the causes correctly
+(the enemy claim is withdrawn). QA re-tightened its own bounds to the new numbers:
+`FieldBuildCapQaTests.BuildCap_500UnitsWith500DistinctGoals_AllStop_AtMost7PercentGiveUp_NoDeadlock`
+(<= 7%) and the stress crowd rows (>= 32% / >= 33% arrived). Whether the targets are in scope (the developer
+says they need unit-aware routing) is the Producer's call.

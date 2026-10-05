@@ -199,7 +199,7 @@ public class FieldBuildCapQaTests
     }
 
     [Fact]
-    public void BuildCap_500UnitsWith500DistinctGoals_AllStop_AtMost11PercentGiveUp_NoDeadlock()
+    public void BuildCap_500UnitsWith500DistinctGoals_AllStop_AtMost7PercentGiveUp_NoDeadlock()
     {
         Simulation sim = SpawnRandom(5018, 500);
         NavGrid g = sim.World.NavGrid;
@@ -233,9 +233,9 @@ public class FieldBuildCapQaTests
         Assert.True(maxBuilds <= MovementConstants.MaxFieldBuildsPerTick);
         // M1-4d-1: units now block each other, so a unit can arrive by touching an arrived groupmate
         // or give up (GoalCell -1) when walled in by other units for GiveUpTicks. M1-4d-2 shoves
-        // friendly Idle units aside, but the two players' units alternate here, so most walls are
-        // enemies (never shoved) or units waiting for a field under the build cap (Moving, never
-        // shoved): 46 of 500 give up (9.2%). The bound is that plus about two points of headroom.
+        // friendly Idle units aside; units waiting for a field under the build cap (Moving) and
+        // enemies are never shoved: 30 of 500 give up (6.0%; 28 with one player, criterion 6 asked
+        // for 3%, BUG-0032). The bound is that plus about one point of headroom.
         bool[] arrived = MoveScenario.Arrived(sim.World);
         int arrivedCount = 0, gaveUp = 0;
         for (int i = 0; i < u.Capacity; i++)
@@ -245,7 +245,7 @@ public class FieldBuildCapQaTests
             else Assert.Fail($"unit {i} idle {Vector2.Distance(u.Position[i], u.Goal[i]):F2} m from its goal without arriving or giving up");
         }
         _out.WriteLine($"arrived {arrivedCount}, gave up {gaveUp}");
-        Assert.True(gaveUp <= u.Capacity * 11 / 100, $"{gaveUp} of {u.Capacity} units gave up");
+        Assert.True(gaveUp <= u.Capacity * 7 / 100, $"{gaveUp} of {u.Capacity} units gave up");
     }
 
     [Fact]

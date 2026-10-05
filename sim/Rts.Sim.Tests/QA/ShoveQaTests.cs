@@ -498,6 +498,126 @@ public class ShoveQaTests
         Assert.Equal(-1, MoveScenario.FirstUnitOnBlockedGround(sim.World));
     }
 
+    /// <summary>
+    /// Criterion 2 at a blocked *diagonal* cell: a one-cell pillar at (6, 6), both side cells of
+    /// (5, 5) passable, so <c>KeepOffWalls</c> trims nothing. A goal-less friendly unit stands in
+    /// the north-east corner of (5, 5); a walker overlapping it from the south-west pushes it
+    /// diagonally at the pillar. Only the blocked-cell refusal keeps it out (round 1 of the
+    /// re-check: removing that refusal no longer failed any test).
+    /// </summary>
+    [Theory]
+    [InlineData(11.95f, 0.25f)]
+    [InlineData(11.9f, 0.3f)]
+    [InlineData(11.98f, 0.2f)]
+    public void IdleUnitInACellCorner_ShovedDiagonallyAtABlockedCell_IsRefused(float at, float back)
+    {
+        var rows = new string[16];
+        for (int y = 0; y < 16; y++) rows[y] = y == 6 ? "0000001000000000" : new string('0', 16);
+        Simulation sim = LocalMovementTests.SimOn(LocalMovementTests.Rows(rows), 2);
+        NavGrid g = sim.World.NavGrid;
+        Assert.False(g.IsPassable(6, 6));
+        Assert.True(g.IsPassable(5, 6) && g.IsPassable(6, 5));
+        int type = LocalMovementTests.TypeWithRadius(0.4f);
+        Vector2 standing = new(at, at);
+        sim.Enqueue(Command.SpawnUnit(0, type, standing));
+        sim.Enqueue(Command.SpawnUnit(0, type, standing - new Vector2(back, back)));
+        sim.Tick();
+        sim.Tick();
+        UnitStore u = sim.World.Units;
+        sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, 1), new Vector2(25f, 25f)));
+        sim.Tick();
+        int moved = 0;
+        for (int t = 0; t < 60; t++)
+        {
+            Vector2 before = u.Position[0];
+            sim.Tick();
+            if (u.Position[0] != before) moved++;
+            Assert.True(MoveScenario.FirstUnitOnBlockedGround(sim.World) == -1, $"tick {t}: unit {MoveScenario.FirstUnitOnBlockedGround(sim.World)} on blocked ground; standing unit at {u.Position[0]}");
+        }
+        _out.WriteLine($"at {at}, walker {back} back: standing unit shoved on {moved} ticks, ends at {u.Position[0]}; walker at {u.Position[1]} ({u.State[1]})");
+    }
+
+    /// <summary>
+    /// Criterion 1 with a parked *pair*: two radius-0.9 units of player 0 ordered to the same point
+    /// in the 1-cell corridor (they pack along it, both keep the goal). A third unit of player 0
+    /// walks past them and must get through (the pair may lose its goal), as criterion 1 asks.
+    /// </summary>
+    [Fact(Skip = "BUG-0033: a parked group (two or more units on their point) is never shoved; the walker gives up. Un-skip when fixed")]
+    public void WalkerInOneCellCorridor_PastAParkedFriendlyPair_Arrives()
+    {
+        Simulation sim = LocalMovementTests.SimOn(Corridor(), 3);
+        NavGrid g = sim.World.NavGrid;
+        int type = LocalMovementTests.TypeWithRadius(0.9f);
+        Vector2 parked = g.CellCenter(8, 2), goal = g.CellCenter(14, 2);
+        sim.Enqueue(Command.SpawnUnit(0, type, g.CellCenter(2, 2)));
+        sim.Enqueue(Command.SpawnUnit(0, type, parked));
+        sim.Enqueue(Command.SpawnUnit(0, type, parked + new Vector2(1.8f, 0f)));
+        sim.Tick();
+        sim.Tick();
+        UnitStore u = sim.World.Units;
+        sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, 1), parked));
+        sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, 2), parked));
+        sim.Tick();
+        int t0 = 0;
+        do { sim.Tick(); t0++; } while (CountMoving(u) > 0 && t0 < 400);
+        bool[] arr = MoveScenario.Arrived(sim.World);
+        _out.WriteLine($"pair parked: {u.Position[1]} goal cell {u.GoalCell[1]} arrived {arr[1]}, {u.Position[2]} goal cell {u.GoalCell[2]} arrived {arr[2]}");
+        sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, 0), goal));
+        sim.Tick();
+        int ticks = 0;
+        do
+        {
+            sim.Tick();
+            ticks++;
+            Assert.Equal(-1, MoveScenario.FirstUnitOnBlockedGround(sim.World));
+        } while (u.State[0] == UnitState.Moving && ticks < 2000);
+        bool through = Vector2.Distance(u.Position[0], goal) <= MovementConstants.ArrivalDistance;
+        _out.WriteLine($"walker {(through ? "arrived" : "gave up")} after {ticks} ticks at {u.Position[0]}; pair at {u.Position[1]} / {u.Position[2]}, goal cells {u.GoalCell[1]} / {u.GoalCell[2]}");
+        Assert.Equal(UnitState.Idle, u.State[0]);
+        Assert.True(through, $"walker stopped at {u.Position[0]}, {Vector2.Distance(u.Position[0], goal):F2} m short");
+    }
+
+    /// <summary>
+    /// Push abuse (ActPush holds the stuck count): two radius-0.9 walkers of player 0 head-on in the
+    /// 1-cell corridor with a lone parked friendly unit between them, each blocked and pushing it
+    /// toward the other. Everything must stop within a bounded time; reports the outcome.
+    /// </summary>
+    [Fact]
+    public void HeadOnWalkersInOneCellCorridor_BothPushingALoneParkedUnit_Terminate()
+    {
+        Simulation sim = LocalMovementTests.SimOn(Corridor(), 3);
+        NavGrid g = sim.World.NavGrid;
+        int type = LocalMovementTests.TypeWithRadius(0.9f);
+        Vector2 parked = g.CellCenter(11, 2);
+        sim.Enqueue(Command.SpawnUnit(0, type, g.CellCenter(3, 2)));
+        sim.Enqueue(Command.SpawnUnit(0, type, g.CellCenter(19, 2)));
+        sim.Enqueue(Command.SpawnUnit(0, type, parked));
+        sim.Tick();
+        sim.Tick();
+        UnitStore u = sim.World.Units;
+        sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, 2), parked));
+        sim.Tick();
+        sim.Tick();
+        sim.Tick();
+        Assert.True(u.State[2] == UnitState.Idle && u.GoalCell[2] >= 0, "not parked");
+        sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, 0), g.CellCenter(19, 2)));
+        sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, 1), g.CellCenter(3, 2)));
+        sim.Tick();
+        var b = new Before(u.Capacity);
+        int ticks = 0, shoves = 0;
+        do
+        {
+            b.Capture(u);
+            sim.Tick();
+            ticks++;
+            string? err = CheckShoves(sim.World, b, ref shoves);
+            Assert.True(err == null, $"tick {ticks}: {err}");
+        } while (CountMoving(u) > 0 && ticks < 3000);
+        _out.WriteLine($"stopped after {ticks} ticks, {shoves} shoves; A at {u.Position[0]} goal cell {u.GoalCell[0]}, B at {u.Position[1]} goal cell {u.GoalCell[1]}, parked at {u.Position[2]} goal cell {u.GoalCell[2]}");
+        Assert.Equal(0, CountMoving(u));
+        Assert.True(ticks < 20 * MovementConstants.GiveUpTicks + 600, $"took {ticks} ticks");
+    }
+
     // ---------- give-up rows with one owner (criterion 6 without enemies) ----------
 
     /// <summary>
