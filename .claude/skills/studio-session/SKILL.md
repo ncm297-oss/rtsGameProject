@@ -43,6 +43,10 @@ on: the routine then keeps whatever schedule it has.
 
 Run these in `REPO`, before entering the worktree.
 
+0. **Remote Control:** call `mcp__ccd_session_mgmt__set_remote_control` with `session_id: "self"`
+   and `enabled: true`, so the owner can follow the session from the Claude mobile app. If the
+   tool is missing or refused (unattended runs may not allow it), carry on; the owner's
+   `remoteControlAtStartup` setting should already have connected the session.
 1. Read `REPO/studio/autopilot.md`. If `enabled` is not `yes` and `SOURCE` is `scheduled`, set
    the heartbeat, reply "Autopilot is disabled; exiting." and stop. An owner-started run
    continues anyway.

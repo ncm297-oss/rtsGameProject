@@ -68,7 +68,8 @@
 
       "mcp__scheduled-tasks__update_scheduled_task",
       "mcp__scheduled-tasks__list_scheduled_tasks",
-      "mcp__ccd_session_mgmt__get_usage"
+      "mcp__ccd_session_mgmt__get_usage",
+      "mcp__ccd_session_mgmt__set_remote_control"
     ],
     "deny": [
       "Bash(winget *)",
