@@ -392,7 +392,8 @@ So separation is symmetric and no result depends on which unit is walked first. 
   stuck. A `Move` to a new goal cell resets both fields. A `Move` to the goal cell the unit already
   has is the same order (click spam, AI refreshes; BUG-0029): an arrived (Idle) unit stays put, and
   a Moving one takes the new point but keeps its order tick and stuck count. Units stopping off
-  the map or on blocked ground also drop their goal.
+  the map or on blocked ground also drop their goal. A tick without progress while a groupmate
+  just ahead is still making progress is *queued*, not stuck (M1-5, below).
 
 **Implementation (M1-4d-2):** shoving, still inside the two passes. Rules:
 
@@ -478,6 +479,50 @@ before shoving). Units that stop at the back-off limit, or give up, can still ov
 more than 40%. Cost (Debug): 500 units converging on one point average about 0.1 ms per tick, 2,500
 about 0.7 ms; a 500-unit tight blob 0.1 ms, 2,500 about 2.7 ms; 200 walkers crossing a settled
 300-unit blob 0.2-0.3 ms.
+
+**Implementation (M1-5): queued walkers don't give up.** A crowd funneling through a ramp or a gap
+between cliffs pins some units against the corners while the rest of the group streams past. Such a
+unit makes no progress for more than a second although its group is moving, and under the M1-4d-1
+rule it gave up. Now a walking tick without progress is *queued* (count holds) instead of stuck
+(count up) when, at the start of the tick, a neighbor with the same `GoalCell` is ahead of the unit
+(in front of its walking direction), within touching + `AvoidRange`, walking, and made progress
+last tick. "Made progress last tick" reads the neighbor's `StuckTicks == 0`: only a progress tick
+resets the count while a unit is Moving, and a queued tick holds the count at no less than 1, so a
+queued unit never passes the signal on. Every hold therefore traces back to a real progress tick, and
+each order has finitely many (each beats the best estimate by `StuckFraction` x speed), so a jammed
+group still gives up once nobody in it moves forward (a test: six units in a 1-cell corridor behind
+an enemy all give up). Back-off, push and wait ticks are unchanged. No new state: it reads the hashed
+`StuckTicks` and velocities from start-of-tick state, like the rest of the plan pass.
+
+**Measured (M1-5), the M1 headline scenario** (`ScenarioTests`, `CrossMapScenario`, Debug). An army of
+200 units, every shipped type (14), one player, spawns at random points of the cells within 12 path
+cells of the passable cell nearest the middle of the west edge (level 0). The goal is the center of
+the passable level-1-or-higher cell with the greatest path cost from that start cell (ties to the
+lowest index), so the route climbs at least one ramp. **Time limit** = 2 x the undisturbed walk of
+the slowest shipped unit over the longest start-to-goal path: `2 * ceil(maxCost * CellSize /
+slowestSpeedPerTick)` ticks, with `maxCost` the largest field cost (cells) from any unit's spawn
+cell to the goal and the speed read from the data (catapult, 2.2 m/s), so a data change moves the
+limit with it. Seeds 1-8: paths of 192-304 m from the start cell (longest spawn 212-311 m), one level
+change and 4 ramp cells each (seed 14 of 30 climbs to level 2: 2 changes, 8 ramp cells); the army
+settles in 1,438-2,534 ticks against limits of 3,858-5,656 (at most 45% of the limit); all 200
+arrive, none gives up, no unit is ever on blocked ground, the pack check passes, and two sims with
+the same seed and commands hash equal at every 100-tick checkpoint. A whole crossing allocates 0
+bytes. Give-ups before the queued rule: over seeds 1-30, 23 units with one player (9 of 30 runs
+lost 1-9) and 19 with owners alternating 0/1 (4 runs); all but one on level-0 ground, at gaps between
+plateaus and corners of ramp walls (the ones traced were pinned there while their group flowed
+past), none on a ramp itself; after it: 0 and 0. Two of those
+60 runs (seed 14 one player, seed 30 two players) end with a pair closer than half their radii's
+sum: a unit stopped at the back-off limit (the known limit above, unchanged by this rule). The
+two-owner row arrives 200 of 200 for seeds 1-8.
+
+Re-measured with the queued rule (before, after): a 3-cell gap, 100 units, seeds 1-10: 18 gave up,
+0. Funnel fuzz (100 seeds x 60 units through gaps): 13, 5 given up of 6,000. 2,500 units to 4 points
+arrived 891, 923 (two players) and 996, 1,105 (one player); 500 units to 4 points 174, 170 and 219,
+215; 2,500 to 1 point 2,493, 2,499; the random-goal rows (30 / 28) and the 64-goal row (26 / 23) are
+unchanged. Same-owner blob crossing: 12, 43 and 29, 28 of 200. Cost: units that used to give up now
+keep walking, so the 2,500-unit tight blob averages about 3.6 ms per tick (was 2.7; the target is
+4.5 ms), 1,000 walkers crossing a 1,500-unit blob 3.3 ms (was 2.0), the enforced 200-walker row
+0.3 ms (unchanged), 500 moving units 0.14 ms (target < 4 ms).
 
 ## Orders and unit states
 

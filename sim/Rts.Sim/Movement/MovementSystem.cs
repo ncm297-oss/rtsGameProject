@@ -32,6 +32,7 @@ public static class MovementSystem
     private const byte ActArrive = 4;  // stop here; keep GoalCell so later units can pack against it
     private const byte ActAbandon = 5; // off the map or no route: stop and drop the goal
     private const byte ActPush = 6;    // blocked, moving only by pushing parked units: take PlannedStep; the stuck count holds
+    private const byte ActQueued = 7;  // no progress, but a groupmate just ahead made some last tick: take PlannedStep; the stuck count holds (at least 1)
 
     /// <summary>Advances every Moving unit by one tick, then moves the Idle units they shoved.</summary>
     public static void Run(World world)
@@ -155,7 +156,7 @@ public static class MovementSystem
             float ri = u.Radius[i];
             Vector2 push = Vector2.Zero, side = Vector2.Zero;
             float maxShare = 0f;
-            bool touchingArrived = false, crowded = false;
+            bool touchingArrived = false, crowded = false, queued = false;
             for (int m = 0; m < count; m++)
             {
                 int j = near[m];
@@ -172,6 +173,14 @@ public static class MovementSystem
                 // walls, handled by Constrain below (friendly Idle ones yield to a shove); walkers
                 // get the soft push.
                 bool standing = idle || u.Velocity[j] == Vector2.Zero;
+                // A groupmate ahead within reach that made progress last tick (its count reset, and
+                // only progress resets it while Moving): the queue is still moving, so this unit
+                // waits its turn, it isn't blocked (M1-5).
+                if (!queued && !standing && u.GoalCell[j] == goalCell && u.StuckTicks[j] == 0 && Vector2.Dot(away, forward) < 0f)
+                {
+                    float reach = sum + MovementConstants.AvoidRange;
+                    queued = d2 < reach * reach;
+                }
                 if (d2 < sum * sum && (!standing || groupmate))
                 {
                     float dist = MathF.Sqrt(d2);
@@ -241,7 +250,7 @@ public static class MovementSystem
             float margin = MovementConstants.StuckFraction * speed;
             float after = aimRemaining + Vector2.Distance(aim, pos + step);
             bool progress = after < best - margin;
-            byte act = progress ? ActWalk : ActStuck;
+            byte act = progress ? ActWalk : queued ? ActQueued : ActStuck;
             bool pushArrived = false;
             if (!progress && u.StuckTicks[i] >= MovementConstants.PushAfterStuckTicks)
             {
@@ -261,7 +270,7 @@ public static class MovementSystem
             planned[i] = step;
             AddShoves(world, u, i, pos, step, near, count, goalCell, pushArrived, shove);
             action[i] = act;
-            remaining[i] = act == ActStuck ? best : after;
+            remaining[i] = act == ActStuck || act == ActQueued ? best : after;
         }
     }
 
@@ -326,6 +335,14 @@ public static class MovementSystem
                     if (action[i] == ActWalk)
                         u.StuckTicks[i] = 0;
                     else if (action[i] == ActPush) { } // moving, but only by pushing: the count holds
+                    else if (action[i] == ActQueued)
+                    {
+                        // Waiting in a flowing group: the count holds. Never at 0, which neighbors
+                        // read as "made progress last tick"; so a holding unit can't hold up others,
+                        // and every hold traces back to a real progress tick, of which each order
+                        // has finitely many: a jammed group still gives up.
+                        if (u.StuckTicks[i] == 0) u.StuckTicks[i] = 1;
+                    }
                     else if (++u.StuckTicks[i] >= MovementConstants.GiveUpTicks)
                     {
                         bool backingOff = action[i] == ActBackOff;

@@ -11,7 +11,11 @@ public static class MovementConstants
     /// <summary>Flow fields built per tick at most, oldest orders first; units whose field isn't cached past that wait a tick (tick-cost cap, docs/03).</summary>
     public const int MaxFieldBuildsPerTick = 2;
 
-    /// <summary>Consecutive stuck ticks after which a Moving unit gives up and goes Idle: 20 ticks = 1 s, "blocked for a short time".</summary>
+    /// <summary>
+    /// Consecutive stuck ticks after which a Moving unit gives up and goes Idle: 20 ticks = 1 s, "blocked
+    /// for a short time". A tick in which a groupmate ahead within <see cref="AvoidRange"/> made progress
+    /// last tick is a queued tick, not a stuck one: the count holds (M1-5, a crowd at a ramp or gap).
+    /// </summary>
     public const int GiveUpTicks = 20;
 
     /// <summary>

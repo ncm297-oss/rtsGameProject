@@ -295,6 +295,107 @@ public class LocalMovementTests
         Assert.Equal(UnitState.Idle, u.State[0]);
     }
 
+    /// <summary>A 48 x 24 map split by a cliff column at cell x = 20, open only through a 3-cell gap (rows 10..12): a ramp's width.</summary>
+    private static Heightmap ThreeCellGap()
+    {
+        var rows = new string[24];
+        for (int y = 0; y < 24; y++)
+        {
+            char[] r = new string('0', 48).ToCharArray();
+            if (y < 10 || y > 12) r[20] = '1';
+            rows[y] = new string(r);
+        }
+        return Rows(rows);
+    }
+
+    /// <summary>
+    /// M1-5: 100 units of every type, one player, packed west of a 3-cell gap (a ramp's width) and sent
+    /// to one point east of it, 10 seeds. The crowd funnels through the gap; units pinned at its
+    /// corners wait while their group flows past (a queued tick holds the stuck count). Before M1-5
+    /// such units gave up after 1 s although their group was still moving: 18 over these 10 seeds
+    /// (9 of the 10 lost 1-4), and the cross-map scenario lost 0-9 units per run so.
+    /// </summary>
+    [Fact]
+    public void CrowdThroughAThreeCellGap_10Seeds_NoneGiveUp_AllArrive()
+    {
+        const int units = 100;
+        int gaveUp = 0, arrivedCount = 0;
+        for (ulong seed = 1; seed <= 10; seed++)
+        {
+            var sim = new Simulation(TestSim.Config(Seed: seed, PlayerCount: 1, UnitCapacity: units, CommandCapacity: 2 * units + 8), ThreeCellGap());
+            NavGrid g = sim.World.NavGrid;
+            Assert.True(g.IsPassable(20, 11) && !g.IsPassable(20, 9) && !g.IsPassable(20, 13));
+            var rng = new Determinism.SimRng(seed, 5);
+            for (int i = 0; i < units; i++)
+            {
+                // Cells x 12..18, y 6..16: a compact crowd just west of the gap.
+                var at = new Vector2(24.1f + rng.NextFloat() * 13.8f, 12.1f + rng.NextFloat() * 21.8f);
+                sim.Enqueue(Command.SpawnUnit(0, i % TestSim.UnitTypeCount, at));
+            }
+            sim.Tick();
+            sim.Tick();
+            MoveScenario.MoveAll(sim, g.CellCenter(36, 11));
+            UnitStore u = sim.World.Units;
+            int ticks = 0;
+            do
+            {
+                sim.Tick();
+                ticks++;
+                Assert.Equal(-1, MoveScenario.FirstUnitOnBlockedGround(sim.World));
+            } while ((ticks < 2 || CountMoving(u) > 0) && ticks < 2000);
+            Assert.Equal(0, CountMoving(u));
+            int seedGaveUp = 0, seedArrived = 0;
+            for (int i = 0; i < units; i++) if (u.GoalCell[i] == -1) seedGaveUp++;
+            foreach (bool a in MoveScenario.Arrived(sim.World)) if (a) seedArrived++;
+            _out.WriteLine($"seed {seed}: idle after {ticks} ticks, arrived {seedArrived}, gave up {seedGaveUp}");
+            gaveUp += seedGaveUp;
+            arrivedCount += seedArrived;
+        }
+        Assert.Equal(0, gaveUp);
+        Assert.Equal(10 * units, arrivedCount);
+    }
+
+    /// <summary>
+    /// M1-5: holding the count while groupmates progress must not keep a jammed group alive. Six units
+    /// of one goal in a 1-cell corridor behind an enemy that blocks it: once the queue has closed up,
+    /// nobody progresses, so every unit gives up within a bounded time.
+    /// </summary>
+    [Fact]
+    public void JammedQueueBehindAnEnemyInOneCellCorridor_AllGiveUp()
+    {
+        Simulation sim = SimOn(Corridor(), 7, players: 2);
+        NavGrid g = sim.World.NavGrid;
+        int wide = TypeWithRadius(0.9f); // too wide to pass each other in 2 m
+        // Spawns apply in player order: player 0's six walkers take slots 0-5, the enemy slot 6.
+        var spawns = new (int, int, Vector2)[7];
+        for (int k = 0; k < 6; k++) spawns[k] = (0, wide, g.CellCenter(k + 1, 2));
+        spawns[6] = (1, wide, g.CellCenter(14, 2));
+        SpawnOwned(sim, spawns);
+        UnitStore u = sim.World.Units;
+        Assert.Equal(1, u.Owner[6]);
+        for (int k = 0; k < 6; k++) sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, k), g.CellCenter(20, 2)));
+        sim.Tick();
+        int ticks = 0;
+        do
+        {
+            sim.Tick();
+            ticks++;
+        } while ((ticks < 2 || CountMoving(u) > 0) && ticks < 1000);
+        _out.WriteLine($"jammed queue: idle after {ticks} ticks");
+        // Bound: the walk to the jam (at most 13 cells at the type's speed), then at most one
+        // GiveUpTicks per unit (a unit that gives up becomes shovable, so the one behind may gain a
+        // little and start its count again).
+        float speed = TestSim.Data.Units[wide].SpeedPerTick;
+        Assert.True(ticks <= (int)(13 * MapConstants.CellSize / speed) + 6 * MovementConstants.GiveUpTicks, $"{ticks} ticks");
+        for (int k = 0; k < 6; k++)
+        {
+            Assert.Equal(UnitState.Idle, u.State[k]);
+            Assert.Equal(-1, u.GoalCell[k]);
+            // Pressed against the enemy (walkers may overlap a standing unit they slid into), never past it.
+            Assert.True(u.Position[k].X < u.Position[6].X + u.Radius[k] + u.Radius[6], $"unit {k} at {u.Position[k]} got past the enemy at {u.Position[6]}");
+        }
+    }
+
     /// <summary>
     /// BUG-0027: a unit at its goal, hugging a cliff, overlapped by an idle unit with no goal. It is
     /// too crowded to stop, and its back-off points into the cliff and is refused. Back-off ticks
