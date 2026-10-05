@@ -397,21 +397,27 @@ So separation is symmetric and no result depends on which unit is walked first. 
 **Implementation (M1-4d-2):** shoving, still inside the two passes. Rules:
 
 - **Who is shoved:** an Idle unit of the walker's own player that is not its arrived groupmate.
-  Moving units (walking, or waiting for a field) and other players' units are never shoved. A unit
-  with no goal (never ordered, or gave up) is pushed straight away from the walker. A unit that
-  arrived at another goal only steps *toward its own point* (the push's component that way; none
-  if the push points away), and one within `ArrivalDistance` of its point holds it and is not
-  shoved at all. (Measured on 500 and 2,500 units of one player sent to 4 points 6 m apart:
-  shoving arrived units straight away from the walker carried the units on a point off it and
-  un-anchored whole blobs: 114 of 500 and 238 of 2,500 arrived; with these two rules, 161 and 499.)
+  Moving units (walking, or waiting for a field) and other players' units are never shoved.
+  - A unit with no goal (never ordered, or gave up) is pushed straight away from the walker.
+  - A unit holding another goal (it arrived there) is pushed too, but `KeepLinks` scales its step
+    down so it stays touching every Idle groupmate it touches (half the slack toward one that is
+    shoved too): the blob bends, it isn't cut apart.
+  - A unit standing on its point (within `ArrivalDistance` of its goal) holds it, except when it
+    stands there *alone* (touching no groupmate) and the walker has been stuck for
+    `MovementConstants.PushAfterStuckTicks` (10) ticks: then it is pushed like a unit with no goal
+    (BUG-0033: a unit parked in a 1-cell corridor blocked its own army). While a walker moves only
+    by pushing such a unit, its stuck count holds (neither resets nor grows).
+  - Measured, why: pushing blob members freely (round 1) let shoves carry a point's units away and
+    un-anchor whole blobs; 2,500 units to 4 points arrived 264, below the 563 with no shoving.
 - **Plan:** `Constrain` treats a shovable unit as a wall that yields as far as its own speed carries
   it along the push (only if that step is legal for it), so the walker may press that far into
-  it. After its step is final, a walker (also when backing off) adds to `World.ShoveStep[j]` the
+  it. A walker stuck for `PushAfterStuckTicks` plans a second step in which lone parked units yield
+  too, and takes it if it moves forward. After its step is final, a walker (also when backing off) adds to `World.ShoveStep[j]` the
   overlap its step would leave with each shovable neighbor, past touching, measured on
   start-of-tick centers (so an existing overlap is shoved out too), in that unit's shove
   direction. Shoves accumulate in the sorted walk order, so each sum is the same every run.
 - **Apply:** after every walker has moved, each shoved unit takes its sum clamped to its own
-  `Speed`, trimmed so it ends no closer than `MovementConstants.ShoveSpacing` (0.5) × the radii's
+  `Speed`, kept touching its groupmates (`KeepLinks`), trimmed so it ends no closer than `MovementConstants.ShoveSpacing` (0.5) × the radii's
   sum to any unit standing still (half the room toward one also being shoved; without this,
   walkers pressed friendly units on top of each other), and so its disk goes no deeper into a
   blocked side neighbor of its cell. A step that ends in a blocked cell, off the map or across a
@@ -436,23 +442,42 @@ push, sidestep and wall trims still sum neighbors in ascending slot order, so wh
 or more units at once its last bit can depend on slot order. Same seed and commands give the same hash.
 
 Measured (M1-4d-2, Debug). Arrived counts are `MoveScenario.Arrived` (Idle, holding the goal, linked
-to the point); the scenarios alternate the two players by slot.
+to the point). The test scenarios alternate two players by slot; the "1 player" figures are the same
+draws with every unit owned by player 0 (QA's `ShoveQaTests`). "No shoving" is this code with
+shoving switched off (the `Constrain` fix only). Criterion 6 of the task asked for the targets shown.
 
-| Scenario | Before shoving (M1-4d-1) | M1-4d-2 |
-| --- | --- | --- |
-| 500 units to 1 point / 2,500 to 1 point | all / almost all arrive | 500/500, 2,493/2,500 |
-| 500 units to 4 points 6 m apart | 78 arrived | 103 arrived |
-| 2,500 units to 4 points 6 m apart | 319 arrived | 264 arrived |
-| 500 units, 500 random goals (build cap) | 59 gave up | 46 gave up |
-| 128 units, 64 neighboring goals | 41 gave up | 23 gave up |
+| Scenario | Target | Before (M1-4d-1) | No shoving | M1-4d-2, 2 players / 1 player |
+| --- | --- | --- | --- | --- |
+| 500 units to 4 points 6 m apart, arrived | 80% | 78 | 112 | 174 (35%) / 219 (44%) |
+| 2,500 units to 4 points 6 m apart, arrived | 60% | 329 | 563 | 891 (36%) / 996 (40%) |
+| 500 units, 500 random goals, gave up | 3% | 59 / 52 | 56 / 44 | 30 (6.0%) / 28 (5.6%) |
+| 128 units, 64 neighboring goals, gave up | 5% | 41 | 29 | 26 (20%) / 23 (18%) |
+| 500 units to 1 point / 2,500 to 1 point | | all / almost all | | all / almost all |
 
-Known limits: neighboring points owned by different players wall each other in, since enemies are
-never shoved and the flow field ignores units, so walkers press into the other player's blob and
-give up; most give-ups in the random-goal tests are next to an enemy Idle unit. Shoved arrived units
-that lose their link drop their goal and stay where they are (they don't walk back). Units that stop
-at the back-off limit, or give up, can still overlap a neighbor by more than 40%. Cost (Debug): 500
-units converging on one point average about 0.1 ms per tick, 2,500 about 0.7 ms; a 500-unit tight
-blob 0.1 ms, 2,500 about 2.6 ms; 200 walkers crossing a settled 300-unit blob 0.2 ms.
+Every target is missed, with one player as well as two, so enemies are not the main cause (an
+earlier version of this section said they were; QA showed otherwise, BUG-0032). What is:
+
+- **The flow field ignores units.** Walkers aim straight through other groups' blobs instead of round
+  them. With 4 points 6 m apart and 125-625 units each, the blobs overlap each other's points, so
+  most of a group arrives from across another group's blob.
+- **Blobs only bend.** Units holding a goal are shoved only as far as they stay touching their
+  blob, and units on their point hold it; otherwise shoves un-anchor blobs and fewer units count
+  as arrived (see above). So a walker meeting a dense blob of another goal still often gives up.
+- **Units waiting for a field are walls.** Under the build cap (2 fields per tick) hundreds of
+  units stand Moving and waiting in the random-goal row (about 1.4 million unit-ticks), and Moving
+  units are never shoved.
+- **Enemies are walls** in the two-player rows, and are never shoved.
+
+Getting near the targets likely needs unit-aware routing (or a flow-field cost for crowded cells),
+or letting units pushed off their blob walk back to their goal; both are outside this task.
+
+Known limits: walkers crossing a settled blob of mixed owners mostly give up (QA's crossing scenario,
+seed 73: 2 of 200 arrive, 28 with no shoving): they press into friendly blob units that can't
+yield far, where without shoving they would slide round. Same-owner blob: 12 and 29 of 200 (0 and 9
+before shoving). Units that stop at the back-off limit, or give up, can still overlap a neighbor by
+more than 40%. Cost (Debug): 500 units converging on one point average about 0.1 ms per tick, 2,500
+about 0.7 ms; a 500-unit tight blob 0.1 ms, 2,500 about 2.7 ms; 200 walkers crossing a settled
+300-unit blob 0.2-0.3 ms.
 
 ## Orders and unit states
 

@@ -468,7 +468,7 @@ public class ShoveQaTests
     /// cell, within ArrivalDistance of its point), not just one with no goal. Two wide units (radius
     /// 0.9) can't pass side by side: the walker must get through (the parked unit may lose its goal).
     /// </summary>
-    [Theory(Skip = "BUG-0033: a friendly unit parked by a Move within ArrivalDistance of its point is never shoved; the walker gives up. Un-skip when fixed")]
+    [Theory]
     [InlineData(0f)]   // parked exactly on its point
     [InlineData(0.9f)] // parked 0.9 m east of its point (within ArrivalDistance)
     public void WalkerInOneCellCorridor_PastAFriendlyUnitParkedThereByAMove_Arrives(float offset)

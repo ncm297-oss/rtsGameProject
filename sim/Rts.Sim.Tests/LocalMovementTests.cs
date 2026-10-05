@@ -628,12 +628,12 @@ public class LocalMovementTests
 
     /// <summary>
     /// Criterion 4: three arrived units of one goal in a row, A within ArrivalDistance of the point,
-    /// B touching A, C touching only B. A friendly walker overlapping B shoves it toward its point:
-    /// B, still touching its blob, keeps its goal; C, no longer linked to the point, drops it. Ordered
-    /// back to the point, C walks there and arrives.
+    /// B touching A, C touching only B. A friendly walker overlapping B shoves it: B moves, but only
+    /// as far as it stays touching A and C (KeepLinks), so the row stays linked to its point and all
+    /// three keep their goal.
     /// </summary>
     [Fact]
-    public void ShovedArrivedUnit_StillTouchingItsBlob_KeepsItsGoal_TheUnitLinkedThroughItDropsIt_AndCanBeSentBack()
+    public void ShovedArrivedUnit_StaysTouchingItsBlob_AndTheRowKeepsItsGoal()
     {
         Simulation sim = SimOn(Flat(32), 4);
         NavGrid g = sim.World.NavGrid;
@@ -655,27 +655,64 @@ public class LocalMovementTests
         // The walker overlaps B and heads away south-west.
         sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, 3), point + new Vector2(-12f, 12f)));
         sim.Tick();
-        sim.Tick(); // the Move applies, the walker plans, B is shoved
-        _out.WriteLine($"after the first shove: A {u.Position[0]}, B {u.Position[1]} (goal cell {u.GoalCell[1]}), C {u.Position[2]} (goal cell {u.GoalCell[2]})");
-        Assert.True(u.Position[1].X < b.X, $"B was not shoved toward its point: {u.Position[1]}");
-        Assert.Equal(b.Y, u.Position[1].Y); // only toward its point (west), never away from it
-        Assert.Equal(a, u.Position[0]);      // A holds its point
-        Assert.Equal(cell, u.GoalCell[0]);
-        Assert.Equal(cell, u.GoalCell[1]);
-        Assert.Equal(-1, u.GoalCell[2]);
         int ticks = 0;
-        while (u.State[3] == UnitState.Moving && ticks < 1000) { sim.Tick(); ticks++; }
-        bool[] arrived = MoveScenario.Arrived(sim.World);
-        Assert.True(arrived[0] && arrived[1], "A and B are no longer linked to their point");
-        // Sent back, C walks to the blob and arrives.
-        Vector2 dropped = u.Position[2];
-        sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, 2), point));
+        bool bMoved = false;
+        do
+        {
+            sim.Tick();
+            ticks++;
+            if (u.Position[1] != b) bMoved = true;
+            bool[] arrived = MoveScenario.Arrived(sim.World);
+            Assert.True(arrived[0] && arrived[1] && arrived[2], $"tick {ticks}: the row came apart: A {u.Position[0]}, B {u.Position[1]}, C {u.Position[2]}");
+        } while (u.State[3] == UnitState.Moving && ticks < 1000);
+        _out.WriteLine($"after {ticks} ticks: A {u.Position[0]}, B {u.Position[1]} (from {b}), C {u.Position[2]}; walker {u.State[3]} at {u.Position[3]}");
+        Assert.True(bMoved, "B was never shoved");
+        Assert.Equal(a, u.Position[0]); // A holds its point
+        for (int i = 0; i < 3; i++) Assert.Equal(cell, u.GoalCell[i]);
+    }
+
+    /// <summary>
+    /// Criterion 4 (BUG-0033): a unit parked alone on its point in the 1-cell corridor is shoved along
+    /// by a blocked friendly walker. It keeps its goal while still within ArrivalDistance of its point,
+    /// drops it (GoalCell -1) once pushed out of it, and walks back when re-ordered to the same point.
+    /// </summary>
+    [Fact]
+    public void LoneUnitParkedInACorridor_ShovedOffItsPoint_DropsItsGoal_AndWalksBackWhenReordered()
+    {
+        Simulation sim = SimOn(Corridor(), 2);
+        NavGrid g = sim.World.NavGrid;
+        int type = TypeWithRadius(0.9f);
+        Vector2 parked = g.CellCenter(8, 2), goal = g.CellCenter(14, 2);
+        SpawnOwned(sim, (0, type, g.CellCenter(2, 2)), (0, type, parked));
+        UnitStore u = sim.World.Units;
+        sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, 1), parked));
+        sim.Tick();
+        sim.Tick();
+        int cell = u.GoalCell[1];
+        Assert.True(cell >= 0 && u.State[1] == UnitState.Idle, "the unit did not park");
+        sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, 0), goal));
+        sim.Tick();
+        int ticks = 0;
+        do
+        {
+            sim.Tick();
+            ticks++;
+            Assert.Equal(UnitState.Idle, u.State[1]);
+            float off = Vector2.Distance(u.Position[1], parked);
+            if (off <= MovementConstants.ArrivalDistance - 1e-3f) Assert.Equal(cell, u.GoalCell[1]);
+            if (off > MovementConstants.ArrivalDistance + 1e-3f) Assert.Equal(-1, u.GoalCell[1]);
+        } while (u.State[0] == UnitState.Moving && ticks < 1000);
+        _out.WriteLine($"walker idle after {ticks} ticks at {u.Position[0]}; parked unit pushed to {u.Position[1]}, goal cell {u.GoalCell[1]}");
+        Assert.True(Vector2.Distance(u.Position[0], goal) <= MovementConstants.ArrivalDistance, $"walker stopped at {u.Position[0]}");
+        Assert.Equal(-1, u.GoalCell[1]);
+        // Sent back to its point, it walks there (the walker, now Idle at its own goal, is shoved too).
+        sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, 1), parked));
         sim.Tick();
         ticks = 0;
-        do { sim.Tick(); ticks++; } while (u.State[2] == UnitState.Moving && ticks < 600);
-        _out.WriteLine($"C re-ordered: arrived after {ticks} ticks at {u.Position[2]} (from {dropped})");
-        Assert.Equal(cell, u.GoalCell[2]);
-        Assert.True(MoveScenario.Arrived(sim.World)[2], $"C stopped at {u.Position[2]}, not linked to its point");
+        do { sim.Tick(); ticks++; } while (u.State[1] == UnitState.Moving && ticks < 1000);
+        _out.WriteLine($"re-ordered: idle after {ticks} ticks at {u.Position[1]}, goal cell {u.GoalCell[1]}");
+        Assert.True(Vector2.Distance(u.Position[1], parked) <= MovementConstants.ArrivalDistance, $"stopped at {u.Position[1]}");
+        Assert.Equal(cell, u.GoalCell[1]);
     }
 
     /// <summary>

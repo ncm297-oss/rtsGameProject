@@ -14,6 +14,13 @@ public static class MovementConstants
     /// <summary>Consecutive stuck ticks after which a Moving unit gives up and goes Idle: 20 ticks = 1 s, "blocked for a short time".</summary>
     public const int GiveUpTicks = 20;
 
+    /// <summary>
+    /// Stuck ticks after which a walker may also shove a friendly unit standing alone at another
+    /// goal (half of <see cref="GiveUpTicks"/>): long enough that walkers able to get round don't,
+    /// short enough to get through before giving up. While it moves only by pushing, the count holds.
+    /// </summary>
+    public const int PushAfterStuckTicks = 10;
+
     /// <summary>A tick counts as progress only if it beats the unit's best estimated path left by this fraction of its speed: less is jostling in place, not walking.</summary>
     public const float StuckFraction = 0.25f;
 

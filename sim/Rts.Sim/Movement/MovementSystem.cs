@@ -31,6 +31,7 @@ public static class MovementSystem
     private const byte ActWait = 3;    // no field yet: hold still, keep the order
     private const byte ActArrive = 4;  // stop here; keep GoalCell so later units can pack against it
     private const byte ActAbandon = 5; // off the map or no route: stop and drop the goal
+    private const byte ActPush = 6;    // blocked, moving only by pushing parked units: take PlannedStep; the stuck count holds
 
     /// <summary>Advances every Moving unit by one tick, then moves the Idle units they shoved.</summary>
     public static void Run(World world)
@@ -215,10 +216,10 @@ public static class MovementSystem
                 }
                 // Too tight to stop here: back off along the push alone, and try again next tick.
                 // Counts toward the stuck limit (BUG-0027); at the limit the unit stops anyway.
-                Vector2 back = Constrain(grid, u, i, pos, ClampLength(push, speed), near, count, goalCell);
+                Vector2 back = Constrain(world, grid, u, i, pos, ClampLength(push, speed), near, count, goalCell, false);
                 action[i] = ActBackOff;
                 planned[i] = CanStep(grid, cx, cy, pos + back) ? back : Vector2.Zero;
-                AddShoves(u, i, pos, planned[i], near, count, goalCell, shove);
+                AddShoves(world, u, i, pos, planned[i], near, count, goalCell, false, shove);
                 continue;
             }
             if (noAim != ActWalk)
@@ -227,25 +228,8 @@ public static class MovementSystem
                 continue;
             }
 
-            Vector2 step = Constrain(grid, u, i, pos, ClampLength(flowStep + ClampLength(side, speed) + push, speed), near, count, goalCell);
-            if (!CanStep(grid, cx, cy, pos + step))
-            {
-                // Refused: never step into a blocked cell or across a blocked corner. Slide along the
-                // wall (keep one axis of the step, the one gaining more along the aim), else retry
-                // the flow step alone, so neighbors can't pin a unit against a wall.
-                Vector2 alongX = Constrain(grid, u, i, pos, new Vector2(step.X, 0f), near, count, goalCell);
-                Vector2 alongY = Constrain(grid, u, i, pos, new Vector2(0f, step.Y), near, count, goalCell);
-                bool okX = CanStep(grid, cx, cy, pos + alongX), okY = CanStep(grid, cx, cy, pos + alongY);
-                if (okX && (!okY || Vector2.Dot(alongX, forward) >= Vector2.Dot(alongY, forward))) step = alongX;
-                else if (okY) step = alongY;
-                else
-                {
-                    step = Constrain(grid, u, i, pos, flowStep, near, count, goalCell);
-                    if (!CanStep(grid, cx, cy, pos + step)) step = Vector2.Zero;
-                }
-            }
-            planned[i] = step;
-            AddShoves(u, i, pos, step, near, count, goalCell, shove);
+            Vector2 desired = ClampLength(flowStep + ClampLength(side, speed) + push, speed);
+            Vector2 step = WalkStep(world, grid, u, i, pos, cx, cy, desired, flowStep, forward, near, count, goalCell, false);
             // Progress: the estimated path meters left beat the best so far (or where the unit
             // stands now) by a margin. The estimate is this cell's field cost, less the way already
             // made from the cell's center toward the aim; it runs on nearly continuously across
@@ -254,11 +238,53 @@ public static class MovementSystem
             float cellCost = inGoalCell ? 0f : field!.CostAt(cell) * MapConstants.CellSize;
             float aimRemaining = cellCost - Vector2.Distance(aim, grid.CellCenter(cx, cy));
             float best = MathF.Min(u.BestRemaining[i], aimRemaining + Vector2.Distance(aim, pos));
+            float margin = MovementConstants.StuckFraction * speed;
             float after = aimRemaining + Vector2.Distance(aim, pos + step);
-            bool progress = after < best - MovementConstants.StuckFraction * speed;
-            action[i] = progress ? ActWalk : ActStuck;
-            remaining[i] = progress ? after : best;
+            bool progress = after < best - margin;
+            byte act = progress ? ActWalk : ActStuck;
+            bool pushArrived = false;
+            if (!progress && u.StuckTicks[i] >= MovementConstants.PushAfterStuckTicks)
+            {
+                // Blocked for a while: friendly units parked at other goals yield too, if that moves
+                // it forward (BUG-0033: a unit parked in a corridor blocked its own army). Not before,
+                // so walkers that can get round a blob don't plough through it.
+                Vector2 pushing = WalkStep(world, grid, u, i, pos, cx, cy, desired, flowStep, forward, near, count, goalCell, true);
+                float afterPushing = aimRemaining + Vector2.Distance(aim, pos + pushing);
+                if (pushing != step && afterPushing < aimRemaining + Vector2.Distance(aim, pos) - margin)
+                {
+                    step = pushing;
+                    after = MathF.Min(best, afterPushing);
+                    act = ActPush;
+                    pushArrived = true;
+                }
+            }
+            planned[i] = step;
+            AddShoves(world, u, i, pos, step, near, count, goalCell, pushArrived, shove);
+            action[i] = act;
+            remaining[i] = act == ActStuck ? best : after;
         }
+    }
+
+    /// <summary>
+    /// A walker's step: <paramref name="desired"/> constrained by standing units; if that ends in a
+    /// blocked cell, off the map or across a blocked corner, a slide along the wall (one axis of the
+    /// step, the one gaining more along <paramref name="forward"/>), else the flow step alone, else
+    /// nothing. <paramref name="pushArrived"/>: see <see cref="ShoveDirection"/>.
+    /// </summary>
+    private static Vector2 WalkStep(World world, NavGrid grid, UnitStore u, int i, Vector2 pos, int cx, int cy, Vector2 desired, Vector2 flowStep,
+        Vector2 forward, int[] near, int count, int goalCell, bool pushArrived)
+    {
+        Vector2 step = Constrain(world, grid, u, i, pos, desired, near, count, goalCell, pushArrived);
+        if (CanStep(grid, cx, cy, pos + step)) return step;
+        // Never step into a blocked cell or across a blocked corner; sliding keeps neighbors from
+        // pinning a unit against a wall.
+        Vector2 alongX = Constrain(world, grid, u, i, pos, new Vector2(step.X, 0f), near, count, goalCell, pushArrived);
+        Vector2 alongY = Constrain(world, grid, u, i, pos, new Vector2(0f, step.Y), near, count, goalCell, pushArrived);
+        bool okX = CanStep(grid, cx, cy, pos + alongX), okY = CanStep(grid, cx, cy, pos + alongY);
+        if (okX && (!okY || Vector2.Dot(alongX, forward) >= Vector2.Dot(alongY, forward))) return alongX;
+        if (okY) return alongY;
+        step = Constrain(world, grid, u, i, pos, flowStep, near, count, goalCell, pushArrived);
+        return CanStep(grid, cx, cy, pos + step) ? step : Vector2.Zero;
     }
 
     /// <summary>Carries out the plans: moves units, stops arrivals, and counts stuck ticks toward giving up.</summary>
@@ -299,6 +325,7 @@ public static class MovementSystem
                     if (action[i] != ActBackOff) u.BestRemaining[i] = remaining[i];
                     if (action[i] == ActWalk)
                         u.StuckTicks[i] = 0;
+                    else if (action[i] == ActPush) { } // moving, but only by pushing: the count holds
                     else if (++u.StuckTicks[i] >= MovementConstants.GiveUpTicks)
                     {
                         bool backingOff = action[i] == ActBackOff;
@@ -375,7 +402,7 @@ public static class MovementSystem
     /// pinned the unit whatever its order). Standing units read at their start-of-tick positions;
     /// neighbors are visited in ascending slot order.
     /// </remarks>
-    private static Vector2 Constrain(NavGrid grid, UnitStore u, int i, Vector2 pos, Vector2 step, int[] near, int count, int goalCell)
+    private static Vector2 Constrain(World world, NavGrid grid, UnitStore u, int i, Vector2 pos, Vector2 step, int[] near, int count, int goalCell, bool pushArrived)
     {
         float ri = u.Radius[i];
         float stepLength = step.Length();
@@ -393,7 +420,7 @@ public static class MovementSystem
             float dist = MathF.Sqrt(d2);
             Vector2 normal = dist > 0f ? toJ / dist : -CoincidentDirection(i, j);
             float gap = dist - sum;
-            Vector2 yield = ShoveDirection(u, i, j, goalCell, normal) * u.Speed[j];
+            Vector2 yield = ShoveDirection(world, u, i, j, goalCell, pushArrived, normal) * u.Speed[j];
             if (yield != Vector2.Zero && grid.WorldToCell(u.Position[j], out int jx, out int jy)
                 && CanStep(grid, jx, jy, u.Position[j] + yield))
                 gap += Vector2.Dot(yield, normal);
@@ -406,24 +433,40 @@ public static class MovementSystem
 
     /// <summary>
     /// Which way walker <paramref name="i"/>, pushing along <paramref name="normal"/> (from i toward j),
-    /// may shove unit <paramref name="j"/>, scaled by how much of the push it follows; zero if j can't
-    /// be shoved. Only Idle units of i's owner that aren't i's arrived groupmates can be. One with no
-    /// goal (never ordered, or gave up) steps straight along the push. One that arrived at another
-    /// goal only steps toward its own point (the push's part that way), so it stays in its blob, and
-    /// one within <see cref="MovementConstants.ArrivalDistance"/> of its point holds it and isn't shoved.
+    /// may shove unit <paramref name="j"/>: the push itself, or zero if j can't be shoved. Only Idle
+    /// units of i's owner that aren't i's arrived groupmates can be. One with no goal (never ordered,
+    /// or gave up) always yields. One holding another goal yields too, but only as far as it stays
+    /// touching the groupmates it touches (<see cref="KeepLinks"/>), and one standing on its point
+    /// (within <see cref="MovementConstants.ArrivalDistance"/>) holds it, unless it stands there alone
+    /// and the walker is blocked (<paramref name="pushArrived"/>, see Plan).
     /// </summary>
-    private static Vector2 ShoveDirection(UnitStore u, int i, int j, int goalCell, Vector2 normal)
+    private static Vector2 ShoveDirection(World world, UnitStore u, int i, int j, int goalCell, bool pushArrived, Vector2 normal)
     {
         if (u.State[j] != UnitState.Idle || u.Owner[j] != u.Owner[i] || u.GoalCell[j] == goalCell) return Vector2.Zero;
         if (u.GoalCell[j] < 0) return normal;
-        // Without this, walkers crossing a point carried its anchors off and un-anchored whole blobs;
-        // pushed outward, edge units lost touch with their blob.
-        Vector2 toGoal = u.Goal[j] - u.Position[j];
-        float d2 = toGoal.LengthSquared();
-        if (d2 <= MovementConstants.ArrivalDistance * MovementConstants.ArrivalDistance) return Vector2.Zero;
-        toGoal /= MathF.Sqrt(d2);
-        float along = Vector2.Dot(normal, toGoal);
-        return along > 0f ? toGoal * along : Vector2.Zero;
+        float toGoal2 = Vector2.DistanceSquared(u.Position[j], u.Goal[j]);
+        if (toGoal2 > MovementConstants.ArrivalDistance * MovementConstants.ArrivalDistance) return normal; // tethered: KeepLinks
+        // On its point: it holds it, unless it stands there alone and the walker is blocked. Pushing
+        // a blob's points away un-anchored whole blobs; a lone one parked in a corridor blocked its
+        // own army (BUG-0033).
+        return pushArrived && IsLoneAnchor(world, j) ? normal : Vector2.Zero;
+    }
+
+    /// <summary>True if arrived unit <paramref name="j"/> touches no Idle unit holding its goal cell: it stands at its point alone.</summary>
+    private static bool IsLoneAnchor(World world, int j)
+    {
+        UnitStore u = world.Units;
+        int[] near = world.ShoveNeighbors;
+        Vector2 pos = u.Position[j];
+        int count = world.Spatial.QueryRadius(pos, u.Radius[j] + world.MaxUnitRadius, near);
+        for (int m = 0; m < count; m++)
+        {
+            int k = near[m];
+            if (k == j || !u.Alive[k] || u.State[k] != UnitState.Idle || u.GoalCell[k] != u.GoalCell[j]) continue;
+            float sum = u.Radius[j] + u.Radius[k];
+            if (Vector2.DistanceSquared(pos, u.Position[k]) < sum * sum) return false;
+        }
+        return true;
     }
 
     /// <summary>
@@ -432,7 +475,7 @@ public static class MovementSystem
     /// start-of-tick centers, so an existing overlap counts too), in that unit's shove direction.
     /// </summary>
     /// <remarks>Called in the sorted walk order, so each unit's shove is the same float sum every run.</remarks>
-    private static void AddShoves(UnitStore u, int i, Vector2 pos, Vector2 step, int[] near, int count, int goalCell, Vector2[] shove)
+    private static void AddShoves(World world, UnitStore u, int i, Vector2 pos, Vector2 step, int[] near, int count, int goalCell, bool pushArrived, Vector2[] shove)
     {
         float ri = u.Radius[i];
         for (int m = 0; m < count; m++)
@@ -444,7 +487,7 @@ public static class MovementSystem
             Vector2 normal = dist > 0f ? toJ / dist : -CoincidentDirection(i, j);
             float amount = Vector2.Dot(step, normal) - (dist - ri - u.Radius[j]);
             if (amount <= 0f) continue;
-            shove[j] += ShoveDirection(u, i, j, goalCell, normal) * amount;
+            shove[j] += ShoveDirection(world, u, i, j, goalCell, pushArrived, normal) * amount;
         }
     }
 
@@ -475,7 +518,8 @@ public static class MovementSystem
             Vector2 s = Vector2.Zero;
             if (u.Alive[i] && u.State[i] == UnitState.Idle && grid.WorldToCell(u.Position[i], out int cx, out int cy))
             {
-                s = KeepOffWalls(grid, cx, cy, u.Position[i], u.Radius[i], SqueezeLimit(world, i, ClampLength(shove[i], u.Speed[i])));
+                s = SqueezeLimit(world, i, ClampLength(shove[i], u.Speed[i]));
+                s = KeepOffWalls(grid, cx, cy, u.Position[i], u.Radius[i], KeepLinks(world, i, s));
                 if (!CanStep(grid, cx, cy, u.Position[i] + s)) s = Vector2.Zero;
             }
             step[i] = s;
@@ -510,6 +554,44 @@ public static class MovementSystem
         if (step.Y < 0f && next.Y < top && !grid.IsPassable(cx, cy - 1)) next.Y = MathF.Min(pos.Y, top);
         if (step.Y > 0f && next.Y > bottom && !grid.IsPassable(cx, cy + 1)) next.Y = MathF.Max(pos.Y, bottom);
         return next - pos;
+    }
+
+    /// <summary>
+    /// Scales a shoved arrived unit's <paramref name="step"/> down so it ends still touching every Idle
+    /// groupmate it touches now (half the slack toward one that is shoved too), so a shove doesn't cut
+    /// a blob apart and un-anchor the units linked through it. Units with no goal are not held.
+    /// </summary>
+    /// <remarks>
+    /// Scaling, not projecting, so every link holds at once. Rarely a link still breaks (both ends
+    /// shoved, or a wall trim after this); the anchor re-check then drops the goal as usual.
+    /// </remarks>
+    private static Vector2 KeepLinks(World world, int i, Vector2 step)
+    {
+        UnitStore u = world.Units;
+        if (u.GoalCell[i] < 0) return step;
+        int[] near = world.Neighbors;
+        Vector2 pos = u.Position[i];
+        int count = world.Spatial.QueryRadius(pos, u.Radius[i] + world.MaxUnitRadius + world.MaxUnitSpeed, near);
+        float scale = 1f;
+        for (int m = 0; m < count; m++)
+        {
+            int k = near[m];
+            if (k == i || !u.Alive[k] || u.State[k] != UnitState.Idle || u.GoalCell[k] != u.GoalCell[i]) continue;
+            Vector2 toK = u.Position[k] - pos;
+            float dist = toK.Length();
+            float sum = u.Radius[i] + u.Radius[k];
+            if (dist >= sum || dist <= 0f) continue;
+            // Largest t in [0, 1] with |toK - t * step| <= reach: still touching k where it stood.
+            float reach = sum - 1e-3f;
+            if (world.ShoveStep[k] != Vector2.Zero) reach = dist + 0.5f * (reach - dist); // k may move too
+            if (reach < dist) reach = dist; // already at the edge: just no further
+            float ss = step.LengthSquared();
+            if (ss <= 0f) break;
+            float b = Vector2.Dot(toK, step);
+            float t = (b + MathF.Sqrt(b * b - ss * (dist * dist - reach * reach))) / ss;
+            if (t < scale) scale = MathF.Max(t, 0f);
+        }
+        return step * scale;
     }
 
     /// <summary>

@@ -39,6 +39,7 @@ public sealed class World
         PlannedAction = new byte[config.UnitCapacity];
         PlannedRemaining = new float[config.UnitCapacity];
         ShoveStep = new Vector2[config.UnitCapacity];
+        ShoveNeighbors = new int[config.UnitCapacity];
         ShovedGoals = new int[config.UnitCapacity];
         AnchorQueue = new int[config.UnitCapacity];
         AnchorLinked = new bool[config.UnitCapacity];
@@ -60,6 +61,9 @@ public sealed class World
 
     /// <summary>Scratch for <see cref="Movement.MovementSystem"/>: the shove each standing Idle unit gets from friendly walkers this tick, summed in walk order; zero again once applied; derived, not hashed.</summary>
     internal Vector2[] ShoveStep { get; }
+
+    /// <summary>Scratch for <see cref="Movement.MovementSystem"/>: a second neighbor query while <see cref="Neighbors"/> is in use (does a parked unit stand alone?); derived, not hashed.</summary>
+    internal int[] ShoveNeighbors { get; }
 
     /// <summary>Scratch for <see cref="Movement.MovementSystem"/>: goal cells of the units a shove moved this tick, whose groups re-check their anchors; derived, not hashed.</summary>
     internal int[] ShovedGoals { get; }
