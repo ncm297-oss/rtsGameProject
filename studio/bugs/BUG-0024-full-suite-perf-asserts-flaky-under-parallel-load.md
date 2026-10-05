@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-04-0120, task M1-4b (fix round 1 re-check) |
 | System | test suite (Perf category) |
-| Fixed by | |
+| Fixed by | 8c96b53 (M1-4c); SerialCollection + AllocationProbe |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests` (Debug, full suite), repeated. While this ran, the owner's
@@ -52,3 +52,12 @@ on b707114: `--filter Category=Perf` with `-- xUnit.ParallelizeTestCollections=f
 `DisableParallelization = true` (they run alone after the parallel batch); keep thresholds as they
 are. Until then, the reliable check is two commands: `--filter "Category!=Perf"` and then
 `--filter Category=Perf -- xUnit.ParallelizeTestCollections=false`.
+
+**QA verification (2026-10-04-2056, M1-4c):** fixed as triaged. Every `Category=Perf` test and
+every allocation-measuring test is in `SerialCollection` (`DisableParallelization = true`).
+Thresholds are unchanged: QA diffed every moved test. `SerialCollectionTests` guards membership
+(Perf by reflection, allocation by source scan), and QA confirmed by line position that every
+measuring call in a mixed file sits inside its nested `Serial` class. 5 full one-process
+`dotnet test sim/Rts.Sim.Tests` runs of 8c96b53 were all green: 866 passed / 8 skipped / 874, in
+1m50s, 1m53s, 1m54s, 1m59s and 1m52s. Runs 4-5 used a fresh clone, and the Godot smoke gate plus
+QA test builds ran alongside them.

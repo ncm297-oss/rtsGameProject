@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-03-2220, task M1-4a (fix round 1 re-check) |
 | System | sim core / QA test suite |
-| Fixed by | |
+| Fixed by | 8c96b53 (M1-4c); SerialCollection + AllocationProbe |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests` (full suite, Debug), repeated.
@@ -53,3 +53,12 @@ spawn path reads an `ImmutableArray<UnitDef>` element, which allocates nothing. 
 applies: **the next session's first commit hardens this test** (re-measure once on failure, report
 both deltas; never loosen the 0-byte assert), together with BUG-0024's non-parallel collection.
 Still S3; it does not block M1-4b.
+
+**QA verification (2026-10-04-2056, M1-4c):** fixed as triaged. The flood test runs in
+`SerialCollection` through `AllocationProbe.AssertZero`, which re-runs the block once (re-queuing
+the 10,000 commands through its `setup`) and fails only if both counts are non-zero. The 0-byte
+assert stays. `AllocationProbeTests` proves a steady allocator fails with both counts in the
+message. Green in 5 of 5 full runs (see BUG-0024). Caveat: a re-run only proves something when it
+repeats the same work. In `AllocationTests`' cache-miss test the re-run hits the cache. QA's
+`Tick_1024Units_128SlotCache_TwoBuildsEveryTick_AllocatesNothing` covers the build path with
+builds in both runs.

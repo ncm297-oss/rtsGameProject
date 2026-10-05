@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-04-0120, task M1-4b (fix round 1 re-check) |
 | System | pathfinding (FlowFieldCache) / movement / determinism |
-| Fixed by | |
+| Fixed by | 8c96b53 (M1-4c); QA/FieldCacheHashQaTests |
 
 ## Repro
 1. Un-skip `Rts.Sim.Tests.QA.FieldBuildCapQaTests.BuildCap_FieldCacheIsDerivedState_PrewarmingItDoesNotChangeTheSim`.
@@ -53,3 +53,20 @@ the cache's keys, versions and LRU order as sim state: hash them in `StateHash`,
 save/load (fields rebuild from keys at load), and keep `Get`/`TryGetCached` sim-only (a read-only
 peek for views and AI, if ever needed). Planned as the first part of the next movement task,
 before steering builds on the cap. Un-skip the QA test when fixed.
+
+**QA verification (2026-10-04-2056, M1-4c):** fixed as decided. `StateHash` now covers the cache
+clock, count, and each used slot's requested cell, version and last-use stamp. It also covers
+each live unit's `OrderTick`. `Get`/`TryGetCached` are internal.
+- `QA/FieldCacheHashQaTests`: the hash changes on every mutation path (miss build, Get hit,
+  TryGetCached touch, stale rebuild, fill, eviction). `Contains` and a TryGetCached miss leave it
+  unchanged.
+- A reflection audit classifies every FlowFieldCache/FlowField field as hashed or derived. The
+  public surface is read-only (`CapacityFor`, `Contains`, getters).
+- Save/load proxy: 50 seeds x 500 ticks of random Moves, with one-sided and mirrored internal
+  Gets. On every tick, the hash is equal exactly when QA's reflection signature (units plus cache
+  metadata) is equal; 49 seeds diverged and none collided.
+- Mutation check: dropping last-use or OrderTick from the hash is caught.
+- The dev's rewrite of QA's pre-warm test (now `..._PrewarmingChangesTheHash_IdenticalPrewarmsStayEqual`)
+  matches the decision.
+- Watch item: `NavGrid.Version` itself is not hashed. That is fine while the grid is immutable.
+  When passability can change (M3+), the grid state must join the hash.

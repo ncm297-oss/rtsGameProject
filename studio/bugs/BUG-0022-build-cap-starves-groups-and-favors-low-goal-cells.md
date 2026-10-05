@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-04-0120, task M1-4b (fix round 1 re-check) |
 | System | movement / pathfinding (MovementSystem build cap) |
-| Fixed by | |
+| Fixed by | 8c96b53 (M1-4c); QA/FieldBuildFairnessQaTests; over-capacity remainder in BUG-0025 |
 
 ## Repro
 1. Un-skip `Rts.Sim.Tests.QA.FieldBuildCapQaTests.BuildCap_64GroupsRetargetedEvery20Ticks_EveryGroupMovesInEveryWindow`.
@@ -56,3 +56,18 @@ slot) for the build pass), keep a small count cap (2 is fine against the 4 ms av
 build is ~0.7 ms Debug on the default map), and let cache capacity scale with `UnitCapacity`
 (e.g. max(32, UnitCapacity / 8); 80 KB per field on the default map) to cut rebuild churn. No
 wall-clock budget in the sim. Positions of waiting units stay put (never step without a field).
+
+**QA verification (2026-10-04-2056, M1-4c):** fixed while live goals fit the cache. Misses are
+served oldest order first, two per tick, and the cache is sized by `CapacityFor` (64 fields at
+512 unit slots).
+- The QA starvation test, retuned by the dev to the decided cap (34-tick windows = 1 command tick +
+  ceil(64 / 2) build ticks + 1 spare), passes with 0 of 960 group-windows frozen (was 483). QA
+  accepts that window.
+- `QA/FieldBuildFairnessQaTests`: two bases (rows 10/118), 64 groups, 2,000 ticks, batches of
+  1/2/4/8 on alternating ticks. Every order is served within ceil(B/2) - 1 ticks, nothing
+  overtakes an older order, and per-player mean waits match within 0.4 ticks (7.17 vs 7.24 at
+  batch 4).
+- Positional bias is left only in same-tick ties, as specified. It is measurable: up to 3.7 ticks
+  mean, filed as BUG-0026 (S4).
+- With more live goals than slots, eviction still picks by goal cell and churns. Filed separately
+  as BUG-0025 (S3).
