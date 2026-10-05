@@ -291,6 +291,80 @@ public class LocalMovementTests
         Assert.Equal(UnitState.Idle, u.State[0]);
     }
 
+    /// <summary>
+    /// BUG-0027: a unit at its goal, hugging a cliff, overlapped by an idle unit with no goal. It is
+    /// too crowded to stop, and its back-off points into the cliff and is refused. Back-off ticks
+    /// count toward the limit, so it stops after GiveUpTicks, and keeps its goal (it is at it).
+    /// </summary>
+    [Fact]
+    public void CrowdedAtGoal_BackOffRefusedByACliff_StopsAfterGiveUpTicks_KeepingItsGoal()
+    {
+        var rows = new string[16];
+        for (int y = 0; y < 16; y++) rows[y] = y >= 1 && y <= 14 ? "0000100000000000" : new string('0', 16);
+        Simulation sim = SimOn(Rows(rows), 2);
+        Assert.False(sim.World.NavGrid.IsPassable(4, 5));
+        int type = TypeWithRadius(0.4f);
+        Spawn(sim, (type, new Vector2(10.05f, 11f)), (type, new Vector2(10.15f, 11f)));
+        UnitStore u = sim.World.Units;
+        sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, 0), new Vector2(10.3f, 11f)));
+        sim.Tick(); // queued
+        sim.Tick(); // the Move applies, then the first (crowded) tick
+        Assert.Equal(UnitState.Moving, u.State[0]); // crowded: may not stop yet
+        Assert.Equal(new Vector2(10.05f, 11f), u.Position[0]);
+        int ticks = 1;
+        while (u.State[0] == UnitState.Moving && ticks < 10 * MovementConstants.GiveUpTicks)
+        {
+            sim.Tick();
+            ticks++;
+        }
+        Assert.Equal(UnitState.Idle, u.State[0]);
+        Assert.True(ticks <= MovementConstants.GiveUpTicks + 1, $"{ticks} ticks");
+        Assert.NotEqual(-1, u.GoalCell[0]);
+        Assert.Equal(0, u.StuckTicks[0]);
+    }
+
+    /// <summary>BUG-0029: re-issuing the walled-in unit's own order every tick must not restart its stuck count.</summary>
+    [Fact]
+    public void SameMoveSpammedEveryTick_ToAWalledInUnit_StillGivesUpOnTime()
+    {
+        Simulation sim = Walled(out Vector2 center);
+        UnitStore u = sim.World.Units;
+        Vector2 target = center + new Vector2(20f, 0f);
+        int ticks = 0;
+        do
+        {
+            sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, 0), target + new Vector2(0f, 0.01f * (ticks % 3))));
+            sim.Tick();
+            ticks++;
+        } while ((ticks < 2 || u.State[0] == UnitState.Moving) && ticks < 10 * MovementConstants.GiveUpTicks);
+        Assert.True(ticks <= MovementConstants.GiveUpTicks + 2, $"{ticks} ticks");
+        Assert.Equal(-1, u.GoalCell[0]);
+    }
+
+    /// <summary>BUG-0029: an arrived blob re-ordered to the same point every tick (click spam, AI refresh) stays put.</summary>
+    [Fact]
+    public void ArrivedBlob_ReorderedToTheSamePointEveryTick_StaysIdleAndStill()
+    {
+        Simulation sim = MoveScenario.Spawn(seed: 3, units: 20, maxCost: 40f, out int goalCell);
+        Vector2 goal = MoveScenario.Center(sim.World.NavGrid, goalCell);
+        MoveScenario.MoveAll(sim, goal);
+        sim.Tick();
+        UnitStore u = sim.World.Units;
+        int t = 0;
+        do { sim.Tick(); t++; } while (CountMoving(u) > 0 && t < 1200);
+        Assert.Equal(0, CountMoving(u));
+        bool[] before = MoveScenario.Arrived(sim.World);
+        var positions = (Vector2[])u.Position.Clone();
+        for (int k = 0; k < 100; k++)
+        {
+            MoveScenario.MoveAll(sim, goal);
+            sim.Tick();
+            Assert.Equal(0, CountMoving(u));
+        }
+        Assert.Equal(positions, u.Position);
+        Assert.Equal(before, MoveScenario.Arrived(sim.World));
+    }
+
     [Fact]
     public void UnitMakingProgress_NeverCountsTowardGivingUp()
     {

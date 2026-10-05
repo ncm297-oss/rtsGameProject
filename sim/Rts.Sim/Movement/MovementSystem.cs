@@ -26,7 +26,7 @@ public static class MovementSystem
     // Planned outcomes, written by Plan and carried out by Apply.
     private const byte ActWalk = 0;    // take PlannedStep: progress, the stuck count resets
     private const byte ActStuck = 1;   // take PlannedStep (possibly zero: refused): a stuck tick
-    private const byte ActBackOff = 2; // too tight to stop: take PlannedStep, no progress check
+    private const byte ActBackOff = 2; // too tight to stop: take PlannedStep; a stuck tick, but keeps the goal at the limit
     private const byte ActWait = 3;    // no field yet: hold still, keep the order
     private const byte ActArrive = 4;  // stop here; keep GoalCell so later units can pack against it
     private const byte ActAbandon = 5; // off the map or no route: stop and drop the goal
@@ -210,7 +210,7 @@ public static class MovementSystem
                     continue;
                 }
                 // Too tight to stop here: back off along the push alone, and try again next tick.
-                // Neither progress nor a stuck tick: making room is a step toward stopping.
+                // Counts toward the stuck limit (BUG-0027); at the limit the unit stops anyway.
                 Vector2 back = Constrain(u, i, pos, ClampLength(push, speed), near, count, goalCell);
                 action[i] = ActBackOff;
                 planned[i] = CanStep(grid, cx, cy, pos + back) ? back : Vector2.Zero;
@@ -286,16 +286,22 @@ public static class MovementSystem
                         u.Position[i] += step;
                         u.Facing[i] = SimMath.Atan2(step.Y, step.X);
                     }
-                    if (action[i] == ActBackOff) break;
-                    u.BestRemaining[i] = remaining[i];
+                    // Back-off leaves the progress estimate alone (moving away from the goal is not
+                    // a new best), but it is not progress either, so it counts toward the limit:
+                    // a back-off refused by a wall, or swinging in and out at a blob's edge, must
+                    // end (BUG-0027).
+                    if (action[i] != ActBackOff) u.BestRemaining[i] = remaining[i];
                     if (action[i] == ActWalk)
                         u.StuckTicks[i] = 0;
                     else if (++u.StuckTicks[i] >= MovementConstants.GiveUpTicks)
                     {
-                        // Blocked for a short time: give up where it stands and drop the goal, so
-                        // it doesn't anchor a blob away from the goal.
+                        bool backingOff = action[i] == ActBackOff;
                         Stop(u, i);
-                        u.GoalCell[i] = -1;
+                        // Blocked for a short time: give up where it stands and drop the goal, so
+                        // it doesn't anchor a blob away from the goal. A unit still backing off is
+                        // at its goal or touching its blob: it settles there, crowded, and keeps
+                        // the goal so groupmates still pack against it.
+                        if (!backingOff) u.GoalCell[i] = -1;
                     }
                     break;
             }

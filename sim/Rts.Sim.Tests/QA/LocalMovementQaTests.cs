@@ -62,7 +62,7 @@ public class LocalMovementQaTests
     /// the wall and is refused, and back-off ticks never count toward giving up. It must still
     /// terminate within GiveUpTicks + slack (QA focus "give-up abuse": all terminate, never loop).
     /// </summary>
-    [Fact(Skip = "BUG-0027: back-off ticks never count toward giving up; a refused back-off loops forever; un-skip when fixed")]
+    [Fact]
     public void UnitAtGoal_OverlappedByIdleStranger_AgainstAWall_StillGoesIdle()
     {
         Simulation sim = LocalMovementTests.SimOn(WestWall(), 2);
@@ -83,7 +83,7 @@ public class LocalMovementQaTests
     }
 
     /// <summary>The same livelock without any wall: 50 units spawned on one point and ordered to that point.</summary>
-    [Fact(Skip = "BUG-0027: 14 of 50 units still Moving after 600 ticks, oscillating in back-off; un-skip when fixed")]
+    [Fact]
     public void FiftyUnitsSpawnedOnOnePoint_OrderedToThatPoint_AllTerminate()
     {
         Simulation sim = LocalMovementTests.SimOn(LocalMovementTests.Flat(32), 50);

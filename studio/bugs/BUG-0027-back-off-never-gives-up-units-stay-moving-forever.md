@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-05-0742, task M1-4d-1 |
 | System | movement (MovementSystem crowded arrival / give-up) |
-| Fixed by | |
+| Fixed by | M1-4d-1 fix round 1 (uncommitted); LocalMovementTests.CrowdedAtGoal_BackOffRefusedByACliff_StopsAfterGiveUpTicks_KeepingItsGoal, QA/LocalMovementQaTests (2 un-skipped), Stress/LocalMovementStressTests 2,500 rows un-skipped |
 
 ## Repro
 1. Un-skip and run (each fails today):

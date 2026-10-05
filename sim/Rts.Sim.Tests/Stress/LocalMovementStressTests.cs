@@ -62,8 +62,8 @@ public class LocalMovementStressTests
     [Theory]
     [InlineData(500, 1, 3000)]
     [InlineData(500, 4, 3000)]
-    [InlineData(2500, 1, 6000, Skip = "BUG-0027: 57 units stay Moving forever in a period-2 back-off cycle at the blob's edge; un-skip when fixed")]
-    [InlineData(2500, 4, 6000, Skip = "BUG-0027: a unit stays Moving forever in a refused back-off; un-skip when fixed")]
+    [InlineData(2500, 1, 6000)]
+    [InlineData(2500, 4, 6000)]
     public void Crowd_ToOneOrFourClosePoints_InvariantsEveryTick_AllSettle(int units, int points, int limit)
     {
         Simulation sim = MoveScenario.Spawn(seed: (ulong)(900 + units + points), units: units, maxCost: units > 1000 ? 70f : 40f, out int goalCell);

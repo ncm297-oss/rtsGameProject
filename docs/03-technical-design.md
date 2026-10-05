@@ -383,11 +383,18 @@ So separation is symmetric and no result depends on which unit is walked first. 
   by `StuckFraction` (0.25) × speed; otherwise `UnitStore.StuckTicks` counts up, and at
   `GiveUpTicks` (20 ticks = 1 s) the unit goes Idle with `GoalCell = -1` (so it never anchors a
   blob). A best that only falls means jostling back and forth, even across a cell edge, never
-  resets the count. A `Move` resets both fields; waiting for a field and backing off count as
-  neither progress nor stuck. Units stopping off the map or on blocked ground also drop their goal.
+  resets the count. Backing off counts as a stuck tick too (it leaves the best alone), so a
+  back-off refused by a wall, or one swinging in and out at a blob's edge, ends (BUG-0027): a unit
+  that reaches `GiveUpTicks` while backing off is at its goal or touching its blob, so it stops
+  there, crowded, and *keeps* its `GoalCell`. Waiting for a field counts as neither progress nor
+  stuck. A `Move` to a new goal cell resets both fields. A `Move` to the goal cell the unit already
+  has is the same order (click spam, AI refreshes; BUG-0029): an arrived (Idle) unit stays put, and
+  a Moving one takes the new point but keeps its order tick and stuck count. Units stopping off
+  the map or on blocked ground also drop their goal.
 
 Known limits until shoving (M1-4d-2): standing units never move aside, so units that gave up, or
-wait long for a field under the build cap, wall others in. With 500 units sent to 500 random goals
+wait long for a field under the build cap, wall others in. Units that stop at the back-off limit can
+overlap a neighbor by more than 40% (seen at the edge of a 2,500-unit blob). With 500 units sent to 500 random goals
 about 12% give up; with 64 neighboring goals for 128 units about a third do. Measured cost (Debug):
 500 units converging on one point average about 0.1 ms per tick, 2,500 about 0.6 ms.
 

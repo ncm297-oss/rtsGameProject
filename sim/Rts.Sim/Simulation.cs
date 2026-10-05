@@ -193,6 +193,15 @@ public sealed class Simulation
             goal = grid.CellCenter(cell % grid.Width, cell / grid.Width);
         }
         int i = command.Unit.Index;
+        if (u.GoalCell[i] == cell)
+        {
+            // The order the unit already has (click spam, an AI refreshing its orders): it doesn't
+            // restart. An Idle unit that kept its goal cell has arrived and stays put; a Moving one
+            // takes the new point but keeps its order age and stuck count, so spam can't keep it
+            // Moving forever (BUG-0029).
+            if (u.State[i] == UnitState.Moving) u.Goal[i] = goal;
+            return;
+        }
         u.State[i] = UnitState.Moving;
         u.Goal[i] = goal;
         u.GoalCell[i] = cell;

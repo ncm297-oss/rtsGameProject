@@ -197,11 +197,11 @@ public class MoveQaTests
             sim.Tick();
         }
         Assert.Equal(builds + 1, sim.World.FlowFields.BuildCount);
-        // M1-4d-1: 20 units can't all fit within 1 m of the point, and a spammed Move re-arms the whole
-        // blob every tick, so they settle only once the spam stops: as a blob linked to the point.
+        // Re-ordering an arrived unit to the goal cell it already holds keeps it arrived (BUG-0029), so
+        // under the spam itself the whole group has settled: a blob linked to the point (M1-4d-1).
         UnitStore u = sim.World.Units;
         sim.Tick(); // the last Moves apply
-        for (int t = 0; t < 60; t++) sim.Tick();
+        for (int i = 0; i < 20; i++) Assert.Equal(UnitState.Idle, u.State[i]);
         bool[] arrived = MoveScenario.Arrived(sim.World);
         for (int i = 0; i < 20; i++)
             Assert.True(arrived[i], $"unit {i} at {u.Position[i]} ({u.State[i]}, {Vector2.Distance(u.Position[i], goal):F2} m from the goal)");

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-05-0742, task M1-4d-1 |
 | System | movement (crowded arrival) |
-| Fixed by | |
+| Fixed by | M1-4d-1 fix round 1 (uncommitted); LocalMovementTests.ArrivedBlob_ReorderedToTheSamePointEveryTick_StaysIdleAndStill, LocalMovementTests.SameMoveSpammedEveryTick_ToAWalledInUnit_StillGivesUpOnTime, QA/MoveQaTests.Move_SpammedEveryTick_... restored |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~SettledBlob_ReorderedToSamePointEveryTick" --logger "console;verbosity=detailed"`
