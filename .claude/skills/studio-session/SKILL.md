@@ -132,8 +132,15 @@ Commit its updates: `studio: <SESSION_ID> <VERDICT> - <COMMIT_SUMMARY>`.
 
 **ACCEPT:**
 1. `git fetch origin`. If `origin/main` moved since `BASE`, `git merge --no-edit origin/main`.
-   On conflict: `git merge --abort` and treat as ESCALATE with an owner item ("studio branch
-   conflicts with main"). After a clean merge, rerun build and tests; if red, treat as ESCALATE.
+   On conflict, list the conflicted files (`git diff --name-only --diff-filter=U`):
+   - **Only `docs/` or `studio/` files:** resolve them yourself. These are mostly append-only
+     lists and tables (change logs, inbox, bug index, session tables), so keep both sides' new
+     entries in date order. For `studio/STATE.md`, keep this session's version and re-apply
+     anything main added under Waiting on you or For your review. Then `git add` the files and
+     `git commit --no-edit`.
+   - **Any code, data, or config file:** `git merge --abort` and treat as ESCALATE with an owner
+     item ("studio branch conflicts with main in <files>").
+   After a merge, rerun build and tests; if red, treat as ESCALATE.
 2. If `push_to_github` is `yes`: `git push origin HEAD:main` (alone in its call), then in
    separate calls confirm `git ls-remote origin refs/heads/main` equals `git rev-parse HEAD`.
    If the push is refused by the permission check, don't retry it in another form: push the
