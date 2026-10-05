@@ -1,3 +1,4 @@
+using System.Numerics;
 using Rts.Sim.Data;
 using Rts.Sim.Determinism;
 using Rts.Sim.Entities;
@@ -14,7 +15,12 @@ public sealed class World
     private readonly SimRng[] _rngs;
 
     /// <summary>Creates an empty world sized from the config, with terrain generated from the seed's map stream.</summary>
-    public World(SimConfig config)
+    public World(SimConfig config) : this(config, null)
+    {
+    }
+
+    /// <summary>Test seam: a world on a hand-made map (null generates one from the seed, as in a match).</summary>
+    internal World(SimConfig config, Heightmap? map)
     {
         config.Validate();
         Config = config;
@@ -22,13 +28,36 @@ public sealed class World
         _rngs = new SimRng[RngStream.Count(config.PlayerCount)];
         for (int i = 0; i < _rngs.Length; i++)
             _rngs[i] = new SimRng(config.Seed, (ulong)i);
-        Heightmap = MapGenerator.Generate(config.Map, ref _rngs[RngStream.MapGen]);
+        Heightmap = map ?? MapGenerator.Generate(config.Map, ref _rngs[RngStream.MapGen]);
         NavGrid = new NavGrid(Heightmap);
         Spatial = new SpatialHash(config.UnitCapacity, NavGrid.Width, NavGrid.Height);
         FlowFields = new FlowFieldCache(NavGrid, FlowFieldCache.CapacityFor(config.UnitCapacity, NavGrid.Width * NavGrid.Height));
         MoveOrder = new long[config.UnitCapacity];
         FieldMisses = new long[config.UnitCapacity];
+        Neighbors = new int[config.UnitCapacity];
+        PlannedStep = new Vector2[config.UnitCapacity];
+        PlannedAction = new byte[config.UnitCapacity];
+        PlannedRemaining = new float[config.UnitCapacity];
+        float maxRadius = 0f;
+        for (int t = 0; t < config.Data.Units.Length; t++)
+            if (config.Data.Units[t].Radius > maxRadius) maxRadius = config.Data.Units[t].Radius;
+        MaxUnitRadius = maxRadius;
     }
+
+    /// <summary>Largest unit collision radius in <see cref="Data"/>: a neighbor query of own radius plus this finds every unit that can touch.</summary>
+    internal float MaxUnitRadius { get; }
+
+    /// <summary>Scratch for <see cref="Movement.MovementSystem"/>'s neighbor queries, sized to every slot so a query is never truncated; derived, not hashed.</summary>
+    internal int[] Neighbors { get; }
+
+    /// <summary>Scratch for <see cref="Movement.MovementSystem"/>: each Moving unit's planned step, applied once every unit has planned; derived, not hashed.</summary>
+    internal Vector2[] PlannedStep { get; }
+
+    /// <summary>Scratch for <see cref="Movement.MovementSystem"/>: each Moving unit's planned outcome (walk, wait, arrive, abandon); derived, not hashed.</summary>
+    internal byte[] PlannedAction { get; }
+
+    /// <summary>Scratch for <see cref="Movement.MovementSystem"/>: each walking unit's estimated path left after its planned step; derived, not hashed.</summary>
+    internal float[] PlannedRemaining { get; }
 
     /// <summary>Scratch for <see cref="Movement.MovementSystem"/>: Moving units keyed by (goal cell, slot); derived, not hashed.</summary>
     internal long[] MoveOrder { get; }

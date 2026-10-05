@@ -231,8 +231,20 @@ public class FieldBuildCapQaTests
         _out.WriteLine($"500 distinct goals: all arrived after {ticks} ticks (ideal slowest unit ~{idealMax}), {sim.World.FlowFields.BuildCount} builds, max {maxBuilds}/tick");
         Assert.Equal(0, CountMoving(u));
         Assert.True(maxBuilds <= MovementConstants.MaxFieldBuildsPerTick);
+        // M1-4d-1: units now block each other, so a unit can arrive by touching an arrived groupmate
+        // or give up (GoalCell -1) when walled in by other units for GiveUpTicks. Here hundreds of
+        // units wait for fields under the build cap, standing in others' way, and given-up units
+        // stay put: about 12% give up until shoving (M1-4d-2) moves standing units aside.
+        bool[] arrived = MoveScenario.Arrived(sim.World);
+        int arrivedCount = 0, gaveUp = 0;
         for (int i = 0; i < u.Capacity; i++)
-            Assert.True(Vector2.Distance(u.Position[i], u.Goal[i]) <= MovementConstants.ArrivalDistance, $"unit {i}");
+        {
+            if (arrived[i]) arrivedCount++;
+            else if (u.GoalCell[i] == -1) gaveUp++;
+            else Assert.Fail($"unit {i} idle {Vector2.Distance(u.Position[i], u.Goal[i]):F2} m from its goal without arriving or giving up");
+        }
+        _out.WriteLine($"arrived {arrivedCount}, gave up {gaveUp}");
+        Assert.True(gaveUp <= u.Capacity * 15 / 100, $"{gaveUp} of {u.Capacity} units gave up");
     }
 
     [Fact]

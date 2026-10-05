@@ -120,6 +120,33 @@ public class StateHashTests
     }
 
     [Fact]
+    public void Hash_CoversStuckTicks_AndSpawnResetsIt()
+    {
+        // M1-4d-1: the give-up counter decides when a unit stops, so it is sim state.
+        Simulation sim = MoveScenario.Spawn(5, units: 2, maxCost: 10f, out _);
+        UnitStore u = sim.World.Units;
+        ulong h0 = sim.StateHash();
+        u.StuckTicks[1] = 1;
+        Assert.NotEqual(h0, sim.StateHash());
+        u.StuckTicks[1] = 0;
+        Assert.Equal(h0, sim.StateHash());
+        float best = u.BestRemaining[1];
+        u.BestRemaining[1] = 12.5f;
+        Assert.NotEqual(h0, sim.StateHash());
+        u.BestRemaining[1] = best;
+        Assert.Equal(h0, sim.StateHash());
+
+        // A freed slot's give-up state does not leak into the next unit spawned there.
+        u.StuckTicks[1] = 7;
+        u.BestRemaining[1] = 3f;
+        u.Free(MoveScenario.Handle(sim, 1));
+        Assert.True(u.TryAlloc(out EntityHandle again));
+        Assert.Equal(1, again.Index);
+        Assert.Equal(0, u.StuckTicks[1]);
+        Assert.Equal(float.PositiveInfinity, u.BestRemaining[1]);
+    }
+
+    [Fact]
     public void Hash_CoversStateGoalGoalCellAndCommandUnit()
     {
         Simulation sim = MoveScenario.Spawn(5, units: 2, maxCost: 10f, out int goalCell);

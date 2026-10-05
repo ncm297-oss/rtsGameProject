@@ -220,12 +220,17 @@ public class MovementSystemTests
         }
         _out.WriteLine($"200 units arrived after {ticks} ticks");
         Assert.False(anyMoving, "units still moving after 1200 ticks");
+        // Crowded arrival (M1-4d-1): the group packs into a blob around the point, every unit linked
+        // to it through touching groupmates, none given up, and no two closer than half their radii's sum.
+        bool[] arrived = MoveScenario.Arrived(w);
         for (int i = 0; i < 200; i++)
         {
             Assert.Equal(UnitState.Idle, u.State[i]);
             Assert.Equal(Vector2.Zero, u.Velocity[i]);
-            Assert.True(Vector2.Distance(u.Position[i], goal) <= MovementConstants.ArrivalDistance, $"unit {i} stopped {Vector2.Distance(u.Position[i], goal)} m away");
+            Assert.True(arrived[i], $"unit {i} stopped {Vector2.Distance(u.Position[i], goal)} m away, not linked to the blob (goal cell {u.GoalCell[i]})");
         }
+        string? pack = MoveScenario.FirstPackViolation(w);
+        Assert.True(pack == null, pack);
         Assert.Equal(1, w.FlowFields.BuildCount); // one shared field for the whole group
     }
 
@@ -281,8 +286,19 @@ public class MovementSystemTests
             for (int i = 0; i < u.Capacity; i++) if (u.State[i] == UnitState.Moving) moving++;
         }
         Assert.Equal(0, moving);
+        // The 64 goals are neighboring cells, so the units wall each other in: since M1-4d-1 the ones
+        // that can't get through give up (GoalCell -1) until shoving exists (M1-4d-2).
+        bool[] arrived = MoveScenario.Arrived(sim.World);
+        int arrivedCount = 0, gaveUp = 0;
         for (int i = 0; i < u.Capacity; i++)
-            Assert.True(Vector2.Distance(u.Position[i], u.Goal[i]) <= MovementConstants.ArrivalDistance, $"unit {i} stopped short");
+        {
+            if (arrived[i]) arrivedCount++;
+            else if (u.GoalCell[i] == -1) gaveUp++;
+            else Assert.Fail($"unit {i} idle {Vector2.Distance(u.Position[i], u.Goal[i]):F2} m from its goal without arriving or giving up");
+        }
+        _out.WriteLine($"128 units, 64 neighboring goals: arrived {arrivedCount}, gave up {gaveUp}");
+        Assert.True(arrivedCount >= u.Capacity / 2, $"only {arrivedCount} arrived");
+        Assert.Null(MoveScenario.FirstPackViolation(sim.World));
     }
 
     [Fact]

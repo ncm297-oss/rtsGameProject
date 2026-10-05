@@ -197,10 +197,15 @@ public class MoveQaTests
             sim.Tick();
         }
         Assert.Equal(builds + 1, sim.World.FlowFields.BuildCount);
-        // Re-ordering an arrived unit re-arms Moving; it must settle again within a tick.
+        // M1-4d-1: 20 units can't all fit within 1 m of the point, and a spammed Move re-arms the whole
+        // blob every tick, so they settle only once the spam stops: as a blob linked to the point.
         UnitStore u = sim.World.Units;
+        sim.Tick(); // the last Moves apply
+        for (int t = 0; t < 60; t++) sim.Tick();
+        bool[] arrived = MoveScenario.Arrived(sim.World);
         for (int i = 0; i < 20; i++)
-            Assert.True(Vector2.Distance(u.Position[i], goal) <= MovementConstants.ArrivalDistance + 1e-4f, $"unit {i} at {u.Position[i]}");
+            Assert.True(arrived[i], $"unit {i} at {u.Position[i]} ({u.State[i]}, {Vector2.Distance(u.Position[i], goal):F2} m from the goal)");
+        Assert.Null(MoveScenario.FirstPackViolation(sim.World));
     }
 
     [Fact]
@@ -250,7 +255,14 @@ public class MoveQaTests
     public void EveryShippedUnitType_SpawnsWithDataSpeedAndRadius_AndMovesExactlyThatFar()
     {
         int types = TestSim.UnitTypeCount;
-        var sim = new Simulation(TestSim.Config(8, 1, types, 2 * types + 4));
+        // M1-4d-1: units on one spot push apart, so each type walks in its own sim.
+        for (int type = 0; type < types; type++)
+            WalkOneType(type);
+    }
+
+    private static void WalkOneType(int type)
+    {
+        var sim = new Simulation(TestSim.Config(8, 1, 1, 8));
         NavGrid g = sim.World.NavGrid;
         // An open straight run: a passable cell with 12 passable cells to its east.
         int start = -1;
@@ -262,23 +274,20 @@ public class MoveQaTests
                 if (ok) start = y * g.Width + x;
             }
         Vector2 from = MoveScenario.Center(g, start);
-        for (int t = 0; t < types; t++) sim.Enqueue(Command.SpawnUnit(0, t, from));
+        sim.Enqueue(Command.SpawnUnit(0, type, from));
         sim.Tick();
         sim.Tick();
-        for (int t = 0; t < types; t++) sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, t), from + new Vector2(20f, 0f)));
+        sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, 0), from + new Vector2(20f, 0f)));
         sim.Tick();
         sim.Tick(); // applies Moves and takes the first step
         UnitStore u = sim.World.Units;
-        for (int t = 0; t < types; t++)
-        {
-            var def = TestSim.Data.Units[t];
-            Assert.Equal(def.SpeedPerTick, u.Speed[t]);
-            Assert.Equal(def.Radius, u.Radius[t]);
-            Assert.True(def.SpeedPerTick > 0f, $"{def.Key} has no speed");
-            Assert.Equal(def.SpeedPerTick, u.Position[t].X - from.X, 4);
-            Assert.Equal(from.Y, u.Position[t].Y);
-            Assert.Equal(0f, u.Facing[t], 4);
-        }
+        var def = TestSim.Data.Units[type];
+        Assert.Equal(def.SpeedPerTick, u.Speed[0]);
+        Assert.Equal(def.Radius, u.Radius[0]);
+        Assert.True(def.SpeedPerTick > 0f, $"{def.Key} has no speed");
+        Assert.Equal(def.SpeedPerTick, u.Position[0].X - from.X, 4);
+        Assert.Equal(from.Y, u.Position[0].Y);
+        Assert.Equal(0f, u.Facing[0], 4);
     }
 
     [Theory]
