@@ -66,8 +66,14 @@ _Required criteria met in session 2026-10-03-0826 (task M0-1). Owner signed off 
       per-tick blocked-ground check, 100-tick hash twins) + QA `Stress/CrossMapStressTests` seeds
       1-50, level-2 goals, 500/1,000 units. Needed the queued-walker give-up rule; BUG-0035 (walkers
       squeezed through enemy plugs) fixed in the same task.)_
-- [ ] Replay format (seed + commands + checkpoint hashes); determinism test (same run twice →
+- [x] Replay format (seed + commands + checkpoint hashes); determinism test (same run twice →
       same hash) and one golden replay.
+      _(session 2026-10-05-1446, task M1-6: `Rts.Sim.Replays` (`Replay`, `ReplayRecorder`,
+      `ReplayFormat` ASCII/LF text with FNV-1a checksum, `ReplayPlayer`), `GameData.ContentHash()`;
+      golden `sim/Rts.Sim.Tests/Replays/cross_map_seed1.replay` (200 units, 1,500 ticks, 15
+      checkpoints, 15.5 KB; regen with `RTS_REGEN_GOLDEN=1`); `DeterminismTests` 2,000 ticks. BUG-0014
+      seed mixing landed first (every pinned map hash regenerated once). QA: 50 fuzzed runs replay,
+      parser refuses every truncation/bit flip, recorder allocates 0 bytes at 2,500 units.)_
 - [ ] Perf test: 500 moving units, average tick < 4 ms on the dev machine.
 - [ ] A tiny CLI in `tools/` runs a scenario headless and prints hashes and timings.
 
@@ -76,13 +82,22 @@ _Required criteria met in session 2026-10-03-0826 (task M0-1). Owner signed off 
 **Done when:**
 
 - [ ] `SimRunner` with accumulator and interpolation; game speed setting.
-- [ ] RTS camera: 55° pitch, edge pan, arrow keys, middle-drag, zoom, clamped to the map.
+      _(accumulator (`ViewApi.FixedStepClock`, 5-tick cap, alpha) and game speed 0.25-8 shipped in
+      session 2026-10-05-1446, task M2-1; ticked once unit views interpolate on alpha, M2-2.)_
+- [x] RTS camera: 55° pitch, edge pan, arrow keys, middle-drag, zoom, clamped to the map.
+      _(session 2026-10-05-1446, task M2-1: `RtsCamera` + pure `ViewApi.CameraLimits`; zoom 20-60 m,
+      8 px edge band, rebindable actions in `project.godot`; `game/tests/CameraClampTest.tscn` drives
+      the real camera headless to every edge and both zoom limits.)_
 - [ ] Heightmap terrain mesh with biome vertex colors; trees and rocks as MultiMesh.
+      _(terrain mesh shipped in M2-1: `ViewApi.TerrainMeshBuilder`, flat plateaus, vertical cliffs,
+      sloped ramps, per-level placeholder tints. Trees and rocks wait for M3's resource entities.)_
 - [ ] Placeholder unit views (primitive meshes, team colors), pooled, interpolated.
 - [ ] Selection: click, box, shift-add, double-click type, control groups, Tab subgroups.
 - [ ] Right-click move, A attack-move (moves only for now), S stop, H hold, shift-queue.
 - [ ] Minimap with click-to-move-camera and right-click orders.
 - [ ] `--screenshot` debug flag; debug overlay (nav grid, flow arrows, tick time).
+      _(`--screenshot <path> --screenshot-after <s>` and a tick/speed/tick-ms/FPS label shipped in
+      M2-1; nav grid and flow arrows are M2-5.)_
 - [ ] Placeholder audio for select and command.
 - [ ] Playable: the owner moves an army of 100 placeholder units around a generated map at 60 FPS.
 

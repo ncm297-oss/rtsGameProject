@@ -4,6 +4,9 @@ One file per bug, filed by the QA inspector (or anyone). The Producer triages th
 bugs outrank new features.
 
 - Name: `BUG-<nnnn>-<short-slug>.md`, numbered in order (look at the highest existing number).
+  Two tracks run at once, so the Producer's brief gives each track its first number for the
+  session (sim: next free; view: next free + 10); never reuse a number the other track may take
+  (session 1446 collided on BUG-0039; the view's became BUG-0041).
 - Status moves `open` → `fixed` (with proof) or `wontfix` (with the Producer's reason).
 
 ## Template
