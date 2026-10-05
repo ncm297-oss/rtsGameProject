@@ -164,12 +164,14 @@ public class FieldBuildCapQaTests
         }
     }
 
-    [Fact(Skip = "BUG-0021: with the build cap, flow-field cache contents (unhashed) change unit positions")]
-    public void BuildCap_FieldCacheIsDerivedState_PrewarmingItDoesNotChangeTheSim()
+    [Fact]
+    public void BuildCap_FieldCacheIsSimState_PrewarmingChangesTheHash_IdenticalPrewarmsStayEqual()
     {
-        // docs/03: "The cache is derived state and not hashed." Two sims with equal StateHash must
-        // stay equal whatever the cache holds (e.g. after a save/load, which starts with an empty cache).
-        Simulation a = SpawnRandom(4021, 64), b = SpawnRandom(4021, 64);
+        // Decision 2026-10-04 (BUG-0021, docs/03 "Flow fields"): the cache's keys, versions and LRU
+        // stamps are sim state. Pre-warming one sim's cache must show in its hash at once (equal
+        // hashes then really mean equal futures, e.g. across save/load), and sims pre-warmed the same
+        // way must stay equal. Drafted by the dev in M1-4c; QA owns this test.
+        Simulation a = SpawnRandom(4021, 64), b = SpawnRandom(4021, 64), c = SpawnRandom(4021, 64);
         NavGrid g = a.World.NavGrid;
         List<int> passable = FlowFieldOracle.PassableCells(g);
         var rng = new SimRng(4021, 4);
@@ -181,14 +183,18 @@ public class FieldBuildCapQaTests
             Vector2 target = MoveScenario.Center(g, goalCells[i % goalCells.Length]);
             a.Enqueue(Command.Move(ua.Owner[i], MoveScenario.Handle(a, i), target));
             b.Enqueue(Command.Move(ua.Owner[i], MoveScenario.Handle(b, i), target));
+            c.Enqueue(Command.Move(ua.Owner[i], MoveScenario.Handle(c, i), target));
         }
-        foreach (int c in goalCells) b.World.FlowFields.Get(c); // only b's cache differs
         Assert.Equal(a.StateHash(), b.StateHash());
+        foreach (int cell in goalCells) b.World.FlowFields.Get(cell);
+        Assert.True(a.StateHash() != b.StateHash(), "pre-warming b's cache did not change its hash");
+        foreach (int cell in goalCells) c.World.FlowFields.Get(cell); // c pre-warmed exactly like b
+        Assert.Equal(b.StateHash(), c.StateHash());
         for (int t = 0; t < 20; t++)
         {
-            a.Tick();
             b.Tick();
-            Assert.True(a.StateHash() == b.StateHash(), $"tick {t}: equal-hash sims diverged because only one had the fields cached");
+            c.Tick();
+            Assert.True(b.StateHash() == c.StateHash(), $"tick {t}: identically pre-warmed sims diverged");
         }
     }
 
@@ -229,12 +235,18 @@ public class FieldBuildCapQaTests
             Assert.True(Vector2.Distance(u.Position[i], u.Goal[i]) <= MovementConstants.ArrivalDistance, $"unit {i}");
     }
 
-    [Fact(Skip = "BUG-0022: groups re-ordered faster than the build cap serves them never move; low goal cells win")]
-    public void BuildCap_64GroupsRetargetedEvery20Ticks_EveryGroupMovesInEveryWindow()
+    [Fact]
+    public void BuildCap_64GroupsRetargetedEvery34Ticks_EveryGroupMovesInEveryWindow()
     {
         // A realistic load later (AI re-targeting, chase orders): 64 groups of 8 get a new goal every
-        // second. Each window the cap allows 20 builds, so no group should go a whole window frozen... ideally.
+        // window. Retuned in M1-4c (BUG-0022) to the decided cap and capacity: 512 unit slots give a
+        // 64-field cache, and a window of 34 ticks covers the Moves' one-tick command delay plus
+        // ceil(64 / MaxFieldBuildsPerTick) = 32 build ticks, with one to spare. Oldest-first serving
+        // means no group may go a whole window frozen. Drafted by the dev; QA owns the parameters.
+        const int windowTicks = 34;
+        Assert.True(windowTicks >= 1 + (64 + MovementConstants.MaxFieldBuildsPerTick - 1) / MovementConstants.MaxFieldBuildsPerTick);
         Simulation sim = SpawnRandom(6018, 512);
+        Assert.True(sim.World.FlowFields.Capacity >= 64);
         NavGrid g = sim.World.NavGrid;
         List<int> passable = FlowFieldOracle.PassableCells(g);
         UnitStore u = sim.World.Units;
@@ -252,7 +264,7 @@ public class FieldBuildCapQaTests
                 start[i] = u.Position[i];
                 sim.Enqueue(Command.Move(u.Owner[i], MoveScenario.Handle(sim, i), MoveScenario.Center(g, groupGoal[i % 64])));
             }
-            for (int t = 0; t < 20; t++) sim.Tick();
+            for (int t = 0; t < windowTicks; t++) sim.Tick();
             int frozenThisWindow = 0;
             for (int k = 0; k < 64; k++)
             {
@@ -275,58 +287,68 @@ public class FieldBuildCapQaTests
         Assert.True(frozenGroupWindows == 0, $"{frozenGroupWindows} group-windows never moved");
     }
 
-    [Fact]
-    public void BuildCap_SteadyStateWith300LiveGoals_TickAllocatesNothing()
+    /// <summary>This class's wall-clock and allocation tests: they run alone in <see cref="SerialCollection"/> (BUG-0017, BUG-0024) while the heavy tests above stay in the parallel batch.</summary>
+    [Collection(SerialCollection.Name)]
+    public class Serial
     {
-        Simulation sim = SpawnRandom(7018, 600);
-        NavGrid g = sim.World.NavGrid;
-        List<int> passable = FlowFieldOracle.PassableCells(g);
-        UnitStore u = sim.World.Units;
-        var rng = new SimRng(7018, 1);
-        var goals = new int[300];
-        for (int k = 0; k < goals.Length; k++) goals[k] = passable[rng.NextInt(0, passable.Count)];
-        for (int i = 0; i < u.Capacity; i++)
-            sim.Enqueue(Command.Move(u.Owner[i], MoveScenario.Handle(sim, i), MoveScenario.Center(g, goals[i % goals.Length])));
-        for (int t = 0; t < 40; t++) sim.Tick(); // warm-up: JIT, every code path incl. waiting and building
-        int builds = sim.World.FlowFields.BuildCount;
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int t = 0; t < 60; t++) sim.Tick();
-        long delta = GC.GetAllocatedBytesForCurrentThread() - before;
-        _out.WriteLine($"60 ticks, {CountMoving(u)} moving, {sim.World.FlowFields.BuildCount - builds} builds: {delta} bytes");
-        Assert.True(sim.World.FlowFields.BuildCount - builds >= 50, "measurement didn't include builds");
-        Assert.Equal(0, delta);
-    }
+        private readonly ITestOutputHelper _out;
 
-    [Trait("Category", "Perf")]
-    [Theory]
-    [InlineData(500)]
-    [InlineData(1000)]
-    [InlineData(2500)]
-    public void Perf_BuildCap_EveryUnitItsOwnGoal_TickCost(int units)
-    {
-        Simulation sim = SpawnRandom(8018, units);
-        NavGrid g = sim.World.NavGrid;
-        List<int> passable = FlowFieldOracle.PassableCells(g);
-        UnitStore u = sim.World.Units;
-        var rng = new SimRng(8018, 1);
-        for (int i = 0; i < u.Capacity; i++)
-            sim.Enqueue(Command.Move(u.Owner[i], MoveScenario.Handle(sim, i), MoveScenario.Center(g, passable[rng.NextInt(0, passable.Count)])));
-        sim.Tick();
-        for (int t = 0; t < 10; t++) sim.Tick();
-        var sw = new Stopwatch();
-        double worst = 0;
-        for (int t = 0; t < 100; t++)
+        public Serial(ITestOutputHelper output) => _out = output;
+
+        [Fact]
+        public void BuildCap_SteadyStateWith300LiveGoals_TickAllocatesNothing()
         {
-            sw.Restart();
-            sim.Tick();
-            worst = Math.Max(worst, sw.Elapsed.TotalMilliseconds);
+            Simulation sim = SpawnRandom(7018, 600);
+            NavGrid g = sim.World.NavGrid;
+            List<int> passable = FlowFieldOracle.PassableCells(g);
+            UnitStore u = sim.World.Units;
+            var rng = new SimRng(7018, 1);
+            var goals = new int[300];
+            for (int k = 0; k < goals.Length; k++) goals[k] = passable[rng.NextInt(0, passable.Count)];
+            for (int i = 0; i < u.Capacity; i++)
+                sim.Enqueue(Command.Move(u.Owner[i], MoveScenario.Handle(sim, i), MoveScenario.Center(g, goals[i % goals.Length])));
+            for (int t = 0; t < 40; t++) sim.Tick(); // warm-up: JIT, every code path incl. waiting and building
+            int builds = sim.World.FlowFields.BuildCount;
+            Action sixtyTicks = () =>
+            {
+                for (int t = 0; t < 60; t++) sim.Tick();
+            };
+            int runs = AllocationProbe.AssertZero(sixtyTicks, _out);
+            _out.WriteLine($"{60 * runs} ticks, {CountMoving(u)} moving, {sim.World.FlowFields.BuildCount - builds} builds: 0 bytes");
+            Assert.True(sim.World.FlowFields.BuildCount - builds >= 50, "measurement didn't include builds");
         }
-        double total = 0;
-        sw.Restart();
-        for (int t = 0; t < 100; t++) sim.Tick();
-        total = sw.Elapsed.TotalMilliseconds / 100;
-        _out.WriteLine($"{units} units, {units} distinct goals: avg {total:F3} ms/tick, worst {worst:F3} ms, {CountMoving(u)} moving");
-        Assert.True(total < 4.0, $"avg {total:F3} ms (docs/03: < 4 ms)");
-        Assert.True(worst < 8.0, $"worst {worst:F3} ms (docs/03: p99 < 8 ms)");
+
+        [Trait("Category", "Perf")]
+        [Theory]
+        [InlineData(500)]
+        [InlineData(1000)]
+        [InlineData(2500)]
+        public void Perf_BuildCap_EveryUnitItsOwnGoal_TickCost(int units)
+        {
+            Simulation sim = SpawnRandom(8018, units);
+            NavGrid g = sim.World.NavGrid;
+            List<int> passable = FlowFieldOracle.PassableCells(g);
+            UnitStore u = sim.World.Units;
+            var rng = new SimRng(8018, 1);
+            for (int i = 0; i < u.Capacity; i++)
+                sim.Enqueue(Command.Move(u.Owner[i], MoveScenario.Handle(sim, i), MoveScenario.Center(g, passable[rng.NextInt(0, passable.Count)])));
+            sim.Tick();
+            for (int t = 0; t < 10; t++) sim.Tick();
+            var sw = new Stopwatch();
+            double worst = 0;
+            for (int t = 0; t < 100; t++)
+            {
+                sw.Restart();
+                sim.Tick();
+                worst = Math.Max(worst, sw.Elapsed.TotalMilliseconds);
+            }
+            double total = 0;
+            sw.Restart();
+            for (int t = 0; t < 100; t++) sim.Tick();
+            total = sw.Elapsed.TotalMilliseconds / 100;
+            _out.WriteLine($"{units} units, {units} distinct goals: avg {total:F3} ms/tick, worst {worst:F3} ms, {CountMoving(u)} moving");
+            Assert.True(total < 4.0, $"avg {total:F3} ms (docs/03: < 4 ms)");
+            Assert.True(worst < 8.0, $"worst {worst:F3} ms (docs/03: p99 < 8 ms)");
+        }
     }
 }

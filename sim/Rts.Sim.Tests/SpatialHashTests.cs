@@ -10,6 +10,7 @@ using Xunit.Abstractions;
 namespace Rts.Sim.Tests;
 
 /// <summary>SpatialHash (M1-4a): brute-force equivalence, slot order, boundaries, clamping, truncation, nearest enemy, perf.</summary>
+[Collection(SerialCollection.Name)]
 public class SpatialHashTests
 {
     private const int MapCells = 128;

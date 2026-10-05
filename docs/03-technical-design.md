@@ -73,10 +73,10 @@ phases in this fixed order:
 5. **Status effects and zones:** expire, tick DoTs and regen, apply zone effects.
 6. **Abilities:** cast timers, effect resolution.
 7. **Orders and targeting:** order queue advance, target acquisition (staggered scans).
-8. **Pathfinding requests:** build or fetch flow fields for new move targets. (M1-4b: done
-   inside phase 9: Moving units are sorted by (goal cell, slot), each goal's field is fetched
-   from the cache once per tick, and a miss builds it right there, without allocating, at most
-   `MovementConstants.MaxFieldBuildsPerTick` (1) builds per tick.)
+8. **Pathfinding requests:** build or fetch flow fields for new move targets. (M1-4c: the first
+   step of `MovementSystem.Run`: Moving units are sorted by (goal cell, slot), every goal that
+   needs a field and has it cached is touched, and the missing ones are built oldest order first,
+   without allocating, at most `MovementConstants.MaxFieldBuildsPerTick` (2) per tick; see "Build cap".)
 9. **Movement:** flow-field direction + steering + collision against the nav grid
    (`MovementSystem.Run`, units in (goal cell, slot) order).
 10. **Combat:** attack wind-ups and cooldowns, projectile flight and impact, splash.
@@ -147,9 +147,11 @@ Rules:
 - **State hash:** `Simulation.StateHash()` is 64-bit FNV-1a (`StateHasher`) over the tick number,
   every unit slot's generation and alive flag, every live unit's fields, the free list, all RNG
   states, per-player command sequence counters, and pending commands (including a `Move`'s unit
-  handle). Derived state is left out: the spatial hash and a unit's `Speed`/`Radius` (copied from
-  its `TypeId`'s data). The flow-field cache is left out today too, but under the build cap its
-  contents decide who waits, so it joins the hash with BUG-0021 (see "Flow fields").
+  handle), and the flow-field cache's metadata (its clock and count, and each used slot's
+  requested cell, grid version and last-use stamp, in slot order): under the build cap the cache
+  decides who waits, so it is sim state (BUG-0021, see "Flow fields"). Derived state is left out:
+  the spatial hash, the fields' contents (they follow from the grid and the key), and a unit's
+  `Speed`/`Radius` (copied from its `TypeId`'s data).
 
 ## Entity model
 
@@ -172,8 +174,9 @@ public readonly record struct EntityHandle(int Index, int Generation);
 
 **Implementation (M1-4b):** `UnitStore` has `Position`, `PrevPosition`, `Velocity` (m/tick),
 `Facing` (radians, `SimMath.Atan2` of the last step), `Owner`, `TypeId`, `Speed` (m/tick) and
-`Radius` (m), `State` (`UnitState.Idle` / `Moving`), `Goal` (m) and `GoalCell` (nav cell index of
-the goal's flow field, -1 for none), plus `Alive` and `Generation`. `Speed` and `Radius` are copied
+`Radius` (m), `State` (`UnitState.Idle` / `Moving`), `Goal` (m), `GoalCell` (nav cell index of
+the goal's flow field, -1 for none) and `OrderTick` (the tick the current Move applied, M1-4c),
+plus `Alive` and `Generation`. `Speed` and `Radius` are copied
 from `UnitDef.SpeedPerTick` / `Radius` at spawn, so movement never looks up data per tick. The
 match's data travels with the setup: `SimConfig.Data` is a required `GameData` (from
 `DataLoader.LoadAll`), exposed as `World.Data`; the sim never reads files itself. The other fields
@@ -242,7 +245,7 @@ On a move order, the group's target cell gets a flow field:
    no corner cutting past blocked cells). 16K cells, well under 1 ms.
 2. **Direction field:** each cell points at its lowest-cost neighbor.
 
-Fields are cached by target cell in an LRU cache (default 32 entries) and tagged with the grid
+Fields are cached by target cell in an LRU cache (32 to 128 entries, scaled with the unit cap) and tagged with the grid
 version. Any passability change invalidates the cache (simple; refine to region versions only if
 profiling shows rebuild cost). All units heading to the same target share one field. Units whose
 collision radius is at most half a cell share one size class, which is why the design caps
@@ -264,33 +267,44 @@ a 128 × 128 field in about 0.7 ms in a Debug build. A blocked target cell resol
 passable cell by squared cell distance, ties to the lowest (y, x); `FlowField.NearestPassable` is
 that rule. It searches square rings outward from the cell and stops once a ring can't beat the
 best distance found, so its cost grows with the distance to passable ground, not the map size. Unreachable targets can't happen yet: the nav grid seals every pocket, so all passable
-cells connect. `FlowFieldCache` (on `World.FlowFields`) keeps 32 fields by default, keyed by the
-requested target cell and tagged with `NavGrid.Version`; a hit returns the same instance and marks it
+cells connect. `FlowFieldCache` (on `World.FlowFields`) keeps
+`FlowFieldCache.CapacityFor(UnitCapacity, cells)` fields: `clamp(UnitCapacity / 8, 32, 128)`, then at
+most `max(32, 64 MiB / (5 bytes × cells))`, so the default map (16,384 cells, 80 KB per field) is
+never memory-capped (512 unit slots: 64 fields, 5 MB; 1024 and up: 128 fields, 10 MB) and a
+1024 × 1024 map stays at 32. Fields are keyed by the requested target cell and tagged with `NavGrid.Version`; a hit returns the same instance and marks it
 most recently used, a miss fills a free slot or rebuilds the least recently used one in place, and
 a field whose version is stale is rebuilt on its next use; `TryGetCached` returns a current field
 (marking it used) or null without building. Every field array, the queue, and a
 per-cell step mask (which of the 8 steps are legal, shared by all fields and recomputed when the
-version changes) are allocated in the constructor: about 5 bytes × cells × capacity, 2.6 MB on the
-default map (160 MB on a 1024 × 1024 map, so capacity may need to scale with map size later). The
-cache is not hashed yet. A field's *contents* depend only on the grid and its target, but since the
-build cap (below) *which* fields are cached decides which units wait a tick, so the cache's keys
-and LRU order are in effect sim state. Only `MovementSystem` touches the cache today, so same seed
-+ same commands still gives the same hash; save/load or any other caller would break that
-(BUG-0021). Producer decision 2026-10-04: the next movement task hashes (and later saves) the
-cache's metadata, serves misses oldest order first, and keeps `Get` sim-only.
+version changes) are allocated in the constructor: about 5 bytes × cells × capacity (2.6 MB for 32
+fields on the default map, 160 MB for 32 on a 1024 × 1024 map), plus a 4-byte cell-to-slot index that makes every lookup O(1) instead of a scan of up to 128 slots. A field's *contents* depend only on
+the grid and its target, but under the build cap (below) *which* fields are cached decides which
+units wait a tick, so the cache's metadata is sim state (Producer decision 2026-10-04, BUG-0021):
+`StateHash` covers its clock, count and every used slot's requested cell, version and last-use
+stamp, and save/load will save the keys and rebuild the fields at load. `Get` and `TryGetCached`
+are `internal`, for the sim only (a call moves the hashed LRU state); views and AI see only
+`Capacity`, `Count`, `BuildCount` and `Contains`, which change nothing.
 
-**Build cap (BUG-0018).** Fetching a field per unit in slot order thrashed the LRU once live goals
+**Build cap (BUG-0018, BUG-0022).** Fetching a field per unit in slot order thrashed the LRU once live goals
 outnumbered its slots (goals interleaved by slot evict exactly the field the next unit needs: a
 full build per unit per tick, ~320 ms). Now `MovementSystem` sorts Moving units by (goal cell,
-slot) into a preallocated `World.MoveOrder` buffer, fetches each goal's field once per tick, and
-builds at most `MovementConstants.MaxFieldBuildsPerTick` = 1 field per tick (~0.7 ms on the default
-map in Debug). A unit whose field isn't cached once the cap is spent waits that tick (still Moving,
-velocity 0); units already in their goal cell need no field. Cost: when many new goals arrive in
-one tick their groups start one tick apart (32 new goals: the last starts 1.6 s late), and with
-more live goals than cache slots, the lowest goal cells rotate through the cache (one build per
-tick) while the rest wait until earlier groups arrive. A unit that never arrives (blocked forever
-until M1-4c's give-up rules) can hold its slot indefinitely. One build of a large map still costs
-more than the tick budget (512 × 512 ≈ 10 ms in Debug); time-sliced builds are future work.
+slot) into a preallocated `World.MoveOrder` buffer. A build pass then walks the goal groups: a
+group needs a field if one of its units stands on the map outside the goal cell; a needed field
+that is cached is touched (so a build evicts a field nobody used this tick whenever one exists),
+and a missing one goes into the preallocated `World.FieldMisses` buffer keyed by (the group's
+oldest `OrderTick`, goal cell). The buffer is sorted and the first
+`MovementConstants.MaxFieldBuildsPerTick` = 2 are built: oldest order first. The units' walk then
+only reads cached fields; a unit whose field is still missing waits that tick (still Moving,
+velocity 0, position unchanged; it never steps without a field). Units already in their goal cell
+need no field. Cost: two builds are about 1.4 ms on the default map in Debug, against the 4 ms
+average tick budget. A burst of N new goals in one tick starts its groups over ceil(N / 2) ticks
+(32 new goals: the last starts 0.8 s late), and within one burst tick ties break by goal cell, so
+the remaining positional bias is bounded by ceil(N / 2) ticks; an order never waits behind a
+newer one. A re-issued Move gets a new `OrderTick`. With more live goals than cache slots, fields
+of groups still walking are evicted and rebuilt (the evicted group's old order goes first), so
+builds keep running at the cap until enough groups arrive. A unit that never arrives (blocked
+forever until the give-up rules) can hold its slot indefinitely. One build of a large map still
+costs more than the tick budget (512 × 512 ≈ 10 ms in Debug); time-sliced builds are future work.
 
 ### Local movement
 
@@ -309,7 +323,8 @@ unit; a group move is one command per unit, and they share one cached field beca
 target cell. Applying it sets `State = Moving`, `Goal` = the target, and `GoalCell` = the target's
 cell; if that cell is blocked, the goal becomes the center of the nearest passable cell (the same
 rule as the field). `MovementSystem.Run` then moves each Moving unit, in (goal cell, slot) order (units don't interact
-yet; the order only decides which goals get a field first under the build cap, BUG-0022): in the goal cell, within `MovementConstants.ArrivalDistance`
+yet, and which goals got a field this tick is settled by the build pass before the walk, oldest
+order first, so the walk order changes no result): in the goal cell, within `MovementConstants.ArrivalDistance`
 (`CellSize / 2` = 1 m) of the goal it arrives (Idle, velocity 0), otherwise it heads straight at the
 goal. Arrival only counts inside the goal cell, so a unit 0.85 m from its goal across a blocked
 corner walks the long way round instead of arriving (BUG-0020). Elsewhere it heads at the center of the
@@ -321,7 +336,7 @@ blocked or off the map is refused: the unit stays put with velocity 0 and keeps 
 standing on blocked ground or off the map (only possible through a raw `SpawnUnit`) stops, since no
 field leads out of a blocked cell. `Velocity` is the step taken and `Facing` its `SimMath.Atan2`.
 Not yet: direct steering across adjacent cells, separation, arrival slots, shoving, giving up when
-blocked, `Stop`/`Hold`, and order queues (M1-4c and later). Units sent to one point stack on it.
+blocked, `Stop`/`Hold`, and order queues (M1-4d and later). Units sent to one point stack on it.
 
 ## Orders and unit states
 
@@ -568,6 +583,12 @@ AiPlayer
 - Golden replays live in `sim/Rts.Sim.Tests/Replays/`. Regenerate with a test flag when a
   deliberate change alters outcomes, and explain why in the commit message.
 - Perf thresholds are generous (they catch 2× regressions, not 5% noise).
+- Every `Category=Perf` test and every allocation-measuring test is in the xUnit collection
+  `SerialCollection` (`DisableParallelization = true`), so it runs alone after the parallel batch;
+  classes that also hold heavy unmeasured tests put the measured ones in a nested `Serial` class.
+  Allocation tests go through `AllocationProbe.AssertZero`, which re-runs the block once after a
+  non-zero count and fails only if the re-run allocates too, reporting both counts (BUG-0017,
+  BUG-0024). One `dotnet test sim/Rts.Sim.Tests` is the whole check.
 - Headless Godot uses the dummy renderer, so screenshots need a windowed run. The game will
   accept a `--screenshot <path> --screenshot-after <seconds>` debug flag (M2) so Claude can grab
   frames without an MCP server.

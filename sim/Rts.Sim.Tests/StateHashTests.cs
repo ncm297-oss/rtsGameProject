@@ -158,4 +158,62 @@ public class StateHashTests
         Assert.NotEqual(p0, Pending(new EntityHandle(0, 2)).StateHash());
         Assert.Equal(p0, Pending(new EntityHandle(0, 1)).StateHash());
     }
+
+    // ---------- M1-4c: the flow-field cache and order ticks are sim state (BUG-0021) ----------
+
+    [Fact]
+    public void Hash_CoversOrderTick()
+    {
+        Simulation sim = MoveScenario.Spawn(5, units: 2, maxCost: 10f, out _);
+        ulong h0 = sim.StateHash();
+        sim.World.Units.OrderTick[1] = 7;
+        Assert.NotEqual(h0, sim.StateHash());
+        sim.World.Units.OrderTick[1] = 0;
+        Assert.Equal(h0, sim.StateHash());
+    }
+
+    [Fact]
+    public void Hash_CoversFlowFieldCache_AGetChangesIt_TheSameGetsMakeItEqualAgain()
+    {
+        var a = new Simulation(Config(9));
+        var b = new Simulation(Config(9));
+        var g = a.World.NavGrid;
+        List<int> open = FlowFieldOracle.PassableCells(g);
+        int c1 = open[open.Count / 3], c2 = open[2 * open.Count / 3];
+        Assert.Equal(a.StateHash(), b.StateHash());
+
+        a.World.FlowFields.Get(c1);
+        Assert.NotEqual(a.StateHash(), b.StateHash()); // before any tick
+        b.World.FlowFields.Get(c1);
+        Assert.Equal(a.StateHash(), b.StateHash());
+
+        a.World.FlowFields.Get(c2);
+        b.World.FlowFields.Get(c2);
+        Assert.Equal(a.StateHash(), b.StateHash());
+
+        // A hit builds nothing; it only moves the LRU stamp, and that alone changes the hash.
+        int builds = a.World.FlowFields.BuildCount;
+        a.World.FlowFields.Get(c1);
+        Assert.Equal(builds, a.World.FlowFields.BuildCount);
+        Assert.NotEqual(a.StateHash(), b.StateHash());
+        b.World.FlowFields.Get(c1);
+        Assert.Equal(a.StateHash(), b.StateHash());
+        a.Tick();
+        b.Tick();
+        Assert.Equal(a.StateHash(), b.StateHash());
+    }
+
+    [Fact]
+    public void Hash_SameCachedFieldsAndClock_DifferentLruOrder_Differs()
+    {
+        var a = new Simulation(Config(9));
+        var b = new Simulation(Config(9));
+        List<int> open = FlowFieldOracle.PassableCells(a.World.NavGrid);
+        int c1 = open[100], c2 = open[200];
+        // Same slots, same clock (4 uses), same count; only which field was used last differs.
+        a.World.FlowFields.Get(c1); a.World.FlowFields.Get(c2); a.World.FlowFields.Get(c1); a.World.FlowFields.Get(c2);
+        b.World.FlowFields.Get(c1); b.World.FlowFields.Get(c2); b.World.FlowFields.Get(c2); b.World.FlowFields.Get(c1);
+        Assert.Equal(a.World.FlowFields.BuildCount, b.World.FlowFields.BuildCount);
+        Assert.NotEqual(a.StateHash(), b.StateHash());
+    }
 }

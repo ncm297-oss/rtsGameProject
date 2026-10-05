@@ -174,138 +174,154 @@ public class MovementStressTests
         }
 
         var first = new List<ulong>();
-        ulong a = Run(41, false, first, null);
-        ulong b = Run(41, true, null, first); // a cache churned by unrelated lookups must not change anything
+        ulong a = Run(41, true, first, null);
+        // The cache is sim state since M1-4c (BUG-0021): extra lookups change the hash, so both
+        // runs churn it identically, and a run without the churn must differ.
+        ulong b = Run(41, true, null, first);
         Assert.Equal(a, b);
+        Assert.NotEqual(a, Run(41, false, null, null));
         ulong c = Run(42, false, null, null);
         Assert.NotEqual(a, c);
     }
 
-    [Fact]
-    public void Tick_With500Units_And64DistinctTargets_AllocatesNothing()
+    /// <summary>This class's wall-clock and allocation tests: they run alone in <see cref="SerialCollection"/> (BUG-0017, BUG-0024) while the heavy tests above stay in the parallel batch.</summary>
+    [Collection(SerialCollection.Name)]
+    public class Serial
     {
-        Simulation sim = SpawnRandom(61, 500);
-        NavGrid g = sim.World.NavGrid;
-        List<int> passable = FlowFieldOracle.PassableCells(g);
-        var rng = new SimRng(61, 904);
-        var targets = new Vector2[64];
-        for (int k = 0; k < 64; k++) targets[k] = MoveScenario.Center(g, passable[rng.NextInt(0, passable.Count)]);
-        UnitStore u = sim.World.Units;
-        for (int i = 0; i < u.Capacity; i++) sim.Enqueue(Command.Move(u.Owner[i], MoveScenario.Handle(sim, i), targets[i % 64]));
-        sim.Tick();
-        sim.Tick();
-        sim.Tick();
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        sim.Tick();
-        long delta = GC.GetAllocatedBytesForCurrentThread() - before;
-        Assert.Equal(0, delta);
-    }
+        private readonly ITestOutputHelper _out;
 
-    // ---------- perf ----------
+        public Serial(ITestOutputHelper output) => _out = output;
 
-    private double MeasureMovingTicks(Simulation sim, int ticks)
-    {
-        for (int i = 0; i < 5; i++) sim.Tick();
-        var sw = Stopwatch.StartNew();
-        for (int i = 0; i < ticks; i++) sim.Tick();
-        return sw.Elapsed.TotalMilliseconds / ticks;
-    }
-
-    private static void MoveAllTo(Simulation sim, Func<int, Vector2> target)
-    {
-        UnitStore u = sim.World.Units;
-        for (int i = 0; i < u.Capacity; i++)
-            if (u.Alive[i]) sim.Enqueue(Command.Move(u.Owner[i], MoveScenario.Handle(sim, i), target(i)));
-    }
-
-    [Theory]
-    [Trait("Category", "Perf")]
-    [InlineData(500, 2.0)]
-    [InlineData(1000, 4.0)]
-    [InlineData(2500, 10.0)]
-    public void Perf_UnitsMovingToFourTargets_ScalesLinearly(int units, double budgetMs)
-    {
-        Simulation sim = SpawnRandom(71, units);
-        NavGrid g = sim.World.NavGrid;
-        // Four far corners-ish targets so everyone keeps walking during the measurement.
-        var targets = new[]
+        [Fact]
+        public void Tick_With500Units_And64DistinctTargets_AllocatesNothing()
         {
-            MoveScenario.Center(g, FlowField.NearestPassable(g, 8 * g.Width + 8)),
-            MoveScenario.Center(g, FlowField.NearestPassable(g, 8 * g.Width + g.Width - 9)),
-            MoveScenario.Center(g, FlowField.NearestPassable(g, (g.Height - 9) * g.Width + 8)),
-            MoveScenario.Center(g, FlowField.NearestPassable(g, (g.Height - 9) * g.Width + g.Width - 9)),
-        };
-        MoveAllTo(sim, i => targets[i % 4]);
-        sim.Tick();
-        double avg = MeasureMovingTicks(sim, 100);
-        int moving = 0;
-        for (int i = 0; i < units; i++) if (sim.World.Units.State[i] == UnitState.Moving) moving++;
-        _out.WriteLine($"{units} units ({moving} moving): {avg:F3} ms/tick, {avg * 1000 / units:F2} us/unit");
-        Assert.True(moving > units * 0.8, $"only {moving} moving");
-        Assert.True(avg < budgetMs, $"{avg:F3} ms/tick");
-    }
+            Simulation sim = SpawnRandom(61, 500);
+            NavGrid g = sim.World.NavGrid;
+            List<int> passable = FlowFieldOracle.PassableCells(g);
+            var rng = new SimRng(61, 904);
+            var targets = new Vector2[64];
+            for (int k = 0; k < 64; k++) targets[k] = MoveScenario.Center(g, passable[rng.NextInt(0, passable.Count)]);
+            UnitStore u = sim.World.Units;
+            for (int i = 0; i < u.Capacity; i++) sim.Enqueue(Command.Move(u.Owner[i], MoveScenario.Handle(sim, i), targets[i % 64]));
+            sim.Tick();
+            sim.Tick();
+            sim.Tick();
+            Action tick = sim.Tick;
+            AllocationProbe.AssertZero(tick, _out);
+        }
 
-    [Theory]
-    [Trait("Category", "Perf")]
-    [InlineData(32)]
-    [InlineData(33)]
-    [InlineData(64)]
-    public void Perf_500Units_DistinctTargetsInterleavedBySlot_CostPerTick(int distinctTargets)
-    {
-        // Units whose goals interleave in slot order: with more distinct goals than cache slots,
-        // LRU misses on every unit and each miss is a full Dijkstra build.
-        Simulation sim = SpawnRandom(81, 500);
-        NavGrid g = sim.World.NavGrid;
-        List<int> passable = FlowFieldOracle.PassableCells(g);
-        var rng = new SimRng(81, 905);
-        var targets = new Vector2[distinctTargets];
-        for (int k = 0; k < targets.Length; k++) targets[k] = MoveScenario.Center(g, passable[rng.NextInt(0, passable.Count)]);
-        MoveAllTo(sim, i => targets[i % distinctTargets]);
-        sim.Tick();
-        int builds = sim.World.FlowFields.BuildCount;
-        double avg = MeasureMovingTicks(sim, 10);
-        int perTick = (sim.World.FlowFields.BuildCount - builds) / 15;
-        _out.WriteLine($"500 units, {distinctTargets} distinct targets: {avg:F2} ms/tick, ~{perTick} field builds per tick");
-        Assert.True(avg < 4.0, $"{distinctTargets} distinct targets: {avg:F2} ms/tick (docs/03: 500 units, average tick < 4 ms)");
-    }
+        // ---------- perf ----------
 
-    [Theory]
-    [Trait("Category", "Perf")]
-    [InlineData(128)]
-    [InlineData(512, Skip = "BUG-0023: the timed tick includes one 512x512 flow-field build (~10 ms Debug); the BUG-0019 scan itself is fixed")]
-    [InlineData(1024, Skip = "BUG-0023: one 1024x1024 flow-field build in the tick")]
-    public void Perf_500MovesToOneCliffCell_ApplyCost(int mapSize)
-    {
-        var p = MapGenParams.Default with { Width = mapSize, Height = mapSize };
-        var sim = new Simulation(TestSim.Config(91, 2, 500, 1100) with { Map = p });
-        NavGrid g = sim.World.NavGrid;
-        List<int> passable = FlowFieldOracle.PassableCells(g);
-        for (int i = 0; i < 500; i++) sim.Enqueue(Command.SpawnUnit(i % 2, 0, MoveScenario.Center(g, passable[i * 7 % passable.Count])));
-        sim.Tick();
-        sim.Tick();
-        // A blocked target far from passable ground: the map's corner (ring cell).
-        Vector2 corner = new(0.5f, 0.5f);
-        MoveAllTo(sim, _ => corner);
-        sim.Tick(); // queued for next tick
-        var sw = Stopwatch.StartNew();
-        sim.Tick(); // applies 500 Moves (each resolves the blocked target) and builds its field once
-        double ms = sw.Elapsed.TotalMilliseconds;
-        _out.WriteLine($"{mapSize}x{mapSize}: tick applying 500 Moves to a ring cell took {ms:F1} ms");
-        Assert.True(ms < 8.0, $"{ms:F1} ms for one tick (docs/03: p99 tick < 8 ms)");
-    }
+        private double MeasureMovingTicks(Simulation sim, int ticks)
+        {
+            for (int i = 0; i < 5; i++) sim.Tick();
+            var sw = Stopwatch.StartNew();
+            for (int i = 0; i < ticks; i++) sim.Tick();
+            return sw.Elapsed.TotalMilliseconds / ticks;
+        }
 
-    [Fact]
-    [Trait("Category", "Perf")]
-    public void Perf_WorldOn1024Map_FlowFieldCacheMemory()
-    {
-        var p = MapGenParams.Default with { Width = 1024, Height = 1024 };
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        var cfg = TestSim.Config(5, 2, 8, 8) with { Map = p };
-        var sw = Stopwatch.StartNew();
-        var world = new World(cfg);
-        double ms = sw.Elapsed.TotalMilliseconds;
-        long bytes = GC.GetAllocatedBytesForCurrentThread() - before;
-        _out.WriteLine($"1024 map world: {bytes / 1e6:F0} MB allocated, {ms:F0} ms (cache capacity {world.FlowFields.Capacity})");
-        Assert.True(bytes < 400_000_000, $"{bytes / 1e6:F0} MB");
+        private static void MoveAllTo(Simulation sim, Func<int, Vector2> target)
+        {
+            UnitStore u = sim.World.Units;
+            for (int i = 0; i < u.Capacity; i++)
+                if (u.Alive[i]) sim.Enqueue(Command.Move(u.Owner[i], MoveScenario.Handle(sim, i), target(i)));
+        }
+
+        [Theory]
+        [Trait("Category", "Perf")]
+        [InlineData(500, 2.0)]
+        [InlineData(1000, 4.0)]
+        [InlineData(2500, 10.0)]
+        public void Perf_UnitsMovingToFourTargets_ScalesLinearly(int units, double budgetMs)
+        {
+            Simulation sim = SpawnRandom(71, units);
+            NavGrid g = sim.World.NavGrid;
+            // Four far corners-ish targets so everyone keeps walking during the measurement.
+            var targets = new[]
+            {
+                MoveScenario.Center(g, FlowField.NearestPassable(g, 8 * g.Width + 8)),
+                MoveScenario.Center(g, FlowField.NearestPassable(g, 8 * g.Width + g.Width - 9)),
+                MoveScenario.Center(g, FlowField.NearestPassable(g, (g.Height - 9) * g.Width + 8)),
+                MoveScenario.Center(g, FlowField.NearestPassable(g, (g.Height - 9) * g.Width + g.Width - 9)),
+            };
+            MoveAllTo(sim, i => targets[i % 4]);
+            sim.Tick();
+            double avg = MeasureMovingTicks(sim, 100);
+            int moving = 0;
+            for (int i = 0; i < units; i++) if (sim.World.Units.State[i] == UnitState.Moving) moving++;
+            _out.WriteLine($"{units} units ({moving} moving): {avg:F3} ms/tick, {avg * 1000 / units:F2} us/unit");
+            Assert.True(moving > units * 0.8, $"only {moving} moving");
+            Assert.True(avg < budgetMs, $"{avg:F3} ms/tick");
+        }
+
+        [Theory]
+        [Trait("Category", "Perf")]
+        [InlineData(32)]
+        [InlineData(33)]
+        [InlineData(64)]
+        public void Perf_500Units_DistinctTargetsInterleavedBySlot_CostPerTick(int distinctTargets)
+        {
+            // Units whose goals interleave in slot order: with more distinct goals than cache slots,
+            // LRU misses on every unit and each miss is a full Dijkstra build.
+            Simulation sim = SpawnRandom(81, 500);
+            NavGrid g = sim.World.NavGrid;
+            List<int> passable = FlowFieldOracle.PassableCells(g);
+            var rng = new SimRng(81, 905);
+            var targets = new Vector2[distinctTargets];
+            for (int k = 0; k < targets.Length; k++) targets[k] = MoveScenario.Center(g, passable[rng.NextInt(0, passable.Count)]);
+            MoveAllTo(sim, i => targets[i % distinctTargets]);
+            sim.Tick();
+            int builds = sim.World.FlowFields.BuildCount;
+            double avg = MeasureMovingTicks(sim, 10);
+            int perTick = (sim.World.FlowFields.BuildCount - builds) / 15;
+            _out.WriteLine($"500 units, {distinctTargets} distinct targets: {avg:F2} ms/tick, ~{perTick} field builds per tick");
+            Assert.True(avg < 4.0, $"{distinctTargets} distinct targets: {avg:F2} ms/tick (docs/03: 500 units, average tick < 4 ms)");
+        }
+
+        [Theory]
+        [Trait("Category", "Perf")]
+        [InlineData(128)]
+        [InlineData(512, Skip = "BUG-0023: the timed tick includes one 512x512 flow-field build (~10 ms Debug); the BUG-0019 scan itself is fixed")]
+        [InlineData(1024, Skip = "BUG-0023: one 1024x1024 flow-field build in the tick")]
+        public void Perf_500MovesToOneCliffCell_ApplyCost(int mapSize)
+        {
+            var p = MapGenParams.Default with { Width = mapSize, Height = mapSize };
+            var sim = new Simulation(TestSim.Config(91, 2, 500, 1100) with { Map = p });
+            NavGrid g = sim.World.NavGrid;
+            List<int> passable = FlowFieldOracle.PassableCells(g);
+            for (int i = 0; i < 500; i++) sim.Enqueue(Command.SpawnUnit(i % 2, 0, MoveScenario.Center(g, passable[i * 7 % passable.Count])));
+            sim.Tick();
+            sim.Tick();
+            // A blocked target far from passable ground: the map's corner (ring cell).
+            Vector2 corner = new(0.5f, 0.5f);
+            MoveAllTo(sim, _ => corner);
+            sim.Tick(); // queued for next tick
+            var sw = Stopwatch.StartNew();
+            sim.Tick(); // applies 500 Moves (each resolves the blocked target) and builds its field once
+            double ms = sw.Elapsed.TotalMilliseconds;
+            _out.WriteLine($"{mapSize}x{mapSize}: tick applying 500 Moves to a ring cell took {ms:F1} ms");
+            Assert.True(ms < 8.0, $"{ms:F1} ms for one tick (docs/03: p99 tick < 8 ms)");
+        }
+
+        [Fact]
+        [Trait("Category", "Perf")]
+        public void Perf_WorldOn1024Map_FlowFieldCacheMemory()
+        {
+            var p = MapGenParams.Default with { Width = 1024, Height = 1024 };
+            var cfg = TestSim.Config(5, 2, 8, 8) with { Map = p };
+            World? built = null;
+            var sw = new Stopwatch();
+            Action create = () =>
+            {
+                sw.Start();
+                built = new World(cfg);
+                sw.Stop();
+            };
+            long bytes = AllocationProbe.Measure(create);
+            double ms = sw.Elapsed.TotalMilliseconds;
+            World world = built!;
+            _out.WriteLine($"1024 map world: {bytes / 1e6:F0} MB allocated, {ms:F0} ms (cache capacity {world.FlowFields.Capacity})");
+            Assert.True(bytes < 400_000_000, $"{bytes / 1e6:F0} MB");
+        }
     }
 }

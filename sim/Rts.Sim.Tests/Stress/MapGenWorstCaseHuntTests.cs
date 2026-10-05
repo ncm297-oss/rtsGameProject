@@ -11,6 +11,7 @@ namespace Rts.Sim.Tests.Stress;
 /// (many tiny ramps so the overlap list is long, mouth-wide ramps, ramps as long as the map,
 /// non-square maps). Brief M1-4a: worst valid case ~2 s, fail above 5 s (Debug).
 /// </summary>
+[Collection(SerialCollection.Name)]
 public class MapGenWorstCaseHuntTests
 {
     private readonly ITestOutputHelper _out;

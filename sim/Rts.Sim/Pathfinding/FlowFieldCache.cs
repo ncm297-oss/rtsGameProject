@@ -1,4 +1,5 @@
 using System;
+using Rts.Sim.Determinism;
 using Rts.Sim.Map;
 
 namespace Rts.Sim.Pathfinding;
@@ -6,18 +7,35 @@ namespace Rts.Sim.Pathfinding;
 /// <summary>Least-recently-used cache of flow fields keyed by target cell and tagged with <see cref="NavGrid.Version"/> (docs/03 "Flow fields").</summary>
 /// <remarks>
 /// Every field, the Dijkstra queue and the bookkeeping are allocated in the constructor, so a miss
-/// that builds a field inside a tick allocates nothing. Memory is about 5 bytes x cells x capacity
-/// (2.6 MB for 32 fields on a 128 x 128 map). Fields are derived state: which ones are cached
-/// never changes a result, because a field depends only on the grid and its target.
+/// that builds a field inside a tick allocates nothing. Memory is about 5 bytes x cells x capacity, plus 4 bytes x cells for the lookup index
+/// (2.6 MB for 32 fields on a 128 x 128 map). A field's contents depend only on the grid and its
+/// target, but under the per-tick build cap *which* fields are cached decides which units wait, so
+/// the cache's keys, versions and LRU stamps are sim state: <see cref="AddToHash"/> covers them, and
+/// only the sim may call <see cref="Get"/> or <see cref="TryGetCached"/> (BUG-0021).
 /// </remarks>
 public sealed class FlowFieldCache
 {
-    /// <summary>Number of fields kept when no capacity is given (docs/03).</summary>
+    /// <summary>Number of fields kept when no capacity is given, and the floor of <see cref="CapacityFor"/> (docs/03).</summary>
     public const int DefaultCapacity = 32;
+
+    /// <summary>Ceiling of <see cref="CapacityFor"/>'s unit-based capacity.</summary>
+    public const int MaxCapacity = 128;
+
+    /// <summary>Unit slots per cached field in <see cref="CapacityFor"/>.</summary>
+    public const int UnitsPerField = 8;
+
+    /// <summary>Memory one field takes per nav cell: a float cost and a direction byte.</summary>
+    public const int BytesPerCell = 5;
+
+    /// <summary>Field memory above which <see cref="CapacityFor"/> stops adding fields beyond <see cref="DefaultCapacity"/>: 64 MiB.</summary>
+    public const long MemoryBudgetBytes = 64L * 1024 * 1024;
 
     private readonly NavGrid _grid;
     private readonly FlowField[] _fields;
     private readonly long[] _lastUse;
+    // Requested cell -> slot holding it, -1 for none: O(1) lookups, since up to 128 slots are
+    // searched for every goal group twice per tick.
+    private readonly int[] _slotOfCell;
     private readonly CellQueue _queue;
     private readonly byte[] _steps;
     private int _stepsVersion;
@@ -33,10 +51,25 @@ public sealed class FlowFieldCache
         for (int i = 0; i < capacity; i++)
             _fields[i] = new FlowField(grid.Width, grid.Height);
         _lastUse = new long[capacity];
+        _slotOfCell = new int[grid.Width * grid.Height];
+        Array.Fill(_slotOfCell, -1);
         _queue = new CellQueue(grid.Width * grid.Height);
         _steps = new byte[grid.Width * grid.Height];
         FlowField.ComputeSteps(grid, _steps);
         _stepsVersion = grid.Version;
+    }
+
+    /// <summary>
+    /// Cache capacity for a world: <c>clamp(unitCapacity / 8, 32, 128)</c>, then at most
+    /// <c>max(32, 64 MiB / (5 x cellCount))</c> so big maps don't multiply memory (docs/03 "Flow fields").
+    /// </summary>
+    public static int CapacityFor(int unitCapacity, int cellCount)
+    {
+        if (unitCapacity < 1) throw new ArgumentOutOfRangeException(nameof(unitCapacity));
+        if (cellCount < 1) throw new ArgumentOutOfRangeException(nameof(cellCount));
+        int byUnits = Math.Clamp(unitCapacity / UnitsPerField, DefaultCapacity, MaxCapacity);
+        long byMemory = Math.Max(DefaultCapacity, MemoryBudgetBytes / ((long)BytesPerCell * cellCount));
+        return (int)Math.Min(byUnits, byMemory);
     }
 
     /// <summary>Maximum number of cached fields.</summary>
@@ -52,7 +85,8 @@ public sealed class FlowFieldCache
     public bool Contains(int targetCell) => Find(targetCell) >= 0;
 
     /// <summary>The cached, up-to-date field for the target, marked most recently used; null (and nothing built) on a miss.</summary>
-    public FlowField? TryGetCached(int targetCell)
+    /// <remarks>Sim-only: a hit moves the hashed LRU stamp.</remarks>
+    internal FlowField? TryGetCached(int targetCell)
     {
         int slot = Find(targetCell);
         if (slot < 0) return null;
@@ -61,27 +95,25 @@ public sealed class FlowFieldCache
     }
 
     /// <summary>The field leading to <paramref name="targetCell"/>: cached if current, otherwise built now, evicting the least recently used field when full.</summary>
-    public FlowField Get(int targetCell)
+    /// <remarks>Sim-only: a call changes the hashed LRU state, so views and AI must never call it.</remarks>
+    internal FlowField Get(int targetCell)
     {
         if ((uint)targetCell >= (uint)(_grid.Width * _grid.Height))
             throw new ArgumentOutOfRangeException(nameof(targetCell));
         _clock++;
-        int slot = -1;
-        for (int i = 0; i < _count; i++)
-        {
-            if (_fields[i].RequestedCell == targetCell)
-            {
-                slot = i;
-                break;
-            }
-        }
+        int slot = _slotOfCell[targetCell];
         if (slot >= 0 && _fields[slot].Version == _grid.Version)
         {
             _lastUse[slot] = _clock;
             return _fields[slot];
         }
         if (slot < 0)
+        {
             slot = _count < _fields.Length ? _count++ : LeastRecentlyUsed();
+            int evicted = _fields[slot].RequestedCell;
+            if (evicted >= 0) _slotOfCell[evicted] = -1;
+            _slotOfCell[targetCell] = slot;
+        }
         if (_stepsVersion != _grid.Version)
         {
             FlowField.ComputeSteps(_grid, _steps);
@@ -93,14 +125,24 @@ public sealed class FlowFieldCache
         return _fields[slot];
     }
 
-    private int Find(int targetCell)
+    /// <summary>Mixes the cache's sim-visible state into a state hash: clock, count, and each used slot's requested cell, version and last use, in slot order.</summary>
+    internal void AddToHash(ref StateHasher h)
     {
+        h.Add((ulong)_clock);
+        h.Add(_count);
         for (int i = 0; i < _count; i++)
         {
-            if (_fields[i].RequestedCell == targetCell && _fields[i].Version == _grid.Version)
-                return i;
+            h.Add(_fields[i].RequestedCell);
+            h.Add(_fields[i].Version);
+            h.Add((ulong)_lastUse[i]);
         }
-        return -1;
+    }
+
+    private int Find(int targetCell)
+    {
+        if ((uint)targetCell >= (uint)_slotOfCell.Length) return -1;
+        int slot = _slotOfCell[targetCell];
+        return slot >= 0 && _fields[slot].Version == _grid.Version ? slot : -1;
     }
 
     private int LeastRecentlyUsed()

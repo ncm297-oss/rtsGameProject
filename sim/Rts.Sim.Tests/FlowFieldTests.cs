@@ -8,6 +8,7 @@ using static Rts.Sim.Tests.FlowFieldOracle;
 namespace Rts.Sim.Tests;
 
 /// <summary>Flow fields (M1-4b): costs and directions against independent oracles, no corner cutting, blocked targets.</summary>
+[Collection(SerialCollection.Name)]
 public class FlowFieldTests
 {
     private readonly ITestOutputHelper _out;

@@ -416,42 +416,52 @@ public class SpatialHashQaTests
         Assert.False(sim.World.Spatial.NearestEnemy(new Vector2(50, 50), 1000f, 0, out _));
     }
 
-    [Fact]
-    public void MillionQueries_AllocateNothing()
+    /// <summary>This class's wall-clock and allocation tests: they run alone in <see cref="SerialCollection"/> (BUG-0017, BUG-0024) while the heavy tests above stay in the parallel batch.</summary>
+    [Collection(SerialCollection.Name)]
+    public class Serial
     {
-        var u = new UnitStore(512);
-        var rng = new SimRng(8, 8);
-        for (int i = 0; i < 500; i++)
-        {
-            u.Alloc();
-            u.Position[i] = new Vector2(rng.NextFloat() * 300f - 20f, rng.NextFloat() * 300f - 20f);
-            u.Owner[i] = i % 3;
-        }
-        var h = new SpatialHash(512, 128, 128);
-        var buf = new int[16];
-        long sink = Run(h, u, buf, 2000);
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        h.Rebuild(u);
-        sink += Run(h, u, buf, 1_000_000);
-        long delta = GC.GetAllocatedBytesForCurrentThread() - before;
-        _out.WriteLine($"1M queries allocated {delta} bytes (sink {sink})");
-        Assert.Equal(0, delta);
+        private readonly ITestOutputHelper _out;
 
-        static long Run(SpatialHash h, UnitStore u, int[] buf, int n)
+        public Serial(ITestOutputHelper output) => _out = output;
+
+        [Fact]
+        public void MillionQueries_AllocateNothing()
         {
-            long s = 0;
-            for (int i = 0; i < n; i++)
+            var u = new UnitStore(512);
+            var rng = new SimRng(8, 8);
+            for (int i = 0; i < 500; i++)
             {
-                Vector2 c = u.Position[i % 500];
-                switch (i & 3)
-                {
-                    case 0: s += h.QueryRadius(c, (i % 17) * 1.5f, buf); break;
-                    case 1: s += h.QueryRect(c, c - new Vector2(9f, -7f), buf); break;
-                    case 2: s += h.NearestEnemy(c, 12f, i % 3, out int x) ? x : -1; break;
-                    default: s += h.QueryRadius(c, i % 50 == 0 ? float.PositiveInfinity : float.NaN, buf); break;
-                }
+                u.Alloc();
+                u.Position[i] = new Vector2(rng.NextFloat() * 300f - 20f, rng.NextFloat() * 300f - 20f);
+                u.Owner[i] = i % 3;
             }
-            return s;
+            var h = new SpatialHash(512, 128, 128);
+            var buf = new int[16];
+            long sink = Run(h, u, buf, 2000);
+            Action block = () =>
+            {
+                h.Rebuild(u);
+                sink += Run(h, u, buf, 1_000_000);
+            };
+            int runs = AllocationProbe.AssertZero(block, _out);
+            _out.WriteLine($"1M queries allocated 0 bytes ({runs} measured run(s), sink {sink})");
+
+            static long Run(SpatialHash h, UnitStore u, int[] buf, int n)
+            {
+                long s = 0;
+                for (int i = 0; i < n; i++)
+                {
+                    Vector2 c = u.Position[i % 500];
+                    switch (i & 3)
+                    {
+                        case 0: s += h.QueryRadius(c, (i % 17) * 1.5f, buf); break;
+                        case 1: s += h.QueryRect(c, c - new Vector2(9f, -7f), buf); break;
+                        case 2: s += h.NearestEnemy(c, 12f, i % 3, out int x) ? x : -1; break;
+                        default: s += h.QueryRadius(c, i % 50 == 0 ? float.PositiveInfinity : float.NaN, buf); break;
+                    }
+                }
+                return s;
+            }
         }
     }
 }

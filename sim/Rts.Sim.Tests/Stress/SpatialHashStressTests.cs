@@ -8,6 +8,7 @@ using Xunit.Abstractions;
 namespace Rts.Sim.Tests.Stress;
 
 /// <summary>QA scale runs for the M1-4a spatial hash: 1x/2x/5x unit counts, big maps, worst-case clustering.</summary>
+[Collection(SerialCollection.Name)]
 public class SpatialHashStressTests
 {
     private readonly ITestOutputHelper _out;

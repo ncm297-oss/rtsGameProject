@@ -9,9 +9,12 @@ namespace Rts.Sim.Movement;
 
 /// <summary>Tick phases 8-9: walks Moving units along their goal's flow field at their data speed (docs/03 "Local movement").</summary>
 /// <remarks>
-/// M1-4b only: no separation, shoving or arrival slots yet (M1-4c), so units heading to one point
-/// stack on it. Units update grouped by goal cell, then slot, so each goal's field is fetched once
-/// per tick; units don't interact yet, so the order changes no result.
+/// No separation, shoving or arrival slots yet (M1-4d), so units heading to one point stack on it.
+/// Units update grouped by goal cell, then slot, so each goal's field is fetched once per tick. A
+/// build pass first serves goals without a cached field, oldest order first, at most
+/// <see cref="MovementConstants.MaxFieldBuildsPerTick"/> per tick; units whose field is still
+/// missing wait. Which goals get built (and so which units wait) depends on order ticks, goal cells
+/// and the hashed cache state, never on slot order alone.
 /// </remarks>
 public static class MovementSystem
 {
@@ -31,9 +34,9 @@ public static class MovementSystem
         // Fetching per unit in slot order made LRU evict the very field the next unit needed once
         // live goals outnumbered cache slots: a full build per unit per tick (BUG-0018).
         Array.Sort(order, 0, n);
+        BuildMissingFields(world, n);
 
         const float arrival2 = MovementConstants.ArrivalDistance * MovementConstants.ArrivalDistance;
-        int builds = 0;
         int groupCell = -1;
         FlowField? field = null;
         bool fetched = false;
@@ -72,14 +75,8 @@ public static class MovementSystem
             {
                 if (!fetched)
                 {
-                    // Phase 8: a miss builds the field here, without allocating, up to the per-tick cap.
                     fetched = true;
                     field = cache.TryGetCached(goalCell);
-                    if (field == null && builds < MovementConstants.MaxFieldBuildsPerTick)
-                    {
-                        field = cache.Get(goalCell);
-                        builds++;
-                    }
                 }
                 if (field == null)
                 {
@@ -110,7 +107,7 @@ public static class MovementSystem
             Vector2 next = pos + step;
             if (!grid.WorldToCell(next, out int nx, out int ny) || !grid.IsPassable(nx, ny))
             {
-                // Refused: never step into a blocked cell. Stays Moving; M1-4c adds give-up rules.
+                // Refused: never step into a blocked cell. Stays Moving; M1-4d adds give-up rules.
                 u.Velocity[i] = Vector2.Zero;
                 continue;
             }
@@ -118,6 +115,46 @@ public static class MovementSystem
             u.Velocity[i] = step;
             u.Facing[i] = SimMath.Atan2(step.Y, step.X);
         }
+    }
+
+    /// <summary>
+    /// Phase 8: touches every needed field that is cached, then builds the missing ones with the
+    /// oldest orders, at most <see cref="MovementConstants.MaxFieldBuildsPerTick"/>, without allocating.
+    /// </summary>
+    /// <remarks>
+    /// A goal group's age is its oldest unit's <see cref="UnitStore.OrderTick"/>; ties go to the lower
+    /// goal cell (BUG-0022). Touching the hits first means a build evicts a field nobody used this
+    /// tick whenever one exists. A group needs a field only if one of its units stands on the map
+    /// outside the goal cell; the others arrive or stop without one.
+    /// </remarks>
+    private static void BuildMissingFields(World world, int n)
+    {
+        UnitStore u = world.Units;
+        NavGrid grid = world.NavGrid;
+        FlowFieldCache cache = world.FlowFields;
+        long[] order = world.MoveOrder;
+        long[] misses = world.FieldMisses;
+        int missCount = 0;
+        int k = 0;
+        while (k < n)
+        {
+            int goalCell = (int)(order[k] >> 32);
+            int oldest = int.MaxValue;
+            bool needsField = false;
+            for (; k < n && (int)(order[k] >> 32) == goalCell; k++)
+            {
+                int i = (int)(order[k] & 0xFFFFFFFF);
+                if (u.OrderTick[i] < oldest) oldest = u.OrderTick[i];
+                if (!needsField && grid.WorldToCell(u.Position[i], out int cx, out int cy) && cy * grid.Width + cx != goalCell)
+                    needsField = true;
+            }
+            if (needsField && cache.TryGetCached(goalCell) == null)
+                misses[missCount++] = ((long)oldest << 32) | (uint)goalCell;
+        }
+        Array.Sort(misses, 0, missCount);
+        int builds = Math.Min(missCount, MovementConstants.MaxFieldBuildsPerTick);
+        for (int b = 0; b < builds; b++)
+            cache.Get((int)(misses[b] & 0xFFFFFFFF));
     }
 
     private static void Stop(UnitStore u, int i)

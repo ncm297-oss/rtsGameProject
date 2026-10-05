@@ -151,21 +151,30 @@ public class RampWallQaTests
             : p;
     }
 
-    [Theory]
-    [Trait("Category", "Perf")]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void WorstValidParams_1024Map_AtCaps_UnderFiveSeconds(bool bigRamps)
+    /// <summary>This class's wall-clock and allocation tests: they run alone in <see cref="SerialCollection"/> (BUG-0017, BUG-0024) while the heavy tests above stay in the parallel batch.</summary>
+    [Collection(SerialCollection.Name)]
+    public class Serial
     {
-        // Brief M1-4a: "worst valid case ~2 s, fail above 5 s". docs/03 only claims 512 x 512; Validate accepts 1024 x 1024.
-        MapGenParams p = Worst(bigRamps);
-        p.Validate();
-        var sw = Stopwatch.StartNew();
-        Heightmap hm = Gen(11, p);
-        var nav = new NavGrid(hm);
-        sw.Stop();
-        _out.WriteLine($"1024x1024 worst case: {sw.Elapsed.TotalSeconds:F2} s");
-        Assert.True(sw.Elapsed.TotalSeconds < 5, $"took {sw.Elapsed.TotalSeconds:F1} s");
-        Assert.True(MapQaChecker.Check(hm, nav, requireAllLevels: false, minPassableFraction: 0).Count == 0);
+        private readonly ITestOutputHelper _out;
+
+        public Serial(ITestOutputHelper output) => _out = output;
+
+        [Theory]
+        [Trait("Category", "Perf")]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void WorstValidParams_1024Map_AtCaps_UnderFiveSeconds(bool bigRamps)
+        {
+            // Brief M1-4a: "worst valid case ~2 s, fail above 5 s". docs/03 only claims 512 x 512; Validate accepts 1024 x 1024.
+            MapGenParams p = Worst(bigRamps);
+            p.Validate();
+            var sw = Stopwatch.StartNew();
+            Heightmap hm = Gen(11, p);
+            var nav = new NavGrid(hm);
+            sw.Stop();
+            _out.WriteLine($"1024x1024 worst case: {sw.Elapsed.TotalSeconds:F2} s");
+            Assert.True(sw.Elapsed.TotalSeconds < 5, $"took {sw.Elapsed.TotalSeconds:F1} s");
+            Assert.True(MapQaChecker.Check(hm, nav, requireAllLevels: false, minPassableFraction: 0).Count == 0);
+        }
     }
 }

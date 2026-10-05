@@ -25,12 +25,16 @@ public sealed class World
         Heightmap = MapGenerator.Generate(config.Map, ref _rngs[RngStream.MapGen]);
         NavGrid = new NavGrid(Heightmap);
         Spatial = new SpatialHash(config.UnitCapacity, NavGrid.Width, NavGrid.Height);
-        FlowFields = new FlowFieldCache(NavGrid);
+        FlowFields = new FlowFieldCache(NavGrid, FlowFieldCache.CapacityFor(config.UnitCapacity, NavGrid.Width * NavGrid.Height));
         MoveOrder = new long[config.UnitCapacity];
+        FieldMisses = new long[config.UnitCapacity];
     }
 
     /// <summary>Scratch for <see cref="Movement.MovementSystem"/>: Moving units keyed by (goal cell, slot); derived, not hashed.</summary>
     internal long[] MoveOrder { get; }
+
+    /// <summary>Scratch for <see cref="Movement.MovementSystem"/>'s build pass: goals without a cached field keyed by (oldest order tick, goal cell); derived, not hashed.</summary>
+    internal long[] FieldMisses { get; }
 
     /// <summary>The match setup this world was built from.</summary>
     public SimConfig Config { get; }
@@ -47,7 +51,7 @@ public sealed class World
     /// <summary>Unit neighbour index, rebuilt by <see cref="Simulation.Tick"/> right after commands apply. Derived state.</summary>
     public SpatialHash Spatial { get; }
 
-    /// <summary>Flow fields for move targets, built on demand by movement. Derived state.</summary>
+    /// <summary>Flow fields for move targets, built on demand by movement. Its metadata is hashed sim state (BUG-0021); outside the sim, read it only through public members.</summary>
     public FlowFieldCache FlowFields { get; }
 
     /// <summary>All units.</summary>

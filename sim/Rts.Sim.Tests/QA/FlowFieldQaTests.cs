@@ -331,29 +331,39 @@ public class FlowFieldQaTests
         Assert.Null(Check(g, cache.Get(c), c));
     }
 
-    [Fact]
-    public void Cache_Thrash_64TargetsRoundRobin_AllocatesNothing_AndMeasuresBuildCost()
+    /// <summary>This class's wall-clock and allocation tests: they run alone in <see cref="SerialCollection"/> (BUG-0017, BUG-0024) while the heavy tests above stay in the parallel batch.</summary>
+    [Collection(SerialCollection.Name)]
+    public class Serial
     {
-        NavGrid g = FlowFieldOracle.Generated(21);
-        var cache = new FlowFieldCache(g);
-        List<int> passable = FlowFieldOracle.PassableCells(g);
-        var targets = new int[64];
-        var rng = new SimRng(21, 5);
-        for (int i = 0; i < targets.Length; i++) targets[i] = passable[rng.NextInt(0, passable.Count)];
-        for (int i = 0; i < targets.Length; i++) cache.Get(targets[i]); // JIT + fill
-        int builds = cache.BuildCount;
+        private readonly ITestOutputHelper _out;
 
-        var sw = new Stopwatch();
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        sw.Start();
-        for (int round = 0; round < 3; round++)
-            for (int i = 0; i < targets.Length; i++) cache.Get(targets[i]);
-        sw.Stop();
-        long delta = GC.GetAllocatedBytesForCurrentThread() - before;
+        public Serial(ITestOutputHelper output) => _out = output;
 
-        // Round-robin over 64 targets with 32 slots is LRU's worst case: every Get misses.
-        Assert.Equal(builds + 3 * 64, cache.BuildCount);
-        _out.WriteLine($"192 thrashing Gets: {sw.Elapsed.TotalMilliseconds:F1} ms, {sw.Elapsed.TotalMilliseconds / 192:F3} ms per build, {delta} bytes");
-        Assert.Equal(0, delta);
+        [Fact]
+        public void Cache_Thrash_64TargetsRoundRobin_AllocatesNothing_AndMeasuresBuildCost()
+        {
+            NavGrid g = FlowFieldOracle.Generated(21);
+            var cache = new FlowFieldCache(g);
+            List<int> passable = FlowFieldOracle.PassableCells(g);
+            var targets = new int[64];
+            var rng = new SimRng(21, 5);
+            for (int i = 0; i < targets.Length; i++) targets[i] = passable[rng.NextInt(0, passable.Count)];
+            for (int i = 0; i < targets.Length; i++) cache.Get(targets[i]); // JIT + fill
+            int builds = cache.BuildCount;
+
+            var sw = new Stopwatch();
+            Action thrash = () =>
+            {
+                sw.Restart();
+                for (int round = 0; round < 3; round++)
+                    for (int i = 0; i < targets.Length; i++) cache.Get(targets[i]);
+                sw.Stop();
+            };
+            int runs = AllocationProbe.AssertZero(thrash, _out);
+
+            // Round-robin over 64 targets with 32 slots is LRU's worst case: every Get misses.
+            Assert.Equal(builds + runs * 3 * 64, cache.BuildCount);
+            _out.WriteLine($"192 thrashing Gets: {sw.Elapsed.TotalMilliseconds:F1} ms, {sw.Elapsed.TotalMilliseconds / 192:F3} ms per build, 0 bytes");
+        }
     }
 }

@@ -6,6 +6,7 @@ using Xunit.Abstractions;
 namespace Rts.Sim.Tests;
 
 /// <summary>Terraced map generator (M1-3): invariants over many seeds, determinism, RNG isolation, bounded work.</summary>
+[Collection(SerialCollection.Name)]
 public class MapGeneratorTests
 {
     /// <summary>A 32 x 32 setup scaled down from the defaults.</summary>

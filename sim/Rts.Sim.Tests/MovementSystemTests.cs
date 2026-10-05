@@ -12,6 +12,7 @@ using Xunit.Abstractions;
 namespace Rts.Sim.Tests;
 
 /// <summary>MovementSystem (M1-4b): data speed, arrival, refused blocked steps, the 200-unit scenario, perf.</summary>
+[Collection(SerialCollection.Name)]
 public class MovementSystemTests
 {
     private readonly ITestOutputHelper _out;

@@ -75,10 +75,12 @@ public sealed class Simulation
         World.TickNumber++;
     }
 
-    /// <summary>64-bit FNV-1a hash of all gameplay state: tick, units, RNG streams, and pending commands.</summary>
+    /// <summary>64-bit FNV-1a hash of all gameplay state: tick, units, RNG streams, flow-field cache metadata, and pending commands.</summary>
     /// <remarks>
-    /// Derived state is left out: the spatial hash (rebuilt from the units every tick), the flow-field
-    /// cache (a field depends only on the grid and its target), and Speed/Radius (they follow from TypeId).
+    /// Derived state is left out: the spatial hash (rebuilt from the units every tick) and
+    /// Speed/Radius (they follow from TypeId). The flow-field cache's keys, versions and LRU stamps
+    /// are in, because they decide which units wait under the build cap (BUG-0021); the fields'
+    /// contents are not, since they follow from the grid and the key.
     /// </remarks>
     public ulong StateHash()
     {
@@ -102,6 +104,7 @@ public sealed class Simulation
             h.Add((int)u.State[i]);
             h.Add(u.Goal[i]);
             h.Add(u.GoalCell[i]);
+            h.Add(u.OrderTick[i]);
         }
         h.Add(u.FreeCount);
         for (int i = 0; i < u.FreeCount; i++)
@@ -112,6 +115,8 @@ public sealed class Simulation
             h.Add(World.Rng(s).State);
             h.Add(World.Rng(s).Increment);
         }
+
+        World.FlowFields.AddToHash(ref h);
 
         for (int p = 0; p < _nextSequence.Length; p++)
             h.Add(_nextSequence[p]);
@@ -184,5 +189,6 @@ public sealed class Simulation
         u.State[i] = UnitState.Moving;
         u.Goal[i] = goal;
         u.GoalCell[i] = cell;
+        u.OrderTick[i] = World.TickNumber;
     }
 }

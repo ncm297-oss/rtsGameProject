@@ -32,6 +32,11 @@ public sealed class UnitStore
     public readonly Vector2[] Goal;
     /// <summary>Nav cell index (<c>y * Width + x</c>) whose flow field leads to <see cref="Goal"/>; -1 with no goal.</summary>
     public readonly int[] GoalCell;
+    /// <summary>
+    /// Tick number on which the unit's current Move applied; the flow-field build pass serves the
+    /// oldest orders first (BUG-0022). Meaningful while Moving; arriving or stopping leaves it as is.
+    /// </summary>
+    public readonly int[] OrderTick;
     /// <summary>Whether the slot holds a live unit.</summary>
     public readonly bool[] Alive;
     /// <summary>Per-slot generation; a handle is valid only while it matches.</summary>
@@ -55,6 +60,7 @@ public sealed class UnitStore
         State = new UnitState[capacity];
         Goal = new Vector2[capacity];
         GoalCell = new int[capacity];
+        OrderTick = new int[capacity];
         Alive = new bool[capacity];
         Generation = new int[capacity];
         _freeList = new int[capacity];
@@ -100,6 +106,7 @@ public sealed class UnitStore
         State[index] = UnitState.Idle;
         Goal[index] = default;
         GoalCell[index] = -1;
+        OrderTick[index] = 0;
         Alive[index] = true;
         handle = new EntityHandle(index, Generation[index]);
         return true;

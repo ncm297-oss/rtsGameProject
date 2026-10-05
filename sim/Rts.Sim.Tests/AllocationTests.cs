@@ -4,6 +4,7 @@ using Rts.Sim.Commands;
 namespace Rts.Sim.Tests;
 
 /// <summary>CLAUDE.md rule 5: per-tick code must not allocate.</summary>
+[Collection(SerialCollection.Name)]
 public class AllocationTests
 {
     private static Simulation WarmSim()
@@ -23,11 +24,8 @@ public class AllocationTests
     {
         Simulation sim = WarmSim();
 
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        sim.Tick();
-        long delta = GC.GetAllocatedBytesForCurrentThread() - before;
-
-        Assert.Equal(0, delta);
+        Action tick = sim.Tick;
+        AllocationProbe.AssertZero(tick);
     }
 
     [Fact]
@@ -35,17 +33,21 @@ public class AllocationTests
     {
         Simulation sim = WarmSim();
         // Enqueue from both players, out of player order, so the sort has real work to do.
-        for (int i = 0; i < 100; i++)
-            sim.Enqueue(Command.SpawnUnit(1 - (i % 2), typeId: i % TestSim.UnitTypeCount, new Vector2(i, i)));
+        Action queue = () =>
+        {
+            for (int i = 0; i < 100; i++)
+                sim.Enqueue(Command.SpawnUnit(1 - (i % 2), typeId: i % TestSim.UnitTypeCount, new Vector2(i, i)));
+        };
 
         // Two ticks: the first sorts the unsorted batch, the second applies it.
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        sim.Tick();
-        sim.Tick();
-        long delta = GC.GetAllocatedBytesForCurrentThread() - before;
+        Action twoTicks = () =>
+        {
+            sim.Tick();
+            sim.Tick();
+        };
+        int runs = AllocationProbe.AssertZero(twoTicks, setup: queue);
 
-        Assert.Equal(0, delta);
-        Assert.Equal(101, sim.World.Units.Count);
+        Assert.Equal(1 + runs * 100, sim.World.Units.Count);
     }
 
     [Fact]
@@ -61,13 +63,14 @@ public class AllocationTests
         int[] buffer = new int[64]; // smaller than some results, so truncation runs too
         int sink = RunHashQueries(sim, hash, buffer, 50); // JIT warm-up
 
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        sim.Tick(); // includes the rebuild
-        hash.Rebuild(sim.World.Units);
-        sink += RunHashQueries(sim, hash, buffer, 1000);
-        long delta = GC.GetAllocatedBytesForCurrentThread() - before;
+        Action block = () =>
+        {
+            sim.Tick(); // includes the rebuild
+            hash.Rebuild(sim.World.Units);
+            sink += RunHashQueries(sim, hash, buffer, 1000);
+        };
+        AllocationProbe.AssertZero(block);
 
-        Assert.Equal(0, delta);
         Assert.NotEqual(0, sink);
     }
 
@@ -101,14 +104,16 @@ public class AllocationTests
         Assert.True(g.WorldToCell(next, out int nx, out int ny));
         Assert.False(sim.World.FlowFields.Contains(ny * g.Width + nx));
 
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        sim.Tick();                     // a plain moving tick
-        MoveScenario.MoveAll(sim, next); // a new target cell (or its nearest passable cell): not cached
-        sim.Tick();
-        sim.Tick();                     // applies the Moves and builds the field inside the tick
-        long delta = GC.GetAllocatedBytesForCurrentThread() - before;
+        Action block = () =>
+        {
+            sim.Tick();                     // a plain moving tick
+            MoveScenario.MoveAll(sim, next); // a new target cell (or its nearest passable cell): not cached
+            sim.Tick();
+            sim.Tick();                     // applies the Moves and builds the field inside the tick
+        };
+        AllocationProbe.AssertZero(block);
 
-        Assert.Equal(0, delta);
+        // A re-run re-issues the same Moves: the field is cached by then, so still one build.
         Assert.Equal(builds + 1, sim.World.FlowFields.BuildCount);
         int moving = 0;
         for (int i = 0; i < 500; i++) if (sim.World.Units.State[i] == Entities.UnitState.Moving) moving++;

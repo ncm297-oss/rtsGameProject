@@ -177,93 +177,108 @@ public class SimCoreStressTests
         Assert.NotEqual(Run(0), Run(ulong.MaxValue));
     }
 
-    [Fact]
-    public void Flood_10000Commands_OneTick_AllocatesNothing()
+    /// <summary>This class's wall-clock and allocation tests: they run alone in <see cref="SerialCollection"/> (BUG-0017, BUG-0024) while the heavy tests above stay in the parallel batch.</summary>
+    [Collection(SerialCollection.Name)]
+    public class Serial
     {
-        const int players = 8;
-        const int n = 10_000;
-        var sim = new Simulation(TestSim.Config(1, players, UnitCapacity: 2 * n + 16, CommandCapacity: n));
-        // Warm-up path.
-        sim.Enqueue(Command.SpawnUnit(0, 0, Vector2.Zero));
-        sim.Tick();
-        sim.Tick();
-        for (int i = 0; i < n; i++)
-            sim.Enqueue(Command.SpawnUnit(players - 1 - (i % players), i % TestSim.UnitTypeCount, new Vector2(i, 0)));
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        sim.Tick();
-        sim.Tick();
-        long delta = GC.GetAllocatedBytesForCurrentThread() - before;
-        Assert.Equal(0, delta);
-        Assert.Equal(n + 1, sim.World.Units.Count);
-    }
+        private readonly ITestOutputHelper _out;
 
-    /// <summary>Worst time over 3 reps for two ticks that sort and apply n commands from 8 players.</summary>
-    private static double FloodMs(int n)
-    {
-        // Worst realistic arrival order for the insertion sort: players arrive round-robin in
-        // descending order, so almost every command has to move past many others.
-        const int players = 8;
-        double worstMs = 0;
-        for (int rep = 0; rep < 3; rep++)
+        public Serial(ITestOutputHelper output) => _out = output;
+
+        [Fact]
+        public void Flood_10000Commands_OneTick_AllocatesNothing()
         {
-            var sim = new Simulation(TestSim.Config(1, players, UnitCapacity: n, CommandCapacity: n));
+            const int players = 8;
+            const int n = 10_000;
+            var sim = new Simulation(TestSim.Config(1, players, UnitCapacity: 2 * n + 16, CommandCapacity: n));
+            // Warm-up path.
+            sim.Enqueue(Command.SpawnUnit(0, 0, Vector2.Zero));
             sim.Tick();
-            for (int i = 0; i < n; i++)
-                sim.Enqueue(Command.Noop(players - 1 - (i % players)));
-            var sw = Stopwatch.StartNew();
-            sim.Tick(); // sorts the whole batch (applies on the next tick)
             sim.Tick();
-            sw.Stop();
-            worstMs = Math.Max(worstMs, sw.Elapsed.TotalMilliseconds);
+            Action queue = () =>
+            {
+                for (int i = 0; i < n; i++)
+                    sim.Enqueue(Command.SpawnUnit(players - 1 - (i % players), i % TestSim.UnitTypeCount, new Vector2(i, 0)));
+            };
+            // Two ticks: the first sorts the batch, the second applies it. A re-run (BUG-0017) queues
+            // and applies a second batch; the store has room for both.
+            Action twoTicks = () =>
+            {
+                sim.Tick();
+                sim.Tick();
+            };
+            int runs = AllocationProbe.AssertZero(twoTicks, _out, setup: queue);
+            Assert.Equal(runs * n + 1, sim.World.Units.Count);
         }
-        return worstMs;
-    }
 
-    [Trait("Category", "Perf")]
-    [Theory]
-    [InlineData(500)]
-    [InlineData(1000)]
-    public void Flood_InterleavedCommands_UnderTickBudget(int n)
-    {
-        double ms = FloodMs(n);
-        _out.WriteLine($"{n} interleaved commands: worst {ms:F2} ms over two ticks");
-        // docs/03 perf budget: p99 tick < 8 ms.
-        Assert.True(ms < 8, $"{n}-command tick took {ms:F2} ms");
-    }
+        /// <summary>Worst time over 3 reps for two ticks that sort and apply n commands from 8 players.</summary>
+        private static double FloodMs(int n)
+        {
+            // Worst realistic arrival order for the insertion sort: players arrive round-robin in
+            // descending order, so almost every command has to move past many others.
+            const int players = 8;
+            double worstMs = 0;
+            for (int rep = 0; rep < 3; rep++)
+            {
+                var sim = new Simulation(TestSim.Config(1, players, UnitCapacity: n, CommandCapacity: n));
+                sim.Tick();
+                for (int i = 0; i < n; i++)
+                    sim.Enqueue(Command.Noop(players - 1 - (i % players)));
+                var sw = Stopwatch.StartNew();
+                sim.Tick(); // sorts the whole batch (applies on the next tick)
+                sim.Tick();
+                sw.Stop();
+                worstMs = Math.Max(worstMs, sw.Elapsed.TotalMilliseconds);
+            }
+            return worstMs;
+        }
 
-    [Trait("Category", "Perf")]
-    [Fact(Skip = "BUG-0005: CommandQueue insertion sort is O(n^2); un-skip when fixed")]
-    public void Flood_10000InterleavedCommands_NoFrameStall()
-    {
-        double ms = FloodMs(10_000);
-        _out.WriteLine($"10000 interleaved commands: worst {ms:F1} ms over two ticks");
-        // One tick longer than a whole 50 ms frame is a visible stall. Measured ~107 ms (Release).
-        Assert.True(ms < 50, $"10k-command tick took {ms:F1} ms");
-    }
+        [Trait("Category", "Perf")]
+        [Theory]
+        [InlineData(500)]
+        [InlineData(1000)]
+        public void Flood_InterleavedCommands_UnderTickBudget(int n)
+        {
+            double ms = FloodMs(n);
+            _out.WriteLine($"{n} interleaved commands: worst {ms:F2} ms over two ticks");
+            // docs/03 perf budget: p99 tick < 8 ms.
+            Assert.True(ms < 8, $"{n}-command tick took {ms:F2} ms");
+        }
 
-    [Trait("Category", "Perf")]
-    [Theory]
-    [InlineData(500)]
-    [InlineData(1000)]
-    [InlineData(2500)]
-    public void EmptyTick_WithManyUnits_IsCheap(int units)
-    {
-        var sim = new Simulation(TestSim.Config(1, 2, UnitCapacity: units, CommandCapacity: units));
-        for (int i = 0; i < units; i++)
-            sim.Enqueue(Command.SpawnUnit(i % 2, 0, new Vector2(i, i)));
-        sim.Tick();
-        sim.Tick();
-        Assert.Equal(units, sim.World.Units.Count);
-        for (int i = 0; i < 100; i++) sim.Tick();
-        var sw = Stopwatch.StartNew();
-        const int ticks = 2000;
-        for (int i = 0; i < ticks; i++) sim.Tick();
-        sw.Stop();
-        double avgMs = sw.Elapsed.TotalMilliseconds / ticks;
-        var hsw = Stopwatch.StartNew();
-        for (int i = 0; i < 100; i++) sim.StateHash();
-        hsw.Stop();
-        _out.WriteLine($"{units} units: avg tick {avgMs * 1000:F1} us, StateHash {hsw.Elapsed.TotalMilliseconds / 100:F3} ms");
-        Assert.True(avgMs < 0.5, $"avg empty tick {avgMs} ms with {units} units");
+        [Trait("Category", "Perf")]
+        [Fact(Skip = "BUG-0005: CommandQueue insertion sort is O(n^2); un-skip when fixed")]
+        public void Flood_10000InterleavedCommands_NoFrameStall()
+        {
+            double ms = FloodMs(10_000);
+            _out.WriteLine($"10000 interleaved commands: worst {ms:F1} ms over two ticks");
+            // One tick longer than a whole 50 ms frame is a visible stall. Measured ~107 ms (Release).
+            Assert.True(ms < 50, $"10k-command tick took {ms:F1} ms");
+        }
+
+        [Trait("Category", "Perf")]
+        [Theory]
+        [InlineData(500)]
+        [InlineData(1000)]
+        [InlineData(2500)]
+        public void EmptyTick_WithManyUnits_IsCheap(int units)
+        {
+            var sim = new Simulation(TestSim.Config(1, 2, UnitCapacity: units, CommandCapacity: units));
+            for (int i = 0; i < units; i++)
+                sim.Enqueue(Command.SpawnUnit(i % 2, 0, new Vector2(i, i)));
+            sim.Tick();
+            sim.Tick();
+            Assert.Equal(units, sim.World.Units.Count);
+            for (int i = 0; i < 100; i++) sim.Tick();
+            var sw = Stopwatch.StartNew();
+            const int ticks = 2000;
+            for (int i = 0; i < ticks; i++) sim.Tick();
+            sw.Stop();
+            double avgMs = sw.Elapsed.TotalMilliseconds / ticks;
+            var hsw = Stopwatch.StartNew();
+            for (int i = 0; i < 100; i++) sim.StateHash();
+            hsw.Stop();
+            _out.WriteLine($"{units} units: avg tick {avgMs * 1000:F1} us, StateHash {hsw.Elapsed.TotalMilliseconds / 100:F3} ms");
+            Assert.True(avgMs < 0.5, $"avg empty tick {avgMs} ms with {units} units");
+        }
     }
 }

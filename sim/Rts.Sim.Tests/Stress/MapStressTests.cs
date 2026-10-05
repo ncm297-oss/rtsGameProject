@@ -7,6 +7,7 @@ using Xunit.Abstractions;
 namespace Rts.Sim.Tests.Stress;
 
 /// <summary>QA stress on the M1-3 terrain generator: wide seed sweeps, large maps, worst-case bounded work.</summary>
+[Collection(SerialCollection.Name)]
 public class MapStressTests
 {
     private readonly ITestOutputHelper _out;
@@ -99,14 +100,20 @@ public class MapStressTests
         long worstBytes = 0;
         for (ulong seed = 1; seed <= 5; seed++)
         {
-            long before = GC.GetAllocatedBytesForCurrentThread();
-            var sw = Stopwatch.StartNew();
-            Heightmap hm = Gen(seed, p, out _);
-            sw.Stop();
-            long bytes = GC.GetAllocatedBytesForCurrentThread() - before;
+            Heightmap? hm = null;
+            var sw = new Stopwatch();
+            ulong s = seed;
+            Action gen = () =>
+            {
+                sw.Start();
+                hm = Gen(s, p, out _);
+                sw.Stop();
+            };
+            long bytes = AllocationProbe.Measure(gen);
             worst = Math.Max(worst, sw.Elapsed.TotalMilliseconds);
             worstBytes = Math.Max(worstBytes, bytes);
-            Assert.Empty(MapQaChecker.Check(hm, new NavGrid(hm), requireAllLevels: false));
+            Heightmap built = hm!;
+            Assert.Empty(MapQaChecker.Check(built, new NavGrid(built), requireAllLevels: false));
         }
         _out.WriteLine($"512x512: worst {worst:F1} ms, worst allocation {worstBytes / 1024.0 / 1024.0:F1} MiB");
         // 16x the default area; a linear generator stays well under 16 x 50 ms.

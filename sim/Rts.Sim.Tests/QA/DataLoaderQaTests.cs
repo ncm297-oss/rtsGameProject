@@ -7,6 +7,7 @@ using Rts.Sim.Data;
 namespace Rts.Sim.Tests.QA;
 
 /// <summary>QA attacks on the data loader (M1-2): every malformed input must become a DataError naming a file, never an exception.</summary>
+[Collection(SerialCollection.Name)]
 public class DataLoaderQaTests
 {
     private const string MalazanUnits = "factions/malazan/units.json";
@@ -379,11 +380,16 @@ public class DataLoaderQaTests
         });
         Assert.True(new FileInfo(dir.FullPath(MalazanUnits)).Length > 3_000_000);
         DataLoader.LoadAll(TestDataDir.Shipped); // warm up
-        long before = GC.GetAllocatedBytesForCurrentThread(); // per-thread: other test classes run in parallel
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-        DataLoadResult r = LoadNoThrow(dir.Path);
-        sw.Stop();
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        DataLoadResult? loaded = null;
+        var sw = new System.Diagnostics.Stopwatch();
+        Action load = () =>
+        {
+            sw.Start();
+            loaded = LoadNoThrow(dir.Path);
+            sw.Stop();
+        };
+        long allocated = AllocationProbe.Measure(load);
+        DataLoadResult r = loaded!;
         _out.WriteLine($"10k-unit load: {sw.ElapsedMilliseconds} ms, {allocated / 1_000_000} MB allocated");
         Assert.True(r.Ok, string.Join("\n", r.Errors.Take(5)));
         Assert.Equal(14 + 10_000, r.Data!.Units.Length);

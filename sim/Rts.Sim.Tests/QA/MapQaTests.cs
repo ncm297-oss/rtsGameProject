@@ -6,6 +6,7 @@ using Xunit.Abstractions;
 namespace Rts.Sim.Tests.QA;
 
 /// <summary>QA attacks on the M1-3 terrain: named seeds, degenerate params, RNG isolation, coordinate edges, allocation.</summary>
+[Collection(SerialCollection.Name)]
 public class MapQaTests
 {
     private readonly ITestOutputHelper _out;
@@ -305,11 +306,9 @@ public class MapQaTests
         NavGrid nav = DefaultNav;
         Heightmap hm = DefaultHm;
         long sink = Run(nav, hm, 2_000);
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        sink += Run(nav, hm, 1_000_000);
-        long delta = GC.GetAllocatedBytesForCurrentThread() - before;
-        _out.WriteLine($"allocated {delta} bytes over 1,000,000 query rounds (sink {sink})");
-        Assert.Equal(0, delta);
+        Action block = () => sink += Run(nav, hm, 1_000_000);
+        int runs = AllocationProbe.AssertZero(block, _out);
+        _out.WriteLine($"0 bytes over 1,000,000 query rounds ({runs} measured run(s), sink {sink})");
     }
 
     private static readonly float[] Positions = { float.NaN, -0.5f, 256f, 128.3f, float.PositiveInfinity, 3f };

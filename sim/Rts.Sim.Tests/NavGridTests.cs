@@ -5,6 +5,7 @@ using Rts.Sim.Map;
 namespace Rts.Sim.Tests;
 
 /// <summary>NavGrid: cliff and ramp rules on hand-made terrain, pocket sealing, coordinate mapping, zero-allocation queries.</summary>
+[Collection(SerialCollection.Name)]
 public class NavGridTests
 {
     private const float H = MapConstants.LevelHeight;
@@ -215,10 +216,8 @@ public class NavGridTests
         NavGrid nav = DefaultGrid;
         int sink = 0;
         RunQueries(nav, 1000, ref sink); // JIT warm-up
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        RunQueries(nav, 100_000, ref sink);
-        long delta = GC.GetAllocatedBytesForCurrentThread() - before;
-        Assert.Equal(0, delta);
+        Action block = () => RunQueries(nav, 100_000, ref sink);
+        AllocationProbe.AssertZero(block);
         Assert.NotEqual(0, sink);
     }
 
