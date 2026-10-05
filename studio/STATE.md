@@ -3,7 +3,8 @@
 The dashboard. The Producer rewrites it at the end of every session. **Owner: read "Waiting on
 you" first.** "For your review" is non-blocking: things the studio decided or finished on its own.
 
-_Last updated: 2026-10-05 (session 2026-10-05-0742, ACCEPT)._
+_Last updated: 2026-10-05 (session 2026-10-05-1013, PLAN; backlog re-ordered per the owner's
+"Speed up" note)._
 
 ## Waiting on you
 
@@ -35,13 +36,13 @@ _Last updated: 2026-10-05 (session 2026-10-05-0742, ACCEPT)._
 | Field | Value |
 | --- | --- |
 | Milestone | M1 — Core sim, no graphics (started 2026-10-03) |
-| Current task | next: **M1-4d-2 shoving + BUG-0028/0030/0031 + re-tighten assertions** (closes roadmap criterion 4); then BUG-0005 + BUG-0025/0026 small task, M1-5 scenario test |
-| Gate | **GO** (next session starts when the conductor is ready) |
+| Current task | **M1-4d-2 shoving of idle units + BUG-0031 fold-in + re-tighten assertions** (session 2026-10-05-1013, in progress; closes roadmap criterion 4) |
+| Gate | **GO** (session running) |
 | Tools on this PC | Godot 4.7.2 .NET, .NET SDK 8.0.425, Git 2.53 + LFS 3.7; `GODOT` user variable set |
 | Build | green on `studio/2026-10-05-0742` @ 40d4a46 + ACCEPT commit 150ceda (0 warnings, 0 errors); merged to `main` 2026-10-05 (owner-approved; docs/01 conflict resolved by keeping both rows) |
 | Tests | 962 passed / 11 skipped / 973 in one process (~2 min; known-bug skips: BUG-0005, 0008 x2, 0010 x2, 0014, 0023 x2, 0025, 0030, 0031 x3); `tools/qa/smoke.ps1` PASS. Quick loop: `--filter "Category!=Perf&Category!=Soak"` |
 | Open bugs | 11 (S1: 0, S2: 0, S3: 8, S4: 3) — none block |
-| Sessions today | 1 / 10 |
+| Sessions today | 2 / 10 (this one included); feature sessions since last hardening: 1 / 4 (M1-4c counts as hardening, owner ruling) |
 | Last session | 2026-10-05-0742 · M1-4d-1 separation, crowded arrival, give-up, adjacent-cell steering · ACCEPT (1 fix round) |
 
 ## Milestone progress
@@ -52,27 +53,33 @@ _Last updated: 2026-10-05 (session 2026-10-05-0742, ACCEPT)._
 | M1 | 3 / 8 (+ criterion 4: flow fields, cache, Move, build cap, separation, crowded arrival, give-up, steering done; shoving open) | In progress |
 | M2-M9 | — | Planned |
 
-## Backlog (outside the current task)
+## Feature queue (feature sessions, in order)
 
-- M1-4d-2 shoving of idle units (standing units step aside for walkers); BUG-0030 same-order rule
-  by `ArrivalDistance` of the stored `Goal`, not goal cell; BUG-0031 `Constrain` push-out vs cliffs;
-  re-tighten `BuildCap_500UnitsWith500DistinctGoals_EveryUnitArrives_NoDeadlock` (name is false:
-  59/500 give up) and `MoreGoalsThanCacheSlots` (41/128); consider not counting stuck ticks for
-  units waiting on a field (BUG-0028).
-- BUG-0005 per-player command buckets + BUG-0025 (S3) / BUG-0026 (S4) eviction by newest order
-  and rotated tie-break: one small task after 4d-2, before M5.
+1. M1-4d-2 shoving (current). Closes criterion 4.
+2. M1-5 scenario test: 200 units across 128x128 with obstacles, all arrive, none stuck or in
+   blocked cells.
+3. M1-6 replay format + determinism test + one golden replay (fix BUG-0014 seed mixing in the same
+   task: it changes every map hash, so do it before the golden exists).
+4. M1-7 perf test: 500 moving units, average tick < 4 ms; document maps > 256 as unsupported (BUG-0023).
+5. M1-8 headless CLI in `tools/` printing hashes and timings. Then the M1 hardening session and sign-off.
+
+## Debt backlog (hardening sessions only; next one after 3 more feature sessions or at M1 end)
+
+- Movement S3: BUG-0030 (Move within an arrived unit's own goal cell ignored: same-order rule by
+  `ArrivalDistance` of the stored `Goal`), BUG-0028 leftovers (don't count stuck ticks against a
+  walker blocked only by units waiting for a field), BUG-0025 (S3, evict the live field with the
+  newest order) + BUG-0026 (S4, rotate same-tick tie-break).
+- BUG-0005 (S3) per-player command buckets (O(n^2) insertion sort under a flood); before M5.
+- BUG-0023 (S3) single field build > tick budget on maps > 256 (time-sliced builds or document the cap at M1-7).
+- Loader: BUG-0008 (S3) duplicate JSON keys, BUG-0010 (S4) faction slots; fold into the M3 data task.
+- BUG-0014 (S4) seed mixing: goes with M1-6 (feature) because of the golden hashes.
+- BUG-0002 (S4) `.sln` Release config maps RtsGame to Debug; with `tools/export.ps1` (M6).
 - Perf: 2,500 units in one tight blob average 3.8 ms / worst 12.4 ms (Debug); 500 and 1,000 are
-  inside budget. Separation cost is query-dominated in crowded buckets; revisit if M1-7 raises the target.
-- Then M1-5 scenario test (200 units, obstacles), M1-6 replay + determinism golden (BUG-0014
-  first), M1-7 perf test (document maps > 256 unsupported, BUG-0023), M1-8 headless CLI.
-- `NavGrid.Version` is not hashed: fine while the grid is immutable; must join the hash when M3
-  tree depletion changes passability.
-- Generator pinned by 15 hashes + QA oracles; `NavGrid.Flood` relies on the blocked outer ring.
-- Loader: BUG-0008 (S3), BUG-0010 (S4) with the M3 data task; follow-ups for buildings, techs,
-  abilities, `ai.json`, maps; cross-field checks.
-- BUG-0002 (S4): `.sln` Release config maps RtsGame to Debug; fix with `tools/export.ps1` (M6).
-- Enqueue stamps `TickNumber + 1` (up to 50 ms input latency); revisit at M2-1 if felt.
-- Evaluate a Godot MCP server at M2. .NET 8 support ends 2026-11-10: move to next LTS at M6.
+  inside budget. Query-dominated in crowded buckets; revisit if M1-7 raises the target.
+- Notes to keep: `NavGrid.Version` is not hashed (must join the hash when M3 tree depletion changes
+  passability); generator pinned by 15 hashes + QA oracles, `NavGrid.Flood` relies on the blocked
+  outer ring; enqueue stamps `TickNumber + 1` (revisit at M2-1 if felt); Godot MCP at M2; .NET 8
+  support ends 2026-11-10, move to the next LTS at M6.
 
 ## Recent sessions
 

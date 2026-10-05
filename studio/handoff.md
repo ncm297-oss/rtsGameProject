@@ -3,6 +3,93 @@
 Written by the Producer at the end of each session for the next one. The next session's
 Producer starts from this, verifies it against the repo, and then plans.
 
+## Current session plan (2026-10-05-1013, PLAN)
+
+TASK_ID: M1-4d-2 · TASK_TITLE: Add shoving of idle units; fix BUG-0031; re-tighten the loosened
+give-up assertions · SESSION_TYPE: feature · QA_TIER: full · Budget: ~800 changed lines.
+
+Goal: finish roadmap criterion 4 ("steering, separation, arrival, shoving"): standing Idle friendly
+units step aside for walkers, so groups stop giving up en masse against each other's blobs
+(BUG-0028) and the two loosened assertions can say "every unit arrives" again. BUG-0031 is folded in
+because it is a few lines in `Constrain`, the same code shoving changes.
+
+Scope:
+- Shoving in `MovementSystem`, inside the two-pass model: during a walker's Plan, when its step is
+  constrained by (or it already overlaps) a standing, alive, Idle unit of the same owner, accumulate
+  a shove on that unit in a new `World` scratch array (`ShoveStep`, sized to `UnitCapacity`, cleared
+  per tick without allocation). In Apply, after walkers move, each shoved Idle unit takes
+  `ClampLength(ShoveStep, its own Speed)`, refused (stays put) when the destination is a blocked
+  cell, off the map, or across a blocked corner (`CanStep`/`IsLegalStep`). Moving units are never
+  shoved (they plan themselves). Shoved units stay Idle, no order, no `OrderTick` change.
+- Anchor rule: a shoved unit keeps `GoalCell` only if it still counts as arrived for its stored
+  `Goal` (within `ArrivalDistance`, or touching an arrived groupmate); otherwise `GoalCell = -1`.
+  So a shoved unit can be sent back by a re-issued Move, and QA's
+  `AfterCrowdsSettle_EveryIdleUnitHoldingAGoal_IsLinkedToItsPoint` stays true.
+- BUG-0031: `Constrain` only removes the part of a step that goes deeper into a standing unit; an
+  existing overlap is reduced by at most the step length (never a push-out larger than `Speed`
+  that lands in a cliff). Un-skip the BUG-0031 theory (3 rows).
+- Re-tighten `QA/FieldBuildCapQaTests.BuildCap_500UnitsWith500DistinctGoals_EveryUnitArrives_NoDeadlock`
+  and `MovementSystemTests.MoreGoalsThanCacheSlots_BuildsAtMostTheCapPerTick_AndEveryUnitArrives`
+  to the measured give-up rate after shoving plus a small headroom, or rename if not "every"; give
+  `Stress/LocalMovementStressTests` crowd rows (500 and 2,500 units to 4 points 6 m apart) a real
+  arrived-fraction assertion.
+- docs/03 "Local movement": implementation paragraph for M1-4d-2 (shove rule, anchor rule,
+  Constrain change), replace the "Known limits until shoving" paragraph with the new numbers.
+- OUT: BUG-0030 (debt backlog), BUG-0005/0025/0026, Hold/Stop commands, formation offsets,
+  shoving enemies or Moving units, any change to `FieldBuildOrderTests` / `QA/FieldBuildFairnessQaTests`,
+  flow-field or cache changes, new per-unit hashed state (if one proves necessary, say why and
+  cover it in `StateHashTests`).
+
+Acceptance criteria:
+1. A walker in a 1-cell corridor blocked by one Idle unit of its owner reaches its goal; the Idle
+   unit ends Idle, inside a passable cell, never overlapping the cliff, and never Moving.
+2. An Idle unit standing against a cliff is never shoved into a blocked cell or off the map
+   (test with the walker pushing straight at the cliff: shove refused, walker slides or gives up,
+   no blocked-cell position at any tick).
+3. A Moving unit (walking or waiting for a field) is never moved by a shove; an enemy-owned Idle
+   unit is never shoved (test with two owners).
+4. A shoved arrived unit that leaves its blob and its 1 m arrival radius has `GoalCell = -1`; one
+   shoved but still touching its blob keeps it; a shoved unit re-ordered to its old point walks back.
+   `AfterCrowdsSettle_EveryIdleUnitHoldingAGoal_IsLinkedToItsPoint` green for all 7 scenarios.
+5. BUG-0031 theory un-skipped and green (3 rows) plus a dev regression for the `Constrain` cap
+   that fails when the cap is removed.
+6. Give-up rates: `BuildCap_500UnitsWith500DistinctGoals...` at most 3% give up (name restored
+   if 0, else renamed to say what it asserts); `MoreGoalsThanCacheSlots...` at most 5% of 128;
+   crowd 500 to 4 points: at least 80% arrived, 2,500 to 4 points: at least 60% arrived. Report the
+   measured numbers; if a target is missed, say why rather than loosening silently.
+7. Determinism: `Determinism_300UnitsIn4CrowdedGroups_HashEqualEveryTick_SeedsDiffer` and QA's
+   interleaved two-sim test green; a new test runs a walker column through an idle crowd twice with
+   reversed spawn order and asserts the same hash.
+8. Allocation: `Tick_500UnitsConvergingOnOneBlob_AllocatesNothing` green and a new Serial test with
+   200 walkers crossing a settled 300-unit blob allocates 0 bytes.
+9. Perf (Debug, report numbers): `Perf_TightBlob_AvgAndWorstTick` 500 units average under 1 ms;
+   2,500 not worse than 4.5 ms average (today 3.8). Crossing-the-blob scenario at 500 units under 4 ms average.
+10. docs/03 updated in the same commit; `ArchitectureTests` green; `FieldBuildOrderTests` and
+    `QA/FieldBuildFairnessQaTests` unchanged and green; full suite green in one `dotnet test`.
+
+Design references: docs/03 "Local movement" (bullets Shoving, Collision; M1-4d-1 implementation
+paragraph: plan/apply split, walkers vs standing, groupmates, `Constrain`, arrival and anchors,
+give-up rule); docs/05 M1 criterion 4; CLAUDE.md rules 2-5; BUG-0028, BUG-0031 (and BUG-0030's
+"forward risk" note, covered by the anchor rule).
+
+Tests required: `LocalMovementTests` additions for criteria 1-5 and 7; `Stress/` or `Serial`
+tests for 8-9; re-tightened tests for 6; `StateHashTests` only if hashed state changes.
+
+Constraints: no allocation in Plan/Apply (scratch arrays on `World`, cleared by loop, no LINQ or
+closures); all unit-unit reads from start-of-tick state; neighbor order is ascending slot from
+`QueryRadius`; shove sums accumulate in the sorted walk order only (that order is deterministic);
+no `Math` trig, no wall clock; `MovementConstants` for any new tuning number (documented in
+docs/03); one implement commit; report measured rates before asserting them.
+
+QA focus: shove abuse (a walker column shoving a lone unit along a wall for 1,000 ticks: bounded
+displacement, never into a blocked cell; two groups shoving each other's blobs back and forth:
+terminates, no Idle jitter forever); anchor drift (shoved units with a kept `GoalCell` must be
+linked to their point: run the 7 scenarios plus a blob crossed by 200 walkers); enemy and Moving
+units never move without an order; reversed-spawn and two-sim hash equality under crossing crowds;
+tight-blob and crossing-blob Perf at 500/1,000/2,500 with 0-byte ticks; mutation: remove the
+blocked-cell refusal, the owner check, the anchor rule, and the `Constrain` cap, each must fail a
+test; re-run the give-up rate rows and report the numbers against criterion 6.
+
 _Written: 2026-10-05 (session 2026-10-05-0742, ACCEPT)._
 
 ## Where we are
