@@ -672,6 +672,44 @@ public class LocalMovementTests
     }
 
     /// <summary>
+    /// The wait before pushing a parked unit (<see cref="MovementConstants.PushAfterStuckTicks"/>): a
+    /// unit parked alone on its point in the 1-cell corridor is not moved until the blocked friendly
+    /// walker has counted that many stuck ticks; then it is pushed and the walker gets through.
+    /// </summary>
+    [Fact]
+    public void LoneParkedUnit_IsPushedOnlyAfterTheWalkerWasStuckPushAfterStuckTicks()
+    {
+        Simulation sim = SimOn(Corridor(), 2);
+        NavGrid g = sim.World.NavGrid;
+        int type = TypeWithRadius(0.9f);
+        Vector2 parked = g.CellCenter(8, 2), goal = g.CellCenter(14, 2);
+        SpawnOwned(sim, (0, type, g.CellCenter(2, 2)), (0, type, parked));
+        UnitStore u = sim.World.Units;
+        sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, 1), parked));
+        sim.Tick();
+        sim.Tick();
+        Assert.True(u.GoalCell[1] >= 0 && u.State[1] == UnitState.Idle, "the unit did not park");
+        sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, 0), goal));
+        sim.Tick();
+        int ticks = 0, stuckBeforeFirstPush = -1, maxStuckBefore = 0;
+        do
+        {
+            int stuck = u.StuckTicks[0];
+            Vector2 before = u.Position[1];
+            sim.Tick();
+            ticks++;
+            if (stuckBeforeFirstPush < 0)
+            {
+                if (u.Position[1] != before) stuckBeforeFirstPush = stuck;
+                else maxStuckBefore = Math.Max(maxStuckBefore, stuck);
+            }
+        } while (u.State[0] == UnitState.Moving && ticks < 1000);
+        _out.WriteLine($"first push after {stuckBeforeFirstPush} stuck ticks (most stuck before it: {maxStuckBefore}); walker idle after {ticks} ticks at {u.Position[0]}");
+        Assert.Equal(MovementConstants.PushAfterStuckTicks, stuckBeforeFirstPush);
+        Assert.True(Vector2.Distance(u.Position[0], goal) <= MovementConstants.ArrivalDistance, $"walker stopped at {u.Position[0]}");
+    }
+
+    /// <summary>
     /// Criterion 4 (BUG-0033): a unit parked alone on its point in the 1-cell corridor is shoved along
     /// by a blocked friendly walker. It keeps its goal while still within ArrivalDistance of its point,
     /// drops it (GoalCell -1) once pushed out of it, and walks back when re-ordered to the same point.
