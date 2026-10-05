@@ -1,7 +1,8 @@
 # Studio state
 
 The dashboard. The Producer rewrites it at the end of every session. **Owner: read "Waiting on
-you" first.** "For your review" is non-blocking: things the studio decided or finished on its own.
+you" first.** "For your review" (further down) is non-blocking: what the studio built or decided
+on its own, explained in terms of what you'd see in the game.
 
 _Last updated: 2026-10-05 (session 2026-10-05-1013, ACCEPT)._
 
@@ -9,33 +10,6 @@ _Last updated: 2026-10-05 (session 2026-10-05-1013, ACCEPT)._
 
 - Nothing blocking. The studio runs on autopilot (chain sessions, self sign-off) until the end
   of the roadmap or a cap/incident stops it.
-
-## For your review
-
-- 2026-10-05 (M1-4d-2, shoving): walkers now push friendly idle units out of their way; a unit
-  parked alone in a corridor yields after the walker has been stuck 0.5 s; blobs bend but don't
-  split; enemies and moving units are never shoved. A unit pinned against a cliff by a neighbor can
-  walk away again (BUG-0031 fixed). **Producer calls, revisit any time:** (1) I accepted the task
-  although my own crowd targets were missed (groups to 4 nearby points arrive 35-44%, I asked for
-  60-80%): the causes are structural (the flow field ignores units; units waiting for a field and
-  enemies are walls) and were outside the task's scope. QA filed them as S2 (BUG-0032/0033); I set
-  them to S3 and scheduled a follow-up task M1-4d-3 (crowd routing) before the scenario test.
-  (2) Design defaults in docs/01: units standing on their point hold it; a parked *group* still
-  blocks a corridor for its own army until moved by hand (BUG-0033 remainder). To watch it:
-  `dotnet test sim/Rts.Sim.Tests --filter "PastAFriendlyUnitParkedThereByAMove|WalkersCrossingASettledBlob" --logger "console;verbosity=detailed"`.
-- 2026-10-05 **incident note:** at about 12:14 a second session (id 2026-10-05-1214) overwrote
-  `studio/.session.lock` in your checkout while session 1013 was running; your three studio-skill
-  commits went to main meanwhile (724234a, 432fafe, c089405). The studio worktree was untouched and
-  the session finished normally. Your "Downloads stay with the owner" inbox note is processed at the
-  next PLAN (already reflected in the M6 line below).
-- 2026-10-05 (M1-4d-1): units no longer walk through each other or stack on one point. Producer
-  decisions (docs/01): crowded arrival instead of formation offsets for M1; give-up after 1 s; a
-  re-issued order to the held goal cell is the same order.
-- 2026-10-04 (M1-4c): deterministic, fair flow-field build cap (2 per tick); cache metadata hashed.
-- 2026-10-03/04 (M1-2/3/4a/4b): data loader, terraced maps + nav grid, ramps, spatial hash, flow
-  fields + LRU cache, `Move`. Producer decision: `MaxAttempts` cap is 8.
-- Optional M0 item: Godot MCP server for Claude Code (your install; see SETUP.md). Not needed
-  before M2.
 
 ## Now
 
@@ -58,6 +32,119 @@ _Last updated: 2026-10-05 (session 2026-10-05-1013, ACCEPT)._
 | M0 | 7 / 7 required | **Done** 2026-10-03 (optional MCP item open) |
 | M1 | 4 / 8 (sim core, data loader, terrain + nav grid + spatial hash, flow fields + local movement incl. shoving) | In progress |
 | M2-M9 | — | Planned |
+
+## For your review
+
+Non-blocking. Each entry says what was built or decided, what you'd notice in the game, and how
+to change it. Nothing is on screen yet (graphics arrive in M2), so "what you'd see" describes how
+it will play. To change anything, write it in `studio/inbox.md`, for example "use formations
+instead of clusters" or "make giving up take 2 seconds".
+
+### Idle units step aside for walkers (M1-4d-2, 2026-10-05)
+
+- **What you'll see:** soldiers walking through your own idle troops push them out of the way
+  instead of stopping. A clustered group bends to let walkers by but doesn't split apart. A lone
+  unit parked in a narrow pass steps aside once a friendly walker has been stuck behind it for
+  0.5 s. Enemy units and units that are already walking are never pushed. A unit squeezed between
+  a standing unit and a cliff can walk away again (BUG-0031 fixed).
+- **Producer calls, revisit any time:**
+  - Accepted although my own crowd targets were missed: groups sent to 4 nearby points now arrive
+    35-44% of the time (was about 16%), against the 60-80% I asked for. The causes are structural
+    (pathfinding ignores units; units waiting for a path and enemies act as walls) and were
+    outside this task. QA filed them as S2 (BUG-0032/0033); I set them to S3 and scheduled a
+    follow-up, M1-4d-3 crowd routing, before the scenario test.
+  - Units standing on their own click point hold it. So a parked *group* in a 1-cell corridor still
+    blocks its own army until you move it (BUG-0033 remainder).
+- **Rough edge:** walkers crossing a cluster that mixes both players' units mostly give up (2 of
+  200 in a test, 28 before shoving). M1-4d-3 targets this.
+- **To watch it:** `dotnet test sim/Rts.Sim.Tests --filter "PastAFriendlyUnitParkedThereByAMove|WalkersCrossingASettledBlob" --logger "console;verbosity=detailed"`.
+
+### Two studio sessions overlapped (incident note, 2026-10-05)
+
+- At about 12:14 a second session (id 2026-10-05-1214) overwrote `studio/.session.lock` in your
+  checkout while session 1013 was still running; your three studio-skill commits (724234a,
+  432fafe, c089405) went to main meanwhile. The studio worktree was untouched and session 1013
+  finished normally. If that second session is still chaining, two conductors may be running.
+  Your "Downloads stay with the owner" inbox note is processed at the next PLAN (already
+  reflected in the M6 queue line).
+
+### Units cluster around the click point, and give up when stuck (M1-4d-1, 2026-10-05)
+
+- **What you'll see:** select 30 soldiers and right-click a spot. They walk there and pack into a
+  tight cluster centered on the click, shoulder to shoulder, rather than lining up in a formation.
+  Two units meeting in a narrow pass both step to their right and slip past each other.
+  Spam-clicking the same spot doesn't make them restart or stutter.
+- **Giving up:** a unit that makes no headway for 1 second (wedged behind a crowd, or blocked by
+  standing units) stops and stands idle instead of jittering in place forever.
+- **Producer decisions:**
+  - Clusters instead of formations for now: StarCraft-style clumping, where Age of Empires uses
+    line or box formations. Formations can come back in M2 with group commands.
+  - 1 second before giving up. Shorter feels snappier but units stop short more often; longer
+    means more pushing and shoving before they quit.
+  - Clicking the spot a unit is already heading to counts as the same order.
+- **Rough edges until the next session (shoving):** units that are standing still never step
+  aside yet. So two groups sent to spots close together bump into each other's clusters and many
+  stop short: in a stress test, 84% of 500 units sent to 4 nearby points gave up 8-16 m early
+  (BUG-0028). A unit squeezed between a standing unit and a cliff can't walk away (BUG-0031).
+  Both should go away once idle units make room for moving ones.
+- **Also open:** a short nudge order (under about 2.8 m, inside the same 2 m map cell) to a unit
+  that has already arrived is ignored (BUG-0030). It's in the debt backlog.
+
+### Pathfinding: shared arrow maps with a speed limit (M1-4b and M1-4c, 2026-10-04)
+
+- **What it is:** when you send units somewhere, the game computes one map of arrows for that
+  destination: every 2 m square points along the shortest route there. Every unit headed to that
+  spot follows the same map, so moving 200 units costs about the same as moving one. The game
+  remembers recent destinations (32 to 128, depending on how many units the game allows), so
+  re-ordering to a recent spot is instant.
+- **Speed limit (Producer decision):** at most 2 new arrow maps per tick, which is 40 per second,
+  oldest orders first. Each takes about 0.7 ms to build, and the limit keeps every tick inside its
+  time budget so the game never hitches.
+- **What you'll see:** nothing in normal play. Only in a big burst: order 32 separate groups to 32
+  different spots at the same instant and the last group starts walking about 0.8 s after the first.
+- **Why it's saved with the game (Producer decision):** which arrow maps are remembered decides
+  which units wait a tick, so that memory is saved and checked like the rest of the game state.
+  That keeps replays and saved games exact.
+- **Rough edges (debt backlog):** with more separate destinations active at once than the game
+  remembers (only in very large games with many small groups), some older groups can stall while
+  newer ones walk (BUG-0025). In same-instant order bursts, one side of the map gets served
+  0.1-0.2 s sooner on average (BUG-0026, cosmetic).
+
+### Terraced maps: plateaus, cliffs and ramps (M1-3 and M1-4a, 2026-10-03)
+
+- **What you'll see:** maps have up to three height levels (ground, 4 m and 8 m up), each a flat
+  plateau. Plateau edges are cliffs no unit can climb. The only way up is a ramp, 6 m wide and 8 m
+  long with a gentle slope, entered only at its top or bottom because its sides are walled. Ramps
+  are natural chokepoints, wide enough for about 7 foot soldiers or 4 horsemen side by side, so a
+  few defenders can hold one. In M4 the high-ground rule raises the stakes: units below can't see
+  up onto a plateau.
+- **Cliff edges (Producer decision):** the outer 2 m strip of each plateau counts as cliff, so
+  units on high ground stand about one step back from the visible edge. The alternative (walls
+  between squares) would let them stand right at the lip but makes pathfinding more complex.
+- **Safety nets:** the map's outer ring is impassable, and any patch of ground no ramp reaches is
+  sealed off, so a unit can never be stranded. The generator re-rolls a layout that comes out too
+  blocked (under half walkable) or missing a height level, up to 8 times (Producer decision), then
+  takes the best one, so map generation can't hang. A normal map takes about 4 ms to make.
+- Also added: a fast "who's near me" lookup grid that movement and later combat use. Nothing to
+  review there.
+
+### First real game data (M1-2, 2026-10-03)
+
+- **What it is:** the Malazan and Whirlwind rosters (7 units each, stats from the faction pages),
+  the damage-type table and the economy rules now live as JSON in `game/data/`. The game checks
+  every file when it starts and lists every mistake at once.
+- **Values the docs didn't specify (Producer decision, first pass):**
+  - **Body size:** 0.4 m radius for foot soldiers, 0.7 m for cavalry, 0.9 m for siege. This is the
+    one you'll notice most: it decides how tightly crowds pack and how many units fit through a
+    ramp at once.
+  - Per-unit attack wind-up times, faction color palettes, and a placeholder for "requires Age II".
+- **To change them:** edit the numbers in `game/data/factions/<faction>/units.json`, or ask the
+  studio. No code changes are needed.
+
+### Optional: Godot MCP server (M0)
+
+- A tool that lets Claude launch the game and take screenshots more easily. Not needed until M2,
+  when there's something on screen, and the game will have its own screenshot option anyway.
 
 ## Feature queue (feature sessions, in order)
 

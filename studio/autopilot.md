@@ -7,6 +7,7 @@ Changes take effect at the next session; no restart needed.
 | --- | --- | --- |
 | enabled | yes | `no` = scheduled sessions exit immediately without doing anything (manual `/studio-session` still works) |
 | chain_sessions | yes | After a session ends with more work to do, the Producer starts the next one within minutes instead of waiting for the next check-in |
+| usage_stop_percent | 90 | When the weekly plan limit (or the 5-hour window) reaches this percent, the studio pauses itself until that limit resets, then resumes on its own |
 | max_sessions_per_day | 10 | Full work sessions per calendar day (local time). Cheap exits don't count. The studio resumes the next morning when the cap is hit |
 | max_fix_rounds | 2 | Dev ↔ QA fix loops per session before the Producer must accept, reject, or escalate |
 | hardening_every | 4 | Every Nth full session works the debt backlog (S3/S4 bugs, flaky tests, docs drift) instead of features; plus one hardening session at the end of each milestone |

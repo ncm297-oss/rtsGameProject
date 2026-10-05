@@ -9,6 +9,13 @@ Commit and push after editing, from either machine (or ask Claude to).
 
 ## New
 
+- 2026-10-05 · **Downloads stay with the owner.** Agents can't download anything: winget, curl,
+  Invoke-WebRequest, npm/npx and NuGet package adds are on the block list. When downloads are
+  needed (M6: Godot .NET export templates for 4.7.2, the Kenney/KayKit/Quaternius packs listed in
+  docs/04-art-pipeline.md), put the exact download links under **Waiting on you** well before
+  they block work, say which folder in `asset-sources/` each zip goes in, and keep working on
+  unblocked tasks meanwhile. Add a line about this to the M6 entry in the feature queue.
+
 ## Processed
 
 - 2026-10-05 · **Speed up (owner):** QA depth by risk tier, S3/S4 bugs wait for a hardening

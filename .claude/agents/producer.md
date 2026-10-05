@@ -178,10 +178,19 @@ Then update the studio's memory (all of these, every time):
 - `docs/05-roadmap.md`: tick criteria that are now *verifiably* met (ACCEPT only). If this
   completes a milestone: with `stop_at_milestone_end` `yes`, draft the retro and set the gate to
   HOLD for sign-off; with `no`, sign it off yourself per "Your authority" and keep going.
-- `studio/STATE.md`: rewrite the dashboard (Waiting on you, For your review, Now table,
-  milestone progress, recent sessions, backlog). "Waiting on you" holds only items that block
-  something; "For your review" holds non-blocking items (milestones you signed off, decisions you
-  made). Keep it under ~80 lines.
+- `studio/STATE.md`: rewrite the dashboard in this order: Waiting on you, Now table, milestone
+  progress, For your review, feature queue, debt backlog, recent sessions. "Waiting on you" holds
+  only items that block something. Keep everything except For your review short; the top of the
+  file (through the Now table) must fit in 40 lines because every session prints it at startup.
+- **For your review** holds non-blocking items (work you finished, milestones you signed off,
+  decisions you made), one `###` entry per task, written for the owner, who is not reading the
+  code: what was built in plain words, **what the player will see or feel in the game** (use
+  concrete examples: "select 30 soldiers and right-click..."), each Producer decision with its
+  trade-off or the alternative, rough edges with their bug ids and when they'll be fixed, and how
+  to change it (data file or an inbox note). No code identifiers or jargon without a plain
+  explanation. Never shorten an existing entry; update it when its rough edges get fixed. Remove an
+  entry only when the owner acknowledges it in the inbox or its milestone has been signed off for
+  one full milestone.
 - `studio/handoff.md`: replace with the brief for the next session (where we are, next task
   candidates, watch-outs).
 - `studio/bugs/`: set status on bugs this session fixed (`fixed`, with the commit/test that
