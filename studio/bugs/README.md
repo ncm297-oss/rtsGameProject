@@ -67,3 +67,6 @@ bugs outrank new features.
 | [BUG-0029](BUG-0029-move-spam-makes-arrived-blob-churn.md) | S3 | fixed | Re-issuing the same Move every tick makes an arrived blob churn indefinitely |
 | [BUG-0030](BUG-0030-move-within-arrived-units-goal-cell-ignored.md) | S3 | open | A Move to another point of an arrived unit's goal cell is ignored (up to ~2.8 m) |
 | [BUG-0031](BUG-0031-unit-overlapping-standing-unit-against-cliff-pinned.md) | S3 | open | A unit overlapping a standing unit with a cliff behind it can't walk away in any direction |
+| [BUG-0032](BUG-0032-shoving-misses-give-up-targets-even-with-one-owner.md) | S2 | open | Shoving misses every criterion-6 give-up target, also with one owner (no enemies); 2,500 to 4 points is worse than no shoving |
+| [BUG-0033](BUG-0033-friendly-unit-parked-by-move-never-steps-aside.md) | S2 | open | A friendly unit parked by a Move never steps aside; it blocks a 1-cell corridor for its own army |
+| [BUG-0034](BUG-0034-distinct-targets-perf-test-flaky-in-full-suite.md) | S3 | open | `Perf_500Units_DistinctTargetsInterleavedBySlot_CostPerTick(32)` failed once in a full suite run (4.45 ms vs < 4 ms) |
