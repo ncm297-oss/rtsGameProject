@@ -70,6 +70,13 @@ the sim goes under **Requests for the sim track** in `studio/STATE.md`, and the 
 for the sim track. A track with no unblocked work sits a session out while the other continues.
 To pause a track, write it in the inbox.
 
+Test files (Producer, 2026-10-05): the view track's xUnit tests go only in
+`sim/Rts.Sim.Tests/ViewApi/` (dev) and `sim/Rts.Sim.Tests/QA/ViewApi/` (QA); Godot-side checks go
+in `game/tests/`. `ViewApi/` may also hold pure presentation helpers that keep no sim reference and
+mutate nothing (fixed-step clock, mesh geometry from a `Heightmap`), so the view's logic is testable
+without Godot. The sim track keeps `Simulation`, `SimConfig` and `DataLoader.LoadAll` additive
+(no new `required` members, no signature changes) so the view compiles after the merge.
+
 ## How sessions start
 
 On 2026-10-03 the owner authorized the Producer to **start the next session whenever it's

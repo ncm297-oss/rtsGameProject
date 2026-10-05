@@ -4,7 +4,7 @@ The dashboard. The Producer rewrites it at the end of every session. **Owner: re
 you" first.** "For your review" (further down) is non-blocking: what the studio built or decided
 on its own, explained in terms of what you'd see in the game.
 
-_Last updated: 2026-10-05 (session 2026-10-05-1234, ACCEPT)._
+_Last updated: 2026-10-05 (session 2026-10-05-1446, PLAN; first two-track session)._
 
 ## Waiting on you
 
@@ -15,14 +15,17 @@ _Last updated: 2026-10-05 (session 2026-10-05-1234, ACCEPT)._
 
 | Field | Value |
 | --- | --- |
-| Milestone | M1 — Core sim, no graphics (started 2026-10-03) |
-| Current task | next: M1-6 replay format + determinism test + golden replay (fix BUG-0014 first) |
-| Gate | **GO** (next session starts within minutes) |
+| Sim: milestone | M1 — Core sim, no graphics (started 2026-10-03); 5 / 8 criteria |
+| Sim: task | **M1-6** replay format + determinism test + golden replay (BUG-0014 seed mixing first) · feature · QA full |
+| Sim: gate | **GO** |
+| View: milestone | M2 — Presentation (started 2026-10-05); 0 / 10 criteria |
+| View: task | **M2-1** match scene runs the sim: SimRunner, terrain mesh, RTS camera, `--screenshot` flag · feature · QA standard |
+| View: gate | **GO** |
 | Tools on this PC | Godot 4.7.2 .NET, .NET SDK 8.0.425, Git 2.53 + LFS 3.7; `GODOT` user variable set |
-| Build | green on `studio/2026-10-05-1234` @ 98c92b5, merging to `main` (0 warnings, 0 errors) |
-| Tests | 1090 passed / 13 skipped / 0 failed, full suite in one run (2 m 6 s); known-bug skips: BUG-0005, 0008 x2, 0010 x2, 0014, 0023 x2, 0025, 0030, 0033 pair, 0037, 0038; `tools/qa/smoke.ps1` PASS |
+| Build | green on `main` @ 96c9f64 (0 warnings, 0 errors) |
+| Tests | 1021 passed / 10 skipped / 0 failed (non-Perf, 1 m 19 s, Producer re-ran at PLAN); full suite last 1090 / 13 / 0; smoke PASS |
 | Open bugs | 15 (S1: 0, S2: 0, S3: 11, S4: 4) — none block |
-| Sessions today | 3 / 10; feature sessions since last hardening: 3 / 4 (the session after M1-6 is a hardening one) |
+| Sessions today | 3 / 8 (this is the 4th); feature sessions since last hardening: sim 3 / 4 (next sim session is hardening), view 0 / 4 |
 | Last session | 2026-10-05-1234 · M1-5 cross-map scenario + queued-walker rule + BUG-0035 · ACCEPT after 1 fix round |
 
 ## Milestone progress
@@ -30,8 +33,9 @@ _Last updated: 2026-10-05 (session 2026-10-05-1234, ACCEPT)._
 | Milestone | Criteria met | Status |
 | --- | --- | --- |
 | M0 | 7 / 7 required | **Done** 2026-10-03 (optional MCP item open) |
-| M1 | 5 / 8 (sim core, data loader, terrain + nav grid + spatial hash, flow fields + local movement incl. shoving, cross-map scenario) | In progress; left: replay + golden, perf test, CLI, then hardening + sign-off |
-| M2-M9 | — | Planned |
+| M1 (sim track) | 5 / 8 (sim core, data loader, terrain + nav grid + spatial hash, flow fields + local movement incl. shoving, cross-map scenario) | In progress; left: replay + golden (now), perf test, CLI, then hardening + sign-off |
+| M2 (view track) | 0 / 10 | Started 2026-10-05; M2-1 in progress |
+| M3-M9 | — | Planned |
 
 ## For your review
 
@@ -39,6 +43,32 @@ Non-blocking. Each entry says what was built or decided, what you'd notice in th
 to change it. Nothing is on screen yet (graphics arrive in M2), so "what you'd see" describes how
 it will play. To change anything, write it in `studio/inbox.md`, for example "use formations
 instead of clusters" or "make giving up take 2 seconds".
+
+### Two tracks started: the view track begins M2 while the sim track finishes M1 (2026-10-05, session 1446 plan)
+
+- **What changes for you:** from this session the game window stops being an empty scene. If the
+  view task lands, running `& $env:GODOT --path game` shows a generated map in 3D (flat plateaus
+  at three heights, cliff faces, sloped ramps, colored by height) with a camera you can pan with
+  the arrow keys, screen edges or middle-drag, and zoom with the wheel. No units are drawn yet;
+  a small corner label shows the sim ticking (tick number, speed, tick time). Units, selection
+  and right-click orders are the next view task (M2-2).
+- **Producer decisions, revisit any time:**
+  - *Where the view's tests live.* The view track owns `sim/Rts.Sim/ViewApi/` but no test folder,
+    so I set: dev tests in `sim/Rts.Sim.Tests/ViewApi/`, QA tests in `sim/Rts.Sim.Tests/QA/ViewApi/`,
+    nothing else in the test project. Also, `ViewApi/` may hold pure helpers with no sim reference
+    (the fixed-step clock, terrain geometry from the heightmap) so that logic is unit-tested
+    without Godot. Alternative: put those helpers in `game/scripts/`, where nothing can test them.
+  - *The sim track keeps its public setup API additive this session* (no new required fields on
+    `SimConfig`, no signature changes to `Simulation` or the data loader), so the view compiles
+    after both branches merge.
+  - *First view slice order:* scene + terrain + camera + screenshot flag before unit views, because
+    the screenshot flag is how the studio (and you) verify every later visual task.
+- **Docs drift for you to fix (one line, your file):** `CLAUDE.md` still says "Current milestone:
+  M1" and "don't write gameplay code ahead of the roadmap". With two tracks that line is per
+  track (sim M1, view M2). The agents don't edit `CLAUDE.md`; suggested text: "Current
+  milestones: M1 (sim track), M2 (view track)".
+- **Cap note:** `autopilot.md` says 8 sessions per day; the old dashboard said 10. The studio
+  follows autopilot (8).
 
 ### The M1 headline works: an army crosses the map and climbs a ramp (M1-5, 2026-10-05)
 
@@ -100,7 +130,8 @@ instead of clusters" or "make giving up take 2 seconds".
   finished normally. If that second session is still chaining, two conductors may be running.
   Your "Downloads stay with the owner" inbox note was processed at the 1234 PLAN (reflected in
   the M6 queue line). Session 1234 ran on the studio-session skill as loaded at its start; your
-  later two-track (sim + view) change to the skill applies from the next session.
+  later two-track (sim + view) change to the skill applies from the next session. Update 1446:
+  this session is the first on the two-track skill; no second conductor has shown up since.
 
 ### Units cluster around the click point, and give up when stuck (M1-4d-1, 2026-10-05)
 
@@ -182,21 +213,52 @@ instead of clusters" or "make giving up take 2 seconds".
 - A tool that lets Claude launch the game and take screenshots more easily. Not needed until M2,
   when there's something on screen, and the game will have its own screenshot option anyway.
 
-## Feature queue (feature sessions, in order)
+## Requests for the sim track
 
-1. **M1-6 (next):** replay format (seed + commands + checkpoint hashes), determinism test (same
-   run twice → same hash), one golden replay in `sim/Rts.Sim.Tests/Replays/`. Fix BUG-0014 seed
+What the view track needs from the sim and can't add itself (the Producer plans these for the sim
+track right after S1/S2 bugs). None yet. Expected soon: `Stop`, `HoldPosition`, `AttackMove`
+command kinds and shift-queued orders (M2-3), a selection-friendly "units in a world rectangle"
+query if the spatial hash's public surface isn't enough (M2-2), and public read access to a
+cached flow field's directions for the debug overlay (M2-5).
+
+## Feature queue: sim track (feature sessions, in order)
+
+1. **M1-6 (now):** replay format (seed + commands + checkpoint hashes), determinism test (same
+   run twice → same hash), one golden replay in `sim/Rts.Sim.Tests/Replays/`. BUG-0014 seed
    mixing first in the same task: it changes every map hash (15 pinned generator hashes + QA
    oracles regenerate in that commit), so it must land before the golden exists.
-2. M1-7 perf test: 500 moving units, average tick < 4 ms; document maps > 256 as unsupported
+2. Hardening session (sim is at 3/4 feature sessions): see the sim debt backlog.
+3. M1-7 perf test: 500 moving units, average tick < 4 ms; document maps > 256 as unsupported
    (BUG-0023). Watch the unenforced 1,000-walkers-crossing-1,500-blob row (3.1-3.4 ms).
-3. M1-8 headless CLI in `tools/` printing hashes and timings. Then the M1 hardening session
-   (crowd routing first, see the debt backlog) and sign-off.
-4. M6 (far ahead): agents can't download. The Producer lists under "Waiting on you", when M5
+4. M1-8 headless CLI in `tools/` printing hashes and timings (may reuse the replay player). Then
+   the M1 end-of-milestone hardening session (if not already covered) and sign-off.
+5. M3 sim side: resource entities, gather/return loop, building placement and construction,
+   production queues, Age II, full Malazan and Whirlwind data. Plus any **Requests for the sim
+   track** above, which outrank M3 work.
+6. M6 (far ahead): agents can't download. The Producer lists under "Waiting on you", when M5
    starts, the exact links for the Godot 4.7.2 .NET export templates and the Kenney/KayKit/Quaternius
    packs (docs/04) with the `asset-sources/` folder for each (owner note 2026-10-05).
 
-## Debt backlog (hardening sessions only; next one right after M1-6, or at M1 end)
+## Feature queue: view track (feature sessions, in order)
+
+1. **M2-1 (now):** `Match.tscn` boots a `Simulation` from `game/data/` and ticks it from a
+   `SimRunner` (accumulator, 5-tick cap, game speed, interpolation alpha); terrain mesh from the
+   heightmap (flat plateaus, vertical cliffs, sloped ramps, per-level vertex colors); RTS camera
+   (55° pitch, edge pan, arrows, middle-drag, wheel zoom 20-60 m, clamped to the map); `--screenshot
+   <path> --screenshot-after <s>` debug flag; a debug corner label (tick, speed, tick ms).
+2. M2-2: placeholder unit views (pooled primitives, team colors, interpolated), 100-200 units
+   spawned at start through `SpawnUnit` commands; click / box / shift-add selection; right-click
+   move through `Command.Move`. Needs nothing new from the sim.
+3. M2-3: A attack-move (moves only), S stop, H hold, shift-queue; double-click type select, control
+   groups, Tab subgroups. Needs new command kinds → request for the sim track first.
+4. M2-4: minimap (click to move camera, right-click orders).
+5. M2-5: debug overlay (nav grid, flow arrows, tick time graph); `SimRunner` interpolation check.
+6. M2-6: placeholder audio for select and command (generated tones or CC0 already in repo; no
+   downloads by agents).
+7. M2-7: playable check, 100 placeholder units at 60 FPS → M2 sign-off (with the M2 hardening
+   session). Trees and rocks as MultiMesh wait for M3's resource entities.
+
+## Debt backlog: sim track (hardening sessions only; next one is the next sim session)
 
 - **M1-4d-3 crowd routing (S3, most valuable, ~800 lines, QA full):** flow-field crowd cost or local
   detour so walkers go round other groups' blobs; un-anchored units walk back; no stuck ticks
@@ -225,17 +287,24 @@ instead of clusters" or "make giving up take 2 seconds".
 - Known limits in docs/03: crossing a settled mixed-owner blob mostly gives up (seed 73: 2/200);
   stopped units can overlap > 40%; back-off-limit pairs at 500-1,000 units; enemies Moving-but-standing
   keep the single clip; `NavGrid.Version` not hashed (must join the hash at M3); generator pinned by
-  15 hashes + QA oracles; enqueue stamps `TickNumber + 1`; Godot MCP at M2; .NET 8 support ends
-  2026-11-10, move to the next LTS at M6.
+  15 hashes + QA oracles; enqueue stamps `TickNumber + 1`; .NET 8 support ends 2026-11-10, move to
+  the next LTS at M6.
+
+## Debt backlog: view track (hardening sessions only)
+
+- Nothing yet. Optional M0 item: Godot MCP server (owner install; the `--screenshot` flag in M2-1
+  covers the studio's need). Data loading from `res://data` won't work from an exported `.pck`
+  (M6: copy data next to the exe or read through Godot's `FileAccess`).
 
 ## Recent sessions
 
 | Date | Session | Task | Result |
 | --- | --- | --- | --- |
+| 2026-10-05 | 2026-10-05-1446 | sim M1-6 replays + BUG-0014; view M2-1 match scene, terrain mesh, camera, screenshot flag | in progress (first two-track session) |
 | 2026-10-05 | [2026-10-05-1234](sessions/2026-10-05-1234.md) | M1-5 cross-map scenario test + queued-walker give-up rule + BUG-0035 enemies as hard walls | ACCEPT after 1 fix round (QA FAIL then PASS_WITH_ISSUES; S2 + S4 fixed in-session, 2 S3 filed) |
 | 2026-10-05 | [2026-10-05-1013](sessions/2026-10-05-1013.md) | M1-4d-2 shoving of idle units + BUG-0031 fix + re-tightened assertions | ACCEPT after 2 fix rounds (QA FAIL on crowd targets; S2 x2 re-triaged S3, 1 S3 filed, 1 S3 fixed) |
 | 2026-10-05 | [2026-10-05-0742](sessions/2026-10-05-0742.md) | M1-4d-1 separation, crowded arrival, give-up, adjacent-cell steering | ACCEPT after 1 fix round (QA: S2 + S3 fixed in-session, 3 S3 open) |
-| 2026-10-04 | [2026-10-04-2056](sessions/2026-10-04-2056.md) | M1-4c build-cap determinism + fairness; suite de-flaked | ACCEPT, 0 fix rounds |
+| 2026-10-04 | [2026-10-04-2056](sessions/2026-10-04-2056.md) | M1-4c build-cap determinism + fairness; suite de-flaked | ACCEPT, 0 fix rounds (hardening) |
 | 2026-10-04 | [2026-10-04-0120](sessions/2026-10-04-0120.md) | M1-4b GameData in sim + flow fields + LRU cache + `Move` | ACCEPT after 1 fix round |
 | 2026-10-03 | [2026-10-03-2220](sessions/2026-10-03-2220.md) | M1-4a ramp walls + param safety + spatial hash | ACCEPT after 1 fix round |
 | 2026-10-03 | [2026-10-03-1235](sessions/2026-10-03-1235.md) | M1-3 heightmap + nav grid + 2 bug fixes | ACCEPT |

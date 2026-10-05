@@ -9,6 +9,8 @@ Commit and push after editing, from either machine (or ask Claude to).
 
 ## New
 
+## Processed
+
 - 2026-10-05 · **Two tracks in parallel (owner):** every session now works on a `sim` task and a
   `view` task at the same time; you plan and judge both, two game-devs build side by side, and
   the conductor merges sim then view. Rules: `.claude/agents/producer.md` ("Tracks") and
@@ -16,9 +18,11 @@ Commit and push after editing, from either machine (or ask Claude to).
   block per track, Requests for the sim track, per-track queues and debt backlogs) and
   `studio/handoff.md` (a section per track), and start the view track on M2 work that the
   current sim API already supports (camera, terrain mesh, placeholder unit views, selection,
-  move orders).
-
-## Processed
+  move orders). → Done at the 2026-10-05-1446 PLAN: STATE and handoff restructured per track;
+  view track starts with M2-1 (match scene that runs the sim, terrain mesh, RTS camera,
+  `--screenshot` flag) while sim does M1-6 (replays); unit views, selection and move orders are
+  M2-2 next session. Change-log row in docs/01; one Producer refinement (where ViewApi tests
+  live) listed under For your review.
 
 - 2026-10-05 · **Downloads stay with the owner (owner):** agents never download; the Producer lists
   the exact links (Godot 4.7.2 .NET export templates, the Kenney/KayKit/Quaternius packs from
