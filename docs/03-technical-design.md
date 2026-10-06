@@ -54,6 +54,7 @@ Why the split matters:
 | `sim/Rts.Sim.Tests` | xUnit test project | Rts.Sim | Unit, scenario, determinism, replay, data-validation, perf tests |
 | `game/RtsGame.csproj` | Godot.NET.Sdk 4.7.x | Rts.Sim | Presentation, input, UI, audio |
 | `tools/*` | console apps / scripts | Rts.Sim (map gen) | Asset import, map generator CLI, export script |
+| `tools/Rts.Cli` | `net8.0` console app (M1-8) | Rts.Sim | Headless sim runs: checkpoint hashes, tick timings, replay record/play |
 
 `RtsGame.sln` sits at the repo root. Godot's `dotnet/project/solution_directory` setting points
 to `..` so the editor uses it.
@@ -307,7 +308,13 @@ units wait a tick, so the cache's metadata is sim state (Producer decision 2026-
 `StateHash` covers its clock, count and every used slot's requested cell, version and last-use
 stamp, and save/load will save the keys and rebuild the fields at load. `Get` and `TryGetCached`
 are `internal`, for the sim only (a call moves the hashed LRU state); views and AI see only
-`Capacity`, `Count`, `BuildCount` and `Contains`, which change nothing.
+`Capacity`, `Count`, `BuildCount`, `Contains` and `PeekCached`, which change nothing.
+`PeekCached(targetCell)` (M1-8, for the M2-5 flow-arrow overlay) returns the cached field if it is
+current (`Version == NavGrid.Version`), else null, and null for an out-of-range cell; it is not a
+use (no LRU stamp, clock, count or build), so a test peeks 10,000 times between the ticks of a
+500-unit march and the state hash matches an unpeeked twin every tick. The instance is valid until
+the next `Tick()` (a later build may reuse it for another target); read it through
+`FlowField.DirectionAt` / `CostAt` and don't keep it across ticks.
 
 **Build cap (BUG-0018, BUG-0022).** Fetching a field per unit in slot order thrashed the LRU once live goals
 outnumbered its slots (goals interleaved by slot evict exactly the field the next unit needs: a
@@ -1391,6 +1398,34 @@ AiPlayer
   state labels, tick time graph, entity counts.
 - **Dev console** (backtick): `spawn <unit> <n>`, `give <gold> <wood>`, `reveal`, `speed <x>`,
   `ai <player> <difficulty>`, `win`, `lose`, `hash`.
+- **Headless CLI** (M1-8, `tools/Rts.Cli`, references `Rts.Sim` only):
+  - `dotnet run --project tools/Rts.Cli -- run --seed <n> --units <n> [--ticks <n>] [--players 1|2] [--checkpoint <ticks>] [--record <path>] [--data <dir>]`
+    builds the default generated map from the seed and runs the march scenario: player 0's army
+    (`--units` in total, split ceil/floor with two players) spawns in the west debug start block
+    (`ViewApi.StartLayout.Block`, as `Match`), player 1's in the east one, unit types round-robin
+    over every type in id order. Once the units exist (tick 2) every unit gets one `Move` to its
+    player's goal: the passable cell with the greatest path cost from the middle of its own map
+    edge (the passable cell nearest `(1, height / 2)` for player 0, `(width - 2, height / 2)` for
+    player 1), ties to the lowest index, so the armies cross the map and each other. Only
+    `Command.*` factories build commands, and a `ReplayRecorder` attaches before the first
+    enqueue when `--record` is given. Defaults: 1,500 ticks, 1 player, checkpoint every 100 ticks,
+    `game/data` next to the nearest `RtsGame.sln` above the working or program directory.
+    Limits: units 1-100,000, ticks and checkpoint 1-1,728,000. Output: one header line,
+    `tick <n> hash <16 hex>` per checkpoint (`StateHash()` right after that tick), then
+    `ticks N avg A ms p99 P ms worst W ms` (a `Stopwatch` around each `Tick()` in the CLI, never in
+    the sim; the CLI's own hashing and printing are outside it, but with `--record` the recorder
+    hashes the state inside `Tick()` on checkpoint ticks, so those ticks time about 1 ms longer at
+    2,500 units; BUG-0057), and `recorded <path>` after writing the replay.
+  - `play <path> [--data <dir>]` reads the replay (`ReplayFormat.TryReadFile`) and plays it
+    (`ReplayPlayer.Run`); on success it prints the same `tick <n> hash` lines and
+    `ok: K checkpoints matched over N ticks`.
+  - Exit codes: **0** success; **1** bad usage (one `error: ... usage: ...` line), data that
+    doesn't load, a replay file that can't be read, or a replay that can't be written; **2** a replay
+    that is malformed, truncated, refused (`DataMismatch`, ...) or fails playback, printed as
+    `replay failed: <ReplayError> ...` (a `CheckpointMismatch` names the tick and both hashes).
+    Expected failures print exactly one stderr line, never a stack trace.
+  - Tests: `CliTests` call `CliRunner.Run(args, stdout, stderr)` in-process (the test project
+    references `tools/Rts.Cli`).
 - **Logging:** `SimLog` with categories (AI, Path, Combat, Econ) written to `user://logs/`. In
   headless runs it also goes to stdout so Claude can read it.
 

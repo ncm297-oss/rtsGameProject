@@ -86,7 +86,16 @@ _Required criteria met in session 2026-10-03-0826 (task M0-1). Owner signed off 
       `Stop` / `HoldPosition` / `AttackMove` command kinds, `Command.Flags` (shift-queue), a hashed
       8-entry order queue per unit (`OrderSystem`, phase 7) and replay format 2 (10-field command
       lines; golden regenerated, checkpoints byte-identical), for M2-3.)_
-- [ ] A tiny CLI in `tools/` runs a scenario headless and prints hashes and timings.
+- [x] A tiny CLI in `tools/` runs a scenario headless and prints hashes and timings.
+      _(session 2026-10-06-0655, task M1-8: `tools/Rts.Cli` (net8.0 console, references `Rts.Sim`
+      only, in the `.sln`): `run --seed --units [--ticks --players --checkpoint --record --data]`
+      prints `tick <n> hash <16 hex>` per checkpoint and `ticks N avg/p99/worst ms`, records a
+      `.replay`; `play <path>` replays and exits 0 / 1 (usage, data, file) / 2 (replay refused or
+      mismatched). `Cli/CliTests` (in-process; CLI hash equals a direct sim, two runs byte-identical,
+      21 bad-usage rows), QA `QA/CliQaTests` (seeds 1-5 x 200/500, two real processes, every
+      truncation, hostile command rows). Same task: `FlowFieldCache.PeekCached` for the M2-5
+      overlay (read-only, hash-twin proven over 5.3 M peeks). BUG-0057 (S4 nits). All 8 M1 criteria
+      are met; the M1 end-of-milestone hardening session and sign-off follow.)_
 
 ## M2 — Presentation
 
@@ -109,14 +118,21 @@ _Required criteria met in session 2026-10-03-0826 (task M0-1). Owner signed off 
       (reused on respawn), one mesh per unit type sized by its data radius, one material per faction
       with its `PrimaryColor`, placed on `ViewApi.TerrainHeight`; 2,000 views update in 0.47 ms and
       0 bytes per frame; QA hash twin: the view-driven sim equals a bare sim every tick.)_
-- [ ] Selection: click, box, shift-add, double-click type, control groups, Tab subgroups.
+- [x] Selection: click, box, shift-add, double-click type, control groups, Tab subgroups.
       _(click, box, Shift toggle/add and selection rings shipped in M2-2 (`SelectionController`,
-      pure `ViewApi.ScreenPicker` / `SelectionSet`, enemies never selectable); double-click type,
-      control groups and Tab subgroups are M2-3.)_
-- [ ] Right-click move, A attack-move (moves only for now), S stop, H hold, shift-queue.
+      pure `ViewApi.ScreenPicker` / `SelectionSet`, enemies never selectable); double-click / Ctrl +
+      click type select (own on-screen units of the type), control groups 1-9 (pure
+      `ViewApi.ControlGroups`: Ctrl assigns, Shift adds, digit recalls, double-tap centres the
+      camera) and Tab subgroups (pure `ViewApi.Subgroups`, ascending type id) in session
+      2026-10-06-0655, task M2-3: `ControlGroupsTests`, `SubgroupsTests`, `OrdersTest.tscn`,
+      QA `QA/ViewApi/OrdersControllerQaTests` + `QaM23Test.tscn`. BUG-0067 (S4 nits).)_
+- [x] Right-click move, A attack-move (moves only for now), S stop, H hold, shift-queue.
       _(right-click move shipped in M2-2 (`ViewApi.GroundPicker`, within 1 mm of the drawn mesh,
-      cliff faces resolve to the upper plateau); A / S / H / shift-queue wait for `Stop`,
-      `HoldPosition`, `AttackMove` command kinds and queued orders from the sim track, M2-3.)_
+      cliff faces resolve to the upper plateau); A targeting + click, S, H, Shift-queue (and a
+      Shift-queued minimap right-click) through the one order path `SelectionController.Order`
+      in session 2026-10-06-0655, task M2-3; QA hash twin with all four kinds on 3 maps up to
+      1,000 units per player. BUG-0068 (S3): a minimap right-click while A is armed orders a Move
+      instead of cancelling; view hardening session.)_
 - [x] Minimap with click-to-move-camera and right-click orders.
       _(session 2026-10-05-2330, task M2-4: `Hud` CanvasLayer + `Minimap` Control (bottom-left,
       220 px), pure `ViewApi.MinimapRaster` (terrain baked once with the mesh palette, unit dots at
