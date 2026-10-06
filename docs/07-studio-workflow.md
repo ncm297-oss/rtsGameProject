@@ -50,25 +50,35 @@ passing.
 `.claude/worktrees/studio` (gitignored) and delivers through GitHub. Run `git pull` in your
 checkout to see its work. If you and the studio change the same thing, git merges it on pull.
 
-## Two tracks in parallel (since 2026-10-05)
+## Tracks in parallel
 
-Every session works on two tracks at once, coordinated by one conductor and one Producer:
+Every session works on up to three tracks at once (`sim` and `view` since 2026-10-05, `data`
+since 2026-10-06), coordinated by one conductor and one Producer:
 
 1. The Producer (Fable) plans a task for each track together, so they don't collide.
-2. Two game-devs build them at the same time, each in its own worktree.
+2. One game-dev per track builds them at the same time, each in its own worktree.
 3. QA inspects each; fix loops run per track.
 4. The Producer accepts or rejects each track separately.
-5. The conductor merges sim first, then view, into `main`.
+5. The conductor merges sim, then view, then data into `main`.
 
 | Track | Worktree | Owns | Works on |
 | --- | --- | --- | --- |
-| `sim` | `.claude/worktrees/studio` | `sim/`, `game/data/`, `tools/` | Game rules: M1, then the sim side of later milestones |
+| `sim` | `.claude/worktrees/studio` | `sim/`, `game/data/common/`, every data schema and loader, `tools/` | Game rules: M1, then the sim side of later milestones |
 | `view` | `.claude/worktrees/studio-view` | the rest of `game/` (incl. `game/tests/`), read-only `sim/Rts.Sim/ViewApi/`, and its tests in `sim/Rts.Sim.Tests/ViewApi/` + `sim/Rts.Sim.Tests/QA/ViewApi/` | Presentation: M2 camera, terrain, unit views, selection, minimap, HUD, then the view side of later milestones |
+| `data` | `.claude/worktrees/studio-data` | `game/data/factions/`, `docs/factions/`, content tests in `sim/Rts.Sim.Tests/Content/` + `sim/Rts.Sim.Tests/QA/Content/`; no other C# | Faction content: full rosters, stats, costs, techs, player-facing names and descriptions, AI build orders, balance passes, the M7-M9 factions' data |
 
 Docs and studio files are shared and merged automatically. Anything else the view needs from
 the sim goes under **Requests for the sim track** in `studio/STATE.md`, and the Producer plans it
 for the sim track. A track with no unblocked work sits a session out while the other continues.
 To pause a track, write it in the inbox.
+
+**Data track (since 2026-10-06).** Schemas come before content: when the sim track builds a
+system that reads new data (buildings, techs, abilities), it ships the schema and only the
+entries its tests need; the data track then writes the full rosters against what's on `main`.
+If content needs a field the schema lacks, it becomes a request for the sim track. Each accepted
+data task appears under **For your review** as a table of what changed (unit, field, old → new,
+why) plus any new names and descriptions. Reply in the inbox ("Bridgeburners cost 120, not
+100"; "rename X"); your tweaks become the data track's next task. Nothing waits for your review.
 
 Test files (Producer, 2026-10-05): the view track's xUnit tests go only in
 `sim/Rts.Sim.Tests/ViewApi/` (dev) and `sim/Rts.Sim.Tests/QA/ViewApi/` (QA); Godot-side checks go
@@ -80,23 +90,44 @@ without Godot. The sim track keeps `Simulation`, `SimConfig` and `DataLoader.Loa
 ## How sessions start
 
 On 2026-10-03 the owner authorized the Producer to **start the next session whenever it's
-ready** and to check in only at the end of the plan.
+ready** and to check in only at the end of the plan. Since 2026-10-06 sessions never touch the
+routine's schedule themselves: a session started by a schedule always asks before changing a
+scheduled task, and an unanswered prompt stalled the studio.
 
 | Trigger | What happens |
 | --- | --- |
-| **Chain** (the main path) | A session ends with the Producer's `NEXT_GATE: GO`, so the conductor re-arms the routine to fire again 3 minutes later. The studio works through the roadmap session after session |
-| **Heartbeat** | While the studio is waiting (on HOLD, cap reached), the routine falls back to 9am, noon, 3pm, 6pm, 9pm. A heartbeat run exits within seconds unless something changed (a new inbox note, a new day after the cap) |
-| **Safety net** | Each working session first re-arms the routine 4 hours out, so a crash mid-session can't stall the studio for good |
-| You type `/studio-session` | Runs a session now, even if autopilot is off; it chains afterwards like any other |
+| **Watcher** (the main path) | An interactive session on the desktop (the "studio watcher") checks every 10 minutes. When no studio session is running, `studio/STATE.md` on `origin/main` shows Gate GO for a track, today's cap isn't reached and usage is under the stop, it presses **Run now** on the routine. It also turns **Remote Control** on for every running studio session (the app refuses Remote Control inside a scheduled session) and puts the routine back on its hourly schedule if anything changed it |
+| **Hourly fallback** | The routine itself fires every hour. If the watcher is closed, the studio still moves, with gaps of up to an hour. A run with nothing to do (a session already running, HOLD with an empty inbox, cap reached, usage stop) exits within seconds |
+| You type `/studio-session` | Runs a session now, even if autopilot is off |
 | You work with Claude directly | Normal interactive work; finish with `/handoff` so the Producer records it |
 
-The routine only runs while the desktop app is open (a run missed while it was closed fires on
-the next launch). `max_sessions_per_day` in `studio/autopilot.md` caps the chain.
+The routine and the watcher only run while the desktop app is open on the desktop PC (a routine
+run missed while it was closed fires on the next launch). The watcher lives in one session: if
+you close or archive it, ask any new session to "start the studio watcher" (the prompt is in
+[Watcher prompt](#watcher-prompt) below). `max_sessions_per_day` in `studio/autopilot.md` caps
+the number of sessions.
 
 **Usage stop:** every session checks the plan limits first (and again before building and before
-each fix round). At `usage_stop_percent` (90%) of the weekly limit, or of the 5-hour window, it
-stops, records any partial work, and re-arms the routine for just after that limit resets. The
-studio then resumes by itself; nothing for you to do.
+each fix round). At `usage_stop_percent` (95% since 2026-10-06) of the weekly limit, or of the 5-hour window, it
+stops and records any partial work. The watcher and the hourly run keep checking and the studio
+resumes by itself once the limit resets; nothing for you to do.
+
+### Watcher prompt
+
+Paste this into an interactive Claude session on the desktop (or ask it to "start the studio
+watcher"). It schedules itself every 10 minutes in that session; the app expires such schedules
+after 7 days, so re-ask then.
+
+> Every 10 minutes (cron `3-59/10 * * * *`), run the studio watcher: (1) `list_sessions`: turn
+> Remote Control on for every running "RTS studio session" that doesn't have it. (2)
+> `list_scheduled_tasks`: if `rts-studio-session` isn't enabled on cron `7 * * * *`, put it back.
+> (3) Start the next session with `run_scheduled_task rts-studio-session` only if no studio
+> session is running, `studio/.session.lock` is missing or over 3 hours old, the routine's next
+> run is more than 12 minutes away, and on `origin/main` (after `git fetch`): autopilot
+> `enabled` and `chain_sessions` are `yes`, at least one track's Gate in `studio/STATE.md` is GO,
+> today's session logs (not `-incident`) are under `max_sessions_per_day`, and `get_usage` shows
+> every 5-hour and weekly window under `usage_stop_percent`. Reply in one line, only saying what
+> you changed.
 
 ## What the Producer may decide on its own
 

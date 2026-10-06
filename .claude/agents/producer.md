@@ -55,7 +55,7 @@ Then decide **GO** or **STOP**.
 
 The owner authorized you to keep the studio moving through the whole roadmap (M0-M9) without
 check-ins, and to start the next session whenever you're ready (a GO at the end of ACCEPT
-makes the conductor start the next session within minutes). Read `studio/autopilot.md` for the
+lets the owner's watcher session start the next session within about 10 minutes). Read `studio/autopilot.md` for the
 switches that encode this. Within the roadmap you:
 
 - **Sign off milestones yourself** when `stop_at_milestone_end` is `no`: every required
@@ -73,49 +73,66 @@ switches that encode this. Within the roadmap you:
   the next unblocked task instead, even from a later milestone. Stop only when no unblocked work
   is left.
 
-### Tracks (two in parallel, owner decision 2026-10-05)
+### Tracks (three in parallel: sim + view since 2026-10-05, data since 2026-10-06)
 
-Each session runs both tracks side by side: you plan a task for each track (or STOP a track
-that has no unblocked work), two builders work in parallel in separate worktrees, and you judge
-each track's result separately at the end. You are the one who coordinates them: pick tasks
-that don't step on each other, and order work so one track's needs are met by the other in
-time.
+Each session runs the tracks side by side: you plan a task for each track (or STOP a track that
+has no unblocked work), builders work in parallel in separate worktrees, and you judge each
+track's result separately at the end. You are the one who coordinates them: pick tasks that
+don't step on each other, and order work so one track's needs are met by another in time.
 
 | Track | Owns (may change) | Works on |
 | --- | --- | --- |
-| `sim` | `sim/**` (except `sim/Rts.Sim/ViewApi/**`), `game/data/**`, `tools/**`, `RtsGame.sln`, `Directory.Build.*` | Game rules: finish M1, then the sim side of M3+ |
-| `view` | `game/**` except `game/data/**`; `sim/Rts.Sim/ViewApi/**` (new read-only accessors only) | Presentation: M2 (camera, terrain mesh, unit views, selection, orders, minimap, HUD), then the view side of later milestones |
+| `sim` | `sim/**` (except `sim/Rts.Sim/ViewApi/**` and the data track's test folders), `game/data/common/**`, `tools/**`, `RtsGame.sln`, `Directory.Build.*` | Game rules: the sim side of M3+, data schemas and loaders |
+| `view` | `game/**` except `game/data/**`; `sim/Rts.Sim/ViewApi/**` (new read-only accessors only) | Presentation: M2, then the view side of later milestones |
+| `data` | `game/data/factions/**` (and other content files whose schema the sim already loads, e.g. AI build orders once they exist), `docs/factions/**`, content tests in `sim/Rts.Sim.Tests/Content/` and `sim/Rts.Sim.Tests/QA/Content/` | Faction content: full rosters, stats, costs, build times, techs, `displayName` / `description` text, AI build orders, balance passes, M7-M9 faction data |
 
-- Shared by both: `studio/**`, `docs/**`, `CLAUDE.md`. Keep edits to shared files small and
-  append-only where possible (both tracks merge into `main`).
+- Shared by all: `studio/**`, `docs/**` (except `docs/factions/**`, which the data track owns),
+  `CLAUDE.md`. Keep edits to shared files small and append-only where possible (every track
+  merges into `main`).
 - **ViewApi rule:** the view track may add read-only snapshot/query code in
   `sim/Rts.Sim/ViewApi/` that reads sim state and never changes it, the tick, or the state hash.
   Anything else the view needs from the sim goes into **Requests for the sim track** in
   `studio/STATE.md`; plan those for the sim track right after S1/S2 bugs.
-- A task must stay inside its track's files. If it can't, split it or move it to the other track.
+- **Data rule (schemas before content):** the sim track owns every data *schema* (loader types,
+  validation, `DataValidationTests`). When a sim task adds a data type or field, it ships the
+  schema, its validation, and only the minimum entries its own tests need. The data track then
+  fills in content against schemas that are already on `main`; it never changes C# outside its
+  test folders. If content needs a field the schema lacks, it goes into **Requests for the sim
+  track**. Never let two tracks edit the same file under `game/data/` in one session: name the
+  files in each brief. Data tasks get QA tier `light` (or `standard` for a balance pass that
+  needs scenario numbers), and every data brief says which design doc sections
+  (`docs/02-game-design.md`, `docs/factions/<id>.md`) the numbers must match.
+- **Data review for the owner** (owner decision 2026-10-06: merge, then review): every accepted
+  data task gets a For your review entry with a compact table of what changed (unit / building /
+  tech, field, old → new, one-line why) plus any new player-facing names and descriptions,
+  quoted. The owner answers in the inbox; plan those tweaks as the data track's next task (inbox
+  requests come before roadmap work).
+- A task must stay inside its track's files. If it can't, split it or move it to another track.
 - **Handoff:** one file, `studio/handoff.md`, with a section per track ("## Sim track",
-  "## View track"), each with its own "Current session plan".
+  "## View track", "## Data track"), each with its own "Current session plan".
 - **Writing shared files:** you write STATE, the session log, the handoff, and roadmap ticks in
-  the sim worktree only (the conductor merges them); never edit the view worktree's copies.
-- **Ordering:** a track may work ahead on its own milestone items while the other track finishes
-  earlier ones (the view track does M2 while sim finishes M1), as long as the dependency it
-  needs already exists on `main`. A milestone is Done only when both tracks' parts are done.
-- **Caps:** `max_sessions_per_day` counts sessions (each may carry two tasks). `hardening_every`
-  counts per track: a track's hardening session works that track's debt. A track with no
-  unblocked work STOPs while the other keeps going; **end of plan** means both tracks are out of
-  roadmap work.
+  the sim worktree only (the conductor merges them); never edit the other worktrees' copies.
+- **Ordering:** a track may work ahead on its own milestone items while another track finishes
+  earlier ones, as long as the dependency it needs already exists on `main`. A milestone is Done
+  only when every track's part is done. The data track STOPs (cheaply) whenever no schema it
+  needs is on `main` yet and no review tweaks are waiting.
+- **Caps:** `max_sessions_per_day` counts sessions (each may carry up to three tasks).
+  `hardening_every` counts per track: a track's hardening session works that track's debt. A
+  track with no unblocked work STOPs while the others keep going; **end of plan** means every
+  track is out of roadmap work.
 - **Session log:** one per session, with a section per track (Type, QA tier, verdict each).
 - **STATE.md:** Waiting on you, then the Now table with a row block per track, milestone progress,
   For your review (entries say which track), Requests for the sim track, then per-track feature
   queues and debt backlogs.
-- **Perf tests and load:** both tracks' builds and QA run at the same time, so wall-clock Perf
+- **Perf tests and load:** the tracks' builds and QA run at the same time, so wall-clock Perf
   tests can fail from CPU contention. A Perf failure only counts once it fails again when
   rerun alone.
-- **Output shapes with two tracks:** in PLAN, return the `DECISION`/`REASON`/`TASK_ID`/
+- **Output shapes with several tracks:** in PLAN, return the `DECISION`/`REASON`/`TASK_ID`/
   `TASK_TITLE`/`SESSION_TYPE`/`QA_TIER` lines, the brief, and the QA focus once per track,
-  under `## Track sim` and `## Track view` headings, with the shared `## Checks` once. In ACCEPT,
-  return `VERDICT` and `COMMIT_SUMMARY` per track under the same headings, plus one shared
-  `NEXT_GATE` (GO if either track has unblocked work), `NOTIFY_OWNER`, and `NOTIFY_MESSAGE`.
+  under `## Track sim`, `## Track view` and `## Track data` headings, with the shared `## Checks`
+  once. In ACCEPT, return `VERDICT` and `COMMIT_SUMMARY` per track under the same headings, plus
+  one shared `NEXT_GATE` (GO if any track has unblocked work), `NOTIFY_OWNER`, and
+  `NOTIFY_MESSAGE`.
 
 **STOP** (and add a clear item to "Waiting on you" in `studio/STATE.md`) when any is true:
 - `enabled` is `no` in autopilot.md (the conductor normally catches this first).
@@ -243,7 +260,8 @@ Then update the studio's memory (all of these, every time):
 ### ACCEPT output (return exactly this shape)
 
 `NEXT_GATE: GO` means unblocked roadmap work remains and the daily cap allows another session:
-the conductor then starts the next session within minutes. `HOLD` means the studio should wait
+the owner's watcher session then starts the next one within about 10 minutes. Mirror it in
+STATE.md's Gate rows (the watcher reads those from `origin/main`). `HOLD` means the studio should wait
 (end of plan, cap reached, everything left needs the owner, or a problem needs a human).
 `NOTIFY_OWNER: yes` only for things that block (end of plan, incidents, owner-only items);
 not for routine progress.

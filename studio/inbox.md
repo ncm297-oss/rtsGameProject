@@ -9,6 +9,21 @@ Commit and push after editing, from either machine (or ask Claude to).
 
 ## New
 
+- 2026-10-06 · **Third track: data (owner):** sessions now carry up to three tracks: `sim`,
+  `view`, and a new `data` track (faction content: full rosters, stats, costs, build times,
+  techs, `displayName` / `description` text, AI build orders, balance passes, and later the
+  M7-M9 factions' data). Rules: `.claude/agents/producer.md` ("Tracks", incl. the data rule:
+  the sim track keeps every schema and `game/data/common/`; the data track fills
+  `game/data/factions/` against schemas already on main and writes no C# outside
+  `sim/Rts.Sim.Tests/Content/` + `QA/Content/`). I want to review data work actively: every
+  accepted data task gets a For your review table (unit / field, old → new, why, plus quoted
+  names and descriptions); my inbox replies become the data track's next task. Please add a
+  Data block to the Now table, a "## Data track" section to `studio/handoff.md`, and a data
+  feature queue, and start the data track on whatever the current schemas already support
+  (e.g. completing the Malazan and Whirlwind unit rosters toward M3's "factions fully defined in
+  data"). Also: sessions no longer re-arm the routine (see docs/07 "How sessions start"); a
+  watcher session starts the next one when STATE's Gate is GO, so keep the Gate rows accurate.
+
 ## Processed
 
 - 2026-10-05 · **Two tracks in parallel (owner):** every session now works on a `sim` task and a
