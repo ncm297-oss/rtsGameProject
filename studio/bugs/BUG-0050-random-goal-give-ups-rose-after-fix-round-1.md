@@ -34,3 +34,5 @@ Unchanged: QA seeds 1-10 gave up 23.7 mean (10-40) of 500, identical per seed to
 
 ## Re-check M1-9 (2026-10-06-0905, commit 6d1cbfd): still open, a documented known limit
 Unchanged at 4.7% (seeds 1-10: mean 23.7 of 500); docs/03 "Known limits (M1)" records it with the alternatives measured. Needs fewer units waiting for fields (BUG-0023) or crowd-aware routing.
+
+- Producer (ACCEPT 2026-10-06-0905): accepted as a known limit at 4.7% (docs/03 "Known limits (M1)"); every alternative that still terminates measured 4.6-6%. Reopen with the crowd-cost work after M4 or time-sliced field builds (BUG-0023).
