@@ -32,3 +32,13 @@ Each guard checks what its name and the brief say.
 
 ## Notes
 None of these is a wrong game rule today; all four make a future regression easier to miss.
+
+## Re-check round 1 (2026-10-05-1609, fix commit 6abd200): 3 of 4 done
+- Item 2 done: the dev corridor tests tick until nothing moves and no walk-back is pending.
+- Item 3 done: `ShoveQaTests.ChainReach` now requires each link ahead of the previous along the walker's
+  push, a walker in reach of the first member, at most MaxChainShove - 1 links, and no member after the
+  first touching an Idle enemy. Checked: a strict tightening of the round-0 checker (everything it accepts
+  the old one accepted). It treats only Idle enemies as stopping a chain where the sim also stops at a
+  standing Moving enemy, so it is still a little looser than the rule there.
+- Item 4 done: `ReplayRecorder.ToReplay` throws past `Replay.MaxTickCount` (new `ReplayFormatTests` case).
+- Item 1 open: the 2,500 tight blob row still has `enforce: false`.

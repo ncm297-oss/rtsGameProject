@@ -40,3 +40,13 @@ two armies through one gap, two-player crowd), on base and M1-4d-3 alike.
 - `HardWallQaTests.PluggedGap_*` doesn't catch it: walkers only, no goal-less units ahead of the plug,
   no re-orders.
 - The brief's QA focus: "enemy plugs still let nobody through (including against chain shoves)".
+
+## Re-check round 1 (2026-10-05-1609, fix commit 6abd200): fixed in 1-cell passages only
+Verified fixed where the round-1 rules apply (a plug standing in a cell walled on two opposite sides):
+the original repro (3 seeds) and two more seeds pass; closest approach of a friendly to the plug
+0.85-0.90 x the radii's sum (base: 0.06-0.10, first M1-4d-3 version 0.43).
+Still open elsewhere: new QA test `CorridorOfWidthPluggedByEnemies_FriendlyLinesAhead_NobodyThrough`, a
+2- or 3-cell-wide corridor plugged by one wide enemy per row (0.2 m slits): units get through on 4 of 4
+seeds (ticks 264-365; e.g. a radius-0.4 walker at (33.9, 10.6) past plugs at x 33), on base too (all 4,
+plus a friendly pressed to 0.056 x the radii's sum). The walker per-tick check stays green: they are
+shoved in while Idle (given up) and walk out the far side. Rows skipped under this bug.

@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Severity | S2 |
+| Severity | S3 (was S2; downgraded at re-check round 1) |
 | Status | open |
 | Found | 2026-10-05-1609, task M1-4d-3 |
 | System | movement (per-tick cost: chain-shove queries, detour, widened queuing) |
@@ -39,3 +39,17 @@ The developer measured the same (4.81-5.01 vs base 4.41-4.51) and listed it as a
   likely thermal or power throttling; only first-sample, cooled, alternated numbers are quoted above.
 - Two players to one point is now a contest of enemies (BUG-0037), which costs much more per tick;
   that is a realistic game situation (two armies converging), so the Producer may want that row too.
+
+## Re-check round 1 (2026-10-05-1609, 6abd200)
+Same method (cooled single samples, base and fix alternated, 3 rounds, ms/tick):
+
+| Row | Base 7f741f1 | Fix round 1 | Change |
+| --- | --- | --- | --- |
+| 2,500 tight blob, one player (target <= 4.5) | 4.30 / 4.32 / 4.31 | 4.50 / 4.50 / 4.52 | +5% |
+| 2,500 tight blob, two players (report) | 4.51 / 4.50 / 4.53 | 6.62 / 6.71 / 6.65 | +47% |
+| 1,000 walkers crossing a 1,500 blob (report) | 3.09 / 3.11 / 3.09 | 5.43 / 5.43 / 5.43 | +75% |
+| 2,500 to 4 points, seed 1 (report) | 1.97 / 1.97 / 1.96 | 2.57 / 2.55 / 2.55 | +30% |
+
+The target row is now at its 4.5 ms limit within noise (mean 4.507), on a machine where the base
+itself measures 4.3 (3.8 when the target was set): downgraded to S3. Left open for the report rows
+(two players, crossing), which cost much more, and for item 1 of BUG-0047 (the row isn't enforced).

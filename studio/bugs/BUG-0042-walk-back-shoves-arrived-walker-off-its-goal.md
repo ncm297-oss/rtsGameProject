@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-05-1609, task M1-4d-3 |
 | System | movement (walk-back, chain shove, lone-anchor yield) |
-| Fixed by | |
+| Fixed by | M1-4d-3 fix round 1 (6abd200): a walking-back unit never pushes; no detour and only room-side sidesteps in 1-cell passages. `QA/CrowdRoutingQaTests.WalkerPastAParkedPair_StillAtItsGoalOnceTheWalkBacksSettle` (5 rows) and `ParkedPairInACorridor_VariedSeeds_WalkerArrives` (20 seeds) un-skipped, pass |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~CrowdRoutingQaTests.WalkerPastAParkedPair_StillAtItsGoalOnceTheWalkBacksSettle"`
@@ -52,3 +52,10 @@ diagonal, and a shove "along the push" drives the pair into the corridor wall in
   directions: a walking-back unit never shoves an arrived unit off its point, or the walk-back target
   becomes "near the point" when the point is now held by another group's arrived unit.
 - BUG-0033 stays open with this as its remaining repro.
+
+## Re-check round 1 (2026-10-05-1609, fix commit 6abd200): fixed
+Verified: the exact repro settles with the walker 0.89-0.97 m from its goal for goal x 12-20 (it keeps
+its goal cell); on the 20 varied seeds the walker ends at its goal on 20 of 20 (0.90-1.00 m, two
+walk-backs each). The price, by design: the pushed pair walks back, can't push the walker, and ends
+goal-less beyond it. Oscillation hunts (corridor swaps, gap swaps, walk-back waves) all terminate with
+the per-tick checks green and at most one walk-back per order.

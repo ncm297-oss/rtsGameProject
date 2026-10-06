@@ -625,6 +625,88 @@ public class CrowdRoutingQaTests
         Assert.True(worstRatio >= MovementConstants.ShoveSpacing - 1e-3f, $"pressed onto the enemy plug: {worstRatio:F3} x the radii's sum, {worstAt}");
     }
 
+    /// <summary>A corridor <paramref name="width"/> cells wide (rows 3..3+width-1) from x 6 to 25, open 3-row rooms above and below it at both ends.</summary>
+    private static Heightmap WideCorridorWithRooms(int width)
+    {
+        int h = 7 + width;
+        var rows = new string[h];
+        for (int y = 0; y < h; y++)
+        {
+            char[] r = new string('0', 32).ToCharArray();
+            if (y < 3 || y >= 3 + width) for (int x = 6; x < 26; x++) r[x] = '1';
+            rows[y] = new string(r);
+        }
+        return Map(rows);
+    }
+
+    /// <summary>
+    /// The plug attack (BUG-0045) beyond 1-cell passages, where the round-1 cone rules don't apply: a
+    /// corridor <paramref name="width"/> cells wide, plugged at x cell 16 by one wide Idle enemy per row
+    /// (0.2 m slits between them), goal-less friendly units and a parked pair ahead of the plug, a crowd
+    /// pushing to the far room for 1,000 ticks. Nobody gets through, nobody is pressed past the pack limit.
+    /// </summary>
+    [Theory]
+    [InlineData(1, 4UL, 12)]
+    [InlineData(1, 5UL, 16)]
+    [InlineData(2, 1UL, 12, Skip = "BUG-0045: outside 1-cell passages shoves still press friendly units into and through an enemy plug")]
+    [InlineData(2, 2UL, 16, Skip = "BUG-0045: outside 1-cell passages shoves still press friendly units into and through an enemy plug")]
+    [InlineData(2, 3UL, 20, Skip = "BUG-0045: outside 1-cell passages shoves still press friendly units into and through an enemy plug")]
+    [InlineData(3, 4UL, 20, Skip = "BUG-0045: outside 1-cell passages shoves still press friendly units into and through an enemy plug")]
+    public void CorridorOfWidthPluggedByEnemies_FriendlyLinesAhead_NobodyThrough(int width, ulong seed, int crowd)
+    {
+        int line = 4 * width;
+        int cap = width + line + crowd;
+        Simulation Make()
+        {
+            var sim = new Simulation(TestSim.Config(Seed: seed, PlayerCount: 2, UnitCapacity: cap, CommandCapacity: 16 * cap), WideCorridorWithRooms(width));
+            NavGrid g = sim.World.NavGrid;
+            var rng = new SimRng(seed, 4451);
+            int wide = LocalMovementTests.TypeWithRadius(0.9f), small = LocalMovementTests.TypeWithRadius(0.4f);
+            for (int row = 0; row < width; row++)
+                for (int k = 0; k < 4; k++)
+                    sim.Enqueue(Command.SpawnUnit(0, (k + row) % 2 == 0 ? small : wide, g.CellCenter(15 - k, 3 + row) + new Vector2(0.3f, 0f)));
+            for (int k = 0; k < crowd; k++) sim.Enqueue(Command.SpawnUnit(0, rng.NextInt(0, TestSim.UnitTypeCount), g.CellCenter(1 + k % 4, 1 + k / 4 % (5 + width))));
+            for (int row = 0; row < width; row++) sim.Enqueue(Command.SpawnUnit(1, wide, g.CellCenter(16, 3 + row)));
+            sim.Tick();
+            sim.Tick();
+            // Two units of each line park on one point ahead of the plug; the others stay goal-less.
+            for (int row = 0; row < width; row++)
+            {
+                sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, 4 * row + 2), g.CellCenter(13, 3 + row)));
+                sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, 4 * row + 3), g.CellCenter(13, 3 + row)));
+            }
+            return sim;
+        }
+        int firstPlug = cap - width;
+        float plugX = 0f, worstRatio = float.MaxValue;
+        var plugAt = new Vector2[width];
+        string? worstAt = null;
+        void Each(Simulation s, int t)
+        {
+            NavGrid g = s.World.NavGrid;
+            UnitStore u = s.World.Units;
+            if (t == 1) { for (int k = 0; k < width; k++) plugAt[k] = u.Position[firstPlug + k]; plugX = plugAt[0].X; }
+            if (t >= 1)
+            {
+                for (int k = 0; k < width; k++) Assert.True(u.Position[firstPlug + k] == plugAt[k], $"tick {t}: a plug unit moved");
+                for (int i = 0; i < firstPlug; i++)
+                {
+                    for (int k = 0; k < width; k++)
+                    {
+                        float ratio = Vector2.Distance(u.Position[i], plugAt[k]) / (u.Radius[i] + 0.9f);
+                        if (ratio < worstRatio) { worstRatio = ratio; worstAt = $"tick {t}: unit {i} ({u.State[i]}, goal cell {u.GoalCell[i]}, r {u.Radius[i]}) at {u.Position[i]}"; }
+                    }
+                    Assert.True(u.Position[i].X < plugX + 0.9f, $"tick {t}: unit {i} ({u.State[i]}, goal cell {u.GoalCell[i]}, r {u.Radius[i]}) got through the plug to {u.Position[i]}");
+                }
+            }
+            if (t >= 60 && t <= 1000 && (t - 60) % 100 == 0)
+                for (int i = line; i < firstPlug; i++) s.Enqueue(Command.Move(0, MoveScenario.Handle(s, i), g.CellCenter(29, 3)));
+        }
+        (int ticks, Simulation a, Watch w) = Twin(Make, 6000, Each, minTicks: 1100);
+        _out.WriteLine($"width {width}, seed {seed}, crowd {crowd}: stopped after {ticks} ticks, {Report(w)}; nobody through; closest to a plug unit {worstRatio:F3} x the radii's sum, {worstAt}");
+        Assert.True(worstRatio >= MovementConstants.ShoveSpacing - 1e-3f, $"pressed onto the enemy plug: {worstRatio:F3} x the radii's sum, {worstAt}");
+    }
+
     // ---------- corridor pair on 20 more seeds ----------
 
     private static Heightmap Corridor() => Map(

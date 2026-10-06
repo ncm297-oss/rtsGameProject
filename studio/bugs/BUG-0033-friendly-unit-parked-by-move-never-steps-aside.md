@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (filed S2; Producer re-triage 2026-10-05, see below) |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-05-1013, task M1-4d-2 |
 | System | movement (shoving: `MovementSystem.ShoveDirection`) |
-| Fixed by | |
+| Fixed by | M1-4d-3 chain shove (0a71412) + fix round 1 (6abd200, BUG-0042); `QA/ShoveQaTests.WalkerInOneCellCorridor_PastAParkedFriendlyPair_Arrives`, `QA/CrowdRoutingQaTests.WalkerPastAParkedPair_StillAtItsGoalOnceTheWalkBacksSettle` (5 rows), `ParkedPairInACorridor_VariedSeeds_WalkerArrives` (20 seeds) |
 
 ## Repro
 1. Remove the `Skip` from `QA/ShoveQaTests.WalkerInOneCellCorridor_PastAFriendlyUnitParkedThereByAMove_Arrives`
@@ -71,3 +71,8 @@ walk-backs settle, the same scenario ends with the walker 8-24 m short and goal-
 from 12 to 20: the pushed pair walks back and shoves the arrived walker home (BUG-0042, S2). Over 20
 varied seeds (radii, spots, goals) the walker ends at its goal on 6 (base 7f741f1: 1).
 Proof of fix now: un-skip `QA/CrowdRoutingQaTests.WalkerPastAParkedPair_StillAtItsGoalOnceTheWalkBacksSettle`.
+
+## Re-check round 1 (2026-10-05-1609, 6abd200): fixed
+With BUG-0042 fixed the walker stays at its goal once everything settles: exact repro and goal x 12-20,
+and 20 of 20 varied seeds (radii 0.4/0.7/0.9, parking spot, start, goal). The pushed pair ends goal-less
+beyond the walker (it walks back once, may not push, gives up).

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-05-1609, task M1-4d-3 (regression from the BUG-0030 change) |
 | System | commands / movement (`Simulation.ApplyMove` same-cell retarget, progress estimate) |
-| Fixed by | |
+| Fixed by | M1-4d-3 fix round 1 (6abd200): a same-cell retarget moves the best estimate by exactly its change at the unit; `QA/CrowdRoutingQaTests.FreeWalker_*` (10 rows) un-skipped, pass |
 
 ## Repro
 1. Remove the `Skip` from `QA/CrowdRoutingQaTests.FreeWalker_ReorderedOnceToAnotherPointOfItsGoalCell_StillArrives`
@@ -39,3 +39,8 @@ Jitter spam (re-clicking around one spot) is worse: every tick at +-0.05 m, ever
   without this, e.g. only adjust the estimate when the unit is in its goal cell (where the aim is the
   goal), or by the change the retarget makes to the estimate rather than its upper bound.
 - docs/03 "Giving up" documents the 2 x shift rule, so a fix also updates the doc.
+
+## Re-check round 1 (2026-10-05-1609, fix commit 6abd200): fixed
+Verified: the single re-order rows (shift 0.8-2.4 m, radius 0.4 and 0.9) and the six jitter-spam rows all
+arrive (0.66-1.00 m from the point, the same ticks as base). The blocked-unit counterpart
+(`CrowdRoutingTests.BlockedUnit_JitterReorderedInItsGoalCellEveryTick_StillGivesUp`) still passes.

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S1 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-05-1609, task M1-4d-3 (regression: base 7f741f1 stops at tick 238 on the same map) |
 | System | movement (queued rule widened to field-waiting units) + flow-field cache under over-capacity load |
-| Fixed by | |
+| Fixed by | M1-4d-3 fix round 1 (6abd200): behind a field-waiting unit a no-progress tick counts one tick in `QueueOnWaitStride` (4); `QA/CrowdRoutingQaTests.MoreGoalsThanCacheSlots_Seed51_Terminates` un-skipped, passes |
 
 ## Repro
 1. Remove the `Skip` from `QA/CrowdRoutingQaTests.MoreGoalsThanCacheSlots_Seed51_Terminates` and run
@@ -42,3 +42,8 @@ idle state) and a permanent per-tick cost of two field builds (about 1.4 ms on t
   doesn't contain one. 500 units to 500 random goals (seeds 1-10) all stop. Rare, but once it happens
   it never ends, and a deterministic sim replays it every time.
 - Related: BUG-0025 (eviction ignoring order age, endless churn; fixed at M1-4c).
+
+## Re-check round 1 (2026-10-05-1609, fix commit 6abd200): fixed
+Verified: seed 51 stops at tick 389 (53 arrived, 75 gave up; base 92). Termination hunts: 64-goal row
+seeds 41-200 all stop; 500 units to 500 random goals seeds 1-10 all stop (6,767-7,918 ticks).
+Side effect: random-goal give-ups rose (BUG-0050).
