@@ -20,4 +20,10 @@ public enum CommandKind
 
     /// <summary>Orders <see cref="Command.Unit"/> to attack-move to <see cref="Command.Position"/>; walks like <see cref="Move"/> until combat (M4).</summary>
     AttackMove = 5,
+
+    /// <summary>Places a building of <see cref="Command.TypeId"/> for the player with its anchor (lowest x, y) cell at <see cref="Command.Position"/> (dev and tests only until construction, M3-3).</summary>
+    SpawnBuilding = 6,
+
+    /// <summary>Orders worker <see cref="Command.Unit"/> to gather the resource node at <see cref="Command.Position"/> (any point of its footprint), carrying loads to drop-offs until told otherwise (M3-2).</summary>
+    Gather = 7,
 }

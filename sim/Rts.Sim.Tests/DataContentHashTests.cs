@@ -64,14 +64,27 @@ public class DataContentHashTests
     }
 
     private static GameData With(GameData d, DamageTable? table = null, RulesDef? rules = null, FactionDef? faction = null, UnitDef? unit = null,
-        ResourceDef? resource = null, int resourceSlot = 0) => new()
+        ResourceDef? resource = null, int resourceSlot = 0, BuildingDef? building = null, int buildingSlot = 0) => new()
     {
         DamageTable = table ?? d.DamageTable,
         Rules = rules ?? d.Rules,
         Factions = faction == null ? d.Factions : d.Factions.SetItem(faction.Id, faction),
         Units = unit == null ? d.Units : d.Units.SetItem(unit.Id, unit),
         Resources = resource == null ? d.Resources : d.Resources.SetItem(resourceSlot, resource),
+        Buildings = building == null ? d.Buildings : d.Buildings.SetItem(buildingSlot, building),
     };
+
+    [Fact]
+    public void BuildingListLengthAndAFileEdit_ChangeTheHash()
+    {
+        GameData d = TestSim.Data;
+        Assert.NotEqual(d.ContentHash(), new GameData { DamageTable = d.DamageTable, Rules = d.Rules, Factions = d.Factions, Units = d.Units, Resources = d.Resources }.ContentHash());
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("factions/whirlwind/buildings.json", root => root["buildings"]![0]!["armor"] = 6);
+        DataLoadResult load = DataLoader.LoadAll(dir.Path);
+        Assert.True(load.Ok, string.Join("\n", load.Errors));
+        Assert.NotEqual(d.ContentHash(), load.Data!.ContentHash());
+    }
 
     [Fact]
     public void ResourceListLengthAndFootprintEdit_ChangeTheHash()
@@ -121,6 +134,12 @@ public class DataContentHashTests
         // M3-1: every ResourceDef field, on each shipped resource type.
         foreach (ResourceDef r in d.Resources)
             Check(r, x => With(d, resource: x, resourceSlot: r.Id)); // by slot: the Id row changes Id
+        // M3-2: every BuildingDef field, on each shipped building type.
+        foreach (BuildingDef b in d.Buildings)
+            Check(b, x => With(d, building: x, buildingSlot: b.Id));
+        foreach (string f in new[] { "Id", "Key", "Faction", "Slot", "DisplayName", "Description", "FootprintWidth", "FootprintHeight",
+            "Hp", "Armor", "CostGold", "CostWood", "BuildTicks", "HalfPopProvided", "DropOff" })
+            Assert.Contains($"BuildingDef.{f}", checkedFields);
         Assert.Contains("AttackDef.Projectile", checkedFields); // nullable: null and "x" must differ
         foreach (string f in new[] { "Id", "Key", "DisplayName", "Description", "Resource", "FootprintWidth", "FootprintHeight" })
             Assert.Contains($"ResourceDef.{f}", checkedFields);

@@ -307,11 +307,40 @@ public class ResourceQaTests
         Assert.False(after.Reachable); // the hollow: docs/03 says this can't happen
     }
 
-    [Fact(Skip = "BUG-0075: felling a grove's middle tree first leaves an open cell no unit can reach; an order onto it makes the unit give up where it stands instead of going to the grove's edge; un-skip when fixed")]
+    /// <summary>
+    /// BUG-0075 regression (M3-2, replaces the skipped row): only exposed nodes are gathered, so a worker set on
+    /// the grove's middle fells it from the outside; once the middle is gone its cell is reachable, and a unit
+    /// ordered there walks into the grove.
+    /// </summary>
+    [Fact]
     public void OrderIntoAFelledGroveMiddle_StillWalksToTheGrove()
     {
-        var after = OrderIntoGrove(fellMiddle: true);
-        Assert.True(after.End.X > 8 * MapConstants.CellSize, $"unit stayed at {after.End}");
+        Simulation sim = GatherMaps.NewSim(Flat(24, 16));
+        NavGrid g = sim.World.NavGrid;
+        EntityHandle middle = default;
+        for (int y = 6; y <= 8; y++)
+            for (int x = 10; x <= 12; x++)
+            {
+                EntityHandle h = Spawn(sim.World, Tree, x, y, 10);
+                if (x == 11 && y == 7) middle = h;
+            }
+        GatherMaps.Building(sim, 2, 10);
+        EntityHandle worker = GatherMaps.Unit(sim, g.CellCenter(8, 7));
+        sim.Enqueue(Command.Gather(0, worker, g.CellCenter(11, 7)));
+        for (int t = 0; t < 20000 && sim.World.Resources.IsAlive(middle); t++)
+        {
+            sim.Tick();
+            Assert.Null(Stress.ResourceOracle.Reach(g)); // never a hollow, after any fall
+        }
+        Assert.False(sim.World.Resources.IsAlive(middle));
+        sim.Enqueue(Command.Stop(0, worker));
+        EntityHandle walker = GatherMaps.Unit(sim, g.CellCenter(3, 4), type: GatherMaps.Infantry);
+        sim.Enqueue(Command.Move(0, walker, g.CellCenter(11, 7)));
+        UnitStore u = sim.World.Units;
+        sim.Tick();
+        for (int t = 0; t < 600 && !(t > 2 && u.State[walker.Index] == UnitState.Idle); t++) sim.Tick();
+        Assert.True(u.Position[walker.Index].X > 8 * MapConstants.CellSize, $"unit stayed at {u.Position[walker.Index]}");
+        Assert.True(Vector2.Distance(u.Position[walker.Index], g.CellCenter(11, 7)) < 2.5f, $"unit ended at {u.Position[walker.Index]}");
     }
 
     /// <summary>

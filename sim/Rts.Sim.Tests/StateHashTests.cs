@@ -379,4 +379,70 @@ public class StateHashTests
         Assert.Equal(0, used.World.Resources.Count);
         Assert.NotEqual(used.StateHash(), fresh.StateHash());
     }
+
+    // ---------- M3-2: gather loops, cargo, buildings, player totals ----------
+
+    /// <summary>A one-player sim with a Keep and one worker (slot 0), hashed equal to its twin.</summary>
+    private static Simulation Economy()
+    {
+        Simulation sim = GatherMaps.NewSim(ResourceMaps.Flat(16, 16));
+        GatherMaps.Building(sim, 2, 2);
+        GatherMaps.Unit(sim, GatherMaps.At(sim, 9, 9));
+        return sim;
+    }
+
+    public static IEnumerable<object[]> EconomyFields() => new[]
+    {
+        new object[] { "GatherNode.Index", (Action<UnitStore>)(u => u.GatherNode[0] = new EntityHandle(3, 0)) },
+        new object[] { "GatherNode.Generation", (Action<UnitStore>)(u => u.GatherNode[0] = new EntityHandle(0, 2)) },
+        new object[] { "GatherSite", (Action<UnitStore>)(u => u.GatherSite[0] = new Vector2(0f, 1f)) },
+        new object[] { "GatherProgress", (Action<UnitStore>)(u => u.GatherProgress[0] = 0.5f) },
+        new object[] { "Cargo", (Action<UnitStore>)(u => u.Cargo[0] = 1) },
+        new object[] { "CargoKind", (Action<UnitStore>)(u => u.CargoKind[0] = Data.ResourceKind.Wood) },
+    };
+
+    [Theory]
+    [MemberData(nameof(EconomyFields))]
+    public void Hash_CoversEveryGatherField(string field, Action<UnitStore> change)
+    {
+        Simulation a = Economy(), b = Economy();
+        Assert.Equal(a.StateHash(), b.StateHash());
+        change(a.World.Units);
+        Assert.True(a.StateHash() != b.StateHash(), field);
+    }
+
+    [Fact]
+    public void Hash_CoversPlayerTotals()
+    {
+        Simulation a = Economy(), b = Economy(), c = Economy();
+        a.World.AddToTotal(0, Data.ResourceKind.Gold, 1);
+        b.World.AddToTotal(0, Data.ResourceKind.Wood, 1);
+        Assert.NotEqual(c.StateHash(), a.StateHash());
+        Assert.NotEqual(c.StateHash(), b.StateHash());
+        Assert.NotEqual(a.StateHash(), b.StateHash());
+    }
+
+    [Fact]
+    public void Hash_CoversTheBuildingStore_OwnerCellTypeGenerationAndCapacity()
+    {
+        Simulation baseSim = Economy();
+        ulong h = baseSim.StateHash();
+        Simulation other = GatherMaps.NewSim(ResourceMaps.Flat(16, 16));
+        GatherMaps.Building(other, 3, 2); // another cell
+        GatherMaps.Unit(other, GatherMaps.At(other, 9, 9));
+        Assert.NotEqual(h, other.StateHash());
+
+        // Freed and re-placed on the same cell: generation 2; the version is evened out with the test seam.
+        Simulation again = Economy();
+        Assert.True(again.World.Buildings.Free(again.World.Buildings.HandleOf(0)));
+        Assert.True(again.World.Buildings.Spawn(0, GatherMaps.Keep, 2 * 16 + 2, out _));
+        baseSim.World.NavGrid.BumpVersionForTests();
+        baseSim.World.NavGrid.BumpVersionForTests();
+        Assert.Equal(baseSim.World.NavGrid.Version, again.World.NavGrid.Version);
+        Assert.NotEqual(baseSim.StateHash(), again.StateHash());
+
+        var small = new Simulation(TestSim.Config(Seed: 5, PlayerCount: 1, UnitCapacity: 32, CommandCapacity: 144) with { BuildingCapacity = 255 }, ResourceMaps.Flat(16, 16));
+        var big = new Simulation(TestSim.Config(Seed: 5, PlayerCount: 1, UnitCapacity: 32, CommandCapacity: 144), ResourceMaps.Flat(16, 16));
+        Assert.NotEqual(small.StateHash(), big.StateHash());
+    }
 }

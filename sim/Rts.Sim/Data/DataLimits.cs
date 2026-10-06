@@ -20,7 +20,7 @@ public static class DataLimits
     /// <summary>Longest duration in seconds (one hour), so the conversion to ticks can't overflow int (BUG-0007).</summary>
     public const double MaxSeconds = 3600;
 
-    /// <summary>Largest side of a resource node footprint in cells (docs/02: the largest footprint, a Town Hall, is 4 x 4).</summary>
+    /// <summary>Largest side of a resource node or building footprint in cells (docs/02: the largest footprint, a Town Hall, is 4 x 4).</summary>
     public const int MaxFootprint = 4;
 
     /// <summary>JSON spelling of each <see cref="ResourceKind"/>, indexed by the enum value (docs/02 "Economy").</summary>
@@ -29,4 +29,8 @@ public static class DataLimits
     /// <summary>JSON spelling of each <see cref="UnitSlot"/>, indexed by the enum value (docs/02 "Faction template").</summary>
     public static readonly ImmutableArray<string> SlotIds =
         ImmutableArray.Create("worker", "line", "ranged", "shock", "caster", "siege", "unique");
+
+    /// <summary>JSON spelling of each <see cref="BuildingSlot"/>, indexed by the enum value (docs/02 "Buildings").</summary>
+    public static readonly ImmutableArray<string> BuildingSlotIds = ImmutableArray.Create(
+        "town_hall", "house", "camp", "infantry_hall", "ranged_hall", "shock_hall", "forge", "caster_hall", "siege_works", "watch_tower");
 }

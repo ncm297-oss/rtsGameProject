@@ -20,8 +20,9 @@ namespace Rts.Sim.Movement;
 /// applied. So separation is symmetric and no unit's result depends on which unit was walked first.
 /// Walkers also plan shoves on friendly Idle units in their way (and the line ahead of them, M1-4d-3);
 /// those move last, after every walker (M1-4d-2). A unit a shove cuts off its blob walks back once.
-/// Units holding position (M1-7) are never shoved and are hard walls to everyone (M1-9). Not yet:
-/// formation offsets.
+/// Units holding position (M1-7) are never shoved and are hard walls to everyone (M1-9). "Idle" here
+/// means any standing state: since M3-2 a worker standing on its gather loop (Gathering, Returning)
+/// is shoved, anchors and walks back exactly like an Idle unit. Not yet: formation offsets.
 /// </para>
 /// </remarks>
 public static class MovementSystem
@@ -752,7 +753,7 @@ public static class MovementSystem
     private static Vector2 ShoveDirection(World world, UnitStore u, int i, int j, int goalCell, bool pushArrived, Vector2 normal)
     {
         // A unit holding position (M1-7) is never shoved: a plain wall, soft to friends, hard to enemies.
-        if (u.State[j] != UnitState.Idle || u.Owner[j] != u.Owner[i] || u.GoalCell[j] == goalCell || u.Hold[j]) return Vector2.Zero;
+        if (u.State[j] == UnitState.Moving || u.Owner[j] != u.Owner[i] || u.GoalCell[j] == goalCell || u.Hold[j]) return Vector2.Zero;
         if (u.GoalCell[j] < 0) return normal;
         float toGoal2 = Vector2.DistanceSquared(u.Position[j], u.Goal[j]);
         if (toGoal2 > MovementConstants.ArrivalDistance * MovementConstants.ArrivalDistance) return normal; // tethered: KeepLinks
@@ -796,7 +797,7 @@ public static class MovementSystem
             for (int q = 0; q < count && n < chain.Length; q++)
             {
                 int k = near[q];
-                if (k == i || !u.Alive[k] || u.State[k] != UnitState.Idle || u.Owner[k] != owner || u.GoalCell[k] == goalCell || u.Hold[k]) continue;
+                if (k == i || !u.Alive[k] || u.State[k] == UnitState.Moving || u.Owner[k] != owner || u.GoalCell[k] == goalCell || u.Hold[k]) continue;
                 if (u.GoalCell[k] >= 0 && !withAnchored) continue;
                 if (InChain(chain, n, k)) continue;
                 Vector2 d = u.Position[k] - pm;
@@ -839,7 +840,7 @@ public static class MovementSystem
             for (int q = 0; q < count; q++)
             {
                 int k = near[q];
-                if (k == m || !u.Alive[k] || u.State[k] != UnitState.Idle || u.GoalCell[k] != u.GoalCell[m] || u.Owner[k] != u.Owner[m]) continue;
+                if (k == m || !u.Alive[k] || u.State[k] == UnitState.Moving || u.GoalCell[k] != u.GoalCell[m] || u.Owner[k] != u.Owner[m]) continue;
                 float sum = u.Radius[m] + u.Radius[k];
                 if (Vector2.DistanceSquared(pm, u.Position[k]) < sum * sum && !InChain(chain, n, k)) return false;
             }
@@ -925,7 +926,7 @@ public static class MovementSystem
             if (u.WalkBack[i] > UnitStore.WalkBackPending) u.WalkBack[i] = UnitStore.WalkBackPending; // shoved again: wait anew
             shoved[count++] = i;
             Vector2 s = Vector2.Zero;
-            if (u.Alive[i] && u.State[i] == UnitState.Idle && grid.WorldToCell(u.Position[i], out int cx, out int cy))
+            if (u.Alive[i] && u.State[i] != UnitState.Moving && grid.WorldToCell(u.Position[i], out int cx, out int cy))
             {
                 s = SqueezeLimit(world, i, ClampLength(shove[i], u.Speed[i]), out bool enemyNear);
                 s = KeepOffWalls(grid, cx, cy, u.Position[i], u.Radius[i], KeepLinks(world, i, s));
@@ -991,7 +992,7 @@ public static class MovementSystem
             for (int m = 0; m < n && !linked; m++)
             {
                 int j = near[m];
-                if (j == i || outOfReach[j] || !u.Alive[j] || u.State[j] != UnitState.Idle || u.GoalCell[j] != u.GoalCell[i] || u.Owner[j] != u.Owner[i]) continue;
+                if (j == i || outOfReach[j] || !u.Alive[j] || u.State[j] == UnitState.Moving || u.GoalCell[j] != u.GoalCell[i] || u.Owner[j] != u.Owner[i]) continue;
                 float sum = u.Radius[i] + u.Radius[j];
                 linked = Vector2.DistanceSquared(u.Position[i], u.Position[j]) < sum * sum
                     && grid.WorldToCell(u.Position[j], out int jx, out int jy) && IsLegalStep(grid, cx, cy, jx, jy);
@@ -1019,7 +1020,7 @@ public static class MovementSystem
         UnitStore u = world.Units;
         NavGrid grid = world.NavGrid;
         u.WalkBack[i] = UnitStore.WalkBackUsed;
-        if (u.State[i] != UnitState.Idle || u.GoalCell[i] >= 0 || u.Hold[i] || !grid.WorldToCell(u.Goal[i], out int x, out int y)) return;
+        if (u.State[i] == UnitState.Moving || u.GoalCell[i] >= 0 || u.Hold[i] || !grid.WorldToCell(u.Goal[i], out int x, out int y)) return;
         u.State[i] = UnitState.Moving;
         u.GoalCell[i] = y * grid.Width + x;
         u.StuckTicks[i] = 0;
@@ -1063,7 +1064,7 @@ public static class MovementSystem
         for (int m = 0; m < count; m++)
         {
             int k = near[m];
-            if (k == i || !u.Alive[k] || u.State[k] != UnitState.Idle || u.GoalCell[k] != u.GoalCell[i] || u.Owner[k] != u.Owner[i]) continue;
+            if (k == i || !u.Alive[k] || u.State[k] == UnitState.Moving || u.GoalCell[k] != u.GoalCell[i] || u.Owner[k] != u.Owner[i]) continue;
             Vector2 toK = u.Position[k] - pos;
             float dist = toK.Length();
             float sum = u.Radius[i] + u.Radius[k];
@@ -1279,7 +1280,7 @@ public static class MovementSystem
         int tail = 0;
         for (int i = 0; i < u.Capacity; i++)
         {
-            if (!u.Alive[i] || u.State[i] != UnitState.Idle || u.GoalCell[i] != goalCell) continue;
+            if (!u.Alive[i] || u.State[i] == UnitState.Moving || u.GoalCell[i] != goalCell) continue;
             if (grid.WorldToCell(u.Position[i], out int cx, out int cy) && cy * grid.Width + cx == goalCell
                 && Vector2.DistanceSquared(u.Position[i], u.Goal[i]) <= arrival2)
             {
@@ -1298,7 +1299,7 @@ public static class MovementSystem
             for (int m = 0; m < count; m++)
             {
                 int j = near[m];
-                if (linked[j] || !u.Alive[j] || u.State[j] != UnitState.Idle || u.GoalCell[j] != goalCell || u.Owner[j] != u.Owner[i]) continue;
+                if (linked[j] || !u.Alive[j] || u.State[j] == UnitState.Moving || u.GoalCell[j] != goalCell || u.Owner[j] != u.Owner[i]) continue;
                 float sum = u.Radius[i] + u.Radius[j];
                 if (Vector2.DistanceSquared(pos, u.Position[j]) < sum * sum
                     && grid.WorldToCell(u.Position[j], out int jx, out int jy) && IsLegalStep(grid, cx, cy, jx, jy))
@@ -1310,7 +1311,7 @@ public static class MovementSystem
         }
         for (int i = 0; i < u.Capacity; i++)
         {
-            if (!u.Alive[i] || u.State[i] != UnitState.Idle || u.GoalCell[i] != goalCell || linked[i]) continue;
+            if (!u.Alive[i] || u.State[i] == UnitState.Moving || u.GoalCell[i] != goalCell || linked[i]) continue;
             u.GoalCell[i] = -1;
             // Cut off its blob by a shove, not by giving up: it may walk back once (StartWalkBack).
             if (u.WalkBack[i] == UnitStore.WalkBackNone) u.WalkBack[i] = UnitStore.WalkBackPending;

@@ -99,6 +99,8 @@ public static class DataLoader
             factions[f] = BuildFaction(c, factionJsons[f]!, folders[f], f, own.ToImmutable());
         }
 
+        BuildingDef[] buildings = BuildBuildings(c, folders);
+
         if (c.Errors.Count > 0 || table == null || rules == null || resources == null)
             return new DataLoadResult(null, c.Errors);
         var data = new GameData
@@ -108,6 +110,7 @@ public static class DataLoader
             Resources = ImmutableArray.Create(resources),
             Factions = ImmutableArray.Create(factions),
             Units = ImmutableArray.Create(units),
+            Buildings = ImmutableArray.Create(buildings),
         };
         return new DataLoadResult(data, c.Errors);
     }
@@ -226,6 +229,77 @@ public static class DataLoader
                 // A missing footprint is one error, not three.
                 FootprintWidth = fp == null ? 0 : c.Side(fp.Width, p + ".footprint.width"),
                 FootprintHeight = fp == null ? 0 : c.Side(fp.Height, p + ".footprint.height"),
+            };
+        }
+        return defs;
+    }
+
+    /// <summary>
+    /// Every faction's <c>buildings.json</c> (required, M3-2): ids unique across factions (a repeat is an
+    /// error at its second definition), indexed in ordinal order of their string ids.
+    /// </summary>
+    private static BuildingDef[] BuildBuildings(Checker c, string[] folders)
+    {
+        var files = new BuildingFileJson?[folders.Length];
+        var firstFile = new Dictionary<string, string>(StringComparer.Ordinal); // load-time only
+        var accepted = new List<(int Faction, int Index)>();
+        for (int f = 0; f < folders.Length; f++)
+        {
+            BuildingFileJson? file = files[f] = c.Read($"factions/{folders[f]}/buildings.json", DataJsonContext.Default.BuildingFileJson);
+            List<BuildingJson?>? list = file == null ? null : c.Obj(file.Buildings, "buildings");
+            for (int i = 0; list != null && i < list.Count; i++)
+            {
+                string id = c.Id(list[i]?.Id, $"buildings[{i}].id");
+                if (id.Length == 0) continue;
+                if (firstFile.TryGetValue(id, out string? first))
+                    c.Error($"buildings[{i}].id", $"duplicate building id '{id}' (first defined in {first})");
+                else
+                {
+                    firstFile.Add(id, c.CurrentFile);
+                    accepted.Add((f, i));
+                }
+            }
+        }
+
+        var keys = new string[accepted.Count];
+        for (int k = 0; k < accepted.Count; k++)
+            keys[k] = files[accepted[k].Faction]!.Buildings![accepted[k].Index]!.Id!;
+        Array.Sort(keys, StringComparer.Ordinal);
+        var defs = new BuildingDef[keys.Length];
+        foreach ((int f, int i) in accepted)
+        {
+            c.CurrentFile = $"factions/{folders[f]}/buildings.json";
+            BuildingJson b = files[f]!.Buildings![i]!;
+            string p = $"buildings[{i}]";
+            int id = Array.BinarySearch(keys, b.Id!, StringComparer.Ordinal);
+            string slotKey = c.Text(b.Slot, p + ".slot");
+            int slot = DataLimits.BuildingSlotIds.IndexOf(slotKey);
+            if (slotKey.Length > 0 && slot < 0)
+                c.Error(p + ".slot", $"unknown slot '{slotKey}' (expected one of {string.Join(", ", DataLimits.BuildingSlotIds)})");
+            FootprintJson? fp = c.Obj(b.Footprint, p + ".footprint");
+            CostJson? cost = c.Obj(b.Cost, p + ".cost");
+            double pop = c.NonNeg(b.PopProvided, p + ".popProvided");
+            int halfPop = ToHalfPop(pop);
+            if (halfPop < 0) c.Error(p + ".popProvided", $"pop {pop} is not a multiple of 0.5");
+            if (b.DropOff == null) c.Error(p + ".dropOff", "missing required field");
+            defs[id] = new BuildingDef
+            {
+                Id = id,
+                Key = b.Id!,
+                Faction = f,
+                Slot = (BuildingSlot)Math.Max(slot, 0),
+                DisplayName = c.Text(b.DisplayName, p + ".displayName"),
+                Description = c.Text(b.Description, p + ".description"),
+                // A missing footprint is one error, not three.
+                FootprintWidth = fp == null ? 0 : c.Side(fp.Width, p + ".footprint.width"),
+                FootprintHeight = fp == null ? 0 : c.Side(fp.Height, p + ".footprint.height"),
+                Hp = c.Int(b.Hp, p + ".hp", 1),
+                Armor = c.Int(b.Armor, p + ".armor", 0),
+                CostGold = c.Int(cost?.Gold, p + ".cost.gold", 0),
+                CostWood = c.Int(cost?.Wood, p + ".cost.wood", 0),
+                BuildTicks = c.Ticks(b.BuildTime, p + ".buildTime", 1),
+                HalfPopProvided = Math.Max(halfPop, 0),
+                DropOff = b.DropOff ?? false,
             };
         }
         return defs;

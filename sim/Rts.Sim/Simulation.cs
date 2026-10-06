@@ -3,6 +3,7 @@ using System.Numerics;
 using Rts.Sim.Commands;
 using Rts.Sim.Data;
 using Rts.Sim.Determinism;
+using Rts.Sim.Economy;
 using Rts.Sim.Entities;
 using Rts.Sim.Map;
 using Rts.Sim.Movement;
@@ -68,7 +69,7 @@ public sealed class Simulation
         _recorder?.OnEnqueued(in command);
     }
 
-    /// <summary>Runs one tick: applies this tick's commands in (player, sequence) order, rebuilds the spatial hash, starts queued orders, moves units, then bumps <see cref="TickNumber"/>.</summary>
+    /// <summary>Runs one tick: applies this tick's commands in (player, sequence) order, rebuilds the spatial hash, runs gather loops, starts queued orders, moves units, then bumps <see cref="TickNumber"/>.</summary>
     public void Tick()
     {
         World.Units.SnapshotPrevPositions();
@@ -82,6 +83,9 @@ public sealed class Simulation
 
         // Neighbour index for every later phase; right after commands so this tick's spawns are queryable.
         World.Spatial.Rebuild(World.Units);
+
+        // Phase 4: economy (M3-2): gather loops and drop-offs; their walks start here and move in phase 9.
+        EconomySystem.Run(World);
 
         // Phase 7: Idle units start their next shift-queued order.
         OrderSystem.Run(World);
@@ -103,7 +107,7 @@ public sealed class Simulation
         _recorder = recorder;
     }
 
-    /// <summary>64-bit FNV-1a hash of all gameplay state: tick, units (Hold and order queues included), RNG streams, flow-field cache metadata, nav grid version, resource nodes, and pending commands.</summary>
+    /// <summary>64-bit FNV-1a hash of all gameplay state: tick, units (Hold, order queues, gather loops and cargo included), RNG streams, flow-field cache metadata, nav grid version, resource nodes, buildings, player totals, and pending commands.</summary>
     /// <remarks>
     /// Derived state is left out: the spatial hash (rebuilt from the units every tick) and
     /// Speed/Radius (they follow from TypeId). The flow-field cache's keys, versions and LRU stamps
@@ -139,6 +143,15 @@ public sealed class Simulation
             h.Add(u.BestRemaining[i]);
             h.Add(u.WalkBack[i]);
             AddOrdersToHash(ref h, u, i);
+            if (HasEconomy(u, i))
+            {
+                h.Add(u.GatherNode[i].Index);
+                h.Add(u.GatherNode[i].Generation);
+                h.Add(u.GatherSite[i]);
+                h.Add(u.GatherProgress[i]);
+                h.Add(u.Cargo[i]);
+                h.Add((int)u.CargoKind[i]);
+            }
         }
         h.Add(u.FreeCount);
         for (int i = 0; i < u.FreeCount; i++)
@@ -155,6 +168,14 @@ public sealed class Simulation
         // M3-1: resource nodes and the grid version (passability changes with them; it used to be unhashed).
         h.Add(World.NavGrid.Version);
         World.Resources.AddToHash(ref h);
+
+        // M3-2: buildings and the players' totals.
+        World.Buildings.AddToHash(ref h);
+        for (int p = 0; p < World.Gold.Length; p++)
+        {
+            h.Add(World.Gold[p]);
+            h.Add(World.Wood[p]);
+        }
 
         for (int p = 0; p < _nextSequence.Length; p++)
             h.Add(_nextSequence[p]);
@@ -176,7 +197,8 @@ public sealed class Simulation
 
     /// <summary>
     /// Unit <paramref name="i"/>'s order summary for <see cref="StateHash"/>: bit 0 Hold, bit 1 a
-    /// non-zero queue count, then one bit per queue entry that isn't default. Zero for a unit with
+    /// non-zero queue count, then one bit per queue entry that isn't default, and bit 16 for gather-loop or
+    /// cargo state (M3-2). Zero for a unit with
     /// no orders; <see cref="AddOrdersToHash"/> then adds nothing.
     /// </summary>
     private static uint OrderBits(UnitStore u, int i)
@@ -186,8 +208,13 @@ public sealed class Simulation
         int head = i * OrderConstants.QueueCapacity;
         for (int k = 0; k < OrderConstants.QueueCapacity; k++)
             if (u.QueueKind[head + k] != CommandKind.Noop || u.QueuePosition[head + k] != Vector2.Zero) bits |= 4u << k;
+        if (HasEconomy(u, i)) bits |= 1u << 16;
         return bits;
     }
+
+    /// <summary>True when any gather-loop or cargo field (M3-2) of unit <paramref name="i"/> isn't default; flagged in <see cref="OrderBits"/>, then hashed.</summary>
+    private static bool HasEconomy(UnitStore u, int i) =>
+        u.GatherNode[i] != default || u.GatherSite[i] != Vector2.Zero || u.GatherProgress[i] != 0f || u.Cargo[i] != 0 || u.CargoKind[i] != default;
 
     /// <summary>The queue count and every non-default queue entry of unit <paramref name="i"/>, as flagged by <see cref="OrderBits"/> (already hashed), so the stream stays unambiguous.</summary>
     private static void AddOrdersToHash(ref StateHasher h, UnitStore u, int i)
@@ -217,7 +244,11 @@ public sealed class Simulation
             case CommandKind.Stop:
             case CommandKind.HoldPosition:
             case CommandKind.AttackMove:
+            case CommandKind.Gather:
                 OrderSystem.Apply(World, in command);
+                break;
+            case CommandKind.SpawnBuilding:
+                EconomySystem.ApplySpawnBuilding(World, in command);
                 break;
         }
     }

@@ -20,6 +20,9 @@ public sealed record SimConfig(ulong Seed, int PlayerCount, int UnitCapacity, in
     /// <summary>Maximum number of live resource nodes (trees, mines); the store is allocated once at this size and refuses spawns past it. Default <see cref="Entities.ResourceStore.DefaultCapacity"/> (4,096).</summary>
     public int ResourceCapacity { get; init; } = Entities.ResourceStore.DefaultCapacity;
 
+    /// <summary>Maximum number of live buildings; the store is allocated once at this size and refuses spawns past it. Default <see cref="Entities.BuildingStore.DefaultCapacity"/> (256).</summary>
+    public int BuildingCapacity { get; init; } = Entities.BuildingStore.DefaultCapacity;
+
     /// <summary>Throws if any size is out of range.</summary>
     public void Validate()
     {
@@ -27,6 +30,7 @@ public sealed record SimConfig(ulong Seed, int PlayerCount, int UnitCapacity, in
         if (UnitCapacity < 1) throw new ArgumentOutOfRangeException(nameof(UnitCapacity));
         if (CommandCapacity < 1) throw new ArgumentOutOfRangeException(nameof(CommandCapacity));
         if (ResourceCapacity < 1) throw new ArgumentOutOfRangeException(nameof(ResourceCapacity));
+        if (BuildingCapacity < 1) throw new ArgumentOutOfRangeException(nameof(BuildingCapacity));
         if (Data == null) throw new ArgumentNullException(nameof(Data));
         if (Map == null) throw new ArgumentNullException(nameof(Map));
         Map.Validate();

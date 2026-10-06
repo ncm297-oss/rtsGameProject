@@ -70,7 +70,11 @@ phases in this fixed order:
 2. **AI think:** each AI player runs on its own cadence (default every 10 ticks, staggered by
    player index) and enqueues commands for the *next* tick, the same as a human.
 3. **Production:** training and research timers, spawning finished units at rally points.
-4. **Construction and economy:** building progress, gathering, drop-offs.
+4. **Construction and economy:** building progress, gathering, drop-offs. (M3-2:
+   `EconomySystem.Run`: every live unit on a gather loop, in slot order, works, deposits, or starts
+   its next walk; walks move in phases 8-9 of the same tick. Runs after the spatial-hash rebuild and
+   before phase 7, so a worker that arrived last tick is taken up again before queued orders are
+   looked at; see "Implementation (M3-2)".)
 5. **Status effects and zones:** expire, tick DoTs and regen, apply zone effects.
 6. **Abilities:** cast timers, effect resolution.
 7. **Orders and targeting:** order queue advance, target acquisition (staggered scans). (M1-7:
@@ -181,12 +185,17 @@ Rules:
   decides who waits, so it is sim state (BUG-0021, see "Flow fields"). Since M3-1 it also covers
   `NavGrid.Version` and the resource store (`ResourceStore.AddToHash`: capacity, high-water mark,
   every used slot's generation and, when alive, remaining amount, type and anchor cell, and the free
-  list above the never-used slots). Slots go in through `StateHasher.AddWord`, one
+  list above the never-used slots). Since M3-2 it also covers the building store
+  (`BuildingStore.AddToHash`: capacity, high-water mark, each used slot's generation and alive flag,
+  and when alive its owner, type, anchor cell and hit points, then the free list), every player's gold
+  and wood, and each live unit's gather fields (`GatherNode`, `GatherSite`, `GatherProgress`, `Cargo`,
+  `CargoKind`), flagged by bit 16 of the order word and added only when one isn't default.
+  Resource slots go in through `StateHasher.AddWord`, one
   xor-multiply-fold step per 64-bit word (each step a bijection, so one changed word always changes
   the hash), because byte-wise FNV of a full 4,096-slot store took 0.18 ms in Debug; `Add` stays
   byte-wise FNV-1a (unrolled in M3-1, same output). Derived state is left out:
   the spatial hash, the fields' contents (they follow from the grid and the key), and a unit's
-  `Speed`/`Radius` (copied from its `TypeId`'s data).
+  `Speed`/`Radius` (copied from its `TypeId`'s data) and `PrevFacing` (render interpolation, M3-2).
 
 ## Entity model
 
@@ -216,7 +225,7 @@ from `UnitDef.SpeedPerTick` / `Radius` at spawn, so movement never looks up data
 match's data travels with the setup: `SimConfig.Data` is a required `GameData` (from
 `DataLoader.LoadAll`), exposed as `World.Data`; the sim never reads files itself. The other fields
 in the list above arrive with the systems that use them. `ResourceStore` exists since M3-1 (see
-"Economy implementation").
+"Economy implementation"), `BuildingStore` since M3-2 (see "Implementation (M3-2)").
 
 ### Spatial hash
 
@@ -276,7 +285,12 @@ cost 255) on their cells, and a depleted node clears them back to open ground (f
 The internal `SetResource` / `ClearResource` take a node's footprint rectangle and bump `Version`
 once per node placed or freed; `PassableCount` follows. `Version` is in `StateHash` since M3-1.
 Cliff, ramp and border cells never take a node, and the placer keeps every passable cell reachable
-(see "Economy implementation"), so the build-time pocket seal still holds. Water, symmetry and
+(see "Economy implementation"), so the build-time pocket seal still holds as long as nodes are only
+removed from exposed sides, which the gather rule guarantees (M3-2, BUG-0075: only a node with a
+passable cell 4-adjacent to its footprint is gathered, so a felled cell always joins open ground).
+Buildings (M3-2, `NavFlags.Building` with `Blocked`, cost 255, one `Version` bump per building) are
+placed only by the dev command so far and don't re-check reachability; player placement rules
+arrive with construction (M3-3). Water, symmetry and
 hand-made maps arrive in M6.
 
 ### Flow fields
@@ -309,7 +323,8 @@ a 128 × 128 field in about 0.7 ms in a Debug build. A blocked target cell resol
 passable cell by squared cell distance, ties to the lowest (y, x); `FlowField.NearestPassable` is
 that rule. It searches square rings outward from the cell and stops once a ring can't beat the
 best distance found, so its cost grows with the distance to passable ground, not the map size. Unreachable targets can't happen yet: the nav grid seals every pocket, so all passable
-cells connect. `FlowFieldCache` (on `World.FlowFields`) keeps
+cells connect, as long as nodes are only removed from exposed sides, which the gather rule
+guarantees (M3-2, BUG-0075). `FlowFieldCache` (on `World.FlowFields`) keeps
 `FlowFieldCache.CapacityFor(UnitCapacity, cells)` fields: `clamp(UnitCapacity / 8, 32, 128)`, then at
 most `max(32, 64 MiB / (5 bytes × cells))`, so the default map (16,384 cells, 80 KB per field) is
 never memory-capped (512 unit slots: 64 fields, 5 MB; 1024 and up: 128 fields, 10 MB) and a
@@ -964,7 +979,10 @@ or recycled handle or another player's unit; a Move or AttackMove also for a tar
   pending command with `Flags` 0, hash exactly as before M1-7: the golden replay's checkpoints did
   not move. QA's reflection audit mutates every queue entry of a live unit.
 
-Unit states today are `Idle` and `Moving` only. Not built yet: combat targeting for AttackMove,
+Since M3-2 there are also `Gather` (7, a unit order, Shift-queueable: see "Implementation (M3-2)")
+and the dev command `SpawnBuilding` (6, not queueable), and the states `Gathering` and `Returning`.
+Any other unit order (Move, AttackMove, Stop, HoldPosition) ends a gather loop and keeps the cargo.
+Not built yet: combat targeting for AttackMove,
 Hold's enemy scanning, `Patrol`, `Attack(target)`, formations and group moves.
 
 Unit states: `Idle`, `Moving`, `Chasing`, `Attacking` (wind-up / cooldown), `Gathering`,
@@ -986,7 +1004,10 @@ sight every 4 ticks (staggered by index). Priority: enemies attacking me > units
 
 ## Economy implementation
 
-- Resource nodes are entities with remaining amount and a gather slot list (for queuing visuals).
+- Resource nodes are entities with a remaining amount. There is no gather slot list: workers queue
+  at a node's edge (docs/02 "Mine crowding": no hard cap). A worker that ends a walk out of reach
+  stands and walks again every `EconomyConstants.RetryTicks`, choosing the nearest free side; see
+  "Implementation (M3-2)".
 - Workers run a small state machine: walk to node → gather (timer) → walk to nearest drop-off →
   deposit → repeat. Drop-off choice uses straight-line distance, re-evaluated per trip.
 - Production queues: 5 slots per building, resources deducted at queue time and refunded on
@@ -1048,6 +1069,101 @@ Resource nodes exist in the sim; workers, gathering and drop-offs are M3-2.
 - **Not yet:** gathering, the `Gather` command, workers, drop-offs, depleted-node events for views,
   expansion mines and start-location placement, biomes.
 
+### Implementation (M3-2)
+
+Workers gather gold and wood and carry it home with no further orders (M3 criterion 2). BUG-0075 is
+closed by rule: only exposed nodes are gathered.
+
+- **Data.** `factions/<faction>/buildings.json` (required) lists building types: `id`,
+  `displayName`, `description`, `slot` (one of the ten template slots, `DataLimits.BuildingSlotIds`:
+  `town_hall`, `house`, `camp`, `infantry_hall`, `ranged_hall`, `shock_hall`, `forge`, `caster_hall`,
+  `siege_works`, `watch_tower`), `footprint {width, height}` (1-4 cells), `hp`, `armor`,
+  `cost {gold, wood}`, `buildTime` (seconds, to ticks), `popProvided` (to half-pop) and `dropOff`
+  (bool, required). Ids are snake_case and unique across factions; unknown fields are errors. Shipped:
+  the Town Hall slot only (`malazan_garrison_keep`, `whirlwind_holy_camp`: 4 x 4, 2,400 hp, armor 5,
+  275 / 275, 90 s, +10 pop, drop-off), Producer decision; the other nine slots come with M3-3 / M3-6.
+  `GameData.Buildings` (dense ids, ordinal order), `FindBuilding`; `ContentHash` covers every field.
+  `trainedAt` and `requires` stay unresolved strings.
+- **Buildings.** `Rts.Sim.Entities.BuildingStore` (`World.Buildings`): structure of arrays with
+  generational handles (`Alive`, `Generation`, `Owner`, `TypeId`, `Cell` = anchor, `Hp` = the type's
+  maximum for now), LIFO free list, capacity `SimConfig.BuildingCapacity` (optional, default 256).
+  Read-only outside the sim. A building blocks its footprint (`NavFlags.Building` (16) with `Blocked`,
+  cost 255) and bumps `NavGrid.Version` once, so to movement it is a wall like a mine. The only way in
+  is the dev / test command `Command.SpawnBuilding(player, typeId, position)` (kind 6; reuses `TypeId`
+  and `Position`; the cell holding `Position` is the anchor, the footprint's lowest x, y). It is
+  dropped at apply, never thrown, for an unknown type, a full store, a footprint that isn't open
+  ground (the resource-node rule: every cell in the map, passable, not a ramp, one level; so no cliff,
+  border, node or building), or a live unit whose center lies in it. The queued flag on it is
+  malformed. `Free` exists as a test seam until destruction (M3-3 / M4).
+- **Player totals.** `World.Gold` / `World.Wood` (read-only spans, one int per player) start at
+  `rules.json` `startingGold` / `startingWood`; deposits add to them (saturating at `int.MaxValue`).
+  Hashed.
+- **Gather command.** `Command.Gather(player, unit, position[, queued])` (kind 7, a unit order):
+  `position` is any point of a node's footprint; the node is resolved at apply. Dropped (no throw) for
+  a dead or foreign handle, a unit whose type isn't in the `worker` slot (queued or not), or a target
+  off the map. On a node's cell: that node if it is exposed, else the depleted-node rule from its
+  center. On a cell without a node: the nearest exposed node of either kind within `nodeSearchRadius`
+  of the target. Nothing found drops the command (queue and Hold stay, like a Move to nowhere).
+  Accepted unqueued, it replaces the queue. Shift-queued it is appended like any unit order and
+  started by phase 7 when the unit is Idle; a popped Gather keeps the rest of the queue, which runs
+  only when the loop ends.
+- **Unit fields** (`UnitStore`, reset on Alloc and Free, hashed): `GatherNode` (the node's handle;
+  default = no loop), `GatherSite` (the node's footprint center, kept after the node dies: the
+  depleted-node search starts there), `GatherProgress` (fraction of the next unit), `Cargo`,
+  `CargoKind`. `PrevFacing` (view request 4) is the facing at the start of the tick, set where
+  `PrevPosition` is; derived, not hashed.
+- **States.** A worker on a loop walks its legs with the Move machinery (`UnitState.Moving`,
+  `OrderSystem.Walk`: a fresh order, no same-target shortcut). Standing, it is `Gathering` (on the
+  node leg: working when in reach, else waiting) or `Returning` (a full load, out of reach of a
+  drop-off, waiting). Between arriving (movement sets Idle, phase 9) and the next phase 4 it is
+  briefly Idle with `GatherNode` set. Movement treats every standing state like Idle: a standing
+  worker is shoved, anchors its blob and walks back exactly as an Idle unit does (the ten "Idle"
+  tests in `MovementSystem` now read "not Moving"; nothing else changes, M1 trajectories identical).
+- **Exposure rule (BUG-0075).** A node is *exposed* when at least one passable cell is 4-adjacent to
+  its footprint. Only exposed nodes are gathered: an order on an interior tree goes to the nearest
+  exposed tree, and a worker whose node stops being exposed takes the depleted-node rule. A forest is
+  eaten from the outside, so a felled cell always touches open ground and no hollow can form.
+- **Reach and walking.** A worker works or deposits when the distance from its center to the
+  footprint rectangle is at most `EconomyConstants.Reach` (1.25 m, engine geometry like `CellSize`).
+  It walks to a passable cell 4-adjacent to the footprint, aiming `EconomyConstants.GoalInset`
+  ((Reach - ArrivalDistance) / 2 = 0.125 m) outside the shared edge, so a walker that arrives (within
+  `ArrivalDistance` of its goal) is in reach. The cell is the one with the least distance from the
+  worker to its center plus `CellSize` per other unit standing in it (spatial hash), ties to the lower
+  cell index: workers spread round a crowded mine. A worker that arrives or gives up out of reach
+  stands and walks again every `EconomyConstants.RetryTicks` (20); that is the queue at a mine's edge.
+- **Gathering.** Each tick in reach, `GatherProgress += RulesDef.GoldPerTick` (or `WoodPerTick`);
+  whole units are taken with `ResourceStore.Take` into `Cargo`, so the node loses exactly what the
+  worker gains. A gold load of 10 takes 286 ticks in reach (14.3 s), wood 334 (16.7 s). At
+  `workerCarry` the progress resets and the worker returns.
+- **Returning.** The drop-off is the player's live `dropOff` building whose footprint center is
+  nearest the worker in a straight line (ties to the lower slot), chosen when the trip starts and on
+  every retry; in reach of any own drop-off it deposits: total += cargo, cargo 0, then back to the same
+  node if it stands exposed, else the depleted-node rule. No own drop-off: Idle, cargo kept, loop over.
+- **Depleted-node rule** (docs/02): the nearest exposed live node of the loop's kind whose center is
+  within `nodeSearchRadius` (20 m) of the old node's center, ties to the lower slot; none: Idle, cargo
+  kept. A node that dies while the worker walks to it is replaced at once; one that dies while the
+  worker carries a load is replaced after the deposit.
+- **Cargo rules** (Producer decisions, owner may revisit). A Move, AttackMove, Stop or HoldPosition
+  ends the loop and keeps the cargo; a later Gather of the same kind continues from it. A Gather of the
+  other kind discards it (AoE II rule). There is no explicit `ReturnCargo` yet (M3-3 / HUD).
+- **Cost.** Nothing allocates per tick: stand cells, drop-offs and nodes are found by bounded scans
+  (footprint ring of at most 16 cells, the building store, the resource store) in slot or cell order.
+  Measured (Debug, this PC): 500 marching units + 50 gathering workers average 0.94 ms a tick; 200
+  workers gathering alone 0.26 ms.
+- **Replays.** Format stays 3: the new kinds ride in the existing `c` lines. Format 3 has no
+  building-capacity line, so `ReplayRecorder` refuses a sim whose `BuildingCapacity` isn't the
+  default. The golden was regenerated once for the hash composition and the data hash; trajectories
+  unchanged.
+- **CLI.** `run --workers N` (0-200 per player, needs `--forests` or `--mines` above 0, else exit 1):
+  player p plays faction p mod 2; its Town Hall goes on the open 4 x 4 spot (no march unit in it or on
+  its ring) nearest its start block's center, ties toward the map centre; N workers spawn one per
+  free cell on the rings round it and are ordered to gather once they exist (odd slots the nearest
+  mine, even slots the nearest tree). The header ends with `workers N` and the last lines are
+  `player P gold G wood W`, only when `--workers` is given (other runs print exactly as before).
+- **Not yet:** construction and player placement, the Camp, `ReturnCargo`, Whirlwind's gather bonus,
+  production, population, depletion events for views, BUG-0073 (open-only grid changes and flow
+  fields: next sim task) and BUG-0074.
+
 ## Abilities, statuses, zones
 
 - `AbilityDef` (data) → `AbilitySystem` executes cast timers and resolves `effects[]`.
@@ -1093,7 +1209,7 @@ game/data/
   factions/<faction_id>/
     faction.json             # id, displayName, bonus, palette, resource display names
     units.json
-    buildings.json
+    buildings.json           # building types (M3-2: the Town Hall slot only)
     techs.json               # forge upgrades (shared ids), faction upgrade
     abilities.json
     ai.json                  # build orders, compositions, attack thresholds per difficulty
@@ -1143,9 +1259,9 @@ Example unit definition (one entry of the `"units"` array in `units.json`):
 checked. The data-validation test is `DataValidationTests.ShippedData_LoadsWithNoErrors`.
 
 Shipped files: `common/damage_table.json`, `common/rules.json`, `common/resources.json` (M3-1), and
-`faction.json` + `units.json` for `malazan` and `whirlwind`. All seven are required. Everything else in the tree above
-(`statuses`, `buildings`, `techs`, `abilities`, `ai`, `maps`, other factions) arrives with the
-milestone that consumes it.
+`faction.json` + `units.json` + `buildings.json` (M3-2) for `malazan` and `whirlwind`. All nine are
+required. Everything else in the tree above (`statuses`, `techs`, `abilities`, `ai`, `maps`, other
+factions) arrives with the milestone that consumes it.
 
 | File | Shape |
 | --- | --- |
@@ -1153,6 +1269,7 @@ milestone that consumes it.
 | `resources.json` | `{ "resources": [ ... ] }`, each `{id, displayName, description, resource, footprint {width, height}}`: `resource` is `gold` or `wood`, footprint sides are cells, 1-4 (`DataLimits.MaxFootprint`). Amounts are not here: a tree holds `rules.json` `treeWood`, a mine `startMines.gold` (M3-1, see "Economy implementation") |
 | `rules.json` | docs/02 Economy table: `startingGold`, `startingWood`, `startingWorkers`, `popCap`, `workerCarry`, `gatherRate {gold, wood}` (per second), `startMines` / `expansionMines {count, gold}`, `treeWood`, `nodeSearchRadius`. Pop provided by buildings comes with `buildings.json` (M3); age costs with `techs.json` |
 | `faction.json` | `id` (must equal the folder name), `displayName`, `description`, `bonus {displayName, description}`, `resources {gold, wood: {displayName}}`, `palette {primary, secondary, accent}` as `#RRGGBB` |
+| `buildings.json` | `{ "buildings": [ ... ] }`, each `{id, displayName, description, slot, footprint {width, height}, hp, armor, cost {gold, wood}, buildTime, popProvided, dropOff}`: `slot` is one of the ten template slots (`DataLimits.BuildingSlotIds`), footprint sides 1-4 cells, `buildTime` in seconds (to ticks), `popProvided` a multiple of 0.5 (to half-pop), `dropOff` a required bool. Ids unique across factions (M3-2, see "Economy implementation") |
 | `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge) |
 
 Validation rules: ids are `snake_case` and unique (a unit id is unique across all factions);

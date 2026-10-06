@@ -22,18 +22,28 @@ namespace Rts.Cli;
 /// </remarks>
 internal static class March
 {
-    /// <summary>Enqueues one <see cref="Command.SpawnUnit"/> per unit that fits its block; returns how many were enqueued.</summary>
-    public static int EnqueueSpawns(Simulation sim, int units, int players)
+    /// <summary>Each player's spawn points in its start block (as many of its share of <paramref name="units"/> as fit).</summary>
+    public static Vector2[][] Blocks(Simulation sim, int units, int players)
     {
-        GameData data = sim.World.Data;
         float maxRadius = 0f;
-        foreach (UnitDef def in data.Units) maxRadius = MathF.Max(maxRadius, def.Radius);
-
-        int spawned = 0;
+        foreach (UnitDef def in sim.World.Data.Units) maxRadius = MathF.Max(maxRadius, def.Radius);
+        var blocks = new Vector2[players][];
         for (int p = 0; p < players; p++)
         {
             int count = units / players + (p < units % players ? 1 : 0);
-            Vector2[] block = StartLayout.Block(sim.World.NavGrid, count, west: p == 0, maxRadius);
+            blocks[p] = StartLayout.Block(sim.World.NavGrid, count, west: p == 0, maxRadius);
+        }
+        return blocks;
+    }
+
+    /// <summary>Enqueues one <see cref="Command.SpawnUnit"/> per point of each player's block; returns how many were enqueued.</summary>
+    public static int EnqueueSpawns(Simulation sim, Vector2[][] blocks)
+    {
+        GameData data = sim.World.Data;
+        int spawned = 0;
+        for (int p = 0; p < blocks.Length; p++)
+        {
+            Vector2[] block = blocks[p];
             for (int k = 0; k < block.Length; k++)
                 sim.Enqueue(Command.SpawnUnit(p, k % data.Units.Length, block[k]));
             spawned += block.Length;
@@ -53,14 +63,14 @@ internal static class March
         return goals;
     }
 
-    /// <summary>Enqueues one <see cref="Command.Move"/> per live unit, in slot order, to its owner's goal cell centre.</summary>
-    public static void EnqueueMoves(Simulation sim, int[] goalCells)
+    /// <summary>Enqueues one <see cref="Command.Move"/> per live unit, in slot order, to its owner's goal cell centre; slots marked in <paramref name="skip"/> (the economy's workers) stay.</summary>
+    public static void EnqueueMoves(Simulation sim, int[] goalCells, bool[] skip)
     {
         NavGrid g = sim.World.NavGrid;
         UnitStore u = sim.World.Units;
         for (int i = 0; i < u.Capacity; i++)
         {
-            if (!u.Alive[i]) continue;
+            if (!u.Alive[i] || (i < skip.Length && skip[i])) continue;
             int goal = goalCells[u.Owner[i]];
             if (goal < 0) continue;
             Vector2 target = g.CellCenter(goal % g.Width, goal / g.Width);

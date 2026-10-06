@@ -146,3 +146,23 @@ internal sealed class FootprintJson
     public int? Width { get; set; }
     public int? Height { get; set; }
 }
+
+internal sealed class BuildingFileJson
+{
+    public List<BuildingJson?>? Buildings { get; set; }
+}
+
+internal sealed class BuildingJson
+{
+    public string? Id { get; set; }
+    public string? DisplayName { get; set; }
+    public string? Description { get; set; }
+    public string? Slot { get; set; }
+    public FootprintJson? Footprint { get; set; }
+    public int? Hp { get; set; }
+    public int? Armor { get; set; }
+    public CostJson? Cost { get; set; }
+    public double? BuildTime { get; set; }
+    public double? PopProvided { get; set; }
+    public bool? DropOff { get; set; }
+}

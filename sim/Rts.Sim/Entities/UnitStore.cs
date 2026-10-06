@@ -1,6 +1,7 @@
 using System;
 using System.Numerics;
 using Rts.Sim.Commands;
+using Rts.Sim.Data;
 using Rts.Sim.Orders;
 
 namespace Rts.Sim.Entities;
@@ -20,6 +21,8 @@ public sealed class UnitStore
     public readonly Vector2[] Velocity;
     /// <summary>Facing angle in radians.</summary>
     public readonly float[] Facing;
+    /// <summary>Facing at the start of the tick, for render interpolation; derived, not hashed.</summary>
+    public readonly float[] PrevFacing;
     /// <summary>Owning player index.</summary>
     public readonly int[] Owner;
     /// <summary>Unit type id, resolved from data at load.</summary>
@@ -70,6 +73,16 @@ public sealed class UnitStore
     public readonly CommandKind[] QueueKind;
     /// <summary>Queued order targets (x, z) in meters, parallel to <see cref="QueueKind"/>; zero for Stop and HoldPosition and past <see cref="QueueCount"/>.</summary>
     public readonly Vector2[] QueuePosition;
+    /// <summary>The resource node a worker's gather loop works (M3-2); default when it has no gather order.</summary>
+    public readonly EntityHandle[] GatherNode;
+    /// <summary>Center (m) of <see cref="GatherNode"/>'s footprint, kept after the node is gone: the depleted-node search starts here.</summary>
+    public readonly Vector2[] GatherSite;
+    /// <summary>Fraction of the next resource unit gathered so far (0 to 1, from the data rate per tick in reach).</summary>
+    public readonly float[] GatherProgress;
+    /// <summary>Resources the unit carries (0 to <c>RulesDef.WorkerCarry</c>).</summary>
+    public readonly int[] Cargo;
+    /// <summary>What <see cref="Cargo"/> is; on a gather loop also the kind of node it works.</summary>
+    public readonly ResourceKind[] CargoKind;
     /// <summary>Whether the slot holds a live unit.</summary>
     public readonly bool[] Alive;
 
@@ -93,6 +106,7 @@ public sealed class UnitStore
         PrevPosition = new Vector2[capacity];
         Velocity = new Vector2[capacity];
         Facing = new float[capacity];
+        PrevFacing = new float[capacity];
         Owner = new int[capacity];
         TypeId = new int[capacity];
         Speed = new float[capacity];
@@ -108,6 +122,11 @@ public sealed class UnitStore
         QueueCount = new int[capacity];
         QueueKind = new CommandKind[capacity * OrderConstants.QueueCapacity];
         QueuePosition = new Vector2[capacity * OrderConstants.QueueCapacity];
+        GatherNode = new EntityHandle[capacity];
+        GatherSite = new Vector2[capacity];
+        GatherProgress = new float[capacity];
+        Cargo = new int[capacity];
+        CargoKind = new ResourceKind[capacity];
         Alive = new bool[capacity];
         Generation = new int[capacity];
         _freeList = new int[capacity];
@@ -146,6 +165,7 @@ public sealed class UnitStore
         PrevPosition[index] = default;
         Velocity[index] = default;
         Facing[index] = 0f;
+        PrevFacing[index] = 0f;
         Owner[index] = 0;
         TypeId[index] = 0;
         Speed[index] = 0f;
@@ -159,6 +179,7 @@ public sealed class UnitStore
         WalkBack[index] = WalkBackNone;
         Hold[index] = false;
         ClearQueue(index);
+        ClearEconomy(index);
         Alive[index] = true;
         handle = new EntityHandle(index, Generation[index]);
         return true;
@@ -188,6 +209,7 @@ public sealed class UnitStore
         Alive[handle.Index] = false;
         Hold[handle.Index] = false;
         ClearQueue(handle.Index);
+        ClearEconomy(handle.Index);
         Generation[handle.Index]++;
         _freeList[_freeCount++] = handle.Index;
     }
@@ -201,13 +223,24 @@ public sealed class UnitStore
         QueueCount[index] = 0;
     }
 
-    /// <summary>Copies Position into PrevPosition for every live unit (start of tick).</summary>
+    /// <summary>Resets slot <paramref name="index"/>'s gather loop and cargo (M3-2) to the empty state.</summary>
+    private void ClearEconomy(int index)
+    {
+        GatherNode[index] = default;
+        GatherSite[index] = default;
+        GatherProgress[index] = 0f;
+        Cargo[index] = 0;
+        CargoKind[index] = default;
+    }
+
+    /// <summary>Copies Position into PrevPosition and Facing into PrevFacing for every live unit (start of tick).</summary>
     public void SnapshotPrevPositions()
     {
         for (int i = 0; i < Alive.Length; i++)
         {
-            if (Alive[i])
-                PrevPosition[i] = Position[i];
+            if (!Alive[i]) continue;
+            PrevPosition[i] = Position[i];
+            PrevFacing[i] = Facing[i];
         }
     }
 }

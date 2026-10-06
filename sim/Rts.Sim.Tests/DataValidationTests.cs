@@ -186,6 +186,7 @@ public class DataValidationTests
     [InlineData("common/damage_table.json")]
     [InlineData("factions/whirlwind/faction.json")]
     [InlineData("factions/whirlwind/units.json")]
+    [InlineData("factions/whirlwind/buildings.json")]
     public void MissingRequiredFile_YieldsOneError(string rel)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
@@ -368,6 +369,96 @@ public class DataValidationTests
         GameData data = Load(dir.Path);
         Assert.Equal(new[] { "gold_mine", "tree" }, data.Resources.Select(r => r.Key));
         Assert.Equal(TestSim.Data.ContentHash(), data.ContentHash());
+    }
+
+    // ---------------------------------------------------------------- M3-2: buildings.json
+
+    private const string MalazanBuildings = "factions/malazan/buildings.json";
+
+    [Fact]
+    public void ShippedData_Buildings_TownHallOfEachFaction_MatchesDocs02()
+    {
+        GameData data = Load(TestDataDir.Shipped);
+        Assert.Equal(new[] { "malazan_garrison_keep", "whirlwind_holy_camp" }, data.Buildings.Select(b => b.Key));
+        foreach (BuildingDef b in data.Buildings)
+        {
+            Assert.Equal(BuildingSlot.TownHall, b.Slot);
+            Assert.Equal((4, 4), (b.FootprintWidth, b.FootprintHeight));
+            Assert.Equal((2400, 5), (b.Hp, b.Armor));
+            Assert.Equal((275, 275), (b.CostGold, b.CostWood));
+            Assert.Equal(90 * SimConstants.TicksPerSecond, b.BuildTicks);
+            Assert.Equal(20, b.HalfPopProvided); // +10 pop
+            Assert.True(b.DropOff);
+            Assert.False(string.IsNullOrWhiteSpace(b.DisplayName) || string.IsNullOrWhiteSpace(b.Description));
+            Assert.Equal(b.Key.Split('_')[0], data.Factions[b.Faction].Key);
+            // The faction's worker is trained here (docs/factions: trainedAt names the Town Hall).
+            Assert.Contains(data.Factions[b.Faction].Units, id => data.Units[id].Slot == UnitSlot.Worker && data.Units[id].TrainedAt == b.Key);
+        }
+        Assert.Equal(1, data.FindBuilding("whirlwind_holy_camp"));
+        Assert.Equal(-1, data.FindBuilding("malazan_barracks"));
+    }
+
+    private static void SetBuildingField(TestDataDir dir, string dottedField, string? rawJson)
+    {
+        dir.EditJson(MalazanBuildings, root =>
+        {
+            JsonObject parent = root["buildings"]![0]!.AsObject();
+            string[] parts = dottedField.Split('.');
+            for (int i = 0; i < parts.Length - 1; i++)
+                parent = parent[parts[i]]!.AsObject();
+            if (rawJson == null) parent.Remove(parts[^1]);
+            else parent[parts[^1]] = JsonNode.Parse(rawJson);
+        });
+    }
+
+    [Theory]
+    [InlineData("slot", "\"barracks\"", "buildings[0].slot", "unknown slot 'barracks'")]
+    [InlineData("footprint.width", "0", "buildings[0].footprint.width", "outside 1-4")]
+    [InlineData("footprint.height", "5", "buildings[0].footprint.height", "outside 1-4")]
+    [InlineData("dropOff", "\"yes\"", "$.buildings[0].dropOff", "malformed JSON")]
+    [InlineData("dropOff", null, "buildings[0].dropOff", "missing")]
+    [InlineData("hp", "0", "buildings[0].hp", "minimum")]
+    [InlineData("buildTime", "0", "buildings[0].buildTime", "positive")]
+    [InlineData("popProvided", "2.25", "buildings[0].popProvided", "multiple of 0.5")]
+    [InlineData("id", "\"Garrison_Keep\"", "buildings[0].id", "not snake_case")]
+    [InlineData("displayName", null, "buildings[0].displayName", "missing")]
+    public void BrokenBuildingField_YieldsExactlyOneError(string field, string? rawJson, string path, string message)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        SetBuildingField(dir, field, rawJson);
+
+        DataLoadResult result = DataLoader.LoadAll(dir.Path);
+        Assert.Null(result.Data);
+        DataError e = Assert.Single(result.Errors);
+        Assert.Equal(MalazanBuildings, e.File);
+        Assert.Equal(path, e.Path);
+        Assert.Contains(message, e.Message);
+    }
+
+    [Theory]
+    [InlineData("model")]
+    [InlineData("footprint.depth")]
+    public void UnknownBuildingField_IsReportedNotIgnored(string field)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        SetBuildingField(dir, field, "3");
+
+        DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
+        Assert.Equal(MalazanBuildings, e.File);
+        Assert.Contains(field.Split('.')[^1], e.Path + e.Message);
+    }
+
+    [Fact]
+    public void DuplicateBuildingId_AcrossFactions_YieldsOneErrorAtSecondDefinition()
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("factions/whirlwind/buildings.json", root => root["buildings"]![0]!["id"] = "malazan_garrison_keep");
+
+        DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
+        Assert.Equal("factions/whirlwind/buildings.json", e.File);
+        Assert.Equal("buildings[0].id", e.Path);
+        Assert.Contains("duplicate building id 'malazan_garrison_keep'", e.Message);
+        Assert.Contains(MalazanBuildings, e.Message);
     }
 
     private static GameData Load(string dir)

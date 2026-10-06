@@ -6,7 +6,7 @@ namespace Rts.Sim.Data;
 
 /// <summary>All loaded definitions, immutable, indexed by dense int ids. Build it with <see cref="DataLoader.LoadAll"/>.</summary>
 /// <remarks>
-/// Tick code indexes the arrays by id. The string lookups (<see cref="FindUnit"/>, <see cref="FindFaction"/>, <see cref="FindResource"/>)
+/// Tick code indexes the arrays by id. The string lookups (<see cref="FindUnit"/>, <see cref="FindFaction"/>, <see cref="FindResource"/>, <see cref="FindBuilding"/>)
 /// are for load time, commands from tests/UI, and tooling: they binary-search the sorted key arrays.
 /// </remarks>
 public sealed class GameData
@@ -25,6 +25,8 @@ public sealed class GameData
     public required ImmutableArray<UnitDef> Units { get; init; }
     /// <summary>Resource node types (trees, gold mines), indexed by resource type id (ordinal order of their string ids). The loader always sets it; empty only for hand-built data.</summary>
     public ImmutableArray<ResourceDef> Resources { get; init; } = ImmutableArray<ResourceDef>.Empty;
+    /// <summary>Building types of every faction, indexed by building id (ordinal order of their string ids). The loader always sets it; empty only for hand-built data.</summary>
+    public ImmutableArray<BuildingDef> Buildings { get; init; } = ImmutableArray<BuildingDef>.Empty;
 
     /// <summary>Stable 64-bit hash of every field of every definition, in id order; replays store it and refuse to play on other data.</summary>
     /// <remarks>
@@ -124,6 +126,26 @@ public sealed class GameData
             h.Add(d.FootprintWidth);
             h.Add(d.FootprintHeight);
         }
+
+        h.Add(Buildings.Length);
+        foreach (BuildingDef b in Buildings)
+        {
+            h.Add(b.Id);
+            h.Add(b.Key);
+            h.Add(b.Faction);
+            h.Add((int)b.Slot);
+            h.Add(b.DisplayName);
+            h.Add(b.Description);
+            h.Add(b.FootprintWidth);
+            h.Add(b.FootprintHeight);
+            h.Add(b.Hp);
+            h.Add(b.Armor);
+            h.Add(b.CostGold);
+            h.Add(b.CostWood);
+            h.Add(b.BuildTicks);
+            h.Add(b.HalfPopProvided);
+            h.Add(b.DropOff);
+        }
         return h.Value;
     }
 
@@ -144,6 +166,9 @@ public sealed class GameData
 
     /// <summary>Resource type id for a string id, or -1.</summary>
     public int FindResource(string key) => Find(Resources, static r => r.Key, key);
+
+    /// <summary>Building type id for a string id, or -1.</summary>
+    public int FindBuilding(string key) => Find(Buildings, static b => b.Key, key);
 
     /// <summary>Faction id for a string id, or -1.</summary>
     public int FindFaction(string key) => Find(Factions, static f => f.Key, key);
