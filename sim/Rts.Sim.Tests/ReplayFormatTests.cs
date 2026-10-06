@@ -75,7 +75,7 @@ public class ReplayFormatTests
         string text = Text(Small);
         Assert.DoesNotContain('\r', text);
         Assert.All(text, ch => Assert.True(ch == '\n' || (ch >= ' ' && ch <= '~')));
-        Assert.StartsWith("rts-replay 1\nsim-version " + SimInfo.Version + "\n", text);
+        Assert.StartsWith($"rts-replay {Replay.CurrentFormatVersion}\nsim-version " + SimInfo.Version + "\n", text);
         Assert.Contains("\nmap.min-passable-fraction 3F000000\n", text); // 0.5f
         Assert.Contains($" {(uint)BitConverter.SingleToInt32Bits(float.NaN):X8} ", text); // the NaN Move's x, as its bits (FFC00000)
         Assert.EndsWith("\n", text);
@@ -173,11 +173,14 @@ public class ReplayFormatTests
     [InlineData(2, "2", "player == PlayerCount")]
     [InlineData(2, "99", "player far out of range")]
     [InlineData(2, "-1", "negative player")]
-    [InlineData(4, "3", "unknown kind")]
+    [InlineData(4, "6", "unknown kind")]
     [InlineData(4, "-1", "negative kind")]
     [InlineData(1, "0", "tick 0 (Enqueue always stamps at least 1)")]
     [InlineData(1, "301", "tick past the end")]
     [InlineData(3, "5", "sequence gap")]
+    [InlineData(10, "2", "unknown flag bit")]
+    [InlineData(10, "3", "queued plus an unknown flag bit")]
+    [InlineData(10, "-1", "every flag bit")]
     public void CommandBreakingTheLogRules_IsRefusedAtRead(int field, string value, string what)
     {
         string text = Text(Small);
@@ -199,11 +202,57 @@ public class ReplayFormatTests
         Assert.Throws<ArgumentException>(() => ReplayFormat.Write(bad)); // the writer won't write it either
     }
 
-    [Fact]
-    public void FormatVersion2_IsRefusedAsVersionMismatch()
+    /// <summary>M1-7: format 2 added the flags field; format 1 and any other version are refused by version first.</summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(3)]
+    [InlineData(0)]
+    public void OtherFormatVersion_IsRefusedAsVersionMismatch(int version)
     {
-        string text = Text(Small).Replace("rts-replay 1\n", "rts-replay 2\n");
+        Assert.Equal(2, Replay.CurrentFormatVersion);
+        string text = Text(Small).Replace($"rts-replay {Replay.CurrentFormatVersion}\n", $"rts-replay {version}\n");
         Assert.Equal(ReplayError.FormatVersionMismatch, Read(Reseal(text)));
+    }
+
+    /// <summary>M1-7: the golden as format 1 wrote it (header 1, 9-field command lines) is refused with the version code.</summary>
+    [Fact]
+    public void Format1File_IsRefusedAsVersionMismatch()
+    {
+        string text = Encoding.ASCII.GetString(File.ReadAllBytes(ReplayTestRun.GoldenPath));
+        string[] lines = text[..text.LastIndexOf("checksum ", StringComparison.Ordinal)].Split('\n');
+        for (int i = 0; i < lines.Length; i++)
+        {
+            if (lines[i].StartsWith("rts-replay ", StringComparison.Ordinal)) lines[i] = "rts-replay 1";
+            else if (lines[i].StartsWith("c ", StringComparison.Ordinal)) lines[i] = lines[i][..lines[i].LastIndexOf(' ')];
+        }
+        Assert.Equal(ReplayError.FormatVersionMismatch, Read(ReplayFormat.Seal(string.Join('\n', lines))));
+    }
+
+    /// <summary>M1-7: a command line must have exactly 10 fields; the old 9-field shape in a format 2 file is malformed, as is a non-number flags field.</summary>
+    [Fact]
+    public void NineFieldCommandLine_InAFormat2File_IsMalformed()
+    {
+        string text = Text(Small);
+        string line = FirstCommandLine(text);
+        Assert.Equal(10, line.Split(' ').Length - 1);
+        Assert.Equal(ReplayError.Malformed, Read(Reseal(text.Replace(line + "\n", line[..line.LastIndexOf(' ')] + "\n"))));
+        Assert.Equal(ReplayError.Malformed, Read(Reseal(text.Replace(line + "\n", line + " 0\n"))));
+        Assert.Equal(ReplayError.Malformed, Read(Reseal(text.Replace(line + "\n", ReplaceField(line, 10, "x") + "\n"))));
+        Assert.Equal(ReplayError.Malformed, Read(Reseal(text.Replace(line + "\n", ReplaceField(line, 10, "01") + "\n"))));
+    }
+
+    /// <summary>M1-7: queued orders keep their flags through the file and play back.</summary>
+    [Fact]
+    public void QueuedFlags_RoundTrip_AndPlayBack()
+    {
+        Replay r = ReplayTestRun.RecordOrders(seed: 2, ticks: 300).Recorder.ToReplay();
+        Assert.Contains(r.Commands, c => c.Flags == Command.QueuedFlag);
+        Assert.Contains(r.Commands, c => c.Flags == 0 && c.IsUnitOrder);
+        string text = Text(r);
+        Assert.Contains(text.Split('\n'), l => l.StartsWith("c ", StringComparison.Ordinal) && l.EndsWith(" 1", StringComparison.Ordinal));
+        Assert.Equal(ReplayError.None, ReplayFormat.TryRead(ReplayFormat.Write(r), out Replay? parsed));
+        ReplayTestRun.AssertEqual(r, parsed!);
+        Assert.True(ReplayPlayer.Run(parsed!, TestSim.Data).Ok);
     }
 
     [Theory]

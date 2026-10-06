@@ -243,4 +243,63 @@ public class StateHashTests
         Assert.Equal(a.World.FlowFields.BuildCount, b.World.FlowFields.BuildCount);
         Assert.NotEqual(a.StateHash(), b.StateHash());
     }
+
+    /// <summary>M1-7: a pending command's flags are hashed: the same order queued and not differs while pending; once applied the state differs too.</summary>
+    [Fact]
+    public void Hash_CoversPendingFlags()
+    {
+        Simulation Make()
+        {
+            var sim = new Simulation(Config(5));
+            sim.Enqueue(Command.SpawnUnit(0, typeId: 0, new Vector2(20f, 20f)));
+            sim.Tick();
+            sim.Tick();
+            return sim;
+        }
+        Simulation a = Make(), b = Make(), c = Make();
+        Assert.Equal(a.StateHash(), b.StateHash());
+        var unit = new EntityHandle(0, a.World.Units.Generation[0]);
+        a.Enqueue(Command.Stop(0, unit));
+        b.Enqueue(Command.Stop(0, unit, queued: true));
+        c.Enqueue(Command.Stop(0, unit) with { Flags = 1 << 20 }); // an unknown high bit: dropped at apply, still hashed while pending
+        Assert.NotEqual(a.StateHash(), b.StateHash());
+        Assert.NotEqual(a.StateHash(), c.StateHash());
+        Assert.NotEqual(b.StateHash(), c.StateHash());
+    }
+
+    /// <summary>M1-7: Hold, the queue count, and every queue entry of a live unit (also past the count) are hashed; a unit with no orders hashes as before the queue existed (the golden's checkpoints did not move).</summary>
+    [Fact]
+    public void Hash_CoversHoldAndEveryQueueEntry()
+    {
+        var sim = new Simulation(Config(6));
+        sim.Enqueue(Command.SpawnUnit(0, typeId: 0, new Vector2(20f, 20f)));
+        sim.Tick();
+        sim.Tick();
+        UnitStore u = sim.World.Units;
+        ulong h0 = sim.StateHash();
+        var seen = new HashSet<ulong> { h0 };
+        u.Hold[0] = true;
+        Assert.True(seen.Add(sim.StateHash()));
+        u.Hold[0] = false;
+        u.QueueCount[0] = 3;
+        Assert.True(seen.Add(sim.StateHash()));
+        u.QueueCount[0] = 0;
+        for (int k = 0; k < Orders.OrderConstants.QueueCapacity; k++)
+        {
+            u.QueueKind[k] = CommandKind.Move;
+            Assert.True(seen.Add(sim.StateHash()), $"entry {k} kind");
+            u.QueuePosition[k] = new Vector2(3f, 0f);
+            Assert.True(seen.Add(sim.StateHash()), $"entry {k} position");
+            u.QueueKind[k] = CommandKind.Noop;
+            Assert.True(seen.Add(sim.StateHash()), $"entry {k} position alone");
+            u.QueuePosition[k] = Vector2.Zero;
+            Assert.Equal(h0, sim.StateHash());
+        }
+        // Same entries in different slots differ.
+        u.QueueKind[0] = CommandKind.Stop;
+        ulong first = sim.StateHash();
+        u.QueueKind[0] = CommandKind.Noop;
+        u.QueueKind[1] = CommandKind.Stop;
+        Assert.NotEqual(first, sim.StateHash());
+    }
 }

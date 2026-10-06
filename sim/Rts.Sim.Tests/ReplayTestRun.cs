@@ -64,6 +64,26 @@ public static class ReplayTestRun
         return (sim, recorder);
     }
 
+    /// <summary>
+    /// M1-7: a 2-player run of <paramref name="ticks"/> ticks recorded from tick 0: 48 spawns near the
+    /// center, then <see cref="OrderMix.Issue"/> every 3 ticks (every unit-order kind, queued and not).
+    /// </summary>
+    public static (Simulation Sim, ReplayRecorder Recorder) RecordOrders(ulong seed, int ticks, int checkpointInterval = 100)
+    {
+        const int units = 48, perTick = 6;
+        var sim = new Simulation(TestSim.Config(Seed: seed, PlayerCount: 2, UnitCapacity: units, CommandCapacity: units + perTick + 8));
+        var recorder = new ReplayRecorder(sim, checkpointInterval);
+        List<int> cells = OrderMix.Cells(sim.World.NavGrid, 14f);
+        var rng = new SimRng(seed, 43);
+        OrderMix.SpawnInto(sim, units, cells, ref rng);
+        for (int t = 0; t < ticks; t++)
+        {
+            if (t >= 2 && t % 3 == 0) OrderMix.Issue(sim, ref rng, cells, perTick);
+            sim.Tick();
+        }
+        return (sim, recorder);
+    }
+
     /// <summary>Asserts two replays are equal field for field (floats by bit pattern).</summary>
     public static void AssertEqual(Replay expected, Replay actual)
     {
@@ -91,6 +111,7 @@ public static class ReplayTestRun
             Assert.True(BitConverter.SingleToInt32Bits(a.Position.X) == BitConverter.SingleToInt32Bits(b.Position.X), at);
             Assert.True(BitConverter.SingleToInt32Bits(a.Position.Y) == BitConverter.SingleToInt32Bits(b.Position.Y), at);
             Assert.True(a.Unit == b.Unit, at);
+            Assert.True(a.Flags == b.Flags, at);
         }
         Assert.Equal(expected.Checkpoints.ToArray(), actual.Checkpoints.ToArray());
     }

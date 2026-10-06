@@ -1,5 +1,7 @@
 using System;
 using System.Numerics;
+using Rts.Sim.Commands;
+using Rts.Sim.Orders;
 
 namespace Rts.Sim.Entities;
 
@@ -60,6 +62,14 @@ public sealed class UnitStore
     /// walk-back per order, so a corridor can't bounce a unit back and forth forever. Reset by a new order.
     /// </summary>
     public readonly int[] WalkBack;
+    /// <summary>Holding position (<see cref="CommandKind.HoldPosition"/>): never shoved and never walks back. Cleared by the next unqueued order.</summary>
+    public readonly bool[] Hold;
+    /// <summary>Number of shift-queued orders waiting (0 to <see cref="OrderConstants.QueueCapacity"/>); slot i's queue is entries <c>i * QueueCapacity</c> on.</summary>
+    public readonly int[] QueueCount;
+    /// <summary>Queued order kinds, <see cref="OrderConstants.QueueCapacity"/> per slot, head first; entries past <see cref="QueueCount"/> are always default.</summary>
+    public readonly CommandKind[] QueueKind;
+    /// <summary>Queued order targets (x, z) in meters, parallel to <see cref="QueueKind"/>; zero for Stop and HoldPosition and past <see cref="QueueCount"/>.</summary>
+    public readonly Vector2[] QueuePosition;
     /// <summary>Whether the slot holds a live unit.</summary>
     public readonly bool[] Alive;
 
@@ -94,6 +104,10 @@ public sealed class UnitStore
         StuckTicks = new int[capacity];
         BestRemaining = new float[capacity];
         WalkBack = new int[capacity];
+        Hold = new bool[capacity];
+        QueueCount = new int[capacity];
+        QueueKind = new CommandKind[capacity * OrderConstants.QueueCapacity];
+        QueuePosition = new Vector2[capacity * OrderConstants.QueueCapacity];
         Alive = new bool[capacity];
         Generation = new int[capacity];
         _freeList = new int[capacity];
@@ -143,6 +157,8 @@ public sealed class UnitStore
         StuckTicks[index] = 0;
         BestRemaining[index] = float.PositiveInfinity;
         WalkBack[index] = WalkBackNone;
+        Hold[index] = false;
+        ClearQueue(index);
         Alive[index] = true;
         handle = new EntityHandle(index, Generation[index]);
         return true;
@@ -170,8 +186,19 @@ public sealed class UnitStore
         if (!IsAlive(handle))
             throw new ArgumentException($"Handle {handle} is not alive.", nameof(handle));
         Alive[handle.Index] = false;
+        Hold[handle.Index] = false;
+        ClearQueue(handle.Index);
         Generation[handle.Index]++;
         _freeList[_freeCount++] = handle.Index;
+    }
+
+    /// <summary>Drops every queued order of slot <paramref name="index"/>, resetting all its entries so unused ones stay default.</summary>
+    internal void ClearQueue(int index)
+    {
+        int start = index * OrderConstants.QueueCapacity;
+        Array.Clear(QueueKind, start, OrderConstants.QueueCapacity);
+        Array.Clear(QueuePosition, start, OrderConstants.QueueCapacity);
+        QueueCount[index] = 0;
     }
 
     /// <summary>Copies Position into PrevPosition for every live unit (start of tick).</summary>

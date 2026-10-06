@@ -21,7 +21,7 @@ public enum ReplayError
     /// <summary>A header value is out of range: map params, player count, capacities, checkpoint interval, tick count, sim version text.</summary>
     InvalidHeader = 5,
 
-    /// <summary>A command breaks the log rules: player, kind, tick order or range, sequence, or more commands in one tick than the queue holds.</summary>
+    /// <summary>A command breaks the log rules: player, kind, unknown flag bits, tick order or range, sequence, or more commands in one tick than the queue holds.</summary>
     InvalidCommand = 6,
 
     /// <summary>Checkpoints are not exactly one per <see cref="Replay.CheckpointInterval"/> ticks up to <see cref="Replay.TickCount"/>.</summary>

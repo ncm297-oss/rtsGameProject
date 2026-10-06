@@ -282,7 +282,7 @@ public class ReplayQaTests
         Assert.Equal(ReplayError.DataMismatch, res.Error);
         Assert.Equal(0, res.TicksRun);
         // Format version is checked first even when the data also mismatches.
-        Assert.Equal(ReplayError.FormatVersionMismatch, ReplayPlayer.Run(ReplayTestRun.With(r, formatVersion: 2), TestSim.Data).Error);
+        Assert.Equal(ReplayError.FormatVersionMismatch, ReplayPlayer.Run(ReplayTestRun.With(r, formatVersion: Replay.CurrentFormatVersion + 1), TestSim.Data).Error);
     }
 
     // ---------------------------------------------------------------- parser attacks
@@ -451,13 +451,15 @@ public class ReplayQaTests
     }
 
     [Theory]
-    [InlineData(0, "c 1 0 0 0 0 00000000 00000000 0 0 0")] // 10 fields
-    [InlineData(0, "c 1 0 0 0 0 00000000 00000000 0")] // 8 fields
-    [InlineData(0, "C 1 0 0 0 0 00000000 00000000 0 0")]
-    [InlineData(0, "c 1 0 0 0 0 0 0 0 0")] // floats must be 8 hex digits
-    [InlineData(0, "c 1 0 0 0 0 3f800000 00000000 0 0")] // lowercase float bits
-    [InlineData(0, "c 1 0 0 0 0 00000000 00000000 2147483648 0")] // int overflow
-    [InlineData(0, "c 1 0 0 0 0 00000000 00000000 0 -0")]
+    // M1-7 (format 2): command lines have 10 fields, the last the flags.
+    [InlineData(0, "c 1 0 0 0 0 00000000 00000000 0 0 0 0")] // 11 fields
+    [InlineData(0, "c 1 0 0 0 0 00000000 00000000 0 0")] // 9 fields (format 1)
+    [InlineData(0, "C 1 0 0 0 0 00000000 00000000 0 0 0")]
+    [InlineData(0, "c 1 0 0 0 0 0 0 0 0 0")] // floats must be 8 hex digits
+    [InlineData(0, "c 1 0 0 0 0 3f800000 00000000 0 0 0")] // lowercase float bits
+    [InlineData(0, "c 1 0 0 0 0 00000000 00000000 2147483648 0 0")] // int overflow
+    [InlineData(0, "c 1 0 0 0 0 00000000 00000000 0 -0 0")]
+    [InlineData(0, "c 1 0 0 0 0 00000000 00000000 0 0 01")] // non-canonical flags
     public void MalformedCommandLine_IsRefusedAsMalformed(int _, string line)
     {
         string text = Text(Fuzz);
