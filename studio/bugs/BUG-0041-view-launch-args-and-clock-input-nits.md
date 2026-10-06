@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-05-1446, task M2-1 |
 | System | view: FixedStepClock (ViewApi), LaunchOptions, Match log |
-| Fixed by | |
+| Fixed by | M2-2 commit 8e7b548; regression: `FixedStepClockQaTests` row (-1, -1) un-skipped and passing; `game/tests/QaM22Test.tscn` parser rows |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~FixedStepClockQaTests"`: the skipped row
@@ -33,3 +33,10 @@
   fields as `: :`.
 - Suggested fixes: reject `deltaSeconds <= 0 || speed <= 0` separately; in `LaunchOptions.Parse`, don't
   consume a value that starts with `--`; print `unchecked((ulong)Seed)`.
+
+## Verification (QA, 2026-10-05-1609)
+1. `FixedStepClockQaTests.NonFiniteOrNegativeInputs_AddNoTicks_AndKeepAlpha(-1, -1)` passes (no longer skipped).
+2. `& $env:GODOT --headless --path game --quit-after 60 -- --seed --speed 2` warns about `--seed` and logs
+   `Match started: seed 1, ... speed 2x`. `QaM22Test.tscn` also covers `--units --zoom 30`, `--screenshot --units 5`,
+   a trailing `--speed`, and an unknown flag followed by a known one.
+3. `-- --seed 18446744073709551615` logs `Match started: seed 18446744073709551615`.

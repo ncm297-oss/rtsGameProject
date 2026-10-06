@@ -79,4 +79,6 @@ bugs outrank new features.
 | [BUG-0038](BUG-0038-hard-wall-fallback-drops-friendly-clips.md) | S3 | open | The hard-wall fallback drops the clips of the walker's own standing units; a walker beside an enemy slides into an anchored friendly |
 | [BUG-0039](BUG-0039-more-goals-bounds-hold-on-one-map-only.md) | S3 | open | 128 units to 64 neighbouring goals: the pack rule and the 22% give-up bound hold on one map only (25/40 and 22/40 new-seed maps fail) |
 | [BUG-0040](BUG-0040-replay-tick-count-unbounded-and-in-tick-enqueue.md) | S4 | open | Replay header has no tick-count limit; phase-14 checkpoints can't match commands enqueued during a tick (M5) |
-| [BUG-0041](BUG-0041-view-launch-args-and-clock-input-nits.md) | S4 | open | View input nits: clock takes negative x negative as time, a missing flag value eats the next flag, seed max logs as -1 |
+| [BUG-0041](BUG-0041-view-launch-args-and-clock-input-nits.md) | S4 | fixed | View input nits: clock takes negative x negative as time, a missing flag value eats the next flag, seed max logs as -1 |
+| [BUG-0052](BUG-0052-terrainheight-at-throws-on-huge-coordinates.md) | S3 | open | TerrainHeight.At throws instead of clamping for coordinates beyond ~4.3e9 m or +Infinity |
+| [BUG-0053](BUG-0053-m2-2-test-and-doc-nits.md) | S4 | open | M2-2 nits: facing test can't see a yaw sign error, a stale SimRunner remark, picker box height in docs |
