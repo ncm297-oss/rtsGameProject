@@ -8,8 +8,8 @@ Status legend: **Next** = start here, **Planned** = not started, **Done** = acce
 | # | Milestone | Status | One-line goal |
 | --- | --- | --- | --- |
 | M0 | Environment & skeleton | **Done** (2026-10-03) | Tools installed, empty projects build, tests and headless boot pass |
-| M1 | Core sim, no graphics | **Next** | 200 units path across the map deterministically, fast |
-| M2 | Presentation | Planned | Move an army around a 3D map |
+| M1 | Core sim, no graphics | **Next** (sim track; 8 / 8 criteria met, hardening + sign-off pending) | 200 units path across the map deterministically, fast |
+| M2 | Presentation | **Next** (view track, started 2026-10-05) | Move an army around a 3D map |
 | M3 | Economy & buildings | Planned | Build a Malazan base |
 | M4 | Combat, fog, abilities | Planned | Malazan vs. Whirlwind armies fight with abilities and fog |
 | M5 | AI opponent | Planned | Lose to a Whirlwind AI |
