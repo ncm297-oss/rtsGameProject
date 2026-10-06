@@ -50,6 +50,58 @@ public class DeterminismTests
             Assert.True(a[i] == b[i], $"hashes differ at tick {(i + 1) * Every}");
     }
 
+    /// <summary>
+    /// M3-1: <see cref="Run"/>'s movement on a map with 12 forests and 8 mines, plus a scripted
+    /// <c>Take</c> of 37 every 5 ticks between ticks (cycling over the placed nodes), so trees fall,
+    /// cells reopen and fields rebuild mid-run; returns the hash every 100 ticks.
+    /// </summary>
+    private static ulong[] RunWithResources(ulong seed, out int freed, out int versionAtEnd)
+    {
+        var map = new Map.MapGenParams { Forests = 12, GoldMines = 8 };
+        Simulation sim = MoveScenario.Spawn(seed, units: 200, maxCost: 30f, out int goalCell, map: map);
+        var g = sim.World.NavGrid;
+        ResourceStore r = sim.World.Resources;
+        var nodes = new List<EntityHandle>();
+        for (int i = 0; i < r.Capacity; i++)
+            if (r.Alive[i]) nodes.Add(r.HandleOf(i));
+        Assert.True(nodes.Count > 100, $"only {nodes.Count} nodes placed");
+        var rng = new Determinism.SimRng(seed, 71);
+        var hashes = new ulong[Ticks / Every];
+        freed = 0;
+        for (int t = 1; t <= Ticks; t++)
+        {
+            if (t % 250 == 1)
+            {
+                Vector2 target = MoveScenario.Center(g, goalCell) + new Vector2(rng.NextInt(-12, 13) * 2f, rng.NextInt(-12, 13) * 2f);
+                MoveScenario.MoveAll(sim, target);
+            }
+            if (t % 5 == 0)
+            {
+                EntityHandle node = nodes[t / 15 * 7 % nodes.Count]; // three takes per node in a row
+                if (r.IsAlive(node))
+                {
+                    r.Take(node, 37);
+                    if (!r.IsAlive(node)) freed++;
+                }
+            }
+            sim.Tick();
+            if (t % Every == 0) hashes[t / Every - 1] = sim.StateHash();
+        }
+        versionAtEnd = g.Version;
+        return hashes;
+    }
+
+    [Fact]
+    public void ForestsAndMines_WithScriptedTakes_EqualHashEvery100Ticks_For2000Ticks()
+    {
+        ulong[] a = RunWithResources(17, out int freed, out int version), b = RunWithResources(17, out int freedB, out int versionB);
+        Assert.True(freed > 50, $"only {freed} nodes depleted");
+        Assert.Equal((freed, version), (freedB, versionB));
+        for (int i = 0; i < a.Length; i++)
+            Assert.True(a[i] == b[i], $"hashes differ at tick {(i + 1) * Every}");
+        Assert.NotEqual(Run(17, out _)[^1], a[^1]);
+    }
+
     [Fact]
     public void DifferentSeeds_DifferByTick100()
     {

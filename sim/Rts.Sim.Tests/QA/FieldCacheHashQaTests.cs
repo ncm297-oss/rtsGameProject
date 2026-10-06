@@ -123,12 +123,12 @@ public class FieldCacheHashQaTests
         ulong beforeMiss = sim.StateHash();
         Assert.Null(c.TryGetCached(open[30]));
         Assert.Equal(beforeMiss, sim.StateHash()); // a TryGetCached miss changes nothing
-        // The grid itself (and its Version) isn't hashed: it is immutable in production until
-        // passability changes exist (M3+), and then the grid must join the hash. A bump alone only
-        // makes fields stale; the rebuild below is what changes cache state.
+        // M3-1: passability changes exist now (resource depletion), so NavGrid.Version joined the
+        // hash: a bump alone changes it, and the rebuild below changes cache state on top.
         ulong beforeBump = sim.StateHash();
         sim.World.NavGrid.BumpVersionForTests();
-        Assert.Equal(beforeBump, sim.StateHash());
+        Assert.NotEqual(beforeBump, sim.StateHash());
+        Changed("NavGrid version bump");
         Assert.False(c.Contains(open[10]));
         c.Get(open[10]); Changed("stale rebuild in place");
         for (int k = 0; k < 30; k++) c.Get(open[100 + k]);

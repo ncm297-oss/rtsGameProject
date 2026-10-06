@@ -103,5 +103,9 @@ bugs outrank new features.
 | [BUG-0070](BUG-0070-m2-h1-doc-and-test-nits.md) | S4 | open | M2-H1 nits: stale docs/01 minimap row, docs/03 big-map range, twin double-tap constants, dev wall test blind at the far edges |
 | [BUG-0071](BUG-0071-plug-cache-answer-depends-on-query-order-under-stale-hash.md) | S3 | open | In the shove pass a cached plug answer can depend on which member was asked first (stale spatial hash) |
 | [BUG-0072](BUG-0072-m1-9-nits.md) | S4 | open | M1-9 nits: an invalid --record file name still fails only after the run |
+| [BUG-0073](BUG-0073-continuous-depletion-starves-flow-fields.md) | S3 | open | A tree falling every tick leaves all but the 2 oldest goal groups without a flow field |
+| [BUG-0074](BUG-0074-forest-placer-assumes-1x1-trees.md) | S3 | open | The forest placer assumes 1 x 1 trees; a larger tree footprint (valid data) seals pockets |
+| [BUG-0075](BUG-0075-felled-interior-tree-leaves-unreachable-hollow.md) | S3 | open | Felling a forest's interior tree first leaves an open cell nobody can reach; an order onto it does nothing |
+| [BUG-0076](BUG-0076-m3-1-nits.md) | S4 | open | M3-1 nits: setup timing in docs, redundant flood fill, empty resources list loads clean |
 | [BUG-0083](BUG-0083-debug-overlay-label-allocates-per-frame-docs-claim-zero.md) | S3 | open | Overlay-on label line allocates ~600 B per frame; docs/03 "Debug tooling" claims 0 bytes per frame on and off |
 | [BUG-0084](BUG-0084-m2-5-debug-overlay-nits.md) | S4 | open | M2-5 nits: cliff tint reads olive, arrow tips dip up to 9 cm into steep ramps, CS8602 in DebugOverlayTest, blind allocation probe |

@@ -232,7 +232,7 @@ public class CliQaTests
         Assert.Equal(0, Cli("run", "--seed", "4", "--units", "4", "--ticks", "30", "--checkpoint", "10", "--record", path, "--data", TestDataDir.Shipped).Exit);
         string text = File.ReadAllText(path);
         string body = text[..text.IndexOf("checksum ", StringComparison.Ordinal)];
-        Assert.StartsWith("rts-replay 2\n", body);
+        Assert.StartsWith($"rts-replay {Replay.CurrentFormatVersion}\n", body); // M3-1: format 3
         // Format 1 had no flags field on command lines (M1-7 added it).
         var sb = new StringBuilder("rts-replay 1\n");
         foreach (string line in body.Split('\n', StringSplitOptions.RemoveEmptyEntries).Skip(1))

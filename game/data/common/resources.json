@@ -1,0 +1,18 @@
+{
+  "resources": [
+    {
+      "id": "gold_mine",
+      "displayName": "Gold Mine",
+      "description": "A seam of gold. Workers carry it to a Town Hall or Camp.",
+      "resource": "gold",
+      "footprint": { "width": 2, "height": 2 }
+    },
+    {
+      "id": "tree",
+      "displayName": "Tree",
+      "description": "Timber for buildings and siege. Felled trees leave open ground.",
+      "resource": "wood",
+      "footprint": { "width": 1, "height": 1 }
+    }
+  ]
+}

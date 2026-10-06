@@ -178,7 +178,13 @@ Rules:
   states, per-player command sequence counters, and pending commands (including a `Move`'s unit
   handle), and the flow-field cache's metadata (its clock and count, and each used slot's
   requested cell, grid version and last-use stamp, in slot order): under the build cap the cache
-  decides who waits, so it is sim state (BUG-0021, see "Flow fields"). Derived state is left out:
+  decides who waits, so it is sim state (BUG-0021, see "Flow fields"). Since M3-1 it also covers
+  `NavGrid.Version` and the resource store (`ResourceStore.AddToHash`: capacity, high-water mark,
+  every used slot's generation and, when alive, remaining amount, type and anchor cell, and the free
+  list above the never-used slots). Slots go in through `StateHasher.AddWord`, one
+  xor-multiply-fold step per 64-bit word (each step a bijection, so one changed word always changes
+  the hash), because byte-wise FNV of a full 4,096-slot store took 0.18 ms in Debug; `Add` stays
+  byte-wise FNV-1a (unrolled in M3-1, same output). Derived state is left out:
   the spatial hash, the fields' contents (they follow from the grid and the key), and a unit's
   `Speed`/`Radius` (copied from its `TypeId`'s data).
 
@@ -209,7 +215,8 @@ plus `Alive` and `Generation`. `Speed` and `Radius` are copied
 from `UnitDef.SpeedPerTick` / `Radius` at spawn, so movement never looks up data per tick. The
 match's data travels with the setup: `SimConfig.Data` is a required `GameData` (from
 `DataLoader.LoadAll`), exposed as `World.Data`; the sim never reads files itself. The other fields
-in the list above arrive with the systems that use them.
+in the list above arrive with the systems that use them. `ResourceStore` exists since M3-1 (see
+"Economy implementation").
 
 ### Spatial hash
 
@@ -263,8 +270,14 @@ or a flat map: it never loops forever. `MapGenParams.Validate` caps every size a
 cells outside the map as blocked; `WorldToCell` floors (so -0.1 m is outside, not cell 0) and
 rejects NaN and infinities. Cell (x, y) covers meters [2x, 2x + 2) on each axis. Per-cell data is
 ready for 8-connected flow fields: no-corner-cutting only needs `IsPassable` on the two side cells.
-Terrain does not feed `StateHash` yet (M1-6 decides). Trees, water, gold, symmetry, and hand-made
-maps arrive in M3/M6.
+The terrain itself is not hashed (it follows from seed + params). Since M3-1 passability changes
+at run time: resource nodes (trees, gold mines) set `NavFlags.Resource` (always with `Blocked`,
+cost 255) on their cells, and a depleted node clears them back to open ground (flags `None`, cost 1).
+The internal `SetResource` / `ClearResource` take a node's footprint rectangle and bump `Version`
+once per node placed or freed; `PassableCount` follows. `Version` is in `StateHash` since M3-1.
+Cliff, ramp and border cells never take a node, and the placer keeps every passable cell reachable
+(see "Economy implementation"), so the build-time pocket seal still holds. Water, symmetry and
+hand-made maps arrive in M6.
 
 ### Flow fields
 
@@ -981,6 +994,60 @@ sight every 4 ticks (staggered by index). Priority: enemies attacking me > units
 - Construction sites are buildings in `UnderConstruction` state with progress; HP grows with
   progress.
 
+### Implementation (M3-1)
+
+Resource nodes exist in the sim; workers, gathering and drop-offs are M3-2.
+
+- **Data.** `common/resources.json` (required) lists node *types*: `id`, `displayName`,
+  `description`, `resource` (`gold` | `wood`, `DataLimits.ResourceKindIds`) and `footprint {width,
+  height}` in cells, each side 1 to `DataLimits.MaxFootprint` (4). Shipped: `gold_mine` (gold, 2 x 2)
+  and `tree` (wood, 1 x 1). Amounts stay in `rules.json` (docs/02): a placed tree holds `treeWood`
+  (100), a placed mine `startMines.gold` (2,500; every mine until start locations exist, M3-3/M6).
+  `GameData.Resources` is indexed by dense ids in ordinal order (`FindResource`); `ContentHash`
+  covers every field.
+- **Store.** `Rts.Sim.Entities.ResourceStore` (`World.Resources`): structure of arrays with
+  generational handles like `UnitStore` (`Alive`, `Generation`, `TypeId`, `Cell` = the footprint's
+  lowest x, y cell, `Remaining`), a LIFO free list, capacity `SimConfig.ResourceCapacity` (optional,
+  default 4,096), allocated once. Outside the sim it is read-only (`ReadOnlySpan` properties,
+  `IsAlive`, `HandleOf`, `Fits`). The sim mutates it through two internal calls:
+  `Spawn(typeId, cell, amount, out handle)` refuses (false, never throws) when the store is full, the
+  type is unknown, the amount is below 1, or any footprint cell is off the map, blocked (cliff,
+  border, sealed pocket, another node), a ramp, or on another level; `Take(handle, amount)` returns
+  what it took (clamped; 0 for a dead or stale handle or an amount of 0 or less), and a node taken to 0
+  is freed: its cells reopen, `NavGrid.Version` bumps once, its generation moves on. `Take` is the
+  primitive M3-2's gather system calls in tick phase 4; it never allocates. Spawning bumps `Version`
+  once too, so a field cached before a node appears is stale.
+- **Placement.** `World` places nodes right after the nav grid and before the flow-field cache, from
+  `MapGenParams.Forests`, `ForestMinTrees` / `ForestMaxTrees` (12 / 40), `GoldMines` and
+  `MineSpacing` (24 m). Both counts default to 0, so the M1 maps, tests and golden trajectories are
+  unchanged, and then the placer draws nothing. Otherwise it draws from `RngStream.MapGen` after the
+  terrain (the heightmap is identical with and without resources). Mines first, then forests. A node
+  covers only "open" cells: passable, not a ramp, and no cliff, ramp or border cell among the 8
+  neighbors; a footprint is one level. A mine's anchor is drawn at random and its center must be at
+  least `MineSpacing` from every earlier mine's. A forest draws its size from the range, then grows a
+  4-connected blob from a random seed cell, adding a random frontier cell at a time. No new mine or
+  forest cell may touch (8-neighbor) an earlier node, so a mine is reachable from every side and each
+  forest is its own 8-connected group. Before a mine or forest is committed, the placer checks that
+  every passable cell still reaches every other: first a local test (the cells around it are passable
+  and connected among themselves, which is enough on its own and rejects forests that enclose a hole
+  without touching the rest of the map), then a flood fill of the whole map. A failed placement is
+  dropped and retried elsewhere, at most `TriesPerPlacement` (32) times; one that never fits is
+  skipped. `World.ResourcePlacement` reports what was placed (forests, trees, mines). Tree slots follow
+  cell order within a forest. Caps: `Forests` and `GoldMines` at most 64, forest size 1-256. Setup
+  cost (Debug): 12 forests and 8 mines add about 5 ms to a 128 map; the worst case (1024 map, 64
+  forests of 256, 64 mines) about 2.2 s on top of the terrain's 0.3 s (QA measurement, BUG-0076; most of
+  it is the full-map flood fill after the ring test). Large forests (100+ trees) often enclose a hole and are skipped.
+- **Navigation.** See "Navigation grid": `NavFlags.Resource` with `Blocked`, `Version` bumps, and
+  flow fields rebuild through a gap on their next use (the cache's version check, unchanged).
+- **Hash and replays.** `StateHash` covers `NavGrid.Version` and the store (see "Determinism").
+  Replays are format 3: the header carries `resource-capacity` and every new `MapGenParams` field;
+  format 2 files are refused with `FormatVersionMismatch`. The golden was regenerated for the hash
+  composition, the format and the data hash; its unit trajectories are unchanged.
+- **CLI.** `run --forests <n> --mines <n>` (0-64, default 0) builds the map with resources; the header
+  line ends with `forests F trees T mines M` (what was placed), and the replay records them.
+- **Not yet:** gathering, the `Gather` command, workers, drop-offs, depleted-node events for views,
+  expansion mines and start-location placement, biomes.
+
 ## Abilities, statuses, zones
 
 - `AbilityDef` (data) → `AbilitySystem` executes cast timers and resolves `effects[]`.
@@ -1022,6 +1089,7 @@ game/data/
     damage_table.json        # type × armor class multipliers
     statuses.json            # status definitions
     rules.json               # starting resources, pop cap, gather rates, age costs
+    resources.json           # resource node types: tree, gold mine (M3-1)
   factions/<faction_id>/
     faction.json             # id, displayName, bonus, palette, resource display names
     units.json
@@ -1074,14 +1142,15 @@ Example unit definition (one entry of the `"units"` array in `units.json`):
 (reported with line and byte), or a bad field each become one error, and every file is still
 checked. The data-validation test is `DataValidationTests.ShippedData_LoadsWithNoErrors`.
 
-Shipped files: `common/damage_table.json`, `common/rules.json`, and `faction.json` + `units.json`
-for `malazan` and `whirlwind`. All five are required. Everything else in the tree above
+Shipped files: `common/damage_table.json`, `common/rules.json`, `common/resources.json` (M3-1), and
+`faction.json` + `units.json` for `malazan` and `whirlwind`. All seven are required. Everything else in the tree above
 (`statuses`, `buildings`, `techs`, `abilities`, `ai`, `maps`, other factions) arrives with the
 milestone that consumes it.
 
 | File | Shape |
 | --- | --- |
 | `damage_table.json` | `armorClasses: [{id, displayName}]`, `damageTypes: [{id, displayName, ignoresArmor?, multipliers: {<armorClass>: x}}]`. Every type must list every class. `ignoresArmor` (default false) is how Magic skips armor |
+| `resources.json` | `{ "resources": [ ... ] }`, each `{id, displayName, description, resource, footprint {width, height}}`: `resource` is `gold` or `wood`, footprint sides are cells, 1-4 (`DataLimits.MaxFootprint`). Amounts are not here: a tree holds `rules.json` `treeWood`, a mine `startMines.gold` (M3-1, see "Economy implementation") |
 | `rules.json` | docs/02 Economy table: `startingGold`, `startingWood`, `startingWorkers`, `popCap`, `workerCarry`, `gatherRate {gold, wood}` (per second), `startMines` / `expansionMines {count, gold}`, `treeWood`, `nodeSearchRadius`. Pop provided by buildings comes with `buildings.json` (M3); age costs with `techs.json` |
 | `faction.json` | `id` (must equal the folder name), `displayName`, `description`, `bonus {displayName, description}`, `resources {gold, wood: {displayName}}`, `palette {primary, secondary, accent}` as `#RRGGBB` |
 | `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge) |
@@ -1100,9 +1169,9 @@ Conversions at load: durations (`cooldown`, `windup`, `trainTime`) become ticks,
 `round(seconds × 20)` (2.2 s → 44, 0.45 s → 9); speed and gather rates become per-tick values;
 `pop` and `popCap` become half-pop integers (1 → 2, 1.5 → 3). String ids become dense ints in
 ordinal-sorted order of the id strings (units across all factions, factions, armor classes,
-damage types), so ids never depend on file order or file-system enumeration. `GameData` holds
+damage types, resource node types), so ids never depend on file order or file-system enumeration. `GameData` holds
 `ImmutableArray`s indexed by those ids; `FindUnit` / `FindFaction` map a string id back by binary
-search, for load time, tests, and tooling only.
+search, for load time, tests, and tooling only (`FindResource` too, since M3-1).
 
 Not resolved yet (kept as plain strings): `trainedAt` and `requires` (resolved when
 `buildings.json`/`techs.json` land in M3/M4), `model` (M2/M6 asset pipeline), and `projectile`
@@ -1542,12 +1611,14 @@ AiPlayer
 
 - **Replay file** (M1-6, `Rts.Sim.Replays`): a `Replay` holds a header, the command log, and
   checkpoints.
-  - Header: format version (`Replay.CurrentFormatVersion` = 2 since M1-7; 1 was M1-6, without
-    command flags, and is refused with `FormatVersionMismatch`), `SimInfo.Version` (informational,
-    not checked on playback), data hash (`GameData.ContentHash()`), seed, player count, unit and
-    command capacity (both decide outcomes: the unit capacity is in the state hash and a full
-    store drops spawns), checkpoint interval, tick count, and every `MapGenParams` field. There is
-    no map id yet: the map is rebuilt from seed + params.
+  - Header: format version (`Replay.CurrentFormatVersion` = 3 since M3-1; 2 was M1-7, without the
+    resource lines, 1 was M1-6, without command flags; both are refused with `FormatVersionMismatch`),
+    `SimInfo.Version` (informational, not checked on playback), data hash (`GameData.ContentHash()`),
+    seed, player count, unit, command and (M3-1) resource capacity (they decide outcomes: the unit and
+    resource capacities are in the state hash and a full store drops spawns), checkpoint interval,
+    tick count, and every `MapGenParams` field (M3-1 added `map.forests`, `map.forest-min-trees`,
+    `map.forest-max-trees`, `map.gold-mines`, `map.mine-spacing`). There is no map id yet: the map,
+    resource nodes included, is rebuilt from seed + params.
   - Command log: every command `Simulation.Enqueue` accepted, as stamped (tick, player, sequence,
     kind, type id, position, unit handle, flags), in enqueue order. Commands stamped for a tick after the
     recorded span are left out.
@@ -1606,13 +1677,16 @@ AiPlayer
 
 - Golden replays live in `sim/Rts.Sim.Tests/Replays/`. The first (M1-6) is
   `cross_map_seed1.replay`: `CrossMapScenario` seed 1, 200 units ordered across the map, exactly
-  1,500 ticks, checkpoints every 100 (about 16 KB). `ReplayGoldenTests` plays it back and fails on
+  1,500 ticks, checkpoints every 100 (about 16 KB). Last regenerated in M3-1 (format 3, the
+  resource store and grid version in the hash, `resources.json` in the data hash; its commands and
+  unit trajectories are unchanged). `ReplayGoldenTests` plays it back and fails on
   the first mismatching checkpoint. When a deliberate change alters outcomes (movement, tick order,
   RNG use, any `game/data` edit), run the tests once with the environment variable
   `RTS_REGEN_GOLDEN=1`: the test rewrites the file and then fails with "golden regenerated; rerun
   without the flag". Rerun without it, and explain why in the commit message.
 - `DeterminismTests`: two sims with the same seed and commands keep equal hashes every 100 ticks
-  over 2,000 ticks of movement; different seeds differ by tick 100.
+  over 2,000 ticks of movement; different seeds differ by tick 100. Since M3-1 also on a map with 12
+  forests and 8 mines, with scripted `Take`s between ticks that fell trees mid-run.
 - Tests whose bounds or preconditions were measured on one pre-M1-6 map pass their old seed
   through `TestSeeds.PreMix`, which inverts `SimRng.MixSeed` so they get exactly the old streams.
   New tests use plain seeds.
@@ -1662,8 +1736,9 @@ AiPlayer
 - **Dev console** (backtick): `spawn <unit> <n>`, `give <gold> <wood>`, `reveal`, `speed <x>`,
   `ai <player> <difficulty>`, `win`, `lose`, `hash`.
 - **Headless CLI** (M1-8, `tools/Rts.Cli`, references `Rts.Sim` only):
-  - `dotnet run --project tools/Rts.Cli -- run --seed <n> --units <n> [--ticks <n>] [--players 1|2] [--checkpoint <ticks>] [--record <path>] [--data <dir>]`
-    builds the default generated map from the seed and runs the march scenario: player 0's army
+  - `dotnet run --project tools/Rts.Cli -- run --seed <n> --units <n> [--ticks <n>] [--players 1|2] [--checkpoint <ticks>] [--forests <n>] [--mines <n>] [--record <path>] [--data <dir>]`
+    builds the default generated map from the seed (since M3-1 with `--forests` forests and `--mines`
+    gold mines, 0-64 each, default 0) and runs the march scenario: player 0's army
     (`--units` in total, split ceil/floor with two players) spawns in the west debug start block
     (`ViewApi.StartLayout.Block`, as `Match`), player 1's in the east one, unit types round-robin
     over every type in id order. Once the units exist (tick 2) every unit gets one `Move` to its
@@ -1673,7 +1748,8 @@ AiPlayer
     `Command.*` factories build commands, and a `ReplayRecorder` attaches before the first
     enqueue when `--record` is given. Defaults: 1,500 ticks, 1 player, checkpoint every 100 ticks,
     `game/data` next to the nearest `RtsGame.sln` above the working or program directory.
-    Limits: units 1-100,000, ticks and checkpoint 1-1,728,000. Output: one header line,
+    Limits: units 1-100,000, ticks and checkpoint 1-1,728,000. Output: one header line (ending
+    `forests F trees T mines M` since M3-1: what the placer put down),
     `tick <n> hash <16 hex>` per checkpoint (`StateHash()` right after that tick), then
     `ticks N avg A ms p99 P ms worst W ms` (a `Stopwatch` around each `Tick()` in the CLI, never in
     the sim; the CLI's own hashing and printing are outside it, but with `--record` the recorder

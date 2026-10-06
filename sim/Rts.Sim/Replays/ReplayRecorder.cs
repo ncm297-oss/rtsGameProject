@@ -119,6 +119,7 @@ public sealed class ReplayRecorder
             PlayerCount = config.PlayerCount,
             UnitCapacity = config.UnitCapacity,
             CommandCapacity = config.CommandCapacity,
+            ResourceCapacity = config.ResourceCapacity,
             CheckpointInterval = CheckpointInterval,
             TickCount = tickCount,
             Commands = commands.ToImmutable(),

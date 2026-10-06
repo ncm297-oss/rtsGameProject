@@ -9,7 +9,7 @@ public enum NavFlags : byte
     /// <summary>Open ground.</summary>
     None = 0,
 
-    /// <summary>Ground units can't enter (cliff, map border, unreachable pocket; later buildings, trees, water).</summary>
+    /// <summary>Ground units can't enter (cliff, map border, unreachable pocket, resource node; later buildings, water).</summary>
     Blocked = 1,
 
     /// <summary>A plateau edge cell above a drop with no ramp; always also <see cref="Blocked"/>.</summary>
@@ -17,4 +17,7 @@ public enum NavFlags : byte
 
     /// <summary>A sloped cell joining its level to the level above.</summary>
     Ramp = 4,
+
+    /// <summary>Covered by a live resource node (a tree, a gold mine); always also <see cref="Blocked"/>. Cleared when the node is depleted (M3-1).</summary>
+    Resource = 8,
 }

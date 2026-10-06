@@ -227,6 +227,18 @@ public sealed class CliTests : IDisposable
     [InlineData("play")]
     [InlineData("play a.replay b.replay")]
     [InlineData("play a.replay --seed 1")]
+    // M3-1: --forests / --mines take 0 to MapGenParams.MaxResourceGroups (64).
+    [InlineData("run --seed 1 --units 10 --forests 0x10")]
+    [InlineData("run --seed 1 --units 10 --forests -1")]
+    [InlineData("run --seed 1 --units 10 --forests 1e3")]
+    [InlineData("run --seed 1 --units 10 --forests 65")]
+    [InlineData("run --seed 1 --units 10 --forests")]
+    [InlineData("run --seed 1 --units 10 --mines 0x10")]
+    [InlineData("run --seed 1 --units 10 --mines -1")]
+    [InlineData("run --seed 1 --units 10 --mines 1e3")]
+    [InlineData("run --seed 1 --units 10 --mines 2.5")]
+    [InlineData("run --seed 1 --units 10 --mines 3 --mines 3")]
+    [InlineData("play a.replay --forests 3")]
     public void BadUsage_Exits1_WithOneUsageLine(string argLine)
     {
         string[] args = argLine.Length == 0 ? Array.Empty<string>() : argLine.Split(' ');
@@ -237,6 +249,40 @@ public sealed class CliTests : IDisposable
         Assert.StartsWith("error: ", err);
         Assert.Contains(CliRunner.Usage, err);
         Assert.DoesNotContain("Exception", err);
+    }
+
+    /// <summary>M3-1: <c>--forests</c> / <c>--mines</c> build the map with resources, print the placed counts, and record them.</summary>
+    [Fact]
+    public void Run_WithForestsAndMines_PrintsPlacedCounts_MatchesADirectSim_AndRecordsThem()
+    {
+        string path = TempPath();
+        CliResult r = Cli("run", "--seed", "2", "--units", "60", "--ticks", "300", "--forests", "12", "--mines", "8", "--record", path, "--data", TestDataDir.Shipped);
+        Assert.Equal(0, r.Exit);
+        Assert.Equal("", r.Err);
+
+        var map = new MapGenParams { Forests = 12, GoldMines = 8 };
+        var direct = new Simulation(TestSim.Config(Seed: 2, PlayerCount: 1, UnitCapacity: 60, CommandCapacity: 60) with { Map = map });
+        ResourcePlacement p = direct.World.ResourcePlacement;
+        Assert.True(p.Trees > 0);
+        string header = Lines(r.Out)[0];
+        Assert.Equal($"seed 2 units 60 players 1 ticks 300 checkpoint 100 forests {p.Forests} trees {p.Trees} mines {p.Mines}", header);
+        Assert.Equal(3, HashLines(r.Out).Length);
+        Assert.NotEqual(HashLines(r.Out), HashLines(Cli("run", "--seed", "2", "--units", "60", "--ticks", "300", "--data", TestDataDir.Shipped).Out));
+
+        Assert.Equal(ReplayError.None, ReplayFormat.TryReadFile(path, out Replay? replay));
+        Assert.Equal(map, replay!.Map);
+        CliResult played = Cli("play", path, "--data", TestDataDir.Shipped);
+        Assert.Equal(0, played.Exit);
+        Assert.Equal(HashLines(r.Out), HashLines(played.Out));
+        Assert.Contains("ok: 3 checkpoints matched over 300 ticks", played.Out);
+    }
+
+    [Fact]
+    public void Run_WithoutResourceOptions_PrintsZeroCounts()
+    {
+        CliResult r = Cli("run", "--seed", "1", "--units", "10", "--ticks", "10", "--data", TestDataDir.Shipped);
+        Assert.Equal(0, r.Exit);
+        Assert.EndsWith(" forests 0 trees 0 mines 0", Lines(r.Out)[0]);
     }
 
     [Fact]

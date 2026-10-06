@@ -6,7 +6,7 @@ namespace Rts.Sim.Data;
 
 /// <summary>All loaded definitions, immutable, indexed by dense int ids. Build it with <see cref="DataLoader.LoadAll"/>.</summary>
 /// <remarks>
-/// Tick code indexes the arrays by id. The string lookups (<see cref="FindUnit"/>, <see cref="FindFaction"/>)
+/// Tick code indexes the arrays by id. The string lookups (<see cref="FindUnit"/>, <see cref="FindFaction"/>, <see cref="FindResource"/>)
 /// are for load time, commands from tests/UI, and tooling: they binary-search the sorted key arrays.
 /// </remarks>
 public sealed class GameData
@@ -23,6 +23,8 @@ public sealed class GameData
     public required ImmutableArray<FactionDef> Factions { get; init; }
     /// <summary>Unit types of every faction, indexed by unit id (ordinal order of their string ids).</summary>
     public required ImmutableArray<UnitDef> Units { get; init; }
+    /// <summary>Resource node types (trees, gold mines), indexed by resource type id (ordinal order of their string ids). The loader always sets it; empty only for hand-built data.</summary>
+    public ImmutableArray<ResourceDef> Resources { get; init; } = ImmutableArray<ResourceDef>.Empty;
 
     /// <summary>Stable 64-bit hash of every field of every definition, in id order; replays store it and refuse to play on other data.</summary>
     /// <remarks>
@@ -110,6 +112,18 @@ public sealed class GameData
             AddAll(ref h, u.Requires);
             AddAll(ref h, u.Tags);
         }
+
+        h.Add(Resources.Length);
+        foreach (ResourceDef d in Resources)
+        {
+            h.Add(d.Id);
+            h.Add(d.Key);
+            h.Add(d.DisplayName);
+            h.Add(d.Description);
+            h.Add((int)d.Resource);
+            h.Add(d.FootprintWidth);
+            h.Add(d.FootprintHeight);
+        }
         return h.Value;
     }
 
@@ -127,6 +141,9 @@ public sealed class GameData
 
     /// <summary>Unit id for a string id, or -1.</summary>
     public int FindUnit(string key) => Find(Units, static u => u.Key, key);
+
+    /// <summary>Resource type id for a string id, or -1.</summary>
+    public int FindResource(string key) => Find(Resources, static r => r.Key, key);
 
     /// <summary>Faction id for a string id, or -1.</summary>
     public int FindFaction(string key) => Find(Factions, static f => f.Key, key);

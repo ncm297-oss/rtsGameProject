@@ -27,6 +27,7 @@ public static class ReplayPlayer
         {
             Data = data,
             Map = replay.Map,
+            ResourceCapacity = replay.ResourceCapacity,
         };
         var sim = new Simulation(config);
         var recorder = new ReplayRecorder(sim, replay.CheckpointInterval, replay.TickCount, replay.Commands.Length);

@@ -46,6 +46,7 @@ public static class ReplayFormat
         Line(sb, "players", Int(replay.PlayerCount));
         Line(sb, "unit-capacity", Int(replay.UnitCapacity));
         Line(sb, "command-capacity", Int(replay.CommandCapacity));
+        Line(sb, "resource-capacity", Int(replay.ResourceCapacity));
         Line(sb, "checkpoint-interval", Int(replay.CheckpointInterval));
         Line(sb, "ticks", Int(replay.TickCount));
         MapGenParams m = replay.Map;
@@ -65,6 +66,11 @@ public static class ReplayFormat
         Line(sb, "map.ramp-tries", Int(m.RampTries));
         Line(sb, "map.min-passable-fraction", Bits(m.MinPassableFraction));
         Line(sb, "map.max-attempts", Int(m.MaxAttempts));
+        Line(sb, "map.forests", Int(m.Forests));
+        Line(sb, "map.forest-min-trees", Int(m.ForestMinTrees));
+        Line(sb, "map.forest-max-trees", Int(m.ForestMaxTrees));
+        Line(sb, "map.gold-mines", Int(m.GoldMines));
+        Line(sb, "map.mine-spacing", Bits(m.MineSpacing));
 
         Line(sb, "commands", Int(replay.Commands.Length));
         foreach (Command c in replay.Commands)
@@ -166,6 +172,7 @@ public static class ReplayFormat
         if (!r.Int("players", out int players)) return ReplayError.Malformed;
         if (!r.Int("unit-capacity", out int unitCapacity)) return ReplayError.Malformed;
         if (!r.Int("command-capacity", out int commandCapacity)) return ReplayError.Malformed;
+        if (!r.Int("resource-capacity", out int resourceCapacity)) return ReplayError.Malformed;
         if (!r.Int("checkpoint-interval", out int interval)) return ReplayError.Malformed;
         if (!r.Int("ticks", out int ticks)) return ReplayError.Malformed;
 
@@ -177,7 +184,11 @@ public static class ReplayFormat
             || !r.Int("map.ramp-width", out int rampWidth) || !r.Int("map.ramp-length", out int rampLength)
             || !r.Int("map.ramps-per-plateau", out int rampsPer) || !r.Int("map.ramp-tries", out int rampTries)
             || !r.Fields("map.min-passable-fraction", 1, out f) || !TryBits(f[0], out float minPassable)
-            || !r.Int("map.max-attempts", out int maxAttempts))
+            || !r.Int("map.max-attempts", out int maxAttempts)
+            || !r.Int("map.forests", out int forests)
+            || !r.Int("map.forest-min-trees", out int forestMin) || !r.Int("map.forest-max-trees", out int forestMax)
+            || !r.Int("map.gold-mines", out int goldMines)
+            || !r.Fields("map.mine-spacing", 1, out f) || !TryBits(f[0], out float mineSpacing))
             return ReplayError.Malformed;
         var map = new MapGenParams
         {
@@ -197,6 +208,11 @@ public static class ReplayFormat
             RampTries = rampTries,
             MinPassableFraction = minPassable,
             MaxAttempts = maxAttempts,
+            Forests = forests,
+            ForestMinTrees = forestMin,
+            ForestMaxTrees = forestMax,
+            GoldMines = goldMines,
+            MineSpacing = mineSpacing,
         };
 
         // Counts are checked against the lines actually present, never used to size a buffer up front.
@@ -243,6 +259,7 @@ public static class ReplayFormat
             PlayerCount = players,
             UnitCapacity = unitCapacity,
             CommandCapacity = commandCapacity,
+            ResourceCapacity = resourceCapacity,
             CheckpointInterval = interval,
             TickCount = ticks,
             Commands = commands.MoveToImmutable(),

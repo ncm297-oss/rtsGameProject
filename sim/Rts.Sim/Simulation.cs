@@ -103,7 +103,7 @@ public sealed class Simulation
         _recorder = recorder;
     }
 
-    /// <summary>64-bit FNV-1a hash of all gameplay state: tick, units (Hold and order queues included), RNG streams, flow-field cache metadata, and pending commands.</summary>
+    /// <summary>64-bit FNV-1a hash of all gameplay state: tick, units (Hold and order queues included), RNG streams, flow-field cache metadata, nav grid version, resource nodes, and pending commands.</summary>
     /// <remarks>
     /// Derived state is left out: the spatial hash (rebuilt from the units every tick) and
     /// Speed/Radius (they follow from TypeId). The flow-field cache's keys, versions and LRU stamps
@@ -151,6 +151,10 @@ public sealed class Simulation
         }
 
         World.FlowFields.AddToHash(ref h);
+
+        // M3-1: resource nodes and the grid version (passability changes with them; it used to be unhashed).
+        h.Add(World.NavGrid.Version);
+        World.Resources.AddToHash(ref h);
 
         for (int p = 0; p < _nextSequence.Length; p++)
             h.Add(_nextSequence[p]);

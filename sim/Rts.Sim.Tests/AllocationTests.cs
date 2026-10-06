@@ -181,4 +181,60 @@ public class AllocationTests
         Assert.True(left <= queuedPerRun - 150, $"{left} of {queuedPerRun} queued orders still waiting: too few pops measured");
         Assert.True(holding > 0, "no queued HoldPosition was reached");
     }
+
+    // ---------- M3-1: resource nodes ----------
+
+    /// <summary>Spawns trees on every cell that takes one, in index order, until <paramref name="count"/> stand.</summary>
+    private static void FillTrees(Simulation sim, int count, int amount)
+    {
+        Map.NavGrid g = sim.World.NavGrid;
+        Entities.ResourceStore r = sim.World.Resources;
+        for (int c = 0; c < g.Width * g.Height && r.Count < count; c++)
+            r.Spawn(ResourceMaps.Tree, c, amount, out _);
+        Assert.Equal(count, r.Count);
+    }
+
+    [Fact]
+    public void TickAndStateHash_With4000LiveNodes_AllocateNothing()
+    {
+        var sim = new Simulation(TestSim.Config(Seed: 3, PlayerCount: 2, UnitCapacity: 64, CommandCapacity: 64));
+        FillTrees(sim, 4000, ResourceMaps.TreeWood);
+        ulong sink = 0;
+        sim.Tick();
+        sink ^= sim.StateHash(); // JIT warm-up
+        Action block = () =>
+        {
+            sim.Tick();
+            sink ^= sim.StateHash();
+        };
+        AllocationProbe.AssertZero(block);
+        Assert.Equal(4000, sim.World.Resources.Count);
+        _ = sink;
+    }
+
+    [Fact]
+    public void HundredTakes_IncludingFifty_Frees_AllocateNothing()
+    {
+        var sim = new Simulation(TestSim.Config(Seed: 3, PlayerCount: 1, UnitCapacity: 8, CommandCapacity: 8));
+        Entities.ResourceStore r = sim.World.Resources;
+        var handles = new Entities.EntityHandle[50];
+        Action setup = () =>
+        {
+            Assert.Equal(0, r.Count);
+            FillTrees(sim, 50, 2);
+            for (int i = 0; i < 50; i++) handles[i] = r.HandleOf(i);
+        };
+        int taken = 0;
+        Action block = () =>
+        {
+            for (int k = 0; k < 100; k++) taken += r.Take(handles[k % 50], 1); // the second pass empties each tree
+        };
+        setup();
+        block(); // JIT warm-up: Take, Free and the grid's ClearResource
+        int versionBefore = sim.World.NavGrid.Version;
+        int runs = AllocationProbe.AssertZero(block, setup: setup);
+        Assert.Equal(0, r.Count);
+        Assert.Equal(100 * (runs + 1), taken);
+        Assert.Equal(versionBefore + runs * 100, sim.World.NavGrid.Version); // 50 spawns + 50 frees per run
+    }
 }

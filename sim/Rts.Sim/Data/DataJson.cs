@@ -126,3 +126,23 @@ internal sealed class CostJson
     public int? Gold { get; set; }
     public int? Wood { get; set; }
 }
+
+internal sealed class ResourceFileJson
+{
+    public List<ResourceJson?>? Resources { get; set; }
+}
+
+internal sealed class ResourceJson
+{
+    public string? Id { get; set; }
+    public string? DisplayName { get; set; }
+    public string? Description { get; set; }
+    public string? Resource { get; set; }
+    public FootprintJson? Footprint { get; set; }
+}
+
+internal sealed class FootprintJson
+{
+    public int? Width { get; set; }
+    public int? Height { get; set; }
+}

@@ -63,13 +63,27 @@ public class DataContentHashTests
         return null;
     }
 
-    private static GameData With(GameData d, DamageTable? table = null, RulesDef? rules = null, FactionDef? faction = null, UnitDef? unit = null) => new()
+    private static GameData With(GameData d, DamageTable? table = null, RulesDef? rules = null, FactionDef? faction = null, UnitDef? unit = null,
+        ResourceDef? resource = null, int resourceSlot = 0) => new()
     {
         DamageTable = table ?? d.DamageTable,
         Rules = rules ?? d.Rules,
         Factions = faction == null ? d.Factions : d.Factions.SetItem(faction.Id, faction),
         Units = unit == null ? d.Units : d.Units.SetItem(unit.Id, unit),
+        Resources = resource == null ? d.Resources : d.Resources.SetItem(resourceSlot, resource),
     };
+
+    [Fact]
+    public void ResourceListLengthAndFootprintEdit_ChangeTheHash()
+    {
+        GameData d = TestSim.Data;
+        Assert.NotEqual(d.ContentHash(), new GameData { DamageTable = d.DamageTable, Rules = d.Rules, Factions = d.Factions, Units = d.Units }.ContentHash());
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("common/resources.json", root => root["resources"]![0]!["footprint"]!["width"] = 3);
+        DataLoadResult load = DataLoader.LoadAll(dir.Path);
+        Assert.True(load.Ok, string.Join("\n", load.Errors));
+        Assert.NotEqual(d.ContentHash(), load.Data!.ContentHash());
+    }
 
     [Fact]
     public void ChangingAnyFieldOfAnyDef_ChangesTheHash()
@@ -104,7 +118,12 @@ public class DataContentHashTests
             typeof(UnitDef).GetProperty(nameof(UnitDef.Attack))!.SetValue(u, a);
             return With(d, unit: u);
         });
+        // M3-1: every ResourceDef field, on each shipped resource type.
+        foreach (ResourceDef r in d.Resources)
+            Check(r, x => With(d, resource: x, resourceSlot: r.Id)); // by slot: the Id row changes Id
         Assert.Contains("AttackDef.Projectile", checkedFields); // nullable: null and "x" must differ
-        Assert.True(checkedFields.Count >= 50, $"only {checkedFields.Count} fields checked");
+        foreach (string f in new[] { "Id", "Key", "DisplayName", "Description", "Resource", "FootprintWidth", "FootprintHeight" })
+            Assert.Contains($"ResourceDef.{f}", checkedFields);
+        Assert.True(checkedFields.Count >= 57, $"only {checkedFields.Count} fields checked");
     }
 }
