@@ -125,7 +125,7 @@ public class LocalMovementTests
     [Fact]
     public void FiftyUnits_ToOneOpenPoint_AllIdleWithin600Ticks_PackedNeverBlockedOrOffMap()
     {
-        Simulation sim = MoveScenario.Spawn(seed: 41, units: 50, maxCost: 25f, out int goalCell);
+        Simulation sim = MoveScenario.Spawn(seed: 41, units: 50, maxCost: 25f, out int goalCell, players: 1); // one point: one player (BUG-0037)
         World w = sim.World;
         Vector2 goal = MoveScenario.Center(w.NavGrid, goalCell);
         MoveScenario.MoveAll(sim, goal);
@@ -602,7 +602,7 @@ public class LocalMovementTests
     [Fact]
     public void ArrivedBlob_ReorderedToTheSamePointEveryTick_StaysIdleAndStill()
     {
-        Simulation sim = MoveScenario.Spawn(seed: 3, units: 20, maxCost: 40f, out int goalCell);
+        Simulation sim = MoveScenario.Spawn(seed: 3, units: 20, maxCost: 40f, out int goalCell, players: 1); // one point: one player (BUG-0037)
         Vector2 goal = MoveScenario.Center(sim.World.NavGrid, goalCell);
         MoveScenario.MoveAll(sim, goal);
         sim.Tick();

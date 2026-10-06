@@ -188,7 +188,7 @@ public class MoveQaTests
     [Fact]
     public void Move_SpammedEveryTick_ToSameTarget_BuildsOneField_AndStillArrives()
     {
-        Simulation sim = MoveScenario.Spawn(seed: 3, units: 20, maxCost: 40f, out int goalCell);
+        Simulation sim = MoveScenario.Spawn(seed: 3, units: 20, maxCost: 40f, out int goalCell, players: 1); // M1-4d-3: one point, one player (BUG-0037)
         Vector2 goal = MoveScenario.Center(sim.World.NavGrid, goalCell);
         int builds = sim.World.FlowFields.BuildCount;
         for (int t = 0; t < 1200; t++)

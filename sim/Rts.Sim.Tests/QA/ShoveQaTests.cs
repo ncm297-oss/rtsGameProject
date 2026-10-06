@@ -63,8 +63,9 @@ public class ShoveQaTests
     /// After one tick in which no unit got a command: every unit that was Idle and still is, and
     /// moved, was shoved, so it must have moved at most its speed, kept velocity 0 and its order tick,
     /// stand on passable ground, and a Moving unit of its own player must have started the tick
-    /// within touching-plus-one-step of it (shoves never chain and never cross players). Every unit
-    /// that was Moving and still is moved by exactly its own velocity. Returns an error or null.
+    /// within touching-plus-one-step of it, or (chain shove, M1-4d-3) it must have started the tick
+    /// touching a unit of its own player that was shoved this tick too (shoves never cross players).
+    /// Every unit that was Moving and still is moved by exactly its own velocity. Returns an error or null.
     /// </summary>
     internal static string? CheckShoves(World w, Before b, ref int shoves)
     {
@@ -92,6 +93,9 @@ public class ShoveQaTests
                 float reach = u.Radius[i] + u.Radius[k] + u.Speed[k] + 0.01f;
                 if (Vector2.DistanceSquared(b.Pos[k], b.Pos[i]) <= reach * reach) walker = true;
             }
+            // A chain shove (M1-4d-3): a line of touching Idle friendly units, at most MaxChainShove long
+            // with this one, leads from a friendly walker in reach to it (start-of-tick positions).
+            if (!walker) walker = ChainReach(u, b, i, i, MovementConstants.MaxChainShove - 1);
             if (!walker)
             {
                 int nearest = -1;
@@ -107,6 +111,27 @@ public class ShoveQaTests
             }
         }
         return null;
+    }
+
+    /// <summary>True if Idle unit <paramref name="at"/> touched (start of tick) an Idle unit of <paramref name="i"/>'s owner that a friendly walker could shove, within <paramref name="links"/> more links.</summary>
+    private static bool ChainReach(UnitStore u, Before b, int i, int at, int links)
+    {
+        if (links <= 0) return false;
+        for (int k = 0; k < u.Capacity; k++)
+        {
+            if (k == at || k == i || !b.Alive[k] || !u.Alive[k] || u.Owner[k] != u.Owner[i] || b.State[k] != UnitState.Idle) continue;
+            float touch = u.Radius[at] + u.Radius[k] + 0.01f;
+            if (Vector2.DistanceSquared(b.Pos[k], b.Pos[at]) > touch * touch) continue;
+            for (int w = 0; w < u.Capacity; w++)
+            {
+                bool moving = b.State[w] == UnitState.Moving || u.State[w] == UnitState.Moving || u.OrderTick[w] != b.OrderTick[w];
+                if (!b.Alive[w] || !u.Alive[w] || !moving || u.Owner[w] != u.Owner[i]) continue;
+                float reach = u.Radius[k] + u.Radius[w] + u.Speed[w] + 0.01f;
+                if (Vector2.DistanceSquared(b.Pos[w], b.Pos[k]) <= reach * reach) return true;
+            }
+            if (ChainReach(u, b, i, k, links - 1)) return true;
+        }
+        return false;
     }
 
     /// <summary>Idle units keeping a goal cell that are not linked to their point (MoveScenario.Arrived); first one described.</summary>
@@ -542,7 +567,7 @@ public class ShoveQaTests
     /// in the 1-cell corridor (they pack along it, both keep the goal). A third unit of player 0
     /// walks past them and must get through (the pair may lose its goal), as criterion 1 asks.
     /// </summary>
-    [Fact(Skip = "BUG-0033: a parked group (two or more units on their point) is never shoved; the walker gives up. Un-skip when fixed")]
+    [Fact]
     public void WalkerInOneCellCorridor_PastAParkedFriendlyPair_Arrives()
     {
         Simulation sim = LocalMovementTests.SimOn(Corridor(), 3);

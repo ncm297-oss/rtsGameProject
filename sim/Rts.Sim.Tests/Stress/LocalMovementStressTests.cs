@@ -68,30 +68,53 @@ public class LocalMovementStressTests
     /// report settle ticks, arrivals and give-ups.
     /// </summary>
     /// <remarks>
-    /// The arrived bounds are the M1-4d-2 measurements (fix round 1) less a little headroom: 500/500
-    /// and 2493/2500 to one point, 174/500 and 891/2500 to four (criterion 6 asked for 80% / 60%,
-    /// BUG-0032). Owners alternate by slot, so each pair of
-    /// neighboring points belongs to different players: walkers can't shove the other player's blob
-    /// and the flow field doesn't route round it (BUG-0028).
+    /// M1-4d-3 (BUG-0039): swept over plain seeds, each bound holding on every swept seed (the
+    /// worst seed less a little headroom), no longer one pre-M1-6 map. One point: one player (two
+    /// players at one point are enemies contesting it, BUG-0037). Four points: one player per point,
+    /// neighboring points the enemy's (<see cref="CrowdRows.PointOf"/>; the old slot % 4 split sent both
+    /// players to every point, see <see cref="Crowd_ToFourPoints_BothPlayersAtEveryPoint_Report"/>).
+    /// Measured over seeds 1-10 (docs/03 "Implementation (M1-4d-3)"): 500 to 4 points 230-280
+    /// arrived, 2,500 to 4 points 699-966.
     /// </remarks>
     [Theory]
-    [InlineData(500, 1, 3000, 99)]
-    [InlineData(500, 4, 3000, 32)]
-    [InlineData(2500, 1, 6000, 99)]
-    [InlineData(2500, 4, 6000, 33)]
-    public void Crowd_ToOneOrFourClosePoints_InvariantsEveryTick_AllSettle(int units, int points, int limit, int minArrivedPercent)
+    [InlineData(500, 1, 3000, 99, 1UL)]
+    [InlineData(500, 1, 3000, 99, 2UL)]
+    [InlineData(500, 1, 3000, 99, 3UL)]
+    [InlineData(2500, 1, 6000, 99, 1UL)]
+    [InlineData(500, 4, 3000, MinArrived500To4, 1UL)]
+    [InlineData(500, 4, 3000, MinArrived500To4, 2UL)]
+    [InlineData(500, 4, 3000, MinArrived500To4, 3UL)]
+    [InlineData(500, 4, 3000, MinArrived500To4, 4UL)]
+    [InlineData(500, 4, 3000, MinArrived500To4, 5UL)]
+    [InlineData(500, 4, 3000, MinArrived500To4, 6UL)]
+    [InlineData(500, 4, 3000, MinArrived500To4, 7UL)]
+    [InlineData(500, 4, 3000, MinArrived500To4, 8UL)]
+    [InlineData(500, 4, 3000, MinArrived500To4, 9UL)]
+    [InlineData(500, 4, 3000, MinArrived500To4, 10UL)]
+    [InlineData(2500, 4, 6000, MinArrived2500To4, 1UL)]
+    [InlineData(2500, 4, 6000, MinArrived2500To4, 2UL)]
+    [InlineData(2500, 4, 6000, MinArrived2500To4, 3UL)]
+    [InlineData(2500, 4, 6000, MinArrived2500To4, 4UL)]
+    [InlineData(2500, 4, 6000, MinArrived2500To4, 5UL)]
+    [InlineData(2500, 4, 6000, MinArrived2500To4, 6UL)]
+    [InlineData(2500, 4, 6000, MinArrived2500To4, 7UL)]
+    [InlineData(2500, 4, 6000, MinArrived2500To4, 8UL)]
+    [InlineData(2500, 4, 6000, MinArrived2500To4, 9UL)]
+    [InlineData(2500, 4, 6000, MinArrived2500To4, 10UL)]
+    public void Crowd_ToOneOrFourClosePoints_InvariantsEveryTick_AllSettle(int units, int points, int limit, int minArrivedPercent, ulong seed)
     {
-        Simulation sim = MoveScenario.Spawn(seed: TestSeeds.PreMix((ulong)(900 + units + points)), // pre-M1-6 maps the bounds were measured on
-            units: units, maxCost: units > 1000 ? 70f : 40f, out int goalCell);
+        Simulation sim = MoveScenario.Spawn(seed, units, units > 1000 ? 70f : 40f, out int goalCell, players: points == 1 ? 1 : 2);
         World w = sim.World;
         NavGrid g = w.NavGrid;
         Vector2 c = MoveScenario.Center(g, goalCell);
-        var goals = points == 1
-            ? new[] { c }
-            : new[] { c + new Vector2(-3f, -3f), c + new Vector2(3f, -3f), c + new Vector2(-3f, 3f), c + new Vector2(3f, 3f) };
+        Vector2[] four = CrowdRows.FourPoints(c);
         UnitStore u = w.Units;
+        var goalOf = new Vector2[u.Capacity];
         for (int i = 0; i < u.Capacity; i++)
-            sim.Enqueue(Command.Move(u.Owner[i], MoveScenario.Handle(sim, i), goals[i % goals.Length]));
+        {
+            goalOf[i] = points == 1 ? c : four[CrowdRows.PointOf(u, i, true)];
+            sim.Enqueue(Command.Move(u.Owner[i], MoveScenario.Handle(sim, i), goalOf[i]));
+        }
         sim.Tick();
         var lastPos = new Vector2[u.Capacity];
         var lastIdle = new bool[u.Capacity];
@@ -113,25 +136,42 @@ public class LocalMovementStressTests
             string? err = CheckInvariants(w, lastPos, lastIdle);
             Assert.True(err == null, $"post-settle tick {t}: {err}");
         }
-        _out.WriteLine($"{units} units to {points} point(s): {CountMoving(u)} moving after {ticks} ticks; arrived {arrivedCount}, gave up {gaveUp}, other {units - arrivedCount - gaveUp}; pack: {MoveScenario.FirstPackViolation(w) ?? "ok"}");
+        _out.WriteLine($"seed {seed}: {units} units to {points} point(s): {CountMoving(u)} moving after {ticks} ticks; arrived {arrivedCount}, gave up {gaveUp}, other {units - arrivedCount - gaveUp}; pack: {MoveScenario.FirstPackViolation(w) ?? "ok"}");
         // Where the give-ups stopped (distance to their own order's point) and what the stragglers do.
         var buckets = new int[5]; // <2, <4, <8, <16, more (m)
         for (int i = 0; i < u.Capacity; i++)
         {
             if (arrived[i] || u.GoalCell[i] != -1) continue;
-            float d = Vector2.Distance(u.Position[i], goals[i % goals.Length]);
+            float d = Vector2.Distance(u.Position[i], goalOf[i]);
             buckets[d < 2f ? 0 : d < 4f ? 1 : d < 8f ? 2 : d < 16f ? 3 : 4]++;
         }
         _out.WriteLine($"  given-up distance to own point: <2 m {buckets[0]}, <4 m {buckets[1]}, <8 m {buckets[2]}, <16 m {buckets[3]}, more {buckets[4]}");
-        int shown = 0;
-        for (int i = 0; i < u.Capacity && shown < 5; i++)
-            if (u.State[i] == UnitState.Moving)
-            {
-                _out.WriteLine($"  straggler {i}: {Vector2.Distance(u.Position[i], goals[i % goals.Length]):F2} m from its point, stuck {u.StuckTicks[i]}, velocity {u.Velocity[i].Length():F3}");
-                shown++;
-            }
         Assert.True(CountMoving(u) == 0, $"{CountMoving(u)} units still Moving after {ticks} ticks");
         Assert.True(arrivedCount * 100 >= minArrivedPercent * units, $"{arrivedCount} of {units} arrived (< {minArrivedPercent}%)");
+    }
+
+    /// <summary>Lowest arrival share (percent) on every swept seed, 500 units to 4 points (worst measured 230 = 46%).</summary>
+    private const int MinArrived500To4 = 40;
+
+    /// <summary>Lowest arrival share (percent) on every swept seed, 2,500 units to 4 points (worst measured 699 = 28%).</summary>
+    private const int MinArrived2500To4 = 22;
+
+    /// <summary>
+    /// Report row: the pre-M1-4d-3 split (slot % 4), which sends both players to every point. Since
+    /// BUG-0037 every point is contested by enemies, so far fewer arrive; printed for docs/03, asserts
+    /// only that everything stops.
+    /// </summary>
+    [Theory]
+    [InlineData(500, 3000)]
+    [InlineData(2500, 6000)]
+    public void Crowd_ToFourPoints_BothPlayersAtEveryPoint_Report(int units, int limit)
+    {
+        for (ulong seed = 1; seed <= 3; seed++)
+        {
+            CrowdRows.Result r = CrowdRows.ToFourPoints(seed, units, limit, onePlayerPerPoint: false);
+            _out.WriteLine($"seed {seed}: {units} units, both players at every point: arrived {r.Arrived}, gave up {r.GaveUp} after {r.Ticks} ticks");
+            Assert.Equal(0, r.StillMoving);
+        }
     }
 
     // ---------- walls and gaps ----------
@@ -287,10 +327,10 @@ public class LocalMovementStressTests
 
         public Serial(ITestOutputHelper output) => _out = output;
 
-        /// <summary>All units spawned within a few cells of the goal: the worst case for QueryRadius (crowded buckets).</summary>
+        /// <summary>All units spawned within a few cells of the goal: the worst case for QueryRadius (crowded buckets). One player (M1-4d-3: two players at one point are enemies contesting it, BUG-0037).</summary>
         private static Simulation TightBlob(int units)
         {
-            Simulation sim = MoveScenario.Spawn(seed: 99, units: units, maxCost: units >= 2500 ? 12f : units >= 1000 ? 8f : 6f, out int goalCell);
+            Simulation sim = MoveScenario.Spawn(seed: 99, units: units, maxCost: units >= 2500 ? 12f : units >= 1000 ? 8f : 6f, out int goalCell, players: 1);
             MoveScenario.MoveAll(sim, MoveScenario.Center(sim.World.NavGrid, goalCell));
             sim.Tick();
             return sim;

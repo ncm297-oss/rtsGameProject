@@ -80,7 +80,7 @@ phases in this fixed order:
 9. **Movement:** flow-field direction + steering + collision against the nav grid
    (`MovementSystem.Run`, units in (goal cell, slot) order; since M1-4d-1 every unit plans from
    start-of-tick state before any unit moves, and since M1-4d-2 the Idle units they shoved move
-   last, see "Local movement").
+   last; since M1-4d-3 a unit a shove cut off its blob walks back once, see "Local movement").
 10. **Combat:** attack wind-ups and cooldowns, projectile flight and impact, splash.
 11. **Damage and death:** apply queued damage, kill entities, emit death events.
 12. **Vision and detection:** recompute fog every 4 ticks (5 Hz) per player.
@@ -162,7 +162,8 @@ Rules:
   `Cos`, `Atan`, `Atan2` (and the `MathF` versions) in sim source.
 - **State hash:** `Simulation.StateHash()` is 64-bit FNV-1a (`StateHasher`) over the tick number,
   every unit slot's generation and alive flag, every live unit's fields (including the give-up
-  state `StuckTicks` and `BestRemaining`, since they decide when a unit stops), the free list, all RNG
+  state `StuckTicks` and `BestRemaining`, since they decide when a unit stops, and since M1-4d-3 the
+  walk-back state `WalkBack`, which decides whether and when a unit walks back), the free list, all RNG
   states, per-player command sequence counters, and pending commands (including a `Move`'s unit
   handle), and the flow-field cache's metadata (its clock and count, and each used slot's
   requested cell, grid version and last-use stamp, in slot order): under the build cap the cache
@@ -407,7 +408,10 @@ So separation is symmetric and no result depends on which unit is walked first. 
   there, crowded, and *keeps* its `GoalCell`. Waiting for a field counts as neither progress nor
   stuck. A `Move` to a new goal cell resets both fields. A `Move` to the goal cell the unit already
   has is the same order (click spam, AI refreshes; BUG-0029): an arrived (Idle) unit stays put, and
-  a Moving one takes the new point but keeps its order tick and stuck count. Units stopping off
+  a Moving one takes the new point but keeps its order tick and stuck count. Since M1-4d-3
+  (BUG-0030) an Idle unit's "same order" needs the new point within `ArrivalDistance` of its stored
+  goal; a point farther away in the same cell is a new order, and a Moving unit's retarget lowers its
+  best estimate by twice the shift (see "Implementation (M1-4d-3)"). Units stopping off
   the map or on blocked ground also drop their goal. A tick without progress while a groupmate
   just ahead is still making progress is *queued*, not stuck (M1-5, below).
 
@@ -446,7 +450,8 @@ So separation is symmetric and no result depends on which unit is walked first. 
   in the goal cell within `ArrivalDistance` of its goal, or linked to such a unit by a chain of
   touching Idle groupmates (each link a legal step); the rest get `GoalCell = -1`. A whole-group
   check, not one per shoved unit, because a shove can also cut off the units that touched the blob
-  only through the shoved one. A unit that lost its goal can be sent back by re-issuing the Move.
+  only through the shoved one. A unit that lost its goal can be sent back by re-issuing the Move;
+  since M1-4d-3 it also walks back once by itself (see "Implementation (M1-4d-3)").
 - **Constrain (BUG-0031):** it removes only the part of a step that goes deeper into a standing
   unit than touching; an existing overlap is no longer pushed out, so a unit moves at most its own
   step. Before, every candidate step of a unit overlapping a standing unit with a cliff behind it
@@ -564,7 +569,7 @@ Holding those to the exact rule too was measured and rejected: 2,500 units to 4 
 arrived 680-854 (the floor is 825), 500 random goals gave up 38-44 (cap 35), the 64-goal row 37
 (cap 28). Holding all Idle units hard, or all enemy units including waiting ones, also failed rows.
 Producer decision (M1-5), owner may revisit: enemies holding their ground are hard walls; the
-army's own standing units stay soft (single clip, shovable). Two known gaps, both S3 for the M1
+army's own standing units stay soft (single clip, shovable). Two known gaps (both fixed in M1-4d-3, below), both S3 for the M1
 hardening session: an Idle enemy that holds the walker's own goal cell is treated as an arrived
 groupmate (every groupmate check reads `GoalCell` only, never `Owner`), so it is no wall and the
 walker "arrives" up to 0.16 m into it (BUG-0037); and when the hard-wall fallback fires it restarts
@@ -580,6 +585,126 @@ shifts trajectories chaotically: 2,500 to 4 points 1,105, 1,121; 500 to 4 points
 same-owner blob crossing 43, 15 and 28, 28 of 200 (with a 0.05 mm margin instead: 1,160, 198, 12
 and 29), so these rows vary by that much from noise alone. Cost: the 2,500-unit tight blob averages
 3.8 ms per tick (target 4.5), 1,000 walkers crossing a 1,500-unit blob 3.1 ms, 500 moving 0.15 ms.
+
+**Implementation (M1-4d-3): crowd routing, first part.** Local rules only; flow fields stay
+unit-agnostic (a crowd cost in the fields is future work). The rules as built:
+
+- **Detour (BUG-0028).** While a walker follows its field (aiming at a cell center, not at the goal
+  itself), the standing units in the way of its line to the aim (walls: Idle units that aren't its
+  groupmates, and Moving units that didn't move last tick, except its own group's, which it follows)
+  each block an interval of directions: the directions in which its disk would run into theirs, the
+  whole half-plane for one it already touches, plus `MovementConstants.DetourMargin` (0.05 rad). The
+  intervals that chain to the straight line form one block; the walker turns to the nearer edge of
+  the block (the shorter arc toward the aim), ties to the right. A side is taken only if the turn is
+  at most `MaxDetourTurn` (90 degrees) and the ground is open by the walkers' own rule (the first
+  step legal, the tangent point and the point level with the edge wall on passable cells), else the
+  other side is tried, else no detour. The block is a union of intervals and its edges a min and a
+  max, so the side doesn't depend on slot order; the walls are collected in the neighbor loop
+  (no extra pass), the sidestep and queuing are worked out again along the new direction on the
+  ticks a detour turns. Near the goal (aiming at the goal itself) there is no detour: steering round
+  the units packed there cost arrivals (128 units to 64 goals gave up a median 31.5 with the detour
+  everywhere, 24 with it only on the way).
+- **Order-free sums.** A walker's separation push and sidestep are summed in 64-bit fixed point
+  (2^32 units per meter, a power of two so the scaling is exact), so they no longer depend on the
+  slot order of its neighbors: the detour test and the M1-4d-2 column-through-a-crowd test give
+  bit-equal positions in both spawn orders (the column used to differ in the last bit of a velocity
+  once it touched three units).
+- **Queued, widened (BUG-0028 b).** A no-progress tick is queued (count holds, at least 1) when, at
+  the start of the tick, a walker ahead or touching, within touching + `QueueRange` (2 m; was 1 m and
+  groupmates only), made progress last tick, or a unit ahead is waiting for its field (Moving,
+  standing, outside its goal cell, field not cached; `FlowFieldCache.Contains` reads no LRU state).
+  Moving units are still never shoved. Every hold still traces back to a real progress tick, so the
+  termination argument of M1-5 holds. Crossing groups used to jam for a second at each other's
+  streams and give up; the 2 m reach fixes a unit pinned in a ramp-wall corner while its group
+  streamed past just out of reach (cross-map seed 1).
+- **Deep overlaps push out.** Two units closer than `ShoveSpacing` x their radii's sum always get the
+  half-share separation push, whatever they are doing. Two of a group pressed together and both
+  standing took each other for walls (walls never push out of an overlap) and froze at the back-off
+  limit inside the pack rule (cross-map seeds 4 and 25 of 30).
+- **Walk-back (once per order).** A unit the anchor re-check cuts off its blob (`GoalCell` set to -1
+  while it still has a `Goal`) becomes pending (`UnitStore.WalkBack`, hashed). Once nobody has shoved
+  it for `WalkBackDelayTicks` (= `GiveUpTicks`, so a walker still pushing it shoves it again or gives
+  up first), it walks back: Moving to its stored goal and that goal's cell, stuck count and best
+  estimate reset, order tick kept. Then its walk-back is used until a new order, so a corridor can't
+  bounce it forever (`CrowdRoutingTests.UnitShovedOffItsPoint_WalksBackOnce_AndNoMore`).
+- **Chain shove; parked lines yield (BUG-0033).** A walker's shove also moves the line of touching
+  Idle units of its player ahead of the shoved one (along the push), at most `MaxChainShove` (3)
+  units: goal-less units always, units holding a goal only for a walker stuck for
+  `PushAfterStuckTicks`, and only if the line holds every touching groupmate of its members (so a
+  blob is never cut). That same test replaces the lone-anchor rule: a unit on its point yields to a
+  blocked walker only if its whole line yields, so a pair parked in a 1-cell corridor is pushed along
+  and the walker gets through, while a blob's point holds. The line goes along the push; sideways
+  yielding (the brief's "where there is room") isn't built: in the open the detour goes round. A
+  chain stops at a unit touching another player's standing unit: crowds behind an enemy plug
+  otherwise squeezed given-up units past it.
+- **Owner-aware groups (BUG-0037).** Every groupmate test (plan, walls, the covered-aim check, the
+  queued check, the anchor re-check, `KeepLinks`, the chain) compares `Owner` as well as `GoalCell`:
+  an enemy holding the walker's goal cell is a hard wall, and nobody anchors through it.
+- **Fallback keeps friendly clips (BUG-0038).** When the hard-wall fallback fires, `ClosestAllowed`
+  runs over every wall the step touches, the army's own standing units too (walls whose limit is at
+  least twice the desired step can't bind and are left out). The single clip of a friendly is no
+  longer lost.
+- **Same-cell re-orders (BUG-0030).** See "Giving up" above. Moving the goal by d moves the progress
+  estimate by at most 2d, so a jittered re-order can't count as progress.
+
+New hashed state: `UnitStore.WalkBack` (in `StateHash`, so in every replay checkpoint, and in QA's
+reflection audit). New scratch on `World` (derived, not hashed): `HardWalls`, `ChainMembers`,
+`DetourLo`/`DetourHi`/`DetourWall`. Tunables: `DetourMargin`, `MaxDetourTurn`, `MaxChainShove`,
+`QueueRange`, `WalkBackDelayTicks` in `MovementConstants`.
+
+**Both players at one point are enemies now.** `MoveScenario.Spawn` alternates owners in spawn
+order, but commands apply sorted by (player, sequence), so player 0 takes the low slots and player 1
+the high ones; picking a goal by `slot % points` therefore sent *both* players to *every* point (the
+crowd rows' "neighboring points belong to different players" never held). Before BUG-0037 both
+players' units shared one anchor there; now each point is contested by enemies. Scenarios meant as
+one blob per point (all one-point rows, the tight-blob perf row, the spam tests) use one player now;
+the 4-point and 64-goal rows give each point one player (`CrowdRows`, neighbors the enemy's), and
+the old split stays as a report row.
+
+Measured (M1-4d-3, Debug, this machine; "base" is the M1-6 code measured the same way the same day):
+
+| Row | Target | Now (brief) | Base, same scenario | M1-4d-3 |
+| --- | --- | --- | --- | --- |
+| 500 units to 4 points, one player per point, arrived | >= 60% | 182 (36%) | PreMix(1404) 206; seeds 1-10 mean 235, min 164 | PreMix(1404) 220 (44%); seeds 1-10 mean 256 (51%), min 230 |
+| same, both players at every point (the old split) | | 182 (36%) | 182 | PreMix(1404) 121 (24%); seeds 1-3: 135, 197, 185 |
+| 2,500 units to 4 points, one player per point, arrived | >= 50% | 859 (34%) | PreMix(3404) 740; seeds 1-10 mean 720, min 494 | PreMix(3404) 895 (36%); seeds 1-10 mean 853 (34%), min 699 |
+| same, both players at every point | | 859 (34%) | 859 | PreMix(3404) 529 (21%); seeds 1-3: 429, 500, 398 |
+| 500 units, 500 random goals (seed 5018), gave up | <= 3% | 30 (6%) | 13 (2.6%); one player 10 | 11 (2.2%); one player 9 (1.8%) |
+| 128 units, 64 goals, one player per goal, gave up, seeds 1-40 | median <= 10% | 22-26 on one map | median 28 (22%), max 54 | median 24 (19%), min 17, max 42 |
+| same, both players at every goal | | | | median 38 (30%), max 50 |
+| 200 walkers crossing a settled 300-blob, PreMix(73): mixed / same owner, arrived | >= 100 / >= 150 | 2 / 15-28 | 3 / 15 | 111 / 22 |
+| Parked friendly pair in a 1-cell corridor | arrives | gives up | gives up | arrives |
+| Cross-map seeds 1-8, one player | 200/200, 0 give up | 200/200 | 200/200 | 200/200, 0 give up, 1,185-2,525 ticks (at most 40% of the limit); seeds 1-30: 0 give-ups, 0 pack violations |
+| Cross-map seeds 1-8, two owners (report) | | 200/200 | 200/200 | 100-142 arrive: both players to one goal contest it |
+| Perf: 500 moving avg | < 4 ms | 0.15 ms | 0.16 ms | 0.17-0.18 ms |
+| Perf: 2,500 tight blob avg | <= 4.5 ms | 3.8 ms | 4.41-4.51 ms (this machine, today) | 4.81-5.01 ms one player (+11%; about 4.2 ms at the docs' 3.8 baseline) |
+| Perf: 1,000 walkers crossing a 1,500 same-owner blob (report) | report | 3.1 ms | 13-14 ms (QA row, 400 ticks) | 30-33 ms; to settling: 591 ticks at 27 ms vs 263 at 14 ms |
+
+Rows below target, and why (miss rule: each beats its base on the same scenario):
+
+- **The 4-point rows** stay far from 60% / 50%. The four blobs merge into one mass about 12 m across,
+  and a unit arriving from the far side of it has to go round the whole mass: the field (unit-agnostic)
+  points through it, the detour only sees the 3 m round the walker, and the 1 s give-up runs out. A
+  crowd cost in the fields, or routing to the near side of one's own blob, is what would move these.
+  With the old split (both players at every point) the rows fell below "now" (121 and 529): that is
+  the BUG-0037 fix, not the routing (each point is a contest of enemies now).
+- **The 64-goal row**: neighboring goals of the other player are hard walls and arrived units of
+  one's own other goals only bend, so a unit whose goal is surrounded gives up; median 19%.
+- **Same-owner blob crossing**: 22 of 200. The blob is 20 m across and dense; its members only bend
+  (`KeepLinks`), and going round it takes longer than a give-up. Letting a blocked walker shove blob
+  members freely (walk-back would repair them) was measured: no change here, fewer arrivals in the
+  two-player rows.
+- **Perf**: walkers now hold their count while traffic round them still progresses, so more of them
+  are walking on any tick; the cost per walking unit-tick is about the same in a crossing (4.85 vs
+  4.95 us) and +6-11% in a tight blob. The 1,000-walker crossing (no walker arrives in either
+  version) takes 2x per tick and 2.2x as long to settle.
+
+Re-bounded tests (BUG-0039): the crowd stress rows run on plain seeds (one point: seeds 1-3 and 1;
+4 points: seeds 1-10 each) and assert bounds that hold on every swept seed (500 to 4 points >= 40%,
+2,500 >= 22%); the 64-goal dev test and QA's twin sweep seeds 1-40 (build cap, termination, every
+Idle unit arrived or gave up, at most 48 of 128 give up); its pack rule breaks on 15 of 40 maps
+(worst pair 0.768 m against 0.8 m) and is report-only. `TestSeeds.PreMix` is gone from these rows.
+BUG-0034: the distinct-targets perf row averages 100 ticks, budget unchanged.
 
 ## Orders and unit states
 
@@ -876,7 +1001,9 @@ AiPlayer
   ticks run from 1 to the tick count without going backwards, each player's sequences count 0, 1,
   2, ..., players are below the player count, kinds are known, no tick has more commands than the
   command capacity, and the checkpoints are exactly the interval's multiples. Format limits: at
-  most 16 players and capacities up to 1,000,000.
+  most 16 players, capacities up to 1,000,000, and (M1-4d-3, BUG-0040) a tick count and checkpoint
+  interval of at most 1,728,000 (24 h at 20 Hz), so a small file can't declare years of playback.
+  The interval may exceed the tick count: the recorder writes replays shorter than one interval.
 - **Playback** (`ReplayPlayer.Run(replay, data)`): refuses before any tick with
   `FormatVersionMismatch`, another validation code, or `DataMismatch` when the data hash differs.
   Otherwise it builds the `SimConfig`, enqueues each command when `TickNumber == command.Tick - 1`

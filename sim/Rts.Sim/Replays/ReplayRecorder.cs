@@ -36,7 +36,7 @@ public sealed class ReplayRecorder
         int tickCapacity = DefaultTickCapacity, int commandCapacity = DefaultCommandCapacity)
     {
         ArgumentNullException.ThrowIfNull(sim);
-        if (checkpointInterval < 1) throw new ArgumentOutOfRangeException(nameof(checkpointInterval));
+        if (checkpointInterval < 1 || checkpointInterval > Replay.MaxTickCount) throw new ArgumentOutOfRangeException(nameof(checkpointInterval));
         if (tickCapacity < 0) throw new ArgumentOutOfRangeException(nameof(tickCapacity));
         if (commandCapacity < 0) throw new ArgumentOutOfRangeException(nameof(commandCapacity));
         // A replay rebuilds the sim from seed + params and replays from tick 0, so it must see everything.

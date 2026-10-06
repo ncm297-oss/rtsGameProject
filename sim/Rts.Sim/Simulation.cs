@@ -125,6 +125,7 @@ public sealed class Simulation
             h.Add(u.OrderTick[i]);
             h.Add(u.StuckTicks[i]);
             h.Add(u.BestRemaining[i]);
+            h.Add(u.WalkBack[i]);
         }
         h.Add(u.FreeCount);
         for (int i = 0; i < u.FreeCount; i++)
@@ -206,13 +207,24 @@ public sealed class Simulation
             goal = grid.CellCenter(cell % grid.Width, cell / grid.Width);
         }
         int i = command.Unit.Index;
-        if (u.GoalCell[i] == cell)
+        const float same2 = MovementConstants.ArrivalDistance * MovementConstants.ArrivalDistance;
+        if (u.GoalCell[i] == cell && (u.State[i] == UnitState.Moving || Vector2.DistanceSquared(goal, u.Goal[i]) <= same2))
         {
             // The order the unit already has (click spam, an AI refreshing its orders): it doesn't
-            // restart. An Idle unit that kept its goal cell has arrived and stays put; a Moving one
-            // takes the new point but keeps its order age and stuck count, so spam can't keep it
-            // Moving forever (BUG-0029).
-            if (u.State[i] == UnitState.Moving) u.Goal[i] = goal;
+            // restart. A Moving one takes the new point but keeps its order age and stuck count, so
+            // spam (even jittered within the cell) can't keep it Moving forever (BUG-0029). An Idle
+            // unit that kept its goal cell has arrived: a point within ArrivalDistance of its goal is
+            // where it already is, so it stays put; a point farther away in the same cell is a new
+            // order, since a player's short repositioning must move it (BUG-0030).
+            if (u.State[i] == UnitState.Moving)
+            {
+                // Moving the goal by d moves the progress estimate by at most 2d (the distance to the
+                // goal and the goal's offset in its cell): lower the best by that, so a jittered
+                // re-order can never count as progress and keep a blocked unit Moving forever.
+                float shift = Vector2.Distance(goal, u.Goal[i]);
+                if (float.IsFinite(u.BestRemaining[i])) u.BestRemaining[i] -= 2f * shift;
+                u.Goal[i] = goal;
+            }
             return;
         }
         u.State[i] = UnitState.Moving;
@@ -221,5 +233,6 @@ public sealed class Simulation
         u.OrderTick[i] = World.TickNumber;
         u.StuckTicks[i] = 0;
         u.BestRemaining[i] = float.PositiveInfinity;
+        u.WalkBack[i] = UnitStore.WalkBackNone;
     }
 }

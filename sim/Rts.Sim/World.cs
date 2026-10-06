@@ -46,6 +46,11 @@ public sealed class World
         AnchorLinked = new bool[config.UnitCapacity];
         WallNormals = new Vector2[config.UnitCapacity];
         WallLimits = new float[config.UnitCapacity];
+        HardWalls = new int[config.UnitCapacity];
+        ChainMembers = new int[Movement.MovementConstants.MaxChainShove];
+        DetourLo = new float[config.UnitCapacity];
+        DetourHi = new float[config.UnitCapacity];
+        DetourWall = new int[config.UnitCapacity];
         float maxRadius = 0f, maxSpeed = 0f;
         for (int t = 0; t < config.Data.Units.Length; t++)
         {
@@ -82,6 +87,21 @@ public sealed class World
 
     /// <summary>Scratch for <see cref="Movement.MovementSystem"/>'s wall check: how far a step may go along <see cref="WallNormals"/>; derived, not hashed.</summary>
     internal float[] WallLimits { get; }
+
+    /// <summary>Scratch for <see cref="Movement.MovementSystem"/>'s wall check: which of <see cref="WallNormals"/> are hard walls (other players' standing units); derived, not hashed.</summary>
+    internal int[] HardWalls { get; }
+
+    /// <summary>Scratch for <see cref="Movement.MovementSystem"/>'s detour: each wall's blocked interval of directions, low end (radians); derived, not hashed.</summary>
+    internal float[] DetourLo { get; }
+
+    /// <summary>Scratch for the detour: each wall's blocked interval, high end (radians); derived, not hashed.</summary>
+    internal float[] DetourHi { get; }
+
+    /// <summary>Scratch for the detour: the slot of each wall whose interval is in <see cref="DetourLo"/>; derived, not hashed.</summary>
+    internal int[] DetourWall { get; }
+
+    /// <summary>Scratch for <see cref="Movement.MovementSystem"/>'s chain shove: the line of units one shove moves; derived, not hashed.</summary>
+    internal int[] ChainMembers { get; }
 
     /// <summary>Scratch for <see cref="Movement.MovementSystem"/>'s neighbor queries, sized to every slot so a query is never truncated; derived, not hashed.</summary>
     internal int[] Neighbors { get; }

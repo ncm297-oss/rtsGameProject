@@ -281,4 +281,31 @@ public class ReplayFormatTests
         Assert.Throws<ArgumentException>(() => ReplayFormat.Write(ReplayTestRun.With(Small, simVersion: "0.0 1")));
         Assert.Throws<ArgumentException>(() => ReplayFormat.Write(ReplayTestRun.With(Small, checkpoints: Small.Checkpoints.Skip(1))));
     }
+    /// <summary>BUG-0040: the tick count is capped at 24 h (1,728,000 ticks) and the interval at the same limit; the limit itself reads.</summary>
+    [Fact]
+    public void TickCountAndInterval_HaveAFormatLimit()
+    {
+        Replay Header(int ticks, int interval) => new()
+        {
+            SimVersion = Small.SimVersion,
+            DataHash = Small.DataHash,
+            Map = Small.Map,
+            Seed = Small.Seed,
+            PlayerCount = Small.PlayerCount,
+            UnitCapacity = Small.UnitCapacity,
+            CommandCapacity = Small.CommandCapacity,
+            CheckpointInterval = interval,
+            TickCount = ticks,
+            Commands = ImmutableArray<Command>.Empty,
+            Checkpoints = Enumerable.Range(1, ticks / interval).Select(k => new ReplayCheckpoint(k * interval, 0UL)).ToImmutableArray(),
+        };
+        Assert.Equal(1_728_000, Replay.MaxTickCount);
+        Assert.Equal(ReplayError.None, Header(Replay.MaxTickCount, Replay.MaxTickCount).Validate());
+        Assert.Equal(ReplayError.None, Header(50, 100).Validate()); // shorter than one interval: what the recorder writes
+        Assert.Equal(ReplayError.InvalidHeader, Header(Replay.MaxTickCount + 1, Replay.MaxTickCount).Validate());
+        Assert.Equal(ReplayError.InvalidHeader, Header(100, Replay.MaxTickCount + 1).Validate());
+        Assert.Equal(ReplayError.InvalidHeader, Header(int.MaxValue, int.MaxValue).Validate());
+        var sim = new Simulation(TestSim.Config(Seed: 3, PlayerCount: 1, UnitCapacity: 4, CommandCapacity: 4));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new ReplayRecorder(sim, checkpointInterval: Replay.MaxTickCount + 1));
+    }
 }

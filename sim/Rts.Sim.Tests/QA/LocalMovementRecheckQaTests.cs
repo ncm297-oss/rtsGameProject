@@ -76,7 +76,7 @@ public class LocalMovementRecheckQaTests
     /// A lone unit that arrived near one corner of a 2 m cell, ordered to the opposite corner of that
     /// same cell (about 2.5 m away). A player's short repositioning order must move it.
     /// </summary>
-    [Fact(Skip = "BUG-0030: a Move to another point of an arrived unit's goal cell is ignored; un-skip when fixed")]
+    [Fact]
     public void ArrivedLoneUnit_OrderedToTheOppositeCornerOfItsGoalCell_MovesThere()
     {
         Simulation sim = LocalMovementTests.SimOn(LocalMovementTests.Flat(32), 1);
@@ -322,7 +322,9 @@ public class LocalMovementRecheckQaTests
     [Fact]
     public void RandomPointOfTheSameGoalCell_SpammedEveryTick_AllTerminate_Deterministic()
     {
-        Simulation Make() => MoveScenario.Spawn(seed: 64, units: 60, maxCost: 20f, out _);
+        // M1-4d-3: one cell, one player. With two, enemies hold the cell (BUG-0037), units give up, and the
+        // loop's own in-flight Move (stamped before the give-up) re-orders them every 20 ticks forever.
+        Simulation Make() => MoveScenario.Spawn(seed: 64, units: 60, maxCost: 20f, out _, players: 1);
         Simulation s1 = Make(), s2 = Make();
         int goalCell = MoveScenario.CentralCell(s1.World.NavGrid);
         Vector2 corner = MoveScenario.Center(s1.World.NavGrid, goalCell) - new Vector2(MapConstants.CellSize / 2f);
@@ -364,7 +366,7 @@ public class LocalMovementRecheckQaTests
         [Fact]
         public void SettledBlobOf500_SameMoveEveryTick_AllocatesNothing()
         {
-            Simulation sim = MoveScenario.Spawn(seed: 12, units: 500, maxCost: 40f, out int goalCell);
+            Simulation sim = MoveScenario.Spawn(seed: 12, units: 500, maxCost: 40f, out int goalCell, players: 1); // M1-4d-3: one point, one player (BUG-0037)
             Vector2 goal = MoveScenario.Center(sim.World.NavGrid, goalCell);
             MoveScenario.MoveAll(sim, goal);
             int t = 0;
