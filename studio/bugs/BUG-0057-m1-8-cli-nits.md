@@ -22,6 +22,8 @@ run --seed 1 --units 2500 --ticks 600 --checkpoint 1                     avg 5.8
 run --seed 1 --units 2500 --ticks 600 --checkpoint 1 --record t.replay   avg 6.99 / 6.60 ms
 ```
 Fix: one sentence in docs/03 ("with `--record`, checkpoint ticks also include the recorder's hash").
+**Done by the Producer at the 2026-10-06-0655 ACCEPT** (docs/03 "Headless CLI" now says so). Items
+2-4 stay open for the M1 end-of-milestone hardening session.
 
 ## 2. An unwritable `--record` path is reported only after the whole run
 `run ... --ticks 1728000 --record C:/no/such/dir/x.replay` runs all 1.7 M ticks (about 45 s with one

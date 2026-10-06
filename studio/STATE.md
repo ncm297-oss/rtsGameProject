@@ -4,7 +4,7 @@ The dashboard. The Producer rewrites it at the end of every session. **Owner: re
 you" first.** "For your review" (further down) is non-blocking: what the studio built or decided
 on its own, explained in terms of what you'd see in the game.
 
-_Last updated: 2026-10-06 (session 2026-10-05-2330, ACCEPT both tracks)._
+_Last updated: 2026-10-06 (session 2026-10-06-0655, ACCEPT both tracks)._
 
 ## Waiting on you
 
@@ -15,26 +15,26 @@ _Last updated: 2026-10-06 (session 2026-10-05-2330, ACCEPT both tracks)._
 
 | Field | Value |
 | --- | --- |
-| Sim: milestone | M1 — Core sim, no graphics (started 2026-10-03); 7 / 8 criteria; cadence hardening done (M1-4d-3) |
-| Sim: next task | **M1-8** headless CLI in `tools/` (hashes + timings, record / play `.replay`) · feature · QA light-standard; then the M1 end-of-milestone hardening (9 S3/S4 bugs) and sign-off |
+| Sim: milestone | M1 — Core sim, no graphics (started 2026-10-03); **8 / 8 criteria met**; end-of-milestone hardening + sign-off left |
+| Sim: next task | **M1 end-of-milestone hardening** (BUG-0055 holders block their own army, BUG-0054, 0044, 0045, 0046, 0049 / 0050, 0047, 0056, 0057 items 2-4, coverage check), then the M1 retro + sign-off and M3 set to Next · hardening · QA full |
 | Sim: gate | **GO** |
-| View: milestone | M2 — Presentation (started 2026-10-05); 4 / 10 criteria (selection and orders half-done) |
-| View: next task | **M2-3** A / S / H / Shift-queue + double-click type, control groups, Tab subgroups (the sim's command kinds are on `main` now) · feature · QA standard; then the view hardening session (4 / 4) |
+| View: milestone | M2 — Presentation (started 2026-10-05); 6 / 10 criteria (selection and orders complete) |
+| View: next task | **View hardening session** (4 / 4): BUG-0068 (minimap right-click while A is armed), BUG-0067, BUG-0052, BUG-0053, BUG-0064, mesh-test wall mutant · hardening · QA standard; then M2-5 debug overlay (flow arrows via `PeekCached`, now on `main`) |
 | View: gate | **GO** |
 | Tools on this PC | Godot 4.7.2 .NET, .NET SDK 8.0.425, Git 2.53 + LFS 3.7; `GODOT` user variable set |
 | Build | green on both session branches (0 warnings); conductor re-checks `main` after the two merges |
-| Tests | sim branch 1587 / 22 skipped / 0 failed non-Perf (Perf criterion alone: avg 0.67 ms); view branch 1573 / 20 / 0; smoke PASS; Producer re-ran all |
-| Open bugs | 22 (S1: 0, S2: 0, S3: 14, S4: 8) — none block; 4 new this session (sim 0054 S3, 0055 S3, 0056 S4; view 0064 S4) |
-| Sessions today | 0 / 8 on 2026-10-06 (6 / 8 on 10-05); feature sessions since last hardening: sim 1 / 4, view 3 / 4 |
-| Last session | 2026-10-05-2330 · sim M1-7 perf criterion + Stop / Hold / AttackMove + shift-queue (0 fix rounds) · view M2-4 minimap (0 fix rounds) · both ACCEPT |
+| Tests | sim branch 1745 / 22 skipped / 0 failed non-Perf (QA full incl. Perf 1821 / 25 / 0); view branch 1674 / 23 / 0 (QA full 1751 / 26 / 0); smoke PASS; `ORDERS TEST PASS`, `QA M2-3 TEST PASS`; Producer re-ran all |
+| Open bugs | 25 (S1: 0, S2: 0, S3: 15, S4: 10) — none block; 3 new this session (sim 0057 S4; view 0067 S4, 0068 S3) |
+| Sessions today | 1 / 8 on 2026-10-06; feature sessions since last hardening: sim 2 / 4 (milestone-end hardening due anyway), view 4 / 4 |
+| Last session | 2026-10-06-0655 · sim M1-8 headless CLI + `PeekCached` (0 fix rounds) · view M2-3 order keys, type select, control groups, Tab (0 fix rounds) · both ACCEPT |
 
 ## Milestone progress
 
 | Milestone | Criteria met | Status |
 | --- | --- | --- |
 | M0 | 7 / 7 required | **Done** 2026-10-03 (optional MCP item open) |
-| M1 (sim track) | 7 / 8 (core, data, terrain + nav + spatial hash, flow fields + movement + crowd routing, cross-map scenario, replays + golden, perf criterion) | In progress; left: CLI M1-8, end-of-milestone hardening, sign-off |
-| M2 (view track) | 4 / 10 (camera, SimRunner interpolation, placeholder unit views, minimap); selection and orders half-done; terrain mesh waits for trees/rocks (M3), overlay for nav grid + flow arrows (M2-5) | In progress; M2-3 next |
+| M1 (sim track) | 8 / 8 (core, data, terrain + nav + spatial hash, flow fields + movement + crowd routing, cross-map scenario, replays + golden, perf criterion, headless CLI) | Criteria met; end-of-milestone hardening session next, then sign-off |
+| M2 (view track) | 6 / 10 (SimRunner interpolation, camera, placeholder unit views, selection complete, orders complete, minimap); left: terrain mesh trees/rocks (waits for M3 resources), debug overlay (M2-5), audio (M2-6), 60 FPS playable check (M2-7) | In progress; view hardening next, then M2-5 |
 | M3-M9 | — | Planned |
 
 ## For your review
@@ -42,6 +42,63 @@ _Last updated: 2026-10-06 (session 2026-10-05-2330, ACCEPT both tracks)._
 Non-blocking. Each entry says what was built or decided, what you'd notice in the game, and how
 to change it. To change anything, write it in `studio/inbox.md`, for example "use formations
 instead of clusters" or "make giving up take 2 seconds".
+
+### The order keys are in: A, S, H, Shift-queue, double-click, control groups and Tab (view track, M2-3, 2026-10-06)
+
+- **What was built:** the keyboard half of giving orders. **A** then click: attack-move (for now
+  it just walks there; fighting on the way comes in M4). **S**: stop. **H**: hold position (your
+  own walkers route round holders instead of nudging them). **Shift + right-click** (or Shift + S /
+  H): queue the order behind the current ones, up to 8 per unit. **Double-click** a unit, or **Ctrl +
+  click** it: select every unit of that type on screen (Shift adds them). **Ctrl + 1-9** saves the
+  selection as a group, **Shift + 1-9** adds to it, **1-9** recalls it, and tapping the digit twice
+  quickly jumps the camera to the group. **Tab** steps through the unit types in a mixed selection
+  (shown in the top-left label as `sub <type> 1/3`; the command card will use it in M3). Esc
+  cancels an armed A. Every key is its own rebindable action in `game/project.godot`.
+- **Try it:** `& $env:GODOT --path game`. Box-select the blue army, press H, then select a few
+  others and right-click through them: the holders don't budge. Select a group, press A, click far
+  away: they walk (the label shows an `A` while you're aiming). Shift + right-click four spots:
+  they visit them in order. Ctrl + 1, click empty ground, press 1: they're back; press 1 again at
+  once: the camera jumps to them. Double-click one cavalry unit: all cavalry on screen are selected.
+- **Producer decisions, revisit any time:** A with nothing selected does nothing; while A is armed,
+  a click off the map does nothing and keeps aiming; Ctrl + digit with nothing selected keeps the
+  old group (no accidental wipes); recalling an empty group changes nothing; Ctrl + Shift + digit
+  counts as assign; the double-tap window is 0.3 s; Tab order is by unit type id; a unit told to
+  hold shows no "holding" marker because any queued order ends the hold (so a marker would lie).
+- **Rough edges (view hardening session, next view session):** BUG-0068 (S3): right-clicking the
+  *minimap* while A is armed sends a plain move and leaves A armed, where a right-click on the
+  3D map cancels A as intended. BUG-0067 (S4): a double-tap at exactly 300 ms is a coin flip; if
+  every selected unit dies while A is armed, the next click is swallowed (can't happen before M4).
+  Also visible now: send a tight group through Shift-queued points and some units give up a leg
+  when they bump into their own packed comrades (BUG-0028, the crowd-cost follow-up after M4).
+- **To change it:** key bindings are in `game/project.godot` (one action per key, e.g.
+  `order_hold`); the double-tap window is `ControlGroups.DoubleTapSeconds`; the rest by inbox note.
+
+### The game can be run from the command line with no window, and the last M1 criterion is met (sim track, M1-8, 2026-10-06)
+
+- **What was built:** a small tool, `tools/Rts.Cli`, that runs a match headless: it spawns an army
+  (every unit type, `--units` of them), marches it across the map from one edge to the far side,
+  and prints a fingerprint of the game state every 5 seconds of game time plus how long each tick
+  took (average, 99th percentile, worst). It can record the run as a replay file and play a replay
+  back, checking every fingerprint; the exit code says what happened (0 fine, 1 bad arguments or
+  files, 2 a replay that doesn't match). This is the "runs a scenario headless and prints hashes
+  and timings" criterion, the last of M1's eight. The same task gave the view a read-only window
+  into the pathfinding arrow maps, so the M2-5 debug overlay can draw them.
+- **Try it:** `dotnet run --project tools/Rts.Cli -- run --seed 1 --units 200 --ticks 1500`. Run
+  it twice: the 15 fingerprint lines are identical (that's determinism you can see). Add
+  `--record x.replay` then `dotnet run --project tools/Rts.Cli -- play x.replay`: "ok: 15
+  checkpoints matched". `--units 2500` shows the tick cost at scale (about 4.6 ms on this PC).
+- **Producer decisions, revisit any time:** the march goes to the walkable cell farthest (by
+  walking distance) from the middle of the player's own map edge, so armies cross the whole map
+  (with `--players 2` the two armies cross each other); `--units` is the total across players and
+  is capped at 100,000 (the start blocks hold about 14,600 on the default map).
+- **Rough edges (M1 hardening session):** BUG-0057 (S4): an unwritable `--record` path is only
+  reported after the run finishes; a replay recorded with fewer ticks than the checkpoint interval
+  "passes" with nothing compared; a cosmetic `: :` in one error message. (The docs mismatch about
+  timing with `--record` is already fixed.)
+- **For you, one line in your file:** `CLAUDE.md`'s Commands block has no CLI line yet (agents
+  don't edit it). Suggested: `dotnet run --project tools/Rts.Cli -- run --seed 1 --units 200   # headless hashes + timings`.
+- **What's next for M1:** one clean-up session (nine small bugs, listed in the sim debt backlog),
+  then I sign M1 off and write its retro; M3 (economy and buildings) starts after.
 
 ### Stop, hold position, attack-move and Shift-queued orders exist in the rules; the M1 speed target is proven (sim track, M1-7, 2026-10-05)
 
@@ -57,7 +114,7 @@ instead of clusters" or "make giving up take 2 seconds".
 - **What you'll see:** nothing yet; there are no keys for it. The next view task (M2-3) wires A /
   S / H / Shift. Then: select a group, press H, and walkers from your own army route round them
   instead of nudging them off their spot; Shift-right-click four points and the group walks them
-  in order.
+  in order. Update M2-3: landed; see the entry above.
 - **Numbers:** 500 units marching cost 0.67 ms per tick on this PC (budget 4 ms, so 6x headroom);
   2,500 units each with a full queue of 8: 3.0 ms.
 - **Producer decisions, revisit any time:**
@@ -101,7 +158,8 @@ instead of clusters" or "make giving up take 2 seconds".
   nearly the same orange as a ramp tick, and a lone Malazan dot on a cliff lip is nearly the cliff
   colour, so single scouts can hide in plain sight; likely fix is an outline or a 2x2 dot. On maps
   wider than 220 cells (none exist in the game yet) about a quarter of cells would never get a
-  pixel. No fog, resource markers, pings or Alt-click yet (M3/M4).
+  pixel. No fog, resource markers, pings or Alt-click yet (M3/M4). Update M2-3: a Shift + right-click
+  on the minimap now queues the move, like on the 3D map.
 - **To change it:** size and corner are in `game/scenes/Match.tscn` (the `Minimap` node's
   offsets); dot colours follow each faction's `primaryColor` in `game/data/factions/<faction>/`.
 
@@ -242,7 +300,8 @@ instead of clusters" or "make giving up take 2 seconds".
   the golden on purpose and explains why in the commit. This is the guard that keeps future replays
   and saved games exact, and it's the backbone of the M6 replay viewer. Update M1-4d-3: the guard
   did its job; the golden was regenerated once, with the reason in the commit. Update M1-7: the
-  file format grew a column (format 2) and the fingerprints stayed byte-identical.
+  file format grew a column (format 2) and the fingerprints stayed byte-identical. Update M1-8: you
+  can record and play replays yourself from the command line (see the M1-8 entry).
 - **Also fixed (BUG-0014):** two particular seeds (0 and the largest possible number) used to give
   the same map. The seed is now scrambled before use, so every seed is its own map. Side effect:
   **every map changed once.** Seed 1 today is not the seed 1 of yesterday. Nothing you have seen is
@@ -268,7 +327,8 @@ instead of clusters" or "make giving up take 2 seconds".
 
 - **What changed for you:** from this session the game window stops being an empty scene (see the
   M2-1 entry above: it landed). Units, selection and right-click orders are the next view task (M2-2).
-  Update 1609: M2-2 landed too. Update 2330: the minimap (M2-4) landed.
+  Update 1609: M2-2 landed too. Update 2330: the minimap (M2-4) landed. Update 0655: the order keys
+  (M2-3) landed; M1's criteria are all met.
 - **Producer decisions, revisit any time:**
   - *Where the view's tests live.* Dev tests in `sim/Rts.Sim.Tests/ViewApi/`, QA tests in
     `sim/Rts.Sim.Tests/QA/ViewApi/`, Godot-side test scenes in `game/tests/`; `ViewApi/` may hold
@@ -278,6 +338,7 @@ instead of clusters" or "make giving up take 2 seconds".
   - *The sim track keeps its public setup API additive* (no new required fields on `SimConfig`, no
     signature changes to `Simulation` or the data loader), so the view compiles after both merge.
     Held this session and the next. Update 2330: held again (M1-7 kept the 3-argument `Move`).
+    Update 0655: held (M1-8 added one read-only method and nothing else to the sim).
   - *First view slice order:* scene + terrain + camera + screenshot flag before unit views, because
     the screenshot flag is how the studio (and you) verify every later visual task.
   - *Bug numbering with two QA inspectors:* both filed a BUG-0039 this session. From now on the
@@ -285,7 +346,7 @@ instead of clusters" or "make giving up take 2 seconds".
 - **Docs drift for you to fix (one line, your file):** `CLAUDE.md` still says "Current milestone:
   M1" and "don't write gameplay code ahead of the roadmap". With two tracks that line is per
   track (sim M1, view M2). The agents don't edit `CLAUDE.md`; suggested text: "Current
-  milestones: M1 (sim track), M2 (view track)".
+  milestones: M1 (sim track), M2 (view track)". Update 0655: plus the CLI command line (M1-8 entry).
 - **Cap note:** `autopilot.md` says 8 sessions per day; the old dashboard said 10. The studio
   follows autopilot (8).
 
@@ -321,7 +382,7 @@ instead of clusters" or "make giving up take 2 seconds".
   comrade by up to 14 cm for a tick (BUG-0038). Neither lets anyone through a plug. Also, with
   500-1,000 units marching, a few pairs end up closer than they should (a known limit of the
   back-off rule). Update M1-4d-3: BUG-0037 and BUG-0038 fixed.
-- **To watch it:** `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~ScenarioTests" --logger "console;verbosity=detailed"` prints each seed's path length, ticks taken and the limit. Update M1-6: the same march is now the golden replay (`sim/Rts.Sim.Tests/Replays/cross_map_seed1.replay`).
+- **To watch it:** `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~ScenarioTests" --logger "console;verbosity=detailed"` prints each seed's path length, ticks taken and the limit. Update M1-6: the same march is now the golden replay (`sim/Rts.Sim.Tests/Replays/cross_map_seed1.replay`). Update M1-8: `dotnet run --project tools/Rts.Cli -- run --seed 1 --units 200` runs the same kind of march from the command line.
 
 ### Idle units step aside for walkers (M1-4d-2, 2026-10-05)
 
@@ -359,7 +420,8 @@ instead of clusters" or "make giving up take 2 seconds".
   later two-track (sim + view) change to the skill applies from the next session. Update 1446:
   this session is the first on the two-track skill; no second conductor has shown up since.
   Update 1609: a power outage at about 16:40 interrupted both builders; both were resumed from
-  their transcripts with work intact, no second conductor. Update 2330: a quiet session.
+  their transcripts with work intact, no second conductor. Update 2330: a quiet session. Update
+  0655: quiet again.
 
 ### Units cluster around the click point, and give up when stuck (M1-4d-1, 2026-10-05)
 
@@ -398,6 +460,7 @@ instead of clusters" or "make giving up take 2 seconds".
   time budget so the game never hitches.
 - **What you'll see:** nothing in normal play. Only in a big burst: order 32 separate groups to 32
   different spots at the same instant and the last group starts walking about 0.8 s after the first.
+  Update M1-8: the M2-5 debug overlay will be able to draw these arrows on the ground.
 - **Why it's saved with the game (Producer decision):** which arrow maps are remembered decides
   which units wait a tick, so that memory is saved and checked like the rest of the game state.
   That keeps replays and saved games exact.
@@ -453,42 +516,42 @@ track right after S1/S2 bugs).
 1. ~~`Stop`, `HoldPosition`, `AttackMove` command kinds and shift-queued orders~~ → **done in
    M1-7** (session 2330): `Command.Stop/HoldPosition/AttackMove(...)`, `Command.Move(..., queued)`,
    `Command.QueuedFlag`; queue of 8 per unit. M2-3 can start.
-2. Public read access to a cached flow field's directions, for the M2-5 debug overlay (flow arrows).
-   Candidate to fold into M1-8 if trivial.
-3. `DataError.ToString()` shouldn't print `: :` for empty file/path fields (BUG-0041 note; fold into
-   the M3 data task).
+2. ~~Public read access to a cached flow field's directions, for the M2-5 debug overlay~~ → **done
+   in M1-8** (session 0655): `FlowFieldCache.PeekCached(targetCell)` returns the cached `FlowField`
+   (or null); read `DirectionAt` / `CostAt`, don't keep it across ticks. M2-5 can start.
+3. `DataError.ToString()` shouldn't print `: :` for empty file/path fields (BUG-0041 note, BUG-0057
+   item 4; fold into the M3 data task or the M1 hardening).
 4. Low priority: a previous-tick facing (`PrevFacing`) so unit views can blend turns; today the
    view snaps yaw per tick (M2-2 note, M2-7 polish).
+5. Noted, not requested: Shift-queued legs through a packed friendly group give up (BUG-0028);
+   the M2-3 test scene works round it with spread-out units. Crowd-cost follow-up after M4.
 
 ## Feature queue: sim track (feature sessions, in order)
 
-1. **Next:** M1-8 headless CLI in `tools/` printing checkpoint hashes and tick timings; records and
-   plays `.replay` files through `ReplayPlayer`; a console project in the `.sln`, no xUnit
-   dependency, BCL only. Fold in request 2 if trivial.
-2. **M1 end-of-milestone hardening session**, then sign-off: see the sim debt backlog (BUG-0044,
-   0045, 0046, 0047, 0049, 0050, 0054, 0055, 0056, the blank-line nit); coverage ✅ check for every
-   M1 system; retro; M3 set to Next.
-3. M3 sim side: resource entities, gather/return loop, building placement and construction,
-   production queues, Age II, full Malazan and Whirlwind data. Plus any **Requests for the sim
-   track** above, which outrank M3 work.
-4. M6 (far ahead): agents can't download. The Producer lists under "Waiting on you", when M5
+1. **Next (hardening, not a feature):** the M1 end-of-milestone hardening session, then sign-off:
+   see the sim debt backlog (BUG-0055, 0054, 0044, 0045, 0046, 0049, 0050, 0047, 0056, 0057 items
+   2-4, the blank-line nit); coverage ✅ check for every M1 system in `studio/qa/coverage.md`;
+   retro in docs/05; M3 set to Next.
+2. M3 sim side, first slice: resource entities (gold mines, trees; tree depletion updates the nav
+   grid), then the gather/return loop, building placement and construction, production queues,
+   Age II, full Malazan and Whirlwind data. Plus any **Requests for the sim track** above, which
+   outrank M3 work.
+3. M6 (far ahead): agents can't download. The Producer lists under "Waiting on you", when M5
    starts, the exact links for the Godot 4.7.2 .NET export templates and the Kenney/KayKit/Quaternius
    packs (docs/04) with the `asset-sources/` folder for each (owner note 2026-10-05).
 
 ## Feature queue: view track (feature sessions, in order)
 
-1. **M2-3 (next):** A attack-move (moves only), S stop, H hold, Shift-queue (the sim's kinds and
-   queue are on `main`); double-click type select, control groups, Tab subgroups. Generalise
-   `SelectionController.OrderMoveTo` (kind + queued) rather than add a second order path. Don't
-   show Hold as a persistent stance once an order is queued after it (BUG-0056 item 3). Production
-   budget 500 lines (M2-4 held it: 365).
-2. **View hardening session** at 4 / 4 (after M2-3): BUG-0052, BUG-0053, BUG-0064, the dev
-   mesh-test wall mutant.
-3. M2-5: debug overlay (nav grid, flow arrows, tick-time graph); flow arrows need request 2.
-4. M2-6: placeholder audio for select and command (generated tones or CC0 already in repo; no
+1. **Next (hardening, not a feature):** the view hardening session (4 / 4): BUG-0068 (S3),
+   BUG-0067, BUG-0052, BUG-0053, BUG-0064, the dev mesh-test wall mutant, export hygiene notes.
+2. M2-5: debug overlay (nav grid, flow arrows through `FlowFieldCache.PeekCached`, tick-time
+   graph); toggled by a key, off by default.
+3. M2-6: placeholder audio for select and command (generated tones or CC0 already in repo; no
    downloads by agents).
-5. M2-7: playable check, 100 placeholder units at 60 FPS → M2 sign-off (with the M2 hardening
+4. M2-7: playable check, 100 placeholder units at 60 FPS → M2 sign-off (with the M2 hardening
    session). Trees and rocks as MultiMesh wait for M3's resource entities.
+5. M3 view side after that: HUD resource bar, selection panel, command card (uses Tab subgroups),
+   build ghosts.
 
 ## Debt backlog: sim track (hardening sessions only; next one is the M1 end-of-milestone session)
 
@@ -513,10 +576,15 @@ track right after S1/S2 bugs).
   limit or find a rule that terminates and recovers it.
 - **BUG-0046 (S3)** walker paths depend on neighbours' spawn order (`Constrain` clip order,
   pre-existing; determinism unaffected): fix by sorting clips or document as a known limit.
+- **BUG-0057 (S4)** CLI nits, items 2-4: check the `--record` path is writable before ticking;
+  `play` on a 0-checkpoint replay should say "nothing compared" (or `run` warns when `--checkpoint`
+  > `--ticks`); `DataError.ToString()` `: :` for empty fields (request 3). Item 1 (docs) done.
+  Also: `CliTests` leave `.replay` files in `%TEMP%\rts-cli-tests` (clean up or use a temp dir per run).
 - **BUG-0047 (S4)** 1 of 4 left (tight-blob row report-only). Nit: three stray blank lines at the top
   of `MovementSystem`'s class body.
 - **BUG-0028 / BUG-0032 (S3)** crowd targets (4 points 51% / 34%, 64 goals 19%, same-owner crossing
-  22 / 200): needs a crowd cost in the flow fields; not inside M1. Revisit after the M4 sandbox.
+  22 / 200; Shift-queued legs through a packed friendly group give up, seen in the M2-3 scene): needs
+  a crowd cost in the flow fields; not inside M1. Revisit after the M4 sandbox.
 - BUG-0040 (S4) part 2: in-tick AI enqueue vs the phase-14 checkpoint is a design note for M5.
 - BUG-0025 (S3) evict the live field with the newest order + BUG-0026 (S4) rotate same-tick tie-break.
 - BUG-0005 (S3) per-player command buckets (O(n^2) insertion sort under a flood); before M5.
@@ -525,10 +593,11 @@ track right after S1/S2 bugs).
 - Loader: BUG-0008 (S3) duplicate JSON keys, BUG-0010 (S4) faction slots, `DataError.ToString()`
   empty-field formatting; fold into the M3 data task.
 - BUG-0002 (S4) `.sln` Release config maps RtsGame to Debug; with `tools/export.ps1` (M6).
-- Perf (Debug, this machine): 500 moving 0.67 ms (criterion test; the older 0.17 ms row measured a
-  different scenario); 2,500 units with full queues 3.0 ms; 2,500 one-player tight blob 4.5-4.6 ms;
-  two-player 10.5 ms; 1,000 walkers crossing a 1,500 blob 5.4 ms. Replay: 1,000 units x 2,500 ticks
-  records in 6.0 s.
+- Perf (Debug, this machine): 500 moving 0.67 ms (criterion test; CLI 0.66 ms avg, p99 2.3 with the
+  other track running); 1,000 via CLI 1.5 ms; 2,500 units with full queues 3.0 ms; 2,500 CLI march
+  4.6 ms (p99 11.2); 2,500 one-player tight blob 4.5-4.6 ms; two-player 10.5 ms; 1,000 walkers
+  crossing a 1,500 blob 5.4 ms. Replay: 1,000 units x 2,500 ticks records in 6.0 s; 1.7 M ticks
+  with a checkpoint every tick = 45 MB.
 - Known limits in docs/03: 4-point crowds 51% / 34%; same-owner blob crossing 22 / 200; stopped
   units can overlap > 40%; back-off-limit pairs at 500-1,000 units; enemies Moving-but-standing are
   soft (a re-ordered plug can leak 2 small units); holders soft to their own army (BUG-0055);
@@ -536,8 +605,15 @@ track right after S1/S2 bugs).
   oracles; enqueue stamps `TickNumber + 1`; `SimInfo.Version` recorded in replays but not checked;
   .NET 8 support ends 2026-11-10, move to the next LTS at M6.
 
-## Debt backlog: view track (hardening sessions only)
+## Debt backlog: view track (hardening sessions only; next view session)
 
+- **BUG-0068 (S3)**: a minimap right-click while A is armed orders a Move and keeps targeting. Fix:
+  in `Minimap`'s `command` branch, if `SelectionController.Targeting`, cancel it and order nothing
+  (add a public `CancelTargeting()`); docs/03 M2-3 section to say so; turn the QaM23Test print into
+  a check.
+- **BUG-0067 (S4)**: double-tap at exactly 300 ms depends on float rounding (compare whole
+  milliseconds; un-skip `DoubleTap_Exactly300ms_GivesTheSameAnswerAtAnyClockValue`); end targeting
+  when the selection becomes empty (in `_Process` after the prune).
 - BUG-0064 (S4): minimap dots hard to tell from ramp (Whirlwind) and cliff / border (Malazan)
   tints: outline or 2x2 dots; maps over 220 cells skip ~26% of cells under nearest filtering
   (min-filter or screen-space dots); `TryToMap` far-border rounding on letterboxed maps (note).
@@ -555,12 +631,16 @@ track right after S1/S2 bugs).
 - Cosmetic: ramp ends ~31° vs 22° mid-ramp (heights at cell centres); no wall skirts on the map
   border (invisible on generated maps); 1024² mesh 904 MiB transient (outside supported sizes);
   `StartLayout` at radius 1.0 puts bodies exactly touching.
+- Note: `OrdersTest.tscn` and `QaM23Test.tscn` compile into the game like the other test scenes
+  (excluded at M6 export). Headless scene runs print Godot warning stack traces for the expected
+  "order dropped" warnings; not errors.
 - Optional M0 item: Godot MCP server (owner install; not needed since `--screenshot`).
 
 ## Recent sessions
 
 | Date | Session | Task | Result |
 | --- | --- | --- | --- |
+| 2026-10-06 | [2026-10-06-0655](sessions/2026-10-06-0655.md) | sim M1-8 headless CLI (`tools/Rts.Cli`) + `FlowFieldCache.PeekCached`; view M2-3 A / S / H / Shift-queue, type select, control groups, Tab subgroups | both ACCEPT, 0 fix rounds (QA PASS_WITH_ISSUES x2: sim 1 S4; view 1 S3 + 1 S4). All 8 M1 criteria met |
 | 2026-10-05 | [2026-10-05-2330](sessions/2026-10-05-2330.md) | sim M1-7 perf criterion + Stop / HoldPosition / AttackMove + shift-queue (replay format 2); view M2-4 minimap + `Hud` + `--no-hud` | both ACCEPT, 0 fix rounds (QA PASS_WITH_ISSUES x2: sim 2 S3 + 1 S4, view 1 S4) |
 | 2026-10-05 | [2026-10-05-1609](sessions/2026-10-05-1609.md) | sim M1-4d-3 hardening batch (crowd routing + 6 debt bugs); view M2-2 unit views + selection + right-click move + BUG-0041 | both ACCEPT; sim 2 fix rounds (QA FAIL x3: S1 + 2 S2 fixed in-session, BUG-0045 S2 → S3 by the Producer, 4 S3 + 1 S4 filed); view 0 fix rounds (PASS_WITH_ISSUES: 1 S3 + 1 S4) |
 | 2026-10-05 | [2026-10-05-1446](sessions/2026-10-05-1446.md) | sim M1-6 replays + golden + BUG-0014; view M2-1 match scene, terrain mesh, camera, screenshot flag | both ACCEPT, 0 fix rounds (QA PASS_WITH_ISSUES x2: 1 S3 + 2 S4 filed, BUG-0014 fixed); first two-track session |

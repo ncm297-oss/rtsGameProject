@@ -1334,7 +1334,9 @@ AiPlayer
     Limits: units 1-100,000, ticks and checkpoint 1-1,728,000. Output: one header line,
     `tick <n> hash <16 hex>` per checkpoint (`StateHash()` right after that tick), then
     `ticks N avg A ms p99 P ms worst W ms` (a `Stopwatch` around each `Tick()` in the CLI, never in
-    the sim; hashing and printing are outside it), and `recorded <path>` after writing the replay.
+    the sim; the CLI's own hashing and printing are outside it, but with `--record` the recorder
+    hashes the state inside `Tick()` on checkpoint ticks, so those ticks time about 1 ms longer at
+    2,500 units; BUG-0057), and `recorded <path>` after writing the replay.
   - `play <path> [--data <dir>]` reads the replay (`ReplayFormat.TryReadFile`) and plays it
     (`ReplayPlayer.Run`); on success it prints the same `tick <n> hash` lines and
     `ok: K checkpoints matched over N ticks`.
