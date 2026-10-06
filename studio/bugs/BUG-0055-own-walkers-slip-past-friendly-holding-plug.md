@@ -39,3 +39,6 @@ it without overlapping it.
   exists for enemies; likely just `|| u.Hold[j]` in `MovementSystem.IsHardWall`, untested). That was rejected
   earlier for *all* Idle friendlies because of the crowd rows, but holders are rare, so the crowd
   rows probably won't move.
+
+## Producer triage (2026-10-05-2330)
+S3 stands; the code does what the brief said, so the task is accepted. Producer decision (owner may revisit): a unit told to hold a choke should block its own army too, since that is what the player means by H. Fix in the M1 end-of-milestone hardening session: holders count as hard walls for their own player (`IsHardWall` or equivalent), measured against the crowd rows (`CrowdRoutingTests`) and BUG-0044 perf rows; un-skip the QA row. If the crowd rows fall, keep the soft rule and document the gap instead.

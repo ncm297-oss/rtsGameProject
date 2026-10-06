@@ -28,3 +28,6 @@ a waypoint" walks off at once. That matches the brief and docs/03 ("a queued Mov
 it starts, clears Hold"), and it's the usual RTS behavior, so nothing needs to change. It's worth a
 line for the view track (M2-3): the HUD should not show Hold as a persistent stance once an order is
 queued after it.
+
+## Producer triage (2026-10-05-2330)
+S4 stands; M1 end-of-milestone hardening. Item 1: refuse `Flags != 0` on non-unit-order kinds (with BUG-0054). Item 2: add the walkers-stay-behind check to the dev corridor test once BUG-0055 is fixed. Item 3: by design; the M2-3 brief tells the view not to show Hold as a stance once an order is queued after it.
