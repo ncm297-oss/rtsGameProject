@@ -190,6 +190,24 @@ public sealed class Simulation
         u.Radius[h.Index] = def.Radius;
     }
 
+    /// <summary>
+    /// How much unit <paramref name="i"/>'s progress estimate (MovementSystem.Plan) changes where it
+    /// stands if its goal moves from <paramref name="from"/> to <paramref name="to"/> in the same cell:
+    /// nonzero only when it aims at the goal itself (in the goal cell, or a legal step from it), where
+    /// the estimate is the field cost, less the goal's offset from this cell's center, plus the distance to it.
+    /// </summary>
+    private float GoalEstimateShift(int i, Vector2 from, Vector2 to)
+    {
+        UnitStore u = World.Units;
+        NavGrid grid = World.NavGrid;
+        Vector2 pos = u.Position[i];
+        int goalCell = u.GoalCell[i];
+        if (!grid.WorldToCell(pos, out int cx, out int cy)) return 0f;
+        if (cy * grid.Width + cx != goalCell && !MovementSystem.IsLegalStep(grid, cx, cy, goalCell % grid.Width, goalCell / grid.Width)) return 0f;
+        Vector2 center = grid.CellCenter(cx, cy);
+        return (Vector2.Distance(to, pos) - Vector2.Distance(to, center)) - (Vector2.Distance(from, pos) - Vector2.Distance(from, center));
+    }
+
     private void ApplyMove(in Command command)
     {
         // Dropped: a dead or recycled unit, someone else's unit, or a target off the map.
@@ -218,11 +236,11 @@ public sealed class Simulation
             // order, since a player's short repositioning must move it (BUG-0030).
             if (u.State[i] == UnitState.Moving)
             {
-                // Moving the goal by d moves the progress estimate by at most 2d (the distance to the
-                // goal and the goal's offset in its cell): lower the best by that, so a jittered
-                // re-order can never count as progress and keep a blocked unit Moving forever.
-                float shift = Vector2.Distance(goal, u.Goal[i]);
-                if (float.IsFinite(u.BestRemaining[i])) u.BestRemaining[i] -= 2f * shift;
+                // The progress estimate depends on the goal point only where the unit aims at the goal
+                // itself (in its goal cell, or one legal step from it); move the best by exactly what
+                // the new point changes there, so a re-order neither passes for progress (a jittered
+                // re-order keeping a blocked unit Moving) nor costs a walking unit its progress (BUG-0043).
+                if (float.IsFinite(u.BestRemaining[i])) u.BestRemaining[i] += GoalEstimateShift(i, u.Goal[i], goal);
                 u.Goal[i] = goal;
             }
             return;

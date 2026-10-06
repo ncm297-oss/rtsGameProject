@@ -95,7 +95,7 @@ public class ShoveQaTests
             }
             // A chain shove (M1-4d-3): a line of touching Idle friendly units, at most MaxChainShove long
             // with this one, leads from a friendly walker in reach to it (start-of-tick positions).
-            if (!walker) walker = ChainReach(u, b, i, i, MovementConstants.MaxChainShove - 1);
+            if (!walker) walker = ChainReach(u, b, i, MovementConstants.MaxChainShove - 1);
             if (!walker)
             {
                 int nearest = -1;
@@ -113,23 +113,58 @@ public class ShoveQaTests
         return null;
     }
 
-    /// <summary>True if Idle unit <paramref name="at"/> touched (start of tick) an Idle unit of <paramref name="i"/>'s owner that a friendly walker could shove, within <paramref name="links"/> more links.</summary>
-    private static bool ChainReach(UnitStore u, Before b, int i, int at, int links)
+    /// <summary>
+    /// True if a chain shove explains Idle unit <paramref name="i"/>'s move: at the start of the tick a
+    /// friendly walker in reach of a first member, then touching Idle units of i's player, each ahead of
+    /// the previous along that walker's push, lead to i in at most <paramref name="maxLinks"/> links
+    /// (the chain rule: at most MaxChainShove units, all ahead along the push), and no member after the
+    /// first touched another player's standing unit (a chain never pushes a unit into an enemy).
+    /// </summary>
+    private static bool ChainReach(UnitStore u, Before b, int i, int maxLinks)
     {
-        if (links <= 0) return false;
-        for (int k = 0; k < u.Capacity; k++)
+        var path = new int[maxLinks + 1];
+        path[0] = i;
+        return ChainBack(u, b, path, 1, maxLinks);
+    }
+
+    private static bool ChainBack(UnitStore u, Before b, int[] path, int len, int maxLinks)
+    {
+        int i = path[0], first = path[len - 1];
+        if (len >= 2)
         {
-            if (k == at || k == i || !b.Alive[k] || !u.Alive[k] || u.Owner[k] != u.Owner[i] || b.State[k] != UnitState.Idle) continue;
-            float touch = u.Radius[at] + u.Radius[k] + 0.01f;
-            if (Vector2.DistanceSquared(b.Pos[k], b.Pos[at]) > touch * touch) continue;
             for (int w = 0; w < u.Capacity; w++)
             {
                 bool moving = b.State[w] == UnitState.Moving || u.State[w] == UnitState.Moving || u.OrderTick[w] != b.OrderTick[w];
                 if (!b.Alive[w] || !u.Alive[w] || !moving || u.Owner[w] != u.Owner[i]) continue;
-                float reach = u.Radius[k] + u.Radius[w] + u.Speed[w] + 0.01f;
-                if (Vector2.DistanceSquared(b.Pos[w], b.Pos[k]) <= reach * reach) return true;
+                float reach = u.Radius[first] + u.Radius[w] + u.Speed[w] + 0.01f;
+                if (Vector2.DistanceSquared(b.Pos[w], b.Pos[first]) > reach * reach) continue;
+                Vector2 n = b.Pos[first] - b.Pos[w];
+                bool ahead = true;
+                for (int t = len - 1; t >= 1 && ahead; t--) ahead = Vector2.Dot(b.Pos[path[t - 1]] - b.Pos[path[t]], n) > 0f;
+                for (int t = 0; t < len - 1 && ahead; t++) ahead = !TouchedEnemy(u, b, path[t]);
+                if (ahead) return true;
             }
-            if (ChainReach(u, b, i, k, links - 1)) return true;
+        }
+        if (len > maxLinks) return false;
+        for (int k = 0; k < u.Capacity; k++)
+        {
+            if (!b.Alive[k] || !u.Alive[k] || u.Owner[k] != u.Owner[i] || b.State[k] != UnitState.Idle || Array.IndexOf(path, k, 0, len) >= 0) continue;
+            float touch = u.Radius[first] + u.Radius[k] + 0.01f;
+            if (Vector2.DistanceSquared(b.Pos[k], b.Pos[first]) > touch * touch) continue;
+            path[len] = k;
+            if (ChainBack(u, b, path, len + 1, maxLinks)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>True if unit <paramref name="m"/> touched a standing unit of another player at the start of the tick.</summary>
+    private static bool TouchedEnemy(UnitStore u, Before b, int m)
+    {
+        for (int k = 0; k < u.Capacity; k++)
+        {
+            if (k == m || !b.Alive[k] || u.Owner[k] == u.Owner[m] || b.State[k] == UnitState.Moving) continue;
+            float sum = u.Radius[m] + u.Radius[k];
+            if (Vector2.DistanceSquared(b.Pos[m], b.Pos[k]) < sum * sum) return true;
         }
         return false;
     }

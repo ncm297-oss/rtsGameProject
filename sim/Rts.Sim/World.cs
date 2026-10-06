@@ -44,9 +44,9 @@ public sealed class World
         ShovedGoals = new int[config.UnitCapacity];
         AnchorQueue = new int[config.UnitCapacity];
         AnchorLinked = new bool[config.UnitCapacity];
-        WallNormals = new Vector2[config.UnitCapacity];
-        WallLimits = new float[config.UnitCapacity];
-        HardWalls = new int[config.UnitCapacity];
+        WallNormals = new Vector2[3 * config.UnitCapacity]; // a wall, plus two cone edges for an overlapped enemy
+        WallLimits = new float[3 * config.UnitCapacity];
+        HardWalls = new int[3 * config.UnitCapacity];
         ChainMembers = new int[Movement.MovementConstants.MaxChainShove];
         DetourLo = new float[config.UnitCapacity];
         DetourHi = new float[config.UnitCapacity];

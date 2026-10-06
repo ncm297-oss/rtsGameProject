@@ -410,8 +410,9 @@ So separation is symmetric and no result depends on which unit is walked first. 
   has is the same order (click spam, AI refreshes; BUG-0029): an arrived (Idle) unit stays put, and
   a Moving one takes the new point but keeps its order tick and stuck count. Since M1-4d-3
   (BUG-0030) an Idle unit's "same order" needs the new point within `ArrivalDistance` of its stored
-  goal; a point farther away in the same cell is a new order, and a Moving unit's retarget lowers its
-  best estimate by twice the shift (see "Implementation (M1-4d-3)"). Units stopping off
+  goal; a point farther away in the same cell is a new order, and a Moving unit's retarget moves its
+  best estimate by exactly what the new point changes in the estimate where it stands (see
+  "Implementation (M1-4d-3)"). Units stopping off
   the map or on blocked ground also drop their goal. A tick without progress while a groupmate
   just ahead is still making progress is *queued*, not stuck (M1-5, below).
 
@@ -644,13 +645,46 @@ unit-agnostic (a crowd cost in the fields is future work). The rules as built:
   runs over every wall the step touches, the army's own standing units too (walls whose limit is at
   least twice the desired step can't bind and are left out). The single clip of a friendly is no
   longer lost.
-- **Same-cell re-orders (BUG-0030).** See "Giving up" above. Moving the goal by d moves the progress
-  estimate by at most 2d, so a jittered re-order can't count as progress.
+- **Same-cell re-orders (BUG-0030).** See "Giving up" above. The estimate depends on the goal point
+  only where the unit aims at the goal itself (in its goal cell or a legal step from it); there the
+  best estimate moves by exactly the new point's change at the unit's position, elsewhere not at all.
+  So a jittered re-order can't count as progress, and a re-order of a walking unit costs it nothing
+  (fix round 1, BUG-0043: lowering the best by 2 x the shift made walking units give up mid-route).
+
+**Fix round 1 (QA findings BUG-0042..0049).**
+
+- **Queuing behind a field wait counts slowly (BUG-0048, S1).** Behind a unit waiting for its field a
+  no-progress tick still counts toward giving up one tick in `QueueOnWaitStride` (4). Waiting itself
+  counts nothing, so two units waiting in turn and each queuing behind the other held each other
+  forever when live goals outnumber cache slots (64-goal row, seed 51: 94 units Moving for 20,000+
+  ticks, 2 field builds every tick). Now seed 51 stops at about tick 500 (73-77 of 128 give up; base
+  92). Holds behind walkers that made progress still hold fully: those trace back to progress ticks.
+- **A unit walking back never pushes an arrived unit off its point (BUG-0042).** The pair a walker
+  pushed through a corridor walked home and shoved the walker back off its goal. A unit whose
+  walk-back is used doesn't get the `PushAfterStuckTicks` push; it waits behind or gives up.
+- **No sidestep or detour into a wall in a 1-cell passage (BUG-0042).** Inside a cell walled on two
+  opposite sides, a walker sidesteps a standing unit only toward a side where its center could pass
+  it, and doesn't detour at all; it presses on and pushes the parked line along. Sidestepping there
+  wedged the walker against the wall at a slant, past a small unit and onto a wide one, and its
+  shoves drove the pair into the wall. Corridor pair on QA's 20 varied seeds: walker at its goal once
+  everything settles on 20 of 20 (base 1, first M1-4d-3 version 6). The same room check in the open
+  cost crowd arrivals (2,500 to 4 points, seed 6: 699 -> 547), so it applies in passages only.
+- **Enemy plugs hold (BUG-0045).** A unit overlapping another player's standing unit that plugs a
+  1-cell passage may only move within 45 degrees of straight away from it: walkers get two cone
+  half-planes in the hard-wall constraints, shoves are refused otherwise; and a shove's final step
+  (after the wall trim, which could undo the squeeze trim) may not go past the pack limit into such an
+  enemy. Sliding round an enemy while inside it carried units through corridor plugs. Applied
+  everywhere it cost the two-player crowd rows (500 to 4 points min 189), so it is limited to plugs.
+- **Recorder (BUG-0047).** `ReplayRecorder.ToReplay` refuses a recording longer than
+  `Replay.MaxTickCount` (24 h) instead of writing a file `Replay.Validate` refuses.
+- **Perf (BUG-0044).** The per-neighbor helpers of Plan's loop are written out inline (Debug builds,
+  where the tick budget is measured, call every helper), the passage test runs only when needed, and
+  the enemy shove check only when a standing enemy is in reach.
 
 New hashed state: `UnitStore.WalkBack` (in `StateHash`, so in every replay checkpoint, and in QA's
 reflection audit). New scratch on `World` (derived, not hashed): `HardWalls`, `ChainMembers`,
 `DetourLo`/`DetourHi`/`DetourWall`. Tunables: `DetourMargin`, `MaxDetourTurn`, `MaxChainShove`,
-`QueueRange`, `WalkBackDelayTicks` in `MovementConstants`.
+`QueueRange`, `WalkBackDelayTicks`, `QueueOnWaitStride` in `MovementConstants`.
 
 **Both players at one point are enemies now.** `MoveScenario.Spawn` alternates owners in spawn
 order, but commands apply sorted by (player, sequence), so player 0 takes the low slots and player 1
@@ -669,7 +703,7 @@ Measured (M1-4d-3, Debug, this machine; "base" is the M1-6 code measured the sam
 | same, both players at every point (the old split) | | 182 (36%) | 182 | PreMix(1404) 121 (24%); seeds 1-3: 135, 197, 185 |
 | 2,500 units to 4 points, one player per point, arrived | >= 50% | 859 (34%) | PreMix(3404) 740; seeds 1-10 mean 720, min 494 | PreMix(3404) 895 (36%); seeds 1-10 mean 853 (34%), min 699 |
 | same, both players at every point | | 859 (34%) | 859 | PreMix(3404) 529 (21%); seeds 1-3: 429, 500, 398 |
-| 500 units, 500 random goals (seed 5018), gave up | <= 3% | 30 (6%) | 13 (2.6%); one player 10 | 11 (2.2%); one player 9 (1.8%) |
+| 500 units, 500 random goals (seed 5018), gave up | <= 3% | 30 (6%) | 13 (2.6%); one player 10 | 16 (3.2%; 11 before fix round 1); one player 8 (1.6%); QA, seeds 1-10: mean 2.3% |
 | 128 units, 64 goals, one player per goal, gave up, seeds 1-40 | median <= 10% | 22-26 on one map | median 28 (22%), max 54 | median 24 (19%), min 17, max 42 |
 | same, both players at every goal | | | | median 38 (30%), max 50 |
 | 200 walkers crossing a settled 300-blob, PreMix(73): mixed / same owner, arrived | >= 100 / >= 150 | 2 / 15-28 | 3 / 15 | 111 / 22 |
@@ -677,8 +711,9 @@ Measured (M1-4d-3, Debug, this machine; "base" is the M1-6 code measured the sam
 | Cross-map seeds 1-8, one player | 200/200, 0 give up | 200/200 | 200/200 | 200/200, 0 give up, 1,185-2,525 ticks (at most 40% of the limit); seeds 1-30: 0 give-ups, 0 pack violations |
 | Cross-map seeds 1-8, two owners (report) | | 200/200 | 200/200 | 100-142 arrive: both players to one goal contest it |
 | Perf: 500 moving avg | < 4 ms | 0.15 ms | 0.16 ms | 0.17-0.18 ms |
-| Perf: 2,500 tight blob avg | <= 4.5 ms | 3.8 ms | 4.41-4.51 ms (this machine, today) | 4.81-5.01 ms one player (+11%; about 4.2 ms at the docs' 3.8 baseline) |
-| Perf: 1,000 walkers crossing a 1,500 same-owner blob (report) | report | 3.1 ms | 13-14 ms (QA row, 400 ticks) | 30-33 ms; to settling: 591 ticks at 27 ms vs 263 at 14 ms |
+| Perf: 2,500 tight blob avg, one player | <= 4.5 ms | 3.8 ms | 4.44-4.55 ms (this machine, fix round 1) | 4.61-4.66 ms (+3%; first version +11%) |
+| Perf: 2,500 tight blob avg, two players (report) | | | 4.44-4.47 ms | 6.57-6.66 ms (a contest of enemies since BUG-0037: more units stay Moving) |
+| Perf: 1,000 walkers crossing a 1,500 same-owner blob (report) | report | 3.1 ms | 6.27-6.40 ms (probe, 400 ticks) | 14.6-14.8 ms: 2.1x the walking unit-ticks (291k vs 140k: walk-backs, detours and holds keep units walking), +9% per walking unit-tick |
 
 Rows below target, and why (miss rule: each beats its base on the same scenario):
 
@@ -694,10 +729,11 @@ Rows below target, and why (miss rule: each beats its base on the same scenario)
   (`KeepLinks`), and going round it takes longer than a give-up. Letting a blocked walker shove blob
   members freely (walk-back would repair them) was measured: no change here, fewer arrivals in the
   two-player rows.
-- **Perf**: walkers now hold their count while traffic round them still progresses, so more of them
-  are walking on any tick; the cost per walking unit-tick is about the same in a crossing (4.85 vs
-  4.95 us) and +6-11% in a tight blob. The 1,000-walker crossing (no walker arrives in either
-  version) takes 2x per tick and 2.2x as long to settle.
+- **Perf**: walkers now hold their count while traffic round them still progresses, and blob units
+  walk back, so more units are walking on any tick. One-player tight blob: +3% over the base on the
+  same machine (4.6 vs 4.5 ms here; the base itself is at 4.5 today, 3.8 when the target was set).
+  The 1,000-walker crossing (no walker arrives in either version) costs 2.3x per tick, almost all of
+  it from twice as many walking unit-ticks.
 
 Re-bounded tests (BUG-0039): the crowd stress rows run on plain seeds (one point: seeds 1-3 and 1;
 4 points: seeds 1-10 each) and assert bounds that hold on every swept seed (500 to 4 points >= 40%,

@@ -89,4 +89,11 @@ public static class MovementConstants
     /// reach at one and gave up (cross-map seed 1).
     /// </summary>
     public const float QueueRange = 2f * AvoidRange;
+
+    /// <summary>
+    /// Behind a unit waiting for its field, a no-progress tick counts toward giving up only one tick
+    /// in this many (BUG-0048): queuing behind the wait is fair, but waits under more live goals than
+    /// cache slots never end, so the count must still rise. 4: a 1 s give-up becomes 4 s.
+    /// </summary>
+    public const int QueueOnWaitStride = 4;
 }

@@ -308,4 +308,16 @@ public class ReplayFormatTests
         var sim = new Simulation(TestSim.Config(Seed: 3, PlayerCount: 1, UnitCapacity: 4, CommandCapacity: 4));
         Assert.Throws<ArgumentOutOfRangeException>(() => new ReplayRecorder(sim, checkpointInterval: Replay.MaxTickCount + 1));
     }
+
+    /// <summary>BUG-0047: a recording past the format limit is refused when written, not written and then refused on read.</summary>
+    [Fact]
+    public void Recorder_PastTheTickLimit_RefusesToWrite()
+    {
+        var sim = new Simulation(TestSim.Config(Seed: 3, PlayerCount: 1, UnitCapacity: 4, CommandCapacity: 4));
+        var recorder = new ReplayRecorder(sim);
+        sim.World.TickNumber = Replay.MaxTickCount; // test seam: a 24 h recording
+        Assert.Equal(Replay.MaxTickCount, recorder.ToReplay().TickCount); // at the limit: written (checkpoints skipped by the seam)
+        sim.World.TickNumber = Replay.MaxTickCount + 1;
+        Assert.Throws<InvalidOperationException>(() => recorder.ToReplay());
+    }
 }

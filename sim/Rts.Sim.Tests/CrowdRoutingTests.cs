@@ -20,6 +20,12 @@ public class CrowdRoutingTests
 
     public CrowdRoutingTests(ITestOutputHelper output) => _out = output;
 
+    private static bool PendingWalkBack(UnitStore u)
+    {
+        for (int i = 0; i < u.Capacity; i++) if (u.Alive[i] && u.WalkBack[i] >= UnitStore.WalkBackPending) return true;
+        return false;
+    }
+
     private static int CountMoving(UnitStore u)
     {
         int n = 0;
@@ -134,15 +140,17 @@ public class CrowdRoutingTests
 
     /// <summary>
     /// BUG-0028 b: a walker in a 1-cell corridor right behind a unit that is Moving but waiting for its
-    /// field under the build cap (100 newer goals queue ahead of that field, about 50 ticks). The
-    /// walker holds its count instead of giving up after GiveUpTicks, follows once the field is built,
+    /// field under the build cap (60 newer goals queue ahead of that field, about 30 ticks; the cache
+    /// holds them all, so the wait ends). The walker holds its count (all but one tick in
+    /// QueueOnWaitStride) instead of giving up after GiveUpTicks, follows once the field is built,
     /// and arrives. Before M1-4d-3 the waiting unit was a wall and the walker gave up.
     /// </summary>
     [Fact]
     public void WalkerBehindAUnitWaitingForItsField_Queues_ThenFollowsAndArrives()
     {
-        const int others = 100;
-        var sim = new Simulation(TestSim.Config(Seed: 1, PlayerCount: 1, UnitCapacity: others + 2, CommandCapacity: 4 * others + 16), CorridorUnderAField());
+        const int others = 60;
+        // Capacity 1,024 gives the field cache 128 slots: all 61 goals fit, so the wait is a queue, not churn.
+        var sim = new Simulation(TestSim.Config(Seed: 1, PlayerCount: 1, UnitCapacity: 1024, CommandCapacity: 4 * others + 16), CorridorUnderAField());
         NavGrid g = sim.World.NavGrid;
         Assert.True(g.IsPassable(22, 8) && !g.IsPassable(21, 8) && g.IsPassable(5, 9) && !g.IsPassable(5, 10));
         int wide = LocalMovementTests.TypeWithRadius(0.9f), small = LocalMovementTests.TypeWithRadius(0.4f);
@@ -156,7 +164,7 @@ public class CrowdRoutingTests
         sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, 0), walkerGoal));
         sim.Tick();
         sim.Tick(); // the walker's order applies first, so its field is built first
-        // 100 distinct goals in the open area, then the unit ahead's goal: the highest cell, built last.
+        // 60 distinct goals in the open area, then the unit ahead's goal: the highest cell, built last.
         for (int k = 0; k < others; k++)
             sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, 2 + k), g.CellCenter(1 + (k * 7) % 22, 1 + k % 6)));
         sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, 1), g.CellCenter(22, 7)));
@@ -298,10 +306,12 @@ public class CrowdRoutingTests
             ticks++;
             // The far unit moved while the walker never came within touching of it: shoved through the near one.
             if (u.Position[2] != b && Vector2.Distance(w, b) > u.Radius[0] + u.Radius[2] + u.Speed[0] && u.Position[1] != a) chainTicks++;
-        } while (u.State[0] == UnitState.Moving && ticks < 2000);
-        _out.WriteLine($"walker idle after {ticks} ticks at {u.Position[0]}; {chainTicks} chain-shove ticks; pair at {u.Position[1]} / {u.Position[2]}");
+            // Ticked until everything has settled, walk-backs included (BUG-0042, BUG-0047): the pair the
+            // walker pushed past walks home afterwards and must not push it off its goal.
+        } while ((CountMoving(u) > 0 || PendingWalkBack(u)) && ticks < 4000);
+        _out.WriteLine($"settled after {ticks} ticks: walker at {u.Position[0]} (goal cell {u.GoalCell[0]}); {chainTicks} chain-shove ticks; pair at {u.Position[1]} / {u.Position[2]}");
         Assert.True(chainTicks > 0, "the far parked unit never moved with the near one");
-        Assert.True(Vector2.Distance(u.Position[0], goal) <= MovementConstants.ArrivalDistance, $"walker stopped at {u.Position[0]}");
+        Assert.True(Vector2.Distance(u.Position[0], goal) <= MovementConstants.ArrivalDistance && u.GoalCell[0] >= 0, $"walker ends at {u.Position[0]}, goal cell {u.GoalCell[0]}");
     }
 
     /// <summary>
@@ -530,34 +540,43 @@ public class CrowdRoutingTests
     }
 
     /// <summary>
-    /// The rule behind the test above: a Moving unit re-ordered to another point of its goal cell keeps
-    /// its order tick and stuck count, and its best estimate drops by twice the goal's shift (the most
-    /// the shift can lower the estimate), so the new point can't pass for progress.
+    /// The rule behind the test above (BUG-0043 fix): a Moving unit re-ordered to another point of its
+    /// goal cell keeps its order tick and stuck count, and its best estimate moves by exactly what the
+    /// new point changes in the estimate where it stands: nothing far from the goal cell (there the
+    /// estimate doesn't depend on the point; a 2 x shift penalty made walking units give up mid-route),
+    /// and the exact difference inside the goal cell (so moving the point there can't pass for progress).
     /// </summary>
     [Fact]
-    public void MovingUnit_RetargetedInItsGoalCell_KeepsItsOrder_BestDropsByTwiceTheShift()
+    public void MovingUnit_RetargetedInItsGoalCell_KeepsItsOrder_BestMovesByTheEstimateShiftOnly()
     {
         Simulation sim = LocalMovementTests.SimOn(LocalMovementTests.Flat(32), 1);
         sim.Enqueue(Command.SpawnUnit(0, LocalMovementTests.TypeWithRadius(0.4f), new Vector2(11f, 31f)));
         sim.Tick();
         sim.Tick();
         UnitStore u = sim.World.Units;
-        Vector2 a = new(30.2f, 30.4f), b = new(31.6f, 31.5f);
+        NavGrid g = sim.World.NavGrid;
+        Vector2 a = new(30.2f, 30.4f), b = new(31.6f, 31.5f), c = new(30.4f, 31.8f);
         sim.Enqueue(Command.Move(0, MoveScenario.Handle(sim, 0), a));
         for (int t = 0; t < 10; t++) sim.Tick();
         Assert.Equal(UnitState.Moving, u.State[0]);
         Assert.True(float.IsFinite(u.BestRemaining[0]));
         u.StuckTicks[0] = 3; // test seam: a count in progress
         int orderTick = u.OrderTick[0];
-        float bestBefore = u.BestRemaining[0];
-        // Apply the Move alone (a tick would also walk the unit and move its estimate).
         MethodInfo apply = typeof(Simulation).GetMethod("ApplyMove", BindingFlags.NonPublic | BindingFlags.Instance)!;
-        var cmd = Command.Move(0, MoveScenario.Handle(sim, 0), b);
-        apply.Invoke(sim, new object[] { cmd });
+        // Far from the goal cell: the best estimate is untouched.
+        float bestFar = u.BestRemaining[0];
+        apply.Invoke(sim, new object[] { Command.Move(0, MoveScenario.Handle(sim, 0), b) });
         Assert.Equal(b, u.Goal[0]);
         Assert.Equal(orderTick, u.OrderTick[0]);
         Assert.Equal(3, u.StuckTicks[0]);
-        Assert.Equal(bestBefore - 2f * Vector2.Distance(a, b), u.BestRemaining[0], 4);
+        Assert.Equal(bestFar, u.BestRemaining[0]);
+        // Inside the goal cell: it moves by the estimate's change at the unit's position.
+        u.Position[0] = new Vector2(30.9f, 30.3f); // test seam: in the goal cell (15, 15)
+        float bestIn = u.BestRemaining[0];
+        Vector2 pos = u.Position[0], center = g.CellCenter(15, 15);
+        float expected = (Vector2.Distance(c, pos) - Vector2.Distance(c, center)) - (Vector2.Distance(b, pos) - Vector2.Distance(b, center));
+        apply.Invoke(sim, new object[] { Command.Move(0, MoveScenario.Handle(sim, 0), c) });
+        Assert.Equal(bestIn + expected, u.BestRemaining[0], 4);
     }
 
     // ---------- determinism ----------

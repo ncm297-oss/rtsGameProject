@@ -50,7 +50,7 @@ public class CrowdRowSweepStressTests
     public void TwentyFiveHundredToFourPoints_Seeds11To20_BoundHolds() => SweepFourPoints(2500, 6000, 22, 11, 20);
 
     /// <summary>128 units to 64 goals, one player per goal, seeds 41-80 (the bound of 48 was fitted on 1-40): termination, build cap, every Idle unit arrived or gave up, at most 48 gave up.</summary>
-    [Fact(Skip = "BUG-0048 (seed 51 never stops), BUG-0049 (seed 61: 49 gave up; seed 64: a stray anchor)")]
+    [Fact(Skip = "BUG-0049: seed 51 (the BUG-0048 livelock map) now stops, but 73-77 of 128 give up (base 92) against the 48 fitted on seeds 1-40; Producer to re-set the bound or make it report-only")]
     public void MoreGoalsThanCacheSlots_Seeds41To80_BoundHolds()
     {
         var gaveUp = new List<int>();

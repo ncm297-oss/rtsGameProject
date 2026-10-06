@@ -92,7 +92,7 @@ public sealed class ReplayRecorder
         _checkpoints[_checkpointCount++] = new ReplayCheckpoint(tick, _sim.StateHash());
     }
 
-    /// <summary>The recording so far, up to the sim's current tick.</summary>
+    /// <summary>The recording so far, up to the sim's current tick; throws past <see cref="Replay.MaxTickCount"/> ticks (the file would be unreadable).</summary>
     /// <remarks>
     /// Commands stamped for a later tick (queued since the last tick) are left out: they haven't
     /// applied, and no checkpoint so far includes them. Recording continues; call it again later.
@@ -100,6 +100,9 @@ public sealed class ReplayRecorder
     public Replay ToReplay()
     {
         int tickCount = _sim.TickNumber;
+        // A file past the format limit would be refused on read (Replay.Validate): refuse to write it (BUG-0047).
+        if (tickCount > Replay.MaxTickCount)
+            throw new InvalidOperationException($"The recording is {tickCount} ticks long, past the replay format limit of {Replay.MaxTickCount} (24 h).");
         var commands = ImmutableArray.CreateBuilder<Command>(_commandCount);
         for (int i = 0; i < _commandCount; i++)
             if (_commands[i].Tick <= tickCount) commands.Add(_commands[i]);

@@ -25,6 +25,8 @@ namespace Rts.Sim.Movement;
 /// </remarks>
 public static class MovementSystem
 {
+
+
     // Planned outcomes, written by Plan and carried out by Apply.
     private const byte ActWalk = 0;    // take PlannedStep: progress, the stuck count resets
     private const byte ActStuck = 1;   // take PlannedStep (possibly zero: refused): a stuck tick
@@ -33,7 +35,7 @@ public static class MovementSystem
     private const byte ActArrive = 4;  // stop here; keep GoalCell so later units can pack against it
     private const byte ActAbandon = 5; // off the map or no route: stop and drop the goal
     private const byte ActPush = 6;    // blocked, moving only by pushing parked units: take PlannedStep; the stuck count holds
-    private const byte ActQueued = 7;  // no progress, but a groupmate just ahead made some last tick: take PlannedStep; the stuck count holds (at least 1)
+    private const byte ActQueued = 7;  // no progress, but a walker just ahead made some last tick: take PlannedStep; the stuck count holds (at least 1)
 
     // Meters a shove stops short of ShoveSpacing (SqueezeLimit): more than a position's float rounding.
     private const float ShoveRoundingMargin = 1e-4f;
@@ -165,6 +167,10 @@ public static class MovementSystem
             // Detour only on the way: near the goal (aiming at it) a walker presses on into its blob;
             // steering round the units packed there cost arrivals (docs/03). Walls in the way are
             // collected in the neighbor loop below (DetourInterval), the turn worked out after it.
+            // Nor inside a 1-cell passage: turning past a small unit there wedged the walker against the
+            // next, wider one at a slant (BUG-0042); it presses on and pushes the line along instead.
+            // (In a passage or not is worked out only when needed: -1 not yet, then 0 or 1.)
+            int passage = -1;
             bool detour = onField && forward != Vector2.Zero;
             float detourReach = aimDistance + MovementConstants.AvoidRange;
             int detourWalls = 0;
@@ -176,7 +182,7 @@ public static class MovementSystem
             // depend on the slot order neighbors are visited in (spawn order, M1-4d-3).
             long pushX = 0, pushY = 0, sideX = 0, sideY = 0;
             float maxShare = 0f;
-            bool touchingArrived = false, crowded = false, queued = false;
+            bool touchingArrived = false, crowded = false, queued = false, queuedOnWait = false;
             for (int m = 0; m < count; m++)
             {
                 int j = near[m];
@@ -204,17 +210,47 @@ public static class MovementSystem
                     if (world.DetourLo[detourWalls] <= 0f && world.DetourHi[detourWalls] >= 0f) detourCovers = true;
                     detourWalls++;
                 }
-                SidestepAndQueue(world, u, j, away, d2, sum, idle, standing, groupmate, forward, speed, ref sideX, ref sideY, ref queued);
+                // SidestepAndQueue, written out here: Debug builds (where the tick budget is measured)
+                // don't inline calls, and this loop runs for every neighbor of every walker. Keep the two
+                // in step.
+                if (!queued && !idle && (d2 < sum * sum || Vector2.Dot(away, forward) < 0f))
+                {
+                    float reach = sum + MovementConstants.QueueRange;
+                    if (d2 < reach * reach)
+                    {
+                        if (!standing) queued = u.StuckTicks[j] == 0;
+                        else if (!queuedOnWait) queuedOnWait = IsWaitingForField(world, u, j);
+                    }
+                }
+                if (forward != Vector2.Zero && !groupmate)
+                {
+                    float sideReach = sum + MovementConstants.AvoidRange;
+                    if (d2 < sideReach * sideReach && Vector2.Dot(away, forward) < 0f && (standing || Vector2.Dot(u.Velocity[j], forward) < 0f))
+                    {
+                        float w = MathF.Min(1f, (sideReach - MathF.Sqrt(d2)) / MovementConstants.AvoidRange);
+                        var right = new Vector2(forward.Y, -forward.X);
+                        float cross = forward.X * -away.Y + forward.Y * away.X;
+                        Vector2 sideDir = cross >= 0f ? right : -right;
+                        if (standing && passage < 0) passage = InPassage(grid, cx, cy) ? 1 : 0;
+                        if (!(standing && passage == 1) || (grid.WorldToCell(u.Position[j] + sideDir * sum, out int px, out int py) && grid.IsPassable(px, py)))
+                        {
+                            Vector2 sv = sideDir * (w * speed);
+                            sideX += (long)(sv.X * FixedScale);
+                            sideY += (long)(sv.Y * FixedScale);
+                        }
+                    }
+                }
                 // Past the pack limit (closer than ShoveSpacing x the radii's sum) a unit is pushed out
                 // whatever the other is doing: two units of a group pressed together and both standing
                 // took each other for walls, which never push out of an overlap, and stopped there.
-                float pack = MovementConstants.ShoveSpacing * sum;
-                if (d2 < sum * sum && (!standing || groupmate || d2 < pack * pack))
+                if (d2 < sum * sum && (!standing || groupmate || d2 < MovementConstants.ShoveSpacing * MovementConstants.ShoveSpacing * sum * sum))
                 {
                     float dist = MathF.Sqrt(d2);
                     Vector2 dir = dist > 0f ? away / dist : CoincidentDirection(i, j);
                     float share = (sum - dist) * (groupmate ? MovementConstants.SeparationShareStill : MovementConstants.SeparationShareMoving);
-                    FixedAdd(ref pushX, ref pushY, dir * share);
+                    Vector2 pv = dir * share;
+                    pushX += (long)(pv.X * FixedScale);
+                    pushY += (long)(pv.Y * FixedScale);
                     if (share > maxShare) maxShare = share;
                     // Only through a legal step, so a blob never reaches across a blocked corner (BUG-0020).
                     if (groupmate && !touchingArrived && grid.WorldToCell(u.Position[j], out int jx, out int jy)
@@ -222,7 +258,8 @@ public static class MovementSystem
                         touchingArrived = true;
                 }
             }
-            if (detourCovers)
+            if (detourCovers && passage < 0) passage = InPassage(grid, cx, cy) ? 1 : 0;
+            if (detourCovers && passage == 0)
             {
                 Vector2 turned = DetourTurn(world, grid, u, i, pos, cx, cy, forward, detourWalls);
                 if (turned != forward)
@@ -232,7 +269,7 @@ public static class MovementSystem
                     forward = turned;
                     flowStep = forward * MathF.Min(speed, aimDistance);
                     sideX = sideY = 0;
-                    queued = false;
+                    queued = queuedOnWait = false;
                     for (int m = 0; m < count; m++)
                     {
                         int j = near[m];
@@ -241,7 +278,7 @@ public static class MovementSystem
                         bool idle = u.State[j] != UnitState.Moving;
                         bool groupmate = idle && u.GoalCell[j] == goalCell && u.Owner[j] == owner;
                         bool standing = idle || u.Velocity[j] == Vector2.Zero;
-                        SidestepAndQueue(world, u, j, away, away.LengthSquared(), ri + u.Radius[j], idle, standing, groupmate, forward, speed, ref sideX, ref sideY, ref queued);
+                        SidestepAndQueue(world, u, j, away, away.LengthSquared(), ri + u.Radius[j], idle, standing, groupmate, false, forward, speed, ref sideX, ref sideY, ref queued, ref queuedOnWait);
                     }
                 }
             }
@@ -287,8 +324,17 @@ public static class MovementSystem
             float after = aimRemaining + Vector2.Distance(aim, pos + step);
             bool progress = after < best - margin;
             byte act = progress ? ActWalk : queued ? ActQueued : ActStuck;
+            // Behind a unit waiting for its field: a queued tick too, but only most of the time. Waiting
+            // counts as neither progress nor stuck, so two units each waiting in turn and queuing behind
+            // the other held each other forever under more live goals than cache slots (BUG-0048): one
+            // tick in QueueOnWaitStride still counts, so a jam behind waiters ends.
+            if (act == ActStuck && queuedOnWait && (world.TickNumber - u.OrderTick[i]) % MovementConstants.QueueOnWaitStride != 0)
+                act = ActQueued;
             bool pushArrived = false;
-            if (!progress && u.StuckTicks[i] >= MovementConstants.PushAfterStuckTicks)
+            // A unit walking back (its walk-back used, Moving again) never pushes a unit off its point:
+            // the pair a walker pushed through a corridor walked home and shoved the walker back off its
+            // goal (BUG-0042). It waits behind, or gives up, instead.
+            if (!progress && u.StuckTicks[i] >= MovementConstants.PushAfterStuckTicks && u.WalkBack[i] != UnitStore.WalkBackUsed)
             {
                 // Blocked for a while: friendly units parked at other goals yield too, if that moves
                 // it forward (BUG-0033: a unit parked in a corridor blocked its own army). Not before,
@@ -314,10 +360,11 @@ public static class MovementSystem
     /// For walker heading <paramref name="forward"/>, neighbor <paramref name="j"/> (at
     /// <paramref name="away"/> from it, squared distance <paramref name="d2"/>, radii sum
     /// <paramref name="sum"/>): its sidestep share, added to (sideX, sideY), and whether it makes a
-    /// no-progress tick a queued one.
+    /// no-progress tick a queued one. The same rules are written out inline in Plan's neighbor loop
+    /// (the hot path); this copy serves the re-run after a detour turns.
     /// </summary>
-    private static void SidestepAndQueue(World world, UnitStore u, int j, Vector2 away, float d2, float sum, bool idle, bool standing, bool groupmate,
-        Vector2 forward, float speed, ref long sideX, ref long sideY, ref bool queued)
+    private static void SidestepAndQueue(World world, UnitStore u, int j, Vector2 away, float d2, float sum, bool idle, bool standing, bool groupmate, bool inPassage,
+        Vector2 forward, float speed, ref long sideX, ref long sideY, ref bool queued, ref bool queuedOnWait)
     {
         // (Idle neighbors never queue anyone: test that first, it is the cheap part.)
         if (!queued && !idle && (Vector2.Dot(away, forward) < 0f || d2 < sum * sum))
@@ -332,7 +379,7 @@ public static class MovementSystem
                 // ahead waiting for its field (Moving, standing, field not cached, outside its goal
                 // cell) will move once the field is built: queuing too (BUG-0028).
                 if (!standing) queued = u.StuckTicks[j] == 0;
-                else queued = IsWaitingForField(world, u, j);
+                else if (!queuedOnWait) queuedOnWait = IsWaitingForField(world, u, j);
             }
         }
         if (forward == Vector2.Zero || groupmate) return;
@@ -347,7 +394,16 @@ public static class MovementSystem
             // Step away from the side it is on; dead ahead, step right. Both units of a head-on pair
             // step right, which are opposite ways, so they pass.
             float cross = forward.X * toJ.Y - forward.Y * toJ.X;
-            FixedAdd(ref sideX, ref sideY, (cross >= 0f ? right : -right) * (w * speed));
+            Vector2 away2 = cross >= 0f ? right : -right;
+            // Inside a 1-cell passage, round a standing unit only toward a side where the walker could
+            // pass it (its center level with the unit on that side on passable ground): sidestepping
+            // where there is no room wedged the walker against the corridor wall at a slant, and it
+            // pushed parked units into the wall instead of along the corridor (BUG-0042). Elsewhere as
+            // before: the same check in the open cost crowd arrivals (2,500 to 4 points, seed 6: 699 -> 547).
+            NavGrid grid = world.NavGrid;
+            bool checkRoom = standing && inPassage;
+            if (!checkRoom || (grid.WorldToCell(u.Position[j] + away2 * sum, out int px, out int py) && grid.IsPassable(px, py)))
+                FixedAdd(ref sideX, ref sideY, away2 * (w * speed));
         }
     }
 
@@ -524,8 +580,26 @@ public static class MovementSystem
             if (into > limit) step -= normal * (into - limit);
             normals[walls] = normal;
             limits[walls] = limit;
-            if (IsHardWall(u, i, j)) hardWalls[hard++] = walls;
-            walls++;
+            if (!IsHardWall(u, i, j))
+            {
+                walls++;
+                continue;
+            }
+            hardWalls[hard++] = walls++;
+            // Already overlapping another player's standing unit: only within 45 degrees of straight
+            // away from it, so nobody slides round an enemy inside it (a corridor plug, BUG-0045).
+            float sum = u.Radius[i] + u.Radius[j];
+            if (Vector2.DistanceSquared(u.Position[j], pos) >= sum * sum || !AtPassage(grid, u.Position[j])) continue;
+            var across = new Vector2(normal.Y, -normal.X);
+            for (int c = 0; c < 2; c++)
+            {
+                Vector2 cone = Vector2.Normalize((c == 0 ? across : -across) + normal);
+                float coneInto = Vector2.Dot(step, cone);
+                if (coneInto > 0f) step -= cone * coneInto;
+                normals[walls] = cone;
+                limits[walls] = 0f;
+                hardWalls[hard++] = walls++;
+            }
         }
         if (hard > 0 && !AllowedByHard(step, normals, limits, hardWalls, hard))
         {
@@ -615,7 +689,10 @@ public static class MovementSystem
     {
         normal = Vector2.Zero;
         limit = 0f;
-        if (j == i || !u.Alive[j] || !IsWall(u, i, j, goalCell)) return false; // groupmate or walker: soft push instead
+        if (j == i || !u.Alive[j]) return false;
+        // Not a wall (written out: hot path, Debug builds call every helper): a walker, or an arrived groupmate (same goal cell
+        // and owner); those get the soft push instead.
+        if (u.State[j] == UnitState.Moving ? u.Velocity[j] != Vector2.Zero : u.GoalCell[j] == goalCell && u.Owner[j] == u.Owner[i]) return false;
         Vector2 toJ = u.Position[j] - pos;
         float d2 = toJ.LengthSquared();
         float sum = u.Radius[i] + u.Radius[j];
@@ -817,9 +894,10 @@ public static class MovementSystem
             Vector2 s = Vector2.Zero;
             if (u.Alive[i] && u.State[i] == UnitState.Idle && grid.WorldToCell(u.Position[i], out int cx, out int cy))
             {
-                s = SqueezeLimit(world, i, ClampLength(shove[i], u.Speed[i]));
+                s = SqueezeLimit(world, i, ClampLength(shove[i], u.Speed[i]), out bool enemyNear);
                 s = KeepOffWalls(grid, cx, cy, u.Position[i], u.Radius[i], KeepLinks(world, i, s));
-                if (!CanStep(grid, cx, cy, u.Position[i] + s)) s = Vector2.Zero;
+                // The wall trim can undo SqueezeLimit's trim against an enemy: check the final step.
+                if (!CanStep(grid, cx, cy, u.Position[i] + s) || (enemyNear && ShovedIntoEnemy(world, i, s))) s = Vector2.Zero;
             }
             step[i] = s;
         }
@@ -918,9 +996,10 @@ public static class MovementSystem
     /// a unit that is being shoved too, it takes only half the room, since that one may close the rest.
     /// </summary>
     /// <remarks>Without this, a walker pressed friendly units on top of each other.</remarks>
-    private static Vector2 SqueezeLimit(World world, int i, Vector2 step)
+    private static Vector2 SqueezeLimit(World world, int i, Vector2 step, out bool enemyNear)
     {
         UnitStore u = world.Units;
+        enemyNear = false;
         int[] near = world.Neighbors;
         Vector2 pos = u.Position[i];
         // The hash holds start-of-tick positions; no unit has moved more than MaxUnitSpeed since.
@@ -929,6 +1008,7 @@ public static class MovementSystem
         {
             int k = near[m];
             if (k == i || !u.Alive[k] || (u.State[k] == UnitState.Moving && u.Velocity[k] != Vector2.Zero)) continue;
+            if (u.Owner[k] != u.Owner[i]) enemyNear = true; // a standing enemy in reach: ShovedIntoEnemy checks the final step
             Vector2 toK = u.Position[k] - pos;
             float dist = toK.Length();
             Vector2 normal = dist > 0f ? toK / dist : -CoincidentDirection(i, k);
@@ -941,6 +1021,45 @@ public static class MovementSystem
         }
         return ClampLength(step, u.Speed[i]);
     }
+
+    /// <summary>
+    /// True if shove <paramref name="step"/> would take unit <paramref name="i"/> past the pack limit
+    /// (<see cref="MovementConstants.ShoveSpacing"/> x the radii's sum) into another player's standing
+    /// unit, or, already overlapping one, move it more than 45 degrees off straight away from it (sliding
+    /// round an enemy inside it carried units through corridor plugs, BUG-0045).
+    /// </summary>
+    private static bool ShovedIntoEnemy(World world, int i, Vector2 step)
+    {
+        if (step == Vector2.Zero) return false;
+        UnitStore u = world.Units;
+        int[] near = world.Neighbors;
+        Vector2 pos = u.Position[i], next = pos + step;
+        float stepLength = step.Length();
+        int count = world.Spatial.QueryRadius(pos, u.Radius[i] + world.MaxUnitRadius + 2f * world.MaxUnitSpeed, near);
+        for (int m = 0; m < count; m++)
+        {
+            int k = near[m];
+            if (k == i || !u.Alive[k] || u.Owner[k] == u.Owner[i] || (u.State[k] == UnitState.Moving && u.Velocity[k] != Vector2.Zero)) continue;
+            float sum = u.Radius[i] + u.Radius[k];
+            Vector2 pk = u.Position[k];
+            float d1 = Vector2.Distance(next, pk);
+            if (d1 >= sum || !AtPassage(world.NavGrid, pk)) continue;
+            float d0 = Vector2.Distance(pos, pk);
+            if (d1 < d0 && d1 < MovementConstants.ShoveSpacing * sum - ShoveRoundingMargin) return true;
+            if (d0 < sum && d0 > 0f && Vector2.Dot(step, (pos - pk) / d0) < ConeCos * stepLength) return true;
+        }
+        return false;
+    }
+
+    /// <summary>True if <paramref name="p"/> lies in a cell walled on two opposite sides (x or y): a unit standing there plugs a 1-cell passage.</summary>
+    private static bool AtPassage(NavGrid grid, Vector2 p) => grid.WorldToCell(p, out int x, out int y) && InPassage(grid, x, y);
+
+    /// <summary>True if cell (x, y) is walled on two opposite sides: a 1-cell passage.</summary>
+    private static bool InPassage(NavGrid grid, int x, int y) =>
+        (!grid.IsPassable(x + 1, y) && !grid.IsPassable(x - 1, y)) || (!grid.IsPassable(x, y + 1) && !grid.IsPassable(x, y - 1));
+
+    // cos 45 degrees: the cone of directions a unit overlapping an enemy may still move in.
+    private const float ConeCos = 0.70710677f;
 
     /// <summary>
     /// The arrival rule of Plan, re-applied to a whole goal group at end-of-tick positions: an Idle
@@ -1010,23 +1129,11 @@ public static class MovementSystem
         {
             int j = near[m];
             if (j == i || !u.Alive[j]) continue;
-            if (!IsWall(u, i, j, goalCell)) continue;
+            if (u.State[j] == UnitState.Moving ? u.Velocity[j] != Vector2.Zero : u.GoalCell[j] == goalCell && u.Owner[j] == u.Owner[i]) continue; // not a wall: a walker or an arrived groupmate (as in WallLimit)
             float sum = u.Radius[i] + u.Radius[j];
             if (Vector2.DistanceSquared(aim, u.Position[j]) < sum * sum) return true;
         }
         return false;
-    }
-
-    /// <summary>
-    /// True if neighbor <paramref name="j"/> is a wall to walker <paramref name="i"/> (see <see cref="Constrain"/>):
-    /// a unit standing still (Idle, or Moving but not walking last tick) that isn't i's arrived
-    /// groupmate. A groupmate has i's goal cell *and* i's owner: an enemy holding the same goal cell
-    /// is still a wall (BUG-0037).
-    /// </summary>
-    private static bool IsWall(UnitStore u, int i, int j, int goalCell)
-    {
-        if (u.State[j] == UnitState.Moving) return u.Velocity[j] == Vector2.Zero;
-        return u.GoalCell[j] != goalCell || u.Owner[j] != u.Owner[i];
     }
 
     /// <summary>

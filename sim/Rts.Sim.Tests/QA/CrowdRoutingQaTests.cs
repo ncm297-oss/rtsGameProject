@@ -571,9 +571,9 @@ public class CrowdRoutingQaTests
     /// ever gets past the plug, the plug never moves, nobody goes deeper into it.
     /// </summary>
     [Theory]
-    [InlineData(1UL, 6, Skip = "BUG-0045: shoves press friendly units into and through a standing enemy plug")]
-    [InlineData(2UL, 10, Skip = "BUG-0045: shoves press friendly units into and through a standing enemy plug")]
-    [InlineData(3UL, 16, Skip = "BUG-0045: shoves press friendly units into and through a standing enemy plug")]
+    [InlineData(1UL, 6)]
+    [InlineData(2UL, 10)]
+    [InlineData(3UL, 16)]
     public void CorridorPluggedByAnEnemy_FriendlyLinesAhead_ChainShovesNeverSqueezeAnyonePast(ulong seed, int crowd)
     {
         const int line = 4;
@@ -641,26 +641,26 @@ public class CrowdRoutingQaTests
     /// its goal on 6 of 20 (base 7f741f1: 1 of 20); the other seeds are skipped under BUG-0042.
     /// </summary>
     [Theory]
-    [InlineData(1UL, Skip = "BUG-0042: the walker ends short of its goal once the walk-backs settle")]
-    [InlineData(2UL, Skip = "BUG-0042: the walker ends short of its goal once the walk-backs settle")]
+    [InlineData(1UL)]
+    [InlineData(2UL)]
     [InlineData(3UL)]
-    [InlineData(4UL, Skip = "BUG-0042: the walker ends short of its goal once the walk-backs settle")]
-    [InlineData(5UL, Skip = "BUG-0042: the walker ends short of its goal once the walk-backs settle")]
+    [InlineData(4UL)]
+    [InlineData(5UL)]
     [InlineData(6UL)]
-    [InlineData(7UL, Skip = "BUG-0042: the walker ends short of its goal once the walk-backs settle")]
-    [InlineData(8UL, Skip = "BUG-0042: the walker ends short of its goal once the walk-backs settle")]
-    [InlineData(9UL, Skip = "BUG-0042: the walker ends short of its goal once the walk-backs settle")]
-    [InlineData(10UL, Skip = "BUG-0042: the walker ends short of its goal once the walk-backs settle")]
+    [InlineData(7UL)]
+    [InlineData(8UL)]
+    [InlineData(9UL)]
+    [InlineData(10UL)]
     [InlineData(11UL)]
-    [InlineData(12UL, Skip = "BUG-0042: the walker ends short of its goal once the walk-backs settle")]
-    [InlineData(13UL, Skip = "BUG-0042: the walker ends short of its goal once the walk-backs settle")]
+    [InlineData(12UL)]
+    [InlineData(13UL)]
     [InlineData(14UL)]
     [InlineData(15UL)]
-    [InlineData(16UL, Skip = "BUG-0042: the walker ends short of its goal once the walk-backs settle")]
-    [InlineData(17UL, Skip = "BUG-0042: the walker ends short of its goal once the walk-backs settle")]
-    [InlineData(18UL, Skip = "BUG-0042: the walker ends short of its goal once the walk-backs settle")]
+    [InlineData(16UL)]
+    [InlineData(17UL)]
+    [InlineData(18UL)]
     [InlineData(19UL)]
-    [InlineData(20UL, Skip = "BUG-0042: the walker ends short of its goal once the walk-backs settle")]
+    [InlineData(20UL)]
     public void ParkedPairInACorridor_VariedSeeds_WalkerArrives(ulong seed)
     {
         float[] radii = { 0.4f, 0.7f, 0.9f };
@@ -708,11 +708,11 @@ public class CrowdRoutingQaTests
     /// goal-x sweep 12-20 (the repro's 14 among them).
     /// </summary>
     [Theory]
-    [InlineData(14, Skip = "BUG-0042: the walker ends short of its goal once the walk-backs settle")]
-    [InlineData(12, Skip = "BUG-0042: the walker ends short of its goal once the walk-backs settle")]
-    [InlineData(16, Skip = "BUG-0042: the walker ends short of its goal once the walk-backs settle")]
-    [InlineData(18, Skip = "BUG-0042: the walker ends short of its goal once the walk-backs settle")]
-    [InlineData(20, Skip = "BUG-0042: the walker ends short of its goal once the walk-backs settle")]
+    [InlineData(14)]
+    [InlineData(12)]
+    [InlineData(16)]
+    [InlineData(18)]
+    [InlineData(20)]
     public void WalkerPastAParkedPair_StillAtItsGoalOnceTheWalkBacksSettle(int goalX)
     {
         Vector2 goal = default;
@@ -762,12 +762,12 @@ public class CrowdRoutingQaTests
     /// not give up mid-field. M1-4d-3 lowers its best estimate by 2 x the shift on every retarget.
     /// </summary>
     [Theory]
-    [InlineData(1, 0.05f, Skip = "BUG-0043: a same-cell retarget lowers the walker's best estimate by 2 x the shift; it gives up mid-route")]
-    [InlineData(2, 0.1f, Skip = "BUG-0043: a same-cell retarget lowers the walker's best estimate by 2 x the shift; it gives up mid-route")]
-    [InlineData(2, 0.25f, Skip = "BUG-0043: a same-cell retarget lowers the walker's best estimate by 2 x the shift; it gives up mid-route")]
-    [InlineData(4, 0.25f, Skip = "BUG-0043: a same-cell retarget lowers the walker's best estimate by 2 x the shift; it gives up mid-route")]
-    [InlineData(1, 0.5f, Skip = "BUG-0043: a same-cell retarget lowers the walker's best estimate by 2 x the shift; it gives up mid-route")]
-    [InlineData(3, 0.5f, Skip = "BUG-0043: a same-cell retarget lowers the walker's best estimate by 2 x the shift; it gives up mid-route")]
+    [InlineData(1, 0.05f)]
+    [InlineData(2, 0.1f)]
+    [InlineData(2, 0.25f)]
+    [InlineData(4, 0.25f)]
+    [InlineData(1, 0.5f)]
+    [InlineData(3, 0.5f)]
     public void FreeWalker_JitterSpamClickedWithinItsGoalCell_StillArrives(int every, float jitter)
     {
         Simulation sim = LocalMovementTests.SimOn(LocalMovementTests.Flat(32), 1);
@@ -803,10 +803,10 @@ public class CrowdRoutingQaTests
     /// </summary>
     [Theory]
     [InlineData(0.9f, 0.8f)]
-    [InlineData(0.9f, 1.2f, Skip = "BUG-0043: a same-cell retarget lowers the walker's best estimate by 2 x the shift; it gives up mid-route")]
-    [InlineData(0.9f, 1.6f, Skip = "BUG-0043: a same-cell retarget lowers the walker's best estimate by 2 x the shift; it gives up mid-route")]
-    [InlineData(0.4f, 1.6f, Skip = "BUG-0043: a same-cell retarget lowers the walker's best estimate by 2 x the shift; it gives up mid-route")]
-    [InlineData(0.4f, 2.4f, Skip = "BUG-0043: a same-cell retarget lowers the walker's best estimate by 2 x the shift; it gives up mid-route")]
+    [InlineData(0.9f, 1.2f)]
+    [InlineData(0.9f, 1.6f)]
+    [InlineData(0.4f, 1.6f)]
+    [InlineData(0.4f, 2.4f)]
     public void FreeWalker_ReorderedOnceToAnotherPointOfItsGoalCell_StillArrives(float radius, float shift)
     {
         Simulation sim = LocalMovementTests.SimOn(LocalMovementTests.Flat(32), 1);
@@ -863,7 +863,7 @@ public class CrowdRoutingQaTests
     /// BUG-0048: the 64-goal row (more live goals than cache slots) on map seed 51 must stop. At
     /// M1-4d-3 94 units stay Moving for 20,000+ ticks with 2 field builds every tick; base stopped at 238.
     /// </summary>
-    [Fact(Skip = "BUG-0048: livelock, 94 units Moving forever with 2 field builds per tick")]
+    [Fact]
     public void MoreGoalsThanCacheSlots_Seed51_Terminates()
     {
         CrowdRows.Result r = CrowdRows.MoreGoalsThanCacheSlots(51);
