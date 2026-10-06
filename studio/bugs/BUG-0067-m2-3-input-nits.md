@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-06-0655, task M2-3 |
 | System | view input (ControlGroups, SelectionController) |
-| Fixed by | |
+| Fixed by | M2-H1 (3dc0568): `ControlGroups.Tap` compares whole milliseconds; `SelectionController` ends targeting when the pruned selection is empty (each frame and on the next left press); `OrdersControllerQaTests.DoubleTap_Exactly300ms_*` un-skipped, passes |
 
 ## Repro
 1. **Double-tap edge.** `OrdersControllerQaTests.DoubleTap_Exactly300ms_GivesTheSameAnswerAtAnyClockValue`
@@ -34,3 +34,6 @@ stale-A case needs the whole selection to die (no combat before M4).
 
 ## Notes
 For the view hardening session. The regression test for item 1 already exists (skipped).
+
+## Re-check (2026-10-06-0905, M2-H1 commit 3dc0568): fixed
+Verified: the un-skipped row fails on base code and passes on 3dc0568. QA `ViewHardeningQaTests.Tap_AgreesWithAnIntegerMillisecondModel_OverRandomClocks`: 20,000 random tap sequences with clocks up to ~1e11 ms and gaps of 300 / 301 / random ms, 0 disagreements with an integer-ms model. QA `game/tests/QaH1Test.tscn` (3,000 random steps through the viewport, including deaths of the whole selection with and without a frame before the next input) passes. The same scene on base scripts reports "targeting survived a frame after the whole selection died" 31 times.

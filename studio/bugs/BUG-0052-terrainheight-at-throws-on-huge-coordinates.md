@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-05-1609, task M2-2 |
 | System | view: ViewApi TerrainHeight (unit view placement, selection rings) |
-| Fixed by | |
+| Fixed by | M2-H1 (3dc0568): `TerrainHeight.At` clamps in float before the `(int)` cast; the 5 `QA/ViewApi/TerrainHeightQaTests.At_FarOffTheMapOrInfinite_*` rows un-skipped, pass |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~TerrainHeightQaTests.At_FarOffTheMapOrInfinite"`
@@ -33,3 +33,6 @@ Fails for x or y = 1e10, +Infinity, float.MaxValue. Negative huge values, -Infin
   call it every frame for every unit, so if a sim bug ever put a unit far off the map this would throw
   every frame instead of drawing the unit at the edge.
 - `GroundPicker` is not affected (it clamps cell indices before calling `InCell`).
+
+## Re-check (2026-10-06-0905, M2-H1 commit 3dc0568): fixed
+Verified: the 5 un-skipped rows fail on base code (scratch clone, `TerrainHeight.cs` reverted) and pass on 3dc0568. New QA `ViewHardeningQaTests.At_EverySpecialOnBothAxes_IsFiniteAndEqualsTheClampedPoint`: 16 specials (NaN, +/-Inf, +/-MaxValue, +/-1e10, +/-4.3e9, 2.2e9, +/-Epsilon, +/-0, +/-1e-30) on each axis against 22 values on the other, on 4 maps (one with a ramp in the map's edge column): every result is finite, in range, and exactly equal to the height at the clamped point. `InCell` over every cell of the edge-ramp map with all 256 special pairs stays inside the cell's corner range.

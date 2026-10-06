@@ -89,12 +89,14 @@ bugs outrank new features.
 | [BUG-0048](BUG-0048-crowd-never-stops-under-field-cache-churn.md) | S1 | fixed | Livelock: 94 of 128 units Moving forever with 2 field builds per tick (64-goal row, map seed 51; regression) |
 | [BUG-0049](BUG-0049-64-goal-bounds-break-on-new-maps-stray-anchor.md) | S3 | open | The re-bounded 64-goal row breaks on new maps: 49 give-ups on seed 61, a stray anchor on seed 64 |
 | [BUG-0050](BUG-0050-random-goal-give-ups-rose-after-fix-round-1.md) | S3 | open | 500 units to 500 random goals: give-ups rose to 4.7% mean (2.3% before fix round 1; target 3%) |
-| [BUG-0052](BUG-0052-terrainheight-at-throws-on-huge-coordinates.md) | S3 | open | TerrainHeight.At throws instead of clamping for coordinates beyond ~4.3e9 m or +Infinity |
-| [BUG-0053](BUG-0053-m2-2-test-and-doc-nits.md) | S4 | open | M2-2 nits: facing test can't see a yaw sign error, a stale SimRunner remark, picker box height in docs |
+| [BUG-0052](BUG-0052-terrainheight-at-throws-on-huge-coordinates.md) | S3 | fixed | TerrainHeight.At throws instead of clamping for coordinates beyond ~4.3e9 m or +Infinity |
+| [BUG-0053](BUG-0053-m2-2-test-and-doc-nits.md) | S4 | fixed | M2-2 nits: facing test can't see a yaw sign error, a stale SimRunner remark, picker box height in docs |
 | [BUG-0054](BUG-0054-unknown-command-flags-recorded-replay-write-throws.md) | S3 | open | A command with unknown Flags bits is accepted and recorded; ReplayFormat.Write then throws (same for an undefined kind) |
 | [BUG-0055](BUG-0055-own-walkers-slip-past-friendly-holding-plug.md) | S3 | open | Own walkers slip past a friendly holding unit plugging a 1-cell corridor (10 of 30, up to 1.05 m overlap; soft clip) |
 | [BUG-0056](BUG-0056-m1-7-order-nits.md) | S4 | open | M1-7 nits: Queued flag valid on Spawn/Noop, corridor Hold test misses passing walkers, Hold lasts one tick under a queued order |
 | [BUG-0057](BUG-0057-m1-8-cli-nits.md) | S4 | open | M1-8 CLI nits: timings include recorder hashing despite docs, unwritable --record found only after the run, 0-checkpoint replays "pass" |
-| [BUG-0064](BUG-0064-minimap-dot-readability-and-large-map-sampling.md) | S4 | open | Minimap dots hard to tell from ramps (Whirlwind) and cliffs (Malazan); maps over 220 cells drop dots |
-| [BUG-0067](BUG-0067-m2-3-input-nits.md) | S4 | open | M2-3 nits: an exact 300 ms double-tap depends on the clock value; A-targeting outlives an emptied selection and eats the next click |
-| [BUG-0068](BUG-0068-minimap-right-click-while-targeting-orders-move.md) | S3 | open | A minimap right-click while A-targeting orders a Move and leaves targeting armed |
+| [BUG-0064](BUG-0064-minimap-dot-readability-and-large-map-sampling.md) | S4 | fixed | Minimap dots hard to tell from ramps (Whirlwind) and cliffs (Malazan); maps over 220 cells drop dots |
+| [BUG-0067](BUG-0067-m2-3-input-nits.md) | S4 | fixed | M2-3 nits: an exact 300 ms double-tap depends on the clock value; A-targeting outlives an emptied selection and eats the next click |
+| [BUG-0068](BUG-0068-minimap-right-click-while-targeting-orders-move.md) | S3 | fixed | A minimap right-click while A-targeting orders a Move and leaves targeting armed |
+| [BUG-0069](BUG-0069-lone-minimap-dots-read-as-rim-colour.md) | S3 | open | A lone minimap dot reads as its rim colour (black or white), not its player colour |
+| [BUG-0070](BUG-0070-m2-h1-doc-and-test-nits.md) | S4 | open | M2-H1 nits: stale docs/01 minimap row, docs/03 big-map range, twin double-tap constants, dev wall test blind at the far edges |

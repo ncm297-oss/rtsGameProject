@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-05-2330, task M2-4 |
 | System | HUD / minimap (view) |
-| Fixed by | |
+| Fixed by | M2-H1 (3dc0568): 3 x 3-cell dots (owner cell plus a luma-chosen rim); `MinimapRasterTests` dot/rim/edge/contrast rows; docs/03 note for maps over 220 cells (no code change for big maps) |
 
 These are small related readability findings, grouped into one bug. None of them affects the
 acceptance criteria on the shipped 128 x 128 map.
@@ -43,3 +43,6 @@ Possible fixes, for the developer to choose from: outline the dots or draw them 
 ramps in a less saturated tint on the minimap; use a min-filter or one dot per screen pixel
 (draw the dots in screen space) when the map has more cells than the control has pixels.
 Faction colours come from data, so the dot style is the right place to fix it, not the palette.
+
+## Re-check (2026-10-06-0905, M2-H1 commit 3dc0568): fixed
+Verified, readability part: in windowed shots at 100 and 990 units per player (QA `game/tests/QaH1DotsShot.tscn`), lone units of both factions beside the border, beside a cliff lip, on a ramp, and on the top plateau are all visible as 5 x 5 px squares. Big maps: docs-only note, as the brief allowed (Match runs 128 only). Follow-ups: the dot now reads as its rim colour, not the player colour (BUG-0069), and the docs note's range is off (BUG-0070).
