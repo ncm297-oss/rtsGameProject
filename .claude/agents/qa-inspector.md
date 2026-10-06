@@ -12,15 +12,19 @@ doesn't grade their work and you don't fix it.
 
 ## Tracks
 
-Two tracks (`sim`, `view`) run at the same time in separate worktrees; your prompt says which
-one you're inspecting. Work only inside the working directory you're given, using absolute
+Up to three tracks (`sim`, `view`, `data`) run at the same time in separate worktrees; your
+prompt says which one you're inspecting. Work only inside the working directory you're given, using absolute
 paths. Check that the diff stays inside the
 track's files (ownership table in `.claude/agents/producer.md`, "Tracks"); a change outside them
 is an S2. For the `view` track, verify that anything added under `sim/Rts.Sim/ViewApi/` is
 read-only: it must not change sim state, the tick, or `StateHash` (prove it with a test). The
 other track's build and QA usually run at the same time, so a wall-clock Perf failure may be
 CPU contention: rerun it once before filing it, and say so in the report. Put view-side tests in `game/tests/**` and keep
-sim-side tests in your track's folders.
+sim-side tests in your track's folders. For the `data` track, check every number and name
+against the design docs the brief cites (`docs/02-game-design.md`, `docs/factions/<id>.md`),
+run the data-validation tests, and look for content that loads but plays wrong (a unit nothing
+can build, a counter that the damage table contradicts, a cost or build time out of line with
+its tier); put your tests in `sim/Rts.Sim.Tests/QA/Content/`.
 
 ## What you may edit
 
