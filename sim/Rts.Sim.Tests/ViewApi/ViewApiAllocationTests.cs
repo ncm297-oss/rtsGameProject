@@ -118,4 +118,45 @@ public class ViewApiAllocationTests
         int runs = AllocationProbe.AssertZero(block, _out);
         _out.WriteLine($"Minimap dots (2,000 units) + transform: 0 bytes (runs {runs}), checksum {sum + count}");
     }
+    [Fact]
+    public void DebugOverlay_NavRefill_Arrows_Counts_Ring_2000Units_AllocateZeroBytes()
+    {
+        Heightmap map = TerrainHeightTests.GeneratedMap(3);
+        var grid = new NavGrid(map);
+        var cache = new Rts.Sim.Pathfinding.FlowFieldCache(grid);
+        const int n = 2000;
+        var store = new UnitStore(n);
+        var selection = new SelectionSet(n);
+        int goal = Rts.Sim.Pathfinding.FlowField.NearestPassable(grid, 64 * grid.Width + 64);
+        for (int i = 0; i < n; i++)
+        {
+            EntityHandle h = store.Alloc();
+            store.GoalCell[i] = i % 5 == 0 ? goal : -1;
+            store.State[i] = i % 3 == 0 ? UnitState.Moving : UnitState.Idle;
+            selection.Add(h);
+        }
+        cache.Get(goal);
+        var nav = new NavOverlayBuilder(map);
+        var arrows = new FlowArrowLayout();
+        var ring = new TickTimeRing();
+        nav.Refresh(grid);
+        long count = 0;
+        double sum = 0;
+        Action setup = grid.BumpVersionForTests;
+        Action block = () =>
+        {
+            // One overlay frame after a passability change (the worst case: nav refill and a relist), then the steady frame.
+            count += nav.Refresh(grid) ? 1 : 0;
+            int g = FlowArrowLayout.GoalOf(selection.Items, store.Alive, store.Generation, store.GoalCell);
+            arrows.Invalidate();
+            count += arrows.Refresh(cache, grid, g, new Vector2(128f, 128f)) ? arrows.Count : 0;
+            count += arrows.Refresh(cache, grid, g, new Vector2(130f, 128f)) ? 1 : 0;
+            count += DebugCounts.Moving(store.Alive, store.State) + cache.Count;
+            for (int i = 0; i < 130; i++) ring.Add(i * 0.01);
+            sum += ring.Average + ring.Worst + ring[ring.Count - 1];
+        };
+        block();
+        int runs = AllocationProbe.AssertZero(block, _out, setup);
+        _out.WriteLine($"Debug overlay helpers (2,000 units): 0 bytes (runs {runs}), checksum {count + sum}");
+    }
 }

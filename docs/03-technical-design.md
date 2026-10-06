@@ -1445,6 +1445,79 @@ Match
   `--units 999` for the crowded shot, since the two extra units need free slots in the 2,000-slot
   store.
 
+### Implementation (M2-5)
+
+The debug overlay. New nodes in `Match.tscn`:
+
+```
+Match
+  World3D
+    ...SelectionRings
+    NavOverlay         MeshInstance3D (NavOverlayView.cs), hidden until the overlay is on
+    FlowArrows         MultiMeshInstance3D (FlowArrowsView.cs) + GoalMarker child made at first use
+  ...
+  DebugOverlay         CanvasLayer (DebugOverlay.cs): Label (always on) + TickGraph Control (TickGraph.cs)
+```
+
+- **Toggle:** the input action `debug_overlay` (F12, physical key, rebindable in `game/project.godot`;
+  F12 is unassigned in docs/02) flips it in `DebugOverlay._UnhandledInput` (echo presses ignored);
+  `--debug-overlay` starts it on. Off is the default. While off, `NavOverlay`, `FlowArrows` and
+  `TickGraph` are hidden and nothing calls them: the two 3D layers have no `_Process` at all and
+  build nothing until the first frame the overlay is on. `DebugOverlay._Process` (already running
+  for the M2-1 label) calls `SyncLayers()` only while on. The overlay reads the sim and never
+  enqueues.
+- **Nav grid:** the pure `ViewApi.NavOverlayBuilder(Heightmap)` builds one quad per cell, inset
+  8 cm from the cell edges (so the terrain shows as thin grid lines) and lifted 5 cm above the drawn
+  surface (`TerrainHeight.CellCorners`, so ramp quads tilt with the ramp). `Refresh(NavGrid)` refills
+  the vertex colours only when `NavGrid.Version` differs from the last fill, so the mesh is
+  uploaded once when the overlay first turns on and once per passability change, never per frame.
+  Colours (sRGB, alpha-blended, unshaded): any cell with `Blocked` set is blocked whatever else is
+  set, dark red if also `Cliff`, else red (border ring, sealed pockets; later buildings, trees,
+  resources); an unblocked `Ramp` cell is orange; other open ground is faint white. Unknown flag
+  bits never change the colour.
+- **Flow arrows:** goal = `GoalCell` of the lowest-slot live selected unit with `GoalCell >= 0`
+  (`ViewApi.FlowArrowLayout.GoalOf`). Every frame `FlowArrowLayout.Refresh` peeks
+  `World.FlowFields.PeekCached(goal)` and relists the arrows only when the goal cell, the field's
+  presence or `Version`, or the window changes. A field's contents depend only on the grid version
+  and its target, so an unchanged key means unchanged arrows; an evicted or stale field peeks null
+  and shows nothing. No `FlowField` is kept between frames. The window is the 40 x 40-cell square
+  centred on the camera focus's cell, clipped to the map (at zoom 60 the screen shows more than the
+  window). One arrow per window cell whose `DirectionAt` isn't `NoDirection`, pointing along the
+  sim's own offset table (`FlowField.OffsetX/OffsetY`); a cyan disc marks the field's `TargetCell`
+  (the cell it leads to) when it is in the window. Arrows are flat, 1.3 m long, 0.3 m above the
+  terrain at the cell centre, written into the MultiMesh buffer in one call per relist. No
+  selection, no goal, or no cached field: no arrows. A new order's field appears once the sim
+  builds it (the build cap can delay a new goal while many groups are walking, "Build cap" above).
+- **Tick graph:** `SimRunner.TickTimes` is a `ViewApi.TickTimeRing` of the last 120
+  `LastTickMs` samples, one per `Tick()` (also when several run in one frame), filled even while the
+  overlay is off (one array write per tick) so the graph has history when turned on. `TickGraph`
+  draws one bar per sample, oldest left, red above the 4 ms budget, with the budget line; its scale is
+  twice the budget or the worst sample. It builds no text per frame.
+- **Label:** while on, a second line: `units <live>   moving <n>   fields <count>/<capacity>   tick avg
+  <ms>   worst <ms> (<samples>)   arrows <n>`. Counts: `UnitStore.Count`, `ViewApi.DebugCounts.Moving`,
+  `FlowFieldCache.Count`. The label's strings allocate per frame, as the M2-1 label always has.
+- **Cost:** `SyncLayers()` (nav check, goal, peek, relist, counts) at 2,000 units, zoom 60, Debug:
+  about 0.09 ms average and 0.2 ms worst per frame with the camera moving a cell every frame (a
+  relist of about 1,500 arrows each time), less when steady; 0 bytes per frame panning or steady.
+- **Tests:** `ViewApi/NavOverlayBuilderTests` (colour rule incl. unknown bits, every cell's quad and
+  colour on the hand map and 3 generated maps, edge rows, inset geometry on the drawn surface,
+  winding, one refill per version, 0 bytes per refill), `ViewApi/FlowArrowLayoutTests` (the 8
+  directions against the sim's table, every arrow pointing to a cheaper passable neighbour, arrows
+  equal to `DirectionAt` in windows at the middle, an edge and all four corners, off-map and
+  non-finite focus, no field or no goal, relist only on a change, stale and evicted fields never
+  drawn, `GoalOf`), `ViewApi/TickTimeRingTests`, `ViewApi/DebugOverlayHashTwinTests` (the helpers
+  three times a tick with the overlay toggling, the selection changing, 48-goal churn and a version
+  bump: the hash equals a bare twin every tick), a `ViewApiAllocationTests` row, and the headless
+  scene `res://tests/DebugOverlayTest.tscn` ("DEBUG OVERLAY TEST PASS"): `--debug-overlay`, off by
+  default with nothing built, F12 through the viewport (release and echo ignored) and the action,
+  one nav upload over many frames, arrows after a Move equal to `DirectionAt` (and, run windowed,
+  the engine's instance transforms equal to the uploaded buffer; the headless renderer keeps none),
+  the corner window, no arrows without a goal, a field evicted by a 200-goal churn stops being
+  drawn, 80 churn ticks never stale, counts, cost and 0 bytes at 2,000 units, the 120-sample graph,
+  and a bare twin sim fed the same commands hashing equal every tick. For looking:
+  `& $env:GODOT --path game res://tests/DebugOverlayShot.tscn -- --out <absolute png> [--units n] [--zoom m]`
+  orders player 0's army north-east on seed 1 and saves one frame with the overlay on.
+
 ## AI architecture
 
 The AI lives in `Rts.Sim.Ai`, inside the sim assembly, because it must be deterministic (it uses
@@ -1577,8 +1650,15 @@ AiPlayer
   exit code 0 (1 if the file can't be written). Edge panning is off during it so the mouse can't
   move the shot. Headless runs print "Screenshot unavailable in headless mode" and quit 0 without
   an ERROR line. `--seed <n>` and `--speed <x>` pick the map and game speed.
-- **Debug overlay** (F12, dev builds): nav grid, flow field arrows for the selected group, unit
-  state labels, tick time graph, entity counts.
+- **Debug overlay** (M2-5; F12, input action `debug_overlay`; launch flag `--debug-overlay` starts it
+  on, so `--screenshot` can capture it): the nav grid on the ground, the flow-field arrows of the
+  selection's goal around the camera, a tick-time graph of the last 120 ticks with the 4 ms budget
+  line, and a second label line with live / Moving units, cached fields and the graph's average and
+  worst. Off by default; while off its layers are hidden, have no `_Process` and aren't built.
+  Costs (2,000 units, zoom 60, Debug): about 0.09 ms per frame with a relist every frame (camera
+  panning), 0 bytes per frame on and off. Details in "Implementation (M2-5)". Deferred: per-unit
+  state labels (maybe with M2-7), arrows for more than one goal, a window that follows the visible
+  trapezoid instead of a fixed square.
 - **Dev console** (backtick): `spawn <unit> <n>`, `give <gold> <wood>`, `reveal`, `speed <x>`,
   `ai <player> <difficulty>`, `win`, `lose`, `hash`.
 - **Headless CLI** (M1-8, `tools/Rts.Cli`, references `Rts.Sim` only):

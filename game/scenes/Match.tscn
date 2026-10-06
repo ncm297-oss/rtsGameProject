@@ -1,4 +1,4 @@
-[gd_scene load_steps=15 format=3]
+[gd_scene load_steps=18 format=3]
 
 [ext_resource type="Script" path="res://scripts/Match.cs" id="1_match"]
 [ext_resource type="Script" path="res://scripts/SimRunner.cs" id="2_runner"]
@@ -10,6 +10,9 @@
 [ext_resource type="Script" path="res://scripts/SelectionRings.cs" id="8_rings"]
 [ext_resource type="Script" path="res://scripts/SelectionController.cs" id="9_select"]
 [ext_resource type="Script" path="res://scripts/Minimap.cs" id="10_minimap"]
+[ext_resource type="Script" path="res://scripts/NavOverlayView.cs" id="11_nav"]
+[ext_resource type="Script" path="res://scripts/FlowArrowsView.cs" id="12_arrows"]
+[ext_resource type="Script" path="res://scripts/TickGraph.cs" id="13_graph"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMaterial_1"]
 sky_top_color = Color(0.36, 0.52, 0.72, 1)
@@ -53,6 +56,14 @@ script = ExtResource("7_units")
 [node name="SelectionRings" type="MultiMeshInstance3D" parent="World3D"]
 script = ExtResource("8_rings")
 
+[node name="NavOverlay" type="MeshInstance3D" parent="World3D"]
+visible = false
+script = ExtResource("11_nav")
+
+[node name="FlowArrows" type="MultiMeshInstance3D" parent="World3D"]
+visible = false
+script = ExtResource("12_arrows")
+
 [node name="RtsCamera" type="Camera3D" parent="."]
 fov = 50.0
 far = 1000.0
@@ -89,11 +100,22 @@ script = ExtResource("5_overlay")
 [node name="Label" type="Label" parent="DebugOverlay"]
 offset_left = 8.0
 offset_top = 8.0
-offset_right = 600.0
-offset_bottom = 32.0
+offset_right = 900.0
+offset_bottom = 56.0
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 4
+
+[node name="TickGraph" type="Control" parent="DebugOverlay"]
+visible = false
+layout_mode = 3
+anchors_preset = 0
+offset_left = 8.0
+offset_top = 60.0
+offset_right = 368.0
+offset_bottom = 150.0
+mouse_filter = 2
+script = ExtResource("13_graph")
 
 [node name="Screenshotter" type="Node" parent="."]
 script = ExtResource("6_shot")

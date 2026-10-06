@@ -9,7 +9,8 @@ namespace Rts.Game;
 /// <c>--seed &lt;n&gt;</c>, <c>--speed &lt;x&gt;</c>, <c>--screenshot &lt;path&gt;</c>,
 /// <c>--screenshot-after &lt;seconds&gt;</c> (default 2), <c>--units &lt;n&gt;</c> (per player, 0 to
 /// <see cref="MaxUnitsPerPlayer"/>, default <see cref="DefaultUnitsPerPlayer"/>), <c>--zoom &lt;m&gt;</c>
-/// (start zoom, clamped to the camera limits; for perf runs), <c>--no-hud</c> (hide the HUD). Bad values are
+/// (start zoom, clamped to the camera limits; for perf runs), <c>--no-hud</c> (hide the HUD), <c>--debug-overlay</c>
+/// (start with the F12 debug overlay on, e.g. for a screenshot). Bad values are
 /// warned about and ignored; a token starting with <c>--</c> is never taken as a value (BUG-0041).
 /// </remarks>
 public sealed class LaunchOptions
@@ -40,6 +41,9 @@ public sealed class LaunchOptions
 
     /// <summary>True to hide the HUD (clean screenshots, perf comparisons).</summary>
     public bool NoHud { get; private set; }
+
+    /// <summary>True to start with the debug overlay (nav grid, flow arrows, tick graph) on.</summary>
+    public bool DebugOverlay { get; private set; }
 
     /// <summary>Parses <see cref="OS.GetCmdlineUserArgs"/>.</summary>
     public static LaunchOptions FromCommandLine() => Parse(OS.GetCmdlineUserArgs());
@@ -83,6 +87,9 @@ public sealed class LaunchOptions
                     break;
                 case "--no-hud":
                     o.NoHud = true;
+                    continue; // takes no value
+                case "--debug-overlay":
+                    o.DebugOverlay = true;
                     continue; // takes no value
                 default:
                     continue;

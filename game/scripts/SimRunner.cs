@@ -39,6 +39,9 @@ public partial class SimRunner : Node
     /// <summary>Wall-clock cost of the most recent <c>Tick()</c> in milliseconds.</summary>
     public double LastTickMs { get; private set; }
 
+    /// <summary>The last <see cref="TickTimeRing.DefaultCapacity"/> tick costs (every <c>Tick()</c>, also several per frame), for the debug overlay's graph. One array write per tick, so it is kept even while the overlay is off.</summary>
+    public TickTimeRing TickTimes { get; } = new();
+
     /// <summary>Creates the simulation from loaded data; ticking starts on the next frame.</summary>
     public void Start(GameData data)
     {
@@ -56,6 +59,7 @@ public partial class SimRunner : Node
             Simulation.Tick();
             _stopwatch.Stop();
             LastTickMs = _stopwatch.Elapsed.TotalMilliseconds;
+            TickTimes.Add(LastTickMs);
         }
     }
 }

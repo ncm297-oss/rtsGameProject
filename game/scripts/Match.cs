@@ -54,9 +54,8 @@ public partial class Match : Node3D
             hud.GetNode<Minimap>("Minimap").Init(_runner, camera, selection, playerRgb);
         }
 
-        var overlay = GetNode<DebugOverlay>("DebugOverlay");
-        overlay.Runner = _runner;
-        overlay.Selection = selection;
+        GetNode<DebugOverlay>("DebugOverlay").Init(_runner, selection, camera,
+            GetNode<NavOverlayView>("World3D/NavOverlay"), GetNode<FlowArrowsView>("World3D/FlowArrows"), options.DebugOverlay);
         GetNode<Screenshotter>("Screenshotter").Arm(options.ScreenshotPath, options.ScreenshotAfter);
         // The seed printed is the one the sim uses (BUG-0041: the long export printed 2^64-1 as -1).
         GD.Print($"Match started: seed {unchecked((ulong)_runner.Seed)}, map {map.Width} x {map.Height}, " +
