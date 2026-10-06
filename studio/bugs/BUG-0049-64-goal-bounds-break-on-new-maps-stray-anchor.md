@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-05-1609, task M1-4d-3 |
 | System | movement (anchor rule) / tests (BUG-0039 re-bound) |
-| Fixed by | |
+| Fixed by | 6d1cbfd (M1-9); see the M1-9 re-check below |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~CrowdRowSweepStressTests.MoreGoalsThanCacheSlots_Seeds41To80"`
@@ -44,3 +44,10 @@ sweep stays skipped with that reason.
 
 ## Re-check round 2 (2026-10-05-1609, fix commit 57cc55c)
 Unchanged: seeds 41-80 median 30, max 75 (seed 51); the sweep stays skipped for the Producer's bound decision.
+
+## Re-check M1-9 (2026-10-06-0905, commit 6d1cbfd): fixed (bound re-set, the brief's option)
+`MovementSystemTests.MoreGoalsMaxGaveUp` re-set to 80 on seeds 1-80 (seed 51, the BUG-0048 map, gives
+up 76; base 75), plus a per-half median bound of 32 (measured 27.5 / 30.5). QA's
+`Stress/CrowdRowSweepStressTests.MoreGoalsThanCacheSlots_Seeds41To80_BoundHolds` is un-skipped on the
+shared constant and passes; seeds 81-140 all terminate. The stray anchor (seed 64) has not come back,
+and M1-9's `SettleBackedOff` closes the back-off path that produced it.

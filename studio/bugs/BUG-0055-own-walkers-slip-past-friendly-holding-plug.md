@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-05-2330, task M1-7 |
 | System | orders / local movement (`UnitStore.Hold`, `MovementSystem.Constrain` soft clip) |
-| Fixed by | |
+| Fixed by | 6d1cbfd (M1-9); see the M1-9 re-check below |
 
 ## Repro
 1. `QA/OrderQaTests.FriendlyHoldingPlug_InA1CellCorridor_LetsNobodyThrough` (skipped under this bug).
@@ -42,3 +42,10 @@ it without overlapping it.
 
 ## Producer triage (2026-10-05-2330)
 S3 stands; the code does what the brief said, so the task is accepted. Producer decision (owner may revisit): a unit told to hold a choke should block its own army too, since that is what the player means by H. Fix in the M1 end-of-milestone hardening session: holders count as hard walls for their own player (`IsHardWall` or equivalent), measured against the crowd rows (`CrowdRoutingTests`) and BUG-0044 perf rows; un-skip the QA row. If the crowd rows fall, keep the soft rule and document the gap instead.
+
+## Re-check M1-9 (2026-10-06-0905, commit 6d1cbfd): fixed
+Holders are hard walls to their own army (`IsHardWall`, `StandsHard`). `QA/OrderQaTests.FriendlyHoldingPlug_InA1CellCorridor_LetsNobodyThrough`
+un-skipped: fails on base, passes. New `QA/HardeningQaTests`: holders of both players in a 1-cell
+corridor with both players walking both ways (4 rows: nobody passes, holders bit-equal, twins every
+tick), an open-field storm of 240 walkers of both players round 6 holders (never moved, closest 0.79 x
+the radii's sum), lines of own holders plugging 2- and 3-cell corridors for both players (nobody through).

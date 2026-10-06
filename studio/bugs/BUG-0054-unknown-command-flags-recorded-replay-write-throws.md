@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-05-2330, task M1-7 |
 | System | commands / replays (`Simulation.Enqueue`, `ReplayRecorder`, `ReplayFormat.Write`) |
-| Fixed by | |
+| Fixed by | 6d1cbfd (M1-9); see the M1-9 re-check below |
 
 ## Repro
 1. `QA/OrderQaTests.UnknownFlagsEnqueued_RecordedReplay_StillReads` (skipped under this bug).
@@ -38,3 +38,12 @@ One bad command loses the whole session's replay, and the save path throws.
 
 ## Producer triage (2026-10-05-2330)
 S3 stands. Not player-facing until a replay is saved from the game (M6) and no factory sets a bad bit. Fix in the M1 end-of-milestone hardening session: `Enqueue` throws `ArgumentException` for an undefined kind or unknown flag bits (as it does for an unknown player), with a regression test; un-skip the QA row.
+
+## Re-check M1-9 (2026-10-06-0905, commit 6d1cbfd): fixed
+`Simulation.Enqueue` throws `ArgumentException` for a command that isn't `Command.IsWellFormed()` (nothing
+queued, no sequence used); `Replay.Validate` applies the same rule. Regression tests fail on base:
+`SimulationTests.Enqueue_MalformedKindOrFlags_ThrowsAndChangesNothing` (8 rows), `QA/OrderQaTests.UnknownFlagsEnqueued_RecordedReplay_StillReads`,
+`QA/SimCoreQaTests.UnknownCommandKind_IsIgnoredWithoutCrash`, `StateHashTests.Hash_CoversPendingFlags`.
+QA fuzz `Stress/CommandDoorFuzzStressTests` (8 seeds x 2,000 ticks, about 28k malformed commands refused
+against an independent oracle, hash and pending count unchanged on every refusal, every recording
+replays) and `QA/CliQaTests.Play_MalformedKindOrFlags_Exit2_InvalidCommand` (7 hostile rows exit 2, one line).

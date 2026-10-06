@@ -34,3 +34,6 @@ depends on slot order" is not true of movement as a whole.
 ## Notes
 Low priority while replays rebuild the same slots. Worth a docs/03 sentence so nobody relies on full
 order independence (for example in a future "re-spawn from snapshot" feature).
+
+## Re-check M1-9 (2026-10-06-0905, commit 6d1cbfd): still open, a documented known limit
+The developer built and measured a slot-free wall-clip order (bit-equal on the four permutation rows) but did not land it: it re-rolled three fitted crowd bounds. docs/03 "Known limits (M1)" now lists the slot dependence. The four QA rows stay skipped under this bug; landing it with re-fitted bounds is the Producer's call. BUG-0071 adds one more slot-order dependence (shove-pass plug cache).

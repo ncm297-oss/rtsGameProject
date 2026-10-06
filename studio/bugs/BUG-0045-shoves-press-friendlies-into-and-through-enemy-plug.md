@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (was S2; Producer re-triage at ACCEPT 2026-10-05-1609, see the last section) |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-05-1609, task M1-4d-3 (pre-existing on base 7f741f1; more seeds pass the plug on M1-4d-3) |
 | System | movement (shoves: `SqueezeLimit` / `KeepOffWalls` / chain shove vs other players' units) |
-| Fixed by | |
+| Fixed by | 6d1cbfd (M1-9); see the M1-9 re-check below |
 
 ## Repro
 1. Remove the `Skip` from `QA/CrowdRoutingQaTests.CorridorPluggedByAnEnemy_FriendlyLinesAhead_ChainShovesNeverSqueezeAnyonePast`
@@ -77,3 +77,11 @@ with combat). The owner is told in STATE "For your review", with the correction 
 hardening session (after M1-7 / M1-8): raise the span or make the plug test span-free (blocked ground on
 two opposite sides within the line's bounding box), measured against the two-player perf rows (BUG-0044).
 The 5 skipped QA rows are the proof when it lands.
+
+## Re-check M1-9 (2026-10-06-0905, commit 6d1cbfd): fixed
+A plug is now the hard unit's whole cluster (up to `MaxPlugCluster` = 32). The five skipped QA rows
+(`WideCorridorPluggedByAWideEnemyPerRow` width 5 x2, `CorridorPluggedBySmallEnemies_MoreMembersThanMaxPlugSpan` x3)
+fail on base 1f533aa and pass on 6d1cbfd. New QA rows pass: mixed radii (5-6 members, widths 3-4), an
+8-unit zigzag, own holders of mixed radii; closest approach 0.72-0.80 x the radii's sum (pack limit 0.5).
+A corridor filled by a block of more than 32 enemies (40, 50) still lets nobody through, but a unit is
+pressed to 0.28 x the radii's sum into it (documented in docs/03 Known limits: past 32 the cone rule is off).
