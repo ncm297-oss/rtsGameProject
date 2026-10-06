@@ -96,6 +96,8 @@ public static class ReplayTestRun
         Assert.Equal(expected.PlayerCount, actual.PlayerCount);
         Assert.Equal(expected.UnitCapacity, actual.UnitCapacity);
         Assert.Equal(expected.CommandCapacity, actual.CommandCapacity);
+        Assert.Equal(expected.ResourceCapacity, actual.ResourceCapacity);
+        Assert.Equal(BitConverter.SingleToInt32Bits(expected.Map.MineSpacing), BitConverter.SingleToInt32Bits(actual.Map.MineSpacing));
         Assert.Equal(expected.CheckpointInterval, actual.CheckpointInterval);
         Assert.Equal(expected.TickCount, actual.TickCount);
         Assert.Equal(expected.Commands.Length, actual.Commands.Length);
@@ -128,6 +130,7 @@ public static class ReplayTestRun
         PlayerCount = players ?? r.PlayerCount,
         UnitCapacity = r.UnitCapacity,
         CommandCapacity = r.CommandCapacity,
+        ResourceCapacity = r.ResourceCapacity,
         CheckpointInterval = r.CheckpointInterval,
         TickCount = r.TickCount,
         Commands = commands == null ? r.Commands : commands.ToImmutableArray(),

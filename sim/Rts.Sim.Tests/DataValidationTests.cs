@@ -182,6 +182,7 @@ public class DataValidationTests
 
     [Theory]
     [InlineData("common/rules.json")]
+    [InlineData("common/resources.json")]
     [InlineData("common/damage_table.json")]
     [InlineData("factions/whirlwind/faction.json")]
     [InlineData("factions/whirlwind/units.json")]
@@ -252,6 +253,121 @@ public class DataValidationTests
         dir.EditJson("common/rules.json", r => r.Remove("treeWood"));
 
         Assert.Equal(5, DataLoader.LoadAll(dir.Path).Errors.Count);
+    }
+
+    // ---------- M3-1: common/resources.json ----------
+
+    private const string ResourcesFile = "common/resources.json";
+
+    [Fact]
+    public void ShippedData_Resources_TreeAndGoldMine_MatchDocs02()
+    {
+        GameData data = Load(TestDataDir.Shipped);
+        Assert.Equal(new[] { "gold_mine", "tree" }, data.Resources.Select(r => r.Key)); // ordinal id order
+        ResourceDef mine = data.Resources[data.FindResource("gold_mine")];
+        ResourceDef tree = data.Resources[data.FindResource("tree")];
+        Assert.Equal(ResourceKind.Gold, mine.Resource);
+        Assert.Equal((2, 2), (mine.FootprintWidth, mine.FootprintHeight));
+        Assert.Equal(ResourceKind.Wood, tree.Resource);
+        Assert.Equal((1, 1), (tree.FootprintWidth, tree.FootprintHeight));
+        Assert.All(data.Resources, r => Assert.False(string.IsNullOrWhiteSpace(r.DisplayName) || string.IsNullOrWhiteSpace(r.Description)));
+        for (int i = 0; i < data.Resources.Length; i++) Assert.Equal(i, data.Resources[i].Id);
+        Assert.Equal(-1, data.FindResource("stone"));
+        // Amounts stay in rules.json (docs/02 "Economy").
+        Assert.Equal(100, data.Rules.TreeWood);
+        Assert.Equal(2500, data.Rules.StartMineGold);
+    }
+
+    /// <summary>Sets (or with <paramref name="rawJson"/> null, removes) a dotted field of resource entry <paramref name="index"/>.</summary>
+    private static void SetResourceField(TestDataDir dir, int index, string dottedField, string? rawJson)
+    {
+        dir.EditJson(ResourcesFile, root =>
+        {
+            JsonObject parent = root["resources"]![index]!.AsObject();
+            string[] parts = dottedField.Split('.');
+            for (int i = 0; i < parts.Length - 1; i++)
+                parent = parent[parts[i]]!.AsObject();
+            if (rawJson == null) parent.Remove(parts[^1]);
+            else parent[parts[^1]] = JsonNode.Parse(rawJson);
+        });
+    }
+
+    [Theory]
+    [InlineData("resource", "\"stone\"", "resources[1].resource", "unknown resource 'stone'")]
+    [InlineData("resource", "\"Wood\"", "resources[1].resource", "unknown resource 'Wood'")]
+    [InlineData("id", "\"Oak_Tree\"", "resources[1].id", "not snake_case")]
+    [InlineData("id", "\"oak tree\"", "resources[1].id", "not snake_case")]
+    [InlineData("footprint.width", "0", "resources[1].footprint.width", "outside 1-4")]
+    [InlineData("footprint.height", "5", "resources[1].footprint.height", "outside 1-4")]
+    [InlineData("footprint.width", "-1", "resources[1].footprint.width", "outside 1-4")]
+    [InlineData("footprint.height", null, "resources[1].footprint.height", "missing")]
+    [InlineData("footprint", null, "resources[1].footprint", "missing")]
+    [InlineData("displayName", null, "resources[1].displayName", "missing")]
+    [InlineData("description", "\" \"", "resources[1].description", "missing")]
+    [InlineData("resource", null, "resources[1].resource", "missing")]
+    public void BrokenResourceField_YieldsExactlyOneError(string field, string? rawJson, string path, string message)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        SetResourceField(dir, 1, field, rawJson);
+
+        DataLoadResult result = DataLoader.LoadAll(dir.Path);
+        Assert.Null(result.Data);
+        DataError e = Assert.Single(result.Errors);
+        Assert.Equal(ResourcesFile, e.File);
+        Assert.Equal(path, e.Path);
+        Assert.Contains(message, e.Message);
+    }
+
+    [Fact]
+    public void DuplicateResourceId_YieldsOneErrorAtSecondDefinition()
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        SetResourceField(dir, 1, "id", "\"gold_mine\"");
+
+        DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
+        Assert.Equal(ResourcesFile, e.File);
+        Assert.Equal("resources[1].id", e.Path);
+        Assert.Contains("duplicate resource id 'gold_mine'", e.Message);
+    }
+
+    [Theory]
+    [InlineData("amount")]  // amounts live in rules.json, not here
+    [InlineData("footprint.depth")]
+    public void UnknownResourceField_IsReportedNotIgnored(string field)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        SetResourceField(dir, 0, field, "3");
+
+        DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
+        Assert.Equal(ResourcesFile, e.File);
+        Assert.Contains(field.Split('.')[^1], e.Path + e.Message);
+    }
+
+    [Fact]
+    public void ResourcesListMissing_YieldsOneError()
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson(ResourcesFile, root => root.Remove("resources"));
+
+        DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
+        Assert.Equal(ResourcesFile, e.File);
+        Assert.Equal("resources", e.Path);
+    }
+
+    [Fact]
+    public void ResourceIds_AreOrdinalOrder_NotFileOrder()
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson(ResourcesFile, root =>
+        {
+            JsonArray list = root["resources"]!.AsArray();
+            JsonNode first = list[0]!;
+            list.RemoveAt(0);
+            list.Add(first); // tree first in the file now
+        });
+        GameData data = Load(dir.Path);
+        Assert.Equal(new[] { "gold_mine", "tree" }, data.Resources.Select(r => r.Key));
+        Assert.Equal(TestSim.Data.ContentHash(), data.ContentHash());
     }
 
     private static GameData Load(string dir)

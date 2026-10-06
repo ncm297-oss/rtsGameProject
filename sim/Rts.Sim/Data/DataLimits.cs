@@ -20,6 +20,12 @@ public static class DataLimits
     /// <summary>Longest duration in seconds (one hour), so the conversion to ticks can't overflow int (BUG-0007).</summary>
     public const double MaxSeconds = 3600;
 
+    /// <summary>Largest side of a resource node footprint in cells (docs/02: the largest footprint, a Town Hall, is 4 x 4).</summary>
+    public const int MaxFootprint = 4;
+
+    /// <summary>JSON spelling of each <see cref="ResourceKind"/>, indexed by the enum value (docs/02 "Economy").</summary>
+    public static readonly ImmutableArray<string> ResourceKindIds = ImmutableArray.Create("gold", "wood");
+
     /// <summary>JSON spelling of each <see cref="UnitSlot"/>, indexed by the enum value (docs/02 "Faction template").</summary>
     public static readonly ImmutableArray<string> SlotIds =
         ImmutableArray.Create("worker", "line", "ranged", "shock", "caster", "siege", "unique");

@@ -32,9 +32,21 @@ public class PerfCriterionTests
     /// </summary>
     [Fact]
     [Trait("Category", "Perf")]
-    public void FiveHundredMovingUnits_AverageTickUnder4Ms()
+    public void FiveHundredMovingUnits_AverageTickUnder4Ms() => RunCriterion(MapGenParams.Default);
+
+    /// <summary>M3-1 criterion 8: the same row on a map with 12 forests and 8 gold mines (seed 7) stays under 4 ms.</summary>
+    [Fact]
+    [Trait("Category", "Perf")]
+    public void FiveHundredMovingUnits_WithForestsAndMines_AverageTickUnder4Ms()
     {
-        Simulation sim = MoveScenario.Spawn(seed: 7, units: Units, maxCost: 12f, out int center);
+        var map = new MapGenParams { Forests = 12, GoldMines = 8 };
+        Assert.True(RunCriterion(map) > 0);
+    }
+
+    /// <summary>Runs the criterion row on <paramref name="map"/>; returns the resource nodes standing at the end.</summary>
+    private int RunCriterion(MapGenParams map)
+    {
+        Simulation sim = MoveScenario.Spawn(seed: 7, units: Units, maxCost: 12f, out int center, map: map);
         NavGrid g = sim.World.NavGrid;
         Assert.Equal(MapGenParams.Default.Width, g.Width);
         Assert.Equal(MapGenParams.Default.Height, g.Height);
@@ -75,7 +87,8 @@ public class PerfCriterionTests
         Array.Sort(sorted);
         double p99 = sorted[(int)Math.Ceiling(0.99 * MeasuredTicks) - 1];
         double worst = sorted[^1];
-        _out.WriteLine($"{Units} moving units (fewest on a measured tick: {fewestMoving} Moving, {fewestWalking} stepping), {MeasuredTicks} ticks: avg {avg:F3} ms, p99 {p99:F3} ms, worst {worst:F3} ms (budget: avg < {BudgetMs} ms)");
+        _out.WriteLine($"{(map.Forests + map.GoldMines > 0 ? $"forests {map.Forests} mines {map.GoldMines} ({sim.World.Resources.Count} nodes): " : "")}{Units} moving units (fewest on a measured tick: {fewestMoving} Moving, {fewestWalking} stepping), {MeasuredTicks} ticks: avg {avg:F3} ms, p99 {p99:F3} ms, worst {worst:F3} ms (budget: avg < {BudgetMs} ms)");
         Assert.True(avg < BudgetMs, $"average tick {avg:F3} ms (p99 {p99:F3}, worst {worst:F3}) is over the {BudgetMs} ms budget");
+        return sim.World.Resources.Count;
     }
 }

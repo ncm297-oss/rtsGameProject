@@ -302,4 +302,81 @@ public class StateHashTests
         u.QueueKind[1] = CommandKind.Stop;
         Assert.NotEqual(first, sim.StateHash());
     }
+
+    // ---------- M3-1: resource nodes and the nav grid version ----------
+
+    private static Simulation Trees(int capacity = ResourceStore.DefaultCapacity, params (int X, int Y)[] cells)
+    {
+        Simulation sim = ResourceMaps.NewSim(ResourceMaps.Flat(16, 16), resourceCapacity: capacity);
+        foreach ((int x, int y) in cells) ResourceMaps.Spawn(sim.World, ResourceMaps.Tree, x, y, ResourceMaps.TreeWood);
+        return sim;
+    }
+
+    [Fact]
+    public void Hash_CoversOneNodesRemainingAmount()
+    {
+        Simulation a = Trees(cells: new[] { (3, 3), (5, 5) }), b = Trees(cells: new[] { (3, 3), (5, 5) });
+        Assert.Equal(a.StateHash(), b.StateHash());
+        Assert.Equal(1, a.World.Resources.Take(a.World.Resources.HandleOf(1), 1));
+        Assert.Equal(a.World.NavGrid.Version, b.World.NavGrid.Version);
+        Assert.NotEqual(a.StateHash(), b.StateHash());
+        Assert.Equal(1, b.World.Resources.Take(b.World.Resources.HandleOf(1), 1));
+        Assert.Equal(a.StateHash(), b.StateHash());
+    }
+
+    [Fact]
+    public void Hash_CoversAliveVsFreed_WithTheGridVersionEqual()
+    {
+        Simulation alive = Trees(cells: new[] { (3, 3) }), freed = Trees(cells: new[] { (3, 3) });
+        Assert.Equal(ResourceMaps.TreeWood, freed.World.Resources.Take(freed.World.Resources.HandleOf(0), int.MaxValue));
+        alive.World.NavGrid.BumpVersionForTests();
+        Assert.Equal(alive.World.NavGrid.Version, freed.World.NavGrid.Version);
+        Assert.NotEqual(alive.StateHash(), freed.StateHash());
+    }
+
+    [Fact]
+    public void Hash_CoversTheNavGridVersionAlone()
+    {
+        Simulation a = Trees(cells: new[] { (3, 3) }), b = Trees(cells: new[] { (3, 3) });
+        Assert.Equal(a.StateHash(), b.StateHash());
+        a.World.NavGrid.BumpVersionForTests();
+        Assert.NotEqual(a.StateHash(), b.StateHash());
+        // Generated maps too: the version is hashed with no nodes at all.
+        var c = new Simulation(Config(9));
+        ulong h = c.StateHash();
+        c.World.NavGrid.BumpVersionForTests();
+        Assert.NotEqual(h, c.StateHash());
+    }
+
+    [Fact]
+    public void Hash_CoversNodeCellTypeFreeListOrderAndCapacity()
+    {
+        ulong baseHash = Trees(cells: new[] { (3, 3) }).StateHash();
+        Assert.NotEqual(baseHash, Trees(cells: new[] { (3, 4) }).StateHash());
+        Simulation mine = ResourceMaps.NewSim(ResourceMaps.Flat(16, 16));
+        ResourceMaps.Spawn(mine.World, ResourceMaps.Mine, 3, 3, ResourceMaps.TreeWood); // same anchor and amount, other type
+        Assert.NotEqual(baseHash, mine.StateHash());
+        Assert.NotEqual(baseHash, Trees(capacity: ResourceStore.DefaultCapacity - 1, cells: new[] { (3, 3) }).StateHash());
+
+        // Same nodes, generations and version; only the free list's order differs.
+        Simulation a = Trees(cells: new[] { (3, 3), (5, 5), (7, 7) }), b = Trees(cells: new[] { (3, 3), (5, 5), (7, 7) });
+        a.World.Resources.Take(a.World.Resources.HandleOf(0), int.MaxValue);
+        a.World.Resources.Take(a.World.Resources.HandleOf(1), int.MaxValue);
+        b.World.Resources.Take(b.World.Resources.HandleOf(1), int.MaxValue);
+        b.World.Resources.Take(b.World.Resources.HandleOf(0), int.MaxValue);
+        Assert.Equal(a.World.NavGrid.Version, b.World.NavGrid.Version);
+        Assert.NotEqual(a.StateHash(), b.StateHash());
+    }
+
+    [Fact]
+    public void Hash_SkipsNeverUsedSlots_ButAnEmptyStoreStillDiffersFromAUsedOne()
+    {
+        // High-water mark: a spawned-then-freed slot differs from a never-used one (generation 2 vs 1).
+        Simulation used = Trees(cells: new[] { (3, 3) }), fresh = Trees();
+        used.World.Resources.Take(used.World.Resources.HandleOf(0), int.MaxValue);
+        fresh.World.NavGrid.BumpVersionForTests();
+        fresh.World.NavGrid.BumpVersionForTests();
+        Assert.Equal(0, used.World.Resources.Count);
+        Assert.NotEqual(used.StateHash(), fresh.StateHash());
+    }
 }

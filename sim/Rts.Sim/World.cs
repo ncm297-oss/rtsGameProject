@@ -32,6 +32,10 @@ public sealed class World
         HasGeneratedMap = map == null;
         Heightmap = map ?? MapGenerator.Generate(config.Map, ref _rngs[RngStream.MapGen]);
         NavGrid = new NavGrid(Heightmap);
+        // Resources before the flow-field cache, so its step mask starts from the grid with them.
+        // The placer draws from the map stream after the terrain did, and nothing when counts are 0.
+        Resources = new ResourceStore(config.ResourceCapacity, NavGrid, config.Data);
+        ResourcePlacement = ResourcePlacer.Place(config.Map, NavGrid, Resources, config.Data, ref _rngs[RngStream.MapGen]);
         Spatial = new SpatialHash(config.UnitCapacity, NavGrid.Width, NavGrid.Height);
         FlowFields = new FlowFieldCache(NavGrid, FlowFieldCache.CapacityFor(config.UnitCapacity, NavGrid.Width * NavGrid.Height));
         MoveOrder = new long[config.UnitCapacity];
@@ -197,6 +201,12 @@ public sealed class World
 
     /// <summary>All units.</summary>
     public UnitStore Units { get; }
+
+    /// <summary>All resource nodes (trees, gold mines). Read-only outside the sim.</summary>
+    public ResourceStore Resources { get; }
+
+    /// <summary>What the resource placer put on the map at construction (counts can fall short of <see cref="SimConfig.Map"/>'s request).</summary>
+    public ResourcePlacement ResourcePlacement { get; }
 
     /// <summary>Number of the next tick to run (0 before the first tick).</summary>
     public int TickNumber { get; internal set; }

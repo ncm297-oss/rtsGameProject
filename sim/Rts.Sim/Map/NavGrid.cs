@@ -73,14 +73,61 @@ public sealed class NavGrid
     /// <summary>Height in cells.</summary>
     public int Height { get; }
 
-    /// <summary>Increments whenever passability changes, so cached flow fields can tell they're stale. Nothing changes it until buildings and trees exist (M3).</summary>
+    /// <summary>Increments whenever passability changes (a resource node placed or depleted; later buildings), so cached flow fields can tell they're stale. Part of the state hash.</summary>
     public int Version { get; private set; }
 
-    /// <summary>Test seam: marks passability as changed so cached flow fields go stale. No production caller until M3 adds buildings.</summary>
+    /// <summary>Test seam: marks passability as changed so cached flow fields go stale, with nothing else changed.</summary>
     internal void BumpVersionForTests() => Version++;
 
-    /// <summary>Number of passable cells.</summary>
-    public int PassableCount { get; }
+    /// <summary>Number of passable cells (resource nodes take cells away; depleting them gives the cells back).</summary>
+    public int PassableCount { get; private set; }
+
+    /// <summary>
+    /// True if a resource node may cover the cell: in the map, passable (so not a cliff, the border,
+    /// a sealed pocket or another node) and not a ramp.
+    /// </summary>
+    internal bool CanTakeResource(int x, int y) =>
+        InBounds(x, y) && (_flags[y * Width + x] & (NavFlags.Blocked | NavFlags.Ramp)) == 0;
+
+    /// <summary>
+    /// Blocks the <paramref name="width"/> x <paramref name="height"/> cells from (<paramref name="x"/>, <paramref name="y"/>)
+    /// for a resource node (flags <see cref="NavFlags.Blocked"/> | <see cref="NavFlags.Resource"/>, cost blocked) and bumps
+    /// <see cref="Version"/> once. Every cell must pass <see cref="CanTakeResource"/>; the caller (the resource store) checks.
+    /// </summary>
+    internal void SetResource(int x, int y, int width, int height)
+    {
+        for (int cy = y; cy < y + height; cy++)
+        {
+            for (int cx = x; cx < x + width; cx++)
+            {
+                int i = cy * Width + cx;
+                _flags[i] |= NavFlags.Blocked | NavFlags.Resource;
+                _cost[i] = MapConstants.CostBlocked;
+            }
+        }
+        PassableCount -= width * height;
+        Version++;
+    }
+
+    /// <summary>
+    /// Reopens the cells a depleted resource node covered (the reverse of <see cref="SetResource"/>: a node only ever
+    /// covers open ground, so its cells go back to <see cref="NavFlags.None"/> and passable cost) and bumps
+    /// <see cref="Version"/> once, so cached flow fields rebuild through the gap.
+    /// </summary>
+    internal void ClearResource(int x, int y, int width, int height)
+    {
+        for (int cy = y; cy < y + height; cy++)
+        {
+            for (int cx = x; cx < x + width; cx++)
+            {
+                int i = cy * Width + cx;
+                _flags[i] &= ~(NavFlags.Blocked | NavFlags.Resource);
+                _cost[i] = MapConstants.CostPassable;
+            }
+        }
+        PassableCount += width * height;
+        Version++;
+    }
 
     /// <summary>True if (x, y) is a cell of this grid.</summary>
     public bool InBounds(int x, int y) => (uint)x < (uint)Width && (uint)y < (uint)Height;

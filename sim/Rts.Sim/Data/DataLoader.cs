@@ -32,6 +32,8 @@ public static class DataLoader
         DamageTable? table = tableJson == null ? null : BuildDamageTable(c, tableJson);
         RulesJson? rulesJson = c.Read("common/rules.json", DataJsonContext.Default.RulesJson);
         RulesDef? rules = rulesJson == null ? null : BuildRules(c, rulesJson);
+        ResourceFileJson? resourcesJson = c.Read("common/resources.json", DataJsonContext.Default.ResourceFileJson);
+        ResourceDef[]? resources = resourcesJson == null ? null : BuildResources(c, resourcesJson);
 
         string[] folders = Array.Empty<string>();
         string factionsDir = Path.Combine(dataDir, "factions");
@@ -97,12 +99,13 @@ public static class DataLoader
             factions[f] = BuildFaction(c, factionJsons[f]!, folders[f], f, own.ToImmutable());
         }
 
-        if (c.Errors.Count > 0 || table == null || rules == null)
+        if (c.Errors.Count > 0 || table == null || rules == null || resources == null)
             return new DataLoadResult(null, c.Errors);
         var data = new GameData
         {
             DamageTable = table,
             Rules = rules,
+            Resources = ImmutableArray.Create(resources),
             Factions = ImmutableArray.Create(factions),
             Units = ImmutableArray.Create(units),
         };
@@ -180,6 +183,52 @@ public static class DataLoader
             TreeWood = c.Int(j.TreeWood, "treeWood", 1),
             NodeSearchRadius = (float)c.Pos(j.NodeSearchRadius, "nodeSearchRadius"),
         };
+    }
+
+    /// <summary>Resource node types, indexed by id in ordinal order of their string ids; a repeated id is an error at its second definition.</summary>
+    private static ResourceDef[] BuildResources(Checker c, ResourceFileJson j)
+    {
+        List<ResourceJson?>? list = c.Obj(j.Resources, "resources");
+        var accepted = new List<int>();
+        var keys = new List<string>();
+        for (int i = 0; list != null && i < list.Count; i++)
+        {
+            string id = c.Id(list[i]?.Id, $"resources[{i}].id");
+            if (id.Length == 0) continue;
+            if (keys.Contains(id))
+            {
+                c.Error($"resources[{i}].id", $"duplicate resource id '{id}'");
+                continue;
+            }
+            keys.Add(id);
+            accepted.Add(i);
+        }
+        string[] sorted = keys.ToArray();
+        Array.Sort(sorted, StringComparer.Ordinal);
+        var defs = new ResourceDef[sorted.Length];
+        foreach (int i in accepted)
+        {
+            ResourceJson r = list![i]!;
+            string p = $"resources[{i}]";
+            int id = Array.BinarySearch(sorted, r.Id!, StringComparer.Ordinal);
+            string kindKey = c.Text(r.Resource, p + ".resource");
+            int kind = DataLimits.ResourceKindIds.IndexOf(kindKey);
+            if (kindKey.Length > 0 && kind < 0)
+                c.Error(p + ".resource", $"unknown resource '{kindKey}' (expected one of {string.Join(", ", DataLimits.ResourceKindIds)})");
+            FootprintJson? fp = c.Obj(r.Footprint, p + ".footprint");
+            defs[id] = new ResourceDef
+            {
+                Id = id,
+                Key = r.Id!,
+                DisplayName = c.Text(r.DisplayName, p + ".displayName"),
+                Description = c.Text(r.Description, p + ".description"),
+                Resource = (ResourceKind)Math.Max(kind, 0),
+                // A missing footprint is one error, not three.
+                FootprintWidth = fp == null ? 0 : c.Side(fp.Width, p + ".footprint.width"),
+                FootprintHeight = fp == null ? 0 : c.Side(fp.Height, p + ".footprint.height"),
+            };
+        }
+        return defs;
     }
 
     private static FactionDef BuildFaction(Checker c, FactionJson j, string folder, int id, ImmutableArray<int> units)
@@ -381,6 +430,15 @@ public static class DataLoader
             if (value == null) Error(path, "missing required field");
             else if (value < min) Error(path, $"{value} is below the minimum {min}");
             else if (value > DataLimits.MaxInteger) Error(path, $"{value} is above the maximum {DataLimits.MaxInteger}");
+            else return value.Value;
+            return 0;
+        }
+
+        /// <summary>A footprint side in cells, 1 to <see cref="DataLimits.MaxFootprint"/>.</summary>
+        public int Side(int? value, string path)
+        {
+            if (value == null) Error(path, "missing required field");
+            else if (value < 1 || value > DataLimits.MaxFootprint) Error(path, $"{value} is outside 1-{DataLimits.MaxFootprint} cells");
             else return value.Value;
             return 0;
         }

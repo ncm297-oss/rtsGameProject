@@ -11,6 +11,7 @@ namespace Rts.Sim.Data;
 [JsonSerializable(typeof(RulesJson))]
 [JsonSerializable(typeof(FactionJson))]
 [JsonSerializable(typeof(UnitFileJson))]
+[JsonSerializable(typeof(ResourceFileJson))]
 internal sealed partial class DataJsonContext : JsonSerializerContext
 {
 }

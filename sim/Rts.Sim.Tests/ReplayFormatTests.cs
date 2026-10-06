@@ -89,6 +89,7 @@ public class ReplayFormatTests
             Width = 100, Height = 96, EdgeMargin = 5, Level1Plateaus = 4, Level1MinSize = 15, Level1MaxSize = 30,
             Level2Plateaus = 3, Level2MinSize = 8, Level2MaxSize = 12, Level2Inset = 3, RampWidth = 4, RampLength = 5,
             RampsPerPlateau = 3, RampTries = 40, MinPassableFraction = 0.4375f, MaxAttempts = 7,
+            Forests = 3, ForestMinTrees = 5, ForestMaxTrees = 9, GoldMines = 2, MineSpacing = 10.5f, // M3-1
         };
         map.Validate();
         // A new MapGenParams property left at its default here fails: add it to the format and this list.
@@ -100,7 +101,7 @@ public class ReplayFormatTests
         Replay r = new()
         {
             SimVersion = SimInfo.Version, DataHash = 0xFEDCBA9876543210UL, Map = map, Seed = ulong.MaxValue, PlayerCount = 3,
-            UnitCapacity = 7, CommandCapacity = 9, CheckpointInterval = 7, TickCount = 20,
+            UnitCapacity = 7, CommandCapacity = 9, ResourceCapacity = 33, CheckpointInterval = 7, TickCount = 20,
             Commands = ImmutableArrayOf(), Checkpoints = new[] { new ReplayCheckpoint(7, 1), new ReplayCheckpoint(14, ulong.MaxValue) }.ToImmutableArray(),
         };
         Assert.Equal(ReplayError.None, ReplayFormat.TryRead(ReplayFormat.Write(r), out Replay? parsed));
@@ -203,14 +204,15 @@ public class ReplayFormatTests
         Assert.Throws<ArgumentException>(() => ReplayFormat.Write(bad)); // the writer won't write it either
     }
 
-    /// <summary>M1-7: format 2 added the flags field; format 1 and any other version are refused by version first.</summary>
+    /// <summary>M1-7: format 2 added the flags field; M3-1: format 3 the resource lines. Any other version is refused by version first.</summary>
     [Theory]
     [InlineData(1)]
-    [InlineData(3)]
+    [InlineData(2)]
+    [InlineData(4)]
     [InlineData(0)]
     public void OtherFormatVersion_IsRefusedAsVersionMismatch(int version)
     {
-        Assert.Equal(2, Replay.CurrentFormatVersion);
+        Assert.Equal(3, Replay.CurrentFormatVersion);
         string text = Text(Small).Replace($"rts-replay {Replay.CurrentFormatVersion}\n", $"rts-replay {version}\n");
         Assert.Equal(ReplayError.FormatVersionMismatch, Read(Reseal(text)));
     }
@@ -227,6 +229,58 @@ public class ReplayFormatTests
             else if (lines[i].StartsWith("c ", StringComparison.Ordinal)) lines[i] = lines[i][..lines[i].LastIndexOf(' ')];
         }
         Assert.Equal(ReplayError.FormatVersionMismatch, Read(ReplayFormat.Seal(string.Join('\n', lines))));
+    }
+
+    /// <summary>M3-1: the golden as format 2 wrote it (header 2, no resource-capacity or resource map lines) is refused with the version code.</summary>
+    [Fact]
+    public void Format2File_IsRefusedAsVersionMismatch()
+    {
+        string text = Encoding.ASCII.GetString(File.ReadAllBytes(ReplayTestRun.GoldenPath));
+        string[] lines = text[..text.LastIndexOf("checksum ", StringComparison.Ordinal)].Split('\n');
+        string[] dropped = { "resource-capacity ", "map.forests ", "map.forest-min-trees ", "map.forest-max-trees ", "map.gold-mines ", "map.mine-spacing " };
+        Assert.All(dropped, key => Assert.Contains(lines, l => l.StartsWith(key, StringComparison.Ordinal)));
+        var format2 = lines.Where(l => !dropped.Any(key => l.StartsWith(key, StringComparison.Ordinal)))
+            .Select(l => l.StartsWith("rts-replay ", StringComparison.Ordinal) ? "rts-replay 2" : l);
+        Assert.Equal(ReplayError.FormatVersionMismatch, Read(ReplayFormat.Seal(string.Join('\n', format2))));
+    }
+
+    /// <summary>M3-1: a replay on a map with forests and mines records their params and plays back.</summary>
+    [Fact]
+    public void ForestsAndMines_RoundTripAndPlayBack()
+    {
+        var map = new MapGenParams { Forests = 6, GoldMines = 4, ForestMinTrees = 8, ForestMaxTrees = 20, MineSpacing = 30f };
+        var sim = new Simulation(TestSim.Config(Seed: 9, PlayerCount: 2, UnitCapacity: 40, CommandCapacity: 80) with { Map = map, ResourceCapacity = 900 });
+        var recorder = new ReplayRecorder(sim, checkpointInterval: 50);
+        Assert.True(sim.World.ResourcePlacement.Trees > 0 && sim.World.ResourcePlacement.Mines > 0);
+        NavGrid g = sim.World.NavGrid;
+        int center = MoveScenario.CentralCell(g);
+        var cells = OrderMix.Cells(g, 14f);
+        for (int i = 0; i < 40; i++) sim.Enqueue(Commands.Command.SpawnUnit(i % 2, i % TestSim.UnitTypeCount, MoveScenario.Center(g, cells[i * 7 % cells.Count])));
+        for (int t = 0; t < 200; t++)
+        {
+            if (t == 2) MoveScenario.MoveAll(sim, MoveScenario.Center(g, center));
+            sim.Tick();
+        }
+        Replay r = recorder.ToReplay();
+        Assert.Equal(map, r.Map);
+        Assert.Equal(900, r.ResourceCapacity);
+        string text = Text(r);
+        Assert.Contains("\nresource-capacity 900\n", text);
+        Assert.Contains("\nmap.forests 6\nmap.forest-min-trees 8\nmap.forest-max-trees 20\nmap.gold-mines 4\nmap.mine-spacing 41F00000\n", text);
+        Assert.Equal(ReplayError.None, ReplayFormat.TryRead(ReplayFormat.Write(r), out Replay? parsed));
+        ReplayTestRun.AssertEqual(r, parsed!);
+        ReplayResult played = ReplayPlayer.Run(parsed!, TestSim.Data);
+        Assert.True(played.Ok, played.ToString());
+        Assert.Equal(4, played.TicksRun / 50);
+
+        // Played on the default (resource-free) map instead, the same log diverges at the first checkpoint.
+        Replay bare = new()
+        {
+            SimVersion = r.SimVersion, DataHash = r.DataHash, Map = MapGenParams.Default, Seed = r.Seed, PlayerCount = r.PlayerCount,
+            UnitCapacity = r.UnitCapacity, CommandCapacity = r.CommandCapacity, ResourceCapacity = r.ResourceCapacity,
+            CheckpointInterval = r.CheckpointInterval, TickCount = r.TickCount, Commands = r.Commands, Checkpoints = r.Checkpoints,
+        };
+        Assert.Equal(ReplayError.CheckpointMismatch, ReplayPlayer.Run(bare, TestSim.Data).Error);
     }
 
     /// <summary>M1-7: a command line must have exactly 10 fields; the old 9-field shape in a format 2 file is malformed, as is a non-number flags field.</summary>
@@ -261,6 +315,15 @@ public class ReplayFormatTests
     [InlineData("players 2\n", "players 17\n", ReplayError.InvalidHeader)]
     [InlineData("checkpoint-interval 100\n", "checkpoint-interval 0\n", ReplayError.InvalidHeader)]
     [InlineData("map.width 128\n", "map.width 8\n", ReplayError.InvalidHeader)]
+    [InlineData("resource-capacity 4096\n", "resource-capacity 0\n", ReplayError.InvalidHeader)]
+    [InlineData("resource-capacity 4096\n", "resource-capacity 1000001\n", ReplayError.InvalidHeader)]
+    [InlineData("resource-capacity 4096\n", "", ReplayError.Malformed)]
+    [InlineData("map.forests 0\n", "map.forests 65\n", ReplayError.InvalidHeader)]
+    [InlineData("map.gold-mines 0\n", "map.gold-mines -1\n", ReplayError.InvalidHeader)]
+    [InlineData("map.forest-min-trees 12\n", "map.forest-min-trees 41\n", ReplayError.InvalidHeader)]
+    [InlineData("map.mine-spacing 41C00000\n", "map.mine-spacing 7FC00000\n", ReplayError.InvalidHeader)]
+    [InlineData("map.mine-spacing 41C00000\n", "map.mine-spacing 24\n", ReplayError.Malformed)]
+    [InlineData("map.forests 0\n", "", ReplayError.Malformed)]
     [InlineData("players 2\n", "players 02\n", ReplayError.Malformed)]
     [InlineData("players 2\n", "players  2\n", ReplayError.Malformed)]
     [InlineData("players 2\n", "player 2\n", ReplayError.Malformed)]

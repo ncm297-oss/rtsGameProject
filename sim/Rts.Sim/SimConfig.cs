@@ -14,8 +14,11 @@ public sealed record SimConfig(ulong Seed, int PlayerCount, int UnitCapacity, in
     /// <summary>Loaded unit, faction and rules data; every stat the sim uses comes from here (CLAUDE.md rule 6).</summary>
     public required GameData Data { get; init; }
 
-    /// <summary>Terrain generator settings; defaults to the docs/02 128 x 128 map.</summary>
+    /// <summary>Terrain generator and resource placer settings; defaults to the docs/02 128 x 128 map without resources.</summary>
     public MapGenParams Map { get; init; } = MapGenParams.Default;
+
+    /// <summary>Maximum number of live resource nodes (trees, mines); the store is allocated once at this size and refuses spawns past it. Default <see cref="Entities.ResourceStore.DefaultCapacity"/> (4,096).</summary>
+    public int ResourceCapacity { get; init; } = Entities.ResourceStore.DefaultCapacity;
 
     /// <summary>Throws if any size is out of range.</summary>
     public void Validate()
@@ -23,6 +26,7 @@ public sealed record SimConfig(ulong Seed, int PlayerCount, int UnitCapacity, in
         if (PlayerCount < 1) throw new ArgumentOutOfRangeException(nameof(PlayerCount));
         if (UnitCapacity < 1) throw new ArgumentOutOfRangeException(nameof(UnitCapacity));
         if (CommandCapacity < 1) throw new ArgumentOutOfRangeException(nameof(CommandCapacity));
+        if (ResourceCapacity < 1) throw new ArgumentOutOfRangeException(nameof(ResourceCapacity));
         if (Data == null) throw new ArgumentNullException(nameof(Data));
         if (Map == null) throw new ArgumentNullException(nameof(Map));
         Map.Validate();

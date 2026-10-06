@@ -13,8 +13,8 @@ namespace Rts.Sim.Replays;
 /// </remarks>
 public sealed class Replay
 {
-    /// <summary>The format version this build writes and reads (2 since M1-7: command lines carry <see cref="Command.Flags"/>).</summary>
-    public const int CurrentFormatVersion = 2;
+    /// <summary>The format version this build writes and reads (3 since M3-1: the resource capacity and the resource placer's map fields; 2 since M1-7: command lines carry <see cref="Command.Flags"/>).</summary>
+    public const int CurrentFormatVersion = 3;
 
     /// <summary>Largest player count a replay may declare (a format limit that bounds what a file can make the reader allocate).</summary>
     public const int MaxPlayers = 16;
@@ -49,6 +49,9 @@ public sealed class Replay
     /// <summary><see cref="SimConfig.CommandCapacity"/>.</summary>
     public required int CommandCapacity { get; init; }
 
+    /// <summary><see cref="SimConfig.ResourceCapacity"/>: part of the state hash, and a full store refuses nodes (M3-1).</summary>
+    public int ResourceCapacity { get; init; } = Entities.ResourceStore.DefaultCapacity;
+
     /// <summary>Ticks between checkpoints.</summary>
     public required int CheckpointInterval { get; init; }
 
@@ -71,6 +74,7 @@ public sealed class Replay
         if (PlayerCount < 1 || PlayerCount > MaxPlayers) return ReplayError.InvalidHeader;
         if (UnitCapacity < 1 || UnitCapacity > MaxCapacity) return ReplayError.InvalidHeader;
         if (CommandCapacity < 1 || CommandCapacity > MaxCapacity) return ReplayError.InvalidHeader;
+        if (ResourceCapacity < 1 || ResourceCapacity > MaxCapacity) return ReplayError.InvalidHeader;
         if (TickCount < 0 || TickCount > MaxTickCount) return ReplayError.InvalidHeader;
         // Not "at most TickCount": the recorder writes replays shorter than one interval (0 checkpoints).
         if (CheckpointInterval < 1 || CheckpointInterval > MaxTickCount) return ReplayError.InvalidHeader;

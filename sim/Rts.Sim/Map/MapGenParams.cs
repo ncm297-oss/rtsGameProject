@@ -2,7 +2,7 @@ using System;
 
 namespace Rts.Sim.Map;
 
-/// <summary>Tunables of the terraced map generator. All sizes are in cells; defaults give a docs/02 128 x 128 map.</summary>
+/// <summary>Tunables of the terraced map generator and the resource placer. Sizes are in cells (<see cref="MineSpacing"/> in meters); defaults give a docs/02 128 x 128 map without resources.</summary>
 /// <remarks>
 /// Plateaus are rectangles: level-1 ones on open ground, level-2 ones inside a level-1 one.
 /// Overlapping rectangles merge into one plateau.
@@ -60,6 +60,27 @@ public sealed record MapGenParams
     /// <summary>Layouts tried before falling back (bounds generation time; it never loops forever).</summary>
     public int MaxAttempts { get; init; } = 8;
 
+    /// <summary>Number of forests (connected blobs of trees) placed after the terrain; 0 (the default) places none and draws nothing (M3-1).</summary>
+    public int Forests { get; init; }
+
+    /// <summary>Fewest trees in one forest.</summary>
+    public int ForestMinTrees { get; init; } = 12;
+
+    /// <summary>Most trees in one forest.</summary>
+    public int ForestMaxTrees { get; init; } = 40;
+
+    /// <summary>Number of gold mines placed after the terrain; 0 (the default) places none and draws nothing (M3-1).</summary>
+    public int GoldMines { get; init; }
+
+    /// <summary>Least distance in meters between two gold mines' centers.</summary>
+    public float MineSpacing { get; init; } = 24f;
+
+    /// <summary>Largest <see cref="Forests"/> and <see cref="GoldMines"/>: every placement runs a flood fill of the map, so this bounds setup time.</summary>
+    public const int MaxResourceGroups = 64;
+
+    /// <summary>Largest <see cref="ForestMaxTrees"/>.</summary>
+    public const int MaxForestTrees = 256;
+
     /// <summary>Largest <see cref="RampTries"/>; with the other caps it bounds the worst valid generation (BUG-0013, BUG-0015).</summary>
     public const int MaxRampTries = 128;
 
@@ -97,6 +118,13 @@ public sealed record MapGenParams
 
         Check(MinPassableFraction >= 0f && MinPassableFraction <= 1f, nameof(MinPassableFraction));
         Check(MaxAttempts >= 1 && MaxAttempts <= MaxMaxAttempts, nameof(MaxAttempts));
+
+        Check(Forests >= 0 && Forests <= MaxResourceGroups, nameof(Forests));
+        Check(ForestMinTrees >= 1 && ForestMinTrees <= MaxForestTrees, nameof(ForestMinTrees));
+        Check(ForestMaxTrees >= ForestMinTrees && ForestMaxTrees <= MaxForestTrees, nameof(ForestMaxTrees));
+        Check(GoldMines >= 0 && GoldMines <= MaxResourceGroups, nameof(GoldMines));
+        // Written so NaN fails; no two cells of the map are further apart than this.
+        Check(MineSpacing >= 0f && MineSpacing <= 2f * MapConstants.CellSize * Math.Max(Width, Height), nameof(MineSpacing));
     }
 
     private static void Check(bool ok, string name)

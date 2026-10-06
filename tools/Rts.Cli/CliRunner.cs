@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using Rts.Sim;
 using Rts.Sim.Data;
+using Rts.Sim.Map;
 using Rts.Sim.Replays;
 
 namespace Rts.Cli;
@@ -31,7 +32,7 @@ public static class CliRunner
 
     /// <summary>The one-line usage text.</summary>
     public const string Usage =
-        "usage: Rts.Cli run --seed <n> --units <n> [--ticks <n>] [--players 1|2] [--checkpoint <ticks>] [--record <path>] [--data <dir>]"
+        "usage: Rts.Cli run --seed <n> --units <n> [--ticks <n>] [--players 1|2] [--checkpoint <ticks>] [--forests <n>] [--mines <n>] [--record <path>] [--data <dir>]"
         + " | Rts.Cli play <path> [--data <dir>]";
 
     private const int DefaultTicks = 1500;
@@ -58,7 +59,7 @@ public static class CliRunner
 
     private static int RunVerb(string[] args, TextWriter stdout, TextWriter stderr)
     {
-        string? error = ParseOptions(args, 1, new[] { "--seed", "--units", "--ticks", "--players", "--checkpoint", "--record", "--data" },
+        string? error = ParseOptions(args, 1, new[] { "--seed", "--units", "--ticks", "--players", "--checkpoint", "--forests", "--mines", "--record", "--data" },
             out Dictionary<string, string> o, out _);
         if (error != null) return UsageError(stderr, error);
 
@@ -70,6 +71,8 @@ public static class CliRunner
         if ((error = IntOption(o, "--players", 1, 1, 2, out int players)) != null) return UsageError(stderr, error);
         if ((error = IntOption(o, "--checkpoint", ReplayRecorder.DefaultCheckpointInterval, 1, Replay.MaxTickCount, out int checkpoint)) != null)
             return UsageError(stderr, error);
+        if ((error = IntOption(o, "--forests", 0, 0, MapGenParams.MaxResourceGroups, out int forests)) != null) return UsageError(stderr, error);
+        if ((error = IntOption(o, "--mines", 0, 0, MapGenParams.MaxResourceGroups, out int mines)) != null) return UsageError(stderr, error);
         o.TryGetValue("--record", out string? recordPath);
         // Checked before the run, which can take minutes: a bad path found only at the end wastes it (BUG-0057).
         if (recordPath != null && (error = RecordPathError(recordPath)) != null)
@@ -81,14 +84,17 @@ public static class CliRunner
         GameData? data = LoadData(o, stderr);
         if (data == null) return ExitError;
 
-        var sim = new Simulation(new SimConfig(seed, players, units, units) { Data = data });
+        var map = new MapGenParams { Forests = forests, GoldMines = mines };
+        var sim = new Simulation(new SimConfig(seed, players, units, units) { Data = data, Map = map });
         // Before any enqueue: a replay must see every command from tick 0 (docs/03 "Save/load and replays").
         ReplayRecorder? recorder = recordPath == null ? null
             : new ReplayRecorder(sim, checkpoint, tickCapacity: ticks, commandCapacity: 2 * units);
 
         int spawned = March.EnqueueSpawns(sim, units, players);
         int[] goals = March.GoalCells(sim.World.NavGrid, players);
-        stdout.WriteLine($"seed {seed.ToString(Inv)} units {spawned.ToString(Inv)} players {players.ToString(Inv)} ticks {ticks.ToString(Inv)} checkpoint {checkpoint.ToString(Inv)}");
+        ResourcePlacement placed = sim.World.ResourcePlacement;
+        stdout.WriteLine($"seed {seed.ToString(Inv)} units {spawned.ToString(Inv)} players {players.ToString(Inv)} ticks {ticks.ToString(Inv)} checkpoint {checkpoint.ToString(Inv)}"
+            + $" forests {placed.Forests.ToString(Inv)} trees {placed.Trees.ToString(Inv)} mines {placed.Mines.ToString(Inv)}");
 
         var ms = new double[ticks];
         double toMs = 1000.0 / Stopwatch.Frequency;

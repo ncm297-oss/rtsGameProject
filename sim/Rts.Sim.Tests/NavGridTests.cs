@@ -235,6 +235,65 @@ public class NavGridTests
         }
     }
 
+    // ---------- M3-1: resource nodes ----------
+
+    [Fact]
+    public void ResourceNode_BlocksItsCells_AndDepletionRestoresFlagsAndCostsExactly_WithOneVersionBump()
+    {
+        Simulation sim = ResourceMaps.NewSim(ResourceMaps.Flat(12, 10));
+        NavGrid g = sim.World.NavGrid;
+        int n = g.Width * g.Height;
+        var flags0 = new NavFlags[n];
+        var cost0 = new byte[n];
+        for (int i = 0; i < n; i++)
+        {
+            flags0[i] = g.FlagsAt(i % g.Width, i / g.Width);
+            cost0[i] = g.CostAt(i % g.Width, i / g.Width);
+        }
+        int passable0 = g.PassableCount;
+
+        var tree = ResourceMaps.Spawn(sim.World, ResourceMaps.Tree, 4, 4, ResourceMaps.TreeWood);
+        Assert.Equal(NavFlags.Blocked | NavFlags.Resource, g.FlagsAt(4, 4));
+        Assert.False(g.IsPassable(4, 4));
+        Assert.Equal(MapConstants.CostBlocked, g.CostAt(4, 4));
+        Assert.Equal(passable0 - 1, g.PassableCount);
+        Assert.Equal(0, g.LevelAt(4, 4)); // the level is terrain, untouched
+        int v = g.Version;
+
+        Assert.Equal(ResourceMaps.TreeWood - 1, sim.World.Resources.Take(tree, ResourceMaps.TreeWood - 1));
+        Assert.Equal(v, g.Version);
+        Assert.Equal(1, sim.World.Resources.Take(tree, 1));
+        Assert.Equal(v + 1, g.Version);
+        Assert.Equal(passable0, g.PassableCount);
+        for (int i = 0; i < n; i++)
+        {
+            Assert.Equal(flags0[i], g.FlagsAt(i % g.Width, i / g.Width));
+            Assert.Equal(cost0[i], g.CostAt(i % g.Width, i / g.Width));
+        }
+    }
+
+    [Fact]
+    public void ResourceFlag_IsNeverSetWithoutBlocked_OnAGeneratedMapWithForestsAndMines()
+    {
+        var sim = new Simulation(TestSim.Config(Seed: 3, PlayerCount: 1, UnitCapacity: 4, CommandCapacity: 4)
+            with { Map = new MapGenParams { Forests = 12, GoldMines = 8 } });
+        NavGrid g = sim.World.NavGrid;
+        int resourceCells = 0;
+        for (int y = 0; y < g.Height; y++)
+        {
+            for (int x = 0; x < g.Width; x++)
+            {
+                NavFlags f = g.FlagsAt(x, y);
+                if ((f & NavFlags.Resource) == 0) continue;
+                resourceCells++;
+                Assert.Equal(NavFlags.Blocked | NavFlags.Resource, f); // never with Cliff or Ramp
+            }
+        }
+        ResourcePlacement p = sim.World.ResourcePlacement;
+        Assert.Equal(p.Trees + 4 * p.Mines, resourceCells);
+        Assert.True(resourceCells > 0);
+    }
+
     private static readonly NavGrid DefaultGrid = BuildDefault();
 
     private static NavGrid BuildDefault()

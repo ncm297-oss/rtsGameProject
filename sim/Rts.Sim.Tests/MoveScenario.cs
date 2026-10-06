@@ -25,11 +25,12 @@ public static class MoveScenario
     /// cost to <paramref name="goalCell"/> is at most <paramref name="maxCost"/> cells. Spawns are
     /// applied before returning. Since M1-4d-3 (BUG-0037) two players sent to one point are enemies
     /// contesting it, not one blob: whole-crowd-to-one-point scenarios pass <c>players: 1</c>.
+    /// <paramref name="map"/> (M3-1) sets the map params, e.g. forests and mines; default the M1 map.
     /// </summary>
-    public static Simulation Spawn(ulong seed, int units, float maxCost, out int goalCell, int capacity = 0, int players = 2)
+    public static Simulation Spawn(ulong seed, int units, float maxCost, out int goalCell, int capacity = 0, int players = 2, MapGenParams? map = null)
     {
         var sim = new Simulation(TestSim.Config(Seed: seed, PlayerCount: 2,
-            UnitCapacity: Math.Max(units, capacity), CommandCapacity: 2 * Math.Max(units, capacity) + 8));
+            UnitCapacity: Math.Max(units, capacity), CommandCapacity: 2 * Math.Max(units, capacity) + 8) with { Map = map ?? MapGenParams.Default });
         NavGrid g = sim.World.NavGrid;
         goalCell = CentralCell(g);
         FlowField field = FlowField.Build(g, goalCell);
