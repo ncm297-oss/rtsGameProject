@@ -48,6 +48,7 @@ public sealed class World
         WallLimits = new float[3 * config.UnitCapacity];
         HardWalls = new int[3 * config.UnitCapacity];
         ChainMembers = new int[Movement.MovementConstants.MaxChainShove];
+        PlugMembers = new int[Movement.MovementConstants.MaxPlugSpan];
         DetourLo = new float[config.UnitCapacity];
         DetourHi = new float[config.UnitCapacity];
         DetourWall = new int[config.UnitCapacity];
@@ -99,6 +100,9 @@ public sealed class World
 
     /// <summary>Scratch for the detour: the slot of each wall whose interval is in <see cref="DetourLo"/>; derived, not hashed.</summary>
     internal int[] DetourWall { get; }
+
+    /// <summary>Scratch for <see cref="Movement.MovementSystem"/>'s plug test: the line of enemies searched; derived, not hashed.</summary>
+    internal int[] PlugMembers { get; }
 
     /// <summary>Scratch for <see cref="Movement.MovementSystem"/>'s chain shove: the line of units one shove moves; derived, not hashed.</summary>
     internal int[] ChainMembers { get; }

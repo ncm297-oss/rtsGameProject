@@ -648,10 +648,10 @@ public class CrowdRoutingQaTests
     [Theory]
     [InlineData(1, 4UL, 12)]
     [InlineData(1, 5UL, 16)]
-    [InlineData(2, 1UL, 12, Skip = "BUG-0045: outside 1-cell passages shoves still press friendly units into and through an enemy plug")]
-    [InlineData(2, 2UL, 16, Skip = "BUG-0045: outside 1-cell passages shoves still press friendly units into and through an enemy plug")]
-    [InlineData(2, 3UL, 20, Skip = "BUG-0045: outside 1-cell passages shoves still press friendly units into and through an enemy plug")]
-    [InlineData(3, 4UL, 20, Skip = "BUG-0045: outside 1-cell passages shoves still press friendly units into and through an enemy plug")]
+    [InlineData(2, 1UL, 12)]
+    [InlineData(2, 2UL, 16)]
+    [InlineData(2, 3UL, 20)]
+    [InlineData(3, 4UL, 20)]
     public void CorridorOfWidthPluggedByEnemies_FriendlyLinesAhead_NobodyThrough(int width, ulong seed, int crowd)
     {
         int line = 4 * width;

@@ -96,4 +96,11 @@ public static class MovementConstants
     /// cache slots never end, so the count must still rise. 4: a 1 s give-up becomes 4 s.
     /// </summary>
     public const int QueueOnWaitStride = 4;
+
+    /// <summary>
+    /// Enemy units a plug test follows (BUG-0045): a line of standing enemies too close together to pass
+    /// between, reaching blocked ground at two members, plugs a passage; 4 covers corridors up to 3 or 4
+    /// cells wide, and keeps the search short and away from the inside of open-field blobs.
+    /// </summary>
+    public const int MaxPlugSpan = 4;
 }

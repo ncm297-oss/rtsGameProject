@@ -27,6 +27,7 @@ public static class MovementSystem
 {
 
 
+
     // Planned outcomes, written by Plan and carried out by Apply.
     private const byte ActWalk = 0;    // take PlannedStep: progress, the stuck count resets
     private const byte ActStuck = 1;   // take PlannedStep (possibly zero: refused): a stuck tick
@@ -589,7 +590,7 @@ public static class MovementSystem
             // Already overlapping another player's standing unit: only within 45 degrees of straight
             // away from it, so nobody slides round an enemy inside it (a corridor plug, BUG-0045).
             float sum = u.Radius[i] + u.Radius[j];
-            if (Vector2.DistanceSquared(u.Position[j], pos) >= sum * sum || !AtPassage(grid, u.Position[j])) continue;
+            if (Vector2.DistanceSquared(u.Position[j], pos) >= sum * sum || !IsPlug(world, i, pos, j, near, count)) continue;
             var across = new Vector2(normal.Y, -normal.X);
             for (int c = 0; c < 2; c++)
             {
@@ -1043,7 +1044,7 @@ public static class MovementSystem
             float sum = u.Radius[i] + u.Radius[k];
             Vector2 pk = u.Position[k];
             float d1 = Vector2.Distance(next, pk);
-            if (d1 >= sum || !AtPassage(world.NavGrid, pk)) continue;
+            if (d1 >= sum || !IsPlug(world, i, pos, k, near, count)) continue;
             float d0 = Vector2.Distance(pos, pk);
             if (d1 < d0 && d1 < MovementConstants.ShoveSpacing * sum - ShoveRoundingMargin) return true;
             if (d0 < sum && d0 > 0f && Vector2.Dot(step, (pos - pk) / d0) < ConeCos * stepLength) return true;
@@ -1051,8 +1052,62 @@ public static class MovementSystem
         return false;
     }
 
-    /// <summary>True if <paramref name="p"/> lies in a cell walled on two opposite sides (x or y): a unit standing there plugs a 1-cell passage.</summary>
-    private static bool AtPassage(NavGrid grid, Vector2 p) => grid.WorldToCell(p, out int x, out int y) && InPassage(grid, x, y);
+    /// <summary>
+    /// True if standing enemy <paramref name="k"/>, which unit <paramref name="i"/> overlaps, is part of a
+    /// plug: a line of other players' standing units, each too close to the next for i to pass between
+    /// (gap under i's diameter), that reaches blocked ground on two opposite sides (each wall gap under
+    /// i's diameter too) within <see cref="MovementConstants.MaxPlugSpan"/> units, or k alone in a 1-cell
+    /// passage. An enemy blob pressed against one cliff is no plug: its walls are all on one side. Then i may only
+    /// move straight-ish away from k (BUG-0045: units squeezed through the 0.1-0.2 m slits of enemy plugs
+    /// in corridors 1-3 cells wide). In the open, sliding round enemy units is how two-player crowds flow,
+    /// and holding that too cost crowd arrivals, so it is left alone.
+    /// </summary>
+    /// <remarks>Breadth first from k over start-of-tick positions, neighbors in ascending slot order: the same answer every run.</remarks>
+    private static bool IsPlug(World world, int i, Vector2 pos, int k, int[] near, int count)
+    {
+        NavGrid grid = world.NavGrid;
+        UnitStore u = world.Units;
+        if (grid.WorldToCell(u.Position[k], out int kx, out int ky) && InPassage(grid, kx, ky)) return true;
+        int[] line = world.PlugMembers;
+        int[] found = world.ShoveNeighbors;
+        float pass = 2f * u.Radius[i];
+        int n = 1, walls = 0;
+        line[0] = k;
+        for (int head = 0; head < n; head++)
+        {
+            int m = line[head];
+            walls |= WallSides(grid, u.Position[m], u.Radius[m], pass);
+            // Blocked ground on opposite sides (left and right, or above and below): the line spans the passage.
+            if ((walls & 3) == 3 || (walls & 12) == 12) return true;
+            int c = world.Spatial.QueryRadius(u.Position[m], u.Radius[m] + world.MaxUnitRadius + pass, found);
+            for (int q = 0; q < c && n < line.Length; q++)
+            {
+                int e = found[q];
+                if (e == i || !u.Alive[e] || u.Owner[e] == u.Owner[i] || (u.State[e] == UnitState.Moving && u.Velocity[e] != Vector2.Zero)) continue;
+                if (Array.IndexOf(line, e, 0, n) >= 0) continue;
+                float gap = Vector2.Distance(u.Position[m], u.Position[e]) - u.Radius[m] - u.Radius[e];
+                if (gap < pass) line[n++] = e;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Which sides of a unit at <paramref name="p"/> (radius <paramref name="r"/>) are blocked ground
+    /// closer than <paramref name="pass"/> beyond its disk: bit 1 +x, 2 -x, 4 +y, 8 -y (its cell's blocked
+    /// 4-neighbors, measured from the cell edge).
+    /// </summary>
+    private static int WallSides(NavGrid grid, Vector2 p, float r, float pass)
+    {
+        if (!grid.WorldToCell(p, out int x, out int y)) return 0;
+        const float cell = MapConstants.CellSize;
+        int sides = 0;
+        if (!grid.IsPassable(x + 1, y) && (x + 1) * cell - (p.X + r) < pass) sides |= 1;
+        if (!grid.IsPassable(x - 1, y) && (p.X - r) - x * cell < pass) sides |= 2;
+        if (!grid.IsPassable(x, y + 1) && (y + 1) * cell - (p.Y + r) < pass) sides |= 4;
+        if (!grid.IsPassable(x, y - 1) && (p.Y - r) - y * cell < pass) sides |= 8;
+        return sides;
+    }
 
     /// <summary>True if cell (x, y) is walled on two opposite sides: a 1-cell passage.</summary>
     private static bool InPassage(NavGrid grid, int x, int y) =>

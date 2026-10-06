@@ -659,6 +659,11 @@ unit-agnostic (a crowd cost in the fields is future work). The rules as built:
   forever when live goals outnumber cache slots (64-goal row, seed 51: 94 units Moving for 20,000+
   ticks, 2 field builds every tick). Now seed 51 stops at about tick 500 (73-77 of 128 give up; base
   92). Holds behind walkers that made progress still hold fully: those trace back to progress ticks.
+  Cost (BUG-0050): 500 units to 500 random goals give up a mean of 25 over seeds 1-10 (16 before; base
+  40 on QA's harness). Measured alternatives, fix round 2: never counting behind a wait gives 15 but
+  never terminates under churn (units whose field is never built keep their neighbors holding);
+  counting 1 tick in 8, 16 or 32 gives 23-25; holding fully only while the waiter's order is younger
+  than 100 or 300 ticks gives 25-26 and worse 64-goal maxima. No bounded rule tried recovers it.
 - **A unit walking back never pushes an arrived unit off its point (BUG-0042).** The pair a walker
   pushed through a corridor walked home and shoved the walker back off its goal. A unit whose
   walk-back is used doesn't get the `PushAfterStuckTicks` push; it waits behind or gives up.
@@ -669,12 +674,17 @@ unit-agnostic (a crowd cost in the fields is future work). The rules as built:
   shoves drove the pair into the wall. Corridor pair on QA's 20 varied seeds: walker at its goal once
   everything settles on 20 of 20 (base 1, first M1-4d-3 version 6). The same room check in the open
   cost crowd arrivals (2,500 to 4 points, seed 6: 699 -> 547), so it applies in passages only.
-- **Enemy plugs hold (BUG-0045).** A unit overlapping another player's standing unit that plugs a
-  1-cell passage may only move within 45 degrees of straight away from it: walkers get two cone
-  half-planes in the hard-wall constraints, shoves are refused otherwise; and a shove's final step
-  (after the wall trim, which could undo the squeeze trim) may not go past the pack limit into such an
-  enemy. Sliding round an enemy while inside it carried units through corridor plugs. Applied
-  everywhere it cost the two-player crowd rows (500 to 4 points min 189), so it is limited to plugs.
+- **Enemy plugs hold (BUG-0045).** A unit overlapping another player's standing unit that is part of
+  a plug may only move within 45 degrees of straight away from it: walkers get two cone half-planes in
+  the hard-wall constraints, shoves are refused otherwise; and a shove's final step (after the wall
+  trim, which could undo the squeeze trim) may not go past the pack limit into it. A plug is the enemy
+  alone in a 1-cell passage, or a line of standing enemies, each too close to the next for the unit to
+  pass between, that reaches blocked ground on two opposite sides (each wall gap under the unit's
+  diameter too) within `MaxPlugSpan` (4) units: corridors 1-3 cells wide plugged by one wide enemy per
+  row hold (fix round 2; QA's 2- and 3-cell rows). Sliding round an enemy while inside it carried units
+  through plugs. Applied to every enemy, or to any enemy next to blocked ground, it cost the two-player
+  crowd rows (500 to 4 points min 119 / 187 against 206): enemy blobs pressed against one cliff are no
+  plug, since their walls are all on one side.
 - **Recorder (BUG-0047).** `ReplayRecorder.ToReplay` refuses a recording longer than
   `Replay.MaxTickCount` (24 h) instead of writing a file `Replay.Validate` refuses.
 - **Perf (BUG-0044).** The per-neighbor helpers of Plan's loop are written out inline (Debug builds,
@@ -684,7 +694,7 @@ unit-agnostic (a crowd cost in the fields is future work). The rules as built:
 New hashed state: `UnitStore.WalkBack` (in `StateHash`, so in every replay checkpoint, and in QA's
 reflection audit). New scratch on `World` (derived, not hashed): `HardWalls`, `ChainMembers`,
 `DetourLo`/`DetourHi`/`DetourWall`. Tunables: `DetourMargin`, `MaxDetourTurn`, `MaxChainShove`,
-`QueueRange`, `WalkBackDelayTicks`, `QueueOnWaitStride` in `MovementConstants`.
+`QueueRange`, `WalkBackDelayTicks`, `QueueOnWaitStride`, `MaxPlugSpan` in `MovementConstants`.
 
 **Both players at one point are enemies now.** `MoveScenario.Spawn` alternates owners in spawn
 order, but commands apply sorted by (player, sequence), so player 0 takes the low slots and player 1
