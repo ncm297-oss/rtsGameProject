@@ -9,7 +9,7 @@ using Rts.Sim.ViewApi;
 
 namespace Rts.Game;
 
-/// <summary>The bottom-left minimap (docs/02 "Minimap"): baked terrain, unit dots at 5 Hz and the camera's view outline; left-click or drag moves the camera, right-click orders the selection there.</summary>
+/// <summary>The bottom-left minimap (docs/02 "Minimap"): baked terrain, resource nodes and unit dots at 5 Hz and the camera's view outline; left-click or drag moves the camera, right-click orders the selection there.</summary>
 /// <remarks>
 /// Pixels come from the pure <see cref="MinimapRaster"/> (one texel per cell, drawn with nearest
 /// filtering) and the pixel/meter mapping from <see cref="MinimapTransform"/>. Mouse filter is
@@ -29,7 +29,7 @@ public partial class Minimap : Control
     private SimRunner _runner = null!;
     private RtsCamera _camera = null!;
     private SelectionController _selection = null!;
-    private ImageTexture _terrainTexture = null!, _dotsTexture = null!;
+    private ImageTexture _terrainTexture = null!, _dotsTexture = null!, _resourcesTexture = null!;
     private readonly Vector2[] _outline = new Vector2[5];
     private readonly Stopwatch _watch = new();
     private int _lastRefreshTick = -RefreshTicks;
@@ -38,10 +38,13 @@ public partial class Minimap : Control
     /// <summary>The minimap's pixels; null until <see cref="Init"/>.</summary>
     public MinimapRaster? Raster { get; private set; }
 
+    /// <summary>CPU copy of the resource layer last uploaded to its texture (trees, mines; under the dots).</summary>
+    public Image ResourcesImage { get; private set; } = null!;
+
     /// <summary>CPU copy of the dot layer last uploaded to the texture.</summary>
     public Image DotsImage { get; private set; } = null!;
 
-    /// <summary>Wall-clock cost of the last dot refresh (raster + upload) in milliseconds.</summary>
+    /// <summary>Wall-clock cost of the last refresh (resource check or redraw, dots, uploads) in milliseconds.</summary>
     public double LastRefreshMs { get; private set; }
 
     /// <summary>Dot refreshes so far.</summary>
@@ -66,6 +69,8 @@ public partial class Minimap : Control
         _terrainTexture = ImageTexture.CreateFromImage(Image.CreateFromData(Raster.Width, Raster.Height, false, Image.Format.Rgba8, Raster.Terrain));
         DotsImage = Image.CreateFromData(Raster.Width, Raster.Height, false, Image.Format.Rgba8, Raster.Dots);
         _dotsTexture = ImageTexture.CreateFromImage(DotsImage);
+        ResourcesImage = Image.CreateFromData(Raster.Width, Raster.Height, false, Image.Format.Rgba8, Raster.Resources);
+        _resourcesTexture = ImageTexture.CreateFromImage(ResourcesImage);
         camera.EdgePanBlocker = this;
     }
 
@@ -76,11 +81,18 @@ public partial class Minimap : Control
         QueueRedraw();
     }
 
-    /// <summary>Redraws the unit dots from the sim's current positions and uploads them.</summary>
+    /// <summary>Redraws the resource layer if passability changed, then the unit dots from the sim's current positions, and uploads what changed.</summary>
     public void Refresh(Simulation sim)
     {
         _watch.Restart();
-        UnitStore u = sim.World.Units;
+        World world = sim.World;
+        ResourceStore r = world.Resources;
+        if (Raster!.DrawResources(world.Data.Resources, world.NavGrid.Version, r.Alive, r.TypeId, r.Cell))
+        {
+            ResourcesImage.SetData(Raster.Width, Raster.Height, false, Image.Format.Rgba8, Raster.Resources);
+            _resourcesTexture.Update(ResourcesImage);
+        }
+        UnitStore u = world.Units;
         Raster!.DrawDots(u.Alive, u.Position, u.Owner);
         DotsImage.SetData(Raster.Width, Raster.Height, false, Image.Format.Rgba8, Raster.Dots);
         _dotsTexture.Update(DotsImage);
@@ -97,6 +109,7 @@ public partial class Minimap : Control
         var rect = new Rect2(pos.X, pos.Y, size.X, size.Y);
         DrawRect(new Rect2(Vector2.Zero, Size), Backdrop);
         DrawTextureRect(_terrainTexture, rect, false);
+        DrawTextureRect(_resourcesTexture, rect, false);
         DrawTextureRect(_dotsTexture, rect, false);
         UpdateOutline();
         DrawPolyline(_outline, OutlineColor, 1.5f);

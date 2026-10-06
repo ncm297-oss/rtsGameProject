@@ -32,18 +32,21 @@ public class NavOverlayBuilderTests
         // A blocked ramp (border ring, sealed pocket) is blocked.
         Assert.Equal(NavOverlayBuilder.BlockedColor, NavOverlayBuilder.ColorFor(NavFlags.Blocked | NavFlags.Ramp));
         Assert.Equal(NavOverlayBuilder.CliffColor, NavOverlayBuilder.ColorFor(NavFlags.Blocked | NavFlags.Cliff | NavFlags.Ramp));
-        // Bits this build doesn't know (the sim track's Resource bit, anything later) never change the colour.
-        for (int unknown = 8; unknown < 256; unknown += 8)
+        // M2-3b: a resource node's cells are green; a cliff still wins (never both on a real map).
+        Assert.Equal(NavOverlayBuilder.ResourceColor, NavOverlayBuilder.ColorFor(NavFlags.Blocked | NavFlags.Resource));
+        Assert.Equal(NavOverlayBuilder.CliffColor, NavOverlayBuilder.ColorFor(NavFlags.Blocked | NavFlags.Cliff | NavFlags.Resource));
+        // Bits this build doesn't know (the sim track's Building bit, anything later) never change the colour.
+        for (int unknown = 16; unknown < 256; unknown += 16)
         {
-            for (int known = 0; known < 8; known++)
+            for (int known = 0; known < 16; known++)
             {
                 var flags = (NavFlags)(known | unknown);
                 Assert.Equal(NavOverlayBuilder.ColorFor((NavFlags)known), NavOverlayBuilder.ColorFor(flags));
             }
         }
         // Distinct, visible colours.
-        var all = new[] { NavOverlayBuilder.PassableColor, NavOverlayBuilder.BlockedColor, NavOverlayBuilder.CliffColor, NavOverlayBuilder.RampColor };
-        Assert.Equal(4, all.Distinct().Count());
+        var all = new[] { NavOverlayBuilder.PassableColor, NavOverlayBuilder.BlockedColor, NavOverlayBuilder.CliffColor, NavOverlayBuilder.RampColor, NavOverlayBuilder.ResourceColor };
+        Assert.Equal(5, all.Distinct().Count());
         Assert.All(all, c => Assert.InRange(c.W, 0.05f, 0.9f));
     }
 

@@ -1496,7 +1496,7 @@ Match
   does not zoom while the mouse is over the minimap.
 - **Edge panning** is suppressed while the mouse is over the minimap (`RtsCamera.EdgePanBlocker`),
   since the minimap touches the screen's left and bottom edges.
-- **Not shown yet:** fog of war (M4), resource markers, alerts and pings (Alt + click), attack
+- **Not shown yet:** fog of war (M4), alerts and pings (Alt + click), attack
   orders, minimap zoom. Buildings will be added as dots or footprints when they exist.
 - **Launch flag added:** `--no-hud` hides the HUD (clean screenshots, perf comparisons).
 - **Tests:** `ViewApi/MinimapRasterTests` (every cell against the mesh tint on the hand map and
@@ -1541,9 +1541,9 @@ Match
   the vertex colours only when `NavGrid.Version` differs from the last fill, so the mesh is
   uploaded once when the overlay first turns on and once per passability change, never per frame.
   Colours (sRGB, alpha-blended, unshaded): any cell with `Blocked` set is blocked whatever else is
-  set, dark red if also `Cliff`, else red (border ring, sealed pockets; later buildings, trees,
-  resources); an unblocked `Ramp` cell is orange; other open ground is faint white. Unknown flag
-  bits never change the colour.
+  set, dark red if also `Cliff`, green if also `Resource` (a tree or mine, M2-3b), else red (border
+  ring, sealed pockets; later buildings); an unblocked `Ramp` cell is orange; other open ground is
+  faint white. Unknown flag bits never change the colour.
 - **Flow arrows:** goal = `GoalCell` of the lowest-slot live selected unit with `GoalCell >= 0`
   (`ViewApi.FlowArrowLayout.GoalOf`). Every frame `FlowArrowLayout.Refresh` peeks
   `World.FlowFields.PeekCached(goal)` and relists the arrows only when the goal cell, the field's
@@ -1586,6 +1586,78 @@ Match
   and a bare twin sim fed the same commands hashing equal every tick. For looking:
   `& $env:GODOT --path game res://tests/DebugOverlayShot.tscn -- --out <absolute png> [--units n] [--zoom m]`
   orders player 0's army north-east on seed 1 and saves one frame with the overlay on.
+
+### Implementation (M2-3b)
+
+Trees and gold mines on the match map, drawn as props and marked on the minimap. Completes M2
+criterion 3 except rocks: rocks are decoration with no sim footprint and wait for the M6 art pass
+(Producer decision). New node in `Match.tscn`:
+
+```
+Match
+  World3D
+    ...TerrainView
+    PropsView          Node3D (PropsView.cs): one MultiMeshInstance3D child per resource type, named by type id
+    UnitViews ...
+```
+
+- **Map:** `SimRunner.Start` builds `MapGenParams.Default with { Forests, GoldMines }`, defaults 12
+  and 8 (`LaunchOptions.DefaultForests` / `DefaultMines`, Producer defaults for the 128 map). Launch
+  flags `--forests <n>` and `--mines <n>` (0 to `MapGenParams.MaxResourceGroups`, 64) override;
+  out-of-range or non-integer values are warned about and ignored like `--units`; `--forests 0
+  --mines 0` gives the M2 bare map. The start-up line ends with `forests F trees T mines M` from
+  `World.ResourcePlacement` (what was placed; it can fall short of the request). On seed 1 the
+  default map has 12 forests, 287 trees and 8 mines.
+- **Layout:** the pure `ViewApi.PropLayout(GameData.Resources, capacity)` keeps one transform list
+  per resource type. `Refresh(Heightmap, NavGrid, alive, typeId, cell)` takes the resource store's
+  spans and relists only when `NavGrid.Version` differs from the last fill: every spawn and every
+  node taken to 0 bumps it once, and a partly taken node looks the same, so nothing else needs
+  watching. A dead node is **gone** (each list is compacted, in slot order), not collapsed to scale
+  0, so the drawn instance count is the live count. Each instance sits at its footprint's centre
+  (`(x0 + w/2, y0 + h/2)` cells; for a 2 x 2 mine that is a cell corner) at
+  `TerrainHeight.At` there (a footprint is one flat level, M3-1). Rotation is a yaw from a
+  multiplicative hash of the anchor cell (`cell * 2654435761`, top bits): a one-cell footprint takes
+  one of 256 angles; a larger one turns only in quarter turns (square) or half turns (oblong) with
+  exact 0 / +-1 basis entries, so a mesh that fills its footprint never pokes out. Trig is
+  `SimMath`. Transforms are Godot's MultiMesh layout (12 floats, the 3 x 4 matrix row by row).
+  Cost: a relist of 4,096 nodes is about 0.3 ms (Debug); a steady frame is one int compare, 0 bytes.
+- **Meshes** (placeholders built in code, hard-coded tints like the terrain's, M2-1 rule), chosen by
+  the type's `ResourceKind` so a new type is data only, sized from `FootprintWidth / Height`, never
+  literal cell counts: wood = a 7-sided cone (radius 0.4 x the footprint's smaller side, 0.8 m in a
+  2 m cell) from 1 m to 3.5 m on a 6-sided brown trunk (radius 0.15 m, 1 m tall); gold = a dark
+  slate box covering the footprint, 1.6 m tall, with a gold box half the footprint's sides and
+  0.5 m tall on top. `PropsView` copies a relisted type into its buffer and sets
+  `MultiMesh.Buffer` (instance count = the store's capacity, `VisibleInstanceCount` = the live
+  count), only when `PropLayout.Refresh` returns true. Props cast shadows; no physics.
+- **Minimap:** `MinimapRaster` has a third layer, `Resources`, drawn between terrain and dots.
+  `DrawResources(types, version, alive, typeId, cell)` redraws it only when the grid version changed:
+  it clears the pixels it painted last time, then paints every footprint cell of each live node
+  (`WoodRgb` 0x1E5A1E dark green, `GoldRgb` 0xE6B422 gold, by `ResourceKind`). The minimap calls it
+  in its 5 Hz refresh before the dots and uploads the layer's texture only when it was redrawn, so
+  a felled tree disappears within one refresh. The terrain bake no longer darkens a cell blocked
+  only by a resource node (`Resource` set), so the ground under a felled tree has its true colour.
+  Cost: 2,000 dots plus a forced 4,096-node resource redraw is about 0.25 ms (Debug; limit 0.3 ms);
+  0 bytes.
+- **Read-only:** `PropLayout` and `DrawResources` read spans and keep no reference to the store;
+  nothing in `ViewApi` names `ResourceStore`, `Take`, `Spawn` or the flow-field cache (except the
+  M2-5 arrow layer's peek).
+- **Tests:** `ViewApi/PropLayoutTests` (hand map with a plateau and a ramp, generated maps seeds 1-5
+  at 12 / 8 against an oracle from the store and the heightmap, a mine's centre on a cell corner,
+  a full take relists once and drops the instance, a partial take relists nothing, 600 ticks of a
+  walking army relist nothing, yaw rules),
+  `ViewApi/MinimapRasterResourceTests` (colours, every footprint cell, terrain equal to the bare
+  map's, dots never touching the layer, a depleted node's cells transparent on the next redraw),
+  `ViewApi/PropsHashTwinTests` (props, minimap and unit-view reads three
+  times a tick with 2,000 units marching between mines and three trees felled: equal to a bare twin
+  every tick for 600 ticks; a ViewApi source scan), `NavOverlayBuilderTests` (green resource
+  cells), and the headless scene `res://tests/PropsViewTest.tscn` ("PROPS VIEW TEST PASS": the
+  `--forests` / `--mines` rows, then the real Match at 12 / 8, 3 / 2 and 0 / 0: drawn count per
+  type equal to the store's and to `ResourcePlacement`, mesh bounds inside footprints, the minimap's
+  mine and tree pixels, one upload, steady frames 0 bytes); `ViewApi/PropsMeasureTests` holds the
+  cost and allocation rows at a full 4,096-node store. `DebugOverlayTest`'s bare twin now copies the
+  match's whole `SimConfig`, map parameters included. For looking:
+  `& $env:GODOT --path game res://tests/PropsShot.tscn -- --out <absolute png>` sends player 0's
+  100 units (seed 1) through the forest nearest them and saves one frame as they walk round it.
 
 ## AI architecture
 

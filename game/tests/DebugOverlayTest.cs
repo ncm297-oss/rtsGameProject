@@ -103,7 +103,7 @@ public partial class DebugOverlayTest : Node
         _runner.ProcessMode = ProcessModeEnum.Disabled; // the test ticks the sim (and its twin) itself
         _sim = _runner.Simulation!;
         SimConfig c = _sim.World.Config;
-        _twin = new Simulation(new SimConfig(c.Seed, c.PlayerCount, c.UnitCapacity, c.CommandCapacity) { Data = _data });
+        _twin = new Simulation(c); // the same config, map parameters included (M2-3b: the match map has resources)
         _overlay = _match.GetNode<DebugOverlay>("DebugOverlay");
         _nav = _match.GetNode<NavOverlayView>("World3D/NavOverlay");
         _arrows = _match.GetNode<FlowArrowsView>("World3D/FlowArrows");

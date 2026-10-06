@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Godot;
 using Rts.Sim;
 using Rts.Sim.Data;
+using Rts.Sim.Map;
 using Rts.Sim.ViewApi;
 
 namespace Rts.Game;
@@ -42,10 +43,20 @@ public partial class SimRunner : Node
     /// <summary>The last <see cref="TickTimeRing.DefaultCapacity"/> tick costs (every <c>Tick()</c>, also several per frame), for the debug overlay's graph. One array write per tick, so it is kept even while the overlay is off.</summary>
     public TickTimeRing TickTimes { get; } = new();
 
-    /// <summary>Creates the simulation from loaded data; ticking starts on the next frame.</summary>
+    /// <summary>Forests the map generator places (<see cref="MapGenParams.Forests"/>).</summary>
+    [Export] public int Forests { get; set; } = LaunchOptions.DefaultForests;
+
+    /// <summary>Gold mines the map generator places (<see cref="MapGenParams.GoldMines"/>).</summary>
+    [Export] public int GoldMines { get; set; } = LaunchOptions.DefaultMines;
+
+    /// <summary>Creates the simulation from loaded data on the default 128 map with <see cref="Forests"/> and <see cref="GoldMines"/>; ticking starts on the next frame.</summary>
     public void Start(GameData data)
     {
-        var config = new SimConfig(unchecked((ulong)Seed), PlayerCount, UnitCapacity, CommandCapacity) { Data = data };
+        var config = new SimConfig(unchecked((ulong)Seed), PlayerCount, UnitCapacity, CommandCapacity)
+        {
+            Data = data,
+            Map = MapGenParams.Default with { Forests = Forests, GoldMines = GoldMines },
+        };
         Simulation = new Simulation(config);
     }
 

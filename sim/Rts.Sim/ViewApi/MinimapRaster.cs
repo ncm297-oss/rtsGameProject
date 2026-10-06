@@ -1,15 +1,18 @@
 using System;
+using System.Collections.Immutable;
 using System.Numerics;
+using Rts.Sim.Data;
 using Rts.Sim.Map;
 
 namespace Rts.Sim.ViewApi;
 
-/// <summary>The minimap's pixels, one per map cell (RGBA8, row-major, row = map y): a terrain layer baked once and a unit-dot layer redrawn on demand.</summary>
+/// <summary>The minimap's pixels, one per map cell (RGBA8, row-major, row = map y): a terrain layer baked once, a resource layer redrawn when passability changes, and a unit-dot layer redrawn on demand.</summary>
 /// <remarks>
 /// Terrain uses the 3D mesh's palette (<see cref="TerrainMeshBuilder"/>): a ramp cell gets the ramp
 /// tint, a nav-grid cliff cell (the lip above a drop, or a ramp wall) the cliff tint, any other cell
 /// its level tint, and other impassable cells (map border, sealed pockets) are darkened by
-/// <see cref="ImpassableShade"/>. Each live unit's dot is its cell in the owner's colour inside a
+/// <see cref="ImpassableShade"/>; a cell blocked only by a resource node keeps its ground colour, since
+/// the node is drawn on the resource layer and the ground shows again once it is gone (M2-3b). Each live unit's dot is its cell in the owner's colour inside a
 /// one-cell rim (3 x 3 cells) in <see cref="RimFor"/>'s contrasting shade, on a transparent layer:
 /// the rim is what tells a lone dot from a 1-cell ramp tick or cliff lip in a similar colour
 /// (BUG-0064). Every rim is drawn before any centre, so a crowd's centres are never hidden by a
@@ -30,11 +33,20 @@ public sealed class MinimapRaster
     /// <summary>Cells a dot covers: its own and the eight around it.</summary>
     public const int DotCells = 9;
 
+    /// <summary>Resource-layer colour (0xRRGGBB) of a node yielding wood (trees): dark green.</summary>
+    public const uint WoodRgb = 0x1E5A1E;
+
+    /// <summary>Resource-layer colour (0xRRGGBB) of a node yielding gold (mines): gold.</summary>
+    public const uint GoldRgb = 0xE6B422;
+
     private readonly uint[] _ownerRgb;
     private readonly uint[] _rimRgb;
     // Centre pixel and owner of each dot drawn last time (also what the next call clears).
     private readonly int[] _centre, _centreOwner;
     private int _drawn;
+    // Pixels the resource layer painted last time: what the next fill clears.
+    private readonly int[] _resourcePixels;
+    private int _resourceCount;
 
     /// <summary>Width in pixels (= map cells).</summary>
     public int Width { get; }
@@ -48,6 +60,15 @@ public sealed class MinimapRaster
     /// <summary>Unit-dot layer, same size; transparent where no unit stands.</summary>
     public byte[] Dots { get; }
 
+    /// <summary>Resource layer, same size, drawn between terrain and dots; transparent where no node stands.</summary>
+    public byte[] Resources { get; }
+
+    /// <summary>The <see cref="NavGrid.Version"/> of the last resource fill; -1 before the first.</summary>
+    public int ResourceVersion { get; private set; } = -1;
+
+    /// <summary>Times the resource layer was redrawn (test and debug readout).</summary>
+    public int ResourceDraws { get; private set; }
+
     /// <summary>Bakes the terrain layer and sizes the dot layer.</summary>
     /// <param name="map">Terrain (only read).</param>
     /// <param name="grid">Passability of the same map (only read).</param>
@@ -59,6 +80,8 @@ public sealed class MinimapRaster
         Height = map.Height;
         Terrain = new byte[Width * Height * 4];
         Dots = new byte[Terrain.Length];
+        Resources = new byte[Terrain.Length];
+        _resourcePixels = new int[Width * Height];
         _ownerRgb = (uint[])ownerRgb.Clone();
         _rimRgb = new uint[_ownerRgb.Length];
         for (int o = 0; o < _ownerRgb.Length; o++) _rimRgb[o] = RimFor(_ownerRgb[o]);
@@ -85,8 +108,50 @@ public sealed class MinimapRaster
         NavFlags flags = grid.FlagsAt(x, y);
         if ((flags & NavFlags.Cliff) != 0) return TerrainMeshBuilder.CliffColor;
         Vector4 c = TerrainMeshBuilder.LevelColor(map.LevelAt(x, y));
-        if ((flags & NavFlags.Blocked) != 0) c = new Vector4(c.X * ImpassableShade, c.Y * ImpassableShade, c.Z * ImpassableShade, c.W);
+        bool blocked = (flags & NavFlags.Blocked) != 0 && (flags & NavFlags.Resource) == 0;
+        if (blocked) c = new Vector4(c.X * ImpassableShade, c.Y * ImpassableShade, c.Z * ImpassableShade, c.W);
         return c;
+    }
+
+    /// <summary>Resource-layer colour (0xRRGGBB) of a node yielding <paramref name="kind"/>.</summary>
+    public static uint ResourceRgb(ResourceKind kind) => kind == ResourceKind.Gold ? GoldRgb : WoodRgb;
+
+    /// <summary>Redraws the resource layer from the resource store's spans if <paramref name="version"/> (the grid's <see cref="NavGrid.Version"/>) differs from the last fill; returns true if it did.</summary>
+    /// <remarks>Every footprint cell of a live node is painted its kind's colour; the cells painted last time are cleared first, so a depleted node's cells show the terrain again. Allocates nothing.</remarks>
+    /// <param name="types">Resource types (<c>GameData.Resources</c>): footprint and kind.</param>
+    /// <param name="version">The grid's current version.</param>
+    /// <param name="alive">The resource store's <c>Alive</c>.</param>
+    /// <param name="typeId">The resource store's <c>TypeId</c>.</param>
+    /// <param name="cell">The resource store's <c>Cell</c> (footprint anchor).</param>
+    public bool DrawResources(ImmutableArray<ResourceDef> types, int version, ReadOnlySpan<bool> alive, ReadOnlySpan<int> typeId, ReadOnlySpan<int> cell)
+    {
+        if (ResourceDraws > 0 && version == ResourceVersion) return false;
+        byte[] d = Resources;
+        for (int k = 0; k < _resourceCount; k++) Set(d, _resourcePixels[k] * 4, 0u, 0);
+        _resourceCount = 0;
+        int n = Math.Min(alive.Length, Math.Min(typeId.Length, cell.Length));
+        int cells = Width * Height;
+        for (int s = 0; s < n; s++)
+        {
+            int t = typeId[s], a = cell[s];
+            if (!alive[s] || (uint)t >= (uint)types.Length || (uint)a >= (uint)cells) continue;
+            ResourceDef def = types[t];
+            uint rgb = ResourceRgb(def.Resource);
+            int x0 = a % Width, y0 = a / Width;
+            int x1 = Math.Min(x0 + def.FootprintWidth, Width), y1 = Math.Min(y0 + def.FootprintHeight, Height);
+            for (int y = y0; y < y1; y++)
+            {
+                for (int x = x0; x < x1; x++)
+                {
+                    int p = y * Width + x;
+                    if (d[p * 4 + 3] == 0 && _resourceCount < _resourcePixels.Length) _resourcePixels[_resourceCount++] = p;
+                    Set(d, p * 4, rgb, 255);
+                }
+            }
+        }
+        ResourceVersion = version;
+        ResourceDraws++;
+        return true;
     }
 
     /// <summary>The rim colour for a dot of colour <paramref name="rgb"/>: <see cref="LightRim"/> when the dot is dark (Rec. 601 luma under 0.35), else <see cref="DarkRim"/>.</summary>

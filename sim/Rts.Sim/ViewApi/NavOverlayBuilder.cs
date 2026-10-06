@@ -25,11 +25,14 @@ public sealed class NavOverlayBuilder
     /// <summary>Open ground: faint white, sRGB RGBA.</summary>
     public static readonly Vector4 PassableColor = new(1f, 1f, 1f, 0.10f);
 
-    /// <summary>Blocked, not a cliff (map border, sealed pockets; later buildings, trees, resources): red.</summary>
+    /// <summary>Blocked, not a cliff or a resource node (map border, sealed pockets; later buildings): red.</summary>
     public static readonly Vector4 BlockedColor = new(0.95f, 0.12f, 0.10f, 0.45f);
 
     /// <summary>Blocked cliff cell (plateau lip, ramp wall): dark red.</summary>
     public static readonly Vector4 CliffColor = new(0.45f, 0.02f, 0.02f, 0.60f);
+
+    /// <summary>Blocked by a resource node (<see cref="NavFlags.Resource"/>: a tree, a mine), so it reopens when the node is gone: green.</summary>
+    public static readonly Vector4 ResourceColor = new(0.15f, 0.85f, 0.25f, 0.45f);
 
     /// <summary>Passable ramp cell: orange.</summary>
     public static readonly Vector4 RampColor = new(1f, 0.55f, 0.08f, 0.40f);
@@ -102,13 +105,13 @@ public sealed class NavOverlayBuilder
     /// <summary>The colour of a cell with these flags.</summary>
     /// <remarks>
     /// Any cell with <see cref="NavFlags.Blocked"/> is blocked whatever else is set (dark red if it is also a
-    /// <see cref="NavFlags.Cliff"/>, else red); an unblocked cell is orange if it is a <see cref="NavFlags.Ramp"/>, else
+    /// <see cref="NavFlags.Cliff"/>, green if it is a <see cref="NavFlags.Resource"/> node, else red); an unblocked cell is orange if it is a <see cref="NavFlags.Ramp"/>, else
     /// faint. Bits this class doesn't know (added by later milestones) never change the colour.
     /// </remarks>
     public static Vector4 ColorFor(NavFlags flags)
     {
         if ((flags & NavFlags.Blocked) != 0)
-            return (flags & NavFlags.Cliff) != 0 ? CliffColor : BlockedColor;
+            return (flags & NavFlags.Cliff) != 0 ? CliffColor : (flags & NavFlags.Resource) != 0 ? ResourceColor : BlockedColor;
         return (flags & NavFlags.Ramp) != 0 ? RampColor : PassableColor;
     }
 

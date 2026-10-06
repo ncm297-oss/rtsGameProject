@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using Godot;
+using Rts.Sim.Map;
 
 namespace Rts.Game;
 
@@ -10,7 +11,9 @@ namespace Rts.Game;
 /// <c>--screenshot-after &lt;seconds&gt;</c> (default 2), <c>--units &lt;n&gt;</c> (per player, 0 to
 /// <see cref="MaxUnitsPerPlayer"/>, default <see cref="DefaultUnitsPerPlayer"/>), <c>--zoom &lt;m&gt;</c>
 /// (start zoom, clamped to the camera limits; for perf runs), <c>--no-hud</c> (hide the HUD), <c>--debug-overlay</c>
-/// (start with the F12 debug overlay on, e.g. for a screenshot). Bad values are
+/// (start with the F12 debug overlay on, e.g. for a screenshot), <c>--forests &lt;n&gt;</c> and <c>--mines &lt;n&gt;</c>
+/// (resource groups on the map, 0 to <see cref="MapGenParams.MaxResourceGroups"/>, defaults
+/// <see cref="DefaultForests"/> and <see cref="DefaultMines"/>). Bad values are
 /// warned about and ignored; a token starting with <c>--</c> is never taken as a value (BUG-0041).
 /// </remarks>
 public sealed class LaunchOptions
@@ -20,6 +23,18 @@ public sealed class LaunchOptions
 
     /// <summary>Most units per player <c>--units</c> accepts (two players fill the 2,000-slot store).</summary>
     public const int MaxUnitsPerPlayer = 1000;
+
+    /// <summary>Forests on the match map without <c>--forests</c> (Producer default for the 128 map, M2-3b).</summary>
+    public const int DefaultForests = 12;
+
+    /// <summary>Gold mines on the match map without <c>--mines</c> (Producer default for the 128 map, M2-3b).</summary>
+    public const int DefaultMines = 8;
+
+    /// <summary>Forests the map generator places.</summary>
+    public int Forests { get; private set; } = DefaultForests;
+
+    /// <summary>Gold mines the map generator places.</summary>
+    public int Mines { get; private set; } = DefaultMines;
 
     /// <summary>Sim seed override, or null for the scene's value.</summary>
     public ulong? Seed { get; private set; }
@@ -81,6 +96,14 @@ public sealed class LaunchOptions
                     if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int units) && units >= 0 && units <= MaxUnitsPerPlayer) o.UnitsPerPlayer = units;
                     else Warn(flag, value);
                     break;
+                case "--forests":
+                    if (TryGroups(value, out int forests)) o.Forests = forests;
+                    else Warn(flag, value);
+                    break;
+                case "--mines":
+                    if (TryGroups(value, out int mines)) o.Mines = mines;
+                    else Warn(flag, value);
+                    break;
                 case "--zoom":
                     if (float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out float zoom) && float.IsFinite(zoom)) o.Zoom = zoom;
                     else Warn(flag, value);
@@ -98,6 +121,9 @@ public sealed class LaunchOptions
         }
         return o;
     }
+
+    private static bool TryGroups(string? value, out int n) =>
+        int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out n) && n >= 0 && n <= MapGenParams.MaxResourceGroups;
 
     private static void Warn(string flag, string? value) =>
         GD.PushWarning($"Ignoring {flag} with bad or missing value '{value}'.");

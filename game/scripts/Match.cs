@@ -23,11 +23,17 @@ public partial class Match : Node3D
     {
         if (options.Seed is ulong seed) _runner.Seed = unchecked((long)seed);
         if (options.Speed is double speed) _runner.GameSpeed = speed;
+        _runner.Forests = options.Forests;
+        _runner.GoldMines = options.Mines;
         _runner.Start(data);
         Simulation sim = _runner.Simulation!;
 
         Heightmap map = sim.World.Heightmap;
         GetNode<TerrainView>("World3D/TerrainView").Build(map);
+        var props = GetNode<PropsView>("World3D/PropsView");
+        props.Bind(data, sim.World.Resources.Capacity);
+        props.Runner = _runner;
+        props.Sync(sim.World);
 
         var camera = GetNode<RtsCamera>("RtsCamera");
         camera.SetMap(map.Width, map.Height);
@@ -58,8 +64,10 @@ public partial class Match : Node3D
             GetNode<NavOverlayView>("World3D/NavOverlay"), GetNode<FlowArrowsView>("World3D/FlowArrows"), options.DebugOverlay);
         GetNode<Screenshotter>("Screenshotter").Arm(options.ScreenshotPath, options.ScreenshotAfter);
         // The seed printed is the one the sim uses (BUG-0041: the long export printed 2^64-1 as -1).
+        ResourcePlacement placed = sim.World.ResourcePlacement;
         GD.Print($"Match started: seed {unchecked((ulong)_runner.Seed)}, map {map.Width} x {map.Height}, " +
-            $"speed {_runner.GameSpeed:0.##}x, {options.UnitsPerPlayer} units per player");
+            $"speed {_runner.GameSpeed:0.##}x, {options.UnitsPerPlayer} units per player, " +
+            $"forests {placed.Forests} trees {placed.Trees} mines {placed.Mines}");
     }
 
     /// <summary>Enqueues each player's start army in its <see cref="StartLayout"/> block; returns player 0's block centre (meters).</summary>
