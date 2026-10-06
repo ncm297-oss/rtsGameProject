@@ -95,3 +95,5 @@ bugs outrank new features.
 | [BUG-0055](BUG-0055-own-walkers-slip-past-friendly-holding-plug.md) | S3 | open | Own walkers slip past a friendly holding unit plugging a 1-cell corridor (10 of 30, up to 1.05 m overlap; soft clip) |
 | [BUG-0056](BUG-0056-m1-7-order-nits.md) | S4 | open | M1-7 nits: Queued flag valid on Spawn/Noop, corridor Hold test misses passing walkers, Hold lasts one tick under a queued order |
 | [BUG-0064](BUG-0064-minimap-dot-readability-and-large-map-sampling.md) | S4 | open | Minimap dots hard to tell from ramps (Whirlwind) and cliffs (Malazan); maps over 220 cells drop dots |
+| [BUG-0067](BUG-0067-m2-3-input-nits.md) | S4 | open | M2-3 nits: an exact 300 ms double-tap depends on the clock value; A-targeting outlives an emptied selection and eats the next click |
+| [BUG-0068](BUG-0068-minimap-right-click-while-targeting-orders-move.md) | S3 | open | A minimap right-click while A-targeting orders a Move and leaves targeting armed |
