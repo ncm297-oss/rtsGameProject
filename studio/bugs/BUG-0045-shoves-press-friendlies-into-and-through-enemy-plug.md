@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Severity | S2 |
+| Severity | S3 (was S2; Producer re-triage at ACCEPT 2026-10-05-1609, see the last section) |
 | Status | open |
 | Found | 2026-10-05-1609, task M1-4d-3 (pre-existing on base 7f741f1; more seeds pass the plug on M1-4d-3) |
 | System | movement (shoves: `SqueezeLimit` / `KeepOffWalls` / chain shove vs other players' units) |
@@ -67,3 +67,13 @@ between, reaching blocked ground on two opposite sides. QA attacks (two-sim twin
 - Report: a plug whose two units are re-ordered inside their cell every 7 ticks (Moving, soft walls by
   design) lets 2 small units through; twins and invariants hold.
 Severity stays S2; the bug predates M1-4d-3 (base fails every one of these rows).
+
+## Producer triage (ACCEPT, 2026-10-05-1609): S2 -> S3
+Not a regression of M1-4d-3: base 7f741f1 fails every plug row QA built; this task made plugs of up to
+`MaxPlugSpan` (4) hold, diagonal and forming/dissolving ones included. Nothing player-facing depends on
+it before M4 (a unit pressed into enemies will be fighting there, and the enemy-contact rule is redefined
+with combat). The owner is told in STATE "For your review", with the correction to the M1-5 claim that
+"nobody gets through" (true for the 3-unit plugs tested then). Scheduled: the M1 end-of-milestone
+hardening session (after M1-7 / M1-8): raise the span or make the plug test span-free (blocked ground on
+two opposite sides within the line's bounding box), measured against the two-player perf rows (BUG-0044).
+The 5 skipped QA rows are the proof when it lands.
