@@ -274,6 +274,38 @@ public class CliQaTests
         if (r.Exit == 2) Assert.StartsWith("replay failed: ", OneErrorLine(r));
     }
 
+    /// <summary>
+    /// M1-9 (BUG-0054 / BUG-0056): a command row with an undefined kind or flag bits its kind doesn't
+    /// take (what Enqueue now refuses) is refused at read: play exits 2 with one "InvalidCommand" line,
+    /// never throws (the player would otherwise hit Enqueue's ArgumentException, which it doesn't catch).
+    /// </summary>
+    [Theory]
+    [InlineData(4, "99")]          // undefined kind
+    [InlineData(4, "-1")]          // negative kind
+    [InlineData(4, "6")]           // one past the last kind
+    [InlineData(4, "-2147483648")] // int.MinValue kind
+    [InlineData(10, "2")]          // unknown flag bit
+    [InlineData(10, "-1")]         // every flag bit
+    [InlineData(10, "1")]          // queued flag on a spawn
+    public void Play_MalformedKindOrFlags_Exit2_InvalidCommand(int field, string value)
+    {
+        string path = Path.Combine(TempDir(), "k.replay");
+        Assert.Equal(0, Cli("run", "--seed", "4", "--units", "4", "--ticks", "30", "--checkpoint", "10", "--record", path, "--data", TestDataDir.Shipped).Exit);
+        string text = File.ReadAllText(path);
+        string body = text[..text.IndexOf("checksum ", StringComparison.Ordinal)];
+        string[] lines = body.Split('\n');
+        int first = Array.FindIndex(lines, l => l.StartsWith("c ", StringComparison.Ordinal));
+        string[] f = lines[first].Split(' ');
+        f[field] = value;
+        lines[first] = string.Join(' ', f);
+        string hostile = Path.Combine(TempDir(), "hostile.replay");
+        File.WriteAllBytes(hostile, ReplayFormat.Seal(string.Join('\n', lines)));
+
+        CliResult r = Cli("play", hostile, "--data", TestDataDir.Shipped);
+        Assert.True(r.Exit == 2, $"exit {r.Exit}: {r.Err}");
+        Assert.Contains("InvalidCommand", OneErrorLine(r));
+    }
+
     /// <summary>Hostile Move commands: the unit handle and target are attacker-chosen; play must not throw.</summary>
     [Theory]
     [InlineData("2147483647", "0", "42F20000", "42FE0000")]

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-06-0655, task M1-8 |
 | System | tools/Rts.Cli, docs/03 "Debug tooling" |
-| Fixed by | |
+| Fixed by | 6d1cbfd (M1-9); see the M1-9 re-check below |
 
 Four small findings, grouped. None breaks a criterion.
 
@@ -43,3 +43,10 @@ so it's a wording issue: say `ok: 0 checkpoints (nothing compared)` or have `run
   (empty file and path fields give `: : `; "1 errors").
 - A broken data dir with several errors shows only the first (by design for the one-line rule, but
   the QA focus asked for the error list; the count is printed, so the user knows there are more).
+
+## Re-check M1-9 (2026-10-06-0905, commit 6d1cbfd): fixed (item 2 has a leftover, BUG-0072)
+Item 2: a missing folder, a directory, or an empty path fail before the first tick (`--ticks 1728000`
+with a missing folder: 0.05 s). An invalid file name (`a<b>.replay`) or an access-denied folder still
+fail only after the run: filed as BUG-0072 (S4). Item 3: `ok: 0 checkpoints (nothing compared) over 50 ticks`.
+Item 4: `error: data in '' did not load (1 error), first: data directory '' does not exist`. Regression
+tests (`Cli/CliTests`, `DataConversionTests.DataError_ToString_LeavesOutEmptyFields`) fail on base.

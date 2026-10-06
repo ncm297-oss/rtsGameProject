@@ -233,12 +233,12 @@ public class OrderQaTests
         Assert.True(deepest <= stoppedDeepest, $"an enemy walker got {deepest:F3} m into the holding plug, {stoppedDeepest:F3} m into a stopped one");
     }
 
-    /// <summary>A friendly holding plug: the holder never moves and walkers settle (passing is BUG-0055, below).</summary>
+    /// <summary>A friendly holding plug: the holder never moves and walkers settle (nobody passing is BUG-0055, below).</summary>
     [Fact]
     public void FriendlyHoldingPlug_NeverMoves_AndWalkersSettle() => RunPlug(0);
 
     /// <summary>The QA focus's rule for M1-7: a holding unit plugging a choke lets nobody through, its own army included.</summary>
-    [Fact(Skip = "BUG-0055: own walkers slip past a friendly holding plug in a 1-cell corridor (soft clip)")]
+    [Fact]
     public void FriendlyHoldingPlug_InA1CellCorridor_LetsNobodyThrough() => Assert.Equal(0, RunPlug(0).Passed);
 
     // ------------------------------------------------------------ queue abuse
@@ -579,9 +579,10 @@ public class OrderQaTests
 
     /// <summary>
     /// Everything Enqueue accepts is recorded; a session in which a command with an unknown flag bit
-    /// was enqueued (the sim drops it at apply) should still produce a replay that reads and plays back.
+    /// was offered should still produce a replay that reads and plays back. Since the BUG-0054 fix
+    /// Enqueue refuses it (ArgumentException, as for an unknown player), so it is never recorded.
     /// </summary>
-    [Fact(Skip = "BUG-0054: a command with unknown Flags is accepted and recorded; ReplayFormat.Write then throws (InvalidCommand)")]
+    [Fact]
     public void UnknownFlagsEnqueued_RecordedReplay_StillReads()
     {
         var sim = new Simulation(TestSim.Config(Seed: 3, PlayerCount: 1, UnitCapacity: 4, CommandCapacity: 16));
@@ -589,7 +590,7 @@ public class OrderQaTests
         sim.Enqueue(Command.SpawnUnit(0, 0, MoveScenario.Center(sim.World.NavGrid, MoveScenario.CentralCell(sim.World.NavGrid))));
         sim.Tick();
         sim.Tick();
-        sim.Enqueue(Command.Stop(0, H(sim, 0)) with { Flags = 2 });
+        Assert.Throws<ArgumentException>(() => sim.Enqueue(Command.Stop(0, H(sim, 0)) with { Flags = 2 }));
         for (int t = 0; t < 18; t++) sim.Tick();
         byte[] bytes = ReplayFormat.Write(rec.ToReplay());
         ReplayError e = ReplayFormat.TryRead(bytes, out Replay? r);

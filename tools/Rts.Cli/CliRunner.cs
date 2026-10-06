@@ -71,6 +71,12 @@ public static class CliRunner
         if ((error = IntOption(o, "--checkpoint", ReplayRecorder.DefaultCheckpointInterval, 1, Replay.MaxTickCount, out int checkpoint)) != null)
             return UsageError(stderr, error);
         o.TryGetValue("--record", out string? recordPath);
+        // Checked before the run, which can take minutes: a bad path found only at the end wastes it (BUG-0057).
+        if (recordPath != null && (error = RecordPathError(recordPath)) != null)
+        {
+            stderr.WriteLine($"error: cannot write replay '{recordPath}': {error}");
+            return ExitError;
+        }
 
         GameData? data = LoadData(o, stderr);
         if (data == null) return ExitError;
@@ -153,7 +159,10 @@ public static class CliRunner
             return ExitReplayFailed;
         }
         foreach (ReplayCheckpoint k in replay.Checkpoints) stdout.WriteLine(HashLine(k.Tick, k.Hash));
-        stdout.WriteLine($"ok: {replay.Checkpoints.Length.ToString(Inv)} checkpoints matched over {result.TicksRun.ToString(Inv)} ticks");
+        // A replay shorter than one checkpoint interval is valid but proves nothing: say so (BUG-0057).
+        stdout.WriteLine(replay.Checkpoints.Length == 0
+            ? $"ok: 0 checkpoints (nothing compared) over {result.TicksRun.ToString(Inv)} ticks"
+            : $"ok: {replay.Checkpoints.Length.ToString(Inv)} checkpoints matched over {result.TicksRun.ToString(Inv)} ticks");
         return ExitOk;
     }
 
@@ -198,6 +207,24 @@ public static class CliRunner
         return $"{name} must be a whole number from {min.ToString(Inv)} to {max.ToString(Inv)}";
     }
 
+    /// <summary>Why a replay can't be written to <paramref name="path"/> (an invalid path, a missing folder, or a folder in its place), or null if it looks writable.</summary>
+    private static string? RecordPathError(string path)
+    {
+        string full;
+        try
+        {
+            full = Path.GetFullPath(path);
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return e.Message;
+        }
+        if (Directory.Exists(full)) return "it is a directory";
+        string? dir = Path.GetDirectoryName(full);
+        if (dir != null && !Directory.Exists(dir)) return $"directory '{dir}' does not exist";
+        return null;
+    }
+
     /// <summary>Loads <c>--data</c>, or <c>game/data</c> next to the nearest <c>RtsGame.sln</c> above the working or program directory; null after printing one error line.</summary>
     private static GameData? LoadData(Dictionary<string, string> o, TextWriter stderr)
     {
@@ -212,7 +239,8 @@ public static class CliRunner
         }
         DataLoadResult result = DataLoader.LoadAll(dir);
         if (result.Ok) return result.Data;
-        stderr.WriteLine($"error: data in '{dir}' did not load ({result.Errors.Count.ToString(Inv)} errors), first: {result.Errors[0]}");
+        int count = result.Errors.Count;
+        stderr.WriteLine($"error: data in '{dir}' did not load ({count.ToString(Inv)} {(count == 1 ? "error" : "errors")}), first: {result.Errors[0]}");
         return null;
     }
 

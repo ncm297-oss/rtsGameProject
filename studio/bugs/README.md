@@ -82,21 +82,24 @@ bugs outrank new features.
 | [BUG-0041](BUG-0041-view-launch-args-and-clock-input-nits.md) | S4 | fixed | View input nits: clock takes negative x negative as time, a missing flag value eats the next flag, seed max logs as -1 |
 | [BUG-0042](BUG-0042-walk-back-shoves-arrived-walker-off-its-goal.md) | S2 | fixed | Walk-back undoes the corridor-pair fix: the pushed pair walks home and shoves the arrived walker 8-24 m back, goal-less |
 | [BUG-0043](BUG-0043-reorder-within-goal-cell-makes-walker-give-up.md) | S2 | fixed | One re-order of a walking unit to another point of its goal cell (1.2 m) makes it give up mid-route (regression from the BUG-0030 change) |
-| [BUG-0044](BUG-0044-tight-blob-2500-over-slice-perf-target.md) | S3 | open | 2,500 tight blob at its 4.5 ms target; two-player rows much slower: contested blob 10.5 ms (2.3x base), 2,500 to 4 points 1.9x (round 2 plug search); crossing +75% |
-| [BUG-0045](BUG-0045-shoves-press-friendlies-into-and-through-enemy-plug.md) | S3 | open | Shoves press friendly units into and through an enemy plug: fixed for plugs of up to 4 enemies; 5+ (small infantry across a 2-cell choke, 5-cell corridors) still leak (pre-existing) |
+| [BUG-0044](BUG-0044-tight-blob-2500-over-slice-perf-target.md) | S3 | fixed | 2,500 tight blob at its 4.5 ms target; two-player rows much slower: contested blob 10.5 ms (2.3x base), 2,500 to 4 points 1.9x (round 2 plug search); crossing +75% |
+| [BUG-0045](BUG-0045-shoves-press-friendlies-into-and-through-enemy-plug.md) | S3 | fixed | Shoves press friendly units into and through an enemy plug: fixed for plugs of up to 4 enemies; 5+ (small infantry across a 2-cell choke, 5-cell corridors) still leak (pre-existing) |
 | [BUG-0046](BUG-0046-walker-paths-depend-on-neighbor-spawn-order.md) | S3 | open | Walker positions still depend on the neighbors' spawn order (Constrain clip order; pre-existing) |
-| [BUG-0047](BUG-0047-m1-4d-3-test-guard-gaps.md) | S4 | open | M1-4d-3 test-guard gaps: 2,500 blob perf unguarded, tests ending at first Idle, loose chain-shove checker, >24 h replays unreadable |
+| [BUG-0047](BUG-0047-m1-4d-3-test-guard-gaps.md) | S4 | fixed | M1-4d-3 test-guard gaps: 2,500 blob perf unguarded, tests ending at first Idle, loose chain-shove checker, >24 h replays unreadable |
 | [BUG-0048](BUG-0048-crowd-never-stops-under-field-cache-churn.md) | S1 | fixed | Livelock: 94 of 128 units Moving forever with 2 field builds per tick (64-goal row, map seed 51; regression) |
-| [BUG-0049](BUG-0049-64-goal-bounds-break-on-new-maps-stray-anchor.md) | S3 | open | The re-bounded 64-goal row breaks on new maps: 49 give-ups on seed 61, a stray anchor on seed 64 |
+| [BUG-0049](BUG-0049-64-goal-bounds-break-on-new-maps-stray-anchor.md) | S3 | fixed | The re-bounded 64-goal row breaks on new maps: 49 give-ups on seed 61, a stray anchor on seed 64 |
 | [BUG-0050](BUG-0050-random-goal-give-ups-rose-after-fix-round-1.md) | S3 | open | 500 units to 500 random goals: give-ups rose to 4.7% mean (2.3% before fix round 1; target 3%) |
 | [BUG-0052](BUG-0052-terrainheight-at-throws-on-huge-coordinates.md) | S3 | fixed | TerrainHeight.At throws instead of clamping for coordinates beyond ~4.3e9 m or +Infinity |
 | [BUG-0053](BUG-0053-m2-2-test-and-doc-nits.md) | S4 | fixed | M2-2 nits: facing test can't see a yaw sign error, a stale SimRunner remark, picker box height in docs |
-| [BUG-0054](BUG-0054-unknown-command-flags-recorded-replay-write-throws.md) | S3 | open | A command with unknown Flags bits is accepted and recorded; ReplayFormat.Write then throws (same for an undefined kind) |
-| [BUG-0055](BUG-0055-own-walkers-slip-past-friendly-holding-plug.md) | S3 | open | Own walkers slip past a friendly holding unit plugging a 1-cell corridor (10 of 30, up to 1.05 m overlap; soft clip) |
-| [BUG-0056](BUG-0056-m1-7-order-nits.md) | S4 | open | M1-7 nits: Queued flag valid on Spawn/Noop, corridor Hold test misses passing walkers, Hold lasts one tick under a queued order |
-| [BUG-0057](BUG-0057-m1-8-cli-nits.md) | S4 | open | M1-8 CLI nits: timings include recorder hashing despite docs, unwritable --record found only after the run, 0-checkpoint replays "pass" |
+| [BUG-0054](BUG-0054-unknown-command-flags-recorded-replay-write-throws.md) | S3 | fixed | A command with unknown Flags bits is accepted and recorded; ReplayFormat.Write then throws (same for an undefined kind) |
+| [BUG-0055](BUG-0055-own-walkers-slip-past-friendly-holding-plug.md) | S3 | fixed | Own walkers slip past a friendly holding unit plugging a 1-cell corridor (10 of 30, up to 1.05 m overlap; soft clip) |
+| [BUG-0056](BUG-0056-m1-7-order-nits.md) | S4 | fixed | M1-7 nits: Queued flag valid on Spawn/Noop, corridor Hold test misses passing walkers, Hold lasts one tick under a queued order |
+| [BUG-0057](BUG-0057-m1-8-cli-nits.md) | S4 | fixed | M1-8 CLI nits: timings include recorder hashing despite docs, unwritable --record found only after the run, 0-checkpoint replays "pass" |
+| [BUG-0058](BUG-0058-give-up-while-backing-off-leaves-stray-anchor.md) | S3 | fixed | A unit that gives up while backing off can stop 1.1 m from its goal and keep its goal cell (stray anchor); found and fixed in M1-9 (`SettleBackedOff`) |
 | [BUG-0064](BUG-0064-minimap-dot-readability-and-large-map-sampling.md) | S4 | fixed | Minimap dots hard to tell from ramps (Whirlwind) and cliffs (Malazan); maps over 220 cells drop dots |
 | [BUG-0067](BUG-0067-m2-3-input-nits.md) | S4 | fixed | M2-3 nits: an exact 300 ms double-tap depends on the clock value; A-targeting outlives an emptied selection and eats the next click |
 | [BUG-0068](BUG-0068-minimap-right-click-while-targeting-orders-move.md) | S3 | fixed | A minimap right-click while A-targeting orders a Move and leaves targeting armed |
 | [BUG-0069](BUG-0069-lone-minimap-dots-read-as-rim-colour.md) | S3 | open | A lone minimap dot reads as its rim colour (black or white), not its player colour |
 | [BUG-0070](BUG-0070-m2-h1-doc-and-test-nits.md) | S4 | open | M2-H1 nits: stale docs/01 minimap row, docs/03 big-map range, twin double-tap constants, dev wall test blind at the far edges |
+| [BUG-0071](BUG-0071-plug-cache-answer-depends-on-query-order-under-stale-hash.md) | S3 | open | In the shove pass a cached plug answer can depend on which member was asked first (stale spatial hash) |
+| [BUG-0072](BUG-0072-m1-9-nits.md) | S4 | open | M1-9 nits: an invalid --record file name still fails only after the run |

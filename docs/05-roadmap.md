@@ -8,9 +8,9 @@ Status legend: **Next** = start here, **Planned** = not started, **Done** = acce
 | # | Milestone | Status | One-line goal |
 | --- | --- | --- | --- |
 | M0 | Environment & skeleton | **Done** (2026-10-03) | Tools installed, empty projects build, tests and headless boot pass |
-| M1 | Core sim, no graphics | **Next** (sim track; 8 / 8 criteria met, hardening + sign-off pending) | 200 units path across the map deterministically, fast |
+| M1 | Core sim, no graphics | **Done** (2026-10-06, Producer sign-off) | 200 units path across the map deterministically, fast |
 | M2 | Presentation | **Next** (view track, started 2026-10-05) | Move an army around a 3D map |
-| M3 | Economy & buildings | Planned | Build a Malazan base |
+| M3 | Economy & buildings | **Next** (sim track, from session 2026-10-06-0905) | Build a Malazan base |
 | M4 | Combat, fog, abilities | Planned | Malazan vs. Whirlwind armies fight with abilities and fog |
 | M5 | AI opponent | Planned | Lose to a Whirlwind AI |
 | M6 | Game shell & real art | Planned | A friend can play it |
@@ -96,6 +96,13 @@ _Required criteria met in session 2026-10-03-0826 (task M0-1). Owner signed off 
       truncation, hostile command rows). Same task: `FlowFieldCache.PeekCached` for the M2-5
       overlay (read-only, hash-twin proven over 5.3 M peeks). BUG-0057 (S4 nits). All 8 M1 criteria
       are met; the M1 end-of-milestone hardening session and sign-off follow.)_
+
+_All 8 criteria met by session 2026-10-06-0655. End-of-milestone hardening M1-9 in session
+2026-10-06-0905 (holders block their own army, malformed commands refused at `Enqueue`, plug clusters
+up to 32, plug-answer cache, stray-anchor fix, 64-goal re-bound, CLI nits, docs sweep).
+`studio/qa/coverage.md`: every M1 row ✅ for Unit, Invariant fuzz and Determinism; no open S1/S2.
+Signed off by the Producer on 2026-10-06 under autopilot (`stop_at_milestone_end: no`); open S3/S4
+listed in the retro. Owner may revisit._
 
 ## M2 — Presentation
 
@@ -260,3 +267,36 @@ Add one section per completed milestone below.
   equivalent) as the smoke gate in the definition of done; settle the `.sln` Release mapping
   for the game project before `tools/export.ps1` (BUG-0002, M6).
 - Decisions made (also recorded in 01-vision.md): none.
+
+### M1 retro (2026-10-06, signed off by the Producer under autopilot)
+- What shipped: the whole simulation core with no graphics: entity stores with generational
+  handles, seeded RNG streams, `SimMath`, a 20 Hz tick with a command queue that refuses malformed
+  commands at the door; the data loader and validation for `game/data/`; terraced maps (3 levels,
+  cliffs, walled ramps, sealed pockets) with a nav grid and spatial hash; flow fields with a hashed
+  LRU cache and a 2-builds-per-tick cap; steering, separation, crowded arrival, give-up, shoving,
+  walk-back, detours, enemy and holder plugs; `Stop` / `HoldPosition` / `AttackMove` and Shift-queues
+  of 8; replays (format 2) with a golden file and determinism tests; the 500-unit perf criterion
+  (0.63 ms vs 4 ms); the headless CLI (`tools/Rts.Cli`) and `PeekCached` for the view. 14 sim sessions
+  (2026-10-03 to 2026-10-06), 3 of them hardening; 1,841 non-Perf tests green, 80 Perf.
+- What was harder than expected: crowd movement. Four sessions (M1-4d-1 to M1-4d-3 plus M1-9) went
+  into units that stop short, livelocks under field-cache churn, plugs that leak, and perf at 2,500
+  units; the Producer's crowd targets (60% / 50% arrivals to 4 nearby points) were not met (51% /
+  34%) because flow fields don't know where units stand. QA found an S1 livelock and several S2s
+  in-session; every one was fixed before merge.
+- What to change in the process or the plan: (1) a "crowd cost" in flow fields (BUG-0028 / 0032)
+  is the real fix for crowd quality; decide after the M4 combat sandbox shows whether it matters in
+  play, not before. (2) Fitted crowd bounds make any movement change expensive (BUG-0046's sort was
+  built, measured and shelved because it re-rolled three bounds); prefer median / aggregate bounds
+  over per-seed ones in new rows. (3) Perf rows fail from CPU contention when both tracks run QA at
+  once: a Perf failure counts only when it fails alone (now a standing rule). (4) Keep the public
+  setup API additive while the view track builds against it: it worked for five sessions.
+- Open S3/S4 carried into M3 (none block): BUG-0046 (wall clips in slot order; known limit),
+  BUG-0050 (4.7% random-goal give-ups vs 3%; known limit), BUG-0071 (shove-pass plug cache can depend
+  on query order under a stale hash; deterministic), BUG-0072 (CLI `--record` pre-check misses invalid
+  file names), BUG-0005 (per-player command buckets, before M5), BUG-0008 / 0010 (loader nits, M3 data
+  task), BUG-0023 / 0025 / 0026 (field cache limits, documented), BUG-0028 / 0032 (crowd targets),
+  BUG-0040 part 2 (M5 design note), BUG-0002 (`.sln` Release mapping, M6).
+- Decisions made (also recorded in 01-vision.md): clusters instead of formations; 1 s give-up;
+  cliff strips 2 m; ramps 6 x 8 m; 2 field builds per tick, cache metadata hashed; own standing units
+  soft, enemies and holders hard; plugs up to 32; replays bound to the exact data content hash;
+  malformed commands refused at `Enqueue`; maps over 256 unsupported; BUG-0046 kept as a known limit.

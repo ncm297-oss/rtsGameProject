@@ -1,3 +1,4 @@
+using System;
 using System.Numerics;
 using Rts.Sim.Data;
 using Rts.Sim.Determinism;
@@ -44,11 +45,15 @@ public sealed class World
         ShovedGoals = new int[config.UnitCapacity];
         AnchorQueue = new int[config.UnitCapacity];
         AnchorLinked = new bool[config.UnitCapacity];
+        BackedOffStops = new int[config.UnitCapacity];
         WallNormals = new Vector2[3 * config.UnitCapacity]; // a wall, plus two cone edges for an overlapped enemy
         WallLimits = new float[3 * config.UnitCapacity];
         HardWalls = new int[3 * config.UnitCapacity];
         ChainMembers = new int[Movement.MovementConstants.MaxChainShove];
-        PlugMembers = new int[Movement.MovementConstants.MaxPlugSpan];
+        PlugMembers = new int[Movement.MovementConstants.MaxPlugCluster];
+        RadiusClassOfType = new int[config.Data.Units.Length];
+        RadiusClassCount = RadiusClasses(config.Data, RadiusClassOfType);
+        PlugAnswers = new long[config.UnitCapacity * config.PlayerCount * RadiusClassCount];
         DetourLo = new float[config.UnitCapacity];
         DetourHi = new float[config.UnitCapacity];
         DetourWall = new int[config.UnitCapacity];
@@ -83,6 +88,9 @@ public sealed class World
     /// <summary>Scratch for <see cref="Movement.MovementSystem"/>'s anchor re-check: which slots are linked to their point; all false between re-checks; derived, not hashed.</summary>
     internal bool[] AnchorLinked { get; }
 
+    /// <summary>Scratch for <see cref="Movement.MovementSystem"/>: the units that gave up while backing off this tick, checked again at its end; derived, not hashed.</summary>
+    internal int[] BackedOffStops { get; }
+
     /// <summary>Scratch for <see cref="Movement.MovementSystem"/>'s wall check: the unit normal toward each hard wall a step touches; derived, not hashed.</summary>
     internal Vector2[] WallNormals { get; }
 
@@ -101,8 +109,49 @@ public sealed class World
     /// <summary>Scratch for the detour: the slot of each wall whose interval is in <see cref="DetourLo"/>; derived, not hashed.</summary>
     internal int[] DetourWall { get; }
 
-    /// <summary>Scratch for <see cref="Movement.MovementSystem"/>'s plug test: the line of enemies searched; derived, not hashed.</summary>
+    /// <summary>Scratch for <see cref="Movement.MovementSystem"/>'s plug test: the cluster of hard units searched; derived, not hashed.</summary>
     internal int[] PlugMembers { get; }
+
+    /// <summary>
+    /// Scratch for <see cref="Movement.MovementSystem"/>'s plug test: per unit, per walker owner and
+    /// radius class (<see cref="RadiusClassCount"/>), the answer worked out in pass
+    /// <see cref="PlugEpoch"/> (epoch x 4 + answer bits), so each cluster is searched about once per pass
+    /// (BUG-0044); derived, not hashed.
+    /// </summary>
+    internal long[] PlugAnswers { get; }
+
+    /// <summary>The movement pass <see cref="PlugAnswers"/> are valid for: bumped at the start of each pass that reads them; derived, not hashed.</summary>
+    internal long PlugEpoch { get; set; }
+
+    /// <summary>Number of distinct unit radii in <see cref="Data"/> (the plug test depends on the walker's radius only).</summary>
+    internal int RadiusClassCount { get; }
+
+    /// <summary>Each unit type's index among the distinct radii, in ascending radius order.</summary>
+    internal int[] RadiusClassOfType { get; }
+
+    /// <summary>Fills <paramref name="classOfType"/> with each type's rank among the distinct radii (ascending) and returns how many there are (at least 1).</summary>
+    private static int RadiusClasses(GameData data, int[] classOfType)
+    {
+        int n = data.Units.Length, count = 0;
+        for (int t = 0; t < n; t++)
+        {
+            // The rank is how many distinct radii are smaller; each radius counts once, at its first type.
+            int rank = 0;
+            for (int s = 0; s < n; s++)
+                if (data.Units[s].Radius < data.Units[t].Radius && FirstWithRadius(data, s)) rank++;
+            classOfType[t] = rank;
+            if (FirstWithRadius(data, t)) count++;
+        }
+        return Math.Max(count, 1);
+    }
+
+    /// <summary>True if no type before <paramref name="t"/> has its radius.</summary>
+    private static bool FirstWithRadius(GameData data, int t)
+    {
+        for (int s = 0; s < t; s++)
+            if (data.Units[s].Radius == data.Units[t].Radius) return false;
+        return true;
+    }
 
     /// <summary>Scratch for <see cref="Movement.MovementSystem"/>'s chain shove: the line of units one shove moves; derived, not hashed.</summary>
     internal int[] ChainMembers { get; }

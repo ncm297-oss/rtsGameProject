@@ -244,7 +244,7 @@ public class StateHashTests
         Assert.NotEqual(a.StateHash(), b.StateHash());
     }
 
-    /// <summary>M1-7: a pending command's flags are hashed: the same order queued and not differs while pending; once applied the state differs too.</summary>
+    /// <summary>M1-7: a pending command's flags are hashed: the same order queued and not differs while pending; once applied the state differs too. An unknown bit never gets that far (BUG-0054: Enqueue refuses it).</summary>
     [Fact]
     public void Hash_CoversPendingFlags()
     {
@@ -261,10 +261,10 @@ public class StateHashTests
         var unit = new EntityHandle(0, a.World.Units.Generation[0]);
         a.Enqueue(Command.Stop(0, unit));
         b.Enqueue(Command.Stop(0, unit, queued: true));
-        c.Enqueue(Command.Stop(0, unit) with { Flags = 1 << 20 }); // an unknown high bit: dropped at apply, still hashed while pending
+        ulong before = c.StateHash();
+        Assert.Throws<ArgumentException>(() => c.Enqueue(Command.Stop(0, unit) with { Flags = 1 << 20 }));
         Assert.NotEqual(a.StateHash(), b.StateHash());
-        Assert.NotEqual(a.StateHash(), c.StateHash());
-        Assert.NotEqual(b.StateHash(), c.StateHash());
+        Assert.Equal(before, c.StateHash());
     }
 
     /// <summary>M1-7: Hold, the queue count, and every queue entry of a live unit (also past the count) are hashed; a unit with no orders hashes as before the queue existed (the golden's checkpoints did not move).</summary>

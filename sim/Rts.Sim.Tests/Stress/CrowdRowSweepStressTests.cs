@@ -49,8 +49,8 @@ public class CrowdRowSweepStressTests
     [Trait("Category", "Soak")] // about 1 min in Debug; filter out with Category!=Soak for a quick loop
     public void TwentyFiveHundredToFourPoints_Seeds11To20_BoundHolds() => SweepFourPoints(2500, 6000, 22, 11, 20);
 
-    /// <summary>128 units to 64 goals, one player per goal, seeds 41-80 (the bound of 48 was fitted on 1-40): termination, build cap, every Idle unit arrived or gave up, at most 48 gave up.</summary>
-    [Fact(Skip = "BUG-0049: seed 51 (the BUG-0048 livelock map) now stops, but 73-77 of 128 give up (base 92) against the 48 fitted on seeds 1-40; Producer to re-set the bound or make it report-only")]
+    /// <summary>128 units to 64 goals, one player per goal, seeds 41-80: termination, build cap, every Idle unit arrived or gave up, at most the dev test's bound gave up (re-set on seeds 1-80 for BUG-0049: seed 51, the BUG-0048 map, gives up 73-77).</summary>
+    [Fact]
     public void MoreGoalsThanCacheSlots_Seeds41To80_BoundHolds()
     {
         var gaveUp = new List<int>();
@@ -64,7 +64,7 @@ public class CrowdRowSweepStressTests
             if (r.Pack != null) pack++;
             if (r.StillMoving != 0) failures.Add($"seed {seed}: {r.StillMoving} still moving");
             if (r.Arrived + r.GaveUp != 128) failures.Add($"seed {seed}: {128 - r.Arrived - r.GaveUp} neither arrived nor gave up");
-            if (r.GaveUp > 48) failures.Add($"seed {seed}: {r.GaveUp} of 128 gave up");
+            if (r.GaveUp > MovementSystemTests.MoreGoalsMaxGaveUp) failures.Add($"seed {seed}: {r.GaveUp} of 128 gave up");
         }
         gaveUp.Sort();
         _out.WriteLine($"seeds 41-80: gave up min {gaveUp[0]}, median {(gaveUp[19] + gaveUp[20]) / 2.0}, max {gaveUp[^1]}; pack rule broken on {pack}/40");

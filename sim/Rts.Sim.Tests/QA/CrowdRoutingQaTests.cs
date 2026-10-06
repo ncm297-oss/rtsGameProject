@@ -231,7 +231,7 @@ public class CrowdRoutingQaTests
     [InlineData(3UL)]
     [InlineData(4UL)]
     [InlineData(5UL)]
-    [InlineData(6UL, Skip = "BUG-0046: walker positions depend on the neighbors' spawn order (Constrain clip order)")]
+    [InlineData(6UL, Skip = "BUG-0046: walker positions depend on the neighbors' spawn order (Constrain clip order; a slot-free order was measured at M1-9 and left for the Producer, docs/03 Known limits)")]
     public void DetourPastAMixedEnemyCluster_AnySpawnPermutation_BitEqualWalkerPath(ulong seed)
     {
         const int cluster = 12;
@@ -289,9 +289,9 @@ public class CrowdRoutingQaTests
     /// Walkers interact (sidestep, push, queue, detour round each other's standing units, arrival).
     /// </summary>
     [Theory]
-    [InlineData(11UL, Skip = "BUG-0046: walker positions depend on the neighbors' spawn order (Constrain clip order)")]
-    [InlineData(12UL, Skip = "BUG-0046: walker positions depend on the neighbors' spawn order (Constrain clip order)")]
-    [InlineData(13UL, Skip = "BUG-0046: walker positions depend on the neighbors' spawn order (Constrain clip order)")]
+    [InlineData(11UL, Skip = "BUG-0046: walker positions depend on the neighbors' spawn order (Constrain clip order; a slot-free order was measured at M1-9 and left for the Producer, docs/03 Known limits)")]
+    [InlineData(12UL, Skip = "BUG-0046: walker positions depend on the neighbors' spawn order (Constrain clip order; a slot-free order was measured at M1-9 and left for the Producer, docs/03 Known limits)")]
+    [InlineData(13UL, Skip = "BUG-0046: walker positions depend on the neighbors' spawn order (Constrain clip order; a slot-free order was measured at M1-9 and left for the Producer, docs/03 Known limits)")]
     public void ManyWalkersDetouringAnEnemyCluster_AnySpawnPermutation_BitEqualPositions(ulong seed)
     {
         const int walkers = 16, cluster = 10;
@@ -783,8 +783,8 @@ public class CrowdRoutingQaTests
     [Theory]
     [InlineData(4, 1UL)]
     [InlineData(4, 2UL)]
-    [InlineData(5, 3UL, Skip = "BUG-0045: a plug of more than MaxPlugSpan (4) enemy units is not recognized; units are shoved into it and walk through")]
-    [InlineData(5, 4UL, Skip = "BUG-0045: a plug of more than MaxPlugSpan (4) enemy units is not recognized; units are shoved into it and walk through")]
+    [InlineData(5, 3UL)]
+    [InlineData(5, 4UL)]
     public void WideCorridorPluggedByAWideEnemyPerRow_Width4And5_NobodyThrough(int width, ulong seed)
     {
         int wide = LocalMovementTests.TypeWithRadius(0.9f), small = LocalMovementTests.TypeWithRadius(0.4f);
@@ -809,9 +809,9 @@ public class CrowdRoutingQaTests
     /// a 3-cell one (more members than MaxPlugSpan). Nobody through; nobody pressed past the pack limit.
     /// </summary>
     [Theory]
-    [InlineData(2, 1UL, Skip = "BUG-0045: a plug of more than MaxPlugSpan (4) enemy units is not recognized; units are shoved into it and walk through")]
-    [InlineData(2, 2UL, Skip = "BUG-0045: a plug of more than MaxPlugSpan (4) enemy units is not recognized; units are shoved into it and walk through")]
-    [InlineData(3, 3UL, Skip = "BUG-0045: a plug of more than MaxPlugSpan (4) enemy units is not recognized; units are shoved into it and walk through")]
+    [InlineData(2, 1UL)]
+    [InlineData(2, 2UL)]
+    [InlineData(3, 3UL)]
     public void CorridorPluggedBySmallEnemies_MoreMembersThanMaxPlugSpan_NobodyThrough(int width, ulong seed)
     {
         int small = LocalMovementTests.TypeWithRadius(0.4f), wide = LocalMovementTests.TypeWithRadius(0.9f);
@@ -826,6 +826,100 @@ public class CrowdRoutingQaTests
         Report($"small plug, width {width} ({count} enemies), seed {seed}", res);
         Assert.True(res.Through == null, res.Through);
         Assert.True(res.WorstRatio >= MovementConstants.ShoveSpacing - 1e-3f, $"pressed onto a plug unit: {res.WorstRatio:F3} ({res.WorstAt})");
+    }
+
+    // ---------- M1-9 plug attacks (session 2026-10-06-0905): clusters, mixed radii, zigzags, deep plugs ----------
+
+    /// <summary>
+    /// Enemies of the given radii in one line across a corridor of <paramref name="width"/> cells at
+    /// x = 33 m, the leftover space split evenly into the gaps (wall, between members, wall).
+    /// </summary>
+    private static (int, Vector2)[] PlugLine(int width, float[] radii)
+    {
+        float span = 2f * width, used = 0f;
+        foreach (float r in radii) used += 2f * r;
+        float gap = (span - used) / (radii.Length + 1);
+        Assert.True(gap >= 0f && gap < 0.8f, $"precondition: gap {gap:F3} m must be under the smallest walker's diameter (0.8 m)");
+        var enemies = new (int, Vector2)[radii.Length];
+        float y = 6f + gap;
+        for (int k = 0; k < radii.Length; k++)
+        {
+            enemies[k] = (LocalMovementTests.TypeWithRadius(radii[k]), new Vector2(33f, y + radii[k]));
+            y += 2f * radii[k] + gap;
+        }
+        return enemies;
+    }
+
+    /// <summary>
+    /// M1-9 (BUG-0045, clusters): mixed-radius enemy lines of 5 and 6 members across 3- and 4-cell
+    /// corridors (gaps under every walker's diameter). Nobody through; nobody pressed past the pack limit.
+    /// </summary>
+    [Theory]
+    [InlineData(3, 1UL, new[] { 0.9f, 0.4f, 0.7f, 0.4f, 0.4f })]
+    [InlineData(3, 2UL, new[] { 0.4f, 0.7f, 0.9f, 0.4f, 0.4f })]
+    [InlineData(4, 3UL, new[] { 0.9f, 0.4f, 0.7f, 0.4f, 0.9f, 0.4f })]
+    [InlineData(4, 4UL, new[] { 0.4f, 0.9f, 0.4f, 0.9f, 0.4f, 0.7f })]
+    public void CorridorPluggedByMixedRadiusEnemies_NobodyThrough(int width, ulong seed, float[] radii)
+    {
+        int wide = LocalMovementTests.TypeWithRadius(0.9f);
+        var ahead = new (int, Vector2)[width];
+        for (int r = 0; r < width; r++) ahead[r] = (wide, new Vector2(29.3f, 7f + 2f * r));
+        PlugResult res = PlugAttack(WideCorridorWithRooms(width), seed, PlugLine(width, radii), ahead, 6 * width,
+            (g, k) => g.CellCenter(1 + k % 4, 1 + k / 4 % (5 + width)), g => g.CellCenter(29, 3), p => p.X - 33.95f);
+        Report($"mixed plug, width {width} ({string.Join("/", radii)}), seed {seed}", res);
+        Assert.True(res.Through == null, res.Through);
+        Assert.True(res.WorstRatio >= MovementConstants.ShoveSpacing - 1e-3f, $"pressed onto a plug unit: {res.WorstRatio:F3} ({res.WorstAt})");
+    }
+
+    /// <summary>
+    /// M1-9 (BUG-0045, clusters): 8 small enemies in two staggered columns across a 2-cell corridor
+    /// (no single line spans it; the cluster does). Nobody through; nobody pressed past the pack limit.
+    /// </summary>
+    [Theory]
+    [InlineData(1UL)]
+    [InlineData(2UL)]
+    [InlineData(3UL)]
+    public void CorridorPluggedByAZigzagOf8SmallEnemies_NobodyThrough(ulong seed)
+    {
+        int small = LocalMovementTests.TypeWithRadius(0.4f), wide = LocalMovementTests.TypeWithRadius(0.9f);
+        var enemies = new (int, Vector2)[8];
+        for (int k = 0; k < 4; k++)
+        {
+            enemies[2 * k] = (small, new Vector2(33f, 6.4f + 1.05f * k));
+            enemies[2 * k + 1] = (small, new Vector2(33.75f, Math.Min(6.9f + 1.05f * k, 9.6f)));
+        }
+        var ahead = new (int, Vector2)[] { (wide, new Vector2(29.3f, 7f)), (wide, new Vector2(29.3f, 9f)) };
+        PlugResult res = PlugAttack(WideCorridorWithRooms(2), seed, enemies, ahead, 12,
+            (g, k) => g.CellCenter(1 + k % 4, 1 + k / 4 % 7), g => g.CellCenter(29, 3), p => p.X - 34.15f);
+        Report($"zigzag plug, seed {seed}", res);
+        Assert.True(res.Through == null, res.Through);
+        Assert.True(res.WorstRatio >= MovementConstants.ShoveSpacing - 1e-3f, $"pressed onto a plug unit: {res.WorstRatio:F3} ({res.WorstAt})");
+    }
+
+    /// <summary>
+    /// M1-9 deep plug: 5 small enemies across a 2-cell corridor, <paramref name="deep"/> rows deep
+    /// (0.8 m apart, touching). At 6 rows (30 members) the cluster is a plug; at 8 rows (40) it is past
+    /// MaxPlugCluster (32), an "army's blob" to the plug test (docs/03 Known limits: units overlapping
+    /// one may slide round it). The corridor is still solid wall to wall: nobody may get through either way.
+    /// </summary>
+    [Theory]
+    [InlineData(6, 1UL)]
+    [InlineData(8, 1UL)]
+    [InlineData(8, 2UL)]
+    [InlineData(10, 3UL)]
+    public void CorridorFilledByADeepEnemyBlock_NobodyThrough(int deep, ulong seed)
+    {
+        int small = LocalMovementTests.TypeWithRadius(0.4f), wide = LocalMovementTests.TypeWithRadius(0.9f);
+        var enemies = new (int, Vector2)[5 * deep];
+        for (int d = 0; d < deep; d++)
+            for (int k = 0; k < 5; k++)
+                enemies[d * 5 + k] = (small, new Vector2(33f + 0.8f * d, 6.4f + 0.8f * k));
+        float far = 33f + 0.8f * (deep - 1) + 0.4f;
+        var ahead = new (int, Vector2)[] { (wide, new Vector2(29.3f, 7f)), (wide, new Vector2(29.3f, 9f)) };
+        PlugResult res = PlugAttack(WideCorridorWithRooms(2), seed, enemies, ahead, 16,
+            (g, k) => g.CellCenter(1 + k % 4, 1 + k / 4 % 7), g => g.CellCenter(29, 3), p => p.X - far);
+        Report($"deep block {deep} rows ({5 * deep} enemies), seed {seed}", res);
+        Assert.True(res.Through == null, res.Through);
     }
 
     /// <summary>A 40 x 40 map: a diagonal (staircase) band |x - y| &lt;= 1; outside it cliffs and sealed 1-cell pockets.</summary>

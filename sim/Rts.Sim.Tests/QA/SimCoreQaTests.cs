@@ -305,7 +305,8 @@ public class SimCoreQaTests
     public void UnknownCommandKind_IsIgnoredWithoutCrash()
     {
         var sim = new Simulation(TestSim.Config(1, PlayerCount: 1, UnitCapacity: 8, CommandCapacity: 8));
-        sim.Enqueue(new Command { Kind = (CommandKind)999, Player = 0 });
+        // Since BUG-0054 Enqueue refuses an undefined kind (ArgumentException) instead of queuing it.
+        Assert.Throws<ArgumentException>(() => sim.Enqueue(new Command { Kind = (CommandKind)999, Player = 0 }));
         sim.Tick();
         sim.Tick();
         Assert.Equal(0, sim.PendingCommandCount);

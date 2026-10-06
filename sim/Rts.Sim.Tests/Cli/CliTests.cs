@@ -14,21 +14,45 @@ using Rts.Sim.ViewApi;
 namespace Rts.Sim.Tests.Cli;
 
 /// <summary>The headless CLI (M1-8, tools/Rts.Cli), called in-process through <see cref="CliRunner.Run"/>.</summary>
-public class CliTests
+/// <remarks>Every temp file a test writes is deleted when it ends (BUG-0057); the shared recording is kept in memory.</remarks>
+public sealed class CliTests : IDisposable
 {
     private static readonly Regex HashLine = new(@"^tick (\d+) hash ([0-9A-F]{16})$");
     private static readonly Regex TimingLine = new(@"^ticks (\d+) avg \d+\.\d{3} ms p99 \d+\.\d{3} ms worst \d+\.\d{3} ms$");
 
     private static readonly string[] AcceptanceArgs = { "run", "--seed", "1", "--units", "200", "--ticks", "1500" };
 
-    /// <summary>One recorded acceptance run shared by the replay tests (each test copies or edits its own file).</summary>
-    private static readonly Lazy<(string Path, string[] HashLines)> s_recorded = new(() =>
+    /// <summary>One recorded acceptance run shared by the replay tests: the file's bytes (each test writes its own copy) and the hash lines printed.</summary>
+    private static readonly Lazy<(byte[] Bytes, string[] HashLines)> s_recorded = new(() =>
+    {
+        string path = NewTempPath();
+        try
+        {
+            CliResult r = Cli(With(AcceptanceArgs, "--record", path, "--data", TestDataDir.Shipped));
+            Assert.Equal(0, r.Exit);
+            return (File.ReadAllBytes(path), HashLines(r.Out));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    });
+
+    private readonly List<string> _tempFiles = new();
+
+    /// <summary>Deletes the temp files this test wrote.</summary>
+    public void Dispose()
+    {
+        foreach (string path in _tempFiles) File.Delete(path);
+    }
+
+    /// <summary>A copy of the shared recording in a temp file of this test.</summary>
+    private string RecordedCopy()
     {
         string path = TempPath();
-        CliResult r = Cli(With(AcceptanceArgs, "--record", path, "--data", TestDataDir.Shipped));
-        Assert.Equal(0, r.Exit);
-        return (path, HashLines(r.Out));
-    });
+        File.WriteAllBytes(path, s_recorded.Value.Bytes);
+        return path;
+    }
 
     [Fact]
     public void Run_PrintsTheSameHashesAsADirectSim()
@@ -84,7 +108,8 @@ public class CliTests
     [Fact]
     public void RecordThenPlay_MatchesEveryCheckpoint()
     {
-        (string path, string[] recordedHashes) = s_recorded.Value;
+        string[] recordedHashes = s_recorded.Value.HashLines;
+        string path = RecordedCopy();
         Assert.Equal(15, recordedHashes.Length);
         CliResult r = Cli("play", path, "--data", TestDataDir.Shipped);
         Assert.Equal(0, r.Exit);
@@ -96,7 +121,7 @@ public class CliTests
     [Fact]
     public void Play_EditedCheckpointHash_Exits2NamingCheckpointMismatchAndTick()
     {
-        string text = File.ReadAllText(s_recorded.Value.Path);
+        string text = Encoding.ASCII.GetString(s_recorded.Value.Bytes);
         Match k = Regex.Match(text, @"^k 700 ([0-9A-F]{16})$", RegexOptions.Multiline);
         Assert.True(k.Success);
         string original = k.Groups[1].Value;
@@ -117,7 +142,7 @@ public class CliTests
     [Fact]
     public void Play_TruncatedFile_Exits2()
     {
-        byte[] bytes = File.ReadAllBytes(s_recorded.Value.Path);
+        byte[] bytes = s_recorded.Value.Bytes;
         string path = TempPath();
         File.WriteAllBytes(path, bytes[..(bytes.Length / 2)]);
         CliResult r = Cli("play", path, "--data", TestDataDir.Shipped);
@@ -136,7 +161,7 @@ public class CliTests
     [Fact]
     public void Play_MissingDataDir_Exits1()
     {
-        CliResult r = Cli("play", s_recorded.Value.Path, "--data", Path.Combine(Path.GetTempPath(), "rts-cli-tests", "no-such-data"));
+        CliResult r = Cli("play", RecordedCopy(), "--data", Path.Combine(Path.GetTempPath(), "rts-cli-tests", "no-such-data"));
         Assert.Equal(1, r.Exit);
         Assert.Contains("did not load", OneLine(r.Err));
     }
@@ -146,8 +171,38 @@ public class CliTests
     {
         CliResult r = Cli("run", "--seed", "1", "--units", "5", "--data", Path.Combine(Path.GetTempPath(), "rts-cli-tests", "no-such-data"));
         Assert.Equal(1, r.Exit);
-        Assert.Contains("did not load", OneLine(r.Err));
+        string err = OneLine(r.Err);
+        Assert.Contains("did not load", err);
         Assert.Equal("", r.Out);
+        // BUG-0057: no empty fields (": : ") and no "1 errors".
+        Assert.Contains("(1 error)", err);
+        Assert.DoesNotContain(": :", err);
+    }
+
+    /// <summary>BUG-0057: an unwritable --record path (missing folder, or a folder) fails at once, before a single tick runs.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Run_UnwritableRecordPath_FailsBeforeTicking(bool missingFolder)
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "rts-cli-tests");
+        Directory.CreateDirectory(dir);
+        string path = missingFolder ? Path.Combine(dir, "no-such-folder", "x" + ReplayFormat.FileExtension) : dir;
+        CliResult r = Cli("run", "--seed", "1", "--units", "5", "--ticks", "200", "--record", path, "--data", TestDataDir.Shipped);
+        Assert.Equal(1, r.Exit);
+        Assert.StartsWith($"error: cannot write replay '{path}'", OneLine(r.Err));
+        Assert.Equal("", r.Out); // nothing ran: no header, no checkpoint, no timing line
+    }
+
+    /// <summary>BUG-0057: a replay shorter than one checkpoint interval plays back "ok", but says nothing was compared.</summary>
+    [Fact]
+    public void Play_ReplayWithNoCheckpoints_SaysNothingWasCompared()
+    {
+        string path = TempPath();
+        Assert.Equal(0, Cli("run", "--seed", "1", "--units", "5", "--ticks", "50", "--record", path, "--data", TestDataDir.Shipped).Exit);
+        CliResult r = Cli("play", path, "--data", TestDataDir.Shipped);
+        Assert.Equal(0, r.Exit);
+        Assert.Equal("ok: 0 checkpoints (nothing compared) over 50 ticks", Lines(r.Out).Last());
     }
 
     [Theory]
@@ -229,7 +284,15 @@ public class CliTests
         return lines[0];
     }
 
-    private static string TempPath()
+    /// <summary>A fresh temp file path, deleted when this test ends.</summary>
+    private string TempPath()
+    {
+        string path = NewTempPath();
+        _tempFiles.Add(path);
+        return path;
+    }
+
+    private static string NewTempPath()
     {
         string dir = Path.Combine(Path.GetTempPath(), "rts-cli-tests");
         Directory.CreateDirectory(dir);

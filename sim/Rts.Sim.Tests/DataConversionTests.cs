@@ -7,6 +7,15 @@ namespace Rts.Sim.Tests;
 /// <summary>Load-time conversions: seconds to ticks, pop to half-pop, and deterministic string-to-int ids.</summary>
 public class DataConversionTests
 {
+    /// <summary>BUG-0057: a DataError prints "file: path: message" and leaves out an empty file or path with its separator (no ": : ").</summary>
+    [Theory]
+    [InlineData("units.json", "units[2].radius", "too big", "units.json: units[2].radius: too big")]
+    [InlineData("units.json", "", "not JSON", "units.json: not JSON")]
+    [InlineData("", "units[0]", "odd", "units[0]: odd")]
+    [InlineData("", "", "data directory '' does not exist", "data directory '' does not exist")]
+    public void DataError_ToString_LeavesOutEmptyFields(string file, string path, string message, string expected) =>
+        Assert.Equal(expected, new DataError(file, path, message).ToString());
+
     [Theory]
     [InlineData(2.2, 44)]
     [InlineData(0.45, 9)]

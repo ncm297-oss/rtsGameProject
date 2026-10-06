@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (was S2; downgraded at re-check round 1) |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-05-1609, task M1-4d-3 |
 | System | movement (per-tick cost: chain-shove queries, detour, widened queuing) |
-| Fixed by | |
+| Fixed by | 6d1cbfd (M1-9); see the M1-9 re-check below |
 
 ## Repro
 Perf probe (QA scratch, same code on both builds): `MoveScenario.Spawn(seed 99, 2,500 units, maxCost 12,
@@ -70,3 +70,14 @@ both players next to each other) the round-2 `IsPlug` search (a breadth-first se
 query per member, for every overlapped Idle enemy, in every `Constrain` call) adds +57% / +46% over
 round 1: 2.3x / 1.9x base. Still report rows (500 units stay far under the 4 ms design budget), so S3;
 the Producer may want a two-player row in the perf targets.
+
+## Re-check M1-9 (2026-10-06-0905, commit 6d1cbfd): fixed
+Plug answers cached per unit / walker owner / radius class (`World.PlugAnswers`, epoch-stamped, preallocated)
+and `Constrain` skips non-walls inline. `CrowdPerfTests` (Perf, run alone, Debug), the same tests on base
+1f533aa and on 6d1cbfd: one-player 2,500 tight blob 4.52 -> 4.33 ms (enforced <= 4.5; fails on base);
+two-player contested blob 10.61 -> 6.90 ms (guard < 10.5; fails on base); 2,500 to 4 points 3.76 -> 3.11
+ms (guard < 3.7; fails on base); 500 moving 0.63 ms. The cache was checked against a fresh search for
+every query in 3 shuffled orders on 5 random worlds (`QA/HardeningQaTests.PlugCache_AnyQueryOrder_EqualsAFreshSearch`:
+0 mismatches); one stale-hash corner in the shove pass is BUG-0071. Left as report rows: the two-player
+blob is still about 1.5x the one-player blob (docs/03 Known limits), and the tight-blob row has under 4%
+headroom on this machine (a slower day may trip it: re-run alone first).

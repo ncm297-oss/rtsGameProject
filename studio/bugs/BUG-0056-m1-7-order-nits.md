@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-05-2330, task M1-7 |
 | System | commands / orders / tests |
-| Fixed by | |
+| Fixed by | 6d1cbfd (M1-9); see the M1-9 re-check below |
 
 Three small findings, grouped.
 
@@ -31,3 +31,8 @@ queued after it.
 
 ## Producer triage (2026-10-05-2330)
 S4 stands; M1 end-of-milestone hardening. Item 1: refuse `Flags != 0` on non-unit-order kinds (with BUG-0054). Item 2: add the walkers-stay-behind check to the dev corridor test once BUG-0055 is fixed. Item 3: by design; the M2-3 brief tells the view not to show Hold as a stance once an order is queued after it.
+
+## Re-check M1-9 (2026-10-06-0905, commit 6d1cbfd): fixed
+Item 1: `QueuedFlag` on `Noop` / `SpawnUnit` is refused by `Enqueue` and `Replay.Validate` (new
+`SimulationTests` and `ReplayFormatTests` rows fail on base). Item 2: `OrderTests.HoldingUnit_InACorridor_IsNeverPushed_ButAStoppedOneIs`
+now asserts walkers stay behind the holder (fails on base). Item 3: by design (Producer triage).

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-05-1609, task M1-4d-3 |
 | System | tests (movement, replay) |
-| Fixed by | |
+| Fixed by | 6d1cbfd (M1-9); see the M1-9 re-check below |
 
 ## Repro / Actual (four small items)
 1. **The 2,500 tight blob target is not guarded.** `Stress/LocalMovementStressTests+Serial.Perf_TightBlob_AvgAndWorstTick(2500, enforce: false)`
@@ -42,3 +42,7 @@ None of these is a wrong game rule today; all four make a future regression easi
   standing Moving enemy, so it is still a little looser than the rule there.
 - Item 4 done: `ReplayRecorder.ToReplay` throws past `Replay.MaxTickCount` (new `ReplayFormatTests` case).
 - Item 1 open: the 2,500 tight blob row still has `enforce: false`.
+
+## Re-check M1-9 (2026-10-06-0905, commit 6d1cbfd): fixed (item 1 was the last open item)
+`CrowdPerfTests.TightBlob2500_OnePlayer_AverageTickAtMost4_5Ms` enforces the 4.5 ms target (Perf,
+run alone): 4.52 ms on base 1f533aa (fails), 4.33 ms on 6d1cbfd.
