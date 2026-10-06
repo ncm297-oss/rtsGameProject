@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using Godot;
 using Rts.Sim;
+using Rts.Sim.Commands;
 using Rts.Sim.Entities;
 using Rts.Sim.Map;
 using Rts.Sim.ViewApi;
@@ -14,7 +15,7 @@ namespace Rts.Game;
 /// filtering) and the pixel/meter mapping from <see cref="MinimapTransform"/>. Mouse filter is
 /// Stop, so clicks inside the control never reach <see cref="SelectionController"/>; events outside
 /// its rect are never seen here. Holds no gameplay state; orders go through
-/// <see cref="SelectionController.OrderMoveTo"/>.
+/// <see cref="SelectionController.Order"/> (a Move, queued while <c>order_queue</c> is held).
 /// </remarks>
 public partial class Minimap : Control
 {
@@ -130,7 +131,7 @@ public partial class Minimap : Control
             }
             else if (mb.IsActionReleased("select")) _jumping = false;
             else if (mb.IsActionPressed("command") && Fit.TryToMap(new(mb.Position.X, mb.Position.Y), out System.Numerics.Vector2 p))
-                _selection.OrderMoveTo(new Vector2(p.X, p.Y));
+                _selection.Order(CommandKind.Move, new Vector2(p.X, p.Y), Input.IsActionPressed("order_queue"));
             AcceptEvent();
         }
         else if (e is InputEventMouseMotion motion && _jumping)

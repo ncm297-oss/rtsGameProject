@@ -7,19 +7,23 @@ using Rts.Sim.ViewApi;
 
 namespace Rts.Game;
 
-/// <summary>Mouse selection and right-click move orders for the local player (docs/02 "Controls and camera").</summary>
+/// <summary>Selection, control groups, subgroups and unit orders for the local player (docs/02 "Controls and camera").</summary>
 /// <remarks>
 /// Left click selects the nearest own unit under the cursor, a 4 px drag box-selects own units by
-/// their projected centres; Shift (<c>select_add</c>) toggles a clicked unit or adds a box. A plain
-/// click on no own unit clears the selection. Right click (<c>command</c>) picks the ground and
-/// calls <see cref="OrderMoveTo"/> with that point (the minimap calls it too). The geometry lives in the pure
-/// <see cref="ScreenPicker"/> and <see cref="GroundPicker"/>; the sim is changed only through
-/// <see cref="Simulation.Enqueue"/>.
+/// their projected centres; Shift (<c>select_add</c>) toggles a clicked unit or adds a box. A
+/// double-click or Ctrl + click (<c>select_type</c>) selects every own on-screen unit of the
+/// clicked type. Right click, A + click, S and H all go through <see cref="Order"/>, as does the
+/// minimap. The geometry lives in the pure <see cref="ScreenPicker"/> and <see cref="GroundPicker"/>,
+/// groups and subgroups in <see cref="ControlGroups"/> and <see cref="Rts.Sim.ViewApi.Subgroups"/>;
+/// the sim is changed only through <see cref="Simulation.Enqueue"/>.
 /// </remarks>
 public partial class SelectionController : Node
 {
     /// <summary>The human player's index until the match setup screen exists.</summary>
     public const int LocalPlayer = 0;
+
+    private static readonly StringName[] GroupActions =
+        { "group_1", "group_2", "group_3", "group_4", "group_5", "group_6", "group_7", "group_8", "group_9" };
 
     private SimRunner _runner = null!;
     private RtsCamera _camera = null!;
@@ -27,7 +31,8 @@ public partial class SelectionController : Node
     private ColorRect _box = null!;
 
     private Vector2 _press;
-    private bool _pressing, _boxing;
+    private bool _pressing, _boxing, _doubleClick;
+    private readonly int[] _issued = new int[(int)CommandKind.AttackMove + 1];
 
     // Per-slot projection scratch, filled on each click or box release.
     private System.Numerics.Vector2[] _screen = Array.Empty<System.Numerics.Vector2>();
@@ -38,8 +43,20 @@ public partial class SelectionController : Node
     /// <summary>The selected units.</summary>
     public SelectionSet Selection { get; private set; } = new(1);
 
-    /// <summary>Move commands dropped because the command queue was too full to take a whole order (logged).</summary>
+    /// <summary>Control groups 1-9 (index 0-8).</summary>
+    public ControlGroups Groups { get; private set; } = new(1);
+
+    /// <summary>The selection's unit types and the active one (Tab).</summary>
+    public Subgroups Subgroups { get; private set; } = new(1);
+
+    /// <summary>True after A: the next left click on the map attack-moves the selection there.</summary>
+    public bool Targeting { get; private set; }
+
+    /// <summary>Orders dropped because the command queue was too full to take a whole order (logged).</summary>
     public int DroppedOrders { get; private set; }
+
+    /// <summary>Commands of <paramref name="kind"/> enqueued by <see cref="Order"/> so far (one per unit).</summary>
+    public int IssuedCount(CommandKind kind) => (uint)kind < (uint)_issued.Length ? _issued[(int)kind] : 0;
 
     public override void _Ready()
     {
@@ -53,8 +70,11 @@ public partial class SelectionController : Node
         _runner = runner;
         _camera = camera;
         _rings = rings;
-        int capacity = runner.Simulation!.World.Units.Capacity;
+        World world = runner.Simulation!.World;
+        int capacity = world.Units.Capacity;
         Selection = new SelectionSet(capacity);
+        Groups = new ControlGroups(capacity);
+        Subgroups = new Subgroups(Math.Max(1, world.Data.Units.Length));
         _screen = new System.Numerics.Vector2[capacity];
         _radiusPx = new float[capacity];
         _candidate = new bool[capacity];
@@ -66,7 +86,11 @@ public partial class SelectionController : Node
     {
         if (_runner?.Simulation is not Simulation sim) return;
         World world = sim.World;
-        Selection.Prune(world.Units.Alive, world.Units.Generation);
+        UnitStore u = world.Units;
+        Selection.Prune(u.Alive, u.Generation);
+        Groups.Prune(u.Alive, u.Generation);
+        // A death keeps the active subgroup while its type is still selected.
+        Subgroups.Update(Selection.Items, u.TypeId, reset: false);
         _rings.Sync(world, (float)_runner.Alpha, Selection.Items);
     }
 
@@ -77,8 +101,15 @@ public partial class SelectionController : Node
         {
             if (mb.IsActionPressed("select"))
             {
+                // While targeting, a left click is the order's point and never selects; off the map it does nothing.
+                if (Targeting)
+                {
+                    if (IssueAt(CommandKind.AttackMove, mb.Position)) Targeting = false;
+                    return;
+                }
                 _pressing = true;
                 _boxing = false;
+                _doubleClick = mb.DoubleClick;
                 _press = mb.Position;
             }
             else if (mb.IsActionReleased("select") && _pressing)
@@ -89,7 +120,8 @@ public partial class SelectionController : Node
             }
             else if (mb.IsActionPressed("command"))
             {
-                IssueMove(mb.Position);
+                if (Targeting) Targeting = false; // right click cancels targeting and orders nothing
+                else IssueAt(CommandKind.Move, mb.Position);
             }
         }
         else if (e is InputEventMouseMotion motion && _pressing)
@@ -101,6 +133,48 @@ public partial class SelectionController : Node
                 _box.Size = (motion.Position - _press).Abs();
                 _box.Visible = true;
             }
+        }
+        else if (e is InputEventKey) HandleKey(e);
+    }
+
+    private void HandleKey(InputEvent e)
+    {
+        bool queued = Input.IsActionPressed("order_queue");
+        if (e.IsActionPressed("order_cancel")) Targeting = false;
+        else if (e.IsActionPressed("order_attack_move")) Targeting = Selection.Count > 0;
+        else if (e.IsActionPressed("order_stop") || e.IsActionPressed("order_hold"))
+        {
+            Targeting = false;
+            Order(e.IsActionPressed("order_stop") ? CommandKind.Stop : CommandKind.HoldPosition, null, queued);
+        }
+        else if (e.IsActionPressed("subgroup_next")) Subgroups.Next();
+        else
+        {
+            for (int g = 0; g < GroupActions.Length; g++)
+            {
+                if (!e.IsActionPressed(GroupActions[g])) continue;
+                GroupKey(g);
+                return;
+            }
+        }
+    }
+
+    // Ctrl + digit assigns, Shift + digit adds (Ctrl wins when both are held), a plain digit recalls;
+    // a second quick recall of the same group centres the camera on it.
+    private void GroupKey(int g)
+    {
+        UnitStore u = _runner.Simulation!.World.Units;
+        Selection.Prune(u.Alive, u.Generation);
+        if (Input.IsActionPressed("group_assign"))
+        {
+            if (Selection.Count > 0) Groups.Assign(g, Selection.Items); // an empty selection never wipes a group
+        }
+        else if (Input.IsActionPressed("group_add")) Groups.Add(g, Selection.Items);
+        else if (Groups.Recall(g, Selection, u.Alive, u.Generation) > 0)
+        {
+            SelectionChanged();
+            if (Groups.Tap(g, Time.GetTicksMsec() / 1000.0) && Groups.TryMean(g, u.Position, u.Alive, u.Generation, out System.Numerics.Vector2 mean))
+                _camera.SetFocus(mean.X, mean.Y);
         }
     }
 
@@ -131,17 +205,39 @@ public partial class SelectionController : Node
             {
                 // Shift + click on empty ground keeps the selection, as in most RTS games.
                 if (!add) Selection.Clear();
-                return;
             }
-            var h = new EntityHandle(slot, u.Generation[slot]);
-            if (add) Selection.Toggle(h);
+            else if (_doubleClick || Input.IsActionPressed("select_type")) SelectType(u.TypeId[slot], add);
+            else if (add) Selection.Toggle(new EntityHandle(slot, u.Generation[slot]));
             else
             {
                 Selection.Clear();
-                Selection.Add(h);
+                Selection.Add(new EntityHandle(slot, u.Generation[slot]));
             }
         }
         _boxing = false;
+        SelectionChanged();
+    }
+
+    // Every own on-screen unit of the type (Project() has run): a box over the whole viewport, filtered by type.
+    private void SelectType(int type, bool add)
+    {
+        UnitStore u = _runner.Simulation!.World.Units;
+        Vector2 view = _camera.GetViewport().GetVisibleRect().Size;
+        int n = ScreenPicker.PickBox(_screen, _candidate, System.Numerics.Vector2.Zero, ToNumerics(view), _picked);
+        if (!add) Selection.Clear();
+        for (int i = 0; i < n; i++)
+        {
+            int s = _picked[i];
+            if (u.TypeId[s] == type) Selection.Add(new EntityHandle(s, u.Generation[s]));
+        }
+    }
+
+    // A selection the player made: the first subgroup becomes active.
+    private void SelectionChanged()
+    {
+        UnitStore u = _runner.Simulation!.World.Units;
+        Selection.Prune(u.Alive, u.Generation);
+        Subgroups.Update(Selection.Items, u.TypeId, reset: true);
     }
 
     // Fills the per-slot screen centre, pixel radius and candidate flag (live, own, in front of the camera).
@@ -168,32 +264,52 @@ public partial class SelectionController : Node
         }
     }
 
-    private void IssueMove(Vector2 screen)
+    // Picks the ground under a screen point and orders the selection there (queued while order_queue is held); false if the ray missed the map.
+    private bool IssueAt(CommandKind kind, Vector2 screen)
     {
-        if (Selection.Count == 0) return;
         Simulation sim = _runner.Simulation!;
         Vector3 origin = _camera.ProjectRayOrigin(screen), dir = _camera.ProjectRayNormal(screen);
         if (!GroundPicker.TryPick(sim.World.Heightmap, new(origin.X, origin.Y, origin.Z), new(dir.X, dir.Y, dir.Z), out System.Numerics.Vector3 hit))
-            return; // off the map: no order
-        OrderMoveTo(new Vector2(hit.X, hit.Z));
+            return false;
+        Order(kind, new Vector2(hit.X, hit.Z), Input.IsActionPressed("order_queue"));
+        return true;
     }
 
-    /// <summary>Enqueues one <see cref="Command.Move"/> per selected live unit to a ground point (sim x, y in meters); the right-click and minimap order path.</summary>
-    public void OrderMoveTo(Vector2 point)
+    /// <summary>The one order path: enqueues one <paramref name="kind"/> command per selected live unit, or none if the whole order doesn't fit the command queue.</summary>
+    /// <param name="kind">Move, AttackMove, Stop or HoldPosition.</param>
+    /// <param name="point">Ground point (sim x, y in meters); required and finite for Move and AttackMove, ignored otherwise.</param>
+    /// <param name="queued">Append to each unit's order queue (Shift) instead of replacing it.</param>
+    public void Order(CommandKind kind, Vector2? point, bool queued)
     {
-        if (_runner?.Simulation is not Simulation sim || !float.IsFinite(point.X) || !float.IsFinite(point.Y)) return;
+        if (_runner?.Simulation is not Simulation sim) return;
+        if (kind is not (CommandKind.Move or CommandKind.AttackMove or CommandKind.Stop or CommandKind.HoldPosition))
+            throw new ArgumentOutOfRangeException(nameof(kind), kind, "not a unit order");
+        var target = System.Numerics.Vector2.Zero;
+        if (kind is CommandKind.Move or CommandKind.AttackMove)
+        {
+            if (point is not Vector2 p || !float.IsFinite(p.X) || !float.IsFinite(p.Y)) return;
+            target = new System.Numerics.Vector2(p.X, p.Y);
+        }
         Selection.Prune(sim.World.Units.Alive, sim.World.Units.Generation);
         if (Selection.Count == 0) return;
         // The queue throws when full; never send half an order.
         if (sim.PendingCommandCount + Selection.Count > sim.World.Config.CommandCapacity)
         {
             DroppedOrders++;
-            GD.PushWarning($"Move order for {Selection.Count} units dropped: command queue full.");
+            GD.PushWarning($"{kind} order for {Selection.Count} units dropped: command queue full.");
             return;
         }
-        var target = new System.Numerics.Vector2(point.X, point.Y);
         foreach (EntityHandle h in Selection.Items)
-            sim.Enqueue(Command.Move(LocalPlayer, h, target));
+        {
+            sim.Enqueue(kind switch
+            {
+                CommandKind.Move => Command.Move(LocalPlayer, h, target, queued),
+                CommandKind.AttackMove => Command.AttackMove(LocalPlayer, h, target, queued),
+                CommandKind.Stop => Command.Stop(LocalPlayer, h, queued),
+                _ => Command.HoldPosition(LocalPlayer, h, queued),
+            });
+        }
+        _issued[(int)kind] += Selection.Count;
     }
 
     // The middle of the placeholder capsule: what the player sees and clicks.

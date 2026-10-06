@@ -1124,6 +1124,84 @@ Match
   ("SELECTION TEST PASS"), run with `& $env:GODOT --headless --path game res://tests/<name>.tscn`.
   Headless windows are 64 x 64 px, so `SelectionTest` sets the root window to 1152 x 648 first.
 
+### Implementation (M2-3)
+
+Order keys, Shift-queue, type select, control groups and Tab subgroups. No new nodes; everything
+is in `SelectionController`, two pure ViewApi helpers, and the input map.
+
+- **Input actions** (`game/project.godot`, all physical keys, each rebindable alone):
+  `order_attack_move` A, `order_stop` S, `order_hold` H, `order_cancel` Esc, `order_queue` Shift,
+  `select_type` Ctrl, `group_assign` Ctrl, `group_add` Shift, `group_1`..`group_9` digits 1-9,
+  `subgroup_next` Tab. `order_queue` and `group_add` share Shift with `select_add`, and
+  `group_assign` shares Ctrl with `select_type`: one action per purpose, so rebinding one never
+  moves another. Key actions carry no modifiers, so Ctrl + 1 still matches `group_1`; the
+  controller reads the held modifier actions with `Input.IsActionPressed`. Echo (key repeat)
+  presses are ignored. The controller never marks events handled, so the camera still sees them.
+- **One order path:** `SelectionController.Order(CommandKind kind, Vector2? point, bool queued)`.
+  Kinds: `Move`, `AttackMove` (need a finite point, else nothing), `Stop`, `HoldPosition` (point
+  ignored); anything else throws. It prunes the selection, does nothing if it is empty, and drops
+  the whole order with one warning (`DroppedOrders` + 1) if `PendingCommandCount + selected`
+  exceeds `CommandCapacity`, for every kind. Otherwise one command per selected unit, with
+  `Command.QueuedFlag` when `queued`. `IssuedCount(kind)` counts the commands enqueued per kind
+  (dev and test readout). Callers: 3D right-click (Move), A + click (AttackMove), S / H keys,
+  and the minimap's right-click (Move). Each passes `queued = Input.IsActionPressed("order_queue")`
+  at the moment of the click or key.
+- **A (attack-move targeting):** A with a non-empty selection sets `Targeting` (A again keeps
+  it; with nothing selected A does nothing). While targeting, a left press is never a selection:
+  if the camera ray hits the map it orders `AttackMove` to the picked point and ends targeting; off
+  the map it does nothing and targeting stays. The matching release is ignored. Esc
+  (`order_cancel`), a right-click (which then orders nothing), S and H end targeting. A
+  minimap click does not (minimap attack-move is not built). The debug label shows a trailing
+  `A` while targeting; no cursor art yet.
+- **S / H:** `Order(Stop | HoldPosition, null, queued)` for the whole selection. Shift + S queues a
+  Stop behind the current orders (docs/03 "Orders and unit states": a moving unit keeps moving
+  and stops on arrival). There is no "holding" indicator: Hold ends when a queued order starts
+  (BUG-0056), so it would lie.
+- **Type select:** on the release of a click (not a drag) that picks an own unit, if the press was
+  a double-click (`InputEventMouseButton.DoubleClick`) or `select_type` (Ctrl) is held, the
+  selection becomes every own, live unit of that unit's type whose projected centre lies in the
+  viewport (inclusive edges, in front of the camera: the box picker over the whole screen,
+  filtered by type). With `select_add` (Shift) it adds instead. Enemies are never candidates.
+  A double-click or Ctrl + click on empty ground or an enemy is an ordinary click (clears, or keeps
+  with Shift); Ctrl during a drag is an ordinary box.
+- **Control groups:** the pure `ViewApi.ControlGroups` holds nine `SelectionSet`s (keys 1-9 are
+  groups 0-8; fixed capacity, no sim reference) and is pruned every frame with the selection. Ctrl +
+  digit replaces the group with the selection (an empty selection leaves the group alone); Shift +
+  digit adds the selection; Ctrl wins if both are held. A plain digit prunes the group and
+  replaces the selection with its live units (an empty group changes nothing), so a dead or
+  recycled slot (even one respawned for the enemy) is never recalled. A second plain press of the
+  same digit within `ControlGroups.DoubleTapSeconds` (0.3 s of wall clock, `Time.GetTicksMsec`;
+  a recall of another group in between breaks the pair) centres the camera on the group's mean
+  position (`TryMean`, current tick positions); the double-tap is consumed, so a third press
+  starts a new pair.
+- **Tab subgroups:** the pure `ViewApi.Subgroups` lists the selection's distinct unit types in
+  ascending type id (one pass over the selection and one over the type ids; no sort, no
+  allocation after construction) and keeps an active index. Tab advances and wraps; with an
+  empty selection it does nothing. Every selection the player makes (click, box, type select,
+  group recall) resets it to the first type. Each frame the list is refreshed from the pruned
+  selection without a reset: the active type stays active while any unit of it is selected, else
+  the first. The debug label shows `sub <typeId> <n>/<m>` (index + 1 of the count). Nothing else
+  reads it until the command card (M3).
+- **Tests:** `ViewApi/ControlGroupsTests` (assign / add / recall, recycled slots, prune of all
+  nine, full-capacity groups, index range, double-tap boundary and consumption, mean),
+  `ViewApi/SubgroupsTests` (ascending distinct types, wrap, empty, reset, refresh keeps or falls
+  back, out-of-range types), a `ViewApiAllocationTests` row (groups and subgroups over 2,000
+  units, 0 bytes), QA's `ViewHashTwinQaTests` (all four kinds, queued or not, and group recalls
+  between orders: the view-driven sim equals a bare twin every tick), and the headless scene
+  `res://tests/OrdersTest.tscn` ("ORDERS TEST PASS"). It disables `SimRunner` and calls `Tick()`
+  itself, so tick counts are exact (a command enqueued before tick N applies on tick N + 1, the
+  second `Tick()` call). It injects key and mouse events into the real Match scene: double-click,
+  Shift + double-click and Ctrl + click type select against the on-screen set; Ctrl + 1, Shift +
+  2, recall after a freed slot respawns as an enemy, the double-tap focus; Tab over three types,
+  the label, reset and the empty case; S on 10 walkers (all Idle with `GoalCell` -1 two ticks
+  later); H (every unit holding, then 10 other units walk through them: holders move 0 m); Shift +
+  right-click three points (each unit's goal goes p1, p2, p3 and it comes within 5 m of each in
+  turn); A + click (an `AttackMove` per unit, the selection kept, the units arrive within 5 m);
+  Esc, right-click, A twice and an off-map click while targeting; Shift + S; and S, H, Shift + S,
+  Shift + right-click with 1,000 selected against 3,097 pending commands (all four dropped whole).
+  From the queue check on, the scene keeps only five spread-out units on the field, because
+  walkers that meet idle, holding or packed friends give up (BUG-0028, sim side).
+
 ### Implementation (M2-4)
 
 The minimap, the first HUD element. New nodes in `Match.tscn`:
@@ -1166,7 +1244,8 @@ Match
   `SelectionController`; events outside its rect are never seen by it. Left press (`select`)
   jumps the camera focus to the clicked map point (`RtsCamera.SetFocus`, clamped as usual) and
   keeps following the cursor while the button is held; a drag past the map area just stops
-  moving. Right press (`command`) calls `SelectionController.OrderMoveTo(point)`, the same path a
+  moving. Right press (`command`) calls `SelectionController.Order(Move, point, queued)` (queued while
+  `order_queue` is held; M2-3), the same path a
   3D right-click takes after its ground pick: prune, nothing if the selection is empty or the
   point non-finite, the whole order dropped with a warning if it would overflow the command
   queue, else one `Command.Move` per selected unit. Pixels in the letterbox do nothing. The wheel

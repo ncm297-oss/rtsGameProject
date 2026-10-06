@@ -51,6 +51,42 @@ public class ViewApiAllocationTests
     }
 
     [Fact]
+    public void ControlGroups_Subgroups_2000Units_AllocateZeroBytes()
+    {
+        const int n = 2000;
+        var store = new UnitStore(n);
+        var all = new EntityHandle[n];
+        for (int i = 0; i < n; i++)
+        {
+            all[i] = store.Alloc();
+            store.TypeId[i] = i % 7;
+            store.Position[i] = new Vector2(i % 50, i / 50);
+        }
+        var groups = new ControlGroups(n);
+        var selection = new SelectionSet(n);
+        var sub = new Subgroups(7);
+        for (int g = 0; g < ControlGroups.Count; g++) groups.Assign(g, all);
+        double now = 0;
+        int count = 0;
+        Action block = () =>
+        {
+            // A frame's prunes and refresh, then the key handlers: recall, double-tap mean, add, assign, Tab.
+            count += groups.Prune(store.Alive, store.Generation);
+            count += groups.Recall(3, selection, store.Alive, store.Generation);
+            sub.Update(selection.Items, store.TypeId, reset: true);
+            sub.Update(selection.Items, store.TypeId, reset: false);
+            sub.Next();
+            if (groups.Tap(3, now += 0.1) && groups.TryMean(3, store.Position, store.Alive, store.Generation, out Vector2 m)) count += (int)m.X;
+            groups.Add(4, selection.Items);
+            groups.Assign(5, selection.Items);
+            count += sub.ActiveType;
+        };
+        block();
+        int runs = AllocationProbe.AssertZero(block, _out);
+        _out.WriteLine($"Control groups + subgroups (2,000 units): 0 bytes (runs {runs}), checksum {count}");
+    }
+
+    [Fact]
     public void MinimapDots_2000Units_AndTransform_AllocateZeroBytes()
     {
         Heightmap map = TerrainHeightTests.GeneratedMap(3);

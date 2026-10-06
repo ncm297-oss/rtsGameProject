@@ -15,7 +15,8 @@ namespace Rts.Sim.Tests.QA.ViewApi;
 /// round-robin), several "frames" per tick that call TerrainHeight.At on every interpolated unit,
 /// SelectionSet.Prune, ScreenPicker click and box over a projection of the units, GroundPicker on
 /// camera rays, and FixedStepClock; right-click moves go to the GroundPicker point for every
-/// selected unit. Twin B gets exactly the commands A sent and nothing else. Also asserts A's hash
+/// selected unit; since M2-3 the order is any of Move / AttackMove / Stop / HoldPosition, queued or
+/// not, with control-group assigns, recalls and Tab subgroup refreshes in between. Twin B gets exactly the commands A sent and nothing else. Also asserts A's hash
 /// doesn't move across a frame's helper calls.
 /// </remarks>
 public class ViewHashTwinQaTests
@@ -53,6 +54,9 @@ public class ViewHashTwinQaTests
         UnitStore u = w.Units;
         Heightmap map = w.Heightmap;
         var selection = new SelectionSet(u.Capacity);
+        var groups = new ControlGroups(u.Capacity);
+        var subgroups = new Subgroups(w.Data.Units.Length);
+        var kinds = new int[(int)CommandKind.AttackMove + 1];
         var clock = new FixedStepClock();
         var centers = new Vector2[u.Capacity];
         var radii = new float[u.Capacity];
@@ -80,6 +84,8 @@ public class ViewHashTwinQaTests
                 cand[i] = u.Owner[i] == 0;
             }
             selection.Prune(u.Alive, u.Generation);
+            groups.Prune(u.Alive, u.Generation);
+            subgroups.Update(selection.Items, u.TypeId, reset: false);
 
             if (frames % 37 == 0)
             {
@@ -100,14 +106,33 @@ public class ViewHashTwinQaTests
                 Vector3 dir = Vector3.Normalize(new Vector3(rng.NextFloat() - 0.5f, -1.2f, -0.8f));
                 bool picked3 = GroundPicker.TryPick(map, origin, dir, out Vector3 hit);
                 Assert.Equal(before, a.StateHash()); // the reads and picks changed nothing (Enqueue below does, by design)
-                if (picked3 && a.PendingCommandCount + selection.Count <= 4096)
+                // M2-3: SelectionController.Order's kinds (all four, queued or not), control-group
+                // assigns and recalls and the Tab subgroup refresh between orders.
+                int g = rng.NextInt(0, ControlGroups.Count);
+                if (rng.NextInt(0, 3) == 0) groups.Assign(g, selection.Items);
+                else if (groups.Recall(g, selection, u.Alive, u.Generation) > 0 && groups.TryMean(g, u.Position, u.Alive, u.Generation, out Vector2 mean)) sum += mean.X;
+                subgroups.Update(selection.Items, u.TypeId, reset: true);
+                subgroups.Next();
+                Assert.Equal(before, a.StateHash());
+                var kind = (CommandKind)rng.NextInt((int)CommandKind.Move, (int)CommandKind.AttackMove + 1);
+                bool queued = rng.NextInt(0, 2) == 0;
+                bool positional = kind is CommandKind.Move or CommandKind.AttackMove;
+                if ((picked3 || !positional) && a.PendingCommandCount + selection.Count <= 4096)
                 {
+                    var target = new Vector2(hit.X, hit.Z);
                     foreach (EntityHandle h in selection.Items)
                     {
-                        Command m = Command.Move(0, h, new Vector2(hit.X, hit.Z));
+                        Command m = kind switch
+                        {
+                            CommandKind.Move => Command.Move(0, h, target, queued),
+                            CommandKind.AttackMove => Command.AttackMove(0, h, target, queued),
+                            CommandKind.Stop => Command.Stop(0, h, queued),
+                            _ => Command.HoldPosition(0, h, queued),
+                        };
                         a.Enqueue(m);
                         b.Enqueue(m);
                         orders++;
+                        kinds[(int)kind]++;
                     }
                 }
             }
@@ -124,8 +149,10 @@ public class ViewHashTwinQaTests
                 Assert.True(a.StateHash() == b.StateHash(), $"view-driven sim diverged from its bare twin at tick {a.TickNumber}");
             }
         }
-        _out.WriteLine($"seed {seed}, {perPlayer}/player: {ticks} ticks, {frames} frames, {orders} move orders, {u.Count} units alive, final hash {a.StateHash():X16}");
+        _out.WriteLine($"seed {seed}, {perPlayer}/player: {ticks} ticks, {frames} frames, {orders} orders " +
+            $"(move {kinds[2]}, stop {kinds[3]}, hold {kinds[4]}, attack-move {kinds[5]}), {u.Count} units alive, final hash {a.StateHash():X16}");
         Assert.Equal(2 * perPlayer, u.Count);
         Assert.True(orders > 0, "no orders were issued");
+        for (int k = (int)CommandKind.Move; k < kinds.Length; k++) Assert.True(kinds[k] > 0, $"no {(CommandKind)k} orders were issued");
     }
 }
