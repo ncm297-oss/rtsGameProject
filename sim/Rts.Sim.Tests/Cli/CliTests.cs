@@ -239,6 +239,12 @@ public sealed class CliTests : IDisposable
     [InlineData("run --seed 1 --units 10 --mines 2.5")]
     [InlineData("run --seed 1 --units 10 --mines 3 --mines 3")]
     [InlineData("play a.replay --forests 3")]
+    // M3-2: --workers takes 0 to 200 and needs something to gather.
+    [InlineData("run --seed 1 --units 10 --workers 10")]
+    [InlineData("run --seed 1 --units 10 --workers 5 --forests 0 --mines 0")]
+    [InlineData("run --seed 1 --units 10 --workers 201 --mines 2")]
+    [InlineData("run --seed 1 --units 10 --workers -1 --mines 2")]
+    [InlineData("run --seed 1 --units 10 --workers")]
     public void BadUsage_Exits1_WithOneUsageLine(string argLine)
     {
         string[] args = argLine.Length == 0 ? Array.Empty<string>() : argLine.Split(' ');
@@ -283,6 +289,44 @@ public sealed class CliTests : IDisposable
         CliResult r = Cli("run", "--seed", "1", "--units", "10", "--ticks", "10", "--data", TestDataDir.Shipped);
         Assert.Equal(0, r.Exit);
         Assert.EndsWith(" forests 0 trees 0 mines 0", Lines(r.Out)[0]);
+    }
+
+    /// <summary>M3-2 criterion 9: the economy run prints identical hashes and totals twice, gathers both resources, and records Town Halls and Gathers that play back.</summary>
+    [Fact]
+    public void Run_WithWorkers_IsRepeatable_GathersBothResources_AndReplays()
+    {
+        string path = TempPath();
+        string[] args = { "run", "--seed", "1", "--units", "50", "--workers", "10", "--forests", "12", "--mines", "8", "--ticks", "2000", "--data", TestDataDir.Shipped };
+        CliResult a = Cli(With(args, "--record", path)), b = Cli(args);
+        Assert.Equal(0, a.Exit);
+        Assert.Equal("", a.Err);
+        string[] la = Lines(a.Out), lb = Lines(b.Out);
+        Assert.EndsWith(" workers 10", la[0]);
+        Assert.Equal(HashLines(a.Out), HashLines(b.Out));
+        Assert.Equal(20, HashLines(a.Out).Length);
+        string totals = Assert.Single(la, l => l.StartsWith("player 0 ", StringComparison.Ordinal));
+        Assert.Equal(totals, la[^1]);
+        Assert.Equal(totals, lb[^1]);
+        Match m = Regex.Match(totals, @"^player 0 gold (\d+) wood (\d+)$");
+        Assert.True(m.Success, totals);
+        Assert.True(int.Parse(m.Groups[1].Value) > 200 && int.Parse(m.Groups[2].Value) > 200, totals);
+
+        Assert.Equal(ReplayError.None, ReplayFormat.TryReadFile(path, out Replay? replay));
+        Assert.Equal(3, replay!.FormatVersion);
+        Assert.Contains(replay.Commands, c => c.Kind == CommandKind.SpawnBuilding);
+        Assert.Equal(10, replay.Commands.Count(c => c.Kind == CommandKind.Gather));
+        CliResult played = Cli("play", path, "--data", TestDataDir.Shipped);
+        Assert.Equal(0, played.Exit);
+        Assert.Equal(HashLines(a.Out), HashLines(played.Out));
+    }
+
+    [Fact]
+    public void Run_WithoutWorkers_KeepsTheHeaderAndPrintsNoTotals()
+    {
+        CliResult r = Cli("run", "--seed", "1", "--units", "10", "--ticks", "10", "--mines", "2", "--data", TestDataDir.Shipped);
+        Assert.Equal(0, r.Exit);
+        Assert.DoesNotContain("workers", r.Out);
+        Assert.DoesNotContain("player 0", r.Out);
     }
 
     [Fact]

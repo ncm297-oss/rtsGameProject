@@ -44,6 +44,9 @@ public sealed class ReplayRecorder
             throw new InvalidOperationException("Attach the recorder before the first command and tick.");
         if (!sim.World.HasGeneratedMap)
             throw new InvalidOperationException("A sim on a hand-made map can't be replayed from its seed.");
+        // Format 3 has no building-capacity line, and the capacity is in the state hash (M3-2).
+        if (sim.World.Config.BuildingCapacity != Entities.BuildingStore.DefaultCapacity)
+            throw new InvalidOperationException("Replay format 3 records only the default building capacity.");
 
         _sim = sim;
         CheckpointInterval = checkpointInterval;

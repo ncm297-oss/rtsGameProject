@@ -282,7 +282,7 @@ public class LocalMovementQaTests
     [Fact]
     public void EveryUnitStoreArray_IsHashed_OrDocumentedDerived()
     {
-        var derived = new HashSet<string> { "Speed", "Radius" };
+        var derived = new HashSet<string> { "Speed", "Radius", "PrevFacing" }; // PrevFacing: render interpolation (M3-2)
         Simulation sim = MoveScenario.Spawn(5, units: 2, maxCost: 10f, out _);
         UnitStore u = sim.World.Units;
         ulong h0 = sim.StateHash();
@@ -306,6 +306,8 @@ public class LocalMovementQaTests
                     Vector2 x => x + new Vector2(0.25f, 0f),
                     UnitState x => x == UnitState.Idle ? UnitState.Moving : UnitState.Idle,
                     CommandKind x => x == CommandKind.Move ? CommandKind.Stop : CommandKind.Move,
+                    EntityHandle x => new EntityHandle(x.Index + 1, x.Generation + 1), // M3-2: GatherNode
+                    Rts.Sim.Data.ResourceKind x => x == Rts.Sim.Data.ResourceKind.Gold ? Rts.Sim.Data.ResourceKind.Wood : Rts.Sim.Data.ResourceKind.Gold, // M3-2: CargoKind
                     _ => throw new InvalidOperationException($"{f.Name}: element type {f.FieldType} not covered by the audit"),
                 };
                 arr.SetValue(changed, e);
@@ -319,7 +321,7 @@ public class LocalMovementQaTests
         Assert.Contains("StuckTicks", typeof(UnitStore).GetFields().Select(x => x.Name));
         Assert.Contains("BestRemaining", typeof(UnitStore).GetFields().Select(x => x.Name));
         Assert.Contains("WalkBack", typeof(UnitStore).GetFields().Select(x => x.Name)); // M1-4d-3
-        foreach (string name in new[] { "Hold", "QueueCount", "QueueKind", "QueuePosition" }) // M1-7
+        foreach (string name in new[] { "Hold", "QueueCount", "QueueKind", "QueuePosition", "GatherNode", "GatherSite", "GatherProgress", "Cargo", "CargoKind" }) // M1-7, M3-2
             Assert.Contains(name, typeof(UnitStore).GetFields().Select(x => x.Name));
         Assert.True(unhashed.Count == 0, "not in StateHash: " + string.Join(", ", unhashed));
     }

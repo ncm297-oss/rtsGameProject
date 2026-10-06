@@ -73,7 +73,7 @@ public sealed class NavGrid
     /// <summary>Height in cells.</summary>
     public int Height { get; }
 
-    /// <summary>Increments whenever passability changes (a resource node placed or depleted; later buildings), so cached flow fields can tell they're stale. Part of the state hash.</summary>
+    /// <summary>Increments whenever passability changes (a resource node placed or depleted, a building placed), so cached flow fields can tell they're stale. Part of the state hash.</summary>
     public int Version { get; private set; }
 
     /// <summary>Test seam: marks passability as changed so cached flow fields go stale, with nothing else changed.</summary>
@@ -94,14 +94,22 @@ public sealed class NavGrid
     /// for a resource node (flags <see cref="NavFlags.Blocked"/> | <see cref="NavFlags.Resource"/>, cost blocked) and bumps
     /// <see cref="Version"/> once. Every cell must pass <see cref="CanTakeResource"/>; the caller (the resource store) checks.
     /// </summary>
-    internal void SetResource(int x, int y, int width, int height)
+    internal void SetResource(int x, int y, int width, int height) => SetFootprint(x, y, width, height, NavFlags.Resource);
+
+    /// <summary>As <see cref="SetResource"/>, for a building's footprint (<see cref="NavFlags.Building"/>, M3-2); the caller (the building store) checks every cell first.</summary>
+    internal void SetBuilding(int x, int y, int width, int height) => SetFootprint(x, y, width, height, NavFlags.Building);
+
+    /// <summary>As <see cref="ClearResource"/>, for a building's footprint (M3-2).</summary>
+    internal void ClearBuilding(int x, int y, int width, int height) => ClearFootprint(x, y, width, height, NavFlags.Building);
+
+    private void SetFootprint(int x, int y, int width, int height, NavFlags kind)
     {
         for (int cy = y; cy < y + height; cy++)
         {
             for (int cx = x; cx < x + width; cx++)
             {
                 int i = cy * Width + cx;
-                _flags[i] |= NavFlags.Blocked | NavFlags.Resource;
+                _flags[i] |= NavFlags.Blocked | kind;
                 _cost[i] = MapConstants.CostBlocked;
             }
         }
@@ -114,14 +122,16 @@ public sealed class NavGrid
     /// covers open ground, so its cells go back to <see cref="NavFlags.None"/> and passable cost) and bumps
     /// <see cref="Version"/> once, so cached flow fields rebuild through the gap.
     /// </summary>
-    internal void ClearResource(int x, int y, int width, int height)
+    internal void ClearResource(int x, int y, int width, int height) => ClearFootprint(x, y, width, height, NavFlags.Resource);
+
+    private void ClearFootprint(int x, int y, int width, int height, NavFlags kind)
     {
         for (int cy = y; cy < y + height; cy++)
         {
             for (int cx = x; cx < x + width; cx++)
             {
                 int i = cy * Width + cx;
-                _flags[i] &= ~(NavFlags.Blocked | NavFlags.Resource);
+                _flags[i] &= ~(NavFlags.Blocked | kind);
                 _cost[i] = MapConstants.CostPassable;
             }
         }

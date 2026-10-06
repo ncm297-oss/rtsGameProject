@@ -1,5 +1,6 @@
 using System.Numerics;
 using Rts.Sim.Commands;
+using Rts.Sim.Economy;
 using Rts.Sim.Entities;
 using Rts.Sim.Map;
 using Rts.Sim.Movement;
@@ -8,8 +9,8 @@ using Rts.Sim.Pathfinding;
 namespace Rts.Sim.Orders;
 
 /// <summary>
-/// Unit orders (docs/03 "Orders and unit states"): applies Move, AttackMove, Stop and HoldPosition
-/// commands in phase 1, and in phase 7 starts the next shift-queued order of every Idle unit.
+/// Unit orders (docs/03 "Orders and unit states"): applies Move, AttackMove, Stop, HoldPosition and
+/// Gather commands in phase 1, and in phase 7 starts the next shift-queued order of every Idle unit.
 /// </summary>
 /// <remarks>
 /// An unqueued order replaces the unit's queue and clears Hold; a queued one is appended. A popped
@@ -40,12 +41,23 @@ public static class OrderSystem
         UnitStore u = world.Units;
         if (!u.IsAlive(command.Unit) || u.Owner[command.Unit.Index] != command.Player) return;
         int i = command.Unit.Index;
-        bool positional = command.Kind is CommandKind.Move or CommandKind.AttackMove;
+        bool positional = command.Kind is CommandKind.Move or CommandKind.AttackMove or CommandKind.Gather;
         // A target off the map is dropped whether queued or not, so it never takes a queue entry.
         if (positional && !world.NavGrid.WorldToCell(command.Position, out _, out _)) return;
+        // Only workers gather (M3-2); a Gather to anyone else is dropped, queued or not.
+        if (command.Kind == CommandKind.Gather && !EconomySystem.IsWorker(world, i)) return;
         if (command.IsQueued)
         {
             Append(u, i, command.Kind, positional ? command.Position : Vector2.Zero);
+            return;
+        }
+        if (command.Kind == CommandKind.Gather)
+        {
+            // No node to work drops the whole command, like a Move with no passable target.
+            int node = EconomySystem.ResolveNode(world, command.Position);
+            if (node < 0) return;
+            u.ClearQueue(i);
+            EconomySystem.StartGather(world, i, node);
             return;
         }
         if (positional)
@@ -54,6 +66,7 @@ public static class OrderSystem
             if (!ResolveTarget(world.NavGrid, command.Position, out int cell, out Vector2 goal)) return;
             u.ClearQueue(i);
             u.Hold[i] = false;
+            EndLoop(u, i);
             Move(world, i, cell, goal);
             return;
         }
@@ -70,7 +83,13 @@ public static class OrderSystem
             case CommandKind.AttackMove: // walks like a Move until combat targeting (M4)
                 if (!ResolveTarget(world.NavGrid, target, out int cell, out Vector2 goal)) return;
                 u.Hold[i] = false;
+                EndLoop(u, i);
                 Move(world, i, cell, goal);
+                break;
+            case CommandKind.Gather:
+                // Popped from the queue: the rest of the queue stays, for when the loop ends.
+                int node = EconomySystem.ResolveNode(world, target);
+                if (node >= 0) EconomySystem.StartGather(world, i, node);
                 break;
             case CommandKind.Stop:
                 u.ClearQueue(i);
@@ -110,9 +129,17 @@ public static class OrderSystem
         u.QueueCount[i] = n - 1;
     }
 
-    /// <summary>Stands the unit still with no goal: Idle, shovable, nothing to walk back to.</summary>
+    /// <summary>Any other order ends a gather loop (cargo kept); a worker standing on it counts as Idle for the order's same-target rule.</summary>
+    private static void EndLoop(UnitStore u, int i)
+    {
+        u.GatherNode[i] = default;
+        if (u.State[i] is UnitState.Gathering or UnitState.Returning) u.State[i] = UnitState.Idle;
+    }
+
+    /// <summary>Stands the unit still with no goal: Idle, shovable, nothing to walk back to, no gather loop (cargo kept).</summary>
     private static void Stop(UnitStore u, int i)
     {
+        EndLoop(u, i);
         u.State[i] = UnitState.Idle;
         u.GoalCell[i] = -1;
         u.Velocity[i] = Vector2.Zero;
@@ -138,6 +165,23 @@ public static class OrderSystem
         return true;
     }
 
+    /// <summary>
+    /// The gather loop's walk (M3-2): a fresh Move to <paramref name="goal"/> in <paramref name="cell"/> (passable),
+    /// without the same-target rule of a player's re-order, so a worker waiting at a mine's edge really walks
+    /// again. Keeps the queue, Hold (already clear) and the gather loop.
+    /// </summary>
+    internal static void Walk(World world, int i, int cell, Vector2 goal)
+    {
+        UnitStore u = world.Units;
+        u.State[i] = UnitState.Moving;
+        u.Goal[i] = goal;
+        u.GoalCell[i] = cell;
+        u.OrderTick[i] = world.TickNumber;
+        u.StuckTicks[i] = 0;
+        u.BestRemaining[i] = float.PositiveInfinity;
+        u.WalkBack[i] = UnitStore.WalkBackNone;
+    }
+
     private static void Move(World world, int i, int cell, Vector2 goal)
     {
         UnitStore u = world.Units;
@@ -161,13 +205,7 @@ public static class OrderSystem
             }
             return;
         }
-        u.State[i] = UnitState.Moving;
-        u.Goal[i] = goal;
-        u.GoalCell[i] = cell;
-        u.OrderTick[i] = world.TickNumber;
-        u.StuckTicks[i] = 0;
-        u.BestRemaining[i] = float.PositiveInfinity;
-        u.WalkBack[i] = UnitStore.WalkBackNone;
+        Walk(world, i, cell, goal);
     }
 
     /// <summary>

@@ -14,6 +14,8 @@ namespace Rts.Sim;
 public sealed class World
 {
     private readonly SimRng[] _rngs;
+    private readonly int[] _gold;
+    private readonly int[] _wood;
 
     /// <summary>Creates an empty world sized from the config, with terrain generated from the seed's map stream.</summary>
     public World(SimConfig config) : this(config, null)
@@ -36,6 +38,11 @@ public sealed class World
         // The placer draws from the map stream after the terrain did, and nothing when counts are 0.
         Resources = new ResourceStore(config.ResourceCapacity, NavGrid, config.Data);
         ResourcePlacement = ResourcePlacer.Place(config.Map, NavGrid, Resources, config.Data, ref _rngs[RngStream.MapGen]);
+        Buildings = new BuildingStore(config.BuildingCapacity, NavGrid, config.Data);
+        _gold = new int[config.PlayerCount];
+        _wood = new int[config.PlayerCount];
+        Array.Fill(_gold, config.Data.Rules.StartingGold);
+        Array.Fill(_wood, config.Data.Rules.StartingWood);
         Spatial = new SpatialHash(config.UnitCapacity, NavGrid.Width, NavGrid.Height);
         FlowFields = new FlowFieldCache(NavGrid, FlowFieldCache.CapacityFor(config.UnitCapacity, NavGrid.Width * NavGrid.Height));
         MoveOrder = new long[config.UnitCapacity];
@@ -204,6 +211,23 @@ public sealed class World
 
     /// <summary>All resource nodes (trees, gold mines). Read-only outside the sim.</summary>
     public ResourceStore Resources { get; }
+
+    /// <summary>All buildings (M3-2: placed by the dev command <c>SpawnBuilding</c> only). Read-only outside the sim.</summary>
+    public BuildingStore Buildings { get; }
+
+    /// <summary>Each player's gold, indexed by player (starts at <c>rules.json</c> <c>startingGold</c>; workers deposit into it).</summary>
+    public ReadOnlySpan<int> Gold => _gold;
+
+    /// <summary>Each player's wood, indexed by player (starts at <c>rules.json</c> <c>startingWood</c>).</summary>
+    public ReadOnlySpan<int> Wood => _wood;
+
+    /// <summary>Adds <paramref name="amount"/> of <paramref name="kind"/> to <paramref name="player"/>'s total, saturating at <see cref="int.MaxValue"/>.</summary>
+    internal void AddToTotal(int player, ResourceKind kind, int amount)
+    {
+        int[] totals = kind == ResourceKind.Gold ? _gold : _wood;
+        long sum = (long)totals[player] + amount;
+        totals[player] = sum > int.MaxValue ? int.MaxValue : (int)sum;
+    }
 
     /// <summary>What the resource placer put on the map at construction (counts can fall short of <see cref="SimConfig.Map"/>'s request).</summary>
     public ResourcePlacement ResourcePlacement { get; }

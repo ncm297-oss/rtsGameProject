@@ -132,7 +132,8 @@ public class SimulationTests
     [Theory]
     [InlineData(99, 0)]
     [InlineData(-1, 0)]
-    [InlineData(6, 0)]
+    [InlineData(8, 0)] // one past the last kind (Gather, M3-2)
+    [InlineData((int)CommandKind.SpawnBuilding, Command.QueuedFlag)]
     [InlineData((int)CommandKind.Stop, 2)]
     [InlineData((int)CommandKind.Move, 1 << 20)]
     [InlineData((int)CommandKind.HoldPosition, -1)]

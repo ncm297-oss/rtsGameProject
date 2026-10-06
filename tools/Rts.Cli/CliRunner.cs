@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Numerics;
 using Rts.Sim;
 using Rts.Sim.Data;
 using Rts.Sim.Map;
@@ -32,7 +33,7 @@ public static class CliRunner
 
     /// <summary>The one-line usage text.</summary>
     public const string Usage =
-        "usage: Rts.Cli run --seed <n> --units <n> [--ticks <n>] [--players 1|2] [--checkpoint <ticks>] [--forests <n>] [--mines <n>] [--record <path>] [--data <dir>]"
+        "usage: Rts.Cli run --seed <n> --units <n> [--ticks <n>] [--players 1|2] [--checkpoint <ticks>] [--forests <n>] [--mines <n>] [--workers <n>] [--record <path>] [--data <dir>]"
         + " | Rts.Cli play <path> [--data <dir>]";
 
     private const int DefaultTicks = 1500;
@@ -59,7 +60,7 @@ public static class CliRunner
 
     private static int RunVerb(string[] args, TextWriter stdout, TextWriter stderr)
     {
-        string? error = ParseOptions(args, 1, new[] { "--seed", "--units", "--ticks", "--players", "--checkpoint", "--forests", "--mines", "--record", "--data" },
+        string? error = ParseOptions(args, 1, new[] { "--seed", "--units", "--ticks", "--players", "--checkpoint", "--forests", "--mines", "--workers", "--record", "--data" },
             out Dictionary<string, string> o, out _);
         if (error != null) return UsageError(stderr, error);
 
@@ -73,6 +74,9 @@ public static class CliRunner
             return UsageError(stderr, error);
         if ((error = IntOption(o, "--forests", 0, 0, MapGenParams.MaxResourceGroups, out int forests)) != null) return UsageError(stderr, error);
         if ((error = IntOption(o, "--mines", 0, 0, MapGenParams.MaxResourceGroups, out int mines)) != null) return UsageError(stderr, error);
+        if ((error = IntOption(o, "--workers", 0, 0, Workers.MaxWorkers, out int workers)) != null) return UsageError(stderr, error);
+        bool economy = o.ContainsKey("--workers");
+        if (workers > 0 && forests == 0 && mines == 0) return UsageError(stderr, "--workers needs --forests or --mines above 0 (nothing to gather)");
         o.TryGetValue("--record", out string? recordPath);
         // Checked before the run, which can take minutes: a bad path found only at the end wastes it (BUG-0057).
         if (recordPath != null && (error = RecordPathError(recordPath)) != null)
@@ -85,16 +89,21 @@ public static class CliRunner
         if (data == null) return ExitError;
 
         var map = new MapGenParams { Forests = forests, GoldMines = mines };
-        var sim = new Simulation(new SimConfig(seed, players, units, units) { Data = data, Map = map });
+        // Room for the march, the workers and (with --workers) one Town Hall command per player.
+        int capacity = units + workers * players, commands = economy ? capacity + players : units;
+        var sim = new Simulation(new SimConfig(seed, players, capacity, commands) { Data = data, Map = map });
         // Before any enqueue: a replay must see every command from tick 0 (docs/03 "Save/load and replays").
         ReplayRecorder? recorder = recordPath == null ? null
-            : new ReplayRecorder(sim, checkpoint, tickCapacity: ticks, commandCapacity: 2 * units);
+            : new ReplayRecorder(sim, checkpoint, tickCapacity: ticks, commandCapacity: capacity + commands);
 
-        int spawned = March.EnqueueSpawns(sim, units, players);
+        Vector2[][] blocks = March.Blocks(sim, units, players);
+        int spawned = March.EnqueueSpawns(sim, blocks);
         int[] goals = March.GoalCells(sim.World.NavGrid, players);
+        bool[] isWorker = economy ? Workers.EnqueueSetup(sim, workers, players, blocks) : Array.Empty<bool>();
         ResourcePlacement placed = sim.World.ResourcePlacement;
         stdout.WriteLine($"seed {seed.ToString(Inv)} units {spawned.ToString(Inv)} players {players.ToString(Inv)} ticks {ticks.ToString(Inv)} checkpoint {checkpoint.ToString(Inv)}"
-            + $" forests {placed.Forests.ToString(Inv)} trees {placed.Trees.ToString(Inv)} mines {placed.Mines.ToString(Inv)}");
+            + $" forests {placed.Forests.ToString(Inv)} trees {placed.Trees.ToString(Inv)} mines {placed.Mines.ToString(Inv)}"
+            + (economy ? $" workers {workers.ToString(Inv)}" : ""));
 
         var ms = new double[ticks];
         double toMs = 1000.0 / Stopwatch.Frequency;
@@ -102,7 +111,11 @@ public static class CliRunner
         {
             // Commands queued at tick 0 apply in the tick run at TickNumber 1, so the units exist from
             // TickNumber 2 on; the march is ordered then (Move needs their handles).
-            if (sim.TickNumber == 2) March.EnqueueMoves(sim, goals);
+            if (sim.TickNumber == 2)
+            {
+                March.EnqueueMoves(sim, goals, isWorker);
+                if (economy) Workers.EnqueueGathers(sim, isWorker);
+            }
             long start = Stopwatch.GetTimestamp();
             sim.Tick();
             ms[t] = (Stopwatch.GetTimestamp() - start) * toMs;
@@ -128,6 +141,12 @@ public static class CliRunner
                 return ExitError;
             }
             stdout.WriteLine($"recorded {recordPath}");
+        }
+        // Last, so scripts can take the final lines as the totals.
+        if (economy)
+        {
+            for (int p = 0; p < players; p++)
+                stdout.WriteLine($"player {p.ToString(Inv)} gold {sim.World.Gold[p].ToString(Inv)} wood {sim.World.Wood[p].ToString(Inv)}");
         }
         return ExitOk;
     }
