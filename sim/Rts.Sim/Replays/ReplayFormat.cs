@@ -72,7 +72,8 @@ public static class ReplayFormat
             sb.Append("c ").Append(Int(c.Tick)).Append(' ').Append(Int(c.Player)).Append(' ').Append(Int(c.Sequence))
                 .Append(' ').Append(Int((int)c.Kind)).Append(' ').Append(Int(c.TypeId))
                 .Append(' ').Append(Bits(c.Position.X)).Append(' ').Append(Bits(c.Position.Y))
-                .Append(' ').Append(Int(c.Unit.Index)).Append(' ').Append(Int(c.Unit.Generation)).Append('\n');
+                .Append(' ').Append(Int(c.Unit.Index)).Append(' ').Append(Int(c.Unit.Generation))
+                .Append(' ').Append(Int(c.Flags)).Append('\n');
         }
         Line(sb, "checkpoints", Int(replay.Checkpoints.Length));
         foreach (ReplayCheckpoint k in replay.Checkpoints)
@@ -203,11 +204,12 @@ public static class ReplayFormat
         var commands = ImmutableArray.CreateBuilder<Command>(commandCount);
         for (int i = 0; i < commandCount; i++)
         {
-            if (!r.Fields("c", 9, out f)
+            if (!r.Fields("c", 10, out f)
                 || !TryInt(f[0], out int tick) || !TryInt(f[1], out int player) || !TryInt(f[2], out int sequence)
                 || !TryInt(f[3], out int kind) || !TryInt(f[4], out int typeId)
                 || !TryBits(f[5], out float x) || !TryBits(f[6], out float y)
-                || !TryInt(f[7], out int unitIndex) || !TryInt(f[8], out int unitGeneration))
+                || !TryInt(f[7], out int unitIndex) || !TryInt(f[8], out int unitGeneration)
+                || !TryInt(f[9], out int flags))
                 return ReplayError.Malformed;
             commands.Add(new Command
             {
@@ -218,6 +220,7 @@ public static class ReplayFormat
                 TypeId = typeId,
                 Position = new Vector2(x, y),
                 Unit = new EntityHandle(unitIndex, unitGeneration),
+                Flags = flags,
             });
         }
 

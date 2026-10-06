@@ -713,7 +713,7 @@ public static class MovementSystem
     /// <summary>
     /// Which way walker <paramref name="i"/>, pushing along <paramref name="normal"/> (from i toward j),
     /// may shove unit <paramref name="j"/>: the push itself, or zero if j can't be shoved. Only Idle
-    /// units of i's owner that aren't i's arrived groupmates can be. One with no goal (never ordered,
+    /// units of i's owner that aren't i's arrived groupmates and aren't holding position can be. One with no goal (never ordered,
     /// or gave up) always yields. One holding another goal yields too, but only as far as it stays
     /// touching the groupmates it touches (<see cref="KeepLinks"/>), and one standing on its point
     /// (within <see cref="MovementConstants.ArrivalDistance"/>) holds it, unless the walker is blocked
@@ -723,7 +723,8 @@ public static class MovementSystem
     /// </summary>
     private static Vector2 ShoveDirection(World world, UnitStore u, int i, int j, int goalCell, bool pushArrived, Vector2 normal)
     {
-        if (u.State[j] != UnitState.Idle || u.Owner[j] != u.Owner[i] || u.GoalCell[j] == goalCell) return Vector2.Zero;
+        // A unit holding position (M1-7) is never shoved: a plain wall, soft to friends, hard to enemies.
+        if (u.State[j] != UnitState.Idle || u.Owner[j] != u.Owner[i] || u.GoalCell[j] == goalCell || u.Hold[j]) return Vector2.Zero;
         if (u.GoalCell[j] < 0) return normal;
         float toGoal2 = Vector2.DistanceSquared(u.Position[j], u.Goal[j]);
         if (toGoal2 > MovementConstants.ArrivalDistance * MovementConstants.ArrivalDistance) return normal; // tethered: KeepLinks
@@ -738,7 +739,7 @@ public static class MovementSystem
     /// <summary>
     /// The line a shove of <paramref name="j"/> along <paramref name="normal"/> moves (chain shove,
     /// M1-4d-3), into <c>World.ChainMembers</c>; returns its length (j first). Breadth first from j:
-    /// Idle units of walker <paramref name="i"/>'s owner, not its groupmates, touching a member and
+    /// Idle units of walker <paramref name="i"/>'s owner, not its groupmates nor holding position, touching a member and
     /// ahead of it along the push. Units holding a goal join only when
     /// <paramref name="withAnchored"/>. At most <see cref="MovementConstants.MaxChainShove"/> units.
     /// </summary>
@@ -767,7 +768,7 @@ public static class MovementSystem
             for (int q = 0; q < count && n < chain.Length; q++)
             {
                 int k = near[q];
-                if (k == i || !u.Alive[k] || u.State[k] != UnitState.Idle || u.Owner[k] != owner || u.GoalCell[k] == goalCell) continue;
+                if (k == i || !u.Alive[k] || u.State[k] != UnitState.Idle || u.Owner[k] != owner || u.GoalCell[k] == goalCell || u.Hold[k]) continue;
                 if (u.GoalCell[k] >= 0 && !withAnchored) continue;
                 if (InChain(chain, n, k)) continue;
                 Vector2 d = u.Position[k] - pm;
@@ -928,7 +929,7 @@ public static class MovementSystem
         UnitStore u = world.Units;
         NavGrid grid = world.NavGrid;
         u.WalkBack[i] = UnitStore.WalkBackUsed;
-        if (u.State[i] != UnitState.Idle || u.GoalCell[i] >= 0 || !grid.WorldToCell(u.Goal[i], out int x, out int y)) return;
+        if (u.State[i] != UnitState.Idle || u.GoalCell[i] >= 0 || u.Hold[i] || !grid.WorldToCell(u.Goal[i], out int x, out int y)) return;
         u.State[i] = UnitState.Moving;
         u.GoalCell[i] = y * grid.Width + x;
         u.StuckTicks[i] = 0;

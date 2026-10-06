@@ -4,6 +4,7 @@ using Rts.Sim.Commands;
 using Rts.Sim.Entities;
 using Rts.Sim.Map;
 using Rts.Sim.Movement;
+using Rts.Sim.Orders;
 using Rts.Sim.Pathfinding;
 using Xunit.Abstractions;
 
@@ -275,6 +276,8 @@ public class LocalMovementQaTests
     /// <summary>
     /// Every per-unit array on UnitStore is either in StateHash or one of the documented derived
     /// arrays (Speed, Radius follow from TypeId). Mutating one element of a live unit must change the hash.
+    /// M1-7: the order-queue arrays hold <c>OrderConstants.QueueCapacity</c> entries per unit; every
+    /// entry of the live unit is mutated in turn (an entry past the queue count too).
     /// </summary>
     [Fact]
     public void EveryUnitStoreArray_IsHashed_OrDocumentedDerived()
@@ -290,27 +293,34 @@ public class LocalMovementQaTests
             if (!f.FieldType.IsArray || f.Name.StartsWith("_")) continue;
             if (derived.Contains(f.Name)) continue;
             var arr = (Array)f.GetValue(u)!;
-            if (arr.Length != u.Capacity) continue;
-            object? old = arr.GetValue(1);
-            object changed = old switch
+            int perUnit = arr.Length == u.Capacity ? 1 : arr.Length == u.Capacity * OrderConstants.QueueCapacity ? OrderConstants.QueueCapacity : 0;
+            Assert.True(perUnit > 0, $"{f.Name}: length {arr.Length} is neither per unit nor per queue entry; extend the audit");
+            for (int e = perUnit; e < 2 * perUnit; e++) // unit 1's elements
             {
-                int x => x + 1,
-                float x => float.IsFinite(x) ? x + 1.5f : 2.5f,
-                bool x => !x,
-                Vector2 x => x + new Vector2(0.25f, 0f),
-                UnitState x => x == UnitState.Idle ? UnitState.Moving : UnitState.Idle,
-                _ => throw new InvalidOperationException($"{f.Name}: element type {f.FieldType} not covered by the audit"),
-            };
-            arr.SetValue(changed, 1);
-            if (sim.StateHash() == h0) unhashed.Add(f.Name);
-            arr.SetValue(old, 1);
-            Assert.Equal(h0, sim.StateHash());
+                object? old = arr.GetValue(e);
+                object changed = old switch
+                {
+                    int x => x + 1,
+                    float x => float.IsFinite(x) ? x + 1.5f : 2.5f,
+                    bool x => !x,
+                    Vector2 x => x + new Vector2(0.25f, 0f),
+                    UnitState x => x == UnitState.Idle ? UnitState.Moving : UnitState.Idle,
+                    CommandKind x => x == CommandKind.Move ? CommandKind.Stop : CommandKind.Move,
+                    _ => throw new InvalidOperationException($"{f.Name}: element type {f.FieldType} not covered by the audit"),
+                };
+                arr.SetValue(changed, e);
+                if (sim.StateHash() == h0) unhashed.Add(perUnit == 1 ? f.Name : $"{f.Name}[entry {e - perUnit}]");
+                arr.SetValue(old, e);
+                Assert.Equal(h0, sim.StateHash());
+            }
             checkedArrays++;
         }
         _out.WriteLine($"{checkedArrays} UnitStore arrays audited");
         Assert.Contains("StuckTicks", typeof(UnitStore).GetFields().Select(x => x.Name));
         Assert.Contains("BestRemaining", typeof(UnitStore).GetFields().Select(x => x.Name));
         Assert.Contains("WalkBack", typeof(UnitStore).GetFields().Select(x => x.Name)); // M1-4d-3
+        foreach (string name in new[] { "Hold", "QueueCount", "QueueKind", "QueuePosition" }) // M1-7
+            Assert.Contains(name, typeof(UnitStore).GetFields().Select(x => x.Name));
         Assert.True(unhashed.Count == 0, "not in StateHash: " + string.Join(", ", unhashed));
     }
 

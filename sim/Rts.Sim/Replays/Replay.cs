@@ -13,8 +13,8 @@ namespace Rts.Sim.Replays;
 /// </remarks>
 public sealed class Replay
 {
-    /// <summary>The format version this build writes and reads.</summary>
-    public const int CurrentFormatVersion = 1;
+    /// <summary>The format version this build writes and reads (2 since M1-7: command lines carry <see cref="Command.Flags"/>).</summary>
+    public const int CurrentFormatVersion = 2;
 
     /// <summary>Largest player count a replay may declare (a format limit that bounds what a file can make the reader allocate).</summary>
     public const int MaxPlayers = 16;
@@ -88,6 +88,7 @@ public sealed class Replay
             if (sameTick > CommandCapacity) return ReplayError.InvalidCommand;
             if ((uint)c.Player >= (uint)PlayerCount) return ReplayError.InvalidCommand;
             if (!Enum.IsDefined(c.Kind)) return ReplayError.InvalidCommand;
+            if ((c.Flags & ~Command.KnownFlags) != 0) return ReplayError.InvalidCommand;
             if (c.Sequence != nextSequence[c.Player]) return ReplayError.InvalidCommand;
             nextSequence[c.Player]++;
         }

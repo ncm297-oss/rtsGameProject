@@ -78,7 +78,14 @@ _Required criteria met in session 2026-10-03-0826 (task M0-1). Owner signed off 
       checkpoints, 15.5 KB; regen with `RTS_REGEN_GOLDEN=1`); `DeterminismTests` 2,000 ticks. BUG-0014
       seed mixing landed first (every pinned map hash regenerated once). QA: 50 fuzzed runs replay,
       parser refuses every truncation/bit flip, recorder allocates 0 bytes at 2,500 units.)_
-- [ ] Perf test: 500 moving units, average tick < 4 ms on the dev machine.
+- [x] Perf test: 500 moving units, average tick < 4 ms on the dev machine.
+      _(session 2026-10-05-2330, task M1-7: `PerfCriterionTests.FiveHundredMovingUnits_AverageTickUnder4Ms`
+      (Perf trait, serial; 500 units of every type on the default 128 map, asserts >= 95% Moving on
+      every measured tick, 5 warm-up + 200 timed): avg 0.66-0.70 ms, p99 < 1 ms, worst ~1 ms alone
+      (Debug, dev PC). Maps over 256 x 256 documented as unsupported (BUG-0023). The same task added
+      `Stop` / `HoldPosition` / `AttackMove` command kinds, `Command.Flags` (shift-queue), a hashed
+      8-entry order queue per unit (`OrderSystem`, phase 7) and replay format 2 (10-field command
+      lines; golden regenerated, checkpoints byte-identical), for M2-3.)_
 - [ ] A tiny CLI in `tools/` runs a scenario headless and prints hashes and timings.
 
 ## M2 — Presentation
@@ -110,7 +117,14 @@ _Required criteria met in session 2026-10-03-0826 (task M0-1). Owner signed off 
       _(right-click move shipped in M2-2 (`ViewApi.GroundPicker`, within 1 mm of the drawn mesh,
       cliff faces resolve to the upper plateau); A / S / H / shift-queue wait for `Stop`,
       `HoldPosition`, `AttackMove` command kinds and queued orders from the sim track, M2-3.)_
-- [ ] Minimap with click-to-move-camera and right-click orders.
+- [x] Minimap with click-to-move-camera and right-click orders.
+      _(session 2026-10-05-2330, task M2-4: `Hud` CanvasLayer + `Minimap` Control (bottom-left,
+      220 px), pure `ViewApi.MinimapRaster` (terrain baked once with the mesh palette, unit dots at
+      5 Hz, 0 bytes per refresh) and `ViewApi.MinimapTransform` (letterboxed fit, pixel <-> metres);
+      camera trapezoid every frame; left-click / drag moves the camera focus, right-click calls
+      `SelectionController.OrderMoveTo`; edge pan suppressed over it; `--no-hud` flag;
+      `game/tests/MinimapTest.tscn`; QA hash twin with 808 minimap orders over 3 map shapes.
+      Fog, resources, pings and minimap zoom come with M3/M4. BUG-0064 (S4, dot readability).)_
 - [ ] `--screenshot` debug flag; debug overlay (nav grid, flow arrows, tick time).
       _(`--screenshot <path> --screenshot-after <s>` and a tick/speed/tick-ms/FPS label shipped in
       M2-1; nav grid and flow arrows are M2-5.)_

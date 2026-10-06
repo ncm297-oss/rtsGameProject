@@ -91,4 +91,7 @@ bugs outrank new features.
 | [BUG-0050](BUG-0050-random-goal-give-ups-rose-after-fix-round-1.md) | S3 | open | 500 units to 500 random goals: give-ups rose to 4.7% mean (2.3% before fix round 1; target 3%) |
 | [BUG-0052](BUG-0052-terrainheight-at-throws-on-huge-coordinates.md) | S3 | open | TerrainHeight.At throws instead of clamping for coordinates beyond ~4.3e9 m or +Infinity |
 | [BUG-0053](BUG-0053-m2-2-test-and-doc-nits.md) | S4 | open | M2-2 nits: facing test can't see a yaw sign error, a stale SimRunner remark, picker box height in docs |
+| [BUG-0054](BUG-0054-unknown-command-flags-recorded-replay-write-throws.md) | S3 | open | A command with unknown Flags bits is accepted and recorded; ReplayFormat.Write then throws (same for an undefined kind) |
+| [BUG-0055](BUG-0055-own-walkers-slip-past-friendly-holding-plug.md) | S3 | open | Own walkers slip past a friendly holding unit plugging a 1-cell corridor (10 of 30, up to 1.05 m overlap; soft clip) |
+| [BUG-0056](BUG-0056-m1-7-order-nits.md) | S4 | open | M1-7 nits: Queued flag valid on Spawn/Noop, corridor Hold test misses passing walkers, Hold lasts one tick under a queued order |
 | [BUG-0064](BUG-0064-minimap-dot-readability-and-large-map-sampling.md) | S4 | open | Minimap dots hard to tell from ramps (Whirlwind) and cliffs (Malazan); maps over 220 cells drop dots |

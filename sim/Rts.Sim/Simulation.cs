@@ -6,6 +6,7 @@ using Rts.Sim.Determinism;
 using Rts.Sim.Entities;
 using Rts.Sim.Map;
 using Rts.Sim.Movement;
+using Rts.Sim.Orders;
 using Rts.Sim.Pathfinding;
 using Rts.Sim.Replays;
 
@@ -61,7 +62,7 @@ public sealed class Simulation
         _recorder?.OnEnqueued(in command);
     }
 
-    /// <summary>Runs one tick: applies this tick's commands in (player, sequence) order, rebuilds the spatial hash, moves units, then bumps <see cref="TickNumber"/>.</summary>
+    /// <summary>Runs one tick: applies this tick's commands in (player, sequence) order, rebuilds the spatial hash, starts queued orders, moves units, then bumps <see cref="TickNumber"/>.</summary>
     public void Tick()
     {
         World.Units.SnapshotPrevPositions();
@@ -75,6 +76,9 @@ public sealed class Simulation
 
         // Neighbour index for every later phase; right after commands so this tick's spawns are queryable.
         World.Spatial.Rebuild(World.Units);
+
+        // Phase 7: Idle units start their next shift-queued order.
+        OrderSystem.Run(World);
 
         // Phases 8-9: flow fields (fetched or built on demand) and movement.
         MovementSystem.Run(World);
@@ -93,7 +97,7 @@ public sealed class Simulation
         _recorder = recorder;
     }
 
-    /// <summary>64-bit FNV-1a hash of all gameplay state: tick, units, RNG streams, flow-field cache metadata, and pending commands.</summary>
+    /// <summary>64-bit FNV-1a hash of all gameplay state: tick, units (Hold and order queues included), RNG streams, flow-field cache metadata, and pending commands.</summary>
     /// <remarks>
     /// Derived state is left out: the spatial hash (rebuilt from the units every tick) and
     /// Speed/Radius (they follow from TypeId). The flow-field cache's keys, versions and LRU stamps
@@ -119,13 +123,16 @@ public sealed class Simulation
             h.Add(u.Facing[i]);
             h.Add(u.Owner[i]);
             h.Add(u.TypeId[i]);
-            h.Add((int)u.State[i]);
+            // Orders (M1-7) ride in the high half of the state word, which is zero for a unit with
+            // no Hold and an empty queue, so such a unit hashes exactly as before the queue existed.
+            h.Add((ulong)(byte)u.State[i] | ((ulong)OrderBits(u, i) << 32));
             h.Add(u.Goal[i]);
             h.Add(u.GoalCell[i]);
             h.Add(u.OrderTick[i]);
             h.Add(u.StuckTicks[i]);
             h.Add(u.BestRemaining[i]);
             h.Add(u.WalkBack[i]);
+            AddOrdersToHash(ref h, u, i);
         }
         h.Add(u.FreeCount);
         for (int i = 0; i < u.FreeCount; i++)
@@ -145,7 +152,7 @@ public sealed class Simulation
         for (int i = 0; i < _commands.Count; i++)
         {
             ref readonly Command c = ref _commands[i];
-            h.Add((int)c.Kind);
+            h.Add((ulong)(uint)c.Kind | ((ulong)(uint)c.Flags << 32)); // Flags 0: as before M1-7
             h.Add(c.Player);
             h.Add(c.Tick);
             h.Add(c.Sequence);
@@ -155,6 +162,34 @@ public sealed class Simulation
             h.Add(c.Unit.Generation);
         }
         return h.Value;
+    }
+
+    /// <summary>
+    /// Unit <paramref name="i"/>'s order summary for <see cref="StateHash"/>: bit 0 Hold, bit 1 a
+    /// non-zero queue count, then one bit per queue entry that isn't default. Zero for a unit with
+    /// no orders; <see cref="AddOrdersToHash"/> then adds nothing.
+    /// </summary>
+    private static uint OrderBits(UnitStore u, int i)
+    {
+        uint bits = u.Hold[i] ? 1u : 0u;
+        if (u.QueueCount[i] != 0) bits |= 2u;
+        int head = i * OrderConstants.QueueCapacity;
+        for (int k = 0; k < OrderConstants.QueueCapacity; k++)
+            if (u.QueueKind[head + k] != CommandKind.Noop || u.QueuePosition[head + k] != Vector2.Zero) bits |= 4u << k;
+        return bits;
+    }
+
+    /// <summary>The queue count and every non-default queue entry of unit <paramref name="i"/>, as flagged by <see cref="OrderBits"/> (already hashed), so the stream stays unambiguous.</summary>
+    private static void AddOrdersToHash(ref StateHasher h, UnitStore u, int i)
+    {
+        if (u.QueueCount[i] != 0) h.Add(u.QueueCount[i]);
+        int head = i * OrderConstants.QueueCapacity;
+        for (int k = 0; k < OrderConstants.QueueCapacity; k++)
+        {
+            if (u.QueueKind[head + k] == CommandKind.Noop && u.QueuePosition[head + k] == Vector2.Zero) continue;
+            h.Add((int)u.QueueKind[head + k]);
+            h.Add(u.QueuePosition[head + k]);
+        }
     }
 
     private void Apply(in Command command)
@@ -169,7 +204,10 @@ public sealed class Simulation
                 ApplySpawn(in command);
                 break;
             case CommandKind.Move:
-                ApplyMove(in command);
+            case CommandKind.Stop:
+            case CommandKind.HoldPosition:
+            case CommandKind.AttackMove:
+                OrderSystem.Apply(World, in command);
                 break;
         }
     }
@@ -188,69 +226,5 @@ public sealed class Simulation
         u.TypeId[h.Index] = command.TypeId;
         u.Speed[h.Index] = def.SpeedPerTick;
         u.Radius[h.Index] = def.Radius;
-    }
-
-    /// <summary>
-    /// How much unit <paramref name="i"/>'s progress estimate (MovementSystem.Plan) changes where it
-    /// stands if its goal moves from <paramref name="from"/> to <paramref name="to"/> in the same cell:
-    /// nonzero only when it aims at the goal itself (in the goal cell, or a legal step from it), where
-    /// the estimate is the field cost, less the goal's offset from this cell's center, plus the distance to it.
-    /// </summary>
-    private float GoalEstimateShift(int i, Vector2 from, Vector2 to)
-    {
-        UnitStore u = World.Units;
-        NavGrid grid = World.NavGrid;
-        Vector2 pos = u.Position[i];
-        int goalCell = u.GoalCell[i];
-        if (!grid.WorldToCell(pos, out int cx, out int cy)) return 0f;
-        if (cy * grid.Width + cx != goalCell && !MovementSystem.IsLegalStep(grid, cx, cy, goalCell % grid.Width, goalCell / grid.Width)) return 0f;
-        Vector2 center = grid.CellCenter(cx, cy);
-        return (Vector2.Distance(to, pos) - Vector2.Distance(to, center)) - (Vector2.Distance(from, pos) - Vector2.Distance(from, center));
-    }
-
-    private void ApplyMove(in Command command)
-    {
-        // Dropped: a dead or recycled unit, someone else's unit, or a target off the map.
-        UnitStore u = World.Units;
-        if (!u.IsAlive(command.Unit) || u.Owner[command.Unit.Index] != command.Player) return;
-        NavGrid grid = World.NavGrid;
-        if (!grid.WorldToCell(command.Position, out int x, out int y)) return;
-        int cell = y * grid.Width + x;
-        Vector2 goal = command.Position;
-        if (!grid.IsPassable(x, y))
-        {
-            // Same rule as the flow field's blocked target: walk to the nearest passable cell's center.
-            cell = FlowField.NearestPassable(grid, cell);
-            if (cell < 0) return;
-            goal = grid.CellCenter(cell % grid.Width, cell / grid.Width);
-        }
-        int i = command.Unit.Index;
-        const float same2 = MovementConstants.ArrivalDistance * MovementConstants.ArrivalDistance;
-        if (u.GoalCell[i] == cell && (u.State[i] == UnitState.Moving || Vector2.DistanceSquared(goal, u.Goal[i]) <= same2))
-        {
-            // The order the unit already has (click spam, an AI refreshing its orders): it doesn't
-            // restart. A Moving one takes the new point but keeps its order age and stuck count, so
-            // spam (even jittered within the cell) can't keep it Moving forever (BUG-0029). An Idle
-            // unit that kept its goal cell has arrived: a point within ArrivalDistance of its goal is
-            // where it already is, so it stays put; a point farther away in the same cell is a new
-            // order, since a player's short repositioning must move it (BUG-0030).
-            if (u.State[i] == UnitState.Moving)
-            {
-                // The progress estimate depends on the goal point only where the unit aims at the goal
-                // itself (in its goal cell, or one legal step from it); move the best by exactly what
-                // the new point changes there, so a re-order neither passes for progress (a jittered
-                // re-order keeping a blocked unit Moving) nor costs a walking unit its progress (BUG-0043).
-                if (float.IsFinite(u.BestRemaining[i])) u.BestRemaining[i] += GoalEstimateShift(i, u.Goal[i], goal);
-                u.Goal[i] = goal;
-            }
-            return;
-        }
-        u.State[i] = UnitState.Moving;
-        u.Goal[i] = goal;
-        u.GoalCell[i] = cell;
-        u.OrderTick[i] = World.TickNumber;
-        u.StuckTicks[i] = 0;
-        u.BestRemaining[i] = float.PositiveInfinity;
-        u.WalkBack[i] = UnitStore.WalkBackNone;
     }
 }

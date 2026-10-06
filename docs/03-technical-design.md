@@ -72,7 +72,11 @@ phases in this fixed order:
 4. **Construction and economy:** building progress, gathering, drop-offs.
 5. **Status effects and zones:** expire, tick DoTs and regen, apply zone effects.
 6. **Abilities:** cast timers, effect resolution.
-7. **Orders and targeting:** order queue advance, target acquisition (staggered scans).
+7. **Orders and targeting:** order queue advance, target acquisition (staggered scans). (M1-7:
+   `OrderSystem.Run`: every live Idle unit with a shift-queued order, in slot order, starts the
+   head of its queue, so a queued order given to an Idle unit walks in the tick it applies, and a
+   unit that arrives or gives up in phase 9 starts its next leg on the next tick. No targeting yet;
+   see "Orders and unit states".)
 8. **Pathfinding requests:** build or fetch flow fields for new move targets. (M1-4c: the first
    step of `MovementSystem.Run`: Moving units are sorted by (goal cell, slot), every goal that
    needs a field and has it cached is touched, and the missing ones are built oldest order first,
@@ -111,11 +115,13 @@ progress. The cost is at most one tick (50 ms) of input latency. Pending command
 fixed-capacity `CommandQueue` (size from `SimConfig.CommandCapacity`) that is insertion-sorted in
 place each tick, so applying commands does not allocate. `Enqueue` on a full queue throws and
 leaves state unchanged (the sequence counter advances only once the command is accepted). At
-apply time, `Command.IsValid()` drops malformed commands (today: a `SpawnUnit` or `Move` with a
-NaN or infinite position), the same policy as a spawn into a full unit store; new command kinds add
+apply time, `Command.IsValid()` drops malformed commands (today: a `SpawnUnit`, `Move` or
+`AttackMove` with a NaN or infinite position, and any command with a `Flags` bit other than
+`Command.QueuedFlag`), the same policy as a spawn into a full unit store; new command kinds add
 their checks there. Checks that need the world run in `Simulation.Apply`: a `SpawnUnit` whose
-`TypeId` is not a unit in `SimConfig.Data` is dropped, and a `Move` is dropped when its unit
-handle is stale, the unit belongs to another player, or the target is outside the map.
+`TypeId` is not a unit in `SimConfig.Data` is dropped, and a unit order (`Move`, `Stop`,
+`HoldPosition`, `AttackMove`) is dropped when its unit handle is stale, the unit belongs to another
+player, or (`Move`, `AttackMove`) the target is outside the map.
 
 The sim runs on the main thread in v1. If profiling demands it later, move `Tick()` to a worker
 thread with double-buffered snapshots. The sim's design (no Godot calls, explicit snapshot
@@ -326,6 +332,10 @@ behind newer ones and the cap is spent on rebuilds every tick until enough group
 evicting). A unit that can't get through gives up after `MovementConstants.GiveUpTicks` (see
 "Local movement"), so a blocked group no longer holds its slot forever. One build of a large map still
 costs more than the tick budget (512 × 512 ≈ 10 ms in Debug); time-sliced builds are future work.
+**Maps larger than 256 × 256 are unsupported until builds are time-sliced** (BUG-0023, Producer
+decision 2026-10-04): one field build there takes longer than the tick budget (256: about 5 ms in
+Debug; 512: 13 ms; 1024: 55 ms, a visible stall). The design map is 128 × 128. `MapGenParams` still
+accepts up to 1024 because the generator stress suites use it; gameplay on such maps isn't supported.
 
 ### Local movement
 
@@ -419,7 +429,9 @@ So separation is symmetric and no result depends on which unit is walked first. 
 **Implementation (M1-4d-2):** shoving, still inside the two passes. Rules:
 
 - **Who is shoved:** an Idle unit of the walker's own player that is not its arrived groupmate.
-  Moving units (walking, or waiting for a field) and other players' units are never shoved.
+  Moving units (walking, or waiting for a field) and other players' units are never shoved; since
+  M1-7 neither are units holding position (`UnitStore.Hold`): not singly, not in a chain shove, not
+  as a parked line yielding, and they never walk back (see "Orders and unit states").
   - A unit with no goal (never ordered, or gave up) is pushed straight away from the walker.
   - A unit holding another goal (it arrived there) is pushed too, but `KeepLinks` scales its step
     down so it stays touching every Idle groupmate it touches (half the slack toward one that is
@@ -757,6 +769,43 @@ BUG-0034: the distinct-targets perf row averages 100 ticks, budget unchanged.
 Orders: `Move`, `AttackMove`, `Attack(target)`, `Hold`, `Stop`, `Patrol`, `Gather(node)`,
 `ReturnCargo`, `Build(site)`, `Repair(building)`, `Cast(ability, target)`. Shift-queued orders
 append to the queue; unqueued orders replace it.
+
+**What exists now (M1-7).** `CommandKind.Move` (2), `Stop` (3), `HoldPosition` (4) and
+`AttackMove` (5), each one command per unit. `Command.Flags` bit 0 (`Command.QueuedFlag`) marks a
+shift-queued order; factories `Command.Move(player, unit, target[, queued])`,
+`Command.Stop/HoldPosition(player, unit, queued = false)` and
+`Command.AttackMove(player, unit, target, queued = false)`. Every unit order is dropped for a dead
+or recycled handle or another player's unit; a Move or AttackMove also for a target off the map
+(queued or not, so it never takes a queue entry).
+
+- **Unqueued** (phase 1): `Move` and `AttackMove` clear the unit's queue and Hold, then apply the
+  Move rule of "Local movement" (same-cell re-orders included). `AttackMove` walks exactly like a
+  `Move` until combat targeting arrives (M4); only the kind kept in a queue entry differs. `Stop`
+  clears the queue and Hold and leaves the unit Idle with no goal (`GoalCell = -1`), velocity 0,
+  `StuckTicks` 0, `BestRemaining` infinity and no walk-back: goal-less, so friendly walkers shove it
+  freely and it anchors nothing. `HoldPosition` is `Stop` and then sets `UnitStore.Hold`.
+- **Holding** units are never shoved (single, chain, parked-line yield) and never walk back; apart
+  from that a holding unit is an ordinary Idle unit: a soft wall (single clip) to its own army and a
+  hard wall (and possible plug) to the other player. No enemy scanning yet (M4). Any later unqueued
+  order, and a queued Move or AttackMove when it starts, clears Hold.
+- **Queued** (`QueuedFlag`): appended to the unit's queue (kind and target); a full queue
+  (`OrderConstants.QueueCapacity` = 8) drops the order silently. A queued order never restarts a
+  Moving unit: its order tick, goal and stuck count are untouched. In phase 7 every live Idle unit
+  (it arrived, gave up, stopped, or was never ordered) with a queued order pops the head and starts
+  it through the same code as the unqueued order, except that a popped Move or AttackMove keeps the
+  rest of the queue. A popped `Stop` or `HoldPosition` is terminal: it drops the rest. A unit that
+  gave up on a leg still starts the next one.
+- **Storage** (no per-unit lists): `UnitStore.Hold` (bool per slot), `QueueCount` (int per slot),
+  and flat `QueueKind` / `QueuePosition` arrays of `Capacity * QueueCapacity` entries (slot i's
+  queue starts at `i * QueueCapacity`, head first; entries past the count are always default).
+  Alloc and Free reset them. All of them are in `StateHash`, and pending commands' `Flags` too.
+  They go into the high 32 bits of the hashed state and kind words (always zero before), with the
+  queue entries added only when flagged there, so a unit with no Hold and an empty queue, and a
+  pending command with `Flags` 0, hash exactly as before M1-7: the golden replay's checkpoints did
+  not move. QA's reflection audit mutates every queue entry of a live unit.
+
+Unit states today are `Idle` and `Moving` only. Not built yet: combat targeting for AttackMove,
+Hold's enemy scanning, `Patrol`, `Attack(target)`, formations and group moves.
 
 Unit states: `Idle`, `Moving`, `Chasing`, `Attacking` (wind-up / cooldown), `Gathering`,
 `Returning`, `Building`, `Casting`, `Dead`.
@@ -1159,13 +1208,14 @@ AiPlayer
 
 - **Replay file** (M1-6, `Rts.Sim.Replays`): a `Replay` holds a header, the command log, and
   checkpoints.
-  - Header: format version (`Replay.CurrentFormatVersion` = 1), `SimInfo.Version` (informational,
+  - Header: format version (`Replay.CurrentFormatVersion` = 2 since M1-7; 1 was M1-6, without
+    command flags, and is refused with `FormatVersionMismatch`), `SimInfo.Version` (informational,
     not checked on playback), data hash (`GameData.ContentHash()`), seed, player count, unit and
     command capacity (both decide outcomes: the unit capacity is in the state hash and a full
     store drops spawns), checkpoint interval, tick count, and every `MapGenParams` field. There is
     no map id yet: the map is rebuilt from seed + params.
   - Command log: every command `Simulation.Enqueue` accepted, as stamped (tick, player, sequence,
-    kind, type id, position, unit handle), in enqueue order. Commands stamped for a tick after the
+    kind, type id, position, unit handle, flags), in enqueue order. Commands stamped for a tick after the
     recorded span are left out.
   - Checkpoints: `(tick, StateHash())` right after each tick whose new `TickNumber` is a multiple of
     the interval (default 100, 5 s), so exactly `tickCount / interval` of them.
@@ -1177,14 +1227,16 @@ AiPlayer
   (M5), size the recorder's command capacity for the match. `ToReplay()` snapshots the recording.
 - **Text format** (`ReplayFormat`, extension `.replay`): ASCII, LF line endings, one `key value`
   line per header field in a fixed order, `commands N` then N lines
-  `c tick player sequence kind typeId x y unitIndex unitGeneration`, `checkpoints N` then N lines
+  `c tick player sequence kind typeId x y unitIndex unitGeneration flags` (10 fields; format 2 added
+  `flags`), `checkpoints N` then N lines
   `k tick hash`, `end`, and last `checksum H`: FNV-1a 64 over every byte before that line, so any
   changed byte is caught. Integers are invariant-culture decimal in canonical form (no `+`, no
   leading zeros); hashes are 16 uppercase hex digits; floats are their exact IEEE-754 bit pattern
   as 8 uppercase hex digits (`0.5` is `3F000000`, NaN round-trips). `TryRead` never throws on bad
   bytes: it returns a `ReplayError` code and no replay. Read rules (`Replay.Validate`): command
   ticks run from 1 to the tick count without going backwards, each player's sequences count 0, 1,
-  2, ..., players are below the player count, kinds are known, no tick has more commands than the
+  2, ..., players are below the player count, kinds are known, flags hold no bit but
+  `Command.QueuedFlag` (M1-7), no tick has more commands than the
   command capacity, and the checkpoints are exactly the interval's multiples. Format limits: at
   most 16 players, capacities up to 1,000,000, and (M1-4d-3, BUG-0040) a tick count and checkpoint
   interval of at most 1,728,000 (24 h at 20 Hz), so a small file can't declare years of playback.
@@ -1230,6 +1282,12 @@ AiPlayer
   through `TestSeeds.PreMix`, which inverts `SimRng.MixSeed` so they get exactly the old streams.
   New tests use plain seeds.
 - Perf thresholds are generous (they catch 2× regressions, not 5% noise).
+- The M1 perf criterion is `PerfCriterionTests.FiveHundredMovingUnits_AverageTickUnder4Ms` (M1-7):
+  500 units of every type, two players, on the default 128 map, spawned within 12 path cells of the
+  center and sent to the farthest passable cell. It asserts that at least 95% are Moving after every
+  measured tick, times 200 ticks one by one after 5 warm-up ticks, prints the average, p99 and
+  worst, and fails on an average of 4 ms or more. Measured (Debug, dev machine, run alone): about
+  0.7-1.0 ms average, all 500 Moving and stepping on every tick.
 - Every `Category=Perf` test and every allocation-measuring test is in the xUnit collection
   `SerialCollection` (`DisableParallelization = true`), so it runs alone after the parallel batch;
   classes that also hold heavy unmeasured tests put the measured ones in a nested `Serial` class.

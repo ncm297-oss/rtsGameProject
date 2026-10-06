@@ -140,4 +140,45 @@ public class AllocationTests
         Assert.Equal(before + 5 * runs, rec.CheckpointCount);
         Assert.Equal(200 + 500 * runs, sim.TickNumber);
     }
+
+    /// <summary>
+    /// M1-7 criterion 7: 500 units cycling shift-queued orders (an unqueued Move, then queued Move,
+    /// AttackMove, and for some a terminal Stop or HoldPosition) among four nearby points: applying
+    /// them and phase 7 popping them allocates nothing.
+    /// </summary>
+    [Fact]
+    public void Tick_With500UnitsCyclingQueuedOrders_AllocatesNothing()
+    {
+        Simulation sim = MoveScenario.Spawn(seed: 14, units: 500, maxCost: 14f, out int goalCell, capacity: 1000, players: 1); // capacity: room for 3-4 commands per unit
+        var g = sim.World.NavGrid;
+        Vector2 c = MoveScenario.Center(g, goalCell);
+        Vector2[] points = { c + new Vector2(-6f, -6f), c + new Vector2(6f, -6f), c + new Vector2(6f, 6f), c + new Vector2(-6f, 6f) };
+        Entities.UnitStore u = sim.World.Units;
+        int queuedPerRun = 0;
+        Action order = () =>
+        {
+            queuedPerRun = 0;
+            for (int i = 0; i < 500; i++)
+            {
+                var h = MoveScenario.Handle(sim, i);
+                sim.Enqueue(Command.Move(0, h, points[i % 4]));
+                sim.Enqueue(Command.Move(0, h, points[(i + 1) % 4], queued: true));
+                sim.Enqueue(Command.AttackMove(0, h, points[(i + 2) % 4], queued: true));
+                queuedPerRun += 2;
+                if (i % 5 == 0) { sim.Enqueue(Command.Stop(0, h, queued: true)); queuedPerRun++; }
+                else if (i % 7 == 0) { sim.Enqueue(Command.HoldPosition(0, h, queued: true)); queuedPerRun++; }
+            }
+        };
+        Action ticks = () =>
+        {
+            for (int t = 0; t < 200; t++) sim.Tick();
+        };
+        order();
+        ticks(); // warm-up: JITs the order paths and pops
+        AllocationProbe.AssertZero(ticks, setup: order);
+        int left = 0, holding = 0;
+        for (int i = 0; i < 500; i++) { left += u.QueueCount[i]; if (u.Hold[i]) holding++; }
+        Assert.True(left <= queuedPerRun - 150, $"{left} of {queuedPerRun} queued orders still waiting: too few pops measured");
+        Assert.True(holding > 0, "no queued HoldPosition was reached");
+    }
 }

@@ -4,6 +4,7 @@ using Rts.Sim.Commands;
 using Rts.Sim.Entities;
 using Rts.Sim.Map;
 using Rts.Sim.Movement;
+using Rts.Sim.Orders;
 using Xunit.Abstractions;
 
 namespace Rts.Sim.Tests;
@@ -562,10 +563,11 @@ public class CrowdRoutingTests
         Assert.True(float.IsFinite(u.BestRemaining[0]));
         u.StuckTicks[0] = 3; // test seam: a count in progress
         int orderTick = u.OrderTick[0];
-        MethodInfo apply = typeof(Simulation).GetMethod("ApplyMove", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        // Test seam: apply the order directly (what phase 1 does), between ticks.
+        void apply(Command order) => OrderSystem.Apply(sim.World, in order);
         // Far from the goal cell: the best estimate is untouched.
         float bestFar = u.BestRemaining[0];
-        apply.Invoke(sim, new object[] { Command.Move(0, MoveScenario.Handle(sim, 0), b) });
+        apply(Command.Move(0, MoveScenario.Handle(sim, 0), b));
         Assert.Equal(b, u.Goal[0]);
         Assert.Equal(orderTick, u.OrderTick[0]);
         Assert.Equal(3, u.StuckTicks[0]);
@@ -575,7 +577,7 @@ public class CrowdRoutingTests
         float bestIn = u.BestRemaining[0];
         Vector2 pos = u.Position[0], center = g.CellCenter(15, 15);
         float expected = (Vector2.Distance(c, pos) - Vector2.Distance(c, center)) - (Vector2.Distance(b, pos) - Vector2.Distance(b, center));
-        apply.Invoke(sim, new object[] { Command.Move(0, MoveScenario.Handle(sim, 0), c) });
+        apply(Command.Move(0, MoveScenario.Handle(sim, 0), c));
         Assert.Equal(bestIn + expected, u.BestRemaining[0], 4);
     }
 
