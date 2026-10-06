@@ -91,3 +91,4 @@ bugs outrank new features.
 | [BUG-0050](BUG-0050-random-goal-give-ups-rose-after-fix-round-1.md) | S3 | open | 500 units to 500 random goals: give-ups rose to 4.7% mean (2.3% before fix round 1; target 3%) |
 | [BUG-0052](BUG-0052-terrainheight-at-throws-on-huge-coordinates.md) | S3 | open | TerrainHeight.At throws instead of clamping for coordinates beyond ~4.3e9 m or +Infinity |
 | [BUG-0053](BUG-0053-m2-2-test-and-doc-nits.md) | S4 | open | M2-2 nits: facing test can't see a yaw sign error, a stale SimRunner remark, picker box height in docs |
+| [BUG-0064](BUG-0064-minimap-dot-readability-and-large-map-sampling.md) | S4 | open | Minimap dots hard to tell from ramps (Whirlwind) and cliffs (Malazan); maps over 220 cells drop dots |
