@@ -11,7 +11,8 @@ namespace Rts.Sim.Pathfinding;
 /// (2.6 MB for 32 fields on a 128 x 128 map). A field's contents depend only on the grid and its
 /// target, but under the per-tick build cap *which* fields are cached decides which units wait, so
 /// the cache's keys, versions and LRU stamps are sim state: <see cref="AddToHash"/> covers them, and
-/// only the sim may call <see cref="Get"/> or <see cref="TryGetCached"/> (BUG-0021).
+/// only the sim may call <see cref="Get"/> or <see cref="TryGetCached"/> (BUG-0021). Views use
+/// <see cref="PeekCached"/>, which is not a use.
 /// </remarks>
 public sealed class FlowFieldCache
 {
@@ -83,6 +84,19 @@ public sealed class FlowFieldCache
 
     /// <summary>True if an up-to-date field for the target is cached; does not count as a use.</summary>
     public bool Contains(int targetCell) => Find(targetCell) >= 0;
+
+    /// <summary>Read-only peek for views and debug tools: the cached field for the target if it is current, else null (also for an out-of-range cell).</summary>
+    /// <remarks>
+    /// Not a use: it touches no LRU stamp, clock or count, so it never changes <see cref="Simulation.StateHash"/>
+    /// and never builds. The instance is valid until the next <see cref="Simulation.Tick"/>, which may
+    /// rebuild it in place for another target; read it through <see cref="FlowField.DirectionAt"/> and
+    /// <see cref="FlowField.CostAt"/> and don't keep it across ticks.
+    /// </remarks>
+    public FlowField? PeekCached(int targetCell)
+    {
+        int slot = Find(targetCell);
+        return slot < 0 ? null : _fields[slot];
+    }
 
     /// <summary>The cached, up-to-date field for the target, marked most recently used; null (and nothing built) on a miss.</summary>
     /// <remarks>Sim-only: a hit moves the hashed LRU stamp.</remarks>

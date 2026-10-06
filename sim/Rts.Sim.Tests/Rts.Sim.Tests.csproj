@@ -19,6 +19,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Rts.Sim\Rts.Sim.csproj" />
+    <!-- In-process CLI tests (M1-8) call Rts.Cli.CliRunner.Run directly. -->
+    <ProjectReference Include="..\..\tools\Rts.Cli\Rts.Cli.csproj" />
   </ItemGroup>
 
   <ItemGroup>

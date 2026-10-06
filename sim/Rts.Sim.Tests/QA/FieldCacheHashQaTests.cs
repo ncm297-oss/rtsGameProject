@@ -206,7 +206,8 @@ public class FieldCacheHashQaTests
         string[] publicMethods = typeof(FlowFieldCache)
             .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
             .Where(m => !m.IsSpecialName).Select(m => m.Name).OrderBy(n => n, StringComparer.Ordinal).ToArray();
-        Assert.Equal(new[] { "CapacityFor", "Contains" }, publicMethods);
+        // PeekCached (M1-8): read-only, not a use; FlowFieldCacheTests' 10,000-peek hash twin guards it.
+        Assert.Equal(new[] { "CapacityFor", "Contains", "PeekCached" }, publicMethods);
         Assert.All(typeof(FlowFieldCache).GetProperties(BindingFlags.Public | BindingFlags.Instance),
             p => Assert.False(p.SetMethod?.IsPublic ?? false, $"{p.Name} has a public setter"));
         Assert.False(typeof(World).GetProperty("FlowFields")!.SetMethod?.IsPublic ?? false);

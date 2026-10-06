@@ -120,6 +120,97 @@ public class FlowFieldCacheTests
         Assert.Throws<ArgumentOutOfRangeException>(() => new FlowFieldCache(Grid, 0));
     }
 
+    [Fact]
+    public void PeekCached_Hit_ReturnsTheInstanceGetWould_AndIsNotAUse()
+    {
+        var cache = new FlowFieldCache(Grid, capacity: 2);
+        FlowField a = cache.Get(Target(0));
+        cache.Get(Target(1));
+        Assert.Same(a, cache.PeekCached(Target(0))); // not a touch: target 0 stays the oldest
+        Assert.Equal(2, cache.BuildCount);
+        cache.Get(Target(2));
+        Assert.False(cache.Contains(Target(0)));
+        Assert.Null(cache.PeekCached(Target(0)));
+        Assert.Same(cache.Get(Target(1)), cache.PeekCached(Target(1)));
+        Assert.Equal(3, cache.BuildCount);
+        Assert.Equal(2, cache.Count);
+    }
+
+    [Fact]
+    public void PeekCached_Miss_ReturnsNull_AndBuildsNothing()
+    {
+        var cache = new FlowFieldCache(Grid);
+        Assert.Null(cache.PeekCached(Target(0)));
+        Assert.Equal(0, cache.BuildCount);
+        Assert.Equal(0, cache.Count);
+    }
+
+    [Fact]
+    public void PeekCached_StaleVersion_ReturnsNull()
+    {
+        NavGrid grid = Generated(5); // own grid: the version bump must not leak into other tests
+        int target = PassableCells(grid)[10];
+        var cache = new FlowFieldCache(grid);
+        FlowField f = cache.Get(target);
+        Assert.Same(f, cache.PeekCached(target));
+        grid.BumpVersionForTests();
+        Assert.Null(cache.PeekCached(target));
+        Assert.Equal(1, cache.BuildCount); // a peek never rebuilds
+    }
+
+    [Fact]
+    public void PeekCached_OutOfRange_ReturnsNull()
+    {
+        var cache = new FlowFieldCache(Grid);
+        cache.Get(Target(0));
+        foreach (int cell in new[] { -1, int.MinValue, int.MaxValue, Grid.Width * Grid.Height })
+            Assert.Null(cache.PeekCached(cell));
+        Assert.Equal(1, cache.BuildCount);
+    }
+
+    /// <summary>
+    /// Hash twin: two identical 500-unit marches, one peeked 500 times between every tick for 20
+    /// ticks (10,000 peeks over every cell, including the goal's), keep equal state hashes, and the
+    /// peeks themselves leave the hash unchanged.
+    /// </summary>
+    [Fact]
+    public void PeekCached_TenThousandPeeksBetweenTicks_LeaveStateHashUnchanged()
+    {
+        const int units = 500, ticks = 20, peeksPerTick = 500;
+        CrossMapScenario peeked = CrossMapScenario.Create(7, units, ScenarioTests.StartRadius);
+        CrossMapScenario twin = CrossMapScenario.Create(7, units, ScenarioTests.StartRadius);
+        peeked.OrderAll();
+        twin.OrderAll();
+        FlowFieldCache cache = peeked.Sim.World.FlowFields;
+        int cells = peeked.Sim.World.NavGrid.Width * peeked.Sim.World.NavGrid.Height;
+
+        int hits = 0, peeks = 0, next = 0;
+        for (int t = 0; t < ticks; t++)
+        {
+            peeked.Sim.Tick();
+            twin.Sim.Tick();
+            ulong before = peeked.Sim.StateHash();
+            int builds = cache.BuildCount;
+            for (int k = 0; k < peeksPerTick; k++)
+            {
+                // Every other peek is the goal cell (a live field once built); the rest sweep the map.
+                int cell = k % 2 == 0 ? peeked.GoalCell : next++ % cells;
+                FlowField? f = cache.PeekCached(cell);
+                if (f != null)
+                {
+                    hits++;
+                    Assert.Equal(cell, f.RequestedCell);
+                }
+                peeks++;
+            }
+            Assert.Equal(builds, cache.BuildCount);
+            Assert.Equal(before, peeked.Sim.StateHash());
+            Assert.Equal(twin.Sim.StateHash(), peeked.Sim.StateHash());
+        }
+        Assert.Equal(10_000, peeks);
+        Assert.True(hits >= (ticks - 1) * peeksPerTick / 2, $"only {hits} peeks hit; the goal field should be cached after the first tick");
+    }
+
     private static void AssertSameAsFresh(FlowField cached)
     {
         FlowField fresh = FlowField.Build(Grid, cached.RequestedCell);

@@ -39,11 +39,18 @@ only. See the [roadmap](docs/05-roadmap.md).
 
 ## Running it
 
-Nothing to run yet. Once M0 lands:
-
 ```powershell
 dotnet test sim/Rts.Sim.Tests             # simulation tests
 & $env:GODOT --path game                  # run the game
+```
+
+Headless sim runs from the command line (checkpoint hashes, tick timings, replays; exit codes in
+[03 Technical design](docs/03-technical-design.md#debug-tooling)):
+
+```powershell
+dotnet run --project tools/Rts.Cli -- run --seed 1 --units 200 --ticks 1500   # hashes + timings
+dotnet run --project tools/Rts.Cli -- run --seed 1 --units 200 --record x.replay   # also record a replay
+dotnet run --project tools/Rts.Cli -- play x.replay   # exit 0 = every checkpoint matched
 ```
 
 Tool installation is in [SETUP.md](SETUP.md).
