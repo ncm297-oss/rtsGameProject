@@ -49,4 +49,37 @@ public class ViewApiAllocationTests
         int runs = AllocationProbe.AssertZero(block, _out);
         _out.WriteLine($"ViewApi per-frame helpers: 0 bytes (runs {runs}), checksum {sum + count}");
     }
+
+    [Fact]
+    public void MinimapDots_2000Units_AndTransform_AllocateZeroBytes()
+    {
+        Heightmap map = TerrainHeightTests.GeneratedMap(3);
+        const int n = 2000;
+        var raster = new MinimapRaster(map, new NavGrid(map), new uint[] { 0x3366CC, 0xE08020 }, n);
+        var alive = new bool[n];
+        var pos = new Vector2[n];
+        var owner = new int[n];
+        for (int i = 0; i < n; i++)
+        {
+            alive[i] = i % 7 != 0;
+            pos[i] = new Vector2(i * 0.127f % (map.Width * 2), i * 0.311f % (map.Height * 2));
+            owner[i] = i % 2;
+        }
+        var fit = new MinimapTransform(new Vector2(220, 220), new Vector2(map.Width * 2, map.Height * 2));
+        float sum = 0f;
+        int count = 0;
+        Action block = () =>
+        {
+            count += raster.DrawDots(alive, pos, owner);
+            for (int i = 0; i < 4; i++)
+            {
+                Vector2 g = MinimapTransform.RayToGround(new Vector3(i * 10f, 60f, 100f), new Vector3(0.3f, -1f, -0.7f), 4f);
+                sum += fit.ToPixel(fit.ClampToMap(g)).X;
+                if (fit.TryToMap(new Vector2(i * 50f, 100f), out Vector2 m)) sum += m.Y;
+            }
+        };
+        block();
+        int runs = AllocationProbe.AssertZero(block, _out);
+        _out.WriteLine($"Minimap dots (2,000 units) + transform: 0 bytes (runs {runs}), checksum {sum + count}");
+    }
 }

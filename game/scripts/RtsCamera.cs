@@ -14,6 +14,12 @@ public partial class RtsCamera : Camera3D
     /// <summary>Screen-edge panning; turned off for scripted screenshots so the mouse can't move the shot.</summary>
     [Export] public bool EdgePanEnabled { get; set; } = true;
 
+    /// <summary>A control (the minimap) that sits on the screen edge; edge panning pauses while the mouse is over it.</summary>
+    public Control? EdgePanBlocker { get; set; }
+
+    /// <summary>Ground focus point (sim x, y) in meters.</summary>
+    public System.Numerics.Vector2 Focus => _focus;
+
     private System.Numerics.Vector2 _focus;
     private float _zoom = CameraLimits.DefaultZoom;
     private int _mapWidthCells = 1, _mapHeightCells = 1;
@@ -87,6 +93,7 @@ public partial class RtsCamera : Camera3D
         Vector2 size = vp.GetVisibleRect().Size;
         Vector2 m = vp.GetMousePosition();
         if (m.X < 0 || m.Y < 0 || m.X > size.X || m.Y > size.Y) return Vector2.Zero; // cursor outside the window
+        if (EdgePanBlocker != null && EdgePanBlocker.IsVisibleInTree() && EdgePanBlocker.GetGlobalRect().HasPoint(m)) return Vector2.Zero;
         float edge = CameraLimits.EdgePanPixels;
         var d = Vector2.Zero;
         if (m.X < edge) d.X -= 1;

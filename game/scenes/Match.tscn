@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3]
+[gd_scene load_steps=15 format=3]
 
 [ext_resource type="Script" path="res://scripts/Match.cs" id="1_match"]
 [ext_resource type="Script" path="res://scripts/SimRunner.cs" id="2_runner"]
@@ -9,6 +9,7 @@
 [ext_resource type="Script" path="res://scripts/UnitViews.cs" id="7_units"]
 [ext_resource type="Script" path="res://scripts/SelectionRings.cs" id="8_rings"]
 [ext_resource type="Script" path="res://scripts/SelectionController.cs" id="9_select"]
+[ext_resource type="Script" path="res://scripts/Minimap.cs" id="10_minimap"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMaterial_1"]
 sky_top_color = Color(0.36, 0.52, 0.72, 1)
@@ -67,6 +68,20 @@ script = ExtResource("9_select")
 visible = false
 mouse_filter = 2
 color = Color(0.35, 1, 0.45, 0.18)
+
+[node name="Hud" type="CanvasLayer" parent="."]
+
+[node name="Minimap" type="Control" parent="Hud"]
+texture_filter = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = -228.0
+offset_right = 228.0
+offset_bottom = -8.0
+grow_vertical = 0
+script = ExtResource("10_minimap")
 
 [node name="DebugOverlay" type="CanvasLayer" parent="."]
 script = ExtResource("5_overlay")

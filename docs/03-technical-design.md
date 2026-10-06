@@ -933,7 +933,7 @@ Match.tscn
     SelectionDecals       # MultiMesh rings + health bars
   RtsCamera               # pitch 55°, pan/zoom, clamps to map
   SelectionController     # picking, box select, command issuing
-  Hud (CanvasLayer)       # resource bar, minimap, selection panel, command card, alerts
+  Hud (CanvasLayer)       # resource bar, minimap (M2-4), selection panel, command card, alerts
 ```
 
 - **Unit views:** a `PackedScene` per unit type (glTF model + AnimationPlayer + team-color
@@ -1074,6 +1074,66 @@ Match
   `res://tests/UnitViewsTest.tscn` ("UNITVIEWS TEST PASS") and `res://tests/SelectionTest.tscn`
   ("SELECTION TEST PASS"), run with `& $env:GODOT --headless --path game res://tests/<name>.tscn`.
   Headless windows are 64 x 64 px, so `SelectionTest` sets the root window to 1152 x 648 first.
+
+### Implementation (M2-4)
+
+The minimap, the first HUD element. New nodes in `Match.tscn`:
+
+```
+Match
+  ...
+  Hud                CanvasLayer (hidden by --no-hud)
+    Minimap          Control (Minimap.cs): bottom-left, 8 px margin, 220 x 220 px, mouse filter Stop
+  DebugOverlay
+```
+
+- **Pixels:** the pure `ViewApi.MinimapRaster(Heightmap, NavGrid, ownerRgb[], maxDots)` holds two
+  RGBA8 layers with one pixel per map cell, row = map y. The terrain layer is baked once in
+  `Match.Start` with the 3D mesh's palette (`TerrainMeshBuilder.LevelColor` / `RampColor` /
+  `CliffColor`): ramp cells get the ramp tint, nav-grid cliff cells (the lip above a drop and ramp
+  walls) the cliff tint, any other cell its level tint, darkened by `ImpassableShade` (0.6) if it is
+  blocked anyway (the map's border ring, sealed pockets). `DrawDots(alive, positions, owners)`
+  clears the previous dots (only the pixels it wrote, so cost scales with units, not map area)
+  and writes one opaque cell-sized dot per live unit in its owner's colour; later slots overwrite
+  earlier ones, unknown owners and non-finite positions draw nothing, positions are clamped onto
+  the map (floor, like `NavGrid.WorldToCell`). It allocates nothing after construction. Player p's
+  colour is faction p's `PrimaryColor` (the same rule as the unit views until M6).
+- **Refresh rates:** the terrain `ImageTexture` is made once. The dot texture is redrawn from the
+  current tick's positions (no interpolation) every 4 ticks, 5 Hz at 1x speed, and costs about
+  0.06 ms at 2,000 units (`MinimapTest`). The camera outline is redrawn every frame in `_Draw`.
+  Both textures use nearest filtering, so dots stay crisp cells.
+- **Transform:** the pure `ViewApi.MinimapTransform(controlPixels, mapMeters)` fits the map into
+  the control preserving aspect: scale = min(width / mapW, height / mapH), centred, so a non-square
+  map is letterboxed (the bars show a dark backdrop). `ToPixel(map)` and `TryToMap(pixel)`
+  convert; `TryToMap` is false outside the map area and for NaN/Inf. Screen-up on the minimap is
+  map -y, the same as the 3D camera.
+- **Camera outline:** the four viewport corners' camera rays (`ProjectRayOrigin` /
+  `ProjectRayNormal`) meet the horizontal plane at the terrain height under the camera focus
+  (`MinimapTransform.RayToGround`); a ray that points up or lands more than 200 m away is cut at
+  200 m along the ray. Each corner is clamped onto the map before it becomes a pixel, so the white
+  outline never leaves the map area. Seen from the camera's side it is a trapezoid, wider at the
+  top (far) edge.
+- **Input:** the control's mouse filter is Stop, so a click inside it never reaches
+  `SelectionController`; events outside its rect are never seen by it. Left press (`select`)
+  jumps the camera focus to the clicked map point (`RtsCamera.SetFocus`, clamped as usual) and
+  keeps following the cursor while the button is held; a drag past the map area just stops
+  moving. Right press (`command`) calls `SelectionController.OrderMoveTo(point)`, the same path a
+  3D right-click takes after its ground pick: prune, nothing if the selection is empty or the
+  point non-finite, the whole order dropped with a warning if it would overflow the command
+  queue, else one `Command.Move` per selected unit. Pixels in the letterbox do nothing. The wheel
+  does not zoom while the mouse is over the minimap.
+- **Edge panning** is suppressed while the mouse is over the minimap (`RtsCamera.EdgePanBlocker`),
+  since the minimap touches the screen's left and bottom edges.
+- **Not shown yet:** fog of war (M4), resource markers, alerts and pings (Alt + click), attack
+  orders, minimap zoom. Buildings will be added as dots or footprints when they exist.
+- **Launch flag added:** `--no-hud` hides the HUD (clean screenshots, perf comparisons).
+- **Tests:** `ViewApi/MinimapRasterTests` (every cell against the mesh tint on the hand map and
+  3 generated maps, dot pixels at corners, centres and the map's last float, dead units, unknown
+  owners), `MinimapTransformTests` (round trips, 160x48 / 48x160 letterbox, outside and
+  non-finite pixels, rays), a `ViewApiAllocationTests` row (2,000 dots, 0 bytes), and the
+  headless scene `res://tests/MinimapTest.tscn` ("MINIMAP TEST PASS"): dot colours at 2,000
+  units, refresh cost, left-click, drag, right-click orders and outside clicks pushed through
+  the viewport, the outline at both zoom limits and map corners.
 
 ## AI architecture
 

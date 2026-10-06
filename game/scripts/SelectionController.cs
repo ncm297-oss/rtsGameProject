@@ -12,7 +12,7 @@ namespace Rts.Game;
 /// Left click selects the nearest own unit under the cursor, a 4 px drag box-selects own units by
 /// their projected centres; Shift (<c>select_add</c>) toggles a clicked unit or adds a box. A plain
 /// click on no own unit clears the selection. Right click (<c>command</c>) picks the ground and
-/// enqueues one <see cref="Command.Move"/> per selected unit. The geometry lives in the pure
+/// calls <see cref="OrderMoveTo"/> with that point (the minimap calls it too). The geometry lives in the pure
 /// <see cref="ScreenPicker"/> and <see cref="GroundPicker"/>; the sim is changed only through
 /// <see cref="Simulation.Enqueue"/>.
 /// </remarks>
@@ -175,7 +175,15 @@ public partial class SelectionController : Node
         Vector3 origin = _camera.ProjectRayOrigin(screen), dir = _camera.ProjectRayNormal(screen);
         if (!GroundPicker.TryPick(sim.World.Heightmap, new(origin.X, origin.Y, origin.Z), new(dir.X, dir.Y, dir.Z), out System.Numerics.Vector3 hit))
             return; // off the map: no order
+        OrderMoveTo(new Vector2(hit.X, hit.Z));
+    }
+
+    /// <summary>Enqueues one <see cref="Command.Move"/> per selected live unit to a ground point (sim x, y in meters); the right-click and minimap order path.</summary>
+    public void OrderMoveTo(Vector2 point)
+    {
+        if (_runner?.Simulation is not Simulation sim || !float.IsFinite(point.X) || !float.IsFinite(point.Y)) return;
         Selection.Prune(sim.World.Units.Alive, sim.World.Units.Generation);
+        if (Selection.Count == 0) return;
         // The queue throws when full; never send half an order.
         if (sim.PendingCommandCount + Selection.Count > sim.World.Config.CommandCapacity)
         {
@@ -183,7 +191,7 @@ public partial class SelectionController : Node
             GD.PushWarning($"Move order for {Selection.Count} units dropped: command queue full.");
             return;
         }
-        var target = new System.Numerics.Vector2(hit.X, hit.Z);
+        var target = new System.Numerics.Vector2(point.X, point.Y);
         foreach (EntityHandle h in Selection.Items)
             sim.Enqueue(Command.Move(LocalPlayer, h, target));
     }

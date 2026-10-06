@@ -9,7 +9,7 @@ namespace Rts.Game;
 /// <c>--seed &lt;n&gt;</c>, <c>--speed &lt;x&gt;</c>, <c>--screenshot &lt;path&gt;</c>,
 /// <c>--screenshot-after &lt;seconds&gt;</c> (default 2), <c>--units &lt;n&gt;</c> (per player, 0 to
 /// <see cref="MaxUnitsPerPlayer"/>, default <see cref="DefaultUnitsPerPlayer"/>), <c>--zoom &lt;m&gt;</c>
-/// (start zoom, clamped to the camera limits; for perf runs). Bad values are
+/// (start zoom, clamped to the camera limits; for perf runs), <c>--no-hud</c> (hide the HUD). Bad values are
 /// warned about and ignored; a token starting with <c>--</c> is never taken as a value (BUG-0041).
 /// </remarks>
 public sealed class LaunchOptions
@@ -37,6 +37,9 @@ public sealed class LaunchOptions
 
     /// <summary>Start zoom override in meters, or null for the default.</summary>
     public float? Zoom { get; private set; }
+
+    /// <summary>True to hide the HUD (clean screenshots, perf comparisons).</summary>
+    public bool NoHud { get; private set; }
 
     /// <summary>Parses <see cref="OS.GetCmdlineUserArgs"/>.</summary>
     public static LaunchOptions FromCommandLine() => Parse(OS.GetCmdlineUserArgs());
@@ -78,6 +81,9 @@ public sealed class LaunchOptions
                     if (float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out float zoom) && float.IsFinite(zoom)) o.Zoom = zoom;
                     else Warn(flag, value);
                     break;
+                case "--no-hud":
+                    o.NoHud = true;
+                    continue; // takes no value
                 default:
                     continue;
             }

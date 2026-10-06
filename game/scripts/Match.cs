@@ -44,6 +44,16 @@ public partial class Match : Node3D
         camera.SetFocus(focus.X, focus.Y);
         if (options.Zoom is float zoom) camera.SetZoom(zoom);
 
+        var hud = GetNode<CanvasLayer>("Hud");
+        hud.Visible = !options.NoHud;
+        if (!options.NoHud)
+        {
+            // Player p plays faction p until the M6 lobby, so a player's dot colour is that faction's.
+            var playerRgb = new uint[sim.World.Config.PlayerCount];
+            for (int p = 0; p < playerRgb.Length; p++) playerRgb[p] = data.Factions[p % data.Factions.Length].PrimaryColor;
+            hud.GetNode<Minimap>("Minimap").Init(_runner, camera, selection, playerRgb);
+        }
+
         var overlay = GetNode<DebugOverlay>("DebugOverlay");
         overlay.Runner = _runner;
         overlay.Selection = selection;
