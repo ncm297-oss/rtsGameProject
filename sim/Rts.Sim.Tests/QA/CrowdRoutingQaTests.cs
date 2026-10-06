@@ -231,7 +231,7 @@ public class CrowdRoutingQaTests
     [InlineData(3UL)]
     [InlineData(4UL)]
     [InlineData(5UL)]
-    [InlineData(6UL, Skip = "BUG-0046: walker positions depend on the neighbors' spawn order (Constrain clip order)")]
+    [InlineData(6UL, Skip = "BUG-0046: walker positions depend on the neighbors' spawn order (Constrain clip order; a slot-free order was measured at M1-9 and left for the Producer, docs/03 Known limits)")]
     public void DetourPastAMixedEnemyCluster_AnySpawnPermutation_BitEqualWalkerPath(ulong seed)
     {
         const int cluster = 12;
@@ -289,9 +289,9 @@ public class CrowdRoutingQaTests
     /// Walkers interact (sidestep, push, queue, detour round each other's standing units, arrival).
     /// </summary>
     [Theory]
-    [InlineData(11UL, Skip = "BUG-0046: walker positions depend on the neighbors' spawn order (Constrain clip order)")]
-    [InlineData(12UL, Skip = "BUG-0046: walker positions depend on the neighbors' spawn order (Constrain clip order)")]
-    [InlineData(13UL, Skip = "BUG-0046: walker positions depend on the neighbors' spawn order (Constrain clip order)")]
+    [InlineData(11UL, Skip = "BUG-0046: walker positions depend on the neighbors' spawn order (Constrain clip order; a slot-free order was measured at M1-9 and left for the Producer, docs/03 Known limits)")]
+    [InlineData(12UL, Skip = "BUG-0046: walker positions depend on the neighbors' spawn order (Constrain clip order; a slot-free order was measured at M1-9 and left for the Producer, docs/03 Known limits)")]
+    [InlineData(13UL, Skip = "BUG-0046: walker positions depend on the neighbors' spawn order (Constrain clip order; a slot-free order was measured at M1-9 and left for the Producer, docs/03 Known limits)")]
     public void ManyWalkersDetouringAnEnemyCluster_AnySpawnPermutation_BitEqualPositions(ulong seed)
     {
         const int walkers = 16, cluster = 10;
@@ -783,8 +783,8 @@ public class CrowdRoutingQaTests
     [Theory]
     [InlineData(4, 1UL)]
     [InlineData(4, 2UL)]
-    [InlineData(5, 3UL, Skip = "BUG-0045: a plug of more than MaxPlugSpan (4) enemy units is not recognized; units are shoved into it and walk through")]
-    [InlineData(5, 4UL, Skip = "BUG-0045: a plug of more than MaxPlugSpan (4) enemy units is not recognized; units are shoved into it and walk through")]
+    [InlineData(5, 3UL)]
+    [InlineData(5, 4UL)]
     public void WideCorridorPluggedByAWideEnemyPerRow_Width4And5_NobodyThrough(int width, ulong seed)
     {
         int wide = LocalMovementTests.TypeWithRadius(0.9f), small = LocalMovementTests.TypeWithRadius(0.4f);
@@ -809,9 +809,9 @@ public class CrowdRoutingQaTests
     /// a 3-cell one (more members than MaxPlugSpan). Nobody through; nobody pressed past the pack limit.
     /// </summary>
     [Theory]
-    [InlineData(2, 1UL, Skip = "BUG-0045: a plug of more than MaxPlugSpan (4) enemy units is not recognized; units are shoved into it and walk through")]
-    [InlineData(2, 2UL, Skip = "BUG-0045: a plug of more than MaxPlugSpan (4) enemy units is not recognized; units are shoved into it and walk through")]
-    [InlineData(3, 3UL, Skip = "BUG-0045: a plug of more than MaxPlugSpan (4) enemy units is not recognized; units are shoved into it and walk through")]
+    [InlineData(2, 1UL)]
+    [InlineData(2, 2UL)]
+    [InlineData(3, 3UL)]
     public void CorridorPluggedBySmallEnemies_MoreMembersThanMaxPlugSpan_NobodyThrough(int width, ulong seed)
     {
         int small = LocalMovementTests.TypeWithRadius(0.4f), wide = LocalMovementTests.TypeWithRadius(0.9f);

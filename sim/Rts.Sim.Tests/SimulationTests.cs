@@ -124,6 +124,41 @@ public class SimulationTests
         Assert.Throws<InvalidOperationException>(() => sim.Enqueue(Command.Noop(0)));
     }
 
+    /// <summary>
+    /// BUG-0054 / BUG-0056: an undefined kind, an unknown flag bit, or the queued flag on a kind that
+    /// isn't a unit order is refused at the door like an unknown player: an exception, nothing queued,
+    /// no sequence number used (the next command hashes as in a twin that never saw the bad one).
+    /// </summary>
+    [Theory]
+    [InlineData(99, 0)]
+    [InlineData(-1, 0)]
+    [InlineData(6, 0)]
+    [InlineData((int)CommandKind.Stop, 2)]
+    [InlineData((int)CommandKind.Move, 1 << 20)]
+    [InlineData((int)CommandKind.HoldPosition, -1)]
+    [InlineData((int)CommandKind.SpawnUnit, Command.QueuedFlag)]
+    [InlineData((int)CommandKind.Noop, Command.QueuedFlag)]
+    public void Enqueue_MalformedKindOrFlags_ThrowsAndChangesNothing(int kind, int flags)
+    {
+        Simulation Make()
+        {
+            var s = new Simulation(TestSim.Config(Seed: 1, PlayerCount: 1, UnitCapacity: 2, CommandCapacity: 4));
+            s.Enqueue(Command.SpawnUnit(0, typeId: 0, new Vector2(20f, 20f)));
+            s.Tick();
+            s.Tick();
+            return s;
+        }
+        Simulation sim = Make(), twin = Make();
+        var bad = new Command { Kind = (CommandKind)kind, Player = 0, Flags = flags, Unit = new EntityHandle(0, sim.World.Units.Generation[0]) };
+        ulong before = sim.StateHash();
+        Assert.Throws<ArgumentException>(() => sim.Enqueue(bad));
+        Assert.Equal(0, sim.PendingCommandCount);
+        Assert.Equal(before, sim.StateHash());
+        sim.Enqueue(Command.Noop(0));
+        twin.Enqueue(Command.Noop(0));
+        Assert.Equal(twin.StateHash(), sim.StateHash()); // same sequence number: the bad one used none
+    }
+
     // ---------- M1-4b: data-driven spawns, Move validation ----------
 
     [Fact]

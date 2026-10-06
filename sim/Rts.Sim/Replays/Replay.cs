@@ -87,8 +87,8 @@ public sealed class Replay
             // Commands stamped for one tick all wait in the queue together.
             if (sameTick > CommandCapacity) return ReplayError.InvalidCommand;
             if ((uint)c.Player >= (uint)PlayerCount) return ReplayError.InvalidCommand;
-            if (!Enum.IsDefined(c.Kind)) return ReplayError.InvalidCommand;
-            if ((c.Flags & ~Command.KnownFlags) != 0) return ReplayError.InvalidCommand;
+            // The rule Simulation.Enqueue applies, so everything it accepts reads back (BUG-0054).
+            if (!c.IsWellFormed()) return ReplayError.InvalidCommand;
             if (c.Sequence != nextSequence[c.Player]) return ReplayError.InvalidCommand;
             nextSequence[c.Player]++;
         }

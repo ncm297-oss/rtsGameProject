@@ -98,9 +98,11 @@ public static class MovementConstants
     public const int QueueOnWaitStride = 4;
 
     /// <summary>
-    /// Enemy units a plug test follows (BUG-0045): a line of standing enemies too close together to pass
-    /// between, reaching blocked ground at two members, plugs a passage; 4 covers corridors up to 3 or 4
-    /// cells wide, and keeps the search short and away from the inside of open-field blobs.
+    /// Most hard units a plug can have (BUG-0045): a cluster of standing enemies (or holders) too close
+    /// together to pass between that reaches blocked ground on two opposite sides plugs a passage, if it
+    /// has at most this many members. 32 covers a line of the smallest units (0.8 m) two deep across a
+    /// 6 m ramp (16 members) with room to spare; a bigger cluster is an army's blob, where sliding round
+    /// enemies is how two-player crowds flow. Also bounds one search's cost.
     /// </summary>
-    public const int MaxPlugSpan = 4;
+    public const int MaxPlugCluster = 32;
 }

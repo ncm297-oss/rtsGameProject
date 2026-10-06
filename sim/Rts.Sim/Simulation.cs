@@ -49,12 +49,18 @@ public sealed class Simulation
     /// <summary>Queues a command for tick <c>TickNumber + 1</c>, stamped with the player's next sequence number.</summary>
     /// <remarks>
     /// Always one tick ahead, whether called between ticks (input) or during one (AI think), so a
-    /// command never changes the tick that is already running.
+    /// command never changes the tick that is already running. A command for an unknown player, of an
+    /// undefined kind, or with flag bits its kind doesn't take (<see cref="Command.IsWellFormed"/>) is
+    /// refused with an exception and changes nothing, so everything accepted can be recorded and read
+    /// back (BUG-0054). A well-formed command with a bad payload (a NaN target, a dead unit) is
+    /// accepted and dropped when it applies.
     /// </remarks>
     public void Enqueue(Command command)
     {
         if ((uint)command.Player >= (uint)_nextSequence.Length)
             throw new ArgumentOutOfRangeException(nameof(command), $"Unknown player {command.Player}.");
+        if (!command.IsWellFormed())
+            throw new ArgumentException($"Malformed command: kind {(int)command.Kind}, flags {command.Flags}.", nameof(command));
         command.Tick = World.TickNumber + 1;
         command.Sequence = _nextSequence[command.Player];
         _commands.Add(in command); // throws when full; bump the counter only once accepted (BUG-0004)

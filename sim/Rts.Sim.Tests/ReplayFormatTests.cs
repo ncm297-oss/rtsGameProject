@@ -181,6 +181,7 @@ public class ReplayFormatTests
     [InlineData(10, "2", "unknown flag bit")]
     [InlineData(10, "3", "queued plus an unknown flag bit")]
     [InlineData(10, "-1", "every flag bit")]
+    [InlineData(10, "1", "the queued flag on a spawn (not a unit order, BUG-0056)")]
     public void CommandBreakingTheLogRules_IsRefusedAtRead(int field, string value, string what)
     {
         string text = Text(Small);

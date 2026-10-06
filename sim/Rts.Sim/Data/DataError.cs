@@ -21,6 +21,10 @@ public sealed class DataError
     /// <summary>What is wrong.</summary>
     public string Message { get; }
 
-    /// <inheritdoc/>
-    public override string ToString() => $"{File}: {Path}: {Message}";
+    /// <summary>"file: path: message", leaving out an empty file or path (and its separator).</summary>
+    public override string ToString()
+    {
+        string where = File.Length == 0 ? Path : Path.Length == 0 ? File : $"{File}: {Path}";
+        return where.Length == 0 ? Message : $"{where}: {Message}";
+    }
 }

@@ -392,6 +392,42 @@ public class CrowdRoutingTests
     }
 
     /// <summary>
+    /// M1-9: a unit that reaches the give-up limit while backing off keeps its goal only if it is still
+    /// anchored at the end of the tick. Here an enemy presses it from the goal side, so the back-off
+    /// carries it past ArrivalDistance with nobody of its group in touch: it used to stay Idle holding
+    /// the goal cell (a stray anchor later arrivals packed against, 10 m from their point in QA's
+    /// 2,500-unit one-owner row); now it is checked again at the end of the tick and drops the goal, to
+    /// walk back once.
+    /// </summary>
+    [Fact]
+    public void GivingUpWhileBackingOff_OutOfReach_DropsTheGoal()
+    {
+        var sim = new Simulation(TestSim.Config(Seed: 1, PlayerCount: 2, UnitCapacity: 2, CommandCapacity: 8), LocalMovementTests.Flat(24));
+        int small = LocalMovementTests.TypeWithRadius(0.4f);
+        var goal = new Vector2(21f, 21f);
+        sim.Enqueue(Command.SpawnUnit(0, small, goal + new Vector2(0.9f, 0f)));
+        sim.Enqueue(Command.SpawnUnit(1, small, goal + new Vector2(0.6f, 0f))); // 0.3 m apart: deeper than the pack limit
+        sim.Tick();
+        sim.Tick();
+        World w = sim.World;
+        UnitStore u = w.Units;
+        Assert.True(w.NavGrid.WorldToCell(goal, out int gx, out int gy));
+        // Test seam: unit 0 is walking to the goal, one stuck tick short of giving up.
+        u.State[0] = UnitState.Moving;
+        u.Goal[0] = goal;
+        u.GoalCell[0] = gy * w.NavGrid.Width + gx;
+        u.StuckTicks[0] = MovementConstants.GiveUpTicks - 1;
+        u.BestRemaining[0] = 0f;
+        sim.Tick();
+        float dist = Vector2.Distance(u.Position[0], goal);
+        _out.WriteLine($"backed off to {u.Position[0]}, {dist:F3} m from its goal; goal cell {u.GoalCell[0]}, walk-back {u.WalkBack[0]}");
+        Assert.Equal(UnitState.Idle, u.State[0]);
+        Assert.True(dist > MovementConstants.ArrivalDistance, $"precondition: the back-off should leave it out of reach ({dist:F3} m)");
+        Assert.Equal(-1, u.GoalCell[0]);
+        Assert.False(MoveScenario.Arrived(w)[0]);
+    }
+
+    /// <summary>
     /// BUG-0037 in the anchor re-check: a friendly unit touching the point only through an enemy that
     /// holds the same goal cell is cut off when a shove makes the group re-check, never kept through the enemy.
     /// </summary>

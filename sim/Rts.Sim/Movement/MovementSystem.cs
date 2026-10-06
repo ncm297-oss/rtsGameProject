@@ -20,14 +20,12 @@ namespace Rts.Sim.Movement;
 /// applied. So separation is symmetric and no unit's result depends on which unit was walked first.
 /// Walkers also plan shoves on friendly Idle units in their way (and the line ahead of them, M1-4d-3);
 /// those move last, after every walker (M1-4d-2). A unit a shove cuts off its blob walks back once.
-/// Not yet: formation offsets, <c>Stop</c>/<c>Hold</c>.
+/// Units holding position (M1-7) are never shoved and are hard walls to everyone (M1-9). Not yet:
+/// formation offsets.
 /// </para>
 /// </remarks>
 public static class MovementSystem
 {
-
-
-
     // Planned outcomes, written by Plan and carried out by Apply.
     private const byte ActWalk = 0;    // take PlannedStep: progress, the stuck count resets
     private const byte ActStuck = 1;   // take PlannedStep (possibly zero: refused): a stuck tick
@@ -60,8 +58,8 @@ public static class MovementSystem
         Array.Sort(order, 0, n);
         BuildMissingFields(world, n);
         Plan(world, n);
-        Apply(world, n);
-        ApplyShoves(world);
+        int backedOff = Apply(world, n);
+        ApplyShoves(world, backedOff);
     }
 
     /// <summary>Plans every Moving unit's outcome and step, and the shoves it gives, from start-of-tick state; writes only the world's scratch arrays (and LRU touches).</summary>
@@ -77,6 +75,7 @@ public static class MovementSystem
         byte[] action = world.PlannedAction;
         Vector2[] shove = world.ShoveStep;
         float queryExtra = world.MaxUnitRadius + MovementConstants.AvoidRange;
+        world.PlugEpoch++; // plug answers of the last pass are stale: positions and states moved since
 
         const float arrival2 = MovementConstants.ArrivalDistance * MovementConstants.ArrivalDistance;
         int groupCell = -1;
@@ -430,10 +429,16 @@ public static class MovementSystem
         return CanStep(grid, cx, cy, pos + step) ? step : Vector2.Zero;
     }
 
-    /// <summary>Carries out the plans: moves units, stops arrivals, and counts stuck ticks toward giving up.</summary>
-    private static void Apply(World world, int n)
+    /// <summary>
+    /// Carries out the plans: moves units, stops arrivals, and counts stuck ticks toward giving up.
+    /// Returns how many units it wrote to <c>World.BackedOffStops</c>: those that gave up while backing
+    /// off and kept their goal, for <see cref="SettleBackedOff"/> at the end of the tick.
+    /// </summary>
+    private static int Apply(World world, int n)
     {
         UnitStore u = world.Units;
+        int[] backedOff = world.BackedOffStops;
+        int backedOffCount = 0;
         long[] order = world.MoveOrder;
         Vector2[] planned = world.PlannedStep;
         float[] remaining = world.PlannedRemaining;
@@ -482,14 +487,19 @@ public static class MovementSystem
                         bool backingOff = action[i] == ActBackOff;
                         Stop(u, i);
                         // Blocked for a short time: give up where it stands and drop the goal, so
-                        // it doesn't anchor a blob away from the goal. A unit still backing off is
+                        // it doesn't anchor a blob away from the goal. A unit still backing off was
                         // at its goal or touching its blob: it settles there, crowded, and keeps
-                        // the goal so groupmates still pack against it.
+                        // the goal so groupmates still pack against it. But the back-off step itself
+                        // can carry it out of reach (1.17 m from its goal, nobody of its group
+                        // touching: a stray anchor that later arrivals packed against, M1-9), so it is
+                        // checked again at the end of the tick (SettleBackedOff).
                         if (!backingOff) u.GoalCell[i] = -1;
+                        else backedOff[backedOffCount++] = i;
                     }
                     break;
             }
         }
+        return backedOffCount;
     }
 
     /// <summary>
@@ -576,6 +586,10 @@ public static class MovementSystem
         for (int m = 0; m < count; m++)
         {
             int j = near[m];
+            // Not a wall (a walker, or an arrived groupmate), the common case in a crowd: WallLimit's own
+            // first test, written out so most neighbors cost no call (Debug builds, where the tick budget
+            // is measured, call every helper; BUG-0044).
+            if (j == i || (u.State[j] == UnitState.Moving ? u.Velocity[j] != Vector2.Zero : u.GoalCell[j] == goalCell && u.Owner[j] == u.Owner[i])) continue;
             if (!WallLimit(world, grid, u, i, pos, j, stepLength, goalCell, pushArrived, out Vector2 normal, out float limit)) continue;
             float into = Vector2.Dot(step, normal);
             if (into > limit) step -= normal * (into - limit);
@@ -587,10 +601,11 @@ public static class MovementSystem
                 continue;
             }
             hardWalls[hard++] = walls++;
-            // Already overlapping another player's standing unit: only within 45 degrees of straight
-            // away from it, so nobody slides round an enemy inside it (a corridor plug, BUG-0045).
+            // Already overlapping a hard wall (an enemy, or a holder of its own army): only within 45
+            // degrees of straight away from it, so nobody slides round it while inside it (a corridor
+            // plug, BUG-0045 / BUG-0055).
             float sum = u.Radius[i] + u.Radius[j];
-            if (Vector2.DistanceSquared(u.Position[j], pos) >= sum * sum || !IsPlug(world, i, pos, j, near, count)) continue;
+            if (Vector2.DistanceSquared(u.Position[j], pos) >= sum * sum || !IsPlug(world, i, j)) continue;
             var across = new Vector2(normal.Y, -normal.X);
             for (int c = 0; c < 2; c++)
             {
@@ -674,10 +689,23 @@ public static class MovementSystem
     }
 
     /// <summary>
-    /// True if wall <paramref name="j"/> is a hard wall to walker <paramref name="i"/>: a unit of another
-    /// player that isn't walking under an order (Idle now; holding or fighting later). See <see cref="Constrain"/>.
+    /// True if wall <paramref name="j"/> is a hard wall to walker <paramref name="i"/>: a unit that isn't
+    /// walking under an order (Idle now; fighting later) and belongs to another player or holds
+    /// position (<see cref="UnitStore.Hold"/>). See <see cref="Constrain"/>.
     /// </summary>
-    private static bool IsHardWall(UnitStore u, int i, int j) => u.State[j] != UnitState.Moving && u.Owner[j] != u.Owner[i];
+    /// <remarks>
+    /// Holders block their own army too (BUG-0055, Producer decision 2026-10-05): a unit told to hold a
+    /// choke means nobody through. They are rare, so the crowd rows, which hold friendly walls soft, don't move.
+    /// </remarks>
+    private static bool IsHardWall(UnitStore u, int i, int j) => u.State[j] != UnitState.Moving && (u.Owner[j] != u.Owner[i] || u.Hold[j]);
+
+    /// <summary>
+    /// True if unit <paramref name="k"/> counts as a plug member, or a unit no shove may press
+    /// <paramref name="i"/> into, under the hard rules (<see cref="IsPlug"/>, <see cref="ShovedIntoEnemy"/>,
+    /// the chain shove): another player's unit that isn't walking, or one of i's own army holding position.
+    /// </summary>
+    private static bool StandsHard(UnitStore u, int i, int k) =>
+        u.Owner[k] != u.Owner[i] ? !(u.State[k] == UnitState.Moving && u.Velocity[k] != Vector2.Zero) : u.Hold[k];
 
     /// <summary>
     /// For <see cref="Constrain"/>: false if neighbor <paramref name="j"/> is no wall to walker
@@ -783,13 +811,13 @@ public static class MovementSystem
         return kept;
     }
 
-    /// <summary>True if one of the <paramref name="count"/> units in <paramref name="near"/> belongs to another player than <paramref name="m"/>, stands still and touches it.</summary>
+    /// <summary>True if one of the <paramref name="count"/> units in <paramref name="near"/> touches <paramref name="m"/> and stands hard to it (<see cref="StandsHard"/>: another player's standing unit, or a holder of its own army).</summary>
     private static bool TouchesEnemy(UnitStore u, int m, int[] near, int count)
     {
         for (int q = 0; q < count; q++)
         {
             int k = near[q];
-            if (!u.Alive[k] || u.Owner[k] == u.Owner[m] || (u.State[k] == UnitState.Moving && u.Velocity[k] != Vector2.Zero)) continue;
+            if (k == m || !u.Alive[k] || !StandsHard(u, m, k)) continue;
             float sum = u.Radius[m] + u.Radius[k];
             if (Vector2.DistanceSquared(u.Position[m], u.Position[k]) < sum * sum) return true;
         }
@@ -864,15 +892,17 @@ public static class MovementSystem
     /// Moves every shoved unit (after the walkers): each takes its summed shove, clamped to its own
     /// speed and kept out of other standing units (<see cref="SqueezeLimit"/>), unless that ends in
     /// a blocked cell, off the map or across a blocked corner (then it stays). It stays Idle with no
-    /// new order. Then every goal group that had a member moved re-checks its anchors
-    /// (<see cref="RecheckAnchors"/>), so no unit keeps a goal cell away from its point.
+    /// new order. Then the first <paramref name="backedOff"/> units of <c>World.BackedOffStops</c> (they
+    /// gave up backing off this tick) keep their goal only if still anchored (<see cref="SettleBackedOff"/>),
+    /// and every goal group that had a member moved re-checks its anchors (<see cref="RecheckAnchors"/>),
+    /// so no unit keeps a goal cell away from its point.
     /// </summary>
     /// <remarks>
     /// Every shove step is worked out before any shoved unit moves, from positions after the walkers
     /// moved, and goal groups are re-checked once each in goal-cell order: no result depends on
     /// slot order.
     /// </remarks>
-    private static void ApplyShoves(World world)
+    private static void ApplyShoves(World world, int backedOff)
     {
         UnitStore u = world.Units;
         NavGrid grid = world.NavGrid;
@@ -880,6 +910,7 @@ public static class MovementSystem
         Vector2[] step = world.PlannedStep;
         int[] shoved = world.AnchorQueue;
         int count = 0;
+        world.PlugEpoch++; // walkers moved since Plan: its plug answers are stale
         for (int i = 0; i < shove.Length; i++)
         {
             if (shove[i] == Vector2.Zero)
@@ -913,9 +944,68 @@ public static class MovementSystem
             u.Position[i] += step[i];
             if (u.GoalCell[i] >= 0) goals[goalCount++] = u.GoalCell[i];
         }
+        if (backedOff > 0) SettleBackedOff(world, backedOff);
         Array.Sort(goals, 0, goalCount);
         for (int k = 0; k < goalCount; k++)
             if (k == 0 || goals[k] != goals[k - 1]) RecheckAnchors(world, goals[k]);
+    }
+
+    /// <summary>
+    /// The arrival rule, applied at end-of-tick positions to the first <paramref name="count"/> units of
+    /// <c>World.BackedOffStops</c>, which gave up while backing off and kept their goal: one keeps it
+    /// only if it is in its goal cell within <see cref="MovementConstants.ArrivalDistance"/> of its goal,
+    /// or touches (through a legal step) an Idle groupmate that holds the goal cell and isn't itself one
+    /// of these units left out of reach. The others drop the goal and may walk back once, like a unit a
+    /// shove cut off.
+    /// </summary>
+    /// <remarks>
+    /// Local, not <see cref="RecheckAnchors"/>: a whole-group re-check for every such unit cost the
+    /// 2,500-unit tight blob 16% (4.5 -> 5.3 ms), where hundreds back off at the edge of one blob. It is
+    /// enough here: nobody anchored on these units this tick (they were walking when the tick planned),
+    /// and the groupmates they touch keep their own anchors through the usual re-checks. Decided for
+    /// all of them before any drops, with <c>World.AnchorLinked</c> marking the ones out of reach, so
+    /// the slot order changes nothing.
+    /// </remarks>
+    private static void SettleBackedOff(World world, int count)
+    {
+        UnitStore u = world.Units;
+        NavGrid grid = world.NavGrid;
+        int[] units = world.BackedOffStops;
+        bool[] outOfReach = world.AnchorLinked; // all false between anchor re-checks
+        int[] near = world.Neighbors;
+        const float arrival2 = MovementConstants.ArrivalDistance * MovementConstants.ArrivalDistance;
+        for (int k = 0; k < count; k++)
+        {
+            int i = units[k];
+            outOfReach[i] = !(grid.WorldToCell(u.Position[i], out int cx, out int cy) && cy * grid.Width + cx == u.GoalCell[i]
+                && Vector2.DistanceSquared(u.Position[i], u.Goal[i]) <= arrival2);
+        }
+        // The hash holds start-of-tick positions; no unit has moved more than MaxUnitSpeed since.
+        float extra = world.MaxUnitRadius + world.MaxUnitSpeed;
+        for (int k = 0; k < count; k++)
+        {
+            int i = units[k];
+            if (!outOfReach[i]) continue;
+            bool linked = false;
+            int n = grid.WorldToCell(u.Position[i], out int cx, out int cy) ? world.Spatial.QueryRadius(u.Position[i], u.Radius[i] + extra, near) : 0;
+            for (int m = 0; m < n && !linked; m++)
+            {
+                int j = near[m];
+                if (j == i || outOfReach[j] || !u.Alive[j] || u.State[j] != UnitState.Idle || u.GoalCell[j] != u.GoalCell[i] || u.Owner[j] != u.Owner[i]) continue;
+                float sum = u.Radius[i] + u.Radius[j];
+                linked = Vector2.DistanceSquared(u.Position[i], u.Position[j]) < sum * sum
+                    && grid.WorldToCell(u.Position[j], out int jx, out int jy) && IsLegalStep(grid, cx, cy, jx, jy);
+            }
+            if (!linked) units[k] = ~i; // marked to drop, once every unit is decided
+        }
+        for (int k = 0; k < count; k++)
+        {
+            int i = units[k] < 0 ? ~units[k] : units[k];
+            outOfReach[i] = false;
+            if (units[k] >= 0) continue;
+            u.GoalCell[i] = -1;
+            if (u.WalkBack[i] == UnitStore.WalkBackNone) u.WalkBack[i] = UnitStore.WalkBackPending;
+        }
     }
 
     /// <summary>
@@ -1010,7 +1100,7 @@ public static class MovementSystem
         {
             int k = near[m];
             if (k == i || !u.Alive[k] || (u.State[k] == UnitState.Moving && u.Velocity[k] != Vector2.Zero)) continue;
-            if (u.Owner[k] != u.Owner[i]) enemyNear = true; // a standing enemy in reach: ShovedIntoEnemy checks the final step
+            if (u.Owner[k] != u.Owner[i] || u.Hold[k]) enemyNear = true; // a standing enemy or holder in reach: ShovedIntoEnemy checks the final step
             Vector2 toK = u.Position[k] - pos;
             float dist = toK.Length();
             Vector2 normal = dist > 0f ? toK / dist : -CoincidentDirection(i, k);
@@ -1027,8 +1117,9 @@ public static class MovementSystem
     /// <summary>
     /// True if shove <paramref name="step"/> would take unit <paramref name="i"/> past the pack limit
     /// (<see cref="MovementConstants.ShoveSpacing"/> x the radii's sum) into another player's standing
-    /// unit, or, already overlapping one, move it more than 45 degrees off straight away from it (sliding
-    /// round an enemy inside it carried units through corridor plugs, BUG-0045).
+    /// unit or a holder of its own army (<see cref="StandsHard"/>), or, already overlapping one, move it
+    /// more than 45 degrees off straight away from it (sliding round an enemy inside it carried units
+    /// through corridor plugs, BUG-0045).
     /// </summary>
     private static bool ShovedIntoEnemy(World world, int i, Vector2 step)
     {
@@ -1041,11 +1132,11 @@ public static class MovementSystem
         for (int m = 0; m < count; m++)
         {
             int k = near[m];
-            if (k == i || !u.Alive[k] || u.Owner[k] == u.Owner[i] || (u.State[k] == UnitState.Moving && u.Velocity[k] != Vector2.Zero)) continue;
+            if (k == i || !u.Alive[k] || !StandsHard(u, i, k)) continue;
             float sum = u.Radius[i] + u.Radius[k];
             Vector2 pk = u.Position[k];
             float d1 = Vector2.Distance(next, pk);
-            if (d1 >= sum || !IsPlug(world, i, pos, k, near, count)) continue;
+            if (d1 >= sum || !IsPlug(world, i, k)) continue;
             float d0 = Vector2.Distance(pos, pk);
             if (d1 < d0 && d1 < MovementConstants.ShoveSpacing * sum - ShoveRoundingMargin) return true;
             if (d0 < sum && d0 > 0f && Vector2.Dot(step, (pos - pk) / d0) < ConeCos * stepLength) return true;
@@ -1054,43 +1145,92 @@ public static class MovementSystem
     }
 
     /// <summary>
-    /// True if standing enemy <paramref name="k"/>, which unit <paramref name="i"/> overlaps, is part of a
-    /// plug: a line of other players' standing units, each too close to the next for i to pass between
-    /// (gap under i's diameter), that reaches blocked ground on two opposite sides (each wall gap under
-    /// i's diameter too) within <see cref="MovementConstants.MaxPlugSpan"/> units, or k alone in a 1-cell
-    /// passage. An enemy blob pressed against one cliff is no plug: its walls are all on one side. Then i may only
-    /// move straight-ish away from k (BUG-0045: units squeezed through the 0.1-0.2 m slits of enemy plugs
-    /// in corridors 1-3 cells wide). In the open, sliding round enemy units is how two-player crowds flow,
+    /// True if hard unit <paramref name="k"/> (<see cref="StandsHard"/>: another player's standing unit, or
+    /// a holder of i's army), which unit <paramref name="i"/> overlaps, is part of a plug: k alone in a
+    /// 1-cell passage, or k's cluster reaches blocked ground on two opposite sides. The cluster is every
+    /// hard unit linked to k by gaps under i's diameter (too close for i to pass between), if it has at
+    /// most <see cref="MovementConstants.MaxPlugCluster"/> members; a bigger one (an army's blob in the
+    /// open) is no plug. A blob pressed against one cliff is no plug either: its walls are all on one
+    /// side. Then i may only move straight-ish away from k (BUG-0045: units squeezed through the 0.1-0.2 m
+    /// slits of plugs in corridors). In the open, sliding round enemy units is how two-player crowds flow,
     /// and holding that too cost crowd arrivals, so it is left alone.
     /// </summary>
-    /// <remarks>Breadth first from k over start-of-tick positions, neighbors in ascending slot order: the same answer every run.</remarks>
-    private static bool IsPlug(World world, int i, Vector2 pos, int k, int[] near, int count)
+    /// <remarks>
+    /// The answer depends on k's cluster, i's owner and i's radius only (i itself is never a member: it
+    /// walks or is shoved, so it doesn't hold), and nothing it reads changes within a pass. So a search
+    /// writes it for every member it visits, per owner and radius class, into <c>World.PlugAnswers</c>,
+    /// and the rest of the pass reads it there: each cluster is searched about once per pass (BUG-0044).
+    /// A set property (which units are linked, how many, which walls they touch), so the visiting order
+    /// changes nothing.
+    /// </remarks>
+    private static bool IsPlug(World world, int i, int k)
     {
         NavGrid grid = world.NavGrid;
         UnitStore u = world.Units;
         if (grid.WorldToCell(u.Position[k], out int kx, out int ky) && InPassage(grid, kx, ky)) return true;
+        long answer = world.PlugAnswers[PlugSlot(world, u, i, k)];
+        if (answer >> 2 == world.PlugEpoch && (answer & PlugVisiting) == 0) return (answer & PlugYes) != 0;
+        return SearchPlug(world, i, k);
+    }
+
+    // World.PlugAnswers entries: epoch x 4 + these bits.
+    private const long PlugYes = 1;
+    private const long PlugVisiting = 2; // in the cluster being searched
+
+    /// <summary>Unit <paramref name="k"/>'s entry in <c>World.PlugAnswers</c> for walkers of i's owner and radius class.</summary>
+    private static int PlugSlot(World world, UnitStore u, int i, int k) =>
+        (k * world.Config.PlayerCount + u.Owner[i]) * world.RadiusClassCount + world.RadiusClassOfType[u.TypeId[i]];
+
+    /// <summary>
+    /// The search behind <see cref="IsPlug"/>: breadth first over k's cluster, stopping early at a member
+    /// already answered this pass (same cluster, so the same answer) or once the cluster outgrows
+    /// <see cref="MovementConstants.MaxPlugCluster"/>; writes the answer for every member visited.
+    /// </summary>
+    private static bool SearchPlug(World world, int i, int k)
+    {
+        NavGrid grid = world.NavGrid;
+        UnitStore u = world.Units;
+        long[] answers = world.PlugAnswers;
+        long epoch = world.PlugEpoch << 2;
         int[] line = world.PlugMembers;
         int[] found = world.ShoveNeighbors;
         float pass = 2f * u.Radius[i];
         int n = 1, walls = 0;
+        long known = -1; // the cluster's answer, once met in an answered member (or too big: no)
         line[0] = k;
-        for (int head = 0; head < n; head++)
+        answers[PlugSlot(world, u, i, k)] = epoch | PlugVisiting;
+        for (int head = 0; head < n && known < 0; head++)
         {
             int m = line[head];
             walls |= WallSides(grid, u.Position[m], u.Radius[m], pass);
-            // Blocked ground on opposite sides (left and right, or above and below): the line spans the passage.
-            if ((walls & 3) == 3 || (walls & 12) == 12) return true;
             int c = world.Spatial.QueryRadius(u.Position[m], u.Radius[m] + world.MaxUnitRadius + pass, found);
-            for (int q = 0; q < c && n < line.Length; q++)
+            for (int q = 0; q < c; q++)
             {
                 int e = found[q];
-                if (e == i || !u.Alive[e] || u.Owner[e] == u.Owner[i] || (u.State[e] == UnitState.Moving && u.Velocity[e] != Vector2.Zero)) continue;
-                if (Array.IndexOf(line, e, 0, n) >= 0) continue;
+                if (e == m || !u.Alive[e] || !StandsHard(u, i, e)) continue;
                 float gap = Vector2.Distance(u.Position[m], u.Position[e]) - u.Radius[m] - u.Radius[e];
-                if (gap < pass) line[n++] = e;
+                if (gap >= pass) continue;
+                int slot = PlugSlot(world, u, i, e);
+                if (answers[slot] >> 2 == world.PlugEpoch)
+                {
+                    if ((answers[slot] & PlugVisiting) != 0) continue; // already in this search
+                    known = answers[slot] & PlugYes;
+                    break;
+                }
+                if (n == line.Length)
+                {
+                    known = 0; // bigger than any plug: a blob, not a line across a passage
+                    break;
+                }
+                answers[slot] = epoch | PlugVisiting;
+                line[n++] = e;
             }
         }
-        return false;
+        // Blocked ground on opposite sides (left and right, or above and below): the cluster spans the passage.
+        bool plug = known >= 0 ? known == PlugYes : (walls & 3) == 3 || (walls & 12) == 12;
+        long done = epoch | (plug ? PlugYes : 0);
+        for (int c = 0; c < n; c++) answers[PlugSlot(world, u, i, line[c])] = done;
+        return plug;
     }
 
     /// <summary>

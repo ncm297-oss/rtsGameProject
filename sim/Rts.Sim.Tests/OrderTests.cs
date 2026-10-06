@@ -214,7 +214,13 @@ public class OrderTests
             sim.Tick();
             for (int i = 1; i <= walkers; i++)
                 if (Vector2.Distance(u.Position[i], u.Position[0]) < u.Radius[i] + u.Radius[0] + 0.05f) { pressed++; break; }
-            if (hold) Assert.True(u.Position[0] == at, $"tick {t}: the holding unit moved from {at} to {u.Position[0]}");
+            if (hold)
+            {
+                Assert.True(u.Position[0] == at, $"tick {t}: the holding unit moved from {at} to {u.Position[0]}");
+                // A holder is a hard wall to its own army too (BUG-0055): nobody gets past it.
+                for (int i = 1; i <= walkers; i++)
+                    Assert.True(u.Position[i].X < at.X, $"tick {t}: walker {i} (r {u.Radius[i]}) got past the holder to {u.Position[i]}");
+            }
         }
         _out.WriteLine($"hold {hold}: unit at {u.Position[0]} (stood at {at}), walkers touching it on {pressed} ticks");
         Assert.True(pressed > 0, "no walker ever reached the unit");

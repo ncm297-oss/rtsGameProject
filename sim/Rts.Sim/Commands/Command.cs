@@ -36,10 +36,25 @@ public struct Command
     /// <summary>True for the kinds addressed to one unit (<see cref="Unit"/>), which can be queued.</summary>
     public readonly bool IsUnitOrder => Kind is CommandKind.Move or CommandKind.Stop or CommandKind.HoldPosition or CommandKind.AttackMove;
 
-    /// <summary>True when the payload is safe to apply: only known flag bits, and positional commands need a finite position.</summary>
+    /// <summary>True when <see cref="Kind"/> is a defined <see cref="CommandKind"/> and <see cref="Flags"/> holds only known bits, set on unit orders only: what <c>Simulation.Enqueue</c> accepts and a replay may hold.</summary>
+    /// <remarks>
+    /// <see cref="QueuedFlag"/> means nothing on a <see cref="CommandKind.Noop"/> or a
+    /// <see cref="CommandKind.SpawnUnit"/>, so it is refused there rather than carried, ignored, in the
+    /// replay and the hash (BUG-0056). Written as a switch, not <c>Enum.IsDefined</c>, so a new kind is
+    /// refused until it is added here on purpose.
+    /// </remarks>
+    public readonly bool IsWellFormed()
+    {
+        bool knownKind = Kind is CommandKind.Noop or CommandKind.SpawnUnit or CommandKind.Move or CommandKind.Stop
+            or CommandKind.HoldPosition or CommandKind.AttackMove;
+        if (!knownKind || (Flags & ~KnownFlags) != 0) return false;
+        return Flags == 0 || IsUnitOrder;
+    }
+
+    /// <summary>True when the payload is safe to apply: well formed (<see cref="IsWellFormed"/>), and positional commands need a finite position.</summary>
     public readonly bool IsValid()
     {
-        if ((Flags & ~KnownFlags) != 0) return false;
+        if (!IsWellFormed()) return false;
         return Kind switch
         {
             CommandKind.SpawnUnit or CommandKind.Move or CommandKind.AttackMove => float.IsFinite(Position.X) && float.IsFinite(Position.Y),

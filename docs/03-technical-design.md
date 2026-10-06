@@ -115,11 +115,15 @@ is called between ticks (input) or during one (AI think), so a command never cha
 progress. The cost is at most one tick (50 ms) of input latency. Pending commands live in a
 fixed-capacity `CommandQueue` (size from `SimConfig.CommandCapacity`) that is insertion-sorted in
 place each tick, so applying commands does not allocate. `Enqueue` on a full queue throws and
-leaves state unchanged (the sequence counter advances only once the command is accepted). At
-apply time, `Command.IsValid()` drops malformed commands (today: a `SpawnUnit`, `Move` or
-`AttackMove` with a NaN or infinite position, and any command with a `Flags` bit other than
-`Command.QueuedFlag`), the same policy as a spawn into a full unit store; new command kinds add
-their checks there. Checks that need the world run in `Simulation.Apply`: a `SpawnUnit` whose
+leaves state unchanged (the sequence counter advances only once the command is accepted). Since
+M1-9 (BUG-0054) `Enqueue` also refuses a command that isn't well formed (`Command.IsWellFormed()`:
+an undefined `CommandKind`, a `Flags` bit other than `Command.QueuedFlag`, or `QueuedFlag` on a kind
+that isn't a unit order, i.e. `Noop` or `SpawnUnit`, BUG-0056) with an `ArgumentException`, like an
+unknown player: nothing is queued, recorded or hashed, and no sequence number is used, so
+everything `Enqueue` accepts can be written to a replay and read back (`Replay.Validate` applies the
+same rule). At apply time, `Command.IsValid()` (well formed, plus a finite position for `SpawnUnit`,
+`Move` and `AttackMove`) drops what is left, e.g. a NaN ray cast, the same policy as a spawn into a
+full unit store; new command kinds add their checks there. Checks that need the world run in `Simulation.Apply`: a `SpawnUnit` whose
 `TypeId` is not a unit in `SimConfig.Data` is dropped, and a unit order (`Move`, `Stop`,
 `HoldPosition`, `AttackMove`) is dropped when its unit handle is stale, the unit belongs to another
 player, or (`Move`, `AttackMove`) the target is outside the map.
@@ -482,6 +486,8 @@ hashed positions and goal cells. The two passes are still order-independent for 
 crosses a walker column through an idle crowd in both spawn orders, bit-equal), but a walker's own
 push, sidestep and wall trims still sum neighbors in ascending slot order, so where it touches three
 or more units at once its last bit can depend on slot order. Same seed and commands give the same hash.
+(Since M1-4d-3 the push and sidestep are summed order-free; what still depends on slots, the wall
+clips among them, is listed under "Known limits (M1)" in "Implementation (M1-9)".)
 
 Measured (M1-4d-2, Debug). Arrived counts are `MoveScenario.Arrived` (Idle, holding the goal, linked
 to the point). The test scenarios alternate two players by slot; the "1 player" figures are the same
@@ -589,7 +595,9 @@ Holding those to the exact rule too was measured and rejected: 2,500 units to 4 
 arrived 680-854 (the floor is 825), 500 random goals gave up 38-44 (cap 35), the 64-goal row 37
 (cap 28). Holding all Idle units hard, or all enemy units including waiting ones, also failed rows.
 Producer decision (M1-5), owner may revisit: enemies holding their ground are hard walls; the
-army's own standing units stay soft (single clip, shovable). Two known gaps (both fixed in M1-4d-3, below), both S3 for the M1
+army's own standing units stay soft (single clip, shovable); since M1-9 the army's own *holding*
+units are hard too (Producer decision 2026-10-05, BUG-0055; holders are rare, so the crowd rows
+don't move). Two known gaps (both fixed in M1-4d-3, below), both S3 for the M1
 hardening session: an Idle enemy that holds the walker's own goal cell is treated as an arrived
 groupmate (every groupmate check reads `GoalCell` only, never `Owner`), so it is no wall and the
 walker "arrives" up to 0.16 m into it (BUG-0037); and when the hard-wall fallback fires it restarts
@@ -700,7 +708,9 @@ unit-agnostic (a crowd cost in the fields is future work). The rules as built:
   alone in a 1-cell passage, or a line of standing enemies, each too close to the next for the unit to
   pass between, that reaches blocked ground on two opposite sides (each wall gap under the unit's
   diameter too) within `MaxPlugSpan` (4) units: corridors 1-3 cells wide plugged by one wide enemy per
-  row hold (fix round 2; QA's 2- and 3-cell rows). Sliding round an enemy while inside it carried units
+  row hold (fix round 2; QA's 2- and 3-cell rows). (M1-9 replaced the line of at most 4 by a cluster of
+  at most `MaxPlugCluster` (32) units, and holders of the unit's own army count as plug members; see
+  "Implementation (M1-9)".) Sliding round an enemy while inside it carried units
   through plugs. Applied to every enemy, or to any enemy next to blocked ground, it cost the two-player
   crowd rows (500 to 4 points min 119 / 187 against 206): enemy blobs pressed against one cliff are no
   plug, since their walls are all on one side.
@@ -713,7 +723,8 @@ unit-agnostic (a crowd cost in the fields is future work). The rules as built:
 New hashed state: `UnitStore.WalkBack` (in `StateHash`, so in every replay checkpoint, and in QA's
 reflection audit). New scratch on `World` (derived, not hashed): `HardWalls`, `ChainMembers`,
 `DetourLo`/`DetourHi`/`DetourWall`. Tunables: `DetourMargin`, `MaxDetourTurn`, `MaxChainShove`,
-`QueueRange`, `WalkBackDelayTicks`, `QueueOnWaitStride`, `MaxPlugSpan` in `MovementConstants`.
+`QueueRange`, `WalkBackDelayTicks`, `QueueOnWaitStride`, `MaxPlugSpan` (`MaxPlugCluster` since M1-9) in
+`MovementConstants`.
 
 **Both players at one point are enemies now.** `MoveScenario.Spawn` alternates owners in spawn
 order, but commands apply sorted by (player, sequence), so player 0 takes the low slots and player 1
@@ -767,9 +778,135 @@ Rows below target, and why (miss rule: each beats its base on the same scenario)
 Re-bounded tests (BUG-0039): the crowd stress rows run on plain seeds (one point: seeds 1-3 and 1;
 4 points: seeds 1-10 each) and assert bounds that hold on every swept seed (500 to 4 points >= 40%,
 2,500 >= 22%); the 64-goal dev test and QA's twin sweep seeds 1-40 (build cap, termination, every
-Idle unit arrived or gave up, at most 48 of 128 give up); its pack rule breaks on 15 of 40 maps
-(worst pair 0.768 m against 0.8 m) and is report-only. `TestSeeds.PreMix` is gone from these rows.
+Idle unit arrived or gave up, at most 48 of 128 give up; re-bounded on seeds 1-80 in M1-9, below); its
+pack rule breaks on 15 of 40 maps (worst pair 0.768 m against 0.8 m) and is report-only. `TestSeeds.PreMix` is gone from these rows.
 BUG-0034: the distinct-targets perf row averages 100 ticks, budget unchanged.
+
+**Implementation (M1-9): end-of-milestone hardening.** The M1 debt QA left open, in priority order.
+
+- **Holders block their own army (BUG-0055).** `IsHardWall` counts a unit holding position as hard
+  for every walker, its own army included (Producer decision 2026-10-05), and the plug rules follow
+  (`StandsHard`): a holder can be a plug member, a chain shove stops at a unit touching one, and no
+  shove presses a unit past the pack limit into one. QA's 1-cell corridor with a radius-0.9 holder:
+  0 of 30 own walkers end past it (10 before, overlapping it by up to 1.05 m). No crowd row issues
+  `HoldPosition`, and with no holder every rule reads exactly as before, so every crowd row, the perf
+  rows and the golden replay are bit-identical: nothing to reverse.
+- **Malformed commands are refused at the door (BUG-0054, BUG-0056 item 1).** See "Tick model":
+  `Enqueue` throws for an undefined kind, an unknown flag bit or `QueuedFlag` on a `Noop` /
+  `SpawnUnit`, and `Replay.Validate` applies the same `Command.IsWellFormed()`.
+- **Plugs are clusters (BUG-0045).** A plug is now the hard unit alone in a 1-cell passage, or its
+  *cluster* (every hard unit linked to it by gaps under the walker's diameter: other players' units
+  that aren't walking, and holders of the walker's army) if the cluster has at most
+  `MovementConstants.MaxPlugCluster` (32) members and its members' wall sides include two opposite
+  ones. M1-4d-3 followed a line of at most 4 (`MaxPlugSpan`), so a 5-cell corridor plugged by one
+  wide enemy per row, or 5-7 small enemies across a 2- or 3-cell corridor, let 3-12 units through.
+  QA's five rows for those now hold (nobody through; closest friendly 0.75-0.81 x the radii's sum,
+  the pack limit is 0.5). A cluster bigger than 32 is an army's blob, where sliding round enemies
+  is how two-player crowds flow; its members are still hard walls, only the 45-degree cone is off.
+- **Plug answers are cached (BUG-0044).** The answer depends only on the cluster, the walker's owner
+  and the walker's radius, and nothing it reads changes within a pass (Plan reads start-of-tick
+  state; the shove pass reads positions after the walkers moved). So `World.PlugAnswers` keeps it
+  per unit, per walker owner and per radius class (`World.RadiusClassCount`: the distinct radii in
+  the data, 3 today), stamped with `World.PlugEpoch` (bumped at the start of Plan and of the shove
+  pass). A search writes its answer for every member it visits and stops early at a member already
+  answered this pass (same cluster, same answer) or once the cluster outgrows 32, so each cluster
+  is searched about once per pass. Preallocated, derived, not hashed. `Constrain` also tests "not a
+  wall" (a walker or an arrived groupmate, most neighbors in a crowd) inline before calling
+  `WallLimit` (Debug builds call every helper).
+- **A unit giving up while backing off is checked again (found in M1-9).** A unit at its goal but
+  too crowded to stop backs off; one that reaches `GiveUpTicks` doing so stops there and keeps its
+  goal cell. But the back-off step can carry it out of reach (1.06-1.17 m from its goal with nobody
+  of its group in touch): a stray anchor that later arrivals packed against (a stray blob 10 m from
+  its point in QA's 2,500-unit one-owner row once a movement change re-rolled the trajectories).
+  `Apply` now lists such units, and at the end of the tick (after the shoves) `SettleBackedOff`
+  applies the arrival rule at their final positions: a unit keeps its goal only if it is in its goal
+  cell within `ArrivalDistance` of its goal, or touches (through a legal step) an Idle groupmate
+  holding the goal cell that isn't itself one of these units left out of reach; the others drop the
+  goal and may walk back once, like a unit a shove cut off. Local, not the whole-group re-check:
+  that cost the 2,500-unit tight blob 16% (hundreds back off at the edge of one blob), and nobody
+  anchored on these units this tick (they were walking when it planned). Test:
+  `CrowdRoutingTests.GivingUpWhileBackingOff_OutOfReach_DropsTheGoal`. The golden replay is
+  byte-identical; it changes a few outcomes in big crowds (QA's 1,000-unit cross-map report, seed 4:
+  989 arrived, now 983).
+- **The 64-goal row is re-bounded on seeds 1-80 (BUG-0049).** The dev test sweeps seeds 1-40 and
+  41-80 (two halves, run in parallel): build cap, termination, every Idle unit arrived or gave up on
+  every map, at most 80 of 128 give up on any map, and each half's median at most 32. Measured: 1-40
+  median 27.5 (max 41), 41-80 median 30.5 (max 44, except seed 51 with 76). Seed 51 is the BUG-0048
+  map (more live goals than cache slots, the jam ends only by giving up; base 92, and before
+  BUG-0048's fix it never stopped), hence the per-map 80; the medians guard the typical map. QA's
+  41-80 sweep is un-skipped with the same per-map bound.
+- **Random goals stay at 4.7% give-ups, a known limit (BUG-0050).** 500 units to 500 random goals,
+  seeds 1-10: 23, 20, 40, 39, 10, 16, 18, 37, 17, 17 of 500 (mean 23.7, 4.7%; unchanged by this
+  task). Alternatives measured (M1-4d-3 fix round 2): never counting a stuck tick behind a field
+  wait gives 15 (3%) but never terminates under cache churn; counting 1 tick in 8, 16 or 32 gives
+  23-25; holding fully only while the waiter's order is younger than 100 or 300 ticks gives 25-26
+  with worse 64-goal maxima. And in M1-9, six slot-free wall clip orders (BUG-0046, below): 23.6-30.3.
+  None reaches 3% with a jam that still ends; the target needs fewer units waiting for fields
+  (time-sliced or cheaper builds, BUG-0023) or crowd-aware routing.
+- **Wall clips still run in slot order, a known limit (BUG-0046).** Sorting `Constrain`'s walls by a
+  slot-free key was built and measured: hard walls first (so a later clip can't push the step into
+  a friendly without the hard-wall check seeing it, BUG-0038), then the farthest first, ties by
+  position. QA's four spawn-permutation rows were then bit-equal, and the aggregates held (random
+  goals 24.1 vs 23.7; 64-goal medians 28 / 29.5 vs 27.5 / 30.5; the dev 4-point rows' means 252 vs
+  256 (500) and 842 vs 847 (2,500); a plain position order was worse: random goals 30.3). But changing
+  the order re-rolls every crowd's chaotic outcome, and three bounds fitted to today's outcomes broke:
+  QA's 500-to-4-points sweep (seed 30: 184 arrived, bound 200), the headline cross-map scenario's
+  pack check (seed 4: two units 0.356 m apart, bound 0.4) and QA's 64-goal sweep (seed 3: 49, bound
+  48). Not landed; whether to land it with bounds re-fitted on wider sweeps is the Producer's call.
+  The QA rows stay skipped under BUG-0046.
+- **Measured (M1-9, Debug, this machine, ms per tick; base 1f533aa and M1-9 alternated, three rounds
+  each, one fresh `dotnet test` process per sample; the base matches QA's BUG-0044 figures):**
+
+  | Row | Target | Base | M1-9 |
+  | --- | --- | --- | --- |
+  | 500 moving units (`PerfCriterionTests`) | < 4 | 0.66-0.67 | 0.62-0.63 |
+  | 2,500 tight blob, one player (`CrowdPerfTests`, enforced) | <= 4.5 | 4.55-4.59 | 4.33-4.35 |
+  | 2,500 tight blob, two players contesting the point (report, guard < 10.5) | | 10.53-10.65 | 6.82-6.84 (-36%) |
+  | 2,500 to 4 points, one player per point, seed 1 (report, guard < 3.7) | | 3.74-3.76 | 3.08-3.09 (-18%) |
+  | 1,000 walkers crossing a 1,500 same-owner blob (QA report) | | 14.85-14.95 | 14.18-14.21 |
+  | 200 walkers crossing a 300-unit blob (enforced) | < 4 | 0.96 | 0.93-0.95 |
+
+  The plug answers' cache pays back the M1-4d-3 regression in the two-player rows (the contested blob
+  is still 1.5x the one-player blob: more units stay Moving in a contest). The one-player tight blob
+  is under its target by the `Constrain` change alone, with 3% headroom on this machine.
+
+  Crowd rows (base, M1-9): QA's 500 to 4 points over seeds 1-40 mean 255, 257 (min 206, 206); 2,500
+  to 4 points over seeds 11-20 mean 888, 912 (min 762, 763); the dev 2,500 to 4 points rows (seeds
+  1-10) mean 847, 856 (min 686, 688), 500 to 4 points 256, 255 (min 230, 227); the cross-map scenario
+  one owner unchanged (200/200, 0 give-ups on seeds 1-8, and on QA's 60 seeds); two owners 559, 562 and
+  516, 514 give-ups per 10 seeds; 64-goal and random goals as above. The two-player rows moved by the
+  plug clusters, within the run-to-run spread; one-player rows only where a back-off was settled.
+
+**Known limits (M1), as of M1-9.** What the code does not do, so nobody relies on it:
+
+- **Flow fields ignore units** (BUG-0028 / BUG-0032, after M4): walkers aim through other groups'
+  blobs and only the local detour (3 m) and give-up (1 s) handle them. Crowd rows stay below the
+  Producer's targets: 4 points about 51% (500) and 34% (2,500) arrived, 64-goal median 22-24% given
+  up, a same-owner blob crossing 22 of 200.
+- **Random goals give up 4.7%** (target 3%, BUG-0050, above).
+- **The 64-goal row's BUG-0048 map gives up 76 of 128** (seed 51; the bound allows 80).
+- **The pack rule (no two stopped units closer than half their radii's sum) is not guaranteed:** a
+  unit that stops at the back-off limit or gives up can be closer (the 64-goal row breaks it on
+  about 40% of maps, worst 0.77 of the radii's sum; the headline cross-map scenario keeps it on its
+  swept seeds).
+- **Spawn-order independence is partial** (BUG-0046): same seed and commands always give the same
+  hash, but a walker's path can depend on its neighbors' slots where it touches several walls at
+  once (`Constrain` clips in slot order), and so can shoves (summed in walk order, (goal cell,
+  slot); `SqueezeLimit` trims in slot order; a chain of at most `MaxChainShove` picks members in slot
+  order; two coincident units push apart by slot). Don't build on order independence (e.g. a
+  re-spawn from a snapshot must keep slots).
+- **Plugs:** a cluster of more than 32 hard units is not a plug (units overlapping one may slide
+  round it); outside plugs, shoves can press a given-up unit 0.15-0.32 m deeper into a standing enemy
+  in one tick (pre-existing, BUG-0045 note). Enemy contact is redefined with combat in M4.
+- **Holders are walls, nothing more:** no enemy scanning or retaliation until M4; a queued order
+  after an unqueued Hold ends the Hold when it starts (by design, BUG-0056 item 3).
+- **Moving units are never shoved** and units waiting for a field are walls; a unit's walk-back
+  happens once per order.
+- **Maps larger than 256 x 256 are unsupported** (one field build exceeds the tick, BUG-0023); the
+  over-capacity cache eviction is plain LRU (BUG-0025) and same-tick build ties favor lower goal
+  cells (BUG-0026).
+- **Perf is measured in Debug on the dev machine**; the 2,500-unit two-player contest costs about
+  1.6x the one-player blob (6.8 vs 4.3 ms). The 4 ms design budget is for 500 units (0.6 ms today).
 
 ## Orders and unit states
 
@@ -791,9 +928,12 @@ or recycled handle or another player's unit; a Move or AttackMove also for a tar
   clears the queue and Hold and leaves the unit Idle with no goal (`GoalCell = -1`), velocity 0,
   `StuckTicks` 0, `BestRemaining` infinity and no walk-back: goal-less, so friendly walkers shove it
   freely and it anchors nothing. `HoldPosition` is `Stop` and then sets `UnitStore.Hold`.
-- **Holding** units are never shoved (single, chain, parked-line yield) and never walk back; apart
-  from that a holding unit is an ordinary Idle unit: a soft wall (single clip) to its own army and a
-  hard wall (and possible plug) to the other player. No enemy scanning yet (M4). Any later unqueued
+- **Holding** units are never shoved (single, chain, parked-line yield) and never walk back, and
+  since M1-9 (BUG-0055, Producer decision 2026-10-05) they are hard walls to everyone, their own army
+  included: a walker never goes deeper into one, also when pressed between it and something else, a
+  holder can be (part of) a plug, a chain shove stops at a unit touching it, and no shove presses a
+  unit past the pack limit into it. A unit told to hold a choke lets nobody through (QA's 1-cell
+  corridor row: 0 of 30 own walkers pass, 10 before). No enemy scanning yet (M4). Any later unqueued
   order, and a queued Move or AttackMove when it starts, clears Hold.
 - **Queued** (`QueuedFlag`): appended to the unit's queue (kind and target); a full queue
   (`OrderConstants.QueueCapacity` = 8) drops the order silently. A queued order never restarts a
@@ -1321,8 +1461,9 @@ AiPlayer
   as 8 uppercase hex digits (`0.5` is `3F000000`, NaN round-trips). `TryRead` never throws on bad
   bytes: it returns a `ReplayError` code and no replay. Read rules (`Replay.Validate`): command
   ticks run from 1 to the tick count without going backwards, each player's sequences count 0, 1,
-  2, ..., players are below the player count, kinds are known, flags hold no bit but
-  `Command.QueuedFlag` (M1-7), no tick has more commands than the
+  2, ..., players are below the player count, every command is well formed (`Command.IsWellFormed()`:
+  a known kind, no flag bit but `Command.QueuedFlag` (M1-7), and that one only on a unit order
+  (M1-9), the rule `Enqueue` applies), no tick has more commands than the
   command capacity, and the checkpoints are exactly the interval's multiples. Format limits: at
   most 16 players, capacities up to 1,000,000, and (M1-4d-3, BUG-0040) a tick count and checkpoint
   interval of at most 1,728,000 (24 h at 20 Hz), so a small file can't declare years of playback.
@@ -1374,6 +1515,13 @@ AiPlayer
   measured tick, times 200 ticks one by one after 5 warm-up ticks, prints the average, p99 and
   worst, and fails on an average of 4 ms or more. Measured (Debug, dev machine, run alone): about
   0.7-1.0 ms average, all 500 Moving and stepping on every tick.
+- The 2,500-unit crowd rows (M1-9, `CrowdPerfTests`, BUG-0044 / BUG-0047): the one-player tight
+  blob (seed 99, 2,500 units within 12 path cells of the central cell, all ordered to it; 5 warm-up
+  ticks, a full GC, 300 timed ticks) must average at most 4.5 ms, the M1-4d-3 target. Two report rows
+  guard the plug test's cost where two players overlap all the time: the same blob with owners
+  alternating (both players contest the point) under 10.5 ms, and 2,500 units to 4 points, one player
+  per point, seed 1, 600 ticks, under 3.7 ms: what each cost before the plug answers were cached.
+  Wall-clock rows are sensitive to other load on the machine: re-run a failure once alone first.
 - Every `Category=Perf` test and every allocation-measuring test is in the xUnit collection
   `SerialCollection` (`DisableParallelization = true`), so it runs alone after the parallel batch;
   classes that also hold heavy unmeasured tests put the measured ones in a nested `Serial` class.
@@ -1415,10 +1563,16 @@ AiPlayer
     `ticks N avg A ms p99 P ms worst W ms` (a `Stopwatch` around each `Tick()` in the CLI, never in
     the sim; the CLI's own hashing and printing are outside it, but with `--record` the recorder
     hashes the state inside `Tick()` on checkpoint ticks, so those ticks time about 1 ms longer at
-    2,500 units; BUG-0057), and `recorded <path>` after writing the replay.
+    2,500 units; BUG-0057), and `recorded <path>` after writing the replay. The `--record` path is
+    checked before the first tick (M1-9, BUG-0057): a path that isn't valid, names a directory, or
+    sits in a directory that doesn't exist fails at once with `error: cannot write replay ...`
+    instead of after the whole run (a write that still fails at the end reports the same way).
   - `play <path> [--data <dir>]` reads the replay (`ReplayFormat.TryReadFile`) and plays it
     (`ReplayPlayer.Run`); on success it prints the same `tick <n> hash` lines and
-    `ok: K checkpoints matched over N ticks`.
+    `ok: K checkpoints matched over N ticks`, or `ok: 0 checkpoints (nothing compared) over N ticks`
+    for a replay shorter than one checkpoint interval (valid, but it proves nothing; M1-9).
+  - Data that doesn't load prints `error: data in '<dir>' did not load (N error[s]), first: <error>`,
+    where an error reads `file: path: message` with an empty file or path left out (M1-9).
   - Exit codes: **0** success; **1** bad usage (one `error: ... usage: ...` line), data that
     doesn't load, a replay file that can't be read, or a replay that can't be written; **2** a replay
     that is malformed, truncated, refused (`DataMismatch`, ...) or fails playback, printed as
