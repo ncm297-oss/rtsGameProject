@@ -109,3 +109,5 @@ bugs outrank new features.
 | [BUG-0076](BUG-0076-m3-1-nits.md) | S4 | open | M3-1 nits: setup timing in docs, redundant flood fill, empty resources list loads clean |
 | [BUG-0083](BUG-0083-debug-overlay-label-allocates-per-frame-docs-claim-zero.md) | S3 | open | Overlay-on label line allocates ~600 B per frame; docs/03 "Debug tooling" claims 0 bytes per frame on and off |
 | [BUG-0084](BUG-0084-m2-5-debug-overlay-nits.md) | S4 | open | M2-5 nits: cliff tint reads olive, arrow tips dip up to 9 cm into steep ramps, CS8602 in DebugOverlayTest, blind allocation probe |
+| [BUG-0085](BUG-0085-default-match-spawns-army-inside-a-forest.md) | S3 | open | The default match (seed 1) spawns player 0's start army inside a forest |
+| [BUG-0086](BUG-0086-m2-3b-props-nits.md) | S4 | open | M2-3b nits: every relist uploads every type's full 4,096-instance buffer; tight minimap perf margin |
