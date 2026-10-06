@@ -41,3 +41,6 @@ Seed 64's stray anchor and seed 61's 49 are gone (no seed in 41-80 leaves a unit
 gave up). Left: seed 51 (the BUG-0048 map, now terminating) gives up 75 of 128 against the bound of 48
 (base 92); seeds 41-80 median 30, max 75. A bound question for the Producer (re-set or report-only); the
 sweep stays skipped with that reason.
+
+## Re-check round 2 (2026-10-05-1609, fix commit 57cc55c)
+Unchanged: seeds 41-80 median 30, max 75 (seed 51); the sweep stays skipped for the Producer's bound decision.

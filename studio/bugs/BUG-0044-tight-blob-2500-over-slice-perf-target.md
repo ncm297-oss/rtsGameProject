@@ -53,3 +53,20 @@ Same method (cooled single samples, base and fix alternated, 3 rounds, ms/tick):
 The target row is now at its 4.5 ms limit within noise (mean 4.507), on a machine where the base
 itself measures 4.3 (3.8 when the target was set): downgraded to S3. Left open for the report rows
 (two players, crossing), which cost much more, and for item 1 of BUG-0047 (the row isn't enforced).
+
+## Re-check round 2 (2026-10-05-1609, fix commit 57cc55c): the two-player rows regressed again
+Same method (cooled single samples, base and fix alternated, 3 rounds, ms/tick):
+
+| Row | Base 7f741f1 | Round 1 (6abd200) | Round 2 (57cc55c) |
+| --- | --- | --- | --- |
+| 2,500 tight blob, one player (target <= 4.5) | 4.38 / 4.30 / 4.31 | 4.50 / 4.50 / 4.52 | 4.61 / 4.46 / 4.50 |
+| 2,500 tight blob, two players (report) | 4.47 / 4.49 / 4.47 | 6.62 / 6.71 / 6.65 | 10.40 / 10.50 / 10.46 |
+| 2,500 to 4 points, one player per point, seed 1 (report) | 1.97 / 1.99 / 1.95 | 2.57 / 2.55 / 2.55 | 3.72 / 3.71 / 3.73 |
+| 1,000 walkers crossing a 1,500 blob (report) | 3.10 / 3.09 / 3.12 | 5.43 / 5.43 / 5.43 | 5.48 / 5.38 / 5.40 |
+
+The developer's note "not regressed (the plug test only runs on enemy overlap)" holds for the
+one-player rows only. Where two players' units overlap all the time (a contested point, crowds of
+both players next to each other) the round-2 `IsPlug` search (a breadth-first search with a spatial
+query per member, for every overlapped Idle enemy, in every `Constrain` call) adds +57% / +46% over
+round 1: 2.3x / 1.9x base. Still report rows (500 units stay far under the 4 ms design budget), so S3;
+the Producer may want a two-player row in the perf targets.

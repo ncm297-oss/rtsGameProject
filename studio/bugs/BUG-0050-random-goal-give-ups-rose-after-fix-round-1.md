@@ -28,3 +28,6 @@ so the miss rule may apply, but docs/03 lists the new 3.2% without saying why it
 ## Notes
 Suspected: the BUG-0048 fix (behind a field-waiting unit, one no-progress tick in 4 now counts), since
 this row has a goal per unit and constant field churn; possibly the walk-back no-push rule. Not traced.
+
+## Re-check round 2 (2026-10-05-1609, fix commit 57cc55c)
+Unchanged: QA seeds 1-10 gave up 23.7 mean (10-40) of 500, identical per seed to round 1.

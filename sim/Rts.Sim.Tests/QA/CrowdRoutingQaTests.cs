@@ -707,6 +707,253 @@ public class CrowdRoutingQaTests
         Assert.True(worstRatio >= MovementConstants.ShoveSpacing - 1e-3f, $"pressed onto the enemy plug: {worstRatio:F3} x the radii's sum, {worstAt}");
     }
 
+    // ---------- plug-rule attacks (BUG-0045 round 2: IsPlug, MaxPlugSpan) ----------
+
+    /// <summary>Outcome of <see cref="PlugAttack"/>.</summary>
+    private readonly record struct PlugResult(int Ticks, float WorstRatio, string? WorstAt, string? Through, Watch W, int CrossedByRadius04, int CrossedByRadius07, int CrossedByRadius09);
+
+    /// <summary>
+    /// Generic plug attack, as a two-sim twin with the strict per-tick checker: player-1 units at
+    /// <paramref name="enemies"/> (never ordered unless <paramref name="each"/> does), player-0 goal-less
+    /// units at <paramref name="ahead"/>, and a crowd of <paramref name="crowd"/> mixed types in
+    /// <paramref name="crowdCells"/> re-ordered to <paramref name="target"/> every 100 ticks for 1,000 ticks.
+    /// <paramref name="side"/> maps a position to how far past the plug it is (positive = through).
+    /// Records, per radius, how many player-0 units ended a tick fully past the plug after starting on
+    /// the near side, and the closest any player-0 unit came to an Idle enemy (fraction of the radii's sum).
+    /// </summary>
+    private static PlugResult PlugAttack(Heightmap map, ulong seed, (int Type, Vector2 At)[] enemies, (int Type, Vector2 At)[] ahead,
+        int crowd, Func<NavGrid, int, Vector2> crowdAt, Func<NavGrid, Vector2> target, Func<Vector2, float> side, Action<Simulation, int, bool>? each = null, int limit = 6000)
+    {
+        int cap = ahead.Length + crowd + enemies.Length;
+        int firstEnemy = ahead.Length + crowd;
+        Simulation? primary = null;
+        Simulation Make()
+        {
+            var sim = new Simulation(TestSim.Config(Seed: seed, PlayerCount: 2, UnitCapacity: cap, CommandCapacity: 32 * cap), map);
+            primary ??= sim;
+            NavGrid g = sim.World.NavGrid;
+            var rng = new SimRng(seed, 4470);
+            foreach (var a in ahead) sim.Enqueue(Command.SpawnUnit(0, a.Type, a.At));
+            for (int k = 0; k < crowd; k++) sim.Enqueue(Command.SpawnUnit(0, rng.NextInt(0, TestSim.UnitTypeCount), crowdAt(g, k)));
+            foreach (var e in enemies) sim.Enqueue(Command.SpawnUnit(1, e.Type, e.At));
+            sim.Tick();
+            sim.Tick();
+            Assert.Equal(cap, sim.World.Units.Count);
+            return sim;
+        }
+        float worst = float.MaxValue;
+        string? worstAt = null, through = null;
+        var crossed = new int[3];
+        bool[]? counted = null;
+        void Each(Simulation s, int t)
+        {
+            UnitStore u = s.World.Units;
+            counted ??= new bool[u.Capacity];
+            bool isPrimary = ReferenceEquals(s, primary);
+            for (int i = 0; i < firstEnemy && isPrimary; i++)
+            {
+                for (int k = firstEnemy; k < cap; k++)
+                {
+                    if (u.State[k] == UnitState.Moving) continue;
+                    float ratio = Vector2.Distance(u.Position[i], u.Position[k]) / (u.Radius[i] + u.Radius[k]);
+                    if (ratio < worst) { worst = ratio; worstAt = $"tick {t}: unit {i} ({u.State[i]}, r {u.Radius[i]}) at {u.Position[i]}, enemy {k} at {u.Position[k]}"; }
+                }
+                if (!counted[i] && side(u.Position[i]) > u.Radius[i])
+                {
+                    counted[i] = true;
+                    crossed[u.Radius[i] < 0.5f ? 0 : u.Radius[i] < 0.8f ? 1 : 2]++;
+                    through ??= $"tick {t}: unit {i} ({u.State[i]}, r {u.Radius[i]}) through to {u.Position[i]}";
+                }
+            }
+            if (t >= 5 && t <= 1000 && (t - 5) % 100 == 0)
+                for (int i = ahead.Length; i < firstEnemy; i++) s.Enqueue(Command.Move(0, MoveScenario.Handle(s, i), target(s.World.NavGrid)));
+            each?.Invoke(s, t, isPrimary);
+        }
+        (int ticks, _, Watch w) = Twin(Make, limit, Each, minTicks: 1100);
+        return new PlugResult(ticks, worst, worstAt, through, w, crossed[0], crossed[1], crossed[2]);
+    }
+
+    private void Report(string name, PlugResult r) =>
+        _out.WriteLine($"{name}: stopped after {r.Ticks} ticks; crossed r0.4/0.7/0.9: {r.CrossedByRadius04}/{r.CrossedByRadius07}/{r.CrossedByRadius09}; first: {r.Through ?? "none"}; closest to an Idle enemy {r.WorstRatio:F3} x radii sum ({r.WorstAt}); {Report(r.W)}");
+
+    /// <summary>
+    /// Width-4 and width-5 corridors plugged by one wide enemy per row (4 and 5 plug members; MaxPlugSpan
+    /// is 4). Nobody through; nobody pressed past the pack limit into a plug unit.
+    /// </summary>
+    [Theory]
+    [InlineData(4, 1UL)]
+    [InlineData(4, 2UL)]
+    [InlineData(5, 3UL, Skip = "BUG-0045: a plug of more than MaxPlugSpan (4) enemy units is not recognized; units are shoved into it and walk through")]
+    [InlineData(5, 4UL, Skip = "BUG-0045: a plug of more than MaxPlugSpan (4) enemy units is not recognized; units are shoved into it and walk through")]
+    public void WideCorridorPluggedByAWideEnemyPerRow_Width4And5_NobodyThrough(int width, ulong seed)
+    {
+        int wide = LocalMovementTests.TypeWithRadius(0.9f), small = LocalMovementTests.TypeWithRadius(0.4f);
+        Heightmap map = WideCorridorWithRooms(width);
+        var enemies = new (int, Vector2)[width];
+        var ahead = new (int, Vector2)[2 * width];
+        for (int r = 0; r < width; r++)
+        {
+            enemies[r] = (wide, new Vector2(33f, 7f + 2f * r));
+            ahead[2 * r] = (small, new Vector2(31.3f, 7f + 2f * r));
+            ahead[2 * r + 1] = (wide, new Vector2(29.3f, 7f + 2f * r));
+        }
+        PlugResult res = PlugAttack(map, seed, enemies, ahead, 6 * width, (g, k) => g.CellCenter(1 + k % 4, 1 + k / 4 % (5 + width)),
+            g => g.CellCenter(29, 3), p => p.X - 33.9f);
+        Report($"width {width}, seed {seed}", res);
+        Assert.True(res.Through == null, res.Through);
+        Assert.True(res.WorstRatio >= MovementConstants.ShoveSpacing - 1e-3f, $"pressed onto a plug unit: {res.WorstRatio:F3} ({res.WorstAt})");
+    }
+
+    /// <summary>
+    /// Small enemies plug corridors: 5 radius-0.4 enemies touching across a 2-cell (4 m) corridor, 7 across
+    /// a 3-cell one (more members than MaxPlugSpan). Nobody through; nobody pressed past the pack limit.
+    /// </summary>
+    [Theory]
+    [InlineData(2, 1UL, Skip = "BUG-0045: a plug of more than MaxPlugSpan (4) enemy units is not recognized; units are shoved into it and walk through")]
+    [InlineData(2, 2UL, Skip = "BUG-0045: a plug of more than MaxPlugSpan (4) enemy units is not recognized; units are shoved into it and walk through")]
+    [InlineData(3, 3UL, Skip = "BUG-0045: a plug of more than MaxPlugSpan (4) enemy units is not recognized; units are shoved into it and walk through")]
+    public void CorridorPluggedBySmallEnemies_MoreMembersThanMaxPlugSpan_NobodyThrough(int width, ulong seed)
+    {
+        int small = LocalMovementTests.TypeWithRadius(0.4f), wide = LocalMovementTests.TypeWithRadius(0.9f);
+        int count = (int)(2f * width / 0.8f + 0.001f);
+        float span = 2f * width;
+        var enemies = new (int, Vector2)[count];
+        for (int k = 0; k < count; k++) enemies[k] = (small, new Vector2(33f, 6f + 0.4f + k * (span - 0.8f) / Math.Max(1, count - 1)));
+        var ahead = new (int, Vector2)[width];
+        for (int r = 0; r < width; r++) ahead[r] = (wide, new Vector2(29.3f, 7f + 2f * r));
+        PlugResult res = PlugAttack(WideCorridorWithRooms(width), seed, enemies, ahead, 6 * width, (g, k) => g.CellCenter(1 + k % 4, 1 + k / 4 % (5 + width)),
+            g => g.CellCenter(29, 3), p => p.X - 33.4f);
+        Report($"small plug, width {width} ({count} enemies), seed {seed}", res);
+        Assert.True(res.Through == null, res.Through);
+        Assert.True(res.WorstRatio >= MovementConstants.ShoveSpacing - 1e-3f, $"pressed onto a plug unit: {res.WorstRatio:F3} ({res.WorstAt})");
+    }
+
+    /// <summary>A 40 x 40 map: a diagonal (staircase) band |x - y| &lt;= 1; outside it cliffs and sealed 1-cell pockets.</summary>
+    private static Heightmap DiagonalBand()
+    {
+        var rows = new string[40];
+        for (int y = 0; y < 40; y++)
+        {
+            char[] r = new string('0', 40).ToCharArray();
+            for (int x = 0; x < 40; x++)
+                if (Math.Abs(x - y) >= 2 && (x - y) % 2 == 0) r[x] = '1'; // isolated '0' pockets outside: sealed, the band is the map's one region
+            rows[y] = new string(r);
+        }
+        return Map(rows);
+    }
+
+    /// <summary>
+    /// A diagonal (staircase) corridor plugged across by three wide enemies at cells (16,15), (15,15),
+    /// (15,16): its cells are never walled on two opposite sides. Nobody through; nobody pressed past the pack limit.
+    /// </summary>
+    [Theory]
+    [InlineData(1UL)]
+    [InlineData(2UL)]
+    public void DiagonalCorridorPluggedByThreeEnemies_NobodyThrough(ulong seed)
+    {
+        int wide = LocalMovementTests.TypeWithRadius(0.9f), small = LocalMovementTests.TypeWithRadius(0.4f);
+        var enemies = new (int, Vector2)[] { (wide, new Vector2(33f, 31f)), (wide, new Vector2(31f, 31f)), (wide, new Vector2(31f, 33f)) };
+        var ahead = new (int, Vector2)[] { (small, new Vector2(29.2f, 29.2f)), (wide, new Vector2(27.4f, 27.4f)), (small, new Vector2(29f, 27.2f)) };
+        PlugResult res = PlugAttack(DiagonalBand(), seed, enemies, ahead, 15, (g, k) => g.CellCenter(1 + k / 3 + (k % 3 == 1 ? 1 : 0), 1 + k / 3 + (k % 3 == 2 ? 1 : 0)),
+            g => g.CellCenter(36, 36), p => (p.X + p.Y) - 67.3f);
+        Report($"diagonal, seed {seed}", res);
+        Assert.True(res.Through == null, res.Through);
+        Assert.True(res.WorstRatio >= MovementConstants.ShoveSpacing - 1e-3f, $"pressed onto a plug unit: {res.WorstRatio:F3} ({res.WorstAt})");
+    }
+
+    /// <summary>
+    /// A partial plug: in a 2-cell corridor three small enemies touch the lower wall, leaving 1.6 m (or
+    /// 1.85 m) to the upper wall, through which units may legally pass (walls bound unit centers, not
+    /// disks, so even a radius-0.9 unit fits). Twins and invariants; nobody is pressed past the pack limit
+    /// into an enemy; crossings reported.
+    /// </summary>
+    [Theory]
+    [InlineData(1UL, 1.6f)]
+    [InlineData(2UL, 1.6f)]
+    [InlineData(3UL, 1.85f)]
+    public void CorridorPartlyPluggedBySmallEnemies_PassersNeverPressedIntoEnemies(ulong seed, float gap)
+    {
+        int small = LocalMovementTests.TypeWithRadius(0.4f);
+        float top = 10f - gap; // the enemies' upper edge
+        var enemies = new (int, Vector2)[] { (small, new Vector2(33f, 6.4f)), (small, new Vector2(33f, 6.4f + (top - 6.8f) / 2f)), (small, new Vector2(33f, top - 0.4f)) };
+        var ahead = Array.Empty<(int, Vector2)>();
+        PlugResult res = PlugAttack(WideCorridorWithRooms(2), seed, enemies, ahead, 20, (g, k) => g.CellCenter(1 + k % 4, 1 + k / 4 % 7),
+            g => g.CellCenter(29, 3), p => p.X - 33.4f);
+        Report($"gap {gap} m, seed {seed}", res);
+        Assert.True(res.WorstRatio >= MovementConstants.ShoveSpacing - 1e-3f, $"pressed onto an enemy: {res.WorstRatio:F3} ({res.WorstAt})");
+    }
+
+    /// <summary>
+    /// A plug that forms and dissolves mid-push: two wide enemies just past a 2-cell corridor's middle
+    /// step into a plug at tick 3 (before the crowd arrives), step 4 m back at tick 400 and return at tick 520. While both stand Idle on the
+    /// plug, no player-0 unit that was on the near side when it formed gets through. Twins and invariants.
+    /// </summary>
+    [Theory]
+    [InlineData(1UL)]
+    [InlineData(2UL)]
+    [InlineData(3UL)]
+    public void PlugFormingAndDissolvingMidPush_HoldsWhileStanding(ulong seed)
+    {
+        int wide = LocalMovementTests.TypeWithRadius(0.9f);
+        var enemies = new (int, Vector2)[] { (wide, new Vector2(37f, 7f)), (wide, new Vector2(37f, 9f)) };
+        var plug = new[] { new Vector2(33f, 7f), new Vector2(33f, 9f) };
+        bool[]? nearSide = null;
+        int heldTicks = 0;
+        string? breach = null;
+        void Each(Simulation s, int t, bool isPrimary)
+        {
+            UnitStore u = s.World.Units;
+            int e0 = u.Capacity - 2;
+            if (t == 3 || t == 520)
+                for (int k = 0; k < 2; k++) s.Enqueue(Command.Move(1, MoveScenario.Handle(s, e0 + k), plug[k]));
+            if (t == 400)
+                for (int k = 0; k < 2; k++) s.Enqueue(Command.Move(1, MoveScenario.Handle(s, e0 + k), new Vector2(41f, 7f + 2f * k)));
+            if (!isPrimary) return;
+            bool held = t > 2 && u.State[e0] == UnitState.Idle && u.State[e0 + 1] == UnitState.Idle
+                && Vector2.Distance(u.Position[e0], plug[0]) <= MovementConstants.ArrivalDistance && Vector2.Distance(u.Position[e0 + 1], plug[1]) <= MovementConstants.ArrivalDistance
+                && Vector2.Distance(u.Position[e0], u.Position[e0 + 1]) - 1.8f < 0.8f; // standing as a plug: the slit between them under the smallest unit
+            if (!held) { nearSide = null; return; }
+            heldTicks++;
+            if (nearSide == null)
+            {
+                nearSide = new bool[e0];
+                for (int i = 0; i < e0; i++) nearSide[i] = u.Position[i].X < 33f;
+                return;
+            }
+            for (int i = 0; i < e0; i++)
+                if (nearSide[i] && u.Position[i].X > 33.9f + u.Radius[i]) breach ??= $"tick {t}: unit {i} (r {u.Radius[i]}) through the standing plug to {u.Position[i]}";
+        }
+        PlugResult res = PlugAttack(WideCorridorWithRooms(2), seed, enemies, Array.Empty<(int, Vector2)>(), 24,
+            (g, k) => g.CellCenter(1 + k % 4, 1 + k / 4 % 7), g => g.CellCenter(29, 3), p => float.MinValue, Each, limit: 8000);
+        Report($"form/dissolve, seed {seed} (plug held {heldTicks} ticks)", res);
+        Assert.True(heldTicks > 100, $"the plug stood only {heldTicks} ticks");
+        Assert.True(breach == null, breach);
+    }
+
+    /// <summary>
+    /// Plug units that keep getting orders (Moving, often standing): two wide enemies on a 2-cell
+    /// corridor plug re-ordered every 7 ticks to a point 1.2 m away in their own cell, alternating, while
+    /// the crowd pushes. Twins and invariants; reports how many get through (a Moving enemy is a soft wall by design).
+    /// </summary>
+    [Fact]
+    public void PlugOfConstantlyReorderedEnemies_TwinsAndInvariants_Report()
+    {
+        int wide = LocalMovementTests.TypeWithRadius(0.9f);
+        var enemies = new (int, Vector2)[] { (wide, new Vector2(33f, 7f)), (wide, new Vector2(33f, 9f)) };
+        void Each(Simulation s, int t, bool isPrimary)
+        {
+            if (t < 3 || t > 1000 || t % 7 != 0) return;
+            UnitStore u = s.World.Units;
+            int e0 = u.Capacity - 2;
+            float dx = (t / 7) % 2 == 0 ? 0.6f : -0.6f;
+            s.Enqueue(Command.Move(1, MoveScenario.Handle(s, e0), new Vector2(33f + dx, 7f)));
+            s.Enqueue(Command.Move(1, MoveScenario.Handle(s, e0 + 1), new Vector2(33f - dx, 9f)));
+        }
+        PlugResult res = PlugAttack(WideCorridorWithRooms(2), 9, enemies, Array.Empty<(int, Vector2)>(), 24,
+            (g, k) => g.CellCenter(1 + k % 4, 1 + k / 4 % 7), g => g.CellCenter(29, 3), p => p.X - 33.9f, Each);
+        Report("re-ordered plug", res);
+    }
+
     // ---------- corridor pair on 20 more seeds ----------
 
     private static Heightmap Corridor() => Map(

@@ -50,3 +50,20 @@ Still open elsewhere: new QA test `CorridorOfWidthPluggedByEnemies_FriendlyLines
 seeds (ticks 264-365; e.g. a radius-0.4 walker at (33.9, 10.6) past plugs at x 33), on base too (all 4,
 plus a friendly pressed to 0.056 x the radii's sum). The walker per-tick check stays green: they are
 shoved in while Idle (given up) and walk out the far side. Rows skipped under this bug.
+
+## Re-check round 2 (2026-10-05-1609, fix commit 57cc55c): fixed up to MaxPlugSpan members; open beyond
+Round 2 recognizes a plug as a line of up to `MaxPlugSpan` (4) standing enemies, too close to pass
+between, reaching blocked ground on two opposite sides. QA attacks (two-sim twins + strict per-tick checks):
+- Holds now (base fails all): 2- and 3-cell corridors with one wide enemy per row (4 seeds), a 4-cell
+  one (2 seeds), a diagonal staircase corridor plugged by 3 wide enemies (2 seeds), a plug that forms
+  before the crowd arrives, dissolves at tick 400 and re-forms at 520 (3 seeds; held 369-805 ticks, no
+  breach), and the 1-cell plugs. Closest friendly to a plug unit 0.81-0.86 x the radii's sum.
+- Still fails (base too), skipped under this bug:
+  - 5-cell corridor, one wide enemy per row (5 members): 8 and 12 units through, a friendly pressed to
+    0.056 x the radii's sum (`WideCorridorPluggedByAWideEnemyPerRow_Width4And5_NobodyThrough(5, *)`).
+  - Small enemies plugging a 2-cell corridor (5 radius-0.4 units) or a 3-cell one (7): 3, 4 and 7 units
+    through, pressed to 0.31-0.49 x (`CorridorPluggedBySmallEnemies_MoreMembersThanMaxPlugSpan_NobodyThrough`).
+  The common real plug (a line of infantry across a 4 m choke) needs 5 members, so the cap matters.
+- Report: a plug whose two units are re-ordered inside their cell every 7 ticks (Moving, soft walls by
+  design) lets 2 small units through; twins and invariants hold.
+Severity stays S2; the bug predates M1-4d-3 (base fails every one of these rows).
