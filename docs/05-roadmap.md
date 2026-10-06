@@ -117,9 +117,18 @@ listed in the retro. Owner may revisit._
       _(session 2026-10-05-1446, task M2-1: `RtsCamera` + pure `ViewApi.CameraLimits`; zoom 20-60 m,
       8 px edge band, rebindable actions in `project.godot`; `game/tests/CameraClampTest.tscn` drives
       the real camera headless to every edge and both zoom limits.)_
-- [ ] Heightmap terrain mesh with biome vertex colors; trees and rocks as MultiMesh.
+- [x] Heightmap terrain mesh with biome vertex colors; trees and rocks as MultiMesh.
       _(terrain mesh shipped in M2-1: `ViewApi.TerrainMeshBuilder`, flat plateaus, vertical cliffs,
-      sloped ramps, per-level placeholder tints. Trees and rocks wait for M3's resource entities.)_
+      sloped ramps, per-level placeholder tints. Trees and gold mines as MultiMesh props in session
+      2026-10-06-1503, task M2-3b: pure `ViewApi.PropLayout` (one transform list per resource type
+      from `World.Resources`, relisted only on a `NavGrid.Version` change, dead nodes compacted away),
+      `PropsView` (placeholder cone-on-trunk trees, slate-and-gold mine blocks sized from the data
+      footprint), the match map gets 12 forests / 8 mines by default (`--forests` / `--mines`),
+      minimap resource layer (trees dark green, mines gold). QA oracle 43 map setups through Take
+      churn, 0 mismatches; 396+ fps with 2,000 units and 1,773 props. **Scoped by the Producer:**
+      biome vertex colours and rocks (decoration, no sim footprint) move to the M6 art pass with the
+      real materials; ticked as "terrain mesh + trees as MultiMesh". BUG-0085 (S3, the seed-1 start
+      army stands in a forest), BUG-0086 (S4 nits).)_
 - [x] Placeholder unit views (primitive meshes, team colors), pooled, interpolated.
       _(session 2026-10-05-1609, task M2-2: `UnitViews`, one capsule `MeshInstance3D` per unit slot
       (reused on respawn), one mesh per unit type sized by its data radius, one material per faction
@@ -174,7 +183,19 @@ listed in the retro. Owner may revisit._
       forests 0.82 ms per tick. Open: BUG-0073 (every fall invalidates every field: M3-2 design),
       BUG-0074 (placer assumes 1 x 1 trees), BUG-0075 (interior fell leaves a hollow: M3-2 gather rule),
       BUG-0076 (nits).)_
-- [ ] Worker gather/return loop with automatic drop-off choice.
+- [x] Worker gather/return loop with automatic drop-off choice.
+      _(session 2026-10-06-1503, task M3-2: `Command.Gather` (unit order, Shift-queueable; the node
+      is resolved at apply), `EconomySystem.Run` in tick phase 4 (states `Gathering` / `Returning`;
+      walks use the Move machinery to the nearest passable cell 4-adjacent to the footprint; reach
+      1.25 m; retry every 20 ticks = the queue at a mine's edge), rates / carry / search radius from
+      `rules.json`, drop-off = the nearest own `dropOff` building by straight line, depleted-node rule
+      within 20 m, exposure rule (only a node with an open 4-neighbour is gathered: closes BUG-0075),
+      `BuildingStore` + dev `SpawnBuilding` with `buildings.json` (Town Hall slot only), per-player
+      `World.Gold` / `Wood` in the hash, CLI `--workers`. QA: conservation exact over 8 seeds x 3,000
+      ticks of hostile commands; exposure fuzz 246 maps / 2,866 falls / 0 pockets; 500 marchers + 50
+      workers 0.92 ms a tick. Open: BUG-0077 (S3, a building dropped on a marching column makes half
+      give up: M3-2b), BUG-0078 (S3, exposure counts a sealed pocket's cell: M3-3), BUG-0079 (S4
+      nits), BUG-0073 (S3, continuous felling starves fields: M3-2b, next).)_
 - [ ] Building placement (ghost preview, validity), construction with multiple builders, repair.
 - [ ] Production queues (5 slots), rally points, population and cap, refunds on cancel.
 - [ ] Age II research and unlocks; Forge upgrades.

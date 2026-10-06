@@ -9,6 +9,10 @@ Commit and push after editing, from either machine (or ask Claude to).
 
 ## New
 
+(nothing new)
+
+## Processed
+
 - 2026-10-06 · **Third track: data (owner):** sessions now carry up to three tracks: `sim`,
   `view`, and a new `data` track (faction content: full rosters, stats, costs, build times,
   techs, `displayName` / `description` text, AI build orders, balance passes, and later the
@@ -23,8 +27,13 @@ Commit and push after editing, from either machine (or ask Claude to).
   (e.g. completing the Malazan and Whirlwind unit rosters toward M3's "factions fully defined in
   data"). Also: sessions no longer re-arm the routine (see docs/07 "How sessions start"); a
   watcher session starts the next one when STATE's Gate is GO, so keep the Gate rows accurate.
-
-## Processed
+  → Done at the 2026-10-06-1503 ACCEPT (the note arrived mid-session, so this session ran two
+  tracks): STATE has a Data block in the Now table and a data feature queue, `studio/handoff.md`
+  has a "## Data track" section, and the data track's first task (next session) is the one the
+  current schemas support: the nine missing building types per faction in `buildings.json`
+  (M3-2 shipped the schema with the Town Hall only; the unit rosters already hold all 7 slots
+  per faction from M1-2, so the rest of "fully defined in data" waits on the techs / abilities
+  schemas from M3-5 / M4). Gate rows are kept per track; the data track's Gate is GO.
 
 - 2026-10-05 · **Two tracks in parallel (owner):** every session now works on a `sim` task and a
   `view` task at the same time; you plan and judge both, two game-devs build side by side, and
