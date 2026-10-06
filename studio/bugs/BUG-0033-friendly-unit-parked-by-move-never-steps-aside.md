@@ -64,3 +64,10 @@ exists yet, and the dev showed that freely shoving blob members halves the crowd
 needs a real rule (chain shoves, or a stuck walker making a parked group yield sideways out of a
 choke and drop its goal) rather than a tweak. Scheduled with BUG-0032 in **M1-4d-3 (crowd
 routing)**. Proof of fix: un-skip `ShoveQaTests.WalkerInOneCellCorridor_PastAParkedFriendlyPair_Arrives`.
+
+## Update (QA verified at 2026-10-05-1609 (M1-4d-3, commit 0a71412)): not fixed
+The un-skipped repro passes only because it stops at the walker's first Idle tick. Ticked until the
+walk-backs settle, the same scenario ends with the walker 8-24 m short and goal-less for every goal x
+from 12 to 20: the pushed pair walks back and shoves the arrived walker home (BUG-0042, S2). Over 20
+varied seeds (radii, spots, goals) the walker ends at its goal on 6 (base 7f741f1: 1).
+Proof of fix now: un-skip `QA/CrowdRoutingQaTests.WalkerPastAParkedPair_StillAtItsGoalOnceTheWalkBacksSettle`.

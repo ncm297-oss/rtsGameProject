@@ -79,3 +79,9 @@ by standing units (or a per-tick local detour), units that lost their anchor wal
 not counting stuck ticks against walkers blocked only by field-waiting units (BUG-0028). Carry
 the criterion-6 targets into that task and re-measure the same rows; also re-check the
 mixed-owner crossing regression (seed 73: 2/200 vs 28). Fix = targets met or re-set with a reason.
+
+## Update (QA verified at 2026-10-05-1609 (M1-4d-3, commit 0a71412))
+QA measurements on many maps (one player per point / goal): 500 to 4 points mean 51% (seeds 1-40,
+min 41%); 2,500 to 4 points mean 34% (seeds 11-40, min 25%); 500 units to 500 random goals gave up
+mean 2.3% (seeds 1-10, max 6.6%; base 7.9%): the random-goal target is met on average; 128 to 64
+goals gave up median 19% (seeds 1-40) / 22% (seeds 41-80). The crowd rows still need field-level routing.

@@ -68,15 +68,23 @@ bugs outrank new features.
 | [BUG-0027](BUG-0027-back-off-never-gives-up-units-stay-moving-forever.md) | S2 | fixed | Back-off never counts toward giving up; crowded units stay Moving forever (refused back-off, period-2 oscillation) |
 | [BUG-0028](BUG-0028-groups-to-nearby-points-give-up-en-masse.md) | S3 | open | Groups sent to nearby points give up en masse (84-87%); walkers give up against units that are only waiting |
 | [BUG-0029](BUG-0029-move-spam-makes-arrived-blob-churn.md) | S3 | fixed | Re-issuing the same Move every tick makes an arrived blob churn indefinitely |
-| [BUG-0030](BUG-0030-move-within-arrived-units-goal-cell-ignored.md) | S3 | open | A Move to another point of an arrived unit's goal cell is ignored (up to ~2.8 m) |
+| [BUG-0030](BUG-0030-move-within-arrived-units-goal-cell-ignored.md) | S3 | fixed | A Move to another point of an arrived unit's goal cell is ignored (up to ~2.8 m) |
 | [BUG-0031](BUG-0031-unit-overlapping-standing-unit-against-cliff-pinned.md) | S3 | fixed | A unit overlapping a standing unit with a cliff behind it can't walk away in any direction |
 | [BUG-0032](BUG-0032-shoving-misses-give-up-targets-even-with-one-owner.md) | S3 | open | Crowds to nearby points arrive 35-44% and random-goal give-ups 6-20%, far from the M1-4d-2 targets (filed S2; Producer: needs unit-aware routing, task M1-4d-3) |
 | [BUG-0033](BUG-0033-friendly-unit-parked-by-move-never-steps-aside.md) | S3 | open | A parked friendly *group* never steps aside in a 1-cell corridor (lone units fixed in M1-4d-2; filed S2, Producer: task M1-4d-3) |
-| [BUG-0034](BUG-0034-distinct-targets-perf-test-flaky-in-full-suite.md) | S3 | open | `Perf_500Units_DistinctTargetsInterleavedBySlot_CostPerTick(32)` failed once in a full suite run (4.45 ms vs < 4 ms) |
+| [BUG-0034](BUG-0034-distinct-targets-perf-test-flaky-in-full-suite.md) | S3 | fixed | `Perf_500Units_DistinctTargetsInterleavedBySlot_CostPerTick(32)` failed once in a full suite run (4.45 ms vs < 4 ms) |
 | [BUG-0035](BUG-0035-walkers-squeeze-between-standing-enemies.md) | S2 | fixed | Walkers squeeze between two standing enemy units (0.6 m deep); 40% of a crowd walks through a 3-unit enemy plug |
 | [BUG-0036](BUG-0036-queued-rule-guard-test-does-not-exercise-a-hold.md) | S4 | fixed | The M1-5 "jammed group still gives up" test never exercises a hold; four safety mutants of the queued rule pass the dev suite |
-| [BUG-0037](BUG-0037-idle-enemy-holding-walkers-goal-cell-is-no-wall.md) | S3 | open | An Idle enemy holding the walker's goal cell counts as its arrived groupmate, so it is no wall (walked 0.12-0.16 m into in one tick) |
-| [BUG-0038](BUG-0038-hard-wall-fallback-drops-friendly-clips.md) | S3 | open | The hard-wall fallback drops the clips of the walker's own standing units; a walker beside an enemy slides into an anchored friendly |
-| [BUG-0039](BUG-0039-more-goals-bounds-hold-on-one-map-only.md) | S3 | open | 128 units to 64 neighbouring goals: the pack rule and the 22% give-up bound hold on one map only (25/40 and 22/40 new-seed maps fail) |
+| [BUG-0037](BUG-0037-idle-enemy-holding-walkers-goal-cell-is-no-wall.md) | S3 | fixed | An Idle enemy holding the walker's goal cell counts as its arrived groupmate, so it is no wall (walked 0.12-0.16 m into in one tick) |
+| [BUG-0038](BUG-0038-hard-wall-fallback-drops-friendly-clips.md) | S3 | fixed | The hard-wall fallback drops the clips of the walker's own standing units; a walker beside an enemy slides into an anchored friendly |
+| [BUG-0039](BUG-0039-more-goals-bounds-hold-on-one-map-only.md) | S3 | fixed | 128 units to 64 neighbouring goals: the pack rule and the 22% give-up bound hold on one map only (25/40 and 22/40 new-seed maps fail) |
 | [BUG-0040](BUG-0040-replay-tick-count-unbounded-and-in-tick-enqueue.md) | S4 | open | Replay header has no tick-count limit; phase-14 checkpoints can't match commands enqueued during a tick (M5) |
 | [BUG-0041](BUG-0041-view-launch-args-and-clock-input-nits.md) | S4 | open | View input nits: clock takes negative x negative as time, a missing flag value eats the next flag, seed max logs as -1 |
+| [BUG-0042](BUG-0042-walk-back-shoves-arrived-walker-off-its-goal.md) | S2 | open | Walk-back undoes the corridor-pair fix: the pushed pair walks home and shoves the arrived walker 8-24 m back, goal-less |
+| [BUG-0043](BUG-0043-reorder-within-goal-cell-makes-walker-give-up.md) | S2 | open | One re-order of a walking unit to another point of its goal cell (1.2 m) makes it give up mid-route (regression from the BUG-0030 change) |
+| [BUG-0044](BUG-0044-tight-blob-2500-over-slice-perf-target.md) | S2 | open | 2,500-unit tight blob 4.7 ms/tick vs the M1-4d-3 target 4.5 (+9%; +52% with two players; 1,000-walker crossing +76%) |
+| [BUG-0045](BUG-0045-shoves-press-friendlies-into-and-through-enemy-plug.md) | S2 | open | Shoves press friendly units into and through a standing enemy plugging a corridor (pre-existing; 2 of 3 seeds pass the plug at M1-4d-3, 1 of 3 on base) |
+| [BUG-0046](BUG-0046-walker-paths-depend-on-neighbor-spawn-order.md) | S3 | open | Walker positions still depend on the neighbors' spawn order (Constrain clip order; pre-existing) |
+| [BUG-0047](BUG-0047-m1-4d-3-test-guard-gaps.md) | S4 | open | M1-4d-3 test-guard gaps: 2,500 blob perf unguarded, tests ending at first Idle, loose chain-shove checker, >24 h replays unreadable |
+| [BUG-0048](BUG-0048-crowd-never-stops-under-field-cache-churn.md) | S1 | open | Livelock: 94 of 128 units Moving forever with 2 field builds per tick (64-goal row, map seed 51; regression) |
+| [BUG-0049](BUG-0049-64-goal-bounds-break-on-new-maps-stray-anchor.md) | S3 | open | The re-bounded 64-goal row breaks on new maps: 49 give-ups on seed 61, a stray anchor on seed 64 |
