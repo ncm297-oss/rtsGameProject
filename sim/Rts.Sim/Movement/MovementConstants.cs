@@ -13,8 +13,9 @@ public static class MovementConstants
 
     /// <summary>
     /// Consecutive stuck ticks after which a Moving unit gives up and goes Idle: 20 ticks = 1 s, "blocked
-    /// for a short time". A tick in which a groupmate ahead within <see cref="AvoidRange"/> made progress
-    /// last tick is a queued tick, not a stuck one: the count holds (M1-5, a crowd at a ramp or gap).
+    /// for a short time". A tick in which a walker ahead (or touching) within <see cref="QueueRange"/>
+    /// made progress last tick, or a unit ahead waits for its field, is a queued tick, not a stuck one:
+    /// the count holds (M1-5, a crowd at a ramp or gap; M1-4d-3, crossing traffic and field waits).
     /// </summary>
     public const int GiveUpTicks = 20;
 
@@ -53,4 +54,53 @@ public static class MovementConstants
     /// unit ahead: about three ticks of two units closing head-on, enough to slip past before contact.
     /// </summary>
     public const float AvoidRange = 1f;
+
+    /// <summary>
+    /// Radians a detour passes clear of a standing unit's edge (M1-4d-3): a tangent exactly grazing
+    /// it would clip it on the next tick's slight turn; about 3 degrees.
+    /// </summary>
+    public const float DetourMargin = 0.05f;
+
+    /// <summary>
+    /// Largest turn (radians) a detour takes away from the aim: 90 degrees. Past that the walker would
+    /// walk away from its aim to get round; it presses on and the wall rules decide instead.
+    /// </summary>
+    public const float MaxDetourTurn = 1.5707964f;
+
+    /// <summary>
+    /// Units a walker's shove moves at most, the shoved one included, along a line of touching
+    /// friendly Idle units ahead of it (chain shove, M1-4d-3): enough for a pair parked in a 1-cell
+    /// corridor and one more; a longer line stays a wall, so a crowd isn't bulldozed and the cost
+    /// stays bounded.
+    /// </summary>
+    public const int MaxChainShove = 3;
+
+    /// <summary>
+    /// Ticks a unit cut off its blob by a shove must go unshoved before it walks back to its point
+    /// (M1-4d-3): <see cref="GiveUpTicks"/>, since a walker still pushing it shoves it again or gives
+    /// up within that time, so the walk-back never starts head-on into the push.
+    /// </summary>
+    public const int WalkBackDelayTicks = GiveUpTicks;
+
+    /// <summary>
+    /// Gap (meters) beyond touching within which a walker ahead that made progress last tick makes a
+    /// no-progress tick a queued one (the count holds). Two of <see cref="AvoidRange"/> (M1-4d-3): a
+    /// unit pinned in a corner while its group streams past a step away read the stream as out of
+    /// reach at one and gave up (cross-map seed 1).
+    /// </summary>
+    public const float QueueRange = 2f * AvoidRange;
+
+    /// <summary>
+    /// Behind a unit waiting for its field, a no-progress tick counts toward giving up only one tick
+    /// in this many (BUG-0048): queuing behind the wait is fair, but waits under more live goals than
+    /// cache slots never end, so the count must still rise. 4: a 1 s give-up becomes 4 s.
+    /// </summary>
+    public const int QueueOnWaitStride = 4;
+
+    /// <summary>
+    /// Enemy units a plug test follows (BUG-0045): a line of standing enemies too close together to pass
+    /// between, reaching blocked ground at two members, plugs a passage; 4 covers corridors up to 3 or 4
+    /// cells wide, and keeps the search short and away from the inside of open-field blobs.
+    /// </summary>
+    public const int MaxPlugSpan = 4;
 }

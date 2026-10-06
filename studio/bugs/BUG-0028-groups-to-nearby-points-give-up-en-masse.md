@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | open (part fixed) |
 | Found | 2026-10-05-0742, task M1-4d-1 |
 | System | movement (give-up rule, standing units as walls) |
 | Fixed by | |
@@ -41,3 +41,12 @@ Partly addressed by shoving: 500 to 4 points now arrives 174 (was 78), 2,500 to 
 329); the two loosened assertions were re-tightened to the measurements (7% / 22%). Still open:
 the rates are far from "most arrive" (BUG-0032 has the current table) and (b) is not done. Both go
 to task M1-4d-3 (crowd routing); close this bug there together with BUG-0032.
+
+## Update (QA verified at 2026-10-05-1609 (M1-4d-3, commit 0a71412))
+- **Waiting units: fixed.** A walker blocked by a unit that is Moving but waiting for its field now holds
+  its count and follows: `CrowdRoutingTests.WalkerBehindAUnitWaitingForItsField_Queues_ThenFollowsAndArrives` passes.
+  Side effect: under more live goals than cache slots this hold can last forever (BUG-0048, S1, 1 map in 160).
+- **Groups to nearby points: still open.** QA sweep, one player per point (the setup is legitimate: the
+  old `slot % 4` split did send both players to every point, `QA/CrowdRoutingQaTests.OldCrowdSplit_*`):
+  500 to 4 points over seeds 1-40 arrived mean 256 (51%), min 206 (base 7f741f1: 241, min 164); 2,500
+  to 4 points over seeds 11-40 mean 844 (34%), min 621 (base 732).

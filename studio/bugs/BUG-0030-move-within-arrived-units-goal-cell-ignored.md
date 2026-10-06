@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-05-0742 (re-check of the BUG-0029 fix), task M1-4d-1 |
 | System | commands / movement (Simulation.ApplyMove "same order" rule) |
-| Fixed by | |
+| Fixed by | M1-4d-3 (0a71412): `QA/LocalMovementRecheckQaTests.ArrivedLoneUnit_OrderedToTheOppositeCornerOfItsGoalCell_MovesThere` (un-skipped, passes), `CrowdRoutingTests.ArrivedUnit_ReorderedWithinItsGoalCell_MovesOnlyForAPointFartherThanArrivalDistance` |
 
 ## Repro
 1. Remove the `Skip` from `QA/LocalMovementRecheckQaTests.ArrivedLoneUnit_OrderedToTheOppositeCornerOfItsGoalCell_MovesThere` and run
@@ -36,3 +36,10 @@ that path works (`MovingUnit_RetargetedInsideItsGoalCell_ToTheOppositeCorner_Arr
   for the new point). Otherwise restart it, which still leaves click-spam to one point harmless.
 - Forward risk for M1-4d-2 (shoving): once Idle units can be pushed, a shoved arrived unit with a
   kept goal cell cannot be sent back to its point by re-issuing the same order.
+
+## Fix (QA verified at 2026-10-05-1609 (M1-4d-3, commit 0a71412))
+An Idle unit re-ordered to a point of its goal cell farther than `ArrivalDistance` from its stored goal
+takes a new order and walks there; click spam to one point stays a no-op
+(`QA/CrowdRoutingQaTests.ArrivedBlob_ClickSpammedAtTheSamePoint_NoUnitRestartsOrMoves`, the BUG-0029 tests).
+The same change also lowers a *Moving* unit's best estimate by 2 x the shift on a same-cell retarget,
+which makes a freely walking unit give up mid-route after one 1.2 m correction: filed as BUG-0043 (S2).

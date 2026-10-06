@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-05-1446, task M1-6 |
 | System | local movement (crowded arrival, give-up, shoving) |
-| Fixed by | |
+| Fixed by | M1-4d-3 (0a71412): `MovementSystemTests.MoreGoalsThanCacheSlots_SweptOver40Maps_*`, `QA/SeedSweepQaTests.MoreGoalsThanCacheSlots_TerminationAndGiveUpBound_HoldOnNewSeedMaps1To40`, crowd rows on plain seeds |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~SeedSweepQaTests" --logger "console;verbosity=detailed"`
@@ -41,3 +41,10 @@ own bound (at most 22% give up) hold on any default map, not only the one map th
   the movement system. Consider sweeping maps when the movement bounds are next re-measured.
 - Likely the same mechanics as BUG-0028 / BUG-0032 (groups to nearby points give up en masse) and
   BUG-0038 (hard-wall fallback drops friendly clips, which would explain end-state overlaps).
+
+## Fix (QA verified at 2026-10-05-1609 (M1-4d-3, commit 0a71412))
+As asked: the rows run on plain seeds, `TestSeeds.PreMix` is gone from them, the bounds hold on every
+swept map, the pack rule is report-only (docs/03 names the limit). QA's twin was rewritten by the dev
+as the brief allowed (pack rule dropped, 22% -> 48 of 128). QA check beyond the swept seeds: the 4-point
+bounds hold on seeds 1-40 / 11-40; the 64-goal bound does not on seeds 41-80 (BUG-0049; seed 51 is the
+BUG-0048 livelock).

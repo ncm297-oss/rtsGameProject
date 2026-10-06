@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-05-1234 (re-check round 1), task M1-5 |
 | System | movement (`MovementSystem.Plan` groupmate rule, `WallLimit`, `AimCovered`, `RecheckAnchors`) |
-| Fixed by | |
+| Fixed by | M1-4d-3 (0a71412): `QA/HardWallQaTests.IdleEnemyHoldingTheWalkersGoalCell_IsStillAHardWall` (un-skipped, passes), `CrowdRoutingTests.EnemyHoldingTheWalkersGoalPoint_IsAWall_NotAnAnchor` |
 
 ## Repro
 1. Remove the `Skip` from `QA/HardWallQaTests.IdleEnemyHoldingTheWalkersGoalCell_IsStillAHardWall` and run
@@ -48,3 +48,7 @@ seed 3: 2 times, up to 0.155 m in one tick; seed 5: 2 times, 0.110 m; seed 6: 0.
 
 ## Producer triage (2026-10-05-1234, ACCEPT)
 S3 confirmed, not blocking M1 (no combat yet; nobody passes a plug). Scheduled for the M1 hardening session together with M1-4d-3 crowd routing (same code: `Plan`/`WallLimit`/`Constrain`). docs/03 now lists it as a known gap.
+
+## Fix (QA verified at 2026-10-05-1609 (M1-4d-3, commit 0a71412))
+Every groupmate test compares `Owner` too. QA's per-tick check (no walker steps deeper into an Idle
+enemy) held in every new QA scenario (gap swaps, ring of enemies, two-player crowd with re-orders).

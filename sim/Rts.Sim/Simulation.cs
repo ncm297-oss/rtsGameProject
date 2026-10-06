@@ -125,6 +125,7 @@ public sealed class Simulation
             h.Add(u.OrderTick[i]);
             h.Add(u.StuckTicks[i]);
             h.Add(u.BestRemaining[i]);
+            h.Add(u.WalkBack[i]);
         }
         h.Add(u.FreeCount);
         for (int i = 0; i < u.FreeCount; i++)
@@ -189,6 +190,24 @@ public sealed class Simulation
         u.Radius[h.Index] = def.Radius;
     }
 
+    /// <summary>
+    /// How much unit <paramref name="i"/>'s progress estimate (MovementSystem.Plan) changes where it
+    /// stands if its goal moves from <paramref name="from"/> to <paramref name="to"/> in the same cell:
+    /// nonzero only when it aims at the goal itself (in the goal cell, or a legal step from it), where
+    /// the estimate is the field cost, less the goal's offset from this cell's center, plus the distance to it.
+    /// </summary>
+    private float GoalEstimateShift(int i, Vector2 from, Vector2 to)
+    {
+        UnitStore u = World.Units;
+        NavGrid grid = World.NavGrid;
+        Vector2 pos = u.Position[i];
+        int goalCell = u.GoalCell[i];
+        if (!grid.WorldToCell(pos, out int cx, out int cy)) return 0f;
+        if (cy * grid.Width + cx != goalCell && !MovementSystem.IsLegalStep(grid, cx, cy, goalCell % grid.Width, goalCell / grid.Width)) return 0f;
+        Vector2 center = grid.CellCenter(cx, cy);
+        return (Vector2.Distance(to, pos) - Vector2.Distance(to, center)) - (Vector2.Distance(from, pos) - Vector2.Distance(from, center));
+    }
+
     private void ApplyMove(in Command command)
     {
         // Dropped: a dead or recycled unit, someone else's unit, or a target off the map.
@@ -206,13 +225,24 @@ public sealed class Simulation
             goal = grid.CellCenter(cell % grid.Width, cell / grid.Width);
         }
         int i = command.Unit.Index;
-        if (u.GoalCell[i] == cell)
+        const float same2 = MovementConstants.ArrivalDistance * MovementConstants.ArrivalDistance;
+        if (u.GoalCell[i] == cell && (u.State[i] == UnitState.Moving || Vector2.DistanceSquared(goal, u.Goal[i]) <= same2))
         {
             // The order the unit already has (click spam, an AI refreshing its orders): it doesn't
-            // restart. An Idle unit that kept its goal cell has arrived and stays put; a Moving one
-            // takes the new point but keeps its order age and stuck count, so spam can't keep it
-            // Moving forever (BUG-0029).
-            if (u.State[i] == UnitState.Moving) u.Goal[i] = goal;
+            // restart. A Moving one takes the new point but keeps its order age and stuck count, so
+            // spam (even jittered within the cell) can't keep it Moving forever (BUG-0029). An Idle
+            // unit that kept its goal cell has arrived: a point within ArrivalDistance of its goal is
+            // where it already is, so it stays put; a point farther away in the same cell is a new
+            // order, since a player's short repositioning must move it (BUG-0030).
+            if (u.State[i] == UnitState.Moving)
+            {
+                // The progress estimate depends on the goal point only where the unit aims at the goal
+                // itself (in its goal cell, or one legal step from it); move the best by exactly what
+                // the new point changes there, so a re-order neither passes for progress (a jittered
+                // re-order keeping a blocked unit Moving) nor costs a walking unit its progress (BUG-0043).
+                if (float.IsFinite(u.BestRemaining[i])) u.BestRemaining[i] += GoalEstimateShift(i, u.Goal[i], goal);
+                u.Goal[i] = goal;
+            }
             return;
         }
         u.State[i] = UnitState.Moving;
@@ -221,5 +251,6 @@ public sealed class Simulation
         u.OrderTick[i] = World.TickNumber;
         u.StuckTicks[i] = 0;
         u.BestRemaining[i] = float.PositiveInfinity;
+        u.WalkBack[i] = UnitStore.WalkBackNone;
     }
 }

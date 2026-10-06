@@ -20,11 +20,13 @@ public static class MoveScenario
     public static EntityHandle Handle(Simulation sim, int slot) => new(slot, sim.World.Units.Generation[slot]);
 
     /// <summary>
-    /// A sim with <paramref name="units"/> units of mixed types (owners alternate 0/1), each at a random
-    /// point of a random passable cell whose path cost to <paramref name="goalCell"/> is at most
-    /// <paramref name="maxCost"/> cells. Spawns are applied before returning.
+    /// A sim with <paramref name="units"/> units of mixed types (owners alternate 0 to
+    /// <paramref name="players"/> - 1), each at a random point of a random passable cell whose path
+    /// cost to <paramref name="goalCell"/> is at most <paramref name="maxCost"/> cells. Spawns are
+    /// applied before returning. Since M1-4d-3 (BUG-0037) two players sent to one point are enemies
+    /// contesting it, not one blob: whole-crowd-to-one-point scenarios pass <c>players: 1</c>.
     /// </summary>
-    public static Simulation Spawn(ulong seed, int units, float maxCost, out int goalCell, int capacity = 0)
+    public static Simulation Spawn(ulong seed, int units, float maxCost, out int goalCell, int capacity = 0, int players = 2)
     {
         var sim = new Simulation(TestSim.Config(Seed: seed, PlayerCount: 2,
             UnitCapacity: Math.Max(units, capacity), CommandCapacity: 2 * Math.Max(units, capacity) + 8));
@@ -41,7 +43,7 @@ public static class MoveScenario
             // Stay 0.05 m inside the cell so float rounding can't put the spawn in a neighbor.
             var offset = new Vector2(0.05f + rng.NextFloat() * 1.9f, 0.05f + rng.NextFloat() * 1.9f);
             Vector2 corner = Center(g, cell) - new Vector2(MapConstants.CellSize / 2);
-            sim.Enqueue(Command.SpawnUnit(i % 2, i % TestSim.UnitTypeCount, corner + offset));
+            sim.Enqueue(Command.SpawnUnit(i % players, i % TestSim.UnitTypeCount, corner + offset));
         }
         sim.Tick();
         sim.Tick();
@@ -93,7 +95,8 @@ public static class MoveScenario
     /// <summary>
     /// Which units arrived under the crowded-arrival rule: Idle, still holding their goal cell, and
     /// linked to a unit within <see cref="Movement.MovementConstants.ArrivalDistance"/> of the goal
-    /// through a chain of touching Idle units with the same goal cell.
+    /// through a chain of touching Idle units with the same goal cell and owner (an enemy is never a
+    /// link, BUG-0037).
     /// </summary>
     public static bool[] Arrived(World w)
     {
@@ -115,7 +118,7 @@ public static class MoveScenario
             int i = queue.Dequeue();
             for (int j = 0; j < u.Capacity; j++)
             {
-                if (arrived[j] || !u.Alive[j] || u.State[j] != UnitState.Idle || u.GoalCell[j] != u.GoalCell[i]) continue;
+                if (arrived[j] || !u.Alive[j] || u.State[j] != UnitState.Idle || u.GoalCell[j] != u.GoalCell[i] || u.Owner[j] != u.Owner[i]) continue;
                 if (Vector2.Distance(u.Position[i], u.Position[j]) < u.Radius[i] + u.Radius[j] + eps)
                 {
                     arrived[j] = true;

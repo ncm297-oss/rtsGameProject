@@ -58,7 +58,11 @@ _Required criteria met in session 2026-10-03-0826 (task M0-1). Owner signed off 
       Producer's targets (groups to nearby points arrive 35-44%, parked groups block chokes):
       BUG-0032/0033; the follow-up, M1-4d-3 crowd routing, is S3 debt for the M1 hardening
       session. The scenario test below (one army, one goal) does not depend on it (Producer,
-      session 2026-10-05-1234).)_
+      session 2026-10-05-1234). M1-4d-3 landed in the M1 hardening session 2026-10-05-1609:
+      detour round foreign blobs, widened queuing, walk-back, chain shove, owner-aware groups,
+      enemy plugs of up to 4 units hold; crowd rows still below the Producer's targets (4 points:
+      51% / 34%), kept as S3 debt BUG-0028/0032 and BUG-0044/0045/0049/0050 for the M1
+      end-of-milestone hardening session; see docs/03 "Implementation (M1-4d-3)".)_
 - [x] Scenario test: 200 units ordered across a 128×128 map with obstacles all arrive within a
       time limit, none stuck, none inside blocked cells.
       _(session 2026-10-05-1234, task M1-5: `ScenarioTests.TwoHundredUnits_AcrossTheMap_UpARamp_AllArriveWithinLimit_NoneGiveUp_NeverOnBlockedGround`
@@ -81,9 +85,11 @@ _Required criteria met in session 2026-10-03-0826 (task M0-1). Owner signed off 
 
 **Done when:**
 
-- [ ] `SimRunner` with accumulator and interpolation; game speed setting.
+- [x] `SimRunner` with accumulator and interpolation; game speed setting.
       _(accumulator (`ViewApi.FixedStepClock`, 5-tick cap, alpha) and game speed 0.25-8 shipped in
-      session 2026-10-05-1446, task M2-1; ticked once unit views interpolate on alpha, M2-2.)_
+      session 2026-10-05-1446, task M2-1; ticked in session 2026-10-05-1609, task M2-2: unit views
+      lerp `PrevPosition` to `Position` on alpha clamped to [0, 1], never extrapolating
+      (`game/tests/UnitViewsTest.tscn` checks the midpoint at alpha 0.5 and bad alphas).)_
 - [x] RTS camera: 55° pitch, edge pan, arrow keys, middle-drag, zoom, clamped to the map.
       _(session 2026-10-05-1446, task M2-1: `RtsCamera` + pure `ViewApi.CameraLimits`; zoom 20-60 m,
       8 px edge band, rebindable actions in `project.godot`; `game/tests/CameraClampTest.tscn` drives
@@ -91,9 +97,19 @@ _Required criteria met in session 2026-10-03-0826 (task M0-1). Owner signed off 
 - [ ] Heightmap terrain mesh with biome vertex colors; trees and rocks as MultiMesh.
       _(terrain mesh shipped in M2-1: `ViewApi.TerrainMeshBuilder`, flat plateaus, vertical cliffs,
       sloped ramps, per-level placeholder tints. Trees and rocks wait for M3's resource entities.)_
-- [ ] Placeholder unit views (primitive meshes, team colors), pooled, interpolated.
+- [x] Placeholder unit views (primitive meshes, team colors), pooled, interpolated.
+      _(session 2026-10-05-1609, task M2-2: `UnitViews`, one capsule `MeshInstance3D` per unit slot
+      (reused on respawn), one mesh per unit type sized by its data radius, one material per faction
+      with its `PrimaryColor`, placed on `ViewApi.TerrainHeight`; 2,000 views update in 0.47 ms and
+      0 bytes per frame; QA hash twin: the view-driven sim equals a bare sim every tick.)_
 - [ ] Selection: click, box, shift-add, double-click type, control groups, Tab subgroups.
+      _(click, box, Shift toggle/add and selection rings shipped in M2-2 (`SelectionController`,
+      pure `ViewApi.ScreenPicker` / `SelectionSet`, enemies never selectable); double-click type,
+      control groups and Tab subgroups are M2-3.)_
 - [ ] Right-click move, A attack-move (moves only for now), S stop, H hold, shift-queue.
+      _(right-click move shipped in M2-2 (`ViewApi.GroundPicker`, within 1 mm of the drawn mesh,
+      cliff faces resolve to the upper plateau); A / S / H / shift-queue wait for `Stop`,
+      `HoldPosition`, `AttackMove` command kinds and queued orders from the sim track, M2-3.)_
 - [ ] Minimap with click-to-move-camera and right-click orders.
 - [ ] `--screenshot` debug flag; debug overlay (nav grid, flow arrows, tick time).
       _(`--screenshot <path> --screenshot-after <s>` and a tick/speed/tick-ms/FPS label shipped in

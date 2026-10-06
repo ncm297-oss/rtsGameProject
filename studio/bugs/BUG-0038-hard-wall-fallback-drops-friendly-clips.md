@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-05-1234 (re-check round 1), task M1-5 |
 | System | movement (`MovementSystem.Constrain` / `ClosestAllowed`) |
-| Fixed by | |
+| Fixed by | M1-4d-3 (0a71412): `QA/HardWallQaTests.Constrain_EnemyBelowAndAnchoredFriendAbove_FallbackStillRespectsTheFriend` (un-skipped, passes), `CrowdRoutingTests.HardWallFallback_KeepsTheFriendlyClip` |
 
 ## Repro
 1. Remove the `Skip` from `QA/HardWallQaTests.Constrain_EnemyBelowAndAnchoredFriendAbove_FallbackStillRespectsTheFriend`
@@ -49,3 +49,6 @@ walkers went more than 1 cm deeper into a friendly unit standing on its own poin
 
 ## Producer triage (2026-10-05-1234, ACCEPT)
 S3 confirmed, not blocking M1 (no combat yet; nobody passes a plug). Scheduled for the M1 hardening session together with M1-4d-3 crowd routing (same code: `Plan`/`WallLimit`/`Constrain`). docs/03 now lists it as a known gap.
+
+## Fix (QA verified at 2026-10-05-1609 (M1-4d-3, commit 0a71412))
+The fallback keeps every wall the step touches; the un-skipped repro passes without assertion edits.

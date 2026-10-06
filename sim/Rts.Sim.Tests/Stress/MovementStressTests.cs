@@ -272,8 +272,10 @@ public class MovementStressTests
             MoveAllTo(sim, i => targets[i % distinctTargets]);
             sim.Tick();
             int builds = sim.World.FlowFields.BuildCount;
-            double avg = MeasureMovingTicks(sim, 10);
-            int perTick = (sim.World.FlowFields.BuildCount - builds) / 15;
+            // 100 ticks (BUG-0034): over 10, one slow tick (GC, a background process) moved the
+            // average by a third and failed a full-suite run now and then. The 4 ms budget is unchanged.
+            double avg = MeasureMovingTicks(sim, 100);
+            int perTick = (sim.World.FlowFields.BuildCount - builds) / 105;
             _out.WriteLine($"500 units, {distinctTargets} distinct targets: {avg:F2} ms/tick, ~{perTick} field builds per tick");
             Assert.True(avg < 4.0, $"{distinctTargets} distinct targets: {avg:F2} ms/tick (docs/03: 500 units, average tick < 4 ms)");
         }

@@ -52,8 +52,23 @@ public sealed class UnitStore
     /// speed. Infinity until the first walking tick, after a Move, and when stopped.
     /// </summary>
     public readonly float[] BestRemaining;
+    /// <summary>
+    /// Walk-back state on the current order (M1-4d-3): <see cref="WalkBackNone"/>, <see cref="WalkBackUsed"/>,
+    /// or pending: a shove carried the unit off its blob and the anchor re-check dropped its goal cell;
+    /// the value is <see cref="WalkBackPending"/> plus the ticks since it was last shoved, and it walks
+    /// back to <see cref="Goal"/> once that reaches <c>MovementConstants.WalkBackDelayTicks</c>. One
+    /// walk-back per order, so a corridor can't bounce a unit back and forth forever. Reset by a new order.
+    /// </summary>
+    public readonly int[] WalkBack;
     /// <summary>Whether the slot holds a live unit.</summary>
     public readonly bool[] Alive;
+
+    /// <summary><see cref="WalkBack"/>: the order has not been walked back to yet.</summary>
+    public const int WalkBackNone = 0;
+    /// <summary><see cref="WalkBack"/>: this order's one walk-back has started.</summary>
+    public const int WalkBackUsed = 1;
+    /// <summary><see cref="WalkBack"/>: un-anchored by a shove this tick; each later tick without a shove adds one.</summary>
+    public const int WalkBackPending = 2;
     /// <summary>Per-slot generation; a handle is valid only while it matches.</summary>
     public readonly int[] Generation;
 
@@ -78,6 +93,7 @@ public sealed class UnitStore
         OrderTick = new int[capacity];
         StuckTicks = new int[capacity];
         BestRemaining = new float[capacity];
+        WalkBack = new int[capacity];
         Alive = new bool[capacity];
         Generation = new int[capacity];
         _freeList = new int[capacity];
@@ -126,6 +142,7 @@ public sealed class UnitStore
         OrderTick[index] = 0;
         StuckTicks[index] = 0;
         BestRemaining[index] = float.PositiveInfinity;
+        WalkBack[index] = WalkBackNone;
         Alive[index] = true;
         handle = new EntityHandle(index, Generation[index]);
         return true;

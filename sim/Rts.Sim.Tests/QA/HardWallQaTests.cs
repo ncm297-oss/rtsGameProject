@@ -124,7 +124,7 @@ public class HardWallQaTests
     /// single clip"). The fallback's candidates are built from the desired step and the hard walls
     /// alone, so it returns the slide along the enemy, straight into the friendly.
     /// </summary>
-    [Fact(Skip = "BUG-0038: the hard-wall fallback drops the clips of the walker's own standing units")]
+    [Fact]
     public void Constrain_EnemyBelowAndAnchoredFriendAbove_FallbackStillRespectsTheFriend()
     {
         Simulation sim = ThreeUnits();
@@ -508,7 +508,7 @@ public class HardWallQaTests
     /// counts the enemy as an arrived groupmate instead (soft push only), walks into it and "arrives"
     /// overlapping it, anchored to the goal through the enemy.
     /// </summary>
-    [Fact(Skip = "BUG-0037: an Idle enemy holding the walker's goal cell counts as its groupmate, not a wall")]
+    [Fact]
     public void IdleEnemyHoldingTheWalkersGoalCell_IsStillAHardWall()
     {
         var sim = new Simulation(TestSim.Config(Seed: 1, PlayerCount: 2, UnitCapacity: 2, CommandCapacity: 8), LocalMovementTests.Rows(Flat(24, 24)));

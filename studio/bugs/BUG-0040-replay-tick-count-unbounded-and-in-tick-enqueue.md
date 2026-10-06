@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open (part 1 fixed) |
 | Found | 2026-10-05-1446, task M1-6 |
 | System | replays (`Rts.Sim.Replays`) |
-| Fixed by | |
+| Fixed by | Part 1: M1-4d-3 (0a71412): `QA/ReplayQaTests.AbsurdTickCount_IsRefusedAtRead` (un-skipped, passes), `ReplayFormatTests.TickCountAndInterval_HaveAFormatLimit` |
 
 Two small replay findings, grouped.
 
@@ -37,3 +37,9 @@ Settle how AI commands are recorded before M5.
 
 ## Notes
 Neither affects M1 criteria. Found by QA reading `Replay.Validate` and `Simulation.Tick`.
+
+## Update (QA verified at 2026-10-05-1609 (M1-4d-3, commit 0a71412)): part 1 fixed
+`ticks` and `checkpoint-interval` are capped at `Replay.MaxTickCount` = 1,728,000 (24 h). Deviation
+from the brief (interval not capped at the tick count) is legitimate: the recorder writes replays
+shorter than one interval. A recording longer than 24 h is written but refused on read (BUG-0047 item 4).
+Part 2 (in-tick AI enqueue) stays open for M5.

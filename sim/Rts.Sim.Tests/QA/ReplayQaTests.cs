@@ -511,7 +511,7 @@ public class ReplayQaTests
     }
 
     /// <summary>A 1 KB file must not be able to declare a playback of years of game time (players and capacities have format limits; ticks don't).</summary>
-    [Fact(Skip = "BUG-0040: TickCount and CheckpointInterval have no format limit; a crafted header makes ReplayPlayer.Run spin for hours")]
+    [Fact]
     public void AbsurdTickCount_IsRefusedAtRead()
     {
         string text = Text(Fuzz);

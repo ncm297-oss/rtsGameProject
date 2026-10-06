@@ -310,6 +310,7 @@ public class LocalMovementQaTests
         _out.WriteLine($"{checkedArrays} UnitStore arrays audited");
         Assert.Contains("StuckTicks", typeof(UnitStore).GetFields().Select(x => x.Name));
         Assert.Contains("BestRemaining", typeof(UnitStore).GetFields().Select(x => x.Name));
+        Assert.Contains("WalkBack", typeof(UnitStore).GetFields().Select(x => x.Name)); // M1-4d-3
         Assert.True(unhashed.Count == 0, "not in StateHash: " + string.Join(", ", unhashed));
     }
 

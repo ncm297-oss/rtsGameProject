@@ -22,6 +22,9 @@ public sealed class Replay
     /// <summary>Largest unit or command capacity a replay may declare (a format limit, as <see cref="MaxPlayers"/>).</summary>
     public const int MaxCapacity = 1_000_000;
 
+    /// <summary>Largest tick count a replay may declare: 24 hours at 20 Hz, so a small file can't declare a playback of years (BUG-0040).</summary>
+    public const int MaxTickCount = 1_728_000;
+
     /// <summary>Format version; must be <see cref="CurrentFormatVersion"/> to play.</summary>
     public int FormatVersion { get; init; } = CurrentFormatVersion;
 
@@ -68,7 +71,9 @@ public sealed class Replay
         if (PlayerCount < 1 || PlayerCount > MaxPlayers) return ReplayError.InvalidHeader;
         if (UnitCapacity < 1 || UnitCapacity > MaxCapacity) return ReplayError.InvalidHeader;
         if (CommandCapacity < 1 || CommandCapacity > MaxCapacity) return ReplayError.InvalidHeader;
-        if (CheckpointInterval < 1 || TickCount < 0) return ReplayError.InvalidHeader;
+        if (TickCount < 0 || TickCount > MaxTickCount) return ReplayError.InvalidHeader;
+        // Not "at most TickCount": the recorder writes replays shorter than one interval (0 checkpoints).
+        if (CheckpointInterval < 1 || CheckpointInterval > MaxTickCount) return ReplayError.InvalidHeader;
 
         if (Commands.IsDefault) return ReplayError.InvalidCommand;
         var nextSequence = new int[PlayerCount];
