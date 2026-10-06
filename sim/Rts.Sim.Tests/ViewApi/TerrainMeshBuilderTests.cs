@@ -183,6 +183,52 @@ public class TerrainMeshBuilderTests
         Assert.Contains(TerrainMeshBuilder.CliffColor, a.Colors);
     }
 
+    [Theory]
+    [InlineData(1UL)]
+    [InlineData(42UL)]
+    public void DefaultMap_HasAWallOnEveryEdgeWhereTheTwoCellsDiffer_AndNowhereElse(ulong seed)
+    {
+        // Independent count: an edge between neighbours needs a wall when their top corners on it
+        // differ (CellCorners is the surface both TerrainHeight and the mesh use). Catches a builder
+        // that drops walls (for example on the last row or column) or adds stray ones.
+        var sim = new Simulation(TestSim.Config(seed, 2, 16, 64));
+        Heightmap hm = sim.World.Heightmap;
+        int w = hm.Width, h = hm.Height;
+        const float cs = MapConstants.CellSize, eps = 1e-4f;
+        Span<float> c = stackalloc float[4], n = stackalloc float[4];
+        var expected = new HashSet<(float, float)>();
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                TerrainHeight.CellCorners(hm, x, y, c);
+                if (x + 1 < w)
+                {
+                    TerrainHeight.CellCorners(hm, x + 1, y, n);
+                    if (MathF.Abs(c[1] - n[0]) > eps || MathF.Abs(c[3] - n[2]) > eps) expected.Add(((x + 1) * cs, (y + 0.5f) * cs));
+                }
+                if (y + 1 < h)
+                {
+                    TerrainHeight.CellCorners(hm, x, y + 1, n);
+                    if (MathF.Abs(c[2] - n[0]) > eps || MathF.Abs(c[3] - n[1]) > eps) expected.Add(((x + 0.5f) * cs, (y + 1) * cs));
+                }
+            }
+
+        TerrainMesh m = TerrainMeshBuilder.Build(hm);
+        var walls = new HashSet<(float, float)>();
+        int wallQuads = 0;
+        for (int q = 0; q < m.Positions.Length; q += 4)
+        {
+            if (m.Normals[q].Y > 1e-3f) continue;
+            wallQuads++;
+            Vector3 mid = (m.Positions[q] + m.Positions[q + 1] + m.Positions[q + 2] + m.Positions[q + 3]) / 4f;
+            walls.Add((mid.X, mid.Z));
+        }
+        Assert.True(expected.Count > 100, $"only {expected.Count} wall edges on the default map");
+        Assert.Equal(expected.Count, wallQuads);
+        Assert.Equal(w * h + expected.Count, m.Positions.Length / 4);
+        Assert.True(walls.SetEquals(expected), $"{walls.Except(expected).Count()} stray walls, {expected.Except(walls).Count()} missing");
+    }
+
     /// <summary>Wall-clock budget; run alone in the serial collection.</summary>
     [Collection(SerialCollection.Name)]
     public class Serial

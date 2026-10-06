@@ -8,7 +8,7 @@ using Rts.Sim.ViewApi;
 namespace Rts.Game;
 
 /// <summary>Owns the match's <see cref="Simulation"/> and ticks it at 20 Hz from frame time (docs/03 "Presentation timing").</summary>
-/// <remarks>The view changes sim state only through <see cref="Simulation.Tick"/> here and, later, <c>Enqueue</c>.</remarks>
+/// <remarks>Here the view changes sim state only through <see cref="Simulation.Tick"/>; player orders are enqueued by <see cref="Match"/> and <see cref="SelectionController"/>.</remarks>
 public partial class SimRunner : Node
 {
     /// <summary>Slowest and fastest game speed.</summary>

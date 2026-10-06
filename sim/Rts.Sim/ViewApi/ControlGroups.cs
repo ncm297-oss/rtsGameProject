@@ -18,9 +18,12 @@ public sealed class ControlGroups
     /// <summary>Longest gap between two recalls of the same group that counts as a double-tap (seconds of wall clock).</summary>
     public const double DoubleTapSeconds = 0.3;
 
+    /// <summary><see cref="DoubleTapSeconds"/> in whole milliseconds, the unit the gap is compared in.</summary>
+    public const double DoubleTapMs = 300;
+
     private readonly SelectionSet[] _groups = new SelectionSet[Count];
     private int _lastTap = -1;
-    private double _lastTapAt = double.NegativeInfinity;
+    private double _lastTapMs = double.NegativeInfinity;
 
     /// <summary>Creates nine empty groups for a unit store of <paramref name="slotCapacity"/> slots.</summary>
     public ControlGroups(int slotCapacity)
@@ -81,13 +84,19 @@ public sealed class ControlGroups
     }
 
     /// <summary>Records a recall of <paramref name="group"/> at <paramref name="nowSeconds"/>; true if it is the second tap of the same group within <see cref="DoubleTapSeconds"/>.</summary>
-    /// <remarks>A double-tap is consumed: a third quick tap starts a new pair.</remarks>
+    /// <remarks>
+    /// A double-tap is consumed: a third quick tap starts a new pair. Times are rounded to whole
+    /// milliseconds first (the clock the view reads), so a gap of exactly 300 ms gets the same answer
+    /// at any clock value instead of depending on how <c>t / 1000.0</c> rounds (BUG-0067).
+    /// </remarks>
     public bool Tap(int group, double nowSeconds)
     {
         Group(group);
-        bool doubled = group == _lastTap && nowSeconds - _lastTapAt <= DoubleTapSeconds && nowSeconds >= _lastTapAt;
+        // Integer-valued doubles subtract exactly up to 2^53 ms; NaN never pairs.
+        double nowMs = Math.Round(nowSeconds * 1000.0);
+        bool doubled = group == _lastTap && nowMs - _lastTapMs <= DoubleTapMs && nowMs >= _lastTapMs;
         _lastTap = doubled ? -1 : group;
-        _lastTapAt = nowSeconds;
+        _lastTapMs = nowMs;
         return doubled;
     }
 

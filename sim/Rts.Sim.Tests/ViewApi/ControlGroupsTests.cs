@@ -112,6 +112,21 @@ public class ControlGroupsTests
         Assert.False(groups.Tap(3, 19.9)); // a clock running backwards never doubles
     }
 
+    [Theory]
+    [InlineData(0UL)]
+    [InlineData(800UL)] // 1.1 - 0.8 is 0.30000000000000004 in seconds (BUG-0067)
+    [InlineData(123_456_789UL)]
+    public void Tap_GapsCompareInWholeMilliseconds_AtAnyClockValue(ulong t0)
+    {
+        var groups = new ControlGroups(1);
+        Assert.False(groups.Tap(0, t0 / 1000.0));
+        Assert.True(groups.Tap(0, (t0 + 300) / 1000.0), "exactly 300 ms is a double-tap");
+        Assert.False(groups.Tap(0, (t0 + 1000) / 1000.0));
+        Assert.False(groups.Tap(0, (t0 + 1301) / 1000.0), "301 ms is not");
+        Assert.False(groups.Tap(0, double.NaN));
+        Assert.False(groups.Tap(0, double.NaN)); // NaN never pairs
+    }
+
     [Fact]
     public void TryMean_AveragesLiveUnitsOnly()
     {

@@ -276,7 +276,7 @@ public class MinimapQaTests
         Assert.Equal(Colors[1], Rgb(raster, q));
         int opaque = 0;
         for (int i = 3; i < raster.Dots.Length; i += 4) if (raster.Dots[i] != 0) opaque++;
-        Assert.Equal(1, opaque);
+        Assert.Equal(MinimapRaster.DotCells, opaque); // one dot: its cell and its rim (BUG-0064), nothing left at p
     }
 
     [Fact]

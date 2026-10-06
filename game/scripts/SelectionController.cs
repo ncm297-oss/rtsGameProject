@@ -50,6 +50,7 @@ public partial class SelectionController : Node
     public Subgroups Subgroups { get; private set; } = new(1);
 
     /// <summary>True after A: the next left click on the map attack-moves the selection there.</summary>
+    /// <remarks>Ends on that click, on Esc, S, H, any right-click (3D view or minimap), or when the selection becomes empty.</remarks>
     public bool Targeting { get; private set; }
 
     /// <summary>Orders dropped because the command queue was too full to take a whole order (logged).</summary>
@@ -89,6 +90,8 @@ public partial class SelectionController : Node
         UnitStore u = world.Units;
         Selection.Prune(u.Alive, u.Generation);
         Groups.Prune(u.Alive, u.Generation);
+        // Nothing left to attack-move: the next click must be a normal selection click (BUG-0067).
+        if (Selection.Count == 0) Targeting = false;
         // A death keeps the active subgroup while its type is still selected.
         Subgroups.Update(Selection.Items, u.TypeId, reset: false);
         _rings.Sync(world, (float)_runner.Alpha, Selection.Items);
@@ -101,6 +104,8 @@ public partial class SelectionController : Node
         {
             if (mb.IsActionPressed("select"))
             {
+                // The selection may have died since the last _Process; then this is a normal click (BUG-0067).
+                if (Targeting) PruneSelection();
                 // While targeting, a left click is the order's point and never selects; off the map it does nothing.
                 if (Targeting)
                 {
@@ -120,7 +125,7 @@ public partial class SelectionController : Node
             }
             else if (mb.IsActionPressed("command"))
             {
-                if (Targeting) Targeting = false; // right click cancels targeting and orders nothing
+                if (Targeting) CancelTargeting(); // right click cancels targeting and orders nothing
                 else IssueAt(CommandKind.Move, mb.Position);
             }
         }
@@ -140,7 +145,7 @@ public partial class SelectionController : Node
     private void HandleKey(InputEvent e)
     {
         bool queued = Input.IsActionPressed("order_queue");
-        if (e.IsActionPressed("order_cancel")) Targeting = false;
+        if (e.IsActionPressed("order_cancel")) CancelTargeting();
         else if (e.IsActionPressed("order_attack_move")) Targeting = Selection.Count > 0;
         else if (e.IsActionPressed("order_stop") || e.IsActionPressed("order_hold"))
         {
@@ -158,6 +163,9 @@ public partial class SelectionController : Node
             }
         }
     }
+
+    /// <summary>Ends A-targeting without ordering anything (Esc, or a right-click on the 3D view or the minimap).</summary>
+    public void CancelTargeting() => Targeting = false;
 
     // Ctrl + digit assigns, Shift + digit adds (Ctrl wins when both are held), a plain digit recalls;
     // a second quick recall of the same group centres the camera on it.
@@ -236,8 +244,16 @@ public partial class SelectionController : Node
     private void SelectionChanged()
     {
         UnitStore u = _runner.Simulation!.World.Units;
-        Selection.Prune(u.Alive, u.Generation);
+        PruneSelection();
         Subgroups.Update(Selection.Items, u.TypeId, reset: true);
+    }
+
+    // Drops dead units from the selection; targeting needs someone to order.
+    private void PruneSelection()
+    {
+        UnitStore u = _runner.Simulation!.World.Units;
+        Selection.Prune(u.Alive, u.Generation);
+        if (Selection.Count == 0) Targeting = false;
     }
 
     // Fills the per-slot screen centre, pixel radius and candidate flag (live, own, in front of the camera).

@@ -78,9 +78,28 @@ public class TerrainHeightTests
     [InlineData(100f, 100f, 0f)]                      // clamps onto cell (3, 3)
     [InlineData(float.NaN, float.NaN, MapConstants.LevelHeight)]
     [InlineData(8f, 8f, 0f)]                          // the far map corner belongs to the last cell
+    // BUG-0052: huge or infinite coordinates once cast to int.MinValue and threw.
+    [InlineData(1e10f, 1e10f, 0f)]
+    [InlineData(float.PositiveInfinity, float.PositiveInfinity, 0f)]
+    [InlineData(float.MaxValue, float.MaxValue, 0f)]
+    [InlineData(float.NegativeInfinity, float.NegativeInfinity, MapConstants.LevelHeight)]
+    [InlineData(1e10f, -1e10f, 0f)]                    // clamps onto cell (3, 0)
     public void At_OffTheMap_ClampsOntoTheEdgeCells(float x, float y, float expected)
     {
         Assert.Equal(expected, TerrainHeight.At(HandMap(), x, y));
+    }
+
+    [Fact]
+    public void InCell_OnARamp_NaNOrInfiniteCoordinates_GiveAFiniteHeight()
+    {
+        // Cell (2, 1) is the hand map's ramp; Math.Clamp would pass NaN through into the lerp.
+        Heightmap map = HandMap();
+        foreach (float v in new[] { float.NaN, float.PositiveInfinity, float.NegativeInfinity, 1e10f, float.MaxValue })
+        {
+            float h = TerrainHeight.InCell(map, 2, 1, v, v);
+            Assert.True(float.IsFinite(h) && h >= 0f && h <= MapConstants.LevelHeight, $"InCell(ramp, {v}) = {h}");
+        }
+        Assert.Equal(MapConstants.LevelHeight, TerrainHeight.InCell(map, 2, 1, float.NaN, float.NaN));
     }
 
     private static void Near(float expected, float actual, string what) =>

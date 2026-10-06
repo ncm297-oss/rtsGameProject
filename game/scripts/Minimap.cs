@@ -15,7 +15,8 @@ namespace Rts.Game;
 /// filtering) and the pixel/meter mapping from <see cref="MinimapTransform"/>. Mouse filter is
 /// Stop, so clicks inside the control never reach <see cref="SelectionController"/>; events outside
 /// its rect are never seen here. Holds no gameplay state; orders go through
-/// <see cref="SelectionController.Order"/> (a Move, queued while <c>order_queue</c> is held).
+/// <see cref="SelectionController.Order"/> (a Move, queued while <c>order_queue</c> is held); a
+/// right-click while A-targeting only cancels it. A left click here never ends targeting.
 /// </remarks>
 public partial class Minimap : Control
 {
@@ -130,8 +131,13 @@ public partial class Minimap : Control
                 JumpTo(mb.Position);
             }
             else if (mb.IsActionReleased("select")) _jumping = false;
-            else if (mb.IsActionPressed("command") && Fit.TryToMap(new(mb.Position.X, mb.Position.Y), out System.Numerics.Vector2 p))
-                _selection.Order(CommandKind.Move, new Vector2(p.X, p.Y), Input.IsActionPressed("order_queue"));
+            else if (mb.IsActionPressed("command"))
+            {
+                // A right-click while A is armed cancels it and orders nothing, as on the 3D view (BUG-0068).
+                if (_selection.Targeting) _selection.CancelTargeting();
+                else if (Fit.TryToMap(new(mb.Position.X, mb.Position.Y), out System.Numerics.Vector2 p))
+                    _selection.Order(CommandKind.Move, new Vector2(p.X, p.Y), Input.IsActionPressed("order_queue"));
+            }
             AcceptEvent();
         }
         else if (e is InputEventMouseMotion motion && _jumping)

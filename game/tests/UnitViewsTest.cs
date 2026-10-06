@@ -80,6 +80,17 @@ public partial class UnitViewsTest : Node
         NVector2 step = NVector2.Normalize(u.Position[0] - u.PrevPosition[0]);
         Check(forward.X * step.X + forward.Z * step.Y > 0.9f, $"forward {forward} but the unit walked {step}");
         GD.Print($"facing check: sim {f:F3} rad, step ({step.X:F3}, {step.Y:F3}), node forward {forward}");
+        // The walk above is along +x (facing 0), where a sign-flipped yaw gives the same answer (BUG-0053):
+        // also face +y, -y and two diagonals. A flipped sign turns +y into -y and (1, 1) into (1, -1).
+        foreach (float facing in new[] { Mathf.Pi / 2f, -Mathf.Pi / 2f, Mathf.Pi / 4f, -3f * Mathf.Pi / 4f })
+        {
+            u.Facing[0] = facing;
+            views.Sync(world, 0.5f);
+            Vector3 fwd = -views.ViewOf(0)!.Basis.Z;
+            var dir = new Vector3(Mathf.Cos(facing), 0f, Mathf.Sin(facing)); // sim (x, y) is Godot (x, z)
+            Check(fwd.DistanceTo(dir) < 1e-3f, $"facing {facing:F3}: node forward {fwd}, want {dir}");
+        }
+        u.Facing[0] = f;
 
         // Pooling: a freed slot hides its node; a respawn into it (LIFO free list) reuses it.
         int nodes = views.NodeCount;

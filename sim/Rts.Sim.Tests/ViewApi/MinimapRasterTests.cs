@@ -4,7 +4,7 @@ using Rts.Sim.ViewApi;
 
 namespace Rts.Sim.Tests.ViewApi;
 
-/// <summary>The minimap's pixels: terrain matches the 3D mesh's tints, dots land on the unit's cell in its owner's colour.</summary>
+/// <summary>The minimap's pixels: terrain matches the 3D mesh's tints, dots land on the unit's cell in its owner's colour inside a contrasting rim.</summary>
 public class MinimapRasterTests
 {
     private const float Cs = MapConstants.CellSize;
@@ -95,7 +95,7 @@ public class MinimapRasterTests
             int drawn = raster.DrawDots(new[] { true }, new[] { pos }, new[] { 1 });
             Assert.Equal(1, drawn);
             AssertDot(raster, x, y, Colors[1]);
-            Assert.Equal(1, CountDots(raster)); // the previous dot was cleared
+            AssertOnlyDotAt(raster, x, y, Colors[1]); // the previous dot and rim were cleared
         }
     }
 
@@ -123,6 +123,78 @@ public class MinimapRasterTests
         Heightmap map = TerrainHeightTests.HandMap();
         var raster = new MinimapRaster(map, new NavGrid(map), Colors, 2);
         Assert.Equal(2, raster.DrawDots(new[] { true, true, true }, new[] { new Vector2(1, 1), new Vector2(3, 1), new Vector2(5, 1) }, new[] { 0, 0, 0 }));
+    }
+
+    [Fact]
+    public void ALoneDot_IsItsCellInTheOwnerColour_InsideAOneCellRim()
+    {
+        Heightmap map = TerrainHeightTests.GeneratedMap(1);
+        var raster = new MinimapRaster(map, new NavGrid(map), Colors, 4);
+        raster.DrawDots(new[] { true }, new[] { new Vector2(20.5f * Cs, 30.5f * Cs) }, new[] { 0 });
+        AssertOnlyDotAt(raster, 20, 30, Colors[0]);
+        Assert.Equal(MinimapRaster.DotCells, CountDots(raster));
+        for (int dy = -1; dy <= 1; dy++)
+            for (int dx = -1; dx <= 1; dx++)
+                if ((dx | dy) != 0) AssertDot(raster, 20 + dx, 30 + dy, MinimapRaster.RimFor(Colors[0]));
+    }
+
+    [Theory]
+    [InlineData(0, 0, 4)]
+    [InlineData(0, 30, 6)]
+    [InlineData(-1, -1, 4)] // far corner (filled in below)
+    public void ADotOnTheMapEdge_ClipsItsRim(int x, int y, int cells)
+    {
+        Heightmap map = TerrainHeightTests.GeneratedMap(1);
+        if (x < 0) { x = map.Width - 1; y = map.Height - 1; }
+        var raster = new MinimapRaster(map, new NavGrid(map), Colors, 4);
+        raster.DrawDots(new[] { true }, new[] { new Vector2((x + 0.5f) * Cs, (y + 0.5f) * Cs) }, new[] { 1 });
+        AssertOnlyDotAt(raster, x, y, Colors[1]);
+        Assert.Equal(cells, CountDots(raster));
+    }
+
+    [Fact]
+    public void NeighbouringDots_NeverHideEachOthersCentre_InEitherSlotOrder()
+    {
+        Heightmap map = TerrainHeightTests.GeneratedMap(1);
+        var raster = new MinimapRaster(map, new NavGrid(map), Colors, 4);
+        Vector2 a = new(10.5f * Cs, 10.5f * Cs), b = new(11.5f * Cs, 10.5f * Cs);
+        foreach ((Vector2 first, Vector2 second, int o1, int o2) in new[] { (a, b, 0, 1), (b, a, 1, 0) })
+        {
+            Assert.Equal(2, raster.DrawDots(new[] { true, true }, new[] { first, second }, new[] { o1, o2 }));
+            AssertDot(raster, 10, 10, Colors[0]); // a is always owner 0, b owner 1
+            AssertDot(raster, 11, 10, Colors[1]);
+            Assert.Equal(12, CountDots(raster)); // 3 x 4 cells
+        }
+    }
+
+    [Fact]
+    public void EveryShippedFactionColour_GetsARimThatContrastsWithIt()
+    {
+        // BUG-0064: Malazan's dark grey vanished on cliffs, Whirlwind's orange looked like a ramp tick.
+        foreach (Rts.Sim.Data.FactionDef f in TestSim.Data.Factions)
+        {
+            uint rim = MinimapRaster.RimFor(f.PrimaryColor);
+            float gap = MathF.Abs(Luma(rim) - Luma(f.PrimaryColor));
+            Assert.True(gap >= 0.35f, $"{f.Id}: dot {f.PrimaryColor:X6} rim {rim:X6}, luma gap {gap:F2}");
+        }
+        Assert.Equal(MinimapRaster.LightRim, MinimapRaster.RimFor(0x000000));
+        Assert.Equal(MinimapRaster.DarkRim, MinimapRaster.RimFor(0xFFFFFF));
+    }
+
+    private static float Luma(uint rgb) => (0.299f * (byte)(rgb >> 16) + 0.587f * (byte)(rgb >> 8) + 0.114f * (byte)rgb) / 255f;
+
+    // Every opaque pixel is the dot at (x, y) or its rim; the centre is the owner colour.
+    private static void AssertOnlyDotAt(MinimapRaster r, int x, int y, uint rgb)
+    {
+        AssertDot(r, x, y, rgb);
+        for (int py = 0; py < r.Height; py++)
+            for (int px = 0; px < r.Width; px++)
+            {
+                int i = (py * r.Width + px) * 4;
+                if (r.Dots[i + 3] == 0 || (px == x && py == y)) continue;
+                Assert.True(Math.Abs(px - x) <= 1 && Math.Abs(py - y) <= 1, $"stray dot pixel at ({px}, {py}), dot at ({x}, {y})");
+                AssertDot(r, px, py, MinimapRaster.RimFor(rgb));
+            }
     }
 
     private static void AssertDot(MinimapRaster r, int x, int y, uint rgb)

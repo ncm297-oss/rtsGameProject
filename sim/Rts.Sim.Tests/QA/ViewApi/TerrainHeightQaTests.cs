@@ -74,13 +74,13 @@ public class TerrainHeightQaTests
     }
 
     [Theory]
-    [InlineData(1e10f, 5f, Skip = "BUG-0052: (int) overflow throws; un-skip when fixed")]
+    [InlineData(1e10f, 5f)]
     [InlineData(-1e10f, 5f)]
-    [InlineData(5f, 1e10f, Skip = "BUG-0052: (int) overflow throws; un-skip when fixed")]
-    [InlineData(float.PositiveInfinity, 5f, Skip = "BUG-0052: (int) overflow throws; un-skip when fixed")]
+    [InlineData(5f, 1e10f)]
+    [InlineData(float.PositiveInfinity, 5f)]
     [InlineData(float.NegativeInfinity, 5f)]
-    [InlineData(5f, float.PositiveInfinity, Skip = "BUG-0052: (int) overflow throws; un-skip when fixed")]
-    [InlineData(float.MaxValue, float.MaxValue, Skip = "BUG-0052: (int) overflow throws; un-skip when fixed")]
+    [InlineData(5f, float.PositiveInfinity)]
+    [InlineData(float.MaxValue, float.MaxValue)]
     public void At_FarOffTheMapOrInfinite_ClampsOntoTheMapInsteadOfThrowing(float x, float y)
     {
         // TerrainHeight.At's contract: "points off the map are clamped onto it".

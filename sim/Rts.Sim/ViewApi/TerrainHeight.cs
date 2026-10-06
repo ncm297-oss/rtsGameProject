@@ -15,12 +15,15 @@ public static class TerrainHeight
     /// <remarks>On a cell boundary the cell with the larger index wins (floor), matching <see cref="NavGrid.WorldToCell"/>.</remarks>
     public static float At(Heightmap map, float x, float y)
     {
-        float fx = x / MapConstants.CellSize, fy = y / MapConstants.CellSize;
-        // Written so NaN lands on cell 0 instead of throwing.
-        int cx = fx >= 0f ? Math.Min((int)fx, map.Width - 1) : 0;
-        int cy = fy >= 0f ? Math.Min((int)fy, map.Height - 1) : 0;
+        int cx = ClampCell(x / MapConstants.CellSize, map.Width);
+        int cy = ClampCell(y / MapConstants.CellSize, map.Height);
         return InCell(map, cx, cy, x, y);
     }
+
+    // Clamps in float before the cast: an out-of-range float-to-int cast is int.MinValue on x64,
+    // so 1e10 or +Infinity would otherwise land on cell -2^31 and throw (BUG-0052). NaN fails
+    // `f >= 0` and lands on cell 0.
+    private static int ClampCell(float f, int size) => f >= 0f ? (int)MathF.Min(f, size - 1) : 0;
 
     /// <summary>Height of cell (cx, cy)'s top surface plane at ground point (x, y), clamped to the cell's footprint.</summary>
     public static float InCell(Heightmap map, int cx, int cy, float x, float y)
@@ -28,13 +31,16 @@ public static class TerrainHeight
         if (!map.IsRamp(cx, cy)) return map.ElevationAt(cx, cy);
         Span<float> c = stackalloc float[4];
         CellCorners(map, cx, cy, c);
-        float u = Math.Clamp(x / MapConstants.CellSize - cx, 0f, 1f);
-        float v = Math.Clamp(y / MapConstants.CellSize - cy, 0f, 1f);
+        float u = Unit(x / MapConstants.CellSize - cx);
+        float v = Unit(y / MapConstants.CellSize - cy);
         // Lerp written as a*(1-t) + b*t so the corners come back exactly.
         float top = c[0] * (1f - u) + c[1] * u;
         float bottom = c[2] * (1f - u) + c[3] * u;
         return top * (1f - v) + bottom * v;
     }
+
+    // Clamp to [0, 1] with NaN going to 0 (Math.Clamp passes NaN through, which would make the height NaN).
+    private static float Unit(float t) => t > 0f ? MathF.Min(t, 1f) : 0f;
 
     /// <summary>Heights of a cell's four top corners: [0] (x0, y0), [1] (x1, y0), [2] (x0, y1), [3] (x1, y1).</summary>
     /// <remarks>

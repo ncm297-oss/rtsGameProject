@@ -1093,12 +1093,16 @@ Match
   x, y)`. Facing is the current tick's (no previous facing in the sim yet).
 - **Terrain height:** `TerrainHeight.At` returns the drawn surface: flat plateau cells, the ramp
   plane on ramp cells, the point clamped onto the map, and on a cell boundary the higher-index
-  cell (floor, like `NavGrid.WorldToCell`). It and `TerrainMeshBuilder` share
+  cell (floor, like `NavGrid.WorldToCell`). The clamp happens in float before the cell index is
+  cast to `int`, so any input (1e10, ±Infinity, `float.MaxValue`, NaN) gives a finite edge-cell
+  height instead of throwing (BUG-0052); NaN lands on cell 0 and, on a ramp, on the cell's first
+  corner. It and `TerrainMeshBuilder` share
   `TerrainHeight.CellCorners`, and a test checks every cell corner and centre of 20 generated
   maps and the 4x4 hand map against the mesh.
 - **Facing convention:** sim `Facing = Atan2(vy, vx)` points along `(cos θ, sin θ)` on the ground,
   which is Godot `(cos θ, 0, sin θ)`. A view's forward is Godot's -Z, so its yaw about +Y is
-  `-θ - π/2` (`UnitViews.Yaw`); checked with a unit walking +x (facing 0, forward (1, 0, 0)).
+  `-θ - π/2` (`UnitViews.Yaw`). `UnitViewsTest` checks a unit walking +x plus facings +y, -y and
+  two diagonals (+x alone can't tell the yaw's sign), and QA's `QaM22Test` sweeps 64 angles.
 - **Selection** (input actions `select` = LMB, `command` = RMB, `select_add` = Shift): on release,
   every own (player 0), live unit in front of the camera is projected at its body centre; its
   pixel radius is `radius · viewportHeight / (2 · depth · tan(fov / 2))`. Less than 4 px of mouse
@@ -1112,7 +1116,7 @@ Match
   unit (radius × 1.35, 6 cm above the ground).
 - **Right-click move:** the camera ray (`ProjectRayOrigin` / `ProjectRayNormal`) goes to
   `ViewApi.GroundPicker.TryPick(Heightmap, origin, direction)`: the ray is clipped to the map's box
-  (0 to 9 m high), walked cell by cell (grid DDA), and solved exactly against each cell's surface
+  (-1 to 9 m high: 1 m below the lowest level and above the highest), walked cell by cell (grid DDA), and solved exactly against each cell's surface
   plane. A ray that enters a cell already below its surface has hit the wall on that boundary,
   which belongs to the higher cell, so a click on a cliff face orders units to the upper plateau.
   The hit is kept 1 mm inside its cell. Rays that miss the map return false and the click
@@ -1151,15 +1155,19 @@ is in `SelectionController`, two pure ViewApi helpers, and the input map.
   exceeds `CommandCapacity`, for every kind. Otherwise one command per selected unit, with
   `Command.QueuedFlag` when `queued`. `IssuedCount(kind)` counts the commands enqueued per kind
   (dev and test readout). Callers: 3D right-click (Move), A + click (AttackMove), S / H keys,
-  and the minimap's right-click (Move). Each passes `queued = Input.IsActionPressed("order_queue")`
+  and the minimap's right-click (Move, when not targeting). Each passes `queued = Input.IsActionPressed("order_queue")`
   at the moment of the click or key.
 - **A (attack-move targeting):** A with a non-empty selection sets `Targeting` (A again keeps
   it; with nothing selected A does nothing). While targeting, a left press is never a selection:
   if the camera ray hits the map it orders `AttackMove` to the picked point and ends targeting; off
   the map it does nothing and targeting stays. The matching release is ignored. Esc
-  (`order_cancel`), a right-click (which then orders nothing), S and H end targeting. A
-  minimap click does not (minimap attack-move is not built). The debug label shows a trailing
-  `A` while targeting; no cursor art yet.
+  (`order_cancel`), S, H and any right-click end targeting. A right-click then orders nothing,
+  whether it lands on the 3D view or the minimap (`SelectionController.CancelTargeting()`, called
+  from the minimap's right-click branch; BUG-0068). A minimap left click jumps the camera and keeps
+  targeting (minimap attack-move is not built). Targeting also ends when the selection becomes
+  empty (every selected unit died or was freed). This is checked each frame after the prune and
+  again on the next left press, so that click selects normally instead of being swallowed
+  (BUG-0067). The debug label shows a trailing `A` while targeting; no cursor art yet.
 - **S / H:** `Order(Stop | HoldPosition, null, queued)` for the whole selection. Shift + S queues a
   Stop behind the current orders (docs/03 "Orders and unit states": a moving unit keeps moving
   and stops on arrival). There is no "holding" indicator: Hold ends when a queued order starts
@@ -1178,7 +1186,8 @@ is in `SelectionController`, two pure ViewApi helpers, and the input map.
   replaces the selection with its live units (an empty group changes nothing), so a dead or
   recycled slot (even one respawned for the enemy) is never recalled. A second plain press of the
   same digit within `ControlGroups.DoubleTapSeconds` (0.3 s of wall clock, `Time.GetTicksMsec`;
-  a recall of another group in between breaks the pair) centres the camera on the group's mean
+  a recall of another group in between breaks the pair; times are rounded to whole milliseconds
+  before comparing, so a gap of exactly 300 ms is a double-tap at any clock value, BUG-0067) centres the camera on the group's mean
   position (`TryMean`, current tick positions); the double-tap is consumed, so a third press
   starts a new pair.
 - **Tab subgroups:** the pure `ViewApi.Subgroups` lists the selection's distinct unit types in
@@ -1190,7 +1199,8 @@ is in `SelectionController`, two pure ViewApi helpers, and the input map.
   the first. The debug label shows `sub <typeId> <n>/<m>` (index + 1 of the count). Nothing else
   reads it until the command card (M3).
 - **Tests:** `ViewApi/ControlGroupsTests` (assign / add / recall, recycled slots, prune of all
-  nine, full-capacity groups, index range, double-tap boundary and consumption, mean),
+  nine, full-capacity groups, index range, double-tap boundary and consumption, whole-millisecond
+  gaps, mean),
   `ViewApi/SubgroupsTests` (ascending distinct types, wrap, empty, reset, refresh keeps or falls
   back, out-of-range types), a `ViewApiAllocationTests` row (groups and subgroups over 2,000
   units, 0 bytes), QA's `ViewHashTwinQaTests` (all four kinds, queued or not, and group recalls
@@ -1207,7 +1217,12 @@ is in `SelectionController`, two pure ViewApi helpers, and the input map.
   Esc, right-click, A twice and an off-map click while targeting; Shift + S; and S, H, Shift + S,
   Shift + right-click with 1,000 selected against 3,097 pending commands (all four dropped whole).
   From the queue check on, the scene keeps only five spread-out units on the field, because
-  walkers that meet idle, holding or packed friends give up (BUG-0028, sim side).
+  walkers that meet idle, holding or packed friends give up (BUG-0028, sim side). QA's
+  `res://tests/QaM23Test.tscn` ("QA M2-3 TEST PASS") pushes events through the viewport's real
+  routing. Its targeting steps check that a minimap right-click while A is armed cancels and
+  orders nothing (and orders a Move when A is not armed), that a 3D right-click and Esc still
+  cancel, and that after every selected unit is freed while A is armed the next click is a plain
+  selection (with and without a frame in between).
 
 ### Implementation (M2-4)
 
@@ -1227,15 +1242,27 @@ Match
   `CliffColor`): ramp cells get the ramp tint, nav-grid cliff cells (the lip above a drop and ramp
   walls) the cliff tint, any other cell its level tint, darkened by `ImpassableShade` (0.6) if it is
   blocked anyway (the map's border ring, sealed pockets). `DrawDots(alive, positions, owners)`
-  clears the previous dots (only the pixels it wrote, so cost scales with units, not map area)
-  and writes one opaque cell-sized dot per live unit in its owner's colour; later slots overwrite
-  earlier ones, unknown owners and non-finite positions draw nothing, positions are clamped onto
+  clears the previous dots (only the 3 x 3 blocks it wrote, so cost scales with units, not map
+  area) and draws each live unit as its cell in the owner's colour inside a one-cell rim (3 x 3
+  cells, clipped at the map edge). The rim colour is `MinimapRaster.RimFor(colour)`: near-black
+  (`DarkRim` 0x141414) around light colours, light grey (`LightRim` 0xE6E6E6) around dark ones
+  (Rec. 601 luma under 0.35). The rim is what tells a lone dot from terrain of a similar colour: a
+  Whirlwind dot (#C8892E) from a 1-2 cell ramp tick, a Malazan dot (#4B4F55) from a cliff lip or
+  the border ring (BUG-0064). All rims are drawn before any centre, so in a crowd no rim covers a
+  unit; among centres, later slots overwrite earlier ones. Unknown owners and non-finite positions
+  draw nothing, positions are clamped onto
   the map (floor, like `NavGrid.WorldToCell`). It allocates nothing after construction. Player p's
   colour is faction p's `PrimaryColor` (the same rule as the unit views until M6).
 - **Refresh rates:** the terrain `ImageTexture` is made once. The dot texture is redrawn from the
   current tick's positions (no interpolation) every 4 ticks, 5 Hz at 1x speed, and costs about
-  0.06 ms at 2,000 units (`MinimapTest`). The camera outline is redrawn every frame in `_Draw`.
-  Both textures use nearest filtering, so dots stay crisp cells.
+  0.13 ms at 2,000 units with the rims (`MinimapTest`, raster + upload). The camera outline is
+  redrawn every frame in `_Draw`. Both textures use nearest filtering, so dots stay crisp cells.
+- **Maps wider than the control (note for later):** at 220 px, a map over 220 cells per axis has
+  more texels than pixels, and nearest filtering skips some rows and columns (about 26% of cells
+  on a 256 map). A 3-cell-wide dot keeps at least one sampled texel per axis up to 660 cells, but
+  from 221 to 440 cells a unit can show only its rim colour, not its owner colour. `Match` only
+  runs 128 x 128 today. When bigger maps ship, draw the dots in screen space (one dot per screen
+  pixel) or downsample with a min-filter that keeps unit pixels.
 - **Transform:** the pure `ViewApi.MinimapTransform(controlPixels, mapMeters)` fits the map into
   the control preserving aspect: scale = min(width / mapW, height / mapH), centred, so a non-square
   map is letterboxed (the bars show a dark backdrop). `ToPixel(map)` and `TryToMap(pixel)`
@@ -1251,8 +1278,9 @@ Match
   `SelectionController`; events outside its rect are never seen by it. Left press (`select`)
   jumps the camera focus to the clicked map point (`RtsCamera.SetFocus`, clamped as usual) and
   keeps following the cursor while the button is held; a drag past the map area just stops
-  moving. Right press (`command`) calls `SelectionController.Order(Move, point, queued)` (queued while
-  `order_queue` is held; M2-3), the same path a
+  moving. Right press (`command`) while A-targeting only cancels targeting and orders nothing,
+  as on the 3D view (M2-3, BUG-0068). Otherwise it calls `SelectionController.Order(Move, point,
+  queued)` (queued while `order_queue` is held; M2-3), the same path a
   3D right-click takes after its ground pick: prune, nothing if the selection is empty or the
   point non-finite, the whole order dropped with a warning if it would overflow the command
   queue, else one `Command.Move` per selected unit. Pixels in the letterbox do nothing. The wheel
@@ -1264,11 +1292,18 @@ Match
 - **Launch flag added:** `--no-hud` hides the HUD (clean screenshots, perf comparisons).
 - **Tests:** `ViewApi/MinimapRasterTests` (every cell against the mesh tint on the hand map and
   3 generated maps, dot pixels at corners, centres and the map's last float, dead units, unknown
-  owners), `MinimapTransformTests` (round trips, 160x48 / 48x160 letterbox, outside and
+  owners, the 3 x 3 dot and its rim, rims clipped at the map's edges and corners, neighbouring
+  dots never hiding each other's centre in either slot order, rim contrast for every shipped
+  faction colour), `MinimapTransformTests` (round trips, 160x48 / 48x160 letterbox, outside and
   non-finite pixels, rays), a `ViewApiAllocationTests` row (2,000 dots, 0 bytes), and the
   headless scene `res://tests/MinimapTest.tscn` ("MINIMAP TEST PASS"): dot colours at 2,000
   units, refresh cost, left-click, drag, right-click orders and outside clicks pushed through
-  the viewport, the outline at both zoom limits and map corners.
+  the viewport, the outline at both zoom limits and map corners. For looking, not pass/fail:
+  `& $env:GODOT --path game res://tests/MinimapDotsShot.tscn -- --units 100 --out <png>` (windowed)
+  adds one lone Whirlwind unit on a ramp cell and one lone Malazan unit beside a cliff lip, then
+  saves the frame and a 4x nearest crop of the minimap (`<png>` with `-minimap` added). Use
+  `--units 999` for the crowded shot, since the two extra units need free slots in the 2,000-slot
+  store.
 
 ## AI architecture
 

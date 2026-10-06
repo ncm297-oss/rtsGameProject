@@ -43,6 +43,7 @@ public partial class QaM23Test : Node
             await DoubleClickEdges();
             await TargetingWithMinimap();
             await TabAfterMinimapClick();
+            await TargetingWithEmptiedSelection();
             Overflow();
         }
         catch (Exception ex)
@@ -212,13 +213,23 @@ public partial class QaM23Test : Node
         Check(_sim.PendingCommandCount == pending, "a minimap left click while targeting enqueued commands");
         GD.Print($"A then minimap click: camera moved {System.Numerics.Vector2.Distance(before, _camera.Focus):F1} m, still targeting {_sel.Targeting}");
         Check(Same(_sel.Selection.Items, sel), "the minimap click while targeting changed the selection");
-        // Minimap right-click while targeting (BUG-0068 probe; printed, not checked): the brief says a right-click while
-        // targeting cancels and orders nothing; the minimap's right-click goes straight to Order(Move).
+        // BUG-0068: a minimap right-click while targeting cancels it and orders nothing, as on the 3D view.
         int moves = _sel.IssuedCount(CommandKind.Move);
-        Push(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = true, Position = inMini });
-        Push(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = false, Position = inMini });
-        GD.Print($"A then minimap right-click: {_sel.IssuedCount(CommandKind.Move) - moves} Move commands, still targeting {_sel.Targeting}");
+        RightClick(inMini);
+        Check(_sel.IssuedCount(CommandKind.Move) == moves && _sim.PendingCommandCount == pending,
+            $"A then minimap right-click ordered {_sel.IssuedCount(CommandKind.Move) - moves} moves");
+        Check(!_sel.Targeting, "a minimap right-click did not cancel A targeting");
+        // Not targeting: the same minimap right-click is a Move again.
+        RightClick(inMini);
+        Check(_sel.IssuedCount(CommandKind.Move) - moves == sel.Count, $"a plain minimap right-click ordered {_sel.IssuedCount(CommandKind.Move) - moves} moves, expected {sel.Count}");
+        moves = _sel.IssuedCount(CommandKind.Move);
+        // A 3D right-click while targeting: cancels, orders nothing (unchanged).
+        Key(Godot.Key.A);
+        RightClick(FindEmpty());
+        Check(!_sel.Targeting && _sel.IssuedCount(CommandKind.Move) == moves, "a 3D right-click while targeting ordered a move or kept targeting");
         // Esc through the real routing
+        Key(Godot.Key.A);
+        Check(_sel.Targeting, "A did not re-arm");
         Key(Godot.Key.Escape);
         Check(!_sel.Targeting, "Esc via the viewport did not cancel");
         // Back home, A + click on an own unit: AttackMove, the click never selects.
@@ -259,6 +270,33 @@ public partial class QaM23Test : Node
         for (int k = 0; k < 3; k++) Key(Godot.Key.Tab);
         Check(_sel.Subgroups.Count == 1 && _sel.Subgroups.Index == 0 && _sel.Subgroups.ActiveType == t, "Tab with one type moved off it");
         await Frame();
+    }
+
+    // BUG-0067: A armed, then every selected unit dies: the next click selects normally and orders nothing.
+    // Once with a frame in between (the _Process prune) and once with the click arriving first.
+    private async Task TargetingWithEmptiedSelection()
+    {
+        for (int pass = 0; pass < 2; pass++)
+        {
+            List<int> own = Own();
+            List<int> doomed = own.Take(2).ToList();
+            int survivor = own[2];
+            SelectSlots(doomed);
+            Key(Godot.Key.A);
+            Check(_sel.Targeting, "A did not arm");
+            foreach (int s in doomed) U.Free(new EntityHandle(s, U.Generation[s]));
+            if (pass == 0)
+            {
+                await Frame();
+                Check(!_sel.Targeting, "targeting outlived an emptied selection");
+            }
+            int attacks = _sel.IssuedCount(CommandKind.AttackMove), pending = _sim.PendingCommandCount;
+            LeftClick(At(survivor));
+            Check(!_sel.Targeting, $"pass {pass}: still targeting after the click");
+            Check(_sel.IssuedCount(CommandKind.AttackMove) == attacks && _sim.PendingCommandCount == pending, $"pass {pass}: the click ordered something");
+            Check(Same(_sel.Selection.Items, new[] { survivor }), $"pass {pass}: the click selected {_sel.Selection.Count}, expected the clicked unit");
+            await Frame();
+        }
     }
 
     // 1,000 selected against a nearly full queue: S, H, Shift+H, Shift + right-click, A + click each dropped whole, once.

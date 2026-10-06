@@ -333,7 +333,7 @@ public class OrdersControllerQaTests
         Assert.Throws<ArgumentOutOfRangeException>(() => groups.Tap(-1, 0));
     }
 
-    [Fact(Skip = "BUG-0067: an exactly 300 ms gap counts as a double-tap at some clock values and not at others (floating-point seconds)")]
+    [Fact]
     public void DoubleTap_Exactly300ms_GivesTheSameAnswerAtAnyClockValue()
     {
         // SelectionController passes Time.GetTicksMsec() / 1000.0, so gaps are whole milliseconds.
