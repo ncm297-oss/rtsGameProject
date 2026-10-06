@@ -103,3 +103,5 @@ bugs outrank new features.
 | [BUG-0070](BUG-0070-m2-h1-doc-and-test-nits.md) | S4 | open | M2-H1 nits: stale docs/01 minimap row, docs/03 big-map range, twin double-tap constants, dev wall test blind at the far edges |
 | [BUG-0071](BUG-0071-plug-cache-answer-depends-on-query-order-under-stale-hash.md) | S3 | open | In the shove pass a cached plug answer can depend on which member was asked first (stale spatial hash) |
 | [BUG-0072](BUG-0072-m1-9-nits.md) | S4 | open | M1-9 nits: an invalid --record file name still fails only after the run |
+| [BUG-0083](BUG-0083-debug-overlay-label-allocates-per-frame-docs-claim-zero.md) | S3 | open | Overlay-on label line allocates ~600 B per frame; docs/03 "Debug tooling" claims 0 bytes per frame on and off |
+| [BUG-0084](BUG-0084-m2-5-debug-overlay-nits.md) | S4 | open | M2-5 nits: cliff tint reads olive, arrow tips dip up to 9 cm into steep ramps, CS8602 in DebugOverlayTest, blind allocation probe |
