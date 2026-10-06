@@ -35,6 +35,12 @@ wait of 15 ticks, no give-ups, and 32 of 32 arrive (`HundredTreesFallInOneTick_W
 
 Not reachable in M3-1 (nothing calls `Take` inside a tick); it becomes real with M3-2 gathering.
 
+## Producer triage (2026-10-06-1255 ACCEPT)
+S3 agreed; a design question for the M3-2 brief, not a hardening item: the recommended route is the
+"open-only changes keep fields usable, rebuild lazily under the cap" option below (closing changes,
+M3-3 buildings, still invalidate at once). The `FlowFieldCache` surface is pinned by QA; the brief
+must say what changes.
+
 ## Notes
 - Depletion only ever *opens* cells, so a field that is stale only because of depletions still
   never points into a blocked cell. It is just not the shortest path any more. One option is

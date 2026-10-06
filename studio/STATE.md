@@ -4,7 +4,7 @@ The dashboard. The Producer rewrites it at the end of every session. **Owner: re
 you" first.** "For your review" (further down) is non-blocking: what the studio built or decided
 on its own, explained in terms of what you'd see in the game.
 
-_Last updated: 2026-10-06 (session 2026-10-06-0905, ACCEPT both tracks; M1 signed off)._
+_Last updated: 2026-10-06 (session 2026-10-06-1255, ACCEPT both tracks)._
 
 ## Waiting on you
 
@@ -15,27 +15,27 @@ _Last updated: 2026-10-06 (session 2026-10-06-0905, ACCEPT both tracks; M1 signe
 
 | Field | Value |
 | --- | --- |
-| Sim: milestone | **M1 Done (2026-10-06, Producer sign-off; retro in docs/05)** → **M3 — Economy & buildings** (Next, 0 / 8) |
-| Sim: next task | **M3-1 first economy slice**: gold mines and trees as resource entities (data-driven), tree depletion updates the nav grid, `NavGrid.Version` joins the state hash · feature · QA full |
+| Sim: milestone | M3 — Economy & buildings (started 2026-10-06-1255); 1 / 8 criteria |
+| Sim: next task | **M3-2 worker gather / return loop** (Gather command, worker state machine, automatic drop-off; a minimal drop-off building store; settles BUG-0073 / BUG-0075 in the brief) · feature · QA full |
 | Sim: gate | **GO** |
-| View: milestone | M2 — Presentation (started 2026-10-05); 6 / 10 criteria; view hardening done |
-| View: next task | **M2-5 debug overlay**: nav grid, flow arrows via `FlowFieldCache.PeekCached`, tick-time graph; one toggle key, off by default · feature · QA standard |
+| View: milestone | M2 — Presentation (started 2026-10-05); 7 / 10 criteria |
+| View: next task | **Trees and gold mines as MultiMesh** from `World.Resources` (M2 criterion 3, unblocked by M3-1; `Match` asks for forests / mines) · feature · QA standard; then M2-6 audio, M2-7 60 FPS check |
 | View: gate | **GO** |
 | Tools on this PC | Godot 4.7.2 .NET, .NET SDK 8.0.425, Git 2.53 + LFS 3.7; `GODOT` user variable set |
-| Build | green on both session branches (0 warnings); conductor re-checks `main` after the two merges |
-| Tests | sim branch 1841 / 16 skipped / 0 failed non-Perf, Perf alone green (500 moving 0.62 ms; 2,500 tight blob 4.33 ms <= 4.5); view branch 1810 / 17 / 0 (QA full 1890 / 20 / 0); smoke PASS; 5 Godot scenes PASS (Producer), 9 (QA); Producer re-ran all |
-| Open bugs | 16 (S1: 0, S2: 0, S3: 10, S4: 6) — none block; 13 fixed this session (+ BUG-0058 found and fixed in-session); 4 new (sim 0071 S3, 0072 S4; view 0069 S3, 0070 S4) |
-| Sessions today | 2 / 8 on 2026-10-06; feature sessions since last hardening: sim 0 / 4, view 0 / 4 |
-| Last session | 2026-10-06-0905 · sim M1-9 M1 end-of-milestone hardening (0 fix rounds) · view M2-H1 view hardening (0 fix rounds) · both ACCEPT · M1 signed off |
+| Build | sim branch 0 warnings; view branch 1 warning (CS8602 in a test scene, BUG-0084); conductor re-checks `main` after the two merges |
+| Tests | sim branch 2088 / 13 skipped / 0 failed non-Perf, Perf rows alone green (500 moving with forests 0.82 ms; tight blob 4.33 ms = base); view branch 1929 / 10 / 0 (QA full incl. Perf 1998 / 13 / 0); smoke PASS on both; `DebugOverlayTest` + `QaM25Test` PASS; CLI twin with forests identical; Producer re-ran all |
+| Open bugs | 22 (S1: 0, S2: 0, S3: 14, S4: 8) — none block; 6 new (sim 0073 / 0074 / 0075 S3, 0076 S4; view 0083 S3, 0084 S4) |
+| Sessions today | 3 / 8 on 2026-10-06; feature sessions since last hardening: sim 1 / 4, view 1 / 4 |
+| Last session | 2026-10-06-1255 · sim M3-1 resource entities (0 fix rounds) · view M2-5 debug overlay (0 fix rounds) · both ACCEPT |
 
 ## Milestone progress
 
 | Milestone | Criteria met | Status |
 | --- | --- | --- |
 | M0 | 7 / 7 required | **Done** 2026-10-03 (optional MCP item open) |
-| M1 (sim track) | 8 / 8 | **Done** 2026-10-06 (Producer sign-off after the M1-9 hardening; coverage ✅ x3 on every M1 row; open S3/S4 listed in the retro) |
-| M2 (view track) | 6 / 10 (SimRunner interpolation, camera, placeholder unit views, selection complete, orders complete, minimap); left: terrain mesh trees/rocks (waits for M3 resources), debug overlay (M2-5), audio (M2-6), 60 FPS playable check (M2-7) | In progress; M2-5 next, then M2-6, M2-7, M2 hardening + sign-off |
-| M3 (sim track) | 0 / 8 | **Next**; first slice M3-1 resource entities |
+| M1 (sim track) | 8 / 8 | **Done** 2026-10-06 (Producer sign-off after the M1-9 hardening; retro in docs/05) |
+| M2 (view track) | 7 / 10 (SimRunner interpolation, camera, placeholder unit views, selection complete, orders complete, minimap, debug overlay); left: terrain mesh trees/rocks (unblocked now), audio (M2-6), 60 FPS playable check (M2-7) | In progress; trees / mines next, then M2-6, M2-7, M2 hardening + sign-off |
+| M3 (sim track) | 1 / 8 (resource entities + depletion updates the nav grid) | In progress; M3-2 gather loop next |
 | M4-M9 | — | Planned |
 
 ## For your review
@@ -43,6 +43,94 @@ _Last updated: 2026-10-06 (session 2026-10-06-0905, ACCEPT both tracks; M1 signe
 Non-blocking. Each entry says what was built or decided, what you'd notice in the game, and how
 to change it. To change anything, write it in `studio/inbox.md`, for example "use formations
 instead of clusters" or "make giving up take 2 seconds".
+
+### Gold mines and trees exist in the rules: the first piece of the economy (sim track, M3-1, 2026-10-06)
+
+- **What was built:** the game now knows about resource nodes. A **tree** holds 100 wood and
+  covers one 2 m square; a **gold mine** holds 2,500 gold and covers a 2 x 2 block. Both are solid:
+  units walk round them. When a tree is cut down to nothing (nothing cuts yet; that's the next sim
+  task, workers), its square opens up and every pathfinding arrow map is recomputed, so armies walk
+  straight through the gap. A map can be generated with forests (connected clumps of 12-40 trees)
+  and mines (at least 24 m apart), and the generator makes sure no patch of ground is ever walled
+  in by them. All of this is part of the replay fingerprint, so a replay where a tree falls one tick
+  later is a different replay. The replay file format grew (version 3; old files are refused with a
+  clear code), and the checked-in golden replay was regenerated once with the proof that every
+  unit's path stayed byte-identical.
+- **What you'll see:** nothing in the window yet: the game window still builds its map without
+  resources, and no tree or mine is drawn. The next view task draws them (placeholder cone trees
+  and dark blocks) and turns forests on in the game's map, so in one or two sessions you'll see
+  forests and mines on the map and the army routing round them.
+- **Try it now (command line):** `dotnet run --project tools/Rts.Cli -- run --seed 1 --units 200 --ticks 600 --forests 12 --mines 8`
+  twice: the header ends with `forests 12 trees N mines 8` and the fingerprint lines are identical
+  both times. Press F12 in the game window later (see the overlay entry) to see resource cells red
+  once the view turns forests on.
+- **Producer decisions, revisit any time:**
+  - *A mine is 2 x 2 cells (4 x 4 m), a tree 1 x 1.* The docs didn't say; 2 x 2 gives eight sides for
+    workers to stand on. Alternative: 3 x 3 for a grander mine.
+  - *A worked-out mine leaves open ground, like a felled tree* (no rubble blocking the spot).
+  - *Maps have no forests or mines unless asked* (the generator's defaults are 0). This kept every
+    M1 test and the golden replay's trajectories identical. The game window will ask for them in
+    the next view task; the numbers (how many forests, how many mines) are a design call I'll make
+    then (something like 12 forests and 8 mines on the 128 x 128 map). Tell me if you have a
+    preference, or a preference for where mines go (near start positions comes with M3-3 / M6).
+  - *Every mine holds the "start mine" amount (2,500)* until start locations exist and expansion
+    mines (2,000) can be told apart.
+  - *Room for 4,096 nodes per map* (a setting, not a limit of the design).
+  - *Size: about 2,200 lines against a 1,000-1,300 budget*, mostly tests. Accepted: the new part is
+    how resources interact with pathfinding and the fingerprint, and the tests are what prove it.
+- **Rough edges (S3, none visible before workers exist):**
+  - BUG-0073: when trees fall *continuously* (one per tick, QA's stress), every arrow map is
+    invalidated every tick and most groups stand still until the felling stops. In play, with workers
+    chopping, a tree falls every few seconds, which would mean short stalls. I've made this a design
+    question for the next sim task (felled trees only *open* ground, so an old arrow map is still safe
+    to follow; the fix is to keep using it and refresh it in the background).
+  - BUG-0075: cutting a tree in the *middle* of a forest first leaves an open square nobody can
+    reach, and a click on it makes the unit give up. Workers will only ever cut trees they can stand
+    next to, so this can't happen in play once that rule is written down; the next sim task does that.
+  - BUG-0074: the forest generator assumes trees are 1 x 1; if someone edits the data to make trees
+    2 x 2, forests can wall ground in. Next sim clean-up session.
+  - BUG-0076 (S4): small notes (a setup-time number in the docs, fixed; a redundant check that costs
+    2 s on a huge 1024 x 1024 map; an empty resources file loads without complaint).
+- **To change it:** `game/data/common/resources.json` (node types, footprints, names);
+  `game/data/common/rules.json` (`treeWood`, `startMines.gold`); forest sizes and mine spacing are
+  generator settings (`MapGenParams`), by inbox note.
+
+### Press F12: the developer overlay shows the pathfinding under the hood (view track, M2-5, 2026-10-06)
+
+- **What was built:** a toggle (F12) that draws the game's inner workings on the map: every ground
+  cell as a faint square (red where units can't go, dark red on cliff edges, orange on ramps); yellow
+  arrows on the ground showing which way the selected units' pathfinding map points, in a 40 x 40-cell
+  window round the camera, with a cyan disc on the destination; a bar graph of the last 120 ticks'
+  cost with the 4 ms budget line (bars go red over budget); and a second line in the top-left label
+  with the live unit count, how many are moving, how many arrow maps are cached, and the average and
+  worst tick time. Off by default; `-- --debug-overlay` starts with it on (so `--screenshot` can capture
+  it). While off it costs nothing and nothing is built.
+- **Try it:** `& $env:GODOT --path game`. Box-select the blue army, right-click a spot on the far
+  plateau, press **F12**: the arrows converge on the ramp (orange) and then run to the cyan disc. Pan the
+  camera: the arrow window follows. Press F12 again to hide it. `& $env:GODOT --path game -- --units 1000 --zoom 60 --debug-overlay`
+  shows the graph with 2,000 units ticking (bars well under the line).
+- **Producer decisions, revisit any time:**
+  - *F12*, rebindable (`debug_overlay` in `game/project.godot`); the docs' key list left it free.
+  - *Arrows for one destination only*: the lowest-numbered selected unit's. Arrows for every selected
+    group would clutter; the window and a Tab subgroup pick the one you mean.
+  - *A fixed 40 x 40-cell window round the camera*, not the exact visible area: at the farthest zoom you
+    see more ground than the window covers. The visible-trapezoid version is deferred.
+  - *The numbers (average, worst) are on the label, not drawn inside the graph.* The dev's call;
+    accepted.
+  - *Per-unit state labels and the dev console are deferred* (they are in the docs' wish list, not in
+    the M2 criterion); labels may come with the M2-7 polish if cheap.
+  - *Size: about 2,100 lines against an 800-1,100 budget*, mostly tests (an independent checker that
+    recomputes the arrows after every refresh and compares them to what's drawn).
+- **Rough edges (view hardening session, after M2-6 / M2-7):** BUG-0083 (S3): with the overlay on,
+  the label's text line allocates a little memory every frame while the docs claim zero (the overlay's
+  own drawing is zero; the fix is a line in the docs or a cached string). BUG-0084 (S4): cliff edges
+  read olive, not dark red, on the green plateau; arrow tips dip a few cm into steep ramps; one compiler
+  warning in a test scene; one dev test measures the wrong case. Also seen: with more than 128
+  destinations active at once under the 2-maps-per-tick build limit, a new order's arrows can take a
+  while to appear (BUG-0025, sim, known).
+- **To change it:** key binding in `game/project.godot`; colours are constants in
+  `sim/Rts.Sim/ViewApi/NavOverlayBuilder.cs` and `game/scripts/FlowArrowsView.cs` (dev-only, not
+  player-facing); window size `FlowArrowLayout.DefaultWindow`; the rest by inbox note.
 
 ### M1 is done: the whole game simulation works without graphics, and I signed it off (sim track, M1-9 + sign-off, 2026-10-06)
 
@@ -95,6 +183,7 @@ instead of clusters" or "make giving up take 2 seconds".
   `dotnet run --project tools/Rts.Cli -- run --seed 1 --units 200   # headless hashes + timings`.
 - **What's next:** M3, the economy: gold mines and trees, workers gathering, building placement and
   construction, production queues, Age II, and the full Malazan and Whirlwind rosters in data.
+  **Update 1255: gold mines and trees landed (see the M3-1 entry at the top).**
 
 ### View clean-up: the minimap right-click cancels A, lone dots are visible, five bugs closed (view track, M2-H1, 2026-10-06)
 
@@ -179,6 +268,7 @@ instead of clusters" or "make giving up take 2 seconds".
   it twice: the 15 fingerprint lines are identical (that's determinism you can see). Add
   `--record x.replay` then `dotnet run --project tools/Rts.Cli -- play x.replay`: "ok: 15
   checkpoints matched". `--units 2500` shows the tick cost at scale (about 4.6 ms on this PC).
+  Update 1255: `--forests 12 --mines 8` adds resources to the map (see the M3-1 entry).
 - **Producer decisions, revisit any time:** the march goes to the walkable cell farthest (by
   walking distance) from the middle of the player's own map edge, so armies cross the whole map
   (with `--players 2` the two armies cross each other); `--units` is the total across players and
@@ -404,7 +494,9 @@ instead of clusters" or "make giving up take 2 seconds".
   did its job; the golden was regenerated once, with the reason in the commit. Update M1-7: the
   file format grew a column (format 2) and the fingerprints stayed byte-identical. Update M1-8: you
   can record and play replays yourself from the command line (see the M1-8 entry). Update M1-9: the
-  golden stayed byte-identical through the whole clean-up batch.
+  golden stayed byte-identical through the whole clean-up batch. Update 1255: format 3 (resources);
+  the fingerprints changed because the fingerprint now covers trees and mines, but every unit's path
+  was proven identical before and after.
 - **Also fixed (BUG-0014):** two particular seeds (0 and the largest possible number) used to give
   the same map. The seed is now scrambled before use, so every seed is its own map. Side effect:
   **every map changed once.** Seed 1 today is not the seed 1 of yesterday. Nothing you have seen is
@@ -432,7 +524,8 @@ instead of clusters" or "make giving up take 2 seconds".
 - **What changed for you:** from this session the game window stops being an empty scene (see the
   M2-1 entry above: it landed). Units, selection and right-click orders are the next view task (M2-2).
   Update 1609: M2-2 landed too. Update 2330: the minimap (M2-4) landed. Update 0655: the order keys
-  (M2-3) landed; M1's criteria are all met. Update 0905: M1 signed off; sim starts M3.
+  (M2-3) landed; M1's criteria are all met. Update 0905: M1 signed off; sim starts M3. Update 1255:
+  resources (M3-1) and the F12 overlay (M2-5) landed.
 - **Producer decisions, revisit any time:**
   - *Where the view's tests live.* Dev tests in `sim/Rts.Sim.Tests/ViewApi/`, QA tests in
     `sim/Rts.Sim.Tests/QA/ViewApi/`, Godot-side test scenes in `game/tests/`; `ViewApi/` may hold
@@ -444,7 +537,8 @@ instead of clusters" or "make giving up take 2 seconds".
     Held this session and the next. Update 2330: held again (M1-7 kept the 3-argument `Move`).
     Update 0655: held (M1-8 added one read-only method and nothing else to the sim). Update 0905:
     held (one unused public constant renamed; `Enqueue` now throws on malformed commands, which the
-    view never produces).
+    view never produces). Update 1255: held (`SimConfig.ResourceCapacity` optional; a new required
+    data file `resources.json` that the game already ships).
   - *First view slice order:* scene + terrain + camera + screenshot flag before unit views, because
     the screenshot flag is how the studio (and you) verify every later visual task.
   - *Bug numbering with two QA inspectors:* both filed a BUG-0039 this session. From now on the
@@ -531,7 +625,8 @@ instead of clusters" or "make giving up take 2 seconds".
   0655: quiet again. Update 0905: one near miss, no harm: the view builder's file I/O used a
   relative path and briefly rewrote two files in *your* checkout (`game/scripts/UnitViews.cs`,
   `game/tests/UnitViewsTest.cs`); restored byte-identical, your `git status` shows only your own
-  `.claude/settings.json` change. Builders are reminded to use absolute paths.
+  `.claude/settings.json` change. Builders are reminded to use absolute paths. Update 1255: quiet
+  (Remote Control was refused as "unavailable in unattended sessions"; no effect on the work).
 
 ### Units cluster around the click point, and give up when stuck (M1-4d-1, 2026-10-05)
 
@@ -570,7 +665,8 @@ instead of clusters" or "make giving up take 2 seconds".
   time budget so the game never hitches.
 - **What you'll see:** nothing in normal play. Only in a big burst: order 32 separate groups to 32
   different spots at the same instant and the last group starts walking about 0.8 s after the first.
-  Update M1-8: the M2-5 debug overlay will be able to draw these arrows on the ground.
+  Update M1-8: the M2-5 debug overlay will be able to draw these arrows on the ground. Update 1255:
+  it does; press F12 (see the overlay entry at the top).
 - **Why it's saved with the game (Producer decision):** which arrow maps are remembered decides
   which units wait a tick, so that memory is saved and checked like the rest of the game state.
   That keeps replays and saved games exact.
@@ -611,7 +707,8 @@ instead of clusters" or "make giving up take 2 seconds".
   - Per-unit attack wind-up times, faction color palettes, and a placeholder for "requires Age II".
 - **To change them:** edit the numbers in `game/data/factions/<faction>/units.json`, or ask the
   studio. No code changes are needed. Update M1-6: a data edit also means regenerating the golden
-  replay (the studio does this; it's one command).
+  replay (the studio does this; it's one command). Update 1255: `common/resources.json` joins the
+  data (tree and gold-mine types).
 
 ### Optional: Godot MCP server (M0)
 
@@ -627,42 +724,58 @@ track right after S1/S2 bugs).
    M1-7** (session 2330).
 2. ~~Public read access to a cached flow field's directions, for the M2-5 debug overlay~~ → **done
    in M1-8** (session 0655): `FlowFieldCache.PeekCached(targetCell)`; read `DirectionAt` / `CostAt`,
-   don't keep it across ticks. M2-5 can start.
+   don't keep it across ticks. M2-5 used it (session 1255).
 3. ~~`DataError.ToString()` shouldn't print `: :` for empty fields~~ → **done in M1-9** (session 0905).
 4. Low priority: a previous-tick facing (`PrevFacing`) so unit views can blend turns; today the
    view snaps yaw per tick (M2-2 note, M2-7 polish). Fold into any M3 slice touching `UnitStore`.
 5. Noted, not requested: Shift-queued legs through a packed friendly group give up (BUG-0028);
    the M2-3 test scene works round it with spread-out units. Crowd-cost follow-up after M4.
+6. Noted (M2-5, session 1255): with 64+ live goals under the 2-builds-per-tick cap about 90 % of
+   selected goals had no cached field in QA's churn; that is BUG-0025 (sim debt). No depletion
+   events for resource nodes: the view polls `World.Resources.Alive` / `Generation` (fine for M2).
 
 ## Feature queue: sim track (feature sessions, in order)
 
-1. **Next: M3-1** resource entities: gold mines and trees as a data-driven entity store (generational
-   handles), resource definitions in `game/data/`, tree depletion updates the nav grid and
-   `NavGrid.Version` joins the state hash (docs/03 known limit). One system, ~800 lines (new
-   interaction with the nav grid and the hash). QA full.
-2. M3-2 worker gather / return loop with automatic drop-off choice; M3-3 building placement (ghost
-   validity rule in the sim, construction with multiple builders, repair); M3-4 production queues
-   (5 slots), rally points, population and cap, refunds; M3-5 Age II research and Forge upgrades;
-   M3-6 full Malazan and Whirlwind data (units, buildings, techs). **Requests for the sim track**
-   above outrank M3 work.
+1. **Next: M3-2** worker gather / return loop: `Gather` command, worker state machine in tick phase 4
+   (walk to node, gather `workerCarry` at `gatherRate`, return to the nearest drop-off by walking
+   distance, repeat; `nodeSearchRadius` for the next node when one depletes), per-player resource
+   totals in the hash. Needs a drop-off: a minimal building store with pre-placed Town Halls
+   (recommended; it becomes M3-3's store) or M3-3 first. The brief settles BUG-0073 (open-only grid
+   changes keep fields usable) and BUG-0075 (gather only from an adjacent reachable cell). QA full.
+2. M3-3 building placement (ghost validity rule in the sim, construction with multiple builders,
+   repair); M3-4 production queues (5 slots), rally points, population and cap, refunds; M3-5 Age II
+   research and Forge upgrades; M3-6 full Malazan and Whirlwind data (units, buildings, techs).
+   **Requests for the sim track** above outrank M3 work.
 3. M6 (far ahead): agents can't download. The Producer lists under "Waiting on you", when M5
    starts, the exact links for the Godot 4.7.2 .NET export templates and the Kenney/KayKit/Quaternius
    packs (docs/04) with the `asset-sources/` folder for each (owner note 2026-10-05).
 
 ## Feature queue: view track (feature sessions, in order)
 
-1. **Next: M2-5** debug overlay (nav grid, flow arrows through `FlowFieldCache.PeekCached`, tick-time
-   graph); one rebindable toggle key, off by default; `--screenshot` with it on. QA standard.
+1. **Next: trees and gold mines as MultiMesh** from `World.Resources` (M2 criterion 3; rocks are
+   decorative and optional): `Match` builds its map with forests and mines (launch flags `--forests`
+   / `--mines`, defaults a Producer call at the PLAN), placeholder meshes sized from the footprint,
+   instances hidden when a node's `Alive` goes false, 0 bytes per frame, hash twin. QA standard.
 2. M2-6: placeholder audio for select and command (generated tones or CC0 already in repo; no
    downloads by agents).
 3. M2-7: playable check, 100 placeholder units at 60 FPS → M2 end-of-milestone hardening (BUG-0069,
-   BUG-0070, export hygiene notes) → M2 sign-off. Trees and rocks as MultiMesh wait for M3's
-   resource entities (the criterion stays open until then or is split).
+   BUG-0070, BUG-0083, BUG-0084, export hygiene notes) → M2 sign-off.
 4. M3 view side after that: HUD resource bar, selection panel, command card (uses Tab subgroups),
-   build ghosts.
+   build ghosts, worker / gather feedback.
 
-## Debt backlog: sim track (hardening sessions only; next one after 4 feature sessions)
+## Debt backlog: sim track (hardening sessions only; next one after 3 more feature sessions)
 
+- **BUG-0073 (S3, design, M3-2 brief)** every tree fall invalidates every cached field; with the
+  2-per-tick build cap, continuous felling leaves most groups standing. Open-only changes should keep
+  fields usable and rebuild lazily; closing changes (buildings) still invalidate at once.
+- **BUG-0075 (S3, rule, M3-2 brief)** felling an interior tree first leaves an unreachable hollow;
+  gather only from a node cell adjacent to the passable cell the worker stands on; fix the two docs/03
+  sentences; un-skip the QA row.
+- **BUG-0074 (S3)** forest placer assumes 1 x 1 trees; validate (tree type must be 1 x 1) or
+  generalize `TryForest` to footprints; un-skip the QA row.
+- **BUG-0076 (S4)** M3-1 nits: full flood fill after the ring test can't fail (keep as a debug
+  assertion), empty resources list loads clean (require one type per kind), -0 mine spacing. Item 1
+  (docs timing) fixed by the Producer.
 - **BUG-0071 (S3)** shove-pass plug cache: the cached answer can depend on which cluster member is
   asked first when a member stopped this tick within a hair of the link distance (stale hash);
   deterministic. Fix: widen `SearchPlug`'s query by `MaxUnitSpeed` in the shove pass (as
@@ -676,25 +789,31 @@ track right after S1/S2 bugs).
 - **BUG-0028 / BUG-0032 (S3)** crowd targets (4 points 51% / 34%, 64 goals median 22-24% give up,
   same-owner crossing 22 / 200): needs a crowd cost in the flow fields; after the M4 sandbox.
 - BUG-0040 (S4) part 2: in-tick AI enqueue vs the phase-14 checkpoint is a design note for M5.
-- BUG-0025 (S3) evict the live field with the newest order + BUG-0026 (S4) rotate same-tick tie-break.
+- BUG-0025 (S3) evict the live field with the newest order (the M2-5 churn confirms it at 64 goals)
+  + BUG-0026 (S4) rotate same-tick tie-break.
 - BUG-0005 (S3) per-player command buckets (O(n^2) insertion sort under a flood); before M5.
 - BUG-0023 (S3) single field build > tick budget on maps > 256: documented as unsupported.
 - Loader: BUG-0008 (S3) duplicate JSON keys, BUG-0010 (S4) faction slots; fold into M3-6 data.
 - BUG-0002 (S4) `.sln` Release config maps RtsGame to Debug; with `tools/export.ps1` (M6).
-- Perf (Debug, this machine, alone): 500 moving 0.62 ms; 2,500 one-player tight blob 4.33 ms
-  (enforced <= 4.5, ~3% headroom); two-player contested blob 6.84 ms (guard < 10.5); 2,500 to 4
-  points 3.08 ms (guard < 3.7); 1,000 walkers crossing a 1,500 blob 14.2 ms (report); CLI 2,500
-  march 4.6 ms. `World.PlugAnswers` is 120 KB at design numbers, 687 MB at the format limits
-  (16 players x 1 M units; no crash).
+- Perf (Debug, this machine, alone): 500 moving 0.62 ms, with 12 forests + 8 mines 0.82 ms; full
+  4,096-slot resource hash 20 µs; 2,500 one-player tight blob 4.33 ms (enforced <= 4.5, ~3%
+  headroom); two-player contested blob 6.84 ms (guard < 10.5); 2,500 to 4 points 3.08 ms (guard
+  < 3.7); 1,000 walkers crossing a 1,500 blob 14.2 ms (report); CLI 2,500 march 4.6 ms. Setup: 128
+  map with 12 forests + 8 mines +5 ms; 1024 map at the resource caps +2.2 s.
 - Known limits: docs/03 "Known limits (M1), as of M1-9" is the list (flow fields ignore units;
   4.7% random-goal give-ups; the BUG-0048 map gives up 76 of 128; pack rule not guaranteed; partial
   spawn-order independence; clusters over 32 are not plugs; holders are walls only; maps > 256
-  unsupported; perf measured in Debug). Plus: `NavGrid.Version` not hashed (M3-1 fixes); enqueue
-  stamps `TickNumber + 1`; `SimInfo.Version` recorded but not checked; .NET 8 support ends
-  2026-11-10, move to the next LTS at M6.
+  unsupported; perf measured in Debug). Plus: enqueue stamps `TickNumber + 1`; `SimInfo.Version`
+  recorded but not checked; no depletion events (views poll); .NET 8 support ends 2026-11-10, move
+  to the next LTS at M6.
 
 ## Debt backlog: view track (hardening sessions only; next one is the M2 end-of-milestone session)
 
+- **BUG-0083 (S3)**: the overlay-on label line allocates ~600 B per frame; docs/03 "Debug tooling"
+  claims 0 bytes on and off. Fix the doc claim (the layers are 0 B) or cache the string.
+- **BUG-0084 (S4)**: cliff tint reads olive on green terrain (raise alpha or pick a bluer dark red);
+  arrow ends dip up to 9 cm into steep ramp cells (lift by the cell's slope); CS8602 in
+  `DebugOverlayTest.cs:173`; the dev allocation probe should relist with a live field.
 - **BUG-0069 (S3)**: a lone minimap dot reads as its rim colour (1-4 px of owner colour in a 5 x 5 px
   square at 220 px / 128 cells); two light factions' lone units would look alike; empty cells in a
   formation leave rim lines. Default: 2 x 2-cell owner centre in a one-cell rim; alternatives:
@@ -705,19 +824,22 @@ track right after S1/S2 bugs).
   row / column (QA kills those mutants; add a hand map with a step on the far edges).
 - Edge-pan hover suppression (`RtsCamera.EdgePanBlocker`) can't fire today: the minimap's 8 px margin
   keeps it out of the 8 px edge band. Harmless; revisit if the HUD layout changes.
-- Export hygiene (M6): exclude `game/tests/` from the release build (now 11 scenes compile in); load
+- Export hygiene (M6): exclude `game/tests/` from the release build (now 14 scenes compile in); load
   `game/data/` in a way that works from a `.pck` instead of `ProjectSettings.GlobalizePath("res://data")`.
 - `MinimapDotsShot --units 1000` silently drops its second lone unit (store full; documented).
 - Cosmetic: ramp ends ~31° vs 22° mid-ramp; no wall skirts on the map border; 1024² mesh 904 MiB
   transient (outside supported sizes); `StartLayout` at radius 1.0 puts bodies exactly touching.
+- Overlay deferred items (docs/03): per-unit state labels, arrows for more than one goal, a window
+  that follows the visible trapezoid, the dev console.
 - Note: headless scene runs print Godot warning stack traces for the expected "order dropped"
-  warnings; not errors. Builders: absolute paths for all file I/O (this session's near miss).
+  warnings; not errors. Builders: absolute paths for all file I/O.
 - Optional M0 item: Godot MCP server (owner install; not needed since `--screenshot`).
 
 ## Recent sessions
 
 | Date | Session | Task | Result |
 | --- | --- | --- | --- |
+| 2026-10-06 | [2026-10-06-1255](sessions/2026-10-06-1255.md) | sim M3-1 resource entities (`ResourceStore`, placer, depletion → nav grid, hash, replay format 3, CLI flags); view M2-5 debug overlay (F12: nav grid, flow arrows, tick graph, counts) | both ACCEPT, 0 fix rounds (QA PASS_WITH_ISSUES x2: sim 3 S3 + 1 S4; view 1 S3 + 1 S4). M3 1 / 8, M2 7 / 10 |
 | 2026-10-06 | [2026-10-06-0905](sessions/2026-10-06-0905.md) | sim M1-9 M1 end-of-milestone hardening (9 items, 8 bugs fixed + BUG-0058); view M2-H1 view hardening (5 bugs fixed, rimmed minimap dots) | both ACCEPT, 0 fix rounds (QA PASS_WITH_ISSUES x2: sim 1 S3 + 1 S4; view 1 S3 + 1 S4). **M1 signed off by the Producer** |
 | 2026-10-06 | [2026-10-06-0655](sessions/2026-10-06-0655.md) | sim M1-8 headless CLI (`tools/Rts.Cli`) + `FlowFieldCache.PeekCached`; view M2-3 A / S / H / Shift-queue, type select, control groups, Tab subgroups | both ACCEPT, 0 fix rounds (QA PASS_WITH_ISSUES x2: sim 1 S4; view 1 S3 + 1 S4). All 8 M1 criteria met |
 | 2026-10-05 | [2026-10-05-2330](sessions/2026-10-05-2330.md) | sim M1-7 perf criterion + Stop / HoldPosition / AttackMove + shift-queue (replay format 2); view M2-4 minimap + `Hud` + `--no-hud` | both ACCEPT, 0 fix rounds (QA PASS_WITH_ISSUES x2: sim 2 S3 + 1 S4, view 1 S4) |

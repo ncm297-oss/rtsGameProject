@@ -9,8 +9,8 @@ Status legend: **Next** = start here, **Planned** = not started, **Done** = acce
 | --- | --- | --- | --- |
 | M0 | Environment & skeleton | **Done** (2026-10-03) | Tools installed, empty projects build, tests and headless boot pass |
 | M1 | Core sim, no graphics | **Done** (2026-10-06, Producer sign-off) | 200 units path across the map deterministically, fast |
-| M2 | Presentation | **Next** (view track, started 2026-10-05) | Move an army around a 3D map |
-| M3 | Economy & buildings | **Next** (sim track, from session 2026-10-06-0905) | Build a Malazan base |
+| M2 | Presentation | **In progress** (view track, started 2026-10-05; 7 / 10) | Move an army around a 3D map |
+| M3 | Economy & buildings | **In progress** (sim track, started 2026-10-06-1255; 1 / 8) | Build a Malazan base |
 | M4 | Combat, fog, abilities | Planned | Malazan vs. Whirlwind armies fight with abilities and fog |
 | M5 | AI opponent | Planned | Lose to a Whirlwind AI |
 | M6 | Game shell & real art | Planned | A friend can play it |
@@ -148,9 +148,15 @@ listed in the retro. Owner may revisit._
       `SelectionController.OrderMoveTo`; edge pan suppressed over it; `--no-hud` flag;
       `game/tests/MinimapTest.tscn`; QA hash twin with 808 minimap orders over 3 map shapes.
       Fog, resources, pings and minimap zoom come with M3/M4. BUG-0064 (S4, dot readability).)_
-- [ ] `--screenshot` debug flag; debug overlay (nav grid, flow arrows, tick time).
+- [x] `--screenshot` debug flag; debug overlay (nav grid, flow arrows, tick time).
       _(`--screenshot <path> --screenshot-after <s>` and a tick/speed/tick-ms/FPS label shipped in
-      M2-1; nav grid and flow arrows are M2-5.)_
+      M2-1; the overlay in session 2026-10-06-1255, task M2-5: F12 (action `debug_overlay`) or
+      `--debug-overlay`; pure `ViewApi.NavOverlayBuilder` (one quad per cell, colour by flag, refilled
+      only on a `NavGrid.Version` change), `ViewApi.FlowArrowLayout` (the selection's goal via
+      `FlowFieldCache.PeekCached`, 40 x 40 cells round the camera, never a held field),
+      `ViewApi.TickTimeRing` (120 samples, 4 ms line) + entity counts; off by default and 0 bytes per
+      frame for its layers; QA oracle 0 mismatches over 960 refreshes + 195 live frames, hash twin at
+      2,000 units. BUG-0083 (S3, the label line allocates; docs claim 0), BUG-0084 (S4 nits).)_
 - [ ] Placeholder audio for select and command.
 - [ ] Playable: the owner moves an army of 100 placeholder units around a generated map at 60 FPS.
 
@@ -158,7 +164,16 @@ listed in the retro. Owner may revisit._
 
 **Done when:**
 
-- [ ] Gold mines and trees as resource entities; tree depletion updates the nav grid.
+- [x] Gold mines and trees as resource entities; tree depletion updates the nav grid.
+      _(session 2026-10-06-1255, task M3-1: `common/resources.json` (`tree` 1 x 1 wood, `gold_mine`
+      2 x 2 gold; amounts from `rules.json`), `ResourceStore` (SoA, generational handles, capacity
+      `SimConfig.ResourceCapacity` 4,096; internal `Spawn` / `Take`), `NavFlags.Resource`, depletion
+      reopens the cells and bumps `NavGrid.Version` once; `ResourcePlacer` from `MapGenParams.Forests`
+      / `GoldMines` (default 0; every passable cell stays reachable); `NavGrid.Version` and the store
+      in `StateHash`; replay format 3; CLI `--forests` / `--mines`. QA oracle 246 seeds; 500 units with
+      forests 0.82 ms per tick. Open: BUG-0073 (every fall invalidates every field: M3-2 design),
+      BUG-0074 (placer assumes 1 x 1 trees), BUG-0075 (interior fell leaves a hollow: M3-2 gather rule),
+      BUG-0076 (nits).)_
 - [ ] Worker gather/return loop with automatic drop-off choice.
 - [ ] Building placement (ghost preview, validity), construction with multiple builders, repair.
 - [ ] Production queues (5 slots), rally points, population and cap, refunds on cancel.

@@ -41,6 +41,12 @@ gather rule: gathering only 4-adjacent trees from reachable ground never creates
 reachable-order felling over 246 seeds kept every cell reachable). Gathering diagonally, or
 splash/ability tree removal later, does create one.
 
+## Producer triage (2026-10-06-1255 ACCEPT)
+S3 agreed; not blocking M3-1 (nothing fells trees in game yet). Planned into the M3-2 brief: a worker
+gathers only from a node cell adjacent to the passable cell it stands on, so interior trees fall last;
+docs/03's two sentences get the condition ("as long as nodes are only removed from reachable ground");
+the skipped QA row becomes the regression test. Abilities that remove trees (M4+) must re-check this.
+
 ## Notes
 Options: make M3-2's gather rule 4-adjacent from reachable ground and say so in docs/03; or treat
 an unreachable target like a blocked one (snap to the nearest cell *reachable* from the unit, which

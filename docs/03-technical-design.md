@@ -1035,7 +1035,8 @@ Resource nodes exist in the sim; workers, gathering and drop-offs are M3-2.
   skipped. `World.ResourcePlacement` reports what was placed (forests, trees, mines). Tree slots follow
   cell order within a forest. Caps: `Forests` and `GoldMines` at most 64, forest size 1-256. Setup
   cost (Debug): 12 forests and 8 mines add about 5 ms to a 128 map; the worst case (1024 map, 64
-  forests of 256, 64 mines) about 1 s on top of the terrain's 1 s. Large forests (100+ trees) often enclose a hole and are skipped.
+  forests of 256, 64 mines) about 2.2 s on top of the terrain's 0.3 s (QA measurement, BUG-0076; most of
+  it is the full-map flood fill after the ring test). Large forests (100+ trees) often enclose a hole and are skipped.
 - **Navigation.** See "Navigation grid": `NavFlags.Resource` with `Blocked`, `Version` bumps, and
   flow fields rebuild through a gap on their next use (the cache's version check, unchanged).
 - **Hash and replays.** `StateHash` covers `NavGrid.Version` and the store (see "Determinism").

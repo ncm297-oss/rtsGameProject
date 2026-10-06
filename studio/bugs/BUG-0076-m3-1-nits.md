@@ -28,3 +28,8 @@
 
 ## Expected
 Docs match measurements; no work that can't change the result; required data is actually required.
+
+## Producer triage (2026-10-06-1255 ACCEPT)
+S4 agreed. Item 1 fixed by the Producer in docs/03 at this ACCEPT (2.2 s). Items 2-4 go to the next sim
+hardening session; for item 2 the Producer's call is: keep the full flood fill as a debug-build assertion
+(`Debug.Assert`) and let the ring test decide, with the QA oracle as the proof.
