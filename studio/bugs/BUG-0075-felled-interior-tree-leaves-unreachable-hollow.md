@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-06-1255, task M3-1 |
 | System | navigation grid / economy (depletion), docs |
-| Fixed by | |
+| Fixed by | 7104208 (M3-2: exposure rule, only nodes with an open 4-neighbour are gathered); regression `QA/ResourceQaTests.OrderIntoAFelledGroveMiddle_StillWalksToTheGrove` (un-skipped) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~OrderIntoAFelledGroveMiddle_Report" --logger "console;verbosity=detailed"`
@@ -52,3 +52,13 @@ Options: make M3-2's gather rule 4-adjacent from reachable ground and say so in 
 an unreachable target like a blocked one (snap to the nearest cell *reachable* from the unit, which
 needs a reachability label per region); or re-label hollows as blocked on open. In any case fix the
 two docs/03 sentences above.
+
+## Verified fixed (QA, 2026-10-06-1503, M3-2)
+- `OrderIntoAFelledGroveMiddle_StillWalksToTheGrove` passes: a worker set on the 3 x 3 grove's middle
+  fells it from the outside, the reach oracle holds after every tick, and a unit then ordered onto the
+  middle cell walks into the grove.
+- `Stress/EconomyFuzzStressTests.RandomGatherOrders_OnThePlacementMaps_NeverOpenAPocket_NeverTakeAnInteriorNode`:
+  24 workers with random gather orders (often onto interior trees) on all 246 placement-oracle maps
+  (nodes drained near empty): 2,866 falls, a full-map 4-connected flood after every grid change, no
+  pocket, and no node ever lost wood or gold while none of its 4-neighbours was open.
+- Felling can no longer make a hollow. Buildings sealing pockets are a separate issue (BUG-0078).
