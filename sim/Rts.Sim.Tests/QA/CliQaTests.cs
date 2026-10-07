@@ -282,7 +282,7 @@ public class CliQaTests
     [Theory]
     [InlineData(4, "99")]          // undefined kind
     [InlineData(4, "-1")]          // negative kind
-    [InlineData(4, "8")]           // one past the last kind (7, Gather, since M3-2)
+    [InlineData(4, "11")]          // one past the last kind (10, Repair, since M3-3)
     [InlineData(4, "-2147483648")] // int.MinValue kind
     [InlineData(10, "2")]          // unknown flag bit
     [InlineData(10, "-1")]         // every flag bit

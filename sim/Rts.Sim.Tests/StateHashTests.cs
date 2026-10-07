@@ -496,4 +496,46 @@ public class StateHashTests
         var big = new Simulation(TestSim.Config(Seed: 5, PlayerCount: 1, UnitCapacity: 32, CommandCapacity: 144), ResourceMaps.Flat(16, 16));
         Assert.NotEqual(small.StateHash(), big.StateHash());
     }
+
+    // ---------- M3-3: construction sites, builders, repair ----------
+
+    /// <summary>A one-player sim with a House site (slot 0) and its builder (slot 0), hashed equal to its twin.</summary>
+    private static Simulation Site()
+    {
+        Simulation sim = GatherMaps.NewSim(ResourceMaps.Flat(16, 16));
+        EntityHandle w = GatherMaps.Unit(sim, GatherMaps.At(sim, 2, 2));
+        sim.Enqueue(Command.Build(0, w, BuildMaps.House, GatherMaps.At(sim, 8, 8)));
+        sim.Tick();
+        sim.Tick();
+        return sim;
+    }
+
+    public static IEnumerable<object[]> SiteFields() => new[]
+    {
+        new object[] { "Work", (Action<World>)(w => w.Buildings.SetWork(0, 1)) }, // hp stays 1
+        new object[] { "Hp", (Action<World>)(w => w.Buildings.SetHp(0, 2)) },
+        new object[] { "UnderConstruction", (Action<World>)(w => ((bool[])typeof(BuildingStore).GetField("_underConstruction", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(w.Buildings)!)[0] = false) },
+        new object[] { "RepairProgress", (Action<World>)(w => w.Buildings.RepairProgress(0) = 1) },
+        new object[] { "RepairGold", (Action<World>)(w => w.Buildings.RepairGold(0) = 1) },
+        new object[] { "RepairWood", (Action<World>)(w => w.Buildings.RepairWood(0) = 1) },
+        new object[] { "BuildTarget.Index", (Action<World>)(w => w.Units.BuildTarget[0] = new EntityHandle(1, w.Units.BuildTarget[0].Generation)) },
+        new object[] { "BuildTarget.Generation", (Action<World>)(w => w.Units.BuildTarget[0] = new EntityHandle(0, 9)) },
+        new object[] { "QueueTypeId", (Action<World>)(w =>
+        {
+            w.Units.QueueKind[0] = CommandKind.Build;
+            w.Units.QueueTypeId[0] = 1;
+        }) },
+    };
+
+    [Theory]
+    [MemberData(nameof(SiteFields))]
+    public void Hash_CoversEveryConstructionField(string field, Action<World> change)
+    {
+        Simulation a = Site(), b = Site();
+        Assert.Equal(a.StateHash(), b.StateHash());
+        if (field == "QueueTypeId") b.World.Units.QueueKind[0] = CommandKind.Build; // only the type id differs
+        if (field == "QueueTypeId") b.World.Units.QueueCount[0] = a.World.Units.QueueCount[0] = 1;
+        change(a.World);
+        Assert.True(a.StateHash() != b.StateHash(), field);
+    }
 }

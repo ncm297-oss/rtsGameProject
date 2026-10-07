@@ -53,8 +53,8 @@ public class BuildingDataQaTests
         Assert.Contains(field.Split('.')[0], e.Path);
     }
 
-    /// <summary>A missing <c>footprint</c> is one error (the loader says so); a missing <c>cost</c> is three (cost, cost.gold, cost.wood).</summary>
-    [Fact(Skip = "BUG-0079: a missing cost object reports three errors where a missing footprint reports one; un-skip when fixed")]
+    /// <summary>A missing <c>footprint</c> is one error (the loader says so); a missing <c>cost</c> was three (cost, cost.gold, cost.wood) until M3-3 (BUG-0079).</summary>
+    [Fact]
     public void MissingCostObject_IsOneError_LikeAMissingFootprint()
     {
         DataLoadResult r = LoadWith(root => SetField(root, "cost", null));

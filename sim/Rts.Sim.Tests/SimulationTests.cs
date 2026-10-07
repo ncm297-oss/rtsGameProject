@@ -132,8 +132,9 @@ public class SimulationTests
     [Theory]
     [InlineData(99, 0)]
     [InlineData(-1, 0)]
-    [InlineData(8, 0)] // one past the last kind (Gather, M3-2)
+    [InlineData(11, 0)] // one past the last kind (Repair, M3-3)
     [InlineData((int)CommandKind.SpawnBuilding, Command.QueuedFlag)]
+    [InlineData((int)CommandKind.Cancel, Command.QueuedFlag)] // M3-3: not a unit order
     [InlineData((int)CommandKind.Stop, 2)]
     [InlineData((int)CommandKind.Move, 1 << 20)]
     [InlineData((int)CommandKind.HoldPosition, -1)]

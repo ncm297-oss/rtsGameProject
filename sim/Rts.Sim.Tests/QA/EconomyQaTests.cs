@@ -449,10 +449,11 @@ public class EconomyQaTests
 
     /// <summary>
     /// The exposure rule counts any passable 4-neighbour, also one sealed off by buildings: a tree whose only open
-    /// neighbour is a pocket walled in by Keeps is "exposed", so a worker ordered onto it is sent to a stand cell it can
-    /// never reach and retries for ever, while an exposed reachable tree stands right next to it.
+    /// neighbour is a pocket walled in by Keeps would be "exposed", and a worker ordered onto it sent to a stand cell it
+    /// could never reach. Since M3-3 (BUG-0078) the Keep that would close the pocket is refused (the never-seal rule, by
+    /// <c>CanPlace</c>, <c>Build</c> and the dev <c>SpawnBuilding</c> alike), so the tree stays reachable and is gathered.
     /// </summary>
-    [Fact(Skip = "BUG-0078: exposure counts a passable neighbour nobody can reach; a worker sent to a tree exposed only to a pocket sealed by buildings retries for ever; un-skip when fixed")]
+    [Fact]
     public void ATreeExposedOnlyToAPocketSealedByBuildings_IsNotWhereTheWorkerEndsUpStuck()
     {
         Simulation sim = GatherMaps.NewSim(Flat(40, 30));
@@ -460,19 +461,26 @@ public class EconomyQaTests
         EntityHandle open = Spawn(sim.World, Tree, 21, 15, TreeWood); // its east neighbour (22, 15) leads out
         Building(sim, 16, 11);
         Building(sim, 16, 16);
-        Building(sim, 12, 13);
         Building(sim, 20, 11);
         Building(sim, 20, 16);
         Building(sim, 30, 2); // a drop-off outside
         NavGrid g = sim.World.NavGrid;
-        Assert.True(g.IsPassable(19, 15) && g.IsPassable(22, 15));
-        Assert.NotNull(Stress.ResourceOracle.Reach(g)); // the corridor x 16-19, y 15 is sealed
+        // The Keep at (12, 13) would close the corridor x 16-19, y 15 at its west end: refused, whichever way it comes.
+        BuildMaps.Give(sim, 0, 1000, 1000);
+        Assert.False(sim.World.CanPlace(0, Keep, BuildMaps.Cell(sim, 12, 13), out PlacementError why));
+        Assert.Equal(PlacementError.SealsGround, why);
         EntityHandle w = Unit(sim, At(sim, 30, 8));
+        sim.Enqueue(Command.Build(0, w, Keep, At(sim, 12, 13)));
+        sim.Enqueue(Command.SpawnBuilding(0, Keep, At(sim, 12, 13)));
+        Run(sim, 2);
+        Assert.Equal(5, sim.World.Buildings.Count);
+        Assert.True(g.IsPassable(19, 15) && g.IsPassable(15, 15) && g.IsPassable(22, 15));
+        Assert.Null(Stress.ResourceOracle.Reach(g)); // no pocket
         sim.Enqueue(Command.Gather(0, w, At(sim, 20, 15)));
         UnitStore u = sim.World.Units;
         Run(sim, 1200);
         _out.WriteLine($"sealed-pocket tree: node slot {u.GatherNode[w.Index].Index} (sealed {sealedTree.Index}, open {open.Index}), state {u.State[w.Index]}, at {u.Position[w.Index]}, cargo {u.Cargo[w.Index]}, wood {sim.World.Wood[0]}");
-        Assert.True(u.Cargo[w.Index] > 0 || sim.World.Wood[0] > 200, "60 s on the loop and nothing gathered");
+        Assert.True(u.Cargo[w.Index] > 0 || sim.World.Wood[0] > 1200, "60 s on the loop and nothing gathered");
     }
 
     [Fact]

@@ -2,6 +2,7 @@ using System;
 using System.Numerics;
 using Rts.Sim.Data;
 using Rts.Sim.Determinism;
+using Rts.Sim.Economy;
 using Rts.Sim.Entities;
 using Rts.Sim.Map;
 using Rts.Sim.Pathfinding;
@@ -39,12 +40,14 @@ public sealed class World
         Resources = new ResourceStore(config.ResourceCapacity, NavGrid, config.Data);
         ResourcePlacement = ResourcePlacer.Place(config.Map, NavGrid, Resources, config.Data, ref _rngs[RngStream.MapGen]);
         Buildings = new BuildingStore(config.BuildingCapacity, NavGrid, config.Data);
+        SiteWorkers = new int[config.BuildingCapacity];
         _gold = new int[config.PlayerCount];
         _wood = new int[config.PlayerCount];
         Array.Fill(_gold, config.Data.Rules.StartingGold);
         Array.Fill(_wood, config.Data.Rules.StartingWood);
         Spatial = new SpatialHash(config.UnitCapacity, NavGrid.Width, NavGrid.Height);
         FlowFields = new FlowFieldCache(NavGrid, FlowFieldCache.CapacityFor(config.UnitCapacity, NavGrid.Width * NavGrid.Height));
+        Seal = new SealCheck(NavGrid, FlowFields.BuildScratch);
         MoveOrder = new long[config.UnitCapacity];
         FieldMisses = new long[config.UnitCapacity];
         FieldRefreshes = new long[config.UnitCapacity];
@@ -79,6 +82,37 @@ public sealed class World
         MaxUnitSpeed = maxSpeed;
         // The placer's closings happened before any unit existed; only later ones reset progress marks.
         SeenBlockVersion = NavGrid.BlockVersion;
+    }
+
+    /// <summary>Scratch for the never-seal placement rule (M3-3); derived, not hashed.</summary>
+    internal SealCheck Seal { get; }
+
+    /// <summary>Scratch for <see cref="ConstructionSystem"/>: per building slot, the workers in reach this tick (-1: its workers stop); derived, not hashed.</summary>
+    internal int[] SiteWorkers { get; }
+
+    /// <summary>The faction <paramref name="player"/> plays: player p plays faction <c>p mod factions</c> in id order until a lobby picks them (M6); -1 for no such player.</summary>
+    public int FactionOf(int player) =>
+        (uint)player < (uint)_gold.Length && Data.Factions.Length > 0 ? player % Data.Factions.Length : -1;
+
+    /// <summary>
+    /// Whether <paramref name="player"/> may place a building of <paramref name="typeId"/> with its anchor (lowest x, y)
+    /// at <paramref name="anchorCell"/> now (docs/02 "Buildings" placement rule, M3-3): the rule <c>Command.Build</c>
+    /// applies, and the view's placement ghost asks. Read-only and allocation-free; <paramref name="reason"/> is the
+    /// first rule broken, in <see cref="PlacementError"/> order.
+    /// </summary>
+    public bool CanPlace(int player, int typeId, int anchorCell, out PlacementError reason)
+    {
+        reason = ConstructionSystem.Check(this, player, typeId, anchorCell);
+        return reason == PlacementError.None;
+    }
+
+    /// <summary>True (and the amounts taken) if <paramref name="player"/> has at least <paramref name="gold"/> and <paramref name="wood"/>.</summary>
+    internal bool TrySpend(int player, int gold, int wood)
+    {
+        if (_gold[player] < gold || _wood[player] < wood) return false;
+        _gold[player] -= gold;
+        _wood[player] -= wood;
+        return true;
     }
 
     /// <summary>Largest unit collision radius in <see cref="Data"/>: a neighbor query of own radius plus this finds every unit that can touch.</summary>
@@ -225,7 +259,7 @@ public sealed class World
     /// <summary>All resource nodes (trees, gold mines). Read-only outside the sim.</summary>
     public ResourceStore Resources { get; }
 
-    /// <summary>All buildings (M3-2: placed by the dev command <c>SpawnBuilding</c> only). Read-only outside the sim.</summary>
+    /// <summary>All buildings and construction sites (M3-3: placed by workers' <c>Build</c> commands, or the dev command <c>SpawnBuilding</c>). Read-only outside the sim.</summary>
     public BuildingStore Buildings { get; }
 
     /// <summary>Each player's gold, indexed by player (starts at <c>rules.json</c> <c>startingGold</c>; workers deposit into it).</summary>

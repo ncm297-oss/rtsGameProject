@@ -60,6 +60,8 @@ public sealed class GameData
         h.Add(r.ExpansionMineGold);
         h.Add(r.TreeWood);
         h.Add(r.NodeSearchRadius);
+        h.Add(r.RepairRateFactor);
+        h.Add(r.RepairCostFactor);
 
         h.Add(Factions.Length);
         foreach (FactionDef f in Factions)

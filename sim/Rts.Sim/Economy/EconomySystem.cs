@@ -162,7 +162,7 @@ public static class EconomySystem
     }
 
     /// <summary>Stands the worker in <paramref name="state"/>: still, its count for <see cref="Wait"/> at 0.</summary>
-    private static void Stand(UnitStore u, int i, UnitState state)
+    internal static void Stand(UnitStore u, int i, UnitState state)
     {
         u.State[i] = state;
         u.Velocity[i] = Vector2.Zero;
@@ -194,7 +194,7 @@ public static class EconomySystem
     /// worker waiting behind others at a mine's edge tries a freer side next time (ties to the lower cell
     /// index). False if no such cell is passable.
     /// </summary>
-    private static bool WalkToFootprint(World world, int i, int anchor, int fw, int fh)
+    internal static bool WalkToFootprint(World world, int i, int anchor, int fw, int fh)
     {
         NavGrid g = world.NavGrid;
         Vector2 pos = world.Units.Position[i];
@@ -271,7 +271,7 @@ public static class EconomySystem
     }
 
     /// <summary>Distance (m) from <paramref name="p"/> to the footprint rectangle at <paramref name="anchor"/> is at most <see cref="EconomyConstants.Reach"/>.</summary>
-    private static bool InReach(NavGrid g, Vector2 p, int anchor, int fw, int fh)
+    internal static bool InReach(NavGrid g, Vector2 p, int anchor, int fw, int fh)
     {
         const float cs = MapConstants.CellSize;
         float x0 = anchor % g.Width * cs, y0 = anchor / g.Width * cs;
@@ -401,6 +401,7 @@ public static class EconomySystem
         }
         SetNode(world, i, n);
         u.Hold[i] = false;
+        u.BuildTarget[i] = default; // a Gather ends building or repairing (M3-3)
         u.WalkBack[i] = UnitStore.WalkBackNone;
         if (u.Cargo[i] >= world.Data.Rules.WorkerCarry) StartReturn(world, i);
         else if (InReachOfNode(world, i, n))
@@ -414,8 +415,9 @@ public static class EconomySystem
     /// <summary>
     /// Applies <see cref="CommandKind.SpawnBuilding"/> (dev / tests): a building of <see cref="Command.TypeId"/>
     /// for the player with its anchor (lowest x, y) cell at <see cref="Command.Position"/>. Dropped for an
-    /// unknown type, a full store, a footprint that isn't open ground (<see cref="BuildingStore.Fits"/>), or
-    /// a live unit whose center lies in the footprint.
+    /// unknown type, a full store, a footprint that isn't open ground (<see cref="BuildingStore.Fits"/>), a
+    /// footprint that would seal ground off (the M3-3 never-seal rule, BUG-0078), or a live unit whose center
+    /// lies in the footprint. No faction or cost check: a dev command.
     /// </summary>
     internal static void ApplySpawnBuilding(World world, in Command command)
     {
@@ -425,6 +427,7 @@ public static class EconomySystem
         int anchor = y * g.Width + x;
         if (!world.Buildings.Fits(command.TypeId, anchor)) return;
         BuildingDef def = world.Data.Buildings[command.TypeId];
+        if (!world.Seal.KeepsConnected(x, y, def.FootprintWidth, def.FootprintHeight)) return;
         const float cs = MapConstants.CellSize;
         float x0 = x * cs, y0 = y * cs, x1 = (x + def.FootprintWidth) * cs, y1 = (y + def.FootprintHeight) * cs;
         UnitStore u = world.Units;

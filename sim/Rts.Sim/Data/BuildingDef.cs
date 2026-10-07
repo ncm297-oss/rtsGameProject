@@ -31,7 +31,7 @@ public sealed class BuildingDef
     public int CostGold { get; init; }
     /// <summary>Wood cost.</summary>
     public int CostWood { get; init; }
-    /// <summary>Ticks to build with one worker (unused until construction, M3-3).</summary>
+    /// <summary>Ticks to build with one worker (docs/02: n workers take <c>t x 3 / (n + 2)</c>).</summary>
     public int BuildTicks { get; init; }
     /// <summary>Population provided, in half-pop units (pop 10 = 20); unused until population, M3-4.</summary>
     public int HalfPopProvided { get; init; }
