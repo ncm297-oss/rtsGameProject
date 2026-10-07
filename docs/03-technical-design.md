@@ -1393,7 +1393,7 @@ game/data/
   factions/<faction_id>/
     faction.json             # id, displayName, bonus, palette, resource display names
     units.json
-    buildings.json           # building types (M3-2: the Town Hall slot only)
+    buildings.json           # building types (M3-2 schema; all ten slots per faction since D1)
     techs.json               # forge upgrades (shared ids), faction upgrade
     abilities.json
     ai.json                  # build orders, compositions, attack thresholds per difficulty
