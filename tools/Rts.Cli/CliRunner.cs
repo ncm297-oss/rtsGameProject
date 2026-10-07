@@ -151,10 +151,15 @@ public static class CliRunner
         if (economy)
         {
             for (int p = 0; p < players; p++)
-                stdout.WriteLine($"player {p.ToString(Inv)} gold {sim.World.Gold[p].ToString(Inv)} wood {sim.World.Wood[p].ToString(Inv)}");
+                stdout.WriteLine($"player {p.ToString(Inv)} gold {sim.World.Gold[p].ToString(Inv)} wood {sim.World.Wood[p].ToString(Inv)}"
+                    + $" pop {Pop(sim.World.HalfPop[p])}/{Pop(sim.World.HalfPopCap[p])}");
         }
         return ExitOk;
     }
+
+    /// <summary>A half-pop count as population: 10 → "5", 3 → "1.5".</summary>
+    private static string Pop(int halfPop) =>
+        (halfPop / 2).ToString(Inv) + (halfPop % 2 != 0 ? ".5" : "");
 
     private static int PlayVerb(string[] args, TextWriter stdout, TextWriter stderr)
     {

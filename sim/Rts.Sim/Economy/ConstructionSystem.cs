@@ -135,9 +135,10 @@ public static class ConstructionSystem
     /// Moves every unit of <paramref name="player"/> whose center lies in the new footprint (none of them holding but the
     /// worker whose Build this is: the placement rule refused the others) to the nearest free cell outside it, slot
     /// order: the rings of cells round the footprint, nearest first, on the footprint's level, passable, with no other
-    /// unit's center in it; nearest to the unit's center, ties to the lower cell. Rings go on outward until a free cell
-    /// turns up, so two pushed units never share a cell (BUG-0092); only a level with no free cell at all falls back to
-    /// the nearest passable cell (<see cref="FlowField.NearestPassable"/>). A position set, not a walk: the previous
+    /// unit's center in it; nearest to the unit's center, ties to the lower cell (<see cref="FreeCellSearch"/>, shared with
+    /// production spawns, M3-4). Rings go on outward until a free cell turns up, so two pushed units never share a cell
+    /// (BUG-0092), but no further than the level's bounding box (M3-4, BUG-0095); only a level with no free cell at all
+    /// falls back to the nearest passable cell (<see cref="FlowField.NearestPassable"/>). A position set, not a walk: the previous
     /// position moves too, so the view doesn't draw the unit sliding through the new building.
     /// </summary>
     /// <remarks>
@@ -161,60 +162,16 @@ public static class ConstructionSystem
         NavGrid g = world.NavGrid;
         int[] taken = world.FlowFields.BuildScratch; // per cell: 0 not asked yet, 1 free, 2 a unit's center in it
         Array.Clear(taken, 0, g.Width * g.Height);
-        int level = g.LevelAt(x0, y0), fw = def.FootprintWidth, fh = def.FootprintHeight;
-        int maxRing = Math.Max(g.Width, g.Height);
         for (int p = 0; p < count; p++)
         {
             int i = pushed[p];
-            int best = -1;
-            float bestD2 = float.PositiveInfinity;
-            for (int r = 1; r <= maxRing && best < 0; r++)
-            {
-                // The ring's cells in index order (rows top to bottom, x ascending), so a tie keeps the lower cell.
-                for (int y = y0 - r; y < y0 + fh + r; y++)
-                {
-                    bool fullRow = y == y0 - r || y == y0 + fh + r - 1;
-                    int step = fullRow ? 1 : fw + 2 * r - 1;
-                    for (int x = x0 - r; x < x0 + fw + r; x += step)
-                    {
-                        if (!g.IsPassable(x, y) || g.LevelAt(x, y) != level) continue;
-                        float d2 = Vector2.DistanceSquared(u.Position[i], g.CellCenter(x, y));
-                        if (d2 < bestD2 && !Occupied(world, taken, x, y))
-                        {
-                            best = y * g.Width + x;
-                            bestD2 = d2;
-                        }
-                    }
-                }
-            }
+            int best = FreeCellSearch.Nearest(world, x0, y0, def.FootprintWidth, def.FootprintHeight, u.Position[i], taken);
             if (best < 0) best = FlowField.NearestPassable(g, y0 * g.Width + x0);
             if (best < 0) continue;
             u.Position[i] = g.CellCenter(best % g.Width, best / g.Width);
             u.PrevPosition[i] = u.Position[i];
             taken[best] = 2;
         }
-    }
-
-    /// <summary>
-    /// True if a live unit has its center in cell (x, y) (outside the footprint): asked of the spatial hash the first time,
-    /// then read from <paramref name="taken"/>, where the push-out also marks the cells it sets units down on.
-    /// </summary>
-    private static bool Occupied(World world, int[] taken, int x, int y)
-    {
-        int c = y * world.NavGrid.Width + x;
-        if (taken[c] != 0) return taken[c] == 2;
-        const float cs = MapConstants.CellSize;
-        UnitStore u = world.Units;
-        int[] near = world.Neighbors;
-        bool occupied = false;
-        int n = world.Spatial.QueryRect(new Vector2(x * cs, y * cs), new Vector2((x + 1) * cs, (y + 1) * cs), near);
-        for (int m = 0; m < n && !occupied; m++)
-        {
-            Vector2 p = u.Position[near[m]];
-            occupied = u.Alive[near[m]] && p.X >= x * cs && p.X < (x + 1) * cs && p.Y >= y * cs && p.Y < (y + 1) * cs;
-        }
-        taken[c] = occupied ? 2 : 1;
-        return occupied;
     }
 
     /// <summary>

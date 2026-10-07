@@ -69,7 +69,11 @@ phases in this fixed order:
    only records the unit's goal here; the walking happens in phases 8-9 of the same tick.
 2. **AI think:** each AI player runs on its own cadence (default every 10 ticks, staggered by
    player index) and enqueues commands for the *next* tick, the same as a human.
-3. **Production:** training and research timers, spawning finished units at rally points.
+3. **Production:** training and research timers, spawning finished units at rally points. (M3-4:
+   `ProductionSystem.Run`: every finished building with a queue, in slot order, starts its head item when the owner's
+   population has room, counts it, and spawns the unit when it is complete, sending it to the rally point; after the
+   spatial-hash rebuild of phase 1 and before construction, so a cap raised by a House finished in phase 4 starts a
+   waiting item on the next tick. See "Implementation (M3-4)".)
 4. **Construction and economy:** building progress, gathering, drop-offs. (M3-2:
    `EconomySystem.Run`: every live unit on a gather loop, in slot order, works, deposits, or starts
    its next walk; walks move in phases 8-9 of the same tick. Runs after the spatial-hash rebuild and
@@ -1065,6 +1069,10 @@ Any other unit order (Move, AttackMove, Stop, HoldPosition) ends a gather loop a
 Since M3-3 there are `Build` (8) and `Repair` (10), unit orders for workers (Shift-queueable; a queued
 Build keeps its building type in `UnitStore.QueueTypeId`), `Cancel` (9, not a unit order, not queueable), and
 the state `Building`; see "Implementation (M3-3)". Any other unit order ends building or repairing.
+Since M3-4 there are `Train` (11), `CancelTrain` (12), `SetRally` (13) and `ClearRally` (14): production commands
+addressed to a building, not unit orders, not queueable (the queued flag is refused at the door); see
+"Implementation (M3-4)". A trained unit's rally order is the Move rule (or, for a worker rallied onto a resource node,
+a `Gather`), given in phase 3.
 Not built yet: combat targeting for AttackMove,
 Hold's enemy scanning, `Patrol`, `Attack(target)`, formations and group moves.
 
@@ -1345,8 +1353,83 @@ repair"; the ghost is view work that calls `World.CanPlace`). Closes BUG-0078 by
   two map-sized arrays of its own (8 MB on a 1024 map), and clears its visited marks before each flood it runs. So
   `CanPlace`, though it changes no sim state, writes that scratch: the view must call it on the sim thread between
   ticks, never while a tick runs (BUG-0092).
-- **Not yet:** the placement ghost and HUD (view), population and `popProvided`, production, rally points (M3-4),
-  the fog "explored" rule (M4), rubble, real damage (M4), start-location Town Halls (M6), events for views.
+- **Not yet:** the placement ghost and HUD (view), the fog "explored" rule (M4), rubble, real damage (M4),
+  start-location Town Halls (M6), events for views. (Population, `popProvided`, production and rally points: M3-4, below.)
+
+### Implementation (M3-4)
+
+A finished building trains the units whose `trainedAt` names it (the M3 criterion "Production queues (5 slots), rally
+points, population and cap, refunds on cancel"; the HUD's production card and rally marker are view work, M3-V3).
+
+- **Data.** The loader resolves each unit's `trainedAt` to `UnitDef.TrainedAtTypeId`: it must name a building of the
+  unit's own faction, else one `DataError` at `units[i].trainedAt` (unknown id, or another faction's building). It is
+  skipped when a buildings file itself had errors, so a broken file is reported once. `GameData.Trains` /
+  `UnitsTrainedAt(buildingType)` list the unit ids each building type trains, ascending (an `ImmutableArray<int>` per
+  building type, built at load; no dictionary). `requires` stays a string list: in M3-4 a unit with any requirement
+  (the Sapper, the Zealot: `["age_ii"]`) is not trainable (`TrainError.LockedByRequirement`) until techs exist
+  (M3-5 / M3-6). `ContentHash` covers `TrainedAtTypeId`.
+- **Commands** (phase 1; dropped, never thrown, for anything below that fails):
+  - `Command.Train(player, building, unitTypeId)` (kind 11; `Position` a point of the building, `TypeId` the unit
+    type): the player's own **finished** building covering `Position` queues the unit and the full cost is paid now.
+    The rule is `World.CanTrain(player, buildingSlot, unitTypeId, out TrainError reason)` (public, read-only,
+    allocation-free, for the view's production card), first rule broken in order: `NoBuilding` (none, another
+    player's, or a site: sites have no queue), `UnknownType`, `WrongFaction`, `NotTrainedHere` (its `trainedAt` names
+    another building type), `LockedByRequirement`, `QueueFull` (`EconomyConstants.ProductionQueueCapacity` = 5),
+    `CannotAfford`.
+  - `Command.CancelTrain(player, building, slotIndex)` (kind 12; `TypeId` the queue index, 0 = the head): the item
+    leaves the queue and its full cost comes back; later items shift down. A started head also loses its progress and
+    releases its population reservation. A bad index (negative, 5, past the count) is dropped.
+  - `Command.SetRally(player, buildingCell, target)` (kind 13): the building rides in `TypeId` as a nav cell
+    (`y * Width + x`, any cell of its footprint, e.g. `BuildingStore.Cell`), so the target keeps `Position`'s full
+    precision. Dropped for a target off the map, no building there, another player's, or a site.
+  - `Command.ClearRally(player, building)` (kind 14; `Position` a point of the building, like `Cancel`).
+- **Production** (`ProductionSystem.Run`, tick phase 3, buildings in slot order). A head item with no progress starts
+  when `HalfPop + unit.HalfPop <= HalfPopCap` for its owner: the reservation is taken and the tick counts
+  (`Progress` 1); else it waits with no progress (a full cap pauses the queue, the items behind it too). Each later
+  tick adds 1; at `trainTicks` (`round(trainTime x 20)`: a 14 s Heavy Infantry takes 280 ticks counting the tick its
+  `Train` applied) the unit spawns, the reservation passes to the unit's own count, and the next item starts in the
+  same tick, so each takes exactly its train ticks. With no free cell (or a full unit store) the item stays complete
+  and tries again next tick; units never stack.
+- **Spawn cell.** The push-out's ring search, shared (`FreeCellSearch`): the rings of cells round the footprint, nearest
+  ring first, on the footprint's level, passable, no live unit's center in the cell; within a ring the cell nearest the
+  rally point (the footprint's center without one), ties to the lower cell index. The ring walk ends once a ring
+  encloses the bounding box of the level's cells (`World.LevelBounds`, terrain only, computed at load), so a full small
+  plateau costs its own area, not the map's (BUG-0095's lesson; it bounds the construction push-out the same way:
+  same answers, a full 6 x 6 plateau no longer scans the map). Occupancy comes from the spatial hash and the
+  push-out's per-cell cache, whose level box is cleared on the tick's first spawn attempt there, so units spawned this
+  tick count for later spawns; the spatial hash is rebuilt after a tick with a spawn. The unit stands on the cell's
+  center, Idle.
+- **Rally.** With a rally point the spawned unit gets the Move rule to it (it arrives within `ArrivalDistance`); a
+  `worker` rallied onto a cell of a resource node gets `Gather` on it instead (Age of Empires' "rally on a mine";
+  the node a `Gather` there resolves to). Without one it stands Idle at the edge. Rally on a building (repair,
+  garrison) is out of scope.
+- **Population.** Per player, in half-pop: `World.HalfPop` (every live unit's type `pop`, counted at spawn, plus the
+  reservations of started heads) and `World.HalfPopCap` (`min(sum of the finished own buildings' popProvided,
+  rules.json popCap)`: a Town Hall +10 = 20, a House +8 = 16, never above 100 pop = 200). Both are kept incrementally
+  in `PlayerLedger` (with the gold and wood totals), shared by the stores: `UnitStore.TrySpawn` counts a unit and
+  `UnitStore.Free` releases exactly what it counted (so M4 deaths release population for free); a building counts
+  toward the cap when it spawns finished or completes, and stops when freed. The dev `SpawnUnit` ignores the cap but
+  counts, so the numbers past the cap still add up. A building destroyed or cancelled lowers the cap (nothing dies;
+  training elsewhere pauses if the cap is now full), every item of its queue is refunded in full and a started head's
+  reservation released. A site has no queue and provides nothing.
+- **Storage** (`BuildingStore`, flat, no per-building lists): `QueueCount` (per slot), `QueueTypeId` (`Capacity x 5`
+  entries, head first, entries past the count 0; read with `QueueTypeAt(slot, i)`, -1 past the count), `Progress`,
+  `HasRally`, `RallyPosition`; `TrainTicks(unitType)` and `ReservedHalfPop(slot)` for the view. Freeing a slot clears
+  them (Alloc starts from cleared slots).
+- **Hash and replays.** Each live building's production rides in the high half of its construction-state word (bit 0
+  a queue, bit 1 progress, bit 2 a rally, bit 3 a non-zero rally point, bit 4 + k queue entry k non-zero), followed by
+  the flagged words; a building with none of them hashes exactly as before, so the golden's checkpoints did not move
+  (it was regenerated for the data hash only, `TrainedAtTypeId`). A started head's reservation is its `Progress`
+  being non-zero, so it is hashed there. `HalfPop` and `HalfPopCap` are derived (from units, queues and buildings)
+  and not hashed, like `Speed`; the fuzz checks them against a recount every tick. Replays stay format 3: the new
+  kinds ride in `c` lines.
+- **Cost.** Production is a slot-order scan of the building store per tick plus, per spawn, a ring search and one
+  spatial-hash rebuild; nothing allocates per tick or in the four applies. Measured (Debug, this PC,
+  `ProductionPerfTests`): 500 marchers + 50 gatherers + 20 Town Halls training non-stop average 0.41 ms a tick over
+  2,000 ticks; a waiting spawn on a full 8 x 8 plateau of a 420 x 420 map costs 0.005 ms (3.0 ms without the level-box
+  cap). CLI: `run --workers` prints `player P gold G wood W pop U/C` (pop in whole units, `.5` for a half).
+- **Not yet:** techs, Age II and Forge upgrades (M3-5), `requires` resolution (M3-6), AI build orders (M5), the
+  production card, queue and rally visuals (view M3-V3), rally on a building, events for views.
 
 ## Abilities, statuses, zones
 
@@ -1474,8 +1557,10 @@ damage types, resource node types), so ids never depend on file order or file-sy
 `ImmutableArray`s indexed by those ids; `FindUnit` / `FindFaction` map a string id back by binary
 search, for load time, tests, and tooling only (`FindResource` too, since M3-1).
 
-Not resolved yet (kept as plain strings): `trainedAt` and `requires` (resolved when
-`buildings.json`/`techs.json` land in M3/M4), `model` (M2/M6 asset pipeline), and `projectile`
+`trainedAt` resolves at load (M3-4) to `UnitDef.TrainedAtTypeId`, an own-faction building type (one error at
+`units[i].trainedAt` otherwise), and `GameData.UnitsTrainedAt(buildingType)` lists each building's units.
+Not resolved yet (kept as plain strings): `requires` (resolved when `techs.json` lands, M3-5 / M3-6; a unit with
+any requirement can't be trained until then), `model` (M2/M6 asset pipeline), and `projectile`
 (M4 combat). Unit passives, abilities, detection, and faction modifiers (e.g. Whirlwind's gather
 bonus) are also not in the M1 schema; they arrive with `abilities.json` / `statuses.json` and the
 systems that use them. Collision radii in the shipped units (0.4 foot, 0.7 mounted, 0.9 siege) are

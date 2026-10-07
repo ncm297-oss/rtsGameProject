@@ -15,8 +15,9 @@ namespace Rts.Sim;
 public sealed class World
 {
     private readonly SimRng[] _rngs;
-    private readonly int[] _gold;
-    private readonly int[] _wood;
+    private readonly PlayerLedger _ledger;
+    // Per level: min x, min y, max x, max y of its cells (min > max for a level with none); terrain only, never changes.
+    private readonly int[] _levelBounds;
 
     /// <summary>Creates an empty world sized from the config, with terrain generated from the seed's map stream.</summary>
     public World(SimConfig config) : this(config, null)
@@ -28,7 +29,8 @@ public sealed class World
     {
         config.Validate();
         Config = config;
-        Units = new UnitStore(config.UnitCapacity);
+        _ledger = new PlayerLedger(config.PlayerCount, config.Data.Rules);
+        Units = new UnitStore(config.UnitCapacity, _ledger);
         _rngs = new SimRng[RngStream.Count(config.PlayerCount)];
         for (int i = 0; i < _rngs.Length; i++)
             _rngs[i] = new SimRng(config.Seed, (ulong)i);
@@ -39,13 +41,11 @@ public sealed class World
         // The placer draws from the map stream after the terrain did, and nothing when counts are 0.
         Resources = new ResourceStore(config.ResourceCapacity, NavGrid, config.Data);
         ResourcePlacement = ResourcePlacer.Place(config.Map, NavGrid, Resources, config.Data, ref _rngs[RngStream.MapGen]);
-        Buildings = new BuildingStore(config.BuildingCapacity, NavGrid, config.Data);
+        Buildings = new BuildingStore(config.BuildingCapacity, NavGrid, config.Data, _ledger);
         SiteWorkers = new int[config.BuildingCapacity];
         PushedUnits = new int[config.UnitCapacity];
-        _gold = new int[config.PlayerCount];
-        _wood = new int[config.PlayerCount];
-        Array.Fill(_gold, config.Data.Rules.StartingGold);
-        Array.Fill(_wood, config.Data.Rules.StartingWood);
+        _levelBounds = LevelBoundsOf(NavGrid);
+        SpawnCacheCleared = new bool[_levelBounds.Length / 4];
         Spatial = new SpatialHash(config.UnitCapacity, NavGrid.Width, NavGrid.Height);
         FlowFields = new FlowFieldCache(NavGrid, FlowFieldCache.CapacityFor(config.UnitCapacity, NavGrid.Width * NavGrid.Height));
         Seal = new SealCheck(NavGrid, FlowFields.BuildScratch);
@@ -92,12 +92,66 @@ public sealed class World
     /// <summary>Scratch for <see cref="ConstructionSystem"/>: per building slot, the workers in reach this tick (-1: its workers stop); derived, not hashed.</summary>
     internal int[] SiteWorkers { get; }
 
+    /// <summary>Scratch for <see cref="ProductionSystem"/>: per terrain level, whether this tick's spawns have cleared the level's box of the free-cell cache; derived, not hashed.</summary>
+    internal bool[] SpawnCacheCleared { get; }
+
     /// <summary>Scratch for <see cref="ConstructionSystem"/>'s push-out: the units a new site sets down, slot order; derived, not hashed.</summary>
     internal int[] PushedUnits { get; }
 
     /// <summary>The faction <paramref name="player"/> plays: player p plays faction <c>p mod factions</c> in id order until a lobby picks them (M6); -1 for no such player.</summary>
     public int FactionOf(int player) =>
-        (uint)player < (uint)_gold.Length && Data.Factions.Length > 0 ? player % Data.Factions.Length : -1;
+        _ledger.Has(player) && Data.Factions.Length > 0 ? player % Data.Factions.Length : -1;
+
+    /// <summary>
+    /// Whether <paramref name="player"/> may queue a unit of <paramref name="unitTypeId"/> at building slot
+    /// <paramref name="buildingSlot"/> now (M3-4): the rule <c>Command.Train</c> applies, and what the view's production
+    /// card asks. Read-only and allocation-free; <paramref name="reason"/> is the first rule broken, in <see cref="TrainError"/> order.
+    /// </summary>
+    public bool CanTrain(int player, int buildingSlot, int unitTypeId, out TrainError reason)
+    {
+        reason = ProductionSystem.Check(this, player, buildingSlot, unitTypeId);
+        return reason == TrainError.None;
+    }
+
+    /// <summary>
+    /// The bounding box of the cells on terrain level <paramref name="level"/> (inclusive cell coordinates); false for a
+    /// level with no cells. Terrain only: buildings and nodes don't change it. Bounds the push-out / spawn ring search.
+    /// </summary>
+    internal bool LevelBounds(int level, out int minX, out int minY, out int maxX, out int maxY)
+    {
+        minX = minY = maxX = maxY = 0;
+        if ((uint)level >= (uint)(_levelBounds.Length / 4)) return false;
+        minX = _levelBounds[4 * level];
+        minY = _levelBounds[4 * level + 1];
+        maxX = _levelBounds[4 * level + 2];
+        maxY = _levelBounds[4 * level + 3];
+        return minX <= maxX;
+    }
+
+    private static int[] LevelBoundsOf(NavGrid g)
+    {
+        int levels = 1;
+        for (int y = 0; y < g.Height; y++)
+            for (int x = 0; x < g.Width; x++) levels = Math.Max(levels, g.LevelAt(x, y) + 1);
+        var b = new int[4 * levels];
+        for (int l = 0; l < levels; l++)
+        {
+            b[4 * l] = b[4 * l + 1] = int.MaxValue;
+            b[4 * l + 2] = b[4 * l + 3] = int.MinValue;
+        }
+        for (int y = 0; y < g.Height; y++)
+        {
+            for (int x = 0; x < g.Width; x++)
+            {
+                int l = g.LevelAt(x, y);
+                b[4 * l] = Math.Min(b[4 * l], x);
+                b[4 * l + 1] = Math.Min(b[4 * l + 1], y);
+                b[4 * l + 2] = Math.Max(b[4 * l + 2], x);
+                b[4 * l + 3] = Math.Max(b[4 * l + 3], y);
+            }
+        }
+        return b;
+    }
 
     /// <summary>
     /// Whether <paramref name="player"/> may place a building of <paramref name="typeId"/> with its anchor (lowest x, y)
@@ -112,13 +166,10 @@ public sealed class World
     }
 
     /// <summary>True (and the amounts taken) if <paramref name="player"/> has at least <paramref name="gold"/> and <paramref name="wood"/>.</summary>
-    internal bool TrySpend(int player, int gold, int wood)
-    {
-        if (_gold[player] < gold || _wood[player] < wood) return false;
-        _gold[player] -= gold;
-        _wood[player] -= wood;
-        return true;
-    }
+    internal bool TrySpend(int player, int gold, int wood) => _ledger.TrySpend(player, gold, wood);
+
+    /// <summary>Per-player totals and population, shared with the stores (M3-4).</summary>
+    internal PlayerLedger Ledger => _ledger;
 
     /// <summary>Largest unit collision radius in <see cref="Data"/>: a neighbor query of own radius plus this finds every unit that can touch.</summary>
     internal float MaxUnitRadius { get; }
@@ -268,18 +319,23 @@ public sealed class World
     public BuildingStore Buildings { get; }
 
     /// <summary>Each player's gold, indexed by player (starts at <c>rules.json</c> <c>startingGold</c>; workers deposit into it).</summary>
-    public ReadOnlySpan<int> Gold => _gold;
+    public ReadOnlySpan<int> Gold => _ledger.Gold;
 
     /// <summary>Each player's wood, indexed by player (starts at <c>rules.json</c> <c>startingWood</c>).</summary>
-    public ReadOnlySpan<int> Wood => _wood;
+    public ReadOnlySpan<int> Wood => _ledger.Wood;
+
+    /// <summary>
+    /// Each player's population in use, in half-pop units (pop 1 = 2), indexed by player (M3-4): every live unit counts
+    /// its type's <c>pop</c> from its spawn (the dev <c>SpawnUnit</c> too, past the cap), and every production item that
+    /// has started reserves its unit's. Derived from units and queues (kept incrementally), so not hashed.
+    /// </summary>
+    public ReadOnlySpan<int> HalfPop => _ledger.HalfPop;
+
+    /// <summary>Each player's population cap in half-pop units, indexed by player (M3-4): the <c>popProvided</c> of its finished buildings, at most <c>rules.json</c> <c>popCap</c>. Derived from the buildings, so not hashed.</summary>
+    public ReadOnlySpan<int> HalfPopCap => _ledger.HalfPopCap;
 
     /// <summary>Adds <paramref name="amount"/> of <paramref name="kind"/> to <paramref name="player"/>'s total, saturating at <see cref="int.MaxValue"/>.</summary>
-    internal void AddToTotal(int player, ResourceKind kind, int amount)
-    {
-        int[] totals = kind == ResourceKind.Gold ? _gold : _wood;
-        long sum = (long)totals[player] + amount;
-        totals[player] = sum > int.MaxValue ? int.MaxValue : (int)sum;
-    }
+    internal void AddToTotal(int player, ResourceKind kind, int amount) => _ledger.AddToTotal(player, kind, amount);
 
     /// <summary>What the resource placer put on the map at construction (counts can fall short of <see cref="SimConfig.Map"/>'s request).</summary>
     public ResourcePlacement ResourcePlacement { get; }

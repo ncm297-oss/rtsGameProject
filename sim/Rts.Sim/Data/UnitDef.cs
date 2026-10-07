@@ -45,8 +45,11 @@ public sealed class UnitDef
     public int HalfPop { get; init; }
     /// <summary>Ticks to train.</summary>
     public int TrainTicks { get; init; }
-    /// <summary>Building id that trains it, unresolved until M3.</summary>
+    /// <summary>String id of the building type that trains it (<c>trainedAt</c>).</summary>
     public required string TrainedAt { get; init; }
+    /// <summary>Building type id (index into <see cref="GameData.Buildings"/>) of <see cref="TrainedAt"/>, resolved at load (M3-4): an own-faction building; -1 in hand-built data.</summary>
+    /// <remarks>Set once by the loader after the buildings are read; never written afterwards.</remarks>
+    public int TrainedAtTypeId { get; internal set; } = -1;
     /// <summary>Building/tech ids required to train it, unresolved until M3/M4.</summary>
     public required ImmutableArray<string> Requires { get; init; }
     /// <summary>Free-form tags used by bonuses and targeting (e.g. <c>infantry</c>).</summary>

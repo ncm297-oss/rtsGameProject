@@ -205,6 +205,14 @@ public static class OrderSystem
         u.WalkBack[i] = UnitStore.WalkBackNone;
     }
 
+    /// <summary>The Move rule to <paramref name="target"/> for unit <paramref name="i"/> without touching its queue, Hold or loops (a trained unit sent to its rally point, M3-4); false, nothing changed, for a target with no passable cell.</summary>
+    internal static bool MoveTo(World world, int i, Vector2 target)
+    {
+        if (!ResolveTarget(world.NavGrid, target, out int cell, out Vector2 goal)) return false;
+        Move(world, i, cell, goal);
+        return true;
+    }
+
     private static void Move(World world, int i, int cell, Vector2 goal)
     {
         UnitStore u = world.Units;

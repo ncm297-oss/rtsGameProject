@@ -91,16 +91,15 @@ public class BuildingDataQaTests
     }
 
     [Fact]
-    public void AnEmptyBuildingList_Loads_AndTheFactionSimplyHasNoTownHall_Note()
+    public void AnEmptyBuildingList_IsAnErrorPerUnitTrainedThere_Note()
     {
-        // Not an error today (only the Town Hall slot ships and slots aren't required yet, M3-6); pinned so a later
-        // "every faction has a Town Hall" rule is a deliberate change.
+        // The empty list itself is still no error (slots aren't required yet, M3-6), but since M3-4 every unit's
+        // trainedAt must name an own-faction building, so each of the seven Malazan units is one error at its
+        // trainedAt (M3-4 flipped this pin; before it the file loaded and the faction simply had no buildings).
         DataLoadResult r = LoadWith(root => root["buildings"]!.AsArray().Clear());
-        Assert.True(r.Ok, string.Join("\n", r.Errors));
-        // D1 (2026-10-06-1744): Whirlwind ships ten buildings now, so "only the other faction's buildings remain"
-        // replaces the old Assert.Single.
-        GameData d = r.Data!;
-        Assert.Equal(10, d.Buildings.Length);
-        Assert.All(d.Buildings, b => Assert.Equal("whirlwind", d.Factions[b.Faction].Key));
+        Assert.Null(r.Data);
+        Assert.Equal(7, r.Errors.Count);
+        Assert.All(r.Errors, e => Assert.Equal("factions/malazan/units.json", e.File));
+        Assert.All(r.Errors, e => Assert.EndsWith(".trainedAt", e.Path));
     }
 }

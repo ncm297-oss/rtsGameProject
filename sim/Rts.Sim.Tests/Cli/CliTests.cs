@@ -320,8 +320,11 @@ public sealed class CliTests : IDisposable
         string totals = Assert.Single(la, l => l.StartsWith("player 0 ", StringComparison.Ordinal));
         Assert.Equal(totals, la[^1]);
         Assert.Equal(totals, lb[^1]);
-        Match m = Regex.Match(totals, @"^player 0 gold (\d+) wood (\d+)$");
+        Match m = Regex.Match(totals, @"^player 0 gold (\d+) wood (\d+) pop (\d+)/(\d+)$");
         Assert.True(m.Success, totals);
+        // M3-4: one Town Hall's cap of 10; the dev spawns (50 marchers, 10 workers) count past it.
+        Assert.Equal("10", m.Groups[4].Value);
+        Assert.True(int.Parse(m.Groups[3].Value) >= 60, totals);
         Assert.True(int.Parse(m.Groups[1].Value) > 200 && int.Parse(m.Groups[2].Value) > 200, totals);
 
         Assert.Equal(ReplayError.None, ReplayFormat.TryReadFile(path, out Replay? replay));

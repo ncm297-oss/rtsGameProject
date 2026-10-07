@@ -100,11 +100,20 @@ public sealed class UnitStore
     public readonly int[] Generation;
 
     private readonly int[] _freeList;
+    // Per slot: the half-pop CountPop added for it (M3-4), so Free gives back exactly that; derived, not hashed.
+    private readonly int[] _countedHalfPop;
+    private readonly Economy.PlayerLedger? _ledger;
     private int _freeCount;
 
-    /// <summary>Creates a store with a fixed number of slots.</summary>
-    public UnitStore(int capacity)
+    /// <summary>Creates a store with a fixed number of slots (no population tracking: <see cref="CountPop"/> does nothing).</summary>
+    public UnitStore(int capacity) : this(capacity, null)
     {
+    }
+
+    /// <summary>A store whose units count toward <paramref name="ledger"/>'s population (the world's store).</summary>
+    internal UnitStore(int capacity, Economy.PlayerLedger? ledger)
+    {
+        _ledger = ledger;
         if (capacity < 1) throw new ArgumentOutOfRangeException(nameof(capacity));
         Position = new Vector2[capacity];
         PrevPosition = new Vector2[capacity];
@@ -136,6 +145,7 @@ public sealed class UnitStore
         Alive = new bool[capacity];
         Generation = new int[capacity];
         _freeList = new int[capacity];
+        _countedHalfPop = new int[capacity];
         // Push in reverse so the first allocations take slots 0, 1, 2...
         for (int i = 0; i < capacity; i++)
         {
@@ -186,9 +196,37 @@ public sealed class UnitStore
         Hold[index] = false;
         ClearQueue(index);
         ClearEconomy(index);
+        _countedHalfPop[index] = 0;
         Alive[index] = true;
         handle = new EntityHandle(index, Generation[index]);
         return true;
+    }
+
+    /// <summary>
+    /// Allocates a unit of type <paramref name="typeId"/> (<paramref name="def"/>) for <paramref name="owner"/> at <paramref name="position"/> (the dev
+    /// <c>SpawnUnit</c> command and production, M3-4): position, owner, type, speed and radius set, the rest as
+    /// <see cref="TryAlloc"/> leaves it, and its population counted. False when the store is full.
+    /// </summary>
+    internal bool TrySpawn(int owner, int typeId, UnitDef def, Vector2 position, out EntityHandle handle)
+    {
+        if (!TryAlloc(out handle)) return false;
+        int i = handle.Index;
+        Position[i] = position;
+        PrevPosition[i] = position;
+        Owner[i] = owner;
+        TypeId[i] = typeId;
+        Speed[i] = def.SpeedPerTick;
+        Radius[i] = def.Radius;
+        CountPop(i, def.HalfPop);
+        return true;
+    }
+
+    /// <summary>Counts <paramref name="halfPop"/> toward the owner's population for live slot <paramref name="index"/>; <see cref="Free"/> gives it back (M3-4).</summary>
+    internal void CountPop(int index, int halfPop)
+    {
+        if (_ledger == null || !_ledger.Has(Owner[index])) return;
+        _countedHalfPop[index] += halfPop;
+        _ledger.AddHalfPop(Owner[index], halfPop);
     }
 
     /// <summary>Allocates a slot; throws when the store is full rather than growing.</summary>
@@ -207,11 +245,16 @@ public sealed class UnitStore
             && Generation[handle.Index] == handle.Generation;
     }
 
-    /// <summary>Frees the unit's slot and invalidates every handle to it; throws on a stale handle.</summary>
+    /// <summary>Frees the unit's slot and invalidates every handle to it, releasing the population it counted (M3-4); throws on a stale handle.</summary>
     public void Free(EntityHandle handle)
     {
         if (!IsAlive(handle))
             throw new ArgumentException($"Handle {handle} is not alive.", nameof(handle));
+        if (_countedHalfPop[handle.Index] != 0)
+        {
+            _ledger?.AddHalfPop(Owner[handle.Index], -_countedHalfPop[handle.Index]);
+            _countedHalfPop[handle.Index] = 0;
+        }
         Alive[handle.Index] = false;
         Hold[handle.Index] = false;
         ClearQueue(handle.Index);

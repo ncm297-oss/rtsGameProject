@@ -27,6 +27,13 @@ public sealed class GameData
     public ImmutableArray<ResourceDef> Resources { get; init; } = ImmutableArray<ResourceDef>.Empty;
     /// <summary>Building types of every faction, indexed by building id (ordinal order of their string ids). The loader always sets it; empty only for hand-built data.</summary>
     public ImmutableArray<BuildingDef> Buildings { get; init; } = ImmutableArray<BuildingDef>.Empty;
+    /// <summary>Per building type id, the unit type ids it trains (whose <see cref="UnitDef.TrainedAtTypeId"/> names it), ascending; built at load (M3-4). Empty for hand-built data.</summary>
+    /// <remarks>Derived from the units' <see cref="UnitDef.TrainedAtTypeId"/>, which <see cref="ContentHash"/> covers.</remarks>
+    public ImmutableArray<ImmutableArray<int>> Trains { get; init; } = ImmutableArray<ImmutableArray<int>>.Empty;
+
+    /// <summary>The unit type ids building type <paramref name="buildingTypeId"/> trains, ascending (locked ones included: <c>World.CanTrain</c> says which can be queued now); empty for an unknown type.</summary>
+    public ImmutableArray<int> UnitsTrainedAt(int buildingTypeId) =>
+        (uint)buildingTypeId < (uint)Trains.Length ? Trains[buildingTypeId] : ImmutableArray<int>.Empty;
 
     /// <summary>Stable 64-bit hash of every field of every definition, in id order; replays store it and refuse to play on other data.</summary>
     /// <remarks>
@@ -113,6 +120,7 @@ public sealed class GameData
             h.Add(u.HalfPop);
             h.Add(u.TrainTicks);
             h.Add(u.TrainedAt);
+            h.Add(u.TrainedAtTypeId);
             AddAll(ref h, u.Requires);
             AddAll(ref h, u.Tags);
         }

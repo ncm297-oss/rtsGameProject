@@ -325,5 +325,45 @@ public class AllocationTests
         Assert.True(BuildMaps.SiteAt(sim, 20, 2) < 0);
         AllocationProbe.AssertZero(block, setup: setup);
     }
+    /// <summary>
+    /// M3-4 criterion 10: ticks applying Train, CancelTrain, SetRally and ClearRally, CanTrain queries, and production
+    /// running heads to completion and spawning (one worker rallied onto a mine, one infantry with no rally point)
+    /// allocate nothing.
+    /// </summary>
+    [Fact]
+    public void Tick_WithTrainCancelTrainSetRallyClearRally_AndSpawns_AllocatesNothing()
+    {
+        Simulation sim = BuildMaps.NewSim(ResourceMaps.Flat(48, 32), units: 64);
+        int keep = GatherMaps.Building(sim, 4, 4).Index;
+        int bar = GatherMaps.Building(sim, 14, 4, type: ProductionMaps.Barracks).Index;
+        for (int k = 0; k < 4; k++) GatherMaps.Building(sim, 4 + 4 * k, 20, type: BuildMaps.House);
+        ResourceMaps.Spawn(sim.World, ResourceMaps.Mine, 30, 10, 100_000);
+        BuildMaps.Give(sim, 0, 1_000_000, 1_000_000);
+        System.Numerics.Vector2 atKeep = ProductionMaps.In(sim, keep), atBar = ProductionMaps.In(sim, bar), mine = GatherMaps.At(sim, 31, 11);
+        int keepCell = sim.World.Buildings.Cell[keep], barCell = sim.World.Buildings.Cell[bar];
+        int sink = 0;
+        Action block = () =>
+        {
+            sim.Enqueue(Command.SetRally(0, keepCell, mine));
+            sim.Enqueue(Command.SetRally(0, barCell, mine));
+            sim.Enqueue(Command.ClearRally(0, atBar));
+            sim.Enqueue(Command.Train(0, atKeep, GatherMaps.Laborer));
+            sim.Enqueue(Command.Train(0, atKeep, GatherMaps.Laborer));
+            sim.Enqueue(Command.Train(0, atKeep, GatherMaps.Laborer));
+            sim.Enqueue(Command.Train(0, atBar, GatherMaps.Infantry));
+            sim.Enqueue(Command.CancelTrain(0, atKeep, 2));
+            for (int t = 0; t < 300; t++)
+            {
+                sim.Tick();
+                if (sim.World.CanTrain(0, keep, GatherMaps.Laborer, out _)) sink++;
+            }
+        };
+        block(); // warm-up: JIT every path once
+        Assert.Equal(1, sim.World.Buildings.QueueCount[keep]); // one of the two left is trained, the next is training
+        int units = sim.World.Units.Count;
+        AllocationProbe.AssertZero(block);
+        Assert.True(sim.World.Units.Count >= units + 2, "spawns happened in the measured block");
+        Assert.True(sink > 0);
+    }
 }
 

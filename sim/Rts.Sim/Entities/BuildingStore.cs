@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Immutable;
+using System.Numerics;
 using Rts.Sim.Data;
 using Rts.Sim.Determinism;
+using Rts.Sim.Economy;
 using Rts.Sim.Map;
 
 namespace Rts.Sim.Entities;
@@ -13,7 +15,9 @@ namespace Rts.Sim.Entities;
 /// those cells are blocked in the <see cref="NavGrid"/> (<see cref="NavFlags.Building"/>), so to movement a
 /// building is a wall. Read-only outside the sim. Since M3-3 a worker's <c>Command.Build</c> places a
 /// construction site (<see cref="UnderConstruction"/>, growing with <see cref="Work"/>); the dev/test
-/// command <c>Command.SpawnBuilding</c> still places a finished building at full hit points.
+/// command <c>Command.SpawnBuilding</c> still places a finished building at full hit points. Since M3-4 a finished
+/// building provides its type's population and has a production queue (<see cref="QueueCount"/>,
+/// <see cref="QueueTypeAt"/>, <see cref="Progress"/>) and a rally point (<see cref="HasRally"/>, <see cref="RallyPosition"/>).
 /// </remarks>
 public sealed class BuildingStore
 {
@@ -31,19 +35,38 @@ public sealed class BuildingStore
     private readonly long[] _repairProgress;
     private readonly long[] _repairGold;
     private readonly long[] _repairWood;
+    private readonly int[] _queueCount;
+    private readonly int[] _queueTypeId;
+    private readonly int[] _progress;
+    private readonly bool[] _hasRally;
+    private readonly Vector2[] _rallyPosition;
     private readonly int[] _freeList;
     private readonly NavGrid _grid;
     private readonly ImmutableArray<BuildingDef> _defs;
+    private readonly ImmutableArray<UnitDef> _units;
+    private readonly PlayerLedger? _ledger;
     private int _freeCount;
     // One past the highest slot ever used; slots from here on still hold their initial state (see ResourceStore).
     private int _highWater;
 
     /// <summary>Creates a store with a fixed number of slots for buildings on <paramref name="grid"/>, with footprints from <paramref name="data"/>.</summary>
-    internal BuildingStore(int capacity, NavGrid grid, GameData data)
+    internal BuildingStore(int capacity, NavGrid grid, GameData data) : this(capacity, grid, data, null)
+    {
+    }
+
+    /// <summary>The world's store: finished buildings provide population to, and freed queues refund into, <paramref name="ledger"/> (M3-4).</summary>
+    internal BuildingStore(int capacity, NavGrid grid, GameData data, PlayerLedger? ledger)
     {
         if (capacity < 1) throw new ArgumentOutOfRangeException(nameof(capacity));
         _grid = grid ?? throw new ArgumentNullException(nameof(grid));
         _defs = data.Buildings;
+        _units = data.Units;
+        _ledger = ledger;
+        _queueCount = new int[capacity];
+        _queueTypeId = new int[capacity * EconomyConstants.ProductionQueueCapacity];
+        _progress = new int[capacity];
+        _hasRally = new bool[capacity];
+        _rallyPosition = new Vector2[capacity];
         _alive = new bool[capacity];
         _generation = new int[capacity];
         _owner = new int[capacity];
@@ -91,6 +114,102 @@ public sealed class BuildingStore
     /// <summary>Construction work done on each site (see <see cref="WorkNeeded"/>).</summary>
     public ReadOnlySpan<int> Work => _work;
 
+    /// <summary>Number of items in each live slot's production queue (0 to <see cref="EconomyConstants.ProductionQueueCapacity"/>; always 0 for a site), M3-4.</summary>
+    public ReadOnlySpan<int> QueueCount => _queueCount;
+
+    /// <summary>The unit type id of item <paramref name="item"/> (0 = the head, training) of slot <paramref name="slot"/>'s queue; -1 past <see cref="QueueCount"/> or out of range.</summary>
+    public int QueueTypeAt(int slot, int item)
+    {
+        if ((uint)slot >= (uint)Capacity || (uint)item >= (uint)_queueCount[slot]) return -1;
+        return _queueTypeId[slot * EconomyConstants.ProductionQueueCapacity + item];
+    }
+
+    /// <summary>
+    /// Ticks of training done on each slot's head item (M3-4): 0 while it hasn't started (waiting for population), 1 to
+    /// <see cref="TrainTicks"/> once started; a started head holds its population reservation. At <see cref="TrainTicks"/>
+    /// it is complete and waits for a free cell to spawn on.
+    /// </summary>
+    public ReadOnlySpan<int> Progress => _progress;
+
+    /// <summary>Ticks a unit of <paramref name="unitType"/> takes to train (its <c>trainTime</c>); 0 for an unknown type.</summary>
+    public int TrainTicks(int unitType) => (uint)unitType < (uint)_units.Length ? _units[unitType].TrainTicks : 0;
+
+    /// <summary>Whether each live slot has a rally point (M3-4): units it trains walk to <see cref="RallyPosition"/>.</summary>
+    public ReadOnlySpan<bool> HasRally => _hasRally;
+
+    /// <summary>Each slot's rally point (x, z) in meters; zero without one.</summary>
+    public ReadOnlySpan<Vector2> RallyPosition => _rallyPosition;
+
+    /// <summary>The half-pop slot <paramref name="slot"/>'s started head item reserves (0 when nothing has started).</summary>
+    public int ReservedHalfPop(int slot)
+    {
+        if ((uint)slot >= (uint)Capacity || _progress[slot] == 0 || _queueCount[slot] == 0) return 0;
+        int type = _queueTypeId[slot * EconomyConstants.ProductionQueueCapacity];
+        return (uint)type < (uint)_units.Length ? _units[type].HalfPop : 0;
+    }
+
+    /// <summary>Raw queue entry <paramref name="item"/> of slot <paramref name="slot"/> (production system, hash tests).</summary>
+    internal ref int QueueEntry(int slot, int item) => ref _queueTypeId[slot * EconomyConstants.ProductionQueueCapacity + item];
+
+    /// <summary>Writable <see cref="QueueCount"/> of a slot (production system, tests).</summary>
+    internal ref int QueueCountOf(int slot) => ref _queueCount[slot];
+
+    /// <summary>Writable <see cref="Progress"/> of a slot (production system, tests).</summary>
+    internal ref int ProgressOf(int slot) => ref _progress[slot];
+
+    /// <summary>Sets or (<paramref name="has"/> false) clears slot <paramref name="slot"/>'s rally point; a cleared one goes back to zero.</summary>
+    internal void SetRally(int slot, bool has, Vector2 position)
+    {
+        _hasRally[slot] = has;
+        _rallyPosition[slot] = has ? position : Vector2.Zero;
+    }
+
+    /// <summary>Appends unit type <paramref name="unitType"/> to slot <paramref name="slot"/>'s queue; the caller checked the room and took the cost.</summary>
+    internal void Enqueue(int slot, int unitType)
+    {
+        int n = _queueCount[slot];
+        _queueTypeId[slot * EconomyConstants.ProductionQueueCapacity + n] = unitType;
+        _queueCount[slot] = n + 1;
+    }
+
+    /// <summary>
+    /// Removes item <paramref name="item"/> of slot <paramref name="slot"/>'s queue: its full cost goes back to the owner and,
+    /// for a started head, its progress and population reservation are dropped; later items shift down and the freed last
+    /// entry goes back to default. The caller checks the index.
+    /// </summary>
+    internal void RemoveQueued(int slot, int item)
+    {
+        UnitDef def = _units[_queueTypeId[slot * EconomyConstants.ProductionQueueCapacity + item]];
+        _ledger?.Refund(_owner[slot], def.CostGold, def.CostWood);
+        if (item == 0) ReleaseHead(slot);
+        Shift(slot, item);
+    }
+
+    /// <summary>The head item became a unit, whose own population count takes over the reservation: progress 0, reservation released, the rest shift down.</summary>
+    internal void PopTrained(int slot)
+    {
+        ReleaseHead(slot);
+        Shift(slot, 0);
+    }
+
+    /// <summary>The head item's training ends: progress 0, its reservation released.</summary>
+    private void ReleaseHead(int slot)
+    {
+        if (_progress[slot] == 0) return;
+        _ledger?.AddHalfPop(_owner[slot], -ReservedHalfPop(slot));
+        _progress[slot] = 0;
+    }
+
+    /// <summary>Drops entry <paramref name="item"/>: later entries move down one, the freed last entry goes back to default.</summary>
+    private void Shift(int slot, int item)
+    {
+        int head = slot * EconomyConstants.ProductionQueueCapacity, n = _queueCount[slot];
+        for (int k = item + 1; k < n; k++)
+            _queueTypeId[head + k - 1] = _queueTypeId[head + k];
+        _queueTypeId[head + n - 1] = 0;
+        _queueCount[slot] = n - 1;
+    }
+
     /// <summary>Work a building of type <paramref name="typeId"/> needs: <c>EconomyConstants.BuildWorkScale</c> (3) x its one-worker build ticks, so n builders adding n + 2 a tick take <c>t x 3 / (n + 2)</c> ticks (docs/02).</summary>
     public int WorkNeeded(int typeId) => Economy.EconomyConstants.BuildWorkScale * _defs[typeId].BuildTicks;
 
@@ -125,6 +244,8 @@ public sealed class BuildingStore
         if (work >= needed)
         {
             _work[index] = needed;
+            // Completion: the building starts providing its population (M3-4).
+            if (_underConstruction[index]) _ledger?.AddProvided(_owner[index], _defs[_typeId[index]].HalfPopProvided);
             _underConstruction[index] = false;
             _hp[index] = max;
             return;
@@ -200,6 +321,7 @@ public sealed class BuildingStore
         _hp[index] = site ? 1 : def.Hp;
         _underConstruction[index] = site;
         _work[index] = 0;
+        if (!site) _ledger?.AddProvided(owner, def.HalfPopProvided);
         _grid.SetBuilding(cell % _grid.Width, cell / _grid.Width, def.FootprintWidth, def.FootprintHeight);
         handle = new EntityHandle(index, _generation[index]);
         return true;
@@ -220,13 +342,18 @@ public sealed class BuildingStore
     /// <summary>
     /// Removes a live building (destroyed, or a cancelled site) and its generation moves on. Its cells are freed by the
     /// grid's pocket rule (BUG-0093): they reopen (one <see cref="NavGrid.Version"/> bump, an opening change) when they
-    /// touch open ground, else they stay blocked as <see cref="NavFlags.Pocket"/> cells with no bump. False for a dead or stale handle.
+    /// touch open ground, else they stay blocked as <see cref="NavFlags.Pocket"/> cells with no bump. A finished building
+    /// stops providing population (nothing dies; training elsewhere may pause), every item of its queue is refunded in
+    /// full and a started head's reservation released, and its rally point goes (M3-4). False for a dead or stale handle.
     /// </summary>
     internal bool Free(EntityHandle handle)
     {
         if (!IsAlive(handle)) return false;
         int index = handle.Index;
         BuildingDef def = _defs[_typeId[index]];
+        while (_queueCount[index] > 0) RemoveQueued(index, _queueCount[index] - 1);
+        if (!_underConstruction[index]) _ledger?.AddProvided(_owner[index], -def.HalfPopProvided);
+        SetRally(index, false, Vector2.Zero);
         int cell = _cell[index];
         _grid.ClearBuilding(cell % _grid.Width, cell / _grid.Width, def.FootprintWidth, def.FootprintHeight);
         _alive[index] = false;
@@ -247,8 +374,13 @@ public sealed class BuildingStore
     /// <summary>
     /// Mixes the store into a state hash the way <see cref="ResourceStore"/> does: capacity, the high-water
     /// mark, each used slot's generation (and, when alive, owner, type, anchor cell, hit points, construction state,
-    /// work and repair accumulators), then the free list above the never-used slots.
+    /// work and repair accumulators, and the production state of M3-4), then the free list above the never-used slots.
     /// </summary>
+    /// <remarks>
+    /// Production (M3-4) rides in the high half of the construction-state word (<see cref="ProductionBits"/>): zero for a
+    /// building with an empty queue, no progress and no rally, which so hashes exactly as before M3-4; the flagged words
+    /// follow it.
+    /// </remarks>
     internal void AddToHash(ref StateHasher h)
     {
         h.Add(Capacity);
@@ -262,7 +394,9 @@ public sealed class BuildingStore
             h.Add(_typeId[i]);
             h.Add(_cell[i]);
             h.Add(_hp[i]);
-            h.Add(_underConstruction[i]);
+            uint bits = ProductionBits(i);
+            h.Add((_underConstruction[i] ? 1UL : 0UL) | ((ulong)bits << 32));
+            if (bits != 0) AddProductionToHash(ref h, i, bits);
             h.Add(_work[i]);
             h.Add((ulong)_repairProgress[i]);
             h.Add((ulong)_repairGold[i]);
@@ -271,5 +405,30 @@ public sealed class BuildingStore
         h.Add(_freeCount);
         for (int k = Capacity - _highWater; k < _freeCount; k++)
             h.Add(_freeList[k]);
+    }
+
+    /// <summary>Slot <paramref name="i"/>'s production summary: bit 0 a queue, bit 1 progress, bit 2 a rally, bit 3 a non-zero rally point, bit 4 + k queue entry k non-zero.</summary>
+    private uint ProductionBits(int i)
+    {
+        uint bits = 0;
+        if (_queueCount[i] != 0) bits |= 1u;
+        if (_progress[i] != 0) bits |= 2u;
+        if (_hasRally[i]) bits |= 4u;
+        if (_rallyPosition[i] != Vector2.Zero) bits |= 8u;
+        int head = i * EconomyConstants.ProductionQueueCapacity;
+        for (int k = 0; k < EconomyConstants.ProductionQueueCapacity; k++)
+            if (_queueTypeId[head + k] != 0) bits |= 16u << k;
+        return bits;
+    }
+
+    /// <summary>The words <see cref="ProductionBits"/> flags (already hashed), in a fixed order.</summary>
+    private void AddProductionToHash(ref StateHasher h, int i, uint bits)
+    {
+        if ((bits & 1u) != 0) h.Add(_queueCount[i]);
+        if ((bits & 2u) != 0) h.Add(_progress[i]);
+        if ((bits & 8u) != 0) h.Add(_rallyPosition[i]);
+        int head = i * EconomyConstants.ProductionQueueCapacity;
+        for (int k = 0; k < EconomyConstants.ProductionQueueCapacity; k++)
+            if ((bits & (16u << k)) != 0) h.Add(_queueTypeId[head + k]);
     }
 }

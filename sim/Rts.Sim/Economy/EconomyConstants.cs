@@ -30,4 +30,7 @@ public static class EconomyConstants
 
     /// <summary>Fixed-point scale (2^16) for the repair factors and accumulators, so repair is integer math.</summary>
     public const int RepairFixedOne = 65536;
+
+    /// <summary>docs/02 / docs/03 "Economy implementation": a building's production queue holds 5 items (the head one training). A rule of the queue, not a stat.</summary>
+    public const int ProductionQueueCapacity = 5;
 }

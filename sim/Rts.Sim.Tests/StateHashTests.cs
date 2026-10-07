@@ -538,4 +538,84 @@ public class StateHashTests
         change(a.World);
         Assert.True(a.StateHash() != b.StateHash(), field);
     }
+
+    // ---------- M3-4: production queues, progress (the population reservation), rally points ----------
+
+    /// <summary>A one-player sim with a Keep (slot 0) training two workers (the head started) with a rally point, hashed equal to its twin.</summary>
+    private static Simulation Production()
+    {
+        Simulation sim = GatherMaps.NewSim(ResourceMaps.Flat(16, 16));
+        GatherMaps.Building(sim, 2, 2);
+        sim.Enqueue(Command.Train(0, GatherMaps.At(sim, 3, 3), GatherMaps.Laborer));
+        sim.Enqueue(Command.Train(0, GatherMaps.At(sim, 3, 3), GatherMaps.Laborer));
+        sim.Enqueue(Command.SetRally(0, BuildMaps.Cell(sim, 2, 2), GatherMaps.At(sim, 10, 10)));
+        GatherMaps.Run(sim, 5);
+        Assert.Equal((2, 4, true), (sim.World.Buildings.QueueCount[0], sim.World.Buildings.Progress[0], sim.World.Buildings.HasRally[0]));
+        return sim;
+    }
+
+    public static IEnumerable<object[]> ProductionFields() => new[]
+    {
+        new object[] { "QueueCount", (Action<World>)(w => w.Buildings.QueueCountOf(0) = 3) },
+        new object[] { "QueueTypeId[0]", (Action<World>)(w => w.Buildings.QueueEntry(0, 0) = 1) },
+        new object[] { "QueueTypeId[1]", (Action<World>)(w => w.Buildings.QueueEntry(0, 1) = 1) },
+        new object[] { "QueueTypeId[2] (past the count)", (Action<World>)(w => w.Buildings.QueueEntry(0, 2) = 1) },
+        new object[] { "QueueTypeId[3]", (Action<World>)(w => w.Buildings.QueueEntry(0, 3) = 1) },
+        new object[] { "QueueTypeId[4]", (Action<World>)(w => w.Buildings.QueueEntry(0, 4) = 1) },
+        new object[] { "Progress (and so the head's reservation)", (Action<World>)(w => w.Buildings.ProgressOf(0) = 5) },
+        new object[] { "Progress to 0 (no reservation)", (Action<World>)(w => w.Buildings.ProgressOf(0) = 0) },
+        new object[] { "HasRally", (Action<World>)(w => w.Buildings.SetRally(0, false, w.Buildings.RallyPosition[0])) },
+        new object[] { "RallyPosition.X", (Action<World>)(w => w.Buildings.SetRally(0, true, w.Buildings.RallyPosition[0] + new Vector2(0.25f, 0f))) },
+        new object[] { "RallyPosition.Y", (Action<World>)(w => w.Buildings.SetRally(0, true, w.Buildings.RallyPosition[0] + new Vector2(0f, 0.25f))) },
+    };
+
+    [Theory]
+    [MemberData(nameof(ProductionFields))]
+    public void Hash_CoversEveryProductionField(string field, Action<World> change)
+    {
+        Simulation a = Production(), b = Production();
+        Assert.Equal(a.StateHash(), b.StateHash());
+        change(a.World);
+        Assert.True(a.StateHash() != b.StateHash(), field);
+    }
+
+    /// <summary>
+    /// Reflection audit: every per-slot array of <see cref="BuildingStore"/> is hashed. Each element of live slot 0 (all
+    /// five queue entries) is changed in turn; the free list is covered by the high-water mark and its hashed tail.
+    /// </summary>
+    [Fact]
+    public void EveryBuildingStoreArray_IsHashed()
+    {
+        Simulation sim = Production();
+        BuildingStore b = sim.World.Buildings;
+        ulong h0 = sim.StateHash();
+        var unhashed = new List<string>();
+        int audited = 0;
+        foreach (FieldInfo f in typeof(BuildingStore).GetFields(BindingFlags.NonPublic | BindingFlags.Instance))
+        {
+            if (!f.FieldType.IsArray || f.Name == "_freeList") continue;
+            var arr = (Array)f.GetValue(b)!;
+            int per = arr.Length == b.Capacity ? 1 : arr.Length == b.Capacity * Rts.Sim.Economy.EconomyConstants.ProductionQueueCapacity ? Rts.Sim.Economy.EconomyConstants.ProductionQueueCapacity : 0;
+            Assert.True(per > 0, $"{f.Name}: length {arr.Length} is neither per slot nor per queue entry; extend the audit");
+            for (int e = 0; e < per; e++)
+            {
+                object? old = arr.GetValue(e);
+                object changed = old switch
+                {
+                    int x => x + 1,
+                    long x => x + 1,
+                    bool x => !x,
+                    Vector2 x => x + new Vector2(0.25f, 0f),
+                    _ => throw new InvalidOperationException($"{f.Name}: element type {f.FieldType} not covered by the audit"),
+                };
+                arr.SetValue(changed, e);
+                if (sim.StateHash() == h0) unhashed.Add(per == 1 ? f.Name : $"{f.Name}[{e}]");
+                arr.SetValue(old, e);
+                Assert.Equal(h0, sim.StateHash());
+            }
+            audited++;
+        }
+        Assert.True(audited >= 16, $"only {audited} arrays audited");
+        Assert.True(unhashed.Count == 0, "not in StateHash: " + string.Join(", ", unhashed));
+    }
 }
