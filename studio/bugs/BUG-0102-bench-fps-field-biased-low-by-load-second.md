@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-06-2114, task M2-7 (QA) |
 | System | view: `game/scripts/BenchRunner.cs` (`_fpsSum` / `_fpsSamples`) |
-| Fixed by | |
+| Fixed by | M2-H2 (f4e1b8d): `fps` = timed frames / elapsed seconds; `BenchTest` checks it in-process and on the binary |
 
 ## Repro
 1. `& $env:GODOT --path game -- --bench 10 --vsync on` (120 Hz display) and compare `fps` with `frames / seconds`.
@@ -33,3 +33,6 @@ it is 7-10 %, which on a 60 Hz display would print about 55 fps for a run that d
 ## Notes
 - Fix: print `Stats.Count / Script.Elapsed` (or `1000 / Stats.Average`); docs/03 "Measurement"
   would then drop the "mean of TimeFps" sentence. `BenchTest.LineShape` doesn't change.
+
+## Re-check (2026-10-07-0800, M2-H2 commit f4e1b8d): fixed
+Verified: windowed `--bench 10 --vsync off --mute` printed `frames 14336 ... fps 1433.5` over 10.0 s (frames / seconds 1433.6); `BenchTest` in-process 124.7 vs 124.73.

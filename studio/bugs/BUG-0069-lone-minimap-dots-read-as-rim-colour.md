@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-06-0905, task M2-H1 |
 | System | HUD / minimap (view): `ViewApi/MinimapRaster` dot style |
-| Fixed by | |
+| Fixed by | M2-H2 (f4e1b8d): `MinimapRaster` draws a 2 x 2 owner centre (`CentreOf`) in a one-cell rim (4 x 4); `MinimapRasterTests`, `ViewHardeningQaTests` reference renderer |
 
 ## Repro
 1. `dotnet build RtsGame.sln`, then (windowed)
@@ -63,3 +63,6 @@ the army, black through Whirlwind and white through Malazan, which can look like
 - Not a blocker for M2-H1: the acceptance criteria ask for visibility, and that is met.
 - The owner should judge the screenshots: `qa100-minimap.png` / `qa990-minimap.png` (4x crops)
   and the 1x frames that `QaH1DotsShot` writes.
+
+## Re-check (2026-10-07-0800, M2-H2 commit f4e1b8d): fixed
+Verified: `ViewH2QaTests.Dots_*` (property oracle at 100 / 990 units with border, ramp and cliff-lip units; four map corners) pass. Windowed `QaH1DotsShot` at 100 and 990 units: every lone dot (border, cliff lip, ramp, level 2, both factions) shows a 3 x 3 or 4 x 4 block of screen pixels in the exact owner colour (#4B4F55 / #C8892E) at 220 px / 128 cells. Perf rows pass alone (see BUG-0105 for the margin).

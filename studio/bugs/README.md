@@ -99,8 +99,8 @@ bugs outrank new features.
 | [BUG-0064](BUG-0064-minimap-dot-readability-and-large-map-sampling.md) | S4 | fixed | Minimap dots hard to tell from ramps (Whirlwind) and cliffs (Malazan); maps over 220 cells drop dots |
 | [BUG-0067](BUG-0067-m2-3-input-nits.md) | S4 | fixed | M2-3 nits: an exact 300 ms double-tap depends on the clock value; A-targeting outlives an emptied selection and eats the next click |
 | [BUG-0068](BUG-0068-minimap-right-click-while-targeting-orders-move.md) | S3 | fixed | A minimap right-click while A-targeting orders a Move and leaves targeting armed |
-| [BUG-0069](BUG-0069-lone-minimap-dots-read-as-rim-colour.md) | S3 | open | A lone minimap dot reads as its rim colour (black or white), not its player colour |
-| [BUG-0070](BUG-0070-m2-h1-doc-and-test-nits.md) | S4 | open | M2-H1 nits: stale docs/01 minimap row, docs/03 big-map range, twin double-tap constants, dev wall test blind at the far edges |
+| [BUG-0069](BUG-0069-lone-minimap-dots-read-as-rim-colour.md) | S3 | fixed | A lone minimap dot reads as its rim colour (black or white), not its player colour |
+| [BUG-0070](BUG-0070-m2-h1-doc-and-test-nits.md) | S4 | fixed | M2-H1 nits: stale docs/01 minimap row, docs/03 big-map range, twin double-tap constants, dev wall test blind at the far edges |
 | [BUG-0071](BUG-0071-plug-cache-answer-depends-on-query-order-under-stale-hash.md) | S3 | open | In the shove pass a cached plug answer can depend on which member was asked first (stale spatial hash) |
 | [BUG-0072](BUG-0072-m1-9-nits.md) | S4 | open | M1-9 nits: an invalid --record file name still fails only after the run |
 | [BUG-0073](BUG-0073-continuous-depletion-starves-flow-fields.md) | S3 | fixed | A tree falling every tick leaves all but the 2 oldest goal groups without a flow field |
@@ -113,17 +113,19 @@ bugs outrank new features.
 | [BUG-0080](BUG-0080-back-to-back-closing-changes-starve-goal-groups.md) | S3 | open | A closing change on every tick starves all but 2 goal groups for as long as it lasts (docs/03's ceil(groups / 2) bound holds only for spaced closings) |
 | [BUG-0081](BUG-0081-stale-usable-fields-cannot-be-rebuilt-at-load.md) | S3 | open | Usable-but-stale flow fields can't be rebuilt from their keys at load (docs/03's save/load plan, M6) |
 | [BUG-0082](BUG-0082-m3-2b-felling-tick-over-criterion.md) | S2 | fixed | With a tree felled every tick the 32-group scene averages 0.81 ms a tick, over M3-2b's 0.5 ms criterion; the perf row only bounds it relatively |
-| [BUG-0083](BUG-0083-debug-overlay-label-allocates-per-frame-docs-claim-zero.md) | S3 | open | Overlay-on label line allocates ~600 B per frame; docs/03 "Debug tooling" claims 0 bytes per frame on and off |
-| [BUG-0084](BUG-0084-m2-5-debug-overlay-nits.md) | S4 | open | M2-5 nits: cliff tint reads olive, arrow tips dip up to 9 cm into steep ramps, CS8602 in DebugOverlayTest, blind allocation probe |
-| [BUG-0085](BUG-0085-default-match-spawns-army-inside-a-forest.md) | S3 | open | The default match (seed 1) spawns player 0's start army inside a forest |
-| [BUG-0086](BUG-0086-m2-3b-props-nits.md) | S4 | open | M2-3b nits: every relist uploads every type's full 4,096-instance buffer; tight minimap perf margin |
-| [BUG-0087](BUG-0087-sfx-sound-playing-at-quit-leaks-objectdb-in-existing-scenes.md) | S3 | open | A sound still playing at quit leaves an ObjectDB leak warning in existing test scenes (intermittent) |
-| [BUG-0088](BUG-0088-orderstest-double-tap-row-flaky-under-cpu-load.md) | S4 | open | `OrdersTest.tscn` double-tap row fails under CPU load: process-time wait vs wall-clock tap window (pre-existing, seen at the 1744 ACCEPT) |
+| [BUG-0083](BUG-0083-debug-overlay-label-allocates-per-frame-docs-claim-zero.md) | S3 | fixed | Overlay-on label line allocates ~600 B per frame; docs/03 "Debug tooling" claims 0 bytes per frame on and off |
+| [BUG-0084](BUG-0084-m2-5-debug-overlay-nits.md) | S4 | fixed | M2-5 nits: cliff tint reads olive, arrow tips dip up to 9 cm into steep ramps, CS8602 in DebugOverlayTest, blind allocation probe |
+| [BUG-0085](BUG-0085-default-match-spawns-army-inside-a-forest.md) | S3 | fixed | The default match (seed 1) spawns player 0's start army inside a forest |
+| [BUG-0086](BUG-0086-m2-3b-props-nits.md) | S4 | fixed | M2-3b nits: every relist uploads every type's full 4,096-instance buffer; tight minimap perf margin |
+| [BUG-0087](BUG-0087-sfx-sound-playing-at-quit-leaks-objectdb-in-existing-scenes.md) | S3 | fixed | A sound still playing at quit leaves an ObjectDB leak warning in existing test scenes (intermittent) |
+| [BUG-0088](BUG-0088-orderstest-double-tap-row-flaky-under-cpu-load.md) | S4 | fixed | `OrdersTest.tscn` double-tap row fails under CPU load: process-time wait vs wall-clock tap window (pre-existing, seen at the 1744 ACCEPT) |
 | [BUG-0090](BUG-0090-d1-building-text-ahead-of-schema.md) | S4 | open | D1 building descriptions promise tower attack/detection and requirements the schema lacks (comment item fixed in M3-3) |
 | [BUG-0091](BUG-0091-refused-builds-each-run-the-seal-flood.md) | S3 | open | Refused Builds each run the never-seal flood before the cheap checks; 100 in one tick cost 22 ms |
 | [BUG-0092](BUG-0092-m3-3-nits.md) | S4 | open | M3-3 nits: tiny repair factor rounds to 0, a holding worker can't build on its spot, push-out fallback stacks units |
 | [BUG-0093](BUG-0093-cancel-pocket-reopens-bug-0078.md) | S3 | open | A cancelled walled-in site leaves a pocket; BUG-0078's stuck worker is reachable with player commands |
-| [BUG-0101](BUG-0101-bench-order-across-moves-army-only-15-m.md) | S3 | open | `--bench` "order across the map" sends the army about 15 m, to the enemy start block next door |
-| [BUG-0102](BUG-0102-bench-fps-field-biased-low-by-load-second.md) | S3 | open | The `bench:` line's `fps` reads low on short runs (averages Godot's once-a-second counter, first sample is the load second) |
-| [BUG-0103](BUG-0103-m2-7-bench-nits.md) | S4 | open | M2-7 nits: vsync-on rows report smoothed deltas, "no bunching" remark, culture in two log lines, endless huge `--bench` |
+| [BUG-0101](BUG-0101-bench-order-across-moves-army-only-15-m.md) | S3 | fixed | `--bench` "order across the map" sends the army about 15 m, to the enemy start block next door |
+| [BUG-0102](BUG-0102-bench-fps-field-biased-low-by-load-second.md) | S3 | fixed | The `bench:` line's `fps` reads low on short runs (averages Godot's once-a-second counter, first sample is the load second) |
+| [BUG-0103](BUG-0103-m2-7-bench-nits.md) | S4 | fixed | M2-7 nits: vsync-on rows report smoothed deltas, "no bunching" remark, culture in two log lines, endless huge `--bench` |
+| [BUG-0104](BUG-0104-bench-march-under-20-m-on-seed-21.md) | S3 | open | The 10 s bench moves seed 21's army centre only 19.1 m (QaM27's 20 m bound fits seed 1, not the map family) |
+| [BUG-0105](BUG-0105-m2-h2-nits.md) | S4 | open | M2-H2 nits: minimap refresh row at 92-94% of its 0.3 ms limit (docs say 0.25 ms), Sfx exit-wait range in docs/03 |
 | [BUG-0111](BUG-0111-d2-page-pin-gaps.md) | S4 | open | D2 page pins miss a false "+N pop" claim and Provides free-text edits; culture-dependent range text in UnitContentTests.G |

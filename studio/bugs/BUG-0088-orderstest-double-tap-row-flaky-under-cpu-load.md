@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-06-1744, Producer ACCEPT check (view track) |
 | System | view test scene `game/tests/OrdersTest.cs` (control-group double-tap row) |
-| Fixed by | |
+| Fixed by | M2-H2 (f4e1b8d): `OrdersTest` double-tap row waits on `Time.GetTicksMsec()` |
 
 ## Repro
 1. Start two `dotnet test sim/Rts.Sim.Tests` runs in other worktrees (or anything that keeps every core busy).
@@ -31,3 +31,6 @@ base `game/` (b9af5f2) and the M2-6 branch.
   heavy contention. Pre-existing since M2-3.
 - Fix (view hardening): wait on the wall clock in the test (loop frames until `Time.GetTicksMsec()`
   has advanced by 350 ms), or drive `Tap` with an injected clock in the test scene.
+
+## Re-check (2026-10-07-0800, M2-H2 commit f4e1b8d): fixed
+Verified: `OrdersTest.tscn` 3 / 3 PASS while the full sim suite ran.

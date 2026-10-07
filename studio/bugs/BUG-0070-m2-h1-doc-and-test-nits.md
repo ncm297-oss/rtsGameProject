@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-06-0905, task M2-H1 |
 | System | docs (01, 03), ViewApi ControlGroups, TerrainMeshBuilderTests |
-| Fixed by | |
+| Fixed by | M2-H2 (f4e1b8d): docs/01 minimap row, docs/03 big-map range (over 440 cells), `DoubleTapSeconds = DoubleTapMs / 1000`, `TerrainMeshBuilderTests.HandMapWithStepsOnTheLastRowAndColumn_*` |
 
 ## Repro
 1. **docs/01 decision table is stale.** `docs/01-vision.md`, the 2026-10-05 Minimap row: "unit dots
@@ -41,3 +41,6 @@ As above. None of these changes behaviour in the shipped 128 x 128 game.
 ## Notes
 For item 4, a hand map with a level step on the last row and column (or the QA adversarial set)
 would make the dev test cover the edges.
+
+## Re-check (2026-10-07-0800, M2-H2 commit f4e1b8d): fixed
+Verified by reading the four items in the diff and running `ControlGroupsTests` and `TerrainMeshBuilderTests` (green).

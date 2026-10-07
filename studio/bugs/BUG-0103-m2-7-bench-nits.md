@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-06-2114, task M2-7 (QA) |
 | System | view: `BenchRunner`, `BenchScript`, docs/03 "Implementation (M2-7)" |
-| Fixed by | |
+| Fixed by | M2-H2 (f4e1b8d): docs/03 delta-smoothing sentence, BenchScript remark, invariant `StartLineText` / `WorstLineText`, `LaunchOptions.MaxBenchSeconds` = 3,600 |
 
 ## Repro
 1. `& $env:GODOT --path game -- --bench 10 --vsync on`, five times.
@@ -30,3 +30,6 @@
 4. `--bench 1e308` (finite, positive) is accepted and the run never ends; it printed the duration as a
    309-digit number. That input is outside any sensible range (a note, not a defect); an upper bound
    such as 3,600 s would match the other flags' "bad values warn and are ignored" rule.
+
+## Re-check (2026-10-07-0800, M2-H2 commit f4e1b8d): fixed
+Verified: `BenchTest` (de-DE info lines, 3,600 accepted, 3,600.5 / 1e308 refused) PASS; docs/03 and the remark read correct.

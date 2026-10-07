@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-06-1503, task M2-3b |
 | System | PropsView, MinimapRaster perf row |
-| Fixed by | |
+| Fixed by | M2-H2 (f4e1b8d): per-type buffers, `PropLayout.Changed(type)`, `PropsView.UploadsOf(type)`; `PropLayoutTests.ARelist_MarksChangedOnlyTheTypesWhoseListChanged` |
 
 ## Repro
 1. Read `game/scripts/PropsView.cs` `Sync`: on any `NavGrid.Version` change it loops over every type, copies that
@@ -29,3 +29,6 @@ A felled tree re-uploads only what changed, sized to what is drawn; perf rows ke
 ## Notes
 Possible fixes: upload only the types whose count or slots changed; set `InstanceCount` to the live count (or keep a
 per-type buffer); the perf note is a watch item, not a request to loosen the threshold.
+
+## Re-check (2026-10-07-0800, M2-H2 commit f4e1b8d): fixed
+Verified for the upload item: `ViewH2QaTests.PropLayoutChanged_RandomFells_*` (Changed == transforms differ, 100+ relists on two seeds) and the real scene in `QaH2Test` (a felled tree uploads trees only, then a felled mine uploads mines only). The perf-margin watch item is carried by BUG-0105.

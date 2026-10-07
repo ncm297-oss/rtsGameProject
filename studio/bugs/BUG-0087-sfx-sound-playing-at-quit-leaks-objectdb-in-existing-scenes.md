@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-06-1744, task M2-6 |
 | System | audio (`game/scripts/Sfx.cs`) |
-| Fixed by | |
+| Fixed by | M2-H2 (f4e1b8d): `Sfx._ExitTree` stops the pool and waits (bounded, 200 ms) for one mix; close request stops the pool; `SfxTest` has no fixed wait |
 
 ## Repro
 1. `dotnet build RtsGame.sln`
@@ -35,3 +35,6 @@ audio, and the same thing happens in the game whenever it quits within ~120 ms o
 leaves the playback in the audio server. A fix in production code, such as stopping the 8 players in
 `Sfx._ExitTree` or on `NotificationPredelete`/`NotificationWMCloseRequest`, would remove the need for
 the per-test wait. Found by the QA scene sweep; not reproduced in SmokeTest (no input there).
+
+## Re-check (2026-10-07-0800, M2-H2 commit f4e1b8d): fixed
+Verified: `SfxTest` 10 / 10 and `QaM26Test` 10 / 10 headless runs exit 0 with no ObjectDB / leak line, under suite load; the exit wait printed 22-93 ms, never near 200 ms. All 18 headless scenes clean.

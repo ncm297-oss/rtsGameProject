@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-06-2114, task M2-7 (QA) |
 | System | view: `game/scripts/BenchRunner.cs` (`BenchStep.OrderAcross`) |
-| Fixed by | |
+| Fixed by | M2-H2 (f4e1b8d): `ViewApi.BenchTarget.TryAcross`, `BenchRunner.AcrossFrom/AcrossTarget/AcrossOrders`; `BenchTargetTests`, `QaM27Test` asserts reach >= 100 m and centre >= 20 m |
 
 ## Repro
 1. `& $env:GODOT --headless --path game res://tests/QaM27Test.tscn`
@@ -37,3 +37,6 @@ honestly ("Move to the far start block"); docs/01 and the plan say "across".
 - A fix could target a fixed far point instead, e.g. the passable cell nearest (0.85 W, 0.5 H) and
   then (0.15 W, 0.5 H), or the map corner opposite the army. `QaM27Test.OrderReach` prints the
   distance; once the fix lands it could assert at least about 100 m.
+
+## Re-check (2026-10-07-0800, M2-H2 commit f4e1b8d): fixed
+Verified: `QaM27Test` PASS (seed 1: 108.9 m, 22.1 m); `ViewH2QaTests.BenchTarget_200MatchSeeds_*` (30 blocked far cells: 18 cliff, 12 forest/mine; every target passable, opposite, reachable by flow field). Seed 21 moves the centre only 19.1 m: BUG-0104.

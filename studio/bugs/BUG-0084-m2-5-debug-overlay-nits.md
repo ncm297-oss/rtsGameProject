@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-06-1255, task M2-5 |
 | System | debug overlay (view), its tests |
-| Fixed by | |
+| Fixed by | M2-H2 (f4e1b8d): crimson `CliffColor` (hue test over every level), `FlowArrowLayout.ArrowGround`, CS8602 fixed, allocation probe asserts a live relist (>100 arrows) |
 
 ## Repro
 1. **Cliff tint.** `& $env:GODOT --path game res://tests/DebugOverlayShot.tscn -- --out <png> --units 100`.
@@ -38,3 +38,6 @@ As above. None of these affects gameplay or correctness.
 Possible fixes: raise the cliff alpha or saturation (or use the `BlockedColor` hue with a darker value);
 lift arrows by `0.65 * MaxRampSlope + margin` (about 0.4 m), or tilt them to the cell plane like the nav
 quads; add `!` or a local in the test's message.
+
+## Re-check (2026-10-07-0800, M2-H2 commit f4e1b8d): fixed
+Verified: `NavOverlayBuilderTests.CliffTint_*`, `FlowArrowLayoutTests.ArrowGround_*`, `ViewApiAllocationTests` green; `dotnet build` 0 warnings in `game/`.

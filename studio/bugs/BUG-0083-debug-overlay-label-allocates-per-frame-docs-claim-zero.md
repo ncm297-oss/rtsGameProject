@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-06-1255, task M2-5 |
 | System | debug overlay (view: `game/scripts/DebugOverlay.cs`), docs/03 "Debug tooling" |
-| Fixed by | |
+| Fixed by | M2-H2 (f4e1b8d): `DebugOverlay._Process` rebuilds the label only when a shown value changes (`LabelBuilds`); `DebugOverlayTest` 300-frame probe |
 
 ## Repro
 1. `& $env:GODOT --headless --path game res://tests/QaM25Test.tscn` (QA scene, 2,000 units, 200 selected, a cached field, steady camera).
@@ -36,3 +36,6 @@ the M2-1 label always has", but the "Debug tooling" bullet says "0 bytes per fra
   and the label text does not.
 - ~56 KB per second at 60 FPS feeds Gen0 GC. That matters for M2-7's "100 units at 60 FPS" check
   only if GC pauses show up.
+
+## Re-check (2026-10-07-0800, M2-H2 commit f4e1b8d): fixed
+Verified: `DebugOverlayTest.tscn` prints "overlay frame with the label, 300 unchanged frames: 0 bytes, 0 rebuilds" and passes; every value the label prints (incl. `SelectionSuffix`) is in `LabelValues`.

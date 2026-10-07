@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-06-1503, task M2-3b |
 | System | Match start layout (`ViewApi.StartLayout.Block`) vs map generator resource placement |
-| Fixed by | |
+| Fixed by | M2-H2 (f4e1b8d): `StartLayout.IsOpen` + one same-level clearing per block; `StartLayoutTests`, tightened `PropLayoutQaTests.StartBlocks_OnTheMatchMap_*` |
 
 ## Repro
 1. `& $env:GODOT --path game -- --seed 1 --screenshot <abs png> --screenshot-after 2` (the defaults: 12 forests, 8 mines, 100 units per player).
@@ -32,3 +32,6 @@ a passable cell (the QA test asserts it), so nothing is stuck or invalid; it loo
   locations), or `StartLayout.Block` skipping cells near `NavFlags.Resource` (view track).
 - Regression test to un-report when fixed: `QA/ViewApi/PropLayoutQaTests.StartBlocks_OnTheMatchMap_NeverOnAResourceCell_ReportsHowManyTouchAForest`
   (currently asserts only that no spot is on a blocked cell; tighten to "no spot touches a node" with the fix).
+
+## Re-check (2026-10-07-0800, M2-H2 commit f4e1b8d): fixed
+Verified: `ViewH2QaTests.StartBlocks_Seeds1To40_*` (independent open / clearing oracle, 100 and 1,000 per side, spacing, determinism, hash unchanged) and the CLI-map row pass; the real Match at `--units 1000` on seeds 1 / 13 / 40 spawns 1,000 per side on open cells, one level each (`QaH2Test`). Screenshots at 100 and 1,000 units looked at: both blocks clear of trees, mines and cliff edges.
