@@ -6,7 +6,7 @@
 | Status | open |
 | Found | 2026-10-06-1744, task M3-2b |
 | System | movement build pass / flow-field cache (closing grid changes) |
-| Fixed by | |
+| Fixed by | Not fixed; documented as a known limit in M3-H1 (4abbf37, session 2026-10-07-0800, Producer decision): docs/03 "Known limits" states the measured bound (a closing every p ticks lets only the 2p oldest goal groups walk; `SimHardeningTests.ClosingsEveryPeriodTicks_OnlyThe2xPeriodOldestGroupsWalk` pins periods 1 / 2 / 4) and why the usable-stale change was left (walkers pressed against a new building on an old field would count stuck ticks and give up in 20 ticks; the closing semantics are pinned by overlay, `PeekCached` and cache tests on both tracks). Stays open at S3; revisit when the M5 AI's placement rate is known |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~FourGroups_AClosingChangeEveryTick_StarvesTwoGroupsWhileItLasts_Report" --logger "console;verbosity=detailed"`

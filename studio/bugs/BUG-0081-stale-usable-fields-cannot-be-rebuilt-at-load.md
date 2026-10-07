@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-06-1744, task M3-2b |
 | System | flow-field cache / save-load design (M6) |
-| Fixed by | |
+| Fixed by | Design decision recorded in M3-H1 (4abbf37, session 2026-10-07-0800; Producer decision 2026-10-07, owner may revisit at M6): docs/03 "Save/load and replays" now says a save file stores the flow-field cache's contents (every used slot's direction bytes, costs, keys and stamps), so save then load reproduces the unsaved run exactly; replays replay from tick 0 and need nothing. docs/01 change log row. The M6 save/load task implements it; the QA proxy row `RebuildingStaleFieldsAtLoad_Proxy_*` stays as the reason |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~RebuildingStaleFieldsAtLoad_Proxy_DivergesFromAnUninterruptedRun_Report" --logger "console;verbosity=detailed"`

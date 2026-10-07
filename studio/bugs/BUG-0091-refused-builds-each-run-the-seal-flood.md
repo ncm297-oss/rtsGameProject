@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-06-2114, task M3-3 |
 | System | construction / placement rule (`ConstructionSystem.Check`, `Map/SealCheck`) |
-| Fixed by | |
+| Fixed by | M3-H1 (4abbf37, session 2026-10-07-0800): `ConstructionSystem.Check(..., sealLast: true)` on the Build apply path runs UnknownType to StoreFull before the seal flood; `World.CanPlace` keeps the documented reason order. `SimHardeningTests.HundredUnaffordableBuildsAtALongDetourAnchor_OneTick_Under2Ms` (0.074 ms, was 22 ms); QA `SimHardeningQaTests.CanPlaceAndBuild_AgreeOnPassFail_RandomStates` (1,190 probes, pass / fail equal) and the UnitInTheWay / StoreFull rows (0.04 / 0.09 ms). Residual: Builds refused for SealsGround still flood each (BUG-0096, S3) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~ConstructionQaTests.UnaffordableBuildsAtALongDetourAnchor_TickCost_Report" --logger "console;verbosity=detailed"`

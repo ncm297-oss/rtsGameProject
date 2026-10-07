@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-06-0905, task M1-9 |
 | System | tools/Rts.Cli, docs/03 "Headless CLI" |
-| Fixed by | |
+| Fixed by | M3-H1 (4abbf37, session 2026-10-07-0800): `CliRunner.OpenRecordFile` creates (truncates) and holds the `--record` file before the first tick, so a name the file system refuses (`a<b.replay`) or a folder the user may not write to fails at once. `Cli/CliTests` `a<b` row; QA `SimHardeningQaTests.Run_RecordOntoAReadOnlyFile_FailsBeforeTheFirstTick_AndLeavesItIntact`; docs/03 "Headless CLI". Accepted side effect (QA note): an aborted run leaves an empty file where an old replay of that name was |
 
 ## Repro
 ```

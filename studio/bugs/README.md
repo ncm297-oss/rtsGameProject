@@ -101,17 +101,17 @@ bugs outrank new features.
 | [BUG-0068](BUG-0068-minimap-right-click-while-targeting-orders-move.md) | S3 | fixed | A minimap right-click while A-targeting orders a Move and leaves targeting armed |
 | [BUG-0069](BUG-0069-lone-minimap-dots-read-as-rim-colour.md) | S3 | open | A lone minimap dot reads as its rim colour (black or white), not its player colour |
 | [BUG-0070](BUG-0070-m2-h1-doc-and-test-nits.md) | S4 | open | M2-H1 nits: stale docs/01 minimap row, docs/03 big-map range, twin double-tap constants, dev wall test blind at the far edges |
-| [BUG-0071](BUG-0071-plug-cache-answer-depends-on-query-order-under-stale-hash.md) | S3 | open | In the shove pass a cached plug answer can depend on which member was asked first (stale spatial hash) |
-| [BUG-0072](BUG-0072-m1-9-nits.md) | S4 | open | M1-9 nits: an invalid --record file name still fails only after the run |
+| [BUG-0071](BUG-0071-plug-cache-answer-depends-on-query-order-under-stale-hash.md) | S3 | fixed (M3-H1) | In the shove pass a cached plug answer can depend on which member was asked first (stale spatial hash) |
+| [BUG-0072](BUG-0072-m1-9-nits.md) | S4 | fixed (M3-H1) | M1-9 nits: an invalid --record file name still fails only after the run |
 | [BUG-0073](BUG-0073-continuous-depletion-starves-flow-fields.md) | S3 | fixed | A tree falling every tick leaves all but the 2 oldest goal groups without a flow field |
 | [BUG-0074](BUG-0074-forest-placer-assumes-1x1-trees.md) | S3 | fixed | The forest placer assumes 1 x 1 trees; a larger tree footprint (valid data) seals pockets |
 | [BUG-0075](BUG-0075-felled-interior-tree-leaves-unreachable-hollow.md) | S3 | fixed | Felling a forest's interior tree first leaves an open cell nobody can reach; an order onto it does nothing |
-| [BUG-0076](BUG-0076-m3-1-nits.md) | S4 | open | M3-1 nits: setup timing in docs, redundant flood fill, empty resources list loads clean |
+| [BUG-0076](BUG-0076-m3-1-nits.md) | S4 | fixed (M3-H1) | M3-1 nits: setup timing in docs, redundant flood fill, empty resources list loads clean |
 | [BUG-0077](BUG-0077-building-placed-mid-walk-makes-units-give-up.md) | S3 | fixed | A building placed in front of a moving column makes the units behind it give up after 20 ticks |
 | [BUG-0078](BUG-0078-exposure-counts-sealed-pocket-cells.md) | S3 | fixed (M3-3 never-seal rule; residual BUG-0093) | Exposure counts an open neighbour nobody can reach; a worker sent to a tree exposed only to a sealed pocket retries for ever |
-| [BUG-0079](BUG-0079-m3-2-nits.md) | S4 | open | M3-2 nits: ~~missing cost is three errors~~ (fixed in M3-3), tests over budget (waived), --workers 0 wording |
-| [BUG-0080](BUG-0080-back-to-back-closing-changes-starve-goal-groups.md) | S3 | open | A closing change on every tick starves all but 2 goal groups for as long as it lasts (docs/03's ceil(groups / 2) bound holds only for spaced closings) |
-| [BUG-0081](BUG-0081-stale-usable-fields-cannot-be-rebuilt-at-load.md) | S3 | open | Usable-but-stale flow fields can't be rebuilt from their keys at load (docs/03's save/load plan, M6) |
+| [BUG-0079](BUG-0079-m3-2-nits.md) | S4 | fixed (M3-3 + M3-H1) | M3-2 nits: missing cost is three errors (M3-3), tests over budget (waived), --workers 0 wording (M3-H1) |
+| [BUG-0080](BUG-0080-back-to-back-closing-changes-starve-goal-groups.md) | S3 | open (known limit since M3-H1) | A closing change every p ticks lets only the 2p oldest goal groups walk while it lasts; measured bound in docs/03 "Known limits", the usable-stale fix was left (Producer decision) |
+| [BUG-0081](BUG-0081-stale-usable-fields-cannot-be-rebuilt-at-load.md) | S3 | fixed (M3-H1 decision: save the cache contents, M6 implements) | Usable-but-stale flow fields can't be rebuilt from their keys at load (docs/03's save/load plan, M6) |
 | [BUG-0082](BUG-0082-m3-2b-felling-tick-over-criterion.md) | S2 | fixed | With a tree felled every tick the 32-group scene averages 0.81 ms a tick, over M3-2b's 0.5 ms criterion; the perf row only bounds it relatively |
 | [BUG-0083](BUG-0083-debug-overlay-label-allocates-per-frame-docs-claim-zero.md) | S3 | open | Overlay-on label line allocates ~600 B per frame; docs/03 "Debug tooling" claims 0 bytes per frame on and off |
 | [BUG-0084](BUG-0084-m2-5-debug-overlay-nits.md) | S4 | open | M2-5 nits: cliff tint reads olive, arrow tips dip up to 9 cm into steep ramps, CS8602 in DebugOverlayTest, blind allocation probe |
@@ -120,9 +120,9 @@ bugs outrank new features.
 | [BUG-0087](BUG-0087-sfx-sound-playing-at-quit-leaks-objectdb-in-existing-scenes.md) | S3 | open | A sound still playing at quit leaves an ObjectDB leak warning in existing test scenes (intermittent) |
 | [BUG-0088](BUG-0088-orderstest-double-tap-row-flaky-under-cpu-load.md) | S4 | open | `OrdersTest.tscn` double-tap row fails under CPU load: process-time wait vs wall-clock tap window (pre-existing, seen at the 1744 ACCEPT) |
 | [BUG-0090](BUG-0090-d1-building-text-ahead-of-schema.md) | S4 | open | D1 building descriptions promise tower attack/detection and requirements the schema lacks (comment item fixed in M3-3) |
-| [BUG-0091](BUG-0091-refused-builds-each-run-the-seal-flood.md) | S3 | open | Refused Builds each run the never-seal flood before the cheap checks; 100 in one tick cost 22 ms |
-| [BUG-0092](BUG-0092-m3-3-nits.md) | S4 | open | M3-3 nits: tiny repair factor rounds to 0, a holding worker can't build on its spot, push-out fallback stacks units |
-| [BUG-0093](BUG-0093-cancel-pocket-reopens-bug-0078.md) | S3 | open | A cancelled walled-in site leaves a pocket; BUG-0078's stuck worker is reachable with player commands |
+| [BUG-0091](BUG-0091-refused-builds-each-run-the-seal-flood.md) | S3 | fixed (M3-H1; residual BUG-0096) | Refused Builds each run the never-seal flood before the cheap checks; 100 in one tick cost 22 ms |
+| [BUG-0092](BUG-0092-m3-3-nits.md) | S4 | fixed (M3-H1; residual BUG-0095) | M3-3 nits: tiny repair factor rounds to 0, a holding worker can't build on its spot, push-out fallback stacks units |
+| [BUG-0093](BUG-0093-cancel-pocket-reopens-bug-0078.md) | S3 | fixed (M3-H1) | A cancelled walled-in site leaves a pocket; BUG-0078's stuck worker is reachable with player commands |
 | [BUG-0101](BUG-0101-bench-order-across-moves-army-only-15-m.md) | S3 | open | `--bench` "order across the map" sends the army about 15 m, to the enemy start block next door |
 | [BUG-0102](BUG-0102-bench-fps-field-biased-low-by-load-second.md) | S3 | open | The `bench:` line's `fps` reads low on short runs (averages Godot's once-a-second counter, first sample is the load second) |
 | [BUG-0103](BUG-0103-m2-7-bench-nits.md) | S4 | open | M2-7 nits: vsync-on rows report smoothed deltas, "no bunching" remark, culture in two log lines, endless huge `--bench` |

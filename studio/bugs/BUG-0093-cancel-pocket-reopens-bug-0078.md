@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-06-2114, task M3-3 |
 | System | construction (cancel / destruction) + gather exposure rule |
-| Fixed by | |
+| Fixed by | M3-H1 (4abbf37, session 2026-10-07-0800): the pocket rule in `NavGrid.ClearFootprint` with `NavFlags.Pocket` (32): freed cells reopen only if the union of the footprint and the pocket cells 4-connected to it touches open ground, else they stay `Blocked \| Pocket` with no `Version` bump; a later opening beside them reopens the whole chain. QA row `ConstructionQaTests.ACancelledSiteBesideATree_LeavesThePocketBug0078Described_Report` un-skipped (cells `Blocked \| Pocket`, versions unchanged, tree unexposed, worker retargets another tree); `PocketRuleTests` (chain reopen, cell opened into a pocket alone, 4 x 300 fuzz + twins); QA `PocketRuleQaTests` and `Stress/PocketRuleFuzzStressTests` (30 runs x 1,000 steps against an independent reachability oracle, 0 violations). docs/03 "Navigation grid" pocket rule, docs/01 row |
 
 ## Repro
 1. `QA/ConstructionQaTests.ACancelledSiteBesideATree_LeavesThePocketBug0078Described_Report` (skipped with this id;
