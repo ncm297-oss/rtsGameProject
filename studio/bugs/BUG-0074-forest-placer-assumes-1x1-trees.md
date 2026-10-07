@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-06-1255, task M3-1 |
 | System | resource placement / data |
-| Fixed by | |
+| Fixed by | 28d78f8 (M3-2b): the loader refuses a wood type whose footprint isn't 1 x 1; `QA/ResourceQaTests.TwoByTwoTrees_KeepTheOracle` un-skipped (refusal counts as passing) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~TwoByTwoTrees_Report" --logger "console;verbosity=detailed"`
@@ -40,3 +40,6 @@ Shipped data uses 1 x 1 trees, so nothing ships broken today.
 Either make the forest grower footprint-aware (grow in footprint-sized steps and check the full
 footprint plus its ring), or have the loader / `DataLimits` require a 1 x 1 footprint for the type
 the placer uses as trees and document it. Also stop ignoring `Spawn`'s return value in `TryForest`.
+
+## Verification (QA, 2026-10-06-1744)
+QA `QA/GridChangeQaTests.AWoodTypeWithANon1x1Footprint_IsOneErrorOnItsFootprint` (1x2, 2x1, 4x4, 1x4: exactly one error on `.footprint` naming the size) and `AWoodTypeWithABadFootprintSide_IsOneError_NotTwo` (0 / 5 sides, missing side, null footprint: one error, no extra wood error); a 1 x 1 gold type still loads.

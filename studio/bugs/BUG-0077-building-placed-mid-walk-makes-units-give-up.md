@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-06-1503, task M3-2 |
 | System | movement (stuck / give-up rule) vs closing grid changes (buildings) |
-| Fixed by | |
+| Fixed by | 28d78f8 (M3-2b): a closing change resets every Moving unit's `BestRemaining`; `QA/EconomyQaTests.ABuildingDroppedOnAMarchingColumnsPath_..._AndTheColumnStillArrives` un-skipped |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~ABuildingDroppedOnAMarchingColumnsPath_NoUnitCenterEverEntersItsCells_AndTheColumnStillArrives"`
@@ -45,3 +45,6 @@ is rebuilt the same tick and the unit keeps walking at full speed, but `StuckTic
   plain Moves.
 - Safety holds: no unit's centre ever enters the building's cells
   (`ABuildingDroppedOnAMarchingColumnsPath_NoUnitCenterEverEntersItsCells`, passes).
+
+## Verification (QA, 2026-10-06-1744)
+QA row: 16/16 within 6 m, all Idle at tick 472, no unit center ever in the Keep's cells. The reset can't loop: QA `GridChangeQaTests.WalkersPinnedBehindEnemies_AClosingChangeEveryTick_StillGiveUp` (stop at tick 163 with a closing change every tick, same as the calm twin), `ACrowdJammedAtACorridorMouth_...` and `ABlobOf300_...` settle at the calm twin's tick.
