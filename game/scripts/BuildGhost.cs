@@ -17,8 +17,9 @@ namespace Rts.Game;
 /// (<see cref="CanPlaceCalls"/>), and only when the anchor, the type or the sim tick changed since the last answer (nothing
 /// else changes what it says). The box moves only with an answer, so the colour drawn is always <c>CanPlace</c> of the
 /// anchor drawn. Meshes (one per building type, made on first use) and the two materials are kept, and the reason label's
-/// text is set only when the reason changes, so a steady frame allocates nothing. Holds no gameplay state: the type and
-/// anchor are what is shown; the order is <see cref="SelectionController.OrderBuild"/>.
+/// text is set only when the reason changes, so a steady frame allocates nothing. A click places at the anchor under the
+/// click itself (<see cref="ResolveClick"/>, BUG-0109), which may spend the frame's one <c>CanPlace</c> call. Holds no
+/// gameplay state: the type and anchor are what is shown; the order is <see cref="SelectionController.OrderBuild"/>.
 /// </remarks>
 public partial class BuildGhost : Node3D
 {
@@ -173,6 +174,47 @@ public partial class BuildGhost : Node3D
         }
         else if (!Visible) Show(world, anchor, Valid, Reason);
     }
+
+    /// <summary>
+    /// The anchor a left click at <paramref name="screen"/> places at (BUG-0109): recomputed from the click's own position,
+    /// since input arrives before this frame's <see cref="Sync"/>. The drawn anchor uses the drawn answer; another anchor is
+    /// asked of <c>CanPlace</c> as this frame's one call (and drawn), unless the frame's call is spent, a tick is running
+    /// or this is not the main thread: then the click is ignored. True (anchor in <paramref name="anchor"/>) only when that
+    /// anchor is green; false off the map, red, or ignored.
+    /// </summary>
+    public bool ResolveClick(Vector2 screen, out int anchor)
+    {
+        anchor = -1;
+        if (!Active || _runner?.Simulation is not Simulation sim) return false;
+        World world = sim.World;
+        Vector3 o = _camera.ProjectRayOrigin(screen), d = _camera.ProjectRayNormal(screen);
+        if (!GroundPicker.TryPick(world.Heightmap, new(o.X, o.Y, o.Z), new(d.X, d.Y, d.Z), out System.Numerics.Vector3 hit)) return false;
+        int at = PlacementGhost.Anchor(world.NavGrid, _data.Buildings[TypeId], new System.Numerics.Vector2(hit.X, hit.Z));
+        if (at < 0) return false;
+        if (at == Anchor && Visible)
+        {
+            anchor = at;
+            return Valid;
+        }
+        ulong frame = Engine.GetProcessFrames();
+        if (frame == _evalFrame || _runner.Ticking || System.Environment.CurrentManagedThreadId != _mainThread)
+        {
+            ClicksIgnored++;
+            return false;
+        }
+        _evalFrame = frame;
+        CanPlaceCalls++;
+        bool ok = world.CanPlace(_player, TypeId, at, out PlacementError reason);
+        _evalAnchor = at;
+        _evalType = TypeId;
+        _evalTick = sim.TickNumber;
+        Show(world, at, ok, reason);
+        anchor = at;
+        return ok;
+    }
+
+    /// <summary>Clicks <see cref="ResolveClick"/> ignored because this frame's <c>CanPlace</c> call was already spent (or a tick was running).</summary>
+    public int ClicksIgnored { get; private set; }
 
     private void Show(World world, int anchor, bool ok, PlacementError reason)
     {

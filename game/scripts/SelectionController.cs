@@ -17,7 +17,11 @@ namespace Rts.Game;
 /// minimap; M + click is a plain Move (M3-V2). A right click on a live resource node with a worker
 /// selected is a Gather for the workers and a Move for the rest (<see cref="ContextOrder"/>, M3-V1),
 /// on an own damaged building a Repair and on an own site a joining Build (M3-V2); the minimap's
-/// right click stays a Move. A left click that hits no unit selects the own building whose box it
+/// right click stays a Move. A right click whose ray meets a building's drawn box first means that building (its
+/// footprint centre), not the ground behind it (<see cref="ContextTarget"/>, BUG-0108). With an own finished building
+/// selected a right click (3D view or minimap) sets its rally point, and one on the building itself clears it (M3-V3);
+/// the production card's train, research and queue-cancel presses enqueue through <see cref="Produce"/> and
+/// <see cref="CancelQueueItem"/>. A left click that hits no unit selects the own building whose box it
 /// hits (<see cref="SelectedBuilding"/>, M3-V2: alone, units cleared; a box never selects one). The
 /// command card (<see cref="Card"/>) sees keys and clicks first while its build menu or ghost is up. The geometry lives in the pure <see cref="ScreenPicker"/> and <see cref="GroundPicker"/>,
 /// groups and subgroups in <see cref="ControlGroups"/> and <see cref="Rts.Sim.ViewApi.Subgroups"/>;
@@ -41,7 +45,8 @@ public partial class SelectionController : Node
 
     private Vector2 _press;
     private bool _pressing, _boxing, _doubleClick;
-    private readonly int[] _issued = new int[(int)CommandKind.Repair + 1];
+    private static readonly int IssuedSlots = MaxKind() + 1;
+    private readonly int[] _issued = new int[IssuedSlots];
     private CommandKind _target = CommandKind.Noop;
 
     // The selected building: slot and generation (view state only; -1 for none).
@@ -96,6 +101,18 @@ public partial class SelectionController : Node
             BuildingStore b = sim.World.Buildings;
             if (!b.Alive[_building] || b.Generation[_building] != _buildingGen) _building = -1;
             return _building;
+        }
+    }
+
+    /// <summary>The selected building's slot when it is an own finished building (it has a production queue and a rally point), else -1 (M3-V3).</summary>
+    public int SelectedFinishedBuilding
+    {
+        get
+        {
+            int slot = SelectedBuilding;
+            if (slot < 0) return -1;
+            BuildingStore b = _runner.Simulation!.World.Buildings;
+            return !b.UnderConstruction[slot] && b.Owner[slot] == LocalPlayer ? slot : -1;
         }
     }
 
@@ -171,7 +188,7 @@ public partial class SelectionController : Node
                 // A placement ghost takes the click: a green one places, a red one does nothing; it never selects.
                 if (Card != null && Card.GhostActive)
                 {
-                    Card.GhostClick(Input.IsActionPressed("order_queue"));
+                    Card.GhostClick(Input.IsActionPressed("order_queue"), mb.Position);
                     return;
                 }
                 // The selection may have died since the last _Process; then this is a normal click (BUG-0067).
@@ -535,15 +552,131 @@ public partial class SelectionController : Node
         return true;
     }
 
-    /// <summary>What a right click at <paramref name="screen"/> on the 3D view orders: picks the ground there and calls <see cref="ContextOrder"/>; false if the ray missed the map.</summary>
+    /// <summary>
+    /// What a right click at <paramref name="screen"/> on the 3D view orders: resolves the point (<see cref="ContextTarget"/>);
+    /// with a building selected its rally order (<see cref="RallyOrder"/>, M3-V3: set there, cleared on the building
+    /// itself, nothing for a site); otherwise <see cref="ContextOrder"/>. False if the click met neither a building nor the map.
+    /// </summary>
     public bool CommandAt(Vector2 screen, bool queued)
     {
-        Simulation sim = _runner.Simulation!;
-        Vector3 origin = _camera.ProjectRayOrigin(screen), dir = _camera.ProjectRayNormal(screen);
-        if (!GroundPicker.TryPick(sim.World.Heightmap, new(origin.X, origin.Y, origin.Z), new(dir.X, dir.Y, dir.Z), out System.Numerics.Vector3 hit))
-            return false;
-        ContextOrder(new Vector2(hit.X, hit.Z), queued);
+        if (!ContextTarget(screen, out System.Numerics.Vector2 point, out int building)) return false;
+        if (SelectedBuilding >= 0)
+        {
+            RallyOrder(point, building);
+            return true;
+        }
+        ContextOrder(new Vector2(point.X, point.Y), queued);
         return true;
+    }
+
+    /// <summary>
+    /// Where a right click at <paramref name="screen"/> points (BUG-0108): the building of any owner whose drawn box the
+    /// camera ray meets first (<see cref="BuildingPicker.PickRay"/>; its slot in <paramref name="building"/>) gives its
+    /// footprint centre, so the visible top of a box means the building and not the ground 2 m behind it; else the ground
+    /// under the ray (<paramref name="building"/> -1). False when the ray meets neither. Resource nodes still go by the
+    /// ground point (their prop heights are view constants the pure pickers don't see).
+    /// </summary>
+    public bool ContextTarget(Vector2 screen, out System.Numerics.Vector2 point, out int building)
+    {
+        World world = _runner.Simulation!.World;
+        Vector3 o = _camera.ProjectRayOrigin(screen), d = _camera.ProjectRayNormal(screen);
+        building = BuildingPicker.PickRay(world.Buildings, world.Data.Buildings, world.NavGrid, world.Heightmap, -1,
+            new(o.X, o.Y, o.Z), new(d.X, d.Y, d.Z), BuildingViews.BoxHeight, BuildingViews.SiteMinHeight);
+        if (building >= 0)
+        {
+            point = SiteCenter(world, building);
+            return true;
+        }
+        if (GroundPicker.TryPick(world.Heightmap, new(o.X, o.Y, o.Z), new(d.X, d.Y, d.Z), out System.Numerics.Vector3 hit))
+        {
+            point = new System.Numerics.Vector2(hit.X, hit.Z);
+            return true;
+        }
+        point = default;
+        return false;
+    }
+
+    /// <summary>
+    /// A right click's rally order while a building is selected (M3-V3): on the selected building itself
+    /// (<paramref name="building"/>) one <c>ClearRally</c>; anywhere else (ground, a resource node, another building) one
+    /// <c>SetRally</c> to <paramref name="point"/>; one Command sound. Nothing for a selected site, a non-finite point or a
+    /// full command queue. Returns true if it enqueued.
+    /// </summary>
+    public bool RallyOrder(System.Numerics.Vector2 point, int building = -1)
+    {
+        if (_runner?.Simulation is not Simulation sim) return false;
+        int slot = SelectedFinishedBuilding;
+        if (slot < 0 || !float.IsFinite(point.X) || !float.IsFinite(point.Y)) return false;
+        if (!RoomFor(sim, 1, "Rally")) return false;
+        World world = sim.World;
+        if (building == slot)
+        {
+            sim.Enqueue(Command.ClearRally(LocalPlayer, SiteCenter(world, slot)));
+            _issued[(int)CommandKind.ClearRally]++;
+        }
+        else
+        {
+            sim.Enqueue(Command.SetRally(LocalPlayer, world.Buildings.Cell[slot], point));
+            _issued[(int)CommandKind.SetRally]++;
+        }
+        _sfx?.Play(SfxEvent.Command);
+        return true;
+    }
+
+    /// <summary>
+    /// What a production card press does (M3-V3): one <c>Train</c> (or <c>Research</c> when <paramref name="isTech"/>) of
+    /// <paramref name="typeId"/> at the selected own finished building's footprint centre, one Command sound; nothing (no
+    /// sound) when <c>World.CanTrain</c> / <c>CanResearch</c> refuses now, nothing is selected, or the command queue is full.
+    /// </summary>
+    public bool Produce(int typeId, bool isTech)
+    {
+        if (_runner?.Simulation is not Simulation sim) return false;
+        int slot = SelectedFinishedBuilding;
+        if (slot < 0) return false;
+        World world = sim.World;
+        bool ok = isTech ? world.CanResearch(LocalPlayer, slot, typeId, out _) : world.CanTrain(LocalPlayer, slot, typeId, out _);
+        if (!ok || !RoomFor(sim, 1, isTech ? "Research" : "Train")) return false;
+        System.Numerics.Vector2 at = SiteCenter(world, slot);
+        sim.Enqueue(isTech ? Command.Research(LocalPlayer, at, typeId) : Command.Train(LocalPlayer, at, typeId));
+        _issued[(int)(isTech ? CommandKind.Research : CommandKind.Train)]++;
+        _sfx?.Play(SfxEvent.Command);
+        return true;
+    }
+
+    /// <summary>What a click on queue item <paramref name="item"/> of the selected own finished building does (M3-V3): one <c>CancelTrain</c> of it at the footprint centre, one Command sound; nothing past the queue's count.</summary>
+    public bool CancelQueueItem(int item)
+    {
+        if (_runner?.Simulation is not Simulation sim) return false;
+        int slot = SelectedFinishedBuilding;
+        if (slot < 0 || (uint)item >= (uint)sim.World.Buildings.QueueCount[slot]) return false;
+        if (!RoomFor(sim, 1, "Cancel")) return false;
+        sim.Enqueue(Command.CancelTrain(LocalPlayer, SiteCenter(sim.World, slot), item));
+        _issued[(int)CommandKind.CancelTrain]++;
+        _sfx?.Play(SfxEvent.Command);
+        return true;
+    }
+
+    /// <summary>What a portrait click in the selection panel does (M3-V3): selects that unit alone (if it is still alive), Select sound if that changed the selection.</summary>
+    public bool SelectOnly(EntityHandle unit)
+    {
+        if (_runner?.Simulation is not Simulation sim) return false;
+        UnitStore u = sim.World.Units;
+        if ((uint)unit.Index >= (uint)u.Capacity || !u.Alive[unit.Index] || u.Generation[unit.Index] != unit.Generation) return false;
+        SnapshotSelection();
+        Selection.Clear();
+        Selection.Add(unit);
+        SelectionChanged();
+        PlaySelectIfChanged();
+        return true;
+    }
+
+    // The command queue throws when full: a whole order or nothing (one warning).
+    private bool RoomFor(Simulation sim, int n, string what)
+    {
+        if (sim.PendingCommandCount + n <= sim.World.Config.CommandCapacity) return true;
+        DroppedOrders++;
+        GD.PushWarning($"{what} dropped: command queue full.");
+        return false;
     }
 
     /// <summary>
@@ -661,4 +794,11 @@ public partial class SelectionController : Node
         UnitViews.GroundPoint(world, slot, alpha) + new Vector3(0f, UnitViews.BodyHeight(world.Units.Radius[slot]) / 2f, 0f);
 
     private static System.Numerics.Vector2 ToNumerics(Vector2 v) => new(v.X, v.Y);
+
+    private static int MaxKind()
+    {
+        int max = 0;
+        foreach (CommandKind k in Enum.GetValues<CommandKind>()) max = Math.Max(max, (int)k);
+        return max;
+    }
 }

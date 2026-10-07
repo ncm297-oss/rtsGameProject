@@ -16,7 +16,8 @@ namespace Rts.Game;
 /// Stop, so clicks inside the control never reach <see cref="SelectionController"/>; events outside
 /// its rect are never seen here. Holds no gameplay state; orders go through
 /// <see cref="SelectionController.Order"/> (a Move, queued while <c>order_queue</c> is held); a
-/// right-click while A-targeting only cancels it. A left click here never ends targeting.
+/// right-click while A-targeting only cancels it; with a building selected a right click sets its rally point
+/// (<see cref="SelectionController.RallyOrder"/>, M3-V3). A left click here never ends targeting.
 /// </remarks>
 public partial class Minimap : Control
 {
@@ -149,7 +150,11 @@ public partial class Minimap : Control
                 // A right-click while A is armed cancels it and orders nothing, as on the 3D view (BUG-0068).
                 if (_selection.Targeting) _selection.CancelTargeting();
                 else if (Fit.TryToMap(new(mb.Position.X, mb.Position.Y), out System.Numerics.Vector2 p))
-                    _selection.Order(CommandKind.Move, new Vector2(p.X, p.Y), Input.IsActionPressed("order_queue"));
+                {
+                    // With a building selected the right click sets its rally point there (M3-V3), as on the 3D view.
+                    if (_selection.SelectedBuilding >= 0) _selection.RallyOrder(p);
+                    else _selection.Order(CommandKind.Move, new Vector2(p.X, p.Y), Input.IsActionPressed("order_queue"));
+                }
             }
             AcceptEvent();
         }
