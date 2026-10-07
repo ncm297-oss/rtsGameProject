@@ -256,6 +256,36 @@ public class DataValidationTests
         Assert.Equal(5, DataLoader.LoadAll(dir.Path).Errors.Count);
     }
 
+    // ---------- M3-3: rules.json repair block ----------
+
+    [Theory]
+    [InlineData(null, null, "repair", "missing required field")]
+    [InlineData("rateFactor", "0", "repair.rateFactor", "must be positive")]
+    [InlineData("rateFactor", "1.5", "repair.rateFactor", "above the maximum 1")]
+    [InlineData("costFactor", "-0.25", "repair.costFactor", "must be positive")]
+    [InlineData("costFactor", "2", "repair.costFactor", "above the maximum 1")]
+    [InlineData("costFactor", null, "repair.costFactor", "missing required field")]
+    public void RepairBlock_MissingOrOutOfRange_IsOneError(string? field, string? value, string path, string message)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("common/rules.json", r =>
+        {
+            if (field == null) r.Remove("repair");
+            else if (value == null) r["repair"]!.AsObject().Remove(field);
+            else r["repair"]![field] = JsonNode.Parse(value);
+        });
+        DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
+        Assert.Equal(path, e.Path);
+        Assert.Contains(message, e.Message);
+    }
+
+    [Fact]
+    public void ShippedData_RepairFactors_MatchDocs02()
+    {
+        RulesDef r = Load(TestDataDir.Shipped).Rules;
+        Assert.Equal((0.5f, 0.25f), (r.RepairRateFactor, r.RepairCostFactor)); // 50% of the build rate, 25% of the cost
+    }
+
     // ---------- M3-1: common/resources.json ----------
 
     private const string ResourcesFile = "common/resources.json";

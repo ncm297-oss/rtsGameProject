@@ -69,7 +69,7 @@ public sealed class Simulation
         _recorder?.OnEnqueued(in command);
     }
 
-    /// <summary>Runs one tick: applies this tick's commands in (player, sequence) order, rebuilds the spatial hash, runs gather loops, starts queued orders, moves units, then bumps <see cref="TickNumber"/>.</summary>
+    /// <summary>Runs one tick: applies this tick's commands in (player, sequence) order, rebuilds the spatial hash, runs gather loops, then builders and repairers, starts queued orders, moves units, then bumps <see cref="TickNumber"/>.</summary>
     public void Tick()
     {
         World.Units.SnapshotPrevPositions();
@@ -86,6 +86,8 @@ public sealed class Simulation
 
         // Phase 4: economy (M3-2): gather loops and drop-offs; their walks start here and move in phase 9.
         EconomySystem.Run(World);
+        // M3-3: builders and repairers, after the gatherers.
+        ConstructionSystem.Run(World);
 
         // Phase 7: Idle units start their next shift-queued order.
         OrderSystem.Run(World);
@@ -151,6 +153,8 @@ public sealed class Simulation
                 h.Add(u.GatherProgress[i]);
                 h.Add(u.Cargo[i]);
                 h.Add((int)u.CargoKind[i]);
+                h.Add(u.BuildTarget[i].Index);
+                h.Add(u.BuildTarget[i].Generation);
             }
         }
         h.Add(u.FreeCount);
@@ -210,14 +214,14 @@ public sealed class Simulation
         if (u.QueueCount[i] != 0) bits |= 2u;
         int head = i * OrderConstants.QueueCapacity;
         for (int k = 0; k < OrderConstants.QueueCapacity; k++)
-            if (u.QueueKind[head + k] != CommandKind.Noop || u.QueuePosition[head + k] != Vector2.Zero) bits |= 4u << k;
+            if (u.QueueKind[head + k] != CommandKind.Noop || u.QueuePosition[head + k] != Vector2.Zero || u.QueueTypeId[head + k] != 0) bits |= 4u << k;
         if (HasEconomy(u, i)) bits |= 1u << 16;
         return bits;
     }
 
-    /// <summary>True when any gather-loop or cargo field (M3-2) of unit <paramref name="i"/> isn't default; flagged in <see cref="OrderBits"/>, then hashed.</summary>
+    /// <summary>True when any gather-loop or cargo field (M3-2) or the build target (M3-3) of unit <paramref name="i"/> isn't default; flagged in <see cref="OrderBits"/>, then hashed.</summary>
     private static bool HasEconomy(UnitStore u, int i) =>
-        u.GatherNode[i] != default || u.GatherSite[i] != Vector2.Zero || u.GatherProgress[i] != 0f || u.Cargo[i] != 0 || u.CargoKind[i] != default;
+        u.BuildTarget[i] != default || u.GatherNode[i] != default || u.GatherSite[i] != Vector2.Zero || u.GatherProgress[i] != 0f || u.Cargo[i] != 0 || u.CargoKind[i] != default;
 
     /// <summary>The queue count and every non-default queue entry of unit <paramref name="i"/>, as flagged by <see cref="OrderBits"/> (already hashed), so the stream stays unambiguous.</summary>
     private static void AddOrdersToHash(ref StateHasher h, UnitStore u, int i)
@@ -226,8 +230,9 @@ public sealed class Simulation
         int head = i * OrderConstants.QueueCapacity;
         for (int k = 0; k < OrderConstants.QueueCapacity; k++)
         {
-            if (u.QueueKind[head + k] == CommandKind.Noop && u.QueuePosition[head + k] == Vector2.Zero) continue;
-            h.Add((int)u.QueueKind[head + k]);
+            if (u.QueueKind[head + k] == CommandKind.Noop && u.QueuePosition[head + k] == Vector2.Zero && u.QueueTypeId[head + k] == 0) continue;
+            // A queued Build's type id (M3-3) rides in the high half of the kind word: zero for every other kind, so they hash as before.
+            h.Add((ulong)(uint)u.QueueKind[head + k] | ((ulong)(uint)u.QueueTypeId[head + k] << 32));
             h.Add(u.QueuePosition[head + k]);
         }
     }
@@ -248,7 +253,12 @@ public sealed class Simulation
             case CommandKind.HoldPosition:
             case CommandKind.AttackMove:
             case CommandKind.Gather:
+            case CommandKind.Build:
+            case CommandKind.Repair:
                 OrderSystem.Apply(World, in command);
+                break;
+            case CommandKind.Cancel:
+                ConstructionSystem.ApplyCancel(World, in command);
                 break;
             case CommandKind.SpawnBuilding:
                 EconomySystem.ApplySpawnBuilding(World, in command);

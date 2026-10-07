@@ -252,4 +252,102 @@ public class DeterminismTests
         }
         return (sim, Step, recorder);
     }
+
+    /// <summary>
+    /// M3-3 criterion 10: 200 marchers re-ordered every 300 ticks, 10 workers gathering for a Keep and 10 builders given a
+    /// random Build (new or joining), Cancel, Repair or Gather every 100 ticks; with <paramref name="damage"/> a random
+    /// building also takes 300 damage every 150 ticks (a test seam, so only in the twin runs, never in the replay).
+    /// </summary>
+    private static (Simulation Sim, Action<int> Step, ReplayRecorder? Recorder) ConstructionScene(ulong seed, bool damage, bool record)
+    {
+        var map = MapGenParams.Default with { Forests = 12, GoldMines = 8 };
+        var sim = new Simulation(TestSim.Config(Seed: seed, PlayerCount: 2, UnitCapacity: 232, CommandCapacity: 512) with { Map = map });
+        ReplayRecorder? recorder = record ? new ReplayRecorder(sim, checkpointInterval: 100) : null;
+        NavGrid g = sim.World.NavGrid;
+        var rng = new Determinism.SimRng(seed, 57);
+        List<int> open = FlowFieldOracle.PassableCells(g);
+        for (int k = 0; k < 200; k++) sim.Enqueue(Command.SpawnUnit(k % 2, GatherMaps.Infantry, MoveScenario.Center(g, open[rng.NextInt(0, open.Count)])));
+        sim.Tick();
+        sim.Tick();
+        var marchers = Enumerable.Range(0, 200).Select(i => MoveScenario.Handle(sim, i)).ToArray();
+        EntityHandle[] gatherers = EconomyScenario.Setup(sim, 10);
+        UnitStore u = sim.World.Units;
+        var before = (bool[])u.Alive.Clone();
+        for (int k = 0; k < 10; k++) sim.Enqueue(Command.SpawnUnit(0, GatherMaps.Laborer, u.Position[gatherers[k].Index] + new Vector2(1f, 1f)));
+        sim.Tick();
+        sim.Tick();
+        var builders = Enumerable.Range(0, u.Capacity).Where(i => u.Alive[i] && !before[i]).Select(i => MoveScenario.Handle(sim, i)).ToArray();
+        Assert.Equal(10, builders.Length);
+        int[] types = TestSim.Data.Buildings.Where(d => d.Faction == 0 && d.CostGold == 0).Select(d => d.Id).ToArray();
+        BuildingStore b = sim.World.Buildings;
+        void Step(int t)
+        {
+            if (t % 300 == 0)
+                for (int k = 0; k < 200; k++)
+                    sim.Enqueue(Command.Move(k % 2, marchers[k], MoveScenario.Center(g, open[rng.NextInt(0, open.Count)])));
+            if (damage && t % 150 == 75)
+            {
+                int k = AnyBuilding(b, ref rng);
+                if (k >= 0) b.Damage(b.HandleOf(k), 300);
+            }
+            if (t % 100 != 50) return;
+            foreach (EntityHandle w in builders)
+            {
+                Vector2 near = u.Position[w.Index] + new Vector2(rng.NextInt(-6, 7), rng.NextInt(-6, 7)) * 2f;
+                int k = AnyBuilding(b, ref rng);
+                Vector2 some = k >= 0 ? MoveScenario.Center(g, b.Cell[k]) : near;
+                switch (rng.NextInt(0, 6))
+                {
+                    case 0: case 1: sim.Enqueue(Command.Build(0, w, types[rng.NextInt(0, types.Length)], near, rng.NextInt(0, 3) == 0)); break;
+                    case 2: if (k >= 0) sim.Enqueue(Command.Build(0, w, b.TypeId[k], some)); break;
+                    case 3: sim.Enqueue(Command.Cancel(0, some)); break;
+                    case 4: sim.Enqueue(Command.Repair(0, w, some, rng.NextInt(0, 3) == 0)); break;
+                    default: sim.Enqueue(Command.Gather(0, w, near)); break;
+                }
+            }
+        }
+        return (sim, Step, recorder);
+    }
+
+    /// <summary>A random live building's slot (one draw), or -1 when there is none.</summary>
+    private static int AnyBuilding(BuildingStore b, ref Determinism.SimRng rng)
+    {
+        if (b.Count == 0) return -1;
+        int n = rng.NextInt(0, b.Count);
+        for (int k = 0; k < b.Capacity; k++)
+            if (b.Alive[k] && n-- == 0) return k;
+        return -1;
+    }
+
+    [Fact]
+    public void PlacingBuildingCancellingAndRepairing_TwinsHashEqualEveryTick_For3000Ticks_AndTheReplayRoundTrips()
+    {
+        (Simulation a, Action<int> stepA, ReplayRecorder? rec) = ConstructionScene(41, damage: false, record: true);
+        (Simulation b, Action<int> stepB, _) = ConstructionScene(41, damage: false, record: false);
+        (Simulation c, Action<int> stepC, _) = ConstructionScene(41, damage: true, record: false);
+        (Simulation d, Action<int> stepD, _) = ConstructionScene(41, damage: true, record: false);
+        int sites = 0, built = 0, repairing = 0;
+        for (int t = 0; t < 3000; t++)
+        {
+            stepA(t); stepB(t); stepC(t); stepD(t);
+            a.Tick(); b.Tick(); c.Tick(); d.Tick();
+            Assert.True(a.StateHash() == b.StateHash(), $"twins differ after tick {a.TickNumber}");
+            Assert.True(c.StateHash() == d.StateHash(), $"damaged twins differ after tick {c.TickNumber}");
+            BuildingStore cb = c.World.Buildings;
+            for (int k = 0; k < cb.Capacity; k++)
+            {
+                if (!cb.Alive[k]) continue;
+                if (cb.UnderConstruction[k]) sites++; else built++;
+            }
+            for (int i = 0; i < c.World.Units.Capacity; i++)
+                if (c.World.Units.Alive[i] && c.World.Units.State[i] == UnitState.Building && !cb.UnderConstruction[c.World.Units.BuildTarget[i].Index]) repairing++;
+        }
+        Assert.True(sites > 0 && built > 0 && repairing > 0, $"site-ticks {sites}, building-ticks {built}, repair-ticks {repairing}");
+
+        Replay recorded = rec!.ToReplay();
+        Assert.Equal(ReplayError.None, ReplayFormat.TryRead(ReplayFormat.Write(recorded), out Replay? parsed));
+        ReplayResult played = ReplayPlayer.Run(parsed!, TestSim.Data);
+        Assert.True(played.Ok, played.ToString());
+        Assert.Equal(recorded.TickCount, played.TicksRun);
+    }
 }

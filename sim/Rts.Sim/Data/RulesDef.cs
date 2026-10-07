@@ -33,4 +33,8 @@ public sealed class RulesDef
     public int TreeWood { get; init; }
     /// <summary>Meters a worker searches for a new node of the same type when its node is depleted.</summary>
     public float NodeSearchRadius { get; init; }
+    /// <summary>Repair speed as a fraction of the one-builder build rate (docs/02 "Buildings": 50%), above 0 and at most 1.</summary>
+    public float RepairRateFactor { get; init; }
+    /// <summary>Repair cost as a fraction of the building's cost for its full hit points, scaled by damage (docs/02: 25%), above 0 and at most 1.</summary>
+    public float RepairCostFactor { get; init; }
 }

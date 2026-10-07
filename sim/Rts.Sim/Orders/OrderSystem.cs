@@ -9,8 +9,8 @@ using Rts.Sim.Pathfinding;
 namespace Rts.Sim.Orders;
 
 /// <summary>
-/// Unit orders (docs/03 "Orders and unit states"): applies Move, AttackMove, Stop, HoldPosition and
-/// Gather commands in phase 1, and in phase 7 starts the next shift-queued order of every Idle unit.
+/// Unit orders (docs/03 "Orders and unit states"): applies Move, AttackMove, Stop, HoldPosition,
+/// Gather, Build and Repair commands in phase 1, and in phase 7 starts the next shift-queued order of every Idle unit.
 /// </summary>
 /// <remarks>
 /// An unqueued order replaces the unit's queue and clears Hold; a queued one is appended. A popped
@@ -30,8 +30,9 @@ public static class OrderSystem
             int head = i * OrderConstants.QueueCapacity;
             CommandKind kind = u.QueueKind[head];
             Vector2 target = u.QueuePosition[head];
+            int typeId = u.QueueTypeId[head];
             Pop(u, i);
-            Execute(world, i, kind, target);
+            Execute(world, i, kind, target, typeId);
         }
     }
 
@@ -41,14 +42,26 @@ public static class OrderSystem
         UnitStore u = world.Units;
         if (!u.IsAlive(command.Unit) || u.Owner[command.Unit.Index] != command.Player) return;
         int i = command.Unit.Index;
-        bool positional = command.Kind is CommandKind.Move or CommandKind.AttackMove or CommandKind.Gather;
+        bool positional = command.Kind is CommandKind.Move or CommandKind.AttackMove or CommandKind.Gather or CommandKind.Build or CommandKind.Repair;
         // A target off the map is dropped whether queued or not, so it never takes a queue entry.
         if (positional && !world.NavGrid.WorldToCell(command.Position, out _, out _)) return;
-        // Only workers gather (M3-2); a Gather to anyone else is dropped, queued or not.
-        if (command.Kind == CommandKind.Gather && !EconomySystem.IsWorker(world, i)) return;
+        // Only workers gather, build and repair (M3-2, M3-3); such an order to anyone else is dropped, queued or not.
+        bool workerOrder = command.Kind is CommandKind.Gather or CommandKind.Build or CommandKind.Repair;
+        if (workerOrder && !EconomySystem.IsWorker(world, i)) return;
         if (command.IsQueued)
         {
-            Append(u, i, command.Kind, positional ? command.Position : Vector2.Zero);
+            Append(u, i, command.Kind, positional ? command.Position : Vector2.Zero, command.Kind == CommandKind.Build ? command.TypeId : 0);
+            return;
+        }
+        // A Build or Repair with nothing to build or repair drops the whole command: queue and Hold stay.
+        if (command.Kind == CommandKind.Build)
+        {
+            ConstructionSystem.StartBuild(world, i, command.TypeId, command.Position, replaceQueue: true);
+            return;
+        }
+        if (command.Kind == CommandKind.Repair)
+        {
+            ConstructionSystem.StartRepair(world, i, command.Position, replaceQueue: true);
             return;
         }
         if (command.Kind == CommandKind.Gather)
@@ -70,11 +83,11 @@ public static class OrderSystem
             Move(world, i, cell, goal);
             return;
         }
-        Execute(world, i, command.Kind, Vector2.Zero);
+        Execute(world, i, command.Kind, Vector2.Zero, 0);
     }
 
     /// <summary>Starts an order now: the unqueued semantics, minus clearing the queue for Move and AttackMove.</summary>
-    private static void Execute(World world, int i, CommandKind kind, Vector2 target)
+    private static void Execute(World world, int i, CommandKind kind, Vector2 target, int typeId)
     {
         UnitStore u = world.Units;
         switch (kind)
@@ -91,6 +104,12 @@ public static class OrderSystem
                 int node = EconomySystem.ResolveNode(world, target);
                 if (node >= 0) EconomySystem.StartGather(world, i, node);
                 break;
+            case CommandKind.Build: // popped: the rest of the queue stays, as for Gather
+                ConstructionSystem.StartBuild(world, i, typeId, target, replaceQueue: false);
+                break;
+            case CommandKind.Repair:
+                ConstructionSystem.StartRepair(world, i, target, replaceQueue: false);
+                break;
             case CommandKind.Stop:
                 u.ClearQueue(i);
                 Stop(u, i);
@@ -104,13 +123,14 @@ public static class OrderSystem
         }
     }
 
-    private static void Append(UnitStore u, int i, CommandKind kind, Vector2 target)
+    private static void Append(UnitStore u, int i, CommandKind kind, Vector2 target, int typeId)
     {
         int n = u.QueueCount[i];
         if (n >= OrderConstants.QueueCapacity) return; // full: dropped silently
         int at = i * OrderConstants.QueueCapacity + n;
         u.QueueKind[at] = kind;
         u.QueuePosition[at] = target;
+        u.QueueTypeId[at] = typeId;
         u.QueueCount[i] = n + 1;
     }
 
@@ -123,17 +143,20 @@ public static class OrderSystem
         {
             u.QueueKind[head + k - 1] = u.QueueKind[head + k];
             u.QueuePosition[head + k - 1] = u.QueuePosition[head + k];
+            u.QueueTypeId[head + k - 1] = u.QueueTypeId[head + k];
         }
         u.QueueKind[head + n - 1] = default;
         u.QueuePosition[head + n - 1] = default;
+        u.QueueTypeId[head + n - 1] = default;
         u.QueueCount[i] = n - 1;
     }
 
-    /// <summary>Any other order ends a gather loop (cargo kept); a worker standing on it counts as Idle for the order's same-target rule.</summary>
+    /// <summary>Any other order ends a gather loop (cargo kept) or a build / repair order; a worker standing on one counts as Idle for the order's same-target rule.</summary>
     private static void EndLoop(UnitStore u, int i)
     {
         u.GatherNode[i] = default;
-        if (u.State[i] is UnitState.Gathering or UnitState.Returning) u.State[i] = UnitState.Idle;
+        u.BuildTarget[i] = default;
+        if (u.State[i] is UnitState.Gathering or UnitState.Returning or UnitState.Building) u.State[i] = UnitState.Idle;
     }
 
     /// <summary>Stands the unit still with no goal: Idle, shovable, nothing to walk back to, no gather loop (cargo kept).</summary>

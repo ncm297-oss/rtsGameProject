@@ -6,7 +6,7 @@
 | Status | open |
 | Found | 2026-10-06-1503, task M3-2 |
 | System | data loader, CLI docs, studio budget |
-| Fixed by | |
+| Fixed by | item 1: b4b423c (M3-3), `DataLoader.BuildBuildings` reports a missing `cost` once; QA `BuildingDataQaTests.MissingCostObject_IsOneError_LikeAMissingFootprint` un-skipped. Items 2 (budget note, waived by the Producer) and 3 (docs sentence) still open |
 
 ## Repro / Actual
 1. **Missing `cost` reports three errors.** Remove `cost` from the first building of
