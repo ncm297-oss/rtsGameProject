@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-06-1744, task M3-2b |
 | System | movement build pass / flow fields (perf) |
-| Fixed by | |
+| Fixed by | eec51e2 (M3-2b fix round 1), verified 2026-10-06-1744 re-check |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~GridChangeMovementTests.OneTreeFallsEveryTick_AverageTick_Perf" --logger "console;verbosity=detailed"`
@@ -38,3 +38,22 @@ build a tick, and nothing asserts the 0.5 ms target.
   builds (BUG-0023).
 - Also noted (no separate bug): `DeterminismTests.ChoppingMarchingAndBuildingDrops_...` fells only 2 trees in
   3,000 ticks and asserts `felled >= 2`, so its replay round trip covers few opening changes.
+
+## Verification (QA re-check, 2026-10-06-1744, eec51e2)
+- Fix: `CellQueue` is now storage for a three-bucket ring with lazy deletion, `FlowField.Build` drives it
+  inline with the eight directions unrolled and directions picked at relax time, `ComputeSteps` slides a
+  3 x 3 window, `NavGrid.Flags` returns the array. The Perf row now asserts an absolute `< 0.5 ms`.
+- Perf row run alone, six times: 0.399 / 0.394 / 0.396 / 0.406 ms (calm 0.014-0.015 ms; 2 builds + step pass
+  0.350-0.364 ms, step pass 0.045-0.048 ms). A third build a tick (about 0.15 ms) would take it over 0.5 ms.
+- Run while the full non-Perf suite was running on the same machine: 0.86 / 1.18 / 0.88 ms, FAIL (calm doubled
+  too). That's CPU contention, and Perf rows run alone, but the 20% headroom is thinner than most Perf rows have.
+- Results are unchanged: `QA/FlowFieldBuildEquivalenceQaTests` compares the new build bit for bit (cost bits,
+  direction, resolved target, step masks) against a verbatim copy of the a80c143 build
+  (`QA/LegacyFlowFieldA80c143.cs`) on about 44,000 fields over 17 grid sizes from 1x1 to 257x131, random
+  plateaus, blocked targets, pockets walled off by placed nodes and 1-4 sided buildings, node churn, a reused
+  field and queue, a 1024 x 1024 open map (costs up to 1,444) and a serpentine. All identical. A tie-break
+  mutation in the reference (`<` to `<=`) fails 11 of 19 rows.
+- Trajectories: per-tick unit digests and chained StateHash identical at c7a1d1a and eec51e2 for
+  CrossMapScenario seeds 1-8 (1,500 ticks), MoreGoalsThanCacheSlots and ToFourPoints (500) seeds 1-3, the
+  32-group felling scene (600 ticks, 262 builds) and the grid-change fuzz seeds 1-3 (2,500 ticks, 2,646-2,844
+  builds). The replay golden isn't touched by eec51e2.

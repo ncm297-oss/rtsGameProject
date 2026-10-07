@@ -112,7 +112,7 @@ bugs outrank new features.
 | [BUG-0079](BUG-0079-m3-2-nits.md) | S4 | open | M3-2 nits: missing cost is three errors, tests over budget, --workers 0 wording |
 | [BUG-0080](BUG-0080-back-to-back-closing-changes-starve-goal-groups.md) | S3 | open | A closing change on every tick starves all but 2 goal groups for as long as it lasts (docs/03's ceil(groups / 2) bound holds only for spaced closings) |
 | [BUG-0081](BUG-0081-stale-usable-fields-cannot-be-rebuilt-at-load.md) | S3 | open | Usable-but-stale flow fields can't be rebuilt from their keys at load (docs/03's save/load plan, M6) |
-| [BUG-0082](BUG-0082-m3-2b-felling-tick-over-criterion.md) | S2 | open | With a tree felled every tick the 32-group scene averages 0.81 ms a tick, over M3-2b's 0.5 ms criterion; the perf row only bounds it relatively |
+| [BUG-0082](BUG-0082-m3-2b-felling-tick-over-criterion.md) | S2 | fixed | With a tree felled every tick the 32-group scene averages 0.81 ms a tick, over M3-2b's 0.5 ms criterion; the perf row only bounds it relatively |
 | [BUG-0083](BUG-0083-debug-overlay-label-allocates-per-frame-docs-claim-zero.md) | S3 | open | Overlay-on label line allocates ~600 B per frame; docs/03 "Debug tooling" claims 0 bytes per frame on and off |
 | [BUG-0084](BUG-0084-m2-5-debug-overlay-nits.md) | S4 | open | M2-5 nits: cliff tint reads olive, arrow tips dip up to 9 cm into steep ramps, CS8602 in DebugOverlayTest, blind allocation probe |
 | [BUG-0085](BUG-0085-default-match-spawns-army-inside-a-forest.md) | S3 | open | The default match (seed 1) spawns player 0's start army inside a forest |
