@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-07-1131, task M3-5 |
 | System | data loader (techs.json), tech bonus |
-| Fixed by | |
+| Fixed by | 8928418 (M3-6): empty `units` / `tags` is one error; `QA/TechDataQaTests.AnEmptyUnitsOrTagsFilter_IsRejected_NotReadAsEveryUnit` un-skipped |
 
 ## Repro
 1. In `game/data/factions/malazan/techs.json`, set Moranth Supply's first effect to

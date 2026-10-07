@@ -1272,7 +1272,7 @@ repair"; the ghost is view work that calls `World.CanPlace`). Closes BUG-0078 by
 - **Placement rule.** `World.CanPlace(player, typeId, anchorCell, out PlacementError reason)`: public, read-only,
   allocation-free, and the one rule `Build` applies. `reason` is the first rule broken, in order: `UnknownType`;
   `WrongFaction` (player p plays faction `p mod factions`, `World.FactionOf`, until a lobby picks them, M6);
-  `OffMap`; `Blocked` (a footprint cell blocked: cliff, border, node, building; or a ramp, or another level than
+  `Requires` (M3-6, see "Implementation (M3-6)"); `OffMap`; `Blocked` (a footprint cell blocked: cliff, border, node, building; or a ramp, or another level than
   the anchor: `BuildingStore.Fits`); `SealsGround` (below); `UnitInTheWay` (an enemy unit, or an own unit holding
   position, has its center in the footprint; own units that aren't holding are pushed out instead); `CannotAfford`;
   `StoreFull`; else `None`. The "explored by the player" rule waits for fog (M4). The `Build` apply path needs only
@@ -1370,7 +1370,7 @@ points, population and cap, refunds on cancel"; the HUD's production card and ra
   `UnitsTrainedAt(buildingType)` list the unit ids each building type trains, ascending (an `ImmutableArray<int>` per
   building type, built at load; no dictionary). `requires` stays a string list: in M3-4 a unit with any requirement
   (the Sapper, the Zealot: `["age_ii"]`) is not trainable (`TrainError.LockedByRequirement`) until techs exist
-  (M3-5 / M3-6). `ContentHash` covers `TrainedAtTypeId`.
+  (M3-5 / M3-6; since M3-6 it is locked only while the requirement is unmet). `ContentHash` covers `TrainedAtTypeId`.
 - **Commands** (phase 1; dropped, never thrown, for anything below that fails):
   - `Command.Train(player, building, unitTypeId)` (kind 11; `Position` a point of the building, `TypeId` the unit
     type): the player's own **finished** building covering `Position` queues the unit and the full cost is paid now.
@@ -1431,7 +1431,7 @@ points, population and cap, refunds on cancel"; the HUD's production card and ra
   `ProductionPerfTests`): 500 marchers + 50 gatherers + 20 Town Halls training non-stop average 0.41 ms a tick over
   2,000 ticks; a waiting spawn on a full 8 x 8 plateau of a 420 x 420 map costs 0.005 ms (3.0 ms without the level-box
   cap). CLI: `run --workers` prints `player P gold G wood W pop U/C` (pop in whole units, `.5` for a half).
-- **Not yet:** techs, Age II and Forge upgrades (M3-5, below), `requires` resolution (M3-6), AI build orders (M5), the
+- **Not yet:** techs, Age II and Forge upgrades (M3-5, below), `requires` resolution (M3-6, below), AI build orders (M5), the
   production card, queue and rally visuals (view M3-V3), rally on a building, events for views.
 
 ### Implementation (M3-5)
@@ -1464,7 +1464,8 @@ bonuses are a read-only query that M4 combat will apply. The research button and
   check, like the per-faction slot check and the effects' unit and tag references, runs only when the files it points
   into were read whole (no broken buildings file, every unit id accepted, every techs file read), so a broken file is
   one error. Whether a requirement is met is **M3-6** (Age II's "any two of" rule too: its `requires` ships as `[]`);
-  until then `CanResearch` does not look at `requires` and `CanTrain`'s `LockedByRequirement` stays "has any".
+  until then `CanResearch` does not look at `requires` and `CanTrain`'s `LockedByRequirement` stays "has any". (Since
+  M3-6 both gate on the resolved requirements; see "Implementation (M3-6)".)
 - **Commands** (phase 1; dropped, never thrown, when a rule fails):
   - `Command.Research(player, building, techId)` (kind 15; `Position` a point of the building, `TypeId` the tech; not a
     unit order, so the queued flag is refused): the player's own **finished** building there queues the tech and its
@@ -1495,8 +1496,72 @@ bonuses are a read-only query that M4 combat will apply. The research button and
   queued". Measured (Debug, this PC, `ResearchPerfTests`): the M3-4 criterion-10 scene plus 10 Forges researching
   non-stop averages 0.42 ms a tick over 2,000 ticks; `TechBonus` for 500 units x 2 stats costs 0.007 ms. The applies,
   completion and queries allocate nothing (`AllocationTests`). CLI: `run --workers` prints `... pop U/C age A`.
-- **Not yet:** `requires` gating (M3-6), combat and ability use of the bonuses (M4), AI research (M5), the research
-  button / card (view M3-V3), events for views.
+- **Not yet:** combat and ability use of the bonuses (M4), AI research (M5), the research button / card (view M3-V3),
+  events for views. (`requires` gating and Age II's any-two-halls rule: M3-6, below.)
+
+### Implementation (M3-6)
+
+`requires` is real: a unit can't be trained, a building can't be placed and a tech can't be researched until its
+requirements are met, with Age II's "any two of Infantry Hall / Ranged Hall / Shock Hall / Forge" (docs/02 "Ages") read
+from data (the M3 criterion "Age II research and unlocks"). The view's greying and reason text are M3-V3; it reads the
+three gates below.
+
+- **Resolution at load.** Every `requires` entry of a unit, building or tech resolves to a tech id or a building *type*
+  id: `RequiresTechs` / `RequiresBuildings` on `UnitDef`, `BuildingDef` and `TechDef`, each an ascending,
+  de-duplicated `ImmutableArray<int>` (the strings stay in `Requires` for tools). A tech requirement is met once the
+  player has researched it; a building requirement by one of the player's own **finished** buildings of that type (a
+  site doesn't count, nor an enemy's). `ContentHash` covers the resolved arrays as well as the strings.
+- **`requiresAnyOf`** (optional, techs only): `{ "count": n, "of": [...] }`. Each `of` entry is a building **slot** id,
+  so a common tech works for every faction, or, in a faction's own techs file, one of its building ids, which counts as
+  that building's slot. It resolves to `TechDef.RequiresAnyOfSlots` (ascending `BuildingSlot` values) and
+  `RequiresAnyOfCount`; it is met when at least `count` of the distinct listed slots hold an own finished building (two
+  Barracks fill one slot). Validation, one error at the field each: `count` missing or outside 1 to the number of `of`
+  entries; `of` missing; an entry that is neither a slot id nor (in a faction file) an own-faction building id; an entry
+  naming a slot already named. Shipped only on `age_ii`: `{ "count": 2, "of": ["infantry_hall", "ranged_hall",
+  "shock_hall", "forge"] }`; every other tech has none.
+- **Gates** (one rule each, read-only and allocation-free, shared by the command's apply step and the view;
+  `Economy/Requirements`):
+  - `World.CanTrain`: `TrainError.LockedByRequirement` (after `NotTrainedHere`, before `QueueFull`) when a required tech
+    is not researched or a required building type has no own finished instance.
+  - `World.CanPlace`: new `PlacementError.Requires`, right after `WrongFaction` and before `OffMap` (cheap, so before the
+    map rules and the seal flood; the `Build` apply path checks it in the same place). Full order: `UnknownType`,
+    `WrongFaction`, `Requires`, `OffMap`, `Blocked`, `SealsGround`, `UnitInTheWay`, `CannotAfford`, `StoreFull`. The
+    enum's numbers moved up by one from `OffMap` on; the view keys its text by member name (`requires`).
+  - `World.CanResearch`: new `ResearchError.Requires`, after `NotResearchedHere` and before `AlreadyResearched`, for an
+    unmet `requires` or `requiresAnyOf`. Full order: `NoBuilding`, `UnknownTech`, `WrongFaction`, `NotResearchedHere`,
+    `Requires`, `AlreadyResearched`, `AlreadyQueued`, `QueueFull`, `CannotAfford`.
+  A refused command is dropped with nothing changed (totals, queues, store). The dev command `SpawnBuilding` ignores
+  requirements, as it ignores cost and faction.
+- **Queue-time rule.** Requirements are checked when the command applies (a queued `Build` when it starts, phase 7),
+  never again at completion: a unit or tech already queued survives the loss of what unlocked it (Age of Empires'
+  rule: a Barracks destroyed mid-training doesn't cancel the item; Age II keeps researching if a hall falls). Age II
+  completing in phase 3 of tick T opens the gates for commands applying in phase 1 of tick T + 1; it unlocks nothing
+  retroactively (a command already refused stays refused).
+- **Finished counts.** `PlayerLedger` keeps each player's finished buildings per type and per slot, updated by
+  `BuildingStore` when a building spawns finished, completes or is freed (a site never counts). They are derived from
+  the store, so not hashed (like `HalfPopCap`); `RequirementFuzzTests` recounts them against the store every tick, and
+  `StateHashTests` shows changing them doesn't move the hash. The gates read them in O(1) per requirement.
+- **Loader nits folded in.** BUG-0098: an `appliesTo.units` or `.tags` set to `[]` is one error at the list (it used to
+  read as "no filter", every unit). BUG-0099: a `requires` cycle among techs and buildings (a self-requirement too) is
+  one error at the entry that closes it (an iterative depth-first search in id order, techs before buildings, entries in
+  file order); a tech id equal to a building id is one error at the tech's id. BUG-0008: every data file gets a
+  `Utf8JsonReader` pre-pass (linear in the file, load time only) that reports a key repeated in one object, once, at its
+  path (`units[2].attack.bonusVs.heavy`); a file that isn't well-formed JSON reports only the parser's error; a UTF-8
+  byte order mark is still accepted. BUG-0010: each faction's `units.json` fills the seven unit slots and its
+  `buildings.json` the ten building slots, one entry each: no entries is one error at the list, a second entry in a
+  slot one error at its `slot`, an empty slot one error at the list; skipped when the file already has an error. A
+  buildings file failing it counts as broken, so the checks into it (`trainedAt`, `researchedAt`, `requires`) are
+  skipped and it is not reported again through them.
+- **Hash and replays.** No new sim state is hashed: the tech flags and queues were already. The golden was regenerated
+  for the data hash only (`age_ii.requiresAnyOf` and the resolved arrays in `ContentHash`); its checkpoints are
+  byte-identical. Replays stay format 3.
+- **Cost.** Measured (Debug, this PC, `RequirementPerfTests`): the M3-5 research scene with every command through its
+  gate (the halls' Trains, the Forges' Research, plus 20 locked Trains, 10 locked Researches and 10 refused Builds a
+  tick) averages 0.42 ms a tick over 2,000; 5,000 locked Train / Build / Research commands applying in one tick take
+  0.73 ms. The gates and the locked applies allocate nothing (`AllocationTests`).
+- **Not yet:** the view's greying and reason text (M3-V3), AI use (M5), combat use of the bonuses (M4); `requiresAnyOf`
+  edges are not part of the cycle check (an any-of that its own members require could deadlock; none ships).
+
 
 ## Abilities, statuses, zones
 
@@ -1604,8 +1669,8 @@ factions) arrives with the milestone that consumes it.
 | `resources.json` | `{ "resources": [ ... ] }`, each `{id, displayName, description, resource, footprint {width, height}}`: `resource` is `gold` or `wood`, footprint sides are cells, 1-4 (`DataLimits.MaxFootprint`). Amounts are not here: a tree holds `rules.json` `treeWood`, a mine `startMines.gold` (M3-1, see "Economy implementation") |
 | `rules.json` | docs/02 Economy table: `startingGold`, `startingWood`, `startingWorkers`, `popCap`, `workerCarry`, `gatherRate {gold, wood}` (per second), `startMines` / `expansionMines {count, gold}`, `treeWood`, `nodeSearchRadius`. Pop provided by buildings comes with `buildings.json` (M3); the Age II cost with `techs.json` (M3-5) |
 | `faction.json` | `id` (must equal the folder name), `displayName`, `description`, `bonus {displayName, description}`, `resources {gold, wood: {displayName}}`, `palette {primary, secondary, accent}` as `#RRGGBB` |
-| `buildings.json` | `{ "buildings": [ ... ] }`, each `{id, displayName, description, slot, footprint {width, height}, hp, armor, cost {gold, wood}, buildTime, popProvided, dropOff}`: `slot` is one of the ten template slots (`DataLimits.BuildingSlotIds`), footprint sides 1-4 cells, `buildTime` in seconds (to ticks), `popProvided` a multiple of 0.5 (to half-pop), `dropOff` a required bool, `requires` an optional list of tech / building ids (M3-5; checked to exist, gating is M3-6; shipped `[]`). Ids unique across factions (M3-2, see "Economy implementation") |
-| `techs.json` | `{ "techs": [ ... ] }` in `common/` (shared by every faction) and in each faction folder (its own), each `{id, displayName, description, researchedAt, cost {gold, wood}, researchTime, requires?, effects: [{stat, amount, appliesTo {attackType?, tags?, units?, siege?}}]}`: `researchedAt` is a building slot id (a common tech resolves to each faction's building of it; a faction without one is an error), `researchTime` in seconds (to ticks), `requires` tech / building ids (checked to exist, gating is M3-6), `effects` may be empty. `stat` is one of `attack`, `armor`, `range`, `hp`, `abilityCooldown` (`DataLimits.TechStatIds`); `amount` is non-zero, whole for attack / armor / hp, meters for range, seconds for ability cooldown (to ticks, negative shortens it). `appliesTo` is required (`{}` = every unit); each filter it sets must match: `attackType` a damage type, `tags` any one of the unit's tags (each must be a tag some unit has), `units` unit ids (a faction tech's must be its own), `siege` true / false for the `siege` slot. Tech ids are unique across all techs files; `DataLimits.AgeTechIds` (`age_ii`) must be a common tech (M3-5, see "Implementation (M3-5)") |
+| `buildings.json` | `{ "buildings": [ ... ] }`, each `{id, displayName, description, slot, footprint {width, height}, hp, armor, cost {gold, wood}, buildTime, popProvided, dropOff}`: `slot` is one of the ten template slots (`DataLimits.BuildingSlotIds`), footprint sides 1-4 cells, `buildTime` in seconds (to ticks), `popProvided` a multiple of 0.5 (to half-pop), `dropOff` a required bool, `requires` an optional list of tech / building ids (M3-5; resolved and gating placement since M3-6). Ids unique across factions (M3-2, see "Economy implementation"); exactly one building per slot per faction (M3-6, BUG-0010) |
+| `techs.json` | `{ "techs": [ ... ] }` in `common/` (shared by every faction) and in each faction folder (its own), each `{id, displayName, description, researchedAt, cost {gold, wood}, researchTime, requires?, requiresAnyOf?, effects: [{stat, amount, appliesTo {attackType?, tags?, units?, siege?}}]}`: `researchedAt` is a building slot id (a common tech resolves to each faction's building of it; a faction without one is an error), `researchTime` in seconds (to ticks), `requires` tech / building ids (resolved and gating research since M3-6), `requiresAnyOf` `{count, of: [slot ids, or in a faction file its own building ids]}`: met when `count` of the distinct listed slots hold an own finished building (M3-6; shipped on `age_ii` only), `effects` may be empty. `stat` is one of `attack`, `armor`, `range`, `hp`, `abilityCooldown` (`DataLimits.TechStatIds`); `amount` is non-zero, whole for attack / armor / hp, meters for range, seconds for ability cooldown (to ticks, negative shortens it). `appliesTo` is required (`{}` = every unit); each filter it sets must match: `attackType` a damage type, `tags` any one of the unit's tags (each must be a tag some unit has), `units` unit ids (a faction tech's must be its own), `siege` true / false for the `siege` slot; a `tags` or `units` list set to `[]` is an error (M3-6, BUG-0098). Tech ids are unique across all techs files and may not equal a building id (M3-6); `DataLimits.AgeTechIds` (`age_ii`) must be a common tech (M3-5, see "Implementation (M3-5)") |
 | `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge) |
 
 Validation rules: ids are `snake_case` and unique (a unit id is unique across all factions);
@@ -1615,7 +1680,8 @@ positive; `radius` is within 0.4-1.0 m; `pop` is a multiple of 0.5; every number
 against an upper bound before it is narrowed (`DataLimits`: integers at most 1,000,000, decimals at
 most 1,000,000, durations at most 3600 s), so nothing overflows to Infinity or a wrapped int
 (BUG-0007); every `requires` and `tags` entry is a `snake_case` id (BUG-0009); unknown JSON fields are errors
-(a typo must not silently fall back to a default). The only literals in C# are these schema limits,
+(a typo must not silently fall back to a default), and so is a key repeated in one object (M3-6, BUG-0008); each
+faction fills the seven unit slots and the ten building slots once each (M3-6, BUG-0010). The only literals in C# are these schema limits,
 in `DataLimits`.
 
 Conversions at load: durations (`cooldown`, `windup`, `trainTime`) become ticks,
@@ -1628,8 +1694,9 @@ search, for load time, tests, and tooling only (`FindResource` too, since M3-1).
 
 `trainedAt` resolves at load (M3-4) to `UnitDef.TrainedAtTypeId`, an own-faction building type (one error at
 `units[i].trainedAt` otherwise), and `GameData.UnitsTrainedAt(buildingType)` lists each building's units.
-`requires` (units, buildings, techs) is checked at load (M3-5: every entry names a tech or building id) but stays a
-string list: whether it is met is M3-6 (until then a unit with any requirement can't be trained). Not resolved yet
+`requires` (units, buildings, techs) resolves at load (M3-6) to `RequiresTechs` / `RequiresBuildings` (tech ids and
+building type ids, ascending; the strings are kept): one error at an entry naming neither, one at the entry closing a
+`requires` cycle. The gates `CanTrain` / `CanPlace` / `CanResearch` check them (see "Implementation (M3-6)"). Not resolved yet
 (kept as plain strings): `model` (M2/M6 asset pipeline) and `projectile`
 (M4 combat). Unit passives, abilities, detection, and faction modifiers (e.g. Whirlwind's gather
 bonus) are also not in the M1 schema; they arrive with `abilities.json` / `statuses.json` and the

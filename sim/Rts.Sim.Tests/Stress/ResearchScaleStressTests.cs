@@ -38,6 +38,8 @@ public class ResearchScaleStressTests
                 (forge ? forges : halls).Add(k);
             }
         Give(sim, 0, 1_000_000, 1_000_000);
+        // M3-6: with Age II the faction upgrade opens; the level-2 upgrades still need their level 1 researched.
+        w.Techs.Set(0, AgeII, true);
         // Fill every hall's queue with units (the cap stops them: nothing starts beyond the first few).
         foreach (int k in halls)
             for (int q = 0; q < 5; q++) sim.Enqueue(Command.Train(0, In(sim, k), Laborer));
@@ -62,8 +64,9 @@ public class ResearchScaleStressTests
                     Assert.True(seen.Add(b.QueueTypeAt(k, q)), $"{w.Data.Techs[b.QueueTypeAt(k, q)].Key} queued twice");
                 }
         _out.WriteLine($"5,000 Research commands, 64 buildings ({halls.Count} halls with full queues): {queuedTechs} accepted, tick {ms:F2} ms");
-        // Age II can't fit a full hall queue; the six Forge upgrades and Moranth Supply go to Forges.
-        Assert.Equal(7, queuedTechs);
+        // Age II is researched (and couldn't fit a full hall queue); the three level-1 upgrades and Moranth Supply go to
+        // Forges; the level-2 upgrades are refused (Requires: level 1 not researched yet, M3-6).
+        Assert.Equal(4, queuedTechs);
         Assert.DoesNotContain(Dryjhna, seen);
     }
 }

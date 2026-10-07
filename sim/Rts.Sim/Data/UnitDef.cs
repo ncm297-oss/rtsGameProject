@@ -50,8 +50,14 @@ public sealed class UnitDef
     /// <summary>Building type id (index into <see cref="GameData.Buildings"/>) of <see cref="TrainedAt"/>, resolved at load (M3-4): an own-faction building; -1 in hand-built data.</summary>
     /// <remarks>Set once by the loader after the buildings are read; never written afterwards.</remarks>
     public int TrainedAtTypeId { get; internal set; } = -1;
-    /// <summary>Building / tech ids required to train it: each names one (checked at load, M3-5); whether they are met is M3-6.</summary>
+    /// <summary>Building / tech ids required to train it, as written: each names one (checked at load, M3-5). Kept for tools; the sim reads <see cref="RequiresTechs"/> / <see cref="RequiresBuildings"/>.</summary>
     public required ImmutableArray<string> Requires { get; init; }
+    /// <summary><see cref="Requires"/>' tech ids, resolved at load (M3-6), ascending: each must be researched to queue the unit.</summary>
+    /// <remarks>Set once by the loader; never written afterwards. Empty in hand-built data.</remarks>
+    public ImmutableArray<int> RequiresTechs { get; internal set; } = ImmutableArray<int>.Empty;
+    /// <summary><see cref="Requires"/>' building type ids, resolved at load (M3-6), ascending: the player needs an own finished building of each type.</summary>
+    /// <remarks>Set once by the loader; never written afterwards. Empty in hand-built data.</remarks>
+    public ImmutableArray<int> RequiresBuildings { get; internal set; } = ImmutableArray<int>.Empty;
     /// <summary>Free-form tags used by bonuses and targeting (e.g. <c>infantry</c>).</summary>
     public required ImmutableArray<string> Tags { get; init; }
 }

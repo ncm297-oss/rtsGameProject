@@ -46,9 +46,9 @@ bugs outrank new features.
 | [BUG-0005](BUG-0005-command-sort-quadratic-under-flood.md) | S3 | open | CommandQueue insertion sort is O(n^2); 10k interleaved commands stall ~107 ms |
 | [BUG-0006](BUG-0006-spawn-accepts-non-finite-position.md) | S4 | fixed | SpawnUnit accepts NaN/Infinity positions into sim state |
 | [BUG-0007](BUG-0007-loader-accepts-huge-numbers-as-infinity-or-overflow.md) | S3 | fixed | Data loader turns huge numbers into float Infinity or a negative int instead of rejecting them |
-| [BUG-0008](BUG-0008-loader-duplicate-json-keys-last-wins.md) | S3 | open | Duplicate JSON keys are silently resolved last-wins |
+| [BUG-0008](BUG-0008-loader-duplicate-json-keys-last-wins.md) | S3 | fixed | Duplicate JSON keys are silently resolved last-wins |
 | [BUG-0009](BUG-0009-loader-null-entries-in-requires-tags.md) | S4 | fixed | Null or blank entries in `requires` / `tags` are copied into GameData |
-| [BUG-0010](BUG-0010-loader-does-not-check-faction-slots.md) | S4 | open | A faction with no units, or a missing or doubled template slot, loads clean |
+| [BUG-0010](BUG-0010-loader-does-not-check-faction-slots.md) | S4 | fixed | A faction with no units, or a missing or doubled template slot, loads clean |
 | [BUG-0011](BUG-0011-ramp-sides-walkable-steeper-than-30-degrees.md) | S3 | fixed | Ramp sides are walkable: a unit can step 1.6-3.2 m sideways off a ramp (39-58 degrees) |
 | [BUG-0012](BUG-0012-mapgen-int-overflow-passes-validate-then-crashes.md) | S3 | fixed | MapGenParams.Validate and the Heightmap ctor overflow on huge ints; Generate then crashes |
 | [BUG-0013](BUG-0013-mapgen-worst-case-params-take-tens-of-seconds.md) | S4 | fixed | Map generation with params Validate allows can take ~35 s |
@@ -135,10 +135,13 @@ bugs outrank new features.
 | [BUG-0097](BUG-0097-spawn-and-push-out-cross-to-another-plateau-of-the-same-level.md) | S3 | open | A spawn (or push-out) on a full plateau lands on another plateau of the same level, 30+ m away |
 | [BUG-0106](BUG-0106-m3-v1-tree-gather-bound-unmet-from-start.md) | S3 | wontfix (criterion reworded, 0925) | Right-click on the nearest tree from the start: workers reach Gathering at tick 123, not within 60 (criterion 3 wording vs walk time) |
 | [BUG-0107](BUG-0107-m3-v1-nits.md) | S4 | open | M3-V1 nits: Malazan site vs finished colour, tiny wood cube at 60 m, minimap resource redraw on every building change |
-| [BUG-0098](BUG-0098-m3-5-empty-tech-filter-matches-every-unit.md) | S3 | open | An empty `units` or `tags` filter in a tech effect silently matches every unit (the other faction's too) |
-| [BUG-0099](BUG-0099-m3-5-tech-data-nits.md) | S4 | open | M3-5 tech data nits: `requires` cycles load, an effect matching no unit loads, a tech id may equal a building id |
+| [BUG-0098](BUG-0098-m3-5-empty-tech-filter-matches-every-unit.md) | S3 | fixed | An empty `units` or `tags` filter in a tech effect silently matches every unit (the other faction's too) |
+| [BUG-0099](BUG-0099-m3-5-tech-data-nits.md) | S4 | open (items 1, 3 fixed M3-6) | M3-5 tech data nits: `requires` cycles load, an effect matching no unit loads, a tech id may equal a building id |
 | [BUG-0108](BUG-0108-right-click-on-a-building-box-top-picks-the-ground-behind-it.md) | S3 | fixed | A right click on the visible top of a building's box picks the ground behind it: half of a damaged hall's top gives a Move, not a Repair |
 | [BUG-0109](BUG-0109-ghost-click-ignores-the-click-position.md) | S3 | fixed | A placement click ignores where it lands: it builds at the last frame's drawn anchor, or is swallowed if that one was red |
 | [BUG-0110](BUG-0110-ui-json-non-object-root-loads-empty.md) | S3 | fixed | ui.json whose root is not an object (`[]`, `null`, a number or a string) loads with no error and blank labels |
 | [BUG-0122](BUG-0122-m3-v2-nits.md) | S4 | open | M3-V2 nits: mid-word wrap on "Quartermaster's Depot", Shift-click floods duplicate Builds, ghost lags a panning camera, small reason text |
+| [BUG-0100](BUG-0100-m3-6-unmeetable-requirements-load.md) | S3 | open | Requirements that can never be met load clean (another faction's building, an any-of only its own tech opens) |
+| [BUG-0112](BUG-0112-m3-6-d3-building-requires-break-sim-tests.md) | S3 | open | With D3's building requires merged, 25 of the sim's tests fail (construction fuzz, never-seal, requirement fuzz): merge hazard for the data track |
+| [BUG-0113](BUG-0113-m3-6-nits.md) | S4 | open | M3-6 nits: type-mismatch errors read "malformed JSON ... Nullable`1[Int32]", the 10k-unit load test now times a failing load |
 | [BUG-0123](BUG-0123-selection-panel-allocates-every-tick-under-repair.md) | S3 | open | The selection panel allocates a string every tick while the selected building is repaired (~52 B/tick); a greyed production button looks enabled |

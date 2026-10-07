@@ -409,4 +409,48 @@ public class AllocationTests
         Assert.Equal(2, researched); // a tech completed in the measured block
         Assert.True(sink > 0f);
     }
+
+    /// <summary>
+    /// M3-6 criterion 8: ticks applying locked Train / Research / Build commands (each refused by its requirement gate),
+    /// and the three gates queried both locked and open (a building requirement, Age II's any-of over the halls, a
+    /// level-2 upgrade's two techs), allocate nothing.
+    /// </summary>
+    [Fact]
+    public void LockedCommands_AndTheThreeRequirementGates_AllocateNothing()
+    {
+        Data.GameData d = RequirementGatingTests.Fixture;
+        var sim = new Simulation(new SimConfig(5, 1, 64, 1024) { Data = d }, ResourceMaps.Flat(64, 48));
+        World w = sim.World;
+        int keep = GatherMaps.Building(sim, 4, 4).Index;
+        int yard = GatherMaps.Building(sim, 12, 4, type: ProductionMaps.EngineersYard).Index;
+        int armory = GatherMaps.Building(sim, 20, 4, type: ResearchMaps.Armory).Index;
+        int bar = GatherMaps.Building(sim, 28, 4, type: ProductionMaps.Barracks).Index;
+        GatherMaps.Building(sim, 36, 4, type: d.FindBuilding("malazan_crossbow_range"));
+        Entities.EntityHandle worker = GatherMaps.Unit(sim, GatherMaps.At(sim, 30, 20));
+        BuildMaps.Give(sim, 0, 1_000_000, 1_000_000);
+        int tower = d.FindBuilding("malazan_cadre_tower");
+        System.Numerics.Vector2 atKeep = ProductionMaps.In(sim, keep), atYard = ProductionMaps.In(sim, yard), atArmory = ProductionMaps.In(sim, armory);
+        System.Numerics.Vector2 site = GatherMaps.At(sim, 40, 20);
+        int cell = 20 * w.NavGrid.Width + 40;
+        int open = 0;
+        Action block = () =>
+        {
+            for (int t = 0; t < 50; t++)
+            {
+                sim.Enqueue(Command.Train(0, atYard, ProductionMaps.Sapper));
+                sim.Enqueue(Command.Research(0, atArmory, ResearchMaps.Melee2));
+                sim.Enqueue(Command.Build(0, worker, tower, site));
+                sim.Tick();
+                if (w.CanTrain(0, yard, ProductionMaps.Sapper, out _)) open++;
+                if (w.CanTrain(0, bar, GatherMaps.Infantry, out _)) open++;          // building requirement met
+                if (w.CanResearch(0, keep, ResearchMaps.AgeII, out _)) open++;       // any-of: Barracks + Range + Armory
+                if (w.CanResearch(0, armory, ResearchMaps.Melee2, out _)) open++;
+                if (w.CanPlace(0, tower, cell, out _)) open++;
+            }
+        };
+        block(); // warm-up: JIT every path once
+        AllocationProbe.AssertZero(block);
+        Assert.Equal(0, w.Buildings.QueueCount[yard] + w.Buildings.QueueCount[armory]);
+        Assert.True(open > 0, "no gate was ever open");
+    }
 }

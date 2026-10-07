@@ -18,7 +18,7 @@ public enum TrainError
     /// <summary>The unit type's <c>trainedAt</c> names another building type.</summary>
     NotTrainedHere,
 
-    /// <summary>The unit type has a <c>requires</c> list (an Age II unique); requirements are resolved with techs (M3-5 / M3-6).</summary>
+    /// <summary>The player hasn't met the unit type's <c>requires</c> (M3-6): a tech not researched (the uniques need Age II), or no own finished building of a required type.</summary>
     LockedByRequirement,
 
     /// <summary>The queue already holds <see cref="EconomyConstants.ProductionQueueCapacity"/> items.</summary>

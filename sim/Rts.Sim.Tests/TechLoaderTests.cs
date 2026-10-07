@@ -116,9 +116,11 @@ public class TechLoaderTests
     }
 
     [Fact]
-    public void ShippedBuildings_AllCarryAnEmptyRequires_AndTheUniquesRequireAnExistingTech()
+    public void ShippedRequires_NameExistingTechsOrBuildings_AndTheUniquesRequireAnExistingTech()
     {
-        Assert.All(D.Buildings, b => Assert.Empty(b.Requires));
+        // The buildings' requires are faction content (D3 fills them); whatever they hold must name a tech or a building.
+        foreach (BuildingDef b in D.Buildings)
+            foreach (string r in b.Requires) Assert.True(D.FindTech(r) >= 0 || D.FindBuilding(r) >= 0, $"{b.Key} requires {r}");
         foreach (UnitDef u in D.Units)
             foreach (string r in u.Requires) Assert.True(D.FindTech(r) >= 0 || D.FindBuilding(r) >= 0, $"{u.Key} requires {r}");
         Assert.Equal(new[] { "age_ii" }, D.Units[D.FindUnit("malazan_sapper")].Requires.ToArray());
@@ -185,19 +187,19 @@ public class TechLoaderTests
     }
 
     [Fact]
-    public void ASlotTheFactionLacks_IsOneErrorAtEachTechsResearchedAt()
+    public void ASlotTheFactionLacks_IsReportedAtTheBuildingsFile_NotAtEachTech()
     {
-        // The Armory turned into a second House: Malazan has no forge, so each tech researched there (six common, one own) is one error.
+        // The Armory turned into a second House: since M3-6 (BUG-0010) that is two errors in the buildings file (a
+        // doubled house, no forge), and the per-tech researchedAt check (M3-5: one error per tech researched at the
+        // forge) is skipped, like every check into a broken buildings file.
         using TestDataDir dir = TestDataDir.CopyOfShipped();
         dir.EditJson(MalazanBuildings, root => root["buildings"]!.AsArray().Single(b => (string)b!["id"]! == "malazan_armory")!["slot"] = "house");
         DataLoadResult r = DataLoader.LoadAll(dir.Path);
         Assert.Null(r.Data);
-        Assert.Equal(7, r.Errors.Count);
-        Assert.All(r.Errors, e => Assert.EndsWith(".researchedAt", e.Path));
-        Assert.All(r.Errors, e => Assert.Contains("faction 'malazan' has no 'forge' building", e.Message));
-        Assert.Equal(6, r.Errors.Count(e => e.File == Common));
-        Assert.Equal(1, r.Errors.Count(e => e.File == MalazanTechs && e.Path == "techs[0].researchedAt"));
-        Assert.Equal(r.Errors.Count, r.Errors.Select(e => (e.File, e.Path)).Distinct().Count());
+        Assert.Equal(2, r.Errors.Count);
+        Assert.All(r.Errors, e => Assert.Equal(MalazanBuildings, e.File));
+        Assert.Contains(r.Errors, e => e.Path == "buildings[6].slot" && e.Message.Contains("slot 'house' is already filled by 'malazan_billet'"));
+        Assert.Contains(r.Errors, e => e.Path == "buildings" && e.Message.Contains("no building in slot 'forge'"));
     }
 
     [Fact]
@@ -277,7 +279,8 @@ public class TechLoaderTests
     {
         // age_ii renamed and every reference to it moved along: only the age rule (DataLimits.AgeTechIds) is left broken.
         using TestDataDir dir = TestDataDir.CopyOfShipped();
-        foreach (string file in new[] { Common, MalazanTechs, "factions/whirlwind/techs.json", MalazanUnits, "factions/whirlwind/units.json" })
+        foreach (string file in new[] { Common, MalazanTechs, "factions/whirlwind/techs.json", MalazanUnits, "factions/whirlwind/units.json",
+            MalazanBuildings, "factions/whirlwind/buildings.json" })
             File.WriteAllText(dir.FullPath(file), File.ReadAllText(dir.FullPath(file)).Replace("\"age_ii\"", "\"age_two\""));
         DataError e = OneError(dir);
         Assert.Equal((Common, "techs"), (e.File, e.Path));

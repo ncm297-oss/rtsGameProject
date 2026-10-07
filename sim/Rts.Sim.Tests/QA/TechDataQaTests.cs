@@ -181,11 +181,10 @@ public class TechDataQaTests
     }
 
     /// <summary>
-    /// BUG-0098: an empty <c>units</c> (or <c>tags</c>) list is read as "no filter", so the effect applies to every unit
-    /// of every faction; a data author who empties the list to switch the effect off gets the opposite. It should be one
-    /// error at the list (or match nothing).
+    /// BUG-0098 (fixed M3-6): an empty <c>units</c> (or <c>tags</c>) list was read as "no filter", so the effect applied to
+    /// every unit of every faction. It is one error at the list.
     /// </summary>
-    [Theory(Skip = "BUG-0098: an empty units / tags filter silently matches every unit")]
+    [Theory]
     [InlineData("units")]
     [InlineData("tags")]
     public void AnEmptyUnitsOrTagsFilter_IsRejected_NotReadAsEveryUnit(string filter)
@@ -196,24 +195,8 @@ public class TechDataQaTests
         Assert.Equal((MalazanTechs, $"techs[0].effects[0].appliesTo.{filter}"), (e.File, e.Path));
     }
 
-    /// <summary>What BUG-0098 does today: the Malazan upgrade with <c>units: []</c> shortens every unit's cooldown, the other faction's too.</summary>
-    [Fact]
-    public void BUG0098_Today_AnEmptyUnitsFilter_ReachesEveryUnit()
-    {
-        using TestDataDir dir = TestDataDir.CopyOfShipped();
-        EditTech(dir, MalazanTechs, 0, t => t["effects"]![0]!["appliesTo"] = JsonNode.Parse("{\"units\": []}"));
-        DataLoadResult r = DataLoader.LoadAll(dir.Path);
-        Assert.True(r.Ok, "fixed? then flip this pin to the skipped test above: " + string.Join("; ", r.Errors));
-        GameData d = r.Data!;
-        var sim = new Simulation(new SimConfig(5, 1, 16, 64) { Data = d }, ResourceMaps.Flat(16, 16));
-        sim.World.Techs.Set(0, d.FindTech("moranth_supply"), true);
-        // Recorded for the bug: the Malazan upgrade reaches a Whirlwind unit (and every other unit).
-        Assert.Equal(-300f, sim.World.TechBonus(0, d.FindUnit("whirlwind_zealot"), TechStat.AbilityCooldown));
-        Assert.Equal(-300f, sim.World.TechBonus(0, d.FindUnit("malazan_heavy_infantry"), TechStat.AbilityCooldown));
-    }
-
-    /// <summary>BUG-0099: <c>requires</c> cycles (a tech requiring itself, two techs requiring each other) load; with M3-6 gating both would be unresearchable forever.</summary>
-    [Theory(Skip = "BUG-0099: requires cycles are accepted at load (M3-6 gating would lock them forever)")]
+    /// <summary>BUG-0099 (fixed M3-6): <c>requires</c> cycles (a tech requiring itself, two techs requiring each other) would be unresearchable forever; each is an error at a requires entry.</summary>
+    [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public void ARequiresCycle_IsOneError(bool self)
@@ -226,25 +209,14 @@ public class TechDataQaTests
         Assert.Contains(r.Errors, e => e.Path.Contains("requires"));
     }
 
+    /// <summary>BUG-0099 (fixed M3-6): a tech may not take a building's id (a <c>requires</c> entry naming it would be ambiguous): one error at the tech's id.</summary>
     [Fact]
-    public void BUG0099_Today_ARequiresCycle_Loads()
-    {
-        using TestDataDir dir = TestDataDir.CopyOfShipped();
-        EditTech(dir, Common, 1, t => t["requires"] = JsonNode.Parse("[\"melee_weapons_2\"]"));
-        DataLoadResult r = DataLoader.LoadAll(dir.Path);
-        Assert.True(r.Ok, "fixed? then flip this pin to the skipped test above: " + string.Join("; ", r.Errors));
-        Assert.Equal(new[] { "melee_weapons_2" }, r.Data!.Techs[r.Data.FindTech("melee_weapons_1")].Requires.ToArray());
-    }
-
-    /// <summary>BUG-0099: a tech may take a building's id, so a <c>requires</c> entry naming it is ambiguous (tech or building?).</summary>
-    [Fact]
-    public void BUG0099_Today_ATechIdEqualToABuildingId_Loads()
+    public void ATechIdEqualToABuildingId_IsOneError()
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
         EditTech(dir, MalazanTechs, 0, t => t["id"] = "malazan_armory");
-        DataLoadResult r = DataLoader.LoadAll(dir.Path);
-        Assert.True(r.Ok, "BUG-0099 fixed? then make this a rejection test: " + string.Join("; ", r.Errors));
-        Assert.True(r.Data!.FindTech("malazan_armory") >= 0 && r.Data.FindBuilding("malazan_armory") >= 0);
+        DataError e = OneError(dir);
+        Assert.Equal((MalazanTechs, "techs[0].id"), (e.File, e.Path));
     }
 
     [Fact]

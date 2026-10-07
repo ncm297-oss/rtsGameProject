@@ -175,14 +175,16 @@ public class DataContentHashTests
         foreach (BuildingDef b in d.Buildings)
             Check(b, x => With(d, building: x, buildingSlot: b.Id));
         foreach (string f in new[] { "Id", "Key", "Faction", "Slot", "DisplayName", "Description", "FootprintWidth", "FootprintHeight",
-            "Hp", "Armor", "CostGold", "CostWood", "BuildTicks", "HalfPopProvided", "DropOff", "Requires" })
+            "Hp", "Armor", "CostGold", "CostWood", "BuildTicks", "HalfPopProvided", "DropOff", "Requires", "RequiresTechs", "RequiresBuildings" })
             Assert.Contains($"BuildingDef.{f}", checkedFields);
         // M3-5: every TechDef field, on each shipped tech (the effects' own fields: TechListLength_EffectCount_AndEveryEffectField_ChangeTheHash).
         foreach (TechDef t in d.Techs)
             Check(t, x => With(d, tech: x, techSlot: t.Id));
         foreach (string f in new[] { "Id", "Key", "Faction", "DisplayName", "Description", "ResearchedAtSlot", "CostGold", "CostWood",
-            "ResearchTicks", "Requires", "Effects" })
+            "ResearchTicks", "Requires", "Effects", "RequiresTechs", "RequiresBuildings", "RequiresAnyOf", "RequiresAnyOfCount", "RequiresAnyOfSlots" })
             Assert.Contains($"TechDef.{f}", checkedFields);
+        foreach (string f in new[] { "Requires", "RequiresTechs", "RequiresBuildings", "TrainedAtTypeId" }) // M3-6: the resolved requires
+            Assert.Contains($"UnitDef.{f}", checkedFields);
         Assert.Contains("AttackDef.Projectile", checkedFields); // nullable: null and "x" must differ
         foreach (string f in new[] { "Id", "Key", "DisplayName", "Description", "Resource", "FootprintWidth", "FootprintHeight" })
             Assert.Contains($"ResourceDef.{f}", checkedFields);

@@ -27,8 +27,27 @@ public sealed class TechDef
     public int CostWood { get; init; }
     /// <summary>Ticks to research.</summary>
     public int ResearchTicks { get; init; }
-    /// <summary>Tech / building ids it requires; every id exists (checked at load), gating is M3-6.</summary>
+    /// <summary>Tech / building ids it requires, as written; every id exists (checked at load). Kept for tools; the sim reads <see cref="RequiresTechs"/> / <see cref="RequiresBuildings"/>.</summary>
     public required ImmutableArray<string> Requires { get; init; }
+    /// <summary><see cref="Requires"/>' tech ids, resolved at load (M3-6), ascending: each must be researched before this tech can be queued.</summary>
+    /// <remarks>Set once by the loader; never written afterwards. Empty in hand-built data.</remarks>
+    public ImmutableArray<int> RequiresTechs { get; internal set; } = ImmutableArray<int>.Empty;
+    /// <summary><see cref="Requires"/>' building type ids, resolved at load (M3-6), ascending: the player needs an own finished building of each type.</summary>
+    /// <remarks>Set once by the loader; never written afterwards. Empty in hand-built data.</remarks>
+    public ImmutableArray<int> RequiresBuildings { get; internal set; } = ImmutableArray<int>.Empty;
+    /// <summary>
+    /// <c>requiresAnyOf.of</c> as written (M3-6): building slot ids (or, in a faction's own techs file, its building ids);
+    /// empty when the tech has no any-of rule.
+    /// </summary>
+    public ImmutableArray<string> RequiresAnyOf { get; init; } = ImmutableArray<string>.Empty;
+    /// <summary><c>requiresAnyOf.count</c> (M3-6): how many of <see cref="RequiresAnyOfSlots"/> need an own finished building; 0 when the tech has no any-of rule.</summary>
+    public int RequiresAnyOfCount { get; init; }
+    /// <summary>
+    /// <see cref="RequiresAnyOf"/> resolved at load to <see cref="BuildingSlot"/> values (a building id becomes its slot), ascending
+    /// and distinct (M3-6). A slot counts once however many own finished buildings fill it.
+    /// </summary>
+    /// <remarks>Set once by the loader; never written afterwards. Empty in hand-built data.</remarks>
+    public ImmutableArray<int> RequiresAnyOfSlots { get; internal set; } = ImmutableArray<int>.Empty;
     /// <summary>What it changes once researched; empty for a tech that only unlocks (Age II).</summary>
     public required ImmutableArray<TechEffect> Effects { get; init; }
 }

@@ -18,7 +18,9 @@ namespace Rts.Sim.Entities;
 /// command <c>Command.SpawnBuilding</c> still places a finished building at full hit points. Since M3-4 a finished
 /// building provides its type's population and has a production queue (<see cref="QueueCount"/>,
 /// <see cref="QueueTypeAt"/>, <see cref="Progress"/>) and a rally point (<see cref="HasRally"/>, <see cref="RallyPosition"/>).
-/// Since M3-5 a queue item is a unit or a tech (<see cref="QueueIsTechAt"/>, <see cref="ItemTicks"/>).
+/// Since M3-5 a queue item is a unit or a tech (<see cref="QueueIsTechAt"/>, <see cref="ItemTicks"/>). Since M3-6 the
+/// world's ledger counts each player's finished buildings per type and slot as they spawn finished, complete or go
+/// (derived, for the requirement gates).
 /// </remarks>
 public sealed class BuildingStore
 {
@@ -304,8 +306,12 @@ public sealed class BuildingStore
         if (work >= needed)
         {
             _work[index] = needed;
-            // Completion: the building starts providing its population (M3-4).
-            if (_underConstruction[index]) _ledger?.AddProvided(_owner[index], _defs[_typeId[index]].HalfPopProvided);
+            // Completion: the building starts providing its population (M3-4) and meeting requirements (M3-6).
+            if (_underConstruction[index])
+            {
+                _ledger?.AddProvided(_owner[index], _defs[_typeId[index]].HalfPopProvided);
+                _ledger?.AddFinished(_owner[index], _typeId[index], _defs[_typeId[index]].Slot, 1);
+            }
             _underConstruction[index] = false;
             _hp[index] = max;
             return;
@@ -381,7 +387,11 @@ public sealed class BuildingStore
         _hp[index] = site ? 1 : def.Hp;
         _underConstruction[index] = site;
         _work[index] = 0;
-        if (!site) _ledger?.AddProvided(owner, def.HalfPopProvided);
+        if (!site)
+        {
+            _ledger?.AddProvided(owner, def.HalfPopProvided);
+            _ledger?.AddFinished(owner, typeId, def.Slot, 1);
+        }
         _grid.SetBuilding(cell % _grid.Width, cell / _grid.Width, def.FootprintWidth, def.FootprintHeight);
         handle = new EntityHandle(index, _generation[index]);
         return true;
@@ -412,7 +422,11 @@ public sealed class BuildingStore
         int index = handle.Index;
         BuildingDef def = _defs[_typeId[index]];
         while (_queueCount[index] > 0) RemoveQueued(index, _queueCount[index] - 1);
-        if (!_underConstruction[index]) _ledger?.AddProvided(_owner[index], -def.HalfPopProvided);
+        if (!_underConstruction[index])
+        {
+            _ledger?.AddProvided(_owner[index], -def.HalfPopProvided);
+            _ledger?.AddFinished(_owner[index], _typeId[index], def.Slot, -1);
+        }
         SetRally(index, false, Vector2.Zero);
         int cell = _cell[index];
         _grid.ClearBuilding(cell % _grid.Width, cell / _grid.Width, def.FootprintWidth, def.FootprintHeight);

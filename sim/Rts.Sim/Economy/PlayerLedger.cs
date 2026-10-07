@@ -6,15 +6,26 @@ namespace Rts.Sim.Economy;
 /// <summary>
 /// Per-player totals and population (M3-2, M3-4): gold, wood, half-pop used, and the cap the player's finished buildings
 /// provide. Shared by <see cref="World"/> and the unit and building stores, so a unit freed or a building destroyed
-/// settles its own population and refunds without the stores knowing the world.
+/// settles its own population and refunds without the stores knowing the world. Since M3-6 it also counts each player's
+/// finished buildings per type and per slot, for the requirement gates (derived from the building store, not hashed).
 /// </summary>
 internal sealed class PlayerLedger
 {
-    private readonly int _rulesCap;
+    private static readonly int SlotCount = DataLimits.BuildingSlotIds.Length;
 
-    /// <summary>A ledger for <paramref name="players"/> players starting at <paramref name="rules"/>' totals, no population and no cap.</summary>
-    public PlayerLedger(int players, RulesDef rules)
+    private readonly int _rulesCap;
+    private readonly int _types;
+    // player x types + type, and player x SlotCount + slot: finished, live buildings the player owns.
+    private readonly int[] _finishedOfType;
+    private readonly int[] _finishedInSlot;
+
+    /// <summary>A ledger for <paramref name="players"/> players starting at <paramref name="data"/>'s rules totals, no population, no cap and no buildings.</summary>
+    public PlayerLedger(int players, GameData data)
     {
+        RulesDef rules = data.Rules;
+        _types = data.Buildings.Length;
+        _finishedOfType = new int[players * _types];
+        _finishedInSlot = new int[players * SlotCount];
         Gold = new int[players];
         Wood = new int[players];
         HalfPop = new int[players];
@@ -73,6 +84,25 @@ internal sealed class PlayerLedger
     {
         if (Has(player)) HalfPop[player] += delta;
     }
+
+    /// <summary>
+    /// A finished building of <paramref name="type"/> in <paramref name="slot"/> starts (+1: spawned finished or completed)
+    /// or stops (-1: freed) counting for <paramref name="player"/> (M3-6). Derived from the building store, so not hashed.
+    /// </summary>
+    public void AddFinished(int player, int type, BuildingSlot slot, int delta)
+    {
+        if (!Has(player) || (uint)type >= (uint)_types || (uint)slot >= (uint)SlotCount) return;
+        _finishedOfType[player * _types + type] += delta;
+        _finishedInSlot[player * SlotCount + (int)slot] += delta;
+    }
+
+    /// <summary>How many finished buildings of <paramref name="type"/> <paramref name="player"/> owns; 0 for out-of-range ids.</summary>
+    public int FinishedOfType(int player, int type) =>
+        Has(player) && (uint)type < (uint)_types ? _finishedOfType[player * _types + type] : 0;
+
+    /// <summary>How many finished buildings in <paramref name="slot"/> (a <see cref="BuildingSlot"/> value) <paramref name="player"/> owns; 0 for out-of-range ids.</summary>
+    public int FinishedInSlot(int player, int slot) =>
+        Has(player) && (uint)slot < (uint)SlotCount ? _finishedInSlot[player * SlotCount + slot] : 0;
 
     /// <summary>Changes the population <paramref name="player"/>'s buildings provide by <paramref name="delta"/> half-pop, and its cap with it.</summary>
     public void AddProvided(int player, int delta)

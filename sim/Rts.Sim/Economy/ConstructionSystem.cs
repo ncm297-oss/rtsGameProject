@@ -33,6 +33,7 @@ public static class ConstructionSystem
     /// it in the way (BUG-0092). With <paramref name="sealLast"/> (the Build apply path, which needs only pass / fail)
     /// the never-seal flood runs after every cheap rule has passed, so a refused Build costs no flood (BUG-0091); the
     /// answer's pass / fail is the same either way, only the reason reported for a spot breaking several rules differs.
+    /// The requirement rule (M3-6) comes right after the faction's, before any map rule.
     /// </summary>
     private static PlacementError Check(World world, int player, int typeId, int anchorCell, int worker, bool sealLast)
     {
@@ -40,6 +41,8 @@ public static class ConstructionSystem
         if ((uint)typeId >= (uint)data.Buildings.Length) return PlacementError.UnknownType;
         BuildingDef def = data.Buildings[typeId];
         if (world.FactionOf(player) != def.Faction) return PlacementError.WrongFaction;
+        // M3-6: cheap, so before the map rules and the flood; checked when the Build starts, not again at completion.
+        if (!Requirements.Met(world, player, def.RequiresTechs, def.RequiresBuildings)) return PlacementError.Requires;
         NavGrid g = world.NavGrid;
         int w = g.Width;
         if ((uint)anchorCell >= (uint)(w * g.Height)) return PlacementError.OffMap;

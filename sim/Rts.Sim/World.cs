@@ -29,7 +29,7 @@ public sealed class World
     {
         config.Validate();
         Config = config;
-        _ledger = new PlayerLedger(config.PlayerCount, config.Data.Rules);
+        _ledger = new PlayerLedger(config.PlayerCount, config.Data);
         Techs = new TechState(config.PlayerCount, config.Data);
         Units = new UnitStore(config.UnitCapacity, _ledger);
         _rngs = new SimRng[RngStream.Count(config.PlayerCount)];
@@ -107,6 +107,8 @@ public sealed class World
     /// Whether <paramref name="player"/> may queue a unit of <paramref name="unitTypeId"/> at building slot
     /// <paramref name="buildingSlot"/> now (M3-4): the rule <c>Command.Train</c> applies, and what the view's production
     /// card asks. Read-only and allocation-free; <paramref name="reason"/> is the first rule broken, in <see cref="TrainError"/> order.
+    /// Since M3-6 <see cref="TrainError.LockedByRequirement"/> means the unit's <c>requires</c> is not met now (a tech not
+    /// researched, no own finished building of a required type); it is checked when the Train applies, not at completion.
     /// </summary>
     public bool CanTrain(int player, int buildingSlot, int unitTypeId, out TrainError reason)
     {
@@ -117,7 +119,8 @@ public sealed class World
     /// <summary>
     /// Whether <paramref name="player"/> may queue tech <paramref name="techId"/> at building slot <paramref name="buildingSlot"/>
     /// now (M3-5): the rule <c>Command.Research</c> applies, and what the view's research buttons ask. Read-only and
-    /// allocation-free; <paramref name="reason"/> is the first rule broken, in <see cref="ResearchError"/> order.
+    /// allocation-free; <paramref name="reason"/> is the first rule broken, in <see cref="ResearchError"/> order (M3-6:
+    /// <see cref="ResearchError.Requires"/> for an unmet <c>requires</c> or <c>requiresAnyOf</c>, checked at queue time).
     /// </summary>
     public bool CanResearch(int player, int buildingSlot, int techId, out ResearchError reason)
     {
@@ -186,7 +189,8 @@ public sealed class World
     /// Whether <paramref name="player"/> may place a building of <paramref name="typeId"/> with its anchor (lowest x, y)
     /// at <paramref name="anchorCell"/> now (docs/02 "Buildings" placement rule, M3-3): the rule <c>Command.Build</c>
     /// applies, and the view's placement ghost asks. Read-only and allocation-free; <paramref name="reason"/> is the
-    /// first rule broken, in <see cref="PlacementError"/> order.
+    /// first rule broken, in <see cref="PlacementError"/> order (M3-6: <see cref="PlacementError.Requires"/> right after
+    /// <see cref="PlacementError.WrongFaction"/>, checked when the Build starts).
     /// </summary>
     public bool CanPlace(int player, int typeId, int anchorCell, out PlacementError reason)
     {

@@ -8,9 +8,10 @@ public static partial class DataLoader
 {
     /// <summary>
     /// M3-5: reads <c>common/techs.json</c> and every <c>factions/&lt;id&gt;/techs.json</c> (all required) into
-    /// <see cref="TechDef"/>s, and checks every <c>requires</c> list (techs, buildings, units) against the tech and
-    /// building ids. Tech ids are unique across the files (a repeat is an error at its second definition) and ordered
-    /// ordinally across them.
+    /// <see cref="TechDef"/>s. M3-6: resolves every <c>requires</c> list (techs, buildings, units) to tech and building
+    /// type ids and every <c>requiresAnyOf</c> to building slots, and rejects a tech id that is also a building id and a
+    /// <c>requires</c> cycle. Tech ids are unique across the files (a repeat is an error at its second definition) and
+    /// ordered ordinally across them.
     /// </summary>
     private sealed class TechReader
     {
@@ -23,6 +24,7 @@ public static partial class DataLoader
         private readonly string[] _unitKeys;
         private readonly string[] _unitTags;
         private readonly BuildingDef[] _buildings;
+        private readonly string[] _buildingKeys;
         // Index 0 is the common file (faction -1); index f + 1 is faction f's file.
         private readonly TechFileJson?[] _files;
         private readonly List<(int File, int Index)> _accepted = new();
@@ -38,6 +40,8 @@ public static partial class DataLoader
             _unitKeys = unitKeys;
             _unitTags = unitTags;
             _buildings = buildings;
+            _buildingKeys = new string[buildings.Length];
+            for (int b = 0; b < buildings.Length; b++) _buildingKeys[b] = buildings[b].Key;
             _files = new TechFileJson?[folders.Length + 1];
         }
 
@@ -104,6 +108,7 @@ public static partial class DataLoader
                 }
             }
             CostJson? cost = _c.Obj(t.Cost, p + ".cost");
+            (ImmutableArray<string> anyOf, int anyCount, ImmutableArray<int> anySlots) = AnyOf(t.RequiresAnyOf, p + ".requiresAnyOf", faction, refs);
             List<TechEffectJson?>? effects = _c.Obj(t.Effects, p + ".effects");
             var built = ImmutableArray.CreateBuilder<TechEffect>(effects?.Count ?? 0);
             for (int j = 0; effects != null && j < effects.Count; j++)
@@ -124,8 +129,54 @@ public static partial class DataLoader
                 CostWood = cost == null ? 0 : _c.Int(cost.Wood, p + ".cost.wood", 0),
                 ResearchTicks = _c.Ticks(t.ResearchTime, p + ".researchTime", 1),
                 Requires = _c.Ids(t.Requires, p + ".requires"),
+                RequiresAnyOf = anyOf,
+                RequiresAnyOfCount = anyCount,
+                RequiresAnyOfSlots = anySlots,
                 Effects = built.ToImmutable(),
             };
+        }
+
+        /// <summary>
+        /// M3-6: the optional <c>requiresAnyOf {count, of}</c>. Each <c>of</c> entry is a building slot id, or (in a
+        /// faction's own techs file) one of its building ids, which counts as that building's slot; a slot may be named
+        /// once. <c>count</c> is 1 to the number of entries. One error at the field that breaks a rule; the building-id
+        /// check needs the buildings files read whole (<paramref name="refs"/>).
+        /// </summary>
+        private (ImmutableArray<string> Of, int Count, ImmutableArray<int> Slots) AnyOf(RequiresAnyOfJson? j, string p, int faction, bool refs)
+        {
+            if (j == null) return (ImmutableArray<string>.Empty, 0, ImmutableArray<int>.Empty);
+            List<string?>? of = _c.Obj(j.Of, p + ".of");
+            int entries = of?.Count ?? 0, count = 0;
+            if (j.Count == null) _c.Error(p + ".count", "missing required field");
+            else if (of != null && (j.Count < 1 || j.Count > entries))
+                _c.Error(p + ".count", $"{j.Count} is outside 1-{entries} (the number of 'of' entries)");
+            else count = j.Count.Value;
+            var ids = ImmutableArray.CreateBuilder<string>(entries);
+            var slots = new SortedSet<int>(); // load-time only
+            for (int i = 0; i < entries; i++)
+            {
+                string path = $"{p}.of[{i}]";
+                string id = _c.Id(of![i], path);
+                if (id.Length == 0) continue;
+                ids.Add(id);
+                int slot = DataLimits.BuildingSlotIds.IndexOf(id);
+                if (slot < 0)
+                {
+                    if (!refs) continue; // the buildings files are broken; that is already reported
+                    int b = Array.BinarySearch(_buildingKeys, id, StringComparer.Ordinal);
+                    if (b < 0 || faction < 0 || _buildings[b].Faction != faction)
+                    {
+                        _c.Error(path, faction < 0
+                            ? $"'{id}' is not a building slot id (a common tech names slots: {string.Join(", ", DataLimits.BuildingSlotIds)})"
+                            : $"'{id}' is neither a building slot id nor a building of faction '{_folders[faction]}'");
+                        continue;
+                    }
+                    slot = (int)_buildings[b].Slot;
+                }
+                if (!slots.Add(slot))
+                    _c.Error(path, $"'{id}' names slot '{DataLimits.BuildingSlotIds[slot]}' again (each slot counts once)");
+            }
+            return (ids.ToImmutable(), count, ToArray(slots));
         }
 
         private TechEffect BuildEffect(TechEffectJson e, string p, int faction, bool refs)
@@ -137,6 +188,9 @@ public static partial class DataLoader
             float amount = Amount(e.Amount, p + ".amount", stat);
             AppliesToJson? a = _c.Obj(e.AppliesTo, p + ".appliesTo");
             string ap = p + ".appliesTo";
+            // BUG-0098: a filter set to [] matches no unit; it must not read as "no filter" (every unit of every faction).
+            if (a?.Tags is { Count: 0 }) _c.Error(ap + ".tags", "an empty list matches no unit (leave the filter out to match every unit)");
+            if (a?.Units is { Count: 0 }) _c.Error(ap + ".units", "an empty list matches no unit (leave the filter out to match every unit)");
             return new TechEffect
             {
                 Stat = (TechStat)Math.Max(stat, 0),
@@ -224,39 +278,127 @@ public static partial class DataLoader
         }
 
         /// <summary>
-        /// Every <c>requires</c> entry of every tech, building and unit must name a tech or a building id (one error each,
-        /// at the entry). Entries that are not snake_case ids were already reported. Whether the requirement is met is M3-6.
+        /// M3-6: every <c>requires</c> entry of every tech, building and unit must name a tech or a building id (one error
+        /// each, at the entry) and is resolved to <c>RequiresTechs</c> / <c>RequiresBuildings</c> on its def. Entries that
+        /// are not snake_case ids were already reported. A tech id that is also a building id is one error at the tech's
+        /// id (BUG-0099: the entry naming it would be ambiguous), and a <c>requires</c> cycle among techs and buildings is
+        /// one error at the entry that closes it (BUG-0099: nothing in it could ever be met).
         /// </summary>
         public void ResolveRequires(BuildingFileJson?[] buildingFiles, List<(int Faction, int Index)> buildings,
             UnitFileJson?[] unitFiles, List<(int Faction, int Index)> units)
         {
-            var buildingKeys = new string[_buildings.Length];
-            for (int b = 0; b < _buildings.Length; b++) buildingKeys[b] = _buildings[b].Key;
+            foreach ((int file, int i) in _accepted)
+            {
+                string key = _files[file]!.Techs![i]!.Id!;
+                if (Array.BinarySearch(_buildingKeys, key, StringComparer.Ordinal) < 0) continue;
+                _c.CurrentFile = FileOf(file);
+                _c.Error($"techs[{i}].id", $"tech id '{key}' is also a building id (a requires entry naming it would be ambiguous)");
+            }
+
+            // Nodes of the requires graph: tech t is node t, building type b is node techs + b. Units are never required.
+            int techs = _keys.Length;
+            var edges = new List<Edge>[techs + _buildings.Length];
+            for (int n = 0; n < edges.Length; n++) edges[n] = new List<Edge>();
             foreach ((int file, int i) in _accepted)
             {
                 _c.CurrentFile = FileOf(file);
-                Check(_files[file]!.Techs![i]!.Requires, $"techs[{i}].requires", buildingKeys);
+                TechJson json = _files[file]!.Techs![i]!;
+                TechDef def = _defs[Array.BinarySearch(_keys, json.Id!, StringComparer.Ordinal)];
+                (def.RequiresTechs, def.RequiresBuildings) = Resolve(json.Requires, $"techs[{i}].requires", edges[def.Id]);
             }
             foreach ((int f, int i) in buildings)
             {
                 _c.CurrentFile = $"factions/{_folders[f]}/buildings.json";
-                Check(buildingFiles[f]!.Buildings![i]!.Requires, $"buildings[{i}].requires", buildingKeys);
+                BuildingJson json = buildingFiles[f]!.Buildings![i]!;
+                BuildingDef def = _buildings[Array.BinarySearch(_buildingKeys, json.Id!, StringComparer.Ordinal)];
+                (def.RequiresTechs, def.RequiresBuildings) = Resolve(json.Requires, $"buildings[{i}].requires", edges[techs + def.Id]);
             }
             foreach ((int f, int i) in units)
             {
                 _c.CurrentFile = $"factions/{_folders[f]}/units.json";
-                Check(unitFiles[f]!.Units![i]!.Requires, $"units[{i}].requires", buildingKeys);
+                UnitJson json = unitFiles[f]!.Units![i]!;
+                UnitDef def = _units[Array.BinarySearch(_unitKeys, json.Id!, StringComparer.Ordinal)];
+                (def.RequiresTechs, def.RequiresBuildings) = Resolve(json.Requires, $"units[{i}].requires", null);
             }
+            FindCycles(edges);
         }
 
-        private void Check(List<string?>? requires, string path, string[] buildingKeys)
+        /// <summary>One <c>requires</c> entry as a graph edge: the node it names, and where it is written (for the error).</summary>
+        private readonly record struct Edge(int To, string File, string Path);
+
+        /// <summary>
+        /// A <c>requires</c> list resolved to (tech ids, building type ids), each ascending and de-duplicated; an unknown id
+        /// is one error at its entry. Each resolved entry is added to <paramref name="edges"/> (null for a unit's list).
+        /// </summary>
+        private (ImmutableArray<int> Techs, ImmutableArray<int> Buildings) Resolve(List<string?>? requires, string path, List<Edge>? edges)
         {
+            var techs = new SortedSet<int>(); // load-time only
+            var buildings = new SortedSet<int>();
             for (int j = 0; requires != null && j < requires.Count; j++)
             {
                 string? id = requires[j];
                 if (!Checker.IsId(id)) continue;
-                if (Array.BinarySearch(_keys, id!, StringComparer.Ordinal) < 0 && Array.BinarySearch(buildingKeys, id!, StringComparer.Ordinal) < 0)
+                // An id that is both a tech and a building was reported at the tech's id; it reads as the tech here.
+                int t = Array.BinarySearch(_keys, id!, StringComparer.Ordinal);
+                int b = t >= 0 ? -1 : Array.BinarySearch(_buildingKeys, id!, StringComparer.Ordinal);
+                if (t >= 0) techs.Add(t);
+                else if (b >= 0) buildings.Add(b);
+                else
+                {
                     _c.Error($"{path}[{j}]", $"unknown tech or building '{id}' (requires names a tech or building id)");
+                    continue;
+                }
+                edges?.Add(new Edge(t >= 0 ? t : _keys.Length + b, _c.CurrentFile, $"{path}[{j}]"));
+            }
+            return (ToArray(techs), ToArray(buildings));
+        }
+
+        private static ImmutableArray<int> ToArray(SortedSet<int> set)
+        {
+            var result = ImmutableArray.CreateBuilder<int>(set.Count);
+            foreach (int x in set) result.Add(x);
+            return result.MoveToImmutable();
+        }
+
+        private string NodeKey(int node) => node < _keys.Length ? _keys[node] : _buildingKeys[node - _keys.Length];
+
+        /// <summary>
+        /// Depth-first search over the requires graph in node order, entries in file order; each edge back to a node still
+        /// on the path closes a cycle and is one error at that entry (a self-requirement is such an edge). Iterative, so a
+        /// long chain can't overflow the stack.
+        /// </summary>
+        private void FindCycles(List<Edge>[] edges)
+        {
+            var state = new byte[edges.Length]; // 0 unvisited, 1 on the current path, 2 done
+            var stack = new Stack<(int Node, int Next)>();
+            for (int start = 0; start < edges.Length; start++)
+            {
+                if (state[start] != 0) continue;
+                state[start] = 1;
+                stack.Push((start, 0));
+                while (stack.Count > 0)
+                {
+                    (int node, int next) = stack.Pop();
+                    if (next == edges[node].Count)
+                    {
+                        state[node] = 2;
+                        continue;
+                    }
+                    stack.Push((node, next + 1));
+                    Edge e = edges[node][next];
+                    if (state[e.To] == 1)
+                    {
+                        _c.CurrentFile = e.File;
+                        _c.Error(e.Path, e.To == node
+                            ? $"'{NodeKey(node)}' requires itself, so it can never be met"
+                            : $"requires cycle: '{NodeKey(node)}' needs '{NodeKey(e.To)}', which needs '{NodeKey(node)}' (directly or through others), so none of them can ever be met");
+                    }
+                    else if (state[e.To] == 0)
+                    {
+                        state[e.To] = 1;
+                        stack.Push((e.To, 0));
+                    }
+                }
             }
         }
 

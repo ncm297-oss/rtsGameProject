@@ -288,7 +288,7 @@ public class DataLoaderQaTests
 
     // ---------- faction template coverage (docs/02 "Faction template": every faction fills seven slots) ----------
 
-    [Fact(Skip = "BUG-0010: a faction with no units (or a missing/doubled slot) loads clean; un-skip when fixed")]
+    [Fact] // regression: BUG-0010
     public void FactionWithEmptyUnitsList_IsRejected()
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
@@ -298,7 +298,7 @@ public class DataLoaderQaTests
         Assert.Contains(r.Errors, e => e.File.StartsWith("factions/whirlwind/", StringComparison.Ordinal));
     }
 
-    [Fact(Skip = "BUG-0010: a faction with no units (or a missing/doubled slot) loads clean; un-skip when fixed")]
+    [Fact] // regression: BUG-0010
     public void FactionWithTwoUnitsInOneSlot_IsRejected()
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
@@ -309,7 +309,7 @@ public class DataLoaderQaTests
 
     // ---------- duplicate JSON keys: the parser must not silently keep the last one ----------
 
-    [Fact(Skip = "BUG-0008: duplicate JSON keys are silently resolved last-wins; un-skip when fixed")]
+    [Fact] // regression: BUG-0008
     public void DuplicateBonusVsKey_IsReported()
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
@@ -320,7 +320,7 @@ public class DataLoaderQaTests
         Assert.Contains(r.Errors, e => e.File == MalazanUnits);
     }
 
-    [Fact(Skip = "BUG-0008: duplicate JSON keys are silently resolved last-wins; un-skip when fixed")]
+    [Fact] // regression: BUG-0008
     public void DuplicatePropertyInUnit_IsReported()
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
@@ -391,8 +391,10 @@ public class DataLoaderQaTests
         long allocated = AllocationProbe.Measure(load);
         DataLoadResult r = loaded!;
         _out.WriteLine($"10k-unit load: {sw.ElapsedMilliseconds} ms, {allocated / 1_000_000} MB allocated");
-        Assert.True(r.Ok, string.Join("\n", r.Errors.Take(5)));
-        Assert.Equal(14 + 10_000, r.Data!.Units.Length);
+        // M3-6 (BUG-0010): one unit per template slot, so each bulk copy of the Crossbowman (ranged) is one error at its
+        // slot; every unit is still read and validated in full, which is what this times.
+        Assert.Equal(10_000, r.Errors.Count);
+        Assert.All(r.Errors, e => Assert.Contains("slot 'ranged' is already filled by 'malazan_crossbowman'", e.Message));
         // ~0.2-0.3 s alone, ~0.7 s under the parallel suite; 2 s leaves headroom on a slower machine.
         Assert.True(sw.ElapsedMilliseconds < 2000, $"10k-unit load took {sw.ElapsedMilliseconds} ms");
         Assert.True(allocated < 200_000_000, $"10k-unit load allocated {allocated / 1_000_000} MB");
