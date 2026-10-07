@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Godot;
 using Rts.Sim;
+using Rts.Sim.Entities;
 using Rts.Sim.ViewApi;
 
 namespace Rts.Game;
@@ -11,7 +12,8 @@ namespace Rts.Game;
 /// active subgroup, A targeting. The overlay (M2-5, input action <c>debug_overlay</c>, F12; launch flag
 /// <c>--debug-overlay</c> starts with it on) adds the nav grid (<see cref="NavOverlayView"/>), the flow
 /// arrows of the selection's goal around the camera (<see cref="FlowArrowsView"/>), the tick-time graph
-/// (<see cref="TickGraph"/>) and a second label line with entity counts and tick averages. It is off by
+/// (<see cref="TickGraph"/>) and a second label line with entity counts, the workers gathering, returning and
+/// building (M3-V1), and tick averages. It is off by
 /// default; while off its layers are hidden, have no <c>_Process</c> and are not even built.
 /// Reads the sim only; never enqueues.
 /// </remarks>
@@ -44,6 +46,15 @@ public partial class DebugOverlay : CanvasLayer
 
     /// <summary>Moving units at the last <see cref="SyncLayers"/>.</summary>
     public int MovingUnits { get; private set; }
+
+    /// <summary>Live units <see cref="UnitState.Gathering"/> at the last <see cref="SyncLayers"/>.</summary>
+    public int GatheringUnits { get; private set; }
+
+    /// <summary>Live units <see cref="UnitState.Returning"/> at the last <see cref="SyncLayers"/>.</summary>
+    public int ReturningUnits { get; private set; }
+
+    /// <summary>Live units <see cref="UnitState.Building"/> at the last <see cref="SyncLayers"/>.</summary>
+    public int BuildingUnits { get; private set; }
 
     /// <summary>Cached flow fields at the last <see cref="SyncLayers"/>.</summary>
     public int CachedFields { get; private set; }
@@ -104,7 +115,7 @@ public partial class DebugOverlay : CanvasLayer
         var shown = new LabelValues(sim.TickNumber, Runner.GameSpeed, Runner.LastTickMs, Engine.GetFramesPerSecond(),
             Selection?.Selection.Count ?? 0, sub?.Count ?? 0, sub?.ActiveType ?? 0, sub?.Index ?? 0, Selection?.Targeting ?? false,
             Enabled, LiveUnits, MovingUnits, CachedFields, sim.World.FlowFields.Capacity, ring.Average, ring.Worst, ring.Count,
-            ShownGoal >= 0 ? _arrows?.ShownCount ?? 0 : -1);
+            ShownGoal >= 0 ? _arrows?.ShownCount ?? 0 : -1, GatheringUnits, ReturningUnits, BuildingUnits);
         if (LabelBuilds > 0 && shown == _shown) return;
         _shown = shown;
         LabelBuilds++;
@@ -114,6 +125,7 @@ public partial class DebugOverlay : CanvasLayer
         if (Enabled)
         {
             text += $"\nunits {LiveUnits}   moving {MovingUnits}   fields {CachedFields}/{sim.World.FlowFields.Capacity}   " +
+                $"workers gathering {GatheringUnits}, returning {ReturningUnits}, building {BuildingUnits}   " +
                 $"tick avg {ring.Average:0.000} ms   worst {ring.Worst:0.000} ms ({ring.Count})" +
                 (shown.Arrows >= 0 ? $"   arrows {shown.Arrows}" : "");
         }
@@ -125,7 +137,8 @@ public partial class DebugOverlay : CanvasLayer
 
     // Every value the label shows, compared as a whole: equal means the text would be the same.
     private readonly record struct LabelValues(long Tick, double Speed, double TickMs, double Fps, int Selected, int SubCount, int SubType,
-        int SubIndex, bool Targeting, bool On, int Live, int Moving, int Fields, int FieldCapacity, double Avg, double Worst, int Samples, int Arrows);
+        int SubIndex, bool Targeting, bool On, int Live, int Moving, int Fields, int FieldCapacity, double Avg, double Worst, int Samples, int Arrows,
+        int Gathering, int Returning, int Building);
 
     private LabelValues _shown;
 
@@ -141,6 +154,9 @@ public partial class DebugOverlay : CanvasLayer
         ShownGoal = goal;
         LiveUnits = world.Units.Count;
         MovingUnits = DebugCounts.Moving(world.Units.Alive, world.Units.State);
+        GatheringUnits = DebugCounts.InState(world.Units.Alive, world.Units.State, UnitState.Gathering);
+        ReturningUnits = DebugCounts.InState(world.Units.Alive, world.Units.State, UnitState.Returning);
+        BuildingUnits = DebugCounts.InState(world.Units.Alive, world.Units.State, UnitState.Building);
         CachedFields = world.FlowFields.Count;
         _graph.QueueRedraw();
         _watch.Stop();

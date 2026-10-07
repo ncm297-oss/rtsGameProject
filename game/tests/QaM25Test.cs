@@ -63,7 +63,7 @@ public partial class QaM25Test : Node
     {
         var m = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
         AddChild(m);
-        m.Start(_data, LaunchOptions.Parse(new[] { "--no-hud", "--debug-overlay", "--units", "50" }));
+        m.Start(_data, LaunchOptions.Parse(new[] { "--no-hud", "--debug-overlay", "--units", "50", "--no-bases" })); // armies only, as in M2 (M3-V1)
         for (int i = 0; i < 10; i++) await Frame();
         var o = m.GetNode<DebugOverlay>("DebugOverlay");
         Check(o.Enabled, "--no-hud --debug-overlay: overlay off");
@@ -81,7 +81,7 @@ public partial class QaM25Test : Node
     {
         _match = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
         AddChild(_match);
-        _match.Start(_data, LaunchOptions.Parse(new[] { "--units", "1000", "--zoom", "60", "--debug-overlay" }));
+        _match.Start(_data, LaunchOptions.Parse(new[] { "--units", "1000", "--zoom", "60", "--debug-overlay", "--no-bases" })); // armies only, as in M2 (M3-V1)
         _runner = _match.GetNode<SimRunner>("SimRunner");
         _sim = _runner.Simulation!;
         _overlay = _match.GetNode<DebugOverlay>("DebugOverlay");

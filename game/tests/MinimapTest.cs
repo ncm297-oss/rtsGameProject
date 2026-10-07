@@ -49,7 +49,7 @@ public partial class MinimapTest : Node
         GameData data = loaded.Data!;
         var match = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
         AddChild(match);
-        match.Start(data, LaunchOptions.Parse(new[] { "--units", "1000" }));
+        match.Start(data, LaunchOptions.Parse(new[] { "--units", "1000", "--no-bases" })); // armies only, as in M2 (M3-V1)
         _mini = match.GetNode<Minimap>("Hud/Minimap");
         _camera = match.GetNode<RtsCamera>("RtsCamera");
         _camera.EdgePanEnabled = false;

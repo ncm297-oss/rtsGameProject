@@ -15,7 +15,9 @@ namespace Rts.Game;
 /// (run the scripted benchmark, print one <c>bench:</c> line and quit; positive seconds up to <see cref="MaxBenchSeconds"/>), <c>--vsync on|off</c>
 /// (window vsync; default is the project setting, on), <c>--forests &lt;n&gt;</c> and <c>--mines &lt;n&gt;</c>
 /// (resource groups on the map, 0 to <see cref="MapGenParams.MaxResourceGroups"/>, defaults
-/// <see cref="DefaultForests"/> and <see cref="DefaultMines"/>). Bad values are
+/// <see cref="DefaultForests"/> and <see cref="DefaultMines"/>), <c>--workers &lt;n&gt;</c> (starting workers per player
+/// beside each Town Hall, 0 to <see cref="MaxWorkers"/>; default <c>rules.json</c> <c>startingWorkers</c>, M3-V1),
+/// <c>--no-bases</c> (dev / tests: no Town Halls and no starting workers, the M2 armies-only match). Bad values are
 /// warned about and ignored; a token starting with <c>--</c> is never taken as a value (BUG-0041).
 /// </remarks>
 public sealed class LaunchOptions
@@ -28,6 +30,9 @@ public sealed class LaunchOptions
 
     /// <summary>Longest <c>--bench</c> run accepted, in seconds (an hour; BUG-0103: a huge finite value never ended).</summary>
     public const double MaxBenchSeconds = 3600;
+
+    /// <summary>Most starting workers per player <c>--workers</c> accepts (the CLI's <c>run --workers</c> bound).</summary>
+    public const int MaxWorkers = 200;
 
     /// <summary>Forests on the match map without <c>--forests</c> (Producer default for the 128 map, M2-3b).</summary>
     public const int DefaultForests = 12;
@@ -55,6 +60,12 @@ public sealed class LaunchOptions
 
     /// <summary>Units each player spawns at match start.</summary>
     public int UnitsPerPlayer { get; private set; } = DefaultUnitsPerPlayer;
+
+    /// <summary>Starting workers per player (<c>--workers</c>), or null for <c>rules.json</c> <c>startingWorkers</c>.</summary>
+    public int? Workers { get; private set; }
+
+    /// <summary>True to start without Town Halls and workers (<c>--no-bases</c>; takes no value): the armies-only match the M2 test scenes were written for.</summary>
+    public bool NoBases { get; private set; }
 
     /// <summary>Start zoom override in meters, or null for the default.</summary>
     public float? Zoom { get; private set; }
@@ -110,6 +121,10 @@ public sealed class LaunchOptions
                     if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int units) && units >= 0 && units <= MaxUnitsPerPlayer) o.UnitsPerPlayer = units;
                     else Warn(flag, value);
                     break;
+                case "--workers":
+                    if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int workers) && workers >= 0 && workers <= MaxWorkers) o.Workers = workers;
+                    else Warn(flag, value);
+                    break;
                 case "--forests":
                     if (TryGroups(value, out int forests)) o.Forests = forests;
                     else Warn(flag, value);
@@ -138,6 +153,9 @@ public sealed class LaunchOptions
                     continue; // takes no value
                 case "--mute":
                     o.Mute = true;
+                    continue; // takes no value
+                case "--no-bases":
+                    o.NoBases = true;
                     continue; // takes no value
                 default:
                     continue;

@@ -48,7 +48,7 @@ public partial class SelectionTest : Node
         if (!loaded.Ok) throw new InvalidOperationException("data failed to load");
         var match = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
         AddChild(match);
-        match.Start(loaded.Data!, LaunchOptions.Parse(new[] { "--units", "40" }));
+        match.Start(loaded.Data!, LaunchOptions.Parse(new[] { "--units", "40", "--no-bases" })); // armies only, as in M2 (M3-V1)
         _sel = match.GetNode<SelectionController>("SelectionController");
         _rings = match.GetNode<SelectionRings>("World3D/SelectionRings");
         _camera = match.GetNode<RtsCamera>("RtsCamera");

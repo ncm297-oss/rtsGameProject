@@ -2,6 +2,7 @@ using System;
 using Godot;
 using Rts.Sim;
 using Rts.Sim.Commands;
+using Rts.Sim.Data;
 using Rts.Sim.Entities;
 using Rts.Sim.ViewApi;
 
@@ -13,7 +14,9 @@ namespace Rts.Game;
 /// their projected centres; Shift (<c>select_add</c>) toggles a clicked unit or adds a box. A
 /// double-click or Ctrl + click (<c>select_type</c>) selects every own on-screen unit of the
 /// clicked type. Right click, A + click, S and H all go through <see cref="Order"/>, as does the
-/// minimap. The geometry lives in the pure <see cref="ScreenPicker"/> and <see cref="GroundPicker"/>,
+/// minimap. A right click on a live resource node with a worker selected is a Gather for the
+/// workers and a Move for the rest (<see cref="ContextOrder"/>, M3-V1); the minimap's right click
+/// stays a Move. The geometry lives in the pure <see cref="ScreenPicker"/> and <see cref="GroundPicker"/>,
 /// groups and subgroups in <see cref="ControlGroups"/> and <see cref="Rts.Sim.ViewApi.Subgroups"/>;
 /// the sim is changed only through <see cref="Simulation.Enqueue"/>. A selection action that leaves
 /// a changed, non-empty selection plays <see cref="SfxEvent.Select"/>; an order that enqueued
@@ -35,7 +38,10 @@ public partial class SelectionController : Node
 
     private Vector2 _press;
     private bool _pressing, _boxing, _doubleClick;
-    private readonly int[] _issued = new int[(int)CommandKind.AttackMove + 1];
+    private readonly int[] _issued = new int[(int)CommandKind.Repair + 1];
+
+    // Per unit type: in the worker slot (gathers on a right click on a node).
+    private bool[] _isWorkerType = Array.Empty<bool>();
 
     // Per-slot projection scratch, filled on each click or box release.
     private System.Numerics.Vector2[] _screen = Array.Empty<System.Numerics.Vector2>();
@@ -85,6 +91,8 @@ public partial class SelectionController : Node
         Selection = new SelectionSet(capacity);
         Groups = new ControlGroups(capacity);
         Subgroups = new Subgroups(Math.Max(1, world.Data.Units.Length));
+        _isWorkerType = new bool[world.Data.Units.Length];
+        for (int t = 0; t < _isWorkerType.Length; t++) _isWorkerType[t] = world.Data.Units[t].Slot == UnitSlot.Worker;
         _screen = new System.Numerics.Vector2[capacity];
         _radiusPx = new float[capacity];
         _candidate = new bool[capacity];
@@ -136,7 +144,7 @@ public partial class SelectionController : Node
             else if (mb.IsActionPressed("command"))
             {
                 if (Targeting) CancelTargeting(); // right click cancels targeting and orders nothing
-                else OrderAt(CommandKind.Move, mb.Position, Input.IsActionPressed("order_queue"));
+                else CommandAt(mb.Position, Input.IsActionPressed("order_queue"));
             }
         }
         else if (e is InputEventMouseMotion motion && _pressing)
@@ -346,6 +354,56 @@ public partial class SelectionController : Node
         return true;
     }
 
+    /// <summary>What a right click at <paramref name="screen"/> on the 3D view orders: picks the ground there and calls <see cref="ContextOrder"/>; false if the ray missed the map.</summary>
+    public bool CommandAt(Vector2 screen, bool queued)
+    {
+        Simulation sim = _runner.Simulation!;
+        Vector3 origin = _camera.ProjectRayOrigin(screen), dir = _camera.ProjectRayNormal(screen);
+        if (!GroundPicker.TryPick(sim.World.Heightmap, new(origin.X, origin.Y, origin.Z), new(dir.X, dir.Y, dir.Z), out System.Numerics.Vector3 hit))
+            return false;
+        ContextOrder(new Vector2(hit.X, hit.Z), queued);
+        return true;
+    }
+
+    /// <summary>
+    /// The right click's context command at a ground point (sim x, y in meters): on a live resource node's cell
+    /// (<see cref="ResourcePicker"/>) with at least one <c>worker</c>-slot unit selected, a <c>Gather</c> of that point for
+    /// every selected worker and a <c>Move</c> there for every other unit; anywhere else a plain <see cref="Order"/> Move.
+    /// One Command sound; nothing if the whole order doesn't fit the command queue. The sim resolves the node at apply.
+    /// </summary>
+    public void ContextOrder(Vector2 point, bool queued)
+    {
+        if (_runner?.Simulation is not Simulation sim) return;
+        if (!float.IsFinite(point.X) || !float.IsFinite(point.Y)) return;
+        var target = new System.Numerics.Vector2(point.X, point.Y);
+        World world = sim.World;
+        UnitStore u = world.Units;
+        Selection.Prune(u.Alive, u.Generation);
+        int workers = 0;
+        foreach (EntityHandle h in Selection.Items)
+            if (_isWorkerType[u.TypeId[h.Index]]) workers++;
+        if (workers == 0 || NodeAt(world, target) < 0)
+        {
+            Order(CommandKind.Move, point, queued);
+            return;
+        }
+        if (sim.PendingCommandCount + Selection.Count > world.Config.CommandCapacity)
+        {
+            DroppedOrders++;
+            GD.PushWarning($"Gather order for {Selection.Count} units dropped: command queue full.");
+            return;
+        }
+        foreach (EntityHandle h in Selection.Items)
+        {
+            sim.Enqueue(_isWorkerType[u.TypeId[h.Index]]
+                ? Command.Gather(LocalPlayer, h, target, queued)
+                : Command.Move(LocalPlayer, h, target, queued));
+        }
+        _issued[(int)CommandKind.Gather] += workers;
+        _issued[(int)CommandKind.Move] += Selection.Count - workers;
+        _sfx?.Play(SfxEvent.Command);
+    }
+
     /// <summary>The one order path: enqueues one <paramref name="kind"/> command per selected live unit, or none if the whole order doesn't fit the command queue.</summary>
     /// <param name="kind">Move, AttackMove, Stop or HoldPosition.</param>
     /// <param name="point">Ground point (sim x, y in meters); required and finite for Move and AttackMove, ignored otherwise.</param>
@@ -383,6 +441,10 @@ public partial class SelectionController : Node
         _issued[(int)kind] += Selection.Count;
         _sfx?.Play(SfxEvent.Command);
     }
+
+    /// <summary>The slot of the live resource node covering a ground point (sim x, y in meters), or -1 (<see cref="ResourcePicker"/>).</summary>
+    public static int NodeAt(World world, System.Numerics.Vector2 point) =>
+        ResourcePicker.NodeAtPoint(world.NavGrid, world.Data.Resources, world.Resources.Alive, world.Resources.TypeId, world.Resources.Cell, point);
 
     // The middle of the placeholder capsule: what the player sees and clicks.
     private static Vector3 BodyCentre(World world, int slot, float alpha) =>

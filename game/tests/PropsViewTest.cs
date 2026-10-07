@@ -69,7 +69,7 @@ public partial class PropsViewTest : Node
 
     private async Task MatchWith(string[] flags, int forests, int mines, bool deep)
     {
-        var args = new List<string> { "--units", "20" };
+        var args = new List<string> { "--units", "20", "--no-bases" }; // armies only, as in M2 (M3-V1)
         args.AddRange(flags);
         var match = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
         AddChild(match);

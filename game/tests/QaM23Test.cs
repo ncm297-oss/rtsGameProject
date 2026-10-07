@@ -64,7 +64,7 @@ public partial class QaM23Test : Node
         if (!loaded.Ok) throw new InvalidOperationException("data failed to load");
         var match = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
         AddChild(match);
-        match.Start(loaded.Data!, LaunchOptions.Parse(new[] { "--units", "60" }));
+        match.Start(loaded.Data!, LaunchOptions.Parse(new[] { "--units", "60", "--no-bases" })); // armies only, as in M2 (M3-V1)
         var runner = match.GetNode<SimRunner>("SimRunner");
         runner.ProcessMode = ProcessModeEnum.Disabled;
         _sim = runner.Simulation!;

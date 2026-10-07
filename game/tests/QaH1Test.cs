@@ -157,11 +157,18 @@ public partial class QaH1Test : Node
                 Check(SameHandlesLive(selBefore), $"{where}: a minimap right-click changed the selection");
                 break;
             case "3dRightGround":
-                RightClick(FindEmpty(rng));
+            {
+                // M3-V1: ground on a tree or mine with workers selected is a Gather for them and a Move for the rest.
+                Vector2 at = FindEmpty(rng);
+                int workers = LiveWorkersSelected();
+                bool onNode = SelectionController.NodeAt(_sim.World, GroundAt(at)) >= 0;
+                RightClick(at);
                 Check(!_sel.Targeting, $"{where}: a 3D right-click left targeting on");
                 if (wasTargeting) ExpectNoCommands(before, pending, where);
+                else if (onNode && workers > 0) { ExpectGatherSplit(before, pending, workers, live - workers, where); _moveOrders++; }
                 else { ExpectOnly(before, pending, CommandKind.Move, live, where); _moveOrders += live > 0 ? 1 : 0; }
                 break;
+            }
             case "3dLeftGround":
                 LeftClick(FindEmpty(rng));
                 Check(!_sel.Targeting, $"{where}: a 3D left click on ground left targeting on");
@@ -294,6 +301,33 @@ public partial class QaH1Test : Node
             Check(now[k] - before[k] == want, $"{where}: {(CommandKind)k} x{now[k] - before[k]}, expected {want}");
         }
         Check(_sim.PendingCommandCount - pending == count, $"{where}: {_sim.PendingCommandCount - pending} enqueued, expected {count}");
+    }
+
+    private void ExpectGatherSplit(int[] before, int pending, int gathers, int moves, string where)
+    {
+        int[] now = Issued();
+        for (int k = 0; k < now.Length; k++)
+        {
+            int want = k == (int)CommandKind.Gather ? gathers : k == (int)CommandKind.Move ? moves : 0;
+            Check(now[k] - before[k] == want, $"{where}: {(CommandKind)k} x{now[k] - before[k]}, expected {want}");
+        }
+        Check(_sim.PendingCommandCount - pending == gathers + moves, $"{where}: {_sim.PendingCommandCount - pending} enqueued, expected {gathers + moves}");
+    }
+
+    private int LiveWorkersSelected()
+    {
+        int n = 0;
+        foreach (EntityHandle h in _sel.Selection.Items)
+            if (U.Alive[h.Index] && U.Generation[h.Index] == h.Generation && _sim.World.Data.Units[U.TypeId[h.Index]].Slot == UnitSlot.Worker) n++;
+        return n;
+    }
+
+    // The ground point (sim x, y) under a screen pixel, as the controller picks it; NaN off the map.
+    private System.Numerics.Vector2 GroundAt(Vector2 px)
+    {
+        Vector3 o = _camera.ProjectRayOrigin(px), d = _camera.ProjectRayNormal(px);
+        return GroundPicker.TryPick(_sim.World.Heightmap, new(o.X, o.Y, o.Z), new(d.X, d.Y, d.Z), out System.Numerics.Vector3 hit)
+            ? new(hit.X, hit.Z) : new(float.NaN, float.NaN);
     }
 
     private int LiveSelected()

@@ -13,11 +13,26 @@ namespace Rts.Game;
 /// so a unit respawned into the slot reuses it. Meshes (one per unit type, radius from data) and
 /// materials (one per faction, its <c>PrimaryColor</c>) are all made in <see cref="Bind"/>. Views
 /// hold no gameplay state; they only read the unit store.
+/// Worker feedback (M3-V1): a standing worker's <see cref="UnitState"/> (<c>Gathering</c>, <c>Returning</c>,
+/// <c>Building</c>) tints its body through a shared overlay material, and while <c>Cargo</c> &gt; 0 a small marker
+/// floats above it, gold-coloured or wood-brown by <c>CargoKind</c>. A slot's marker node is made the first time it
+/// carries and then reused; overlay and marker are only touched when what they show changes, so a steady frame
+/// allocates nothing.
 /// </remarks>
 public partial class UnitViews : Node3D
 {
     /// <summary>Capsule height above twice the radius, in meters.</summary>
     public const float ExtraBodyHeight = 1f;
+
+    /// <summary>Cargo marker edge length, and its gap above the body, in meters.</summary>
+    public const float CargoSize = 0.35f, CargoGap = 0.3f;
+
+    // Placeholder tints until the M6 art pass (M2-1 rule). Cargo colours match the props' gold and trunk.
+    private static readonly Color GoldCargoColor = new(0.90f, 0.70f, 0.15f);
+    private static readonly Color WoodCargoColor = new(0.45f, 0.28f, 0.12f);
+    private static readonly Color GatheringTint = new(0.25f, 0.95f, 0.35f, 0.45f);
+    private static readonly Color ReturningTint = new(1.00f, 0.80f, 0.20f, 0.45f);
+    private static readonly Color BuildingTint = new(0.30f, 0.65f, 1.00f, 0.45f);
 
     /// <summary>The runner whose sim is shown each frame; null shows nothing (tests call <see cref="Sync"/> directly).</summary>
     public SimRunner? Runner { get; set; }
@@ -28,6 +43,14 @@ public partial class UnitViews : Node3D
     private int[] _viewType = Array.Empty<int>();
     private bool[] _shown = Array.Empty<bool>();
 
+    // Worker feedback: overlay per UnitState (null for untinted states), marker mesh per ResourceKind.
+    private StandardMaterial3D?[] _tints = Array.Empty<StandardMaterial3D?>();
+    private BoxMesh[] _cargoMeshes = Array.Empty<BoxMesh>();
+    private MeshInstance3D?[] _markers = Array.Empty<MeshInstance3D?>();
+    // What each slot shows now: the tinted state (Idle: none), the cargo kind (-1: none).
+    private UnitState[] _shownTint = Array.Empty<UnitState>();
+    private sbyte[] _shownCargo = Array.Empty<sbyte>();
+
     /// <summary>View nodes created so far (one per slot ever used).</summary>
     public int NodeCount { get; private set; }
 
@@ -36,6 +59,9 @@ public partial class UnitViews : Node3D
 
     /// <summary>Materials created (one per faction).</summary>
     public int MaterialCount { get; private set; }
+
+    /// <summary>Cargo marker nodes created so far (one per slot that ever carried).</summary>
+    public int MarkerCount { get; private set; }
 
     /// <summary>Creates the shared meshes and materials and sizes the slot pool; call once before the first <see cref="Sync"/>.</summary>
     public void Bind(GameData data, int unitCapacity)
@@ -60,7 +86,37 @@ public partial class UnitViews : Node3D
         _viewType = new int[unitCapacity];
         Array.Fill(_viewType, -1);
         _shown = new bool[unitCapacity];
+
+        _tints = new StandardMaterial3D?[(int)UnitState.Building + 1];
+        _tints[(int)UnitState.Gathering] = Tint(GatheringTint);
+        _tints[(int)UnitState.Returning] = Tint(ReturningTint);
+        _tints[(int)UnitState.Building] = Tint(BuildingTint);
+        _cargoMeshes = new BoxMesh[(int)ResourceKind.Wood + 1];
+        _cargoMeshes[(int)ResourceKind.Gold] = CargoMesh(GoldCargoColor);
+        _cargoMeshes[(int)ResourceKind.Wood] = CargoMesh(WoodCargoColor);
+        _markers = new MeshInstance3D?[unitCapacity];
+        _shownTint = new UnitState[unitCapacity];
+        _shownCargo = new sbyte[unitCapacity];
+        Array.Fill(_shownCargo, (sbyte)-1);
     }
+
+    /// <summary>The state whose tint slot <paramref name="slot"/> shows (<see cref="UnitState.Idle"/>: none).</summary>
+    public UnitState ShownTint(int slot) => _shownTint[slot];
+
+    /// <summary>The cargo kind slot <paramref name="slot"/>'s marker shows, or -1 for no marker.</summary>
+    public int ShownCargo(int slot) => _shownCargo[slot];
+
+    /// <summary>The cargo marker node of slot <paramref name="slot"/>, or null if it never carried.</summary>
+    public MeshInstance3D? MarkerOf(int slot) => (uint)slot < (uint)_markers.Length ? _markers[slot] : null;
+
+    /// <summary>The overlay material that tints a unit in <paramref name="state"/>, or null for an untinted state.</summary>
+    public StandardMaterial3D? TintOf(UnitState state) => (uint)state < (uint)_tints.Length ? _tints[(int)state] : null;
+
+    /// <summary>The marker mesh for cargo of <paramref name="kind"/>.</summary>
+    public BoxMesh CargoMeshOf(ResourceKind kind) => _cargoMeshes[(int)kind];
+
+    /// <summary>The state a unit's tint shows: its own if <see cref="TintOf"/> has a material for it, else <see cref="UnitState.Idle"/> (none).</summary>
+    public UnitState TintStateFor(UnitState state) => TintOf(state) != null ? state : UnitState.Idle;
 
     /// <summary>The view node of a slot, or null if the slot has never held a unit.</summary>
     public MeshInstance3D? ViewOf(int slot) => (uint)slot < (uint)_views.Length ? _views[slot] : null;
@@ -102,8 +158,53 @@ public partial class UnitViews : Node3D
             Vector3 ground = GroundPoint(world, i, alpha);
             float facing = BlendFacing(u.PrevFacing[i], u.Facing[i], alpha);
             view.Transform = new Transform3D(new Basis(Vector3.Up, Yaw(facing)), ground + new Vector3(0f, _halfHeight[type], 0f));
+
+            UnitState tint = TintStateFor(u.State[i]);
+            if (tint != _shownTint[i])
+            {
+                view.MaterialOverlay = _tints[(int)tint];
+                _shownTint[i] = tint;
+            }
+            sbyte cargo = u.Cargo[i] > 0 ? (sbyte)u.CargoKind[i] : (sbyte)-1;
+            if (cargo != _shownCargo[i]) ShowCargo(i, view, type, cargo);
         }
     }
+
+    // Shows or hides the slot's cargo marker; the marker is a child of the body, so it follows it and hides with it.
+    private void ShowCargo(int slot, MeshInstance3D view, int type, sbyte cargo)
+    {
+        _shownCargo[slot] = cargo;
+        MeshInstance3D? marker = _markers[slot];
+        if (cargo < 0 || cargo >= _cargoMeshes.Length)
+        {
+            if (marker != null) marker.Visible = false;
+            return;
+        }
+        if (marker == null)
+        {
+            marker = new MeshInstance3D { Name = "Cargo", CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+            view.AddChild(marker);
+            _markers[slot] = marker;
+            MarkerCount++;
+        }
+        marker.Mesh = _cargoMeshes[cargo];
+        // The body is centred on its node; the marker floats above its top (types differ in height).
+        marker.Position = new Vector3(0f, _halfHeight[type] + CargoGap + CargoSize / 2f, 0f);
+        marker.Visible = true;
+    }
+
+    private static StandardMaterial3D Tint(Color c) => new()
+    {
+        AlbedoColor = c,
+        Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+        ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+    };
+
+    private static BoxMesh CargoMesh(Color c) => new()
+    {
+        Size = new Vector3(CargoSize, CargoSize, CargoSize),
+        Material = new StandardMaterial3D { AlbedoColor = c, Roughness = 0.6f },
+    };
 
     /// <summary>A unit's interpolated ground point in view coordinates: lerp(PrevPosition, Position, alpha) with alpha clamped to [0, 1], on the terrain surface.</summary>
     public static Vector3 GroundPoint(World world, int slot, float alpha)

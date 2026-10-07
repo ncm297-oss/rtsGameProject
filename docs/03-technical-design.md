@@ -2130,6 +2130,96 @@ repeatable benchmark, facing interpolation, and a screenshot set. The owner's pl
   10 s bench at 100 units per player with vsync off that must average under 16.7 ms with p99 under
   33 ms (headless prints "BENCH TEST SKIP" for that row). `UnitViewsTest` adds the facing-blend rows.
 
+### Implementation (M3-V1)
+
+The first view half of M3: the owner sees the economy run and drives it. The default match gets a Town Hall and workers
+per player, the HUD a resource bar, a right-click on a tree or mine sends selected workers gathering, and workers and
+buildings show what they are doing.
+
+```
+Match.tscn  (new nodes)
+  World3D/BuildingViews   Node3D, BuildingViews.cs: one box + bar per building slot
+  Hud/ResourceBar         Label, ResourceBar.cs: top right, "<gold name> N  <wood name> N"
+```
+
+- **Start bases** (`Match.SpawnBases`, the pure `Rts.Sim.ViewApi.StartBase`): after the armies, per player a finished
+  Town Hall (its faction's `town_hall` slot, `World.FactionOf`) through the dev `Command.SpawnBuilding`, then
+  `--workers <n>` (0-200, default `rules.json` `startingWorkers` = 5) units of its `worker` slot. The hall's spot is
+  the anchor whose footprint fits (`BuildingStore.Fits`) on the start block's level, whose 8-ring has no blocked cell
+  (tree, mine, cliff, border, building: an all-passable ring is a loop round the footprint, so the never-seal rule
+  always passes), with no army unit or earlier base in footprint or ring, and which stays on its own side of the
+  6-cell centre gap between the two blocks (west for player 0, east for player 1); the one whose centre is nearest
+  the block's mean wins, ties toward the map centre, then the lower anchor (the CLI `run --workers` order). With no
+  army (`--units 0`) a one-unit block stands in, and the camera starts on player 0's hall. Workers stand one per
+  passable free cell on the rings round the hall, ring 1 first, within a ring nearest the gold mine closest to the
+  hall (else the block), so the first trip is short (seed 1: all five Gathering by tick 23). No spot: one warning per
+  player ("no open spot for a Town Hall...") and no hall or workers for that player; the match runs on (seeds
+  1-50 at the default 12 / 8 resources, and 1-40 at 64 / 64 with 100 or 1,000 units: no player without a spot). The
+  bench's 100 / 1,000 units per player are unchanged; the unit store grows past 2,000 to fit the workers
+  (`players x (units + workers)`). The start-up line ends with `town halls H, W workers per player`.
+  **`--no-bases`** (dev / tests) skips halls and workers: the armies-only match the M2 test scenes were written for
+  (their hash twins replay their own spawns, and they count one nav / minimap / props upload because nothing
+  changes the grid after the start, which a hall placed on tick 1 now does).
+- **Building views** (`BuildingViews`): polled each frame from `Buildings.Alive` / `Generation` like the props (no
+  sim events yet). A slot's nodes (box, bar back, bar fill) are made the first time it holds a building and hidden
+  while it is free. The box is the footprint (cells x 2 m) by 3 m, in the owner's faction colour; a construction
+  site is slate (lighter than the Malazan grey) and rises from 15% to full height with its progress. The bar over it
+  comes from the pure `ViewApi.BuildingBars.Of(buildings, defs, slot, out fill)`: `Progress` (`Work / WorkNeeded`,
+  yellow) on a site, `HitPoints` (`Hp / max`, green) on a finished building below full hit points, `None` otherwise;
+  its transform is written only when kind or fill change. A freed slot (a Cancel) is hidden on the first frame
+  after. Buildings are not selectable yet (M3-V3).
+- **Resource bar** (`ResourceBar`, `Hud` top right, docs/02 "HUD layout"): player 0's `World.Gold` / `Wood` with the
+  names from its faction's `faction.json` `resources.gold / wood.displayName` (`FactionDef.GoldName` / `WoodName`, so
+  no resource name is a C# literal); the text is rebuilt only when a number changes (the M2-H2 overlay rule).
+  Population joins it in M3-V3. Hidden with the HUD (`--no-hud`).
+- **Right-click Gather** (`SelectionController.ContextOrder`, called by `CommandAt` from a 3D right click): when the
+  picked ground point lies on a live resource node's cell (`ViewApi.ResourcePicker`) and the selection holds at least
+  one `worker`-slot unit, each selected worker gets `Command.Gather(player, unit, point)` and every other unit a
+  `Move` there, Shift queueing both; anywhere else it is the plain `Order(Move)`. One Command sound; the whole order or
+  nothing when the command queue is too full (as `Order`). The sim resolves the node at apply (an unexposed tree goes
+  to the nearest exposed one). The minimap's right click stays a Move. `ResourcePicker.NodeAt(grid, defs, alive,
+  typeId, anchorCell, cell)` (and `NodeAtPoint` for meters) returns the node's slot or -1: a cell without
+  `NavFlags.Resource` costs one flag read; otherwise the live nodes are scanned for the footprint that covers it (the
+  store has no cell index).
+- **Worker feedback** (`UnitViews`): a standing worker's `Gathering` (green), `Returning` (amber) or `Building` (blue)
+  state tints its body through a shared translucent overlay material (`MaterialOverlay`); while `Cargo > 0` a 0.35 m
+  cube floats above it, gold or wood-brown by `CargoKind`. A slot's marker node is made the first time it carries,
+  then reused; overlay and marker are touched only when what they show changes. Walking legs (`Moving`) are not
+  tinted; the marker shows the load either way. The F12 overlay's second line adds "workers gathering N,
+  returning N, building N" (`ViewApi.DebugCounts.InState`).
+- **ViewApi rule.** The new reads take the stores' read-only parts (grid, defs, spans, `BuildingStore`), never the
+  `World` (the QA source scan forbids `World`, `Simulation` and `UnitStore` in `ViewApi/`); `StartBase.Plan` takes
+  each player's faction from the caller (`World.FactionOf`). No `CanPlace` call (M3-V2's ghost will, on the sim thread
+  between ticks).
+- **Cost.** 300 idle frames of the resource bar, building views and unit views (cargo markers and tints in use)
+  allocate 0 bytes. `--bench 10 --vsync off` at 100 units per player with the halls and workers (dev PC, default
+  1152 x 648 window, Debug): avg 0.52 ms, p99 0.92 ms, worst 1.39 ms, avg tick 0.21 ms (the M2-7 figure at this size
+  was 0.52 ms).
+- **Tests.** xUnit (`Rts.Sim.Tests/ViewApi`): `ResourcePickerTests` (every cell of every node on 50 match maps resolves
+  to it and every other cell to -1, against a brute-force oracle; off-map and non-finite input; a felled node stops
+  resolving; 0 bytes for the picker, `BuildingBars` and `DebugCounts`), `BuildingBarsTests` (no bar at full hp, the hp
+  share when damaged, a site's progress growing with `Work`, none when done; dead and out-of-range slots),
+  `StartBaseTests` (seeds 1 / 6 / 31: both halls stand finished at the planned anchor on the block's level, five
+  workers each beside it facing the nearest mine; 50 seeds: every planned hall is accepted, ring passable, on its side
+  of the gap; no room on a 7 x 7 map; a tree on the ring or a taken cell rules a spot out; worker ring order) and
+  `EconomyViewHashTwinTests` (400 ticks of gathering, a build and its cancel, calling every new read each tick: the
+  hash equals a bare twin's every tick). Headless scene `res://tests/EconomyViewTest.tscn` ("ECONOMY VIEW TEST
+  PASS"): `--workers` parsing; the no-spot warning path (`SpawnBases` with every cell taken: two warnings, nothing
+  enqueued); seeds 1 / 6 / 31 boot with both halls (faction, anchor, finished, box size and colour, no bar), five
+  workers each and the bar reading "Gold 200  Wood 200" from data; `--workers 0` and `--units 0 --workers 7`; a
+  real right-click on seed 1's mine with the five workers selected (all Gathering by tick 23 of 60, gold up at tick
+  310 of 1,200), then on a tree (wood up within 1,200), each frame checking the bar against `World.Gold` / `Wood` and
+  every unit's tint and cargo marker against the sim; the F12 counts; 5 workers + 5 soldiers: plain ground is 10
+  Moves, Shift + right-click on the mine queues a Gather per worker and a Move per soldier, unqueued the workers gather
+  and the soldiers walk, soldiers alone get Moves, the minimap path stays a Move; 300 idle frames at 0 bytes; a
+  worker's Build: the site box is slate with a progress bar equal to `Work / WorkNeeded` every tick, and gone the
+  frame after its Cancel frees it. Windowed with `-- --shots <dir>` it saves the start of each seed, workers
+  hauling, and the site. `QaH1Test`'s fuzz now expects the Gather / Move split when its "empty ground" right click
+  lands on a tree or mine with workers selected; the M2 scenes that assume an armies-only match pass `--no-bases`.
+- **Not yet:** command card, build menu, ghost (M3-V2); production UI, rally marker, population in the bar (M3-V3);
+  building selection; a damaged building in a scene test (no public damage path until combat; `BuildingBarsTests`
+  covers the hit-point bar's numbers).
+
 ## AI architecture
 
 The AI lives in `Rts.Sim.Ai`, inside the sim assembly, because it must be deterministic (it uses

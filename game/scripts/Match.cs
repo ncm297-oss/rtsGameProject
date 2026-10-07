@@ -16,6 +16,12 @@ public partial class Match : Node3D
     /// <summary>The <c>--bench</c> runner, or null for a normal run.</summary>
     public BenchRunner? Bench { get; private set; }
 
+    /// <summary>The start bases placed by <see cref="Start"/> (Town Hall anchor and worker spots per player); null before it and under <c>--no-bases</c>.</summary>
+    public StartBasePlan? Bases { get; private set; }
+
+    /// <summary>Starting workers per player this match asked for (<c>--workers</c>, else <c>rules.json</c> <c>startingWorkers</c>).</summary>
+    public int WorkersPerPlayer { get; private set; }
+
     public override void _Ready()
     {
         _runner = GetNode<SimRunner>("SimRunner");
@@ -28,6 +34,9 @@ public partial class Match : Node3D
         if (options.Speed is double speed) _runner.GameSpeed = speed;
         _runner.Forests = options.Forests;
         _runner.GoldMines = options.Mines;
+        WorkersPerPlayer = options.NoBases ? 0 : options.Workers ?? data.Rules.StartingWorkers;
+        // The start workers come on top of the armies (the bench keeps its 100 / 1,000 a side), so the store grows past 2,000 when needed.
+        _runner.UnitCapacity = Math.Max(_runner.UnitCapacity, _runner.PlayerCount * (options.UnitsPerPlayer + WorkersPerPlayer));
         _runner.Start(data);
         Simulation sim = _runner.Simulation!;
 
@@ -49,11 +58,22 @@ public partial class Match : Node3D
         units.Bind(data, sim.World.Units.Capacity);
         units.Runner = _runner;
 
+        // Player p plays faction p until the M6 lobby (World.FactionOf), so a player's colour is that faction's.
+        var playerRgb = new uint[sim.World.Config.PlayerCount];
+        for (int p = 0; p < playerRgb.Length; p++) playerRgb[p] = data.Factions[sim.World.FactionOf(p)].PrimaryColor;
+        var buildings = GetNode<BuildingViews>("World3D/BuildingViews");
+        buildings.Bind(data, sim.World.Buildings.Capacity, playerRgb);
+        buildings.Runner = _runner;
+
         Sfx.SetMuted(options.Mute);
         var selection = GetNode<SelectionController>("SelectionController");
         selection.Init(_runner, camera, GetNode<SelectionRings>("World3D/SelectionRings"), GetNode<Sfx>("Sfx"));
 
-        System.Numerics.Vector2 focus = SpawnArmies(sim, options.UnitsPerPlayer);
+        System.Numerics.Vector2[][] blocks = SpawnArmies(sim, options.UnitsPerPlayer, out System.Numerics.Vector2 focus);
+        Bases = options.NoBases ? null : SpawnBases(sim, blocks, WorkersPerPlayer, out _);
+        // No army: look at player 0's Town Hall instead of the map centre.
+        if (options.UnitsPerPlayer == 0 && Bases != null && Bases.HallAnchor[0] >= 0)
+            focus = StartBase.FootprintCenter(sim.World.NavGrid, data.Buildings[Bases.HallType[0]], Bases.HallAnchor[0]);
         camera.SetFocus(focus.X, focus.Y);
         if (options.Zoom is float zoom) camera.SetZoom(zoom);
 
@@ -62,11 +82,11 @@ public partial class Match : Node3D
         Minimap? minimap = null;
         if (!options.NoHud)
         {
-            // Player p plays faction p until the M6 lobby, so a player's dot colour is that faction's.
-            var playerRgb = new uint[sim.World.Config.PlayerCount];
-            for (int p = 0; p < playerRgb.Length; p++) playerRgb[p] = data.Factions[p % data.Factions.Length].PrimaryColor;
             minimap = hud.GetNode<Minimap>("Minimap");
             minimap.Init(_runner, camera, selection, playerRgb);
+            // Resource names come from the local player's faction data (CLAUDE.md rule 8).
+            FactionDef local = data.Factions[sim.World.FactionOf(SelectionController.LocalPlayer)];
+            hud.GetNode<ResourceBar>("ResourceBar").Init(_runner, SelectionController.LocalPlayer, local.GoldName, local.WoodName);
         }
 
         GetNode<DebugOverlay>("DebugOverlay").Init(_runner, selection, camera,
@@ -83,26 +103,28 @@ public partial class Match : Node3D
         ResourcePlacement placed = sim.World.ResourcePlacement;
         GD.Print($"Match started: seed {unchecked((ulong)_runner.Seed)}, map {map.Width} x {map.Height}, " +
             $"speed {_runner.GameSpeed:0.##}x, {options.UnitsPerPlayer} units per player, " +
-            $"forests {placed.Forests} trees {placed.Trees} mines {placed.Mines}");
+            $"forests {placed.Forests} trees {placed.Trees} mines {placed.Mines}, " +
+            $"town halls {Halls(Bases)}, {WorkersPerPlayer} workers per player");
     }
 
-    /// <summary>Enqueues each player's start army in its <see cref="StartLayout"/> block; returns player 0's block centre (meters).</summary>
+    /// <summary>Enqueues each player's start army in its <see cref="StartLayout"/> block; returns each player's block, and player 0's block centre (meters) in <paramref name="focus"/>.</summary>
     /// <remarks>
     /// Until the M6 lobby, player p plays faction p (ids in data order: malazan, whirlwind) and
     /// spawns its roster round-robin. The units appear on the sim's next tick.
     /// </remarks>
-    private static System.Numerics.Vector2 SpawnArmies(Simulation sim, int perPlayer)
+    private static System.Numerics.Vector2[][] SpawnArmies(Simulation sim, int perPlayer, out System.Numerics.Vector2 focus)
     {
         GameData data = sim.World.Data;
         NavGrid grid = sim.World.NavGrid;
-        var focus = new System.Numerics.Vector2(grid.Width, grid.Height) * MapConstants.CellSize / 2;
+        focus = new System.Numerics.Vector2(grid.Width, grid.Height) * MapConstants.CellSize / 2;
         int players = Math.Min(sim.World.Config.PlayerCount, 2); // two start blocks: west and east
+        var blocks = new System.Numerics.Vector2[players][];
         for (int p = 0; p < players; p++)
         {
             FactionDef faction = data.Factions[p % data.Factions.Length];
             float maxRadius = 0f;
             foreach (int t in faction.Units) maxRadius = Math.Max(maxRadius, data.Units[t].Radius);
-            System.Numerics.Vector2[] spots = StartLayout.Block(grid, perPlayer, west: p == 0, maxRadius);
+            System.Numerics.Vector2[] spots = blocks[p] = StartLayout.Block(grid, perPlayer, west: p == 0, maxRadius);
             if (spots.Length < perPlayer)
                 GD.PushWarning($"Player {p}: only {spots.Length} of {perPlayer} start positions fit.");
             var sum = System.Numerics.Vector2.Zero;
@@ -113,7 +135,50 @@ public partial class Match : Node3D
             }
             if (p == 0 && spots.Length > 0) focus = sum / spots.Length;
         }
-        return focus;
+        return blocks;
+    }
+
+    /// <summary>
+    /// Enqueues each player's start base after its army (M3-V1, docs/02 "Economy" starting state): a finished Town Hall
+    /// (the faction's <c>town_hall</c> slot, through the dev <c>SpawnBuilding</c>) on the <see cref="StartBase"/> spot
+    /// beside its block, then <paramref name="workers"/> of its <c>worker</c> slot round it. A player with no spot gets one
+    /// warning and no base; the match runs on. Returns the plan; <paramref name="warnings"/> counts the players skipped.
+    /// </summary>
+    /// <remarks>Commands apply in (player, sequence) order next tick, so the hall sees its own army in place; the plan keeps clear of every army cell.</remarks>
+    public static StartBasePlan SpawnBases(Simulation sim, System.Numerics.Vector2[][] blocks, int workers, out int warnings)
+    {
+        World world = sim.World;
+        float maxRadius = 0f;
+        foreach (UnitDef def in world.Data.Units) maxRadius = Math.Max(maxRadius, def.Radius);
+        var factions = new int[blocks.Length];
+        for (int p = 0; p < factions.Length; p++) factions[p] = world.FactionOf(p);
+        StartBasePlan plan = StartBase.Plan(world.NavGrid, world.Data, world.Buildings, world.Resources.Alive, world.Resources.TypeId,
+            world.Resources.Cell, factions, blocks, workers, maxRadius);
+        NavGrid g = world.NavGrid;
+        warnings = 0;
+        for (int p = 0; p < blocks.Length; p++)
+        {
+            int anchor = plan.HallAnchor[p];
+            if (anchor < 0)
+            {
+                warnings++;
+                GD.PushWarning($"Player {p}: no open spot for a Town Hall beside the start block; no Town Hall or workers.");
+                continue;
+            }
+            sim.Enqueue(Command.SpawnBuilding(p, plan.HallType[p], g.CellCenter(anchor % g.Width, anchor / g.Width)));
+            foreach (System.Numerics.Vector2 spot in plan.Workers[p]) sim.Enqueue(Command.SpawnUnit(p, plan.WorkerType[p], spot));
+            if (plan.Workers[p].Length < workers)
+                GD.PushWarning($"Player {p}: only {plan.Workers[p].Length} of {workers} workers fit beside the Town Hall.");
+        }
+        return plan;
+    }
+
+    private static int Halls(StartBasePlan? plan)
+    {
+        if (plan == null) return 0;
+        int n = 0;
+        foreach (int anchor in plan.HallAnchor) if (anchor >= 0) n++;
+        return n;
     }
 
     public override void _ExitTree()

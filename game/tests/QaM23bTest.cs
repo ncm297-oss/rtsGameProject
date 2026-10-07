@@ -77,7 +77,7 @@ public partial class QaM23bTest : Node
     {
         var match = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
         AddChild(match);
-        match.Start(_data, LaunchOptions.Parse(new[] { "--seed", "7", "--units", "1000", "--forests", "64", "--mines", "64" }));
+        match.Start(_data, LaunchOptions.Parse(new[] { "--seed", "7", "--units", "1000", "--forests", "64", "--mines", "64", "--no-bases" })); // armies only, as in M2 (M3-V1)
         var runner = match.GetNode<SimRunner>("SimRunner");
         Simulation sim = runner.Simulation!;
         World w = sim.World;
