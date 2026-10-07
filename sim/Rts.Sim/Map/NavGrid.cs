@@ -18,6 +18,7 @@ public sealed class NavGrid
     private readonly byte[] _levels;
     private readonly NavFlags[] _flags;
     private readonly byte[] _cost;
+    private int[]? _scratch;
 
     /// <summary>Derives flags, costs and levels from terrain.</summary>
     public NavGrid(Heightmap map)
@@ -110,7 +111,7 @@ public sealed class NavGrid
     /// <summary>As <see cref="SetResource"/>, for a building's footprint (<see cref="NavFlags.Building"/>, M3-2); the caller (the building store) checks every cell first.</summary>
     internal void SetBuilding(int x, int y, int width, int height) => SetFootprint(x, y, width, height, NavFlags.Building);
 
-    /// <summary>As <see cref="ClearResource"/>, for a building's footprint (M3-2).</summary>
+    /// <summary>As <see cref="ClearResource"/>, for a building's footprint (M3-2): a destroyed building or cancelled site (the pocket rule, M3-H1).</summary>
     internal void ClearBuilding(int x, int y, int width, int height) => ClearFootprint(x, y, width, height, NavFlags.Building);
 
     private void SetFootprint(int x, int y, int width, int height, NavFlags kind)
@@ -130,26 +131,107 @@ public sealed class NavGrid
     }
 
     /// <summary>
-    /// Reopens the cells a depleted resource node covered (the reverse of <see cref="SetResource"/>: a node only ever
-    /// covers open ground, so its cells go back to <see cref="NavFlags.None"/> and passable cost) and bumps
-    /// <see cref="Version"/> once, so cached flow fields rebuild through the gap. An opening change: <see cref="BlockVersion"/>
-    /// stays, so those fields stay usable until rebuilt.
+    /// Frees the cells a depleted resource node covered (the reverse of <see cref="SetResource"/>) by the pocket rule
+    /// (<see cref="ClearFootprint"/>): normally they go back to open ground and <see cref="Version"/> bumps once, an
+    /// opening change (<see cref="BlockVersion"/> stays, so cached fields stay usable until rebuilt).
     /// </summary>
     internal void ClearResource(int x, int y, int width, int height) => ClearFootprint(x, y, width, height, NavFlags.Resource);
 
+    /// <summary>Lends the grid scratch of at least two ints a cell for the pocket rule's flood (the flow-field builder's queue storage, idle between builds); without it the first flood allocates its own.</summary>
+    internal void ShareScratch(int[] scratch)
+    {
+        if (scratch.Length < 2 * Width * Height) throw new ArgumentException("scratch too small", nameof(scratch));
+        _scratch = scratch;
+    }
+
+    /// <summary>
+    /// The pocket rule (M3-H1, BUG-0093): frees a footprint so that every passable cell still reaches every other. The
+    /// footprint and the <see cref="NavFlags.Pocket"/> cells 4-connected to it through other pocket cells reopen together
+    /// (one <see cref="Version"/> bump) if any of them is 4-adjacent to a passable cell; otherwise the footprint's cells
+    /// stay blocked as pocket cells and nothing is published (no version bump: no cell a unit can use changed).
+    /// </summary>
+    /// <remarks>
+    /// Passable cells form one 4-connected region (sealed at load, kept so by the never-seal placement rule); a union that
+    /// touches it joins it, one that doesn't would be a region of its own. The common case (no pocket cell beside the
+    /// footprint) reads only the footprint's 4-adjacent ring; a flood runs only when pockets exist next to it.
+    /// </remarks>
     private void ClearFootprint(int x, int y, int width, int height, NavFlags kind)
     {
+        int w = Width;
+        for (int cy = y; cy < y + height; cy++)
+            for (int cx = x; cx < x + width; cx++)
+                _flags[cy * w + cx] &= ~kind;
+        bool open = false, pocketNear = false;
+        for (int k = 0; k < 2 * (width + height); k++)
+        {
+            SealCheck.RingCell(x, y, width, height, k, out int rx, out int ry);
+            NavFlags f = FlagsAt(rx, ry);
+            if ((f & NavFlags.Blocked) == 0) open = true;
+            else if ((f & NavFlags.Pocket) != 0) pocketNear = true;
+        }
+        if (!pocketNear)
+        {
+            for (int cy = y; cy < y + height; cy++)
+                for (int cx = x; cx < x + width; cx++)
+                    SetOpen(cy * w + cx, open);
+            if (open)
+            {
+                PassableCount += width * height;
+                Version++;
+            }
+            return;
+        }
+
+        int n = w * Height;
+        int[] s = _scratch ??= new int[2 * n];
+        Array.Clear(s, 0, n); // [0, n): 1 = in the union; [n, 2n): the union's cells
+        int tail = n;
         for (int cy = y; cy < y + height; cy++)
         {
             for (int cx = x; cx < x + width; cx++)
             {
-                int i = cy * Width + cx;
-                _flags[i] &= ~(NavFlags.Blocked | kind);
-                _cost[i] = MapConstants.CostPassable;
+                s[cy * w + cx] = 1;
+                s[tail++] = cy * w + cx;
             }
         }
-        PassableCount += width * height;
+        // A footprint or pocket cell is never on the border ring, so its 4 neighbors are in bounds.
+        for (int head = n; head < tail; head++)
+        {
+            int i = s[head];
+            for (int d = 0; d < 4; d++)
+            {
+                int j = d == 0 ? i - 1 : d == 1 ? i + 1 : d == 2 ? i - w : i + w;
+                if (s[j] != 0) continue;
+                NavFlags f = _flags[j];
+                if ((f & NavFlags.Blocked) == 0) open = true;
+                else if ((f & NavFlags.Pocket) != 0)
+                {
+                    s[j] = 1;
+                    s[tail++] = j;
+                }
+            }
+        }
+        if (!open)
+        {
+            for (int cy = y; cy < y + height; cy++)
+                for (int cx = x; cx < x + width; cx++)
+                    SetOpen(cy * w + cx, false);
+            return;
+        }
+        for (int k = n; k < tail; k++) SetOpen(s[k], true);
+        PassableCount += tail - n;
         Version++;
+    }
+
+    /// <summary>A freed cell (no node or building on it now): open ground, or a blocked <see cref="NavFlags.Pocket"/> cell.</summary>
+    private void SetOpen(int i, bool open)
+    {
+        if (open)
+        {
+            _flags[i] &= ~(NavFlags.Blocked | NavFlags.Pocket);
+            _cost[i] = MapConstants.CostPassable;
+        }
+        else _flags[i] |= NavFlags.Blocked | NavFlags.Pocket;
     }
 
     /// <summary>Every cell's flags, indexed <c>y * Width + x</c>, for whole-grid passes that can't afford a bounds check per read; the live array, so read it and never write it.</summary>

@@ -9,8 +9,8 @@ Status legend: **Next** = start here, **Planned** = not started, **Done** = acce
 | --- | --- | --- | --- |
 | M0 | Environment & skeleton | **Done** (2026-10-03) | Tools installed, empty projects build, tests and headless boot pass |
 | M1 | Core sim, no graphics | **Done** (2026-10-06, Producer sign-off) | 200 units path across the map deterministically, fast |
-| M2 | Presentation | **In progress** (view track, started 2026-10-05; 10 / 10 criteria; end-of-milestone hardening session, then sign-off) | Move an army around a 3D map |
-| M3 | Economy & buildings | **In progress** (sim + data tracks, started 2026-10-06-1255; 3 / 8) | Build a Malazan base |
+| M2 | Presentation | **Done** (2026-10-07, Producer sign-off after the M2-H2 hardening) | Move an army around a 3D map |
+| M3 | Economy & buildings | **In progress** (sim + data tracks since 2026-10-06-1255, view track from 2026-10-07; 3 / 8; sim hardening M3-H1 done) | Build a Malazan base |
 | M4 | Combat, fog, abilities | Planned | Malazan vs. Whirlwind armies fight with abilities and fog |
 | M5 | AI opponent | Planned | Lose to a Whirlwind AI |
 | M6 | Game shell & real art | Planned | A friend can play it |
@@ -186,6 +186,15 @@ listed in the retro. Owner may revisit._
       playtest is the last check (STATE "For your review"). Open for the M2 hardening session: BUG-0101 (S3, the
       bench's "order across" only moves the army ~17 m), BUG-0102 (S3, `fps` field biased low on short runs),
       BUG-0103 (S4 nits).)_
+
+_All 10 criteria met by session 2026-10-06-2114. End-of-milestone hardening M2-H2 in session
+2026-10-07-0800 (the bench marches across the map and reports a true `fps`, start blocks stand in a
+clearing, sounds stop at quit, the overlay label allocates only on change, 2 x 2 minimap dots, export
+notes for M6; BUG-0069 / 0070 / 0083 / 0084 / 0085 / 0086 / 0087 / 0088 / 0101 / 0102 / 0103 fixed).
+`studio/qa/coverage.md`: every M2 row ✅ for Unit, Invariant fuzz and Determinism (audio's Determinism
+"—": `Sfx` has no sim reference); no open S1/S2. Signed off by the Producer on 2026-10-07 under autopilot
+(`stop_at_milestone_end: no`); open S3/S4 listed in the retro. The owner's own playtest (STATE "For your
+review") stands as feedback, not as a gate. Owner may revisit._
 
 ## M3 — Economy & buildings
 
@@ -371,6 +380,39 @@ Add one section per completed milestone below.
   file names), BUG-0005 (per-player command buckets, before M5), BUG-0008 / 0010 (loader nits, M3 data
   task), BUG-0023 / 0025 / 0026 (field cache limits, documented), BUG-0028 / 0032 (crowd targets),
   BUG-0040 part 2 (M5 design note), BUG-0002 (`.sln` Release mapping, M6).
+
+### M2 retro (2026-10-07, signed off by the Producer under autopilot)
+- What shipped: the game window. A 3D terraced map (plateaus, cliff walls, ramps, sun and sky) with
+  placeholder trees and gold mines; the RTS camera (55°, edge pan, keys, middle-drag, 20-60 m zoom,
+  clamped); 200 capsule units in faction colours that walk smoothly between ticks and turn the short
+  way round; click / box / Shift / double-click / Ctrl selection, control groups, Tab subgroups; every
+  order key (right-click, A, S, H, Shift-queue) through one order path; a 220 px minimap with click-to-
+  jump, right-click orders, resource layer and rimmed 2 x 2 dots; the F12 overlay (nav grid, flow arrows,
+  tick graph); generated select / command sounds with `--mute`; `--screenshot`, `--bench`, `--vsync` and a
+  measured 60 FPS with 10x headroom (0.73 ms a frame at 100 units per player). 9 view sessions
+  (2026-10-05 to 2026-10-07), 2 of them hardening; 18 headless Godot test scenes; every M2 coverage row
+  ✅ for Unit / fuzz / Determinism.
+- What was harder than expected: measuring honestly without a human. The benchmark's first "order across"
+  step moved the army 15 m (BUG-0101), its `fps` was biased by the load second (BUG-0102), and the default
+  start block stood in a forest and on a cliff edge (BUG-0085); all three were caught by QA's independent
+  measurements rather than by the pinned tests, and all three fixed in the hardening session. Godot's
+  headless runs hide failures (exit 0 on script errors, leak warnings only at exit), so the smoke script,
+  the `TEST PASS` banners and log greps carry the verdicts.
+- What to change in the process or the plan: (1) pin visual and benchmark claims to a property with
+  an independent oracle (pixel reads, distance travelled, frames / seconds), not to a number copied from
+  the first run; (2) keep ViewApi pure and read-only (the hash-twin tests proved it every session; no view
+  task ever changed a sim result); (3) the owner's playtest and listening are still owed (STATE "For your
+  review"), and a milestone's "Playable" criterion is ticked on measurements until then; (4) numbered
+  acceptance criteria belong in `studio/handoff.md` at PLAN time (missed once in session 2114).
+- Decisions made (also recorded in 01-vision.md): placeholder colours and debug start blocks until M6;
+  faction colour as team colour; clusters, not formations; 12 forests / 8 mines on the default map; F12
+  overlay with one goal's arrows; generated tones instead of sound files; the 2 x 2 rimmed dot (owner may
+  pick another style, BUG-0069); the bench's far target at 0.85 x width.
+- Open S3/S4 carried into M3 (none block): BUG-0104 (S3, the 10 s bench moves seed 21's army 19.1 m
+  against a 20 m bound fitted to seed 1), BUG-0105 (S4, minimap refresh row at 92-94 % of its 0.3 ms
+  limit, two stale doc figures), BUG-0025 (sim, overlay arrows late with 64+ goals), the cosmetic notes
+  in STATE's view backlog (ramp-end slope, no border skirts, edge-pan suppression unreachable, export
+  hygiene for M6).
 - Decisions made (also recorded in 01-vision.md): clusters instead of formations; 1 s give-up;
   cliff strips 2 m; ramps 6 x 8 m; 2 field builds per tick, cache metadata hashed; own standing units
   soft, enemies and holders hard; plugs up to 32; replays bound to the exact data content hash;

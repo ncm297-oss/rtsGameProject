@@ -217,7 +217,11 @@ public sealed class BuildingStore
         if (_hp[i] == 0) Free(handle);
     }
 
-    /// <summary>Removes a live building (destroyed, or a cancelled site): its cells reopen (one <see cref="NavGrid.Version"/> bump, an opening change) and its generation moves on. False for a dead or stale handle.</summary>
+    /// <summary>
+    /// Removes a live building (destroyed, or a cancelled site) and its generation moves on. Its cells are freed by the
+    /// grid's pocket rule (BUG-0093): they reopen (one <see cref="NavGrid.Version"/> bump, an opening change) when they
+    /// touch open ground, else they stay blocked as <see cref="NavFlags.Pocket"/> cells with no bump. False for a dead or stale handle.
+    /// </summary>
     internal bool Free(EntityHandle handle)
     {
         if (!IsAlive(handle)) return false;

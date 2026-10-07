@@ -296,10 +296,11 @@ public class ConstructionQaTests
 
     /// <summary>
     /// BUG-0078 through player commands only: a House site beside a tree whose other sides are forest, walled in by
-    /// three own Houses (each legal: the site is already a wall), then cancelled. Its cells reopen as a pocket, the tree
-    /// is "exposed" to it again, and a worker sent to that tree is in BUG-0078's situation. Reports what the worker does.
+    /// three own Houses (each legal: the site is already a wall), then cancelled. M3-H1 (BUG-0093): the pocket rule keeps
+    /// the four cells blocked as pocket cells with nothing published, so the tree has no open side, and a worker sent
+    /// to it takes the depleted-node rule instead of retrying it for ever.
     /// </summary>
-    [Fact(Skip = "BUG-0093: a cancelled walled-in site leaves a pocket; a worker sent to a tree exposed only to it gathers nothing for ever (BUG-0078 via player commands); un-skip when fixed")]
+    [Fact]
     public void ACancelledSiteBesideATree_LeavesThePocketBug0078Described_Report()
     {
         Simulation sim = BuildMaps.NewSim(Flat(40, 30));
@@ -317,17 +318,22 @@ public class ConstructionQaTests
             Run(sim, 2);
         }
         Assert.Equal(5, sim.World.Buildings.Count);
+        NavGrid g = sim.World.NavGrid;
+        int v = g.Version, bv = g.BlockVersion, passable = g.PassableCount;
         sim.Enqueue(Command.Cancel(0, At(sim, 21, 15)));
         Run(sim, 2);
-        NavGrid g = sim.World.NavGrid;
-        int[] labels = SealOracle.Labels(g);
-        bool pocket = labels[Cell(sim, 21, 15)] != labels[Cell(sim, 26, 22)];
+        Assert.Equal(4, sim.World.Buildings.Count);
+        foreach ((int x, int y) in new[] { (21, 15), (22, 15), (21, 16), (22, 16) })
+            Assert.Equal(NavFlags.Blocked | NavFlags.Pocket, g.FlagsAt(x, y));
+        Assert.Equal((v, bv, passable), (g.Version, g.BlockVersion, g.PassableCount));
+        Assert.Null(Stress.ResourceOracle.Reach(g)); // every passable cell still reaches every other
+        Assert.False(g.IsPassable(19, 15) || g.IsPassable(21, 15) || g.IsPassable(20, 14) || g.IsPassable(20, 16), "the tree has an exposed side");
         sim.Enqueue(Command.Gather(0, w, At(sim, 20, 15)));
         Run(sim, 1200);
         UnitStore u = sim.World.Units;
-        _out.WriteLine($"pocket after the cancel: {pocket}; after 60 s on the tree: state {u.State[w.Index]}, node {u.GatherNode[w.Index].Index} (tree {tree.Index}), cargo {u.Cargo[w.Index]}, wood {sim.World.Wood[0]}, at {u.Position[w.Index]}");
-        Assert.True(pocket, "expected the cancel to leave a pocket");
-        Assert.False(u.GatherNode[w.Index] == tree && u.Cargo[w.Index] == 0, "BUG-0078: the worker retries a tree it can only reach through a pocket, for ever");
+        _out.WriteLine($"after 60 s: state {u.State[w.Index]}, node {u.GatherNode[w.Index].Index} (tree {tree.Index}), cargo {u.Cargo[w.Index]}, wood {sim.World.Wood[0]}, tree left {sim.World.Resources.Remaining[tree.Index]}");
+        Assert.False(u.GatherNode[w.Index] == tree, "BUG-0078: the worker is still on the tree it can only reach through a pocket");
+        Assert.Equal(TreeWood, sim.World.Resources.Remaining[tree.Index]); // nobody gathered the walled-in tree
     }
 
     // ------------------------------------------------------------------ cancel / refund exploits

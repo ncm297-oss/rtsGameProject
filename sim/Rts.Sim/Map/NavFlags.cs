@@ -23,4 +23,11 @@ public enum NavFlags : byte
 
     /// <summary>Covered by a building's footprint; always also <see cref="Blocked"/> (M3-2).</summary>
     Building = 16,
+
+    /// <summary>
+    /// A cell a freed building or node left reachable from nowhere (M3-H1, BUG-0093): it stays <see cref="Blocked"/>
+    /// until an opening change next to it joins it to open ground. Always also <see cref="Blocked"/>. Load-time pockets
+    /// are plain <see cref="Blocked"/> and never reopen.
+    /// </summary>
+    Pocket = 32,
 }

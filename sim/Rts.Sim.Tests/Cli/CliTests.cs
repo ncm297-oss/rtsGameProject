@@ -194,6 +194,19 @@ public sealed class CliTests : IDisposable
         Assert.Equal("", r.Out); // nothing ran: no header, no checkpoint, no timing line
     }
 
+    /// <summary>BUG-0072: a file name the file system refuses (which <c>Path.GetFullPath</c> accepts) also fails before a single tick: the file is opened before the run.</summary>
+    [Fact]
+    public void Run_RecordFileNameTheFileSystemRefuses_FailsBeforeTicking()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "rts-cli-tests");
+        Directory.CreateDirectory(dir);
+        string path = Path.Combine(dir, "a<b" + ReplayFormat.FileExtension);
+        CliResult r = Cli("run", "--seed", "1", "--units", "5", "--ticks", "200", "--record", path, "--data", TestDataDir.Shipped);
+        Assert.Equal(1, r.Exit);
+        Assert.StartsWith($"error: cannot write replay '{path}'", OneLine(r.Err));
+        Assert.Equal("", r.Out); // no header, no checkpoint, no timing line
+    }
+
     /// <summary>BUG-0057: a replay shorter than one checkpoint interval plays back "ok", but says nothing was compared.</summary>
     [Fact]
     public void Play_ReplayWithNoCheckpoints_SaysNothingWasCompared()

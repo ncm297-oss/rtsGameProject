@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-06-1255, task M3-1 |
 | System | resource placement, data loader, docs |
-| Fixed by | |
+| Fixed by | Item 1 (docs timing) by the Producer in M3-2b. Items 2-3 in M3-H1 (4abbf37, session 2026-10-07-0800): `DataLoader.BuildResources` requires one resource type per kind (an empty list or a missing gold / wood type is a `DataError`); `ResourcePlacer.Scratch.StaysConnected` runs the whole-map flood only as a `Debug.Assert` after the ring test (Producer decision: QA's oracle over 246 seeds never saw them disagree; Release setup skips the flood); `MapGenParams.Validate` refuses `-0` `MineSpacing`. Tests: QA `ResourceQaTests` empty-list and missing-kind rows (un-skipped), `SimHardeningTests` `-0` row; docs/03 "Implementation (M3-1)" |
 
 ## Repro / Actual
 1. **Setup time in docs.** docs/03 "Implementation (M3-1)" says the worst case (1024 map, 64 forests

@@ -4,7 +4,7 @@ The dashboard. The Producer rewrites it at the end of every session. **Owner: re
 you" first.** "For your review" (further down) is non-blocking: what the studio built or decided
 on its own, explained in terms of what you'd see in the game.
 
-_Last updated: 2026-10-06 (session 2026-10-06-2114, ACCEPT all three tracks: sim M3-3, view M2-7, data D2)._
+_Last updated: 2026-10-07 (session 2026-10-07-0800, the resumed 2026-10-06-2326: ACCEPT sim M3-H1 and view M2-H2; **M2 signed off**; data STOPped cheaply)._
 
 ## Waiting on you
 
@@ -18,21 +18,21 @@ _Last updated: 2026-10-06 (session 2026-10-06-2114, ACCEPT all three tracks: sim
 
 | Field | Value |
 | --- | --- |
-| Sim: milestone | M3 — Economy & buildings (started 2026-10-06-1255); 3 / 8 criteria; M3-3 closed BUG-0078 (residual BUG-0093) |
-| Sim: next task | **Sim hardening session** (4 / 4): BUG-0093 pocket after Cancel, BUG-0091 refused-Build floods, BUG-0080 design, BUG-0081 M6 note, BUG-0092 / 0079 / 0076 / 0071 / 0072 · hardening · QA standard; then M3-4 production + population |
+| Sim: milestone | M3 — Economy & buildings (started 2026-10-06-1255); 3 / 8 criteria; M3-H1 sim hardening done (8 bugs closed, pocket rule) |
+| Sim: next task | **M3-4 production queues (5 slots), rally points, population + cap, refunds on cancel** · feature · QA full; then M3-5 Age II + Forge upgrades (`techs.json`, building `requires`), M3-6 `trainedAt` / `requires` validation |
 | Sim: gate | **GO** |
-| View: milestone | M2 — Presentation (started 2026-10-05); 10 / 10 criteria ticked (M2-7 landed); sign-off after the hardening session |
-| View: next task | **M2 end-of-milestone hardening** (BUG-0101 / 0102 bench, 0087, 0085, 0083, 0069, 0103 / 0084 / 0086 / 0088 / 0070) → Producer signs M2 off · hardening · QA standard; then M3 view side (resource bar, build ghost) |
+| View: milestone | **M2 Done** (signed off 2026-10-07 after M2-H2; 11 bugs closed) → M3 view side starts (HUD, worker orders, build ghost) |
+| View: next task | **M3-V1 HUD resource bar, right-click Gather on trees / mines, worker and site feedback, a Town Hall + workers in the default match** · feature · QA standard; then M3-V2 command card + build ghost + build menu |
 | View: gate | **GO** |
 | Data: milestone | M3 — "factions fully defined in data": units ✓ + buildings ✓, both pinned to the faction pages (D2); techs wait for the M3-5 schema |
 | Data: next task | **Owner review tweaks** from the inbox if any, else **STOP** (no schema to fill until M3-5) |
 | Data: gate | **GO** (tweaks) / cheap STOP otherwise |
 | Tools on this PC | Godot 4.7.2 .NET, .NET SDK 8.0.425, Git 2.53 + LFS 3.7; `GODOT` user variable set |
-| Build | all three branches 0 errors, 1 warning (CS8602 `game/tests/DebugOverlayTest.cs:173`, BUG-0084); golden regenerated on the sim branch only (`data-hash` + checksum) |
-| Tests | Producer reruns non-Perf: sim 2538 / 2550 (12 skipped) / 0 failed, 8 m 38 s; view 2449 / 2461 (12 skipped) / 0 failed; data 2450 / 2462 (12 skipped) / 0 failed; view smoke PASS (`Rts.Sim 0.0.1`, match stopped at tick 85, no ERROR); headless `--bench 2 --mute` exit 0, one `bench:` line (290 frames, 40 ticks, avgTick 0.257 ms; its `fps 88.2` against 145 real frames per second is BUG-0102 reproduced); windowed `--bench 5 --vsync off --mute` (1152 x 648, 120 Hz): avg 0.52 / p99 1.03 / worst 1.39 ms, exit 0. QA: sim 2644 / 15 / 0 incl. Perf, view 2544 / 15 / 0 + 17 / 17 scenes, data 2450 / 12 / 0 |
-| Open bugs | 32 (S1: 0, S2: 0, S3: 18, S4: 14) — none block; fixed this session: 0078 (S3, by rule; residual 0093); new: 0091 / 0093 / 0101 / 0102 (S3), 0092 / 0103 / 0111 (S4) |
-| Sessions today | 6 / 8 on 2026-10-06; feature sessions since last hardening: sim 4 / 4, view 4 / 4, data 2 / 4 |
-| Last session | 2026-10-06-2114 · sim M3-3 (0 fix rounds) · view M2-7 (0) · data D2 (0) · all ACCEPT |
+| Build | sim branch 0 errors / 1 warning (the CS8602 the view branch fixes, BUG-0084); view branch 0 / 0; golden untouched on both |
+| Tests | Producer reruns non-Perf: sim 2671 / 2680 (9 skipped) / 0 failed, 8 m 12 s; view 2718 / 2730 (12 skipped) / 0 failed, 7 m 44 s; view smoke PASS (Producer rerun). QA: sim 2784 / 12 / 0 incl. Perf (Perf rows pass alone; `TightBlob2500` 4.48 of 4.5 ms), view 2823 / 15 / 1 under load (the one Perf row passes alone) + 18 / 18 scenes, clean clone 2662 / 12 / 0 |
+| Open bugs | 20 (S1: 0, S2: 0, S3: 12, S4: 8) — none block; fixed this session: sim 0071 / 0081 / 0091 / 0093 (S3), 0072 / 0076 / 0079 / 0092 (S4); view 0069 / 0083 / 0085 / 0087 / 0101 / 0102 (S3), 0070 / 0084 / 0086 / 0088 / 0103 (S4); BUG-0080 stays as a documented limit; new: 0095 / 0096 / 0104 (S3), 0094 / 0105 (S4) |
+| Sessions today | 1 / 8 on 2026-10-07 (this one resumed 2026-10-06-2326 after an OS restart); feature sessions since last hardening: sim 0 / 4, view 0 / 4, data 2 / 4 |
+| Last session | 2026-10-07-0800 · sim M3-H1 hardening (0 fix rounds) · view M2-H2 hardening (0) · data STOP · both ACCEPT, M2 signed off |
 
 ## Milestone progress
 
@@ -40,8 +40,8 @@ _Last updated: 2026-10-06 (session 2026-10-06-2114, ACCEPT all three tracks: sim
 | --- | --- | --- |
 | M0 | 7 / 7 required | **Done** 2026-10-03 (optional MCP item open) |
 | M1 (sim track) | 8 / 8 | **Done** 2026-10-06 (Producer sign-off after the M1-9 hardening; retro in docs/05) |
-| M2 (view track) | 10 / 10 (SimRunner interpolation, camera, terrain mesh + trees / mines, placeholder unit views, selection, orders, minimap, debug overlay, placeholder audio, 60 FPS playable check) | Criteria met; M2 hardening session next, then Producer sign-off (owner playtest under For your review) |
-| M3 (sim + data tracks) | 3 / 8 (resource entities; worker gather / return loop; building placement + construction + repair, sim half); M3-2b done; data: units + buildings pinned to the faction pages, techs pending | In progress; sim hardening next, then M3-4 |
+| M2 (view track) | 10 / 10 (SimRunner interpolation, camera, terrain mesh + trees / mines, placeholder unit views, selection, orders, minimap, debug overlay, placeholder audio, 60 FPS playable check) | **Done** 2026-10-07 (Producer sign-off after the M2-H2 hardening; retro in docs/05; your playtest under For your review is feedback, not a gate) |
+| M3 (all three tracks) | 3 / 8 (resource entities; worker gather / return loop; building placement + construction + repair, sim half); M3-2b and the M3-H1 sim hardening done; data: units + buildings pinned to the faction pages, techs pending; view side starts now | In progress; sim M3-4 production next, view M3-V1 HUD + worker orders next |
 | M4-M9 | — | Planned |
 
 ## For your review
@@ -49,6 +49,120 @@ _Last updated: 2026-10-06 (session 2026-10-06-2114, ACCEPT all three tracks: sim
 Non-blocking. Each entry says what was built or decided, what you'd notice in the game, and how
 to change it. To change anything, write it in `studio/inbox.md`, for example "use formations
 instead of clusters" or "make giving up take 2 seconds".
+
+### M2 is done: the game window is signed off, and its clean-up fixed the benchmark, the start positions, the quit leak and the minimap dots (view track, M2-H2 + sign-off, 2026-10-07)
+
+- **What M2 is:** everything you can see and touch today: a 3D terraced map with forests and gold mines,
+  the camera, 200 placeholder soldiers that walk and turn smoothly, selection (click, box, Shift,
+  double-click, Ctrl, groups 1-9, Tab), every order key (right-click, A, S, H, Shift-queue), the minimap
+  with click-to-jump and right-click orders, the F12 developer overlay, select / command sounds, the
+  `--screenshot` and `--bench` flags, and a measured 60 FPS with 10x headroom. Nine view sessions over
+  three days, two of them clean-up sessions; 18 headless test scenes.
+- **This session's clean-up (eight items), in plain words:**
+  1. The benchmark's "order across the map" step **really marches across now** (about 109 m, to a spot
+     85 % of the way to the far edge, or the opposite corner if that spot is a cliff or a forest) instead
+     of 15 m to the enemy's doorstep (BUG-0101), and its `fps` is frames divided by seconds (BUG-0102).
+     The 60 s numbers barely moved: 0.73 ms a frame at 100 units per player, 2.62 ms at 1,000 per player
+     with the west army marching through the east one. QA checked the target on 200 map seeds.
+  2. **Both armies start in a clearing**: no soldier next to a tree, a mine, a cliff edge or the map
+     border, and each army on one height level (BUG-0085; seeds 1-40 checked at 100 and 1,000 per side).
+  3. **Sounds stop when the game quits**, so the "instances leaked" warning is gone (10 of 10 runs clean;
+     BUG-0087). A test row that could fail under heavy PC load now waits on the right clock (BUG-0088).
+  4. **Minimap dots are a 2 x 2 coloured centre inside a one-cell rim**, so a lone scout reads in its
+     player's colour (BUG-0069, my default; QA read the screen pixels of lone dots at the border, on a
+     ramp and on a cliff lip).
+  5. The F12 overlay's text line is rebuilt only when a number changes (a quiet frame allocates nothing,
+     BUG-0083); cliff edges read crimson instead of olive, arrows no longer dip into steep ramps, the one
+     compiler warning is gone (BUG-0084).
+  6. Smaller: a felled tree re-uploads only the trees, not the mines (BUG-0086); `--bench` is capped at an
+     hour and prints with a dot decimal on every PC (BUG-0103); four doc / test nits (BUG-0070).
+  7. Two notes for the M6 release build are in the docs: keep the test scenes out of the shipped zip,
+     and load the data files in a way that works from the packed game.
+- **I signed M2 off myself** (your autopilot setting `stop_at_milestone_end: no`). Conditions held: all
+  ten criteria verified, every M2 system covered by unit, fuzz and determinism tests (the sounds have no
+  game-state side, so "determinism" doesn't apply there), no serious open bugs, clean-up session done.
+  **Your playtest is still wanted, as feedback:** `& $env:GODOT --path game`, maximize the window,
+  box-select the grey army west of centre (it stands in a clearing now), right-click far across the map
+  past the orange army and watch the march through a ramp: smooth turning, no per-tick snapping. Click
+  the minimap corners, scroll the wheel from 20 m to 60 m, press A and click, Shift + right-click three
+  points, H, S. Zoom out (`-- --zoom 60`) and look at the minimap dots. Listen: a short blip on select, a
+  rising two-note on an order. Then `& $env:GODOT --path game -- --bench 60 --vsync off` and read the
+  `bench:` line (expect avg under 1 ms, fps over 1,000 on this PC). Write "M2 playable ok" in the inbox,
+  or what felt wrong; a complaint becomes the view track's next task ahead of roadmap work.
+- **Producer decisions, revisit any time:**
+  - *Signed off on measurements, with your playtest as feedback rather than a gate* (the alternative,
+    holding the view track until you play, would idle it; flip the autopilot setting to `yes` if you'd
+    rather gate).
+  - *The 2 x 2 dot* over the two alternatives (screen-pixel dots, or a rim only round a crowd's outside);
+    both remain yours to pick by inbox note.
+  - *The benchmark's pass mark is "the army centre moves at least 20 m in 10 s"* (seed 1 moves 22 m; the
+    march runs through the idle enemy army, which halves its pace after a few seconds). QA found that
+    seed 21 moves 19.1 m (BUG-0104), so the bound is fitted to seed 1, not the map family; the benchmark
+    runs seeds 1 / 6 / 31 by default, so nothing fails today.
+  - *At 1,000 units per side the start block may wrap round a mine or a forest strip* (every soldier is
+    still clear of them); that is what the clearing rule allows.
+  - *Size: ~230 game-code lines, ~330 view-helper lines, ~450 dev test lines, ~660 QA test lines.*
+- **Rough edges (next view clean-up session, after four feature sessions):** BUG-0104 (S3) above; BUG-0105
+  (S4): the minimap refresh test now runs at 92-94 % of its 0.3 ms limit (it could fail under load; the
+  2 x 2 dot cost the margin) and two doc figures are stale.
+- **What's next (view track, M3):** a resource bar, right-click a tree or mine to gather, worker and
+  construction feedback, then the build menu with a ghost preview, then the production queue UI.
+
+### Sim clean-up: no patch of ground can ever be walled off, refused build orders are cheap, eight bugs closed (sim track, M3-H1, 2026-10-07)
+
+- **What was built (clean-up, no new features):**
+  1. **A cancelled or destroyed building can't leave a hole nobody can reach.** When a building goes
+     (cancelled now, destroyed in M4 combat) and its squares touch open ground, they open as before. If
+     other buildings or trees surround them, the squares stay blocked (a "pocket") until something next to
+     them opens, and then the whole chain opens at once. So the "worker walks to the wall for ever" case
+     (BUG-0093, the last trace of BUG-0078) is gone, and "every open square reaches every other square" is
+     now true at every moment of a match. QA ran 30,000 random build / cancel / destroy / fell steps on six
+     maps against an independent "can everyone reach everyone" checker: no violation, and two identical
+     runs stayed identical every tick.
+  2. **A refused build order is cheap.** "Can't afford it", "a unit is in the way" and "the building list
+     is full" are checked before the expensive "would this wall ground off" test: 100 refused orders in one
+     tick went from 22 ms to 0.07 ms (BUG-0091).
+  3. **Units set down outside a new building never share a square** (the search keeps going ring by ring:
+     400 soldiers stacked where a Town Hall goes land on 400 different squares in 2.5 ms); the push-out
+     finds nearby units through the fast lookup grid (0.3 ms instead of 7 ms with 400 units around); the
+     view will never draw a pushed unit sliding through the building; a worker holding position can build
+     on its own spot; a hand-edited repair factor too small to do anything is refused (BUG-0092).
+  4. Small ones: an empty resources file, or one without a tree or a mine type, is refused (BUG-0076); the
+     command-line tool refuses a bad `--record` file name before the run instead of after (BUG-0072); a
+     one-in-a-million "is this a wall?" answer no longer depends on which unit asked first (BUG-0071); a
+     docs sentence (BUG-0079).
+- **What you'll see:** nothing new in the window; these are safety and speed fixes under the hood that the
+  M3 build menu (view track, next sessions) will rely on. Numbers: 500 marchers + 50 builders + a tree
+  felled every tick still cost 1.19 ms a tick (budget 4); the replay fingerprint did not change (no unit
+  moved differently).
+- **Producer decisions, revisit any time:**
+  - *Blocked pockets, rather than "an unreachable tree is not a target".* The alternative (teach workers to
+    check reachability per target) fixes one symptom; the pocket rule keeps the whole-map promise that
+    combat and the AI can rely on later.
+  - *BUG-0080 stays as a documented limit.* If a player (or the M5 AI) places a building on **every single
+    tick**, armies ordered more recently stand still while that lasts (a building every 2 ticks: only the 4
+    oldest groups walk; every 4 ticks with 8 groups: all walk, the youngest after 3 ticks). The preferred
+    fix (keep following the old route maps and rely on the per-step wall check) was not done: units pressed
+    against a new building would give up after one second instead of waiting for the new map, and the
+    current behaviour is pinned by tests on both tracks. The exact bound is in the docs with a test that
+    measures it. Revisit when the AI's building rate is known (M5).
+  - *Saved games (M6) will store the route maps themselves*, not only "which destinations were cached", so
+    loading a save continues the game exactly as it would have run (BUG-0081). Alternative: refresh every
+    map at save time in both runs, at the cost of a few metres of difference per unit. Owner may revisit
+    at M6.
+  - *The forest generator's whole-map double-check runs only in debug builds now* (the local check never
+    disagreed with it across 246 maps); saves about 2 s of setup on the biggest maps in release.
+  - *A `--record` run now empties an existing file of that name at start*, so a run that dies leaves an
+    empty file where the old replay was. Accepted: don't record over a replay you want to keep.
+  - *Size: ~290 code lines, ~540 dev test lines, ~1,100 QA test lines, ~120 doc lines (budget 1,500).*
+- **Rough edges (S3, next sim clean-up session after four feature sessions):** BUG-0095: a building placed
+  on a small plateau with fewer free squares than units standing in its footprint makes the search walk
+  the whole map for each leftover unit (9 ms on the normal map, 35 ms on a 256 map) and the leftovers end
+  up stacked on one point; a player would have to construct it. BUG-0096: a build order refused *because it
+  would wall ground off* still pays the full check (100 such orders in one tick: 33 ms); the ghost preview
+  will refuse those before an order is ever sent, so in play it needs a scripted flood of bad orders.
+  BUG-0094 (S4): a test helper can build groves that wall cells in; test-only.
+- **To change it:** the pocket rule, the BUG-0080 call and the save-file decision by inbox note.
 
 ### You can place buildings and workers build them, in the rules (sim track, M3-3, 2026-10-06)
 
@@ -95,6 +209,8 @@ instead of clusters" or "make giving up take 2 seconds".
   - BUG-0092 (S4): a hand-edited repair factor below one 100,000th loads but does nothing; a worker on
     Hold can't build on its own spot; past eight full rings pushed units share a cell; push-out is slow
     with 400 units around a Town Hall (7 ms once).
+  - **Update 0800: BUG-0093, BUG-0091 and BUG-0092 are fixed (see the M3-H1 entry at the top); two residuals
+    stay (BUG-0095 / 0096, S3, both perf corner cases, next sim clean-up session).**
 - **To change it:** repair factors in `game/data/common/rules.json` (`repair.rateFactor`, `costFactor`);
   the never-seal rule, push-out and the "player p plays faction p" rule by inbox note.
 
@@ -136,7 +252,9 @@ instead of clusters" or "make giving up take 2 seconds".
   includes the loading second; 60 s runs are off by 1-2 %). BUG-0103 (S4): with vsync on the frame times
   print as perfectly even (the engine smooths them), two log lines use the PC's decimal comma, an absurd
   `--bench 1e308` never ends. Also seen: on the default seed the grey army's start block straddles a cliff
-  edge (goes with BUG-0085's "inside a forest").
+  edge (goes with BUG-0085's "inside a forest"). **Update 0800: BUG-0101 / 0102 / 0103 fixed and the start
+  block stands in a clearing (BUG-0085); see the M2 sign-off entry at the top. The benchmark now marches the
+  army about 109 m across the map and its `fps` is frames divided by seconds.**
 - **To change it:** the step list and timings are the table at the top of `sim/Rts.Sim/ViewApi/BenchScript.cs`;
   the warm-up count `BenchRunner.WarmUpFrames`; the rest by inbox note.
 
@@ -252,7 +370,8 @@ instead of clusters" or "make giving up take 2 seconds".
   game quits leaves a harmless "instances leaked" warning in the log about 2 runs in 5 (the players
   are never stopped at quit). BUG-0088 (S4, found by me, not caused by this task): one existing test
   scene's double-tap row can fail when the PC is heavily loaded, because it waits on game time while
-  the double-tap window uses the wall clock.
+  the double-tap window uses the wall clock. **Update 0800: both fixed (M2-H2): sounds stop when the game
+  quits (10 of 10 runs clean), and the test row waits on the wall clock.**
 - **To change it:** pitches and lengths are the note table at the top of `game/scripts/Sfx.cs`;
   volume `Sfx.SfxVolumeDb`; the 50 ms gap `Sfx.MinGapMs`; the rest by inbox note.
 
@@ -293,6 +412,9 @@ instead of clusters" or "make giving up take 2 seconds".
   - *Size: ~540 code lines (budget 800), ~600 lines of dev tests (budget 600), ~1,400 of QA tests.*
 - **Rough edges:** BUG-0080 and BUG-0081 above (S3, sim hardening in two sessions); the felling perf
   test has ~20 % headroom and fails when the whole suite runs at once (passes every time alone).
+  **Update 0800: BUG-0081 is decided (the save file will store the route maps, see the M3-H1 entry at the
+  top); BUG-0080 stays as a documented limit with its exact measured bound (the fix was judged riskier
+  than the limit; details in that entry).**
 - **To change it:** the build cap is `MovementConstants.MaxFieldBuildsPerTick` (2); the rest by inbox note.
 
 ### Workers gather gold and wood and carry it home by themselves (sim track, M3-2, 2026-10-06)
@@ -349,7 +471,7 @@ instead of clusters" or "make giving up take 2 seconds".
   - BUG-0079 (S4): a missing `cost` in a building file reports three errors instead of one;
     `--workers 0` without resources runs though the docs say it needs them.
   - **Update 1744: BUG-0073 and BUG-0077 are fixed (see the M3-2b entry at the top); the other nine
-    buildings per faction landed (the D1 entry).**
+    buildings per faction landed (the D1 entry). Update 0800: BUG-0079 closed (M3-H1).**
 - **To change it:** rates, carry and the 20 m search are in `game/data/common/rules.json`
   (`gatherRate`, `workerCarry`, `nodeSearchRadius`); the Town Hall numbers in
   `game/data/factions/<faction>/buildings.json`; reach / retry / cargo rules by inbox note.
@@ -388,6 +510,9 @@ instead of clusters" or "make giving up take 2 seconds".
     forests away from the start blocks (sim track).
   - BUG-0086 (S4): each relist re-uploads both prop buffers even if only one type changed; the
     minimap refresh has ~15 % headroom to its 0.3 ms limit.
+  - **Update 0800: BUG-0085 and BUG-0086 fixed (M2-H2): both armies now start in a clearing (no tree, mine
+    or cliff edge beside any soldier, the whole army on one level), and a felled tree re-uploads only the
+    trees. The minimap refresh margin is now 6-8 % (BUG-0105, S4, a watch item).**
 - **To change it:** defaults are `LaunchOptions.DefaultForests` / `DefaultMines` (view code, or an
   inbox note); colours and sizes are constants in `game/scripts/PropsView.cs` and
   `sim/Rts.Sim/ViewApi/MinimapRaster.cs` (placeholders until M6).
@@ -453,7 +578,9 @@ instead of clusters" or "make giving up take 2 seconds".
     2 x 2, forests can wall ground in. Next sim clean-up session. **Update 1744: BUG-0073, BUG-0074
     and BUG-0075 are all fixed (M3-2 and M3-2b entries above).**
   - BUG-0076 (S4): small notes (a setup-time number in the docs, fixed; a redundant check that costs
-    2 s on a huge 1024 x 1024 map; an empty resources file loads without complaint).
+    2 s on a huge 1024 x 1024 map; an empty resources file loads without complaint). **Update 0800:
+    BUG-0076 fixed (M3-H1): an empty or one-kind resources file is refused, and the 2 s check runs only
+    in debug builds.**
 - **To change it:** `game/data/common/resources.json` (node types, footprints, names);
   `game/data/common/rules.json` (`treeWood`, `startMines.gold`); forest sizes and mine spacing are
   generator settings (`MapGenParams`), by inbox note.
@@ -491,7 +618,9 @@ instead of clusters" or "make giving up take 2 seconds".
   warning in a test scene; one dev test measures the wrong case. Also seen: with more than 128
   destinations active at once under the 2-maps-per-tick build limit, a new order's arrows can take a
   while to appear (BUG-0025, sim, known). **Update 1503: resource cells (trees, mines) show green in
-  the overlay instead of red, since they open up when used.**
+  the overlay instead of red, since they open up when used. Update 0800: BUG-0083 and BUG-0084 fixed
+  (M2-H2): the label is rebuilt only when a number changes, cliff edges read crimson, arrow tips clear the
+  ramps.**
 - **To change it:** key binding in `game/project.godot`; colours are constants in
   `sim/Rts.Sim/ViewApi/NavOverlayBuilder.cs` and `game/scripts/FlowArrowsView.cs` (dev-only, not
   player-facing); window size `FlowArrowLayout.DefaultWindow`; the rest by inbox note.
@@ -541,7 +670,7 @@ instead of clusters" or "make giving up take 2 seconds".
 - **Rough edges (all small, next sim clean-up session in four sessions):** BUG-0071 (S3): in one
   constructed geometry the "is this a wall?" shortcut can answer differently depending on which unit
   asks first; deterministic, never seen in random play, no replay risk. BUG-0072 (S4): a `--record`
-  file name with illegal characters is still caught only after the run.
+  file name with illegal characters is still caught only after the run. **Update 0800: both fixed (M3-H1).**
 - **For you, one line in your file:** `CLAUDE.md` says "Current milestone: M1". Suggested:
   "Current milestones: M3 (sim track), M2 (view track)", plus the CLI line
   `dotnet run --project tools/Rts.Cli -- run --seed 1 --units 200   # headless hashes + timings`.
@@ -584,6 +713,9 @@ instead of clusters" or "make giving up take 2 seconds".
   (after M2-5, M2-6, M2-7). Alternatives: draw dots in screen pixels (a fixed 3-4 px colour square
   with a 1 px outline, also future-proof for big maps), or rim only around the outside of a crowd.
   Say which in the inbox if you have a preference. BUG-0070 (S4): four doc/test nits, same session.
+  **Update 0800: done (M2-H2): the dot is now a 2 x 2 coloured centre in a one-cell rim (the default plan);
+  QA read the screen pixels of lone dots at the border, on a ramp and on a cliff lip and every one shows
+  3-4 pixels of the exact player colour. BUG-0070 fixed too. The other two styles remain yours to pick.**
 - **To change it:** rim colours are `MinimapRaster.DarkRim` / `LightRim` (engine constants); the
   double-tap window is `ControlGroups.DoubleTapSeconds`; the rest by inbox note.
 
@@ -1117,28 +1249,33 @@ track right after S1/S2 bugs).
     `Repair`, `Buildings.UnderConstruction` / `Work` / `WorkNeeded(type)` / `Hp` for a site progress bar,
     `UnitStore.BuildTarget` and `UnitState.Building`. Group build = one `Build` per selected worker (the
     first places, the rest join the same anchor). Nothing requested yet.
+11. Noted at the M2 sign-off (session 0800) for the view's M3 HUD: `World.Pop` / `PopCap` per player and a
+    building's production queue + progress come with M3-4 (sim, next); the view's M3-V1 must not block on them.
+    Since M3-H1 a pushed unit's `PrevPosition` equals its `Position` (no slide through the building), and
+    `NavFlags.Pocket` (32) cells are `Blocked` (the overlay draws them red; no change needed).
 
 ## Feature queue: sim track (feature sessions, in order)
 
-1. **Next: the sim hardening session** (4 / 4; debt backlog below, BUG-0093 and BUG-0091 first). Details in
+1. **Next: M3-4 production queues** (5 slots), rally points, population and cap (`popProvided` applies), refunds
+   on cancel, with read access for the view's selection panel (`Pop` / `PopCap`, queue + progress). Details in
    `studio/handoff.md`.
-2. Then M3-4 production queues (5 slots), rally points, population and cap (`popProvided` applies), refunds
-   on cancel; M3-5 Age II research and Forge upgrades (ships the `techs.json` schema and the building
-   `requires` field the data track asked for); M3-6 `trainedAt` / `requires` resolution and validation
-   (QA D2 note: `trainedAt` is still an unchecked string). **Requests for the sim track** above outrank M3 work.
+2. Then M3-5 Age II research and Forge upgrades (ships the `techs.json` schema and the building `requires` field
+   the data track asked for); M3-6 `trainedAt` / `requires` resolution and validation (QA D2 note: `trainedAt` is
+   still an unchecked string; fold in loader nits BUG-0008 / 0010). **Requests for the sim track** above outrank
+   M3 work. Next sim hardening session after 4 feature sessions: BUG-0095 / 0096 first.
 3. M6 (far ahead): agents can't download. The Producer lists under "Waiting on you", when M5
    starts, the exact links for the Godot 4.7.2 .NET export templates and the Kenney/KayKit/Quaternius
    packs (docs/04) with the `asset-sources/` folder for each (owner note 2026-10-05).
 
 ## Feature queue: view track (feature sessions, in order)
 
-1. **Next: M2 end-of-milestone hardening** (BUG-0101 + BUG-0102 bench, BUG-0087, BUG-0085 incl. the cliff-edge
-   start block, BUG-0083, BUG-0069, BUG-0103 / 0084 / 0086 / 0088 / 0070, export hygiene notes) → **M2
-   sign-off** by the Producer (every M2 coverage row ✅ Unit / fuzz / Determinism; audio's Determinism "—"
-   recorded as not applicable). Details in `studio/handoff.md`.
-2. M3 view side after that: HUD resource bar (`World.Gold` / `Wood`), selection panel, command card (uses
-   Tab subgroups), build ghost + placement via `World.CanPlace` + `Command.Build` (M3-3 landed), worker /
-   gather / build feedback (`Cargo`, `Gathering` / `Returning` / `Building`, site progress).
+1. **Next: M3-V1** HUD resource bar (`World.Gold` / `Wood`, pop once `World.Pop` is on `main`), right-click
+   Gather on a tree / mine, worker and construction-site feedback, a Town Hall + workers in the default match.
+   Details in `studio/handoff.md`.
+2. M3-V2 command card (Tab subgroups, grid hotkeys), worker build menu, build ghost + placement via
+   `World.CanPlace` + `Command.Build`, Cancel / Repair; M3-V3 production UI (queue, rally marker) after
+   M3-4; then the M3 "Playable: build a full Malazan base and reach Age II" with the owner. Next view
+   hardening session after 4 feature sessions: BUG-0104 / 0105.
 
 ## Feature queue: data track (feature sessions, in order; owner reviews every landed task)
 
@@ -1150,48 +1287,36 @@ track right after S1/S2 bugs).
    (M4), tower attack / sight / detector fields (M4), `ai.json` build orders (M5); M7-M9 faction data when
    those milestones open; balance passes (QA standard) after the M4 sandbox.
 
-## Debt backlog: sim track (hardening sessions only; the next sim session is one)
+## Debt backlog: sim track (hardening sessions only; the next one after four feature sessions)
 
-- **BUG-0093 (S3, first)** a Cancel (or `Damage` to 0) of a building enclosed by other buildings reopens
-  its cells as an unreachable pocket; a Gather on a tree exposed only to it loops for ever (BUG-0078's
-  symptom with player commands). Preferred fix: reopened cells that reach no other region keep a
-  `Pocket` block flag until a neighbouring cell opens (re-flood then); alternative: exposure means
-  "reachable from the worker". Un-skip the QA row.
-- **BUG-0091 (S3)** `ConstructionSystem.Check` runs the seal flood before UnitInTheWay / CannotAfford /
-  StoreFull; `StartBuild` only needs pass / fail, so run the cheap rules first there (CanPlace keeps the
-  documented reason order). 100 refused Builds in one tick = 22 ms today.
-- **BUG-0092 (S4)** M3-3 nits: loader floor for the repair factors (reject below 2^-16); a Build clears the
-  issuing worker's own Hold before UnitInTheWay; push-out past 8 rings must not stack units; push-out
-  `Occupied` through the spatial hash (7.3 ms with 400 units round a Keep); set `PrevPosition` on a pushed
-  unit; docs/03 note that `CanPlace` writes flow-field scratch (call on the sim thread between ticks).
-- **BUG-0080 (S3)** a closing change on every tick starves all but the 2 oldest goal groups while it
-  lasts (docs/03's ceil(groups / 2) bound holds for spaced closings only). Measured in M3-3 at a realistic
-  rate (a House every 2 s, 32 groups): longest wait 0.80 s. Options: keep a closed field usable when none
-  of its directed cells was blocked (per-change bounding box), region versions, or document.
-- **BUG-0081 (S3, M6 design)** usable-but-stale fields can't be rebuilt from their keys at load; the
-  docs/03 save/load sentence now carries the open point. Decide at M6: save stale slots' contents,
-  save the grid change history, or refresh every field at the save point in both runs.
-- ~~BUG-0078~~ fixed in M3-3 (never-seal placement rule); the residual is BUG-0093 above.
-- **BUG-0079 (S4)** M3-2 nits left: `--workers 0` without resources runs though docs/03 says it needs
-  them (fix the sentence: "N above 0"). Item 1 (missing `cost` = 3 errors) fixed in M3-3; item 2 (test
-  budget) waived.
+- **BUG-0095 (S3, first)** push-out on a level with fewer free cells than pushed units: `PushOut` now walks
+  rings up to the map size for each leftover unit (one Build 8.9 ms at 128, 35 ms at 256, Debug, alone) and
+  the leftovers fall back to `NearestPassable` = one exact point, where idle units never separate. Fix:
+  stop the ring walk once a ring is entirely off the level / map (or cap rings at the level's bounding box)
+  and let leftovers wait a tick or spread on the fallback.
+- **BUG-0096 (S3)** Builds refused for `SealsGround` still pay one flood each (100 in a tick: 33 ms); the
+  cheap-first order can't help this reason. Options: a per-tick memo of refused (type, anchor) pairs
+  keyed on `BlockVersion`, or a cheaper ring pre-test before the labelled flood.
+- **BUG-0094 (S4, test-only)** `ResourceStore.Spawn` through `ResourceMaps.Spawn` skips the never-seal
+  check, so hand-built groves can wall cells in before tick 1; QA's own harness is fixed, the shared helper
+  is not (add a `KeepsConnected` check or an opt-in flag).
+- **BUG-0080 (S3, known limit since M3-H1)** a closing change every p ticks lets only the 2p oldest goal
+  groups walk while it lasts; the bound is in docs/03 "Known limits" and pinned by
+  `SimHardeningTests.ClosingsEveryPeriodTicks_*`. Revisit (usable-stale closed fields with a stuck-tick
+  exemption) once the M5 AI's placement rate is known.
+- ~~BUG-0081~~ decided in M3-H1: the M6 save file stores the flow-field cache's contents (docs/03).
+- ~~BUG-0078~~ fixed in M3-3; ~~BUG-0093~~ (pocket rule), ~~BUG-0091~~, ~~BUG-0092~~, ~~BUG-0079~~,
+  ~~BUG-0076~~, ~~BUG-0071~~, ~~BUG-0072~~ fixed in M3-H1 (session 0800).
 - ~~BUG-0090 sim part~~ (`BuildingSlot.cs` comment) fixed in M3-3; the data part stays in the data backlog.
 - Note (M3-2b): `FlowField.Build` has the 8 directions written out (~150 lines) for Debug speed; fold
   back only if tests move to Release. The felling Perf row (`OneTreeFallsEveryTick_AverageTick_Perf`,
   < 0.5 ms absolute) has ~20 % headroom and fails under full-suite contention: rerun alone before
   filing; widen the scene or pin p50 if it ever fails alone.
-- **BUG-0076 (S4)** M3-1 nits: full flood fill after the ring test can't fail (keep as a debug
-  assertion), empty resources list loads clean (require one type per kind), -0 mine spacing. Item 1
-  (docs timing) fixed by the Producer.
 - Note (QA, M3-2): a worker that fills up with no own drop-off ends its loop Idle with the load and a
   drop-off built later doesn't re-arm it; consistent with docs/03, a "resume" is a design option for
-  M3-3.
-- **BUG-0071 (S3)** shove-pass plug cache: the cached answer can depend on which cluster member is
-  asked first when a member stopped this tick within a hair of the link distance (stale hash);
-  deterministic. Fix: widen `SearchPlug`'s query by `MaxUnitSpeed` in the shove pass (as
-  `SettleBackedOff` does) and keep the exact gap test; un-skip the QA row.
-- **BUG-0072 (S4)** CLI `--record` pre-check misses invalid file names / access-denied folders:
-  open the file before ticking (or check `GetInvalidFileNameChars()`); docs/03 wording.
+  the M3 HUD / M3-4.
+- Note (QA, M3-H1): `--record` now truncates an existing file before the run (an aborted run leaves an
+  empty file); `TightBlob2500` has 0.02 ms of headroom alone (4.48 of 4.5 ms): a failure alone is real.
 - **BUG-0046 (S3, known limit)** wall clips in slot order; a slot-free sort exists in the M1-9
   report (hard walls first, farthest first, ties by position) and re-rolls three fitted bounds.
   Revisit with the crowd-cost work after M4. 4 QA rows skipped.
@@ -1206,7 +1331,9 @@ track right after S1/S2 bugs).
 - Loader: BUG-0008 (S3) duplicate JSON keys, BUG-0010 (S4) faction slots; fold into M3-6 data.
 - BUG-0002 (S4) `.sln` Release config maps RtsGame to Debug; with `tools/export.ps1` (M6).
 - Perf (Debug, this machine, alone): 500 moving 0.62-0.63 ms, with 12 forests + 8 mines 0.82 ms; 500
-  marching + 50 gathering 0.90-0.92 ms; 200 workers gathering alone 0.26 ms; flow field build
+  marching + 50 gathering 0.90-0.92 ms; felling + 50 builders + 500 marchers 1.19 ms (1,000: 1.42, 2,500:
+  2.55); 100 refused Builds in a tick 0.04-0.09 ms (SealsGround 33 ms, BUG-0096); push-out of 16 in a blob
+  of 400 0.29 ms, 400 stacked in a Keep 2.46 ms; 200 workers gathering alone 0.26 ms; flow field build
   128 x 128 0.37 ms (0.7 before M3-2b); 32 groups with a tree felled every tick 0.40 ms (1.76 before);
   full 4,096-slot resource hash 20 µs; 2,500 one-player tight blob 4.33-4.40 ms (enforced <= 4.5, ~3% headroom); two-player
   contested blob 6.84 ms (guard < 10.5); 2,500 to 4 points 3.08 ms (guard < 3.7); 1,000 walkers
@@ -1220,50 +1347,24 @@ track right after S1/S2 bugs).
   recorded but not checked; no depletion events (views poll); .NET 8 support ends 2026-11-10, move
   to the next LTS at M6.
 
-## Debt backlog: view track (hardening sessions only; the next view session is the M2 end-of-milestone one)
+## Debt backlog: view track (hardening sessions only; the next one after four feature sessions)
 
-- **BUG-0101 (S3, first)**: the bench's `OrderAcross` targets the east start block ~15 m away (army centre
-  moves at most 17.4 m on a 256 m map); target the passable cell nearest (0.85 W, 0.5 H) / its mirror or
-  the opposite corner, assert >= ~100 m in `QaM27Test`, refresh the docs/03 figures if they move.
-- **BUG-0102 (S3)**: the `bench:` line's `fps` averages Godot's once-a-second `TimeFps` incl. the load
-  second (111 vs 119.9 real at 10 s); print `Stats.Count / Script.Elapsed`, fix the docs/03 sentence.
-- **BUG-0103 (S4)**: vsync-on rows are probably delta-smoothed pacing (one docs/03 sentence; or turn
-  `application/run/delta_smoothing` off for the bench), BenchScript "no bunching" remark, invariant
-  culture on the two info lines, `--bench` upper bound (3,600 s).
-- Seen in M2-7: the seed-1 west start block straddles a cliff edge (debug `StartLayout`); fold into BUG-0085.
-- **BUG-0087 (S3)**: a sound still playing at quit leaves an ObjectDB leak *warning* (AudioStreamWAV +
-  playback) in existing scenes ~2 in 5 runs; `Sfx` never stops its 8 players. Fix: stop them in
-  `_ExitTree` / on the close request; drop the 0.3 s wait in `SfxTest`; fix the docs/03 sentence that
-  calls it a test-only artefact.
-- **BUG-0088 (S4)**: `OrdersTest.tscn`'s double-tap row waits on a `SceneTreeTimer` (process time)
-  while `ControlGroups.Tap` uses the wall clock; under heavy CPU load the timer can fire inside the
-  300 ms window and the row fails ("a single recall moved the camera"). Wait on `Time.GetTicksMsec()`
-  in the test (or inject the clock). Pre-existing since M2-3; seen 2 of 6 runs under load, 8 / 8 alone.
-- **BUG-0085 (S3, Producer triage: view track)**: the default seed-1 match spawns player 0's start
-  army inside a forest (17 / 100 spots touch a tree; 9 / 40 blocks over seeds 1-20). Fix:
-  `ViewApi.StartLayout.Block` skips cells 8-adjacent to a `NavFlags.Resource` cell; tighten QA's
-  `StartBlocks_OnTheMatchMap_*` to "no spot touches a node". Real start locations with clear bases
-  come with M6 maps.
-- **BUG-0086 (S4)**: each relist uploads both resource types' full 4,096-instance buffers even when
-  one type is unchanged (upload per changed type); the mine MultiMesh's hidden instances carry tree
-  transforms (harmless); the minimap Perf row has ~15 % headroom (0.255 of 0.3 ms).
-- **BUG-0083 (S3)**: the overlay-on label line allocates ~600 B per frame; docs/03 "Debug tooling"
-  claims 0 bytes on and off. Fix the doc claim (the layers are 0 B) or cache the string.
-- **BUG-0084 (S4)**: cliff tint reads olive on green terrain (raise alpha or pick a bluer dark red);
-  arrow ends dip up to 9 cm into steep ramp cells (lift by the cell's slope); CS8602 in
-  `DebugOverlayTest.cs:173`; the dev allocation probe should relist with a live field.
-- **BUG-0069 (S3)**: a lone minimap dot reads as its rim colour (1-4 px of owner colour in a 5 x 5 px
-  square at 220 px / 128 cells); two light factions' lone units would look alike; empty cells in a
-  formation leave rim lines. Default: 2 x 2-cell owner centre in a one-cell rim; alternatives:
-  screen-space dots (fixed 3-4 px square + 1 px outline; also fixes the >220-cell note) or rim only
-  round a crowd's outside. Owner may pick (For your review).
-- **BUG-0070 (S4)**: docs/01 minimap decision row says "one map cell"; docs/03 "221 to 440" → "over
-  220"; `DoubleTapSeconds` / `DoubleTapMs` twin literals (derive one); dev wall test blind to the last
-  row / column (QA kills those mutants; add a hand map with a step on the far edges).
+- **BUG-0104 (S3, first)**: `QaM27Test`'s 20 m centre-shift bound is fitted to seed 1 (22.1 m); seed 21
+  (far cell a cliff, corner-adjacent target 101.5 m away) moves 19.1 m, seed 6 20.3 m. The target itself
+  is right on all 200 seeds (west army >= 100 m; the east army's is 99.5-99.97 m on seeds 42 / 133, never
+  used in a 10 s run). Options: a per-seed note in docs/03 and the bound on seed 1 only, or give the
+  march more room (order across before A + click, start at 0.5 s). `QaH2Test -- --seeds 21` reproduces.
+- **BUG-0105 (S4)**: `MinimapRefresh_2000Units_4096Nodes_ResourceRedraw_Under0_3Ms` runs at 0.277-0.283
+  ms alone (92-94 % of its limit; the 4 x 4 dot cost the margin); docs/03 M2-3b still says "about 0.25
+  ms"; docs/03 M2-6 says the Sfx exit wait is 5-60 ms, seen up to 93 ms under load. Refresh the figures;
+  if the row flakes, the forced 4,096-node resource redraw is where the time is.
+- ~~BUG-0069~~, ~~0070~~, ~~0083~~, ~~0084~~, ~~0085~~, ~~0086~~, ~~0087~~, ~~0088~~, ~~0101~~,
+  ~~0102~~, ~~0103~~ fixed in M2-H2 (session 0800).
 - Edge-pan hover suppression (`RtsCamera.EdgePanBlocker`) can't fire today: the minimap's 8 px margin
   keeps it out of the 8 px edge band. Harmless; revisit if the HUD layout changes.
-- Export hygiene (M6): exclude `game/tests/` from the release build (now 14 scenes compile in); load
-  `game/data/` in a way that works from a `.pck` instead of `ProjectSettings.GlobalizePath("res://data")`.
+- Export hygiene (M6; written up in docs/03 "Build and export" by M2-H2): exclude `game/tests/` from the
+  release build (18 scenes compile in today); load `game/data/` in a `.pck`-safe way instead of
+  `ProjectSettings.GlobalizePath("res://data")`.
 - `MinimapDotsShot --units 1000` silently drops its second lone unit (store full; documented).
 - Cosmetic: ramp ends ~31° vs 22° mid-ramp; no wall skirts on the map border; 1024² mesh 904 MiB
   transient (outside supported sizes); `StartLayout` at radius 1.0 puts bodies exactly touching.
@@ -1290,6 +1391,7 @@ track right after S1/S2 bugs).
 
 | Date | Session | Task | Result |
 | --- | --- | --- | --- |
+| 2026-10-07 | [2026-10-07-0800](sessions/2026-10-07-0800.md) | sim M3-H1 hardening (pocket rule `NavFlags.Pocket` after Cancel / destruction, cheap-first Build checks, ring-by-ring push-out through the spatial hash, BUG-0080 measured bound documented, BUG-0081 save/load decision, loader / CLI / plug-cache nits: BUG-0071 / 0072 / 0076 / 0079 / 0081 / 0091 / 0092 / 0093 fixed); view M2-H2 hardening (bench marches across + true `fps`, start blocks in a clearing, `Sfx` stops at quit, overlay label on change, 2 x 2 minimap dots, S4 batch, M6 export notes: 11 bugs fixed) → **M2 signed off**; data STOP (resumed after an OS restart killed 2026-10-06-2326) | both ACCEPT, 0 fix rounds (QA PASS_WITH_ISSUES x2: sim 2 S3 + 1 S4, view 1 S3 + 1 S4) |
 | 2026-10-06 | [2026-10-06-2114](sessions/2026-10-06-2114.md) | sim M3-3 placement validity (`World.CanPlace`, never-seal `SealCheck`), `Build` / `Cancel` / `Repair`, multi-builder construction (BUG-0078 fixed by rule); view M2-7 `--bench` / `--vsync`, `PrevFacing` blend, screenshot set (M2 10 / 10); data D2 unit stats pinned to the faction pages, building tables on the pages | all ACCEPT, 0 fix rounds (QA PASS_WITH_ISSUES x3: sim 2 S3 + 1 S4, view 2 S3 + 1 S4, data 1 S4). M3 3 / 8 |
 | 2026-10-06 | [2026-10-06-1744](sessions/2026-10-06-1744.md) | sim M3-2b closing vs opening grid changes (`BlockVersion`, usable-stale fields refreshed lazily, progress-mark reset, wood 1 x 1 rule, 2x faster field build; BUG-0073 / 0074 / 0077 fixed); view M2-6 placeholder audio (`Sfx`, Select / Command tones, `--mute`); data D1 all ten buildings per faction in data | all ACCEPT; sim 1 fix round (QA FAIL on S2 BUG-0082 perf, fixed; 2 S3 filed), view 0 (1 S3 + Producer's S4 BUG-0088), data 0 (1 S4). M3 2 / 8, M2 9 / 10 |
 | 2026-10-06 | [2026-10-06-1503](sessions/2026-10-06-1503.md) | sim M3-2 worker gather / return loop (`Gather`, `EconomySystem`, `BuildingStore` + dev `SpawnBuilding`, `buildings.json` Town Hall, player totals, CLI `--workers`); view M2-3b trees and mines as MultiMesh props, 12 / 8 defaults, minimap resource layer | both ACCEPT, 0 fix rounds (QA PASS_WITH_ISSUES x2: sim 2 S3 + 1 S4, BUG-0075 fixed; view 1 S3 + 1 S4). M3 2 / 8, M2 8 / 10. Data track added by the owner mid-session |

@@ -124,7 +124,8 @@ public sealed record MapGenParams
         Check(ForestMaxTrees >= ForestMinTrees && ForestMaxTrees <= MaxForestTrees, nameof(ForestMaxTrees));
         Check(GoldMines >= 0 && GoldMines <= MaxResourceGroups, nameof(GoldMines));
         // Written so NaN fails; no two cells of the map are further apart than this.
-        Check(MineSpacing >= 0f && MineSpacing <= 2f * MapConstants.CellSize * Math.Max(Width, Height), nameof(MineSpacing));
+        // -0 is refused like the other odd float encodings (BUG-0076).
+        Check(MineSpacing >= 0f && !float.IsNegative(MineSpacing) && MineSpacing <= 2f * MapConstants.CellSize * Math.Max(Width, Height), nameof(MineSpacing));
     }
 
     private static void Check(bool ok, string name)

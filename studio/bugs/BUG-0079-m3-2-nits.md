@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-06-1503, task M3-2 |
 | System | data loader, CLI docs, studio budget |
-| Fixed by | item 1: b4b423c (M3-3), `DataLoader.BuildBuildings` reports a missing `cost` once; QA `BuildingDataQaTests.MissingCostObject_IsOneError_LikeAMissingFootprint` un-skipped. Items 2 (budget note, waived by the Producer) and 3 (docs sentence) still open |
+| Fixed by | item 1: b4b423c (M3-3), `DataLoader.BuildBuildings` reports a missing `cost` once; QA `BuildingDataQaTests.MissingCostObject_IsOneError_LikeAMissingFootprint` un-skipped. Item 2 (budget note) waived by the Producer. Item 3 in M3-H1 (4abbf37, session 2026-10-07-0800): docs/03 "CLI" now reads "N above 0 needs `--forests` or `--mines` above 0" |
 
 ## Repro / Actual
 1. **Missing `cost` reports three errors.** Remove `cost` from the first building of

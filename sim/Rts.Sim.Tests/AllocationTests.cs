@@ -292,4 +292,38 @@ public class AllocationTests
         Assert.Equal(-1, BuildMaps.SiteAt(sim, 16 + 3 * (run - 1), 31)); // cancelled
         Assert.False(b.UnderConstruction[BuildMaps.SiteAt(sim, 16 + 3 * (run - 1), 26)]); // completed
     }
+    /// <summary>
+    /// M3-H1 criterion 10: the pocket decision (a building freed into a pocket, ring only and with the flood), refused
+    /// Builds on the cheap-first path, and a placement that pushes own units out allocate nothing.
+    /// </summary>
+    [Fact]
+    public void PocketDecisions_RefusedBuilds_AndAPushOut_AllocateNothing()
+    {
+        Simulation sim = null!;
+        Entities.EntityHandle c = default, d = default, worker = default;
+        Action setup = () =>
+        {
+            (sim, c, d, _, _) = PocketRuleTests.Enclosure();
+            worker = GatherMaps.Unit(sim, GatherMaps.At(sim, 22, 4));
+            for (int k = 0; k < 4; k++) GatherMaps.Unit(sim, GatherMaps.At(sim, 24, 14) + new System.Numerics.Vector2(0.3f * k, 0f));
+            BuildMaps.SetTotals(sim, 0, 100, 100); // a Keep (275 / 275) can't be afforded, a House (0 / 50) can
+        };
+        Action block = () =>
+        {
+            Entities.BuildingStore b = sim.World.Buildings;
+            b.Damage(c, 100_000); // into a pocket: the ring alone decides
+            b.Damage(d, 100_000); // beside that pocket: the flood decides
+            for (int k = 0; k < 10; k++) sim.Enqueue(Command.Build(0, worker, GatherMaps.Keep, GatherMaps.At(sim, 20, 2)));
+            sim.Enqueue(Command.Build(0, worker, BuildMaps.House, GatherMaps.At(sim, 24, 14))); // on four own units: push-out
+            sim.Tick();
+            sim.Tick();
+        };
+        setup();
+        block(); // JIT warm-up
+        Assert.Equal(Map.NavFlags.Blocked | Map.NavFlags.Pocket, sim.World.NavGrid.FlagsAt(12, 8));
+        Assert.True(BuildMaps.SiteAt(sim, 24, 14) >= 0);
+        Assert.True(BuildMaps.SiteAt(sim, 20, 2) < 0);
+        AllocationProbe.AssertZero(block, setup: setup);
+    }
 }
+

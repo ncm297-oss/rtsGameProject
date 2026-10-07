@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-06-0905, task M1-9 |
 | System | movement (plug test cache, BUG-0044) |
-| Fixed by | |
+| Fixed by | M3-H1 (4abbf37, session 2026-10-07-0800): the shove-pass plug search in `MovementSystem` widens its neighbour query by `World.MaxUnitSpeed` (the hash holds start-of-tick points there; the exact gap test still decides), so every cluster member finds the same links. QA row `HardeningQaTests.PlugCache_StaleHash_ConstructedPair_AnswerDoesNotDependOnQueryOrder` un-skipped and green; `ReplayGoldenTests` unchanged (no trajectory moved). docs/03 "Local movement" |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~HardeningQaTests.PlugCache_StaleHash_ConstructedPair_AnswerDoesNotDependOnQueryOrder"`

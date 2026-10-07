@@ -45,27 +45,14 @@ public class RepairDataQaTests
     }
 
     /// <summary>
-    /// A rate factor the loader accepts (above 0) but below 2^-17 rounds to 0 in the 2^16 fixed point: then a repair
-    /// restores nothing, costs nothing, and its workers stand "repairing" for ever. Reports what happens.
+    /// A rate factor below 2^-17 rounded to 0 in the 2^16 fixed point: a repair that restored nothing and cost nothing,
+    /// its workers standing "repairing" for ever. M3-H1 (BUG-0092): the loader refuses factors below 2^-16.
     /// </summary>
-    [Fact(Skip = "BUG-0092: a repair rateFactor the loader accepts (above 0) but below 2^-17 rounds to 0: workers repair for ever without restoring a hit point; un-skip when fixed")]
-    public void ATinyAcceptedRateFactor_Report()
+    [Fact]
+    public void ATinyRateFactor_IsRefusedByTheLoader()
     {
-        using TestDataDir dir = TestDataDir.CopyOfShipped();
-        dir.EditJson("common/rules.json", r => r["repair"]!["rateFactor"] = JsonNode.Parse("0.000001"));
-        DataLoadResult load = DataLoader.LoadAll(dir.Path);
-        Assert.Empty(load.Errors);
-        GameData data = load.Data!;
-        var sim = new Simulation(new SimConfig(5, 1, 16, 64) { Data = data }, Flat(30, 24));
-        sim.Enqueue(Command.SpawnBuilding(0, data.FindBuilding("malazan_garrison_keep"), At(sim, 10, 10)));
-        sim.Enqueue(Command.SpawnUnit(0, data.FindUnit("malazan_laborer"), At(sim, 9, 11)));
-        Run(sim, 2);
-        BuildingStore b = sim.World.Buildings;
-        b.Damage(b.HandleOf(0), 1000);
-        sim.Enqueue(Command.Repair(0, new EntityHandle(0, sim.World.Units.Generation[0]), At(sim, 11, 11)));
-        Run(sim, 2000);
-        _out.WriteLine($"rateFactor 1e-6: after 100 s hp {b.Hp[0]} / 2400, worker state {sim.World.Units.State[0]}, totals {sim.World.Gold[0]} / {sim.World.Wood[0]}");
-        Assert.True(b.Hp[0] > 1400 || sim.World.Units.State[0] != UnitState.Building,
-            "an accepted repair rate makes workers repair for ever without restoring a hit point");
+        DataLoadResult load = LoadWith("rateFactor", "0.000001");
+        _out.WriteLine(string.Join("; ", load.Errors.Select(e => $"{e.Path}: {e.Message}")));
+        Assert.Contains(load.Errors, e => e.Path == "repair.rateFactor");
     }
 }

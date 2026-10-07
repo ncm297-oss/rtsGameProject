@@ -275,7 +275,8 @@ exactly one level down, so plateau rims are blocked except at a ramp's top ("mou
 keeps the lower level (docs/02) and its height steps evenly, strictly between the two levels; it
 joins level L to L+1 only. The flat lower cells flanking a ramp along its length are cliffs too ("ramp walls", M1-4a, BUG-0011), so a ramp is a corridor entered only at its mouth and foot and no passable 4-neighbor step is steeper than 30°. The outer ring of cells is blocked. Passable cells outside the largest
 4-connected region (pockets no ramp reaches) are blocked at build time, so every passable cell is
-reachable; later passability changes (M3 buildings) don't re-seal. A layout with under
+reachable; later changes keep it so (placement never seals ground, freed cells follow the pocket rule
+below, M3-H1). A layout with under
 `MinPassableFraction` (50%) passable cells or with a level missing is redrawn, at most
 `MaxAttempts` times, then the generator falls back to the first layout that was passable enough,
 or a flat map: it never loops forever. `MapGenParams.Validate` caps every size at the smaller map side before using it in arithmetic, and caps `RampTries` (128), `MaxAttempts` (8, the default) and plateau counts (32). A ramp try costs O(1) plus O(ramps placed) plus O(`RampWidth`) for the mouth, not O(`RampWidth` × `RampLength`): a summed-area table of off-limits cells (border ring, cells with a lower neighbor) and rectangle overlap tests against the ramps already placed replace the cell-by-cell footprint scan, accepting exactly the same tries (BUG-0015). Each attempt also builds a full nav grid. The worst valid case, a 1024 × 1024 map with every count at its cap and any ramp size, takes about 1 s in a Debug build (how the tests run) and about 0.2 s in Release. Default generation takes about 4 ms. Queries (`InBounds`,
@@ -293,11 +294,24 @@ Cliff, ramp and border cells never take a node, and the placer keeps every passa
 removed from exposed sides, which the gather rule guarantees (M3-2, BUG-0075: only a node with a
 passable cell 4-adjacent to its footprint is gathered, so a felled cell always joins open ground).
 Buildings (M3-2, `NavFlags.Building` with `Blocked`, cost 255, one `Version` bump per building) are
-placed only by the dev command so far and don't re-check reachability; player placement rules
-arrive with construction (M3-3). Since M3-2b the grid tells *closing* changes from *opening* ones:
+placed only where the never-seal rule allows (M3-3, see "Implementation (M3-3)").
+**Pocket rule (M3-H1, BUG-0093).** Freeing cells (`ClearResource`, `ClearBuilding`: a node depleted, a building
+destroyed or cancelled) never opens ground nobody can reach. The freed footprint and the `NavFlags.Pocket` cells
+4-connected to it through other pocket cells reopen together, one `Version` bump, if any of them is 4-adjacent to a
+passable cell; otherwise the footprint's cells stay `Blocked` and gain `Pocket` (32), cost 255, with no version bump
+and `PassableCount` unchanged: no cell a unit can use changed, so nothing is published. So a site walled in by other
+buildings and then cancelled stays blocked, and so does an interior tree felled by a test seam; the first later
+opening beside them (a tree felled, an enclosing building freed) that joins them to open ground reopens the whole
+chain of pockets with it, and a cell opened into pockets alone becomes a pocket too. To the flow-field builder,
+`CanPlace` and the exposure rule a pocket cell is a blocked cell like any other. Invariant: after any sequence of
+placements, cancels, destruction and felling, every passable cell reaches every other. The common case (no pocket
+cell beside the footprint) reads only the footprint's 4-adjacent ring; next to pockets a flood over them runs on the
+flow-field builder's queue storage (`FlowFieldCache.BuildScratch`, shared through `NavGrid.ShareScratch`), so it
+allocates nothing. Load-time pockets stay plain `Blocked` and never reopen. Since M3-2b the grid tells *closing* changes from *opening* ones:
 `NavGrid.BlockVersion` (public get, hashed) bumps once only when cells are blocked (`SetResource`,
 `SetBuilding`: a node spawned, a building placed), while `Version` keeps bumping once on every change,
-clearing included (`ClearResource`, `ClearBuilding`: a node depleted, a building removed). The test
+clearing included (`ClearResource`, `ClearBuilding`: a node depleted, a building removed; not when the pocket rule
+keeps the cells blocked). The test
 seam `BumpVersionForTests` is a closing change (both bump). So a flow field built at the current
 `BlockVersion` never points into a blocked cell, whatever has opened since (see "Flow fields"). Water, symmetry and
 hand-made maps arrive in M6.
@@ -338,9 +352,9 @@ builds, where the JIT inlines nothing, so this builds a 128 × 128 field in abou
 passable cell by squared cell distance, ties to the lowest (y, x); `FlowField.NearestPassable` is
 that rule. It searches square rings outward from the cell and stops once a ring can't beat the
 best distance found, so its cost grows with the distance to passable ground, not the map size. Unreachable targets
-are rare: the nav grid seals every pocket at load, nodes are only removed from exposed sides (M3-2, BUG-0075), and no
-building placement may cut passable ground in two (M3-3's never-seal rule, BUG-0078). The one way a pocket can still
-appear is a building that other buildings enclose being destroyed or cancelled: its cells reopen, reachable from nowhere. `FlowFieldCache` (on `World.FlowFields`) keeps
+are rare: the nav grid seals every pocket at load, nodes are only removed from exposed sides (M3-2, BUG-0075), no
+building placement may cut passable ground in two (M3-3's never-seal rule, BUG-0078), and cells freed where nobody can
+reach them stay blocked (M3-H1's pocket rule, BUG-0093, see "Navigation grid"). `FlowFieldCache` (on `World.FlowFields`) keeps
 `FlowFieldCache.CapacityFor(UnitCapacity, cells)` fields: `clamp(UnitCapacity / 8, 32, 128)`, then at
 most `max(32, 64 MiB / (5 bytes × cells))`, so the default map (16,384 cells, 80 KB per field) is
 never memory-capped (512 unit slots: 64 fields, 5 MB; 1024 and up: 128 fields, 10 MB) and a
@@ -354,9 +368,8 @@ fields on the default map, 160 MB for 32 on a 1024 × 1024 map), plus a 4-byte c
 the grid and its target, but under the build cap (below) *which* fields are cached decides which
 units wait a tick, so the cache's metadata is sim state (Producer decision 2026-10-04, BUG-0021):
 `StateHash` covers its clock, count and every used slot's requested cell, version, block version and last-use
-stamp, and save/load will save the keys and rebuild the fields at load (open point for M6: since M3-2b a
-usable-but-stale slot's contents depend on the grid as it was at its build, so a load that rebuilds every
-field from its key is not an uninterrupted run; options in BUG-0081). `Get` and `TryGetCached`
+stamp. Since M3-2b a usable-but-stale slot's contents depend on the grid as it was at its build, not only on its
+key and today's grid, so a save file stores the cached fields' contents too (see "Save/load and replays", BUG-0081). `Get` and `TryGetCached`
 are `internal`, for the sim only (a call moves the hashed LRU state); views and AI see only
 `Capacity`, `Count`, `BuildCount`, `Contains` and `PeekCached`, which change nothing.
 `PeekCached(targetCell)` (M1-8, for the M2-5 flow-arrow overlay) returns the field units follow to
@@ -886,7 +899,10 @@ BUG-0034: the distinct-targets perf row averages 100 ticks, budget unchanged.
   the data, 3 today), stamped with `World.PlugEpoch` (bumped at the start of Plan and of the shove
   pass). A search writes its answer for every member it visits and stops early at a member already
   answered this pass (same cluster, same answer) or once the cluster outgrows 32, so each cluster
-  is searched about once per pass. Preallocated, derived, not hashed. `Constrain` also tests "not a
+  is searched about once per pass. In the shove pass the spatial hash still holds start-of-tick
+  points while units have moved up to `World.MaxUnitSpeed`, so the search's neighbor query is
+  widened by that much (the exact gap test still decides): every member finds the same links, and
+  the cached answer no longer depends on which member was asked first (M3-H1, BUG-0071). Preallocated, derived, not hashed. `Constrain` also tests "not a
   wall" (a walker or an arrived groupmate, most neighbors in a crowd) inline before calling
   `WallLimit` (Debug builds call every helper).
 - **A unit giving up while backing off is checked again (found in M1-9).** A unit at its goal but
@@ -984,11 +1000,19 @@ BUG-0034: the distinct-targets perf row averages 100 ticks, budget unchanged.
 - **Grid changes (M3-2b):** while trees keep falling, the build cap spends its 2 builds every tick
   refreshing stale fields (about 0.8 ms a tick on a 120 x 72 map in Debug, 1.4 ms of builds on the
   128 map; a calm walk costs 0.02 ms), and until its refresh a group follows the longer route its
-  usable field knows. A closing change still makes every field unusable at once: with more than 2
-  goal groups the younger ones wait up to ceil(groups / 2) ticks per closing change, as every change
-  did before M3-2b, provided closings are at least that far apart; closings on every tick (nothing in
-  the game does that yet) keep every group but the 2 oldest waiting for as long as they last
-  (BUG-0080; revisit with M3-3 placement). Time-sliced builds are BUG-0023.
+  usable field knows. A closing change (a building placed, a node spawned) still makes every field
+  unusable at once, and the cap rebuilds them oldest order first, 2 a tick. Measured with real
+  closings (`SimHardeningTests.ClosingsEveryPeriodTicks_OnlyThe2xPeriodOldestGroupsWalk`, M3-H1): with
+  a closing every p ticks only the 2p oldest goal groups ever get a field (the k-th oldest waits
+  floor(k / 2) ticks after each closing) and the younger ones wait for as long as the closings last;
+  once p reaches ceil(groups / 2) every group walks, the youngest after ceil(groups / 2) - 1 ticks
+  (8 groups: closings every tick starve 6 for good, every 2 ticks 4, every 4 ticks none, longest wait
+  3). So a player or AI placing a building every tick for a while stalls the younger armies for that
+  while (BUG-0080). Keeping closed fields usable-stale (walkers clipped by the per-step check against
+  blocked cells) was the preferred fix but was left: walkers pressed against a new building on an old
+  field would count stuck ticks and give up in 20 ticks, where today they wait, and the closing
+  semantics are pinned by the flow-arrow overlay, PeekCached and cache tests on both tracks.
+  Time-sliced builds are BUG-0023.
 - **Perf is measured in Debug on the dev machine**; the 2,500-unit two-player contest costs about
   1.6x the one-player blob (6.8 vs 4.3 ms). The 4 ms design budget is for 500 units (0.6 ms today).
 
@@ -1082,7 +1106,8 @@ Resource nodes exist in the sim; workers, gathering and drop-offs are M3-2.
   `description`, `resource` (`gold` | `wood`, `DataLimits.ResourceKindIds`) and `footprint {width,
   height}` in cells, each side 1 to `DataLimits.MaxFootprint` (4); a `wood` type must be 1 x 1, since the
   forest placer grows forests cell by cell (M3-2b, BUG-0074: the loader refuses anything else). Shipped: `gold_mine` (gold, 2 x 2)
-  and `tree` (wood, 1 x 1). Amounts stay in `rules.json` (docs/02): a placed tree holds `treeWood`
+  and `tree` (wood, 1 x 1). At least one type of each kind is required (M3-H1, BUG-0076: an empty list, or one
+  without a gold or a wood type, is a `DataError`, not a map that silently places nothing). Amounts stay in `rules.json` (docs/02): a placed tree holds `treeWood`
   (100), a placed mine `startMines.gold` (2,500; every mine until start locations exist, M3-3/M6).
   `GameData.Resources` is indexed by dense ids in ordinal order (`FindResource`); `ContentHash`
   covers every field.
@@ -1100,7 +1125,7 @@ Resource nodes exist in the sim; workers, gathering and drop-offs are M3-2.
   once too, so a field cached before a node appears is stale.
 - **Placement.** `World` places nodes right after the nav grid and before the flow-field cache, from
   `MapGenParams.Forests`, `ForestMinTrees` / `ForestMaxTrees` (12 / 40), `GoldMines` and
-  `MineSpacing` (24 m). Both counts default to 0, so the M1 maps, tests and golden trajectories are
+  `MineSpacing` (24 m; 0 or more, and -0 is refused like the other odd float encodings, M3-H1). Both counts default to 0, so the M1 maps, tests and golden trajectories are
   unchanged, and then the placer draws nothing. Otherwise it draws from `RngStream.MapGen` after the
   terrain (the heightmap is identical with and without resources). Mines first, then forests. A node
   covers only "open" cells: passable, not a ramp, and no cliff, ramp or border cell among the 8
@@ -1111,13 +1136,14 @@ Resource nodes exist in the sim; workers, gathering and drop-offs are M3-2.
   forest is its own 8-connected group. Before a mine or forest is committed, the placer checks that
   every passable cell still reaches every other: first a local test (the cells around it are passable
   and connected among themselves, which is enough on its own and rejects forests that enclose a hole
-  without touching the rest of the map), then a flood fill of the whole map. A failed placement is
+  without touching the rest of the map; since M3-H1 it decides, BUG-0076), then a flood fill of the whole map that
+  only Debug builds run, as an assertion that can't fail (Producer decision). A failed placement is
   dropped and retried elsewhere, at most `TriesPerPlacement` (32) times; one that never fits is
   skipped. `World.ResourcePlacement` reports what was placed (forests, trees, mines). Tree slots follow
   cell order within a forest. Caps: `Forests` and `GoldMines` at most 64, forest size 1-256. Setup
   cost (Debug): 12 forests and 8 mines add about 5 ms to a 128 map; the worst case (1024 map, 64
-  forests of 256, 64 mines) about 2.2 s on top of the terrain's 0.3 s (QA measurement, BUG-0076; most of
-  it is the full-map flood fill after the ring test). Large forests (100+ trees) often enclose a hole and are skipped.
+  forests of 256, 64 mines) about 2.2 s on top of the terrain's 0.3 s in Debug (QA measurement, BUG-0076; most of
+  it is the full-map flood fill after the ring test, which Release builds skip since M3-H1). Large forests (100+ trees) often enclose a hole and are skipped.
 - **Navigation.** See "Navigation grid": `NavFlags.Resource` with `Blocked`, `Version` bumps, and
   flow fields rebuild through a gap on their next use (the cache's version check, unchanged).
 - **Hash and replays.** `StateHash` covers `NavGrid.Version` and the store (see "Determinism").
@@ -1215,7 +1241,7 @@ closed by rule: only exposed nodes are gathered.
   building-capacity line, so `ReplayRecorder` refuses a sim whose `BuildingCapacity` isn't the
   default. The golden was regenerated once for the hash composition and the data hash; trajectories
   unchanged.
-- **CLI.** `run --workers N` (0-200 per player, needs `--forests` or `--mines` above 0, else exit 1):
+- **CLI.** `run --workers N` (0-200 per player; N above 0 needs `--forests` or `--mines` above 0, else exit 1):
   player p plays faction p mod 2; its Town Hall goes on the open 4 x 4 spot (no march unit in it or on
   its ring) nearest its start block's center, ties toward the map centre; N workers spawn one per
   free cell on the rings round it and are ordered to gather once they exist (odd slots the nearest
@@ -1238,7 +1264,12 @@ repair"; the ghost is view work that calls `World.CanPlace`). Closes BUG-0078 by
   `OffMap`; `Blocked` (a footprint cell blocked: cliff, border, node, building; or a ramp, or another level than
   the anchor: `BuildingStore.Fits`); `SealsGround` (below); `UnitInTheWay` (an enemy unit, or an own unit holding
   position, has its center in the footprint; own units that aren't holding are pushed out instead); `CannotAfford`;
-  `StoreFull`; else `None`. The "explored by the player" rule waits for fog (M4).
+  `StoreFull`; else `None`. The "explored by the player" rule waits for fog (M4). The `Build` apply path needs only
+  pass / fail, so it runs the cheap rules (UnknownType to StoreFull) first and the seal flood last (M3-H1, BUG-0091:
+  100 refused Builds at a long-detour anchor cost one tick 22 ms in Debug before, 0.07 ms now); both answer pass / fail
+  identically, `CanPlace` keeps the order above. A worker's own Hold never puts it in the way of its own Build (M3-H1,
+  BUG-0092): the Build is accepted, the worker pushed out and its Hold ended like any order's, while `CanPlace`, which
+  has no worker, still reports `UnitInTheWay` for that spot.
 - **Never seal (BUG-0078).** A footprint may be taken only if every two passable cells that connect now still
   connect without it (`Map.SealCheck`, on `World`, allocation-free). A path through the footprint enters
   and leaves it through passable cells 4-adjacent to it, so it is enough that those cells still reach each other.
@@ -1248,8 +1279,10 @@ repair"; the ghost is view work that calls `World.CanPlace`). Closes BUG-0078 by
   label whose cells are all expanded without meeting another is a cut-off region (no). A "no" so costs about the
   pocket it would make, not the map. Unlike
   the placer it doesn't need the whole map connected beforehand. The dev command `SpawnBuilding` applies it too.
-  A destroyed or cancelled building that other buildings enclosed leaves a pocket (reachable from nowhere); that is
-  allowed, and later placements keep whatever regions exist.
+  A destroyed or cancelled building that other buildings enclosed would leave a pocket (reachable from nowhere); since
+  M3-H1 the grid's pocket rule (BUG-0093, "Navigation grid") keeps its cells blocked as `NavFlags.Pocket` cells
+  instead, with nothing published, until an opening beside them joins them to open ground. So every passable cell
+  reaches every other at all times, and a tree whose only open side was such a pocket counts as unexposed.
 - **Build command.** `Command.Build(player, worker, typeId, anchor[, queued])` (kind 8, a unit order; `TypeId`
   and `Position` as for `SpawnBuilding`: the cell holding `Position` is the anchor). Dropped, never thrown, for a dead
   or foreign handle, a unit not in the `worker` slot (queued or not), or an anchor off the map. At apply: if the
@@ -1259,8 +1292,12 @@ repair"; the ghost is view work that calls `World.CanPlace`). Closes BUG-0078 by
   `Version` and `BlockVersion` bump once), and every own unit whose center lies in the footprint is set down (a
   position set, not a walk) on the nearest free cell outside it, slot order: the rings of cells round the footprint
   (ring 1 is the cells 8-adjacent to it), nearest ring first, on the footprint's level, passable and with no other
-  unit's center in it; within a ring the cell nearest the unit, ties to the lower cell index; past
-  `EconomyConstants.PushRings` (8) rings the nearest passable cell. Then the worker is given the site. A dropped
+  unit's center in it; within a ring the cell nearest the unit, ties to the lower cell index. Rings go on outward until
+  a free cell turns up, so two pushed units never share a cell (M3-H1, BUG-0092; only a level with no free cell at all
+  falls back to the nearest passable cell). Occupants come from the spatial hash, rebuilt once per push-out so it
+  matches the units of that moment, each cell's answer kept in the flow-field builder's scratch; a pushed unit's
+  `PrevPosition` is set with its `Position`, so the view doesn't draw it sliding through the building. Then the worker
+  is given the site. A dropped
   Build changes nothing (totals, store, queue and Hold stay). Queued, a Build is checked when it starts (phase 7) and
   pays then.
 - **Construction.** A site is a `BuildingStore` entry with `UnderConstruction` and `Work` (int);
@@ -1278,7 +1315,8 @@ repair"; the ghost is view work that calls `World.CanPlace`). Closes BUG-0078 by
   building in slot order, so the order of builders never matters. Move, AttackMove, Stop, HoldPosition, Gather and
   another Build or Repair end the order (cargo kept); the target gone, finished, or whole again idles the worker.
 - **Cancel.** `Command.Cancel(player, position)` (kind 9): the player's own site covering the position is freed (an
-  opening change: `Version` bumps, `BlockVersion` doesn't), `floor(cost x (WorkNeeded - Work) / WorkNeeded)` of each
+  opening change: `Version` bumps, `BlockVersion` doesn't; or, walled in, its cells stay blocked as a pocket with no
+  bump, M3-H1), `floor(cost x (WorkNeeded - Work) / WorkNeeded)` of each
   resource comes back, and its workers go Idle. Dropped for a finished building, another player's site, or nothing.
 - **Repair.** `Command.Repair(player, worker, position[, queued])` (kind 10): the player's own finished building
   covering the position, below full hit points; dropped for anything else (full, a site, an enemy's, none). Each
@@ -1290,19 +1328,23 @@ repair"; the ghost is view work that calls `World.CanPlace`). Closes BUG-0078 by
   Idle, when a payment would take a total below 0, or at once when the player has 0 of a resource the building costs.
   At full hit points the workers go Idle and the accumulators reset.
 - **Damage seam.** `BuildingStore.Damage(handle, amount)` (internal): at 0 hit points the building is freed, an
-  opening change, so flow fields cached before it stay usable. Combat calls it in M4.
-- **Data.** `rules.json` gains `"repair": { "rateFactor": 0.5, "costFactor": 0.25 }` (required; each above 0 and at
-  most 1; a missing `repair` object is one error). `ContentHash` covers both. A building's missing `cost` object is now
+  opening change (or a pocket, as for a Cancel), so flow fields cached before it stay usable. Combat calls it in M4.
+- **Data.** `rules.json` gains `"repair": { "rateFactor": 0.5, "costFactor": 0.25 }` (required; each from 2^-16 to
+  1, since a smaller factor rounds to 0 in the 2^16 fixed point and the repair would restore or cost nothing, M3-H1,
+  BUG-0092; a missing `repair` object is one error). `ContentHash` covers both. A building's missing `cost` object is now
   one error, like a missing `footprint` (BUG-0079).
 - **Hash and replays.** `StateHash` adds each building's `UnderConstruction`, `Work` and repair accumulators, each
   unit's `BuildTarget` (with the gather fields, only when one of them isn't default, so units without them hash as
   before) and a queued Build's type id. Replays stay format 3: the new kinds ride in `c` lines. The golden was
   regenerated for the data hash only (the `repair` block); its checkpoints are byte-identical.
-- **Cost.** Placement and push-out scan the unit store; nothing allocates in apply or per tick. Measured (Debug,
+- **Cost.** Placement scans the unit store (`UnitInTheWay`); push-out uses the spatial hash (a Keep on 16 own units in a
+  blob of 400: the Build's apply 0.3 ms in Debug, 7.3 ms a tick before M3-H1); nothing allocates in apply or per tick. Measured (Debug,
   this PC, `ConstructionPerfTests`): 500 marching units + 50 workers building 10 sites average 0.98 ms a tick (1.02 ms
   with the same units and no sites); one `CanPlace` on the 128 map averages 0.0013 ms over every anchor and 0.05 ms at
   its slowest. The flood borrows the flow-field cache's build queue storage (`FlowFieldCache.BuildScratch`) instead of
-  two map-sized arrays of its own (8 MB on a 1024 map), and clears its visited marks before each flood it runs.
+  two map-sized arrays of its own (8 MB on a 1024 map), and clears its visited marks before each flood it runs. So
+  `CanPlace`, though it changes no sim state, writes that scratch: the view must call it on the sim thread between
+  ticks, never while a tick runs (BUG-0092).
 - **Not yet:** the placement ghost and HUD (view), population and `popProvided`, production, rally points (M3-4),
   the fog "explored" rule (M4), rubble, real damage (M4), start-location Town Halls (M6), events for views.
 
@@ -2159,6 +2201,12 @@ AiPlayer
   def type in turn, so a new field that isn't hashed fails it.
 - **Save file:** a versioned binary snapshot of the full `World` (stores, RNG states, pending
   commands, AI blackboards) plus the replay log so far. Loading restores the snapshot directly.
+  It stores the flow-field cache's *contents* too, every used slot's direction bytes and costs with
+  its keys, version stamps and LRU stamps (Producer decision 2026-10-07, BUG-0081; owner may revisit
+  at M6): since M3-2b a usable-but-stale field was built on the grid as it was then, so rebuilding
+  the fields from their keys at load would route units differently from the unsaved run (QA measured
+  positions parting at once). So save then load reproduces the unsaved run exactly. Replays need
+  nothing of this: they replay from tick 0, and the cache rebuilds itself on the way.
 - If a replay's data hash doesn't match the current data, the game says it was recorded with
   different balance data and refuses to play it (no silent desync). The sim returns only the
   `ReplayError.DataMismatch` code; the text comes from data (M6 playback UI).
@@ -2263,7 +2311,10 @@ AiPlayer
     2,500 units; BUG-0057), and `recorded <path>` after writing the replay. The `--record` path is
     checked before the first tick (M1-9, BUG-0057): a path that isn't valid, names a directory, or
     sits in a directory that doesn't exist fails at once with `error: cannot write replay ...`
-    instead of after the whole run (a write that still fails at the end reports the same way).
+    instead of after the whole run. Since M3-H1 (BUG-0072) the file is also created (truncated) and
+    held open before the first tick and written at the end, so a name the file system refuses
+    (`a<b.replay`, which `Path.GetFullPath` accepts) or a folder the user may not write to fails
+    then too (a write that still fails at the end reports the same way).
   - `play <path> [--data <dir>]` reads the replay (`ReplayFormat.TryReadFile`) and plays it
     (`ReplayPlayer.Run`); on success it prints the same `tick <n> hash` lines and
     `ok: K checkpoints matched over N ticks`, or `ok: 0 checkpoints (nothing compared) over N ticks`

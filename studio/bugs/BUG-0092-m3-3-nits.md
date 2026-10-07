@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-06-2114, task M3-3 |
 | System | construction / repair / data loader |
-| Fixed by | |
+| Fixed by | M3-H1 (4abbf37, session 2026-10-07-0800), items (a)-(f): (a) `DataLoader.Factor` rejects repair factors below 2^-16 (QA `RepairDataQaTests` tiny-factor row un-skipped); (b) the issuing worker's own Hold never puts it in the way of its Build (`Check(..., worker)`; QA `HoldingWorkerInsideTheFootprint_TheOnlyCanPlaceBuildDivergence` pins it as the one documented CanPlace / Build divergence); (c) push-out rings go on outward until a free cell (90 units round a 2 x 2 site on distinct cells; QA 400 stacked in a Keep, ring 9, 2.46 ms); (d) occupants through the spatial hash with per-cell answers in the build scratch (16 pushed in a blob of 400: 0.29 ms); (e) `PrevPosition` set with `Position`; (f) docs/03 "Cost" note that `CanPlace` writes flow-field scratch. `SimHardeningTests` rows, `AllocationTests.PocketDecisions_RefusedBuilds_AndAPushOut_AllocateNothing`. Residual: a level with fewer free cells than pushed units scans the whole map and stacks the rest (BUG-0095, S3) |
 
 ## Repro
 1. **Tiny repair factor.** `QA/RepairDataQaTests.ATinyAcceptedRateFactor_Report` (skipped with this id): `rules.json`

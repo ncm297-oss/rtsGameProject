@@ -304,7 +304,7 @@ public class ResourceQaTests
         _out.WriteLine($"grove intact: unit ends at {before.End} (goal cell {before.GoalCell}, {before.State}); every open cell reachable: {before.Reachable}");
         _out.WriteLine($"middle felled: unit ends at {after.End} (goal cell {after.GoalCell}, {after.State}); every open cell reachable: {after.Reachable}");
         Assert.True(before.Reachable);
-        Assert.False(after.Reachable); // the hollow: docs/03 says this can't happen
+        Assert.True(after.Reachable); // M3-H1 pocket rule (BUG-0093): the felled middle stays blocked as a pocket, no hollow
     }
 
     /// <summary>
@@ -523,7 +523,7 @@ public class ResourceQaTests
     [InlineData("map.mine-spacing 41C00000\n", "map.mine-spacing 7F800000\n", ReplayError.InvalidHeader)]
     [InlineData("map.mine-spacing 41C00000\n", "map.mine-spacing FF800000\n", ReplayError.InvalidHeader)]
     [InlineData("map.mine-spacing 41C00000\n", "map.mine-spacing BF800000\n", ReplayError.InvalidHeader)]
-    [InlineData("map.mine-spacing 41C00000\n", "map.mine-spacing 80000000\n", ReplayError.None)] // -0 m: valid, and these 3 mines land as with 24 m
+    [InlineData("map.mine-spacing 41C00000\n", "map.mine-spacing 80000000\n", ReplayError.InvalidHeader)] // -0 m: refused since M3-H1 (BUG-0076)
     [InlineData("resource-capacity 4096\n", "resource-capacity 2147483647\n", ReplayError.InvalidHeader)]
     [InlineData("resource-capacity 4096\n", "resource-capacity -2147483648\n", ReplayError.InvalidHeader)]
     [InlineData("resource-capacity 4096\n", "resource-capacity 1\n", ReplayError.CheckpointMismatch)]
@@ -674,7 +674,6 @@ public class ResourceQaTests
     [Theory]
     [InlineData("\"displayName\": \"Gold Mine\"", "\"displayName\": \"Gold Mines\"")]
     [InlineData("A seam of gold.", "A seam of gold!")]
-    [InlineData("\"resource\": \"wood\"", "\"resource\": \"gold\"")] // M3-2b: was gold -> wood, but a 2 x 2 wood type is refused now (BUG-0074)
     [InlineData("{ \"width\": 2, \"height\": 2 }", "{ \"width\": 3, \"height\": 2 }")]
     [InlineData("{ \"width\": 2, \"height\": 2 }", "{ \"width\": 2, \"height\": 3 }")]
     [InlineData("\"id\": \"gold_mine\"", "\"id\": \"gold_vein\"")]
@@ -691,16 +690,39 @@ public class ResourceQaTests
         Assert.NotEqual(TestSim.Data.ContentHash(), r.Data!.ContentHash());
     }
 
+    /// <summary>
+    /// The kind field is hashed. M3-H1: a two-type file can't flip a kind any more (a 2 x 2 wood type is refused,
+    /// BUG-0074, and a file with no wood or no gold type too, BUG-0076), so a third 1 x 1 type flips instead.
+    /// </summary>
     [Fact]
-    public void EmptyResourcesList_Report()
+    public void ContentHash_ChangesWithAResourceKind()
+    {
+        ulong Hash(string kind)
+        {
+            using TestDataDir dir = TestDataDir.CopyOfShipped();
+            string path = dir.FullPath(ResourcesFile);
+            string extra = "{ \"id\": \"zz_node\", \"displayName\": \"Z\", \"description\": \"Z.\", \"resource\": \"" + kind + "\", \"footprint\": { \"width\": 1, \"height\": 1 } },";
+            File.WriteAllText(path, File.ReadAllText(path).Replace("\"resources\": [", "\"resources\": [" + extra));
+            DataLoadResult r = LoadNoThrow(dir.Path);
+            Assert.True(r.Ok, string.Join(" | ", r.Errors));
+            return r.Data!.ContentHash();
+        }
+        Assert.NotEqual(Hash("gold"), Hash("wood"));
+    }
+
+    /// <summary>BUG-0076 (M3-H1): an empty list, or one without a type of some kind, is a data error (one type per kind is required).</summary>
+    [Theory]
+    [InlineData("{ \"resources\": [] }", "gold")]
+    [InlineData("{ \"resources\": [ { \"id\": \"tree\", \"displayName\": \"T\", \"description\": \"T.\", \"resource\": \"wood\", \"footprint\": { \"width\": 1, \"height\": 1 } } ] }", "gold")]
+    [InlineData("{ \"resources\": [ { \"id\": \"mine\", \"displayName\": \"M\", \"description\": \"M.\", \"resource\": \"gold\", \"footprint\": { \"width\": 2, \"height\": 2 } } ] }", "wood")]
+    public void AResourcesListMissingAKind_IsADataError(string json, string missing)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
-        File.WriteAllText(dir.FullPath(ResourcesFile), "{ \"resources\": [] }");
+        File.WriteAllText(dir.FullPath(ResourcesFile), json);
         DataLoadResult r = LoadNoThrow(dir.Path);
-        _out.WriteLine(r.Ok ? "an empty resources list loads clean" : string.Join(" | ", r.Errors));
-        if (!r.Ok) return;
-        var sim = new Simulation(new SimConfig(1, 1, 4, 4) { Data = r.Data!, Map = MapGenParams.Default with { Forests = 12, GoldMines = 8 } });
-        _out.WriteLine($"forests 12 + mines 8 requested on it: placed {sim.World.ResourcePlacement}");
+        _out.WriteLine(string.Join(" | ", r.Errors));
+        Assert.False(r.Ok);
+        Assert.Contains(r.Errors, e => e.File == ResourcesFile && e.Message.Contains($"'{missing}'"));
     }
 
     [Fact]

@@ -1254,7 +1254,10 @@ public static class MovementSystem
         {
             int m = line[head];
             walls |= WallSides(grid, u.Position[m], u.Radius[m], pass);
-            int c = world.Spatial.QueryRadius(u.Position[m], u.Radius[m] + world.MaxUnitRadius + pass, found);
+            // Widened by the most a unit moves in a tick: in the shove pass the hash holds start-of-tick points, and a
+            // narrower query let one member miss a neighbor that sees it, so the first member asked decided the cached
+            // answer (BUG-0071). The exact gap test below still decides; with a fresh hash (Plan) nothing changes.
+            int c = world.Spatial.QueryRadius(u.Position[m], u.Radius[m] + world.MaxUnitRadius + world.MaxUnitSpeed + pass, found);
             for (int q = 0; q < c; q++)
             {
                 int e = found[q];

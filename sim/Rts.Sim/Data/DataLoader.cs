@@ -191,7 +191,11 @@ public static class DataLoader
         };
     }
 
-    /// <summary>A fraction above 0 and at most 1 (a missing <c>repair</c> object is one error, reported by the caller).</summary>
+    /// <summary>
+    /// A fraction from 2^-16 to 1 (a missing <c>repair</c> object is one error, reported by the caller). Repair runs in
+    /// 2^16 fixed point (<c>EconomyConstants.RepairFixedOne</c>), where a smaller factor rounds to 0: a repair that
+    /// restores or costs nothing (BUG-0092).
+    /// </summary>
     private static float Factor(Checker c, double? value, string path)
     {
         double f = c.Pos(value, path);
@@ -200,13 +204,22 @@ public static class DataLoader
             c.Error(path, $"{f} is above the maximum 1");
             return 0f;
         }
+        if (f > 0 && f < MinFactor)
+        {
+            c.Error(path, $"{f} is below the minimum 2^-16 ({MinFactor}), which rounds to 0 in repair's fixed point");
+            return 0f;
+        }
         return (float)f;
     }
+
+    /// <summary>Smallest repair factor: one unit of <c>EconomyConstants.RepairFixedOne</c> (2^16).</summary>
+    private const double MinFactor = 1.0 / Economy.EconomyConstants.RepairFixedOne;
 
     /// <summary>Resource node types, indexed by id in ordinal order of their string ids; a repeated id is an error at its second definition.</summary>
     private static ResourceDef[] BuildResources(Checker c, ResourceFileJson j)
     {
         List<ResourceJson?>? list = c.Obj(j.Resources, "resources");
+        int errorsBefore = c.Errors.Count;
         var accepted = new List<int>();
         var keys = new List<string>();
         for (int i = 0; list != null && i < list.Count; i++)
@@ -250,6 +263,14 @@ public static class DataLoader
                 FootprintWidth = fw,
                 FootprintHeight = fh,
             };
+        }
+        // One type per kind is required: with none, the placer would silently place nothing of it (BUG-0076). Checked only
+        // on an otherwise clean list, so a broken entry is one error, not two.
+        for (int k = 0; list != null && c.Errors.Count == errorsBefore && k < DataLimits.ResourceKindIds.Length; k++)
+        {
+            bool found = false;
+            foreach (ResourceDef d in defs) found |= (int)d.Resource == k;
+            if (!found) c.Error("resources", $"no '{DataLimits.ResourceKindIds[k]}' resource type (one per kind is required)");
         }
         return defs;
     }
