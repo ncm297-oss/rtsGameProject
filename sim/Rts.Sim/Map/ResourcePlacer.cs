@@ -16,10 +16,10 @@ namespace Rts.Sim.Map;
 /// random seed cell as a 4-connected blob of a size drawn from the forest range, adding a random
 /// frontier cell at a time. No cell of a new mine or forest touches (8-neighbor) an earlier node, so
 /// workers reach a mine from every side and each forest is its own 8-connected group of trees.
-/// Before a mine or forest is committed, a flood fill checks that every passable cell is still
-/// reachable from every other; if not, that placement is dropped (a cheap local test on the cells
-/// around it rejects most bad ones first; see <c>Scratch.StaysConnected</c>). Depletion only reopens
-/// cells, so no pocket can appear later. Every placement gets at most <see cref="TriesPerPlacement"/>
+/// Before a mine or forest is committed, a local test on the cells round it checks that every
+/// passable cell is still reachable from every other; if not, that placement is dropped (see
+/// <c>Scratch.StaysConnected</c>; a whole-map flood confirms it in Debug builds). Depletion only
+/// reopens cells joined to open ground (the grid's pocket rule), so no pocket can appear later. Every placement gets at most <see cref="TriesPerPlacement"/>
 /// tries; one that fails them all is skipped and the shortfall shows in the returned counts. Load
 /// time only, so it allocates its scratch freely; no Dictionary or HashSet, cells in index order.
 /// </remarks>
@@ -266,10 +266,16 @@ internal static class ResourcePlacer
         /// must be passable and the ring 4-connected by itself. That is enough on its own (a path between two
         /// cells that crossed the candidates enters and leaves them through ring cells, so it can go round
         /// through the ring instead), and it rejects the common failure, a forest enclosing a hole, without
-        /// touching the rest of the map. Then the flood fill of the whole map the rule asks for, which only
-        /// placements that pass the ring test pay for.
+        /// touching the rest of the map. The ring test decides; the whole-map flood fill the rule first asked
+        /// for can't disagree with it (QA's independent oracle over 246 seeds), so it runs only as a Debug
+        /// build assertion (BUG-0076, Producer decision): Release setup skips the flood, most of its cost.
         /// </remarks>
-        public bool StaysConnected() => RingStaysConnected() && MapStaysConnected();
+        public bool StaysConnected()
+        {
+            if (!RingStaysConnected()) return false;
+            System.Diagnostics.Debug.Assert(MapStaysConnected(), "the ring test passed a placement that cuts the map");
+            return true;
+        }
 
         private bool RingStaysConnected()
         {

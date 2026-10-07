@@ -508,7 +508,7 @@ public class HardeningQaTests
     /// its own answer every time; with it, the first root asked decides both. Asserts m's answer doesn't
     /// depend on which unit was asked first in the pass.
     /// </summary>
-    [Fact(Skip = "BUG-0071: under a stale spatial hash (shove pass) the first cluster member asked decides the cached answer for all")]
+    [Fact] // BUG-0071 fixed in M3-H1: the plug search's query is widened by MaxUnitSpeed
     public void PlugCache_StaleHash_ConstructedPair_AnswerDoesNotDependOnQueryOrder()
     {
         var sim = new Simulation(TestSim.Config(Seed: 1, PlayerCount: 2, UnitCapacity: 3, CommandCapacity: 8), WideCorridorWithRooms(2));

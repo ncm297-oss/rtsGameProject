@@ -81,7 +81,8 @@ public class GridChangeFuzzStressTests
                 fells++;
                 s.Felled.Add(cell);
                 // The stranded case: a unit appears on the just-opened cell and is ordered to a goal some other unit already has (its field is likely cached, stale now).
-                if (rng.NextInt(0, 4) == 0 && u.Count < u.Capacity - 4)
+                // (Only onto open ground: since M3-H1 an interior tree's cell stays blocked as a pocket, BUG-0093.)
+                if (rng.NextInt(0, 4) == 0 && u.Count < u.Capacity - 4 && g.IsPassable(cell % g.Width, cell / g.Width))
                 {
                     sim.Enqueue(Command.SpawnUnit(0, rng.NextInt(0, TestSim.UnitTypeCount), g.CellCenter(cell % g.Width, cell / g.Width) + new Vector2(rng.NextFloat() - 0.5f, rng.NextFloat() - 0.5f)));
                     strandSpawns++;

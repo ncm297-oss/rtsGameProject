@@ -25,7 +25,16 @@ namespace Rts.Sim.Economy;
 public static class ConstructionSystem
 {
     /// <summary>The placement rule behind <see cref="World.CanPlace"/>: the first rule broken, or <see cref="PlacementError.None"/>.</summary>
-    internal static PlacementError Check(World world, int player, int typeId, int anchorCell)
+    internal static PlacementError Check(World world, int player, int typeId, int anchorCell) =>
+        Check(world, player, typeId, anchorCell, -1, sealLast: false);
+
+    /// <summary>
+    /// The placement rule. <paramref name="worker"/> is the unit issuing a Build (-1 for none): its own Hold never puts
+    /// it in the way (BUG-0092). With <paramref name="sealLast"/> (the Build apply path, which needs only pass / fail)
+    /// the never-seal flood runs after every cheap rule has passed, so a refused Build costs no flood (BUG-0091); the
+    /// answer's pass / fail is the same either way, only the reason reported for a spot breaking several rules differs.
+    /// </summary>
+    private static PlacementError Check(World world, int player, int typeId, int anchorCell, int worker, bool sealLast)
     {
         GameData data = world.Data;
         if ((uint)typeId >= (uint)data.Buildings.Length) return PlacementError.UnknownType;
@@ -38,15 +47,16 @@ public static class ConstructionSystem
         if (x0 + def.FootprintWidth > w || y0 + def.FootprintHeight > g.Height) return PlacementError.OffMap;
         // Terrain, nodes and buildings: the store's rule (passable, no ramp, one level).
         if (!world.Buildings.Fits(typeId, anchorCell)) return PlacementError.Blocked;
-        if (!world.Seal.KeepsConnected(x0, y0, def.FootprintWidth, def.FootprintHeight)) return PlacementError.SealsGround;
+        if (!sealLast && !world.Seal.KeepsConnected(x0, y0, def.FootprintWidth, def.FootprintHeight)) return PlacementError.SealsGround;
         UnitStore u = world.Units;
         for (int i = 0; i < u.Capacity; i++)
         {
-            if (!u.Alive[i] || (u.Owner[i] == player && !u.Hold[i])) continue;
+            if (!u.Alive[i] || i == worker || (u.Owner[i] == player && !u.Hold[i])) continue;
             if (Inside(u.Position[i], x0, y0, def)) return PlacementError.UnitInTheWay;
         }
         if (world.Gold[player] < def.CostGold || world.Wood[player] < def.CostWood) return PlacementError.CannotAfford;
         if (world.Buildings.FreeCount == 0) return PlacementError.StoreFull;
+        if (sealLast && !world.Seal.KeepsConnected(x0, y0, def.FootprintWidth, def.FootprintHeight)) return PlacementError.SealsGround;
         return PlacementError.None;
     }
 
@@ -77,7 +87,7 @@ public static class ConstructionSystem
         }
         else
         {
-            if (Check(world, player, typeId, anchor) != PlacementError.None) return false;
+            if (Check(world, player, typeId, anchor, i, sealLast: true) != PlacementError.None) return false;
             BuildingDef def = world.Data.Buildings[typeId];
             world.TrySpend(player, def.CostGold, def.CostWood);
             b.Spawn(player, typeId, anchor, out EntityHandle h, site: true);
@@ -122,32 +132,54 @@ public static class ConstructionSystem
     }
 
     /// <summary>
-    /// Moves every unit of <paramref name="player"/> whose center lies in the new footprint (none of them holding: the
-    /// placement rule refused those) to the nearest free cell outside it, slot order: the rings of cells round the
-    /// footprint, nearest first, on the footprint's level, passable, with no other unit's center in it; nearest to the
-    /// unit's center, ties to the lower cell. A position set, not a walk. Past <see cref="EconomyConstants.PushRings"/>
-    /// rings: the nearest passable cell (<see cref="FlowField.NearestPassable"/>).
+    /// Moves every unit of <paramref name="player"/> whose center lies in the new footprint (none of them holding but the
+    /// worker whose Build this is: the placement rule refused the others) to the nearest free cell outside it, slot
+    /// order: the rings of cells round the footprint, nearest first, on the footprint's level, passable, with no other
+    /// unit's center in it; nearest to the unit's center, ties to the lower cell. Rings go on outward until a free cell
+    /// turns up, so two pushed units never share a cell (BUG-0092); only a level with no free cell at all falls back to
+    /// the nearest passable cell (<see cref="FlowField.NearestPassable"/>). A position set, not a walk: the previous
+    /// position moves too, so the view doesn't draw the unit sliding through the new building.
     /// </summary>
+    /// <remarks>
+    /// Occupants come from the spatial hash, rebuilt here once so it matches the positions of this moment (commands and
+    /// queued orders move and spawn units after the tick's own rebuild). Each cell's answer is kept in the flow-field
+    /// builder's scratch (idle between builds; cleared first) and a cell is marked taken as a unit is set down on it, so
+    /// the units pushed later read it there. The cost follows the units near the footprint, not the store (400 units
+    /// round a Keep: about 0.3 ms in Debug).
+    /// </remarks>
     private static void PushOut(World world, int player, int x0, int y0, BuildingDef def)
     {
         UnitStore u = world.Units;
-        NavGrid g = world.NavGrid;
-        int level = g.LevelAt(x0, y0);
+        int[] pushed = world.PushedUnits;
+        int count = 0;
         for (int i = 0; i < u.Capacity; i++)
         {
-            if (!u.Alive[i] || u.Owner[i] != player || !Inside(u.Position[i], x0, y0, def)) continue;
+            if (u.Alive[i] && u.Owner[i] == player && Inside(u.Position[i], x0, y0, def)) pushed[count++] = i;
+        }
+        if (count == 0) return;
+        world.Spatial.Rebuild(u);
+        NavGrid g = world.NavGrid;
+        int[] taken = world.FlowFields.BuildScratch; // per cell: 0 not asked yet, 1 free, 2 a unit's center in it
+        Array.Clear(taken, 0, g.Width * g.Height);
+        int level = g.LevelAt(x0, y0), fw = def.FootprintWidth, fh = def.FootprintHeight;
+        int maxRing = Math.Max(g.Width, g.Height);
+        for (int p = 0; p < count; p++)
+        {
+            int i = pushed[p];
             int best = -1;
             float bestD2 = float.PositiveInfinity;
-            for (int r = 1; r <= EconomyConstants.PushRings && best < 0; r++)
+            for (int r = 1; r <= maxRing && best < 0; r++)
             {
-                for (int y = y0 - r; y < y0 + def.FootprintHeight + r; y++)
+                // The ring's cells in index order (rows top to bottom, x ascending), so a tie keeps the lower cell.
+                for (int y = y0 - r; y < y0 + fh + r; y++)
                 {
-                    for (int x = x0 - r; x < x0 + def.FootprintWidth + r; x++)
+                    bool fullRow = y == y0 - r || y == y0 + fh + r - 1;
+                    int step = fullRow ? 1 : fw + 2 * r - 1;
+                    for (int x = x0 - r; x < x0 + fw + r; x += step)
                     {
-                        bool edge = y == y0 - r || y == y0 + def.FootprintHeight + r - 1 || x == x0 - r || x == x0 + def.FootprintWidth + r - 1;
-                        if (!edge || !g.IsPassable(x, y) || g.LevelAt(x, y) != level || Occupied(u, i, x, y)) continue;
+                        if (!g.IsPassable(x, y) || g.LevelAt(x, y) != level) continue;
                         float d2 = Vector2.DistanceSquared(u.Position[i], g.CellCenter(x, y));
-                        if (d2 < bestD2) // cells come in index order, so a tie keeps the lower one
+                        if (d2 < bestD2 && !Occupied(world, taken, x, y))
                         {
                             best = y * g.Width + x;
                             bestD2 = d2;
@@ -156,21 +188,33 @@ public static class ConstructionSystem
                 }
             }
             if (best < 0) best = FlowField.NearestPassable(g, y0 * g.Width + x0);
-            if (best >= 0) u.Position[i] = g.CellCenter(best % g.Width, best / g.Width);
+            if (best < 0) continue;
+            u.Position[i] = g.CellCenter(best % g.Width, best / g.Width);
+            u.PrevPosition[i] = u.Position[i];
+            taken[best] = 2;
         }
     }
 
-    /// <summary>True if a live unit other than <paramref name="i"/> has its center in cell (x, y).</summary>
-    private static bool Occupied(UnitStore u, int i, int x, int y)
+    /// <summary>
+    /// True if a live unit has its center in cell (x, y) (outside the footprint): asked of the spatial hash the first time,
+    /// then read from <paramref name="taken"/>, where the push-out also marks the cells it sets units down on.
+    /// </summary>
+    private static bool Occupied(World world, int[] taken, int x, int y)
     {
+        int c = y * world.NavGrid.Width + x;
+        if (taken[c] != 0) return taken[c] == 2;
         const float cs = MapConstants.CellSize;
-        for (int j = 0; j < u.Capacity; j++)
+        UnitStore u = world.Units;
+        int[] near = world.Neighbors;
+        bool occupied = false;
+        int n = world.Spatial.QueryRect(new Vector2(x * cs, y * cs), new Vector2((x + 1) * cs, (y + 1) * cs), near);
+        for (int m = 0; m < n && !occupied; m++)
         {
-            if (j == i || !u.Alive[j]) continue;
-            Vector2 p = u.Position[j];
-            if (p.X >= x * cs && p.X < (x + 1) * cs && p.Y >= y * cs && p.Y < (y + 1) * cs) return true;
+            Vector2 p = u.Position[near[m]];
+            occupied = u.Alive[near[m]] && p.X >= x * cs && p.X < (x + 1) * cs && p.Y >= y * cs && p.Y < (y + 1) * cs;
         }
-        return false;
+        taken[c] = occupied ? 2 : 1;
+        return occupied;
     }
 
     /// <summary>

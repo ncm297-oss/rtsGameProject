@@ -41,6 +41,7 @@ public sealed class World
         ResourcePlacement = ResourcePlacer.Place(config.Map, NavGrid, Resources, config.Data, ref _rngs[RngStream.MapGen]);
         Buildings = new BuildingStore(config.BuildingCapacity, NavGrid, config.Data);
         SiteWorkers = new int[config.BuildingCapacity];
+        PushedUnits = new int[config.UnitCapacity];
         _gold = new int[config.PlayerCount];
         _wood = new int[config.PlayerCount];
         Array.Fill(_gold, config.Data.Rules.StartingGold);
@@ -48,6 +49,7 @@ public sealed class World
         Spatial = new SpatialHash(config.UnitCapacity, NavGrid.Width, NavGrid.Height);
         FlowFields = new FlowFieldCache(NavGrid, FlowFieldCache.CapacityFor(config.UnitCapacity, NavGrid.Width * NavGrid.Height));
         Seal = new SealCheck(NavGrid, FlowFields.BuildScratch);
+        NavGrid.ShareScratch(FlowFields.BuildScratch); // the pocket rule's flood (BUG-0093)
         MoveOrder = new long[config.UnitCapacity];
         FieldMisses = new long[config.UnitCapacity];
         FieldRefreshes = new long[config.UnitCapacity];
@@ -89,6 +91,9 @@ public sealed class World
 
     /// <summary>Scratch for <see cref="ConstructionSystem"/>: per building slot, the workers in reach this tick (-1: its workers stop); derived, not hashed.</summary>
     internal int[] SiteWorkers { get; }
+
+    /// <summary>Scratch for <see cref="ConstructionSystem"/>'s push-out: the units a new site sets down, slot order; derived, not hashed.</summary>
+    internal int[] PushedUnits { get; }
 
     /// <summary>The faction <paramref name="player"/> plays: player p plays faction <c>p mod factions</c> in id order until a lobby picks them (M6); -1 for no such player.</summary>
     public int FactionOf(int player) =>

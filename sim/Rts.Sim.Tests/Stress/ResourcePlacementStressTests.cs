@@ -378,7 +378,10 @@ public static class ResourceOracle
             else if (step % checkEvery == 0 && Reach(g) != null)
                 hollowFells++;
         }
-        if (g.Version != startVersion + nodes) return $"Version {g.Version}, expected {startVersion + nodes}";
+        // Felled from the outside, every fell opens ground: one bump each. In any order, an interior tree felled first stays
+        // blocked as a pocket with no bump and reopens with the neighbour that joins it to open ground (M3-H1, BUG-0093).
+        if (reachableOnly ? g.Version != startVersion + nodes : g.Version > startVersion + nodes || g.Version <= startVersion)
+            return $"Version {g.Version}, expected {(reachableOnly ? "" : "at most ")}{startVersion + nodes}";
         if (g.PassableCount != g0.PassableCount) return $"PassableCount {g.PassableCount} vs bare {g0.PassableCount}";
         for (int y = 0; y < g.Height; y++)
             for (int x = 0; x < g.Width; x++)

@@ -87,6 +87,10 @@ public static class CliRunner
 
         GameData? data = LoadData(o, stderr);
         if (data == null) return ExitError;
+        // Opened now and written at the end: a name the file system refuses (`a<b`) or a folder we may not write to
+        // fails here, before the first tick, which a path check alone can't promise (BUG-0072).
+        using FileStream? recordFile = recordPath == null ? null : OpenRecordFile(recordPath, stderr);
+        if (recordPath != null && recordFile == null) return ExitError;
 
         var map = new MapGenParams { Forests = forests, GoldMines = mines };
         // Room for the march, the workers and (with --workers) one Town Hall command per player.
@@ -129,11 +133,12 @@ public static class CliRunner
         double p99 = sorted[(int)Math.Ceiling(0.99 * ticks) - 1];
         stdout.WriteLine(string.Format(Inv, "ticks {0} avg {1:F3} ms p99 {2:F3} ms worst {3:F3} ms", ticks, sum / ticks, p99, sorted[^1]));
 
-        if (recorder != null && recordPath != null)
+        if (recorder != null && recordFile != null)
         {
             try
             {
-                ReplayFormat.WriteFile(recorder.ToReplay(), recordPath);
+                recordFile.Write(ReplayFormat.Write(recorder.ToReplay()));
+                recordFile.Flush();
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
             {
@@ -230,6 +235,20 @@ public static class CliRunner
         if (!o.TryGetValue(name, out string? text)) return null;
         if (int.TryParse(text, NumberStyles.AllowLeadingSign, Inv, out value) && value >= min && value <= max) return null;
         return $"{name} must be a whole number from {min.ToString(Inv)} to {max.ToString(Inv)}";
+    }
+
+    /// <summary>Creates (or truncates) the replay file for writing; null after printing one error line.</summary>
+    private static FileStream? OpenRecordFile(string path, TextWriter stderr)
+    {
+        try
+        {
+            return new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            stderr.WriteLine($"error: cannot write replay '{path}': {e.Message}");
+            return null;
+        }
     }
 
     /// <summary>Why a replay can't be written to <paramref name="path"/> (an invalid path, a missing folder, or a folder in its place), or null if it looks writable.</summary>

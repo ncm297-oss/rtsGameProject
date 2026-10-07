@@ -28,9 +28,6 @@ public static class EconomyConstants
     /// <summary>The "+ 2" of docs/02's <c>t x 3 / (n + 2)</c>: work a site gains per tick on top of one per builder in reach.</summary>
     public const int BuildWorkBase = 2;
 
-    /// <summary>Rings of cells round a new site searched for a free cell to push a unit standing in its footprint to; past them the nearest passable cell is used.</summary>
-    public const int PushRings = 8;
-
     /// <summary>Fixed-point scale (2^16) for the repair factors and accumulators, so repair is integer math.</summary>
     public const int RepairFixedOne = 65536;
 }
