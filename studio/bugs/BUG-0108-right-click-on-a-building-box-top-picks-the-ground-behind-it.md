@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-07-1131, task M3-V2 |
 | System | right-click context order (SelectionController.CommandAt / ContextOrder), view |
-| Fixed by | |
+| Fixed by | f1ef79f (M3-V3, `SelectionController.ContextTarget`); dev row `ProductionHudTest.Bug0108`, QA rows `QaV2Test.RightClickOnBoxTop` (strict) and `QaV3Test.RightClickSweep` (every box pixel at 20 / 30 / 60 m and on a 4 m-slope lip: 0 wrong of 112k), verified by QA 2026-10-07-1415 |
 
 ## Repro
 1. `& $env:GODOT --headless --path game res://tests/QaV2Test.tscn` (row `RightClickOnBoxTop`; add `-- --strict` to make

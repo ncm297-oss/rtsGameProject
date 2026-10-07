@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-07-1131, task M3-V2 |
 | System | build ghost / placement click (CommandCard.GhostClick, BuildGhost), view |
-| Fixed by | |
+| Fixed by | f1ef79f (M3-V3, `BuildGhost.ResolveClick`); dev row `ProductionHudTest.Bug0109`, QA rows `QaV2Test.ClickPositionVsDrawnAnchor` (strict) and `QaV3Test.FlickThenClick` / `FlickThroughRealInput` (300 flick clicks: 0 at a wrong anchor, max 1 `CanPlace` a frame, 0 green clicks dropped through the real input path), verified by QA 2026-10-07-1415 |
 
 ## Repro
 1. `& $env:GODOT --headless --path game res://tests/QaV2Test.tscn` (row `ClickPositionVsDrawnAnchor`; `-- --strict`
