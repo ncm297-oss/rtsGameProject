@@ -132,3 +132,5 @@ bugs outrank new features.
 | [BUG-0094](BUG-0094-test-grove-spawns-skip-the-seal-check.md) | S4 | open | Hand-built test groves (`ResourceStore.Spawn`) skip the never-seal check and wall cells in before tick 1 |
 | [BUG-0095](BUG-0095-push-out-on-a-full-level-scans-the-whole-map.md) | S3 | open | Push-out on a level with too few free cells scans every ring of the map per leftover unit (9 ms at 128, 35 ms at 256) and stacks them on one point |
 | [BUG-0096](BUG-0096-builds-refused-for-sealsground-each-flood.md) | S3 | open | Builds refused for SealsGround still pay a flood each: 100 in one tick cost 33 ms (BUG-0091 residual) |
+| [BUG-0106](BUG-0106-m3-v1-tree-gather-bound-unmet-from-start.md) | S3 | open | Right-click on the nearest tree from the start: workers reach Gathering at tick 123, not within 60 (criterion 3 wording vs walk time) |
+| [BUG-0107](BUG-0107-m3-v1-nits.md) | S4 | open | M3-V1 nits: Malazan site vs finished colour, tiny wood cube at 60 m, minimap resource redraw on every building change |
