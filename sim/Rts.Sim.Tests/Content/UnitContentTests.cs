@@ -187,7 +187,10 @@ public class UnitContentTests
                 Assert.True((r.Slot, r.Name) == (FactionPage.Slot<UnitSlot>(c[0]), c[1]), where + " slot/name");
                 Assert.True((r.Hp, r.Armor, r.Class) == (int.Parse(c[2]), int.Parse(c[3]), c[4].ToLowerInvariant()), where + " hp/armor/class");
                 Assert.True((r.Atk, r.Type, r.Cd) == (int.Parse(c[5]), c[6].ToLowerInvariant(), FactionPage.Num(c[7])), where + " attack");
-                string range = r.Range == Melee ? "melee" : r.MinRange > 0 ? $"{r.Range} (min {r.MinRange})" : $"{r.Range}";
+                // BUG-0111: invariant culture, so a page range like 7.5 is not expected as "7,5" on a de-DE machine.
+                string range = r.Range == Melee ? "melee"
+                    : r.MinRange > 0 ? $"{FactionPage.Text(r.Range)} (min {FactionPage.Text(r.MinRange)})"
+                    : FactionPage.Text(r.Range);
                 Assert.True(range == c[8], where + $" range '{c[8]}'");
                 Assert.True((r.Speed, (double)r.Sight) == (FactionPage.Num(c[9]), FactionPage.Num(c[10])), where + " speed/sight");
                 Assert.True((r.Gold, r.Wood) == FactionPage.Cost(c[11]), where + " cost");

@@ -82,7 +82,7 @@
       "buildTime": 45,
       "popProvided": 0,
       "dropOff": false,
-      "requires": []
+      "requires": ["whirlwind_raider_camp"]
     },
     {
       "id": "whirlwind_smithy",
@@ -110,7 +110,7 @@
       "buildTime": 50,
       "popProvided": 0,
       "dropOff": false,
-      "requires": []
+      "requires": ["age_ii"]
     },
     {
       "id": "whirlwind_ram_yard",
@@ -124,7 +124,7 @@
       "buildTime": 55,
       "popProvided": 0,
       "dropOff": false,
-      "requires": []
+      "requires": ["age_ii"]
     },
     {
       "id": "whirlwind_lookout_tower",
@@ -138,7 +138,7 @@
       "buildTime": 35,
       "popProvided": 0,
       "dropOff": false,
-      "requires": []
+      "requires": ["age_ii"]
     }
   ]
 }

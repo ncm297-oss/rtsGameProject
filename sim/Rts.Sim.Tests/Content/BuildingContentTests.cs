@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Rts.Sim.Data;
 
 namespace Rts.Sim.Tests.Content;
@@ -214,17 +216,93 @@ public class BuildingContentTests
 
                 // Provides: pop, drop-off and the units trained here must agree with the data.
                 string provides = c[8];
-                Assert.True((t.Pop > 0) == provides.Contains($"+{t.Pop} pop", StringComparison.Ordinal), where + " pop");
+                // BUG-0111: any "+N pop" claim must be the building's own pop (a 0-pop building claims none).
+                int[] popClaims = Regex.Matches(provides, @"\+(\d+) pop").Select(m => int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture)).ToArray();
+                Assert.True(popClaims.SequenceEqual(t.Pop > 0 ? new[] { t.Pop } : Array.Empty<int>()), where + $" pop claim in '{provides}'");
                 Assert.True(t.DropOff == provides.Contains("drop-off", StringComparison.OrdinalIgnoreCase), where + " drop-off");
                 string[] trained = Data.Units.Where(u => u.TrainedAt == id).Select(u => u.DisplayName).ToArray();
                 string trains = trained.Length == 0 ? "" : "rains " + string.Join(", ", trained);
                 Assert.True(trained.Length == 0 ? !provides.Contains("rains", StringComparison.Ordinal) : provides.Contains(trains, StringComparison.Ordinal), where + $" provides '{provides}'");
+                // BUG-0111: the whole cell is docs/02's with the faction's names substituted, so free text can't drift.
+                string expectedProvides = Provides(faction, slot, id);
+                Assert.True(expectedProvides == provides, where + $" provides '{provides}', expected '{expectedProvides}'");
 
                 string requires = PageRequires.TryGetValue(slot, out string? r)
                     ? (r == "InfantryHall" ? Roster[faction].Single(e => e.Slot == BuildingSlot.InfantryHall).Name : r)
                     : "—";
                 Assert.True(requires == c[9], where + $" requires '{c[9]}'");
+                // ...and the data's requires, written as names, is that same cell.
+                BuildingDef b = Data.Buildings[Data.FindBuilding(id)];
+                Assert.True(RequiresText.Cell(Data, b.Requires) == c[9], where + $" requires '{c[9]}' vs data [{string.Join(", ", b.Requires)}]");
             }
         }
+    }
+
+    // docs/02 "Buildings" rows by slot: (Provides, Requires) as docs/02 writes them, generic names.
+    private static Dictionary<BuildingSlot, (string Provides, string Requires)> Docs02Rows() =>
+        FactionPage.DocTable(Path.Combine("docs", "02-game-design.md"), "Buildings")
+            .ToDictionary(c => FactionPage.Slot<BuildingSlot>(c[0]), c => (c[6], c[7]));
+
+    /// <summary>
+    /// docs/02's Provides cell with the faction's names in: "trains Worker" / "Trains Line" become the units trained at
+    /// this building, and the faction's own techs researched here (the faction upgrade at the Forge) are appended.
+    /// </summary>
+    private static string Provides(string faction, BuildingSlot slot, string id)
+    {
+        string generic = Docs02Rows()[slot].Provides;
+        string[] trained = Data.Units.Where(u => u.TrainedAt == id).OrderBy(u => u.Slot).Select(u => u.DisplayName).ToArray();
+        string s = trained.Length == 0 ? generic : Regex.Replace(generic, "([Tt]rains) [^,;]+", m => m.Groups[1].Value + " " + string.Join(", ", trained));
+        int f = Data.FindFaction(faction);
+        string[] ownTechs = Data.Techs.Where(x => x.Faction == f && x.ResearchedAtSlot == slot).Select(x => x.DisplayName).ToArray();
+        return ownTechs.Length == 0 ? s : s + ", " + string.Join(", ", ownTechs);
+    }
+
+    [Fact]
+    public void G2_Docs02Requires_IsWhatThePagesSubstitute()
+    {
+        Dictionary<BuildingSlot, (string Provides, string Requires)> rows = Docs02Rows();
+        Assert.Equal(Enum.GetValues<BuildingSlot>().OrderBy(s => s), rows.Keys.OrderBy(s => s));
+        foreach (BuildingSlot slot in Enum.GetValues<BuildingSlot>())
+        {
+            string expected = PageRequires.TryGetValue(slot, out string? r) ? (r == "InfantryHall" ? "Infantry Hall" : r) : "—";
+            Assert.True(expected == rows[slot].Requires, $"docs/02 {slot} requires '{rows[slot].Requires}'");
+        }
+    }
+
+    [Fact]
+    public void H_Requires_ShockHallNeedsTheInfantryHall_AgeIIBuildingsNeedAgeII_OthersNothing()
+    {
+        foreach (string faction in Factions)
+            foreach ((BuildingSlot slot, string id, string _) in Roster[faction])
+            {
+                string infantryHall = Roster[faction].Single(e => e.Slot == BuildingSlot.InfantryHall).Id;
+                string[] expected = slot switch
+                {
+                    BuildingSlot.ShockHall => new[] { infantryHall },
+                    BuildingSlot.CasterHall or BuildingSlot.SiegeWorks or BuildingSlot.WatchTower => new[] { "age_ii" },
+                    _ => Array.Empty<string>(),
+                };
+                Assert.Equal(expected, Data.Buildings[Data.FindBuilding(id)].Requires.ToArray());
+                // The file writes it the same way (an explicit list, empty when none).
+                JsonNode file = FileList(faction).Single(n => (string)n!["id"]! == id)!;
+                Assert.Equal(expected, file["requires"]!.AsArray().Select(n => (string)n!));
+            }
+    }
+
+    [Fact]
+    public void I_BUG0090_ADescriptionThatSaysNeedsX_HasExactlyThoseRequires()
+    {
+        foreach (BuildingDef b in Data.Buildings)
+            RequiresText.AssertMatches(Data, b.Key, b.Description, b.Requires);
+    }
+
+    [Theory]
+    [InlineData("Trains the Wickan Lancer; needs a Legion Barracks.", "Legion Barracks")]
+    [InlineData("Needs Melee Weapons and Age II.", "Melee Weapons|Age II")]
+    [InlineData("Trains the Cadre Mage; needs Age II.", "Age II")]
+    [InlineData("Trains the Raider and, from Age II, the Zealot.", "")]
+    public void I2_TheNeedsReader_FindsEveryNamedRequirement(string description, string names)
+    {
+        Assert.Equal(names.Length == 0 ? Array.Empty<string>() : names.Split('|'), RequiresText.Needs(description));
     }
 }
