@@ -1135,8 +1135,9 @@ closed by rule: only exposed nodes are gathered.
   `siege_works`, `watch_tower`), `footprint {width, height}` (1-4 cells), `hp`, `armor`,
   `cost {gold, wood}`, `buildTime` (seconds, to ticks), `popProvided` (to half-pop) and `dropOff`
   (bool, required). Ids are snake_case and unique across factions; unknown fields are errors. Shipped:
-  the Town Hall slot only (`malazan_garrison_keep`, `whirlwind_holy_camp`: 4 x 4, 2,400 hp, armor 5,
-  275 / 275, 90 s, +10 pop, drop-off), Producer decision; the other nine slots come with M3-3 / M3-6.
+  M3-2 shipped the Town Hall slot only (`malazan_garrison_keep`, `whirlwind_holy_camp`: 4 x 4, 2,400 hp,
+  armor 5, 275 / 275, 90 s, +10 pop, drop-off); the data track's D1 (session 2026-10-06-1744) filled the
+  other nine slots per faction from the docs/02 "Buildings" table (`Content/BuildingContentTests` pins them).
   `GameData.Buildings` (dense ids, ordinal order), `FindBuilding`; `ContentHash` covers every field.
   `trainedAt` and `requires` stay unresolved strings.
 - **Buildings.** `Rts.Sim.Entities.BuildingStore` (`World.Buildings`): structure of arrays with

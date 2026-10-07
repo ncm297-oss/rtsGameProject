@@ -1,5 +1,49 @@
 # Handoff: brief for the current / next session
 
+## Current session plan (session 2026-10-06-2114, PLAN written 21:14; base 62d7aa1; 6 / 8 today)
+
+Checks: inbox empty; build 0 errors / 1 known warning (BUG-0084); smoke PASS (tick 93, no ERROR);
+non-Perf suite rerun by the Producer: 2416 passed / 12 skipped / 0 failed (6 m 29 s); verified BUG-0074 loader rule
+(`DataLoader.cs:227`) and D1's 10 buildings per faction; docs/03 M3-2 "Town Hall only" sentence fixed by
+the Producer; open bugs 28 per the bug files (S3 16, S4 12; STATE said 26: fix at ACCEPT); no S1/S2.
+All three tracks GO, all `feature`. **Bug numbers: sim from BUG-0091, view from BUG-0101, data from BUG-0111.**
+
+### Sim: M3-3 — building placement and construction (feature, QA full)
+
+Goal: players can place buildings and workers build them: the sim side of the M3 criterion "Building
+placement (ghost preview, validity), construction with multiple builders, repair" (the ghost preview is
+view work later). D1 gives every slot a definition, so this makes the whole roster placeable.
+
+Scope (in): placement validity (`CanPlace`, public, read-only, same rule as apply; the view's ghost will
+call it); `Command.Build(player, worker, typeId, cell position[, queued])` placing a construction site
+and deducting the cost, or joining an existing own site of that type at that anchor as a builder;
+construction with n builders at `t x 3 / (n + 2)`; `Command.Cancel` on a site (refund the unbuilt
+fraction); `Command.Repair(player, worker, building position[, queued])`; a building at 0 hp is freed
+(opening change); own non-holding units in the footprint are pushed to the nearest free cell outside it;
+`rules.json` `repairRateFactor` / `repairCostFactor`; hash, replay (format stays 3), docs/03, fold-ins
+(BUG-0090 comment, BUG-0079 "missing cost" if cheap), BUG-0078 closed by the never-seal rule.
+Out: ghost preview, HUD, population (M3-4), production, fog "explored" rule (M4), rubble visuals, combat
+damage (a test seam only), start-location Town Halls, data content beyond `rules.json` minimums, CLI flags.
+Acceptance criteria, design refs, tests and QA focus: see the Producer's PLAN output (session log at ACCEPT).
+
+### View: M2-7 — playable check + `--bench` (feature, QA standard)
+
+Goal: prove the last M2 criterion's studio half ("100 placeholder units at 60 FPS on a generated map",
+windowed, HUD + sound on, default 12 / 8 map), smooth turning from `PrevFacing`, a repeatable benchmark
+flag (`--bench <seconds>`: scripted select / order / minimap jump / zoom sequence, prints frame stats, quits),
+and a screenshot set. Out: new features, art, HUD panels (M3), formation changes.
+
+### Data: D2 — unit stats pinned to the faction pages; building tables on the pages (feature, QA light)
+
+Goal: the faction pages become the full design source for both factions' numbers, and tests pin
+`units.json` to the pages' unit tables the way D1 pinned buildings to docs/02. Files: `docs/factions/malazan.md`,
+`docs/factions/whirlwind.md`, `sim/Rts.Sim.Tests/Content/UnitContentTests.cs` (new), QA
+`sim/Rts.Sim.Tests/QA/Content/UnitRosterQaTests.cs` (new). `units.json` changes only where a value or a
+description contradicts its page (then regen the golden: `data-hash` + checksum only). `buildings.json`,
+`game/data/common/**` untouched.
+
+---
+
 Written by the Producer at the ACCEPT of session 2026-10-06-1744 (5 / 8 today; all three tracks ACCEPT).
 The next session is a **feature** session on every track (counters after this one: sim 3 / 4, view 3 / 4,
 data 1 / 4). The session after it is the sim hardening session and the view's M2 end-of-milestone
