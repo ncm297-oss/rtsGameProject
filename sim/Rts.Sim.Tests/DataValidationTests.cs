@@ -379,8 +379,18 @@ public class DataValidationTests
     public void ShippedData_Buildings_TownHallOfEachFaction_MatchesDocs02()
     {
         GameData data = Load(TestDataDir.Shipped);
-        Assert.Equal(new[] { "malazan_garrison_keep", "whirlwind_holy_camp" }, data.Buildings.Select(b => b.Key));
-        foreach (BuildingDef b in data.Buildings)
+        Assert.Equal(data.Buildings.Length, data.Buildings.Select(b => b.Key).Distinct(StringComparer.Ordinal).Count());
+        foreach (FactionDef f in data.Factions)
+        {
+            // File order: each faction's buildings.json lists its Town Hall first.
+            string path = Path.Combine(TestDataDir.Shipped, "factions", f.Key, "buildings.json");
+            JsonNode first = JsonNode.Parse(File.ReadAllText(path))!["buildings"]![0]!;
+            Assert.Equal("town_hall", (string?)first["slot"]);
+            Assert.Equal(BuildingSlot.TownHall, data.Buildings[data.FindBuilding((string)first["id"]!)].Slot);
+        }
+        BuildingDef[] townHalls = data.Buildings.Where(b => b.Slot == BuildingSlot.TownHall).ToArray();
+        Assert.Equal(new[] { "malazan_garrison_keep", "whirlwind_holy_camp" }, townHalls.Select(b => b.Key));
+        foreach (BuildingDef b in townHalls)
         {
             Assert.Equal(BuildingSlot.TownHall, b.Slot);
             Assert.Equal((4, 4), (b.FootprintWidth, b.FootprintHeight));
@@ -394,8 +404,8 @@ public class DataValidationTests
             // The faction's worker is trained here (docs/factions: trainedAt names the Town Hall).
             Assert.Contains(data.Factions[b.Faction].Units, id => data.Units[id].Slot == UnitSlot.Worker && data.Units[id].TrainedAt == b.Key);
         }
-        Assert.Equal(1, data.FindBuilding("whirlwind_holy_camp"));
-        Assert.Equal(-1, data.FindBuilding("malazan_barracks"));
+        Assert.Equal("whirlwind_holy_camp", data.Buildings[data.FindBuilding("whirlwind_holy_camp")].Key);
+        Assert.Equal(-1, data.FindBuilding("malazan_no_such_building"));
     }
 
     private static void SetBuildingField(TestDataDir dir, string dottedField, string? rawJson)
