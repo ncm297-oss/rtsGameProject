@@ -1,4 +1,4 @@
-[gd_scene load_steps=19 format=3]
+[gd_scene load_steps=20 format=3]
 
 [ext_resource type="Script" path="res://scripts/Match.cs" id="1_match"]
 [ext_resource type="Script" path="res://scripts/SimRunner.cs" id="2_runner"]
@@ -14,6 +14,7 @@
 [ext_resource type="Script" path="res://scripts/FlowArrowsView.cs" id="12_arrows"]
 [ext_resource type="Script" path="res://scripts/TickGraph.cs" id="13_graph"]
 [ext_resource type="Script" path="res://scripts/PropsView.cs" id="14_props"]
+[ext_resource type="Script" path="res://scripts/Sfx.cs" id="15_sfx"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMaterial_1"]
 sky_top_color = Color(0.36, 0.52, 0.72, 1)
@@ -123,3 +124,6 @@ script = ExtResource("13_graph")
 
 [node name="Screenshotter" type="Node" parent="."]
 script = ExtResource("6_shot")
+
+[node name="Sfx" type="Node" parent="."]
+script = ExtResource("15_sfx")

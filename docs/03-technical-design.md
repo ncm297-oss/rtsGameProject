@@ -1375,8 +1375,9 @@ Godot starts children before parents, so `Main._Ready` loads the data and then c
   `Rts.Sim.ViewApi.CameraLimits`. Input actions in `project.godot`: `camera_pan_left/right/up/down`
   (arrows), `camera_zoom_in/out` (wheel), `camera_drag` (middle button).
 - **Launch flags** (user args after `--`): `--seed <n>`, `--speed <x>` (clamped 0.25-8),
-  `--screenshot <path> --screenshot-after <seconds>` (default 2). Bad values log a warning and are
-  ignored. Example: `& $env:GODOT --path game -- --screenshot C:\temp\shot.png --screenshot-after 2`.
+  `--screenshot <path> --screenshot-after <seconds>` (default 2); later tasks added `--units`,
+  `--zoom`, `--no-hud`, `--debug-overlay`, `--forests`, `--mines` and `--mute` (M2-6, mutes the
+  master audio bus). Bad values log a warning and are ignored. Example: `& $env:GODOT --path game -- --screenshot C:\temp\shot.png --screenshot-after 2`.
 
 ### Implementation (M2-2)
 
@@ -1775,6 +1776,57 @@ Match
   match's whole `SimConfig`, map parameters included. For looking:
   `& $env:GODOT --path game res://tests/PropsShot.tscn -- --out <absolute png>` sends player 0's
   100 units (seed 1) through the forest nearest them and saves one frame as they walk round it.
+
+### Audio (M2-6)
+
+Placeholder sounds for selecting and ordering, so the audio plumbing exists from M2 (docs/04
+"Placeholder art"). Nothing is downloaded or imported: every clip is synthesized in code at start-up.
+New node in `Match.tscn`:
+
+```
+Match
+  ...Screenshotter
+  Sfx                Node (Sfx.cs): 8 AudioStreamPlayer children (Player0-7), the clip table, counters
+```
+
+- **Reads nothing from the sim.** `Sfx` has no `Rts.Sim` reference and no `_Process`; callers
+  decide that an event happened and call `Sfx.Play(SfxEvent)`. Today the only caller is
+  `SelectionController`. Tone synthesis stays in `game/scripts/` (it uses `Math.Sin`, which the
+  architecture scan forbids in `Rts.Sim`).
+- **Events and clips:** `SfxEvent` (`Select`, `Command`) indexes a table of notes played back to
+  back; `_Ready` turns each row into an `AudioStreamWav` (mono, 16-bit PCM, 44.1 kHz) once.
+  `Select` is one 1,320 Hz note of 70 ms; `Command` is 660 Hz then 990 Hz, 60 ms each (120 ms).
+  Each note is a sine at amplitude 0.8 shaped by a cubic attack (6 ms), an exponential decay (30 ms)
+  and a cubic release (10 ms), so a note starts and ends at silence (no clicks; the first and last
+  2 ms stay under 0.05) and peaks at about 0.65. Adding an event (an alert ping, M3/M4) is one enum
+  member and one table row; `_Ready` throws if the two disagree.
+- **When they play** (`SelectionController`): `Select` after a click, box, double-click / Ctrl +
+  click or group recall that leaves a non-empty selection different (as a set) from the one before
+  the action; so not on an empty-ground click, re-clicking the only selected unit, a recall of the
+  group already selected (the double-tap that centres the camera), Tab, Ctrl / Shift + digit.
+  `Command` from `Order(...)` once at least one command was enqueued: right-click, Shift +
+  right-click, S, H, A + click, minimap right-click; not with nothing selected, not for an order
+  dropped whole on a full command queue, not for A itself.
+- **Rate limits:** each event plays at most once per process frame and never within 50 ms
+  (`Sfx.MinGapMs`, wall clock) of its last play, so 50 right-clicks in one frame are one sound.
+  A play takes the next player of the 8-player pool round-robin (a 9th overlapping sound cuts the
+  oldest) and allocates nothing.
+- **Volume and mute:** every player runs at `Sfx.SfxVolumeDb` (-6 dB), a constant standing in for
+  the SFX volume setting (docs/02 "Settings", M6). `--mute` (takes no value) mutes the master bus;
+  without it `Match.Start` unmutes it. Counters run either way.
+- **Headless:** the dummy audio driver takes playback without logging errors, so headless runs
+  play too (the smoke gate stays clean). A sound started in the very frame the engine quits can
+  leave an ObjectDB leak warning at exit (Godot's audio server still holds the playback); the test
+  waits 0.3 s before quitting.
+- **Counters for tests:** `Sfx.PlayCount(SfxEvent)` (plays after rate limiting) and
+  `Sfx.LastPlayedFrame(SfxEvent)` (process frame, -1 if never). `Play(e, frame, nowUsec)` drives
+  the limiter with an explicit clock.
+- **Tests:** `res://tests/SfxTest.tscn` ("SFX TEST PASS"): each clip's length (70 / 120 ms +- 5),
+  peak <= 0.9, quiet 2 ms edges, no NaN, 16-bit mono 44.1 kHz, the two clips different; the rate
+  limit with a hand-driven clock (20 ms apart 1 play, 60 ms apart 2, one per frame, events
+  separate, 0 bytes for 20 plays); `--mute` parsing; then the real Match at 100 units with injected
+  input for every selection and order row above, and a second Match with `--mute` (bus muted,
+  counter still runs).
 
 ## AI architecture
 
