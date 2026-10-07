@@ -13,10 +13,11 @@ namespace Rts.Sim.Data;
 /// Collects every problem instead of stopping at the first, so one run lists all broken data.
 /// String ids become dense ints in ordinal-sorted order, so ids never depend on file-system order.
 /// Seconds become ticks and per-second rates become per-tick rates here; the sim never sees seconds.
-/// <c>trainedAt</c> resolves to an own-faction building type id (M3-4); <c>requires</c>, <c>model</c> and
-/// <c>projectile</c> stay unresolved strings until techs and assets exist (M3/M4, docs/03 "Data format").
+/// <c>trainedAt</c> resolves to an own-faction building type id (M3-4); every <c>requires</c> entry must name a tech or
+/// building id (M3-5) but stays a string until gating (M3-6); <c>model</c> and
+/// <c>projectile</c> stay unresolved strings until assets and combat exist (M4, docs/03 "Data format").
 /// </remarks>
-public static class DataLoader
+public static partial class DataLoader
 {
     /// <summary>Loads <c>common/</c> and every <c>factions/&lt;id&gt;/</c> folder under <paramref name="dataDir"/>.</summary>
     public static DataLoadResult LoadAll(string dataDir)
@@ -100,10 +101,32 @@ public static class DataLoader
         }
 
         int errorsBeforeBuildings = c.Errors.Count;
-        BuildingDef[] buildings = BuildBuildings(c, folders);
+        BuildingDef[] buildings = BuildBuildings(c, folders, out BuildingFileJson?[] buildingFiles, out List<(int Faction, int Index)> acceptedBuildings);
         // A broken buildings file is reported once, not again through every unit naming one of its buildings.
-        if (c.Errors.Count == errorsBeforeBuildings)
+        bool buildingsClean = c.Errors.Count == errorsBeforeBuildings;
+        if (buildingsClean)
             ResolveTrainedAt(c, folders, unitFiles, accepted, unitKeys, units, buildings);
+
+        // M3-5: techs. Cross-file references (a slot's building per faction, effect units and tags, every requires list)
+        // are checked only when the files they point into were read whole, so a broken or missing file is one error.
+        // Every unit entry accepted (read, a valid id, not a repeat), so the unit id set is complete.
+        int unitEntries = 0;
+        bool unitFilesOk = true;
+        foreach (UnitFileJson? file in unitFiles)
+        {
+            unitFilesOk &= file?.Units != null;
+            unitEntries += file?.Units?.Count ?? 0;
+        }
+        unitFilesOk &= unitEntries == accepted.Count;
+        string[] unitTags = UnitTagsOf(units);
+        var techs = new TechReader(c, folders, table, units, unitKeys, unitTags, buildings);
+        TechDef[] techDefs = techs.Build(buildingsClean && unitFilesOk);
+        int[] ageTechs = Array.Empty<int>();
+        if (buildingsClean && unitFilesOk && techs.FilesOk)
+        {
+            techs.ResolveRequires(buildingFiles, acceptedBuildings, unitFiles, accepted);
+            ageTechs = techs.AgeTechs();
+        }
 
         if (c.Errors.Count > 0 || table == null || rules == null || resources == null)
             return new DataLoadResult(null, c.Errors);
@@ -116,8 +139,37 @@ public static class DataLoader
             Units = ImmutableArray.Create(units),
             Buildings = ImmutableArray.Create(buildings),
             Trains = TrainsPerBuilding(units, buildings.Length),
+            Techs = ImmutableArray.Create(techDefs),
+            Research = ResearchPerBuilding(techDefs, buildings),
+            UnitTags = ImmutableArray.Create(unitTags),
+            AgeTechs = ImmutableArray.Create(ageTechs),
         };
         return new DataLoadResult(data, c.Errors);
+    }
+
+    /// <summary>Every tag of every unit, ordinal order, de-duplicated (the ids tech effects' <c>tags</c> resolve to).</summary>
+    private static string[] UnitTagsOf(UnitDef[] units)
+    {
+        var set = new SortedSet<string>(StringComparer.Ordinal); // load-time only
+        foreach (UnitDef u in units)
+            if (u != null) foreach (string t in u.Tags) set.Add(t);
+        var tags = new string[set.Count];
+        set.CopyTo(tags);
+        return tags;
+    }
+
+    /// <summary>Per building type, the techs of its slot that are common or of its faction, ascending (techs are in id order).</summary>
+    private static ImmutableArray<ImmutableArray<int>> ResearchPerBuilding(TechDef[] techs, BuildingDef[] buildings)
+    {
+        var result = ImmutableArray.CreateBuilder<ImmutableArray<int>>(buildings.Length);
+        foreach (BuildingDef b in buildings)
+        {
+            var list = ImmutableArray.CreateBuilder<int>();
+            foreach (TechDef t in techs)
+                if (t.ResearchedAtSlot == b.Slot && (t.Faction < 0 || t.Faction == b.Faction)) list.Add(t.Id);
+            result.Add(list.ToImmutable());
+        }
+        return result.MoveToImmutable();
     }
 
     /// <summary>
@@ -322,11 +374,11 @@ public static class DataLoader
     /// Every faction's <c>buildings.json</c> (required, M3-2): ids unique across factions (a repeat is an
     /// error at its second definition), indexed in ordinal order of their string ids.
     /// </summary>
-    private static BuildingDef[] BuildBuildings(Checker c, string[] folders)
+    private static BuildingDef[] BuildBuildings(Checker c, string[] folders, out BuildingFileJson?[] files, out List<(int Faction, int Index)> accepted)
     {
-        var files = new BuildingFileJson?[folders.Length];
+        files = new BuildingFileJson?[folders.Length];
         var firstFile = new Dictionary<string, string>(StringComparer.Ordinal); // load-time only
-        var accepted = new List<(int Faction, int Index)>();
+        accepted = new List<(int Faction, int Index)>();
         for (int f = 0; f < folders.Length; f++)
         {
             BuildingFileJson? file = files[f] = c.Read($"factions/{folders[f]}/buildings.json", DataJsonContext.Default.BuildingFileJson);
@@ -385,6 +437,7 @@ public static class DataLoader
                 BuildTicks = c.Ticks(b.BuildTime, p + ".buildTime", 1),
                 HalfPopProvided = Math.Max(halfPop, 0),
                 DropOff = b.DropOff ?? false,
+                Requires = c.Ids(b.Requires, p + ".requires"),
             };
         }
         return defs;
@@ -565,6 +618,18 @@ public static class DataLoader
                 }
             }
             return s;
+        }
+
+        /// <summary>True for a non-blank snake_case id (what <see cref="Id"/> accepts), reporting nothing.</summary>
+        public static bool IsId(string? s)
+        {
+            if (string.IsNullOrWhiteSpace(s)) return false;
+            for (int i = 0; i < s.Length; i++)
+            {
+                char ch = s[i];
+                if (!((ch >= 'a' && ch <= 'z') || (i > 0 && ((ch >= '0' && ch <= '9') || ch == '_')))) return false;
+            }
+            return true;
         }
 
         /// <summary>An optional list of ids (absent means empty); every entry must pass <see cref="Id"/> (BUG-0009).</summary>

@@ -1,0 +1,86 @@
+{
+  "techs": [
+    {
+      "id": "age_ii",
+      "displayName": "Age II",
+      "description": "Advance to Age II. Unlocks the Caster Hall, Siege Works and Watch Tower, your unique unit, level-2 Forge upgrades and your faction upgrade.",
+      "researchedAt": "town_hall",
+      "cost": { "gold": 400, "wood": 200 },
+      "researchTime": 60,
+      "requires": [],
+      "effects": []
+    },
+    {
+      "id": "melee_weapons_1",
+      "displayName": "Melee Weapons",
+      "description": "+1 attack for melee units.",
+      "researchedAt": "forge",
+      "cost": { "gold": 100, "wood": 50 },
+      "researchTime": 30,
+      "requires": [],
+      "effects": [
+        { "stat": "attack", "amount": 1, "appliesTo": { "attackType": "melee" } }
+      ]
+    },
+    {
+      "id": "melee_weapons_2",
+      "displayName": "Melee Weapons II",
+      "description": "Another +1 attack for melee units (+2 in all). Needs Melee Weapons and Age II.",
+      "researchedAt": "forge",
+      "cost": { "gold": 175, "wood": 100 },
+      "researchTime": 40,
+      "requires": ["melee_weapons_1", "age_ii"],
+      "effects": [
+        { "stat": "attack", "amount": 1, "appliesTo": { "attackType": "melee" } }
+      ]
+    },
+    {
+      "id": "ranged_weapons_1",
+      "displayName": "Ranged Weapons",
+      "description": "+1 attack for pierce units and towers.",
+      "researchedAt": "forge",
+      "cost": { "gold": 100, "wood": 50 },
+      "researchTime": 30,
+      "requires": [],
+      "effects": [
+        { "stat": "attack", "amount": 1, "appliesTo": { "attackType": "pierce" } }
+      ]
+    },
+    {
+      "id": "ranged_weapons_2",
+      "displayName": "Ranged Weapons II",
+      "description": "Another +1 attack for pierce units and towers (+2 in all). Needs Ranged Weapons and Age II.",
+      "researchedAt": "forge",
+      "cost": { "gold": 175, "wood": 100 },
+      "researchTime": 40,
+      "requires": ["ranged_weapons_1", "age_ii"],
+      "effects": [
+        { "stat": "attack", "amount": 1, "appliesTo": { "attackType": "pierce" } }
+      ]
+    },
+    {
+      "id": "armor_1",
+      "displayName": "Armor",
+      "description": "+1 armor for all non-siege units.",
+      "researchedAt": "forge",
+      "cost": { "gold": 125, "wood": 50 },
+      "researchTime": 35,
+      "requires": [],
+      "effects": [
+        { "stat": "armor", "amount": 1, "appliesTo": { "siege": false } }
+      ]
+    },
+    {
+      "id": "armor_2",
+      "displayName": "Armor II",
+      "description": "Another +1 armor for all non-siege units (+2 in all). Needs Armor and Age II.",
+      "researchedAt": "forge",
+      "cost": { "gold": 200, "wood": 125 },
+      "researchTime": 45,
+      "requires": ["armor_1", "age_ii"],
+      "effects": [
+        { "stat": "armor", "amount": 1, "appliesTo": { "siege": false } }
+      ]
+    }
+  ]
+}

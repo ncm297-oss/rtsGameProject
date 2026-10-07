@@ -112,7 +112,7 @@ public sealed class Simulation
         _recorder = recorder;
     }
 
-    /// <summary>64-bit FNV-1a hash of all gameplay state: tick, units (Hold, order queues, gather loops and cargo included), RNG streams, flow-field cache metadata, nav grid versions (and the movement pass's last seen block version), resource nodes, buildings (production queues and rally points included), player totals, and pending commands.</summary>
+    /// <summary>64-bit FNV-1a hash of all gameplay state: tick, units (Hold, order queues, gather loops and cargo included), RNG streams, flow-field cache metadata, nav grid versions (and the movement pass's last seen block version), resource nodes, buildings (production queues, research items and rally points included), player totals and researched techs, and pending commands.</summary>
     /// <remarks>
     /// Derived state is left out: the spatial hash (rebuilt from the units every tick),
     /// Speed/Radius (they follow from TypeId), and population (M3-4: <see cref="World.HalfPop"/> follows from the live
@@ -184,8 +184,12 @@ public sealed class Simulation
         World.Buildings.AddToHash(ref h);
         for (int p = 0; p < World.Gold.Length; p++)
         {
-            h.Add(World.Gold[p]);
+            // M3-5: a player with any researched tech sets the high half of its gold word and its tech words follow;
+            // without techs it hashes exactly as before.
+            bool techs = World.Techs.Any(p);
+            h.Add((ulong)(uint)World.Gold[p] | (techs ? 1UL << 32 : 0UL));
             h.Add(World.Wood[p]);
+            if (techs) World.Techs.AddToHash(ref h, p);
         }
 
         for (int p = 0; p < _nextSequence.Length; p++)
@@ -278,6 +282,9 @@ public sealed class Simulation
                 break;
             case CommandKind.ClearRally:
                 ProductionSystem.ApplyClearRally(World, in command);
+                break;
+            case CommandKind.Research:
+                ProductionSystem.ApplyResearch(World, in command);
                 break;
         }
     }

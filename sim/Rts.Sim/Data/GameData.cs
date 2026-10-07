@@ -35,6 +35,23 @@ public sealed class GameData
     public ImmutableArray<int> UnitsTrainedAt(int buildingTypeId) =>
         (uint)buildingTypeId < (uint)Trains.Length ? Trains[buildingTypeId] : ImmutableArray<int>.Empty;
 
+    /// <summary>Techs of <c>common/techs.json</c> and every faction's <c>techs.json</c>, indexed by tech id (ordinal order of their string ids across the files), M3-5. Empty for hand-built data.</summary>
+    public ImmutableArray<TechDef> Techs { get; init; } = ImmutableArray<TechDef>.Empty;
+
+    /// <summary>Per building type id, the tech ids it researches (a tech of its slot, common or of its faction), ascending; built at load (M3-5). Empty for hand-built data.</summary>
+    /// <remarks>Derived from the techs' slot and faction and the buildings', which <see cref="ContentHash"/> covers.</remarks>
+    public ImmutableArray<ImmutableArray<int>> Research { get; init; } = ImmutableArray<ImmutableArray<int>>.Empty;
+
+    /// <summary>Every tag any unit carries, ordinal order, de-duplicated: the ids <see cref="TechEffect.Tags"/> index. Derived from the units.</summary>
+    public ImmutableArray<string> UnitTags { get; init; } = ImmutableArray<string>.Empty;
+
+    /// <summary>Tech ids of <see cref="DataLimits.AgeTechIds"/>, in order (entry k researched = Age k + 2). Empty for hand-built data.</summary>
+    public ImmutableArray<int> AgeTechs { get; init; } = ImmutableArray<int>.Empty;
+
+    /// <summary>The tech ids building type <paramref name="buildingTypeId"/> researches, ascending (<c>World.CanResearch</c> says which can be queued now); empty for an unknown type.</summary>
+    public ImmutableArray<int> TechsResearchableAt(int buildingTypeId) =>
+        (uint)buildingTypeId < (uint)Research.Length ? Research[buildingTypeId] : ImmutableArray<int>.Empty;
+
     /// <summary>Stable 64-bit hash of every field of every definition, in id order; replays store it and refuse to play on other data.</summary>
     /// <remarks>
     /// FNV-1a through <see cref="StateHasher"/>, strings char by char, so it is the same in every
@@ -155,8 +172,41 @@ public sealed class GameData
             h.Add(b.BuildTicks);
             h.Add(b.HalfPopProvided);
             h.Add(b.DropOff);
+            AddAll(ref h, b.Requires);
+        }
+
+        h.Add(Techs.Length);
+        foreach (TechDef tech in Techs)
+        {
+            h.Add(tech.Id);
+            h.Add(tech.Key);
+            h.Add(tech.Faction);
+            h.Add(tech.DisplayName);
+            h.Add(tech.Description);
+            h.Add((int)tech.ResearchedAtSlot);
+            h.Add(tech.CostGold);
+            h.Add(tech.CostWood);
+            h.Add(tech.ResearchTicks);
+            AddAll(ref h, tech.Requires);
+            h.Add(tech.Effects.Length);
+            foreach (TechEffect e in tech.Effects)
+            {
+                h.Add((int)e.Stat);
+                h.Add(e.Amount);
+                h.Add(e.AttackType);
+                AddAll(ref h, e.Tags);
+                AddAll(ref h, e.Units);
+                h.Add(e.Siege);
+            }
         }
         return h.Value;
+    }
+
+    private static void AddAll(ref StateHasher h, ImmutableArray<int> items)
+    {
+        h.Add(items.IsDefault ? -1 : items.Length);
+        if (items.IsDefault) return;
+        foreach (int i in items) h.Add(i);
     }
 
     private static void AddAll(ref StateHasher h, ImmutableArray<string> items)
@@ -179,6 +229,9 @@ public sealed class GameData
 
     /// <summary>Building type id for a string id, or -1.</summary>
     public int FindBuilding(string key) => Find(Buildings, static b => b.Key, key);
+
+    /// <summary>Tech id for a string id, or -1.</summary>
+    public int FindTech(string key) => Find(Techs, static t => t.Key, key);
 
     /// <summary>Faction id for a string id, or -1.</summary>
     public int FindFaction(string key) => Find(Factions, static f => f.Key, key);

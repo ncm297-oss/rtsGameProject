@@ -365,5 +365,48 @@ public class AllocationTests
         Assert.True(sim.World.Units.Count >= units + 2, "spawns happened in the measured block");
         Assert.True(sink > 0);
     }
-}
 
+    /// <summary>
+    /// M3-5 criterion 9: ticks applying Research and a CancelTrain of a queued tech, a Train behind it, CanResearch and
+    /// TechBonus queries, and research running to completion (setting the tech flag and the bonus sums) allocate nothing.
+    /// </summary>
+    [Fact]
+    public void Tick_WithResearchCancelAndCompletion_AndTheTechQueries_AllocatesNothing()
+    {
+        Simulation sim = BuildMaps.NewSim(ResourceMaps.Flat(48, 32), units: 64);
+        int keep = GatherMaps.Building(sim, 4, 4).Index;
+        int armory = GatherMaps.Building(sim, 14, 4, type: ResearchMaps.Armory).Index;
+        BuildMaps.Give(sim, 0, 1_000_000, 1_000_000);
+        World w = sim.World;
+        System.Numerics.Vector2 atKeep = ProductionMaps.In(sim, keep), atArmory = ProductionMaps.In(sim, armory);
+        int armoryType = w.Buildings.TypeId[armory];
+        float sink = 0f;
+        int researched = 0;
+        Action block = () =>
+        {
+            int pick = -1, other = -1;
+            foreach (int t in w.Data.TechsResearchableAt(armoryType))
+            {
+                if (!w.CanResearch(0, armory, t, out _)) continue;
+                if (pick < 0) pick = t;
+                else if (other < 0) other = t;
+            }
+            sim.Enqueue(Command.Research(0, atArmory, pick));
+            sim.Enqueue(Command.Research(0, atArmory, other));
+            sim.Enqueue(Command.CancelTrain(0, atArmory, 1)); // the second tech, refunded
+            sim.Enqueue(Command.Train(0, atKeep, GatherMaps.Laborer));
+            for (int t = 0; t < 950; t++)
+            {
+                sim.Tick();
+                if (w.CanResearch(0, armory, other, out _)) sink += 1f;
+                sink += w.TechBonus(0, GatherMaps.Infantry, Data.TechStat.Attack) + w.TechBonus(0, GatherMaps.Infantry, Data.TechStat.Armor);
+            }
+            if (w.HasTech(0, pick)) researched++;
+        };
+        block(); // warm-up: JIT every path once
+        Assert.Equal(1, researched);
+        AllocationProbe.AssertZero(block);
+        Assert.Equal(2, researched); // a tech completed in the measured block
+        Assert.True(sink > 0f);
+    }
+}

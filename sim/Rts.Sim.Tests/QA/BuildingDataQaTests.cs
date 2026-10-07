@@ -96,10 +96,18 @@ public class BuildingDataQaTests
         // The empty list itself is still no error (slots aren't required yet, M3-6), but since M3-4 every unit's
         // trainedAt must name an own-faction building, so each of the seven Malazan units is one error at its
         // trainedAt (M3-4 flipped this pin; before it the file loaded and the faction simply had no buildings).
+        // M3-5 adds one error per tech Malazan researches (Age II, the six Forge upgrades, Moranth Supply): a faction
+        // without the building of a tech's slot is an error at the tech's researchedAt.
         DataLoadResult r = LoadWith(root => root["buildings"]!.AsArray().Clear());
         Assert.Null(r.Data);
-        Assert.Equal(7, r.Errors.Count);
-        Assert.All(r.Errors, e => Assert.Equal("factions/malazan/units.json", e.File));
-        Assert.All(r.Errors, e => Assert.EndsWith(".trainedAt", e.Path));
+        Assert.Equal(7 + 8, r.Errors.Count);
+        DataError[] units = r.Errors.Where(e => e.File == "factions/malazan/units.json").ToArray();
+        Assert.Equal(7, units.Length);
+        Assert.All(units, e => Assert.EndsWith(".trainedAt", e.Path));
+        DataError[] techs = r.Errors.Where(e => e.File != "factions/malazan/units.json").ToArray();
+        Assert.All(techs, e => Assert.EndsWith(".researchedAt", e.Path));
+        Assert.All(techs, e => Assert.Contains("faction 'malazan' has no", e.Message));
+        Assert.Equal(7, techs.Count(e => e.File == "common/techs.json"));
+        Assert.Equal(1, techs.Count(e => e.File == "factions/malazan/techs.json"));
     }
 }

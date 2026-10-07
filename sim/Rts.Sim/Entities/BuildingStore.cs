@@ -18,6 +18,7 @@ namespace Rts.Sim.Entities;
 /// command <c>Command.SpawnBuilding</c> still places a finished building at full hit points. Since M3-4 a finished
 /// building provides its type's population and has a production queue (<see cref="QueueCount"/>,
 /// <see cref="QueueTypeAt"/>, <see cref="Progress"/>) and a rally point (<see cref="HasRally"/>, <see cref="RallyPosition"/>).
+/// Since M3-5 a queue item is a unit or a tech (<see cref="QueueIsTechAt"/>, <see cref="ItemTicks"/>).
 /// </remarks>
 public sealed class BuildingStore
 {
@@ -37,6 +38,7 @@ public sealed class BuildingStore
     private readonly long[] _repairWood;
     private readonly int[] _queueCount;
     private readonly int[] _queueTypeId;
+    private readonly bool[] _queueIsTech;
     private readonly int[] _progress;
     private readonly bool[] _hasRally;
     private readonly Vector2[] _rallyPosition;
@@ -44,6 +46,7 @@ public sealed class BuildingStore
     private readonly NavGrid _grid;
     private readonly ImmutableArray<BuildingDef> _defs;
     private readonly ImmutableArray<UnitDef> _units;
+    private readonly ImmutableArray<TechDef> _techs;
     private readonly PlayerLedger? _ledger;
     private int _freeCount;
     // One past the highest slot ever used; slots from here on still hold their initial state (see ResourceStore).
@@ -61,9 +64,11 @@ public sealed class BuildingStore
         _grid = grid ?? throw new ArgumentNullException(nameof(grid));
         _defs = data.Buildings;
         _units = data.Units;
+        _techs = data.Techs;
         _ledger = ledger;
         _queueCount = new int[capacity];
         _queueTypeId = new int[capacity * EconomyConstants.ProductionQueueCapacity];
+        _queueIsTech = new bool[capacity * EconomyConstants.ProductionQueueCapacity];
         _progress = new int[capacity];
         _hasRally = new bool[capacity];
         _rallyPosition = new Vector2[capacity];
@@ -117,22 +122,41 @@ public sealed class BuildingStore
     /// <summary>Number of items in each live slot's production queue (0 to <see cref="EconomyConstants.ProductionQueueCapacity"/>; always 0 for a site), M3-4.</summary>
     public ReadOnlySpan<int> QueueCount => _queueCount;
 
-    /// <summary>The unit type id of item <paramref name="item"/> (0 = the head, training) of slot <paramref name="slot"/>'s queue; -1 past <see cref="QueueCount"/> or out of range.</summary>
+    /// <summary>
+    /// The type id of item <paramref name="item"/> (0 = the head, in progress) of slot <paramref name="slot"/>'s queue: a
+    /// unit type id, or a tech id when <see cref="QueueIsTechAt"/> says so (M3-5); -1 past <see cref="QueueCount"/> or out of range.
+    /// </summary>
     public int QueueTypeAt(int slot, int item)
     {
         if ((uint)slot >= (uint)Capacity || (uint)item >= (uint)_queueCount[slot]) return -1;
         return _queueTypeId[slot * EconomyConstants.ProductionQueueCapacity + item];
     }
 
+    /// <summary>True if item <paramref name="item"/> of slot <paramref name="slot"/>'s queue is a tech being researched (M3-5), false for a unit or past <see cref="QueueCount"/>.</summary>
+    public bool QueueIsTechAt(int slot, int item)
+    {
+        if ((uint)slot >= (uint)Capacity || (uint)item >= (uint)_queueCount[slot]) return false;
+        return _queueIsTech[slot * EconomyConstants.ProductionQueueCapacity + item];
+    }
+
     /// <summary>
-    /// Ticks of training done on each slot's head item (M3-4): 0 while it hasn't started (waiting for population), 1 to
-    /// <see cref="TrainTicks"/> once started; a started head holds its population reservation. At <see cref="TrainTicks"/>
-    /// it is complete and waits for a free cell to spawn on.
+    /// Ticks of work done on each slot's head item (M3-4): 0 while it hasn't started (a unit waiting for population), 1 to
+    /// <see cref="ItemTicks"/> once started; a started unit head holds its population reservation (a tech reserves none,
+    /// M3-5). At <see cref="ItemTicks"/> a unit is complete and waits for a free cell to spawn on; a tech completes at once.
     /// </summary>
     public ReadOnlySpan<int> Progress => _progress;
 
     /// <summary>Ticks a unit of <paramref name="unitType"/> takes to train (its <c>trainTime</c>); 0 for an unknown type.</summary>
     public int TrainTicks(int unitType) => (uint)unitType < (uint)_units.Length ? _units[unitType].TrainTicks : 0;
+
+    /// <summary>Ticks item <paramref name="item"/> of slot <paramref name="slot"/>'s queue takes: its unit's train ticks or its tech's research ticks (M3-5); 0 past <see cref="QueueCount"/>.</summary>
+    public int ItemTicks(int slot, int item)
+    {
+        int type = QueueTypeAt(slot, item);
+        if (type < 0) return 0;
+        if (!QueueIsTechAt(slot, item)) return TrainTicks(type);
+        return (uint)type < (uint)_techs.Length ? _techs[type].ResearchTicks : 0;
+    }
 
     /// <summary>Whether each live slot has a rally point (M3-4): units it trains walk to <see cref="RallyPosition"/>.</summary>
     public ReadOnlySpan<bool> HasRally => _hasRally;
@@ -144,12 +168,29 @@ public sealed class BuildingStore
     public int ReservedHalfPop(int slot)
     {
         if ((uint)slot >= (uint)Capacity || _progress[slot] == 0 || _queueCount[slot] == 0) return 0;
+        if (_queueIsTech[slot * EconomyConstants.ProductionQueueCapacity]) return 0; // research takes no population
         int type = _queueTypeId[slot * EconomyConstants.ProductionQueueCapacity];
         return (uint)type < (uint)_units.Length ? _units[type].HalfPop : 0;
     }
 
     /// <summary>Raw queue entry <paramref name="item"/> of slot <paramref name="slot"/> (production system, hash tests).</summary>
     internal ref int QueueEntry(int slot, int item) => ref _queueTypeId[slot * EconomyConstants.ProductionQueueCapacity + item];
+
+    /// <summary>Raw tech flag of queue entry <paramref name="item"/> of slot <paramref name="slot"/> (hash tests).</summary>
+    internal ref bool QueueIsTechEntry(int slot, int item) => ref _queueIsTech[slot * EconomyConstants.ProductionQueueCapacity + item];
+
+    /// <summary>True if <paramref name="player"/> has <paramref name="tech"/> queued at any of its live buildings (a tech is queued once at a time, M3-5).</summary>
+    internal bool IsTechQueued(int player, int tech)
+    {
+        for (int k = 0; k < _highWater; k++)
+        {
+            if (!_alive[k] || _owner[k] != player) continue;
+            int head = k * EconomyConstants.ProductionQueueCapacity;
+            for (int q = 0; q < _queueCount[k]; q++)
+                if (_queueIsTech[head + q] && _queueTypeId[head + q] == tech) return true;
+        }
+        return false;
+    }
 
     /// <summary>Writable <see cref="QueueCount"/> of a slot (production system, tests).</summary>
     internal ref int QueueCountOf(int slot) => ref _queueCount[slot];
@@ -165,27 +206,42 @@ public sealed class BuildingStore
     }
 
     /// <summary>Appends unit type <paramref name="unitType"/> to slot <paramref name="slot"/>'s queue; the caller checked the room and took the cost.</summary>
-    internal void Enqueue(int slot, int unitType)
+    internal void Enqueue(int slot, int unitType) => Enqueue(slot, unitType, false);
+
+    /// <summary>Appends tech <paramref name="tech"/> to slot <paramref name="slot"/>'s queue (M3-5); the caller checked the rules and took the cost.</summary>
+    internal void EnqueueTech(int slot, int tech) => Enqueue(slot, tech, true);
+
+    private void Enqueue(int slot, int type, bool tech)
     {
         int n = _queueCount[slot];
-        _queueTypeId[slot * EconomyConstants.ProductionQueueCapacity + n] = unitType;
+        _queueTypeId[slot * EconomyConstants.ProductionQueueCapacity + n] = type;
+        _queueIsTech[slot * EconomyConstants.ProductionQueueCapacity + n] = tech;
         _queueCount[slot] = n + 1;
     }
 
     /// <summary>
-    /// Removes item <paramref name="item"/> of slot <paramref name="slot"/>'s queue: its full cost goes back to the owner and,
-    /// for a started head, its progress and population reservation are dropped; later items shift down and the freed last
-    /// entry goes back to default. The caller checks the index.
+    /// Removes item <paramref name="item"/> of slot <paramref name="slot"/>'s queue, a unit or a tech: its full cost goes back
+    /// to the owner and, for a started head, its progress (and a unit's population reservation) is dropped; later items
+    /// shift down and the freed last entry goes back to default. The caller checks the index.
     /// </summary>
     internal void RemoveQueued(int slot, int item)
     {
-        UnitDef def = _units[_queueTypeId[slot * EconomyConstants.ProductionQueueCapacity + item]];
-        _ledger?.Refund(_owner[slot], def.CostGold, def.CostWood);
+        int e = slot * EconomyConstants.ProductionQueueCapacity + item;
+        if (_queueIsTech[e])
+        {
+            TechDef tech = _techs[_queueTypeId[e]];
+            _ledger?.Refund(_owner[slot], tech.CostGold, tech.CostWood);
+        }
+        else
+        {
+            UnitDef def = _units[_queueTypeId[e]];
+            _ledger?.Refund(_owner[slot], def.CostGold, def.CostWood);
+        }
         if (item == 0) ReleaseHead(slot);
         Shift(slot, item);
     }
 
-    /// <summary>The head item became a unit, whose own population count takes over the reservation: progress 0, reservation released, the rest shift down.</summary>
+    /// <summary>The head item is done (a unit spawned, whose own population count takes over the reservation, or a tech researched): progress 0, reservation released, the rest shift down.</summary>
     internal void PopTrained(int slot)
     {
         ReleaseHead(slot);
@@ -205,8 +261,12 @@ public sealed class BuildingStore
     {
         int head = slot * EconomyConstants.ProductionQueueCapacity, n = _queueCount[slot];
         for (int k = item + 1; k < n; k++)
+        {
             _queueTypeId[head + k - 1] = _queueTypeId[head + k];
+            _queueIsTech[head + k - 1] = _queueIsTech[head + k];
+        }
         _queueTypeId[head + n - 1] = 0;
+        _queueIsTech[head + n - 1] = false;
         _queueCount[slot] = n - 1;
     }
 
@@ -407,7 +467,10 @@ public sealed class BuildingStore
             h.Add(_freeList[k]);
     }
 
-    /// <summary>Slot <paramref name="i"/>'s production summary: bit 0 a queue, bit 1 progress, bit 2 a rally, bit 3 a non-zero rally point, bit 4 + k queue entry k non-zero.</summary>
+    /// <summary>
+    /// Slot <paramref name="i"/>'s production summary: bit 0 a queue, bit 1 progress, bit 2 a rally, bit 3 a non-zero rally
+    /// point, bit 4 + k queue entry k non-zero, bit 9 + k queue entry k a tech (M3-5; the flag itself, no word follows).
+    /// </summary>
     private uint ProductionBits(int i)
     {
         uint bits = 0;
@@ -417,7 +480,10 @@ public sealed class BuildingStore
         if (_rallyPosition[i] != Vector2.Zero) bits |= 8u;
         int head = i * EconomyConstants.ProductionQueueCapacity;
         for (int k = 0; k < EconomyConstants.ProductionQueueCapacity; k++)
+        {
             if (_queueTypeId[head + k] != 0) bits |= 16u << k;
+            if (_queueIsTech[head + k]) bits |= (16u << EconomyConstants.ProductionQueueCapacity) << k;
+        }
         return bits;
     }
 

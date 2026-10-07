@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Immutable;
 using System.Numerics;
 using Rts.Sim.Commands;
 using Rts.Sim.Data;
@@ -9,15 +10,17 @@ using Rts.Sim.Orders;
 namespace Rts.Sim.Economy;
 
 /// <summary>
-/// Production (docs/03 "Implementation (M3-4)"): the apply steps of <see cref="CommandKind.Train"/>,
-/// <see cref="CommandKind.CancelTrain"/>, <see cref="CommandKind.SetRally"/> and <see cref="CommandKind.ClearRally"/>,
-/// and tick phase 3, where every finished building trains the head of its queue and spawns the unit when it is done.
+/// Production (docs/03 "Implementation (M3-4)" and "(M3-5)"): the apply steps of <see cref="CommandKind.Train"/>,
+/// <see cref="CommandKind.Research"/>, <see cref="CommandKind.CancelTrain"/>, <see cref="CommandKind.SetRally"/> and
+/// <see cref="CommandKind.ClearRally"/>, and tick phase 3, where every finished building works on the head of its queue:
+/// it spawns a trained unit when it is done, or sets the owner's tech flag for a researched tech.
 /// </summary>
 /// <remarks>
 /// An item is paid when queued and refunded in full when cancelled. The head item starts (taking its population as a
 /// reservation) only while the owner has room under the cap, then counts one tick a tick up to its type's train ticks;
 /// complete, it spawns on the nearest free cell round the footprint (<see cref="FreeCellSearch"/>) and walks to the
-/// rally point, or waits there for a free cell. Buildings go in slot order; bounded scans only, no allocation.
+/// rally point, or waits there for a free cell. A tech starts at once (no population) and spawns nothing (M3-5).
+/// Buildings go in slot order; bounded scans only, no allocation.
 /// </remarks>
 public static class ProductionSystem
 {
@@ -36,6 +39,24 @@ public static class ProductionSystem
         if (b.QueueCount[slot] >= EconomyConstants.ProductionQueueCapacity) return TrainError.QueueFull;
         if (world.Gold[player] < def.CostGold || world.Wood[player] < def.CostWood) return TrainError.CannotAfford;
         return TrainError.None;
+    }
+
+    /// <summary>The rule behind <see cref="World.CanResearch"/> and <c>Research</c> (M3-5): the first one broken, or <see cref="ResearchError.None"/>.</summary>
+    /// <remarks><c>requires</c> is not checked yet (M3-6): a level-2 upgrade can be queued without level 1 or Age II.</remarks>
+    internal static ResearchError CheckResearch(World world, int player, int slot, int tech)
+    {
+        BuildingStore b = world.Buildings;
+        if ((uint)slot >= (uint)b.Capacity || !b.Alive[slot] || b.Owner[slot] != player || b.UnderConstruction[slot]) return ResearchError.NoBuilding;
+        GameData data = world.Data;
+        if ((uint)tech >= (uint)data.Techs.Length) return ResearchError.UnknownTech;
+        TechDef def = data.Techs[tech];
+        if (def.Faction >= 0 && def.Faction != world.FactionOf(player)) return ResearchError.WrongFaction;
+        if (ImmutableArray.BinarySearch(data.TechsResearchableAt(b.TypeId[slot]), tech) < 0) return ResearchError.NotResearchedHere;
+        if (world.HasTech(player, tech)) return ResearchError.AlreadyResearched;
+        if (b.IsTechQueued(player, tech)) return ResearchError.AlreadyQueued;
+        if (b.QueueCount[slot] >= EconomyConstants.ProductionQueueCapacity) return ResearchError.QueueFull;
+        if (world.Gold[player] < def.CostGold || world.Wood[player] < def.CostWood) return ResearchError.CannotAfford;
+        return ResearchError.None;
     }
 
     /// <summary>Slot of <paramref name="player"/>'s finished building covering nav cell (<paramref name="x"/>, <paramref name="y"/>), or -1 (none, another player's, a site).</summary>
@@ -59,7 +80,17 @@ public static class ProductionSystem
         world.Buildings.Enqueue(k, command.TypeId);
     }
 
-    /// <summary>Applies <see cref="CommandKind.CancelTrain"/>: item <see cref="Command.TypeId"/> leaves the queue with a full refund (a started head also loses its progress and reservation); dropped for a bad index or no own finished building.</summary>
+    /// <summary>Applies <see cref="CommandKind.Research"/> (M3-5): queues the tech and takes its cost; dropped for anything <see cref="CheckResearch"/> refuses.</summary>
+    internal static void ApplyResearch(World world, in Command command)
+    {
+        int k = OwnFinishedAt(world, command.Player, command.Position);
+        if (k < 0 || CheckResearch(world, command.Player, k, command.TypeId) != ResearchError.None) return;
+        TechDef def = world.Data.Techs[command.TypeId];
+        world.TrySpend(command.Player, def.CostGold, def.CostWood);
+        world.Buildings.EnqueueTech(k, command.TypeId);
+    }
+
+    /// <summary>Applies <see cref="CommandKind.CancelTrain"/>: item <see cref="Command.TypeId"/>, a unit or a tech (M3-5), leaves the queue with a full refund (a started head also loses its progress and a unit's reservation); dropped for a bad index or no own finished building.</summary>
     internal static void ApplyCancelTrain(World world, in Command command)
     {
         int k = OwnFinishedAt(world, command.Player, command.Position);
@@ -107,27 +138,42 @@ public static class ProductionSystem
     private static bool Step(World world, int k)
     {
         BuildingStore b = world.Buildings;
-        UnitDef def = world.Data.Units[b.QueueTypeAt(k, 0)];
         ref int progress = ref b.ProgressOf(k);
+        int ticks = b.ItemTicks(k, 0);
         if (progress == 0)
         {
-            if (!TryStart(world, k, def)) return false;
+            if (!TryStart(world, k)) return false;
         }
-        else if (progress < def.TrainTicks) progress++;
-        if (progress < def.TrainTicks || !Spawn(world, k, def)) return false;
+        else if (progress < ticks) progress++;
+        if (progress < ticks) return false;
+        bool spawned = false;
+        if (b.QueueIsTechAt(k, 0))
+            world.Techs.Set(b.Owner[k], b.QueueTypeAt(k, 0), true); // researched: nothing spawns
+        else if (Spawn(world, k, world.Data.Units[b.QueueTypeAt(k, 0)]))
+            spawned = true;
+        else
+            return false;
         b.PopTrained(k);
-        // The next item starts in the same tick, so each one takes exactly its train ticks.
-        if (b.QueueCount[k] > 0) TryStart(world, k, world.Data.Units[b.QueueTypeAt(k, 0)]);
-        return true;
+        // The next item starts in the same tick, so each one takes exactly its train or research ticks.
+        if (b.QueueCount[k] > 0) TryStart(world, k);
+        return spawned;
     }
 
-    /// <summary>Starts slot <paramref name="k"/>'s head item if its population fits under the owner's cap: the reservation is taken and this tick counts.</summary>
-    private static bool TryStart(World world, int k, UnitDef def)
+    /// <summary>
+    /// Starts slot <paramref name="k"/>'s head item and counts this tick: a tech at once (research takes no population,
+    /// M3-5), a unit only if its population fits under the owner's cap, taking it as a reservation.
+    /// </summary>
+    private static bool TryStart(World world, int k)
     {
-        int owner = world.Buildings.Owner[k];
-        if (world.HalfPop[owner] + def.HalfPop > world.HalfPopCap[owner]) return false;
-        world.Ledger.AddHalfPop(owner, def.HalfPop);
-        world.Buildings.ProgressOf(k) = 1;
+        BuildingStore b = world.Buildings;
+        if (!b.QueueIsTechAt(k, 0))
+        {
+            UnitDef def = world.Data.Units[b.QueueTypeAt(k, 0)];
+            int owner = b.Owner[k];
+            if (world.HalfPop[owner] + def.HalfPop > world.HalfPopCap[owner]) return false;
+            world.Ledger.AddHalfPop(owner, def.HalfPop);
+        }
+        b.ProgressOf(k) = 1;
         return true;
     }
 

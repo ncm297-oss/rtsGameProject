@@ -132,7 +132,7 @@ public class SimulationTests
     [Theory]
     [InlineData(99, 0)]
     [InlineData(-1, 0)]
-    [InlineData(15, 0)] // one past the last kind (ClearRally, M3-4)
+    [InlineData(16, 0)] // one past the last kind (Research, M3-5)
     [InlineData((int)CommandKind.SpawnBuilding, Command.QueuedFlag)]
     [InlineData((int)CommandKind.Cancel, Command.QueuedFlag)] // M3-3: not a unit order
     [InlineData((int)CommandKind.Train, Command.QueuedFlag)] // M3-4: the production kinds aren't unit orders either

@@ -98,12 +98,13 @@ public class DataLoaderBoundsQaTests
     public void ValidRequiresAndTags_AreKeptInOrder()
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
-        dir.SetUnitField("malazan", Crossbow, "requires", "[\"b_req\", \"a_req\"]");
+        // M3-5: requires entries must name a tech or building id, so real ids in non-sorted order.
+        dir.SetUnitField("malazan", Crossbow, "requires", "[\"melee_weapons_1\", \"age_ii\"]");
         dir.SetUnitField("malazan", Crossbow, "tags", "[\"zz\", \"aa\"]");
         DataLoadResult r = Load(dir);
         Assert.True(r.Ok);
         UnitDef u = r.Data!.Units[r.Data.FindUnit(Crossbow)];
-        Assert.Equal(new[] { "b_req", "a_req" }, u.Requires.ToArray());
+        Assert.Equal(new[] { "melee_weapons_1", "age_ii" }, u.Requires.ToArray());
         Assert.Equal(new[] { "zz", "aa" }, u.Tags.ToArray());
     }
 }

@@ -618,4 +618,84 @@ public class StateHashTests
         Assert.True(audited >= 16, $"only {audited} arrays audited");
         Assert.True(unhashed.Count == 0, "not in StateHash: " + string.Join(", ", unhashed));
     }
+
+    // ---------- M3-5: researched techs, research items in the queue ----------
+
+    /// <summary>A two-player sim with a Keep (slot 0) researching Age II (started, progress 4) with a Laborer queued behind it, hashed equal to its twin.</summary>
+    private static Simulation Research()
+    {
+        Simulation sim = GatherMaps.NewSim(ResourceMaps.Flat(16, 16), players: 2);
+        GatherMaps.Building(sim, 2, 2);
+        BuildMaps.SetTotals(sim, 0, 1000, 1000);
+        sim.Enqueue(Command.Research(0, GatherMaps.At(sim, 3, 3), ResearchMaps.AgeII));
+        sim.Enqueue(Command.Train(0, GatherMaps.At(sim, 3, 3), GatherMaps.Laborer));
+        GatherMaps.Run(sim, 5);
+        Assert.Equal((2, 4, true, false), (sim.World.Buildings.QueueCount[0], sim.World.Buildings.Progress[0],
+            sim.World.Buildings.QueueIsTechAt(0, 0), sim.World.Buildings.QueueIsTechAt(0, 1)));
+        return sim;
+    }
+
+    public static IEnumerable<object[]> ResearchFields() => new[]
+    {
+        new object[] { "QueueIsTech[0] (the head)", (Action<World>)(w => w.Buildings.QueueIsTechEntry(0, 0) = false) },
+        new object[] { "QueueIsTech[1]", (Action<World>)(w => w.Buildings.QueueIsTechEntry(0, 1) = true) },
+        new object[] { "QueueIsTech[2] (past the count)", (Action<World>)(w => w.Buildings.QueueIsTechEntry(0, 2) = true) },
+        new object[] { "QueueIsTech[4]", (Action<World>)(w => w.Buildings.QueueIsTechEntry(0, 4) = true) },
+        new object[] { "the head's tech id", (Action<World>)(w => w.Buildings.QueueEntry(0, 0) = ResearchMaps.Melee1) },
+        new object[] { "research progress", (Action<World>)(w => w.Buildings.ProgressOf(0) = 900) },
+        new object[] { "research progress to 0", (Action<World>)(w => w.Buildings.ProgressOf(0) = 0) },
+    };
+
+    [Theory]
+    [MemberData(nameof(ResearchFields))]
+    public void Hash_CoversEveryResearchQueueField(string field, Action<World> change)
+    {
+        Simulation a = Research(), b = Research();
+        Assert.Equal(a.StateHash(), b.StateHash());
+        change(a.World);
+        Assert.True(a.StateHash() != b.StateHash(), field);
+    }
+
+    /// <summary>Criterion 7: every tech flag of every player is hashed, each one differently, and clearing it again restores the hash.</summary>
+    [Fact]
+    public void Hash_CoversEveryTechFlagOfEveryPlayer()
+    {
+        Simulation baseSim = Research();
+        ulong h0 = baseSim.StateHash();
+        var seen = new HashSet<ulong> { h0 };
+        int techs = TestSim.Data.Techs.Length;
+        Assert.Equal(9, techs);
+        for (int p = 0; p < 2; p++)
+        {
+            for (int t = 0; t < techs; t++)
+            {
+                Simulation a = Research();
+                a.World.Techs.Set(p, t, true);
+                Assert.True(a.World.HasTech(p, t));
+                Assert.True(seen.Add(a.StateHash()), $"player {p} tech {TestSim.Data.Techs[t].Key}: not in the hash, or the same as another flag");
+                a.World.Techs.Set(p, t, false);
+                Assert.Equal(h0, a.StateHash());
+            }
+        }
+        // Two flags differ from either alone.
+        Simulation both = Research();
+        both.World.Techs.Set(0, 0, true);
+        both.World.Techs.Set(0, 1, true);
+        Assert.True(seen.Add(both.StateHash()));
+    }
+
+    /// <summary>
+    /// The tech words are added only for a player with a tech: the high half of its gold word says so, and a world with
+    /// none hashes exactly as before M3-5 (ReplayGoldenTests: the checkpoints did not move).
+    /// </summary>
+    [Fact]
+    public void Hash_PlayerWithATech_FlagsItInTheHighHalfOfItsGoldWord()
+    {
+        Simulation a = Research(), b = Research();
+        b.World.Techs.Set(1, 0, true);
+        Assert.NotEqual(a.StateHash(), b.StateHash());
+        Assert.False(a.World.Techs.Any(0) || a.World.Techs.Any(1));
+        Assert.True(b.World.Techs.Any(1) && !b.World.Techs.Any(0));
+        Assert.Equal(1, b.World.Techs.WordsPerPlayer);
+    }
 }

@@ -47,4 +47,7 @@ public enum CommandKind
 
     /// <summary>Clears the rally point of the player's own finished building covering <see cref="Command.Position"/> (M3-4).</summary>
     ClearRally = 14,
+
+    /// <summary>Queues tech <see cref="Command.TypeId"/> at the player's own finished building covering <see cref="Command.Position"/>, paying its cost now (M3-5; not a unit order). <see cref="CancelTrain"/> cancels it like a unit.</summary>
+    Research = 15,
 }
