@@ -127,3 +127,6 @@ bugs outrank new features.
 | [BUG-0102](BUG-0102-bench-fps-field-biased-low-by-load-second.md) | S3 | open | The `bench:` line's `fps` reads low on short runs (averages Godot's once-a-second counter, first sample is the load second) |
 | [BUG-0103](BUG-0103-m2-7-bench-nits.md) | S4 | open | M2-7 nits: vsync-on rows report smoothed deltas, "no bunching" remark, culture in two log lines, endless huge `--bench` |
 | [BUG-0111](BUG-0111-d2-page-pin-gaps.md) | S4 | open | D2 page pins miss a false "+N pop" claim and Provides free-text edits; culture-dependent range text in UnitContentTests.G |
+| [BUG-0094](BUG-0094-test-grove-spawns-skip-the-seal-check.md) | S4 | open | Hand-built test groves (`ResourceStore.Spawn`) skip the never-seal check and wall cells in before tick 1 |
+| [BUG-0095](BUG-0095-push-out-on-a-full-level-scans-the-whole-map.md) | S3 | open | Push-out on a level with too few free cells scans every ring of the map per leftover unit (9 ms at 128, 35 ms at 256) and stacks them on one point |
+| [BUG-0096](BUG-0096-builds-refused-for-sealsground-each-flood.md) | S3 | open | Builds refused for SealsGround still pay a flood each: 100 in one tick cost 33 ms (BUG-0091 residual) |

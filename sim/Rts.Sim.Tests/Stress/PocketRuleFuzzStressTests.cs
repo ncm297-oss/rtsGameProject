@@ -103,7 +103,7 @@ public class PocketRuleFuzzStressTests
                 var rng = new SimRng(seed, 7);
                 for (int y = 12; y < 28; y++)
                     for (int x = 14; x < 34; x++)
-                        if (rng.NextInt(0, 5) != 0) Spawn(sim.World, Tree, x, y, TreeWood);
+                        if (rng.NextInt(0, 5) != 0) Grove(sim.World, x, y);
                 return sim;
             }
             case 1:
@@ -116,27 +116,35 @@ public class PocketRuleFuzzStressTests
                 for (int y = 0; y < 30; y++)
                     rows[y] = new string('0', 20) + (y is >= 13 and <= 15 ? "r" : "0") + new string('1', 19);
                 var sim = new Simulation(Cfg(), FromRows(rows));
-                NavGrid g = sim.World.NavGrid;
                 var rng = new SimRng(seed, 9);
                 for (int y = 2; y < 28; y++)
                     for (int x = 14; x < 34; x++)
-                        if (rng.NextInt(0, 3) == 0 && g.CanTakeResource(x, y)) sim.World.Resources.Spawn(Tree, y * g.Width + x, TreeWood, out _);
+                        if (rng.NextInt(0, 3) == 0) Grove(sim.World, x, y);
                 return sim;
             }
             case 4: // small: clutter on the border ring's inner side
             {
                 var sim = new Simulation(Cfg(), Flat(24, 20));
-                NavGrid g = sim.World.NavGrid;
                 var rng = new SimRng(seed, 11);
                 for (int y = 1; y < 19; y++)
                     for (int x = 1; x < 23; x++)
-                        if ((x <= 3 || y <= 3 || x >= 20 || y >= 16) && rng.NextInt(0, 2) == 0 && g.CanTakeResource(x, y))
-                            sim.World.Resources.Spawn(Tree, y * g.Width + x, TreeWood, out _);
+                        if ((x <= 3 || y <= 3 || x >= 20 || y >= 16) && rng.NextInt(0, 2) == 0) Grove(sim.World, x, y);
                 return sim;
             }
             default:
                 return new Simulation(Cfg() with { Map = MapGenParams.Default with { Width = 96, Height = 80, Forests = 30, GoldMines = 8, ForestMinTrees = 20, ForestMaxTrees = 60 } });
         }
+    }
+
+    /// <summary>
+    /// A grove tree, only where the never-seal rule allows it. <c>ResourceStore.Spawn</c> (internal, load and test only)
+    /// has no seal check, unlike <c>ResourcePlacer</c> and placement: the first version of this harness spawned straight
+    /// into it and walled cells in before tick 1 (2026-10-07-0800, the 3 red setup cases on maps 0, 3 and 4).
+    /// </summary>
+    private static void Grove(World w, int x, int y)
+    {
+        if (w.NavGrid.CanTakeResource(x, y) && w.Seal.KeepsConnected(x, y, 1, 1))
+            w.Resources.Spawn(Tree, y * w.NavGrid.Width + x, TreeWood, out _);
     }
 
     private static Run NewRun(int map, ulong seed)
@@ -245,6 +253,14 @@ public class PocketRuleFuzzStressTests
             sim.Enqueue(Command.Move(player, worker, HotSpot(w, ref rng)));
     }
 
+    /// <summary>Four more seeds per map (session 2026-10-07-0800): map 3's first seed made no pocket at all.</summary>
+    public static IEnumerable<object[]> MoreSeeds()
+    {
+        for (int map = 0; map < 6; map++)
+            for (ulong s = 0; s < 4; s++)
+                yield return new object[] { map, 200UL + 10UL * (ulong)map + s };
+    }
+
     private static int CountFlag(NavGrid g, NavFlags flag)
     {
         int n = 0;
@@ -262,6 +278,7 @@ public class PocketRuleFuzzStressTests
     [InlineData(3, 104UL)]
     [InlineData(4, 105UL)]
     [InlineData(5, 106UL)]
+    [MemberData(nameof(MoreSeeds))]
     public void ThousandRandomSteps_IndependentOracleEveryTick_TwinsEqual(int map, ulong seed)
     {
         Run a = NewRun(map, seed), b = NewRun(map, seed);
@@ -308,4 +325,5 @@ public class PocketRuleFuzzStressTests
         Assert.Equal(0, unitsOnPocket);
         Assert.Equal(0, spuriousBumps);
     }
+
 }
