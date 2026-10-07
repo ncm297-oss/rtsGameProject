@@ -172,4 +172,37 @@ internal sealed class BuildingJson
     public double? BuildTime { get; set; }
     public double? PopProvided { get; set; }
     public bool? DropOff { get; set; }
+    public List<string?>? Requires { get; set; }
+}
+
+internal sealed class TechFileJson
+{
+    public List<TechJson?>? Techs { get; set; }
+}
+
+internal sealed class TechJson
+{
+    public string? Id { get; set; }
+    public string? DisplayName { get; set; }
+    public string? Description { get; set; }
+    public string? ResearchedAt { get; set; }
+    public CostJson? Cost { get; set; }
+    public double? ResearchTime { get; set; }
+    public List<string?>? Requires { get; set; }
+    public List<TechEffectJson?>? Effects { get; set; }
+}
+
+internal sealed class TechEffectJson
+{
+    public string? Stat { get; set; }
+    public double? Amount { get; set; }
+    public AppliesToJson? AppliesTo { get; set; }
+}
+
+internal sealed class AppliesToJson
+{
+    public string? AttackType { get; set; }
+    public List<string?>? Tags { get; set; }
+    public List<string?>? Units { get; set; }
+    public bool? Siege { get; set; }
 }

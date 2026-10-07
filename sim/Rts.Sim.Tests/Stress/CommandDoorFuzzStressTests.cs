@@ -71,7 +71,7 @@ public class CommandDoorFuzzStressTests
         // About one command in five is malformed in one way.
         switch (rng.NextInt(0, 25))
         {
-            case 0: c.Kind = (CommandKind)(15 + rng.NextInt(0, 3)); break; // 8-10 Build, Cancel, Repair (M3-3); 11-14 production (M3-4)
+            case 0: c.Kind = (CommandKind)(16 + rng.NextInt(0, 3)); break; // 8-10 Build, Cancel, Repair (M3-3); 11-14 production (M3-4); 15 Research (M3-5)
             case 1: c.Kind = (CommandKind)(-1 - rng.NextInt(0, 3)); break;
             case 2: c.Kind = (CommandKind)int.MinValue; break;
             case 3: c.Flags = 2 << rng.NextInt(0, 30); break;

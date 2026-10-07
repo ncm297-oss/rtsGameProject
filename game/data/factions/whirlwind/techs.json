@@ -1,0 +1,17 @@
+{
+  "techs": [
+    {
+      "id": "dryjhnas_prophecy",
+      "displayName": "Dryjhna's Prophecy",
+      "description": "The prophecy of the Apocalypse: Zealots gain 20 HP and the Priest's Sandstorm cooldown drops from 45 to 30 s. Needs Age II.",
+      "researchedAt": "forge",
+      "cost": { "gold": 200, "wood": 150 },
+      "researchTime": 45,
+      "requires": ["age_ii"],
+      "effects": [
+        { "stat": "hp", "amount": 20, "appliesTo": { "units": ["whirlwind_zealot"] } },
+        { "stat": "abilityCooldown", "amount": -15, "appliesTo": { "units": ["whirlwind_priest"] } }
+      ]
+    }
+  ]
+}

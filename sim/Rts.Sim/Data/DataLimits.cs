@@ -33,4 +33,13 @@ public static class DataLimits
     /// <summary>JSON spelling of each <see cref="BuildingSlot"/>, indexed by the enum value (docs/02 "Buildings").</summary>
     public static readonly ImmutableArray<string> BuildingSlotIds = ImmutableArray.Create(
         "town_hall", "house", "camp", "infantry_hall", "ranged_hall", "shock_hall", "forge", "caster_hall", "siege_works", "watch_tower");
+
+    /// <summary>JSON spelling of each <see cref="TechStat"/>, indexed by the enum value (docs/03 "Data format", M3-5).</summary>
+    public static readonly ImmutableArray<string> TechStatIds = ImmutableArray.Create("attack", "armor", "range", "hp", "abilityCooldown");
+
+    /// <summary>
+    /// The common techs that advance a player's age, in order: researching entry k puts the player in Age k + 2 (docs/02
+    /// "Ages": Age I at start, Age II researched). Each must exist in <c>common/techs.json</c>. A rule of the format.
+    /// </summary>
+    public static readonly ImmutableArray<string> AgeTechIds = ImmutableArray.Create("age_ii");
 }

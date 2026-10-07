@@ -64,7 +64,7 @@ public static class ProductionMaps
             if (u.Alive[i] && u.Owner[i] == player) n += w.Data.Units[u.TypeId[i]].HalfPop;
         BuildingStore b = w.Buildings;
         for (int k = 0; k < b.Capacity; k++)
-            if (b.Alive[k] && b.Owner[k] == player && b.Progress[k] > 0) n += w.Data.Units[b.QueueTypeAt(k, 0)].HalfPop;
+            if (b.Alive[k] && b.Owner[k] == player && b.Progress[k] > 0 && !b.QueueIsTechAt(k, 0)) n += w.Data.Units[b.QueueTypeAt(k, 0)].HalfPop; // research reserves none (M3-5)
         return n;
     }
 

@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+
 namespace Rts.Sim.Data;
 
 /// <summary>One building type from <c>factions/&lt;id&gt;/buildings.json</c> (docs/02 "Buildings"), converted to sim units (ticks, half-pop).</summary>
@@ -37,4 +39,6 @@ public sealed class BuildingDef
     public int HalfPopProvided { get; init; }
     /// <summary>Workers deposit cargo here (Town Hall, Camp).</summary>
     public bool DropOff { get; init; }
+    /// <summary>Tech / building ids it requires (M3-5: every id exists, checked at load; gating in placement is M3-6). Empty when none.</summary>
+    public ImmutableArray<string> Requires { get; init; } = ImmutableArray<string>.Empty;
 }

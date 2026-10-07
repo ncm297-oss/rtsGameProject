@@ -174,7 +174,7 @@ public class ReplayFormatTests
     [InlineData(2, "2", "player == PlayerCount")]
     [InlineData(2, "99", "player far out of range")]
     [InlineData(2, "-1", "negative player")]
-    [InlineData(4, "15", "unknown kind (one past ClearRally, M3-4)")]
+    [InlineData(4, "16", "unknown kind (one past Research, M3-5)")]
     [InlineData(4, "-1", "negative kind")]
     [InlineData(1, "0", "tick 0 (Enqueue always stamps at least 1)")]
     [InlineData(1, "301", "tick past the end")]

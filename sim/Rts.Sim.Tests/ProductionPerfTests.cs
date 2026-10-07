@@ -24,7 +24,7 @@ public class ProductionPerfTests
     /// training workers non-stop, rallied, queues topped up to 5 and the trained units removed between ticks (as deaths
     /// would) so the cap never stops them; returns the sim and the halls.
     /// </summary>
-    private static (Simulation Sim, List<int> Halls) Scene()
+    internal static (Simulation Sim, List<int> Halls) Scene()
     {
         Simulation sim = MoveScenario.Spawn(7, units: 500, maxCost: 12f, out int center, capacity: 650, players: 1, map: ResourceMap);
         NavGrid g = sim.World.NavGrid;
@@ -53,7 +53,7 @@ public class ProductionPerfTests
     }
 
     /// <summary>Between ticks: Trains to bring every hall's queue back to 5 (the surplus of the two ticks before they apply is dropped as full), and player 1's trained units removed.</summary>
-    private static void TopUp(Simulation sim, List<int> halls)
+    internal static void TopUp(Simulation sim, List<int> halls)
     {
         BuildingStore b = sim.World.Buildings;
         foreach (int k in halls)

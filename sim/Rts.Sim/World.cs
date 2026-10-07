@@ -30,6 +30,7 @@ public sealed class World
         config.Validate();
         Config = config;
         _ledger = new PlayerLedger(config.PlayerCount, config.Data.Rules);
+        Techs = new TechState(config.PlayerCount, config.Data);
         Units = new UnitStore(config.UnitCapacity, _ledger);
         _rngs = new SimRng[RngStream.Count(config.PlayerCount)];
         for (int i = 0; i < _rngs.Length; i++)
@@ -112,6 +113,34 @@ public sealed class World
         reason = ProductionSystem.Check(this, player, buildingSlot, unitTypeId);
         return reason == TrainError.None;
     }
+
+    /// <summary>
+    /// Whether <paramref name="player"/> may queue tech <paramref name="techId"/> at building slot <paramref name="buildingSlot"/>
+    /// now (M3-5): the rule <c>Command.Research</c> applies, and what the view's research buttons ask. Read-only and
+    /// allocation-free; <paramref name="reason"/> is the first rule broken, in <see cref="ResearchError"/> order.
+    /// </summary>
+    public bool CanResearch(int player, int buildingSlot, int techId, out ResearchError reason)
+    {
+        reason = ProductionSystem.CheckResearch(this, player, buildingSlot, techId);
+        return reason == ResearchError.None;
+    }
+
+    /// <summary>Whether <paramref name="player"/> has researched tech <paramref name="techId"/> (M3-5); false for out-of-range ids. Hashed state.</summary>
+    public bool HasTech(int player, int techId) => Techs.Has(player, techId);
+
+    /// <summary><paramref name="player"/>'s age (M3-5): 1 at start, 2 once <c>age_ii</c> is researched (<see cref="GameData.AgeTechs"/>); 0 for no such player.</summary>
+    public int Age(int player) => Techs.Age(player);
+
+    /// <summary>
+    /// What <paramref name="player"/>'s researched techs add to <paramref name="stat"/> of unit type <paramref name="unitType"/>
+    /// (M3-5): the sum of every matching effect, in sim units (whole points for attack / armor / hp, meters for range,
+    /// ticks for ability cooldown). Read-only and allocation-free (one array read); 0 for out-of-range ids. Combat does
+    /// not apply it yet (M4).
+    /// </summary>
+    public float TechBonus(int player, int unitType, TechStat stat) => Techs.Bonus(player, unitType, stat);
+
+    /// <summary>Per-player researched techs (M3-5): the flags are hashed state, the bonus sums derived.</summary>
+    internal TechState Techs { get; }
 
     /// <summary>
     /// The bounding box of the cells on terrain level <paramref name="level"/> (inclusive cell coordinates); false for a

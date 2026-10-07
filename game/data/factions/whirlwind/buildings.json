@@ -11,7 +11,8 @@
       "cost": { "gold": 275, "wood": 275 },
       "buildTime": 90,
       "popProvided": 10,
-      "dropOff": true
+      "dropOff": true,
+      "requires": []
     },
     {
       "id": "whirlwind_tent",
@@ -24,7 +25,8 @@
       "cost": { "gold": 0, "wood": 50 },
       "buildTime": 20,
       "popProvided": 8,
-      "dropOff": false
+      "dropOff": false,
+      "requires": []
     },
     {
       "id": "whirlwind_supply_cache",
@@ -37,7 +39,8 @@
       "cost": { "gold": 0, "wood": 75 },
       "buildTime": 25,
       "popProvided": 0,
-      "dropOff": true
+      "dropOff": true,
+      "requires": []
     },
     {
       "id": "whirlwind_raider_camp",
@@ -50,7 +53,8 @@
       "cost": { "gold": 0, "wood": 150 },
       "buildTime": 40,
       "popProvided": 0,
-      "dropOff": false
+      "dropOff": false,
+      "requires": []
     },
     {
       "id": "whirlwind_archer_camp",
@@ -63,7 +67,8 @@
       "cost": { "gold": 0, "wood": 150 },
       "buildTime": 40,
       "popProvided": 0,
-      "dropOff": false
+      "dropOff": false,
+      "requires": []
     },
     {
       "id": "whirlwind_horse_lines",
@@ -76,7 +81,8 @@
       "cost": { "gold": 75, "wood": 150 },
       "buildTime": 45,
       "popProvided": 0,
-      "dropOff": false
+      "dropOff": false,
+      "requires": []
     },
     {
       "id": "whirlwind_smithy",
@@ -89,7 +95,8 @@
       "cost": { "gold": 100, "wood": 100 },
       "buildTime": 40,
       "popProvided": 0,
-      "dropOff": false
+      "dropOff": false,
+      "requires": []
     },
     {
       "id": "whirlwind_shrine",
@@ -102,7 +109,8 @@
       "cost": { "gold": 150, "wood": 150 },
       "buildTime": 50,
       "popProvided": 0,
-      "dropOff": false
+      "dropOff": false,
+      "requires": []
     },
     {
       "id": "whirlwind_ram_yard",
@@ -115,7 +123,8 @@
       "cost": { "gold": 150, "wood": 200 },
       "buildTime": 55,
       "popProvided": 0,
-      "dropOff": false
+      "dropOff": false,
+      "requires": []
     },
     {
       "id": "whirlwind_lookout_tower",
@@ -128,7 +137,8 @@
       "cost": { "gold": 50, "wood": 125 },
       "buildTime": 35,
       "popProvided": 0,
-      "dropOff": false
+      "dropOff": false,
+      "requires": []
     }
   ]
 }

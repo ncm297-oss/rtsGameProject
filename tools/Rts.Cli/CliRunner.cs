@@ -152,7 +152,7 @@ public static class CliRunner
         {
             for (int p = 0; p < players; p++)
                 stdout.WriteLine($"player {p.ToString(Inv)} gold {sim.World.Gold[p].ToString(Inv)} wood {sim.World.Wood[p].ToString(Inv)}"
-                    + $" pop {Pop(sim.World.HalfPop[p])}/{Pop(sim.World.HalfPopCap[p])}");
+                    + $" pop {Pop(sim.World.HalfPop[p])}/{Pop(sim.World.HalfPopCap[p])} age {sim.World.Age(p).ToString(Inv)}");
         }
         return ExitOk;
     }

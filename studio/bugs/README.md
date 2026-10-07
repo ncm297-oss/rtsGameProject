@@ -133,8 +133,10 @@ bugs outrank new features.
 | [BUG-0095](BUG-0095-push-out-on-a-full-level-scans-the-whole-map.md) | S3 | open | Push-out on a level with too few free cells scans every ring of the map per leftover unit (9 ms at 128, 35 ms at 256) and stacks them on one point |
 | [BUG-0096](BUG-0096-builds-refused-for-sealsground-each-flood.md) | S3 | open | Builds refused for SealsGround still pay a flood each: 100 in one tick cost 33 ms (BUG-0091 residual) |
 | [BUG-0097](BUG-0097-spawn-and-push-out-cross-to-another-plateau-of-the-same-level.md) | S3 | open | A spawn (or push-out) on a full plateau lands on another plateau of the same level, 30+ m away |
-| [BUG-0106](BUG-0106-m3-v1-tree-gather-bound-unmet-from-start.md) | S3 | open | Right-click on the nearest tree from the start: workers reach Gathering at tick 123, not within 60 (criterion 3 wording vs walk time) |
+| [BUG-0106](BUG-0106-m3-v1-tree-gather-bound-unmet-from-start.md) | S3 | wontfix (criterion reworded, 0925) | Right-click on the nearest tree from the start: workers reach Gathering at tick 123, not within 60 (criterion 3 wording vs walk time) |
 | [BUG-0107](BUG-0107-m3-v1-nits.md) | S4 | open | M3-V1 nits: Malazan site vs finished colour, tiny wood cube at 60 m, minimap resource redraw on every building change |
+| [BUG-0098](BUG-0098-m3-5-empty-tech-filter-matches-every-unit.md) | S3 | open | An empty `units` or `tags` filter in a tech effect silently matches every unit (the other faction's too) |
+| [BUG-0099](BUG-0099-m3-5-tech-data-nits.md) | S4 | open | M3-5 tech data nits: `requires` cycles load, an effect matching no unit loads, a tech id may equal a building id |
 | [BUG-0108](BUG-0108-right-click-on-a-building-box-top-picks-the-ground-behind-it.md) | S3 | open | A right click on the visible top of a building's box picks the ground behind it: half of a damaged hall's top gives a Move, not a Repair |
 | [BUG-0109](BUG-0109-ghost-click-ignores-the-click-position.md) | S3 | open | A placement click ignores where it lands: it builds at the last frame's drawn anchor, or is swallowed if that one was red |
 | [BUG-0110](BUG-0110-ui-json-non-object-root-loads-empty.md) | S3 | open | ui.json whose root is not an object (`[]`, `null`, a number or a string) loads with no error and blank labels |

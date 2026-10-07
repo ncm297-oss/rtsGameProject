@@ -60,11 +60,17 @@ public class DataContentHashTests
             var a = (ImmutableArray<string>)value!;
             return a.Length > 0 ? a.SetItem(0, a[0] + "x") : a.Add("x");
         }
+        if (t == typeof(ImmutableArray<TechEffect>))
+        {
+            var a = (ImmutableArray<TechEffect>)value!;
+            return a.Length > 0 ? a.SetItem(0, a[0] with { Amount = a[0].Amount + 1f })
+                : a.Add(new TechEffect { Stat = TechStat.Armor, Amount = 1f, AttackType = -1, Tags = ImmutableArray<int>.Empty, Units = ImmutableArray<int>.Empty, Siege = -1 });
+        }
         return null;
     }
 
     private static GameData With(GameData d, DamageTable? table = null, RulesDef? rules = null, FactionDef? faction = null, UnitDef? unit = null,
-        ResourceDef? resource = null, int resourceSlot = 0, BuildingDef? building = null, int buildingSlot = 0) => new()
+        ResourceDef? resource = null, int resourceSlot = 0, BuildingDef? building = null, int buildingSlot = 0, TechDef? tech = null, int techSlot = 0) => new()
     {
         DamageTable = table ?? d.DamageTable,
         Rules = rules ?? d.Rules,
@@ -72,7 +78,38 @@ public class DataContentHashTests
         Units = unit == null ? d.Units : d.Units.SetItem(unit.Id, unit),
         Resources = resource == null ? d.Resources : d.Resources.SetItem(resourceSlot, resource),
         Buildings = building == null ? d.Buildings : d.Buildings.SetItem(buildingSlot, building),
+        Techs = tech == null ? d.Techs : d.Techs.SetItem(techSlot, tech),
     };
+
+    /// <summary>M3-5: every <see cref="TechEffect"/> field, the effect count, and the tech list length change the hash.</summary>
+    [Fact]
+    public void TechListLength_EffectCount_AndEveryEffectField_ChangeTheHash()
+    {
+        GameData d = TestSim.Data;
+        ulong baseline = d.ContentHash();
+        Assert.NotEqual(baseline, new GameData { DamageTable = d.DamageTable, Rules = d.Rules, Factions = d.Factions, Units = d.Units, Resources = d.Resources, Buildings = d.Buildings }.ContentHash());
+        TechDef tech = d.Techs[d.FindTech("moranth_supply")];
+        TechEffect e = tech.Effects[0];
+        var variants = new (string Field, TechEffect Changed)[]
+        {
+            ("Stat", e with { Stat = TechStat.Hp }),
+            ("Amount", e with { Amount = e.Amount + 0.5f }),
+            ("AttackType", e with { AttackType = e.AttackType + 1 }),
+            ("Tags", e with { Tags = e.Tags.Add(0) }),
+            ("Units", e with { Units = e.Units.Add(0) }),
+            ("Siege", e with { Siege = e.Siege + 1 }),
+        };
+        foreach ((string field, TechEffect changed) in variants)
+        {
+            TechDef copy = Clone(tech);
+            typeof(TechDef).GetProperty(nameof(TechDef.Effects))!.SetValue(copy, tech.Effects.SetItem(0, changed));
+            Assert.True(With(d, tech: copy, techSlot: tech.Id).ContentHash() != baseline, $"TechEffect.{field} is not in GameData.ContentHash");
+        }
+        Assert.Equal(6, typeof(TechEffect).GetProperties().Length); // a new field must be added above and to ContentHash
+        TechDef fewer = Clone(tech);
+        typeof(TechDef).GetProperty(nameof(TechDef.Effects))!.SetValue(fewer, tech.Effects.RemoveAt(1));
+        Assert.NotEqual(baseline, With(d, tech: fewer, techSlot: tech.Id).ContentHash());
+    }
 
     [Fact]
     public void BuildingListLengthAndAFileEdit_ChangeTheHash()
@@ -138,8 +175,14 @@ public class DataContentHashTests
         foreach (BuildingDef b in d.Buildings)
             Check(b, x => With(d, building: x, buildingSlot: b.Id));
         foreach (string f in new[] { "Id", "Key", "Faction", "Slot", "DisplayName", "Description", "FootprintWidth", "FootprintHeight",
-            "Hp", "Armor", "CostGold", "CostWood", "BuildTicks", "HalfPopProvided", "DropOff" })
+            "Hp", "Armor", "CostGold", "CostWood", "BuildTicks", "HalfPopProvided", "DropOff", "Requires" })
             Assert.Contains($"BuildingDef.{f}", checkedFields);
+        // M3-5: every TechDef field, on each shipped tech (the effects' own fields: TechListLength_EffectCount_AndEveryEffectField_ChangeTheHash).
+        foreach (TechDef t in d.Techs)
+            Check(t, x => With(d, tech: x, techSlot: t.Id));
+        foreach (string f in new[] { "Id", "Key", "Faction", "DisplayName", "Description", "ResearchedAtSlot", "CostGold", "CostWood",
+            "ResearchTicks", "Requires", "Effects" })
+            Assert.Contains($"TechDef.{f}", checkedFields);
         Assert.Contains("AttackDef.Projectile", checkedFields); // nullable: null and "x" must differ
         foreach (string f in new[] { "Id", "Key", "DisplayName", "Description", "Resource", "FootprintWidth", "FootprintHeight" })
             Assert.Contains($"ResourceDef.{f}", checkedFields);

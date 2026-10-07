@@ -3,10 +3,16 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | wontfix |
 | Found | 2026-10-07-0925, task M3-V1 |
 | System | HUD / right-click Gather (view), start bases, criterion wording |
-| Fixed by | |
+| Fixed by | — (wontfix: criterion reworded by the Producer at ACCEPT, session 2026-10-07-0925; status set at the 2026-10-07-1131 ACCEPT) |
+
+## Resolution (Producer, 2026-10-07)
+Not a defect. Criterion 3 of M3-V1 was reworded to "all 5 reach `Gathering` within 60 ticks of arriving at the node":
+the gather order is instant, the delay is the walk at the sim's speed (12.7 m for seed 1's nearest tree). The dev's
+200-tick tree row and QA's `FreshTreeAndMine` report stand as the reading. Alternative kept open: place the Town Hall
+nearer a forest once real start locations exist (M6).
 
 ## Repro
 1. `& $env:GODOT --headless --path game res://tests/QaV1Test.tscn` (row `FreshTreeAndMine`).
