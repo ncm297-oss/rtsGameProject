@@ -4,7 +4,7 @@ The dashboard. The Producer rewrites it at the end of every session. **Owner: re
 you" first.** "For your review" (further down) is non-blocking: what the studio built or decided
 on its own, explained in terms of what you'd see in the game.
 
-_Last updated: 2026-10-07 (session 2026-10-07-1131: ACCEPT sim M3-5 Age II research + Forge upgrades and view M3-V2 command card + build ghost; data STOPped cheaply)._
+_Last updated: 2026-10-07 (session 2026-10-07-1131: ACCEPT sim M3-5 Age II research + Forge upgrades and view M3-V2 command card + build ghost; data STOPped cheaply. 1415 PLAN: GO on all three tracks; the Age II roadmap box unticked until M3-6)._
 
 ## Waiting on you
 
@@ -18,7 +18,7 @@ _Last updated: 2026-10-07 (session 2026-10-07-1131: ACCEPT sim M3-5 Age II resea
 
 | Field | Value |
 | --- | --- |
-| Sim: milestone | M3 — Economy & buildings (started 2026-10-06-1255); 5 / 8 criteria (Age II + Forge upgrades landed 1131); M3-H1 sim hardening done |
+| Sim: milestone | M3 — Economy & buildings (started 2026-10-06-1255); 4 / 8 criteria (Age II research + Forge upgrades landed 1131; the "research and unlocks" box ticks when M3-6's gating lands: unticked at the 1415 PLAN); M3-H1 sim hardening done |
 | Sim: next task | **M3-6 `requires` gating** (`CanTrain` / `CanPlace` / `CanResearch` get a real `Requires` reason; Age II needs any two of the four halls; loader nits BUG-0098 / 0099 / 0008 / 0010) · feature · QA full; then the sim's end-of-M3 hardening (BUG-0097 / 0095 / 0096) |
 | Sim: gate | **GO** |
 | View: milestone | M3 view side: resource bar ✓, right-click Gather / Repair / join ✓, building + worker feedback ✓, command card + grid hotkeys ✓, build menus + ghost ✓, site Cancel ✓ (M3-V2); selection panel + production card next |
@@ -41,7 +41,7 @@ _Last updated: 2026-10-07 (session 2026-10-07-1131: ACCEPT sim M3-5 Age II resea
 | M0 | 7 / 7 required | **Done** 2026-10-03 (optional MCP item open) |
 | M1 (sim track) | 8 / 8 | **Done** 2026-10-06 (Producer sign-off after the M1-9 hardening; retro in docs/05) |
 | M2 (view track) | 10 / 10 (SimRunner interpolation, camera, terrain mesh + trees / mines, placeholder unit views, selection, orders, minimap, debug overlay, placeholder audio, 60 FPS playable check) | **Done** 2026-10-07 (Producer sign-off after the M2-H2 hardening; retro in docs/05; your playtest under For your review is feedback, not a gate) |
-| M3 (all three tracks) | 5 / 8 (resource entities; worker gather / return loop; building placement + construction + repair, sim half; production queues + rally + pop, sim half; Age II research + Forge upgrades); HUD in progress (resource bar, worker orders, building feedback, command card, build menus, ghost, site Cancel landed; selection panel + production card next); data: units + buildings pinned, techs content next | In progress; sim M3-6 `requires` gating next, view M3-V3 production card next, data D3 techs content next |
+| M3 (all three tracks) | 4 / 8 (resource entities; worker gather / return loop; building placement + construction + repair, sim half; production queues + rally + pop, sim half); Age II research + Forge upgrades landed, the box ticks with M3-6's unlocks; HUD in progress (resource bar, worker orders, building feedback, command card, build menus, ghost, site Cancel landed; selection panel + production card next); data: units + buildings pinned, techs content next | In progress; sim M3-6 `requires` gating next, view M3-V3 production card next, data D3 techs content next |
 | M4-M9 | — | Planned |
 
 ## For your review

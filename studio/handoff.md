@@ -5,6 +5,15 @@ and view M3-V2 both ACCEPTed with 0 fix rounds; data STOPped cheaply. Next sessi
 after 1131: sim 2 / 4, view 2 / 4, data 2 / 4 (the data counter moves when D3 runs). **Bug numbers for the next
 session: sim from BUG-0100 (0100, then 0112-0121), view from BUG-0123 (0123-0131), data from BUG-0132.**
 
+**Confirmed as the plan of session 2026-10-07-1415 (fourth full session of the day, 4 / 8; base `2e9ed42` =
+`origin/main`): GO on all three tracks with the briefs below unchanged.** PLAN checks: inbox empty; `dotnet build` 0
+warnings / 0 errors; all three worktrees clean at `2e9ed42`; no S1 / S2 open (27 open: S3 16, S4 11). Trust-but-verify:
+the roadmap's "Age II research and unlocks" box was ticked with only the research half built, so the Producer **unticked
+it** (M3 reads 4 / 8 now; it is re-ticked at M3-6's ACCEPT; the note already said so). Verified on `main`: `requires`
+shipped on all 10 buildings per faction and on the techs; `ResearchError` has the documented members; `ui.json` has a
+`placement` block and **no** `requires` / `train` / `research` keys yet (so the watch-out below stands: M3-V3 must ship
+them). Non-Perf suite on `main` at the PLAN: 3075 passed / 11 skipped / 0 failed (3086 total), 8 m 13 s.
+
 ## Where we are
 
 - `main` after this session's merge: M0, M1, M2 Done; **M3 5 / 8** (resources, gather loop, placement + construction +
