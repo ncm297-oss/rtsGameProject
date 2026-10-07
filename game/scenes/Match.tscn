@@ -1,4 +1,4 @@
-[gd_scene load_steps=22 format=3]
+[gd_scene load_steps=25 format=3]
 
 [ext_resource type="Script" path="res://scripts/Match.cs" id="1_match"]
 [ext_resource type="Script" path="res://scripts/SimRunner.cs" id="2_runner"]
@@ -17,6 +17,9 @@
 [ext_resource type="Script" path="res://scripts/Sfx.cs" id="15_sfx"]
 [ext_resource type="Script" path="res://scripts/BuildingViews.cs" id="16_buildings"]
 [ext_resource type="Script" path="res://scripts/ResourceBar.cs" id="17_resources"]
+[ext_resource type="Script" path="res://scripts/BuildGhost.cs" id="18_ghost"]
+[ext_resource type="Script" path="res://scripts/BuildingOutline.cs" id="19_outline"]
+[ext_resource type="Script" path="res://scripts/CommandCard.cs" id="20_card"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMaterial_1"]
 sky_top_color = Color(0.36, 0.52, 0.72, 1)
@@ -62,6 +65,12 @@ script = ExtResource("7_units")
 
 [node name="BuildingViews" type="Node3D" parent="World3D"]
 script = ExtResource("16_buildings")
+
+[node name="BuildingOutline" type="Node3D" parent="World3D"]
+script = ExtResource("19_outline")
+
+[node name="BuildGhost" type="Node3D" parent="World3D"]
+script = ExtResource("18_ghost")
 
 [node name="SelectionRings" type="MultiMeshInstance3D" parent="World3D"]
 script = ExtResource("8_rings")
@@ -120,6 +129,21 @@ theme_override_constants/outline_size = 4
 theme_override_font_sizes/font_size = 18
 horizontal_alignment = 2
 script = ExtResource("17_resources")
+
+[node name="CommandCard" type="Control" parent="Hud"]
+layout_mode = 3
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -484.0
+offset_top = -196.0
+offset_right = -8.0
+offset_bottom = -8.0
+grow_horizontal = 0
+grow_vertical = 0
+script = ExtResource("20_card")
 
 [node name="DebugOverlay" type="CanvasLayer" parent="."]
 script = ExtResource("5_overlay")

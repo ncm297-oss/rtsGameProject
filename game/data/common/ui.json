@@ -1,0 +1,25 @@
+{
+  "commands": {
+    "move": { "displayName": "Move", "hotkeyHint": "M" },
+    "attack_move": { "displayName": "Attack", "hotkeyHint": "A" },
+    "stop": { "displayName": "Stop", "hotkeyHint": "S" },
+    "hold": { "displayName": "Hold", "hotkeyHint": "H" },
+    "build_basic": { "displayName": "Build", "hotkeyHint": "B" },
+    "build_advanced": { "displayName": "Build Advanced", "hotkeyHint": "V" },
+    "cancel": { "displayName": "Cancel", "hotkeyHint": "B" }
+  },
+  "buildMenus": {
+    "basic": ["house", "camp", "infantry_hall", "ranged_hall", "shock_hall", "forge"],
+    "advanced": ["caster_hall", "siege_works", "watch_tower"]
+  },
+  "placement": {
+    "unknown_type": "Unknown building",
+    "wrong_faction": "Not your faction's building",
+    "off_map": "Off the map",
+    "blocked": "Blocked",
+    "seals_ground": "Would wall ground off",
+    "unit_in_the_way": "Units in the way",
+    "cannot_afford": "Can't afford",
+    "store_full": "Too many buildings"
+  }
+}

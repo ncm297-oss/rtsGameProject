@@ -37,6 +37,9 @@ public partial class SimRunner : Node
     /// <summary>Interpolation factor between the previous and current tick, in [0, 1).</summary>
     public double Alpha => _clock.Alpha;
 
+    /// <summary>True only while <see cref="Simulation.Tick"/> runs inside <see cref="_Process"/>: reads that write sim scratch (<c>World.CanPlace</c>, M3-V2) must not run then (docs/03 M3-3).</summary>
+    public bool Ticking { get; private set; }
+
     /// <summary>Wall-clock cost of the most recent <c>Tick()</c> in milliseconds.</summary>
     public double LastTickMs { get; private set; }
 
@@ -70,7 +73,9 @@ public partial class SimRunner : Node
         for (int i = 0; i < ticks; i++)
         {
             _stopwatch.Restart();
+            Ticking = true;
             Simulation.Tick();
+            Ticking = false;
             _stopwatch.Stop();
             LastTickMs = _stopwatch.Elapsed.TotalMilliseconds;
             TickTimes.Add(LastTickMs);

@@ -68,6 +68,7 @@ public partial class Match : Node3D
         Sfx.SetMuted(options.Mute);
         var selection = GetNode<SelectionController>("SelectionController");
         selection.Init(_runner, camera, GetNode<SelectionRings>("World3D/SelectionRings"), GetNode<Sfx>("Sfx"));
+        selection.Outline = GetNode<BuildingOutline>("World3D/BuildingOutline");
 
         System.Numerics.Vector2[][] blocks = SpawnArmies(sim, options.UnitsPerPlayer, out System.Numerics.Vector2 focus);
         Bases = options.NoBases ? null : SpawnBases(sim, blocks, WorkersPerPlayer, out _);
@@ -87,6 +88,15 @@ public partial class Match : Node3D
             // Resource names come from the local player's faction data (CLAUDE.md rule 8).
             FactionDef local = data.Factions[sim.World.FactionOf(SelectionController.LocalPlayer)];
             hud.GetNode<ResourceBar>("ResourceBar").Init(_runner, SelectionController.LocalPlayer, local.GoldName, local.WoodName);
+            // The card's labels and menus are view data (ui.json); without them it stays hidden and the errors are logged.
+            var card = hud.GetNode<CommandCard>("CommandCard");
+            if (UiText.Shared is UiText ui)
+            {
+                var ghost = GetNode<BuildGhost>("World3D/BuildGhost");
+                ghost.Init(_runner, camera, ui, SelectionController.LocalPlayer);
+                card.Init(_runner, selection, ghost, ui);
+            }
+            else card.Visible = false;
         }
 
         GetNode<DebugOverlay>("DebugOverlay").Init(_runner, selection, camera,

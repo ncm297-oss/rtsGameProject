@@ -2305,6 +2305,112 @@ Match.tscn  (new nodes)
   building selection; a damaged building in a scene test (no public damage path until combat; `BuildingBarsTests`
   covers the hit-point bar's numbers).
 
+### Implementation (M3-V2)
+
+The owner builds a base in the window: a command card with the docs' grid hotkeys, the worker build menus, a placement
+ghost the sim's own `CanPlace` colours, building selection with a site's Cancel, and right-click Repair / join.
+
+```
+Match.tscn  (new nodes)
+  World3D/BuildingOutline Node3D, BuildingOutline.cs: the selected building's flat footprint outline
+  World3D/BuildGhost      Node3D, BuildGhost.cs: translucent footprint box + reason label (Label3D)
+  Hud/CommandCard         Control, CommandCard.cs: bottom right, 5 x 3 buttons
+game/data/common/ui.json  view-only text and menu lists (UiText.cs); the sim's DataLoader never reads it
+```
+
+- **`ui.json`** (Producer default; view data, so CLAUDE.md rule 8 holds for the card): `{ "commands": { "<id>":
+  { "displayName", "hotkeyHint" } }, "buildMenus": { "basic": [slot ids], "advanced": [slot ids] }, "placement":
+  { "<reason>": text } }`. Command ids: `move`, `attack_move`, `stop`, `hold`, `build_basic`, `build_advanced`,
+  `cancel`. Placement keys are the snake_case names of every `PlacementError` but `None` (`blocked`, `seals_ground`,
+  `unit_in_the_way`, `cannot_afford` ...), so a reason the sim adds (M3-6's `Requires`) is a load error until the file
+  has its text. Menus list slot ids (`DataLimits.BuildingSlotIds` spelling): basic = the six Age I slots (House, Camp,
+  Infantry Hall, Ranged Hall, Shock Hall, Forge), advanced = Caster Hall, Siege Works, Watch Tower (docs/02
+  "Buildings"); at most 15 each. `UiText.Shared` loads it once (`File.ReadAllText` of `res://data/common/ui.json`,
+  globalized like the sim data); every missing or empty key, an unknown slot id or bad JSON is one error naming it
+  ("ui.json: missing commands.stop.displayName"), logged with `GD.PushError` (so the smoke gate fails), and the match
+  runs with the card hidden.
+- **Card layout** (`CommandCard`, docs/02 "HUD layout" / "Grid hotkeys"): 5 x 3 buttons (92 x 60 px, 4 px gaps),
+  cells 0-14 keyed by input actions `card_0` ... `card_14` = `Q W E R T / A S D F G / Z X C V B`. A button shows its
+  name (command `displayName` or building `displayName`), its hotkey hint top left (`hotkeyHint`, or for a menu entry
+  the key bound to its `card_<i>` action as the keyboard labels it) and, for a building, its cost "G / W" bottom right;
+  the tooltip is the building's `description` and "<gold name> G  <wood name> W" (faction names). Contents follow
+  the selection: units: Attack (A) on the A cell, Stop (S), Hold (H) and Move (M) on the rest of the middle row (row 1
+  stays free for abilities, Q W E R); when the active Tab subgroup is a `worker` type also Build advanced on V and
+  Build basic on B; B / V (actions `build_basic`, `build_advanced`) open a menu whose entries take cells 0, 1, 2 ...
+  in list order (Q W E R T A for the basic menu) and own every grid key while it is open (A picks the sixth entry, S
+  does nothing); a selected own site: Cancel on the B cell (its grid key); a finished building: nothing (M3-V3); no
+  selection: nothing. Every entry is enabled (`requires` greying: M3-6 / M3-V3). A button press makes exactly the call
+  its key makes (A / M arm targeting, S / H order, B / V open, Cancel cancels, an entry raises the ghost). Esc or a
+  right click closes a menu and its ghost and orders nothing. The texts are written only when the contents change
+  (`Layouts`); every string is built in `Init`. The root control ignores the mouse, so only visible buttons take clicks
+  (an empty cell lets a click through to the map); buttons take no keyboard focus.
+- **M (Move).** New input action `order_move` (M): arms Move targeting like A arms attack-move
+  (`SelectionController.TargetKind`); the next left click orders a plain `Move` there (today what a right click on
+  ground does; it will ignore enemies once combat exists, M4). `Targeting` is true for either; the F12 label shows "M"
+  or "A".
+- **Ghost rule** (`BuildGhost`): the anchor is `ViewApi.PlacementGhost.Anchor(grid, def, point)`: the cell under the
+  cursor minus half the footprint (integer halves: exact centring for odd footprints, within a cell for even ones),
+  clamped so the footprint stays on the map; a cursor off the map hides the box. Green when `World.CanPlace(player,
+  type, anchor, out reason)` passes, red otherwise with `ui.json` `placement.<reason>` over it. `CanPlace` writes
+  flow-field scratch (M3-3), so it is called only from the ghost's `_Process`, which runs after `SimRunner`'s tick
+  step in the same frame (tree order: the runner is the match's first child), on the main thread, never while
+  `SimRunner.Ticking`, at most once per frame, and only when the anchor, the type or the sim tick changed since the last
+  answer (nothing else changes it). The box moves only with an answer, so the colour drawn is always `CanPlace` of the
+  anchor drawn. Left click with a green ghost: `SelectionController.OrderBuild`: one `Command.Build(player, worker,
+  type, anchor point)` per selected live worker (the anchor cell's centre; the first to apply places the site, the rest
+  join it), one Command sound; the menu and ghost close, unless Shift is held: then the ghost stays, and each later
+  placement of the same ghost is queued (`queued` flag) so the workers build them in turn (the first stays unqueued:
+  a queued order behind an endless Gather would never start). A red or off-map click does nothing and plays nothing.
+  Meshes (one per building type, on first use) and the two materials are kept; the label text is set only when the
+  reason changes.
+- **Selection rule** (`SelectionController`): a left click that picks no unit selects the own building whose drawn box
+  the camera ray meets first (`ViewApi.BuildingPicker.PickRay`: footprint x box height on the terrain at the footprint
+  centre, a site only up to its drawn rise) alone: units cleared, targeting ended, Select sound if it changed. Shift or
+  double-click make no difference; enemy buildings aren't selectable (own only, like units). A box never selects a
+  building (a plain box drops it like the units); a click on empty ground, a unit, a box or a group recall that leaves
+  units selected drops it. `SelectedBuilding` is the slot or -1, a view selection (slot + generation): a freed or reused
+  slot reads -1 from the next read on. Tab does nothing with a building selected. `BuildingOutline` draws four thin
+  flat bars just outside the footprint, moved only when the selection changes. The F12 label says "sel building".
+  Cancel: `Command.Cancel(player, footprint centre)` (`CancelSelectedSite`), one Command sound.
+- **Right-click Repair / join** (`ContextOrder`, with a worker selected): on a node's cell a Gather (M3-V1); else on an
+  own finished building below full hit points (`ViewApi.BuildingPicker.SlotAt`, the store's `SlotAt` in meters) a
+  `Repair(player, worker, point)`; on an own site a `Build` of the site's type at its anchor cell's centre (it joins);
+  every other selected unit a `Move` there; Shift queues them all. Anything else (no worker, enemy building, own building
+  at full hit points, ground) is the plain Move. One sound; nothing if the whole order doesn't fit the command queue.
+- **ViewApi additions** (read-only, allocation-free, no `World`): `BuildingPicker` (`SlotAt`, `PickRay`, `BoxRise`),
+  `PlacementGhost` (`Anchor`, `AnchorPoint`), `BuildMenu` (`Entries`: the faction's building per listed slot,
+  `TryParseSlot`).
+- **Cost.** 300 idle frames with the card in a menu, a ghost up and the outline on allocate 0 bytes (card, ghost,
+  outline); the ghost following a moving cursor (one `CanPlace` a frame) allocates 0 bytes. `--bench 10 --vsync off`
+  (dev PC, default window, Debug): avg 0.80 ms, p99 1.39 ms, avg tick 0.33 ms over two runs, with the unit card on show and another track's test run loading the CPU (the M3-V1 figure, measured on a quiet machine, was 0.52 ms).
+- **Tests.** xUnit (`Rts.Sim.Tests/ViewApi`): `BuildingPickerTests` (every cell of three seeds' bases vs a footprint
+  scan, off-map / NaN; a straight-down ray over every cell picks the building under it, own filter; oblique rays: the
+  nearer box of two, a site only up to its drawn rise, bad rays; `BoxRise` follows `Work`; 0 bytes),
+  `PlacementGhostTests` (every cell of the 128 map for six footprints, four points per cell, against the formula with
+  the clamp; centring away from the edges; off-map / NaN / too large; `AnchorPoint` round trip; 0 bytes),
+  `BuildMenuTests` (both factions' menus in slot order, Malazan by key; span bound, unknown faction, empty list;
+  `TryParseSlot`; 0 bytes) and `CommandCardHashTwinTests` (400 ticks of joining Builds, a damaged house's Repair, a
+  placed house and its Cancel, calling every new read and the ghost's `CanPlace` each tick: the hash equals a bare
+  twin's every tick). Headless scene `res://tests/CommandCardTest.tscn` ("COMMAND CARD TEST PASS"): `ui.json` rows
+  (every key present; a missing command, hint, placement text or bad slot id, bad JSON and a missing file each one named
+  error); card contents for nothing / soldiers / workers / a mixed selection through Tab; S, H, A + click and M + click
+  by key and by button enqueue the same commands, with and without Shift; B / V by key and button; through the
+  viewport an empty card cell passes a click to the map and a visible button takes it; both menus' entries (type, name,
+  grid key, tooltip description and cost, cost label), Esc and right-click close, A in a menu picks the Forge, S does
+  nothing, B with soldiers opens nothing; 200 random cursor points (seed 1, a tick every 10) each checked against the
+  test's own `CanPlace` (anchor, colour, reason, `ui.json` text) with at most one call a frame, and two `Sync`s in one
+  frame making one call; a green click with 3 live workers + a dead one + a soldier: 3 Builds of the type at the anchor,
+  one sound, the ghost closed, the site placed and all three building it; a red "Can't afford" ghost after it (red
+  material, regression for a new ghost keeping the last one's green) and a click on the hall: nothing, no sound; Shift:
+  the ghost stays and a second click enqueues 3 queued Builds; a site click selects it alone (Cancel on B from
+  `ui.json`, outline, "sel building", Tab inert), a box over it doesn't, B enqueues one Cancel at its centre, the box
+  and the selection go the frame after; the Cancel button and a slot reused in the same tick clear the selection; the
+  hall selected with an empty card, the enemy hall not selectable; right-click: full-hp hall = Moves, damaged hall = 3
+  Repairs + the soldier's Move (Shift queued), own site = 3 joining Builds, enemy hall = Moves; 300 idle frames 0 bytes
+  and nothing rewritten. Windowed with `-- --shots <dir>` it saves the soldier and worker cards, the B menu, a green and
+  a red ghost and a selected site with its Cancel.
+- **Not yet:** production card, queue, rally, population (M3-V3); `requires` greying (M3-6); rebinding UI; real art.
+
 ## AI architecture
 
 The AI lives in `Rts.Sim.Ai`, inside the sim assembly, because it must be deterministic (it uses

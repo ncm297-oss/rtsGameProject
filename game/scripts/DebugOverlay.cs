@@ -9,7 +9,7 @@ namespace Rts.Game;
 /// <summary>Developer readout and the F12 debug overlay (docs/03 "Debug tooling"). Dev-only text, not player-facing.</summary>
 /// <remarks>
 /// The top-left label is always on (M2-1): tick, game speed, last tick cost, FPS, selected units,
-/// active subgroup, A targeting. The overlay (M2-5, input action <c>debug_overlay</c>, F12; launch flag
+/// active subgroup, A targeting ("sel building" while a building is selected, M3-V2). The overlay (M2-5, input action <c>debug_overlay</c>, F12; launch flag
 /// <c>--debug-overlay</c> starts with it on) adds the nav grid (<see cref="NavOverlayView"/>), the flow
 /// arrows of the selection's goal around the camera (<see cref="FlowArrowsView"/>), the tick-time graph
 /// (<see cref="TickGraph"/>) and a second label line with entity counts, the workers gathering, returning and
@@ -113,14 +113,14 @@ public partial class DebugOverlay : CanvasLayer
         Rts.Sim.ViewApi.Subgroups? sub = Selection?.Subgroups;
         TickTimeRing ring = Runner.TickTimes;
         var shown = new LabelValues(sim.TickNumber, Runner.GameSpeed, Runner.LastTickMs, Engine.GetFramesPerSecond(),
-            Selection?.Selection.Count ?? 0, sub?.Count ?? 0, sub?.ActiveType ?? 0, sub?.Index ?? 0, Selection?.Targeting ?? false,
+            Selection?.Selection.Count ?? 0, sub?.Count ?? 0, sub?.ActiveType ?? 0, sub?.Index ?? 0, (int)(Selection?.TargetKind ?? Rts.Sim.Commands.CommandKind.Noop),
             Enabled, LiveUnits, MovingUnits, CachedFields, sim.World.FlowFields.Capacity, ring.Average, ring.Worst, ring.Count,
-            ShownGoal >= 0 ? _arrows?.ShownCount ?? 0 : -1, GatheringUnits, ReturningUnits, BuildingUnits);
+            ShownGoal >= 0 ? _arrows?.ShownCount ?? 0 : -1, GatheringUnits, ReturningUnits, BuildingUnits, Selection?.SelectedBuilding ?? -1);
         if (LabelBuilds > 0 && shown == _shown) return;
         _shown = shown;
         LabelBuilds++;
         string text = $"tick {sim.TickNumber}   speed {Runner.GameSpeed:0.##}x   " +
-            $"tick {Runner.LastTickMs:0.000} ms   {shown.Fps:0} fps   sel {shown.Selected}" +
+            $"tick {Runner.LastTickMs:0.000} ms   {shown.Fps:0} fps   " + (shown.SelectedBuilding >= 0 ? "sel building" : $"sel {shown.Selected}") +
             SelectionSuffix();
         if (Enabled)
         {
@@ -137,8 +137,8 @@ public partial class DebugOverlay : CanvasLayer
 
     // Every value the label shows, compared as a whole: equal means the text would be the same.
     private readonly record struct LabelValues(long Tick, double Speed, double TickMs, double Fps, int Selected, int SubCount, int SubType,
-        int SubIndex, bool Targeting, bool On, int Live, int Moving, int Fields, int FieldCapacity, double Avg, double Worst, int Samples, int Arrows,
-        int Gathering, int Returning, int Building);
+        int SubIndex, int Targeting, bool On, int Live, int Moving, int Fields, int FieldCapacity, double Avg, double Worst, int Samples, int Arrows,
+        int Gathering, int Returning, int Building, int SelectedBuilding);
 
     private LabelValues _shown;
 
@@ -169,6 +169,7 @@ public partial class DebugOverlay : CanvasLayer
         if (Selection == null) return "";
         Rts.Sim.ViewApi.Subgroups sub = Selection.Subgroups;
         string text = sub.Count > 0 ? $"   sub {sub.ActiveType} {sub.Index + 1}/{sub.Count}" : "";
-        return Selection.Targeting ? text + "   A" : text;
+        if (!Selection.Targeting) return text;
+        return text + (Selection.TargetKind == Rts.Sim.Commands.CommandKind.Move ? "   M" : "   A");
     }
 }
