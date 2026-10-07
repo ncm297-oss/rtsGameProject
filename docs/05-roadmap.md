@@ -10,7 +10,7 @@ Status legend: **Next** = start here, **Planned** = not started, **Done** = acce
 | M0 | Environment & skeleton | **Done** (2026-10-03) | Tools installed, empty projects build, tests and headless boot pass |
 | M1 | Core sim, no graphics | **Done** (2026-10-06, Producer sign-off) | 200 units path across the map deterministically, fast |
 | M2 | Presentation | **Done** (2026-10-07, Producer sign-off after the M2-H2 hardening) | Move an army around a 3D map |
-| M3 | Economy & buildings | **In progress** (sim + data tracks since 2026-10-06-1255, view track from 2026-10-07; 4 / 8; sim hardening M3-H1 done) | Build a Malazan base |
+| M3 | Economy & buildings | **In progress** (sim + data tracks since 2026-10-06-1255, view track from 2026-10-07; 5 / 8; sim hardening M3-H1 done) | Build a Malazan base |
 | M4 | Combat, fog, abilities | Planned | Malazan vs. Whirlwind armies fight with abilities and fog |
 | M5 | AI opponent | Planned | Lose to a Whirlwind AI |
 | M6 | Game shell & real art | Planned | A friend can play it |
@@ -252,7 +252,22 @@ review") stands as feedback, not as a gate. Owner may revisit._
       conservation and pop recount; 500 marchers + 20 halls + 50 gatherers 0.40 ms a tick. The queue / rally UI is the
       view's M3-V3. Open: BUG-0097 (S3, a spawn on a full plateau lands on another plateau of the same level index),
       BUG-0095 (S3, push-out fallback still stacks).)_
-- [ ] Age II research and unlocks; Forge upgrades.
+- [x] Age II research and unlocks; Forge upgrades.
+      _(research half, session 2026-10-07-1131, task M3-5: `common/techs.json` (Age II 400 / 200, 60 s at the Town
+      Hall; six Forge upgrades per docs/02 "Tech") and `factions/<id>/techs.json` (the faction upgrade: Moranth Supply,
+      Dryjhna's Prophecy, 200 / 150, 45 s at the Forge), both required; a tech names the building *slot* that researches
+      it; `Command.Research` (kind 15) through `World.CanResearch(player, slot, tech, out ResearchError)` (NoBuilding,
+      UnknownTech, WrongFaction, NotResearchedHere, AlreadyResearched, AlreadyQueued, QueueFull, CannotAfford); a queue
+      item is a unit or a tech (`QueueIsTechAt`, `ItemTicks`), one timer per building, no population, full refund on
+      cancel (`CancelTrain`) or destruction, a tech queued once per player at a time; `TechState` flags hashed
+      (`World.HasTech` / `Age`), bonus sums derived (`World.TechBonus(player, unitType, TechStat)`, applied by combat in
+      M4); building `requires` field shipped `[]`; every `requires` id (units, buildings, techs) checked to exist. Producer
+      defaults: "+1 / +2" are totals, melee attack type = melee units (workers included), non-siege = not the siege slot
+      (the Sapper gets Armor). QA: hostile fuzz 8 seeds x 3,000 ticks with exact conservation and a raw-JSON bonus
+      oracle; 10 Forges researching 0.40 ms a tick. **Unlocks (the "unlocks" half) are M3-6**: `requires` gating in
+      `CanTrain` / `CanPlace` / `CanResearch` incl. Age II's any-two-of-four-halls rule; the criterion stays ticked for
+      the research side and M3-6 completes it before the Playable criterion. Open: BUG-0098 (S3, an empty tech filter
+      list matches every unit), BUG-0099 (S4 nits), both folded into M3-6.)_
 - [ ] Malazan and Whirlwind factions fully defined in data (units, buildings, techs).
       _(In progress, data track: units landed in M1-2 (7 per faction); all ten buildings per faction in
       session 2026-10-06-1744, task D1 (`Content/BuildingContentTests`, QA `QA/Content/BuildingRosterQaTests`;
@@ -267,7 +282,15 @@ review") stands as feedback, not as a gate. Owner may revisit._
       default match, `--workers N`, `--no-bases`), `ResourcePicker` + right-click Gather (workers gather, others
       Move, Shift queues), `BuildingViews` (boxes, site progress bar, hp bar), `BuildingBars`, worker tints + cargo
       markers, F12 worker counts. Open: BUG-0107 (S4 nits); BUG-0106 resolved by rewording the criterion's 60-tick
-      bound to "after arriving". Command card + build menus + ghost: M3-V2; selection panel + production queue: M3-V3.)_
+      bound to "after arriving". Session 2026-10-07-1131, task M3-V2: the command card (bottom right, 5 x 3 buttons on
+      Q-T / A-G / Z-B; Attack / Stop / Hold / Move on the middle row, Build basic B / advanced V for workers, a site's
+      Cancel), view-only `game/data/common/ui.json` for every label, hint, refusal text and the menus' slot lists
+      (`UiText`, fail-fast), the worker build menus (six Age I / three Age II buildings from data, cost + description),
+      the placement ghost (`ViewApi.PlacementGhost.Anchor`, coloured by `World.CanPlace` at most once a frame on the main
+      thread after the tick step; one `Build` per selected worker, Shift keeps it), building click-select
+      (`ViewApi.BuildingPicker.PickRay`, footprint outline, box-select never), right-click Repair on an own damaged
+      building / join on an own site, the M key. Open: BUG-0108 / 0109 / 0110 (S3, folded into M3-V3), BUG-0122 (S4).
+      Selection panel + production card + rally + pop: M3-V3.)_
 - [ ] Playable: the owner builds a full Malazan base and reaches Age II.
 
 ## M4 — Combat, fog, abilities
