@@ -65,7 +65,9 @@ public class BuildingDataQaTests
     [Fact]
     public void DuplicateIdInsideOneFile_IsOneErrorAtTheSecond()
     {
-        DataLoadResult r = LoadWith(root => root["buildings"]!.AsArray().Add(JsonNode.Parse(root["buildings"]![0]!.ToJsonString())));
+        // D1 (2026-10-06-1744): the roster now has ten entries, so the copy of the Town Hall is inserted at index 1
+        // (not appended) to keep the second occurrence at a fixed path.
+        DataLoadResult r = LoadWith(root => root["buildings"]!.AsArray().Insert(1, JsonNode.Parse(root["buildings"]![0]!.ToJsonString())));
         Assert.Null(r.Data);
         DataError e = Assert.Single(r.Errors);
         Assert.Equal("buildings[1].id", e.Path);
@@ -95,6 +97,10 @@ public class BuildingDataQaTests
         // "every faction has a Town Hall" rule is a deliberate change.
         DataLoadResult r = LoadWith(root => root["buildings"]!.AsArray().Clear());
         Assert.True(r.Ok, string.Join("\n", r.Errors));
-        Assert.Single(r.Data!.Buildings);
+        // D1 (2026-10-06-1744): Whirlwind ships ten buildings now, so "only the other faction's buildings remain"
+        // replaces the old Assert.Single.
+        GameData d = r.Data!;
+        Assert.Equal(10, d.Buildings.Length);
+        Assert.All(d.Buildings, b => Assert.Equal("whirlwind", d.Factions[b.Faction].Key));
     }
 }
