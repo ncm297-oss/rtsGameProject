@@ -73,6 +73,10 @@ public sealed class UnitStore
     public readonly CommandKind[] QueueKind;
     /// <summary>Queued order targets (x, z) in meters, parallel to <see cref="QueueKind"/>; zero for Stop and HoldPosition and past <see cref="QueueCount"/>.</summary>
     public readonly Vector2[] QueuePosition;
+    /// <summary>Queued building types (<see cref="CommandKind.Build"/> entries, M3-3), parallel to <see cref="QueueKind"/>; 0 for every other kind and past <see cref="QueueCount"/>.</summary>
+    public readonly int[] QueueTypeId;
+    /// <summary>The building a worker builds or repairs (M3-3); default when it has no such order.</summary>
+    public readonly EntityHandle[] BuildTarget;
     /// <summary>The resource node a worker's gather loop works (M3-2); default when it has no gather order.</summary>
     public readonly EntityHandle[] GatherNode;
     /// <summary>Center (m) of <see cref="GatherNode"/>'s footprint, kept after the node is gone: the depleted-node search starts here.</summary>
@@ -122,6 +126,8 @@ public sealed class UnitStore
         QueueCount = new int[capacity];
         QueueKind = new CommandKind[capacity * OrderConstants.QueueCapacity];
         QueuePosition = new Vector2[capacity * OrderConstants.QueueCapacity];
+        QueueTypeId = new int[capacity * OrderConstants.QueueCapacity];
+        BuildTarget = new EntityHandle[capacity];
         GatherNode = new EntityHandle[capacity];
         GatherSite = new Vector2[capacity];
         GatherProgress = new float[capacity];
@@ -220,12 +226,14 @@ public sealed class UnitStore
         int start = index * OrderConstants.QueueCapacity;
         Array.Clear(QueueKind, start, OrderConstants.QueueCapacity);
         Array.Clear(QueuePosition, start, OrderConstants.QueueCapacity);
+        Array.Clear(QueueTypeId, start, OrderConstants.QueueCapacity);
         QueueCount[index] = 0;
     }
 
-    /// <summary>Resets slot <paramref name="index"/>'s gather loop and cargo (M3-2) to the empty state.</summary>
+    /// <summary>Resets slot <paramref name="index"/>'s gather loop and cargo (M3-2) and build target (M3-3) to the empty state.</summary>
     private void ClearEconomy(int index)
     {
+        BuildTarget[index] = default;
         GatherNode[index] = default;
         GatherSite[index] = default;
         GatherProgress[index] = 0f;

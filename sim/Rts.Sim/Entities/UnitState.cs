@@ -14,4 +14,7 @@ public enum UnitState : byte
 
     /// <summary>A worker standing with a full load on the gather loop (M3-2), out of reach of a drop-off and waiting to walk again.</summary>
     Returning = 3,
+
+    /// <summary>A worker standing at its <see cref="UnitStore.BuildTarget"/> (M3-3): building or repairing while in reach, else waiting to walk in again.</summary>
+    Building = 4,
 }

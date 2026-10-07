@@ -43,6 +43,9 @@ public partial class SimRunner : Node
     /// <summary>The last <see cref="TickTimeRing.DefaultCapacity"/> tick costs (every <c>Tick()</c>, also several per frame), for the debug overlay's graph. One array write per tick, so it is kept even while the overlay is off.</summary>
     public TickTimeRing TickTimes { get; } = new();
 
+    /// <summary>Sum of every <c>Tick()</c> cost so far in milliseconds; with <see cref="TickTimeRing.Total"/> it gives the mean over any span (the <c>--bench</c> line).</summary>
+    public double TotalTickMs { get; private set; }
+
     /// <summary>Forests the map generator places (<see cref="MapGenParams.Forests"/>).</summary>
     [Export] public int Forests { get; set; } = LaunchOptions.DefaultForests;
 
@@ -71,6 +74,7 @@ public partial class SimRunner : Node
             _stopwatch.Stop();
             LastTickMs = _stopwatch.Elapsed.TotalMilliseconds;
             TickTimes.Add(LastTickMs);
+            TotalTickMs += LastTickMs;
         }
     }
 }

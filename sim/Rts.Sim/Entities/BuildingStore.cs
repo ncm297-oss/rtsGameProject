@@ -11,8 +11,9 @@ namespace Rts.Sim.Entities;
 /// Arrays are sized once from <see cref="SimConfig.BuildingCapacity"/> and never grow. A live building
 /// covers its type's footprint from its anchor <see cref="Cell"/> (the footprint's lowest x, y cell), and
 /// those cells are blocked in the <see cref="NavGrid"/> (<see cref="NavFlags.Building"/>), so to movement a
-/// building is a wall. Read-only outside the sim. Until construction arrives (M3-3) the only way in is
-/// the dev/test command <c>Command.SpawnBuilding</c>, and a building stands at full hit points.
+/// building is a wall. Read-only outside the sim. Since M3-3 a worker's <c>Command.Build</c> places a
+/// construction site (<see cref="UnderConstruction"/>, growing with <see cref="Work"/>); the dev/test
+/// command <c>Command.SpawnBuilding</c> still places a finished building at full hit points.
 /// </remarks>
 public sealed class BuildingStore
 {
@@ -25,6 +26,11 @@ public sealed class BuildingStore
     private readonly int[] _typeId;
     private readonly int[] _cell;
     private readonly int[] _hp;
+    private readonly bool[] _underConstruction;
+    private readonly int[] _work;
+    private readonly long[] _repairProgress;
+    private readonly long[] _repairGold;
+    private readonly long[] _repairWood;
     private readonly int[] _freeList;
     private readonly NavGrid _grid;
     private readonly ImmutableArray<BuildingDef> _defs;
@@ -44,6 +50,11 @@ public sealed class BuildingStore
         _typeId = new int[capacity];
         _cell = new int[capacity];
         _hp = new int[capacity];
+        _underConstruction = new bool[capacity];
+        _work = new int[capacity];
+        _repairProgress = new long[capacity];
+        _repairGold = new long[capacity];
+        _repairWood = new long[capacity];
         _freeList = new int[capacity];
         // Push in reverse so the first spawns take slots 0, 1, 2...
         for (int i = 0; i < capacity; i++)
@@ -71,8 +82,59 @@ public sealed class BuildingStore
     /// <summary>Anchor nav cell (<c>y * Width + x</c>, the footprint's lowest x, y) of each live slot; -1 for a free slot.</summary>
     public ReadOnlySpan<int> Cell => _cell;
 
-    /// <summary>Hit points of each live slot (its type's maximum until combat and construction, M3-3 / M4).</summary>
+    /// <summary>Hit points of each live slot: a site's grow with its <see cref="Work"/> (at least 1); a finished building's start at its type's maximum.</summary>
     public ReadOnlySpan<int> Hp => _hp;
+
+    /// <summary>Whether each live slot is a construction site (M3-3): it blocks its cells, provides nothing, and completes at <see cref="WorkNeeded"/>.</summary>
+    public ReadOnlySpan<bool> UnderConstruction => _underConstruction;
+
+    /// <summary>Construction work done on each site (see <see cref="WorkNeeded"/>).</summary>
+    public ReadOnlySpan<int> Work => _work;
+
+    /// <summary>Work a building of type <paramref name="typeId"/> needs: <c>EconomyConstants.BuildWorkScale</c> (3) x its one-worker build ticks, so n builders adding n + 2 a tick take <c>t x 3 / (n + 2)</c> ticks (docs/02).</summary>
+    public int WorkNeeded(int typeId) => Economy.EconomyConstants.BuildWorkScale * _defs[typeId].BuildTicks;
+
+    /// <summary>The slot of the live building whose footprint covers cell (<paramref name="x"/>, <paramref name="y"/>), or -1.</summary>
+    public int SlotAt(int x, int y)
+    {
+        int w = _grid.Width;
+        for (int i = 0; i < _highWater; i++)
+        {
+            if (!_alive[i]) continue;
+            BuildingDef def = _defs[_typeId[i]];
+            int ax = _cell[i] % w, ay = _cell[i] / w;
+            if (x >= ax && y >= ay && x < ax + def.FootprintWidth && y < ay + def.FootprintHeight) return i;
+        }
+        return -1;
+    }
+
+    /// <summary>Repair accumulator of slot <paramref name="index"/> (M3-3): hit points restored, in fixed point.</summary>
+    internal ref long RepairProgress(int index) => ref _repairProgress[index];
+
+    /// <summary>Gold owed for repair so far, fixed point (see <see cref="RepairProgress"/>).</summary>
+    internal ref long RepairGold(int index) => ref _repairGold[index];
+
+    /// <summary>Wood owed for repair so far, fixed point (see <see cref="RepairProgress"/>).</summary>
+    internal ref long RepairWood(int index) => ref _repairWood[index];
+
+    /// <summary>Sets a site's work and its hit points from it (<c>max(1, maxHp x work / needed)</c>); at the work needed it completes at full hit points. For the construction system and tests.</summary>
+    internal void SetWork(int index, int work)
+    {
+        int needed = WorkNeeded(_typeId[index]);
+        int max = _defs[_typeId[index]].Hp;
+        if (work >= needed)
+        {
+            _work[index] = needed;
+            _underConstruction[index] = false;
+            _hp[index] = max;
+            return;
+        }
+        _work[index] = work;
+        _hp[index] = (int)Math.Max(1L, (long)max * work / needed);
+    }
+
+    /// <summary>Sets slot <paramref name="index"/>'s hit points (repair, tests); the caller keeps them between 1 and the type's maximum.</summary>
+    internal void SetHp(int index, int hp) => _hp[index] = hp;
 
     /// <summary>Total number of slots.</summary>
     public int Capacity => _alive.Length;
@@ -120,10 +182,11 @@ public sealed class BuildingStore
 
     /// <summary>
     /// Places a building of type <paramref name="typeId"/> for <paramref name="owner"/> with its anchor at
-    /// <paramref name="cell"/>, at full hit points, and blocks its footprint (one <see cref="NavGrid.Version"/>
+    /// <paramref name="cell"/>, at full hit points (or, with <paramref name="site"/>, as a construction site with no
+    /// work and 1 hit point), and blocks its footprint (one <see cref="NavGrid.Version"/>
     /// bump). Refuses (false, default handle) without throwing when the store is full or it doesn't <see cref="Fits"/>.
     /// </summary>
-    internal bool Spawn(int owner, int typeId, int cell, out EntityHandle handle)
+    internal bool Spawn(int owner, int typeId, int cell, out EntityHandle handle, bool site = false)
     {
         handle = default;
         if (_freeCount == 0 || !Fits(typeId, cell)) return false;
@@ -134,13 +197,27 @@ public sealed class BuildingStore
         _owner[index] = owner;
         _typeId[index] = typeId;
         _cell[index] = cell;
-        _hp[index] = def.Hp;
+        _hp[index] = site ? 1 : def.Hp;
+        _underConstruction[index] = site;
+        _work[index] = 0;
         _grid.SetBuilding(cell % _grid.Width, cell / _grid.Width, def.FootprintWidth, def.FootprintHeight);
         handle = new EntityHandle(index, _generation[index]);
         return true;
     }
 
-    /// <summary>Removes a live building: its cells reopen (one <see cref="NavGrid.Version"/> bump) and its generation moves on. False for a dead or stale handle. Test seam until destruction (M3-3 / M4).</summary>
+    /// <summary>
+    /// Takes <paramref name="amount"/> hit points from a live building (the damage seam combat uses in M4); at 0 it is
+    /// <see cref="Free"/>d, an opening change. Nothing for a dead or stale handle or an amount below 1.
+    /// </summary>
+    internal void Damage(EntityHandle handle, int amount)
+    {
+        if (amount < 1 || !IsAlive(handle)) return;
+        int i = handle.Index;
+        _hp[i] = amount >= _hp[i] ? 0 : _hp[i] - amount;
+        if (_hp[i] == 0) Free(handle);
+    }
+
+    /// <summary>Removes a live building (destroyed, or a cancelled site): its cells reopen (one <see cref="NavGrid.Version"/> bump, an opening change) and its generation moves on. False for a dead or stale handle.</summary>
     internal bool Free(EntityHandle handle)
     {
         if (!IsAlive(handle)) return false;
@@ -153,6 +230,11 @@ public sealed class BuildingStore
         _typeId[index] = 0;
         _cell[index] = -1;
         _hp[index] = 0;
+        _underConstruction[index] = false;
+        _work[index] = 0;
+        _repairProgress[index] = 0;
+        _repairGold[index] = 0;
+        _repairWood[index] = 0;
         _generation[index]++;
         _freeList[_freeCount++] = index;
         return true;
@@ -160,8 +242,8 @@ public sealed class BuildingStore
 
     /// <summary>
     /// Mixes the store into a state hash the way <see cref="ResourceStore"/> does: capacity, the high-water
-    /// mark, each used slot's generation (and, when alive, owner, type, anchor cell and hit points), then the
-    /// free list above the never-used slots.
+    /// mark, each used slot's generation (and, when alive, owner, type, anchor cell, hit points, construction state,
+    /// work and repair accumulators), then the free list above the never-used slots.
     /// </summary>
     internal void AddToHash(ref StateHasher h)
     {
@@ -176,6 +258,11 @@ public sealed class BuildingStore
             h.Add(_typeId[i]);
             h.Add(_cell[i]);
             h.Add(_hp[i]);
+            h.Add(_underConstruction[i]);
+            h.Add(_work[i]);
+            h.Add((ulong)_repairProgress[i]);
+            h.Add((ulong)_repairGold[i]);
+            h.Add((ulong)_repairWood[i]);
         }
         h.Add(_freeCount);
         for (int k = Capacity - _highWater; k < _freeCount; k++)

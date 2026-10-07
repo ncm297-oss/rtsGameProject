@@ -74,7 +74,8 @@ phases in this fixed order:
    `EconomySystem.Run`: every live unit on a gather loop, in slot order, works, deposits, or starts
    its next walk; walks move in phases 8-9 of the same tick. Runs after the spatial-hash rebuild and
    before phase 7, so a worker that arrived last tick is taken up again before queued orders are
-   looked at; see "Implementation (M3-2)".)
+   looked at; see "Implementation (M3-2)". M3-3: then `ConstructionSystem.Run`, builders and
+   repairers; see "Implementation (M3-3)".)
 5. **Status effects and zones:** expire, tick DoTs and regen, apply zone effects.
 6. **Abilities:** cast timers, effect resolution.
 7. **Orders and targeting:** order queue advance, target acquisition (staggered scans). (M1-7:
@@ -103,7 +104,7 @@ phases in this fixed order:
 `SimRunner` (a Godot `Node`) accumulates real frame time × game speed. While the accumulator holds
 at least 50 ms it runs one tick (max 5 ticks per frame, to avoid a death spiral after a stall).
 Views render at `alpha = accumulator / 50 ms` between each entity's previous and current
-position and facing. Commands from input are stamped with the next tick number.
+position and facing (facing since M2-7: the short way round, see "Implementation (M2-7)"). Commands from input are stamped with the next tick number.
 
 Since M2-1 the accumulator is the pure class `Rts.Sim.ViewApi.FixedStepClock` (unit-tested
 without Godot): `Advance(delta, speed)` returns the ticks to run this frame and `Alpha` is in
@@ -336,9 +337,10 @@ builds, where the JIT inlines nothing, so this builds a 128 × 128 field in abou
 (0.7 ms before) with the same costs and directions. A blocked target cell resolves to the nearest
 passable cell by squared cell distance, ties to the lowest (y, x); `FlowField.NearestPassable` is
 that rule. It searches square rings outward from the cell and stops once a ring can't beat the
-best distance found, so its cost grows with the distance to passable ground, not the map size. Unreachable targets can't happen yet: the nav grid seals every pocket, so all passable
-cells connect, as long as nodes are only removed from exposed sides, which the gather rule
-guarantees (M3-2, BUG-0075). `FlowFieldCache` (on `World.FlowFields`) keeps
+best distance found, so its cost grows with the distance to passable ground, not the map size. Unreachable targets
+are rare: the nav grid seals every pocket at load, nodes are only removed from exposed sides (M3-2, BUG-0075), and no
+building placement may cut passable ground in two (M3-3's never-seal rule, BUG-0078). The one way a pocket can still
+appear is a building that other buildings enclose being destroyed or cancelled: its cells reopen, reachable from nowhere. `FlowFieldCache` (on `World.FlowFields`) keeps
 `FlowFieldCache.CapacityFor(UnitCapacity, cells)` fields: `clamp(UnitCapacity / 8, 32, 128)`, then at
 most `max(32, 64 MiB / (5 bytes × cells))`, so the default map (16,384 cells, 80 KB per field) is
 never memory-capped (512 unit slots: 64 fields, 5 MB; 1024 and up: 128 fields, 10 MB) and a
@@ -1036,6 +1038,9 @@ or recycled handle or another player's unit; a Move or AttackMove also for a tar
 Since M3-2 there are also `Gather` (7, a unit order, Shift-queueable: see "Implementation (M3-2)")
 and the dev command `SpawnBuilding` (6, not queueable), and the states `Gathering` and `Returning`.
 Any other unit order (Move, AttackMove, Stop, HoldPosition) ends a gather loop and keeps the cargo.
+Since M3-3 there are `Build` (8) and `Repair` (10), unit orders for workers (Shift-queueable; a queued
+Build keeps its building type in `UnitStore.QueueTypeId`), `Cancel` (9, not a unit order, not queueable), and
+the state `Building`; see "Implementation (M3-3)". Any other unit order ends building or repairing.
 Not built yet: combat targeting for AttackMove,
 Hold's enemy scanning, `Patrol`, `Attack(target)`, formations and group moves.
 
@@ -1216,10 +1221,90 @@ closed by rule: only exposed nodes are gathered.
   free cell on the rings round it and are ordered to gather once they exist (odd slots the nearest
   mine, even slots the nearest tree). The header ends with `workers N` and the last lines are
   `player P gold G wood W`, only when `--workers` is given (other runs print exactly as before).
-- **Not yet:** construction and player placement, the Camp, `ReturnCargo`, Whirlwind's gather bonus,
-  production, population, depletion events for views. (BUG-0073 and BUG-0077, closing vs opening grid
+- **Not yet:** the Camp as a drop-off in play, `ReturnCargo`, Whirlwind's gather bonus,
+  production, population, depletion events for views (construction and placement: M3-3, below). (BUG-0073 and BUG-0077, closing vs opening grid
   changes, and BUG-0074, wood footprints other than 1 x 1 refused, were done in M3-2b: see "Flow
   fields" and "Local movement".)
+
+### Implementation (M3-3)
+
+Players (and later the AI) place any of their faction's ten buildings, and workers build and repair them (the sim
+half of the M3 criterion "Building placement (ghost preview, validity), construction with multiple builders,
+repair"; the ghost is view work that calls `World.CanPlace`). Closes BUG-0078 by rule: no placement seals ground.
+
+- **Placement rule.** `World.CanPlace(player, typeId, anchorCell, out PlacementError reason)`: public, read-only,
+  allocation-free, and the one rule `Build` applies. `reason` is the first rule broken, in order: `UnknownType`;
+  `WrongFaction` (player p plays faction `p mod factions`, `World.FactionOf`, until a lobby picks them, M6);
+  `OffMap`; `Blocked` (a footprint cell blocked: cliff, border, node, building; or a ramp, or another level than
+  the anchor: `BuildingStore.Fits`); `SealsGround` (below); `UnitInTheWay` (an enemy unit, or an own unit holding
+  position, has its center in the footprint; own units that aren't holding are pushed out instead); `CannotAfford`;
+  `StoreFull`; else `None`. The "explored by the player" rule waits for fog (M4).
+- **Never seal (BUG-0078).** A footprint may be taken only if every two passable cells that connect now still
+  connect without it (`Map.SealCheck`, on `World`, allocation-free). A path through the footprint enters
+  and leaves it through passable cells 4-adjacent to it, so it is enough that those cells still reach each other.
+  The resource placer's ring-then-flood test: when every cell 8-adjacent to the footprint is passable they form a
+  loop round it and the answer is yes at once; otherwise one 4-connected flood from all of them at once, outside the
+  footprint, each carrying its side's label: where two floods meet their labels merge (yes once one is left), and a
+  label whose cells are all expanded without meeting another is a cut-off region (no). A "no" so costs about the
+  pocket it would make, not the map. Unlike
+  the placer it doesn't need the whole map connected beforehand. The dev command `SpawnBuilding` applies it too.
+  A destroyed or cancelled building that other buildings enclosed leaves a pocket (reachable from nowhere); that is
+  allowed, and later placements keep whatever regions exist.
+- **Build command.** `Command.Build(player, worker, typeId, anchor[, queued])` (kind 8, a unit order; `TypeId`
+  and `Position` as for `SpawnBuilding`: the cell holding `Position` is the anchor). Dropped, never thrown, for a dead
+  or foreign handle, a unit not in the `worker` slot (queued or not), or an anchor off the map. At apply: if the
+  player's own site of that type is anchored exactly there, the worker joins it as a builder (several selected
+  workers share one command this way, and it is how "right-click a site to help" works); anything else on that cell
+  drops the command. Otherwise `CanPlace` must say `None`: the cost is paid, the site spawns (a closing change:
+  `Version` and `BlockVersion` bump once), and every own unit whose center lies in the footprint is set down (a
+  position set, not a walk) on the nearest free cell outside it, slot order: the rings of cells round the footprint
+  (ring 1 is the cells 8-adjacent to it), nearest ring first, on the footprint's level, passable and with no other
+  unit's center in it; within a ring the cell nearest the unit, ties to the lower cell index; past
+  `EconomyConstants.PushRings` (8) rings the nearest passable cell. Then the worker is given the site. A dropped
+  Build changes nothing (totals, store, queue and Hold stay). Queued, a Build is checked when it starts (phase 7) and
+  pays then.
+- **Construction.** A site is a `BuildingStore` entry with `UnderConstruction` and `Work` (int);
+  `WorkNeeded(type) = EconomyConstants.BuildWorkScale (3) x buildTicks`. Each tick n builders in reach add
+  n + `BuildWorkBase` (2), so a site takes exactly `ceil(3 t / (n + 2))` ticks (docs/02's `t x 3 / (n + 2)`): a 20 s
+  House takes 400, 300, 200 and 120 ticks with 1, 2, 4 and 8 builders. `Hp = max(1, maxHp x Work / WorkNeeded)`
+  while building; at `WorkNeeded` the site completes at full hit points and its workers go Idle (`popProvided`
+  applies with population, M3-4). Damage to a site is overwritten by the next tick's progress (until combat, M4).
+- **Builders.** `UnitStore.BuildTarget` (a building handle, hashed, reset on Alloc / Free) and state
+  `UnitState.Building` (standing; movement shoves it like a gatherer). A worker walks to a passable cell 4-adjacent
+  to the footprint exactly like a gatherer (`EconomySystem.WalkToFootprint`), works while within
+  `EconomyConstants.Reach`, and standing out of reach walks again every `RetryTicks`. A site under construction is
+  built, a finished building below full hit points repaired. `ConstructionSystem.Run` (phase 4, after gathering)
+  first steps every worker with a target in slot order and counts those in reach per building, then applies work per
+  building in slot order, so the order of builders never matters. Move, AttackMove, Stop, HoldPosition, Gather and
+  another Build or Repair end the order (cargo kept); the target gone, finished, or whole again idles the worker.
+- **Cancel.** `Command.Cancel(player, position)` (kind 9): the player's own site covering the position is freed (an
+  opening change: `Version` bumps, `BlockVersion` doesn't), `floor(cost x (WorkNeeded - Work) / WorkNeeded)` of each
+  resource comes back, and its workers go Idle. Dropped for a finished building, another player's site, or nothing.
+- **Repair.** `Command.Repair(player, worker, position[, queued])` (kind 10): the player's own finished building
+  covering the position, below full hit points; dropped for anything else (full, a site, an enemy's, none). Each
+  repairer in reach restores `maxHp / buildTicks x repair.rateFactor` (0.5) hit points a tick and the owner pays
+  `repair.costFactor` (0.25) `x cost x restored / maxHp` of each resource (docs/02: 50% of the build rate, 25% of
+  the cost, scaled by damage). Both run through per-building fixed-point accumulators (`EconomyConstants.RepairFixedOne`
+  = 2^16, hashed), so whole hit points and whole resources are exact: one worker restores a Keep from 1,200 to 2,400 hp
+  in 1,800 ticks for 34 gold and 34 wood (`floor(0.25 x 275 x 0.5)`), two in 900. Repair stops, and its workers go
+  Idle, when a payment would take a total below 0, or at once when the player has 0 of a resource the building costs.
+  At full hit points the workers go Idle and the accumulators reset.
+- **Damage seam.** `BuildingStore.Damage(handle, amount)` (internal): at 0 hit points the building is freed, an
+  opening change, so flow fields cached before it stay usable. Combat calls it in M4.
+- **Data.** `rules.json` gains `"repair": { "rateFactor": 0.5, "costFactor": 0.25 }` (required; each above 0 and at
+  most 1; a missing `repair` object is one error). `ContentHash` covers both. A building's missing `cost` object is now
+  one error, like a missing `footprint` (BUG-0079).
+- **Hash and replays.** `StateHash` adds each building's `UnderConstruction`, `Work` and repair accumulators, each
+  unit's `BuildTarget` (with the gather fields, only when one of them isn't default, so units without them hash as
+  before) and a queued Build's type id. Replays stay format 3: the new kinds ride in `c` lines. The golden was
+  regenerated for the data hash only (the `repair` block); its checkpoints are byte-identical.
+- **Cost.** Placement and push-out scan the unit store; nothing allocates in apply or per tick. Measured (Debug,
+  this PC, `ConstructionPerfTests`): 500 marching units + 50 workers building 10 sites average 0.98 ms a tick (1.02 ms
+  with the same units and no sites); one `CanPlace` on the 128 map averages 0.0013 ms over every anchor and 0.05 ms at
+  its slowest. The flood borrows the flow-field cache's build queue storage (`FlowFieldCache.BuildScratch`) instead of
+  two map-sized arrays of its own (8 MB on a 1024 map), and clears its visited marks before each flood it runs.
+- **Not yet:** the placement ghost and HUD (view), population and `popProvided`, production, rally points (M3-4),
+  the fog "explored" rule (M4), rubble, real damage (M4), start-location Town Halls (M6), events for views.
 
 ## Abilities, statuses, zones
 
@@ -1433,8 +1518,8 @@ Godot starts children before parents, so `Main._Ready` loads the data and then c
   (arrows), `camera_zoom_in/out` (wheel), `camera_drag` (middle button).
 - **Launch flags** (user args after `--`): `--seed <n>`, `--speed <x>` (clamped 0.25-8),
   `--screenshot <path> --screenshot-after <seconds>` (default 2); later tasks added `--units`,
-  `--zoom`, `--no-hud`, `--debug-overlay`, `--forests`, `--mines` and `--mute` (M2-6, mutes the
-  master audio bus). Bad values log a warning and are ignored. Example: `& $env:GODOT --path game -- --screenshot C:\temp\shot.png --screenshot-after 2`.
+  `--zoom`, `--no-hud`, `--debug-overlay`, `--forests`, `--mines`, `--mute` (M2-6, mutes the
+  master audio bus), `--bench <seconds>` and `--vsync on|off` (M2-7). Bad values log a warning and are ignored. Example: `& $env:GODOT --path game -- --screenshot C:\temp\shot.png --screenshot-after 2`.
 
 ### Implementation (M2-2)
 
@@ -1885,6 +1970,66 @@ Match
   input for every selection and order row above, and a second Match with `--mute` (bus muted,
   counter still runs).
 
+### Implementation (M2-7)
+
+The studio's half of the M2 "Playable" criterion (100 units per player at 60 FPS): a scripted,
+repeatable benchmark, facing interpolation, and a screenshot set. The owner's playtest confirms it.
+
+- **Facing blend.** `UnitViews.Sync` turns each unit to `UnitViews.BlendFacing(PrevFacing, Facing,
+  alpha)`, the same clamped alpha as the position lerp (NaN shows the current tick). The difference
+  is wrapped into [-π, π) before the lerp, so 0.9π to -0.9π turns 0.2π through ±π; an exact half
+  turn wraps to -π, so it always turns the same way. `PrevFacing` is the sim's derived, unhashed
+  start-of-tick copy (M3-2). Pure arithmetic: the 2,000-unit update still allocates 0 bytes.
+- **`--bench <seconds>`** (positive, finite; `0`, negatives and non-numbers warn and are ignored).
+  `Match.Start` adds a `BenchRunner` node. It waits until tick 2 (the armies exist) and any
+  `--screenshot` is saved (the screenshotter then doesn't quit), skips 30 warm-up frames (the
+  first draws of new unit nodes compile pipelines: a one-time ~85 ms frame on the dev PC, load time
+  rather than play), then plays the pure `Rts.Sim.ViewApi.BenchScript` on frame time until the
+  duration ends. One 10 s loop: camera to the local army at the start zoom (0.25 s), box-select the
+  whole screen (0.5 s), Move to the far start block (1 s), four minimap clicks on the map corners
+  (0.25 s each, all inside the first 3 s), camera back to the army, zoom 20 m (1 s) and 60 m (1 s),
+  A + click (2 s), three Shift-queued moves (0.5 s each), H (1 s), S (0.5 s). Every action goes
+  through the real code: `SelectionController.BoxSelect` / `OrderAt` / `BeginAttackMove` +
+  `AttackMoveClick` / `Order` (public since M2-7; the mouse and key handlers call the same
+  methods), `Minimap.JumpTo` (the camera directly under `--no-hud`), `RtsCamera.SetZoom`. Edge
+  panning is off during a bench.
+- **Measurement.** Each timed frame's `_Process` delta goes into `Rts.Sim.ViewApi.FrameTimeStats`
+  (a 0.01 ms histogram up to 250 ms, so no per-frame allocation; percentiles are bin edges);
+  `fps` is the mean of `Performance.Monitor.TimeFps` over the frames (Godot updates it once a
+  second); ticks and their mean cost come from `SimRunner.TickTimes.Total` and the new
+  `SimRunner.TotalTickMs`. At the end it prints `Bench worst frame <ms> at <s>, after step <step>`
+  and then the one result line, and quits with 0:
+  `bench: seconds S frames N avg A ms p50 B ms p99 C ms worst D ms fps F ticks T avgTick U ms`.
+  Nothing else starts with `bench:`.
+- **`--vsync on|off`** sets `DisplayServer.WindowSetVsyncMode` (skipped headless). Without it the
+  project default (vsync on) holds.
+- **Figures** (dev PC: i7-13700F, RTX 4070, Debug build, window 1920 x 1061 because the taskbar
+  clamps a 1920 x 1080 window, default 128 map with 12 forests / 8 mines, HUD and sound on, 60 s):
+
+  | Run | avg | p50 | p99 | worst | fps | avg tick |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | 100 / player, vsync off | 0.72 ms | 0.70 ms | 1.31 ms | 10.6 ms | 1,372 | 0.24 ms |
+  | 100 / player, vsync on, 60 Hz display | 16.67 ms | 16.67 ms | 16.67 ms | 16.7 ms | 59.5 | 0.24 ms |
+  | 100 / player, vsync on, 120 Hz display | 8.34 ms | 8.34 ms | 8.34 ms | 9.1 ms | 118.5 | 0.24 ms |
+  | 1,000 / player, zoom 60, vsync off | 2.26 ms | 2.09 ms | 3.34 ms | 14.6 ms | 437 | 3.03 ms |
+
+  The frame budget at 60 FPS is 16.7 ms; the 100-unit case uses under 5% of it. An earlier
+  1,000-unit run measured avg 3.85 ms / p99 6.26 ms while other work shared the PC.
+- **Screenshot set** (windowed, kept out of the repo): the overview (`--zoom 60 --screenshot <png>
+  --screenshot-after 3`), the overlay (`--debug-overlay --screenshot <png> --screenshot-after 3`), and
+  `res://tests/MarchShot.tscn -- --out-dir <dir>`, which box-selects the army, orders it east
+  at 4x, and once 10 own units stand on ramp cells switches to 1x, puts the camera on them at zoom 30
+  and saves `ramp-crossing.png` plus `minimap-corner.png` (the bottom-left 240 px of the same frame).
+- **Tests:** `Rts.Sim.Tests/ViewApi/BenchScriptTests` (step order, loop, end of run, one step per
+  call, bad durations, 0 bytes) and `FrameTimeStatsTests` (mean, percentiles, spikes past the
+  histogram, 0 bytes); `res://tests/BenchTest.tscn` ("BENCH TEST PASS"): `--bench` / `--vsync`
+  parsing; the game binary started headless as a child process with `--bench 2 --mute` (exit 0,
+  exactly one line in the documented shape, under 7 s, no ERROR) and with `--bench 0 | -3 | abc`
+  (a WARNING, no line, no ERROR); an in-process `--bench 3` (selection 0 -> the whole army,
+  commands enqueued, four minimap jumps to four different camera points); and, windowed only, a
+  10 s bench at 100 units per player with vsync off that must average under 16.7 ms with p99 under
+  33 ms (headless prints "BENCH TEST SKIP" for that row). `UnitViewsTest` adds the facing-blend rows.
+
 ## AI architecture
 
 The AI lives in `Rts.Sim.Ai`, inside the sim assembly, because it must be deterministic (it uses
@@ -2022,6 +2167,9 @@ AiPlayer
   exit code 0 (1 if the file can't be written). Edge panning is off during it so the mouse can't
   move the shot. Headless runs print "Screenshot unavailable in headless mode" and quit 0 without
   an ERROR line. `--seed <n>` and `--speed <x>` pick the map and game speed.
+- **Benchmark** (M2-7): `& $env:GODOT --path game -- --bench 60 [--vsync off] [--units n] [--zoom m] [--mute] [--no-hud]`
+  plays a scripted 10 s loop of selections, orders, minimap jumps and zooms for that many seconds
+  and prints one `bench: ...` line of frame-time figures, then quits 0. Details in "Implementation (M2-7)".
 - **Debug overlay** (M2-5; F12, input action `debug_overlay`; launch flag `--debug-overlay` starts it
   on, so `--screenshot` can capture it): the nav grid on the ground, the flow-field arrows of the
   selection's goal around the camera, a tick-time graph of the last 120 ticks with the 4 ms budget

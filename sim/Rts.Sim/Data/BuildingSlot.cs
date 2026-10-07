@@ -1,7 +1,7 @@
 namespace Rts.Sim.Data;
 
 /// <summary>The ten template building slots every faction fills (docs/02 "Buildings").</summary>
-/// <remarks>Order matches <see cref="DataLimits.BuildingSlotIds"/>, which holds the JSON spelling. M3-2 ships the Town Hall only.</remarks>
+/// <remarks>Order matches <see cref="DataLimits.BuildingSlotIds"/>, which holds the JSON spelling. Every faction fills all ten (D1); M3-3 makes them placeable.</remarks>
 public enum BuildingSlot
 {
     /// <summary>Drop-off, population, trains workers, researches Age II.</summary>

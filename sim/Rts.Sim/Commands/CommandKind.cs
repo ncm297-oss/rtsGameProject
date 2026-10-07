@@ -26,4 +26,13 @@ public enum CommandKind
 
     /// <summary>Orders worker <see cref="Command.Unit"/> to gather the resource node at <see cref="Command.Position"/> (any point of its footprint), carrying loads to drop-offs until told otherwise (M3-2).</summary>
     Gather = 7,
+
+    /// <summary>Orders worker <see cref="Command.Unit"/> to build a <see cref="Command.TypeId"/> with its anchor cell at <see cref="Command.Position"/>: places the site (paying its cost) or joins the own site of that type already anchored there (M3-3).</summary>
+    Build = 8,
+
+    /// <summary>Cancels the player's own construction site covering <see cref="Command.Position"/>, refunding the unbuilt fraction of its cost (M3-3; not a unit order).</summary>
+    Cancel = 9,
+
+    /// <summary>Orders worker <see cref="Command.Unit"/> to repair the player's own damaged building covering <see cref="Command.Position"/> (M3-3).</summary>
+    Repair = 10,
 }

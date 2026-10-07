@@ -252,4 +252,44 @@ public class AllocationTests
         Assert.Equal(100 * (runs + 1), taken);
         Assert.Equal(versionBefore + runs * 100, sim.World.NavGrid.Version); // 50 spawns + 50 frees per run
     }
+
+    /// <summary>M3-3 criterion 11: 100 ticks holding a Build (new site, joined), a Cancel, a Repair and a completion, plus CanPlace queries, allocate nothing.</summary>
+    [Fact]
+    public void Tick_WithABuildACancelARepairAndACompletion_AllocatesNothing()
+    {
+        Simulation sim = BuildMaps.NewSim(ResourceMaps.Flat(64, 40));
+        Entities.EntityHandle keep = GatherMaps.Building(sim, 4, 4);
+        Entities.EntityHandle[] repairers = BuildMaps.WorkersRound(sim, 4, 4, 4, 4, 2);
+        Entities.EntityHandle[] builders = Enumerable.Range(0, 3).Select(i => GatherMaps.Unit(sim, GatherMaps.At(sim, 18 + 2 * i, 30))).ToArray();
+        BuildMaps.Give(sim, 0, 1_000_000, 1_000_000);
+        Entities.BuildingStore b = sim.World.Buildings;
+        int run = 0, sink = 0;
+        Action block = () =>
+        {
+            int x = 16 + 3 * run, y = 26; // sites a few cells from the builders, so they arrive and work
+            sim.Enqueue(Command.Build(0, builders[0], BuildMaps.House, GatherMaps.At(sim, x, y)));
+            sim.Enqueue(Command.Build(0, builders[1], BuildMaps.House, GatherMaps.At(sim, x, y)));
+            sim.Enqueue(Command.Build(0, builders[2], BuildMaps.House, GatherMaps.At(sim, x, y + 5)));
+            sim.Enqueue(Command.Repair(0, repairers[0], GatherMaps.At(sim, 5, 5)));
+            sim.Enqueue(Command.Repair(0, repairers[1], GatherMaps.At(sim, 5, 5)));
+            sim.Tick();
+            sim.Tick();
+            for (int c = 0; c < 64 * 40; c += 7)
+                if (sim.World.CanPlace(0, GatherMaps.Keep, c, out _)) sink++;
+            int k = BuildMaps.SiteAt(sim, x, y);
+            b.SetWork(k, b.WorkNeeded(BuildMaps.House) - 40); // completes inside the block
+            sim.Enqueue(Command.Cancel(0, GatherMaps.At(sim, x, y + 5)));
+            for (int t = 0; t < 98; t++) sim.Tick();
+            run++;
+        };
+        Action damage = () => b.Damage(keep, 300);
+        damage();
+        block(); // warm-up: JIT every path once
+        Assert.False(b.UnderConstruction[BuildMaps.SiteAt(sim, 16, 26)]);
+        AllocationProbe.AssertZero(block, setup: damage);
+        Assert.True(sink > 0);
+        Assert.True(b.Hp[keep.Index] > 2400 - 600, "the repairers worked");
+        Assert.Equal(-1, BuildMaps.SiteAt(sim, 16 + 3 * (run - 1), 31)); // cancelled
+        Assert.False(b.UnderConstruction[BuildMaps.SiteAt(sim, 16 + 3 * (run - 1), 26)]); // completed
+    }
 }

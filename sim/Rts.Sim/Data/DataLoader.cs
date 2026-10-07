@@ -170,6 +170,7 @@ public static class DataLoader
         RateJson? rate = c.Obj(j.GatherRate, "gatherRate");
         MinesJson? start = c.Obj(j.StartMines, "startMines");
         MinesJson? exp = c.Obj(j.ExpansionMines, "expansionMines");
+        RepairJson? repair = c.Obj(j.Repair, "repair");
         return new RulesDef
         {
             StartingGold = c.Int(j.StartingGold, "startingGold", 0),
@@ -185,7 +186,21 @@ public static class DataLoader
             ExpansionMineGold = c.Int(exp?.Gold, "expansionMines.gold", 1),
             TreeWood = c.Int(j.TreeWood, "treeWood", 1),
             NodeSearchRadius = (float)c.Pos(j.NodeSearchRadius, "nodeSearchRadius"),
+            RepairRateFactor = repair == null ? 0f : Factor(c, repair.RateFactor, "repair.rateFactor"),
+            RepairCostFactor = repair == null ? 0f : Factor(c, repair.CostFactor, "repair.costFactor"),
         };
+    }
+
+    /// <summary>A fraction above 0 and at most 1 (a missing <c>repair</c> object is one error, reported by the caller).</summary>
+    private static float Factor(Checker c, double? value, string path)
+    {
+        double f = c.Pos(value, path);
+        if (f > 1)
+        {
+            c.Error(path, $"{f} is above the maximum 1");
+            return 0f;
+        }
+        return (float)f;
     }
 
     /// <summary>Resource node types, indexed by id in ordinal order of their string ids; a repeated id is an error at its second definition.</summary>
@@ -300,8 +315,9 @@ public static class DataLoader
                 FootprintHeight = fp == null ? 0 : c.Side(fp.Height, p + ".footprint.height"),
                 Hp = c.Int(b.Hp, p + ".hp", 1),
                 Armor = c.Int(b.Armor, p + ".armor", 0),
-                CostGold = c.Int(cost?.Gold, p + ".cost.gold", 0),
-                CostWood = c.Int(cost?.Wood, p + ".cost.wood", 0),
+                // A missing cost is one error, like a missing footprint (BUG-0079).
+                CostGold = cost == null ? 0 : c.Int(cost.Gold, p + ".cost.gold", 0),
+                CostWood = cost == null ? 0 : c.Int(cost.Wood, p + ".cost.wood", 0),
                 BuildTicks = c.Ticks(b.BuildTime, p + ".buildTime", 1),
                 HalfPopProvided = Math.Max(halfPop, 0),
                 DropOff = b.DropOff ?? false,

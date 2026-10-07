@@ -37,6 +37,13 @@ internal sealed class RulesJson
     public MinesJson? ExpansionMines { get; set; }
     public int? TreeWood { get; set; }
     public double? NodeSearchRadius { get; set; }
+    public RepairJson? Repair { get; set; }
+}
+
+internal sealed class RepairJson
+{
+    public double? RateFactor { get; set; }
+    public double? CostFactor { get; set; }
 }
 
 internal sealed class RateJson

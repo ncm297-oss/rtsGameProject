@@ -82,6 +82,9 @@ public sealed class FlowFieldCache
     /// <summary>Maximum number of cached fields.</summary>
     public int Capacity => _fields.Length;
 
+    /// <summary>The field builder's queue storage (3 ints a cell), holding nothing between builds: the never-seal check borrows it (M3-3), so a 1024 map doesn't pay 8 MB more for it.</summary>
+    internal int[] BuildScratch => _queue.Entries;
+
     /// <summary>Number of fields built so far.</summary>
     public int Count => _count;
 

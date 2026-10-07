@@ -70,7 +70,7 @@ public partial class UnitViews : Node3D
         if (Runner?.Simulation is Simulation sim) Sync(sim.World, (float)Runner.Alpha);
     }
 
-    /// <summary>Places every live unit at its interpolated position and hides dead slots. No allocation once each slot has its node.</summary>
+    /// <summary>Places every live unit at its interpolated position and facing and hides dead slots. No allocation once each slot has its node.</summary>
     public void Sync(World world, float alpha)
     {
         UnitStore u = world.Units;
@@ -100,7 +100,8 @@ public partial class UnitViews : Node3D
                 _shown[i] = true;
             }
             Vector3 ground = GroundPoint(world, i, alpha);
-            view.Transform = new Transform3D(new Basis(Vector3.Up, Yaw(u.Facing[i])), ground + new Vector3(0f, _halfHeight[type], 0f));
+            float facing = BlendFacing(u.PrevFacing[i], u.Facing[i], alpha);
+            view.Transform = new Transform3D(new Basis(Vector3.Up, Yaw(facing)), ground + new Vector3(0f, _halfHeight[type], 0f));
         }
     }
 
@@ -112,6 +113,20 @@ public partial class UnitViews : Node3D
         float a = Math.Clamp(float.IsNaN(alpha) ? 1f : alpha, 0f, 1f);
         System.Numerics.Vector2 p = System.Numerics.Vector2.Lerp(u.PrevPosition[slot], u.Position[slot], a);
         return new Vector3(p.X, TerrainHeight.At(world.Heightmap, p.X, p.Y), p.Y);
+    }
+
+    /// <summary>A unit's interpolated sim facing: from <paramref name="prev"/> toward <paramref name="current"/> the short way round by alpha (clamped to [0, 1] like <see cref="GroundPoint"/>).</summary>
+    /// <remarks>
+    /// The difference is wrapped into [-π, π), so 0.9π to -0.9π turns 0.2π through ±π, not 1.8π
+    /// back through 0. An exact half turn wraps to -π, so it always turns the same way. The result
+    /// is not wrapped: it may leave [-π, π] by up to π, which <see cref="Yaw"/> doesn't mind.
+    /// </remarks>
+    public static float BlendFacing(float prev, float current, float alpha)
+    {
+        float a = Math.Clamp(float.IsNaN(alpha) ? 1f : alpha, 0f, 1f);
+        float d = current - prev;
+        d -= Mathf.Floor((d + Mathf.Pi) / Mathf.Tau) * Mathf.Tau;
+        return prev + d * a;
     }
 
     /// <summary>Godot yaw (radians about +Y) that turns a node's forward (-Z) to the sim facing.</summary>

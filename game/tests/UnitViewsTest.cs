@@ -11,7 +11,7 @@ using NVector2 = System.Numerics.Vector2;
 
 namespace Rts.Game.Tests;
 
-/// <summary>M2-2: unit views interpolate without extrapolating, stand on the terrain, face the sim facing, reuse their nodes, and update 2,000 units without allocating.</summary>
+/// <summary>M2-2: unit views interpolate without extrapolating, stand on the terrain, face the sim facing, reuse their nodes, and update 2,000 units without allocating; M2-7: facing blends PrevFacing to Facing the short way.</summary>
 /// <remarks>
 /// Headless. Run: <c>&amp; $env:GODOT --headless --path game res://tests/UnitViewsTest.tscn</c>; prints
 /// "UNITVIEWS TEST PASS" and exits 0, or prints each failure and exits 1. It drives its own
@@ -85,12 +85,15 @@ public partial class UnitViewsTest : Node
         foreach (float facing in new[] { Mathf.Pi / 2f, -Mathf.Pi / 2f, Mathf.Pi / 4f, -3f * Mathf.Pi / 4f })
         {
             u.Facing[0] = facing;
+            u.PrevFacing[0] = facing; // a unit not turning this tick
             views.Sync(world, 0.5f);
             Vector3 fwd = -views.ViewOf(0)!.Basis.Z;
             var dir = new Vector3(Mathf.Cos(facing), 0f, Mathf.Sin(facing)); // sim (x, y) is Godot (x, z)
             Check(fwd.DistanceTo(dir) < 1e-3f, $"facing {facing:F3}: node forward {fwd}, want {dir}");
         }
+        FacingBlendRows(views, world);
         u.Facing[0] = f;
+        u.PrevFacing[0] = f;
 
         // Pooling: a freed slot hides its node; a respawn into it (LIFO free list) reuses it.
         int nodes = views.NodeCount;
@@ -159,6 +162,40 @@ public partial class UnitViewsTest : Node
         Check(views.NodeCount == capacity, $"{views.NodeCount} nodes for {capacity} slots");
         Check(views.MeshCount == meshes && views.MaterialCount == materials, "meshes or materials created after Bind");
         Check(views.MeshCount == data.Units.Length && views.MaterialCount == data.Factions.Length, "one mesh per type, one material per faction");
+    }
+
+    // M2-7: yaw follows lerp(PrevFacing, Facing) by alpha the short way round (wrap at ±π), never past the current tick.
+    private void FacingBlendRows(UnitViews views, World world)
+    {
+        UnitStore u = world.Units;
+        float pi = Mathf.Pi;
+        Check(Mathf.Abs(UnitViews.BlendFacing(0f, pi / 2f, 0.5f) - pi / 4f) <= 1e-4f, $"0 -> π/2 at 0.5 gives {UnitViews.BlendFacing(0f, pi / 2f, 0.5f)}, want π/4");
+        float across = UnitViews.BlendFacing(0.9f * pi, -0.9f * pi, 0.5f);
+        Check(Mathf.Abs(Mathf.Abs(across) - pi) <= 1e-4f, $"0.9π -> -0.9π at 0.5 gives {across}, want ±π (through the wrap)");
+        float quarter = UnitViews.BlendFacing(0.9f * pi, -0.9f * pi, 0.25f);
+        Check(Mathf.Abs(quarter - 0.95f * pi) <= 1e-4f, $"0.9π -> -0.9π at 0.25 gives {quarter}, want 0.95π (the short way)");
+        float back = UnitViews.BlendFacing(-0.9f * pi, 0.9f * pi, 0.5f);
+        Check(Mathf.Abs(Mathf.Abs(back) - pi) <= 1e-4f, $"-0.9π -> 0.9π at 0.5 gives {back}, want ±π");
+        // A half turn in one tick: deterministic, the same way every time.
+        float half1 = UnitViews.BlendFacing(0f, pi, 0.5f), half2 = UnitViews.BlendFacing(0f, pi, 0.5f);
+        Check(half1 == half2 && Mathf.Abs(Mathf.Abs(half1) - pi / 2f) <= 1e-4f, $"0 -> π at 0.5 gives {half1} / {half2}, want ±π/2 and the same twice");
+        Check(Mathf.Abs(UnitViews.BlendFacing(0.3f, 1.2f, 0f) - 0.3f) <= 1e-6f && Mathf.Abs(UnitViews.BlendFacing(0.3f, 1.2f, 1f) - 1.2f) <= 1e-6f,
+            "alpha 0 / 1 should give PrevFacing / Facing");
+        Check(Mathf.Abs(UnitViews.BlendFacing(0.3f, 1.2f, 1.5f) - 1.2f) <= 1e-6f && Mathf.Abs(UnitViews.BlendFacing(0.3f, 1.2f, -1f) - 0.3f) <= 1e-6f
+            && Mathf.Abs(UnitViews.BlendFacing(0.3f, 1.2f, float.NaN) - 1.2f) <= 1e-6f, "alpha outside [0, 1] or NaN should clamp like the position");
+
+        // The node itself: PrevFacing 0, Facing π/2, alpha 0.5 faces π/4 on the ground; 0.9π -> -0.9π faces -x.
+        (float prev, float cur, float want)[] rows = { (0f, pi / 2f, pi / 4f), (0.9f * pi, -0.9f * pi, pi) };
+        foreach ((float prev, float cur, float want) in rows)
+        {
+            u.PrevFacing[0] = prev;
+            u.Facing[0] = cur;
+            views.Sync(world, 0.5f);
+            Vector3 fwd = -views.ViewOf(0)!.Basis.Z;
+            var dir = new Vector3(Mathf.Cos(want), 0f, Mathf.Sin(want));
+            GD.Print($"facing blend {prev:F3} -> {cur:F3} at 0.5: node forward {fwd}, want {dir}");
+            Check(fwd.DistanceTo(dir) < 1e-3f, $"facing blend {prev:F3} -> {cur:F3}: node forward {fwd}, want {dir}");
+        }
     }
 
     private void CheckPlaced(UnitViews views, World world, int slot, float alpha, NVector2 expected, string what)

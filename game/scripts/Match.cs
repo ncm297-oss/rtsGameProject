@@ -13,6 +13,9 @@ public partial class Match : Node3D
 {
     private SimRunner _runner = null!;
 
+    /// <summary>The <c>--bench</c> runner, or null for a normal run.</summary>
+    public BenchRunner? Bench { get; private set; }
+
     public override void _Ready()
     {
         _runner = GetNode<SimRunner>("SimRunner");
@@ -37,7 +40,10 @@ public partial class Match : Node3D
 
         var camera = GetNode<RtsCamera>("RtsCamera");
         camera.SetMap(map.Width, map.Height);
-        camera.EdgePanEnabled = options.ScreenshotPath == null;
+        // Scripted runs: the mouse must not move the shot or the benchmark.
+        camera.EdgePanEnabled = options.ScreenshotPath == null && options.BenchSeconds == null;
+        if (options.Vsync is bool vsync && DisplayServer.GetName() != "headless")
+            DisplayServer.WindowSetVsyncMode(vsync ? DisplayServer.VSyncMode.Enabled : DisplayServer.VSyncMode.Disabled);
 
         var units = GetNode<UnitViews>("World3D/UnitViews");
         units.Bind(data, sim.World.Units.Capacity);
@@ -53,17 +59,26 @@ public partial class Match : Node3D
 
         var hud = GetNode<CanvasLayer>("Hud");
         hud.Visible = !options.NoHud;
+        Minimap? minimap = null;
         if (!options.NoHud)
         {
             // Player p plays faction p until the M6 lobby, so a player's dot colour is that faction's.
             var playerRgb = new uint[sim.World.Config.PlayerCount];
             for (int p = 0; p < playerRgb.Length; p++) playerRgb[p] = data.Factions[p % data.Factions.Length].PrimaryColor;
-            hud.GetNode<Minimap>("Minimap").Init(_runner, camera, selection, playerRgb);
+            minimap = hud.GetNode<Minimap>("Minimap");
+            minimap.Init(_runner, camera, selection, playerRgb);
         }
 
         GetNode<DebugOverlay>("DebugOverlay").Init(_runner, selection, camera,
             GetNode<NavOverlayView>("World3D/NavOverlay"), GetNode<FlowArrowsView>("World3D/FlowArrows"), options.DebugOverlay);
-        GetNode<Screenshotter>("Screenshotter").Arm(options.ScreenshotPath, options.ScreenshotAfter);
+        var shot = GetNode<Screenshotter>("Screenshotter");
+        shot.Arm(options.ScreenshotPath, options.ScreenshotAfter, quitAfter: options.BenchSeconds == null);
+        if (options.BenchSeconds is double benchSeconds)
+        {
+            Bench = new BenchRunner { Name = "BenchRunner" };
+            AddChild(Bench);
+            Bench.Init(_runner, selection, camera, minimap, shot, benchSeconds, camera.Zoom);
+        }
         // The seed printed is the one the sim uses (BUG-0041: the long export printed 2^64-1 as -1).
         ResourcePlacement placed = sim.World.ResourcePlacement;
         GD.Print($"Match started: seed {unchecked((ulong)_runner.Seed)}, map {map.Width} x {map.Height}, " +

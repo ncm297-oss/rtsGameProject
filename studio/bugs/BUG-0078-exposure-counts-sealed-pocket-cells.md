@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-06-1503, task M3-2 |
 | System | economy (exposure rule, stand-cell choice) vs buildings sealing pockets |
-| Fixed by | |
+| Fixed by | b4b423c (M3-3): the never-seal rule `Map/SealCheck` behind `World.CanPlace` / `Command.Build` and the dev `SpawnBuilding`; `NeverSealTests`, QA `ConstructionQaTests` (every anchor vs an independent flood oracle), `EconomyQaTests` row now asserts the sealing Keep is refused `SealsGround`. Residual (a Cancel or destruction of an enclosed building reopens a pocket): BUG-0093, S3, sim hardening |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~ATreeExposedOnlyToAPocketSealedByBuildings_IsNotWhereTheWorkerEndsUpStuck"`
