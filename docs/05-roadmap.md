@@ -9,8 +9,8 @@ Status legend: **Next** = start here, **Planned** = not started, **Done** = acce
 | --- | --- | --- | --- |
 | M0 | Environment & skeleton | **Done** (2026-10-03) | Tools installed, empty projects build, tests and headless boot pass |
 | M1 | Core sim, no graphics | **Done** (2026-10-06, Producer sign-off) | 200 units path across the map deterministically, fast |
-| M2 | Presentation | **In progress** (view track, started 2026-10-05; 9 / 10) | Move an army around a 3D map |
-| M3 | Economy & buildings | **In progress** (sim + data tracks, started 2026-10-06-1255; 2 / 8) | Build a Malazan base |
+| M2 | Presentation | **In progress** (view track, started 2026-10-05; 10 / 10 criteria; end-of-milestone hardening session, then sign-off) | Move an army around a 3D map |
+| M3 | Economy & buildings | **In progress** (sim + data tracks, started 2026-10-06-1255; 3 / 8) | Build a Malazan base |
 | M4 | Combat, fog, abilities | Planned | Malazan vs. Whirlwind armies fight with abilities and fog |
 | M5 | AI opponent | Planned | Lose to a Whirlwind AI |
 | M6 | Game shell & real art | Planned | A friend can play it |
@@ -175,7 +175,17 @@ listed in the retro. Owner may revisit._
       for the M6 setting; `game/tests/SfxTest.tscn`, QA `QaM26Test.tscn` (clip audit, spam at 2,000
       units, 0 bytes per play). Nobody could listen unattended: the owner's ears are the last check
       (STATE "For your review"). BUG-0087 (S3, a sound playing at quit leaks an ObjectDB warning).)_
-- [ ] Playable: the owner moves an army of 100 placeholder units around a generated map at 60 FPS.
+- [x] Playable: the owner moves an army of 100 placeholder units around a generated map at 60 FPS.
+      _(studio half, session 2026-10-06-2114, task M2-7: `--bench <seconds>` (`BenchRunner` + pure
+      `ViewApi.BenchScript` / `FrameTimeStats`: box-select, order, four minimap corner jumps, zoom 20 / 60,
+      A + click, three Shift-queued moves, H, S, looping every 10 s; one `bench:` line, exit 0), `--vsync on|off`,
+      `UnitViews.BlendFacing` (short-arc `PrevFacing` → `Facing`), a four-shot screenshot set (`MarchShot.tscn`).
+      Measured windowed, HUD + sound, default 12 / 8 map, 100 units per player, 60 s: avg 0.72 ms / p99 1.31 ms
+      per frame with vsync off (1,372 fps); 59.5 fps on a 60 Hz display with vsync on; 1,000 per player at zoom 60:
+      avg 2.26 / p99 3.34 ms. Pinned by `BenchTest.tscn` (avg < 16.7, p99 < 33 ms, windowed only). The owner's own
+      playtest is the last check (STATE "For your review"). Open for the M2 hardening session: BUG-0101 (S3, the
+      bench's "order across" only moves the army ~17 m), BUG-0102 (S3, `fps` field biased low on short runs),
+      BUG-0103 (S4 nits).)_
 
 ## M3 — Economy & buildings
 
@@ -204,14 +214,31 @@ listed in the retro. Owner may revisit._
       workers 0.92 ms a tick. Open: BUG-0077 (S3, a building dropped on a marching column makes half
       give up: M3-2b), BUG-0078 (S3, exposure counts a sealed pocket's cell: M3-3), BUG-0079 (S4
       nits), BUG-0073 (S3, continuous felling starves fields: M3-2b, next).)_
-- [ ] Building placement (ghost preview, validity), construction with multiple builders, repair.
+- [x] Building placement (ghost preview, validity), construction with multiple builders, repair.
+      _(sim half, session 2026-10-06-2114, task M3-3: `World.CanPlace(player, type, anchor, out PlacementError)`
+      (public, read-only, the one rule `Build` applies; reasons in order: UnknownType, WrongFaction, OffMap,
+      Blocked, SealsGround, UnitInTheWay, CannotAfford, StoreFull), the never-seal rule `Map/SealCheck`
+      (closes BUG-0078 for placements; the dev `SpawnBuilding` obeys it too), `Command.Build` (kind 8; pays and
+      places a site, or joins an own site at that anchor; own non-holding units in the footprint are set down on
+      the nearest free cell outside), construction `WorkNeeded = 3 x buildTicks`, n builders add n + 2 a tick
+      (docs/02 `t x 3 / (n + 2)`: a House takes 400 / 300 / 200 / 120 ticks with 1 / 2 / 4 / 8), `Command.Cancel`
+      (kind 9, floor refund of the unbuilt fraction, an opening change), `Command.Repair` (kind 10; `rules.json`
+      `repair.rateFactor` 0.5 / `costFactor` 0.25, fixed-point accumulators, stops when the player can't pay),
+      `BuildingStore.Damage` seam (0 hp frees, an opening change), hash + replay (format 3; golden regenerated
+      for `data-hash` only). QA: never-seal matches an independent flood oracle on ~9,700 verdicts, conservation
+      exact, twins identical, 0 B/tick; felling + building + 500 marchers 1.17 ms avg. The ghost preview and HUD
+      are the view's part (M3 HUD criterion). Open: BUG-0091 (S3, refused Builds each run the seal flood),
+      BUG-0093 (S3, a cancelled enclosed site leaves a pocket: BUG-0078's symptom via Cancel), BUG-0092 (S4 nits).)_
 - [ ] Production queues (5 slots), rally points, population and cap, refunds on cancel.
 - [ ] Age II research and unlocks; Forge upgrades.
 - [ ] Malazan and Whirlwind factions fully defined in data (units, buildings, techs).
       _(In progress, data track: units landed in M1-2 (7 per faction); all ten buildings per faction in
       session 2026-10-06-1744, task D1 (`Content/BuildingContentTests`, QA `QA/Content/BuildingRosterQaTests`;
-      descriptions carry "needs Age II" in text only until a `requires` field exists: BUG-0090, S4). Techs
-      wait for the `techs.json` schema (M3-5).)_
+      descriptions carry "needs Age II" in text only until a `requires` field exists: BUG-0090, S4). Session
+      2026-10-06-2114, task D2: the faction pages are the design source for every unit and building number
+      (`Content/UnitContentTests` A-G pin `units.json` to the pages' Units tables; the pages' Buildings tables
+      gained hp / armor / cost / build time / footprint / provides / requires, pinned by `BuildingContentTests.G`;
+      QA `QA/Content/UnitRosterQaTests`); no data value changed. Techs wait for the `techs.json` schema (M3-5).)_
 - [ ] HUD: resource bar, selection panel, command card with grid hotkeys, worker build menus.
 - [ ] Playable: the owner builds a full Malazan base and reaches Age II.
 

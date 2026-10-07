@@ -4,7 +4,7 @@ The dashboard. The Producer rewrites it at the end of every session. **Owner: re
 you" first.** "For your review" (further down) is non-blocking: what the studio built or decided
 on its own, explained in terms of what you'd see in the game.
 
-_Last updated: 2026-10-06 (session 2026-10-06-1744, ACCEPT all three tracks: sim M3-2b, view M2-6, data D1)._
+_Last updated: 2026-10-06 (session 2026-10-06-2114, ACCEPT all three tracks: sim M3-3, view M2-7, data D2)._
 
 ## Waiting on you
 
@@ -18,21 +18,21 @@ _Last updated: 2026-10-06 (session 2026-10-06-1744, ACCEPT all three tracks: sim
 
 | Field | Value |
 | --- | --- |
-| Sim: milestone | M3 — Economy & buildings (started 2026-10-06-1255); 2 / 8 criteria; M3-2b closed BUG-0073 / 0074 / 0077 |
-| Sim: next task | **M3-3 building placement + construction** (validity incl. "never seals ground" (BUG-0078), `Command.Build`, builders `t x 3 / (n + 2)`, costs / refunds, destruction, repair) · feature · QA full; the sim hardening session follows it (4 / 4) |
+| Sim: milestone | M3 — Economy & buildings (started 2026-10-06-1255); 3 / 8 criteria; M3-3 closed BUG-0078 (residual BUG-0093) |
+| Sim: next task | **Sim hardening session** (4 / 4): BUG-0093 pocket after Cancel, BUG-0091 refused-Build floods, BUG-0080 design, BUG-0081 M6 note, BUG-0092 / 0079 / 0076 / 0071 / 0072 · hardening · QA standard; then M3-4 production + population |
 | Sim: gate | **GO** |
-| View: milestone | M2 — Presentation (started 2026-10-05); 9 / 10 criteria (left: M2-7 playable check) |
-| View: next task | **M2-7 playable check** (100 units at 60 FPS on the default map with HUD + sound, `PrevFacing` blending, screenshot set) · feature · QA standard; then the M2 hardening session (BUG-0069 / 0070 / 0083 / 0084 / 0085 / 0086 / 0087 / 0088) → M2 sign-off |
+| View: milestone | M2 — Presentation (started 2026-10-05); 10 / 10 criteria ticked (M2-7 landed); sign-off after the hardening session |
+| View: next task | **M2 end-of-milestone hardening** (BUG-0101 / 0102 bench, 0087, 0085, 0083, 0069, 0103 / 0084 / 0086 / 0088 / 0070) → Producer signs M2 off · hardening · QA standard; then M3 view side (resource bar, build ghost) |
 | View: gate | **GO** |
-| Data: milestone | M3 — "factions fully defined in data": units ✓ (M1-2), buildings ✓ (D1, review below), techs wait for the M3-5 schema |
-| Data: next task | **Owner review tweaks** from the inbox if any, else **D2: building stats tables on the faction pages + unit description polish** · feature · QA light |
-| Data: gate | **GO** |
+| Data: milestone | M3 — "factions fully defined in data": units ✓ + buildings ✓, both pinned to the faction pages (D2); techs wait for the M3-5 schema |
+| Data: next task | **Owner review tweaks** from the inbox if any, else **STOP** (no schema to fill until M3-5) |
+| Data: gate | **GO** (tweaks) / cheap STOP otherwise |
 | Tools on this PC | Godot 4.7.2 .NET, .NET SDK 8.0.425, Git 2.53 + LFS 3.7; `GODOT` user variable set |
-| Build | all three branches 0 errors, 1 warning (CS8602 `game/tests/DebugOverlayTest.cs:173`, BUG-0084); a scratch merge of all three built, golden regenerated (`data-hash` + checksum vs the sim copy), `ReplayGoldenTests` green |
-| Tests | Producer reruns: sim branch 2383 / 12 skipped / 0 failed non-Perf; data branch 2345 / 15 / 0; felling Perf row alone 0.402 / 0.406 ms (< 0.5); view smoke PASS, `SfxTest` + `QaM26Test` PASS, `OrdersTest` 8 / 8 alone (2 flakes under load: BUG-0088); CLI `--workers 10` twins identical, `player 0 gold 250 wood 300`; scratch merge of all three: 2416 / 12 / 0 non-Perf, smoke PASS |
-| Open bugs | 26 (S1: 0, S2: 0, S3: 15, S4: 11) — none block; fixed this session: 0073, 0074, 0077 (S3), 0082 (S2, in-session); new: 0080 / 0081 / 0087 (S3), 0088 / 0090 (S4) |
-| Sessions today | 5 / 8 on 2026-10-06; feature sessions since last hardening: sim 3 / 4, view 3 / 4, data 1 / 4 |
-| Last session | 2026-10-06-1744 · sim M3-2b (1 fix round) · view M2-6 (0) · data D1 (0) · all ACCEPT |
+| Build | all three branches 0 errors, 1 warning (CS8602 `game/tests/DebugOverlayTest.cs:173`, BUG-0084); golden regenerated on the sim branch only (`data-hash` + checksum) |
+| Tests | Producer reruns non-Perf: sim 2538 / 2550 (12 skipped) / 0 failed, 8 m 38 s; view 2449 / 2461 (12 skipped) / 0 failed; data 2450 / 2462 (12 skipped) / 0 failed; view smoke PASS (`Rts.Sim 0.0.1`, match stopped at tick 85, no ERROR); headless `--bench 2 --mute` exit 0, one `bench:` line (290 frames, 40 ticks, avgTick 0.257 ms; its `fps 88.2` against 145 real frames per second is BUG-0102 reproduced); windowed `--bench 5 --vsync off --mute` (1152 x 648, 120 Hz): avg 0.52 / p99 1.03 / worst 1.39 ms, exit 0. QA: sim 2644 / 15 / 0 incl. Perf, view 2544 / 15 / 0 + 17 / 17 scenes, data 2450 / 12 / 0 |
+| Open bugs | 32 (S1: 0, S2: 0, S3: 18, S4: 14) — none block; fixed this session: 0078 (S3, by rule; residual 0093); new: 0091 / 0093 / 0101 / 0102 (S3), 0092 / 0103 / 0111 (S4) |
+| Sessions today | 6 / 8 on 2026-10-06; feature sessions since last hardening: sim 4 / 4, view 4 / 4, data 2 / 4 |
+| Last session | 2026-10-06-2114 · sim M3-3 (0 fix rounds) · view M2-7 (0) · data D2 (0) · all ACCEPT |
 
 ## Milestone progress
 
@@ -40,8 +40,8 @@ _Last updated: 2026-10-06 (session 2026-10-06-1744, ACCEPT all three tracks: sim
 | --- | --- | --- |
 | M0 | 7 / 7 required | **Done** 2026-10-03 (optional MCP item open) |
 | M1 (sim track) | 8 / 8 | **Done** 2026-10-06 (Producer sign-off after the M1-9 hardening; retro in docs/05) |
-| M2 (view track) | 9 / 10 (SimRunner interpolation, camera, terrain mesh + trees / mines as MultiMesh, placeholder unit views, selection, orders, minimap, debug overlay, placeholder audio); left: 60 FPS playable check (M2-7) | In progress; M2-7 next, then M2 hardening + sign-off |
-| M3 (sim + data tracks) | 2 / 8 (resource entities; worker gather / return loop with automatic drop-off); M3-2b (grid-change handling) done; data: units + all buildings in data, techs pending | In progress; sim M3-3 next; data D2 / owner tweaks |
+| M2 (view track) | 10 / 10 (SimRunner interpolation, camera, terrain mesh + trees / mines, placeholder unit views, selection, orders, minimap, debug overlay, placeholder audio, 60 FPS playable check) | Criteria met; M2 hardening session next, then Producer sign-off (owner playtest under For your review) |
+| M3 (sim + data tracks) | 3 / 8 (resource entities; worker gather / return loop; building placement + construction + repair, sim half); M3-2b done; data: units + buildings pinned to the faction pages, techs pending | In progress; sim hardening next, then M3-4 |
 | M4-M9 | — | Planned |
 
 ## For your review
@@ -49,6 +49,119 @@ _Last updated: 2026-10-06 (session 2026-10-06-1744, ACCEPT all three tracks: sim
 Non-blocking. Each entry says what was built or decided, what you'd notice in the game, and how
 to change it. To change anything, write it in `studio/inbox.md`, for example "use formations
 instead of clusters" or "make giving up take 2 seconds".
+
+### You can place buildings and workers build them, in the rules (sim track, M3-3, 2026-10-06)
+
+- **What was built:** the sim half of "building placement, construction with several builders, repair".
+  A worker ordered to **build** a building at a spot pays the cost at once, a construction site appears
+  (it is a wall to walkers from that moment), the worker walks to its edge and works; more workers
+  ordered onto the same site join it. The design doc's build-time rule is exact: with n builders a
+  building takes `t x 3 / (n + 2)` of its one-builder time, so a 20-second Billet takes 20 s alone,
+  15 s with two, 10 s with four, 6 s with eight. A site's hit points grow with its progress. **Cancel**
+  a site and the unbuilt share of the cost comes back (rounded down); **repair** a damaged building and
+  workers restore it at half the build rate for a quarter of its cost, scaled by the damage, stopping
+  when you can't pay. A building at 0 hit points disappears (combat will use that in M4). The game also
+  answers "may this go here?" for the ghost preview the view will draw: not off the map, not on a cliff,
+  ramp, tree, mine or other building, not on another height level, **not sealing off any ground**, no
+  enemy or holding unit inside, affordable, and room in the building list. Your own idle units standing
+  in the footprint are set down on the nearest free spot outside it (the RTS norm).
+- **What you'll see:** nothing in the window yet. The build menu and the ghost preview are the view
+  track's M3 work (after the M2 clean-up session). Today it runs in tests only: the QA suite places
+  thousands of buildings on generated maps against an independent "did this wall anything off" checker,
+  and every verdict agreed.
+- **Numbers:** 500 marching units plus 50 builders on 10 sites cost 0.98 ms a tick (budget 4); a tree
+  felled every tick on top: 1.17 ms. One placement check costs 0.0013 ms on average, 0.05 ms at worst on
+  the default map.
+- **Producer decisions, revisit any time:**
+  - *A building may never wall ground off.* Age of Empires lets you wall; this game's design doc rules
+    it out so no unit or worker can ever be stranded. The check keeps whatever regions already exist
+    (so it still works after a pocket appears, see the rough edge). Alternative: allow walling and teach
+    workers to ignore unreachable trees.
+  - *Player 1 is Malazan, player 2 Whirlwind* (player p plays faction p) until the M6 lobby lets you pick.
+  - *Idle own units in the footprint are pushed out; holding units block the placement* (H means "stay").
+  - *Repair stops the moment you have 0 of any resource the building costs*, rather than running up a debt.
+  - *Push-out ring 1 is the eight-neighbour ring; after eight rings the nearest passable cell.*
+  - *The "+ 2" and "x 3" of the build-time formula are code constants*, since they are the rule itself,
+    not a balance number; the repair factors (0.5 / 0.25) are in `game/data/common/rules.json`.
+  - *Size: ~785 code lines (budget 1,500), ~990 dev test lines (budget ~1,000), ~1,800 QA test lines.*
+- **Rough edges (S3, the sim clean-up session is next):**
+  - BUG-0093: if you build a site, surround it with three Billets and then cancel the site, its cells
+    reopen as a pocket nobody can reach; a worker sent to a tree touching only that pocket would walk to
+    the wall for ever (the old BUG-0078 symptom, now needing a deliberate sequence of player orders).
+    Fix planned next session: reopened cells that reach nothing stay blocked until a neighbour opens.
+  - BUG-0091: a *refused* build order at a spot far round a wall runs the full "does this seal ground"
+    check before the cheap checks (can't afford, unit in the way), so 100 refused orders in one tick cost
+    22 ms. The fix is to run the cheap checks first; one session.
+  - BUG-0092 (S4): a hand-edited repair factor below one 100,000th loads but does nothing; a worker on
+    Hold can't build on its own spot; past eight full rings pushed units share a cell; push-out is slow
+    with 400 units around a Town Hall (7 ms once).
+- **To change it:** repair factors in `game/data/common/rules.json` (`repair.rateFactor`, `costFactor`);
+  the never-seal rule, push-out and the "player p plays faction p" rule by inbox note.
+
+### The 60 FPS check is in: a built-in benchmark, smooth turning, and your playtest is the last word (view track, M2-7, 2026-10-06)
+
+- **What was built:** the studio's half of M2's last criterion ("the owner moves an army of 100 units
+  around a generated map at 60 FPS"). The game got a benchmark flag: `& $env:GODOT --path game -- --bench 60`
+  plays a scripted loop for 60 s (box-select the army, order it, click the four minimap corners, zoom to
+  20 m and 60 m, A + click, three Shift-queued moves, H, S, repeating every 10 s), prints one line of frame
+  times and quits. `--vsync off` lets it measure the raw frame cost. Units now **turn smoothly** between
+  ticks instead of snapping to a new facing 20 times a second. Four screenshots were taken and looked at
+  (overview, a ramp crossing with nine units on the ramp, the minimap corner, the F12 overlay).
+- **The numbers on this PC** (windowed, HUD and sound on, default map with forests and mines, 100 units
+  per side, 60 s): one frame costs **0.72 ms on average and 1.31 ms at the 99th percentile** with vsync
+  off, against the 16.7 ms a 60 FPS frame allows (about 5 % of the budget); with vsync on it holds the
+  monitor's rate exactly (59.5 fps on a 60 Hz display, 118.5 on 120 Hz). 1,000 units per side zoomed
+  out: 2.3 ms a frame. A test scene pins "under 16.7 ms average, under 33 ms worst 1 %" so a regression
+  fails the suite.
+- **Please play it (five minutes), this is the owner's half of the criterion:** `& $env:GODOT --path game`,
+  maximize the window, box-select the grey army west of centre, right-click far across the map past the
+  orange army and watch the march through a ramp: the turning should be smooth, no per-tick snapping.
+  Click the minimap corners, scroll the wheel from 20 m to 60 m, press A and click, Shift + right-click
+  three points, H, S. The FPS in the top-left label should sit at your monitor's refresh rate with no
+  hitches. Then `& $env:GODOT --path game -- --bench 60` and read the `bench:` line. Write "M2 playable
+  ok" (or what felt wrong) in the inbox; I will sign M2 off after its clean-up session either way unless
+  you object.
+- **Producer decisions, revisit any time:**
+  - *I ticked the criterion on the measured numbers* even though the benchmark's "order across the map"
+    step only sends the army about 15 m (BUG-0101, below): the frame budget has 10x headroom and a long
+    march adds only sim time that is already measured elsewhere. The benchmark will be fixed to march
+    properly in the next view session so it measures what you will do.
+  - *The first 30 frames after the armies appear are not timed* (the first draw of new unit shapes is a
+    one-time 85 ms hitch, load time rather than play).
+  - *Benchmark steps go through the real selection and order code*, not shortcuts, so a bug in a key
+    handler shows up in the numbers.
+- **Rough edges (view clean-up session, next):** BUG-0101 (S3): the benchmark's "order across" step
+  targets the enemy's start spot 15 m away, so the army barely moves. BUG-0102 (S3): the `fps` figure on
+  the benchmark line reads low on short runs (it averages the engine's once-a-second counter, which
+  includes the loading second; 60 s runs are off by 1-2 %). BUG-0103 (S4): with vsync on the frame times
+  print as perfectly even (the engine smooths them), two log lines use the PC's decimal comma, an absurd
+  `--bench 1e308` never ends. Also seen: on the default seed the grey army's start block straddles a cliff
+  edge (goes with BUG-0085's "inside a forest").
+- **To change it:** the step list and timings are the table at the top of `sim/Rts.Sim/ViewApi/BenchScript.cs`;
+  the warm-up count `BenchRunner.WarmUpFrames`; the rest by inbox note.
+
+### The faction pages are now the design source for every unit and building number (data track, D2, 2026-10-06)
+
+- **What was built:** the second data task. (1) Both faction pages (`docs/factions/malazan.md`,
+  `whirlwind.md`) got full building tables: hit points, armor, cost, build time, footprint, what the
+  building provides, and what it requires, next to the names and ids they already had. (2) Tests now pin
+  every unit's numbers to its faction page's Units table (hit points, armor, attack, cooldown, range,
+  speed, sight, cost, population, train time, where it trains), typed from the page, so changing a number
+  in the data or on the page alone fails a test. (3) Tests also read the pages themselves and compare.
+- **What changed in the data: nothing.** All 14 units already matched their pages, so no name, number or
+  description moved, and no replay fingerprint was regenerated. There is nothing to approve this time; the
+  table of changes is empty by design.
+- **The new page columns** (one row example, Malazan Billet): HP 500 · Armor 3 · Cost 0 / 50 · Build 20 s ·
+  Footprint 2×2 · Provides "+8 pop" · Requires "—". The Watch Towers read "Attack 10 pierce / 2 s, range 18;
+  sight 24; detector 16 m" straight from the design doc; those tower numbers are not in the data yet (M4).
+- **Producer decisions, revisit any time:** melee range is written as `0.5` in the data (edge to edge) and
+  as "melee" on the pages; the pin treats them as equal. Radius and wind-up (which the pages don't give)
+  are pinned as shipped (my M1-2 values).
+- **Rough edges:** BUG-0111 (S4): a few page edits slip past the tests (a false "+N pop" claim on a
+  building that gives none, the Forge / tower "Provides" wording, a decimal-comma PC formatting a range);
+  fixed in the next data task that touches those tests.
+- **To change it:** edit the page and the data together (the tests tell you which side disagrees), or
+  write the change in the inbox and the data track does both.
 
 ### Every building of both factions is in the data now: names, numbers and descriptions for you to check (data track, D1, 2026-10-06)
 
@@ -105,7 +218,8 @@ instead of clusters" or "make giving up take 2 seconds".
   - *One test rule was relaxed:* a QA test that pinned "an empty Malazan building list leaves exactly
     one building" could not survive ten Whirlwind buildings; it now pins "exactly Whirlwind's ten".
 - **Rough edges:** BUG-0090 (S4) above; also a stale code comment saying only the Town Hall ships
-  (next sim change in that folder fixes it).
+  (next sim change in that folder fixes it). **Update 2114: the comment is fixed (M3-3); the stats
+  tables you see above are now also on the faction pages (D2 entry at the top).**
 - **To change it:** write the tweak in the inbox ("call the Billet a Barracks Annex", "Tent costs 40
   wood", "shorter Smithy text") and the data track does it next session (it regenerates the replay
   fingerprint). Or edit `game/data/factions/<faction>/buildings.json` yourself and run
@@ -230,7 +344,8 @@ instead of clusters" or "make giving up take 2 seconds".
   - BUG-0078: if buildings wall off a patch of ground next to a tree, the tree still counts as
     "reachable" and a worker sent to it walks to the wall for ever. M3-3's placement rule (no building
     may wall ground off) makes it impossible; the docs sentence "unreachable targets can't happen"
-    is stale until then.
+    is stale until then. **Update 2114: done; BUG-0078 is closed by M3-3's placement rule (see the M3-3
+    entry at the top); a residual pocket after a Cancel is BUG-0093.**
   - BUG-0079 (S4): a missing `cost` in a building file reports three errors instead of one;
     `--workers 0` without resources runs though the docs say it needs them.
   - **Update 1744: BUG-0073 and BUG-0077 are fixed (see the M3-2b entry at the top); the other nine
@@ -994,62 +1109,73 @@ track right after S1/S2 bugs).
    fields (docs/02: 10 pierce / 2 s, range 18, sight 24, detector 16 m), planned with M4 combat / fog;
    (c) where the faction upgrade is researched (Forge per docs/02) when `techs.json` gets its schema
    (M3-5). Until then the descriptions say "needs Age II" in text only.
-9. Sim-owned nit from D1: `sim/Rts.Sim/Data/BuildingSlot.cs:4` still says "M3-2 ships the Town Hall
-   only"; fix in the next sim change in that folder (M3-3).
+9. ~~Sim-owned nit from D1: `sim/Rts.Sim/Data/BuildingSlot.cs:4` still says "M3-2 ships the Town Hall
+   only"~~ → **done in M3-3** (session 2114).
+10. Available since M3-3 (session 2114) for the view's build ghost and worker feedback:
+    `World.CanPlace(player, typeId, anchorCell, out PlacementError)` (call once per frame on the main
+    thread between ticks: it writes flow-field scratch, BUG-0092 note), `Command.Build` / `Cancel` /
+    `Repair`, `Buildings.UnderConstruction` / `Work` / `WorkNeeded(type)` / `Hp` for a site progress bar,
+    `UnitStore.BuildTarget` and `UnitState.Building`. Group build = one `Build` per selected worker (the
+    first places, the rest join the same anchor). Nothing requested yet.
 
 ## Feature queue: sim track (feature sessions, in order)
 
-1. **Next: M3-3 building placement + construction** (QA full): validity in the sim (open ground, no
-   unit inside or push-out, **never seals ground**: closes BUG-0078), `Command.Build`, construction
-   with multiple builders `t x 3 / (n + 2)`, costs / refunds, destruction (an opening change), repair;
-   fold in the `BuildingSlot.cs` comment (BUG-0090) and BUG-0079's "missing cost is three errors" if
-   cheap. Details in `studio/handoff.md`. The sim hardening session follows it (4 / 4).
-2. M3-4 production queues (5 slots), rally points, population and cap; M3-5 Age II research and Forge
-   upgrades (ships the `techs.json` schema and the building `requires` field the data track asked
-   for); M3-6 `trainedAt` / `requires` resolution (the content itself is the data track's).
-   **Requests for the sim track** above outrank M3 work.
+1. **Next: the sim hardening session** (4 / 4; debt backlog below, BUG-0093 and BUG-0091 first). Details in
+   `studio/handoff.md`.
+2. Then M3-4 production queues (5 slots), rally points, population and cap (`popProvided` applies), refunds
+   on cancel; M3-5 Age II research and Forge upgrades (ships the `techs.json` schema and the building
+   `requires` field the data track asked for); M3-6 `trainedAt` / `requires` resolution and validation
+   (QA D2 note: `trainedAt` is still an unchecked string). **Requests for the sim track** above outrank M3 work.
 3. M6 (far ahead): agents can't download. The Producer lists under "Waiting on you", when M5
    starts, the exact links for the Godot 4.7.2 .NET export templates and the Kenney/KayKit/Quaternius
    packs (docs/04) with the `asset-sources/` folder for each (owner note 2026-10-05).
 
 ## Feature queue: view track (feature sessions, in order)
 
-1. **Next: M2-7 playable check** (QA standard): 100 placeholder units at 60 FPS windowed on the
-   default 12 / 8 map with HUD and sound, `PrevFacing` blending, a screenshot set; the owner's own
-   playtest is listed under For your review when it lands. Details in `studio/handoff.md`.
-2. M2 end-of-milestone hardening (BUG-0069, BUG-0070, BUG-0083, BUG-0084, BUG-0085 start block clear
-   of trees, BUG-0086, BUG-0087 stop the Sfx players at quit, BUG-0088 OrdersTest on the wall clock,
-   export hygiene notes) → M2 sign-off (every M2 coverage row ✅ Unit / fuzz / Determinism).
-3. M3 view side after that: HUD resource bar (`World.Gold` / `Wood`), selection panel, command card
-   (uses Tab subgroups), build ghosts (after M3-3), worker / gather feedback.
+1. **Next: M2 end-of-milestone hardening** (BUG-0101 + BUG-0102 bench, BUG-0087, BUG-0085 incl. the cliff-edge
+   start block, BUG-0083, BUG-0069, BUG-0103 / 0084 / 0086 / 0088 / 0070, export hygiene notes) → **M2
+   sign-off** by the Producer (every M2 coverage row ✅ Unit / fuzz / Determinism; audio's Determinism "—"
+   recorded as not applicable). Details in `studio/handoff.md`.
+2. M3 view side after that: HUD resource bar (`World.Gold` / `Wood`), selection panel, command card (uses
+   Tab subgroups), build ghost + placement via `World.CanPlace` + `Command.Build` (M3-3 landed), worker /
+   gather / build feedback (`Cargo`, `Gathering` / `Returning` / `Building`, site progress).
 
 ## Feature queue: data track (feature sessions, in order; owner reviews every landed task)
 
-1. **Next: owner review tweaks** from the inbox (the D1 table under For your review) whenever present;
-   else **D2**: per-building stats tables on the faction pages (`docs/factions/*.md` "Buildings") and
-   unit `description` polish in `units.json` (golden `data-hash` regen, checkpoints byte-identical).
-   QA light. Details in `studio/handoff.md`.
-2. Then: nothing until a schema lands (see 3).
-3. Waiting on schemas: `techs.json` (M3-5), `abilities.json` / `statuses.json` (M4), `ai.json`
-   build orders (M5); M7-M9 faction data when those milestones open; balance passes (QA standard)
-   after the M4 sandbox.
+1. **Next: owner review tweaks** from the inbox (the D1 / D2 entries under For your review) whenever present
+   (QA light; golden `data-hash` regen on a data change).
+2. Otherwise the data track **STOPs cheaply**: no schema it needs is on `main`. BUG-0111 (S4, test-only) rides
+   with the next data task touching the content tests.
+3. Waiting on schemas: `techs.json` + building `requires` (M3-5 / M3-6), `abilities.json` / `statuses.json`
+   (M4), tower attack / sight / detector fields (M4), `ai.json` build orders (M5); M7-M9 faction data when
+   those milestones open; balance passes (QA standard) after the M4 sandbox.
 
-## Debt backlog: sim track (hardening sessions only; next one after 1 more feature session)
+## Debt backlog: sim track (hardening sessions only; the next sim session is one)
 
+- **BUG-0093 (S3, first)** a Cancel (or `Damage` to 0) of a building enclosed by other buildings reopens
+  its cells as an unreachable pocket; a Gather on a tree exposed only to it loops for ever (BUG-0078's
+  symptom with player commands). Preferred fix: reopened cells that reach no other region keep a
+  `Pocket` block flag until a neighbouring cell opens (re-flood then); alternative: exposure means
+  "reachable from the worker". Un-skip the QA row.
+- **BUG-0091 (S3)** `ConstructionSystem.Check` runs the seal flood before UnitInTheWay / CannotAfford /
+  StoreFull; `StartBuild` only needs pass / fail, so run the cheap rules first there (CanPlace keeps the
+  documented reason order). 100 refused Builds in one tick = 22 ms today.
+- **BUG-0092 (S4)** M3-3 nits: loader floor for the repair factors (reject below 2^-16); a Build clears the
+  issuing worker's own Hold before UnitInTheWay; push-out past 8 rings must not stack units; push-out
+  `Occupied` through the spatial hash (7.3 ms with 400 units round a Keep); set `PrevPosition` on a pushed
+  unit; docs/03 note that `CanPlace` writes flow-field scratch (call on the sim thread between ticks).
 - **BUG-0080 (S3)** a closing change on every tick starves all but the 2 oldest goal groups while it
-  lasts (docs/03's ceil(groups / 2) bound holds for spaced closings only; sentence fixed by the
-  Producer). Reachable from M3-3 (several placers). Options: keep a closed field usable when none of
-  its directed cells was blocked (per-change bounding box), region versions, or document.
+  lasts (docs/03's ceil(groups / 2) bound holds for spaced closings only). Measured in M3-3 at a realistic
+  rate (a House every 2 s, 32 groups): longest wait 0.80 s. Options: keep a closed field usable when none
+  of its directed cells was blocked (per-change bounding box), region versions, or document.
 - **BUG-0081 (S3, M6 design)** usable-but-stale fields can't be rebuilt from their keys at load; the
   docs/03 save/load sentence now carries the open point. Decide at M6: save stale slots' contents,
   save the grid change history, or refresh every field at the save point in both runs.
-- **BUG-0078 (S3, with M3-3)** exposure counts a passable neighbour nobody can reach (a pocket sealed
-  by buildings); a worker retries for ever. M3-3's placement rule must refuse sealing placements (or
-  exposure means "reachable"); the docs/03 "nav grid seals every pocket" sentence is stale.
-- **BUG-0079 (S4)** M3-2 nits: a missing building `cost` reports 3 errors (footprint reports 1);
-  tests 1,286 lines vs the 1,000 budget; `--workers 0` without resources runs though the docs say it
-  needs them.
-- **BUG-0090 (S4, sim part)** `BuildingSlot.cs:4` "M3-2 ships the Town Hall only" is stale (M3-3).
+- ~~BUG-0078~~ fixed in M3-3 (never-seal placement rule); the residual is BUG-0093 above.
+- **BUG-0079 (S4)** M3-2 nits left: `--workers 0` without resources runs though docs/03 says it needs
+  them (fix the sentence: "N above 0"). Item 1 (missing `cost` = 3 errors) fixed in M3-3; item 2 (test
+  budget) waived.
+- ~~BUG-0090 sim part~~ (`BuildingSlot.cs` comment) fixed in M3-3; the data part stays in the data backlog.
 - Note (M3-2b): `FlowField.Build` has the 8 directions written out (~150 lines) for Debug speed; fold
   back only if tests move to Release. The felling Perf row (`OneTreeFallsEveryTick_AverageTick_Perf`,
   < 0.5 ms absolute) has ~20 % headroom and fails under full-suite contention: rerun alone before
@@ -1094,8 +1220,17 @@ track right after S1/S2 bugs).
   recorded but not checked; no depletion events (views poll); .NET 8 support ends 2026-11-10, move
   to the next LTS at M6.
 
-## Debt backlog: view track (hardening sessions only; next one is the M2 end-of-milestone session, after M2-7)
+## Debt backlog: view track (hardening sessions only; the next view session is the M2 end-of-milestone one)
 
+- **BUG-0101 (S3, first)**: the bench's `OrderAcross` targets the east start block ~15 m away (army centre
+  moves at most 17.4 m on a 256 m map); target the passable cell nearest (0.85 W, 0.5 H) / its mirror or
+  the opposite corner, assert >= ~100 m in `QaM27Test`, refresh the docs/03 figures if they move.
+- **BUG-0102 (S3)**: the `bench:` line's `fps` averages Godot's once-a-second `TimeFps` incl. the load
+  second (111 vs 119.9 real at 10 s); print `Stats.Count / Script.Elapsed`, fix the docs/03 sentence.
+- **BUG-0103 (S4)**: vsync-on rows are probably delta-smoothed pacing (one docs/03 sentence; or turn
+  `application/run/delta_smoothing` off for the bench), BenchScript "no bunching" remark, invariant
+  culture on the two info lines, `--bench` upper bound (3,600 s).
+- Seen in M2-7: the seed-1 west start block straddles a cliff edge (debug `StartLayout`); fold into BUG-0085.
 - **BUG-0087 (S3)**: a sound still playing at quit leaves an ObjectDB leak *warning* (AudioStreamWAV +
   playback) in existing scenes ~2 in 5 runs; `Sfx` never stops its 8 players. Fix: stop them in
   `_ExitTree` / on the close request; drop the 0.3 s wait in `SfxTest`; fix the docs/03 sentence that
@@ -1144,6 +1279,10 @@ track right after S1/S2 bugs).
   Barracks") and tower attack / detection that the schema can't express yet; recheck every such
   sentence when `requires` (M3-5 / M3-6) and the tower fields (M4) land. Schema requests are under
   "Requests for the sim track" 8.
+- **BUG-0111 (S4)**: D2 page pins miss a false "+N pop" claim on a 0-pop building and Forge / Watch Tower
+  Provides text (compare the whole Provides cell to docs/02 with names substituted, as Requires does);
+  `UnitContentTests.G` formats range with the current culture (use invariant); blank line before the
+  pin line on both pages. Test-only; with the next data task touching those tests.
 - Note: a QA row (`AnEmptyBuildingList_Loads_...`) now pins "exactly Whirlwind's ten remain"; it moves
   again whenever a building is added or removed (intended: the roster is pinned).
 
@@ -1151,6 +1290,7 @@ track right after S1/S2 bugs).
 
 | Date | Session | Task | Result |
 | --- | --- | --- | --- |
+| 2026-10-06 | [2026-10-06-2114](sessions/2026-10-06-2114.md) | sim M3-3 placement validity (`World.CanPlace`, never-seal `SealCheck`), `Build` / `Cancel` / `Repair`, multi-builder construction (BUG-0078 fixed by rule); view M2-7 `--bench` / `--vsync`, `PrevFacing` blend, screenshot set (M2 10 / 10); data D2 unit stats pinned to the faction pages, building tables on the pages | all ACCEPT, 0 fix rounds (QA PASS_WITH_ISSUES x3: sim 2 S3 + 1 S4, view 2 S3 + 1 S4, data 1 S4). M3 3 / 8 |
 | 2026-10-06 | [2026-10-06-1744](sessions/2026-10-06-1744.md) | sim M3-2b closing vs opening grid changes (`BlockVersion`, usable-stale fields refreshed lazily, progress-mark reset, wood 1 x 1 rule, 2x faster field build; BUG-0073 / 0074 / 0077 fixed); view M2-6 placeholder audio (`Sfx`, Select / Command tones, `--mute`); data D1 all ten buildings per faction in data | all ACCEPT; sim 1 fix round (QA FAIL on S2 BUG-0082 perf, fixed; 2 S3 filed), view 0 (1 S3 + Producer's S4 BUG-0088), data 0 (1 S4). M3 2 / 8, M2 9 / 10 |
 | 2026-10-06 | [2026-10-06-1503](sessions/2026-10-06-1503.md) | sim M3-2 worker gather / return loop (`Gather`, `EconomySystem`, `BuildingStore` + dev `SpawnBuilding`, `buildings.json` Town Hall, player totals, CLI `--workers`); view M2-3b trees and mines as MultiMesh props, 12 / 8 defaults, minimap resource layer | both ACCEPT, 0 fix rounds (QA PASS_WITH_ISSUES x2: sim 2 S3 + 1 S4, BUG-0075 fixed; view 1 S3 + 1 S4). M3 2 / 8, M2 8 / 10. Data track added by the owner mid-session |
 | 2026-10-06 | [2026-10-06-1255](sessions/2026-10-06-1255.md) | sim M3-1 resource entities (`ResourceStore`, placer, depletion → nav grid, hash, replay format 3, CLI flags); view M2-5 debug overlay (F12: nav grid, flow arrows, tick graph, counts) | both ACCEPT, 0 fix rounds (QA PASS_WITH_ISSUES x2: sim 3 S3 + 1 S4; view 1 S3 + 1 S4). M3 1 / 8, M2 7 / 10 |
