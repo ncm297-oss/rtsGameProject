@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-06-2114, task D2 |
 | System | content tests (`sim/Rts.Sim.Tests/Content/`), faction pages |
-| Fixed by | |
+| Fixed by | 8bcca04 (D3): `BuildingContentTests.G` compares the whole Provides cell to docs/02 with names substituted and rejects any "+N pop" claim but the building's own; `UnitContentTests.G` formats ranges invariant; blank line before the pin line on both pages. QA 2026-10-07-1415: repros 1-3 now each fail `G`; `QA/Content/PagePinCultureQaTests` runs the pins under de-DE / fr-FR / tr-TR / ar-SA (and fails when `FactionPage.Num` is made culture-dependent) |
 
 ## Repro
 Scratch clone of 35fd9df, one edit at a time, then
