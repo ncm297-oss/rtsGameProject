@@ -46,6 +46,10 @@ public partial class Sfx : Node
     private readonly long[] _lastFrame = new long[Table.Length];
     private readonly ulong[] _lastUsec = new ulong[Table.Length];
     private int _next;
+    private ulong _startedUsec; // wall clock of the last sound actually started (not the limiter's test clock)
+
+    // A sound started this recently (the longest clip plus a margin) may still be in the audio server.
+    private static readonly ulong RecentUsec = (ulong)(LongestClipMs() + 100f) * 1000UL;
 
     public override void _Ready()
     {
@@ -61,6 +65,61 @@ public partial class Sfx : Node
             _pool[i] = new AudioStreamPlayer { Name = $"Player{i}", VolumeDb = SfxVolumeDb };
             AddChild(_pool[i]);
         }
+    }
+
+    /// <summary>Longest time <see cref="_ExitTree"/> waits for the audio thread to drop stopped sounds, in milliseconds.</summary>
+    public const int ExitWaitLimitMs = 200;
+
+    /// <summary>Milliseconds the last <see cref="_ExitTree"/> waited for the audio thread (0 if no sound had started recently).</summary>
+    public double LastExitWaitMs { get; private set; }
+
+    public override void _ExitTree()
+    {
+        // BUG-0087: the audio server drops a stopped or finished playback only on its next mix, on
+        // the audio thread. Quitting before that mix left the clip and its playback in the server: an
+        // ObjectDB leak warning at exit. The pool players stop their sounds as they leave the tree
+        // (children leave before this node), so if a sound started recently, wait (bounded) for one mix.
+        StopAll();
+        if (_startedUsec > 0 && Time.GetTicksUsec() - _startedUsec < RecentUsec) LastExitWaitMs = WaitForAMix();
+    }
+
+    public override void _Notification(int what)
+    {
+        // The window's close button: stop early, before the engine starts tearing the tree down.
+        if (what == NotificationWMCloseRequest) StopAll();
+    }
+
+    /// <summary>Stops every pool player; returns how many were playing.</summary>
+    public int StopAll()
+    {
+        int playing = 0;
+        foreach (AudioStreamPlayer? player in _pool)
+        {
+            if (player == null || !IsInstanceValid(player)) continue;
+            if (player.Playing) playing++;
+            player.Stop();
+        }
+        return playing;
+    }
+
+    // Blocks until a mix that started after this call has finished (it removes stopped playbacks), or the limit.
+    private static double WaitForAMix()
+    {
+        ulong start = Time.GetTicksUsec();
+        while (true)
+        {
+            ulong waited = Time.GetTicksUsec() - start;
+            // The last mix began after `start`: take the server lock, which the driver holds while it mixes.
+            if (AudioServer.GetTimeSinceLastMix() * 1_000_000.0 < waited)
+            {
+                AudioServer.Lock();
+                AudioServer.Unlock();
+                break;
+            }
+            if (waited >= ExitWaitLimitMs * 1000UL) break;
+            OS.DelayUsec(500);
+        }
+        return (Time.GetTicksUsec() - start) / 1000.0;
     }
 
     /// <summary>Mutes or unmutes the master bus (<c>--mute</c>); counters keep running either way.</summary>
@@ -99,6 +158,7 @@ public partial class Sfx : Node
         _next = (_next + 1) % PoolSize;
         player.Stream = _clips[i];
         player.Play();
+        _startedUsec = Math.Max(1UL, Time.GetTicksUsec());
         return true;
     }
 
@@ -124,6 +184,18 @@ public partial class Sfx : Node
             at += count;
         }
         return samples;
+    }
+
+    private static float LongestClipMs()
+    {
+        float longest = 0f;
+        foreach (Note[] row in Table)
+        {
+            float ms = 0f;
+            foreach (Note n in row) ms += n.Ms;
+            longest = Math.Max(longest, ms);
+        }
+        return longest;
     }
 
     private static int Samples(float ms) => (int)MathF.Round(ms * MixRate / 1000f);

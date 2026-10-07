@@ -26,7 +26,10 @@ public sealed class PropLayout
     private readonly int[] _width, _height;
     private readonly float[][] _transforms;
     private readonly int[][] _slots;
+    private readonly int[][] _anchors;
     private readonly int[] _counts;
+    private readonly bool[] _changed;
+    private readonly int[] _oldCounts;
 
     /// <summary>Sizes one list per resource type for up to <paramref name="capacity"/> nodes (the store's capacity).</summary>
     /// <param name="types">Resource types (<c>GameData.Resources</c>); only footprints are read.</param>
@@ -39,13 +42,17 @@ public sealed class PropLayout
         _height = new int[n];
         _transforms = new float[n][];
         _slots = new int[n][];
+        _anchors = new int[n][];
         _counts = new int[n];
+        _changed = new bool[n];
+        _oldCounts = new int[n];
         for (int t = 0; t < n; t++)
         {
             _width[t] = types[t].FootprintWidth;
             _height[t] = types[t].FootprintHeight;
             _transforms[t] = new float[capacity * Stride];
             _slots[t] = new int[capacity];
+            _anchors[t] = new int[capacity];
         }
     }
 
@@ -64,6 +71,9 @@ public sealed class PropLayout
     /// <summary>Instance transforms of type <paramref name="type"/>, <see cref="Stride"/> floats each.</summary>
     public ReadOnlySpan<float> TransformsOf(int type) => _transforms[type].AsSpan(0, _counts[type] * Stride);
 
+    /// <summary>True if type <paramref name="type"/>'s list (its nodes' slots and anchors, so its transforms) changed in the last relist; a view uploads only those types (BUG-0086).</summary>
+    public bool Changed(int type) => _changed[type];
+
     /// <summary>Store slot of each instance of type <paramref name="type"/>, parallel to <see cref="TransformsOf"/>, ascending.</summary>
     public ReadOnlySpan<int> SlotsOf(int type) => _slots[type].AsSpan(0, _counts[type]);
 
@@ -76,6 +86,12 @@ public sealed class PropLayout
     public bool Refresh(Heightmap map, NavGrid grid, ReadOnlySpan<bool> alive, ReadOnlySpan<int> typeId, ReadOnlySpan<int> cell)
     {
         if (Rebuilds > 0 && grid.Version == BuiltVersion) return false;
+        // Each type's list is compared with the last one as it is rewritten: same slots at the same anchors, in the
+        // same order and count, means the same transforms (the terrain never changes).
+        for (int t = 0; t < _counts.Length; t++) _changed[t] = Rebuilds == 0;
+        int types = _counts.Length;
+        int[] oldCounts = _oldCounts;
+        Array.Copy(_counts, oldCounts, types);
         Array.Clear(_counts);
         int n = Math.Min(alive.Length, Math.Min(typeId.Length, cell.Length));
         int w = grid.Width;
@@ -96,9 +112,12 @@ public sealed class PropLayout
             b[i] = c; b[i + 1] = 0f; b[i + 2] = si; b[i + 3] = o.X;
             b[i + 4] = 0f; b[i + 5] = 1f; b[i + 6] = 0f; b[i + 7] = o.Y;
             b[i + 8] = -si; b[i + 9] = 0f; b[i + 10] = c; b[i + 11] = o.Z;
+            if (k >= oldCounts[t] || _slots[t][k] != s || _anchors[t][k] != cell[s]) _changed[t] = true;
             _slots[t][k] = s;
+            _anchors[t][k] = cell[s];
             _counts[t] = k + 1;
         }
+        for (int t = 0; t < types; t++) if (_counts[t] != oldCounts[t]) _changed[t] = true;
         BuiltVersion = grid.Version;
         Rebuilds++;
         return true;

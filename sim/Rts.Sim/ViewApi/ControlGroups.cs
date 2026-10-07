@@ -15,11 +15,11 @@ public sealed class ControlGroups
     /// <summary>Number of groups.</summary>
     public const int Count = 9;
 
-    /// <summary>Longest gap between two recalls of the same group that counts as a double-tap (seconds of wall clock).</summary>
-    public const double DoubleTapSeconds = 0.3;
-
-    /// <summary><see cref="DoubleTapSeconds"/> in whole milliseconds, the unit the gap is compared in.</summary>
+    /// <summary>Longest gap between two recalls of the same group that counts as a double-tap, in whole milliseconds of wall clock (the unit the gap is compared in); the one source for the rule (BUG-0070).</summary>
     public const double DoubleTapMs = 300;
+
+    /// <summary><see cref="DoubleTapMs"/> in seconds.</summary>
+    public const double DoubleTapSeconds = DoubleTapMs / 1000;
 
     private readonly SelectionSet[] _groups = new SelectionSet[Count];
     private int _lastTap = -1;

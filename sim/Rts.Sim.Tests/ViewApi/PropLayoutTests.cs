@@ -128,6 +128,35 @@ public class PropLayoutTests
     }
 
     [Fact]
+    public void ARelist_MarksChangedOnlyTheTypesWhoseListChanged()
+    {
+        // BUG-0086: one felled tree re-uploaded both the tree and the mine buffers.
+        Simulation sim = MatchSim(1);
+        World w = sim.World;
+        ResourceStore r = w.Resources;
+        PropLayout l = Layout(w);
+        Refresh(l, w);
+        Assert.True(l.Changed(ResourceMaps.Tree) && l.Changed(ResourceMaps.Mine), "the first fill changes every type");
+        foreach ((int felled, int other) in new[] { (ResourceMaps.Tree, ResourceMaps.Mine), (ResourceMaps.Mine, ResourceMaps.Tree) })
+        {
+            int slot = l.SlotsOf(felled)[l.CountOf(felled) / 2];
+            r.Take(r.HandleOf(slot), int.MaxValue);
+            Assert.True(Refresh(l, w));
+            Assert.True(l.Changed(felled), $"type {felled} lost a node but is not marked changed");
+            Assert.False(l.Changed(other), $"type {other} is marked changed, but nothing of it changed");
+        }
+        // A version bump with nothing changed relists, and marks nothing.
+        w.NavGrid.BumpVersionForTests();
+        Assert.True(Refresh(l, w));
+        Assert.False(l.Changed(ResourceMaps.Tree) || l.Changed(ResourceMaps.Mine));
+        // Losing the last node of the list (the tail) is a count change.
+        int last = l.SlotsOf(ResourceMaps.Tree)[l.CountOf(ResourceMaps.Tree) - 1];
+        r.Take(r.HandleOf(last), int.MaxValue);
+        Assert.True(Refresh(l, w));
+        Assert.True(l.Changed(ResourceMaps.Tree) && !l.Changed(ResourceMaps.Mine));
+    }
+
+    [Fact]
     public void SixHundredTicksWithNoPassabilityChange_NeverRelist()
     {
         Simulation sim = MatchSim(2, units: 200);

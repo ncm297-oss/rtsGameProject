@@ -192,7 +192,31 @@ public class TerrainMeshBuilderTests
         // differ (CellCorners is the surface both TerrainHeight and the mesh use). Catches a builder
         // that drops walls (for example on the last row or column) or adds stray ones.
         var sim = new Simulation(TestSim.Config(seed, 2, 16, 64));
-        Heightmap hm = sim.World.Heightmap;
+        int count = AssertWallsExactlyWhereCellsDiffer(sim.World.Heightmap);
+        Assert.True(count > 100, $"only {count} wall edges on the default map");
+    }
+
+    [Fact]
+    public void HandMapWithStepsOnTheLastRowAndColumn_HasThoseWalls_AndNoOthers()
+    {
+        // BUG-0070: the default maps' border ring is flat, so a builder that skipped the last row or column of
+        // walls passed the seed 1 / 42 rows. Here the last column and the last row are a level up.
+        const int n = 6;
+        var levels = new byte[n * n];
+        var elevations = new float[n * n];
+        for (int y = 0; y < n; y++)
+            for (int x = 0; x < n; x++)
+            {
+                levels[y * n + x] = (byte)(x == n - 1 || y == n - 1 ? 1 : 0);
+                elevations[y * n + x] = levels[y * n + x] * MapConstants.LevelHeight;
+            }
+        int count = AssertWallsExactlyWhereCellsDiffer(new Heightmap(n, n, levels, elevations));
+        Assert.Equal(2 * (n - 1), count); // x = 4 | 5 on rows 0-4, and y = 4 | 5 on columns 0-4
+    }
+
+    // Independent count: every edge whose two cells' top corners differ has exactly one wall quad, and no other edge has one. Returns the edge count.
+    private static int AssertWallsExactlyWhereCellsDiffer(Heightmap hm)
+    {
         int w = hm.Width, h = hm.Height;
         const float cs = MapConstants.CellSize, eps = 1e-4f;
         Span<float> c = stackalloc float[4], n = stackalloc float[4];
@@ -223,10 +247,10 @@ public class TerrainMeshBuilderTests
             Vector3 mid = (m.Positions[q] + m.Positions[q + 1] + m.Positions[q + 2] + m.Positions[q + 3]) / 4f;
             walls.Add((mid.X, mid.Z));
         }
-        Assert.True(expected.Count > 100, $"only {expected.Count} wall edges on the default map");
         Assert.Equal(expected.Count, wallQuads);
         Assert.Equal(w * h + expected.Count, m.Positions.Length / 4);
         Assert.True(walls.SetEquals(expected), $"{walls.Except(expected).Count()} stray walls, {expected.Except(walls).Count()} missing");
+        return expected.Count;
     }
 
     /// <summary>Wall-clock budget; run alone in the serial collection.</summary>

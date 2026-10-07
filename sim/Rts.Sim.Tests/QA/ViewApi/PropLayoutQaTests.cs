@@ -296,10 +296,11 @@ public class PropLayoutQaTests
     }
 
     [Fact]
-    public void StartBlocks_OnTheMatchMap_NeverOnAResourceCell_ReportsHowManyTouchAForest()
+    public void StartBlocks_OnTheMatchMap_NoSpotTouchesANodeOrACliff_AndEachBlockIsOnOneLevel()
     {
-        // The debug start block (StartLayout) was written before forests were on in the Match: every spot must
-        // still be an open cell; how many spots sit next to a node is reported (an army spawned inside a forest).
+        // BUG-0085 (fixed in M2-H2): the debug start block was written before forests were on in the Match, and on
+        // seed 1 player 0's army spawned threaded through a forest. Now no spot may have a node, a cliff or the
+        // border ring (any Blocked cell) among its 8 neighbours, and a block stays on one level.
         float maxR = TestSim.Data.Units.Max(u => u.Radius);
         var report = new List<string>();
         for (ulong seed = 1; seed <= 20; seed++)
@@ -309,7 +310,8 @@ public class PropLayoutQaTests
             for (int p = 0; p < 2; p++)
             {
                 Vector2[] spots = StartLayout.Block(g, 100, p == 0, maxR);
-                int touching = 0;
+                Assert.Equal(100, spots.Length);
+                int touching = 0, level = -1;
                 foreach (Vector2 s in spots)
                 {
                     int cx = (int)(s.X / Cs), cy = (int)(s.Y / Cs);
@@ -317,13 +319,15 @@ public class PropLayoutQaTests
                     bool near = false;
                     for (int dy = -1; dy <= 1; dy++)
                         for (int dx = -1; dx <= 1; dx++)
-                            if ((g.FlagsAt(cx + dx, cy + dy) & NavFlags.Resource) != 0) near = true;
+                            if ((g.FlagsAt(cx + dx, cy + dy) & (NavFlags.Blocked | NavFlags.Resource | NavFlags.Cliff)) != 0) near = true;
                     if (near) touching++;
+                    if (level < 0) level = g.LevelAt(cx, cy);
+                    Assert.True(g.LevelAt(cx, cy) == level, $"seed {seed} p{p}: spot ({cx}, {cy}) on level {g.LevelAt(cx, cy)}, block on {level}");
                 }
                 if (touching > 0) report.Add($"seed {seed} p{p}: {touching}/{spots.Length}");
             }
         }
-        _out.WriteLine("start spots next to a resource node: " + (report.Count == 0 ? "none" : string.Join(", ", report)));
+        Assert.True(report.Count == 0, "start spots next to a node, a cliff or the border: " + string.Join(", ", report));
     }
 
     [Fact]

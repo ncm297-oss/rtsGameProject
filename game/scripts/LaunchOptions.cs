@@ -12,7 +12,7 @@ namespace Rts.Game;
 /// <see cref="MaxUnitsPerPlayer"/>, default <see cref="DefaultUnitsPerPlayer"/>), <c>--zoom &lt;m&gt;</c>
 /// (start zoom, clamped to the camera limits; for perf runs), <c>--no-hud</c> (hide the HUD), <c>--debug-overlay</c>
 /// (start with the F12 debug overlay on, e.g. for a screenshot), <c>--mute</c> (mute the master audio bus), <c>--bench &lt;seconds&gt;</c>
-/// (run the scripted benchmark, print one <c>bench:</c> line and quit; positive seconds), <c>--vsync on|off</c>
+/// (run the scripted benchmark, print one <c>bench:</c> line and quit; positive seconds up to <see cref="MaxBenchSeconds"/>), <c>--vsync on|off</c>
 /// (window vsync; default is the project setting, on), <c>--forests &lt;n&gt;</c> and <c>--mines &lt;n&gt;</c>
 /// (resource groups on the map, 0 to <see cref="MapGenParams.MaxResourceGroups"/>, defaults
 /// <see cref="DefaultForests"/> and <see cref="DefaultMines"/>). Bad values are
@@ -25,6 +25,9 @@ public sealed class LaunchOptions
 
     /// <summary>Most units per player <c>--units</c> accepts (two players fill the 2,000-slot store).</summary>
     public const int MaxUnitsPerPlayer = 1000;
+
+    /// <summary>Longest <c>--bench</c> run accepted, in seconds (an hour; BUG-0103: a huge finite value never ended).</summary>
+    public const double MaxBenchSeconds = 3600;
 
     /// <summary>Forests on the match map without <c>--forests</c> (Producer default for the 128 map, M2-3b).</summary>
     public const int DefaultForests = 12;
@@ -120,7 +123,7 @@ public sealed class LaunchOptions
                     else Warn(flag, value);
                     break;
                 case "--bench":
-                    if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double bench) && bench > 0 && double.IsFinite(bench)) o.BenchSeconds = bench;
+                    if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double bench) && bench > 0 && bench <= MaxBenchSeconds) o.BenchSeconds = bench;
                     else Warn(flag, value);
                     break;
                 case "--vsync":

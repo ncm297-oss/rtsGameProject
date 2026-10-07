@@ -95,6 +95,40 @@ public sealed class FlowArrowLayout
         return goal;
     }
 
+    /// <summary>Arrow shape (meters, along the arrow from its cell centre): the tail end.</summary>
+    public const float ArrowTail = -0.65f;
+
+    /// <summary>Arrow shape: where the shaft meets the head.</summary>
+    public const float ArrowNeck = 0.1f;
+
+    /// <summary>Arrow shape: the tip.</summary>
+    public const float ArrowTip = 0.65f;
+
+    /// <summary>Arrow shape: half the shaft's width.</summary>
+    public const float ArrowShaft = 0.1f;
+
+    /// <summary>Arrow shape: half the head's width at the neck.</summary>
+    public const float ArrowHead = 0.32f;
+
+    /// <summary>Highest terrain under a flat arrow at <paramref name="centre"/> pointing along <paramref name="dir"/> (a unit vector): the most of <see cref="TerrainHeight.At"/> at the centre and the arrow's corners (BUG-0084).</summary>
+    /// <remarks>A flat arrow drawn a fixed lift above the centre's height dipped into steep ramps (0.577 slope x 0.65 m = 0.375 m &gt; the 0.3 m lift); drawn that lift above this height, every corner clears the ground by the lift. Allocates nothing.</remarks>
+    public static float ArrowGround(Heightmap map, Vector2 centre, Vector2 dir)
+    {
+        float h = TerrainHeight.At(map, centre.X, centre.Y);
+        // The whole arrow lies inside its cell (it reaches 0.65 m from the centre of a 2 m cell), and
+        // only a ramp cell is not flat; a ramp is a plane, so its highest point under the arrow is a corner.
+        int cx = (int)MathF.Floor(centre.X / MapConstants.CellSize), cy = (int)MathF.Floor(centre.Y / MapConstants.CellSize);
+        if ((uint)cx < (uint)map.Width && (uint)cy < (uint)map.Height && !map.IsRamp(cx, cy)) return h;
+        var side = new Vector2(-dir.Y, dir.X);
+        h = MathF.Max(h, Ground(map, centre + dir * ArrowTail + side * ArrowShaft));
+        h = MathF.Max(h, Ground(map, centre + dir * ArrowTail - side * ArrowShaft));
+        h = MathF.Max(h, Ground(map, centre + dir * ArrowNeck + side * ArrowHead));
+        h = MathF.Max(h, Ground(map, centre + dir * ArrowNeck - side * ArrowHead));
+        return MathF.Max(h, Ground(map, centre + dir * ArrowTip));
+    }
+
+    private static float Ground(Heightmap map, Vector2 p) => TerrainHeight.At(map, p.X, p.Y);
+
     /// <summary>Unit ground vector (x, y in sim axes) of direction <paramref name="direction"/>, from the sim's own offset table.</summary>
     public static Vector2 DirectionVector(int direction) =>
         Vector2.Normalize(new Vector2(FlowField.OffsetX(direction), FlowField.OffsetY(direction)));

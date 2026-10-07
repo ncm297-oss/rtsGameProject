@@ -167,11 +167,14 @@ public partial class OrdersTest : Node
         Tick(2); // a command enqueued before tick N applies on tick N + 1: the second Tick() call
         Check(U.Alive[victim] && U.Owner[victim] == 1, $"slot {victim} was not reused by the enemy spawn");
         Press(Key.Key1);
+        ulong tapped = Time.GetTicksMsec();
         ExpectSlots("recall after the respawn", five.Skip(1).ToList());
 
         // Double-tap: a lone press after the window leaves the camera, the second press centres it.
         _camera.SetFocus(U.Position[victim].X + 60f, U.Position[victim].Y);
-        await ToSignal(GetTree().CreateTimer(ControlGroups.DoubleTapSeconds + 0.05, true, false, true), SceneTreeTimer.SignalName.Timeout);
+        // BUG-0088: wait on the clock the tap window is measured with (Time.GetTicksMsec), not a process-time timer,
+        // which can run ahead of the wall clock after slow frames and fire inside the window.
+        while (Time.GetTicksMsec() - tapped < (ulong)ControlGroups.DoubleTapMs + 50) await Frame();
         System.Numerics.Vector2 away = _camera.Focus;
         Press(Key.Key1);
         Check(System.Numerics.Vector2.Distance(_camera.Focus, away) < 0.01f, "a single recall moved the camera");

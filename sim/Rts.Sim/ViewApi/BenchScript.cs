@@ -7,7 +7,8 @@ namespace Rts.Sim.ViewApi;
 /// Pure: no Godot, no sim reference, so it is unit-tested. The view feeds it each frame's delta;
 /// the first step is due on the first call, each step then waits its <see cref="Entry.Seconds"/>
 /// before the next, and the sequence repeats until <see cref="Duration"/> has elapsed. At most one
-/// step fires per call, so a long frame delays the steps behind it instead of bunching them.
+/// step fires per call. The schedule is cumulative, so after a long frame the overdue steps fire on
+/// the following frames, one per frame, and the loop keeps its length.
 /// One loop takes <see cref="LoopSeconds"/>; the four minimap jumps all land inside the first 3 s,
 /// so <c>--bench 3</c> exercises every camera move. Allocates nothing after construction.
 /// </remarks>
@@ -17,24 +18,28 @@ public sealed class BenchScript
     public readonly record struct Entry(BenchStep Step, int Arg, double Seconds);
 
     /// <summary>The steps in order; the script loops over them.</summary>
+    /// <remarks>
+    /// The army marches across from 0.75 s until H at 9.5 s (BUG-0101): A + click comes before the
+    /// Move across, and the three moves are Shift-queued behind it, so neither cuts the march short.
+    /// </remarks>
     public static readonly Entry[] Sequence =
     {
         new(BenchStep.FocusArmy, 0, 0.25),
-        new(BenchStep.BoxSelectArmy, 0, 0.5),
+        new(BenchStep.BoxSelectArmy, 0, 0.25),
+        new(BenchStep.AttackMove, 0, 0.25),
         new(BenchStep.OrderAcross, 0, 1.0),
         new(BenchStep.MinimapJump, 0, 0.25),
         new(BenchStep.MinimapJump, 1, 0.25),
         new(BenchStep.MinimapJump, 2, 0.25),
         new(BenchStep.MinimapJump, 3, 0.25),
         new(BenchStep.FocusArmy, 0, 0.25),
-        new(BenchStep.ZoomIn, 0, 1.0),
-        new(BenchStep.ZoomOut, 0, 1.0),
-        new(BenchStep.AttackMove, 0, 2.0),
         new(BenchStep.QueuePoint, 0, 0.5),
         new(BenchStep.QueuePoint, 1, 0.5),
         new(BenchStep.QueuePoint, 2, 0.5),
-        new(BenchStep.Hold, 0, 1.0),
-        new(BenchStep.Stop, 0, 0.5),
+        new(BenchStep.ZoomIn, 0, 1.5),
+        new(BenchStep.ZoomOut, 0, 3.5),
+        new(BenchStep.Hold, 0, 0.25),
+        new(BenchStep.Stop, 0, 0.25),
     };
 
     /// <summary>Seconds one pass over <see cref="Sequence"/> takes.</summary>

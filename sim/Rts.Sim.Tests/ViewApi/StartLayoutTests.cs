@@ -54,6 +54,46 @@ public class StartLayoutTests
         }
     }
 
+    [Theory]
+    [MemberData(nameof(Seeds))]
+    public void Blocks_OnTheMatchMap_NoSpotTouchesABlockedOrResourceCell_AndEachBlockIsOnOneLevel(ulong seed)
+    {
+        // BUG-0085: seed 1's west army started threaded through a forest. Match map: 12 forests, 8 mines.
+        NavGrid grid = PropLayoutTests.MatchSim(seed).World.NavGrid;
+        float maxR = TestSim.Data.Units.Max(u => u.Radius);
+        for (int p = 0; p < 2; p++)
+        {
+            Vector2[] spots = StartLayout.Block(grid, 100, west: p == 0, maxR);
+            Assert.Equal(100, spots.Length);
+            int level = -1;
+            foreach (Vector2 s in spots)
+            {
+                Assert.True(grid.WorldToCell(s, out int x, out int y), $"seed {seed} p{p}: {s} off the map");
+                Assert.True((grid.FlagsAt(x, y) & NavFlags.Ramp) == 0, $"seed {seed} p{p}: ({x}, {y}) is a ramp");
+                for (int dy = -1; dy <= 1; dy++)
+                    for (int dx = -1; dx <= 1; dx++)
+                        Assert.True((grid.FlagsAt(x + dx, y + dy) & (NavFlags.Blocked | NavFlags.Resource)) == 0,
+                            $"seed {seed} p{p}: spot ({x}, {y}) touches ({x + dx}, {y + dy}) flags {grid.FlagsAt(x + dx, y + dy)}");
+                if (level < 0) level = grid.LevelAt(x, y);
+                Assert.True(grid.LevelAt(x, y) == level, $"seed {seed} p{p}: ({x}, {y}) on level {grid.LevelAt(x, y)}, block on {level}");
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(1UL)]
+    [InlineData(2UL)]
+    [InlineData(7UL)]
+    [InlineData(11UL)]
+    public void Blocks_OnTheMatchMap_StillFit1000PerSide(ulong seed)
+    {
+        // `--units 1000` (the dots shot and the perf rows) must still fill both blocks.
+        NavGrid grid = PropLayoutTests.MatchSim(seed).World.NavGrid;
+        float maxR = TestSim.Data.Units.Max(u => u.Radius);
+        Assert.Equal(1000, StartLayout.Block(grid, 1000, west: true, maxR).Length);
+        Assert.Equal(1000, StartLayout.Block(grid, 1000, west: false, maxR).Length);
+    }
+
     [Fact]
     public void Block_IsDeterministic_AndCentredOnTheMapsMiddleRow()
     {

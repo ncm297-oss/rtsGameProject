@@ -16,7 +16,7 @@ namespace Rts.Game;
 /// </remarks>
 public partial class FlowArrowsView : MultiMeshInstance3D
 {
-    /// <summary>Height of the arrows above the terrain at the cell centre, in meters (clears a ramp's slope under the arrow).</summary>
+    /// <summary>Height of the arrows above the highest ground under them (<see cref="FlowArrowLayout.ArrowGround"/>), in meters, so they clear a ramp's slope.</summary>
     public const float Lift = 0.3f;
 
     // Dev overlay tints, not player-facing.
@@ -60,7 +60,7 @@ public partial class FlowArrowsView : MultiMeshInstance3D
             int c = cells[k];
             System.Numerics.Vector2 centre = grid.CellCenter(c % grid.Width, c / grid.Width);
             System.Numerics.Vector2 v = FlowArrowLayout.DirectionVector(dirs[k]);
-            float y = TerrainHeight.At(map, centre.X, centre.Y) + Lift;
+            float y = FlowArrowLayout.ArrowGround(map, centre, v) + Lift;
             // Basis columns X = (v.x, 0, v.y) (the arrow mesh points along +X), Y = up, Z = X x Y; rows of a 3x4 matrix.
             int o = k * Stride;
             b[o] = v.X; b[o + 1] = 0f; b[o + 2] = -v.Y; b[o + 3] = centre.X;
@@ -117,10 +117,11 @@ public partial class FlowArrowsView : MultiMeshInstance3D
         AddChild(_marker);
     }
 
-    // A flat arrow in the XZ plane pointing +X, 1.3 m long (cells are 2 m), drawn from both sides.
+    // A flat arrow in the XZ plane pointing +X, 1.3 m long (cells are 2 m), drawn from both sides; the shape is FlowArrowLayout's.
     private static ArrayMesh ArrowMesh()
     {
-        const float tail = -0.65f, neck = 0.1f, tip = 0.65f, shaft = 0.1f, head = 0.32f;
+        const float tail = FlowArrowLayout.ArrowTail, neck = FlowArrowLayout.ArrowNeck, tip = FlowArrowLayout.ArrowTip;
+        const float shaft = FlowArrowLayout.ArrowShaft, head = FlowArrowLayout.ArrowHead;
         var v = new[]
         {
             new Vector3(tail, 0, -shaft), new Vector3(neck, 0, -shaft), new Vector3(neck, 0, shaft), new Vector3(tail, 0, shaft),

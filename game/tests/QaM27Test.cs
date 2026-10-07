@@ -17,6 +17,9 @@ namespace Rts.Game.Tests;
 /// </remarks>
 public partial class QaM27Test : Node
 {
+    // Smallest local-army centre displacement a 10 s bench must reach (see OrderReach).
+    private const float MinCentreShift = 20f;
+
     private readonly List<string> _failures = new();
     private GameData _data = null!;
 
@@ -145,7 +148,7 @@ public partial class QaM27Test : Node
         await Frame();
     }
 
-    // Measurement: how far a 10 s bench moves the local army (the brief: "order across the map").
+    // How far a 10 s bench sends and moves the local army (the brief: "order across the map"; M2-H2 asserts it).
     private async Task OrderReach()
     {
         Match match = StartMatch("--bench", "10", "--mute", "--speed", "1");
@@ -167,8 +170,15 @@ public partial class QaM27Test : Node
                     maxUnit = Math.Max(maxUnit, System.Numerics.Vector2.Distance(start[i], u.Position[i]));
         }
         float mapW = sim.World.NavGrid.Width * Rts.Sim.Map.MapConstants.CellSize;
-        GD.Print($"QA M2-7 NOTE: 10 s bench moved the local army centre at most {maxCentreShift:F1} m and any unit at most {maxUnit:F1} m on a {mapW:F0} m map");
+        float reach = System.Numerics.Vector2.Distance(bench.AcrossFrom, bench.AcrossTarget);
+        GD.Print($"QA M2-7 NOTE: 10 s bench sent the army {reach:F1} m (from {bench.AcrossFrom} to {bench.AcrossTarget}) and moved the local army centre at most {maxCentreShift:F1} m and any unit at most {maxUnit:F1} m on a {mapW:F0} m map");
         Check(bench.Finished, "10 s bench never finished");
+        // BUG-0101: "order across the map" must go across (was the enemy block ~15 m away; the centre moved 17.4 m).
+        // The march crosses the idle enemy block, which halves its pace after ~5 s: an uninterrupted 10 s sim march
+        // moves seed 1's centre 24.2 m (29.3 m with no enemy), so the bench's 8.75 s march is held to 20 m.
+        Check(bench.AcrossOrders >= 1, "the 10 s bench never ordered the army across");
+        Check(reach >= 100f, $"order across targets {bench.AcrossTarget}, only {reach:F1} m from the army at {bench.AcrossFrom}");
+        Check(maxCentreShift >= MinCentreShift, $"the army centre moved at most {maxCentreShift:F1} m in 10 s (want >= {MinCentreShift} m)");
         match.QueueFree();
         await Frame();
         await Frame();

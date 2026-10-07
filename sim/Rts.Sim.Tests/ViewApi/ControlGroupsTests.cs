@@ -97,6 +97,14 @@ public class ControlGroupsTests
     }
 
     [Fact]
+    public void DoubleTapSeconds_IsDerivedFromDoubleTapMs()
+    {
+        // BUG-0070: two literals for one rule could drift apart.
+        Assert.Equal(ControlGroups.DoubleTapMs, ControlGroups.DoubleTapSeconds * 1000);
+        Assert.Equal(0.3, ControlGroups.DoubleTapSeconds);
+    }
+
+    [Fact]
     public void Tap_SecondTapOfTheSameGroupWithinTheWindow_IsADoubleTap()
     {
         var groups = new ControlGroups(4);

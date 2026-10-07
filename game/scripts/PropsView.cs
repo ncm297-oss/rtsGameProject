@@ -41,7 +41,8 @@ public partial class PropsView : Node3D
 
     private PropLayout? _layout;
     private MultiMesh[] _mms = Array.Empty<MultiMesh>();
-    private float[] _buffer = Array.Empty<float>();
+    private float[][] _buffers = Array.Empty<float[]>();
+    private int[] _typeUploads = Array.Empty<int>();
 
     /// <summary>The runner whose sim is shown each frame; null shows nothing (tests call <see cref="Sync"/> directly).</summary>
     public SimRunner? Runner { get; set; }
@@ -49,8 +50,11 @@ public partial class PropsView : Node3D
     /// <summary>The layout, or null before <see cref="Bind"/>.</summary>
     public PropLayout? Layout => _layout;
 
-    /// <summary>Times the instance buffers were uploaded (test and debug readout).</summary>
+    /// <summary>Relists that uploaded at least one type's buffer (test and debug readout).</summary>
     public int Uploads { get; private set; }
+
+    /// <summary>Times resource type <paramref name="type"/>'s buffer was uploaded: only when its own list changed (BUG-0086).</summary>
+    public int UploadsOf(int type) => _typeUploads[type];
 
     /// <summary>Instances drawn for resource type <paramref name="type"/>.</summary>
     public int ShownCount(int type) => _mms[type].VisibleInstanceCount;
@@ -62,8 +66,9 @@ public partial class PropsView : Node3D
     public void Bind(GameData data, int capacity)
     {
         _layout = new PropLayout(data.Resources, capacity);
-        _buffer = new float[capacity * PropLayout.Stride];
         _mms = new MultiMesh[data.Resources.Length];
+        _buffers = new float[_mms.Length][];
+        _typeUploads = new int[_mms.Length];
         for (int t = 0; t < _mms.Length; t++)
         {
             ResourceDef def = data.Resources[t];
@@ -74,6 +79,7 @@ public partial class PropsView : Node3D
                 InstanceCount = capacity,
                 VisibleInstanceCount = 0,
             };
+            _buffers[t] = new float[capacity * PropLayout.Stride];
             AddChild(new MultiMeshInstance3D { Name = t.ToString(), Multimesh = _mms[t] });
         }
     }
@@ -89,15 +95,20 @@ public partial class PropsView : Node3D
         if (_layout == null) return;
         ResourceStore r = world.Resources;
         if (!_layout.Refresh(world.Heightmap, world.NavGrid, r.Alive, r.TypeId, r.Cell)) return;
+        bool any = false;
         for (int t = 0; t < _mms.Length; t++)
         {
-            ReadOnlySpan<float> src = _layout.TransformsOf(t);
-            src.CopyTo(_buffer);
+            // A felled tree re-uploads the trees, not the mines (BUG-0086).
+            if (!_layout.Changed(t)) continue;
+            // Each type has its own buffer, so its hidden instances (past the count) only ever hold its own old transforms.
+            _layout.TransformsOf(t).CopyTo(_buffers[t]);
             // Godot wants the whole buffer; instances past the count are never drawn.
-            _mms[t].Buffer = _buffer;
+            _mms[t].Buffer = _buffers[t];
             _mms[t].VisibleInstanceCount = _layout.CountOf(t);
+            _typeUploads[t]++;
+            any = true;
         }
-        Uploads++;
+        if (any) Uploads++;
     }
 
     // A cone canopy on a trunk cylinder, standing on the origin, inside the footprint.

@@ -241,4 +241,51 @@ public class FlowArrowLayoutTests
         Assert.Equal(2, DebugCounts.Moving(alive, state));
         Assert.Equal(0, DebugCounts.Moving(ReadOnlySpan<bool>.Empty, state));
     }
+
+    [Fact]
+    public void ArrowGround_IsAtLeastTheTerrainUnderEveryArrowVertex_OnRampsToo()
+    {
+        // BUG-0084: arrows lifted 0.3 m above the centre's height dipped up to 9 cm into the steepest ramps.
+        // Every vertex of the flat arrow (and each edge midpoint) must sit no lower than the terrain under it
+        // minus 2 cm when drawn at ArrowGround (the view adds 0.3 m on top).
+        int oldDips = 0, vertices = 0;
+        float worst = float.MinValue;
+        foreach (ulong seed in new ulong[] { 1, 2, 3, 4, 5 })
+        {
+            Heightmap map = TerrainHeightTests.GeneratedMap(seed);
+            var g = new NavGrid(map);
+            for (int y = 0; y < g.Height; y++)
+                for (int x = 0; x < g.Width; x++)
+                {
+                    if (!g.IsPassable(x, y)) continue;
+                    Vector2 c = g.CellCenter(x, y);
+                    for (int d = 0; d < 8; d++)
+                    {
+                        Vector2 v = FlowArrowLayout.DirectionVector(d), side = new(-v.Y, v.X);
+                        float ground = FlowArrowLayout.ArrowGround(map, c, v), centre = TerrainHeight.At(map, c.X, c.Y);
+                        Assert.True(ground >= centre);
+                        Vector2[] shape =
+                        {
+                            c + v * FlowArrowLayout.ArrowTail + side * FlowArrowLayout.ArrowShaft, c + v * FlowArrowLayout.ArrowNeck + side * FlowArrowLayout.ArrowShaft,
+                            c + v * FlowArrowLayout.ArrowNeck + side * FlowArrowLayout.ArrowHead, c + v * FlowArrowLayout.ArrowTip,
+                            c + v * FlowArrowLayout.ArrowNeck - side * FlowArrowLayout.ArrowHead, c + v * FlowArrowLayout.ArrowNeck - side * FlowArrowLayout.ArrowShaft,
+                            c + v * FlowArrowLayout.ArrowTail - side * FlowArrowLayout.ArrowShaft,
+                        };
+                        for (int k = 0; k < shape.Length; k++)
+                        {
+                            foreach (Vector2 p in new[] { shape[k], (shape[k] + shape[(k + 1) % shape.Length]) / 2 })
+                            {
+                                float t = TerrainHeight.At(map, p.X, p.Y);
+                                vertices++;
+                                worst = MathF.Max(worst, t - ground);
+                                Assert.True(t <= ground + 0.02f, $"seed {seed} cell ({x}, {y}) dir {d}: ground {t} at {p} is {t - ground:F3} m above the arrow's base");
+                                if (t > centre + 0.3f) oldDips++; // where the old rule (centre + 0.3 m) went under
+                            }
+                        }
+                    }
+                }
+        }
+        Assert.True(oldDips > 0, "no arrow point dips under the old rule: the maps no longer exercise steep ramps");
+        Assert.True(worst <= 0.02f, $"worst {worst}");
+    }
 }

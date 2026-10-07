@@ -9,6 +9,7 @@ using Rts.Sim;
 using Rts.Sim.Commands;
 using Rts.Sim.Data;
 using Rts.Sim.Entities;
+using Rts.Sim.ViewApi;
 
 namespace Rts.Game.Tests;
 
@@ -57,7 +58,8 @@ public partial class BenchTest : Node
     {
         Check(LaunchOptions.Parse(new[] { "--bench", "60" }).BenchSeconds == 60, "--bench 60");
         Check(LaunchOptions.Parse(new[] { "--bench", "2.5", "--mute" }).BenchSeconds == 2.5, "--bench 2.5");
-        foreach (string bad in new[] { "0", "-1", "-0.5", "abc", "NaN", "Infinity", "1e400" })
+        Check(LaunchOptions.Parse(new[] { "--bench", "3600" }).BenchSeconds == LaunchOptions.MaxBenchSeconds, "--bench 3600 (the cap itself)");
+        foreach (string bad in new[] { "0", "-1", "-0.5", "abc", "NaN", "Infinity", "1e400", "1e308", "3600.5" }) // BUG-0103: capped at an hour
             Check(LaunchOptions.Parse(new[] { "--bench", bad }).BenchSeconds == null, $"--bench {bad} should be ignored");
         LaunchOptions missing = LaunchOptions.Parse(new[] { "--bench", "--mute" });
         Check(missing.BenchSeconds == null && missing.Mute, "--bench with no value must not eat --mute");
@@ -82,8 +84,13 @@ public partial class BenchTest : Node
             Check(LineShape.IsMatch(l), $"bench line not in the documented shape: '{l}'");
             System.Text.RegularExpressions.Match m = LineShape.Match(l);
             if (m.Success)
-                Check(double.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture) >= 2.0 && int.Parse(m.Groups[2].Value) > 0 && int.Parse(m.Groups[8].Value) > 0,
-                    $"bench line numbers implausible: '{l}'");
+            {
+                double secs = double.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture), fps = double.Parse(m.Groups[7].Value, CultureInfo.InvariantCulture);
+                int frames = int.Parse(m.Groups[2].Value);
+                Check(secs >= 2.0 && frames > 0 && int.Parse(m.Groups[8].Value) > 0, $"bench line numbers implausible: '{l}'");
+                // BUG-0102 on the real binary: fps = frames / seconds (seconds is printed to 0.1 s, so allow 2 % + that rounding).
+                Check(secs > 0 && Math.Abs(fps - frames / secs) <= 0.02 * frames / secs + frames * 0.05 / (secs * secs), $"fps {fps} but frames / seconds = {frames / secs:F1}: '{l}'");
+            }
         }
         GD.Print($"game --bench 2: exit {exit} after {seconds:F1} s, {benchLines} bench line(s)");
         Check(exit == 0, $"--bench 2 exited {exit}");
@@ -109,6 +116,9 @@ public partial class BenchTest : Node
     // Criterion 2 in-process: a 3 s bench through the real controllers changes the selection, enqueues commands and moves the camera.
     private async Task ScriptDrivesRealCode()
     {
+        // BUG-0103: on a comma-decimal PC the two info lines printed "10,56 ms"; run this one under de-DE.
+        CultureInfo culture = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = new CultureInfo("de-DE");
         Match match = StartMatch("--bench", "3", "--mute");
         BenchRunner bench = match.Bench!;
         bench.QuitOnFinish = false;
@@ -122,6 +132,16 @@ public partial class BenchTest : Node
             maxSelected = Math.Max(maxSelected, sel.Selection.Count);
             await Frame();
         }
+        // The formatters themselves, called here under de-DE (the frame callbacks may not see this async method's culture).
+        string start = BenchRunner.StartLineText(10.5, new Vector2(1920, 1061), "Disabled", 59.94, "Windows");
+        string worst = BenchRunner.WorstLineText(10.56, 3.25, BenchStep.OrderAcross);
+        CultureInfo.CurrentCulture = culture;
+        Check(start == "Bench running for 10.5 s (16 steps per 10 s loop), viewport 1920 x 1061, vsync Disabled at 59.9 Hz, display Windows", $"start line under de-DE: '{start}'");
+        Check(worst == "Bench worst frame 10.56 ms at 3.25 s, after step OrderAcross", $"worst line under de-DE: '{worst}'");
+        var comma = new Regex(@"\d,\d");
+        Check(bench.StartLine != null && bench.StartLine.Contains("3 s (") && !comma.IsMatch(bench.StartLine), $"start line under de-DE: '{bench.StartLine}'");
+        Check(bench.WorstLine != null && Regex.IsMatch(bench.WorstLine, @"^Bench worst frame \d+\.\d\d ms at \d+\.\d\d s, after step \w+$"), $"worst line under de-DE: '{bench.WorstLine}'");
+        Check(bench.Line != null && !comma.IsMatch(bench.Line), $"bench line under de-DE: '{bench.Line}'");
         int issued = 0;
         foreach (CommandKind k in Enum.GetValues<CommandKind>()) issued += sel.IssuedCount(k);
         UnitStore u = sim.World.Units;
@@ -139,6 +159,15 @@ public partial class BenchTest : Node
             for (int b = a + 1; b < 4; b++)
                 Check(System.Numerics.Vector2.Distance(bench.JumpFocus[a], bench.JumpFocus[b]) > 50f, $"jumps {a} and {b} left the camera at {bench.JumpFocus[a]} and {bench.JumpFocus[b]}");
         Check(bench.Ticks >= 50, $"{bench.Ticks} ticks in 3 s");
+        // BUG-0102: fps is the frames drawn in the timed span over its length (was a mean of Godot's once-a-second counter, 7-10 % low on short runs).
+        System.Text.RegularExpressions.Match line = LineShape.Match(bench.Line ?? "");
+        if (line.Success)
+        {
+            double fps = double.Parse(line.Groups[7].Value, CultureInfo.InvariantCulture);
+            double drawn = bench.Stats.Count / bench.Script!.Elapsed, fromAvg = 1000.0 / bench.Stats.Average;
+            GD.Print($"fps {fps}: frames / elapsed {drawn:F2}, 1000 / avg {fromAvg:F2}");
+            Check(Math.Abs(fps - drawn) <= 0.02 * drawn && Math.Abs(fps - fromAvg) <= 0.02 * fromAvg, $"fps {fps} vs frames / elapsed {drawn:F2} and 1000 / avg {fromAvg:F2}");
+        }
         match.QueueFree();
         await Frame();
         await Frame();

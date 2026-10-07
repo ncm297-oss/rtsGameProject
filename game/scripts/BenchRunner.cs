@@ -39,10 +39,9 @@ public partial class BenchRunner : Node
     private Minimap? _minimap;
     private Screenshotter? _shot;
     private float _startZoom;
-    private System.Numerics.Vector2 _west, _east;
     private long _ticksAtStart;
-    private double _tickMsAtStart, _fpsSum;
-    private int _fpsSamples, _warmUp;
+    private double _tickMsAtStart;
+    private int _warmUp;
     private double _worstAt;
     private BenchStep _lastStep, _worstAfter;
 
@@ -64,6 +63,12 @@ public partial class BenchRunner : Node
     /// <summary>The printed <c>bench:</c> line; null until <see cref="Finished"/>.</summary>
     public string? Line { get; private set; }
 
+    /// <summary>The printed "Bench running for ..." info line; null until <see cref="Running"/>. Invariant culture, like <see cref="Line"/> (BUG-0103).</summary>
+    public string? StartLine { get; private set; }
+
+    /// <summary>The printed "Bench worst frame ..." info line; null until <see cref="Finished"/>.</summary>
+    public string? WorstLine { get; private set; }
+
     /// <summary>Camera focus right after each of the four minimap jumps of the latest loop (corner order).</summary>
     public System.Numerics.Vector2[] JumpFocus { get; } = new System.Numerics.Vector2[4];
 
@@ -72,6 +77,15 @@ public partial class BenchRunner : Node
 
     /// <summary>Selection size after the latest box select.</summary>
     public int LastBoxSelected { get; private set; }
+
+    /// <summary>Local army centre (meters) when the latest <see cref="BenchStep.OrderAcross"/> ran.</summary>
+    public System.Numerics.Vector2 AcrossFrom { get; private set; }
+
+    /// <summary>Where the latest <see cref="BenchStep.OrderAcross"/> sent the selection (<see cref="BenchTarget.TryAcross"/>).</summary>
+    public System.Numerics.Vector2 AcrossTarget { get; private set; }
+
+    /// <summary>Times <see cref="BenchStep.OrderAcross"/> issued an order.</summary>
+    public int AcrossOrders { get; private set; }
 
     /// <summary>Sim ticks run during the timed span.</summary>
     public long Ticks => _runner.TickTimes.Total - _ticksAtStart;
@@ -86,10 +100,6 @@ public partial class BenchRunner : Node
         _shot = shot;
         _startZoom = startZoom;
         Script = new BenchScript(seconds);
-        NavGrid grid = runner.Simulation!.World.NavGrid;
-        // One passable spot in each start block: the far one is where "order across the map" goes.
-        _west = StartLayout.Block(grid, 1, west: true, 1f)[0];
-        _east = StartLayout.Block(grid, 1, west: false, 1f)[0];
     }
 
     public override void _Process(double delta)
@@ -104,8 +114,8 @@ public partial class BenchRunner : Node
             _ticksAtStart = _runner.TickTimes.Total;
             _tickMsAtStart = _runner.TotalTickMs;
             Vector2 size = _camera.GetViewport().GetVisibleRect().Size;
-            GD.Print($"Bench running for {Script.Duration:0.###} s ({BenchScript.Sequence.Length} steps per {BenchScript.LoopSeconds:0.##} s loop), " +
-                $"viewport {size.X:0} x {size.Y:0}, vsync {DisplayServer.WindowGetVsyncMode()} at {DisplayServer.ScreenGetRefreshRate():0.#} Hz, display {DisplayServer.GetName()}");
+            StartLine = StartLineText(Script.Duration, size, DisplayServer.WindowGetVsyncMode().ToString(), DisplayServer.ScreenGetRefreshRate(), DisplayServer.GetName());
+            GD.Print(StartLine);
             return; // this frame's delta is from before the start
         }
         if (delta * 1000.0 > Stats.Worst)
@@ -114,12 +124,6 @@ public partial class BenchRunner : Node
             _worstAfter = _lastStep;
         }
         Stats.Add(delta * 1000.0);
-        double fps = Performance.GetMonitor(Performance.Monitor.TimeFps);
-        if (fps > 0)
-        {
-            _fpsSum += fps;
-            _fpsSamples++;
-        }
         if (Script.Advance(delta, out BenchScript.Entry step))
         {
             Run(step, sim);
@@ -141,8 +145,14 @@ public partial class BenchRunner : Node
                 LastBoxSelected = _selection.BoxSelect(new Vector2(1, 1), view - new Vector2(1, 1), add: false);
                 break;
             case BenchStep.OrderAcross:
-                System.Numerics.Vector2 to = TryArmyCentre(sim.World.Units, out System.Numerics.Vector2 a) && a.X > sim.World.NavGrid.Width * MapConstants.CellSize / 2 ? _west : _east;
-                _selection.Order(CommandKind.Move, new Vector2(to.X, to.Y), queued: false);
+                // BUG-0101: a far point on the other side of the map, not the enemy block next door.
+                if (TryArmyCentre(sim.World.Units, out System.Numerics.Vector2 from) && BenchTarget.TryAcross(sim.World.NavGrid, from, out System.Numerics.Vector2 to))
+                {
+                    AcrossFrom = from;
+                    AcrossTarget = to;
+                    AcrossOrders++;
+                    _selection.Order(CommandKind.Move, new Vector2(to.X, to.Y), queued: false);
+                }
                 break;
             case BenchStep.MinimapJump:
                 Jump(step.Arg, sim.World.Heightmap);
@@ -202,17 +212,29 @@ public partial class BenchRunner : Node
         return n > 0;
     }
 
+    /// <summary>The "Bench running for ..." line, invariant culture.</summary>
+    public static string StartLineText(double seconds, Vector2 viewport, string vsync, double refreshHz, string display) =>
+        string.Create(CultureInfo.InvariantCulture,
+            $"Bench running for {seconds:0.###} s ({BenchScript.Sequence.Length} steps per {BenchScript.LoopSeconds:0.##} s loop), " +
+            $"viewport {viewport.X:0} x {viewport.Y:0}, vsync {vsync} at {refreshHz:0.#} Hz, display {display}");
+
+    /// <summary>The "Bench worst frame ..." line, invariant culture.</summary>
+    public static string WorstLineText(double worstMs, double atSeconds, BenchStep after) =>
+        string.Create(CultureInfo.InvariantCulture, $"Bench worst frame {worstMs:0.00} ms at {atSeconds:0.00} s, after step {after}");
+
     private void Finish()
     {
         Running = false;
         Finished = true;
         long ticks = Ticks;
         double avgTick = ticks > 0 ? (_runner.TotalTickMs - _tickMsAtStart) / ticks : 0;
-        double fps = _fpsSamples > 0 ? _fpsSum / _fpsSamples : 0;
+        // Frames drawn in the timed span over its length (= 1000 / avg); BUG-0102: not Godot's once-a-second counter.
+        double fps = Script!.Elapsed > 0 ? Stats.Count / Script.Elapsed : 0;
         Line = string.Create(CultureInfo.InvariantCulture,
             $"{LinePrefix} seconds {Script!.Elapsed:0.0} frames {Stats.Count} avg {Stats.Average:0.00} ms p50 {Stats.Percentile(0.5):0.00} ms " +
             $"p99 {Stats.Percentile(0.99):0.00} ms worst {Stats.Worst:0.00} ms fps {fps:0.0} ticks {ticks} avgTick {avgTick:0.000} ms");
-        GD.Print($"Bench worst frame {Stats.Worst:0.00} ms at {_worstAt:0.00} s, after step {_worstAfter}");
+        WorstLine = WorstLineText(Stats.Worst, _worstAt, _worstAfter);
+        GD.Print(WorstLine);
         GD.Print(Line);
         if (QuitOnFinish) GetTree().Quit(0);
     }

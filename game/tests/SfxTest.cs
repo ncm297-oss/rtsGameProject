@@ -47,8 +47,9 @@ public partial class SfxTest : Node
             int before = _sfx.PlayCount(SfxEvent.Select);
             _sfx.Play(SfxEvent.Select);
             Check(_sfx.PlayCount(SfxEvent.Select) == before + 1, "counter did not run while muted");
-            // A sound started in the frame the engine quits outlives the audio server (an ObjectDB leak warning at exit).
-            await ToSignal(GetTree().CreateTimer(0.3), SceneTreeTimer.SignalName.Timeout);
+            ExitAfterPlay();
+            // BUG-0087: no wait here any more. The Select above is still sounding as the scene quits; Sfx._ExitTree
+            // waits for the audio server's next mix, so the exit log has no ObjectDB leak warning.
         }
         catch (Exception ex)
         {
@@ -117,6 +118,26 @@ public partial class SfxTest : Node
         bytes = GC.GetAllocatedBytesForCurrentThread() - bytes;
         Check(sfx.PlayCount(SfxEvent.Command) == 21, $"20 spaced plays counted {sfx.PlayCount(SfxEvent.Command) - 1}");
         Check(bytes == 0, $"20 plays allocated {bytes} bytes");
+        sfx.QueueFree();
+    }
+
+    // BUG-0087: a pool that played just now waits for one audio mix as it leaves the tree (well under the limit);
+    // one that never played doesn't wait at all.
+    private void ExitAfterPlay()
+    {
+        var quiet = new Sfx();
+        AddChild(quiet);
+        RemoveChild(quiet);
+        Check(quiet.LastExitWaitMs == 0, $"a pool that never played waited {quiet.LastExitWaitMs} ms at exit");
+        quiet.QueueFree();
+
+        var sfx = new Sfx();
+        AddChild(sfx);
+        Check(sfx.Play(SfxEvent.Command), "Command did not play");
+        RemoveChild(sfx);
+        GD.Print($"exit right after a play: waited {sfx.LastExitWaitMs:F1} ms for an audio mix (limit {Sfx.ExitWaitLimitMs} ms)");
+        Check(sfx.LastExitWaitMs > 0 && sfx.LastExitWaitMs < Sfx.ExitWaitLimitMs, $"exit after a play waited {sfx.LastExitWaitMs} ms");
+        Check(sfx.StopAll() == 0, "a player still plays after the pool left the tree");
         sfx.QueueFree();
     }
 

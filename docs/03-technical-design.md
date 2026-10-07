@@ -1542,11 +1542,17 @@ Match
 - **Start armies (debug until real start locations):** `Match.Start` enqueues `SpawnUnit` for
   `--units <n>` per player (0-1000, default 100). Player p plays faction p in data order
   (malazan, whirlwind) until the M6 lobby and spawns its roster round-robin. Positions come from
-  the pure `ViewApi.StartLayout.Block(NavGrid, count, west, maxRadius)`: passable cell centres
+  the pure `ViewApi.StartLayout.Block(NavGrid, count, west, maxRadius)`: open cell centres
   nearest the middle of an inner column 3 cells from the map's centre line (west block for player
   0, east for player 1), scored `dx² + dy²` (a half-disc), ties to the lower cell index, on a
-  lattice of `ceil(2·maxRadius / 2 m)` cells so bodies never overlap. No RNG; fewer positions
-  come back (with a warning) if a half of the map runs out of room. The camera starts on player
+  lattice of `ceil(2·maxRadius / 2 m)` cells so bodies never overlap. Since M2-H2 (BUG-0085) a cell
+  is open when it is passable, not a ramp, and none of its 8 neighbours is `Blocked` (no tree, mine,
+  cliff edge or border ring next to a unit: docs/02 "Map", start locations are open bases), and a
+  block stays in one clearing: the open cells joined to its first cell through open cells on that
+  cell's level. The first cell is the best-scoring one whose clearing holds the whole block (else
+  the one with the roomiest clearing), so a small terrace by the centre line can't split the army.
+  No RNG; fewer positions come back (with a warning) if no clearing on that side has room. The CLI's
+  march scenario uses the same blocks. The camera starts on player
   0's block centre. The units appear on the sim's second tick.
 - **Unit views:** `UnitViews.Bind` makes one `CapsuleMesh` per unit type (radius from
   `UnitDef.Radius`, height `2·radius + 1 m`, 12 radial segments) and one `StandardMaterial3D` per
@@ -1711,14 +1717,20 @@ Match
   `CliffColor`): ramp cells get the ramp tint, nav-grid cliff cells (the lip above a drop and ramp
   walls) the cliff tint, any other cell its level tint, darkened by `ImpassableShade` (0.6) if it is
   blocked anyway (the map's border ring, sealed pockets). `DrawDots(alive, positions, owners)`
-  clears the previous dots (only the 3 x 3 blocks it wrote, so cost scales with units, not map
-  area) and draws each live unit as its cell in the owner's colour inside a one-cell rim (3 x 3
-  cells, clipped at the map edge). The rim colour is `MinimapRaster.RimFor(colour)`: near-black
+  clears the previous dots (only the 4 x 4 blocks it wrote, so cost scales with units, not map
+  area) and draws each live unit as a 2 x 2 block in the owner's colour inside a one-cell rim
+  (4 x 4 cells, clipped at the map edge). The 2 x 2 centre is the four cells around the cell corner
+  nearest the unit (`MinimapRaster.CentreOf`), so the unit's own cell is always one of them; at the
+  shipped 220 px for 128 cells it is at least 3 screen pixels per axis, so a lone unit reads in its
+  player's colour, not its rim's (M2-H2, BUG-0069; it was one owner cell in a 3 x 3 rim). The
+  pixels are written as 32-bit words and copied to the byte layer once per draw. The rim colour is
+  `MinimapRaster.RimFor(colour)`: near-black
   (`DarkRim` 0x141414) around light colours, light grey (`LightRim` 0xE6E6E6) around dark ones
   (Rec. 601 luma under 0.35). The rim is what tells a lone dot from terrain of a similar colour: a
   Whirlwind dot (#C8892E) from a 1-2 cell ramp tick, a Malazan dot (#4B4F55) from a cliff lip or
   the border ring (BUG-0064). All rims are drawn before any centre, so in a crowd no rim covers a
-  unit; among centres, later slots overwrite earlier ones. Unknown owners and non-finite positions
+  unit; among centres, later slots overwrite earlier ones, and every unit's own cell is drawn last,
+  so a neighbour's centre never hides where a unit stands. Unknown owners and non-finite positions
   draw nothing, positions are clamped onto
   the map (floor, like `NavGrid.WorldToCell`). It allocates nothing after construction. Player p's
   colour is faction p's `PrimaryColor` (the same rule as the unit views until M6).
@@ -1728,8 +1740,9 @@ Match
   redrawn every frame in `_Draw`. Both textures use nearest filtering, so dots stay crisp cells.
 - **Maps wider than the control (note for later):** at 220 px, a map over 220 cells per axis has
   more texels than pixels, and nearest filtering skips some rows and columns (about 26% of cells
-  on a 256 map). A 3-cell-wide dot keeps at least one sampled texel per axis up to 660 cells, but
-  from 221 to 440 cells a unit can show only its rim colour, not its owner colour. `Match` only
+  on a 256 map). A 4-cell-wide dot keeps at least one sampled texel per axis up to 880 cells and
+  its 2-cell centre up to 440, so over 440 cells a unit can show only its rim colour, not its owner
+  colour (with the M2-H1 one-cell centre that started over 220 cells, BUG-0070). `Match` only
   runs 128 x 128 today. When bigger maps ship, draw the dots in screen space (one dot per screen
   pixel) or downsample with a min-filter that keeps unit pixels.
 - **Transform:** the pure `ViewApi.MinimapTransform(controlPixels, mapMeters)` fits the map into
@@ -1761,8 +1774,9 @@ Match
 - **Launch flag added:** `--no-hud` hides the HUD (clean screenshots, perf comparisons).
 - **Tests:** `ViewApi/MinimapRasterTests` (every cell against the mesh tint on the hand map and
   3 generated maps, dot pixels at corners, centres and the map's last float, dead units, unknown
-  owners, the 3 x 3 dot and its rim, rims clipped at the map's edges and corners, neighbouring
-  dots never hiding each other's centre in either slot order, rim contrast for every shipped
+  owners, the 2 x 2 centre and its rim, the nearest-corner rule, at least 3 screen pixels of centre
+  per axis at 220 px / 128 cells, rims clipped at the map's edges and corners, neighbouring
+  dots never hiding each other's cell in either slot order, rim contrast for every shipped
   faction colour), `MinimapTransformTests` (round trips, 160x48 / 48x160 letterbox, outside and
   non-finite pixels, rays), a `ViewApiAllocationTests` row (2,000 dots, 0 bytes), and the
   headless scene `res://tests/MinimapTest.tscn` ("MINIMAP TEST PASS"): dot colours at 2,000
@@ -1801,7 +1815,9 @@ Match
   the vertex colours only when `NavGrid.Version` differs from the last fill, so the mesh is
   uploaded once when the overlay first turns on and once per passability change, never per frame.
   Colours (sRGB, alpha-blended, unshaded): any cell with `Blocked` set is blocked whatever else is
-  set, dark red if also `Cliff`, green if also `Resource` (a tree or mine, M2-3b), else red (border
+  set, deep crimson if also `Cliff` (0.55 / 0.03 / 0.35 at alpha 0.85, bluish so it stays red
+  over every level tint; the first dark red blended to olive on green, BUG-0084), green if also
+  `Resource` (a tree or mine, M2-3b), else red (border
   ring, sealed pockets; later buildings); an unblocked `Ramp` cell is orange; other open ground is
   faint white. Unknown flag bits never change the colour.
 - **Flow arrows:** goal = `GoalCell` of the lowest-slot live selected unit with `GoalCell >= 0`
@@ -1814,7 +1830,10 @@ Match
   window). One arrow per window cell whose `DirectionAt` isn't `NoDirection`, pointing along the
   sim's own offset table (`FlowField.OffsetX/OffsetY`); a cyan disc marks the field's `TargetCell`
   (the cell it leads to) when it is in the window. Arrows are flat, 1.3 m long, 0.3 m above the
-  terrain at the cell centre, written into the MultiMesh buffer in one call per relist. No
+  highest ground under them (`FlowArrowLayout.ArrowGround`: an arrow stays inside its cell, so on a
+  flat cell that is the cell's height, and on a ramp, a plane, the highest of the arrow's corners;
+  they used to dip up to 9 cm into the steepest ramps, BUG-0084), written into the MultiMesh buffer in one
+  call per relist. The arrow's shape constants live in `FlowArrowLayout` too. No
   selection, no goal, or no cached field: no arrows. A new order's field appears once the sim
   builds it (the build cap can delay a new goal while many groups are walking, "Build cap" above).
 - **Tick graph:** `SimRunner.TickTimes` is a `ViewApi.TickTimeRing` of the last 120
@@ -1824,7 +1843,11 @@ Match
   twice the budget or the worst sample. It builds no text per frame.
 - **Label:** while on, a second line: `units <live>   moving <n>   fields <count>/<capacity>   tick avg
   <ms>   worst <ms> (<samples>)   arrows <n>`. Counts: `UnitStore.Count`, `ViewApi.DebugCounts.Moving`,
-  `FlowFieldCache.Count`. The label's strings allocate per frame, as the M2-1 label always has.
+  `FlowFieldCache.Count`. Building the text allocates, so since M2-H2 (BUG-0083) `_Process`
+  compares every shown value with the last ones and rebuilds the text only when one changed: each
+  sim tick (the tick number), when Godot's FPS counter moves (once a second), and on selection,
+  subgroup, targeting or count changes. A frame with nothing changed allocates 0 bytes, label
+  included.
 - **Cost:** `SyncLayers()` (nav check, goal, peek, relist, counts) at 2,000 units, zoom 60, Debug:
   about 0.09 ms average and 0.2 ms worst per frame with the camera moving a cell every frame (a
   relist of about 1,500 arrows each time), less when steady; 0 bytes per frame panning or steady.
@@ -1886,9 +1909,12 @@ Match
   literal cell counts: wood = a 7-sided cone (radius 0.4 x the footprint's smaller side, 0.8 m in a
   2 m cell) from 1 m to 3.5 m on a 6-sided brown trunk (radius 0.15 m, 1 m tall); gold = a dark
   slate box covering the footprint, 1.6 m tall, with a gold box half the footprint's sides and
-  0.5 m tall on top. `PropsView` copies a relisted type into its buffer and sets
+  0.5 m tall on top. `PropsView` copies a relisted type into that type's own buffer and sets
   `MultiMesh.Buffer` (instance count = the store's capacity, `VisibleInstanceCount` = the live
-  count), only when `PropLayout.Refresh` returns true. Props cast shadows; no physics.
+  count), only when `PropLayout.Refresh` returns true and only for the types whose list changed
+  (`PropLayout.Changed(type)`: same slots at the same anchors in the same order means the same
+  transforms), so a felled tree re-uploads the trees, not the mines (M2-H2, BUG-0086). Props cast
+  shadows; no physics.
 - **Minimap:** `MinimapRaster` has a third layer, `Resources`, drawn between terrain and dots.
   `DrawResources(types, version, alive, typeId, cell)` redraws it only when the grid version changed:
   it clears the pixels it painted last time, then paints every footprint cell of each live node
@@ -1957,9 +1983,15 @@ Match
   the SFX volume setting (docs/02 "Settings", M6). `--mute` (takes no value) mutes the master bus;
   without it `Match.Start` unmutes it. Counters run either way.
 - **Headless:** the dummy audio driver takes playback without logging errors, so headless runs
-  play too (the smoke gate stays clean). A sound started in the very frame the engine quits can
-  leave an ObjectDB leak warning at exit (Godot's audio server still holds the playback); the test
-  waits 0.3 s before quitting.
+  play too (the smoke gate stays clean).
+- **Quitting with a sound playing** (BUG-0087): Godot's audio server drops a stopped or finished
+  playback only on its next mix, on the audio thread, so quitting within about 120 ms of a click or
+  order (any scene or the game, not only tests) left the clip and its playback in the server: an
+  ObjectDB leak warning at exit. The pool players stop their sounds as they leave the tree, and if a
+  sound started within the longest clip plus 100 ms, `Sfx._ExitTree` then waits for one mix that
+  started after the stop (`AudioServer.GetTimeSinceLastMix`, then the server lock the driver holds
+  while mixing), at most `Sfx.ExitWaitLimitMs` (200 ms); about 5-60 ms headless. The window's close
+  request stops the players too. `SfxTest` no longer waits before quitting.
 - **Counters for tests:** `Sfx.PlayCount(SfxEvent)` (plays after rate limiting) and
   `Sfx.LastPlayedFrame(SfxEvent)` (process frame, -1 if never). `Play(e, frame, nowUsec)` drives
   the limiter with an explicit clock.
@@ -1968,7 +2000,8 @@ Match
   limit with a hand-driven clock (20 ms apart 1 play, 60 ms apart 2, one per frame, events
   separate, 0 bytes for 20 plays); `--mute` parsing; then the real Match at 100 units with injected
   input for every selection and order row above, and a second Match with `--mute` (bus muted,
-  counter still runs).
+  counter still runs); a pool leaving the tree right after a play waits for one mix (under the
+  limit), one that never played doesn't wait; it then quits with a sound playing.
 
 ### Implementation (M2-7)
 
@@ -1980,50 +2013,75 @@ repeatable benchmark, facing interpolation, and a screenshot set. The owner's pl
   is wrapped into [-π, π) before the lerp, so 0.9π to -0.9π turns 0.2π through ±π; an exact half
   turn wraps to -π, so it always turns the same way. `PrevFacing` is the sim's derived, unhashed
   start-of-tick copy (M3-2). Pure arithmetic: the 2,000-unit update still allocates 0 bytes.
-- **`--bench <seconds>`** (positive, finite; `0`, negatives and non-numbers warn and are ignored).
+- **`--bench <seconds>`** (positive, at most `LaunchOptions.MaxBenchSeconds` = 3,600; `0`, negatives,
+  non-numbers and longer runs warn and are ignored: BUG-0103, `1e308` used to run forever).
   `Match.Start` adds a `BenchRunner` node. It waits until tick 2 (the armies exist) and any
   `--screenshot` is saved (the screenshotter then doesn't quit), skips 30 warm-up frames (the
   first draws of new unit nodes compile pipelines: a one-time ~85 ms frame on the dev PC, load time
   rather than play), then plays the pure `Rts.Sim.ViewApi.BenchScript` on frame time until the
-  duration ends. One 10 s loop: camera to the local army at the start zoom (0.25 s), box-select the
-  whole screen (0.5 s), Move to the far start block (1 s), four minimap clicks on the map corners
-  (0.25 s each, all inside the first 3 s), camera back to the army, zoom 20 m (1 s) and 60 m (1 s),
-  A + click (2 s), three Shift-queued moves (0.5 s each), H (1 s), S (0.5 s). Every action goes
+  duration ends. One 10 s loop (M2-H2 order): camera to the local army at the start zoom (0.25 s),
+  box-select the whole screen (0.25 s), A + click (0.25 s), Move across the map (1 s), four minimap
+  clicks on the map corners (0.25 s each, all inside the first 3 s), camera back to the army
+  (0.25 s), three Shift-queued moves (0.5 s each), zoom 20 m (1.5 s) and 60 m (3.5 s), H (0.25 s),
+  S (0.25 s). "Across" (BUG-0101; it used to target the enemy start block about 15 m away) is the
+  pure `ViewApi.BenchTarget.TryAcross`: the passable cell nearest (0.85 x width, 0.5 x height) for an
+  army whose centre is west of the map's centre line, the mirror point (0.15 x width) for one east
+  of it, ties to the lower cell index; with no passable cell within 8 cells of that point, the
+  passable cell nearest the map corner opposite the army. A + click comes before the Move and the
+  three moves are queued behind it, so the army marches from 0.75 s until H at 9.5 s; on seed 1 the
+  target is about 109 m away and the army's centre moves about 22 m in 10 s (`QaM27Test`: target at
+  least 100 m, centre at least 20 m). The march runs through the idle enemy block, which roughly
+  halves the army's pace after a few seconds (a bare 10 s sim march moves the centre 24 m, 29 m with
+  no enemy in the way). Every action goes
   through the real code: `SelectionController.BoxSelect` / `OrderAt` / `BeginAttackMove` +
   `AttackMoveClick` / `Order` (public since M2-7; the mouse and key handlers call the same
   methods), `Minimap.JumpTo` (the camera directly under `--no-hud`), `RtsCamera.SetZoom`. Edge
   panning is off during a bench.
 - **Measurement.** Each timed frame's `_Process` delta goes into `Rts.Sim.ViewApi.FrameTimeStats`
   (a 0.01 ms histogram up to 250 ms, so no per-frame allocation; percentiles are bin edges);
-  `fps` is the mean of `Performance.Monitor.TimeFps` over the frames (Godot updates it once a
-  second); ticks and their mean cost come from `SimRunner.TickTimes.Total` and the new
+  `fps` is the timed frames over the timed seconds (= 1000 / avg; BUG-0102: it was a mean of
+  Godot's once-a-second counter, whose first sample is the load second, 7-10 % low on a 10 s run);
+  ticks and their mean cost come from `SimRunner.TickTimes.Total` and the new
   `SimRunner.TotalTickMs`. At the end it prints `Bench worst frame <ms> at <s>, after step <step>`
-  and then the one result line, and quits with 0:
+  and then the one result line, and quits with 0 (all three lines in the invariant culture, so a
+  comma-decimal PC prints `10.56`, not `10,56`):
   `bench: seconds S frames N avg A ms p50 B ms p99 C ms worst D ms fps F ticks T avgTick U ms`.
   Nothing else starts with `bench:`.
 - **`--vsync on|off`** sets `DisplayServer.WindowSetVsyncMode` (skipped headless). Without it the
-  project default (vsync on) holds.
+  project default (vsync on) holds. With vsync on, Godot's `application/run/delta_smoothing` (on
+  by default, not overridden here) snaps `_Process` deltas to the refresh period, so the vsync-on
+  rows measure pacing, not cost: they read as perfect frames by construction (BUG-0103). The
+  vsync-off rows are raw deltas; use them for cost.
 - **Figures** (dev PC: i7-13700F, RTX 4070, Debug build, window 1920 x 1061 because the taskbar
-  clamps a 1920 x 1080 window, default 128 map with 12 forests / 8 mines, HUD and sound on, 60 s):
+  clamps a 1920 x 1080 window (`--resolution 1920x1080`), default 128 map with 12 forests / 8 mines,
+  HUD and sound on, 60 s; rerun 2026-10-07 for M2-H2 with the march across the map and `fps` as
+  frames / seconds):
 
   | Run | avg | p50 | p99 | worst | fps | avg tick |
   | --- | --- | --- | --- | --- | --- | --- |
-  | 100 / player, vsync off | 0.72 ms | 0.70 ms | 1.31 ms | 10.6 ms | 1,372 | 0.24 ms |
-  | 100 / player, vsync on, 60 Hz display | 16.67 ms | 16.67 ms | 16.67 ms | 16.7 ms | 59.5 | 0.24 ms |
-  | 100 / player, vsync on, 120 Hz display | 8.34 ms | 8.34 ms | 8.34 ms | 9.1 ms | 118.5 | 0.24 ms |
-  | 1,000 / player, zoom 60, vsync off | 2.26 ms | 2.09 ms | 3.34 ms | 14.6 ms | 437 | 3.03 ms |
+  | 100 / player, vsync off | 0.73 ms | 0.71 ms | 1.39 ms | 9.1 ms | 1,377 | 0.21 ms |
+  | 100 / player, vsync on, 120 Hz display | 8.34 ms | 8.34 ms | 8.34 ms | 14.6 ms | 120.0 | 0.22 ms |
+  | 1,000 / player, zoom 60, vsync off | 2.62 ms | 2.78 ms | 3.34 ms | 7.9 ms | 382 | 3.32 ms |
 
-  The frame budget at 60 FPS is 16.7 ms; the 100-unit case uses under 5% of it. An earlier
-  1,000-unit run measured avg 3.85 ms / p99 6.26 ms while other work shared the PC.
+  The frame budget at 60 FPS is 16.7 ms; the 100-unit case uses under 5% of it. The vsync-on row
+  shows pacing, not cost (delta smoothing, above); its worst frame is the first timed frame. The
+  1,000-unit row now has the west army marching through the east one; another run while other
+  work shared the PC measured avg 3.57 ms / p99 5.27 ms / tick 4.45 ms. Before M2-H2 (the army
+  stopping in the enemy block 15 m away): 0.72 / 1.31 ms at 100 units, 2.26 / 3.34 ms and tick
+  3.03 ms at 1,000; a 60 Hz display showed 16.67 ms frames (fps 59.5 by the old counter). At the
+  default window size (1152 x 648) the 100-unit vsync-off run averages 0.52 ms.
 - **Screenshot set** (windowed, kept out of the repo): the overview (`--zoom 60 --screenshot <png>
   --screenshot-after 3`), the overlay (`--debug-overlay --screenshot <png> --screenshot-after 3`), and
   `res://tests/MarchShot.tscn -- --out-dir <dir>`, which box-selects the army, orders it east
   at 4x, and once 10 own units stand on ramp cells switches to 1x, puts the camera on them at zoom 30
   and saves `ramp-crossing.png` plus `minimap-corner.png` (the bottom-left 240 px of the same frame).
 - **Tests:** `Rts.Sim.Tests/ViewApi/BenchScriptTests` (step order, loop, end of run, one step per
-  call, bad durations, 0 bytes) and `FrameTimeStatsTests` (mean, percentiles, spikes past the
+  call, bad durations, 0 bytes), `BenchTargetTests` (seeds 1-20 from both start blocks: a passable
+  cell on the other side at least 100 m away, equal to a brute-force nearest search; the corner
+  fallback; no passable cell; 0 bytes) and `FrameTimeStatsTests` (mean, percentiles, spikes past the
   histogram, 0 bytes); `res://tests/BenchTest.tscn` ("BENCH TEST PASS"): `--bench` / `--vsync`
-  parsing; the game binary started headless as a child process with `--bench 2 --mute` (exit 0,
+  parsing (3,600 accepted, 3,600.5 and 1e308 not); the info lines under de-DE; `fps` within 2 % of
+  frames / seconds; the game binary started headless as a child process with `--bench 2 --mute` (exit 0,
   exactly one line in the documented shape, under 7 s, no ERROR) and with `--bench 0 | -3 | abc`
   (a WARNING, no line, no ERROR); an in-process `--bench 3` (selection 0 -> the whole army,
   commands enqueued, four minimap jumps to four different camera points); and, windowed only, a
@@ -2176,7 +2234,9 @@ AiPlayer
   line, and a second label line with live / Moving units, cached fields and the graph's average and
   worst. Off by default; while off its layers are hidden, have no `_Process` and aren't built.
   Costs (2,000 units, zoom 60, Debug): about 0.09 ms per frame with a relist every frame (camera
-  panning), 0 bytes per frame on and off. Details in "Implementation (M2-5)". Deferred: per-unit
+  panning). Allocation: the overlay layers 0 bytes per frame; the label text is rebuilt (and
+  allocates) only when a shown number changes, at most once a tick plus once a second for the FPS,
+  so a frame with nothing changed is 0 bytes on and off (BUG-0083). Details in "Implementation (M2-5)". Deferred: per-unit
   state labels (maybe with M2-7), arrows for more than one goal, a window that follows the visible
   trapezoid instead of a fixed square.
 - **Dev console** (backtick): `spawn <unit> <n>`, `give <gold> <wood>`, `reveal`, `speed <x>`,
@@ -2227,3 +2287,15 @@ AiPlayer
 - Export templates for 4.7.x .NET must be installed once per machine (SETUP.md).
 - `tools/export.ps1`: builds the solution in Release, runs the tests, exports
   `build/RtsGame/RtsGame.exe`, and zips it as `build/RtsGame-<version>.zip`.
+- **M6 notes (from the M2 hardening, M2-H2):**
+  - **Leave `game/tests/` out of the release.** The test and screenshot scenes (and their scripts)
+    are dev tools; some start the game binary as a child process (`OS.Execute`). Exclude them in the
+    preset (resources filter `tests/*`) and check the exported `.pck` holds no `tests/` path.
+  - **Load `game/data/` in a `.pck`-safe way.** Today `Main` and the test scenes call
+    `DataLoader.LoadAll(ProjectSettings.GlobalizePath("res://data"))`, which reads the JSON from disk:
+    fine in the editor, but in an exported game `res://` lives inside the `.pck` and the globalized
+    path doesn't exist. Read the files through Godot (`DirAccess` / `FileAccess` on `res://data`)
+    and hand their text to a loader overload that takes text, or ship `data/` beside the exe and
+    locate it from `OS.GetExecutablePath()`. Either way `.json` is a non-resource file, so the preset
+    needs the include filter `data/*.json`. A smoke check runs the exported exe headless and looks
+    for the `Rts.Sim <version>` banner.

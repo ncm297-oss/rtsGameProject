@@ -102,6 +102,7 @@ public partial class PropsViewTest : Node
         Check(props.ShownCount(tree) == placed.Trees && props.ShownCount(mine) == placed.Mines,
             $"{what}: shown {props.ShownCount(tree)} trees / {props.ShownCount(mine)} mines, placed {placed.Trees} / {placed.Mines}");
         Check(props.Uploads == 1, $"{what}: {props.Uploads} uploads over the first frames, expected 1");
+        Check(props.UploadsOf(tree) == 1 && props.UploadsOf(mine) == 1, $"{what}: per-type uploads {props.UploadsOf(tree)} / {props.UploadsOf(mine)}, expected 1 / 1");
 
         if (deep)
         {

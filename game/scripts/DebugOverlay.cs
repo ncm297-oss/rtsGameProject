@@ -97,18 +97,37 @@ public partial class DebugOverlay : CanvasLayer
     {
         if (Runner?.Simulation is not Simulation sim) return;
         if (Enabled) SyncLayers();
+        // BUG-0083: building the text allocates, so it is rebuilt only when a shown value changes
+        // (each tick, and when the FPS counter, selection or counts move), not every frame.
+        Rts.Sim.ViewApi.Subgroups? sub = Selection?.Subgroups;
+        TickTimeRing ring = Runner.TickTimes;
+        var shown = new LabelValues(sim.TickNumber, Runner.GameSpeed, Runner.LastTickMs, Engine.GetFramesPerSecond(),
+            Selection?.Selection.Count ?? 0, sub?.Count ?? 0, sub?.ActiveType ?? 0, sub?.Index ?? 0, Selection?.Targeting ?? false,
+            Enabled, LiveUnits, MovingUnits, CachedFields, sim.World.FlowFields.Capacity, ring.Average, ring.Worst, ring.Count,
+            ShownGoal >= 0 ? _arrows?.ShownCount ?? 0 : -1);
+        if (LabelBuilds > 0 && shown == _shown) return;
+        _shown = shown;
+        LabelBuilds++;
         string text = $"tick {sim.TickNumber}   speed {Runner.GameSpeed:0.##}x   " +
-            $"tick {Runner.LastTickMs:0.000} ms   {Engine.GetFramesPerSecond():0} fps   sel {Selection?.Selection.Count ?? 0}" +
+            $"tick {Runner.LastTickMs:0.000} ms   {shown.Fps:0} fps   sel {shown.Selected}" +
             SelectionSuffix();
         if (Enabled)
         {
-            TickTimeRing ring = Runner.TickTimes;
             text += $"\nunits {LiveUnits}   moving {MovingUnits}   fields {CachedFields}/{sim.World.FlowFields.Capacity}   " +
                 $"tick avg {ring.Average:0.000} ms   worst {ring.Worst:0.000} ms ({ring.Count})" +
-                (ShownGoal >= 0 ? $"   arrows {_arrows?.ShownCount ?? 0}" : "");
+                (shown.Arrows >= 0 ? $"   arrows {shown.Arrows}" : "");
         }
         _label.Text = text;
     }
+
+    /// <summary>Times the label text was rebuilt (it is rebuilt only when a shown value changes).</summary>
+    public int LabelBuilds { get; private set; }
+
+    // Every value the label shows, compared as a whole: equal means the text would be the same.
+    private readonly record struct LabelValues(long Tick, double Speed, double TickMs, double Fps, int Selected, int SubCount, int SubType,
+        int SubIndex, bool Targeting, bool On, int Live, int Moving, int Fields, int FieldCapacity, double Avg, double Worst, int Samples, int Arrows);
+
+    private LabelValues _shown;
 
     /// <summary>One frame of overlay work: nav grid (rebuilt only on a grid version change), flow arrows (relisted only on a change), counts, graph redraw. Allocates nothing at steady state.</summary>
     public void SyncLayers()

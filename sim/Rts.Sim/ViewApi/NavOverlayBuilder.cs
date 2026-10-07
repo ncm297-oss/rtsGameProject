@@ -28,8 +28,8 @@ public sealed class NavOverlayBuilder
     /// <summary>Blocked, not a cliff or a resource node (map border, sealed pockets; later buildings): red.</summary>
     public static readonly Vector4 BlockedColor = new(0.95f, 0.12f, 0.10f, 0.45f);
 
-    /// <summary>Blocked cliff cell (plateau lip, ramp wall): dark red.</summary>
-    public static readonly Vector4 CliffColor = new(0.45f, 0.02f, 0.02f, 0.60f);
+    /// <summary>Blocked cliff cell (plateau lip, ramp wall): deep crimson, a bluish dark red strong enough to stay red over every level tint (BUG-0084: the old 0.45 / 0.02 / 0.02 at 0.6 blended to olive on the green upland).</summary>
+    public static readonly Vector4 CliffColor = new(0.55f, 0.03f, 0.35f, 0.85f);
 
     /// <summary>Blocked by a resource node (<see cref="NavFlags.Resource"/>: a tree, a mine), so it reopens when the node is gone: green.</summary>
     public static readonly Vector4 ResourceColor = new(0.15f, 0.85f, 0.25f, 0.45f);

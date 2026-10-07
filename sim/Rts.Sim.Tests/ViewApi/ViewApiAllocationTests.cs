@@ -142,14 +142,21 @@ public class ViewApiAllocationTests
         nav.Refresh(grid);
         long count = 0;
         double sum = 0;
-        Action setup = grid.BumpVersionForTests;
+        int listed = -1;
+        // BUG-0084: after the bump the old field is stale and PeekCached returns null, so the relist listed nothing;
+        // the setup rebuilds the goal's field, so the measured relist runs the per-cell loop over a live field.
+        Action setup = () =>
+        {
+            grid.BumpVersionForTests();
+            cache.Get(goal);
+        };
         Action block = () =>
         {
             // One overlay frame after a passability change (the worst case: nav refill and a relist), then the steady frame.
             count += nav.Refresh(grid) ? 1 : 0;
             int g = FlowArrowLayout.GoalOf(selection.Items, store.Alive, store.Generation, store.GoalCell);
             arrows.Invalidate();
-            count += arrows.Refresh(cache, grid, g, new Vector2(128f, 128f)) ? arrows.Count : 0;
+            count += arrows.Refresh(cache, grid, g, new Vector2(128f, 128f)) ? listed = arrows.Count : 0;
             count += arrows.Refresh(cache, grid, g, new Vector2(130f, 128f)) ? 1 : 0;
             count += DebugCounts.Moving(store.Alive, store.State) + cache.Count;
             for (int i = 0; i < 130; i++) ring.Add(i * 0.01);
@@ -157,6 +164,7 @@ public class ViewApiAllocationTests
         };
         block();
         int runs = AllocationProbe.AssertZero(block, _out, setup);
-        _out.WriteLine($"Debug overlay helpers (2,000 units): 0 bytes (runs {runs}), checksum {count + sum}");
+        Assert.True(listed > 100, $"the measured relist listed {listed} arrows: no live field");
+        _out.WriteLine($"Debug overlay helpers (2,000 units): 0 bytes (runs {runs}), {listed} arrows relisted, checksum {count + sum}");
     }
 }

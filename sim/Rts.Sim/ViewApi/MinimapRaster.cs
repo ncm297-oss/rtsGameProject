@@ -12,11 +12,13 @@ namespace Rts.Sim.ViewApi;
 /// tint, a nav-grid cliff cell (the lip above a drop, or a ramp wall) the cliff tint, any other cell
 /// its level tint, and other impassable cells (map border, sealed pockets) are darkened by
 /// <see cref="ImpassableShade"/>; a cell blocked only by a resource node keeps its ground colour, since
-/// the node is drawn on the resource layer and the ground shows again once it is gone (M2-3b). Each live unit's dot is its cell in the owner's colour inside a
-/// one-cell rim (3 x 3 cells) in <see cref="RimFor"/>'s contrasting shade, on a transparent layer:
-/// the rim is what tells a lone dot from a 1-cell ramp tick or cliff lip in a similar colour
-/// (BUG-0064). Every rim is drawn before any centre, so a crowd's centres are never hidden by a
-/// neighbour's rim; among centres, later slots overwrite earlier ones. Keeps no reference to the
+/// the node is drawn on the resource layer and the ground shows again once it is gone (M2-3b). Each live unit's dot is
+/// a 2 x 2 block in the owner's colour (the four cells around the cell corner nearest the unit, its own cell among them)
+/// inside a one-cell rim (4 x 4 cells) in <see cref="RimFor"/>'s contrasting shade, on a transparent layer: the rim is
+/// what tells a lone dot from a 1-cell ramp tick or cliff lip in a similar colour (BUG-0064), and the 2 x 2 centre
+/// keeps the owner's colour readable at the shipped 220 px for 128 cells (BUG-0069). Every rim is drawn before any
+/// centre, so a crowd's centres are never hidden by a neighbour's rim; among centres later slots overwrite earlier
+/// ones, and each unit's own cell is drawn last, so it always shows a unit's colour. Keeps no reference to the
 /// map or the sim; <see cref="DrawDots"/> allocates nothing.
 /// </remarks>
 public sealed class MinimapRaster
@@ -30,8 +32,8 @@ public sealed class MinimapRaster
     /// <summary>Rim colour (0xRRGGBB) around dark dots, where a dark rim would not stand out.</summary>
     public const uint LightRim = 0xE6E6E6;
 
-    /// <summary>Cells a dot covers: its own and the eight around it.</summary>
-    public const int DotCells = 9;
+    /// <summary>Cells a lone dot covers away from the map edge: a 2 x 2 centre inside a one-cell rim (4 x 4).</summary>
+    public const int DotCells = 16;
 
     /// <summary>Resource-layer colour (0xRRGGBB) of a node yielding wood (trees): dark green.</summary>
     public const uint WoodRgb = 0x1E5A1E;
@@ -41,8 +43,12 @@ public sealed class MinimapRaster
 
     private readonly uint[] _ownerRgb;
     private readonly uint[] _rimRgb;
-    // Centre pixel and owner of each dot drawn last time (also what the next call clears).
-    private readonly int[] _centre, _centreOwner;
+    // The dot layer as one 32-bit RGBA8 word per pixel (copied to Dots after each draw: a quarter of the writes),
+    // and each owner's centre and rim colour as such a word.
+    private readonly uint[] _dotPx;
+    private readonly uint[] _ownerPx, _rimPx;
+    // Centre (top-left of the 2 x 2), own cell and owner of each dot drawn last time (the centres are also what the next call clears).
+    private readonly int[] _centre, _own, _centreOwner;
     private int _drawn;
     // Pixels the resource layer painted last time: what the next fill clears.
     private readonly int[] _resourcePixels;
@@ -84,8 +90,17 @@ public sealed class MinimapRaster
         _resourcePixels = new int[Width * Height];
         _ownerRgb = (uint[])ownerRgb.Clone();
         _rimRgb = new uint[_ownerRgb.Length];
-        for (int o = 0; o < _ownerRgb.Length; o++) _rimRgb[o] = RimFor(_ownerRgb[o]);
+        _ownerPx = new uint[_ownerRgb.Length];
+        _rimPx = new uint[_ownerRgb.Length];
+        for (int o = 0; o < _ownerRgb.Length; o++)
+        {
+            _rimRgb[o] = RimFor(_ownerRgb[o]);
+            _ownerPx[o] = Pixel(_ownerRgb[o]);
+            _rimPx[o] = Pixel(_rimRgb[o]);
+        }
+        _dotPx = new uint[Width * Height];
         _centre = new int[maxDots];
+        _own = new int[maxDots];
         _centreOwner = new int[maxDots];
         for (int y = 0; y < Height; y++)
         {
@@ -174,82 +189,99 @@ public sealed class MinimapRaster
         return true;
     }
 
-    /// <summary>Clears the previous dots and draws one per live unit (centre cell plus rim); returns how many were drawn.</summary>
+    /// <summary>Clears the previous dots and draws one per live unit (a 2 x 2 owner-coloured centre plus rim); returns how many were drawn.</summary>
     public int DrawDots(ReadOnlySpan<bool> alive, ReadOnlySpan<Vector2> positions, ReadOnlySpan<int> owners)
     {
-        byte[] d = Dots;
+        uint[] d = _dotPx;
         int w = Width;
-        // Clearing only the 3 x 3 blocks drawn last time keeps the cost proportional to units, not
-        // map area. The loops are written out by hand: 2,000 dots are up to 18,000 pixel writes.
+        // Clearing only the 4 x 4 blocks drawn last time keeps the cost proportional to units, not
+        // map area. The loops are written out by hand: 2,000 dots are up to 32,000 rim pixel writes.
         for (int k = 0; k < _drawn; k++)
         {
             int c = _centre[k];
             if (IsInterior(c))
             {
-                for (int row = c - w - 1; row <= c + w - 1; row += w)
+                for (int i = c - w - 1, end = c + 3 * w - 1; i < end; i += w)
                 {
-                    int i = row * 4 + 3;
+                    d[i + 3] = 0; // highest index first: one bounds check covers the row
                     d[i] = 0;
-                    d[i + 4] = 0;
-                    d[i + 8] = 0;
+                    d[i + 1] = 0;
+                    d[i + 2] = 0;
                 }
             }
-            else Block(d, c, 0u, 0);
+            else Fill(d, c, -1, 4, 0u);
         }
         _drawn = 0;
         int n = Math.Min(Math.Min(alive.Length, positions.Length), Math.Min(owners.Length, _centre.Length));
-        // Pass 1: rims (and remember each centre). Pass 2: centres, so no rim ever covers a unit.
+        // Pass 1: rims (and remember each centre). Pass 2: 2 x 2 centres, so no rim ever covers a
+        // unit. Pass 3: each unit's own cell, so a neighbour's centre never hides where a unit stands.
         for (int s = 0; s < n; s++)
         {
             if (!alive[s] || (uint)owners[s] >= (uint)_ownerRgb.Length || !TryPixelOf(positions[s], out int x, out int y)) continue;
-            int c = y * w + x;
-            uint rim = _rimRgb[owners[s]];
+            int c = CentreOf(positions[s]);
+            uint rim = _rimPx[owners[s]];
             if (IsInterior(c))
             {
-                byte r = (byte)(rim >> 16), g = (byte)(rim >> 8), b = (byte)rim;
-                for (int row = c - w - 1; row <= c + w - 1; row += w)
+                for (int i = c - w - 1, end = c + 3 * w - 1; i < end; i += w)
                 {
-                    for (int i = row * 4, end = i + 12; i < end; i += 4)
-                    {
-                        d[i + 3] = 255;
-                        d[i] = r;
-                        d[i + 1] = g;
-                        d[i + 2] = b;
-                    }
+                    d[i + 3] = rim;
+                    d[i] = rim;
+                    d[i + 1] = rim;
+                    d[i + 2] = rim;
                 }
             }
-            else Block(d, c, rim, 255);
+            else Fill(d, c, -1, 4, rim);
             _centre[_drawn] = c;
+            _own[_drawn] = y * w + x;
             _centreOwner[_drawn++] = owners[s];
         }
         for (int k = 0; k < _drawn; k++)
         {
-            uint rgb = _ownerRgb[_centreOwner[k]];
-            int i = _centre[k] * 4;
-            d[i + 3] = 255;
-            d[i] = (byte)(rgb >> 16);
-            d[i + 1] = (byte)(rgb >> 8);
-            d[i + 2] = (byte)rgb;
+            int c = _centre[k];
+            uint px = _ownerPx[_centreOwner[k]];
+            if (IsInterior(c))
+            {
+                d[c + w + 1] = px;
+                d[c] = px;
+                d[c + 1] = px;
+                d[c + w] = px;
+            }
+            else Fill(d, c, 0, 2, px);
         }
+        for (int k = 0; k < _drawn; k++) d[_own[k]] = _ownerPx[_centreOwner[k]];
+        Buffer.BlockCopy(d, 0, Dots, 0, Dots.Length);
         return _drawn;
     }
 
-    // True when the whole 3 x 3 block around pixel c is on the raster.
+    /// <summary>Top-left pixel (row-major index) of the 2 x 2 dot centre for a unit at <paramref name="position"/> (finite): the four cells around the cell corner nearest the unit, so the unit's own cell is always one of them; clamped onto the raster.</summary>
+    public int CentreOf(Vector2 position)
+    {
+        // The corner nearest the unit is (kx, ky); the centre is cells kx-1..kx by ky-1..ky.
+        int kx = (int)Math.Clamp(MathF.Floor(position.X / MapConstants.CellSize + 0.5f), 1f, Math.Max(1, Width - 1));
+        int ky = (int)Math.Clamp(MathF.Floor(position.Y / MapConstants.CellSize + 0.5f), 1f, Math.Max(1, Height - 1));
+        return (ky - 1) * Width + kx - 1;
+    }
+
+    // True when the whole 4 x 4 block around centre pixel c (top-left of the 2 x 2) is on the raster.
     private bool IsInterior(int c)
     {
         int y = c / Width, x = c - y * Width;
-        return x > 0 && y > 0 && x < Width - 1 && y < Height - 1;
+        return x > 0 && y > 0 && x + 2 < Width && y + 2 < Height;
     }
 
-    // Fills the 3 x 3 block around pixel c, clipped to the raster (dots on the map's edge).
-    private void Block(byte[] d, int c, uint rgb, byte alpha)
+    // Fills the size x size block whose top-left is `offset` cells (each axis) from pixel c, clipped to the raster.
+    private void Fill(uint[] d, int c, int offset, int size, uint px)
     {
         int y = c / Width, x = c - y * Width;
-        int x0 = x > 0 ? x - 1 : 0, x1 = x < Width - 1 ? x + 1 : x;
-        int y0 = y > 0 ? y - 1 : 0, y1 = y < Height - 1 ? y + 1 : y;
+        int x0 = Math.Max(0, x + offset), x1 = Math.Min(Width - 1, x + offset + size - 1);
+        int y0 = Math.Max(0, y + offset), y1 = Math.Min(Height - 1, y + offset + size - 1);
         for (int ry = y0; ry <= y1; ry++)
-            for (int rx = x0; rx <= x1; rx++) Set(d, (ry * Width + rx) * 4, rgb, alpha);
+            for (int rx = x0; rx <= x1; rx++) d[ry * Width + rx] = px;
     }
+
+    // An opaque 0xRRGGBB colour as the 32-bit word whose bytes in memory are R, G, B, A (either byte order).
+    private static uint Pixel(uint rgb) =>
+        BitConverter.ToUInt32(new[] { (byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb, (byte)255 }, 0);
 
     private static void Set(byte[] d, int i, uint rgb, byte alpha)
     {

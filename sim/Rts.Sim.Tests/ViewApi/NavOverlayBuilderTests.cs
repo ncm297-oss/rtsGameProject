@@ -184,4 +184,32 @@ public class NavOverlayBuilderTests
         Assert.True(rebuilt);
         _out.WriteLine($"nav overlay refill ({map.Width} x {map.Height}): 0 bytes (runs {runs})");
     }
+
+    [Fact]
+    public void CliffTint_OverEveryLevelColour_StillReadsCrimson_NotOlive()
+    {
+        // BUG-0084: blended over the terrain (sRGB alpha blend, as the overlay draws it), the cliff quad must keep a
+        // red-to-magenta hue (300-360 or 0-10 degrees) and a strong saturation on every level, and differ from the
+        // plain blocked red.
+        for (int level = 0; level < MapConstants.LevelCount; level++)
+        {
+            Vector4 ground = TerrainMeshBuilder.LevelColor(level);
+            (float hue, float sat) = HueSat(Blend(NavOverlayBuilder.CliffColor, ground));
+            Assert.True((hue >= 300f || hue <= 10f) && sat >= 0.5f, $"level {level}: cliff blend hue {hue:F0}, saturation {sat:F2}");
+            (float blockedHue, _) = HueSat(Blend(NavOverlayBuilder.BlockedColor, ground));
+            float gap = MathF.Min(MathF.Abs(hue - blockedHue), 360f - MathF.Abs(hue - blockedHue));
+            Assert.True(gap >= 25f, $"level {level}: cliff hue {hue:F0} too close to blocked hue {blockedHue:F0}");
+        }
+    }
+
+    private static Vector3 Blend(Vector4 over, Vector4 under) =>
+        new(over.X * over.W + under.X * (1 - over.W), over.Y * over.W + under.Y * (1 - over.W), over.Z * over.W + under.Z * (1 - over.W));
+
+    private static (float Hue, float Sat) HueSat(Vector3 c)
+    {
+        float max = MathF.Max(c.X, MathF.Max(c.Y, c.Z)), min = MathF.Min(c.X, MathF.Min(c.Y, c.Z)), d = max - min;
+        float hue = d == 0 ? 0 : max == c.X ? 60f * ((c.Y - c.Z) / d) : max == c.Y ? 60f * ((c.Z - c.X) / d + 2) : 60f * ((c.X - c.Y) / d + 4);
+        if (hue < 0) hue += 360f;
+        return (hue, max == 0 ? 0 : d / max);
+    }
 }

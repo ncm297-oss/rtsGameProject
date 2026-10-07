@@ -170,7 +170,7 @@ public partial class DebugOverlayTest : Node
         Check(_overlay.Enabled, "the debug_overlay action did not turn it on");
         // Many frames on with an unchanged grid: the nav mesh is never rebuilt.
         for (int i = 0; i < 30; i++) await Frame();
-        Check(_nav.Uploads == 1 && _nav.Builder!.Builds == 1, $"nav mesh rebuilt without a version change ({_nav.Uploads} uploads, {_nav.Builder.Builds} fills)");
+        Check(_nav.Uploads == 1 && _nav.Builder!.Builds == 1, $"nav mesh rebuilt without a version change ({_nav.Uploads} uploads, {_nav.Builder!.Builds} fills)");
         Check(_nav.Builder.BuiltVersion == _sim.World.NavGrid.Version, "nav overlay built from another version");
     }
 
@@ -375,6 +375,28 @@ public partial class DebugOverlayTest : Node
         GD.Print($"overlay allocation: panning {panning} bytes / 60 frames, steady {steady} bytes / 60 frames");
         Check(panning == 0 && steady == 0, $"overlay frames allocated (panning {panning}, steady {steady} bytes)");
         _camera.SetFocus(start.X, start.Y);
+
+        // BUG-0083: the whole frame with the overlay on, label included, 300 frames with nothing shown changing
+        // (the runner is disabled, so the tick and its costs stand still): the text is not rebuilt, 0 bytes.
+        _overlay._Process(0);
+        int builds = _overlay.LabelBuilds;
+        string text = _match.GetNode<Label>("DebugOverlay/Label").Text;
+        before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 300; i++) _overlay._Process(0);
+        long label = GC.GetAllocatedBytesForCurrentThread() - before;
+        GD.Print($"overlay frame with the label, 300 unchanged frames: {label} bytes, {_overlay.LabelBuilds - builds} rebuilds");
+        Check(label == 0 && _overlay.LabelBuilds == builds, $"300 unchanged frames allocated {label} bytes and rebuilt the label {_overlay.LabelBuilds - builds} times");
+        Check(_match.GetNode<Label>("DebugOverlay/Label").Text == text, "label text changed with nothing shown changing");
+        // A shown value changing rebuilds it once.
+        EntityHandle[] saved = _sel.Selection.Items.ToArray();
+        if (saved.Length > 0) _sel.Selection.Remove(saved[0]);
+        else _sel.Selection.Add(new EntityHandle(0, U.Generation[0]));
+        _overlay._Process(0);
+        _overlay._Process(0);
+        Check(_overlay.LabelBuilds == builds + 1, $"a selection change rebuilt the label {_overlay.LabelBuilds - builds} times, want 1");
+        Check(_match.GetNode<Label>("DebugOverlay/Label").Text.Contains($"sel {_sel.Selection.Count}"), "label did not show the new selection count");
+        _sel.Selection.Clear();
+        foreach (EntityHandle h in saved) _sel.Selection.Add(h);
 
         // Off: the frame does no overlay work at all.
         _overlay.SetEnabled(false);

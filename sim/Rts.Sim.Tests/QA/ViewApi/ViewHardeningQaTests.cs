@@ -10,7 +10,7 @@ using Xunit.Abstractions;
 
 namespace Rts.Sim.Tests.QA.ViewApi;
 
-/// <summary>QA (M2-H1): TerrainHeight.At over every float special on both axes, the 3 x 3 rimmed minimap dots against a naive reference renderer, edge-heavy dot refresh cost and allocation, whole-millisecond double-taps, and a hash twin for the touched ViewApi reads.</summary>
+/// <summary>QA (M2-H1): TerrainHeight.At over every float special on both axes, the rimmed minimap dots (4 x 4 since M2-H2) against a naive reference renderer, edge-heavy dot refresh cost and allocation, whole-millisecond double-taps, and a hash twin for the touched ViewApi reads.</summary>
 public class ViewHardeningQaTests
 {
     private const float Cs = MapConstants.CellSize;
@@ -106,25 +106,32 @@ public class ViewHardeningQaTests
 
     // ---- minimap dots ----
 
-    // The documented picture, drawn the slow way: clear everything, every rim (3 x 3, clipped), then every centre in slot order.
+    // The documented picture, drawn the slow way (M2-H2, BUG-0069): clear everything; every rim (the 4 x 4 block around
+    // the 2 x 2 centre at the cell corner nearest the unit, clipped); then every 2 x 2 centre in slot order; then every
+    // unit's own cell in slot order.
     private static byte[] Reference(int w, int h, uint[] colors, bool[] alive, Vector2[] pos, int[] owner, int maxDots, out int drawn)
     {
         var d = new byte[w * h * 4];
-        var centres = new List<(int x, int y, int o)>();
+        var dots = new List<(int x, int y, int kx, int ky, int o)>();
         for (int s = 0; s < alive.Length && s < maxDots; s++)
         {
             if (!alive[s] || owner[s] < 0 || owner[s] >= colors.Length) continue;
             Vector2 p = pos[s];
             if (!float.IsFinite(p.X) || !float.IsFinite(p.Y)) continue;
             int x = (int)Math.Clamp(MathF.Floor(p.X / Cs), 0f, w - 1), y = (int)Math.Clamp(MathF.Floor(p.Y / Cs), 0f, h - 1);
-            centres.Add((x, y, owner[s]));
+            int kx = (int)Math.Clamp(MathF.Floor(p.X / Cs + 0.5f), 1f, Math.Max(1, w - 1)), ky = (int)Math.Clamp(MathF.Floor(p.Y / Cs + 0.5f), 1f, Math.Max(1, h - 1));
+            dots.Add((x, y, kx, ky, owner[s]));
             uint rim = MinimapRaster.RimFor(colors[owner[s]]);
-            for (int yy = y - 1; yy <= y + 1; yy++)
-                for (int xx = x - 1; xx <= x + 1; xx++)
+            for (int yy = ky - 2; yy <= ky + 1; yy++)
+                for (int xx = kx - 2; xx <= kx + 1; xx++)
                     if (xx >= 0 && yy >= 0 && xx < w && yy < h) Put(d, (yy * w + xx) * 4, rim);
         }
-        foreach ((int x, int y, int o) in centres) Put(d, (y * w + x) * 4, colors[o]);
-        drawn = centres.Count;
+        foreach ((int _, int _, int kx, int ky, int o) in dots)
+            for (int yy = ky - 1; yy <= ky; yy++)
+                for (int xx = kx - 1; xx <= kx; xx++)
+                    if (xx < w && yy < h) Put(d, (yy * w + xx) * 4, colors[o]);
+        foreach ((int x, int y, int _, int _, int o) in dots) Put(d, (y * w + x) * 4, colors[o]);
+        drawn = dots.Count;
         return d;
     }
 
