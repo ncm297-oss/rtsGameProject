@@ -392,7 +392,7 @@ public class ResourceQaTests
     /// tick, so with more than 2 goal groups the younger orders never get a field while felling goes on.
     /// Pins the bound QA expects (no walker stands more than 40 ticks); see BUG-0073.
     /// </summary>
-    [Fact(Skip = "BUG-0073: one tree felled per tick starves all but the 2 oldest goal groups of a flow field (walkers stand still for as long as felling continues); un-skip when fixed")]
+    [Fact]
     public void OneTreeFallsEveryTick_NoWalkerStandsWaitingForItsFieldMoreThan40Ticks()
     {
         int longest = ContinuousFellingLongestWait(out string report);
@@ -674,7 +674,7 @@ public class ResourceQaTests
     [Theory]
     [InlineData("\"displayName\": \"Gold Mine\"", "\"displayName\": \"Gold Mines\"")]
     [InlineData("A seam of gold.", "A seam of gold!")]
-    [InlineData("\"resource\": \"gold\"", "\"resource\": \"wood\"")]
+    [InlineData("\"resource\": \"wood\"", "\"resource\": \"gold\"")] // M3-2b: was gold -> wood, but a 2 x 2 wood type is refused now (BUG-0074)
     [InlineData("{ \"width\": 2, \"height\": 2 }", "{ \"width\": 3, \"height\": 2 }")]
     [InlineData("{ \"width\": 2, \"height\": 2 }", "{ \"width\": 2, \"height\": 3 }")]
     [InlineData("\"id\": \"gold_mine\"", "\"id\": \"gold_vein\"")]
@@ -729,8 +729,8 @@ public class ResourceQaTests
         _out.WriteLine($"4x4 mines on 16x16: {mines} placed over 40 seeds");
     }
 
-    /// <summary>The loader accepts a tree footprint of 1-4 cells, so the placer must honor it (BUG-0074).</summary>
-    [Fact(Skip = "BUG-0074: the forest placer assumes 1 x 1 trees; a 2 x 2 tree footprint (valid data) overlaps, miscounts and skips the open-ground / connectivity checks; un-skip when fixed")]
+    /// <summary>The loader accepted a tree footprint of 1-4 cells, which the placer didn't honor (BUG-0074). Fixed (M3-2b) by refusing a wood footprint other than 1 x 1, so no such world can be built.</summary>
+    [Fact]
     public void TwoByTwoTrees_KeepTheOracle()
     {
         Assert.Null(TwoByTwoTreeOracle(out _));
@@ -749,7 +749,13 @@ public class ResourceQaTests
         string path = dir.FullPath(ResourcesFile);
         File.WriteAllText(path, File.ReadAllText(path).Replace("{ \"width\": 1, \"height\": 1 }", "{ \"width\": 2, \"height\": 2 }"));
         DataLoadResult loaded = LoadNoThrow(dir.Path);
-        Assert.True(loaded.Ok, string.Join("\n", loaded.Errors));
+        if (!loaded.Ok)
+        {
+            // M3-2b: refused at load, so the placer never sees a 2 x 2 tree.
+            Assert.Contains(loaded.Errors, e => e.File == ResourcesFile && e.Path.EndsWith(".footprint", StringComparison.Ordinal));
+            summary = $"2x2 trees: refused by the loader ({string.Join("; ", loaded.Errors)})";
+            return null;
+        }
         GameData data = loaded.Data!;
         MapGenParams m = MapGenParams.Default with { Forests = 12, GoldMines = 4 };
         string? first = null;

@@ -29,7 +29,6 @@ public sealed class FlowField
 
     private readonly float[] _cost;
     private readonly byte[] _direction;
-    private readonly int[] _offset; // cell index step per direction for this width
 
     internal FlowField(int width, int height)
     {
@@ -37,9 +36,6 @@ public sealed class FlowField
         Height = height;
         _cost = new float[width * height];
         _direction = new byte[width * height];
-        _offset = new int[DirectionCount];
-        for (int d = 0; d < DirectionCount; d++)
-            _offset[d] = DirY[d] * width + DirX[d];
     }
 
     /// <summary>Width in cells (same as the grid it was built on).</summary>
@@ -54,8 +50,11 @@ public sealed class FlowField
     /// <summary>The cell the field actually leads to: <see cref="RequestedCell"/>, or the nearest passable cell if that is blocked; -1 if the grid has no passable cell.</summary>
     public int TargetCell { get; private set; } = -1;
 
-    /// <summary><see cref="NavGrid.Version"/> at build time; a mismatch means the field is stale.</summary>
+    /// <summary><see cref="NavGrid.Version"/> at build time; a mismatch means the field is stale (it may miss a shorter way through newly opened cells, and cells opened since have no direction).</summary>
     public int Version { get; private set; }
+
+    /// <summary><see cref="NavGrid.BlockVersion"/> at build time; while it matches, no cell the field reaches has been blocked since, so units may still follow it (M3-2b).</summary>
+    public int BlockVersion { get; private set; }
 
     /// <summary>Path cost from the cell to <see cref="TargetCell"/>; +infinity for blocked or unreachable cells.</summary>
     public float CostAt(int cell) => _cost[cell];
@@ -131,27 +130,71 @@ public sealed class FlowField
     /// direction d (both cells passable and, for a diagonal, both side cells too). Depends only on the
     /// grid, so the cache computes it once per <see cref="NavGrid.Version"/> and shares it by all fields.
     /// </summary>
+    /// <remarks>
+    /// Runs after every grid change (with felling, every tick), so it is written for Debug builds, where
+    /// the JIT inlines nothing: inner cells slide a 3 x 3 window of open bits along each row, reading only
+    /// the three new cells on the right from the flags array, instead of 25 bounds-checked
+    /// <see cref="NavGrid.IsPassable"/> calls each (M3-2b: 1.5 ms a pass on 120 x 72 in Debug at first,
+    /// 0.12 ms with direct reads, BUG-0082). The outer ring takes the general path, which bounds-checks.
+    /// </remarks>
     internal static void ComputeSteps(NavGrid grid, byte[] steps)
     {
-        int w = grid.Width;
-        for (int y = 0; y < grid.Height; y++)
+        int w = grid.Width, h = grid.Height;
+        NavFlags[] flags = grid.Flags;
+        for (int y = 0; y < h; y++)
         {
-            for (int x = 0; x < w; x++)
+            if (y == 0 || y == h - 1 || w < 3)
             {
+                for (int x = 0; x < w; x++) steps[y * w + x] = StepMask(grid, x, y);
+                continue;
+            }
+            int row = y * w;
+            steps[row] = StepMask(grid, 0, y);
+            steps[row + w - 1] = StepMask(grid, w - 1, y);
+            // Open bits of the window round cell (x, y): column x - 1 (nw, west, sw), x (n, c, s), x + 1 (ne, e, se).
+            int up = row - w, down = row + w;
+            bool nw = (flags[up] & NavFlags.Blocked) == 0, west = (flags[row] & NavFlags.Blocked) == 0, sw = (flags[down] & NavFlags.Blocked) == 0;
+            bool n = (flags[up + 1] & NavFlags.Blocked) == 0, c = (flags[row + 1] & NavFlags.Blocked) == 0, s = (flags[down + 1] & NavFlags.Blocked) == 0;
+            for (int x = 1; x < w - 1; x++)
+            {
+                bool ne = (flags[up + x + 1] & NavFlags.Blocked) == 0;
+                bool e = (flags[row + x + 1] & NavFlags.Blocked) == 0;
+                bool se = (flags[down + x + 1] & NavFlags.Blocked) == 0;
+                // Same bits as StepMask: d is open if its cell is, a diagonal only if both side cells are too.
                 int mask = 0;
-                if (grid.IsPassable(x, y))
+                if (c)
                 {
-                    for (int d = 0; d < DirectionCount; d++)
-                    {
-                        int dx = DirX[d], dy = DirY[d];
-                        if (!grid.IsPassable(x + dx, y + dy)) continue;
-                        if ((d & 1) == 1 && !(grid.IsPassable(x + dx, y) && grid.IsPassable(x, y + dy))) continue;
-                        mask |= 1 << d;
-                    }
+                    if (e) mask |= 1;
+                    if (e && s && se) mask |= 2;
+                    if (s) mask |= 4;
+                    if (west && s && sw) mask |= 8;
+                    if (west) mask |= 16;
+                    if (west && n && nw) mask |= 32;
+                    if (n) mask |= 64;
+                    if (e && n && ne) mask |= 128;
                 }
-                steps[y * w + x] = (byte)mask;
+                steps[row + x] = (byte)mask;
+                nw = n; west = c; sw = s;
+                n = ne; c = e; s = se;
             }
         }
+    }
+
+    /// <summary>The step mask of one cell, read through bounds-checked grid queries (the definition <see cref="ComputeSteps"/> follows).</summary>
+    internal static byte StepMask(NavGrid grid, int x, int y)
+    {
+        int mask = 0;
+        if (grid.IsPassable(x, y))
+        {
+            for (int d = 0; d < DirectionCount; d++)
+            {
+                int dx = DirX[d], dy = DirY[d];
+                if (!grid.IsPassable(x + dx, y + dy)) continue;
+                if ((d & 1) == 1 && !(grid.IsPassable(x + dx, y) && grid.IsPassable(x, y + dy))) continue;
+                mask |= 1 << d;
+            }
+        }
+        return (byte)mask;
     }
 
     /// <summary>Rebuilds this field in place for a target using step masks from <see cref="ComputeSteps"/>; allocation-free.</summary>
@@ -165,6 +208,7 @@ public sealed class FlowField
         Array.Fill(_direction, NoDirection);
         RequestedCell = requestedCell;
         Version = grid.Version;
+        BlockVersion = grid.BlockVersion;
         int w = Width;
         TargetCell = grid.IsPassable(requestedCell % w, requestedCell / w)
             ? requestedCell
@@ -172,41 +216,189 @@ public sealed class FlowField
         if (TargetCell < 0) return;
 
         // Dijkstra from the target. Steps are symmetric (the same side cells gate a diagonal both
-        // ways), so cost from the target equals cost to it. Each cell picks its direction when it
-        // is settled: every neighbor that could start its shortest path is cheaper, so already
-        // settled, and any unsettled neighbor costs at least as much as the cell itself, so it
-        // can't win. That is the same pick a separate pass over the finished field would make.
-        int[] offset = _offset;
+        // ways), so cost from the target equals cost to it. A cell's direction points back along the
+        // step that gave it its final cost, the lowest direction number on a tie. Every neighbor that
+        // can give that cost is cheaper by at least 1, so it is settled, and has relaxed the cell,
+        // before the cell is: the same pick a pass over the finished field would make. Neither costs
+        // nor directions depend on the order cells are settled in, so the order inside a bucket is free.
         float[] cost = _cost;
         byte[] direction = _direction;
+        int[] entries = queue.Entries;
+        int cells = queue.Cells;
+        // The ring of three buckets: whole-number costs k (draining), k + 1 and k + 2, each a run of
+        // entries starting at its base. Lengths stay in locals: the hot loop touches no queue field.
+        int baseK = 0, baseK1 = cells, baseK2 = 2 * cells;
+        int lengthK = 1, lengthK1 = 0, lengthK2 = 0;
         cost[TargetCell] = 0f;
-        queue.Reset(cost);
-        queue.PushOrDecrease(TargetCell);
-        int c;
-        while ((c = queue.Pop()) >= 0)
+        entries[0] = TargetCell;
+        for (int k = 0; lengthK + lengthK1 + lengthK2 > 0; k++)
         {
-            int mask = steps[c];
-            float cc = cost[c];
-            float best = float.PositiveInfinity;
-            int bestDir = NoDirection;
-            for (int d = 0; mask != 0; d++, mask >>= 1)
+            // Settling bucket k's cells pushes only into k + 1 and k + 2, so its length is fixed while it drains.
+            for (int e = baseK, end = baseK + lengthK; e < end; e++)
             {
-                if ((mask & 1) == 0) continue;
-                int n = c + offset[d];
-                float step = (d & 1) == 0 ? 1f : DiagonalCost;
-                float cn = cost[n];
-                if (cn + step < best)
+                int c = entries[e];
+                float cc = cost[c];
+                if ((int)cc != k) continue; // stale: the cell's cost fell into an earlier bucket and it was settled there
+                // The eight directions are written out, one block each (east, then clockwise; offset,
+                // step cost and the neighbor's direction back to c differ), rather than looped over a
+                // table: tests run Debug builds, where the loop's bookkeeping was a third of a build
+                // (BUG-0082). In every block: a cheaper way to n lowers its cost, points it back at c and
+                // queues it unless it is already queued in that whole number; an equal one only wins the
+                // tie for a lower direction number.
+                int mask = steps[c];
+                if ((mask & 1) != 0)
                 {
-                    best = cn + step;
-                    bestDir = d;
+                    int n = c + 1;
+                    float through = cc + 1f;
+                    float cn = cost[n];
+                    if (through < cn)
+                    {
+                        cost[n] = through;
+                        direction[n] = 4;
+                        int kn = (int)through;
+                        if (cn == float.PositiveInfinity || (int)cn != kn)
+                        {
+                            if (kn == k + 1) entries[baseK1 + lengthK1++] = n;
+                            else entries[baseK2 + lengthK2++] = n;
+                        }
+                    }
+                    else if (through == cn && 4 < direction[n]) direction[n] = 4;
                 }
-                if (cc + step < cn)
+                if ((mask & 2) != 0)
                 {
-                    cost[n] = cc + step;
-                    queue.PushOrDecrease(n);
+                    int n = c + w + 1;
+                    float through = cc + DiagonalCost;
+                    float cn = cost[n];
+                    if (through < cn)
+                    {
+                        cost[n] = through;
+                        direction[n] = 5;
+                        int kn = (int)through;
+                        if (cn == float.PositiveInfinity || (int)cn != kn)
+                        {
+                            if (kn == k + 1) entries[baseK1 + lengthK1++] = n;
+                            else entries[baseK2 + lengthK2++] = n;
+                        }
+                    }
+                    else if (through == cn && 5 < direction[n]) direction[n] = 5;
+                }
+                if ((mask & 4) != 0)
+                {
+                    int n = c + w;
+                    float through = cc + 1f;
+                    float cn = cost[n];
+                    if (through < cn)
+                    {
+                        cost[n] = through;
+                        direction[n] = 6;
+                        int kn = (int)through;
+                        if (cn == float.PositiveInfinity || (int)cn != kn)
+                        {
+                            if (kn == k + 1) entries[baseK1 + lengthK1++] = n;
+                            else entries[baseK2 + lengthK2++] = n;
+                        }
+                    }
+                    else if (through == cn && 6 < direction[n]) direction[n] = 6;
+                }
+                if ((mask & 8) != 0)
+                {
+                    int n = c + w - 1;
+                    float through = cc + DiagonalCost;
+                    float cn = cost[n];
+                    if (through < cn)
+                    {
+                        cost[n] = through;
+                        direction[n] = 7;
+                        int kn = (int)through;
+                        if (cn == float.PositiveInfinity || (int)cn != kn)
+                        {
+                            if (kn == k + 1) entries[baseK1 + lengthK1++] = n;
+                            else entries[baseK2 + lengthK2++] = n;
+                        }
+                    }
+                    else if (through == cn && 7 < direction[n]) direction[n] = 7;
+                }
+                if ((mask & 16) != 0)
+                {
+                    int n = c + -1;
+                    float through = cc + 1f;
+                    float cn = cost[n];
+                    if (through < cn)
+                    {
+                        cost[n] = through;
+                        direction[n] = 0;
+                        int kn = (int)through;
+                        if (cn == float.PositiveInfinity || (int)cn != kn)
+                        {
+                            if (kn == k + 1) entries[baseK1 + lengthK1++] = n;
+                            else entries[baseK2 + lengthK2++] = n;
+                        }
+                    }
+                    else if (through == cn && 0 < direction[n]) direction[n] = 0;
+                }
+                if ((mask & 32) != 0)
+                {
+                    int n = c + -w - 1;
+                    float through = cc + DiagonalCost;
+                    float cn = cost[n];
+                    if (through < cn)
+                    {
+                        cost[n] = through;
+                        direction[n] = 1;
+                        int kn = (int)through;
+                        if (cn == float.PositiveInfinity || (int)cn != kn)
+                        {
+                            if (kn == k + 1) entries[baseK1 + lengthK1++] = n;
+                            else entries[baseK2 + lengthK2++] = n;
+                        }
+                    }
+                    else if (through == cn && 1 < direction[n]) direction[n] = 1;
+                }
+                if ((mask & 64) != 0)
+                {
+                    int n = c + -w;
+                    float through = cc + 1f;
+                    float cn = cost[n];
+                    if (through < cn)
+                    {
+                        cost[n] = through;
+                        direction[n] = 2;
+                        int kn = (int)through;
+                        if (cn == float.PositiveInfinity || (int)cn != kn)
+                        {
+                            if (kn == k + 1) entries[baseK1 + lengthK1++] = n;
+                            else entries[baseK2 + lengthK2++] = n;
+                        }
+                    }
+                    else if (through == cn && 2 < direction[n]) direction[n] = 2;
+                }
+                if ((mask & 128) != 0)
+                {
+                    int n = c + -w + 1;
+                    float through = cc + DiagonalCost;
+                    float cn = cost[n];
+                    if (through < cn)
+                    {
+                        cost[n] = through;
+                        direction[n] = 3;
+                        int kn = (int)through;
+                        if (cn == float.PositiveInfinity || (int)cn != kn)
+                        {
+                            if (kn == k + 1) entries[baseK1 + lengthK1++] = n;
+                            else entries[baseK2 + lengthK2++] = n;
+                        }
+                    }
+                    else if (through == cn && 3 < direction[n]) direction[n] = 3;
                 }
             }
-            if (c != TargetCell) direction[c] = (byte)bestDir;
+            // Bucket k is empty: it becomes k + 3.
+            int drained = baseK;
+            baseK = baseK1;
+            baseK1 = baseK2;
+            baseK2 = drained;
+            lengthK = lengthK1;
+            lengthK1 = lengthK2;
+            lengthK2 = 0;
         }
     }
 }

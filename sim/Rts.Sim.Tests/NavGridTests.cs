@@ -149,6 +149,25 @@ public class NavGridTests
     public void Version_StartsAtZero()
     {
         Assert.Equal(0, new NavGrid(FromRows("000", "000", "000")).Version);
+        Assert.Equal(0, new NavGrid(FromRows("000", "000", "000")).BlockVersion);
+    }
+
+    /// <summary>M3-2b: <c>Version</c> bumps once on every passability change, <c>BlockVersion</c> only on the closing ones.</summary>
+    [Fact]
+    public void BlockVersion_BumpsOnceOnClosingChangesOnly_VersionOnceOnEvery()
+    {
+        var g = new NavGrid(ResourceMaps.Flat(10, 10));
+        void Expect(Action change, int dv, int db)
+        {
+            int v = g.Version, b = g.BlockVersion;
+            change();
+            Assert.Equal((v + dv, b + db), (g.Version, g.BlockVersion));
+        }
+        Expect(() => g.SetResource(3, 3, 2, 2), 1, 1);
+        Expect(() => g.ClearResource(3, 3, 2, 2), 1, 0);
+        Expect(() => g.SetBuilding(5, 5, 3, 3), 1, 1);
+        Expect(() => g.ClearBuilding(5, 5, 3, 3), 1, 0);
+        Expect(g.BumpVersionForTests, 1, 1);
     }
 
     [Theory]

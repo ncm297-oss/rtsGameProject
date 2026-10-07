@@ -43,8 +43,9 @@ public partial class Match : Node3D
         units.Bind(data, sim.World.Units.Capacity);
         units.Runner = _runner;
 
+        Sfx.SetMuted(options.Mute);
         var selection = GetNode<SelectionController>("SelectionController");
-        selection.Init(_runner, camera, GetNode<SelectionRings>("World3D/SelectionRings"));
+        selection.Init(_runner, camera, GetNode<SelectionRings>("World3D/SelectionRings"), GetNode<Sfx>("Sfx"));
 
         System.Numerics.Vector2 focus = SpawnArmies(sim, options.UnitsPerPlayer);
         camera.SetFocus(focus.X, focus.Y);

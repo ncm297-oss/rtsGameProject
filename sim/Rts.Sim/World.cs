@@ -47,6 +47,7 @@ public sealed class World
         FlowFields = new FlowFieldCache(NavGrid, FlowFieldCache.CapacityFor(config.UnitCapacity, NavGrid.Width * NavGrid.Height));
         MoveOrder = new long[config.UnitCapacity];
         FieldMisses = new long[config.UnitCapacity];
+        FieldRefreshes = new long[config.UnitCapacity];
         Neighbors = new int[config.UnitCapacity];
         PlannedStep = new Vector2[config.UnitCapacity];
         PlannedAction = new byte[config.UnitCapacity];
@@ -76,6 +77,8 @@ public sealed class World
         }
         MaxUnitRadius = maxRadius;
         MaxUnitSpeed = maxSpeed;
+        // The placer's closings happened before any unit existed; only later ones reset progress marks.
+        SeenBlockVersion = NavGrid.BlockVersion;
     }
 
     /// <summary>Largest unit collision radius in <see cref="Data"/>: a neighbor query of own radius plus this finds every unit that can touch.</summary>
@@ -184,6 +187,16 @@ public sealed class World
 
     /// <summary>Scratch for <see cref="Movement.MovementSystem"/>'s build pass: goals without a cached field keyed by (oldest order tick, goal cell); derived, not hashed.</summary>
     internal long[] FieldMisses { get; }
+
+    /// <summary>Scratch for <see cref="Movement.MovementSystem"/>'s build pass: goals whose usable field is stale keyed by (field version, goal cell), refreshed after the misses; derived, not hashed.</summary>
+    internal long[] FieldRefreshes { get; }
+
+    /// <summary>
+    /// <see cref="NavGrid.BlockVersion"/> as the last movement pass saw it; a difference makes the next pass reset
+    /// every Moving unit's progress mark (M3-2b, BUG-0077). Hashed: a grid change between ticks (a test seam, or a
+    /// phase after movement) leaves it behind the grid until the next pass, and it decides that reset.
+    /// </summary>
+    internal int SeenBlockVersion { get; set; }
 
     /// <summary>False for the test seam's hand-made maps, which a replay (seed + map params) can't rebuild.</summary>
     internal bool HasGeneratedMap { get; }

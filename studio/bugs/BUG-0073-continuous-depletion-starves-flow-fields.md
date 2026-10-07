@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-06-1255, task M3-1 |
 | System | pathfinding / economy (depletion vs the flow-field cache) |
-| Fixed by | |
+| Fixed by | 28d78f8 (M3-2b): opening changes leave fields usable; `QA/ResourceQaTests.OneTreeFallsEveryTick_NoWalkerStandsWaitingForItsFieldMoreThan40Ticks` un-skipped, dev twin `GridChangeMovementTests.OneTreeFallsEveryTickFor100Ticks_32Groups_...` |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~OneTreeFallsEveryTick_Report" --logger "console;verbosity=detailed"`
@@ -48,3 +48,6 @@ must say what changes.
   lazily within the cap, and invalidate everything only for closing changes (buildings, M3-3).
   Others are batching depletions per N ticks, or incremental repair of the affected region.
 - Plan this into M3-2's design (the brief says the gather system calls `Take` in tick phase 4).
+
+## Verification (QA, 2026-10-06-1744)
+QA row: longest wait 0 ticks, 0 of 32 walkers waited >= 90 of 100 ticks. QA fuzz `Stress/GridChangeFuzzStressTests` (4 seeds x 3,000 ticks, ~450 fells each): no usable field ever points into a blocked cell. The closing-change half of the mechanism remains: BUG-0080. Avg tick in the scene 0.81 ms (was 1.73-1.81 ms at a80c143, measured by QA), above the brief's 0.5 ms target: BUG-0082.

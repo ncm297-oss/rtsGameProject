@@ -15,7 +15,9 @@ namespace Rts.Game;
 /// clicked type. Right click, A + click, S and H all go through <see cref="Order"/>, as does the
 /// minimap. The geometry lives in the pure <see cref="ScreenPicker"/> and <see cref="GroundPicker"/>,
 /// groups and subgroups in <see cref="ControlGroups"/> and <see cref="Rts.Sim.ViewApi.Subgroups"/>;
-/// the sim is changed only through <see cref="Simulation.Enqueue"/>.
+/// the sim is changed only through <see cref="Simulation.Enqueue"/>. A selection action that leaves
+/// a changed, non-empty selection plays <see cref="SfxEvent.Select"/>; an order that enqueued
+/// anything plays <see cref="SfxEvent.Command"/> (M2-6).
 /// </remarks>
 public partial class SelectionController : Node
 {
@@ -29,6 +31,7 @@ public partial class SelectionController : Node
     private RtsCamera _camera = null!;
     private SelectionRings _rings = null!;
     private ColorRect _box = null!;
+    private Sfx? _sfx;
 
     private Vector2 _press;
     private bool _pressing, _boxing, _doubleClick;
@@ -39,6 +42,10 @@ public partial class SelectionController : Node
     private float[] _radiusPx = Array.Empty<float>();
     private bool[] _candidate = Array.Empty<bool>();
     private int[] _picked = Array.Empty<int>();
+
+    // The selection before the current selection action, to tell whether it changed (Select sound).
+    private EntityHandle[] _before = Array.Empty<EntityHandle>();
+    private int _beforeCount;
 
     /// <summary>The selected units.</summary>
     public SelectionSet Selection { get; private set; } = new(1);
@@ -66,9 +73,11 @@ public partial class SelectionController : Node
     }
 
     /// <summary>Connects the controller to the match; call once after the sim exists.</summary>
-    public void Init(SimRunner runner, RtsCamera camera, SelectionRings rings)
+    /// <param name="sfx">Where selection and order sounds go; null plays none.</param>
+    public void Init(SimRunner runner, RtsCamera camera, SelectionRings rings, Sfx? sfx = null)
     {
         _runner = runner;
+        _sfx = sfx;
         _camera = camera;
         _rings = rings;
         World world = runner.Simulation!.World;
@@ -80,6 +89,7 @@ public partial class SelectionController : Node
         _radiusPx = new float[capacity];
         _candidate = new bool[capacity];
         _picked = new int[capacity];
+        _before = new EntityHandle[capacity];
         _rings.Init(capacity);
     }
 
@@ -178,9 +188,12 @@ public partial class SelectionController : Node
             if (Selection.Count > 0) Groups.Assign(g, Selection.Items); // an empty selection never wipes a group
         }
         else if (Input.IsActionPressed("group_add")) Groups.Add(g, Selection.Items);
-        else if (Groups.Recall(g, Selection, u.Alive, u.Generation) > 0)
+        else
         {
+            SnapshotSelection();
+            if (Groups.Recall(g, Selection, u.Alive, u.Generation) == 0) return;
             SelectionChanged();
+            PlaySelectIfChanged();
             if (Groups.Tap(g, Time.GetTicksMsec() / 1000.0) && Groups.TryMean(g, u.Position, u.Alive, u.Generation, out System.Numerics.Vector2 mean))
                 _camera.SetFocus(mean.X, mean.Y);
         }
@@ -198,6 +211,7 @@ public partial class SelectionController : Node
     private void FinishSelect(Vector2 release)
     {
         bool add = Input.IsActionPressed("select_add");
+        SnapshotSelection();
         Project();
         UnitStore u = _runner.Simulation!.World.Units;
         if (_boxing || ScreenPicker.IsDrag(ToNumerics(_press), ToNumerics(release)))
@@ -224,6 +238,25 @@ public partial class SelectionController : Node
         }
         _boxing = false;
         SelectionChanged();
+        PlaySelectIfChanged();
+    }
+
+    // Remembers the live selection before a selection action; leaves targeting alone (QaH1: a recall keeps A armed).
+    private void SnapshotSelection()
+    {
+        UnitStore u = _runner.Simulation!.World.Units;
+        Selection.Prune(u.Alive, u.Generation);
+        Selection.Items.CopyTo(_before);
+        _beforeCount = Selection.Count;
+    }
+
+    // Select sound when the action left a non-empty selection that differs (as a set) from the snapshot.
+    private void PlaySelectIfChanged()
+    {
+        if (Selection.Count == 0) return;
+        bool same = Selection.Count == _beforeCount;
+        for (int i = 0; same && i < _beforeCount; i++) same = Selection.Contains(_before[i]);
+        if (!same) _sfx?.Play(SfxEvent.Select);
     }
 
     // Every own on-screen unit of the type (Project() has run): a box over the whole viewport, filtered by type.
@@ -326,6 +359,7 @@ public partial class SelectionController : Node
             });
         }
         _issued[(int)kind] += Selection.Count;
+        _sfx?.Play(SfxEvent.Command);
     }
 
     // The middle of the placeholder capsule: what the player sees and clicks.

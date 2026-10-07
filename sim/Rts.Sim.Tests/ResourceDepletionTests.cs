@@ -29,7 +29,7 @@ public class ResourceDepletionTests
     private static int Cell(NavGrid g, int x, int y) => y * g.Width + x;
 
     [Fact]
-    public void CachedFieldBehindATreeLine_IsStaleAfterTheTreeFalls_AndRebuildsWithALowerCost()
+    public void CachedFieldBehindATreeLine_StaysUsableButStaleAfterTheTreeFalls_AndRebuildsInPlaceWithALowerCost()
     {
         Simulation sim = TreeLineSim(out EntityHandle[] line);
         NavGrid g = sim.World.NavGrid;
@@ -44,10 +44,14 @@ public class ResourceDepletionTests
 
         Assert.Equal(TreeWood, sim.World.Resources.Take(line[Row - LineTop], TreeWood));
         Assert.Equal(version + 1, g.Version);
-        Assert.False(cache.Contains(goal));
-        Assert.Null(cache.PeekCached(goal)); // stale fields are never handed out
+        // M3-2b: a fall only opens cells, so the old field stays usable (units keep walking it) but stale.
+        Assert.True(cache.Contains(goal));
+        Assert.Same(before, cache.PeekCached(goal));
+        Assert.NotEqual(g.Version, before.Version);
+        Assert.Equal(detour, before.CostAt(start)); // not rebuilt by a peek
 
         FlowField after = cache.Get(goal);
+        Assert.Same(before, after); // rebuilt in place
         Assert.Equal(builds + 1, cache.BuildCount);
         Assert.Equal(g.Version, after.Version);
         Assert.Equal(GoalX - StartX, after.CostAt(start)); // straight through the gap
