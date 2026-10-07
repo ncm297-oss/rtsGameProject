@@ -181,4 +181,50 @@ public class BuildingContentTests
             }
         }
     }
+
+    // docs/02 "Buildings" Requires column, with "Infantry Hall" written as the faction's own hall name on its page.
+    private static readonly Dictionary<BuildingSlot, string> PageRequires = new()
+    {
+        [BuildingSlot.ShockHall] = "InfantryHall",
+        [BuildingSlot.CasterHall] = "Age II",
+        [BuildingSlot.SiegeWorks] = "Age II",
+        [BuildingSlot.WatchTower] = "Age II",
+    };
+
+    [Fact]
+    public void G_ThePagesBuildingTables_MatchTheRosterAndTemplate()
+    {
+        foreach (string faction in Factions)
+        {
+            string[][] rows = FactionPage.Table(faction, "Buildings");
+            Assert.Equal(Roster[faction].Length, rows.Length);
+            for (int i = 0; i < rows.Length; i++)
+            {
+                // Slot | Name | Id | HP | Armor | Cost (G/W) | Build (s) | Footprint | Provides | Requires
+                string[] c = rows[i];
+                Assert.Equal(10, c.Length);
+                (BuildingSlot slot, string id, string name) = Roster[faction][i];
+                var t = Template[slot];
+                string where = $"{faction}.md Buildings row {name}";
+                Assert.True((slot, name, id) == (FactionPage.Slot<BuildingSlot>(c[0]), c[1], c[2]), where + " slot/name/id");
+                Assert.True((t.Hp, t.Armor) == (int.Parse(c[3]), int.Parse(c[4])), where + " hp/armor");
+                Assert.True((t.Gold, t.Wood) == FactionPage.Cost(c[5]), where + " cost");
+                Assert.True(t.BuildS == int.Parse(c[6]), where + " build");
+                Assert.True($"{t.W}×{t.H}" == c[7], where + " footprint");
+
+                // Provides: pop, drop-off and the units trained here must agree with the data.
+                string provides = c[8];
+                Assert.True((t.Pop > 0) == provides.Contains($"+{t.Pop} pop", StringComparison.Ordinal), where + " pop");
+                Assert.True(t.DropOff == provides.Contains("drop-off", StringComparison.OrdinalIgnoreCase), where + " drop-off");
+                string[] trained = Data.Units.Where(u => u.TrainedAt == id).Select(u => u.DisplayName).ToArray();
+                string trains = trained.Length == 0 ? "" : "rains " + string.Join(", ", trained);
+                Assert.True(trained.Length == 0 ? !provides.Contains("rains", StringComparison.Ordinal) : provides.Contains(trains, StringComparison.Ordinal), where + $" provides '{provides}'");
+
+                string requires = PageRequires.TryGetValue(slot, out string? r)
+                    ? (r == "InfantryHall" ? Roster[faction].Single(e => e.Slot == BuildingSlot.InfantryHall).Name : r)
+                    : "—";
+                Assert.True(requires == c[9], where + $" requires '{c[9]}'");
+            }
+        }
+    }
 }

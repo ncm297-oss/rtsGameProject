@@ -64,20 +64,21 @@ buildings and can wreck your own army if you're careless.
 
 ## Buildings
 
-| Slot | Name | Id |
-| --- | --- | --- |
-| Town Hall | Garrison Keep | `malazan_garrison_keep` |
-| House | Billet | `malazan_billet` |
-| Camp | Quartermaster's Depot | `malazan_depot` |
-| Infantry Hall | Legion Barracks | `malazan_barracks` |
-| Ranged Hall | Crossbow Range | `malazan_crossbow_range` |
-| Shock Hall | Wickan Corral | `malazan_wickan_corral` |
-| Caster Hall | Cadre Tower | `malazan_cadre_tower` |
-| Siege Works | Engineers' Yard | `malazan_engineers_yard` |
-| Forge | Armory | `malazan_armory` |
-| Watch Tower | Watchtower | `malazan_watchtower` |
+| Slot | Name | Id | HP | Armor | Cost (G/W) | Build (s) | Footprint | Provides | Requires |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Town Hall | Garrison Keep | `malazan_garrison_keep` | 2400 | 5 | 275 / 275 | 90 | 4×4 | +10 pop, drop-off, trains Laborer, researches Age II | — |
+| House | Billet | `malazan_billet` | 500 | 3 | 0 / 50 | 20 | 2×2 | +8 pop | — |
+| Camp | Quartermaster's Depot | `malazan_depot` | 600 | 3 | 0 / 75 | 25 | 2×2 | Drop-off | — |
+| Infantry Hall | Legion Barracks | `malazan_barracks` | 1200 | 4 | 0 / 150 | 40 | 3×3 | Trains Heavy Infantry | — |
+| Ranged Hall | Crossbow Range | `malazan_crossbow_range` | 1200 | 4 | 0 / 150 | 40 | 3×3 | Trains Crossbowman | — |
+| Shock Hall | Wickan Corral | `malazan_wickan_corral` | 1200 | 4 | 75 / 150 | 45 | 3×3 | Trains Wickan Lancer | Legion Barracks |
+| Forge | Armory | `malazan_armory` | 1000 | 4 | 100 / 100 | 40 | 3×3 | Upgrades, Moranth Supply | — |
+| Caster Hall | Cadre Tower | `malazan_cadre_tower` | 1200 | 4 | 150 / 150 | 50 | 3×3 | Trains Cadre Mage | Age II |
+| Siege Works | Engineers' Yard | `malazan_engineers_yard` | 1400 | 4 | 150 / 200 | 55 | 3×3 | Trains Catapult, Sapper | Age II |
+| Watch Tower | Watchtower | `malazan_watchtower` | 800 | 5 | 50 / 125 | 35 | 2×2 | Attack 10 pierce / 2 s, range 18; sight 24; detector 16 m | Age II |
 
 Building stats follow the template in [02-game-design.md](../02-game-design.md#buildings).
+`Content/BuildingContentTests` and `UnitContentTests` pin this page to the data.
 
 ## Strengths and weaknesses
 
