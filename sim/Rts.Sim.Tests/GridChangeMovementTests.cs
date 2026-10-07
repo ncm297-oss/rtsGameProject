@@ -83,12 +83,11 @@ public class GridChangeMovementTests
     }
 
     /// <summary>
-    /// The same scene's average tick while a tree falls every tick. The brief's target was 0.5 ms, but the cap
-    /// still spends its 2 builds a tick on refreshes while felling goes on, and 2 builds of a 120 x 72 field take
-    /// about 0.67 ms in Debug on their own (measured on a quiet machine: 0.82 ms a tick; 1.9 ms before M3-2b,
-    /// most of it the step-mask pass). So the row bounds the felling tick by the calm tick plus what 2 builds and
-    /// one step-mask pass cost on this machine right now, with 50% slack: robust to a loaded machine, and it
-    /// fails if a tick builds more than the cap or the step masks go slow again.
+    /// The same scene's average tick while a tree falls every tick: under the brief's 0.5 ms, an absolute bound
+    /// (BUG-0082). The cap still spends its 2 builds a tick on refreshes while felling goes on, so the tick is
+    /// about 2 builds of a 120 x 72 field plus one step-mask pass. Debug, quiet machine: 1.76 ms a tick before
+    /// M3-2b, 0.81 ms after its first round (0.33 ms a build, 0.12 ms a step pass), 0.40 ms after BUG-0082's
+    /// fix (0.15 ms a build, 0.045 ms a step pass). The printed breakdown says which part grew when it fails.
     /// </summary>
     [Fact]
     [Trait("Category", "Perf")]
@@ -125,8 +124,11 @@ public class GridChangeMovementTests
             field.Build(g, sim.World.Units.GoalCell[k + 1], queue, steps);
         }
         double budget = System.Diagnostics.Stopwatch.GetElapsedTime(b0).TotalMilliseconds / 30;
-        _out.WriteLine($"avg tick with a tree felled every tick: {felling / 90:F3} ms; calm {calmMs / 90:F3} ms; 2 builds + 1 step pass alone {budget:F3} ms");
-        Assert.True(felling / 90 < calmMs / 90 + 1.5 * budget, $"avg tick {felling / 90:F3} ms");
+        b0 = System.Diagnostics.Stopwatch.GetTimestamp();
+        for (int k = 0; k < 30; k++) FlowField.ComputeSteps(g, steps);
+        double stepPass = System.Diagnostics.Stopwatch.GetElapsedTime(b0).TotalMilliseconds / 30;
+        _out.WriteLine($"avg tick with a tree felled every tick: {felling / 90:F3} ms; calm {calmMs / 90:F3} ms; 2 builds + 1 step pass alone {budget:F3} ms (step pass {stepPass:F3} ms)");
+        Assert.True(felling / 90 < 0.5, $"avg tick {felling / 90:F3} ms (M3-2b criterion 3: < 0.5 ms)");
     }
 
     /// <summary>

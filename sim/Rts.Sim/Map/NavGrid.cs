@@ -152,8 +152,9 @@ public sealed class NavGrid
         Version++;
     }
 
-    /// <summary>Every cell's flags, indexed <c>y * Width + x</c>, for whole-grid passes that can't afford a bounds check per read.</summary>
-    internal ReadOnlySpan<NavFlags> Flags => _flags;
+    /// <summary>Every cell's flags, indexed <c>y * Width + x</c>, for whole-grid passes that can't afford a bounds check per read; the live array, so read it and never write it.</summary>
+    /// <remarks>An array, not a span: Debug builds (the tests') don't inline a span's indexer, which made the per-change step-mask pass twice as slow (BUG-0082).</remarks>
+    internal NavFlags[] Flags => _flags;
 
     /// <summary>True if (x, y) is a cell of this grid.</summary>
     public bool InBounds(int x, int y) => (uint)x < (uint)Width && (uint)y < (uint)Height;

@@ -328,8 +328,12 @@ passable (no corner cutting). All passable cells cost 1 today; the nav cost byte
 Each reached cell points at the neighbor that starts its shortest path, lowest direction number on a
 tie; the target, blocked cells and unreachable cells have no direction. The priority queue is a
 bucket queue on the whole-number part of the cost (Dial's algorithm: every step costs at least 1, so
-cells in one bucket can't improve each other), which gives the same costs as a binary heap but builds
-a 128 × 128 field in about 0.7 ms in a Debug build. A blocked target cell resolves to the nearest
+cells in one bucket can't improve each other), which gives the same costs as a binary heap. Since
+BUG-0082 (M3-2b) it is three buckets in a ring with lazy deletion (a cell whose cost drops a whole
+number is queued again and its old entry skipped), driven inline in the build loop with the eight
+directions written out and each cell's direction picked when a neighbor relaxes it: tests run Debug
+builds, where the JIT inlines nothing, so this builds a 128 × 128 field in about 0.37 ms in Debug
+(0.7 ms before) with the same costs and directions. A blocked target cell resolves to the nearest
 passable cell by squared cell distance, ties to the lowest (y, x); `FlowField.NearestPassable` is
 that rule. It searches square rings outward from the cell and stops once a ring can't beat the
 best distance found, so its cost grows with the distance to passable ground, not the map size. Unreachable targets can't happen yet: the nav grid seals every pocket, so all passable
@@ -370,8 +374,11 @@ every field stale at once, so with one tree felled per tick only the 2 oldest go
 field and the rest stood for as long as felling went on (QA: 30 of 32 walkers stood 90+ of 100
 ticks); now they walk their usable fields (longest wait 0 ticks in the same scene). The step masks
 are still recomputed once per `Version`; since M3-2b inner cells read the grid's flag array directly
-(`ComputeSteps`, same bits as the per-cell `StepMask` definition, which the outer ring still uses), so
-a pass on 120 x 72 cells takes about 0.13 ms in Debug instead of 1.5 ms.
+(`ComputeSteps`, same bits as the per-cell `StepMask` definition, which the outer ring still uses),
+sliding a 3 × 3 window of open bits along each row, so a pass on 120 x 72 cells takes about 0.045 ms
+in Debug instead of 1.5 ms. With one far tree felled every tick, the 2 builds a tick go to refreshes,
+and the 32-group scene averages 0.40 ms a tick in Debug (1.76 ms before M3-2b; the perf row pins
+< 0.5 ms).
 
 **Build cap (BUG-0018, BUG-0022).** Fetching a field per unit in slot order thrashed the LRU once live goals
 outnumbered its slots (goals interleaved by slot evict exactly the field the next unit needs: a

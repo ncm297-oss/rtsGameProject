@@ -291,6 +291,40 @@ public class FlowFieldCacheTests
         Assert.Equal(builds + 1, cache.BuildCount); // current now: a hit
     }
 
+    /// <summary>
+    /// Every field the cache builds, as nodes come and go, has exactly the Dijkstra oracle's costs and
+    /// directions: the lazy-deletion bucket queue, the unrolled directions picked at relax time and the
+    /// sliding-window step masks (BUG-0082) change speed, not results.
+    /// </summary>
+    [Fact]
+    public void Get_AfterNodesComeAndGo_MatchesTheOracleOnEveryCell()
+    {
+        NavGrid grid = Generated(11);
+        List<int> open = PassableCells(grid);
+        var cache = new FlowFieldCache(grid, capacity: 4);
+        for (int round = 0; round < 6; round++)
+        {
+            for (int t = 0; t < 4; t++)
+            {
+                int target = open[(round * 4 + t) * 211 % open.Count];
+                FlowField f = cache.Get(target);
+                (float[] cost, byte[] dir, int resolved) = Solve(grid, target);
+                Assert.Equal(resolved, f.TargetCell);
+                for (int c = 0; c < cost.Length; c++)
+                {
+                    if (cost[c] != f.CostAt(c)) Assert.Fail($"round {round} target {target} cell {c}: cost {f.CostAt(c)}, oracle {cost[c]}");
+                    if (dir[c] != f.DirectionAt(c)) Assert.Fail($"round {round} target {target} cell {c}: direction {f.DirectionAt(c)}, oracle {dir[c]}");
+                }
+            }
+            for (int k = round % 3; k < open.Count; k += 17) // nodes appear on a scatter of cells, then go again
+            {
+                int x = open[k] % grid.Width, y = open[k] / grid.Width;
+                if ((grid.FlagsAt(x, y) & NavFlags.Resource) != 0) grid.ClearResource(x, y, 1, 1);
+                else if (round % 2 == 0 && grid.CanTakeResource(x, y)) grid.SetResource(x, y, 1, 1);
+            }
+        }
+    }
+
     /// <summary>The step masks' fast path (inner cells read the flags directly) gives the per-cell definition's bits on every cell, also after nodes come and go.</summary>
     [Fact]
     public void ComputeSteps_MatchesTheBoundsCheckedDefinition_OnEveryCell()
