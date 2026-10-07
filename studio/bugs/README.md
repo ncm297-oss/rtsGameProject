@@ -120,3 +120,6 @@ bugs outrank new features.
 | [BUG-0087](BUG-0087-sfx-sound-playing-at-quit-leaks-objectdb-in-existing-scenes.md) | S3 | open | A sound still playing at quit leaves an ObjectDB leak warning in existing test scenes (intermittent) |
 | [BUG-0088](BUG-0088-orderstest-double-tap-row-flaky-under-cpu-load.md) | S4 | open | `OrdersTest.tscn` double-tap row fails under CPU load: process-time wait vs wall-clock tap window (pre-existing, seen at the 1744 ACCEPT) |
 | [BUG-0090](BUG-0090-d1-building-text-ahead-of-schema.md) | S4 | open | D1 building descriptions promise tower attack/detection and requirements the schema lacks; stale BuildingSlot comment |
+| [BUG-0101](BUG-0101-bench-order-across-moves-army-only-15-m.md) | S3 | open | `--bench` "order across the map" sends the army about 15 m, to the enemy start block next door |
+| [BUG-0102](BUG-0102-bench-fps-field-biased-low-by-load-second.md) | S3 | open | The `bench:` line's `fps` reads low on short runs (averages Godot's once-a-second counter, first sample is the load second) |
+| [BUG-0103](BUG-0103-m2-7-bench-nits.md) | S4 | open | M2-7 nits: vsync-on rows report smoothed deltas, "no bunching" remark, culture in two log lines, endless huge `--bench` |
