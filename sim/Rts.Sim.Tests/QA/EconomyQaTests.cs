@@ -397,7 +397,7 @@ public class EconomyQaTests
     public void AColumnWithNoBuildingDropped_Arrives_ControlRow() => ColumnPastADroppedBuilding(drop: false);
 
     /// <summary>BUG-0077: the walkers' progress mark (<c>BestRemaining</c>) survives a closing grid change, so the detour round the new building counts as no progress and half the column gives up after 20 ticks.</summary>
-    [Fact(Skip = "BUG-0077: a building placed in front of a moving column makes the units behind it give up after 20 ticks; un-skip when fixed")]
+    [Fact]
     public void ABuildingDroppedOnAMarchingColumnsPath_NoUnitCenterEverEntersItsCells_AndTheColumnStillArrives() => ColumnPastADroppedBuilding(drop: true);
 
     [Fact]

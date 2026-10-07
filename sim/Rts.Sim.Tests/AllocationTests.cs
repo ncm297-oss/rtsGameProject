@@ -212,6 +212,21 @@ public class AllocationTests
         _ = sink;
     }
 
+    /// <summary>M3-2b: a tree felled before every measured tick, 32 goal groups walking stale-but-usable fields while the build pass refreshes 2 a tick.</summary>
+    [Fact]
+    public void Tick_WithATreeFelledEveryTick_AndRefreshesRunning_AllocatesNothing()
+    {
+        (Simulation sim, Entities.EntityHandle[] trees) = GridChangeMovementTests.ThirtyTwoGroups();
+        int k = 0;
+        Action fell = () => Assert.Equal(ResourceMaps.TreeWood, sim.World.Resources.Take(trees[k++], ResourceMaps.TreeWood));
+        fell();
+        sim.Tick(); // JIT warm-up: the refresh path and the step masks
+        int builds = sim.World.FlowFields.BuildCount;
+        int runs = AllocationProbe.AssertZero(sim.Tick, setup: fell);
+        Assert.Equal(builds + 2 * runs, sim.World.FlowFields.BuildCount); // the cap's 2 refreshes ran every measured tick
+        Assert.Equal(32, Enumerable.Range(0, 32).Count(i => sim.World.Units.State[i] == Entities.UnitState.Moving));
+    }
+
     [Fact]
     public void HundredTakes_IncludingFifty_Frees_AllocateNothing()
     {

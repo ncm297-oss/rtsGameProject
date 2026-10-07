@@ -219,6 +219,12 @@ public static class DataLoader
             if (kindKey.Length > 0 && kind < 0)
                 c.Error(p + ".resource", $"unknown resource '{kindKey}' (expected one of {string.Join(", ", DataLimits.ResourceKindIds)})");
             FootprintJson? fp = c.Obj(r.Footprint, p + ".footprint");
+            // A missing footprint is one error, not three.
+            int fw = fp == null ? 0 : c.Side(fp.Width, p + ".footprint.width");
+            int fh = fp == null ? 0 : c.Side(fp.Height, p + ".footprint.height");
+            // The forest placer grows forests cell by cell (BUG-0074): a tree is one cell. (A bad side already erred.)
+            if (kind == (int)ResourceKind.Wood && fw > 0 && fh > 0 && (fw != 1 || fh != 1))
+                c.Error(p + ".footprint", $"a wood resource's footprint must be 1 x 1, not {fw} x {fh} (forests are placed cell by cell)");
             defs[id] = new ResourceDef
             {
                 Id = id,
@@ -226,9 +232,8 @@ public static class DataLoader
                 DisplayName = c.Text(r.DisplayName, p + ".displayName"),
                 Description = c.Text(r.Description, p + ".description"),
                 Resource = (ResourceKind)Math.Max(kind, 0),
-                // A missing footprint is one error, not three.
-                FootprintWidth = fp == null ? 0 : c.Side(fp.Width, p + ".footprint.width"),
-                FootprintHeight = fp == null ? 0 : c.Side(fp.Height, p + ".footprint.height"),
+                FootprintWidth = fw,
+                FootprintHeight = fh,
             };
         }
         return defs;

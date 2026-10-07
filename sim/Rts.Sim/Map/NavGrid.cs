@@ -73,11 +73,22 @@ public sealed class NavGrid
     /// <summary>Height in cells.</summary>
     public int Height { get; }
 
-    /// <summary>Increments whenever passability changes (a resource node placed or depleted, a building placed), so cached flow fields can tell they're stale. Part of the state hash.</summary>
+    /// <summary>Increments whenever passability changes (a resource node placed or depleted, a building placed or removed), so cached flow fields can tell they're stale. Part of the state hash.</summary>
     public int Version { get; private set; }
 
-    /// <summary>Test seam: marks passability as changed so cached flow fields go stale, with nothing else changed.</summary>
-    internal void BumpVersionForTests() => Version++;
+    /// <summary>
+    /// Increments only on a *closing* change (cells blocked: a resource node or building placed), so a flow field built
+    /// at the same value never points into a blocked cell, however many cells have opened since (M3-2b, docs/03 "Flow
+    /// fields"). Every bump of it also bumps <see cref="Version"/>. Part of the state hash.
+    /// </summary>
+    public int BlockVersion { get; private set; }
+
+    /// <summary>Test seam: marks passability as changed (a closing change: both versions bump) so cached flow fields go stale and unusable, with nothing else changed.</summary>
+    internal void BumpVersionForTests()
+    {
+        Version++;
+        BlockVersion++;
+    }
 
     /// <summary>Number of passable cells (resource nodes take cells away; depleting them gives the cells back).</summary>
     public int PassableCount { get; private set; }
@@ -92,7 +103,7 @@ public sealed class NavGrid
     /// <summary>
     /// Blocks the <paramref name="width"/> x <paramref name="height"/> cells from (<paramref name="x"/>, <paramref name="y"/>)
     /// for a resource node (flags <see cref="NavFlags.Blocked"/> | <see cref="NavFlags.Resource"/>, cost blocked) and bumps
-    /// <see cref="Version"/> once. Every cell must pass <see cref="CanTakeResource"/>; the caller (the resource store) checks.
+    /// <see cref="Version"/> and <see cref="BlockVersion"/> once. Every cell must pass <see cref="CanTakeResource"/>; the caller (the resource store) checks.
     /// </summary>
     internal void SetResource(int x, int y, int width, int height) => SetFootprint(x, y, width, height, NavFlags.Resource);
 
@@ -115,12 +126,14 @@ public sealed class NavGrid
         }
         PassableCount -= width * height;
         Version++;
+        BlockVersion++;
     }
 
     /// <summary>
     /// Reopens the cells a depleted resource node covered (the reverse of <see cref="SetResource"/>: a node only ever
     /// covers open ground, so its cells go back to <see cref="NavFlags.None"/> and passable cost) and bumps
-    /// <see cref="Version"/> once, so cached flow fields rebuild through the gap.
+    /// <see cref="Version"/> once, so cached flow fields rebuild through the gap. An opening change: <see cref="BlockVersion"/>
+    /// stays, so those fields stay usable until rebuilt.
     /// </summary>
     internal void ClearResource(int x, int y, int width, int height) => ClearFootprint(x, y, width, height, NavFlags.Resource);
 
@@ -138,6 +151,10 @@ public sealed class NavGrid
         PassableCount += width * height;
         Version++;
     }
+
+    /// <summary>Every cell's flags, indexed <c>y * Width + x</c>, for whole-grid passes that can't afford a bounds check per read; the live array, so read it and never write it.</summary>
+    /// <remarks>An array, not a span: Debug builds (the tests') don't inline a span's indexer, which made the per-change step-mask pass twice as slow (BUG-0082).</remarks>
+    internal NavFlags[] Flags => _flags;
 
     /// <summary>True if (x, y) is a cell of this grid.</summary>
     public bool InBounds(int x, int y) => (uint)x < (uint)Width && (uint)y < (uint)Height;

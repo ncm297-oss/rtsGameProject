@@ -181,8 +181,11 @@ Rules:
   walk-back state `WalkBack`, which decides whether and when a unit walks back), the free list, all RNG
   states, per-player command sequence counters, and pending commands (including a `Move`'s unit
   handle), and the flow-field cache's metadata (its clock and count, and each used slot's
-  requested cell, grid version and last-use stamp, in slot order): under the build cap the cache
-  decides who waits, so it is sim state (BUG-0021, see "Flow fields"). Since M3-1 it also covers
+  requested cell, grid version, block-version tag (M3-2b) and last-use stamp, in slot order): under the build cap the cache
+  decides who waits, so it is sim state (BUG-0021, see "Flow fields"). Since M3-2b it also covers
+  `NavGrid.BlockVersion` and `World.SeenBlockVersion` (the movement pass's last view of it, which decides
+  when progress marks reset; it trails the grid between a closing change and the next pass, so it is
+  not derived). Since M3-1 it also covers
   `NavGrid.Version` and the resource store (`ResourceStore.AddToHash`: capacity, high-water mark,
   every used slot's generation and, when alive, remaining amount, type and anchor cell, and the free
   list above the never-used slots). Since M3-2 it also covers the building store
@@ -290,7 +293,12 @@ removed from exposed sides, which the gather rule guarantees (M3-2, BUG-0075: on
 passable cell 4-adjacent to its footprint is gathered, so a felled cell always joins open ground).
 Buildings (M3-2, `NavFlags.Building` with `Blocked`, cost 255, one `Version` bump per building) are
 placed only by the dev command so far and don't re-check reachability; player placement rules
-arrive with construction (M3-3). Water, symmetry and
+arrive with construction (M3-3). Since M3-2b the grid tells *closing* changes from *opening* ones:
+`NavGrid.BlockVersion` (public get, hashed) bumps once only when cells are blocked (`SetResource`,
+`SetBuilding`: a node spawned, a building placed), while `Version` keeps bumping once on every change,
+clearing included (`ClearResource`, `ClearBuilding`: a node depleted, a building removed). The test
+seam `BumpVersionForTests` is a closing change (both bump). So a flow field built at the current
+`BlockVersion` never points into a blocked cell, whatever has opened since (see "Flow fields"). Water, symmetry and
 hand-made maps arrive in M6.
 
 ### Flow fields
@@ -302,8 +310,10 @@ On a move order, the group's target cell gets a flow field:
 2. **Direction field:** each cell points at its lowest-cost neighbor.
 
 Fields are cached by target cell in an LRU cache (32 to 128 entries, scaled with the unit cap) and tagged with the grid
-version. Any passability change invalidates the cache (simple; refine to region versions only if
-profiling shows rebuild cost). All units heading to the same target share one field. Units whose
+version and block version. A *closing* change (cells blocked: a building placed, a node spawned) makes
+every cached field unusable; an *opening* change (a tree felled, a building removed) only makes them
+stale: units keep following them while they are rebuilt under the build cap (M3-2b, BUG-0073; region
+versions only if profiling shows rebuild cost). All units heading to the same target share one field. Units whose
 collision radius is at most half a cell share one size class, which is why the design caps
 collision radius at 1 m.
 
@@ -318,8 +328,12 @@ passable (no corner cutting). All passable cells cost 1 today; the nav cost byte
 Each reached cell points at the neighbor that starts its shortest path, lowest direction number on a
 tie; the target, blocked cells and unreachable cells have no direction. The priority queue is a
 bucket queue on the whole-number part of the cost (Dial's algorithm: every step costs at least 1, so
-cells in one bucket can't improve each other), which gives the same costs as a binary heap but builds
-a 128 × 128 field in about 0.7 ms in a Debug build. A blocked target cell resolves to the nearest
+cells in one bucket can't improve each other), which gives the same costs as a binary heap. Since
+BUG-0082 (M3-2b) it is three buckets in a ring with lazy deletion (a cell whose cost drops a whole
+number is queued again and its old entry skipped), driven inline in the build loop with the eight
+directions written out and each cell's direction picked when a neighbor relaxes it: tests run Debug
+builds, where the JIT inlines nothing, so this builds a 128 × 128 field in about 0.37 ms in Debug
+(0.7 ms before) with the same costs and directions. A blocked target cell resolves to the nearest
 passable cell by squared cell distance, ties to the lowest (y, x); `FlowField.NearestPassable` is
 that rule. It searches square rings outward from the cell and stops once a ring can't beat the
 best distance found, so its cost grows with the distance to passable ground, not the map size. Unreachable targets can't happen yet: the nav grid seals every pocket, so all passable
@@ -330,23 +344,43 @@ most `max(32, 64 MiB / (5 bytes × cells))`, so the default map (16,384 cells, 8
 never memory-capped (512 unit slots: 64 fields, 5 MB; 1024 and up: 128 fields, 10 MB) and a
 1024 × 1024 map stays at 32. Fields are keyed by the requested target cell and tagged with `NavGrid.Version`; a hit returns the same instance and marks it
 most recently used, a miss fills a free slot or rebuilds the least recently used one in place, and
-a field whose version is stale is rebuilt on its next use; `TryGetCached` returns a current field
-(marking it used) or null without building. Every field array, the queue, and a
+a field whose version is stale is rebuilt in place on its next `Get`; `TryGetCached` returns a usable field
+(current, or stale by opened cells only: M3-2b, below; marking it used) or null without building. Every field array, the queue, and a
 per-cell step mask (which of the 8 steps are legal, shared by all fields and recomputed when the
 version changes) are allocated in the constructor: about 5 bytes × cells × capacity (2.6 MB for 32
 fields on the default map, 160 MB for 32 on a 1024 × 1024 map), plus a 4-byte cell-to-slot index that makes every lookup O(1) instead of a scan of up to 128 slots. A field's *contents* depend only on
 the grid and its target, but under the build cap (below) *which* fields are cached decides which
 units wait a tick, so the cache's metadata is sim state (Producer decision 2026-10-04, BUG-0021):
-`StateHash` covers its clock, count and every used slot's requested cell, version and last-use
-stamp, and save/load will save the keys and rebuild the fields at load. `Get` and `TryGetCached`
+`StateHash` covers its clock, count and every used slot's requested cell, version, block version and last-use
+stamp, and save/load will save the keys and rebuild the fields at load (open point for M6: since M3-2b a
+usable-but-stale slot's contents depend on the grid as it was at its build, so a load that rebuilds every
+field from its key is not an uninterrupted run; options in BUG-0081). `Get` and `TryGetCached`
 are `internal`, for the sim only (a call moves the hashed LRU state); views and AI see only
 `Capacity`, `Count`, `BuildCount`, `Contains` and `PeekCached`, which change nothing.
-`PeekCached(targetCell)` (M1-8, for the M2-5 flow-arrow overlay) returns the cached field if it is
-current (`Version == NavGrid.Version`), else null, and null for an out-of-range cell; it is not a
+`PeekCached(targetCell)` (M1-8, for the M2-5 flow-arrow overlay) returns the field units follow to
+the target (since M3-2b: the cached field if it is *usable*, see below), else null, and null for an
+out-of-range cell; it is not a
 use (no LRU stamp, clock, count or build), so a test peeks 10,000 times between the ticks of a
 500-unit march and the state hash matches an unpeeked twin every tick. The instance is valid until
 the next `Tick()` (a later build may reuse it for another target); read it through
 `FlowField.DirectionAt` / `CostAt` and don't keep it across ticks.
+
+**Closing vs opening changes (M3-2b, BUG-0073).** Every field also records `FlowField.BlockVersion`
+(the grid's `BlockVersion` at build). A cached field is *current* when `Version == NavGrid.Version`
+and *usable* when `BlockVersion == NavGrid.BlockVersion`: only cells have opened since it was built,
+so nothing it points into or diagonally past has been blocked; it may miss a shorter way through the
+opened cells, and an opened cell has no direction in it. `Contains`, `PeekCached` and `TryGetCached`
+answer for usable fields (current or not); `Get` returns a current field and rebuilds a stale or
+unusable slot for its target in place (same instance, `Count` unchanged). Before, any change made
+every field stale at once, so with one tree felled per tick only the 2 oldest goal groups ever had a
+field and the rest stood for as long as felling went on (QA: 30 of 32 walkers stood 90+ of 100
+ticks); now they walk their usable fields (longest wait 0 ticks in the same scene). The step masks
+are still recomputed once per `Version`; since M3-2b inner cells read the grid's flag array directly
+(`ComputeSteps`, same bits as the per-cell `StepMask` definition, which the outer ring still uses),
+sliding a 3 × 3 window of open bits along each row, so a pass on 120 x 72 cells takes about 0.045 ms
+in Debug instead of 1.5 ms. With one far tree felled every tick, the 2 builds a tick go to refreshes,
+and the 32-group scene averages 0.40 ms a tick in Debug (1.76 ms before M3-2b; the perf row pins
+< 0.5 ms).
 
 **Build cap (BUG-0018, BUG-0022).** Fetching a field per unit in slot order thrashed the LRU once live goals
 outnumbered its slots (goals interleaved by slot evict exactly the field the next unit needs: a
@@ -356,8 +390,14 @@ group needs a field if one of its units stands on the map outside the goal cell;
 that is cached is touched (so a build evicts a field nobody used this tick whenever one exists),
 and a missing one goes into the preallocated `World.FieldMisses` buffer keyed by (the group's
 oldest `OrderTick`, goal cell). The buffer is sorted and the first
-`MovementConstants.MaxFieldBuildsPerTick` = 2 are built: oldest order first. The units' walk then
-only reads cached fields; a unit whose field is still missing waits that tick (still Moving,
+`MovementConstants.MaxFieldBuildsPerTick` = 2 are built: oldest order first. Since M3-2b a goal
+whose cached field is usable but stale is a *refresh* instead, in the preallocated
+`World.FieldRefreshes` buffer keyed by (the field's `Version`, goal cell); refreshes take whatever the
+misses leave of the same cap, oldest field first, ties to the lower goal cell. A stale field with no
+direction where one of the group's units stands outside the goal cell (a cell opened after the build:
+a unit spawned or shoved onto a felled tree's cell) makes the goal a miss, and that unit waits
+(`ActWait`, not an abandon as on a current field) until the rebuild. The units' walk then
+only reads cached usable fields; a unit whose field is still missing waits that tick (still Moving,
 velocity 0, position unchanged; it never steps without a field). Units already in their goal cell
 need no field. Cost: two builds are about 1.4 ms on the default map in Debug, against the 4 ms
 average tick budget. A burst of N new goals in one tick starts its groups over ceil(N / 2) ticks
@@ -455,7 +495,13 @@ So separation is symmetric and no result depends on which unit is walked first. 
   back-off refused by a wall, or one swinging in and out at a blob's edge, ends (BUG-0027): a unit
   that reaches `GiveUpTicks` while backing off is at its goal or touching its blob, so it stops
   there, crowded, and *keeps* its `GoalCell`. Waiting for a field counts as neither progress nor
-  stuck. A `Move` to a new goal cell resets both fields. A `Move` to the goal cell the unit already
+  stuck. A `Move` to a new goal cell resets both fields. Since M3-2b (BUG-0077) a *closing* grid change
+  (a building placed, a node spawned: `NavGrid.BlockVersion` differs from `World.SeenBlockVersion`, the
+  value the last pass saw) resets every Moving unit's `BestRemaining` to +inf before the plan pass, so
+  the first tick along the longer route round the new wall is measured against where the unit stands
+  on the rebuilt field, not against a best its old, shorter route set (half of a 16-unit column used to
+  give up behind a dropped Keep; now 16 of 16 arrive). `StuckTicks` follows the usual rule. An
+  *opening* change only shortens routes, so it resets nothing. A `Move` to the goal cell the unit already
   has is the same order (click spam, AI refreshes; BUG-0029): an arrived (Idle) unit stays put, and
   a Moving one takes the new point but keeps its order tick and stuck count. Since M1-4d-3
   (BUG-0030) an Idle unit's "same order" needs the new point within `ArrivalDistance` of its stored
@@ -933,6 +979,14 @@ BUG-0034: the distinct-targets perf row averages 100 ticks, budget unchanged.
 - **Maps larger than 256 x 256 are unsupported** (one field build exceeds the tick, BUG-0023); the
   over-capacity cache eviction is plain LRU (BUG-0025) and same-tick build ties favor lower goal
   cells (BUG-0026).
+- **Grid changes (M3-2b):** while trees keep falling, the build cap spends its 2 builds every tick
+  refreshing stale fields (about 0.8 ms a tick on a 120 x 72 map in Debug, 1.4 ms of builds on the
+  128 map; a calm walk costs 0.02 ms), and until its refresh a group follows the longer route its
+  usable field knows. A closing change still makes every field unusable at once: with more than 2
+  goal groups the younger ones wait up to ceil(groups / 2) ticks per closing change, as every change
+  did before M3-2b, provided closings are at least that far apart; closings on every tick (nothing in
+  the game does that yet) keep every group but the 2 oldest waiting for as long as they last
+  (BUG-0080; revisit with M3-3 placement). Time-sliced builds are BUG-0023.
 - **Perf is measured in Debug on the dev machine**; the 2,500-unit two-player contest costs about
   1.6x the one-player blob (6.8 vs 4.3 ms). The 4 ms design budget is for 500 units (0.6 ms today).
 
@@ -1021,7 +1075,8 @@ Resource nodes exist in the sim; workers, gathering and drop-offs are M3-2.
 
 - **Data.** `common/resources.json` (required) lists node *types*: `id`, `displayName`,
   `description`, `resource` (`gold` | `wood`, `DataLimits.ResourceKindIds`) and `footprint {width,
-  height}` in cells, each side 1 to `DataLimits.MaxFootprint` (4). Shipped: `gold_mine` (gold, 2 x 2)
+  height}` in cells, each side 1 to `DataLimits.MaxFootprint` (4); a `wood` type must be 1 x 1, since the
+  forest placer grows forests cell by cell (M3-2b, BUG-0074: the loader refuses anything else). Shipped: `gold_mine` (gold, 2 x 2)
   and `tree` (wood, 1 x 1). Amounts stay in `rules.json` (docs/02): a placed tree holds `treeWood`
   (100), a placed mine `startMines.gold` (2,500; every mine until start locations exist, M3-3/M6).
   `GameData.Resources` is indexed by dense ids in ordinal order (`FindResource`); `ContentHash`
@@ -1161,8 +1216,9 @@ closed by rule: only exposed nodes are gathered.
   mine, even slots the nearest tree). The header ends with `workers N` and the last lines are
   `player P gold G wood W`, only when `--workers` is given (other runs print exactly as before).
 - **Not yet:** construction and player placement, the Camp, `ReturnCargo`, Whirlwind's gather bonus,
-  production, population, depletion events for views, BUG-0073 (open-only grid changes and flow
-  fields: next sim task) and BUG-0074.
+  production, population, depletion events for views. (BUG-0073 and BUG-0077, closing vs opening grid
+  changes, and BUG-0074, wood footprints other than 1 x 1 refused, were done in M3-2b: see "Flow
+  fields" and "Local movement".)
 
 ## Abilities, statuses, zones
 
