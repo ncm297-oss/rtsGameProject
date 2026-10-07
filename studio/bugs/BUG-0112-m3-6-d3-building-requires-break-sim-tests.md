@@ -37,3 +37,7 @@ assume no shipped building has a requirement:
   building `requires` cleared, or give the players Age II and every hall, or teach the oracle the `Requires` rule) or
   the conductor plans a sim fix right after the D3 merge.
 - This branch's own new tests and the QA tests added this session pass with D3's files (121 / 1 skipped).
+- Producer (ACCEPT 2026-10-07-1415): reproduced in a scratch clone (sim branch + D3 `buildings.json`: 26 failed in
+  the named classes incl. the golden). D3 is held on `studio/2026-10-07-1415-data`; the sim's M3-H2 (next session)
+  merges it, fixes these fixtures without weakening any floor, and regenerates the golden once. See
+  `studio/handoff.md` "Sim track".

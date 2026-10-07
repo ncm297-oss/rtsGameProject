@@ -4,7 +4,7 @@ The dashboard. The Producer rewrites it at the end of every session. **Owner: re
 you" first.** "For your review" (further down) is non-blocking: what the studio built or decided
 on its own, explained in terms of what you'd see in the game.
 
-_Last updated: 2026-10-07 (session 2026-10-07-1131: ACCEPT sim M3-5 Age II research + Forge upgrades and view M3-V2 command card + build ghost; data STOPped cheaply. 1415 PLAN: GO on all three tracks; the Age II roadmap box unticked until M3-6)._
+_Last updated: 2026-10-07 (session 2026-10-07-1415: ACCEPT sim M3-6 `requires` gating and view M3-V3 selection panel + production card; data D3 verified but **held on its branch** (REJECT for integration only: its building `requires` break 25 sim-owned test fixtures, BUG-0112; the sim's next session lands it). M3 6 / 8; the game is playable to Age II in the window)._
 
 ## Waiting on you
 
@@ -18,21 +18,21 @@ _Last updated: 2026-10-07 (session 2026-10-07-1131: ACCEPT sim M3-5 Age II resea
 
 | Field | Value |
 | --- | --- |
-| Sim: milestone | M3 — Economy & buildings (started 2026-10-06-1255); 4 / 8 criteria (Age II research + Forge upgrades landed 1131; the "research and unlocks" box ticks when M3-6's gating lands: unticked at the 1415 PLAN); M3-H1 sim hardening done |
-| Sim: next task | **M3-6 `requires` gating** (`CanTrain` / `CanPlace` / `CanResearch` get a real `Requires` reason; Age II needs any two of the four halls; loader nits BUG-0098 / 0099 / 0008 / 0010) · feature · QA full; then the sim's end-of-M3 hardening (BUG-0097 / 0095 / 0096) |
+| Sim: milestone | M3 — Economy & buildings; 6 / 8 criteria; **the sim side is complete** (M3-6 `requires` gating landed 1415); M3-H1 hardening done, the end-of-M3 hardening (M3-H2) next |
+| Sim: next task | **M3-H2 sim hardening**: first land the held D3 data branch with the BUG-0112 test fixes (merge `studio/2026-10-07-1415-data`, make the construction / never-seal / requirement fuzz tolerate building `requires`, regenerate the golden once), then BUG-0097 / 0095 / 0096 / 0094 / 0100 / 0113, door fuzz kinds 11-15 · hardening · QA full; then M4 combat |
 | Sim: gate | **GO** |
-| View: milestone | M3 view side: resource bar ✓, right-click Gather / Repair / join ✓, building + worker feedback ✓, command card + grid hotkeys ✓, build menus + ghost ✓, site Cancel ✓ (M3-V2); selection panel + production card next |
-| View: next task | **M3-V3 selection panel, production card (train / research buttons, queue strip, cancel), rally marker + right-click SetRally, "Pop a / b"**, folding BUG-0108 / 0109 / 0110 · feature · QA standard; then the M3 "Playable" session with you |
+| View: milestone | M3 view side **complete**: resource bar, Gather / Repair / join, building + worker feedback, command card, build menus + ghost, site Cancel, selection panel, production card + queue strip, rally, pop (M3-V3 landed 1415); the Playable criterion waits on your playtest (M3-V3 entry under For your review) |
+| View: next task | **M3-H2 view hardening**: BUG-0123 (S3, panel allocation under repair + greyed-button look) first, then BUG-0104 / 0105 / 0107 / 0122 and your playtest findings · hardening · QA standard; then a scripted headless "full base + Age II" run if you are silent a day; then M4 view work |
 | View: gate | **GO** |
-| Data: milestone | M3 — "factions fully defined in data": units ✓ + buildings ✓ (pinned to the faction pages); techs schema on `main` since 1131, content next |
-| Data: next task | **D3 techs content** (faction upgrade text, building `requires` values from the pages, pins, BUG-0111 / BUG-0090) · feature · QA light; inbox tweaks to D1 / D2 / M3-5 text first if any |
-| Data: gate | **GO** |
+| Data: milestone | M3 — "factions fully defined in data": units ✓ + buildings ✓; **D3 techs content verified (QA + Producer) but held on `studio/2026-10-07-1415-data`** until the sim's M3-H2 lands it (BUG-0112); then D4 (`common/techs.json` text) |
+| Data: next task | **STOP next session** (cheap): D3 lands through the sim's M3-H2 (one golden regeneration per session); D4 the session after. Inbox tweaks to the D1 / D2 / M3-5 / D3 text come first whenever present |
+| Data: gate | **HOLD** (one session; the sim and view gates stay GO) |
 | Tools on this PC | Godot 4.7.2 .NET, .NET SDK 8.0.425, Git 2.53 + LFS 3.7; `GODOT` user variable set |
-| Build | both branches 0 errors / 0 warnings; golden regenerated on the sim branch for `data-hash` only (every checkpoint byte-identical) |
-| Tests | Producer reruns non-Perf: sim 3049 / 3060 (11 skipped) / 0 failed, 9 m 13 s; view 2919 / 2928 (9 skipped) / 0 failed, 9 m 10 s (both at once); view smoke PASS ("town halls 2, 5 workers per player", tick 85, no ERROR); sim `ResearchPerfTests` (10-Forge scene 997 ms / 2,000 ticks, `TechBonus` 36 ms) / golden / allocation rows 21 / 21 green alone. QA: sim non-Perf 3049 / 3060 (11 skipped) / 0 + Perf alone 119 / 122; view full suite 3031 / 3043 (12 skipped) / 0 + 21 / 21 scenes; clean clones green |
-| Open bugs | 27 (S1: 0, S2: 0, S3: 16, S4: 11) — none block; new this session: BUG-0098 (S3, sim: an empty tech filter list matches every unit; shipped data has none), BUG-0099 (S4, sim: tech data nits), BUG-0108 (S3, view: right-click on a building's box top picks the ground behind it), BUG-0109 (S3, view: a placement click uses the last frame's ghost anchor), BUG-0110 (S3, view: a malformed `ui.json` root loads blank), BUG-0122 (S4, view nits); BUG-0106 set to `wontfix` (criterion reworded) |
-| Sessions today | 3 / 8 on 2026-10-07; feature sessions since last hardening: sim 2 / 4, view 2 / 4, data 2 / 4 |
-| Last session | 2026-10-07-1131 · sim M3-5 feature (0 fix rounds) · view M3-V2 feature (0) · data STOP · both ACCEPT |
+| Build | sim, view and data branches 0 errors / 0 warnings; golden regenerated on the sim branch for `data-hash` only (`age_ii.requiresAnyOf` + resolved arrays; every checkpoint byte-identical); the data branch's own regen is discarded at its re-land |
+| Tests | Producer reruns: sim non-Perf 3205 / 3211 (6 skipped) / 0 failed, 9 m 49 s, plus alone `RequirementPerfTests` / `RequirementPerfQaTests` / golden / `AllocationTests` / `StateHashTests` / `TightBlob2500` 85 / 85; view non-Perf 3126 / 3137 (11 skipped) / 0 failed, 8 m 57 s (both suites at once); view smoke PASS (tick 87, no ERROR); data `Content` + `DataValidation` + golden + `TechLoader` 238 / 240 (the 2 sim-owned `TechLoaderTests` the sim branch already updated); BUG-0112 reproduced in a scratch clone (sim branch + D3 `buildings.json`: 26 failed in the named classes). QA: sim non-Perf 3205 / 3211 (6 skipped) / 0 + Perf alone 123 / 126; view 3099 / 3110 (11 skipped) / 0 + 24 scenes + smoke PASS; data full suite 3209 / 3225 (2 failed = the sim-owned pair) |
+| Open bugs | 29 (S1: 0, S2: 0, S3: 16, S4: 13) — none block. Fixed this session: BUG-0008 / 0010 / 0098 / 0099 (items 1 + 3) (sim), BUG-0108 / 0109 / 0110 (view), BUG-0111 + BUG-0090 buildings part (data, on the held branch). New: BUG-0100 (S3, sim: a requirement that can never be met loads clean), BUG-0112 (S3, sim: D3's building `requires` break 25 sim test fixtures), BUG-0113 (S4, sim nits), BUG-0123 (S3, view: panel allocates under repair; greyed button looks enabled), BUG-0132 (S4, data: pin messages hide the values; on the held branch) |
+| Sessions today | 4 / 8 on 2026-10-07; feature sessions since last hardening: sim 3 / 4, view 3 / 4, data 3 / 4 (both code tracks take their end-of-M3 hardening next) |
+| Last session | 2026-10-07-1415 · sim M3-6 feature (0 fix rounds, ACCEPT) · view M3-V3 feature (0, ACCEPT) · data D3 feature (0, REJECT-hold: integration only) |
 
 ## Milestone progress
 
@@ -41,7 +41,7 @@ _Last updated: 2026-10-07 (session 2026-10-07-1131: ACCEPT sim M3-5 Age II resea
 | M0 | 7 / 7 required | **Done** 2026-10-03 (optional MCP item open) |
 | M1 (sim track) | 8 / 8 | **Done** 2026-10-06 (Producer sign-off after the M1-9 hardening; retro in docs/05) |
 | M2 (view track) | 10 / 10 (SimRunner interpolation, camera, terrain mesh + trees / mines, placeholder unit views, selection, orders, minimap, debug overlay, placeholder audio, 60 FPS playable check) | **Done** 2026-10-07 (Producer sign-off after the M2-H2 hardening; retro in docs/05; your playtest under For your review is feedback, not a gate) |
-| M3 (all three tracks) | 4 / 8 (resource entities; worker gather / return loop; building placement + construction + repair, sim half; production queues + rally + pop, sim half); Age II research + Forge upgrades landed, the box ticks with M3-6's unlocks; HUD in progress (resource bar, worker orders, building feedback, command card, build menus, ghost, site Cancel landed; selection panel + production card next); data: units + buildings pinned, techs content next | In progress; sim M3-6 `requires` gating next, view M3-V3 production card next, data D3 techs content next |
+| M3 (all three tracks) | 6 / 8 (resource entities; worker gather / return loop; building placement + construction + repair; production queues + rally + pop; Age II research **and unlocks** + Forge upgrades; the HUD complete). Left: "factions fully defined in data" (D3 verified, held one session; then D4 common tech text) and "Playable: build a full Malazan base and reach Age II" (your playtest, or a scripted run after a day) | In progress; both code tracks take their end-of-M3 hardening next (the sim's lands D3) |
 | M4-M9 | — | Planned |
 
 ## For your review
@@ -49,6 +49,119 @@ _Last updated: 2026-10-07 (session 2026-10-07-1131: ACCEPT sim M3-5 Age II resea
 Non-blocking. Each entry says what was built or decided, what you'd notice in the game, and how
 to change it. To change anything, write it in `studio/inbox.md`, for example "use formations
 instead of clusters" or "make giving up take 2 seconds".
+
+### You can run a whole base in the window now, up to Age II: a selection panel, train and research buttons, a queue with progress, rally points and the population count. Please play it (view track, M3-V3, 2026-10-07)
+
+- **What was built:** the last piece of M3's HUD. **(1) A selection panel** bottom centre (right of the minimap): one
+  selected unit shows a coloured placeholder portrait with its initial, its name, HP, Attack, Armor, Range, Speed from
+  the data (a researched upgrade shows beside the number as a green "+1"; **the bonus is shown only, combat applies it
+  in M4**) and what it is doing ("Idle", "Gathering", "Building" ...); several units show a grid of up to 24 portraits
+  (a "+N" for the rest) with the active Tab subgroup outlined, and a click on a portrait selects that unit alone; a
+  building shows its name and hit points. **(2) A production card:** click one of your finished buildings and the
+  command card lists what it trains and researches on the grid keys (a Barracks: Heavy Infantry on Q; the Town Hall:
+  Laborer on Q, Age II on W; the Armory: the six Forge upgrades then Moranth Supply), each with its name, key and cost,
+  and the description plus "Needs ..." in a tooltip. A button is **greyed with the reason** ("Can't afford", "Queue
+  full", "In a queue", "Researched", "Locked") exactly when the rules would refuse it. **(3) A queue strip** above the
+  card: up to five squares (a unit's colour and initial, or a tech's name), the first with a yellow progress bar; click
+  a square to cancel it and get the full cost back. When Age II completes, "Age II" flashes in the resource bar.
+  **(4) Rally points:** with a building selected, right-click the ground (or the minimap) to plant a small yellow flag
+  with a line from the building: new units walk there; a rally on a gold mine or a tree makes new workers gather it;
+  right-click the building itself to clear it. **(5) "Pop 5 / 10"** in the resource bar, red when the cap is full.
+  **(6)** The three M3-V2 rough edges are fixed: a right-click on the top face of a building now means that building
+  (BUG-0108), a placement click builds exactly where you clicked (BUG-0109), and a broken `ui.json` reports an error
+  instead of blank labels (BUG-0110).
+- **Please play it: this is M3's last criterion ("build a full Malazan base and reach Age II"), about ten minutes.**
+  `& $env:GODOT --path game`, maximize. Box-select the five grey workers by the slate Town Hall, right-click the nearest
+  gold mine: they gather. Click the Town Hall: the panel shows its name and HP; the card shows **Laborer (Q)** and
+  **Age II (W)** greyed "Locked" (you need two different halls first). Press Q three times: three squares appear in the
+  strip, the first with a progress bar; click the third square to cancel it (the 50 gold comes back). Right-click a
+  forest with the Town Hall still selected: a yellow flag; the new Laborers walk there and chop. Select some workers,
+  press **B** then **E** (Legion Barracks, 150 wood), click on green; then **B**, **A** (Armory, 100 / 100) somewhere
+  else; later **B**, **Q** (Billet, 50 wood) to raise the cap from 10 to 18. When the Barracks and the Armory are both
+  finished, click the Town Hall: **Age II is live** (400 gold / 200 wood, 60 s). Press W, watch the bar fill; at the end
+  "Age II" flashes top right. Now click the Armory: Melee Weapons (100 / 50) is live, Melee Weapons II stays "Locked"
+  until Melee Weapons is researched, and Moranth Supply is live after Age II. Click the Barracks: Heavy Infantry on Q;
+  after Melee Weapons, select one and the panel reads its attack with a green "+1". Press **V**, **W** (Engineers'
+  Yard): the Sapper button in it is "Locked" until Age II. Write **"M3 playable ok"** in the inbox, or what felt wrong
+  (that becomes the view track's next task ahead of roadmap work). Things to look for: does the card read well at your
+  resolution, is the flag visible enough, does the greyed button look greyed enough (it doesn't, see the rough edges).
+- **Producer decisions, revisit any time:**
+  - *Shared upgrades are listed before the faction's own* on a Forge's card (Armor, Armor II, Melee I / II, Ranged I /
+    II, then Moranth Supply). Alternative: the faction upgrade first.
+  - *A greyed button shows the reason instead of the cost* (the cost is still in the tooltip). Alternative: both lines.
+  - *At the population cap the train buttons stay live*: an item queues, pays, and waits for room (the rules have no
+    "pop full" refusal; the red "Pop" is the cue). Alternative: grey them with "Pop full"; one inbox line.
+  - *Layout:* the panel sits between the minimap and the card; the resource bar moved 142 px left to make room for the
+    pop count. Unit hit points read "max / max" until combat exists (M4).
+  - *A right-click on any building's box means that building*: on your own damaged one, Repair; on your own site, join;
+    on an enemy or an undamaged building, a walk to its centre (so units gather round it). A right-click on a tree or
+    mine still goes by the ground point (nodes are low; fine in play).
+  - *Size: ~1,350 game-code lines (panel 380, card +160, selection +160, queue strip 180, rally marker 120, resource bar
+    +150, text loader +100), ~175 view-helper lines, ~1,000 dev test lines, ~1,270 QA test lines, ~120 doc lines; over
+    the 1,500 budget on game code by the panel; accepted, it is plain layout code.*
+- **Rough edges:** BUG-0123 (S3, fixed in the view's clean-up session, next): while a selected building is being
+  repaired, the panel rebuilds its hit-point text every tick (about 52 bytes a tick: harmless in play, but against the
+  studio's "no per-frame allocation" rule), and a greyed button keeps its bright name and cost, so only the small red
+  reason line tells it from a live one. BUG-0122 (S4, same session): "Quartermaster's Depot" wraps mid-word, the ghost
+  trails a panning camera by a frame, the reason text is small. Also: the Age II buildings (Cadre Tower, Engineers'
+  Yard, Watchtower) and the Wickan Corral are **not locked yet** in the window: their "needs ..." values are the data
+  track's D3, verified but held one session (see the data row in Now and the D3 note below).
+- **To change it:** every word in `game/data/common/ui.json` (`train`, `research`, `states`, `hud` sections); panel and
+  strip sizes are constants at the top of `game/scripts/SelectionPanel.cs` / `ProductionQueueStrip.cs`; the flash
+  length `ResourceBar.AgeFlashSeconds`; the rest by inbox note.
+
+### Requirements are real now: the Sapper needs Age II, Age II needs two different halls, Melee Weapons II needs Melee Weapons and Age II (sim track, M3-6, 2026-10-07)
+
+- **What was built:** the "unlocks" half of M3's Age II criterion. Every "needs ..." in the data is now enforced: a
+  unit can't be trained, a building can't be placed and a tech can't be researched until its requirements are met. A
+  requirement is either a tech you have researched or **one of your own finished buildings of that kind** (a site under
+  construction doesn't count; an enemy's doesn't). Age II has a special rule from the design doc, written in the data:
+  **any two of** Infantry Hall, Ranged Hall, Shock Hall and Forge must be finished (two Barracks count once). The check
+  happens **when you give the order**, not again when it completes: if your only Barracks is destroyed while a unit it
+  unlocked is training, the unit still finishes (the Age of Empires rule). Four loader rough edges were fixed in the same
+  pass: a duplicate key in any data file is an error (BUG-0008), every faction must fill all seven unit slots and all ten
+  building slots exactly once (BUG-0010), an empty "applies to" list in an upgrade is an error instead of "everyone"
+  (BUG-0098), and a requirement loop or a tech named like a building is an error (BUG-0099).
+- **What you'll see:** in the window, with the production card above: Age II greyed "Locked" until two different halls
+  stand; the Sapper and Zealot "Locked" until Age II; Melee / Ranged / Armor level II "Locked" until level I and Age II;
+  Moranth Supply until Age II. The placement ghost also goes red with "Needs more" for a building you haven't unlocked,
+  but **no building is locked in the window yet**: the values ("Wickan Corral needs a Legion Barracks", "Cadre Tower,
+  Engineers' Yard, Watchtower need Age II") are the data track's D3, held one session. Numbers: 5,000 refused orders in
+  one tick cost 0.7-0.9 ms; a refusal is cheaper than an acceptance; the fingerprint of the replay did not move.
+- **Producer decisions, revisit any time:**
+  - *Checked at order time only* (above). Alternative: cancel queued items when their unlock is lost (StarCraft-like).
+  - *A building requirement means a finished building you own.* Alternative: count a site, or an ally's (no allies yet).
+  - *"Any two of" is a data rule* (`requiresAnyOf` with a count and a list of building kinds), not code, so a future
+    faction or Age III can use it. The list names building **kinds** (slots) so the one shared Age II entry works for
+    every faction.
+  - *Every faction fills every slot exactly once* (seven units, ten buildings): a content rule, now enforced at load. It
+    is what the design doc's templates say; it also means the Teblor / Tiste / Shadow factions (M7-M9) can't skip a slot
+    without a rules change. Alternative: allow empty slots.
+  - *The ghost's "needs" check runs before the map checks*, so the reason you see for a locked building is always
+    "Needs more", even over a tree. And a researched Age II whose halls were later lost reads "Locked" rather than
+    "Researched" if asked (a corner nobody will see: Age II can't be researched twice anyway).
+  - *Size: ~520 code lines (budget 1,500), ~1,230 dev test lines, ~1,300 QA test lines, ~75 doc lines.*
+- **Rough edges:** BUG-0100 (S3, sim clean-up next session): a data author could write a requirement that can never be
+  met (a Malazan unit needing a Whirlwind building; a shared upgrade needing one faction's building; three halls needing
+  Age II while Age II needs two halls) and the game loads it silently and locks the content for the whole match. The
+  shipped data has none; the fix is a load-time check. BUG-0112 (S3, see the data note below): the data track's building
+  requirements make 25 of the sim's own test setups fail (the tests assumed nothing is locked), which is why D3 is held.
+  BUG-0113 (S4): a wrong-type value in a data file gets a technical error message; a size test now times a failing load.
+- **To change it:** the requirement lists are the `requires` fields in `game/data/factions/<faction>/units.json`,
+  `buildings.json` and the techs files; the Age II rule is `requiresAnyOf` on `age_ii` in `game/data/common/techs.json`
+  (change `count` to 1 or 3, or the list); the order-time rule and the slot rule by inbox note.
+
+### The techs text and the building requirements are written and checked, but wait one session to land (data track, D3, 2026-10-07)
+
+- **What happened:** the data track finished D3 (the faction upgrades' descriptions rewritten, the "needs ..." values
+  on eight buildings, a Techs table on each faction page, tests that pin all of it to the pages, BUG-0111 and the
+  buildings part of BUG-0090 fixed). QA and I verified it. It is **held on its branch** because the eight new
+  building requirements make 25 of the sim track's own test setups fail (they were written when nothing was locked:
+  BUG-0112). `main` is always green, so the sim's next session merges the branch with the test fixes, and the full
+  change table for your review appears here then. The two new descriptions, so you can object early:
+  - Moranth Supply: "Crates of Moranth munitions, paid for in Imperial coin: the Sapper's Cusser cooldown drops from 45 to 30 s and the Catapult gets +4 m range. Needs Age II."
+  - Dryjhna's Prophecy: "The Apocalypse foretold is at hand: Zealots gain +20 HP and the Priest of the Whirlwind's Sandstorm cooldown drops from 45 to 30 s. Needs Age II."
+- **To change it:** an inbox note; it is applied when the branch lands.
 
 ### Age II and the Forge upgrades exist in the rules: a Town Hall researches Age II, a Forge researches weapon and armor upgrades, and each player's upgrades are tracked (sim track, M3-5, 2026-10-07)
 
@@ -68,7 +181,8 @@ instead of clusters" or "make giving up take 2 seconds".
   Town Hall, press the Age II button, watch the queue). What is not in yet either: **nothing is locked**. The data says
   "Melee Weapons II needs Melee Weapons and Age II" and "the Sapper needs Age II", and the game checks those names
   exist, but it doesn't enforce them until the next sim task (M3-6). Today: `dotnet run --project tools/Rts.Cli -- run --seed 1 --units 50 --workers 5 --forests 12 --mines 8 --ticks 600`
-  ends each player's line with `age 1`.
+  ends each player's line with `age 1`. **Update 1415: both are in. The research buttons are in the window (M3-V3
+  entry at the top) and the locks are real (M3-6 entry at the top).**
 - **The new player-facing text, quoted** (placeholder wording by the sim builder; the data track polishes it next
   session and you review that pass):
   - Age II: "Advance to Age II. Unlocks the Caster Hall, Siege Works and Watch Tower, your unique unit, level-2 Forge upgrades and your faction upgrade."
@@ -102,6 +216,8 @@ instead of clusters" or "make giving up take 2 seconds".
   the next sim task (M3-6), which rewrites that part of the loader anyway. BUG-0099 (S4): a requirement loop
   ("A needs B, B needs A") or a tech named like a building loads without complaint today; both become errors in M3-6.
   Also noted for M4: "Ranged Weapons ... and towers" has no tower path yet (towers have no attack until M4).
+  **Update 1415: BUG-0098 and the loop / name items of BUG-0099 are fixed (M3-6); the "an upgrade that reaches no unit
+  loads" item stays an S4 note.**
 - **To change it:** numbers and text in `game/data/common/techs.json` (shared) and
   `game/data/factions/<faction>/techs.json` (the faction upgrade); which units an upgrade reaches is the `appliesTo`
   part of each effect (attack type, unit tags, unit ids, siege yes / no); the rules above by inbox note. A data edit
@@ -148,7 +264,8 @@ instead of clusters" or "make giving up take 2 seconds".
   - *A click on red does nothing and plays no sound* (the reason text is the feedback).
   - *Size: ~1,250 game-code lines (card, ghost, selection, text loader, outline), ~160 view-helper lines, ~930 dev test
     lines, ~720 QA test lines; over the 1,500 budget on game code by the card's button plumbing; accepted.*
-- **Rough edges (S3, all three fixed in the next view task, M3-V3, which touches the same code):**
+- **Rough edges (S3, all three fixed in the next view task, M3-V3, which touches the same code). Update 1415: BUG-0108
+  / 0109 / 0110 are fixed (M3-V3 entry at the top); BUG-0122 stays for the view's clean-up session.**
   - BUG-0108: a right-click on the **top face** of a building's box is read as a click on the ground *behind* it (the
     camera looks down at 55°, so the far half of a 3 m-tall box's top lands about 2 m behind the footprint). On a
     damaged Town Hall, 39 of 81 top pixels would send workers to walk behind it instead of repairing. You can't see
@@ -180,7 +297,8 @@ instead of clusters" or "make giving up take 2 seconds".
   (the Sapper, the Zealot) can't be trained until Age II exists (next sim task). Two spawned units never share
   a square; if there is no free square the unit waits inside until one opens. **Update 1131: Age II exists (the
   M3-5 entry at the top); the Sapper and Zealot stay locked until the next sim task (M3-6) makes "needs Age II"
-  a real check instead of "has any requirement".**
+  a real check instead of "has any requirement". Update 1415: done (M3-6 entry at the top): they unlock the tick
+  after Age II completes.**
 - **What you'll see:** nothing in the window yet: the production card (click a Barracks, pick a unit, see the
   queue and progress) and the rally marker are the view track's M3-V3, two view sessions away. Today the
   command-line tool shows the pop count: `dotnet run --project tools/Rts.Cli -- run --seed 1 --units 50 --workers 5 --forests 12 --mines 8 --ticks 600`
@@ -479,7 +597,8 @@ instead of clusters" or "make giving up take 2 seconds".
   are pinned as shipped (my M1-2 values).
 - **Rough edges:** BUG-0111 (S4): a few page edits slip past the tests (a false "+N pop" claim on a
   building that gives none, the Forge / tower "Provides" wording, a decimal-comma PC formatting a range);
-  fixed in the next data task that touches those tests.
+  fixed in the next data task that touches those tests. **Update 1415: fixed in D3 (held one session, see the
+  D3 note near the top).**
 - **To change it:** edit the page and the data together (the tests tell you which side disagrees), or
   write the change in the inbox and the data track does both.
 
@@ -532,7 +651,10 @@ instead of clusters" or "make giving up take 2 seconds".
 - **Producer decisions, revisit any time:**
   - *Requirements ("needs Age II", "needs a Legion Barracks") live only in the text for now.* The data
     format has no "requires" field yet; it comes with the Age II task (M3-5 / M3-6), and the text will
-    be checked against it then (BUG-0090, S4). Same for the towers' attack and detection (M4).
+    be checked against it then (BUG-0090, S4). Same for the towers' attack and detection (M4). **Update
+    1415: the field exists (M3-5), the game enforces it (M3-6), and D3 sets the values from the faction
+    pages with a test that every "needs ..." sentence has one (held one session; the towers part of
+    BUG-0090 stays for M4).**
   - *The faction upgrade is described as researched at the Forge* (the design doc lists it there);
     where research happens is settled when techs get their data format.
   - *One test rule was relaxed:* a QA test that pinned "an empty Malazan building list leaves exactly
@@ -1468,23 +1590,29 @@ track right after S1/S2 bugs).
     out ResearchError)`, `World.HasTech` / `Age` / `TechBonus(player, unitType, TechStat)`, `GameData.Techs` /
     `TechsResearchableAt(buildingType)` (sorted ids), `Buildings.QueueIsTechAt(slot, i)` / `ItemTicks(slot, i)` (a
     queue item is a unit or a tech; `QueueTypeAt` returns the tech id when `QueueIsTechAt`), `Command.Research(player,
-    point, tech)`; `CancelTrain` cancels techs too. Requested of the view by the sim (M3-6, next session): the view's
-    `ui.json` must carry `placement.requires` / `train.requires` / `research.requires` texts before M3-6's new
-    `Requires` reason members merge, or `UiText` fails fast and the smoke gate fails (planned in M3-V3).
-14. Data track requests (D3, next session): none yet; building `requires` and faction techs schemas are on `main`.
-    The common techs' text (`common/techs.json`) waits for D4 because M3-6 edits that file (`age_ii.requiresAnyOf`).
+    point, tech)`; `CancelTrain` cancels techs too. ~~Requested of the view by the sim (M3-6): the view's `ui.json`
+    must carry `placement.requires` / `train.requires` / `research.requires` texts before M3-6's `Requires` members
+    merge~~ → **done in M3-V3** (session 1415; `UiText.ForwardKey` tolerates a key with no member yet).
+14. Data track requests (D3): none; building `requires` and faction techs schemas are on `main`. The common techs' text
+    (`common/techs.json`) waits for D4 because M3-6 edited that file (`age_ii.requiresAnyOf`).
+15. **Data track, from D3 (session 1415, BUG-0112), first item of the sim's M3-H2:** the sim-owned
+    `Stress/ConstructionFuzzStressTests` (15 rows), `NeverSealTests` (8) and `RequirementFuzzTests` seeds 2-3 assume no
+    shipped building has a `requires`; with D3's `buildings.json` they fail (26 with the golden, reproduced by the
+    Producer). The sim track merges `studio/2026-10-07-1415-data` into its branch, fixes the fixtures (clear building
+    requires in the fixture data, or grant Age II + the halls, or teach the oracle the `Requires` rule), regenerates the
+    golden once, and lands D3 with it. The data track STOPs that session.
+16. Noted by the view (M3-V3 QA): `CanTrain` has no "pop cap" reason, so a train button stays live at the cap and the
+    item waits inside the queue (the M3-4 rule). If the owner wants greyed buttons at the cap, the sim adds a
+    `TrainError.PopFull` ordered after `CannotAfford` (one line + tests) and the view keys `train.pop_full`. Not requested.
 
 ## Feature queue: sim track (feature sessions, in order)
 
-1. **Next: M3-6 `requires` resolution and gating**: `requires` resolved to ints at load (tech ids, building type ids),
-   `CanTrain` LockedByRequirement becomes a real check, `CanPlace` gains a `Requires` reason (after WrongFaction),
-   `CanResearch` gains `Requires` incl. Age II's `requiresAnyOf` (any two of Infantry / Ranged / Shock Hall / Forge,
-   by slot), requirements checked at queue time; loader nits BUG-0098 / 0099 (items 1 + 3) / 0008 / 0010 folded in.
-   The sim ships only `age_ii.requiresAnyOf` in `common/techs.json`; faction `requires` values are the data track's D3
-   (same session, other files). Details in `studio/handoff.md`.
-2. Then the **sim's end-of-M3 hardening session** (M3's sim side is complete after M3-6): BUG-0097 / 0095
-   (plateau-bounded free-cell search + per-plateau memo), BUG-0096, BUG-0094, door fuzz kinds 11-15.
-   **Requests for the sim track** above outrank M3 work.
+1. ~~M3-6 `requires` resolution and gating~~ → **done** (session 1415).
+2. **Next: the sim's end-of-M3 hardening session (M3-H2)**, QA full: (a) land D3 with the BUG-0112 fixture fixes
+   (Requests 15 above; merge the data branch, fix the 25 rows, regenerate the golden once), (b) BUG-0097 / 0095
+   (plateau-bounded free-cell search + per-plateau "no free cell" memo), (c) BUG-0096 (SealsGround refusal memo),
+   (d) BUG-0100 (unmeetable requirements = load errors, incl. any-of reachability), (e) BUG-0094, BUG-0113, BUG-0099
+   item 2 if cheap, door fuzz kinds 11-15, M3-5 / M3-6 doc polish. Details in `studio/handoff.md`.
 3. Then M4 combat (attack / damage formula with the worked example first) while the view and data tracks finish M3.
 4. M6 (far ahead): agents can't download. The Producer lists under "Waiting on you", when M5
    starts, the exact links for the Godot 4.7.2 .NET export templates and the Kenney/KayKit/Quaternius
@@ -1492,34 +1620,45 @@ track right after S1/S2 bugs).
 
 ## Feature queue: view track (feature sessions, in order)
 
-1. **Next: M3-V3** selection panel (portrait / stats + tech bonus column / multi-select grid), production card on a
-   selected finished building (`UnitsTrainedAt` + `TechsResearchableAt` buttons greyed by `CanTrain` / `CanResearch`
-   with reason text from `ui.json`, `Train` / `Research`, a queue strip with progress and click-to-cancel), rally
-   marker + right-click SetRally / ClearRally (minimap too), "Pop a / b" in the resource bar; folds BUG-0108 / 0109 /
-   0110 (same code); ships the `requires` reason texts ahead of M3-6. Details in `studio/handoff.md`.
-2. Then the **M3 "Playable: build a full Malazan base and reach Age II"** session: playtest instructions for the owner
-   under For your review; ticked on the owner's word or, after a day's silence, on a scripted headless run of the path.
-3. Then the view's end-of-M3 hardening session: BUG-0104 / 0105 / 0107 / 0122 + playtest findings. Then M4 view work
-   (combat feedback, fog shader) once the sim's M4 lands.
+1. ~~M3-V3 selection panel, production card, queue strip, rally, pop~~ → **done** (session 1415); the playtest
+   instructions are under For your review (M3-V3 entry).
+2. **Next: the view's end-of-M3 hardening session (M3-H2)**, QA standard: BUG-0123 (S3) first, then BUG-0104 / 0105 /
+   0107 / 0122, plus whatever the owner's playtest reports (inbox). Details in `studio/handoff.md`.
+3. Then the **M3 "Playable"** tick: on the owner's word in the inbox, or, after a day's silence, a scripted headless run
+   of the full-base + Age II path (a `game/tests` scene through the real HUD: workers gather, Barracks + Armory placed
+   and built, Age II queued and completed, a Sapper trained from an Engineers' Yard; after D3 lands so the building
+   locks are live). Then M4 view work (combat feedback, fog shader) once the sim's M4 lands.
 
 ## Feature queue: data track (feature sessions, in order; owner reviews every landed task)
 
 1. **Owner review tweaks** from the inbox (the D1 / D2 / M3-5 text entries under For your review) whenever present
    come first (QA light; golden `data-hash` regen on a data change).
-2. **Next: D3 techs content**: the faction upgrades' names and descriptions in each faction's voice (numbers pinned
-   to the pages' "Faction upgrade" lines), the building `requires` values from the pages' Requires column (Shock Hall
-   ← Infantry Hall; Caster Hall / Siege Works / Watch Tower ← Age II), `Content/TechContentTests` + QA
-   `QA/Content/TechRosterQaTests`, a Techs table on each faction page, BUG-0111 and the BUG-0090 "needs ..." text
-   recheck. Files: `game/data/factions/**` and `docs/factions/**` only (the sim edits `common/techs.json` in M3-6 the
-   same session). Golden regenerated after merging the sim's. QA light. Details in `studio/handoff.md`.
-3. Then **D4**: `common/techs.json` text (Age II and the six Forge upgrades) pinned to docs/02 "Tech", after M3-6.
+2. **D3 techs content: built and verified in session 1415, held on `studio/2026-10-07-1415-data` (BUG-0112)**; it
+   lands through the sim's M3-H2 (Requests 15). The data track **STOPs** that session (one golden regeneration per
+   session). The owner's review table appears under For your review when it lands.
+3. Then **D4** (the session after D3 lands): `common/techs.json` text (Age II and the six Forge upgrades: names and
+   descriptions pinned to docs/02 "Tech"), BUG-0132 (pin messages), the BUG-0113 item 1 wording if the sim hasn't;
+   golden `data-hash` regen (descriptions are hashed). QA light.
 4. Waiting on schemas: `abilities.json` / `statuses.json` (M4), tower attack / sight / detector fields (M4),
    `ai.json` build orders (M5); M7-M9 faction data when those milestones open; balance passes (QA standard) after
    the M4 sandbox.
 
-## Debt backlog: sim track (hardening sessions only; the next one after four feature sessions)
+## Debt backlog: sim track (hardening sessions only; the next one is M3-H2, next session)
 
-- **BUG-0097 (S3, first) + BUG-0095 (S3, residual)**: `FreeCellSearch` bounds its walk by `World.LevelBounds`,
+- **BUG-0112 (S3, first: it blocks the data track)**: `ConstructionFuzzStressTests` (15 rows), `NeverSealTests` (8)
+  and `RequirementFuzzTests` seeds 2-3 assume no shipped building has a `requires`; D3's `buildings.json` fails them
+  (the flood oracle compares `CanPlace` with geometry only; the never-seal coverage floor "n placed" starves when
+  random types are refused for `Requires`; the fuzz fixture rewrites Malazan's requires but inherits Whirlwind's).
+  Fix in the fixtures (clear building requires, or grant Age II + every hall before the run) or teach the oracle
+  `Requires`; then land D3 (Requests 15).
+- **BUG-0100 (S3)**: unmeetable requirements load clean: a def naming another faction's building, a common tech naming
+  any faction's building, an any-of whose reachable entries are fewer than `count` (the cycle search ignores any-of
+  edges). Items 1-2 are a faction check in `TechReader.Resolve`; item 3 a reachability fixpoint from "nothing built".
+- **BUG-0113 (S4)**: type-mismatch errors print CLR type names ("Nullable`1[Int32]"); the 10k-unit load Perf row now
+  times a failing load (10,000 slot errors) since BUG-0010.
+- BUG-0099 item 2 (S4 note): an effect matching no unit loads; the M4 note: `TechBonus` has no tower path.
+- ~~BUG-0008~~, ~~BUG-0010~~, ~~BUG-0098~~, ~~BUG-0099 items 1 + 3~~ fixed in M3-6 (session 1415).
+- **BUG-0097 (S3) + BUG-0095 (S3, residual)**: `FreeCellSearch` bounds its walk by `World.LevelBounds`,
   a per-level-index box, so a spawn or push-out on a full plateau lands on another plateau of the same level
   (30+ m away, QA pin `ProductionQaTests...Bug0097Pin`); and the push-out's `NearestPassable` fallback still
   stacks leftovers on one point (18 units on a cell). Fix both at once: a per-cell plateau id (connected
@@ -1564,10 +1703,10 @@ track right after S1/S2 bugs).
   + BUG-0026 (S4) rotate same-tick tie-break.
 - BUG-0005 (S3) per-player command buckets (O(n^2) insertion sort under a flood); before M5.
 - BUG-0023 (S3) single field build > tick budget on maps > 256: documented as unsupported.
-- Loader: BUG-0008 (S3) duplicate JSON keys, BUG-0010 (S4) faction slots, **BUG-0098 (S3)** an empty `units` /
-  `tags` tech filter matches every unit, **BUG-0099 (S4)** `requires` cycles / tech id = building id (items 1 + 3;
-  item 2 "effect matches no unit" stays a note; the M4 note: `TechBonus` has no tower path): all folded into
-  **M3-6** (next sim feature session), which rewrites the `requires` loader anyway.
+- Note (QA, M3-6): `CanResearch` reports `Requires` ahead of `AlreadyResearched` (the brief's order); a researched
+  Age II whose halls fall reads "Locked" if the view asks. The dev `SpawnBuilding` ignores requirements (documented). A
+  queued `Build` is checked when it starts (phase 7), so it sees a phase-3 Age II of the same tick; direct commands see
+  it the next tick (documented).
 - Note (QA, M3-5): a tech queued behind a pop-blocked unit waits (the M3-4 pause rule; Producer kept it); the
   golden regen reason for M3-5 is in docs/03 (data-hash only: `techs.json` + buildings' `requires`).
 - BUG-0002 (S4) `.sln` Release config maps RtsGame to Debug; with `tools/export.ps1` (M6).
@@ -1588,9 +1727,16 @@ track right after S1/S2 bugs).
   recorded but not checked; no depletion events (views poll); .NET 8 support ends 2026-11-10, move
   to the next LTS at M6.
 
-## Debt backlog: view track (hardening sessions only; the next one after four feature sessions)
+## Debt backlog: view track (hardening sessions only; the next one is M3-H2, next session)
 
-- **BUG-0104 (S3, first)**: `QaM27Test`'s 20 m centre-shift bound is fitted to seed 1 (22.1 m); seed 21
+- **BUG-0123 (S3, first)**: `SelectionPanel.SetStat` builds `$"{hpNow} / {max}"` on every hp change, so a selected
+  building under repair allocates ~52 B a tick (15,552 B / 300 ticks; idle is 0 B). Fix: two labels ("now" from a
+  cached int-string table up to the largest building hp, built once in `Init`, and "/ max"), or a reused `char[]`
+  buffer. Also: a disabled production button keeps the enabled look (name / hint / cost are child labels, so Godot's
+  disabled style doesn't dim them); set `Modulate` (~60 % alpha) on the cell's labels when `Disabled` changes. Turn the
+  `Known("BUG-0123")` row of `QaV3Test` into a `Check`. Note from the same QA pass: `BuildingPicker.PickRay` has no
+  terrain-occlusion test (a box behind a hill would win over the hill; 0 such pixels on seed 1).
+- **BUG-0104 (S3)**: `QaM27Test`'s 20 m centre-shift bound is fitted to seed 1 (22.1 m); seed 21
   (far cell a cliff, corner-adjacent target 101.5 m away) moves 19.1 m, seed 6 20.3 m. The target itself
   is right on all 200 seeds (west army >= 100 m; the east army's is 99.5-99.97 m on seeds 42 / 133, never
   used in a 10 s run). Options: a per-seed note in docs/03 and the bound on seed 1 only, or give the
@@ -1603,11 +1749,7 @@ track right after S1/S2 bugs).
   scaffold tone or stripes); the wood cargo cube is 3-4 px at 60 m on 720p (scale with zoom or outline it);
   the minimap resource layer and props relist on every `NavGrid.Version` bump, so every build / cancel /
   completion redraws them (key on a resource-only change; Requests 12).
-- **BUG-0108 / 0109 / 0110 (S3, M3-V2)**: right-click on a box top ground-picks behind the building (pick the box
-  first via `BuildingPicker.PickRay`, then the ground); a placement click uses the last frame's drawn anchor
-  (recompute from the click position; ask `CanPlace` as that frame's one call when it differs); a non-object
-  `ui.json` root loads blank (one line). **Planned as folds in M3-V3** (next view feature session), not left for
-  hardening: same code, small fixes, and the M3 playable benefits. QA's `QaV2Test` rows turn from `Known` to `Check`.
+- ~~BUG-0108 / 0109 / 0110~~ fixed in M3-V3 (session 1415; `QaV2Test` rows are `Check`s now).
 - **BUG-0122 (S4, M3-V2 nits)**: "Quartermaster's Depot" wraps mid-word (font / `AutowrapMode.Word`); 25
   Shift-clicks on one anchor send 75 Builds (skip a placement at the last placed anchor); the ghost runs before
   `RtsCamera` in tree order so it trails a pan by a frame (move it after the camera, still after `SimRunner`); the
@@ -1636,10 +1778,11 @@ track right after S1/S2 bugs).
   Barracks") and tower attack / detection that the schema can't express yet; recheck every such
   sentence when `requires` (M3-5 / M3-6) and the tower fields (M4) land. Schema requests are under
   "Requests for the sim track" 8.
-- **BUG-0111 (S4)**: D2 page pins miss a false "+N pop" claim on a 0-pop building and Forge / Watch Tower
-  Provides text (compare the whole Provides cell to docs/02 with names substituted, as Requires does);
-  `UnitContentTests.G` formats range with the current culture (use invariant); blank line before the
-  pin line on both pages. Test-only; with the next data task touching those tests.
+- ~~BUG-0111 (S4)~~ fixed in D3 (on the held branch `studio/2026-10-07-1415-data`; lands with the sim's M3-H2). The
+  buildings part of BUG-0090 likewise; the towers part stays (M4).
+- **BUG-0132 (S4, on the held D3 branch)**: the D3 tech pins fail on every one-sided edit but some messages hide the
+  values or blame the page (`TechContentTests.C` gives the field only; `A` asserts tuples without a message; `B` / `C`
+  say "should start ..." even when the data moved; `RequiresText.Needs` reads only the word "needs"). With D4.
 - Note: a QA row (`AnEmptyBuildingList_Loads_...`) now pins "exactly Whirlwind's ten remain"; it moves
   again whenever a building is added or removed (intended: the roster is pinned).
 
@@ -1647,6 +1790,7 @@ track right after S1/S2 bugs).
 
 | Date | Session | Task | Result |
 | --- | --- | --- | --- |
+| 2026-10-07 | [2026-10-07-1415](sessions/2026-10-07-1415.md) | sim M3-6 `requires` gating (`RequiresTechs` / `RequiresBuildings` resolved at load, `requiresAnyOf` by slot on `age_ii`, `Requires` reasons in `CanPlace` / `CanResearch`, real `LockedByRequirement`, queue-time rule, `PlayerLedger` finished counts, loader nits BUG-0008 / 0010 / 0098 / 0099); view M3-V3 selection panel + production card + queue strip + rally marker + pop + Age II flash, BUG-0108 / 0109 / 0110 fixed; data D3 techs text + building `requires` + page Techs tables + pins, BUG-0111 fixed | sim + view ACCEPT, 0 fix rounds (QA PASS_WITH_ISSUES x2: sim 2 S3 (BUG-0100, BUG-0112) + 1 S4; view 1 S3 (BUG-0123)); **data REJECT-hold** (QA PASS_WITH_ISSUES, 1 S4; integration only: BUG-0112, lands via the sim's M3-H2). M3 6 / 8 |
 | 2026-10-07 | [2026-10-07-1131](sessions/2026-10-07-1131.md) | sim M3-5 Age II research + Forge upgrades (`common/techs.json` + faction `techs.json` schema, `Research` kind 15 through `CanResearch`, queue items unit-or-tech, `TechState` flags hashed + `TechBonus` derived, building `requires` field, CLI `age N`); view M3-V2 command card (5 x 3 grid, `ui.json` view text, B / V build menus, `BuildGhost` via `CanPlace` once a frame, building click-select + outline + site Cancel, right-click Repair / join, M key); data STOP | both ACCEPT, 0 fix rounds (QA PASS_WITH_ISSUES x2: sim 1 S3 (BUG-0098) + 1 S4; view 3 S3 (BUG-0108 / 0109 / 0110, folded into M3-V3) + 1 S4). M3 5 / 8 |
 | 2026-10-07 | [2026-10-07-0925](sessions/2026-10-07-0925.md) | sim M3-4 production queues (`Train` / `CancelTrain` / `SetRally` / `ClearRally`, `ProductionSystem` phase 3, `PlayerLedger` pop + cap, `FreeCellSearch` capped at the level box, `trainedAt` resolved, `UnitsTrainedAt`, CLI pop); view M3-V1 economy HUD (`StartBase` Town Hall + workers, `ResourceBar`, right-click Gather via `ResourcePicker`, `BuildingViews` + `BuildingBars`, worker tints + cargo markers, F12 worker counts); data STOP | both ACCEPT, 0 fix rounds (QA PASS_WITH_ISSUES x2: sim 1 S3 (BUG-0097); view 1 S3 (BUG-0106, reworded away) + 1 S4). M3 4 / 8 |
 | 2026-10-07 | [2026-10-07-0800](sessions/2026-10-07-0800.md) | sim M3-H1 hardening (pocket rule `NavFlags.Pocket` after Cancel / destruction, cheap-first Build checks, ring-by-ring push-out through the spatial hash, BUG-0080 measured bound documented, BUG-0081 save/load decision, loader / CLI / plug-cache nits: BUG-0071 / 0072 / 0076 / 0079 / 0081 / 0091 / 0092 / 0093 fixed); view M2-H2 hardening (bench marches across + true `fps`, start blocks in a clearing, `Sfx` stops at quit, overlay label on change, 2 x 2 minimap dots, S4 batch, M6 export notes: 11 bugs fixed) → **M2 signed off**; data STOP (resumed after an OS restart killed 2026-10-06-2326) | both ACCEPT, 0 fix rounds (QA PASS_WITH_ISSUES x2: sim 2 S3 + 1 S4, view 1 S3 + 1 S4) |
