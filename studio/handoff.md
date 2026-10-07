@@ -1,10 +1,11 @@
 # Handoff: brief for the current / next session
 
-Written by the Producer at the ACCEPT of session **2026-10-07-0925** (second full session of 2026-10-07, cap 8; both
-tracks accepted, data STOPped). Next session: feature on **sim** (M3-5) and **view** (M3-V2); **data STOPs cheaply**
-unless the inbox holds D1 / D2 tweaks. Counters after the next session: sim 2 / 4, view 2 / 4, data 2 / 4.
-**Bug numbers: sim from BUG-0098 (0098-0100 free, then 0112-0121), view from BUG-0108 (0108-0110 free, then
-0122-0131), data from BUG-0132.**
+Confirmed by the Producer at the PLAN of session **2026-10-07-1131** (third full session of 2026-10-07, cap 8; base
+`28145d7`, main green: build 0 warnings, smoke and non-Perf suite rerun at plan time). This session: feature on **sim**
+(M3-5, QA full) and **view** (M3-V2, QA standard); **data STOPs cheaply** (inbox empty, no schema to fill). Counters
+after this session: sim 2 / 4, view 2 / 4, data 2 / 4. The briefs below are the 0925 handoff's, with the M3-5
+refinements marked **(1131)**. **Bug numbers: sim from BUG-0098 (0098-0100 free, then 0112-0121), view from BUG-0108
+(0108-0110 free, then 0122-0131), data from BUG-0132.**
 
 ## Where we are
 
@@ -40,10 +41,17 @@ ids exist.
   faction's upgrade (`moranth_supply`, `dryjhnas_prophecy`; ids from the faction pages' "Faction upgrade" lines).
   Entry: `{ id, displayName, description, researchedAt: <building slot id, e.g. "town_hall" / "forge">, cost {gold,
   wood}, researchTime (s → ticks), requires: [ids], effects: [ { stat, amount, appliesTo { attackType?, tags?,
-  units?, siege?: bool } } ] }`. `stat` is one of `attack`, `armor`, `range`, `abilityCooldown` (strings validated
-  against a fixed list; amounts are ints for attack / armor, floats in meters / seconds for range / cooldown). A
+  units?, siege?: bool } } ] }`. `stat` is one of `attack`, `armor`, `range`, `hp`, `abilityCooldown` (strings
+  validated against a fixed list; amounts are ints for attack / armor / hp, floats in meters / seconds for range /
+  cooldown). **(1131)** `hp` is needed for Dryjhna's Prophecy (Zealots +20 HP, `docs/factions/whirlwind.md` line 31);
+  an `abilityCooldown` effect's `appliesTo.units` names the unit whose ability it shortens (Sapper for Cusser,
+  Priest of the Whirlwind for Sandstorm); M4's abilities schema may add an `abilities` filter later. A
   tech id is unique across all techs files; `requires` entries must name an existing tech or building id (the
-  Age II "any two of" rule is **M3-6**; write Age II's `requires` as `[]` now and the rule in the docs). Common
+  Age II "any two of" rule is **M3-6**; write Age II's `requires` as `[]` now and the rule in the docs). **(1131)**
+  Ship the `requires` values the docs give: level-2 upgrades `["<level_1 id>", "age_ii"]`, faction upgrades
+  `["age_ii"]`; and extend the same id check to `units[i].requires` (the shipped Sapper / Zealot already carry
+  `["age_ii"]`, which resolves once the tech exists; `CanTrain`'s `LockedByRequirement` stays "has any requires"
+  until M3-6). Common
   techs resolve `researchedAt` per faction to that faction's building of the slot; a faction without the slot is a
   `DataError`. Both files are **required** (a missing file is one error), like the others. Numbers from docs/02
   "Tech" (Age II 400 G / 200 W, 60 s; the upgrade table) and the faction pages (faction upgrades 200 G / 150 W,
@@ -84,9 +92,11 @@ ids exist.
 1. Shipped data loads with 0 errors; `GameData.Techs` holds 9 techs (7 common + 2 faction); Age II costs 400 / 200
    and takes 1,200 ticks; the Forge upgrade table matches docs/02 (`DataValidationTests` row per number); each
    faction upgrade matches its page (cost, time, effects: Moranth Supply `abilityCooldown -15` s on the Sapper and
-   `range +4` on the Catapult; Dryjhna's Prophecy per `docs/factions/whirlwind.md`).
+   `range +4` on the Catapult; Dryjhna's Prophecy `hp +20` on the Zealot and `abilityCooldown -15` s on the Priest
+   of the Whirlwind, per `docs/factions/whirlwind.md`).
 2. Loader errors, one each at the field: unknown `stat`, unknown `researchedAt` slot, a slot the faction lacks,
-   duplicate tech id across files, `requires` naming nothing, a missing techs file (common or faction).
+   duplicate tech id across files, `requires` naming nothing (on a tech, a building **and a unit**), a missing techs
+   file (common or faction).
 3. `Research(age_ii)` at the Town Hall: gold / wood drop 400 / 200 at queue time; after exactly 1,200 ticks
    `HasTech(0, age_ii)` and `Age(0) == 2`; nothing spawned; pop unchanged throughout; a second `Research(age_ii)`
    while queued or after completion is dropped, totals unchanged.
@@ -242,8 +252,8 @@ view hardening session (BUG-0104 / 0105 / 0107).
 ## Data track
 
 ### Current session plan: STOP (cheap)
-No inbox tweaks to the D1 / D2 review; no schema the track needs is on `main` (`techs.json` + building `requires`
-come with M3-5, merged at the end of the next session). Counter stays 2 / 4. If the owner answers the D1 / D2 review
+Confirmed at the 1131 PLAN: no inbox tweaks to the D1 / D2 review; no schema the track needs is on `main`
+(`techs.json` + building `requires` come with M3-5, merged at the end of this session). Counter stays 2 / 4. If the owner answers the D1 / D2 review
 in the inbox, that tweak is the next data task (QA light; golden `data-hash` regen). **After M3-5 lands: D3** techs
 content (names, descriptions, numbers pinned to docs/02 "Tech" and the faction pages' upgrade lines; building
 `requires` values per the faction pages' Requires column; BUG-0111 + the BUG-0090 text recheck).
