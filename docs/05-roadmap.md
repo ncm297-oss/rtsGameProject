@@ -10,7 +10,7 @@ Status legend: **Next** = start here, **Planned** = not started, **Done** = acce
 | M0 | Environment & skeleton | **Done** (2026-10-03) | Tools installed, empty projects build, tests and headless boot pass |
 | M1 | Core sim, no graphics | **Done** (2026-10-06, Producer sign-off) | 200 units path across the map deterministically, fast |
 | M2 | Presentation | **Done** (2026-10-07, Producer sign-off after the M2-H2 hardening) | Move an army around a 3D map |
-| M3 | Economy & buildings | **In progress** (sim + data tracks since 2026-10-06-1255, view track from 2026-10-07; 6 / 8: the sim side (M3-6) and the HUD (M3-V3) are complete; sim hardening M3-H1 done) | Build a Malazan base |
+| M3 | Economy & buildings | **In progress** (sim + data tracks since 2026-10-06-1255, view track from 2026-10-07; 5 / 8 on `main`: the sim side (M3-6) is complete; the HUD's last part (M3-V3) and the techs content (D3) are verified and held on their branches, BUG-0124 / BUG-0112; sim hardening M3-H1 done) | Build a Malazan base |
 | M4 | Combat, fog, abilities | Planned | Malazan vs. Whirlwind armies fight with abilities and fog |
 | M5 | AI opponent | Planned | Lose to a Whirlwind AI |
 | M6 | Game shell & real art | Planned | A friend can play it |
@@ -286,8 +286,11 @@ review") stands as feedback, not as a gate. Owner may revisit._
       Techs tables on the pages, BUG-0111 fixed, BUG-0090 buildings part): verified by QA and the Producer but **held
       on its branch** (`studio/2026-10-07-1415-data`): the building `requires` break 25 sim-owned test fixtures
       (BUG-0112), so the sim's M3-H2 lands it with the fix. Then D4: `common/techs.json` text.)_
-- [x] HUD: resource bar, selection panel, command card with grid hotkeys, worker build menus.
-      _(Complete with session 2026-10-07-1415, task M3-V3: `SelectionPanel` (one unit: portrait placeholder, name,
+- [ ] HUD: resource bar, selection panel, command card with grid hotkeys, worker build menus.
+      _(Built and verified in session 2026-10-07-1415, task M3-V3, but **held on `studio/2026-10-07-1415-view`**: merged
+      with M3-6 one of its fixtures queues Age II without the two halls the sim now demands (BUG-0124, S2); the box is
+      ticked when it re-lands (next session, first). Meanwhile `main`'s smoke gate fails on the missing
+      `placement.requires` text. M3-V3: `SelectionPanel` (one unit: portrait placeholder, name,
       HP / Attack / Armor / Range / Speed from data with `TechBonus` as a green "+N"; up to 24 portraits for a group
       with the Tab subgroup outlined, a click selects that unit; a building: name + hp), the production card (a selected
       own finished building's `UnitsTrainedAt` then `TechsResearchableAt` on the grid keys, greyed with `ui.json`
@@ -310,8 +313,8 @@ review") stands as feedback, not as a gate. Owner may revisit._
       (`ViewApi.BuildingPicker.PickRay`, footprint outline, box-select never), right-click Repair on an own damaged
       building / join on an own site, the M key.)_
 - [ ] Playable: the owner builds a full Malazan base and reaches Age II.
-      _(Playable in the window since 2026-10-07-1415; playtest instructions under STATE "For your review" (M3-V3
-      entry). The building requirements from the faction pages (Wickan Corral needs a Barracks; Cadre Tower, Engineers'
+      _(Playable in the window once M3-V3 re-lands (BUG-0124); playtest instructions under STATE "For your review"
+      (M3-V3 entry). The building requirements from the faction pages (Wickan Corral needs a Barracks; Cadre Tower, Engineers'
       Yard, Watchtower need Age II) are on the held data branch `studio/2026-10-07-1415-data` (D3) and land with the
       sim's M3-H2. Ticked on the owner's word, or after a scripted headless run of the full-base + Age II path.)_
 

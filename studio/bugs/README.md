@@ -144,3 +144,4 @@ bugs outrank new features.
 | [BUG-0100](BUG-0100-m3-6-unmeetable-requirements-load.md) | S3 | open | Requirements that can never be met load clean (another faction's building, an any-of only its own tech opens) |
 | [BUG-0112](BUG-0112-m3-6-d3-building-requires-break-sim-tests.md) | S3 | open | With D3's building requires merged, 25 of the sim's tests fail (construction fuzz, never-seal, requirement fuzz): merge hazard for the data track |
 | [BUG-0113](BUG-0113-m3-6-nits.md) | S4 | open | M3-6 nits: type-mismatch errors read "malformed JSON ... Nullable`1[Int32]", the 10k-unit load test now times a failing load |
+| [BUG-0124](BUG-0124-m3-v3-tests-queue-age-ii-without-halls.md) | S2 | open | M3-V3's tests queue Age II at a Town Hall with no halls; merged with M3-6 the view branch is red and `main`'s smoke gate fails until it lands |

@@ -4,15 +4,17 @@ The dashboard. The Producer rewrites it at the end of every session. **Owner: re
 you" first.** "For your review" (further down) is non-blocking: what the studio built or decided
 on its own, explained in terms of what you'd see in the game.
 
-_Last updated: 2026-10-07 (session 2026-10-07-1415: ACCEPT sim M3-6 `requires` gating and view M3-V3 selection panel + production card; data D3 verified but **held on its branch** (REJECT for integration only: its building `requires` break 25 sim-owned test fixtures, BUG-0112; the sim's next session lands it). M3 6 / 8; the game is playable to Age II in the window)._
+_Last updated: 2026-10-07 (session 2026-10-07-1415: sim M3-6 `requires` gating landed on `main`. View M3-V3 (selection panel + production card) and data D3 (techs text + building `requires`) are both verified but **held on their branches**: each trips test fixtures that assumed nothing was locked (BUG-0124 view, BUG-0112 data). **`main`'s headless smoke gate is red until the view branch lands** (the sim's new "Requires" reason has no text in `ui.json` on `main`; the game runs but hides the command card). Next session fixes both first. M3 5 / 8 on `main`.)_
 
 ## Waiting on you
 
 - **Restore the routine's hourly schedule** (a session set a one-time 19:03 run before the
   no-re-arm rule landed). Not blocking while your watcher session is open (it starts sessions from
   the Gate rows below); without it the studio only moves when the watcher does.
-- Otherwise nothing blocking. The studio runs on autopilot (chain sessions, self sign-off) until
-  the end of the roadmap or a cap/incident stops it.
+- Otherwise nothing blocking. **FYI, no action needed:** `main` fails its headless smoke gate right now
+  (BUG-0124: the view's HUD branch is held one session; `& $env:GODOT --path game` on `main` runs but
+  logs an error and shows no command card). The next session repairs it first; play from the held
+  branch or wait a session.
 
 ## Now
 
@@ -21,18 +23,18 @@ _Last updated: 2026-10-07 (session 2026-10-07-1415: ACCEPT sim M3-6 `requires` g
 | Sim: milestone | M3 — Economy & buildings; 6 / 8 criteria; **the sim side is complete** (M3-6 `requires` gating landed 1415); M3-H1 hardening done, the end-of-M3 hardening (M3-H2) next |
 | Sim: next task | **M3-H2 sim hardening**: first land the held D3 data branch with the BUG-0112 test fixes (merge `studio/2026-10-07-1415-data`, make the construction / never-seal / requirement fuzz tolerate building `requires`, regenerate the golden once), then BUG-0097 / 0095 / 0096 / 0094 / 0100 / 0113, door fuzz kinds 11-15 · hardening · QA full; then M4 combat |
 | Sim: gate | **GO** |
-| View: milestone | M3 view side **complete**: resource bar, Gather / Repair / join, building + worker feedback, command card, build menus + ghost, site Cancel, selection panel, production card + queue strip, rally, pop (M3-V3 landed 1415); the Playable criterion waits on your playtest (M3-V3 entry under For your review) |
-| View: next task | **M3-H2 view hardening**: BUG-0123 (S3, panel allocation under repair + greyed-button look) first, then BUG-0104 / 0105 / 0107 / 0122 and your playtest findings · hardening · QA standard; then a scripted headless "full base + Age II" run if you are silent a day; then M4 view work |
-| View: gate | **GO** |
+| View: milestone | M3 view side built: resource bar, Gather / Repair / join, building + worker feedback, command card, build menus + ghost, site Cancel on `main`; **selection panel + production card + queue strip + rally + pop (M3-V3) verified but held on `origin/studio/2026-10-07-1415-view` (5f89068, already merged with `main`)**: one xUnit fixture and the matching scenes queue Age II without the two halls M3-6 now demands (BUG-0124, S2). `main`'s smoke gate is red until it lands |
+| View: next task | **M3-V3b re-land (BUG-0124) first**: fix the fixtures / scenes (spawn two halls before Age II; a no-halls greying case expects "Locked"), run every scene + smoke, also against the held D3 `buildings.json`; then the M3-H2 hardening items as budget allows (BUG-0123 first, then 0104 / 0105 / 0107 / 0122) · feature (re-land) · QA standard |
+| View: gate | **GO** (merge the view first next session) |
 | Data: milestone | M3 — "factions fully defined in data": units ✓ + buildings ✓; **D3 techs content verified (QA + Producer) but held on `studio/2026-10-07-1415-data`** until the sim's M3-H2 lands it (BUG-0112); then D4 (`common/techs.json` text) |
 | Data: next task | **STOP next session** (cheap): D3 lands through the sim's M3-H2 (one golden regeneration per session); D4 the session after. Inbox tweaks to the D1 / D2 / M3-5 / D3 text come first whenever present |
 | Data: gate | **HOLD** (one session; the sim and view gates stay GO) |
 | Tools on this PC | Godot 4.7.2 .NET, .NET SDK 8.0.425, Git 2.53 + LFS 3.7; `GODOT` user variable set |
-| Build | sim, view and data branches 0 errors / 0 warnings; golden regenerated on the sim branch for `data-hash` only (`age_ii.requiresAnyOf` + resolved arrays; every checkpoint byte-identical); the data branch's own regen is discarded at its re-land |
+| Build | `main` (da654c6) builds 0 warnings, non-Perf green, **smoke FAIL** (`ERROR: ui.json: missing placement.requires`, BUG-0124); the merged view branch builds 0 warnings, smoke PASS, 1 xUnit failure (BUG-0124); the data branch builds, 2 sim-owned failures (BUG-0112). Golden on `main` regenerated by the sim for `data-hash` only; the data branch's own regen is discarded at its re-land |
 | Tests | Producer reruns: sim non-Perf 3205 / 3211 (6 skipped) / 0 failed, 9 m 49 s, plus alone `RequirementPerfTests` / `RequirementPerfQaTests` / golden / `AllocationTests` / `StateHashTests` / `TightBlob2500` 85 / 85; view non-Perf 3126 / 3137 (11 skipped) / 0 failed, 8 m 57 s (both suites at once); view smoke PASS (tick 87, no ERROR); data `Content` + `DataValidation` + golden + `TechLoader` 238 / 240 (the 2 sim-owned `TechLoaderTests` the sim branch already updated); BUG-0112 reproduced in a scratch clone (sim branch + D3 `buildings.json`: 26 failed in the named classes). QA: sim non-Perf 3205 / 3211 (6 skipped) / 0 + Perf alone 123 / 126; view 3099 / 3110 (11 skipped) / 0 + 24 scenes + smoke PASS; data full suite 3209 / 3225 (2 failed = the sim-owned pair) |
-| Open bugs | 29 (S1: 0, S2: 0, S3: 16, S4: 13) — none block. Fixed this session: BUG-0008 / 0010 / 0098 / 0099 (items 1 + 3) (sim), BUG-0108 / 0109 / 0110 (view), BUG-0111 + BUG-0090 buildings part (data, on the held branch). New: BUG-0100 (S3, sim: a requirement that can never be met loads clean), BUG-0112 (S3, sim: D3's building `requires` break 25 sim test fixtures), BUG-0113 (S4, sim nits), BUG-0123 (S3, view: panel allocates under repair; greyed button looks enabled), BUG-0132 (S4, data: pin messages hide the values; on the held branch) |
+| Open bugs | 30 (S1: 0, **S2: 1** (BUG-0124: the view's M3-V3 tests queue Age II without halls; holds the view branch, `main` smoke red), S3: 16, S4: 13). Fixed this session: BUG-0008 / 0010 / 0098 / 0099 (items 1 + 3) (sim), BUG-0108 / 0109 / 0110 (view), BUG-0111 + BUG-0090 buildings part (data, on the held branch). New: BUG-0100 (S3, sim: a requirement that can never be met loads clean), BUG-0112 (S3, sim: D3's building `requires` break 25 sim test fixtures), BUG-0113 (S4, sim nits), BUG-0123 (S3, view: panel allocates under repair; greyed button looks enabled), BUG-0132 (S4, data: pin messages hide the values; on the held branch) |
 | Sessions today | 4 / 8 on 2026-10-07; feature sessions since last hardening: sim 3 / 4, view 3 / 4, data 3 / 4 (both code tracks take their end-of-M3 hardening next) |
-| Last session | 2026-10-07-1415 · sim M3-6 feature (0 fix rounds, ACCEPT) · view M3-V3 feature (0, ACCEPT) · data D3 feature (0, REJECT-hold: integration only) |
+| Last session | 2026-10-07-1415 · sim M3-6 feature (0 fix rounds, ACCEPT, on `main`) · view M3-V3 feature (0, ACCEPT by the Producer, **ESCALATE at integration**: 1 red fixture after the merge, BUG-0124, branch held) · data D3 feature (0, REJECT-hold: integration only, BUG-0112) |
 
 ## Milestone progress
 
@@ -41,7 +43,7 @@ _Last updated: 2026-10-07 (session 2026-10-07-1415: ACCEPT sim M3-6 `requires` g
 | M0 | 7 / 7 required | **Done** 2026-10-03 (optional MCP item open) |
 | M1 (sim track) | 8 / 8 | **Done** 2026-10-06 (Producer sign-off after the M1-9 hardening; retro in docs/05) |
 | M2 (view track) | 10 / 10 (SimRunner interpolation, camera, terrain mesh + trees / mines, placeholder unit views, selection, orders, minimap, debug overlay, placeholder audio, 60 FPS playable check) | **Done** 2026-10-07 (Producer sign-off after the M2-H2 hardening; retro in docs/05; your playtest under For your review is feedback, not a gate) |
-| M3 (all three tracks) | 6 / 8 (resource entities; worker gather / return loop; building placement + construction + repair; production queues + rally + pop; Age II research **and unlocks** + Forge upgrades; the HUD complete). Left: "factions fully defined in data" (D3 verified, held one session; then D4 common tech text) and "Playable: build a full Malazan base and reach Age II" (your playtest, or a scripted run after a day) | In progress; both code tracks take their end-of-M3 hardening next (the sim's lands D3) |
+| M3 (all three tracks) | 5 / 8 on `main` (resource entities; worker gather / return loop; building placement + construction + repair; production queues + rally + pop; Age II research **and unlocks** + Forge upgrades). The HUD criterion is built and verified but its last part (M3-V3) is held on its branch: ticked when it re-lands next session (BUG-0124). Left after that: "factions fully defined in data" (D3 verified, held; then D4) and "Playable: build a full Malazan base and reach Age II" (your playtest, or a scripted run after a day) | In progress; next session: view re-lands M3-V3 first, sim hardening lands D3 |
 | M4-M9 | — | Planned |
 
 ## For your review
@@ -52,6 +54,12 @@ instead of clusters" or "make giving up take 2 seconds".
 
 ### You can run a whole base in the window now, up to Age II: a selection panel, train and research buttons, a queue with progress, rally points and the population count. Please play it (view track, M3-V3, 2026-10-07)
 
+- **Status update (integration, same evening): held one session.** I accepted this work, but when the conductor
+  merged it on top of the sim's new locks, one of its own tests failed: the test queues Age II at a Town Hall that has
+  no halls, which the sim now (rightly) refuses (BUG-0124). The branch is kept, the fix is a test setup change, and it
+  lands first thing next session. Until then `main`'s window shows the M3-V2 state and logs an error at start (the
+  sim's new "Locked" reason has no text yet on `main`), so the playtest below works after the next session, or today
+  from the branch `studio/2026-10-07-1415-view` if you like.
 - **What was built:** the last piece of M3's HUD. **(1) A selection panel** bottom centre (right of the minimap): one
   selected unit shows a coloured placeholder portrait with its initial, its name, HP, Attack, Armor, Range, Speed from
   the data (a researched upgrade shows beside the number as a green "+1"; **the bonus is shown only, combat applies it
@@ -122,8 +130,8 @@ instead of clusters" or "make giving up take 2 seconds".
   pass: a duplicate key in any data file is an error (BUG-0008), every faction must fill all seven unit slots and all ten
   building slots exactly once (BUG-0010), an empty "applies to" list in an upgrade is an error instead of "everyone"
   (BUG-0098), and a requirement loop or a tech named like a building is an error (BUG-0099).
-- **What you'll see:** in the window, with the production card above: Age II greyed "Locked" until two different halls
-  stand; the Sapper and Zealot "Locked" until Age II; Melee / Ranged / Armor level II "Locked" until level I and Age II;
+- **What you'll see:** in the window, once the production card above lands (held one session, BUG-0124): Age II
+  greyed "Locked" until two different halls stand; the Sapper and Zealot "Locked" until Age II; Melee / Ranged / Armor level II "Locked" until level I and Age II;
   Moranth Supply until Age II. The placement ghost also goes red with "Needs more" for a building you haven't unlocked,
   but **no building is locked in the window yet**: the values ("Wickan Corral needs a Legion Barracks", "Cadre Tower,
   Engineers' Yard, Watchtower need Age II") are the data track's D3, held one session. Numbers: 5,000 refused orders in
@@ -1620,10 +1628,13 @@ track right after S1/S2 bugs).
 
 ## Feature queue: view track (feature sessions, in order)
 
-1. ~~M3-V3 selection panel, production card, queue strip, rally, pop~~ → **done** (session 1415); the playtest
-   instructions are under For your review (M3-V3 entry).
-2. **Next: the view's end-of-M3 hardening session (M3-H2)**, QA standard: BUG-0123 (S3) first, then BUG-0104 / 0105 /
-   0107 / 0122, plus whatever the owner's playtest reports (inbox). Details in `studio/handoff.md`.
+1. **Next: M3-V3b re-land (BUG-0124, S2)** on `origin/studio/2026-10-07-1415-view` (5f89068, already merged with
+   `main`): the `ProductionHudTests` fixture and the scenes that queue Age II spawn two distinct halls first (dev
+   `SpawnBuilding` ignores requirements); a no-halls greying row expects `research.requires`; every scene + smoke PASS,
+   also with the held D3 `buildings.json` copied in locally (building locks). Then, as budget allows, the M3-H2
+   hardening items: BUG-0123 (S3) first, then BUG-0104 / 0105 / 0107 / 0122, plus the owner's playtest findings.
+   Feature (re-land), QA standard. Details in `studio/handoff.md`. The playtest instructions are under For your review.
+2. Whatever of M3-H2 is left after the re-land session.
 3. Then the **M3 "Playable"** tick: on the owner's word in the inbox, or, after a day's silence, a scripted headless run
    of the full-base + Age II path (a `game/tests` scene through the real HUD: workers gather, Barracks + Armory placed
    and built, Age II queued and completed, a Sapper trained from an Engineers' Yard; after D3 lands so the building
@@ -1790,7 +1801,7 @@ track right after S1/S2 bugs).
 
 | Date | Session | Task | Result |
 | --- | --- | --- | --- |
-| 2026-10-07 | [2026-10-07-1415](sessions/2026-10-07-1415.md) | sim M3-6 `requires` gating (`RequiresTechs` / `RequiresBuildings` resolved at load, `requiresAnyOf` by slot on `age_ii`, `Requires` reasons in `CanPlace` / `CanResearch`, real `LockedByRequirement`, queue-time rule, `PlayerLedger` finished counts, loader nits BUG-0008 / 0010 / 0098 / 0099); view M3-V3 selection panel + production card + queue strip + rally marker + pop + Age II flash, BUG-0108 / 0109 / 0110 fixed; data D3 techs text + building `requires` + page Techs tables + pins, BUG-0111 fixed | sim + view ACCEPT, 0 fix rounds (QA PASS_WITH_ISSUES x2: sim 2 S3 (BUG-0100, BUG-0112) + 1 S4; view 1 S3 (BUG-0123)); **data REJECT-hold** (QA PASS_WITH_ISSUES, 1 S4; integration only: BUG-0112, lands via the sim's M3-H2). M3 6 / 8 |
+| 2026-10-07 | [2026-10-07-1415](sessions/2026-10-07-1415.md) | sim M3-6 `requires` gating (`RequiresTechs` / `RequiresBuildings` resolved at load, `requiresAnyOf` by slot on `age_ii`, `Requires` reasons in `CanPlace` / `CanResearch`, real `LockedByRequirement`, queue-time rule, `PlayerLedger` finished counts, loader nits BUG-0008 / 0010 / 0098 / 0099); view M3-V3 selection panel + production card + queue strip + rally marker + pop + Age II flash, BUG-0108 / 0109 / 0110 fixed; data D3 techs text + building `requires` + page Techs tables + pins, BUG-0111 fixed | sim ACCEPT (on `main`), 0 fix rounds (QA PASS_WITH_ISSUES: 2 S3 (BUG-0100, BUG-0112) + 1 S4); **view ACCEPT then ESCALATE at integration** (QA PASS_WITH_ISSUES, 1 S3 BUG-0123; merged with M3-6 one fixture queues Age II without halls: BUG-0124 S2, branch held, `main` smoke red); **data REJECT-hold** (QA PASS_WITH_ISSUES, 1 S4; integration only: BUG-0112, lands via the sim's M3-H2). M3 5 / 8 on `main` |
 | 2026-10-07 | [2026-10-07-1131](sessions/2026-10-07-1131.md) | sim M3-5 Age II research + Forge upgrades (`common/techs.json` + faction `techs.json` schema, `Research` kind 15 through `CanResearch`, queue items unit-or-tech, `TechState` flags hashed + `TechBonus` derived, building `requires` field, CLI `age N`); view M3-V2 command card (5 x 3 grid, `ui.json` view text, B / V build menus, `BuildGhost` via `CanPlace` once a frame, building click-select + outline + site Cancel, right-click Repair / join, M key); data STOP | both ACCEPT, 0 fix rounds (QA PASS_WITH_ISSUES x2: sim 1 S3 (BUG-0098) + 1 S4; view 3 S3 (BUG-0108 / 0109 / 0110, folded into M3-V3) + 1 S4). M3 5 / 8 |
 | 2026-10-07 | [2026-10-07-0925](sessions/2026-10-07-0925.md) | sim M3-4 production queues (`Train` / `CancelTrain` / `SetRally` / `ClearRally`, `ProductionSystem` phase 3, `PlayerLedger` pop + cap, `FreeCellSearch` capped at the level box, `trainedAt` resolved, `UnitsTrainedAt`, CLI pop); view M3-V1 economy HUD (`StartBase` Town Hall + workers, `ResourceBar`, right-click Gather via `ResourcePicker`, `BuildingViews` + `BuildingBars`, worker tints + cargo markers, F12 worker counts); data STOP | both ACCEPT, 0 fix rounds (QA PASS_WITH_ISSUES x2: sim 1 S3 (BUG-0097); view 1 S3 (BUG-0106, reworded away) + 1 S4). M3 4 / 8 |
 | 2026-10-07 | [2026-10-07-0800](sessions/2026-10-07-0800.md) | sim M3-H1 hardening (pocket rule `NavFlags.Pocket` after Cancel / destruction, cheap-first Build checks, ring-by-ring push-out through the spatial hash, BUG-0080 measured bound documented, BUG-0081 save/load decision, loader / CLI / plug-cache nits: BUG-0071 / 0072 / 0076 / 0079 / 0081 / 0091 / 0092 / 0093 fixed); view M2-H2 hardening (bench marches across + true `fps`, start blocks in a clearing, `Sfx` stops at quit, overlay label on change, 2 x 2 minimap dots, S4 batch, M6 export notes: 11 bugs fixed) → **M2 signed off**; data STOP (resumed after an OS restart killed 2026-10-06-2326) | both ACCEPT, 0 fix rounds (QA PASS_WITH_ISSUES x2: sim 2 S3 + 1 S4, view 1 S3 + 1 S4) |

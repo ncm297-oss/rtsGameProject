@@ -1,19 +1,27 @@
 # Handoff: brief for the current / next session
 
-Written by the Producer at the ACCEPT of session **2026-10-07-1415** (fourth full session of 2026-10-07, cap 8). Sim
-M3-6 and view M3-V3 ACCEPTed with 0 fix rounds; data D3 **REJECT-hold** (the content is right and verified; it can't
-land on a green `main` until the sim fixes 25 of its own test fixtures: BUG-0112). Counters after 1415: sim 3 / 4, view
-3 / 4, data 3 / 4. Both code tracks' M3 work is complete, so **next session is the end-of-M3 hardening on sim and
-view**; the data track STOPs (D3 lands through the sim's session). **Bug numbers for the next session: sim from
-BUG-0114 (0114-0121, then 0133+), view from BUG-0124 (0124-0131), data from BUG-0133 if it runs.**
+Written by the Producer at the ACCEPT of session **2026-10-07-1415** (fourth full session of 2026-10-07, cap 8),
+corrected after integration. Sim M3-6 ACCEPTed and on `main` (da654c6). View M3-V3 ACCEPTed by the Producer but
+**ESCALATEd at integration**: merged with M3-6, one of its fixtures queues Age II at a bare Town Hall and fails
+(BUG-0124, S2); the merged branch `origin/studio/2026-10-07-1415-view` (5f89068) is held, and **`main`'s smoke gate
+is red** until it lands (`ui.json: missing placement.requires`). Data D3 **REJECT-hold** (verified; its building
+`requires` break 25 sim-owned fixtures: BUG-0112). Counters after 1415: sim 3 / 4, view 3 / 4, data 3 / 4. **Next
+session: view re-lands M3-V3 first (S2 outranks everything) and is merged first; sim takes its end-of-M3 hardening and
+lands D3; data STOPs. Bug numbers: sim from BUG-0114 (0114-0121, then 0133+), view from BUG-0125 (0125-0131), data
+from BUG-0133 if it runs.**
 
 ## Where we are
 
-- `main` after this session's merge (sim, then view; the data branch is **not** merged): M0, M1, M2 Done; **M3 6 / 8**
-  (resources, gather loop, placement + construction + repair, production + rally + pop, **Age II research and
-  unlocks + Forge upgrades**, **the HUD**). Left: "factions fully defined in data" (D3 held, then D4) and "Playable:
-  build a full Malazan base and reach Age II" (owner playtest; instructions under STATE "For your review", M3-V3
-  entry). 29 open bugs (S3 16, S4 13), no S1 / S2.
+- `main` (da654c6): M0, M1, M2 Done; **M3 5 / 8** (resources, gather loop, placement + construction + repair,
+  production + rally + pop, **Age II research and unlocks + Forge upgrades**). Build 0 warnings, non-Perf green,
+  **smoke FAIL** (BUG-0124; the game runs and hides the card). Held: the HUD's M3-V3 (view branch) and D3 (data
+  branch). Then left: "Playable" (owner playtest; instructions under STATE "For your review", M3-V3 entry). 30 open
+  bugs (S2 1: BUG-0124; S3 16, S4 13).
+- **Held branch `origin/studio/2026-10-07-1415-view` (5f89068 = M3-V3 + merge of `main`)**: build 0 warnings, smoke
+  PASS, non-Perf 1 failed (`ProductionHudTests.QueueStrip_CountAndHeadFill_FollowTheQueueThroughLaborerAgeIILaborer`,
+  expected 3 got 2: `Research(age_ii)` dropped for `Requires`); the scenes that queue Age II (`ProductionHudTest`
+  criterion 3, `QaV3Test` greying / strip / hash-twin rows) were not run and will fail the same way. Conflicts already
+  resolved in that merge (docs/01, bugs README, coverage: both sides kept).
 - **Held branch `studio/2026-10-07-1415-data` (D3, 2 commits: 8bcca04 implement, 1687f56 QA)**: faction `techs.json`
   descriptions, `buildings.json` `requires` on 8 buildings, `docs/factions/*.md` Techs tables, tests under
   `sim/Rts.Sim.Tests/Content/` + `QA/Content/`, a golden regen that **must be discarded** (take the sim's side, then
@@ -102,12 +110,26 @@ attack-move / chase / retaliation, projectiles, death. The view and data tracks 
 
 ## View track
 
-### Current session plan: M3-H2 — end-of-M3 view hardening (hardening, QA standard)
+### Current session plan: M3-V3b — re-land M3-V3 (BUG-0124), then M3-H2 items (feature, QA standard)
 
-**Goal.** The view's M3 feature work is done; this session works its debt so the owner's playtest and M4's combat
-feedback start from a clean HUD. Inbox playtest complaints, if any arrive before the session, come first.
+**Goal.** Get the HUD onto `main` and the smoke gate green: the M3-V3 branch is verified except that its fixtures were
+written before Age II had requirements. Start from `origin/studio/2026-10-07-1415-view` (5f89068; it already contains
+`main`), fix the test setups, prove every scene against the real gating and against D3's building locks, and spend
+what budget remains on the view's debt (M3-H2 items below).
 
-**Scope, in order.**
+**Scope, in order ((0) is mandatory; stop when the size budget is spent).**
+- **(0) BUG-0124 (S2):** every test that researches Age II spawns two finished halls of distinct slots first (a
+  Barracks and an Armory through the dev `SpawnBuilding`, which ignores requirements): `ViewApi/ProductionHudTests`
+  (the `[laborer, age_ii, laborer]` row and any other that queues a tech with requirements), `ProductionHudHashTwinTests`
+  if it researches, `game/tests/ProductionHudTest.cs` criterion 3 (strip + Age II flash), `QaV3Test` (`GreyingEveryFrame`
+  must now also see `research.requires` on a bare Town Hall, `QueueStripEveryFrame`, the Age II row of its hash twin),
+  and `QA/ViewApi/ProductionHudQaTests` 600-tick twin. Add one explicit row: a bare Town Hall's Age II button reads
+  `research.requires` ("Locked") and a press enqueues nothing. Then: `dotnet test` non-Perf green, `tools/qa/smoke.ps1`
+  PASS, **every** `game/tests` scene PASS (`QaV2Test --strict`; `QaV3Test --strict` may fail only the BUG-0123 row
+  unless (a) is done). Repeat the scene loop once with the held D3 `buildings.json` files copied in from
+  `origin/studio/2026-10-07-1415-data` (**do not commit them**): placement rows that use the Wickan Corral / Cadre
+  Tower / Engineers' Yard / Watchtower must expect `placement.requires` or use an Age I type; fix any scene that
+  assumes those are placeable. Report both loops.
 - **(a) BUG-0123 (S3)**: the selection panel's hp text allocation-free under repair (two labels, "now" from a
   once-built int-string table up to the largest building hp, or a reused buffer; 300 repair ticks 0 bytes in
   `QaV3Test` `Allocation`, turned into a `Check` with `--strict`); greyed production buttons visibly dim (Modulate on
@@ -126,6 +148,10 @@ feedback start from a clean HUD. Inbox playtest complaints, if any arrive before
 - **Out:** the scripted Playable run (the session after, once D3 is on `main`), M4 views, fog.
 
 **Acceptance criteria.**
+0. BUG-0124: the merged branch's non-Perf suite green; smoke PASS; every scene PASS, and again with D3's
+   `buildings.json` in place; a bare Town Hall's Age II button reads "Locked" and a press enqueues nothing; the
+   `[laborer, age_ii, laborer]` rows pass with two halls spawned. **This alone is enough to merge** if the budget runs
+   out; items 1-6 below apply to whatever of (a)-(f) was done.
 1. `QaV3Test -- --strict` PASS (BUG-0123 rows are `Check`s): 300 repair ticks 0 bytes; a greyed button's labels at
    ≤ 60 % alpha in a screenshot read by the test (or pixel-sampled).
 2. `QaH2Test -- --seeds 1,6,21` PASS with the documented bound.
@@ -168,7 +194,15 @@ until M4's `abilities.json` / `statuses.json` schemas and the tower attack / sig
 
 ## Watch-outs (all tracks)
 
-- **Merge order next session:** sim first (it carries D3 + the golden), then view. The data track doesn't run.
+- **Merge order next session: view first** (it turns `main`'s smoke green), **then sim** (it carries D3 + the golden).
+  The data track doesn't run. Conductor: after merging the sim on top of the view, run smoke **and** the `game/tests`
+  scene loop; if only a view-owned scene fails because of D3's building locks, hold the sim branch like today (no
+  owner notification: the next view session fixes the scene) rather than ESCALATE.
+- **Rule from BUG-0112 / BUG-0124:** when a sim task changes a gate (`CanTrain` / `CanPlace` / `CanResearch` / data
+  validation), every other track's QA merges the sim branch (or `main` once the sim has landed) before its final run,
+  and the Producer reruns the **merged** result. A stand-in for enum members is not a test of the gating.
+- The sim's M3-H2 must run `tools/qa/smoke.ps1` and the scene loop with D3's data before reporting (the view's
+  M3-V3b makes the scenes robust to D3's locks; if the sim lands first in time, say which scenes fail and why).
 - The D3 branch's golden regen (`FA1CB635CA8F63BF`) is wrong once merged on top of M3-6: take `main`'s golden at the
   merge and regenerate once at the end of the sim's work.
 - Two hardening sessions at once: both suites and the view's scene loop run together; Perf rows can fail from CPU
