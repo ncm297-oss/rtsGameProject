@@ -160,8 +160,11 @@ public partial class Minimap : Control
         }
     }
 
-    private void JumpTo(Vector2 pixel)
+    /// <summary>What a left click at control pixel <paramref name="pixel"/> does: centres the camera on that map point; false (nothing moves) off the map.</summary>
+    public bool JumpTo(Vector2 pixel)
     {
-        if (Fit.TryToMap(new(pixel.X, pixel.Y), out System.Numerics.Vector2 p)) _camera.SetFocus(p.X, p.Y);
+        if (!Fit.TryToMap(new(pixel.X, pixel.Y), out System.Numerics.Vector2 p)) return false;
+        _camera.SetFocus(p.X, p.Y);
+        return true;
     }
 }

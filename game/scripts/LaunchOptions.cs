@@ -11,7 +11,9 @@ namespace Rts.Game;
 /// <c>--screenshot-after &lt;seconds&gt;</c> (default 2), <c>--units &lt;n&gt;</c> (per player, 0 to
 /// <see cref="MaxUnitsPerPlayer"/>, default <see cref="DefaultUnitsPerPlayer"/>), <c>--zoom &lt;m&gt;</c>
 /// (start zoom, clamped to the camera limits; for perf runs), <c>--no-hud</c> (hide the HUD), <c>--debug-overlay</c>
-/// (start with the F12 debug overlay on, e.g. for a screenshot), <c>--mute</c> (mute the master audio bus), <c>--forests &lt;n&gt;</c> and <c>--mines &lt;n&gt;</c>
+/// (start with the F12 debug overlay on, e.g. for a screenshot), <c>--mute</c> (mute the master audio bus), <c>--bench &lt;seconds&gt;</c>
+/// (run the scripted benchmark, print one <c>bench:</c> line and quit; positive seconds), <c>--vsync on|off</c>
+/// (window vsync; default is the project setting, on), <c>--forests &lt;n&gt;</c> and <c>--mines &lt;n&gt;</c>
 /// (resource groups on the map, 0 to <see cref="MapGenParams.MaxResourceGroups"/>, defaults
 /// <see cref="DefaultForests"/> and <see cref="DefaultMines"/>). Bad values are
 /// warned about and ignored; a token starting with <c>--</c> is never taken as a value (BUG-0041).
@@ -63,6 +65,12 @@ public sealed class LaunchOptions
     /// <summary>True to mute the master audio bus (<c>--mute</c>; takes no value).</summary>
     public bool Mute { get; private set; }
 
+    /// <summary>Seconds of scripted benchmark to run after the match starts (<c>--bench</c>), or null for a normal run.</summary>
+    public double? BenchSeconds { get; private set; }
+
+    /// <summary>Vsync override (<c>--vsync on|off</c>), or null to keep the project setting.</summary>
+    public bool? Vsync { get; private set; }
+
     /// <summary>Parses <see cref="OS.GetCmdlineUserArgs"/>.</summary>
     public static LaunchOptions FromCommandLine() => Parse(OS.GetCmdlineUserArgs());
 
@@ -109,6 +117,14 @@ public sealed class LaunchOptions
                     break;
                 case "--zoom":
                     if (float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out float zoom) && float.IsFinite(zoom)) o.Zoom = zoom;
+                    else Warn(flag, value);
+                    break;
+                case "--bench":
+                    if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double bench) && bench > 0 && double.IsFinite(bench)) o.BenchSeconds = bench;
+                    else Warn(flag, value);
+                    break;
+                case "--vsync":
+                    if (value is "on" or "off") o.Vsync = value == "on";
                     else Warn(flag, value);
                     break;
                 case "--no-hud":

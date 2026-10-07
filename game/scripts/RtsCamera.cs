@@ -20,6 +20,9 @@ public partial class RtsCamera : Camera3D
     /// <summary>Ground focus point (sim x, y) in meters.</summary>
     public System.Numerics.Vector2 Focus => _focus;
 
+    /// <summary>Height above the focus in meters, within the camera limits.</summary>
+    public float Zoom => _zoom;
+
     private System.Numerics.Vector2 _focus;
     private float _zoom = CameraLimits.DefaultZoom;
     private int _mapWidthCells = 1, _mapHeightCells = 1;

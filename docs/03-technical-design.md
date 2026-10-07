@@ -103,7 +103,7 @@ phases in this fixed order:
 `SimRunner` (a Godot `Node`) accumulates real frame time × game speed. While the accumulator holds
 at least 50 ms it runs one tick (max 5 ticks per frame, to avoid a death spiral after a stall).
 Views render at `alpha = accumulator / 50 ms` between each entity's previous and current
-position and facing. Commands from input are stamped with the next tick number.
+position and facing (facing since M2-7: the short way round, see "Implementation (M2-7)"). Commands from input are stamped with the next tick number.
 
 Since M2-1 the accumulator is the pure class `Rts.Sim.ViewApi.FixedStepClock` (unit-tested
 without Godot): `Advance(delta, speed)` returns the ticks to run this frame and `Alpha` is in
@@ -1433,8 +1433,8 @@ Godot starts children before parents, so `Main._Ready` loads the data and then c
   (arrows), `camera_zoom_in/out` (wheel), `camera_drag` (middle button).
 - **Launch flags** (user args after `--`): `--seed <n>`, `--speed <x>` (clamped 0.25-8),
   `--screenshot <path> --screenshot-after <seconds>` (default 2); later tasks added `--units`,
-  `--zoom`, `--no-hud`, `--debug-overlay`, `--forests`, `--mines` and `--mute` (M2-6, mutes the
-  master audio bus). Bad values log a warning and are ignored. Example: `& $env:GODOT --path game -- --screenshot C:\temp\shot.png --screenshot-after 2`.
+  `--zoom`, `--no-hud`, `--debug-overlay`, `--forests`, `--mines`, `--mute` (M2-6, mutes the
+  master audio bus), `--bench <seconds>` and `--vsync on|off` (M2-7). Bad values log a warning and are ignored. Example: `& $env:GODOT --path game -- --screenshot C:\temp\shot.png --screenshot-after 2`.
 
 ### Implementation (M2-2)
 
@@ -1885,6 +1885,66 @@ Match
   input for every selection and order row above, and a second Match with `--mute` (bus muted,
   counter still runs).
 
+### Implementation (M2-7)
+
+The studio's half of the M2 "Playable" criterion (100 units per player at 60 FPS): a scripted,
+repeatable benchmark, facing interpolation, and a screenshot set. The owner's playtest confirms it.
+
+- **Facing blend.** `UnitViews.Sync` turns each unit to `UnitViews.BlendFacing(PrevFacing, Facing,
+  alpha)`, the same clamped alpha as the position lerp (NaN shows the current tick). The difference
+  is wrapped into [-π, π) before the lerp, so 0.9π to -0.9π turns 0.2π through ±π; an exact half
+  turn wraps to -π, so it always turns the same way. `PrevFacing` is the sim's derived, unhashed
+  start-of-tick copy (M3-2). Pure arithmetic: the 2,000-unit update still allocates 0 bytes.
+- **`--bench <seconds>`** (positive, finite; `0`, negatives and non-numbers warn and are ignored).
+  `Match.Start` adds a `BenchRunner` node. It waits until tick 2 (the armies exist) and any
+  `--screenshot` is saved (the screenshotter then doesn't quit), skips 30 warm-up frames (the
+  first draws of new unit nodes compile pipelines: a one-time ~85 ms frame on the dev PC, load time
+  rather than play), then plays the pure `Rts.Sim.ViewApi.BenchScript` on frame time until the
+  duration ends. One 10 s loop: camera to the local army at the start zoom (0.25 s), box-select the
+  whole screen (0.5 s), Move to the far start block (1 s), four minimap clicks on the map corners
+  (0.25 s each, all inside the first 3 s), camera back to the army, zoom 20 m (1 s) and 60 m (1 s),
+  A + click (2 s), three Shift-queued moves (0.5 s each), H (1 s), S (0.5 s). Every action goes
+  through the real code: `SelectionController.BoxSelect` / `OrderAt` / `BeginAttackMove` +
+  `AttackMoveClick` / `Order` (public since M2-7; the mouse and key handlers call the same
+  methods), `Minimap.JumpTo` (the camera directly under `--no-hud`), `RtsCamera.SetZoom`. Edge
+  panning is off during a bench.
+- **Measurement.** Each timed frame's `_Process` delta goes into `Rts.Sim.ViewApi.FrameTimeStats`
+  (a 0.01 ms histogram up to 250 ms, so no per-frame allocation; percentiles are bin edges);
+  `fps` is the mean of `Performance.Monitor.TimeFps` over the frames (Godot updates it once a
+  second); ticks and their mean cost come from `SimRunner.TickTimes.Total` and the new
+  `SimRunner.TotalTickMs`. At the end it prints `Bench worst frame <ms> at <s>, after step <step>`
+  and then the one result line, and quits with 0:
+  `bench: seconds S frames N avg A ms p50 B ms p99 C ms worst D ms fps F ticks T avgTick U ms`.
+  Nothing else starts with `bench:`.
+- **`--vsync on|off`** sets `DisplayServer.WindowSetVsyncMode` (skipped headless). Without it the
+  project default (vsync on) holds.
+- **Figures** (dev PC: i7-13700F, RTX 4070, Debug build, window 1920 x 1061 because the taskbar
+  clamps a 1920 x 1080 window, default 128 map with 12 forests / 8 mines, HUD and sound on, 60 s):
+
+  | Run | avg | p50 | p99 | worst | fps | avg tick |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | 100 / player, vsync off | 0.72 ms | 0.70 ms | 1.31 ms | 10.6 ms | 1,372 | 0.24 ms |
+  | 100 / player, vsync on, 60 Hz display | 16.67 ms | 16.67 ms | 16.67 ms | 16.7 ms | 59.5 | 0.24 ms |
+  | 100 / player, vsync on, 120 Hz display | 8.34 ms | 8.34 ms | 8.34 ms | 9.1 ms | 118.5 | 0.24 ms |
+  | 1,000 / player, zoom 60, vsync off | 2.26 ms | 2.09 ms | 3.34 ms | 14.6 ms | 437 | 3.03 ms |
+
+  The frame budget at 60 FPS is 16.7 ms; the 100-unit case uses under 5% of it. An earlier
+  1,000-unit run measured avg 3.85 ms / p99 6.26 ms while other work shared the PC.
+- **Screenshot set** (windowed, kept out of the repo): the overview (`--zoom 60 --screenshot <png>
+  --screenshot-after 3`), the overlay (`--debug-overlay --screenshot <png> --screenshot-after 3`), and
+  `res://tests/MarchShot.tscn -- --out-dir <dir>`, which box-selects the army, orders it east
+  at 4x, and once 10 own units stand on ramp cells switches to 1x, puts the camera on them at zoom 30
+  and saves `ramp-crossing.png` plus `minimap-corner.png` (the bottom-left 240 px of the same frame).
+- **Tests:** `Rts.Sim.Tests/ViewApi/BenchScriptTests` (step order, loop, end of run, one step per
+  call, bad durations, 0 bytes) and `FrameTimeStatsTests` (mean, percentiles, spikes past the
+  histogram, 0 bytes); `res://tests/BenchTest.tscn` ("BENCH TEST PASS"): `--bench` / `--vsync`
+  parsing; the game binary started headless as a child process with `--bench 2 --mute` (exit 0,
+  exactly one line in the documented shape, under 7 s, no ERROR) and with `--bench 0 | -3 | abc`
+  (a WARNING, no line, no ERROR); an in-process `--bench 3` (selection 0 -> the whole army,
+  commands enqueued, four minimap jumps to four different camera points); and, windowed only, a
+  10 s bench at 100 units per player with vsync off that must average under 16.7 ms with p99 under
+  33 ms (headless prints "BENCH TEST SKIP" for that row). `UnitViewsTest` adds the facing-blend rows.
+
 ## AI architecture
 
 The AI lives in `Rts.Sim.Ai`, inside the sim assembly, because it must be deterministic (it uses
@@ -2022,6 +2082,9 @@ AiPlayer
   exit code 0 (1 if the file can't be written). Edge panning is off during it so the mouse can't
   move the shot. Headless runs print "Screenshot unavailable in headless mode" and quit 0 without
   an ERROR line. `--seed <n>` and `--speed <x>` pick the map and game speed.
+- **Benchmark** (M2-7): `& $env:GODOT --path game -- --bench 60 [--vsync off] [--units n] [--zoom m] [--mute] [--no-hud]`
+  plays a scripted 10 s loop of selections, orders, minimap jumps and zooms for that many seconds
+  and prints one `bench: ...` line of frame-time figures, then quits 0. Details in "Implementation (M2-7)".
 - **Debug overlay** (M2-5; F12, input action `debug_overlay`; launch flag `--debug-overlay` starts it
   on, so `--screenshot` can capture it): the nav grid on the ground, the flow-field arrows of the
   selection's goal around the camera, a tick-time graph of the last 120 ticks with the 4 ms budget

@@ -119,7 +119,7 @@ public partial class SelectionController : Node
                 // While targeting, a left click is the order's point and never selects; off the map it does nothing.
                 if (Targeting)
                 {
-                    if (IssueAt(CommandKind.AttackMove, mb.Position)) Targeting = false;
+                    AttackMoveClick(mb.Position);
                     return;
                 }
                 _pressing = true;
@@ -136,7 +136,7 @@ public partial class SelectionController : Node
             else if (mb.IsActionPressed("command"))
             {
                 if (Targeting) CancelTargeting(); // right click cancels targeting and orders nothing
-                else IssueAt(CommandKind.Move, mb.Position);
+                else OrderAt(CommandKind.Move, mb.Position, Input.IsActionPressed("order_queue"));
             }
         }
         else if (e is InputEventMouseMotion motion && _pressing)
@@ -156,7 +156,7 @@ public partial class SelectionController : Node
     {
         bool queued = Input.IsActionPressed("order_queue");
         if (e.IsActionPressed("order_cancel")) CancelTargeting();
-        else if (e.IsActionPressed("order_attack_move")) Targeting = Selection.Count > 0;
+        else if (e.IsActionPressed("order_attack_move")) BeginAttackMove();
         else if (e.IsActionPressed("order_stop") || e.IsActionPressed("order_hold"))
         {
             Targeting = false;
@@ -172,6 +172,18 @@ public partial class SelectionController : Node
                 return;
             }
         }
+    }
+
+    /// <summary>What A does: arms attack-move targeting, only when something is selected.</summary>
+    public void BeginAttackMove() => Targeting = Selection.Count > 0;
+
+    /// <summary>What a left click at <paramref name="screen"/> does while targeting: attack-moves the selection to the ground there (queued while <c>order_queue</c> is held) and disarms; false (still armed) when not targeting or off the map.</summary>
+    public bool AttackMoveClick(Vector2 screen)
+    {
+        if (!Targeting) return false;
+        if (!OrderAt(CommandKind.AttackMove, screen, Input.IsActionPressed("order_queue"))) return false;
+        Targeting = false;
+        return true;
     }
 
     /// <summary>Ends A-targeting without ordering anything (Esc, or a right-click on the 3D view or the minimap).</summary>
@@ -211,34 +223,44 @@ public partial class SelectionController : Node
     private void FinishSelect(Vector2 release)
     {
         bool add = Input.IsActionPressed("select_add");
+        if (_boxing || ScreenPicker.IsDrag(ToNumerics(_press), ToNumerics(release)))
+        {
+            _boxing = false;
+            BoxSelect(_press, release, add);
+            return;
+        }
         SnapshotSelection();
         Project();
         UnitStore u = _runner.Simulation!.World.Units;
-        if (_boxing || ScreenPicker.IsDrag(ToNumerics(_press), ToNumerics(release)))
+        int slot = ScreenPicker.PickClick(_screen, _radiusPx, _candidate, ToNumerics(release));
+        if (slot < 0)
         {
-            int n = ScreenPicker.PickBox(_screen, _candidate, ToNumerics(_press), ToNumerics(release), _picked);
+            // Shift + click on empty ground keeps the selection, as in most RTS games.
             if (!add) Selection.Clear();
-            for (int i = 0; i < n; i++) Selection.Add(new EntityHandle(_picked[i], u.Generation[_picked[i]]));
         }
+        else if (_doubleClick || Input.IsActionPressed("select_type")) SelectType(u.TypeId[slot], add);
+        else if (add) Selection.Toggle(new EntityHandle(slot, u.Generation[slot]));
         else
         {
-            int slot = ScreenPicker.PickClick(_screen, _radiusPx, _candidate, ToNumerics(release));
-            if (slot < 0)
-            {
-                // Shift + click on empty ground keeps the selection, as in most RTS games.
-                if (!add) Selection.Clear();
-            }
-            else if (_doubleClick || Input.IsActionPressed("select_type")) SelectType(u.TypeId[slot], add);
-            else if (add) Selection.Toggle(new EntityHandle(slot, u.Generation[slot]));
-            else
-            {
-                Selection.Clear();
-                Selection.Add(new EntityHandle(slot, u.Generation[slot]));
-            }
+            Selection.Clear();
+            Selection.Add(new EntityHandle(slot, u.Generation[slot]));
         }
-        _boxing = false;
         SelectionChanged();
         PlaySelectIfChanged();
+    }
+
+    /// <summary>What a box drag from <paramref name="from"/> to <paramref name="to"/> (screen pixels) does: selects the own units whose centres are inside, added to the selection when <paramref name="add"/> (Shift); returns the selection size.</summary>
+    public int BoxSelect(Vector2 from, Vector2 to, bool add)
+    {
+        SnapshotSelection();
+        Project();
+        UnitStore u = _runner.Simulation!.World.Units;
+        int n = ScreenPicker.PickBox(_screen, _candidate, ToNumerics(from), ToNumerics(to), _picked);
+        if (!add) Selection.Clear();
+        for (int i = 0; i < n; i++) Selection.Add(new EntityHandle(_picked[i], u.Generation[_picked[i]]));
+        SelectionChanged();
+        PlaySelectIfChanged();
+        return Selection.Count;
     }
 
     // Remembers the live selection before a selection action; leaves targeting alone (QaH1: a recall keeps A armed).
@@ -313,14 +335,14 @@ public partial class SelectionController : Node
         }
     }
 
-    // Picks the ground under a screen point and orders the selection there (queued while order_queue is held); false if the ray missed the map.
-    private bool IssueAt(CommandKind kind, Vector2 screen)
+    /// <summary>What a right click (Move) or targeting click (AttackMove) at <paramref name="screen"/> orders: picks the ground there and calls <see cref="Order"/>; false if the ray missed the map.</summary>
+    public bool OrderAt(CommandKind kind, Vector2 screen, bool queued)
     {
         Simulation sim = _runner.Simulation!;
         Vector3 origin = _camera.ProjectRayOrigin(screen), dir = _camera.ProjectRayNormal(screen);
         if (!GroundPicker.TryPick(sim.World.Heightmap, new(origin.X, origin.Y, origin.Z), new(dir.X, dir.Y, dir.Z), out System.Numerics.Vector3 hit))
             return false;
-        Order(kind, new Vector2(hit.X, hit.Z), Input.IsActionPressed("order_queue"));
+        Order(kind, new Vector2(hit.X, hit.Z), queued);
         return true;
     }
 
