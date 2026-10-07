@@ -4,7 +4,7 @@ The dashboard. The Producer rewrites it at the end of every session. **Owner: re
 you" first.** "For your review" (further down) is non-blocking: what the studio built or decided
 on its own, explained in terms of what you'd see in the game.
 
-_Last updated: 2026-10-06 (session 2026-10-06-1503, ACCEPT both tracks; data track added)._
+_Last updated: 2026-10-06 (session 2026-10-06-1744, ACCEPT all three tracks: sim M3-2b, view M2-6, data D1)._
 
 ## Waiting on you
 
@@ -18,21 +18,21 @@ _Last updated: 2026-10-06 (session 2026-10-06-1503, ACCEPT both tracks; data tra
 
 | Field | Value |
 | --- | --- |
-| Sim: milestone | M3 — Economy & buildings (started 2026-10-06-1255); 2 / 8 criteria |
-| Sim: next task | **M3-2b: BUG-0073 + BUG-0077** (closing vs opening grid changes: `BlockVersion`, stale-but-usable fields refreshed lazily, progress mark reset on a closing change) · feature · QA full · small; then M3-3 placement + construction |
+| Sim: milestone | M3 — Economy & buildings (started 2026-10-06-1255); 2 / 8 criteria; M3-2b closed BUG-0073 / 0074 / 0077 |
+| Sim: next task | **M3-3 building placement + construction** (validity incl. "never seals ground" (BUG-0078), `Command.Build`, builders `t x 3 / (n + 2)`, costs / refunds, destruction, repair) · feature · QA full; the sim hardening session follows it (4 / 4) |
 | Sim: gate | **GO** |
-| View: milestone | M2 — Presentation (started 2026-10-05); 8 / 10 criteria |
-| View: next task | **M2-6 placeholder audio** (generated select / command tones, `--mute`) · feature · QA light; then M2-7 60 FPS check + `PrevFacing`, M2 hardening (incl. BUG-0085), M2 sign-off |
+| View: milestone | M2 — Presentation (started 2026-10-05); 9 / 10 criteria (left: M2-7 playable check) |
+| View: next task | **M2-7 playable check** (100 units at 60 FPS on the default map with HUD + sound, `PrevFacing` blending, screenshot set) · feature · QA standard; then the M2 hardening session (BUG-0069 / 0070 / 0083 / 0084 / 0085 / 0086 / 0087 / 0088) → M2 sign-off |
 | View: gate | **GO** |
-| Data: milestone | M3 — "factions fully defined in data" (track added by the owner 2026-10-06; first session next) |
-| Data: next task | **D1: complete `buildings.json`** for both factions (nine missing slots each, docs/02 numbers, faction-page names, descriptions; content tests; golden `data-hash` regen with checkpoints byte-identical) · feature · QA light |
+| Data: milestone | M3 — "factions fully defined in data": units ✓ (M1-2), buildings ✓ (D1, review below), techs wait for the M3-5 schema |
+| Data: next task | **Owner review tweaks** from the inbox if any, else **D2: building stats tables on the faction pages + unit description polish** · feature · QA light |
 | Data: gate | **GO** |
 | Tools on this PC | Godot 4.7.2 .NET, .NET SDK 8.0.425, Git 2.53 + LFS 3.7; `GODOT` user variable set |
-| Build | both branches 0 errors, 1 warning (CS8602 `game/tests/DebugOverlayTest.cs:173`, BUG-0084); conductor re-checks `main` after the merges |
-| Tests | Producer reruns: sim branch 2266 / 15 skipped / 0 failed non-Perf (7 m 56 s under load; QA Perf alone 90 / 3 / 0 first run); view branch 2181 / 13 / 0; smoke PASS (view, `forests 12 trees 287 mines 8`); `PropsViewTest` PASS; CLI `--workers 10` twin identical, `player 0 gold 250 wood 300`; golden diff = `data-hash` + 15 `k` lines + checksum only |
-| Open bugs | 24 (S1: 0, S2: 0, S3: 15, S4: 9) — none block; 5 new (sim 0077 / 0078 S3, 0079 S4; view 0085 S3, 0086 S4); BUG-0075 fixed |
-| Sessions today | 4 / 8 on 2026-10-06; feature sessions since last hardening: sim 2 / 4, view 2 / 4, data 0 / 4 |
-| Last session | 2026-10-06-1503 · sim M3-2 gather loop (0 fix rounds) · view M2-3b props (0 fix rounds) · both ACCEPT |
+| Build | all three branches 0 errors, 1 warning (CS8602 `game/tests/DebugOverlayTest.cs:173`, BUG-0084); a scratch merge of all three built, golden regenerated (`data-hash` + checksum vs the sim copy), `ReplayGoldenTests` green |
+| Tests | Producer reruns: sim branch 2383 / 12 skipped / 0 failed non-Perf; data branch 2345 / 15 / 0; felling Perf row alone 0.402 / 0.406 ms (< 0.5); view smoke PASS, `SfxTest` + `QaM26Test` PASS, `OrdersTest` 8 / 8 alone (2 flakes under load: BUG-0088); CLI `--workers 10` twins identical, `player 0 gold 250 wood 300`; scratch merge of all three: 2416 / 12 / 0 non-Perf, smoke PASS |
+| Open bugs | 26 (S1: 0, S2: 0, S3: 15, S4: 11) — none block; fixed this session: 0073, 0074, 0077 (S3), 0082 (S2, in-session); new: 0080 / 0081 / 0087 (S3), 0088 / 0090 (S4) |
+| Sessions today | 5 / 8 on 2026-10-06; feature sessions since last hardening: sim 3 / 4, view 3 / 4, data 1 / 4 |
+| Last session | 2026-10-06-1744 · sim M3-2b (1 fix round) · view M2-6 (0) · data D1 (0) · all ACCEPT |
 
 ## Milestone progress
 
@@ -40,8 +40,8 @@ _Last updated: 2026-10-06 (session 2026-10-06-1503, ACCEPT both tracks; data tra
 | --- | --- | --- |
 | M0 | 7 / 7 required | **Done** 2026-10-03 (optional MCP item open) |
 | M1 (sim track) | 8 / 8 | **Done** 2026-10-06 (Producer sign-off after the M1-9 hardening; retro in docs/05) |
-| M2 (view track) | 8 / 10 (SimRunner interpolation, camera, terrain mesh + trees / mines as MultiMesh, placeholder unit views, selection, orders, minimap, debug overlay); left: audio (M2-6), 60 FPS playable check (M2-7) | In progress; M2-6 next, then M2-7, M2 hardening + sign-off |
-| M3 (sim + data tracks) | 2 / 8 (resource entities; worker gather / return loop with automatic drop-off) | In progress; sim M3-2b (BUG-0073 / 0077) next, then M3-3; data fills `buildings.json` |
+| M2 (view track) | 9 / 10 (SimRunner interpolation, camera, terrain mesh + trees / mines as MultiMesh, placeholder unit views, selection, orders, minimap, debug overlay, placeholder audio); left: 60 FPS playable check (M2-7) | In progress; M2-7 next, then M2 hardening + sign-off |
+| M3 (sim + data tracks) | 2 / 8 (resource entities; worker gather / return loop with automatic drop-off); M3-2b (grid-change handling) done; data: units + all buildings in data, techs pending | In progress; sim M3-3 next; data D2 / owner tweaks |
 | M4-M9 | — | Planned |
 
 ## For your review
@@ -49,6 +49,137 @@ _Last updated: 2026-10-06 (session 2026-10-06-1503, ACCEPT both tracks; data tra
 Non-blocking. Each entry says what was built or decided, what you'd notice in the game, and how
 to change it. To change anything, write it in `studio/inbox.md`, for example "use formations
 instead of clusters" or "make giving up take 2 seconds".
+
+### Every building of both factions is in the data now: names, numbers and descriptions for you to check (data track, D1, 2026-10-06)
+
+- **What was built:** the first data-track task. Each faction's building file grew from one entry
+  (the Town Hall) to all ten. Names and ids come from the faction pages, every number from the design
+  doc's building table (identical for both factions, as the doc says), and each building got a
+  one-sentence description in its faction's voice. The Town Hall entries did not change. Tests pin
+  the roster to the doc (change a number in the doc without the data, or the other way round, and a
+  test fails), and the replay fingerprint was regenerated once with every movement checkpoint
+  byte-identical (proof that no unit stat moved).
+- **What you'll see:** nothing yet: nobody can place a building until M3-3 (sim) and the build menu
+  (view). The data is loaded at every start, so a typo would already fail the boot gate.
+- **The change table** (every row is a new entry; "old" was "absent"; one row covers both factions
+  because the numbers are the same by design):
+
+  | Slot | Malazan (id) | Whirlwind (id) | HP / armor | Gold / wood | Time | Size | Does |
+  | --- | --- | --- | --- | --- | --- | --- | --- |
+  | House | Billet (`malazan_billet`) | Tent (`whirlwind_tent`) | 500 / 3 | 0 / 50 | 20 s | 2 x 2 | +8 population |
+  | Camp | Quartermaster's Depot (`malazan_depot`) | Supply Cache (`whirlwind_supply_cache`) | 600 / 3 | 0 / 75 | 25 s | 2 x 2 | drop-off for gold and wood |
+  | Infantry Hall | Legion Barracks (`malazan_barracks`) | Raider Camp (`whirlwind_raider_camp`) | 1200 / 4 | 0 / 150 | 40 s | 3 x 3 | trains the line unit (and the Zealot) |
+  | Ranged Hall | Crossbow Range (`malazan_crossbow_range`) | Archer Camp (`whirlwind_archer_camp`) | 1200 / 4 | 0 / 150 | 40 s | 3 x 3 | trains the ranged unit |
+  | Shock Hall | Wickan Corral (`malazan_wickan_corral`) | Horse Lines (`whirlwind_horse_lines`) | 1200 / 4 | 75 / 150 | 45 s | 3 x 3 | trains cavalry; needs the Infantry Hall |
+  | Forge | Armory (`malazan_armory`) | Smithy (`whirlwind_smithy`) | 1000 / 4 | 100 / 100 | 40 s | 3 x 3 | upgrades (and the faction upgrade) |
+  | Caster Hall | Cadre Tower (`malazan_cadre_tower`) | Shrine of the Whirlwind (`whirlwind_shrine`) | 1200 / 4 | 150 / 150 | 50 s | 3 x 3 | trains the caster; Age II |
+  | Siege Works | Engineers' Yard (`malazan_engineers_yard`) | Ram Yard (`whirlwind_ram_yard`) | 1400 / 4 | 150 / 200 | 55 s | 3 x 3 | trains siege (and the Sapper); Age II |
+  | Watch Tower | Watchtower (`malazan_watchtower`) | Lookout Tower (`whirlwind_lookout_tower`) | 800 / 5 | 50 / 125 | 35 s | 2 x 2 | Age II; its attack, sight and detection are not in the data yet |
+
+  Why these numbers: they are the design doc's table (docs/02 "Buildings"), copied, not tuned.
+- **The new player-facing text, quoted** (Malazan, then Whirlwind):
+  - Billet: "Bunks, a roof and a cookpot for another squad, raising your population cap by 8."
+  - Quartermaster's Depot: "A forward store where Laborers drop off gold and wood, so they spend less time walking and more time working."
+  - Legion Barracks: "Trains Heavy Infantry, the shield wall every Malazan legion is built around."
+  - Crossbow Range: "Trains the Crossbowman, who does the killing from behind the shield wall."
+  - Wickan Corral: "Trains the Wickan Lancer, fast horsemen for flanks and raids; needs a Legion Barracks."
+  - Armory: "Researches weapon and armor upgrades for the legions, and Moranth Supply once you reach Age II."
+  - Cadre Tower: "Trains the Cadre Mage, the sorcerer attached to every Malazan army; needs Age II."
+  - Engineers' Yard: "Trains the Catapult and the Sapper, who blow up the enemy and occasionally themselves; needs Age II."
+  - Watchtower: "A manned tower that watches the approaches, spots hidden enemies and shoots at intruders; needs Age II."
+  - Tent: "Shelter from the sun for more of the faithful, raising your population cap by 8."
+  - Supply Cache: "A hidden store in the sand where Camp Followers drop off gold and wood far from the Holy Camp."
+  - Raider Camp: "Trains the Raider and, from Age II, the Zealot: the endless blades of the Apocalypse."
+  - Archer Camp: "Trains the Desert Archer, quick on foot and quicker with the bow."
+  - Horse Lines: "Trains the Horse Raider to strike enemy worker lines and vanish into the desert; needs a Raider Camp."
+  - Smithy: "Researches weapon and armor upgrades for the faithful, and Dryjhna's Prophecy once you reach Age II."
+  - Shrine of the Whirlwind: "Trains the Priest of the Whirlwind, who carries the goddess's storm into battle; needs Age II."
+  - Ram Yard: "Builds the Battering Ram, which breaks enemy buildings under cover of the swarm; needs Age II."
+  - Lookout Tower: "A tall lookout that watches the sands, spots hidden enemies and shoots at intruders; needs Age II."
+- **Producer decisions, revisit any time:**
+  - *Requirements ("needs Age II", "needs a Legion Barracks") live only in the text for now.* The data
+    format has no "requires" field yet; it comes with the Age II task (M3-5 / M3-6), and the text will
+    be checked against it then (BUG-0090, S4). Same for the towers' attack and detection (M4).
+  - *The faction upgrade is described as researched at the Forge* (the design doc lists it there);
+    where research happens is settled when techs get their data format.
+  - *One test rule was relaxed:* a QA test that pinned "an empty Malazan building list leaves exactly
+    one building" could not survive ten Whirlwind buildings; it now pins "exactly Whirlwind's ten".
+- **Rough edges:** BUG-0090 (S4) above; also a stale code comment saying only the Town Hall ships
+  (next sim change in that folder fixes it).
+- **To change it:** write the tweak in the inbox ("call the Billet a Barracks Annex", "Tent costs 40
+  wood", "shorter Smithy text") and the data track does it next session (it regenerates the replay
+  fingerprint). Or edit `game/data/factions/<faction>/buildings.json` yourself and run
+  `dotnet test sim/Rts.Sim.Tests --filter FullyQualifiedName~Content` to see what the tests pin.
+
+### The game makes a sound when you select and when you give an order (view track, M2-6, 2026-10-06)
+
+- **What was built:** the audio plumbing, with two placeholder sounds generated by the game itself at
+  start-up (no sound files, nothing downloaded): a short high **blip** when a click, a box, a
+  double-click or a group recall changes your selection to something non-empty, and a rising
+  **two-note confirm** when an order goes out (right-click, Shift + right-click, S, H, A + click, a
+  minimap right-click). A box over 100 units is one blip; 50 clicks in one frame are one confirm; the
+  same sound never repeats within 50 ms, so click spam doesn't buzz. `-- --mute` silences everything
+  (for tests and for you). Later sounds (build complete, attack, alert) are one line each in the
+  same table. This completes the M2 criterion "Placeholder audio for select and command" (9 of 10).
+- **Try it, and please listen:** `& $env:GODOT --path game`. Box-select the blue army (blip),
+  right-click across the map (two-note), press Tab (nothing), press 1 twice (one blip, the second
+  press jumps the camera and is silent). Nobody in the studio could listen in an unattended session:
+  QA checked the waveforms (right pitch, no clicks, silent edges) but **your ears are the last check**.
+  If the blip is too sharp or the volume wrong, say so in the inbox; the volume is one constant
+  (`Sfx.SfxVolumeDb`, -6 dB) until the M6 settings screen.
+- **Producer decisions, revisit any time:**
+  - *Generated tones instead of sound files*, so no download was needed (agents can't download); real
+    SFX come with M6.
+  - *Pressing a group digit when that group is already selected plays nothing* (that press is the
+    camera double-tap). Alternative: a blip on every recall.
+  - *Sounds play in headless test runs too* (Godot's dummy audio driver takes them silently), so the
+    boot gate didn't need a special case.
+- **Rough edges (M2 hardening session, after M2-7):** BUG-0087 (S3): a sound still playing when the
+  game quits leaves a harmless "instances leaked" warning in the log about 2 runs in 5 (the players
+  are never stopped at quit). BUG-0088 (S4, found by me, not caused by this task): one existing test
+  scene's double-tap row can fail when the PC is heavily loaded, because it waits on game time while
+  the double-tap window uses the wall clock.
+- **To change it:** pitches and lengths are the note table at the top of `game/scripts/Sfx.cs`;
+  volume `Sfx.SfxVolumeDb`; the 50 ms gap `Sfx.MinGapMs`; the rest by inbox note.
+
+### A tree falling no longer stalls the army, and a building dropped in a column's path no longer makes it give up (sim track, M3-2b, 2026-10-06)
+
+- **What was built:** the pathfinding now tells two kinds of map change apart. When ground **opens**
+  (a tree is cut down, a building removed), every army's route map stays valid: nothing it points at
+  has become a wall, it just might miss a new shortcut. Walkers keep walking it while the game
+  refreshes those maps in the background at the usual two per tick (missing maps first, then the
+  oldest stale ones). Before, every tree fall threw away every route map at once, so with workers
+  chopping steadily most groups stood still until the chopping stopped (BUG-0073). When ground
+  **closes** (a building is placed, a mine spawned), every map is thrown away as before, and every
+  walker's "am I making progress?" memory is reset, so the longer way round the new wall counts as a
+  fresh start instead of "stuck" (BUG-0077: half of a 16-unit column used to give up behind a dropped
+  building; now 16 of 16 arrive). A unit standing on a freshly opened square (a tree cut from under
+  it) waits a tick or two for its map to refresh instead of giving up. Also: the rules file now
+  refuses a tree type bigger than one square (BUG-0074), and the route-map builder got twice as fast
+  (0.7 → 0.37 ms per map) after QA's perf check failed the first round.
+- **What you'll see:** nothing new on screen; it's a change in how the army behaves while the economy
+  works. Once workers chop in the window (M3 HUD) and you can place buildings (M3-3), armies will
+  march through a forest being cut without pausing, and a building dropped in front of a column makes
+  it walk round, not stop. The numbers: 32 groups marching while a tree falls every single tick: longest
+  pause 0 ticks (was 90+ of 100 ticks for 30 of 32 groups), average tick 0.40 ms (was 1.76).
+- **Producer decisions, revisit any time:**
+  - *Opening changes refresh lazily; closing changes still invalidate everything at once.* Simplest
+    rule that is always safe. Its limit: a building placed on every single tick would starve all but
+    two groups while it lasts (BUG-0080, S3; nothing in the game places that fast; revisit with M3-3).
+  - *Kept my 0.5 ms target rather than relaxing it* when the first round came in at 0.81 ms; the fix
+    made the map builder itself faster. Cost: the builder's inner loop is now written out eight times
+    (one block per direction, ~150 lines, with the reason in a comment) because the tests run Debug
+    builds where the compiler inlines nothing. Readability against 40 % of that budget; I accepted it.
+    Alternative: fold it back and accept ~0.56 ms.
+  - *Trees bigger than one square are refused* rather than teaching the forest generator about them
+    (no such tree is planned).
+  - *Save/load note for M6 (BUG-0081, S3):* a stale-but-valid route map now depends on the map as it
+    was when built, so "save the keys, rebuild at load" would change the game by a few metres per unit
+    on load. The docs now say so; the decision (save the stale maps, or refresh all at save) waits for M6.
+  - *Size: ~540 code lines (budget 800), ~600 lines of dev tests (budget 600), ~1,400 of QA tests.*
+- **Rough edges:** BUG-0080 and BUG-0081 above (S3, sim hardening in two sessions); the felling perf
+  test has ~20 % headroom and fails when the whole suite runs at once (passes every time alone).
+- **To change it:** the build cap is `MovementConstants.MaxFieldBuildsPerTick` (2); the rest by inbox note.
 
 ### Workers gather gold and wood and carry it home by themselves (sim track, M3-2, 2026-10-06)
 
@@ -102,6 +233,8 @@ instead of clusters" or "make giving up take 2 seconds".
     is stale until then.
   - BUG-0079 (S4): a missing `cost` in a building file reports three errors instead of one;
     `--workers 0` without resources runs though the docs say it needs them.
+  - **Update 1744: BUG-0073 and BUG-0077 are fixed (see the M3-2b entry at the top); the other nine
+    buildings per faction landed (the D1 entry).**
 - **To change it:** rates, carry and the 20 m search are in `game/data/common/rules.json`
   (`gatherRate`, `workerCarry`, `nodeSearchRadius`); the Town Hall numbers in
   `game/data/factions/<faction>/buildings.json`; reach / retry / cargo rules by inbox note.
@@ -155,7 +288,7 @@ instead of clusters" or "make giving up take 2 seconds".
   each), with the change table and quoted text for you under For your review when it lands.
 - **One thing to know:** a data change alters the data fingerprint, so the checked-in golden replay
   gets regenerated with it; the brief requires every movement checkpoint to stay byte-identical
-  (proof that no unit stat moved).
+  (proof that no unit stat moved). **Update 1744: landed; see the D1 entry at the top.**
 
 ### Gold mines and trees exist in the rules: the first piece of the economy (sim track, M3-1, 2026-10-06)
 
@@ -202,7 +335,8 @@ instead of clusters" or "make giving up take 2 seconds".
     reach, and a click on it makes the unit give up. Workers will only ever cut trees they can stand
     next to, so this can't happen in play once that rule is written down; the next sim task does that.
   - BUG-0074: the forest generator assumes trees are 1 x 1; if someone edits the data to make trees
-    2 x 2, forests can wall ground in. Next sim clean-up session.
+    2 x 2, forests can wall ground in. Next sim clean-up session. **Update 1744: BUG-0073, BUG-0074
+    and BUG-0075 are all fixed (M3-2 and M3-2b entries above).**
   - BUG-0076 (S4): small notes (a setup-time number in the docs, fixed; a redundant check that costs
     2 s on a huge 1024 x 1024 map; an empty resources file loads without complaint).
 - **To change it:** `game/data/common/resources.json` (node types, footprints, names);
@@ -854,63 +988,72 @@ track right after S1/S2 bugs).
 7. Available since M3-2 (session 1503) for the M3 HUD: `World.Gold` / `World.Wood` (per-player
    spans), `World.Buildings` spans, `UnitStore.Cargo` / `CargoKind` / `GatherNode` and the states
    `Gathering` / `Returning` for worker feedback. Nothing requested yet.
-8. Data track requests (none yet). When content needs a field the schema lacks, it is listed here.
+8. Data track requests (D1, session 1744; carried in BUG-0090): (a) a building `requires` field
+   (a building id and / or Age II: Shock Hall ← Infantry Hall; Caster Hall, Siege Works, Watch Tower ←
+   Age II) with validation, planned with M3-5 / M3-6; (b) Watch Tower `attack` / `sight` / `detector`
+   fields (docs/02: 10 pierce / 2 s, range 18, sight 24, detector 16 m), planned with M4 combat / fog;
+   (c) where the faction upgrade is researched (Forge per docs/02) when `techs.json` gets its schema
+   (M3-5). Until then the descriptions say "needs Age II" in text only.
+9. Sim-owned nit from D1: `sim/Rts.Sim/Data/BuildingSlot.cs:4` still says "M3-2 ships the Town Hall
+   only"; fix in the next sim change in that folder (M3-3).
 
 ## Feature queue: sim track (feature sessions, in order)
 
-1. **Next: M3-2b** BUG-0073 + BUG-0077 (QA full, small): `NavGrid.BlockVersion` on closing changes
-   only; a field whose `BlockVersion` matches stays usable while stale and is refreshed lazily under
-   the build cap; walkers' progress mark resets on a closing change so a building dropped on their
-   path doesn't make them give up. Then BUG-0074 if cheap. Details in `studio/handoff.md`.
-2. M3-3 building placement (ghost validity rule in the sim incl. "never seals ground", which closes
-   BUG-0078; construction with multiple builders `t x 3 / (n + 2)`; costs / refunds; destruction;
-   repair); M3-4 production queues (5 slots), rally points, population and cap; M3-5 Age II research
-   and Forge upgrades (ships the `techs.json` schema); M3-6 `trainedAt` / `requires` resolution (the
-   content itself is the data track's). **Requests for the sim track** above outrank M3 work.
+1. **Next: M3-3 building placement + construction** (QA full): validity in the sim (open ground, no
+   unit inside or push-out, **never seals ground**: closes BUG-0078), `Command.Build`, construction
+   with multiple builders `t x 3 / (n + 2)`, costs / refunds, destruction (an opening change), repair;
+   fold in the `BuildingSlot.cs` comment (BUG-0090) and BUG-0079's "missing cost is three errors" if
+   cheap. Details in `studio/handoff.md`. The sim hardening session follows it (4 / 4).
+2. M3-4 production queues (5 slots), rally points, population and cap; M3-5 Age II research and Forge
+   upgrades (ships the `techs.json` schema and the building `requires` field the data track asked
+   for); M3-6 `trainedAt` / `requires` resolution (the content itself is the data track's).
+   **Requests for the sim track** above outrank M3 work.
 3. M6 (far ahead): agents can't download. The Producer lists under "Waiting on you", when M5
    starts, the exact links for the Godot 4.7.2 .NET export templates and the Kenney/KayKit/Quaternius
    packs (docs/04) with the `asset-sources/` folder for each (owner note 2026-10-05).
 
 ## Feature queue: view track (feature sessions, in order)
 
-1. **Next: M2-6** placeholder audio for select and command (generated tones; no downloads by
-   agents; `--mute` for tests). QA light.
-2. M2-7: playable check, 100 placeholder units at 60 FPS on the default 12 / 8 map, `PrevFacing`
-   blending → M2 end-of-milestone hardening (BUG-0069, BUG-0070, BUG-0083, BUG-0084, BUG-0085 start
-   block clear of trees, BUG-0086, export hygiene notes) → M2 sign-off.
+1. **Next: M2-7 playable check** (QA standard): 100 placeholder units at 60 FPS windowed on the
+   default 12 / 8 map with HUD and sound, `PrevFacing` blending, a screenshot set; the owner's own
+   playtest is listed under For your review when it lands. Details in `studio/handoff.md`.
+2. M2 end-of-milestone hardening (BUG-0069, BUG-0070, BUG-0083, BUG-0084, BUG-0085 start block clear
+   of trees, BUG-0086, BUG-0087 stop the Sfx players at quit, BUG-0088 OrdersTest on the wall clock,
+   export hygiene notes) → M2 sign-off (every M2 coverage row ✅ Unit / fuzz / Determinism).
 3. M3 view side after that: HUD resource bar (`World.Gold` / `Wood`), selection panel, command card
    (uses Tab subgroups), build ghosts (after M3-3), worker / gather feedback.
 
 ## Feature queue: data track (feature sessions, in order; owner reviews every landed task)
 
-1. **Next: D1** complete `buildings.json` for both factions: the nine missing slots per faction
-   (House, Camp, Infantry / Ranged / Shock / Caster Hall, Siege Works, Forge, Watch Tower) with
-   docs/02 "Buildings" numbers and the faction pages' names / ids, one-line descriptions, content
-   tests in `sim/Rts.Sim.Tests/Content/`, golden `data-hash` regenerated with checkpoints
-   byte-identical. QA light. Details in `studio/handoff.md`.
-2. D2: per-building stats tables on the faction pages (docs/factions); unit description polish;
-   owner review tweaks from the inbox (they come first whenever present).
+1. **Next: owner review tweaks** from the inbox (the D1 table under For your review) whenever present;
+   else **D2**: per-building stats tables on the faction pages (`docs/factions/*.md` "Buildings") and
+   unit `description` polish in `units.json` (golden `data-hash` regen, checkpoints byte-identical).
+   QA light. Details in `studio/handoff.md`.
+2. Then: nothing until a schema lands (see 3).
 3. Waiting on schemas: `techs.json` (M3-5), `abilities.json` / `statuses.json` (M4), `ai.json`
    build orders (M5); M7-M9 faction data when those milestones open; balance passes (QA standard)
    after the M4 sandbox.
 
-## Debt backlog: sim track (hardening sessions only; next one after 2 more feature sessions)
+## Debt backlog: sim track (hardening sessions only; next one after 1 more feature session)
 
-- **BUG-0073 (S3, next feature task M3-2b)** every tree fall invalidates every cached field; with the
-  2-per-tick build cap, continuous felling leaves most groups standing. Measured at the shipped
-  cadence (M3-2 QA): 38 grid changes per 600 s, longest field wait 26-29 ticks, so a comfort fix.
-  Open-only changes should keep fields usable and rebuild lazily; closing changes (buildings) still
-  invalidate at once.
-- **BUG-0077 (S3, with M3-2b)** a building placed in front of a moving column makes 8 of 16 give up:
-  `BestRemaining` survives a closing grid change. S2 once players can build (M3-3).
+- **BUG-0080 (S3)** a closing change on every tick starves all but the 2 oldest goal groups while it
+  lasts (docs/03's ceil(groups / 2) bound holds for spaced closings only; sentence fixed by the
+  Producer). Reachable from M3-3 (several placers). Options: keep a closed field usable when none of
+  its directed cells was blocked (per-change bounding box), region versions, or document.
+- **BUG-0081 (S3, M6 design)** usable-but-stale fields can't be rebuilt from their keys at load; the
+  docs/03 save/load sentence now carries the open point. Decide at M6: save stale slots' contents,
+  save the grid change history, or refresh every field at the save point in both runs.
 - **BUG-0078 (S3, with M3-3)** exposure counts a passable neighbour nobody can reach (a pocket sealed
   by buildings); a worker retries for ever. M3-3's placement rule must refuse sealing placements (or
   exposure means "reachable"); the docs/03 "nav grid seals every pocket" sentence is stale.
 - **BUG-0079 (S4)** M3-2 nits: a missing building `cost` reports 3 errors (footprint reports 1);
   tests 1,286 lines vs the 1,000 budget; `--workers 0` without resources runs though the docs say it
   needs them.
-- **BUG-0074 (S3)** forest placer assumes 1 x 1 trees; validate (tree type must be 1 x 1) or
-  generalize `TryForest` to footprints; un-skip the QA row.
+- **BUG-0090 (S4, sim part)** `BuildingSlot.cs:4` "M3-2 ships the Town Hall only" is stale (M3-3).
+- Note (M3-2b): `FlowField.Build` has the 8 directions written out (~150 lines) for Debug speed; fold
+  back only if tests move to Release. The felling Perf row (`OneTreeFallsEveryTick_AverageTick_Perf`,
+  < 0.5 ms absolute) has ~20 % headroom and fails under full-suite contention: rerun alone before
+  filing; widen the scene or pin p50 if it ever fails alone.
 - **BUG-0076 (S4)** M3-1 nits: full flood fill after the ring test can't fail (keep as a debug
   assertion), empty resources list loads clean (require one type per kind), -0 mine spacing. Item 1
   (docs timing) fixed by the Producer.
@@ -936,9 +1079,10 @@ track right after S1/S2 bugs).
 - BUG-0023 (S3) single field build > tick budget on maps > 256: documented as unsupported.
 - Loader: BUG-0008 (S3) duplicate JSON keys, BUG-0010 (S4) faction slots; fold into M3-6 data.
 - BUG-0002 (S4) `.sln` Release config maps RtsGame to Debug; with `tools/export.ps1` (M6).
-- Perf (Debug, this machine, alone): 500 moving 0.62 ms, with 12 forests + 8 mines 0.82 ms; 500
-  marching + 50 gathering 0.92 ms; 200 workers gathering alone 0.26 ms; full 4,096-slot resource
-  hash 20 µs; 2,500 one-player tight blob 4.33 ms (enforced <= 4.5, ~3% headroom); two-player
+- Perf (Debug, this machine, alone): 500 moving 0.62-0.63 ms, with 12 forests + 8 mines 0.82 ms; 500
+  marching + 50 gathering 0.90-0.92 ms; 200 workers gathering alone 0.26 ms; flow field build
+  128 x 128 0.37 ms (0.7 before M3-2b); 32 groups with a tree felled every tick 0.40 ms (1.76 before);
+  full 4,096-slot resource hash 20 µs; 2,500 one-player tight blob 4.33-4.40 ms (enforced <= 4.5, ~3% headroom); two-player
   contested blob 6.84 ms (guard < 10.5); 2,500 to 4 points 3.08 ms (guard < 3.7); 1,000 walkers
   crossing a 1,500 blob 14.2 ms (report); CLI 2,500 march 4.6 ms. Setup: 128 map with 12 forests +
   8 mines +5 ms; 1024 map at the resource caps +2.2 s. Gather efficiency per worker per minute
@@ -950,8 +1094,16 @@ track right after S1/S2 bugs).
   recorded but not checked; no depletion events (views poll); .NET 8 support ends 2026-11-10, move
   to the next LTS at M6.
 
-## Debt backlog: view track (hardening sessions only; next one is the M2 end-of-milestone session)
+## Debt backlog: view track (hardening sessions only; next one is the M2 end-of-milestone session, after M2-7)
 
+- **BUG-0087 (S3)**: a sound still playing at quit leaves an ObjectDB leak *warning* (AudioStreamWAV +
+  playback) in existing scenes ~2 in 5 runs; `Sfx` never stops its 8 players. Fix: stop them in
+  `_ExitTree` / on the close request; drop the 0.3 s wait in `SfxTest`; fix the docs/03 sentence that
+  calls it a test-only artefact.
+- **BUG-0088 (S4)**: `OrdersTest.tscn`'s double-tap row waits on a `SceneTreeTimer` (process time)
+  while `ControlGroups.Tap` uses the wall clock; under heavy CPU load the timer can fire inside the
+  300 ms window and the row fails ("a single recall moved the camera"). Wait on `Time.GetTicksMsec()`
+  in the test (or inject the clock). Pre-existing since M2-3; seen 2 of 6 runs under load, 8 / 8 alone.
 - **BUG-0085 (S3, Producer triage: view track)**: the default seed-1 match spawns player 0's start
   army inside a forest (17 / 100 spots touch a tree; 9 / 40 blocks over seeds 1-20). Fix:
   `ViewApi.StartLayout.Block` skips cells 8-adjacent to a `NavFlags.Resource` cell; tighten QA's
@@ -986,10 +1138,20 @@ track right after S1/S2 bugs).
   warnings; not errors. Builders: absolute paths for all file I/O.
 - Optional M0 item: Godot MCP server (owner install; not needed since `--screenshot`).
 
+## Debt backlog: data track
+
+- **BUG-0090 (S4)**: building descriptions state requirements ("needs Age II", "needs a Legion
+  Barracks") and tower attack / detection that the schema can't express yet; recheck every such
+  sentence when `requires` (M3-5 / M3-6) and the tower fields (M4) land. Schema requests are under
+  "Requests for the sim track" 8.
+- Note: a QA row (`AnEmptyBuildingList_Loads_...`) now pins "exactly Whirlwind's ten remain"; it moves
+  again whenever a building is added or removed (intended: the roster is pinned).
+
 ## Recent sessions
 
 | Date | Session | Task | Result |
 | --- | --- | --- | --- |
+| 2026-10-06 | [2026-10-06-1744](sessions/2026-10-06-1744.md) | sim M3-2b closing vs opening grid changes (`BlockVersion`, usable-stale fields refreshed lazily, progress-mark reset, wood 1 x 1 rule, 2x faster field build; BUG-0073 / 0074 / 0077 fixed); view M2-6 placeholder audio (`Sfx`, Select / Command tones, `--mute`); data D1 all ten buildings per faction in data | all ACCEPT; sim 1 fix round (QA FAIL on S2 BUG-0082 perf, fixed; 2 S3 filed), view 0 (1 S3 + Producer's S4 BUG-0088), data 0 (1 S4). M3 2 / 8, M2 9 / 10 |
 | 2026-10-06 | [2026-10-06-1503](sessions/2026-10-06-1503.md) | sim M3-2 worker gather / return loop (`Gather`, `EconomySystem`, `BuildingStore` + dev `SpawnBuilding`, `buildings.json` Town Hall, player totals, CLI `--workers`); view M2-3b trees and mines as MultiMesh props, 12 / 8 defaults, minimap resource layer | both ACCEPT, 0 fix rounds (QA PASS_WITH_ISSUES x2: sim 2 S3 + 1 S4, BUG-0075 fixed; view 1 S3 + 1 S4). M3 2 / 8, M2 8 / 10. Data track added by the owner mid-session |
 | 2026-10-06 | [2026-10-06-1255](sessions/2026-10-06-1255.md) | sim M3-1 resource entities (`ResourceStore`, placer, depletion → nav grid, hash, replay format 3, CLI flags); view M2-5 debug overlay (F12: nav grid, flow arrows, tick graph, counts) | both ACCEPT, 0 fix rounds (QA PASS_WITH_ISSUES x2: sim 3 S3 + 1 S4; view 1 S3 + 1 S4). M3 1 / 8, M2 7 / 10 |
 | 2026-10-06 | [2026-10-06-0905](sessions/2026-10-06-0905.md) | sim M1-9 M1 end-of-milestone hardening (9 items, 8 bugs fixed + BUG-0058); view M2-H1 view hardening (5 bugs fixed, rimmed minimap dots) | both ACCEPT, 0 fix rounds (QA PASS_WITH_ISSUES x2: sim 1 S3 + 1 S4; view 1 S3 + 1 S4). **M1 signed off by the Producer** |

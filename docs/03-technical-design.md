@@ -352,7 +352,9 @@ fields on the default map, 160 MB for 32 on a 1024 × 1024 map), plus a 4-byte c
 the grid and its target, but under the build cap (below) *which* fields are cached decides which
 units wait a tick, so the cache's metadata is sim state (Producer decision 2026-10-04, BUG-0021):
 `StateHash` covers its clock, count and every used slot's requested cell, version, block version and last-use
-stamp, and save/load will save the keys and rebuild the fields at load. `Get` and `TryGetCached`
+stamp, and save/load will save the keys and rebuild the fields at load (open point for M6: since M3-2b a
+usable-but-stale slot's contents depend on the grid as it was at its build, so a load that rebuilds every
+field from its key is not an uninterrupted run; options in BUG-0081). `Get` and `TryGetCached`
 are `internal`, for the sim only (a call moves the hashed LRU state); views and AI see only
 `Capacity`, `Count`, `BuildCount`, `Contains` and `PeekCached`, which change nothing.
 `PeekCached(targetCell)` (M1-8, for the M2-5 flow-arrow overlay) returns the field units follow to
@@ -981,8 +983,10 @@ BUG-0034: the distinct-targets perf row averages 100 ticks, budget unchanged.
   refreshing stale fields (about 0.8 ms a tick on a 120 x 72 map in Debug, 1.4 ms of builds on the
   128 map; a calm walk costs 0.02 ms), and until its refresh a group follows the longer route its
   usable field knows. A closing change still makes every field unusable at once: with more than 2
-  goal groups the younger ones wait up to ceil(groups / 2) ticks, as every change did before M3-2b
-  (time-sliced builds are BUG-0023).
+  goal groups the younger ones wait up to ceil(groups / 2) ticks per closing change, as every change
+  did before M3-2b, provided closings are at least that far apart; closings on every tick (nothing in
+  the game does that yet) keep every group but the 2 oldest waiting for as long as they last
+  (BUG-0080; revisit with M3-3 placement). Time-sliced builds are BUG-0023.
 - **Perf is measured in Debug on the dev machine**; the 2,500-unit two-player contest costs about
   1.6x the one-player blob (6.8 vs 4.3 ms). The 4 ms design budget is for 500 units (0.6 ms today).
 

@@ -9,8 +9,8 @@ Status legend: **Next** = start here, **Planned** = not started, **Done** = acce
 | --- | --- | --- | --- |
 | M0 | Environment & skeleton | **Done** (2026-10-03) | Tools installed, empty projects build, tests and headless boot pass |
 | M1 | Core sim, no graphics | **Done** (2026-10-06, Producer sign-off) | 200 units path across the map deterministically, fast |
-| M2 | Presentation | **In progress** (view track, started 2026-10-05; 7 / 10) | Move an army around a 3D map |
-| M3 | Economy & buildings | **In progress** (sim track, started 2026-10-06-1255; 1 / 8) | Build a Malazan base |
+| M2 | Presentation | **In progress** (view track, started 2026-10-05; 9 / 10) | Move an army around a 3D map |
+| M3 | Economy & buildings | **In progress** (sim + data tracks, started 2026-10-06-1255; 2 / 8) | Build a Malazan base |
 | M4 | Combat, fog, abilities | Planned | Malazan vs. Whirlwind armies fight with abilities and fog |
 | M5 | AI opponent | Planned | Lose to a Whirlwind AI |
 | M6 | Game shell & real art | Planned | A friend can play it |
@@ -166,7 +166,15 @@ listed in the retro. Owner may revisit._
       `ViewApi.TickTimeRing` (120 samples, 4 ms line) + entity counts; off by default and 0 bytes per
       frame for its layers; QA oracle 0 mismatches over 960 refreshes + 195 live frames, hash twin at
       2,000 units. BUG-0083 (S3, the label line allocates; docs claim 0), BUG-0084 (S4 nits).)_
-- [ ] Placeholder audio for select and command.
+- [x] Placeholder audio for select and command.
+      _(session 2026-10-06-1744, task M2-6: `game/scripts/Sfx.cs` + `SfxEvent` (8-player pool, clips
+      synthesized at start-up: `Select` one 1,320 Hz blip of 70 ms, `Command` a 660 → 990 Hz two-note
+      confirm of 120 ms, cubic attack / release so nothing clicks, peak ~0.65), hooks in
+      `SelectionController` (Select on a changed non-empty selection; Command once per order that
+      enqueued anything), once per frame and 50 ms apart per event, `--mute`, `SfxVolumeDb` placeholder
+      for the M6 setting; `game/tests/SfxTest.tscn`, QA `QaM26Test.tscn` (clip audit, spam at 2,000
+      units, 0 bytes per play). Nobody could listen unattended: the owner's ears are the last check
+      (STATE "For your review"). BUG-0087 (S3, a sound playing at quit leaks an ObjectDB warning).)_
 - [ ] Playable: the owner moves an army of 100 placeholder units around a generated map at 60 FPS.
 
 ## M3 — Economy & buildings
@@ -200,6 +208,10 @@ listed in the retro. Owner may revisit._
 - [ ] Production queues (5 slots), rally points, population and cap, refunds on cancel.
 - [ ] Age II research and unlocks; Forge upgrades.
 - [ ] Malazan and Whirlwind factions fully defined in data (units, buildings, techs).
+      _(In progress, data track: units landed in M1-2 (7 per faction); all ten buildings per faction in
+      session 2026-10-06-1744, task D1 (`Content/BuildingContentTests`, QA `QA/Content/BuildingRosterQaTests`;
+      descriptions carry "needs Age II" in text only until a `requires` field exists: BUG-0090, S4). Techs
+      wait for the `techs.json` schema (M3-5).)_
 - [ ] HUD: resource bar, selection panel, command card with grid hotkeys, worker build menus.
 - [ ] Playable: the owner builds a full Malazan base and reaches Age II.
 

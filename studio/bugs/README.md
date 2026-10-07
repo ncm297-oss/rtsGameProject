@@ -117,3 +117,4 @@ bugs outrank new features.
 | [BUG-0084](BUG-0084-m2-5-debug-overlay-nits.md) | S4 | open | M2-5 nits: cliff tint reads olive, arrow tips dip up to 9 cm into steep ramps, CS8602 in DebugOverlayTest, blind allocation probe |
 | [BUG-0085](BUG-0085-default-match-spawns-army-inside-a-forest.md) | S3 | open | The default match (seed 1) spawns player 0's start army inside a forest |
 | [BUG-0086](BUG-0086-m2-3b-props-nits.md) | S4 | open | M2-3b nits: every relist uploads every type's full 4,096-instance buffer; tight minimap perf margin |
+| [BUG-0088](BUG-0088-orderstest-double-tap-row-flaky-under-cpu-load.md) | S4 | open | `OrdersTest.tscn` double-tap row fails under CPU load: process-time wait vs wall-clock tap window (pre-existing, seen at the 1744 ACCEPT) |
