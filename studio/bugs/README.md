@@ -120,3 +120,4 @@ bugs outrank new features.
 | [BUG-0087](BUG-0087-sfx-sound-playing-at-quit-leaks-objectdb-in-existing-scenes.md) | S3 | open | A sound still playing at quit leaves an ObjectDB leak warning in existing test scenes (intermittent) |
 | [BUG-0088](BUG-0088-orderstest-double-tap-row-flaky-under-cpu-load.md) | S4 | open | `OrdersTest.tscn` double-tap row fails under CPU load: process-time wait vs wall-clock tap window (pre-existing, seen at the 1744 ACCEPT) |
 | [BUG-0090](BUG-0090-d1-building-text-ahead-of-schema.md) | S4 | open | D1 building descriptions promise tower attack/detection and requirements the schema lacks; stale BuildingSlot comment |
+| [BUG-0111](BUG-0111-d2-page-pin-gaps.md) | S4 | open | D2 page pins miss a false "+N pop" claim and Provides free-text edits; culture-dependent range text in UnitContentTests.G |
