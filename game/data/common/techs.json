@@ -8,6 +8,7 @@
       "cost": { "gold": 400, "wood": 200 },
       "researchTime": 60,
       "requires": [],
+      "requiresAnyOf": { "count": 2, "of": ["infantry_hall", "ranged_hall", "shock_hall", "forge"] },
       "effects": []
     },
     {

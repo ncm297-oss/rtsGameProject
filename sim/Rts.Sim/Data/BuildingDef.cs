@@ -39,6 +39,12 @@ public sealed class BuildingDef
     public int HalfPopProvided { get; init; }
     /// <summary>Workers deposit cargo here (Town Hall, Camp).</summary>
     public bool DropOff { get; init; }
-    /// <summary>Tech / building ids it requires (M3-5: every id exists, checked at load; gating in placement is M3-6). Empty when none.</summary>
+    /// <summary>Tech / building ids it requires, as written (M3-5: every id exists, checked at load). Empty when none. Kept for tools; the sim reads <see cref="RequiresTechs"/> / <see cref="RequiresBuildings"/>.</summary>
     public ImmutableArray<string> Requires { get; init; } = ImmutableArray<string>.Empty;
+    /// <summary><see cref="Requires"/>' tech ids, resolved at load (M3-6), ascending: each must be researched to place the building.</summary>
+    /// <remarks>Set once by the loader; never written afterwards. Empty in hand-built data.</remarks>
+    public ImmutableArray<int> RequiresTechs { get; internal set; } = ImmutableArray<int>.Empty;
+    /// <summary><see cref="Requires"/>' building type ids, resolved at load (M3-6), ascending: the player needs an own finished building of each type.</summary>
+    /// <remarks>Set once by the loader; never written afterwards. Empty in hand-built data.</remarks>
+    public ImmutableArray<int> RequiresBuildings { get; internal set; } = ImmutableArray<int>.Empty;
 }

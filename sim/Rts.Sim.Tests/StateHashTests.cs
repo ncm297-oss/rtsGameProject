@@ -626,6 +626,9 @@ public class StateHashTests
     {
         Simulation sim = GatherMaps.NewSim(ResourceMaps.Flat(16, 16), players: 2);
         GatherMaps.Building(sim, 2, 2);
+        // M3-6: Age II needs two of the four hall slots finished.
+        GatherMaps.Building(sim, 8, 2, type: ProductionMaps.Barracks);
+        GatherMaps.Building(sim, 12, 2, type: ResearchMaps.Armory);
         BuildMaps.SetTotals(sim, 0, 1000, 1000);
         sim.Enqueue(Command.Research(0, GatherMaps.At(sim, 3, 3), ResearchMaps.AgeII));
         sim.Enqueue(Command.Train(0, GatherMaps.At(sim, 3, 3), GatherMaps.Laborer));
@@ -697,5 +700,23 @@ public class StateHashTests
         Assert.False(a.World.Techs.Any(0) || a.World.Techs.Any(1));
         Assert.True(b.World.Techs.Any(1) && !b.World.Techs.Any(0));
         Assert.Equal(1, b.World.Techs.WordsPerPlayer);
+    }
+
+    // ---------- M3-6: the finished-building counts the requirement gates read ----------
+
+    /// <summary>
+    /// The ledger's per-player finished counts (per building type and slot) are derived from the building store, which is
+    /// hashed, so they are not hashed themselves: two worlds differing only in them hash the same. RequirementFuzzTests
+    /// recounts them against the store every tick.
+    /// </summary>
+    [Fact]
+    public void FinishedBuildingCounts_AreDerived_AndNotHashed()
+    {
+        Simulation a = Research(), b = Research();
+        int barracks = ProductionMaps.Barracks;
+        Assert.Equal(1, a.World.Ledger.FinishedOfType(0, barracks));
+        b.World.Ledger.AddFinished(0, barracks, Data.BuildingSlot.InfantryHall, 5);
+        Assert.Equal(6, b.World.Ledger.FinishedOfType(0, barracks));
+        Assert.Equal(a.StateHash(), b.StateHash());
     }
 }

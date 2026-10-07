@@ -34,15 +34,15 @@ public static class ProductionSystem
         UnitDef def = data.Units[unitType];
         if (world.FactionOf(player) != def.Faction) return TrainError.WrongFaction;
         if (def.TrainedAtTypeId != b.TypeId[slot]) return TrainError.NotTrainedHere;
-        // M3-4: requirements (Age II) aren't resolved until techs exist (M3-5 / M3-6), so a unit with any is locked.
-        if (def.Requires.Length > 0) return TrainError.LockedByRequirement;
+        // M3-6: checked when the Train applies, not again at completion (Requirements).
+        if (!Requirements.Met(world, player, def.RequiresTechs, def.RequiresBuildings)) return TrainError.LockedByRequirement;
         if (b.QueueCount[slot] >= EconomyConstants.ProductionQueueCapacity) return TrainError.QueueFull;
         if (world.Gold[player] < def.CostGold || world.Wood[player] < def.CostWood) return TrainError.CannotAfford;
         return TrainError.None;
     }
 
     /// <summary>The rule behind <see cref="World.CanResearch"/> and <c>Research</c> (M3-5): the first one broken, or <see cref="ResearchError.None"/>.</summary>
-    /// <remarks><c>requires</c> is not checked yet (M3-6): a level-2 upgrade can be queued without level 1 or Age II.</remarks>
+    /// <remarks>M3-6: <c>requires</c> and <c>requiresAnyOf</c> are checked when the Research applies, not again at completion.</remarks>
     internal static ResearchError CheckResearch(World world, int player, int slot, int tech)
     {
         BuildingStore b = world.Buildings;
@@ -52,6 +52,8 @@ public static class ProductionSystem
         TechDef def = data.Techs[tech];
         if (def.Faction >= 0 && def.Faction != world.FactionOf(player)) return ResearchError.WrongFaction;
         if (ImmutableArray.BinarySearch(data.TechsResearchableAt(b.TypeId[slot]), tech) < 0) return ResearchError.NotResearchedHere;
+        if (!Requirements.Met(world, player, def.RequiresTechs, def.RequiresBuildings) || !Requirements.AnyOfMet(world, player, def))
+            return ResearchError.Requires;
         if (world.HasTech(player, tech)) return ResearchError.AlreadyResearched;
         if (b.IsTechQueued(player, tech)) return ResearchError.AlreadyQueued;
         if (b.QueueCount[slot] >= EconomyConstants.ProductionQueueCapacity) return ResearchError.QueueFull;

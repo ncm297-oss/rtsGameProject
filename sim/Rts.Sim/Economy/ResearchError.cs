@@ -18,6 +18,12 @@ public enum ResearchError
     /// <summary>The building's type doesn't research it (another slot, or another faction's building).</summary>
     NotResearchedHere,
 
+    /// <summary>
+    /// The player hasn't met the tech's <c>requires</c> or <c>requiresAnyOf</c> (M3-6): a tech not researched, no own
+    /// finished building of a required type, or too few of the listed slots filled (Age II: any two of the four halls).
+    /// </summary>
+    Requires,
+
     /// <summary>The player has already researched it.</summary>
     AlreadyResearched,
 

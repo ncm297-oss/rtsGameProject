@@ -29,6 +29,8 @@ public class ResearchQaTests
         keep = Building(sim, 25, 10).Index;
         armory = Building(sim, 10, 10, type: Armory).Index;
         armory2 = Building(sim, 10, 20, type: Armory).Index;
+        // M3-6: Age II needs two distinct hall slots finished; the two Armories are one slot, so a Barracks makes two.
+        Building(sim, 34, 10, type: ProductionMaps.Barracks);
         Building(sim, 40, 24, player: 1, type: HolyCamp);
         SetTotals(sim, 0, Start, Start);
         SetTotals(sim, 1, Start, Start);
@@ -358,6 +360,9 @@ public class ResearchQaTests
         Simulation sim = BuildMaps.NewSim(Flat(48, 32), units: 16, players: 2);
         int[] forge = { Building(sim, 10, 10, type: Armory).Index, Building(sim, 30, 10, player: 1, type: Smithy).Index };
         int[] hall = { Building(sim, 10, 20).Index, Building(sim, 30, 20, player: 1, type: HolyCamp).Index };
+        // M3-6: Age II needs two hall slots (the Forge is one); research goes in id order, so Age II (id 0) comes first.
+        Building(sim, 18, 10, type: ProductionMaps.Barracks);
+        Building(sim, 38, 10, player: 1, type: RaiderCamp);
         SetTotals(sim, 0, 1_000_000, 1_000_000);
         SetTotals(sim, 1, 1_000_000, 1_000_000);
         World w = sim.World;

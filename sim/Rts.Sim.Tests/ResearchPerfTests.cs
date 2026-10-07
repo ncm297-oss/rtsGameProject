@@ -18,7 +18,7 @@ public class ResearchPerfTests
     public ResearchPerfTests(ITestOutputHelper output) => _out = output;
 
     /// <summary>Five Armories for player 0 and five Smithies for player 1, placed in the M3-4 criterion-10 scene.</summary>
-    private static List<int> AddForges(Simulation sim)
+    internal static List<int> AddForges(Simulation sim)
     {
         NavGrid g = sim.World.NavGrid;
         BuildMaps.Give(sim, 0, 10_000_000, 10_000_000);
@@ -46,7 +46,7 @@ public class ResearchPerfTests
     }
 
     /// <summary>Between ticks: every idle Forge researches the next tech its owner may queue; once a player has run out, its researched flags are cleared (test seam) so research never stops.</summary>
-    private static void KeepResearching(Simulation sim, List<int> forges)
+    internal static void KeepResearching(Simulation sim, List<int> forges)
     {
         World w = sim.World;
         BuildingStore b = w.Buildings;
@@ -67,7 +67,7 @@ public class ResearchPerfTests
     }
 
     /// <summary>Researched flags set, over both players.</summary>
-    private static int Researched(World w)
+    internal static int Researched(World w)
     {
         int n = 0;
         for (int p = 0; p < 2; p++)
@@ -81,6 +81,9 @@ public class ResearchPerfTests
     {
         (Simulation sim, List<int> halls) = ProductionPerfTests.Scene();
         List<int> forges = AddForges(sim);
+        // M3-6: both players in Age II, so the level-2 and faction upgrades are open (level 2 still waits for level 1).
+        sim.World.Techs.Set(0, ResearchMaps.AgeII, true);
+        sim.World.Techs.Set(1, ResearchMaps.AgeII, true);
         for (int t = 0; t < 20; t++)
         {
             ProductionPerfTests.TopUp(sim, halls);

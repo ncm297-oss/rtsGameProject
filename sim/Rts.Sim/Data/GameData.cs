@@ -139,6 +139,8 @@ public sealed class GameData
             h.Add(u.TrainedAt);
             h.Add(u.TrainedAtTypeId);
             AddAll(ref h, u.Requires);
+            AddAll(ref h, u.RequiresTechs);
+            AddAll(ref h, u.RequiresBuildings);
             AddAll(ref h, u.Tags);
         }
 
@@ -173,6 +175,8 @@ public sealed class GameData
             h.Add(b.HalfPopProvided);
             h.Add(b.DropOff);
             AddAll(ref h, b.Requires);
+            AddAll(ref h, b.RequiresTechs);
+            AddAll(ref h, b.RequiresBuildings);
         }
 
         h.Add(Techs.Length);
@@ -188,6 +192,11 @@ public sealed class GameData
             h.Add(tech.CostWood);
             h.Add(tech.ResearchTicks);
             AddAll(ref h, tech.Requires);
+            AddAll(ref h, tech.RequiresTechs);
+            AddAll(ref h, tech.RequiresBuildings);
+            AddAll(ref h, tech.RequiresAnyOf);
+            h.Add(tech.RequiresAnyOfCount);
+            AddAll(ref h, tech.RequiresAnyOfSlots);
             h.Add(tech.Effects.Length);
             foreach (TechEffect e in tech.Effects)
             {

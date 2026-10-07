@@ -13,8 +13,8 @@ namespace Rts.Sim.Data;
 /// Collects every problem instead of stopping at the first, so one run lists all broken data.
 /// String ids become dense ints in ordinal-sorted order, so ids never depend on file-system order.
 /// Seconds become ticks and per-second rates become per-tick rates here; the sim never sees seconds.
-/// <c>trainedAt</c> resolves to an own-faction building type id (M3-4); every <c>requires</c> entry must name a tech or
-/// building id (M3-5) but stays a string until gating (M3-6); <c>model</c> and
+/// <c>trainedAt</c> resolves to an own-faction building type id (M3-4); every <c>requires</c> entry resolves to a tech or
+/// building type id (M3-6, kept as a string too); <c>model</c> and
 /// <c>projectile</c> stay unresolved strings until assets and combat exist (M4, docs/03 "Data format").
 /// </remarks>
 public static partial class DataLoader
@@ -88,6 +88,13 @@ public static partial class DataLoader
             int id = Array.BinarySearch(unitKeys, u.Id!, StringComparer.Ordinal);
             units[id] = BuildUnit(c, u, $"units[{i}]", id, f, table);
         }
+        // BUG-0010: every faction fills the seven unit template slots, one unit each (docs/02 "Faction template").
+        for (int f = 0; f < folders.Length; f++)
+        {
+            if (unitFiles[f]?.Units == null) continue;
+            c.CurrentFile = $"factions/{folders[f]}/units.json";
+            CheckSlots(c, "units", "unit", DataLimits.SlotIds, accepted, f, k => units[Array.BinarySearch(unitKeys, unitFiles[f]!.Units![k]!.Id!, StringComparer.Ordinal)] is { } u ? ((int)u.Slot, u.Key) : (-1, ""));
+        }
 
         var factions = new FactionDef[folders.Length];
         for (int f = 0; f < folders.Length; f++)
@@ -145,6 +152,37 @@ public static partial class DataLoader
             AgeTechs = ImmutableArray.Create(ageTechs),
         };
         return new DataLoadResult(data, c.Errors);
+    }
+
+    /// <summary>
+    /// BUG-0010: faction <paramref name="faction"/>'s file lists exactly one entry per template slot. A file with no entries
+    /// is one error at <paramref name="list"/>; a second entry in a slot is one error at its <c>slot</c>; a slot with none
+    /// is one error at <paramref name="list"/>. Skipped when the file already has an error (a bad entry, a bad slot), so a
+    /// broken entry is reported once.
+    /// </summary>
+    private static void CheckSlots(Checker c, string list, string what, ImmutableArray<string> slotIds, List<(int Faction, int Index)> accepted,
+        int faction, Func<int, (int Slot, string Key)> entry)
+    {
+        foreach (DataError e in c.Errors)
+            if (e.File == c.CurrentFile) return;
+        var first = new string?[slotIds.Length];
+        int count = 0;
+        foreach ((int f, int i) in accepted)
+        {
+            if (f != faction) continue;
+            (int slot, string key) = entry(i);
+            if (slot < 0) continue;
+            count++;
+            if (first[slot] == null) first[slot] = key;
+            else c.Error($"{list}[{i}].slot", $"slot '{slotIds[slot]}' is already filled by '{first[slot]}' (one {what} per template slot)");
+        }
+        if (count == 0)
+        {
+            c.Error(list, $"the faction has no {what}s (every faction fills the {slotIds.Length} template slots)");
+            return;
+        }
+        for (int s = 0; s < slotIds.Length; s++)
+            if (first[s] == null) c.Error(list, $"no {what} in slot '{slotIds[s]}' (every faction fills the {slotIds.Length} template slots)");
     }
 
     /// <summary>Every tag of every unit, ordinal order, de-duplicated (the ids tech effects' <c>tags</c> resolve to).</summary>
@@ -402,6 +440,9 @@ public static partial class DataLoader
             keys[k] = files[accepted[k].Faction]!.Buildings![accepted[k].Index]!.Id!;
         Array.Sort(keys, StringComparer.Ordinal);
         var defs = new BuildingDef[keys.Length];
+        // Copies of the out parameters, which the slot check's lambda below can't capture.
+        List<(int Faction, int Index)> acceptedList = accepted;
+        BuildingFileJson?[] fileList = files;
         foreach ((int f, int i) in accepted)
         {
             c.CurrentFile = $"factions/{folders[f]}/buildings.json";
@@ -439,6 +480,14 @@ public static partial class DataLoader
                 DropOff = b.DropOff ?? false,
                 Requires = c.Ids(b.Requires, p + ".requires"),
             };
+        }
+        // BUG-0010: every faction fills the ten building template slots, one building each (docs/02 "Buildings").
+        for (int f = 0; f < folders.Length; f++)
+        {
+            if (fileList[f]?.Buildings == null) continue;
+            c.CurrentFile = $"factions/{folders[f]}/buildings.json";
+            CheckSlots(c, "buildings", "building", DataLimits.BuildingSlotIds, acceptedList, f,
+                k => defs[Array.BinarySearch(keys, fileList[f]!.Buildings![k]!.Id!, StringComparer.Ordinal)] is { } d ? ((int)d.Slot, d.Key) : (-1, ""));
         }
         return defs;
     }
@@ -559,6 +608,8 @@ public static partial class DataLoader
 
         public void Error(string path, string message) => Errors.Add(new DataError(CurrentFile, path, message));
 
+        private static ReadOnlySpan<byte> Utf8Bom => new byte[] { 0xEF, 0xBB, 0xBF };
+
         public T? Read<T>(string relPath, JsonTypeInfo<T> info) where T : class
         {
             CurrentFile = relPath;
@@ -570,8 +621,12 @@ public static partial class DataLoader
             }
             try
             {
-                using FileStream stream = File.OpenRead(full);
-                T? value = JsonSerializer.Deserialize(stream, info);
+                byte[] bytes = File.ReadAllBytes(full);
+                // A UTF-8 byte order mark is allowed (as the stream reader allowed it); the span readers don't skip it.
+                ReadOnlySpan<byte> json = bytes.AsSpan();
+                if (json.StartsWith(Utf8Bom)) json = json[Utf8Bom.Length..];
+                ReportDuplicateKeys(json);
+                T? value = JsonSerializer.Deserialize(json, info);
                 if (value == null) Error("$", "file holds null instead of an object");
                 return value;
             }
@@ -585,6 +640,86 @@ public static partial class DataLoader
                 Error("", $"cannot read file: {e.Message}");
             }
             return null;
+        }
+
+        /// <summary>
+        /// BUG-0008: System.Text.Json keeps the last of two equal keys in one object without a word, so a copy-paste
+        /// leftover silently wins. One <see cref="Utf8JsonReader"/> pass over the file (linear in its size, load time only)
+        /// reports each repeated key once, at its path. A file that isn't well-formed JSON reports nothing here: the
+        /// deserializer reports it, once.
+        /// </summary>
+        private void ReportDuplicateKeys(ReadOnlySpan<byte> json)
+        {
+            var found = new List<(string Path, string Key)>();
+            var frames = new List<KeyFrame>();
+            try
+            {
+                var reader = new Utf8JsonReader(json);
+                while (reader.Read())
+                {
+                    switch (reader.TokenType)
+                    {
+                        case JsonTokenType.StartObject:
+                        case JsonTokenType.StartArray:
+                            NextValue(frames);
+                            frames.Add(new KeyFrame(reader.TokenType == JsonTokenType.StartObject));
+                            break;
+                        case JsonTokenType.EndObject:
+                        case JsonTokenType.EndArray:
+                            frames.RemoveAt(frames.Count - 1);
+                            break;
+                        case JsonTokenType.PropertyName:
+                            KeyFrame top = frames[^1];
+                            top.Property = reader.GetString()!;
+                            if (!top.Names!.Add(top.Property)) found.Add((KeyPath(frames), top.Property));
+                            break;
+                        default:
+                            NextValue(frames);
+                            break;
+                    }
+                }
+            }
+            catch (Exception e) when (e is JsonException or InvalidOperationException) // malformed, or text that isn't UTF-8
+            {
+                return;
+            }
+            foreach ((string path, string key) in found)
+                Error(path, $"duplicate key '{key}' (JSON would keep only the last one silently)");
+        }
+
+        /// <summary>A value starts inside the innermost container: an array moves to its next index.</summary>
+        private static void NextValue(List<KeyFrame> frames)
+        {
+            if (frames.Count > 0 && frames[^1].Names == null) frames[^1].Index++;
+        }
+
+        /// <summary>The field path of the current property, in the loader's style (<c>units[2].attack.bonusVs.heavy</c>).</summary>
+        private static string KeyPath(List<KeyFrame> frames)
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (KeyFrame f in frames)
+            {
+                if (f.Names == null) sb.Append('[').Append(f.Index).Append(']');
+                else
+                {
+                    if (sb.Length > 0) sb.Append('.');
+                    sb.Append(f.Property);
+                }
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>One open JSON object (the keys seen so far, the current one) or array (the current index).</summary>
+        private sealed class KeyFrame
+        {
+            public KeyFrame(bool isObject)
+            {
+                if (isObject) Names = new HashSet<string>(StringComparer.Ordinal); // load-time only
+            }
+
+            public HashSet<string>? Names { get; }
+            public string Property { get; set; } = "";
+            public int Index { get; set; } = -1;
         }
 
         public T? Obj<T>(T? value, string path) where T : class

@@ -128,9 +128,11 @@ public class ResearchTests
     public void BothMeleeLevels_SumToTwo()
     {
         var s = new Scene();
-        s.Sim.Enqueue(Command.Research(0, s.At(s.Armory), Melee1));
-        s.Sim.Enqueue(Command.Research(0, s.At(s.Armory), Melee2)); // requires isn't gated until M3-6
-        Run(s.Sim, 2 + 600 + 800);
+        s.W.Techs.Set(0, AgeII, true); // level 2 needs Age II and level 1 researched (M3-6)
+        Apply(s.Sim, Command.Research(0, s.At(s.Armory), Melee1));
+        Run(s.Sim, 600);
+        Apply(s.Sim, Command.Research(0, s.At(s.Armory), Melee2));
+        Run(s.Sim, 800);
         Assert.True(s.W.HasTech(0, Melee1) && s.W.HasTech(0, Melee2));
         Assert.Equal(2f, s.W.TechBonus(0, Infantry, TechStat.Attack));
     }
@@ -154,6 +156,8 @@ public class ResearchTests
     {
         var s = new Scene();
         World w = s.W;
+        w.Techs.Set(0, AgeII, true); // the faction upgrades need Age II (M3-6); Age II itself has no effects
+        w.Techs.Set(1, AgeII, true);
         s.Sim.Enqueue(Command.Research(0, s.At(s.Armory), Moranth));
         s.Sim.Enqueue(Command.Research(1, s.At(s.Smithy), Dryjhna));
         Run(s.Sim, 2 + 900);

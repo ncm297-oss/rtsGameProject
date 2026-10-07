@@ -189,7 +189,14 @@ internal sealed class TechJson
     public CostJson? Cost { get; set; }
     public double? ResearchTime { get; set; }
     public List<string?>? Requires { get; set; }
+    public RequiresAnyOfJson? RequiresAnyOf { get; set; }
     public List<TechEffectJson?>? Effects { get; set; }
+}
+
+internal sealed class RequiresAnyOfJson
+{
+    public int? Count { get; set; }
+    public List<string?>? Of { get; set; }
 }
 
 internal sealed class TechEffectJson
