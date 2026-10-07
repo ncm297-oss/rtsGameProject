@@ -132,3 +132,4 @@ bugs outrank new features.
 | [BUG-0094](BUG-0094-test-grove-spawns-skip-the-seal-check.md) | S4 | open | Hand-built test groves (`ResourceStore.Spawn`) skip the never-seal check and wall cells in before tick 1 |
 | [BUG-0095](BUG-0095-push-out-on-a-full-level-scans-the-whole-map.md) | S3 | open | Push-out on a level with too few free cells scans every ring of the map per leftover unit (9 ms at 128, 35 ms at 256) and stacks them on one point |
 | [BUG-0096](BUG-0096-builds-refused-for-sealsground-each-flood.md) | S3 | open | Builds refused for SealsGround still pay a flood each: 100 in one tick cost 33 ms (BUG-0091 residual) |
+| [BUG-0097](BUG-0097-spawn-and-push-out-cross-to-another-plateau-of-the-same-level.md) | S3 | open | A spawn (or push-out) on a full plateau lands on another plateau of the same level, 30+ m away |

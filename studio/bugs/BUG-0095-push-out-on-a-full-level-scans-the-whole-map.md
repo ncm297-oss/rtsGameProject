@@ -38,3 +38,6 @@ idle units on one exact point never separate (pre-existing, the same happens to 
   nearest passable cells by ring like the main search, or allow other levels for the fallback.
 - No correctness problem found: every unit ends on passable ground, never in the footprint, nothing non-finite after
   200 ticks.
+- Re-measured 2026-10-07-0925 (M3-4, QA): the cost part is fixed by the level-box cap (`FreeCellSearch`): Build apply
+  0.081 ms at 128 and 0.187 ms at 256 (was 8.9 / 35.4 ms). The stacking part is still open: 18 units on one cell, 153
+  identical-position pairs after 10 s. Status left open for the stacking.
