@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-03-1151, task M1-2 |
 | System | data loader |
-| Fixed by | |
+| Fixed by | 8928418 (M3-6): `CheckSlots` for units and buildings; `QA/DataLoaderQaTests` slot rows un-skipped, `RequirementLoaderTests` slot rows |
 
 ## Repro
 1. Un-skip `Rts.Sim.Tests.QA.DataLoaderQaTests.FactionWithEmptyUnitsList_IsRejected` and

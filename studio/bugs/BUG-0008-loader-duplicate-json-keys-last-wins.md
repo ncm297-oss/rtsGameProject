@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-03-1151, task M1-2 |
 | System | data loader |
-| Fixed by | |
+| Fixed by | 8928418 (M3-6): `Utf8JsonReader` pre-pass; `QA/DataLoaderQaTests` duplicate rows un-skipped, `RequirementLoaderTests.ADuplicateKey_*`, QA `RequirementQaTests.ADuplicateKey_AtAnyDepth_*` (root and depth 2-4, all seven file kinds, escaped key, BOM) |
 
 ## Repro
 1. Un-skip `Rts.Sim.Tests.QA.DataLoaderQaTests.DuplicateBonusVsKey_IsReported` and

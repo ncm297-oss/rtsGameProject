@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open (items 1 and 3 fixed in 8928418, M3-6; item 2 open) |
 | Found | 2026-10-07-1131, task M3-5 |
 | System | data loader (techs.json, requires) |
-| Fixed by | |
+| Fixed by | items 1 + 3: 8928418 (M3-6), `QA/TechDataQaTests.ARequiresCycle_IsOneError` un-skipped, `ATechIdEqualToABuildingId_IsOneError`; QA `RequirementQaTests` cycles of length 1-4. Item 2 (an effect matching no unit) not in M3-6 scope |
 
 ## Repro
 Each one loads with 0 errors (pinned in `sim/Rts.Sim.Tests/QA/TechDataQaTests.cs`):
