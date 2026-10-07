@@ -4,7 +4,7 @@ The dashboard. The Producer rewrites it at the end of every session. **Owner: re
 you" first.** "For your review" (further down) is non-blocking: what the studio built or decided
 on its own, explained in terms of what you'd see in the game.
 
-_Last updated: 2026-10-07 (session 2026-10-07-0800, the resumed 2026-10-06-2326: ACCEPT sim M3-H1 and view M2-H2; **M2 signed off**; data STOPped cheaply)._
+_Last updated: 2026-10-07 (session 2026-10-07-0925: ACCEPT sim M3-4 production and view M3-V1 economy HUD; data STOPped cheaply)._
 
 ## Waiting on you
 
@@ -18,21 +18,21 @@ _Last updated: 2026-10-07 (session 2026-10-07-0800, the resumed 2026-10-06-2326:
 
 | Field | Value |
 | --- | --- |
-| Sim: milestone | M3 — Economy & buildings (started 2026-10-06-1255); 3 / 8 criteria; M3-H1 sim hardening done (8 bugs closed, pocket rule) |
-| Sim: next task | **M3-4 production queues (5 slots), rally points, population + cap, refunds on cancel** · feature · QA full; then M3-5 Age II + Forge upgrades (`techs.json`, building `requires`), M3-6 `trainedAt` / `requires` validation |
+| Sim: milestone | M3 — Economy & buildings (started 2026-10-06-1255); 4 / 8 criteria (production landed 0925); M3-H1 sim hardening done |
+| Sim: next task | **M3-5 Age II research + Forge upgrades** (`techs.json` schema, `Research` / `CancelResearch` in the production queue, per-player tech state, the bonus query M4 reads) · feature · QA full; then M3-6 `requires` resolution (units, buildings, techs) + loader nits |
 | Sim: gate | **GO** |
-| View: milestone | **M2 Done** (signed off 2026-10-07 after M2-H2; 11 bugs closed) → M3 view side starts (HUD, worker orders, build ghost) |
-| View: next task | **M3-V1 HUD resource bar, right-click Gather on trees / mines, worker and site feedback, a Town Hall + workers in the default match** · feature · QA standard; then M3-V2 command card + build ghost + build menu |
+| View: milestone | M3 view side: resource bar ✓, right-click Gather ✓, building / worker feedback ✓, Town Hall + workers in the default match ✓ (M3-V1) |
+| View: next task | **M3-V2 command card (5 x 3 grid hotkeys), worker build menus (B / V), build ghost + placement via `CanPlace`, building click-select with Cancel, right-click Repair** · feature · QA standard; then M3-V3 selection panel + production queue + rally + pop |
 | View: gate | **GO** |
-| Data: milestone | M3 — "factions fully defined in data": units ✓ + buildings ✓, both pinned to the faction pages (D2); techs wait for the M3-5 schema |
-| Data: next task | **Owner review tweaks** from the inbox if any, else **STOP** (no schema to fill until M3-5) |
+| Data: milestone | M3 — "factions fully defined in data": units ✓ + buildings ✓ (pinned to the faction pages); techs wait for the M3-5 schema |
+| Data: next task | **Owner review tweaks** from the inbox if any, else **STOP** (D3 techs content once M3-5 is on `main`) |
 | Data: gate | **GO** (tweaks) / cheap STOP otherwise |
 | Tools on this PC | Godot 4.7.2 .NET, .NET SDK 8.0.425, Git 2.53 + LFS 3.7; `GODOT` user variable set |
-| Build | sim branch 0 errors / 1 warning (the CS8602 the view branch fixes, BUG-0084); view branch 0 / 0; golden untouched on both |
-| Tests | Producer reruns non-Perf: sim 2671 / 2680 (9 skipped) / 0 failed, 8 m 12 s; view 2718 / 2730 (12 skipped) / 0 failed, 7 m 44 s; view smoke PASS (Producer rerun). QA: sim 2784 / 12 / 0 incl. Perf (Perf rows pass alone; `TightBlob2500` 4.48 of 4.5 ms), view 2823 / 15 / 1 under load (the one Perf row passes alone) + 18 / 18 scenes, clean clone 2662 / 12 / 0 |
-| Open bugs | 20 (S1: 0, S2: 0, S3: 12, S4: 8) — none block; fixed this session: sim 0071 / 0081 / 0091 / 0093 (S3), 0072 / 0076 / 0079 / 0092 (S4); view 0069 / 0083 / 0085 / 0087 / 0101 / 0102 (S3), 0070 / 0084 / 0086 / 0088 / 0103 (S4); BUG-0080 stays as a documented limit; new: 0095 / 0096 / 0104 (S3), 0094 / 0105 (S4) |
-| Sessions today | 1 / 8 on 2026-10-07 (this one resumed 2026-10-06-2326 after an OS restart); feature sessions since last hardening: sim 0 / 4, view 0 / 4, data 2 / 4 |
-| Last session | 2026-10-07-0800 · sim M3-H1 hardening (0 fix rounds) · view M2-H2 hardening (0) · data STOP · both ACCEPT, M2 signed off |
+| Build | both branches 0 errors / 0 warnings; golden regenerated on the sim branch for `data-hash` only (every checkpoint byte-identical) |
+| Tests | Producer reruns non-Perf: sim 2865 / 2874 (9 skipped) / 0 failed, 7 m 39 s; view 2812 / 2821 (9 skipped) / 0 failed, 8 m 2 s; view smoke PASS (Producer rerun: "town halls 2, 5 workers per player"); sim Perf / golden / allocation rows green alone. QA: sim full suite 2981 / 12 / 0 (5 wall-clock Perf rows failed only under the other track's load), view 2912 / 12 / 0 + 19 / 19 scenes, clean clones green |
+| Open bugs | 22 (S1: 0, S2: 0, S3: 13, S4: 9) — none block; new this session: BUG-0097 (S3, sim: a spawn on a full plateau lands on another plateau of the same level index), BUG-0106 (S3, view: resolved by rewording criterion 3; file to be set `wontfix` by the next view task), BUG-0107 (S4, view nits); BUG-0095's cost part fixed, its stacking part stays open |
+| Sessions today | 2 / 8 on 2026-10-07; feature sessions since last hardening: sim 1 / 4, view 1 / 4, data 2 / 4 |
+| Last session | 2026-10-07-0925 · sim M3-4 feature (0 fix rounds) · view M3-V1 feature (0) · data STOP · both ACCEPT |
 
 ## Milestone progress
 
@@ -41,7 +41,7 @@ _Last updated: 2026-10-07 (session 2026-10-07-0800, the resumed 2026-10-06-2326:
 | M0 | 7 / 7 required | **Done** 2026-10-03 (optional MCP item open) |
 | M1 (sim track) | 8 / 8 | **Done** 2026-10-06 (Producer sign-off after the M1-9 hardening; retro in docs/05) |
 | M2 (view track) | 10 / 10 (SimRunner interpolation, camera, terrain mesh + trees / mines, placeholder unit views, selection, orders, minimap, debug overlay, placeholder audio, 60 FPS playable check) | **Done** 2026-10-07 (Producer sign-off after the M2-H2 hardening; retro in docs/05; your playtest under For your review is feedback, not a gate) |
-| M3 (all three tracks) | 3 / 8 (resource entities; worker gather / return loop; building placement + construction + repair, sim half); M3-2b and the M3-H1 sim hardening done; data: units + buildings pinned to the faction pages, techs pending; view side starts now | In progress; sim M3-4 production next, view M3-V1 HUD + worker orders next |
+| M3 (all three tracks) | 4 / 8 (resource entities; worker gather / return loop; building placement + construction + repair, sim half; production queues + rally + pop, sim half); HUD in progress (resource bar, worker orders and building feedback landed); data: units + buildings pinned, techs pending | In progress; sim M3-5 Age II next, view M3-V2 command card + build ghost next |
 | M4-M9 | — | Planned |
 
 ## For your review
@@ -49,6 +49,91 @@ _Last updated: 2026-10-07 (session 2026-10-07-0800, the resumed 2026-10-06-2326:
 Non-blocking. Each entry says what was built or decided, what you'd notice in the game, and how
 to change it. To change anything, write it in `studio/inbox.md`, for example "use formations
 instead of clusters" or "make giving up take 2 seconds".
+
+### Buildings train units now: five-deep queues, rally points, population and a cap, full refunds (sim track, M3-4, 2026-10-07)
+
+- **What was built:** the rules for training. A finished building takes orders for the units it trains (the
+  Legion Barracks trains Heavy Infantry, the Garrison Keep trains Laborers, and so on, from each unit's "trained
+  at" in the data): up to **five** in its queue, each **paid when you queue it** and **refunded in full** if you
+  cancel it (or the building is destroyed). The first item trains for its train time (a 14 s Heavy Infantry
+  takes exactly 280 ticks) and the unit appears on the nearest free square next to the building, then walks to
+  the building's **rally point** if one is set; a worker rallied onto a gold mine or a tree starts gathering it
+  by itself (the Age of Empires rule). **Population:** every unit counts its pop (half-steps allowed: a Lancer
+  is 2, a Laborer 1), a Town Hall gives 10, a House 8, the hard cap is 100 (all from the data). An item only
+  *starts* training when there is room; if the cap is full the queue waits, and it resumes the moment a House
+  finishes. Nothing ever dies from losing a House: training just pauses. A unit with an Age II requirement
+  (the Sapper, the Zealot) can't be trained until Age II exists (next sim task). Two spawned units never share
+  a square; if there is no free square the unit waits inside until one opens.
+- **What you'll see:** nothing in the window yet: the production card (click a Barracks, pick a unit, see the
+  queue and progress) and the rally marker are the view track's M3-V3, two view sessions away. Today the
+  command-line tool shows the pop count: `dotnet run --project tools/Rts.Cli -- run --seed 1 --units 50 --workers 5 --forests 12 --mines 8 --ticks 600`
+  ends each player's line with `pop 21/10` (the 50 debug units are spawned past the cap and still count,
+  which is the rule for dev spawns).
+- **Numbers:** 500 marching units + 20 Town Halls training non-stop + 50 gathering workers cost 0.40 ms a
+  tick (budget 1.3, hard budget 4). QA's hostile run (8 seeds x 3,000 ticks of random train / cancel / rally /
+  build / cancel / destroy orders on two players) balanced gold and wood to the exact coin every tick, and two
+  identical runs stayed identical every tick.
+- **Producer decisions, revisit any time:**
+  - *A House finished by builders lets a waiting queue resume one tick (50 ms) later than one placed by a
+    dev command.* Training runs before construction each tick, as the design doc's tick order says. The
+    alternative (construction first) was not worth a reorder for one tick.
+  - *The population numbers are recomputed from the units and queues, not stored in the replay fingerprint*
+    (like a unit's speed, they follow from other stored facts). The fuzz tests recount them every tick.
+  - *A rally order from the sim's side names the building by its map square*, so the rally target keeps its
+    exact position.
+  - *The queue holds five items* (a rule, not a stat: a code constant). The alternative, a data field per
+    building, can come later if a design wants a longer queue somewhere.
+  - *Size: ~950 code lines (budget 1,500), ~1,250 dev test lines, ~1,000 QA test lines, ~95 doc lines.*
+- **Rough edges (S3, next sim clean-up session after three more feature sessions):** BUG-0097: if every
+  square of a building's plateau is taken (by hundreds of units, a stress case), a new unit is set down on
+  *another* plateau of the same height, up to 30 m away, instead of waiting; the same holds for units pushed
+  out of a new building's footprint (that part predates this session). Fix: bound the search by the
+  building's own connected plateau. BUG-0095 (from M3-H1) is half fixed: the cost is gone (9 / 35 ms → 0.08 /
+  0.19 ms), the "leftovers stack on one point" part remains.
+- **To change it:** unit costs, pop, train times and "trained at" in `game/data/factions/<faction>/units.json`;
+  pop provided in `buildings.json`; the hard cap in `game/data/common/rules.json` (`popCap`); the rally-on-a-mine
+  rule, the queue length and the tick order by inbox note.
+
+### The economy is on screen: a Town Hall and five workers at the start, a resource bar, right-click to gather, and buildings and workers show what they are doing (view track, M3-V1, 2026-10-07)
+
+- **What was built:** the first half of M3's HUD. **(1)** The default match now starts each player with a
+  finished Town Hall beside their army (on the nearest open 4 x 4 spot with a clear ring round it, on the
+  army's own side of the map) and **five workers** next to it, standing on the side facing the nearest gold
+  mine so the first trip is short. `-- --workers 12` changes the number (0-200); `-- --no-bases` gives the old
+  armies-only match for tests. **(2)** A **resource bar** top right reads "Gold 200  Wood 200" (the names come
+  from each faction's data file, not from code) and updates the frame a total changes. **(3) Right-click on a
+  tree or a mine** with workers selected sends them gathering (the Command sound plays); any soldiers in the
+  same selection just walk there; Shift queues it after the current order; right-click on plain ground is a
+  move as before, and the minimap's right-click stays a move. **(4) Buildings** are drawn: a box in the
+  player's colour on its footprint, 3 m tall; a construction site is a lighter slate box that **rises with its
+  progress** under a yellow bar; a damaged building shows a green hit-point bar. **(5) Workers** are tinted
+  green while gathering, amber while waiting with a load, blue while building, and carry a small gold or brown
+  cube above their head while loaded. F12's second line adds "workers gathering N, returning N, building N".
+- **Try it (three minutes):** `& $env:GODOT --path game`. Both armies now have a slate (Malazan) or orange
+  (Whirlwind) Town Hall box beside them with five small workers. Box-select the five grey workers west of
+  centre, right-click the nearest gold mine (dark block with a gold top): they turn green at the mine, carry a
+  gold cube home, and the bar's gold ticks up by 10 per trip (about every 30 s per worker at first). Right-click
+  a forest: the same with wood and brown cubes. Box-select workers *and* soldiers together and right-click a
+  mine: the workers gather, the soldiers walk there. Press F12 to see the worker counts. Nothing can be
+  *built* yet: that is the next view task (build menu and ghost preview).
+- **Producer decisions, revisit any time:**
+  - *Where the Town Hall goes* (nearest clear 4 x 4 spot beside the army, never between the two armies) and
+    *where the workers stand* (mine-facing side) are debug placements until real start locations exist (M6).
+  - *Criterion wording:* my brief said "all five workers reach Gathering within 60 ticks (3 s)" of the click;
+    that only holds for a node within 12 m. On seed 1 the mine is 10 m away (tick 23) and the nearest tree
+    12.7 m (tick 123). The gather order itself is instant; the walk is the sim's walking speed. I reworded the
+    rule to "within 60 ticks of arriving" and closed the finding (BUG-0106) as not a defect. Alternative:
+    place the Town Hall nearer a forest; not worth it before real start locations.
+  - *A right-click on a node with no worker selected is a plain move* (soldiers don't gather).
+  - *Both the site's rising box (the builder's idea) and the dev-only `--no-bases` flag were accepted.*
+  - *Size: ~580 game-code lines, ~360 view-helper lines, ~600 dev test lines, ~1,100 QA test lines.*
+- **Rough edges (BUG-0107, S4, next view clean-up session):** a Malazan construction site at 100 % is the same
+  dark slate hue as a finished Malazan building (the bar is what tells them apart); the wood cube is only 3-4
+  px tall when zoomed all the way out at 720p; placing or cancelling a building redraws the minimap's resource
+  layer and the trees for no reason (cheap, but every build will trigger it from M3-V2).
+- **To change it:** worker count default is `startingWorkers` in `game/data/common/rules.json`; the resource
+  names in `game/data/factions/<faction>/faction.json`; colours and sizes are placeholder constants in
+  `game/scripts/BuildingViews.cs` / `UnitViews.cs` until the M6 art pass; the rest by inbox note.
 
 ### M2 is done: the game window is signed off, and its clean-up fixed the benchmark, the start positions, the quit leak and the minimap dots (view track, M2-H2 + sign-off, 2026-10-07)
 
@@ -1249,51 +1334,68 @@ track right after S1/S2 bugs).
     `Repair`, `Buildings.UnderConstruction` / `Work` / `WorkNeeded(type)` / `Hp` for a site progress bar,
     `UnitStore.BuildTarget` and `UnitState.Building`. Group build = one `Build` per selected worker (the
     first places, the rest join the same anchor). Nothing requested yet.
-11. Noted at the M2 sign-off (session 0800) for the view's M3 HUD: `World.Pop` / `PopCap` per player and a
-    building's production queue + progress come with M3-4 (sim, next); the view's M3-V1 must not block on them.
-    Since M3-H1 a pushed unit's `PrevPosition` equals its `Position` (no slide through the building), and
-    `NavFlags.Pocket` (32) cells are `Blocked` (the overlay draws them red; no change needed).
+11. ~~Noted at the M2 sign-off (session 0800) for the view's M3 HUD: `World.Pop` / `PopCap` per player and a
+    building's production queue + progress come with M3-4~~ → **available since M3-4** (session 0925) for the
+    view's M3-V3 production card: `World.HalfPop` / `HalfPopCap` (per-player spans, half-pop units: show
+    `n / 2`, ".5" for odd), `World.CanTrain(player, slot, type, out TrainError)` (why a button is greyed),
+    `Buildings.QueueCount` / `QueueTypeAt(slot, i)` / `Progress` / `TrainTicks(type)` / `HasRally` /
+    `RallyPosition` / `ReservedHalfPop(slot)`, `GameData.UnitsTrainedAt(buildingType)` (the card's buttons,
+    sorted by id), `Command.Train(player, point, type)` / `CancelTrain(player, point, index)` /
+    `SetRally(player, buildingCell, target)` / `ClearRally(player, point)`. Since M3-H1 a pushed unit's
+    `PrevPosition` equals its `Position`, and `NavFlags.Pocket` (32) cells are `Blocked`.
+12. Noted (M3-V1, session 0925, BUG-0107 item 3): the view keys its minimap resource layer and props relist on
+    `NavGrid.Version`, which building changes bump too. A resource-only version (or a `ResourceStore` change
+    counter) would let the view redraw only on fells; low priority, the view can also diff `Resources.Count`.
+    Not requested yet.
 
 ## Feature queue: sim track (feature sessions, in order)
 
-1. **Next: M3-4 production queues** (5 slots), rally points, population and cap (`popProvided` applies), refunds
-   on cancel, with read access for the view's selection panel (`Pop` / `PopCap`, queue + progress). Details in
-   `studio/handoff.md`.
-2. Then M3-5 Age II research and Forge upgrades (ships the `techs.json` schema and the building `requires` field
-   the data track asked for); M3-6 `trainedAt` / `requires` resolution and validation (QA D2 note: `trainedAt` is
-   still an unchecked string; fold in loader nits BUG-0008 / 0010). **Requests for the sim track** above outrank
-   M3 work. Next sim hardening session after 4 feature sessions: BUG-0095 / 0096 first.
+1. **Next: M3-5 Age II research and Forge upgrades**: the `techs.json` schema (common upgrades + Age II with
+   `researchedAt` a building slot; the faction upgrade per faction), `Research` / `CancelResearch` as items of the
+   M3-4 production queue, per-player tech state (`HasTech`, `Age`), the `TechBonus` query M4 combat will read, and
+   the building `requires` field (schema + id validation only). Details in `studio/handoff.md`.
+2. Then M3-6 `requires` resolution for units, buildings and techs (`CanTrain` LockedByRequirement becomes a real
+   check, `CanPlace` gains a `Requires` reason, Age II's "any two of" rule) + loader nits BUG-0008 / 0010.
+   **Requests for the sim track** above outrank M3 work. Next sim hardening session after 4 feature sessions:
+   BUG-0097 / 0095 (plateau-bounded free-cell search) and BUG-0096 first.
 3. M6 (far ahead): agents can't download. The Producer lists under "Waiting on you", when M5
    starts, the exact links for the Godot 4.7.2 .NET export templates and the Kenney/KayKit/Quaternius
    packs (docs/04) with the `asset-sources/` folder for each (owner note 2026-10-05).
 
 ## Feature queue: view track (feature sessions, in order)
 
-1. **Next: M3-V1** HUD resource bar (`World.Gold` / `Wood`, pop once `World.Pop` is on `main`), right-click
-   Gather on a tree / mine, worker and construction-site feedback, a Town Hall + workers in the default match.
+1. **Next: M3-V2** command card bottom right (5 x 3 grid hotkeys, follows the Tab subgroup), worker build menus
+   (B basic / V advanced), build ghost + placement via `World.CanPlace` + one `Command.Build` per selected
+   worker, building click-select with a Cancel button on a site, right-click Repair on a damaged own building.
    Details in `studio/handoff.md`.
-2. M3-V2 command card (Tab subgroups, grid hotkeys), worker build menu, build ghost + placement via
-   `World.CanPlace` + `Command.Build`, Cancel / Repair; M3-V3 production UI (queue, rally marker) after
-   M3-4; then the M3 "Playable: build a full Malazan base and reach Age II" with the owner. Next view
-   hardening session after 4 feature sessions: BUG-0104 / 0105.
+2. M3-V3 selection panel (portrait / stats / multi-select grid), production card + queue + progress on a
+   selected building (`CanTrain`, `UnitsTrainedAt`, `Train` / `CancelTrain`), rally marker + right-click
+   SetRally, "Pop a / b" in the resource bar, a Research button once M3-5 is on `main`; then the M3 "Playable:
+   build a full Malazan base and reach Age II" with the owner. Next view hardening session after 4 feature
+   sessions: BUG-0104 / 0105 / 0107, and BUG-0106's file set to `wontfix` (the next view task may do that one).
 
 ## Feature queue: data track (feature sessions, in order; owner reviews every landed task)
 
 1. **Next: owner review tweaks** from the inbox (the D1 / D2 entries under For your review) whenever present
    (QA light; golden `data-hash` regen on a data change).
-2. Otherwise the data track **STOPs cheaply**: no schema it needs is on `main`. BUG-0111 (S4, test-only) rides
-   with the next data task touching the content tests.
+2. Otherwise the data track **STOPs cheaply** until M3-5 is on `main`; then **D3: techs content** (both factions'
+   tech names, descriptions and numbers against docs/02 "Tech" and the faction pages' upgrade lines, pinned by
+   `Content/TechContentTests`; the building `requires` values per the faction pages; BUG-0111 and the BUG-0090
+   "needs Age II" text recheck ride along). QA light.
 3. Waiting on schemas: `techs.json` + building `requires` (M3-5 / M3-6), `abilities.json` / `statuses.json`
    (M4), tower attack / sight / detector fields (M4), `ai.json` build orders (M5); M7-M9 faction data when
    those milestones open; balance passes (QA standard) after the M4 sandbox.
 
 ## Debt backlog: sim track (hardening sessions only; the next one after four feature sessions)
 
-- **BUG-0095 (S3, first)** push-out on a level with fewer free cells than pushed units: `PushOut` now walks
-  rings up to the map size for each leftover unit (one Build 8.9 ms at 128, 35 ms at 256, Debug, alone) and
-  the leftovers fall back to `NearestPassable` = one exact point, where idle units never separate. Fix:
-  stop the ring walk once a ring is entirely off the level / map (or cap rings at the level's bounding box)
-  and let leftovers wait a tick or spread on the fallback.
+- **BUG-0097 (S3, first) + BUG-0095 (S3, residual)**: `FreeCellSearch` bounds its walk by `World.LevelBounds`,
+  a per-level-index box, so a spawn or push-out on a full plateau lands on another plateau of the same level
+  (30+ m away, QA pin `ProductionQaTests...Bug0097Pin`); and the push-out's `NearestPassable` fallback still
+  stacks leftovers on one point (18 units on a cell). Fix both at once: a per-cell plateau id (connected
+  same-level component, computed at load with its own box), search within the plateau, and let push-out
+  leftovers wait or spread. Also from BUG-0097's notes: a complete head waiting for a cell repeats its full
+  walk every tick (20 halls on a packed level 1.7-1.9 ms a tick): a per-plateau "no free cell this tick" memo.
+  The cost part of BUG-0095 is fixed since M3-4 (0.08 / 0.19 ms).
 - **BUG-0096 (S3)** Builds refused for `SealsGround` still pay one flood each (100 in a tick: 33 ms); the
   cheap-first order can't help this reason. Options: a per-tick memo of refused (type, anchor) pairs
   keyed on `BlockVersion`, or a cheaper ring pre-test before the labelled flood.
@@ -1317,6 +1419,9 @@ track right after S1/S2 bugs).
   the M3 HUD / M3-4.
 - Note (QA, M3-H1): `--record` now truncates an existing file before the run (an aborted run leaves an
   empty file); `TightBlob2500` has 0.02 ms of headroom alone (4.48 of 4.5 ms): a failure alone is real.
+- Note (QA, M3-4): `CommandDoorFuzzStressTests` generates well-formed kinds 0-10 only; the production kinds
+  11-14 are covered by `ProductionHostileFuzzStressTests`. Extend the door fuzz to every kind in the next
+  hardening session. `HalfPop` / `HalfPopCap` are derived (not hashed): the fuzz recount is the guard.
 - **BUG-0046 (S3, known limit)** wall clips in slot order; a slot-free sort exists in the M1-9
   report (hard walls first, farthest first, ties by position) and re-rolls three fitted bounds.
   Revisit with the crowd-cost work after M4. 4 QA rows skipped.
@@ -1358,6 +1463,13 @@ track right after S1/S2 bugs).
   ms alone (92-94 % of its limit; the 4 x 4 dot cost the margin); docs/03 M2-3b still says "about 0.25
   ms"; docs/03 M2-6 says the Sfx exit wait is 5-60 ms, seen up to 93 ms under load. Refresh the figures;
   if the row flakes, the forced 4,096-node resource redraw is where the time is.
+- **BUG-0107 (S4, M3-V1 nits)**: a Malazan site at 100 % is the finished building's hue (give sites a sand /
+  scaffold tone or stripes); the wood cargo cube is 3-4 px at 60 m on 720p (scale with zoom or outline it);
+  the minimap resource layer and props relist on every `NavGrid.Version` bump, so every build / cancel /
+  completion redraws them (key on a resource-only change; Requests 12).
+- **BUG-0106 (S3 → `wontfix`)**: criterion 3's "Gathering within 60 ticks" was a distance rule; the Producer
+  reworded it to "within 60 ticks of arriving" at ACCEPT 0925. The next view task (any) sets the bug file's
+  status to `wontfix` with that reason and the README row to match; no code change.
 - ~~BUG-0069~~, ~~0070~~, ~~0083~~, ~~0084~~, ~~0085~~, ~~0086~~, ~~0087~~, ~~0088~~, ~~0101~~,
   ~~0102~~, ~~0103~~ fixed in M2-H2 (session 0800).
 - Edge-pan hover suppression (`RtsCamera.EdgePanBlocker`) can't fire today: the minimap's 8 px margin
@@ -1391,6 +1503,7 @@ track right after S1/S2 bugs).
 
 | Date | Session | Task | Result |
 | --- | --- | --- | --- |
+| 2026-10-07 | [2026-10-07-0925](sessions/2026-10-07-0925.md) | sim M3-4 production queues (`Train` / `CancelTrain` / `SetRally` / `ClearRally`, `ProductionSystem` phase 3, `PlayerLedger` pop + cap, `FreeCellSearch` capped at the level box, `trainedAt` resolved, `UnitsTrainedAt`, CLI pop); view M3-V1 economy HUD (`StartBase` Town Hall + workers, `ResourceBar`, right-click Gather via `ResourcePicker`, `BuildingViews` + `BuildingBars`, worker tints + cargo markers, F12 worker counts); data STOP | both ACCEPT, 0 fix rounds (QA PASS_WITH_ISSUES x2: sim 1 S3 (BUG-0097); view 1 S3 (BUG-0106, reworded away) + 1 S4). M3 4 / 8 |
 | 2026-10-07 | [2026-10-07-0800](sessions/2026-10-07-0800.md) | sim M3-H1 hardening (pocket rule `NavFlags.Pocket` after Cancel / destruction, cheap-first Build checks, ring-by-ring push-out through the spatial hash, BUG-0080 measured bound documented, BUG-0081 save/load decision, loader / CLI / plug-cache nits: BUG-0071 / 0072 / 0076 / 0079 / 0081 / 0091 / 0092 / 0093 fixed); view M2-H2 hardening (bench marches across + true `fps`, start blocks in a clearing, `Sfx` stops at quit, overlay label on change, 2 x 2 minimap dots, S4 batch, M6 export notes: 11 bugs fixed) → **M2 signed off**; data STOP (resumed after an OS restart killed 2026-10-06-2326) | both ACCEPT, 0 fix rounds (QA PASS_WITH_ISSUES x2: sim 2 S3 + 1 S4, view 1 S3 + 1 S4) |
 | 2026-10-06 | [2026-10-06-2114](sessions/2026-10-06-2114.md) | sim M3-3 placement validity (`World.CanPlace`, never-seal `SealCheck`), `Build` / `Cancel` / `Repair`, multi-builder construction (BUG-0078 fixed by rule); view M2-7 `--bench` / `--vsync`, `PrevFacing` blend, screenshot set (M2 10 / 10); data D2 unit stats pinned to the faction pages, building tables on the pages | all ACCEPT, 0 fix rounds (QA PASS_WITH_ISSUES x3: sim 2 S3 + 1 S4, view 2 S3 + 1 S4, data 1 S4). M3 3 / 8 |
 | 2026-10-06 | [2026-10-06-1744](sessions/2026-10-06-1744.md) | sim M3-2b closing vs opening grid changes (`BlockVersion`, usable-stale fields refreshed lazily, progress-mark reset, wood 1 x 1 rule, 2x faster field build; BUG-0073 / 0074 / 0077 fixed); view M2-6 placeholder audio (`Sfx`, Select / Command tones, `--mute`); data D1 all ten buildings per faction in data | all ACCEPT; sim 1 fix round (QA FAIL on S2 BUG-0082 perf, fixed; 2 S3 filed), view 0 (1 S3 + Producer's S4 BUG-0088), data 0 (1 S4). M3 2 / 8, M2 9 / 10 |

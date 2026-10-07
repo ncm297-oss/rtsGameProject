@@ -10,7 +10,7 @@ Status legend: **Next** = start here, **Planned** = not started, **Done** = acce
 | M0 | Environment & skeleton | **Done** (2026-10-03) | Tools installed, empty projects build, tests and headless boot pass |
 | M1 | Core sim, no graphics | **Done** (2026-10-06, Producer sign-off) | 200 units path across the map deterministically, fast |
 | M2 | Presentation | **Done** (2026-10-07, Producer sign-off after the M2-H2 hardening) | Move an army around a 3D map |
-| M3 | Economy & buildings | **In progress** (sim + data tracks since 2026-10-06-1255, view track from 2026-10-07; 3 / 8; sim hardening M3-H1 done) | Build a Malazan base |
+| M3 | Economy & buildings | **In progress** (sim + data tracks since 2026-10-06-1255, view track from 2026-10-07; 4 / 8; sim hardening M3-H1 done) | Build a Malazan base |
 | M4 | Combat, fog, abilities | Planned | Malazan vs. Whirlwind armies fight with abilities and fog |
 | M5 | AI opponent | Planned | Lose to a Whirlwind AI |
 | M6 | Game shell & real art | Planned | A friend can play it |
@@ -238,7 +238,20 @@ review") stands as feedback, not as a gate. Owner may revisit._
       exact, twins identical, 0 B/tick; felling + building + 500 marchers 1.17 ms avg. The ghost preview and HUD
       are the view's part (M3 HUD criterion). Open: BUG-0091 (S3, refused Builds each run the seal flood),
       BUG-0093 (S3, a cancelled enclosed site leaves a pocket: BUG-0078's symptom via Cancel), BUG-0092 (S4 nits).)_
-- [ ] Production queues (5 slots), rally points, population and cap, refunds on cancel.
+- [x] Production queues (5 slots), rally points, population and cap, refunds on cancel.
+      _(sim half, session 2026-10-07-0925, task M3-4: `Command.Train` (11) / `CancelTrain` (12) / `SetRally` (13) /
+      `ClearRally` (14), not unit orders; `World.CanTrain(player, slot, type, out TrainError)` the one rule (NoBuilding,
+      UnknownType, WrongFaction, NotTrainedHere, LockedByRequirement until techs exist, QueueFull at
+      `EconomyConstants.ProductionQueueCapacity` 5, CannotAfford); paid at queue time, full refund on cancel or
+      destruction; `ProductionSystem.Run` in tick phase 3: the head reserves its pop when it starts (a full cap pauses),
+      spawns at `trainTicks` on the nearest free ring cell nearest the rally point (`FreeCellSearch`, shared with the
+      push-out, capped at `World.LevelBounds`), waits if none; a worker rallied onto a node gathers. `PlayerLedger`
+      (`World.HalfPop` / `HalfPopCap`, derived, not hashed; `UnitStore.Free` releases pop); `BuildingStore` queue /
+      `Progress` / rally arrays hashed only when non-default (golden checkpoints unchanged, `data-hash` moved for
+      `UnitDef.TrainedAtTypeId`); `GameData.UnitsTrainedAt(b)`. QA: hostile flood 8 seeds x 3,000 ticks with exact
+      conservation and pop recount; 500 marchers + 20 halls + 50 gatherers 0.40 ms a tick. The queue / rally UI is the
+      view's M3-V3. Open: BUG-0097 (S3, a spawn on a full plateau lands on another plateau of the same level index),
+      BUG-0095 (S3, push-out fallback still stacks).)_
 - [ ] Age II research and unlocks; Forge upgrades.
 - [ ] Malazan and Whirlwind factions fully defined in data (units, buildings, techs).
       _(In progress, data track: units landed in M1-2 (7 per faction); all ten buildings per faction in
@@ -249,6 +262,12 @@ review") stands as feedback, not as a gate. Owner may revisit._
       gained hp / armor / cost / build time / footprint / provides / requires, pinned by `BuildingContentTests.G`;
       QA `QA/Content/UnitRosterQaTests`); no data value changed. Techs wait for the `techs.json` schema (M3-5).)_
 - [ ] HUD: resource bar, selection panel, command card with grid hotkeys, worker build menus.
+      _(In progress, view track. Resource bar landed in session 2026-10-07-0925, task M3-V1, with the first economy
+      presentation: `ViewApi.StartBase` (a finished Town Hall + `rules.startingWorkers` workers per player in the
+      default match, `--workers N`, `--no-bases`), `ResourcePicker` + right-click Gather (workers gather, others
+      Move, Shift queues), `BuildingViews` (boxes, site progress bar, hp bar), `BuildingBars`, worker tints + cargo
+      markers, F12 worker counts. Open: BUG-0107 (S4 nits); BUG-0106 resolved by rewording the criterion's 60-tick
+      bound to "after arriving". Command card + build menus + ghost: M3-V2; selection panel + production queue: M3-V3.)_
 - [ ] Playable: the owner builds a full Malazan base and reaches Age II.
 
 ## M4 — Combat, fog, abilities
