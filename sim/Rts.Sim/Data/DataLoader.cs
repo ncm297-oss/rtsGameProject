@@ -13,8 +13,8 @@ namespace Rts.Sim.Data;
 /// Collects every problem instead of stopping at the first, so one run lists all broken data.
 /// String ids become dense ints in ordinal-sorted order, so ids never depend on file-system order.
 /// Seconds become ticks and per-second rates become per-tick rates here; the sim never sees seconds.
-/// <c>trainedAt</c>, <c>requires</c>, <c>model</c> and <c>projectile</c> stay unresolved strings until
-/// buildings, techs and assets exist (M3/M4, docs/03 "Data format").
+/// <c>trainedAt</c> resolves to an own-faction building type id (M3-4); <c>requires</c>, <c>model</c> and
+/// <c>projectile</c> stay unresolved strings until techs and assets exist (M3/M4, docs/03 "Data format").
 /// </remarks>
 public static class DataLoader
 {
@@ -99,7 +99,11 @@ public static class DataLoader
             factions[f] = BuildFaction(c, factionJsons[f]!, folders[f], f, own.ToImmutable());
         }
 
+        int errorsBeforeBuildings = c.Errors.Count;
         BuildingDef[] buildings = BuildBuildings(c, folders);
+        // A broken buildings file is reported once, not again through every unit naming one of its buildings.
+        if (c.Errors.Count == errorsBeforeBuildings)
+            ResolveTrainedAt(c, folders, unitFiles, accepted, unitKeys, units, buildings);
 
         if (c.Errors.Count > 0 || table == null || rules == null || resources == null)
             return new DataLoadResult(null, c.Errors);
@@ -111,8 +115,47 @@ public static class DataLoader
             Factions = ImmutableArray.Create(factions),
             Units = ImmutableArray.Create(units),
             Buildings = ImmutableArray.Create(buildings),
+            Trains = TrainsPerBuilding(units, buildings.Length),
         };
         return new DataLoadResult(data, c.Errors);
+    }
+
+    /// <summary>
+    /// M3-4: each unit's <c>trainedAt</c> must name a building of its own faction; it becomes
+    /// <see cref="UnitDef.TrainedAtTypeId"/>. An unknown id and another faction's building are one error each, at the
+    /// unit's <c>trainedAt</c> (a missing one was already reported).
+    /// </summary>
+    private static void ResolveTrainedAt(Checker c, string[] folders, UnitFileJson?[] unitFiles, List<(int Faction, int Index)> accepted,
+        string[] unitKeys, UnitDef[] units, BuildingDef[] buildings)
+    {
+        var keys = new string[buildings.Length];
+        for (int b = 0; b < buildings.Length; b++) keys[b] = buildings[b].Key;
+        foreach ((int f, int i) in accepted)
+        {
+            UnitDef u = units[Array.BinarySearch(unitKeys, unitFiles[f]!.Units![i]!.Id!, StringComparer.Ordinal)];
+            if (u == null || u.TrainedAt.Length == 0) continue;
+            c.CurrentFile = $"factions/{folders[f]}/units.json";
+            string path = $"units[{i}].trainedAt";
+            int b = Array.BinarySearch(keys, u.TrainedAt, StringComparer.Ordinal);
+            if (b < 0)
+                c.Error(path, $"unknown building '{u.TrainedAt}' (not in any buildings.json)");
+            else if (buildings[b].Faction != u.Faction)
+                c.Error(path, $"building '{u.TrainedAt}' belongs to faction '{folders[buildings[b].Faction]}', not '{folders[f]}'");
+            else
+                u.TrainedAtTypeId = b;
+        }
+    }
+
+    /// <summary>Per building type, the unit ids that name it in <c>trainedAt</c>, ascending (units are in id order).</summary>
+    private static ImmutableArray<ImmutableArray<int>> TrainsPerBuilding(UnitDef[] units, int buildingCount)
+    {
+        var lists = new ImmutableArray<int>.Builder[buildingCount];
+        for (int b = 0; b < buildingCount; b++) lists[b] = ImmutableArray.CreateBuilder<int>();
+        for (int id = 0; id < units.Length; id++)
+            if ((uint)units[id].TrainedAtTypeId < (uint)buildingCount) lists[units[id].TrainedAtTypeId].Add(id);
+        var result = ImmutableArray.CreateBuilder<ImmutableArray<int>>(buildingCount);
+        for (int b = 0; b < buildingCount; b++) result.Add(lists[b].ToImmutable());
+        return result.MoveToImmutable();
     }
 
     /// <summary>Converts a duration in seconds to whole ticks at <see cref="SimConstants.TicksPerSecond"/>, rounding to nearest.</summary>

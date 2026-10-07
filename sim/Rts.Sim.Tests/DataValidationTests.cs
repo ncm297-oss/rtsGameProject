@@ -501,6 +501,48 @@ public class DataValidationTests
         Assert.Contains(MalazanBuildings, e.Message);
     }
 
+    // ---------- M3-4: trainedAt resolves to an own-faction building ----------
+
+    [Fact]
+    public void ShippedData_TrainedAt_ResolvesForAll14Units()
+    {
+        GameData data = Load(TestDataDir.Shipped);
+        Assert.Equal(14, data.Units.Length);
+        foreach (UnitDef u in data.Units)
+        {
+            int b = data.FindBuilding(u.TrainedAt);
+            Assert.True(b >= 0, u.Key);
+            Assert.Equal(b, u.TrainedAtTypeId);
+            Assert.Equal(u.Faction, data.Buildings[b].Faction);
+            Assert.Contains(u.Id, data.UnitsTrainedAt(b));
+        }
+        Assert.Equal(data.FindBuilding("malazan_barracks"), data.Units[data.FindUnit("malazan_heavy_infantry")].TrainedAtTypeId);
+    }
+
+    [Theory]
+    [InlineData("\"malazan_barack\"", "unknown building 'malazan_barack'")]
+    [InlineData("\"whirlwind_archer_camp\"", "belongs to faction 'whirlwind', not 'malazan'")]
+    public void TrainedAt_UnknownOrAnotherFactions_IsOneErrorAtTheField(string rawJson, string message)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.SetUnitField("malazan", "malazan_crossbowman", "trainedAt", rawJson);
+
+        DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
+        Assert.Equal(MalazanUnits, e.File);
+        Assert.Equal("units[2].trainedAt", e.Path);
+        Assert.Contains(message, e.Message);
+    }
+
+    [Fact]
+    public void TrainedAt_NotChecked_WhenTheBuildingsThemselvesHaveErrors()
+    {
+        // A broken buildings file is one error, not one more per unit naming its buildings.
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson(MalazanBuildings, root => root["buildings"]![0]!["hp"] = 0);
+        DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
+        Assert.Equal(MalazanBuildings, e.File);
+    }
+
     private static GameData Load(string dir)
     {
         DataLoadResult result = DataLoader.LoadAll(dir);

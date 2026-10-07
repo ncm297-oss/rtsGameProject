@@ -69,7 +69,7 @@ public sealed class Simulation
         _recorder?.OnEnqueued(in command);
     }
 
-    /// <summary>Runs one tick: applies this tick's commands in (player, sequence) order, rebuilds the spatial hash, runs gather loops, then builders and repairers, starts queued orders, moves units, then bumps <see cref="TickNumber"/>.</summary>
+    /// <summary>Runs one tick: applies this tick's commands in (player, sequence) order, rebuilds the spatial hash, trains and spawns units, runs gather loops, then builders and repairers, starts queued orders, moves units, then bumps <see cref="TickNumber"/>.</summary>
     public void Tick()
     {
         World.Units.SnapshotPrevPositions();
@@ -83,6 +83,9 @@ public sealed class Simulation
 
         // Neighbour index for every later phase; right after commands so this tick's spawns are queryable.
         World.Spatial.Rebuild(World.Units);
+
+        // Phase 3: production (M3-4): training timers, spawns, rally orders (their walks move in phase 9).
+        ProductionSystem.Run(World);
 
         // Phase 4: economy (M3-2): gather loops and drop-offs; their walks start here and move in phase 9.
         EconomySystem.Run(World);
@@ -109,10 +112,11 @@ public sealed class Simulation
         _recorder = recorder;
     }
 
-    /// <summary>64-bit FNV-1a hash of all gameplay state: tick, units (Hold, order queues, gather loops and cargo included), RNG streams, flow-field cache metadata, nav grid versions (and the movement pass's last seen block version), resource nodes, buildings, player totals, and pending commands.</summary>
+    /// <summary>64-bit FNV-1a hash of all gameplay state: tick, units (Hold, order queues, gather loops and cargo included), RNG streams, flow-field cache metadata, nav grid versions (and the movement pass's last seen block version), resource nodes, buildings (production queues and rally points included), player totals, and pending commands.</summary>
     /// <remarks>
-    /// Derived state is left out: the spatial hash (rebuilt from the units every tick) and
-    /// Speed/Radius (they follow from TypeId). The flow-field cache's keys, versions and LRU stamps
+    /// Derived state is left out: the spatial hash (rebuilt from the units every tick),
+    /// Speed/Radius (they follow from TypeId), and population (M3-4: <see cref="World.HalfPop"/> follows from the live
+    /// units and the started production items, <see cref="World.HalfPopCap"/> from the finished buildings). The flow-field cache's keys, versions and LRU stamps
     /// are in, because they decide which units wait under the build cap (BUG-0021); the fields'
     /// contents are not, since they follow from the grid and the key.
     /// </remarks>
@@ -263,22 +267,27 @@ public sealed class Simulation
             case CommandKind.SpawnBuilding:
                 EconomySystem.ApplySpawnBuilding(World, in command);
                 break;
+            case CommandKind.Train:
+                ProductionSystem.ApplyTrain(World, in command);
+                break;
+            case CommandKind.CancelTrain:
+                ProductionSystem.ApplyCancelTrain(World, in command);
+                break;
+            case CommandKind.SetRally:
+                ProductionSystem.ApplySetRally(World, in command);
+                break;
+            case CommandKind.ClearRally:
+                ProductionSystem.ApplyClearRally(World, in command);
+                break;
         }
     }
 
     private void ApplySpawn(in Command command)
     {
-        // An unknown type or a full store drops the spawn: a command must never crash the sim.
+        // An unknown type or a full store drops the spawn: a command must never crash the sim. A dev spawn ignores the
+        // population cap but counts toward the population (M3-4).
         GameData data = World.Data;
         if ((uint)command.TypeId >= (uint)data.Units.Length) return;
-        if (!World.Units.TryAlloc(out EntityHandle h)) return;
-        UnitDef def = data.Units[command.TypeId];
-        UnitStore u = World.Units;
-        u.Position[h.Index] = command.Position;
-        u.PrevPosition[h.Index] = command.Position;
-        u.Owner[h.Index] = command.Player;
-        u.TypeId[h.Index] = command.TypeId;
-        u.Speed[h.Index] = def.SpeedPerTick;
-        u.Radius[h.Index] = def.Radius;
+        World.Units.TrySpawn(command.Player, command.TypeId, data.Units[command.TypeId], command.Position, out _);
     }
 }

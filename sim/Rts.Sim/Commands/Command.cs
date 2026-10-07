@@ -21,7 +21,11 @@ public struct Command
     public int Tick;
     /// <summary>Per-player issue order, used to break ties within a tick.</summary>
     public int Sequence;
-    /// <summary>Unit type for <see cref="CommandKind.SpawnUnit"/>; building type for <see cref="CommandKind.SpawnBuilding"/> and <see cref="CommandKind.Build"/>.</summary>
+    /// <summary>
+    /// Unit type for <see cref="CommandKind.SpawnUnit"/> and <see cref="CommandKind.Train"/>; building type for
+    /// <see cref="CommandKind.SpawnBuilding"/> and <see cref="CommandKind.Build"/>; the queue index for
+    /// <see cref="CommandKind.CancelTrain"/>; the building's nav cell for <see cref="CommandKind.SetRally"/>.
+    /// </summary>
     public int TypeId;
     /// <summary>Target position (x, z) in meters.</summary>
     public Vector2 Position;
@@ -40,7 +44,8 @@ public struct Command
     /// <summary>True when <see cref="Kind"/> is a defined <see cref="CommandKind"/> and <see cref="Flags"/> holds only known bits, set on unit orders only: what <c>Simulation.Enqueue</c> accepts and a replay may hold.</summary>
     /// <remarks>
     /// <see cref="QueuedFlag"/> means nothing on a <see cref="CommandKind.Noop"/>, a
-    /// <see cref="CommandKind.SpawnUnit"/>, a <see cref="CommandKind.SpawnBuilding"/> or a <see cref="CommandKind.Cancel"/>, so it is refused there rather than carried, ignored, in the
+    /// <see cref="CommandKind.SpawnUnit"/>, a <see cref="CommandKind.SpawnBuilding"/>, a <see cref="CommandKind.Cancel"/> or the production kinds
+    /// (<see cref="CommandKind.Train"/> to <see cref="CommandKind.ClearRally"/>), so it is refused there rather than carried, ignored, in the
     /// replay and the hash (BUG-0056). Written as a switch, not <c>Enum.IsDefined</c>, so a new kind is
     /// refused until it is added here on purpose.
     /// </remarks>
@@ -48,7 +53,8 @@ public struct Command
     {
         bool knownKind = Kind is CommandKind.Noop or CommandKind.SpawnUnit or CommandKind.Move or CommandKind.Stop
             or CommandKind.HoldPosition or CommandKind.AttackMove or CommandKind.SpawnBuilding or CommandKind.Gather
-            or CommandKind.Build or CommandKind.Cancel or CommandKind.Repair;
+            or CommandKind.Build or CommandKind.Cancel or CommandKind.Repair
+            or CommandKind.Train or CommandKind.CancelTrain or CommandKind.SetRally or CommandKind.ClearRally;
         if (!knownKind || (Flags & ~KnownFlags) != 0) return false;
         return Flags == 0 || IsUnitOrder;
     }
@@ -60,7 +66,8 @@ public struct Command
         return Kind switch
         {
             CommandKind.SpawnUnit or CommandKind.Move or CommandKind.AttackMove or CommandKind.SpawnBuilding or CommandKind.Gather
-                or CommandKind.Build or CommandKind.Cancel or CommandKind.Repair =>
+                or CommandKind.Build or CommandKind.Cancel or CommandKind.Repair
+                or CommandKind.Train or CommandKind.CancelTrain or CommandKind.SetRally or CommandKind.ClearRally =>
                 float.IsFinite(Position.X) && float.IsFinite(Position.Y),
             _ => true,
         };
@@ -115,6 +122,27 @@ public struct Command
     /// <summary>A command sending <paramref name="player"/>'s worker <paramref name="unit"/> to repair the own building covering <paramref name="building"/> (meters).</summary>
     public static Command Repair(int player, EntityHandle unit, Vector2 building, bool queued = false) =>
         UnitOrder(CommandKind.Repair, player, unit, building, queued);
+
+    /// <summary>A command queueing a unit of <paramref name="unitTypeId"/> at <paramref name="player"/>'s finished building covering <paramref name="building"/> (meters), paid now (M3-4).</summary>
+    public static Command Train(int player, Vector2 building, int unitTypeId) =>
+        new() { Kind = CommandKind.Train, Player = player, TypeId = unitTypeId, Position = building };
+
+    /// <summary>A command removing item <paramref name="slotIndex"/> (0 = the head, training) from the queue of <paramref name="player"/>'s building covering <paramref name="building"/> (meters), refunding its full cost.</summary>
+    public static Command CancelTrain(int player, Vector2 building, int slotIndex) =>
+        new() { Kind = CommandKind.CancelTrain, Player = player, TypeId = slotIndex, Position = building };
+
+    /// <summary>
+    /// A command setting the rally point of <paramref name="player"/>'s finished building covering nav cell
+    /// <paramref name="buildingCell"/> (<c>y * Width + x</c>, e.g. its <c>BuildingStore.Cell</c> anchor) to
+    /// <paramref name="target"/> (meters). The building rides in <see cref="TypeId"/> so the target can keep
+    /// <see cref="Position"/>'s full precision.
+    /// </summary>
+    public static Command SetRally(int player, int buildingCell, Vector2 target) =>
+        new() { Kind = CommandKind.SetRally, Player = player, TypeId = buildingCell, Position = target };
+
+    /// <summary>A command clearing the rally point of <paramref name="player"/>'s finished building covering <paramref name="building"/> (meters).</summary>
+    public static Command ClearRally(int player, Vector2 building) =>
+        new() { Kind = CommandKind.ClearRally, Player = player, Position = building };
 
     private static Command UnitOrder(CommandKind kind, int player, EntityHandle unit, Vector2 target, bool queued) =>
         new() { Kind = kind, Player = player, Unit = unit, Position = target, Flags = queued ? QueuedFlag : 0 };

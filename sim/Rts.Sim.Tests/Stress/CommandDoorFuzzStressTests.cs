@@ -27,12 +27,12 @@ public class CommandDoorFuzzStressTests
 
     private const int Players = 2;
 
-    /// <summary>docs/03: a defined kind, no flag but Queued, and Queued only on a unit order (Move, Stop, HoldPosition, AttackMove, Gather, Build, Repair; not SpawnBuilding, M3-2, or Cancel, M3-3).</summary>
+    /// <summary>docs/03: a defined kind, no flag but Queued, and Queued only on a unit order (Move, Stop, HoldPosition, AttackMove, Gather, Build, Repair; not SpawnBuilding, M3-2, Cancel, M3-3, or the production kinds, M3-4).</summary>
     private static bool OracleWellFormed(int kind, int flags)
     {
-        if (kind < 0 || kind > 10) return false;
+        if (kind < 0 || kind > 14) return false; // M3-4: 11-14 are Train, CancelTrain, SetRally, ClearRally
         if ((flags & ~1) != 0) return false;
-        return flags == 0 || (kind >= 2 && kind != 6 && kind != 9);
+        return flags == 0 || (kind >= 2 && kind <= 10 && kind != 6 && kind != 9);
     }
 
     private static Command RandomCommand(ref SimRng rng, Simulation sim, List<Vector2> open, List<Vector2> nodes)
@@ -71,7 +71,7 @@ public class CommandDoorFuzzStressTests
         // About one command in five is malformed in one way.
         switch (rng.NextInt(0, 25))
         {
-            case 0: c.Kind = (CommandKind)(11 + rng.NextInt(0, 3)); break; // 8-10 are Build, Cancel, Repair since M3-3
+            case 0: c.Kind = (CommandKind)(15 + rng.NextInt(0, 3)); break; // 8-10 Build, Cancel, Repair (M3-3); 11-14 production (M3-4)
             case 1: c.Kind = (CommandKind)(-1 - rng.NextInt(0, 3)); break;
             case 2: c.Kind = (CommandKind)int.MinValue; break;
             case 3: c.Flags = 2 << rng.NextInt(0, 30); break;

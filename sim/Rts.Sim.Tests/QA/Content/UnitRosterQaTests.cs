@@ -190,19 +190,19 @@ public class UnitRosterQaTests
     }
 
     /// <summary>
-    /// Pins today's documented gap (docs/03 "Data format": <c>trainedAt</c> stays an unresolved string): a cross-faction
-    /// or misspelled <c>trainedAt</c> still loads, so <see cref="EveryUnit_TrainsAtItsOwnFactionsHallForItsSlot"/> is the
-    /// only guard. When the loader starts resolving it, flip this to expect an error.
+    /// Was the pinned gap "an unresolved <c>trainedAt</c> still loads"; flipped by M3-4 (sim track) as this pin asked:
+    /// the loader resolves <c>trainedAt</c> now, so a cross-faction or misspelled one is one error at the unit's field.
     /// </summary>
     [Theory]
     [InlineData("malazan_barracks")]
     [InlineData("whirlwind_raider_camp_typo")]
-    public void UnresolvedTrainedAt_StillLoads_ContentTestIsTheGuard(string trainedAt)
+    public void UnresolvedTrainedAt_IsOneErrorAtTheField(string trainedAt)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
         dir.EditJson("factions/whirlwind/units.json", root => root["units"]![1]!["trainedAt"] = trainedAt);
         DataLoadResult r = DataLoader.LoadAll(dir.Path);
-        Assert.True(r.Ok, string.Join("\n", r.Errors));
-        Assert.Equal(trainedAt, r.Data!.Units[r.Data.FindUnit("whirlwind_raider")].TrainedAt);
+        Assert.Null(r.Data);
+        DataError e = Assert.Single(r.Errors);
+        Assert.Equal(("factions/whirlwind/units.json", "units[1].trainedAt"), (e.File, e.Path));
     }
 }

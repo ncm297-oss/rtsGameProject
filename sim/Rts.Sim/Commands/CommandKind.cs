@@ -35,4 +35,16 @@ public enum CommandKind
 
     /// <summary>Orders worker <see cref="Command.Unit"/> to repair the player's own damaged building covering <see cref="Command.Position"/> (M3-3).</summary>
     Repair = 10,
+
+    /// <summary>Queues a unit of <see cref="Command.TypeId"/> at the player's own finished building covering <see cref="Command.Position"/>, paying its cost now (M3-4; not a unit order).</summary>
+    Train = 11,
+
+    /// <summary>Removes item <see cref="Command.TypeId"/> (0 = the head) from the production queue of the player's own finished building covering <see cref="Command.Position"/>, refunding its full cost (M3-4).</summary>
+    CancelTrain = 12,
+
+    /// <summary>Sets the rally point of the player's own finished building covering nav cell <see cref="Command.TypeId"/> (<c>y * Width + x</c>) to <see cref="Command.Position"/> (M3-4).</summary>
+    SetRally = 13,
+
+    /// <summary>Clears the rally point of the player's own finished building covering <see cref="Command.Position"/> (M3-4).</summary>
+    ClearRally = 14,
 }
