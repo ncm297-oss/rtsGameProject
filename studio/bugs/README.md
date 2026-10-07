@@ -120,3 +120,6 @@ bugs outrank new features.
 | [BUG-0087](BUG-0087-sfx-sound-playing-at-quit-leaks-objectdb-in-existing-scenes.md) | S3 | open | A sound still playing at quit leaves an ObjectDB leak warning in existing test scenes (intermittent) |
 | [BUG-0088](BUG-0088-orderstest-double-tap-row-flaky-under-cpu-load.md) | S4 | open | `OrdersTest.tscn` double-tap row fails under CPU load: process-time wait vs wall-clock tap window (pre-existing, seen at the 1744 ACCEPT) |
 | [BUG-0090](BUG-0090-d1-building-text-ahead-of-schema.md) | S4 | open | D1 building descriptions promise tower attack/detection and requirements the schema lacks; stale BuildingSlot comment |
+| [BUG-0091](BUG-0091-refused-builds-each-run-the-seal-flood.md) | S3 | open | Refused Builds each run the never-seal flood before the cheap checks; 100 in one tick cost 22 ms |
+| [BUG-0092](BUG-0092-m3-3-nits.md) | S4 | open | M3-3 nits: tiny repair factor rounds to 0, a holding worker can't build on its spot, push-out fallback stacks units |
+| [BUG-0093](BUG-0093-cancel-pocket-reopens-bug-0078.md) | S3 | open | A cancelled walled-in site leaves a pocket; BUG-0078's stuck worker is reachable with player commands |
