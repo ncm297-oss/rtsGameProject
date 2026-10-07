@@ -1,6 +1,7 @@
 using System.Numerics;
 using Rts.Sim.Commands;
 using Rts.Sim.Entities;
+using Rts.Sim.Map;
 using Rts.Sim.Replays;
 
 namespace Rts.Sim.Tests;
@@ -165,5 +166,90 @@ public class DeterminismTests
         ReplayResult played = ReplayPlayer.Run(parsed!, TestSim.Data);
         Assert.True(played.Ok, played.ToString());
         Assert.Equal(Ticks, played.TicksRun);
+    }
+
+    /// <summary>
+    /// M3-2b: 20 workers gathering (half of them felling trees, so cells open while the march goes on), 64
+    /// marchers in 32 goal groups re-ordered every 300 ticks, and a Keep dropped every 300 ticks (closing
+    /// changes): two sims hash equal after every tick for 3,000 ticks, and the recorded run plays back.
+    /// </summary>
+    [Fact]
+    public void ChoppingMarchingAndBuildingDrops_TwinsHashEqualEveryTick_For3000Ticks_AndTheReplayRoundTrips()
+    {
+        const int ticks = 3000;
+        (Simulation a, Func<int, bool> stepA, ReplayRecorder? recorder) = GridChangeScene(31, record: true);
+        (Simulation b, Func<int, bool> stepB, _) = GridChangeScene(31, record: false);
+        int wood0 = Trees(a.World), dropped = 0;
+        int block0 = a.World.NavGrid.BlockVersion, version0 = a.World.NavGrid.Version;
+        Assert.Equal(a.StateHash(), b.StateHash());
+        for (int t = 0; t < ticks; t++)
+        {
+            if (stepA(t)) dropped++;
+            stepB(t);
+            a.Tick();
+            b.Tick();
+            Assert.True(a.StateHash() == b.StateHash(), $"hashes differ after tick {a.TickNumber}");
+        }
+        int felled = wood0 - Trees(a.World);
+        Assert.True(felled >= 2, $"only {felled} trees felled"); // 10 workers on trees fell 2 in 3,000 ticks (seed 31)
+        Assert.True(dropped >= 8 && a.World.Buildings.Count >= 8, $"{dropped} drops, {a.World.Buildings.Count} buildings");
+        Assert.True(a.World.NavGrid.BlockVersion - block0 >= 8 && a.World.NavGrid.Version - version0 >= 11);
+
+        Replay recorded = recorder!.ToReplay();
+        Assert.Equal(ReplayError.None, ReplayFormat.TryRead(ReplayFormat.Write(recorded), out Replay? parsed));
+        ReplayResult played = ReplayPlayer.Run(parsed!, TestSim.Data);
+        Assert.True(played.Ok, played.ToString());
+        Assert.Equal(recorded.TickCount, played.TicksRun);
+    }
+
+    private static int Trees(World w)
+    {
+        int n = 0;
+        for (int k = 0; k < w.Resources.Capacity; k++)
+            if (w.Resources.Alive[k] && w.Data.Resources[w.Resources.TypeId[k]].Resource == Data.ResourceKind.Wood) n++;
+        return n;
+    }
+
+    /// <summary>The scene of the test above, set up to the first march tick; the step issues tick <c>t</c>'s commands and returns true when it dropped a Keep.</summary>
+    private static (Simulation Sim, Func<int, bool> Step, ReplayRecorder? Recorder) GridChangeScene(ulong seed, bool record)
+    {
+        var map = MapGenParams.Default with { Forests = 8, GoldMines = 2 };
+        var sim = new Simulation(TestSim.Config(Seed: seed, PlayerCount: 1, UnitCapacity: 96, CommandCapacity: 256) with { Map = map });
+        ReplayRecorder? recorder = record ? new ReplayRecorder(sim, checkpointInterval: 100) : null;
+        NavGrid g = sim.World.NavGrid;
+        EconomyScenario.Setup(sim, 20);
+        UnitStore u = sim.World.Units;
+        var rng = new Determinism.SimRng(seed, 73);
+        List<int> open = FlowFieldOracle.PassableCells(g);
+        var before = (bool[])u.Alive.Clone();
+        for (int k = 0; k < 64; k++) sim.Enqueue(Command.SpawnUnit(0, GatherMaps.Infantry, MoveScenario.Center(g, open[rng.NextInt(0, open.Count)])));
+        sim.Tick();
+        sim.Tick();
+        var marchers = new List<EntityHandle>();
+        for (int i = 0; i < u.Capacity; i++)
+            if (u.Alive[i] && !before[i]) marchers.Add(new EntityHandle(i, u.Generation[i]));
+        Assert.Equal(64, marchers.Count);
+        bool Step(int t)
+        {
+            if (t % 300 == 0)
+            {
+                for (int k = 0; k < 32; k++)
+                {
+                    Vector2 goal = MoveScenario.Center(g, open[rng.NextInt(0, open.Count)]);
+                    sim.Enqueue(Command.Move(0, marchers[2 * k], goal));
+                    sim.Enqueue(Command.Move(0, marchers[2 * k + 1], goal));
+                }
+            }
+            if (t % 300 != 150) return false;
+            for (int tries = 0; tries < 200; tries++)
+            {
+                int c = open[rng.NextInt(0, open.Count)];
+                if (!sim.World.Buildings.Fits(GatherMaps.Keep, c)) continue;
+                sim.Enqueue(Command.SpawnBuilding(0, GatherMaps.Keep, MoveScenario.Center(g, c)));
+                return true;
+            }
+            return false;
+        }
+        return (sim, Step, recorder);
     }
 }

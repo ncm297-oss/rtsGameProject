@@ -54,8 +54,11 @@ public sealed class FlowField
     /// <summary>The cell the field actually leads to: <see cref="RequestedCell"/>, or the nearest passable cell if that is blocked; -1 if the grid has no passable cell.</summary>
     public int TargetCell { get; private set; } = -1;
 
-    /// <summary><see cref="NavGrid.Version"/> at build time; a mismatch means the field is stale.</summary>
+    /// <summary><see cref="NavGrid.Version"/> at build time; a mismatch means the field is stale (it may miss a shorter way through newly opened cells, and cells opened since have no direction).</summary>
     public int Version { get; private set; }
+
+    /// <summary><see cref="NavGrid.BlockVersion"/> at build time; while it matches, no cell the field reaches has been blocked since, so units may still follow it (M3-2b).</summary>
+    public int BlockVersion { get; private set; }
 
     /// <summary>Path cost from the cell to <see cref="TargetCell"/>; +infinity for blocked or unreachable cells.</summary>
     public float CostAt(int cell) => _cost[cell];
@@ -131,27 +134,63 @@ public sealed class FlowField
     /// direction d (both cells passable and, for a diagonal, both side cells too). Depends only on the
     /// grid, so the cache computes it once per <see cref="NavGrid.Version"/> and shares it by all fields.
     /// </summary>
+    /// <remarks>
+    /// Runs after every grid change (with felling, every tick), so inner cells read the flags array
+    /// directly instead of 25 bounds-checked <see cref="NavGrid.IsPassable"/> calls each (M3-2b: 1.5 ms
+    /// a call on 120 x 72 in Debug before). The outer ring takes the general path, which bounds-checks.
+    /// </remarks>
     internal static void ComputeSteps(NavGrid grid, byte[] steps)
     {
-        int w = grid.Width;
-        for (int y = 0; y < grid.Height; y++)
+        int w = grid.Width, h = grid.Height;
+        ReadOnlySpan<NavFlags> flags = grid.Flags;
+        for (int y = 0; y < h; y++)
         {
+            bool ringRow = y == 0 || y == h - 1;
             for (int x = 0; x < w; x++)
             {
-                int mask = 0;
-                if (grid.IsPassable(x, y))
+                int i = y * w + x;
+                if ((flags[i] & NavFlags.Blocked) != 0)
                 {
-                    for (int d = 0; d < DirectionCount; d++)
-                    {
-                        int dx = DirX[d], dy = DirY[d];
-                        if (!grid.IsPassable(x + dx, y + dy)) continue;
-                        if ((d & 1) == 1 && !(grid.IsPassable(x + dx, y) && grid.IsPassable(x, y + dy))) continue;
-                        mask |= 1 << d;
-                    }
+                    steps[i] = 0;
+                    continue;
                 }
-                steps[y * w + x] = (byte)mask;
+                if (ringRow || x == 0 || x == w - 1)
+                {
+                    steps[i] = StepMask(grid, x, y);
+                    continue;
+                }
+                // Same bits as StepMask: d is open if its cell is, a diagonal only if both side cells are too.
+                bool e = (flags[i + 1] & NavFlags.Blocked) == 0, s = (flags[i + w] & NavFlags.Blocked) == 0;
+                bool west = (flags[i - 1] & NavFlags.Blocked) == 0, n = (flags[i - w] & NavFlags.Blocked) == 0;
+                int mask = 0;
+                if (e) mask |= 1;
+                if (e && s && (flags[i + w + 1] & NavFlags.Blocked) == 0) mask |= 2;
+                if (s) mask |= 4;
+                if (west && s && (flags[i + w - 1] & NavFlags.Blocked) == 0) mask |= 8;
+                if (west) mask |= 16;
+                if (west && n && (flags[i - w - 1] & NavFlags.Blocked) == 0) mask |= 32;
+                if (n) mask |= 64;
+                if (e && n && (flags[i - w + 1] & NavFlags.Blocked) == 0) mask |= 128;
+                steps[i] = (byte)mask;
             }
         }
+    }
+
+    /// <summary>The step mask of one cell, read through bounds-checked grid queries (the definition <see cref="ComputeSteps"/> follows).</summary>
+    internal static byte StepMask(NavGrid grid, int x, int y)
+    {
+        int mask = 0;
+        if (grid.IsPassable(x, y))
+        {
+            for (int d = 0; d < DirectionCount; d++)
+            {
+                int dx = DirX[d], dy = DirY[d];
+                if (!grid.IsPassable(x + dx, y + dy)) continue;
+                if ((d & 1) == 1 && !(grid.IsPassable(x + dx, y) && grid.IsPassable(x, y + dy))) continue;
+                mask |= 1 << d;
+            }
+        }
+        return (byte)mask;
     }
 
     /// <summary>Rebuilds this field in place for a target using step masks from <see cref="ComputeSteps"/>; allocation-free.</summary>
@@ -165,6 +204,7 @@ public sealed class FlowField
         Array.Fill(_direction, NoDirection);
         RequestedCell = requestedCell;
         Version = grid.Version;
+        BlockVersion = grid.BlockVersion;
         int w = Width;
         TargetCell = grid.IsPassable(requestedCell % w, requestedCell / w)
             ? requestedCell

@@ -176,7 +176,7 @@ public class FieldCacheHashQaTests
         var cacheFields = new Dictionary<string, string>
         {
             ["_grid"] = "derived: the world's grid",
-            ["_fields"] = "hashed per used slot (RequestedCell, Version); contents derived from grid + key",
+            ["_fields"] = "hashed per used slot (RequestedCell, Version, BlockVersion); contents derived from the grid at Version + key",
             ["_lastUse"] = "hashed per used slot",
             ["_slotOfCell"] = "derived: inverse of the used slots' RequestedCell (QA index fuzz)",
             ["_queue"] = "scratch",
@@ -196,6 +196,7 @@ public class FieldCacheHashQaTests
             ["<RequestedCell>k__BackingField"] = "hashed",
             ["<TargetCell>k__BackingField"] = "derived from grid + RequestedCell",
             ["<Version>k__BackingField"] = "hashed",
+            ["<BlockVersion>k__BackingField"] = "hashed (M3-2b: decides whether the field is usable)",
         };
         string Unknown(Type t, Dictionary<string, string> known) => string.Join(", ",
             t.GetFields(Priv | BindingFlags.Public).Select(f => f.Name).Where(n => !known.ContainsKey(n)));
@@ -211,6 +212,13 @@ public class FieldCacheHashQaTests
         Assert.All(typeof(FlowFieldCache).GetProperties(BindingFlags.Public | BindingFlags.Instance),
             p => Assert.False(p.SetMethod?.IsPublic ?? false, $"{p.Name} has a public setter"));
         Assert.False(typeof(World).GetProperty("FlowFields")!.SetMethod?.IsPublic ?? false);
+
+        // M3-2b: the movement pass's last seen NavGrid.BlockVersion lives on World and decides when progress marks
+        // reset, so it is hashed (StateHashTests.Hash_CoversTheSeenBlockVersion); poke it and the hash moves.
+        var sim = new Simulation(TestSim.Config(4404, 1, UnitCapacity: 8, CommandCapacity: 8));
+        ulong h = sim.StateHash();
+        sim.World.SeenBlockVersion++;
+        Assert.NotEqual(h, sim.StateHash());
     }
 
     [Fact]

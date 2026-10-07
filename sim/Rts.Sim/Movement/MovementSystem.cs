@@ -10,10 +10,12 @@ namespace Rts.Sim.Movement;
 /// <summary>Tick phases 8-9: walks Moving units along their goal's flow field at their data speed, with separation, crowded arrival, giving up and shoving (docs/03 "Local movement").</summary>
 /// <remarks>
 /// Units are grouped by goal cell, then slot, so each goal's field is fetched once per tick. A
-/// build pass first serves goals without a cached field, oldest order first, at most
-/// <see cref="MovementConstants.MaxFieldBuildsPerTick"/> per tick; units whose field is still
-/// missing wait. Which goals get built (and so which units wait) depends on order ticks, goal cells
-/// and the hashed cache state, never on slot order alone.
+/// build pass first serves goals without a usable cached field, oldest order first, then refreshes
+/// usable fields gone stale by opened cells, at most <see cref="MovementConstants.MaxFieldBuildsPerTick"/>
+/// builds per tick in all; units whose field is still missing wait, units with a usable field walk it.
+/// Which goals get built (and so which units wait) depends on order ticks, goal cells and the hashed
+/// cache state, never on slot order alone. A closing grid change (<see cref="NavGrid.BlockVersion"/>)
+/// resets every walker's progress mark, since its route may now be longer (BUG-0077).
 /// <para>
 /// Then two passes: every Moving unit plans its step from start-of-tick positions and states
 /// (flow or direct aim, detour, sidestep, overlap push, arrival), and only then are the plans
@@ -31,7 +33,7 @@ public static class MovementSystem
     private const byte ActWalk = 0;    // take PlannedStep: progress, the stuck count resets
     private const byte ActStuck = 1;   // take PlannedStep (possibly zero: refused): a stuck tick
     private const byte ActBackOff = 2; // too tight to stop: take PlannedStep; a stuck tick, but keeps the goal at the limit
-    private const byte ActWait = 3;    // no field yet: hold still, keep the order
+    private const byte ActWait = 3;    // no usable field yet (or its cell opened after the build): hold still, keep the order
     private const byte ActArrive = 4;  // stop here; keep GoalCell so later units can pack against it
     private const byte ActAbandon = 5; // off the map or no route: stop and drop the goal
     private const byte ActPush = 6;    // blocked, moving only by pushing parked units: take PlannedStep; the stuck count holds
@@ -58,6 +60,7 @@ public static class MovementSystem
         // live goals outnumbered cache slots: a full build per unit per tick (BUG-0018).
         Array.Sort(order, 0, n);
         BuildMissingFields(world, n);
+        ResetProgressOnClosing(world, n);
         Plan(world, n);
         int backedOff = Apply(world, n);
         ApplyShoves(world, backedOff);
@@ -127,8 +130,10 @@ public static class MovementSystem
                     byte d = field.DirectionAt(cell);
                     if (d == FlowField.NoDirection)
                     {
-                        // Standing in a blocked cell (e.g. spawned on a cliff) or one the goal can't reach.
-                        noAim = ActAbandon;
+                        // In a stale field, a cell opened after the build (a unit shoved or spawned onto a
+                        // felled tree's cell): wait for the rebuild, which the build pass counts as a miss.
+                        // Otherwise standing in a blocked cell (e.g. spawned on a cliff) or one the goal can't reach.
+                        noAim = field.Version != grid.Version ? ActWait : ActAbandon;
                     }
                     else if (!IsLegalStep(grid, cx, cy, goalCell % grid.Width, goalCell / grid.Width))
                     {
@@ -504,14 +509,19 @@ public static class MovementSystem
     }
 
     /// <summary>
-    /// Phase 8: touches every needed field that is cached, then builds the missing ones with the
-    /// oldest orders, at most <see cref="MovementConstants.MaxFieldBuildsPerTick"/>, without allocating.
+    /// Phase 8: touches every needed field that is cached and usable, then builds the missing ones
+    /// with the oldest orders, then refreshes the stale ones, at most
+    /// <see cref="MovementConstants.MaxFieldBuildsPerTick"/> builds in all, without allocating.
     /// </summary>
     /// <remarks>
     /// A goal group's age is its oldest unit's <see cref="UnitStore.OrderTick"/>; ties go to the lower
     /// goal cell (BUG-0022). Touching the hits first means a build evicts a field nobody used this
     /// tick whenever one exists. A group needs a field only if one of its units stands on the map
-    /// outside the goal cell; the others arrive or stop without one.
+    /// outside the goal cell; the others arrive or stop without one. A *miss* is a needed goal with no
+    /// usable field, or with a stale one that has no direction where one of its units stands (a cell
+    /// opened after the build: that unit waits). A *refresh* is any other stale usable field: its units
+    /// walk it meanwhile, so refreshes take what the misses leave of the cap, oldest field version
+    /// first, ties to the lower goal cell (M3-2b, BUG-0073).
     /// </remarks>
     private static void BuildMissingFields(World world, int n)
     {
@@ -520,11 +530,13 @@ public static class MovementSystem
         FlowFieldCache cache = world.FlowFields;
         long[] order = world.MoveOrder;
         long[] misses = world.FieldMisses;
-        int missCount = 0;
+        long[] refreshes = world.FieldRefreshes;
+        int missCount = 0, refreshCount = 0;
         int k = 0;
         while (k < n)
         {
             int goalCell = (int)(order[k] >> 32);
+            int first = k;
             int oldest = int.MaxValue;
             bool needsField = false;
             for (; k < n && (int)(order[k] >> 32) == goalCell; k++)
@@ -534,13 +546,51 @@ public static class MovementSystem
                 if (!needsField && grid.WorldToCell(u.Position[i], out int cx, out int cy) && cy * grid.Width + cx != goalCell)
                     needsField = true;
             }
-            if (needsField && cache.TryGetCached(goalCell) == null)
+            if (!needsField) continue;
+            FlowField? field = cache.TryGetCached(goalCell);
+            if (field == null || (field.Version != grid.Version && StrandedInStaleField(grid, u, order, first, k, goalCell, field)))
                 misses[missCount++] = ((long)oldest << 32) | (uint)goalCell;
+            else if (field.Version != grid.Version)
+                refreshes[refreshCount++] = ((long)field.Version << 32) | (uint)goalCell;
         }
         Array.Sort(misses, 0, missCount);
         int builds = Math.Min(missCount, MovementConstants.MaxFieldBuildsPerTick);
         for (int b = 0; b < builds; b++)
             cache.Get((int)(misses[b] & 0xFFFFFFFF));
+        Array.Sort(refreshes, 0, refreshCount);
+        int refreshBuilds = Math.Min(refreshCount, MovementConstants.MaxFieldBuildsPerTick - builds);
+        for (int b = 0; b < refreshBuilds; b++)
+            cache.Get((int)(refreshes[b] & 0xFFFFFFFF));
+    }
+
+    /// <summary>True if a unit of the goal group in <c>order[from..to)</c> stands outside the goal cell on a cell with no direction in the stale <paramref name="field"/> (a cell opened after the build).</summary>
+    private static bool StrandedInStaleField(NavGrid grid, UnitStore u, long[] order, int from, int to, int goalCell, FlowField field)
+    {
+        for (int k = from; k < to; k++)
+        {
+            int i = (int)(order[k] & 0xFFFFFFFF);
+            if (!grid.WorldToCell(u.Position[i], out int cx, out int cy)) continue;
+            int cell = cy * grid.Width + cx;
+            if (cell != goalCell && field.DirectionAt(cell) == FlowField.NoDirection) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// After a closing grid change (<see cref="NavGrid.BlockVersion"/> differs from the value the last
+    /// pass saw), clears every Moving unit's progress mark (<see cref="UnitStore.BestRemaining"/>), so the
+    /// first tick along a longer route round the new wall is a new best, not "no progress" (BUG-0077). An
+    /// opening change only shortens routes, so it leaves the marks alone.
+    /// </summary>
+    private static void ResetProgressOnClosing(World world, int n)
+    {
+        int blockVersion = world.NavGrid.BlockVersion;
+        if (world.SeenBlockVersion == blockVersion) return;
+        world.SeenBlockVersion = blockVersion;
+        UnitStore u = world.Units;
+        long[] order = world.MoveOrder;
+        for (int k = 0; k < n; k++)
+            u.BestRemaining[(int)(order[k] & 0xFFFFFFFF)] = float.PositiveInfinity;
     }
 
     /// <summary>True if a unit in cell (x0, y0) may end a step in cell (x1, y1): the same cell or an 8-neighbor, passable, and for a diagonal both side cells passable.</summary>
@@ -1335,14 +1385,17 @@ public static class MovementSystem
 
     /// <summary>
     /// True if Moving unit <paramref name="j"/> will wait for its field this tick: it stands outside
-    /// its goal cell and the field isn't cached after this tick's builds (<see cref="FlowFieldCache.Contains"/>
-    /// changes no LRU state). Read only for a unit that didn't move last tick.
+    /// its goal cell and no usable field is cached after this tick's builds, or a stale one has no
+    /// direction on its cell (<see cref="FlowFieldCache.PeekCached"/> changes no LRU state). Read only for a
+    /// unit that didn't move last tick.
     /// </summary>
     private static bool IsWaitingForField(World world, UnitStore u, int j)
     {
-        if (world.FlowFields.Contains(u.GoalCell[j])) return false;
         NavGrid grid = world.NavGrid;
-        return grid.WorldToCell(u.Position[j], out int x, out int y) && y * grid.Width + x != u.GoalCell[j];
+        if (!grid.WorldToCell(u.Position[j], out int x, out int y) || y * grid.Width + x == u.GoalCell[j]) return false;
+        // Not a use (no LRU touch): a usable field, unless it is stale with no direction on j's cell (M3-2b).
+        FlowField? field = world.FlowFields.PeekCached(u.GoalCell[j]);
+        return field == null || (field.Version != grid.Version && field.DirectionAt(y * grid.Width + x) == FlowField.NoDirection);
     }
 
     /// <summary>

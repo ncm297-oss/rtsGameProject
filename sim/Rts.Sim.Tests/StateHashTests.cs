@@ -2,6 +2,9 @@ using System.Numerics;
 using Rts.Sim.Commands;
 using Rts.Sim.Determinism;
 using Rts.Sim.Entities;
+using Rts.Sim.Map;
+using Rts.Sim.Pathfinding;
+using System.Reflection;
 
 namespace Rts.Sim.Tests;
 
@@ -227,6 +230,54 @@ public class StateHashTests
         Assert.Equal(a.StateHash(), b.StateHash());
         a.Tick();
         b.Tick();
+        Assert.Equal(a.StateHash(), b.StateHash());
+    }
+
+    /// <summary>M3-2b: two grids with the same cells and <c>Version</c> but a different <c>BlockVersion</c> hash differently.</summary>
+    [Fact]
+    public void Hash_CoversTheGridBlockVersionAlone()
+    {
+        var a = new Simulation(Config(9));
+        var b = new Simulation(Config(9));
+        NavGrid g = a.World.NavGrid;
+        int cell = FlowFieldOracle.PassableCells(g).First(c => g.CanTakeResource(c % g.Width, c / g.Width));
+        g.SetResource(cell % g.Width, cell / g.Width, 1, 1); // a closing change ...
+        g.ClearResource(cell % g.Width, cell / g.Width, 1, 1); // ... undone by an opening one: Version 2, BlockVersion 1
+        b.World.NavGrid.BumpVersionForTests();
+        b.World.NavGrid.BumpVersionForTests(); // Version 2, BlockVersion 2, same cells
+        Assert.Equal(g.Version, b.World.NavGrid.Version);
+        Assert.Equal(g.PassableCount, b.World.NavGrid.PassableCount);
+        Assert.NotEqual(g.BlockVersion, b.World.NavGrid.BlockVersion);
+        Assert.NotEqual(a.StateHash(), b.StateHash());
+    }
+
+    /// <summary>M3-2b: a cached field's <c>BlockVersion</c> tag is hashed (it decides whether units may follow the field).</summary>
+    [Fact]
+    public void Hash_CoversAFieldsBlockVersionTag()
+    {
+        var a = new Simulation(Config(9));
+        var b = new Simulation(Config(9));
+        int c = FlowFieldOracle.PassableCells(a.World.NavGrid)[100];
+        FlowField fa = a.World.FlowFields.Get(c);
+        b.World.FlowFields.Get(c);
+        Assert.Equal(a.StateHash(), b.StateHash());
+        typeof(FlowField).GetField("<BlockVersion>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(fa, fa.BlockVersion + 1);
+        Assert.NotEqual(a.StateHash(), b.StateHash());
+    }
+
+    /// <summary>M3-2b: the movement pass's last seen <c>BlockVersion</c> (on <c>World</c>) is hashed: it decides when progress marks reset.</summary>
+    [Fact]
+    public void Hash_CoversTheSeenBlockVersion()
+    {
+        var a = new Simulation(Config(9));
+        var b = new Simulation(Config(9));
+        Assert.Equal(a.World.NavGrid.BlockVersion, a.World.SeenBlockVersion);
+        a.World.SeenBlockVersion--;
+        Assert.NotEqual(a.StateHash(), b.StateHash());
+        // The next movement pass catches it up, and the hashes meet again.
+        a.Tick();
+        b.Tick();
+        Assert.Equal(a.World.NavGrid.BlockVersion, a.World.SeenBlockVersion);
         Assert.Equal(a.StateHash(), b.StateHash());
     }
 
