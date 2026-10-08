@@ -102,9 +102,10 @@ step up if it still reads too soft.
 Characters (Standard + Source, incl. a Godot project zip and hairstyles), Modular Character
 Outfits – Fantasy (Standard + Source), Universal Animation Library 1 (Standard, Pro, Source) and 2
 (Standard, Source), Ultimate Fantasy RTS (`quaternius-ultimate-fantasy-rts-2022-08/`), and the four
-Mixamo packs above (`mixamo/<pack>/`). Blender 5.2 is the owner's install for `.blend` sources and
-model edits. Still to download before M6: nature (Stylized Nature MegaKit preferred over the
-KayKit forest for the realistic look), UI, fonts, audio, the Godot export templates.
+Mixamo packs above (`mixamo/<pack>/`), and Stylized Nature MegaKit (Standard, Pro, Source; preferred
+over the KayKit forest for the realistic look). Blender 5.2 is the owner's install for `.blend`
+sources and model edits. Still to download before M6: realistic ground textures (ambientCG /
+Poly Haven, CC0), UI, fonts, audio, the Godot export templates.
 
 ### Buildings, nature, props
 
