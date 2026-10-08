@@ -10,8 +10,8 @@ Status legend: **Next** = start here, **Planned** = not started, **Done** = acce
 | M0 | Environment & skeleton | **Done** (2026-10-03) | Tools installed, empty projects build, tests and headless boot pass |
 | M1 | Core sim, no graphics | **Done** (2026-10-06, Producer sign-off) | 200 units path across the map deterministically, fast |
 | M2 | Presentation | **Done** (2026-10-07, Producer sign-off after the M2-H2 hardening) | Move an army around a 3D map |
-| M3 | Economy & buildings | **In progress** (sim + data tracks since 2026-10-06-1255, view track from 2026-10-07; 7 / 8 on `main` after session 2026-10-07-1715: the sim side is complete and hardened (M3-H1, M3-H2), the HUD complete (M3-V3b) and hardened, the content in data (D3; D4 text polish next); left: "Playable", the owner's playtest or a scripted run) | Build a Malazan base |
-| M4 | Combat, fog, abilities | Planned | Malazan vs. Whirlwind armies fight with abilities and fog |
+| M3 | Economy & buildings | **Criteria complete, sign-off pending** (8 / 8 on `main` after session 2026-10-07-2315; every track's end-of-M3 hardening done (M3-H1 / H2, M3-V3b, D4); sign-off held by BUG-0146 (S2, sim: gatherers wedge out of reach of a tree), fixed in session 2026-10-08-0313) | Build a Malazan base |
+| M4 | Combat, fog, abilities | **In progress** (sim track since 2026-10-07-2315: M4-1 melee combat on `main`; 1 / 10 ticked) | Malazan vs. Whirlwind armies fight with abilities and fog |
 | M5 | AI opponent | Planned | Lose to a Whirlwind AI |
 | M6 | Game shell & real art | Planned | A friend can play it |
 | M7 | Teblor | Planned | Third faction: scale and population systems proven |
