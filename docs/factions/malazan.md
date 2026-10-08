@@ -29,15 +29,15 @@ Age II, at the Armory, 200 G / 150 W, 45 s. Sapper **Cusser cooldown 45 → 30 s
 
 ## Units
 
-| Slot | Unit | HP | Armor | Class | Attack | Type | CD | Range | Speed | Sight | Cost (G/W) | Pop | Train | Trained at |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Worker | Laborer | 40 | 0 | Light | 4 | Melee | 1.5 | melee | 4.0 | 14 | 50 / 0 | 1 | 12 | Garrison Keep |
-| Line | Heavy Infantry | 130 | 3 | Heavy | 10 | Melee | 1.5 | melee | 3.0 | 14 | 54 / 20 | 1 | 14 | Legion Barracks |
-| Ranged | Crossbowman | 55 | 0 | Light | 9 | Pierce | 2.2 | 15 | 3.2 | 18 | 36 / 45 | 1 | 16 | Crossbow Range |
-| Shock | Wickan Lancer | 150 | 1 | Mounted | 12 | Melee | 1.8 | melee | 6.2 | 16 | 90 / 30 | 2 | 26 | Wickan Corral |
-| Caster | Cadre Mage | 60 | 0 | Light | 9 | Magic | 2.2 | 12 | 3.2 | 16 | 100 / 50 | 2 | 30 | Cadre Tower |
-| Siege | Catapult | 220 | 4 | Heavy | 50 | Siege | 5.0 | 24 (min 6) | 2.2 | 18 | 200 / 150 | 3 | 40 | Engineers' Yard |
-| Unique | Sapper | 70 | 1 | Light | 20 | Siege | 3.0 | 8 | 3.4 | 16 | 72 / 40 | 1 | 20 | Engineers' Yard |
+| Slot | Unit | HP | Armor | Class | Attack | Type | CD | Range | Targets | Speed | Sight | Cost (G/W) | Pop | Train | Trained at |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Worker | Laborer | 40 | 0 | Light | 4 | Melee | 1.5 | melee | all | 4.0 | 14 | 50 / 0 | 1 | 12 | Garrison Keep |
+| Line | Heavy Infantry | 130 | 3 | Heavy | 10 | Melee | 1.5 | melee | all | 3.0 | 14 | 54 / 20 | 1 | 14 | Legion Barracks |
+| Ranged | Crossbowman | 55 | 0 | Light | 9 | Pierce | 2.2 | 15 | all | 3.2 | 18 | 36 / 45 | 1 | 16 | Crossbow Range |
+| Shock | Wickan Lancer | 150 | 1 | Mounted | 12 | Melee | 1.8 | melee | all | 6.2 | 16 | 90 / 30 | 2 | 26 | Wickan Corral |
+| Caster | Cadre Mage | 60 | 0 | Light | 9 | Magic | 2.2 | 12 | all | 3.2 | 16 | 100 / 50 | 2 | 30 | Cadre Tower |
+| Siege | Catapult | 220 | 4 | Heavy | 50 | Siege | 5.0 | 24 (min 6) | all | 2.2 | 18 | 200 / 150 | 3 | 40 | Engineers' Yard |
+| Unique | Sapper | 70 | 1 | Light | 20 | Siege | 3.0 | 8 | all | 3.4 | 16 | 72 / 40 | 1 | 20 | Engineers' Yard |
 
 ### Unit notes
 

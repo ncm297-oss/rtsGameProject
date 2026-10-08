@@ -62,6 +62,27 @@ internal static class FactionPage
         return string.Join(" ", text).Replace("**", "");
     }
 
+    /// <summary>
+    /// The bullets under the heading <c>#..# <paramref name="section"/></c> of a faction page (its "### Unit notes"),
+    /// each with its continuation lines joined by spaces and the <c>**</c> bold markers removed, the leading "- " dropped.
+    /// </summary>
+    public static string[] Bullets(string faction, string section, int level)
+    {
+        string[] lines = File.ReadAllLines(Path.Combine(TestDataDir.RepoRoot(), "docs", "factions", faction + ".md"));
+        string heading = new string('#', level) + " " + section;
+        int i = Array.IndexOf(lines, heading);
+        Assert.True(i >= 0, $"{faction}.md has no '{heading}' heading");
+        var bullets = new List<string>();
+        for (i++; i < lines.Length && !lines[i].StartsWith('#'); i++)
+        {
+            string line = lines[i].Trim();
+            if (line.StartsWith("- ", StringComparison.Ordinal)) bullets.Add(line[2..]);
+            else if (line.Length > 0 && bullets.Count > 0 && lines[i].StartsWith(' ')) bullets[^1] += " " + line;
+        }
+        Assert.NotEmpty(bullets);
+        return bullets.Select(b => b.Replace("**", "")).ToArray();
+    }
+
     /// <summary>"Town Hall" -> <c>TownHall</c>: page slot names are the enum names with spaces.</summary>
     public static T Slot<T>(string cell) where T : struct, Enum => Enum.Parse<T>(cell.Replace(" ", ""));
 

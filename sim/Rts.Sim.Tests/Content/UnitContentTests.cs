@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Rts.Sim.Data;
 
 namespace Rts.Sim.Tests.Content;
@@ -40,6 +41,26 @@ public class UnitContentTests
         },
     };
 
+    // docs/factions/<id>.md "Units" Targets column (D5; docs/02 "Combat: Stats" attack.targets): every unit "all" but
+    // the Battering Ram, which "attacks buildings only" (whirlwind.md unit notes).
+    private static readonly Dictionary<string, string> Targets = new()
+    {
+        ["malazan_laborer"] = "all",
+        ["malazan_heavy_infantry"] = "all",
+        ["malazan_crossbowman"] = "all",
+        ["malazan_wickan_lancer"] = "all",
+        ["malazan_cadre_mage"] = "all",
+        ["malazan_catapult"] = "all",
+        ["malazan_sapper"] = "all",
+        ["whirlwind_camp_follower"] = "all",
+        ["whirlwind_raider"] = "all",
+        ["whirlwind_desert_archer"] = "all",
+        ["whirlwind_horse_raider"] = "all",
+        ["whirlwind_priest"] = "all",
+        ["whirlwind_battering_ram"] = "buildings",
+        ["whirlwind_zealot"] = "all",
+    };
+
     // Producer decision M1-2: the pages don't give these, so they are pinned as shipped. Radius by class
     // (0.4 foot / 0.7 mounted / 0.9 siege); windup in seconds.
     private static readonly Dictionary<string, (double Radius, double Windup)> Unspecified = new()
@@ -73,6 +94,13 @@ public class UnitContentTests
         JsonNode.Parse(File.ReadAllText(Path.Combine(TestDataDir.Shipped, "factions", faction, "units.json")))!["units"]!.AsArray();
 
     private static JsonNode FileUnit(string faction, string id) => FileList(faction).Single(n => (string)n!["id"]! == id)!;
+
+    /// <summary>The data's <c>attack.targets</c> as the file spells it ("all" when the field is absent).</summary>
+    private static string TargetsOf(UnitDef u) => DataLimits.AttackTargetIds[(int)u.Attack.Targets];
+
+    /// <summary>One field of a pin, failing "page X vs data Y" with the unit and the field named (BUG-0132's style).</summary>
+    private static void Pin(string where, string field, string page, string data) =>
+        Assert.True(page == data, $"{where} {field}: page {page} vs data {data}");
 
     private static int Ticks(double seconds) => (int)Math.Round(seconds * SimConstants.TicksPerSecond, MidpointRounding.AwayFromZero);
 
@@ -121,10 +149,13 @@ public class UnitContentTests
                 Assert.True((r.Gold, r.Wood, r.Pop * 2) == (u.CostGold, u.CostWood, u.HalfPop), $"{r.Id} cost/pop");
                 Assert.True(Ticks(r.Train) == u.TrainTicks, $"{r.Id} trainTime");
                 Assert.True(r.TrainedAt == u.TrainedAt, $"{r.Id} trainedAt");
+                Pin(r.Id, "attack.targets", Targets[r.Id], TargetsOf(u));
 
                 // The file holds seconds and m/s, not ticks.
                 JsonNode f = FileUnit(faction, r.Id);
                 Assert.Equal((r.Cd, r.Speed, (double)r.Train), ((double)f["attack"]!["cooldown"]!, (double)f["speed"]!, (double)f["trainTime"]!));
+                // "all" is the default, so the file writes the field only when it narrows the attack.
+                Pin(r.Id, "file attack.targets", Targets[r.Id] == "all" ? "(absent)" : Targets[r.Id], (string?)f["attack"]!["targets"] ?? "(absent)");
             }
     }
 
@@ -179,10 +210,10 @@ public class UnitContentTests
             Assert.Equal(roster.Length, rows.Length);
             for (int i = 0; i < rows.Length; i++)
             {
-                // Slot | Unit | HP | Armor | Class | Attack | Type | CD | Range | Speed | Sight | Cost (G/W) | Pop | Train | Trained at
+                // Slot | Unit | HP | Armor | Class | Attack | Type | CD | Range | Targets | Speed | Sight | Cost (G/W) | Pop | Train | Trained at
                 string[] c = rows[i];
                 var r = roster[i];
-                Assert.Equal(15, c.Length);
+                Assert.Equal(16, c.Length);
                 string where = $"{faction}.md Units row {r.Name}";
                 Assert.True((r.Slot, r.Name) == (FactionPage.Slot<UnitSlot>(c[0]), c[1]), where + " slot/name");
                 Assert.True((r.Hp, r.Armor, r.Class) == (int.Parse(c[2]), int.Parse(c[3]), c[4].ToLowerInvariant()), where + " hp/armor/class");
@@ -192,11 +223,40 @@ public class UnitContentTests
                     : r.MinRange > 0 ? $"{FactionPage.Text(r.Range)} (min {FactionPage.Text(r.MinRange)})"
                     : FactionPage.Text(r.Range);
                 Assert.True(range == c[8], where + $" range '{c[8]}'");
-                Assert.True((r.Speed, (double)r.Sight) == (FactionPage.Num(c[9]), FactionPage.Num(c[10])), where + " speed/sight");
-                Assert.True((r.Gold, r.Wood) == FactionPage.Cost(c[11]), where + " cost");
-                Assert.True((r.Pop, r.Train) == (int.Parse(c[12]), int.Parse(c[13])), where + " pop/train");
-                Assert.True(Data.Buildings[Data.FindBuilding(r.TrainedAt)].DisplayName == c[14], where + " trained at");
+                Pin(where, "targets", c[9], Targets[r.Id]);
+                Assert.True((r.Speed, (double)r.Sight) == (FactionPage.Num(c[10]), FactionPage.Num(c[11])), where + " speed/sight");
+                Assert.True((r.Gold, r.Wood) == FactionPage.Cost(c[12]), where + " cost");
+                Assert.True((r.Pop, r.Train) == (int.Parse(c[13]), int.Parse(c[14])), where + " pop/train");
+                Assert.True(Data.Buildings[Data.FindBuilding(r.TrainedAt)].DisplayName == c[15], where + " trained at");
             }
+        }
+    }
+
+    /// <summary>"attacks buildings only" / "attacks units only" in a unit note: the sentence form of a narrowed <c>attack.targets</c>.</summary>
+    private static readonly Regex AttacksOnly = new(@"\battacks (?<t>buildings|units) only\b", RegexOptions.IgnoreCase);
+
+    [Fact]
+    public void H_TheUnitNotes_SayAttacksXOnly_ExactlyWhenTheDataNarrowsTargets()
+    {
+        // The whirlwind page's Battering Ram note says "attacks buildings only"; the sentence and the field must agree
+        // both ways: a note that says it binds the data, and a unit the data narrows must have a note that says so.
+        foreach (string faction in Factions)
+        {
+            string[] notes = FactionPage.Bullets(faction, "Unit notes", 3);
+            foreach (var r in Roster[faction])
+            {
+                string where = $"{faction}.md Unit notes {r.Name}";
+                string[] own = notes.Where(n => n.StartsWith(r.Name + ":", StringComparison.Ordinal)
+                    || n.StartsWith(r.Name + " (", StringComparison.Ordinal)).ToArray();
+                Assert.True(own.Length <= 1, $"{where}: {own.Length} notes");
+                Match m = own.Length == 1 ? AttacksOnly.Match(own[0]) : Match.Empty;
+                string page = m.Success ? m.Groups["t"].Value.ToLowerInvariant() : "all";
+                Pin(where, "attack.targets", page, TargetsOf(Unit(r.Id)));
+            }
+            // No note may say it of a unit outside the roster (a renamed unit would otherwise drop its check silently).
+            foreach (string n in notes.Where(n => AttacksOnly.IsMatch(n)))
+                Assert.True(Roster[faction].Any(r => n.StartsWith(r.Name + ":", StringComparison.Ordinal) || n.StartsWith(r.Name + " (", StringComparison.Ordinal)),
+                    $"{faction}.md Unit notes: '{n}' says 'attacks ... only' but names no unit of the roster");
         }
     }
 }

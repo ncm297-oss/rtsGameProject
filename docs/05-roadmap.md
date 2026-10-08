@@ -363,7 +363,8 @@ ten-minute playtest (STATE "For your review", M3-V3 entry) stands as feedback, n
       `ReplayFormat4QaTests`, `AttackMoveRepickQaTests`. The view's attack-target click / F key is the next view task
       (M4-V2). Open: BUG-0156 (S3, a unit hitting a building ignores the unit killing it), BUG-0157 (S3, jittered A-click
       spam every 1-3 ticks costs 10-26 % of a brawl's damage), BUG-0144 (S3), BUG-0149 (S3), BUG-0153 / 0142 (S4).)_
-      _(View half in session 2026-10-08-0913, task M4-V2: a right-click or A + click on an enemy unit's drawn body or an
+      _(View half accepted in session 2026-10-08-0913, task M4-V2, **held on its branch at integration** (BUG-0210:
+      `MinimapTest` red on `main` since M4-2b; merges after the view's next session fixes it): a right-click or A + click on an enemy unit's drawn body or an
       enemy building's box is one `Command.Attack` per selected unit (Shift queues; an own unit or building or a prop in
       front hides what is behind it), through the read-only `ViewApi.UnitPicker` (capsule ray pick + `ResolveEnemy`,
       1,000 rays vs a marching oracle, 0 own targets); a pooled red `TargetRing` for 0.5 s; the panel reads `ui.json`

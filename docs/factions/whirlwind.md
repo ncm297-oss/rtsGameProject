@@ -32,15 +32,15 @@ Age II, at the Smithy, 200 G / 150 W, 45 s. Zealots **+20 HP**; Sandstorm **cool
 
 ## Units
 
-| Slot | Unit | HP | Armor | Class | Attack | Type | CD | Range | Speed | Sight | Cost (G/W) | Pop | Train | Trained at |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Worker | Camp Follower | 36 | 0 | Light | 4 | Melee | 1.5 | melee | 4.0 | 14 | 40 / 0 | 1 | 12 | Holy Camp |
-| Line | Raider | 108 | 1 | Heavy | 11 | Melee | 1.5 | melee | 3.4 | 14 | 48 / 16 | 1 | 18 | Raider Camp |
-| Ranged | Desert Archer | 50 | 0 | Light | 7 | Pierce | 1.8 | 14 | 3.6 | 18 | 32 / 36 | 1 | 20 | Archer Camp |
-| Shock | Horse Raider | 135 | 0 | Mounted | 11 | Melee | 1.6 | melee | 6.6 | 18 | 72 / 24 | 2 | 26 | Horse Lines |
-| Caster | Priest of the Whirlwind | 54 | 0 | Light | 9 | Magic | 2.2 | 12 | 3.2 | 16 | 80 / 40 | 2 | 30 | Shrine of the Whirlwind |
-| Siege | Battering Ram | 240 | 6 | Heavy | 60 | Siege | 3.0 | melee | 2.4 | 10 | 160 / 120 | 3 | 36 | Ram Yard |
-| Unique | Zealot | 63 | 0 | Light | 9 | Melee | 1.0 | melee | 4.4 | 14 | 30 / 10 | 1 | 10 | Raider Camp |
+| Slot | Unit | HP | Armor | Class | Attack | Type | CD | Range | Targets | Speed | Sight | Cost (G/W) | Pop | Train | Trained at |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Worker | Camp Follower | 36 | 0 | Light | 4 | Melee | 1.5 | melee | all | 4.0 | 14 | 40 / 0 | 1 | 12 | Holy Camp |
+| Line | Raider | 108 | 1 | Heavy | 11 | Melee | 1.5 | melee | all | 3.4 | 14 | 48 / 16 | 1 | 18 | Raider Camp |
+| Ranged | Desert Archer | 50 | 0 | Light | 7 | Pierce | 1.8 | 14 | all | 3.6 | 18 | 32 / 36 | 1 | 20 | Archer Camp |
+| Shock | Horse Raider | 135 | 0 | Mounted | 11 | Melee | 1.6 | melee | all | 6.6 | 18 | 72 / 24 | 2 | 26 | Horse Lines |
+| Caster | Priest of the Whirlwind | 54 | 0 | Light | 9 | Magic | 2.2 | 12 | all | 3.2 | 16 | 80 / 40 | 2 | 30 | Shrine of the Whirlwind |
+| Siege | Battering Ram | 240 | 6 | Heavy | 60 | Siege | 3.0 | melee | buildings | 2.4 | 10 | 160 / 120 | 3 | 36 | Ram Yard |
+| Unique | Zealot | 63 | 0 | Light | 9 | Melee | 1.0 | melee | all | 4.4 | 14 | 30 / 10 | 1 | 10 | Raider Camp |
 
 ### Unit notes
 

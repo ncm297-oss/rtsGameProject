@@ -9,6 +9,8 @@ Commit and push after editing, from either machine (or ask Claude to).
 
 ## New
 
+## Processed
+
 - 2026-10-08 · **Art direction + packs downloaded (owner):** I prefer a grounded, realistic art style
   over a cartoonish one. The humanoid base is now Quaternius Universal Base Characters + Modular
   Character Outfits – Fantasy + Universal Animation Library 1 and 2, with Mixamo packs (Great Sword,
@@ -20,8 +22,12 @@ Commit and push after editing, from either machine (or ask Claude to).
   getting ahead. Please update the M6 line in the feature queue (downloads done except nature,
   UI, fonts, audio, export templates), and clear the stale "restore the routine's hourly
   schedule" item from Waiting on you (it has been back on hourly since 2026-10-06).
-
-## Processed
+  → Done at the 2026-10-08-0913 integration update: the M6 line in STATE's sim feature queue now
+  carries the art direction and the download state as docs/04 records it after your later commits
+  (nature, UI and audio are in too; fonts, music and the Godot export templates remain, listed under
+  Waiting on you when M5 starts); the hourly-schedule item is cleared. M6 stays where it is; no
+  look test is pulled forward. Your docs/01 row is an owner decision; nothing for the studio to
+  change.
 
 - 2026-10-06 · **Third track: data (owner):** sessions now carry up to three tracks: `sim`,
   `view`, and a new `data` track (faction content: full rosters, stats, costs, build times,
