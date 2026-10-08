@@ -71,9 +71,13 @@ public sealed class UnitStore
     public readonly int[] QueueCount;
     /// <summary>Queued order kinds, <see cref="OrderConstants.QueueCapacity"/> per slot, head first; entries past <see cref="QueueCount"/> are always default.</summary>
     public readonly CommandKind[] QueueKind;
-    /// <summary>Queued order targets (x, z) in meters, parallel to <see cref="QueueKind"/>; zero for Stop and HoldPosition and past <see cref="QueueCount"/>.</summary>
+    /// <summary>
+    /// Queued order targets (x, z) in meters, parallel to <see cref="QueueKind"/>; zero for Stop and HoldPosition and past
+    /// <see cref="QueueCount"/>. Not a point on an <see cref="CommandKind.Attack"/> entry: read that one's target with
+    /// <see cref="QueuedTarget"/> (a queued-waypoint overlay must not draw it as a position).
+    /// </summary>
     public readonly Vector2[] QueuePosition;
-    /// <summary>Queued building types (<see cref="CommandKind.Build"/> entries, M3-3), parallel to <see cref="QueueKind"/>; 0 for every other kind and past <see cref="QueueCount"/>.</summary>
+    /// <summary>Queued building types (<see cref="CommandKind.Build"/> entries, M3-3), parallel to <see cref="QueueKind"/>; on an <see cref="CommandKind.Attack"/> entry 1 when its target is a building (<see cref="QueuedTarget"/>); 0 for every other kind and past <see cref="QueueCount"/>.</summary>
     public readonly int[] QueueTypeId;
     /// <summary>The building a worker builds or repairs (M3-3); default when it has no such order.</summary>
     public readonly EntityHandle[] BuildTarget;

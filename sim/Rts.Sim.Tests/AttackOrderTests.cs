@@ -391,4 +391,85 @@ public class AttackOrderTests
         RunUntil(s2, () => s2.World.Buildings.Hp[keep.Index] < keepHp, 600);
         Assert.True(s2.World.Buildings.Hp[keep.Index] < keepHp, "the ram never hit the building");
     }
+
+    // ---------- re-issuing an order (BUG-0152) ----------
+
+    /// <summary>
+    /// The damage a Heavy Infantry deals in 600 ticks to a held enemy Laborer in reach (100,000 hp), given
+    /// <paramref name="order"/> once (null: none, it fights by its own scan) and again every <paramref name="every"/> ticks.
+    /// </summary>
+    private static int DamageOver600(Func<EntityHandle, EntityHandle, Command>? order, int every, out EntityHandle a, out Simulation sim)
+    {
+        sim = Flat(units: 8);
+        UnitStore u = sim.World.Units;
+        a = Place(sim, 0, HeavyInfantry, At(sim, 20, 24));
+        EntityHandle t = Place(sim, 1, Laborer, At(sim, 20, 24, dx: 1.2f));
+        u.Hp[t.Index] = 100_000;
+        sim.Enqueue(Command.HoldPosition(1, t)); // a worker never fights back
+        if (order != null) sim.Enqueue(order(a, t));
+        for (int k = 1; k <= 600; k++)
+        {
+            if (order != null && every > 0 && k % every == 0) sim.Enqueue(order(a, t));
+            sim.Tick();
+        }
+        return 100_000 - u.Hp[t.Index];
+    }
+
+    [Fact]
+    public void ReissuedAttack_OnTheTargetItHolds_EveryTick_DealsWhatOneOrderDeals()
+    {
+        Func<EntityHandle, EntityHandle, Command> attack = (a, t) => Command.Attack(0, a, t, false);
+        int once = DamageOver600(attack, 0, out _, out _);
+        int spam = DamageOver600(attack, 1, out EntityHandle a, out Simulation sim);
+        Assert.True(once > 0, "setup: no damage");
+        Assert.Equal(once, spam);
+        Assert.Equal(CombatMode.Ordered, sim.World.Units.Mode[a.Index]);
+    }
+
+    [Fact]
+    public void Attack_OnTheTargetItAlreadyFightsByItself_KeepsTheSwing_AndHoldsItAsOrdered()
+    {
+        int byScan = DamageOver600(null, 0, out _, out _);
+        int spam = DamageOver600((a, t) => Command.Attack(0, a, t, false), 1, out EntityHandle a, out Simulation sim);
+        Assert.True(byScan > 0, "setup: no damage by scan");
+        // The first order lands after the scan took the target: every swing it starts by itself is kept.
+        Assert.True(spam >= byScan - 20, $"{spam} damage spammed vs {byScan} by scan");
+        Assert.Equal(CombatMode.Ordered, sim.World.Units.Mode[a.Index]);
+    }
+
+    [Theory]
+    [InlineData(1, false)]
+    [InlineData(3, false)]
+    [InlineData(1, true)]
+    [InlineData(3, true)]
+    public void ReissuedAttackMove_WhileFightingInReach_DealsWhatOneOrderDeals(int every, bool farPoint)
+    {
+        // Cells are 2 m: (41, 49) is the attacker's own cell center (20, 24), (80, 80) is 50 m off.
+        Func<EntityHandle, EntityHandle, Command> order = (a, t) => Command.AttackMove(0, a, farPoint ? new Vector2(80f, 80f) : new Vector2(41f, 49f));
+        int once = DamageOver600(order, 0, out _, out _);
+        int spam = DamageOver600(order, every, out _, out _);
+        Assert.True(once > 0, "setup: no damage");
+        Assert.True(spam * 10 >= once * 9, $"re-ordered every {every} ticks: {spam} damage vs {once} with one order");
+    }
+
+    [Fact]
+    public void AttackMove_ElsewhereWhileFightingInReach_KeepsTheTarget_ThenWalksTheLeg()
+    {
+        Simulation sim = Flat(units: 8);
+        UnitStore u = sim.World.Units;
+        EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 20, 24));
+        EntityHandle t = Place(sim, 1, Laborer, At(sim, 20, 24, dx: 1.2f));
+        sim.Enqueue(Command.HoldPosition(1, t));
+        RunUntil(sim, () => u.WindupTicks[a.Index] > 0, 200); // its own scan took the laborer: mid-swing
+        Assert.Equal(t, u.Target[a.Index]);
+        Vector2 leg = At(sim, 30, 30);
+        sim.Enqueue(Command.AttackMove(0, a, leg));
+        Apply(sim);
+        Assert.Equal(t, u.Target[a.Index]);
+        Assert.Equal(CombatMode.AttackMove, u.Mode[a.Index]);
+        RunUntil(sim, () => !u.IsAlive(t), 2000);
+        Assert.False(u.IsAlive(t), "never killed");
+        RunUntil(sim, () => u.Mode[a.Index] == CombatMode.None && u.State[a.Index] == UnitState.Idle, 600);
+        Assert.True(Vector2.Distance(u.Position[a.Index], leg) < 1.5f, $"never walked the leg: at {u.Position[a.Index]}");
+    }
 }

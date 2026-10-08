@@ -309,10 +309,10 @@ public class ShoveQaTests
     public void BuildCap_500UnitsTo500RandomGoals_ShoveRulesHoldEveryTick_ReportGiveUps(int players)
     {
         const ulong seed = 5018;
-        // Combat off (config only; docs/03 "Combat switch"): the shove checker reads a unit Idle at both ends of a tick that
-        // moved as shoved, and a chaser can step, plant and stand down within one tick (a chase step, not a shove); with
-        // M4-2a's ram no longer fighting units the two-player brawl here does exactly that (tick 6733, unit 38).
-        var sim = new Simulation(TestSim.ConfigNoCombat(seed, players, UnitCapacity: 500, CommandCapacity: 2 * 500 + 64));
+        // Combat on again since BUG-0150's fix. Note (BUG-0153): the shove checker reads a unit Idle at both ends of a tick that
+        // moved as shoved, and a chaser can step, plant and stand down within one tick (a chase step, not a shove); before the
+        // fix the two-player brawl here did that once (tick 6733, unit 38).
+        var sim = new Simulation(TestSim.Config(seed, players, UnitCapacity: 500, CommandCapacity: 2 * 500 + 64));
         World w = sim.World;
         NavGrid g = w.NavGrid;
         List<int> passable = FlowFieldOracle.PassableCells(g);

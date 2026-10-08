@@ -1098,7 +1098,10 @@ addressed to a building, not unit orders, not queueable (the queued flag is refu
 "Implementation (M3-4)". A trained unit's rally order is the Move rule (or, for a worker rallied onto a resource node,
 a `Gather`), given in phase 3.
 Since M4-1 units fight (melee only): see "Implementation (M4-1)". Any unit order that is taken
-(unqueued, or popped from the queue) ends the unit's engagement first. Since M4-2a there is `Attack` (16, a unit
+(unqueued, or popped from the queue) ends the unit's engagement first, except that re-issuing a fight never throws
+the swing away (BUG-0152, M4-2a): an unqueued `Attack` on the target the unit already has, or an unqueued `AttackMove`
+on the leg it walks or by a unit fighting in reach or mid-swing, keeps the target, swing and cooldown (see
+"Implementation (M4-2a)"). Since M4-2a there is `Attack` (16, a unit
 order, Shift-queueable): `Command.Attack(player, unit, target, isBuilding[, queued])` carries the target in
 `Command.Target` / `Command.TargetIsBuilding` (default on every other kind, else the command is malformed), and a
 queued Attack keeps its handle in the flat queue arrays it already has: an Attack has no target point, so the entry's
@@ -1217,7 +1220,10 @@ before. A target on another plateau, behind a wall, or outrunning the chaser has
 so those chases still end. Switching from one target to another keeps the stall count (`Engage` resets it only for a
 unit that had no target): a unit whose scans took two targets in turn (one drifting in and out of its sight) restarted
 the count every scan and chased forever. So does a retaliator
-the leash pulls back, and a chaser that loses sight of its target while not gaining on it. Giving up remembers the
+the leash pulls back, and a chaser that loses sight of its target while not gaining on it, whether or not its scan
+then finds another target (BUG-0150, M4-2a fix round: before, a switch to another target in sight did not give the
+lost one up, and a caster at the sight edge reached by a path leading out of sight and a nearer worker took turns
+forever, each switch a fresh chase whose first scan showed progress). Giving up remembers the
 target (`UnitStore.Ignored`, a unit or a building): the unit's scans take it again only when it is in reach, and an
 attack by that unit does not start a retaliation (a building remembered with the same slot and generation as the
 attacker is not it, BUG-0142; a melee attacker is in reach, so the next scan takes it anyway). The unit
@@ -1293,13 +1299,14 @@ two-owner movement termination rows whose limits are walking bounds (`CrossMap_T
 fill: a precondition) run combat off too; their combat-on termination is `CombatTerminationTests` (the same scenes on
 combat come to rest, nobody Moving for 200 ticks, within 3x the walking limit; measured at most 1.23x). The
 placement-churn field-wait row runs combat off as well (see BUG-0080 above). Since M4-2a four more two-owner movement
-rows do (config only): `ShoveQaTests.BuildCap_500UnitsTo500RandomGoals...(players: 2)` (its shove checker reads a chaser
-that steps, plants and stands down in one tick as a shove), `CrowdRowSweepStressTests.MoreGoalsThanCacheSlots_Seeds81To140`,
-`GridChangeQaTests.FourGroups_AClosingChangeEveryTick...` and `GridChangeFuzzStressTests` (walking-bound termination):
-once the ram stopped fighting units their brawls changed and a retaliator ping-ponged forever between two targets at
-its sight edge (a tier-1 caster just inside sight, reached only by a path that leads out of sight, and a nearer tier-2
-worker; the stall count never builds; GridChangeFuzz seed 3, tick 6,960 on). That is an M4-1 acquisition gap, reported
-with M4-2a, not fixed here. Matches, the CLI and replays always
+rows went combat off once the ram stopped fighting units and a retaliator ping-ponged between two targets (BUG-0150);
+its fix round put two back on combat (`ShoveQaTests.BuildCap_500UnitsTo500RandomGoals...(players: 2)`,
+`GridChangeFuzzStressTests`, whose seed 3 found the loop). Two stay off (config only):
+`CrowdRowSweepStressTests.MoreGoalsThanCacheSlots_Seeds81To140` and `GridChangeQaTests.FourGroups_AClosingChangeEveryTick...`
+(walking bound 3,000 ticks). On combat they are not a loop but a slow, one-sided brawl: the scenes end only when one
+side's few melee fighters have cut down the other side's units that cannot fight back in this slice (ranged and
+casters), which they do by themselves at tick 3,759 (seed 110, the only one of the 60 seeds over the bound) and
+5,057-6,618 (the four-groups scene with closings every 3 / 2 / 1 ticks). Matches, the CLI and replays always
 fight. Since M4-2a replay format 4 records the switch (`combat` in the header) and `ReplayPlayer.Run(replay, data)` plays
 back with it; `Run(replay, data, combat)` overrides it (format 3 test replays recorded off).
 
@@ -1366,7 +1373,15 @@ repair loop: `GatherNode` or `BuildTarget` set; every other walk is unchanged, s
   walkers a tick in denser crowds round the nodes (stand points fill, so more workers stand close). Per resource
   delivered it is about 20% dearer. The 500 marching + 50 gathering row is unchanged (0.90 ms), and so is the 2,500
   tight blob (4.38-4.54 ms against 4.40-4.49 ms; it has no footprint walkers). The brief's 10% bound on the gather row is
-  not met; reported for the Producer.
+  not met; reported for the Producer (BUG-0151). The fix round profiled it (Debug, alone; base 0.226-0.231, head
+  0.314-0.327 ms): the cost is not the new code but the crowd it makes. Per tick over ticks 400-800 the scene has 57
+  workers walking against 41 (most of the extra within 4 m of their stand points) and twice the neighbors within 1.5 m
+  of each walker (465 against 228), so movement's per-neighbor work doubles. Switching parts off one at a time: the
+  stand points' three spatial queries off (middle point only) made it slower (0.38 ms: more workers pile on one point);
+  the queue rule off 0.29 ms (but that is the BUG-0146 fix itself); the stand arrival off 0.26 ms with gold 1,010 (below
+  the base's 1,120). Three cheaper variants (a stuck walker queuing on any touching groupmate, also on a same-node
+  worker ahead in another cell, a wider point-crowd radius) each broke a `GatherPocketStressTests` wedge row, or cut
+  little (0.31 ms with gold 1,220 for a walker stuck 10 ticks queuing on any groupmate). None was kept.
 
 Regression rows: `GatherWedgeTests` (the bug's map by hand: a 1 x 1 tree with trees north, west and east and a Depot to
 the south-west; four workers each deliver within 600 ticks, and a column of four ordered one after another never has a
@@ -1413,6 +1428,18 @@ not this arrival rule (the walker never arrives), and not reproduced; left to it
 - **Cost:** nothing allocates; the ordered unit costs what a chaser does. The queue rule and the stand arrival read a
   walker's loop handles only when it touches an arrived groupmate or stands within 1 m of its goal, so a crowd of plain
   walkers pays nothing new (the gather cost is under BUG-0146 above).
+- **Re-issuing a fight** (BUG-0152, fix round): an unqueued Attack used to end the engagement first and start afresh,
+  which zeroed a wind-up in progress while the cooldown it set kept counting, so a Heavy Infantry (6-tick wind-up)
+  re-ordered every 5 ticks or faster never landed a hit (an AttackMove to the same point likewise, since M4-1). Now an
+  unqueued Attack on the target the unit already has (same handle and building flag) only replaces the queue and
+  clears Hold: the swing, cooldown, state and, under `Ordered`, the chase memory stay (`CombatSystem.ReaffirmAttack`); a
+  unit that took that target itself (scan, retaliation, attack-move) now holds it as `Ordered`, with a fresh chase and
+  give-up memory as a new Attack gets. An unqueued AttackMove keeps the unit's target, swing and chase when it is on the
+  leg the unit already walks (the leg's end resolves to the same cell; the give-up memory kept) or when the unit fights
+  in reach or mid-swing (anywhere; the case its own scan keeps; the give-up memory reset as for any new order); the
+  mode becomes the new leg, walked once the fight ends. Unengaged on the same leg, the Move rule's same-target case
+  applies as before. Rows: `AttackOrderTests.ReissuedAttack_...`, `ReissuedAttackMove_...`,
+  `AttackMove_ElsewhereWhileFightingInReach_...`, `QA/AttackOrderQaTests.ReissuingTheSameAttack_EveryNTicks_...`.
 - **Not yet:** projectiles, misses, splash, friendly fire, minimum range (M4-2b), fog (M4-3), the view's F-key / cursor
   path.
 

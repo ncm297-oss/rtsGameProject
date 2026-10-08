@@ -82,9 +82,10 @@ public class CrowdRowSweepStressTests
         var stuck = new List<string>();
         for (ulong seed = 81; seed <= 140; seed++)
         {
-            // Combat off (config only; docs/03 "Combat switch"): a movement row with a walking bound. Since M4-2a's ram stopped
-            // fighting units the two-player brawl here changes, and a retaliator can ping-pong between two targets at its sight edge
-            // forever (reported with M4-2a); combat-on termination is CombatTerminationTests'.
+            // Combat off (config only; docs/03 "Combat switch"): a movement row with a walking bound (3,000 ticks). On combat the
+            // scene ends only when one side's fighters have cut down the other side's units that can't fight back yet (ranged and
+            // casters until M4-2b): a slow, one-sided brawl that ends by itself (seed 110: tick 3,759; the other 59 seeds stop within 3,000 ticks on combat) (BUG-0150's fix round; the
+            // ping-pong itself is fixed and GridChangeFuzzStressTests runs on combat). Combat-on termination is CombatTerminationTests'.
             CrowdRows.Result r = CrowdRows.MoreGoalsThanCacheSlots(seed, combat: false);
             if (r.StillMoving != 0) stuck.Add($"seed {seed}: {r.StillMoving} still moving after {r.Ticks} ticks");
         }

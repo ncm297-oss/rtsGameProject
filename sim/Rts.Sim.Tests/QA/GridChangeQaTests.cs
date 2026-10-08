@@ -481,9 +481,10 @@ public class GridChangeQaTests
         {
             int longest = 0, tick = 0;
             var wait = new int[600];
-            // Combat off (config only; docs/03 "Combat switch"): a movement row with a walking bound. Since M4-2a's ram stopped
-            // fighting units the two-player brawl here changes, and a retaliator can ping-pong between two targets at its sight edge
-            // forever (reported with M4-2a); combat-on termination is CombatTerminationTests'.
+            // Combat off (config only; docs/03 "Combat switch"): a movement row with a walking bound (3,000 ticks). On combat the
+            // scene ends only when one side's fighters have cut down the other side's units that can't fight back yet (ranged and
+            // casters until M4-2b): a slow, one-sided brawl that ends by itself at tick 5,000-6,600 (BUG-0150's fix round; the
+            // ping-pong itself is fixed and GridChangeFuzzStressTests runs on combat). Combat-on termination is CombatTerminationTests'.
             CrowdRows.Result r = CrowdRows.ToFourPoints(1, 300, 3000, onePlayerPerPoint: true, combat: false, everyTick: w =>
             {
                 for (int i = 0; i < w.Units.Capacity; i++)

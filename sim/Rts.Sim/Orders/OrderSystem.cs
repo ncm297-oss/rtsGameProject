@@ -62,6 +62,14 @@ public static class OrderSystem
         if (command.Kind == CommandKind.Attack)
         {
             u.ClearQueue(i);
+            // The target it already fights (click spam, an AI refreshing its orders): the swing in progress and the chase go
+            // on (BUG-0152); only the mode becomes Ordered, as the order says.
+            if (u.Target[i].Generation != 0 && u.Target[i] == command.Target && u.TargetIsBuilding[i] == command.TargetIsBuilding)
+            {
+                u.Hold[i] = false;
+                CombatSystem.ReaffirmAttack(world, i);
+                return;
+            }
             StartAttack(world, i, command.Target, command.TargetIsBuilding);
             return;
         }
@@ -91,6 +99,26 @@ public static class OrderSystem
             // A target that resolves to no passable cell drops the whole command: queue and Hold stay.
             if (!ResolveTarget(world.NavGrid, command.Position, out int cell, out Vector2 goal)) return;
             u.ClearQueue(i);
+            if (command.Kind == CommandKind.AttackMove && world.CombatEnabled)
+            {
+                // Re-issuing an attack-move (click spam, an AI refreshing its orders) never throws a fight away (BUG-0152):
+                // on the leg it already walks a fight on the way goes on, chase and all; to anywhere, a unit fighting in
+                // reach or mid-swing keeps that target, as its scan would. It walks to the leg's end when the fight is over.
+                bool sameLeg = OnLegTo(world, i, cell);
+                if (u.Target[i].Generation != 0 && (sameLeg || CombatSystem.FightsInReach(world, i)))
+                {
+                    u.Hold[i] = false;
+                    CombatSystem.KeepFightForAttackMove(u, i, goal, newOrder: !sameLeg);
+                    return;
+                }
+                if (sameLeg)
+                {
+                    // Unengaged on that leg: the Move rule's same-target case (no restart), its give-up memory kept.
+                    Move(world, i, cell, goal);
+                    CombatSystem.StartAttackMove(u, i, u.Goal[i]);
+                    return;
+                }
+            }
             u.Hold[i] = false;
             EndLoop(u, i);
             CombatSystem.ClearForOrder(u, i);
@@ -145,6 +173,14 @@ public static class OrderSystem
                 u.Hold[i] = true;
                 break;
         }
+    }
+
+    /// <summary>Whether unit <paramref name="i"/> walks (or fights on) an attack-move leg whose end resolves to <paramref name="cell"/>.</summary>
+    private static bool OnLegTo(World world, int i, int cell)
+    {
+        UnitStore u = world.Units;
+        return u.Mode[i] == CombatMode.AttackMove
+            && ResolveTarget(world.NavGrid, u.AnchorPosition[i], out int legCell, out _) && legCell == cell;
     }
 
     /// <summary>Appends an entry to unit <paramref name="i"/>'s queue; returns its index in the flat queue arrays, or -1 when the queue is full (the order is dropped silently).</summary>

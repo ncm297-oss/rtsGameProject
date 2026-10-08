@@ -305,7 +305,7 @@ public class AttackOrderQaTests
     /// Re-issuing the same Attack (a player spam-clicking the target, an AI refreshing its orders) must not stop the unit
     /// fighting: over 600 ticks in reach the target takes at least half the hits it takes with a single order.
     /// </summary>
-    [Theory(Skip = "BUG-0152: re-issuing the same Attack / AttackMove cancels the wind-up every time; spam does no damage")]
+    [Theory]
     [InlineData(1, false)]
     [InlineData(3, false)]
     [InlineData(5, false)]
