@@ -58,3 +58,17 @@ sending another laborer, and saves `m3playable-seed6-stall-tick<T>.replay`. None
   crowd arrival) at a point that is not within `Reach`. The retry then repeats the same arrival. `GoalInset` assumes the
   walker gets within `ArrivalDistance` of the goal point, which a stopped crowd / pocket may not allow.
 - Not a view bug. It makes the M3 Playable scene's budget depend on whether its nearest tree is such a pocket.
+- **Replay header vs D4 (QA 2026-10-07-2315).** The attached replay is a 16,087-line text file headered
+  `data-hash 702859B867AAC412` (the pre-D4 shipped data). D4 regenerates the golden to `data-hash A863BAF8637CC860`
+  (string-only data changes). Once D4 is merged, the replay loader's data-hash check will reject this file, so whoever
+  un-skips `GatherWedgeQaTests` next session must either (a) have the row bypass or override the header's `data-hash`
+  (the D4 changes are text only, so the command stream still plays the same game), or (b) regenerate the replay on the
+  merged data with `M3PlayableTest -- --seed 21` (the scene saves `m3playable-seed21-fail-tick16001.replay` in Godot's
+  user data folder) and confirm the wedge is still in it before replacing this file. Don't loosen the row's assertion
+  to make it pass. The row used to `return` (pass) on a data-hash mismatch; QA 2026-10-07-2315 changed that to a
+  failing assert, so a stale header can no longer let the un-skipped row pass without testing. Hand-editing the header
+  is not enough either: the file is checksummed, and QA's scratch edit of only the `data-hash` line made
+  `ReplayFormat.TryReadFile` return `ChecksumMismatch`. So option (a) means the row substitutes the hash in code (or
+  rewrites the file through `ReplayFormat` so the checksum is recomputed), not a text edit. QA re-ran the un-skipped
+  row on this branch's data at 2026-10-07-2315: it still fails with
+  `unit 10 stood out of reach of its tree for 14575 ticks (to tick 15815)`.

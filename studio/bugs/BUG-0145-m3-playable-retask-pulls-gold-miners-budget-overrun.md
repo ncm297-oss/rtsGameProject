@@ -45,3 +45,9 @@ When it does, it sends that miner to wood for good. A player would not re-task a
   keeps sending idle laborers to the nearest tree, which is the wedged one.
 - The `--break` check works: `-- --seed 6 --break 4` prints
   `M3 PLAYABLE TEST FAIL 4. Q three times (seed 6, tick 504): deliberately broken by --break`.
+- **Re-check (QA 2026-10-07-2315, still open, no fix yet).** `RetaskIdle` on the branch still selects on
+  `State == Idle && QueueCount == 0` only (no `GatherNode` / on-loop check). Five two-seed runs while the full sim suite
+  ran in parallel: 5 / 5 PASS, but seed 1 took 15,055 / 11,872 / 13,285 / 14,591 / 12,504 ticks (3-10 re-tasks; the
+  slowest finished with 945 ticks of budget left), against a steady seed 6 at 11,032-11,306. The seed-1 spread is the
+  timing luck this bug describes. For the fix: 10 runs per seed under load, all inside the budget, as the Producer's
+  focus asks.

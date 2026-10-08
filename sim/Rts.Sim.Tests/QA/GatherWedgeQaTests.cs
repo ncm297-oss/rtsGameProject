@@ -29,11 +29,10 @@ public class GatherWedgeQaTests
         string path = System.IO.Path.GetFullPath(System.IO.Path.Combine(TestDataDir.Shipped, "..", "..", "studio", "bugs", "BUG-0146-seed21-wood-wedge.replay"));
         Assert.Equal(ReplayError.None, ReplayFormat.TryReadFile(path, out Replay? replay));
         GameData data = DataLoader.LoadAll(TestDataDir.Shipped).Data!;
-        if (data.ContentHash() != replay!.DataHash)
-        {
-            _out.WriteLine("shipped data changed since the replay was recorded: re-record it from M3PlayableTest -- --seed 21");
-            return;
-        }
+        // A data-hash mismatch fails loudly rather than returning: a silent return would make the un-skipped row pass
+        // without testing anything (D4 moves the shipped data hash; see BUG-0146's notes).
+        Assert.True(data.ContentHash() == replay!.DataHash,
+            $"shipped data hash {data.ContentHash():X16} != the replay's {replay.DataHash:X16}: re-record it from M3PlayableTest -- --seed 21 (or override the header for a text-only data change) before trusting this row");
         var sim = new Simulation(new SimConfig(replay.Seed, replay.PlayerCount, replay.UnitCapacity, replay.CommandCapacity)
         {
             Data = data,
