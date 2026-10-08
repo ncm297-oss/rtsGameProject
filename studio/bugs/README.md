@@ -163,7 +163,8 @@ bugs outrank new features.
 | [BUG-0144](BUG-0144-chasers-field-wait-under-placement-churn.md) | S3 | open | Chasers wait up to 1.7 s for a flow field when buildings are being placed (BUG-0080 threshold 1 s) |
 | [BUG-0145](BUG-0145-m3-playable-retask-pulls-gold-miners-budget-overrun.md) | S2 | fixed | M3PlayableTest's idle re-task pulls working gold miners off the mine; seed 1 overran the 16,000-tick budget in 1 of 4 runs |
 | [BUG-0146](BUG-0146-laborers-wedge-gathering-out-of-reach-of-a-tree.md) | S2 | open | Laborers wedge in Gathering out of reach of a tree (sim); wood income stops for the rest of the match |
-| [BUG-0147](BUG-0147-view-breaks-on-m4-1-merge.md) | S3 | open | The view on top of M4-1: smoke fails (no `states.attacking`), 7 of 27 scenes fail, the M3 Playable proof among them |
+| [BUG-0147](BUG-0147-view-breaks-on-m4-1-merge.md) | S3 | fixed | The view on top of M4-1: smoke fails (no `states.attacking`), 7 of 27 scenes fail, the M3 Playable proof among them |
 | [BUG-0148](BUG-0148-m3-v4-nits.md) | S4 | partly fixed (2, 4) | M3-V4 nits: ~1 % facet-sliver picks, "+1" colour and rally walk unchecked, no replay on a non-step exception |
 | [BUG-0149](BUG-0149-stall-count-kept-across-target-switch-gives-up-reachable-enemy.md) | S3 | open | A stall count carried across a target switch makes a chaser give up a reachable enemy behind a short detour and stand Idle in sight of it |
 | [BUG-0155](BUG-0155-d4-shared-text-pin-gaps.md) | S4 | open | D4 shared-text pins: H's name check is case-sensitive and skips faction tech names (caught only by the 160-char limit); age_ii at 158 / 160 |
+| [BUG-0160](BUG-0160-m4-v1-combat-view-nits.md) | S4 | open | M4-V1 nits: F12 line covers "K / L", a unit hit before its first frame never flashes, corpses read black for both teams, F12 fallback labels in C# |

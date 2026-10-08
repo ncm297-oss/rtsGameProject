@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-07-2014, task M3-V4 (QA; a merge check, not a defect of M3-V4 itself) |
 | System | view integration with M4-1 combat: `game/data/common/ui.json`, `game/tests/**` scenes |
-| Fixed by | |
+| Fixed by | 20c05a8 (M4-V1: `--no-combat` launch flag -> `SimRunner.Combat` -> `SimConfig.Combat`; DebugOverlay, Orders, QaH1, QaH2, QaM27 run with it; regression rows in `CombatViewTest` LaunchRows) |
 
 ## Repro
 1. In a scratch clone of `studio/2026-10-07-2014-view` (df37a8c), merge `studio/2026-10-07-2014-sim` at f2879b9
@@ -55,3 +55,10 @@ the merged sim branch (M4-1) before the final run").
   The advisory scratch merge of the sim branch was deferred (the sim branch is mid-fix in another worktree). Do it in the
   view's next task, and confirm the red set is exactly the six M2 scenes and that the Playable scene passes with the
   sim's worker rule.
+- **Re-check (QA 2026-10-08-0313, task M4-V1): fixed.** On 20c05a8 the five scenes' diffs change only their launch
+  arguments (`--no-combat` appended; no `Check`, threshold or expected value touched; diffed file by file). The flag
+  reaches the sim before the match builds: `Match.Start` sets `SimRunner.Combat` before `SimRunner.Start` builds the
+  `SimConfig`, and `CombatViewTest` asserts `World.Config.Combat == false` / `CombatEnabled == false` on a real Match
+  with the flag and true without it; the DebugOverlay hash twin is built from `World.Config`, so it is off too.
+  QaM24 passes without the flag. Scene loop on the branch: 28 / 28 headless `*Test` scenes PASS (27 + QA's new
+  `QaV5Test`), 5 / 5 windowed `*Shot` scenes exit 0 with no ERROR line; smoke PASS.
