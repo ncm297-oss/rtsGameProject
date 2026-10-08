@@ -81,7 +81,18 @@ can't shoot beyond 3 m and the army can't retreat quickly.
 | Watch Tower | Lookout Tower | `whirlwind_lookout_tower` | 800 | 5 | 50 / 125 | 35 | 2×2 | Attack 10 pierce / 2 s, range 18; sight 24; detector 16 m | Age II |
 
 Building stats follow the template in [02-game-design.md](../02-game-design.md#buildings).
+
 `Content/BuildingContentTests` and `UnitContentTests` pin this page to the data.
+
+## Techs
+
+| Id | Name | Researched at | Cost (G/W) | Time (s) | Requires | Effects |
+| --- | --- | --- | --- | --- | --- | --- |
+| `dryjhnas_prophecy` | Dryjhna's Prophecy | Smithy | 200 / 150 | 45 | Age II | Zealot +20 HP; Priest of the Whirlwind Sandstorm cooldown 45 → 30 s |
+
+The faction upgrade is the only faction-specific tech. Age II and the six shared Forge upgrades are in
+[02-game-design.md "Forge upgrades"](../02-game-design.md#forge-upgrades). `Content/TechContentTests` pins this
+table and the "Faction upgrade" line above to the data.
 
 ## Strengths and weaknesses
 

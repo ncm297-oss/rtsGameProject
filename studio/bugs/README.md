@@ -119,7 +119,7 @@ bugs outrank new features.
 | [BUG-0086](BUG-0086-m2-3b-props-nits.md) | S4 | fixed | M2-3b nits: every relist uploads every type's full 4,096-instance buffer; tight minimap perf margin |
 | [BUG-0087](BUG-0087-sfx-sound-playing-at-quit-leaks-objectdb-in-existing-scenes.md) | S3 | fixed | A sound still playing at quit leaves an ObjectDB leak warning in existing test scenes (intermittent) |
 | [BUG-0088](BUG-0088-orderstest-double-tap-row-flaky-under-cpu-load.md) | S4 | fixed | `OrdersTest.tscn` double-tap row fails under CPU load: process-time wait vs wall-clock tap window (pre-existing, seen at the 1744 ACCEPT) |
-| [BUG-0090](BUG-0090-d1-building-text-ahead-of-schema.md) | S4 | open | D1 building descriptions promise tower attack/detection and requirements the schema lacks (comment item fixed in M3-3) |
+| [BUG-0090](BUG-0090-d1-building-text-ahead-of-schema.md) | S4 | open | D1 building descriptions promise tower attack/detection the schema lacks (comment item fixed in M3-3, requirements item in D3) |
 | [BUG-0091](BUG-0091-refused-builds-each-run-the-seal-flood.md) | S3 | fixed (M3-H1; residual BUG-0096) | Refused Builds each run the never-seal flood before the cheap checks; 100 in one tick cost 22 ms |
 | [BUG-0092](BUG-0092-m3-3-nits.md) | S4 | fixed (M3-H1; residual BUG-0095) | M3-3 nits: tiny repair factor rounds to 0, a holding worker can't build on its spot, push-out fallback stacks units |
 | [BUG-0093](BUG-0093-cancel-pocket-reopens-bug-0078.md) | S3 | fixed (M3-H1) | A cancelled walled-in site leaves a pocket; BUG-0078's stuck worker is reachable with player commands |
@@ -128,7 +128,8 @@ bugs outrank new features.
 | [BUG-0103](BUG-0103-m2-7-bench-nits.md) | S4 | fixed | M2-7 nits: vsync-on rows report smoothed deltas, "no bunching" remark, culture in two log lines, endless huge `--bench` |
 | [BUG-0104](BUG-0104-bench-march-under-20-m-on-seed-21.md) | S3 | open | The 10 s bench moves seed 21's army centre only 19.1 m (QaM27's 20 m bound fits seed 1, not the map family) |
 | [BUG-0105](BUG-0105-m2-h2-nits.md) | S4 | open | M2-H2 nits: minimap refresh row at 92-94% of its 0.3 ms limit (docs say 0.25 ms), Sfx exit-wait range in docs/03 |
-| [BUG-0111](BUG-0111-d2-page-pin-gaps.md) | S4 | open | D2 page pins miss a false "+N pop" claim and Provides free-text edits; culture-dependent range text in UnitContentTests.G |
+| [BUG-0111](BUG-0111-d2-page-pin-gaps.md) | S4 | fixed | D2 page pins miss a false "+N pop" claim and Provides free-text edits; culture-dependent range text in UnitContentTests.G |
+| [BUG-0132](BUG-0132-d3-pin-failure-messages.md) | S4 | open | D3 tech pins: some one-sided-edit failure messages omit the values or blame the page; "needs" reader ignores "requires" / "after" wording |
 | [BUG-0094](BUG-0094-test-grove-spawns-skip-the-seal-check.md) | S4 | open | Hand-built test groves (`ResourceStore.Spawn`) skip the never-seal check and wall cells in before tick 1 |
 | [BUG-0095](BUG-0095-push-out-on-a-full-level-scans-the-whole-map.md) | S3 | open | Push-out on a level with too few free cells scans every ring of the map per leftover unit (9 ms at 128, 35 ms at 256) and stacks them on one point |
 | [BUG-0096](BUG-0096-builds-refused-for-sealsground-each-flood.md) | S3 | open | Builds refused for SealsGround still pay a flood each: 100 in one tick cost 33 ms (BUG-0091 residual) |
