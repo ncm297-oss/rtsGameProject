@@ -6,7 +6,7 @@
 | Status | fixed (re-check round 2, 2026-10-07-2315: the 4 `Brawl_IsFoughtToAFinish...` rows un-skipped and green, decided on ticks 1,037 / 1,418 / 1,885 / 2,834, longest Idle-in-sight 1-4 ticks) |
 | Found | 2026-10-07-2315 (re-check of 2026-10-07-2014), task M4-1 fix round 1 |
 | System | combat (BUG-0137 give-up memory: `ChaseStall`, `Ignored`, `GiveUps`, `CombatConstants.MaxGiveUps`) |
-| Fixed by | eace378 (`CombatSystem.FriendFightsTarget`; `CombatTests.ChaserQueuedBehindItsOwnFightingFrontRank_NeverGivesUp`). Its stall count kept across a target switch causes BUG-0145 |
+| Fixed by | eace378 (`CombatSystem.FriendFightsTarget`; `CombatTests.ChaserQueuedBehindItsOwnFightingFrontRank_NeverGivesUp`). Its stall count kept across a target switch causes BUG-0149 |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~Brawl_IsFoughtToAFinish_NoUnitStandsIdleInSightOfAnEnemy"`

@@ -1,4 +1,4 @@
-# BUG-0145: A stall count carried across a target switch makes a chaser give up a reachable enemy behind a short detour and stand Idle in sight of it
+# BUG-0149: A stall count carried across a target switch makes a chaser give up a reachable enemy behind a short detour and stand Idle in sight of it
 
 | Field | Value |
 | --- | --- |

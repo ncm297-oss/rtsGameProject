@@ -161,4 +161,4 @@ bugs outrank new features.
 | [BUG-0142](BUG-0142-m4-1-nits.md) | S4 | open (items 3-4 fixed) | M4-1 nits: CanPlace vs Build with an Attacking worker, slot scan phase decides in-reach duels |
 | [BUG-0143](BUG-0143-max-give-ups-cap-stalls-brawls.md) | S2 | fixed | The `MaxGiveUps` cap stalls every brawl: units that gave up three crowd-blocked chases stand Idle beside reachable enemies |
 | [BUG-0144](BUG-0144-chasers-field-wait-under-placement-churn.md) | S3 | open | Chasers wait up to 1.7 s for a flow field when buildings are being placed (BUG-0080 threshold 1 s) |
-| [BUG-0145](BUG-0145-stall-count-kept-across-target-switch-gives-up-reachable-enemy.md) | S3 | open | A stall count carried across a target switch makes a chaser give up a reachable enemy behind a short detour and stand Idle in sight of it |
+| [BUG-0149](BUG-0149-stall-count-kept-across-target-switch-gives-up-reachable-enemy.md) | S3 | open | A stall count carried across a target switch makes a chaser give up a reachable enemy behind a short detour and stand Idle in sight of it |
