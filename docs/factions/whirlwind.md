@@ -148,3 +148,25 @@ Expand   2nd Holy Camp at ~9:00 regardless of threat (relies on army presence)
 | Dryjhna's Prophecy | The Prophecy |
 | Raraku | The Holy Desert |
 | Raider, Desert Archer, Horse Raider, Battering Ram, Zealot, Camp Follower, other buildings | Keep (generic) |
+
+## Balance baseline (M4-2b, 2026-10-08)
+
+Measured at sim commit `dd5b5b9` by `Content/CounterTriangleMarginsTests` (D6), on the scene of
+`Scenario/CounterTriangleTests`: a flat map, 1,200 gold + wood a side, two blocks 5 wide whose fronts start 24 m apart,
+every unit attack-moved into the other block, seed 7, both seats; no abilities, upgrades or terrain. These are the
+rows a Whirlwind unit wins; the full table, the scene and the proposed target margins are in
+[malazan.md "Balance baseline"](malazan.md#balance-baseline-m4-2b-2026-10-08) (Malazan is the balance reference). The test
+pins only the winner; the margins are not asserted.
+
+| Rule | Winner v loser | Winner seat | Fielded (winner v loser) | Winner left | Winner keeps (cost) | Time to last death |
+| --- | --- | --- | --- | --- | --- | --- |
+| Line beats Shock | Raider v Wickan Lancer | 0 | 19 (1216) v 10 (1200) | 19 / 19 | 1216 / 1216 (100 %) | 17.4 s |
+| Line beats Shock | Raider v Wickan Lancer | 1 | 19 (1216) v 10 (1200) | 18 / 19 | 1152 / 1216 (95 %) | 18.3 s |
+| Shock beats Ranged | Horse Raider v Crossbowman | 0 | 13 (1248) v 15 (1215) | 9 / 13 | 864 / 1248 (69 %) | 20.9 s |
+| Shock beats Ranged | Horse Raider v Crossbowman | 1 | 13 (1248) v 15 (1215) | 10 / 13 | 960 / 1248 (77 %) | 18.2 s |
+| Ranged beats casters | Desert Archer v Cadre Mage | 0 | 18 (1224) v 8 (1200) | 16 / 18 | 1088 / 1224 (89 %) | 11.4 s |
+| Ranged beats casters | Desert Archer v Cadre Mage | 1 | 18 (1224) v 8 (1200) | 13 / 18 | 884 / 1224 (72 %) | 13.0 s |
+| Siege beats buildings | 1 Battering Ram v a Billet, against 4 Raiders | - | - | - | 13.8 s v 254.5 s (5 %) | - |
+
+The proposed band (winner keeps 40-65 % of its cost, both seats within 15 points) is a proposal for the owner; every
+Whirlwind row is above it today, Raider v Lancer (95-100 %) most.

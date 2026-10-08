@@ -154,8 +154,13 @@ public class UnitContentTests
                 // The file holds seconds and m/s, not ticks.
                 JsonNode f = FileUnit(faction, r.Id);
                 Assert.Equal((r.Cd, r.Speed, (double)r.Train), ((double)f["attack"]!["cooldown"]!, (double)f["speed"]!, (double)f["trainTime"]!));
-                // "all" is the default, so the file writes the field only when it narrows the attack.
-                Pin(r.Id, "file attack.targets", Targets[r.Id] == "all" ? "(absent)" : Targets[r.Id], (string?)f["attack"]!["targets"] ?? "(absent)");
+                // Style rule, not a page value (BUG-0200): "all" is the default, so the file writes the field only when it
+                // narrows the attack. The page's value itself is pinned just above.
+                string? written = (string?)f["attack"]!["targets"];
+                string? expected = Targets[r.Id] == "all" ? null : Targets[r.Id];
+                Assert.True(written == expected, written == "all"
+                    ? $"{r.Id} file attack.targets: \"all\" written out although it is the default (style rule: write targets only when it is not \"all\")"
+                    : $"{r.Id} file attack.targets: file {written ?? "(absent)"}, expected {expected ?? "(absent)"} (style rule: write targets only when it is not \"all\")");
             }
     }
 
