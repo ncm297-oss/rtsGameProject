@@ -1,8 +1,11 @@
 # Handoff: brief for the next session
 
 Written by the Producer at the ACCEPT of session **2026-10-08-0913** (base `5ccbe0f`; second full session of
-2026-10-08, cap 8). All three tracks **ACCEPT**: sim **M4-2b** (1 fix round), view **M4-V2** (0), data **D5** (0). The
-next session's PLAN replaces the "Current session plan" sections below. **Bug ids next session:** sim from **BUG-0210**,
+2026-10-08, cap 8), updated at integration. Sim **M4-2b** ACCEPT (1 fix round, on `main` at 941a35a), data **D5** ACCEPT
+(0, merges after the sim), view **M4-V2** ACCEPT then **ESCALATE at integration**: `main` itself fails the Godot scene
+`MinimapTest` since M4-2b (**BUG-0210, S2**: a pre-combat 2,000-unit scene; every unit fights now, so archers shoot a
+walker within 3 s). The view branch is kept at `origin/studio/2026-10-08-0913-view` (ad7f5cc, `main` merged in, 31 / 31
+before the merge). The next session's PLAN replaces the "Current session plan" sections below. **Bug ids next session:** sim from **BUG-0210**,
 view from **BUG-0220**, data from **BUG-0230** (disjoint blocks; this session used 0180-0184, 0190, 0200).
 
 ## Where we are
@@ -16,7 +19,10 @@ view from **BUG-0220**, data from **BUG-0230** (disjoint blocks; this session us
   (`& $env:GODOT --path game`, A + click) has arrows and stones in the rules but **no projectile visuals yet** (M4-V3).
 - **Hardening counters after this session:** sim 3 / 4, view 3 / 4, data 1 / 4 (`hardening_every` 4). One more feature
   session per track, then each track's hardening session (or at M4's end, whichever first).
-- **Open bugs:** S1 0, **S2 0**, S3 (sim: BUG-0144, 0149, 0151, 0157, 0134, 0080, 0046, 0050, 0028 / 0032, 0025, 0005,
+- **`main` is red on one scene test** (BUG-0210, S2, the only S1/S2): build, sim suite and smoke are green; the scene
+  loop is 30 / 31. The view track fixes it first (its file, a few lines), the sim track keeps going (its M4-3 branch
+  must not make the loop worse: run `tools/qa/scene-loop.ps1` in sim QA and at ACCEPT from now on).
+- **Open bugs:** S1 0, **S2 1 (BUG-0210)**, S3 (sim: BUG-0144, 0149, 0151, 0157, 0134, 0080, 0046, 0050, 0028 / 0032, 0025, 0005,
   0023; view: none), S4 (sim 0182 item 2 / 0184 / 0153 3-4 / 0158 / 0142 / 0133 / 0113 / 0094 / 0040 / 0026 / 0002; view
   0190 / 0148 / 0126 3-6; data 0200 / 0090 towers part).
 - **Repo health at ACCEPT** (each branch): build 0 warnings; see the session log for the Producer's reruns.
@@ -38,7 +44,9 @@ view from **BUG-0220**, data from **BUG-0230** (disjoint blocks; this session us
    spans first, ~800 lines; towers second). Perf: 5 Hz per player over a 128 x 128 grid with ~200 sight sources must stay
    well under the 4 ms budget (`TightBlob2500` is at 4.3-4.5 of 4.6 ms: fog must not add per-unit work to the tick it
    runs in; consider spreading players across ticks). Hashed: the explored bits (they persist) but not the visible bits if
-   they are derived every 4 ticks (say which in the brief). QA full.
+   they are derived every 4 ticks (say which in the brief). QA full, **scene loop included** (BUG-0210): fog must not
+   change what any existing scene asserts (no scene reads fog yet), so 30 / 31 with only `MinimapTest` red (until the
+   view's fix merges) is the bar; anything else red is the sim's.
 2. Fold-ins if a few lines: BUG-0184 item 1 (`<=` with a small epsilon on the lead test, or document it), the
    `ProjectileImpact.Position` doc comment still says "where the target was when the shot was fired" (it is the impact
    point, which a led shot moves). BUG-0182 item 2 is a data note (below), not a sim fix.
@@ -59,6 +67,13 @@ view from **BUG-0220**, data from **BUG-0230** (disjoint blocks; this session us
 
 ### Next task candidates
 
+0. **First, BUG-0210 (S2) on the held branch `studio/2026-10-08-0913-view`:** `game/tests/MinimapTest.cs` starts the
+   real Match with `--units 1000 --no-bases` and combat on; since M4-2b every unit fights, and "39 of 40 Moving 3 s
+   after the minimap order" fails on `main` (941a35a) with no view code. Print the failing slot's `Alive` / `Hp` /
+   `State` / `Goal` once to confirm it was shot dead (if it is alive and stopped on a plain Move, that is a sim
+   regression: file it against the sim, S2, and tell the Producer); then run the scene with `--no-combat` as BUG-0147's
+   five (it is a walking-bound M2 scene), keep every `Check`, scene loop 31 / 31, smoke PASS. The branch already has
+   `main` merged in; the conductor merges it after QA. Only then M4-V3.
 1. **M4-V3: projectile visuals.** `World.Projectiles` (`ProjectileStore`: `Capacity`, `Count`; per-slot read-only spans
    `Alive`, `Position`, `PrevPosition` (the launch point on the firing tick), `Target` (the impact point; a led shot's
    moves a little each tick), `ProjectileTypeId` (`GameData.Projectiles`: `Key`, `Kind` aimed / lob), `Owner`) and
@@ -108,6 +123,13 @@ view from **BUG-0220**, data from **BUG-0230** (disjoint blocks; this session us
 
 - **Merge order:** sim, then view, then data. Expected shared-file conflicts: docs/03 (one subsection per track), docs/01
   (rows appended), `studio/bugs/README.md`, `studio/qa/coverage.md` (append both sides).
+- **Scene loop is part of the sim gate now (BUG-0210):** a sim task that changes unit behaviour (combat, movement,
+  economy, orders) runs `powershell -File tools/qa/scene-loop.ps1` in QA (expect 31 / 31 once BUG-0210 is fixed; name the
+  count in the report) and the Producer runs it at ACCEPT. Smoke alone boots one match for ~90 ticks and sees nothing a
+  scene asserts. The brief says so under Constraints.
+- **Owner note 2026-10-08 (processed):** art direction is grounded / realistic (Quaternius + Mixamo; KayKit fallback);
+  most packs are already downloaded (docs/04); **do not pull the look test or art work forward** (M6 stays). Fonts,
+  music and the export templates remain to download; the Producer lists them when M5 starts.
 - **Perf:** the category in one process fails 8-9 wall-clock rows on base and head alike (machine load); a Perf failure
   counts only alone, first run in a fresh process (BUG-0158). `TightBlob2500` is at 4.3-4.5 of 4.6 ms.
 - `CLAUDE.md` still says "Current milestone: M1" (the owner's file; suggested text under For your review, M1 entry).
