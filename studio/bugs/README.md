@@ -155,22 +155,23 @@ bugs outrank new features.
 | [BUG-0136](BUG-0136-smoke-fails-ui-json-missing-states-attacking.md) | S1 | fixed on merge | Headless smoke FAILS: `ui.json: missing states.attacking` (new `UnitState.Attacking`) |
 | [BUG-0137](BUG-0137-chase-livelock-unreachable-or-detoured-targets.md) | S2 | fixed | Chasing a target the unit cannot reach (or only by a detour) never ends: attack-moves stop for good, Idle units dither forever |
 | [BUG-0138](BUG-0138-site-under-construction-damage-undone-by-build-tick.md) | S2 | fixed | A site under construction with a builder is effectively invulnerable: every build tick resets its hit points from progress |
-| [BUG-0139](BUG-0139-battering-ram-attacks-units.md) | S3 | open (M4-2) | The Battering Ram attacks units; the Whirlwind page says it attacks buildings only |
+| [BUG-0139](BUG-0139-battering-ram-attacks-units.md) | S3 | fixed | The Battering Ram attacks units; the Whirlwind page says it attacks buildings only |
 | [BUG-0140](BUG-0140-tightblob2500-row-flaky-after-m4-1.md) | S3 | fixed | `TightBlob2500_OnePlayer` (4.5 ms) now fails about 1 run in 6 after M4-1 (+0.08 ms) |
 | [BUG-0141](BUG-0141-retaliation-never-ends-when-anchor-cell-is-blocked.md) | S3 | fixed | A retaliation whose anchor cell becomes blocked never ends (mode stays `Retaliate` / `AttackMove` for good) |
 | [BUG-0142](BUG-0142-m4-1-nits.md) | S4 | open (items 3-4 fixed) | M4-1 nits: CanPlace vs Build with an Attacking worker, slot scan phase decides in-reach duels |
 | [BUG-0143](BUG-0143-max-give-ups-cap-stalls-brawls.md) | S2 | fixed | The `MaxGiveUps` cap stalls every brawl: units that gave up three crowd-blocked chases stand Idle beside reachable enemies |
 | [BUG-0144](BUG-0144-chasers-field-wait-under-placement-churn.md) | S3 | open | Chasers wait up to 1.7 s for a flow field when buildings are being placed (BUG-0080 threshold 1 s) |
 | [BUG-0145](BUG-0145-m3-playable-retask-pulls-gold-miners-budget-overrun.md) | S2 | fixed | M3PlayableTest's idle re-task pulls working gold miners off the mine; seed 1 overran the 16,000-tick budget in 1 of 4 runs |
-| [BUG-0146](BUG-0146-laborers-wedge-gathering-out-of-reach-of-a-tree.md) | S2 | open | Laborers wedge in Gathering out of reach of a tree (sim); wood income stops for the rest of the match |
+| [BUG-0146](BUG-0146-laborers-wedge-gathering-out-of-reach-of-a-tree.md) | S2 | fixed | Laborers wedge in Gathering out of reach of a tree (sim); wood income stops for the rest of the match |
 | [BUG-0147](BUG-0147-view-breaks-on-m4-1-merge.md) | S3 | open | The view on top of M4-1: smoke fails (no `states.attacking`), 7 of 27 scenes fail, the M3 Playable proof among them |
 | [BUG-0148](BUG-0148-m3-v4-nits.md) | S4 | partly fixed (2, 4) | M3-V4 nits: ~1 % facet-sliver picks, "+1" colour and rally walk unchecked, no replay on a non-step exception |
 | [BUG-0149](BUG-0149-stall-count-kept-across-target-switch-gives-up-reachable-enemy.md) | S3 | open | A stall count carried across a target switch makes a chaser give up a reachable enemy behind a short detour and stand Idle in sight of it |
 | [BUG-0150](BUG-0150-retaliator-ping-pongs-between-two-targets-forever.md) | S2 | fixed | A retaliator ping-pongs between two targets forever (give-up never builds); four movement rows switched to combat off |
-| [BUG-0151](BUG-0151-gather-perf-row-up-40-percent-after-wedge-fix.md) | S2 | open | After the BUG-0146 fix the 200-worker gather Perf row costs ~40 % more per tick (criterion allows 10 %) |
+| [BUG-0151](BUG-0151-gather-perf-row-up-40-percent-after-wedge-fix.md) | S3 | open (Producer re-triage S2 → S3: crowd cost, criterion re-stated) | After the BUG-0146 fix the 200-worker gather Perf row costs ~40 % more per tick (0.32 of 1 ms; per-walker cost unchanged, denser crowd at the nodes) |
 | [BUG-0152](BUG-0152-reissued-attack-cancels-windup-spam-does-no-damage.md) | S2 | fixed | Re-issuing the same Attack / AttackMove cancels the wind-up: an order every 5 ticks or faster never deals damage |
 | [BUG-0153](BUG-0153-m4-2a-nits.md) | S4 | open (1-2 fixed) | M4-2a nits: queued Attack target in public `QueuePosition`, a shove row lost combat-on, two brief rows not meetable as worded |
 | [BUG-0154](BUG-0154-reissued-attack-move-keeps-building-cannot-redirect.md) | S2 | fixed | Since the BUG-0152 fix an attack-move anywhere keeps an in-reach fight: the player can't redirect a unit off a building onto its attacker |
 | [BUG-0155](BUG-0155-d4-shared-text-pin-gaps.md) | S4 | open | D4 shared-text pins: H's name check is case-sensitive and skips faction tech names (caught only by the 160-char limit); age_ii at 158 / 160 |
 | [BUG-0156](BUG-0156-unit-hitting-building-ignores-attacker.md) | S3 | open | A unit hitting a building in reach never turns on an enemy unit killing it (tier 0 skipped while in reach) |
 | [BUG-0157](BUG-0157-jittered-attack-move-spam-drops-chasers-fights.md) | S3 | open | Attack-move spam to a new point every 1-3 ticks still costs 10-26 % of a brawl's damage: chasers out of reach lose their fight on each click |
+| [BUG-0158](BUG-0158-blob-scan-perf-row-reads-machine-slowdown-as-delta.md) | S4 | open | QA Perf row `TightBlob2500_OneEnemyAtTheFarCorner_ScansNearFree` reads a sustained-load machine slowdown (4.35 then 7.2 ms runs) as the far enemy's cost; fails alone on base and head alike |

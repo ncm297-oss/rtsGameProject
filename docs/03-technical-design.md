@@ -1444,8 +1444,10 @@ not this arrival rule (the walker never arrives), and not reproduced; left to it
   Raider killing it. Now a kept fight re-picks unless the order is the leg's own point (within `ArrivalDistance`, 1 m, of
   the leg's resolved end: the Move rule's "already there"): the order sets `UnitStore.Repick`, and that tick's phase 7
   scans the unit at once, due or not and in reach or not, by the usual priority. The same pick keeps the swing (`Engage`
-  with the target it has changes nothing), so spam to the same or to a new point still lands every hit; a better pick
-  (an attacker, a unit over a building) is taken at once. Another point in the leg's own cell counts as a new point here
+  with the target it has changes nothing), so spam to the same point, or to a new point by a unit fighting in reach,
+  still lands every hit; a better pick (an attacker, a unit over a building) is taken at once. A chaser still out of
+  reach given a new point does lose its target until its next scan (BUG-0157, S3: jittered A-click spam every 1-3
+  ticks costs a brawl 10-26 % of its damage; same-point spam and spam 5+ ticks apart cost nothing). Another point in the leg's own cell counts as a new point here
   (QA's repro attack-moved onto a Raider standing in that cell) but keeps the give-up memory. The flag is cleared in the
   same phase 7 (and by `ClearForOrder`), so it is never set between ticks; it is hashed above the mode's byte (`Simulation.AddCombatToHash`), which leaves every hash between ticks, and the goldens, as they were. Rows:
   `AttackOrderTests.ReissuedAttack_...`, `ReissuedAttackMove_...`, `AttackMove_ToANewLeg_MidSwing_...`,

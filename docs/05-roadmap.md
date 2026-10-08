@@ -335,11 +335,34 @@ review") stands as feedback, not as a gate. Owner may revisit._
       drawn tree / mine shape), BUG-0126 items 1-2 ("Locked" on a locked building's ghost and button, "Researched" / "In a
       queue" over "Locked").)_
 
+_All 8 criteria met by session 2026-10-07-2315. End-of-milestone hardening on every track: sim M3-H1 (session
+2026-10-07-0800) and M3-H2 (1715), view M3-V3b (1715), data D4 (2315). The one S2 the Playable run found (BUG-0146,
+gatherers wedged out of reach of a tree open on one side) was fixed and QA-verified in session 2026-10-08-0313 (M4-2a:
+stand points and the queue rule; the seed 21 scripted playtest passes). `studio/qa/coverage.md`: every M3 row ✅ for
+Unit, Invariant fuzz and Determinism; no open S1/S2. **Signed off by the Producer on 2026-10-08 under autopilot
+(`stop_at_milestone_end: no`).** Open S3/S4 carried: BUG-0134 (S3, a building requiring a tech researched only at
+itself loads clean), BUG-0151 (S3, the crowded gather row costs +40 % a tick after the wedge fix: crowd cost, not
+waste), BUG-0133 / 0113 / 0094 (S4, sim nits), BUG-0126 items 3-6 and BUG-0148 items 1, 3 (S4, view nits), BUG-0155 and
+BUG-0090's towers part (S4, data), the docs/02 "Ages" wording drift (data track's next task). The owner's own
+ten-minute playtest (STATE "For your review", M3-V3 entry) stands as feedback, not as a gate. Owner may revisit._
+
 ## M4 — Combat, fog, abilities
 
 **Done when:**
 
-- [ ] Attack, attack-move, chase, retaliation, target acquisition priorities.
+- [x] Attack, attack-move, chase, retaliation, target acquisition priorities.
+      _(Ticked in session 2026-10-08-0313, task M4-2a: the explicit `Attack(target)` order (`CommandKind.Attack` = 16,
+      `Command.Attack(player, unit, target, isBuilding[, queued])`, Shift-queueable with the handle kept in the existing
+      queue arrays; dropped like a bad Gather for a dead / recycled / own / forbidden target or a unit that cannot fight
+      yet; `CombatMode.Ordered`: the target outranks the scan, no leash, the give-up memory still applies, Idle in place
+      after the kill), `attack.targets` schema field (`all` / `units` / `buildings`; the Battering Ram is `buildings`,
+      BUG-0139 fixed), replay format 4 (the target on command lines, `combat` in the header; format 3 loads). Fix rounds:
+      re-issuing a fight order never cancels a swing (BUG-0152), an attack-move to a new point re-picks by priority so a
+      unit can be pulled off a building (BUG-0154), a lost-from-sight target is given up on a switch (BUG-0150). QA:
+      `AttackOrderQaTests`, `AttackOrderFuzzStressTests` (4 seeds x 2,500 ticks of hostile Attack orders, twins equal),
+      `ReplayFormat4QaTests`, `AttackMoveRepickQaTests`. The view's attack-target click / F key is the next view task
+      (M4-V2). Open: BUG-0156 (S3, a unit hitting a building ignores the unit killing it), BUG-0157 (S3, jittered A-click
+      spam every 1-3 ticks costs 10-26 % of a brawl's damage), BUG-0144 (S3), BUG-0149 (S3), BUG-0153 / 0142 (S4).)_
       _(Sim half landed in session 2026-10-07-2315, task M4-1 (`Rts.Sim.Combat`, melee only): attack-move acquisition
       every 4 ticks staggered by slot through `SpatialHash.QueryEnemies`, the docs/03 priority (enemies attacking me >
       units that can attack > other units > buildings, nearest, lowest slot), chase through the normal Move path, Idle
@@ -356,7 +379,16 @@ review") stands as feedback, not as a gate. Owner may revisit._
       raw, tech-boosted attacker / defender ±1. Wind-up + cooldown in ticks, hits queued at the wind-up point (grace
       0.5 m) and applied in attacker slot order in phase 11 so mutual kills land.)_
 - [ ] Projectiles with travel time and misses; splash with falloff; friendly fire.
-- [ ] Death, corpses, building destruction and rubble.
+- [x] Death, corpses, building destruction and rubble.
+      _(View half in session 2026-10-08-0313, task M4-V1: `CombatViews` (hp bars over hurt units only, green → yellow →
+      red, two MultiMeshes; corpse discs for 10 s and rubble boxes for 20 s of game time from `World.Deaths`, a pooled ring
+      of 2,000 markers, oldest replaced), `UnitViews` hit flash (0.15 s white overlay through `ViewApi.HitFlash`, no sim
+      event), kills / losses in the resource bar and on F12 (`ui.json` `hud.kills` / `hud.losses`), live hp in the
+      selection panel (allocation-free); `--no-combat` dev flag for the M2 scenes (BUG-0147 fixed, no assertion
+      loosened); `CombatViewTest.tscn` seeds 1 / 6 + QA's `QaV5Test.tscn` (60 v 60 at 8x / 1x / stopped, 1,100+ frames
+      checked, 2,000 hurt units 1.5 ms worst, 0 B). Placeholder discs and boxes until the M6 art pass (death animations,
+      corpse models). Open: BUG-0160 (S4 nits: F12 line overlaps K / L, a unit hit before its first frame never flashes,
+      corpses read near-black, two fallback literals).)_
       _(Sim half in M4-1 (session 2026-10-07-2315): a unit at 0 hp is freed the tick it dies (pop released, handle
       stale, targets on it cleared), `World.Deaths` holds one tick's `DeathEvent`s (victim, type, owner, killer's owner,
       position) for the view, `World.Kills` / `Losses` per player (hashed); a building at 0 goes through

@@ -2,8 +2,8 @@
 
 | Field | Value |
 | --- | --- |
-| Severity | S2 |
-| Status | open (QA: cost confirmed crowd-driven; Producer to re-state the criterion or keep it) |
+| Severity | S3 (Producer re-triage from S2 at the 2026-10-08-0313 ACCEPT; see the decision below) |
+| Status | open (S3: a crowd-cost item for the next sim hardening session or the post-M4 crowd-cost work; the criterion was re-stated, see below) |
 | Found | 2026-10-08-0313, task M4-2a (declared by the developer, confirmed by QA) |
 | System | sim: gather walks (`Economy/EconomySystem.WalkToFootprint`, `Movement/MovementSystem` stand arrival), sim track |
 | Fixed by |  |
@@ -58,3 +58,15 @@ At *matched* crowd density the tick costs the same on both builds (median ms by 
 denser crowd (more workers walking near their stand points), not slower code. The developer's explanation holds. The
 criterion as worded (≤ 10 %) is still not met, so this stays S2 until the Producer re-states it (e.g. against the 1 ms
 budget, or per resource delivered) or asks for a cheaper crowd.
+
+## Producer decision (2026-10-08-0313 ACCEPT)
+Criterion 3's "at most 10 %" was written as a guard against wasteful code in the arrival fix. QA's profile shows the
+per-walker cost is unchanged (5.5-6.1 us per walker-tick on both builds; equal cost at matched neighbour density) and the
+extra 0.09 ms is the crowd the fix creates: 39 % more workers walking (they used to stand wedged, which was the bug) and
+twice the neighbour pairs round the nodes, in a scene of 100 workers on one tree and one mine per base. The row sits at
+0.32 ms of its 1 ms budget, the 500 + 50 row and `TightBlob2500` are unchanged, and income rose (+14-17 % in the row,
++15 % per worker at 20 workers). **Re-stated criterion:** per-walker cost unchanged and the row inside its own budget;
+met. **Re-triaged S3** (crowd cost, not a defect in the fix): revisit with the crowd-cost work after the M4 sandbox (the
+same item as BUG-0028 / 0032 / 0046: a crowd cost in the flow fields or cheaper neighbour handling at stand points), or
+earlier if a hardening session finds a cheap cut (the dev tried four variants; each broke a wedge row or cut little).
+Also noted for the data track's balance pass: +15 % crowd income at 20 workers is a balance change to M3's numbers.
