@@ -106,8 +106,14 @@ Mixamo packs above (`mixamo/<pack>/`), and Stylized Nature MegaKit (Standard, Pr
 over the KayKit forest for the realistic look). Blender 5.2 is the owner's install for `.blend`
 sources and model edits. Ground textures: 23 ambientCG PBR materials at 1K JPG (CC0) in
 `asset-sources/ambientcg/<id>/` (grass, ground, rock, rocks, paving stones, asphalt; each with
-Color, NormalGL / NormalDX, Roughness, AO, Displacement and a Godot `.tres`). Still to download
-before M6: UI, fonts, audio, the Godot export templates.
+Color, NormalGL / NormalDX, Roughness, AO, Displacement and a Godot `.tres`). Poly Haven scanned
+models (CC0) in `asset-sources/polyhaven/<id>/`: 4 trees (island, jacaranda, small, searsia
+shrub), a dead trunk, boulders, cliffs and mossy rocks, as 4K `.blend` + textures (heavy: decimate
+and downsample to the budgets above). Kenney UI Pack RPG Expansion (CC0) in
+`asset-sources/kenney-ui-pack-rpg-expansion/`. Sonniss GDC 2026 Game Audio Bundle (royalty-free,
+no attribution, no resale of raw files; licence PDF inside) in `asset-sources/sonniss-gdc-2026/part1-5/`,
+~7.5 GB. Still to download before M6: fonts (e.g. Cinzel, EB Garamond; SIL OFL), music, the Godot
+export templates.
 
 ### Buildings, nature, props
 
