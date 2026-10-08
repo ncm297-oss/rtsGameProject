@@ -363,6 +363,14 @@ ten-minute playtest (STATE "For your review", M3-V3 entry) stands as feedback, n
       `ReplayFormat4QaTests`, `AttackMoveRepickQaTests`. The view's attack-target click / F key is the next view task
       (M4-V2). Open: BUG-0156 (S3, a unit hitting a building ignores the unit killing it), BUG-0157 (S3, jittered A-click
       spam every 1-3 ticks costs 10-26 % of a brawl's damage), BUG-0144 (S3), BUG-0149 (S3), BUG-0153 / 0142 (S4).)_
+      _(View half in session 2026-10-08-0913, task M4-V2: a right-click or A + click on an enemy unit's drawn body or an
+      enemy building's box is one `Command.Attack` per selected unit (Shift queues; an own unit or building or a prop in
+      front hides what is behind it), through the read-only `ViewApi.UnitPicker` (capsule ray pick + `ResolveEnemy`,
+      1,000 rays vs a marching oracle, 0 own targets); a pooled red `TargetRing` for 0.5 s; the panel reads `ui.json`
+      `states.ordered_attack` ("Pursuing") while a unit chases its ordered target; the F12 overlay names the target slot;
+      the minimap right-click stays a Move until fog (M4-3). BUG-0160 fixed (F12 layout, first-sight flash, corpse discs
+      85 % on a darker rim, no fallback literals); BUG-0156 fixed in M4-2b. `AttackOrderViewTest.tscn` + QA's `QaV6Test`
+      (500-click spam 0 B, hash twins). Open: BUG-0190 (S4: corpse discs half-buried on a ramp edge; a NaN entry edge).)_
       _(Sim half landed in session 2026-10-07-2315, task M4-1 (`Rts.Sim.Combat`, melee only): attack-move acquisition
       every 4 ticks staggered by slot through `SpatialHash.QueryEnemies`, the docs/03 priority (enemies attacking me >
       units that can attack > other units > buildings, nearest, lowest slot), chase through the normal Move path, Idle
@@ -378,7 +386,21 @@ ten-minute playtest (STATE "For your review", M3-V3 entry) stands as feedback, n
       `DamageCalcTests`: the worked example `9 x 0.6 x 1.3 = 7.02 → 7 - 1 = 6`, every table cell at armor 0 and armor ≥
       raw, tech-boosted attacker / defender ±1. Wind-up + cooldown in ticks, hits queued at the wind-up point (grace
       0.5 m) and applied in attacker slot order in phase 11 so mutual kills land.)_
-- [ ] Projectiles with travel time and misses; splash with falloff; friendly fire.
+- [x] Projectiles with travel time and misses; splash with falloff; friendly fire.
+      _(Ticked in session 2026-10-08-0913, task M4-2b: `common/projectiles.json` schema (`aimed` / `lob`, `speed`,
+      `hitTolerance`, `leadSpeed`; every `attack.projectile` resolved at load, a lob needs a splash), `ProjectileStore`
+      (flat SoA, `SimConfig.ProjectileSlots`, hashed only while a shot is in flight) and `ProjectileSystem` (Fly at the
+      start of phase 10, Fire at the wind-up end, Land in phase 11 after the melee hits; aimed shots hit within radius +
+      tolerance of the impact point, lobs always explode; splash 100 % inside 40 % of the radius to 50 % at the edge,
+      friendly fire at 50 % for own units only, never own buildings; `attack.minRange` with no kiting), `CanFight` for
+      every attack (all 14 shipped units fight), BUG-0156 folded in. Fix round: the lead rule (BUG-0183, S2: with
+      docs/02's rule as written a walking Heavy Infantry dodged every shot past 5 m; now a shot at a unit no faster than
+      the projectile's `leadSpeed` is led and re-led in flight: walkers 100 % to 16.3 m, a galloping Horse Raider 0 %
+      from 6 m), BUG-0180 / 0181 / 0182 item 1. Golden `data-hash` moved (every `k` line identical). View spans
+      `World.Projectiles` / `World.Impacts` documented for M4-V3. QA full: `ProjectileQaTests`, `ProjectileLeadQaTests`,
+      `RangedSplashFuzzQaTests` (6 seeds x 3,000, twins equal), `ProjectileScaleQaTests`; 500 v 500 mixed 1.7-1.9 ms,
+      1,000 shots in flight 0.06 ms / 0 B, `TightBlob2500` 4.3-4.5 of 4.6 ms. Open: BUG-0182 item 2 (S4, data note: Sappers
+      splash themselves in melee, friendly fire 23-28 % of deaths in shooter-heavy fuzz), BUG-0184 (S4, lead nits).)_
 - [x] Death, corpses, building destruction and rubble.
       _(View half in session 2026-10-08-0313, task M4-V1: `CombatViews` (hp bars over hurt units only, green → yellow →
       red, two MultiMeshes; corpse discs for 10 s and rubble boxes for 20 s of game time from `World.Deaths`, a pooled ring
@@ -398,8 +420,15 @@ ten-minute playtest (STATE "For your review", M3-V3 entry) stands as feedback, n
 - [ ] Ability system (target ground, self/aura, summon) and status effects; zones.
 - [ ] Stealth and detection system (tested now, even though Shadow arrives in M8).
 - [ ] Telas Fire, Sapper Sharpers + Cusser, Sandstorm, Zealot passives all work.
-- [ ] Scenario tests for the counter triangle (Line beats Shock, Shock beats Ranged, Ranged beats
+- [x] Scenario tests for the counter triangle (Line beats Shock, Shock beats Ranged, Ranged beats
       Light, Siege beats buildings).
+      _(Ticked in session 2026-10-08-0913, task M4-2b: `Scenario/CounterTriangleTests`, equal-cost groups attack-moved
+      into each other on a flat map, both factions' pairs and both seats: Heavy Infantry v Horse Raider, Raider v Wickan
+      Lancer (Line beats Shock, margins 1,036-1,216 of ~1,200 cost: very wide, a balance note for the data track);
+      Wickan Lancer v Desert Archer, Horse Raider v Crossbowman (Shock beats Ranged, 840-960); Crossbowman v Priest,
+      Desert Archer v Cadre Mage (Ranged beats the casters, 810-1,088); a Catapult kills a Tent in 341 ticks against
+      3,844 for the same cost of Heavy Infantry, a Battering Ram a Billet in 276 against 5,090 for Raiders. The rows
+      assert the winner and print survivors and time. The view's attack-target click landed the same session (M4-V2).)_
 - [ ] Playable: Malazan vs. Whirlwind armies fight in a sandbox with fog on.
 
 ## M5 — AI opponent
