@@ -493,4 +493,39 @@ public class AllocationTests
         Assert.Equal(10, builds); // every round placed the House on the 30 (so the leftovers' passes ran)
         Assert.Equal(1, full.World.Buildings.QueueCount[keep]);
     }
+
+    /// <summary>M4-1 criterion 8: 2,500 Idle units of one player scanning (625 scans a tick, staggered by slot) allocate nothing.</summary>
+    [Fact]
+    public void IdleScans_OnA2500UnitOnePlayerBlob_AllocateNothing()
+    {
+        var sim = new Simulation(TestSim.Config(Seed: 1, PlayerCount: 1, UnitCapacity: 2500, CommandCapacity: 64), LocalMovementTests.Flat(128));
+        for (int k = 0; k < 2500; k++)
+            CombatScenes.Place(sim, 0, CombatScenes.HeavyInfantry, new Vector2(78f + k % 50 * 2f, 78f + k / 50 * 2f));
+        for (int t = 0; t < 8; t++) sim.Tick(); // warm-up: every slot has scanned twice
+        Action ticks = () =>
+        {
+            sim.Tick();
+            sim.Tick();
+        };
+        AllocationProbe.AssertZero(ticks);
+        Assert.Equal(2500, sim.World.Units.Count);
+    }
+
+    /// <summary>M4-1 criterion 8: ticks of a 100 v 100 melee brawl in full swing (swings, hits, deaths, re-targeting) allocate nothing.</summary>
+    [Fact]
+    public void BrawlTicks_WithHitsAndDeaths_AllocateNothing()
+    {
+        Simulation sim = CombatScenes.Flat(size: 64, units: 200);
+        CombatScenes.FlatBrawl(sim, 100, new Vector2(64f, 64f), gap: 6f, ranks: 10);
+        World w = sim.World;
+        CombatScenes.RunUntil(sim, () => w.Kills[0] + w.Kills[1] >= 4, 2000);
+        Assert.True(w.Kills[0] + w.Kills[1] >= 4);
+        int before = w.Kills[0] + w.Kills[1];
+        Action ticks = () =>
+        {
+            for (int t = 0; t < 20; t++) sim.Tick();
+        };
+        AllocationProbe.AssertZero(ticks);
+        Assert.True(w.Kills[0] + w.Kills[1] > before, "no deaths inside the measured ticks");
+    }
 }

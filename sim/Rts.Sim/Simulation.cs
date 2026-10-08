@@ -1,5 +1,6 @@
 using System;
 using System.Numerics;
+using Rts.Sim.Combat;
 using Rts.Sim.Commands;
 using Rts.Sim.Data;
 using Rts.Sim.Determinism;
@@ -69,10 +70,11 @@ public sealed class Simulation
         _recorder?.OnEnqueued(in command);
     }
 
-    /// <summary>Runs one tick: applies this tick's commands in (player, sequence) order, rebuilds the spatial hash, trains and spawns units, runs gather loops, then builders and repairers, starts queued orders, moves units, then bumps <see cref="TickNumber"/>.</summary>
+    /// <summary>Runs one tick: applies this tick's commands in (player, sequence) order, rebuilds the spatial hash, trains and spawns units, runs gather loops, then builders and repairers, starts queued orders, acquires targets, moves units, swings and applies damage and death, then bumps <see cref="TickNumber"/>.</summary>
     public void Tick()
     {
         World.Units.SnapshotPrevPositions();
+        World.ClearDeaths(); // the last tick's death events have been read by now
 
         // Phase 1: apply commands.
         _commands.Sort();
@@ -92,11 +94,18 @@ public sealed class Simulation
         // M3-3: builders and repairers, after the gatherers.
         ConstructionSystem.Run(World);
 
-        // Phase 7: Idle units start their next shift-queued order.
+        // Phase 7: Idle units start their next shift-queued order, then target acquisition (M4-1).
         OrderSystem.Run(World);
+        CombatSystem.Acquire(World);
 
         // Phases 8-9: flow fields (fetched or built on demand) and movement.
         MovementSystem.Run(World);
+
+        // Phase 10: swings, wind-ups and cooldowns (M4-1); hits queue for phase 11.
+        CombatSystem.Attack(World);
+
+        // Phase 11: damage and death (M4-1).
+        CombatSystem.Resolve(World);
 
         // Phase 13: cleanup.
         World.TickNumber++;
@@ -112,7 +121,7 @@ public sealed class Simulation
         _recorder = recorder;
     }
 
-    /// <summary>64-bit FNV-1a hash of all gameplay state: tick, units (Hold, order queues, gather loops and cargo included), RNG streams, flow-field cache metadata, nav grid versions (and the movement pass's last seen block version), resource nodes, buildings (production queues, research items and rally points included), player totals and researched techs, and pending commands.</summary>
+    /// <summary>64-bit FNV-1a hash of all gameplay state: tick, units (Hold, order queues, gather loops and cargo, combat state included), RNG streams, flow-field cache metadata, nav grid versions (and the movement pass's last seen block version), resource nodes, buildings (production queues, research items and rally points included), player totals, researched techs, kills and losses, and pending commands.</summary>
     /// <remarks>
     /// Derived state is left out: the spatial hash (rebuilt from the units every tick),
     /// Speed/Radius (they follow from TypeId), and population (M3-4: <see cref="World.HalfPop"/> follows from the live
@@ -141,7 +150,9 @@ public sealed class Simulation
             h.Add(u.TypeId[i]);
             // Orders (M1-7) ride in the high half of the state word, which is zero for a unit with
             // no Hold and an empty queue, so such a unit hashes exactly as before the queue existed.
-            h.Add((ulong)(byte)u.State[i] | ((ulong)OrderBits(u, i) << 32));
+            // M4-1: bit 17 flags combat state, added after the economy words.
+            bool combat = HasCombat(World, i);
+            h.Add((ulong)(byte)u.State[i] | ((ulong)(OrderBits(u, i) | (combat ? 1u << 17 : 0u)) << 32));
             h.Add(u.Goal[i]);
             h.Add(u.GoalCell[i]);
             h.Add(u.OrderTick[i]);
@@ -160,6 +171,7 @@ public sealed class Simulation
                 h.Add(u.BuildTarget[i].Index);
                 h.Add(u.BuildTarget[i].Generation);
             }
+            if (combat) AddCombatToHash(ref h, u, i);
         }
         h.Add(u.FreeCount);
         for (int i = 0; i < u.FreeCount; i++)
@@ -187,9 +199,16 @@ public sealed class Simulation
             // M3-5: a player with any researched tech sets the high half of its gold word and its tech words follow;
             // without techs it hashes exactly as before.
             bool techs = World.Techs.Any(p);
-            h.Add((ulong)(uint)World.Gold[p] | (techs ? 1UL << 32 : 0UL));
+            // M4-1: likewise bit 33 for a player with kills or losses, followed by the two counts.
+            bool deaths = World.Kills[p] != 0 || World.Losses[p] != 0;
+            h.Add((ulong)(uint)World.Gold[p] | (techs ? 1UL << 32 : 0UL) | (deaths ? 1UL << 33 : 0UL));
             h.Add(World.Wood[p]);
             if (techs) World.Techs.AddToHash(ref h, p);
+            if (deaths)
+            {
+                h.Add(World.Kills[p]);
+                h.Add(World.Losses[p]);
+            }
         }
 
         for (int p = 0; p < _nextSequence.Length; p++)
@@ -225,6 +244,33 @@ public sealed class Simulation
             if (u.QueueKind[head + k] != CommandKind.Noop || u.QueuePosition[head + k] != Vector2.Zero || u.QueueTypeId[head + k] != 0) bits |= 4u << k;
         if (HasEconomy(u, i)) bits |= 1u << 16;
         return bits;
+    }
+
+    /// <summary>
+    /// True when any combat field (M4-1) of unit <paramref name="i"/> isn't at its spawn value: hit points below (or
+    /// above) the type's, a target, a cooldown, a wind-up, a last attacker, an anchor or a combat mode. Flagged by bit 17
+    /// of the order word, then hashed, so a unit that never fought hashes exactly as before M4-1.
+    /// </summary>
+    private static bool HasCombat(World world, int i)
+    {
+        UnitStore u = world.Units;
+        int fullHp = (uint)u.TypeId[i] < (uint)world.Data.Units.Length ? world.Data.Units[u.TypeId[i]].Hp : 0;
+        return u.Hp[i] != fullHp || u.Target[i] != default || u.TargetIsBuilding[i] || u.CooldownTicks[i] != 0 || u.WindupTicks[i] != 0
+            || u.LastAttacker[i] != default || u.AnchorPosition[i] != Vector2.Zero || u.Mode[i] != CombatMode.None;
+    }
+
+    /// <summary>Unit <paramref name="i"/>'s combat fields, as flagged by bit 17 of <see cref="OrderBits"/>.</summary>
+    private static void AddCombatToHash(ref StateHasher h, UnitStore u, int i)
+    {
+        h.Add(u.Hp[i]);
+        h.Add(u.Target[i].Index);
+        h.Add((ulong)(uint)u.Target[i].Generation | (u.TargetIsBuilding[i] ? 1UL << 32 : 0UL));
+        h.Add(u.CooldownTicks[i]);
+        h.Add(u.WindupTicks[i]);
+        h.Add(u.LastAttacker[i].Index);
+        h.Add(u.LastAttacker[i].Generation);
+        h.Add(u.AnchorPosition[i]);
+        h.Add((int)u.Mode[i]);
     }
 
     /// <summary>True when any gather-loop or cargo field (M3-2) or the build target (M3-3) of unit <paramref name="i"/> isn't default; flagged in <see cref="OrderBits"/>, then hashed.</summary>

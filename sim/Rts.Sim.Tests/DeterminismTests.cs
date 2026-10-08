@@ -350,4 +350,40 @@ public class DeterminismTests
         Assert.True(played.Ok, played.ToString());
         Assert.Equal(recorded.TickCount, played.TicksRun);
     }
+
+    // ---------- M4-1: combat ----------
+
+    /// <summary>M4-1 criterion 6: a 200 v 200 brawl on the default map, two sims hash-equal after every tick for 1,000 ticks, with real deaths.</summary>
+    [Fact]
+    public void Brawl200v200_TwinsHashEqualEveryTick_For1000Ticks()
+    {
+        Simulation a = CombatScenes.MapBrawl(17, 200), b = CombatScenes.MapBrawl(17, 200);
+        int attacking = 0;
+        for (int t = 0; t < 1000; t++)
+        {
+            a.Tick();
+            b.Tick();
+            Assert.True(a.StateHash() == b.StateHash(), $"twins differ after tick {a.TickNumber - 1}");
+            UnitStore u = a.World.Units;
+            for (int i = 0; i < u.Capacity; i++) if (u.Alive[i] && u.State[i] == UnitState.Attacking) attacking++;
+        }
+        Assert.True(a.World.Kills[0] + a.World.Kills[1] >= 50, $"only {a.World.Kills[0] + a.World.Kills[1]} kills");
+        Assert.True(attacking > 0);
+    }
+
+    /// <summary>M4-1 criterion 6: the same brawl recorded from tick 0 writes, reads back and plays back with every checkpoint matching.</summary>
+    [Fact]
+    public void Brawl_ReplayRoundTrip_MatchesEveryCheckpoint()
+    {
+        ReplayRecorder? recorder = null;
+        Simulation sim = CombatScenes.MapBrawl(23, 120, s => recorder = new ReplayRecorder(s, checkpointInterval: 50));
+        while (sim.TickNumber < 800) sim.Tick();
+        Assert.True(sim.World.Kills[0] + sim.World.Kills[1] > 0);
+        Replay recorded = recorder!.ToReplay();
+        Assert.Contains(recorded.Commands, c => c.Kind == CommandKind.AttackMove);
+        Assert.Equal(ReplayError.None, ReplayFormat.TryRead(ReplayFormat.Write(recorded), out Replay? parsed));
+        ReplayResult played = ReplayPlayer.Run(parsed!, TestSim.Data);
+        Assert.True(played.Ok, played.ToString());
+        Assert.Equal(recorded.TickCount, played.TicksRun);
+    }
 }

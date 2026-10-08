@@ -88,8 +88,10 @@ phases in this fixed order:
 7. **Orders and targeting:** order queue advance, target acquisition (staggered scans). (M1-7:
    `OrderSystem.Run`: every live Idle unit with a shift-queued order, in slot order, starts the
    head of its queue, so a queued order given to an Idle unit walks in the tick it applies, and a
-   unit that arrives or gives up in phase 9 starts its next leg on the next tick. No targeting yet;
-   see "Orders and unit states".)
+   unit that arrives or gives up in phase 9 starts its next leg on the next tick; a unit with a
+   combat target waits (M4-1). Then (M4-1) `CombatSystem.Acquire`: dead targets dropped, finished
+   engagements ended, the leash applied, and every unit due (slot s on ticks where
+   `(tick + s) % 4 == 0`) scans; see "Implementation (M4-1)".)
 8. **Pathfinding requests:** build or fetch flow fields for new move targets. (M1-4c: the first
    step of `MovementSystem.Run`: Moving units are sorted by (goal cell, slot), every goal that
    needs a field and has it cached is touched, and the missing ones are built oldest order first,
@@ -98,10 +100,16 @@ phases in this fixed order:
    (`MovementSystem.Run`, units in (goal cell, slot) order; since M1-4d-1 every unit plans from
    start-of-tick state before any unit moves, and since M1-4d-2 the Idle units they shoved move
    last; since M1-4d-3 a unit a shove cut off its blob walks back once, see "Local movement").
-10. **Combat:** attack wind-ups and cooldowns, projectile flight and impact, splash.
-11. **Damage and death:** apply queued damage, kill entities, emit death events.
+10. **Combat:** attack wind-ups and cooldowns, projectile flight and impact, splash. (M4-1:
+    `CombatSystem.Attack`, melee only: cooldowns count down, units with a target stand and swing in
+    reach, chase out of it, and land wind-ups as queued hits.)
+11. **Damage and death:** apply queued damage, kill entities, emit death events. (M4-1:
+    `CombatSystem.Resolve`: hits in attacker slot order, the dead freed at once with their
+    population, kills and losses counted, death events recorded, stale targets cleared.)
 12. **Vision and detection:** recompute fog every 4 ticks (5 Hz) per player.
-13. **Cleanup:** free dead handles, finalize the tick's event list, bump `TickNumber`.
+13. **Cleanup:** free dead handles, finalize the tick's event list, bump `TickNumber`. (M4-1: the
+    dead are freed in phase 11 already; the tick's death events stay readable in `World.Deaths`
+    until the next tick starts, which empties the buffer first thing.)
 14. **State hash** (debug builds and tests): a 64-bit hash of all gameplay state. Since M1-6 an
     attached `ReplayRecorder` hashes here when the new `TickNumber` is a multiple of its checkpoint
     interval (see "Save/load and replays").
@@ -200,7 +208,10 @@ Rules:
   (`BuildingStore.AddToHash`: capacity, high-water mark, each used slot's generation and alive flag,
   and when alive its owner, type, anchor cell and hit points, then the free list), every player's gold
   and wood, and each live unit's gather fields (`GatherNode`, `GatherSite`, `GatherProgress`, `Cargo`,
-  `CargoKind`), flagged by bit 16 of the order word and added only when one isn't default.
+  `CargoKind`), flagged by bit 16 of the order word and added only when one isn't default. Since M4-1
+  likewise each live unit's combat fields (`Hp` when not the type's, `Target`, `TargetIsBuilding`,
+  `CooldownTicks`, `WindupTicks`, `LastAttacker`, `AnchorPosition`, `Mode`), flagged by bit 17, and
+  each player's kills and losses, flagged by bit 33 of its gold word; see "Implementation (M4-1)".
   Resource slots go in through `StateHasher.AddWord`, one
   xor-multiply-fold step per 64-bit word (each step a bijection, so one changed word always changes
   the hash), because byte-wise FNV of a full 4,096-slot store took 0.18 ms in Debug; `Add` stays
@@ -257,6 +268,11 @@ enemy until teams exist; ties go to the lowest slot). Results are slot indices i
 A query writes at most `results.Length` slots (the lowest ones) and returns the total match count,
 so a return value above the buffer length means the buffer was too small. Negative or NaN radii
 and non-finite centers match nothing. The hash is derived state and does not feed `StateHash`.
+Since M4-1 `QueryEnemies(center, radius, player, results)` returns the other owners' slots within the
+radius in bucket order (not sorted; the combat scan breaks ties by slot itself), skipping buckets that
+hold only the player's units (each bucket's single owner, empty or mixed, kept in the rebuild's
+per-bucket fill-position array once its positions are spent, so it costs no memory) and returning at
+once when no other owner has a live unit (a count per owner).
 
 ## Pathfinding
 
@@ -1039,7 +1055,7 @@ or recycled handle or another player's unit; a Move or AttackMove also for a tar
 
 - **Unqueued** (phase 1): `Move` and `AttackMove` clear the unit's queue and Hold, then apply the
   Move rule of "Local movement" (same-cell re-orders included). `AttackMove` walks exactly like a
-  `Move` until combat targeting arrives (M4); only the kind kept in a queue entry differs. `Stop`
+  `Move` and since M4-1 also scans and fights on the way (see "Implementation (M4-1)"). `Stop`
   clears the queue and Hold and leaves the unit Idle with no goal (`GoalCell = -1`), velocity 0,
   `StuckTicks` 0, `BestRemaining` infinity and no walk-back: goal-less, so friendly walkers shove it
   freely and it anchors nothing. `HoldPosition` is `Stop` and then sets `UnitStore.Hold`.
@@ -1048,7 +1064,8 @@ or recycled handle or another player's unit; a Move or AttackMove also for a tar
   included: a walker never goes deeper into one, also when pressed between it and something else, a
   holder can be (part of) a plug, a chain shove stops at a unit touching it, and no shove presses a
   unit past the pack limit into it. A unit told to hold a choke lets nobody through (QA's 1-cell
-  corridor row: 0 of 30 own walkers pass, 10 before). No enemy scanning yet (M4). Any later unqueued
+  corridor row: 0 of 30 own walkers pass, 10 before). Since M4-1 a holder scans for enemies within
+  its reach and fights them without moving (an Attacking unit is planted the same way). Any later unqueued
   order, and a queued Move or AttackMove when it starts, clears Hold.
 - **Queued** (`QueuedFlag`): appended to the unit's queue (kind and target); a full queue
   (`OrderConstants.QueueCapacity` = 8) drops the order silently. A queued order never restarts a
@@ -1076,11 +1093,15 @@ Since M3-4 there are `Train` (11), `CancelTrain` (12), `SetRally` (13) and `Clea
 addressed to a building, not unit orders, not queueable (the queued flag is refused at the door); see
 "Implementation (M3-4)". A trained unit's rally order is the Move rule (or, for a worker rallied onto a resource node,
 a `Gather`), given in phase 3.
-Not built yet: combat targeting for AttackMove,
-Hold's enemy scanning, `Patrol`, `Attack(target)`, formations and group moves.
+Since M4-1 units fight (melee only): see "Implementation (M4-1)". Any unit order that is taken
+(unqueued, or popped from the queue) ends the unit's engagement first. Not built yet: `Attack(target)`
+(M4-2, with replay format 4), `Patrol`, formations and group moves.
 
 Unit states: `Idle`, `Moving`, `Chasing`, `Attacking` (wind-up / cooldown), `Gathering`,
 `Returning`, `Building`, `Casting`, `Dead`.
+(Since M4-1 `Attacking` is a real `UnitState`; chasing is `Moving` with a live `UnitStore.Target`,
+so movement walks a chaser unchanged; a dead unit is freed the tick it dies, so there is no `Dead`
+state; `Casting` comes with abilities.)
 
 Target acquisition: idle, attack-moving, holding, and patrolling units scan for enemies within
 sight every 4 ticks (staggered by index). Priority: enemies attacking me > units that can attack
@@ -1095,6 +1116,125 @@ sight every 4 ticks (staggered by index). Priority: enemies attacking me > units
   Hit/miss is resolved on arrival (see [02 Projectiles](02-game-design.md#projectiles)).
 - The damage formula lives in one function (`DamageCalc.Compute`) with exhaustive unit tests,
   including the worked example from 02.
+
+### Implementation (M4-1)
+
+Melee combat: `Rts.Sim.Combat` (`CombatSystem`, `DamageCalc`, `CombatMode`, `DeathEvent`,
+`CombatConstants`). Projectiles, misses, splash, friendly fire, minimum range and the
+`Attack(target)` order are M4-2; fog M4-3. Until M4-2 only attacks **without a projectile** fight
+(`CombatSystem.CanFight`): ranged, caster, Catapult and Sapper units neither scan nor swing, but they
+are targets like any other unit.
+
+**Damage.** `DamageCalc.Compute(table, damageType, armorClass, attack, bonusVs, armor)`:
+`raw = attack x table[type][class] x bonusVs`, then `max(1, round(raw) - armor)`, or `max(1, round(raw))`
+for a type with `ignoresArmor` (Magic). `round` is half up, `floor(raw + 0.5)` in float (so 2.5 gives 3,
+and the worked example's `9 x 0.6 x 1.3 = 7.02` gives 7). The attack's `bonusVs` for the class is 1 where
+the data gives none. Attack and armor include the owners' `TechState.Bonus` (`TechStat.Attack` /
+`Armor`, rounded half up to whole points). Buildings take damage as the `structure` armor class
+(`CombatConstants.StructureClassKey`) with their data armor; there are no building tech bonuses. The hp
+and range tech stats are not applied yet.
+
+**Per-unit state** (`UnitStore`, reset by Alloc and Free): `Hp` (the type's `hp` at spawn), `Target`
+(a unit handle, or a building handle when `TargetIsBuilding`), `CooldownTicks`, `WindupTicks`,
+`LastAttacker` (the last enemy unit that hit it), `AnchorPosition` and `Mode` (`CombatMode`). State
+`Attacking` (5) is real; **Chasing is not a state of its own**: a chasing unit is `Moving` with a live
+`Target`, so movement walks it unchanged. `UnitStore.IsPlanted(i)` (holding, or Attacking; written out inline in
+movement's hot loops) is what movement and the placement rule used to ask of `Hold`: an Attacking unit is never shoved or walked
+back, is a hard wall to everyone, and is never pushed out of a new footprint.
+
+**Modes.** `None`: an Idle unit scans; a plain `Move`, a worker loop never scan. `AttackMove`: the
+anchor is the leg's goal once the Move rule has applied; the unit scans while walking, chasing and fighting, and
+walks the leg again (`OrderSystem.MoveTo` to the anchor) whenever it drops its target; standing Idle
+with no target (arrived, or gave up) ends the mode, after which it is an ordinary Idle unit and its
+queue may advance. `Retaliate`: an Idle unit that took a target (by scan, or because it was hit);
+the anchor is where it stood. When its target dies or leaves its sight it walks back to the anchor,
+still scanning; standing Idle with no target ends the mode. **Leash** (Producer default, M4-1): a
+retaliating unit farther than its own sight radius from its anchor drops its target and walks back as
+`Returning`, which does not scan (so it can't be kited back and forth), and is `None` again once it
+stands. Holding units keep `None`: they scan, take targets within reach only, and never move.
+Workers on a gather, build or repair loop (`Gathering`, `Returning`, `Building`, or walking a leg of
+it) never scan and never retaliate. Any unit order that is taken (unqueued, or popped) clears the
+target, the swing and the mode first (`CombatSystem.ClearForOrder`); the cooldown keeps counting. A
+unit with a target does not pop its queue.
+
+**Acquisition (phase 7, after the queue).** Every live unit, slot order: a dead `LastAttacker` or
+target is dropped; a finished engagement ends; the leash is checked; then a unit that scans and is
+due (`(tick + slot) % CombatConstants.ScanInterval == 0`, interval 4) and is neither mid-swing nor
+already in reach of a live target picks one (a swing is never thrown away for a better target). The pick is one pass over `SpatialHash.QueryEnemies` (other owners within
+sight, or within reach for a holder): tier 0 enemies whose `Target` is this unit or that are its
+`LastAttacker`, tier 1 units that can attack (`attack.value > 0`, not the worker slot), tier 2 other
+units; then nearest (squared center distance), then lowest slot. Only when no unit qualifies are
+buildings looked at: this tick's list of live building slots (collected once a tick, at most
+`BuildingCapacity`, skipped outright when no other owner has one), within sight of the footprint
+rectangle, nearest then lowest slot. No target found drops the current one (out of sight). A new
+target of a unit that may move starts a chase unless it is in reach.
+
+**Chase.** `CombatSystem.Chase` resolves the target's position (a building: the footprint point
+nearest the unit, pushed out by the unit's radius + `CombatConstants.BuildingStandOff` (0.25 m), a
+standing point inside melee reach) like a Move target and gives a fresh walk (`OrderSystem.Walk`)
+through the normal movement path, unless the unit already walks to that cell. A walking chaser's goal
+is refreshed only on its scan ticks, so a fleeing target changes the goal at most every 4 ticks; a
+chaser standing Idle (it reached where the target was, gave up, or stood down) walks again at its
+next phase 7. **Every walk combat starts (a chase, an attack-mover's leg again, a walk home) starts in
+phase 7**, before movement, as every order does: phases 10 and 11 only stand units still, so no unit
+turns Moving after it moved in a tick (QA's movement invariants read "Moving" as "walked its step").
+When a unit loses its target (dead, gone, out of sight) phase 7 settles it (`CombatSystem.Settle`): an
+attack-mover heads for the end of its leg again and a retaliator for its anchor, at once, also when it
+is still walking a chase; one standing after it walked there (its goal is the anchor: arrived, or
+gave up on the way) ends the engagement.
+A chaser counts as arrived only within 0.05 m of its goal (`MovementConstants.ChaseArrival2`), not
+the usual `ArrivalDistance` (1 m), so it never stops short of its reach; combat plants it once the
+target is in reach. **No straight steering:** the M4-1 plan allowed chasers to steer straight at targets
+within 8 m, without flow fields, if chasing thrashed the field cache. Measured (CombatPerfTests
+`Chase250After250_Report`, 250 Heavy Infantry attack-moving after 250 faster Crossbowmen fleeing to 50
+points, 300 ticks): 0.29 field builds a tick and chasers
+standing still while Moving (waiting for a field) on 1.9% of chaser-ticks, 0.65 ms a tick in Debug: the cache does
+not thrash, because a walking chaser's goal changes only when its target's cell does, at most every
+scan. Straight steering was built and measured (1.0% waiting) and then left out: in the brawl below it
+made the lines engage more slowly (120 vs 214 units swinging after 200 ticks) for the same cost.
+
+**Attack (phase 10).** Every live unit, slot order: the cooldown counts down; a unit with a target
+mid-swing stands, faces the target and counts its wind-up down; at 0 the hit is queued if the target
+is within reach + `CombatConstants.WindupGrace` (0.5 m, Producer default), else the swing is lost.
+Otherwise in reach (`gap <= attack range`, gap = center distance less both radii, or for a building
+the distance to its footprint less the unit's radius) the unit plants (`Attacking`, no goal, no
+velocity, no walk-back), faces the target, and with the cooldown at 0 starts a swing: cooldown =
+`attack.cooldown`, wind-up = `attack.windup` (a wind-up of 0 hits at once). So the first hit lands
+`windup` ticks after the swing starts and then every `cooldown` ticks. Out of reach an Attacking unit
+stands Idle again (a holder waits; anyone else chases from the next phase 7), and a swing that ends
+with the target out of reach stands the unit down that same tick, so an Attacking unit is always in
+reach or mid-swing, and a scan never re-targets one (fuzz-checked: a unit Attacking at the end of two
+ticks running never moved in between).
+
+**Damage and death (phase 11).** Hits apply in attacker slot order; a hit's damage is worked out when
+it is queued. A unit killed earlier in the phase takes no more hits, but its own queued hit still
+lands, so equal fighters that swing together die together. A unit at 0 hp is freed at once (its handle
+is stale before the tick ends, its population goes back through the ledger, its queue and loops go);
+a building at 0 goes through `BuildingStore.Damage` (freed, cells by the pocket rule, queue refunded).
+Each death appends a `DeathEvent` (victim handle, building or not, type, owner, killer's owner,
+position: a building's footprint center) to a buffer sized to the unit capacity (a death per hit at most), and counts one kill for
+the killer's owner and one loss for the victim's (`World.Kills` / `Losses`). A unit hit by an enemy
+records it as `LastAttacker` and, if it scans and has no target, takes it on at once (retaliation).
+After any death one pass clears every stale target (the attacker stands down; phase 7 settles it)
+and last attacker, and ends the build or repair order of every worker whose building died. `World.Deaths` holds one tick's events: the next tick empties it first.
+
+**Hashing.** The combat fields go in only when one isn't at its spawn value (hp below or above the
+type's, a target, cooldown, wind-up, last attacker, anchor or mode), flagged by bit 17 of the unit's
+order word, so a unit that never fought hashes exactly as before and the golden replay did not move.
+Kills and losses go in only for a player with either non-zero, flagged by bit 33 of its gold word.
+The death buffer, the hit queue and the building list are scratch, not hashed.
+
+**Cost.** The scan's spatial query skips buckets holding only the scanner's own units (a per-bucket
+owner code) and returns at once when no other owner has a live unit (per-owner counts), so a
+one-player crowd's units skip their scans altogether (each tick works out, per player, whether any
+other owner has a unit or building at all). Measured in Debug, same machine, against the M4-1 base
+(three alternating runs): the one-player 2,500 tight blob 4.36 -> 4.42 ms, the M1 500-moving-unit row
+0.633 -> 0.647 ms; the combat phases themselves cost 0.03 ms a tick there. A 500 v 500 melee brawl
+(`CombatPerfTests`, two battle lines 10 ranks deep and 50 m wide, 8 m apart) averages 3.0 ms over its
+first 200 ticks and 3.4 ms over the next 400; the same armies as columns 25 ranks deep and 20 m wide
+(reported, not asserted) 4.3 / 5.6 ms, most of it movement: the units queued behind their own planted
+front rank. Scanning a crowd allocates nothing, nor does a brawl tick (`AllocationTests`). The world on
+a 1,024-cell map with 4,096 unit slots grows 0.4 MB (227.5 -> 227.9 MB).
 
 ## Economy implementation
 

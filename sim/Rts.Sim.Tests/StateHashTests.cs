@@ -736,4 +736,102 @@ public class StateHashTests
         w.Seal.ForgetForTests();
         Assert.Equal(a.StateHash(), b.StateHash());
     }
+
+    // ---------- M4-1: combat state ----------
+
+    /// <summary>The combat fields of UnitStore (M4-1); each one, mutated on a live unit, must flip the hash.</summary>
+    private static readonly string[] CombatFields = { "Hp", "Target", "TargetIsBuilding", "CooldownTicks", "WindupTicks", "LastAttacker", "AnchorPosition", "Mode" };
+
+    [Fact]
+    public void Hash_CoversEveryCombatField_OnALiveUnit_AndRestoringItRestoresTheHash()
+    {
+        Simulation sim = CombatScenes.Flat(units: 8);
+        EntityHandle h = CombatScenes.Place(sim, 0, CombatScenes.HeavyInfantry, CombatScenes.At(sim, 10, 10));
+        UnitStore u = sim.World.Units;
+        ulong h0 = sim.StateHash();
+        var unhashed = new List<string>();
+        foreach (string name in CombatFields)
+        {
+            FieldInfo? f = typeof(UnitStore).GetField(name);
+            Assert.True(f != null, $"UnitStore.{name} is missing");
+            var arr = (Array)f!.GetValue(u)!;
+            Assert.Equal(u.Capacity, arr.Length);
+            object? old = arr.GetValue(h.Index);
+            object changed = old switch
+            {
+                int x => x - 1,
+                bool x => !x,
+                Vector2 x => x + new Vector2(0.25f, 0f),
+                EntityHandle x => new EntityHandle(x.Index + 1, x.Generation + 1),
+                Combat.CombatMode x => x == Combat.CombatMode.None ? Combat.CombatMode.Retaliate : Combat.CombatMode.None,
+                _ => throw new InvalidOperationException($"{name}: element type {f.FieldType} not covered"),
+            };
+            arr.SetValue(changed, h.Index);
+            if (sim.StateHash() == h0) unhashed.Add(name);
+            arr.SetValue(old, h.Index);
+            Assert.Equal(h0, sim.StateHash());
+        }
+        Assert.True(unhashed.Count == 0, "not in StateHash: " + string.Join(", ", unhashed));
+
+        // A target's generation alone, and a target being a building rather than a unit, also count.
+        u.Target[h.Index] = new EntityHandle(3, 1);
+        ulong unitTarget = sim.StateHash();
+        u.Target[h.Index] = new EntityHandle(3, 2);
+        Assert.NotEqual(unitTarget, sim.StateHash());
+        u.Target[h.Index] = new EntityHandle(3, 1);
+        u.TargetIsBuilding[h.Index] = true;
+        Assert.NotEqual(unitTarget, sim.StateHash());
+        u.Target[h.Index] = default;
+        u.TargetIsBuilding[h.Index] = false;
+        Assert.Equal(h0, sim.StateHash());
+    }
+
+    [Fact]
+    public void Hash_CoversKillsAndLosses_PerPlayer()
+    {
+        Simulation sim = CombatScenes.Flat(units: 8);
+        ulong h0 = sim.StateHash();
+        var ledger = sim.World.Ledger;
+        ledger.Kills[0]++;
+        ulong k0 = sim.StateHash();
+        Assert.NotEqual(h0, k0);
+        ledger.Kills[0]--;
+        ledger.Kills[1]++;
+        Assert.NotEqual(h0, sim.StateHash());
+        Assert.NotEqual(k0, sim.StateHash());
+        ledger.Kills[1]--;
+        ledger.Losses[0]++;
+        Assert.NotEqual(h0, sim.StateHash());
+        ledger.Losses[0]--;
+        Assert.Equal(h0, sim.StateHash());
+    }
+
+    [Fact]
+    public void Hash_ADeathBufferIsOutput_NotState()
+    {
+        Simulation sim = CombatScenes.Flat(units: 8);
+        ulong h0 = sim.StateHash();
+        sim.World.RecordDeath(new Combat.DeathEvent(new EntityHandle(1, 1), false, 0, 0, 1, Vector2.One));
+        sim.World.Ledger.Kills[1]--;
+        sim.World.Ledger.Losses[0]--;
+        Assert.Equal(1, sim.World.Deaths.Length);
+        Assert.Equal(h0, sim.StateHash());
+    }
+
+    [Fact]
+    public void Hash_AnIdleUnitThatNeverFought_HashesTheSameWithCombatFieldsAtSpawnValues()
+    {
+        // Same unit placed on two sims; on one, the combat fields are written back to their spawn values by hand:
+        // the flag bit stays clear, so nothing combat goes into the hash (the golden replay's guarantee).
+        Simulation a = CombatScenes.Flat(units: 8), b = CombatScenes.Flat(units: 8);
+        EntityHandle ha = CombatScenes.Place(a, 0, CombatScenes.HeavyInfantry, CombatScenes.At(a, 10, 10));
+        EntityHandle hb = CombatScenes.Place(b, 0, CombatScenes.HeavyInfantry, CombatScenes.At(b, 10, 10));
+        UnitStore u = b.World.Units;
+        u.Hp[hb.Index] = TestSim.Data.Units[CombatScenes.HeavyInfantry].Hp;
+        u.Target[hb.Index] = default;
+        u.Mode[hb.Index] = Combat.CombatMode.None;
+        u.AnchorPosition[hb.Index] = Vector2.Zero;
+        Assert.Equal(a.StateHash(), b.StateHash());
+        Assert.Equal(ha, hb);
+    }
 }

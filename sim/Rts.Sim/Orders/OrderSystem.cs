@@ -1,4 +1,5 @@
 using System.Numerics;
+using Rts.Sim.Combat;
 using Rts.Sim.Commands;
 using Rts.Sim.Economy;
 using Rts.Sim.Entities;
@@ -26,7 +27,8 @@ public static class OrderSystem
         UnitStore u = world.Units;
         for (int i = 0; i < u.Capacity; i++)
         {
-            if (!u.Alive[i] || u.QueueCount[i] == 0 || u.State[i] != UnitState.Idle) continue;
+            // A unit with a target is fighting (an arrived chaser stands Idle a tick): its queue waits for the fight to end.
+            if (!u.Alive[i] || u.QueueCount[i] == 0 || u.State[i] != UnitState.Idle || u.Target[i].Generation != 0) continue;
             int head = i * OrderConstants.QueueCapacity;
             CommandKind kind = u.QueueKind[head];
             Vector2 target = u.QueuePosition[head];
@@ -56,12 +58,12 @@ public static class OrderSystem
         // A Build or Repair with nothing to build or repair drops the whole command: queue and Hold stay.
         if (command.Kind == CommandKind.Build)
         {
-            ConstructionSystem.StartBuild(world, i, command.TypeId, command.Position, replaceQueue: true);
+            if (ConstructionSystem.StartBuild(world, i, command.TypeId, command.Position, replaceQueue: true)) CombatSystem.ClearForOrder(u, i);
             return;
         }
         if (command.Kind == CommandKind.Repair)
         {
-            ConstructionSystem.StartRepair(world, i, command.Position, replaceQueue: true);
+            if (ConstructionSystem.StartRepair(world, i, command.Position, replaceQueue: true)) CombatSystem.ClearForOrder(u, i);
             return;
         }
         if (command.Kind == CommandKind.Gather)
@@ -70,6 +72,7 @@ public static class OrderSystem
             int node = EconomySystem.ResolveNode(world, command.Position);
             if (node < 0) return;
             u.ClearQueue(i);
+            CombatSystem.ClearForOrder(u, i);
             EconomySystem.StartGather(world, i, node);
             return;
         }
@@ -80,7 +83,9 @@ public static class OrderSystem
             u.ClearQueue(i);
             u.Hold[i] = false;
             EndLoop(u, i);
+            CombatSystem.ClearForOrder(u, i);
             Move(world, i, cell, goal);
+            if (command.Kind == CommandKind.AttackMove) CombatSystem.StartAttackMove(u, i, u.Goal[i]);
             return;
         }
         Execute(world, i, command.Kind, Vector2.Zero, 0);
@@ -93,29 +98,35 @@ public static class OrderSystem
         switch (kind)
         {
             case CommandKind.Move:
-            case CommandKind.AttackMove: // walks like a Move until combat targeting (M4)
+            case CommandKind.AttackMove: // M4-1: walks like a Move, scanning on the way (CombatSystem)
                 if (!ResolveTarget(world.NavGrid, target, out int cell, out Vector2 goal)) return;
                 u.Hold[i] = false;
                 EndLoop(u, i);
+                CombatSystem.ClearForOrder(u, i);
                 Move(world, i, cell, goal);
+                if (kind == CommandKind.AttackMove) CombatSystem.StartAttackMove(u, i, u.Goal[i]);
                 break;
             case CommandKind.Gather:
                 // Popped from the queue: the rest of the queue stays, for when the loop ends.
                 int node = EconomySystem.ResolveNode(world, target);
-                if (node >= 0) EconomySystem.StartGather(world, i, node);
+                if (node < 0) break;
+                CombatSystem.ClearForOrder(u, i);
+                EconomySystem.StartGather(world, i, node);
                 break;
             case CommandKind.Build: // popped: the rest of the queue stays, as for Gather
-                ConstructionSystem.StartBuild(world, i, typeId, target, replaceQueue: false);
+                if (ConstructionSystem.StartBuild(world, i, typeId, target, replaceQueue: false)) CombatSystem.ClearForOrder(u, i);
                 break;
             case CommandKind.Repair:
-                ConstructionSystem.StartRepair(world, i, target, replaceQueue: false);
+                if (ConstructionSystem.StartRepair(world, i, target, replaceQueue: false)) CombatSystem.ClearForOrder(u, i);
                 break;
             case CommandKind.Stop:
+                CombatSystem.ClearForOrder(u, i);
                 u.ClearQueue(i);
                 Stop(u, i);
                 u.Hold[i] = false;
                 break;
             case CommandKind.HoldPosition:
+                CombatSystem.ClearForOrder(u, i);
                 u.ClearQueue(i);
                 Stop(u, i);
                 u.Hold[i] = true;
@@ -175,7 +186,7 @@ public static class OrderSystem
     /// The goal cell and point for a move target: its own cell, or (blocked) the nearest passable
     /// cell's center, the flow field's rule. False when off the map or nothing is passable.
     /// </summary>
-    private static bool ResolveTarget(NavGrid grid, Vector2 target, out int cell, out Vector2 goal)
+    internal static bool ResolveTarget(NavGrid grid, Vector2 target, out int cell, out Vector2 goal)
     {
         goal = target;
         cell = -1;

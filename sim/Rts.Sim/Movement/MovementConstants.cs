@@ -11,6 +11,9 @@ public static class MovementConstants
     /// <summary>Flow fields built per tick at most, oldest orders first; units whose field isn't cached past that wait a tick (tick-cost cap, docs/03).</summary>
     public const int MaxFieldBuildsPerTick = 2;
 
+    /// <summary>Squared meters within which a chaser counts as at its goal (M4-1): about on it, not <see cref="ArrivalDistance"/>.</summary>
+    public const float ChaseArrival2 = 0.05f * 0.05f;
+
     /// <summary>
     /// Consecutive stuck ticks after which a Moving unit gives up and goes Idle: 20 ticks = 1 s, "blocked
     /// for a short time". A tick in which a walker ahead (or touching) within <see cref="QueueRange"/>
