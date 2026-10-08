@@ -64,3 +64,6 @@ anchor), and the unit walks a 0.6 m loop forever without fighting.
   81-140, seed 110 is the only one over 3,000 ticks. The skipped rows' 3,000-tick bound is a walking bound; they are
   replaced by `CombatPingPongQaTests` combat-on rows with a combat bound (rest within 10,000 ticks, no 1,000-tick window
   without hp lost while anyone moves), and the old rows were removed.
+
+## Re-check (2026-10-08-0313, round 2)
+Still fixed on `3c09765`: its regression rows are green in the full non-Perf run (3,614 / 10 skipped / 0 failed) and in a targeted run on a clean clone (`FightReissueQaTests`, `AttackOrderTests`, `AttackOrderQaTests`, `CombatPingPongQaTests`, `ShoveQaTests`, GridChangeFuzz: 95 / 95).

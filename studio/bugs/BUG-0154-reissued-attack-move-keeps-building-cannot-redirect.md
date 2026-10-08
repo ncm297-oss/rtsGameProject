@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-08-0313, task M4-2a re-check round 1 (introduced by the round-1 fix `fea7963`) |
 | System | sim: orders / combat (`Orders/OrderSystem.Apply` AttackMove branch, `CombatSystem.FightsInReach` / `KeepFightForAttackMove`), sim track |
-| Fixed by | |
+| Fixed by | `3c09765` (M4-2a fix round 2): `UnitStore.Repick`, an attack-move to any point but the leg's own re-picks by priority in that tick's phase 7. Regression: `QA/FightReissueQaTests.AttackMoveOntoAnAttacker_WhileHittingABuilding_TakesTheAttacker` (un-skipped; fails on `a38967b`: 360 ticks, unit dead; passes on `3c09765`: 2 ticks, alive), `AttackOrderTests.AttackMove_WhileHittingABuilding_ANewPointRepicks...` (3), `QA/AttackMoveRepickQaTests` |
 
 ## Repro
 1. Un-skip `sim/Rts.Sim.Tests/QA/FightReissueQaTests.cs` `AttackMoveOntoAnAttacker_WhileHittingABuilding_TakesTheAttacker`
@@ -44,3 +44,10 @@ the Raider still works.
   pins the current behaviour and would need to change with the rule.
 - Related pre-existing gap (M4-1, not caused by this fix): BUG-0156. A unit hitting a building never turns on the
   enemy hitting it without an order, so the attack-move redirect was the player's only quick rescue.
+
+## Re-check (2026-10-08-0313, round 2)
+Verified fixed by QA. The repro row passes on `3c09765` (took the attacker 2 ticks after the attack-move, alive) and
+fails on the round-1 code `a38967b` (360 ticks, dead). Same-point spam stays lossless (BUG-0152's rows green; a 40 v 40
+brawl re-ordered to the same point every 1 or 3 ticks deals exactly one order's damage). The flag never outlives its
+tick (fuzz, 3 seeds x 1,500 ticks, ~5,000 orders each, twins hash-equal every tick), and a later Move or Stop in the
+same tick cancels the re-pick. Remaining new-point spam loss (pre-existing since round 1) is BUG-0157 (S3).

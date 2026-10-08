@@ -50,3 +50,6 @@ AttackMove to the same point (M4-1's path), so it isn't new in M4-2a, but M4-2a'
   fight walk the last leg after the kill.
 - **But the "attack-move anywhere keeps an in-reach fight" half of the fix is a regression: BUG-0154 (S2).** An
   attack-move can no longer redirect a fighting unit, e.g. off a building onto the enemy killing it.
+
+## Re-check (2026-10-08-0313, round 2)
+Still fixed on `3c09765`: its regression rows are green in the full non-Perf run (3,614 / 10 skipped / 0 failed) and in a targeted run on a clean clone (`FightReissueQaTests`, `AttackOrderTests`, `AttackOrderQaTests`, `CombatPingPongQaTests`, `ShoveQaTests`, GridChangeFuzz: 95 / 95).

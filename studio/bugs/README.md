@@ -170,6 +170,7 @@ bugs outrank new features.
 | [BUG-0151](BUG-0151-gather-perf-row-up-40-percent-after-wedge-fix.md) | S2 | open | After the BUG-0146 fix the 200-worker gather Perf row costs ~40 % more per tick (criterion allows 10 %) |
 | [BUG-0152](BUG-0152-reissued-attack-cancels-windup-spam-does-no-damage.md) | S2 | fixed | Re-issuing the same Attack / AttackMove cancels the wind-up: an order every 5 ticks or faster never deals damage |
 | [BUG-0153](BUG-0153-m4-2a-nits.md) | S4 | open (1-2 fixed) | M4-2a nits: queued Attack target in public `QueuePosition`, a shove row lost combat-on, two brief rows not meetable as worded |
-| [BUG-0154](BUG-0154-reissued-attack-move-keeps-building-cannot-redirect.md) | S2 | open | Since the BUG-0152 fix an attack-move anywhere keeps an in-reach fight: the player can't redirect a unit off a building onto its attacker |
+| [BUG-0154](BUG-0154-reissued-attack-move-keeps-building-cannot-redirect.md) | S2 | fixed | Since the BUG-0152 fix an attack-move anywhere keeps an in-reach fight: the player can't redirect a unit off a building onto its attacker |
 | [BUG-0155](BUG-0155-d4-shared-text-pin-gaps.md) | S4 | open | D4 shared-text pins: H's name check is case-sensitive and skips faction tech names (caught only by the 160-char limit); age_ii at 158 / 160 |
 | [BUG-0156](BUG-0156-unit-hitting-building-ignores-attacker.md) | S3 | open | A unit hitting a building in reach never turns on an enemy unit killing it (tier 0 skipped while in reach) |
+| [BUG-0157](BUG-0157-jittered-attack-move-spam-drops-chasers-fights.md) | S3 | open | Attack-move spam to a new point every 1-3 ticks still costs 10-26 % of a brawl's damage: chasers out of reach lose their fight on each click |
