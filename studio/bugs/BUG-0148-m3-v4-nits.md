@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | partly fixed: items 2 and 4 fixed (ec28ee4), items 1 and 3 open |
 | Found | 2026-10-07-2014, task M3-V4 (QA) |
 | System | right-click node pick (`ViewApi/ResourcePicker.PickRay`), M3 Playable scene (`game/tests/M3PlayableTest.cs`) |
 | Fixed by | |
@@ -29,3 +29,12 @@ brief's script says. 4: every failure leaves a repro.
 
 ## Notes
 None of these blocks M3-V4.
+
+## Re-check round 1 (QA 2026-10-07-2315)
+- Item 2 **fixed**. Step 18 reads `StatBonus(1).GetThemeColor("font_color")` and requires G > 0.5, G > R + 0.3 and
+  G > B + 0.3. The panel's `BonusColor` is (0.35, 0.95, 0.45), which passes. A label left at the default theme colour
+  (white) would fail. All 10 QA runs passed the check.
+- Item 4 **fixed**. The generic `catch` now saves `m3playable-seed<N>-exception-tick<T>.replay` and guards the save with
+  its own try/catch. Checked by reading the code only; no exception was injected.
+- Items 1 (facet slivers, a documented approximation) and 3 (the rally walk isn't checked against the rally forest)
+  remain open.

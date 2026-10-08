@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed (QA re-check 2026-10-07-2315 round 1) |
 | Found | 2026-10-07-2014, task M3-V4 (QA) |
 | System | M3 Playable proof scene (`game/tests/M3PlayableTest.cs`, view track) |
-| Fixed by | |
+| Fixed by | ec28ee4 "M3-V4: fix QA findings (round 1)" |
 
 ## Repro
 1. `& $env:GODOT --headless --path game res://tests/M3PlayableTest.tscn` (both seeds, about 100-160 s), four times.
@@ -51,3 +51,11 @@ When it does, it sends that miner to wood for good. A player would not re-task a
   slowest finished with 945 ticks of budget left), against a steady seed 6 at 11,032-11,306. The seed-1 spread is the
   timing luck this bug describes. For the fix: 10 runs per seed under load, all inside the budget, as the Producer's
   focus asks.
+- **Re-check round 1 (QA 2026-10-07-2315): fixed.** `RetaskIdle` now also requires `!W.Resources.IsAlive(U.GatherNode[i])`
+  (`OffTheLoop`). A laborer on a live node's loop is never picked, and a default handle (no gather order) or a dead node's
+  handle still counts as idle, so the "rally tree felled before birth" case the scene describes is still exercised.
+  Ten two-seed runs on ec28ee4, all PASS, exit 0. Runs 1-5 ran while a full `dotnet test sim/Rts.Sim.Tests` was running
+  (two back-to-back suite runs), and runs 6-10 mostly alone. Seed 1: 11,986 / 11,872 / 11,873 / 11,872 / 11,873 / 11,990 /
+  11,871 / 11,872 / 11,985 / 11,984 ticks. Seed 6: 11,034 / 11,592 / 11,523 / 11,034 / 11,416 / 11,207 / 11,349 / 11,083 /
+  11,357 / 11,109 ticks. Every run re-tasked exactly 2 laborers per seed, and the gold census holds (seed 1 run 1: 5 on
+  gold before and after the two re-tasks). The worst run is 4,010 ticks inside the 16,000 budget. Wall time 146-161 s per run.

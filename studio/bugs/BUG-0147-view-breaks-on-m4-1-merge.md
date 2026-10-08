@@ -43,3 +43,15 @@ the merged sim branch (M4-1) before the final run").
   updated expectations. For the M3 Playable proof: player 1's start workers sit 26 m away, so either the scene removes
   or freezes player 1, or M4-1's acquisition should not let idle *workers* hunt (a design question for the sim track /
   docs/02, not decided here).
+- **Re-check round 1 (QA 2026-10-07-2315): still open, S3.** Plan, as given by the developer / Producer: "The view ships
+  `states.attacking` (M3-V4 fix round 1). The six M2 scenes that fight on the merge (DebugOverlay, Orders, QaH1, QaH2,
+  QaM27, QaM24) are the first item of the view's next task, once M4-1 (`SimConfig.Combat`) is on `main`. The Playable
+  scene's worker case is fixed sim-side: workers never fight on their own (Producer decision). Stays open at S3."
+  QA verified the first part on ec28ee4. `ui.json` has `"attacking": "Attacking"`, and `ProductionHudTest` has a row for
+  it. Mutation check in a scratch clone (not the branch): with `UnitState.Attacking = 5` added to the sim enum,
+  `ProductionHudTest` PASSes. Removing the key then gives `ERROR: ui.json: missing states.attacking`, a scene FAIL and a
+  smoke FAIL. Without the enum member, removing the key fails the row's unconditional presence check
+  (`ui.json: states.attacking is missing or empty`). So the key can't go missing silently before or after M4-1.
+  The advisory scratch merge of the sim branch was deferred (the sim branch is mid-fix in another worktree). Do it in the
+  view's next task, and confirm the red set is exactly the six M2 scenes and that the Playable scene passes with the
+  sim's worker rule.
