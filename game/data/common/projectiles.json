@@ -1,0 +1,9 @@
+{
+  "projectiles": [
+    { "id": "arrow", "kind": "aimed", "speed": 25, "hitTolerance": 0.3, "leadSpeed": 5 },
+    { "id": "bolt", "kind": "aimed", "speed": 25, "hitTolerance": 0.3, "leadSpeed": 5 },
+    { "id": "catapult_stone", "kind": "lob", "speed": 12 },
+    { "id": "magic_bolt", "kind": "aimed", "speed": 25, "hitTolerance": 0.3, "leadSpeed": 5 },
+    { "id": "sharper", "kind": "lob", "speed": 12 }
+  ]
+}

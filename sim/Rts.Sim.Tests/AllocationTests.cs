@@ -528,4 +528,28 @@ public class AllocationTests
         AllocationProbe.AssertZero(ticks);
         Assert.True(w.Kills[0] + w.Kills[1] > before, "no deaths inside the measured ticks");
     }
+
+    /// <summary>M4-2b criterion 8: ticks of a 100 v 100 mixed brawl (shots fired, bolts in flight, stones and magic splashing, friendly fire) allocate nothing.</summary>
+    [Fact]
+    public void MixedBrawlTicks_WithProjectilesAndSplash_AllocateNothing()
+    {
+        Simulation sim = CombatScenes.Flat(size: 64, units: 200);
+        CombatScenes.MixedBrawl(sim, 100, new Vector2(64f, 64f), gap: 6f);
+        World w = sim.World;
+        CombatScenes.RunUntil(sim, () => w.Kills[0] + w.Kills[1] >= 4 && w.Projectiles.Count > 0, 2000);
+        Assert.True(w.Kills[0] + w.Kills[1] >= 4);
+        int before = w.Kills[0] + w.Kills[1];
+        int impacts = 0;
+        Action ticks = () =>
+        {
+            for (int t = 0; t < 20; t++)
+            {
+                sim.Tick();
+                impacts += w.Impacts.Length;
+            }
+        };
+        AllocationProbe.AssertZero(ticks);
+        Assert.True(impacts > 0, "no projectile landed inside the measured ticks");
+        Assert.True(w.Kills[0] + w.Kills[1] > before, "no deaths inside the measured ticks");
+    }
 }

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-08-0313, task M4-2a re-check round 1 (pre-existing since M4-1; found while checking BUG-0154) |
 | System | sim: combat acquisition (`CombatSystem.Acquire`: no scan while "engaged in reach"), sim track |
-| Fixed by | |
+| Fixed by | b8cc072 (M4-2b), regression `AttackOrderTests.AUnitHittingABuilding_TurnsOnTheEnemyUnitHittingIt_AfterItsSwing`; verified by QA 2026-10-08-0913. The fix's condition is wider than the brief's (any live `LastAttacker`, not a current attacker): BUG-0180 |
 
 ## Repro
 1. Scene (48 x 48 flat): a Malazan Heavy Infantry attack-moves into an enemy Tent (or is ordered to Attack it) and hits

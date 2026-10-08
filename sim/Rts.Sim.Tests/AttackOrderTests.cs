@@ -57,14 +57,13 @@ public class AttackOrderTests
 
     // ---------- drop rules ----------
 
-    public enum Drop { Dead, Recycled, Own, ForbiddenByTargets, CannotFight, CombatOff }
+    public enum Drop { Dead, Recycled, Own, ForbiddenByTargets, CombatOff }
 
     [Theory]
     [InlineData(Drop.Dead)]
     [InlineData(Drop.Recycled)]
     [InlineData(Drop.Own)]
     [InlineData(Drop.ForbiddenByTargets)]
-    [InlineData(Drop.CannotFight)]
     [InlineData(Drop.CombatOff)]
     public void AnAttackOnSomethingItMayNotFight_IsDropped_QueuedOrNot_AndTheOldOrderGoesOn(Drop why)
     {
@@ -72,7 +71,7 @@ public class AttackOrderTests
             ? new Simulation(TestSim.ConfigNoCombat(Seed: 1, PlayerCount: 2, UnitCapacity: 16, CommandCapacity: 64), LocalMovementTests.Flat(48))
             : Flat(units: 16);
         UnitStore u = sim.World.Units;
-        int attackerType = why switch { Drop.ForbiddenByTargets => Ram, Drop.CannotFight => Crossbowman, _ => HeavyInfantry };
+        int attackerType = why == Drop.ForbiddenByTargets ? Ram : HeavyInfantry;
         EntityHandle a = Place(sim, 0, attackerType, At(sim, 10, 24));
         EntityHandle target = Place(sim, why == Drop.Own ? 0 : 1, Laborer, At(sim, 30, 24));
         sim.Enqueue(Command.HoldPosition(1, target));
@@ -98,6 +97,31 @@ public class AttackOrderTests
         Assert.Equal(0, u.QueueCount[a.Index]);
         Assert.Equal(UnitState.Moving, u.State[a.Index]); // still walking its Move
         Assert.Equal(goal, u.Goal[a.Index]);
+    }
+
+    /// <summary>
+    /// M4-2b: the M4-2a row "dropped for a unit that cannot fight yet" (ranged, casters, siege with a projectile) flipped:
+    /// every shipped unit fights now, so a Crossbowman, a Cadre Mage and a Catapult obey an Attack, queued or not.
+    /// </summary>
+    [Theory]
+    [InlineData("malazan_crossbowman")]
+    [InlineData("malazan_cadre_mage")]
+    [InlineData("malazan_catapult")]
+    public void AnAttackByARangedCasterOrSiegeUnit_IsObeyed_QueuedOrNot(string key)
+    {
+        Simulation sim = Flat(units: 16);
+        UnitStore u = sim.World.Units;
+        EntityHandle a = Place(sim, 0, TestSim.Data.FindUnit(key), At(sim, 10, 24));
+        EntityHandle target = Place(sim, 1, Laborer, At(sim, 30, 24));
+        EntityHandle second = Place(sim, 1, Laborer, At(sim, 30, 28));
+        sim.Enqueue(Command.HoldPosition(1, target));
+        sim.Enqueue(Command.HoldPosition(1, second));
+        sim.Enqueue(Command.Attack(0, a, target, isBuilding: false));
+        sim.Enqueue(Command.Attack(0, a, second, isBuilding: false, queued: true));
+        Apply(sim);
+        Assert.Equal(target, u.Target[a.Index]);
+        Assert.Equal(CombatMode.Ordered, u.Mode[a.Index]);
+        Assert.Equal(1, u.QueueCount[a.Index]);
     }
 
     [Fact]
@@ -518,5 +542,31 @@ public class AttackOrderTests
             Assert.Equal(tent, u.Target[a.Index]);
             Assert.True(u.TargetIsBuilding[a.Index]);
         }
+    }
+
+    /// <summary>
+    /// BUG-0156 (M4-2b): a unit hitting a building in reach turns on an enemy unit that hits it, after its current swing
+    /// (the tier-0 priority). Before the fix the scan was skipped while "engaged in reach" and the Heavy Infantry kept
+    /// hitting the Tent until the Raider killed it. With no attacker it keeps the building (the other rows above).
+    /// </summary>
+    [Fact]
+    public void AUnitHittingABuilding_TurnsOnTheEnemyUnitHittingIt_AfterItsSwing()
+    {
+        Simulation sim = Flat(units: 8);
+        UnitStore u = sim.World.Units;
+        EntityHandle tent = PlaceTent(sim, 20, 22);
+        EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 17, 23));
+        sim.Enqueue(Command.AttackMove(0, a, At(sim, 19, 23)));
+        int fullHp = sim.World.Data.Buildings[Tent].Hp;
+        RunUntil(sim, () => sim.World.Buildings.Hp[tent.Index] < fullHp, 600);
+        Assert.Equal(tent, u.Target[a.Index]);
+        EntityHandle r = Place(sim, 1, Raider, u.Position[a.Index] + new Vector2(-1f, 0f));
+        sim.Enqueue(Command.Attack(1, r, a, isBuilding: false));
+        int full = u.Hp[r.Index];
+        RunUntil(sim, () => u.Target[a.Index] == r, 200);
+        Assert.Equal(r, u.Target[a.Index]);
+        Assert.Equal(r, u.LastAttacker[a.Index]);
+        RunUntil(sim, () => u.Hp[r.Index] < full, 200);
+        Assert.True(u.Hp[r.Index] < full, "it never struck the Raider back");
     }
 }

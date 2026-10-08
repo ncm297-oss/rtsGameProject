@@ -40,8 +40,8 @@ public class LocalMovementTests
         return Rows(rows);
     }
 
-    internal static Simulation SimOn(Heightmap map, int units, int players = 1) =>
-        new(TestSim.Config(Seed: 1, PlayerCount: players, UnitCapacity: units, CommandCapacity: 4 * units + 16), map);
+    internal static Simulation SimOn(Heightmap map, int units, int players = 1, bool combat = true) =>
+        new(TestSim.Config(Seed: 1, PlayerCount: players, UnitCapacity: units, CommandCapacity: 4 * units + 16) with { Combat = combat }, map);
 
     /// <summary>The first unit type whose radius is <paramref name="radius"/>.</summary>
     internal static int TypeWithRadius(float radius)
@@ -515,7 +515,8 @@ public class LocalMovementTests
     [Fact]
     public void JammedQueueBehindAnEnemyInOneCellCorridor_AllGiveUp()
     {
-        Simulation sim = SimOn(Corridor(), 7, players: 2);
+        // M4-2b: combat off (config only, BUG-0135): the radius-0.9 type is the Catapult, which fights now.
+        Simulation sim = SimOn(Corridor(), 7, players: 2, combat: false);
         NavGrid g = sim.World.NavGrid;
         int wide = TypeWithRadius(0.9f); // too wide to pass each other in 2 m
         // Spawns apply in player order: player 0's six walkers take slots 0-5, the enemy slot 6.
@@ -1017,7 +1018,8 @@ public class LocalMovementTests
     [InlineData(25f, 11f)]
     public void UnitOverlappingAnEnemyStandingUnit_WithACliffBehind_WalksAway(float tx, float ty)
     {
-        Simulation sim = SimOn(CliffColumn(), 2, players: 2);
+        // M4-2b: combat off (config only, BUG-0135): the radius-0.4 / type-0 unit is the Cadre Mage, which fights now
+        Simulation sim = SimOn(CliffColumn(), 2, players: 2, combat: false);
         int type = TypeWithRadius(0.4f);
         Vector2 start = new(10.05f, 11f), enemy = new(10.15f, 11f);
         SpawnOwned(sim, (0, type, start), (1, type, enemy));

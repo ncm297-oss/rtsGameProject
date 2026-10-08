@@ -14,8 +14,8 @@ namespace Rts.Sim.Data;
 /// String ids become dense ints in ordinal-sorted order, so ids never depend on file-system order.
 /// Seconds become ticks and per-second rates become per-tick rates here; the sim never sees seconds.
 /// <c>trainedAt</c> resolves to an own-faction building type id (M3-4); every <c>requires</c> entry resolves to a tech or
-/// building type id (M3-6, kept as a string too); <c>model</c> and
-/// <c>projectile</c> stay unresolved strings until assets and combat exist (M4, docs/03 "Data format").
+/// building type id (M3-6, kept as a string too); <c>attack.projectile</c> resolves to a <c>common/projectiles.json</c> id
+/// (M4-2b, kept as a string too); <c>model</c> stays an unresolved string until assets exist (docs/03 "Data format").
 /// </remarks>
 public static partial class DataLoader
 {
@@ -35,6 +35,11 @@ public static partial class DataLoader
         RulesDef? rules = rulesJson == null ? null : BuildRules(c, rulesJson);
         ResourceFileJson? resourcesJson = c.Read("common/resources.json", DataJsonContext.Default.ResourceFileJson);
         ResourceDef[]? resources = resourcesJson == null ? null : BuildResources(c, resourcesJson);
+        ProjectileFileJson? projectilesJson = c.Read("common/projectiles.json", DataJsonContext.Default.ProjectileFileJson);
+        // M4-2b: a broken projectiles file is reported once, not again through every attack naming one of its ids.
+        int errorsBeforeProjectiles = c.Errors.Count;
+        ProjectileDef[]? projectiles = projectilesJson == null ? null : BuildProjectiles(c, projectilesJson);
+        if (c.Errors.Count != errorsBeforeProjectiles) projectiles = null;
 
         string[] folders = Array.Empty<string>();
         string factionsDir = Path.Combine(dataDir, "factions");
@@ -86,7 +91,7 @@ public static partial class DataLoader
             c.CurrentFile = $"factions/{folders[f]}/units.json";
             UnitJson u = unitFiles[f]!.Units![i]!;
             int id = Array.BinarySearch(unitKeys, u.Id!, StringComparer.Ordinal);
-            units[id] = BuildUnit(c, u, $"units[{i}]", id, f, table);
+            units[id] = BuildUnit(c, u, $"units[{i}]", id, f, table, projectiles);
         }
         // BUG-0010: every faction fills the seven unit template slots, one unit each (docs/02 "Faction template").
         for (int f = 0; f < folders.Length; f++)
@@ -135,13 +140,14 @@ public static partial class DataLoader
             ageTechs = techs.AgeTechs();
         }
 
-        if (c.Errors.Count > 0 || table == null || rules == null || resources == null)
+        if (c.Errors.Count > 0 || table == null || rules == null || resources == null || projectiles == null)
             return new DataLoadResult(null, c.Errors);
         var data = new GameData
         {
             DamageTable = table,
             Rules = rules,
             Resources = ImmutableArray.Create(resources),
+            Projectiles = ImmutableArray.Create(projectiles),
             Factions = ImmutableArray.Create(factions),
             Units = ImmutableArray.Create(units),
             Buildings = ImmutableArray.Create(buildings),
@@ -517,7 +523,7 @@ public static partial class DataLoader
         };
     }
 
-    private static UnitDef BuildUnit(Checker c, UnitJson u, string p, int id, int faction, DamageTable? table)
+    private static UnitDef BuildUnit(Checker c, UnitJson u, string p, int id, int faction, DamageTable? table, ProjectileDef[]? projectiles)
     {
         string slotKey = c.Text(u.Slot, p + ".slot");
         int slot = DataLimits.SlotIds.IndexOf(slotKey);
@@ -545,7 +551,7 @@ public static partial class DataLoader
             Hp = c.Int(u.Hp, p + ".hp", 1),
             Armor = c.Int(u.Armor, p + ".armor", 0),
             ArmorClass = c.Ref(table?.ArmorClassKeys, u.ArmorClass, p + ".armorClass", "armor class"),
-            Attack = BuildAttack(c, c.Obj(u.Attack, p + ".attack"), p + ".attack", table),
+            Attack = BuildAttack(c, c.Obj(u.Attack, p + ".attack"), p + ".attack", table, projectiles),
             SpeedPerTick = (float)(c.Pos(u.Speed, p + ".speed") / SimConstants.TicksPerSecond),
             Sight = (float)c.Pos(u.Sight, p + ".sight"),
             Radius = (float)radius,
@@ -559,7 +565,7 @@ public static partial class DataLoader
         };
     }
 
-    private static AttackDef BuildAttack(Checker c, AttackJson? a, string p, DamageTable? table)
+    private static AttackDef BuildAttack(Checker c, AttackJson? a, string p, DamageTable? table, ProjectileDef[]? projectiles)
     {
         int classCount = table?.ArmorClassCount ?? 0;
         var bonus = new float[classCount];
@@ -573,6 +579,11 @@ public static partial class DataLoader
                 if (ac >= 0) bonus[ac] = (float)v;
             }
         }
+        double splash = c.NonNeg(a?.Splash ?? 0, p + ".splash");
+        int projectile = ProjectileOf(c, a?.Projectile, p + ".projectile", projectiles);
+        // A lob always explodes, and its explosion is the attack's splash (docs/02 "Projectiles"): without one it would do nothing.
+        if (projectile >= 0 && projectiles![projectile].Kind == ProjectileKind.Lob && splash <= 0)
+            c.Error(p + ".splash", $"projectile '{a!.Projectile}' is a lob, which always explodes: the attack needs a splash radius above 0");
         return new AttackDef
         {
             Value = c.Int(a?.Value, p + ".value", 0),
@@ -581,12 +592,98 @@ public static partial class DataLoader
             WindupTicks = c.Ticks(a?.Windup, p + ".windup", 0),
             Range = (float)c.NonNeg(a?.Range, p + ".range"),
             MinRange = (float)c.NonNeg(a?.MinRange ?? 0, p + ".minRange"),
-            Splash = (float)c.NonNeg(a?.Splash ?? 0, p + ".splash"),
+            Splash = (float)splash,
             FriendlyFire = a?.FriendlyFire ?? false,
             Projectile = a?.Projectile,
+            ProjectileTypeId = projectile,
             Targets = AttackTargetsOf(c, a?.Targets, p + ".targets"),
             BonusVs = ImmutableArray.Create(bonus),
         };
+    }
+
+    /// <summary>
+    /// <c>attack.projectile</c> (M4-2b): absent is none (-1); otherwise it must name a <c>common/projectiles.json</c> id. When
+    /// that file failed to load (<paramref name="projectiles"/> null) nothing is checked: its own error says why.
+    /// </summary>
+    private static int ProjectileOf(Checker c, string? value, string path, ProjectileDef[]? projectiles)
+    {
+        if (value == null || projectiles == null) return -1;
+        for (int k = 0; k < projectiles.Length; k++)
+            if (string.Equals(projectiles[k].Key, value, StringComparison.Ordinal)) return k;
+        c.Error(path, $"unknown projectile '{value}' (not in common/projectiles.json)");
+        return -1;
+    }
+
+    /// <summary>
+    /// <c>common/projectiles.json</c> (M4-2b): ids unique (a repeat is an error at its second definition), indexed in ordinal
+    /// order; <c>kind</c> one of <see cref="DataLimits.ProjectileKindIds"/>; <c>speed</c> (m/s) positive, stored per tick;
+    /// <c>hitTolerance</c> (m) on an aimed kind only, 0 to <see cref="DataLimits.MaxHitTolerance"/>, default
+    /// <see cref="DataLimits.DefaultHitTolerance"/>; on a lob it is an error (a lob never tests a hit). <c>speed</c> is at
+    /// least <see cref="DataLimits.MinProjectileSpeed"/> (BUG-0182). <c>leadSpeed</c> (m/s, BUG-0183) on an aimed kind only,
+    /// not negative, default 0 (no lead), stored per tick; on a lob it is an error (a lob is ground-targeted).
+    /// </summary>
+    private static ProjectileDef[] BuildProjectiles(Checker c, ProjectileFileJson j)
+    {
+        List<ProjectileJson?>? list = c.Obj(j.Projectiles, "projectiles");
+        var accepted = new List<int>();
+        var keys = new List<string>();
+        for (int i = 0; list != null && i < list.Count; i++)
+        {
+            string id = c.Id(list[i]?.Id, $"projectiles[{i}].id");
+            if (id.Length == 0) continue;
+            if (keys.Contains(id))
+            {
+                c.Error($"projectiles[{i}].id", $"duplicate projectile id '{id}'");
+                continue;
+            }
+            keys.Add(id);
+            accepted.Add(i);
+        }
+        string[] sorted = keys.ToArray();
+        Array.Sort(sorted, StringComparer.Ordinal);
+        var defs = new ProjectileDef[sorted.Length];
+        foreach (int i in accepted)
+        {
+            ProjectileJson x = list![i]!;
+            string p = $"projectiles[{i}]";
+            int id = Array.BinarySearch(sorted, x.Id!, StringComparer.Ordinal);
+            string kindKey = c.Text(x.Kind, p + ".kind");
+            int kind = DataLimits.ProjectileKindIds.IndexOf(kindKey);
+            if (kindKey.Length > 0 && kind < 0)
+                c.Error(p + ".kind", $"unknown kind '{kindKey}' (expected one of {string.Join(", ", DataLimits.ProjectileKindIds)})");
+            double tolerance = 0, lead = 0;
+            if (kind == (int)ProjectileKind.Lob && x.LeadSpeed != null)
+                c.Error(p + ".leadSpeed", "a lob is ground-targeted at where its target is: it never leads");
+            else if (kind == (int)ProjectileKind.Aimed && x.LeadSpeed != null)
+                lead = c.NonNeg(x.LeadSpeed, p + ".leadSpeed");
+            if (kind == (int)ProjectileKind.Lob && x.HitTolerance != null)
+                c.Error(p + ".hitTolerance", "a lob always explodes at its impact point: it has no hit tolerance");
+            else if (kind == (int)ProjectileKind.Aimed)
+            {
+                tolerance = c.NonNeg(x.HitTolerance ?? DataLimits.DefaultHitTolerance, p + ".hitTolerance");
+                if (tolerance > DataLimits.MaxHitTolerance)
+                {
+                    c.Error(p + ".hitTolerance", $"{tolerance} is above the maximum {DataLimits.MaxHitTolerance} m");
+                    tolerance = 0;
+                }
+            }
+            double speed = c.Pos(x.Speed, p + ".speed");
+            if (speed > 0 && speed < DataLimits.MinProjectileSpeed)
+            {
+                c.Error(p + ".speed", $"{speed} is below the minimum {DataLimits.MinProjectileSpeed} m/s");
+                speed = 0;
+            }
+            defs[id] = new ProjectileDef
+            {
+                Id = id,
+                Key = x.Id!,
+                Kind = (ProjectileKind)Math.Max(kind, 0),
+                SpeedPerTick = (float)(speed / SimConstants.TicksPerSecond),
+                HitTolerance = (float)tolerance,
+                LeadSpeedPerTick = (float)(lead / SimConstants.TicksPerSecond),
+            };
+        }
+        return defs;
     }
 
     /// <summary><c>attack.targets</c> (M4-2a): <c>all</c> when absent; anything but the <see cref="DataLimits.AttackTargetIds"/> spellings is an error.</summary>

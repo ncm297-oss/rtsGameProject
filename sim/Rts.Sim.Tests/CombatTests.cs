@@ -450,7 +450,7 @@ public class CombatTests
         Simulation sim = Flat(size: 64, units: 8);
         UnitStore u = sim.World.Units;
         EntityHandle c = Place(sim, 0, HeavyInfantry, At(sim, 30, 24));
-        EntityHandle far = Place(sim, 1, Crossbowman, At(sim, 30, 24, dx: 10f)); // "can attack" (tier 1), can't fight back yet
+        EntityHandle far = Place(sim, 1, Crossbowman, At(sim, 30, 24, dx: 10f)); // "can attack" (tier 1); since M4-2b it shoots back from its hold
         EntityHandle near = Place(sim, 1, Laborer, At(sim, 30, 24, dx: -12f)); // tier 2
         sim.Enqueue(Command.HoldPosition(1, far));
         sim.Enqueue(Command.HoldPosition(1, near));

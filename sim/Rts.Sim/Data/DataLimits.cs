@@ -37,6 +37,24 @@ public static class DataLimits
     /// <summary>JSON spelling of each <see cref="AttackTargets"/>, indexed by the enum value (<c>attack.targets</c>, M4-2a).</summary>
     public static readonly ImmutableArray<string> AttackTargetIds = ImmutableArray.Create("all", "units", "buildings");
 
+    /// <summary>JSON spelling of each <see cref="ProjectileKind"/>, indexed by the enum value (<c>common/projectiles.json</c>, M4-2b).</summary>
+    public static readonly ImmutableArray<string> ProjectileKindIds = ImmutableArray.Create("aimed", "lob");
+
+    /// <summary>
+    /// An aimed projectile's <c>hitTolerance</c> in meters when the file gives none (docs/02 "Projectiles": collision
+    /// radius + 0.3 m). The schema's default, like <c>attack.targets</c>' <c>all</c>; the shipped file writes it out.
+    /// </summary>
+    public const double DefaultHitTolerance = 0.3;
+
+    /// <summary>Largest <c>hitTolerance</c> in meters: a cell, so an "aimed" shot can't silently become a sure hit at any miss distance.</summary>
+    public const double MaxHitTolerance = 2.0;
+
+    /// <summary>
+    /// Slowest projectile <c>speed</c> in m/s (BUG-0182): far below any real shot (docs/02: 12-25 m/s) but a step a float
+    /// holds, so a typo like <c>1e-50</c> is an error rather than a shot that hovers for an hour.
+    /// </summary>
+    public const double MinProjectileSpeed = 1.0;
+
     /// <summary>JSON spelling of each <see cref="TechStat"/>, indexed by the enum value (docs/03 "Data format", M3-5).</summary>
     public static readonly ImmutableArray<string> TechStatIds = ImmutableArray.Create("attack", "armor", "range", "hp", "abilityCooldown");
 

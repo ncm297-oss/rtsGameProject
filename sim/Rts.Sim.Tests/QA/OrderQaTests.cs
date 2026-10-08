@@ -428,7 +428,8 @@ public class OrderQaTests
         Vector2[] starts = { new(8f, 8f), new(56f, 8f), new(8f, 56f), new(56f, 56f), new(32f, 8f), new(32f, 56f) };
         (Vector2 Pos, bool Hold, int Queue)[] Run(int[] order)
         {
-            Simulation sim = new(TestSim.Config(Seed: 5, PlayerCount: 2, UnitCapacity: 6, CommandCapacity: 64), LocalMovementTests.Flat(33));
+            // M4-2b: combat off (config only, BUG-0135): the radius-0.4 / type-0 unit is the Cadre Mage, which fights now
+            Simulation sim = new(TestSim.ConfigNoCombat(Seed: 5, PlayerCount: 2, UnitCapacity: 6, CommandCapacity: 64), LocalMovementTests.Flat(33));
             foreach (int s in order) sim.Enqueue(Command.SpawnUnit(s % 2, LocalMovementTests.TypeWithRadius(0.4f), starts[s]));
             ApplyPending(sim);
             UnitStore u = sim.World.Units;

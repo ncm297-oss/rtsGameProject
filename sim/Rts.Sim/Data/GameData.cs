@@ -25,6 +25,8 @@ public sealed class GameData
     public required ImmutableArray<UnitDef> Units { get; init; }
     /// <summary>Resource node types (trees, gold mines), indexed by resource type id (ordinal order of their string ids). The loader always sets it; empty only for hand-built data.</summary>
     public ImmutableArray<ResourceDef> Resources { get; init; } = ImmutableArray<ResourceDef>.Empty;
+    /// <summary>Projectile types of <c>common/projectiles.json</c> (M4-2b), indexed by id (ordinal order of their string ids); what <see cref="AttackDef.ProjectileTypeId"/> indexes. The loader always sets it; empty only for hand-built data.</summary>
+    public ImmutableArray<ProjectileDef> Projectiles { get; init; } = ImmutableArray<ProjectileDef>.Empty;
     /// <summary>Building types of every faction, indexed by building id (ordinal order of their string ids). The loader always sets it; empty only for hand-built data.</summary>
     public ImmutableArray<BuildingDef> Buildings { get; init; } = ImmutableArray<BuildingDef>.Empty;
     /// <summary>Per building type id, the unit type ids it trains (whose <see cref="UnitDef.TrainedAtTypeId"/> names it), ascending; built at load (M3-4). Empty for hand-built data.</summary>
@@ -128,6 +130,7 @@ public sealed class GameData
             h.Add(a.Splash);
             h.Add(a.FriendlyFire);
             h.Add(a.Projectile);
+            h.Add(a.ProjectileTypeId);
             h.Add((int)a.Targets);
             AddAll(ref h, a.BonusVs);
             h.Add(u.SpeedPerTick);
@@ -155,6 +158,18 @@ public sealed class GameData
             h.Add((int)d.Resource);
             h.Add(d.FootprintWidth);
             h.Add(d.FootprintHeight);
+        }
+
+        // M4-2b: the projectile types. Hand-built data has none and adds one word, as an empty list always did.
+        h.Add(Projectiles.Length);
+        foreach (ProjectileDef p in Projectiles)
+        {
+            h.Add(p.Id);
+            h.Add(p.Key);
+            h.Add((int)p.Kind);
+            h.Add(p.SpeedPerTick);
+            h.Add(p.HitTolerance);
+            h.Add(p.LeadSpeedPerTick);
         }
 
         h.Add(Buildings.Length);
@@ -236,6 +251,9 @@ public sealed class GameData
 
     /// <summary>Resource type id for a string id, or -1.</summary>
     public int FindResource(string key) => Find(Resources, static r => r.Key, key);
+
+    /// <summary>Projectile type id for a string id, or -1.</summary>
+    public int FindProjectile(string key) => Find(Projectiles, static p => p.Key, key);
 
     /// <summary>Building type id for a string id, or -1.</summary>
     public int FindBuilding(string key) => Find(Buildings, static b => b.Key, key);
