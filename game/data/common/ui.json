@@ -49,7 +49,8 @@
     "moving": "Moving",
     "gathering": "Gathering",
     "returning": "Returning cargo",
-    "building": "Building"
+    "building": "Building",
+    "attacking": "Attacking"
   },
   "hud": {
     "pop": "Pop",

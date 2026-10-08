@@ -2608,7 +2608,8 @@ Match.tscn  (new nodes)
 - **`ui.json` additions** (view data; the sim's `DataLoader` still never reads it): `train` and `research` sections keyed by
   the snake_case name of every `TrainError` / `ResearchError` member but `None` (`no_building`, `queue_full`,
   `cannot_afford`, `already_queued`, `locked_by_requirement` ...), `states` keyed by every `UnitState` (`idle`, `moving`,
-  `gathering`, `returning`, `building`), `hud` keyed by the view's `HudText` enum (`pop`, `hp`, `attack`, `armor`, `range`,
+  `gathering`, `returning`, `building`; plus `attacking`, shipped ahead of M4-1's `UnitState.Attacking` so the merged
+  view boots, an extra key until then: BUG-0136 / BUG-0147), `hud` keyed by the view's `HudText` enum (`pop`, `hp`, `attack`, `armor`, `range`,
   `speed`, `needs`). A member without its key is one named load error, as before. Each reason section (`placement`,
   `train`, `research`) must also carry `requires` (`UiText.ForwardKey`), the reason M3-6's gating adds: a key with no enum
   member yet is accepted (any extra key is), so the file loads against `main` with or without M3-6, and once the sim has
@@ -2699,7 +2700,8 @@ Match.tscn  (new nodes)
   and the any-owner box pick each tick: the hash equals a bare twin's every tick). Headless scene
   `res://tests/ProductionHudTest.tscn` ("PRODUCTION HUD TEST PASS"): `ui.json` rows (every new key present; a missing
   `train.queue_full`, `research.already_queued`, `placement.requires`, `research.requires`, `states.idle`, `hud.pop` each
-  one named error; an extra key accepted; five non-object roots one error each: BUG-0110); "Pop 5 / 10" at the start, red
+  one named error; an extra key accepted; `states.attacking` shipped, and removing it accepted until the sim has
+  `UnitState.Attacking`, one named error after; five non-object roots one error each: BUG-0110); "Pop 5 / 10" at the start, red
   "Pop 10 / 10" at the cap, "Pop 5.5 / 10" after a pop-0.5 unit (a data copy); one laborer's name and stats from data, a
   "+1" attack after Melee Weapons, its state "Gathering"; 26 units: 24 cells in selection order and colours, "+2", the
   outline following Tab three times, a portrait click selecting that unit alone with a Select sound; the Barracks, Town
@@ -2748,9 +2750,10 @@ and researched buttons).
   closes; Age 2 and the "Age II" flash; at the Armory Melee Weapons (on E: the card lists the common upgrades in id
   order, Armor Q, Armor II W, Melee Weapons E, Melee Weapons II R) is live and Melee Weapons II "Locked", E researches
   it; V, W places the Engineers' Yard (now live) and it is built; a Heavy Infantry from the Barracks and a Sapper from
-  the Yard (their grid keys); the Heavy Infantry clicked: its panel's attack reads the green "+1" (`TechBonus` 1). What a
+  the Yard (their grid keys); the Heavy Infantry clicked: its panel's attack reads the green "+1" (`TechBonus` 1; the label's `font_color` is checked green: BUG-0148 item 2). What a
   player would also do: while waiting for money, a laborer standing Idle (its rally tree was felled before it was born:
-  a rally onto a node's cell is a Gather only while the node lives, M3-4) is clicked and right-clicked onto the nearest
+  a rally onto a node's cell is a Gather only while the node lives, M3-4) and off its gather loop (its `GatherNode` not
+  a live node: BUG-0145, a miner on its loop reads Idle for single ticks between legs and must not be pulled) is clicked and right-clicked onto the nearest
   tree, and the selection clicked back; a site whose work stands still for 800 ticks gets another worker (the laborer
   nearest the site, clicked and right-clicked onto it: a joining Build), which builds from then on. That last one is a
   workaround for a sim movement deadlock seen in about one two-seed run in five (seed 6: the builder, leaving the mine,
@@ -2758,10 +2761,13 @@ and researched buttons).
   flipping each tick); the scene logs it and saves the replay (`m3playable-seed<N>-stall-tick<T>.replay` in Godot's user
   data folder) for the sim track. Money comes only from gathering (no dev spawns: the sim has no
   dev resource command, and none was needed). **Tick budget** 16,000 per seed (`M3PlayableTest.TickBudget`, 13 min 20 s
-  of game time); measured over eight runs: seed 1 11,873-13,430, seed 6 10,506-12,872 (the slowest with the deadlock
-  workaround below); two and a half to three minutes of wall time for both.
+  of game time); after the BUG-0145 fix, ten runs (five while the full sim suite ran): seed 1 11,871-11,997, seed 6
+  11,069-11,528, two re-tasks a seed every run, so at least 4,000 ticks (25 %) of margin; about two and a half minutes
+  of wall time for both. (Before the fix seed 1 swung 11,871-16,000+, because the re-task caught gold miners between
+  legs.)
   The commands land on whichever tick the frame clock reaches, so two runs differ by a few hundred ticks. On any failure
-  the replay so far is saved the same way (`-fail-`), a repro for `Rts.Cli play`. **Hash twin:**
+  the replay so far is saved the same way (`-fail-`, or `-exception-` for an exception that is not a step's check:
+  BUG-0148 item 4), a repro for `Rts.Cli play`. **Hash twin:**
   `SimRunner.RecordCheckpointInterval` (0 by default) attaches a `ReplayRecorder` to the new sim before the match
   enqueues anything; at the end the scene replays the recorded command stream into a bare sim (`ReplayPlayer.Run`) with
   a checkpoint every tick: every hash equal (seed 1: 45 commands, 11,937 checkpoints). `-- --break <n>` fails step n on

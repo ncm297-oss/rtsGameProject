@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Godot;
 using Rts.Sim;
@@ -142,6 +143,24 @@ public partial class ProductionHudTest : Node
         errors.Clear();
         Check(UiText.Parse(json.Replace("\"queue_full\": \"Queue full\",", "\"queue_full\": \"Queue full\", \"some_future_reason\": \"Later\","), errors) != null && errors.Count == 0,
             $"an extra reason key was refused: {string.Join("; ", errors)}");
+        // BUG-0136 / BUG-0147: `states.attacking` ships before the sim's UnitState.Attacking (M4-1) merges, so the merged
+        // view boots. Today it is an extra key (accepted, and removing it is fine); once the member exists the enum loop
+        // above demands its text, and removing the key is one named error.
+        using (JsonDocument doc = JsonDocument.Parse(json))
+        {
+            Check(doc.RootElement.GetProperty("states").TryGetProperty("attacking", out JsonElement attacking)
+                && attacking.ValueKind == JsonValueKind.String && attacking.GetString() is { Length: > 0 },
+                "ui.json: states.attacking is missing or empty");
+        }
+        errors.Clear();
+        string noAttacking = json.Replace("\r\n", "\n").Replace("\"building\": \"Building\",\n    \"attacking\": \"Attacking\"", "\"building\": \"Building\"");
+        if (Check(noAttacking != json.Replace("\r\n", "\n"), "ui.json row: states.attacking line not found"))
+        {
+            UiText? r = UiText.Parse(noAttacking, errors);
+            bool simHasIt = Enum.TryParse("Attacking", out UnitState _);
+            Check(simHasIt ? r == null && errors.Count == 1 && errors[0].Contains("states.attacking") : r != null && errors.Count == 0,
+                $"ui.json without states.attacking (sim has the state: {simHasIt}): {string.Join("; ", errors)}");
+        }
         // BUG-0110 regression: a root that is not an object is one error, never a UiText with empty labels.
         foreach (string root in new[] { "[]", "null", "42", "\"ui\"", "true" })
         {

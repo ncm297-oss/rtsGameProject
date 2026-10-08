@@ -31,7 +31,7 @@ namespace Rts.Game.Tests;
 /// </remarks>
 public partial class M3PlayableTest : Node
 {
-    /// <summary>Most sim ticks one seed may take (13 min 20 s of game time; seeds 1 and 6 measured 10,500-13,400 over eight runs).</summary>
+    /// <summary>Most sim ticks one seed may take (13 min 20 s of game time). After BUG-0145, ten runs (five under load): seed 1 11,871-11,997, seed 6 11,069-11,528, so at least 4,000 ticks (25 %) of margin.</summary>
     public const int TickBudget = 16000;
 
     private sealed class StepFailed : Exception
@@ -99,7 +99,10 @@ public partial class M3PlayableTest : Node
         }
         catch (Exception ex)
         {
-            failure = $"{_step} (seed {_seed}): exception {ex}";
+            // BUG-0148 item 4: every failure leaves a repro, not only a failed step.
+            failure = $"{_step} (seed {_seed}, tick {(_sim != null ? Tick : -1)}): exception {ex}";
+            try { SaveReplay("exception"); }
+            catch (Exception save) { GD.Print($"  replay not saved: {save.Message}"); }
         }
         GD.Print(failure.Length == 0 ? "M3 PLAYABLE TEST PASS" : $"M3 PLAYABLE TEST FAIL {failure}");
         GetTree().Quit(failure.Length == 0 ? 0 : 1);
@@ -320,6 +323,9 @@ public partial class M3PlayableTest : Node
         Expect(_panel.NameLabel.Text == _data.Units[_infantry].DisplayName && _panel.StatBonus(1).Visible && _panel.StatBonus(1).Text == "+1"
             && W.TechBonus(0, _infantry, TechStat.Attack) == 1f,
             $"panel '{_panel.NameLabel.Text}' attack bonus visible {_panel.StatBonus(1).Visible} '{_panel.StatBonus(1).Text}'");
+        // BUG-0148 item 2: the "+1" is drawn green (more green than red or blue), not merely present.
+        Color bonus = _panel.StatBonus(1).GetThemeColor("font_color");
+        Expect(bonus.G > 0.5f && bonus.G > bonus.R + 0.3f && bonus.G > bonus.B + 0.3f, $"the attack bonus is not green: {bonus}");
         Done();
 
         // The hash twin: the command stream the HUD sent, replayed into a bare sim, hashes equal every tick.
@@ -652,11 +658,17 @@ public partial class M3PlayableTest : Node
         }
     }
 
+    // BUG-0145: a gatherer on its loop reads Idle for single ticks between legs (waiting at the mine's edge, retrying), and
+    // a player would never pull it off a live node. Only a laborer whose node is gone (or who has no gather order: the sim
+    // clears GatherNode when a loop ends) is really idle.
+    private bool OffTheLoop(int i) => !W.Resources.IsAlive(U.GatherNode[i]);
+
     private async Task RetaskIdle()
     {
         int idle = -1;
         for (int i = 0; i < U.Capacity && idle < 0; i++)
-            if (U.Alive[i] && U.Owner[i] == 0 && U.TypeId[i] == _laborer && U.State[i] == UnitState.Idle && U.QueueCount[i] == 0 && i != _builder.Index) idle = i;
+            if (U.Alive[i] && U.Owner[i] == 0 && U.TypeId[i] == _laborer && U.State[i] == UnitState.Idle && U.QueueCount[i] == 0 && i != _builder.Index
+                && OffTheLoop(i)) idle = i;
         if (idle < 0) return;
         int building = _sel.SelectedBuilding;
         bool builder = _sel.Selection.Count == 1 && _sel.Selection.Contains(_builder);
