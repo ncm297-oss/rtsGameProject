@@ -3421,8 +3421,9 @@ AiPlayer
   are only walls, as before M4. A **dev and test flag, never a game option**: it exists for the M2 scenes whose assertions
   are about a world without fights (marches across the enemy block, selections that must not lose units, overlay goals);
   they pass it instead of changing an expectation. The start-up line ends with ", combat off". `--no-bases` (M3-V1) is
-  the other half of the armies-only M2 setup. A replay recorded from such a match plays back with `ReplayPlayer.Run(replay,
-  data, combat: false)` until the replay header records the switch (format 4, M4-2a).
+  the other half of the armies-only M2 setup. A replay recorded from such a match records `combat 0` in its header
+  (format 4, M4-2a), so `ReplayPlayer.Run(replay, data)` plays it back off by itself; the `combat:` override parameter
+  stays for format-3 files recorded with combat off.
 - **Debug overlay** (M2-5; F12, input action `debug_overlay`; launch flag `--debug-overlay` starts it
   on, so `--screenshot` can capture it): the nav grid on the ground, the flow-field arrows of the
   selection's goal around the camera, a tick-time graph of the last 120 ticks with the 4 ms budget
