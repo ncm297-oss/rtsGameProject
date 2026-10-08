@@ -196,6 +196,7 @@ public partial class CombatViewTest : Node
     {
         StartMatch(seed, runnerTicks: false);
         Check(W.CombatEnabled, $"seed {seed}: combat off in a default match");
+        CheckCorpseColours(seed);
         (System.Numerics.Vector2 goal0, System.Numerics.Vector2 goal1) = Stage();
         await TickAndCheck(seed);
         await TickAndCheck(seed);
@@ -213,7 +214,7 @@ public partial class CombatViewTest : Node
         _camera.SetFocus(mid.X, mid.Y);
 
         int unitDeaths = 0, buildingDeaths = 0, maxBars = 0, panelFrames = 0, lastDeathTick = -1;
-        bool shotBrawl = false, shotRubble = false, shotCorpses = false;
+        bool shotBrawl = false, shotRubble = false, shotCorpses = false, shotLate = false;
         long steadyBytes = 0;
         int steadyFrames = 0;
         for (int t = 0; t < MaxTicks; t++)
@@ -244,11 +245,18 @@ public partial class CombatViewTest : Node
             {
                 shotBrawl = true;
                 await Shot($"seed{seed}-brawl");
+                await Shot($"seed{seed}-f12", overlay: true);
             }
             if (!shotCorpses && _combat.Markers.Count >= 8)
             {
                 shotCorpses = true;
                 await Shot($"seed{seed}-corpses");
+            }
+            // Most of the field dead: both teams' corpses side by side (M4-V2, BUG-0160 item 3).
+            if (!shotLate && _combat.Markers.Count >= 25)
+            {
+                shotLate = true;
+                await Shot($"seed{seed}-corpses-late");
             }
             if (!shotRubble && buildingDeaths > 0)
             {
@@ -270,6 +278,7 @@ public partial class CombatViewTest : Node
         _hits = _hitWhileLit = 0;
 
         await DeathStorm(seed);
+        await CorpseCloseUp(seed);
 
         // The hash twin: the stream the scene sent, replayed bare, equals the views' sim every tick.
         Replay replay = _runner.Recorder!.ToReplay();
@@ -322,6 +331,7 @@ public partial class CombatViewTest : Node
         CheckMarkers(seed, tick);
         CheckBars(seed, tick);
         CheckCounts(seed, tick);
+        if (tick % 200 == 0) CheckOverlayLayout(seed, tick);
         return (units, buildings);
     }
 
@@ -339,7 +349,9 @@ public partial class CombatViewTest : Node
         for (int i = 0; i < U.Capacity; i++)
         {
             bool same = U.Alive[i] && U.Generation[i] == _lastGen[i];
-            bool hit = same && U.Hp[i] < _lastHp[i];
+            // M4-V2 (BUG-0160 item 2): a unit first seen below its type's hp counts as hit once.
+            bool first = U.Alive[i] && !same;
+            bool hit = same ? U.Hp[i] < _lastHp[i] : first && U.Hp[i] < _data.Units[U.TypeId[i]].Hp;
             if (hit)
             {
                 if (_sinceHit[i] <= 3) _hitWhileLit++;
@@ -347,7 +359,7 @@ public partial class CombatViewTest : Node
                 _hits++;
             }
             else _sinceHit[i] = same ? _sinceHit[i] + 1 : 1000;
-            bool want = same && _sinceHit[i] <= 3;
+            bool want = U.Alive[i] && _sinceHit[i] <= 3;
             bool lit = _units.Flash.IsLit(i);
             if (lit != want || _units.Flash.WasHit(i) != hit)
                 Check(false, $"seed {seed} tick {tick} frame {frame} slot {i}: lit {lit} (want {want}), hit {_units.Flash.WasHit(i)} (want {hit})");
@@ -414,6 +426,85 @@ public partial class CombatViewTest : Node
             $"seed {seed} tick {tick}: overlay {_overlay.Kills0}/{_overlay.Losses0} {_overlay.Kills1}/{_overlay.Losses1}, sim {k0}/{l0} {W.Kills[1]}/{W.Losses[1]}");
         string line = $"p1 {_ui.Hud(HudText.Kills)} {W.Kills[1]} / {_ui.Hud(HudText.Losses)} {W.Losses[1]}";
         Check(_overlay.Enabled && _match.GetNode<Label>("DebugOverlay/Label").Text.Contains(line), $"seed {seed} tick {tick}: overlay label lacks '{line}'");
+    }
+
+    // BUG-0160 item 1: every line of the F12 label ends left of the resource bar's labels (Pop, K / L) and the label ends
+    // above the tick graph, measured with the label's own font at the 1152 x 648 window.
+    private void CheckOverlayLayout(ulong seed, int tick)
+    {
+        Label label = _match.GetNode<Label>("DebugOverlay/Label");
+        Font font = label.GetThemeFont("font");
+        int size = label.GetThemeFontSize("font_size");
+        float right = float.MaxValue;
+        foreach (Control c in new Control[] { _bar, _bar.PopLabel, _bar.KillsLabel }) right = Math.Min(right, c.GetGlobalRect().Position.X);
+        string[] lines = label.Text.Split('\n');
+        Check(lines.Length == 5, $"seed {seed} tick {tick}: F12 label has {lines.Length} lines, want 5");
+        float widest = 0f;
+        foreach (string line in lines)
+        {
+            float w = font.GetStringSize(line, HorizontalAlignment.Left, -1, size).X;
+            widest = Math.Max(widest, w);
+            Check(label.GlobalPosition.X + w < right, $"seed {seed} tick {tick}: F12 line '{line}' is {w:0} px wide, runs past x {right:0} (resource bar)");
+        }
+        float bottom = label.GlobalPosition.Y + lines.Length * font.GetHeight(size);
+        float graphTop = _overlay.Graph.GetGlobalRect().Position.Y;
+        Check(bottom <= graphTop, $"seed {seed} tick {tick}: F12 label ends at y {bottom:0}, the graph starts at {graphTop:0}");
+        if (!_layoutPrinted)
+        {
+            _layoutPrinted = true;
+            GD.Print($"F12 layout: widest line {widest:0} px from x {label.GlobalPosition.X:0}, resource bar from x {right:0}; label ends y {bottom:0}, graph from y {graphTop:0}");
+        }
+    }
+
+    private bool _layoutPrinted;
+
+    // BUG-0160 item 3: corpses read by team: the fill is the owner colour at CorpseShade, the rim darker, and the two
+    // players' fills are bright enough to read and far apart.
+    private void CheckCorpseColours(ulong seed)
+    {
+        float[] lum = new float[2];
+        for (int p = 0; p < 2; p++)
+        {
+            Color c = UnitViews.ColorFromRgb(_data.Factions[W.FactionOf(p)].PrimaryColor);
+            Color fill = _combat.CorpseColor(p), rim = _combat.CorpseRimColor(p);
+            Check(Math.Abs(fill.R - c.R * CombatViews.CorpseShade) < 1e-4f && Math.Abs(fill.G - c.G * CombatViews.CorpseShade) < 1e-4f && Math.Abs(fill.B - c.B * CombatViews.CorpseShade) < 1e-4f,
+                $"seed {seed}: player {p} corpse fill {fill}, owner colour {c}");
+            Check(rim.R < fill.R && rim.G < fill.G && rim.B < fill.B, $"seed {seed}: player {p} corpse rim {rim} not darker than {fill}");
+            lum[p] = 0.2126f * fill.R + 0.7152f * fill.G + 0.0722f * fill.B;
+            Check(lum[p] >= 0.2f, $"seed {seed}: player {p} corpse fill {fill} reads black (luminance {lum[p]:0.00})");
+        }
+        Color a = _combat.CorpseColor(0), b = _combat.CorpseColor(1);
+        float d = MathF.Sqrt((a.R - b.R) * (a.R - b.R) + (a.G - b.G) * (a.G - b.G) + (a.B - b.B) * (a.B - b.B));
+        Check(d >= 0.25f, $"seed {seed}: the two teams' corpses {a} / {b} are only {d:0.00} apart");
+        Check(_combat.CorpseRimMesh.InstanceCount == _combat.CorpseMesh.InstanceCount, $"seed {seed}: rim pool {_combat.CorpseRimMesh.InstanceCount}, corpse pool {_combat.CorpseMesh.InstanceCount}");
+        GD.Print($"seed {seed}: corpse fills {a} / {b} (luminance {lum[0]:0.00} / {lum[1]:0.00}, {d:0.00} apart), rims {_combat.CorpseRimColor(0)} / {_combat.CorpseRimColor(1)}");
+    }
+
+    // Windowed only (BUG-0160 item 3): a row of each team's corpses on open ground, zoomed in, through the real draw path
+    // (AddDeaths), so the shot shows the two teams' discs side by side; then the camera goes back and they expire.
+    private async Task CorpseCloseUp(ulong seed)
+    {
+        if (_shots == null || DisplayServer.GetName() == "headless") return;
+        NavGrid g = W.NavGrid;
+        int center = FlowField.NearestPassable(g, g.Height / 2 * g.Width + g.Width / 2);
+        System.Numerics.Vector2 c = g.CellCenter(center % g.Width, center / g.Width);
+        int hi = _data.FindUnit("malazan_heavy_infantry"), raider = _data.FindUnit("whirlwind_raider");
+        var deaths = new DeathEvent[12];
+        for (int k = 0; k < deaths.Length; k++)
+        {
+            int owner = k / 6;
+            var at = c + new System.Numerics.Vector2((k % 6 - 2.5f) * 1.6f, owner == 0 ? -1.2f : 1.2f);
+            deaths[k] = new DeathEvent(new EntityHandle(k, 1), false, owner == 0 ? hi : raider, owner, 1 - owner, at);
+        }
+        _combat.AddDeaths(W, deaths, W.TickNumber);
+        float zoom = _camera.Zoom;
+        _camera.SetFocus(c.X, c.Y);
+        _camera.SetZoom(14f);
+        await Frame();
+        await Shot($"seed{seed}-corpses-close");
+        _camera.SetZoom(zoom);
+        while (_combat.Markers.Count > 0) { _sim.Tick(); _combat.Sync(W, 1f); }
+        await Frame();
     }
 
     // 500 deaths in one tick, five times: the pool stays at its cap, replaces the oldest, and the next frames allocate nothing.
@@ -484,11 +575,12 @@ public partial class CombatViewTest : Node
         await EndMatch();
     }
 
-    private async Task Shot(string name)
+    private async Task Shot(string name, bool overlay = false)
     {
         if (_shots == null || DisplayServer.GetName() == "headless") return;
-        // The F12 layers off for the picture (its second line runs under the resource bar), back on after.
-        _overlay.SetEnabled(false);
+        // The F12 layers (nav grid, arrows) off for the picture of the ground, back on after; the "f12" shot keeps them to
+        // show the label's layout (M4-V2, BUG-0160).
+        _overlay.SetEnabled(overlay);
         for (int i = 0; i < 3; i++) await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
         string path = $"{_shots}/combat-{name}.png";
         GetViewport().GetTexture().GetImage().SavePng(path);

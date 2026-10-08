@@ -76,6 +76,9 @@ public partial class Match : Node3D
         selection.Init(_runner, camera, GetNode<SelectionRings>("World3D/SelectionRings"), GetNode<Sfx>("Sfx"));
         selection.Outline = GetNode<BuildingOutline>("World3D/BuildingOutline");
         GetNode<RallyMarker>("World3D/RallyMarker").Init(_runner, selection);
+        var targetRing = GetNode<TargetRing>("World3D/TargetRing");
+        targetRing.Init(_runner);
+        selection.TargetRing = targetRing;
 
         System.Numerics.Vector2[][] blocks = SpawnArmies(sim, options.UnitsPerPlayer, out System.Numerics.Vector2 focus);
         Bases = options.NoBases ? null : SpawnBases(sim, blocks, WorkersPerPlayer, out _);

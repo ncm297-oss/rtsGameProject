@@ -15,7 +15,8 @@ namespace Rts.Game;
 /// filtering) and the pixel/meter mapping from <see cref="MinimapTransform"/>. Mouse filter is
 /// Stop, so clicks inside the control never reach <see cref="SelectionController"/>; events outside
 /// its rect are never seen here. Holds no gameplay state; orders go through
-/// <see cref="SelectionController.Order"/> (a Move, queued while <c>order_queue</c> is held); a
+/// <see cref="SelectionController.Order"/> (a Move, queued while <c>order_queue</c> is held; also on an enemy dot: the
+/// minimap's Attack half waits for fog, M4-3, when dots become reliable; M4-V2); a
 /// right-click while A-targeting only cancels it; with a building selected a right click sets its rally point
 /// (<see cref="SelectionController.RallyOrder"/>, M3-V3). A left click here never ends targeting.
 /// </remarks>
