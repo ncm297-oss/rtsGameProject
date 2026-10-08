@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-08-0913, task M4-2b (sim track, QA full) |
 | System | sim: combat acquisition (`CombatSystem.Acquire`, the BUG-0156 condition `!u.TargetIsBuilding[i] \|\| u.LastAttacker[i].Generation == 0`) |
-| Fixed by | |
+| Fixed by | 0aeed2f (`CombatSystem.AttackerInScanRange`); regression `QA/ProjectileQaTests.BuildingHitter_WithAStaleLastAttacker_BehavesLikeANeverHitOne` (un-skipped) |
 
 ## Repro
 `QA/ProjectileQaTests.BuildingHitter_WithAStaleLastAttacker_BehavesLikeANeverHitOne` (skipped for this bug; remove the
@@ -37,3 +37,12 @@ With the stale `LastAttacker` the unit re-scans every scan interval while hittin
 - A possible fix is to require the remembered attacker to be targeting this unit (or to have hit it within a window,
   or to be within its sight), so the re-pick only happens for a current attacker. Keep
   `AttackOrderTests.AUnitHittingABuilding_TurnsOnTheEnemyUnitHittingIt_AfterItsSwing` green.
+
+## Verification (QA re-check round 1, 2026-10-08-0913)
+- `BuildingHitter_WithAStaleLastAttacker_BehavesLikeANeverHitOne` passes: never hit, leaves the Tent = False; hit once
+  long ago by an archer that walked 40+ m away, leaves = False.
+- BUG-0156's own case still holds. The developer's `AttackOrderTests.AUnitHittingABuilding_TurnsOnTheEnemyUnitHittingIt_AfterItsSwing`
+  (melee attacker at 1 m) passes. New QA row `BuildingHitter_ShotByAnArcherInSight_TurnsOnTheArcher` (ranged attacker
+  at 12 m, inside the 14 m sight) passes: the Heavy Infantry turns on the archer 4 ticks after its first hit.
+- The 6-seed ranged fuzz (`Stress/RangedSplashFuzzQaTests`) stays green: the last-attacker invariants hold, twins are
+  equal and the replay plays back.

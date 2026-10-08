@@ -91,4 +91,78 @@ public class ProjectileScaleQaTests
         Assert.Equal(0, w.Projectiles.Count);
         Assert.True(landing < 100, $"stall: {landing:F1} ms");
     }
+
+    /// <summary>
+    /// The BUG-0183 re-lead pass at its worst: 1,000 bolts in flight at 1,000 different walking Heavy Infantry, every one
+    /// re-led and steered every tick (data copy: bolt speed 1 m/s, the loader's floor, so the shots fly 300 ticks). Combat
+    /// is off so the sim never calls <see cref="ProjectileSystem.Fly"/>; the row times it alone, and once more with
+    /// <c>leadSpeed</c> 0 (no re-lead) as the control. Budget: the developer's 1,000-in-flight row, 0.3 ms a tick, and 0 B.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Perf")]
+    public void ThousandLedShots_AtThousandWalkers_ReLeadEveryTick_UnderPoint3Ms_AndAllocateNothing()
+    {
+        (double avg, double worst, long bytes, int steered) Run(double leadSpeed)
+        {
+            using TestDataDir dir = TestDataDir.CopyOfShipped();
+            dir.EditJson("common/projectiles.json", root =>
+            {
+                foreach (System.Text.Json.Nodes.JsonNode? p in root["projectiles"]!.AsArray())
+                    if ((string?)p!["id"] == "bolt") { p["speed"] = 1; p["leadSpeed"] = leadSpeed; }
+            });
+            Data.DataLoadResult r = Data.DataLoader.LoadAll(dir.Path);
+            Assert.True(r.Ok, string.Join("\n", r.Errors));
+            var sim = new Simulation(TestSim.Config(Seed: 1, PlayerCount: 2, UnitCapacity: 1100, CommandCapacity: 4096)
+                with { Data = r.Data!, Combat = false, ProjectileCapacity = 1000 }, LocalMovementTests.Flat(160));
+            World w = sim.World;
+            UnitStore u = w.Units;
+            int hi = r.Data!.FindUnit("malazan_heavy_infantry"), xbow = r.Data.FindUnit("malazan_crossbowman");
+            var walkers = new List<EntityHandle>();
+            for (int k = 0; k < 1000; k++)
+            {
+                var at = new Vector2(40f + k % 25 * 2.5f, 20f + k / 25 * 7f);
+                EntityHandle h = Place(sim, 1, hi, at);
+                walkers.Add(h);
+                // 8 shared goals far east (1,000 distinct goals would thrash the flow-field cache, BUG-0025, and most would wait).
+                sim.Enqueue(Command.Move(1, h, new Vector2(300f, 20f + k / 25 % 8 * 25f)));
+            }
+            EntityHandle s = Place(sim, 0, xbow, new Vector2(10f, 10f));
+            for (int t = 0; t < 10; t++) sim.Tick();
+            foreach (EntityHandle h in walkers)
+            {
+                u.Position[s.Index] = u.Position[h.Index] - new Vector2(15f, 0f);
+                u.Target[s.Index] = h;
+                ProjectileSystem.Fire(w, s.Index);
+            }
+            u.Target[s.Index] = default;
+            Assert.Equal(1000, w.Projectiles.Count);
+            var before = new Vector2[w.Projectiles.Capacity];
+            var times = new double[100];
+            long bytes = 0;
+            int steered = 0;
+            ProjectileSystem.Fly(w); // warm
+            for (int t = 0; t < times.Length; t++)
+            {
+                sim.Tick(); // walkers step; no Fly (combat off)
+                w.Projectiles.Target.CopyTo(before);
+                long b0 = GC.GetAllocatedBytesForCurrentThread();
+                long s0 = Stopwatch.GetTimestamp();
+                ProjectileSystem.Fly(w);
+                times[t] = Ms(Stopwatch.GetTimestamp() - s0);
+                bytes += GC.GetAllocatedBytesForCurrentThread() - b0;
+                for (int k = 0; k < before.Length; k++)
+                    if (w.Projectiles.Alive[k] && w.Projectiles.Target[k] != before[k]) steered++;
+            }
+            Assert.Equal(1000, w.Projectiles.Count);
+            return (times.Average(), times.Max(), bytes, steered);
+        }
+        var led = Run(5);
+        var control = Run(0);
+        _out.WriteLine($"1,000 led shots: Fly {led.avg:F4} ms avg, worst {led.worst:F4}, {led.bytes} B, {led.steered} steers over 100 ticks; " +
+            $"control (no lead): {control.avg:F4} ms avg, worst {control.worst:F4}, {control.steered} steers");
+        Assert.True(led.steered > 50_000, $"setup: only {led.steered} steers (of 100,000 shot-ticks)");
+        Assert.Equal(0, control.steered);
+        Assert.Equal(0L, led.bytes);
+        Assert.True(led.avg < 0.3, $"re-lead pass {led.avg:F3} ms a tick");
+    }
 }

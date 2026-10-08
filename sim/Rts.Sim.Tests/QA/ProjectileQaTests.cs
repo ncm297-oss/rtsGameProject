@@ -434,6 +434,32 @@ public class ProjectileQaTests
         Assert.True(played.Ok, $"recorded with ProjectileCapacity 1, played with the default: {played}");
     }
 
+    /// <summary>
+    /// BUG-0181 fix boundaries: the default size given explicitly records and plays back; one slot more or less than the
+    /// default is refused.
+    /// </summary>
+    [Fact]
+    public void Recorder_TakesTheDefaultProjectileCapacityGivenExplicitly_AndRefusesOneSlotOff()
+    {
+        SimConfig baseCfg = TestSim.Config(Seed: 2, PlayerCount: 2, UnitCapacity: 64, CommandCapacity: 256);
+        int slots = baseCfg.ProjectileSlots;
+        Assert.True(slots > 1, $"setup: default {slots}");
+        foreach (int off in new[] { -1, 1 })
+            Assert.Throws<InvalidOperationException>(() => new ReplayRecorder(new Simulation(baseCfg with { ProjectileCapacity = slots + off }), checkpointInterval: 20));
+        var sim = new Simulation(baseCfg with { ProjectileCapacity = slots });
+        var rec = new ReplayRecorder(sim, checkpointInterval: 20);
+        int center = MoveScenario.CentralCell(sim.World.NavGrid);
+        Vector2 at = MoveScenario.Center(sim.World.NavGrid, center);
+        for (int k = 0; k < 6; k++)
+        {
+            sim.Enqueue(Command.SpawnUnit(0, Crossbowman, at + new Vector2(-6f, k - 3f)));
+            sim.Enqueue(Command.SpawnUnit(1, Raider, at + new Vector2(6f, k - 3f)));
+        }
+        for (int t = 0; t < 200; t++) sim.Tick();
+        ReplayResult played = ReplayPlayer.Run(rec.ToReplay(), TestSim.Data);
+        Assert.True(played.Ok, $"explicit default {slots}: {played}");
+    }
+
     // ---------- BUG-0156 fix scope ----------
 
     /// <summary>
@@ -487,5 +513,33 @@ public class ProjectileQaTests
         bool control = LeavesTheTent(false), stale = LeavesTheTent(true);
         _out.WriteLine($"never hit: leaves the Tent = {control}; hit once long ago (attacker alive, gone): leaves = {stale}");
         Assert.Equal(control, stale);
+    }
+
+    /// <summary>
+    /// BUG-0180's fix keeps BUG-0156's case for a ranged attacker: an archer shooting a Heavy Infantry (sight 14 m) that
+    /// is hitting a Tent, from 12 m (in sight), makes it leave the Tent for the archer. The developer's BUG-0156 row
+    /// covers only a melee attacker 1 m away.
+    /// </summary>
+    [Fact]
+    public void BuildingHitter_ShotByAnArcherInSight_TurnsOnTheArcher()
+    {
+        Simulation sim = Flat(size: 64, units: 16);
+        World w = sim.World;
+        UnitStore u = w.Units;
+        Assert.True(w.Buildings.Spawn(1, Tent, 30 * w.NavGrid.Width + 30, out EntityHandle tent));
+        EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 28, 30));
+        sim.Enqueue(Command.AttackMove(0, a, At(sim, 29, 30)));
+        int full = w.Buildings.Hp[tent.Index];
+        RunUntil(sim, () => w.Buildings.Hp[tent.Index] < full, 400);
+        Assert.True(u.TargetIsBuilding[a.Index] && u.Target[a.Index] == tent, "setup: not hitting the Tent");
+        EntityHandle archer = Place(sim, 1, Archer, u.Position[a.Index] + new Vector2(0f, -12f));
+        sim.Enqueue(Command.HoldPosition(1, archer));
+        sim.Enqueue(Command.Attack(1, archer, a, isBuilding: false));
+        int hp = u.Hp[a.Index];
+        RunUntil(sim, () => u.Hp[a.Index] < hp, 200);
+        Assert.True(u.Hp[a.Index] < hp, "setup: the archer never hit");
+        int ran = RunUntil(sim, () => !u.TargetIsBuilding[a.Index] && u.Target[a.Index] == archer, 100);
+        _out.WriteLine($"turned on the archer {ran} ticks after its first hit");
+        Assert.Equal(archer, u.Target[a.Index]);
     }
 }

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-08-0913, task M4-2b (sim track, QA full) |
 | System | sim: replays (`ReplayRecorder` constructor), `SimConfig.ProjectileCapacity` |
-| Fixed by | |
+| Fixed by | 0aeed2f (`ReplayRecorder` constructor guard); regression `QA/ProjectileQaTests.ARecordingOfASimWithANonDefaultProjectileCapacity_IsRefusedOrPlaysBack` (un-skipped) |
 
 ## Repro
 `QA/ProjectileQaTests.ARecordingOfASimWithANonDefaultProjectileCapacity_IsRefusedOrPlaysBack` (skipped for this bug;
@@ -30,3 +30,9 @@ slots), shots that were lost in the recording land in the playback, and the firs
   `ReplayRecorder` constructor (one line), or a header line.
 - The game does not set `ProjectileCapacity` today (grep `game/`), so no shipped replay is affected; dev scenes and
   tests that set it can record replays that silently can't play back.
+
+## Verification (QA re-check round 1, 2026-10-08-0913)
+- The un-skipped row passes: `ProjectileCapacity = 1` is refused with `InvalidOperationException`.
+- New boundary row `Recorder_TakesTheDefaultProjectileCapacityGivenExplicitly_AndRefusesOneSlotOff` passes. The
+  default size minus 1 and plus 1 are both refused. The default given explicitly records, and its replay plays back
+  200 ticks of a Crossbowman v Raider fight.

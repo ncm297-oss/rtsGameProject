@@ -66,6 +66,11 @@ public class RangedSplashFuzzQaTests
         var rng = new SimRng(seed, 4242);
         long deaths = 0;
         int hits = 0, misses = 0, maxInFlight = 0, friendly = 0, buildingDeaths = 0, peakUnits = 0;
+        // Round 1 (BUG-0183): shots re-led in flight (same shot, impact point moved) and the longest step a led shot takes.
+        var lastAim = new Vector2[capacity];
+        var lastLeft = new int[capacity];
+        int steers = 0;
+        float longestStep = 0f;
         for (int t = 0; t < Ticks; t++)
         {
             if (t % 100 == 0 && u.Count < 340)
@@ -146,6 +151,16 @@ public class RangedSplashFuzzQaTests
                 // Each step closes on the impact point (straight line, constant speed): never farther than the step before.
                 Assert.True(Vector2.Distance(pos, target) <= Vector2.Distance(prev, target) + 1e-3f, $"seed {seed} tick {t}: projectile {k} moved away from its impact point");
                 Assert.True(pos.X >= 0 && pos.Y >= 0 && pos.X <= g.Width * MapConstants.CellSize && pos.Y <= g.Height * MapConstants.CellSize);
+                if (lastLeft[k] == ps.TicksLeft[k] + 1)
+                {
+                    if (target != lastAim[k]) steers++;
+                    longestStep = MathF.Max(longestStep, Vector2.Distance(prev, pos));
+                }
+            }
+            for (int k = 0; k < ps.Capacity; k++)
+            {
+                lastLeft[k] = ps.Alive[k] ? ps.TicksLeft[k] : -1;
+                lastAim[k] = ps.Target[k];
             }
             Assert.Equal(ps.Count, live);
             Assert.True(live <= capacity);
@@ -172,9 +187,10 @@ public class RangedSplashFuzzQaTests
                 Assert.True(bs.Hp[j] > 0 && bs.Hp[j] <= w.Data.Buildings[bs.TypeId[j]].Hp, $"seed {seed} tick {t}: building {j} hp {bs.Hp[j]}");
             }
         }
-        _out.WriteLine($"seed {seed}: {deaths} deaths ({buildingDeaths} buildings, {friendly} friendly fire), {hits} hits / {misses} misses, up to {maxInFlight} of {capacity} in flight, peak {peakUnits} units");
+        _out.WriteLine($"seed {seed}: {deaths} deaths ({buildingDeaths} buildings, {friendly} friendly fire), {hits} hits / {misses} misses, up to {maxInFlight} of {capacity} in flight, peak {peakUnits} units; {steers} re-leads, longest step {longestStep:F2} m");
         Assert.True(deaths >= 50, $"seed {seed}: only {deaths} deaths");
         Assert.True(hits > 50 && misses > 0, $"seed {seed}: {hits} hits, {misses} misses");
+        Assert.True(steers > 0, $"seed {seed}: no shot was re-led in flight");
 
         Replay recorded = recorder.ToReplay();
         Assert.Equal(ReplayError.None, ReplayFormat.TryRead(ReplayFormat.Write(recorded), out Replay? back));

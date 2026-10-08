@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open (item 1 fixed; item 2 is a data-track note) |
 | Found | 2026-10-08-0913, task M4-2b (sim track, QA full) |
 | System | sim: data loader (`BuildProjectiles`), projectile store; data note for the data track |
-| Fixed by | |
+| Fixed by | item 1: 0aeed2f (`DataLimits.MinProjectileSpeed` = 1 m/s); regression `QA/ProjectileLoaderQaTests.ASpeedThatIsNoFloatStep_IsRejected("1e-50")` (un-skipped). Item 2: open, data-track note |
 
 ## Repro
 1. **Speed underflow.** `QA/ProjectileLoaderQaTests.ASpeedThatIsNoFloatStep_IsRejected("1e-50")` (skipped for this
@@ -31,3 +31,10 @@ As above.
 
 ## Notes
 Inputs in item 1 are far outside the documented range (docs/02: 12-25 m/s); no crash or hang.
+
+## Verification (QA re-check round 1, 2026-10-08-0913)
+- Item 1: `ASpeedThatIsNoFloatStep_IsRejected("1e-50")` passes. New row `TheSpeedFloor_IsInclusive` passes: `0.999`
+  is an error at `projectiles[0].speed` ("0.999 is below the minimum 1 m/s"), and `1` and `1.0001` load. docs/03's
+  data table states the floor.
+- Item 2 (Sapper self-splash) is unchanged and is for the data track. Friendly-fire deaths in the fuzz are still
+  222-261 of 945-1,006 per seed (23-27 %).

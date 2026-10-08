@@ -120,4 +120,58 @@ public class ProjectileLoaderQaTests
         _out.WriteLine($"laborer with a bolt: ok {r.Ok}; {string.Join(" | ", r.Errors)}");
         Assert.True(r.Ok || r.Errors.All(e => e.File != File));
     }
+
+    // ---------- round 1 (BUG-0182 item 1, BUG-0183) ----------
+
+    /// <summary>The BUG-0182 floor (<see cref="DataLimits.MinProjectileSpeed"/> = 1 m/s): just under is an error at the field, the floor itself loads.</summary>
+    [Theory]
+    [InlineData("0.999", false)]
+    [InlineData("1", true)]
+    [InlineData("1.0001", true)]
+    public void TheSpeedFloor_IsInclusive(string raw, bool ok)
+    {
+        DataLoadResult r = LoadWith(dir => EditArrow(dir, p => p["speed"] = JsonNode.Parse(raw)));
+        _out.WriteLine($"speed {raw}: ok {r.Ok}; {string.Join(" | ", r.Errors)}");
+        Assert.Equal(ok, r.Ok);
+        if (!ok) Assert.Contains(r.Errors, e => e.File == File && e.Path == "projectiles[0].speed");
+    }
+
+    /// <summary>
+    /// <c>leadSpeed</c> of the wrong JSON type, or one a float tick step cannot hold, must be an error at the field, as a
+    /// wrong-type <c>hitTolerance</c> and a 1e40 <c>speed</c> are (never a silent default and never infinity).
+    /// </summary>
+    [Theory]
+    [InlineData("\"5\"")]
+    [InlineData("true")]
+    [InlineData("[5]")]
+    [InlineData("{}")]
+    [InlineData("1e40")]
+    public void ABadLeadSpeed_IsAnErrorAtTheField(string raw)
+    {
+        DataLoadResult r = LoadWith(dir => EditArrow(dir, p => p["leadSpeed"] = JsonNode.Parse(raw)));
+        string got = r.Ok ? $"accepted: {r.Data!.Projectiles[r.Data.FindProjectile("arrow")].LeadSpeedPerTick} m a tick" : string.Join(" | ", r.Errors);
+        _out.WriteLine($"leadSpeed {raw}: {got}");
+        Assert.False(r.Ok, $"leadSpeed {raw} {got}");
+        Assert.Contains(r.Errors, e => e.File == File && e.Path.Contains("projectiles[0].leadSpeed", StringComparison.Ordinal));
+    }
+
+    /// <summary>A <c>leadSpeed</c> of null is the same as none (the default 0, never leads), like a null <c>hitTolerance</c> is its default; pinned either way.</summary>
+    [Fact]
+    public void ANullLeadSpeed_IsTheDefaultOrAnError()
+    {
+        DataLoadResult r = LoadWith(dir => EditArrow(dir, p => p["leadSpeed"] = null));
+        _out.WriteLine($"leadSpeed null: ok {r.Ok}; {string.Join(" | ", r.Errors)}");
+        if (r.Ok) Assert.Equal(0f, r.Data!.Projectiles[r.Data.FindProjectile("arrow")].LeadSpeedPerTick);
+        else Assert.Contains(r.Errors, e => e.File == File);
+    }
+
+    /// <summary>The lead speed is in the data hash: a replay recorded with one lead speed must not play against another.</summary>
+    [Fact]
+    public void LeadSpeed_ChangesTheContentHash()
+    {
+        DataLoadResult a = LoadWith(dir => EditArrow(dir, p => p["leadSpeed"] = 5));
+        DataLoadResult b = LoadWith(dir => EditArrow(dir, p => p["leadSpeed"] = 5.5));
+        Assert.True(a.Ok && b.Ok);
+        Assert.NotEqual(a.Data!.ContentHash(), b.Data!.ContentHash());
+    }
 }
