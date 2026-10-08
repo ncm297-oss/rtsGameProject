@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed (but the fix's `MaxGiveUps` cap causes BUG-0143) |
 | Found | 2026-10-07-2014, task M4-1 |
 | System | combat acquisition / chase / settle (`CombatSystem.Acquire`, `Chase`, `Settle`) |
-| Fixed by | |
+| Fixed by | eebb152; regressions `QA/CombatQaTests` (3 rows un-skipped), `CombatTests` give-up rows, `QA/CombatGiveUpQaTests` |
 
 ## Repro
 `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~QA.CombatQaTests"`, three rows:
@@ -46,3 +46,6 @@ the developer: skip targets on another nav region / level the unit cannot path t
 unit's cell is infinite), give up on a target after a failed chase (remember it for some ticks), or count a walk away
 from the target as leash progress. The scratch "livelock breaker" QA used for classification (drop the target after
 12 chase re-walks without planting and stop scanning for a while) turned 8 of the 9 red termination rows green.
+
+## Re-check 2026-10-07-2315 (QA, fix round 1)
+All 3 QA rows green; the 9 termination rows green on combat. New attacks green (`QA/CombatGiveUpQaTests`): 2 and 3 unreachable cliff-top enemies taking turns end after 3 engagements, Idle within 1 m of home by tick 364 / 245 and still for 3,000 ticks; at the cap a reachable Raider is fought and killed and the reset leads to at most 3 more engagements, settled 293 ticks after the kill; an attack-move past 5 cliff-top enemies arrives in 581 ticks; a retaliator behind a wall is Idle at its anchor after 76 ticks (bound 300) and stays. But the cap stalls real brawls: BUG-0143 (S2).

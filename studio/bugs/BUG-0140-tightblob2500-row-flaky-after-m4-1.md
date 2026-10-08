@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (budget 4.5 -> 4.6 ms, Producer-approved in advance) |
 | Found | 2026-10-07-2014, task M4-1 |
 | System | tick cost: combat phase 7 early-outs, movement's planted checks |
-| Fixed by | |
+| Fixed by | eebb152 (`CrowdPerfTests.TightBlobBudgetMs`) |
 
 ## Repro
 `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~TightBlob2500_OnePlayer"`, alternated 13 times between a
@@ -31,3 +31,6 @@ The one-player early-out itself is cheap: the same blob with one enemy at the fa
 own-only buckets) costs +0.087 ms over the blob alone (`Stress/CombatScaleQaTests`). The rest is spread over the
 per-unit checks added to phase 7 and movement (`Target` read per walker for `ChaseArrival2`, the `Attacking` compares
 in the hard-wall / shove tests).
+
+## Re-check 2026-10-07-2315 (QA, fix round 1)
+5 runs alone: 4.47, 4.51, 4.49, 4.48, 4.49 ms, all under 4.6 (1 of 5 over the old 4.5). Far-enemy delta +0.076 ms (`CombatScaleQaTests`).

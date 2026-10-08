@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-07-2014, task M4-1 |
 | System | combat settle (`CombatSystem.Settle`) |
-| Fixed by | |
+| Fixed by | eebb152 (`Settle` accepts the resolved anchor); regressions `AnchorCellBlockedByANewBuilding_EngagementStillEnds`, `CombatTests.Retaliator_WhoseAnchorCellIsBuiltOver...` |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~AnchorCellBlockedByANewBuilding_EngagementStillEnds"`
@@ -28,3 +28,6 @@ Consequences: the unit is hashed with combat state for good; a stuck `AttackMove
 (`Engage` sets a leash only from mode `None`) chases without a leash and then walks back to the stale destination; a
 stuck `Retaliate` keeps the old anchor for the next fight. Fix idea: compare the goal with the anchor's resolved goal
 (`ResolveTarget`), or end the mode whenever the unit stands Idle after a walk that `Settle` started.
+
+## Re-check 2026-10-07-2315 (QA, fix round 1)
+QA row un-skipped and green.

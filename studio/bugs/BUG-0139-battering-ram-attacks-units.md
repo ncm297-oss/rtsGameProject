@@ -2,8 +2,8 @@
 
 | Field | Value |
 | --- | --- |
-| Severity | S2 |
-| Status | open |
+| Severity | S3 |
+| Status | open, deferred to M4-2 (Producer re-triage S2 -> S3: needs an `attack.targets` schema field, moves `data-hash`) |
 | Found | 2026-10-07-2014, task M4-1 |
 | System | combat target rules (`CombatSystem.CanFight` / `PickTarget`) vs unit data |
 | Fixed by | |
@@ -26,3 +26,6 @@ soldiers, and also counts as a tier-1 "can attack" target for the enemy's priori
 The data has no field saying "buildings only", so this needs a generic data hook (e.g. an attack `targets` list or
 `buildingsOnly` flag in `units.json`, data track + loader) or, for this slice, a Producer call. Rule 6 forbids a
 hard-coded id check. Until fixed, a Whirlwind ram in a real match is a 240-hp, armor-6 melee unit.
+
+## Re-check 2026-10-07-2315 (QA, fix round 1)
+Still reproduces (row stays skipped); docs/03 "The ram" records the deferral.

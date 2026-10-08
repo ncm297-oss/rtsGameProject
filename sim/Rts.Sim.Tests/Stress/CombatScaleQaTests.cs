@@ -140,4 +140,64 @@ public class CombatScaleQaTests
         Assert.True(sim.World.Kills[0] + sim.World.Kills[1] > 0);
         Assert.True(later.Average() < 40.0 && first.Average() < 40.0);
     }
+
+    /// <summary>
+    /// BUG-0144: <c>ConstructionScaleStressTests.APlacementEveryTwoSeconds_32MarchingGroups_LongestFieldWait_Report</c>'s
+    /// scene (512 units of two owners in 32 mixed goal groups march across the default map while player 0's worker places
+    /// a House every 2 s) on combat: the groups meet and fight, and a chaser re-aiming its goal while placements stale the
+    /// cache waits up to 34 ticks for a usable field. Same 1 s (20-tick) bound as the walkers' row. A tick count, not wall
+    /// clock: deterministic. Measured: combat off 16 ticks (= base 8655fb1), combat on without placements 14, with 34.
+    /// </summary>
+    [Fact(Skip = "BUG-0144: chasers wait up to 1.7 s for a flow field under placement churn")]
+    public void ChasersUnderPlacementChurn_LongestFieldWait_AtMostOneSecond()
+    {
+        Simulation sim = MoveScenario.Spawn(11, units: 512, maxCost: 30f, out _, capacity: 520, players: 2,
+            map: MapGenParams.Default with { Forests = 12, GoldMines = 8 });
+        NavGrid g = sim.World.NavGrid;
+        var rng = new Determinism.SimRng(11, 4);
+        List<int> open = FlowFieldOracle.PassableCells(g);
+        int center = MoveScenario.CentralCell(g);
+        int[] goals = new int[32];
+        for (int k = 0; k < 32; k++)
+        {
+            int c;
+            do c = open[rng.NextInt(0, open.Count)];
+            while (Math.Abs(c % g.Width - center % g.Width) + Math.Abs(c / g.Width - center / g.Width) < 40);
+            goals[k] = c;
+        }
+        UnitStore u = sim.World.Units;
+        for (int i = 0; i < 512; i++) sim.Enqueue(Command.Move(u.Owner[i], MoveScenario.Handle(sim, i), MoveScenario.Center(g, goals[i % 32])));
+        sim.Enqueue(Command.SpawnUnit(0, GatherMaps.Laborer, MoveScenario.Center(g, center)));
+        sim.Tick();
+        sim.Tick();
+        EntityHandle placer = MoveScenario.Handle(sim, 512);
+        BuildMaps.SetTotals(sim, 0, 100_000, 100_000);
+        var wait = new int[u.Capacity];
+        int longest = 0, longestUnit = -1, placements = 0;
+        bool longestChasing = false;
+        for (int t = 0; t < 1600; t++)
+        {
+            if (t < 1200 && t % 40 == 0)
+            {
+                for (int tries = 0; tries < 200; tries++)
+                {
+                    int c = open[rng.NextInt(0, open.Count)];
+                    if (!sim.World.CanPlace(0, BuildMaps.House, c, out _)) continue;
+                    sim.Enqueue(Command.Build(0, placer, BuildMaps.House, MoveScenario.Center(g, c)));
+                    placements++;
+                    break;
+                }
+            }
+            sim.Tick();
+            for (int i = 0; i < 512; i++)
+            {
+                wait[i] = QA.GridChangeOracle.WaitingForField(sim.World, i) ? wait[i] + 1 : 0;
+                if (wait[i] > longest) (longest, longestUnit, longestChasing) = (wait[i], i, u.Target[i] != default);
+            }
+        }
+        _out.WriteLine($"{placements} placements, combat on: longest field wait {longest} ticks ({longest / 20.0:F2} s, unit {longestUnit}, chasing {longestChasing}); {sim.World.Kills[0] + sim.World.Kills[1]} dead");
+        Assert.True(placements >= 25);
+        Assert.True(sim.World.Kills[0] + sim.World.Kills[1] > 0, "setup: nobody fought");
+        Assert.True(longest <= 20, $"longest field wait {longest} ticks = {longest / 20.0:F2} s (unit {longestUnit}, chasing {longestChasing})");
+    }
 }

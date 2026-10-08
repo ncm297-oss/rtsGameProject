@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S1 |
-| Status | open |
+| Status | open: 1 of 194 rows left red (`APlacementEveryTwoSeconds_32MarchingGroups_LongestFieldWait_Report`, Perf, 34 ticks on combat; QA recommends combat off, see BUG-0144) |
 | Found | 2026-10-07-2014, task M4-1 |
 | System | combat (`CombatSystem`) vs the pre-M4 movement / economy / production test scenes |
-| Fixed by | |
+| Fixed by | eebb152 (`SimConfig.Combat`, `TestSim.ConfigNoCombat`, holder invariants re-baselined) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests` on f2879b9: Failed 194, Passed 3,328, Skipped 10 (13 m 22 s).
@@ -53,3 +53,6 @@ Not fixable in the sim alone without a decision. The developer's options: (a) a 
 pre-M4 movement / economy / production scenes turn off (recorded in the replay header with M4-2), or (b) teams /
 allies. QA's view: (a) keeps 175 tests meaning what they meant; the QA-owned rows among them (Stress/ and QA/) should
 then be pinned to combat off by QA, not loosened. The 9 BUG-0137 rows must stay on combat and go green through the fix.
+
+## Re-check 2026-10-07-2315 (QA, fix round 1)
+Full suite 3,558 / 3,571 passed, 12 skipped, 1 failed (the field-wait row above). Every re-pin audited: config only (`combat: false` / `ConfigNoCombat`) except the two holder invariants (door fuzz, order stress: Idle *or Attacking*, still never moves; Producer decision 1) and `WorkerOnABuildOrder_IsHit_NeverRetaliates`' holding attacker (Laborer -> Heavy Infantry, decision 2; no assertion changed). The 9 termination rows run on combat and pass. Combat-off scenes are byte-identical to the base: per-tick hashes of 2 seeds x 1,000 ticks (two players mixed, Move / AttackMove / Stop / Hold, queued) from 8655fb1 and eebb152 (combat off) are equal; the same scene on combat differs from tick 1. The 3 'mixed' crowd rows on combat stop for good (500 x 4 seed 2 by tick 3,797; 2,500 seed 7 by 6,000, still at 20,000): their failures there are fights, not a livelock. The view hash twins on combat keep equal hashes every tick (only their alive counts fail).

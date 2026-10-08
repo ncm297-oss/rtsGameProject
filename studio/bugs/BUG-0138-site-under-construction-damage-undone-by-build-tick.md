@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-07-2014, task M4-1 |
 | System | construction (`BuildingStore.SetWork`) vs combat damage (`BuildingStore.Damage`) |
-| Fixed by | |
+| Fixed by | eebb152 (`BuildingStore.SetWork` adds the hit points work grows); regressions `SiteBeingBuilt_DamageSticks...`, `ConstructionSystemTests.SiteDamage_StaysTaken...` |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~SiteBeingBuilt_DamageSticks_TheNextBuildTickDoesNotUndoIt"`
@@ -29,3 +29,6 @@ The developer noticed this ("sites under construction recompute hp from progress
 progress delta to hp (`hp += max x (work - oldWork) / needed`, capped at max) instead of recomputing it, and do not
 reset to max at completion. Regression test: the QA row above (it asserts the hit sticks and a site that took more
 than its full hp is not complete at full hp).
+
+## Re-check 2026-10-07-2315 (QA, fix round 1)
+QA row un-skipped and green.

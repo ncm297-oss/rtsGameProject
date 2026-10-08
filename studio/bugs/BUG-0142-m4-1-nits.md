@@ -30,3 +30,16 @@ See repro.
 ## Notes
 Item 2 fix idea if wanted: let a unit that is hit while Idle start its swing on the same tick its attacker's hit
 lands, or let an in-reach enemy be picked up by the phase-10 reach check rather than waiting for a scan.
+
+## Re-check 2026-10-07-2315 (QA, fix round 1)
+Item 1: still open (the developer documented it as the BUG-0092 shape); row stays skipped. Item 2 unchanged. Two more
+nits from the fix round:
+
+3. `SimConfig.Combat`'s `///` summary is stale: it says "pending the Producer's call" (decided 2026-10-07, docs/03
+   "Combat switch") and "a replay always plays back with combat on", while `ReplayPlayer.Run(replay, data, combat)` now
+   lets a caller play one back with combat off.
+4. `CombatSystem` retaliation compares `u.Ignored[v] != hit.Attacker` without `IgnoredIsBuilding`: when the ignored
+   target is a building whose (index, generation) equals the attacking unit's handle, the hit starts no retaliation.
+   Harmless (a melee attacker is in reach and the next scan takes it, at most 4 ticks later), but the scan code
+   checks the building flag and this does not.
+

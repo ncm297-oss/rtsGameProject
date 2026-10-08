@@ -151,11 +151,13 @@ bugs outrank new features.
 | [BUG-0134](BUG-0134-building-requiring-tech-researched-only-at-its-own-slot-loads.md) | S3 | open | A building requiring a tech researched only at its own slot (Armory requires Melee Weapons) loads clean and can never be built |
 | [BUG-0125](BUG-0125-resource-right-click-column-takes-open-ground-behind-a-tree.md) | S3 | open | The resource right-click pick treats a tree as a full 2 x 2 x 3.5 m column, so a click on open ground just north of a tree or mine targets the node |
 | [BUG-0126](BUG-0126-m3-v3b-nits.md) | S4 | open | M3-V3b nits: a locked building's ghost reads "Needs more", Age II reads "Locked" while queued / researched after a hall dies, props relist on building changes, smaller leftovers |
-| [BUG-0135](BUG-0135-m4-1-pre-m4-two-player-scenes-now-fight-suite-red.md) | S1 | open | M4-1 turns 194 pre-M4 test rows red: two-player scenes now fight (suite red) |
-| [BUG-0136](BUG-0136-smoke-fails-ui-json-missing-states-attacking.md) | S1 | open | Headless smoke FAILS: `ui.json: missing states.attacking` (new `UnitState.Attacking`) |
-| [BUG-0137](BUG-0137-chase-livelock-unreachable-or-detoured-targets.md) | S2 | open | Chasing a target the unit cannot reach (or only by a detour) never ends: attack-moves stop for good, Idle units dither forever |
-| [BUG-0138](BUG-0138-site-under-construction-damage-undone-by-build-tick.md) | S2 | open | A site under construction with a builder is effectively invulnerable: every build tick resets its hit points from progress |
-| [BUG-0139](BUG-0139-battering-ram-attacks-units.md) | S2 | open | The Battering Ram attacks units; the Whirlwind page says it attacks buildings only |
-| [BUG-0140](BUG-0140-tightblob2500-row-flaky-after-m4-1.md) | S3 | open | `TightBlob2500_OnePlayer` (4.5 ms) now fails about 1 run in 6 after M4-1 (+0.08 ms) |
-| [BUG-0141](BUG-0141-retaliation-never-ends-when-anchor-cell-is-blocked.md) | S3 | open | A retaliation whose anchor cell becomes blocked never ends (mode stays `Retaliate` / `AttackMove` for good) |
+| [BUG-0135](BUG-0135-m4-1-pre-m4-two-player-scenes-now-fight-suite-red.md) | S1 | open (1 row left) | M4-1 turns 194 pre-M4 test rows red: two-player scenes now fight (suite red) |
+| [BUG-0136](BUG-0136-smoke-fails-ui-json-missing-states-attacking.md) | S1 | fixed on merge | Headless smoke FAILS: `ui.json: missing states.attacking` (new `UnitState.Attacking`) |
+| [BUG-0137](BUG-0137-chase-livelock-unreachable-or-detoured-targets.md) | S2 | fixed | Chasing a target the unit cannot reach (or only by a detour) never ends: attack-moves stop for good, Idle units dither forever |
+| [BUG-0138](BUG-0138-site-under-construction-damage-undone-by-build-tick.md) | S2 | fixed | A site under construction with a builder is effectively invulnerable: every build tick resets its hit points from progress |
+| [BUG-0139](BUG-0139-battering-ram-attacks-units.md) | S3 | open (M4-2) | The Battering Ram attacks units; the Whirlwind page says it attacks buildings only |
+| [BUG-0140](BUG-0140-tightblob2500-row-flaky-after-m4-1.md) | S3 | fixed | `TightBlob2500_OnePlayer` (4.5 ms) now fails about 1 run in 6 after M4-1 (+0.08 ms) |
+| [BUG-0141](BUG-0141-retaliation-never-ends-when-anchor-cell-is-blocked.md) | S3 | fixed | A retaliation whose anchor cell becomes blocked never ends (mode stays `Retaliate` / `AttackMove` for good) |
 | [BUG-0142](BUG-0142-m4-1-nits.md) | S4 | open | M4-1 nits: CanPlace vs Build with an Attacking worker, slot scan phase decides in-reach duels |
+| [BUG-0143](BUG-0143-max-give-ups-cap-stalls-brawls.md) | S2 | open | The `MaxGiveUps` cap stalls every brawl: units that gave up three crowd-blocked chases stand Idle beside reachable enemies |
+| [BUG-0144](BUG-0144-chasers-field-wait-under-placement-churn.md) | S3 | open | Chasers wait up to 1.7 s for a flow field when buildings are being placed (BUG-0080 threshold 1 s) |
