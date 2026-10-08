@@ -574,9 +574,10 @@ public partial class SelectionController : Node
     /// camera ray meets first (<see cref="BuildingPicker.PickRay"/>; its slot in <paramref name="building"/>) gives its
     /// footprint centre, so the visible top of a box means the building and not the ground 2 m behind it; else the ground
     /// under the ray (<paramref name="building"/> -1). False when the ray meets neither. A resource node's drawn prop
-    /// works the same way (M3-V3b: <see cref="ResourcePicker.PickRay"/> with <see cref="PropsView"/>'s heights): when the
-    /// ray meets a tree or a mine before any box, the point is the node's footprint centre, so a click on a canopy
-    /// gathers that tree. Terrain in front hides both.
+    /// works the same way (M3-V3b; since M3-V4 <see cref="ResourcePicker.PickRay"/> tests <see cref="PropsView.Shape"/>, the
+    /// trunk and cone or the mine's blocks, not the footprint's column, BUG-0125): when the ray meets a tree or a mine
+    /// before any box, the point is the node's footprint centre, so a click on a canopy gathers that tree, and a click on
+    /// open ground beside it is a Move. Terrain in front hides both.
     /// </summary>
     public bool ContextTarget(Vector2 screen, out System.Numerics.Vector2 point, out int building)
     {
@@ -587,7 +588,7 @@ public partial class SelectionController : Node
             so, sd, BuildingViews.BoxHeight, BuildingViews.SiteMinHeight, out float buildingT);
         ResourceStore r = world.Resources;
         int node = ResourcePicker.PickRay(world.NavGrid, world.Data.Resources, r.Alive, r.TypeId, r.Cell, world.Heightmap, so, sd,
-            PropsView.TreeHeight, PropsView.MineHeight + PropsView.GoldHeight, out float nodeT);
+            PropsView.Shape, out float nodeT);
         if (node >= 0 && nodeT < buildingT)
         {
             building = -1;

@@ -30,7 +30,7 @@ public class ResearchFuzzTests
     /// <summary>Two players on a flat 64 x 48 map, each with a Town Hall, a production hall, a Forge and four workers.</summary>
     private static Simulation Setup()
     {
-        Simulation sim = BuildMaps.NewSim(Flat(64, 48), units: 200, players: 2);
+        Simulation sim = BuildMaps.NewSim(Flat(64, 48), units: 200, players: 2, combat: false);
         Building(sim, 4, 4);
         Building(sim, 12, 4, type: ProductionMaps.Barracks);
         Building(sim, 18, 4, type: ResearchMaps.Armory);

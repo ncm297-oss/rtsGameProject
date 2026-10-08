@@ -25,7 +25,7 @@ public class ProductionScaleStressTests
 
     private static (Simulation Sim, List<int> Halls) Scene(int marchers, int hallCount)
     {
-        Simulation sim = MoveScenario.Spawn(7, units: marchers, maxCost: 12f, out int center, capacity: marchers + 150, players: 2, map: ResourceMap);
+        Simulation sim = MoveScenario.Spawn(7, units: marchers, maxCost: 12f, out int center, capacity: marchers + 150, players: 2, map: ResourceMap, combat: false);
         NavGrid g = sim.World.NavGrid;
         FlowField fromCenter = FlowField.Build(g, center);
         int far = center;

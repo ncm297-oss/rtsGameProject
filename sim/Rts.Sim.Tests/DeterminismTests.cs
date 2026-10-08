@@ -114,7 +114,8 @@ public class DeterminismTests
     /// M1-7: two sims fed the same random mix of every unit-order kind (Move, AttackMove, Stop,
     /// HoldPosition; about half shift-queued, a few stale, foreign or off-map) hash equal after every
     /// tick for 2,000 ticks. The mix must really exercise the queue: units holding, queues filling up
-    /// to capacity, and queued orders starting.
+    /// to capacity, and queued orders starting. Combat off (BUG-0143): on combat seed 2's units fight to the death and
+    /// no queue ever fills, and a precondition is not re-baselined; combat twins are <c>CombatFuzzTests</c>.
     /// </summary>
     [Theory]
     [InlineData(1UL)]
@@ -122,8 +123,8 @@ public class DeterminismTests
     [InlineData(3UL)]
     public void RandomOrderMixes_TwoSimsHashEqualEveryTick_For2000Ticks(ulong seed)
     {
-        Simulation a = OrderMix.Spawn(seed, units: 96, reach: 20f, out List<int> cells);
-        Simulation b = OrderMix.Spawn(seed, units: 96, reach: 20f, out _);
+        Simulation a = OrderMix.Spawn(seed, units: 96, reach: 20f, out List<int> cells, combat: false);
+        Simulation b = OrderMix.Spawn(seed, units: 96, reach: 20f, out _, combat: false);
         Assert.Equal(a.StateHash(), b.StateHash());
         var rngA = new Determinism.SimRng(seed, 47);
         var rngB = new Determinism.SimRng(seed, 47);
@@ -345,6 +346,42 @@ public class DeterminismTests
         Assert.True(sites > 0 && built > 0 && repairing > 0, $"site-ticks {sites}, building-ticks {built}, repair-ticks {repairing}");
 
         Replay recorded = rec!.ToReplay();
+        Assert.Equal(ReplayError.None, ReplayFormat.TryRead(ReplayFormat.Write(recorded), out Replay? parsed));
+        ReplayResult played = ReplayPlayer.Run(parsed!, TestSim.Data);
+        Assert.True(played.Ok, played.ToString());
+        Assert.Equal(recorded.TickCount, played.TicksRun);
+    }
+
+    // ---------- M4-1: combat ----------
+
+    /// <summary>M4-1 criterion 6: a 200 v 200 brawl on the default map, two sims hash-equal after every tick for 1,000 ticks, with real deaths.</summary>
+    [Fact]
+    public void Brawl200v200_TwinsHashEqualEveryTick_For1000Ticks()
+    {
+        Simulation a = CombatScenes.MapBrawl(17, 200), b = CombatScenes.MapBrawl(17, 200);
+        int attacking = 0;
+        for (int t = 0; t < 1000; t++)
+        {
+            a.Tick();
+            b.Tick();
+            Assert.True(a.StateHash() == b.StateHash(), $"twins differ after tick {a.TickNumber - 1}");
+            UnitStore u = a.World.Units;
+            for (int i = 0; i < u.Capacity; i++) if (u.Alive[i] && u.State[i] == UnitState.Attacking) attacking++;
+        }
+        Assert.True(a.World.Kills[0] + a.World.Kills[1] >= 50, $"only {a.World.Kills[0] + a.World.Kills[1]} kills");
+        Assert.True(attacking > 0);
+    }
+
+    /// <summary>M4-1 criterion 6: the same brawl recorded from tick 0 writes, reads back and plays back with every checkpoint matching.</summary>
+    [Fact]
+    public void Brawl_ReplayRoundTrip_MatchesEveryCheckpoint()
+    {
+        ReplayRecorder? recorder = null;
+        Simulation sim = CombatScenes.MapBrawl(23, 120, s => recorder = new ReplayRecorder(s, checkpointInterval: 50));
+        while (sim.TickNumber < 800) sim.Tick();
+        Assert.True(sim.World.Kills[0] + sim.World.Kills[1] > 0);
+        Replay recorded = recorder!.ToReplay();
+        Assert.Contains(recorded.Commands, c => c.Kind == CommandKind.AttackMove);
         Assert.Equal(ReplayError.None, ReplayFormat.TryRead(ReplayFormat.Write(recorded), out Replay? parsed));
         ReplayResult played = ReplayPlayer.Run(parsed!, TestSim.Data);
         Assert.True(played.Ok, played.ToString());

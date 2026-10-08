@@ -78,7 +78,7 @@ public class RequirementHostileFuzzStressTests
 
     private static Simulation Setup()
     {
-        Simulation sim = new(new SimConfig(5, Players, 300, 1024) { Data = D }, ResourceMaps.Flat(72, 56));
+        Simulation sim = new(new SimConfig(5, Players, 300, 1024) { Data = D, Combat = false }, ResourceMaps.Flat(72, 56));
         Building(sim, 4, 4);
         Building(sim, 12, 4, type: B("malazan_barracks"));
         Building(sim, 18, 4, type: B("malazan_armory"));

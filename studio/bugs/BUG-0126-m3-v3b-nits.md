@@ -6,7 +6,7 @@
 | Status | open |
 | Found | 2026-10-07-1715, task M3-V3b (QA) |
 | System | HUD / command card / build ghost / props (view), `game/data/common/ui.json`, perf rows |
-| Fixed by | |
+| Fixed by | items 1-2: df37a8c (M3-V4), regression rows `ProductionHudTests.AgeII_QueuedThenAHallLost_ReadsInAQueue_ThenResearched`, `BuildMenu_NoAnchor_IsRequiresExactlyWhileLocked_CadreTowerUntilAgeII`, `QaV3bTest` (NOTE flipped to a check), QA `game/tests/QaV4Test.tscn`; items 3-6 open |
 
 ## Repro
 1. Items 1-2: with D3's `buildings.json` copied in (`git checkout origin/studio/2026-10-07-1415-data --
@@ -46,3 +46,16 @@
    changes: 1,152-1,168 B over 300 repair ticks (the documented M3-V1 rule). `QaV3Test`'s strict row and `QaV3bTest`
    exclude those frames. Every other HUD element (panel, card, strip, rally, minimap, building views) measured 0 B. The
    panel's int-string table could serve the bar too.
+
+## Verification of items 1-2 (2026-10-07-2014, M3-V4 QA)
+- Item 1: `game/tests/QaV4Test.tscn` checks every Place cell of the B and V menus after every real frame (537 frames,
+  2,124 cells, 0 mismatches). It compares against `CanPlace(NoAnchor)` and an independent oracle (required techs
+  researched, an own finished building of each required type) through: bare; a Barracks site (Corral still locked);
+  a finished Barracks (Corral live); the Barracks destroyed (Corral locked again in the same frame, and its open ghost
+  turns red "Locked"); Age II queued; a hall lost while queued; researched; every hall lost after Age II (Tower and Yard
+  stay live, the Corral re-locks). Money swings 0 to plenty: 503 live cells were shown with no money, so a Place
+  button greys only for `Requires`. A locked button is never `Disabled`. The Cadre Tower ghost read "Locked" in 194 of
+  194 frames while Age II researched, and `Blocked` (not `Requires`) the frame after.
+- Item 2: Age II's button read "In a queue" with the sim at `Requires` (queued, Forge lost), and "Researched" with the
+  sim at `Requires` (one hall slot left, and again with every hall lost).
+- Items 3-6 not touched by M3-V4: still open.

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Godot;
 using Rts.Sim;
@@ -125,7 +126,7 @@ public partial class ProductionHudTest : Node
         {
             ("\"queue_full\": \"Queue full\",\n    \"cannot_afford\": \"Can't afford\",\n    \"requires\": \"Locked\"\n  },\n  \"research\"", "\"cannot_afford\": \"Can't afford\",\n    \"requires\": \"Locked\"\n  },\n  \"research\"", "train.queue_full"),
             ("\"already_queued\": \"In a queue\",", "", "research.already_queued"),
-            ("\"store_full\": \"Too many buildings\",\n    \"requires\": \"Needs more\"", "\"store_full\": \"Too many buildings\"", "placement.requires"),
+            ("\"store_full\": \"Too many buildings\",\n    \"requires\": \"Locked\"", "\"store_full\": \"Too many buildings\"", "placement.requires"),
             ("\"cannot_afford\": \"Can't afford\",\n    \"requires\": \"Locked\"\n  },\n  \"states\"", "\"cannot_afford\": \"Can't afford\"\n  },\n  \"states\"", "research.requires"),
             ("\"idle\": \"Idle\",", "", "states.idle"),
             ("\"pop\": \"Pop\",", "", "hud.pop"),
@@ -142,6 +143,24 @@ public partial class ProductionHudTest : Node
         errors.Clear();
         Check(UiText.Parse(json.Replace("\"queue_full\": \"Queue full\",", "\"queue_full\": \"Queue full\", \"some_future_reason\": \"Later\","), errors) != null && errors.Count == 0,
             $"an extra reason key was refused: {string.Join("; ", errors)}");
+        // BUG-0136 / BUG-0147: `states.attacking` ships before the sim's UnitState.Attacking (M4-1) merges, so the merged
+        // view boots. Today it is an extra key (accepted, and removing it is fine); once the member exists the enum loop
+        // above demands its text, and removing the key is one named error.
+        using (JsonDocument doc = JsonDocument.Parse(json))
+        {
+            Check(doc.RootElement.GetProperty("states").TryGetProperty("attacking", out JsonElement attacking)
+                && attacking.ValueKind == JsonValueKind.String && attacking.GetString() is { Length: > 0 },
+                "ui.json: states.attacking is missing or empty");
+        }
+        errors.Clear();
+        string noAttacking = json.Replace("\r\n", "\n").Replace("\"building\": \"Building\",\n    \"attacking\": \"Attacking\"", "\"building\": \"Building\"");
+        if (Check(noAttacking != json.Replace("\r\n", "\n"), "ui.json row: states.attacking line not found"))
+        {
+            UiText? r = UiText.Parse(noAttacking, errors);
+            bool simHasIt = Enum.TryParse("Attacking", out UnitState _);
+            Check(simHasIt ? r == null && errors.Count == 1 && errors[0].Contains("states.attacking") : r != null && errors.Count == 0,
+                $"ui.json without states.attacking (sim has the state: {simHasIt}): {string.Join("; ", errors)}");
+        }
         // BUG-0110 regression: a root that is not an object is one error, never a UiText with empty labels.
         foreach (string root in new[] { "[]", "null", "42", "\"ui\"", "true" })
         {
@@ -431,6 +450,8 @@ public partial class ProductionHudTest : Node
                 else
                 {
                     W.CanResearch(0, sel, _card.TypeAt(i), out ResearchError e);
+                    // M3-V4 (BUG-0126): the card shows Researched / In a queue over the sim's earlier reasons.
+                    e = ProductionMenu.ShownResearchReason(e, W.HasTech(0, _card.TypeAt(i)), ProductionMenu.IsTechQueued(W.Buildings, 0, _card.TypeAt(i)));
                     reason = (int)e;
                     text = e == ResearchError.None ? $"{_data.Techs[_card.TypeAt(i)].CostGold} / {_data.Techs[_card.TypeAt(i)].CostWood}" : _ui.ResearchText(e);
                     seen.Add($"research {e}");

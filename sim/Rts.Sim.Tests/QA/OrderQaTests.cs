@@ -347,7 +347,7 @@ public class OrderQaTests
     {
         Simulation Run(out ulong[] hashes)
         {
-            Simulation sim = MoveScenario.Spawn(seed: 4, units: 40, maxCost: 10f, out int center);
+            Simulation sim = MoveScenario.Spawn(seed: 4, units: 40, maxCost: 10f, out int center, combat: false);
             NavGrid g = sim.World.NavGrid;
             UnitStore u = sim.World.Units;
             hashes = new ulong[2000];

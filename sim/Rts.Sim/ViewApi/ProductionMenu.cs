@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Immutable;
 using Rts.Sim.Data;
+using Rts.Sim.Economy;
+using Rts.Sim.Entities;
 
 namespace Rts.Sim.ViewApi;
 
@@ -28,6 +30,32 @@ public static class ProductionMenu
                 if (common == (pass == 0)) into[n++] = new ProductionEntry(techs[i], true);
             }
         return n;
+    }
+
+    /// <summary>
+    /// The refusal a research button shows (M3-V4, BUG-0126): <see cref="ResearchError.AlreadyResearched"/> when the player
+    /// has the tech, else <see cref="ResearchError.AlreadyQueued"/> when it is in one of the player's queues, else the sim's
+    /// own first reason <paramref name="sim"/>. The sim checks <c>requires</c> first (M3-6), so after a hall is lost a queued
+    /// or researched Age II would otherwise read "Locked"; the button stays greyed either way, only the words differ.
+    /// </summary>
+    /// <param name="sim"><c>World.CanResearch</c>'s reason.</param>
+    /// <param name="researched"><c>World.HasTech</c> for the player and tech.</param>
+    /// <param name="queued"><see cref="IsTechQueued"/> for the player and tech.</param>
+    public static ResearchError ShownResearchReason(ResearchError sim, bool researched, bool queued) =>
+        researched ? ResearchError.AlreadyResearched : queued ? ResearchError.AlreadyQueued : sim;
+
+    /// <summary>True if <paramref name="tech"/> is in the production queue of one of <paramref name="player"/>'s live buildings (read-only, allocation-free: one pass over the store's queues).</summary>
+    public static bool IsTechQueued(BuildingStore buildings, int player, int tech)
+    {
+        ReadOnlySpan<bool> alive = buildings.Alive;
+        ReadOnlySpan<int> owner = buildings.Owner, count = buildings.QueueCount;
+        for (int k = 0; k < buildings.Capacity; k++)
+        {
+            if (!alive[k] || owner[k] != player) continue;
+            for (int q = 0; q < count[k]; q++)
+                if (buildings.QueueIsTechAt(k, q) && buildings.QueueTypeAt(k, q) == tech) return true;
+        }
+        return false;
     }
 
     /// <summary>The display name of a <c>requires</c> entry: the tech's or the building's <c>displayName</c>; the id itself if neither has it (the loader rejects such data).</summary>

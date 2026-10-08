@@ -244,6 +244,165 @@ public class ProductionHudTests
         Assert.True(open.World.CanResearch(0, hall2, ResearchMaps.AgeII, out why), $"with two halls: {why}");
     }
 
+    // M3-V4 (BUG-0126 item 2): the research button's words. Researched beats queued beats the sim's own first reason,
+    // for every reason the sim can give.
+    [Fact]
+    public void ShownResearchReason_ResearchedThenQueuedThenTheSimsReason()
+    {
+        foreach (Economy.ResearchError e in Enum.GetValues<Economy.ResearchError>())
+        {
+            Assert.Equal(e, ProductionMenu.ShownResearchReason(e, researched: false, queued: false));
+            Assert.Equal(Economy.ResearchError.AlreadyQueued, ProductionMenu.ShownResearchReason(e, researched: false, queued: true));
+            Assert.Equal(Economy.ResearchError.AlreadyResearched, ProductionMenu.ShownResearchReason(e, researched: true, queued: false));
+            Assert.Equal(Economy.ResearchError.AlreadyResearched, ProductionMenu.ShownResearchReason(e, researched: true, queued: true));
+        }
+    }
+
+    // M3-V4 (BUG-0126 item 2), shipped data: Age II queued at a hall with two distinct halls standing, then the Armory
+    // destroyed: the sim answers Requires ("Locked") for the queued item, the button reads AlreadyQueued ("In a queue");
+    // once researched with one hall slot left it reads AlreadyResearched ("Researched"). IsTechQueued equals the store's
+    // own rule every tick for every tech and both players.
+    [Fact]
+    public void AgeII_QueuedThenAHallLost_ReadsInAQueue_ThenResearched()
+    {
+        (Simulation sim, int hall) = Hall(1);
+        World w = sim.World;
+        BuildingStore b = w.Buildings;
+        int age = ResearchMaps.AgeII;
+        SpawnNear(sim, hall, BuildingSlot.InfantryHall);
+        int forge = SpawnNear(sim, hall, BuildingSlot.Forge);
+        Assert.True(w.CanResearch(0, hall, age, out Economy.ResearchError why), $"two halls: {why}");
+        Assert.False(ProductionMenu.IsTechQueued(b, 0, age));
+        sim.Enqueue(Command.Research(0, ProductionMaps.In(sim, hall), age));
+        sim.Tick();
+        sim.Tick();
+        Assert.True(ProductionMenu.IsTechQueued(b, 0, age));
+        Assert.False(ProductionMenu.IsTechQueued(b, 1, age));
+        w.CanResearch(0, hall, age, out why);
+        Assert.Equal(Economy.ResearchError.AlreadyQueued, why);
+        b.Damage(b.HandleOf(forge), 1_000_000);
+        sim.Tick();
+        Assert.False(b.Alive[forge]);
+        int queuedLocked = 0, researchedLocked = 0, ticks = 0;
+        while (ticks++ < 2000 && w.Age(0) < 2)
+        {
+            w.CanResearch(0, hall, age, out why);
+            bool queued = ProductionMenu.IsTechQueued(b, 0, age);
+            Assert.Equal(Economy.ResearchError.Requires, why); // M3-6's order: requires before queued / researched
+            Assert.True(queued, $"tick {sim.TickNumber}: Age II left the queue before it completed");
+            Assert.Equal(Economy.ResearchError.AlreadyQueued, ProductionMenu.ShownResearchReason(why, w.HasTech(0, age), queued));
+            queuedLocked++;
+            for (int t = 0; t < w.Data.Techs.Length; t++)
+                for (int p = 0; p < 2; p++)
+                    Assert.Equal(b.IsTechQueued(p, t), ProductionMenu.IsTechQueued(b, p, t));
+            sim.Tick();
+        }
+        Assert.Equal(2, w.Age(0));
+        for (int k = 0; k < 20; k++)
+        {
+            w.CanResearch(0, hall, age, out why);
+            Assert.Equal(Economy.ResearchError.Requires, why);
+            Assert.Equal(Economy.ResearchError.AlreadyResearched, ProductionMenu.ShownResearchReason(why, w.HasTech(0, age), ProductionMenu.IsTechQueued(b, 0, age)));
+            researchedLocked++;
+            sim.Tick();
+        }
+        SpawnNear(sim, hall, BuildingSlot.Forge);
+        w.CanResearch(0, hall, age, out why);
+        Assert.Equal(Economy.ResearchError.AlreadyResearched, why); // with two slots again the sim says it itself
+        _out.WriteLine($"queued with a hall lost: {queuedLocked} ticks sim Requires / shown AlreadyQueued; researched: {researchedLocked} ticks shown AlreadyResearched");
+    }
+
+    // M3-V4 (BUG-0126 item 1), shipped data: a build-menu button asks CanPlace at BuildMenu.NoAnchor. For every building
+    // type and both players the answer is Requires exactly when an oracle (every required tech researched, an own finished
+    // building of every required type) says locked, OffMap when it is open (WrongFaction for the other faction's), and the
+    // shown reason maps OffMap to live. The Cadre Tower and the Engineers' Yard are locked until Age II, the Wickan Corral
+    // until a Barracks is finished; the call changes nothing (hash) and allocates nothing.
+    [Fact]
+    public void BuildMenu_NoAnchor_IsRequiresExactlyWhileLocked_CadreTowerUntilAgeII()
+    {
+        (Simulation sim, int hall) = Hall(1);
+        World w = sim.World;
+        GameData data = w.Data;
+        int tower = data.FindBuilding("malazan_cadre_tower"), yard = data.FindBuilding("malazan_engineers_yard");
+        int corral = data.FindBuilding("malazan_wickan_corral"), billet = data.FindBuilding("malazan_billet");
+        int checks = 0, locked = 0;
+        void CheckAll(string when)
+        {
+            ulong hash = sim.StateHash();
+            for (int p = 0; p < 2; p++)
+                for (int t = 0; t < data.Buildings.Length; t++)
+                {
+                    BuildingDef def = data.Buildings[t];
+                    w.CanPlace(p, t, BuildMenu.NoAnchor, out Economy.PlacementError e);
+                    bool open = def.RequiresTechs.All(x => w.HasTech(p, x))
+                        && def.RequiresBuildings.All(x => Enumerable.Range(0, w.Buildings.Capacity).Any(k =>
+                            w.Buildings.Alive[k] && w.Buildings.Owner[k] == p && w.Buildings.TypeId[k] == x && !w.Buildings.UnderConstruction[k]));
+                    Economy.PlacementError want = def.Faction != w.FactionOf(p) ? Economy.PlacementError.WrongFaction
+                        : open ? Economy.PlacementError.OffMap : Economy.PlacementError.Requires;
+                    Assert.True(want == e, $"{when}: player {p} {def.Key}: CanPlace(NoAnchor) {e}, oracle {want}");
+                    Economy.PlacementError shown = BuildMenu.ShownPlaceReason(e);
+                    Assert.Equal(e == Economy.PlacementError.OffMap ? Economy.PlacementError.None : e, shown);
+                    checks++;
+                    if (e == Economy.PlacementError.Requires) locked++;
+                }
+            Assert.Equal(hash, sim.StateHash());
+        }
+        Economy.PlacementError Shown(int type)
+        {
+            w.CanPlace(0, type, BuildMenu.NoAnchor, out Economy.PlacementError e);
+            return BuildMenu.ShownPlaceReason(e);
+        }
+        CheckAll("start");
+        Assert.Equal(Economy.PlacementError.Requires, Shown(tower));
+        Assert.Equal(Economy.PlacementError.Requires, Shown(yard));
+        Assert.Equal(Economy.PlacementError.Requires, Shown(corral));
+        Assert.Equal(Economy.PlacementError.None, Shown(billet));
+        SpawnNear(sim, hall, BuildingSlot.InfantryHall);
+        CheckAll("barracks");
+        Assert.Equal(Economy.PlacementError.None, Shown(corral));
+        Assert.Equal(Economy.PlacementError.Requires, Shown(tower));
+        SpawnNear(sim, hall, BuildingSlot.Forge);
+        sim.Enqueue(Command.Research(0, ProductionMaps.In(sim, hall), ResearchMaps.AgeII));
+        for (int t = 0; t < 2000 && w.Age(0) < 2; t++) sim.Tick();
+        Assert.Equal(2, w.Age(0));
+        CheckAll("age II");
+        Assert.Equal(Economy.PlacementError.None, Shown(tower));
+        Assert.Equal(Economy.PlacementError.None, Shown(yard));
+        Assert.Equal(Economy.PlacementError.Requires, ShownFor(w, 1, data.Buildings.Select((d, i) => (d, i)).First(x => x.d.Faction == w.FactionOf(1) && x.d.Slot == BuildingSlot.CasterHall).i));
+        _out.WriteLine($"{checks} NoAnchor answers equal the oracle, {locked} of them Requires");
+        Assert.True(locked > 6);
+    }
+
+    private static Economy.PlacementError ShownFor(World w, int player, int type)
+    {
+        w.CanPlace(player, type, BuildMenu.NoAnchor, out Economy.PlacementError e);
+        return BuildMenu.ShownPlaceReason(e);
+    }
+
+    [Fact]
+    public void ShownReasons_IsTechQueued_AndTheNoAnchorAsk_AllocateZeroBytes()
+    {
+        (Simulation sim, int hall) = Hall(6, ageIIHalls: true);
+        World w = sim.World;
+        sim.Enqueue(Command.Research(0, ProductionMaps.In(sim, hall), ResearchMaps.AgeII));
+        sim.Tick();
+        sim.Tick();
+        long sum = 0;
+        Action block = () =>
+        {
+            for (int t = 0; t < w.Data.Techs.Length; t++)
+            {
+                w.CanResearch(0, hall, t, out Economy.ResearchError e);
+                bool q = ProductionMenu.IsTechQueued(w.Buildings, 0, t);
+                sum += (int)ProductionMenu.ShownResearchReason(e, w.HasTech(0, t), q) + (q ? 1 : 0);
+            }
+            for (int t = 0; t < w.Data.Buildings.Length; t++) sum += (int)ShownFor(w, 0, t);
+        };
+        block();
+        int runs = AllocationProbe.AssertZero(block, _out);
+        _out.WriteLine($"M3-V4 card reads: 0 bytes (runs {runs}), checksum {sum}");
+    }
+
     // A match with one army unit and 5 workers a side (population room to train) and player 0's Town Hall slot; player 0
     // gets money for Age II (the ledger directly, as the research tests do). With <paramref name="ageIIHalls"/> player 0
     // also gets a finished Barracks and Armory (dev spawns, which ignore requirements): Age II needs any two finished

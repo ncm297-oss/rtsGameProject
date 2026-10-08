@@ -280,7 +280,7 @@ public class MovementSystemTests
         string? firstPack = null;
         for (ulong seed = from; seed <= to; seed++)
         {
-            CrowdRows.Result r = CrowdRows.MoreGoalsThanCacheSlots(seed);
+            CrowdRows.Result r = CrowdRows.MoreGoalsThanCacheSlots(seed, combat: false);
             CrowdRows.AssertBuildCap(r);
             Assert.True(r.StillMoving == 0, $"seed {seed}: {r.StillMoving} still moving after {r.Ticks} ticks");
             Assert.True(r.Arrived + r.GaveUp == 128, $"seed {seed}: {128 - r.Arrived - r.GaveUp} Idle units neither arrived nor gave up");

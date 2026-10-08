@@ -36,7 +36,7 @@ public class FieldBuildFairnessQaTests
     /// <summary>Units alternate owners 0/1; player 0 spawns in rows around <paramref name="rowP0"/>, player 1 around <paramref name="rowP1"/>.</summary>
     internal static Simulation SpawnRows(ulong seed, int unitCapacity, int units, int rowP0, int rowP1, out List<int>[] bases)
     {
-        var sim = new Simulation(TestSim.Config(seed, 2, UnitCapacity: unitCapacity, CommandCapacity: 4 * unitCapacity + 64));
+        var sim = new Simulation(TestSim.ConfigNoCombat(seed, 2, UnitCapacity: unitCapacity, CommandCapacity: 4 * unitCapacity + 64));
         NavGrid g = sim.World.NavGrid;
         bases = new[] { CellsInRows(g, rowP0 - 4, rowP0 + 4), CellsInRows(g, rowP1 - 4, rowP1 + 4) };
         var rng = new SimRng(seed, 950);

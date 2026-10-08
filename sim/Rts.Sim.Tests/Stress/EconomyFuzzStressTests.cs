@@ -44,7 +44,7 @@ public class EconomyFuzzStressTests
     {
         const int ticks = 3000, capacity = 96, players = 2;
         SimConfig config = TestSim.Config(Seed: seed, PlayerCount: players, UnitCapacity: capacity, CommandCapacity: 512)
-            with { Map = MapGenParams.Default with { Forests = 12, GoldMines = 8 } };
+            with { Map = MapGenParams.Default with { Forests = 12, GoldMines = 8 }, Combat = false };
         var a = new Simulation(config);
         var rec = new ReplayRecorder(a, checkpointInterval: 100);
         var b = new Simulation(config);
@@ -173,7 +173,7 @@ public class EconomyFuzzStressTests
         if (!drained)
         {
             Assert.Equal(ReplayError.None, ReplayFormat.TryRead(ReplayFormat.Write(rep), out Replay? back));
-            ReplayResult res = ReplayPlayer.Run(back!, TestSim.Data);
+            ReplayResult res = ReplayPlayer.Run(back!, TestSim.Data, combat: false); // recorded with combat off (BUG-0135)
             Assert.True(res.Ok, $"seed {seed}: replay {res.Error} at tick {res.Tick}");
         }
         _out.WriteLine($"seed {seed}: {gathers} Gather + {spawnsB} SpawnBuilding sent; {w.Buildings.Count} buildings; {falls} nodes fell; {taken} taken; discarded on kind change gold {goldDiscarded} wood {woodDiscarded}; totals p0 {w.Gold[0]}/{w.Wood[0]} p1 {w.Gold[1]}/{w.Wood[1]}; {u.Count} units; replay {rep.Commands.Length} commands, {rep.Checkpoints.Length} checkpoints {(drained ? "(drained: not replayed)" : "matched")}");

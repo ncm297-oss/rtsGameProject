@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-07-1715, task M3-V3b (QA) |
 | System | right-click context target (view): `SelectionController.ContextTarget`, `Rts.Sim.ViewApi.ResourcePicker.PickRay` |
-| Fixed by | |
+| Fixed by | df37a8c (M3-V4): `ResourcePicker.PickRay(..., in PropShape, out entry)` tests the drawn trunk + cone and the mine's two blocks; regression rows `PickRayQaTests.RightClickNodeIntent_DrawnPick_NeverConfusesGroundAndNode`, `ResourcePickRay_EveryTreePick_TouchesTheDrawnTree`, QA `PickRayV4QaTests` |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~PickRayQaTests" --logger "console;verbosity=detailed"`
@@ -53,3 +53,18 @@ front instead.
   constants (`PropsView.CanopyFill`, `TrunkHeight`, `MineHeight`, `GoldFill`) the caller can pass in, as it already
   passes the heights. When fixed, turn the measurement rows into checks: "open ground taken for a node" = 0 and
   "column pick wrong" well under the ground pick's 21.8 %.
+
+## Verification (2026-10-07-2014, M3-V4 QA)
+- QA's own reference, independent of the dev's sampled circles: exact Cyrus-Beck clipping against the polyhedra
+  `PropsView` draws (6-sided trunk, 7-sided cone in Godot's `CylinderMesh` layout turned by `PropLayout.YawOf`, the
+  mine's two boxes), ground from `GroundPicker.TryPick` (`QA/ViewApi/PickRayV4QaTests`). 4 seeds (1, 6, 21, 42) x 4 ray
+  families x 3,000 RTS-camera rays (pitch 55, zoom 20-60): general rays round nodes, a forest's canopy band with a tree
+  behind, a mine's block and gold-block top edges (+-5 cm), nodes by a cliff lip. Open ground taken for a node **0**, a
+  drawn node taken for ground **0**, wrong node **0**, a canopy over other ground not a Gather of its tree **0**
+  (48,000 rays; 4,165-4,416 canopy-over-ground rays a seed). State hash unchanged.
+- The one approximation: the pick tests the circles round the facets, so 0.7-1.7 % of rays per family pass within the
+  cone / trunk circle but outside a facet (at most 8 cm, about one pixel at zoom 60) and pick the tree. Counted
+  separately as "facet slivers", 0 on mines. Documented in docs/03; noted in BUG-0148.
+- Sensitivity: the same reference with an oversized shape (`CanopyFill` 1.0, `GoldFill` 1.0) counts 25-112 open-ground
+  picks per family (`Reference_SeesAnOversizedShape`).
+- The dev's `PickRayQaTests` rows (3 ex-measurement rows now checks) and `QaV3bTest` (canopy case) are green.

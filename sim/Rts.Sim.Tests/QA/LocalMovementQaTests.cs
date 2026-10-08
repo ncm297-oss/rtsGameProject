@@ -308,6 +308,7 @@ public class LocalMovementQaTests
                     CommandKind x => x == CommandKind.Move ? CommandKind.Stop : CommandKind.Move,
                     EntityHandle x => new EntityHandle(x.Index + 1, x.Generation + 1), // M3-2: GatherNode
                     Rts.Sim.Data.ResourceKind x => x == Rts.Sim.Data.ResourceKind.Gold ? Rts.Sim.Data.ResourceKind.Wood : Rts.Sim.Data.ResourceKind.Gold, // M3-2: CargoKind
+                    Rts.Sim.Combat.CombatMode x => x == Rts.Sim.Combat.CombatMode.None ? Rts.Sim.Combat.CombatMode.AttackMove : Rts.Sim.Combat.CombatMode.None, // M4-1: Mode
                     _ => throw new InvalidOperationException($"{f.Name}: element type {f.FieldType} not covered by the audit"),
                 };
                 arr.SetValue(changed, e);

@@ -1,6 +1,6 @@
 namespace Rts.Sim.Entities;
 
-/// <summary>What a unit is doing (docs/03 "Orders and unit states"); more states arrive with combat and economy.</summary>
+/// <summary>What a unit is doing (docs/03 "Orders and unit states"); more states arrive with later systems.</summary>
 public enum UnitState : byte
 {
     /// <summary>Standing still with no order.</summary>
@@ -17,4 +17,11 @@ public enum UnitState : byte
 
     /// <summary>A worker standing at its <see cref="UnitStore.BuildTarget"/> (M3-3): building or repairing while in reach, else waiting to walk in again.</summary>
     Building = 4,
+
+    /// <summary>
+    /// Standing at its <see cref="UnitStore.Target"/> in reach (M4-1): winding up a swing or waiting out the cooldown. Never
+    /// moves (no shove, no walk-back) and is a hard wall to everyone, like a unit holding position.
+    /// </summary>
+    /// <remarks>Chasing is not a state of its own: a chasing unit is <see cref="Moving"/> with a live target, so movement walks it unchanged.</remarks>
+    Attacking = 5,
 }

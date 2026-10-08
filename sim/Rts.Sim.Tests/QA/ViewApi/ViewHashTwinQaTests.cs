@@ -25,7 +25,7 @@ public class ViewHashTwinQaTests
 
     public ViewHashTwinQaTests(ITestOutputHelper output) => _out = output;
 
-    private static SimConfig RunnerConfig(ulong seed) => TestSim.Config(seed, PlayerCount: 2, UnitCapacity: 2000, CommandCapacity: 4096);
+    private static SimConfig RunnerConfig(ulong seed) => TestSim.ConfigNoCombat(seed, PlayerCount: 2, UnitCapacity: 2000, CommandCapacity: 4096);
 
     // Match.SpawnArmies, rewritten here from the brief and docs/03 "Implementation (M2-2)".
     private static List<Command> StartArmies(Simulation sim, int perPlayer)

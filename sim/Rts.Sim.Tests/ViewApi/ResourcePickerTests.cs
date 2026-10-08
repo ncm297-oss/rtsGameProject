@@ -116,12 +116,16 @@ public class ResourcePickerTests
 
     private const float WoodHeight = 3.5f, GoldHeight = 2.1f; // PropsView: TreeHeight, MineHeight + GoldHeight (game side)
 
-    private static int Pick(World w, Vector3 o, Vector3 d, out float t) =>
-        ResourcePicker.PickRay(w.NavGrid, w.Data.Resources, w.Resources.Alive, w.Resources.TypeId, w.Resources.Cell, w.Heightmap, o, d, WoodHeight, GoldHeight, out t);
+    /// <summary>PropsView.Shape (game side): trunk 1 m x 0.15 m, tip 3.5 m, canopy 0.8 of the cell; mine 1.6 m + a half-size 0.5 m gold block.</summary>
+    internal static readonly PropShape Shape = new(1f, 0.15f, 3.5f, 0.8f, 1.6f, 0.5f, 0.5f);
 
-    // M3-V3b: the ray pick sees each node's drawn prop as a box over its footprint up to its kind's height: a ray through
-    // a tree's canopy column picks the tree although its ground point lies behind it; over the top it misses; the nearer
-    // of two nodes on a line wins; a mine is only GoldHeight tall; a node behind a ridge is hidden; bad rays are -1.
+    private static int Pick(World w, Vector3 o, Vector3 d, out float t) =>
+        ResourcePicker.PickRay(w.NavGrid, w.Data.Resources, w.Resources.Alive, w.Resources.TypeId, w.Resources.Cell, w.Heightmap, o, d, Shape, out t);
+
+    // M3-V3b, M3-V4: the ray pick sees each node's drawn prop (a tree's trunk and cone, a mine's block and gold block): a
+    // ray through a tree's canopy picks the tree although its ground point lies behind it; over the top it misses; the
+    // nearer of two nodes on a line wins; a mine is only GoldHeight tall; open ground beside or behind a prop is not the
+    // prop (BUG-0125); a node behind a ridge is hidden; bad rays are -1.
     [Fact]
     public void PickRay_SeesTheDrawnProp_NearestFirst_AndTerrainHides()
     {
@@ -154,6 +158,25 @@ public class ResourcePickerTests
         Assert.Equal(-1, Pick(w, low, target - low, out _));
         var high = new Vector3(40f, 12f, 25f);
         Assert.Equal(hidden.Index, Pick(w, high, target - high, out _));
+        // BUG-0125: the pick is the drawn shape, not the footprint's 3.5 m column. A camera ray to open ground 2.5 m north of
+        // the tree, 0.6 m east of its axis, crosses the old column between 1.7 m and the top but misses the trunk and cone:
+        // the ground (a Move), not the tree. The same ray moved onto the axis goes through the cone.
+        var north = new Vector3(21.6f, 0f, 18.5f);
+        var cam2 = new Vector3(21.6f, 30f, 45f);
+        Assert.True(OldColumn(cam2, north - cam2, 20f, 22f, 0f, WoodHeight, 20f, 22f), "the ray must cross the old column");
+        Assert.Equal(-1, Pick(w, cam2, north - cam2, out t));
+        Assert.True(float.IsPositiveInfinity(t));
+        Assert.Equal(tree.Index, Pick(w, cam2 - new Vector3(0.6f, 0f, 0f), north - cam2, out _));
+        // Beside the trunk under the canopy (0.5 m off the axis, 0.5 m up): open ground seen under the cone's rim.
+        Assert.Equal(-1, Pick(w, new Vector3(21.5f, 0.5f, 40f), -Vector3.UnitZ, out _));
+        Assert.Equal(tree.Index, Pick(w, new Vector3(21.1f, 0.5f, 40f), -Vector3.UnitZ, out _));
+        // The cone's slope: at 2 m its radius is 0.8 x 1.5 / 2.5 = 0.48 m; 0.45 m off the axis hits, 0.52 m misses.
+        Assert.Equal(tree.Index, Pick(w, new Vector3(21.45f, 2f, 40f), -Vector3.UnitZ, out _));
+        Assert.Equal(-1, Pick(w, new Vector3(21.52f, 2f, 40f), -Vector3.UnitZ, out _));
+        // The mine above its 1.6 m block is only the centred 2 x 2 m gold block: 1.9 m up, 0.5 m inside the footprint's
+        // north edge, misses (the old column hit it); through the gold block's middle it hits.
+        Assert.Equal(-1, Pick(w, new Vector3(mx, 1.9f, 20.5f), Vector3.UnitX, out _));
+        Assert.Equal(mine.Index, Pick(w, new Vector3(mx, 1.9f, 22f), Vector3.UnitX, out _));
         // A felled node is gone.
         w.Resources.Take(tree, 100);
         Assert.NotEqual(tree.Index, Pick(w, cam, aim - cam, out _));
@@ -162,6 +185,20 @@ public class ResourcePickerTests
         Assert.True(float.IsPositiveInfinity(t));
         Assert.Equal(-1, Pick(w, new Vector3(float.NaN, 1f, 1f), -Vector3.UnitY, out _));
         Assert.Equal(-1, Pick(w, cam, new Vector3(0f, float.PositiveInfinity, 0f), out _));
+    }
+
+    // True if the ray enters the axis-aligned box (the M3-V3b column a node used to be picked by).
+    private static bool OldColumn(Vector3 o, Vector3 d, float x0, float x1, float y0, float y1, float z0, float z1)
+    {
+        float t0 = 0f, t1 = float.PositiveInfinity;
+        foreach ((float oc, float dc, float lo, float hi) in new[] { (o.X, d.X, x0, x1), (o.Y, d.Y, y0, y1), (o.Z, d.Z, z0, z1) })
+        {
+            if (dc == 0f) { if (oc < lo || oc > hi) return false; continue; }
+            float a = (lo - oc) / dc, b = (hi - oc) / dc;
+            t0 = MathF.Max(t0, MathF.Min(a, b));
+            t1 = MathF.Min(t1, MathF.Max(a, b));
+        }
+        return t0 <= t1;
     }
 
     [Fact]

@@ -74,7 +74,7 @@ public class HardeningQaTests
         int wide = LocalMovementTests.TypeWithRadius(0.9f);
         Simulation Make()
         {
-            var sim = new Simulation(TestSim.Config(Seed: seed, PlayerCount: 2, UnitCapacity: 2 + 4 * perGroup, CommandCapacity: 8 * perGroup + 16), RoomCorridorRoom(20));
+            var sim = new Simulation(TestSim.ConfigNoCombat(Seed: seed, PlayerCount: 2, UnitCapacity: 2 + 4 * perGroup, CommandCapacity: 8 * perGroup + 16), RoomCorridorRoom(20));
             NavGrid g = sim.World.NavGrid;
             sim.Enqueue(Command.SpawnUnit(0, wide, g.CellCenter(15, 4))); // slot 0
             sim.Enqueue(Command.SpawnUnit(1, wide, g.CellCenter(24, 4))); // slot 1 (player 1 applies after player 0's spawns: re-checked below)
@@ -171,7 +171,7 @@ public class HardeningQaTests
         float[] radii = { 0.4f, 0.7f, 0.9f };
         Simulation Make()
         {
-            var sim = new Simulation(TestSim.Config(Seed: seed, PlayerCount: 2, UnitCapacity: holders * (ring + 1) + walkers, CommandCapacity: 4 * walkers + 128), LocalMovementTests.Flat(64));
+            var sim = new Simulation(TestSim.ConfigNoCombat(Seed: seed, PlayerCount: 2, UnitCapacity: holders * (ring + 1) + walkers, CommandCapacity: 4 * walkers + 128), LocalMovementTests.Flat(64));
             NavGrid g = sim.World.NavGrid;
             for (int h = 0; h < holders; h++)
             {
@@ -290,7 +290,7 @@ public class HardeningQaTests
         int line = radii.Length, crowd = 8 * width;
         Simulation Make()
         {
-            var sim = new Simulation(TestSim.Config(Seed: seed, PlayerCount: 2, UnitCapacity: line + 2 * crowd, CommandCapacity: 8 * (line + 2 * crowd)), WideCorridorWithRooms(width));
+            var sim = new Simulation(TestSim.ConfigNoCombat(Seed: seed, PlayerCount: 2, UnitCapacity: line + 2 * crowd, CommandCapacity: 8 * (line + 2 * crowd)), WideCorridorWithRooms(width));
             NavGrid g = sim.World.NavGrid;
             float y = 6f + gap;
             foreach (float r in radii)

@@ -46,9 +46,9 @@ public static class CrowdRows
     /// points, ticked until none moves or <paramref name="limit"/> ticks. <paramref name="everyTick"/>
     /// (optional) checks invariants after each tick and returns an error or null.
     /// </summary>
-    public static Result ToFourPoints(ulong seed, int units, int limit, bool onePlayerPerPoint, int players = 2, Func<World, string?>? everyTick = null)
+    public static Result ToFourPoints(ulong seed, int units, int limit, bool onePlayerPerPoint, int players = 2, Func<World, string?>? everyTick = null, bool combat = true)
     {
-        Simulation sim = MoveScenario.Spawn(seed, units, units > 1000 ? 70f : 40f, out int goalCell, players: players);
+        Simulation sim = MoveScenario.Spawn(seed, units, units > 1000 ? 70f : 40f, out int goalCell, players: players, combat: combat);
         World w = sim.World;
         Vector2[] goals = FourPoints(MoveScenario.Center(w.NavGrid, goalCell));
         UnitStore u = w.Units;
@@ -60,11 +60,12 @@ public static class CrowdRows
     /// <summary>
     /// 128 units to the 64 cells nearest the central cell by path (more goals than the 32 cache slots,
     /// BUG-0018). One player per goal: each player's units take every other goal, two units per goal.
-    /// Otherwise <c>slot % 64</c>, which gives every goal one unit of each player.
+    /// Otherwise <c>slot % 64</c>, which gives every goal one unit of each player. Both rows take <c>combat</c> false
+    /// (<see cref="SimConfig.Combat"/>, BUG-0135) for the pre-M4 rows whose bounds are about movement, not fights.
     /// </summary>
-    public static Result MoreGoalsThanCacheSlots(ulong seed, bool onePlayerPerGoal = true, Func<World, string?>? everyTick = null)
+    public static Result MoreGoalsThanCacheSlots(ulong seed, bool onePlayerPerGoal = true, Func<World, string?>? everyTick = null, bool combat = true)
     {
-        Simulation sim = MoveScenario.Spawn(seed, units: 128, maxCost: 15f, out int center);
+        Simulation sim = MoveScenario.Spawn(seed, units: 128, maxCost: 15f, out int center, combat: combat);
         NavGrid g = sim.World.NavGrid;
         FlowField near = FlowField.Build(g, center);
         var goals = new List<int>();

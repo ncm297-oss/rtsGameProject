@@ -252,7 +252,7 @@ public class CrowdRoutingQaTests
         }
         List<Vector2> Run(int[] perm)
         {
-            var sim = new Simulation(TestSim.Config(Seed: 1, PlayerCount: 2, UnitCapacity: cluster + 1, CommandCapacity: 64), LocalMovementTests.Flat(40));
+            var sim = new Simulation(TestSim.ConfigNoCombat(Seed: 1, PlayerCount: 2, UnitCapacity: cluster + 1, CommandCapacity: 64), LocalMovementTests.Flat(40));
             sim.Enqueue(Command.SpawnUnit(0, LocalMovementTests.TypeWithRadius(0.4f), new Vector2(23f, 41.3f)));
             foreach (int k in perm) sim.Enqueue(Command.SpawnUnit(1, spots[k].Type, spots[k].At));
             sim.Tick();
@@ -580,7 +580,7 @@ public class CrowdRoutingQaTests
         int cap = 1 + line + crowd;
         Simulation Make()
         {
-            var sim = new Simulation(TestSim.Config(Seed: seed, PlayerCount: 2, UnitCapacity: cap, CommandCapacity: 16 * cap), CorridorWithRooms());
+            var sim = new Simulation(TestSim.ConfigNoCombat(Seed: seed, PlayerCount: 2, UnitCapacity: cap, CommandCapacity: 16 * cap), CorridorWithRooms());
             NavGrid g = sim.World.NavGrid;
             var rng = new SimRng(seed, 4450);
             int wide = LocalMovementTests.TypeWithRadius(0.9f), small = LocalMovementTests.TypeWithRadius(0.4f);
@@ -658,7 +658,7 @@ public class CrowdRoutingQaTests
         int cap = width + line + crowd;
         Simulation Make()
         {
-            var sim = new Simulation(TestSim.Config(Seed: seed, PlayerCount: 2, UnitCapacity: cap, CommandCapacity: 16 * cap), WideCorridorWithRooms(width));
+            var sim = new Simulation(TestSim.ConfigNoCombat(Seed: seed, PlayerCount: 2, UnitCapacity: cap, CommandCapacity: 16 * cap), WideCorridorWithRooms(width));
             NavGrid g = sim.World.NavGrid;
             var rng = new SimRng(seed, 4451);
             int wide = LocalMovementTests.TypeWithRadius(0.9f), small = LocalMovementTests.TypeWithRadius(0.4f);
@@ -729,7 +729,7 @@ public class CrowdRoutingQaTests
         Simulation? primary = null;
         Simulation Make()
         {
-            var sim = new Simulation(TestSim.Config(Seed: seed, PlayerCount: 2, UnitCapacity: cap, CommandCapacity: 32 * cap), map);
+            var sim = new Simulation(TestSim.ConfigNoCombat(Seed: seed, PlayerCount: 2, UnitCapacity: cap, CommandCapacity: 32 * cap), map);
             primary ??= sim;
             NavGrid g = sim.World.NavGrid;
             var rng = new SimRng(seed, 4470);
@@ -1289,7 +1289,7 @@ public class CrowdRoutingQaTests
     [Fact]
     public void MoreGoalsThanCacheSlots_Seed51_Terminates()
     {
-        CrowdRows.Result r = CrowdRows.MoreGoalsThanCacheSlots(51);
+        CrowdRows.Result r = CrowdRows.MoreGoalsThanCacheSlots(51, combat: false);
         _out.WriteLine($"seed 51: arrived {r.Arrived}, gave up {r.GaveUp}, still moving {r.StillMoving} after {r.Ticks} ticks");
         Assert.Equal(0, r.StillMoving);
         Assert.Equal(128, r.Arrived + r.GaveUp);

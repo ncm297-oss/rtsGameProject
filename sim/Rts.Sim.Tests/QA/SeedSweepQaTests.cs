@@ -25,7 +25,7 @@ public class SeedSweepQaTests
     /// </summary>
     private static (int GaveUp, int Arrived, string? Pack, int StillMoving) MoreGoals(ulong seed, bool onePlayerPerGoal = true)
     {
-        CrowdRows.Result r = CrowdRows.MoreGoalsThanCacheSlots(seed, onePlayerPerGoal);
+        CrowdRows.Result r = CrowdRows.MoreGoalsThanCacheSlots(seed, onePlayerPerGoal, combat: false);
         CrowdRows.AssertBuildCap(r);
         return (r.GaveUp, r.Arrived, r.Pack, r.StillMoving);
     }

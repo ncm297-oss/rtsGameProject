@@ -20,7 +20,9 @@ namespace Rts.Game;
 /// selected own finished building shows its production card (M3-V3, <see cref="ProductionMenu"/>): the units it trains,
 /// then the techs it researches, on cells 0, 1, 2 ... with their grid keys; each frame a button is greyed when
 /// <c>World.CanTrain</c> / <c>CanResearch</c> refuses, its cost line replaced by the reason (<c>ui.json</c> <c>train</c> /
-/// <c>research</c>), and only a change of reason rewrites it. Esc or a right click closes a menu and its ghost. A button
+/// <c>research</c>), and only a change of reason rewrites it; a researched or queued tech reads so even when the sim's first
+/// reason is its unmet <c>requires</c> (M3-V4, BUG-0126). A build-menu entry whose <c>requires</c> is unmet is greyed
+/// "Locked" (<c>placement.requires</c>) but stays pressable: its ghost is red with the same reason. Esc or a right click closes a menu and its ghost. A button
 /// press does exactly what its key does (the same <see cref="SelectionController"/> call). Labels come from
 /// <see cref="UiText"/> or the building's, unit's or tech's <c>displayName</c>, the tooltip from its <c>description</c>,
 /// cost (faction resource names) and <c>requires</c> ("Needs ..." with display names), all built in <see cref="Init"/>;
@@ -106,8 +108,8 @@ public partial class CommandCard : Control
     /// <summary>The building type of a <see cref="CardCommand.Place"/> cell, the unit type of a <see cref="CardCommand.Train"/> cell or the tech of a <see cref="CardCommand.Research"/> cell, else -1.</summary>
     public int TypeAt(int i) => (uint)i < Cells && _actions[i] is CardCommand.Place or CardCommand.Train or CardCommand.Research ? _types[i] : -1;
 
-    /// <summary>The refusal a production cell shows now (<see cref="TrainError"/> for a Train cell, <see cref="ResearchError"/> for a Research cell, as int; 0 = enabled), or -1 for any other cell.</summary>
-    public int ReasonAt(int i) => (uint)i < Cells && _actions[i] is CardCommand.Train or CardCommand.Research ? _shownReason[i] : -1;
+    /// <summary>The refusal a production or build-menu cell shows now (<see cref="TrainError"/> for a Train cell, <see cref="ResearchError"/> for a Research cell, <see cref="PlacementError"/> for a Place cell, as int; 0 = live), or -1 for any other cell.</summary>
+    public int ReasonAt(int i) => (uint)i < Cells && _actions[i] is CardCommand.Train or CardCommand.Research or CardCommand.Place ? _shownReason[i] : -1;
 
     /// <summary>The button of grid cell <paramref name="i"/>.</summary>
     public Button ButtonAt(int i) => _buttons[i];
@@ -253,6 +255,7 @@ public partial class CommandCard : Control
         else want = MenuOpen ? _menu : Mode.Workers;
         if (want != _shown) Layout(want, building);
         if (_shown == Mode.Production) Grey(sim.World, building);
+        else if (_shown is Mode.BasicMenu or Mode.AdvancedMenu) GreyPlaces(sim.World);
     }
 
     // Greys each production button the sim would refuse now; touches a button only when its reason changed.
@@ -270,18 +273,44 @@ public partial class CommandCard : Control
             }
             else
             {
-                world.CanResearch(SelectionController.LocalPlayer, building, _types[i], out ResearchError e);
-                reason = (int)e;
+                const int p = SelectionController.LocalPlayer;
+                int tech = _types[i];
+                world.CanResearch(p, building, tech, out ResearchError e);
+                // BUG-0126: "Researched" / "In a queue" over the sim's earlier "Locked" (a hall lost after it was queued).
+                reason = (int)ProductionMenu.ShownResearchReason(e, world.HasTech(p, tech), ProductionMenu.IsTechQueued(world.Buildings, p, tech));
             }
             if (reason == _shownReason[i]) continue;
             _shownReason[i] = reason;
             bool ok = reason == 0;
             _buttons[i].Disabled = !ok;
             string cost = c == CardCommand.Train ? _unitCost[_types[i]] : _techCost[_types[i]];
-            _costs[i].Text = ok ? cost : c == CardCommand.Train ? _ui.TrainText((TrainError)reason) : _ui.ResearchText((ResearchError)reason);
-            _costs[i].AddThemeColorOverride(FontColor, ok ? CostColor : ReasonColor);
-            _names[i].Modulate = _hints[i].Modulate = ok ? Colors.White : Dimmed;
+            ShowReason(i, ok, ok ? cost : c == CardCommand.Train ? _ui.TrainText((TrainError)reason) : _ui.ResearchText((ResearchError)reason));
         }
+    }
+
+    // BUG-0126: a build-menu entry whose requirement is unmet is greyed with placement.requires ("Locked"), asked of the
+    // sim's own rule (CanPlace at BuildMenu.NoAnchor: requires is checked before any map rule, so no flood runs). It stays
+    // pressable: the press raises the ghost, red with the same reason, so the player sees what it needs.
+    private void GreyPlaces(World world)
+    {
+        for (int i = 0; i < Cells; i++)
+        {
+            if (_actions[i] != CardCommand.Place) continue;
+            world.CanPlace(SelectionController.LocalPlayer, _types[i], BuildMenu.NoAnchor, out PlacementError e);
+            int reason = (int)BuildMenu.ShownPlaceReason(e);
+            if (reason == _shownReason[i]) continue;
+            _shownReason[i] = reason;
+            bool ok = reason == 0;
+            ShowReason(i, ok, ok ? _costText[_types[i]] : _ui.PlacementText((PlacementError)reason));
+        }
+    }
+
+    // A greyed cell: the reason in red instead of the cost, name and hotkey dimmed (BUG-0123); a live one: the cost.
+    private void ShowReason(int i, bool ok, string line)
+    {
+        _costs[i].Text = line;
+        _costs[i].AddThemeColorOverride(FontColor, ok ? CostColor : ReasonColor);
+        _names[i].Modulate = _hints[i].Modulate = ok ? Colors.White : Dimmed;
     }
 
     // "<description>\n<gold> G  <wood> W" plus "\nNeeds A, B" when the def requires anything (display names).

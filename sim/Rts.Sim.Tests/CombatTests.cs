@@ -1,0 +1,634 @@
+using System.Numerics;
+using Rts.Sim.Combat;
+using Rts.Sim.Commands;
+using Rts.Sim.Data;
+using Rts.Sim.Entities;
+using Rts.Sim.Map;
+using static Rts.Sim.Tests.CombatScenes;
+
+namespace Rts.Sim.Tests;
+
+/// <summary>M4-1 criteria 2-5: melee fights, target priority, leash and resume, death.</summary>
+public class CombatTests
+{
+    private static UnitDef Def(int type) => TestSim.Data.Units[type];
+
+    // ---------- criterion 2: two Heavy Infantry ----------
+
+    [Fact]
+    public void TwoHeavyInfantry_AttackMovedIntoEachOther_HitOnTheWindupThenEveryCooldown_7Each_BothDie()
+    {
+        UnitDef hi = Def(HeavyInfantry);
+        int windup = hi.Attack.WindupTicks, cooldown = hi.Attack.CooldownTicks;
+        Assert.Equal(6, windup);     // 0.3 s
+        Assert.Equal(30, cooldown);  // 1.5 s
+        int hit = DamageCalc.Compute(TestSim.Data.DamageTable, hi.Attack, 0, hi.ArmorClass, hi.Armor);
+        Assert.Equal(7, hit); // 10 x 1.0 x 1.0 - 3
+        int hitsToKill = (hi.Hp + hit - 1) / hit;
+        Assert.Equal(19, hitsToKill);
+
+        Simulation sim = Flat();
+        // 40 m apart: far beyond sight (14 m), so they only meet through the attack-move.
+        EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 10, 24));
+        EntityHandle b = Place(sim, 1, HeavyInfantry, At(sim, 30, 24));
+        UnitStore u = sim.World.Units;
+        sim.Enqueue(Command.AttackMove(0, a, u.Position[b.Index]));
+        sim.Enqueue(Command.AttackMove(1, b, u.Position[a.Index]));
+
+        var log = new List<(UnitState A, UnitState B, int HpA, int HpB, bool AliveA, bool AliveB)>();
+        for (int t = 0; t < 2000 && (u.IsAlive(a) || u.IsAlive(b)); t++)
+        {
+            sim.Tick();
+            log.Add((u.IsAlive(a) ? u.State[a.Index] : default, u.IsAlive(b) ? u.State[b.Index] : default,
+                u.IsAlive(a) ? u.Hp[a.Index] : 0, u.IsAlive(b) ? u.Hp[b.Index] : 0, u.IsAlive(a), u.IsAlive(b)));
+        }
+        Assert.False(u.IsAlive(a));
+        Assert.False(u.IsAlive(b));
+
+        // Each side: the tick it first stood Attacking starts its first swing; the victim's hp drops at start + windup,
+        // then every cooldown, 7 each, and it dies on hit 19.
+        CheckSide(log.Select(e => (e.A, e.HpB, e.AliveB)).ToList());
+        CheckSide(log.Select(e => (e.B, e.HpA, e.AliveA)).ToList());
+
+        void CheckSide(List<(UnitState Attacker, int VictimHp, bool VictimAlive)> side)
+        {
+            int start = side.FindIndex(e => e.Attacker == UnitState.Attacking);
+            Assert.True(start >= 0);
+            var drops = new List<(int Tick, int Amount)>();
+            int prev = hi.Hp;
+            for (int t = 0; t < side.Count; t++)
+            {
+                int hp = side[t].VictimAlive ? side[t].VictimHp : 0;
+                if (hp < prev) drops.Add((t, prev - hp));
+                prev = hp;
+            }
+            Assert.Equal(hitsToKill, drops.Count);
+            for (int k = 0; k < drops.Count; k++)
+            {
+                Assert.Equal(start + windup + k * cooldown, drops[k].Tick);
+                // The killing hit takes what was left (4 of 7).
+                Assert.Equal(k < drops.Count - 1 ? hit : hi.Hp - hit * (hitsToKill - 1), drops[k].Amount);
+            }
+        }
+    }
+
+    [Fact]
+    public void EqualFighters_EngagingOnTheSameTick_DieOnTheSameTick_EachKilledByTheOther()
+    {
+        Simulation sim = Flat();
+        // Slots 0 and 4 scan on the same ticks (slot mod 4); slots 1-3 stand far off in a corner.
+        EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 30, 30));
+        for (int k = 0; k < 3; k++) Place(sim, 0, Laborer, At(sim, 3 + k, 3));
+        EntityHandle b = Place(sim, 1, HeavyInfantry, At(sim, 30, 30, dx: 1f));
+        Assert.Equal(0, a.Index);
+        Assert.Equal(4, b.Index);
+        UnitStore u = sim.World.Units;
+        int deathTick = -1;
+        for (int t = 0; t < 2000 && deathTick < 0; t++)
+        {
+            sim.Tick();
+            if (!u.IsAlive(a) || !u.IsAlive(b))
+            {
+                deathTick = t;
+                Assert.False(u.IsAlive(a));
+                Assert.False(u.IsAlive(b));
+                ReadOnlySpan<DeathEvent> deaths = sim.World.Deaths;
+                Assert.Equal(2, deaths.Length);
+                // Hits apply in attacker slot order: a's (slot 0) kills b, then b's own queued hit still lands and kills a.
+                Assert.Equal(b, deaths[0].Victim);
+                Assert.Equal(0, deaths[0].KillerOwner);
+                Assert.Equal(a, deaths[1].Victim);
+                Assert.Equal(1, deaths[1].KillerOwner);
+                Assert.Equal(new[] { 1, 1 }, sim.World.Kills.ToArray());
+                Assert.Equal(new[] { 1, 1 }, sim.World.Losses.ToArray());
+            }
+        }
+        Assert.True(deathTick > 0);
+    }
+
+    // ---------- criterion 3: target priority ----------
+
+    /// <summary>Runs ticks until unit <paramref name="h"/> has a target (at most <paramref name="max"/>); returns its target slot or -1.</summary>
+    private static int FirstTarget(Simulation sim, EntityHandle h, int max = 12)
+    {
+        UnitStore u = sim.World.Units;
+        RunUntil(sim, () => u.Target[h.Index] != default, max);
+        return u.Target[h.Index] == default ? -1 : u.Target[h.Index].Index;
+    }
+
+    [Fact]
+    public void Priority_FartherSoldierBeatsNearerWorker()
+    {
+        Simulation sim = Flat();
+        EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 20, 20));
+        EntityHandle worker = Place(sim, 1, Laborer, At(sim, 20, 20, dx: 5f));
+        EntityHandle soldier = Place(sim, 1, Crossbowman, At(sim, 20, 20, dx: -9f));
+        sim.Enqueue(Command.HoldPosition(1, worker)); // out of its reach: it never takes a on, so it is no "attacker"
+        Assert.Equal(soldier.Index, FirstTarget(sim, a));
+        Assert.False(sim.World.Units.TargetIsBuilding[a.Index]);
+        Assert.Equal(default, sim.World.Units.Target[worker.Index]);
+    }
+
+    [Fact]
+    public void Priority_TheSoldierAttackingMeBeatsANearerOne()
+    {
+        Simulation sim = Flat();
+        EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 20, 20));
+        EntityHandle near = Place(sim, 1, HeavyInfantry, At(sim, 20, 20, dx: 4f));
+        EntityHandle attacker = Place(sim, 1, HeavyInfantry, At(sim, 20, 20, dx: -8f));
+        UnitStore u = sim.World.Units;
+        sim.Enqueue(Command.HoldPosition(1, near));
+        sim.Enqueue(Command.AttackMove(1, attacker, u.Position[a.Index]));
+        for (int t = 0; t < 10; t++) sim.Tick();
+        Assert.Equal(a, u.Target[attacker.Index]);
+        Assert.Equal(attacker, u.Target[a.Index]);
+        Assert.True(Vector2.Distance(u.Position[a.Index], u.Position[near.Index]) < Vector2.Distance(u.Position[a.Index], u.Position[attacker.Index]));
+    }
+
+    [Fact]
+    public void Priority_OnlyABuildingInSight_IsTakenAndHitAsStructure()
+    {
+        Simulation sim = Flat();
+        int tent = TestSim.Data.FindBuilding("whirlwind_tent");
+        EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 20, 20));
+        sim.Enqueue(Command.SpawnBuilding(1, tent, At(sim, 24, 19)));
+        UnitStore u = sim.World.Units;
+        BuildingStore b = sim.World.Buildings;
+        RunUntil(sim, () => u.Target[a.Index] != default, 12);
+        Assert.True(u.TargetIsBuilding[a.Index]);
+        int k = u.Target[a.Index].Index;
+        Assert.Equal(tent, b.TypeId[k]);
+        int full = b.Hp[k];
+        RunUntil(sim, () => b.Hp[k] < full, 400);
+        UnitDef hi = Def(HeavyInfantry);
+        int expected = DamageCalc.Compute(TestSim.Data.DamageTable, hi.Attack, 0, sim.World.StructureClass, TestSim.Data.Buildings[tent].Armor);
+        Assert.Equal(1, expected); // 10 x 0.4 - 3 = 1
+        Assert.Equal(full - expected, b.Hp[k]);
+        Assert.Equal(UnitState.Attacking, u.State[a.Index]);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Priority_EqualDistance_GoesToTheLowestSlot(bool rightFirst)
+    {
+        Simulation sim = Flat();
+        EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 20, 20));
+        EntityHandle first = Place(sim, 1, Crossbowman, At(sim, 20, 20, dx: rightFirst ? 5f : -5f));
+        EntityHandle second = Place(sim, 1, Crossbowman, At(sim, 20, 20, dx: rightFirst ? -5f : 5f));
+        UnitStore u = sim.World.Units;
+        Assert.Equal(Vector2.DistanceSquared(u.Position[a.Index], u.Position[first.Index]), Vector2.DistanceSquared(u.Position[a.Index], u.Position[second.Index]));
+        Assert.True(first.Index < second.Index);
+        Assert.Equal(first.Index, FirstTarget(sim, a));
+    }
+
+    [Theory]
+    [InlineData(-0.25f, true)]
+    [InlineData(0.25f, false)]
+    public void Scan_SeesExactlyItsSightRadius(float pastSight, bool expectTarget)
+    {
+        Simulation sim = Flat();
+        float sight = Def(HeavyInfantry).Sight;
+        EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 20, 20));
+        Place(sim, 1, Crossbowman, At(sim, 20, 20, dx: sight + pastSight));
+        Assert.Equal(expectTarget, FirstTarget(sim, a, max: 3 * CombatConstants.ScanInterval) >= 0);
+    }
+
+    [Fact]
+    public void PlainMove_NeverAcquires_ThoughItPassesAnEnemyInSight()
+    {
+        Simulation sim = Flat();
+        EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 6, 20));
+        EntityHandle c = Place(sim, 1, Crossbowman, At(sim, 16, 22));
+        UnitStore u = sim.World.Units;
+        Assert.True(Vector2.Distance(u.Position[a.Index], u.Position[c.Index]) > Def(HeavyInfantry).Sight); // not seen before the Move
+        sim.Enqueue(Command.Move(0, a, At(sim, 40, 20)));
+        sim.Tick();
+        sim.Tick(); // the Move applies
+        Assert.Equal(UnitState.Moving, u.State[a.Index]);
+        float closest = float.MaxValue;
+        for (int t = 0; t < 600 && u.State[a.Index] == UnitState.Moving; t++)
+        {
+            sim.Tick();
+            closest = MathF.Min(closest, Vector2.Distance(u.Position[a.Index], u.Position[c.Index]));
+            if (u.State[a.Index] == UnitState.Moving) Assert.Equal(default, u.Target[a.Index]);
+        }
+        Assert.True(closest < 6f, $"closest {closest}");
+        Assert.Equal(UnitState.Idle, u.State[a.Index]);
+        Assert.Equal(CombatMode.None, u.Mode[a.Index]);
+    }
+
+    [Fact]
+    public void HoldingUnit_FightsInReach_WithABitIdenticalPositionThroughout()
+    {
+        Simulation sim = Flat();
+        EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 20, 20));
+        // Out of sight at first, so a only meets b holding (the orders apply on the second tick).
+        EntityHandle b = Place(sim, 1, HeavyInfantry, At(sim, 20, 20, dx: 16f));
+        UnitStore u = sim.World.Units;
+        sim.Enqueue(Command.HoldPosition(0, a));
+        sim.Enqueue(Command.AttackMove(1, b, u.Position[a.Index]));
+        Vector2 at = u.Position[a.Index];
+        bool attacked = false;
+        for (int t = 0; t < 1500 && u.IsAlive(a) && u.IsAlive(b); t++)
+        {
+            sim.Tick();
+            if (!u.IsAlive(a)) break;
+            Assert.Equal(BitConverter.SingleToInt32Bits(at.X), BitConverter.SingleToInt32Bits(u.Position[a.Index].X));
+            Assert.Equal(BitConverter.SingleToInt32Bits(at.Y), BitConverter.SingleToInt32Bits(u.Position[a.Index].Y));
+            attacked |= u.State[a.Index] == UnitState.Attacking;
+        }
+        Assert.True(attacked);
+        Assert.True(!u.IsAlive(b) || u.Hp[b.Index] < Def(HeavyInfantry).Hp);
+        Assert.True(sim.World.Kills[0] + sim.World.Kills[1] >= 1);
+    }
+
+    [Fact]
+    public void GatheringWorker_NeverRetaliates()
+    {
+        Simulation sim = new(TestSim.Config(Seed: 5, PlayerCount: 2, UnitCapacity: 16, CommandCapacity: 64), ResourceMaps.Flat(32, 20));
+        ResourceMaps.Spawn(sim.World, ResourceMaps.Mine, 16, 8, 2500);
+        GatherMaps.Building(sim, 8, 7);
+        EntityHandle w = Place(sim, 0, Laborer, At(sim, 14, 9));
+        UnitStore u = sim.World.Units;
+        sim.Enqueue(Command.Gather(0, w, At(sim, 16, 8)));
+        RunUntil(sim, () => u.State[w.Index] == UnitState.Gathering, 200);
+        Assert.Equal(UnitState.Gathering, u.State[w.Index]);
+        EntityHandle enemy = Place(sim, 1, HeavyInfantry, u.Position[w.Index] + new Vector2(0f, -1.2f));
+        for (int t = 0; t < 600 && u.IsAlive(w); t++)
+        {
+            sim.Tick();
+            if (!u.IsAlive(w)) break;
+            Assert.Equal(default, u.Target[w.Index]);
+            Assert.Equal(CombatMode.None, u.Mode[w.Index]);
+            Assert.NotEqual(UnitState.Attacking, u.State[w.Index]);
+        }
+        Assert.False(u.IsAlive(w)); // it took the hits to the end
+        Assert.True(u.IsAlive(enemy));
+        Assert.Equal(Def(HeavyInfantry).Hp, u.Hp[enemy.Index]);
+    }
+
+    // ---------- criterion 4: leash and resume ----------
+
+    [Fact]
+    public void IdleUnit_ChasedPastItsSight_WalksBack_AndIsIdleOnItsAnchorCell()
+    {
+        Simulation sim = Flat();
+        Vector2 home = At(sim, 10, 24);
+        EntityHandle a = Place(sim, 0, HeavyInfantry, home);
+        // A slower target (Catapult 2.2 m/s vs 3.0) 12 m away walking off: a gains on it every scan (so it never gives
+        // the chase up, BUG-0137) but not enough to catch it before it is its sight radius from home.
+        EntityHandle c = Place(sim, 1, TestSim.Data.FindUnit("malazan_catapult"), At(sim, 10, 24, dx: 12f));
+        UnitStore u = sim.World.Units;
+        sim.Enqueue(Command.Move(1, c, At(sim, 44, 24)));
+        float sight = Def(HeavyInfantry).Sight;
+        float farthest = 0f;
+        bool chased = false, returned = false;
+        for (int t = 0; t < 1500; t++)
+        {
+            sim.Tick();
+            farthest = MathF.Max(farthest, Vector2.Distance(u.Position[a.Index], home));
+            chased |= u.Target[a.Index] == c;
+            returned |= u.Mode[a.Index] == CombatMode.Returning;
+            if (returned && u.State[a.Index] == UnitState.Idle && u.Mode[a.Index] == CombatMode.None) break;
+        }
+        Assert.True(chased);
+        Assert.True(returned);
+        Assert.True(farthest > sight, $"farthest {farthest}");
+        Assert.True(farthest <= sight + Def(HeavyInfantry).SpeedPerTick + 1e-3f, $"farthest {farthest}");
+        Assert.Equal(UnitState.Idle, u.State[a.Index]);
+        Assert.Equal(CombatMode.None, u.Mode[a.Index]);
+        Assert.Equal(default, u.Target[a.Index]);
+        NavGrid g = sim.World.NavGrid;
+        Assert.True(g.WorldToCell(home, out int hx, out int hy));
+        Assert.True(g.WorldToCell(u.Position[a.Index], out int ax, out int ay));
+        Assert.Equal((hx, hy), (ax, ay));
+    }
+
+    /// <summary>
+    /// BUG-0137: a target that runs faster than the chaser (a Crossbowman, 3.2 m/s vs 3.0) is given up within
+    /// <see cref="CombatConstants.GiveUpScans"/> stalled scans, before the leash; the unit walks home, is Idle there, and
+    /// does not take that target again while it is out of reach.
+    /// </summary>
+    [Fact]
+    public void IdleUnit_ChasingAFasterTarget_GivesItUp_WalksHome_AndDoesNotTakeItAgain()
+    {
+        Simulation sim = Flat();
+        Vector2 home = At(sim, 10, 24);
+        EntityHandle a = Place(sim, 0, HeavyInfantry, home);
+        EntityHandle c = Place(sim, 1, Crossbowman, At(sim, 10, 24, dx: 4f));
+        UnitStore u = sim.World.Units;
+        sim.Enqueue(Command.Move(1, c, At(sim, 30, 24)));
+        bool chased = false;
+        int t = RunUntil(sim, () =>
+        {
+            chased |= u.Target[a.Index] == c;
+            return chased && u.Target[a.Index] == default;
+        }, 400);
+        Assert.True(chased);
+        Assert.Equal(c, u.Ignored[a.Index]);
+        Assert.Equal(1, u.GiveUps[a.Index]);
+        Assert.NotEqual(CombatMode.Returning, u.Mode[a.Index]); // given up, not pulled back by the leash
+        RunUntil(sim, () => u.State[a.Index] == UnitState.Idle && u.Mode[a.Index] == CombatMode.None, 600);
+        Assert.Equal(CombatMode.None, u.Mode[a.Index]);
+        Assert.True(Vector2.Distance(u.Position[a.Index], home) < 1f, $"{Vector2.Distance(u.Position[a.Index], home)} m from home");
+        // The crossbowman stands 40 m off, out of a's sight; brought back into sight (about 9 m, out of reach) it is not
+        // taken again.
+        sim.Enqueue(Command.Move(1, c, At(sim, 15, 24)));
+        for (int k = 0; k < 400; k++)
+        {
+            sim.Tick();
+            Assert.True(u.Target[a.Index] == default, $"tick {k}: took {u.Target[a.Index]} again");
+        }
+        Assert.Equal(UnitState.Idle, u.State[a.Index]);
+        // An order forgets it.
+        sim.Enqueue(Command.Stop(0, a));
+        sim.Tick();
+        sim.Tick(); // the Stop applies
+        Assert.Equal(default, u.Ignored[a.Index]);
+        Assert.Equal(0, u.GiveUps[a.Index]);
+        RunUntil(sim, () => u.Target[a.Index] == c, 20);
+        Assert.Equal(c, u.Target[a.Index]);
+    }
+
+    /// <summary>
+    /// BUG-0137: after <see cref="CombatConstants.MaxGiveUps"/> chases given up, a unit's scans take only targets in reach,
+    /// so several enemies it can't reach don't take turns forever; landing a hit resets the count.
+    /// </summary>
+    [Fact]
+    public void AfterMaxGiveUps_ScansTakeOnlyTargetsInReach_UntilAHitLands()
+    {
+        Simulation sim = Flat();
+        EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 20, 20));
+        EntityHandle e = Place(sim, 1, Laborer, At(sim, 26, 20));
+        sim.Enqueue(Command.HoldPosition(1, e));
+        UnitStore u = sim.World.Units;
+        u.GiveUps[a.Index] = CombatConstants.MaxGiveUps;
+        for (int k = 0; k < 40; k++)
+        {
+            sim.Tick();
+            Assert.True(u.Target[a.Index] == default, $"tick {k}: took a target 6 m away");
+        }
+        // In reach it fights, and its first landed hit clears the count.
+        EntityHandle n = Place(sim, 1, Laborer, u.Position[a.Index] + new Vector2(1f, 0f));
+        sim.Enqueue(Command.HoldPosition(1, n));
+        RunUntil(sim, () => u.Hp[n.Index] < Def(Laborer).Hp, 60);
+        Assert.True(u.Hp[n.Index] < Def(Laborer).Hp);
+        Assert.Equal(0, u.GiveUps[a.Index]);
+    }
+
+    /// <summary>
+    /// BUG-0143: a chaser queued behind its own front rank (a 1-cell corridor: an enemy holder at the dead end, two
+    /// friends planted fighting it side by side, the chaser behind them) gets no closer for far longer than
+    /// <see cref="CombatConstants.GiveUpScans"/> scans, but a friend stands in reach of its target, so it never gives
+    /// up and keeps its target.
+    /// </summary>
+    [Fact]
+    public void ChaserQueuedBehindItsOwnFightingFrontRank_NeverGivesUp()
+    {
+        string wall = new('1', 24), corridor = "1" + new string('0', 22) + "1";
+        var sim = new Simulation(TestSim.Config(Seed: 1, PlayerCount: 2, UnitCapacity: 8, CommandCapacity: 64),
+            LocalMovementTests.Rows(wall, wall, corridor, wall, wall));
+        EntityHandle e = Place(sim, 1, Crossbowman, At(sim, 1, 2)); // never swings in this slice
+        sim.Enqueue(Command.HoldPosition(1, e));
+        EntityHandle f = Place(sim, 0, HeavyInfantry, At(sim, 2, 2, dy: -0.5f));
+        EntityHandle f2 = Place(sim, 0, HeavyInfantry, At(sim, 2, 2, dy: 0.5f)); // the two fill the corridor's width
+        EntityHandle c = Place(sim, 0, HeavyInfantry, At(sim, 5, 2));
+        UnitStore u = sim.World.Units;
+        u.Hp[e.Index] = 100_000;
+        int fTicks = 0;
+        for (int t = 0; t < 600; t++)
+        {
+            sim.Tick();
+            if (u.State[f.Index] == UnitState.Attacking && u.State[f2.Index] == UnitState.Attacking) fTicks++;
+            Assert.True(u.GiveUps[c.Index] == 0, $"tick {t}: the chaser gave its target up ({u.State[c.Index]}, gap blocked by its friend)");
+        }
+        Assert.True(fTicks > 500, $"setup: the friends fought together on {fTicks} ticks only");
+        Assert.Equal(e, u.Target[c.Index]);
+        Assert.NotEqual(UnitState.Attacking, u.State[c.Index]); // setup: it really is queued, not in reach
+    }
+
+    /// <summary>
+    /// BUG-0143 (found by the fix): a chaser that switches from one target to another keeps its stall count, so two
+    /// targets a scan takes in turn (one drifting in and out of sight) can't restart it every scan and keep the chase
+    /// going forever. Here a cliff-top Laborer is chased from below, then a cliff-top Crossbowman (higher priority) comes
+    /// into sight mid-stall.
+    /// </summary>
+    [Fact]
+    public void SwitchingTargetsMidChase_KeepsTheStallCount()
+    {
+        var rows = new string[40];
+        for (int y = 0; y < 40; y++)
+        {
+            var c = new char[40];
+            for (int x = 0; x < 40; x++) c[x] = x >= 20 && x <= 35 && y >= 5 && y <= 34 ? '1' : '0';
+            rows[y] = new string(c);
+        }
+        var sim = new Simulation(TestSim.Config(Seed: 1, PlayerCount: 2, UnitCapacity: 8, CommandCapacity: 64), LocalMovementTests.Rows(rows));
+        EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 17, 20));
+        EntityHandle low = Place(sim, 1, Laborer, At(sim, 22, 20));
+        sim.Enqueue(Command.HoldPosition(1, low));
+        UnitStore u = sim.World.Units;
+        RunUntil(sim, () => u.Target[a.Index] == low && u.ChaseStall[a.Index] >= 3, 300);
+        Assert.True(u.Target[a.Index] == low && u.ChaseStall[a.Index] >= 3, $"setup: stall {u.ChaseStall[a.Index]}, target {u.Target[a.Index]}");
+        EntityHandle high = Place(sim, 1, Crossbowman, At(sim, 22, 22)); // a unit that can attack: taken over the laborer
+        sim.Enqueue(Command.HoldPosition(1, high));
+        RunUntil(sim, () => u.Target[a.Index] != low, 40);
+        Assert.Equal(high, u.Target[a.Index]);
+        Assert.True(u.ChaseStall[a.Index] >= 3, $"the switch restarted the stall count: {u.ChaseStall[a.Index]}");
+    }
+
+    /// <summary>
+    /// BUG-0142 item 4: a unit that gave up a building whose handle (slot and generation) equals an enemy unit's still
+    /// retaliates when that unit hits it; the given-up memory is a building, not that unit.
+    /// </summary>
+    [Fact]
+    public void HitByAUnitWithTheHandleOfAGivenUpBuilding_StillRetaliates()
+    {
+        Simulation sim = Flat();
+        EntityHandle r = Place(sim, 1, Raider, At(sim, 4, 4));
+        EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 30, 30)); // far out of each other's sight
+        UnitStore u = sim.World.Units;
+        u.Ignored[a.Index] = r; // the same slot and generation, as a building
+        u.IgnoredIsBuilding[a.Index] = true;
+        World w = sim.World;
+        w.Hits[0] = new PendingHit(r, 1, a, false, 1);
+        w.HitCount = 1;
+        CombatSystem.Resolve(w);
+        Assert.Equal(r, u.Target[a.Index]);
+        Assert.Equal(CombatMode.Retaliate, u.Mode[a.Index]);
+    }
+
+    [Fact]
+    public void AttackMove_KillsWhatIsOnTheWay_ThenResumesItsLeg_AndArrives()
+    {
+        Simulation sim = Flat();
+        Vector2 dest = At(sim, 40, 24);
+        EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 6, 24));
+        EntityHandle v = Place(sim, 1, Laborer, At(sim, 18, 25));
+        UnitStore u = sim.World.Units;
+        sim.Enqueue(Command.HoldPosition(1, v));
+        sim.Enqueue(Command.AttackMove(0, a, dest));
+        bool fought = false;
+        for (int t = 0; t < 2000; t++)
+        {
+            sim.Tick();
+            fought |= u.Target[a.Index] == v;
+            if (!u.IsAlive(v) && u.State[a.Index] == UnitState.Idle && u.Mode[a.Index] == CombatMode.None) break;
+        }
+        Assert.True(fought);
+        Assert.False(u.IsAlive(v));
+        // The finished leg ended the attack-move where the leg ends.
+        Assert.Equal(UnitState.Idle, u.State[a.Index]);
+        Assert.Equal(CombatMode.None, u.Mode[a.Index]);
+        Assert.True(Vector2.Distance(u.Position[a.Index], dest) < 1f, $"stopped {Vector2.Distance(u.Position[a.Index], dest)} m from the leg's end");
+        Assert.Equal(1, sim.World.Kills[0]);
+    }
+
+    // ---------- criterion 5: death ----------
+
+    [Fact]
+    public void Death_FreesTheSameTick_ReleasesPop_EmitsTheEvent_ClearsAttackers_WhoReacquireOnTheirNextScan()
+    {
+        Simulation sim = Flat();
+        Vector2 o = At(sim, 20, 20);
+        EntityHandle a1 = Place(sim, 0, HeavyInfantry, o);
+        EntityHandle v1 = Place(sim, 1, Laborer, o + new Vector2(1f, 0f));
+        EntityHandle a2 = Place(sim, 0, HeavyInfantry, o + new Vector2(2f, 0f));
+        EntityHandle v2 = Place(sim, 1, Laborer, o + new Vector2(1f, 5f));
+        UnitStore u = sim.World.Units;
+        sim.Enqueue(Command.HoldPosition(1, v1));
+        sim.Enqueue(Command.HoldPosition(1, v2));
+        int popBefore = sim.World.HalfPop[1];
+        Assert.Equal(ProductionMaps.RecountHalfPop(sim.World, 1), popBefore);
+        RunUntil(sim, () => !u.IsAlive(v1), 400);
+        Assert.False(u.IsAlive(v1));
+        DeathEvent[] deaths = sim.World.Deaths.ToArray();
+        DeathEvent e = Assert.Single(deaths);
+        Assert.Equal(new DeathEvent(v1, false, Laborer, 1, 0, o + new Vector2(1f, 0f)), e);
+        Assert.Equal(popBefore - Def(Laborer).HalfPop, sim.World.HalfPop[1]);
+        Assert.Equal(ProductionMaps.RecountHalfPop(sim.World, 1), sim.World.HalfPop[1]);
+        Assert.Equal(1, sim.World.Kills[0]);
+        Assert.Equal(1, sim.World.Losses[1]);
+        Assert.Equal(0, sim.World.Kills[1] + sim.World.Losses[0]);
+        Assert.NotEqual(v1, u.Target[a1.Index]);
+        Assert.NotEqual(v1, u.Target[a2.Index]);
+        // Both attackers had v1: both pick v2 on their next scan.
+        for (int t = 0; t < CombatConstants.ScanInterval; t++) sim.Tick();
+        Assert.Equal(v2, u.Target[a1.Index]);
+        Assert.Equal(v2, u.Target[a2.Index]);
+        Assert.Equal(0, sim.World.Deaths.Length); // the buffer holds one tick's deaths
+    }
+
+    [Fact]
+    public void BuildingKilledByMelee_IsFreed_CountsAKill_AndItsCellsReopen()
+    {
+        Simulation sim = Flat();
+        int tent = TestSim.Data.FindBuilding("whirlwind_tent");
+        EntityHandle site = GatherMaps.Building(sim, 24, 19, player: 1, type: tent);
+        BuildingStore b = sim.World.Buildings;
+        b.SetHp(site.Index, 2);
+        EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 22, 20));
+        RunUntil(sim, () => !b.IsAlive(site), 400);
+        Assert.False(b.IsAlive(site));
+        Assert.Equal(0, b.Count);
+        DeathEvent e = Assert.Single(sim.World.Deaths.ToArray());
+        // Cells 24-25 x 19-20: x 48-52 m, y 38-42 m.
+        Assert.Equal(new DeathEvent(site, true, tent, 1, 0, new Vector2(50f, 40f)), e);
+        Assert.Equal(1, sim.World.Kills[0]);
+        Assert.Equal(1, sim.World.Losses[1]);
+        // The footprint touches open ground, so the pocket rule reopens it.
+        NavGrid g = sim.World.NavGrid;
+        for (int y = 19; y <= 20; y++)
+            for (int x = 24; x <= 25; x++)
+                Assert.True(g.IsPassable(x, y));
+        Assert.Equal(default, sim.World.Units.Target[a.Index]);
+    }
+
+    // ---------- wind-up grace and facing ----------
+
+    /// <summary>
+    /// Producer default (M4-1): a target that steps out of reach during the wind-up is still hit within reach + 0.5 m,
+    /// else the swing is lost and the attacker goes after it. The attacker faces its target while it swings.
+    /// </summary>
+    [Theory]
+    [InlineData(0.4f, true)]
+    [InlineData(0.6f, false)]
+    public void TargetLeavingReachDuringTheWindup_IsHitWithinTheGrace_ElseTheSwingIsLost(float pastReach, bool hits)
+    {
+        Simulation sim = Flat();
+        EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 20, 20));
+        EntityHandle b = Place(sim, 1, Crossbowman, At(sim, 20, 20, dx: 1f, dy: 0.5f)); // in reach, and it never swings back
+        UnitStore u = sim.World.Units;
+        UnitDef hi = Def(HeavyInfantry);
+        RunUntil(sim, () => u.WindupTicks[a.Index] > 0, 20);
+        Assert.Equal(UnitState.Attacking, u.State[a.Index]);
+        Assert.Equal(hi.Attack.WindupTicks, u.WindupTicks[a.Index]);
+        Vector2 d = u.Position[b.Index] - u.Position[a.Index];
+        Assert.Equal(Determinism.SimMath.Atan2(d.Y, d.X), u.Facing[a.Index]);
+        // Step b straight out to reach + pastReach, edge to edge.
+        float reachCenter = hi.Attack.Range + u.Radius[a.Index] + u.Radius[b.Index];
+        u.Position[b.Index] = u.Position[a.Index] + Vector2.Normalize(d) * (reachCenter + pastReach);
+        int hp = u.Hp[b.Index];
+        for (int t = 0; t < hi.Attack.WindupTicks; t++) sim.Tick();
+        Assert.Equal(hits ? hp - DamageCalc.Compute(TestSim.Data.DamageTable, hi.Attack, 0, Def(Crossbowman).ArmorClass, Def(Crossbowman).Armor) : hp, u.Hp[b.Index]);
+        Assert.Equal(0, u.WindupTicks[a.Index]);
+        Assert.Equal(b, u.Target[a.Index]);
+        // Out of reach once the swing is over: a stood down at once (phase 10) and chases from the next phase 7.
+        Assert.Equal(UnitState.Idle, u.State[a.Index]);
+        sim.Tick();
+        Assert.Equal(UnitState.Moving, u.State[a.Index]);
+    }
+
+    /// <summary>
+    /// BUG-0141 (M4-1 fix): a retaliator whose anchor cell a building covers while it chases still ends its engagement
+    /// once its target is dead: "at the anchor" includes the point the Move rule resolves the anchor to.
+    /// </summary>
+    [Fact]
+    public void Retaliator_WhoseAnchorCellIsBuiltOver_EndsItsEngagementAfterTheKill()
+    {
+        Simulation sim = Flat();
+        Vector2 home = At(sim, 30, 30);
+        EntityHandle a = Place(sim, 0, HeavyInfantry, home);
+        EntityHandle v = Place(sim, 1, Raider, At(sim, 30, 30, dx: 7f));
+        UnitStore u = sim.World.Units;
+        sim.Enqueue(Command.HoldPosition(1, v));
+        u.Hp[v.Index] = 30; // a short fight
+        RunUntil(sim, () => u.Mode[a.Index] == CombatMode.Retaliate && Vector2.Distance(u.Position[a.Index], home) > 3f, 200);
+        Assert.Equal(CombatMode.Retaliate, u.Mode[a.Index]);
+        GatherMaps.Building(sim, 29, 29, player: 0, type: TestSim.Data.FindBuilding("malazan_billet"));
+        Assert.False(sim.World.NavGrid.IsPassable(30, 30));
+        RunUntil(sim, () => !u.IsAlive(v), 600);
+        Assert.False(u.IsAlive(v));
+        RunUntil(sim, () => u.Mode[a.Index] == CombatMode.None && u.State[a.Index] == UnitState.Idle, 400);
+        Assert.Equal(CombatMode.None, u.Mode[a.Index]);
+        Assert.Equal(UnitState.Idle, u.State[a.Index]);
+        Assert.True(Vector2.Distance(u.Position[a.Index], home) < 4f, $"{Vector2.Distance(u.Position[a.Index], home)} m from home");
+    }
+
+    /// <summary>
+    /// A Stop to a unit mid-fight leaves it with no target, no mode and Idle on the tick it applies (the companion of the
+    /// order fuzzes' re-baselined invariants). Its target is a Crossbowman, which never swings in this slice, so no hit
+    /// re-engages it, and the Stop applies on a tick its slot does not scan.
+    /// </summary>
+    [Fact]
+    public void Stop_OnAFightingUnit_LeavesNoTarget_NoMode_AndIdle_OnTheTickItApplies()
+    {
+        Simulation sim = Flat();
+        EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 20, 20));
+        EntityHandle b = Place(sim, 1, Crossbowman, At(sim, 20, 20, dx: 1f));
+        Assert.Equal(0, a.Index); // scans on ticks 0 mod 4
+        UnitStore u = sim.World.Units;
+        RunUntil(sim, () => u.State[a.Index] == UnitState.Attacking, 40);
+        Assert.Equal(UnitState.Attacking, u.State[a.Index]);
+        RunUntil(sim, () => sim.World.TickNumber % CombatConstants.ScanInterval == 1, 8);
+        sim.Enqueue(Command.Stop(0, a));
+        sim.Tick();
+        sim.Tick(); // the Stop applies at the start of this tick (number 2 mod 4: no scan for slot 0)
+        Assert.True(u.IsAlive(b));
+        Assert.Equal(default, u.Target[a.Index]);
+        Assert.Equal(CombatMode.None, u.Mode[a.Index]);
+        Assert.Equal(UnitState.Idle, u.State[a.Index]);
+        Assert.Equal(0, u.WindupTicks[a.Index]);
+    }
+}

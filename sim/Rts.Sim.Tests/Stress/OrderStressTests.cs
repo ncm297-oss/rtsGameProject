@@ -55,7 +55,8 @@ public class OrderStressTests
             Assert.True(g.WorldToCell(pos, out int cx, out int cy) && g.IsPassable(cx, cy), $"{at}: on blocked ground or off the map at {pos}");
             if (u.Hold[i])
             {
-                Assert.Equal(UnitState.Idle, u.State[i]);
+                // Re-baselined for M4-1 (BUG-0135): a holder fights what comes in reach, so it is Idle or Attacking (and never moves, below).
+                Assert.True(u.State[i] is UnitState.Idle or UnitState.Attacking, $"{at}: holding but {u.State[i]}");
                 Assert.Equal(-1, u.GoalCell[i]);
                 if (heldBefore[i]) Assert.True(pos == posBefore[i], $"{at}: holding unit moved {posBefore[i]} -> {pos}");
             }
