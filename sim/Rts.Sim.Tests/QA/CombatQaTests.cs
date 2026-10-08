@@ -279,7 +279,7 @@ public class CombatQaTests
     // ---------- data conformance ----------
 
     /// <summary>docs/factions/whirlwind.md: "Battering Ram: attacks buildings only." A ram next to an enemy worker must not hit it.</summary>
-    [Fact(Skip = "BUG-0139: the ram attacks units (no data hook for buildings-only yet)")]
+    [Fact] // BUG-0139, closed by attack.targets (M4-2a)
     public void BatteringRam_AttacksBuildingsOnly_NeverAUnit()
     {
         Simulation sim = Flat();

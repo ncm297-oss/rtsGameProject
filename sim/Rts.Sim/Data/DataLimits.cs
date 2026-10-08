@@ -34,6 +34,9 @@ public static class DataLimits
     public static readonly ImmutableArray<string> BuildingSlotIds = ImmutableArray.Create(
         "town_hall", "house", "camp", "infantry_hall", "ranged_hall", "shock_hall", "forge", "caster_hall", "siege_works", "watch_tower");
 
+    /// <summary>JSON spelling of each <see cref="AttackTargets"/>, indexed by the enum value (<c>attack.targets</c>, M4-2a).</summary>
+    public static readonly ImmutableArray<string> AttackTargetIds = ImmutableArray.Create("all", "units", "buildings");
+
     /// <summary>JSON spelling of each <see cref="TechStat"/>, indexed by the enum value (docs/03 "Data format", M3-5).</summary>
     public static readonly ImmutableArray<string> TechStatIds = ImmutableArray.Create("attack", "armor", "range", "hp", "abilityCooldown");
 

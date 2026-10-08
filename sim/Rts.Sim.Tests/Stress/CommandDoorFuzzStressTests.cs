@@ -27,12 +27,37 @@ public class CommandDoorFuzzStressTests
 
     private const int Players = 2;
 
-    /// <summary>docs/03: a defined kind, no flag but Queued, and Queued only on a unit order (Move, Stop, HoldPosition, AttackMove, Gather, Build, Repair; not SpawnBuilding, M3-2, Cancel, M3-3, the production kinds, M3-4, or Research, M3-5).</summary>
-    private static bool OracleWellFormed(int kind, int flags)
+    /// <summary>docs/03: a defined kind, no flag but Queued, and Queued only on a unit order (Move, Stop, HoldPosition, AttackMove, Gather, Build, Repair, Attack; not SpawnBuilding, M3-2, Cancel, M3-3, the production kinds, M3-4, or Research, M3-5); an attack target on an Attack only (M4-2a).</summary>
+    private static bool OracleWellFormed(int kind, int flags, bool hasTarget)
     {
-        if (kind < 0 || kind > 15) return false; // M3-4: 11-14 Train, CancelTrain, SetRally, ClearRally; M3-5: 15 Research
+        if (kind < 0 || kind > 16) return false; // M3-4: 11-14 Train, CancelTrain, SetRally, ClearRally; M3-5: 15 Research; M4-2a: 16 Attack
         if ((flags & ~1) != 0) return false;
-        return flags == 0 || (kind >= 2 && kind <= 10 && kind != 6 && kind != 9);
+        if (hasTarget && kind != 16) return false;
+        return flags == 0 || (kind >= 2 && kind <= 10 && kind != 6 && kind != 9) || kind == 16;
+    }
+
+    /// <summary>M4-2a: an Attack's target: a live unit or building of either player most of the time, else a stale or bogus handle.</summary>
+    private static Command AttackOn(ref SimRng rng, Simulation sim, int player, EntityHandle unit, bool queued)
+    {
+        bool building = rng.NextInt(0, 4) == 0;
+        int capacity = building ? sim.World.Buildings.Capacity : sim.World.Units.Capacity;
+        int start = rng.NextInt(0, capacity);
+        EntityHandle target = new(start, 1);
+        for (int n = 0; n < capacity; n++)
+        {
+            int k = (start + n) % capacity;
+            bool alive = building ? sim.World.Buildings.Alive[k] : sim.World.Units.Alive[k];
+            if (!alive) continue;
+            target = building ? sim.World.Buildings.HandleOf(k) : new EntityHandle(k, sim.World.Units.Generation[k]);
+            break;
+        }
+        target = rng.NextInt(0, 6) switch
+        {
+            0 => new EntityHandle(target.Index, target.Generation + 1),
+            1 => new EntityHandle(-1, 0),
+            _ => target,
+        };
+        return Command.Attack(player, unit, target, building, queued);
     }
 
     private static Command RandomCommand(ref SimRng rng, Simulation sim, List<Vector2> open, List<Vector2> nodes)
@@ -75,18 +100,22 @@ public class CommandDoorFuzzStressTests
             14 => Command.Train(player, at, rng.NextInt(-1, TestSim.UnitTypeCount + 1)),
             15 => rng.NextInt(0, 2) == 0 ? Command.CancelTrain(player, at, rng.NextInt(-1, 7)) : Command.Research(player, at, rng.NextInt(-1, TestSim.Data.Techs.Length + 1)),
             16 => rng.NextInt(0, 2) == 0 ? Command.SetRally(player, buildingCell, p) : Command.ClearRally(player, at),
+            // M4-2a: Attack, on live, stale and bogus targets of either player, units and buildings.
+            10 or 11 => AttackOn(ref rng, sim, player, h, queued),
             _ => Command.Move(player, h, p, queued),
         };
         // About one command in five is malformed in one way.
         switch (rng.NextInt(0, 25))
         {
-            case 0: c.Kind = (CommandKind)(16 + rng.NextInt(0, 3)); break; // 8-10 Build, Cancel, Repair (M3-3); 11-14 production (M3-4); 15 Research (M3-5)
+            case 0: c.Kind = (CommandKind)(17 + rng.NextInt(0, 3)); break; // 8-10 Build, Cancel, Repair (M3-3); 11-14 production (M3-4); 15 Research (M3-5); 16 Attack (M4-2a)
             case 1: c.Kind = (CommandKind)(-1 - rng.NextInt(0, 3)); break;
             case 2: c.Kind = (CommandKind)int.MinValue; break;
             case 3: c.Flags = 2 << rng.NextInt(0, 30); break;
             case 4: c.Flags = -1; break;
             case 5: c.Flags = Command.QueuedFlag; break; // malformed only on Noop / SpawnUnit / SpawnBuilding
             case 6: c.Player = rng.NextInt(0, 2) == 0 ? -1 : Players + rng.NextInt(0, 3); break;
+            case 7: c.Target = new EntityHandle(rng.NextInt(0, 4), 1); break; // M4-2a: malformed except on an Attack
+            case 8: c.TargetIsBuilding = true; break;
         }
         return c;
     }
@@ -171,7 +200,7 @@ public class CommandDoorFuzzStressTests
         var bornAt = new Vector2[unitCapacity];
         var bornOnGround = new bool[unitCapacity];
         int accepted = 0, malformed = 0, badPlayer = 0, full = 0;
-        var perKind = new int[16];
+        var perKind = new int[17];
         for (int t = 0; t < ticks; t++)
         {
             int n = rng.NextInt(0, 2) == 0 ? rng.NextInt(0, 6) : rng.NextInt(0, 36); // bursts fill the queue (36 since M3-2: longer runs of orders that drop at apply)
@@ -181,7 +210,7 @@ public class CommandDoorFuzzStressTests
                 ulong hashA = a.StateHash(), hashB = b.StateHash();
                 int pending = a.PendingCommandCount;
                 bool playerOk = (uint)c.Player < Players;
-                bool wellFormed = OracleWellFormed((int)c.Kind, c.Flags);
+                bool wellFormed = OracleWellFormed((int)c.Kind, c.Flags, c.Target != default || c.TargetIsBuilding);
                 bool room = pending < commandCapacity;
                 if (!playerOk)
                 {
@@ -227,7 +256,7 @@ public class CommandDoorFuzzStressTests
         Assert.Equal(ticks, res.TicksRun);
         _out.WriteLine($"seed {seed}: {accepted} accepted, {malformed} malformed refused, {badPlayer} unknown players refused, {full} refused full; {a.World.Units.Count} units alive at the end; replay of {r.Checkpoints.Length} checkpoints matched");
         Assert.True(accepted > 1000 && malformed > 100 && badPlayer > 20 && full > 20, "precondition: every door path exercised");
-        // M3-H2: every defined kind, 0 to 15, went through the door accepted.
+        // M3-H2: every defined kind, 0 to 16 (M4-2a: Attack), went through the door accepted.
         Assert.True(perKind.All(n => n > 0), "accepted per kind: " + string.Join(", ", perKind));
     }
 }

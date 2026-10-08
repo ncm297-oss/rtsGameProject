@@ -18,4 +18,11 @@ public enum CombatMode : byte
 
     /// <summary>A retaliating unit pulled back by the leash: walks to its anchor without scanning (so it can't be kited back and forth), then <see cref="None"/>.</summary>
     Returning = 3,
+
+    /// <summary>
+    /// An explicit <c>Attack</c> order (M4-2a): the target is held (no scan re-picks it), the leash does not apply, and
+    /// the chase ends only when the target dies, another order is taken, or the give-up memory ends an unreachable chase;
+    /// then the unit stands Idle where it is (no anchor) and its queue may advance.
+    /// </summary>
+    Ordered = 4,
 }

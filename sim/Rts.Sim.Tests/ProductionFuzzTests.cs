@@ -1,5 +1,6 @@
 using System.Numerics;
 using Rts.Sim.Commands;
+using Rts.Sim.Replays;
 using Rts.Sim.Data;
 using Rts.Sim.Determinism;
 using Rts.Sim.Entities;
@@ -286,7 +287,7 @@ public class ProductionFuzzTests
         Replays.Replay replay = rec.ToReplay();
         byte[] bytes = Replays.ReplayFormat.Write(replay);
         Assert.Equal(Replays.ReplayError.None, Replays.ReplayFormat.TryRead(bytes, out Replays.Replay? back));
-        Assert.Equal(3, back!.FormatVersion);
+        Assert.Equal(Replay.CurrentFormatVersion, back!.FormatVersion);
         foreach (CommandKind k in new[] { CommandKind.Train, CommandKind.CancelTrain, CommandKind.SetRally, CommandKind.ClearRally })
             Assert.Contains(back.Commands, c => c.Kind == k);
         Replays.ReplayResult result = Replays.ReplayPlayer.Run(back, TestSim.Data);

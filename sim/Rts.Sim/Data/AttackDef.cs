@@ -27,6 +27,8 @@ public sealed class AttackDef
     public bool FriendlyFire { get; init; }
     /// <summary>Projectile id, unresolved until M4; null for melee.</summary>
     public string? Projectile { get; init; }
+    /// <summary>What the attack may target (<c>attack.targets</c>, M4-2a): units, buildings or both (the default).</summary>
+    public AttackTargets Targets { get; init; }
     /// <summary>Damage multiplier per armor class id (1 where the data gives none).</summary>
     public required ImmutableArray<float> BonusVs { get; init; }
 }

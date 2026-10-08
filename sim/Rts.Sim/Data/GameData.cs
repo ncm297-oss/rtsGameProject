@@ -128,6 +128,7 @@ public sealed class GameData
             h.Add(a.Splash);
             h.Add(a.FriendlyFire);
             h.Add(a.Projectile);
+            h.Add((int)a.Targets);
             AddAll(ref h, a.BonusVs);
             h.Add(u.SpeedPerTick);
             h.Add(u.Sight);

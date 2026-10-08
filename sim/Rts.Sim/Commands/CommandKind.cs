@@ -50,4 +50,12 @@ public enum CommandKind
 
     /// <summary>Queues tech <see cref="Command.TypeId"/> at the player's own finished building covering <see cref="Command.Position"/>, paying its cost now (M3-5; not a unit order). <see cref="CancelTrain"/> cancels it like a unit.</summary>
     Research = 15,
+
+    /// <summary>
+    /// Orders <see cref="Command.Unit"/> to attack <see cref="Command.Target"/> (a unit, or a building when
+    /// <see cref="Command.TargetIsBuilding"/>) until it dies or another order ends it (M4-2a). Dropped at apply for a dead or
+    /// recycled target, an own target, a target the attacker's <c>attack.targets</c> forbids, or an attacker that cannot
+    /// fight yet.
+    /// </summary>
+    Attack = 16,
 }

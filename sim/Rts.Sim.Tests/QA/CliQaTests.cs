@@ -254,7 +254,7 @@ public class CliQaTests
     [InlineData(7, "FF800000")]   // -inf y
     [InlineData(6, "7F7FFFFF")]   // float.MaxValue x
     [InlineData(8, "-5")]         // unit index (spawn ignores it)
-    [InlineData(10, "1")]         // queued flag on a spawn
+    [InlineData(13, "1")]         // queued flag on a spawn (field 13 since format 4)
     public void Play_HostileCommandFields_NeverThrow(int field, string value)
     {
         string path = Path.Combine(TempDir(), "h.replay");
@@ -282,11 +282,11 @@ public class CliQaTests
     [Theory]
     [InlineData(4, "99")]          // undefined kind
     [InlineData(4, "-1")]          // negative kind
-    [InlineData(4, "16")]          // one past the last kind (15, Research, since M3-5)
+    [InlineData(4, "17")]          // one past the last kind (16, Attack, since M4-2a)
     [InlineData(4, "-2147483648")] // int.MinValue kind
-    [InlineData(10, "2")]          // unknown flag bit
-    [InlineData(10, "-1")]         // every flag bit
-    [InlineData(10, "1")]          // queued flag on a spawn
+    [InlineData(13, "2")]          // unknown flag bit
+    [InlineData(13, "-1")]         // every flag bit
+    [InlineData(13, "1")]          // queued flag on a spawn
     public void Play_MalformedKindOrFlags_Exit2_InvalidCommand(int field, string value)
     {
         string path = Path.Combine(TempDir(), "k.replay");

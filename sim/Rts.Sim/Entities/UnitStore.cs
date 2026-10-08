@@ -322,6 +322,22 @@ public sealed class UnitStore
         _freeList[_freeCount++] = handle.Index;
     }
 
+    /// <summary>
+    /// The target of queue entry <paramref name="entry"/> (an index into the flat queue arrays), an <see cref="CommandKind.Attack"/>
+    /// entry (M4-2a): an Attack has no target point, so its <see cref="QueuePosition"/> holds the target's slot (x) and
+    /// generation (y) as whole numbers, exact in a float below 2^24 (a generation counts frees of one slot: a 24-hour
+    /// match can't reach that), and its <see cref="QueueTypeId"/> is 1 for a building. Kept in the existing arrays, not a
+    /// new one, so the queue costs no more memory (a 1,024-cell world with 4,096 slots stays inside its 228 MB bound).
+    /// </summary>
+    public EntityHandle QueuedTarget(int entry) => new((int)QueuePosition[entry].X, (int)QueuePosition[entry].Y);
+
+    /// <summary>Writes <see cref="QueuedTarget"/> for entry <paramref name="entry"/>.</summary>
+    internal void SetQueuedTarget(int entry, EntityHandle target, bool isBuilding)
+    {
+        QueuePosition[entry] = new Vector2(target.Index, target.Generation);
+        QueueTypeId[entry] = isBuilding ? 1 : 0;
+    }
+
     /// <summary>Drops every queued order of slot <paramref name="index"/>, resetting all its entries so unused ones stay default.</summary>
     internal void ClearQueue(int index)
     {

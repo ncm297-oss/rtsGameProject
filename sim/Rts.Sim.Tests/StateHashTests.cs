@@ -318,6 +318,70 @@ public class StateHashTests
         Assert.Equal(before, c.StateHash());
     }
 
+    /// <summary>M4-2a: a pending Attack's target (index, generation, building or not) is hashed.</summary>
+    [Fact]
+    public void Hash_CoversAPendingAttacksTarget()
+    {
+        Simulation Make()
+        {
+            var sim = new Simulation(Config(5));
+            sim.Enqueue(Command.SpawnUnit(0, typeId: 0, new Vector2(20f, 20f)));
+            sim.Tick();
+            sim.Tick();
+            return sim;
+        }
+        var unit = new EntityHandle(0, 1);
+        var hashes = new List<ulong>();
+        foreach (Command c in new[]
+        {
+            Command.Attack(0, unit, new EntityHandle(3, 1), false),
+            Command.Attack(0, unit, new EntityHandle(4, 1), false),
+            Command.Attack(0, unit, new EntityHandle(3, 2), false),
+            Command.Attack(0, unit, new EntityHandle(3, 1), true),
+            Command.Attack(0, unit, default, false),
+        })
+        {
+            Simulation sim = Make();
+            sim.Enqueue(c);
+            hashes.Add(sim.StateHash());
+        }
+        Assert.Equal(hashes.Count, hashes.Distinct().Count());
+    }
+
+    /// <summary>M4-2a: a queued Attack's target (slot, generation, building or not) is hashed in every queue entry, and reads back exactly.</summary>
+    [Fact]
+    public void Hash_CoversEveryQueuedAttackTarget()
+    {
+        var sim = new Simulation(Config(6));
+        sim.Enqueue(Command.SpawnUnit(0, typeId: 0, new Vector2(20f, 20f)));
+        sim.Tick();
+        sim.Tick();
+        UnitStore u = sim.World.Units;
+        ulong h0 = sim.StateHash();
+        for (int k = 0; k < Orders.OrderConstants.QueueCapacity; k++)
+        {
+            u.QueueKind[k] = CommandKind.Attack;
+            u.SetQueuedTarget(k, new EntityHandle(2, 1), false);
+            ulong one = sim.StateHash();
+            Assert.NotEqual(h0, one);
+            Assert.Equal(new EntityHandle(2, 1), u.QueuedTarget(k));
+            u.SetQueuedTarget(k, new EntityHandle(2, 2), false);
+            ulong two = sim.StateHash();
+            Assert.NotEqual(one, two);
+            u.SetQueuedTarget(k, new EntityHandle(3, 2), false);
+            Assert.NotEqual(two, sim.StateHash());
+            u.SetQueuedTarget(k, new EntityHandle(3, 2), true);
+            ulong building = sim.StateHash();
+            Assert.True(building != two && building != one);
+            // Exact for any slot of the largest store and a generation far past a day's frees.
+            u.SetQueuedTarget(k, new EntityHandle(Replays.Replay.MaxCapacity - 1, (1 << 24) - 1), true);
+            Assert.Equal(new EntityHandle(Replays.Replay.MaxCapacity - 1, (1 << 24) - 1), u.QueuedTarget(k));
+            u.QueueKind[k] = CommandKind.Noop;
+            u.SetQueuedTarget(k, default, false);
+            Assert.Equal(h0, sim.StateHash());
+        }
+    }
+
     /// <summary>M1-7: Hold, the queue count, and every queue entry of a live unit (also past the count) are hashed; a unit with no orders hashes as before the queue existed (the golden's checkpoints did not move).</summary>
     [Fact]
     public void Hash_CoversHoldAndEveryQueueEntry()

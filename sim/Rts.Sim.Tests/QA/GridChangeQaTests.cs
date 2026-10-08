@@ -481,7 +481,10 @@ public class GridChangeQaTests
         {
             int longest = 0, tick = 0;
             var wait = new int[600];
-            CrowdRows.Result r = CrowdRows.ToFourPoints(1, 300, 3000, onePlayerPerPoint: true, everyTick: w =>
+            // Combat off (config only; docs/03 "Combat switch"): a movement row with a walking bound. Since M4-2a's ram stopped
+            // fighting units the two-player brawl here changes, and a retaliator can ping-pong between two targets at its sight edge
+            // forever (reported with M4-2a); combat-on termination is CombatTerminationTests'.
+            CrowdRows.Result r = CrowdRows.ToFourPoints(1, 300, 3000, onePlayerPerPoint: true, combat: false, everyTick: w =>
             {
                 for (int i = 0; i < w.Units.Capacity; i++)
                 {

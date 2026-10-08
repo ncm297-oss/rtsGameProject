@@ -111,7 +111,7 @@ public class ReplayPlayerTests
     [Fact]
     public void OtherFormatVersion_IsRefusedBeforeAnyTick()
     {
-        foreach (int version in new[] { 0, Replay.CurrentFormatVersion - 1, Replay.CurrentFormatVersion + 1, -1 })
+        foreach (int version in new[] { 0, Replay.OldestFormatVersion - 1, Replay.CurrentFormatVersion + 1, -1 })
         {
             ReplayResult result = ReplayPlayer.Run(ReplayTestRun.With(Recorded, formatVersion: version), TestSim.Data);
             Assert.Equal(ReplayError.FormatVersionMismatch, result.Error);

@@ -36,7 +36,10 @@ public class GridChangeFuzzStressTests
 
     private static Scene NewScene(ulong seed)
     {
-        SimConfig config = TestSim.Config(Seed: seed, PlayerCount: 2, UnitCapacity: 160, CommandCapacity: 512)
+        // Combat off (config only; docs/03 "Combat switch"): a movement row with a walking bound. Since M4-2a's ram stopped
+        // fighting units the two-player brawl here changes, and a retaliator can ping-pong between two targets at its sight edge
+        // forever (reported with M4-2a); combat-on termination is CombatTerminationTests'.
+        SimConfig config = TestSim.ConfigNoCombat(Seed: seed, PlayerCount: 2, UnitCapacity: 160, CommandCapacity: 512)
             with { Map = MapGenParams.Default with { Forests = 16, GoldMines = 2 } };
         var sim = new Simulation(config);
         NavGrid g = sim.World.NavGrid;
@@ -191,7 +194,7 @@ public class GridChangeFuzzStressTests
                 g.WorldToCell(u.Position[i], out int x, out int y);
                 int c = y * g.Width + x;
                 string fs = f == null ? "no usable field" : $"field v{f.Version}/b{f.BlockVersion} target {f.TargetCell} dir {f.DirectionAt(c)} cost {f.CostAt(c)}";
-                sb.AppendLine($"  unit {i} goal {gc} ({gc % g.Width},{gc / g.Width}) at cell ({x},{y}) passable {g.IsPassable(x, y)} flags {g.FlagsAt(x, y)} vel {u.Velocity[i]} stuck {u.StuckTicks[i]} orderTick {u.OrderTick[i]} {fs}");
+                sb.AppendLine($"  unit {i} goal {gc} ({gc % g.Width},{gc / g.Width}) at cell ({x},{y}) passable {g.IsPassable(x, y)} flags {g.FlagsAt(x, y)} vel {u.Velocity[i]} stuck {u.StuckTicks[i]} orderTick {u.OrderTick[i]} target {u.Target[i]}{(u.TargetIsBuilding[i] ? " (building)" : "")} mode {u.Mode[i]} {fs}");
             }
         }
         return sb.ToString();

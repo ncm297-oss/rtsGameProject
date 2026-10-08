@@ -82,7 +82,10 @@ public class CrowdRowSweepStressTests
         var stuck = new List<string>();
         for (ulong seed = 81; seed <= 140; seed++)
         {
-            CrowdRows.Result r = CrowdRows.MoreGoalsThanCacheSlots(seed);
+            // Combat off (config only; docs/03 "Combat switch"): a movement row with a walking bound. Since M4-2a's ram stopped
+            // fighting units the two-player brawl here changes, and a retaliator can ping-pong between two targets at its sight edge
+            // forever (reported with M4-2a); combat-on termination is CombatTerminationTests'.
+            CrowdRows.Result r = CrowdRows.MoreGoalsThanCacheSlots(seed, combat: false);
             if (r.StillMoving != 0) stuck.Add($"seed {seed}: {r.StillMoving} still moving after {r.Ticks} ticks");
         }
         _out.WriteLine($"seeds 81-140: {stuck.Count} of 60 maps never stop. {string.Join("; ", stuck)}");

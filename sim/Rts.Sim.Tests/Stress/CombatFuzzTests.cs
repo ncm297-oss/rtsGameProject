@@ -13,7 +13,8 @@ namespace Rts.Sim.Tests.Stress;
 
 /// <summary>
 /// M4-1 criterion 7: two players on a flat 64 x 48 map with a base each, a mine and a grove, 3,000 ticks of random
-/// AttackMove / Move / Stop / Hold / Gather (queued and not) / Train, dev spawns, units and buildings freed between ticks,
+/// AttackMove / Move / Stop / Hold / Gather / Attack (M4-2a: enemy and own units and buildings, live or stale; queued and
+/// not) / Train, dev spawns, units and buildings freed between ticks,
 /// buildings dropped, 6 seeds. After every tick: hit points in (0, max]; no live unit targets a dead unit or building; a
 /// unit Attacking on two ticks running, not ordered in between and whose target the test didn't free, has not moved, nor has a
 /// holder; population equals its
@@ -76,7 +77,7 @@ public class CombatFuzzTests
         var lastGen = new int[cap];
         long deaths = 0;
         var lossesSeen = new long[2];
-        int attackingTicks = 0, holdingChecks = 0, buildingDeaths = 0;
+        int attackingTicks = 0, holdingChecks = 0, buildingDeaths = 0, attackOrders = 0, orderedTicks = 0;
 
         for (int t = 0; t < Ticks; t++)
         {
@@ -92,12 +93,14 @@ public class CombatFuzzTests
                 Vector2 target = new(2.5f + rng.NextFloat() * (W * 2 - 5), 2.5f + rng.NextFloat() * (H * 2 - 5));
                 bool queued = rng.NextInt(0, 4) == 0;
                 int roll = rng.NextInt(0, 100);
-                Command c = roll < 40 ? Command.AttackMove(p, h, target, queued)
-                    : roll < 60 ? Command.Move(p, h, target, queued)
-                    : roll < 70 ? Command.Stop(p, h, queued)
-                    : roll < 82 ? Command.HoldPosition(p, h, queued)
-                    : roll < 92 ? Command.Gather(p, h, rng.NextInt(0, 2) == 0 ? At(a, 30, 22) : At(a, 26 + 2 * rng.NextInt(0, 6), 42), queued)
+                Command c = roll < 32 ? Command.AttackMove(p, h, target, queued)
+                    : roll < 48 ? Command.Move(p, h, target, queued)
+                    : roll < 56 ? Command.Stop(p, h, queued)
+                    : roll < 66 ? Command.HoldPosition(p, h, queued)
+                    : roll < 76 ? Command.Gather(p, h, rng.NextInt(0, 2) == 0 ? At(a, 30, 22) : At(a, 26 + 2 * rng.NextInt(0, 6), 42), queued)
+                    : roll < 92 ? AttackOrder(ref rng, w, p, h, queued)
                     : Command.Train(p, p == 0 ? At(a, 5, 27) : At(a, 57, 27), p == 0 ? GatherMaps.Infantry : ProductionMaps.Raider);
+                if (c.Kind == CommandKind.Attack) attackOrders++;
                 Both(a, b, c);
                 if (c.Kind != CommandKind.Train) orderedNext[i] = true;
             }
@@ -178,6 +181,13 @@ public class CombatFuzzTests
                 bool same = lastGen[i] == u.Generation[i] && !ordered[i];
                 bool attacking = u.State[i] == UnitState.Attacking;
                 if (attacking) attackingTicks++;
+                if (u.Mode[i] == CombatMode.Ordered && u.Target[i] != default)
+                {
+                    orderedTicks++;
+                    // An explicit Attack's target is one its attack.targets allows.
+                    AttackTargets allowed = def.Attack.Targets;
+                    Assert.True(allowed == AttackTargets.All || (allowed == AttackTargets.Buildings) == u.TargetIsBuilding[i], $"seed {seed} tick {ran}: unit {i} ({def.Key}) targets a kind its attack.targets forbids");
+                }
                 // Attacking at the end of both ticks and not ordered: nothing may have moved it in between.
                 if (same && wasAttacking[i] && attacking)
                     Assert.True(pos == lastPos[i], $"seed {seed} tick {ran}: unit {i} ({def.Key}) moved while Attacking, {lastPos[i]} -> {pos}; "
@@ -194,9 +204,35 @@ public class CombatFuzzTests
                 lastGen[i] = u.Generation[i];
             }
         }
-        _out.WriteLine($"seed {seed}: {deaths} deaths ({buildingDeaths} buildings), kills {w.Kills[0]}/{w.Kills[1]}, {attackingTicks} unit-ticks Attacking, {holdingChecks} holder checks, {u.Count} units left");
+        _out.WriteLine($"seed {seed}: {deaths} deaths ({buildingDeaths} buildings), kills {w.Kills[0]}/{w.Kills[1]}, {attackingTicks} unit-ticks Attacking, {holdingChecks} holder checks, " +
+            $"{attackOrders} Attack orders, {orderedTicks} unit-ticks under one, {u.Count} units left");
         Assert.True(deaths >= 20, $"seed {seed}: only {deaths} deaths; the mix is not fighting");
         Assert.True(attackingTicks > 0 && holdingChecks > 0);
+        Assert.True(orderedTicks > 0, $"seed {seed}: no Attack order was ever taken");
+    }
+
+    /// <summary>M4-2a: an Attack on a random unit (mostly an enemy's) or, one time in four, a random building; one in six handles stale.</summary>
+    private static Command AttackOrder(ref SimRng rng, World w, int p, EntityHandle h, bool queued)
+    {
+        bool building = rng.NextInt(0, 4) == 0;
+        EntityHandle target = default;
+        if (building)
+        {
+            BuildingStore bs = w.Buildings;
+            int start = rng.NextInt(0, bs.Capacity);
+            for (int n = 0; n < bs.Capacity && target == default; n++)
+            {
+                int k = (start + n) % bs.Capacity;
+                if (bs.Alive[k]) target = bs.HandleOf(k);
+            }
+        }
+        else
+        {
+            int j = RandomUnit(w.Units, rng.NextInt(0, 5) == 0 ? p : 1 - p, rng.NextInt(0, w.Units.Capacity));
+            if (j >= 0) target = new EntityHandle(j, w.Units.Generation[j]);
+        }
+        if (rng.NextInt(0, 6) == 0) target = new EntityHandle(target.Index, target.Generation + 1);
+        return Command.Attack(p, h, target, building, queued);
     }
 
     /// <summary>A target freed by the test between ticks is an outside event, like an order: its attackers may stand down and walk on the next tick.</summary>

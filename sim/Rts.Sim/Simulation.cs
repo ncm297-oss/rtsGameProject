@@ -219,7 +219,9 @@ public sealed class Simulation
         for (int i = 0; i < _commands.Count; i++)
         {
             ref readonly Command c = ref _commands[i];
-            h.Add((ulong)(uint)c.Kind | ((ulong)(uint)c.Flags << 32)); // Flags 0: as before M1-7
+            // Flags 0: as before M1-7. M4-2a: bit 63 flags an attack target, whose words follow.
+            bool target = c.Target != default || c.TargetIsBuilding;
+            h.Add((ulong)(uint)c.Kind | ((ulong)(uint)c.Flags << 32) | (target ? 1UL << 63 : 0UL));
             h.Add(c.Player);
             h.Add(c.Tick);
             h.Add(c.Sequence);
@@ -227,6 +229,11 @@ public sealed class Simulation
             h.Add(c.Position);
             h.Add(c.Unit.Index);
             h.Add(c.Unit.Generation);
+            if (target)
+            {
+                h.Add(c.Target.Index);
+                h.Add((ulong)(uint)c.Target.Generation | (c.TargetIsBuilding ? 1UL << 32 : 0UL));
+            }
         }
         return h.Value;
     }
@@ -235,7 +242,8 @@ public sealed class Simulation
     /// Unit <paramref name="i"/>'s order summary for <see cref="StateHash"/>: bit 0 Hold, bit 1 a
     /// non-zero queue count, then one bit per queue entry that isn't default, and bit 16 for gather-loop or
     /// cargo state (M3-2). Zero for a unit with
-    /// no orders; <see cref="AddOrdersToHash"/> then adds nothing.
+    /// no orders; <see cref="AddOrdersToHash"/> then adds nothing. A queued Attack's target (M4-2a) lives in the entry's
+    /// position and type id (<see cref="UnitStore.QueuedTarget"/>), so it is hashed with them.
     /// </summary>
     private static uint OrderBits(UnitStore u, int i)
     {
@@ -295,6 +303,7 @@ public sealed class Simulation
         {
             if (u.QueueKind[head + k] == CommandKind.Noop && u.QueuePosition[head + k] == Vector2.Zero && u.QueueTypeId[head + k] == 0) continue;
             // A queued Build's type id (M3-3) rides in the high half of the kind word: zero for every other kind, so they hash as before.
+            // A queued Attack's building flag does too, and its target's slot and generation are the position (M4-2a).
             h.Add((ulong)(uint)u.QueueKind[head + k] | ((ulong)(uint)u.QueueTypeId[head + k] << 32));
             h.Add(u.QueuePosition[head + k]);
         }
@@ -318,6 +327,7 @@ public sealed class Simulation
             case CommandKind.Gather:
             case CommandKind.Build:
             case CommandKind.Repair:
+            case CommandKind.Attack:
                 OrderSystem.Apply(World, in command);
                 break;
             case CommandKind.Cancel:

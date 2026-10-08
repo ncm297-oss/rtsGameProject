@@ -13,8 +13,11 @@ namespace Rts.Sim.Replays;
 /// </remarks>
 public sealed class Replay
 {
-    /// <summary>The format version this build writes and reads (3 since M3-1: the resource capacity and the resource placer's map fields; 2 since M1-7: command lines carry <see cref="Command.Flags"/>).</summary>
-    public const int CurrentFormatVersion = 3;
+    /// <summary>The format version this build writes (4 since M4-2a: the <see cref="Combat"/> switch in the header and an attack target on every command line; 3 since M3-1: the resource capacity and the resource placer's map fields; 2 since M1-7: command lines carry <see cref="Command.Flags"/>).</summary>
+    public const int CurrentFormatVersion = 4;
+
+    /// <summary>The oldest format version this build still reads and plays: 3 (M3-1), which has no combat line (combat on) and no attack targets.</summary>
+    public const int OldestFormatVersion = 3;
 
     /// <summary>Largest player count a replay may declare (a format limit that bounds what a file can make the reader allocate).</summary>
     public const int MaxPlayers = 16;
@@ -25,8 +28,11 @@ public sealed class Replay
     /// <summary>Largest tick count a replay may declare: 24 hours at 20 Hz, so a small file can't declare a playback of years (BUG-0040).</summary>
     public const int MaxTickCount = 1_728_000;
 
-    /// <summary>Format version; must be <see cref="CurrentFormatVersion"/> to play.</summary>
+    /// <summary>Format version, <see cref="OldestFormatVersion"/> to <see cref="CurrentFormatVersion"/>; the writer writes the replay in this format.</summary>
     public int FormatVersion { get; init; } = CurrentFormatVersion;
+
+    /// <summary><see cref="SimConfig.Combat"/> when recorded (format 4; a format 3 replay was recorded with combat on).</summary>
+    public bool Combat { get; init; } = true;
 
     /// <summary><see cref="SimInfo.Version"/> of the build that recorded it (informational; playback does not check it).</summary>
     public required string SimVersion { get; init; }
@@ -68,7 +74,9 @@ public sealed class Replay
     /// <remarks>The data hash is checked by <see cref="ReplayPlayer.Run"/>, which has the data.</remarks>
     public ReplayError Validate()
     {
-        if (FormatVersion != CurrentFormatVersion) return ReplayError.FormatVersionMismatch;
+        if (FormatVersion < OldestFormatVersion || FormatVersion > CurrentFormatVersion) return ReplayError.FormatVersionMismatch;
+        // Format 3 has no combat line: it can only say "on".
+        if (FormatVersion < 4 && !Combat) return ReplayError.InvalidHeader;
         if (!IsToken(SimVersion)) return ReplayError.InvalidHeader;
         if (Map == null || !MapIsValid(Map)) return ReplayError.InvalidHeader;
         if (PlayerCount < 1 || PlayerCount > MaxPlayers) return ReplayError.InvalidHeader;
@@ -93,6 +101,8 @@ public sealed class Replay
             if ((uint)c.Player >= (uint)PlayerCount) return ReplayError.InvalidCommand;
             // The rule Simulation.Enqueue applies, so everything it accepts reads back (BUG-0054).
             if (!c.IsWellFormed()) return ReplayError.InvalidCommand;
+            // Format 3 lines have no attack target, so an Attack can't be written there.
+            if (FormatVersion < 4 && c.Kind == CommandKind.Attack) return ReplayError.InvalidCommand;
             if (c.Sequence != nextSequence[c.Player]) return ReplayError.InvalidCommand;
             nextSequence[c.Player]++;
         }
