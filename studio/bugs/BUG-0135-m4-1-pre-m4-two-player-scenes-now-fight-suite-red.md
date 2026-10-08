@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S1 |
-| Status | open: 1 of 194 rows left red (`APlacementEveryTwoSeconds_32MarchingGroups_LongestFieldWait_Report`, Perf, 34 ticks on combat; QA recommends combat off, see BUG-0144) |
+| Status | fixed (re-check round 2, 2026-10-07-2315: full suite incl. Perf 3,591 / 3,604, 13 skipped, 0 failed; the field-wait row runs combat off, 16 ticks, chasers' waits tracked as BUG-0144) |
 | Found | 2026-10-07-2014, task M4-1 |
 | System | combat (`CombatSystem`) vs the pre-M4 movement / economy / production test scenes |
-| Fixed by | eebb152 (`SimConfig.Combat`, `TestSim.ConfigNoCombat`, holder invariants re-baselined) |
+| Fixed by | eebb152 (`SimConfig.Combat`, `TestSim.ConfigNoCombat`, holder invariants re-baselined); eace378 (field-wait row and five two-owner walking-bound rows combat off; combat-on termination in `CombatTerminationTests`) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests` on f2879b9: Failed 194, Passed 3,328, Skipped 10 (13 m 22 s).

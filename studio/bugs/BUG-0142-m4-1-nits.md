@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open: items 3-4 fixed in eace378 (`SimConfig.Combat` summary rewritten; retaliation compares `Ignored` only when it is a unit, `CombatTests.HitByAUnitWithTheHandleOfAGivenUpBuilding_StillRetaliates`); items 1-2 open |
 | Found | 2026-10-07-2014, task M4-1 |
 | System | construction placement rule, combat scan stagger |
 | Fixed by | |

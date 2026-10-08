@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | open (M4-2); the original row now runs combat off (eace378), this skipped row keeps the combat-on scene |
 | Found | 2026-10-07-2315 (re-check of 2026-10-07-2014), task M4-1 fix round 1 |
 | System | combat chase x flow-field cache (build cap, placement invalidation) |
 | Fixed by | |
