@@ -175,4 +175,5 @@ bugs outrank new features.
 | [BUG-0156](BUG-0156-unit-hitting-building-ignores-attacker.md) | S3 | open | A unit hitting a building in reach never turns on an enemy unit killing it (tier 0 skipped while in reach) |
 | [BUG-0157](BUG-0157-jittered-attack-move-spam-drops-chasers-fights.md) | S3 | open | Attack-move spam to a new point every 1-3 ticks still costs 10-26 % of a brawl's damage: chasers out of reach lose their fight on each click |
 | [BUG-0158](BUG-0158-blob-scan-perf-row-reads-machine-slowdown-as-delta.md) | S4 | open | QA Perf row `TightBlob2500_OneEnemyAtTheFarCorner_ScansNearFree` reads a sustained-load machine slowdown (4.35 then 7.2 ms runs) as the far enemy's cost; fails alone on base and head alike |
-| [BUG-0160](BUG-0160-m4-v1-combat-view-nits.md) | S4 | open | M4-V1 nits: F12 line covers "K / L", a unit hit before its first frame never flashes, corpses read black for both teams, F12 fallback labels in C# |
+| [BUG-0160](BUG-0160-m4-v1-combat-view-nits.md) | S4 | fixed | M4-V1 nits: F12 line covers "K / L", a unit hit before its first frame never flashes, corpses read black for both teams, F12 fallback labels in C# |
+| [BUG-0190](BUG-0190-m4-v2-attack-order-view-nits.md) | S4 | open | M4-V2 nits: corpse discs on a ramp are half buried; ResolveEnemy takes a NaN unit entry as "no unit" |

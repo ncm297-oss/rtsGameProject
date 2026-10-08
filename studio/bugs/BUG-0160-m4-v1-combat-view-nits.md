@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-08-0313, task M4-V1 |
 | System | combat views / HUD (`UnitViews` + `ViewApi.HitFlash`, `CombatViews`, `ResourceBar`, `DebugOverlay`) |
-| Fixed by | |
+| Fixed by | 9a3d143 (M4-V2); verified by QA 2026-10-08-0913 |
 
 ## Repro
 1. **F12 overlap.** `& $env:GODOT --path game res://tests/DebugOverlayShot.tscn`, open
@@ -37,3 +37,17 @@ As above. None of these breaks a criterion's main path; the developer's and QA's
 - Also noted, not a bug (documented by the developer): a replay recorded from a `--no-combat` match needs
   `ReplayPlayer.Run(..., combat: false)` until replay format 4 carries the switch.
 - The K / L label and the F12 line allocate a string when a count changes (by design: rebuilt on change only).
+
+## Fix verification (QA, 2026-10-08-0913, task M4-V2)
+1. F12 overlap: the label is now five short lines. `CombatViewTest` measures every line with the label's font: the widest
+   is 451 px from x 8, and the resource bar starts at x 682. The label ends at y 123 and the graph starts at y 134. QA
+   looked at windowed shots at 1280 x 720 and 1920 x 1080 (`QaV6Test -- --shots`): no line reaches "Gold / Wood / Pop"
+   or "K / L".
+2. First-sight hit: `HitFlash.Update` with type ids lights a unit first seen below its type's `hp` once. `QaV5Test`
+   phase 2 now requires the flash, and it passes. QA edge rows are in `QA/ViewApi/UnitPickerQaTests.HitFlash_FirstSight_EdgeRows`:
+   a match's first frame, a slot re-used twice, paused frames, a short `maxHp` span.
+3. Corpse tint: fill at 85 % of the owner colour on a darker 1.2x rim disc. In `combat-seed1-corpses-close.png` the
+   Malazan discs are grey and the Whirlwind discs gold, each with a dark rim, clearly apart. At zoom 30 the grey ones read
+   dark but still differ from gold. Leftover: half-buried discs on a ramp, filed as BUG-0190.
+4. Fallback literals: `DebugOverlay._killsName` / `_lossesName` now default to `""`.
+
