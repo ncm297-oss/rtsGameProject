@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-07-2014, task D4 |
 | System | content tests (`sim/Rts.Sim.Tests/Content/TechContentTests.cs` H) |
-| Fixed by | |
+| Fixed by | 3f70d8c (D5): `TechContentTests.H` compares OrdinalIgnoreCase and forbids faction tech names; QA 2026-10-08-0913 verified "moranth supply" and "caster hall" in a short shared description now fail H naming the name |
 
 ## Repro
 Scratch clone of 338da1e, one edit at a time to `game/data/common/techs.json` `age_ii.description`, then
