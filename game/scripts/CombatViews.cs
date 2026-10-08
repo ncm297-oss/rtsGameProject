@@ -22,7 +22,8 @@ namespace Rts.Game;
 /// darker rim disc (<see cref="CorpseRimShade"/>, <see cref="CorpseRimScale"/>; M4-V2, BUG-0160: at 35 % both teams read
 /// black) for <see cref="DeathMarkers.UnitLifetimeTicks"/>,
 /// or a low grey box over a building's footprint for <see cref="DeathMarkers.BuildingLifetimeTicks"/>, both in game time
-/// (sim ticks), at the death position on the terrain. The markers are two more <see cref="MultiMesh"/>es with one instance per
+/// (sim ticks), at the death position on the terrain (a corpse at the highest ground under its rim,
+/// <see cref="TerrainHeight.MaxUnder"/>, so it reads whole on a ramp: BUG-0190). The markers are two more <see cref="MultiMesh"/>es with one instance per
 /// pool slot; an unused instance has a zero transform. A marker's transform is written only when it is added or removed,
 /// so a steady frame writes nothing for them. The pool is fixed (<see cref="DeathMarkers.DefaultCapacity"/>): a death storm
 /// replaces the oldest markers.</para>
@@ -255,6 +256,8 @@ public partial class CombatViews : Node3D
         else
         {
             float r = _data.Units[Math.Clamp(type, 0, _data.Units.Length - 1)].Radius;
+            // At the highest ground under the rim, so a disc on a ramp is not half buried (BUG-0190 item 1).
+            y = TerrainHeight.MaxUnder(world.Heightmap, p.X, p.Y, r * CorpseRimScale);
             _markerTransform[slot] = new Transform3D(Basis.FromScale(new Vector3(r, CorpseHeight, r)), new Vector3(p.X, y + CorpseHeight / 2f, p.Y));
             _corpses.SetInstanceTransform(slot, _markerTransform[slot]);
             float rr = r * CorpseRimScale;

@@ -3496,6 +3496,87 @@ Match.tscn  (new node)
 - **Not yet:** projectile visuals (M4-V3), the fog shader and the minimap's Attack half (M4-3), cursor art and attack
   animations (M6), Patrol.
 
+### Implementation (M4-V3)
+
+The projectiles the sim has flown since M4-2b, drawn: bolts, arrows and magic bolts in a straight line, Catapult stones
+and Sapper sharpers on an arc, and a mark where each lands. Plus BUG-0210 (MinimapTest) and BUG-0190.
+
+```
+Match.tscn  (new node)
+  World3D/ProjectileViews   Node3D, ProjectileViews.cs: aimed and lob MultiMeshes + the impact mark MultiMesh
+```
+
+- **Shots** (`ProjectileViews`): two `MultiMesh`es sized to `World.Projectiles.Capacity` (`Bind`), written densely each
+  frame, one instance per live slot (`VisibleInstanceCount` = the shots of that kind). Aimed: a 1.2 x 0.12 m streak
+  (`StreakLength`, `StreakWidth`; bigger than a real bolt so it reads at the default zoom) yawed along `Position -
+  PrevPosition` (on the firing tick, toward `Target`), in its owner's colour lifted 55 % toward white (`StreakLift`), so
+  each side's volleys read apart. Lob: a dark stone, radius 0.28 m. Position: `lerp(PrevPosition, Position, alpha)` with
+  the runner's render alpha **clamped to [0, 1]** (never extrapolated: a re-led bolt can step 1.8 m in a tick,
+  BUG-0184; NaN draws the current tick), on `TerrainHeight` under that point plus `LaunchHeight` (1.2 m) for an aimed
+  shot, plus `StoneRide` (0.18 m) and the arc for a lob. Placeholder look until M6 (real models, trails, sounds).
+- **The tracker** (`ViewApi.ProjectileTracker`, view state, fixed arrays, read-only on the store's spans): the sim keeps
+  no launch point, so on the first observation of a live slot it records the launch point (`PrevPosition`: on the
+  firing tick and one tick later it is exactly the launch point), the flight length (launch to `Target`), the kind, type
+  and owner, and drops the slot when it is dead. `Observe(store, defs, tick)` runs on every `SimRunner.Ticked` (so it
+  sees every tick even at 8x, where a projectile slot freed in phase 11 is always seen dead before phase 10 of the next
+  tick reuses it) and again from the frame loop (once per tick number; a second call is a no-op), for scenes that tick
+  the sim themselves. An observer that skipped ticks may meet a different shot in a slot it still tracks; it starts that
+  slot over when it stands still (a firing tick), its type or owner changed, a lob's impact point moved (lobs never
+  re-aim), its `PrevPosition` is not where it was on the previous tick, or it is nearer its launch than before
+  (`Reused` counts these). A missed reuse of an aimed slot costs nothing (aimed shots draw without the launch point).
+- **The arc**: `height = apex x 4t(1 - t)` (`ArcHeight`), apex = a quarter of the flight length within 1-6 m
+  (`ProjectileTracker.Apex`: a 24 m Catapult shot peaks at 6 m, a short Sapper throw at 1 m). t is the distance from the
+  launch point over the arc's span, clamped to [0, 1]. The span ends **one step before the impact point**: the sim moves
+  a lob onto its impact point and frees it in the same tick, so its last drawn position is a step short; ending the arc a
+  step earlier still keeps the whole last drawn tick on the ground at any alpha (a stone touches down, rolls one tick,
+  then bursts). Span = `(n - 2) x step` with n = `ProjectileStore.FlightTicks(length, speed)`; a lob of 2 ticks or less
+  stays on the ground. A placeholder curve until M6.
+- **Impact marks** (`ViewApi.ImpactMarks`, like `DeathMarkers`): every `ProjectileImpact` of a tick (read on
+  `SimRunner.Ticked` while `World.Impacts` still holds it, and from the frame loop once per tick) adds a mark to a ring of
+  512 (`DefaultCapacity`; when full the oldest is replaced): an aimed **hit** a flash (0.2 s, `FlashTicks` 4) at the
+  shot's height, an aimed **miss** a dust puff (0.3 s, `DustTicks` 6) on the ground, a **lob** a burst (0.4 s,
+  `BurstTicks` 8, builder's choice) on the ground. Times are game ticks (game speed scales them), but a mark expires only
+  after a frame has drawn it, so a landing at 8x always shows at least once. One instance per pool slot, a transparent
+  sphere that grows (flash 0.25-0.55 m, dust 0.2-0.7 m, burst 30-100 % of its size) and fades with its age
+  (`Age(slot, tick, alpha)`); a burst's size is 60 % of the widest `splash` among the attacks that throw that projectile
+  (data: Catapult 2.5 m gives 1.5 m, Sapper 2 m gives 1.2 m; at least 0.6 m). A free slot has a zero transform.
+  Splash-radius rings are not drawn (the impact carries no radius).
+- **Cost**: per frame one pass over the projectile slots (200 by default) and one over the 512 mark slots, plus the
+  `MultiMesh` writes; 0 bytes a frame (the tracker, the ring and the views allocate only in `Bind`).
+- **BUG-0210** (`MinimapTest` red on `main` since M4-2b): the failing slot was **dead** (slot 0: `Alive` false,
+  generation bumped to 2, hp 0, State Idle: shot by the Whirlwind archers within the 3 s), not a sim regression. The
+  scene now passes `--no-combat` like BUG-0147's five, every `Check` unchanged; it prints any of the 40 that is not
+  `Moving` with its alive flag, generation, hp, state, goal and target.
+- **BUG-0190:** (1) a corpse disc sits at `TerrainHeight.MaxUnder` (the highest of the centre and eight rim samples under
+  its rim's radius), so on a ramp it no longer sinks half into the slope (it floats a little on the downhill side);
+  `CombatViewTest` checks every corpse's underside against it. (2) `UnitPicker.ResolveEnemy` counts a NaN entry (unit,
+  building or prop) as nearest (0), so a unit passed with a NaN entry can no longer lose to the building behind it.
+- **Tests.** xUnit `ViewApi/ProjectileTrackerTests`: the launch on the firing tick and a tick late, a slot dropped when it
+  dies, a slot that dies before the first observation (never tracked), slot reuse between two observations (next tick,
+  several ticks later; same type, a lob re-aimed, another type or owner), a full store of 300 tracked slot for slot, a
+  mismatched store refused, the same tick observed twice a no-op, 0 bytes over 20 ticks; the 24 m stone's arc (0 on the
+  firing tick, 0 at every alpha of the last drawn tick, 6 m peak), a 3 m Sapper throw above 0.5 m, the apex limits; a
+  500-tick mixed brawl with an every-tick and an every-third-tick tracker matching the store's count each time and the
+  sim hash equal to a bare twin's every tick; `ImpactMarks`' kinds, lifetimes, drawn-before-expiry rule, once per tick,
+  and the ring. `UnitPickerTests` NaN row; `TerrainHeightTests` `MaxUnder` row. Headless scene
+  `res://tests/ProjectileViewTest.tscn` ("PROJECTILE VIEW TEST PASS", seeds 1 and 6): a real Match, 15 Malazan (Heavy
+  Infantry, Crossbowmen, Sappers, Catapults) v 15 Whirlwind (Raiders, Desert Archers, Priests), A + click on an enemy
+  through the viewport, the match's own runner at 1x for 160 ticks and then 8x at 30 fps (frames of several ticks);
+  **every frame**: drawn instances = `Projectiles.Count`, each within one step of its slot's `Position`, aimed shots on
+  the segment `PrevPosition -> Position` at 1.2 m, lobs at most 0.2 m up on their firing tick and on their last drawn tick
+  and more than 0.5 m up between 40 and 60 % of the arc, a mark for every landing (counted by the test's own `Ticked`
+  handler), drawn the frame after its tick, at its landing point, never drawn past its life; after the fight no shot and
+  no mark drawn; the hash twin every tick. Then a 200 v 200 shooter-heavy brawl staged in two lines at the centre
+  (`--units 200` start blocks never had 100 shots in the air at once: the armies arrive strung out; 500 v 500 from the
+  start blocks peaked at 94): 300 frames from the first tick with 100 in flight (between a few and 200 in flight, mean
+  about 60: shipped flights are a third of a cooldown or less, so shots come in volleys), 0 bytes, hash twin; and 500 v
+  500 past the store's capacity (200 in flight, the store full for several ticks while the sim drops the shots that do
+  not fit): drawn = tracked = in flight every tick, hash twin. Windowed with `-- --shots <dir>` it saves
+  `projectiles-seedN.png` with bolts, arrows and a stone high in the air. `MinimapTest` with `--no-combat`;
+  `CombatViewTest`'s corpse-underside row.
+- **Not yet:** the fog shader, hiding unseen units and their shots, ghosts (M4-V4); real projectile models, trails and
+  sounds (M6); splash-radius rings.
+
 ## AI architecture
 
 The AI lives in `Rts.Sim.Ai`, inside the sim assembly, because it must be deterministic (it uses
@@ -3654,7 +3735,9 @@ AiPlayer
   `SimConfig.Combat = false` (`LaunchOptions.NoCombat` -> `SimRunner.Combat`): units never scan, swing or die and enemies
   are only walls, as before M4. A **dev and test flag, never a game option**: it exists for the M2 scenes whose assertions
   are about a world without fights (marches across the enemy block, selections that must not lose units, overlay goals);
-  they pass it instead of changing an expectation. The start-up line ends with ", combat off". `--no-bases` (M3-V1) is
+  they pass it instead of changing an expectation. The scenes that pass it: DebugOverlayTest, OrdersTest, QaH1Test,
+  QaH2Test, QaM27Test (M4-V1) and MinimapTest (M4-V3, BUG-0210: since M4-2b every unit fights, and the enemy's archers
+  shot one of the 40 units its minimap order moves). The start-up line ends with ", combat off". `--no-bases` (M3-V1) is
   the other half of the armies-only M2 setup. A replay recorded from such a match records `combat 0` in its header
   (format 4, M4-2a), so `ReplayPlayer.Run(replay, data)` plays it back off by itself; the `combat:` override parameter
   stays for format-3 files recorded with combat off.

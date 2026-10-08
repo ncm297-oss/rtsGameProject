@@ -72,13 +72,19 @@ public static class UnitPicker
     /// (<see cref="ResourcePicker"/>) with their entry parameters. The nearest of the three wins; true when it is a live
     /// unit or building of another player than <paramref name="localPlayer"/> (its handle in <paramref name="target"/>,
     /// <paramref name="isBuilding"/> for a building). An own unit or building, or a prop, in front means no target. Ties go to
-    /// the unit, then the building. The unit spans are the unit store's <c>Alive</c>, <c>Owner</c> and <c>Generation</c>.
+    /// the unit, then the building. A NaN entry counts as nearest (0). The unit spans are the unit store's <c>Alive</c>,
+    /// <c>Owner</c> and <c>Generation</c>.
     /// </summary>
     public static bool ResolveEnemy(ReadOnlySpan<bool> unitAlive, ReadOnlySpan<int> unitOwner, ReadOnlySpan<int> unitGeneration, int unit, float unitT,
         BuildingStore buildings, int building, float buildingT, float nodeT, int localPlayer, out EntityHandle target, out bool isBuilding)
     {
         target = default;
         isBuilding = false;
+        // A NaN entry counts as nearest (BUG-0190): `NaN <= x` is false, so a unit passed with NaN would otherwise lose to
+        // the building behind it and a hidden building could be picked through the caller's own unit.
+        if (float.IsNaN(unitT)) unitT = 0f;
+        if (float.IsNaN(buildingT)) buildingT = 0f;
+        if (float.IsNaN(nodeT)) nodeT = 0f;
         if ((uint)unit < (uint)unitAlive.Length && unit < unitOwner.Length && unit < unitGeneration.Length && unitAlive[unit] && unitT <= buildingT && unitT <= nodeT)
         {
             if (unitOwner[unit] == localPlayer) return false;

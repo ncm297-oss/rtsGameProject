@@ -267,7 +267,7 @@ public partial class CombatViewTest : Node
         }
         GD.Print($"seed {seed}: {unitDeaths} unit deaths, {buildingDeaths} building deaths by tick {lastDeathTick}, markers gone by {W.TickNumber}; " +
             $"at most {maxBars} bars; kills {W.Kills[0]} / {W.Kills[1]}, losses {W.Losses[0]} / {W.Losses[1]}; panel live {panelFrames} frames; " +
-            $"flash hits {_hits}, {_hitWhileLit} while lit; steady frames {steadyFrames}: {steadyBytes} bytes");
+            $"flash hits {_hits}, {_hitWhileLit} while lit; steady frames {steadyFrames}: {steadyBytes} bytes; corpses raised on a slope (BUG-0190) {_corpsesOnSlopes}");
         Check(unitDeaths >= PerSide, $"seed {seed}: only {unitDeaths} unit deaths");
         Check(buildingDeaths == 1, $"seed {seed}: {buildingDeaths} building deaths (want the losing side's one)");
         Check(_combat.Markers.Count == 0, $"seed {seed}: {_combat.Markers.Count} markers left after their time");
@@ -288,7 +288,7 @@ public partial class CombatViewTest : Node
         await EndMatch();
     }
 
-    private int _hits, _hitWhileLit;
+    private int _hits, _hitWhileLit, _corpsesOnSlopes;
 
     // One tick, the unit views three times at the fixed step (flash checked each time), two frames for the other views, then every check. Returns this tick's unit and building deaths.
     private async Task<(int Units, int Buildings)> TickAndCheck(ulong seed)
@@ -326,6 +326,13 @@ public partial class CombatViewTest : Node
             float ground = TerrainHeight.At(W.Heightmap, d.Position.X, d.Position.Y);
             Check(Mathf.Abs(tr.Origin.X - d.Position.X) < 1e-3f && Mathf.Abs(tr.Origin.Z - d.Position.Y) < 1e-3f && tr.Origin.Y > ground && tr.Origin.Y < ground + 1f && tr.Basis.Scale.X > 0.1f,
                 $"seed {seed} tick {tick}: marker {slot} drawn at {tr.Origin}, death at {d.Position}");
+            // BUG-0190 item 1: a corpse disc's underside is at the highest ground under its rim, so a ramp never buries half of it.
+            if (!d.IsBuilding)
+            {
+                float top = TerrainHeight.MaxUnder(W.Heightmap, d.Position.X, d.Position.Y, tr.Basis.Scale.X * CombatViews.CorpseRimScale);
+                Check(tr.Origin.Y - CombatViews.CorpseHeight / 2f >= top - 1e-3f, $"seed {seed} tick {tick}: corpse {slot} underside {tr.Origin.Y - CombatViews.CorpseHeight / 2f:F3} below the ground under its rim {top:F3}");
+                if (top > ground + 0.05f) _corpsesOnSlopes++;
+            }
         }
         Check(_combat.Markers.Added - addedBefore == deaths.Length, $"seed {seed} tick {tick}: {deaths.Length} deaths, {_combat.Markers.Added - addedBefore} markers added");
         CheckMarkers(seed, tick);

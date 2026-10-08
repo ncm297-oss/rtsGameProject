@@ -20,6 +20,30 @@ public static class TerrainHeight
         return InCell(map, cx, cy, x, y);
     }
 
+    // Unit offsets of the eight rim samples of MaxUnder (every 45 degrees; constants, no trig).
+    private const float Diag = 0.70710678f;
+
+    /// <summary>
+    /// The highest surface height (m) among the centre and eight points round the rim of the disc of
+    /// <paramref name="radius"/> m at (x, y), so a flat disc placed there is not half buried on a ramp (BUG-0190). A
+    /// non-positive or NaN radius samples the centre only.
+    /// </summary>
+    public static float MaxUnder(Heightmap map, float x, float y, float radius)
+    {
+        float best = At(map, x, y);
+        if (!(radius > 0f)) return best;
+        float d = radius * Diag;
+        best = MathF.Max(best, At(map, x + radius, y));
+        best = MathF.Max(best, At(map, x - radius, y));
+        best = MathF.Max(best, At(map, x, y + radius));
+        best = MathF.Max(best, At(map, x, y - radius));
+        best = MathF.Max(best, At(map, x + d, y + d));
+        best = MathF.Max(best, At(map, x + d, y - d));
+        best = MathF.Max(best, At(map, x - d, y + d));
+        best = MathF.Max(best, At(map, x - d, y - d));
+        return best;
+    }
+
     // Clamps in float before the cast: an out-of-range float-to-int cast is int.MinValue on x64,
     // so 1e10 or +Infinity would otherwise land on cell -2^31 and throw (BUG-0052). NaN fails
     // `f >= 0` and lands on cell 0.

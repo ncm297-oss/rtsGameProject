@@ -1,4 +1,4 @@
-[gd_scene load_steps=30 format=3]
+[gd_scene load_steps=31 format=3]
 
 [ext_resource type="Script" path="res://scripts/Match.cs" id="1_match"]
 [ext_resource type="Script" path="res://scripts/SimRunner.cs" id="2_runner"]
@@ -25,6 +25,7 @@
 [ext_resource type="Script" path="res://scripts/RallyMarker.cs" id="23_rally"]
 [ext_resource type="Script" path="res://scripts/CombatViews.cs" id="24_combat"]
 [ext_resource type="Script" path="res://scripts/TargetRing.cs" id="25_target"]
+[ext_resource type="Script" path="res://scripts/ProjectileViews.cs" id="26_shots"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMaterial_1"]
 sky_top_color = Color(0.36, 0.52, 0.72, 1)
@@ -73,6 +74,9 @@ script = ExtResource("16_buildings")
 
 [node name="CombatViews" type="Node3D" parent="World3D"]
 script = ExtResource("24_combat")
+
+[node name="ProjectileViews" type="Node3D" parent="World3D"]
+script = ExtResource("26_shots")
 
 [node name="BuildingOutline" type="Node3D" parent="World3D"]
 script = ExtResource("19_outline")

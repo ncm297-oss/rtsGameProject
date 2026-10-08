@@ -70,6 +70,9 @@ public partial class Match : Node3D
         combat.Bind(data, sim.World.Units.Capacity, playerRgb);
         combat.Runner = _runner;
         combat.Camera = camera;
+        var shots = GetNode<ProjectileViews>("World3D/ProjectileViews");
+        shots.Bind(data, sim.World.Projectiles.Capacity, playerRgb);
+        shots.Runner = _runner;
 
         Sfx.SetMuted(options.Mute);
         var selection = GetNode<SelectionController>("SelectionController");

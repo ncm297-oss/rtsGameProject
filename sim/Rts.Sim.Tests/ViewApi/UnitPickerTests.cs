@@ -25,6 +25,42 @@ public class UnitPickerTests
         out EntityHandle target, out bool isBuilding) =>
         UnitPicker.ResolveEnemy(u.Alive, u.Owner, u.Generation, unit, unitT, b, building, buildingT, nodeT, local, out target, out isBuilding);
 
+    // ---- BUG-0190 item 2: a NaN entry counts as nearest ----
+
+    [Fact]
+    public void ResolveEnemy_NaNEntry_CountsAsNearest_NeverPicksTheBuildingBehindTheCallersUnit()
+    {
+        Simulation sim = CombatViewScene.Create();
+        CombatViewScene.Start(sim);
+        UnitStore u = sim.World.Units;
+        BuildingStore b = sim.World.Buildings;
+        int tent = -1, own = -1, enemy = -1;
+        for (int i = 0; i < b.Capacity; i++) if (b.Alive[i] && b.Owner[i] == 1) tent = i;
+        for (int i = 0; i < u.Capacity; i++)
+        {
+            if (!u.Alive[i]) continue;
+            if (u.Owner[i] == 0 && own < 0) own = i;
+            if (u.Owner[i] == 1 && enemy < 0) enemy = i;
+        }
+        Assert.True(tent >= 0 && own >= 0 && enemy >= 0);
+        float inf = float.PositiveInfinity;
+        // The QA row: an own unit with a NaN entry in front of the enemy Tent at 9 resolved to the Tent. Now: no target.
+        Assert.False(Resolve(u, own, float.NaN, b, tent, 9f, inf, 0, out EntityHandle target, out bool isB));
+        Assert.Equal(default, target);
+        Assert.False(isB);
+        // An enemy unit with a NaN entry is the target, not the Tent behind it.
+        Assert.True(Resolve(u, enemy, float.NaN, b, tent, 9f, inf, 0, out target, out isB));
+        Assert.Equal(enemy, target.Index);
+        Assert.False(isB);
+        // A NaN building entry is nearest among building and prop; a NaN prop entry blocks both.
+        Assert.True(Resolve(u, -1, inf, b, tent, float.NaN, 4f, 0, out target, out isB));
+        Assert.True(isB);
+        Assert.False(Resolve(u, enemy, 3f, b, tent, 2f, float.NaN, 0, out _, out _));
+        // No unit passed: its NaN entry changes nothing.
+        Assert.True(Resolve(u, -1, float.NaN, b, tent, 9f, inf, 0, out target, out isB));
+        Assert.True(isB);
+    }
+
     // ---- The capsule ----
 
     [Fact]

@@ -102,6 +102,29 @@ public class TerrainHeightTests
         Assert.Equal(MapConstants.LevelHeight, TerrainHeight.InCell(map, 2, 1, float.NaN, float.NaN));
     }
 
+    // BUG-0190 item 1: a corpse disc sits at the highest sample under its radius, so on a ramp it is not half buried.
+    [Fact]
+    public void MaxUnder_OnARamp_IsTheUphillRim_OnFlatGroundTheCentre()
+    {
+        Heightmap map = HandMap();
+        const float cs = MapConstants.CellSize, r = 0.6f;
+        // Ramp cell (2, 1) rises west: the disc's west rim point is its highest.
+        float x = 2.5f * cs, y = 1.5f * cs;
+        float max = TerrainHeight.MaxUnder(map, x, y, r);
+        Assert.Equal(TerrainHeight.At(map, x - r, y), max, 5);
+        Assert.True(max > TerrainHeight.At(map, x, y) + 0.1f, $"ramp disc: max {max}, centre {TerrainHeight.At(map, x, y)}");
+        // Every one of the nine samples is at or below it.
+        for (int k = 0; k < 16; k++)
+        {
+            float a = k * MathF.PI / 8f;
+            Assert.True(TerrainHeight.At(map, x + r * MathF.Cos(a), y + r * MathF.Sin(a)) <= max + 0.02f, $"rim angle {k}/16 above the max");
+        }
+        // Flat ground, a zero or NaN radius: the centre's height.
+        Assert.Equal(0f, TerrainHeight.MaxUnder(map, 3.5f * cs, 3.5f * cs, r), 5);
+        Assert.Equal(TerrainHeight.At(map, x, y), TerrainHeight.MaxUnder(map, x, y, 0f), 5);
+        Assert.Equal(TerrainHeight.At(map, x, y), TerrainHeight.MaxUnder(map, x, y, float.NaN), 5);
+    }
+
     private static void Near(float expected, float actual, string what) =>
         Assert.True(MathF.Abs(expected - actual) <= Tolerance, $"{what}: expected {expected}, got {actual}");
 }
