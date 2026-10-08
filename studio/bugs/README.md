@@ -166,4 +166,8 @@ bugs outrank new features.
 | [BUG-0147](BUG-0147-view-breaks-on-m4-1-merge.md) | S3 | open | The view on top of M4-1: smoke fails (no `states.attacking`), 7 of 27 scenes fail, the M3 Playable proof among them |
 | [BUG-0148](BUG-0148-m3-v4-nits.md) | S4 | partly fixed (2, 4) | M3-V4 nits: ~1 % facet-sliver picks, "+1" colour and rally walk unchecked, no replay on a non-step exception |
 | [BUG-0149](BUG-0149-stall-count-kept-across-target-switch-gives-up-reachable-enemy.md) | S3 | open | A stall count carried across a target switch makes a chaser give up a reachable enemy behind a short detour and stand Idle in sight of it |
+| [BUG-0150](BUG-0150-retaliator-ping-pongs-between-two-targets-forever.md) | S2 | open | A retaliator ping-pongs between two targets forever (give-up never builds); four movement rows switched to combat off |
+| [BUG-0151](BUG-0151-gather-perf-row-up-40-percent-after-wedge-fix.md) | S2 | open | After the BUG-0146 fix the 200-worker gather Perf row costs ~40 % more per tick (criterion allows 10 %) |
+| [BUG-0152](BUG-0152-reissued-attack-cancels-windup-spam-does-no-damage.md) | S2 | open | Re-issuing the same Attack / AttackMove cancels the wind-up: an order every 5 ticks or faster never deals damage |
+| [BUG-0153](BUG-0153-m4-2a-nits.md) | S4 | open | M4-2a nits: queued Attack target in public `QueuePosition`, a shove row lost combat-on, two brief rows not meetable as worded |
 | [BUG-0155](BUG-0155-d4-shared-text-pin-gaps.md) | S4 | open | D4 shared-text pins: H's name check is case-sensitive and skips faction tech names (caught only by the 160-char limit); age_ii at 158 / 160 |
