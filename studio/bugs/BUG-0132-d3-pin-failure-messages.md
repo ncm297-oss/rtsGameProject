@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-07-1415, task D3 |
 | System | content tests (`sim/Rts.Sim.Tests/Content/TechContentTests.cs`, `RequiresText.cs`) |
-| Fixed by | |
+| Fixed by | D4 (2026-10-07-2014, data track): `TechContentTests.Pin` makes every A / B / C / F / G field fail as `<tech> <field>: page X vs data Y`; B parses the page line's head and pins requires / researched at / cost / time one by one; new `TechContentTests.I_NoShippedDescription_SaysARequirementOtherThanWithNeeds` (with `RequiresText.OtherWords`) keeps every shipped description to "needs" |
 
 ## Repro
 Scratch clone of 8bcca04, one edit at a time, then
@@ -34,3 +34,12 @@ Buildings Requires, data `requires`, descriptions; see the D3 QA report). But:
 Add the two values to `C`'s messages ("page 250 / 150, data 200 / 150"), give `A` a `$"{u.Id} ..."` message per
 assert, and say "page vs data" rather than "should". Optionally widen `Needs` to "requires" / "after" or assert no
 description uses those words. Data track, test-only.
+
+## Fix (D4)
+Repro reruns on the D4 tree, one edit at a time, `--filter "FullyQualifiedName~Content.TechContentTests"`:
+1. `malazan.md` Techs row cost `200 / 150` -> `250 / 150`: `C` fails `malazan.md Techs row moranth_supply cost: page 250 / 150 vs data 200 / 150`.
+2. `factions/malazan/techs.json` `"gold": 200` -> `250`: `A` `malazan moranth_supply cost: page 200 / 150 vs data 250 / 150`,
+   `B` `malazan.md faction upgrade moranth_supply cost: page 200 / 150 vs data 250 / 150`, `C` and `F` the same shape.
+3. A description written "Requires Armor and Age II." fails `I` (`armor_2: description says 'Requires'; write
+   requirements as 'needs ...'`) and `F` (`armor_2 description needs: page Age II, Armor vs data `). The fix takes the
+   brief's second option: `Needs` still reads only "needs", and a test forbids the other words in shipped text.

@@ -3,7 +3,7 @@
     {
       "id": "age_ii",
       "displayName": "Age II",
-      "description": "Advance to Age II. Unlocks the Caster Hall, Siege Works and Watch Tower, your unique unit, level-2 Forge upgrades and your faction upgrade.",
+      "description": "Unlocks your caster, siege and tower buildings, unique unit, level II and faction upgrades. Needs two kinds of building: infantry, ranged, mounted or upgrade.",
       "researchedAt": "town_hall",
       "cost": { "gold": 400, "wood": 200 },
       "researchTime": 60,

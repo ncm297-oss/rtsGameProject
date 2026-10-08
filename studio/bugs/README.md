@@ -129,7 +129,7 @@ bugs outrank new features.
 | [BUG-0104](BUG-0104-bench-march-under-20-m-on-seed-21.md) | S3 | fixed | The 10 s bench moves seed 21's army centre only 19.1 m (QaM27's 20 m bound fits seed 1, not the map family) |
 | [BUG-0105](BUG-0105-m2-h2-nits.md) | S4 | fixed | M2-H2 nits: minimap refresh row at 92-94% of its 0.3 ms limit (docs say 0.25 ms), Sfx exit-wait range in docs/03 |
 | [BUG-0111](BUG-0111-d2-page-pin-gaps.md) | S4 | fixed | D2 page pins miss a false "+N pop" claim and Provides free-text edits; culture-dependent range text in UnitContentTests.G |
-| [BUG-0132](BUG-0132-d3-pin-failure-messages.md) | S4 | open | D3 tech pins: some one-sided-edit failure messages omit the values or blame the page; "needs" reader ignores "requires" / "after" wording |
+| [BUG-0132](BUG-0132-d3-pin-failure-messages.md) | S4 | fixed (D4) | D3 tech pins: some one-sided-edit failure messages omit the values or blame the page; "needs" reader ignores "requires" / "after" wording |
 | [BUG-0094](BUG-0094-test-grove-spawns-skip-the-seal-check.md) | S4 | open | Hand-built test groves (`ResourceStore.Spawn`) skip the never-seal check and wall cells in before tick 1 |
 | [BUG-0095](BUG-0095-push-out-on-a-full-level-scans-the-whole-map.md) | S3 | fixed (M3-H2) | Push-out on a level with too few free cells scans every ring of the map per leftover unit (9 ms at 128, 35 ms at 256) and stacks them on one point |
 | [BUG-0096](BUG-0096-builds-refused-for-sealsground-each-flood.md) | S3 | fixed (M3-H2) | Builds refused for SealsGround still pay a flood each: 100 in one tick cost 33 ms (BUG-0091 residual) |

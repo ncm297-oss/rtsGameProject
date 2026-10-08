@@ -56,5 +56,8 @@ public class PagePinCultureQaTests
         t.B_ThePagesFactionUpgradeLine_MatchesTheData();
         t.C_ThePagesTechsTable_MatchesTheData();
         t.D_Descriptions_StateEveryEffectWithItsNumber_AndTheirRequirements();
+        // D4: the shared techs' pins to docs/02 "Forge upgrades" / "Ages".
+        t.F_TheForgeUpgradesTable_MatchesTheSharedTechs();
+        t.G_TheAgesSection_MatchesAgeII_AndItsDescription();
     });
 }

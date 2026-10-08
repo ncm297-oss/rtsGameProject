@@ -11,12 +11,16 @@ internal static class FactionPage
     /// </summary>
     public static string[][] Table(string faction, string section) => DocTable(Path.Combine("docs", "factions", faction + ".md"), section);
 
-    /// <summary>As <see cref="Table"/>, for any markdown file under the repo root (e.g. <c>docs/02-game-design.md</c>).</summary>
-    public static string[][] DocTable(string relativePath, string section)
+    /// <summary>
+    /// As <see cref="Table"/>, for any markdown file under the repo root (e.g. <c>docs/02-game-design.md</c>);
+    /// <paramref name="level"/> is the heading's number of <c>#</c> (3 for docs/02's "### Forge upgrades").
+    /// </summary>
+    public static string[][] DocTable(string relativePath, string section, int level = 2)
     {
         string[] lines = File.ReadAllLines(Path.Combine(TestDataDir.RepoRoot(), relativePath));
-        int i = Array.IndexOf(lines, "## " + section);
-        Assert.True(i >= 0, $"{relativePath} has no '## {section}' heading");
+        string heading = new string('#', level) + " " + section;
+        int i = Array.IndexOf(lines, heading);
+        Assert.True(i >= 0, $"{relativePath} has no '{heading}' heading");
         while (i < lines.Length && !lines[i].StartsWith('|')) i++;
         var rows = new List<string[]>();
         for (i += 2; i < lines.Length && lines[i].StartsWith('|'); i++)
@@ -37,6 +41,23 @@ internal static class FactionPage
         for (i++; i < lines.Length && lines[i].Trim().Length == 0; i++) { }
         var text = new List<string>();
         for (; i < lines.Length && lines[i].Trim().Length > 0; i++) text.Add(lines[i].Trim());
+        Assert.NotEmpty(text);
+        return string.Join(" ", text).Replace("**", "");
+    }
+
+    /// <summary>
+    /// The text under the heading <c>#..# <paramref name="section"/></c> up to the next heading, its lines trimmed and
+    /// joined with spaces, the <c>**</c> bold markers removed (docs/02's "### Ages" bullets read as one string).
+    /// </summary>
+    public static string DocText(string relativePath, string section, int level)
+    {
+        string[] lines = File.ReadAllLines(Path.Combine(TestDataDir.RepoRoot(), relativePath));
+        string heading = new string('#', level) + " " + section;
+        int i = Array.IndexOf(lines, heading);
+        Assert.True(i >= 0, $"{relativePath} has no '{heading}' heading");
+        var text = new List<string>();
+        for (i++; i < lines.Length && !lines[i].StartsWith('#'); i++)
+            if (lines[i].Trim().Length > 0) text.Add(lines[i].Trim());
         Assert.NotEmpty(text);
         return string.Join(" ", text).Replace("**", "");
     }
