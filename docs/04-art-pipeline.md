@@ -5,8 +5,10 @@ and the licensing log. Until M6 the game runs entirely on procedural placeholder
 
 ## Style guide
 
-- **Low-poly, flat-shaded.** Solid colors from a small palette atlas, no photographic textures.
-  This is what the CC0 packs already look like, so mixed sources stay coherent.
+- **Grounded, not cartoonish (owner decision 2026-10-08).** Realistic human proportions (no big
+  heads or stubby limbs), restrained materials, weighty animation. Still low-poly for the budgets
+  below, but pick the more realistic option whenever sources differ. Simple textures and normal
+  maps (as in the Quaternius Universal packs) are fine; no photographic textures.
 - **Readable at RTS zoom (20-60 m camera distance).** Silhouette beats detail. Every unit slot
   must be identifiable by shape alone in a grayscale screenshot.
 - **Muted world, saturated teams.** Terrain, buildings, and clothing use earthy, desaturated
@@ -82,12 +84,30 @@ All candidate packs are CC0 (public domain, no attribution required, commercial 
 | Quaternius – Modular Character Outfits – Fantasy | <https://quaternius.com/packs/modularcharacteroutfitsfantasy.html> | Outfits for the Universal Base Characters |
 | Mixamo (Adobe account) | <https://www.mixamo.com> | Gap-filler animations; auto-rigging for humanoids |
 
-**Tone check before committing to KayKit.** KayKit characters are chunky and cheerful
-(big heads, short limbs), which pulls against the grim tone. They are low-poly, animated,
-and consistent, which is exactly what an RTS needs. At the start of M6, do a one-hour **look
-test**: put KayKit units (muted palette, team colors) and Quaternius Universal Base Characters
-side by side in the game at RTS zoom, take screenshots, and pick one base for all humanoids.
-Default: KayKit, because its animation pack covers every RTS action.
+**Humanoid base: Quaternius Universal (owner decision 2026-10-08).** The owner prefers a
+realistic look over cartoonish, so the default humanoid stack is Quaternius **Universal Base
+Characters** + **Modular Character Outfits – Fantasy** + **Universal Animation Library** 1 and 2
+(one shared humanoid rig, CC0), with **Mixamo** packs retargeted onto that rig for gaps (bow,
+great sword, sword and shield, magic). KayKit drops to a fallback for props and weapon bits. The
+M6 look test still happens at the start of M6 (not earlier), now to confirm the Quaternius
+stack at RTS zoom and settle palettes, with MPFB2 (MakeHuman for Blender, CC0 output) as the
+step up if it still reads too soft.
+
+| Pack | Source | Use |
+| --- | --- | --- |
+| Quaternius – Universal Animation Library 1 and 2 | <https://quaternius.com/packs/universalanimationlibrary.html> | 250+ animations on the Universal rig: locomotion, melee and armed combos, deaths, work actions |
+| Mixamo packs (Great Sword, Pro Longbow, Pro Magic, Pro Sword and Shield) | <https://www.mixamo.com> | Retargeted onto the Universal rig; FBX, 30 fps, no keyframe reduction, in-place locomotion |
+
+**Already downloaded (owner, 2026-10-08), in `asset-sources/` on the desktop PC:** Universal Base
+Characters (Standard + Source, incl. a Godot project zip and hairstyles), Modular Character
+Outfits – Fantasy (Standard + Source), Universal Animation Library 1 (Standard, Pro, Source) and 2
+(Standard, Source), Ultimate Fantasy RTS (`quaternius-ultimate-fantasy-rts-2022-08/`), and the four
+Mixamo packs above (`mixamo/<pack>/`), and Stylized Nature MegaKit (Standard, Pro, Source; preferred
+over the KayKit forest for the realistic look). Blender 5.2 is the owner's install for `.blend`
+sources and model edits. Ground textures: 23 ambientCG PBR materials at 1K JPG (CC0) in
+`asset-sources/ambientcg/<id>/` (grass, ground, rock, rocks, paving stones, asphalt; each with
+Color, NormalGL / NormalDX, Roughness, AO, Displacement and a Godot `.tres`). Still to download
+before M6: UI, fonts, audio, the Godot export templates.
 
 ### Buildings, nature, props
 
@@ -120,16 +140,16 @@ in the licensing log.
 
 | Need | First choice | Fallback |
 | --- | --- | --- |
-| Human infantry, mages, workers | KayKit Adventurers + recolor + accessories | Quaternius Universal Base Characters |
-| Horses (Lancer, Horse Raider, Rider) | Quaternius animal pack horse + KayKit rider | AI-generated |
+| Human infantry, mages, workers | Quaternius Universal Base Characters + Modular Outfits + recolor | MPFB2 bodies; KayKit Adventurers (cartoonish, last resort) |
+| Horses (Lancer, Horse Raider, Rider) | Quaternius animal pack horse + Universal Base Character rider | AI-generated |
 | Catapult | Kenney Castle Kit | Kit-bash in Blender |
 | Battering Ram / Edur Ram | Kit-bash (Medieval Village pieces + wheels) | AI-generated |
-| Teblor | KayKit Barbarian at 1.5× | AI-generated giants |
+| Teblor | Universal Base Character (male) at 1.5× + outfits | MPFB2 giant body; AI-generated |
 | War-dogs | Quaternius dog/wolf if present | **AI-generated** |
 | Hounds of Shadow | Quaternius wolf at 1.6×, dark material | **AI-generated** |
 | Aptorian Stalker | — | **AI-generated** |
 | Great Raven | — | **AI-generated** |
-| Eleint-blooded Champion | KayKit Knight at 1.3× + horns | AI-generated |
+| Eleint-blooded Champion | Universal Base Character at 1.3× + outfit + horns | AI-generated |
 | Wraiths | KayKit Skeletons + ghost shader | — |
 | Buildings (all factions) | Quaternius Ultimate Fantasy RTS + kit-bash, recolored per palette | AI-generated hero buildings |
 
@@ -137,8 +157,8 @@ in the licensing log.
 
 Used only where packs fall short. Workflow:
 
-1. **Prompt template:** "Low-poly stylized game asset, flat shaded, solid colors, no texture
-   detail, [subject], [pose: T-pose / standing neutral], [palette colors], RTS unit, clean
+1. **Prompt template:** "Low-poly game asset, realistic proportions, muted natural colors,
+   simple textures, not cartoonish, [subject], [pose: T-pose / standing neutral], [palette colors], RTS unit, clean
    silhouette, single object, plain background."
 2. Generate several candidates, pick by silhouette at small size, not by close-up detail.
 3. Reduce to budget (Blender Decimate, or the service's low-poly option), bake or map colors to
@@ -195,9 +215,10 @@ tools/
 
 ### Animation setup
 
-- KayKit characters share rigs (Rig_Medium, Rig_Large), so one `AnimationLibrary` per rig serves
-  every character on it. Other humanoids retarget onto it with Godot's `BoneMap` and humanoid
-  skeleton profile.
+- The Quaternius Universal characters and both Universal Animation Libraries share one humanoid
+  rig, so one `AnimationLibrary` serves every humanoid. Mixamo clips (and any other humanoid)
+  retarget onto it with Godot's `BoneMap` and humanoid skeleton profile at import; use the
+  in-place versions of locomotion clips.
 - Required clips per unit: `idle`, `walk` (or `run`), `attack` (per weapon type), `cast`
   (casters), `hit`, `death`, and for workers `gather_gold`, `gather_wood`, `build`.
 - Loop flags and root motion settings are part of the import step (root motion off: the sim

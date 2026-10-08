@@ -9,7 +9,17 @@ Commit and push after editing, from either machine (or ask Claude to).
 
 ## New
 
-(nothing new)
+- 2026-10-08 · **Art direction + packs downloaded (owner):** I prefer a grounded, realistic art style
+  over a cartoonish one. The humanoid base is now Quaternius Universal Base Characters + Modular
+  Character Outfits – Fantasy + Universal Animation Library 1 and 2, with Mixamo packs (Great Sword,
+  Pro Longbow, Pro Magic, Pro Sword and Shield) retargeted for gaps; KayKit is a fallback only.
+  docs/04 (style guide, characters, coverage plan, animation setup) and the docs/01 change log
+  are updated. The packs are already in `asset-sources/` on the desktop (list in docs/04), and
+  Blender 5.2 is installed, so I shouldn't be the bottleneck when art work starts. **Don't pull
+  the look test or real-art work forward:** keep M6 where it is in the roadmap; this is just
+  getting ahead. Please update the M6 line in the feature queue (downloads done except nature,
+  UI, fonts, audio, export templates), and clear the stale "restore the routine's hourly
+  schedule" item from Waiting on you (it has been back on hourly since 2026-10-06).
 
 ## Processed
 
