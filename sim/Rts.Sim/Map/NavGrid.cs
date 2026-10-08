@@ -323,6 +323,21 @@ public sealed class NavGrid
         return !foot;
     }
 
+    // Load-time scratch of SealPockets (a cell's region, a flood queue), kept for one later load-time pass to reuse.
+    private int[]? _loadRegion, _loadQueue;
+
+    /// <summary>
+    /// Hands over the two cell-sized int arrays the load-time pocket sealing used (once; null after), so a later
+    /// load-time pass (the plateau labels, M3-H2) reuses them instead of allocating 8 bytes a cell more: a 1024 map's
+    /// world must stay within its memory bound (QA's <c>World_1024Map_CacheStays32_MemoryBounded</c>).
+    /// </summary>
+    internal (int[]? Cells, int[]? Queue) TakeLoadScratch()
+    {
+        (int[]? cells, int[]? queue) = (_loadRegion, _loadQueue);
+        _loadRegion = _loadQueue = null;
+        return (cells, queue);
+    }
+
     // Labels 4-connected passable regions and blocks all but the largest (first found on a tie).
     // Load-time only, so the scratch arrays are fine.
     private void SealPockets()
@@ -331,6 +346,7 @@ public sealed class NavGrid
         var region = new int[n];
         Array.Fill(region, -1);
         var queue = new int[n];
+        (_loadRegion, _loadQueue) = (region, queue);
         int regions = 0, best = -1, bestSize = 0;
         for (int start = 0; start < n; start++)
         {

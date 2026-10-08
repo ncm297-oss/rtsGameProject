@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (merge blocker for D3: `main` goes red when the data branch merges on top of this one) |
-| Status | open |
+| Status | fixed (M3-H2) |
 | Found | 2026-10-07-1415, task M3-6 |
 | System | tests: construction fuzz, never-seal, requirement fuzz |
-| Fixed by | |
+| Fixed by | f9a4a8d + 3f494c0 (M3-H2): `TestSim.DataWithoutBuildingRequires` for the geometry oracles (construction fuzz, never-seal), Whirlwind requires cleared in `RequirementGatingTests.Fixture`. QA 2026-10-07-1715: every per-seed line of the three suites (placements, verdicts checked, sealing refusals, flips) byte-identical to the pre-D3 tree (4af4eda); leaving any one building's requires in the helper fails 9-19 of those tests; `QA/PlateauSealMemoQaTests.DataWithoutBuildingRequires_ClearsEveryBuildingsRequires_AndNothingElse` |
 
 ## Repro
 1. Scratch clone of `studio/2026-10-07-1415-sim` (8928418).

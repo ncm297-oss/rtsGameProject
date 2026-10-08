@@ -6,7 +6,7 @@
 | Status | open |
 | Found | 2026-10-06-1744, task D1 |
 | System | data (buildings.json), Rts.Sim.Data comments |
-| Fixed by | comment item: b4b423c (M3-3) rewrote `BuildingSlot.cs:4`. The three description groups stay open until `requires` (M3-5 / M3-6) and the tower fields (M4) exist |
+| Fixed by | comment item: b4b423c (M3-3) rewrote `BuildingSlot.cs:4`. Requirements item: 8bcca04 (D3) sets `requires` to match every "needs X" in the building descriptions, pinned by `BuildingContentTests.I_BUG0090_...` (QA 2026-10-07-1415 checked: dropping a `requires` or adding a "needs" sentence fails it); gating itself lands with M3-6. Forge item: consistent (techs `researchedAt: forge`). Still open: the towers' attack / sight / detector text (M4 fields) |
 
 ## Repro
 1. Read `game/data/factions/*/buildings.json` (D1) and `sim/Rts.Sim/Data/BuildingSlot.cs:4`.

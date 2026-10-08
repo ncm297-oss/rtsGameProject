@@ -114,7 +114,15 @@ public static partial class DataLoader
             for (int j = 0; effects != null && j < effects.Count; j++)
             {
                 TechEffectJson? e = _c.Obj(effects[j], $"{p}.effects[{j}]");
-                if (e != null) built.Add(BuildEffect(e, $"{p}.effects[{j}]", faction, refs));
+                if (e == null) continue;
+                int errors = _c.Errors.Count;
+                TechEffect effect = BuildEffect(e, $"{p}.effects[{j}]", faction, refs);
+                built.Add(effect);
+                // BUG-0099: filters that no unit meets (a typo, most likely) would make a tech that changes nothing.
+                if (refs && _c.Errors.Count == errors && !MatchesAnyUnit(effect, faction))
+                    _c.Error($"{p}.effects[{j}].appliesTo", faction < 0
+                        ? "no unit of any faction matches every filter set here, so the effect would change nothing"
+                        : $"no unit of faction '{_folders[faction]}' matches every filter set here, so the effect would change nothing");
             }
             return new TechDef
             {
@@ -177,6 +185,14 @@ public static partial class DataLoader
                     _c.Error(path, $"'{id}' names slot '{DataLimits.BuildingSlotIds[slot]}' again (each slot counts once)");
             }
             return (ids.ToImmutable(), count, ToArray(slots));
+        }
+
+        /// <summary>True if some unit (of <paramref name="faction"/>, or of any faction for a common tech, -1) meets every filter <paramref name="e"/> sets.</summary>
+        private bool MatchesAnyUnit(in TechEffect e, int faction)
+        {
+            foreach (UnitDef u in _units)
+                if ((faction < 0 || u.Faction == faction) && Economy.TechState.Matches(e, u, _unitTags)) return true;
+            return false;
         }
 
         private TechEffect BuildEffect(TechEffectJson e, string p, int faction, bool refs)
@@ -282,7 +298,9 @@ public static partial class DataLoader
         /// each, at the entry) and is resolved to <c>RequiresTechs</c> / <c>RequiresBuildings</c> on its def. Entries that
         /// are not snake_case ids were already reported. A tech id that is also a building id is one error at the tech's
         /// id (BUG-0099: the entry naming it would be ambiguous), and a <c>requires</c> cycle among techs and buildings is
-        /// one error at the entry that closes it (BUG-0099: nothing in it could ever be met).
+        /// one error at the entry that closes it (BUG-0099: nothing in it could ever be met). BUG-0100: an entry naming
+        /// another faction's building or tech (or, in a common tech, any faction's) is one error at the entry, and an
+        /// any-of that some faction can never fill is one error at the field (<see cref="CheckAnyOfReachable"/>).
         /// </summary>
         public void ResolveRequires(BuildingFileJson?[] buildingFiles, List<(int Faction, int Index)> buildings,
             UnitFileJson?[] unitFiles, List<(int Faction, int Index)> units)
@@ -304,33 +322,39 @@ public static partial class DataLoader
                 _c.CurrentFile = FileOf(file);
                 TechJson json = _files[file]!.Techs![i]!;
                 TechDef def = _defs[Array.BinarySearch(_keys, json.Id!, StringComparer.Ordinal)];
-                (def.RequiresTechs, def.RequiresBuildings) = Resolve(json.Requires, $"techs[{i}].requires", edges[def.Id]);
+                (def.RequiresTechs, def.RequiresBuildings) = Resolve(json.Requires, $"techs[{i}].requires", def.Faction, edges[def.Id]);
             }
             foreach ((int f, int i) in buildings)
             {
                 _c.CurrentFile = $"factions/{_folders[f]}/buildings.json";
                 BuildingJson json = buildingFiles[f]!.Buildings![i]!;
                 BuildingDef def = _buildings[Array.BinarySearch(_buildingKeys, json.Id!, StringComparer.Ordinal)];
-                (def.RequiresTechs, def.RequiresBuildings) = Resolve(json.Requires, $"buildings[{i}].requires", edges[techs + def.Id]);
+                (def.RequiresTechs, def.RequiresBuildings) = Resolve(json.Requires, $"buildings[{i}].requires", def.Faction, edges[techs + def.Id]);
             }
             foreach ((int f, int i) in units)
             {
                 _c.CurrentFile = $"factions/{_folders[f]}/units.json";
                 UnitJson json = unitFiles[f]!.Units![i]!;
                 UnitDef def = _units[Array.BinarySearch(_unitKeys, json.Id!, StringComparer.Ordinal)];
-                (def.RequiresTechs, def.RequiresBuildings) = Resolve(json.Requires, $"units[{i}].requires", null);
+                (def.RequiresTechs, def.RequiresBuildings) = Resolve(json.Requires, $"units[{i}].requires", def.Faction, null);
             }
             FindCycles(edges);
+            // Reachability means something only on otherwise clean data: a broken any-of or requires entry is reported once.
+            if (_c.Errors.Count == 0) CheckAnyOfReachable();
         }
 
         /// <summary>One <c>requires</c> entry as a graph edge: the node it names, and where it is written (for the error).</summary>
         private readonly record struct Edge(int To, string File, string Path);
 
         /// <summary>
-        /// A <c>requires</c> list resolved to (tech ids, building type ids), each ascending and de-duplicated; an unknown id
-        /// is one error at its entry. Each resolved entry is added to <paramref name="edges"/> (null for a unit's list).
+        /// A <c>requires</c> list of a def of faction <paramref name="owner"/> (-1: a common tech) resolved to (tech ids,
+        /// building type ids), each ascending and de-duplicated; an unknown id is one error at its entry, and so is one the
+        /// owner can never meet (BUG-0100): another faction's building (a building requirement is an own finished
+        /// building, and a player can't place another faction's) or another faction's tech (it can't research it); a
+        /// common tech, which every faction researches, can name neither. Each resolved entry is added to
+        /// <paramref name="edges"/> (null for a unit's list).
         /// </summary>
-        private (ImmutableArray<int> Techs, ImmutableArray<int> Buildings) Resolve(List<string?>? requires, string path, List<Edge>? edges)
+        private (ImmutableArray<int> Techs, ImmutableArray<int> Buildings) Resolve(List<string?>? requires, string path, int owner, List<Edge>? edges)
         {
             var techs = new SortedSet<int>(); // load-time only
             var buildings = new SortedSet<int>();
@@ -341,13 +365,21 @@ public static partial class DataLoader
                 // An id that is both a tech and a building was reported at the tech's id; it reads as the tech here.
                 int t = Array.BinarySearch(_keys, id!, StringComparer.Ordinal);
                 int b = t >= 0 ? -1 : Array.BinarySearch(_buildingKeys, id!, StringComparer.Ordinal);
-                if (t >= 0) techs.Add(t);
-                else if (b >= 0) buildings.Add(b);
-                else
+                if (t < 0 && b < 0)
                 {
                     _c.Error($"{path}[{j}]", $"unknown tech or building '{id}' (requires names a tech or building id)");
                     continue;
                 }
+                int named = t >= 0 ? _defs[t].Faction : _buildings[b].Faction;
+                if (named >= 0 && named != owner)
+                {
+                    _c.Error($"{path}[{j}]", owner < 0
+                        ? $"a common tech can't require '{id}' of faction '{_folders[named]}': no other faction could ever meet it"
+                        : $"'{id}' belongs to faction '{_folders[named]}', not '{_folders[owner]}', so it can never be met");
+                    continue;
+                }
+                if (t >= 0) techs.Add(t);
+                else buildings.Add(b);
                 edges?.Add(new Edge(t >= 0 ? t : _keys.Length + b, _c.CurrentFile, $"{path}[{j}]"));
             }
             return (ToArray(techs), ToArray(buildings));
@@ -358,6 +390,77 @@ public static partial class DataLoader
             var result = ImmutableArray.CreateBuilder<int>(set.Count);
             foreach (int x in set) result.Add(x);
             return result.MoveToImmutable();
+        }
+
+        /// <summary>
+        /// BUG-0100: for each faction, what it can ever have, found by a fixpoint from "nothing built, nothing researched":
+        /// a building of the faction, or a common or own tech, becomes reachable once everything its resolved
+        /// <c>requires</c> names is reachable and (a tech) its any-of has at least <c>count</c> listed slots whose own
+        /// building is reachable. A tech whose any-of some faction can't fill so is one error at its
+        /// <c>requiresAnyOf</c>, naming the factions. Members that require the tech themselves, directly or through
+        /// others, never become reachable before it, so they don't count. Load time only.
+        /// </summary>
+        private void CheckAnyOfReachable()
+        {
+            int techs = _keys.Length;
+            var blocked = new List<string>?[techs];
+            for (int f = 0; f < _folders.Length; f++)
+            {
+                var techOk = new bool[techs];
+                var buildingOk = new bool[_buildings.Length];
+                // Per slot, the faction's building type (BUG-0010: exactly one each in a clean file).
+                var inSlot = new int[DataLimits.BuildingSlotIds.Length];
+                Array.Fill(inSlot, -1);
+                foreach (BuildingDef bd in _buildings)
+                    if (bd.Faction == f) inSlot[(int)bd.Slot] = bd.Id;
+                for (bool changed = true; changed;)
+                {
+                    changed = false;
+                    foreach (BuildingDef bd in _buildings)
+                    {
+                        if (bd.Faction != f || buildingOk[bd.Id] || !AllOk(bd.RequiresTechs, bd.RequiresBuildings, techOk, buildingOk)) continue;
+                        buildingOk[bd.Id] = changed = true;
+                    }
+                    foreach (TechDef td in _defs)
+                    {
+                        if ((td.Faction >= 0 && td.Faction != f) || techOk[td.Id] || !AllOk(td.RequiresTechs, td.RequiresBuildings, techOk, buildingOk)) continue;
+                        if (AnyOfReachable(td, inSlot, buildingOk) < td.RequiresAnyOfCount) continue;
+                        techOk[td.Id] = changed = true;
+                    }
+                }
+                foreach (TechDef td in _defs)
+                {
+                    if ((td.Faction >= 0 && td.Faction != f) || td.RequiresAnyOfCount <= 0) continue;
+                    if (AnyOfReachable(td, inSlot, buildingOk) < td.RequiresAnyOfCount) (blocked[td.Id] ??= new List<string>()).Add(_folders[f]);
+                }
+            }
+            foreach ((int file, int i) in _accepted)
+            {
+                TechJson json = _files[file]!.Techs![i]!;
+                TechDef td = _defs[Array.BinarySearch(_keys, json.Id!, StringComparer.Ordinal)];
+                List<string>? factions = blocked[td.Id];
+                if (factions == null) continue;
+                _c.CurrentFile = FileOf(file);
+                _c.Error($"techs[{i}].requiresAnyOf", $"needs {td.RequiresAnyOfCount} of its slots built, but faction(s) {string.Join(", ", factions)} can "
+                    + "never have that many (the other listed buildings need this tech first, directly or through others)");
+            }
+        }
+
+        private static bool AllOk(ImmutableArray<int> techs, ImmutableArray<int> buildings, bool[] techOk, bool[] buildingOk)
+        {
+            foreach (int t in techs)
+                if (!techOk[t]) return false;
+            foreach (int b in buildings)
+                if (!buildingOk[b]) return false;
+            return true;
+        }
+
+        private static int AnyOfReachable(TechDef td, int[] inSlot, bool[] buildingOk)
+        {
+            int n = 0;
+            foreach (int slot in td.RequiresAnyOfSlots)
+                if (inSlot[slot] >= 0 && buildingOk[inSlot[slot]]) n++;
+            return n;
         }
 
         private string NodeKey(int node) => node < _keys.Length ? _keys[node] : _buildingKeys[node - _keys.Length];

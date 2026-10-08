@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (M3-H2) |
 | Found | 2026-10-07-0925, task M3-4 |
 | System | production spawn / construction push-out (`FreeCellSearch.Nearest`, `World.LevelBounds`) |
-| Fixed by | |
+| Fixed by | 3f494c0 (M3-H2): `Map/Plateaus` (connected same-level ground at load), spawn and push-out search bounded by the plateau, per-plateau full memo per tick. Tests: `QA/ProductionQaTests.ASpawnOnAFullPlateau_Waits_NeverLandsOnAnotherPlateauOfTheSameLevel_Bug0097`, `APushOutOnAFullPlateau_NeverLandsOnAnotherPlateauOfTheSameLevel_Bug0097`, `TwentyHallsAllWaitingForACell_EachTick_Under0point3Ms` (0.093 ms), `PlateauTests.*`; QA 2026-10-07-1715 `QA/PlateauSealMemoQaTests.ThirtySixSameLevelIslands_256Map_*` (49 islands), `GeneratedMaps256_ManyLevel1Plateaus_PartitionMatchesAnIndependentFlood` (seeds 1-10, 10-13 level-1 plateaus each) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~ProductionQaTests.ASpawnOnAFullPlateau_LandsOnAnotherPlateauOfTheSameLevel_Bug0097Pin" --logger "console;verbosity=detailed"`

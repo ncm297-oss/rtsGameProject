@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (M3-H2) |
 | Found | 2026-10-07-1415, task M3-6 |
 | System | data loader (requires, requiresAnyOf) |
-| Fixed by | |
+| Fixed by | 3f494c0 (M3-H2): `TechReader.Resolve` rejects another faction's building / tech (and any faction's in a common tech); `CheckAnyOfReachable` fixpoint per faction. Tests: `QA/RequirementQaTests.ARequirementThatCanNeverBeMet_IsOneError` (un-skipped, 4 cases), `AnAnyOfThatOnlyItsOwnTechCanOpen_IsOneErrorAtTheField`, `AnAnyOfWithExactlyCountReachableMembers_Loads`; QA 2026-10-07-1715 `QA/RequirementReachQaTests` (chains of 3-4 links, both factions, false-positive side). Residual: a building requiring a tech researched only at its own slot still loads, BUG-0134 |
 
 ## Repro
 Each loads with 0 errors (pinned in `sim/Rts.Sim.Tests/QA/RequirementQaTests.cs`, `BUG0100_Today_*`; the wanted

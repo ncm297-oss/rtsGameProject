@@ -3,7 +3,7 @@
     {
       "id": "moranth_supply",
       "displayName": "Moranth Supply",
-      "description": "Munitions bought from the Moranth: the Sapper's Cusser cooldown drops from 45 to 30 s and the Catapult gains 4 m of range. Needs Age II.",
+      "description": "Crates of Moranth munitions, paid for in Imperial coin: the Sapper's Cusser cooldown drops from 45 to 30 s and the Catapult gets +4 m range. Needs Age II.",
       "researchedAt": "forge",
       "cost": { "gold": 200, "wood": 150 },
       "researchTime": 45,

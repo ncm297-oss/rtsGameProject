@@ -78,7 +78,18 @@ buildings and can wreck your own army if you're careless.
 | Watch Tower | Watchtower | `malazan_watchtower` | 800 | 5 | 50 / 125 | 35 | 2×2 | Attack 10 pierce / 2 s, range 18; sight 24; detector 16 m | Age II |
 
 Building stats follow the template in [02-game-design.md](../02-game-design.md#buildings).
+
 `Content/BuildingContentTests` and `UnitContentTests` pin this page to the data.
+
+## Techs
+
+| Id | Name | Researched at | Cost (G/W) | Time (s) | Requires | Effects |
+| --- | --- | --- | --- | --- | --- | --- |
+| `moranth_supply` | Moranth Supply | Armory | 200 / 150 | 45 | Age II | Sapper Cusser cooldown 45 → 30 s; Catapult range +4 m |
+
+The faction upgrade is the only faction-specific tech. Age II and the six shared Forge upgrades are in
+[02-game-design.md "Forge upgrades"](../02-game-design.md#forge-upgrades). `Content/TechContentTests` pins this
+table and the "Faction upgrade" line above to the data.
 
 ## Strengths and weaknesses
 

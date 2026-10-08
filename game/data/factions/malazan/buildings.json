@@ -82,7 +82,7 @@
       "buildTime": 45,
       "popProvided": 0,
       "dropOff": false,
-      "requires": []
+      "requires": ["malazan_barracks"]
     },
     {
       "id": "malazan_armory",
@@ -110,7 +110,7 @@
       "buildTime": 50,
       "popProvided": 0,
       "dropOff": false,
-      "requires": []
+      "requires": ["age_ii"]
     },
     {
       "id": "malazan_engineers_yard",
@@ -124,7 +124,7 @@
       "buildTime": 55,
       "popProvided": 0,
       "dropOff": false,
-      "requires": []
+      "requires": ["age_ii"]
     },
     {
       "id": "malazan_watchtower",
@@ -138,7 +138,7 @@
       "buildTime": 35,
       "popProvided": 0,
       "dropOff": false,
-      "requires": []
+      "requires": ["age_ii"]
     }
   ]
 }

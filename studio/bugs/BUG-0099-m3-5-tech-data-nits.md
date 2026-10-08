@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open (items 1 and 3 fixed in 8928418, M3-6; item 2 open) |
+| Status | fixed (items 1 and 3 in 8928418, M3-6; item 2 in 3f494c0, M3-H2) |
 | Found | 2026-10-07-1131, task M3-5 |
 | System | data loader (techs.json, requires) |
-| Fixed by | items 1 + 3: 8928418 (M3-6), `QA/TechDataQaTests.ARequiresCycle_IsOneError` un-skipped, `ATechIdEqualToABuildingId_IsOneError`; QA `RequirementQaTests` cycles of length 1-4. Item 2 (an effect matching no unit) not in M3-6 scope |
+| Fixed by | items 1 + 3: 8928418 (M3-6), `QA/TechDataQaTests.ARequiresCycle_IsOneError` un-skipped, `ATechIdEqualToABuildingId_IsOneError`; QA `RequirementQaTests` cycles of length 1-4. Item 2 (an effect matching no unit) not in M3-6 scope; item 2: 3f494c0 (M3-H2), an effect matching no unit (any faction for a common tech, own faction for a faction upgrade) is one error at `appliesTo`: `QA/TechDataQaTests.AFilterThatMatchesNoUnit_IsOneErrorAtAppliesTo`, `AFactionUpgradeFilterMatchingOnlyAnotherFactionsUnits_IsOneError` (verified QA 2026-10-07-1715) |
 
 ## Repro
 Each one loads with 0 errors (pinned in `sim/Rts.Sim.Tests/QA/TechDataQaTests.cs`):

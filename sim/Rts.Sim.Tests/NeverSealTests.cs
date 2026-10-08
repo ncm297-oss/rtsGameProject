@@ -52,7 +52,9 @@ public class NeverSealTests
     [InlineData(5UL)] [InlineData(6UL)] [InlineData(7UL)] [InlineData(8UL)]
     public void FiveHundredRandomLegalPlacements_NeverLeaveAPocket(ulong seed)
     {
-        var config = TestSim.Config(Seed: seed, PlayerCount: 1, UnitCapacity: 8, CommandCapacity: 16)
+        // Requires cleared (BUG-0112): every type is placed as a site and never finishes, so a gated type would be
+        // refused for Requires forever and starve the placement floor; this test is about geometry only.
+        var config = TestSim.ConfigWithoutBuildingRequires(Seed: seed, PlayerCount: 1, UnitCapacity: 8, CommandCapacity: 16)
             with { Map = MapGenParams.Default with { Forests = 12, GoldMines = 8 }, BuildingCapacity = 512 };
         var sim = new Simulation(config);
         NavGrid g = sim.World.NavGrid;

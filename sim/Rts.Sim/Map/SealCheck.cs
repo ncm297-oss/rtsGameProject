@@ -28,6 +28,10 @@ internal sealed class SealCheck
     private readonly int[] _scratch;
     private readonly int[] _parent = new int[MaxSides + 1];
     private readonly int[] _queued = new int[MaxSides + 1];
+    // The last flood's question and answer (BUG-0096): the answer depends only on the grid, which can't change without
+    // NavGrid.Version moving, so the same footprint asked again at the same version is answered without a flood.
+    private int _memoX0 = -1, _memoY0, _memoW, _memoH, _memoVersion;
+    private bool _memoAnswer;
 
     /// <summary>A check on <paramref name="grid"/> using <paramref name="scratch"/> (at least two ints a cell), which it may overwrite at every query.</summary>
     public SealCheck(NavGrid grid, int[] scratch)
@@ -38,11 +42,33 @@ internal sealed class SealCheck
     }
 
     /// <summary>True if blocking the <paramref name="fw"/> x <paramref name="fh"/> footprint at (<paramref name="x0"/>, <paramref name="y0"/>) (in the map, every cell passable) leaves every two passable cells that connect now still connected.</summary>
+    /// <remarks>
+    /// The last flood's answer is kept with its footprint and <see cref="NavGrid.Version"/> (M3-H2, BUG-0096): a group
+    /// Build of 100 workers at one sealing spot floods once, not 100 times. Derived scratch, not hashed: it only
+    /// repeats an answer the flood would give again.
+    /// </remarks>
     public bool KeepsConnected(int x0, int y0, int fw, int fh)
     {
         NavFlags[] flags = _grid.Flags;
+        if (RingAllPassable(flags, _grid.Width, x0, y0, fw, fh)) return true;
+        int version = _grid.Version;
+        if (x0 == _memoX0 && y0 == _memoY0 && fw == _memoW && fh == _memoH && version == _memoVersion) return _memoAnswer;
+        bool answer = Flood(flags, x0, y0, fw, fh);
+        Floods++;
+        (_memoX0, _memoY0, _memoW, _memoH, _memoVersion, _memoAnswer) = (x0, y0, fw, fh, version, answer);
+        return answer;
+    }
+
+    /// <summary>Number of floods run so far (diagnostics and tests; derived, not hashed).</summary>
+    internal long Floods { get; private set; }
+
+    /// <summary>Test seam: forgets the kept answer, so the next query floods.</summary>
+    internal void ForgetForTests() => _memoX0 = -1;
+
+    /// <summary>The labelled flood from the footprint's passable sides; true once they all meet.</summary>
+    private bool Flood(NavFlags[] flags, int x0, int y0, int fw, int fh)
+    {
         int w = _grid.Width, n = w * _grid.Height;
-        if (RingAllPassable(flags, w, x0, y0, fw, fh)) return true;
 
         int[] s = _scratch;
         Array.Clear(s, 0, n);

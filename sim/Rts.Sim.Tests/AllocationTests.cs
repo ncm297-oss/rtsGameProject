@@ -453,4 +453,44 @@ public class AllocationTests
         Assert.Equal(0, w.Buildings.QueueCount[yard] + w.Buildings.QueueCount[armory]);
         Assert.True(open > 0, "no gate was ever open");
     }
+    /// <summary>
+    /// M3-H2: a push-out on a full plateau (the leftovers' passes), a House's seal answer asked again (the memo's hit)
+    /// and after a grid change (its miss), and production waiting on a full plateau (the per-plateau memo and the box
+    /// fill from the unit store) allocate nothing.
+    /// </summary>
+    [Fact]
+    public void PushOutLeftovers_SealMemo_AndSpawnsWaitingOnAFullPlateau_AllocateNothing()
+    {
+        (Simulation sim, int worker) = PlateauTests.ThirtyOnASmallPlateau();
+        World w = sim.World;
+        System.Numerics.Vector2 at = GatherMaps.At(sim, 30, 30);
+        (Simulation full, int keep, List<(int X, int Y)> free) = ProductionTests.PlateauKeep(48, 20);
+        foreach ((int x, int y) in free) full.Enqueue(Command.SpawnUnit(1, ProductionMaps.Raider, GatherMaps.At(full, x, y)));
+        GatherMaps.Run(full, 2);
+        BuildMaps.SetTotals(full, 0, 1000, 1000);
+        full.Enqueue(Command.Train(0, ProductionMaps.In(full, keep), GatherMaps.Laborer));
+        GatherMaps.Run(full, full.World.Data.Units[GatherMaps.Laborer].TrainTicks + 4);
+        Assert.Equal(1, full.World.Buildings.QueueCount[keep]); // complete, waiting on the full plateau
+        int sink = 0, builds = 0;
+        Action block = () =>
+        {
+            for (int round = 0; round < 5; round++)
+            {
+                PlateauTests.PackIntoTheHouse(sim);
+                if (Economy.ConstructionSystem.StartBuild(w, worker, BuildMaps.House, at, replaceQueue: true)) builds++;
+                // Beside the border, so the ring isn't all open and the flood runs (then its kept answer is read).
+                if (w.CanPlace(0, BuildMaps.House, w.NavGrid.Width + 1, out _)) sink++;
+                if (w.CanPlace(0, BuildMaps.House, w.NavGrid.Width + 1, out _)) sink++;
+                sim.Enqueue(Command.Cancel(0, at));
+                sim.Tick();
+                sim.Tick();
+                full.Tick();
+            }
+        };
+        block();
+        AllocationProbe.AssertZero(block);
+        Assert.True(sink >= 0);
+        Assert.Equal(10, builds); // every round placed the House on the 30 (so the leftovers' passes ran)
+        Assert.Equal(1, full.World.Buildings.QueueCount[keep]);
+    }
 }

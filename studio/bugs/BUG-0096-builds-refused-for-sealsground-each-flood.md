@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (M3-H2) |
 | Found | 2026-10-07-0800, task M3-H1 |
 | System | construction / placement rule (`ConstructionSystem.Check`, `Map/SealCheck`) |
-| Fixed by | |
+| Fixed by | 3f494c0 (M3-H2): `SealCheck` keeps the last flood's answer per (anchor, size, `NavGrid.Version`). Tests: `QA/SimHardeningQaTests.HundredBuildsRefusedForSealsGround_OneTick_Under2Ms` (0.42 ms, was 33 ms), `PlateauTests.HundredBuildsRefusedForSealsGround_InOneTick_FloodOnce`, `TheMemo_*`; QA 2026-10-07-1715 `QA/PlateauSealMemoQaTests.SealMemo_AfterAnyGridChange_EqualsAFreshFlood` (6 seeds x 1,500 grid changes, memo == fresh flood every time), `SealMemo_ACancelEarlierInTheSameTick_*`, `SealMemo_ATreeFelledByAWorker_*` |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~SimHardeningQaTests.HundredBuildsRefusedForSealsGround_OneTick_Report" --logger "console;verbosity=detailed"`
