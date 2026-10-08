@@ -63,6 +63,7 @@ public class FightReissueQaTests
         EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 16, 2));
         EntityHandle t = Place(sim, 1, Laborer, At(sim, 21, 20));
         sim.Enqueue(Command.HoldPosition(1, t));
+        Spot(sim, 0, t); // M4-3a: up the cliff, a level-0 unit can't see it: spotted, so the cliff chase still happens
         sim.Tick();
         Vector2 end = At(sim, 16, 38);
         Command order = Command.AttackMove(0, a, end);
@@ -90,6 +91,7 @@ public class FightReissueQaTests
         EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 12, 20));
         EntityHandle t = Place(sim, 1, Laborer, At(sim, 23, 20));
         sim.Enqueue(Command.HoldPosition(1, t));
+        Spot(sim, 0, t); // M4-3a: up the cliff, out of sight: spotted, else the Attack is dropped, not given up
         sim.Tick();
         Command order = Command.Attack(0, a, t, false);
         sim.Enqueue(order);

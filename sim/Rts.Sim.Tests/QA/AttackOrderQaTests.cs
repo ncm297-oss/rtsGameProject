@@ -66,6 +66,8 @@ public class AttackOrderQaTests
         UnitStore u = sim.World.Units;
         EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 10, 24));
         EntityHandle b = Place(sim, 1, sameType ? HeavyInfantry : Raider, At(sim, 20, 24));
+        Spot(sim, 0, b); // M4-3a: 20 m apart, past both sights (14 m): spotted, else the fog drops both orders
+        Spot(sim, 1, a);
         sim.Enqueue(Command.Attack(0, a, b, false));
         sim.Enqueue(Command.Attack(1, b, a, false));
         int met = RunUntil(sim, () => u.State[a.Index] == UnitState.Attacking || u.State[b.Index] == UnitState.Attacking, 200);
@@ -90,6 +92,7 @@ public class AttackOrderQaTests
         EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 12, 20));
         EntityHandle t = Place(sim, 1, Laborer, At(sim, 23, 20));
         sim.Enqueue(Command.HoldPosition(1, t));
+        Spot(sim, 0, t); // M4-3a: up the cliff, out of a level-0 unit's sight: spotted, else the fog drops the order
         sim.Tick();
         sim.Enqueue(Command.Attack(0, a, t, false));
         sim.Tick();
@@ -210,6 +213,7 @@ public class AttackOrderQaTests
         EntityHandle t = Place(sim, 1, Raider, At(sim, 48, 48));
         u.Hp[t.Index] = 1_000_000;
         sim.Enqueue(Command.HoldPosition(1, t));
+        Spot(sim, 0, t); // M4-3a: out of most attackers' sight: spotted, else the fog drops their orders
         var hs = new EntityHandle[n];
         for (int k = 0; k < n; k++) hs[k] = Place(sim, 0, HeavyInfantry, At(sim, 8 + k % 25 * 1, 20 + k / 25 * 1) + new Vector2(0.3f * (k % 2), 0f));
         foreach (EntityHandle h in hs) sim.Enqueue(Command.Attack(0, h, t, false));
@@ -279,6 +283,7 @@ public class AttackOrderQaTests
         EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 5, 5));
         EntityHandle t = Place(sim, 1, Laborer, At(sim, 40, 40));
         sim.Enqueue(Command.HoldPosition(1, t));
+        Spot(sim, 0, t); // M4-3a: out of sight: spotted (the recycled slot's newcomer is not)
         Vector2 leg1 = At(sim, 25, 5), leg2 = At(sim, 5, 30);
         sim.Enqueue(Command.Move(0, a, leg1));
         sim.Enqueue(Command.Attack(0, a, t, false, queued: true));
@@ -349,6 +354,7 @@ public class AttackOrderQaTests
         BuildingStore b = sim.World.Buildings;
         EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 5, 5));
         EntityHandle tent = PlaceBuilding(sim, 1, Tent, 30, 30);
+        Spotter(sim, 0, At(sim, 36, 31)); // M4-3a: the tent is out of a's sight: a spotter beside it
         sim.Enqueue(Command.Move(0, a, At(sim, 20, 5)));
         sim.Enqueue(Command.Attack(0, a, tent, true, queued: true));
         sim.Tick();

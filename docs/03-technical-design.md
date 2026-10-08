@@ -108,7 +108,9 @@ phases in this fixed order:
     `CombatSystem.Resolve`: hits in attacker slot order, the dead freed at once with their
     population, kills and losses counted, death events recorded, stale targets cleared. M4-2b: after the queued hits,
     the projectiles that arrived this tick land in slot order, with their splash, before the stale targets are cleared.)
-12. **Vision and detection:** recompute fog every 4 ticks (5 Hz) per player.
+12. **Vision and detection:** recompute fog every 4 ticks (5 Hz) per player. (M4-3a: `VisionSystem.Run` rebuilds every
+    player's unexplored / explored / visible grid on the ticks where `tick % 4 == 1`, from its own units' and buildings'
+    sight with the high-ground rule; an initial stamp also runs at the start of tick 0; see "Vision, detection, fog".)
 13. **Cleanup:** free dead handles, finalize the tick's event list, bump `TickNumber`. (M4-1: the
     dead are freed in phase 11 already; the tick's death events stay readable in `World.Deaths`
     until the next tick starts, which empties the buffer first thing.)
@@ -2106,23 +2108,80 @@ three gates below.
 
 ## Vision, detection, fog
 
-- Per player: `byte[] Visibility` (0 unexplored, 1 explored, 2 visible) and `bool[] Detected`.
-- Every 4 ticks: clear "visible" to "explored", then stamp a precomputed circle mask for each
-  unit and building's sight radius, and for each detector's detection radius. Apply zone masks
-  (cells inside an enemy Darkness/Sandstorm become not-visible unless the viewer is inside).
-- **High ground:** the nav grid stores a `Level` byte per cell (from map data; ramps take the
-  lower level). While stamping, a cell is marked visible only if
-  `Level[cell] <= viewerLevel || distance <= 4 m || viewer.IsFlying`. This is a per-cell compare
-  inside the existing stamping loop, not a raycast, so it costs almost nothing. Attacks fired from
-  a higher level apply a 2 s `Revealed`-to-victim flag on the attacker (visibility only for that
-  one enemy player).
-- Target validity check (used by acquisition, commands, and the AI): the target's cell is
-  visible to the attacker's owner, and the target is not stealthed or is detected.
-- The AI reads the world only through a `PlayerView` facade that applies these checks.
-- **Rendering:** the local player's visibility grid uploads to a 128×128 R8 texture each vision
-  update. The terrain shader samples it with smooth filtering: unexplored = black, explored =
-  desaturated and dark, visible = full color. Unit views are hidden when not visible. Last-seen
-  building ghosts come from a per-player "last known buildings" list in the sim.
+Fog of war and the high-ground rule are in since M4-3a (`sim/Rts.Sim/Vision/`); detection and stealth (M4-5), zones'
+vision effects (M4-4), the last-known building ghosts and buildings that shoot (M4-3b) and the AI's `PlayerView` (M5)
+come later (see "Not yet" below).
+
+- **The grid.** `World.Fog` (`FogStore`): per player a `byte[]` of map cells, row-major (`y * Width + x`), 0 unexplored,
+  1 explored, 2 visible (`VisionConstants.Unexplored` / `Explored` / `Visible`). Allocated with the world: one byte a
+  cell a player, plus a packed explored bit a cell.
+- **When.** Phase 12 (`VisionSystem.Run`) rebuilds every player's fog on the ticks where `tick % 4 == 1`
+  (`VisionConstants.UpdateInterval` 4, `UpdatePhase` 1: 5 Hz). All players update on the same tick (not spread over the
+  four: the update is cheap, see Cost). Tick 1 is the first because the commands queued before the match's first tick
+  (the start bases) apply in tick 1, so start positions are explored when the first tick that has them ends. An
+  **initial stamp** also runs at the start of tick 0, before its commands, for units already in the world before the
+  first tick. Between updates the fog holds still: a move at tick t shows at the next update tick, not before.
+- **The stamp.** Every live own unit (any state; `UnitDef.Sight`) and every live own building (a site under
+  construction too; `BuildingDef.Sight`) stamps a circle centred on its cell (a building: the cell holding its
+  footprint's centre, the higher middle cell on an even side). A cell is inside when its centre is within the sight of
+  the viewer's cell centre: `dx² + dy² <= floor((sight / 2 m)²)` in cells. There is one precomputed mask per distinct
+  radius (row half-widths, built at load from squared integers, no trig). A stamp writes +1 / -1 row-span marks into an
+  int layer per viewer level (laid over the flow-field build queue's scratch, idle in phase 12), so it costs the
+  circle's height, not its area; one pass per player then sums along the rows of the stamped box. A cell already stamped
+  from with the same or a bigger circle in this update is skipped (a blob's units share cells; the mark rides in the high
+  bits of the player's visibility byte until the pass clears it).
+- **High ground** (docs/02). A cell at level h is visible from a viewer of level L only if `h <= L`, or the cell is
+  within `VisionConstants.LipRadius` (4 m) of the viewer (and within its sight). The viewer's level is its own cell's,
+  so a unit on a ramp sees as from the lower level. In the stamp this is the layer's level against the cell's (no
+  raycast); the lip is stamped into the top layer, which covers every level, and only when a higher cell is that near.
+  Flying units would see every level; none exists yet (no code).
+- **Visible to explored.** A cell visible at the last update that no circle covers now becomes explored; explored stays
+  for the match. A dead unit's circle is gone at the next update.
+- **State and hashing.** The explored bits (a `ulong` per 64 cells per player, set when a cell is first seen) and the
+  high-ground reveals in force are hashed. The visible bits, `Version` and the stamp boxes are derived: rebuilt by every
+  update, not hashed (`StateHashTests.FogVisibleBits_Versions_AndBoxes_AreDerived_AndNotHashed`). A save (M6) must run an
+  update after it restores the units so the visible bits exist before the first tick.
+- **Target validity** (combat, M4-3a). A unit may take an enemy unit (scan, retaliation, an explicit Attack, keeping a
+  target) when its owner sees it: (a) the unit sees it itself now: within its sight, and at or below its own level
+  unless within 4 m (the stamp's rule measured unit to unit at this tick, so a unit never misses what its own circle
+  covers between updates); or (b) the target's cell is visible in its owner's fog (another own unit or building sees it);
+  or (c) the target is revealed to its owner. An enemy building: the distance to its footprint and its centre cell's
+  level for (a), any footprint cell visible for (b). An explicit Attack, queued or not (a queued one is checked again
+  when it starts), on a target its owner doesn't see is dropped like a forbidden one. A unit with a target checks on its
+  scan tick; a target its owner no longer sees (it walked up a plateau out of sight, or out of every own circle) is lost
+  as the scan losing it is: given up when the chaser wasn't gaining on it (BUG-0137), else dropped, and a scan may take
+  another. A friendly-fire or splash victim needs no visibility (a hit, not an acquisition). Since the scan radius is the
+  unit's sight, (a) holds for every scan candidate on a one-level map, and every `Scenario/CounterTriangleTests` row plays
+  exactly as before M4-3a (the two siege-against-a-building rows now place a spotter beside the building: their
+  attackers start out of sight of it, and their explicit Attack would be dropped). The Catapult (range 24 m, sight 18 m) is the one shipped unit that outranges its sight: on its
+  own it acquires at 18 m as before; an explicit Attack on a target no own unit or building sees is dropped (M4-3b's
+  last-known buildings list relaxes that for buildings).
+- **The high-ground reveal.** A hit that lands on an enemy unit or building (a melee hit, a projectile's impact, or its
+  splash) from an attacker standing on a higher level than the victim reveals that attacker to the victim's owner until
+  `tick + VisionConstants.HighGroundRevealTicks` (40 = 2 s, docs/02), refreshed by every such hit. The attacker's level
+  is its cell's at the melee hit, and for a projectile the level it was fired from (`ProjectileStore.Level`, one byte a
+  slot, hashed). A dead attacker reveals nothing. It is stored per (unit slot, player) as the end tick and the slot's
+  generation, so a recycled slot never inherits a reveal (2 ints a slot a player). A same-level attacker outside every
+  sight circle of the victim's owner is not revealed, and so not answered (docs/02; M4-5's Revealed status).
+- **For the view (M4-V4).** Read between ticks, never write:
+  - `Fog.Visibility(player)`: `ReadOnlySpan<byte>`, row-major `Fog.Width` x `Fog.Height` cells, the three values above;
+    upload it to the fog texture when `Fog.Version(player)` (+1 per update that ran for that player) changes.
+  - `Fog.IsVisible(player, cell)`, `Fog.IsExplored(player, cell)` (explored or visible).
+  - `Fog.CanSeeUnit(player, slot)`: an own unit, its cell visible at the last update, or revealed to the player (hide
+    enemy unit views where this is false). `Fog.CanSeeBuilding(player, slot)`: own, or any footprint cell visible.
+  - Out-of-range players, cells and dead slots answer false (or an empty span / 0).
+- **Cost** (Debug, first run, 2026-10-08, the machine shared with other test runs): `Vision/FogPerfTests`: 2,500 units of
+  one player spread over a flat 128 map, 0.06 ms a tick amortized (budget 0.25 ms); 1,000 v 1,000 on a generated
+  3-level 128 map, 0.09 ms (budget 0.4 ms); the tight blob of 2,500, 0.02 ms (most of its stamps skipped). Updates
+  allocate nothing.
+- **Not yet.** M4-3b: towers' `attack` and `detector` fields and buildings that shoot, the per-player "last known
+  buildings" list (ghosts in explored fog, docs/02), the placement rule "footprint explored by the player". M4-4: zone
+  vision (Darkness / Sandstorm: per-player vision blocker masks applied after the stamp). M4-5: `bool[] Detected` per
+  player (detector circles stamped like sight), stealth, the Revealed status (attacking or casting reveals for 3 s); the
+  target validity check then also requires "not stealthed, or detected". M5: the AI reads the world only through a
+  `PlayerView` facade that applies these checks. **Rendering** (M4-V4): the local player's grid uploads to an R8 texture
+  each update; the terrain shader samples it with smooth filtering (unexplored black, explored desaturated and dark,
+  visible full color); unit views are hidden when not visible; ghosts come from the last-known list (M4-3b).
 
 ## Data format
 
@@ -2134,7 +2193,7 @@ game/data/
   common/
     damage_table.json        # type × armor class multipliers
     statuses.json            # status definitions
-    rules.json               # starting resources, pop cap, gather rates, repair factors
+    rules.json               # starting resources, pop cap, gather rates, repair factors, building sight
     resources.json           # resource node types: tree, gold mine (M3-1)
     techs.json               # techs every faction shares: Age II, Forge upgrades (M3-5)
     projectiles.json         # projectile types: aimed / lob, speed, hit tolerance, lead speed (M4-2b)
@@ -2199,9 +2258,9 @@ factions) arrives with the milestone that consumes it.
 | --- | --- |
 | `damage_table.json` | `armorClasses: [{id, displayName}]`, `damageTypes: [{id, displayName, ignoresArmor?, multipliers: {<armorClass>: x}}]`. Every type must list every class. `ignoresArmor` (default false) is how Magic skips armor |
 | `resources.json` | `{ "resources": [ ... ] }`, each `{id, displayName, description, resource, footprint {width, height}}`: `resource` is `gold` or `wood`, footprint sides are cells, 1-4 (`DataLimits.MaxFootprint`). Amounts are not here: a tree holds `rules.json` `treeWood`, a mine `startMines.gold` (M3-1, see "Economy implementation") |
-| `rules.json` | docs/02 Economy table: `startingGold`, `startingWood`, `startingWorkers`, `popCap`, `workerCarry`, `gatherRate {gold, wood}` (per second), `startMines` / `expansionMines {count, gold}`, `treeWood`, `nodeSearchRadius`. Pop provided by buildings comes with `buildings.json` (M3); the Age II cost with `techs.json` (M3-5) |
+| `rules.json` | docs/02 Economy table: `startingGold`, `startingWood`, `startingWorkers`, `popCap`, `workerCarry`, `gatherRate {gold, wood}` (per second), `startMines` / `expansionMines {count, gold}`, `treeWood`, `nodeSearchRadius`, `repair {rateFactor, costFactor}` (M3-3), `buildingSight` (M4-3a: meters, above 0 and at most 64, the sight of a building whose entry gives none; shipped 12, a Producer default: docs/02 gives sight only for the Watch Tower). Pop provided by buildings comes with `buildings.json` (M3); the Age II cost with `techs.json` (M3-5) |
 | `faction.json` | `id` (must equal the folder name), `displayName`, `description`, `bonus {displayName, description}`, `resources {gold, wood: {displayName}}`, `palette {primary, secondary, accent}` as `#RRGGBB` |
-| `buildings.json` | `{ "buildings": [ ... ] }`, each `{id, displayName, description, slot, footprint {width, height}, hp, armor, cost {gold, wood}, buildTime, popProvided, dropOff}`: `slot` is one of the ten template slots (`DataLimits.BuildingSlotIds`), footprint sides 1-4 cells, `buildTime` in seconds (to ticks), `popProvided` a multiple of 0.5 (to half-pop), `dropOff` a required bool, `requires` an optional list of tech / building ids (M3-5; resolved and gating placement since M3-6). Ids unique across factions (M3-2, see "Economy implementation"); exactly one building per slot per faction (M3-6, BUG-0010) |
+| `buildings.json` | `{ "buildings": [ ... ] }`, each `{id, displayName, description, slot, footprint {width, height}, hp, armor, cost {gold, wood}, buildTime, popProvided, dropOff}`: `slot` is one of the ten template slots (`DataLimits.BuildingSlotIds`), footprint sides 1-4 cells, `buildTime` in seconds (to ticks), `popProvided` a multiple of 0.5 (to half-pop), `dropOff` a required bool, `requires` an optional list of tech / building ids (M3-5; resolved and gating placement since M3-6), `sight` optional meters (M4-3a: above 0 and at most 64, default `rules.json` `buildingSight`; shipped 24 on both watch towers, docs/02). Ids unique across factions (M3-2, see "Economy implementation"); exactly one building per slot per faction (M3-6, BUG-0010) |
 | `techs.json` | `{ "techs": [ ... ] }` in `common/` (shared by every faction) and in each faction folder (its own), each `{id, displayName, description, researchedAt, cost {gold, wood}, researchTime, requires?, requiresAnyOf?, effects: [{stat, amount, appliesTo {attackType?, tags?, units?, siege?}}]}`: `researchedAt` is a building slot id (a common tech resolves to each faction's building of it; a faction without one is an error), `researchTime` in seconds (to ticks), `requires` tech / building ids (resolved and gating research since M3-6), `requiresAnyOf` `{count, of: [slot ids, or in a faction file its own building ids]}`: met when `count` of the distinct listed slots hold an own finished building (M3-6; shipped on `age_ii` only), `effects` may be empty. `stat` is one of `attack`, `armor`, `range`, `hp`, `abilityCooldown` (`DataLimits.TechStatIds`); `amount` is non-zero, whole for attack / armor / hp, meters for range, seconds for ability cooldown (to ticks, negative shortens it). `appliesTo` is required (`{}` = every unit); each filter it sets must match: `attackType` a damage type, `tags` any one of the unit's tags (each must be a tag some unit has), `units` unit ids (a faction tech's must be its own), `siege` true / false for the `siege` slot; a `tags` or `units` list set to `[]` is an error (M3-6, BUG-0098). Tech ids are unique across all techs files and may not equal a building id (M3-6); `DataLimits.AgeTechIds` (`age_ii`) must be a common tech (M3-5, see "Implementation (M3-5)") |
 | `projectiles.json` | `{ "projectiles": [ ... ] }`, each `{id, kind, speed, hitTolerance?, leadSpeed?}`: `kind` `aimed` or `lob`, `speed` m/s (at least 1), `hitTolerance` m (aimed only, 0-2, default 0.3; an error on a lob), `leadSpeed` m/s (aimed only, not negative, default 0 = never leads; an error on a lob). Ids unique; every unit's `attack.projectile` must name one (M4-2b, see "Implementation (M4-2b)") |
 | `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge) |
@@ -2209,7 +2268,7 @@ factions) arrives with the milestone that consumes it.
 Validation rules: ids are `snake_case` and unique (a unit id is unique across all factions);
 `slot` is one of the seven template slots; `armorClass`, `attack.type`, and `bonusVs` keys exist in
 the damage table; hp, speed, sight, radius, `attack.cooldown`, `trainTime`, and gather rates are
-positive; `radius` is within 0.4-1.0 m; `pop` is a multiple of 0.5; every number is checked
+positive; a unit's and a building's `sight` is at most 64 m (`DataLimits.MaxSight`, M4-3a: one fog mask per distinct radius); `radius` is within 0.4-1.0 m; `pop` is a multiple of 0.5; every number is checked
 against an upper bound before it is narrowed (`DataLimits`: integers at most 1,000,000, decimals at
 most 1,000,000, durations at most 3600 s), so nothing overflows to Infinity or a wrapped int
 (BUG-0007); every `requires` and `tags` entry is a `snake_case` id (BUG-0009); unknown JSON fields are errors

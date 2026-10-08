@@ -8,4 +8,8 @@ namespace Rts.Sim.Combat;
 /// <param name="Victim">The target unit or building.</param>
 /// <param name="IsBuilding">True when <paramref name="Victim"/> is a building handle.</param>
 /// <param name="Damage">The hit's damage (<see cref="DamageCalc"/>), at least 1.</param>
-internal readonly record struct PendingHit(EntityHandle Attacker, int AttackerOwner, EntityHandle Victim, bool IsBuilding, int Damage);
+/// <param name="AttackerLevel">
+/// The level the attacker struck from (M4-3a): its cell's at the melee hit, the firing level for a projectile; a hit from
+/// above its victim reveals the attacker (<see cref="Vision.VisionSystem.OnHit"/>). -1: none known, no reveal.
+/// </param>
+internal readonly record struct PendingHit(EntityHandle Attacker, int AttackerOwner, EntityHandle Victim, bool IsBuilding, int Damage, int AttackerLevel = -1);

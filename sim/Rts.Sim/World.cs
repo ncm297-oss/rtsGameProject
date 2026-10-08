@@ -8,6 +8,7 @@ using Rts.Sim.Entities;
 using Rts.Sim.Map;
 using Rts.Sim.Pathfinding;
 using Rts.Sim.Spatial;
+using Rts.Sim.Vision;
 
 namespace Rts.Sim;
 
@@ -52,6 +53,8 @@ public sealed class World
         FlowFields = new FlowFieldCache(NavGrid, FlowFieldCache.CapacityFor(config.UnitCapacity, NavGrid.Width * NavGrid.Height));
         Seal = new SealCheck(NavGrid, FlowFields.BuildScratch);
         NavGrid.ShareScratch(FlowFields.BuildScratch); // the pocket rule's flood (BUG-0093)
+        // M4-3a: per-player fog; its per-update cover layers lie over the same idle scratch in phase 12.
+        Fog = new FogStore(this, config.PlayerCount, Heightmap, Units, Buildings, config.Data, FlowFields.BuildScratch);
         MoveOrder = new long[config.UnitCapacity];
         FieldMisses = new long[config.UnitCapacity];
         FieldRefreshes = new long[config.UnitCapacity];
@@ -123,6 +126,12 @@ public sealed class World
 
     /// <summary>Empties <see cref="Impacts"/> (start of a tick).</summary>
     internal void ClearImpacts() => ImpactCount = 0;
+
+    /// <summary>
+    /// Fog of war (M4-3a): each player's unexplored / explored / visible cells, rebuilt every 4 ticks in phase 12, and the
+    /// high-ground reveals. Read it; only the sim writes. The explored bits and reveals are hashed, the visible bits derived.
+    /// </summary>
+    public FogStore Fog { get; }
 
     /// <summary>Whether units fight (<see cref="SimConfig.Combat"/>); fixed for the match.</summary>
     public bool CombatEnabled { get; }

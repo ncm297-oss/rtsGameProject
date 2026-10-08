@@ -101,7 +101,7 @@ public class ProjectileLeadQaTests
     /// docs/03: a unit "no faster than" the lead speed is led. A step of exactly the lead speed (0.25 m a tick) in each of
     /// 360 headings, as float trig makes it: every one must be led, not only the axis-aligned ones.
     /// </summary>
-    [Fact(Skip = "BUG-0184: a step of exactly the lead speed fails step^2 <= lead^2 in 13 of 360 headings (float rounding)")]
+    [Fact] // BUG-0184 item 1: fixed in M4-3a (the lead test has a 1e-4 relative slack)
     public void Lead_AStepOfExactlyTheLeadSpeed_IsLedInEveryHeading()
     {
         ProjectileDef bolt = TestSim.Data.Projectiles[TestSim.Data.FindProjectile("bolt")];

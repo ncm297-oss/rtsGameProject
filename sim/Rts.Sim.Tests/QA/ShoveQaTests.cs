@@ -93,12 +93,16 @@ public class ShoveQaTests
             if (!g.WorldToCell(p, out int cx, out int cy) || !g.IsPassable(cx, cy)) return $"shoved unit {i} onto blocked ground at {p}";
             // A chase step, not a shove (BUG-0153 item 2): a unit that started the tick with a combat target can be sent a
             // step after it (a new OrderTick) and stand down again within the tick. Still at most its speed (checked above).
-            if (u.OrderTick[i] != b.OrderTick[i] && b.Target[i].Generation != 0)
+            // M4-3a: also one that started the tick with no target (it died the tick before) and took one this tick: its
+            // settle walk and the new chase start in phase 7, and phase 10 stands it down when the new target walked inside
+            // its minimum range (a Catapult, ShoveQa seed 5018 two players, tick 5799). The step must head for that target.
+            if (u.OrderTick[i] != b.OrderTick[i] && (b.Target[i].Generation != 0 || u.Target[i].Generation != 0))
             {
                 // QA round 1: a chase step heads for its target (a shove pushes it away from the walker, any direction).
                 // The target's start-of-tick position: it may have died during the tick (the case that stands it down).
-                EntityHandle tg = b.Target[i];
-                bool unitTarget = !b.TargetIsBuilding[i] && b.Alive[tg.Index] && b.Generation[tg.Index] == tg.Generation;
+                EntityHandle tg = b.Target[i].Generation != 0 ? b.Target[i] : u.Target[i];
+                bool isBuilding = b.Target[i].Generation != 0 ? b.TargetIsBuilding[i] : u.TargetIsBuilding[i];
+                bool unitTarget = !isBuilding && b.Alive[tg.Index] && b.Generation[tg.Index] == tg.Generation;
                 Vector2 toward = unitTarget ? b.Pos[tg.Index] - b.Pos[i] : Vector2.Zero;
                 if (unitTarget && Vector2.Dot(p - b.Pos[i], toward) <= 0f)
                     return $"unit {i}: a 'chase step' {b.Pos[i]} -> {p} that does not head for its target at {b.Pos[tg.Index]}";

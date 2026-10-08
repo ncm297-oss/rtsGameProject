@@ -113,7 +113,7 @@ public static partial class DataLoader
         }
 
         int errorsBeforeBuildings = c.Errors.Count;
-        BuildingDef[] buildings = BuildBuildings(c, folders, out BuildingFileJson?[] buildingFiles, out List<(int Faction, int Index)> acceptedBuildings);
+        BuildingDef[] buildings = BuildBuildings(c, folders, rules, out BuildingFileJson?[] buildingFiles, out List<(int Faction, int Index)> acceptedBuildings);
         // A broken buildings file is reported once, not again through every unit naming one of its buildings.
         bool buildingsClean = c.Errors.Count == errorsBeforeBuildings;
         if (buildingsClean)
@@ -327,6 +327,7 @@ public static partial class DataLoader
             NodeSearchRadius = (float)c.Pos(j.NodeSearchRadius, "nodeSearchRadius"),
             RepairRateFactor = repair == null ? 0f : Factor(c, repair.RateFactor, "repair.rateFactor"),
             RepairCostFactor = repair == null ? 0f : Factor(c, repair.CostFactor, "repair.costFactor"),
+            BuildingSight = (float)c.Sight(j.BuildingSight, "buildingSight", "rules"),
         };
     }
 
@@ -418,7 +419,7 @@ public static partial class DataLoader
     /// Every faction's <c>buildings.json</c> (required, M3-2): ids unique across factions (a repeat is an
     /// error at its second definition), indexed in ordinal order of their string ids.
     /// </summary>
-    private static BuildingDef[] BuildBuildings(Checker c, string[] folders, out BuildingFileJson?[] files, out List<(int Faction, int Index)> accepted)
+    private static BuildingDef[] BuildBuildings(Checker c, string[] folders, RulesDef? rules, out BuildingFileJson?[] files, out List<(int Faction, int Index)> accepted)
     {
         files = new BuildingFileJson?[folders.Length];
         var firstFile = new Dictionary<string, string>(StringComparer.Ordinal); // load-time only
@@ -485,6 +486,8 @@ public static partial class DataLoader
                 HalfPopProvided = Math.Max(halfPop, 0),
                 DropOff = b.DropOff ?? false,
                 Requires = c.Ids(b.Requires, p + ".requires"),
+                // M4-3a: optional; absent takes the rules' default (0 when rules.json failed, which is reported already).
+                Sight = b.Sight == null ? rules?.BuildingSight ?? 0f : (float)c.Sight(b.Sight, p + ".sight", b.Id!),
             };
         }
         // BUG-0010: every faction fills the ten building template slots, one building each (docs/02 "Buildings").
@@ -553,7 +556,7 @@ public static partial class DataLoader
             ArmorClass = c.Ref(table?.ArmorClassKeys, u.ArmorClass, p + ".armorClass", "armor class"),
             Attack = BuildAttack(c, c.Obj(u.Attack, p + ".attack"), p + ".attack", table, projectiles),
             SpeedPerTick = (float)(c.Pos(u.Speed, p + ".speed") / SimConstants.TicksPerSecond),
-            Sight = (float)c.Pos(u.Sight, p + ".sight"),
+            Sight = (float)c.Sight(u.Sight, p + ".sight", u.Id!),
             Radius = (float)radius,
             CostGold = c.Int(cost?.Gold, p + ".cost.gold", 0),
             CostWood = c.Int(cost?.Wood, p + ".cost.wood", 0),
@@ -915,6 +918,19 @@ public static partial class DataLoader
             if (value == null) Error(path, "missing required field");
             else if (!(value > 0)) Error(path, $"{value} must be positive");
             else if (!(value <= DataLimits.MaxDecimal)) Error(path, $"{value} is above the maximum {DataLimits.MaxDecimal}");
+            else return value.Value;
+            return 0;
+        }
+
+        /// <summary>
+        /// A sight radius in meters (M4-3a): required, above 0 and at most <see cref="DataLimits.MaxSight"/>. The message
+        /// names <paramref name="owner"/> (the unit or building id, or <c>rules</c>) as well as the path's field.
+        /// </summary>
+        public double Sight(double? value, string path, string owner)
+        {
+            if (value == null) Error(path, $"{owner}: missing required field");
+            else if (!(value > 0)) Error(path, $"{owner}: sight {value} must be positive");
+            else if (!(value <= DataLimits.MaxSight)) Error(path, $"{owner}: sight {value} m is above the maximum {DataLimits.MaxSight} m");
             else return value.Value;
             return 0;
         }

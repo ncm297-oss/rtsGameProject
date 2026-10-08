@@ -39,6 +39,11 @@ public sealed class BuildingDef
     public int HalfPopProvided { get; init; }
     /// <summary>Workers deposit cargo here (Town Hall, Camp).</summary>
     public bool DropOff { get; init; }
+    /// <summary>
+    /// Sight radius in meters (M4-3a): the entry's optional <c>sight</c>, else <c>rules.json</c>
+    /// <see cref="RulesDef.BuildingSight"/>, resolved at load; 0 (sees nothing) in hand-built data.
+    /// </summary>
+    public float Sight { get; init; }
     /// <summary>Tech / building ids it requires, as written (M3-5: every id exists, checked at load). Empty when none. Kept for tools; the sim reads <see cref="RequiresTechs"/> / <see cref="RequiresBuildings"/>.</summary>
     public ImmutableArray<string> Requires { get; init; } = ImmutableArray<string>.Empty;
     /// <summary><see cref="Requires"/>' tech ids, resolved at load (M3-6), ascending: each must be researched to place the building.</summary>

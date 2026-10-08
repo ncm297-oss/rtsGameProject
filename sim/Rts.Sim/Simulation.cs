@@ -11,6 +11,7 @@ using Rts.Sim.Movement;
 using Rts.Sim.Orders;
 using Rts.Sim.Pathfinding;
 using Rts.Sim.Replays;
+using Rts.Sim.Vision;
 
 namespace Rts.Sim;
 
@@ -77,6 +78,10 @@ public sealed class Simulation
         World.ClearDeaths(); // the last tick's death events have been read by now
         World.ClearImpacts(); // and its projectile landings (M4-2b)
 
+        // M4-3a: the initial fog stamp, before the first tick's commands, so units already in the world (placed before
+        // the first tick) are seen from tick 0. The first phase-12 update is tick 1's, the tick the start commands apply in.
+        if (World.TickNumber == 0) World.Fog.Update();
+
         // Phase 1: apply commands.
         _commands.Sort();
         int due = _commands.CountDue(World.TickNumber);
@@ -112,6 +117,9 @@ public sealed class Simulation
             CombatSystem.Resolve(World);
         }
 
+        // Phase 12: fog of war (M4-3a), every 4 ticks (1, 5, 9, ...) for every player.
+        VisionSystem.Run(World);
+
         // Phase 13: cleanup.
         World.TickNumber++;
 
@@ -126,9 +134,9 @@ public sealed class Simulation
         _recorder = recorder;
     }
 
-    /// <summary>64-bit FNV-1a hash of all gameplay state: tick, units (Hold, order queues, gather loops and cargo, combat state included), RNG streams, flow-field cache metadata, nav grid versions (and the movement pass's last seen block version), resource nodes, buildings, projectiles in flight (production queues, research items and rally points included), player totals, researched techs, kills and losses, and pending commands.</summary>
+    /// <summary>64-bit FNV-1a hash of all gameplay state: tick, units (Hold, order queues, gather loops and cargo, combat state included), RNG streams, flow-field cache metadata, nav grid versions (and the movement pass's last seen block version), resource nodes, buildings, projectiles in flight (production queues, research items and rally points included), the fog's explored bits and high-ground reveals (M4-3a), player totals, researched techs, kills and losses, and pending commands.</summary>
     /// <remarks>
-    /// Derived state is left out: the spatial hash (rebuilt from the units every tick),
+    /// Derived state is left out: the spatial hash (rebuilt from the units every tick), the fog's visible bits (M4-3a: rebuilt every update),
     /// Speed/Radius (they follow from TypeId), and population (M3-4: <see cref="World.HalfPop"/> follows from the live
     /// units and the started production items, <see cref="World.HalfPopCap"/> from the finished buildings). The flow-field cache's keys, versions and LRU stamps
     /// are in, because they decide which units wait under the build cap (BUG-0021); the fields'
@@ -201,6 +209,8 @@ public sealed class Simulation
         World.Buildings.AddToHash(ref h);
         // M4-2b: projectiles in flight; an empty store adds nothing, so a match without a shot hashes as before.
         World.Projectiles.AddToHash(ref h);
+        // M4-3a: the fog's explored bits and the high-ground reveals in force (its visible bits are derived).
+        World.Fog.AddToHash(ref h, World.TickNumber);
         for (int p = 0; p < World.Gold.Length; p++)
         {
             // M3-5: a player with any researched tech sets the high half of its gold word and its tech words follow;

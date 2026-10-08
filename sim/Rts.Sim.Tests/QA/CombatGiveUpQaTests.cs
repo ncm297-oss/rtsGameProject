@@ -85,6 +85,7 @@ public class CombatGiveUpQaTests
         {
             EntityHandle e = Place(sim, 1, Raider, At(sim, 22, ys[k])); // a melee holder on the cliff: never in reach, never swings (M4-2b: ranged units shoot now)
             sim.Enqueue(Command.HoldPosition(1, e));
+            Spot(sim, 0, e); // M4-3a: up the cliff, a level-0 unit can't see it: spotted, so it is still taken in turn
             Assert.True(Vector2.Distance(home, sim.World.Units.Position[e.Index]) < TestSim.Data.Units[HeavyInfantry].Sight);
         }
         UnitStore u = sim.World.Units;
@@ -125,7 +126,11 @@ public class CombatGiveUpQaTests
         Vector2 home = At(sim, 17, 20);
         EntityHandle a = Place(sim, 0, HeavyInfantry, home);
         foreach (int y in new[] { 17, 23, 20 })
-            sim.Enqueue(Command.HoldPosition(1, Place(sim, 1, Raider, At(sim, 22, y))));
+        {
+            EntityHandle e = Place(sim, 1, Raider, At(sim, 22, y));
+            sim.Enqueue(Command.HoldPosition(1, e));
+            Spot(sim, 0, e); // M4-3a: up the cliff, a level-0 unit can't see it: spotted
+        }
         UnitStore u = sim.World.Units;
         RunUntil(sim, () => u.GiveUps[a.Index] >= CombatConstants.MaxGiveUps && u.Mode[a.Index] == CombatMode.None
             && u.State[a.Index] == UnitState.Idle, 600);

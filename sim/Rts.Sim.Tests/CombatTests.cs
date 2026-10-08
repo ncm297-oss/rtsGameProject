@@ -428,11 +428,13 @@ public class CombatTests
         EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 17, 20));
         EntityHandle low = Place(sim, 1, Laborer, At(sim, 22, 20));
         sim.Enqueue(Command.HoldPosition(1, low));
+        Spot(sim, 0, low); // M4-3a: up the cliff, a level-0 unit can't see it: spotted
         UnitStore u = sim.World.Units;
         RunUntil(sim, () => u.Target[a.Index] == low && u.ChaseStall[a.Index] >= 3, 300);
         Assert.True(u.Target[a.Index] == low && u.ChaseStall[a.Index] >= 3, $"setup: stall {u.ChaseStall[a.Index]}, target {u.Target[a.Index]}");
         EntityHandle high = Place(sim, 1, Crossbowman, At(sim, 22, 22)); // a unit that can attack: taken over the laborer
         sim.Enqueue(Command.HoldPosition(1, high));
+        Spot(sim, 0, high);
         RunUntil(sim, () => u.Target[a.Index] != low, 40);
         Assert.Equal(high, u.Target[a.Index]);
         Assert.True(u.ChaseStall[a.Index] >= 3, $"the switch restarted the stall count: {u.ChaseStall[a.Index]}");
@@ -485,6 +487,7 @@ public class CombatTests
         Simulation sim = Flat();
         EntityHandle r = Place(sim, 1, Raider, At(sim, 4, 4));
         EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 30, 30)); // far out of each other's sight
+        Spot(sim, 0, r); // M4-3a: an unseen attacker is not retaliated on; this row is about the given-up memory
         UnitStore u = sim.World.Units;
         u.Ignored[a.Index] = r; // the same slot and generation, as a building
         u.IgnoredIsBuilding[a.Index] = true;

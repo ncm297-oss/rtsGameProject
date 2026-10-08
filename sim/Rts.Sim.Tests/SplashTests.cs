@@ -57,6 +57,7 @@ public class SplashTests
         EntityHandle victim = Place(sim, victimOwner, Laborer, center + new Vector2(fraction * radius, 0f));
         sim.Enqueue(Command.HoldPosition(1, target));
         sim.Enqueue(Command.HoldPosition(victimOwner, victim));
+        Spot(sim, 0, target); // M4-3a: 20 m off, past the Catapult's sight (18 m; its range is 24)
         sim.Enqueue(Command.Attack(0, c, target, isBuilding: false));
         int full = u.Hp[victim.Index];
         RunUntil(sim, () => w.Projectiles.Count == 1, 300);

@@ -88,6 +88,7 @@ public sealed class GameData
         h.Add(r.NodeSearchRadius);
         h.Add(r.RepairRateFactor);
         h.Add(r.RepairCostFactor);
+        h.Add(r.BuildingSight); // M4-3a
 
         h.Add(Factions.Length);
         foreach (FactionDef f in Factions)
@@ -193,6 +194,7 @@ public sealed class GameData
             AddAll(ref h, b.Requires);
             AddAll(ref h, b.RequiresTechs);
             AddAll(ref h, b.RequiresBuildings);
+            h.Add(b.Sight); // M4-3a
         }
 
         h.Add(Techs.Length);

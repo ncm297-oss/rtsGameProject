@@ -44,6 +44,26 @@ public static class CombatScenes
         return h;
     }
 
+    /// <summary>
+    /// M4-3a: <paramref name="player"/> sees unit <paramref name="unit"/> for the rest of the scene, as a spotter would (a
+    /// high-ground reveal that never ends, a test seam). For scenes about orders, chases and give-ups whose target stands
+    /// outside every own sight circle or up a cliff: without it the fog drops an Attack on it and the scans skip it.
+    /// </summary>
+    public static void Spot(Simulation sim, int player, EntityHandle unit) => sim.World.Fog.Reveal(unit, player, int.MaxValue);
+
+    /// <summary>
+    /// M4-3a: a holding Laborer of <paramref name="player"/> at <paramref name="at"/> (straight into the store), whose sight
+    /// (14 m) shows <paramref name="player"/> what stands around it from the next fog update: a spotter for a building
+    /// target (buildings can't be revealed). A worker never fights unless attack-moved, and holding it never moves.
+    /// </summary>
+    public static EntityHandle Spotter(Simulation sim, int player, Vector2 at)
+    {
+        EntityHandle h = Place(sim, player, Laborer, at);
+        sim.World.Units.Hold[h.Index] = true;
+        sim.World.Fog.Update(); // seen from now, as if placed before the last update
+        return h;
+    }
+
     /// <summary>A point of cell (x, y), offset from its center.</summary>
     public static Vector2 At(Simulation sim, int x, int y, float dx = 0f, float dy = 0f) =>
         sim.World.NavGrid.CellCenter(x, y) + new Vector2(dx, dy);

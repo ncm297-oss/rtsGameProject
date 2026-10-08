@@ -52,7 +52,7 @@ public static class ProjectileSystem
             EntityHandle v = p.Victim[k];
             if (!u.IsAlive(v)) continue;
             Vector2 step = u.Velocity[v.Index];
-            if (!(step.LengthSquared() <= lead * lead)) continue;
+            if (!WithinLead(step, lead)) continue;
             // It lands after `left` more Fly steps; the victim walks in the left - 1 ticks before the landing one.
             p.Steer(k, u.Position[v.Index] + step * (left - 1));
         }
@@ -72,7 +72,7 @@ public static class ProjectileSystem
         if (!u.TargetIsBuilding[i] && pd.Kind == ProjectileKind.Aimed)
             to = Lead(from, to, u.Velocity[u.Target[i].Index], pd);
         world.Projectiles.TrySpawn(from, to, pd.SpeedPerTick, pd.Id, u.Owner[i], type,
-            new EntityHandle(i, u.Generation[i]), u.Target[i], u.TargetIsBuilding[i]);
+            new EntityHandle(i, u.Generation[i]), u.Target[i], u.TargetIsBuilding[i], world.Fog.LevelAt(from));
     }
 
     /// <summary>
@@ -86,12 +86,26 @@ public static class ProjectileSystem
     public static Vector2 Lead(Vector2 from, Vector2 at, Vector2 velocity, ProjectileDef pd)
     {
         float lead = pd.LeadSpeedPerTick;
-        if (velocity == Vector2.Zero || !(velocity.LengthSquared() <= lead * lead)) return at;
+        if (velocity == Vector2.Zero || !WithinLead(velocity, lead)) return at;
         Vector2 aim = at;
         for (int pass = 0; pass < LeadPasses; pass++)
             aim = at + velocity * ProjectileStore.FlightTicks(Vector2.Distance(from, aim), pd.SpeedPerTick);
         return aim;
     }
+
+    /// <summary>
+    /// Whether a walker's step (m a tick) is no longer than <paramref name="lead"/> (m a tick), with
+    /// <see cref="LeadSlack"/>: a step of exactly the lead speed, built from a heading, is 1 ulp either side of it, and
+    /// docs/02's "no faster than" includes it in every heading (BUG-0184 item 1).
+    /// </summary>
+    private static bool WithinLead(Vector2 step, float lead)
+    {
+        float limit = lead * LeadSlack;
+        return step.LengthSquared() <= limit * limit;
+    }
+
+    /// <summary>Relative slack on the lead-speed test (BUG-0184): far above float rounding (1e-7), far below any speed difference in data (0.1 m/s of 5).</summary>
+    private const float LeadSlack = 1.0001f;
 
     /// <summary>Refinements of a led aim point: the first uses the flight to where the target is, the next the flight to that aim.</summary>
     private const int LeadPasses = 2;
@@ -121,11 +135,11 @@ public static class ProjectileSystem
         ProjectileStore p = world.Projectiles;
         GameData data = world.Data;
         ProjectileDef pd = data.Projectiles[p.ProjectileTypeId[k]];
-        int attackerType = p.AttackerType[k], owner = p.Owner[k];
+        int attackerType = p.AttackerType[k], owner = p.Owner[k], level = p.Level[k];
         Vector2 at = p.Target[k];
         if (pd.Kind == ProjectileKind.Lob)
         {
-            Splash(world, at, attackerType, owner, p.Attacker[k], default, false);
+            Splash(world, at, attackerType, owner, p.Attacker[k], default, false, level);
             return true;
         }
         EntityHandle v = p.Victim[k];
@@ -135,7 +149,7 @@ public static class ProjectileSystem
             // A building never moves: a shot at a live one always hits.
             if (!world.Buildings.IsAlive(v)) return false;
             int damage = CombatSystem.DamageToBuilding(world, attackerType, owner, v.Index);
-            if (damage > 0) CombatSystem.HitBuilding(world, new PendingHit(p.Attacker[k], owner, v, true, damage));
+            if (damage > 0) CombatSystem.HitBuilding(world, new PendingHit(p.Attacker[k], owner, v, true, damage, level));
         }
         else
         {
@@ -143,9 +157,9 @@ public static class ProjectileSystem
             if (!u.IsAlive(v)) return false;
             float reach = u.Radius[v.Index] + pd.HitTolerance;
             if (!(Vector2.DistanceSquared(u.Position[v.Index], at) <= reach * reach)) return false;
-            CombatSystem.HitUnit(world, new PendingHit(p.Attacker[k], owner, v, false, CombatSystem.DamageToUnit(world, attackerType, owner, v.Index)));
+            CombatSystem.HitUnit(world, new PendingHit(p.Attacker[k], owner, v, false, CombatSystem.DamageToUnit(world, attackerType, owner, v.Index), level));
         }
-        Splash(world, at, attackerType, owner, p.Attacker[k], v, building);
+        Splash(world, at, attackerType, owner, p.Attacker[k], v, building, level);
         return true;
     }
 
@@ -156,9 +170,10 @@ public static class ProjectileSystem
     /// every other owner's building whose footprint is within it, as structure; never an own building. Damage per victim
     /// is <see cref="DamageCalc.Compute(DamageTable, AttackDef, int, int, int)"/> with its class and armor, times
     /// <see cref="Falloff"/>, rounded half up, at least 1. <paramref name="skip"/> (the direct target an aimed or melee
-    /// hit already struck) is left out. Units in slot order, then buildings in slot order.
+    /// hit already struck) is left out. Units in slot order, then buildings in slot order. <paramref name="attackerLevel"/>
+    /// is the level the blow came from (M4-3a: a hit from above reveals the attacker).
     /// </summary>
-    internal static void Splash(World world, Vector2 at, int attackerType, int owner, EntityHandle attacker, EntityHandle skip, bool skipIsBuilding)
+    internal static void Splash(World world, Vector2 at, int attackerType, int owner, EntityHandle attacker, EntityHandle skip, bool skipIsBuilding, int attackerLevel)
     {
         GameData data = world.Data;
         AttackDef attack = data.Units[attackerType].Attack;
@@ -181,7 +196,7 @@ public static class ProjectileSystem
             UnitDef vdef = data.Units[u.TypeId[j]];
             int armor = vdef.Armor + DamageCalc.Points(world.Techs.Bonus(u.Owner[j], u.TypeId[j], TechStat.Armor));
             int damage = Scale(DamageCalc.Compute(data.DamageTable, attack, attackBonus, vdef.ArmorClass, armor), factor);
-            CombatSystem.HitUnit(world, new PendingHit(attacker, owner, new EntityHandle(j, u.Generation[j]), false, damage));
+            CombatSystem.HitUnit(world, new PendingHit(attacker, owner, new EntityHandle(j, u.Generation[j]), false, damage, attackerLevel));
         }
         int structure = world.StructureClass;
         if (structure < 0) return;
@@ -194,7 +209,7 @@ public static class ProjectileSystem
             float d = MathF.Sqrt(CombatSystem.BuildingDistanceSquared(world, j, at));
             if (!(d <= radius)) continue;
             int damage = Scale(DamageCalc.Compute(data.DamageTable, attack, attackBonus, structure, data.Buildings[b.TypeId[j]].Armor), Falloff(d, radius));
-            CombatSystem.HitBuilding(world, new PendingHit(attacker, owner, b.HandleOf(j), true, damage));
+            CombatSystem.HitBuilding(world, new PendingHit(attacker, owner, b.HandleOf(j), true, damage, attackerLevel));
         }
     }
 

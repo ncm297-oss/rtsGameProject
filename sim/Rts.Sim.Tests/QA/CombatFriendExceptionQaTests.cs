@@ -91,6 +91,7 @@ public class CombatFriendExceptionQaTests
         EntityHandle c = Place(sim, 0, HeavyInfantry, At(sim, 18, 20));
         EntityHandle low = Place(sim, 1, Laborer, At(sim, 21, 20));
         sim.Enqueue(Command.HoldPosition(1, low));
+        Spot(sim, 0, low); // M4-3a: up the cliff, a level-0 unit can't see it: spotted
         UnitStore u = sim.World.Units;
         RunUntil(sim, () => u.Target[c.Index] == low && u.ChaseStall[c.Index] >= 8, 400);
         Assert.True(u.Target[c.Index] == low && u.ChaseStall[c.Index] >= 8, $"setup: stall {u.ChaseStall[c.Index]}");
@@ -133,8 +134,10 @@ public class CombatFriendExceptionQaTests
         EntityHandle c = Place(sim, 0, HeavyInfantry, At(sim, 18, 20));
         EntityHandle low = Place(sim, 1, Laborer, At(sim, 21, 20));
         sim.Enqueue(Command.HoldPosition(1, low));
+        Spot(sim, 0, low); // M4-3a: up the cliff, a level-0 unit can't see it: spotted, so the stalled cliff chase happens
         UnitStore u = sim.World.Units;
         RunUntil(sim, () => u.Target[c.Index] == low && u.ChaseStall[c.Index] >= 8, 400);
+        Assert.True(u.Target[c.Index] == low && u.ChaseStall[c.Index] >= 8, $"setup: stall {u.ChaseStall[c.Index]}");
         EntityHandle r = Place(sim, 1, Raider, At(sim, 13, 20));
         sim.Enqueue(Command.HoldPosition(1, r));
         bool fought = false;

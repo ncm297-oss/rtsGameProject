@@ -5,6 +5,7 @@ using Rts.Sim.Determinism;
 using Rts.Sim.Entities;
 using Rts.Sim.Map;
 using Rts.Sim.Orders;
+using Rts.Sim.Vision;
 
 namespace Rts.Sim.Combat;
 
@@ -87,6 +88,15 @@ public static class CombatSystem
                     continue;
                 }
             }
+            // Out of its owner's sight (M4-3a: walked up out of vision, or out of every own circle): lost on the scan tick,
+            // as the scan losing it does: given up if the chaser wasn't gaining on it (BUG-0137), and a scan may take another.
+            bool lost = false;
+            if (due && u.Target[i].Generation != 0 && !VisionSystem.UnitSees(world, i, u.Target[i], u.TargetIsBuilding[i]))
+            {
+                if (!u.Hold[i] && u.ChaseStall[i] > 0) GiveUp(u, i);
+                else Disengage(u, i);
+                lost = true;
+            }
             bool scanned = false;
             // Due, able to scan, and with an enemy unit or building somewhere (a one-player crowd skips the scan whole).
             if ((due || repick) && world.CombatEnemyExists[u.Owner[i]] && Scans(world, i)
@@ -120,6 +130,7 @@ public static class CombatSystem
                     Settle(world, i);
                 }
             }
+            if (lost && u.Target[i].Generation == 0) Settle(world, i);
             // Chase: a unit standing with a target out of reach walks at once; a walking chaser is re-aimed on its scan
             // tick only, so a fleeing target changes its goal at most every ScanInterval ticks. An ordered attacker doesn't
             // scan (its target is held), so it is re-aimed on the ticks it would have scanned.
@@ -208,7 +219,7 @@ public static class CombatSystem
             Vector2 at = !splash ? default : hit.IsBuilding ? NearestFootprintPoint(world, hit.Victim.Index, u.Position[hit.Attacker.Index]) : u.Position[hit.Victim.Index];
             if (hit.IsBuilding) HitBuilding(world, in hit);
             else HitUnit(world, in hit);
-            if (splash) ProjectileSystem.Splash(world, at, attackerType, hit.AttackerOwner, hit.Attacker, hit.Victim, hit.IsBuilding);
+            if (splash) ProjectileSystem.Splash(world, at, attackerType, hit.AttackerOwner, hit.Attacker, hit.Victim, hit.IsBuilding, hit.AttackerLevel);
         }
         world.HitCount = 0;
         // Then the projectiles that arrived this tick (M4-2b), slot order: hits and splash in the same phase, so a unit
@@ -292,12 +303,15 @@ public static class CombatSystem
         UnitStore u = world.Units;
         UnitDef def = world.Data.Units[u.TypeId[i]];
         if (!CanFight(def)) return false;
+        // M4-3a: and one its owner sees (an Attack on an unseen target is dropped like a forbidden one).
         if (isBuilding)
         {
             BuildingStore b = world.Buildings;
-            return def.Attack.Targets != AttackTargets.Units && b.IsAlive(target) && b.Owner[target.Index] != u.Owner[i];
+            return def.Attack.Targets != AttackTargets.Units && b.IsAlive(target) && b.Owner[target.Index] != u.Owner[i]
+                && VisionSystem.UnitSeesBuilding(world, i, target.Index);
         }
-        return def.Attack.Targets != AttackTargets.Buildings && u.IsAlive(target) && u.Owner[target.Index] != u.Owner[i];
+        return def.Attack.Targets != AttackTargets.Buildings && u.IsAlive(target) && u.Owner[target.Index] != u.Owner[i]
+            && VisionSystem.UnitSeesUnit(world, i, target.Index);
     }
 
     /// <summary>
@@ -392,6 +406,9 @@ public static class CombatSystem
         if (targets == AttackTargets.Buildings) return PickBuilding(world, i, def, pos, owner, hold, radius, ignoredGen, out isBuilding);
         int myGen = u.Generation[i], lastIndex = u.LastAttacker[i].Index, lastGen = u.LastAttacker[i].Generation;
         float minRange = def.Attack.MinRange;
+        // M4-3a: on a one-level map a candidate within sight is seen by the scanner itself; else ask the vision rule.
+        float sight2 = def.Sight * def.Sight;
+        bool oneLevel = !world.Fog.MultiLevel;
         bool[] combatant = world.CombatantType;
         int[] found = world.Neighbors; // movement's scratch: free in phase 7
         int n = Math.Min(world.Spatial.QueryEnemies(pos, radius, owner, found), found.Length);
@@ -420,6 +437,8 @@ public static class CombatSystem
                 float near = minRange + u.Radius[i] + u.Radius[j];
                 if (d2 < near * near) continue;
             }
+            // Only what its owner sees (M4-3a): its own sight now, the owner's fog, or a high-ground reveal.
+            if (!(oneLevel && d2 <= sight2) && !VisionSystem.UnitSeesUnit(world, i, j)) continue;
             if (tier < bestTier || d2 < bestD2 || (d2 == bestD2 && j < best))
             {
                 best = j;
@@ -456,7 +475,8 @@ public static class CombatSystem
         EntityHandle a = u.LastAttacker[i];
         if (a.Generation == 0 || !u.IsAlive(a)) return false;
         bool hold = u.Hold[i] || u.GiveUps[i] >= CombatConstants.MaxGiveUps;
-        return UnitInScanRange(world, i, a.Index, world.Data.Units[u.TypeId[i]], hold);
+        // One it can't see (M4-3a) is no reason to re-pick: the scan wouldn't take it.
+        return UnitInScanRange(world, i, a.Index, world.Data.Units[u.TypeId[i]], hold) && VisionSystem.UnitSeesUnit(world, i, a.Index);
     }
 
     /// <summary>Whether unit <paramref name="j"/> is within unit <paramref name="i"/>'s scan radius: its sight, or holding its reach.</summary>
@@ -486,11 +506,10 @@ public static class CombatSystem
             if (!(d2 <= limit * limit)) continue;
             float near = def.Attack.MinRange + u.Radius[i];
             if (def.Attack.MinRange > 0f && d2 < near * near) continue; // inside the minimum range (M4-2b)
-            if (d2 < bestD2 || (d2 == bestD2 && j < best))
-            {
-                best = j;
-                bestD2 = d2;
-            }
+            if (!(d2 < bestD2 || (d2 == bestD2 && j < best))) continue;
+            if (!VisionSystem.UnitSeesBuilding(world, i, j)) continue; // only what its owner sees (M4-3a)
+            best = j;
+            bestD2 = d2;
         }
         isBuilding = best >= 0;
         return best;
@@ -755,7 +774,7 @@ public static class CombatSystem
         bool building = u.TargetIsBuilding[i];
         int damage = building ? DamageToBuilding(world, type, owner, j) : DamageToUnit(world, type, owner, j);
         if (damage <= 0) return; // data without a structure class: buildings take no damage
-        world.Hits[world.HitCount++] = new PendingHit(new EntityHandle(i, u.Generation[i]), owner, u.Target[i], building, damage);
+        world.Hits[world.HitCount++] = new PendingHit(new EntityHandle(i, u.Generation[i]), owner, u.Target[i], building, damage, world.Fog.LevelAt(u.Position[i]));
     }
 
     /// <summary>One hit's damage by an attacker of unit type <paramref name="attackerType"/> owned by <paramref name="owner"/> on unit slot <paramref name="j"/>: both owners' techs applied.</summary>
@@ -786,6 +805,8 @@ public static class CombatSystem
         UnitStore u = world.Units;
         if (!u.IsAlive(hit.Victim)) return; // killed earlier this phase
         int v = hit.Victim.Index;
+        // M4-3a: a hit from a higher level reveals the attacker to the victim's owner (before the retaliation below asks).
+        if (hit.AttackerLevel > 0) VisionSystem.OnHit(world, hit.Attacker, hit.AttackerLevel, u.Owner[v], world.Fog.LevelAt(u.Position[v]));
         u.Hp[v] -= hit.Damage;
         if (u.Hp[v] <= 0)
         {
@@ -802,10 +823,12 @@ public static class CombatSystem
         // The memory may hold a building with the same slot and generation: that is not this attacker (BUG-0142).
         // Nor a buildings-only attacker (M4-2a, attack.targets): it never takes a unit.
         // Nor one inside its minimum range (M4-2b): it couldn't fire at it, and its next scan would only drop it again.
+        // Nor one its owner can't see (M4-3a): a same-level shooter outside every own circle; a high one is revealed above.
         AttackDef attack = world.Data.Units[u.TypeId[v]].Attack;
         if (u.Target[v].Generation == 0 && Scans(world, v) && (u.IgnoredIsBuilding[v] || u.Ignored[v] != hit.Attacker)
             && attack.Targets != AttackTargets.Buildings
-            && !(attack.MinRange > 0f && UnitGap(u, v, hit.Attacker.Index) < attack.MinRange))
+            && !(attack.MinRange > 0f && UnitGap(u, v, hit.Attacker.Index) < attack.MinRange)
+            && VisionSystem.UnitSeesUnit(world, v, hit.Attacker.Index))
             Engage(world, v, hit.Attacker, false);
     }
 
@@ -815,6 +838,7 @@ public static class CombatSystem
         BuildingStore b = world.Buildings;
         if (!b.IsAlive(hit.Victim)) return;
         int j = hit.Victim.Index;
+        if (hit.AttackerLevel > 0) VisionSystem.OnHit(world, hit.Attacker, hit.AttackerLevel, b.Owner[j], world.Fog.BuildingLevel(j)); // M4-3a
         if (hit.Damage >= b.Hp[j])
         {
             BuildingRect(world, j, out Vector2 min, out Vector2 max);

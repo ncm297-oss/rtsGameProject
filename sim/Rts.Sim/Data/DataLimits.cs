@@ -20,6 +20,12 @@ public static class DataLimits
     /// <summary>Longest duration in seconds (one hour), so the conversion to ticks can't overflow int (BUG-0007).</summary>
     public const double MaxSeconds = 3600;
 
+    /// <summary>
+    /// Largest sight radius in meters, for units and buildings (M4-3a): the fog stamps a precomputed circle per distinct
+    /// radius, so a radius is a memory and stamping cost. Far above any designed sight (docs/02: 10-24 m).
+    /// </summary>
+    public const double MaxSight = 64;
+
     /// <summary>Largest side of a resource node or building footprint in cells (docs/02: the largest footprint, a Town Hall, is 4 x 4).</summary>
     public const int MaxFootprint = 4;
 

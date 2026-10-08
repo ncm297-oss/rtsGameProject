@@ -114,6 +114,7 @@ public class CombatQaTests
         Simulation sim = OnRows(8, PlateauMap());
         EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 17, 20));
         EntityHandle b = Place(sim, 1, HeavyInfantry, At(sim, 23, 20));
+        Spot(sim, 0, b); // M4-3a: up the cliff, a level-0 unit can't see it: spotted, so it is "in sight" as the row means
         UnitStore u = sim.World.Units;
         Assert.True(Vector2.Distance(u.Position[a.Index], u.Position[b.Index]) < Def(HeavyInfantry).Sight);
         int movingLate = 0, walksLate = 0, lastOrderA = u.OrderTick[a.Index], lastOrderB = u.OrderTick[b.Index];
@@ -344,7 +345,8 @@ public class CombatQaTests
     {
         Simulation sim = OnRows(8, PlateauMap());
         EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 17, 36));
-        Place(sim, 1, Crossbowman, At(sim, 22, 20)); // a target that never swings
+        EntityHandle top = Place(sim, 1, Crossbowman, At(sim, 22, 20)); // a target that never swings
+        Spot(sim, 0, top); // M4-3a: up the cliff, a level-0 unit can't see it: spotted, so it is "in sight" as the row means
         UnitStore u = sim.World.Units;
         Vector2 dest = At(sim, 17, 2);
         sim.Enqueue(Command.AttackMove(0, a, dest));

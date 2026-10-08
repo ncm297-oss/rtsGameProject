@@ -116,6 +116,8 @@ public class AttackOrderTests
         EntityHandle second = Place(sim, 1, Laborer, At(sim, 30, 28));
         sim.Enqueue(Command.HoldPosition(1, target));
         sim.Enqueue(Command.HoldPosition(1, second));
+        Spot(sim, 0, target); // M4-3a: 40 m off, out of sight: spotted, else the fog drops the order
+        Spot(sim, 0, second);
         sim.Enqueue(Command.Attack(0, a, target, isBuilding: false));
         sim.Enqueue(Command.Attack(0, a, second, isBuilding: false, queued: true));
         Apply(sim);
@@ -141,6 +143,7 @@ public class AttackOrderTests
         EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 10, 24));
         EntityHandle b = Place(sim, 1, Laborer, At(sim, 20, 24));
         sim.Enqueue(Command.HoldPosition(1, b)); // a worker holding never fights back
+        Spot(sim, 0, b); // M4-3a: 20 m off, past the sight (14 m)
         sim.Enqueue(Command.Attack(0, a, b, isBuilding: false));
         Apply(sim);
         Assert.Equal(b, u.Target[a.Index]);
@@ -186,6 +189,7 @@ public class AttackOrderTests
         EntityHandle a = Place(sim, 0, HeavyInfantry, start);
         EntityHandle b = Place(sim, 1, Laborer, At(sim, 29, 32)); // 46 m off, far past a's sight (14 m)
         sim.Enqueue(Command.HoldPosition(1, b));
+        Spot(sim, 0, b); // M4-3a: spotted, else the fog drops the order
         sim.Enqueue(Command.Attack(0, a, b, isBuilding: false));
         Apply(sim);
         float farthest = 0f;
@@ -215,6 +219,7 @@ public class AttackOrderTests
         EntityHandle b = Place(sim, 1, Laborer, At(sim, 24, 24));
         EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 14, 24));
         sim.Enqueue(Command.HoldPosition(1, b));
+        Spot(sim, 0, b); // M4-3a: 20 m off, past the sight (14 m)
         sim.Enqueue(Command.Attack(0, a, b, isBuilding: false));
         Apply(sim);
         Assert.Equal(b, u.Target[a.Index]);
@@ -313,6 +318,8 @@ public class AttackOrderTests
         EntityHandle b = Place(sim, 1, Laborer, At(sim, 24, 30));
         EntityHandle tent = PlaceTent(sim, 30, 10);
         sim.Enqueue(Command.HoldPosition(1, b));
+        Spot(sim, 0, b); // M4-3a: both targets out of sight: spotted, else the fog drops the orders
+        Spotter(sim, 0, At(sim, 36, 11));
         sim.Enqueue(Command.Move(0, a, At(sim, 16, 24)));
         sim.Enqueue(Command.Attack(0, a, b, isBuilding: false, queued: true));
         sim.Enqueue(Command.Attack(0, a, tent, isBuilding: true, queued: true));

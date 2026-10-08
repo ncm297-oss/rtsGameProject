@@ -270,7 +270,9 @@ every tick and can modify vision. Darkness (Andii) and Sandstorm (Whirlwind) are
   (you can see the lip of the ramp you're standing under); vision from your own units already on
   the high ground works normally.
 - Attacking from high ground **reveals the attacker** to the target's owner for 2 s, so the low
-  side can shoot back or retreat instead of dying to an invisible enemy.
+  side can shoot back or retreat instead of dying to an invisible enemy. Until M4-5's Revealed status only attacks from
+  high ground reveal: a same-level attacker outside every sight circle of the target's owner stays unseen (and can't be
+  shot back at).
 - No damage bonus in v1. An Age of Empires-style elevation damage bonus is a possible tuning lever
   later; it would be a single number in `rules.json`.
 - Consequences to design around: towers and ranged units on high ground are strong; spotting

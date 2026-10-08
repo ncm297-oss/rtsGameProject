@@ -37,4 +37,9 @@ public sealed class RulesDef
     public float RepairRateFactor { get; init; }
     /// <summary>Repair cost as a fraction of the building's cost for its full hit points, scaled by damage (docs/02: 25%), above 0 and at most 1.</summary>
     public float RepairCostFactor { get; init; }
+    /// <summary>
+    /// Sight radius in meters of a building whose <c>buildings.json</c> entry gives no <c>sight</c> (M4-3a; Producer
+    /// default 12 m, docs/02 gives sight only for the Watch Tower), above 0 and at most <see cref="DataLimits.MaxSight"/>.
+    /// </summary>
+    public float BuildingSight { get; init; }
 }

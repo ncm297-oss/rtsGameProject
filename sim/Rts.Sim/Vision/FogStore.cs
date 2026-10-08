@@ -1,0 +1,498 @@
+using System;
+using System.Numerics;
+using Rts.Sim.Data;
+using Rts.Sim.Determinism;
+using Rts.Sim.Entities;
+using Rts.Sim.Map;
+
+namespace Rts.Sim.Vision;
+
+/// <summary>
+/// Fog of war (M4-3a, docs/03 "Vision, detection, fog"): per player a row-major byte per map cell, 0 unexplored, 1
+/// explored, 2 visible (<see cref="VisionConstants"/>), rebuilt by <see cref="VisionSystem"/> every
+/// <see cref="VisionConstants.UpdateInterval"/> ticks from the player's own units and buildings, and the high-ground
+/// reveals combat sets. Read-only outside the sim (the view's fog shader and minimap, M4-V4).
+/// </summary>
+/// <remarks>
+/// <para>
+/// A viewer stamps a precomputed circle (one per distinct radius, built here at load from squared integer cell distances,
+/// no trig) centred on its own cell: a cell is inside when its centre is within the radius of the viewer's cell centre.
+/// The high-ground rule (docs/02) is applied per cell: a cell above the viewer's level is visible only within
+/// <see cref="VisionConstants.LipRadius"/>. The viewer's level is its own cell's, so a unit on a ramp sees as from the
+/// lower level.
+/// </para>
+/// <para>
+/// State: the explored bits (a packed copy of "not unexplored", kept as cells are first seen) and the reveals are hashed;
+/// the visible bits and <see cref="Version"/> are derived, rebuilt at every update, and not hashed (a save, M6, stamps
+/// again at load).
+/// </para>
+/// </remarks>
+public sealed class FogStore
+{
+    private readonly World _world;
+    private readonly UnitStore _units;
+    private readonly BuildingStore _buildings;
+    private readonly GameData _data;
+    private readonly byte[] _levels;
+    private readonly int _width;
+    private readonly int _height;
+    private readonly int _players;
+
+    private readonly byte[][] _visibility;
+    private readonly ulong[][] _explored;
+    private readonly int[] _version;
+
+    // Per (unit slot, player): the tick a high-ground reveal ends, and the slot's generation when it was set (a recycled
+    // slot never inherits it).
+    private readonly int[] _revealUntil;
+    private readonly int[] _revealGeneration;
+
+    // Circle masks, ascending by radius: per mask, the half-width of each row from -R to R.
+    private readonly int[][] _halfWidths;
+    private readonly int[] _unitMask;
+    private readonly int[] _buildingMask;
+    private readonly int[] _lipMask;
+
+    // Scratch for one player's update: one int layer of row-span marks per viewer level, laid over the flow-field build
+    // queue (idle in phase 12, never kept across phases, cleared at every update's start).
+    private readonly int[] _scratch;
+    private readonly bool[] _levelUsed = new bool[MapConstants.LevelCount];
+    private readonly int[] _box = new int[4 * MapConstants.LevelCount]; // per level: min x, min y, max x, max y
+    private readonly int[] _visibleBox; // per player: the box of the last update's stamps (every visible cell is inside)
+
+    /// <summary>Creates the fog for <paramref name="players"/> players on <paramref name="map"/>, every cell unexplored.</summary>
+    internal FogStore(World world, int players, Heightmap map, UnitStore units, BuildingStore buildings, GameData data, int[] scratch)
+    {
+        _world = world;
+        _units = units;
+        _buildings = buildings;
+        _data = data;
+        _levels = map.LevelArray;
+        _width = map.Width;
+        _height = map.Height;
+        _players = players;
+        int cells = _width * _height;
+        if ((long)scratch.Length < (long)MapConstants.LevelCount * cells) throw new ArgumentException("fog scratch is smaller than an int a cell per level", nameof(scratch));
+        // Combine sums the three layers by name (the levels of docs/02: 0-2).
+        if (MapConstants.LevelCount != 3) throw new InvalidOperationException("FogStore.Combine is written for three levels");
+        _scratch = scratch;
+        _visibility = new byte[players][];
+        _explored = new ulong[players][];
+        for (int p = 0; p < players; p++)
+        {
+            _visibility[p] = new byte[cells];
+            _explored[p] = new ulong[(cells + 63) / 64];
+        }
+        _version = new int[players];
+        _visibleBox = new int[4 * players];
+        for (int p = 0; p < players; p++) _visibleBox[4 * p] = int.MaxValue; // empty
+        _revealUntil = new int[units.Capacity * players];
+        _revealGeneration = new int[units.Capacity * players];
+        for (int i = 0; i < cells; i++)
+            if (_levels[i] > 0) MultiLevel = true;
+
+        // One mask per distinct radius (sights, and the lip cut to each sight), ascending, so a bigger index covers a smaller one.
+        int maxLimit = Math.Max(_width, _height) * Math.Max(_width, _height);
+        var limits = new int[2 * (data.Units.Length + data.Buildings.Length)];
+        int count = 0;
+        foreach (UnitDef u in data.Units) AddLimits(limits, ref count, u.Sight, maxLimit);
+        foreach (BuildingDef b in data.Buildings) AddLimits(limits, ref count, b.Sight, maxLimit);
+        Array.Sort(limits, 0, count);
+        int distinct = 0;
+        for (int k = 0; k < count; k++)
+            if (distinct == 0 || limits[k] != limits[distinct - 1]) limits[distinct++] = limits[k];
+        _halfWidths = new int[distinct][];
+        for (int m = 0; m < distinct; m++) _halfWidths[m] = Circle(limits[m]);
+        _lipMask = new int[distinct];
+        for (int m = 0; m < distinct; m++)
+            _lipMask[m] = Array.BinarySearch(limits, 0, distinct, Math.Min(limits[m], Limit(VisionConstants.LipRadius, maxLimit)));
+        _unitMask = new int[data.Units.Length];
+        for (int t = 0; t < _unitMask.Length; t++) _unitMask[t] = MaskOf(limits, distinct, data.Units[t].Sight, maxLimit);
+        _buildingMask = new int[data.Buildings.Length];
+        for (int t = 0; t < _buildingMask.Length; t++) _buildingMask[t] = MaskOf(limits, distinct, data.Buildings[t].Sight, maxLimit);
+    }
+
+    /// <summary>Map width in cells (the visibility arrays are row-major, <c>y * Width + x</c>).</summary>
+    public int Width => _width;
+
+    /// <summary>Map height in cells.</summary>
+    public int Height => _height;
+
+    /// <summary>Number of players.</summary>
+    public int PlayerCount => _players;
+
+    /// <summary>
+    /// <paramref name="player"/>'s fog, one byte per cell, row-major: <see cref="VisionConstants.Unexplored"/>,
+    /// <see cref="VisionConstants.Explored"/> or <see cref="VisionConstants.Visible"/>. Changes only on an update tick;
+    /// empty for no such player.
+    /// </summary>
+    public ReadOnlySpan<byte> Visibility(int player) =>
+        (uint)player < (uint)_players ? _visibility[player] : ReadOnlySpan<byte>.Empty;
+
+    /// <summary>How many fog updates ran for <paramref name="player"/> (+1 each): a view re-uploads its texture when it moves. Derived, not hashed; 0 for no such player.</summary>
+    public int Version(int player) => (uint)player < (uint)_players ? _version[player] : 0;
+
+    /// <summary>Whether <paramref name="cell"/> was inside one of <paramref name="player"/>'s sight circles at the last update; false out of range.</summary>
+    public bool IsVisible(int player, int cell) =>
+        (uint)player < (uint)_players && (uint)cell < (uint)_levels.Length && _visibility[player][cell] == VisionConstants.Visible;
+
+    /// <summary>Whether <paramref name="player"/> has ever seen <paramref name="cell"/> (explored or visible); false out of range.</summary>
+    public bool IsExplored(int player, int cell) =>
+        (uint)player < (uint)_players && (uint)cell < (uint)_levels.Length && _visibility[player][cell] != VisionConstants.Unexplored;
+
+    /// <summary>
+    /// Whether <paramref name="player"/> sees live unit slot <paramref name="slot"/>: its own, its cell visible at the last
+    /// update, or revealed to it by a high-ground hit. What the view shows; combat adds each unit's own sight right now
+    /// (<see cref="VisionSystem"/>). False for a dead slot or no such player.
+    /// </summary>
+    public bool CanSeeUnit(int player, int slot)
+    {
+        if ((uint)player >= (uint)_players || (uint)slot >= (uint)_units.Capacity || !_units.Alive[slot]) return false;
+        return _units.Owner[slot] == player || SeesUnit(player, slot);
+    }
+
+    /// <summary>Whether <paramref name="player"/> sees live building slot <paramref name="slot"/>: its own, or any footprint cell visible at the last update. False for a dead slot or no such player.</summary>
+    public bool CanSeeBuilding(int player, int slot)
+    {
+        if ((uint)player >= (uint)_players || (uint)slot >= (uint)_buildings.Capacity || !_buildings.Alive[slot]) return false;
+        return _buildings.Owner[slot] == player || SeesBuildingCells(player, slot);
+    }
+
+    /// <summary>True when any cell of the map is above level 0: else the high-ground compares are skipped.</summary>
+    internal bool MultiLevel { get; }
+
+    /// <summary>Unit slot <paramref name="slot"/>'s cell is visible to <paramref name="player"/>, or the unit is revealed to it.</summary>
+    internal bool SeesUnit(int player, int slot) =>
+        _visibility[player][CellOf(_units.Position[slot])] == VisionConstants.Visible || Revealed(player, slot);
+
+    /// <summary>Any footprint cell of building slot <paramref name="slot"/> is visible to <paramref name="player"/>.</summary>
+    internal bool SeesBuildingCells(int player, int slot)
+    {
+        byte[] vis = _visibility[player];
+        int anchor = _buildings.Cell[slot];
+        BuildingDef def = _data.Buildings[_buildings.TypeId[slot]];
+        for (int dy = 0; dy < def.FootprintHeight; dy++)
+            for (int dx = 0; dx < def.FootprintWidth; dx++)
+                if (vis[anchor + dy * _width + dx] == VisionConstants.Visible) return true;
+        return false;
+    }
+
+    /// <summary>Whether unit slot <paramref name="slot"/> is revealed to <paramref name="player"/> (a high-ground hit's reveal not yet over, set on this unit, not an earlier one in the slot).</summary>
+    internal bool Revealed(int player, int slot)
+    {
+        int k = slot * _players + player;
+        // During tick t the world's tick number is t; between ticks it is the next tick's, so a reveal shows while it
+        // will still hold on the next tick, as the hash counts it.
+        return _revealUntil[k] > _world.TickNumber && _revealGeneration[k] == _units.Generation[slot];
+    }
+
+    /// <summary>The tick unit slot <paramref name="slot"/>'s reveal to <paramref name="player"/> ends (it shows while the tick number is below it); 0 when none was set on the unit now in the slot.</summary>
+    internal int RevealEnd(int player, int slot)
+    {
+        int k = slot * _players + player;
+        return _revealGeneration[k] == _units.Generation[slot] ? _revealUntil[k] : 0;
+    }
+
+    /// <summary>Reveals unit <paramref name="attacker"/> to <paramref name="player"/> until tick <paramref name="until"/> (a later hit refreshes it).</summary>
+    internal void Reveal(EntityHandle attacker, int player, int until)
+    {
+        int k = attacker.Index * _players + player;
+        _revealUntil[k] = until;
+        _revealGeneration[k] = attacker.Generation;
+    }
+
+    /// <summary>The cell holding <paramref name="p"/> (m), clamped onto the map.</summary>
+    internal int CellOf(Vector2 p)
+    {
+        int x = (int)(p.X / MapConstants.CellSize), y = (int)(p.Y / MapConstants.CellSize);
+        if (!(x >= 0)) x = 0;
+        else if (x >= _width) x = _width - 1;
+        if (!(y >= 0)) y = 0;
+        else if (y >= _height) y = _height - 1;
+        return y * _width + x;
+    }
+
+    /// <summary>The level of the cell holding <paramref name="p"/> (a ramp reports its lower level).</summary>
+    internal int LevelAt(Vector2 p) => _levels[CellOf(p)];
+
+    /// <summary>The cell a building stamps its sight from: the one holding its footprint's centre (an even side takes the higher of the two middle cells).</summary>
+    internal int CentreCell(int buildingSlot)
+    {
+        int anchor = _buildings.Cell[buildingSlot];
+        BuildingDef def = _data.Buildings[_buildings.TypeId[buildingSlot]];
+        return anchor + def.FootprintHeight / 2 * _width + def.FootprintWidth / 2;
+    }
+
+    /// <summary>The level building slot <paramref name="slot"/> stands on (its centre cell's).</summary>
+    internal int BuildingLevel(int slot) => _levels[CentreCell(slot)];
+
+    /// <summary>
+    /// One fog update for every player (docs/03 phase 12): every live own unit (any state) and building (a site under
+    /// construction too) stamps its circle, then the cells it may see become visible and last update's visible cells that
+    /// none sees now become explored. Allocation-free.
+    /// </summary>
+    /// <remarks>
+    /// A stamp writes two numbers a row into its viewer level's layer (+1 where the row's span starts, -1 just past its
+    /// end), so its cost is the circle's height, not its area; one pass per player then runs the sums along each row of
+    /// the stamped box. A cell is seen when a layer at or above its own level covers it (the high-ground rule); the lip is
+    /// stamped into the top layer, which covers every level.
+    /// </remarks>
+    internal void Update()
+    {
+        int n = _levels.Length;
+        Array.Clear(_scratch, 0, MapConstants.LevelCount * n); // other phases leave their own data in it
+        UnitStore u = _units;
+        ReadOnlySpan<bool> bAlive = _buildings.Alive;
+        ReadOnlySpan<int> bOwner = _buildings.Owner;
+        ReadOnlySpan<int> bType = _buildings.TypeId;
+        for (int p = 0; p < _players; p++)
+        {
+            byte[] vis = _visibility[p];
+            for (int i = 0; i < u.Capacity; i++)
+            {
+                if (!u.Alive[i] || u.Owner[i] != p) continue;
+                int m = _unitMask[u.TypeId[i]];
+                if (m >= 0) StampViewer(vis, CellOf(u.Position[i]), m);
+            }
+            for (int j = 0; j < bAlive.Length; j++)
+            {
+                if (!bAlive[j] || bOwner[j] != p) continue;
+                int m = _buildingMask[bType[j]];
+                if (m >= 0) StampViewer(vis, CentreCell(j), m);
+            }
+            Combine(p);
+        }
+    }
+
+    /// <summary>
+    /// A viewer of mask <paramref name="m"/> in cell <paramref name="c"/>: its circle into its level's layer, and the lip
+    /// into the top layer when a higher cell is that near. Skipped when the same or a bigger circle was stamped from the
+    /// same cell in this update (a blob's units share cells): the biggest mask stamped from a cell, + 1, rides in the high
+    /// bits of the player's visibility byte there until <see cref="Combine"/> (which rewrites every cell of the box,
+    /// stamp centres included) clears it; nothing reads the bytes in between.
+    /// </summary>
+    private void StampViewer(byte[] vis, int c, int m)
+    {
+        if (vis[c] >> MarkShift > m) return;
+        if (m < MaxMark) vis[c] = (byte)((vis[c] & StateMask) | ((m + 1) << MarkShift));
+        int cx = c % _width, cy = c / _width, level = _levels[c];
+        Stamp(level, cx, cy, _halfWidths[m]);
+        if (!MultiLevel || level >= MapConstants.MaxLevel) return;
+        int[] lip = _halfWidths[_lipMask[m]];
+        if (HigherWithin(cx, cy, lip, level)) Stamp(MapConstants.MaxLevel, cx, cy, lip);
+    }
+
+    /// <summary>Adds a circle (row half-widths <paramref name="half"/>) around (cx, cy) to layer <paramref name="layer"/>: +1 at each row's first cell, -1 past its last.</summary>
+    private void Stamp(int layer, int cx, int cy, int[] half)
+    {
+        int[] s = _scratch;
+        int w = _width, r = half.Length >> 1, origin = layer * _levels.Length;
+        int y0 = cy - r, y1 = cy + r;
+        if (y0 < 0) y0 = 0;
+        if (y1 >= _height) y1 = _height - 1;
+        for (int y = y0; y <= y1; y++)
+        {
+            int h = half[y - cy + r];
+            int x0 = cx - h, x1 = cx + h;
+            if (x0 < 0) x0 = 0;
+            if (x1 >= w) x1 = w - 1;
+            int row = origin + y * w;
+            s[row + x0]++;
+            if (x1 + 1 < w) s[row + x1 + 1]--;
+        }
+        int xMin = cx - r, xMax = cx + r; // the widest row's span bounds every row's
+        if (xMin < 0) xMin = 0;
+        if (xMax >= w) xMax = w - 1;
+        int b = 4 * layer;
+        if (!_levelUsed[layer])
+        {
+            _levelUsed[layer] = true;
+            _box[b] = xMin;
+            _box[b + 1] = y0;
+            _box[b + 2] = xMax;
+            _box[b + 3] = y1;
+            return;
+        }
+        if (xMin < _box[b]) _box[b] = xMin;
+        if (y0 < _box[b + 1]) _box[b + 1] = y0;
+        if (xMax > _box[b + 2]) _box[b + 2] = xMax;
+        if (y1 > _box[b + 3]) _box[b + 3] = y1;
+    }
+
+    /// <summary>Whether any cell of the circle <paramref name="half"/> around (cx, cy) is above <paramref name="level"/>: else the lip adds nothing.</summary>
+    private bool HigherWithin(int cx, int cy, int[] half, int level)
+    {
+        int r = half.Length >> 1;
+        int y0 = cy - r, y1 = cy + r;
+        if (y0 < 0) y0 = 0;
+        if (y1 >= _height) y1 = _height - 1;
+        for (int y = y0; y <= y1; y++)
+        {
+            int h = half[y - cy + r];
+            int x0 = cx - h, x1 = cx + h;
+            if (x0 < 0) x0 = 0;
+            if (x1 >= _width) x1 = _width - 1;
+            for (int c = y * _width + x0, end = y * _width + x1; c <= end; c++)
+                if (_levels[c] > level) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Player <paramref name="p"/>'s new fog from the stamped layers, over the box holding last update's visible cells and
+    /// this update's stamps: covered cells its viewers may see become visible (the first sight sets the explored bit), the
+    /// rest that were visible become explored. Then the stamped boxes are zeroed for the next player.
+    /// </summary>
+    private void Combine(int p)
+    {
+        byte[] vis = _visibility[p];
+        ulong[] bits = _explored[p];
+        byte[] levels = _levels;
+        int[] s = _scratch;
+        int w = _width, n = levels.Length, n2 = 2 * n;
+        int vb = 4 * p;
+        // This update's stamped box: the union of the layers' boxes (empty: x0 = int.MaxValue).
+        int nx0 = int.MaxValue, ny0 = 0, nx1 = 0, ny1 = 0;
+        for (int layer = 0; layer < MapConstants.LevelCount; layer++)
+        {
+            if (!_levelUsed[layer]) continue;
+            int b = 4 * layer;
+            if (nx0 == int.MaxValue)
+            {
+                nx0 = _box[b];
+                ny0 = _box[b + 1];
+                nx1 = _box[b + 2];
+                ny1 = _box[b + 3];
+                continue;
+            }
+            if (_box[b] < nx0) nx0 = _box[b];
+            if (_box[b + 1] < ny0) ny0 = _box[b + 1];
+            if (_box[b + 2] > nx1) nx1 = _box[b + 2];
+            if (_box[b + 3] > ny1) ny1 = _box[b + 3];
+        }
+        // The pass covers it and last update's box (its visible cells may have to turn explored).
+        int ux0 = _visibleBox[vb], uy0 = _visibleBox[vb + 1], ux1 = _visibleBox[vb + 2], uy1 = _visibleBox[vb + 3];
+        if (ux0 == int.MaxValue)
+        {
+            ux0 = nx0;
+            uy0 = ny0;
+            ux1 = nx1;
+            uy1 = ny1;
+        }
+        else if (nx0 != int.MaxValue)
+        {
+            if (nx0 < ux0) ux0 = nx0;
+            if (ny0 < uy0) uy0 = ny0;
+            if (nx1 > ux1) ux1 = nx1;
+            if (ny1 > uy1) uy1 = ny1;
+        }
+        for (int y = uy0; ux0 != int.MaxValue && y <= uy1; y++)
+        {
+            int run0 = 0, run1 = 0, run2 = 0;
+            for (int c = y * w + ux0, end = y * w + ux1; c <= end; c++)
+            {
+                run0 += s[c];
+                run1 += s[n + c];
+                run2 += s[n2 + c];
+                int level = levels[c];
+                int state = vis[c] & StateMask; // without a stamp mark
+                // The high-ground rule: a layer sees its own level and below; the top one (and the lip) every level.
+                if (run2 > 0 || (run1 > 0 && level <= 1) || (run0 > 0 && level == 0))
+                {
+                    if (state == VisionConstants.Unexplored) bits[c >> 6] |= 1UL << (c & 63);
+                    vis[c] = VisionConstants.Visible;
+                }
+                else
+                {
+                    vis[c] = state == VisionConstants.Visible ? VisionConstants.Explored : (byte)state;
+                }
+            }
+        }
+        _visibleBox[vb] = nx0;
+        _visibleBox[vb + 1] = ny0;
+        _visibleBox[vb + 2] = nx1;
+        _visibleBox[vb + 3] = ny1;
+        for (int layer = 0; layer < MapConstants.LevelCount; layer++)
+        {
+            if (!_levelUsed[layer]) continue;
+            _levelUsed[layer] = false;
+            int b = 4 * layer, x0 = _box[b], x1 = _box[b + 2] + 1 < w ? _box[b + 2] + 1 : w - 1;
+            for (int y = _box[b + 1]; y <= _box[b + 3]; y++)
+                Array.Clear(s, layer * n + y * w + x0, x1 - x0 + 1);
+        }
+        _version[p]++;
+    }
+
+    /// <summary>
+    /// Mixes the fog's state into a state hash: every player's explored bits (64 cells a word), then the count and every
+    /// reveal still in force at tick <paramref name="tick"/> (slot, player, end). The visible bits and versions are derived.
+    /// </summary>
+    internal void AddToHash(ref StateHasher h, int tick)
+    {
+        for (int p = 0; p < _players; p++)
+        {
+            ulong[] bits = _explored[p];
+            for (int k = 0; k < bits.Length; k++) h.AddWord(bits[k]);
+        }
+        int live = 0;
+        for (int k = 0; k < _revealUntil.Length; k++)
+            if (RevealLive(k, tick)) live++;
+        h.Add(live);
+        if (live == 0) return;
+        for (int k = 0; k < _revealUntil.Length; k++)
+        {
+            if (!RevealLive(k, tick)) continue;
+            h.Add(k);
+            h.Add(_revealUntil[k]);
+        }
+    }
+
+    /// <summary>Whether reveal entry <paramref name="k"/> (slot x players + player) is in force at tick <paramref name="tick"/> on the unit it was set on.</summary>
+    private bool RevealLive(int k, int tick)
+    {
+        int slot = k / _players;
+        return _revealUntil[k] > tick && _units.Alive[slot] && _revealGeneration[k] == _units.Generation[slot];
+    }
+
+    /// <summary>The visibility byte's state bits (0-2); the bits above hold a stamp mark during an update only.</summary>
+    private const int StateMask = 3;
+
+    /// <summary>Where a stamp mark starts in the visibility byte.</summary>
+    private const int MarkShift = 2;
+
+    /// <summary>Largest mark (6 bits): masks from this index on are never skipped (no shipped data has that many radii).</summary>
+    private const int MaxMark = 63;
+
+    /// <summary>The largest squared cell distance inside a sight of <paramref name="sight"/> m: (dx^2 + dy^2) x cell^2 &lt;= sight^2.</summary>
+    private static int Limit(float sight, int maxLimit)
+    {
+        double cells = (double)sight / MapConstants.CellSize;
+        double limit = Math.Floor(cells * cells);
+        return limit >= maxLimit ? maxLimit : (int)limit;
+    }
+
+    private static void AddLimits(int[] limits, ref int count, float sight, int maxLimit)
+    {
+        if (!(sight > 0f)) return;
+        limits[count++] = Limit(sight, maxLimit);
+        limits[count++] = Math.Min(Limit(sight, maxLimit), Limit(VisionConstants.LipRadius, maxLimit));
+    }
+
+    private static int MaskOf(int[] limits, int distinct, float sight, int maxLimit) =>
+        sight > 0f ? Array.BinarySearch(limits, 0, distinct, Limit(sight, maxLimit)) : -1;
+
+    /// <summary>The half-width of each row (dy from -R to R) of the cells with dx^2 + dy^2 &lt;= <paramref name="limit"/>.</summary>
+    private static int[] Circle(int limit)
+    {
+        int r = 0;
+        while ((r + 1) * (r + 1) <= limit) r++;
+        var half = new int[2 * r + 1];
+        for (int dy = -r; dy <= r; dy++)
+        {
+            int h = 0;
+            while ((h + 1) * (h + 1) + dy * dy <= limit) h++;
+            half[dy + r] = h;
+        }
+        return half;
+    }
+}

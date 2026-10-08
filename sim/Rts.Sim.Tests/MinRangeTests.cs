@@ -86,6 +86,7 @@ public class MinRangeTests
         EntityHandle c = Place(sim, 0, Catapult, At(sim, 10, 20));
         EntityHandle r = Place(sim, 1, Raider, At(sim, 10, 20, dx: 40f));
         sim.Enqueue(Command.HoldPosition(1, r));
+        Spot(sim, 0, r); // M4-3a: 40 m off, past the Catapult's sight (18 m)
         sim.Enqueue(Command.Attack(0, c, r, isBuilding: false));
         RunUntil(sim, () => u.State[c.Index] == UnitState.Moving, 20);
         Assert.Equal(UnitState.Moving, u.State[c.Index]); // chasing into range

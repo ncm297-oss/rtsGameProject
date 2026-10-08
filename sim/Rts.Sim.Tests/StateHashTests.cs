@@ -956,6 +956,7 @@ public class StateHashTests
             object changed = old switch
             {
                 int x => x + 1,
+                byte x => (byte)(x + 1), // M4-3a: the firing level
                 bool x => !x,
                 Vector2 x => x + new Vector2(0.25f, 0f),
                 EntityHandle x => new EntityHandle(x.Index + 1, x.Generation + 1),
@@ -967,7 +968,7 @@ public class StateHashTests
             Assert.Equal(h0, sim.StateHash());
             audited++;
         }
-        Assert.True(audited >= 12, $"only {audited} arrays audited");
+        Assert.True(audited >= 13, $"only {audited} arrays audited");
         Assert.True(unhashed.Count == 0, "not in StateHash: " + string.Join(", ", unhashed));
         // The victim's building flag, alone.
         ((bool[])typeof(ProjectileStore).GetField("_victimIsBuilding", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(p)!)[0] = true;
@@ -1000,5 +1001,109 @@ public class StateHashTests
         Combat.ProjectileSystem.Fire(c.World, shooter.Index);
         c.World.Units.Target[0] = default;
         Assert.NotEqual(c.StateHash(), d.StateHash());
+    }
+
+    // ---------- M4-3a: fog of war ----------
+
+    private static T FogField<T>(World w, string name) =>
+        (T)typeof(Vision.FogStore).GetField(name, BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(w.Fog)!;
+
+    /// <summary>Two players with a unit each on a flat map, 9 ticks run (three fog updates): twins hash equal.</summary>
+    private static Simulation Fogged()
+    {
+        Simulation sim = CombatScenes.Flat(size: 48, units: 8);
+        CombatScenes.Place(sim, 0, CombatScenes.Crossbowman, CombatScenes.At(sim, 10, 10));
+        CombatScenes.Place(sim, 1, CombatScenes.Crossbowman, CombatScenes.At(sim, 38, 38));
+        for (int t = 0; t < 9; t++) sim.Tick();
+        return sim;
+    }
+
+    [Fact]
+    public void Hash_CoversEveryExploredBit_OfEveryPlayer()
+    {
+        Simulation a = Fogged(), b = Fogged();
+        Assert.Equal(a.StateHash(), b.StateHash());
+        ulong h0 = a.StateHash();
+        var explored = FogField<ulong[][]>(a.World, "_explored");
+        Assert.Equal(2, explored.Length);
+        foreach (int p in new[] { 0, 1 })
+            foreach (int bit in new[] { 0, 63, 64, 48 * 48 - 1 })
+            {
+                explored[p][bit >> 6] ^= 1UL << (bit & 63);
+                Assert.True(a.StateHash() != h0, $"player {p} cell {bit}");
+                explored[p][bit >> 6] ^= 1UL << (bit & 63);
+                Assert.Equal(h0, a.StateHash());
+            }
+        // Exploring is state the match builds up: a unit that walked elsewhere leaves a different hash.
+        Assert.Equal(48 * 48 / 64, explored[0].Length);
+    }
+
+    [Fact]
+    public void Hash_CoversAReveal_ItsEnd_ItsPlayer_AndItsUnit_ButNotOneThatIsOver()
+    {
+        Simulation a = Fogged(), b = Fogged();
+        World w = a.World;
+        EntityHandle u0 = new(0, w.Units.Generation[0]), u1 = new(1, w.Units.Generation[1]);
+        ulong h0 = a.StateHash();
+        w.Fog.Reveal(u1, 0, w.TickNumber + 40);
+        ulong h1 = a.StateHash();
+        Assert.NotEqual(h0, h1);
+        w.Fog.Reveal(u1, 0, w.TickNumber + 41);
+        Assert.NotEqual(h1, a.StateHash());
+        b.World.Fog.Reveal(u0, 1, w.TickNumber + 40);
+        Assert.NotEqual(h1, b.StateHash());
+        Assert.NotEqual(h0, b.StateHash());
+        // A reveal that ended no longer decides anything: it hashes as none.
+        w.Fog.Reveal(u1, 0, w.TickNumber);
+        Assert.Equal(h0, a.StateHash());
+        // Every reveal array, changed under a live reveal, moves the hash.
+        w.Fog.Reveal(u1, 0, w.TickNumber + 40);
+        ulong live = a.StateHash();
+        foreach (string f in new[] { "_revealUntil", "_revealGeneration" })
+        {
+            int[] arr = FogField<int[]>(w, f);
+            int k = 1 * w.Config.PlayerCount + 0;
+            arr[k]++;
+            Assert.True(a.StateHash() != live, f);
+            arr[k]--;
+            Assert.Equal(live, a.StateHash());
+        }
+    }
+
+    /// <summary>
+    /// M4-3a: the visible bits, the update versions and the boxes are rebuilt by every update (derived), so they are not
+    /// hashed; a save (M6) stamps again at load. Changing them leaves the hash alone; the explored bits stay hashed.
+    /// </summary>
+    [Fact]
+    public void FogVisibleBits_Versions_AndBoxes_AreDerived_AndNotHashed()
+    {
+        Simulation a = Fogged(), b = Fogged();
+        World w = a.World;
+        byte[][] vis = FogField<byte[][]>(w, "_visibility");
+        int seen = Array.IndexOf(vis[0], Vision.VisionConstants.Visible);
+        Assert.True(seen >= 0);
+        vis[0][seen] = Vision.VisionConstants.Explored; // visible -> explored: the explored bit is unchanged
+        FogField<int[]>(w, "_version")[0] += 5;
+        FogField<int[]>(w, "_visibleBox")[0]--;
+        Assert.Equal(b.StateHash(), a.StateHash());
+        // The audit: every FogStore array is one of these or hashed (above); a new one must be classified here.
+        var classified = new HashSet<string> { "_visibility", "_version", "_visibleBox", "_explored", "_revealUntil", "_revealGeneration",
+            "_levels", "_halfWidths", "_unitMask", "_buildingMask", "_lipMask", "_scratch", "_levelUsed", "_box" };
+        foreach (FieldInfo f in typeof(Vision.FogStore).GetFields(BindingFlags.NonPublic | BindingFlags.Instance))
+            if (f.FieldType.IsArray) Assert.True(classified.Contains(f.Name), $"FogStore.{f.Name} is not classified as hashed or derived");
+    }
+
+    [Fact]
+    public void FoggedTwins_HashEqualEveryTick_WhileTheyWalk()
+    {
+        Simulation a = Fogged(), b = Fogged();
+        foreach (Simulation s in new[] { a, b })
+            s.Enqueue(Command.Move(0, new EntityHandle(0, s.World.Units.Generation[0]), CombatScenes.At(s, 30, 12)));
+        for (int t = 0; t < 120; t++)
+        {
+            a.Tick();
+            b.Tick();
+            Assert.Equal(a.StateHash(), b.StateHash());
+        }
     }
 }

@@ -60,6 +60,9 @@ public sealed class Heightmap
     /// <summary>Row-major levels, for building the nav grid and for tests.</summary>
     public ReadOnlySpan<byte> Levels => _levels;
 
+    /// <summary>The row-major level array itself, for the fog's per-cell compares (M4-3a); the sim never writes it.</summary>
+    internal byte[] LevelArray => _levels;
+
     /// <summary>Row-major elevations in meters.</summary>
     public ReadOnlySpan<float> Elevations => _elevations;
 

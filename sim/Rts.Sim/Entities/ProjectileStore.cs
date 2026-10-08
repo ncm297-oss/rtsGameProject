@@ -24,6 +24,7 @@ public sealed class ProjectileStore
     private readonly EntityHandle[] _attacker;
     private readonly EntityHandle[] _victim;
     private readonly bool[] _victimIsBuilding;
+    private readonly byte[] _level;
 
     /// <summary>Longest flight in ticks (an hour): a bound on the format, not a stat.</summary>
     private const int MaxFlightTicks = 72_000;
@@ -50,6 +51,7 @@ public sealed class ProjectileStore
         _attacker = new EntityHandle[capacity];
         _victim = new EntityHandle[capacity];
         _victimIsBuilding = new bool[capacity];
+        _level = new byte[capacity];
     }
 
     /// <summary>Number of slots.</summary>
@@ -94,6 +96,9 @@ public sealed class ProjectileStore
     /// <summary>Per slot: whether <see cref="Victim"/> is a building.</summary>
     internal bool[] VictimIsBuilding => _victimIsBuilding;
 
+    /// <summary>Per slot: the level of the cell it was fired from (M4-3a): a hit from above its victim reveals the shooter.</summary>
+    internal byte[] Level => _level;
+
     /// <summary>One past the highest slot that may be live: the loops' bound.</summary>
     internal int End => _end;
 
@@ -103,7 +108,7 @@ public sealed class ProjectileStore
     /// impact point. False (nothing changes) when the store is full: the shot is lost.
     /// </summary>
     internal bool TrySpawn(Vector2 from, Vector2 to, float speedPerTick, int typeId, int owner, int attackerType,
-        EntityHandle attacker, EntityHandle victim, bool victimIsBuilding)
+        EntityHandle attacker, EntityHandle victim, bool victimIsBuilding, int level = 0)
     {
         int i = _firstFree;
         while (i < _alive.Length && _alive[i]) i++;
@@ -122,6 +127,7 @@ public sealed class ProjectileStore
         _attacker[i] = attacker;
         _victim[i] = victim;
         _victimIsBuilding[i] = victimIsBuilding;
+        _level[i] = (byte)level;
         Count++;
         _firstFree = i + 1;
         if (i + 1 > _end) _end = i + 1;
@@ -176,6 +182,7 @@ public sealed class ProjectileStore
         _ticksLeft[i] = _typeId[i] = _owner[i] = _attackerType[i] = 0;
         _attacker[i] = _victim[i] = default;
         _victimIsBuilding[i] = false;
+        _level[i] = 0;
         Count--;
         if (i < _firstFree) _firstFree = i;
         if (Count == 0) _end = 0;
@@ -206,6 +213,7 @@ public sealed class ProjectileStore
             h.Add(_attacker[i].Generation);
             h.Add(_victim[i].Index);
             h.Add((ulong)(uint)_victim[i].Generation | (_victimIsBuilding[i] ? 1UL << 32 : 0UL));
+            h.Add((int)_level[i]); // M4-3a
         }
     }
 }

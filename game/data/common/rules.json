@@ -9,5 +9,6 @@
   "expansionMines": { "count": 2, "gold": 2000 },
   "treeWood": 100,
   "nodeSearchRadius": 20,
-  "repair": { "rateFactor": 0.5, "costFactor": 0.25 }
+  "repair": { "rateFactor": 0.5, "costFactor": 0.25 },
+  "buildingSight": 12
 }

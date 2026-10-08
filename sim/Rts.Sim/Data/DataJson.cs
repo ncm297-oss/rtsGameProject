@@ -38,6 +38,7 @@ internal sealed class RulesJson
     public int? TreeWood { get; set; }
     public double? NodeSearchRadius { get; set; }
     public RepairJson? Repair { get; set; }
+    public double? BuildingSight { get; set; }
 }
 
 internal sealed class RepairJson
@@ -188,6 +189,7 @@ internal sealed class BuildingJson
     public double? PopProvided { get; set; }
     public bool? DropOff { get; set; }
     public List<string?>? Requires { get; set; }
+    public double? Sight { get; set; }
 }
 
 internal sealed class TechFileJson
