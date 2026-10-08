@@ -719,4 +719,21 @@ public class StateHashTests
         Assert.Equal(6, b.World.Ledger.FinishedOfType(0, barracks));
         Assert.Equal(a.StateHash(), b.StateHash());
     }
+
+    /// <summary>
+    /// M3-H2: the plateau ids are derived from terrain (read-only after load, so nothing to change), and the per-tick
+    /// spawn memos and the never-seal answer memo are scratch: changing them doesn't move the hash.
+    /// </summary>
+    [Fact]
+    public void PlateauIds_AndTheSpawnAndSealMemos_AreDerived_AndNotHashed()
+    {
+        Simulation a = Research(), b = Research();
+        World w = b.World;
+        Assert.True(w.Plateaus.Count > 0);
+        w.SpawnPlateauFull[0] = true;
+        w.SpawnCacheCleared[0] = true;
+        w.CanPlace(0, BuildMaps.House, 5 * w.NavGrid.Width + 5, out _); // may leave a seal answer kept
+        w.Seal.ForgetForTests();
+        Assert.Equal(a.StateHash(), b.StateHash());
+    }
 }

@@ -144,6 +144,7 @@ public class SimHardeningQaTests
         Run(sim, 2); // JIT
         foreach (EntityHandle wk in workers) sim.Enqueue(Command.Build(0, wk, House, At(sim, 64, 1)));
         sim.Tick();
+        sim.World.Seal.ForgetForTests(); // the JIT tick's answer is kept (BUG-0096 memo): time the first flood too
         long t0 = Stopwatch.GetTimestamp();
         sim.Tick();
         double ms = (Stopwatch.GetTimestamp() - t0) * 1000.0 / Stopwatch.Frequency;
@@ -174,18 +175,20 @@ public class SimHardeningQaTests
     }
 
     /// <summary>
-    /// Report: the one reason the cheap-first order can't make cheap. With the wall closed at the bottom a House in the
-    /// top gap seals the map, so each refused Build floods one side (~7,900 cells) to prove it. Measures 100 in a tick.
+    /// The one reason the cheap-first order can't make cheap. With the wall closed at the bottom a House in the top gap
+    /// seals the map, so a refused Build floods one side (~7,900 cells) to prove it. BUG-0096 (fixed M3-H2): the answer
+    /// is kept per (footprint, grid version), so 100 in a tick flood once (was 33 ms, Debug). Was <c>..._Report</c>.
     /// </summary>
     [Fact]
     [Trait("Category", "Perf")]
-    public void HundredBuildsRefusedForSealsGround_OneTick_Report()
+    public void HundredBuildsRefusedForSealsGround_OneTick_Under2Ms()
     {
         Simulation sim = LongWall(closedAtTheBottom: true);
         Give(sim, 0, 1_000_000, 1_000_000);
         Assert.False(sim.World.CanPlace(0, House, Cell(sim, 64, 1), out PlacementError why));
         Assert.Equal(PlacementError.SealsGround, why);
-        HundredBuilds(sim, PlacementError.SealsGround, "SealsGround");
+        double ms = HundredBuilds(sim, PlacementError.SealsGround, "SealsGround");
+        Assert.True(ms < 2.0, $"{ms:F3} ms");
     }
 
     // ------------------------------------------------------------------ push-out
@@ -246,15 +249,16 @@ public class SimHardeningQaTests
     }
 
     /// <summary>
-    /// A House built on 30 own units on a small level-1 plateau with 12 free cells: rings go on outward over the whole
-    /// map looking for a free cell on the level, then the rest fall back to the nearest passable cell. Reports the cost
-    /// (the worst case of "rings go on until a free cell turns up") and checks nobody ends on a blocked cell.
+    /// A House built on 30 own units on a small level-1 plateau with 13 free cells. BUG-0095 / BUG-0097 (fixed M3-H2):
+    /// rings stop at the plateau's box, the plateau is found full once, and the 17 leftovers spread over its cells (one
+    /// each before any cell takes a second, each pass off the center), all on the plateau, no two on one point. Was
+    /// <c>PushOutOnAFullSmallPlateau_ScansTheMap_Report</c> (18 on one cell, 153 identical pairs). The cost is now a bound.
     /// </summary>
     [Theory]
     [Trait("Category", "Perf")]
     [InlineData(128)]
     [InlineData(256)]
-    public void PushOutOnAFullSmallPlateau_ScansTheMap_Report(int size)
+    public void PushOutOnAFullSmallPlateau_CostsThePlateau_Under1Ms(int size)
     {
         (Simulation warm, int ww) = Plateau(size);
         ConstructionSystem.StartBuild(warm.World, ww, House, At(warm, 61, 61), replaceQueue: true);
@@ -262,20 +266,36 @@ public class SimHardeningQaTests
         long t0 = Stopwatch.GetTimestamp();
         bool placed = ConstructionSystem.StartBuild(sim.World, worker, House, At(sim, 61, 61), replaceQueue: true);
         double ms = (Stopwatch.GetTimestamp() - t0) * 1000.0 / Stopwatch.Frequency;
+        Assert.True(placed);
+        _out.WriteLine($"{size} x {size}: 30 units on a plateau with {PlateauFree(sim.World.NavGrid)} free cells: Build apply {ms:F3} ms");
+        Assert.True(ms < 1.0, $"{ms:F3} ms");
+    }
+
+    [Theory]
+    [InlineData(128)]
+    [InlineData(256)]
+    public void PushOutOnAFullSmallPlateau_LeftoversSpreadOnThePlateau_NoTwoOnOnePoint(int size)
+    {
+        (Simulation sim, int worker) = Plateau(size);
+        Assert.True(ConstructionSystem.StartBuild(sim.World, worker, House, At(sim, 61, 61), replaceQueue: true));
         UnitStore u = sim.World.Units;
         NavGrid g = sim.World.NavGrid;
-        var cells = new Dictionary<int, int>();
-        for (int i = 0; i < u.Capacity; i++)
+        int free = PlateauFree(g);
+        var share = new Dictionary<int, int>();
+        int same = 0, maxShare = 0;
+        for (int i = 0; i < 30; i++)
         {
-            if (!u.Alive[i]) continue;
             Assert.True(g.WorldToCell(u.Position[i], out int cx, out int cy));
-            Assert.True(g.IsPassable(cx, cy), $"unit {i} on blocked ({cx}, {cy})");
-            cells[cy * g.Width + cx] = cells.GetValueOrDefault(cy * g.Width + cx) + 1;
+            Assert.True(g.IsPassable(cx, cy) && g.LevelAt(cx, cy) == 1, $"unit {i} left the plateau for ({cx}, {cy})");
+            share[cy * g.Width + cx] = share.GetValueOrDefault(cy * g.Width + cx) + 1;
+            maxShare = Math.Max(maxShare, share[cy * g.Width + cx]);
+            for (int j = i + 1; j < 30; j++) if (u.Position[i] == u.Position[j]) same++;
         }
-        _out.WriteLine($"{size} x {size}: placed {placed}; 30 units on a plateau with {PlateauFree(g)} free cells: Build apply {ms:F3} ms; most units on one cell {cells.Values.Max()}");
-        // The fallback sets every leftover unit on the same point: local movement must pull them apart without NaN.
-        int same = 0;
-        for (int i = 0; i < 30; i++) for (int j = i + 1; j < 30; j++) if (u.Position[i] == u.Position[j]) same++;
+        _out.WriteLine($"{size} x {size}: 30 units, {free} free plateau cells: {share.Count} cells used, most units on one cell {maxShare}, identical-position pairs {same}");
+        Assert.Equal(free, share.Count);                  // every plateau cell takes one before any takes more
+        Assert.True(maxShare <= (30 + free - 1) / free, $"{maxShare} on one cell"); // as even as the pigeonhole allows
+        Assert.Equal(0, same);
+        // Local movement keeps them finite and on passable ground.
         for (int t = 0; t < 200; t++)
         {
             sim.Tick();
@@ -286,16 +306,6 @@ public class SimHardeningQaTests
                 Assert.True(g.WorldToCell(u.Position[i], out int cx, out int cy) && g.IsPassable(cx, cy), $"tick {t}: unit {i} at {u.Position[i]} on blocked ground");
             }
         }
-        int sameAfter = 0, maxShare = 0;
-        var share = new Dictionary<int, int>();
-        for (int i = 0; i < 30; i++)
-        {
-            for (int j = i + 1; j < 30; j++) if (u.Position[i] == u.Position[j]) sameAfter++;
-            g.WorldToCell(u.Position[i], out int cx, out int cy);
-            share[cy * g.Width + cx] = share.GetValueOrDefault(cy * g.Width + cx) + 1;
-            maxShare = Math.Max(maxShare, share[cy * g.Width + cx]);
-        }
-        _out.WriteLine($"identical-position pairs: {same} after the push, {sameAfter} after 10 s; most units in one cell after 10 s {maxShare}");
     }
 
     private static int PlateauFree(NavGrid g)

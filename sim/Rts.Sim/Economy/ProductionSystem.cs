@@ -119,14 +119,17 @@ public static class ProductionSystem
     /// <summary>Phase 3: every finished building with a queue, in slot order, starts, advances or spawns its head item.</summary>
     /// <remarks>
     /// Spawn cells come from the push-out's per-cell cache (<see cref="Pathfinding.FlowFieldCache.BuildScratch"/>, idle in
-    /// this phase). The search reads only cells inside the bounding box of the building's level, so on the tick's first
-    /// spawn attempt on a level that box is cleared (not the whole map), and units spawned this tick are seen by later
-    /// spawns. The spatial hash is rebuilt at the end when a unit spawned, so later phases see it.
+    /// this phase). The search reads only cells inside the bounding box of the building's plateau, so on the tick's first
+    /// spawn attempt on a plateau that box is filled from one pass over the unit store (not the whole map, and no
+    /// spatial query per cell), and units spawned this tick are seen by later spawns. A plateau found with no free cell
+    /// is remembered for the rest of the tick (no cell frees in this phase), so twenty heads waiting there cost one walk
+    /// (M3-H2, BUG-0097). The spatial hash is rebuilt at the end when a unit spawned, so later phases see it.
     /// </remarks>
     public static void Run(World world)
     {
         BuildingStore b = world.Buildings;
         Array.Clear(world.SpawnCacheCleared);
+        Array.Clear(world.SpawnPlateauFull);
         bool spawned = false;
         for (int k = 0; k < b.Capacity; k++)
         {
@@ -182,7 +185,7 @@ public static class ProductionSystem
     /// <summary>
     /// Spawns slot <paramref name="k"/>'s complete head item on the free cell nearest the rally point (or the footprint's
     /// center without one) in the nearest ring round the footprint, then sends it on; false, nothing changed, when no cell
-    /// on the building's level is free or the unit store is full.
+    /// on the building's plateau is free or the unit store is full.
     /// </summary>
     private static bool Spawn(World world, int k, UnitDef def)
     {
@@ -192,24 +195,41 @@ public static class ProductionSystem
         NavGrid g = world.NavGrid;
         BuildingDef bd = world.Data.Buildings[b.TypeId[k]];
         int anchor = b.Cell[k], x0 = anchor % g.Width, y0 = anchor / g.Width;
-        int[] taken = world.FlowFields.BuildScratch; // per cell: 0 not asked yet, 1 free, 2 a unit's center in it
-        ClearLevelBox(world, taken, g.LevelAt(x0, y0));
+        int[] taken = world.FlowFields.BuildScratch; // per cell: 1 free, 2 a unit's center in it (inside the plateau's box)
+        int plateau = world.Plateaus.At(anchor);
+        if ((uint)plateau >= (uint)world.SpawnPlateauFull.Length || world.SpawnPlateauFull[plateau]) return false;
+        FillPlateauBox(world, taken, plateau);
         Vector2 from = b.HasRally[k] ? b.RallyPosition[k] : EconomySystem.Center(g, anchor, bd.FootprintWidth, bd.FootprintHeight);
         int cell = FreeCellSearch.Nearest(world, x0, y0, bd.FootprintWidth, bd.FootprintHeight, from, taken);
-        if (cell < 0) return false;
+        if (cell < 0)
+        {
+            world.SpawnPlateauFull[plateau] = true;
+            return false;
+        }
         u.TrySpawn(b.Owner[k], b.QueueTypeAt(k, 0), def, g.CellCenter(cell % g.Width, cell / g.Width), out EntityHandle h);
         taken[cell] = 2;
         if (b.HasRally[k]) Rally(world, h.Index, b.RallyPosition[k]);
         return true;
     }
 
-    /// <summary>Clears <paramref name="taken"/> over the bounding box of <paramref name="level"/>, the first time this tick.</summary>
-    private static void ClearLevelBox(World world, int[] taken, int level)
+    /// <summary>
+    /// The first time this tick: <paramref name="taken"/> over the bounding box of <paramref name="plateau"/> set to
+    /// 1 (free), then 2 for each cell holding a live unit's center, from one pass over the unit store. The same answer the
+    /// spatial hash would give cell by cell (it holds the units as they stand in this phase), at the cost of the box and
+    /// the store, not a query per cell.
+    /// </summary>
+    private static void FillPlateauBox(World world, int[] taken, int plateau)
     {
+        if (world.SpawnCacheCleared[plateau] || !world.Plateaus.Bounds(plateau, out int minX, out int minY, out int maxX, out int maxY)) return;
+        world.SpawnCacheCleared[plateau] = true;
         NavGrid g = world.NavGrid;
-        if (!world.LevelBounds(level, out int minX, out int minY, out int maxX, out int maxY) || world.SpawnCacheCleared[level]) return;
-        world.SpawnCacheCleared[level] = true;
-        for (int y = minY; y <= maxY; y++) Array.Clear(taken, y * g.Width + minX, maxX - minX + 1);
+        for (int y = minY; y <= maxY; y++) Array.Fill(taken, 1, y * g.Width + minX, maxX - minX + 1);
+        UnitStore u = world.Units;
+        for (int i = 0; i < u.Capacity; i++)
+        {
+            if (!u.Alive[i] || !g.WorldToCell(u.Position[i], out int x, out int y)) continue;
+            if (x >= minX && x <= maxX && y >= minY && y <= maxY) taken[y * g.Width + x] = 2;
+        }
     }
 
     /// <summary>A trained unit's first order: a worker rallied onto a resource node gathers it (Age of Empires' rule); anyone else walks there by the Move rule.</summary>

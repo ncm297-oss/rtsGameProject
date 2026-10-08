@@ -16,8 +16,6 @@ public sealed class World
 {
     private readonly SimRng[] _rngs;
     private readonly PlayerLedger _ledger;
-    // Per level: min x, min y, max x, max y of its cells (min > max for a level with none); terrain only, never changes.
-    private readonly int[] _levelBounds;
 
     /// <summary>Creates an empty world sized from the config, with terrain generated from the seed's map stream.</summary>
     public World(SimConfig config) : this(config, null)
@@ -38,6 +36,8 @@ public sealed class World
         HasGeneratedMap = map == null;
         Heightmap = map ?? MapGenerator.Generate(config.Map, ref _rngs[RngStream.MapGen]);
         NavGrid = new NavGrid(Heightmap);
+        // Before resources: plateaus are terrain only (BUG-0097).
+        Plateaus = new Plateaus(NavGrid);
         // Resources before the flow-field cache, so its step mask starts from the grid with them.
         // The placer draws from the map stream after the terrain did, and nothing when counts are 0.
         Resources = new ResourceStore(config.ResourceCapacity, NavGrid, config.Data);
@@ -45,8 +45,8 @@ public sealed class World
         Buildings = new BuildingStore(config.BuildingCapacity, NavGrid, config.Data, _ledger);
         SiteWorkers = new int[config.BuildingCapacity];
         PushedUnits = new int[config.UnitCapacity];
-        _levelBounds = LevelBoundsOf(NavGrid);
-        SpawnCacheCleared = new bool[_levelBounds.Length / 4];
+        SpawnCacheCleared = new bool[Plateaus.Count];
+        SpawnPlateauFull = new bool[Plateaus.Count];
         Spatial = new SpatialHash(config.UnitCapacity, NavGrid.Width, NavGrid.Height);
         FlowFields = new FlowFieldCache(NavGrid, FlowFieldCache.CapacityFor(config.UnitCapacity, NavGrid.Width * NavGrid.Height));
         Seal = new SealCheck(NavGrid, FlowFields.BuildScratch);
@@ -93,8 +93,18 @@ public sealed class World
     /// <summary>Scratch for <see cref="ConstructionSystem"/>: per building slot, the workers in reach this tick (-1: its workers stop); derived, not hashed.</summary>
     internal int[] SiteWorkers { get; }
 
-    /// <summary>Scratch for <see cref="ProductionSystem"/>: per terrain level, whether this tick's spawns have cleared the level's box of the free-cell cache; derived, not hashed.</summary>
+    /// <summary>Scratch for <see cref="ProductionSystem"/>: per plateau, whether this tick's spawns have filled the plateau's box of the free-cell cache; derived, not hashed.</summary>
     internal bool[] SpawnCacheCleared { get; }
+
+    /// <summary>
+    /// Scratch for <see cref="ProductionSystem"/>: per plateau, whether a spawn this tick found no free cell on it, so
+    /// later heads there wait without walking it again (no cell frees during the production phase; BUG-0097's cost
+    /// note); derived, not hashed.
+    /// </summary>
+    internal bool[] SpawnPlateauFull { get; }
+
+    /// <summary>The terrain's plateaus (connected passable same-level ground at load, M3-H2); derived from terrain, not hashed.</summary>
+    internal Plateaus Plateaus { get; }
 
     /// <summary>Scratch for <see cref="ConstructionSystem"/>'s push-out: the units a new site sets down, slot order; derived, not hashed.</summary>
     internal int[] PushedUnits { get; }
@@ -144,46 +154,6 @@ public sealed class World
 
     /// <summary>Per-player researched techs (M3-5): the flags are hashed state, the bonus sums derived.</summary>
     internal TechState Techs { get; }
-
-    /// <summary>
-    /// The bounding box of the cells on terrain level <paramref name="level"/> (inclusive cell coordinates); false for a
-    /// level with no cells. Terrain only: buildings and nodes don't change it. Bounds the push-out / spawn ring search.
-    /// </summary>
-    internal bool LevelBounds(int level, out int minX, out int minY, out int maxX, out int maxY)
-    {
-        minX = minY = maxX = maxY = 0;
-        if ((uint)level >= (uint)(_levelBounds.Length / 4)) return false;
-        minX = _levelBounds[4 * level];
-        minY = _levelBounds[4 * level + 1];
-        maxX = _levelBounds[4 * level + 2];
-        maxY = _levelBounds[4 * level + 3];
-        return minX <= maxX;
-    }
-
-    private static int[] LevelBoundsOf(NavGrid g)
-    {
-        int levels = 1;
-        for (int y = 0; y < g.Height; y++)
-            for (int x = 0; x < g.Width; x++) levels = Math.Max(levels, g.LevelAt(x, y) + 1);
-        var b = new int[4 * levels];
-        for (int l = 0; l < levels; l++)
-        {
-            b[4 * l] = b[4 * l + 1] = int.MaxValue;
-            b[4 * l + 2] = b[4 * l + 3] = int.MinValue;
-        }
-        for (int y = 0; y < g.Height; y++)
-        {
-            for (int x = 0; x < g.Width; x++)
-            {
-                int l = g.LevelAt(x, y);
-                b[4 * l] = Math.Min(b[4 * l], x);
-                b[4 * l + 1] = Math.Min(b[4 * l + 1], y);
-                b[4 * l + 2] = Math.Max(b[4 * l + 2], x);
-                b[4 * l + 3] = Math.Max(b[4 * l + 3], y);
-            }
-        }
-        return b;
-    }
 
     /// <summary>
     /// Whether <paramref name="player"/> may place a building of <paramref name="typeId"/> with its anchor (lowest x, y)

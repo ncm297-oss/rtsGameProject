@@ -167,17 +167,32 @@ public class TechDataQaTests
     }
 
     [Fact]
-    public void AFilterThatMatchesNoUnit_Loads_AndTheTechChangesNothing()
+    public void AFilterThatMatchesNoUnit_IsOneErrorAtAppliesTo()
     {
-        // Documented: "each filter it sets must match". Magic and the siege slot never meet in the shipped units.
+        // BUG-0099 item 2 (fixed M3-H2; this was `AFilterThatMatchesNoUnit_Loads_AndTheTechChangesNothing`): magic and
+        // the siege slot never meet in the shipped units, so the tech would be paid for and change nothing.
         using TestDataDir dir = TestDataDir.CopyOfShipped();
         EditTech(dir, Common, 1, t => t["effects"]![0]!["appliesTo"] = JsonNode.Parse("{\"attackType\": \"magic\", \"siege\": true}"));
-        GameData d = Loads(dir);
-        var sim = new Simulation(new SimConfig(5, 1, 16, 64) { Data = d }, ResourceMaps.Flat(16, 16));
-        sim.World.Techs.Set(0, d.FindTech("melee_weapons_1"), true);
-        for (int u = 0; u < d.Units.Length; u++)
-            for (int s = 0; s < DataLimits.TechStatIds.Length; s++)
-                Assert.Equal(0f, sim.World.TechBonus(0, u, (TechStat)s));
+        DataError e = OneError(dir);
+        Assert.Equal((Common, "techs[1].effects[0].appliesTo"), (e.File, e.Path));
+        Assert.Contains("no unit", e.Message);
+    }
+
+    [Fact]
+    public void AFactionUpgradeFilterMatchingOnlyAnotherFactionsUnits_IsOneError()
+    {
+        // A faction upgrade's filters are matched against its own units only. The shipped factions mirror each other's
+        // tags and attack types, so the Raider gets a tag of its own here; a Malazan upgrade filtering on it matches
+        // nothing Malazan has, while a common tech filtering on it loads.
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        UnitDef raider = TestSim.Data.Units[TestSim.Data.FindUnit("whirlwind_raider")];
+        string tags = string.Join(", ", raider.Tags.Select(t => $"\"{t}\"").Append("\"steppe_only\""));
+        dir.SetUnitField("whirlwind", "whirlwind_raider", "tags", $"[{tags}]");
+        EditTech(dir, Common, 1, t => t["effects"]![0]!["appliesTo"] = JsonNode.Parse("{\"tags\": [\"steppe_only\"]}"));
+        Assert.True(DataLoader.LoadAll(dir.Path).Ok);
+        EditTech(dir, MalazanTechs, 0, t => t["effects"]![1]!["appliesTo"] = JsonNode.Parse("{\"tags\": [\"steppe_only\"]}"));
+        DataError e = OneError(dir);
+        Assert.Equal((MalazanTechs, "techs[0].effects[1].appliesTo"), (e.File, e.Path));
     }
 
     /// <summary>

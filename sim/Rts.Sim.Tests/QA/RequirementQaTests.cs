@@ -238,6 +238,16 @@ public class RequirementQaTests
 
     private static DataLoadResult Load(TestDataDir dir) => DataLoader.LoadAll(dir.Path);
 
+    /// <summary>A second Malazan faction tech: a clone of Moranth Supply under <paramref name="id"/>.</summary>
+    private static void AddMalazanTech(TestDataDir dir, string id) =>
+        dir.EditJson(MalazanTechs, root =>
+        {
+            JsonArray techs = root["techs"]!.AsArray();
+            JsonNode copy = techs[0]!.DeepClone();
+            copy["id"] = id;
+            techs.Add(copy);
+        });
+
     private static void SetRequires(TestDataDir dir, string id, string raw)
     {
         foreach (string rel in new[] { Common, MalazanTechs, "factions/whirlwind/techs.json", MalazanBuildings, "factions/whirlwind/buildings.json", "factions/malazan/units.json", "factions/whirlwind/units.json" })
@@ -261,11 +271,14 @@ public class RequirementQaTests
     [Fact]
     public void AFourCycle_TechBuildingTechBuilding_IsOneError()
     {
+        // Two Malazan techs (a second faction tech cloned in): since BUG-0100 a common tech naming a faction's building is
+        // an error of its own, so the cycle runs through faction techs.
         using TestDataDir dir = TestDataDir.CopyOfShipped();
-        SetRequires(dir, "armor_1", "[\"malazan_cadre_tower\"]");
-        SetRequires(dir, "malazan_cadre_tower", "[\"ranged_weapons_1\"]");
-        SetRequires(dir, "ranged_weapons_1", "[\"malazan_watchtower\"]");
-        SetRequires(dir, "malazan_watchtower", "[\"armor_1\"]");
+        AddMalazanTech(dir, "moranth_drill");
+        SetRequires(dir, "moranth_supply", "[\"malazan_cadre_tower\"]");
+        SetRequires(dir, "malazan_cadre_tower", "[\"moranth_drill\"]");
+        SetRequires(dir, "moranth_drill", "[\"malazan_watchtower\"]");
+        SetRequires(dir, "malazan_watchtower", "[\"moranth_supply\"]");
         DataLoadResult r = Load(dir);
         Assert.Null(r.Data);
         DataError e = Assert.Single(r.Errors);
@@ -303,11 +316,12 @@ public class RequirementQaTests
     [Fact]
     public void TwoCyclesSharingANode_AreReported_AtRequiresEntries_WithoutACrash()
     {
-        // armor_1 <-> malazan_cadre_tower and armor_1 <-> malazan_watchtower (a figure eight through armor_1).
+        // moranth_supply <-> malazan_cadre_tower and moranth_supply <-> malazan_watchtower (a figure eight through the
+        // faction tech; since BUG-0100 a common tech can't name a faction's building at all).
         using TestDataDir dir = TestDataDir.CopyOfShipped();
-        SetRequires(dir, "armor_1", "[\"malazan_cadre_tower\", \"malazan_watchtower\"]");
-        SetRequires(dir, "malazan_cadre_tower", "[\"armor_1\"]");
-        SetRequires(dir, "malazan_watchtower", "[\"armor_1\"]");
+        SetRequires(dir, "moranth_supply", "[\"malazan_cadre_tower\", \"malazan_watchtower\"]");
+        SetRequires(dir, "malazan_cadre_tower", "[\"moranth_supply\"]");
+        SetRequires(dir, "malazan_watchtower", "[\"moranth_supply\"]");
         DataLoadResult r = Load(dir);
         Assert.Null(r.Data);
         Assert.InRange(r.Errors.Count, 1, 2);
@@ -316,14 +330,18 @@ public class RequirementQaTests
     }
 
     [Fact]
-    public void ACycleAcrossFactions_IsOneError()
+    public void ACycleAcrossFactions_IsAnErrorAtEachEntry()
     {
+        // Since BUG-0100 each entry naming the other faction's building is itself an error (it could never be met), so
+        // the "cycle" is reported as those two entries rather than as a cycle.
         using TestDataDir dir = TestDataDir.CopyOfShipped();
         SetRequires(dir, "whirlwind_shrine", "[\"malazan_cadre_tower\"]");
         SetRequires(dir, "malazan_cadre_tower", "[\"whirlwind_shrine\"]");
         DataLoadResult r = Load(dir);
         Assert.Null(r.Data);
-        Assert.Contains(r.Errors, e => e.Message.Contains("requires cycle"));
+        Assert.Equal(2, r.Errors.Count);
+        Assert.All(r.Errors, e => Assert.Contains("belongs to faction", e.Message));
+        Assert.All(r.Errors, e => Assert.EndsWith(".requires[0]", e.Path));
     }
 
     // ---------- loader: requiresAnyOf.count of the wrong JSON type ----------
@@ -454,53 +472,50 @@ public class RequirementQaTests
 
     // ---------- content that loads but can never be met (BUG-0100) ----------
 
-    [Fact]
-    public void BUG0100_Today_ARequirementOnAnotherFactionsBuilding_Loads()
-    {
-        using TestDataDir dir = TestDataDir.CopyOfShipped();
-        SetRequires(dir, "malazan_heavy_infantry", "[\"whirlwind_raider_camp\"]");
-        DataLoadResult r = Load(dir);
-        Assert.True(r.Ok, "BUG-0100 fixed? then flip this pin to the skipped test below: " + string.Join("; ", r.Errors));
-        // ...and a Malazan player can never train it (the dev spawn aside, no Malazan worker can place a Raider Camp).
-        Simulation sim = NewSim(r.Data, players: 1);
-        int bar = Building(sim, 4, 4, type: Barracks).Index;
-        Give(sim, 0, 100_000, 100_000);
-        Assert.False(sim.World.CanTrain(0, bar, Infantry, out TrainError why));
-        Assert.Equal(TrainError.LockedByRequirement, why);
-        Assert.False(sim.World.CanPlace(0, RaiderCamp, Cell(sim, 20, 10), out PlacementError pe));
-        Assert.Equal(PlacementError.WrongFaction, pe);
-    }
+    // BUG-0100 (fixed M3-H2): the three repros the `BUG0100_Today_*` pins held are one error each.
 
-    [Fact]
-    public void BUG0100_Today_ACommonTechRequiringOneFactionsBuilding_Loads()
-    {
-        using TestDataDir dir = TestDataDir.CopyOfShipped();
-        SetRequires(dir, "armor_1", "[\"malazan_barracks\"]"); // Whirlwind can never research Armor 1 (nor Armor 2)
-        DataLoadResult r = Load(dir);
-        Assert.True(r.Ok, "BUG-0100 fixed? then flip this pin: " + string.Join("; ", r.Errors));
-    }
-
-    [Fact]
-    public void BUG0100_Today_AnAnyOfThatOnlyItsOwnTechCanOpen_Loads()
-    {
-        // Age II needs any two of the four halls, but three of the Malazan halls need Age II: only the Armory is
-        // reachable, so Malazan can never reach Age II (nor anything behind it).
-        using TestDataDir dir = TestDataDir.CopyOfShipped();
-        foreach (string id in new[] { "malazan_barracks", "malazan_crossbow_range", "malazan_wickan_corral" })
-            SetRequires(dir, id, "[\"age_ii\"]");
-        DataLoadResult r = Load(dir);
-        Assert.True(r.Ok, "BUG-0100 fixed? then flip this pin: " + string.Join("; ", r.Errors));
-    }
-
-    [Theory(Skip = "BUG-0100: requirements that can never be met (another faction's building, an any-of only its own tech opens) load clean")]
-    [InlineData("malazan_heavy_infantry", "[\"whirlwind_raider_camp\"]")]
-    [InlineData("armor_1", "[\"malazan_barracks\"]")]
-    public void ARequirementThatCanNeverBeMet_IsOneError(string id, string raw)
+    [Theory]
+    [InlineData("malazan_heavy_infantry", "[\"whirlwind_raider_camp\"]", "factions/malazan/units.json")]
+    [InlineData("armor_1", "[\"malazan_barracks\"]", "common/techs.json")]
+    [InlineData("malazan_crossbow_range", "[\"whirlwind_raider_camp\"]", "factions/malazan/buildings.json")]
+    [InlineData("moranth_supply", "[\"dryjhnas_prophecy\"]", "factions/malazan/techs.json")]
+    public void ARequirementThatCanNeverBeMet_IsOneError(string id, string raw, string file)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
         SetRequires(dir, id, raw);
         DataLoadResult r = Load(dir);
         Assert.Null(r.Data);
-        Assert.Single(r.Errors);
+        DataError e = Assert.Single(r.Errors);
+        Assert.Equal(file, e.File);
+        Assert.EndsWith(".requires[0]", e.Path);
+    }
+
+    [Fact]
+    public void AnAnyOfThatOnlyItsOwnTechCanOpen_IsOneErrorAtTheField()
+    {
+        // Age II needs any two of the four halls, but three of the Malazan halls need Age II: only the Armory is
+        // reachable, so Malazan could never reach Age II (nor anything behind it).
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        foreach (string id in new[] { "malazan_barracks", "malazan_crossbow_range", "malazan_wickan_corral" })
+            SetRequires(dir, id, "[\"age_ii\"]");
+        DataLoadResult r = Load(dir);
+        Assert.Null(r.Data);
+        DataError e = Assert.Single(r.Errors);
+        Assert.Equal("common/techs.json", e.File);
+        Assert.EndsWith(".requiresAnyOf", e.Path);
+        Assert.Contains("malazan", e.Message);
+        Assert.DoesNotContain("whirlwind", e.Message);
+    }
+
+    [Fact]
+    public void AnAnyOfWithExactlyCountReachableMembers_Loads()
+    {
+        // Two of the four halls behind Age II leave exactly two reachable: still meetable, so no error.
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        foreach (string id in new[] { "malazan_barracks", "malazan_crossbow_range" })
+            SetRequires(dir, id, "[\"age_ii\"]");
+        SetRequires(dir, "malazan_wickan_corral", "[]");
+        DataLoadResult r = Load(dir);
+        Assert.True(r.Ok, string.Join("; ", r.Errors));
     }
 }

@@ -210,10 +210,11 @@ public class RequirementLoaderTests
     [Fact]
     public void ACycleThroughATechAndABuilding_IsOneError()
     {
-        // The Cadre Tower needs Armor; Armor needs the Cadre Tower.
+        // The Cadre Tower needs Moranth Supply; Moranth Supply needs the Cadre Tower. (A faction tech: since BUG-0100 a
+        // common tech naming a faction's building is an error of its own, before any cycle.)
         using TestDataDir dir = TestDataDir.CopyOfShipped();
-        EditBuilding(dir, MalazanBuildings, "malazan_cadre_tower", b => b["requires"] = JsonNode.Parse("[\"armor_1\"]"));
-        EditTech(dir, Common, 1 + 4, t => t["requires"] = JsonNode.Parse("[\"malazan_cadre_tower\"]")); // techs[5] = armor_1
+        EditBuilding(dir, MalazanBuildings, "malazan_cadre_tower", b => b["requires"] = JsonNode.Parse("[\"moranth_supply\"]"));
+        EditTech(dir, MalazanTechs, 0, t => t["requires"] = JsonNode.Parse("[\"malazan_cadre_tower\"]")); // techs[0] = moranth_supply
         DataLoadResult r = DataLoader.LoadAll(dir.Path);
         Assert.Null(r.Data);
         DataError e = Assert.Single(r.Errors);

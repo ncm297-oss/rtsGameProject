@@ -140,9 +140,13 @@ public static class ConstructionSystem
     /// order: the rings of cells round the footprint, nearest first, on the footprint's level, passable, with no other
     /// unit's center in it; nearest to the unit's center, ties to the lower cell (<see cref="FreeCellSearch"/>, shared with
     /// production spawns, M3-4). Rings go on outward until a free cell turns up, so two pushed units never share a cell
-    /// (BUG-0092), but no further than the level's bounding box (M3-4, BUG-0095); only a level with no free cell at all
-    /// falls back to the nearest passable cell (<see cref="FlowField.NearestPassable"/>). A position set, not a walk: the previous
-    /// position moves too, so the view doesn't draw the unit sliding through the new building.
+    /// (BUG-0092), but no further than the footprint's plateau (M3-H2, BUG-0097: never onto another plateau). On a
+    /// plateau with no free cell left, the rest (the leftovers) spread over its passable cells by the same ring order,
+    /// one leftover per cell before any cell takes a second, each set off the cell's center by its pass (BUG-0095: they
+    /// used to stack on one point); the plateau is found full once, not once per leftover. Only a plateau with no
+    /// passable cell left outside the footprint falls back to the nearest passable cell (<see cref="FlowField.NearestPassable"/>).
+    /// A position set, not a walk: the previous position moves too, so the view doesn't draw the unit sliding through the
+    /// new building.
     /// </summary>
     /// <remarks>
     /// Occupants come from the spatial hash, rebuilt here once so it matches the positions of this moment (commands and
@@ -163,18 +167,66 @@ public static class ConstructionSystem
         if (count == 0) return;
         world.Spatial.Rebuild(u);
         NavGrid g = world.NavGrid;
-        int[] taken = world.FlowFields.BuildScratch; // per cell: 0 not asked yet, 1 free, 2 a unit's center in it
+        int[] taken = world.FlowFields.BuildScratch; // per cell: 0 not asked yet, 1 free, 2 a unit's center in it, 2 + k: and k leftovers
         Array.Clear(taken, 0, g.Width * g.Height);
+        int fw = def.FootprintWidth, fh = def.FootprintHeight;
+        // 0 while the plateau may still have a free cell; then the leftovers' pass (BUG-0095: one walk finds it full, not one per unit).
+        int pass = 0;
         for (int p = 0; p < count; p++)
         {
             int i = pushed[p];
-            int best = FreeCellSearch.Nearest(world, x0, y0, def.FootprintWidth, def.FootprintHeight, u.Position[i], taken);
-            if (best < 0) best = FlowField.NearestPassable(g, y0 * g.Width + x0);
-            if (best < 0) continue;
-            u.Position[i] = g.CellCenter(best % g.Width, best / g.Width);
-            u.PrevPosition[i] = u.Position[i];
-            taken[best] = 2;
+            int best = -1;
+            if (pass == 0)
+            {
+                best = FreeCellSearch.Nearest(world, x0, y0, fw, fh, u.Position[i], taken);
+                if (best >= 0)
+                {
+                    SetDown(u, i, g.CellCenter(best % g.Width, best / g.Width));
+                    taken[best] = 2;
+                    continue;
+                }
+                pass = 1;
+            }
+            // The plateau is full: leftovers spread over its cells, one each before any cell takes a second, each pass at
+            // its own offset from the center, so no two units share a point (local movement then sorts them out).
+            best = FreeCellSearch.NearestForLeftover(world, x0, y0, fw, fh, u.Position[i], taken, pass);
+            if (best < 0)
+            {
+                pass++;
+                best = FreeCellSearch.NearestForLeftover(world, x0, y0, fw, fh, u.Position[i], taken, pass);
+            }
+            if (best >= 0)
+            {
+                SetDown(u, i, g.CellCenter(best % g.Width, best / g.Width) + LeftoverOffset(pass));
+                taken[best] = Math.Max(taken[best], 2) + 1;
+                continue;
+            }
+            // No passable cell of the plateau outside the footprint at all (the building covers the rest of it).
+            best = FlowField.NearestPassable(g, y0 * g.Width + x0);
+            if (best >= 0) SetDown(u, i, g.CellCenter(best % g.Width, best / g.Width) + LeftoverOffset(p + 1));
         }
+    }
+
+    /// <summary>A pushed unit's new position; the previous position moves too, so the view doesn't draw it sliding through the building.</summary>
+    private static void SetDown(UnitStore u, int i, Vector2 at)
+    {
+        u.Position[i] = at;
+        u.PrevPosition[i] = at;
+    }
+
+    // Eight directions round a cell's center for the leftovers' passes; the radius grows every eight passes (three sizes).
+    private static readonly Vector2[] s_leftoverDirections =
+    {
+        new(1f, 0f), new(0f, 1f), new(-1f, 0f), new(0f, -1f),
+        new(0.7f, 0.7f), new(-0.7f, 0.7f), new(-0.7f, -0.7f), new(0.7f, -0.7f),
+    };
+
+    /// <summary>Where in its cell a leftover of pass <paramref name="pass"/> (1 or more) stands, relative to the center: inside the cell, never the center itself.</summary>
+    private static Vector2 LeftoverOffset(int pass)
+    {
+        int k = pass - 1;
+        float radius = MapConstants.CellSize * (0.2f + 0.1f * (k / 8 % 3));
+        return s_leftoverDirections[k % 8] * radius;
     }
 
     /// <summary>

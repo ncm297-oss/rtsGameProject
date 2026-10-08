@@ -21,7 +21,7 @@ public class RequirementGatingTests
 
     /// <summary>
     /// The shipped data with two edits: Heavy Infantry requires a finished Crossbow Range, and the Cadre Tower (caster
-    /// hall) requires Age II. Every id is the same as in the shipped data (ids follow the string ids).
+    /// hall) requires Age II; every other building's <c>requires</c> (both factions, D3's included) is cleared. Every id is the same as in the shipped data (ids follow the string ids).
     /// </summary>
     public static GameData Fixture => s_fixture.Value;
 
@@ -33,6 +33,11 @@ public class RequirementGatingTests
         {
             foreach (JsonNode? b in root["buildings"]!.AsArray())
                 b!["requires"] = (string)b["id"]! == "malazan_cadre_tower" ? JsonNode.Parse("[\"age_ii\"]") : new JsonArray();
+        });
+        // BUG-0112: Whirlwind's shipped (D3) requires are cleared too, so the fixture's only gates are the two above.
+        dir.EditJson("factions/whirlwind/buildings.json", root =>
+        {
+            foreach (JsonNode? b in root["buildings"]!.AsArray()) b!["requires"] = new JsonArray();
         });
         DataLoadResult r = DataLoader.LoadAll(dir.Path);
         Assert.True(r.Ok, string.Join("\n", r.Errors));

@@ -27,10 +27,10 @@ public class CommandDoorFuzzStressTests
 
     private const int Players = 2;
 
-    /// <summary>docs/03: a defined kind, no flag but Queued, and Queued only on a unit order (Move, Stop, HoldPosition, AttackMove, Gather, Build, Repair; not SpawnBuilding, M3-2, Cancel, M3-3, or the production kinds, M3-4).</summary>
+    /// <summary>docs/03: a defined kind, no flag but Queued, and Queued only on a unit order (Move, Stop, HoldPosition, AttackMove, Gather, Build, Repair; not SpawnBuilding, M3-2, Cancel, M3-3, the production kinds, M3-4, or Research, M3-5).</summary>
     private static bool OracleWellFormed(int kind, int flags)
     {
-        if (kind < 0 || kind > 14) return false; // M3-4: 11-14 are Train, CancelTrain, SetRally, ClearRally
+        if (kind < 0 || kind > 15) return false; // M3-4: 11-14 Train, CancelTrain, SetRally, ClearRally; M3-5: 15 Research
         if ((flags & ~1) != 0) return false;
         return flags == 0 || (kind >= 2 && kind <= 10 && kind != 6 && kind != 9);
     }
@@ -55,7 +55,10 @@ public class CommandDoorFuzzStressTests
             _ => open[rng.NextInt(0, open.Count)] + new Vector2(rng.NextFloat() - 0.5f, rng.NextFloat() - 0.5f),
         };
         bool queued = rng.NextInt(0, 2) == 0;
-        Command c = rng.NextInt(0, 12) switch
+        // M3-H2: the building kinds aim at a live building's point most of the time (else the random point).
+        Vector2 at = rng.NextInt(0, 4) != 0 ? BuildingPoint(ref rng, sim, p) : p;
+        int buildingCell = rng.NextInt(0, 3) != 0 && sim.World.NavGrid.WorldToCell(at, out int bx, out int by) ? by * sim.World.NavGrid.Width + bx : rng.NextInt(-2, sim.World.NavGrid.Width * sim.World.NavGrid.Height + 2);
+        Command c = rng.NextInt(0, 18) switch
         {
             0 or 1 => Command.SpawnUnit(rng.NextInt(0, Players), rng.NextInt(-1, TestSim.UnitTypeCount + 1), p),
             2 => Command.Noop(player),
@@ -66,6 +69,12 @@ public class CommandDoorFuzzStressTests
             // M3-2: a rare building (each one blocks 16 cells for good), and Gathers, half of them on a node.
             8 => rng.NextInt(0, 8) == 0 ? Command.SpawnBuilding(rng.NextInt(0, Players), rng.NextInt(-1, TestSim.Data.Buildings.Length + 1), p) : Command.Move(player, h, p, queued),
             9 => Command.Gather(player, h, rng.NextInt(0, 2) == 0 ? nodes[rng.NextInt(0, nodes.Count)] : p, queued),
+            // M3-H2: every kind through the door (8-10 Build, Cancel, Repair, M3-3; 11-14 production, M3-4; 15 Research, M3-5).
+            12 => Command.Build(player, h, rng.NextInt(-1, TestSim.Data.Buildings.Length + 1), p, queued),
+            13 => rng.NextInt(0, 2) == 0 ? Command.Cancel(player, at) : Command.Repair(player, h, at, queued),
+            14 => Command.Train(player, at, rng.NextInt(-1, TestSim.UnitTypeCount + 1)),
+            15 => rng.NextInt(0, 2) == 0 ? Command.CancelTrain(player, at, rng.NextInt(-1, 7)) : Command.Research(player, at, rng.NextInt(-1, TestSim.Data.Techs.Length + 1)),
+            16 => rng.NextInt(0, 2) == 0 ? Command.SetRally(player, buildingCell, p) : Command.ClearRally(player, at),
             _ => Command.Move(player, h, p, queued),
         };
         // About one command in five is malformed in one way.
@@ -80,6 +89,20 @@ public class CommandDoorFuzzStressTests
             case 6: c.Player = rng.NextInt(0, 2) == 0 ? -1 : Players + rng.NextInt(0, 3); break;
         }
         return c;
+    }
+
+    /// <summary>The center of a random live building's anchor cell, or <paramref name="fallback"/> with none.</summary>
+    private static Vector2 BuildingPoint(ref SimRng rng, Simulation sim, Vector2 fallback)
+    {
+        BuildingStore b = sim.World.Buildings;
+        NavGrid g = sim.World.NavGrid;
+        int start = rng.NextInt(0, b.Capacity);
+        for (int n = 0; n < b.Capacity; n++)
+        {
+            int k = (start + n) % b.Capacity;
+            if (b.Alive[k]) return g.CellCenter(b.Cell[k] % g.Width, b.Cell[k] / g.Width);
+        }
+        return fallback;
     }
 
     /// <summary>
@@ -147,6 +170,7 @@ public class CommandDoorFuzzStressTests
         var bornAt = new Vector2[unitCapacity];
         var bornOnGround = new bool[unitCapacity];
         int accepted = 0, malformed = 0, badPlayer = 0, full = 0;
+        var perKind = new int[16];
         for (int t = 0; t < ticks; t++)
         {
             int n = rng.NextInt(0, 2) == 0 ? rng.NextInt(0, 6) : rng.NextInt(0, 36); // bursts fill the queue (36 since M3-2: longer runs of orders that drop at apply)
@@ -181,6 +205,7 @@ public class CommandDoorFuzzStressTests
                     a.Enqueue(c);
                     b.Enqueue(c);
                     accepted++;
+                    perKind[(int)c.Kind]++;
                     Assert.Equal(pending + 1, a.PendingCommandCount);
                     continue;
                 }
@@ -201,5 +226,7 @@ public class CommandDoorFuzzStressTests
         Assert.Equal(ticks, res.TicksRun);
         _out.WriteLine($"seed {seed}: {accepted} accepted, {malformed} malformed refused, {badPlayer} unknown players refused, {full} refused full; {a.World.Units.Count} units alive at the end; replay of {r.Checkpoints.Length} checkpoints matched");
         Assert.True(accepted > 1000 && malformed > 100 && badPlayer > 20 && full > 20, "precondition: every door path exercised");
+        // M3-H2: every defined kind, 0 to 15, went through the door accepted.
+        Assert.True(perKind.All(n => n > 0), "accepted per kind: " + string.Join(", ", perKind));
     }
 }

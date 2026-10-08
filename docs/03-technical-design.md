@@ -1290,6 +1290,10 @@ repair"; the ghost is view work that calls `World.CanPlace`). Closes BUG-0078 by
   label whose cells are all expanded without meeting another is a cut-off region (no). A "no" so costs about the
   pocket it would make, not the map. Unlike
   the placer it doesn't need the whole map connected beforehand. The dev command `SpawnBuilding` applies it too.
+  The last flood's answer is kept with its footprint (anchor and size) and `NavGrid.Version` (M3-H2, BUG-0096): the
+  answer depends only on passability, and every passability change, opening or closing, bumps `Version` (keying on
+  `BlockVersion` would miss an opening that unseals the spot). So 100 workers' Builds refused at one sealing spot in
+  one tick flood once: 33 ms before, 0.41 ms now (Debug, the first flood included). Derived scratch, not hashed.
   A destroyed or cancelled building that other buildings enclosed would leave a pocket (reachable from nowhere); since
   M3-H1 the grid's pocket rule (BUG-0093, "Navigation grid") keeps its cells blocked as `NavFlags.Pocket` cells
   instead, with nothing published, until an opening beside them joins them to open ground. So every passable cell
@@ -1304,8 +1308,13 @@ repair"; the ghost is view work that calls `World.CanPlace`). Closes BUG-0078 by
   position set, not a walk) on the nearest free cell outside it, slot order: the rings of cells round the footprint
   (ring 1 is the cells 8-adjacent to it), nearest ring first, on the footprint's level, passable and with no other
   unit's center in it; within a ring the cell nearest the unit, ties to the lower cell index. Rings go on outward until
-  a free cell turns up, so two pushed units never share a cell (M3-H1, BUG-0092; only a level with no free cell at all
-  falls back to the nearest passable cell). Occupants come from the spatial hash, rebuilt once per push-out so it
+  a free cell turns up, so two pushed units never share a cell (M3-H1, BUG-0092), but only over the footprint's
+  **plateau** (M3-H2, BUG-0097, see "Implementation (M3-4)": never onto another plateau of the same level). Once the
+  plateau has no free cell (found once, not once per unit), the rest, the leftovers, spread over its passable cells by
+  the same ring order, one leftover per cell before any cell takes a second, each pass set off the cell's center in its
+  own direction (M3-H2, BUG-0095: they used to stack on one point), so no two units share a point and two leftovers
+  share a cell only when there are more of them than cells; only a plateau with no passable cell left outside the
+  footprint falls back to the nearest passable cell. Occupants come from the spatial hash, rebuilt once per push-out so it
   matches the units of that moment, each cell's answer kept in the flow-field builder's scratch; a pushed unit's
   `PrevPosition` is set with its `Position`, so the view doesn't draw it sliding through the building. Then the worker
   is given the site. A dropped
@@ -1394,14 +1403,18 @@ points, population and cap, refunds on cancel"; the HUD's production card and ra
   same tick, so each takes exactly its train ticks. With no free cell (or a full unit store) the item stays complete
   and tries again next tick; units never stack.
 - **Spawn cell.** The push-out's ring search, shared (`FreeCellSearch`): the rings of cells round the footprint, nearest
-  ring first, on the footprint's level, passable, no live unit's center in the cell; within a ring the cell nearest the
-  rally point (the footprint's center without one), ties to the lower cell index. The ring walk ends once a ring
-  encloses the bounding box of the level's cells (`World.LevelBounds`, terrain only, computed at load), so a full small
-  plateau costs its own area, not the map's (BUG-0095's lesson; it bounds the construction push-out the same way:
-  same answers, a full 6 x 6 plateau no longer scans the map). Occupancy comes from the spatial hash and the
-  push-out's per-cell cache, whose level box is cleared on the tick's first spawn attempt there, so units spawned this
-  tick count for later spawns; the spatial hash is rebuilt after a tick with a spawn. The unit stands on the cell's
-  center, Idle.
+  ring first, on the footprint's **plateau**, passable, no live unit's center in the cell; within a ring the cell
+  nearest the rally point (the footprint's center without one), ties to the lower cell index. A plateau
+  (`Map/Plateaus`, M3-H2, BUG-0097) is a 4-connected piece of passable ground of one level as the terrain stands at load
+  (a ramp reports its lower level, so it belongs to the ground at its foot); each has its own bounding box, and the
+  ring walk ends once a ring encloses it, so a full small plateau costs its own area, not the map's (BUG-0095). Until
+  M3-H2 the bound was the whole *level* (`World.LevelBounds`), so a spawn on a full plateau landed on another plateau
+  of that level, possibly by the enemy's base; now it waits. Plateau ids are terrain only (nodes and buildings don't
+  change them; levels never change after load), derived and not hashed. Occupancy: on the tick's first spawn attempt
+  on a plateau its box of the push-out's per-cell cache is filled from one pass over the unit store (the spatial hash's
+  answer, without a query per cell), and units spawned this tick are marked there for later spawns; a plateau found
+  with no free cell is remembered for the rest of the tick (no cell frees during production), so further heads waiting
+  on it cost nothing. The spatial hash is rebuilt after a tick with a spawn. The unit stands on the cell's center, Idle.
 - **Rally.** With a rally point the spawned unit gets the Move rule to it (it arrives within `ArrivalDistance`); a
   `worker` rallied onto a cell of a resource node gets `Gather` on it instead (Age of Empires' "rally on a mine";
   the node a `Gather` there resolves to). Without one it stands Idle at the edge. Rally on a building (repair,
@@ -1430,9 +1443,10 @@ points, population and cap, refunds on cancel"; the HUD's production card and ra
   spatial-hash rebuild; nothing allocates per tick or in the four applies. Measured (Debug, this PC,
   `ProductionPerfTests`): 500 marchers + 50 gatherers + 20 Town Halls training non-stop average 0.41 ms a tick over
   2,000 ticks; a waiting spawn on a full 8 x 8 plateau of a 420 x 420 map costs 0.005 ms (3.0 ms without the level-box
-  cap). CLI: `run --workers` prints `player P gold G wood W pop U/C` (pop in whole units, `.5` for a half).
-- **Not yet:** techs, Age II and Forge upgrades (M3-5, below), `requires` resolution (M3-6, below), AI build orders (M5), the
-  production card, queue and rally visuals (view M3-V3), rally on a building, events for views.
+  cap); 20 heads waiting on a packed 120 x 24 map cost 0.09 ms a tick (1.7-1.9 ms before the per-plateau memo, M3-H2). CLI: `run --workers` prints `player P gold G wood W pop U/C` (pop in whole units, `.5` for a half).
+- **Not yet:** AI build orders (M5), rally on a building, events for views; a spawn waits rather than walking out a
+  full plateau's ramp. (Techs, Age II and Forge upgrades: M3-5; `requires`: M3-6; the production card and rally
+  visuals: view M3-V3.)
 
 ### Implementation (M3-5)
 
@@ -1552,6 +1566,17 @@ three gates below.
   slot one error at its `slot`, an empty slot one error at the list; skipped when the file already has an error. A
   buildings file failing it counts as broken, so the checks into it (`trainedAt`, `researchedAt`, `requires`) are
   skipped and it is not reported again through them.
+- **Unmeetable requirements (M3-H2, BUG-0100).** A `requires` entry naming another faction's building or tech is one
+  error at the entry (a building requirement is an *own* finished building, and nobody places or researches another
+  faction's); a common tech, which every faction researches, may name only common techs. On otherwise clean data a
+  reachability pass then runs per faction: a fixpoint from "nothing built, nothing researched" in which a building of the
+  faction, or a common or own tech, becomes reachable once everything its resolved `requires` names is, and (a tech) at
+  least `count` of its any-of slots hold a reachable own building. A `requiresAnyOf` some faction can never fill is one
+  error at the field, naming the factions. So an any-of whose members need its own tech first (Age II over three halls
+  that each need Age II) is caught; cycles through plain `requires` stay BUG-0099's error. Also (BUG-0099 item 2): a tech
+  effect whose filters no unit meets (any faction's for a common tech, its own faction's for a faction upgrade) is one
+  error at its `appliesTo`, since the tech would be paid for and change nothing. Shipped data and D3's load with 0
+  errors.
 - **Hash and replays.** No new sim state is hashed: the tech flags and queues were already. The golden was regenerated
   for the data hash only (`age_ii.requiresAnyOf` and the resolved arrays in `ContentHash`); its checkpoints are
   byte-identical. Replays stay format 3.
@@ -1559,8 +1584,8 @@ three gates below.
   gate (the halls' Trains, the Forges' Research, plus 20 locked Trains, 10 locked Researches and 10 refused Builds a
   tick) averages 0.42 ms a tick over 2,000; 5,000 locked Train / Build / Research commands applying in one tick take
   0.73 ms. The gates and the locked applies allocate nothing (`AllocationTests`).
-- **Not yet:** the view's greying and reason text (M3-V3), AI use (M5), combat use of the bonuses (M4); `requiresAnyOf`
-  edges are not part of the cycle check (an any-of that its own members require could deadlock; none ships).
+- **Not yet:** the view's greying and reason text (M3-V3), AI use (M5), combat use of the bonuses (M4). (An any-of
+  that its own members require is a load error since M3-H2, above.)
 
 
 ## Abilities, statuses, zones

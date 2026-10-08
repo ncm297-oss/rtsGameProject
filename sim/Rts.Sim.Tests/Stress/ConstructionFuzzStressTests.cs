@@ -26,8 +26,11 @@ public class ConstructionFuzzStressTests
 
     private const int Players = 2, WorkersPerPlayer = 10;
 
+    // The oracles compare CanPlace with geometry only, and every type is placed anywhere: D3's building requires would
+    // answer Requires first (BUG-0112), so these worlds run on the shipped data with requires cleared (same ids).
+
     private static Simulation NewWorld(ulong seed) =>
-        new(TestSim.Config(Seed: seed, PlayerCount: Players, UnitCapacity: 48, CommandCapacity: 512) with
+        new(TestSim.ConfigWithoutBuildingRequires(Seed: seed, PlayerCount: Players, UnitCapacity: 48, CommandCapacity: 512) with
         {
             Map = MapGenParams.Default with { Forests = 12, GoldMines = 8 },
             BuildingCapacity = 512,

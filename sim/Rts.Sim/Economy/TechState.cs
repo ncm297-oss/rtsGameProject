@@ -53,7 +53,13 @@ internal sealed class TechState
     public int WordsPerPlayer { get; }
 
     /// <summary>True if effect <paramref name="e"/> applies to unit type <paramref name="u"/>: every filter it sets matches.</summary>
-    public static bool Matches(GameData data, in TechEffect e, UnitDef u)
+    public static bool Matches(GameData data, in TechEffect e, UnitDef u) => Matches(e, u, data.UnitTags.AsSpan());
+
+    /// <summary>
+    /// As <see cref="Matches(GameData, in TechEffect, UnitDef)"/>, with the sorted tag list <see cref="TechEffect.Tags"/>
+    /// indexes passed in (the loader checks effects before a <see cref="GameData"/> exists, BUG-0099).
+    /// </summary>
+    internal static bool Matches(in TechEffect e, UnitDef u, ReadOnlySpan<string> unitTags)
     {
         if (e.AttackType >= 0 && u.Attack.DamageType != e.AttackType) return false;
         if (e.Siege >= 0 && (u.Slot == UnitSlot.Siege) != (e.Siege == 1)) return false;
@@ -63,7 +69,7 @@ internal sealed class TechState
             bool any = false;
             foreach (string tag in u.Tags)
             {
-                int id = ImmutableArray.BinarySearch(data.UnitTags, tag, StringComparer.Ordinal);
+                int id = unitTags.BinarySearch(tag, StringComparer.Ordinal);
                 any |= id >= 0 && ImmutableArray.BinarySearch(e.Tags, id) >= 0;
             }
             if (!any) return false;

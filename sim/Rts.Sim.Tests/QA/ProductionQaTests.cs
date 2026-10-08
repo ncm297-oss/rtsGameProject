@@ -282,12 +282,55 @@ public class ProductionQaTests
 
     /// <summary>
     /// Two 8 x 8 level-1 plateaus far apart. The Keep's plateau is packed; the other one is empty. Brief: "if no cell is
-    /// free, the item stays complete and retries" and "on the building's level". Pins BUG-0097: the ring walk is bounded
-    /// by the bounding box of every level-1 cell, so the unit is set down on the other plateau, 30+ m away, with no path
-    /// back but the ramps. Flip the asserts when BUG-0097 is fixed.
+    /// free, the item stays complete and retries" and "on the building's level". BUG-0097 (fixed M3-H2): the ring walk is
+    /// bounded by the building's plateau, so the trained unit waits instead of appearing on the other plateau, and spawns
+    /// on its own plateau once a cell there frees. (Was the pin `..._LandsOnAnotherPlateauOfTheSameLevel_Bug0097Pin`.)
     /// </summary>
     [Fact]
-    public void ASpawnOnAFullPlateau_LandsOnAnotherPlateauOfTheSameLevel_Bug0097Pin()
+    public void ASpawnOnAFullPlateau_Waits_NeverLandsOnAnotherPlateauOfTheSameLevel_Bug0097()
+    {
+        (Simulation sim, int keep, List<int> fill) = TwoPlateaus();
+        World w = sim.World;
+        SetTotals(sim, 0, 1000, 1000);
+        Apply(sim, Command.Train(0, In(sim, keep), Laborer));
+        Run(sim, w.Data.Units[Laborer].TrainTicks + 5);
+        Assert.DoesNotContain(LiveUnits(w), i => w.Units.Owner[i] == 0);
+        Assert.Equal(1, w.Buildings.QueueCount[keep]); // complete, waiting
+        // A cell on plateau A frees: the unit spawns there, next to the Keep.
+        w.Units.Free(new EntityHandle(fill[0], w.Units.Generation[fill[0]]));
+        Run(sim, 2);
+        int trained = LiveUnits(w).Single(i => w.Units.Owner[i] == 0);
+        Assert.True(w.NavGrid.WorldToCell(w.Units.Position[trained], out int tx, out int ty));
+        _out.WriteLine($"Keep at (12, 12) on plateau A (full); after a cell freed the trained Laborer stands at ({tx}, {ty}), ring {RingOf(sim, keep, tx, ty)}");
+        Assert.True(tx >= 10 && tx <= 17 && ty >= 10 && ty <= 17, $"({tx}, {ty}) is off plateau A");
+        Assert.Equal(0, w.Buildings.QueueCount[keep]);
+    }
+
+    /// <summary>BUG-0097's push-out half: a House dropped on own units on the packed plateau A sets none of them down on plateau B.</summary>
+    [Fact]
+    public void APushOutOnAFullPlateau_NeverLandsOnAnotherPlateauOfTheSameLevel_Bug0097()
+    {
+        (Simulation sim, int _, List<int> fill) = TwoPlateaus(fillPlayer: 0, keep: false);
+        World w = sim.World;
+        NavGrid g = w.NavGrid;
+        SetTotals(sim, 0, 1000, 1000);
+        // A House on plateau A, on top of the own units standing there.
+        int house = BuildMaps.House, anchor = -1;
+        for (int c = 10 * g.Width; c < 18 * g.Width && anchor < 0; c++)
+            if (c % g.Width >= 10 && c % g.Width <= 17 && w.CanPlace(0, house, c, out _)) anchor = c;
+        Assert.True(anchor >= 0, "no House anchor on plateau A");
+        int ax = anchor % g.Width, ay = anchor / g.Width;
+        Apply(sim, Command.Build(0, new EntityHandle(fill[0], w.Units.Generation[fill[0]]), house, At(sim, ax, ay)));
+        Assert.True(SiteAt(sim, ax, ay) >= 0);
+        foreach (int i in LiveUnits(w))
+        {
+            Assert.True(g.WorldToCell(w.Units.Position[i], out int x, out int y));
+            Assert.False(x >= 40 && y >= 40, $"unit {i} set down on plateau B at ({x}, {y})");
+        }
+    }
+
+    /// <summary>Plateau A (10-17, 10-17) with a Keep at (12, 12) (unless not <paramref name="keep"/>; -1 then) and every other passable cell holding a unit of <paramref name="fillPlayer"/>; plateau B (40-47, 40-47) empty; a ramp each.</summary>
+    private static (Simulation Sim, int Keep, List<int> Fill) TwoPlateaus(int fillPlayer = 1, bool keep = true)
     {
         const int size = 64;
         var rows = new string[size];
@@ -307,25 +350,14 @@ public class ProductionQaTests
         Simulation sim = BuildMaps.NewSim(FromRows(rows), units: 64, players: 2);
         World w = sim.World;
         NavGrid g = w.NavGrid;
-        int keep = Building(sim, 12, 12).Index;
+        int keepSlot = keep ? Building(sim, 12, 12).Index : -1;
         var freeA = new List<(int, int)>();
         for (int y = 10; y <= 17; y++)
             for (int x = 10; x <= 17; x++)
                 if (g.IsPassable(x, y)) freeA.Add((x, y));
-        foreach ((int x, int y) in freeA) sim.Enqueue(Command.SpawnUnit(1, Raider, At(sim, x, y)));
+        foreach ((int x, int y) in freeA) sim.Enqueue(Command.SpawnUnit(fillPlayer, fillPlayer == 0 ? Laborer : Raider, At(sim, x, y)));
         Run(sim, 2);
-        SetTotals(sim, 0, 1000, 1000);
-        Apply(sim, Command.Train(0, In(sim, keep), Laborer));
-        Run(sim, w.Data.Units[Laborer].TrainTicks + 5);
-        int trained = LiveUnits(w).SingleOrDefault(i => w.Units.Owner[i] == 0, -1);
-        if (trained < 0)
-        {
-            _out.WriteLine("waits, as the brief asks (BUG-0097 fixed?)");
-            Assert.Fail("BUG-0097 looks fixed: flip this pin");
-        }
-        Assert.True(g.WorldToCell(w.Units.Position[trained], out int tx, out int ty));
-        _out.WriteLine($"Keep at (12, 12) on plateau A (full); the trained Laborer stands at ({tx}, {ty}), level {g.LevelAt(tx, ty)}, ring {RingOf(sim, keep, tx, ty)}");
-        Assert.True(tx >= 40 && ty >= 40, "expected on plateau B (the bug)");
+        return (sim, keepSlot, LiveUnits(w).ToList());
     }
 
     [Fact]
@@ -434,10 +466,11 @@ public class ProductionQaTests
 
     [Fact]
     [Trait("Category", "Perf")]
-    public void TwentyHallsAllWaitingForACell_EachTick_Report()
+    public void TwentyHallsAllWaitingForACell_EachTick_Under0point3Ms()
     {
-        // The packed scene with no free cell at all: every tick, 20 complete heads search their ring walk to the
-        // level's box (the whole map at level 0) and wait.
+        // The packed scene with no free cell at all: every tick, 20 complete heads wait. Since M3-H2 (BUG-0097) the first
+        // head fills the plateau's box from the unit store, walks it once and marks the plateau full for the tick; the
+        // other 19 wait without a walk.
         (Simulation sim, List<int> halls, HashSet<int> fill) = TwentyHalls(reverse: false, freeCells: 0);
         World w = sim.World;
         Run(sim, 2 + 280);
@@ -448,8 +481,7 @@ public class ProductionQaTests
         double ms = (Stopwatch.GetTimestamp() - t0) * 1000.0 / Stopwatch.Frequency / 200;
         _out.WriteLine($"20 complete heads waiting on a packed 120 x 24 map ({fill.Count} units): ProductionSystem.Run {ms:F3} ms");
         Assert.Equal(fill.Count, w.Units.Count);
-        // Report only: a whole level packed is far outside play (QA 2026-10-07-0925 measured 1.7-1.9 ms, Debug). Each
-        // waiting head repeats its full-box walk every tick; see BUG-0097's notes. Guard only against a blow-up.
-        Assert.True(ms < 20, $"{ms:F3} ms per tick of waiting spawns");
+        // QA 2026-10-07-0925 measured 1.7-1.9 ms (Debug) when each head repeated its full-box walk; the brief's bound.
+        Assert.True(ms < 0.3, $"{ms:F3} ms per tick of waiting spawns");
     }
 }
