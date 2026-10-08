@@ -497,4 +497,56 @@ public class CombatTests
         sim.Tick();
         Assert.Equal(UnitState.Moving, u.State[a.Index]);
     }
+
+    /// <summary>
+    /// BUG-0141 (M4-1 fix): a retaliator whose anchor cell a building covers while it chases still ends its engagement
+    /// once its target is dead: "at the anchor" includes the point the Move rule resolves the anchor to.
+    /// </summary>
+    [Fact]
+    public void Retaliator_WhoseAnchorCellIsBuiltOver_EndsItsEngagementAfterTheKill()
+    {
+        Simulation sim = Flat();
+        Vector2 home = At(sim, 30, 30);
+        EntityHandle a = Place(sim, 0, HeavyInfantry, home);
+        EntityHandle v = Place(sim, 1, Raider, At(sim, 30, 30, dx: 7f));
+        UnitStore u = sim.World.Units;
+        sim.Enqueue(Command.HoldPosition(1, v));
+        u.Hp[v.Index] = 30; // a short fight
+        RunUntil(sim, () => u.Mode[a.Index] == CombatMode.Retaliate && Vector2.Distance(u.Position[a.Index], home) > 3f, 200);
+        Assert.Equal(CombatMode.Retaliate, u.Mode[a.Index]);
+        GatherMaps.Building(sim, 29, 29, player: 0, type: TestSim.Data.FindBuilding("malazan_billet"));
+        Assert.False(sim.World.NavGrid.IsPassable(30, 30));
+        RunUntil(sim, () => !u.IsAlive(v), 600);
+        Assert.False(u.IsAlive(v));
+        RunUntil(sim, () => u.Mode[a.Index] == CombatMode.None && u.State[a.Index] == UnitState.Idle, 400);
+        Assert.Equal(CombatMode.None, u.Mode[a.Index]);
+        Assert.Equal(UnitState.Idle, u.State[a.Index]);
+        Assert.True(Vector2.Distance(u.Position[a.Index], home) < 4f, $"{Vector2.Distance(u.Position[a.Index], home)} m from home");
+    }
+
+    /// <summary>
+    /// A Stop to a unit mid-fight leaves it with no target, no mode and Idle on the tick it applies (the companion of the
+    /// order fuzzes' re-baselined invariants). Its target is a Crossbowman, which never swings in this slice, so no hit
+    /// re-engages it, and the Stop applies on a tick its slot does not scan.
+    /// </summary>
+    [Fact]
+    public void Stop_OnAFightingUnit_LeavesNoTarget_NoMode_AndIdle_OnTheTickItApplies()
+    {
+        Simulation sim = Flat();
+        EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 20, 20));
+        EntityHandle b = Place(sim, 1, Crossbowman, At(sim, 20, 20, dx: 1f));
+        Assert.Equal(0, a.Index); // scans on ticks 0 mod 4
+        UnitStore u = sim.World.Units;
+        RunUntil(sim, () => u.State[a.Index] == UnitState.Attacking, 40);
+        Assert.Equal(UnitState.Attacking, u.State[a.Index]);
+        RunUntil(sim, () => sim.World.TickNumber % CombatConstants.ScanInterval == 1, 8);
+        sim.Enqueue(Command.Stop(0, a));
+        sim.Tick();
+        sim.Tick(); // the Stop applies at the start of this tick (number 2 mod 4: no scan for slot 0)
+        Assert.True(u.IsAlive(b));
+        Assert.Equal(default, u.Target[a.Index]);
+        Assert.Equal(CombatMode.None, u.Mode[a.Index]);
+        Assert.Equal(UnitState.Idle, u.State[a.Index]);
+        Assert.Equal(0, u.WindupTicks[a.Index]);
+    }
 }

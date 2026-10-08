@@ -103,7 +103,7 @@ public class LocalMovementStressTests
     [InlineData(2500, 4, 6000, MinArrived2500To4, 10UL)]
     public void Crowd_ToOneOrFourClosePoints_InvariantsEveryTick_AllSettle(int units, int points, int limit, int minArrivedPercent, ulong seed)
     {
-        Simulation sim = MoveScenario.Spawn(seed, units, units > 1000 ? 70f : 40f, out int goalCell, players: points == 1 ? 1 : 2);
+        Simulation sim = MoveScenario.Spawn(seed, units, units > 1000 ? 70f : 40f, out int goalCell, players: points == 1 ? 1 : 2, combat: false);
         World w = sim.World;
         NavGrid g = w.NavGrid;
         Vector2 c = MoveScenario.Center(g, goalCell);

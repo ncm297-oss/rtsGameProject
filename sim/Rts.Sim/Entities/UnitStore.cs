@@ -315,6 +315,9 @@ public sealed class UnitStore
         ClearEconomy(handle.Index);
         ClearCombat(handle.Index);
         Hp[handle.Index] = 0;
+        // A freed slot stands still: since units die (M4-1), a scan over slots must not count a dead walker as Moving.
+        State[handle.Index] = UnitState.Idle;
+        Velocity[handle.Index] = default;
         Generation[handle.Index]++;
         _freeList[_freeCount++] = handle.Index;
     }

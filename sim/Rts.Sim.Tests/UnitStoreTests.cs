@@ -41,6 +41,24 @@ public class UnitStoreTests
         Assert.Equal(0, store.Count);
     }
 
+    /// <summary>
+    /// M4-1 fix round: a unit that dies walking leaves a slot that reads Idle and standing, so a scan over
+    /// slots (the crowd sweeps' "still Moving" counts) never counts the dead (it did in FiveHundredUnitsTo500RandomGoals).
+    /// </summary>
+    [Fact]
+    public void Free_LeavesTheSlotIdle_AndStanding()
+    {
+        var store = new UnitStore(4);
+        EntityHandle a = store.Alloc();
+        store.State[a.Index] = UnitState.Moving;
+        store.Velocity[a.Index] = new System.Numerics.Vector2(1f, 0f);
+
+        store.Free(a);
+
+        Assert.Equal(UnitState.Idle, store.State[a.Index]);
+        Assert.Equal(System.Numerics.Vector2.Zero, store.Velocity[a.Index]);
+    }
+
     [Fact]
     public void ReusedSlot_StaleHandleStaysDead()
     {

@@ -1155,7 +1155,8 @@ stands. "At the anchor" means its goal is the anchor, or the point the Move rule
 building placed over the anchor's cell since: the nearest passable cell's center; BUG-0141), so a blocked anchor
 still ends the mode. Holding units keep `None`: they scan, take targets within reach only, and never move.
 Workers on a gather, build or repair loop (`Gathering`, `Returning`, `Building`, or walking a leg of
-it) never scan and never retaliate. Any unit order that is taken (unqueued, or popped) clears the
+it) never scan and never retaliate; outside a loop a worker scans only on an attack-move leg ("Workers never fight
+on their own", below). Any unit order that is taken (unqueued, or popped) clears the
 target, the swing and the mode first (`CombatSystem.ClearForOrder`); the cooldown keeps counting. A
 unit with a target does not pop its queue.
 
@@ -1225,7 +1226,9 @@ ticks running never moved in between).
 **Damage and death (phase 11).** Hits apply in attacker slot order; a hit's damage is worked out when
 it is queued. A unit killed earlier in the phase takes no more hits, but its own queued hit still
 lands, so equal fighters that swing together die together. A unit at 0 hp is freed at once (its handle
-is stale before the tick ends, its population goes back through the ledger, its queue and loops go);
+is stale before the tick ends, its population goes back through the ledger, its queue and loops go, a
+worker's cargo is lost with it, and the slot reads `Idle` with no velocity, so a scan over slots never counts the dead
+as walking);
 a building at 0 goes through `BuildingStore.Damage` (freed, cells by the pocket rule, queue refunded).
 Each death appends a `DeathEvent` (victim handle, building or not, type, owner, killer's owner,
 position: a building's footprint center) to a buffer sized to the unit capacity (a death per hit at most), and counts one kill for
@@ -1241,13 +1244,28 @@ order word, so a unit that never fought hashes exactly as before and the golden 
 Kills and losses go in only for a player with either non-zero, flagged by bit 33 of its gold word.
 The death buffer, the hit queue and the building list are scratch, not hashed.
 
-**Combat switch** (`SimConfig.Combat`, default true; BUG-0135, **pending the Producer's call**). False skips
-`Acquire`, `Attack` and `Resolve` and makes `AttackMove` set no combat mode, so a world of two owners plays exactly
-as before M4: enemies are walls and never fight. It exists for the pre-M4 movement, economy, production and view
-scenes whose assertions are about a world without fights (arrivals, alive counts, money oracles, "a holder is
-Idle"); they opt out through `TestSim.ConfigNoCombat` or their own config helper. Matches, the CLI and replays
-always fight: the switch is not in the replay header yet (M4-2's format 4 would carry it if it stays), so
-`ReplayPlayer` plays everything back with combat on, and a replay recorded with combat off does not play back.
+**Combat switch** (`SimConfig.Combat`, default true; BUG-0135, Producer decision 2026-10-07, owner may revisit). A
+test and tooling switch, not a game option: false skips `Acquire`, `Attack` and `Resolve` and makes `AttackMove` set no
+combat mode, so a world of two owners plays exactly as before M4: enemies are walls and never fight. It exists for the
+pre-M4 movement, economy, production and view scenes whose assertions are about a world without fights (arrivals,
+alive counts, money oracles, "a holder is Idle"); they opt out through `TestSim.ConfigNoCombat` or their own config
+helper, changing the config only, never an assertion. The command fuzzes (the door fuzz, the order stress) stay on
+combat with the invariant re-baselined: a holder is Idle *or Attacking* and never moves (a Stop leaving no target and
+the state Idle on the tick it applies is `CombatTests`' row). The economy conservation fuzz runs with combat off: on
+combat its "the fuzz gathered and delivered" precondition misses on one seed (attack-moved workers fight instead of
+delivering), and a precondition is not re-baselined. Matches, the CLI and replays always
+fight. The switch is not in the replay header yet: M4-2's replay format 4 records it; until then `ReplayPlayer` plays
+back with combat on unless its caller says otherwise (`Run(replay, data, combat)`, for test replays recorded off).
+
+**Workers never fight on their own** (Producer decision 2026-10-07, owner may revisit; from the view's BUG-0147,
+where player 1's Idle laborers walked to player 0's Depot and then killed player 0's laborers at the Playable scene's
+start). A unit of the `worker` slot does not scan while Idle or holding and does not retaliate when hit
+(`CombatSystem.Scans`); it scans and swings only on an attack-move leg (and, from M4-2, under an explicit `Attack`).
+The data hook is the unit's `slot`, never an id. It still counts as a target (tier 2 in the priority).
+
+**The ram** (BUG-0139, deferred to M4-2): the Battering Ram fights like any melee unit in this slice and takes units as
+targets; docs/02 says buildings only. The fix is an `attack.targets` schema field, which moves `data-hash`, so it
+lands with M4-2.
 
 **Cost.** The scan's spatial query skips buckets holding only the scanner's own units (a per-bucket
 owner code) and returns at once when no other owner has a live unit (per-owner counts), so a
@@ -1260,6 +1278,16 @@ first 200 ticks and 3.4 ms over the next 400; the same armies as columns 25 rank
 (reported, not asserted) 4.3 / 5.6 ms, most of it movement: the units queued behind their own planted
 front rank. Scanning a crowd allocates nothing, nor does a brawl tick (`AllocationTests`). The world on
 a 1,024-cell map with 4,096 unit slots grows 0.4 MB (227.5 -> 227.9 MB).
+
+**The tight-blob budget (BUG-0140, Producer decision 2026-10-07, owner may revisit).** QA's 13 paired runs put the
+one-player 2,500 blob at +0.08 ms over the base (4.374 -> 4.454 ms), which left the row 0.05 ms under its 4.5 ms budget
+and failing about 1 run in 6. The cost is spread over per-unit checks, not the scan: phase 7's loop over every unit,
+a walker's `Target` read for the chase arrival distance, and the `Attacking` test beside every `Hold` test in the
+hard-wall, shove and chain rules. The fix round tried to win it back (phases 7 and 10 skipping their loops until the
+first enemy or attack-move; reading a neighbor's state once in the shove rules); neither moved the measured average
+(4.43-4.52 ms over 5 alone runs either way), so both were left out for simpler code, and the budget is 4.6 ms (approved
+in advance). The scan itself stays near free: one enemy at the far corner costs well under the 0.25 ms QA allows
+(`CombatScaleQaTests`).
 
 ## Economy implementation
 
@@ -1445,7 +1473,9 @@ repair"; the ghost is view work that calls `World.CanPlace`). Closes BUG-0078 by
   100 refused Builds at a long-detour anchor cost one tick 22 ms in Debug before, 0.07 ms now); both answer pass / fail
   identically, `CanPlace` keeps the order above. A worker's own Hold never puts it in the way of its own Build (M3-H1,
   BUG-0092): the Build is accepted, the worker pushed out and its Hold ended like any order's, while `CanPlace`, which
-  has no worker, still reports `UnitInTheWay` for that spot.
+  has no worker, still reports `UnitInTheWay` for that spot. Since M4-1 an own unit standing `Attacking` is planted like a
+  holder, and the same holds for it (BUG-0142 item 1, kept as the BUG-0092 shape): only an attack-moved worker can be
+  Attacking, and its Build is accepted while the ghost reads `UnitInTheWay`.
 - **Never seal (BUG-0078).** A footprint may be taken only if every two passable cells that connect now still
   connect without it (`Map.SealCheck`, on `World`, allocation-free). A path through the footprint enters
   and leaves it through passable cells 4-adjacent to it, so it is enough that those cells still reach each other.
@@ -3004,7 +3034,8 @@ AiPlayer
   0.7-1.0 ms average, all 500 Moving and stepping on every tick.
 - The 2,500-unit crowd rows (M1-9, `CrowdPerfTests`, BUG-0044 / BUG-0047): the one-player tight
   blob (seed 99, 2,500 units within 12 path cells of the central cell, all ordered to it; 5 warm-up
-  ticks, a full GC, 300 timed ticks) must average at most 4.5 ms, the M1-4d-3 target. Two report rows
+  ticks, a full GC, 300 timed ticks) must average at most 4.6 ms (the M1-4d-3 target was 4.5 ms; widened in M4-1 for
+  the combat checks' +0.08 ms, BUG-0140, see "Implementation (M4-1)"). Two report rows
   guard the plug test's cost where two players overlap all the time: the same blob with owners
   alternating (both players contest the point) under 10.5 ms, and 2,500 units to 4 points, one player
   per point, seed 1, 600 ticks, under 3.7 ms: what each cost before the plug answers were cached.

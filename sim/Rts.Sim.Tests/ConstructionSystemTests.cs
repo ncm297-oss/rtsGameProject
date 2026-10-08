@@ -204,4 +204,33 @@ public class ConstructionSystemTests
         b.Damage(keep, 5); // a stale handle: nothing
         Assert.Equal(version + 1, g.Version);
     }
+
+    /// <summary>
+    /// BUG-0138 (M4-1 fix): a work tick adds the hit points the work grows instead of recomputing them, so damage a site
+    /// took stays taken and a damaged site completes short of full; an undamaged site still reads
+    /// <c>max(1, maxHp x work / needed)</c>.
+    /// </summary>
+    [Fact]
+    public void SiteDamage_StaysTaken_WorkAddsOnlyTheHitPointsItGrows()
+    {
+        Simulation sim = BuildMaps.NewSim(Flat(30, 20));
+        EntityHandle w = WorkersRound(sim, 10, 10, 4, 4, 1)[0];
+        SetTotals(sim, 0, 275, 275);
+        sim.Enqueue(Command.Build(0, w, Keep, At(sim, 10, 10)));
+        Run(sim, 2);
+        int k = SiteAt(sim, 10, 10);
+        BuildingStore b = sim.World.Buildings;
+        int needed = b.WorkNeeded(Keep), max = TestSim.Data.Buildings[Keep].Hp;
+        int SiteHp(int work) => (int)Math.Max(1L, (long)max * work / needed);
+        int half = needed / 2;
+        b.SetWork(k, half);
+        Assert.Equal(SiteHp(half), b.Hp[k]); // undamaged: exactly the formula
+        b.Damage(b.HandleOf(k), 100);
+        int damaged = b.Hp[k];
+        b.SetWork(k, half + 300);
+        Assert.Equal(damaged + SiteHp(half + 300) - SiteHp(half), b.Hp[k]);
+        b.SetWork(k, needed);
+        Assert.False(b.UnderConstruction[k]);
+        Assert.Equal(max - 100, b.Hp[k]);
+    }
 }

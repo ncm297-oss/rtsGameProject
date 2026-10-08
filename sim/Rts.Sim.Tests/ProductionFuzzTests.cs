@@ -29,7 +29,7 @@ public class ProductionFuzzTests
     /// <summary>Two players, each with a Town Hall, two production halls and four workers on a flat 64 x 48 map; with <paramref name="nodes"/> a mine and a grove to rally onto.</summary>
     private static Simulation Setup(bool nodes)
     {
-        Simulation sim = BuildMaps.NewSim(Flat(64, 48), units: 200, players: 2);
+        Simulation sim = BuildMaps.NewSim(Flat(64, 48), units: 200, players: 2, combat: false);
         World w = sim.World;
         if (nodes)
         {

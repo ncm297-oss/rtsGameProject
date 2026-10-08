@@ -205,7 +205,7 @@ public class ShoveQaTests
     internal static Simulation Crossing(ulong seed, int blob, int walkers, string blobOwner, out Vector2 target)
     {
         int cap = blob + walkers;
-        var sim = new Simulation(TestSim.Config(Seed: seed, PlayerCount: 2, UnitCapacity: cap, CommandCapacity: 2 * cap + 8));
+        var sim = new Simulation(TestSim.ConfigNoCombat(Seed: seed, PlayerCount: 2, UnitCapacity: cap, CommandCapacity: 2 * cap + 8));
         NavGrid g = sim.World.NavGrid;
         int goalCell = MoveScenario.CentralCell(g);
         Vector2 point = MoveScenario.Center(g, goalCell);

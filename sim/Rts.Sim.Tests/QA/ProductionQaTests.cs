@@ -209,7 +209,7 @@ public class ProductionQaTests
     /// </summary>
     private static (Simulation Sim, List<int> Halls, HashSet<int> Fill) TwentyHalls(bool reverse, int freeCells)
     {
-        var sim = new Simulation(TestSim.Config(Seed: 5, PlayerCount: 2, UnitCapacity: 3000, CommandCapacity: 4096), Flat(120, 24));
+        var sim = new Simulation(TestSim.ConfigNoCombat(Seed: 5, PlayerCount: 2, UnitCapacity: 3000, CommandCapacity: 4096), Flat(120, 24));
         World w = sim.World;
         NavGrid g = w.NavGrid;
         var anchors = new List<(int X, int Y)>();
@@ -347,7 +347,7 @@ public class ProductionQaTests
             if (y == 43) row[39] = 'r';
             rows[y] = new string(row);
         }
-        Simulation sim = BuildMaps.NewSim(FromRows(rows), units: 64, players: 2);
+        Simulation sim = BuildMaps.NewSim(FromRows(rows), units: 64, players: 2, combat: false);
         World w = sim.World;
         NavGrid g = w.NavGrid;
         int keepSlot = keep ? Building(sim, 12, 12).Index : -1;

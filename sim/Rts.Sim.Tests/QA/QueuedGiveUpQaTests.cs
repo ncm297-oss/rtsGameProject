@@ -84,7 +84,7 @@ public class QueuedGiveUpQaTests
     private (int Ticks, int Bound, int GaveUp, int Past) RunPluggedGap(ulong seed, int lo, int hi)
     {
         const int crowd = 60;
-        Simulation sim = new(TestSim.Config(Seed: seed, PlayerCount: 2, UnitCapacity: crowd + hi - lo + 1, CommandCapacity: 4 * crowd + 16), GapMap(lo, hi));
+        Simulation sim = new(TestSim.ConfigNoCombat(Seed: seed, PlayerCount: 2, UnitCapacity: crowd + hi - lo + 1, CommandCapacity: 4 * crowd + 16), GapMap(lo, hi));
         NavGrid g = sim.World.NavGrid;
         var rng = new SimRng(seed, 77);
         for (int i = 0; i < crowd; i++)

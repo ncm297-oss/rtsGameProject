@@ -210,12 +210,17 @@ public static class CombatSystem
     /// <summary>
     /// Whether unit <paramref name="i"/> looks for targets: a fighting type that is holding position, on an attack-move
     /// leg, retaliating (chasing, fighting, or walking back after its target died), or Idle with no engagement. Walking a
-    /// plain Move, walking home on the leash, and a worker's gather or build loop never scan.
+    /// plain Move, walking home on the leash, and a worker's gather or build loop never scan; a unit of the worker slot
+    /// scans only on an attack-move leg.
     /// </summary>
     private static bool Scans(World world, int i)
     {
         UnitStore u = world.Units;
-        if (!CanFight(world.Data.Units[u.TypeId[i]])) return false;
+        UnitDef def = world.Data.Units[u.TypeId[i]];
+        if (!CanFight(def)) return false;
+        // Workers never fight on their own (Producer decision, BUG-0147): not Idle, not holding, not hit; only while the
+        // player attack-moves them. The data hook is the unit's slot.
+        if (def.Slot == UnitSlot.Worker && u.Mode[i] != CombatMode.AttackMove) return false;
         // On a gather, build or repair loop (even standing Idle a tick between its legs): the economy moves it, never combat.
         if (u.GatherNode[i].Generation != 0 || u.BuildTarget[i].Generation != 0) return false;
         UnitState s = u.State[i];

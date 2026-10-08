@@ -48,7 +48,7 @@ public static class BuildMaps
         return cells.Take(n).Select(c => Unit(sim, At(sim, c.X, c.Y), player)).ToArray();
     }
 
-    /// <summary>A sim on a hand-made map with <paramref name="players"/> players, plenty of command room.</summary>
-    public static Simulation NewSim(Heightmap map, int units = 32, int players = 1) =>
-        new(TestSim.Config(Seed: 5, PlayerCount: players, UnitCapacity: units, CommandCapacity: 512), map);
+    /// <summary>A sim on a hand-made map with <paramref name="players"/> players, plenty of command room; <paramref name="combat"/> false: no fights (BUG-0135).</summary>
+    public static Simulation NewSim(Heightmap map, int units = 32, int players = 1, bool combat = true) =>
+        new(TestSim.Config(Seed: 5, PlayerCount: players, UnitCapacity: units, CommandCapacity: 512) with { Combat = combat }, map);
 }

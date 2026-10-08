@@ -264,7 +264,8 @@ public class CombatQaTests
             if (!placedSecond && u.State[w.Index] == UnitState.Building)
             {
                 placedSecond = true;
-                EntityHandle e2 = Place(sim, 1, Laborer, u.Position[w.Index] + new Vector2(0f, 1f));
+                // A fighter, not a Laborer: since the M4-1 worker rule (Producer decision) a holding worker never swings.
+                EntityHandle e2 = Place(sim, 1, HeavyInfantry, u.Position[w.Index] + new Vector2(0f, 1f));
                 sim.Enqueue(Command.HoldPosition(1, e2));
             }
             Assert.True(u.Target[w.Index] == default, $"tick {t}: worker took target {u.Target[w.Index]} ({u.State[w.Index]})");

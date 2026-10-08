@@ -250,7 +250,7 @@ public class HardWallQaTests
     {
         const int crowd = 60;
         int lo = 12 - width / 2, hi = lo + width - 1;
-        var sim = new Simulation(TestSim.Config(Seed: seed, PlayerCount: 2, UnitCapacity: crowd + width, CommandCapacity: 4 * crowd + 16), GapMap(lo, hi));
+        var sim = new Simulation(TestSim.ConfigNoCombat(Seed: seed, PlayerCount: 2, UnitCapacity: crowd + width, CommandCapacity: 4 * crowd + 16), GapMap(lo, hi));
         NavGrid g = sim.World.NavGrid;
         var rng = new SimRng(seed, 351);
         for (int i = 0; i < crowd; i++)

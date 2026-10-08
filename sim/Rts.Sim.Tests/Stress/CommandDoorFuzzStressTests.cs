@@ -134,7 +134,8 @@ public class CommandDoorFuzzStressTests
                 Assert.True(p == bornAt[i], $"{at}: spawned off passable ground at {bornAt[i]}, moved to {p}");
             Assert.True((uint)u.Owner[i] < Players, $"{at}: owner {u.Owner[i]}");
             Assert.True((uint)u.QueueCount[i] <= OrderConstants.QueueCapacity, $"{at}: queue {u.QueueCount[i]}");
-            if (u.Hold[i]) Assert.True(u.State[i] == UnitState.Idle && u.GoalCell[i] == -1, $"{at}: holding but {u.State[i]}, goal cell {u.GoalCell[i]}");
+            // Re-baselined for M4-1 (BUG-0135): a holder fights what comes in reach, so it is Idle or Attacking, never walking.
+            if (u.Hold[i]) Assert.True(u.State[i] is UnitState.Idle or UnitState.Attacking && u.GoalCell[i] == -1, $"{at}: holding but {u.State[i]}, goal cell {u.GoalCell[i]}");
         }
     }
 

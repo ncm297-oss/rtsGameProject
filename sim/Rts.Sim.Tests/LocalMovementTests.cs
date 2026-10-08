@@ -377,7 +377,7 @@ public class LocalMovementTests
             if (y < 10 || y > 11) r[20] = '1';
             rows[y] = new string(r);
         }
-        var sim = new Simulation(TestSim.Config(Seed: seed, PlayerCount: 2, UnitCapacity: crowd + 2, CommandCapacity: 4 * crowd + 16), Rows(rows));
+        var sim = new Simulation(TestSim.ConfigNoCombat(Seed: seed, PlayerCount: 2, UnitCapacity: crowd + 2, CommandCapacity: 4 * crowd + 16), Rows(rows));
         NavGrid g = sim.World.NavGrid;
         var rng = new Determinism.SimRng(seed, 35);
         for (int i = 0; i < crowd; i++)
@@ -454,7 +454,7 @@ public class LocalMovementTests
             if (y != 11) r[20] = '1';
             rows[y] = new string(r);
         }
-        var sim = new Simulation(TestSim.Config(Seed: seed, PlayerCount: 2, UnitCapacity: crowd + 1, CommandCapacity: 4 * crowd + 16), Rows(rows));
+        var sim = new Simulation(TestSim.ConfigNoCombat(Seed: seed, PlayerCount: 2, UnitCapacity: crowd + 1, CommandCapacity: 4 * crowd + 16), Rows(rows));
         NavGrid g = sim.World.NavGrid;
         var rng = new Determinism.SimRng(seed, 36);
         for (int i = 0; i < crowd; i++)
@@ -1211,7 +1211,7 @@ public class LocalMovementTests
         /// </summary>
         private static Simulation CrossingTheBlob(out Vector2[] blob)
         {
-            Simulation sim = MoveScenario.Spawn(seed: TestSeeds.PreMix(73), units: 300, maxCost: 25f, out int goalCell, capacity: 500); // pre-M1-6 map
+            Simulation sim = MoveScenario.Spawn(seed: TestSeeds.PreMix(73), units: 300, maxCost: 25f, out int goalCell, capacity: 500, combat: false); // pre-M1-6 map
             NavGrid g = sim.World.NavGrid;
             UnitStore u = sim.World.Units;
             Vector2 point = MoveScenario.Center(g, goalCell);

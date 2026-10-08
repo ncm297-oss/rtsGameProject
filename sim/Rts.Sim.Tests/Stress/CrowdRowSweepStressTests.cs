@@ -29,7 +29,7 @@ public class CrowdRowSweepStressTests
                 var lastIdle = new bool[units];
                 check = w => LocalMovementStressTests.CheckInvariants(w, lastPos, lastIdle);
             }
-            CrowdRows.Result r = CrowdRows.ToFourPoints(seed, units, limit, onePlayerPerPoint: true, everyTick: check);
+            CrowdRows.Result r = CrowdRows.ToFourPoints(seed, units, limit, onePlayerPerPoint: true, everyTick: check, combat: false);
             CrowdRows.AssertBuildCap(r);
             arrived.Add(r.Arrived);
             _out.WriteLine($"seed {seed}: arrived {r.Arrived} ({100.0 * r.Arrived / units:F0}%), gave up {r.GaveUp}, still moving {r.StillMoving}, {r.Ticks} ticks");
@@ -58,7 +58,7 @@ public class CrowdRowSweepStressTests
         int pack = 0;
         for (ulong seed = 41; seed <= 80; seed++)
         {
-            CrowdRows.Result r = CrowdRows.MoreGoalsThanCacheSlots(seed);
+            CrowdRows.Result r = CrowdRows.MoreGoalsThanCacheSlots(seed, combat: false);
             CrowdRows.AssertBuildCap(r);
             gaveUp.Add(r.GaveUp);
             if (r.Pack != null) pack++;

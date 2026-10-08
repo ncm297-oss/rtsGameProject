@@ -26,11 +26,13 @@ public static class MoveScenario
     /// applied before returning. Since M1-4d-3 (BUG-0037) two players sent to one point are enemies
     /// contesting it, not one blob: whole-crowd-to-one-point scenarios pass <c>players: 1</c>.
     /// <paramref name="map"/> (M3-1) sets the map params, e.g. forests and mines; default the M1 map.
+    /// <paramref name="combat"/> false (<see cref="SimConfig.Combat"/>, BUG-0135) for the pre-M4 movement scenes whose
+    /// two owners stand for "enemies are walls", not for a fight.
     /// </summary>
-    public static Simulation Spawn(ulong seed, int units, float maxCost, out int goalCell, int capacity = 0, int players = 2, MapGenParams? map = null)
+    public static Simulation Spawn(ulong seed, int units, float maxCost, out int goalCell, int capacity = 0, int players = 2, MapGenParams? map = null, bool combat = true)
     {
         var sim = new Simulation(TestSim.Config(Seed: seed, PlayerCount: 2,
-            UnitCapacity: Math.Max(units, capacity), CommandCapacity: 2 * Math.Max(units, capacity) + 8) with { Map = map ?? MapGenParams.Default });
+            UnitCapacity: Math.Max(units, capacity), CommandCapacity: 2 * Math.Max(units, capacity) + 8) with { Map = map ?? MapGenParams.Default, Combat = combat });
         NavGrid g = sim.World.NavGrid;
         goalCell = CentralCell(g);
         FlowField field = FlowField.Build(g, goalCell);
