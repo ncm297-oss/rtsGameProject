@@ -170,21 +170,37 @@ public partial class QaV3bTest : Node
         Check(!B.Alive[forge], "forge not destroyed");
         Check(!AgeOpenByOracle(), "oracle: still open after the forge died");
         Check(QueuedAge(), "Age II dropped from the queue when the forge died");
-        int researchTicks = 0;
+        int researchTicks = 0, inQueue = 0, queuedFrames = 0;
         while (!W.HasTech(0, _age) && researchTicks < 2000)
         {
             Tick(rng.Next(1, 30));
             researchTicks++;
             await Frame();
             CheckFrame("queued then hall destroyed", expectLocked: null);
+            // M3-V4 (BUG-0126 item 2): the sim says Requires, the button says "In a queue".
+            if (W.HasTech(0, _age)) continue;
+            queuedFrames++;
+            int c = AgeCell();
+            if (c >= 0 && _card.ReasonAt(c) == (int)ResearchError.AlreadyQueued && _card.CostAt(c).Text == _ui.ResearchText(ResearchError.AlreadyQueued)) inQueue++;
         }
+        Check(queuedFrames > 0 && inQueue == queuedFrames, $"queued Age II with a hall lost: 'In a queue' in {inQueue} of {queuedFrames} frames");
         Check(W.HasTech(0, _age), "Age II never completed after the forge was destroyed");
         GD.Print($"queued Age II survived the forge's death and completed ({researchTicks} frames)");
-        // After Age II with one hall slot left the sim answers Requires before AlreadyResearched (M3-6's order), so the
-        // researched Age II reads "Locked"; a new Forge makes it AlreadyResearched.
-        int lockedAfter = 0;
-        for (int k = 0; k < 10; k++) { Tick(1); await Frame(); if (CheckFrame("after Age II, one slot", expectLocked: null)) lockedAfter++; }
-        GD.Print($"QA M3-V3b NOTE: Age II researched, a hall slot lost: the button reads 'Locked' in {lockedAfter} of 10 frames");
+        // After Age II with one hall slot left the sim answers Requires before AlreadyResearched (M3-6's order); since M3-V4
+        // (BUG-0126 item 2, was a NOTE: 'Locked' in 10 of 10 frames) the button reads "Researched" anyway.
+        int lockedAfter = 0, researched = 0;
+        for (int k = 0; k < 10; k++)
+        {
+            Tick(1);
+            await Frame();
+            if (CheckFrame("after Age II, one slot", expectLocked: null)) lockedAfter++;
+            int c = AgeCell();
+            W.CanResearch(0, _hall, _age, out ResearchError simSays);
+            if (c >= 0 && simSays == ResearchError.Requires && _card.ReasonAt(c) == (int)ResearchError.AlreadyResearched
+                && _card.CostAt(c).Text == _ui.ResearchText(ResearchError.AlreadyResearched)) researched++;
+        }
+        Check(lockedAfter == 0 && researched == 10, $"Age II researched, a hall slot lost: 'Locked' in {lockedAfter}, 'Researched' (sim Requires) in {researched} of 10 frames");
+        GD.Print($"Age II researched, a hall slot lost: the button reads 'Researched' in {researched} of 10 frames (sim says Requires)");
         Spawn(forgeType, taken);
         for (int k = 0; k < 10; k++) { Tick(1); await Frame(); CheckFrame("after Age II, two slots", expectLocked: false); }
 
@@ -246,6 +262,8 @@ public partial class QaV3bTest : Node
             else
             {
                 W.CanResearch(0, sel, _card.TypeAt(i), out ResearchError e);
+                // M3-V4 (BUG-0126): the card shows Researched / In a queue over the sim's earlier reasons.
+                e = ProductionMenu.ShownResearchReason(e, W.HasTech(0, _card.TypeAt(i)), ProductionMenu.IsTechQueued(W.Buildings, 0, _card.TypeAt(i)));
                 reason = (int)e;
                 text = e == ResearchError.None ? $"{_data.Techs[_card.TypeAt(i)].CostGold} / {_data.Techs[_card.TypeAt(i)].CostWood}" : _ui.ResearchText(e);
                 _seen.Add($"research {e}");

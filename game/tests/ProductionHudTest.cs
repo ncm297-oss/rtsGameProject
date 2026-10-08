@@ -125,7 +125,7 @@ public partial class ProductionHudTest : Node
         {
             ("\"queue_full\": \"Queue full\",\n    \"cannot_afford\": \"Can't afford\",\n    \"requires\": \"Locked\"\n  },\n  \"research\"", "\"cannot_afford\": \"Can't afford\",\n    \"requires\": \"Locked\"\n  },\n  \"research\"", "train.queue_full"),
             ("\"already_queued\": \"In a queue\",", "", "research.already_queued"),
-            ("\"store_full\": \"Too many buildings\",\n    \"requires\": \"Needs more\"", "\"store_full\": \"Too many buildings\"", "placement.requires"),
+            ("\"store_full\": \"Too many buildings\",\n    \"requires\": \"Locked\"", "\"store_full\": \"Too many buildings\"", "placement.requires"),
             ("\"cannot_afford\": \"Can't afford\",\n    \"requires\": \"Locked\"\n  },\n  \"states\"", "\"cannot_afford\": \"Can't afford\"\n  },\n  \"states\"", "research.requires"),
             ("\"idle\": \"Idle\",", "", "states.idle"),
             ("\"pop\": \"Pop\",", "", "hud.pop"),
@@ -431,6 +431,8 @@ public partial class ProductionHudTest : Node
                 else
                 {
                     W.CanResearch(0, sel, _card.TypeAt(i), out ResearchError e);
+                    // M3-V4 (BUG-0126): the card shows Researched / In a queue over the sim's earlier reasons.
+                    e = ProductionMenu.ShownResearchReason(e, W.HasTech(0, _card.TypeAt(i)), ProductionMenu.IsTechQueued(W.Buildings, 0, _card.TypeAt(i)));
                     reason = (int)e;
                     text = e == ResearchError.None ? $"{_data.Techs[_card.TypeAt(i)].CostGold} / {_data.Techs[_card.TypeAt(i)].CostWood}" : _ui.ResearchText(e);
                     seen.Add($"research {e}");

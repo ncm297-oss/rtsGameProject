@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Immutable;
 using Rts.Sim.Data;
+using Rts.Sim.Economy;
 
 namespace Rts.Sim.ViewApi;
 
@@ -24,6 +25,18 @@ public static class BuildMenu
         }
         return n;
     }
+
+    /// <summary>
+    /// The anchor a build-menu button asks <c>World.CanPlace</c> about (M3-V4, BUG-0126): off the map on purpose. The sim
+    /// checks the type, the faction and <c>requires</c> before any map rule (M3-6), so the answer is
+    /// <see cref="PlacementError.Requires"/> exactly when the building is locked and <see cref="PlacementError.OffMap"/>
+    /// otherwise, without touching the map or the never-seal flood (no scratch written, cheap enough for every button).
+    /// </summary>
+    public const int NoAnchor = -1;
+
+    /// <summary>The refusal a build-menu button shows for <c>World.CanPlace(player, type, NoAnchor)</c>'s answer: <see cref="PlacementError.Requires"/> (and the earlier type / faction refusals) as they are, <see cref="PlacementError.None"/> for the map refusal every live type gets.</summary>
+    public static PlacementError ShownPlaceReason(PlacementError noAnchorAnswer) =>
+        noAnchorAnswer is PlacementError.OffMap or PlacementError.None ? PlacementError.None : noAnchorAnswer;
 
     /// <summary>The slot whose JSON id (<see cref="DataLimits.BuildingSlotIds"/>, e.g. <c>infantry_hall</c>) is <paramref name="id"/>; false for an unknown id.</summary>
     public static bool TryParseSlot(string id, out BuildingSlot slot)

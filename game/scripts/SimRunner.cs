@@ -4,6 +4,7 @@ using Godot;
 using Rts.Sim;
 using Rts.Sim.Data;
 using Rts.Sim.Map;
+using Rts.Sim.Replays;
 using Rts.Sim.ViewApi;
 
 namespace Rts.Game;
@@ -55,6 +56,17 @@ public partial class SimRunner : Node
     /// <summary>Gold mines the map generator places (<see cref="MapGenParams.GoldMines"/>).</summary>
     [Export] public int GoldMines { get; set; } = LaunchOptions.DefaultMines;
 
+    /// <summary>
+    /// Scripted runs (M3-V4): when above 0 before <see cref="Start"/>, a <see cref="ReplayRecorder"/> with this
+    /// checkpoint interval is attached to the new sim before anything is enqueued, so the whole command stream the HUD
+    /// sent can be replayed into a bare twin (<see cref="ReplayPlayer"/>): equal checkpoints prove the views only read.
+    /// 0 (the default) records nothing.
+    /// </summary>
+    public int RecordCheckpointInterval { get; set; }
+
+    /// <summary>The recorder attached by <see cref="Start"/> when <see cref="RecordCheckpointInterval"/> is set, else null.</summary>
+    public ReplayRecorder? Recorder { get; private set; }
+
     /// <summary>Creates the simulation from loaded data on the default 128 map with <see cref="Forests"/> and <see cref="GoldMines"/>; ticking starts on the next frame.</summary>
     public void Start(GameData data)
     {
@@ -64,6 +76,7 @@ public partial class SimRunner : Node
             Map = MapGenParams.Default with { Forests = Forests, GoldMines = GoldMines },
         };
         Simulation = new Simulation(config);
+        if (RecordCheckpointInterval > 0) Recorder = new ReplayRecorder(Simulation, RecordCheckpointInterval);
     }
 
     public override void _Process(double delta)

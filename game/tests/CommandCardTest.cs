@@ -311,7 +311,14 @@ public partial class CommandCardTest : Node
                 Check(_card.HintAt(i).Text == keys[i] && _card.GridKey(i) == keys[i], $"{key} menu cell {i}: hint '{_card.HintAt(i).Text}', want {keys[i]}");
                 string cost = $"{f.GoldName} {def.CostGold}  {f.WoodName} {def.CostWood}";
                 Check(b.TooltipText.Contains(def.Description) && b.TooltipText.Contains(cost), $"{key} menu cell {i}: tooltip '{b.TooltipText}' lacks description or '{cost}'");
-                Check(_card.CostAt(i).Text == $"{def.CostGold} / {def.CostWood}", $"{key} menu cell {i}: cost label '{_card.CostAt(i).Text}'");
+                // M3-V4 (BUG-0126 item 1): a locked entry (CanPlace at BuildMenu.NoAnchor answers Requires) reads
+                // placement.requires ("Locked") dimmed instead of its cost, and stays pressable (not Disabled).
+                W.CanPlace(0, type, BuildMenu.NoAnchor, out PlacementError lockedWhy);
+                bool locked = lockedWhy == PlacementError.Requires;
+                string wantLine = locked ? _ui.PlacementText(PlacementError.Requires) : $"{def.CostGold} / {def.CostWood}";
+                Check(_card.CostAt(i).Text == wantLine && !b.Disabled && _card.ReasonAt(i) == (locked ? (int)PlacementError.Requires : 0)
+                    && _card.NameAt(i).Modulate.A == (locked ? CommandCard.DimAlpha : 1f),
+                    $"{key} menu cell {i}: cost label '{_card.CostAt(i).Text}' (want '{wantLine}'), disabled {b.Disabled}, reason {_card.ReasonAt(i)}, alpha {_card.NameAt(i).Modulate.A}");
             }
             GD.Print($"{key} menu: {string.Join(", ", names)}");
             if (key == Godot.Key.B) await Shot("menu-basic");

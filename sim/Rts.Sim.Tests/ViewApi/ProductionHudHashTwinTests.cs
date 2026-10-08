@@ -84,7 +84,7 @@ public class ProductionHudHashTwinTests
                 sink += BuildingPicker.PickRay(bs, w.Data.Buildings, g, w.Heightmap, -1, o, new Vector3(0f, -1f, -0.8f), BoxHeight, SiteMin);
                 // M3-V3b: the right click's resource ray pick and the building pick's entry overload.
                 sink += ResourcePicker.PickRay(g, w.Data.Resources, w.Resources.Alive, w.Resources.TypeId, w.Resources.Cell, w.Heightmap, o,
-                    new Vector3(0.3f, -1f, -0.8f), 3.5f, 2.1f, out float nodeT) + (float.IsFinite(nodeT) ? 1 : 0);
+                    new Vector3(0.3f, -1f, -0.8f), ResourcePickerTests.Shape, out float nodeT) + (float.IsFinite(nodeT) ? 1 : 0);
                 sink += BuildingPicker.PickRay(bs, w.Data.Buildings, g, w.Heightmap, 0, o, new Vector3(-0.2f, -1f, -0.6f), BoxHeight, SiteMin, out float boxT) + (float.IsFinite(boxT) ? 1 : 0);
             }
             Assert.Equal(before, a.StateHash());

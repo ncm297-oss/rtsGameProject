@@ -348,6 +348,8 @@ public partial class QaV3Test : Node
             else
             {
                 W.CanResearch(0, sel, _card.TypeAt(i), out ResearchError e);
+                // M3-V4 (BUG-0126): the card shows Researched / In a queue over the sim's earlier reasons.
+                e = ProductionMenu.ShownResearchReason(e, W.HasTech(0, _card.TypeAt(i)), ProductionMenu.IsTechQueued(W.Buildings, 0, _card.TypeAt(i)));
                 reason = (int)e;
                 text = e == ResearchError.None ? $"{_data.Techs[_card.TypeAt(i)].CostGold} / {_data.Techs[_card.TypeAt(i)].CostWood}" : _ui.ResearchText(e);
                 seen.Add($"research {e}");

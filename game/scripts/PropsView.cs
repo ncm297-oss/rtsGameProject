@@ -33,6 +33,9 @@ public partial class PropsView : Node3D
     /// <summary>Share of the footprint's sides the gold block on a mine takes.</summary>
     public const float GoldFill = 0.5f;
 
+    /// <summary>The drawn prop dimensions above, for the right click's ray pick (<see cref="ResourcePicker.PickRay"/>, BUG-0125: it tests these shapes, not the footprint's column).</summary>
+    public static readonly PropShape Shape = new(TrunkHeight, TrunkRadius, TreeHeight, CanopyFill, MineHeight, GoldHeight, GoldFill);
+
     // Placeholder tints until the M6 art pass (M2-1 rule: hard-coded like the terrain's).
     private static readonly Color CanopyColor = new(0.11f, 0.30f, 0.12f);
     private static readonly Color TrunkColor = new(0.36f, 0.23f, 0.12f);

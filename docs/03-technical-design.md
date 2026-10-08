@@ -2526,7 +2526,8 @@ game/data/common/ui.json  view-only text and menu lists (UiText.cs); the sim's D
   cursor minus half the footprint (integer halves: exact centring for odd footprints, within a cell for even ones),
   clamped so the footprint stays on the map; a cursor off the map hides the box. Green when `World.CanPlace(player,
   type, anchor, out reason)` passes, red otherwise with `ui.json` `placement.<reason>` over it. `CanPlace` writes
-  flow-field scratch (M3-3), so it is called only from the ghost's `_Process`, which runs after `SimRunner`'s tick
+  flow-field scratch (M3-3), so it is called with a map anchor only from the ghost's `_Process` (M3-V4's build-menu
+  greying asks it at the off-map `BuildMenu.NoAnchor`, which returns before the flood), which runs after `SimRunner`'s tick
   step and after `RtsCamera`'s pan in the same frame (`ProcessPriority` 1, after every default-priority node; in tree
   order it came before the camera and trailed a pan by a frame, BUG-0122), on the main thread, never while
   `SimRunner.Ticking`, at most once per frame, and only when the anchor, the type or the sim tick changed since the last
@@ -2669,9 +2670,10 @@ Match.tscn  (new nodes)
   context point; only without a hit does it ground-pick. So the visible top of a damaged own building means Repair, an own
   site join, and an enemy or full-hp building a Move to its centre, instead of whatever lies on the ground 2 m behind the
   box. Since M3-V3b resource nodes are ray-picked the same way: `ResourcePicker.PickRay(grid, defs, alive, typeId, cell,
-  map, origin, direction, woodHeight, goldHeight, out entry)` treats each live node as a box over its footprint up to its
-  kind's prop height (the caller passes `PropsView.TreeHeight` and `MineHeight + GoldHeight`), with the same terrain
-  occlusion; `BuildingPicker.PickRay` has an overload with the same `out entry` (the ray parameter of the hit). Whichever
+  map, origin, direction, ..., out entry)` treated each live node as a box over its footprint up to its kind's prop
+  height (since M3-V4 it tests the drawn trunk and cone or the mine's two blocks, `PropsView.Shape`, BUG-0125: see
+  "Implementation (M3-V4)"), with the same terrain occlusion; `BuildingPicker.PickRay` has an overload with the same
+  `out entry` (the ray parameter of the hit). Whichever
   of the building and the node the ray enters first wins; a node gives its footprint centre, so a right click on a
   tree's canopy, whose ground point is behind the tree, gathers that tree.
 - **BUG-0109** (the placement click): `CommandCard.GhostClick(shift, screen)` takes the click's own position;
@@ -2717,6 +2719,98 @@ Match.tscn  (new nodes)
   flag.
 - **Not yet:** fog (M4); real portraits; rebinding; `requires` greying beyond the text keys (it shows by itself once M3-6's
   reasons reach `main`); rally on a building (units walk to its centre); unit hit points in the panel (M4).
+
+### Implementation (M3-V4)
+
+M3's last criterion ("Playable: the owner builds a full Malazan base and reaches Age II") proven by a script that plays
+the owner's playtest through the real HUD, plus BUG-0125 (the node pick) and BUG-0126 items 1-2 (the wording of locked
+and researched buttons).
+
+- **The Playable scene** (`res://tests/M3PlayableTest.tscn`, "M3 PLAYABLE TEST PASS" / "M3 PLAYABLE TEST FAIL <step>
+  (seed, tick): <what>"): a real `Match` (`--units 0 --mute --speed 8`, shipped data) on seeds 1 and 6 (`-- --seed N` for
+  one), the sim ticked by its own `SimRunner` from frame time at 8x. Every action is input pushed into the viewport
+  (`Viewport.PushInput`): left / right clicks and box drags on the 3D view, grid keys, clicks on the queue strip, and
+  left clicks on the minimap to move the camera; no sim command and no controller call. Headless Godot has no pointer,
+  so the viewport's mouse position doesn't follow a pushed motion event; the scene then gives the ghost the same point
+  through `BuildGhost.ScreenOverride` (said in the log). Each step is checked against the sim once the next ticks have
+  run and the views have drawn them, and prints the tick it completed with the money and a census of the workers. The
+  steps: box-select the five workers; right click the nearest mine (each worker's gather node is the mine, all five
+  seen `Gathering`); click the Town Hall (panel name and "hp / max"; card: Laborer on Q, Age II on W greyed "Locked",
+  the sim saying `Requires`); Q three times (three queued, 150 gold paid, three squares, a head bar); click the third
+  square (two left, 50 gold back); right click a tree with the hall selected (rally at the tree's centre, the flag
+  shown; two more laborers queued; a laborer born after the rally stands `Gathering` wood); one start worker (the
+  builder, clicked alone; the other four keep mining) builds with B then E (Legion Barracks), B, W (a Quartermaster's
+  Depot by the forest, and one by the mine when the mine is over 35 m from the hall: seed 6), B, A (Armory), B, Q
+  (Billet: the bar's cap 10 -> 18; two more laborers), each on a spot the test's `CanPlace` accepts and where the camera
+  ray at its pixel maps back to it (not hidden behind a rise), the ghost green there, built, and the builder
+  right-clicked back to the mine; at the hall Age II is live and W researches it; meanwhile V shows the Cadre Tower and
+  the Engineers' Yard greyed "Locked", W raises the Yard's ghost red "Locked" and a click on it sends nothing, Esc
+  closes; Age 2 and the "Age II" flash; at the Armory Melee Weapons (on E: the card lists the common upgrades in id
+  order, Armor Q, Armor II W, Melee Weapons E, Melee Weapons II R) is live and Melee Weapons II "Locked", E researches
+  it; V, W places the Engineers' Yard (now live) and it is built; a Heavy Infantry from the Barracks and a Sapper from
+  the Yard (their grid keys); the Heavy Infantry clicked: its panel's attack reads the green "+1" (`TechBonus` 1). What a
+  player would also do: while waiting for money, a laborer standing Idle (its rally tree was felled before it was born:
+  a rally onto a node's cell is a Gather only while the node lives, M3-4) is clicked and right-clicked onto the nearest
+  tree, and the selection clicked back; a site whose work stands still for 800 ticks gets another worker (the laborer
+  nearest the site, clicked and right-clicked onto it: a joining Build), which builds from then on. That last one is a
+  workaround for a sim movement deadlock seen in about one two-seed run in five (seed 6: the builder, leaving the mine,
+  wedges against two gatherers standing in the two-cell corridor between the mine's Depot and a cliff, its velocity
+  flipping each tick); the scene logs it and saves the replay (`m3playable-seed<N>-stall-tick<T>.replay` in Godot's user
+  data folder) for the sim track. Money comes only from gathering (no dev spawns: the sim has no
+  dev resource command, and none was needed). **Tick budget** 16,000 per seed (`M3PlayableTest.TickBudget`, 13 min 20 s
+  of game time); measured over eight runs: seed 1 11,873-13,430, seed 6 10,506-12,872 (the slowest with the deadlock
+  workaround below); two and a half to three minutes of wall time for both.
+  The commands land on whichever tick the frame clock reaches, so two runs differ by a few hundred ticks. On any failure
+  the replay so far is saved the same way (`-fail-`), a repro for `Rts.Cli play`. **Hash twin:**
+  `SimRunner.RecordCheckpointInterval` (0 by default) attaches a `ReplayRecorder` to the new sim before the match
+  enqueues anything; at the end the scene replays the recorded command stream into a bare sim (`ReplayPlayer.Run`) with
+  a checkpoint every tick: every hash equal (seed 1: 45 commands, 11,937 checkpoints). `-- --break <n>` fails step n on
+  purpose, to show a failure names its step.
+- **Node pick = the drawn shape** (BUG-0125, `ResourcePicker.PickRay(..., in PropShape shape, out entry)`): M3-V3b's pick
+  treated a node as the box over its footprint up to the prop's height, so open ground up to about 2.5 m north of a tree
+  or mine took the right click (339 of 3,000 QA rays). The caller now passes `PropsView.Shape` (a `ViewApi.PropShape`:
+  trunk height and radius, tree height, canopy fill, mine and gold heights, gold fill) and the pick tests what
+  `PropsView` draws: a tree is a vertical cylinder of the trunk radius up to the trunk height plus a cone from the
+  canopy radius (`CanopyFill` x half the footprint's smaller side) at the trunk's top to a point at the tree height,
+  each solved as a quadratic in the ray parameter (below the tip only the cone's lower nappe, a convex solid, so the
+  entry is the slab's start or a root); a mine is its footprint block up to `MineHeight` plus the centred `GoldFill`
+  block `GoldHeight` tall (two slab tests). Both stand on the terrain at the footprint centre, as drawn; terrain occludes
+  as before (ground met inside the node's own footprint doesn't hide it). The circles contain the 7- and 6-sided meshes
+  (a facet's middle is at most 8 cm inside). A tree first gets one box test round its drawn shape. Allocation-free.
+- **Locked build-menu entries** (BUG-0126 item 1): `ui.json` `placement.requires` is "Locked" (was "Needs more", which
+  read like money). While a B / V menu is open the card asks `World.CanPlace(player, type, BuildMenu.NoAnchor = -1)` per
+  entry each frame: the sim checks the type, the faction and `requires` before any map rule (M3-6), so an off-map anchor
+  answers `Requires` exactly when the building is locked and `OffMap` otherwise, without the never-seal flood or its
+  scratch (so this call is outside the ghost's once-a-frame rule, which exists for the flood).
+  `BuildMenu.ShownPlaceReason` maps `OffMap` to live. A locked entry gets the production card's look (the reason line in
+  red instead of the cost, name and hotkey at `DimAlpha`) but **stays pressable** (Producer default for the owner's
+  script: V, W before Age II raises the ghost red "Locked", so the player sees why); a production button is `Disabled`
+  because its press would do nothing. `ReasonAt` reports a Place cell's shown `PlacementError` too.
+- **Researched / queued over Locked** (BUG-0126 item 2): a research button shows
+  `ProductionMenu.ShownResearchReason(simReason, HasTech, IsTechQueued)`: `AlreadyResearched` ("Researched") when the
+  player has the tech, else `AlreadyQueued` ("In a queue") when one of its live buildings has it queued
+  (`ProductionMenu.IsTechQueued(buildings, player, tech)`, a pass over the queues), else the sim's own first reason. The
+  sim answers `Requires` first (M3-6), so a queued or researched Age II read "Locked" after a hall was lost; now it reads
+  "In a queue" / "Researched". The button is greyed either way and a press still asks the sim (`Produce`).
+- **ViewApi additions** (read-only, allocation-free, no `World`): `PropShape`; `ResourcePicker.PickRay`'s shape overload
+  (replaces the two heights); `BuildMenu.NoAnchor`, `ShownPlaceReason`; `ProductionMenu.ShownResearchReason`,
+  `IsTechQueued`. Game side: `PropsView.Shape`, `SimRunner.RecordCheckpointInterval` / `Recorder`, `CommandCard`'s
+  `GreyPlaces`.
+- **Tests.** xUnit: `ResourcePickerTests.PickRay_SeesTheDrawnProp_...` (a camera ray to open ground 2.5 m north of a tree
+  that crosses the old column misses; on the axis it hits; beside the trunk under the canopy misses; the cone's slope at
+  2 m, 0.45 m in hits and 0.52 m misses; a mine above its block outside the gold block misses); `PickRayQaTests` against
+  a sampled reference of the drawn solids (2 mm steps, a ray within 1 cm of a surface skipped as grazing): the brute-force
+  march equality on seeds 1 and 21 (0 wrong of about 1,470 rays each), every tree pick touches the drawn tree (0 of
+  1,048; the column missed 77.6 %), and the right-click intent: open ground taken for a node 0, a drawn node taken for
+  open ground 0, wrong 0 of 1,239 rays with a node involved (the column was wrong in 68.1 %, the ground-point pick of
+  M3-V3 in 27.1 %); `ProductionHudTests`: the precedence for every `ResearchError`, Age II queued then the Armory
+  destroyed (the sim `Requires` and the button `AlreadyQueued` for 1,198 ticks; `IsTechQueued` equal to the store's own
+  rule for every tech and player every tick; researched: `AlreadyResearched`), every building type for both players at
+  `NoAnchor` against an oracle at the start, with a Barracks and after Age II (Cadre Tower and Engineers' Yard `Requires`
+  until Age II, the Wickan Corral until a Barracks), 0 bytes. Scenes: `QaV3bTest`'s NOTE ("Locked" 10 of 10 frames
+  after a hall is lost) is a check now ("Researched" 10 of 10, "In a queue" every frame while queued);
+  `ProductionHudTest`, `QaV3Test` and `QaV3bTest` compare research cells with the precedence applied.
+- **Not yet:** BUG-0126 items 3-6; M4 views (hp bars, deaths).
 
 ## AI architecture
 
