@@ -82,7 +82,7 @@ public partial class QaV2Test : Node
         {
             var errors = new List<string>();
             UiText? ui = UiText.Parse(json, errors);
-            Known("BUG-0110", ui == null && errors.Count > 0, $" ui.json '{json}' parsed to {(ui == null ? "null" : "a UiText")} with {errors.Count} errors (Stop label '{ui?.CommandName(CardCommand.Stop)}')");
+            Check(ui == null && errors.Count > 0, $"BUG-0110: ui.json '{json}' parsed to {(ui == null ? "null" : "a UiText")} with {errors.Count} errors (Stop label '{ui?.CommandName(CardCommand.Stop)}')");
         }
         // Sections of the wrong kind inside an object root are errors (one per section).
         var e1 = new List<string>();
@@ -285,7 +285,7 @@ public partial class QaV2Test : Node
         LeftClick(hallPx); // the click is on the hall (red); the ghost has not synced to it yet
         List<Command> sent = Pending(start);
         if (green)
-            Known("BUG-0109", sent.Count == 0, $" a click on the hall (red) placed {sent.Count} Builds at the last drawn anchor {spot} ({Describe(sent)})");
+            Check(sent.Count == 0, $"BUG-0109: a click on the hall (red) placed {sent.Count} Builds at the last drawn anchor {spot} ({Describe(sent)})");
         else GD.Print($"stale: spot {spot} not green ({_ghost.Reason}); row not exercised");
         Tick(2);
         _ghost.ScreenOverride = null;
@@ -351,7 +351,8 @@ public partial class QaV2Test : Node
                 Vector2 px = _camera.UnprojectPosition(new Vector3(x, baseY + BuildingViews.BoxHeight, z));
                 if (_sel.PickBuilding(px) != hall) continue;
                 onBox++;
-                CommandKind k = SelectionController.WorkAt(W, Pick(px), out _);
+                // The right click's own resolution (BUG-0108 fix: the box hit first, its footprint centre).
+                CommandKind k = _sel.ContextTarget(px, out System.Numerics.Vector2 at, out _) ? SelectionController.WorkAt(W, at, out _) : CommandKind.Move;
                 if (k == CommandKind.Repair) repair++;
                 else move++;
             }
@@ -362,7 +363,7 @@ public partial class QaV2Test : Node
         RightClick(_sel.PickBuilding(far) == hall ? far : near);
         List<Command> sent = Pending(start);
         GD.Print($"box top of the damaged hall: {onBox} sampled pixels on the box, {repair} Repair, {move} Move; far-edge right-click sent {Describe(sent)}");
-        Known("BUG-0108", move == 0, $" {move} of {onBox} pixels on the damaged hall's visible box top give a Move, not a Repair");
+        Check(move == 0 && sent.Count == 3 && sent.All(c => c.Kind == CommandKind.Repair), $"BUG-0108: {move} of {onBox} pixels on the damaged hall's visible box top give a Move, not a Repair");
         Tick(2);
     }
 

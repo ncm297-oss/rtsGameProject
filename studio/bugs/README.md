@@ -137,11 +137,12 @@ bugs outrank new features.
 | [BUG-0107](BUG-0107-m3-v1-nits.md) | S4 | open | M3-V1 nits: Malazan site vs finished colour, tiny wood cube at 60 m, minimap resource redraw on every building change |
 | [BUG-0098](BUG-0098-m3-5-empty-tech-filter-matches-every-unit.md) | S3 | fixed | An empty `units` or `tags` filter in a tech effect silently matches every unit (the other faction's too) |
 | [BUG-0099](BUG-0099-m3-5-tech-data-nits.md) | S4 | open (items 1, 3 fixed M3-6) | M3-5 tech data nits: `requires` cycles load, an effect matching no unit loads, a tech id may equal a building id |
-| [BUG-0108](BUG-0108-right-click-on-a-building-box-top-picks-the-ground-behind-it.md) | S3 | open | A right click on the visible top of a building's box picks the ground behind it: half of a damaged hall's top gives a Move, not a Repair |
-| [BUG-0109](BUG-0109-ghost-click-ignores-the-click-position.md) | S3 | open | A placement click ignores where it lands: it builds at the last frame's drawn anchor, or is swallowed if that one was red |
-| [BUG-0110](BUG-0110-ui-json-non-object-root-loads-empty.md) | S3 | open | ui.json whose root is not an object (`[]`, `null`, a number or a string) loads with no error and blank labels |
+| [BUG-0108](BUG-0108-right-click-on-a-building-box-top-picks-the-ground-behind-it.md) | S3 | fixed | A right click on the visible top of a building's box picks the ground behind it: half of a damaged hall's top gives a Move, not a Repair |
+| [BUG-0109](BUG-0109-ghost-click-ignores-the-click-position.md) | S3 | fixed | A placement click ignores where it lands: it builds at the last frame's drawn anchor, or is swallowed if that one was red |
+| [BUG-0110](BUG-0110-ui-json-non-object-root-loads-empty.md) | S3 | fixed | ui.json whose root is not an object (`[]`, `null`, a number or a string) loads with no error and blank labels |
 | [BUG-0122](BUG-0122-m3-v2-nits.md) | S4 | open | M3-V2 nits: mid-word wrap on "Quartermaster's Depot", Shift-click floods duplicate Builds, ghost lags a panning camera, small reason text |
 | [BUG-0100](BUG-0100-m3-6-unmeetable-requirements-load.md) | S3 | open | Requirements that can never be met load clean (another faction's building, an any-of only its own tech opens) |
 | [BUG-0112](BUG-0112-m3-6-d3-building-requires-break-sim-tests.md) | S3 | open | With D3's building requires merged, 25 of the sim's tests fail (construction fuzz, never-seal, requirement fuzz): merge hazard for the data track |
 | [BUG-0113](BUG-0113-m3-6-nits.md) | S4 | open | M3-6 nits: type-mismatch errors read "malformed JSON ... Nullable`1[Int32]", the 10k-unit load test now times a failing load |
+| [BUG-0123](BUG-0123-selection-panel-allocates-every-tick-under-repair.md) | S3 | open | The selection panel allocates a string every tick while the selected building is repaired (~52 B/tick); a greyed production button looks enabled |
 | [BUG-0124](BUG-0124-m3-v3-tests-queue-age-ii-without-halls.md) | S2 | open | M3-V3's tests queue Age II at a Town Hall with no halls; merged with M3-6 the view branch is red and `main`'s smoke gate fails until it lands |

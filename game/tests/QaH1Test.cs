@@ -29,7 +29,7 @@ public partial class QaH1Test : Node
     private Simulation _sim = null!;
     private Vector2 _screen;
     private readonly Dictionary<string, int> _actionCounts = new();
-    private int _attackOrders, _moveOrders, _armed;
+    private int _attackOrders, _moveOrders, _armed, _rallyOrders;
 
     private UnitStore U => _sim.World.Units;
 
@@ -47,7 +47,7 @@ public partial class QaH1Test : Node
         }
         foreach (string f in _failures.Take(40)) GD.Print($"QA M2-H1 TEST FAIL: {f}");
         if (_failures.Count > 40) GD.Print($"QA M2-H1 TEST FAIL: ... {_failures.Count - 40} more");
-        GD.Print($"fuzz: {string.Join(", ", _actionCounts.OrderBy(k => k.Key).Select(k => $"{k.Key} {k.Value}"))}; A armed {_armed} times, {_attackOrders} attack-move orders, {_moveOrders} move orders");
+        GD.Print($"fuzz: {string.Join(", ", _actionCounts.OrderBy(k => k.Key).Select(k => $"{k.Key} {k.Value}"))}; A armed {_armed} times, {_attackOrders} attack-move orders, {_moveOrders} move orders, {_rallyOrders} rally orders");
         if (_failures.Count == 0) GD.Print("QA M2-H1 TEST PASS");
         GetTree().Quit(_failures.Count == 0 ? 0 : 1);
     }
@@ -118,6 +118,9 @@ public partial class QaH1Test : Node
         int staleCount = _sel.Selection.Count;
         int[] before = Issued();
         int pending = _sim.PendingCommandCount;
+        // M3-V3: with a building selected a right click is its rally order (one SetRally / ClearRally; nothing for a site).
+        int building = _sel.SelectedBuilding;
+        int rallies = _sel.SelectedFinishedBuilding >= 0 ? 1 : 0;
         List<EntityHandle> selBefore = _sel.Selection.Items.ToArray().ToList();
         Rect2 mini = _mini.GetGlobalRect();
         Vector2 inMini = mini.Position + new Vector2((float)rng.NextDouble(), (float)rng.NextDouble()) * mini.Size * 0.9f + mini.Size * 0.05f;
@@ -153,6 +156,7 @@ public partial class QaH1Test : Node
                 RightClick(inMini);
                 Check(!_sel.Targeting, $"{where}: a minimap right-click left targeting on");
                 if (wasTargeting) ExpectNoCommands(before, pending, where);
+                else if (building >= 0) ExpectRally(before, pending, rallies, where);
                 else { ExpectOnly(before, pending, CommandKind.Move, live, where); _moveOrders += live > 0 ? 1 : 0; }
                 Check(SameHandlesLive(selBefore), $"{where}: a minimap right-click changed the selection");
                 break;
@@ -165,6 +169,7 @@ public partial class QaH1Test : Node
                 RightClick(at);
                 Check(!_sel.Targeting, $"{where}: a 3D right-click left targeting on");
                 if (wasTargeting) ExpectNoCommands(before, pending, where);
+                else if (building >= 0) ExpectRally(before, pending, rallies, where);
                 else if (onNode && workers > 0) { ExpectGatherSplit(before, pending, workers, live - workers, where); _moveOrders++; }
                 else { ExpectOnly(before, pending, CommandKind.Move, live, where); _moveOrders += live > 0 ? 1 : 0; }
                 break;
@@ -301,6 +306,15 @@ public partial class QaH1Test : Node
             Check(now[k] - before[k] == want, $"{where}: {(CommandKind)k} x{now[k] - before[k]}, expected {want}");
         }
         Check(_sim.PendingCommandCount - pending == count, $"{where}: {_sim.PendingCommandCount - pending} enqueued, expected {count}");
+    }
+
+    // A right click with a building selected: no unit order, `count` rally commands (M3-V3).
+    private void ExpectRally(int[] before, int pending, int count, string where)
+    {
+        int[] now = Issued();
+        for (int k = 0; k < now.Length; k++) Check(now[k] == before[k], $"{where}: rally click issued {(CommandKind)k} x{now[k] - before[k]}");
+        Check(_sim.PendingCommandCount - pending == count, $"{where}: {_sim.PendingCommandCount - pending} enqueued with a building selected, expected {count} rally");
+        _rallyOrders += count;
     }
 
     private void ExpectGatherSplit(int[] before, int pending, int gathers, int moves, string where)

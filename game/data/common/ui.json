@@ -20,6 +20,44 @@
     "seals_ground": "Would wall ground off",
     "unit_in_the_way": "Units in the way",
     "cannot_afford": "Can't afford",
-    "store_full": "Too many buildings"
+    "store_full": "Too many buildings",
+    "requires": "Needs more"
+  },
+  "train": {
+    "no_building": "No building",
+    "unknown_type": "Unknown unit",
+    "wrong_faction": "Not your faction's unit",
+    "not_trained_here": "Not trained here",
+    "locked_by_requirement": "Locked",
+    "queue_full": "Queue full",
+    "cannot_afford": "Can't afford",
+    "requires": "Locked"
+  },
+  "research": {
+    "no_building": "No building",
+    "unknown_tech": "Unknown tech",
+    "wrong_faction": "Not your faction's tech",
+    "not_researched_here": "Not researched here",
+    "already_researched": "Researched",
+    "already_queued": "In a queue",
+    "queue_full": "Queue full",
+    "cannot_afford": "Can't afford",
+    "requires": "Locked"
+  },
+  "states": {
+    "idle": "Idle",
+    "moving": "Moving",
+    "gathering": "Gathering",
+    "returning": "Returning cargo",
+    "building": "Building"
+  },
+  "hud": {
+    "pop": "Pop",
+    "hp": "HP",
+    "attack": "Attack",
+    "armor": "Armor",
+    "range": "Range",
+    "speed": "Speed",
+    "needs": "Needs"
   }
 }

@@ -560,13 +560,13 @@ public partial class CommandCardTest : Node
         await Frames();
         Check(!_outline.Visible && _card.ActionAt(14) == CardCommand.None, "outline or Cancel stayed on a reused slot");
 
-        // A finished building: selected alone, its card empty for now; clicking it with units selected drops the units.
+        // A finished building: selected alone, its production card on show (M3-V3: the hall trains its worker, then Age II); clicking it with units selected drops the units.
         int hall = HallSlot(0);
         await Select(Soldiers(3));
         LeftClick(await BoxScreen(hall));
         await Frames();
         Check(_sel.SelectedBuilding == hall && _sel.Selection.Count == 0, $"hall click: {_sel.SelectedBuilding}, {_sel.Selection.Count} units");
-        CheckCells("finished building", new Dictionary<int, CardCommand>());
+        CheckCells("finished building", new Dictionary<int, CardCommand> { [0] = CardCommand.Train, [1] = CardCommand.Research });
         // An enemy building is not selectable (own only, like units).
         int enemy = HallSlot(1);
         LeftClick(await BoxScreen(enemy));
@@ -707,7 +707,7 @@ public partial class CommandCardTest : Node
             CardCommand w = want.TryGetValue(i, out CardCommand c) ? c : CardCommand.None;
             Button b = _card.ButtonAt(i);
             if (!Check(_card.ActionAt(i) == w && b.Visible == (w != CardCommand.None), $"{what}: cell {i} is {_card.ActionAt(i)} (visible {b.Visible}), want {w}")) continue;
-            if (w is CardCommand.None or CardCommand.Place) continue;
+            if (w is CardCommand.None or CardCommand.Place or CardCommand.Train or CardCommand.Research) continue;
             Check(_card.NameAt(i).Text == _ui.CommandName(w) && _card.HintAt(i).Text == _ui.CommandHint(w), $"{what}: cell {i} reads '{_card.NameAt(i).Text}' / '{_card.HintAt(i).Text}'");
         }
     }

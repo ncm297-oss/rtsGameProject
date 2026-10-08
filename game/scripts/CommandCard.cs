@@ -4,6 +4,7 @@ using Godot;
 using Rts.Sim;
 using Rts.Sim.Commands;
 using Rts.Sim.Data;
+using Rts.Sim.Economy;
 using Rts.Sim.Entities;
 using Rts.Sim.ViewApi;
 
@@ -15,12 +16,16 @@ namespace Rts.Game;
 /// active Tab subgroup is a <c>worker</c> type also Build advanced (V) and Build basic (B) on the V and B cells; B / V
 /// open a build menu, whose entries (<c>ui.json</c> <c>buildMenus</c>, the faction's building of each slot) take the grid
 /// cells in order with their grid keys (docs/02 "Grid hotkeys": a menu owns the whole grid, so A picks its sixth entry,
-/// not attack-move); picking one raises the <see cref="BuildGhost"/>. A selected own site shows Cancel on the B cell; a
-/// finished building nothing yet (M3-V3). Esc or a right click closes a menu and its ghost. A button press does exactly
-/// what its key does (the same <see cref="SelectionController"/> call). Labels come from <see cref="UiText"/> or the
-/// building's <c>displayName</c>, the tooltip from its <c>description</c> and cost (faction resource names), all built in
-/// <see cref="Init"/>; a button's text is written only when the card's contents change (<see cref="Layouts"/>), so a
-/// steady frame allocates nothing. Holds view state only (which menu is open).
+/// not attack-move); picking one raises the <see cref="BuildGhost"/>. A selected own site shows Cancel on the B cell. A
+/// selected own finished building shows its production card (M3-V3, <see cref="ProductionMenu"/>): the units it trains,
+/// then the techs it researches, on cells 0, 1, 2 ... with their grid keys; each frame a button is greyed when
+/// <c>World.CanTrain</c> / <c>CanResearch</c> refuses, its cost line replaced by the reason (<c>ui.json</c> <c>train</c> /
+/// <c>research</c>), and only a change of reason rewrites it. Esc or a right click closes a menu and its ghost. A button
+/// press does exactly what its key does (the same <see cref="SelectionController"/> call). Labels come from
+/// <see cref="UiText"/> or the building's, unit's or tech's <c>displayName</c>, the tooltip from its <c>description</c>,
+/// cost (faction resource names) and <c>requires</c> ("Needs ..." with display names), all built in <see cref="Init"/>;
+/// a button's text is written only when the card's contents change (<see cref="Layouts"/>), so a steady frame allocates
+/// nothing. Holds view state only (which menu is open).
 /// </remarks>
 public partial class CommandCard : Control
 {
@@ -33,7 +38,11 @@ public partial class CommandCard : Control
     // The grid cells of the unit commands: the middle row from A, then V and B on the bottom row.
     private const int AttackCell = 5, StopCell = 6, HoldCell = 7, MoveCell = 8, AdvancedCell = 13, BasicCell = 14, CancelCell = 14;
 
-    private enum Mode { None = -1, Empty, Units, Workers, BasicMenu, AdvancedMenu, Site, Building }
+    private enum Mode { None = -1, Empty, Units, Workers, BasicMenu, AdvancedMenu, Site, Production }
+
+    private static readonly StringName FontColor = "font_color";
+    private static readonly Color CostColor = new(0.85f, 0.85f, 0.85f);
+    private static readonly Color ReasonColor = new(1f, 0.45f, 0.4f);
 
     private SimRunner? _runner;
     private SelectionController _sel = null!;
@@ -52,6 +61,12 @@ public partial class CommandCard : Control
     private readonly int[] _basic = new int[UiText.MaxMenuEntries], _advanced = new int[UiText.MaxMenuEntries];
     private int _basicCount, _advancedCount;
     private string[] _costText = Array.Empty<string>(), _tooltip = Array.Empty<string>();
+    private string[] _unitCost = Array.Empty<string>(), _unitTip = Array.Empty<string>();
+    private string[] _techCost = Array.Empty<string>(), _techTip = Array.Empty<string>();
+    private readonly ProductionEntry[] _entries = new ProductionEntry[Cells];
+    // Per cell of a production card: the reason on show (TrainError or ResearchError as int; -1 not set since the layout).
+    private readonly int[] _shownReason = new int[Cells];
+    private int _shownBuilding = -1, _shownBuildingGen;
 
     private Mode _menu = Mode.None;
     private Mode _shown = Mode.None;
@@ -75,8 +90,11 @@ public partial class CommandCard : Control
     /// <summary>What grid cell <paramref name="i"/> (0 = Q ... 14 = B) does now.</summary>
     public CardCommand ActionAt(int i) => (uint)i < Cells ? _actions[i] : CardCommand.None;
 
-    /// <summary>The building type of a <see cref="CardCommand.Place"/> cell, else -1.</summary>
-    public int TypeAt(int i) => (uint)i < Cells && _actions[i] == CardCommand.Place ? _types[i] : -1;
+    /// <summary>The building type of a <see cref="CardCommand.Place"/> cell, the unit type of a <see cref="CardCommand.Train"/> cell or the tech of a <see cref="CardCommand.Research"/> cell, else -1.</summary>
+    public int TypeAt(int i) => (uint)i < Cells && _actions[i] is CardCommand.Place or CardCommand.Train or CardCommand.Research ? _types[i] : -1;
+
+    /// <summary>The refusal a production cell shows now (<see cref="TrainError"/> for a Train cell, <see cref="ResearchError"/> for a Research cell, as int; 0 = enabled), or -1 for any other cell.</summary>
+    public int ReasonAt(int i) => (uint)i < Cells && _actions[i] is CardCommand.Train or CardCommand.Research ? _shownReason[i] : -1;
 
     /// <summary>The button of grid cell <paramref name="i"/>.</summary>
     public Button ButtonAt(int i) => _buttons[i];
@@ -164,6 +182,22 @@ public partial class CommandCard : Control
             _costText[t] = string.Create(CultureInfo.InvariantCulture, $"{def.CostGold} / {def.CostWood}");
             _tooltip[t] = string.Create(CultureInfo.InvariantCulture, $"{def.Description}\n{f.GoldName} {def.CostGold}  {f.WoodName} {def.CostWood}");
         }
+        _unitCost = new string[_data.Units.Length];
+        _unitTip = new string[_data.Units.Length];
+        for (int t = 0; t < _data.Units.Length; t++)
+        {
+            UnitDef def = _data.Units[t];
+            _unitCost[t] = string.Create(CultureInfo.InvariantCulture, $"{def.CostGold} / {def.CostWood}");
+            _unitTip[t] = Tooltip(def.Description, f, def.CostGold, def.CostWood, def.Requires, ui);
+        }
+        _techCost = new string[_data.Techs.Length];
+        _techTip = new string[_data.Techs.Length];
+        for (int t = 0; t < _data.Techs.Length; t++)
+        {
+            TechDef def = _data.Techs[t];
+            _techCost[t] = string.Create(CultureInfo.InvariantCulture, $"{def.CostGold} / {def.CostWood}");
+            _techTip[t] = Tooltip(def.Description, f, def.CostGold, def.CostWood, def.Requires, ui);
+        }
         selection.Card = this;
         _shown = Mode.None;
         Sync();
@@ -180,7 +214,11 @@ public partial class CommandCard : Control
         if (building >= 0)
         {
             if (MenuOpen) CloseMenu();
-            want = sim.World.Buildings.UnderConstruction[building] ? Mode.Site : Mode.Building;
+            BuildingStore b = sim.World.Buildings;
+            want = b.UnderConstruction[building] ? Mode.Site : b.Owner[building] == SelectionController.LocalPlayer ? Mode.Production : Mode.Empty;
+            // Another building of a different type needs its own buttons.
+            if (want == Mode.Production && _shown == Mode.Production && (building != _shownBuilding || b.Generation[building] != _shownBuildingGen))
+                _shown = Mode.None;
         }
         else if (_sel.Selection.Count == 0)
         {
@@ -193,7 +231,46 @@ public partial class CommandCard : Control
             want = _sel.Selection.Count > 0 ? Mode.Units : Mode.Empty;
         }
         else want = MenuOpen ? _menu : Mode.Workers;
-        if (want != _shown) Layout(want);
+        if (want != _shown) Layout(want, building);
+        if (_shown == Mode.Production) Grey(sim.World, building);
+    }
+
+    // Greys each production button the sim would refuse now; touches a button only when its reason changed.
+    private void Grey(World world, int building)
+    {
+        for (int i = 0; i < Cells; i++)
+        {
+            CardCommand c = _actions[i];
+            if (c is not (CardCommand.Train or CardCommand.Research)) continue;
+            int reason;
+            if (c == CardCommand.Train)
+            {
+                world.CanTrain(SelectionController.LocalPlayer, building, _types[i], out TrainError e);
+                reason = (int)e;
+            }
+            else
+            {
+                world.CanResearch(SelectionController.LocalPlayer, building, _types[i], out ResearchError e);
+                reason = (int)e;
+            }
+            if (reason == _shownReason[i]) continue;
+            _shownReason[i] = reason;
+            bool ok = reason == 0;
+            _buttons[i].Disabled = !ok;
+            string cost = c == CardCommand.Train ? _unitCost[_types[i]] : _techCost[_types[i]];
+            _costs[i].Text = ok ? cost : c == CardCommand.Train ? _ui.TrainText((TrainError)reason) : _ui.ResearchText((ResearchError)reason);
+            _costs[i].AddThemeColorOverride(FontColor, ok ? CostColor : ReasonColor);
+        }
+    }
+
+    // "<description>\n<gold> G  <wood> W" plus "\nNeeds A, B" when the def requires anything (display names).
+    private string Tooltip(string description, FactionDef f, int gold, int wood, System.Collections.Immutable.ImmutableArray<string> requires, UiText ui)
+    {
+        string tip = string.Create(CultureInfo.InvariantCulture, $"{description}\n{f.GoldName} {gold}  {f.WoodName} {wood}");
+        if (requires.IsDefaultOrEmpty) return tip;
+        var names = new string[requires.Length];
+        for (int k = 0; k < names.Length; k++) names[k] = ProductionMenu.RequirementName(_data, requires[k]);
+        return $"{tip}\n{ui.Hud(HudText.Needs)} {string.Join(", ", names)}";
     }
 
     /// <summary>Opens the basic (B) or advanced (V) build menu; only with a worker subgroup active.</summary>
@@ -216,15 +293,17 @@ public partial class CommandCard : Control
     }
 
     /// <summary>
-    /// What a left click on the map does while the ghost is up: when green, one <c>Build</c> per selected worker
-    /// (<see cref="SelectionController.OrderBuild"/>, which plays the Command sound) and the menu closes unless
-    /// <paramref name="shift"/> keeps the ghost for another; when red or off the map, nothing (no sound). A Shift placement
-    /// after the first of the same ghost is queued behind it, so the workers build them in turn. Returns true if it placed.
+    /// What a left click at <paramref name="screen"/> on the map does while the ghost is up: the anchor under the click
+    /// (<see cref="BuildGhost.ResolveClick"/>, BUG-0109: not the last frame's drawn one) when green gets one <c>Build</c> per
+    /// selected worker (<see cref="SelectionController.OrderBuild"/>, which plays the Command sound) and the menu closes
+    /// unless <paramref name="shift"/> keeps the ghost for another; red, off the map or unresolved this frame: nothing (no
+    /// sound). A Shift placement after the first of the same ghost is queued behind it, so the workers build them in turn.
+    /// Returns true if it placed.
     /// </summary>
-    public bool GhostClick(bool shift)
+    public bool GhostClick(bool shift, Vector2 screen)
     {
-        if (!_ghost.CanClick) return false;
-        if (_sel.OrderBuild(_ghost.TypeId, _ghost.Anchor, queued: shift && _placed > 0) == 0) return false;
+        if (!_ghost.Active || !_ghost.ResolveClick(screen, out int anchor)) return false;
+        if (_sel.OrderBuild(_ghost.TypeId, anchor, queued: shift && _placed > 0) == 0) return false;
         _placed++;
         if (!shift) CloseMenu();
         return true;
@@ -254,6 +333,16 @@ public partial class CommandCard : Control
         {
             Press(CancelCell);
             return true;
+        }
+        if (_shown == Mode.Production)
+        {
+            // A production card owns the whole grid (docs/02 "Grid hotkeys"); a greyed or empty cell does nothing.
+            for (int i = 0; i < Cells; i++)
+            {
+                if (!e.IsActionPressed(_cardActions[i])) continue;
+                Press(i);
+                return true;
+            }
         }
         if (_shown == Mode.Workers)
         {
@@ -287,16 +376,20 @@ public partial class CommandCard : Control
                 _ghost.Begin(_types[i]);
                 _placed = 0;
                 break;
+            // Produce asks CanTrain / CanResearch again: a greyed press (its key) enqueues nothing and plays nothing.
+            case CardCommand.Train: _sel.Produce(_types[i], isTech: false); break;
+            case CardCommand.Research: _sel.Produce(_types[i], isTech: true); break;
         }
     }
 
     // Rewrites every cell for a new mode; the only place button texts change.
-    private void Layout(Mode mode)
+    private void Layout(Mode mode, int building)
     {
         _shown = mode;
         Layouts++;
         Array.Clear(_actions);
         Array.Fill(_types, -1);
+        Array.Fill(_shownReason, -1);
         switch (mode)
         {
             case Mode.Units:
@@ -324,6 +417,17 @@ public partial class CommandCard : Control
             case Mode.Site:
                 _actions[CancelCell] = CardCommand.Cancel;
                 break;
+            case Mode.Production:
+                BuildingStore bs = _runner!.Simulation!.World.Buildings;
+                _shownBuilding = building;
+                _shownBuildingGen = bs.Generation[building];
+                int count = ProductionMenu.Entries(_data, bs.TypeId[building], _entries);
+                for (int k = 0; k < count; k++)
+                {
+                    _actions[k] = _entries[k].IsTech ? CardCommand.Research : CardCommand.Train;
+                    _types[k] = _entries[k].TypeId;
+                }
+                break;
         }
         for (int i = 0; i < Cells; i++)
         {
@@ -342,6 +446,22 @@ public partial class CommandCard : Control
                 _hints[i].Text = _gridKeys[i];
                 _costs[i].Text = _costText[def.Id];
             }
+            else if (c == CardCommand.Train)
+            {
+                UnitDef def = _data.Units[_types[i]];
+                _names[i].Text = def.DisplayName;
+                b.TooltipText = _unitTip[def.Id];
+                _hints[i].Text = _gridKeys[i];
+                _costs[i].Text = _unitCost[def.Id];
+            }
+            else if (c == CardCommand.Research)
+            {
+                TechDef def = _data.Techs[_types[i]];
+                _names[i].Text = def.DisplayName;
+                b.TooltipText = _techTip[def.Id];
+                _hints[i].Text = _gridKeys[i];
+                _costs[i].Text = _techCost[def.Id];
+            }
             else
             {
                 _names[i].Text = _ui.CommandName(c);
@@ -349,6 +469,9 @@ public partial class CommandCard : Control
                 _hints[i].Text = _ui.CommandHint(c);
                 _costs[i].Text = "";
             }
+            // Greying is per frame (Grey); a fresh layout starts enabled in the cost colour.
+            b.Disabled = false;
+            _costs[i].AddThemeColorOverride(FontColor, CostColor);
             b.Visible = true;
         }
     }

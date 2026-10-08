@@ -2546,7 +2546,126 @@ game/data/common/ui.json  view-only text and menu lists (UiText.cs); the sim's D
   Repairs + the soldier's Move (Shift queued), own site = 3 joining Builds, enemy hall = Moves; 300 idle frames 0 bytes
   and nothing rewritten. Windowed with `-- --shots <dir>` it saves the soldier and worker cards, the B menu, a green and
   a red ghost and a selected site with its Cancel.
-- **Not yet:** production card, queue, rally, population (M3-V3); `requires` greying (M3-6); rebinding UI; real art.
+- **Not yet:** production card, queue, rally, population (M3-V3, below); `requires` greying (M3-6); rebinding UI; real art.
+
+### Implementation (M3-V3)
+
+The owner runs a whole base in the window: a selection panel, a production card on a selected finished building (train
+and research buttons greyed by the sim's own rules, a queue strip with progress and cancel), a rally marker set by
+right-click, and population in the resource bar. Three M3-V2 bugs are folded in (BUG-0108, 0109, 0110).
+
+```
+Match.tscn  (new nodes)
+  World3D/RallyMarker   Node3D, RallyMarker.cs: cone at the selected building's rally point + line from its edge
+  Hud/SelectionPanel    Control, SelectionPanel.cs: bottom centre (right of the minimap), unit stats / portrait grid / building
+  Hud/QueueStrip        Control, ProductionQueueStrip.cs: above the command card, up to 5 queue items
+  Hud/ResourceBar       (M3-V1) + children Pop ("Pop a / b") and AgeFlash
+```
+
+- **`ui.json` additions** (view data; the sim's `DataLoader` still never reads it): `train` and `research` sections keyed by
+  the snake_case name of every `TrainError` / `ResearchError` member but `None` (`no_building`, `queue_full`,
+  `cannot_afford`, `already_queued`, `locked_by_requirement` ...), `states` keyed by every `UnitState` (`idle`, `moving`,
+  `gathering`, `returning`, `building`), `hud` keyed by the view's `HudText` enum (`pop`, `hp`, `attack`, `armor`, `range`,
+  `speed`, `needs`). A member without its key is one named load error, as before. Each reason section (`placement`,
+  `train`, `research`) must also carry `requires` (`UiText.ForwardKey`), the reason M3-6's gating adds: a key with no enum
+  member yet is accepted (any extra key is), so the file loads against `main` with or without M3-6, and once the sim has
+  the member it is read by the same loop (never reported twice). **BUG-0110:** a root that is not an object (`[]`,
+  `null`, a number, a string) is now one error ("ui.json: the root must be an object"), not a `UiText` with blank texts.
+  With any error the match logs them and hides the card and the panel.
+- **Selection panel** (`SelectionPanel`, docs/02 "HUD layout"; a translucent backdrop, hidden with nothing selected).
+  One unit: a placeholder portrait (a square in the type's colour, `SelectionPanel.TypeColor`: hue = type id x 0.618,
+  with the `displayName`'s initial), the `displayName`, and rows HP / Attack / Armor / Range / Speed (labels `hud.*`):
+  values from the `UnitDef` (attack value, flat armor, attack range in meters, speed in m/s = `SpeedPerTick` x 20), and
+  `World.TechBonus(player, type, stat)` for hp, attack, armor and range as a green "+N" beside the value, hidden at 0.
+  **The bonus is shown only: combat does not apply it until M4.** Units have no hit points in the sim before combat, so
+  hp reads max / max (with the hp bonus beside it). The state line is `states.<state>`. Several units: up to
+  `PortraitGrid.MaxPortraits` = 24 portraits (8 x 3, 40 px) in selection order, coloured by type with the initial, a "+N"
+  label for the rest; the cells of the active Tab subgroup's type are outlined; a click on one is
+  `SelectionController.SelectOnly` (that unit alone, Select sound). A building: its `displayName` and hp now / max (hp
+  changes every tick under repair: one small string per change). Every node is made in `_Ready`; a text is rebuilt only
+  when its value changes (`Rebuilds`).
+- **Production card** (`CommandCard`, mode `Production` while an own **finished** building is selected; a site keeps its
+  Cancel). Entries from the pure `ViewApi.ProductionMenu.Entries(data, buildingType, span)`: `UnitsTrainedAt(type)` in
+  order, then `TechsResearchableAt(type)` with the common techs first and the faction's own after them (an Armory: Armor,
+  Armor II, Melee Weapons, Melee Weapons II, Ranged Weapons, Ranged Weapons II, then Moranth Supply; a Town Hall:
+  Laborer, then Age II). They take cells 0, 1, 2 ... with the cell's grid key as hint, the `displayName`, the cost
+  "G / W" bottom right and a tooltip of `description`, "<gold name> G  <wood name> W" and, when the def has `requires`,
+  "<hud.needs> A, B" with the ids mapped to display names (`ProductionMenu.RequirementName`). Every string is built in
+  `Init`. Each frame the card asks `World.CanTrain` / `CanResearch` for every button (at most 15 allocation-free calls)
+  and, only when a button's reason changed, sets `Disabled` and replaces the cost line with `train.<reason>` /
+  `research.<reason>` in red (back to the cost when it clears). A press (button, its grid key, or `Press`) is
+  `SelectionController.Produce`: it asks the same rule again, then enqueues one `Command.Train` / `Command.Research` at the
+  footprint centre with one Command sound; a refused press enqueues nothing and plays nothing. A production card owns the
+  whole grid (docs/02 "Grid hotkeys"): an empty cell's key does nothing.
+- **Queue strip** (`ProductionQueueStrip`): the selected own finished building's queue, up to `QueueStrip.MaxItems` = 5
+  items (64 x 44 px, 4 px gaps), head first: a unit is a square in its type's colour with its initial, a tech a slate
+  square with its `displayName`. The head carries a yellow bar of `QueueStrip.HeadFill` = `Progress / ItemTicks(slot, 0)`
+  clamped to [0, 1]. A click on item k is `SelectionController.CancelQueueItem(k)`: `Command.CancelTrain(player, footprint
+  centre, k)`, a full refund, one Command sound. Items are rewritten only when their type changes, the bar only when the
+  fill does.
+- **Age flash:** when `World.Age(player)` rises, the resource bar's `AgeFlash` label shows the age tech's `displayName`
+  (`GameData.AgeTechs[age - 2]`, "Age II") for 4 s of view time, pulsing.
+- **Population** (`ResourceBar`): a `Pop` child label right of "Gold N  Wood N": "<hud.pop> a / b" from `World.HalfPop` /
+  `HalfPopCap` through `ViewApi.PopText.Format` (half-pop / 2, ".5" for odd: 11 -> "5.5"), red when
+  `PopText.AtCap` (`HalfPop >= HalfPopCap`). Rebuilt only when one of the two numbers changes (`PopBuilds`). The match
+  start reads "Pop 5 / 10" (5 workers, one Town Hall).
+- **Rally** (`SelectionController.RallyOrder`, `RallyMarker`): with an own finished building selected, a right click on
+  the 3D view (`CommandAt`) enqueues one `Command.SetRally(player, buildingStore.Cell[slot], point)` at the clicked point
+  (ground, a resource node, another building's centre), or one `Command.ClearRally(player, footprint centre)` when the click
+  hits the selected building itself; a selected site gets nothing. The minimap's right click with a building selected is
+  `RallyOrder` at the map point (otherwise a Move, as before). One Command sound. The marker is shown while the selected
+  own finished building `HasRally`: a 1.6 m yellow cone at `RallyPosition` on the terrain and a thin box line from
+  `ViewApi.RallyGeometry.EdgePoint` (where the centre-to-target segment leaves the footprint) to the point, absent when the
+  point is inside the footprint; nodes move only when the building or the point changes.
+- **BUG-0108** (right click on a box top): `SelectionController.ContextTarget(screen)` first ray-picks the drawn building
+  boxes of **any** owner (`BuildingPicker.PickRay`, owner -1) and uses the hit building's footprint centre as the
+  context point; only without a hit does it ground-pick. So the visible top of a damaged own building means Repair, an own
+  site join, and an enemy or full-hp building a Move to its centre, instead of whatever lies on the ground 2 m behind the
+  box. Resource nodes still go by the ground point: their prop heights are view constants (`PropsView`) the pure pickers
+  don't see (noted for a later pass).
+- **BUG-0109** (the placement click): `CommandCard.GhostClick(shift, screen)` takes the click's own position;
+  `BuildGhost.ResolveClick` recomputes the anchor there. The drawn anchor uses the drawn answer; another anchor is asked of
+  `CanPlace` as that frame's one call (it then draws that answer, so the next `Sync` asks nothing), unless the frame's call
+  is already spent, a tick is running or this is not the main thread: then the click is ignored (`ClicksIgnored`). So a
+  Build always goes under the click, never to a stale anchor, and `CanPlace` stays at most once per frame.
+- **ViewApi additions** (read-only, allocation-free, no `World`): `PopText` (`Format`, `AtCap`), `QueueStrip` (`Count`,
+  `HeadFill`, `ItemX`, `Width`, `ItemAt`, `MaxItems`), `RallyGeometry` (`EdgePoint`, `Line`), `ProductionMenu`
+  (`Entries`, `RequirementName`) with `ProductionEntry`, `PortraitGrid` (`Shown`, `Overflow`). `PopText.Format` and
+  `RequirementName` allocate their string (called on change / at init only).
+- **Cost.** 300 idle frames with the panel, a production card, a 2-item queue strip, a rally flag and the bar allocate 0
+  bytes and rewrite nothing (also with one unit and with the 26-unit grid). `--bench 10 --vsync off` (dev PC, default
+  window, Debug): avg 0.57 ms, p99 0.95 / 1.06 ms, worst 1.39 / 1.97 ms, avg tick 0.21 ms over two runs (the panel
+  shows the bench's selections; the M3-V2 figure, measured under another track's test load, was 0.80 ms).
+- **Tests.** xUnit (`Rts.Sim.Tests/ViewApi`): `ProductionHudTests` (pop text for 0, odd, even, negative and extreme
+  half-pop, `AtCap`; strip layout round trip, gaps and bounds; `Count` / `HeadFill` against `Progress / ItemTicks` every
+  tick of a `[laborer, age_ii, laborer]` run to Age II; edge point on all four sides, a corner, inside, NaN and a 360
+  degree sweep on the boundary and the line; production entries of the Town Hall, the Barracks, both Forges and every
+  building (units before techs, nothing dropped, truncation); requirement names; portrait grid; 0 bytes) and
+  `ProductionHudHashTwinTests` (400 ticks of trains, Age II research, a cancel, two SetRallys and a ClearRally, calling every
+  new read, `CanTrain` / `CanResearch` for every card entry of every building, `TechBonus` for every type and stat, `Age`
+  and the any-owner box pick each tick: the hash equals a bare twin's every tick). Headless scene
+  `res://tests/ProductionHudTest.tscn` ("PRODUCTION HUD TEST PASS"): `ui.json` rows (every new key present; a missing
+  `train.queue_full`, `research.already_queued`, `placement.requires`, `research.requires`, `states.idle`, `hud.pop` each
+  one named error; an extra key accepted; five non-object roots one error each: BUG-0110); "Pop 5 / 10" at the start, red
+  "Pop 10 / 10" at the cap, "Pop 5.5 / 10" after a pop-0.5 unit (a data copy); one laborer's name and stats from data, a
+  "+1" attack after Melee Weapons, its state "Gathering"; 26 units: 24 cells in selection order and colours, "+2", the
+  outline following Tab three times, a portrait click selecting that unit alone with a Select sound; the Barracks, Town
+  Hall, Armory and Engineers' Yard cards in order with names, hints and tooltips (needs); 200 random states (money, queue
+  ops, cancels, five buildings) with every button's reason, `Disabled` and line equal to `CanTrain` / `CanResearch`
+  (791 cells; None, CannotAfford, QueueFull, LockedByRequirement, AlreadyResearched, AlreadyQueued all seen); button and
+  key presses enqueue one command at the footprint centre with one sound, a greyed key, signal or `Press` nothing and no
+  sound; the strip equal to the queue every frame through `[laborer, age_ii, laborer]` (839 frames, the Age II flash
+  with the tech's name), item clicks sending `CancelTrain(2)` then `(0)`; rally: right-click ground = one SetRally at the
+  picked point and the cone there within a frame, on a mine the same, on the hall one ClearRally and the flag gone, the
+  minimap one SetRally, a selected site nothing; BUG-0108 (the far edge of a damaged Barracks' top: 3 Repairs at its
+  centre); BUG-0109 (a click on the red hall while a green ghost is drawn elsewhere: nothing, one CanPlace; a click on
+  another green anchor: 3 Builds there; a second differing click in the same frame ignored with no CanPlace); 300 idle
+  frames 0 bytes. `QaV2Test`'s three `Known` rows are plain checks now; `QaH1Test`'s fuzz expects a rally order (not a
+  Move) for a right click while a building is selected; `CommandCardTest`'s hall card expects the production entries.
+  Windowed with `-- --shots <dir>` it saves the one-unit panel, the mixed grid, the hall card with its queue and the rally
+  flag.
+- **Not yet:** fog (M4); real portraits; rebinding; `requires` greying beyond the text keys (it shows by itself once M3-6's
+  reasons reach `main`); rally on a building (units walk to its centre); unit hit points in the panel (M4).
 
 ## AI architecture
 

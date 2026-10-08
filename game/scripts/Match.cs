@@ -69,6 +69,7 @@ public partial class Match : Node3D
         var selection = GetNode<SelectionController>("SelectionController");
         selection.Init(_runner, camera, GetNode<SelectionRings>("World3D/SelectionRings"), GetNode<Sfx>("Sfx"));
         selection.Outline = GetNode<BuildingOutline>("World3D/BuildingOutline");
+        GetNode<RallyMarker>("World3D/RallyMarker").Init(_runner, selection);
 
         System.Numerics.Vector2[][] blocks = SpawnArmies(sim, options.UnitsPerPlayer, out System.Numerics.Vector2 focus);
         Bases = options.NoBases ? null : SpawnBases(sim, blocks, WorkersPerPlayer, out _);
@@ -87,16 +88,24 @@ public partial class Match : Node3D
             minimap.Init(_runner, camera, selection, playerRgb);
             // Resource names come from the local player's faction data (CLAUDE.md rule 8).
             FactionDef local = data.Factions[sim.World.FactionOf(SelectionController.LocalPlayer)];
-            hud.GetNode<ResourceBar>("ResourceBar").Init(_runner, SelectionController.LocalPlayer, local.GoldName, local.WoodName);
-            // The card's labels and menus are view data (ui.json); without them it stays hidden and the errors are logged.
+            UiText? ui = UiText.Shared;
+            hud.GetNode<ResourceBar>("ResourceBar").Init(_runner, SelectionController.LocalPlayer, local.GoldName, local.WoodName, ui?.Hud(HudText.Pop) ?? "");
+            // The card's and panel's labels and menus are view data (ui.json); without them they stay hidden and the errors are logged.
             var card = hud.GetNode<CommandCard>("CommandCard");
-            if (UiText.Shared is UiText ui)
+            var panel = hud.GetNode<SelectionPanel>("SelectionPanel");
+            if (ui != null)
             {
                 var ghost = GetNode<BuildGhost>("World3D/BuildGhost");
                 ghost.Init(_runner, camera, ui, SelectionController.LocalPlayer);
                 card.Init(_runner, selection, ghost, ui);
+                panel.Init(_runner, selection, ui);
             }
-            else card.Visible = false;
+            else
+            {
+                card.Visible = false;
+                panel.Visible = false;
+            }
+            hud.GetNode<ProductionQueueStrip>("QueueStrip").Init(_runner, selection);
         }
 
         GetNode<DebugOverlay>("DebugOverlay").Init(_runner, selection, camera,

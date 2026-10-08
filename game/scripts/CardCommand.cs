@@ -1,6 +1,6 @@
 namespace Rts.Game;
 
-/// <summary>What a command card button does (M3-V2). Labels come from <c>ui.json</c> <c>commands</c> (<see cref="UiText"/>) or, for <see cref="Place"/>, the building's <c>displayName</c>.</summary>
+/// <summary>What a command card button does (M3-V2). Labels come from <c>ui.json</c> <c>commands</c> (<see cref="UiText"/>) or, for <see cref="Place"/>, <see cref="Train"/> and <see cref="Research"/>, the building's, unit's or tech's <c>displayName</c>.</summary>
 public enum CardCommand
 {
     /// <summary>An empty grid cell (hidden button).</summary>
@@ -21,4 +21,8 @@ public enum CardCommand
     Cancel,
     /// <summary>A build menu entry: shows the placement ghost for its building type.</summary>
     Place,
+    /// <summary>A production card entry (M3-V3): queues its unit at the selected building (<c>Command.Train</c>).</summary>
+    Train,
+    /// <summary>A production card entry (M3-V3): queues its tech at the selected building (<c>Command.Research</c>).</summary>
+    Research,
 }

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-07-1131, task M3-V2 |
 | System | UiText loader (game/scripts/UiText.cs), view data |
-| Fixed by | |
+| Fixed by | f1ef79f (M3-V3, root check in `UiText.Parse`); dev row `ProductionHudTest.UiTextRows`, QA rows `QaV2Test.UiJsonRoots` (strict) and `QaV3Test.UiJsonRows` (8 non-object roots, one error each), verified by QA 2026-10-07-1415 |
 
 ## Repro
 1. `& $env:GODOT --headless --path game res://tests/QaV2Test.tscn` (row `UiJsonRoots`; `-- --strict` fails it), or
