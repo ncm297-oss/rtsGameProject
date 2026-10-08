@@ -44,6 +44,11 @@ public partial class CommandCard : Control
     private static readonly Color CostColor = new(0.85f, 0.85f, 0.85f);
     private static readonly Color ReasonColor = new(1f, 0.45f, 0.4f);
 
+    /// <summary>A greyed production button's name and hotkey labels are drawn at this alpha (BUG-0123: Godot's disabled style doesn't reach child labels); the reason line stays full strength.</summary>
+    public const float DimAlpha = 0.5f;
+
+    private static readonly Color Dimmed = new(1f, 1f, 1f, DimAlpha);
+
     private SimRunner? _runner;
     private SelectionController _sel = null!;
     private BuildGhost _ghost = null!;
@@ -71,6 +76,14 @@ public partial class CommandCard : Control
     private Mode _menu = Mode.None;
     private Mode _shown = Mode.None;
     private int _placed;
+    // The anchor this ghost last placed at (-1 none): a Shift-click on it again would only queue a copy (BUG-0122).
+    private int _lastPlaced = -1;
+    // Per cell: the name's font size on show; per building / unit / tech id: the size its displayName fits at (BUG-0122).
+    private readonly int[] _nameSizeShown = new int[Cells];
+    private int[] _placeNameSize = Array.Empty<int>(), _unitNameSize = Array.Empty<int>(), _techNameSize = Array.Empty<int>();
+
+    /// <summary>The name label's font size, and the smallest it shrinks to so a long word ("Quartermaster's") never breaks mid-word.</summary>
+    public const int NameFontSize = 12, NameMinFontSize = 9;
 
     /// <summary>Times the card's contents were rewritten (only when what it shows changes).</summary>
     public int Layouts { get; private set; }
@@ -134,7 +147,7 @@ public partial class CommandCard : Control
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
                 AutowrapMode = TextServer.AutowrapMode.WordSmart, ClipText = true,
             };
-            name.AddThemeFontSizeOverride("font_size", 12);
+            name.AddThemeFontSizeOverride("font_size", NameFontSize);
             name.AddThemeConstantOverride("line_spacing", -2);
             var hint = new Label { Name = "Hint", Position = new Vector2(4f, 1f), MouseFilter = MouseFilterEnum.Ignore };
             hint.AddThemeFontSizeOverride("font_size", 11);
@@ -153,6 +166,7 @@ public partial class CommandCard : Control
             AddChild(b);
             _buttons[i] = b;
             _names[i] = name;
+            _nameSizeShown[i] = NameFontSize;
             _hints[i] = hint;
             _costs[i] = cost;
             _cardActions[i] = new StringName($"card_{i}");
@@ -198,6 +212,12 @@ public partial class CommandCard : Control
             _techCost[t] = string.Create(CultureInfo.InvariantCulture, $"{def.CostGold} / {def.CostWood}");
             _techTip[t] = Tooltip(def.Description, f, def.CostGold, def.CostWood, def.Requires, ui);
         }
+        _placeNameSize = new int[_data.Buildings.Length];
+        for (int t = 0; t < _data.Buildings.Length; t++) _placeNameSize[t] = FitNameSize(_data.Buildings[t].DisplayName);
+        _unitNameSize = new int[_data.Units.Length];
+        for (int t = 0; t < _data.Units.Length; t++) _unitNameSize[t] = FitNameSize(_data.Units[t].DisplayName);
+        _techNameSize = new int[_data.Techs.Length];
+        for (int t = 0; t < _data.Techs.Length; t++) _techNameSize[t] = FitNameSize(_data.Techs[t].DisplayName);
         selection.Card = this;
         _shown = Mode.None;
         Sync();
@@ -260,6 +280,7 @@ public partial class CommandCard : Control
             string cost = c == CardCommand.Train ? _unitCost[_types[i]] : _techCost[_types[i]];
             _costs[i].Text = ok ? cost : c == CardCommand.Train ? _ui.TrainText((TrainError)reason) : _ui.ResearchText((ResearchError)reason);
             _costs[i].AddThemeColorOverride(FontColor, ok ? CostColor : ReasonColor);
+            _names[i].Modulate = _hints[i].Modulate = ok ? Colors.White : Dimmed;
         }
     }
 
@@ -303,8 +324,11 @@ public partial class CommandCard : Control
     public bool GhostClick(bool shift, Vector2 screen)
     {
         if (!_ghost.Active || !_ghost.ResolveClick(screen, out int anchor)) return false;
+        // BUG-0122: a Shift flood on the anchor just placed would queue copies that only join the same site.
+        if (shift && _placed > 0 && anchor == _lastPlaced) return false;
         if (_sel.OrderBuild(_ghost.TypeId, anchor, queued: shift && _placed > 0) == 0) return false;
         _placed++;
+        _lastPlaced = anchor;
         if (!shift) CloseMenu();
         return true;
     }
@@ -375,6 +399,7 @@ public partial class CommandCard : Control
             case CardCommand.Place:
                 _ghost.Begin(_types[i]);
                 _placed = 0;
+                _lastPlaced = -1;
                 break;
             // Produce asks CanTrain / CanResearch again: a greyed press (its key) enqueues nothing and plays nothing.
             case CardCommand.Train: _sel.Produce(_types[i], isTech: false); break;
@@ -442,6 +467,7 @@ public partial class CommandCard : Control
             {
                 BuildingDef def = _data.Buildings[_types[i]];
                 _names[i].Text = def.DisplayName;
+                SetNameSize(i, _placeNameSize[def.Id]);
                 b.TooltipText = _tooltip[def.Id];
                 _hints[i].Text = _gridKeys[i];
                 _costs[i].Text = _costText[def.Id];
@@ -450,6 +476,7 @@ public partial class CommandCard : Control
             {
                 UnitDef def = _data.Units[_types[i]];
                 _names[i].Text = def.DisplayName;
+                SetNameSize(i, _unitNameSize[def.Id]);
                 b.TooltipText = _unitTip[def.Id];
                 _hints[i].Text = _gridKeys[i];
                 _costs[i].Text = _unitCost[def.Id];
@@ -458,6 +485,7 @@ public partial class CommandCard : Control
             {
                 TechDef def = _data.Techs[_types[i]];
                 _names[i].Text = def.DisplayName;
+                SetNameSize(i, _techNameSize[def.Id]);
                 b.TooltipText = _techTip[def.Id];
                 _hints[i].Text = _gridKeys[i];
                 _costs[i].Text = _techCost[def.Id];
@@ -465,6 +493,7 @@ public partial class CommandCard : Control
             else
             {
                 _names[i].Text = _ui.CommandName(c);
+                SetNameSize(i, NameFontSize);
                 b.TooltipText = "";
                 _hints[i].Text = _ui.CommandHint(c);
                 _costs[i].Text = "";
@@ -472,8 +501,47 @@ public partial class CommandCard : Control
             // Greying is per frame (Grey); a fresh layout starts enabled in the cost colour.
             b.Disabled = false;
             _costs[i].AddThemeColorOverride(FontColor, CostColor);
+            _names[i].Modulate = _hints[i].Modulate = Colors.White;
             b.Visible = true;
         }
+    }
+
+    private void SetNameSize(int i, int size)
+    {
+        if (_nameSizeShown[i] == size) return;
+        _names[i].AddThemeFontSizeOverride("font_size", size);
+        _nameSizeShown[i] = size;
+    }
+
+    /// <summary>
+    /// The largest font size from <see cref="NameFontSize"/> down to <see cref="NameMinFontSize"/> at which every word of
+    /// <paramref name="text"/> fits the name label's width and the words wrap onto at most two lines (BUG-0122: at 12 px
+    /// "Quartermaster's" is wider than the label, so word-smart wrapping broke it at the apostrophe). Measured once per
+    /// name in <see cref="Init"/>.
+    /// </summary>
+    public int FitNameSize(string text)
+    {
+        Label l = _names[0];
+        Font font = l.GetThemeFont("font");
+        float width = l.Size.X - 2f;
+        string[] words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        for (int size = NameFontSize; size > NameMinFontSize; size--)
+        {
+            float space = font.GetStringSize(" ", HorizontalAlignment.Left, -1, size).X;
+            int lines = 1;
+            float line = 0f;
+            bool fits = true;
+            foreach (string w in words)
+            {
+                float ww = font.GetStringSize(w, HorizontalAlignment.Left, -1, size).X;
+                if (ww > width) { fits = false; break; }
+                if (line == 0f) line = ww;
+                else if (line + space + ww <= width) line += space + ww;
+                else { lines++; line = ww; }
+            }
+            if (fits && lines <= 2) return size;
+        }
+        return NameMinFontSize;
     }
 
     // The key bound to an input action, as the keyboard labels it (rebinding-proof; not a C# literal).

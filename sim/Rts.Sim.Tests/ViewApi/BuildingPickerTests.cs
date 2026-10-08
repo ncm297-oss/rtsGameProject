@@ -190,6 +190,34 @@ public class BuildingPickerTests
         Assert.Equal(0f, BuildingPicker.BoxRise(b, w.Data.Buildings, free, SiteMin));
     }
 
+    // M3-V3b (view hardening): a box behind a ridge is hidden: the ray meets the ridge's wall first, outside the box's
+    // footprint, so PickRay answers -1; the same box seen over the ridge, or with the ridge gone, is picked.
+    [Fact]
+    public void PickRay_ABoxBehindARidge_IsHidden_OverTheRidgeItIsPicked()
+    {
+        var rows = new string[32];
+        for (int y = 0; y < 32; y++) rows[y] = new string('0', 10) + (y >= 2 && y < 30 ? "11" : "00") + new string('0', 20);
+        Simulation sim = GatherMaps.NewSim(LocalMovementTests.Rows(rows));
+        Simulation flat = GatherMaps.NewSim(LocalMovementTests.Flat(32));
+        foreach ((Simulation s, bool ridge) in new[] { (sim, true), (flat, false) })
+        {
+            World w = s.World;
+            int slot = GatherMaps.Building(s, 16, 14).Index;
+            BuildingStore b = w.Buildings;
+            Vector2 c = Center(w, slot);
+            var mid = new Vector3(c.X, BoxHeight / 2f, c.Y);
+            // West of the ridge (cells 10-11 = 20-24 m, 4 m high), 3 m up, straight at the box's middle: through the ridge.
+            var low = new Vector3(8f, 3f, c.Y);
+            int lowPick = BuildingPicker.PickRay(b, w.Data.Buildings, w.NavGrid, w.Heightmap, -1, low, mid - low, BoxHeight, SiteMin);
+            Assert.Equal(ridge ? -1 : slot, lowPick);
+            // From 10 m up the ray clears the ridge (4.8 m over x = 24 m) and comes down on the box.
+            var high = new Vector3(8f, 10f, c.Y);
+            Assert.Equal(slot, BuildingPicker.PickRay(b, w.Data.Buildings, w.NavGrid, w.Heightmap, -1, high, mid - high, BoxHeight, SiteMin));
+            // Straight down on the box: its own footprint's ground never hides it.
+            Assert.Equal(slot, BuildingPicker.PickRay(b, w.Data.Buildings, w.NavGrid, w.Heightmap, 0, new Vector3(c.X, 40f, c.Y), -Vector3.UnitY, BoxHeight, SiteMin));
+        }
+    }
+
     [Fact]
     public void SlotAt_PickRay_BoxRise_AllocateZeroBytes()
     {

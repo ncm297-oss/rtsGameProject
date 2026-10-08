@@ -18,8 +18,10 @@ namespace Rts.Game;
 /// subgroup's outlined; a click on one selects that unit alone (<see cref="SelectionController.SelectOnly"/>). A building:
 /// its <c>displayName</c> and hp (its production card is on the <see cref="CommandCard"/>, its queue on the
 /// <see cref="ProductionQueueStrip"/>). Labels come from <c>ui.json</c> <c>hud</c>. Every node is made in
-/// <see cref="_Ready"/>; a value's text is rebuilt only when the value shown changes (a building's hp under repair changes
-/// every tick: one small string then), so a steady frame allocates nothing. Holds view state only.
+/// <see cref="_Ready"/>; a value's text is rebuilt only when the value shown changes, so a steady frame allocates nothing.
+/// Hit points are two labels, "now" and "/ max": a building's hp under repair changes every tick, so "now" comes from a
+/// table of int strings up to the largest hp in the data, built once in <see cref="Init"/> (BUG-0123: no string per tick).
+/// Holds view state only.
 /// </remarks>
 public partial class SelectionPanel : Control
 {
@@ -54,6 +56,9 @@ public partial class SelectionPanel : Control
     private readonly Label[] _statName = new Label[StatRows.Length];
     private readonly Label[] _statValue = new Label[StatRows.Length];
     private readonly Label[] _statBonus = new Label[StatRows.Length];
+    private Label _hpMax = null!;
+    // "0" .. "maxHp" for every hp a unit or building can show; built once (BUG-0123).
+    private string[] _intText = Array.Empty<string>();
 
     // Grid.
     private Control _grid = null!;
@@ -86,8 +91,14 @@ public partial class SelectionPanel : Control
     /// <summary>The state label (one unit).</summary>
     public Label StateLabel => _state;
 
-    /// <summary>The value label of stat row <paramref name="row"/> (0 hp, 1 attack, 2 armor, 3 range, 4 speed).</summary>
+    /// <summary>The value label of stat row <paramref name="row"/> (0 hp, 1 attack, 2 armor, 3 range, 4 speed); for hp, the current hit points.</summary>
     public Label StatValue(int row) => _statValue[row];
+
+    /// <summary>The hp row's "/ max" label, right of <see cref="StatValue"/>(0).</summary>
+    public Label HpMaxLabel => _hpMax;
+
+    /// <summary>The hp row as read: "now / max" (test and debug use; allocates).</summary>
+    public string HpText => $"{_statValue[Hp].Text} {_hpMax.Text}";
 
     /// <summary>The "+N" bonus label of stat row <paramref name="row"/>; hidden without a bonus.</summary>
     public Label StatBonus(int row) => _statBonus[row];
@@ -145,13 +156,17 @@ public partial class SelectionPanel : Control
         {
             float y = 28f + r * 20f;
             _statName[r] = Text($"Stat{r}", new Vector2(PortraitSize + 12f, y), new Vector2(70f, 20f), 14);
-            _statValue[r] = Text($"Value{r}", new Vector2(PortraitSize + 86f, y), new Vector2(110f, 20f), 14);
+            _statValue[r] = Text($"Value{r}", new Vector2(PortraitSize + 86f, y), new Vector2(r == Hp ? 44f : 110f, 20f), 14);
             _statBonus[r] = Text($"Bonus{r}", new Vector2(PortraitSize + 200f, y), new Vector2(60f, 20f), 14);
             _statBonus[r].AddThemeColorOverride(FontColor, BonusColor);
             _single.AddChild(_statName[r]);
             _single.AddChild(_statValue[r]);
             _single.AddChild(_statBonus[r]);
         }
+        // "now" right-aligned against "/ max", so the pair reads as one "now / max" whatever the digit count.
+        _statValue[Hp].HorizontalAlignment = HorizontalAlignment.Right;
+        _hpMax = Text("HpMax", new Vector2(PortraitSize + 134f, 28f), new Vector2(64f, 20f), 14);
+        _single.AddChild(_hpMax);
 
         _grid = new Control { Name = "Grid", Position = new Vector2(8f, 5f), MouseFilter = MouseFilterEnum.Ignore, Visible = false };
         AddChild(_grid);
@@ -197,6 +212,11 @@ public partial class SelectionPanel : Control
             _initials[t] = n.Length > 0 ? n.Substring(0, 1).ToUpperInvariant() : "";
         }
         for (int r = 0; r < StatRows.Length; r++) _statName[r].Text = ui.Hud(StatRows[r]);
+        int maxHp = 0;
+        foreach (UnitDef u in _data.Units) maxHp = Math.Max(maxHp, u.Hp);
+        foreach (BuildingDef b in _data.Buildings) maxHp = Math.Max(maxHp, b.Hp);
+        _intText = new string[maxHp + 1];
+        for (int i = 0; i <= maxHp; i++) _intText[i] = i.ToString(CultureInfo.InvariantCulture);
         _kind = Kind.None;
         Sync();
     }
@@ -261,6 +281,7 @@ public partial class SelectionPanel : Control
             _initial.Text = _initials[type];
             _name.Text = def.DisplayName;
             for (int r = 0; r < StatRows.Length; r++) _statName[r].Visible = _statValue[r].Visible = true;
+            _hpMax.Visible = true;
             _state.Visible = true;
             Rebuilds++;
         }
@@ -296,24 +317,27 @@ public partial class SelectionPanel : Control
             _initial.Text = def.DisplayName.Length > 0 ? def.DisplayName.Substring(0, 1) : "";
             _name.Text = def.DisplayName;
             for (int r = 0; r < StatRows.Length; r++) _statName[r].Visible = _statValue[r].Visible = _statBonus[r].Visible = r == Hp;
+            _hpMax.Visible = true;
             _state.Visible = false;
             Rebuilds++;
         }
         SetStat(Hp, def.Hp, 0f, hpNow: b.Hp[slot]);
     }
 
-    // Rewrites a stat row only when its value or bonus changed; hp rows show "now / max".
+    // Rewrites a stat row only when its value or bonus changed; the hp row shows "now" and "/ max" (max only rebuilt when
+    // the type changes; now from the int table, so hp moving every tick under repair allocates nothing).
     private void SetStat(int row, float value, float bonus, int hpNow = -1)
     {
-        bool hpChanged = row == Hp && hpNow != _hpNow;
-        if (value != _value[row] || hpChanged)
+        if (row == Hp && hpNow != _hpNow)
+        {
+            _hpNow = hpNow;
+            _statValue[row].Text = (uint)hpNow < (uint)_intText.Length ? _intText[hpNow] : hpNow.ToString(CultureInfo.InvariantCulture);
+            Rebuilds++;
+        }
+        if (value != _value[row])
         {
             _value[row] = value;
-            if (row == Hp)
-            {
-                _hpNow = hpNow;
-                _statValue[row].Text = string.Create(CultureInfo.InvariantCulture, $"{hpNow} / {value:0.#}");
-            }
+            if (row == Hp) _hpMax.Text = string.Create(CultureInfo.InvariantCulture, $"/ {value:0.#}");
             else _statValue[row].Text = value.ToString("0.#", CultureInfo.InvariantCulture);
             Rebuilds++;
         }

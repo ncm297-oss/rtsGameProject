@@ -29,6 +29,7 @@ public partial class CommandCardTest : Node
 {
     private static readonly FieldInfo CommandsField = typeof(Simulation).GetField("_commands", BindingFlags.NonPublic | BindingFlags.Instance)!;
     private static readonly MethodInfo DamageMethod = typeof(BuildingStore).GetMethod("Damage", BindingFlags.Instance | BindingFlags.NonPublic)!;
+    private static readonly PropertyInfo LedgerProperty = typeof(World).GetProperty("Ledger", BindingFlags.NonPublic | BindingFlags.Instance)!;
 
     private readonly List<string> _failures = new();
     private GameData _data = null!;
@@ -87,6 +88,11 @@ public partial class CommandCardTest : Node
         await Placement();
         await SiteSelection();
         await Repair();
+        await Bug0122Names();
+        await Bug0122Flood();
+        await Bug0122GhostPan();
+        await Bug0122ReasonText();
+        await LockedTypeGhost();
         await IdleAllocation();
         await EndMatch();
     }
@@ -632,6 +638,205 @@ public partial class CommandCardTest : Node
         Check(sent.Count == 3 && sent.All(c => c.Kind == CommandKind.Move), $"right-click on the enemy hall: {Describe(sent)}");
         Tick(1);
         GD.Print($"repair: hall {B.Hp[hall]} / {max}, site {site}, house type {house}");
+    }
+
+    // BUG-0122 (1): at 1280 x 720 every shipped name (buildings of both factions, units, techs) fits the card's name label
+    // without a mid-word break: at the size the card picks, every word is narrower than the label and the text takes at
+    // most two lines; the basic menu's camp cell ("Quartermaster's Depot" for the Malazans) uses that size.
+    private async Task Bug0122Names()
+    {
+        GetTree().Root.Size = new Vector2I(1280, 720);
+        await Frames();
+        Label cardName = _card.NameAt(0);
+        var probe = new Label
+        {
+            Size = cardName.Size, AutowrapMode = cardName.AutowrapMode, ClipText = false,
+            HorizontalAlignment = cardName.HorizontalAlignment, VerticalAlignment = cardName.VerticalAlignment,
+        };
+        probe.AddThemeConstantOverride("line_spacing", -2);
+        _card.AddChild(probe);
+        var names = _data.Buildings.Select(b => b.DisplayName).Concat(_data.Units.Select(u => u.DisplayName)).Concat(_data.Techs.Select(t => t.DisplayName)).Distinct().ToList();
+        int shrunk = 0, bad = 0;
+        foreach (string name in names)
+        {
+            int size = _card.FitNameSize(name);
+            probe.AddThemeFontSizeOverride("font_size", size);
+            probe.Text = name;
+            await Frame();
+            Font font = probe.GetThemeFont("font");
+            string? wide = name.Split(' ').FirstOrDefault(w => font.GetStringSize(w, HorizontalAlignment.Left, -1, size).X > probe.Size.X);
+            int lines = probe.GetLineCount();
+            if (size < CommandCard.NameFontSize) shrunk++;
+            if ((wide != null || lines > 2) && bad++ < 5) Check(false, $"name '{name}' at {size} px: word '{wide}' wider than {probe.Size.X} px, {lines} lines");
+        }
+        probe.QueueFree();
+        // The camp's cell in the basic menu.
+        await Select(Workers());
+        Key(Godot.Key.B);
+        await Frames();
+        int depot = StartBase.BuildingOfSlot(_data, W.FactionOf(0), BuildingSlot.Camp);
+        int cell = Enumerable.Range(0, CommandCard.Cells).First(i => _card.TypeAt(i) == depot && _card.ActionAt(i) == CardCommand.Place);
+        int shown = _card.NameAt(cell).GetThemeFontSize("font_size");
+        Check(shown == _card.FitNameSize(_data.Buildings[depot].DisplayName) && (_data.Buildings[depot].DisplayName != "Quartermaster's Depot" || shown < CommandCard.NameFontSize),
+            $"depot cell '{_card.NameAt(cell).Text}' at {shown} px");
+        GD.Print($"BUG-0122 names: {names.Count} names, {shrunk} shrunk below {CommandCard.NameFontSize} px, {bad} break mid-word; '{_card.NameAt(cell).Text}' at {shown} px");
+        await Shot("names-1280");
+        Key(Godot.Key.Escape);
+        GetTree().Root.Size = new Vector2I(1152, 648);
+        await Frames();
+    }
+
+    // BUG-0122 (2): 25 Shift-clicks on one green anchor in one frame send 3 Builds (one per worker), no queued copies.
+    private async Task Bug0122Flood()
+    {
+        SetMoney(50000, 50000);
+        List<EntityHandle> three = Workers().Take(3).ToList();
+        await Select(three);
+        Key(Godot.Key.B);
+        Key(Godot.Key.Q);
+        int house = _ghost.TypeId;
+        int spot = GreenAnchor(house, HallCenter(0), exclude: null);
+        if (!Check(spot >= 0, "flood: no green house spot")) return;
+        await Aim(house, spot);
+        Input.ActionPress("order_queue");
+        int start = _sim.PendingCommandCount;
+        for (int i = 0; i < 25; i++) LeftClick(_ghost.ScreenOverride!.Value);
+        List<Command> sent = Pending(start);
+        Input.ActionRelease("order_queue");
+        System.Numerics.Vector2 point = PlacementGhost.AnchorPoint(G, spot);
+        Check(sent.Count == 3 && sent.All(c => c.Kind == CommandKind.Build && c.Position == point && !c.IsQueued) && sent.Select(c => c.Unit).Distinct().Count() == 3,
+            $"BUG-0122 flood: 25 Shift-clicks sent {sent.Count} commands {Describe(sent.Take(6).ToList())}");
+        // Another anchor after the flood is still placed (queued behind the first), once however often it is clicked.
+        int spot2 = GreenAnchor(house, HallCenter(0), exclude: spot);
+        await Aim(house, spot2);
+        Input.ActionPress("order_queue");
+        start = _sim.PendingCommandCount;
+        LeftClick(_ghost.ScreenOverride!.Value);
+        LeftClick(_ghost.ScreenOverride!.Value);
+        List<Command> next = Pending(start);
+        Input.ActionRelease("order_queue");
+        Check(next.Count == 3 && next.All(c => c.Kind == CommandKind.Build && c.Position == PlacementGhost.AnchorPoint(G, spot2) && c.IsQueued), $"flood, second anchor: {Describe(next)}");
+        GD.Print($"BUG-0122 flood: 25 Shift-clicks -> {sent.Count} Builds; a second anchor clicked twice -> {next.Count}");
+        Key(Godot.Key.Escape);
+        Tick(2);
+        CancelOwnSites();
+        await Frames();
+    }
+
+    // BUG-0122 (3): while the camera key-pans, the ghost's anchor is the cell under the cursor through this frame's camera.
+    private async Task Bug0122GhostPan()
+    {
+        SetMoney(50000, 50000);
+        await Select(Workers());
+        Key(Godot.Key.B);
+        Key(Godot.Key.Q);
+        int house = _ghost.TypeId;
+        FocusOn(HallCenter(0));
+        Vector2 view = GetViewport().GetVisibleRect().Size;
+        _ghost.ScreenOverride = view * 0.5f;
+        await Frames();
+        int frames = 0, lag = 0, moved = 0, last = _ghost.Anchor;
+        // Headless frames are a millisecond or so: at 10 fps each frame pans a few meters, more than a cell.
+        int maxFps = Engine.MaxFps;
+        Engine.MaxFps = 10;
+        foreach (string action in new[] { "camera_pan_right", "camera_pan_down", "camera_pan_left" })
+        {
+            Input.ActionPress(action);
+            for (int f = 0; f < 12; f++)
+            {
+                await Frame();
+                if (!_ghost.Visible) continue;
+                frames++;
+                int want = PlacementGhost.Anchor(G, _data.Buildings[house], Pick(_ghost.ScreenOverride!.Value));
+                if (_ghost.Anchor != want && lag++ < 3) Check(false, $"pan {action} frame {f}: ghost anchor {_ghost.Anchor}, cursor anchor {want}");
+                if (_ghost.Anchor != last) moved++;
+                last = _ghost.Anchor;
+            }
+            Input.ActionRelease(action);
+        }
+        Engine.MaxFps = maxFps;
+        Check(lag == 0 && moved > 20, $"BUG-0122 pan: {lag} of {frames} frames lag the cursor, anchor moved {moved} times");
+        GD.Print($"BUG-0122 pan: {frames} frames, {moved} anchor moves, {lag} lagging");
+        _ghost.ScreenOverride = null;
+        Key(Godot.Key.Escape);
+        await Frames();
+    }
+
+    // BUG-0122 (4): a red ghost's reason label is at least 20 px per em on screen (glyphs about 14 px and up) at 20, 30
+    // and 60 m zoom, clear of the box top, and the red box is a deep red.
+    private async Task Bug0122ReasonText()
+    {
+        await Select(Workers());
+        Key(Godot.Key.B);
+        Key(Godot.Key.E);
+        int type = _ghost.TypeId;
+        var parts = new List<string>();
+        foreach (float zoom in new[] { 20f, 30f, 60f })
+        {
+            await Aim(type, B.Cell[HallSlot(0)]); // on the hall: Blocked
+            _camera.SetZoom(zoom);
+            await Frames();
+            Label3D l = _ghost.ReasonLabel;
+            if (!Check(!_ghost.Valid && l.Visible, $"reason row @{zoom}: ghost valid {_ghost.Valid}, label {l.Visible}")) continue;
+            float em = l.FontSize * l.PixelSize;
+            Vector3 up = _camera.GlobalBasis.Y.Normalized(), at = l.GlobalPosition;
+            float px = _camera.UnprojectPosition(at + up * em / 2f).DistanceTo(_camera.UnprojectPosition(at - up * em / 2f));
+            parts.Add($"{zoom} m: {px:0.#} px/em");
+            Check(px >= 20f, $"BUG-0122 reason text @{zoom} m: {px:0.#} px per em");
+            Check(at.Y - em / 2f > _ghost.GlobalPosition.Y + BuildingViews.BoxHeight, $"reason label @{zoom} m overlaps the box");
+            if (zoom == 30f) await Shot("ghost-reason-30");
+        }
+        Color red = _ghost.RedMaterial.AlbedoColor;
+        Check(red.R >= 0.9f && red.G <= 0.05f && red.B <= 0.05f && red.A >= 0.6f, $"red ghost colour {red}");
+        GD.Print($"BUG-0122 reason text: {string.Join(", ", parts)}; red {red}");
+        _ghost.ScreenOverride = null;
+        Key(Godot.Key.Escape);
+        FocusOn(HallCenter(0));
+        await Frames();
+    }
+
+    // Age II types (the advanced menu): the ghost follows CanPlace whatever the data locks. With D3's building requires
+    // (the Cadre Tower needs Age II) it is red with placement.requires and a click sends nothing; with today's data it is
+    // the map's verdict.
+    private async Task LockedTypeGhost()
+    {
+        SetMoney(50000, 50000);
+        await Select(Workers());
+        Key(Godot.Key.V);
+        Key(Godot.Key.Q);
+        int type = _ghost.TypeId;
+        if (!Check(type == StartBase.BuildingOfSlot(_data, W.FactionOf(0), BuildingSlot.CasterHall), $"V Q picked {type}")) return;
+        int barracks = StartBase.BuildingOfSlot(_data, W.FactionOf(0), BuildingSlot.InfantryHall);
+        int spot = GreenAnchor(barracks, HallCenter(0), exclude: null);
+        await Aim(type, spot);
+        bool ok = W.CanPlace(0, type, _ghost.Anchor, out PlacementError reason);
+        Check(_ghost.Valid == ok && _ghost.Reason == reason && _ghost.ShownText == (ok ? "" : _ui.PlacementText(reason)),
+            $"locked type ghost: {_ghost.Valid} {_ghost.Reason} '{_ghost.ShownText}', CanPlace {ok} {reason}");
+        int start = _sim.PendingCommandCount;
+        LeftClick(_ghost.ScreenOverride!.Value);
+        Check(ok ? _sim.PendingCommandCount > start : _sim.PendingCommandCount == start, $"locked type click: {_sim.PendingCommandCount - start} commands, CanPlace {ok} {reason}");
+        GD.Print($"advanced-menu ghost ({_data.Buildings[type].Key}): CanPlace {ok} {reason}, shows '{_ghost.ShownText}'");
+        _ghost.ScreenOverride = null;
+        Key(Godot.Key.Escape);
+        Tick(2);
+        CancelOwnSites();
+        await Frames();
+    }
+
+    private void SetMoney(int gold, int wood)
+    {
+        object ledger = LedgerProperty.GetValue(W)!;
+        ((int[])ledger.GetType().GetProperty("Gold")!.GetValue(ledger)!)[0] = gold;
+        ((int[])ledger.GetType().GetProperty("Wood")!.GetValue(ledger)!)[0] = wood;
+    }
+
+    private void CancelOwnSites()
+    {
+        for (int k = 0; k < B.Capacity; k++)
+            if (B.Alive[k] && B.Owner[k] == 0 && B.UnderConstruction[k]) _sim.Enqueue(Command.Cancel(0, SelectionController.SiteCenter(W, k)));
+        Tick(2);
+        foreach (EntityHandle h in Workers()) _sim.Enqueue(Command.Stop(0, h));
+        Tick(2);
     }
 
     // Criterion 8: 300 idle frames with the card open (a build menu) and a ghost up, and with a building selected: 0 bytes.

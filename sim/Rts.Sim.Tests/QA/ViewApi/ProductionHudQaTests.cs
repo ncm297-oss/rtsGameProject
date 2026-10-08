@@ -204,8 +204,8 @@ public class ProductionHudQaTests
     [Fact]
     public void HudReads_WithDestructionAndCancels_HashTwin_600Ticks()
     {
-        (Simulation a, int hall) = ProductionHudTests.Hall(4);
-        (Simulation b, _) = ProductionHudTests.Hall(4);
+        (Simulation a, int hall) = ProductionHudTests.Hall(4, ageIIHalls: true); // BUG-0124: the Age II research is accepted
+        (Simulation b, _) = ProductionHudTests.Hall(4, ageIIHalls: true);
         World w = a.World;
         BuildingStore bs = w.Buildings;
         Vector2 at = ProductionMaps.In(a, hall);
@@ -213,6 +213,7 @@ public class ProductionHudQaTests
         var into = new ProductionEntry[15];
         var rng = new Random(44);
         var script = new List<Command>();
+        int sawTech = 0;
         for (int tick = 0; tick < 600; tick++)
         {
             script.Clear();
@@ -253,6 +254,9 @@ public class ProductionHudQaTests
             b.Tick();
             Assert.Equal(b.StateHash(), a.StateHash());
             Assert.Equal(QueueStrip.Count(bs, hall), Math.Min(bs.QueueCount[hall], QueueStrip.MaxItems));
+            for (int i = 0; i < bs.QueueCount[hall]; i++)
+                if (bs.QueueIsTechAt(hall, i)) sawTech++;
         }
+        Assert.True(sawTech > 0, "Age II never entered the hall's queue");
     }
 }

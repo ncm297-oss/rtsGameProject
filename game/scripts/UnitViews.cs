@@ -27,6 +27,18 @@ public partial class UnitViews : Node3D
     /// <summary>Cargo marker edge length, and its gap above the body, in meters.</summary>
     public const float CargoSize = 0.35f, CargoGap = 0.3f;
 
+    /// <summary>
+    /// Zoom (camera height, m) up to which the cargo marker keeps <see cref="CargoSize"/>; above it the marker grows in
+    /// proportion, so it keeps its 30 m screen size (BUG-0107: at 60 m the 0.35 m cube was 3-4 px). At 60 m it is
+    /// 0.7 m; its bottom still clears the body by 0.125 m, so the position needn't change.
+    /// </summary>
+    public const float CargoFullZoom = 30f;
+
+    /// <summary>The camera whose zoom sizes the cargo markers; null keeps <see cref="CargoSize"/>.</summary>
+    public RtsCamera? Camera { get; set; }
+
+    private float _cargoZoom = float.NaN;
+
     // Placeholder tints until the M6 art pass (M2-1 rule). Cargo colours match the props' gold and trunk.
     private static readonly Color GoldCargoColor = new(0.90f, 0.70f, 0.15f);
     private static readonly Color WoodCargoColor = new(0.45f, 0.28f, 0.12f);
@@ -123,7 +135,16 @@ public partial class UnitViews : Node3D
 
     public override void _Process(double delta)
     {
+        if (Camera != null && Camera.Zoom != _cargoZoom) SetCargoZoom(Camera.Zoom);
         if (Runner?.Simulation is Simulation sim) Sync(sim.World, (float)Runner.Alpha);
+    }
+
+    /// <summary>Sizes the shared cargo meshes for camera zoom <paramref name="zoom"/> (one write per kind, only when the zoom changed).</summary>
+    public void SetCargoZoom(float zoom)
+    {
+        _cargoZoom = zoom;
+        float size = CargoSize * Math.Max(1f, zoom / CargoFullZoom);
+        foreach (BoxMesh m in _cargoMeshes) m.Size = new Vector3(size, size, size);
     }
 
     /// <summary>Places every live unit at its interpolated position and facing and hides dead slots. No allocation once each slot has its node.</summary>

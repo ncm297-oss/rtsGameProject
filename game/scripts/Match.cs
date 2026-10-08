@@ -57,6 +57,7 @@ public partial class Match : Node3D
         var units = GetNode<UnitViews>("World3D/UnitViews");
         units.Bind(data, sim.World.Units.Capacity);
         units.Runner = _runner;
+        units.Camera = camera;
 
         // Player p plays faction p until the M6 lobby (World.FactionOf), so a player's colour is that faction's.
         var playerRgb = new uint[sim.World.Config.PlayerCount];

@@ -224,6 +224,8 @@ public partial class EconomyViewTest : Node
         // From the mine, not the hall: the walk to the tree is longer than the first order's.
         await RunGather(workers, ResourceKind.Wood, "wood", 200);
         await Shot("hauling");
+        await CargoAt60();
+        await CanopyClick(workers, hall);
 
         await Mixed(workers, soldiers, minePoint);
         await IdleAllocation();
@@ -416,6 +418,10 @@ public partial class EconomyViewTest : Node
         GD.Print($"site: progress {last:0.00} after {b.Work[slot]} / {needed} work, bar grew {growth} times");
         FocusOn(StartBase.FootprintCenter(g, _data.Buildings[house], anchor));
         await Shot("site");
+        int hallSlot = -1;
+        for (int k = 0; k < b.Capacity && hallSlot < 0; k++)
+            if (b.Alive[k] && b.Owner[k] == 0 && _data.Buildings[b.TypeId[k]].Slot == BuildingSlot.TownHall) hallSlot = k;
+        await SiteHue(slot, hallSlot);
         // The halls (finished, full hp) show no bar meanwhile.
         for (int k = 0; k < b.Capacity; k++)
             if (b.Alive[k] && !b.UnderConstruction[k]) Check(_buildings.ShownBar(k, out _) == BuildingBarKind.None, $"finished building {k} shows a bar");
@@ -431,7 +437,154 @@ public partial class EconomyViewTest : Node
         await Frames();
         Check(!_buildings.IsShown(slot) && !_buildings.ViewOf(slot)!.Visible, "site: the box outlived the site by a frame");
         Check(workers.Take(2).All(h => _units.ShownTint(h.Index) == _units.TintStateFor(U.State[h.Index])), "site: builders' tint after cancel");
+        await ResourceRedraw(workers, house, hall);
         await EndMatch();
+    }
+
+    // BUG-0107 (2): a worker carrying wood at 60 m zoom: its cargo marker is at least 6 px wide on a 1152 x 648 view (the
+    // shared cube grows with the zoom above 30 m; it was 3-4 px), and back at 30 m it is the 0.35 m cube again.
+    private async Task CargoAt60()
+    {
+        int carrier = -1;
+        for (int t = 0; t < 600 && carrier < 0; t++)
+        {
+            for (int i = 0; i < U.Capacity && carrier < 0; i++)
+                if (U.Alive[i] && U.Owner[i] == 0 && U.Cargo[i] > 0 && U.CargoKind[i] == ResourceKind.Wood) carrier = i;
+            if (carrier < 0) Tick(1);
+        }
+        if (!Check(carrier >= 0, "cargo row: no worker carrying wood")) return;
+        await Frames();
+        _camera.SetFocus(U.Position[carrier].X, U.Position[carrier].Y);
+        var widths = new List<string>();
+        foreach (float zoom in new[] { 30f, 60f })
+        {
+            _camera.SetZoom(zoom);
+            await Frames();
+            MeshInstance3D? marker = _units.MarkerOf(carrier);
+            if (!Check(marker != null && marker.Visible, $"cargo row @{zoom}: no visible marker")) return;
+            float size = _units.CargoMeshOf(ResourceKind.Wood).Size.X;
+            Vector3 right = _camera.GlobalBasis.X.Normalized(), at = marker!.GlobalPosition;
+            float px = _camera.UnprojectPosition(at + right * size / 2f).DistanceTo(_camera.UnprojectPosition(at - right * size / 2f));
+            widths.Add($"{zoom} m: {size:0.##} m = {px:0.#} px");
+            if (zoom == 30f) Check(Mathf.IsEqualApprox(size, UnitViews.CargoSize), $"cargo @30 m: {size} m");
+            else Check(px >= 6f, $"BUG-0107 cargo @{zoom} m: {px:0.#} px wide ({size} m)");
+            if (zoom == 60f) await Shot("cargo-60");
+        }
+        GD.Print($"BUG-0107 cargo marker: {string.Join(", ", widths)}");
+        _camera.SetZoom(30f);
+        await Frames();
+    }
+
+    // M3-V3b: a right click on a tree's canopy (2.8 m up its trunk), whose ground point lies behind the tree, is that
+    // tree: ContextTarget gives its footprint centre and the 5 selected workers get one Gather each.
+    private async Task CanopyClick(List<EntityHandle> workers, System.Numerics.Vector2 hall)
+    {
+        // A tree with open ground in front (the camera looks north, so south of it), so no other prop stands in the way.
+        NavGrid g = W.NavGrid;
+        ResourceStore rs = W.Resources;
+        int tree = -1;
+        float best = float.PositiveInfinity;
+        for (int i = 0; i < rs.Capacity; i++)
+        {
+            if (!rs.Alive[i] || _data.Resources[rs.TypeId[i]].Resource != ResourceKind.Wood) continue;
+            int x = rs.Cell[i] % g.Width, y = rs.Cell[i] / g.Width;
+            bool open = y + 4 < g.Height;
+            for (int dy = 1; dy <= 4 && open; dy++)
+                for (int dx = -1; dx <= 1 && open; dx++)
+                    open = x + dx >= 0 && x + dx < g.Width && (g.FlagsAt(x + dx, y + dy) & NavFlags.Resource) == 0;
+            float d = System.Numerics.Vector2.Distance(NodeCenter(i), hall);
+            if (open && d < best) (tree, best) = (i, d);
+        }
+        if (!Check(tree >= 0, "canopy row: no tree with open ground in front")) return;
+        System.Numerics.Vector2 c = NodeCenter(tree);
+        FocusOn(c);
+        await Frames();
+        Vector2 screen = _camera.UnprojectPosition(new Vector3(c.X, TerrainHeight.At(W.Heightmap, c.X, c.Y) + 2.8f, c.Y));
+        int behind = SelectionController.NodeAt(W, Pick(screen));
+        bool hit = _sel.ContextTarget(screen, out System.Numerics.Vector2 point, out int building);
+        int picked = ResourcePicker.NodeAtPoint(W.NavGrid, _data.Resources, W.Resources.Alive, W.Resources.TypeId, W.Resources.Cell, point);
+        Check(hit && building == -1 && picked == tree, $"canopy click: target {point} node {picked} building {building}, want tree {tree} (the ground point's node is {behind})");
+        Select(workers);
+        int gathers = _sel.IssuedCount(CommandKind.Gather);
+        RightClick(screen);
+        Check(_sel.IssuedCount(CommandKind.Gather) == gathers + workers.Count, $"canopy click: {_sel.IssuedCount(CommandKind.Gather) - gathers} Gathers");
+        Tick(2);
+        int onTree = workers.Count(h => U.GatherNode[h.Index].Index == tree);
+        Check(onTree == workers.Count, $"canopy click: {onTree} of {workers.Count} workers on the tree");
+        GD.Print($"canopy click: tree {tree}, the ground point behind it is node {behind}; {onTree} workers sent to the tree");
+    }
+
+    // BUG-0107 (1): a site's colour differs in hue from every player's finished-building colour (at least 60 degrees);
+    // windowed with --shots, also on the rendered pixels of a full-height site next to the finished hall.
+    private async Task SiteHue(int site, int hall)
+    {
+        Color siteColor = _buildings.SiteMaterial.AlbedoColor;
+        for (int p = 0; p < W.Config.PlayerCount; p++)
+        {
+            float d = HueDistance(siteColor, _buildings.PlayerMaterial(p).AlbedoColor);
+            Check(d >= 60f, $"BUG-0107: site hue {siteColor.H * 360f:0} vs player {p}'s {_buildings.PlayerMaterial(p).AlbedoColor.H * 360f:0}: {d:0} degrees apart");
+        }
+        if (_shots == null || DisplayServer.GetName() == "headless") return;
+        // Pixels: the top-centre of the site and of the hall, with the camera between them (the colour doesn't depend on
+        // the site's height, so this is the full-height site's colour too).
+        BuildingStore b = W.Buildings;
+        FocusOn((SelectionController.SiteCenter(W, site) + SelectionController.SiteCenter(W, hall)) / 2f);
+        await Frames();
+        for (int i = 0; i < 3; i++) await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+        Image img = GetViewport().GetTexture().GetImage();
+        Color Sample(int slot)
+        {
+            System.Numerics.Vector2 c = SelectionController.SiteCenter(W, slot);
+            float rise = BuildingPicker.BoxRise(b, _data.Buildings, slot, BuildingViews.SiteMinHeight);
+            Vector2 px = _camera.UnprojectPosition(new Vector3(c.X, TerrainHeight.At(W.Heightmap, c.X, c.Y) + BuildingViews.BoxHeight * rise, c.Y));
+            int x = (int)px.X, y = (int)px.Y + 2;
+            Check(x >= 0 && y >= 0 && x < img.GetWidth() && y < img.GetHeight(), $"BUG-0107 pixels: building {slot} off screen at {px}");
+            return img.GetPixel(Math.Clamp(x, 0, img.GetWidth() - 1), Math.Clamp(y, 0, img.GetHeight() - 1));
+        }
+        Color s = Sample(site), h = Sample(hall);
+        float dh = HueDistance(s, h);
+        GD.Print($"BUG-0107 pixels: site {s} (hue {s.H * 360f:0}), hall {h} (hue {h.H * 360f:0}), {dh:0} degrees apart");
+        Check(dh >= 40f, $"BUG-0107 pixels: site {s} vs hall {h}: {dh:0} degrees apart");
+    }
+
+    private static float HueDistance(Color a, Color b)
+    {
+        float d = MathF.Abs(a.H - b.H) * 360f;
+        return Math.Min(d, 360f - d);
+    }
+
+    // BUG-0107 (3): ten building changes (five sites placed and cancelled) leave the minimap's resource layer alone; a tree
+    // felled redraws it once.
+    private async Task ResourceRedraw(List<EntityHandle> workers, int house, System.Numerics.Vector2 hall)
+    {
+        Minimap mini = _match.GetNode<Minimap>("Hud/Minimap");
+        mini.Refresh(_sim);
+        int draws = mini.Raster!.ResourceDraws, version = W.NavGrid.Version;
+        NavGrid g = W.NavGrid;
+        for (int k = 0; k < 5; k++)
+        {
+            int anchor = SiteSpot(house, hall);
+            if (!Check(anchor >= 0, $"redraw row {k}: no spot")) return;
+            System.Numerics.Vector2 p = g.CellCenter(anchor % g.Width, anchor / g.Width);
+            _sim.Enqueue(Command.Build(0, workers[0], house, p));
+            Tick(2);
+            mini.Refresh(_sim);
+            _sim.Enqueue(Command.Cancel(0, p));
+            Tick(2);
+            mini.Refresh(_sim);
+        }
+        await Frames();
+        Check(W.NavGrid.Version >= version + 10 && mini.Raster.ResourceDraws == draws,
+            $"BUG-0107: 10 building changes (grid version {version} -> {W.NavGrid.Version}) redrew the resource layer {mini.Raster.ResourceDraws - draws} times");
+        // A tree felled: one redraw.
+        int tree = NearestNode(hall, ResourceKind.Wood);
+        ResourceStore r = W.Resources;
+        System.Reflection.MethodInfo take = typeof(ResourceStore).GetMethod("Take", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        take.Invoke(r, new object[] { r.HandleOf(tree), int.MaxValue });
+        mini.Refresh(_sim);
+        mini.Refresh(_sim);
+        Check(!r.Alive[tree] && mini.Raster.ResourceDraws == draws + 1, $"BUG-0107: a felled tree redrew the resource layer {mini.Raster.ResourceDraws - draws} times");
+        GD.Print($"BUG-0107 minimap: 10 building changes -> {0} resource redraws; a fell -> {mini.Raster.ResourceDraws - draws}");
     }
 
     // Every frame: tint and cargo marker of each live unit equal what the sim says.

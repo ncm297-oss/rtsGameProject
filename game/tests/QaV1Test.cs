@@ -311,7 +311,9 @@ public partial class QaV1Test : Node
         await EndMatch();
     }
 
-    // A felled tree and an emptied mine: a right-click on their old cells is a Move.
+    // A felled tree and an emptied mine: a right-click on their old cells is a Move. M3-V3b: the right click ray-picks the
+    // drawn props, so the node is one with open ground in front of it (south, toward the camera): another tree's canopy
+    // in front would rightly take the click. Before felling, the click's context target is the node itself.
     private async Task FelledNodes()
     {
         await StartMatch(1, 20, null);
@@ -319,10 +321,13 @@ public partial class QaV1Test : Node
         MethodInfo take = typeof(ResourceStore).GetMethod("Take", BindingFlags.Instance | BindingFlags.NonPublic)!;
         foreach (ResourceKind kind in new[] { ResourceKind.Wood, ResourceKind.Gold })
         {
-            int node = NearestNode(HallCenter(0), kind);
+            int node = NearestOpenNode(HallCenter(0), kind);
+            if (!Check(node >= 0, $"felled {kind}: no node with open ground in front")) continue;
             System.Numerics.Vector2 c = NodeCenter(node);
             Vector2 px = await OnScreen(c);
             Check(SelectionController.NodeAt(W, Pick(px)) == node, $"felled {kind}: pixel misses the node before felling");
+            Check(_sel.ContextTarget(px, out System.Numerics.Vector2 before, out _) && SelectionController.NodeAt(W, before) == node,
+                $"felled {kind}: the click's target before felling is {before}, not the node");
             take.Invoke(W.Resources, new object[] { W.Resources.HandleOf(node), W.Resources.Remaining[node] });
             Check(!W.Resources.Alive[node], $"felled {kind}: still alive");
             Select(workers);
@@ -333,6 +338,32 @@ public partial class QaV1Test : Node
             Tick(2);
         }
         await EndMatch();
+    }
+
+    // The nearest live node of a kind with no other node in the four cell rows south of its footprint (one cell wider each side).
+    private int NearestOpenNode(System.Numerics.Vector2 from, ResourceKind kind)
+    {
+        NavGrid g = W.NavGrid;
+        ResourceStore r = W.Resources;
+        int best = -1;
+        float bestD = float.PositiveInfinity;
+        for (int i = 0; i < r.Capacity; i++)
+        {
+            if (!r.Alive[i]) continue;
+            ResourceDef def = _data.Resources[r.TypeId[i]];
+            if (def.Resource != kind) continue;
+            int x = r.Cell[i] % g.Width, y = r.Cell[i] / g.Width;
+            bool open = y + def.FootprintHeight + 4 < g.Height;
+            for (int dy = 0; dy < 4 && open; dy++)
+                for (int dx = -1; dx <= def.FootprintWidth && open; dx++)
+                {
+                    int cx = x + dx, cy = y + def.FootprintHeight + dy;
+                    open = cx >= 0 && cx < g.Width && (g.FlagsAt(cx, cy) & NavFlags.Resource) == 0;
+                }
+            float d = System.Numerics.Vector2.Distance(NodeCenter(i), from);
+            if (open && d < bestD) (best, bestD) = (i, d);
+        }
+        return best;
     }
 
     // 256 buildings: every one shown in its owner's colour; 300 Syncs allocate nothing; damage shows a hit-point bar;

@@ -5,7 +5,7 @@ using Xunit.Abstractions;
 
 namespace Rts.Sim.Tests.ViewApi;
 
-/// <summary>M2-3b cost and allocation rows at a full 4,096-node store: the prop relist (<= 1 ms), the minimap refresh with 2,000 dots and a resource redraw (<= 0.3 ms), 0 bytes.</summary>
+/// <summary>M2-3b cost and allocation rows at a full 4,096-node store: the prop relist (<= 1 ms), the minimap's 2,000 dots (<= 0.25 ms) and its forced resource redraw (<= 0.2 ms) timed apart, 0 bytes.</summary>
 [Collection(SerialCollection.Name)]
 public class PropsMeasureTests
 {
@@ -62,17 +62,21 @@ public class PropsMeasureTests
 
     [Fact]
     [Trait("Category", "Perf")]
-    public void MinimapRefresh_2000Units_4096Nodes_ResourceRedraw_Under0_3Ms()
+    public void MinimapRefresh_2000Units_4096Nodes_DotsAndForcedRedraw_TimedApart()
     {
+        // BUG-0105: the combined row sat at 0.28-0.29 ms of its 0.3 ms limit. The two halves are timed apart: the 2,000
+        // dots run on every 5 Hz refresh; the forced 4,096-node resource redraw only on a refresh after a node was felled
+        // (BUG-0107: building changes no longer force it). Limits: the dots get QA's DrawDots budget (0.25 ms, half the
+        // 0.5 ms refresh budget; MinimapQaTests); the redraw 0.2 ms (measured 0.127 ms alone, Debug). The sum is printed.
         (World w, bool[] alive, Vector2[] pos, int[] owner) = Crowd();
         var r = new MinimapRaster(w.Heightmap, w.NavGrid, Colors, alive.Length);
         MinimapRasterResourceTests.DrawResources(r, w);
         MinimapRasterResourceTests.AssertResourceLayer(r, w);
-        Time("minimap refresh (2,000 dots + 4,096-node resource redraw)", w, () =>
-        {
-            MinimapRasterResourceTests.DrawResources(r, w);
-            r.DrawDots(alive, pos, owner);
-        }, 0.3);
+        double dots = Time("minimap dots (2,000 units)", w, () => r.DrawDots(alive, pos, owner), 0.25);
+        int draws = r.ResourceDraws;
+        double redraw = Time("minimap forced resource redraw (4,096 nodes)", w, () => MinimapRasterResourceTests.DrawResources(r, w), 0.2);
+        Assert.Equal(draws + 50, r.ResourceDraws); // every timed run redrew
+        _out.WriteLine($"minimap refresh with a forced redraw (sum): {dots + redraw:F3} ms");
     }
 
     [Fact]

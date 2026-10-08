@@ -131,10 +131,10 @@ public sealed class MinimapRaster
     /// <summary>Resource-layer colour (0xRRGGBB) of a node yielding <paramref name="kind"/>.</summary>
     public static uint ResourceRgb(ResourceKind kind) => kind == ResourceKind.Gold ? GoldRgb : WoodRgb;
 
-    /// <summary>Redraws the resource layer from the resource store's spans if <paramref name="version"/> (the grid's <see cref="NavGrid.Version"/>) differs from the last fill; returns true if it did.</summary>
+    /// <summary>Redraws the resource layer from the resource store's spans if <paramref name="version"/> (a key that changes whenever the set of live nodes does) differs from the last fill; returns true if it did.</summary>
     /// <remarks>Every footprint cell of a live node is painted its kind's colour; the cells painted last time are cleared first, so a depleted node's cells show the terrain again. Allocates nothing.</remarks>
     /// <param name="types">Resource types (<c>GameData.Resources</c>): footprint and kind.</param>
-    /// <param name="version">The grid's current version.</param>
+    /// <param name="version">The resource-set key: the minimap passes the store's free-slot count, which rises with every node felled or mined out and nothing else (nodes are only spawned at map load), so a building's spawn, site or cancel doesn't redraw (BUG-0107).</param>
     /// <param name="alive">The resource store's <c>Alive</c>.</param>
     /// <param name="typeId">The resource store's <c>TypeId</c>.</param>
     /// <param name="cell">The resource store's <c>Cell</c> (footprint anchor).</param>

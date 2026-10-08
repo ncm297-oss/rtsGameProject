@@ -14,9 +14,9 @@ namespace Rts.Game;
 /// precedent; there are no sim events yet). A slot's nodes are created the first time it holds a building and hidden
 /// while it is free, so a later building in the slot reuses them. The box is the footprint (cells x
 /// <see cref="MapConstants.CellSize"/>) by <see cref="BoxHeight"/>, in the owner's faction colour; a construction site is
-/// slate and rises with its progress. The bar's kind and fill come from the pure <see cref="BuildingBars"/>; its
+/// a dusty mauve (<see cref="SiteColor"/>) and rises with its progress. The bar's kind and fill come from the pure <see cref="BuildingBars"/>; its
 /// transform is only written when they change. Meshes (one per building type, plus one bar) and materials (one per
-/// player, slate, and the bar colours) are made in <see cref="Bind"/>, so a steady frame allocates nothing. Views hold no
+/// player, site, and the bar colours) are made in <see cref="Bind"/>, so a steady frame allocates nothing. Views hold no
 /// gameplay state: the per-slot values kept here only say what is already drawn.
 /// </remarks>
 public partial class BuildingViews : Node3D
@@ -34,7 +34,13 @@ public partial class BuildingViews : Node3D
     public const float BarLengthShare = 0.9f, BarThickness = 0.3f;
 
     // Placeholder tints until the M6 art pass (M2-1 rule: hard-coded like the terrain's).
-    private static readonly Color SlateColor = new(0.42f, 0.45f, 0.50f);
+    /// <summary>
+    /// A site's placeholder colour until the M6 art pass: a dusty mauve, hue about 305 degrees, far from both factions'
+    /// building colours (Malazan slate #4B4F55 at about 214, Whirlwind ochre #C8892E at about 35). The old slate
+    /// (0.42, 0.45, 0.50) was the Malazan hue, so a full-height Malazan site differed from a finished one only in
+    /// lightness (BUG-0107).
+    /// </summary>
+    public static readonly Color SiteColor = new(0.64f, 0.48f, 0.62f);
     private static readonly Color BarBackColor = new(0.08f, 0.08f, 0.08f);
     private static readonly Color ProgressColor = new(0.95f, 0.85f, 0.35f);
     private static readonly Color HitPointColor = new(0.30f, 0.90f, 0.35f);
@@ -45,7 +51,7 @@ public partial class BuildingViews : Node3D
     private BoxMesh[] _meshes = Array.Empty<BoxMesh>();
     private BoxMesh _barMesh = null!;
     private StandardMaterial3D[] _playerMats = Array.Empty<StandardMaterial3D>();
-    private StandardMaterial3D _slate = null!, _progressMat = null!, _hpMat = null!;
+    private StandardMaterial3D _siteMat = null!, _progressMat = null!, _hpMat = null!;
 
     private Node3D?[] _roots = Array.Empty<Node3D?>();
     private MeshInstance3D[] _boxes = Array.Empty<MeshInstance3D>();
@@ -78,7 +84,7 @@ public partial class BuildingViews : Node3D
         _playerMats = new StandardMaterial3D[playerRgb.Length];
         for (int p = 0; p < playerRgb.Length; p++)
             _playerMats[p] = new StandardMaterial3D { AlbedoColor = UnitViews.ColorFromRgb(playerRgb[p]), Roughness = 0.85f };
-        _slate = new StandardMaterial3D { AlbedoColor = SlateColor, Roughness = 0.95f };
+        _siteMat = new StandardMaterial3D { AlbedoColor = SiteColor, Roughness = 0.95f };
         _barMesh = new BoxMesh { Size = Vector3.One };
         var back = new StandardMaterial3D { AlbedoColor = BarBackColor, ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded };
         _barMesh.Material = back;
@@ -124,7 +130,7 @@ public partial class BuildingViews : Node3D
             float rise = site ? Math.Max(SiteMinHeight, fill) : 1f;
             if (site != _shownSite[i])
             {
-                _boxes[i].MaterialOverride = site ? _slate : _playerMats[Math.Clamp(b.Owner[i], 0, _playerMats.Length - 1)];
+                _boxes[i].MaterialOverride = site ? _siteMat : _playerMats[Math.Clamp(b.Owner[i], 0, _playerMats.Length - 1)];
                 _shownSite[i] = site;
             }
             if (rise != _shownRise[i])
@@ -156,14 +162,14 @@ public partial class BuildingViews : Node3D
         return _shownBar[slot];
     }
 
-    /// <summary>True if slot <paramref name="slot"/> is drawn as a site (slate, rising).</summary>
+    /// <summary>True if slot <paramref name="slot"/> is drawn as a site (the site colour, rising).</summary>
     public bool ShownAsSite(int slot) => _shownSite[slot];
 
     /// <summary>The material for player <paramref name="player"/>'s finished buildings.</summary>
     public StandardMaterial3D PlayerMaterial(int player) => _playerMats[player];
 
     /// <summary>The material of construction sites.</summary>
-    public StandardMaterial3D SiteMaterial => _slate;
+    public StandardMaterial3D SiteMaterial => _siteMat;
 
     // A building (new, or new in a reused slot): mesh, position on its footprint centre, and fresh shown values.
     private void Place(World world, int i)
@@ -178,7 +184,7 @@ public partial class BuildingViews : Node3D
         _barLength[i] = def.FootprintWidth * MapConstants.CellSize * BarLengthShare;
         _backs[i].Transform = new Transform3D(Basis.FromScale(new Vector3(_barLength[i], BarThickness * 0.8f, BarThickness * 0.8f)), new Vector3(0f, BarHeight, 0f));
         bool site = b.UnderConstruction[i];
-        _boxes[i].MaterialOverride = site ? _slate : _playerMats[Math.Clamp(b.Owner[i], 0, _playerMats.Length - 1)];
+        _boxes[i].MaterialOverride = site ? _siteMat : _playerMats[Math.Clamp(b.Owner[i], 0, _playerMats.Length - 1)];
         _shownSite[i] = site;
         _shownRise[i] = -1f; // forces the box transform
         _shownBar[i] = BuildingBarKind.None;

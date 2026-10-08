@@ -17,7 +17,8 @@ namespace Rts.Game.Tests;
 /// </remarks>
 public partial class QaM27Test : Node
 {
-    // Smallest local-army centre displacement a 10 s bench must reach (see OrderReach).
+    // Smallest local-army centre displacement a 10 s bench must reach (see OrderReach). Fitted to seed 1, the only seed
+    // this scene runs (22.1 m there); other seeds march 19.1-26.2 m and QaH2Test holds them to 15 m (BUG-0104).
     private const float MinCentreShift = 20f;
 
     private readonly List<string> _failures = new();

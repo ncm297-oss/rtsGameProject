@@ -82,13 +82,14 @@ public partial class Minimap : Control
         QueueRedraw();
     }
 
-    /// <summary>Redraws the resource layer if passability changed, then the unit dots from the sim's current positions, and uploads what changed.</summary>
+    /// <summary>Redraws the resource layer if a node was felled or mined out, then the unit dots from the sim's current positions, and uploads what changed.</summary>
     public void Refresh(Simulation sim)
     {
         _watch.Restart();
         World world = sim.World;
         ResourceStore r = world.Resources;
-        if (Raster!.DrawResources(world.Data.Resources, world.NavGrid.Version, r.Alive, r.TypeId, r.Cell))
+        // Keyed on the resource set (FreeCount rises with each fell), not NavGrid.Version, which every building change bumps (BUG-0107).
+        if (Raster!.DrawResources(world.Data.Resources, r.FreeCount, r.Alive, r.TypeId, r.Cell))
         {
             ResourcesImage.SetData(Raster.Width, Raster.Height, false, Image.Format.Rgba8, Raster.Resources);
             _resourcesTexture.Update(ResourcesImage);

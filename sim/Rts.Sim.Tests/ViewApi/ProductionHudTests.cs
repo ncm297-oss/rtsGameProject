@@ -65,7 +65,7 @@ public class ProductionHudTests
     [Fact]
     public void QueueStrip_CountAndHeadFill_FollowTheQueueThroughLaborerAgeIILaborer()
     {
-        (Simulation sim, int hall) = Hall(1);
+        (Simulation sim, int hall) = Hall(1, ageIIHalls: true); // BUG-0124: Age II needs two finished halls of distinct slots
         World w = sim.World;
         BuildingStore b = w.Buildings;
         int laborer = w.Data.UnitsTrainedAt(b.TypeId[hall])[0];
@@ -225,9 +225,30 @@ public class ProductionHudTests
         _out.WriteLine($"M3-V3 helpers: 0 bytes (runs {runs}), checksum {sum}");
     }
 
+    // BUG-0124: a bare Town Hall (no Barracks, Range, Corral or Armory) can't research Age II: CanResearch answers Requires
+    // (the card's "Locked"), and a Research command for it enqueues nothing.
+    [Fact]
+    public void AgeII_AtABareTownHall_IsRequires_AndAResearchQueuesNothing()
+    {
+        (Simulation sim, int hall) = Hall(2);
+        World w = sim.World;
+        BuildingStore b = w.Buildings;
+        Assert.False(w.CanResearch(0, hall, ResearchMaps.AgeII, out Economy.ResearchError why));
+        Assert.Equal(Economy.ResearchError.Requires, why);
+        sim.Enqueue(Command.Research(0, ProductionMaps.In(sim, hall), ResearchMaps.AgeII));
+        sim.Tick();
+        sim.Tick();
+        Assert.Equal(0, b.QueueCount[hall]);
+        // The same fixture with the two halls spawned opens it.
+        (Simulation open, int hall2) = Hall(2, ageIIHalls: true);
+        Assert.True(open.World.CanResearch(0, hall2, ResearchMaps.AgeII, out why), $"with two halls: {why}");
+    }
+
     // A match with one army unit and 5 workers a side (population room to train) and player 0's Town Hall slot; player 0
-    // gets money for Age II (the ledger directly, as the research tests do).
-    internal static (Simulation Sim, int Hall) Hall(ulong seed)
+    // gets money for Age II (the ledger directly, as the research tests do). With <paramref name="ageIIHalls"/> player 0
+    // also gets a finished Barracks and Armory (dev spawns, which ignore requirements): Age II needs any two finished
+    // halls of distinct slots (BUG-0124).
+    internal static (Simulation Sim, int Hall) Hall(ulong seed, bool ageIIHalls = false)
     {
         (Simulation sim, Vector2[][] blocks, StartBasePlan plan) = StartBaseTests.MatchSetup(seed, 1, 5);
         StartBaseTests.Apply(sim, blocks, plan);
@@ -239,6 +260,48 @@ public class ProductionHudTests
         Assert.True(hall >= 0);
         w.Ledger.Gold[0] = 2000;
         w.Ledger.Wood[0] = 2000;
+        if (ageIIHalls)
+        {
+            SpawnNear(sim, hall, BuildingSlot.InfantryHall);
+            SpawnNear(sim, hall, BuildingSlot.Forge);
+        }
         return (sim, hall);
+    }
+
+    /// <summary>Spawns player 0's building of <paramref name="slot"/> finished, at the nearest spot 10-45 m from the hall the sim accepts; returns its slot.</summary>
+    internal static int SpawnNear(Simulation sim, int hall, BuildingSlot slot)
+    {
+        World w = sim.World;
+        NavGrid g = w.NavGrid;
+        BuildingStore b = w.Buildings;
+        int type = StartBase.BuildingOfSlot(w.Data, w.FactionOf(0), slot);
+        BuildingDef def = w.Data.Buildings[type];
+        Vector2 near = StartBase.FootprintCenter(g, w.Data.Buildings[b.TypeId[hall]], b.Cell[hall]);
+        var tried = new HashSet<int>();
+        for (int attempt = 0; attempt < 40; attempt++)
+        {
+            int best = -1;
+            float bestD = float.PositiveInfinity;
+            for (int cell = 0; cell < g.Width * g.Height; cell++)
+            {
+                Vector2 c = StartBase.FootprintCenter(g, def, cell);
+                float d = Vector2.Distance(c, near);
+                if (d >= bestD || d < 10f || d > 45f || tried.Contains(cell)) continue;
+                // Requires is checked before the map rules, so a locked type can't be probed with CanPlace; Fits is the map rule.
+                if (!w.CanPlace(0, type, cell, out Economy.PlacementError r) && r is not (Economy.PlacementError.CannotAfford or Economy.PlacementError.UnitInTheWay)
+                    && !(r == Economy.PlacementError.Requires && b.Fits(type, cell))) continue;
+                (best, bestD) = (cell, d);
+            }
+            Assert.True(best >= 0, $"no spot for {def.Key}");
+            tried.Add(best);
+            int before = b.Count;
+            sim.Enqueue(Command.SpawnBuilding(0, type, g.CellCenter(best % g.Width, best / g.Width)));
+            sim.Tick(); // a command applies in the tick after the one running when it was queued
+            sim.Tick();
+            if (b.Count == before) continue; // a unit of player 0 stood in the footprint: the dev spawn refuses
+            for (int k = 0; k < b.Capacity; k++)
+                if (b.Alive[k] && b.Cell[k] == best && b.TypeId[k] == type) return k;
+        }
+        throw new InvalidOperationException($"could not spawn {def.Key}");
     }
 }

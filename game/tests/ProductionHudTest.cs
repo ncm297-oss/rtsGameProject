@@ -87,6 +87,7 @@ public partial class ProductionHudTest : Node
 
         await StartMatch(_data);
         await PopRows();
+        await BareHallAgeII();
         await SpawnProductionBuildings();
         await PanelOneUnit();
         await PanelMixed();
@@ -201,7 +202,34 @@ public partial class ProductionHudTest : Node
         GD.Print($"pop: start 'Pop 5 / 10', at cap '{_bar.PopLabel.Text}' colour {c}");
     }
 
-    // Finished Barracks, two Armories and an Engineers' Yard for player 0 (dev spawns), and money.
+    // BUG-0124: with only the Town Hall, Age II is locked (it needs two finished halls of distinct slots): the button is
+    // greyed with research.requires ("Locked"), even with money, and a press enqueues nothing and plays no sound.
+    private async Task BareHallAgeII()
+    {
+        SetMoney(5000, 5000);
+        _sel.SelectBuilding(_hall);
+        await Frames();
+        int age = _data.FindTech("age_ii");
+        int cell = Enumerable.Range(0, CommandCard.Cells).FirstOrDefault(i => _card.ActionAt(i) == CardCommand.Research && _card.TypeAt(i) == age, -1);
+        if (!Check(cell >= 0, "bare hall: no Age II button")) return;
+        W.CanResearch(0, _hall, age, out ResearchError why);
+        Check(why == ResearchError.Requires && _card.ReasonAt(cell) == (int)ResearchError.Requires && _card.ButtonAt(cell).Disabled
+            && _card.CostAt(cell).Text == _ui.ResearchText(ResearchError.Requires) && _card.CostAt(cell).Text == "Locked"
+            && _card.NameAt(cell).Modulate.A <= 0.6f && _card.HintAt(cell).Modulate.A <= 0.6f,
+            $"bare hall Age II: sim {why}, card reason {_card.ReasonAt(cell)} disabled {_card.ButtonAt(cell).Disabled} '{_card.CostAt(cell).Text}'");
+        await SoundGap();
+        int start = _sim.PendingCommandCount, sounds = _sfx.PlayCount(SfxEvent.Command);
+        _card.Press(cell);
+        Check(_sim.PendingCommandCount == start && _sfx.PlayCount(SfxEvent.Command) == sounds, $"bare hall Age II press: {_sim.PendingCommandCount - start} commands, {_sfx.PlayCount(SfxEvent.Command) - sounds} sounds");
+        Tick(2);
+        Check(B.QueueCount[_hall] == 0, $"bare hall Age II press: queue {B.QueueCount[_hall]}");
+        GD.Print($"bare hall: Age II reads '{_card.CostAt(cell).Text}', press enqueued nothing");
+        _sel.ClearBuilding();
+        await Frames();
+    }
+
+    // Finished Barracks, two Armories and an Engineers' Yard for player 0 (dev spawns), and money. The Barracks and an
+    // Armory are two halls of distinct slots, so Age II opens at the Town Hall (BUG-0124).
     private async Task SpawnProductionBuildings()
     {
         int f = W.FactionOf(0);
@@ -258,7 +286,7 @@ public partial class ProductionHudTest : Node
     private void CheckStats(string what, UnitDef def, int slot)
     {
         string F(float v) => v.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
-        Check(_panel.StatValue(0).Text == $"{def.Hp} / {def.Hp}", $"{what}: hp '{_panel.StatValue(0).Text}'");
+        Check(_panel.HpText == $"{def.Hp} / {def.Hp}", $"{what}: hp '{_panel.HpText}'");
         Check(_panel.StatValue(1).Text == F(def.Attack.Value), $"{what}: attack '{_panel.StatValue(1).Text}'");
         Check(_panel.StatValue(2).Text == F(def.Armor), $"{what}: armor '{_panel.StatValue(2).Text}'");
         Check(_panel.StatValue(3).Text == F(def.Attack.Range), $"{what}: range '{_panel.StatValue(3).Text}'");
@@ -408,8 +436,11 @@ public partial class ProductionHudTest : Node
                     seen.Add($"research {e}");
                 }
                 cellsChecked++;
-                if (!Check(_card.ReasonAt(i) == reason && _card.ButtonAt(i).Disabled == (reason != 0) && _card.CostAt(i).Text == text,
-                        $"state {s}: building {sel} cell {i} ({c} {_card.TypeAt(i)}): shows reason {_card.ReasonAt(i)} disabled {_card.ButtonAt(i).Disabled} '{_card.CostAt(i).Text}', sim says {reason} '{text}'"))
+                // BUG-0123: a greyed cell's name and hotkey are drawn dimmed, an enabled one's at full strength.
+                float alpha = reason != 0 ? CommandCard.DimAlpha : 1f;
+                bool dim = _card.NameAt(i).Modulate.A == alpha && _card.HintAt(i).Modulate.A == alpha;
+                if (!Check(_card.ReasonAt(i) == reason && _card.ButtonAt(i).Disabled == (reason != 0) && _card.CostAt(i).Text == text && dim,
+                        $"state {s}: building {sel} cell {i} ({c} {_card.TypeAt(i)}): shows reason {_card.ReasonAt(i)} disabled {_card.ButtonAt(i).Disabled} '{_card.CostAt(i).Text}' alpha {_card.NameAt(i).Modulate.A}, sim says {reason} '{text}'"))
                     return;
             }
         }
@@ -491,6 +522,10 @@ public partial class ProductionHudTest : Node
             _sim.Enqueue(Command.SpawnBuilding(0, house, G.CellCenter(a % G.Width, a / G.Width)));
         }
         Tick(2);
+        // BUG-0124: Age II needs two finished halls of distinct slots; the Barracks and an Armory spawned above are they.
+        bool ageOpen = W.CanResearch(0, _hall, _data.FindTech("age_ii"), out ResearchError ageWhy);
+        Check(B.Alive[_barracks] && !B.UnderConstruction[_barracks] && B.Alive[_armory] && !B.UnderConstruction[_armory] && ageOpen,
+            $"queue strip: Age II not open at the hall ({ageWhy})");
         _sel.SelectBuilding(_hall);
         await Frames();
         int laborerCell = 0, ageCell = 1;
@@ -749,6 +784,28 @@ public partial class ProductionHudTest : Node
         for (int f = 0; f < 300; f++) _panel.Sync();
         long gridBytes = GC.GetAllocatedBytesForCurrentThread() - before;
         Check(gridBytes == 0, $"300 idle Syncs of the grid panel allocated {gridBytes} bytes");
+
+        // BUG-0123: the hall selected while three workers repair it: hp changes every tick, the panel allocates nothing.
+        int max = _data.Buildings[B.TypeId[_hall]].Hp;
+        DamageMethod.Invoke(B, new object[] { B.HandleOf(_hall), Math.Max(1, B.Hp[_hall] - max / 3) });
+        System.Numerics.Vector2 hc = SelectionController.SiteCenter(W, _hall);
+        foreach (EntityHandle h in Workers().Take(3)) _sim.Enqueue(Command.Repair(0, h, hc));
+        _sel.SelectBuilding(_hall);
+        int hpStart = B.Hp[_hall];
+        for (int t = 0; t < 400 && B.Hp[_hall] == hpStart; t++) _sim.Tick();
+        _panel.Sync();
+        int hp0 = B.Hp[_hall], panelRebuilds = _panel.Rebuilds;
+        long repairBytes = 0;
+        for (int f = 0; f < 300; f++)
+        {
+            _sim.Tick();
+            before = GC.GetAllocatedBytesForCurrentThread();
+            _panel.Sync();
+            repairBytes += GC.GetAllocatedBytesForCurrentThread() - before;
+        }
+        Check(repairBytes == 0 && B.Hp[_hall] > hp0 && _panel.Rebuilds - panelRebuilds > 100 && _panel.HpText == $"{B.Hp[_hall]} / {max}",
+            $"BUG-0123: 300 repair ticks: panel allocated {repairBytes} bytes (hp {hp0} -> {B.Hp[_hall]}, {_panel.Rebuilds - panelRebuilds} rewrites, shows '{_panel.HpText}')");
+        GD.Print($"repair: panel 0 B over 300 ticks, hp {hp0} -> {B.Hp[_hall]}, {_panel.Rebuilds - panelRebuilds} hp rewrites");
         GD.Print($"idle: building view {bytes} bytes, one unit {unitBytes}, grid {gridBytes}");
     }
 
@@ -820,7 +877,9 @@ public partial class ProductionHudTest : Node
             int x = cell % G.Width, y = cell / G.Width;
             if (taken.Any(t => Math.Abs(t % G.Width - x) < 8 && Math.Abs(t / G.Width - y) < 8)) continue;
             bool ok = W.CanPlace(0, type, cell, out PlacementError r);
-            if (!ok && r != PlacementError.CannotAfford) continue;
+            // A locked type (D3's building requires) answers Requires before any map rule: probe the map rule itself, the
+            // dev spawn ignores requirements.
+            if (!ok && r != PlacementError.CannotAfford && !(r == PlacementError.Requires && B.Fits(type, cell))) continue;
             bool empty = true;
             for (int i = 0; i < U.Capacity && empty; i++)
                 if (U.Alive[i] && MathF.Abs(U.Position[i].X - c.X) < def.FootprintWidth + 3f && MathF.Abs(U.Position[i].Y - c.Y) < def.FootprintHeight + 3f) empty = false;

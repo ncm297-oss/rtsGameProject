@@ -17,8 +17,8 @@ public class ProductionHudHashTwinTests
     [Fact]
     public void ProductionHudReadsEveryTick_HashEqualsABareTwin_400Ticks()
     {
-        (Simulation a, int hall) = ProductionHudTests.Hall(1);
-        (Simulation b, _) = ProductionHudTests.Hall(1);
+        (Simulation a, int hall) = ProductionHudTests.Hall(1, ageIIHalls: true); // BUG-0124: the Age II research is accepted
+        (Simulation b, _) = ProductionHudTests.Hall(1, ageIIHalls: true);
         World w = a.World;
         NavGrid g = w.NavGrid;
         BuildingStore bs = w.Buildings;
@@ -40,7 +40,7 @@ public class ProductionHudHashTwinTests
         };
         var into = new ProductionEntry[15];
         long sink = 0;
-        int sawQueue = 0, sawRally = 0, greyed = 0, enabled = 0;
+        int sawQueue = 0, sawRally = 0, greyed = 0, enabled = 0, sawTech = 0;
         for (int tick = 0; tick < 400; tick++)
         {
             if (script.TryGetValue(tick, out Command[]? cmds))
@@ -64,6 +64,7 @@ public class ProductionHudHashTwinTests
                 // The queue strip and the rally marker.
                 int q = QueueStrip.Count(bs, k);
                 if (q > 0 && k == hall) sawQueue++;
+                if (k == hall && q > 0 && bs.QueueIsTechAt(k, 0)) sawTech++;
                 for (int i = 0; i < q; i++) sink += bs.QueueTypeAt(k, i) + (bs.QueueIsTechAt(k, i) ? 1 : 0) + bs.ItemTicks(k, i);
                 sink += (long)(QueueStrip.HeadFill(bs, k) * 1000);
                 if (bs.HasRally[k])
@@ -81,6 +82,10 @@ public class ProductionHudHashTwinTests
             {
                 var o = new Vector3(at.X + r - 5f, 50f, at.Y + 30f);
                 sink += BuildingPicker.PickRay(bs, w.Data.Buildings, g, w.Heightmap, -1, o, new Vector3(0f, -1f, -0.8f), BoxHeight, SiteMin);
+                // M3-V3b: the right click's resource ray pick and the building pick's entry overload.
+                sink += ResourcePicker.PickRay(g, w.Data.Resources, w.Resources.Alive, w.Resources.TypeId, w.Resources.Cell, w.Heightmap, o,
+                    new Vector3(0.3f, -1f, -0.8f), 3.5f, 2.1f, out float nodeT) + (float.IsFinite(nodeT) ? 1 : 0);
+                sink += BuildingPicker.PickRay(bs, w.Data.Buildings, g, w.Heightmap, 0, o, new Vector3(-0.2f, -1f, -0.6f), BoxHeight, SiteMin, out float boxT) + (float.IsFinite(boxT) ? 1 : 0);
             }
             Assert.Equal(before, a.StateHash());
 
@@ -89,7 +94,7 @@ public class ProductionHudHashTwinTests
             Assert.True(b.StateHash() == a.StateHash(), $"tick {a.TickNumber}: view-read sim diverged from its twin");
         }
         Assert.True(sink != 0);
-        Assert.True(sawQueue > 300 && sawRally > 250 && greyed > 0 && enabled > 0, $"queue {sawQueue}, rally {sawRally}, greyed {greyed}, enabled {enabled}");
+        Assert.True(sawQueue > 300 && sawRally > 250 && greyed > 0 && enabled > 0 && sawTech > 0, $"queue {sawQueue}, rally {sawRally}, greyed {greyed}, enabled {enabled}, Age II at the head {sawTech}");
         Assert.False(bs.HasRally[hall]);
     }
 }

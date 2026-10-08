@@ -49,6 +49,7 @@ public partial class QaV3Test : Node
     private Minimap _mini = null!;
 
     private int _hall, _barracks, _armory, _armory2;
+    private readonly HashSet<string> _greySeen = new();
 
     private World W => _sim.World;
     private UnitStore U => _sim.World.Units;
@@ -67,6 +68,7 @@ public partial class QaV3Test : Node
             UiJsonRows();
             _ui = UiText.Shared!;
             await StartMatch();
+            await BareHallGreying();
             await SpawnBuildings();
             await GreyingEveryFrame();
             await QueueStripEveryFrame();
@@ -208,6 +210,41 @@ public partial class QaV3Test : Node
 
     // ---- greying ----
 
+    // BUG-0124: before any hall stands, Age II at the Town Hall reads research.requires ("Locked") every frame whatever the
+    // money, a press enqueues nothing, and a Research command for it is dropped by the sim.
+    private async Task BareHallGreying()
+    {
+        _hall = HallSlot(0);
+        _sel.SelectBuilding(_hall);
+        var rng = new Random(124);
+        var into = new ProductionEntry[15];
+        int age = _data.FindTech("age_ii"), frames = 0, mismatch = 0, locked = 0;
+        System.Numerics.Vector2 hc = SelectionController.SiteCenter(W, _hall);
+        for (int s = 0; s < 60; s++)
+        {
+            int op = rng.Next(4);
+            if (op == 0) SetMoney(rng.Next(0, 800), rng.Next(0, 500));
+            else if (op == 1) SetMoney(50000, 50000);
+            else if (op == 2) _sim.Enqueue(Command.Research(0, hc, age));
+            Tick(rng.Next(0, 4));
+            await Frame();
+            frames++;
+            CheckCardFrame(frames, _greySeen, into, ref mismatch);
+            int cell = Enumerable.Range(0, CommandCard.Cells).FirstOrDefault(i => _card.ActionAt(i) == CardCommand.Research && _card.TypeAt(i) == age, -1);
+            if (cell >= 0 && _card.ReasonAt(cell) == (int)ResearchError.Requires && _card.ButtonAt(cell).Disabled && _card.CostAt(cell).Text == "Locked") locked++;
+            if (cell >= 0 && s % 10 == 0)
+            {
+                int start = _sim.PendingCommandCount;
+                _card.Press(cell);
+                Check(_sim.PendingCommandCount == start, $"bare hall: an Age II press enqueued {Describe(Pending(start))}");
+            }
+        }
+        Tick(2);
+        Check(mismatch == 0 && locked == frames && B.QueueCount[_hall] == 0 && !W.HasTech(0, age),
+            $"bare hall: {mismatch} mismatches, Age II 'Locked' in {locked} of {frames} frames, queue {B.QueueCount[_hall]}");
+        GD.Print($"bare hall greying: {frames} frames, Age II locked in {locked}, research presses / commands enqueued nothing");
+    }
+
     // After a real frame (the card's own _Process), every production cell equals the sim's verdict now. States: random
     // money incl. cost - 1 / cost / cost + 1 of a random entry, set between the tick and the frame; pop exactly at the
     // cap; queues filled to 5; a tech queued at the other armory; techs completed; cancels; selection hops.
@@ -215,7 +252,7 @@ public partial class QaV3Test : Node
     {
         var rng = new Random(31);
         int[] buildings = { _hall, _barracks, _armory, _armory2 };
-        var seen = new HashSet<string>();
+        HashSet<string> seen = _greySeen; // the bare-hall phase's verdicts count too (research Requires)
         int cells = 0, frames = 0, atCapFrames = 0, mismatch = 0;
         var into = new ProductionEntry[15];
         // One Forge tech researched up front, so AlreadyResearched shows.
@@ -278,44 +315,56 @@ public partial class QaV3Test : Node
             else if (_sel.SelectedBuilding < 0) _sel.SelectBuilding(k);
             await Frame();
             frames++;
-            int sel = _sel.SelectedBuilding;
             if (W.HalfPop[0] == W.HalfPopCap[0]) atCapFrames++;
-            for (int i = 0; i < CommandCard.Cells; i++)
-            {
-                CardCommand a = _card.ActionAt(i);
-                if (a is not (CardCommand.Train or CardCommand.Research)) continue;
-                int reason;
-                string text;
-                if (a == CardCommand.Train)
-                {
-                    W.CanTrain(0, sel, _card.TypeAt(i), out TrainError e);
-                    reason = (int)e;
-                    text = e == TrainError.None ? $"{_data.Units[_card.TypeAt(i)].CostGold} / {_data.Units[_card.TypeAt(i)].CostWood}" : _ui.TrainText(e);
-                    seen.Add($"train {e}{(W.HalfPop[0] >= W.HalfPopCap[0] ? " @cap" : "")}");
-                }
-                else
-                {
-                    W.CanResearch(0, sel, _card.TypeAt(i), out ResearchError e);
-                    reason = (int)e;
-                    text = e == ResearchError.None ? $"{_data.Techs[_card.TypeAt(i)].CostGold} / {_data.Techs[_card.TypeAt(i)].CostWood}" : _ui.ResearchText(e);
-                    seen.Add($"research {e}");
-                }
-                cells++;
-                bool same = _card.ReasonAt(i) == reason && _card.ButtonAt(i).Disabled == (reason != 0) && _card.CostAt(i).Text == text && _card.ButtonAt(i).Visible;
-                if (!same && mismatch++ < 6)
-                    Check(false, $"greying frame {frames}: building {sel} cell {i} ({a} {_card.TypeAt(i)}) shows {_card.ReasonAt(i)} disabled {_card.ButtonAt(i).Disabled} '{_card.CostAt(i).Text}', sim {reason} '{text}'");
-            }
-            // The card's layout is the selected building's menu.
-            int want = sel >= 0 ? ProductionMenu.Entries(_data, B.TypeId[sel], into) : 0;
-            int shown = Enumerable.Range(0, CommandCard.Cells).Count(i => _card.ActionAt(i) is CardCommand.Train or CardCommand.Research);
-            if (shown != want && mismatch++ < 6) Check(false, $"greying frame {frames}: card shows {shown} production cells, menu has {want}");
+            cells += CheckCardFrame(frames, seen, into, ref mismatch);
         }
         Check(mismatch == 0, $"greying: {mismatch} mismatching frames/cells");
         GD.Print($"greying every frame: {frames} frames, {cells} cells, {atCapFrames} frames at the pop cap; seen {string.Join(", ", seen.OrderBy(x => x))}");
-        foreach (string w in new[] { "train QueueFull", "train CannotAfford", "train None", "research AlreadyQueued", "research AlreadyResearched", "research CannotAfford", "research QueueFull" })
+        foreach (string w in new[] { "train QueueFull", "train CannotAfford", "train None", "research AlreadyQueued", "research AlreadyResearched", "research CannotAfford", "research QueueFull", "research Requires" })
             Check(seen.Any(x => x == w || x == w + " @cap"), $"greying never saw {w}");
         Check(seen.Any(x => x.EndsWith("@cap")), "greying never ran at the pop cap");
         await ClearQueues(buildings);
+    }
+
+    // The card after a real frame vs the sim's verdict now, cell by cell: reason, Disabled, the cost / reason text, and the
+    // layout equal to the selected building's menu. Returns the production cells checked.
+    private int CheckCardFrame(int frames, HashSet<string> seen, ProductionEntry[] into, ref int mismatch)
+    {
+        int sel = _sel.SelectedBuilding;
+        int cells = 0;
+        for (int i = 0; i < CommandCard.Cells; i++)
+        {
+            CardCommand a = _card.ActionAt(i);
+            if (a is not (CardCommand.Train or CardCommand.Research)) continue;
+            int reason;
+            string text;
+            if (a == CardCommand.Train)
+            {
+                W.CanTrain(0, sel, _card.TypeAt(i), out TrainError e);
+                reason = (int)e;
+                text = e == TrainError.None ? $"{_data.Units[_card.TypeAt(i)].CostGold} / {_data.Units[_card.TypeAt(i)].CostWood}" : _ui.TrainText(e);
+                seen.Add($"train {e}{(W.HalfPop[0] >= W.HalfPopCap[0] ? " @cap" : "")}");
+            }
+            else
+            {
+                W.CanResearch(0, sel, _card.TypeAt(i), out ResearchError e);
+                reason = (int)e;
+                text = e == ResearchError.None ? $"{_data.Techs[_card.TypeAt(i)].CostGold} / {_data.Techs[_card.TypeAt(i)].CostWood}" : _ui.ResearchText(e);
+                seen.Add($"research {e}");
+            }
+            cells++;
+            // BUG-0123: a greyed button's name and hotkey are dimmed (<= 60 % alpha), an enabled one's are not.
+            float alpha = reason != 0 ? CommandCard.DimAlpha : 1f;
+            bool dim = _card.NameAt(i).Modulate.A == alpha && _card.HintAt(i).Modulate.A == alpha && (reason == 0 || alpha <= 0.6f);
+            bool same = _card.ReasonAt(i) == reason && _card.ButtonAt(i).Disabled == (reason != 0) && _card.CostAt(i).Text == text && _card.ButtonAt(i).Visible && dim;
+            if (!same && mismatch++ < 6)
+                Check(false, $"greying frame {frames}: building {sel} cell {i} ({a} {_card.TypeAt(i)}) shows {_card.ReasonAt(i)} disabled {_card.ButtonAt(i).Disabled} '{_card.CostAt(i).Text}' alpha {_card.NameAt(i).Modulate.A}/{_card.HintAt(i).Modulate.A}, sim {reason} '{text}'");
+        }
+        // The card's layout is the selected building's menu.
+        int want = sel >= 0 ? ProductionMenu.Entries(_data, B.TypeId[sel], into) : 0;
+        int shown = Enumerable.Range(0, CommandCard.Cells).Count(i => _card.ActionAt(i) is CardCommand.Train or CardCommand.Research);
+        if (shown != want && mismatch++ < 6) Check(false, $"greying frame {frames}: card shows {shown} production cells, menu has {want}");
+        return cells;
     }
 
     // ---- queue strip ----
@@ -442,6 +491,30 @@ public partial class QaV3Test : Node
         DamageMethod.Invoke(B, new object[] { B.HandleOf(lip), hmax / 3 });
         GD.Print($"lip house at cell {best}, corner height spread {bestSlope:0.##} m");
         foreach (float zoom in new[] { 20f, 60f }) await SweepBox(lip, zoom, $"lip house @{zoom}");
+
+        // M3-V3b: a house just north of a rise (the camera looks north, so the higher ground is between it and the
+        // camera): the rise hides the box's lower part, and those pixels must not pick it (PickRay's terrain occlusion).
+        int behind = -1;
+        float bestRise = 0f;
+        for (int cell = 0; cell < G.Width * G.Height; cell++)
+        {
+            int x = cell % G.Width, y = cell / G.Width;
+            if (x < 2 || y < 2 || x + hd.FootprintWidth + 2 >= G.Width || y + hd.FootprintHeight + 4 >= G.Height || !B.Fits(house, cell)) continue;
+            float h0 = TerrainHeight.At(W.Heightmap, (x + hd.FootprintWidth / 2f) * MapConstants.CellSize, (y + hd.FootprintHeight / 2f) * MapConstants.CellSize);
+            float front = 0f;
+            for (int dx = 0; dx < hd.FootprintWidth; dx++)
+                for (int dy = 1; dy <= 2; dy++)
+                    front = Math.Max(front, TerrainHeight.At(W.Heightmap, (x + dx + 0.5f) * MapConstants.CellSize, (y + hd.FootprintHeight + dy - 0.5f) * MapConstants.CellSize) - h0);
+            if (front > bestRise) (behind, bestRise) = (cell, front);
+        }
+        if (!Check(behind >= 0 && bestRise >= 2f, $"no house spot behind a rise (best {bestRise:0.#} m)")) return;
+        _sim.Enqueue(Command.SpawnBuilding(0, house, G.CellCenter(behind % G.Width, behind / G.Width)));
+        Tick(2);
+        int hidden = B.SlotAt(behind % G.Width, behind / G.Width);
+        if (!Check(hidden >= 0, $"house behind the rise not spawned at {behind}")) return;
+        DamageMethod.Invoke(B, new object[] { B.HandleOf(hidden), hmax / 3 });
+        GD.Print($"house behind a rise at cell {behind}: ground {bestRise:0.#} m higher just south of it");
+        foreach (float zoom in new[] { 20f, 30f }) await SweepBox(hidden, zoom, $"house behind a rise @{zoom}");
     }
 
     private async Task SweepBox(int slot, float zoom, string what)
@@ -500,7 +573,8 @@ public partial class QaV3Test : Node
         Tick(2);
         Check(onBox > 0 && wrong == 0, $"BUG-0108 {what}: {wrong} of {onBox} box pixels resolve elsewhere ({firstWrong})");
         GD.Print($"BUG-0108 sweep {what}: {onBox} box pixels, {wrong} wrong, {occluded} terrain-occluded but picked, {sent} real right-clicks ({badSent} bad)");
-        if (occluded > 0) GD.Print($"QA M3-V3 NOTE {what}: {occluded} pixels where terrain hides the box still target the building");
+        // M3-V3b: PickRay lets terrain occlude, so no pixel whose ray meets the ground in front of the box picks it.
+        Check(occluded == 0, $"{what}: {occluded} pixels where terrain hides the box still pick the building");
         _camera.SetZoom(30f);
     }
 
@@ -736,18 +810,36 @@ public partial class QaV3Test : Node
             _rally.Sync(W);
             _bar.Sync(W);
         }
+        // Per element (panel, card, strip, rally, bar), so a failing row names its source.
+        var part = new long[5];
+        long barQuiet = 0; // bar bytes on frames where no number it shows changed (must stay 0: the M2-H2 rule)
         long Measure(int n, bool tick)
         {
+            Array.Clear(part);
+            barQuiet = 0;
             long total = 0;
             for (int f = 0; f < n; f++)
             {
                 if (tick) _sim.Tick();
                 long b0 = GC.GetAllocatedBytesForCurrentThread();
-                SyncAll();
-                total += GC.GetAllocatedBytesForCurrentThread() - b0;
+                _panel.Sync();
+                long b1 = GC.GetAllocatedBytesForCurrentThread();
+                _card.Sync();
+                long b2 = GC.GetAllocatedBytesForCurrentThread();
+                _strip.Sync();
+                long b3 = GC.GetAllocatedBytesForCurrentThread();
+                _rally.Sync(W);
+                int builds = _bar.Builds + _bar.PopBuilds;
+                long b4 = GC.GetAllocatedBytesForCurrentThread();
+                _bar.Sync(W);
+                long b5 = GC.GetAllocatedBytesForCurrentThread();
+                if (_bar.Builds + _bar.PopBuilds == builds) barQuiet += b5 - b4;
+                part[0] += b1 - b0; part[1] += b2 - b1; part[2] += b3 - b2; part[3] += b4 - b3; part[4] += b5 - b4;
+                total += b5 - b0;
             }
             return total;
         }
+        string Parts() => $"panel {part[0]}, card {part[1]}, strip {part[2]}, rally {part[3]}, bar {part[4]}";
         SyncAll();
         long idle = Measure(300, tick: false);
         Check(idle == 0, $"300 idle HUD syncs allocated {idle} bytes");
@@ -763,8 +855,10 @@ public partial class QaV3Test : Node
         int hp0 = B.Hp[_hall], rebuilds0 = _panel.Rebuilds;
         long repair = Measure(300, tick: true);
         int hpChanges = _panel.Rebuilds - rebuilds0;
-        GD.Print($"allocation: idle {idle} B; repair {repair} B over 300 ticks (hp {hp0} -> {B.Hp[_hall]}, panel rebuilds {hpChanges})");
-        Known("BUG-0123", repair == 0, $"300 HUD syncs while the selected hall is repaired (hp {hp0} -> {B.Hp[_hall]}, {hpChanges} text rebuilds) allocated {repair} bytes");
+        GD.Print($"allocation: idle {idle} B; repair {repair} B over 300 ticks (hp {hp0} -> {B.Hp[_hall]}, panel rebuilds {hpChanges}; {Parts()})");
+        // BUG-0123: the panel, card, strip and flag allocate nothing while hp moves every tick. Repair spends money, so the
+        // resource bar rebuilds its gold / wood text when a total changes (its documented rule); it may allocate only then.
+        Check(repair - part[4] == 0 && barQuiet == 0, $"BUG-0123: 300 HUD syncs while the selected hall is repaired (hp {hp0} -> {B.Hp[_hall]}, {hpChanges} text rebuilds) allocated {repair} bytes ({Parts()}; bar on quiet frames {barQuiet})");
 
         // Production running: head fill moves every tick.
         int laborer = _data.UnitsTrainedAt(B.TypeId[_hall])[0];
@@ -772,7 +866,7 @@ public partial class QaV3Test : Node
         Tick(2);
         SyncAll();
         long production = Measure(100, tick: true);
-        GD.Print($"allocation: production running {production} B over 100 ticks (bar/text changes included)");
+        GD.Print($"allocation: production running {production} B over 100 ticks (bar/text changes included; {Parts()})");
 
         // One gathering worker selected: state changes, no hp.
         EntityHandle w = Workers()[3];
@@ -865,7 +959,8 @@ public partial class QaV3Test : Node
             int x = cell % G.Width, y = cell / G.Width;
             if (taken.Any(t => Math.Abs(t % G.Width - x) < 8 && Math.Abs(t / G.Width - y) < 8)) continue;
             bool ok = W.CanPlace(0, type, cell, out PlacementError r);
-            if (!ok && r != PlacementError.CannotAfford) continue;
+            // A locked type answers Requires before any map rule: probe the map rule itself (the dev spawn ignores requirements).
+            if (!ok && r != PlacementError.CannotAfford && !(r == PlacementError.Requires && B.Fits(type, cell))) continue;
             bool empty = true;
             for (int i = 0; i < U.Capacity && empty; i++)
                 if (U.Alive[i] && MathF.Abs(U.Position[i].X - c.X) < def.FootprintWidth + 3f && MathF.Abs(U.Position[i].Y - c.Y) < def.FootprintHeight + 3f) empty = false;

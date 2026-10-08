@@ -113,4 +113,76 @@ public class ResourcePickerTests
         int runs = AllocationProbe.AssertZero(block, _out);
         _out.WriteLine($"picker + bars + counts: 0 bytes (runs {runs}), checksum {sum}");
     }
+
+    private const float WoodHeight = 3.5f, GoldHeight = 2.1f; // PropsView: TreeHeight, MineHeight + GoldHeight (game side)
+
+    private static int Pick(World w, Vector3 o, Vector3 d, out float t) =>
+        ResourcePicker.PickRay(w.NavGrid, w.Data.Resources, w.Resources.Alive, w.Resources.TypeId, w.Resources.Cell, w.Heightmap, o, d, WoodHeight, GoldHeight, out t);
+
+    // M3-V3b: the ray pick sees each node's drawn prop as a box over its footprint up to its kind's height: a ray through
+    // a tree's canopy column picks the tree although its ground point lies behind it; over the top it misses; the nearer
+    // of two nodes on a line wins; a mine is only GoldHeight tall; a node behind a ridge is hidden; bad rays are -1.
+    [Fact]
+    public void PickRay_SeesTheDrawnProp_NearestFirst_AndTerrainHides()
+    {
+        var rows = new string[32];
+        for (int y = 0; y < 32; y++) rows[y] = new string('0', 24) + (y >= 2 && y < 30 ? "11" : "00") + "000000";
+        World w = ResourceMaps.NewSim(LocalMovementTests.Rows(rows)).World;
+        EntityHandle tree = ResourceMaps.Spawn(w, ResourceMaps.Tree, 10, 10, 100);
+        EntityHandle tree2 = ResourceMaps.Spawn(w, ResourceMaps.Tree, 10, 6, 100);
+        EntityHandle mine = ResourceMaps.Spawn(w, ResourceMaps.Mine, 16, 10, 1000);
+        EntityHandle hidden = ResourceMaps.Spawn(w, ResourceMaps.Tree, 28, 12, 100); // east of the ridge (cells 24-25)
+        var tc = new Vector3(21f, 0f, 21f); // the tree's cell (10, 10) centre in meters
+        // A camera-like ray from south and above, aimed 3 m up the tree's column: picks the tree; its ground point is north of it.
+        var cam = new Vector3(21f, 30f, 45f);
+        Vector3 aim = tc + new Vector3(0f, 3f, 0f);
+        Assert.Equal(tree.Index, Pick(w, cam, aim - cam, out float t));
+        Assert.True(GroundPicker.TryPick(w.Heightmap, cam, aim - cam, out Vector3 g) && g.Z < 20f, $"the ground behind is at {g}");
+        Assert.InRange(t, 0f, 1f);
+        // Aimed at 0.3 m over the top of the canopy, at the column's far edge: passes over it and over the tree behind.
+        Assert.NotEqual(tree.Index, Pick(w, cam, new Vector3(21f, WoodHeight + 0.3f, 20f) - cam, out _));
+        // Two trees on a north-south line: from the south the nearer (10, 10), from the north the nearer (10, 6).
+        Assert.Equal(tree.Index, Pick(w, new Vector3(21f, 1f, 40f), -Vector3.UnitZ, out _));
+        Assert.Equal(tree2.Index, Pick(w, new Vector3(21f, 1f, 4f), Vector3.UnitZ, out _));
+        // The mine: a horizontal ray at 1.5 m hits it, at GoldHeight + 0.2 m it doesn't.
+        float mx = 16 * 2f - 1f;
+        Assert.Equal(mine.Index, Pick(w, new Vector3(mx, 1.5f, 21f), Vector3.UnitX, out _));
+        Assert.Equal(-1, Pick(w, new Vector3(mx, GoldHeight + 0.2f, 21f), Vector3.UnitX, out _));
+        // Behind the 4 m ridge: a low ray from the west meets the wall first; a high one clears it and picks the tree.
+        var target = new Vector3(57f, 2f, 25f);
+        var low = new Vector3(40f, 3f, 25f);
+        Assert.Equal(-1, Pick(w, low, target - low, out _));
+        var high = new Vector3(40f, 12f, 25f);
+        Assert.Equal(hidden.Index, Pick(w, high, target - high, out _));
+        // A felled node is gone.
+        w.Resources.Take(tree, 100);
+        Assert.NotEqual(tree.Index, Pick(w, cam, aim - cam, out _));
+        // Bad rays.
+        Assert.Equal(-1, Pick(w, cam, Vector3.Zero, out t));
+        Assert.True(float.IsPositiveInfinity(t));
+        Assert.Equal(-1, Pick(w, new Vector3(float.NaN, 1f, 1f), -Vector3.UnitY, out _));
+        Assert.Equal(-1, Pick(w, cam, new Vector3(0f, float.PositiveInfinity, 0f), out _));
+    }
+
+    [Fact]
+    public void PickRay_Resources_AndBuildingsWithEntry_AllocateZeroBytes()
+    {
+        (Simulation sim, Vector2[][] blocks, StartBasePlan plan) = StartBaseTests.MatchSetup(1, 20, 5);
+        StartBaseTests.Apply(sim, blocks, plan);
+        World w = sim.World;
+        float sum = 0f;
+        Action block = () =>
+        {
+            for (int i = 0; i < 40; i++)
+            {
+                var o = new Vector3(i * 5.3f, 50f, i * 4.1f + 30f);
+                var d = new Vector3(0.05f, -1f, -0.7f);
+                sum += Pick(w, o, d, out float t) + (float.IsFinite(t) ? t : 0f);
+                sum += BuildingPicker.PickRay(w.Buildings, w.Data.Buildings, w.NavGrid, w.Heightmap, -1, o, d, 3f, 0.15f, out float bt) + (float.IsFinite(bt) ? bt : 0f);
+            }
+        };
+        block();
+        int runs = AllocationProbe.AssertZero(block, _out);
+        _out.WriteLine($"resource + building ray picks: 0 bytes (runs {runs}), checksum {sum}");
+    }
 }

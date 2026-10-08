@@ -2180,14 +2180,19 @@ Match
   transforms), so a felled tree re-uploads the trees, not the mines (M2-H2, BUG-0086). Props cast
   shadows; no physics.
 - **Minimap:** `MinimapRaster` has a third layer, `Resources`, drawn between terrain and dots.
-  `DrawResources(types, version, alive, typeId, cell)` redraws it only when the grid version changed:
-  it clears the pixels it painted last time, then paints every footprint cell of each live node
-  (`WoodRgb` 0x1E5A1E dark green, `GoldRgb` 0xE6B422 gold, by `ResourceKind`). The minimap calls it
+  `DrawResources(types, version, alive, typeId, cell)` redraws it only when `version` changed. The
+  minimap passes the resource store's `FreeCount`, which rises with each node felled or mined out and
+  nothing else (nodes spawn only at map load); it used to pass `NavGrid.Version`, which every building
+  spawn, site and cancel also bumps (BUG-0107). A redraw clears the pixels it painted last time,
+  then paints every footprint cell of each live node (`WoodRgb` 0x1E5A1E dark green, `GoldRgb`
+  0xE6B422 gold, by `ResourceKind`). The minimap calls it
   in its 5 Hz refresh before the dots and uploads the layer's texture only when it was redrawn, so
   a felled tree disappears within one refresh. The terrain bake no longer darkens a cell blocked
   only by a resource node (`Resource` set), so the ground under a felled tree has its true colour.
-  Cost: 2,000 dots plus a forced 4,096-node resource redraw is about 0.25 ms (Debug; limit 0.3 ms);
-  0 bytes.
+  Cost (Debug, alone on the dev PC, 2026-10-07): 2,000 dots about 0.17 ms (limit 0.25 ms, QA's dot
+  budget) and a forced 4,096-node resource redraw about 0.13 ms (limit 0.2 ms), timed apart since
+  BUG-0105 (together they were 0.28-0.29 ms against one 0.3 ms limit); the redraw runs only on a
+  refresh after a fell. 0 bytes.
 - **Read-only:** `PropLayout` and `DrawResources` read spans and keep no reference to the store;
   nothing in `ViewApi` names `ResourceStore`, `Take`, `Spawn` or the flow-field cache (except the
   M2-5 arrow layer's peek).
@@ -2254,8 +2259,8 @@ Match
   ObjectDB leak warning at exit. The pool players stop their sounds as they leave the tree, and if a
   sound started within the longest clip plus 100 ms, `Sfx._ExitTree` then waits for one mix that
   started after the stop (`AudioServer.GetTimeSinceLastMix`, then the server lock the driver holds
-  while mixing), at most `Sfx.ExitWaitLimitMs` (200 ms); about 5-60 ms headless. The window's close
-  request stops the players too. `SfxTest` no longer waits before quitting.
+  while mixing), at most `Sfx.ExitWaitLimitMs` (200 ms); about 20-30 ms headless alone, up to about
+  100 ms under suite load (BUG-0105). The window's close request stops the players too. `SfxTest` no longer waits before quitting.
 - **Counters for tests:** `Sfx.PlayCount(SfxEvent)` (plays after rate limiting) and
   `Sfx.LastPlayedFrame(SfxEvent)` (process frame, -1 if never). `Play(e, frame, nowUsec)` drives
   the limiter with an explicit clock.
@@ -2296,7 +2301,9 @@ repeatable benchmark, facing interpolation, and a screenshot set. The owner's pl
   target is about 109 m away and the army's centre moves about 22 m in 10 s (`QaM27Test`: target at
   least 100 m, centre at least 20 m). The march runs through the idle enemy block, which roughly
   halves the army's pace after a few seconds (a bare 10 s sim march moves the centre 24 m, 29 m with
-  no enemy in the way). Every action goes
+  no enemy in the way). How far the centre gets is a property of the seed's terrain: 19.1-26.2 m over
+  seeds 1, 6, 7, 21, 23, 31 and 43 (seed 21 least). So the 20 m bound is seed 1's; `QaH2Test` holds
+  any other seed to 15 m, which proves the army marches rather than a pace (BUG-0104). Every action goes
   through the real code: `SelectionController.BoxSelect` / `OrderAt` / `BeginAttackMove` +
   `AttackMoveClick` / `Order` (public since M2-7; the mouse and key handlers call the same
   methods), `Minimap.JumpTo` (the camera directly under `--no-hud`), `RtsCamera.SetZoom`. Edge
@@ -2385,7 +2392,8 @@ Match.tscn  (new nodes)
 - **Building views** (`BuildingViews`): polled each frame from `Buildings.Alive` / `Generation` like the props (no
   sim events yet). A slot's nodes (box, bar back, bar fill) are made the first time it holds a building and hidden
   while it is free. The box is the footprint (cells x 2 m) by 3 m, in the owner's faction colour; a construction
-  site is slate (lighter than the Malazan grey) and rises from 15% to full height with its progress. The bar over it
+  site is a dusty mauve (`BuildingViews.SiteColor`, a hue far from both factions' building colours;
+  it was a slate lighter than the Malazan grey, BUG-0107) and rises from 15% to full height with its progress. The bar over it
   comes from the pure `ViewApi.BuildingBars.Of(buildings, defs, slot, out fill)`: `Progress` (`Work / WorkNeeded`,
   yellow) on a site, `HitPoints` (`Hp / max`, green) on a finished building below full hit points, `None` otherwise;
   its transform is written only when kind or fill change. A freed slot (a Cancel) is hidden on the first frame
@@ -2405,7 +2413,8 @@ Match.tscn  (new nodes)
   store has no cell index).
 - **Worker feedback** (`UnitViews`): a standing worker's `Gathering` (green), `Returning` (amber) or `Building` (blue)
   state tints its body through a shared translucent overlay material (`MaterialOverlay`); while `Cargo > 0` a 0.35 m
-  cube floats above it, gold or wood-brown by `CargoKind`. A slot's marker node is made the first time it carries,
+  cube floats above it, gold or wood-brown by `CargoKind`; above 30 m zoom the shared cube meshes grow with the zoom
+  (0.7 m at 60 m), so the marker keeps its screen size (BUG-0107: it was 3-4 px at 60 m). A slot's marker node is made the first time it carries,
   then reused; overlay and marker are touched only when what they show changes. Walking legs (`Moving`) are not
   tinted; the marker shows the load either way. The F12 overlay's second line adds "workers gathering N,
   returning N, building N" (`ViewApi.DebugCounts.InState`).
@@ -2434,7 +2443,7 @@ Match.tscn  (new nodes)
   every unit's tint and cargo marker against the sim; the F12 counts; 5 workers + 5 soldiers: plain ground is 10
   Moves, Shift + right-click on the mine queues a Gather per worker and a Move per soldier, unqueued the workers gather
   and the soldiers walk, soldiers alone get Moves, the minimap path stays a Move; 300 idle frames at 0 bytes; a
-  worker's Build: the site box is slate with a progress bar equal to `Work / WorkNeeded` every tick, and gone the
+  worker's Build: the site box is in the site colour with a progress bar equal to `Work / WorkNeeded` every tick, and gone the
   frame after its Cancel frees it. Windowed with `-- --shots <dir>` it saves the start of each seed, workers
   hauling, and the site. `QaH1Test`'s fuzz now expects the Gather / Move split when its "empty ground" right click
   lands on a tree or mine with workers selected; the M2 scenes that assume an armies-only match pass `--no-bases`.
@@ -2469,7 +2478,10 @@ game/data/common/ui.json  view-only text and menu lists (UiText.cs); the sim's D
 - **Card layout** (`CommandCard`, docs/02 "HUD layout" / "Grid hotkeys"): 5 x 3 buttons (92 x 60 px, 4 px gaps),
   cells 0-14 keyed by input actions `card_0` ... `card_14` = `Q W E R T / A S D F G / Z X C V B`. A button shows its
   name (command `displayName` or building `displayName`), its hotkey hint top left (`hotkeyHint`, or for a menu entry
-  the key bound to its `card_<i>` action as the keyboard labels it) and, for a building, its cost "G / W" bottom right;
+  the key bound to its `card_<i>` action as the keyboard labels it) and, for a building, its cost "G / W" bottom right.
+  The name is 12 px, word-wrapped onto at most two lines; a name with a word wider than the label shrinks, a pixel at a
+  time down to 9 px, until every word fits and it takes two lines at most (`CommandCard.FitNameSize`, measured once per
+  name in `Init`; BUG-0122: "Quartermaster's Depot" broke at the apostrophe, now 10 px);
   the tooltip is the building's `description` and "<gold name> G  <wood name> W" (faction names). Contents follow
   the selection: units: Attack (A) on the A cell, Stop (S), Hold (H) and Move (M) on the rest of the middle row (row 1
   stays free for abilities, Q W E R); when the active Tab subgroup is a `worker` type also Build advanced on V and
@@ -2490,19 +2502,24 @@ game/data/common/ui.json  view-only text and menu lists (UiText.cs); the sim's D
   clamped so the footprint stays on the map; a cursor off the map hides the box. Green when `World.CanPlace(player,
   type, anchor, out reason)` passes, red otherwise with `ui.json` `placement.<reason>` over it. `CanPlace` writes
   flow-field scratch (M3-3), so it is called only from the ghost's `_Process`, which runs after `SimRunner`'s tick
-  step in the same frame (tree order: the runner is the match's first child), on the main thread, never while
+  step and after `RtsCamera`'s pan in the same frame (`ProcessPriority` 1, after every default-priority node; in tree
+  order it came before the camera and trailed a pan by a frame, BUG-0122), on the main thread, never while
   `SimRunner.Ticking`, at most once per frame, and only when the anchor, the type or the sim tick changed since the last
   answer (nothing else changes it). The box moves only with an answer, so the colour drawn is always `CanPlace` of the
   anchor drawn. Left click with a green ghost: `SelectionController.OrderBuild`: one `Command.Build(player, worker,
   type, anchor point)` per selected live worker (the anchor cell's centre; the first to apply places the site, the rest
   join it), one Command sound; the menu and ghost close, unless Shift is held: then the ghost stays, and each later
   placement of the same ghost is queued (`queued` flag) so the workers build them in turn (the first stays unqueued:
-  a queued order behind an endless Gather would never start). A red or off-map click does nothing and plays nothing.
-  Meshes (one per building type, on first use) and the two materials are kept; the label text is set only when the
-  reason changes.
+  a queued order behind an endless Gather would never start); a Shift-click on the anchor this ghost placed last is
+  skipped (BUG-0122: a flood of clicks queued copies that only joined the same site). A red or off-map click does
+  nothing and plays nothing. Meshes (one per building type, on first use) and the two materials are kept; the label
+  text is set only when the reason changes. The red is a deep (0.95, 0.02, 0.04) at 62 % (it read orange over grass at
+  (1, 0.12, 0.1) and 55 %); the reason label's `PixelSize` is `BuildGhost.ReasonPixelPerZoom` x zoom, so it is about
+  25-35 px per em at every zoom (it was about 9 px at 30 m), set only when the zoom changes.
 - **Selection rule** (`SelectionController`): a left click that picks no unit selects the own building whose drawn box
   the camera ray meets first (`ViewApi.BuildingPicker.PickRay`: footprint x box height on the terrain at the footprint
-  centre, a site only up to its drawn rise) alone: units cleared, targeting ended, Select sound if it changed. Shift or
+  centre, a site only up to its drawn rise; since M3-V3b terrain occludes: a box the ray enters only after meeting the
+  ground outside that box's footprint is behind a ridge or cliff and isn't picked) alone: units cleared, targeting ended, Select sound if it changed. Shift or
   double-click make no difference; enemy buildings aren't selectable (own only, like units). A box never selects a
   building (a plain box drops it like the units); a click on empty ground, a unit, a box or a group recall that leaves
   units selected drops it. `SelectedBuilding` is the slot or -1, a view selection (slot + generation): a freed or reused
@@ -2581,9 +2598,11 @@ Match.tscn  (new nodes)
   hp reads max / max (with the hp bonus beside it). The state line is `states.<state>`. Several units: up to
   `PortraitGrid.MaxPortraits` = 24 portraits (8 x 3, 40 px) in selection order, coloured by type with the initial, a "+N"
   label for the rest; the cells of the active Tab subgroup's type are outlined; a click on one is
-  `SelectionController.SelectOnly` (that unit alone, Select sound). A building: its `displayName` and hp now / max (hp
-  changes every tick under repair: one small string per change). Every node is made in `_Ready`; a text is rebuilt only
-  when its value changes (`Rebuilds`).
+  `SelectionController.SelectOnly` (that unit alone, Select sound). A building: its `displayName` and hp now / max. Hp
+  is two labels, "now" (right-aligned) and "/ max": hp changes every tick under repair, so "now" comes from a table of
+  int strings up to the largest hp in the data, built once in `Init`, and a repaired building's panel allocates nothing
+  (BUG-0123; it was one small string per tick). Every node is made in `_Ready`; a text is rebuilt only when its value
+  changes (`Rebuilds`).
 - **Production card** (`CommandCard`, mode `Production` while an own **finished** building is selected; a site keeps its
   Cancel). Entries from the pure `ViewApi.ProductionMenu.Entries(data, buildingType, span)`: `UnitsTrainedAt(type)` in
   order, then `TechsResearchableAt(type)` with the common techs first and the faction's own after them (an Armory: Armor,
@@ -2592,8 +2611,11 @@ Match.tscn  (new nodes)
   "G / W" bottom right and a tooltip of `description`, "<gold name> G  <wood name> W" and, when the def has `requires`,
   "<hud.needs> A, B" with the ids mapped to display names (`ProductionMenu.RequirementName`). Every string is built in
   `Init`. Each frame the card asks `World.CanTrain` / `CanResearch` for every button (at most 15 allocation-free calls)
-  and, only when a button's reason changed, sets `Disabled` and replaces the cost line with `train.<reason>` /
-  `research.<reason>` in red (back to the cost when it clears). A press (button, its grid key, or `Press`) is
+  and, only when a button's reason changed, sets `Disabled`, replaces the cost line with `train.<reason>` /
+  `research.<reason>` in red (back to the cost when it clears) and dims the name and hotkey labels to
+  `CommandCard.DimAlpha` (50 %) through `Modulate` (BUG-0123: Godot's disabled style doesn't reach child labels, so a
+  greyed button looked enabled); the reason line stays at full strength. A bare Town Hall's Age II reads
+  `research.requires` ("Locked") until two finished halls of distinct slots stand. A press (button, its grid key, or `Press`) is
   `SelectionController.Produce`: it asks the same rule again, then enqueues one `Command.Train` / `Command.Research` at the
   footprint centre with one Command sound; a refused press enqueues nothing and plays nothing. A production card owns the
   whole grid (docs/02 "Grid hotkeys"): an empty cell's key does nothing.
@@ -2621,8 +2643,12 @@ Match.tscn  (new nodes)
   boxes of **any** owner (`BuildingPicker.PickRay`, owner -1) and uses the hit building's footprint centre as the
   context point; only without a hit does it ground-pick. So the visible top of a damaged own building means Repair, an own
   site join, and an enemy or full-hp building a Move to its centre, instead of whatever lies on the ground 2 m behind the
-  box. Resource nodes still go by the ground point: their prop heights are view constants (`PropsView`) the pure pickers
-  don't see (noted for a later pass).
+  box. Since M3-V3b resource nodes are ray-picked the same way: `ResourcePicker.PickRay(grid, defs, alive, typeId, cell,
+  map, origin, direction, woodHeight, goldHeight, out entry)` treats each live node as a box over its footprint up to its
+  kind's prop height (the caller passes `PropsView.TreeHeight` and `MineHeight + GoldHeight`), with the same terrain
+  occlusion; `BuildingPicker.PickRay` has an overload with the same `out entry` (the ray parameter of the hit). Whichever
+  of the building and the node the ray enters first wins; a node gives its footprint centre, so a right click on a
+  tree's canopy, whose ground point is behind the tree, gathers that tree.
 - **BUG-0109** (the placement click): `CommandCard.GhostClick(shift, screen)` takes the click's own position;
   `BuildGhost.ResolveClick` recomputes the anchor there. The drawn anchor uses the drawn answer; another anchor is asked of
   `CanPlace` as that frame's one call (it then draws that answer, so the next `Sync` asks nothing), unless the frame's call

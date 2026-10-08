@@ -12,19 +12,35 @@ namespace Rts.Game;
 /// <remarks>
 /// The anchor is <see cref="PlacementGhost.Anchor(NavGrid, BuildingDef, System.Numerics.Vector2)"/> of the ground point under the
 /// cursor. <c>CanPlace</c> writes flow-field scratch (docs/03 M3-3), so it is asked only here, from <see cref="_Process"/> on
-/// the main thread, after <see cref="SimRunner"/>'s tick step of the frame (this node comes after the runner in Match.tscn, and
-/// nodes process in tree order) and never while <see cref="SimRunner.Ticking"/>; at most once per frame
+/// the main thread, after <see cref="SimRunner"/>'s tick step of the frame and after <see cref="RtsCamera"/> has panned
+/// (<see cref="ProcessPriority"/> 1: every default-priority node, the runner and the camera included, processes first;
+/// BUG-0122: in tree order the ghost came before the camera and trailed a pan by a frame) and never while
+/// <see cref="SimRunner.Ticking"/>; at most once per frame
 /// (<see cref="CanPlaceCalls"/>), and only when the anchor, the type or the sim tick changed since the last answer (nothing
 /// else changes what it says). The box moves only with an answer, so the colour drawn is always <c>CanPlace</c> of the
 /// anchor drawn. Meshes (one per building type, made on first use) and the two materials are kept, and the reason label's
-/// text is set only when the reason changes, so a steady frame allocates nothing. A click places at the anchor under the
+/// text is set only when the reason changes, so a steady frame allocates nothing. The label's size follows the zoom
+/// (<see cref="ReasonPixelPerZoom"/>), so it reads at the same screen height at every zoom. A click places at the anchor under the
 /// click itself (<see cref="ResolveClick"/>, BUG-0109), which may spend the frame's one <c>CanPlace</c> call. Holds no
 /// gameplay state: the type and anchor are what is shown; the order is <see cref="SelectionController.OrderBuild"/>.
 /// </remarks>
 public partial class BuildGhost : Node3D
 {
     private static readonly Color GreenColor = new(0.25f, 0.95f, 0.35f, 0.45f);
-    private static readonly Color RedColor = new(1f, 0.12f, 0.1f, 0.55f);
+    // A deep red at higher alpha: the old (1, 0.12, 0.1) at 55 % read as orange over grass (BUG-0122).
+    private static readonly Color RedColor = new(0.95f, 0.02f, 0.04f, 0.62f);
+
+    /// <summary>The reason label's font size in its own pixels.</summary>
+    public const int ReasonFontSize = 48;
+
+    /// <summary>
+    /// The reason label's <c>PixelSize</c> per meter of camera zoom (height): the camera's distance is proportional to the
+    /// zoom, so this keeps the label's em at about 24 px on a 648 px tall view at any zoom (glyphs about 17 px; it was
+    /// about 9 px at 30 m with a fixed 0.01, BUG-0122).
+    /// </summary>
+    public const float ReasonPixelPerZoom = 0.00088f;
+
+    private float _labelZoom = float.NaN;
 
     private SimRunner? _runner;
     private RtsCamera _camera = null!;
@@ -91,12 +107,13 @@ public partial class BuildGhost : Node3D
         _box = new MeshInstance3D { Name = "Box", CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
         _label = new Label3D
         {
-            Name = "Reason", Billboard = BaseMaterial3D.BillboardModeEnum.Enabled, NoDepthTest = true, FontSize = 48, PixelSize = 0.01f,
-            OutlineSize = 12, Modulate = new Color(1f, 0.85f, 0.8f), Position = new Vector3(0f, BuildingViews.BoxHeight + 1.2f, 0f),
+            Name = "Reason", Billboard = BaseMaterial3D.BillboardModeEnum.Enabled, NoDepthTest = true, FontSize = ReasonFontSize, PixelSize = 0.01f,
+            OutlineSize = 12, Modulate = new Color(1f, 0.62f, 0.58f), Position = new Vector3(0f, BuildingViews.BoxHeight + 1.2f, 0f),
         };
         AddChild(_box);
         AddChild(_label);
         Visible = false;
+        ProcessPriority = 1; // after the camera's pan of this frame (and the runner's tick step)
     }
 
     /// <summary>Connects the ghost to the match; call once after the sim exists.</summary>
@@ -146,6 +163,7 @@ public partial class BuildGhost : Node3D
     {
         if (!Active || _runner?.Simulation is not Simulation sim) return;
         World world = sim.World;
+        if (_camera.Zoom != _labelZoom) ScaleLabel(_camera.Zoom);
         Vector2 screen = ScreenOverride ?? GetViewport().GetMousePosition();
         Vector3 o = _camera.ProjectRayOrigin(screen), d = _camera.ProjectRayNormal(screen);
         if (!GroundPicker.TryPick(world.Heightmap, new(o.X, o.Y, o.Z), new(d.X, d.Y, d.Z), out System.Numerics.Vector3 hit))
@@ -241,6 +259,15 @@ public partial class BuildGhost : Node3D
             _shownText = text;
         }
         Visible = true;
+    }
+
+    // The label's pixel size from the zoom, and its height so its lower edge stays just above the box.
+    private void ScaleLabel(float zoom)
+    {
+        _labelZoom = zoom;
+        float px = ReasonPixelPerZoom * zoom;
+        _label.PixelSize = px;
+        _label.Position = new Vector3(0f, BuildingViews.BoxHeight + 0.4f + 0.6f * ReasonFontSize * px, 0f);
     }
 
     private void HideBox()
