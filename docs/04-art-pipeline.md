@@ -104,8 +104,10 @@ Outfits – Fantasy (Standard + Source), Universal Animation Library 1 (Standard
 (Standard, Source), Ultimate Fantasy RTS (`quaternius-ultimate-fantasy-rts-2022-08/`), and the four
 Mixamo packs above (`mixamo/<pack>/`), and Stylized Nature MegaKit (Standard, Pro, Source; preferred
 over the KayKit forest for the realistic look). Blender 5.2 is the owner's install for `.blend`
-sources and model edits. Still to download before M6: realistic ground textures (ambientCG /
-Poly Haven, CC0), UI, fonts, audio, the Godot export templates.
+sources and model edits. Ground textures: 23 ambientCG PBR materials at 1K JPG (CC0) in
+`asset-sources/ambientcg/<id>/` (grass, ground, rock, rocks, paving stones, asphalt; each with
+Color, NormalGL / NormalDX, Roughness, AO, Displacement and a Godot `.tres`). Still to download
+before M6: UI, fonts, audio, the Godot export templates.
 
 ### Buildings, nature, props
 
