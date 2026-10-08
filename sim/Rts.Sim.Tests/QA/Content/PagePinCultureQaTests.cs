@@ -34,6 +34,8 @@ public class PagePinCultureQaTests
         var t = new UnitContentTests();
         t.C_EveryNumber_MatchesThePage();
         t.G_ThePagesUnitTables_MatchTheRosterAbove();
+        // D5: the Battering Ram note's "attacks buildings only" against attack.targets (case-insensitive regex, tr-TR row).
+        t.H_TheUnitNotes_SayAttacksXOnly_ExactlyWhenTheDataNarrowsTargets();
     });
 
     [Theory]

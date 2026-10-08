@@ -111,9 +111,9 @@ expansions, and making them build a full Town Hall for that is wrong for an AoE-
 ### Ages
 
 - **Age I** at start. **Age II** researched at the Town Hall: 400 Gold / 200 Wood, 60 s.
-  Requires two Age I production buildings or a Forge (any two of Infantry Hall, Ranged Hall,
-  Shock Hall, Forge).
-- Age II unlocks: Caster Hall, Siege Works, Watch Tower, the unique unit, level-2 Forge
+  Requires finished buildings in two different slots (any two of Infantry Hall, Ranged Hall,
+  Shock Hall, Forge): two production halls, or one hall and the Forge.
+- Age II unlocks: Caster Hall, Siege Works, Watch Tower, the unique unit, level II Forge
   upgrades, and the faction upgrade.
 
 ### Forge upgrades

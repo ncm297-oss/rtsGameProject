@@ -365,8 +365,11 @@ public class TechContentTests
     /// <summary>"Age II researched at the Town Hall: 400 Gold / 200 Wood, 60 s."</summary>
     private static readonly Regex AgeLine = new(@"Age II researched at the (?<at>[A-Za-z ]+): (?<g>\d+) Gold / (?<w>\d+) Wood, (?<s>\d+) s\.");
 
-    /// <summary>"(any two of Infantry Hall, Ranged Hall, Shock Hall, Forge)".</summary>
-    private static readonly Regex AgeAnyOf = new(@"\(any (?<n>\w+) of (?<of>[^)]+)\)");
+    /// <summary>
+    /// "Requires finished buildings in two different slots (any two of Infantry Hall, Ranged Hall, Shock Hall, Forge):"
+    /// (D5: the data's any-of rule, met by distinct slots, docs/03 "Data format" <c>requiresAnyOf</c>).
+    /// </summary>
+    private static readonly Regex AgeAnyOf = new(@"Requires finished buildings in (?<k>\w+) different slots \(any (?<n>\w+) of (?<of>[^)]+)\):");
 
     /// <summary>"Age II unlocks: Caster Hall, Siege Works, ..., and the faction upgrade."</summary>
     private static readonly Regex AgeUnlocks = new(@"Age II unlocks: (?<u>[^.]+)\.");
@@ -387,7 +390,8 @@ public class TechContentTests
 
         // Any two of the listed slots: the data's any-of rule, and the description's "Needs two kinds of building: ...".
         Match any = AgeAnyOf.Match(page);
-        Assert.True(any.Success, $"02 Ages: page '{page}' has no '(any <n> of <slots>)'");
+        Assert.True(any.Success, $"02 Ages: page '{page}' has no 'Requires finished buildings in <n> different slots (any <n> of <slots>):'");
+        Pin(where, "requires distinct slots", any.Groups["k"].Value, CountWords[t.RequiresAnyOfCount]);
         BuildingSlot[] pageSlots = any.Groups["of"].Value.Split(", ")
             .Select(x => PageSlot(x.Trim()) ?? throw new InvalidOperationException($"02 Ages: '{x}' is no slot")).ToArray();
         Pin(where, "requires any-of count", any.Groups["n"].Value, CountWords[t.RequiresAnyOfCount]);
@@ -419,7 +423,7 @@ public class TechContentTests
                         Pin($"{f.Key} {u.Key}", "requires", "age_ii", Join(u.Requires));
                 Assert.True(d.Contains("unique unit", StringComparison.Ordinal), $"{where} description unlock: page '{item}' vs data '{d}'");
             }
-            else if (item == "level-2 Forge upgrades")
+            else if (item == "level II Forge upgrades")
             {
                 // Which shared techs need Age II: exactly the three level IIs (F pins each).
                 Pin(where, "shared techs needing it", Join(Forge.Select(x => x.Level2)),
@@ -443,18 +447,20 @@ public class TechContentTests
     public void H_SharedTechText_NamesNoFactionsThing_AndFitsTheCard()
     {
         // A shared tech is read by every faction: the player sees "Cadre Tower", so neither a building's name nor docs/02's
-        // slot name ("Caster Hall") may appear, nor any unit or faction name.
+        // slot name ("Caster Hall") may appear, nor any unit, faction or faction tech name ("Moranth Supply"), in any
+        // case (BUG-0155: "caster hall" and a faction tech's name used to pass, caught only by the 160-char limit).
         string[] forbidden = Data.Buildings.Select(b => b.DisplayName)
             .Concat(Enum.GetValues<BuildingSlot>().Select(SlotName))
             .Concat(Data.Units.Select(u => u.DisplayName))
             .Concat(Data.Factions.Select(f => f.DisplayName))
-            .Distinct(StringComparer.Ordinal).ToArray();
+            .Concat(Data.Techs.Where(t => t.Faction >= 0).Select(t => t.DisplayName))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         foreach ((string id, _) in Shared)
         {
             TechDef t = Tech(id);
             foreach (string text in new[] { t.DisplayName, t.Description })
                 foreach (string name in forbidden)
-                    Assert.False(text.Contains(name, StringComparison.Ordinal), $"{id}: shared text names '{name}': '{text}'");
+                    Assert.False(text.Contains(name, StringComparison.OrdinalIgnoreCase), $"{id}: shared text names '{name}' (any case): '{text}'");
             string d = t.Description;
             Assert.True(d.Length <= 160, $"{id}: {d.Length} chars");
             Assert.True(d.Trim() == d && d.EndsWith('.'), $"{id}: '{d}' should be trimmed and end with '.'");
