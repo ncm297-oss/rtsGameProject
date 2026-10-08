@@ -1,0 +1,82 @@
+using System.Numerics;
+using Rts.Sim.Data;
+using Rts.Sim.Economy;
+using Rts.Sim.Entities;
+using Rts.Sim.Replays;
+using Xunit.Abstractions;
+
+namespace Rts.Sim.Tests.QA;
+
+/// <summary>
+/// QA M3-V4 (2026-10-07-2014), BUG-0146: on the M3 Playable scene's seed 21 run, four laborers gathering the tree at
+/// cell (57, 45) stand in <see cref="UnitState.Gathering"/> 1.7-3.8 m from its footprint (out of
+/// <see cref="EconomyConstants.Reach"/>), so player 0's wood income stops; unit 10 for 14,575 ticks (about 1,240 to 15,815).
+/// The replay (the scene's own command stream, a checkpoint every tick) is attached to the bug. The row replays it and
+/// requires that no worker on a wood loop stays out of reach and within 1 m of one spot for more than 600 ticks in a
+/// row (its 20-tick retry walks end where they started). Skipped while BUG-0146 is open (it fails today); un-skip with
+/// the fix. If the shipped data changes, the replay's data hash no longer matches and the row says so instead of testing.
+/// </summary>
+[Collection(SerialCollection.Name)]
+public class GatherWedgeQaTests
+{
+    private readonly ITestOutputHelper _out;
+
+    public GatherWedgeQaTests(ITestOutputHelper output) => _out = output;
+
+    [Fact(Skip = "BUG-0146 open: laborers wedge in Gathering out of reach of a tree (seed 21 Playable replay)")]
+    public void Seed21PlayableReplay_NoGathererStandsOutOfReachForever()
+    {
+        string path = System.IO.Path.GetFullPath(System.IO.Path.Combine(TestDataDir.Shipped, "..", "..", "studio", "bugs", "BUG-0146-seed21-wood-wedge.replay"));
+        Assert.Equal(ReplayError.None, ReplayFormat.TryReadFile(path, out Replay? replay));
+        GameData data = DataLoader.LoadAll(TestDataDir.Shipped).Data!;
+        if (data.ContentHash() != replay!.DataHash)
+        {
+            _out.WriteLine("shipped data changed since the replay was recorded: re-record it from M3PlayableTest -- --seed 21");
+            return;
+        }
+        var sim = new Simulation(new SimConfig(replay.Seed, replay.PlayerCount, replay.UnitCapacity, replay.CommandCapacity)
+        {
+            Data = data,
+            Map = replay.Map,
+            ResourceCapacity = replay.ResourceCapacity,
+        });
+        World w = sim.World;
+        UnitStore u = w.Units;
+        // Per worker on a wood loop: ticks since it was last in reach of its node or moved 1 m from where
+        // the count started (the 20-tick retry walks of a wedged worker end on the same spot, so state and velocity flicker).
+        var still = new int[u.Capacity];
+        var anchor = new Vector2[u.Capacity];
+        int next = 0, worst = 0, worstUnit = -1, worstTick = 0;
+        while (sim.TickNumber < replay.TickCount)
+        {
+            while (next < replay.Commands.Length && replay.Commands[next].Tick == sim.TickNumber + 1) sim.Enqueue(replay.Commands[next++]);
+            sim.Tick();
+            for (int i = 0; i < u.Capacity; i++)
+            {
+                bool onWood = u.Alive[i] && w.Resources.IsAlive(u.GatherNode[i])
+                    && w.Data.Resources[w.Resources.TypeId[u.GatherNode[i].Index]].Resource == ResourceKind.Wood;
+                if (!onWood || InReach(w, i) || Vector2.Distance(u.Position[i], anchor[i]) > 1f)
+                {
+                    still[i] = 0;
+                    anchor[i] = u.Position[i];
+                    continue;
+                }
+                if (++still[i] > worst) (worst, worstUnit, worstTick) = (still[i], i, sim.TickNumber);
+            }
+        }
+        _out.WriteLine($"longest out-of-reach stand on a wood loop: unit {worstUnit}, {worst} ticks, up to tick {worstTick}; wood {w.Wood[0]}");
+        Assert.True(worst <= 600, $"unit {worstUnit} stood out of reach of its tree for {worst} ticks (to tick {worstTick})");
+    }
+
+    private static bool InReach(World w, int i)
+    {
+        int n = w.Units.GatherNode[i].Index;
+        ResourceDef def = w.Data.Resources[w.Resources.TypeId[n]];
+        const float cs = Map.MapConstants.CellSize;
+        int a = w.Resources.Cell[n], gw = w.NavGrid.Width;
+        float x0 = a % gw * cs, z0 = a / gw * cs, x1 = x0 + def.FootprintWidth * cs, z1 = z0 + def.FootprintHeight * cs;
+        Vector2 p = w.Units.Position[i];
+        float dx = MathF.Max(MathF.Max(x0 - p.X, 0f), p.X - x1), dz = MathF.Max(MathF.Max(z0 - p.Y, 0f), p.Y - z1);
+        return dx * dx + dz * dz <= EconomyConstants.Reach * EconomyConstants.Reach;
+    }
+}
