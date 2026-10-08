@@ -18,6 +18,10 @@ namespace Rts.Game;
 /// floats above it, gold-coloured or wood-brown by <c>CargoKind</c>. A slot's marker node is made the first time it
 /// carries and then reused; overlay and marker are only touched when what they show changes, so a steady frame
 /// allocates nothing.
+/// Hit flash (M4-V1): a unit whose hp fell since the last frame (<see cref="HitFlash"/>, comparing the store's <c>Hp</c>
+/// with what the last frame saw; no sim event) shows a white overlay for <see cref="HitFlash.DefaultSeconds"/> of view
+/// time, which a new hit starts again; it takes the place of the worker tint while lit. A dead unit's node is hidden on the
+/// first frame after its death (the slot reads not alive), so its view goes the frame the death is shown.
 /// </remarks>
 public partial class UnitViews : Node3D
 {
@@ -45,6 +49,7 @@ public partial class UnitViews : Node3D
     private static readonly Color GatheringTint = new(0.25f, 0.95f, 0.35f, 0.45f);
     private static readonly Color ReturningTint = new(1.00f, 0.80f, 0.20f, 0.45f);
     private static readonly Color BuildingTint = new(0.30f, 0.65f, 1.00f, 0.45f);
+    private static readonly Color FlashTint = new(1.00f, 1.00f, 1.00f, 0.75f);
 
     /// <summary>The runner whose sim is shown each frame; null shows nothing (tests call <see cref="Sync"/> directly).</summary>
     public SimRunner? Runner { get; set; }
@@ -62,6 +67,17 @@ public partial class UnitViews : Node3D
     // What each slot shows now: the tinted state (Idle: none), the cargo kind (-1: none).
     private UnitState[] _shownTint = Array.Empty<UnitState>();
     private sbyte[] _shownCargo = Array.Empty<sbyte>();
+    private bool[] _shownLit = Array.Empty<bool>();
+    private StandardMaterial3D _flashMat = null!;
+
+    /// <summary>Hit-flash bookkeeping (M4-V1): which slots are lit and for how long.</summary>
+    public HitFlash Flash { get; private set; } = new(0);
+
+    /// <summary>The overlay material of a lit (just hit) unit.</summary>
+    public StandardMaterial3D FlashMaterial => _flashMat;
+
+    /// <summary>True while slot <paramref name="slot"/>'s view shows the hit flash.</summary>
+    public bool ShownLit(int slot) => (uint)slot < (uint)_shownLit.Length && _shownLit[slot];
 
     /// <summary>View nodes created so far (one per slot ever used).</summary>
     public int NodeCount { get; private set; }
@@ -110,6 +126,9 @@ public partial class UnitViews : Node3D
         _shownTint = new UnitState[unitCapacity];
         _shownCargo = new sbyte[unitCapacity];
         Array.Fill(_shownCargo, (sbyte)-1);
+        _shownLit = new bool[unitCapacity];
+        _flashMat = Tint(FlashTint);
+        Flash = new HitFlash(unitCapacity);
     }
 
     /// <summary>The state whose tint slot <paramref name="slot"/> shows (<see cref="UnitState.Idle"/>: none).</summary>
@@ -136,7 +155,7 @@ public partial class UnitViews : Node3D
     public override void _Process(double delta)
     {
         if (Camera != null && Camera.Zoom != _cargoZoom) SetCargoZoom(Camera.Zoom);
-        if (Runner?.Simulation is Simulation sim) Sync(sim.World, (float)Runner.Alpha);
+        if (Runner?.Simulation is Simulation sim) Sync(sim.World, (float)Runner.Alpha, (float)delta);
     }
 
     /// <summary>Sizes the shared cargo meshes for camera zoom <paramref name="zoom"/> (one write per kind, only when the zoom changed).</summary>
@@ -148,9 +167,11 @@ public partial class UnitViews : Node3D
     }
 
     /// <summary>Places every live unit at its interpolated position and facing and hides dead slots. No allocation once each slot has its node.</summary>
-    public void Sync(World world, float alpha)
+    /// <param name="delta">View seconds since the last call, for the hit flash's timer (0: the flash doesn't fade).</param>
+    public void Sync(World world, float alpha, float delta = 0f)
     {
         UnitStore u = world.Units;
+        Flash.Update(u.Alive, u.Generation, u.Hp, delta);
         int n = Math.Min(u.Capacity, _views.Length);
         for (int i = 0; i < n; i++)
         {
@@ -181,10 +202,12 @@ public partial class UnitViews : Node3D
             view.Transform = new Transform3D(new Basis(Vector3.Up, Yaw(facing)), ground + new Vector3(0f, _halfHeight[type], 0f));
 
             UnitState tint = TintStateFor(u.State[i]);
-            if (tint != _shownTint[i])
+            bool lit = Flash.IsLit(i);
+            if (tint != _shownTint[i] || lit != _shownLit[i])
             {
-                view.MaterialOverlay = _tints[(int)tint];
+                view.MaterialOverlay = lit ? _flashMat : _tints[(int)tint];
                 _shownTint[i] = tint;
+                _shownLit[i] = lit;
             }
             sbyte cargo = u.Cargo[i] > 0 ? (sbyte)u.CargoKind[i] : (sbyte)-1;
             if (cargo != _shownCargo[i]) ShowCargo(i, view, type, cargo);

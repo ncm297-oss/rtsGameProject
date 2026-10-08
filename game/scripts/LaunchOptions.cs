@@ -17,7 +17,8 @@ namespace Rts.Game;
 /// (resource groups on the map, 0 to <see cref="MapGenParams.MaxResourceGroups"/>, defaults
 /// <see cref="DefaultForests"/> and <see cref="DefaultMines"/>), <c>--workers &lt;n&gt;</c> (starting workers per player
 /// beside each Town Hall, 0 to <see cref="MaxWorkers"/>; default <c>rules.json</c> <c>startingWorkers</c>, M3-V1),
-/// <c>--no-bases</c> (dev / tests: no Town Halls and no starting workers, the M2 armies-only match). Bad values are
+/// <c>--no-bases</c> (dev / tests: no Town Halls and no starting workers, the M2 armies-only match), <c>--no-combat</c>
+/// (dev / tests: <c>SimConfig.Combat = false</c>, units never fight; M4-V1, never a game option). Bad values are
 /// warned about and ignored; a token starting with <c>--</c> is never taken as a value (BUG-0041).
 /// </remarks>
 public sealed class LaunchOptions
@@ -66,6 +67,13 @@ public sealed class LaunchOptions
 
     /// <summary>True to start without Town Halls and workers (<c>--no-bases</c>; takes no value): the armies-only match the M2 test scenes were written for.</summary>
     public bool NoBases { get; private set; }
+
+    /// <summary>
+    /// True to run the match with <c>SimConfig.Combat</c> off (<c>--no-combat</c>; takes no value; M4-V1, BUG-0147): units never
+    /// scan, swing or die, so the M2 scenes written for a world without fights keep their assertions. A dev / test flag, never a
+    /// game option.
+    /// </summary>
+    public bool NoCombat { get; private set; }
 
     /// <summary>Start zoom override in meters, or null for the default.</summary>
     public float? Zoom { get; private set; }
@@ -156,6 +164,9 @@ public sealed class LaunchOptions
                     continue; // takes no value
                 case "--no-bases":
                     o.NoBases = true;
+                    continue; // takes no value
+                case "--no-combat":
+                    o.NoCombat = true;
                     continue; // takes no value
                 default:
                     continue;

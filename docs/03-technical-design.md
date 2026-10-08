@@ -3047,6 +3047,83 @@ and researched buttons).
   `ProductionHudTest`, `QaV3Test` and `QaV3bTest` compare research cells with the precedence applied.
 - **Not yet:** BUG-0126 items 3-6; M4 views (hp bars, deaths).
 
+### Implementation (M4-V1)
+
+The view half of M4 criterion 4: the owner sees the fighting M4-1 put in the rules. Hp bars over hurt units, a hit flash,
+corpses and rubble where things died, kill / loss counts, and live hp in the selection panel. First, BUG-0147: the M2
+scenes whose start armies now fight run with combat off.
+
+```
+Match.tscn  (new node)
+  World3D/CombatViews   Node3D, CombatViews.cs: hp bar MultiMeshes (back, fill) + corpse and rubble MultiMeshes
+```
+
+- **BUG-0147** (`--no-combat`, see "Debug tooling"): DebugOverlay, Orders, QaH1, QaH2 and QaM27 pass `--no-combat` on the
+  matches whose armies used to stand or march through each other (their hash twins copy the match's `SimConfig`, so the
+  twin is off too). No expectation changed. QaM24 passes without it.
+- **Hp bars** (`CombatViews`, pure `ViewApi.UnitHpBars`): each frame `UnitHpBars.Collect(Alive, TypeId, Hp, defs, slots)` lists
+  the live units below their type's `hp` (as the building bars, M3-V1; hp tech bonuses are not applied by combat yet, so
+  the type's `hp` is the maximum), in slot order. Each gets a dark back and a fill of `Hp / max` over the body
+  (`UnitViews.BodyHeight` + 0.35 m) at its interpolated position, coloured green (1) -> yellow (0.5) -> red (0)
+  (`UnitHpBars.Color`, linear between). Two `MultiMesh`es with one instance per bar, written densely with
+  `VisibleInstanceCount` = the count, so a unit that dies or heals simply isn't listed the next frame. 1.2 m x 0.16 m at
+  zoom up to 30 m, then grown with the zoom like the cargo cube (M3-V1). The colour written per instance is kept too, since
+  the headless dummy renderer keeps no instance data to read back.
+- **Hit flash** (`UnitViews`, pure `ViewApi.HitFlash`): no sim event. Each `UnitViews.Sync` compares every slot's `Hp`
+  and `Generation` with what the last call saw: the same unit with less hp is lit for `HitFlash.DefaultSeconds` (0.15 s of
+  view time, `_Process`'s delta), and a later hit starts the time again, so a unit under repeated hits stays lit. A new
+  unit in the slot, a dead slot or a heal never lights. While lit, the body's overlay is a translucent white
+  (`UnitViews.FlashMaterial`) in place of the worker tint. `Sync(world, alpha)` without a delta still works (the flash
+  doesn't fade), so older scenes are unchanged.
+- **Deaths, corpses and rubble** (`CombatViews`, pure `ViewApi.DeathMarkers`). A dead unit's or building's view goes the
+  first frame after its death (the slot reads free, as before). `World.Deaths` holds one tick's events and the next tick
+  empties it, and at fast speeds one frame runs several ticks, so the deaths are taken in two places: `SimRunner.Ticked`
+  (a new C# event raised after each tick it runs) and the frame loop (for scenes that tick the sim themselves).
+  `DeathMarkers.Collect(deaths, tick, added)` takes a tick's deaths once, whichever comes first. Each `DeathEvent` adds a
+  marker at its position on the terrain: a unit leaves a flat disc of its radius, 0.08 m high, in its owner's colour at
+  35 % (unshaded), for `DeathMarkers.UnitLifetimeTicks` (200 ticks = 10 s of game time, docs/02 "Death"); a building
+  leaves a 0.6 m grey box over 95 % of its footprint for `BuildingLifetimeTicks` (400 = 20 s). Lifetimes count sim ticks,
+  so game speed scales them and a paused game keeps them. The pool is a fixed ring of `DeathMarkers.DefaultCapacity`
+  (2,000, Producer default): when it is full the next death replaces the oldest marker. A marker is a position, what it
+  was, its owner and an expiry tick; nothing else. Two `MultiMesh`es (corpses with per-instance colour, rubble) hold one
+  instance per pool slot; an unused instance has a zero transform. Transforms are written only when a marker is added or
+  expires, so a steady frame writes none. `CombatViews.AddDeaths` feeds a synthetic list (the death-storm test).
+- **Kills and losses**: `ResourceBar.KillsLabel`, a child under "Pop", shows "<hud.kills> n / <hud.losses> n" (`ui.json`
+  `hud.kills` = "K", `hud.losses` = "L"; new `HudText` members) from `World.Kills` / `Losses` of the local player, rebuilt
+  only when a number changes. The F12 overlay's second line adds "p0 K n / L n  p1 K n / L n" with the same labels.
+- **Selection panel**: one unit's hp is live, the store's `Hp` over the type's `hp`, through the existing int-string table
+  (BUG-0123), so a unit losing hp every few ticks allocates nothing.
+- **ViewApi additions** (read-only, allocation-free after construction, no `World`): `UnitHpBars` (`Shows`, `Color`,
+  `Collect`), `HitFlash` (per-slot last hp, generation and timer; `Update`, `IsLit`, `WasHit`, `Left`), `DeathMarkers` (the ring:
+  `Add`, `Collect`, `Expire`, spans of the marker fields). `HitFlash` and `DeathMarkers` hold view state only.
+- **Cost.** Measured in `CombatViewTest`: 300 frames of a 20 v 20 brawl after warm-up (combat views, unit views with the
+  flash, the panel with a hurt unit) 0 bytes; 120 frames after a 2,500-death storm 0 bytes.
+- **Tests.** xUnit (`Rts.Sim.Tests/ViewApi/CombatViewsTests`, scene in `CombatViewScene`: 20 Heavy Infantry v 20 Raiders on
+  a flat map, a Billet and a Tent behind the lines, all attack-moved to the far building, so the winners knock the other
+  building down): the bar rule's edge rows (full, above max, 0, negative, max 0), the colour ends and its monotony, and
+  `Collect` equal to a brute-force list every tick of the brawl; the flash on a hit, fading after 0.15 s, restarting on
+  a repeat hit, never on a heal, a new unit or a dead slot, NaN / negative time, and every tick of the brawl (hit exactly
+  the units whose hp fell, lit exactly for the hit frame and the two after at 0.06 s a frame); the markers' 200 / 400 tick
+  lifetimes, `Collect` once per tick, six 500-death storms (cap 2,000, 1,000 replaced, the newest kept), and every
+  death of the brawl giving one marker at its position (rubble for the one building) that expires on its tick; the hash
+  twin (4,000 ticks of every new read: equal to a bare twin every tick); 0 bytes for bars + flash + a 500-death collect at
+  2,000 units. Headless scene `res://tests/CombatViewTest.tscn` ("COMBAT VIEW TEST PASS", seeds 1 and 6, `-- --seed N` for
+  one): `--no-combat` parsing and the sim's switch; per seed a real Match (`--units 0 --no-bases --debug-overlay`)
+  with 20 v 20 and a building each beside the central cell, attack-moved through commands; after each tick the unit
+  views are synced three times at a fixed 0.04 s and every unit's flash and overlay checked against the test's own hp
+  oracle; after two frames: every death's view hidden, a marker at the death position (corpse / rubble kind, drawn on
+  the terrain), the marker count equal to the oracle's live deaths and every unused instance drawing nothing, a bar for
+  exactly each hurt live unit with its fill and colour, the bar's and overlay's counts and texts equal to
+  `World.Kills` / `Losses`, the selected unit's panel hp equal to the store; 300 steady brawl frames 0 bytes; a 5 x 500
+  death storm (cap kept, 500 replaced, 0 bytes for 120 frames after, all gone after 20 s); the hash twin (seed 1: 82
+  commands, 5,596 checkpoints equal). Then a run at 8x from frame time (up to 5 ticks a frame): one marker per death.
+  `ProductionHudTest` extends BUG-0123's row: a Heavy Infantry selected while a Raider fights it, 300 ticks, the panel
+  live and 0 bytes. `EconomyViewTest`'s per-frame worker check now expects the flash overlay on a lit unit and the tint
+  otherwise (its armies fight since M4-1). Windowed with `-- --shots <dir>` it saves the brawl, corpses and rubble.
+- **Layout:** the age flash (M3-V3) moved down one line, below the kills / losses label.
+- **Not yet:** the Attack-target cursor and F key (after M4-2a), projectile visuals (M4-2b), the fog shader (M4-3), death
+  animations, real corpse models and hit / death sounds (M6).
+
 ## AI architecture
 
 The AI lives in `Rts.Sim.Ai`, inside the sim assembly, because it must be deterministic (it uses
@@ -3194,6 +3271,13 @@ AiPlayer
 - **Benchmark** (M2-7): `& $env:GODOT --path game -- --bench 60 [--vsync off] [--units n] [--zoom m] [--mute] [--no-hud]`
   plays a scripted 10 s loop of selections, orders, minimap jumps and zooms for that many seconds
   and prints one `bench: ...` line of frame-time figures, then quits 0. Details in "Implementation (M2-7)".
+- **No-combat flag** (M4-V1, BUG-0147): `& $env:GODOT --path game -- --no-combat` (takes no value) starts the match with
+  `SimConfig.Combat = false` (`LaunchOptions.NoCombat` -> `SimRunner.Combat`): units never scan, swing or die and enemies
+  are only walls, as before M4. A **dev and test flag, never a game option**: it exists for the M2 scenes whose assertions
+  are about a world without fights (marches across the enemy block, selections that must not lose units, overlay goals);
+  they pass it instead of changing an expectation. The start-up line ends with ", combat off". `--no-bases` (M3-V1) is
+  the other half of the armies-only M2 setup. A replay recorded from such a match plays back with `ReplayPlayer.Run(replay,
+  data, combat: false)` until the replay header records the switch (format 4, M4-2a).
 - **Debug overlay** (M2-5; F12, input action `debug_overlay`; launch flag `--debug-overlay` starts it
   on, so `--screenshot` can capture it): the nav grid on the ground, the flow-field arrows of the
   selection's goal around the camera, a tick-time graph of the last 120 ticks with the 4 ms budget

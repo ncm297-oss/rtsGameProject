@@ -12,15 +12,16 @@ namespace Rts.Game;
 /// <remarks>
 /// One unit: a placeholder portrait (a square in the type's colour with its initial), the <c>displayName</c>, hit points,
 /// attack, armor, range and speed from its <see cref="UnitDef"/>, each researched <c>World.TechBonus</c> as "+N" in a second
-/// colour (combat does not apply bonuses until M4), and its state in plain words (<c>ui.json</c> <c>states</c>). Units
-/// have no hit points in the sim until combat (M4), so hp shows max / max. Several units: up to
+/// colour (combat applies attack and armor bonuses since M4-1, hp and range not yet), and its state in plain words
+/// (<c>ui.json</c> <c>states</c>). Hp is live since M4-V1: the store's <c>Hp</c> over the type's <c>hp</c>. Several units: up to
 /// <see cref="PortraitGrid.MaxPortraits"/> type-coloured portraits in selection order with a "+N" overflow, the active Tab
 /// subgroup's outlined; a click on one selects that unit alone (<see cref="SelectionController.SelectOnly"/>). A building:
 /// its <c>displayName</c> and hp (its production card is on the <see cref="CommandCard"/>, its queue on the
 /// <see cref="ProductionQueueStrip"/>). Labels come from <c>ui.json</c> <c>hud</c>. Every node is made in
 /// <see cref="_Ready"/>; a value's text is rebuilt only when the value shown changes, so a steady frame allocates nothing.
-/// Hit points are two labels, "now" and "/ max": a building's hp under repair changes every tick, so "now" comes from a
-/// table of int strings up to the largest hp in the data, built once in <see cref="Init"/> (BUG-0123: no string per tick).
+/// Hit points are two labels, "now" and "/ max": a building's hp under repair and a unit's in a fight change every tick, so
+/// "now" comes from a table of int strings up to the largest hp in the data, built once in <see cref="Init"/> (BUG-0123: no
+/// string per tick).
 /// Holds view state only.
 /// </remarks>
 public partial class SelectionPanel : Control
@@ -286,9 +287,9 @@ public partial class SelectionPanel : Control
             Rebuilds++;
         }
         int p = u.Owner[slot];
-        // Units have no hit points in the sim before combat (M4): current = max.
+        // Live hit points (M4-V1); the int-string table keeps a fight's per-tick change allocation-free.
         float hpBonus = world.TechBonus(p, type, TechStat.Hp);
-        SetStat(Hp, def.Hp, hpBonus, hpNow: def.Hp);
+        SetStat(Hp, def.Hp, hpBonus, hpNow: u.Hp[slot]);
         SetStat(Attack, def.Attack.Value, world.TechBonus(p, type, TechStat.Attack));
         SetStat(Armor, def.Armor, world.TechBonus(p, type, TechStat.Armor));
         SetStat(Range, def.Attack.Range, world.TechBonus(p, type, TechStat.Range));

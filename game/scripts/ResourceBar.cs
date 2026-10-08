@@ -13,6 +13,8 @@ namespace Rts.Game;
 /// its child <see cref="PopLabel"/> shows "&lt;Pop&gt; a / b" (<c>ui.json</c> <c>hud.pop</c>, numbers from
 /// <see cref="PopText"/>: half-pop / 2, ".5" for odd), red at the cap. When the player's age rises (<see cref="World.Age"/>)
 /// <see cref="AgeLabel"/> flashes the age tech's <c>displayName</c> ("Age II") for <see cref="FlashSeconds"/> of view time.
+/// Its child <see cref="KillsLabel"/> (M4-V1) shows "&lt;K&gt; n / &lt;L&gt; n": the player's <see cref="World.Kills"/> and
+/// <see cref="World.Losses"/> (labels <c>ui.json</c> <c>hud.kills</c> / <c>hud.losses</c>).
 /// CLAUDE.md rule 8: no player-facing literal here. Building text allocates, so each label is rebuilt only when a number
 /// it shows changes (the M2-H2 overlay rule); a steady frame is a few int compares.
 /// </remarks>
@@ -24,6 +26,9 @@ public partial class ResourceBar : Label
     /// <summary>Width of the population label, in pixels, to the right of the gold and wood text.</summary>
     public const float PopWidth = 130f;
 
+    /// <summary>Width of the kills / losses label, in pixels, under the population label.</summary>
+    public const float KillsWidth = 130f;
+
     private static readonly StringName FontColor = "font_color";
     private static readonly Color PopColor = new(1f, 0.93f, 0.75f);
     private static readonly Color CapColor = new(1f, 0.3f, 0.25f);
@@ -31,9 +36,9 @@ public partial class ResourceBar : Label
     private SimRunner? _runner;
     private GameData? _data;
     private int _player;
-    private string _goldName = "", _woodName = "", _popName = "";
-    private int _gold, _wood, _halfPop, _halfPopCap, _age;
-    private int _popBuilds;
+    private string _goldName = "", _woodName = "", _popName = "", _killsName = "", _lossesName = "";
+    private int _gold, _wood, _halfPop, _halfPopCap, _age, _kills, _losses;
+    private int _popBuilds, _killBuilds;
     private bool _atCap;
     private double _flashLeft;
 
@@ -48,6 +53,18 @@ public partial class ResourceBar : Label
 
     /// <summary>The wood amount on show.</summary>
     public int ShownWood => _wood;
+
+    /// <summary>Times the kills / losses text was rebuilt (only when a shown number changes).</summary>
+    public int KillBuilds => _killBuilds;
+
+    /// <summary>The kill count on show.</summary>
+    public int ShownKills => _kills;
+
+    /// <summary>The loss count on show.</summary>
+    public int ShownLosses => _losses;
+
+    /// <summary>The kills / losses label ("K n / L n"; M4-V1).</summary>
+    public Label KillsLabel { get; private set; } = null!;
 
     /// <summary>The half-pop on show.</summary>
     public int ShownHalfPop => _halfPop;
@@ -76,14 +93,25 @@ public partial class ResourceBar : Label
         PopLabel.AddThemeFontSizeOverride("font_size", 18);
         AgeLabel = new Label
         {
-            Name = "AgeFlash", MouseFilter = MouseFilterEnum.Ignore, Position = new Vector2(0f, Size.Y + 4f), Size = new Vector2(Size.X + 12f + PopWidth, 32f),
+            // Below the kills / losses line (M4-V1), so the two never overlap.
+            Name = "AgeFlash", MouseFilter = MouseFilterEnum.Ignore, Position = new Vector2(0f, 2f * Size.Y + 4f), Size = new Vector2(Size.X + 12f + PopWidth, 32f),
             HorizontalAlignment = HorizontalAlignment.Right, Visible = false,
         };
         AgeLabel.AddThemeColorOverride(FontColor, new Color(1f, 0.85f, 0.3f));
         AgeLabel.AddThemeColorOverride("font_outline_color", new Color(0f, 0f, 0f));
         AgeLabel.AddThemeConstantOverride("outline_size", 6);
         AgeLabel.AddThemeFontSizeOverride("font_size", 26);
+        // Under the population, so the bar keeps its width at the screen's right edge.
+        KillsLabel = new Label
+        {
+            Name = "Kills", MouseFilter = MouseFilterEnum.Ignore, Position = new Vector2(Size.X + 12f, Size.Y), Size = new Vector2(KillsWidth, Size.Y),
+        };
+        KillsLabel.AddThemeColorOverride(FontColor, PopColor);
+        KillsLabel.AddThemeColorOverride("font_outline_color", new Color(0f, 0f, 0f));
+        KillsLabel.AddThemeConstantOverride("outline_size", 4);
+        KillsLabel.AddThemeFontSizeOverride("font_size", 16);
         AddChild(PopLabel);
+        AddChild(KillsLabel);
         AddChild(AgeLabel);
     }
 
@@ -91,8 +119,13 @@ public partial class ResourceBar : Label
     /// <param name="goldName">The faction's display name for gold (data).</param>
     /// <param name="woodName">The faction's display name for wood (data).</param>
     /// <param name="popName">The population label (<c>ui.json</c> <c>hud.pop</c>); empty shows the numbers alone.</param>
-    public void Init(SimRunner runner, int player, string goldName, string woodName, string popName = "")
+    /// <param name="killsName">The kills label (<c>ui.json</c> <c>hud.kills</c>); empty shows the number alone.</param>
+    /// <param name="lossesName">The losses label (<c>ui.json</c> <c>hud.losses</c>); empty shows the number alone.</param>
+    public void Init(SimRunner runner, int player, string goldName, string woodName, string popName = "", string killsName = "", string lossesName = "")
     {
+        _killsName = killsName;
+        _lossesName = lossesName;
+        _killBuilds = 0;
         _runner = runner;
         _player = player;
         _goldName = goldName;
@@ -140,6 +173,15 @@ public partial class ResourceBar : Label
             if (atCap != _atCap || _popBuilds == 1) PopLabel.AddThemeColorOverride(FontColor, atCap ? CapColor : PopColor);
             _atCap = atCap;
         }
+        int kills = (uint)_player < (uint)world.Kills.Length ? world.Kills[_player] : 0;
+        int losses = (uint)_player < (uint)world.Losses.Length ? world.Losses[_player] : 0;
+        if (_killBuilds == 0 || kills != _kills || losses != _losses)
+        {
+            _kills = kills;
+            _losses = losses;
+            _killBuilds++;
+            KillsLabel.Text = string.Create(CultureInfo.InvariantCulture, $"{Join(_killsName, kills)} / {Join(_lossesName, losses)}");
+        }
         int age = world.Age(_player);
         if (age > _age && _data != null)
         {
@@ -154,6 +196,9 @@ public partial class ResourceBar : Label
         }
         _age = age;
     }
+
+    private static string Join(string label, int n) =>
+        label.Length > 0 ? string.Create(CultureInfo.InvariantCulture, $"{label} {n}") : n.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>Times the age flash started.</summary>
     public int AgeFlashes { get; private set; }

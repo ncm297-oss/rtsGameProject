@@ -1,3 +1,4 @@
+using System;
 using System.Diagnostics;
 using Godot;
 using Rts.Sim;
@@ -13,7 +14,8 @@ namespace Rts.Game;
 /// <c>--debug-overlay</c> starts with it on) adds the nav grid (<see cref="NavOverlayView"/>), the flow
 /// arrows of the selection's goal around the camera (<see cref="FlowArrowsView"/>), the tick-time graph
 /// (<see cref="TickGraph"/>) and a second label line with entity counts, the workers gathering, returning and
-/// building (M3-V1), and tick averages. It is off by
+/// building (M3-V1), each player's kills and losses (M4-V1, <c>World.Kills</c> / <c>Losses</c>, labelled from <c>ui.json</c>
+/// <c>hud.kills</c> / <c>hud.losses</c>), and tick averages. It is off by
 /// default; while off its layers are hidden, have no <c>_Process</c> and are not even built.
 /// Reads the sim only; never enqueues.
 /// </remarks>
@@ -31,6 +33,7 @@ public partial class DebugOverlay : CanvasLayer
     private NavOverlayView? _nav;
     private FlowArrowsView? _arrows;
     private readonly Stopwatch _watch = new();
+    private string _killsName = "K", _lossesName = "L";
 
     /// <summary>True while the overlay layers are shown.</summary>
     public bool Enabled { get; private set; }
@@ -55,6 +58,18 @@ public partial class DebugOverlay : CanvasLayer
 
     /// <summary>Live units <see cref="UnitState.Building"/> at the last <see cref="SyncLayers"/>.</summary>
     public int BuildingUnits { get; private set; }
+
+    /// <summary>Kills of players 0 and 1 shown on the overlay line (M4-V1), read every frame.</summary>
+    public int Kills0 { get; private set; }
+
+    /// <summary>Kills of player 1 shown on the overlay line.</summary>
+    public int Kills1 { get; private set; }
+
+    /// <summary>Losses of player 0 shown on the overlay line.</summary>
+    public int Losses0 { get; private set; }
+
+    /// <summary>Losses of player 1 shown on the overlay line.</summary>
+    public int Losses1 { get; private set; }
 
     /// <summary>Cached flow fields at the last <see cref="SyncLayers"/>.</summary>
     public int CachedFields { get; private set; }
@@ -81,6 +96,11 @@ public partial class DebugOverlay : CanvasLayer
         _nav = nav;
         _arrows = arrows;
         _graph.Samples = runner.TickTimes;
+        if (UiText.Shared is UiText ui)
+        {
+            _killsName = ui.Hud(HudText.Kills);
+            _lossesName = ui.Hud(HudText.Losses);
+        }
         nav.Visible = false;
         arrows.Visible = false;
         SetEnabled(startOn);
@@ -112,10 +132,16 @@ public partial class DebugOverlay : CanvasLayer
         // (each tick, and when the FPS counter, selection or counts move), not every frame.
         Rts.Sim.ViewApi.Subgroups? sub = Selection?.Subgroups;
         TickTimeRing ring = Runner.TickTimes;
+        ReadOnlySpan<int> kills = sim.World.Kills, losses = sim.World.Losses;
+        Kills0 = kills.Length > 0 ? kills[0] : 0;
+        Kills1 = kills.Length > 1 ? kills[1] : 0;
+        Losses0 = losses.Length > 0 ? losses[0] : 0;
+        Losses1 = losses.Length > 1 ? losses[1] : 0;
         var shown = new LabelValues(sim.TickNumber, Runner.GameSpeed, Runner.LastTickMs, Engine.GetFramesPerSecond(),
             Selection?.Selection.Count ?? 0, sub?.Count ?? 0, sub?.ActiveType ?? 0, sub?.Index ?? 0, (int)(Selection?.TargetKind ?? Rts.Sim.Commands.CommandKind.Noop),
             Enabled, LiveUnits, MovingUnits, CachedFields, sim.World.FlowFields.Capacity, ring.Average, ring.Worst, ring.Count,
-            ShownGoal >= 0 ? _arrows?.ShownCount ?? 0 : -1, GatheringUnits, ReturningUnits, BuildingUnits, Selection?.SelectedBuilding ?? -1);
+            ShownGoal >= 0 ? _arrows?.ShownCount ?? 0 : -1, GatheringUnits, ReturningUnits, BuildingUnits, Selection?.SelectedBuilding ?? -1,
+            Kills0, Losses0, Kills1, Losses1);
         if (LabelBuilds > 0 && shown == _shown) return;
         _shown = shown;
         LabelBuilds++;
@@ -126,6 +152,7 @@ public partial class DebugOverlay : CanvasLayer
         {
             text += $"\nunits {LiveUnits}   moving {MovingUnits}   fields {CachedFields}/{sim.World.FlowFields.Capacity}   " +
                 $"workers gathering {GatheringUnits}, returning {ReturningUnits}, building {BuildingUnits}   " +
+                $"p0 {_killsName} {Kills0} / {_lossesName} {Losses0}  p1 {_killsName} {Kills1} / {_lossesName} {Losses1}   " +
                 $"tick avg {ring.Average:0.000} ms   worst {ring.Worst:0.000} ms ({ring.Count})" +
                 (shown.Arrows >= 0 ? $"   arrows {shown.Arrows}" : "");
         }
@@ -138,7 +165,7 @@ public partial class DebugOverlay : CanvasLayer
     // Every value the label shows, compared as a whole: equal means the text would be the same.
     private readonly record struct LabelValues(long Tick, double Speed, double TickMs, double Fps, int Selected, int SubCount, int SubType,
         int SubIndex, int Targeting, bool On, int Live, int Moving, int Fields, int FieldCapacity, double Avg, double Worst, int Samples, int Arrows,
-        int Gathering, int Returning, int Building, int SelectedBuilding);
+        int Gathering, int Returning, int Building, int SelectedBuilding, int Kills0, int Losses0, int Kills1, int Losses1);
 
     private LabelValues _shown;
 

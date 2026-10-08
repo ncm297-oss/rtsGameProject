@@ -34,6 +34,7 @@ public partial class Match : Node3D
         if (options.Speed is double speed) _runner.GameSpeed = speed;
         _runner.Forests = options.Forests;
         _runner.GoldMines = options.Mines;
+        _runner.Combat = !options.NoCombat;
         WorkersPerPlayer = options.NoBases ? 0 : options.Workers ?? data.Rules.StartingWorkers;
         // The start workers come on top of the armies (the bench keeps its 100 / 1,000 a side), so the store grows past 2,000 when needed.
         _runner.UnitCapacity = Math.Max(_runner.UnitCapacity, _runner.PlayerCount * (options.UnitsPerPlayer + WorkersPerPlayer));
@@ -65,6 +66,10 @@ public partial class Match : Node3D
         var buildings = GetNode<BuildingViews>("World3D/BuildingViews");
         buildings.Bind(data, sim.World.Buildings.Capacity, playerRgb);
         buildings.Runner = _runner;
+        var combat = GetNode<CombatViews>("World3D/CombatViews");
+        combat.Bind(data, sim.World.Units.Capacity, playerRgb);
+        combat.Runner = _runner;
+        combat.Camera = camera;
 
         Sfx.SetMuted(options.Mute);
         var selection = GetNode<SelectionController>("SelectionController");
@@ -90,7 +95,8 @@ public partial class Match : Node3D
             // Resource names come from the local player's faction data (CLAUDE.md rule 8).
             FactionDef local = data.Factions[sim.World.FactionOf(SelectionController.LocalPlayer)];
             UiText? ui = UiText.Shared;
-            hud.GetNode<ResourceBar>("ResourceBar").Init(_runner, SelectionController.LocalPlayer, local.GoldName, local.WoodName, ui?.Hud(HudText.Pop) ?? "");
+            hud.GetNode<ResourceBar>("ResourceBar").Init(_runner, SelectionController.LocalPlayer, local.GoldName, local.WoodName, ui?.Hud(HudText.Pop) ?? "",
+                ui?.Hud(HudText.Kills) ?? "", ui?.Hud(HudText.Losses) ?? "");
             // The card's and panel's labels and menus are view data (ui.json); without them they stay hidden and the errors are logged.
             var card = hud.GetNode<CommandCard>("CommandCard");
             var panel = hud.GetNode<SelectionPanel>("SelectionPanel");
@@ -124,7 +130,7 @@ public partial class Match : Node3D
         GD.Print($"Match started: seed {unchecked((ulong)_runner.Seed)}, map {map.Width} x {map.Height}, " +
             $"speed {_runner.GameSpeed:0.##}x, {options.UnitsPerPlayer} units per player, " +
             $"forests {placed.Forests} trees {placed.Trees} mines {placed.Mines}, " +
-            $"town halls {Halls(Bases)}, {WorkersPerPlayer} workers per player");
+            $"town halls {Halls(Bases)}, {WorkersPerPlayer} workers per player" + (options.NoCombat ? ", combat off" : ""));
     }
 
     /// <summary>Enqueues each player's start army in its <see cref="StartLayout"/> block; returns each player's block, and player 0's block centre (meters) in <paramref name="focus"/>.</summary>

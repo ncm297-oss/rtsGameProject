@@ -132,7 +132,7 @@ public partial class QaM27Test : Node
     // Without a HUD the jumps go to the camera directly: still four, at four different points.
     private async Task NoHudBench()
     {
-        Match match = StartMatch("--bench", "3", "--mute", "--no-hud");
+        Match match = StartMatch("--bench", "3", "--mute", "--no-hud", "--no-combat"); // combat off: a world without fights, as in M2 (M4-V1, BUG-0147)
         BenchRunner bench = match.Bench!;
         bench.QuitOnFinish = false;
         var watch = Stopwatch.StartNew();
@@ -152,7 +152,7 @@ public partial class QaM27Test : Node
     // How far a 10 s bench sends and moves the local army (the brief: "order across the map"; M2-H2 asserts it).
     private async Task OrderReach()
     {
-        Match match = StartMatch("--bench", "10", "--mute", "--speed", "1");
+        Match match = StartMatch("--bench", "10", "--mute", "--speed", "1", "--no-combat"); // combat off: a world without fights, as in M2 (M4-V1, BUG-0147)
         BenchRunner bench = match.Bench!;
         bench.QuitOnFinish = false;
         Simulation sim = match.GetNode<SimRunner>("SimRunner").Simulation!;

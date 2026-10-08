@@ -60,7 +60,7 @@ public partial class QaH1Test : Node
         if (!loaded.Ok) throw new InvalidOperationException("data failed to load");
         var match = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
         AddChild(match);
-        match.Start(loaded.Data!, LaunchOptions.Parse(new[] { "--units", "60" }));
+        match.Start(loaded.Data!, LaunchOptions.Parse(new[] { "--units", "60", "--no-combat" })); // combat off: a world without fights, as in M2 (M4-V1, BUG-0147)
         var runner = match.GetNode<SimRunner>("SimRunner");
         runner.ProcessMode = ProcessModeEnum.Disabled;
         _sim = runner.Simulation!;

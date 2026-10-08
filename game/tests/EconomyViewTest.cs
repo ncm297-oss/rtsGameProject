@@ -595,7 +595,9 @@ public partial class EconomyViewTest : Node
             if (!U.Alive[i]) continue;
             UnitState tint = _units.TintStateFor(U.State[i]);
             MeshInstance3D view = _units.ViewOf(i)!;
-            if (_units.ShownTint(i) != tint || view.MaterialOverlay != _units.TintOf(tint))
+            // M4-V1: a unit just hit shows the white hit flash in place of its tint while it is lit.
+            Material? overlay = _units.Flash.IsLit(i) ? _units.FlashMaterial : _units.TintOf(tint);
+            if (_units.ShownTint(i) != tint || view.MaterialOverlay != overlay || _units.ShownLit(i) != _units.Flash.IsLit(i))
             {
                 Check(false, $"{what} tick {_sim.TickNumber}: unit {i} state {U.State[i]} shows tint {_units.ShownTint(i)}");
                 return;

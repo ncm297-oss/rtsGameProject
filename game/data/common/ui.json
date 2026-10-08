@@ -59,6 +59,8 @@
     "armor": "Armor",
     "range": "Range",
     "speed": "Speed",
-    "needs": "Needs"
+    "needs": "Needs",
+    "kills": "K",
+    "losses": "L"
   }
 }

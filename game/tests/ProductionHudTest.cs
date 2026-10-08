@@ -827,6 +827,38 @@ public partial class ProductionHudTest : Node
         Check(repairBytes == 0 && B.Hp[_hall] > hp0 && _panel.Rebuilds - panelRebuilds > 100 && _panel.HpText == $"{B.Hp[_hall]} / {max}",
             $"BUG-0123: 300 repair ticks: panel allocated {repairBytes} bytes (hp {hp0} -> {B.Hp[_hall]}, {_panel.Rebuilds - panelRebuilds} rewrites, shows '{_panel.HpText}')");
         GD.Print($"repair: panel 0 B over 300 ticks, hp {hp0} -> {B.Hp[_hall]}, {_panel.Rebuilds - panelRebuilds} hp rewrites");
+
+        // M4-V1 (BUG-0123 extended to a damaged unit): a Heavy Infantry selected while an enemy Raider beside it fights it:
+        // its hp falls every few ticks, the panel shows it live ("now / max") and allocates nothing.
+        int hi = _data.FindUnit("malazan_heavy_infantry"), raider = _data.FindUnit("whirlwind_raider");
+        int spotCell = Rts.Sim.Pathfinding.FlowField.NearestPassable(G, (G.Height / 2) * G.Width + G.Width / 2);
+        System.Numerics.Vector2 spot = G.CellCenter(spotCell % G.Width, spotCell / G.Width);
+        var mineBefore = new HashSet<int>();
+        for (int i = 0; i < U.Capacity; i++) if (U.Alive[i]) mineBefore.Add(i);
+        _sim.Enqueue(Command.SpawnUnit(0, hi, spot));
+        _sim.Enqueue(Command.SpawnUnit(1, raider, spot + new System.Numerics.Vector2(1.6f, 0f)));
+        Tick(2);
+        EntityHandle fighter = default;
+        for (int i = 0; i < U.Capacity; i++)
+            if (U.Alive[i] && !mineBefore.Contains(i) && U.Owner[i] == 0) fighter = new EntityHandle(i, U.Generation[i]);
+        _sel.SelectOnly(fighter);
+        int unitMax = _data.Units[hi].Hp;
+        for (int t = 0; t < 400 && U.Hp[fighter.Index] == unitMax; t++) _sim.Tick();
+        _panel.Sync();
+        int unitHp0 = U.Hp[fighter.Index], unitRebuilds = _panel.Rebuilds, hpWrong = 0;
+        long fightBytes = 0;
+        for (int f = 0; f < 300 && U.IsAlive(fighter); f++)
+        {
+            _sim.Tick();
+            before = GC.GetAllocatedBytesForCurrentThread();
+            _panel.Sync();
+            fightBytes += GC.GetAllocatedBytesForCurrentThread() - before;
+            if (_panel.StatValue(0).Text != U.Hp[fighter.Index].ToString(System.Globalization.CultureInfo.InvariantCulture)) hpWrong++;
+        }
+        bool fighterAlive = U.IsAlive(fighter);
+        Check(fighterAlive && unitHp0 < unitMax && U.Hp[fighter.Index] < unitHp0 && fightBytes == 0 && hpWrong == 0 && _panel.HpText == $"{U.Hp[fighter.Index]} / {unitMax}",
+            $"M4-V1: 300 fight ticks with a hurt unit selected: panel allocated {fightBytes} bytes, {hpWrong} frames off the store, alive {fighterAlive}, hp {unitHp0} -> {(fighterAlive ? U.Hp[fighter.Index] : 0)}, shows '{_panel.HpText}'");
+        GD.Print($"fight: one-unit panel 0 B over 300 ticks, hp {unitHp0} -> {U.Hp[fighter.Index]} of {unitMax}, {_panel.Rebuilds - unitRebuilds} rewrites");
         GD.Print($"idle: building view {bytes} bytes, one unit {unitBytes}, grid {gridBytes}");
     }
 

@@ -61,7 +61,7 @@ public partial class OrdersTest : Node
         if (!loaded.Ok) throw new InvalidOperationException("data failed to load");
         var match = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
         AddChild(match);
-        match.Start(loaded.Data!, LaunchOptions.Parse(new[] { "--units", "40", "--no-bases" })); // armies only, as in M2 (M3-V1)
+        match.Start(loaded.Data!, LaunchOptions.Parse(new[] { "--units", "40", "--no-bases", "--no-combat" })); // armies only, no fights, as in M2 (M3-V1, M4-V1 BUG-0147)
         var runner = match.GetNode<SimRunner>("SimRunner");
         runner.ProcessMode = ProcessModeEnum.Disabled; // the test ticks the sim itself
         _sim = runner.Simulation!;

@@ -81,7 +81,7 @@ public partial class DebugOverlayTest : Node
         Check(LaunchOptions.Parse(new[] { "--debug-overlay", "--seed", "3" }).Seed == 3, "--debug-overlay swallowed the next flag");
         var m = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
         AddChild(m);
-        m.Start(_data, LaunchOptions.Parse(new[] { "--units", "10", "--debug-overlay", "--no-bases" })); // armies only, as in M2 (M3-V1)
+        m.Start(_data, LaunchOptions.Parse(new[] { "--units", "10", "--debug-overlay", "--no-bases", "--no-combat" })); // armies only, no fights, as in M2 (M3-V1, M4-V1 BUG-0147)
         var o = m.GetNode<DebugOverlay>("DebugOverlay");
         await Settle();
         var nav = m.GetNode<NavOverlayView>("World3D/NavOverlay");
@@ -98,7 +98,7 @@ public partial class DebugOverlayTest : Node
     {
         _match = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
         AddChild(_match);
-        _match.Start(_data, LaunchOptions.Parse(new[] { "--units", "0", "--zoom", "60", "--no-bases" })); // armies only, as in M2 (M3-V1)
+        _match.Start(_data, LaunchOptions.Parse(new[] { "--units", "0", "--zoom", "60", "--no-bases", "--no-combat" })); // armies only, no fights, as in M2 (M3-V1, M4-V1 BUG-0147)
         _runner = _match.GetNode<SimRunner>("SimRunner");
         _runner.ProcessMode = ProcessModeEnum.Disabled; // the test ticks the sim (and its twin) itself
         _sim = _runner.Simulation!;

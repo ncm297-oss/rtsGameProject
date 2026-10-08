@@ -55,7 +55,7 @@ public partial class QaH2Test : Node
 
     private async Task BenchAcross(string seed)
     {
-        Match match = StartMatch("--bench", "10", "--mute", "--speed", "1", "--seed", seed);
+        Match match = StartMatch("--bench", "10", "--mute", "--speed", "1", "--seed", seed, "--no-combat"); // combat off: a world without fights, as in M2 (M4-V1, BUG-0147)
         BenchRunner bench = match.Bench!;
         bench.QuitOnFinish = false;
         Simulation sim = match.GetNode<SimRunner>("SimRunner").Simulation!;
@@ -104,7 +104,7 @@ public partial class QaH2Test : Node
     // Blocked cell among its 8 neighbours), each side on one level.
     private async Task Blocks1000(string seed)
     {
-        Match match = StartMatch("--units", "1000", "--mute", "--seed", seed, "--no-bases"); // armies only, as in M2 (M3-V1)
+        Match match = StartMatch("--units", "1000", "--mute", "--seed", seed, "--no-bases", "--no-combat"); // armies only, no fights, as in M2 (M3-V1, M4-V1 BUG-0147)
         Simulation sim = match.GetNode<SimRunner>("SimRunner").Simulation!;
         var watch = Stopwatch.StartNew();
         while (sim.TickNumber < 2 && watch.Elapsed.TotalSeconds < 20) await Frame();
@@ -139,7 +139,7 @@ public partial class QaH2Test : Node
     // BUG-0086 in the real scene: a felled tree re-uploads only the trees; a felled mine only the mines.
     private async Task PropsFell()
     {
-        Match match = StartMatch("--units", "10", "--mute", "--no-bases"); // armies only, as in M2 (M3-V1)
+        Match match = StartMatch("--units", "10", "--mute", "--no-bases", "--no-combat"); // armies only, no fights, as in M2 (M3-V1, M4-V1 BUG-0147)
         Simulation sim = match.GetNode<SimRunner>("SimRunner").Simulation!;
         var props = match.GetNode<PropsView>("World3D/PropsView");
         for (int i = 0; i < 10; i++) await Frame();

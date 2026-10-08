@@ -64,6 +64,16 @@ public partial class SimRunner : Node
     /// </summary>
     public int RecordCheckpointInterval { get; set; }
 
+    /// <summary>Whether the match fights (<see cref="SimConfig.Combat"/>); set before <see cref="Start"/>. False only for <c>--no-combat</c> (dev / tests, M4-V1).</summary>
+    public bool Combat { get; set; } = true;
+
+    /// <summary>
+    /// Raised after every <see cref="Simulation.Tick"/> this runner runs (M4-V1), while the tick's one-tick outputs
+    /// (<c>World.Deaths</c>) are still there: a frame that runs several ticks (fast game speed) would otherwise show only the
+    /// last tick's deaths. Handlers only read.
+    /// </summary>
+    public event Action<Simulation>? Ticked;
+
     /// <summary>The recorder attached by <see cref="Start"/> when <see cref="RecordCheckpointInterval"/> is set, else null.</summary>
     public ReplayRecorder? Recorder { get; private set; }
 
@@ -74,6 +84,7 @@ public partial class SimRunner : Node
         {
             Data = data,
             Map = MapGenParams.Default with { Forests = Forests, GoldMines = GoldMines },
+            Combat = Combat,
         };
         Simulation = new Simulation(config);
         if (RecordCheckpointInterval > 0) Recorder = new ReplayRecorder(Simulation, RecordCheckpointInterval);
@@ -93,6 +104,7 @@ public partial class SimRunner : Node
             LastTickMs = _stopwatch.Elapsed.TotalMilliseconds;
             TickTimes.Add(LastTickMs);
             TotalTickMs += LastTickMs;
+            Ticked?.Invoke(Simulation);
         }
     }
 }

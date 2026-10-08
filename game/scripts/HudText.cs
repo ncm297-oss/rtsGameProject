@@ -17,4 +17,8 @@ public enum HudText
     Speed,
     /// <summary>The tooltip's lead-in to a button's requirements ("Needs").</summary>
     Needs,
+    /// <summary>The resource bar's kill count label ("K"; M4-V1).</summary>
+    Kills,
+    /// <summary>The resource bar's loss count label ("L"; M4-V1).</summary>
+    Losses,
 }
