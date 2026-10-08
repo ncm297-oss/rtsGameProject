@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-07-1415, task M3-V3 |
 | System | HUD (game/scripts/SelectionPanel.cs, game/scripts/CommandCard.cs) |
-| Fixed by | |
+| Fixed by | 9998824 (M3-V3b: hp is two labels with an int-string table; greyed name / hotkey at `CommandCard.DimAlpha` 50 %). `QaV3Test` strict row is a `Check`. Verified by QA 2026-10-07-1715: 300 repair ticks with a running queue and a rally: panel, card, strip, rally, minimap and building views 0 B (`QaV3bTest`; the resource bar allocates only when a total changes, see BUG-0126 item 6); greyed cells' name / hotkey `Modulate.A` = 0.5 on every one of 900 cells checked; windowed pixel read: the brightest name pixel is 1.00 enabled and 0.81 greyed |
 
 ## Repro
 1. `& $env:GODOT --headless --path game res://tests/QaV3Test.tscn` (row `Allocation`; `-- --strict` fails it).

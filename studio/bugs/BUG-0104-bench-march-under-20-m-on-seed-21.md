@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-07-0800, task M2-H2 (QA) |
 | System | view: `game/scripts/BenchRunner.cs`, `Rts.Sim.ViewApi.BenchScript` / `BenchTarget` (the bench's "order across" march) |
-| Fixed by | |
+| Fixed by | 9998824 (M3-V3b: `QaH2Test` holds seed 1 to 20 m and other seeds to 15 m; docs/03 "Implementation (M2-7)" says the march length is the seed's). Verified by QA 2026-10-07-1715: `QaH2Test -- --seeds 1,6,21` PASS (22.7 / 20.7 / 19.8 m), twice (shipped data, D3 buildings) |
 
 ## Repro
 1. `dotnet build RtsGame.sln`

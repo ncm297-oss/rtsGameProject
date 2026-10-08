@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (holds the view branch off `main`; `main` fails `tools/qa/smoke.ps1` meanwhile) |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-07-1415 integration (conductor), after the view's QA had passed against a stand-in for M3-6's enums |
 | System | view tests: `sim/Rts.Sim.Tests/ViewApi/ProductionHudTests.cs`, `game/tests/ProductionHudTest.cs` (criterion 3 `QueueStripRun`, the Age II flash), probably `game/tests/QaV3Test.cs` (`GreyingEveryFrame`, `QueueStripEveryFrame`, the 600-tick hash twin that researches Age II) |
-| Fixed by | |
+| Fixed by | 9998824 (M3-V3b: `ProductionHudTests.Hall(seed, ageIIHalls)` spawns a finished Barracks + Armory before Age II; new rows `ProductionHudTests.AgeII_AtABareTownHall_IsRequires_AndAResearchQueuesNothing`, `ProductionHudTest.BareHallAgeII`, `QaV3Test.BareHallGreying`). Verified by QA 2026-10-07-1715: non-Perf 3260 / 0 failed; all 25 Godot test scenes PASS on shipped data and again with D3's `buildings.json`; `QaV3bTest` checks the card against the real `CanResearch` for 450 frames (bare hall, one hall, two of one slot + a Forge site: "Locked" every frame; two distinct: live; Age II queued, then the Forge destroyed: the item survives and completes), 0 mismatches |
 
 ## Repro
 1. `origin/studio/2026-10-07-1415-view` at 5f89068 (M3-V3 merged with `origin/main` da654c6 = M3-6).

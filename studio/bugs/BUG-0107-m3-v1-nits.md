@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-07-0925, task M3-V1 |
 | System | building views, worker feedback, minimap (view) |
-| Fixed by | |
+| Fixed by | 9998824 (M3-V3b: site colour `BuildingViews.SiteColor` dusty mauve; cargo cube grows above 30 m zoom; minimap resource layer keyed on `ResourceStore.FreeCount`). Verified by QA 2026-10-07-1715: windowed pixel read, a Malazan site's hue is 298 degrees vs the finished hall's 217 (81 apart); `EconomyViewTest`: cargo 7.7 px at 30 m, 7.1 px at 60 m; 10 building changes give 0 resource redraws, a fell gives 1; `QaM23bTest` with bases: 1 draw. The props relist (item 3's parenthesis) still runs on `NavGrid.Version` (moved to BUG-0126 item 3) |
 
 ## Repro
 1. Windowed: `& $env:GODOT --path game res://tests/QaV1Test.tscn -- --shots <dir> --size 1280x720` (and `--size max`),

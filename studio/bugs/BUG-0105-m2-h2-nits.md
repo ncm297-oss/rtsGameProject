@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-07-0800, task M2-H2 (QA) |
 | System | view: `Rts.Sim.ViewApi.MinimapRaster` (perf row), docs/03 "Implementation (M2-3b)" and "Implementation (M2-6)" |
-| Fixed by | |
+| Fixed by | 9998824 (M3-V3b: docs/03 minimap and Sfx figures refreshed; `PropsMeasureTests` times the dots and the forced redraw apart). Verified by QA 2026-10-07-1715 alone: dots 0.166 ms (limit 0.25), redraw 0.125 ms (limit 0.2), sum 0.291 ms; docs say about 0.17 / 0.13 ms. See BUG-0126 item 5 on the unguarded sum |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "Category=Perf&FullyQualifiedName~PropsMeasureTests" --logger "console;verbosity=detailed"`,

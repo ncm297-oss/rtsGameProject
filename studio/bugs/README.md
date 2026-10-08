@@ -126,23 +126,25 @@ bugs outrank new features.
 | [BUG-0101](BUG-0101-bench-order-across-moves-army-only-15-m.md) | S3 | fixed | `--bench` "order across the map" sends the army about 15 m, to the enemy start block next door |
 | [BUG-0102](BUG-0102-bench-fps-field-biased-low-by-load-second.md) | S3 | fixed | The `bench:` line's `fps` reads low on short runs (averages Godot's once-a-second counter, first sample is the load second) |
 | [BUG-0103](BUG-0103-m2-7-bench-nits.md) | S4 | fixed | M2-7 nits: vsync-on rows report smoothed deltas, "no bunching" remark, culture in two log lines, endless huge `--bench` |
-| [BUG-0104](BUG-0104-bench-march-under-20-m-on-seed-21.md) | S3 | open | The 10 s bench moves seed 21's army centre only 19.1 m (QaM27's 20 m bound fits seed 1, not the map family) |
-| [BUG-0105](BUG-0105-m2-h2-nits.md) | S4 | open | M2-H2 nits: minimap refresh row at 92-94% of its 0.3 ms limit (docs say 0.25 ms), Sfx exit-wait range in docs/03 |
+| [BUG-0104](BUG-0104-bench-march-under-20-m-on-seed-21.md) | S3 | fixed | The 10 s bench moves seed 21's army centre only 19.1 m (QaM27's 20 m bound fits seed 1, not the map family) |
+| [BUG-0105](BUG-0105-m2-h2-nits.md) | S4 | fixed | M2-H2 nits: minimap refresh row at 92-94% of its 0.3 ms limit (docs say 0.25 ms), Sfx exit-wait range in docs/03 |
 | [BUG-0111](BUG-0111-d2-page-pin-gaps.md) | S4 | open | D2 page pins miss a false "+N pop" claim and Provides free-text edits; culture-dependent range text in UnitContentTests.G |
 | [BUG-0094](BUG-0094-test-grove-spawns-skip-the-seal-check.md) | S4 | open | Hand-built test groves (`ResourceStore.Spawn`) skip the never-seal check and wall cells in before tick 1 |
 | [BUG-0095](BUG-0095-push-out-on-a-full-level-scans-the-whole-map.md) | S3 | open | Push-out on a level with too few free cells scans every ring of the map per leftover unit (9 ms at 128, 35 ms at 256) and stacks them on one point |
 | [BUG-0096](BUG-0096-builds-refused-for-sealsground-each-flood.md) | S3 | open | Builds refused for SealsGround still pay a flood each: 100 in one tick cost 33 ms (BUG-0091 residual) |
 | [BUG-0097](BUG-0097-spawn-and-push-out-cross-to-another-plateau-of-the-same-level.md) | S3 | open | A spawn (or push-out) on a full plateau lands on another plateau of the same level, 30+ m away |
 | [BUG-0106](BUG-0106-m3-v1-tree-gather-bound-unmet-from-start.md) | S3 | wontfix (criterion reworded, 0925) | Right-click on the nearest tree from the start: workers reach Gathering at tick 123, not within 60 (criterion 3 wording vs walk time) |
-| [BUG-0107](BUG-0107-m3-v1-nits.md) | S4 | open | M3-V1 nits: Malazan site vs finished colour, tiny wood cube at 60 m, minimap resource redraw on every building change |
+| [BUG-0107](BUG-0107-m3-v1-nits.md) | S4 | fixed | M3-V1 nits: Malazan site vs finished colour, tiny wood cube at 60 m, minimap resource redraw on every building change |
 | [BUG-0098](BUG-0098-m3-5-empty-tech-filter-matches-every-unit.md) | S3 | fixed | An empty `units` or `tags` filter in a tech effect silently matches every unit (the other faction's too) |
 | [BUG-0099](BUG-0099-m3-5-tech-data-nits.md) | S4 | open (items 1, 3 fixed M3-6) | M3-5 tech data nits: `requires` cycles load, an effect matching no unit loads, a tech id may equal a building id |
 | [BUG-0108](BUG-0108-right-click-on-a-building-box-top-picks-the-ground-behind-it.md) | S3 | fixed | A right click on the visible top of a building's box picks the ground behind it: half of a damaged hall's top gives a Move, not a Repair |
 | [BUG-0109](BUG-0109-ghost-click-ignores-the-click-position.md) | S3 | fixed | A placement click ignores where it lands: it builds at the last frame's drawn anchor, or is swallowed if that one was red |
 | [BUG-0110](BUG-0110-ui-json-non-object-root-loads-empty.md) | S3 | fixed | ui.json whose root is not an object (`[]`, `null`, a number or a string) loads with no error and blank labels |
-| [BUG-0122](BUG-0122-m3-v2-nits.md) | S4 | open | M3-V2 nits: mid-word wrap on "Quartermaster's Depot", Shift-click floods duplicate Builds, ghost lags a panning camera, small reason text |
+| [BUG-0122](BUG-0122-m3-v2-nits.md) | S4 | fixed | M3-V2 nits: mid-word wrap on "Quartermaster's Depot", Shift-click floods duplicate Builds, ghost lags a panning camera, small reason text |
 | [BUG-0100](BUG-0100-m3-6-unmeetable-requirements-load.md) | S3 | open | Requirements that can never be met load clean (another faction's building, an any-of only its own tech opens) |
 | [BUG-0112](BUG-0112-m3-6-d3-building-requires-break-sim-tests.md) | S3 | open | With D3's building requires merged, 25 of the sim's tests fail (construction fuzz, never-seal, requirement fuzz): merge hazard for the data track |
 | [BUG-0113](BUG-0113-m3-6-nits.md) | S4 | open | M3-6 nits: type-mismatch errors read "malformed JSON ... Nullable`1[Int32]", the 10k-unit load test now times a failing load |
-| [BUG-0123](BUG-0123-selection-panel-allocates-every-tick-under-repair.md) | S3 | open | The selection panel allocates a string every tick while the selected building is repaired (~52 B/tick); a greyed production button looks enabled |
-| [BUG-0124](BUG-0124-m3-v3-tests-queue-age-ii-without-halls.md) | S2 | open | M3-V3's tests queue Age II at a Town Hall with no halls; merged with M3-6 the view branch is red and `main`'s smoke gate fails until it lands |
+| [BUG-0123](BUG-0123-selection-panel-allocates-every-tick-under-repair.md) | S3 | fixed | The selection panel allocates a string every tick while the selected building is repaired (~52 B/tick); a greyed production button looks enabled |
+| [BUG-0124](BUG-0124-m3-v3-tests-queue-age-ii-without-halls.md) | S2 | fixed | M3-V3's tests queue Age II at a Town Hall with no halls; merged with M3-6 the view branch is red and `main`'s smoke gate fails until it lands |
+| [BUG-0125](BUG-0125-resource-right-click-column-takes-open-ground-behind-a-tree.md) | S3 | open | The resource right-click pick treats a tree as a full 2 x 2 x 3.5 m column, so a click on open ground just north of a tree or mine targets the node |
+| [BUG-0126](BUG-0126-m3-v3b-nits.md) | S4 | open | M3-V3b nits: a locked building's ghost reads "Needs more", Age II reads "Locked" while queued / researched after a hall dies, props relist on building changes, smaller leftovers |

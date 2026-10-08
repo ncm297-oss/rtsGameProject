@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-07-1131, task M3-V2 |
 | System | command card, build ghost (view) |
-| Fixed by | |
+| Fixed by | 9998824 (M3-V3b: `CommandCard.FitNameSize`, Shift-click on the last-placed anchor skipped, `BuildGhost.ProcessPriority` 1, zoom-scaled deeper-red reason). Verified by QA 2026-10-07-1715: `CommandCardTest` prints `43 names, 1 shrunk below 12 px, 0 break mid-word; 'Quartermaster's Depot' at 10 px`, `25 Shift-clicks -> 3 Builds`, `pan: 36 frames ... 0 lagging`, reason text 25.8-35 px/em at 20-60 m. The double-Cancel aside from item 2 is not addressed (moved to BUG-0126 item 4) |
 
 ## Repro
 1. Windowed: `& $env:GODOT --path game res://tests/CommandCardTest.tscn -- --shots <dir>` (`card-menu-basic.png`,
