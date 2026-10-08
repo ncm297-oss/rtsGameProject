@@ -15,9 +15,9 @@ public static class OrderMix
     /// before returning), and the passable cells within <paramref name="reach"/> path cells of the
     /// center, from which <see cref="Issue"/> picks targets.
     /// </summary>
-    public static Simulation Spawn(ulong seed, int units, float reach, out List<int> cells, int perTick = 6)
+    public static Simulation Spawn(ulong seed, int units, float reach, out List<int> cells, int perTick = 6, bool combat = true)
     {
-        var sim = new Simulation(TestSim.Config(Seed: seed, PlayerCount: 2, UnitCapacity: units, CommandCapacity: units + 2 * perTick + 8));
+        var sim = new Simulation(TestSim.Config(Seed: seed, PlayerCount: 2, UnitCapacity: units, CommandCapacity: units + 2 * perTick + 8) with { Combat = combat });
         cells = Cells(sim.World.NavGrid, reach);
         var rng = new SimRng(seed, 41);
         SpawnInto(sim, units, cells, ref rng);

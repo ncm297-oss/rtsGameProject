@@ -128,14 +128,15 @@ public class ScenarioTests
     /// <summary>
     /// Report row: the same scenario with owners alternating 0/1, so half the army is the other
     /// player's (enemies are walls and are never shoved). Prints arrivals and give-ups; asserts only
-    /// the hard rules (never on blocked ground, all stop within the limit).
+    /// the hard rules (never on blocked ground, all stop within the limit). Combat off (BUG-0143): the limit is a walking
+    /// bound, and on combat the two owners fight to the end past it (seed 2); see <c>CombatTerminationTests</c>.
     /// </summary>
     [Fact]
     public void CrossMap_TwoOwners_Report()
     {
         for (ulong seed = 1; seed <= 8; seed++)
         {
-            CrossMapScenario s = CrossMapScenario.Create(seed, Army, StartRadius, players: 2);
+            CrossMapScenario s = CrossMapScenario.Create(seed, Army, StartRadius, players: 2, combat: false);
             int ticks = Run(s, $"2 owners, seed {seed}");
             bool[] arrived = MoveScenario.Arrived(s.Sim.World);
             string? pack = MoveScenario.FirstPackViolation(s.Sim.World);

@@ -1035,7 +1035,11 @@ BUG-0034: the distinct-targets perf row averages 100 ticks, budget unchanged.
   blocked cells) was the preferred fix but was left: walkers pressed against a new building on an old
   field would count stuck ticks and give up in 20 ticks, where today they wait, and the closing
   semantics are pinned by the flow-arrow overlay, PeekCached and cache tests on both tracks.
-  Time-sliced builds are BUG-0023.
+  Time-sliced builds are BUG-0023. At a realistic rate (a House every 2 s, 32 groups of 512 walkers) no walker waits
+  more than 1 s for a usable field (`APlacementEveryTwoSeconds_32MarchingGroups_LongestFieldWait_Report`, 16 ticks).
+  Since M4-1 that row runs with combat off (BUG-0135): its two owners' groups would meet and fight, and a chaser
+  re-aiming under the churn waits up to 34 ticks; chasers' waits are BUG-0144 (M4-2), kept as a skipped combat-on row
+  (`ChasersUnderPlacementChurn_LongestFieldWait_AtMostOneSecond`).
 - **Perf is measured in Debug on the dev machine**; the 2,500-unit two-player contest costs about
   1.6x the one-player blob (6.8 vs 4.3 ms). The 4 ms design budget is for 500 units (0.6 ms today).
 
@@ -1190,15 +1194,35 @@ sight and out of reach (another plateau, a sealed pocket) or reachable only by a
 tick a unit with a target that is not holding and not mid-swing compares its gap with its best this chase
 (`UnitStore.ChaseBest`, set when it takes the target or stands in reach): closer by more than
 `CombatConstants.ChaseProgress` (0.1 m) is progress, anything else counts a stalled scan (`ChaseStall`). At
-`CombatConstants.GiveUpScans` (10 scans, 2 s) stalled scans in a row it **gives the target up**; so does a retaliator
+`CombatConstants.GiveUpScans` (10 scans, 2 s) stalled scans in a row it **gives the target up**, unless the target is a
+unit and another unit of the chaser's owner stands `Attacking` within the chaser's own reach of it
+(`CombatSystem.FriendFightsTarget`, one small spatial query, only when a chase stalls; BUG-0143, M4-1 fix round 2).
+Then a standing point in reach exists on foot, the chaser is only queued behind its own side (a brawl's back ranks
+behind their planted front rank), and the fight there frees the place within a few hits; its count starts again and it
+keeps the target (its scan still re-picks the best target every 4 ticks). Without that exception the back ranks of
+every brawl gave up three crowd-blocked chases, went reach-only and stood Idle 2-9 m from the enemy (500 v 500: 213 v
+190 still alive after 5 min). A friend only standing at the target (a ranged unit that can't swing in this slice, a
+worker) does not count: it may never move, and chasers pressing behind it never stopped (a 200-unit cross-map scene).
+Nor does a building target, which can take minutes to fall; chasers that find no room at a building give it up as
+before. A target on another plateau, behind a wall, or outrunning the chaser has no friend of the chaser fighting it,
+so those chases still end. Switching from one target to another keeps the stall count (`Engage` resets it only for a
+unit that had no target): a unit whose scans took two targets in turn (one drifting in and out of its sight) restarted
+the count every scan and chased forever. So does a retaliator
 the leash pulls back, and a chaser that loses sight of its target while not gaining on it. Giving up remembers the
 target (`UnitStore.Ignored`, a unit or a building): the unit's scans take it again only when it is in reach, and an
-attack by it does not start a retaliation (a melee attacker is in reach, so the next scan takes it anyway). The unit
+attack by that unit does not start a retaliation (a building remembered with the same slot and generation as the
+attacker is not it, BUG-0142; a melee attacker is in reach, so the next scan takes it anyway). The unit
 then settles as for a lost target (an attack-mover resumes its leg, a retaliator walks home). It remembers one target
 only, so it also counts its give-ups (`GiveUps`); at `CombatConstants.MaxGiveUps` (3) its scans take only targets in
 reach, like a holder's, so two unreachable enemies can't take turns forever. Any order taken
 (`ClearForOrder`) forgets both; landing a hit resets the count. A chase that stalls because the target runs as
 fast as the chaser ends the same way, which is intended (the attack-mover goes on, the retaliator goes home).
+Known limits of the friend exception: a friend fighting an enemy the chaser can't reach (both on a plateau the chaser
+can't climb) keeps the chaser pressing below for as long as that fight lasts; a target that never dies would keep its
+queued chasers queued. Brawl finish ticks after the fix (QA's scenes; f2879b9, which had no give-up at all, in
+brackets): 500 v 500 lines 2,278 (2,373), columns 3,586 (3,406), 200 v 200 map seed 1 2,834 (2,371), seed 2 2,073
+(2,008), 40 v 40 ten ranks 1,418 (979), five ranks 1,037 (1,285), 100 v 100 1,885 (1,934); a few units give a chase up,
+none reaches `MaxGiveUps`.
 A chaser counts as arrived only within 0.05 m of its goal (`MovementConstants.ChaseArrival2`), not
 the usual `ArrivalDistance` (1 m), so it never stops short of its reach; combat plants it once the
 target is in reach. **No straight steering:** the M4-1 plan allowed chasers to steer straight at targets
@@ -1253,7 +1277,13 @@ helper, changing the config only, never an assertion. The command fuzzes (the do
 combat with the invariant re-baselined: a holder is Idle *or Attacking* and never moves (a Stop leaving no target and
 the state Idle on the tick it applies is `CombatTests`' row). The economy conservation fuzz runs with combat off: on
 combat its "the fuzz gathered and delivered" precondition misses on one seed (attack-moved workers fight instead of
-delivering), and a precondition is not re-baselined. Matches, the CLI and replays always
+delivering), and a precondition is not re-baselined. Since fix round 2 (BUG-0143) brawls are fought to the end, so the
+two-owner movement termination rows whose limits are walking bounds (`CrossMap_TwoOwners_Report`,
+`TwoHundred_TwoOwners_Seeds1To50_Terminate_Report`, `Crowd_ToFourPoints_BothPlayersAtEveryPoint_Report`, the
+`TwoFriendlyGroups_Swapping...` shove row's two-player case) and `RandomOrderMixes_...` (on combat seed 2's queues never
+fill: a precondition) run combat off too; their combat-on termination is `CombatTerminationTests` (the same scenes on
+combat come to rest, nobody Moving for 200 ticks, within 3x the walking limit; measured at most 1.23x). The
+placement-churn field-wait row runs combat off as well (see BUG-0080 above). Matches, the CLI and replays always
 fight. The switch is not in the replay header yet: M4-2's replay format 4 records it; until then `ReplayPlayer` plays
 back with combat on unless its caller says otherwise (`Run(replay, data, combat)`, for test replays recorded off).
 
@@ -1276,7 +1306,8 @@ other owner has a unit or building at all). Measured in Debug, same machine, aga
 (`CombatPerfTests`, two battle lines 10 ranks deep and 50 m wide, 8 m apart) averages 3.0 ms over its
 first 200 ticks and 3.4 ms over the next 400; the same armies as columns 25 ranks deep and 20 m wide
 (reported, not asserted) 4.3 / 5.6 ms, most of it movement: the units queued behind their own planted
-front rank. Scanning a crowd allocates nothing, nor does a brawl tick (`AllocationTests`). The world on
+front rank. Re-measured after the BUG-0143 fix (back ranks keep chasing rather than standing): 3.06 / 3.47 ms and
+4.32 / 5.54 ms. Scanning a crowd allocates nothing, nor does a brawl tick (`AllocationTests`). The world on
 a 1,024-cell map with 4,096 unit slots grows 0.4 MB (227.5 -> 227.9 MB).
 
 **The tight-blob budget (BUG-0140, Producer decision 2026-10-07, owner may revisit).** QA's 13 paired runs put the

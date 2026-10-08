@@ -107,13 +107,15 @@ public class ConstructionScaleStressTests
 
     /// <summary>
     /// BUG-0080 at a realistic rate: 512 units in 32 goal groups march across the default map while player 0's worker
-    /// places a House every 40 ticks (2 s) for 60 s. Reports the longest any unit waited for a usable field.
+    /// places a House every 40 ticks (2 s) for 60 s. Reports the longest any unit waited for a usable field. Combat off
+    /// (M4-1, BUG-0135): the row measures walkers under placement churn; the two owners' groups would otherwise meet and
+    /// fight, and chasers' waits are <c>CombatScaleQaTests.ChasersUnderPlacementChurn_LongestFieldWait_AtMostOneSecond</c> (BUG-0144).
     /// </summary>
     [Fact]
     [Trait("Category", "Perf")]
     public void APlacementEveryTwoSeconds_32MarchingGroups_LongestFieldWait_Report()
     {
-        Simulation sim = MoveScenario.Spawn(11, units: 512, maxCost: 30f, out _, capacity: 520, players: 2, map: ResourceMap);
+        Simulation sim = MoveScenario.Spawn(11, units: 512, maxCost: 30f, out _, capacity: 520, players: 2, map: ResourceMap, combat: false);
         NavGrid g = sim.World.NavGrid;
         var rng = new Determinism.SimRng(11, 4);
         List<int> open = FlowFieldOracle.PassableCells(g);

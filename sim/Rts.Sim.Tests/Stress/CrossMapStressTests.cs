@@ -19,14 +19,14 @@ public class CrossMapStressTests
     private const double FlagHeadroom = 1.3;
 
     private (int runs, int gaveUp, double minHeadroom) Sweep(ulong first, ulong last, int units, float radius, int players, int goalMinLevel,
-        CrossMapStart start, bool requireAll)
+        CrossMapStart start, bool requireAll, bool combat = true)
     {
         int runs = 0, gaveUp = 0;
         double minHeadroom = double.MaxValue;
         var failures = new List<string>();
         for (ulong seed = first; seed <= last; seed++)
         {
-            CrossMapQaScenario? s = CrossMapQaScenario.Create(seed, units, radius, players, goalMinLevel, start);
+            CrossMapQaScenario? s = CrossMapQaScenario.Create(seed, units, radius, players, goalMinLevel, start, combat);
             if (s == null)
             {
                 _out.WriteLine($"seed {seed}: no scenario (no level-{goalMinLevel} goal or no ramp)");
@@ -58,7 +58,11 @@ public class CrossMapStressTests
     public void TwoHundred_OneOwner_Seeds1To50_AllArrive(ulong first, ulong last) =>
         Sweep(first, last, 200, 12f, 1, 1, CrossMapStart.WestEdge, requireAll: true);
 
-    /// <summary>Owners alternating 0/1 over seeds 1-50: hard rules asserted (blocked ground, termination), arrivals reported.</summary>
+    /// <summary>
+    /// Owners alternating 0/1 over seeds 1-50: hard rules asserted (blocked ground, termination), arrivals reported.
+    /// Combat off (BUG-0143, M4-1 fix round 2): the limit is a walking bound and on combat the two owners fight to the
+    /// end, which runs past it on 7 of 50 seeds; the combat-on termination of this sweep is <c>CombatTerminationTests</c>.
+    /// </summary>
     [Theory]
     [InlineData(1UL, 10UL)]
     [InlineData(11UL, 20UL)]
@@ -66,7 +70,7 @@ public class CrossMapStressTests
     [InlineData(31UL, 40UL)]
     [InlineData(41UL, 50UL)]
     public void TwoHundred_TwoOwners_Seeds1To50_Terminate_Report(ulong first, ulong last) =>
-        Sweep(first, last, 200, 12f, 2, 1, CrossMapStart.WestEdge, requireAll: false);
+        Sweep(first, last, 200, 12f, 2, 1, CrossMapStart.WestEdge, requireAll: false, combat: false);
 
     /// <summary>Goal in the farthest cell of a level-2 plateau (two ramps in series), seeds 1-20.</summary>
     [Fact]

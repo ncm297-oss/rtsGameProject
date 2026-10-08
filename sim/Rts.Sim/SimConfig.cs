@@ -25,9 +25,10 @@ public sealed record SimConfig(ulong Seed, int PlayerCount, int UnitCapacity, in
 
     /// <summary>
     /// Whether units fight (M4-1, default true): target scans, swings, damage and death. False turns the three combat
-    /// steps off, so a scene of two owners plays as it did before M4 (enemies are only walls). A test and tooling switch
-    /// for the pre-M4 movement, economy and production scenes (BUG-0135, pending the Producer's call); a match always
-    /// fights. Not in the replay header yet (M4-2 format 4), so a replay always plays back with combat on.
+    /// steps off and an attack-move sets no combat mode, so a scene of two owners plays as it did before M4 (enemies are
+    /// only walls). A test and tooling switch for the pre-M4 movement, economy and production scenes (BUG-0135, Producer
+    /// decision 2026-10-07); a match always fights. Not in the replay header yet (M4-2 format 4): <c>ReplayPlayer</c>
+    /// plays back with combat on unless its caller passes <c>combat: false</c>.
     /// </summary>
     public bool Combat { get; init; } = true;
 

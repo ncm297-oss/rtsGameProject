@@ -377,6 +377,88 @@ public class CombatTests
         Assert.Equal(0, u.GiveUps[a.Index]);
     }
 
+    /// <summary>
+    /// BUG-0143: a chaser queued behind its own front rank (a 1-cell corridor: an enemy holder at the dead end, two
+    /// friends planted fighting it side by side, the chaser behind them) gets no closer for far longer than
+    /// <see cref="CombatConstants.GiveUpScans"/> scans, but a friend stands in reach of its target, so it never gives
+    /// up and keeps its target.
+    /// </summary>
+    [Fact]
+    public void ChaserQueuedBehindItsOwnFightingFrontRank_NeverGivesUp()
+    {
+        string wall = new('1', 24), corridor = "1" + new string('0', 22) + "1";
+        var sim = new Simulation(TestSim.Config(Seed: 1, PlayerCount: 2, UnitCapacity: 8, CommandCapacity: 64),
+            LocalMovementTests.Rows(wall, wall, corridor, wall, wall));
+        EntityHandle e = Place(sim, 1, Crossbowman, At(sim, 1, 2)); // never swings in this slice
+        sim.Enqueue(Command.HoldPosition(1, e));
+        EntityHandle f = Place(sim, 0, HeavyInfantry, At(sim, 2, 2, dy: -0.5f));
+        EntityHandle f2 = Place(sim, 0, HeavyInfantry, At(sim, 2, 2, dy: 0.5f)); // the two fill the corridor's width
+        EntityHandle c = Place(sim, 0, HeavyInfantry, At(sim, 5, 2));
+        UnitStore u = sim.World.Units;
+        u.Hp[e.Index] = 100_000;
+        int fTicks = 0;
+        for (int t = 0; t < 600; t++)
+        {
+            sim.Tick();
+            if (u.State[f.Index] == UnitState.Attacking && u.State[f2.Index] == UnitState.Attacking) fTicks++;
+            Assert.True(u.GiveUps[c.Index] == 0, $"tick {t}: the chaser gave its target up ({u.State[c.Index]}, gap blocked by its friend)");
+        }
+        Assert.True(fTicks > 500, $"setup: the friends fought together on {fTicks} ticks only");
+        Assert.Equal(e, u.Target[c.Index]);
+        Assert.NotEqual(UnitState.Attacking, u.State[c.Index]); // setup: it really is queued, not in reach
+    }
+
+    /// <summary>
+    /// BUG-0143 (found by the fix): a chaser that switches from one target to another keeps its stall count, so two
+    /// targets a scan takes in turn (one drifting in and out of sight) can't restart it every scan and keep the chase
+    /// going forever. Here a cliff-top Laborer is chased from below, then a cliff-top Crossbowman (higher priority) comes
+    /// into sight mid-stall.
+    /// </summary>
+    [Fact]
+    public void SwitchingTargetsMidChase_KeepsTheStallCount()
+    {
+        var rows = new string[40];
+        for (int y = 0; y < 40; y++)
+        {
+            var c = new char[40];
+            for (int x = 0; x < 40; x++) c[x] = x >= 20 && x <= 35 && y >= 5 && y <= 34 ? '1' : '0';
+            rows[y] = new string(c);
+        }
+        var sim = new Simulation(TestSim.Config(Seed: 1, PlayerCount: 2, UnitCapacity: 8, CommandCapacity: 64), LocalMovementTests.Rows(rows));
+        EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 17, 20));
+        EntityHandle low = Place(sim, 1, Laborer, At(sim, 22, 20));
+        sim.Enqueue(Command.HoldPosition(1, low));
+        UnitStore u = sim.World.Units;
+        RunUntil(sim, () => u.Target[a.Index] == low && u.ChaseStall[a.Index] >= 3, 300);
+        Assert.True(u.Target[a.Index] == low && u.ChaseStall[a.Index] >= 3, $"setup: stall {u.ChaseStall[a.Index]}, target {u.Target[a.Index]}");
+        EntityHandle high = Place(sim, 1, Crossbowman, At(sim, 22, 22)); // a unit that can attack: taken over the laborer
+        sim.Enqueue(Command.HoldPosition(1, high));
+        RunUntil(sim, () => u.Target[a.Index] != low, 40);
+        Assert.Equal(high, u.Target[a.Index]);
+        Assert.True(u.ChaseStall[a.Index] >= 3, $"the switch restarted the stall count: {u.ChaseStall[a.Index]}");
+    }
+
+    /// <summary>
+    /// BUG-0142 item 4: a unit that gave up a building whose handle (slot and generation) equals an enemy unit's still
+    /// retaliates when that unit hits it; the given-up memory is a building, not that unit.
+    /// </summary>
+    [Fact]
+    public void HitByAUnitWithTheHandleOfAGivenUpBuilding_StillRetaliates()
+    {
+        Simulation sim = Flat();
+        EntityHandle r = Place(sim, 1, Raider, At(sim, 4, 4));
+        EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 30, 30)); // far out of each other's sight
+        UnitStore u = sim.World.Units;
+        u.Ignored[a.Index] = r; // the same slot and generation, as a building
+        u.IgnoredIsBuilding[a.Index] = true;
+        World w = sim.World;
+        w.Hits[0] = new PendingHit(r, 1, a, false, 1);
+        w.HitCount = 1;
+        CombatSystem.Resolve(w);
+        Assert.Equal(r, u.Target[a.Index]);
+        Assert.Equal(CombatMode.Retaliate, u.Mode[a.Index]);
+    }
+
     [Fact]
     public void AttackMove_KillsWhatIsOnTheWay_ThenResumesItsLeg_AndArrives()
     {

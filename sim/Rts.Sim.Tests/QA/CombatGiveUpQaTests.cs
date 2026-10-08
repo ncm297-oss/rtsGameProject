@@ -375,7 +375,7 @@ public class CombatGiveUpQaTests
     /// times, take only targets in reach from then on, and both armies stand 2-9 m apart (500 v 500: 213 v 190 still
     /// standing at 5 min).
     /// </summary>
-    [Theory(Skip = "BUG-0143: units at MaxGiveUps stand Idle in sight of reachable enemies; brawls stall")]
+    [Theory]
     [InlineData(40, 10, 2500)]
     [InlineData(40, 5, 2500)]
     [InlineData(100, 10, 3000)]

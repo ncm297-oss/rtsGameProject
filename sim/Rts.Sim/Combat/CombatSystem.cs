@@ -70,7 +70,13 @@ public static class CombatSystem
                     u.ChaseBest[i] = gap;
                     u.ChaseStall[i] = 0;
                 }
-                else if (++u.ChaseStall[i] >= CombatConstants.GiveUpScans)
+                else if (++u.ChaseStall[i] >= CombatConstants.GiveUpScans && FriendFightsTarget(world, i))
+                {
+                    // Queued behind its own side (BUG-0143): a friend is fighting the target, so it is reachable. Keep on.
+                    u.ChaseBest[i] = gap;
+                    u.ChaseStall[i] = 0;
+                }
+                else if (u.ChaseStall[i] >= CombatConstants.GiveUpScans)
                 {
                     GiveUp(u, i);
                     Settle(world, i);
@@ -336,11 +342,13 @@ public static class CombatSystem
     {
         UnitStore u = world.Units;
         if (u.Target[i] == target && u.TargetIsBuilding[i] == isBuilding) return;
+        // A switch from one target to another keeps the stall count (BUG-0143): two targets the scan takes in turn
+        // (one drifting in and out of sight) would otherwise restart it every scan and the chase would never end.
+        if (u.Target[i].Generation == 0) u.ChaseStall[i] = 0;
         u.Target[i] = target;
         u.TargetIsBuilding[i] = isBuilding;
         u.WindupTicks[i] = 0;
         u.ChaseBest[i] = Gap(world, i);
-        u.ChaseStall[i] = 0;
         if (u.State[i] == UnitState.Attacking) Stand(u, i, UnitState.Idle);
         if (!u.Hold[i] && u.Mode[i] == CombatMode.None)
         {
@@ -370,6 +378,35 @@ public static class CombatSystem
         u.IgnoredIsBuilding[i] = u.TargetIsBuilding[i];
         if (u.GiveUps[i] < CombatConstants.MaxGiveUps) u.GiveUps[i]++;
         Disengage(u, i);
+    }
+
+    /// <summary>
+    /// Whether another unit of <paramref name="i"/>'s owner stands fighting (<c>Attacking</c>) within
+    /// <paramref name="i"/>'s own reach of its target unit (BUG-0143): then a standing point in reach exists on foot and
+    /// a stalled chase is only queued behind its own side (a brawl's back ranks), not cut off (another plateau, behind a
+    /// wall) or outrun, and the fight there frees the place within a few hits. A friend merely standing there (a ranged
+    /// unit that can't swing yet, a worker) may never move, so it doesn't count; nor does a building target, which can
+    /// take minutes to fall. Runs only when a chase stalls.
+    /// </summary>
+    private static bool FriendFightsTarget(World world, int i)
+    {
+        UnitStore u = world.Units;
+        if (u.TargetIsBuilding[i]) return false;
+        int owner = u.Owner[i];
+        float range = world.Data.Units[u.TypeId[i]].Attack.Range;
+        int t = u.Target[i].Index;
+        Vector2 at = u.Position[t];
+        int[] found = world.Neighbors; // movement's scratch: free in phase 7
+        // The target owner's "enemies" around it: every other owner's units, i's friends among them.
+        int n = Math.Min(world.Spatial.QueryEnemies(at, range + u.Radius[t] + world.MaxUnitRadius, u.Owner[t], found), found.Length);
+        for (int k = 0; k < n; k++)
+        {
+            int j = found[k];
+            if (j == i || !u.Alive[j] || u.Owner[j] != owner || u.State[j] != UnitState.Attacking) continue;
+            float reach = range + u.Radius[t] + u.Radius[j];
+            if (Vector2.DistanceSquared(at, u.Position[j]) <= reach * reach) return true;
+        }
+        return false;
     }
 
     /// <summary>
@@ -531,7 +568,9 @@ public static class CombatSystem
         u.LastAttacker[v] = hit.Attacker;
         // Retaliation: a unit that scans and has nothing to fight takes on whoever hit it, now rather than on its next scan.
         // Not one it gave up on (BUG-0137): a melee attacker is in reach, and its next scan takes it there.
-        if (u.Target[v].Generation == 0 && Scans(world, v) && u.Ignored[v] != hit.Attacker) Engage(world, v, hit.Attacker, false);
+        // The memory may hold a building with the same slot and generation: that is not this attacker (BUG-0142).
+        if (u.Target[v].Generation == 0 && Scans(world, v) && (u.IgnoredIsBuilding[v] || u.Ignored[v] != hit.Attacker))
+            Engage(world, v, hit.Attacker, false);
     }
 
     private static void HitBuilding(World world, in PendingHit hit)

@@ -471,7 +471,7 @@ public class ShoveQaTests
     [InlineData(2)]
     public void TwoFriendlyGroups_SwappingPointsThroughEachOther_Terminate_NoJitterAfter(int players)
     {
-        Simulation sim = LocalMovementTests.SimOn(LocalMovementTests.Flat(40), 120, players);
+        Simulation sim = new(TestSim.ConfigNoCombat(Seed: 1, PlayerCount: players, UnitCapacity: 120, CommandCapacity: 4 * 120 + 16), LocalMovementTests.Flat(40));
         Vector2 a = new(30f, 40f), bPoint = new(50f, 40f);
         var rng = new SimRng(11, 4);
         for (int k = 0; k < 120; k++)
