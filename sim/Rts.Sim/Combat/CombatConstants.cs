@@ -28,6 +28,15 @@ public static class CombatConstants
     /// </summary>
     public const int MaxGiveUps = 3;
 
+    /// <summary>Fraction of a splash radius inside which a victim takes full damage (docs/02 "Splash and friendly fire": 100 % within 40 %).</summary>
+    public const float SplashFullFraction = 0.4f;
+
+    /// <summary>Damage factor at the edge of a splash radius; it falls linearly from 1 at <see cref="SplashFullFraction"/> to this (docs/02: 50 %).</summary>
+    public const float SplashEdgeFactor = 0.5f;
+
+    /// <summary>Damage factor for own and allied units in a friendly-fire splash, after the falloff (docs/02: 50 %).</summary>
+    public const float FriendlyFireFactor = 0.5f;
+
     /// <summary>The armor class id (<c>common/damage_table.json</c>) buildings take damage as.</summary>
     public const string StructureClassKey = "structure";
 }

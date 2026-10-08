@@ -9,9 +9,25 @@ Commit and push after editing, from either machine (or ask Claude to).
 
 ## New
 
-(nothing new)
-
 ## Processed
+
+- 2026-10-08 · **Art direction + packs downloaded (owner):** I prefer a grounded, realistic art style
+  over a cartoonish one. The humanoid base is now Quaternius Universal Base Characters + Modular
+  Character Outfits – Fantasy + Universal Animation Library 1 and 2, with Mixamo packs (Great Sword,
+  Pro Longbow, Pro Magic, Pro Sword and Shield) retargeted for gaps; KayKit is a fallback only.
+  docs/04 (style guide, characters, coverage plan, animation setup) and the docs/01 change log
+  are updated. The packs are already in `asset-sources/` on the desktop (list in docs/04), and
+  Blender 5.2 is installed, so I shouldn't be the bottleneck when art work starts. **Don't pull
+  the look test or real-art work forward:** keep M6 where it is in the roadmap; this is just
+  getting ahead. Please update the M6 line in the feature queue (downloads done except nature,
+  UI, fonts, audio, export templates), and clear the stale "restore the routine's hourly
+  schedule" item from Waiting on you (it has been back on hourly since 2026-10-06).
+  → Done at the 2026-10-08-0913 integration update: the M6 line in STATE's sim feature queue now
+  carries the art direction and the download state as docs/04 records it after your later commits
+  (nature, UI and audio are in too; fonts, music and the Godot export templates remain, listed under
+  Waiting on you when M5 starts); the hourly-schedule item is cleared. M6 stays where it is; no
+  look test is pulled forward. Your docs/01 row is an owner decision; nothing for the studio to
+  change.
 
 - 2026-10-06 · **Third track: data (owner):** sessions now carry up to three tracks: `sim`,
   `view`, and a new `data` track (faction content: full rosters, stats, costs, build times,

@@ -149,6 +149,20 @@ internal sealed class ResourceJson
     public FootprintJson? Footprint { get; set; }
 }
 
+internal sealed class ProjectileFileJson
+{
+    public List<ProjectileJson?>? Projectiles { get; set; }
+}
+
+internal sealed class ProjectileJson
+{
+    public string? Id { get; set; }
+    public string? Kind { get; set; }
+    public double? Speed { get; set; }
+    public double? HitTolerance { get; set; }
+    public double? LeadSpeed { get; set; }
+}
+
 internal sealed class FootprintJson
 {
     public int? Width { get; set; }

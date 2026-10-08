@@ -66,7 +66,8 @@ public class FieldBuildOrderTests
     {
         const int groups = 40;
         // 320 unit slots: cache capacity 40, so no field is evicted during the test.
-        var sim = new Simulation(TestSim.Config(4022, 2, UnitCapacity: 320, CommandCapacity: 256));
+        // M4-2b: combat off (config only, BUG-0135): the radius-0.4 / type-0 unit is the Cadre Mage, which fights now
+        var sim = new Simulation(TestSim.ConfigNoCombat(4022, 2, UnitCapacity: 320, CommandCapacity: 256));
         World w = sim.World;
         NavGrid g = w.NavGrid;
         Assert.True(w.FlowFields.Capacity >= groups);

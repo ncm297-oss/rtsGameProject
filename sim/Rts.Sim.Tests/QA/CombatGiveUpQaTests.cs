@@ -83,7 +83,7 @@ public class CombatGiveUpQaTests
         int[] ys = { 17, 23, 20 };
         for (int k = 0; k < enemies; k++)
         {
-            EntityHandle e = Place(sim, 1, Crossbowman, At(sim, 22, ys[k])); // never swings in this slice
+            EntityHandle e = Place(sim, 1, Raider, At(sim, 22, ys[k])); // a melee holder on the cliff: never in reach, never swings (M4-2b: ranged units shoot now)
             sim.Enqueue(Command.HoldPosition(1, e));
             Assert.True(Vector2.Distance(home, sim.World.Units.Position[e.Index]) < TestSim.Data.Units[HeavyInfantry].Sight);
         }
@@ -125,7 +125,7 @@ public class CombatGiveUpQaTests
         Vector2 home = At(sim, 17, 20);
         EntityHandle a = Place(sim, 0, HeavyInfantry, home);
         foreach (int y in new[] { 17, 23, 20 })
-            sim.Enqueue(Command.HoldPosition(1, Place(sim, 1, Crossbowman, At(sim, 22, y))));
+            sim.Enqueue(Command.HoldPosition(1, Place(sim, 1, Raider, At(sim, 22, y))));
         UnitStore u = sim.World.Units;
         RunUntil(sim, () => u.GiveUps[a.Index] >= CombatConstants.MaxGiveUps && u.Mode[a.Index] == CombatMode.None
             && u.State[a.Index] == UnitState.Idle, 600);
@@ -176,7 +176,7 @@ public class CombatGiveUpQaTests
         Simulation sim = OnRows(12, PlateauMap());
         EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 17, 36));
         foreach (int y in new[] { 8, 14, 20, 26, 32 })
-            sim.Enqueue(Command.HoldPosition(1, Place(sim, 1, Crossbowman, At(sim, 21, y))));
+            sim.Enqueue(Command.HoldPosition(1, Place(sim, 1, Raider, At(sim, 21, y))));
         UnitStore u = sim.World.Units;
         Vector2 dest = At(sim, 17, 2);
         sim.Enqueue(Command.AttackMove(0, a, dest));
@@ -209,7 +209,7 @@ public class CombatGiveUpQaTests
         Simulation sim = OnRows(8, rows);
         Vector2 home = At(sim, 16, 30);
         EntityHandle a = Place(sim, 0, HeavyInfantry, home);
-        EntityHandle e = Place(sim, 1, Crossbowman, At(sim, 22, 30));
+        EntityHandle e = Place(sim, 1, Raider, At(sim, 22, 30));
         sim.Enqueue(Command.HoldPosition(1, e));
         UnitStore u = sim.World.Units;
         var watch = new Watch(u, a);

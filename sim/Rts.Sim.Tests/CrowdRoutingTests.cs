@@ -60,7 +60,8 @@ public class CrowdRoutingTests
     {
         Vector2[] blob = Hexagon(new Vector2(41f, 41f - offset));
         int small = LocalMovementTests.TypeWithRadius(0.4f);
-        var sim = new Simulation(TestSim.Config(Seed: 1, PlayerCount: 2, UnitCapacity: 8, CommandCapacity: 64), LocalMovementTests.Flat(40));
+        // M4-2b: combat off (config only, BUG-0135): the radius-0.4 / type-0 unit is the Cadre Mage, which fights now
+        var sim = new Simulation(TestSim.ConfigNoCombat(Seed: 1, PlayerCount: 2, UnitCapacity: 8, CommandCapacity: 64), LocalMovementTests.Flat(40));
         var spawns = new (int Owner, Vector2 At)[8];
         for (int k = 0; k < 7; k++) spawns[k] = (blobOwner, blob[k]);
         spawns[7] = (0, new Vector2(25f, 41f));

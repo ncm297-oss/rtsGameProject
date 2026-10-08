@@ -899,4 +899,106 @@ public class StateHashTests
         Assert.Equal(a.StateHash(), b.StateHash());
         Assert.Equal(ha, hb);
     }
+
+    // ---------- M4-2b: projectiles in flight ----------
+
+    /// <summary>A two-player sim with one bolt in flight (fired between ticks, slot 0), equal to its twin.</summary>
+    private static Simulation BoltInFlight()
+    {
+        Simulation sim = CombatScenes.Flat(units: 8);
+        EntityHandle x = CombatScenes.Place(sim, 0, CombatScenes.Crossbowman, CombatScenes.At(sim, 20, 20));
+        EntityHandle r = CombatScenes.Place(sim, 1, CombatScenes.Raider, CombatScenes.At(sim, 20, 20, dx: 10f));
+        sim.World.Units.Target[x.Index] = r;
+        Combat.ProjectileSystem.Fire(sim.World, x.Index);
+        sim.World.Units.Target[x.Index] = default;
+        sim.Tick(); // one step: position and last position differ
+        Assert.Equal(1, sim.World.Projectiles.Count);
+        return sim;
+    }
+
+    [Fact]
+    public void Hash_CoversAProjectileInFlight_AndAnEmptyStoreAddsNothing()
+    {
+        Simulation a = BoltInFlight(), b = BoltInFlight();
+        Assert.Equal(a.StateHash(), b.StateHash());
+        ulong h0 = a.StateHash();
+        // The same world with the projectile gone (its slot back at the never-used values) differs ...
+        a.World.Projectiles.Free(0);
+        Assert.NotEqual(h0, a.StateHash());
+        // ... and hashes exactly as one whose store was never used: an empty store adds no word.
+        var fresh = new ProjectileStore(a.World.Projectiles.Capacity);
+        var h1 = new StateHasher();
+        var h2 = new StateHasher();
+        fresh.AddToHash(ref h1);
+        a.World.Projectiles.AddToHash(ref h2);
+        Assert.Equal(h1.Value, h2.Value);
+        Assert.Equal(new StateHasher().Value, h1.Value);
+    }
+
+    /// <summary>
+    /// Reflection audit (M4-2b criterion 7): every per-slot array of <see cref="ProjectileStore"/>, changed on the live
+    /// slot, changes the hash; restoring it restores the hash. A new array must be hashed or this fails.
+    /// </summary>
+    [Fact]
+    public void EveryProjectileStoreArray_IsHashed()
+    {
+        Simulation sim = BoltInFlight();
+        ProjectileStore p = sim.World.Projectiles;
+        ulong h0 = sim.StateHash();
+        var unhashed = new List<string>();
+        int audited = 0;
+        foreach (FieldInfo f in typeof(ProjectileStore).GetFields(BindingFlags.NonPublic | BindingFlags.Instance))
+        {
+            if (!f.FieldType.IsArray) continue;
+            var arr = (Array)f.GetValue(p)!;
+            Assert.Equal(p.Capacity, arr.Length);
+            object? old = arr.GetValue(0);
+            object changed = old switch
+            {
+                int x => x + 1,
+                bool x => !x,
+                Vector2 x => x + new Vector2(0.25f, 0f),
+                EntityHandle x => new EntityHandle(x.Index + 1, x.Generation + 1),
+                _ => throw new InvalidOperationException($"{f.Name}: element type {f.FieldType} not covered by the audit"),
+            };
+            arr.SetValue(changed, 0);
+            if (sim.StateHash() == h0) unhashed.Add(f.Name);
+            arr.SetValue(old, 0);
+            Assert.Equal(h0, sim.StateHash());
+            audited++;
+        }
+        Assert.True(audited >= 12, $"only {audited} arrays audited");
+        Assert.True(unhashed.Count == 0, "not in StateHash: " + string.Join(", ", unhashed));
+        // The victim's building flag, alone.
+        ((bool[])typeof(ProjectileStore).GetField("_victimIsBuilding", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(p)!)[0] = true;
+        Assert.NotEqual(h0, sim.StateHash());
+    }
+
+    [Fact]
+    public void Hash_TheImpactListIsOutput_NotState()
+    {
+        Simulation sim = CombatScenes.Flat(units: 8);
+        ulong h0 = sim.StateHash();
+        sim.World.RecordImpact(new Combat.ProjectileImpact(Vector2.One, 0, 0, true));
+        Assert.Equal(1, sim.World.Impacts.Length);
+        Assert.Equal(h0, sim.StateHash());
+    }
+
+    [Fact]
+    public void ProjectilesInFlight_TwinsHashEqualEveryTick_AndASingleDifferentShotDiffers()
+    {
+        Simulation a = BoltInFlight(), b = BoltInFlight();
+        for (int t = 0; t < 20; t++)
+        {
+            a.Tick();
+            b.Tick();
+            Assert.Equal(a.StateHash(), b.StateHash());
+        }
+        Simulation c = BoltInFlight(), d = BoltInFlight();
+        EntityHandle shooter = new(0, c.World.Units.Generation[0]);
+        c.World.Units.Target[0] = new EntityHandle(1, c.World.Units.Generation[1]);
+        Combat.ProjectileSystem.Fire(c.World, shooter.Index);
+        c.World.Units.Target[0] = default;
+        Assert.NotEqual(c.StateHash(), d.StateHash());
+    }
 }

@@ -101,11 +101,13 @@ phases in this fixed order:
    start-of-tick state before any unit moves, and since M1-4d-2 the Idle units they shoved move
    last; since M1-4d-3 a unit a shove cut off its blob walks back once, see "Local movement").
 10. **Combat:** attack wind-ups and cooldowns, projectile flight and impact, splash. (M4-1:
-    `CombatSystem.Attack`, melee only: cooldowns count down, units with a target stand and swing in
-    reach, chase out of it, and land wind-ups as queued hits.)
+    `CombatSystem.Attack`: cooldowns count down, units with a target stand and swing in
+    reach, chase out of it, and land wind-ups as queued hits. M4-2b: first every projectile in flight moves one step
+    (`ProjectileSystem.Fly`); a wind-up of an attack with a projectile ends in a shot instead of a queued hit.)
 11. **Damage and death:** apply queued damage, kill entities, emit death events. (M4-1:
     `CombatSystem.Resolve`: hits in attacker slot order, the dead freed at once with their
-    population, kills and losses counted, death events recorded, stale targets cleared.)
+    population, kills and losses counted, death events recorded, stale targets cleared. M4-2b: after the queued hits,
+    the projectiles that arrived this tick land in slot order, with their splash, before the stale targets are cleared.)
 12. **Vision and detection:** recompute fog every 4 ticks (5 Hz) per player.
 13. **Cleanup:** free dead handles, finalize the tick's event list, bump `TickNumber`. (M4-1: the
     dead are freed in phase 11 already; the tick's death events stay readable in `World.Deaths`
@@ -1128,8 +1130,9 @@ sight every 4 ticks (staggered by index). Priority: enemies attacking me > units
 - An attack starts when a target is in range and the cooldown is ready. At the wind-up point,
   melee damage is queued, or a projectile spawns. Damage applies in phase 11, so tick order never
   decides who "shot first" inside one tick.
-- Projectiles store origin, impact point, speed, damage payload, and splash/friendly-fire flags.
-  Hit/miss is resolved on arrival (see [02 Projectiles](02-game-design.md#projectiles)).
+- Projectiles store position, impact point, a per-tick step, flight ticks left, and the attacker's unit type (its
+  damage, splash and friendly fire). Hit/miss is resolved on arrival (see [02 Projectiles](02-game-design.md#projectiles)
+  and "Implementation (M4-2b)").
 - The damage formula lives in one function (`DamageCalc.Compute`) with exhaustive unit tests,
   including the worked example from 02.
 
@@ -1137,9 +1140,9 @@ sight every 4 ticks (staggered by index). Priority: enemies attacking me > units
 
 Melee combat: `Rts.Sim.Combat` (`CombatSystem`, `DamageCalc`, `CombatMode`, `DeathEvent`,
 `CombatConstants`). Projectiles, misses, splash, friendly fire, minimum range and the
-`Attack(target)` order are M4-2; fog M4-3. Until M4-2 only attacks **without a projectile** fight
-(`CombatSystem.CanFight`): ranged, caster, Catapult and Sapper units neither scan nor swing, but they
-are targets like any other unit.
+`Attack(target)` order are M4-2; fog M4-3. Until M4-2b only attacks **without a projectile** fought
+(`CombatSystem.CanFight`): ranged, caster, Catapult and Sapper units neither scanned nor swung, but they
+were targets like any other unit. Since M4-2b every attack with a value fights ("Implementation (M4-2b)").
 
 **Damage.** `DamageCalc.Compute(table, damageType, armorClass, attack, bonusVs, armor)`:
 `raw = attack x table[type][class] x bonusVs`, then `max(1, round(raw) - armor)`, or `max(1, round(raw))`
@@ -1397,8 +1400,8 @@ not this arrival rule (the walker never arrives), and not reproduced; left to it
 
 **`Attack(target)`** (`CommandKind.Attack` = 16; M4 criterion 1). Applied in phase 1 (`OrderSystem.Apply`):
 - **Dropped** (queued or not, nothing changes, like a bad Gather) when `CombatSystem.MayAttack` says no: combat is off
-  (`SimConfig.Combat` false), the attacker's type cannot fight in this slice (`CanFight`: ranged, caster and
-  siege-with-projectile units until M4-2b; Producer decision), the target is dead or recycled (generation), or the
+  (`SimConfig.Combat` false), the attacker's type cannot fight (`CanFight`: until M4-2b ranged, caster and
+  siege-with-projectile units; since M4-2b every attack with a value fights), the target is dead or recycled (generation), or the
   attacker's own (no allies yet), or a kind its `attack.targets` forbids. A queued Attack is checked again when it is
   popped and dropped then if its target died meanwhile; the next queued order starts on a later tick.
 - **Started** (unqueued, or popped): the queue is replaced (unqueued only), Hold, any gather / build loop and the old
@@ -1453,8 +1456,144 @@ not this arrival rule (the walker never arrives), and not reproduced; left to it
   `AttackOrderTests.ReissuedAttack_...`, `ReissuedAttackMove_...`, `AttackMove_ToANewLeg_MidSwing_...`,
   `AttackMove_WhileHittingABuilding_ANewPointRepicks...`, `QA/AttackOrderQaTests.ReissuingTheSameAttack_EveryNTicks_...`,
   `QA/FightReissueQaTests.AttackMoveOntoAnAttacker_WhileHittingABuilding_TakesTheAttacker`.
-- **Not yet:** projectiles, misses, splash, friendly fire, minimum range (M4-2b), fog (M4-3), the view's F-key / cursor
-  path.
+- **Not yet:** projectiles, misses, splash, friendly fire, minimum range (M4-2b, below), fog (M4-3), the view's F-key /
+  cursor path.
+
+### Implementation (M4-2b)
+
+Projectiles, misses, splash, friendly fire and the minimum range (M4 criterion 3); `Rts.Sim.Combat.ProjectileSystem`,
+`Rts.Sim.Entities.ProjectileStore`, `ProjectileImpact`. With it every shipped unit fights: `CombatSystem.CanFight` is
+"an attack with a value" (the M4-2a rule that dropped an Attack for a unit with a projectile is gone).
+
+**Data** (`game/data/common/projectiles.json`, sim-owned, required): `{ "projectiles": [ {id, kind, speed, hitTolerance?, leadSpeed?} ] }`.
+`kind` is `aimed` or `lob` (`DataLimits.ProjectileKindIds`); `speed` in m/s (at least 1, `DataLimits.MinProjectileSpeed`,
+BUG-0182; stored per tick: 25 m/s is 1.25 m a tick); `hitTolerance` in meters, aimed only, 0-2 m
+(`DataLimits.MaxHitTolerance`), default 0.3 (`DataLimits.DefaultHitTolerance`, docs/02); on a lob it is an error;
+`leadSpeed` in m/s, aimed only, not negative, default 0 (never leads; see "Leading" below), stored per tick
+(`ProjectileDef.LeadSpeedPerTick`); on a lob it is an error. The shipped five are exactly the ids `units.json`
+names: `arrow`, `bolt`, `magic_bolt` (aimed, 25 m/s, 0.3 m, lead up to 5 m/s; docs/02 gives no caster speed, so the
+magic bolt flies as an arrow does), `catapult_stone` and `sharper` (lobs, 12 m/s; docs/02 "thrown munitions"). A unit's `attack.projectile`
+resolves at load to `AttackDef.ProjectileTypeId` (the string is kept); an unknown id is one error at
+`units[i].attack.projectile`, and a broken projectiles file is reported once, not again per unit. An attack whose
+projectile is a lob must have a splash above 0 (a lob's only effect is its explosion). `GameData.Projectiles` /
+`FindProjectile`; `ContentHash` covers every field and the resolved id. The Battering Ram has no projectile: it is a
+melee siege unit (`attack.targets` `buildings`).
+
+**The store** (`ProjectileStore`, flat structure of arrays, `SimConfig.ProjectileSlots` slots): a projectile is
+fire-and-forget, so there are no handles; a shot takes the lowest free slot, and a shot fired while the store is full is
+lost. `SimConfig.ProjectileCapacity` sets the size; the default (0) is as many shooters as the players' population caps
+allow, `players x rules.popCap / the smallest pop of a unit with a projectile` (200 for two players), at most
+`UnitCapacity`: every shipped shot lands before its shooter's next one (flight shorter than the cooldown,
+`ProjectileTests.EveryShippedShooter_HasAtMostOneShotInTheAir`), so a shooter has at most one in the air. Dev spawns
+past the caps can outnumber it (the 500 v 500 Perf scene sets 1,000). Sizing it to the unit slots instead was measured:
+on the 1,024-cell map with 4,096 unit slots the world grew 0.42 MB, past `FieldBuildFairnessQaTests`' 228 MB bound
+(which had 33 KB left); the default costs 17 KB there. Per slot: position, last position, a per-tick step, the impact point, ticks left, the
+projectile type, the owner, the attacker's unit type and handle, and the target (unit or building handle).
+
+**Firing (phase 10).** A unit whose attack has a projectile swings exactly as a melee unit does (plant in reach,
+cooldown, wind-up); at the wind-up end (`CombatSystem.Strike`) it fires instead of queuing a hit: a projectile from
+the attacker's center to where its target is *now* (a unit's center; a building's footprint point nearest the
+attacker), in a straight line at the type's speed (the view draws any arc). It lands `max(1, ceil(distance / step))`
+ticks later: every tick, at the start of phase 10 (`ProjectileSystem.Fly`, before the swings, so a shot fired this tick
+first moves on the next), each projectile moves one step, the last one exactly onto its impact point. A Crossbowman 8 m
+from its target: `ceil(8 / 1.25)` = 7 ticks.
+
+**Leading (BUG-0183; builder's choice, flagged for the Producer's review).** An aimed shot at a *unit* whose step this
+tick (`UnitStore.Velocity`, the walk movement planned) is no longer than the projectile's `leadSpeed` is **led**: at
+firing it is aimed where that unit will be when it lands (`ProjectileSystem.Lead`: its position plus its step times the
+flight ticks, the flight re-estimated twice since it depends on the aim), and at the start of every phase 10 while it
+flies (`ProjectileSystem.Track`, before `Fly`) its impact point is re-led the same way and it steers there over its
+remaining ticks (`ProjectileStore.Steer`; the landing tick fixed at firing never moves; an unchanged point changes
+nothing, so a shot at a standing unit keeps its launch step). Not re-led: a dead target, a building, a unit stepping
+faster than `leadSpeed` that tick, and the landing tick's own step. A unit faster than `leadSpeed` is shot where it is
+and can dodge, as before. The shipped aimed shots lead up to 5 m/s: every foot unit (3.0-4.4 m/s) is led, the cavalry
+(Wickan Lancer 6.2, Horse Raider 6.6) is not. A lob is ground-targeted and never leads.
+
+Why this rule, not a smaller one: with docs/02's rule as written (fly to where the target was, hit within radius +
+0.3 m) a walking Heavy Infantry dodged every shot past 5 m, and a galloping Horse Raider every shot past 5 m too, so no
+choice of projectile speed or tolerance separates them (the Heavy Infantry walks 1.8 m during a 15 m flight; the Horse
+Raider 1.3 m during a 5 m one), and a tolerance that grows with flight time fails the same way. Some rule must depend on
+the target's speed. Leading at firing alone got 100 % to 12 m but 90-94 % at 14-16.3 m: walkers follow 8-direction
+flow-field legs and bend 45 degrees at a leg change, which a 13-tick flight cannot predict (misses landed 0.7-2.1 m off).
+Re-leading each tick removes those misses with no new stored state (who is led follows from the projectile type and the
+target's step), adds one loop over the live projectiles a tick, and keeps every number in data. Cost: the bolt bends a
+little in flight for a turning walker (the view draws positions, so this shows as a slight curve), and slow units never
+dodge by walking (docs/02 "almost never"); the 0.3 m tolerance now only decides shots at fast units and at units that
+change speed past the lead speed.
+
+**Landing (phase 11)**, after the queued melee hits, in slot order (`ProjectileSystem.Land`): an **aimed** shot hits its
+target if the target is alive and its center is within its collision radius + `hitTolerance` of the impact point (a
+building never moves, so a shot at a live one always hits); the target takes the full damage
+(`DamageCalc.Compute` at landing, both owners' techs) and, if the attack splashes, the splash lands round the impact
+point too. Otherwise it **misses and lands harmlessly**: no damage, no death, no `LastAttacker`, no retaliation (a target
+killed earlier in the phase is a miss as well). A **lob** always explodes: its splash is all of its damage, the target
+included if it is still there. Either way the landing is recorded in `World.Impacts` and the slot is freed. Projectiles
+outlive their shooter. Hits and landings are one phase, so a unit killed by a projectile still lands its own queued
+hit that tick, and the reverse.
+
+**Splash** (`ProjectileSystem.Splash`, an attack with `splash` > 0; a lob's, an aimed hit's, and a melee hit's should a
+melee attack ever carry splash): every unit whose center is within the radius of the impact point, and every building
+whose footprint is, except the target the aimed or melee hit already struck. The factor (`ProjectileSystem.Falloff`):
+1 within 40 % of the radius (`CombatConstants.SplashFullFraction`), then linear to 0.5 at the edge
+(`SplashEdgeFactor`). Other owners' units always; **own units only with `friendlyFire`** (the Catapult and the Sapper),
+times 0.5 more (`FriendlyFireFactor`), the shooter itself included; other owners' buildings take structure damage
+(their `structure` class and armor); **own buildings never** (docs/02: friendly fire never damages buildings). Each
+victim's damage is `DamageCalc.Compute` with its own class and armor, times the factor, rounded half up, at least 1.
+Units in slot order (the spatial hash's radius query into `World.Neighbors`, movement's scratch, widened by a step and
+1 m since the hash holds the phase-1 positions), then buildings in slot order. A melee hit with splash reads the
+attacker's type and position from its slot (a unit freed earlier in the phase keeps both), so `PendingHit` is unchanged. A friendly-fire hit is not an attack: no `LastAttacker`, no retaliation; a
+friendly-fire kill counts as a kill for the shooter's owner and a loss for the same player (`DeathEvent.KillerOwner` =
+`VictimOwner`), so kills and losses still balance.
+
+**Minimum range** (`attack.minRange`, edge to edge like `range`; the Catapult's 6 m). A target inside it cannot be fired
+at: no swing starts, a wind-up that ends with the target inside it is lost, a planted unit stands Idle and a chasing one
+stops where it is (`CombatSystem.InReach` is "within range and not inside the minimum range"). The scan never takes a
+unit or building inside it, so an Idle unit, a retaliator or an attack-mover whose target comes too near drops it at its
+next scan and takes one outside it (a nearer enemy of equal priority wins only if outside), and walks its leg on if
+there is none; a unit hit by an enemy inside its minimum range does not retaliate on it. An **explicit Attack** on a
+too-near target keeps the target and waits where it stands, Idle (the give-up count treats it as in reach, so it never
+gives up); it fires as soon as the target is outside the minimum range again. There is no step back or kiting in this
+slice (Producer decision).
+
+**BUG-0156** (S3, folded in): a unit hitting a *building* in reach now re-picks between swings when the enemy unit that
+last hit it (`LastAttacker`) is alive and within the radius its scan looks (sight; holding: reach;
+`CombatSystem.AttackerInScanRange`): the scan runs, and the attacker (tier 0) wins; a unit target in reach, or any swing
+in progress, is still never thrown away. An attacker that hit it and walked away out of sight is no reason to re-pick
+(BUG-0180): the unit keeps hitting the building as one never hit would.
+
+**For the view (M4-V3).** `World.Projectiles` (`ProjectileStore`): `Capacity`, `Count`, and read-only spans per slot:
+`Alive`, `Position`, `PrevPosition` (the launch point on the tick of the shot; interpolate between the two as for units),
+`Target` (the impact point; a led shot's moves a little each tick as it is re-led), `ProjectileTypeId` (`GameData.Projectiles`), `Owner`. `World.Impacts`: this tick's landings
+(`ProjectileImpact`: position, projectile type, owner, `Hit`: an aimed hit or any lob; false for an aimed miss), slot
+order, emptied at the start of the next tick like `World.Deaths`. Splash victims show through hit points and
+`World.Deaths` as before.
+
+**Hashing.** The store goes into `StateHash` after the buildings only while it holds a projectile: its count, then every
+live slot's index and fields (free slots hold their never-used values, and the slot a shot takes follows from the live
+ones), so a match without a shot hashes exactly as before and the golden replay's `k` lines did not move; its
+`data-hash` moved once for `projectiles.json`, and once more for its `leadSpeed` (BUG-0183; its `k` lines again unchanged, so no shot in the golden match changed). `World.Impacts` is output, not hashed. Reflection audit: `StateHashTests.EveryProjectileStoreArray_IsHashed`. No replay format change
+(no new command; `ProjectileCapacity` is not in the header, a replay plays with the default, and `ReplayRecorder`
+refuses a sim whose projectile store is not the default size, as it does for the building capacity: BUG-0181).
+
+**Hit rates** (`ProjectileTests.HitRateByDistance_Report`, the shipped numbers: 25 m/s, radius + 0.3 m, lead up to
+5 m/s; the last column is the crossbow's longest shot, range + both radii + the wind-up grace, 16.3 m at a Heavy
+Infantry and 16.6 m at a Horse Raider). A walking Heavy Infantry is led and hit 100 % at every distance from 3 m to
+16.3 m, walking across, toward or away (100 headings at 8 m, 12 m and 16.3 m: 100 / 100 each). A galloping Horse Raider
+is not led: crossing, it is hit 33 % at 3 m, 16 % at 4-5 m and 0 % from 6 m on; charging straight at the shooter, 66 %
+at 3 m and 0 % from 4 m on (a charge toward the shooter dodges as well as a crossing one does; docs/02 names only the
+crossing case). Before the lead rule the Heavy Infantry was hit about a third of the time at 5 m crossing and never from
+6 m on, whichever way it walked.
+
+**Cost** (Debug, this PC, each row alone, first run of a fresh process). Nothing allocates
+(`AllocationTests.MixedBrawlTicks_WithProjectilesAndSplash_AllocateNothing`, and the 1,000-bolt row); a tick with an empty
+store pays one compare in `Fly` and one in `Land`. `CombatPerfTests.MixedBrawl500v500_First200Ticks_AverageUnder4Ms`
+(500 v 500 mixed armies, `CombatScenes.MixedBrawl`): 1.73 ms over ticks 5-205, 1.23 ms over 205-605, up to 85
+projectiles in flight (cheaper than the melee brawl: shooters stand, and fewer units press into the front).
+`ThousandProjectilesInFlight_UnderPoint3MsATick_AndAllocateNothing`: 0.026 ms a tick in flight; the tick all 1,000 land
+on one Raider 2.0 ms (reported). With the BUG-0183 re-lead pass (`Track`, one more loop over the live projectiles):
+0.062 ms a tick in flight (budget 0.3), landing tick 2.06 ms; the mixed brawl 1.80 / 1.30 ms; the melee brawl 3.20 /
+3.49 ms; still 0 B a tick. Unchanged rows: the melee brawl 3.09 / 3.39 ms (M4-1: 3.06 / 3.47), the one-player
+2,500 tight blob 4.34 ms (budget 4.6), `GatherPerfTests.TwoHundredGatheringWorkersAlone` 0.318 ms (M4-2a: 0.32).
 
 ## Economy implementation
 
@@ -1998,6 +2137,7 @@ game/data/
     rules.json               # starting resources, pop cap, gather rates, repair factors
     resources.json           # resource node types: tree, gold mine (M3-1)
     techs.json               # techs every faction shares: Age II, Forge upgrades (M3-5)
+    projectiles.json         # projectile types: aimed / lob, speed, hit tolerance, lead speed (M4-2b)
   factions/<faction_id>/
     faction.json             # id, displayName, bonus, palette, resource display names
     units.json
@@ -2051,8 +2191,8 @@ Example unit definition (one entry of the `"units"` array in `units.json`):
 checked. The data-validation test is `DataValidationTests.ShippedData_LoadsWithNoErrors`.
 
 Shipped files: `common/damage_table.json`, `common/rules.json`, `common/resources.json` (M3-1), `common/techs.json`
-(M3-5), and `faction.json` + `units.json` + `buildings.json` (M3-2) + `techs.json` (M3-5) for `malazan` and
-`whirlwind`. All twelve are required. Everything else in the tree above (`statuses`, `abilities`, `ai`, `maps`, other
+(M3-5), `common/projectiles.json` (M4-2b), and `faction.json` + `units.json` + `buildings.json` (M3-2) + `techs.json`
+(M3-5) for `malazan` and `whirlwind`. All thirteen are required. Everything else in the tree above (`statuses`, `abilities`, `ai`, `maps`, other
 factions) arrives with the milestone that consumes it.
 
 | File | Shape |
@@ -2063,6 +2203,7 @@ factions) arrives with the milestone that consumes it.
 | `faction.json` | `id` (must equal the folder name), `displayName`, `description`, `bonus {displayName, description}`, `resources {gold, wood: {displayName}}`, `palette {primary, secondary, accent}` as `#RRGGBB` |
 | `buildings.json` | `{ "buildings": [ ... ] }`, each `{id, displayName, description, slot, footprint {width, height}, hp, armor, cost {gold, wood}, buildTime, popProvided, dropOff}`: `slot` is one of the ten template slots (`DataLimits.BuildingSlotIds`), footprint sides 1-4 cells, `buildTime` in seconds (to ticks), `popProvided` a multiple of 0.5 (to half-pop), `dropOff` a required bool, `requires` an optional list of tech / building ids (M3-5; resolved and gating placement since M3-6). Ids unique across factions (M3-2, see "Economy implementation"); exactly one building per slot per faction (M3-6, BUG-0010) |
 | `techs.json` | `{ "techs": [ ... ] }` in `common/` (shared by every faction) and in each faction folder (its own), each `{id, displayName, description, researchedAt, cost {gold, wood}, researchTime, requires?, requiresAnyOf?, effects: [{stat, amount, appliesTo {attackType?, tags?, units?, siege?}}]}`: `researchedAt` is a building slot id (a common tech resolves to each faction's building of it; a faction without one is an error), `researchTime` in seconds (to ticks), `requires` tech / building ids (resolved and gating research since M3-6), `requiresAnyOf` `{count, of: [slot ids, or in a faction file its own building ids]}`: met when `count` of the distinct listed slots hold an own finished building (M3-6; shipped on `age_ii` only), `effects` may be empty. `stat` is one of `attack`, `armor`, `range`, `hp`, `abilityCooldown` (`DataLimits.TechStatIds`); `amount` is non-zero, whole for attack / armor / hp, meters for range, seconds for ability cooldown (to ticks, negative shortens it). `appliesTo` is required (`{}` = every unit); each filter it sets must match: `attackType` a damage type, `tags` any one of the unit's tags (each must be a tag some unit has), `units` unit ids (a faction tech's must be its own), `siege` true / false for the `siege` slot; a `tags` or `units` list set to `[]` is an error (M3-6, BUG-0098). Tech ids are unique across all techs files and may not equal a building id (M3-6); `DataLimits.AgeTechIds` (`age_ii`) must be a common tech (M3-5, see "Implementation (M3-5)") |
+| `projectiles.json` | `{ "projectiles": [ ... ] }`, each `{id, kind, speed, hitTolerance?, leadSpeed?}`: `kind` `aimed` or `lob`, `speed` m/s (at least 1), `hitTolerance` m (aimed only, 0-2, default 0.3; an error on a lob), `leadSpeed` m/s (aimed only, not negative, default 0 = never leads; an error on a lob). Ids unique; every unit's `attack.projectile` must name one (M4-2b, see "Implementation (M4-2b)") |
 | `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge) |
 
 Validation rules: ids are `snake_case` and unique (a unit id is unique across all factions);
@@ -2088,9 +2229,9 @@ search, for load time, tests, and tooling only (`FindResource` too, since M3-1).
 `units[i].trainedAt` otherwise), and `GameData.UnitsTrainedAt(buildingType)` lists each building's units.
 `requires` (units, buildings, techs) resolves at load (M3-6) to `RequiresTechs` / `RequiresBuildings` (tech ids and
 building type ids, ascending; the strings are kept): one error at an entry naming neither, one at the entry closing a
-`requires` cycle. The gates `CanTrain` / `CanPlace` / `CanResearch` check them (see "Implementation (M3-6)"). Not resolved yet
-(kept as plain strings): `model` (M2/M6 asset pipeline) and `projectile`
-(M4 combat). Unit passives, abilities, detection, and faction modifiers (e.g. Whirlwind's gather
+`requires` cycle. The gates `CanTrain` / `CanPlace` / `CanResearch` check them (see "Implementation (M3-6)").
+`attack.projectile` resolves at load (M4-2b) to `AttackDef.ProjectileTypeId` (one error at the field for an unknown id).
+Not resolved yet (kept as a plain string): `model` (M2/M6 asset pipeline). Unit passives, abilities, detection, and faction modifiers (e.g. Whirlwind's gather
 bonus) are also not in the M1 schema; they arrive with `abilities.json` / `statuses.json` and the
 systems that use them. Collision radii in the shipped units (0.4 foot, 0.7 mounted, 0.9 siege) are
 first-pass values; the faction pages don't list them.
