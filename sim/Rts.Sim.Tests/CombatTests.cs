@@ -276,9 +276,11 @@ public class CombatTests
         Simulation sim = Flat();
         Vector2 home = At(sim, 10, 24);
         EntityHandle a = Place(sim, 0, HeavyInfantry, home);
-        EntityHandle c = Place(sim, 1, Crossbowman, At(sim, 10, 24, dx: 4f));
+        // A slower target (Catapult 2.2 m/s vs 3.0) 12 m away walking off: a gains on it every scan (so it never gives
+        // the chase up, BUG-0137) but not enough to catch it before it is its sight radius from home.
+        EntityHandle c = Place(sim, 1, TestSim.Data.FindUnit("malazan_catapult"), At(sim, 10, 24, dx: 12f));
         UnitStore u = sim.World.Units;
-        sim.Enqueue(Command.Move(1, c, At(sim, 44, 24))); // faster than a: never caught
+        sim.Enqueue(Command.Move(1, c, At(sim, 44, 24)));
         float sight = Def(HeavyInfantry).Sight;
         float farthest = 0f;
         bool chased = false, returned = false;
@@ -301,6 +303,78 @@ public class CombatTests
         Assert.True(g.WorldToCell(home, out int hx, out int hy));
         Assert.True(g.WorldToCell(u.Position[a.Index], out int ax, out int ay));
         Assert.Equal((hx, hy), (ax, ay));
+    }
+
+    /// <summary>
+    /// BUG-0137: a target that runs faster than the chaser (a Crossbowman, 3.2 m/s vs 3.0) is given up within
+    /// <see cref="CombatConstants.GiveUpScans"/> stalled scans, before the leash; the unit walks home, is Idle there, and
+    /// does not take that target again while it is out of reach.
+    /// </summary>
+    [Fact]
+    public void IdleUnit_ChasingAFasterTarget_GivesItUp_WalksHome_AndDoesNotTakeItAgain()
+    {
+        Simulation sim = Flat();
+        Vector2 home = At(sim, 10, 24);
+        EntityHandle a = Place(sim, 0, HeavyInfantry, home);
+        EntityHandle c = Place(sim, 1, Crossbowman, At(sim, 10, 24, dx: 4f));
+        UnitStore u = sim.World.Units;
+        sim.Enqueue(Command.Move(1, c, At(sim, 30, 24)));
+        bool chased = false;
+        int t = RunUntil(sim, () =>
+        {
+            chased |= u.Target[a.Index] == c;
+            return chased && u.Target[a.Index] == default;
+        }, 400);
+        Assert.True(chased);
+        Assert.Equal(c, u.Ignored[a.Index]);
+        Assert.Equal(1, u.GiveUps[a.Index]);
+        Assert.NotEqual(CombatMode.Returning, u.Mode[a.Index]); // given up, not pulled back by the leash
+        RunUntil(sim, () => u.State[a.Index] == UnitState.Idle && u.Mode[a.Index] == CombatMode.None, 600);
+        Assert.Equal(CombatMode.None, u.Mode[a.Index]);
+        Assert.True(Vector2.Distance(u.Position[a.Index], home) < 1f, $"{Vector2.Distance(u.Position[a.Index], home)} m from home");
+        // The crossbowman stands 40 m off, out of a's sight; brought back into sight (about 9 m, out of reach) it is not
+        // taken again.
+        sim.Enqueue(Command.Move(1, c, At(sim, 15, 24)));
+        for (int k = 0; k < 400; k++)
+        {
+            sim.Tick();
+            Assert.True(u.Target[a.Index] == default, $"tick {k}: took {u.Target[a.Index]} again");
+        }
+        Assert.Equal(UnitState.Idle, u.State[a.Index]);
+        // An order forgets it.
+        sim.Enqueue(Command.Stop(0, a));
+        sim.Tick();
+        sim.Tick(); // the Stop applies
+        Assert.Equal(default, u.Ignored[a.Index]);
+        Assert.Equal(0, u.GiveUps[a.Index]);
+        RunUntil(sim, () => u.Target[a.Index] == c, 20);
+        Assert.Equal(c, u.Target[a.Index]);
+    }
+
+    /// <summary>
+    /// BUG-0137: after <see cref="CombatConstants.MaxGiveUps"/> chases given up, a unit's scans take only targets in reach,
+    /// so several enemies it can't reach don't take turns forever; landing a hit resets the count.
+    /// </summary>
+    [Fact]
+    public void AfterMaxGiveUps_ScansTakeOnlyTargetsInReach_UntilAHitLands()
+    {
+        Simulation sim = Flat();
+        EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 20, 20));
+        EntityHandle e = Place(sim, 1, Laborer, At(sim, 26, 20));
+        sim.Enqueue(Command.HoldPosition(1, e));
+        UnitStore u = sim.World.Units;
+        u.GiveUps[a.Index] = CombatConstants.MaxGiveUps;
+        for (int k = 0; k < 40; k++)
+        {
+            sim.Tick();
+            Assert.True(u.Target[a.Index] == default, $"tick {k}: took a target 6 m away");
+        }
+        // In reach it fights, and its first landed hit clears the count.
+        EntityHandle n = Place(sim, 1, Laborer, u.Position[a.Index] + new Vector2(1f, 0f));
+        sim.Enqueue(Command.HoldPosition(1, n));
+        RunUntil(sim, () => u.Hp[n.Index] < Def(Laborer).Hp, 60);
+        Assert.True(u.Hp[n.Index] < Def(Laborer).Hp);
+        Assert.Equal(0, u.GiveUps[a.Index]);
     }
 
     [Fact]

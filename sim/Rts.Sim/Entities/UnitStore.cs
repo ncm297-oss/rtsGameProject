@@ -106,6 +106,25 @@ public sealed class UnitStore
     public readonly Vector2[] AnchorPosition;
     /// <summary>Why the unit fights (M4-1): none, an attack-move leg, or an Idle unit's leashed retaliation.</summary>
     public readonly Combat.CombatMode[] Mode;
+    /// <summary>
+    /// The nearest edge-to-edge gap (m) to its target this chase (BUG-0137): set when it takes a target or stands in
+    /// reach, lowered when a scan finds it closer; 0 with no target.
+    /// </summary>
+    public readonly float[] ChaseBest;
+    /// <summary>Scans in a row a chaser got no closer than <see cref="ChaseBest"/> (BUG-0137); at <see cref="Combat.CombatConstants.GiveUpScans"/> it gives the target up.</summary>
+    public readonly int[] ChaseStall;
+    /// <summary>
+    /// The last target the unit gave up on (BUG-0137): a unit, or a building with <see cref="IgnoredIsBuilding"/>. Its
+    /// scans skip it unless it is in reach, until the unit's next order; default for none.
+    /// </summary>
+    public readonly EntityHandle[] Ignored;
+    /// <summary>True when <see cref="Ignored"/> is a building handle.</summary>
+    public readonly bool[] IgnoredIsBuilding;
+    /// <summary>
+    /// Chases given up since the unit's last order or last landed hit (BUG-0137); at
+    /// <see cref="Combat.CombatConstants.MaxGiveUps"/> its scans take only targets in reach.
+    /// </summary>
+    public readonly int[] GiveUps;
     /// <summary>Whether the slot holds a live unit.</summary>
     public readonly bool[] Alive;
 
@@ -169,6 +188,11 @@ public sealed class UnitStore
         LastAttacker = new EntityHandle[capacity];
         AnchorPosition = new Vector2[capacity];
         Mode = new Combat.CombatMode[capacity];
+        ChaseBest = new float[capacity];
+        ChaseStall = new int[capacity];
+        Ignored = new EntityHandle[capacity];
+        IgnoredIsBuilding = new bool[capacity];
+        GiveUps = new int[capacity];
         Alive = new bool[capacity];
         Generation = new int[capacity];
         _freeList = new int[capacity];
@@ -326,6 +350,11 @@ public sealed class UnitStore
         LastAttacker[index] = default;
         AnchorPosition[index] = default;
         Mode[index] = Combat.CombatMode.None;
+        ChaseBest[index] = 0f;
+        ChaseStall[index] = 0;
+        Ignored[index] = default;
+        IgnoredIsBuilding[index] = false;
+        GiveUps[index] = 0;
     }
 
     /// <summary>

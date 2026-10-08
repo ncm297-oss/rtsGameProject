@@ -85,7 +85,7 @@ public static class OrderSystem
             EndLoop(u, i);
             CombatSystem.ClearForOrder(u, i);
             Move(world, i, cell, goal);
-            if (command.Kind == CommandKind.AttackMove) CombatSystem.StartAttackMove(u, i, u.Goal[i]);
+            if (command.Kind == CommandKind.AttackMove && world.CombatEnabled) CombatSystem.StartAttackMove(u, i, u.Goal[i]);
             return;
         }
         Execute(world, i, command.Kind, Vector2.Zero, 0);
@@ -104,7 +104,7 @@ public static class OrderSystem
                 EndLoop(u, i);
                 CombatSystem.ClearForOrder(u, i);
                 Move(world, i, cell, goal);
-                if (kind == CommandKind.AttackMove) CombatSystem.StartAttackMove(u, i, u.Goal[i]);
+                if (kind == CommandKind.AttackMove && world.CombatEnabled) CombatSystem.StartAttackMove(u, i, u.Goal[i]);
                 break;
             case CommandKind.Gather:
                 // Popped from the queue: the rest of the queue stays, for when the loop ends.

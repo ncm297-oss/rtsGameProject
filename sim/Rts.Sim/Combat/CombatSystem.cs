@@ -53,10 +53,27 @@ public static class CombatSystem
                 float sight = data.Units[u.TypeId[i]].Sight;
                 if (Vector2.DistanceSquared(u.Position[i], u.AnchorPosition[i]) > sight * sight)
                 {
-                    // Past the leash: walk back, eyes front.
-                    Disengage(u, i);
+                    // Past the leash: walk back, eyes front, and don't come back for this one (BUG-0137).
+                    GiveUp(u, i);
                     u.Mode[i] = CombatMode.Returning;
                     if (!OrderSystem.MoveTo(world, i, u.AnchorPosition[i])) EndMode(u, i);
+                    continue;
+                }
+            }
+            // A chase that gets no closer for GiveUpScans scans ends (BUG-0137): the target is out of reach (another
+            // plateau), behind a detour that leads away, or as fast as the chaser. Standing in reach restarts the count.
+            if (due && u.Target[i].Generation != 0 && !u.Hold[i] && u.WindupTicks[i] == 0)
+            {
+                float gap = Gap(world, i);
+                if (gap <= data.Units[u.TypeId[i]].Attack.Range || gap < u.ChaseBest[i] - CombatConstants.ChaseProgress)
+                {
+                    u.ChaseBest[i] = gap;
+                    u.ChaseStall[i] = 0;
+                }
+                else if (++u.ChaseStall[i] >= CombatConstants.GiveUpScans)
+                {
+                    GiveUp(u, i);
+                    Settle(world, i);
                     continue;
                 }
             }
@@ -74,7 +91,10 @@ public static class CombatSystem
                 }
                 else if (u.Target[i].Generation != 0)
                 {
-                    Disengage(u, i); // out of sight (or, holding, out of reach)
+                    // Out of sight (or, holding, out of reach). Lost while the chaser wasn't gaining on it: given up
+                    // (BUG-0137), so it isn't taken again the moment the walk back brings it into sight.
+                    if (!u.Hold[i] && u.ChaseStall[i] > 0) GiveUp(u, i);
+                    else Disengage(u, i);
                     Settle(world, i);
                 }
             }
@@ -166,11 +186,12 @@ public static class CombatSystem
     /// </summary>
     internal static void ClearForOrder(UnitStore u, int i)
     {
-        u.Target[i] = default;
-        u.TargetIsBuilding[i] = false;
-        u.WindupTicks[i] = 0;
+        Disengage(u, i);
+        // A new order forgets what the unit gave up on (BUG-0137).
+        u.Ignored[i] = default;
+        u.IgnoredIsBuilding[i] = false;
+        u.GiveUps[i] = 0;
         EndMode(u, i);
-        if (u.State[i] == UnitState.Attacking) Stand(u, i, UnitState.Idle);
     }
 
     /// <summary>Unit <paramref name="i"/>'s order is now an attack-move leg to <paramref name="destination"/>: its goal once the Move rule has applied (so the leg is over when it stands with that goal).</summary>
@@ -222,8 +243,12 @@ public static class CombatSystem
         UnitDef def = data.Units[u.TypeId[i]];
         Vector2 pos = u.Position[i];
         int owner = u.Owner[i];
-        bool hold = u.Hold[i];
+        // Holding, or after MaxGiveUps chases given up (BUG-0137): only what is in reach.
+        bool hold = u.Hold[i] || u.GiveUps[i] >= CombatConstants.MaxGiveUps;
         float radius = hold ? def.Attack.Range + u.Radius[i] + world.MaxUnitRadius : def.Sight;
+        // The target it last gave up (BUG-0137) is taken again only in reach; index -1 when that is none or a building.
+        int ignoredGen = u.Ignored[i].Generation;
+        int ignoredIndex = u.IgnoredIsBuilding[i] || ignoredGen == 0 ? -1 : u.Ignored[i].Index;
         float r2 = radius * radius;
         int myGen = u.Generation[i], lastIndex = u.LastAttacker[i].Index, lastGen = u.LastAttacker[i].Generation;
         bool[] combatant = world.CombatantType;
@@ -243,7 +268,7 @@ public static class CombatSystem
             if (tier > bestTier) continue; // can't win: skip the distance
             float d2 = Vector2.DistanceSquared(pos, u.Position[j]);
             if (!(d2 <= r2)) continue;
-            if (hold)
+            if (hold || (j == ignoredIndex && u.Generation[j] == ignoredGen))
             {
                 float reach = def.Attack.Range + u.Radius[i] + u.Radius[j];
                 if (!(d2 <= reach * reach)) continue;
@@ -258,12 +283,13 @@ public static class CombatSystem
         if (best >= 0) return best;
         if (world.CombatBuildingCount - world.CombatBuildingsOf[owner] <= 0) return -1;
         BuildingStore b = world.Buildings;
+        int ignoredBuilding = u.IgnoredIsBuilding[i] ? u.Ignored[i].Index : -1;
         for (int k = 0; k < world.CombatBuildingCount; k++)
         {
             int j = world.CombatBuildings[k];
             if (b.Owner[j] == owner) continue;
             float d2 = BuildingDistanceSquared(world, j, pos);
-            float limit = hold ? def.Attack.Range + u.Radius[i] : radius;
+            float limit = hold || (j == ignoredBuilding && b.Generation[j] == ignoredGen) ? def.Attack.Range + u.Radius[i] : radius;
             if (!(d2 <= limit * limit)) continue;
             if (d2 < bestD2 || (d2 == bestD2 && j < best))
             {
@@ -308,6 +334,8 @@ public static class CombatSystem
         u.Target[i] = target;
         u.TargetIsBuilding[i] = isBuilding;
         u.WindupTicks[i] = 0;
+        u.ChaseBest[i] = Gap(world, i);
+        u.ChaseStall[i] = 0;
         if (u.State[i] == UnitState.Attacking) Stand(u, i, UnitState.Idle);
         if (!u.Hold[i] && u.Mode[i] == CombatMode.None)
         {
@@ -322,7 +350,21 @@ public static class CombatSystem
         u.Target[i] = default;
         u.TargetIsBuilding[i] = false;
         u.WindupTicks[i] = 0;
+        u.ChaseBest[i] = 0f;
+        u.ChaseStall[i] = 0;
         if (u.State[i] == UnitState.Attacking) Stand(u, i, UnitState.Idle);
+    }
+
+    /// <summary>
+    /// Unit <paramref name="i"/> gives its target up (BUG-0137): it remembers it in <see cref="UnitStore.Ignored"/> (its
+    /// scans take it again only in reach, until its next order), counts the give-up, and disengages.
+    /// </summary>
+    private static void GiveUp(UnitStore u, int i)
+    {
+        u.Ignored[i] = u.Target[i];
+        u.IgnoredIsBuilding[i] = u.TargetIsBuilding[i];
+        if (u.GiveUps[i] < CombatConstants.MaxGiveUps) u.GiveUps[i]++;
+        Disengage(u, i);
     }
 
     /// <summary>
@@ -336,7 +378,10 @@ public static class CombatSystem
         UnitStore u = world.Units;
         CombatMode mode = u.Mode[i];
         if (mode == CombatMode.None) return;
-        bool there = u.Goal[i] == u.AnchorPosition[i];
+        // At the anchor, or as near as it can get: a building may cover the anchor's cell by now (BUG-0141), and the
+        // Move rule then resolves it to the nearest passable cell's center.
+        bool there = u.Goal[i] == u.AnchorPosition[i]
+            || (OrderSystem.ResolveTarget(world.NavGrid, u.AnchorPosition[i], out _, out Vector2 resolved) && u.Goal[i] == resolved);
         if (u.State[i] == UnitState.Moving)
         {
             if (!there && !OrderSystem.MoveTo(world, i, u.AnchorPosition[i])) EndMode(u, i);
@@ -460,6 +505,7 @@ public static class CombatSystem
             int armor = vdef.Armor + DamageCalc.Points(world.Techs.Bonus(u.Owner[j], u.TypeId[j], TechStat.Armor));
             damage = DamageCalc.Compute(data.DamageTable, def.Attack, attackBonus, vdef.ArmorClass, armor);
         }
+        u.GiveUps[i] = 0; // it lands one: the chases it gave up before no longer hold it back (BUG-0137)
         world.Hits[world.HitCount++] = new PendingHit(new EntityHandle(i, u.Generation[i]), u.Owner[i], u.Target[i], u.TargetIsBuilding[i], damage);
     }
 
@@ -479,7 +525,8 @@ public static class CombatSystem
         if (!u.IsAlive(hit.Attacker)) return;
         u.LastAttacker[v] = hit.Attacker;
         // Retaliation: a unit that scans and has nothing to fight takes on whoever hit it, now rather than on its next scan.
-        if (u.Target[v].Generation == 0 && Scans(world, v)) Engage(world, v, hit.Attacker, false);
+        // Not one it gave up on (BUG-0137): a melee attacker is in reach, and its next scan takes it there.
+        if (u.Target[v].Generation == 0 && Scans(world, v) && u.Ignored[v] != hit.Attacker) Engage(world, v, hit.Attacker, false);
     }
 
     private static void HitBuilding(World world, in PendingHit hit)

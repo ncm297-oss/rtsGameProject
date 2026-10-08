@@ -1151,7 +1151,9 @@ the anchor is where it stood. When its target dies or leaves its sight it walks 
 still scanning; standing Idle with no target ends the mode. **Leash** (Producer default, M4-1): a
 retaliating unit farther than its own sight radius from its anchor drops its target and walks back as
 `Returning`, which does not scan (so it can't be kited back and forth), and is `None` again once it
-stands. Holding units keep `None`: they scan, take targets within reach only, and never move.
+stands. "At the anchor" means its goal is the anchor, or the point the Move rule resolves the anchor to (a
+building placed over the anchor's cell since: the nearest passable cell's center; BUG-0141), so a blocked anchor
+still ends the mode. Holding units keep `None`: they scan, take targets within reach only, and never move.
 Workers on a gather, build or repair loop (`Gathering`, `Returning`, `Building`, or walking a leg of
 it) never scan and never retaliate. Any unit order that is taken (unqueued, or popped) clears the
 target, the swing and the mode first (`CombatSystem.ClearForOrder`); the cooldown keeps counting. A
@@ -1182,6 +1184,20 @@ When a unit loses its target (dead, gone, out of sight) phase 7 settles it (`Com
 attack-mover heads for the end of its leg again and a retaliator for its anchor, at once, also when it
 is still walking a chase; one standing after it walked there (its goal is the anchor: arrived, or
 gave up on the way) ends the engagement.
+**Giving up a chase** (BUG-0137, M4-1 fix). Target choice is by straight-line distance, so a target can be in
+sight and out of reach (another plateau, a sealed pocket) or reachable only by a detour that leads away. Each scan
+tick a unit with a target that is not holding and not mid-swing compares its gap with its best this chase
+(`UnitStore.ChaseBest`, set when it takes the target or stands in reach): closer by more than
+`CombatConstants.ChaseProgress` (0.1 m) is progress, anything else counts a stalled scan (`ChaseStall`). At
+`CombatConstants.GiveUpScans` (10 scans, 2 s) stalled scans in a row it **gives the target up**; so does a retaliator
+the leash pulls back, and a chaser that loses sight of its target while not gaining on it. Giving up remembers the
+target (`UnitStore.Ignored`, a unit or a building): the unit's scans take it again only when it is in reach, and an
+attack by it does not start a retaliation (a melee attacker is in reach, so the next scan takes it anyway). The unit
+then settles as for a lost target (an attack-mover resumes its leg, a retaliator walks home). It remembers one target
+only, so it also counts its give-ups (`GiveUps`); at `CombatConstants.MaxGiveUps` (3) its scans take only targets in
+reach, like a holder's, so two unreachable enemies can't take turns forever. Any order taken
+(`ClearForOrder`) forgets both; landing a hit resets the count. A chase that stalls because the target runs as
+fast as the chaser ends the same way, which is intended (the attack-mover goes on, the retaliator goes home).
 A chaser counts as arrived only within 0.05 m of its goal (`MovementConstants.ChaseArrival2`), not
 the usual `ArrivalDistance` (1 m), so it never stops short of its reach; combat plants it once the
 target is in reach. **No straight steering:** the M4-1 plan allowed chasers to steer straight at targets
@@ -1219,10 +1235,19 @@ After any death one pass clears every stale target (the attacker stands down; ph
 and last attacker, and ends the build or repair order of every worker whose building died. `World.Deaths` holds one tick's events: the next tick empties it first.
 
 **Hashing.** The combat fields go in only when one isn't at its spawn value (hp below or above the
-type's, a target, cooldown, wind-up, last attacker, anchor or mode), flagged by bit 17 of the unit's
+type's, a target, cooldown, wind-up, last attacker, anchor, mode, or the chase memory `ChaseBest`, `ChaseStall`,
+`Ignored` / `IgnoredIsBuilding`, `GiveUps`), flagged by bit 17 of the unit's
 order word, so a unit that never fought hashes exactly as before and the golden replay did not move.
 Kills and losses go in only for a player with either non-zero, flagged by bit 33 of its gold word.
 The death buffer, the hit queue and the building list are scratch, not hashed.
+
+**Combat switch** (`SimConfig.Combat`, default true; BUG-0135, **pending the Producer's call**). False skips
+`Acquire`, `Attack` and `Resolve` and makes `AttackMove` set no combat mode, so a world of two owners plays exactly
+as before M4: enemies are walls and never fight. It exists for the pre-M4 movement, economy, production and view
+scenes whose assertions are about a world without fights (arrivals, alive counts, money oracles, "a holder is
+Idle"); they opt out through `TestSim.ConfigNoCombat` or their own config helper. Matches, the CLI and replays
+always fight: the switch is not in the replay header yet (M4-2's format 4 would carry it if it stays), so
+`ReplayPlayer` plays everything back with combat on, and a replay recorded with combat off does not play back.
 
 **Cost.** The scan's spatial query skips buckets holding only the scanner's own units (a per-bucket
 owner code) and returns at once when no other owner has a live unit (per-owner counts), so a
@@ -1463,9 +1488,12 @@ repair"; the ghost is view work that calls `World.CanPlace`). Closes BUG-0078 by
 - **Construction.** A site is a `BuildingStore` entry with `UnderConstruction` and `Work` (int);
   `WorkNeeded(type) = EconomyConstants.BuildWorkScale (3) x buildTicks`. Each tick n builders in reach add
   n + `BuildWorkBase` (2), so a site takes exactly `ceil(3 t / (n + 2))` ticks (docs/02's `t x 3 / (n + 2)`): a 20 s
-  House takes 400, 300, 200 and 120 ticks with 1, 2, 4 and 8 builders. `Hp = max(1, maxHp x Work / WorkNeeded)`
-  while building; at `WorkNeeded` the site completes at full hit points and its workers go Idle (`popProvided`
-  applies with population, M3-4). Damage to a site is overwritten by the next tick's progress (until combat, M4).
+  House takes 400, 300, 200 and 120 ticks with 1, 2, 4 and 8 builders. Each tick of work **adds** the hit points
+  it grows, `max(1, maxHp x Work / WorkNeeded)` less the same at the old work (full `maxHp` at `WorkNeeded`), capped
+  at the maximum: an undamaged site reads exactly `max(1, maxHp x Work / WorkNeeded)` and completes at full hit
+  points, and damage a site took stays taken (since the M4-1 fix of BUG-0138; before, every work tick recomputed the
+  hit points and a builder made a site immune). At `WorkNeeded` the site completes and its workers go Idle
+  (`popProvided` applies with population, M3-4).
 - **Builders.** `UnitStore.BuildTarget` (a building handle, hashed, reset on Alloc / Free) and state
   `UnitState.Building` (standing; movement shoves it like a gatherer). A worker walks to a passable cell 4-adjacent
   to the footprint exactly like a gatherer (`EconomySystem.WalkToFootprint`), works while within

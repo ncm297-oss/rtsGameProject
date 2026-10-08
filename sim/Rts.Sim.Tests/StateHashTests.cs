@@ -740,7 +740,7 @@ public class StateHashTests
     // ---------- M4-1: combat state ----------
 
     /// <summary>The combat fields of UnitStore (M4-1); each one, mutated on a live unit, must flip the hash.</summary>
-    private static readonly string[] CombatFields = { "Hp", "Target", "TargetIsBuilding", "CooldownTicks", "WindupTicks", "LastAttacker", "AnchorPosition", "Mode" };
+    private static readonly string[] CombatFields = { "Hp", "Target", "TargetIsBuilding", "CooldownTicks", "WindupTicks", "LastAttacker", "AnchorPosition", "Mode", "ChaseBest", "ChaseStall", "Ignored", "IgnoredIsBuilding", "GiveUps" };
 
     [Fact]
     public void Hash_CoversEveryCombatField_OnALiveUnit_AndRestoringItRestoresTheHash()
@@ -760,6 +760,7 @@ public class StateHashTests
             object changed = old switch
             {
                 int x => x - 1,
+                float x => x + 0.25f,
                 bool x => !x,
                 Vector2 x => x + new Vector2(0.25f, 0f),
                 EntityHandle x => new EntityHandle(x.Index + 1, x.Generation + 1),

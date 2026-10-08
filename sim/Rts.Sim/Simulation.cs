@@ -96,16 +96,18 @@ public sealed class Simulation
 
         // Phase 7: Idle units start their next shift-queued order, then target acquisition (M4-1).
         OrderSystem.Run(World);
-        CombatSystem.Acquire(World);
+        if (World.CombatEnabled) CombatSystem.Acquire(World);
 
         // Phases 8-9: flow fields (fetched or built on demand) and movement.
         MovementSystem.Run(World);
 
         // Phase 10: swings, wind-ups and cooldowns (M4-1); hits queue for phase 11.
-        CombatSystem.Attack(World);
-
-        // Phase 11: damage and death (M4-1).
-        CombatSystem.Resolve(World);
+        // Phase 11: damage and death (M4-1). Both off with SimConfig.Combat false.
+        if (World.CombatEnabled)
+        {
+            CombatSystem.Attack(World);
+            CombatSystem.Resolve(World);
+        }
 
         // Phase 13: cleanup.
         World.TickNumber++;
@@ -248,7 +250,7 @@ public sealed class Simulation
 
     /// <summary>
     /// True when any combat field (M4-1) of unit <paramref name="i"/> isn't at its spawn value: hit points below (or
-    /// above) the type's, a target, a cooldown, a wind-up, a last attacker, an anchor or a combat mode. Flagged by bit 17
+    /// above) the type's, a target, a cooldown, a wind-up, a last attacker, an anchor, a combat mode, or chase memory (BUG-0137). Flagged by bit 17
     /// of the order word, then hashed, so a unit that never fought hashes exactly as before M4-1.
     /// </summary>
     private static bool HasCombat(World world, int i)
@@ -256,7 +258,8 @@ public sealed class Simulation
         UnitStore u = world.Units;
         int fullHp = (uint)u.TypeId[i] < (uint)world.Data.Units.Length ? world.Data.Units[u.TypeId[i]].Hp : 0;
         return u.Hp[i] != fullHp || u.Target[i] != default || u.TargetIsBuilding[i] || u.CooldownTicks[i] != 0 || u.WindupTicks[i] != 0
-            || u.LastAttacker[i] != default || u.AnchorPosition[i] != Vector2.Zero || u.Mode[i] != CombatMode.None;
+            || u.LastAttacker[i] != default || u.AnchorPosition[i] != Vector2.Zero || u.Mode[i] != CombatMode.None
+            || u.ChaseBest[i] != 0f || u.ChaseStall[i] != 0 || u.Ignored[i] != default || u.IgnoredIsBuilding[i] || u.GiveUps[i] != 0;
     }
 
     /// <summary>Unit <paramref name="i"/>'s combat fields, as flagged by bit 17 of <see cref="OrderBits"/>.</summary>
@@ -271,6 +274,12 @@ public sealed class Simulation
         h.Add(u.LastAttacker[i].Generation);
         h.Add(u.AnchorPosition[i]);
         h.Add((int)u.Mode[i]);
+        // BUG-0137's chase memory.
+        h.Add(u.ChaseBest[i]);
+        h.Add(u.ChaseStall[i]);
+        h.Add(u.Ignored[i].Index);
+        h.Add((ulong)(uint)u.Ignored[i].Generation | (u.IgnoredIsBuilding[i] ? 1UL << 32 : 0UL));
+        h.Add(u.GiveUps[i]);
     }
 
     /// <summary>True when any gather-loop or cargo field (M3-2) or the build target (M3-3) of unit <paramref name="i"/> isn't default; flagged in <see cref="OrderBits"/>, then hashed.</summary>

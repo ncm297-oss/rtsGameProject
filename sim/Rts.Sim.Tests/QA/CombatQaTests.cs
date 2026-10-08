@@ -108,7 +108,7 @@ public class CombatQaTests
     /// not walk and give up forever: in the last 1,000 of 2,000 ticks neither unit is Moving, and neither keeps issuing
     /// walks (a fresh walk every few ticks re-requests a flow field).
     /// </summary>
-    [Fact(Skip = "BUG-0137: a chase of an unreachable target never ends")]
+    [Fact] // regression: BUG-0137
     public void UnreachableEnemyInSight_ChaserDoesNotWalkAndGiveUpForever()
     {
         Simulation sim = OnRows(8, PlateauMap());
@@ -138,7 +138,7 @@ public class CombatQaTests
     /// is over it walks back as near as it can and the engagement ends (mode None) within 30 s; it does not stay in
     /// Retaliate forever re-issuing a walk to a blocked anchor.
     /// </summary>
-    [Fact(Skip = "BUG-0141: Settle never ends a mode whose anchor cell is blocked")]
+    [Fact] // regression: BUG-0141
     public void AnchorCellBlockedByANewBuilding_EngagementStillEnds()
     {
         Simulation sim = Flat();
@@ -301,7 +301,7 @@ public class CombatQaTests
     /// next tick's building work (docs/03 "Economy implementation": hit points grow with progress), and a site that
     /// took more damage than its full hit points while being built does not complete at full hit points.
     /// </summary>
-    [Fact(Skip = "BUG-0138: SetWork resets a site's hp from progress every build tick")]
+    [Fact] // regression: BUG-0138
     public void SiteBeingBuilt_DamageSticks_TheNextBuildTickDoesNotUndoIt()
     {
         Simulation sim = Flat(units: 16);
@@ -338,7 +338,7 @@ public class CombatQaTests
     /// An attack-move along the foot of a cliff whose top holds an enemy in sight: the unit cannot reach it, so it must
     /// not stop for good; it arrives at its destination within 60 s.
     /// </summary>
-    [Fact(Skip = "BUG-0137: an attack-move stops for good below a cliff-top enemy")]
+    [Fact] // regression: BUG-0137
     public void AttackMovePastAnUnreachableEnemyOnACliff_StillArrives()
     {
         Simulation sim = OnRows(8, PlateauMap());
@@ -358,7 +358,7 @@ public class CombatQaTests
     /// 2,000-4,000 it is never Moving. Before the fix it chases, loses sight or hits the leash, walks home, sees the
     /// enemy again and starts over, forever.
     /// </summary>
-    [Fact(Skip = "BUG-0137: chase / lose sight / walk home cycle forever")]
+    [Fact] // regression: BUG-0137
     public void EnemyInSightBehindAWall_IdleUnitSettles_NoChaseAndReturnCycleForever()
     {
         // 40 x 40, a 2-wide wall (level 1) at x 19-20 from y 6 to the bottom ring: the way round is over the top.

@@ -93,11 +93,15 @@ public sealed class World
         for (int t = 0; t < CombatantType.Length; t++) CombatantType[t] = CombatSystem.IsCombatant(config.Data.Units[t]);
 
         StructureClass = config.Data.DamageTable.ArmorClassKeys.IndexOf(CombatConstants.StructureClassKey);
+        CombatEnabled = config.Combat;
         // The placer's closings happened before any unit existed; only later ones reset progress marks.
         SeenBlockVersion = NavGrid.BlockVersion;
     }
 
     private readonly DeathEvent[] _deaths;
+
+    /// <summary>Whether units fight (<see cref="SimConfig.Combat"/>); fixed for the match.</summary>
+    public bool CombatEnabled { get; }
 
     /// <summary>
     /// The killing blows of the last tick run (M4-1), in the order they landed (attacker slot order): one per unit or

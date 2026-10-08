@@ -298,11 +298,22 @@ public sealed class BuildingStore
     /// <summary>Wood owed for repair so far, fixed point (see <see cref="RepairProgress"/>).</summary>
     internal ref long RepairWood(int index) => ref _repairWood[index];
 
-    /// <summary>Sets a site's work and its hit points from it (<c>max(1, maxHp x work / needed)</c>); at the work needed it completes at full hit points. For the construction system and tests.</summary>
+    /// <summary>
+    /// Sets a site's work and adds the hit points that work grows (<c>max(1, maxHp x work / needed)</c> less the same at
+    /// the old work, capped at the maximum); at the work needed it completes. For the construction system and tests.
+    /// </summary>
+    /// <remarks>
+    /// Added, not recomputed (BUG-0138): damage a site took stays taken, so a builder doesn't make it immune. The
+    /// increments telescope, so an undamaged site reads exactly <c>max(1, maxHp x work / needed)</c>, as before, and
+    /// completes at full hit points.
+    /// </remarks>
     internal void SetWork(int index, int work)
     {
         int needed = WorkNeeded(_typeId[index]);
         int max = _defs[_typeId[index]].Hp;
+        int old = _work[index];
+        int grown = SiteHp(max, Math.Min(work, needed), needed) - SiteHp(max, old, needed);
+        if (grown > 0) _hp[index] = (int)Math.Min(max, (long)_hp[index] + grown);
         if (work >= needed)
         {
             _work[index] = needed;
@@ -313,12 +324,14 @@ public sealed class BuildingStore
                 _ledger?.AddFinished(_owner[index], _typeId[index], _defs[_typeId[index]].Slot, 1);
             }
             _underConstruction[index] = false;
-            _hp[index] = max;
             return;
         }
         _work[index] = work;
-        _hp[index] = (int)Math.Max(1L, (long)max * work / needed);
     }
+
+    /// <summary>An undamaged site's hit points at <paramref name="work"/> of <paramref name="needed"/>: <c>max(1, max x work / needed)</c>, the full <paramref name="max"/> at completion.</summary>
+    private static int SiteHp(int max, int work, int needed) =>
+        work >= needed ? max : (int)Math.Max(1L, (long)max * work / needed);
 
     /// <summary>Sets slot <paramref name="index"/>'s hit points (repair, tests); the caller keeps them between 1 and the type's maximum.</summary>
     internal void SetHp(int index, int hp) => _hp[index] = hp;
