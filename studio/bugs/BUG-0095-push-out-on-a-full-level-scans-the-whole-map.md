@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (M3-H2) |
 | Found | 2026-10-07-0800, task M3-H1 |
 | System | construction push-out (`ConstructionSystem.PushOut`, BUG-0092 (c)) |
-| Fixed by | |
+| Fixed by | 3f494c0 (M3-H2): ring walk bounded by the footprint's plateau, plateau found full once, leftovers spread one per cell per pass. Tests: `QA/SimHardeningQaTests.PushOutOnAFullSmallPlateau_CostsThePlateau_Under1Ms` (0.05 / 0.11 ms at 128 / 256, was 9 / 35 ms), `..._LeftoversSpreadOnThePlateau_NoTwoOnOnePoint`, `PlateauTests.APushOutOnAFullPlateau_SpreadsTheLeftovers_...`; QA 2026-10-07-1715 `QA/PlateauSealMemoQaTests.FourHundredPushedOntoATinyPlateau_*` (400 on 6 cells: 0.13-0.16 ms, 66-67 each). Residual: past 24 leftovers a cell points repeat, BUG-0133 |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~SimHardeningQaTests.PushOutOnAFullSmallPlateau_ScansTheMap_Report" --logger "console;verbosity=detailed"`
