@@ -40,6 +40,9 @@ public static class CombatSystem
         {
             if (!u.Alive[i]) continue;
             bool due = (tick + i) % CombatConstants.ScanInterval == 0;
+            // An attack-move to a new leg that kept the fight (BUG-0154): re-pick by priority now, due or not, in reach or not.
+            bool repick = u.Repick[i];
+            u.Repick[i] = false;
             // The common case, first and cheap: nothing to fight, no engagement to settle, not due to scan.
             if (!due && u.Target[i].Generation == 0 && u.Mode[i] == CombatMode.None) continue;
             if (u.LastAttacker[i].Generation != 0 && !u.IsAlive(u.LastAttacker[i])) u.LastAttacker[i] = default;
@@ -85,9 +88,10 @@ public static class CombatSystem
             }
             bool scanned = false;
             // Due, able to scan, and with an enemy unit or building somewhere (a one-player crowd skips the scan whole).
-            if (due && world.CombatEnemyExists[u.Owner[i]] && Scans(world, i)
-                // Mid-swing, or engaged in reach: keep fighting it (a swing is not thrown away for a better target).
-                && !(u.Target[i].Generation != 0 && (u.WindupTicks[i] > 0 || Gap(world, i) <= data.Units[u.TypeId[i]].Attack.Range)))
+            if ((due || repick) && world.CombatEnemyExists[u.Owner[i]] && Scans(world, i)
+                // Mid-swing, or engaged in reach: keep fighting it (a swing is not thrown away for a better target), unless
+                // the player's new attack-move asks for the re-pick; the same pick keeps the swing (Engage).
+                && (repick || !(u.Target[i].Generation != 0 && (u.WindupTicks[i] > 0 || Gap(world, i) <= data.Units[u.TypeId[i]].Attack.Range))))
             {
                 scanned = true;
                 int pick = PickTarget(world, i, out bool isBuilding);
@@ -206,6 +210,7 @@ public static class CombatSystem
         u.Ignored[i] = default;
         u.IgnoredIsBuilding[i] = false;
         u.GiveUps[i] = 0;
+        u.Repick[i] = false;
         EndMode(u, i);
     }
 
@@ -227,9 +232,11 @@ public static class CombatSystem
     /// <summary>
     /// An unqueued attack-move to <paramref name="destination"/> for unit <paramref name="i"/>, which keeps its target, swing,
     /// cooldown, state and chase memory (BUG-0152): the mode becomes the attack-move leg. A <paramref name="newOrder"/> (a
-    /// different leg) forgets what the unit gave up on, as any new order does; the same leg keeps it.
+    /// different leg) forgets what the unit gave up on, as any new order does; the same leg keeps it. With
+    /// <paramref name="repick"/> (any point but the leg's own, BUG-0154) this tick's phase 7 re-picks by priority, in reach
+    /// or not; the same pick keeps the swing.
     /// </summary>
-    internal static void KeepFightForAttackMove(UnitStore u, int i, Vector2 destination, bool newOrder)
+    internal static void KeepFightForAttackMove(UnitStore u, int i, Vector2 destination, bool newOrder, bool repick)
     {
         if (newOrder)
         {
@@ -237,6 +244,7 @@ public static class CombatSystem
             u.IgnoredIsBuilding[i] = false;
             u.GiveUps[i] = 0;
         }
+        if (repick) u.Repick[i] = true; // a later same-point re-issue this tick doesn't cancel an earlier new point's re-pick
         StartAttackMove(u, i, destination);
     }
 

@@ -452,8 +452,13 @@ public class AttackOrderTests
         Assert.True(spam * 10 >= once * 9, $"re-ordered every {every} ticks: {spam} damage vs {once} with one order");
     }
 
+    /// <summary>
+    /// An attack-move to a new leg by a unit mid-swing on the only enemy around: the re-pick (BUG-0154) picks that same
+    /// target, so the swing in progress lands on time, and the unit walks the new leg after the kill. (Round 1 kept any
+    /// fight in reach for an attack-move anywhere; BUG-0154 made a new leg re-pick by priority instead.)
+    /// </summary>
     [Fact]
-    public void AttackMove_ElsewhereWhileFightingInReach_KeepsTheTarget_ThenWalksTheLeg()
+    public void AttackMove_ToANewLeg_MidSwing_WhenTheTargetIsStillTheBestPick_KeepsTheSwing_ThenWalksTheLeg()
     {
         Simulation sim = Flat(units: 8);
         UnitStore u = sim.World.Units;
@@ -462,14 +467,56 @@ public class AttackOrderTests
         sim.Enqueue(Command.HoldPosition(1, t));
         RunUntil(sim, () => u.WindupTicks[a.Index] > 0, 200); // its own scan took the laborer: mid-swing
         Assert.Equal(t, u.Target[a.Index]);
+        int hp = u.Hp[t.Index], windup = u.WindupTicks[a.Index];
         Vector2 leg = At(sim, 30, 30);
         sim.Enqueue(Command.AttackMove(0, a, leg));
-        Apply(sim);
+        int landed = RunUntil(sim, () => u.Hp[t.Index] < hp, windup + 1);
+        Assert.True(landed <= windup, $"the swing in progress was lost: no hit within {windup} ticks");
         Assert.Equal(t, u.Target[a.Index]);
         Assert.Equal(CombatMode.AttackMove, u.Mode[a.Index]);
         RunUntil(sim, () => !u.IsAlive(t), 2000);
         Assert.False(u.IsAlive(t), "never killed");
         RunUntil(sim, () => u.Mode[a.Index] == CombatMode.None && u.State[a.Index] == UnitState.Idle, 600);
         Assert.True(Vector2.Distance(u.Position[a.Index], leg) < 1.5f, $"never walked the leg: at {u.Position[a.Index]}");
+    }
+
+    /// <summary>
+    /// Hitting a Tent with an enemy Raider standing in sight (held, not attacking): an attack-move to any point but the
+    /// leg's own re-picks by priority at once (BUG-0154), so the unit drops the Tent for the Raider (units rank above
+    /// buildings) the tick the order applies; that holds for another point in the leg's own cell too (QA's repro attack-moved
+    /// onto a Raider standing in that cell). Re-issuing the leg's own point keeps the Tent (BUG-0152: spam never re-picks).
+    /// </summary>
+    [Theory]
+    [InlineData(0, false)] // the leg's own point: spam
+    [InlineData(1, true)]  // the leg's cell, 0.8 m x 0.8 m off its point (1.13 m, past ArrivalDistance)
+    [InlineData(2, true)]  // the Raider's own position, another cell
+    public void AttackMove_WhileHittingABuilding_ANewPointRepicksAUnitInSight_TheLegsOwnPointKeepsTheBuilding(int point, bool takesRaider)
+    {
+        Simulation sim = Flat(units: 8);
+        UnitStore u = sim.World.Units;
+        EntityHandle tent = PlaceTent(sim, 20, 22);
+        EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 17, 23));
+        Vector2 first = At(sim, 19, 23);
+        sim.Enqueue(Command.AttackMove(0, a, first));
+        int fullHp = sim.World.Data.Buildings[Tent].Hp;
+        int hit = RunUntil(sim, () => sim.World.Buildings.Hp[tent.Index] < fullHp, 600);
+        Assert.True(hit < 600, "setup: the Tent was never hit");
+        Assert.Equal(tent, u.Target[a.Index]);
+        Assert.Equal(CombatMode.AttackMove, u.Mode[a.Index]);
+        EntityHandle e = Place(sim, 1, Raider, At(sim, 17, 28));
+        sim.Enqueue(Command.HoldPosition(1, e));
+        Vector2 to = point switch { 0 => first, 1 => At(sim, 19, 23, dx: -0.8f, dy: 0.8f), _ => u.Position[e.Index] };
+        sim.Enqueue(Command.AttackMove(0, a, to));
+        Apply(sim);
+        if (takesRaider)
+        {
+            Assert.Equal(e, u.Target[a.Index]);
+            Assert.False(u.TargetIsBuilding[a.Index]);
+        }
+        else
+        {
+            Assert.Equal(tent, u.Target[a.Index]);
+            Assert.True(u.TargetIsBuilding[a.Index]);
+        }
     }
 }

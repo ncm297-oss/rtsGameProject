@@ -129,6 +129,12 @@ public sealed class UnitStore
     /// <see cref="Combat.CombatConstants.MaxGiveUps"/> its scans take only targets in reach.
     /// </summary>
     public readonly int[] GiveUps;
+    /// <summary>
+    /// Set by an attack-move to any point but its leg's own that kept the unit's fight (BUG-0154): this tick's target
+    /// acquisition re-picks by priority at once, keeping the swing if the pick is the same target. Cleared in that same
+    /// phase 7, so never set between ticks, though hashed (Simulation.AddCombatToHash).
+    /// </summary>
+    public readonly bool[] Repick;
     /// <summary>Whether the slot holds a live unit.</summary>
     public readonly bool[] Alive;
 
@@ -197,6 +203,7 @@ public sealed class UnitStore
         Ignored = new EntityHandle[capacity];
         IgnoredIsBuilding = new bool[capacity];
         GiveUps = new int[capacity];
+        Repick = new bool[capacity];
         Alive = new bool[capacity];
         Generation = new int[capacity];
         _freeList = new int[capacity];
@@ -378,6 +385,7 @@ public sealed class UnitStore
         Ignored[index] = default;
         IgnoredIsBuilding[index] = false;
         GiveUps[index] = 0;
+        Repick[index] = false;
     }
 
     /// <summary>

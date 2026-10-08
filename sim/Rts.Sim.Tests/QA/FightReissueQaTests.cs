@@ -206,7 +206,7 @@ public class FightReissueQaTests
     /// 20 ticks and live. Before BUG-0152's fix it took the Raider in 5 ticks and lived; since, an attack-move anywhere by
     /// a unit fighting in reach keeps the Tent and the unit dies hitting it.
     /// </summary>
-    [Fact(Skip = "BUG-0154: a re-issued attack-move by a unit hitting a building in reach keeps the building; the player can't redirect it onto an attacker")]
+    [Fact]
     public void AttackMoveOntoAnAttacker_WhileHittingABuilding_TakesTheAttacker()
     {
         Simulation sim = Flat(units: 16);

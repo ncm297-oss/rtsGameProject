@@ -258,7 +258,7 @@ public sealed class Simulation
 
     /// <summary>
     /// True when any combat field (M4-1) of unit <paramref name="i"/> isn't at its spawn value: hit points below (or
-    /// above) the type's, a target, a cooldown, a wind-up, a last attacker, an anchor, a combat mode, or chase memory (BUG-0137). Flagged by bit 17
+    /// above) the type's, a target, a cooldown, a wind-up, a last attacker, an anchor, a combat mode, chase memory (BUG-0137), or a pending re-pick (BUG-0154, never set between ticks). Flagged by bit 17
     /// of the order word, then hashed, so a unit that never fought hashes exactly as before M4-1.
     /// </summary>
     private static bool HasCombat(World world, int i)
@@ -267,7 +267,8 @@ public sealed class Simulation
         int fullHp = (uint)u.TypeId[i] < (uint)world.Data.Units.Length ? world.Data.Units[u.TypeId[i]].Hp : 0;
         return u.Hp[i] != fullHp || u.Target[i] != default || u.TargetIsBuilding[i] || u.CooldownTicks[i] != 0 || u.WindupTicks[i] != 0
             || u.LastAttacker[i] != default || u.AnchorPosition[i] != Vector2.Zero || u.Mode[i] != CombatMode.None
-            || u.ChaseBest[i] != 0f || u.ChaseStall[i] != 0 || u.Ignored[i] != default || u.IgnoredIsBuilding[i] || u.GiveUps[i] != 0;
+            || u.ChaseBest[i] != 0f || u.ChaseStall[i] != 0 || u.Ignored[i] != default || u.IgnoredIsBuilding[i] || u.GiveUps[i] != 0
+            || u.Repick[i];
     }
 
     /// <summary>Unit <paramref name="i"/>'s combat fields, as flagged by bit 17 of <see cref="OrderBits"/>.</summary>
@@ -281,7 +282,9 @@ public sealed class Simulation
         h.Add(u.LastAttacker[i].Index);
         h.Add(u.LastAttacker[i].Generation);
         h.Add(u.AnchorPosition[i]);
-        h.Add((int)u.Mode[i]);
+        // BUG-0154's re-pick flag rides above the mode's byte: it is cleared within the tick it is set, so between ticks
+        // the word is the mode alone and the hash stream is what it was before the flag.
+        h.Add((int)u.Mode[i] | (u.Repick[i] ? 1 << 8 : 0));
         // BUG-0137's chase memory.
         h.Add(u.ChaseBest[i]);
         h.Add(u.ChaseStall[i]);

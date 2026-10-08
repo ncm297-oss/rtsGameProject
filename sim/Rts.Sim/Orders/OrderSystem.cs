@@ -102,13 +102,18 @@ public static class OrderSystem
             if (command.Kind == CommandKind.AttackMove && world.CombatEnabled)
             {
                 // Re-issuing an attack-move (click spam, an AI refreshing its orders) never throws a fight away (BUG-0152):
-                // on the leg it already walks a fight on the way goes on, chase and all; to anywhere, a unit fighting in
-                // reach or mid-swing keeps that target, as its scan would. It walks to the leg's end when the fight is over.
+                // on the leg it already walks a fight on the way goes on, chase and all. Any other point is the player
+                // asking for a re-pick (BUG-0154): a unit fighting in reach or mid-swing re-picks by priority in this
+                // tick's phase 7, keeping its swing only if the pick is the target it has. Only the leg's own point (within
+                // ArrivalDistance, the Move rule's "already there") skips the re-pick; a new cell also forgets the give-up
+                // memory, as any new order does. It walks to the leg's end when the fight is over.
                 bool sameLeg = OnLegTo(world, i, cell);
                 if (u.Target[i].Generation != 0 && (sameLeg || CombatSystem.FightsInReach(world, i)))
                 {
+                    const float same2 = MovementConstants.ArrivalDistance * MovementConstants.ArrivalDistance;
+                    bool samePoint = sameLeg && Vector2.DistanceSquared(goal, u.AnchorPosition[i]) <= same2;
                     u.Hold[i] = false;
-                    CombatSystem.KeepFightForAttackMove(u, i, goal, newOrder: !sameLeg);
+                    CombatSystem.KeepFightForAttackMove(u, i, goal, newOrder: !sameLeg, repick: !samePoint);
                     return;
                 }
                 if (sameLeg)
