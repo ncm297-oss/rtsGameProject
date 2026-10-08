@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | open (QA: cost confirmed crowd-driven; Producer to re-state the criterion or keep it) |
 | Found | 2026-10-08-0313, task M4-2a (declared by the developer, confirmed by QA) |
 | System | sim: gather walks (`Economy/EconomySystem.WalkToFootprint`, `Movement/MovementSystem` stand arrival), sim track |
-| Fixed by | |
+| Fixed by |  |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~TwoHundredGatheringWorkersAlone"` alone, three runs, on
@@ -37,3 +37,24 @@ M4-2a acceptance criterion 3: "the gather efficiency Perf rows (200 workers alon
   three `PointCrowd` spatial queries per walk, or the extra walk ticks of the stand arrival). It's filed S2 only because
   it's a stated acceptance criterion, not because a budget is blown.
 - The +15 % crowd income is a balance change for M3's economy numbers; worth a line in the M4 balance pass.
+
+## Re-check (2026-10-08-0313, round 1, QA)
+Not changed by `fea7963` (the developer profiled it and kept no variant). Perf alone on `fea7963`: 0.323 ms. QA
+instrumented the row's scene (`Mixed(0, 200)`, 400 warm-up ticks, 400 measured, 5 runs x 2, Debug) on `007262d` and
+`fea7963`, counting walkers (`Moving`) and walker-neighbour pairs within 1.5 m each tick outside the timed region:
+
+| | base `007262d` | fix `fea7963` |
+| --- | --- | --- |
+| ms / tick | 0.225-0.250 | 0.319-0.348 |
+| walkers / tick | 40.8 | 56.8 (+39 %) |
+| neighbour pairs / tick | 228 | 465 (x2.04) |
+| us per walker-tick | 5.51-6.14 | 5.62-6.12 |
+| resources in the window | 910 | 1,040 (+14 %) |
+| us per resource | 99-110 | 123-134 (+24-30 %) |
+
+At *matched* crowd density the tick costs the same on both builds (median ms by pairs/tick bucket, base vs fix: 0-150:
+0.120-0.129 vs 0.132-0.136; 150-250: 0.181-0.191 vs 0.166-0.174; 250-350: 0.202-0.214 vs 0.206-0.213; 350-450:
+0.223-0.245 vs 0.238-0.248). The fix spends 496 of 1,600 sampled ticks above 600 pairs, base only 20. So the extra cost is the
+denser crowd (more workers walking near their stand points), not slower code. The developer's explanation holds. The
+criterion as worded (≤ 10 %) is still not met, so this stays S2 until the Producer re-states it (e.g. against the 1 ms
+budget, or per resource delivered) or asks for a cheaper crowd.

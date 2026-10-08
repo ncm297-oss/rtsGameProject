@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-08-0313, task M4-2a (reported by the developer, reproduced and characterised by QA) |
 | System | sim: combat chase / give-up memory (`Combat/CombatSystem.cs`: `Acquire`, `Engage`, `PickTarget`), sim track |
-| Fixed by | |
+| Fixed by | `fea7963` (`CombatSystem.Acquire`: a switch away from a target out of scan range while `ChaseStall > 0` gives it up); rows `CombatTests.TargetLostFromSightMidStall_IsGivenUp...`, `GridChangeFuzzStressTests` back on combat |
 
 ## Repro
 1. Un-skip `sim/Rts.Sim.Tests/QA/CombatPingPongQaTests.cs` (both rows) and run
@@ -48,3 +48,19 @@ anchor), and the unit walks a 0.6 m loop forever without fighting.
   81-140, GridChangeQaTests FourGroups, GridChangeFuzzStressTests) with a comment pointing here. That is acceptable for
   movement rows, but the combat-on versions are the only rows that found this; keep `CombatPingPongQaTests` until fixed.
 - Related: BUG-0149 (stall count across a switch gives up a reachable enemy), the opposite failure of the same rule.
+
+## Re-check (2026-10-08-0313, round 1, QA)
+- **The real loop is fixed.** `GridChangeFuzzStressTests` seed 3 with combat on and the settle window raised to 40,000
+  ticks (scratch copy): on `fea7963` it settles 1,540 ticks after the last order. With only the new give-up lines
+  removed it is still Moving at tick 43,002 (unit 55, `Retaliate`, target 107): a true infinite loop, now gone.
+  Seeds 1-12 combat on all settle (1,540-2,284 ticks; bound 4,000), twins equal every tick.
+- **Correction to this report:** the two `CombatPingPongQaTests` rows (and the CrowdRowSweep / FourGroups combat-off
+  switches) were *not* this loop. Run to rest with no tick limit, on both `9be1991` (pre-fix) and `fea7963`, with
+  identical numbers: seed 110 ends at tick 3,759, four-groups at 6,618 / 5,686 / 5,057 (closings every 1 / 2 / 3 ticks), every
+  time with player 1 wiped. Hp is lost in every 500-tick window, so no livelock. Player 1 there has only Heavy Infantry
+  and Zealots that fight (MoveScenario gives player 0 the even type ids and player 1 the odd ones). Its rams, catapults,
+  sappers, archers and priests can't fight back in this slice, so 20 of player 0's melee units crowd round a few large
+  targets as BUG-0143 back-rankers, switching targets (558 switches after tick 3,000) until the last one dies. Of the 60 seeds
+  81-140, seed 110 is the only one over 3,000 ticks. The skipped rows' 3,000-tick bound is a walking bound; they are
+  replaced by `CombatPingPongQaTests` combat-on rows with a combat bound (rest within 10,000 ticks, no 1,000-tick window
+  without hp lost while anyone moves), and the old rows were removed.

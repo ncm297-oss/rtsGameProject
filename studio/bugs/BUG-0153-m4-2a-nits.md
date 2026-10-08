@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open (items 1-2 fixed in `fea7963`; 3-4 are notes for the Producer) |
 | Found | 2026-10-08-0313, task M4-2a |
 | System | sim: orders queue storage; QA rows; brief wording (sim track) |
-| Fixed by | |
+| Fixed by | `fea7963`: item 1 (doc remarks on `QueuePosition` / `QueueTypeId` point to `QueuedTarget`), item 2 (ShoveQaTests 2-player row back on combat) |
 
 ## Repro / Actual
 1. **`UnitStore.QueuePosition` holds non-positions.** A queued Attack keeps its target as `(slot, generation)` floats in
@@ -34,3 +34,10 @@ be met.
 ## Notes
 - The seed 6 two-cell corridor oscillation (BUG-0146's dev-seen note) was not reproduced by QA this session either: the
   M3 Playable scene passed headless on seed 6 three times (and seeds 1, 2 and 21 once each; seed 21 failed on the pre-fix code), with no stall replay saved. Not filed separately; BUG-0146's note stands.
+
+## Re-check (2026-10-08-0313, round 1, QA)
+- Item 1: `UnitStore.QueuePosition` / `QueueTypeId` remarks now say an Attack entry is not a point and name
+  `QueuedTarget`; still nothing outside the sim reads them (grep of `game/` and `ViewApi/`). Accepted for an S4. A small
+  note: the generation is stored as a float, exact up to 2^24 reuses of one slot, far out of reach.
+- Item 2: `ShoveQaTests.BuildCap_500UnitsTo500RandomGoals...(players: 2)` runs combat on again and passes in the suite.
+- Items 3-4: unchanged (BUG-0149 still open; the seed-21 checkpoint note stands).
