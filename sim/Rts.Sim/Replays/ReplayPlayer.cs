@@ -15,7 +15,13 @@ public static class ReplayPlayer
     /// stamp is checked against the log. Checkpoints are hashed by a recorder on the playback sim,
     /// so recording and playback hash at the same point of the tick.
     /// </remarks>
-    public static ReplayResult Run(Replay replay, GameData data)
+    public static ReplayResult Run(Replay replay, GameData data) => Run(replay, data, combat: true);
+
+    /// <summary>
+    /// <see cref="Run(Replay, GameData)"/> with <see cref="SimConfig.Combat"/> given by the caller: for replays recorded
+    /// by a sim with combat off (the pre-M4 test scenes, BUG-0135). The replay format does not carry the switch yet.
+    /// </summary>
+    public static ReplayResult Run(Replay replay, GameData data, bool combat)
     {
         ArgumentNullException.ThrowIfNull(replay);
         ArgumentNullException.ThrowIfNull(data);
@@ -28,6 +34,7 @@ public static class ReplayPlayer
             Data = data,
             Map = replay.Map,
             ResourceCapacity = replay.ResourceCapacity,
+            Combat = combat,
         };
         var sim = new Simulation(config);
         var recorder = new ReplayRecorder(sim, replay.CheckpointInterval, replay.TickCount, replay.Commands.Length);

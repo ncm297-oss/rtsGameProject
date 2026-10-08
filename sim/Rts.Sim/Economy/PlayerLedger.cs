@@ -31,6 +31,8 @@ internal sealed class PlayerLedger
         HalfPop = new int[players];
         HalfPopProvided = new int[players];
         HalfPopCap = new int[players];
+        Kills = new int[players];
+        Losses = new int[players];
         Array.Fill(Gold, rules.StartingGold);
         Array.Fill(Wood, rules.StartingWood);
         _rulesCap = rules.HalfPopCap;
@@ -50,6 +52,19 @@ internal sealed class PlayerLedger
 
     /// <summary>Each player's population cap, half-pop: <c>min(</c><see cref="HalfPopProvided"/><c>, rules popCap)</c>.</summary>
     public int[] HalfPopCap { get; }
+
+    /// <summary>Each player's killing blows, units and buildings (M4-1). Hashed state.</summary>
+    public int[] Kills { get; }
+
+    /// <summary>Each player's units and buildings killed (M4-1). Hashed state.</summary>
+    public int[] Losses { get; }
+
+    /// <summary>One death: <paramref name="killer"/>'s kills and <paramref name="victim"/>'s losses go up by one (M4-1).</summary>
+    public void CountDeath(int killer, int victim)
+    {
+        if (Has(killer)) Kills[killer]++;
+        if (Has(victim)) Losses[victim]++;
+    }
 
     /// <summary>True for a player index this ledger tracks.</summary>
     public bool Has(int player) => (uint)player < (uint)Gold.Length;

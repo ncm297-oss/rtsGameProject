@@ -54,7 +54,7 @@ public static class ConstructionSystem
         UnitStore u = world.Units;
         for (int i = 0; i < u.Capacity; i++)
         {
-            if (!u.Alive[i] || i == worker || (u.Owner[i] == player && !u.Hold[i])) continue;
+            if (!u.Alive[i] || i == worker || (u.Owner[i] == player && !u.IsPlanted(i))) continue;
             if (Inside(u.Position[i], x0, y0, def)) return PlacementError.UnitInTheWay;
         }
         if (world.Gold[player] < def.CostGold || world.Wood[player] < def.CostWood) return PlacementError.CannotAfford;

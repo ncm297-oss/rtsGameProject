@@ -36,7 +36,7 @@ public class ResearchHostileFuzzStressTests
 
     private static Simulation Setup()
     {
-        var sim = new Simulation(TestSim.Config(Seed: 5, PlayerCount: 2, UnitCapacity: 120, CommandCapacity: 1024), Flat(72, 56));
+        var sim = new Simulation(TestSim.ConfigNoCombat(Seed: 5, PlayerCount: 2, UnitCapacity: 120, CommandCapacity: 1024), Flat(72, 56));
         World w = sim.World;
         Spawn(w, Mine, 34, 26, 4000);
         for (int x = 28; x < 42; x += 2) Spawn(w, Tree, x, 50, TreeWood);

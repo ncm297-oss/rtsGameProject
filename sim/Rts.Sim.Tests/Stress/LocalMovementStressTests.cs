@@ -103,7 +103,7 @@ public class LocalMovementStressTests
     [InlineData(2500, 4, 6000, MinArrived2500To4, 10UL)]
     public void Crowd_ToOneOrFourClosePoints_InvariantsEveryTick_AllSettle(int units, int points, int limit, int minArrivedPercent, ulong seed)
     {
-        Simulation sim = MoveScenario.Spawn(seed, units, units > 1000 ? 70f : 40f, out int goalCell, players: points == 1 ? 1 : 2);
+        Simulation sim = MoveScenario.Spawn(seed, units, units > 1000 ? 70f : 40f, out int goalCell, players: points == 1 ? 1 : 2, combat: false);
         World w = sim.World;
         NavGrid g = w.NavGrid;
         Vector2 c = MoveScenario.Center(g, goalCell);
@@ -159,7 +159,8 @@ public class LocalMovementStressTests
     /// <summary>
     /// Report row: the pre-M1-4d-3 split (slot % 4), which sends both players to every point. Since
     /// BUG-0037 every point is contested by enemies, so far fewer arrive; printed for docs/03, asserts
-    /// only that everything stops.
+    /// only that everything stops. Combat off (BUG-0143): on combat the crowds fight to the end past the walking limit;
+    /// <c>CombatTerminationTests</c> holds the combat-on rows.
     /// </summary>
     [Theory]
     [InlineData(500, 3000)]
@@ -168,7 +169,7 @@ public class LocalMovementStressTests
     {
         for (ulong seed = 1; seed <= 3; seed++)
         {
-            CrowdRows.Result r = CrowdRows.ToFourPoints(seed, units, limit, onePlayerPerPoint: false);
+            CrowdRows.Result r = CrowdRows.ToFourPoints(seed, units, limit, onePlayerPerPoint: false, combat: false);
             _out.WriteLine($"seed {seed}: {units} units, both players at every point: arrived {r.Arrived}, gave up {r.GaveUp} after {r.Ticks} ticks");
             Assert.Equal(0, r.StillMoving);
         }

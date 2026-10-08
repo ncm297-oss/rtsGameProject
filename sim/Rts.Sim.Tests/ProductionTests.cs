@@ -339,7 +339,7 @@ public class ProductionTests
             if (y == p + 3) row[p - 1] = 'r';
             rows[y] = new string(row);
         }
-        Simulation sim = BuildMaps.NewSim(FromRows(rows), units: units, players: 2);
+        Simulation sim = BuildMaps.NewSim(FromRows(rows), units: units, players: 2, combat: false);
         int keep = Building(sim, p + 2, p + 2).Index;
         NavGrid g = sim.World.NavGrid;
         var free = new List<(int, int)>();

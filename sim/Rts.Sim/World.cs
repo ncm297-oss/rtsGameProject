@@ -1,5 +1,6 @@
 using System;
 using System.Numerics;
+using Rts.Sim.Combat;
 using Rts.Sim.Data;
 using Rts.Sim.Determinism;
 using Rts.Sim.Economy;
@@ -83,9 +84,74 @@ public sealed class World
         }
         MaxUnitRadius = maxRadius;
         MaxUnitSpeed = maxSpeed;
+        Hits = new PendingHit[config.UnitCapacity]; // one swing lands per unit per tick at most
+        _deaths = new DeathEvent[config.UnitCapacity]; // one death per hit at most
+        CombatBuildings = new int[config.BuildingCapacity];
+        CombatBuildingsOf = new int[config.PlayerCount];
+        CombatEnemyExists = new bool[config.PlayerCount];
+        CombatantType = new bool[config.Data.Units.Length];
+        for (int t = 0; t < CombatantType.Length; t++) CombatantType[t] = CombatSystem.IsCombatant(config.Data.Units[t]);
+
+        StructureClass = config.Data.DamageTable.ArmorClassKeys.IndexOf(CombatConstants.StructureClassKey);
+        CombatEnabled = config.Combat;
         // The placer's closings happened before any unit existed; only later ones reset progress marks.
         SeenBlockVersion = NavGrid.BlockVersion;
     }
+
+    private readonly DeathEvent[] _deaths;
+
+    /// <summary>Whether units fight (<see cref="SimConfig.Combat"/>); fixed for the match.</summary>
+    public bool CombatEnabled { get; }
+
+    /// <summary>
+    /// The killing blows of the last tick run (M4-1), in the order they landed (attacker slot order): one per unit or
+    /// building that died. Emptied at the start of every tick, so between ticks it holds exactly the last tick's deaths.
+    /// Output for views and stats, not state: not hashed.
+    /// </summary>
+    public ReadOnlySpan<DeathEvent> Deaths => _deaths.AsSpan(0, DeathCount);
+
+    /// <summary>Number of entries in <see cref="Deaths"/>.</summary>
+    internal int DeathCount { get; private set; }
+
+    /// <summary>Appends a death to this tick's <see cref="Deaths"/> and counts it in the killer's kills and the victim owner's losses.</summary>
+    internal void RecordDeath(in DeathEvent e)
+    {
+        _deaths[DeathCount++] = e;
+        _ledger.CountDeath(e.KillerOwner, e.VictimOwner);
+    }
+
+    /// <summary>Empties <see cref="Deaths"/> (start of a tick).</summary>
+    internal void ClearDeaths() => DeathCount = 0;
+
+    /// <summary>Each player's killing blows, units and buildings (M4-1), indexed by player. Hashed.</summary>
+    public ReadOnlySpan<int> Kills => _ledger.Kills;
+
+    /// <summary>Each player's units and buildings lost to killing blows (M4-1), indexed by player. Hashed.</summary>
+    public ReadOnlySpan<int> Losses => _ledger.Losses;
+
+    /// <summary>Scratch for <see cref="CombatSystem"/>: the hits queued in phase 10, applied in phase 11; derived, not hashed.</summary>
+    internal PendingHit[] Hits { get; }
+
+    /// <summary>Number of entries in <see cref="Hits"/>.</summary>
+    internal int HitCount { get; set; }
+
+    /// <summary>Scratch for <see cref="CombatSystem"/>: this tick's live building slots, slot order; derived, not hashed.</summary>
+    internal int[] CombatBuildings { get; }
+
+    /// <summary>Number of entries in <see cref="CombatBuildings"/>.</summary>
+    internal int CombatBuildingCount { get; set; }
+
+    /// <summary>Scratch for <see cref="CombatSystem"/>: this tick's live buildings per owner, so a scan with no enemy building skips the list; derived, not hashed.</summary>
+    internal int[] CombatBuildingsOf { get; }
+
+    /// <summary>Scratch for <see cref="CombatSystem"/>: per player, whether any other owner has a unit or a building this tick (else its units skip their scans); derived, not hashed.</summary>
+    internal bool[] CombatEnemyExists { get; }
+
+    /// <summary>Per unit type: whether it counts as "can attack" in the target priority (<see cref="CombatSystem.IsCombatant"/>), read from the data once.</summary>
+    internal bool[] CombatantType { get; }
+
+    /// <summary>The armor class buildings take damage as (<see cref="CombatConstants.StructureClassKey"/>); -1 when the data has none.</summary>
+    internal int StructureClass { get; }
 
     /// <summary>Scratch for the never-seal placement rule (M3-3); derived, not hashed.</summary>
     internal SealCheck Seal { get; }
@@ -147,8 +213,8 @@ public sealed class World
     /// <summary>
     /// What <paramref name="player"/>'s researched techs add to <paramref name="stat"/> of unit type <paramref name="unitType"/>
     /// (M3-5): the sum of every matching effect, in sim units (whole points for attack / armor / hp, meters for range,
-    /// ticks for ability cooldown). Read-only and allocation-free (one array read); 0 for out-of-range ids. Combat does
-    /// not apply it yet (M4).
+    /// ticks for ability cooldown). Read-only and allocation-free (one array read); 0 for out-of-range ids. Combat applies
+    /// the attack and armor bonuses since M4-1 (<see cref="Combat.DamageCalc"/>); hp, range and ability cooldown not yet.
     /// </summary>
     public float TechBonus(int player, int unitType, TechStat stat) => Techs.Bonus(player, unitType, stat);
 

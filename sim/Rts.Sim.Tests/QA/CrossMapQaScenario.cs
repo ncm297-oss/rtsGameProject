@@ -44,9 +44,9 @@ public sealed class CrossMapQaScenario
 
     /// <summary>Builds a scenario; returns null if the map has no reachable cell at <paramref name="goalMinLevel"/> or higher (or no ramp for <see cref="CrossMapStart.OnRamp"/>).</summary>
     public static CrossMapQaScenario? Create(ulong seed, int units, float startRadius, int players = 1, int goalMinLevel = 1,
-        CrossMapStart start = CrossMapStart.WestEdge)
+        CrossMapStart start = CrossMapStart.WestEdge, bool combat = true)
     {
-        var sim = new Simulation(TestSim.Config(Seed: seed, PlayerCount: players, UnitCapacity: units, CommandCapacity: 2 * units + 8));
+        var sim = new Simulation(TestSim.Config(Seed: seed, PlayerCount: players, UnitCapacity: units, CommandCapacity: 2 * units + 8) with { Combat = combat });
         NavGrid g = sim.World.NavGrid;
         int west = FlowField.NearestPassable(g, g.Height / 2 * g.Width + 1);
         int startCell = west;

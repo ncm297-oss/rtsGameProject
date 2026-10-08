@@ -28,12 +28,20 @@ public sealed class SpatialHash
     public const float BucketSize = BucketCells * MapConstants.CellSize;
 
     private readonly int[] _bucketStart; // entries of bucket b are [_bucketStart[b], _bucketStart[b + 1])
-    private readonly int[] _cursor;      // fill position per bucket during the rebuild
+    // Per bucket: the fill position during the rebuild; after it (M4-1), the bucket's owner code for QueryEnemies: the one
+    // owner of all its units, EmptyBucket or MixedBucket. The fill positions are spent by then, so this costs no memory.
+    private readonly int[] _cursor;
+    private const int EmptyBucket = int.MinValue, MixedBucket = int.MinValue + 1; // far from any player index
     private readonly int[] _slotBucket;  // bucket of each slot at the last rebuild, -1 if dead
     private readonly int[] _entrySlot;   // slot of each entry, sorted by bucket then slot
     private readonly Vector2[] _entryPos;
     private readonly int[] _entryOwner;
     private readonly int[] _scratch;     // matches of the running query, before sorting
+    private readonly int[] _ownerCount = new int[OwnerSlots]; // live units per owner (owners past the last slot share it)
+    private const int OwnerSlots = 64;
+    // Whether _cursor holds owner codes: not when one owner has every unit (a one-player crowd), where the counts answer
+    // every query and the pass is skipped.
+    private bool _ownerCodes;
 
     /// <summary>Creates a hash for up to <paramref name="unitCapacity"/> slots over a map of the given size in cells.</summary>
     public SpatialHash(int unitCapacity, int mapWidthCells, int mapHeightCells)
@@ -72,6 +80,7 @@ public sealed class SpatialHash
         if (units.Capacity > Capacity)
             throw new ArgumentException($"store capacity {units.Capacity} exceeds hash capacity {Capacity}", nameof(units));
         Array.Clear(_bucketStart);
+        Array.Clear(_ownerCount);
         bool[] alive = units.Alive;
         Vector2[] position = units.Position;
         for (int s = 0; s < units.Capacity; s++)
@@ -99,8 +108,19 @@ public sealed class SpatialHash
             _entrySlot[e] = s;
             _entryPos[e] = position[s];
             _entryOwner[e] = owner[s];
+            int o = owner[s];
+            _ownerCount[(uint)o < OwnerSlots - 1 ? o : OwnerSlots - 1]++; // owners past 62 share the last count
         }
         Count = _bucketStart[_cursor.Length];
+        // The fill positions are spent: _cursor now holds each bucket's owner code (M4-1), unless one owner has them all.
+        _ownerCodes = Count > 0 && OthersThan(_entryOwner[0]) > 0;
+        if (!_ownerCodes) return;
+        Array.Fill(_cursor, EmptyBucket);
+        for (int e = 0; e < Count; e++)
+        {
+            int b = _slotBucket[_entrySlot[e]], o = _entryOwner[e], was = _cursor[b];
+            _cursor[b] = was == EmptyBucket || was == o ? o : MixedBucket;
+        }
     }
 
     /// <summary>Slots whose point lies within <paramref name="radius"/> meters of <paramref name="center"/>; returns the match count (see remarks on truncation).</summary>
@@ -185,6 +205,47 @@ public sealed class SpatialHash
         }
         return slot >= 0;
     }
+
+    /// <summary>
+    /// Slots not owned by <paramref name="player"/> whose point lies within <paramref name="radius"/> meters of
+    /// <paramref name="center"/> (the <see cref="QueryRadius"/> match rule), in bucket order, <b>not</b> sorted by slot;
+    /// returns the match count (truncation as in <see cref="QueryRadius"/>). Buckets holding only the player's own units
+    /// are skipped on one compare (M4-1), so a scan with no enemy near costs a few bucket reads, and one with no other
+    /// owner's unit anywhere costs one compare.
+    /// </summary>
+    public int QueryEnemies(Vector2 center, float radius, int player, Span<int> results)
+    {
+        if (!(radius >= 0f) || !float.IsFinite(center.X) || !float.IsFinite(center.Y)) return 0;
+        // Nobody else on the map: nothing to look at (a one-player crowd's scans cost this test).
+        if (OthersThan(player) == 0) return 0;
+        float r2 = radius * radius;
+        GetRadiusRange(center, radius, out int x0, out int y0, out int x1, out int y1);
+        int n = 0;
+        for (int by = y0; by <= y1; by++)
+        {
+            for (int bx = x0; bx <= x1; bx++)
+            {
+                int b = by * BucketsX + bx;
+                if (_ownerCodes)
+                {
+                    int o = _cursor[b];
+                    if (o == EmptyBucket || o == player) continue; // empty, or only the player's own units
+                }
+                for (int e = _bucketStart[b]; e < _bucketStart[b + 1]; e++)
+                {
+                    if (_entryOwner[e] == player) continue;
+                    float dx = _entryPos[e].X - center.X, dy = _entryPos[e].Y - center.Y;
+                    if (!(dx * dx + dy * dy <= r2)) continue;
+                    if (n < results.Length) results[n] = _entrySlot[e];
+                    n++;
+                }
+            }
+        }
+        return n;
+    }
+
+    /// <summary>Live units at the last rebuild not owned by <paramref name="player"/> (M4-1); for players past 62 an upper bound.</summary>
+    public int OthersThan(int player) => (uint)player < OwnerSlots - 1 ? Count - _ownerCount[player] : Count;
 
     /// <summary>Bucket column of a world x in meters; outside the map (or NaN) clamps to the nearest edge column.</summary>
     public int BucketX(float x) => Clamp(x / BucketSize, BucketsX);

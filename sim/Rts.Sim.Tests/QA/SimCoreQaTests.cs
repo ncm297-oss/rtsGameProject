@@ -318,7 +318,7 @@ public class SimCoreQaTests
     {
         const int players = 8;
         const int n = 10_000;
-        var sim = new Simulation(TestSim.Config(11, players, UnitCapacity: n, CommandCapacity: n));
+        var sim = new Simulation(TestSim.ConfigNoCombat(11, players, UnitCapacity: n, CommandCapacity: n));
         // Interleave players in a scrambled order; Position.Y records the per-player issue index
         // (M1-4b: TypeId must now name a real unit type, so it can no longer carry the index).
         var rng = new SimRng(1, 0);
@@ -349,7 +349,7 @@ public class SimCoreQaTests
     [Fact]
     public void Flood_CommandsSpreadOverTicks_EachAppliesOnItsOwnTick()
     {
-        var sim = new Simulation(TestSim.Config(1, PlayerCount: 3, UnitCapacity: 4096, CommandCapacity: 64));
+        var sim = new Simulation(TestSim.ConfigNoCombat(1, PlayerCount: 3, UnitCapacity: 4096, CommandCapacity: 64));
         for (int t = 0; t < 500; t++)
         {
             int before = sim.World.Units.Count;

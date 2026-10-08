@@ -87,6 +87,44 @@ public sealed class UnitStore
     public readonly int[] Cargo;
     /// <summary>What <see cref="Cargo"/> is; on a gather loop also the kind of node it works.</summary>
     public readonly ResourceKind[] CargoKind;
+    /// <summary>Hit points (M4-1): the type's <c>hp</c> at spawn; the unit dies when a hit takes them to 0. 0 for a slot allocated without a type.</summary>
+    public readonly int[] Hp;
+    /// <summary>What the unit fights (M4-1): a unit handle, or a building handle when <see cref="TargetIsBuilding"/>; default for none.</summary>
+    public readonly EntityHandle[] Target;
+    /// <summary>True when <see cref="Target"/> is a building handle.</summary>
+    public readonly bool[] TargetIsBuilding;
+    /// <summary>Ticks until the unit may start its next attack (M4-1); counts down every tick, target or not.</summary>
+    public readonly int[] CooldownTicks;
+    /// <summary>Ticks left of the current swing's wind-up (M4-1); the hit lands on the tick it reaches 0. 0 between swings.</summary>
+    public readonly int[] WindupTicks;
+    /// <summary>The last enemy unit that hit this one (M4-1): first in the target priority, cleared when it dies; default for none.</summary>
+    public readonly EntityHandle[] LastAttacker;
+    /// <summary>
+    /// The engagement's anchor (M4-1, see <see cref="Combat.CombatMode"/>): an attack-move leg's destination, or where an
+    /// Idle unit stood when it took a target; zero with <see cref="Combat.CombatMode.None"/>.
+    /// </summary>
+    public readonly Vector2[] AnchorPosition;
+    /// <summary>Why the unit fights (M4-1): none, an attack-move leg, or an Idle unit's leashed retaliation.</summary>
+    public readonly Combat.CombatMode[] Mode;
+    /// <summary>
+    /// The nearest edge-to-edge gap (m) to its target this chase (BUG-0137): set when it takes a target or stands in
+    /// reach, lowered when a scan finds it closer; 0 with no target.
+    /// </summary>
+    public readonly float[] ChaseBest;
+    /// <summary>Scans in a row a chaser got no closer than <see cref="ChaseBest"/> (BUG-0137); at <see cref="Combat.CombatConstants.GiveUpScans"/> it gives the target up.</summary>
+    public readonly int[] ChaseStall;
+    /// <summary>
+    /// The last target the unit gave up on (BUG-0137): a unit, or a building with <see cref="IgnoredIsBuilding"/>. Its
+    /// scans skip it unless it is in reach, until the unit's next order; default for none.
+    /// </summary>
+    public readonly EntityHandle[] Ignored;
+    /// <summary>True when <see cref="Ignored"/> is a building handle.</summary>
+    public readonly bool[] IgnoredIsBuilding;
+    /// <summary>
+    /// Chases given up since the unit's last order or last landed hit (BUG-0137); at
+    /// <see cref="Combat.CombatConstants.MaxGiveUps"/> its scans take only targets in reach.
+    /// </summary>
+    public readonly int[] GiveUps;
     /// <summary>Whether the slot holds a live unit.</summary>
     public readonly bool[] Alive;
 
@@ -142,6 +180,19 @@ public sealed class UnitStore
         GatherProgress = new float[capacity];
         Cargo = new int[capacity];
         CargoKind = new ResourceKind[capacity];
+        Hp = new int[capacity];
+        Target = new EntityHandle[capacity];
+        TargetIsBuilding = new bool[capacity];
+        CooldownTicks = new int[capacity];
+        WindupTicks = new int[capacity];
+        LastAttacker = new EntityHandle[capacity];
+        AnchorPosition = new Vector2[capacity];
+        Mode = new Combat.CombatMode[capacity];
+        ChaseBest = new float[capacity];
+        ChaseStall = new int[capacity];
+        Ignored = new EntityHandle[capacity];
+        IgnoredIsBuilding = new bool[capacity];
+        GiveUps = new int[capacity];
         Alive = new bool[capacity];
         Generation = new int[capacity];
         _freeList = new int[capacity];
@@ -196,6 +247,8 @@ public sealed class UnitStore
         Hold[index] = false;
         ClearQueue(index);
         ClearEconomy(index);
+        ClearCombat(index);
+        Hp[index] = 0;
         _countedHalfPop[index] = 0;
         Alive[index] = true;
         handle = new EntityHandle(index, Generation[index]);
@@ -217,6 +270,7 @@ public sealed class UnitStore
         TypeId[i] = typeId;
         Speed[i] = def.SpeedPerTick;
         Radius[i] = def.Radius;
+        Hp[i] = def.Hp;
         CountPop(i, def.HalfPop);
         return true;
     }
@@ -259,6 +313,11 @@ public sealed class UnitStore
         Hold[handle.Index] = false;
         ClearQueue(handle.Index);
         ClearEconomy(handle.Index);
+        ClearCombat(handle.Index);
+        Hp[handle.Index] = 0;
+        // A freed slot stands still: since units die (M4-1), a scan over slots must not count a dead walker as Moving.
+        State[handle.Index] = UnitState.Idle;
+        Velocity[handle.Index] = default;
         Generation[handle.Index]++;
         _freeList[_freeCount++] = handle.Index;
     }
@@ -283,6 +342,29 @@ public sealed class UnitStore
         Cargo[index] = 0;
         CargoKind[index] = default;
     }
+
+    /// <summary>Resets slot <paramref name="index"/>'s combat state (M4-1), hit points aside, to the empty state.</summary>
+    private void ClearCombat(int index)
+    {
+        Target[index] = default;
+        TargetIsBuilding[index] = false;
+        CooldownTicks[index] = 0;
+        WindupTicks[index] = 0;
+        LastAttacker[index] = default;
+        AnchorPosition[index] = default;
+        Mode[index] = Combat.CombatMode.None;
+        ChaseBest[index] = 0f;
+        ChaseStall[index] = 0;
+        Ignored[index] = default;
+        IgnoredIsBuilding[index] = false;
+        GiveUps[index] = 0;
+    }
+
+    /// <summary>
+    /// True when slot <paramref name="index"/> stands its ground: holding position, or Attacking (M4-1). Movement never
+    /// shoves such a unit and treats it as a hard wall, and the placement rule never pushes it out of a footprint.
+    /// </summary>
+    public bool IsPlanted(int index) => Hold[index] || State[index] == UnitState.Attacking;
 
     /// <summary>Copies Position into PrevPosition and Facing into PrevFacing for every live unit (start of tick).</summary>
     public void SnapshotPrevPositions()

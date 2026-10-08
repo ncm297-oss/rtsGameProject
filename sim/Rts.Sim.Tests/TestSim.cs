@@ -43,6 +43,13 @@ public static class TestSim
     public static SimConfig Config(ulong Seed, int PlayerCount, int UnitCapacity, int CommandCapacity) =>
         new(Seed, PlayerCount, UnitCapacity, CommandCapacity) { Data = Data };
 
+    /// <summary>
+    /// <see cref="Config"/> with combat off (<see cref="SimConfig.Combat"/>, BUG-0135): for the pre-M4 movement, economy,
+    /// production and view scenes whose two owners stand for "enemies are walls", not for a fight.
+    /// </summary>
+    public static SimConfig ConfigNoCombat(ulong Seed, int PlayerCount, int UnitCapacity, int CommandCapacity) =>
+        Config(Seed, PlayerCount, UnitCapacity, CommandCapacity) with { Combat = false };
+
     /// <summary>A <see cref="SimConfig"/> carrying <see cref="DataWithoutBuildingRequires"/>.</summary>
     public static SimConfig ConfigWithoutBuildingRequires(ulong Seed, int PlayerCount, int UnitCapacity, int CommandCapacity) =>
         new(Seed, PlayerCount, UnitCapacity, CommandCapacity) { Data = DataWithoutBuildingRequires };

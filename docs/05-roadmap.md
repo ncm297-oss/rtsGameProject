@@ -322,20 +322,46 @@ review") stands as feedback, not as a gate. Owner may revisit._
       thread after the tick step; one `Build` per selected worker, Shift keeps it), building click-select
       (`ViewApi.BuildingPicker.PickRay`, footprint outline, box-select never), right-click Repair on an own damaged
       building / join on an own site, the M key.)_
-- [ ] Playable: the owner builds a full Malazan base and reaches Age II.
-      _(Playable in the window since session 2026-10-07-1715 (M3-V3b on `main`, D3's building locks live); playtest
-      instructions under STATE "For your review" (M3-V3 entry). Ticked on the owner's word ("M3 playable ok" in the
-      inbox), or after the view track's scripted headless run of the full-base + Age II path through the real HUD
-      (planned as the next view task).)_
+- [x] Playable: the owner builds a full Malazan base and reaches Age II.
+      _(Ticked in session 2026-10-07-2315, task M3-V4: `game/tests/M3PlayableTest.tscn` plays the owner's script through
+      the real HUD at 8x by injected input only (box-select, right-click the mine, Town Hall queue + cancel + rally,
+      Barracks / Depot / Armory / Billet placed and built, Age II greyed "Locked" then researched, Melee Weapons,
+      Engineers' Yard after Age II, a Sapper, a Heavy Infantry whose panel reads the green "+1"), each step checked
+      against the sim with its tick printed, a hash twin of the HUD's command stream, seeds 1 and 6 within 16,000 ticks
+      (11,871-11,990 / 11,034-11,592 over QA's 20 runs; PASS again on the Producer's scratch merge with M4-1 and D4). The
+      run found BUG-0146 (S2, sim: gatherers wedge out of reach of a tree open on one side), which holds the M3 sign-off
+      until the sim fixes it. Playable in the window since session 1715 (M3-V3b); the owner's own playtest is still
+      wanted as feedback (STATE "For your review", M3-V3 entry). Also in M3-V4: BUG-0125 fixed (the node pick tests the
+      drawn tree / mine shape), BUG-0126 items 1-2 ("Locked" on a locked building's ghost and button, "Researched" / "In a
+      queue" over "Locked").)_
 
 ## M4 — Combat, fog, abilities
 
 **Done when:**
 
 - [ ] Attack, attack-move, chase, retaliation, target acquisition priorities.
-- [ ] Damage formula with type × class table and bonuses; unit tests include the worked example.
+      _(Sim half landed in session 2026-10-07-2315, task M4-1 (`Rts.Sim.Combat`, melee only): attack-move acquisition
+      every 4 ticks staggered by slot through `SpatialHash.QueryEnemies`, the docs/03 priority (enemies attacking me >
+      units that can attack > other units > buildings, nearest, lowest slot), chase through the normal Move path, Idle
+      retaliation leashed to the unit's sight radius from where it stood, holders fight in reach without moving, workers
+      never fight on their own, a give-up rule for unreachable targets with a "friend is fighting it" exception for
+      brawls' back ranks (BUG-0137 / 0143), `SimConfig.Combat` as a test switch (BUG-0135). Left for M4-2: the explicit
+      `Attack(target)` order (replay format 4), `attack.targets` for the ram (BUG-0139). Open: BUG-0144 (S3), BUG-0149 (S3),
+      BUG-0142 (S4).)_
+- [x] Damage formula with type × class table and bonuses; unit tests include the worked example.
+      _(Session 2026-10-07-2315, task M4-1: `DamageCalc.Compute` in one place: `raw = attack x table[type][class] x
+      bonusVs`, `max(1, round(raw) - armor)` (half-up rounding, `floor(raw + 0.5)`), magic ignores armor, `bonusVs` 1 where
+      the data gives none, Forge attack / armor bonuses applied per owner; buildings take damage as `structure`.
+      `DamageCalcTests`: the worked example `9 x 0.6 x 1.3 = 7.02 → 7 - 1 = 6`, every table cell at armor 0 and armor ≥
+      raw, tech-boosted attacker / defender ±1. Wind-up + cooldown in ticks, hits queued at the wind-up point (grace
+      0.5 m) and applied in attacker slot order in phase 11 so mutual kills land.)_
 - [ ] Projectiles with travel time and misses; splash with falloff; friendly fire.
 - [ ] Death, corpses, building destruction and rubble.
+      _(Sim half in M4-1 (session 2026-10-07-2315): a unit at 0 hp is freed the tick it dies (pop released, handle
+      stale, targets on it cleared), `World.Deaths` holds one tick's `DeathEvent`s (victim, type, owner, killer's owner,
+      position) for the view, `World.Kills` / `Losses` per player (hashed); a building at 0 goes through
+      `BuildingStore.Damage` (freed, cells by the pocket rule, queue refunded); a site's damage sticks under construction
+      (BUG-0138). Corpses and rubble are the view's (next view task).)_
 - [ ] Three-state fog of war per player; high-ground vision rule (low ground can't see up; attacker reveal); terrain fog shader; building ghosts.
 - [ ] Ability system (target ground, self/aura, summon) and status effects; zones.
 - [ ] Stealth and detection system (tested now, even though Shadow arrives in M8).

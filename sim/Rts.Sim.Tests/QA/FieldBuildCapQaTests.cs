@@ -24,7 +24,7 @@ public class FieldBuildCapQaTests
 
     private static Simulation SpawnRandom(ulong seed, int units, int players = 2)
     {
-        var sim = new Simulation(TestSim.Config(seed, players, UnitCapacity: units, CommandCapacity: 2 * units + 64));
+        var sim = new Simulation(TestSim.ConfigNoCombat(seed, players, UnitCapacity: units, CommandCapacity: 2 * units + 64));
         NavGrid g = sim.World.NavGrid;
         List<int> passable = FlowFieldOracle.PassableCells(g);
         var rng = new SimRng(seed, 900);

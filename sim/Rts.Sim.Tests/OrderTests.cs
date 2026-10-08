@@ -295,23 +295,28 @@ public class OrderTests
 
     // ---------- AttackMove ----------
 
-    /// <summary>Until combat (M4) an AttackMove walks exactly like a Move: two sims, one with Moves, one with AttackMoves, hash equal after every tick for 500 ticks (pending commands differ by kind, so hashes are compared between ticks only once they have applied).</summary>
+    /// <summary>
+    /// With no enemy anywhere an AttackMove walks exactly like a Move (M4-1; until then the two hashed equal): two one-player
+    /// sims, one with Moves, one with AttackMoves, every unit's position, facing and state bit-equal after every tick for
+    /// 500 ticks. The hashes differ now by the attack-move's mode and anchor, which nothing reads without an enemy.
+    /// </summary>
     [Fact]
-    public void AttackMove_IsMove_HashTwinFor500Ticks()
+    public void AttackMove_WithNoEnemy_WalksExactlyLikeMove_For500Ticks()
     {
-        Simulation Make() => MoveScenario.Spawn(seed: 9, units: 120, maxCost: 25f, out _);
+        Simulation Make() => MoveScenario.Spawn(seed: 9, units: 120, maxCost: 25f, out _, players: 1);
         Simulation a = Make(), b = Make();
         Assert.Equal(a.StateHash(), b.StateHash());
         NavGrid g = a.World.NavGrid;
         var rng = new Determinism.SimRng(9, 5);
         int center = MoveScenario.CentralCell(g);
         int moving = 0;
+        bool hashesDiffered = false;
+        UnitStore ua = a.World.Units, ub = b.World.Units;
         for (int t = 0; t < 500; t++)
         {
             if (t % 120 == 0)
             {
                 Vector2 target = MoveScenario.Center(g, center) + new Vector2(rng.NextInt(-10, 11) * 2f, rng.NextInt(-10, 11) * 2f);
-                UnitStore ua = a.World.Units;
                 for (int i = 0; i < ua.Capacity; i++)
                 {
                     if (!ua.Alive[i]) continue;
@@ -321,12 +326,20 @@ public class OrderTests
             }
             a.Tick();
             b.Tick();
-            // Pending commands are hashed with their kind, so compare once both batches have applied.
-            if (a.PendingCommandCount == 0) Assert.True(a.StateHash() == b.StateHash(), $"hashes differ after tick {a.TickNumber}");
-            for (int i = 0; i < a.World.Units.Capacity; i++)
-                if (a.World.Units.State[i] == UnitState.Moving) { moving++; break; }
+            for (int i = 0; i < ua.Capacity; i++)
+            {
+                Assert.Equal(ua.Alive[i], ub.Alive[i]);
+                if (!ua.Alive[i]) continue;
+                Assert.True(ua.Position[i] == ub.Position[i] && ua.Facing[i] == ub.Facing[i] && ua.State[i] == ub.State[i] && ua.GoalCell[i] == ub.GoalCell[i],
+                    $"unit {i} differs after tick {a.TickNumber}");
+                Assert.Equal(default, ub.Target[i]);
+            }
+            hashesDiffered |= a.PendingCommandCount == 0 && a.StateHash() != b.StateHash();
+            for (int i = 0; i < ua.Capacity; i++)
+                if (ua.State[i] == UnitState.Moving) { moving++; break; }
         }
         Assert.True(moving > 250, $"units moved on only {moving} of 500 ticks");
+        Assert.True(hashesDiffered); // the attack-move's mode is state
     }
 
     // ---------- shift-queue ----------
