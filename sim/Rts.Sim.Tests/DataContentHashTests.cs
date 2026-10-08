@@ -70,13 +70,15 @@ public class DataContentHashTests
     }
 
     private static GameData With(GameData d, DamageTable? table = null, RulesDef? rules = null, FactionDef? faction = null, UnitDef? unit = null,
-        ResourceDef? resource = null, int resourceSlot = 0, BuildingDef? building = null, int buildingSlot = 0, TechDef? tech = null, int techSlot = 0) => new()
+        ResourceDef? resource = null, int resourceSlot = 0, BuildingDef? building = null, int buildingSlot = 0, TechDef? tech = null, int techSlot = 0,
+        ProjectileDef? projectile = null, int projectileSlot = 0) => new()
     {
         DamageTable = table ?? d.DamageTable,
         Rules = rules ?? d.Rules,
         Factions = faction == null ? d.Factions : d.Factions.SetItem(faction.Id, faction),
         Units = unit == null ? d.Units : d.Units.SetItem(unit.Id, unit),
         Resources = resource == null ? d.Resources : d.Resources.SetItem(resourceSlot, resource),
+        Projectiles = projectile == null ? d.Projectiles : d.Projectiles.SetItem(projectileSlot, projectile),
         Buildings = building == null ? d.Buildings : d.Buildings.SetItem(buildingSlot, building),
         Techs = tech == null ? d.Techs : d.Techs.SetItem(techSlot, tech),
     };
@@ -121,6 +123,16 @@ public class DataContentHashTests
         DataLoadResult load = DataLoader.LoadAll(dir.Path);
         Assert.True(load.Ok, string.Join("\n", load.Errors));
         Assert.NotEqual(d.ContentHash(), load.Data!.ContentHash());
+    }
+
+    [Fact]
+    public void ProjectileListLength_ChangesTheHash()
+    {
+        GameData d = TestSim.Data;
+        GameData fewer = With(d);
+        typeof(GameData).GetProperty(nameof(GameData.Projectiles))!.SetValue(fewer, d.Projectiles.RemoveAt(d.Projectiles.Length - 1));
+        Assert.Equal(d.ContentHash(), With(d).ContentHash());
+        Assert.NotEqual(d.ContentHash(), fewer.ContentHash());
     }
 
     [Fact]
@@ -188,6 +200,12 @@ public class DataContentHashTests
         Assert.Contains("AttackDef.Projectile", checkedFields); // nullable: null and "x" must differ
         foreach (string f in new[] { "Id", "Key", "DisplayName", "Description", "Resource", "FootprintWidth", "FootprintHeight" })
             Assert.Contains($"ResourceDef.{f}", checkedFields);
+        // M4-2b: every ProjectileDef field, on each shipped projectile type, and the attack's resolved id.
+        foreach (ProjectileDef p in d.Projectiles)
+            Check(p, x => With(d, projectile: x, projectileSlot: p.Id));
+        foreach (string f in new[] { "Id", "Key", "Kind", "SpeedPerTick", "HitTolerance" })
+            Assert.Contains($"ProjectileDef.{f}", checkedFields);
+        Assert.Contains("AttackDef.ProjectileTypeId", checkedFields);
         Assert.True(checkedFields.Count >= 57, $"only {checkedFields.Count} fields checked");
     }
 }

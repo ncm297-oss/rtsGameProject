@@ -9,14 +9,15 @@ using Rts.Sim.Orders;
 namespace Rts.Sim.Combat;
 
 /// <summary>
-/// Melee combat (M4-1, docs/03 "Implementation (M4-1)"): target acquisition and chasing in phase 7
+/// Combat (M4-1, M4-2b; docs/03 "Implementation (M4-1)", "(M4-2b)"): target acquisition and chasing in phase 7
 /// (<see cref="Acquire"/>), swings in phase 10 (<see cref="Attack"/>), damage and death in phase 11 (<see cref="Resolve"/>).
 /// </summary>
 /// <remarks>
 /// Every loop runs in slot order over preallocated scratch in <see cref="World"/>; unit queries go through the spatial
 /// hash only (<see cref="Spatial.SpatialHash.QueryEnemies"/>), buildings through a list of live building slots rebuilt
-/// once a tick (at most <see cref="SimConfig.BuildingCapacity"/>). Only attacks without a projectile fight in this slice:
-/// projectiles arrive in M4-2, and until then ranged, caster and siege-projectile units neither scan nor swing.
+/// once a tick (at most <see cref="SimConfig.BuildingCapacity"/>). Since M4-2b every attack fights: one with a projectile
+/// fires it at the wind-up end (<see cref="ProjectileSystem"/>) instead of queuing a hit, and an attack with a minimum
+/// range neither swings at nor walks toward a target inside it.
 /// <para>
 /// Every walk combat starts (a chase, an attack-mover's leg again, a walk back home) starts in phase 7, before movement,
 /// as every order does; phases 10 and 11 only stand units still (plant, stand down), so a unit never turns Moving after
@@ -90,8 +91,11 @@ public static class CombatSystem
             // Due, able to scan, and with an enemy unit or building somewhere (a one-player crowd skips the scan whole).
             if ((due || repick) && world.CombatEnemyExists[u.Owner[i]] && Scans(world, i)
                 // Mid-swing, or engaged in reach: keep fighting it (a swing is not thrown away for a better target), unless
-                // the player's new attack-move asks for the re-pick; the same pick keeps the swing (Engage).
-                && (repick || !(u.Target[i].Generation != 0 && (u.WindupTicks[i] > 0 || Gap(world, i) <= data.Units[u.TypeId[i]].Attack.Range))))
+                // the player's new attack-move asks for the re-pick; the same pick keeps the swing (Engage). A building in
+                // reach is kept only while no enemy unit has hit this one (BUG-0156): between swings it re-picks, and the
+                // tier-0 attacker wins. A target inside the minimum range (M4-2b) is not "in reach": the scan re-picks.
+                && (repick || !(u.Target[i].Generation != 0 && (u.WindupTicks[i] > 0
+                    || ((!u.TargetIsBuilding[i] || u.LastAttacker[i].Generation == 0) && InReach(data.Units[u.TypeId[i]].Attack, Gap(world, i)))))))
             {
                 scanned = true;
                 int pick = PickTarget(world, i, out bool isBuilding);
@@ -119,7 +123,10 @@ public static class CombatSystem
             // tick only, so a fleeing target changes its goal at most every ScanInterval ticks. An ordered attacker doesn't
             // scan (its target is held), so it is re-aimed on the ticks it would have scanned.
             if (u.Target[i].Generation == 0 || u.Hold[i] || u.State[i] == UnitState.Attacking) continue;
-            if (u.State[i] == UnitState.Idle ? Gap(world, i) > data.Units[u.TypeId[i]].Attack.Range : scanned || (due && u.Mode[i] == CombatMode.Ordered))
+            AttackDef attack = data.Units[u.TypeId[i]].Attack;
+            // Too near to fire at (M4-2b): never walk closer. No step back either (no kiting in this slice): it waits.
+            if (attack.MinRange > 0f && Gap(world, i) < attack.MinRange) continue;
+            if (u.State[i] == UnitState.Idle ? Gap(world, i) > attack.Range : scanned || (due && u.Mode[i] == CombatMode.Ordered))
                 Chase(world, i);
         }
     }
@@ -142,16 +149,25 @@ public static class CombatSystem
             }
             AttackDef attack = data.Units[u.TypeId[i]].Attack;
             float gap = Gap(world, i);
+            // Inside the minimum range (M4-2b) it can't fire: no swing, and a chaser or a planted unit stands where it is.
+            bool tooNear = gap < attack.MinRange;
             if (u.WindupTicks[i] > 0)
             {
-                // Mid-swing the unit stands; the hit lands at the wind-up point if the target is still near enough.
+                // Mid-swing the unit stands; the hit lands (or the shot flies) at the wind-up point if the target is still
+                // near enough and not too near.
                 Face(world, i);
                 if (--u.WindupTicks[i] == 0)
                 {
-                    if (gap <= attack.Range + CombatConstants.WindupGrace) QueueHit(world, i);
+                    if (gap <= attack.Range + CombatConstants.WindupGrace && !tooNear) Strike(world, i, attack);
                     // The swing is over: out of reach, it stands down now, so an Attacking unit is always in reach or mid-swing.
-                    if (gap > attack.Range) Stand(u, i, UnitState.Idle);
+                    if (gap > attack.Range || tooNear) Stand(u, i, UnitState.Idle);
                 }
+                continue;
+            }
+            if (tooNear)
+            {
+                if (u.State[i] == UnitState.Moving) StandStill(u, i);
+                else if (u.State[i] == UnitState.Attacking) Stand(u, i, UnitState.Idle);
                 continue;
             }
             if (gap <= attack.Range)
@@ -162,7 +178,7 @@ public static class CombatSystem
                 {
                     u.CooldownTicks[i] = attack.CooldownTicks;
                     u.WindupTicks[i] = attack.WindupTicks;
-                    if (attack.WindupTicks == 0) QueueHit(world, i);
+                    if (attack.WindupTicks == 0) Strike(world, i, attack);
                 }
                 continue;
             }
@@ -183,10 +199,20 @@ public static class CombatSystem
         for (int k = 0; k < world.HitCount; k++)
         {
             ref PendingHit hit = ref world.Hits[k];
+            // A melee attack with splash (none ships; M4-2b keeps the rule general) splashes round where it struck. The
+            // attacker's slot keeps its type and position even if it died earlier in this phase (a free clears neither, and
+            // nothing spawns in phase 11), so the hit needs no more fields (the 1,024-map memory bound).
+            int attackerType = u.TypeId[hit.Attacker.Index];
+            bool splash = world.Data.Units[attackerType].Attack.Splash > 0f;
+            Vector2 at = !splash ? default : hit.IsBuilding ? NearestFootprintPoint(world, hit.Victim.Index, u.Position[hit.Attacker.Index]) : u.Position[hit.Victim.Index];
             if (hit.IsBuilding) HitBuilding(world, in hit);
             else HitUnit(world, in hit);
+            if (splash) ProjectileSystem.Splash(world, at, attackerType, hit.AttackerOwner, hit.Attacker, hit.Victim, hit.IsBuilding);
         }
         world.HitCount = 0;
+        // Then the projectiles that arrived this tick (M4-2b), slot order: hits and splash in the same phase, so a unit
+        // killed by a projectile still lands its own queued hit, and the reverse.
+        ProjectileSystem.Land(world);
         if (world.DeathCount == deathsBefore) return;
         BuildingStore b = world.Buildings;
         for (int i = 0; i < u.Capacity; i++)
@@ -226,8 +252,11 @@ public static class CombatSystem
     {
         UnitStore u = world.Units;
         if (u.Target[i].Generation == 0 || !TargetAlive(world, i)) return false;
-        return u.WindupTicks[i] > 0 || Gap(world, i) <= world.Data.Units[u.TypeId[i]].Attack.Range;
+        return u.WindupTicks[i] > 0 || InReach(world.Data.Units[u.TypeId[i]].Attack, Gap(world, i));
     }
+
+    /// <summary>Whether an edge-to-edge <paramref name="gap"/> (m) is one <paramref name="attack"/> can strike at: within its range and not inside its minimum range (M4-2b).</summary>
+    internal static bool InReach(AttackDef attack, float gap) => gap <= attack.Range && !(gap < attack.MinRange);
 
     /// <summary>
     /// An unqueued attack-move to <paramref name="destination"/> for unit <paramref name="i"/>, which keeps its target, swing,
@@ -248,8 +277,8 @@ public static class CombatSystem
         StartAttackMove(u, i, destination);
     }
 
-    /// <summary>True for a unit type that fights in this slice: an attack with a value and no projectile (M4-2 brings projectiles).</summary>
-    internal static bool CanFight(UnitDef def) => def.Attack.Value > 0 && def.Attack.Projectile == null;
+    /// <summary>True for a unit type that fights: an attack with a value. Since M4-2b that is every attack, projectile or not (until then ranged, caster and siege-projectile units did not).</summary>
+    internal static bool CanFight(UnitDef def) => def.Attack.Value > 0;
 
     /// <summary>
     /// Whether unit <paramref name="i"/> may take an explicit Attack on <paramref name="target"/> (M4-2a): combat is on, its
@@ -361,6 +390,7 @@ public static class CombatSystem
         AttackTargets targets = def.Attack.Targets;
         if (targets == AttackTargets.Buildings) return PickBuilding(world, i, def, pos, owner, hold, radius, ignoredGen, out isBuilding);
         int myGen = u.Generation[i], lastIndex = u.LastAttacker[i].Index, lastGen = u.LastAttacker[i].Generation;
+        float minRange = def.Attack.MinRange;
         bool[] combatant = world.CombatantType;
         int[] found = world.Neighbors; // movement's scratch: free in phase 7
         int n = Math.Min(world.Spatial.QueryEnemies(pos, radius, owner, found), found.Length);
@@ -382,6 +412,12 @@ public static class CombatSystem
             {
                 float reach = def.Attack.Range + u.Radius[i] + u.Radius[j];
                 if (!(d2 <= reach * reach)) continue;
+            }
+            if (minRange > 0f)
+            {
+                // Inside the minimum range (M4-2b): it can't be fired at, so it is no target; one outside wins.
+                float near = minRange + u.Radius[i] + u.Radius[j];
+                if (d2 < near * near) continue;
             }
             if (tier < bestTier || d2 < bestD2 || (d2 == bestD2 && j < best))
             {
@@ -427,6 +463,8 @@ public static class CombatSystem
             float d2 = BuildingDistanceSquared(world, j, pos);
             float limit = hold || (j == ignoredBuilding && b.Generation[j] == ignoredGen) ? def.Attack.Range + u.Radius[i] : radius;
             if (!(d2 <= limit * limit)) continue;
+            float near = def.Attack.MinRange + u.Radius[i];
+            if (def.Attack.MinRange > 0f && d2 < near * near) continue; // inside the minimum range (M4-2b)
             if (d2 < bestD2 || (d2 == bestD2 && j < best))
             {
                 best = j;
@@ -509,9 +547,9 @@ public static class CombatSystem
     /// Whether another unit of <paramref name="i"/>'s owner stands fighting (<c>Attacking</c>) within
     /// <paramref name="i"/>'s own reach of its target unit (BUG-0143): then a standing point in reach exists on foot and
     /// a stalled chase is only queued behind its own side (a brawl's back ranks), not cut off (another plateau, behind a
-    /// wall) or outrun, and the fight there frees the place within a few hits. A friend merely standing there (a ranged
-    /// unit that can't swing yet, a worker) may never move, so it doesn't count; nor does a building target, which can
-    /// take minutes to fall. Runs only when a chase stalls.
+    /// wall) or outrun, and the fight there frees the place within a few hits. A friend merely standing there (a worker)
+    /// may never move, so it doesn't count, nor does one shooting from farther than the chaser's own reach (M4-2b); nor
+    /// does a building target, which can take minutes to fall. Runs only when a chase stalls.
     /// </summary>
     private static bool FriendFightsTarget(World world, int i)
     {
@@ -598,13 +636,22 @@ public static class CombatSystem
     }
 
     /// <summary>Where unit <paramref name="i"/> heads for its target: a unit's position, or the nearest point of a building's footprint.</summary>
-    private static Vector2 TargetPoint(World world, int i)
+    internal static Vector2 TargetPoint(World world, int i)
     {
         UnitStore u = world.Units;
         if (!u.TargetIsBuilding[i]) return u.Position[u.Target[i].Index];
-        BuildingRect(world, u.Target[i].Index, out Vector2 min, out Vector2 max);
-        return Vector2.Clamp(u.Position[i], min, max);
+        return NearestFootprintPoint(world, u.Target[i].Index, u.Position[i]);
     }
+
+    /// <summary>The point of building slot <paramref name="j"/>'s footprint nearest <paramref name="p"/> (m).</summary>
+    private static Vector2 NearestFootprintPoint(World world, int j, Vector2 p)
+    {
+        BuildingRect(world, j, out Vector2 min, out Vector2 max);
+        return Vector2.Clamp(p, min, max);
+    }
+
+    /// <summary>Edge-to-edge distance (m) between units <paramref name="i"/> and <paramref name="j"/>: centers less both radii.</summary>
+    private static float UnitGap(UnitStore u, int i, int j) => Vector2.Distance(u.Position[i], u.Position[j]) - u.Radius[i] - u.Radius[j];
 
     /// <summary>Edge-to-edge distance (m) from unit <paramref name="i"/> to its live target: centers less both radii, or to a building's footprint less its own radius.</summary>
     private static float Gap(World world, int i)
@@ -616,7 +663,7 @@ public static class CombatSystem
     }
 
     /// <summary>Squared distance (m^2) from <paramref name="p"/> to building slot <paramref name="j"/>'s footprint rectangle; 0 inside it.</summary>
-    private static float BuildingDistanceSquared(World world, int j, Vector2 p)
+    internal static float BuildingDistanceSquared(World world, int j, Vector2 p)
     {
         BuildingRect(world, j, out Vector2 min, out Vector2 max);
         return Vector2.DistanceSquared(p, Vector2.Clamp(p, min, max));
@@ -647,6 +694,14 @@ public static class CombatSystem
         if (d != Vector2.Zero) u.Facing[i] = SimMath.Atan2(d.Y, d.X);
     }
 
+    /// <summary>Stops a walking unit <paramref name="i"/> where it is (its target too near to fire at, M4-2b): Idle, no goal, nothing to walk back to.</summary>
+    private static void StandStill(UnitStore u, int i)
+    {
+        Stand(u, i, UnitState.Idle);
+        u.GoalCell[i] = -1;
+        u.WalkBack[i] = UnitStore.WalkBackNone;
+    }
+
     /// <summary>Stops unit <paramref name="i"/> to fight: Attacking, no goal, nothing to walk back to.</summary>
     private static void Plant(UnitStore u, int i)
     {
@@ -663,33 +718,49 @@ public static class CombatSystem
         u.BestRemaining[i] = float.PositiveInfinity;
     }
 
+    /// <summary>Unit <paramref name="i"/>'s blow at its wind-up point (or at once, with no wind-up): a shot for an attack with a projectile (M4-2b), else a hit queued for phase 11.</summary>
+    private static void Strike(World world, int i, AttackDef attack)
+    {
+        world.Units.GiveUps[i] = 0; // it lands one: the chases it gave up before no longer hold it back (BUG-0137)
+        if (attack.ProjectileTypeId >= 0) ProjectileSystem.Fire(world, i);
+        else QueueHit(world, i);
+    }
+
     /// <summary>Queues unit <paramref name="i"/>'s hit on its target, its damage worked out now from both owners' techs.</summary>
     private static void QueueHit(World world, int i)
     {
         UnitStore u = world.Units;
-        GameData data = world.Data;
-        UnitDef def = data.Units[u.TypeId[i]];
-        int attackBonus = DamageCalc.Points(world.Techs.Bonus(u.Owner[i], u.TypeId[i], TechStat.Attack));
-        int damage;
-        if (u.TargetIsBuilding[i])
-        {
-            int structure = world.StructureClass;
-            if (structure < 0) return; // data without a structure class: buildings take no damage
-            BuildingDef bdef = data.Buildings[world.Buildings.TypeId[u.Target[i].Index]];
-            damage = DamageCalc.Compute(data.DamageTable, def.Attack, attackBonus, structure, bdef.Armor);
-        }
-        else
-        {
-            int j = u.Target[i].Index;
-            UnitDef vdef = data.Units[u.TypeId[j]];
-            int armor = vdef.Armor + DamageCalc.Points(world.Techs.Bonus(u.Owner[j], u.TypeId[j], TechStat.Armor));
-            damage = DamageCalc.Compute(data.DamageTable, def.Attack, attackBonus, vdef.ArmorClass, armor);
-        }
-        u.GiveUps[i] = 0; // it lands one: the chases it gave up before no longer hold it back (BUG-0137)
-        world.Hits[world.HitCount++] = new PendingHit(new EntityHandle(i, u.Generation[i]), u.Owner[i], u.Target[i], u.TargetIsBuilding[i], damage);
+        int type = u.TypeId[i], owner = u.Owner[i], j = u.Target[i].Index;
+        bool building = u.TargetIsBuilding[i];
+        int damage = building ? DamageToBuilding(world, type, owner, j) : DamageToUnit(world, type, owner, j);
+        if (damage <= 0) return; // data without a structure class: buildings take no damage
+        world.Hits[world.HitCount++] = new PendingHit(new EntityHandle(i, u.Generation[i]), owner, u.Target[i], building, damage);
     }
 
-    private static void HitUnit(World world, in PendingHit hit)
+    /// <summary>One hit's damage by an attacker of unit type <paramref name="attackerType"/> owned by <paramref name="owner"/> on unit slot <paramref name="j"/>: both owners' techs applied.</summary>
+    internal static int DamageToUnit(World world, int attackerType, int owner, int j)
+    {
+        GameData data = world.Data;
+        UnitStore u = world.Units;
+        int attackBonus = DamageCalc.Points(world.Techs.Bonus(owner, attackerType, TechStat.Attack));
+        UnitDef vdef = data.Units[u.TypeId[j]];
+        int armor = vdef.Armor + DamageCalc.Points(world.Techs.Bonus(u.Owner[j], u.TypeId[j], TechStat.Armor));
+        return DamageCalc.Compute(data.DamageTable, data.Units[attackerType].Attack, attackBonus, vdef.ArmorClass, armor);
+    }
+
+    /// <summary>One hit's damage by an attacker of unit type <paramref name="attackerType"/> owned by <paramref name="owner"/> on building slot <paramref name="j"/>, as structure; 0 when the data has no structure class.</summary>
+    internal static int DamageToBuilding(World world, int attackerType, int owner, int j)
+    {
+        int structure = world.StructureClass;
+        if (structure < 0) return 0;
+        GameData data = world.Data;
+        int attackBonus = DamageCalc.Points(world.Techs.Bonus(owner, attackerType, TechStat.Attack));
+        BuildingDef bdef = data.Buildings[world.Buildings.TypeId[j]];
+        return DamageCalc.Compute(data.DamageTable, data.Units[attackerType].Attack, attackBonus, structure, bdef.Armor);
+    }
+
+    /// <summary>Applies one hit to a unit (phase 11): its damage, death (freed, event, kill and loss counted), else the attacker remembered and retaliated on.</summary>
+    internal static void HitUnit(World world, in PendingHit hit)
     {
         UnitStore u = world.Units;
         if (!u.IsAlive(hit.Victim)) return; // killed earlier this phase
@@ -702,18 +773,23 @@ public static class CombatSystem
             u.Free(hit.Victim);
             return;
         }
-        if (!u.IsAlive(hit.Attacker)) return;
+        // Friendly fire (M4-2b) is no attack: an own unit is never a last attacker, nor retaliated on.
+        if (!u.IsAlive(hit.Attacker) || u.Owner[hit.Attacker.Index] == u.Owner[v]) return;
         u.LastAttacker[v] = hit.Attacker;
         // Retaliation: a unit that scans and has nothing to fight takes on whoever hit it, now rather than on its next scan.
         // Not one it gave up on (BUG-0137): a melee attacker is in reach, and its next scan takes it there.
         // The memory may hold a building with the same slot and generation: that is not this attacker (BUG-0142).
         // Nor a buildings-only attacker (M4-2a, attack.targets): it never takes a unit.
+        // Nor one inside its minimum range (M4-2b): it couldn't fire at it, and its next scan would only drop it again.
+        AttackDef attack = world.Data.Units[u.TypeId[v]].Attack;
         if (u.Target[v].Generation == 0 && Scans(world, v) && (u.IgnoredIsBuilding[v] || u.Ignored[v] != hit.Attacker)
-            && world.Data.Units[u.TypeId[v]].Attack.Targets != AttackTargets.Buildings)
+            && attack.Targets != AttackTargets.Buildings
+            && !(attack.MinRange > 0f && UnitGap(u, v, hit.Attacker.Index) < attack.MinRange))
             Engage(world, v, hit.Attacker, false);
     }
 
-    private static void HitBuilding(World world, in PendingHit hit)
+    /// <summary>Applies one hit to a building (phase 11): its damage, and its destruction event when it falls.</summary>
+    internal static void HitBuilding(World world, in PendingHit hit)
     {
         BuildingStore b = world.Buildings;
         if (!b.IsAlive(hit.Victim)) return;

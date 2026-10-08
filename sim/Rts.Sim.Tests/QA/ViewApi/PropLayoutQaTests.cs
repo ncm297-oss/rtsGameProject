@@ -18,8 +18,8 @@ public class PropLayoutQaTests
 
     public PropLayoutQaTests(ITestOutputHelper output) => _out = output;
 
-    private static Simulation Sim(ulong seed, int forests, int mines, int w = 128, int h = 128, int units = 64) =>
-        new(TestSim.Config(seed, 2, units, 4096) with { Map = MapGenParams.Default with { Width = w, Height = h, Forests = forests, GoldMines = mines } });
+    private static Simulation Sim(ulong seed, int forests, int mines, int w = 128, int h = 128, int units = 64, bool combat = true) =>
+        new(TestSim.Config(seed, 2, units, 4096) with { Map = MapGenParams.Default with { Width = w, Height = h, Forests = forests, GoldMines = mines }, Combat = combat });
 
     private static bool Refresh(PropLayout l, World w) =>
         l.Refresh(w.Heightmap, w.NavGrid, w.Resources.Alive, w.Resources.TypeId, w.Resources.Cell);
@@ -335,7 +335,8 @@ public class PropLayoutQaTests
     {
         Simulation Make()
         {
-            Simulation s = Sim(13, 64, 64, units: 2000);
+            // M4-2b: combat off (config only, BUG-0135): every unit type is spawned, and the ranged ones fight now.
+            Simulation s = Sim(13, 64, 64, units: 2000, combat: false);
             float maxR = TestSim.Data.Units.Max(u => u.Radius);
             for (int p = 0; p < 2; p++)
             {

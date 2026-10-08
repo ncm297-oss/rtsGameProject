@@ -14,7 +14,7 @@ public static class CombatScenes
     /// <summary>The Malazan worker (melee 4, Light).</summary>
     public static int Laborer => TestSim.Data.FindUnit("malazan_laborer");
 
-    /// <summary>A unit that "can attack" in the priority (ranged) but does not scan or swing until M4-2 (it fires projectiles).</summary>
+    /// <summary>The Malazan Crossbowman: ranged, 9 pierce (x1.3 v heavy), range 15, a <c>bolt</c> (M4-2b; until then it neither scanned nor swung).</summary>
     public static int Crossbowman => TestSim.Data.FindUnit("malazan_crossbowman");
 
     /// <summary>A sim on a flat <paramref name="size"/> x <paramref name="size"/> cell map (only the ring blocked).</summary>
@@ -83,6 +83,46 @@ public static class CombatScenes
                 int col = k % columns, row = k / columns;
                 var at = center + new Vector2(dir * (gap / 2 + col * 1f), (row - (rows - 1) / 2f) * 1f);
                 Place(sim, side, side == 0 ? HeavyInfantry : Raider, at);
+            }
+        }
+        UnitStore u = sim.World.Units;
+        for (int i = 0; i < u.Capacity; i++)
+            if (u.Alive[i]) sim.Enqueue(Command.AttackMove(u.Owner[i], new EntityHandle(i, u.Generation[i]), mid[1 - u.Owner[i]]));
+    }
+
+    /// <summary>Malazan types by rank of a <see cref="MixedBrawl"/> block, front to back (10 ranks): line, shock, ranged, caster, siege / unique.</summary>
+    private static readonly string[] MalazanRanks =
+        { "malazan_heavy_infantry", "malazan_heavy_infantry", "malazan_heavy_infantry", "malazan_heavy_infantry", "malazan_heavy_infantry",
+          "malazan_wickan_lancer", "malazan_crossbowman", "malazan_crossbowman", "malazan_cadre_mage", "malazan_sapper" };
+
+    /// <summary>Whirlwind types by rank of a <see cref="MixedBrawl"/> block.</summary>
+    private static readonly string[] WhirlwindRanks =
+        { "whirlwind_raider", "whirlwind_raider", "whirlwind_raider", "whirlwind_raider", "whirlwind_raider",
+          "whirlwind_horse_raider", "whirlwind_desert_archer", "whirlwind_desert_archer", "whirlwind_priest", "whirlwind_zealot" };
+
+    /// <summary>
+    /// M4-2b: <see cref="FlatBrawl"/> with mixed armies, ten ranks deep (melee in front, ranged, casters and the Sapper or
+    /// Zealot behind; every second Malazan back-rank unit a Catapult instead): <paramref name="perSide"/> units a side, the
+    /// front ranks <paramref name="gap"/> m apart across <paramref name="center"/>, units 1.6 m apart, every unit
+    /// attack-moved to the far block's center.
+    /// </summary>
+    public static void MixedBrawl(Simulation sim, int perSide, Vector2 center, float gap)
+    {
+        const int ranks = 10;
+        const float spacing = 1.6f;
+        var mid = new Vector2[2];
+        for (int side = 0; side < 2; side++)
+        {
+            float dir = side == 0 ? -1f : 1f;
+            int rows = (perSide + ranks - 1) / ranks;
+            mid[side] = center + new Vector2(dir * (gap / 2 + (ranks - 1) * spacing / 2), 0f);
+            for (int k = 0; k < perSide; k++)
+            {
+                int col = k % ranks, row = k / ranks;
+                string key = side == 0 ? MalazanRanks[col] : WhirlwindRanks[col];
+                if (side == 0 && col == ranks - 1 && row % 2 == 1) key = "malazan_catapult";
+                var at = center + new Vector2(dir * (gap / 2 + col * spacing), (row - (rows - 1) / 2f) * spacing);
+                Place(sim, side, TestSim.Data.FindUnit(key), at);
             }
         }
         UnitStore u = sim.World.Units;

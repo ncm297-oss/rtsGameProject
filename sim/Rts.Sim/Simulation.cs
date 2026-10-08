@@ -75,6 +75,7 @@ public sealed class Simulation
     {
         World.Units.SnapshotPrevPositions();
         World.ClearDeaths(); // the last tick's death events have been read by now
+        World.ClearImpacts(); // and its projectile landings (M4-2b)
 
         // Phase 1: apply commands.
         _commands.Sort();
@@ -101,10 +102,12 @@ public sealed class Simulation
         // Phases 8-9: flow fields (fetched or built on demand) and movement.
         MovementSystem.Run(World);
 
-        // Phase 10: swings, wind-ups and cooldowns (M4-1); hits queue for phase 11.
-        // Phase 11: damage and death (M4-1). Both off with SimConfig.Combat false.
+        // Phase 10: projectiles in flight move a step (M4-2b), then swings, wind-ups and cooldowns (M4-1); hits queue for
+        // phase 11 and shots fly from the next tick.
+        // Phase 11: damage and death (M4-1), then the projectiles that arrived land (M4-2b). All off with SimConfig.Combat false.
         if (World.CombatEnabled)
         {
+            ProjectileSystem.Fly(World);
             CombatSystem.Attack(World);
             CombatSystem.Resolve(World);
         }
@@ -123,7 +126,7 @@ public sealed class Simulation
         _recorder = recorder;
     }
 
-    /// <summary>64-bit FNV-1a hash of all gameplay state: tick, units (Hold, order queues, gather loops and cargo, combat state included), RNG streams, flow-field cache metadata, nav grid versions (and the movement pass's last seen block version), resource nodes, buildings (production queues, research items and rally points included), player totals, researched techs, kills and losses, and pending commands.</summary>
+    /// <summary>64-bit FNV-1a hash of all gameplay state: tick, units (Hold, order queues, gather loops and cargo, combat state included), RNG streams, flow-field cache metadata, nav grid versions (and the movement pass's last seen block version), resource nodes, buildings, projectiles in flight (production queues, research items and rally points included), player totals, researched techs, kills and losses, and pending commands.</summary>
     /// <remarks>
     /// Derived state is left out: the spatial hash (rebuilt from the units every tick),
     /// Speed/Radius (they follow from TypeId), and population (M3-4: <see cref="World.HalfPop"/> follows from the live
@@ -196,6 +199,8 @@ public sealed class Simulation
 
         // M3-2: buildings and the players' totals.
         World.Buildings.AddToHash(ref h);
+        // M4-2b: projectiles in flight; an empty store adds nothing, so a match without a shot hashes as before.
+        World.Projectiles.AddToHash(ref h);
         for (int p = 0; p < World.Gold.Length; p++)
         {
             // M3-5: a player with any researched tech sets the high half of its gold word and its tech words follow;

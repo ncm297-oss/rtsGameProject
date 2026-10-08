@@ -25,8 +25,10 @@ public sealed class AttackDef
     public float Splash { get; init; }
     /// <summary>True when splash also hits allied and own units (docs/02 "Splash and friendly fire").</summary>
     public bool FriendlyFire { get; init; }
-    /// <summary>Projectile id, unresolved until M4; null for melee.</summary>
+    /// <summary>Projectile id as written (<c>attack.projectile</c>); null for an attack that hits at the wind-up point (melee, the ram).</summary>
     public string? Projectile { get; init; }
+    /// <summary><see cref="Projectile"/> resolved to a <see cref="GameData.Projectiles"/> id at load (M4-2b); -1 for none (and in hand-built data).</summary>
+    public int ProjectileTypeId { get; init; } = -1;
     /// <summary>What the attack may target (<c>attack.targets</c>, M4-2a): units, buildings or both (the default).</summary>
     public AttackTargets Targets { get; init; }
     /// <summary>Damage multiplier per armor class id (1 where the data gives none).</summary>

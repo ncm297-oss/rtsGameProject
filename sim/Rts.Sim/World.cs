@@ -86,6 +86,8 @@ public sealed class World
         MaxUnitSpeed = maxSpeed;
         Hits = new PendingHit[config.UnitCapacity]; // one swing lands per unit per tick at most
         _deaths = new DeathEvent[config.UnitCapacity]; // one death per hit at most
+        Projectiles = new ProjectileStore(config.ProjectileSlots);
+        _impacts = new ProjectileImpact[config.ProjectileSlots]; // each projectile lands once
         CombatBuildings = new int[config.BuildingCapacity];
         CombatBuildingsOf = new int[config.PlayerCount];
         CombatEnemyExists = new bool[config.PlayerCount];
@@ -99,6 +101,28 @@ public sealed class World
     }
 
     private readonly DeathEvent[] _deaths;
+    private readonly ProjectileImpact[] _impacts;
+
+    /// <summary>
+    /// Projectiles in flight (M4-2b): read-only spans for the view (position, last position, impact point, type, owner).
+    /// Hashed state; written only by the combat phases.
+    /// </summary>
+    public ProjectileStore Projectiles { get; }
+
+    /// <summary>
+    /// The projectiles that landed in the last tick run (M4-2b), slot order: where, which type, whose, and whether it hit
+    /// (a lob always does). Emptied at the start of every tick like <see cref="Deaths"/>. Output for views, not state: not hashed.
+    /// </summary>
+    public ReadOnlySpan<ProjectileImpact> Impacts => _impacts.AsSpan(0, ImpactCount);
+
+    /// <summary>Number of entries in <see cref="Impacts"/>.</summary>
+    internal int ImpactCount { get; private set; }
+
+    /// <summary>Appends a landing to this tick's <see cref="Impacts"/>.</summary>
+    internal void RecordImpact(in ProjectileImpact e) => _impacts[ImpactCount++] = e;
+
+    /// <summary>Empties <see cref="Impacts"/> (start of a tick).</summary>
+    internal void ClearImpacts() => ImpactCount = 0;
 
     /// <summary>Whether units fight (<see cref="SimConfig.Combat"/>); fixed for the match.</summary>
     public bool CombatEnabled { get; }
@@ -329,7 +353,7 @@ public sealed class World
     /// <summary>Scratch for <see cref="Movement.MovementSystem"/>'s chain shove: the line of units one shove moves; derived, not hashed.</summary>
     internal int[] ChainMembers { get; }
 
-    /// <summary>Scratch for <see cref="Movement.MovementSystem"/>'s neighbor queries, sized to every slot so a query is never truncated; derived, not hashed.</summary>
+    /// <summary>Scratch for <see cref="Movement.MovementSystem"/>'s neighbor queries, sized to every slot so a query is never truncated; also combat's scans (phase 7) and splash queries (phase 11, M4-2b); derived, not hashed.</summary>
     internal int[] Neighbors { get; }
 
     /// <summary>Scratch for <see cref="Movement.MovementSystem"/>: each Moving unit's planned step, applied once every unit has planned, then each shoved unit's trimmed shove; derived, not hashed.</summary>

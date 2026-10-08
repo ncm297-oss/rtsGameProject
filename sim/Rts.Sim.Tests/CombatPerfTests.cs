@@ -50,6 +50,85 @@ public class CombatPerfTests
     }
 
     /// <summary>
+    /// M4-2b criterion 8: 500 v 500 mixed armies (<see cref="CombatScenes.MixedBrawl"/>: line and shock in front, crossbows
+    /// / archers, casters, Sappers, Catapults and Zealots behind) on the flat 128 x 128 map, 8 m apart: projectiles,
+    /// splash and friendly fire in the tick. The first 200 ticks after a 5-tick warm-up average under 4 ms; ticks 205-605
+    /// reported with the projectiles in flight.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Perf")]
+    public void MixedBrawl500v500_First200Ticks_AverageUnder4Ms()
+    {
+        // Dev-placed armies past the population caps: up to 350 shooters, more than the default store (200) holds.
+        var sim = new Simulation(TestSim.Config(Seed: 1, PlayerCount: 2, UnitCapacity: 1000, CommandCapacity: 8032) with { ProjectileCapacity = 1000 },
+            LocalMovementTests.Flat(128));
+        CombatScenes.MixedBrawl(sim, 500, new Vector2(128f, 128f), gap: 8f);
+        for (int t = 0; t < 5; t++) sim.Tick();
+        World w = sim.World;
+        int peak = 0;
+        double[] first = Time(sim, 200);
+        int kills = w.Kills[0] + w.Kills[1], inFlight = w.Projectiles.Count;
+        var later = new double[400];
+        long freq = Stopwatch.Frequency;
+        for (int t = 0; t < later.Length; t++)
+        {
+            long start = Stopwatch.GetTimestamp();
+            sim.Tick();
+            later[t] = (Stopwatch.GetTimestamp() - start) * 1000.0 / freq;
+            peak = Math.Max(peak, w.Projectiles.Count);
+        }
+        double avg = first.Average();
+        _out.WriteLine($"500 v 500 mixed brawl, ticks 5-205: avg {avg:F3} ms, worst {first.Max():F3} ms ({kills} dead, {inFlight} projectiles in flight at tick 205); "
+            + $"ticks 205-605: avg {later.Average():F3} ms, worst {later.Max():F3} ms ({w.Kills[0] + w.Kills[1]} dead, {w.Units.Count} alive, up to {peak} projectiles in flight)");
+        Assert.True(kills > 0, "nobody died: not a brawl");
+        Assert.True(avg < BudgetMs, $"avg {avg:F3} ms over the {BudgetMs} ms budget");
+    }
+
+    /// <summary>
+    /// M4-2b criterion 8: 1,000 bolts in flight (a holding Crossbowman's, at a Raider 230 m off, fired between ticks) cost
+    /// under 0.3 ms a tick over 100 ticks of flight, and those ticks allocate nothing; the tick they all land on is reported.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Perf")]
+    public void ThousandProjectilesInFlight_UnderPoint3MsATick_AndAllocateNothing()
+    {
+        var config = TestSim.Config(Seed: 1, PlayerCount: 2, UnitCapacity: 8, CommandCapacity: 64) with { ProjectileCapacity = 1000 };
+        var sim = new Simulation(config, LocalMovementTests.Flat(128));
+        World w = sim.World;
+        UnitStore u = w.Units;
+        EntityHandle s = CombatScenes.Place(sim, 0, CombatScenes.Crossbowman, new Vector2(10f, 128f));
+        EntityHandle r = CombatScenes.Place(sim, 1, CombatScenes.Raider, new Vector2(240f, 128f));
+        sim.Enqueue(Command.HoldPosition(0, s));
+        sim.Enqueue(Command.HoldPosition(1, r));
+        sim.Tick();
+        sim.Tick();
+        u.CooldownTicks[s.Index] = 1_000_000;
+        u.Target[s.Index] = r;
+        for (int k = 0; k < 1000; k++) Combat.ProjectileSystem.Fire(w, s.Index);
+        u.Target[s.Index] = default;
+        Assert.Equal(1000, w.Projectiles.Count);
+        sim.Tick(); // warm-up
+        double[] ms = Time(sim, 100);
+        Assert.Equal(1000, w.Projectiles.Count);
+        AllocationProbe.AssertZero(() =>
+        {
+            for (int t = 0; t < 20; t++) sim.Tick();
+        }, _out);
+        Assert.Equal(1000, w.Projectiles.Count);
+        long freq = Stopwatch.Frequency;
+        double landing = 0;
+        int ticks = 0;
+        while (w.Projectiles.Count > 0 && ticks++ < 300) // they all land on one tick
+        {
+            long start = Stopwatch.GetTimestamp();
+            sim.Tick();
+            landing = Math.Max(landing, (Stopwatch.GetTimestamp() - start) * 1000.0 / freq);
+        }
+        _out.WriteLine($"1,000 bolts in flight: avg {ms.Average():F4} ms, worst {ms.Max():F4} ms a tick; the landing tick {landing:F3} ms; raider alive {u.IsAlive(r)}");
+        Assert.True(ms.Average() < 0.3, $"avg {ms.Average():F4} ms over the 0.3 ms budget");
+    }
+
+    /// <summary>
     /// Reported, not asserted: the same armies as columns 25 ranks deep and 20 m wide, where most units stand pressing
     /// behind their own planted front rank; movement, not combat, is most of that tick.
     /// </summary>

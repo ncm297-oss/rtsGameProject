@@ -24,6 +24,34 @@ public sealed record SimConfig(ulong Seed, int PlayerCount, int UnitCapacity, in
     public int BuildingCapacity { get; init; } = Entities.BuildingStore.DefaultCapacity;
 
     /// <summary>
+    /// Maximum number of projectiles in flight (M4-2b); the store is allocated once at this size, and a shot fired while it
+    /// is full is lost. 0 (the default) sizes it from the data (<see cref="ProjectileSlots"/>). Not in the replay header: a
+    /// replay plays with the default.
+    /// </summary>
+    public int ProjectileCapacity { get; init; }
+
+    /// <summary>
+    /// The projectile store's size: <see cref="ProjectileCapacity"/>, or by default as many shooters as the players'
+    /// population caps allow (<c>players x rules.popCap / the smallest pop of a unit with a projectile</c>, at most
+    /// <see cref="UnitCapacity"/>, at least 1): every shipped shot lands before its shooter's next one (flight shorter than
+    /// the cooldown, pinned by a test), so a shooter has at most one in the air. Dev spawns past the cap can outnumber it;
+    /// a scene that does sets the capacity.
+    /// </summary>
+    public int ProjectileSlots
+    {
+        get
+        {
+            if (ProjectileCapacity > 0) return ProjectileCapacity;
+            int smallest = int.MaxValue;
+            foreach (UnitDef u in Data.Units)
+                if (u.Attack.ProjectileTypeId >= 0 && u.HalfPop < smallest) smallest = Math.Max(u.HalfPop, 1);
+            if (smallest == int.MaxValue) return 1;
+            long shooters = (long)PlayerCount * Data.Rules.HalfPopCap / smallest;
+            return (int)Math.Clamp(shooters, 1, UnitCapacity);
+        }
+    }
+
+    /// <summary>
     /// Whether units fight (M4-1, default true): target scans, swings, damage and death. False turns the three combat
     /// steps off and an attack-move sets no combat mode, so a scene of two owners plays as it did before M4 (enemies are
     /// only walls). A test and tooling switch for the pre-M4 movement, economy and production scenes (BUG-0135, Producer
@@ -40,6 +68,7 @@ public sealed record SimConfig(ulong Seed, int PlayerCount, int UnitCapacity, in
         if (CommandCapacity < 1) throw new ArgumentOutOfRangeException(nameof(CommandCapacity));
         if (ResourceCapacity < 1) throw new ArgumentOutOfRangeException(nameof(ResourceCapacity));
         if (BuildingCapacity < 1) throw new ArgumentOutOfRangeException(nameof(BuildingCapacity));
+        if (ProjectileCapacity < 0) throw new ArgumentOutOfRangeException(nameof(ProjectileCapacity));
         if (Data == null) throw new ArgumentNullException(nameof(Data));
         if (Map == null) throw new ArgumentNullException(nameof(Map));
         Map.Validate();
