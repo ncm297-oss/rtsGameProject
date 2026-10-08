@@ -13,8 +13,10 @@ namespace Rts.Sim.Tests.QA;
 /// <see cref="EconomyConstants.Reach"/>), so player 0's wood income stops; unit 10 for 14,575 ticks (about 1,240 to 15,815).
 /// The replay (the scene's own command stream, a checkpoint every tick) is attached to the bug. The row replays it and
 /// requires that no worker on a wood loop stays out of reach and within 1 m of one spot for more than 600 ticks in a
-/// row (its 20-tick retry walks end where they started). Skipped while BUG-0146 is open (it fails today); un-skip with
-/// the fix. If the shipped data changes, the replay's data hash no longer matches and the row says so instead of testing.
+/// row (its 20-tick retry walks end where they started). Un-skipped with the fix (M4-2a). The file is headered with the
+/// data hash it was recorded at; <see cref="SameGameDataHashes"/> lists the shipped hashes since then whose changes do
+/// not touch this match (the header is substituted in code: the file is checksummed and lives in studio/), and the row
+/// checks the replay still plays bit-exact to its checkpoints up to where the fix first changes an arrival.
 /// </summary>
 [Collection(SerialCollection.Name)]
 public class GatherWedgeQaTests
@@ -23,7 +25,28 @@ public class GatherWedgeQaTests
 
     public GatherWedgeQaTests(ITestOutputHelper output) => _out = output;
 
-    [Fact(Skip = "BUG-0146 open: laborers wedge in Gathering out of reach of a tree (seed 21 Playable replay)")]
+    /// <summary>The replay's recorded data hash.</summary>
+    private const ulong RecordedDataHash = 0x702859B867AAC412;
+
+    /// <summary>
+    /// Shipped data hashes that play the recorded match unchanged: the recording's own; D4's (A863BAF8637CC860: player-facing
+    /// text only); M4-2a's <c>attack.targets</c> on the Battering Ram (no ram in this match). Add one only for a data change
+    /// that cannot touch this game, and keep <see cref="CheckpointPrefixTicks"/> passing: it proves the game is the same.
+    /// </summary>
+    private static readonly ulong[] SameGameDataHashes = { RecordedDataHash, 0xA863BAF8637CC860, M4_2aDataHash };
+
+    /// <summary>The shipped data hash after M4-2a (the ram's <c>attack.targets</c>).</summary>
+    internal const ulong M4_2aDataHash = 0xFA1BFB5ECE056056;
+
+    /// <summary>
+    /// Ticks the replay must still match its recorded checkpoints: the fix (M4-2a) first changes the match on tick 20, when
+    /// the first gather walks walk on to their stand points instead of stopping up to 1 m short, so only the ticks before
+    /// that (the setup: spawns, the bases and the first orders) can still match. They show the header substitution plays
+    /// the recorded game; everything after is the fixed game, which is what the row tests.
+    /// </summary>
+    private const int CheckpointPrefixTicks = 19;
+
+    [Fact]
     public void Seed21PlayableReplay_NoGathererStandsOutOfReachForever()
     {
         string path = System.IO.Path.GetFullPath(System.IO.Path.Combine(TestDataDir.Shipped, "..", "..", "studio", "bugs", "BUG-0146-seed21-wood-wedge.replay"));
@@ -31,8 +54,9 @@ public class GatherWedgeQaTests
         GameData data = DataLoader.LoadAll(TestDataDir.Shipped).Data!;
         // A data-hash mismatch fails loudly rather than returning: a silent return would make the un-skipped row pass
         // without testing anything (D4 moves the shipped data hash; see BUG-0146's notes).
-        Assert.True(data.ContentHash() == replay!.DataHash,
-            $"shipped data hash {data.ContentHash():X16} != the replay's {replay.DataHash:X16}: re-record it from M3PlayableTest -- --seed 21 (or override the header for a text-only data change) before trusting this row");
+        Assert.Equal(RecordedDataHash, replay!.DataHash);
+        Assert.True(Array.IndexOf(SameGameDataHashes, data.ContentHash()) >= 0,
+            $"shipped data hash {data.ContentHash():X16} is not one known to play the recorded match ({replay.DataHash:X16}): re-record it from M3PlayableTest -- --seed 21, or add the hash for a change that cannot touch this game");
         var sim = new Simulation(new SimConfig(replay.Seed, replay.PlayerCount, replay.UnitCapacity, replay.CommandCapacity)
         {
             Data = data,
@@ -50,6 +74,8 @@ public class GatherWedgeQaTests
         {
             while (next < replay.Commands.Length && replay.Commands[next].Tick == sim.TickNumber + 1) sim.Enqueue(replay.Commands[next++]);
             sim.Tick();
+            if (sim.TickNumber <= CheckpointPrefixTicks)
+                Assert.True(replay.Checkpoints[sim.TickNumber - 1].Hash == sim.StateHash(), $"the replay no longer plays the recorded game: checkpoint {sim.TickNumber} differs");
             for (int i = 0; i < u.Capacity; i++)
             {
                 bool onWood = u.Alive[i] && w.Resources.IsAlive(u.GatherNode[i])

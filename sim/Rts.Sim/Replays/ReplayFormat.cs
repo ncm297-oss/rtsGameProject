@@ -13,8 +13,9 @@ namespace Rts.Sim.Replays;
 
 /// <summary>Reads and writes replays as line-based ASCII text (docs/03 "Save/load and replays").</summary>
 /// <remarks>
-/// One <c>key value</c> line per header field in a fixed order, then <c>commands N</c> and N
-/// <c>c</c> lines, <c>checkpoints N</c> and N <c>k</c> lines, <c>end</c>, and last a
+/// One <c>key value</c> line per header field in a fixed order (format 4 adds <c>combat 0 / 1</c> after <c>ticks</c>),
+/// then <c>commands N</c> and N <c>c</c> lines (format 4: 13 fields, the attack target's index, generation and
+/// building flag before the flags; format 3: 10), <c>checkpoints N</c> and N <c>k</c> lines, <c>end</c>, and last a
 /// <c>checksum</c> line: the FNV-1a 64 hash of every byte before it, so any changed byte is caught.
 /// Integers are invariant-culture decimal in canonical form; hashes are 16 uppercase hex digits;
 /// floats are their exact IEEE-754 bit pattern as 8 uppercase hex digits. Lines end in LF only.
@@ -49,6 +50,8 @@ public static class ReplayFormat
         Line(sb, "resource-capacity", Int(replay.ResourceCapacity));
         Line(sb, "checkpoint-interval", Int(replay.CheckpointInterval));
         Line(sb, "ticks", Int(replay.TickCount));
+        bool v4 = replay.FormatVersion >= 4;
+        if (v4) Line(sb, "combat", replay.Combat ? "1" : "0");
         MapGenParams m = replay.Map;
         Line(sb, "map.width", Int(m.Width));
         Line(sb, "map.height", Int(m.Height));
@@ -78,8 +81,12 @@ public static class ReplayFormat
             sb.Append("c ").Append(Int(c.Tick)).Append(' ').Append(Int(c.Player)).Append(' ').Append(Int(c.Sequence))
                 .Append(' ').Append(Int((int)c.Kind)).Append(' ').Append(Int(c.TypeId))
                 .Append(' ').Append(Bits(c.Position.X)).Append(' ').Append(Bits(c.Position.Y))
-                .Append(' ').Append(Int(c.Unit.Index)).Append(' ').Append(Int(c.Unit.Generation))
-                .Append(' ').Append(Int(c.Flags)).Append('\n');
+                .Append(' ').Append(Int(c.Unit.Index)).Append(' ').Append(Int(c.Unit.Generation));
+            // Format 4: the attack target (index, generation, building 0 / 1) before the flags, which stay last.
+            if (v4)
+                sb.Append(' ').Append(Int(c.Target.Index)).Append(' ').Append(Int(c.Target.Generation))
+                    .Append(' ').Append(c.TargetIsBuilding ? '1' : '0');
+            sb.Append(' ').Append(Int(c.Flags)).Append('\n');
         }
         Line(sb, "checkpoints", Int(replay.Checkpoints.Length));
         foreach (ReplayCheckpoint k in replay.Checkpoints)
@@ -162,8 +169,9 @@ public static class ReplayFormat
     {
         replay = null;
         if (!r.Fields(Magic, 1, out string[] f) || !TryInt(f[0], out int version)) return ReplayError.Malformed;
-        // A newer format may change everything after this line, so stop here.
-        if (version != Replay.CurrentFormatVersion) return ReplayError.FormatVersionMismatch;
+        // A newer (or too old) format may change everything after this line, so stop here.
+        if (version < Replay.OldestFormatVersion || version > Replay.CurrentFormatVersion) return ReplayError.FormatVersionMismatch;
+        bool v4 = version >= 4;
 
         if (!r.Fields("sim-version", 1, out f)) return ReplayError.Malformed;
         string simVersion = f[0];
@@ -175,6 +183,12 @@ public static class ReplayFormat
         if (!r.Int("resource-capacity", out int resourceCapacity)) return ReplayError.Malformed;
         if (!r.Int("checkpoint-interval", out int interval)) return ReplayError.Malformed;
         if (!r.Int("ticks", out int ticks)) return ReplayError.Malformed;
+        bool combat = true;
+        if (v4)
+        {
+            if (!r.Fields("combat", 1, out f) || f[0] is not ("0" or "1")) return ReplayError.Malformed;
+            combat = f[0] == "1";
+        }
 
         if (!r.Int("map.width", out int width) || !r.Int("map.height", out int height)
             || !r.Int("map.edge-margin", out int edgeMargin)
@@ -220,13 +234,21 @@ public static class ReplayFormat
         var commands = ImmutableArray.CreateBuilder<Command>(commandCount);
         for (int i = 0; i < commandCount; i++)
         {
-            if (!r.Fields("c", 10, out f)
+            if (!r.Fields("c", v4 ? 13 : 10, out f)
                 || !TryInt(f[0], out int tick) || !TryInt(f[1], out int player) || !TryInt(f[2], out int sequence)
                 || !TryInt(f[3], out int kind) || !TryInt(f[4], out int typeId)
                 || !TryBits(f[5], out float x) || !TryBits(f[6], out float y)
                 || !TryInt(f[7], out int unitIndex) || !TryInt(f[8], out int unitGeneration)
-                || !TryInt(f[9], out int flags))
+                || !TryInt(f[^1], out int flags))
                 return ReplayError.Malformed;
+            int targetIndex = 0, targetGeneration = 0;
+            bool targetIsBuilding = false;
+            if (v4)
+            {
+                if (!TryInt(f[9], out targetIndex) || !TryInt(f[10], out targetGeneration) || f[11] is not ("0" or "1"))
+                    return ReplayError.Malformed;
+                targetIsBuilding = f[11] == "1";
+            }
             commands.Add(new Command
             {
                 Kind = (CommandKind)kind,
@@ -237,6 +259,8 @@ public static class ReplayFormat
                 Position = new Vector2(x, y),
                 Unit = new EntityHandle(unitIndex, unitGeneration),
                 Flags = flags,
+                Target = new EntityHandle(targetIndex, targetGeneration),
+                TargetIsBuilding = targetIsBuilding,
             });
         }
 
@@ -252,6 +276,7 @@ public static class ReplayFormat
         var result = new Replay
         {
             FormatVersion = version,
+            Combat = combat,
             SimVersion = simVersion,
             DataHash = dataHash,
             Map = map,

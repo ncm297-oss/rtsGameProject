@@ -71,9 +71,13 @@ public sealed class UnitStore
     public readonly int[] QueueCount;
     /// <summary>Queued order kinds, <see cref="OrderConstants.QueueCapacity"/> per slot, head first; entries past <see cref="QueueCount"/> are always default.</summary>
     public readonly CommandKind[] QueueKind;
-    /// <summary>Queued order targets (x, z) in meters, parallel to <see cref="QueueKind"/>; zero for Stop and HoldPosition and past <see cref="QueueCount"/>.</summary>
+    /// <summary>
+    /// Queued order targets (x, z) in meters, parallel to <see cref="QueueKind"/>; zero for Stop and HoldPosition and past
+    /// <see cref="QueueCount"/>. Not a point on an <see cref="CommandKind.Attack"/> entry: read that one's target with
+    /// <see cref="QueuedTarget"/> (a queued-waypoint overlay must not draw it as a position).
+    /// </summary>
     public readonly Vector2[] QueuePosition;
-    /// <summary>Queued building types (<see cref="CommandKind.Build"/> entries, M3-3), parallel to <see cref="QueueKind"/>; 0 for every other kind and past <see cref="QueueCount"/>.</summary>
+    /// <summary>Queued building types (<see cref="CommandKind.Build"/> entries, M3-3), parallel to <see cref="QueueKind"/>; on an <see cref="CommandKind.Attack"/> entry 1 when its target is a building (<see cref="QueuedTarget"/>); 0 for every other kind and past <see cref="QueueCount"/>.</summary>
     public readonly int[] QueueTypeId;
     /// <summary>The building a worker builds or repairs (M3-3); default when it has no such order.</summary>
     public readonly EntityHandle[] BuildTarget;
@@ -125,6 +129,12 @@ public sealed class UnitStore
     /// <see cref="Combat.CombatConstants.MaxGiveUps"/> its scans take only targets in reach.
     /// </summary>
     public readonly int[] GiveUps;
+    /// <summary>
+    /// Set by an attack-move to any point but its leg's own that kept the unit's fight (BUG-0154): this tick's target
+    /// acquisition re-picks by priority at once, keeping the swing if the pick is the same target. Cleared in that same
+    /// phase 7, so never set between ticks, though hashed (Simulation.AddCombatToHash).
+    /// </summary>
+    public readonly bool[] Repick;
     /// <summary>Whether the slot holds a live unit.</summary>
     public readonly bool[] Alive;
 
@@ -193,6 +203,7 @@ public sealed class UnitStore
         Ignored = new EntityHandle[capacity];
         IgnoredIsBuilding = new bool[capacity];
         GiveUps = new int[capacity];
+        Repick = new bool[capacity];
         Alive = new bool[capacity];
         Generation = new int[capacity];
         _freeList = new int[capacity];
@@ -322,6 +333,22 @@ public sealed class UnitStore
         _freeList[_freeCount++] = handle.Index;
     }
 
+    /// <summary>
+    /// The target of queue entry <paramref name="entry"/> (an index into the flat queue arrays), an <see cref="CommandKind.Attack"/>
+    /// entry (M4-2a): an Attack has no target point, so its <see cref="QueuePosition"/> holds the target's slot (x) and
+    /// generation (y) as whole numbers, exact in a float below 2^24 (a generation counts frees of one slot: a 24-hour
+    /// match can't reach that), and its <see cref="QueueTypeId"/> is 1 for a building. Kept in the existing arrays, not a
+    /// new one, so the queue costs no more memory (a 1,024-cell world with 4,096 slots stays inside its 228 MB bound).
+    /// </summary>
+    public EntityHandle QueuedTarget(int entry) => new((int)QueuePosition[entry].X, (int)QueuePosition[entry].Y);
+
+    /// <summary>Writes <see cref="QueuedTarget"/> for entry <paramref name="entry"/>.</summary>
+    internal void SetQueuedTarget(int entry, EntityHandle target, bool isBuilding)
+    {
+        QueuePosition[entry] = new Vector2(target.Index, target.Generation);
+        QueueTypeId[entry] = isBuilding ? 1 : 0;
+    }
+
     /// <summary>Drops every queued order of slot <paramref name="index"/>, resetting all its entries so unused ones stay default.</summary>
     internal void ClearQueue(int index)
     {
@@ -358,6 +385,7 @@ public sealed class UnitStore
         Ignored[index] = default;
         IgnoredIsBuilding[index] = false;
         GiveUps[index] = 0;
+        Repick[index] = false;
     }
 
     /// <summary>

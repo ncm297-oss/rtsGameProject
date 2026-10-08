@@ -14,9 +14,24 @@ public static class EconomyConstants
     /// <summary>
     /// How far (meters) outside the footprint edge a gather walk aims: half the slack between
     /// <see cref="Reach"/> and <see cref="MovementConstants.ArrivalDistance"/>, so a walker that arrives
-    /// (within ArrivalDistance of that point) is always in reach.
+    /// (within ArrivalDistance of that point) is always in reach. Since M4-2a (BUG-0146) a footprint walker walks on to
+    /// within about 0.3 m of the point while it can, so the slack behind it is left for the next worker in the queue.
     /// </summary>
     public const float GoalInset = (Reach - MovementConstants.ArrivalDistance) / 2f;
+
+    /// <summary>
+    /// Stand points a footprint walk may aim at per passable cell beside the footprint (BUG-0146): the shared edge's
+    /// middle and one to either side, so several workers stand at a 1 x 1 tree open on one side instead of a column of
+    /// which only the front one is in reach.
+    /// </summary>
+    public const int StandPointsPerCell = 3;
+
+    /// <summary>
+    /// Gap between neighbouring stand points along an edge, in walker radii: 1.5, more than twice
+    /// <see cref="MovementConstants.ArrivalSpacing"/> (1.2), so workers on neighbouring points are not too crowded to
+    /// stop, and less than 2, so three points fit on a 2 m cell edge for a 0.4 m worker.
+    /// </summary>
+    public const float StandPointSpacing = 1.5f;
 
     /// <summary>
     /// docs/02 "Buildings": n workers build in <c>t x 3 / (n + 2)</c> ticks (Age of Empires' formula). A site needs

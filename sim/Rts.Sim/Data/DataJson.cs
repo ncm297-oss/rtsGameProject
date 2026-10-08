@@ -125,6 +125,7 @@ internal sealed class AttackJson
     public double? Splash { get; set; }
     public bool? FriendlyFire { get; set; }
     public string? Projectile { get; set; }
+    public string? Targets { get; set; }
     public Dictionary<string, double>? BonusVs { get; set; }
 }
 

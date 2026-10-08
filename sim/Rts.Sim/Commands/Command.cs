@@ -30,17 +30,21 @@ public struct Command
     public int TypeId;
     /// <summary>Target position (x, z) in meters.</summary>
     public Vector2 Position;
-    /// <summary>The unit a unit order (<see cref="CommandKind.Move"/>, Stop, HoldPosition, AttackMove, Gather, Build, Repair) applies to.</summary>
+    /// <summary>The unit a unit order (<see cref="CommandKind.Move"/>, Stop, HoldPosition, AttackMove, Gather, Build, Repair, Attack) applies to.</summary>
     public EntityHandle Unit;
     /// <summary>Option bits; see <see cref="QueuedFlag"/>.</summary>
     public int Flags;
+    /// <summary>The unit or building an <see cref="CommandKind.Attack"/> is aimed at (M4-2a); default for every other kind.</summary>
+    public EntityHandle Target;
+    /// <summary>True when <see cref="Target"/> is a building handle (M4-2a); false for every other kind.</summary>
+    public bool TargetIsBuilding;
 
     /// <summary>True when <see cref="QueuedFlag"/> is set.</summary>
     public readonly bool IsQueued => (Flags & QueuedFlag) != 0;
 
     /// <summary>True for the kinds addressed to one unit (<see cref="Unit"/>), which can be queued.</summary>
     public readonly bool IsUnitOrder => Kind is CommandKind.Move or CommandKind.Stop or CommandKind.HoldPosition or CommandKind.AttackMove or CommandKind.Gather
-        or CommandKind.Build or CommandKind.Repair;
+        or CommandKind.Build or CommandKind.Repair or CommandKind.Attack;
 
     /// <summary>True when <see cref="Kind"/> is a defined <see cref="CommandKind"/> and <see cref="Flags"/> holds only known bits, set on unit orders only: what <c>Simulation.Enqueue</c> accepts and a replay may hold.</summary>
     /// <remarks>
@@ -48,7 +52,8 @@ public struct Command
     /// <see cref="CommandKind.SpawnUnit"/>, a <see cref="CommandKind.SpawnBuilding"/>, a <see cref="CommandKind.Cancel"/> or the production kinds
     /// (<see cref="CommandKind.Train"/> to <see cref="CommandKind.ClearRally"/>, and <see cref="CommandKind.Research"/>), so it is refused there rather than carried, ignored, in the
     /// replay and the hash (BUG-0056). Written as a switch, not <c>Enum.IsDefined</c>, so a new kind is
-    /// refused until it is added here on purpose.
+    /// refused until it is added here on purpose. Likewise a <see cref="Target"/> (or <see cref="TargetIsBuilding"/>)
+    /// means something on an <see cref="CommandKind.Attack"/> only (M4-2a).
     /// </remarks>
     public readonly bool IsWellFormed()
     {
@@ -56,8 +61,9 @@ public struct Command
             or CommandKind.HoldPosition or CommandKind.AttackMove or CommandKind.SpawnBuilding or CommandKind.Gather
             or CommandKind.Build or CommandKind.Cancel or CommandKind.Repair
             or CommandKind.Train or CommandKind.CancelTrain or CommandKind.SetRally or CommandKind.ClearRally
-            or CommandKind.Research;
+            or CommandKind.Research or CommandKind.Attack;
         if (!knownKind || (Flags & ~KnownFlags) != 0) return false;
+        if (Kind != CommandKind.Attack && (Target.Index != 0 || Target.Generation != 0 || TargetIsBuilding)) return false;
         return Flags == 0 || IsUnitOrder;
     }
 
@@ -149,6 +155,18 @@ public struct Command
     /// <summary>A command clearing the rally point of <paramref name="player"/>'s finished building covering <paramref name="building"/> (meters).</summary>
     public static Command ClearRally(int player, Vector2 building) =>
         new() { Kind = CommandKind.ClearRally, Player = player, Position = building };
+
+    /// <summary>
+    /// A command ordering <paramref name="player"/>'s <paramref name="unit"/> to attack <paramref name="target"/>, a unit, or a
+    /// building when <paramref name="isBuilding"/> (M4-2a); <paramref name="queued"/> appends it to the unit's order queue.
+    /// </summary>
+    public static Command Attack(int player, EntityHandle unit, EntityHandle target, bool isBuilding, bool queued = false)
+    {
+        Command c = UnitOrder(CommandKind.Attack, player, unit, default, queued);
+        c.Target = target;
+        c.TargetIsBuilding = isBuilding;
+        return c;
+    }
 
     private static Command UnitOrder(CommandKind kind, int player, EntityHandle unit, Vector2 target, bool queued) =>
         new() { Kind = kind, Player = player, Unit = unit, Position = target, Flags = queued ? QueuedFlag : 0 };

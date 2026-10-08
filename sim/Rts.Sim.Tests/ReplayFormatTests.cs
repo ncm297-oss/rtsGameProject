@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Numerics;
 using System.Reflection;
 using System.Text;
 using Rts.Sim.Commands;
@@ -174,15 +175,17 @@ public class ReplayFormatTests
     [InlineData(2, "2", "player == PlayerCount")]
     [InlineData(2, "99", "player far out of range")]
     [InlineData(2, "-1", "negative player")]
-    [InlineData(4, "16", "unknown kind (one past Research, M3-5)")]
+    [InlineData(4, "17", "unknown kind (one past Attack, M4-2a)")]
     [InlineData(4, "-1", "negative kind")]
     [InlineData(1, "0", "tick 0 (Enqueue always stamps at least 1)")]
     [InlineData(1, "301", "tick past the end")]
     [InlineData(3, "5", "sequence gap")]
-    [InlineData(10, "2", "unknown flag bit")]
-    [InlineData(10, "3", "queued plus an unknown flag bit")]
-    [InlineData(10, "-1", "every flag bit")]
-    [InlineData(10, "1", "the queued flag on a spawn (not a unit order, BUG-0056)")]
+    [InlineData(13, "2", "unknown flag bit")]
+    [InlineData(13, "3", "queued plus an unknown flag bit")]
+    [InlineData(13, "-1", "every flag bit")]
+    [InlineData(13, "1", "the queued flag on a spawn (not a unit order, BUG-0056)")]
+    [InlineData(10, "1", "an attack target on a spawn (not an Attack, M4-2a)")]
+    [InlineData(12, "1", "a building target flag on a spawn (M4-2a)")]
     public void CommandBreakingTheLogRules_IsRefusedAtRead(int field, string value, string what)
     {
         string text = Text(Small);
@@ -204,15 +207,16 @@ public class ReplayFormatTests
         Assert.Throws<ArgumentException>(() => ReplayFormat.Write(bad)); // the writer won't write it either
     }
 
-    /// <summary>M1-7: format 2 added the flags field; M3-1: format 3 the resource lines. Any other version is refused by version first.</summary>
+    /// <summary>M1-7: format 2 added the flags field; M3-1: format 3 the resource lines; M4-2a: format 4 the combat line and attack targets. Any version but 3 and 4 is refused by version first.</summary>
     [Theory]
     [InlineData(1)]
     [InlineData(2)]
-    [InlineData(4)]
+    [InlineData(5)]
     [InlineData(0)]
     public void OtherFormatVersion_IsRefusedAsVersionMismatch(int version)
     {
-        Assert.Equal(3, Replay.CurrentFormatVersion);
+        Assert.Equal(4, Replay.CurrentFormatVersion);
+        Assert.Equal(3, Replay.OldestFormatVersion);
         string text = Text(Small).Replace($"rts-replay {Replay.CurrentFormatVersion}\n", $"rts-replay {version}\n");
         Assert.Equal(ReplayError.FormatVersionMismatch, Read(Reseal(text)));
     }
@@ -242,6 +246,156 @@ public class ReplayFormatTests
         var format2 = lines.Where(l => !dropped.Any(key => l.StartsWith(key, StringComparison.Ordinal)))
             .Select(l => l.StartsWith("rts-replay ", StringComparison.Ordinal) ? "rts-replay 2" : l);
         Assert.Equal(ReplayError.FormatVersionMismatch, Read(ReplayFormat.Seal(string.Join('\n', format2))));
+    }
+
+    // ---------- M4-2a: format 4 (the combat line, attack targets) and format 3 still read ----------
+
+    /// <summary>The golden rewritten as format 3 wrote it: header 3, no combat line, 10-field command lines.</summary>
+    private static string GoldenAsFormat3()
+    {
+        string text = Encoding.ASCII.GetString(File.ReadAllBytes(ReplayTestRun.GoldenPath));
+        string[] lines = text[..text.LastIndexOf("checksum ", StringComparison.Ordinal)].Split('\n');
+        Assert.Contains("combat 1", lines);
+        var format3 = lines.Where(l => l != "combat 1").Select(l =>
+            l.StartsWith("rts-replay ", StringComparison.Ordinal) ? "rts-replay 3"
+            : l.StartsWith("c ", StringComparison.Ordinal) ? string.Join(' ', l.Split(' ')[..10]) + " " + l.Split(' ')[^1]
+            : l);
+        return string.Join('\n', format3);
+    }
+
+    [Fact]
+    public void Format3File_StillReads_WithCombatOn_WritesBackAsFormat3_AndPlays()
+    {
+        byte[] bytes = ReplayFormat.Seal(GoldenAsFormat3());
+        Assert.Equal(ReplayError.None, ReplayFormat.TryRead(bytes, out Replay? r));
+        Assert.Equal(3, r!.FormatVersion);
+        Assert.True(r.Combat);
+        Assert.All(r.Commands, c => Assert.True(c.Target == default && !c.TargetIsBuilding));
+        Assert.Equal(bytes, ReplayFormat.Write(r)); // a format 3 replay writes back as format 3, byte for byte
+        ReplayResult played = ReplayPlayer.Run(r, TestSim.Data);
+        Assert.True(played.Ok, played.ToString());
+    }
+
+    [Fact]
+    public void Format3_CannotHoldAnAttackOrCombatOff()
+    {
+        Replay r3 = ReplayTestRun.With(Small, formatVersion: 3);
+        Assert.Equal(ReplayError.None, r3.Validate());
+        Assert.Equal(ReplayError.InvalidHeader, ReplayTestRun.With(r3, combat: false).Validate());
+        Command[] commands = r3.Commands.ToArray();
+        commands[^1] = Command.Attack(commands[^1].Player, new Rts.Sim.Entities.EntityHandle(0, 1), new Rts.Sim.Entities.EntityHandle(1, 1), false)
+            with { Tick = commands[^1].Tick, Sequence = commands[^1].Sequence };
+        Assert.Equal(ReplayError.InvalidCommand, ReplayTestRun.With(r3, commands: commands).Validate());
+        Assert.Equal(ReplayError.None, ReplayTestRun.With(Small, commands: commands).Validate()); // format 4 can
+    }
+
+    [Fact]
+    public void Format4_HasTheCombatLine_AndThirteenFieldCommandLines()
+    {
+        string text = Text(Small);
+        Assert.StartsWith("rts-replay 4\n", text);
+        string[] lines = text.Split('\n');
+        Assert.Equal("combat 1", lines[Array.FindIndex(lines, l => l.StartsWith("ticks ", StringComparison.Ordinal)) + 1]);
+        Assert.All(lines.Where(l => l.StartsWith("c ", StringComparison.Ordinal)), l => Assert.Equal(14, l.Split(' ').Length));
+    }
+
+    [Theory]
+    [InlineData("combat 2")]
+    [InlineData("combat true")]
+    [InlineData("combat")]
+    [InlineData("combat 01")]
+    public void Format4_ABadCombatLine_IsMalformed(string line)
+    {
+        string text = Text(Small).Replace("\ncombat 1\n", "\n" + line + "\n");
+        Assert.Equal(ReplayError.Malformed, Read(Reseal(text)));
+    }
+
+    [Theory]
+    [InlineData(" 0 0 2")]  // building flag not 0 / 1
+    [InlineData(" 0 0")]    // 12 fields
+    [InlineData(" 0 0 0 0")] // 14 fields
+    [InlineData(" 00 0 0")] // non-canonical index
+    [InlineData(" 0 x 0")]  // not a number
+    public void Format4_ABadAttackTargetField_IsMalformed(string target)
+    {
+        string text = Text(Small);
+        string first = FirstCommandLine(text);
+        string[] f = first.Split(' ');
+        string edited = string.Join(' ', f[..10]) + target + " " + f[^1];
+        Assert.Equal(ReplayError.Malformed, Read(Reseal(text.Replace(first + "\n", edited + "\n"))));
+    }
+
+    [Fact]
+    public void Format4_CombatOff_IsRecorded_AndPlayedBackOff_WithoutTheOverride()
+    {
+        var sim = new Simulation(TestSim.ConfigNoCombat(Seed: 3, PlayerCount: 2, UnitCapacity: 16, CommandCapacity: 32));
+        var rec = new ReplayRecorder(sim, checkpointInterval: 10);
+        NavGrid g = sim.World.NavGrid;
+        int center = MoveScenario.CentralCell(g);
+        Vector2 at = MoveScenario.Center(g, center);
+        sim.Enqueue(Command.SpawnUnit(0, CombatScenes.HeavyInfantry, at));
+        sim.Enqueue(Command.SpawnUnit(1, CombatScenes.HeavyInfantry, at + new Vector2(1f, 0f)));
+        for (int t = 0; t < 60; t++) sim.Tick();
+        Assert.Equal(0, sim.World.DeathCount + sim.World.Kills[0] + sim.World.Kills[1]);
+        Replay r = rec.ToReplay();
+        Assert.False(r.Combat);
+        Assert.Contains("\ncombat 0\n", Text(r));
+        Assert.Equal(ReplayError.None, ReplayFormat.TryRead(ReplayFormat.Write(r), out Replay? back));
+        Assert.False(back!.Combat);
+        Assert.True(ReplayPlayer.Run(back, TestSim.Data).Ok);
+        // Played with combat on, the two neighbours fight: the checkpoints say so.
+        Assert.Equal(ReplayError.CheckpointMismatch, ReplayPlayer.Run(back, TestSim.Data, combat: true).Error);
+    }
+
+    [Fact]
+    public void Format4_AMatchWithAttackOrders_RoundTripsAndPlaysToEveryCheckpoint()
+    {
+        Replay r = RecordAttackMatch();
+        Assert.Contains(r.Commands, c => c.Kind == CommandKind.Attack && c.IsQueued);
+        Assert.Contains(r.Commands, c => c.Kind == CommandKind.Attack && !c.IsQueued);
+        byte[] bytes = ReplayFormat.Write(r);
+        Assert.Equal(ReplayError.None, ReplayFormat.TryRead(bytes, out Replay? back));
+        ReplayTestRun.AssertEqual(r, back!);
+        Assert.Equal(bytes, ReplayFormat.Write(back!));
+        ReplayResult played = ReplayPlayer.Run(back!, TestSim.Data);
+        Assert.True(played.Ok, played.ToString());
+        Assert.Equal(r.TickCount, played.TicksRun);
+    }
+
+    /// <summary>
+    /// A MapBrawl (seed 4, 12 a side) recorded from its first command: half of each side gets an explicit Attack on an enemy
+    /// (player 0's queued every other time), one an Attack on a building; 400 ticks, a checkpoint every 20.
+    /// </summary>
+    private static Replay RecordAttackMatch()
+    {
+        ReplayRecorder? rec = null;
+        Simulation sim = CombatScenes.MapBrawl(4, perSide: 12, onCreated: s => rec = new ReplayRecorder(s, checkpointInterval: 20));
+        Rts.Sim.Entities.UnitStore u = sim.World.Units;
+        var p0 = new List<int>();
+        var p1 = new List<int>();
+        for (int i = 0; i < u.Capacity; i++)
+            if (u.Alive[i]) (u.Owner[i] == 0 ? p0 : p1).Add(i);
+        for (int k = 0; k < 6; k++)
+        {
+            int i = p0[k], j = p1[k];
+            sim.Enqueue(Command.Attack(0, new(i, u.Generation[i]), new(j, u.Generation[j]), false, queued: k % 2 == 1));
+            sim.Enqueue(Command.Attack(1, new(j, u.Generation[j]), new(i, u.Generation[i]), false));
+        }
+        // A building to attack: player 1 places one through the command door, then player 0's seventh unit is sent at it.
+        NavGrid g = sim.World.NavGrid;
+        int cell = MoveScenario.CentralCell(g);
+        sim.Enqueue(Command.SpawnBuilding(1, TestSim.Data.FindBuilding("whirlwind_tent"), MoveScenario.Center(g, cell) + new Vector2(0f, 10f)));
+        sim.Tick();
+        sim.Tick();
+        Rts.Sim.Entities.BuildingStore b = sim.World.Buildings;
+        for (int k = 0; k < b.Capacity; k++)
+        {
+            if (!b.Alive[k]) continue;
+            int i = p0[6];
+            sim.Enqueue(Command.Attack(0, new(i, u.Generation[i]), b.HandleOf(k), true));
+        }
+        while (sim.TickNumber < 400) sim.Tick();
+        return rec!.ToReplay();
     }
 
     /// <summary>M3-1: a replay on a map with forests and mines records their params and plays back.</summary>
@@ -283,17 +437,17 @@ public class ReplayFormatTests
         Assert.Equal(ReplayError.CheckpointMismatch, ReplayPlayer.Run(bare, TestSim.Data).Error);
     }
 
-    /// <summary>M1-7: a command line must have exactly 10 fields; the old 9-field shape in a format 2 file is malformed, as is a non-number flags field.</summary>
+    /// <summary>M1-7: a command line must have exactly its format's field count (13 in format 4, M4-2a); one short or one long is malformed, as is a non-number flags field.</summary>
     [Fact]
     public void NineFieldCommandLine_InAFormat2File_IsMalformed()
     {
         string text = Text(Small);
         string line = FirstCommandLine(text);
-        Assert.Equal(10, line.Split(' ').Length - 1);
+        Assert.Equal(13, line.Split(' ').Length - 1);
         Assert.Equal(ReplayError.Malformed, Read(Reseal(text.Replace(line + "\n", line[..line.LastIndexOf(' ')] + "\n"))));
         Assert.Equal(ReplayError.Malformed, Read(Reseal(text.Replace(line + "\n", line + " 0\n"))));
-        Assert.Equal(ReplayError.Malformed, Read(Reseal(text.Replace(line + "\n", ReplaceField(line, 10, "x") + "\n"))));
-        Assert.Equal(ReplayError.Malformed, Read(Reseal(text.Replace(line + "\n", ReplaceField(line, 10, "01") + "\n"))));
+        Assert.Equal(ReplayError.Malformed, Read(Reseal(text.Replace(line + "\n", ReplaceField(line, 13, "x") + "\n"))));
+        Assert.Equal(ReplayError.Malformed, Read(Reseal(text.Replace(line + "\n", ReplaceField(line, 13, "01") + "\n"))));
     }
 
     /// <summary>M1-7: queued orders keep their flags through the file and play back.</summary>

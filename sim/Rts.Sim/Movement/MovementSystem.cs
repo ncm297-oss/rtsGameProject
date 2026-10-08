@@ -259,8 +259,8 @@ public static class MovementSystem
                     pushY += (long)(pv.Y * FixedScale);
                     if (share > maxShare) maxShare = share;
                     // Only through a legal step, so a blob never reaches across a blocked corner (BUG-0020).
-                    if (groupmate && !touchingArrived && grid.WorldToCell(u.Position[j], out int jx, out int jy)
-                        && IsLegalStep(grid, cx, cy, jx, jy))
+                    if (groupmate && !touchingArrived && QueuesBehind(u, i, j, pos, goal)
+                        && grid.WorldToCell(u.Position[j], out int jx, out int jy) && IsLegalStep(grid, cx, cy, jx, jy))
                         touchingArrived = true;
                 }
             }
@@ -295,8 +295,13 @@ public static class MovementSystem
             if (pushLength > maxShare) push *= maxShare / pushLength;
 
             // A chaser (M4-1) never stops short: combat plants it once its target is in reach, and a goal-side stop
-            // up to ArrivalDistance away could leave it out of reach for good.
-            bool atGoal = inGoalCell && Vector2.DistanceSquared(pos, goal) <= (u.Target[i].Generation == 0 ? arrival2 : MovementConstants.ChaseArrival2);
+            // up to ArrivalDistance away could leave it out of reach for good. A worker walking to a stand point beside a
+            // footprint (BUG-0146) walks on to it while it makes progress, so the reach behind it is left to the next
+            // worker in the queue; once blocked within ArrivalDistance it stops where it is, which is still in reach.
+            float goal2 = inGoalCell ? Vector2.DistanceSquared(pos, goal) : float.PositiveInfinity;
+            bool atGoal = goal2 <= MovementConstants.ChaseArrival2
+                || (goal2 <= arrival2 && u.Target[i].Generation == 0
+                    && (!OnFootprintWalk(u, i) || u.StuckTicks[i] > 0 || goal2 <= StandArrival2(u, i)));
             if (atGoal || touchingArrived)
             {
                 if (!crowded)
@@ -363,6 +368,31 @@ public static class MovementSystem
             remaining[i] = act == ActStuck || act == ActQueued ? best : after;
         }
     }
+
+    /// <summary>
+    /// True if touching arrived groupmate <paramref name="j"/> lets walker <paramref name="i"/> stop (crowded arrival). For
+    /// a worker walking to a footprint on a gather, build or repair loop, only a groupmate nearer the walker's goal than
+    /// the walker counts (BUG-0146): the worker must get within reach of the footprint, and one touching only the queue
+    /// behind it stopped there for good, its every retry ending on the spot (the queue behind it "arrived" against it).
+    /// Any other walk stops on any touching groupmate, as before.
+    /// </summary>
+    private static bool QueuesBehind(UnitStore u, int i, int j, Vector2 pos, Vector2 goal) =>
+        !OnFootprintWalk(u, i) || Vector2.DistanceSquared(u.Position[j], goal) < Vector2.DistanceSquared(pos, goal);
+
+    /// <summary>
+    /// Squared meters within which a footprint walker counts as on its stand point (M4-2a, BUG-0146): its slack inside
+    /// <c>EconomyConstants.Reach</c> (Reach less the point's <c>GoalInset</c>) less a second worker's width (two radii), so a
+    /// worker of the same size queued touching it from behind is in reach too; 0.325 m for the 0.4 m workers. At least
+    /// <see cref="MovementConstants.ChaseArrival2"/>.
+    /// </summary>
+    private static float StandArrival2(UnitStore u, int i)
+    {
+        float a = Economy.EconomyConstants.Reach - Economy.EconomyConstants.GoalInset - 2f * u.Radius[i];
+        return a > 0f ? MathF.Max(a * a, MovementConstants.ChaseArrival2) : MovementConstants.ChaseArrival2;
+    }
+
+    /// <summary>True while unit <paramref name="i"/> is on a gather, build or repair loop: its walks go to a stand point beside a footprint (<c>EconomySystem.WalkToFootprint</c>).</summary>
+    private static bool OnFootprintWalk(UnitStore u, int i) => u.GatherNode[i].Generation != 0 || u.BuildTarget[i].Generation != 0;
 
     /// <summary>
     /// For walker heading <paramref name="forward"/>, neighbor <paramref name="j"/> (at

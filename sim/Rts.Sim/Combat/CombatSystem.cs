@@ -40,6 +40,9 @@ public static class CombatSystem
         {
             if (!u.Alive[i]) continue;
             bool due = (tick + i) % CombatConstants.ScanInterval == 0;
+            // An attack-move to a new leg that kept the fight (BUG-0154): re-pick by priority now, due or not, in reach or not.
+            bool repick = u.Repick[i];
+            u.Repick[i] = false;
             // The common case, first and cheap: nothing to fight, no engagement to settle, not due to scan.
             if (!due && u.Target[i].Generation == 0 && u.Mode[i] == CombatMode.None) continue;
             if (u.LastAttacker[i].Generation != 0 && !u.IsAlive(u.LastAttacker[i])) u.LastAttacker[i] = default;
@@ -85,15 +88,23 @@ public static class CombatSystem
             }
             bool scanned = false;
             // Due, able to scan, and with an enemy unit or building somewhere (a one-player crowd skips the scan whole).
-            if (due && world.CombatEnemyExists[u.Owner[i]] && Scans(world, i)
-                // Mid-swing, or engaged in reach: keep fighting it (a swing is not thrown away for a better target).
-                && !(u.Target[i].Generation != 0 && (u.WindupTicks[i] > 0 || Gap(world, i) <= data.Units[u.TypeId[i]].Attack.Range)))
+            if ((due || repick) && world.CombatEnemyExists[u.Owner[i]] && Scans(world, i)
+                // Mid-swing, or engaged in reach: keep fighting it (a swing is not thrown away for a better target), unless
+                // the player's new attack-move asks for the re-pick; the same pick keeps the swing (Engage).
+                && (repick || !(u.Target[i].Generation != 0 && (u.WindupTicks[i] > 0 || Gap(world, i) <= data.Units[u.TypeId[i]].Attack.Range))))
             {
                 scanned = true;
                 int pick = PickTarget(world, i, out bool isBuilding);
                 if (pick >= 0)
                 {
-                    Engage(world, i, isBuilding ? world.Buildings.HandleOf(pick) : new EntityHandle(pick, u.Generation[pick]), isBuilding);
+                    EntityHandle picked = isBuilding ? world.Buildings.HandleOf(pick) : new EntityHandle(pick, u.Generation[pick]);
+                    // A switch away from a target it lost sight of while not gaining on it gives that target up, as losing
+                    // it with nothing else in sight does (below): else a target at the sight edge, reached by a path that
+                    // leads out of sight, and a nearer one take turns forever, each switch a fresh chase (BUG-0150).
+                    if (u.Target[i].Generation != 0 && !u.Hold[i] && u.ChaseStall[i] > 0 && !TargetInScanRange(world, i)
+                        && (picked != u.Target[i] || isBuilding != u.TargetIsBuilding[i]))
+                        GiveUp(u, i);
+                    Engage(world, i, picked, isBuilding);
                 }
                 else if (u.Target[i].Generation != 0)
                 {
@@ -105,9 +116,11 @@ public static class CombatSystem
                 }
             }
             // Chase: a unit standing with a target out of reach walks at once; a walking chaser is re-aimed on its scan
-            // tick only, so a fleeing target changes its goal at most every ScanInterval ticks.
+            // tick only, so a fleeing target changes its goal at most every ScanInterval ticks. An ordered attacker doesn't
+            // scan (its target is held), so it is re-aimed on the ticks it would have scanned.
             if (u.Target[i].Generation == 0 || u.Hold[i] || u.State[i] == UnitState.Attacking) continue;
-            if (u.State[i] == UnitState.Idle ? Gap(world, i) > data.Units[u.TypeId[i]].Attack.Range : scanned) Chase(world, i);
+            if (u.State[i] == UnitState.Idle ? Gap(world, i) > data.Units[u.TypeId[i]].Attack.Range : scanned || (due && u.Mode[i] == CombatMode.Ordered))
+                Chase(world, i);
         }
     }
 
@@ -197,6 +210,7 @@ public static class CombatSystem
         u.Ignored[i] = default;
         u.IgnoredIsBuilding[i] = false;
         u.GiveUps[i] = 0;
+        u.Repick[i] = false;
         EndMode(u, i);
     }
 
@@ -207,8 +221,89 @@ public static class CombatSystem
         u.AnchorPosition[i] = destination;
     }
 
+    /// <summary>Whether unit <paramref name="i"/> has a live target it is swinging at or stands in reach of (the case its scan keeps).</summary>
+    internal static bool FightsInReach(World world, int i)
+    {
+        UnitStore u = world.Units;
+        if (u.Target[i].Generation == 0 || !TargetAlive(world, i)) return false;
+        return u.WindupTicks[i] > 0 || Gap(world, i) <= world.Data.Units[u.TypeId[i]].Attack.Range;
+    }
+
+    /// <summary>
+    /// An unqueued attack-move to <paramref name="destination"/> for unit <paramref name="i"/>, which keeps its target, swing,
+    /// cooldown, state and chase memory (BUG-0152): the mode becomes the attack-move leg. A <paramref name="newOrder"/> (a
+    /// different leg) forgets what the unit gave up on, as any new order does; the same leg keeps it. With
+    /// <paramref name="repick"/> (any point but the leg's own, BUG-0154) this tick's phase 7 re-picks by priority, in reach
+    /// or not; the same pick keeps the swing.
+    /// </summary>
+    internal static void KeepFightForAttackMove(UnitStore u, int i, Vector2 destination, bool newOrder, bool repick)
+    {
+        if (newOrder)
+        {
+            u.Ignored[i] = default;
+            u.IgnoredIsBuilding[i] = false;
+            u.GiveUps[i] = 0;
+        }
+        if (repick) u.Repick[i] = true; // a later same-point re-issue this tick doesn't cancel an earlier new point's re-pick
+        StartAttackMove(u, i, destination);
+    }
+
     /// <summary>True for a unit type that fights in this slice: an attack with a value and no projectile (M4-2 brings projectiles).</summary>
     internal static bool CanFight(UnitDef def) => def.Attack.Value > 0 && def.Attack.Projectile == null;
+
+    /// <summary>
+    /// Whether unit <paramref name="i"/> may take an explicit Attack on <paramref name="target"/> (M4-2a): combat is on, its
+    /// type can fight in this slice, and the target is a live unit or building (<paramref name="isBuilding"/>) of another
+    /// owner that the attack's <c>attack.targets</c> allows. Otherwise the order is dropped.
+    /// </summary>
+    internal static bool MayAttack(World world, int i, EntityHandle target, bool isBuilding)
+    {
+        if (!world.CombatEnabled) return false;
+        UnitStore u = world.Units;
+        UnitDef def = world.Data.Units[u.TypeId[i]];
+        if (!CanFight(def)) return false;
+        if (isBuilding)
+        {
+            BuildingStore b = world.Buildings;
+            return def.Attack.Targets != AttackTargets.Units && b.IsAlive(target) && b.Owner[target.Index] != u.Owner[i];
+        }
+        return def.Attack.Targets != AttackTargets.Buildings && u.IsAlive(target) && u.Owner[target.Index] != u.Owner[i];
+    }
+
+    /// <summary>
+    /// Unit <paramref name="i"/> (standing, its old engagement cleared) takes <paramref name="target"/> under an explicit
+    /// Attack (M4-2a, <see cref="CombatMode.Ordered"/>): no anchor, a fresh chase memory; it chases from this tick's phase 7.
+    /// </summary>
+    internal static void StartAttack(World world, int i, EntityHandle target, bool isBuilding)
+    {
+        UnitStore u = world.Units;
+        u.Target[i] = target;
+        u.TargetIsBuilding[i] = isBuilding;
+        u.WindupTicks[i] = 0;
+        u.ChaseStall[i] = 0;
+        u.ChaseBest[i] = Gap(world, i);
+        u.Mode[i] = CombatMode.Ordered;
+        u.AnchorPosition[i] = Vector2.Zero;
+    }
+
+    /// <summary>
+    /// An unqueued Attack on the target unit <paramref name="i"/> already has (BUG-0152): the swing in progress, the cooldown,
+    /// the state and (under <see cref="CombatMode.Ordered"/> already) the chase memory stay, so re-issuing the order never
+    /// cancels a swing. A unit that took the target by itself (scan, retaliation, attack-move) now holds it as ordered:
+    /// no anchor, a fresh chase and give-up memory, as <see cref="StartAttack"/> gives.
+    /// </summary>
+    internal static void ReaffirmAttack(World world, int i)
+    {
+        UnitStore u = world.Units;
+        if (u.Mode[i] == CombatMode.Ordered) return;
+        u.Ignored[i] = default;
+        u.IgnoredIsBuilding[i] = false;
+        u.GiveUps[i] = 0;
+        u.ChaseStall[i] = 0;
+        u.ChaseBest[i] = Gap(world, i);
+        u.Mode[i] = CombatMode.Ordered;
+        u.AnchorPosition[i] = Vector2.Zero;
+    }
 
     /// <summary>True for a unit type that counts as "can attack" in the target priority: an attack with a value, workers aside.</summary>
     internal static bool IsCombatant(UnitDef def) => def.Attack.Value > 0 && def.Slot != UnitSlot.Worker;
@@ -237,6 +332,7 @@ public static class CombatSystem
             CombatMode.AttackMove => true,
             CombatMode.Retaliate => true,
             CombatMode.Returning => false,
+            CombatMode.Ordered => false, // the ordered target is held: no re-pick while it lives (M4-2a)
             _ => s == UnitState.Idle,
         };
     }
@@ -244,7 +340,8 @@ public static class CombatSystem
     /// <summary>
     /// The best target for unit <paramref name="i"/> (slot, or building slot with <paramref name="isBuilding"/>), -1 for
     /// none: within sight (holding: within reach), by the docs/03 priority (enemies attacking it, then units that can
-    /// attack, then other units, then buildings), then nearest, then lowest slot. One pass over the hash's enemies.
+    /// attack, then other units, then buildings), then nearest, then lowest slot. One pass over the hash's enemies. Only
+    /// the kinds its <c>attack.targets</c> allows (M4-2a): a buildings-only attacker never looks at units, and the reverse.
     /// </summary>
     private static int PickTarget(World world, int i, out bool isBuilding)
     {
@@ -261,6 +358,8 @@ public static class CombatSystem
         int ignoredGen = u.Ignored[i].Generation;
         int ignoredIndex = u.IgnoredIsBuilding[i] || ignoredGen == 0 ? -1 : u.Ignored[i].Index;
         float r2 = radius * radius;
+        AttackTargets targets = def.Attack.Targets;
+        if (targets == AttackTargets.Buildings) return PickBuilding(world, i, def, pos, owner, hold, radius, ignoredGen, out isBuilding);
         int myGen = u.Generation[i], lastIndex = u.LastAttacker[i].Index, lastGen = u.LastAttacker[i].Generation;
         bool[] combatant = world.CombatantType;
         int[] found = world.Neighbors; // movement's scratch: free in phase 7
@@ -291,9 +390,35 @@ public static class CombatSystem
                 bestD2 = d2;
             }
         }
-        if (best >= 0) return best;
+        if (best >= 0 || targets == AttackTargets.Units) return best;
+        return PickBuilding(world, i, def, pos, owner, hold, radius, ignoredGen, out isBuilding);
+    }
+
+    /// <summary>Whether unit <paramref name="i"/>'s live target is within the radius its scan looks (<see cref="PickTarget"/>'s: sight, or reach when holding or after <see cref="CombatConstants.MaxGiveUps"/> give-ups).</summary>
+    private static bool TargetInScanRange(World world, int i)
+    {
+        UnitStore u = world.Units;
+        UnitDef def = world.Data.Units[u.TypeId[i]];
+        int j = u.Target[i].Index;
+        bool hold = u.Hold[i] || u.GiveUps[i] >= CombatConstants.MaxGiveUps;
+        if (u.TargetIsBuilding[i])
+        {
+            float limit = hold ? def.Attack.Range + u.Radius[i] : def.Sight;
+            return BuildingDistanceSquared(world, j, u.Position[i]) <= limit * limit;
+        }
+        float radius = hold ? def.Attack.Range + u.Radius[i] + u.Radius[j] : def.Sight;
+        return Vector2.DistanceSquared(u.Position[i], u.Position[j]) <= radius * radius;
+    }
+
+    /// <summary><see cref="PickTarget"/>'s building half: the nearest other owner's building within <paramref name="radius"/> of its footprint (holding, or the one it gave up: within reach), then lowest slot; -1 for none.</summary>
+    private static int PickBuilding(World world, int i, UnitDef def, Vector2 pos, int owner, bool hold, float radius, int ignoredGen, out bool isBuilding)
+    {
+        isBuilding = false;
         if (world.CombatBuildingCount - world.CombatBuildingsOf[owner] <= 0) return -1;
+        UnitStore u = world.Units;
         BuildingStore b = world.Buildings;
+        int best = -1;
+        float bestD2 = float.MaxValue;
         int ignoredBuilding = u.IgnoredIsBuilding[i] ? u.Ignored[i].Index : -1;
         for (int k = 0; k < world.CombatBuildingCount; k++)
         {
@@ -420,6 +545,19 @@ public static class CombatSystem
         UnitStore u = world.Units;
         CombatMode mode = u.Mode[i];
         if (mode == CombatMode.None) return;
+        if (mode == CombatMode.Ordered)
+        {
+            // An explicit Attack is over (its target died, or the chase was given up): stand Idle where it is, no
+            // anchor to walk back to (M4-2a); an Idle unit scans and its queue advances from the next phase 7.
+            if (u.State[i] == UnitState.Moving)
+            {
+                Stand(u, i, UnitState.Idle);
+                u.GoalCell[i] = -1;
+                u.WalkBack[i] = UnitStore.WalkBackNone;
+            }
+            EndMode(u, i);
+            return;
+        }
         // At the anchor, or as near as it can get: a building may cover the anchor's cell by now (BUG-0141), and the
         // Move rule then resolves it to the nearest passable cell's center.
         bool there = u.Goal[i] == u.AnchorPosition[i]
@@ -569,7 +707,9 @@ public static class CombatSystem
         // Retaliation: a unit that scans and has nothing to fight takes on whoever hit it, now rather than on its next scan.
         // Not one it gave up on (BUG-0137): a melee attacker is in reach, and its next scan takes it there.
         // The memory may hold a building with the same slot and generation: that is not this attacker (BUG-0142).
-        if (u.Target[v].Generation == 0 && Scans(world, v) && (u.IgnoredIsBuilding[v] || u.Ignored[v] != hit.Attacker))
+        // Nor a buildings-only attacker (M4-2a, attack.targets): it never takes a unit.
+        if (u.Target[v].Generation == 0 && Scans(world, v) && (u.IgnoredIsBuilding[v] || u.Ignored[v] != hit.Attacker)
+            && world.Data.Units[u.TypeId[v]].Attack.Targets != AttackTargets.Buildings)
             Engage(world, v, hit.Attacker, false);
     }
 

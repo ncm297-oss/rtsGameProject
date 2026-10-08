@@ -36,6 +36,7 @@ public class GridChangeFuzzStressTests
 
     private static Scene NewScene(ulong seed)
     {
+        // Combat on: seed 3 found BUG-0150 (a retaliator ping-ponging between two targets at its sight edge forever).
         SimConfig config = TestSim.Config(Seed: seed, PlayerCount: 2, UnitCapacity: 160, CommandCapacity: 512)
             with { Map = MapGenParams.Default with { Forests = 16, GoldMines = 2 } };
         var sim = new Simulation(config);
@@ -191,7 +192,7 @@ public class GridChangeFuzzStressTests
                 g.WorldToCell(u.Position[i], out int x, out int y);
                 int c = y * g.Width + x;
                 string fs = f == null ? "no usable field" : $"field v{f.Version}/b{f.BlockVersion} target {f.TargetCell} dir {f.DirectionAt(c)} cost {f.CostAt(c)}";
-                sb.AppendLine($"  unit {i} goal {gc} ({gc % g.Width},{gc / g.Width}) at cell ({x},{y}) passable {g.IsPassable(x, y)} flags {g.FlagsAt(x, y)} vel {u.Velocity[i]} stuck {u.StuckTicks[i]} orderTick {u.OrderTick[i]} {fs}");
+                sb.AppendLine($"  unit {i} goal {gc} ({gc % g.Width},{gc / g.Width}) at cell ({x},{y}) passable {g.IsPassable(x, y)} flags {g.FlagsAt(x, y)} vel {u.Velocity[i]} stuck {u.StuckTicks[i]} orderTick {u.OrderTick[i]} target {u.Target[i]}{(u.TargetIsBuilding[i] ? " (building)" : "")} mode {u.Mode[i]} {fs}");
             }
         }
         return sb.ToString();

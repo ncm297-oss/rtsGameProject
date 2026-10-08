@@ -132,6 +132,8 @@ expansions, and making them build a full Town Hall for that is wrong for an AoE-
 Every attacker has: HP, armor (flat), armor class, attack value, damage type, cooldown, range,
 wind-up (time from start of attack to the damage point, default 0.3 s melee / 0.4 s ranged), and
 optional splash radius, minimum range, bonus multipliers vs armor classes, and a friendly-fire flag.
+What an attack may target is `attack.targets`: `units`, `buildings` or `all` (the default); the Battering Ram is
+`buildings` (M4-2a).
 
 ### Damage formula
 

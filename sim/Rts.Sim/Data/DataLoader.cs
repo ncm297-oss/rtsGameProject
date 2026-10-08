@@ -584,8 +584,19 @@ public static partial class DataLoader
             Splash = (float)c.NonNeg(a?.Splash ?? 0, p + ".splash"),
             FriendlyFire = a?.FriendlyFire ?? false,
             Projectile = a?.Projectile,
+            Targets = AttackTargetsOf(c, a?.Targets, p + ".targets"),
             BonusVs = ImmutableArray.Create(bonus),
         };
+    }
+
+    /// <summary><c>attack.targets</c> (M4-2a): <c>all</c> when absent; anything but the <see cref="DataLimits.AttackTargetIds"/> spellings is an error.</summary>
+    private static AttackTargets AttackTargetsOf(Checker c, string? value, string path)
+    {
+        if (value == null) return AttackTargets.All;
+        int k = DataLimits.AttackTargetIds.IndexOf(value);
+        if (k >= 0) return (AttackTargets)k;
+        c.Error(path, $"unknown targets '{value}' (expected one of {string.Join(", ", DataLimits.AttackTargetIds)})");
+        return AttackTargets.All;
     }
 
     // Dictionary enumeration order is unspecified; sort so errors and results never depend on it.

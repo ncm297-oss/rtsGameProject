@@ -188,16 +188,21 @@ public static class EconomySystem
     }
 
     /// <summary>
-    /// Walks unit <paramref name="i"/> (Move machinery, a fresh order) to the nearest passable cell 4-adjacent
-    /// to the footprint, aiming <see cref="EconomyConstants.GoalInset"/> outside the shared edge. "Nearest" is
-    /// the distance to the cell's center plus <c>CellSize</c> for every other unit standing in the cell, so a
-    /// worker waiting behind others at a mine's edge tries a freer side next time (ties to the lower cell
-    /// index). False if no such cell is passable.
+    /// Walks unit <paramref name="i"/> (Move machinery, a fresh order) to a stand point beside the footprint. The cell is
+    /// the passable cell 4-adjacent to the footprint with the least distance from the worker to its center plus
+    /// <c>CellSize</c> for every other unit standing in it (spatial hash), ties to the lower cell index: workers spread
+    /// round a crowded mine. In that cell the worker takes one of <see cref="EconomyConstants.StandPointsPerCell"/> stand
+    /// points along the shared edge (BUG-0146): the edge's middle and <see cref="EconomyConstants.StandPointSpacing"/>
+    /// walker radii to either side, each <see cref="EconomyConstants.GoalInset"/> outside the edge; the one with the
+    /// fewest other units on it (center within the walker's radius), then the nearest, then the middle first. So several
+    /// workers stand side by side at a node open on one side, and one that waited out of reach takes a free point on
+    /// its next retry. False if no such cell is passable.
     /// </summary>
     internal static bool WalkToFootprint(World world, int i, int anchor, int fw, int fh)
     {
         NavGrid g = world.NavGrid;
-        Vector2 pos = world.Units.Position[i];
+        UnitStore u = world.Units;
+        Vector2 pos = u.Position[i];
         int w = g.Width, x0 = anchor % w, y0 = anchor / w;
         int best = -1;
         float bestScore = float.PositiveInfinity;
@@ -206,7 +211,7 @@ public static class EconomySystem
             RingCell(x0, y0, fw, fh, k, out int x, out int y);
             if (!g.IsPassable(x, y)) continue;
             int cell = y * w + x;
-            float score = Vector2.Distance(pos, g.CellCenter(x, y)) + Crowd(world, i, x, y) * MapConstants.CellSize;
+            float score = Vector2.Distance(pos, g.CellCenter(x, y)) + CellCrowd(world, i, x, y) * MapConstants.CellSize;
             if (score < bestScore || (score == bestScore && cell < best))
             {
                 best = cell;
@@ -214,24 +219,55 @@ public static class EconomySystem
             }
         }
         if (best < 0) return false;
-        int bx = best % w, by = best / w;
-        Vector2 goal = g.CellCenter(bx, by);
-        const float cs = MapConstants.CellSize, inset = EconomyConstants.GoalInset;
-        if (bx < x0) goal.X = x0 * cs - inset;
-        else if (bx >= x0 + fw) goal.X = (x0 + fw) * cs + inset;
-        else if (by < y0) goal.Y = y0 * cs - inset;
-        else goal.Y = (y0 + fh) * cs + inset;
-        OrderSystem.Walk(world, i, best, goal);
+        OrderSystem.Walk(world, i, best, StandPoint(world, i, best % w, best / w, x0, y0, fw, fh));
         return true;
     }
 
+    /// <summary>
+    /// The stand point unit <paramref name="i"/> takes in ring cell (bx, by) of the footprint at (x0, y0): of the cell's
+    /// <see cref="EconomyConstants.StandPointsPerCell"/> points along the shared edge, the one with the fewest other
+    /// units on it, then the nearest to the worker, ties to the middle (tried first), then the lower side.
+    /// </summary>
+    private static Vector2 StandPoint(World world, int i, int bx, int by, int x0, int y0, int fw, int fh)
+    {
+        const float cs = MapConstants.CellSize, inset = EconomyConstants.GoalInset;
+        Vector2 middle = world.NavGrid.CellCenter(bx, by);
+        bool vertical = bx < x0 || bx >= x0 + fw; // the cell shares a vertical edge (left or right of the footprint)
+        if (bx < x0) middle.X = x0 * cs - inset;
+        else if (bx >= x0 + fw) middle.X = (x0 + fw) * cs + inset;
+        else if (by < y0) middle.Y = y0 * cs - inset;
+        else middle.Y = (y0 + fh) * cs + inset;
+        // The outer points stay inside the cell, so the goal point is always in the goal cell.
+        UnitStore u = world.Units;
+        float gap = MathF.Min(EconomyConstants.StandPointSpacing * u.Radius[i], cs * 0.5f - inset);
+        Vector2 along = vertical ? new Vector2(0f, gap) : new Vector2(gap, 0f);
+        Vector2 pos = u.Position[i], best = middle;
+        int bestCrowd = int.MaxValue;
+        float bestDistance = float.PositiveInfinity;
+        for (int p = 0; p < EconomyConstants.StandPointsPerCell; p++)
+        {
+            // Middle first, then the lower side, then the upper: p = 0, 1, 2 -> offsets 0, -1, +1.
+            Vector2 point = middle + along * (p == 0 ? 0f : p == 1 ? -1f : 1f);
+            int crowd = PointCrowd(world, i, point);
+            if (crowd > bestCrowd) continue;
+            float distance = Vector2.Distance(pos, point);
+            if (crowd < bestCrowd || distance < bestDistance)
+            {
+                best = point;
+                bestCrowd = crowd;
+                bestDistance = distance;
+            }
+        }
+        return best;
+    }
+
     /// <summary>Live units other than <paramref name="i"/> whose center lies in cell (x, y), from the spatial hash (rebuilt after this tick's commands).</summary>
-    private static int Crowd(World world, int i, int x, int y)
+    private static int CellCrowd(World world, int i, int x, int y)
     {
         const float cs = MapConstants.CellSize;
         var min = new Vector2(x * cs, y * cs);
         var max = new Vector2((x + 1) * cs, (y + 1) * cs);
-        int[] near = world.Neighbors; // movement's scratch: free in phase 4
+        int[] near = world.Neighbors; // movement's scratch: free in phases 1 to 7
         int count = world.Spatial.QueryRect(min, max, near), crowd = 0;
         UnitStore u = world.Units;
         for (int k = 0; k < count; k++)
@@ -240,6 +276,18 @@ public static class EconomySystem
             if (j == i) continue;
             Vector2 p = u.Position[j];
             if (p.X >= min.X && p.X < max.X && p.Y >= min.Y && p.Y < max.Y) crowd++;
+        }
+        return crowd;
+    }
+
+    /// <summary>Live units other than <paramref name="i"/> standing on <paramref name="point"/> (center within i's radius of it), from the spatial hash.</summary>
+    private static int PointCrowd(World world, int i, Vector2 point)
+    {
+        int[] near = world.Neighbors;
+        int count = world.Spatial.QueryRadius(point, world.Units.Radius[i], near), crowd = 0;
+        for (int k = 0; k < count; k++)
+        {
+            if (near[k] != i) crowd++;
         }
         return crowd;
     }

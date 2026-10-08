@@ -439,6 +439,43 @@ public class CombatTests
     }
 
     /// <summary>
+    /// BUG-0150: a chaser that loses sight of its target while it isn't gaining on it, with another enemy in sight, gives
+    /// the first up (as losing it with nothing else in sight does) and takes the other; when the first comes back into
+    /// sight, out of reach, it doesn't drop the second for it. Before the fix the two took turns forever (a tier-1 target at
+    /// the sight edge reached by a path that leads out of sight, and a nearer worker): each switch was a fresh chase.
+    /// </summary>
+    [Fact]
+    public void TargetLostFromSightMidStall_IsGivenUp_AndANearerOneIsNotDroppedWhenItComesBack()
+    {
+        Simulation sim = Flat(size: 64, units: 8);
+        UnitStore u = sim.World.Units;
+        EntityHandle c = Place(sim, 0, HeavyInfantry, At(sim, 30, 24));
+        EntityHandle far = Place(sim, 1, Crossbowman, At(sim, 30, 24, dx: 10f)); // "can attack" (tier 1), can't fight back yet
+        EntityHandle near = Place(sim, 1, Laborer, At(sim, 30, 24, dx: -12f)); // tier 2
+        sim.Enqueue(Command.HoldPosition(1, far));
+        sim.Enqueue(Command.HoldPosition(1, near));
+        RunUntil(sim, () => u.Target[c.Index] == far, 20);
+        Assert.Equal(far, u.Target[c.Index]);
+        // The crossbowman steps out of sight (the test moves it): the chase gets no closer, and the scan sees only the laborer.
+        int k = 0;
+        while (u.Target[c.Index] == far && k++ < 40)
+        {
+            u.Position[far.Index] = u.Position[c.Index] + new Vector2(15.5f, 0f);
+            sim.Tick();
+        }
+        Assert.Equal(near, u.Target[c.Index]);
+        Assert.Equal(far, u.Ignored[c.Index]);
+        // It comes back into sight, out of reach, and stays there: the chaser keeps the laborer and kills it.
+        for (k = 0; k < 600 && u.IsAlive(near); k++)
+        {
+            u.Position[far.Index] = u.Position[c.Index] + new Vector2(9f, 0f);
+            sim.Tick();
+            Assert.True(u.Target[c.Index] != far, $"tick {k}: took the crossbowman back over the laborer");
+        }
+        Assert.False(u.IsAlive(near), "never killed the laborer");
+    }
+
+    /// <summary>
     /// BUG-0142 item 4: a unit that gave up a building whose handle (slot and generation) equals an enemy unit's still
     /// retaliates when that unit hits it; the given-up memory is a building, not that unit.
     /// </summary>

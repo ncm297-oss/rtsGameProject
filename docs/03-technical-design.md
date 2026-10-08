@@ -1098,8 +1098,20 @@ addressed to a building, not unit orders, not queueable (the queued flag is refu
 "Implementation (M3-4)". A trained unit's rally order is the Move rule (or, for a worker rallied onto a resource node,
 a `Gather`), given in phase 3.
 Since M4-1 units fight (melee only): see "Implementation (M4-1)". Any unit order that is taken
-(unqueued, or popped from the queue) ends the unit's engagement first. Not built yet: `Attack(target)`
-(M4-2, with replay format 4), `Patrol`, formations and group moves.
+(unqueued, or popped from the queue) ends the unit's engagement first, except that re-issuing a fight never throws
+the swing away (BUG-0152, M4-2a): an unqueued `Attack` on the target the unit already has, or an unqueued `AttackMove`
+on the leg it walks or by a unit fighting in reach or mid-swing, keeps the target, swing and cooldown; an `AttackMove`
+to any point but the leg's own then re-picks by priority at once, so it can still pull a unit off a building onto an
+enemy (BUG-0154; see "Implementation (M4-2a)"). Since M4-2a there is `Attack` (16, a unit
+order, Shift-queueable): `Command.Attack(player, unit, target, isBuilding[, queued])` carries the target in
+`Command.Target` / `Command.TargetIsBuilding` (default on every other kind, else the command is malformed), and a
+queued Attack keeps its handle in the flat queue arrays it already has: an Attack has no target point, so the entry's
+`QueuePosition` holds the target's slot (x) and generation (y) as whole numbers (exact in a float below 2^24; a slot's
+generation counts its frees, which a 24-hour match can't take that far) and its `QueueTypeId` is 1 for a building
+(`UnitStore.QueuedTarget(entry)` reads it back). So it is hashed with the entry as before, and the queue costs no more
+memory: a new per-entry handle array (256 KB at 4,096 slots) took the 1,024-cell world past its 228 MB bound
+(`FieldBuildFairnessQaTests.World_1024Map_CacheStays32_MemoryBounded`: 228.2 MB). See "Implementation (M4-2a)". Not
+built yet: `Patrol`, formations and group moves.
 
 Unit states: `Idle`, `Moving`, `Chasing`, `Attacking` (wind-up / cooldown), `Gathering`,
 `Returning`, `Building`, `Casting`, `Dead`.
@@ -1157,7 +1169,8 @@ retaliating unit farther than its own sight radius from its anchor drops its tar
 `Returning`, which does not scan (so it can't be kited back and forth), and is `None` again once it
 stands. "At the anchor" means its goal is the anchor, or the point the Move rule resolves the anchor to (a
 building placed over the anchor's cell since: the nearest passable cell's center; BUG-0141), so a blocked anchor
-still ends the mode. Holding units keep `None`: they scan, take targets within reach only, and never move.
+still ends the mode. Holding units keep `None`: they scan, take targets within reach only, and never move. Since M4-2a
+`Ordered` is the explicit `Attack` order's mode (no anchor, no leash, no scan; "Implementation (M4-2a)").
 Workers on a gather, build or repair loop (`Gathering`, `Returning`, `Building`, or walking a leg of
 it) never scan and never retaliate; outside a loop a worker scans only on an attack-move leg ("Workers never fight
 on their own", below). Any unit order that is taken (unqueued, or popped) clears the
@@ -1208,7 +1221,10 @@ before. A target on another plateau, behind a wall, or outrunning the chaser has
 so those chases still end. Switching from one target to another keeps the stall count (`Engage` resets it only for a
 unit that had no target): a unit whose scans took two targets in turn (one drifting in and out of its sight) restarted
 the count every scan and chased forever. So does a retaliator
-the leash pulls back, and a chaser that loses sight of its target while not gaining on it. Giving up remembers the
+the leash pulls back, and a chaser that loses sight of its target while not gaining on it, whether or not its scan
+then finds another target (BUG-0150, M4-2a fix round: before, a switch to another target in sight did not give the
+lost one up, and a caster at the sight edge reached by a path leading out of sight and a nearer worker took turns
+forever, each switch a fresh chase whose first scan showed progress). Giving up remembers the
 target (`UnitStore.Ignored`, a unit or a building): the unit's scans take it again only when it is in reach, and an
 attack by that unit does not start a retaliation (a building remembered with the same slot and generation as the
 attacker is not it, BUG-0142; a melee attacker is in reach, so the next scan takes it anyway). The unit
@@ -1283,9 +1299,17 @@ two-owner movement termination rows whose limits are walking bounds (`CrossMap_T
 `TwoFriendlyGroups_Swapping...` shove row's two-player case) and `RandomOrderMixes_...` (on combat seed 2's queues never
 fill: a precondition) run combat off too; their combat-on termination is `CombatTerminationTests` (the same scenes on
 combat come to rest, nobody Moving for 200 ticks, within 3x the walking limit; measured at most 1.23x). The
-placement-churn field-wait row runs combat off as well (see BUG-0080 above). Matches, the CLI and replays always
-fight. The switch is not in the replay header yet: M4-2's replay format 4 records it; until then `ReplayPlayer` plays
-back with combat on unless its caller says otherwise (`Run(replay, data, combat)`, for test replays recorded off).
+placement-churn field-wait row runs combat off as well (see BUG-0080 above). Since M4-2a four more two-owner movement
+rows went combat off once the ram stopped fighting units and a retaliator ping-ponged between two targets (BUG-0150);
+its fix round put two back on combat (`ShoveQaTests.BuildCap_500UnitsTo500RandomGoals...(players: 2)`,
+`GridChangeFuzzStressTests`, whose seed 3 found the loop). Two stay off (config only):
+`CrowdRowSweepStressTests.MoreGoalsThanCacheSlots_Seeds81To140` and `GridChangeQaTests.FourGroups_AClosingChangeEveryTick...`
+(walking bound 3,000 ticks). On combat they are not a loop but a slow, one-sided brawl: the scenes end only when one
+side's few melee fighters have cut down the other side's units that cannot fight back in this slice (ranged and
+casters), which they do by themselves at tick 3,759 (seed 110, the only one of the 60 seeds over the bound) and
+5,057-6,618 (the four-groups scene with closings every 3 / 2 / 1 ticks). Matches, the CLI and replays always
+fight. Since M4-2a replay format 4 records the switch (`combat` in the header) and `ReplayPlayer.Run(replay, data)` plays
+back with it; `Run(replay, data, combat)` overrides it (format 3 test replays recorded off).
 
 **Workers never fight on their own** (Producer decision 2026-10-07, owner may revisit; from the view's BUG-0147,
 where player 1's Idle laborers walked to player 0's Depot and then killed player 0's laborers at the Playable scene's
@@ -1293,9 +1317,8 @@ start). A unit of the `worker` slot does not scan while Idle or holding and does
 (`CombatSystem.Scans`); it scans and swings only on an attack-move leg (and, from M4-2, under an explicit `Attack`).
 The data hook is the unit's `slot`, never an id. It still counts as a target (tier 2 in the priority).
 
-**The ram** (BUG-0139, deferred to M4-2): the Battering Ram fights like any melee unit in this slice and takes units as
-targets; docs/02 says buildings only. The fix is an `attack.targets` schema field, which moves `data-hash`, so it
-lands with M4-2.
+**The ram** (BUG-0139): fixed in M4-2a by the `attack.targets` field (below, "Implementation (M4-2a)"); the Battering
+Ram's data says `"buildings"`.
 
 **Cost.** The scan's spatial query skips buckets holding only the scanner's own units (a per-bucket
 owner code) and returns at once when no other owner has a live unit (per-owner counts), so a
@@ -1319,6 +1342,119 @@ first enemy or attack-move; reading a neighbor's state once in the shove rules);
 (4.43-4.52 ms over 5 alone runs either way), so both were left out for simpler code, and the budget is 4.6 ms (approved
 in advance). The scan itself stays near free: one enemy at the far corner costs well under the 0.25 ms QA allows
 (`CombatScaleQaTests`).
+
+### Implementation (M4-2a)
+
+**BUG-0146: gatherers wedged out of reach** (fixed first; M3 sign-off). Root cause, from the seed 21 Playable replay: a
+footprint walk (a gather, drop-off, build or repair leg, `EconomySystem.WalkToFootprint`) stopped either within
+`ArrivalDistance` (1 m) of its goal point, so the front worker stood about 1 m off the edge, or on touching an arrived
+groupmate (crowded arrival), so the worker behind it stood about 1.8 m off, out of `Reach` (1.25 m): only one worker
+worked a node open on one side. When the front one left with a load, the next one was the front with the queue
+touching it from behind, and every 20-tick retry "arrived" at once against that queue, on the same spot, for the rest
+of the match (unit 10 for 14,575 ticks). Three changes, all for footprint walkers only (a unit on a gather, build or
+repair loop: `GatherNode` or `BuildTarget` set; every other walk is unchanged, so the golden's `k` lines did not move):
+- **Queue rule** (`MovementSystem.QueuesBehind`): a touched arrived groupmate stops a footprint walker only if it stands
+  nearer the walker's goal than the walker does. The front of a queue always walks in; the queue still forms behind it.
+- **Stand arrival:** while it makes progress, a footprint walker walks on until it is within `Reach - GoalInset - 2 x
+  radius` of its stand point (0.325 m for a 0.4 m worker; `MovementSystem.StandArrival2`), not `ArrivalDistance`: the
+  front worker stands within about 0.45 m of the edge, so one queued touching it from behind (0.8 m further) is in
+  reach too. Once blocked (a stuck or queued tick) within `ArrivalDistance` it stops where it is, as before, which is
+  still in reach (a stand point projects onto the edge, so 1 m from it is at most 1.125 m from the footprint).
+- **Stand points** (`EconomyConstants.StandPointsPerCell` = 3, `StandPointSpacing` = 1.5 walker radii): the cell is
+  picked exactly as before (distance to its center plus `CellSize` per other unit in it, ties to the lower cell), so
+  workers spread round a mine as they did; in that cell the worker takes one of three points along the shared edge (its
+  middle and 0.6 m to either side for a 0.4 m worker, all `GoalInset` outside the edge): the one with the fewest other
+  units on it (center within the walker's radius), then the nearest, then the middle. So four workers on a 1 x 1 tree
+  open on one side all work it (three on the points, one behind), and a worker that waited out of reach takes a free
+  point on its next retry. The "queue at a mine's edge" stays: with every point taken, a walker stops behind the front
+  row and retries every 20 ticks.
+- **Cost** (Debug, this PC, alone, three alternating runs against the base): `GatherPerfTests.TwoHundredGatheringWorkers
+  Alone` 0.23 -> 0.32-0.33 ms a tick (its budget is 1 ms), because that scene (50 workers on one tree, 50 on one mine,
+  per base) now works more: gold 1,120 -> 1,310 and wood 440 -> 500 by the end of the row (+17% / +14%), with 39% more
+  walkers a tick in denser crowds round the nodes (stand points fill, so more workers stand close). Per resource
+  delivered it is about 20% dearer. The 500 marching + 50 gathering row is unchanged (0.90 ms), and so is the 2,500
+  tight blob (4.38-4.54 ms against 4.40-4.49 ms; it has no footprint walkers). The brief's 10% bound on the gather row is
+  not met; reported for the Producer (BUG-0151). The fix round profiled it (Debug, alone; base 0.226-0.231, head
+  0.314-0.327 ms): the cost is not the new code but the crowd it makes. Per tick over ticks 400-800 the scene has 57
+  workers walking against 41 (most of the extra within 4 m of their stand points) and twice the neighbors within 1.5 m
+  of each walker (465 against 228), so movement's per-neighbor work doubles. Switching parts off one at a time: the
+  stand points' three spatial queries off (middle point only) made it slower (0.38 ms: more workers pile on one point);
+  the queue rule off 0.29 ms (but that is the BUG-0146 fix itself); the stand arrival off 0.26 ms with gold 1,010 (below
+  the base's 1,120). Three cheaper variants (a stuck walker queuing on any touching groupmate, also on a same-node
+  worker ahead in another cell, a wider point-crowd radius) each broke a `GatherPocketStressTests` wedge row, or cut
+  little (0.31 ms with gold 1,220 for a walker stuck 10 ticks queuing on any groupmate). None was kept.
+
+Regression rows: `GatherWedgeTests` (the bug's map by hand: a 1 x 1 tree with trees north, west and east and a Depot to
+the south-west; four workers each deliver within 600 ticks, and a column of four ordered one after another never has a
+worker standing out of reach with nobody between it and the tree for more than 40 ticks; both fail on the old code,
+the column for 1,644 ticks) and `QA/GatherWedgeQaTests` (the seed 21 replay un-skipped: longest out-of-reach stand
+343 ticks, a worker queued behind a working one, against 14,575; player 0's wood 1,360 against 100). That replay's
+header is the pre-D4 data hash; the row accepts the shipped hashes whose changes cannot touch that match (D4's text,
+M4-2a's ram field) and checks it still plays its recorded checkpoints up to where the fix first changes a walk (ticks
+1-19: on tick 20 its first gather walks walk on to their stand points, so a longer prefix cannot hold). The seed 6 two-cell corridor
+oscillation in the bug file is a builder walking out against two standing gatherers, its velocity flipping each tick:
+not this arrival rule (the walker never arrives), and not reproduced; left to its own bug.
+
+**`Attack(target)`** (`CommandKind.Attack` = 16; M4 criterion 1). Applied in phase 1 (`OrderSystem.Apply`):
+- **Dropped** (queued or not, nothing changes, like a bad Gather) when `CombatSystem.MayAttack` says no: combat is off
+  (`SimConfig.Combat` false), the attacker's type cannot fight in this slice (`CanFight`: ranged, caster and
+  siege-with-projectile units until M4-2b; Producer decision), the target is dead or recycled (generation), or the
+  attacker's own (no allies yet), or a kind its `attack.targets` forbids. A queued Attack is checked again when it is
+  popped and dropped then if its target died meanwhile; the next queued order starts on a later tick.
+- **Started** (unqueued, or popped): the queue is replaced (unqueued only), Hold, any gather / build loop and the old
+  engagement end (`ClearForOrder`), the unit stops where it stands, and `CombatSystem.StartAttack` sets the target, a
+  fresh chase memory and `CombatMode.Ordered` (no anchor). Phase 7 of the same tick chases it.
+- **Rule:** the explicit target outranks the scan: an `Ordered` unit does not scan (`Scans` is false), so no nearer or
+  higher-priority enemy re-picks it, and a hit by another enemy does not retaliate (it has a target). A walking ordered
+  chaser is re-aimed on the ticks it would have scanned (`(tick + slot) % 4 == 0`). The retaliation leash does not
+  apply (it is `Retaliate`-only): an ordered unit chases as far as its target goes (Producer decision (a)). The give-up
+  memory does apply: ten stalled scans (BUG-0137's rule, the friend-fighting exception included) give the target up
+  (`Ignored`), and the unit then stands Idle where it is, not walking home. A worker obeys an explicit Attack (decision
+  (b)); "workers never fight on their own" still holds for scans and retaliation. When the target dies (or is given
+  up) the unit stands Idle with no mode (`Settle`, which stops a walking one in place); its queue advances from the
+  next phase 7, else it is an ordinary Idle unit and scans as one (a worker does not). A building target works the same
+  way (`TargetIsBuilding`; the chase aims at the footprint's nearest point as in M4-1).
+- **`attack.targets`** (`AttackDef.Targets`, `AttackTargets`: `all` / `units` / `buildings`, JSON `attack.targets`,
+  default `all` when absent, decision (d); any other value is a `DataError` at the field; in `ContentHash`). Respected by
+  the scan and holders (`PickTarget` looks only at the allowed kinds: a buildings-only unit goes straight to the building
+  list), retaliation (a buildings-only unit never takes the unit that hit it) and the explicit order (dropped). The
+  Battering Ram ships `"buildings"` (docs/factions/whirlwind.md: "attacks buildings only"; BUG-0139 closed). The data
+  hook is the field, never an id check.
+- **Hashing:** a pending command's target goes in after its unit handle, flagged by bit 63 of its kind word; queue
+  targets as above (in the entry's hashed position and type id); `CombatMode.Ordered` (4) is in the combat block. No new
+  per-unit or per-entry array.
+- **Replay format 4** (see "Save/load and replays"): the header's `combat` line and the target on every command line.
+  The golden was regenerated once for it: `rts-replay 4`, the `combat 1` line, the new data hash (the ram's field),
+  13-field command lines; every `k` line identical (the fix to BUG-0146 changes no walk on its move-only path).
+- **Cost:** nothing allocates; the ordered unit costs what a chaser does. The queue rule and the stand arrival read a
+  walker's loop handles only when it touches an arrived groupmate or stands within 1 m of its goal, so a crowd of plain
+  walkers pays nothing new (the gather cost is under BUG-0146 above).
+- **Re-issuing a fight** (BUG-0152, fix round): an unqueued Attack used to end the engagement first and start afresh,
+  which zeroed a wind-up in progress while the cooldown it set kept counting, so a Heavy Infantry (6-tick wind-up)
+  re-ordered every 5 ticks or faster never landed a hit (an AttackMove to the same point likewise, since M4-1). Now an
+  unqueued Attack on the target the unit already has (same handle and building flag) only replaces the queue and
+  clears Hold: the swing, cooldown, state and, under `Ordered`, the chase memory stay (`CombatSystem.ReaffirmAttack`); a
+  unit that took that target itself (scan, retaliation, attack-move) now holds it as `Ordered`, with a fresh chase and
+  give-up memory as a new Attack gets. An unqueued AttackMove keeps the unit's target, swing and chase when it is on the
+  leg the unit already walks (the leg's end resolves to the same cell; the give-up memory kept) or when the unit fights
+  in reach or mid-swing (any leg; the give-up memory reset as for any new order); the mode becomes the new leg, walked
+  once the fight ends. Unengaged on the same leg, the Move rule's same-target case applies as before.
+  **Redirecting** (BUG-0154, fix round 2): round 1 stopped there, so an attack-move anywhere left a unit fighting in reach
+  on its target for good (the scan never re-picks in reach): a unit hitting a Tent could not be attack-moved onto the
+  Raider killing it. Now a kept fight re-picks unless the order is the leg's own point (within `ArrivalDistance`, 1 m, of
+  the leg's resolved end: the Move rule's "already there"): the order sets `UnitStore.Repick`, and that tick's phase 7
+  scans the unit at once, due or not and in reach or not, by the usual priority. The same pick keeps the swing (`Engage`
+  with the target it has changes nothing), so spam to the same point, or to a new point by a unit fighting in reach,
+  still lands every hit; a better pick (an attacker, a unit over a building) is taken at once. A chaser still out of
+  reach given a new point does lose its target until its next scan (BUG-0157, S3: jittered A-click spam every 1-3
+  ticks costs a brawl 10-26 % of its damage; same-point spam and spam 5+ ticks apart cost nothing). Another point in the leg's own cell counts as a new point here
+  (QA's repro attack-moved onto a Raider standing in that cell) but keeps the give-up memory. The flag is cleared in the
+  same phase 7 (and by `ClearForOrder`), so it is never set between ticks; it is hashed above the mode's byte (`Simulation.AddCombatToHash`), which leaves every hash between ticks, and the goldens, as they were. Rows:
+  `AttackOrderTests.ReissuedAttack_...`, `ReissuedAttackMove_...`, `AttackMove_ToANewLeg_MidSwing_...`,
+  `AttackMove_WhileHittingABuilding_ANewPointRepicks...`, `QA/AttackOrderQaTests.ReissuingTheSameAttack_EveryNTicks_...`,
+  `QA/FightReissueQaTests.AttackMoveOntoAnAttacker_WhileHittingABuilding_TakesTheAttacker`.
+- **Not yet:** projectiles, misses, splash, friendly fire, minimum range (M4-2b), fog (M4-3), the view's F-key / cursor
+  path.
 
 ## Economy implementation
 
@@ -1453,6 +1589,8 @@ closed by rule: only exposed nodes are gathered.
   worker to its center plus `CellSize` per other unit standing in it (spatial hash), ties to the lower
   cell index: workers spread round a crowded mine. A worker that arrives or gives up out of reach
   stands and walks again every `EconomyConstants.RetryTicks` (20); that is the queue at a mine's edge.
+  (Since M4-2a, BUG-0146: three stand points per cell, the stand arrival and the queue rule; see "Implementation
+  (M4-2a)".)
 - **Gathering.** Each tick in reach, `GatherProgress += RulesDef.GoldPerTick` (or `WoodPerTick`);
   whole units are taken with `ResourceStore.Take` into `Cargo`, so the node loses exactly what the
   worker gains. A gold load of 10 takes 286 ticks in reach (14.3 s), wood 334 (16.7 s). At
@@ -3148,16 +3286,18 @@ AiPlayer
 
 - **Replay file** (M1-6, `Rts.Sim.Replays`): a `Replay` holds a header, the command log, and
   checkpoints.
-  - Header: format version (`Replay.CurrentFormatVersion` = 3 since M3-1; 2 was M1-7, without the
-    resource lines, 1 was M1-6, without command flags; both are refused with `FormatVersionMismatch`),
+  - Header: format version (`Replay.CurrentFormatVersion` = 4 since M4-2a, which added the `combat` line and an
+    attack target on every command line; 3 (M3-1) still reads and plays, `Replay.OldestFormatVersion`; 2 was M1-7,
+    without the resource lines, 1 was M1-6, without command flags; both are refused with `FormatVersionMismatch`),
     `SimInfo.Version` (informational, not checked on playback), data hash (`GameData.ContentHash()`),
     seed, player count, unit, command and (M3-1) resource capacity (they decide outcomes: the unit and
     resource capacities are in the state hash and a full store drops spawns), checkpoint interval,
-    tick count, and every `MapGenParams` field (M3-1 added `map.forests`, `map.forest-min-trees`,
-    `map.forest-max-trees`, `map.gold-mines`, `map.mine-spacing`). There is no map id yet: the map,
-    resource nodes included, is rebuilt from seed + params.
+    tick count, (format 4) `combat 0 / 1` (`SimConfig.Combat` when recorded, `Replay.Combat`; a format 3 file has no
+    such line and was recorded with combat on), and every `MapGenParams` field (M3-1 added `map.forests`,
+    `map.forest-min-trees`, `map.forest-max-trees`, `map.gold-mines`, `map.mine-spacing`). There is no map id yet:
+    the map, resource nodes included, is rebuilt from seed + params.
   - Command log: every command `Simulation.Enqueue` accepted, as stamped (tick, player, sequence,
-    kind, type id, position, unit handle, flags), in enqueue order. Commands stamped for a tick after the
+    kind, type id, position, unit handle, (format 4) attack target handle and building flag, flags), in enqueue order. Commands stamped for a tick after the
     recorded span are left out.
   - Checkpoints: `(tick, StateHash())` right after each tick whose new `TickNumber` is a multiple of
     the interval (default 100, 5 s), so exactly `tickCount / interval` of them.
@@ -3168,9 +3308,11 @@ AiPlayer
   when full inside `Enqueue`, which input calls between ticks; once the AI enqueues during a tick
   (M5), size the recorder's command capacity for the match. `ToReplay()` snapshots the recording.
 - **Text format** (`ReplayFormat`, extension `.replay`): ASCII, LF line endings, one `key value`
-  line per header field in a fixed order, `commands N` then N lines
-  `c tick player sequence kind typeId x y unitIndex unitGeneration flags` (10 fields; format 2 added
-  `flags`), `checkpoints N` then N lines
+  line per header field in a fixed order (a replay is written in its own `FormatVersion`, so a format 3 file read
+  back writes back byte for byte; the recorder makes format 4), `commands N` then N lines
+  `c tick player sequence kind typeId x y unitIndex unitGeneration targetIndex targetGeneration targetIsBuilding flags`
+  (13 fields since format 4, the three target fields `0 0 0` on every kind but `Attack`, flags kept last; format 3
+  lines have 10, without the target; format 2 added `flags`), `checkpoints N` then N lines
   `k tick hash`, `end`, and last `checksum H`: FNV-1a 64 over every byte before that line, so any
   changed byte is caught. Integers are invariant-culture decimal in canonical form (no `+`, no
   leading zeros); hashes are 16 uppercase hex digits; floats are their exact IEEE-754 bit pattern
@@ -3179,14 +3321,16 @@ AiPlayer
   ticks run from 1 to the tick count without going backwards, each player's sequences count 0, 1,
   2, ..., players are below the player count, every command is well formed (`Command.IsWellFormed()`:
   a known kind, no flag bit but `Command.QueuedFlag` (M1-7), and that one only on a unit order
-  (M1-9), the rule `Enqueue` applies), no tick has more commands than the
+  (M1-9), and an attack target only on an `Attack` (M4-2a), the rule `Enqueue` applies; a format 3 replay can
+  hold no `Attack` and no combat-off header), no tick has more commands than the
   command capacity, and the checkpoints are exactly the interval's multiples. Format limits: at
   most 16 players, capacities up to 1,000,000, and (M1-4d-3, BUG-0040) a tick count and checkpoint
   interval of at most 1,728,000 (24 h at 20 Hz), so a small file can't declare years of playback.
   The interval may exceed the tick count: the recorder writes replays shorter than one interval.
 - **Playback** (`ReplayPlayer.Run(replay, data)`): refuses before any tick with
   `FormatVersionMismatch`, another validation code, or `DataMismatch` when the data hash differs.
-  Otherwise it builds the `SimConfig`, enqueues each command when `TickNumber == command.Tick - 1`
+  Otherwise it builds the `SimConfig` (since format 4 with the header's `combat`; `Run(replay, data, combat)` overrides
+  it, for format 3 test replays recorded with combat off, which can't say so), enqueues each command when `TickNumber == command.Tick - 1`
   in log order, checks the sim stamps it with the logged tick and sequence, hashes with its own
   recorder, and stops at the first checkpoint whose hash differs, reporting the tick and both hashes.
 - **Data hash:** `GameData.ContentHash()` is FNV-1a (`StateHasher`) over every field of every def
@@ -3220,9 +3364,10 @@ AiPlayer
 
 - Golden replays live in `sim/Rts.Sim.Tests/Replays/`. The first (M1-6) is
   `cross_map_seed1.replay`: `CrossMapScenario` seed 1, 200 units ordered across the map, exactly
-  1,500 ticks, checkpoints every 100 (about 16 KB). Last regenerated in M3-1 (format 3, the
+  1,500 ticks, checkpoints every 100 (about 16 KB). Regenerated in M3-1 (format 3, the
   resource store and grid version in the hash, `resources.json` in the data hash; its commands and
-  unit trajectories are unchanged). `ReplayGoldenTests` plays it back and fails on
+  unit trajectories are unchanged); last in M4-2a (format 4: the `combat` line and 13-field command lines; the data
+  hash for the ram's `attack.targets`; every `k` line identical). `ReplayGoldenTests` plays it back and fails on
   the first mismatching checkpoint. When a deliberate change alters outcomes (movement, tick order,
   RNG use, any `game/data` edit), run the tests once with the environment variable
   `RTS_REGEN_GOLDEN=1`: the test rewrites the file and then fails with "golden regenerated; rerun

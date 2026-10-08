@@ -11,7 +11,7 @@ namespace Rts.Sim.Orders;
 
 /// <summary>
 /// Unit orders (docs/03 "Orders and unit states"): applies Move, AttackMove, Stop, HoldPosition,
-/// Gather, Build and Repair commands in phase 1, and in phase 7 starts the next shift-queued order of every Idle unit.
+/// Gather, Build, Repair and Attack commands in phase 1, and in phase 7 starts the next shift-queued order of every Idle unit.
 /// </summary>
 /// <remarks>
 /// An unqueued order replaces the unit's queue and clears Hold; a queued one is appended. A popped
@@ -33,8 +33,9 @@ public static class OrderSystem
             CommandKind kind = u.QueueKind[head];
             Vector2 target = u.QueuePosition[head];
             int typeId = u.QueueTypeId[head];
+            EntityHandle attackTarget = kind == CommandKind.Attack ? u.QueuedTarget(head) : default;
             Pop(u, i);
-            Execute(world, i, kind, target, typeId);
+            Execute(world, i, kind, target, typeId, attackTarget);
         }
     }
 
@@ -50,9 +51,26 @@ public static class OrderSystem
         // Only workers gather, build and repair (M3-2, M3-3); such an order to anyone else is dropped, queued or not.
         bool workerOrder = command.Kind is CommandKind.Gather or CommandKind.Build or CommandKind.Repair;
         if (workerOrder && !EconomySystem.IsWorker(world, i)) return;
+        // An Attack on nothing it may fight is dropped, queued or not (M4-2a); a queued one is checked again when it starts.
+        if (command.Kind == CommandKind.Attack && !CombatSystem.MayAttack(world, i, command.Target, command.TargetIsBuilding)) return;
         if (command.IsQueued)
         {
-            Append(u, i, command.Kind, positional ? command.Position : Vector2.Zero, command.Kind == CommandKind.Build ? command.TypeId : 0);
+            int at = Append(u, i, command.Kind, positional ? command.Position : Vector2.Zero, command.Kind == CommandKind.Build ? command.TypeId : 0);
+            if (at >= 0 && command.Kind == CommandKind.Attack) u.SetQueuedTarget(at, command.Target, command.TargetIsBuilding);
+            return;
+        }
+        if (command.Kind == CommandKind.Attack)
+        {
+            u.ClearQueue(i);
+            // The target it already fights (click spam, an AI refreshing its orders): the swing in progress and the chase go
+            // on (BUG-0152); only the mode becomes Ordered, as the order says.
+            if (u.Target[i].Generation != 0 && u.Target[i] == command.Target && u.TargetIsBuilding[i] == command.TargetIsBuilding)
+            {
+                u.Hold[i] = false;
+                CombatSystem.ReaffirmAttack(world, i);
+                return;
+            }
+            StartAttack(world, i, command.Target, command.TargetIsBuilding);
             return;
         }
         // A Build or Repair with nothing to build or repair drops the whole command: queue and Hold stay.
@@ -81,6 +99,31 @@ public static class OrderSystem
             // A target that resolves to no passable cell drops the whole command: queue and Hold stay.
             if (!ResolveTarget(world.NavGrid, command.Position, out int cell, out Vector2 goal)) return;
             u.ClearQueue(i);
+            if (command.Kind == CommandKind.AttackMove && world.CombatEnabled)
+            {
+                // Re-issuing an attack-move (click spam, an AI refreshing its orders) never throws a fight away (BUG-0152):
+                // on the leg it already walks a fight on the way goes on, chase and all. Any other point is the player
+                // asking for a re-pick (BUG-0154): a unit fighting in reach or mid-swing re-picks by priority in this
+                // tick's phase 7, keeping its swing only if the pick is the target it has. Only the leg's own point (within
+                // ArrivalDistance, the Move rule's "already there") skips the re-pick; a new cell also forgets the give-up
+                // memory, as any new order does. It walks to the leg's end when the fight is over.
+                bool sameLeg = OnLegTo(world, i, cell);
+                if (u.Target[i].Generation != 0 && (sameLeg || CombatSystem.FightsInReach(world, i)))
+                {
+                    const float same2 = MovementConstants.ArrivalDistance * MovementConstants.ArrivalDistance;
+                    bool samePoint = sameLeg && Vector2.DistanceSquared(goal, u.AnchorPosition[i]) <= same2;
+                    u.Hold[i] = false;
+                    CombatSystem.KeepFightForAttackMove(u, i, goal, newOrder: !sameLeg, repick: !samePoint);
+                    return;
+                }
+                if (sameLeg)
+                {
+                    // Unengaged on that leg: the Move rule's same-target case (no restart), its give-up memory kept.
+                    Move(world, i, cell, goal);
+                    CombatSystem.StartAttackMove(u, i, u.Goal[i]);
+                    return;
+                }
+            }
             u.Hold[i] = false;
             EndLoop(u, i);
             CombatSystem.ClearForOrder(u, i);
@@ -88,11 +131,11 @@ public static class OrderSystem
             if (command.Kind == CommandKind.AttackMove && world.CombatEnabled) CombatSystem.StartAttackMove(u, i, u.Goal[i]);
             return;
         }
-        Execute(world, i, command.Kind, Vector2.Zero, 0);
+        Execute(world, i, command.Kind, Vector2.Zero, 0, default);
     }
 
-    /// <summary>Starts an order now: the unqueued semantics, minus clearing the queue for Move and AttackMove.</summary>
-    private static void Execute(World world, int i, CommandKind kind, Vector2 target, int typeId)
+    /// <summary>Starts an order now: the unqueued semantics, minus clearing the queue for Move, AttackMove, Gather, Build, Repair and Attack.</summary>
+    private static void Execute(World world, int i, CommandKind kind, Vector2 target, int typeId, EntityHandle attackTarget)
     {
         UnitStore u = world.Units;
         switch (kind)
@@ -119,6 +162,9 @@ public static class OrderSystem
             case CommandKind.Repair:
                 if (ConstructionSystem.StartRepair(world, i, target, replaceQueue: false)) CombatSystem.ClearForOrder(u, i);
                 break;
+            case CommandKind.Attack: // popped: dropped if the target died or turned invalid while it waited; the rest of the queue stays
+                if (CombatSystem.MayAttack(world, i, attackTarget, typeId == 1)) StartAttack(world, i, attackTarget, typeId == 1);
+                break;
             case CommandKind.Stop:
                 CombatSystem.ClearForOrder(u, i);
                 u.ClearQueue(i);
@@ -134,15 +180,38 @@ public static class OrderSystem
         }
     }
 
-    private static void Append(UnitStore u, int i, CommandKind kind, Vector2 target, int typeId)
+    /// <summary>Whether unit <paramref name="i"/> walks (or fights on) an attack-move leg whose end resolves to <paramref name="cell"/>.</summary>
+    private static bool OnLegTo(World world, int i, int cell)
+    {
+        UnitStore u = world.Units;
+        return u.Mode[i] == CombatMode.AttackMove
+            && ResolveTarget(world.NavGrid, u.AnchorPosition[i], out int legCell, out _) && legCell == cell;
+    }
+
+    /// <summary>Appends an entry to unit <paramref name="i"/>'s queue; returns its index in the flat queue arrays, or -1 when the queue is full (the order is dropped silently).</summary>
+    private static int Append(UnitStore u, int i, CommandKind kind, Vector2 target, int typeId)
     {
         int n = u.QueueCount[i];
-        if (n >= OrderConstants.QueueCapacity) return; // full: dropped silently
+        if (n >= OrderConstants.QueueCapacity) return -1;
         int at = i * OrderConstants.QueueCapacity + n;
         u.QueueKind[at] = kind;
         u.QueuePosition[at] = target;
         u.QueueTypeId[at] = typeId;
         u.QueueCount[i] = n + 1;
+        return at;
+    }
+
+    /// <summary>
+    /// Starts an explicit Attack (M4-2a; the target already checked with <c>CombatSystem.MayAttack</c>): Hold, loops and the
+    /// old engagement end, the unit stops where it stands, and phase 7 chases the target from this tick on.
+    /// </summary>
+    private static void StartAttack(World world, int i, EntityHandle target, bool isBuilding)
+    {
+        UnitStore u = world.Units;
+        CombatSystem.ClearForOrder(u, i);
+        Stop(u, i);
+        u.Hold[i] = false;
+        CombatSystem.StartAttack(world, i, target, isBuilding);
     }
 
     /// <summary>Removes the head entry, shifting the rest forward; the freed last entry goes back to default.</summary>

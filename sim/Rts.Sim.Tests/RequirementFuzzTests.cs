@@ -171,18 +171,21 @@ public class RequirementFuzzTests
             // Test seams on both twins: a finished building destroyed now and then (requirements go), a trained unit removed.
             if (t % 150 == 149)
             {
-                // Every other time a Crossbow Range (the Heavy Infantry's requirement) when there is one, so it goes too.
+                // Every other time every finished Crossbow Range (the Heavy Infantry's requirement) when there is one, so the
+                // requirement goes too. (M4-2a: all of them, not one. With BUG-0146's builder walks seed 1 keeps 3 to 6 finished
+                // ranges at every seam, so destroying one never closed the requirement and the coverage check below starved.)
                 slots.Clear();
                 for (int s = 0; s < w.Buildings.Capacity; s++)
                     if (w.Buildings.Alive[s] && !w.Buildings.UnderConstruction[s] && w.Buildings.TypeId[s] == range && t % 300 == 149) slots.Add(s);
-                if (slots.Count == 0)
+                bool ranges = slots.Count > 0;
+                if (!ranges)
                     for (int s = 0; s < w.Buildings.Capacity; s++)
                         if (w.Buildings.Alive[s] && !w.Buildings.UnderConstruction[s]) slots.Add(s);
                 int k = slots.Count > 0 ? slots[rng.NextInt(0, slots.Count)] : -1;
-                if (k >= 0)
+                foreach (int s in ranges ? slots : k >= 0 ? new List<int> { k } : new List<int>())
                 {
-                    a.World.Buildings.Damage(a.World.Buildings.HandleOf(k), 1_000_000);
-                    b.World.Buildings.Damage(b.World.Buildings.HandleOf(k), 1_000_000);
+                    a.World.Buildings.Damage(a.World.Buildings.HandleOf(s), 1_000_000);
+                    b.World.Buildings.Damage(b.World.Buildings.HandleOf(s), 1_000_000);
                     destroyed++;
                 }
             }

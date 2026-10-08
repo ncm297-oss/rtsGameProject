@@ -219,7 +219,9 @@ public sealed class Simulation
         for (int i = 0; i < _commands.Count; i++)
         {
             ref readonly Command c = ref _commands[i];
-            h.Add((ulong)(uint)c.Kind | ((ulong)(uint)c.Flags << 32)); // Flags 0: as before M1-7
+            // Flags 0: as before M1-7. M4-2a: bit 63 flags an attack target, whose words follow.
+            bool target = c.Target != default || c.TargetIsBuilding;
+            h.Add((ulong)(uint)c.Kind | ((ulong)(uint)c.Flags << 32) | (target ? 1UL << 63 : 0UL));
             h.Add(c.Player);
             h.Add(c.Tick);
             h.Add(c.Sequence);
@@ -227,6 +229,11 @@ public sealed class Simulation
             h.Add(c.Position);
             h.Add(c.Unit.Index);
             h.Add(c.Unit.Generation);
+            if (target)
+            {
+                h.Add(c.Target.Index);
+                h.Add((ulong)(uint)c.Target.Generation | (c.TargetIsBuilding ? 1UL << 32 : 0UL));
+            }
         }
         return h.Value;
     }
@@ -235,7 +242,8 @@ public sealed class Simulation
     /// Unit <paramref name="i"/>'s order summary for <see cref="StateHash"/>: bit 0 Hold, bit 1 a
     /// non-zero queue count, then one bit per queue entry that isn't default, and bit 16 for gather-loop or
     /// cargo state (M3-2). Zero for a unit with
-    /// no orders; <see cref="AddOrdersToHash"/> then adds nothing.
+    /// no orders; <see cref="AddOrdersToHash"/> then adds nothing. A queued Attack's target (M4-2a) lives in the entry's
+    /// position and type id (<see cref="UnitStore.QueuedTarget"/>), so it is hashed with them.
     /// </summary>
     private static uint OrderBits(UnitStore u, int i)
     {
@@ -250,7 +258,7 @@ public sealed class Simulation
 
     /// <summary>
     /// True when any combat field (M4-1) of unit <paramref name="i"/> isn't at its spawn value: hit points below (or
-    /// above) the type's, a target, a cooldown, a wind-up, a last attacker, an anchor, a combat mode, or chase memory (BUG-0137). Flagged by bit 17
+    /// above) the type's, a target, a cooldown, a wind-up, a last attacker, an anchor, a combat mode, chase memory (BUG-0137), or a pending re-pick (BUG-0154, never set between ticks). Flagged by bit 17
     /// of the order word, then hashed, so a unit that never fought hashes exactly as before M4-1.
     /// </summary>
     private static bool HasCombat(World world, int i)
@@ -259,7 +267,8 @@ public sealed class Simulation
         int fullHp = (uint)u.TypeId[i] < (uint)world.Data.Units.Length ? world.Data.Units[u.TypeId[i]].Hp : 0;
         return u.Hp[i] != fullHp || u.Target[i] != default || u.TargetIsBuilding[i] || u.CooldownTicks[i] != 0 || u.WindupTicks[i] != 0
             || u.LastAttacker[i] != default || u.AnchorPosition[i] != Vector2.Zero || u.Mode[i] != CombatMode.None
-            || u.ChaseBest[i] != 0f || u.ChaseStall[i] != 0 || u.Ignored[i] != default || u.IgnoredIsBuilding[i] || u.GiveUps[i] != 0;
+            || u.ChaseBest[i] != 0f || u.ChaseStall[i] != 0 || u.Ignored[i] != default || u.IgnoredIsBuilding[i] || u.GiveUps[i] != 0
+            || u.Repick[i];
     }
 
     /// <summary>Unit <paramref name="i"/>'s combat fields, as flagged by bit 17 of <see cref="OrderBits"/>.</summary>
@@ -273,7 +282,9 @@ public sealed class Simulation
         h.Add(u.LastAttacker[i].Index);
         h.Add(u.LastAttacker[i].Generation);
         h.Add(u.AnchorPosition[i]);
-        h.Add((int)u.Mode[i]);
+        // BUG-0154's re-pick flag rides above the mode's byte: it is cleared within the tick it is set, so between ticks
+        // the word is the mode alone and the hash stream is what it was before the flag.
+        h.Add((int)u.Mode[i] | (u.Repick[i] ? 1 << 8 : 0));
         // BUG-0137's chase memory.
         h.Add(u.ChaseBest[i]);
         h.Add(u.ChaseStall[i]);
@@ -295,6 +306,7 @@ public sealed class Simulation
         {
             if (u.QueueKind[head + k] == CommandKind.Noop && u.QueuePosition[head + k] == Vector2.Zero && u.QueueTypeId[head + k] == 0) continue;
             // A queued Build's type id (M3-3) rides in the high half of the kind word: zero for every other kind, so they hash as before.
+            // A queued Attack's building flag does too, and its target's slot and generation are the position (M4-2a).
             h.Add((ulong)(uint)u.QueueKind[head + k] | ((ulong)(uint)u.QueueTypeId[head + k] << 32));
             h.Add(u.QueuePosition[head + k]);
         }
@@ -318,6 +330,7 @@ public sealed class Simulation
             case CommandKind.Gather:
             case CommandKind.Build:
             case CommandKind.Repair:
+            case CommandKind.Attack:
                 OrderSystem.Apply(World, in command);
                 break;
             case CommandKind.Cancel:

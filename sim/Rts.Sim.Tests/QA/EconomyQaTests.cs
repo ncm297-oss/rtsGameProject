@@ -538,8 +538,8 @@ public class EconomyQaTests
             sim.Tick();
         }
         Replay r = rec.ToReplay();
-        Assert.Equal(3, Replay.CurrentFormatVersion);
-        Assert.Equal(3, r.FormatVersion);
+        Assert.Equal(4, Replay.CurrentFormatVersion); // M4-2a: format 4
+        Assert.Equal(Replay.CurrentFormatVersion, r.FormatVersion);
         Assert.Equal(ReplayError.None, ReplayFormat.TryRead(ReplayFormat.Write(r), out Replay? back));
         ReplayResult res = ReplayPlayer.Run(back!, TestSim.Data);
         Assert.True(res.Ok, $"replay {res.Error} at tick {res.Tick}");

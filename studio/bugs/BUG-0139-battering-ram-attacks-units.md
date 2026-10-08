@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open, deferred to M4-2 (Producer re-triage S2 -> S3: needs an `attack.targets` schema field, moves `data-hash`) |
+| Status | fixed |
 | Found | 2026-10-07-2014, task M4-1 |
 | System | combat target rules (`CombatSystem.CanFight` / `PickTarget`) vs unit data |
-| Fixed by | |
+| Fixed by | `9be1991` (M4-2a, session 2026-10-08-0313): `attack.targets` schema field (`AttackDef.Targets`, `all` / `units` / `buildings`, default `all`, bad value = `DataError`), respected by `PickTarget` (a buildings-only unit goes straight to the building list), retaliation, holders and `MayAttack`; the Battering Ram's `units.json` says `"targets": "buildings"` (golden `data-hash` regenerated once with replay format 4). Proof: `BatteringRam_AttacksBuildingsOnly_NeverAUnit` un-skipped and green, `AttackTargetsLoaderTests`, QA `AttackOrderQaTests` ram paths (never takes a unit by scan, Hold, attack-move or retaliation over 400 ticks of being hit; hits a Tent) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~BatteringRam_AttacksBuildingsOnly_NeverAUnit"`

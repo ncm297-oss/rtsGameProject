@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-07-2014, task M3-V4 (QA; found by the M3 Playable scene, not caused by M3-V4) |
 | System | sim: gather loop / movement arrival (`Economy/EconomySystem.cs`, `Movement/`), sim track |
-| Fixed by | |
+| Fixed by | `9be1991` (M4-2a, session 2026-10-08-0313): `MovementSystem.QueuesBehind` (a touched arrived groupmate stops a footprint walker only if it stands nearer the goal), `StandArrival2` (a footprint walker walks on to within 0.325 m of its stand point while it makes progress), three stand points per cell edge (`EconomySystem.StandPoint`, `EconomyConstants.StandPointsPerCell` / `StandPointSpacing`). Proof: `GatherWedgeTests` (hand-built pocket, four workers each deliver within 600 ticks; a column never wedges > 40 ticks; both fail on `007262d`), `QA/GatherWedgeQaTests.Seed21PlayableReplay_NoGathererStandsOutOfReachForever` un-skipped (longest out-of-reach stand 343 ticks, a worker queued behind a working one, was 14,575; wood 1,360 was 100), QA `Stress/GatherPocketStressTests` 20 / 20 rows (13 / 20 fail on the base), `M3PlayableTest` seed 21 PASS headless. Cost: BUG-0151 (S3, the crowded gather row +40 % a tick). The seed-6 corridor oscillation did not reproduce (seed 6 Playable PASS x3): a builder walking out against two standing gatherers, not this arrival rule; refile with a replay if seen again |
 
 ## Repro
 1. The replay is attached: `studio/bugs/BUG-0146-seed21-wood-wedge.replay`. It is `M3PlayableTest -- --seed 21`'s own

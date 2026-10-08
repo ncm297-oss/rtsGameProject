@@ -113,7 +113,7 @@
       "hp": 240,
       "armor": 6,
       "armorClass": "heavy",
-      "attack": { "value": 60, "type": "siege", "cooldown": 3.0, "range": 0.5, "windup": 0.3 },
+      "attack": { "value": 60, "type": "siege", "cooldown": 3.0, "range": 0.5, "windup": 0.3, "targets": "buildings" },
       "speed": 2.4,
       "sight": 10,
       "radius": 0.9,

@@ -4,36 +4,34 @@ The dashboard. The Producer rewrites it at the end of every session. **Owner: re
 you" first.** "For your review" (further down) is non-blocking: what the studio built or decided
 on its own, explained in terms of what you'd see in the game.
 
-_Last updated: 2026-10-08 00:xx (session 2026-10-07-2315, which resumed the dead 2014 session: **units fight now** (M4-1: attack-move, chase, retaliation, the damage formula, death; melee only), the **M3 "Playable" criterion is proven by a scripted run** of your playtest through the real HUD (M3-V4), and the shared techs' text is final (D4). M3 is 8 / 8 but **not signed off yet**: the scripted run found an S2 in the gather loop (BUG-0146), fixed first next session, then sign-off.)_
+_Last updated: 2026-10-08 (session 2026-10-08-0313): **M3 is signed off** (the last S2, BUG-0146, is fixed: laborers no longer wedge short of a tree). The sim added the explicit **"attack this unit / building" order** and made the **Battering Ram buildings-only**; the view shows **hp bars, hit flashes, corpses, rubble and kill counts**. M4 is at 3 / 10. No open S1 / S2._
 
 ## Waiting on you
 
-- **Restore the routine's hourly schedule** (a session set a one-time 19:03 run before the
-  no-re-arm rule landed). Not blocking while your watcher session is open (it starts sessions from
-  the Gate rows below); without it the studio only moves when the watcher does.
+- **Restore the routine's hourly schedule** (a session set a one-time 19:03 run before the no-re-arm rule landed). Not
+  blocking while your watcher session is open (it starts sessions from the Gate rows below).
 - Otherwise nothing blocking. **Wanted, not blocking:** play the M3 base (ten minutes, instructions in the M3-V3 entry
-  under For your review) and write what felt wrong in the inbox (the criterion itself is ticked by the scripted run);
-  and read the one-line **process note** under For your review (a session resumed while its predecessor was still alive).
+  under For your review) and, new, watch a fight (two minutes, the M4-V1 entry); write what felt wrong in the inbox.
 
 ## Now
 
 | Field | Value |
 | --- | --- |
-| Sim: milestone | M3 sim side complete and hardened; **M4 combat started**: M4-1 (melee: attack-move acquisition, chase, leashed retaliation, holders, the damage formula with Forge bonuses, wind-up + cooldown, death, buildings damaged) on `main`; M4 criterion 2 ticked, 1 and 4 half done (the `Attack(target)` order and corpses / rubble left) |
-| Sim: next task | **BUG-0146 (S2) first**: gatherers wedge 1.7 m out of reach of a tree open on one side and never gather (found by the view's scripted Playable run, seed 21 replay attached); then **M4-2a**: the explicit `Attack(target)` order (replay format 4 recording the combat switch), `attack.targets` field (the ram's "buildings only", BUG-0139) · feature · QA full |
+| Sim: milestone | **M3 Done (signed off 2026-10-08)**; **M4 combat**: M4-1 melee + M4-2a (`Attack(target)` order, `attack.targets`, replay format 4, the gather wedge fix) on `main`; criteria 1, 2, 4 ticked |
+| Sim: next task | **M4-2b**: projectiles with travel time and misses, splash with falloff, friendly fire, minimum range (`projectiles.json` schema), every unit fights, the counter-triangle scenario rows; BUG-0156 folded in if a few lines · feature · QA full |
 | Sim: gate | **GO** |
-| View: milestone | **M3 view side done** (M3-V4: the Playable criterion proven by a scripted run of your playtest through the real HUD; BUG-0125 drawn-shape node pick; "Locked" / "Researched" / "In a queue" wording); M4 view work next |
-| View: next task | **M4-V1**: first **BUG-0147** (six M2 test scenes whose start armies now fight: run them with the sim's combat switch off or no armies; the gate is green, the scene loop isn't), then the first combat views on M4-1: unit hp bars, hit flash, death (view freed + 10 s corpse marker, rubble), kill / loss counts, live hp in the panel · feature · QA standard |
+| View: milestone | M3 Done; **M4 views started**: M4-V1 (hp bars, hit flash, corpses / rubble, K / L counts, live panel hp, `--no-combat` dev flag; BUG-0147's five scenes green) on `main` |
+| View: next task | **M4-V2**: the Attack-target order in the HUD (right-click or A + click on an enemy unit / building = Attack, Shift queues; panel text from `ui.json`; a unit pick in `ViewApi`), BUG-0160 nits, one stale docs line · feature · QA standard |
 | View: gate | **GO** |
-| Data: milestone | M3 data side **done and hardened** (D4: the shared techs' text final and pinned to docs/02; BUG-0132 fixed; golden `data-hash` A863BAF8637CC860) |
-| Data: next task | **STOP** (planned) until a schema it needs is on `main`: `attack.targets` (M4-2a), tower attack / sight / detector (M4-3), abilities / statuses (M4-4). Inbox text tweaks come first whenever present; the docs/02 "Ages" wording drift goes with its next task · — |
-| Data: gate | **HOLD** (no unblocked work; the other two tracks keep going) |
+| Data: milestone | M3 Done (D1-D4); M4 data waits on schemas: `attack.targets` is on `main` now, towers (M4-3) and abilities (M4-4) later |
+| Data: next task | **D5**: pin the ram's `attack.targets` to the Whirlwind page, the docs/02 "Ages" wording drift with its test parser, BUG-0155 · feature · QA light |
+| Data: gate | **GO** |
 | Tools on this PC | Godot 4.7.2 .NET, .NET SDK 8.0.425, Git 2.53 + LFS 3.7; `GODOT` user variable set |
-| Build | All three session branches build with 0 warnings; **smoke PASS on the Producer's scratch three-way merge** (sim + view + data: tick 87, `Rts.Sim 0.0.1`, no ERROR; the sim branch alone fails smoke until the view's `states.attacking` key lands: merge order sim, view, data). Golden: the data track regenerated `data-hash` + `checksum` once (every `k` line identical); the sim's combat state hashes only when a unit fought, so M4-1 moved nothing |
-| Tests | QA: sim full suite incl. Perf 3,591 / 3,604 (13 skipped, each a filed bug) / 0 failed; view 3,471 / 3,482 / 0 + 27 / 27 scenes + Playable 20 / 20 seed passes; data 3,467 / 3,477 / 0. Producer: the three non-Perf suites rerun at once: sim 3,467 / 3,478 (11 skipped) / 0 failed, view 3,348 / 3,356 (8) / 0, data 3,346 / 3,353 (7) / 0 (11-13 min each under contention); on the scratch merge: smoke PASS, `M3PlayableTest` PASS with the final sim (seed 6 tick 11,592), five BUG-0147 scenes FAIL as filed (QaM24 passes now), six other scenes PASS |
-| Open bugs | **25** (S1: 0, **S2: 1**, S3: 13, S4: 11). Fixed this session: BUG-0135 / 0136 / 0137 / 0138 / 0140 / 0141 / 0143 + BUG-0142 items 3-4 (sim, all filed and fixed in-session); BUG-0125 / 0145 + BUG-0126 items 1-2 + BUG-0148 items 2 and 4 (view); BUG-0132 (data). New open: **BUG-0146 (S2, sim: gatherers wedge out of reach of a tree)**; BUG-0139 (S3, sim: the ram attacks units, M4-2a), BUG-0144 (S3, sim: chasers' field waits under placement churn, M4-2), BUG-0149 (S3, sim: a stall count kept across a target switch gives up a reachable enemy behind a detour), BUG-0142 items 1-2 (S4); BUG-0147 (S3, view: six M2 scenes fight on the merge), BUG-0148 items 1, 3 (S4); BUG-0155 (S4, data: a case-sensitive name check) |
-| Sessions today | 7 / 8 on 2026-10-07 (2014 died without a log and was resumed as 2315); 0 / 8 on 2026-10-08. Feature sessions since last hardening: sim 1 / 4, view 1 / 4, data 0 / 4 |
-| Last session | 2026-10-07-2315 (resumed 2014) · sim M4-1 combat slice 1 (2 fix rounds, ACCEPT) · view M3-V4 Playable proof + BUG-0125 + BUG-0126 1-2 (1 fix round, ACCEPT) · data D4 shared techs text + BUG-0132 + golden regen (0, ACCEPT) |
+| Build | Both session branches build with 0 warnings; smoke PASS on each (sim tick 90, view tick 92). No scratch merge this session (the sandbox refused a scratch clone): the branches touch disjoint code; conflicts expected only in docs/03 / bugs README / coverage (append both sides). Golden: the sim regenerated once for replay format 4 + the ram's `data-hash` (every `k` line identical) |
+| Tests | QA: sim non-Perf 3,614 / 3,624 (10 skipped, each a filed bug) / 0 failed, every Perf row green alone (the category in one process fails 8-9 wall-clock rows on base and head: machine load); view full suite incl. Perf 3,630 / 3,645 (15) / 0, 28 headless + 5 Shot scenes + Playable (seed 1 11,871 / seed 6 11,035 ticks). Producer reruns (both non-Perf suites at once, 19-22 min each under contention): **sim 3,624 / 3,635 (11 skipped) / 0 failed; view 3,508 / 3,520 (12 skipped) / 0 failed**; sim Perf rows alone: `TightBlob2500_OnePlayer_AverageTickAtMost4_6Ms` PASS x3, `TwoHundredGatheringWorkersAlone` PASS (QA: 0.315-0.33 ms of 1 ms); QA's `TightBlob2500_OneEnemyAtTheFarCorner_ScansNearFree` fails alone today **on base and head alike** (first run 4.35 ms, later runs in the same process 7.2 ms: the machine throttles under sustained load; BUG-0158, S4, test-only); view smoke PASS (tick 91) |
+| Open bugs | **28** (S1: 0, **S2: 0**, S3: 14, S4: 14). Fixed this session: **BUG-0146 (S2)**, BUG-0139, BUG-0150 / 0152 / 0154 (S2, filed and fixed in-session), BUG-0153 items 1-2 (sim); BUG-0147 (view). New open: BUG-0151 (S3, sim: the crowded gather row costs +40 % a tick after the wedge fix: crowd cost, Producer re-triage from S2), BUG-0156 (S3, sim: a unit hitting a building ignores the unit killing it), BUG-0157 (S3, sim: jittered A-click spam every 1-3 ticks costs 10-26 % of a brawl's damage), BUG-0153 items 3-4 (S4 notes), BUG-0158 (S4, test-only: a QA Perf row reads the machine's sustained-load throttle as a cost, filed by the Producer); BUG-0160 (S4, view: F12 line overlaps K / L, first-frame hit never flashes, corpses near-black, two fallback literals) |
+| Sessions today | 1 / 8 on 2026-10-08. Feature sessions since last hardening: sim 2 / 4, view 2 / 4, data 0 / 4 |
+| Last session | 2026-10-08-0313 · sim M4-2a (2 fix rounds, ACCEPT with BUG-0151 re-triaged by decision) · view M4-V1 (0 fix rounds, ACCEPT) · data STOP (planned) · **M3 signed off** |
 
 ## Milestone progress
 
@@ -41,9 +39,9 @@ _Last updated: 2026-10-08 00:xx (session 2026-10-07-2315, which resumed the dead
 | --- | --- | --- |
 | M0 | 7 / 7 required | **Done** 2026-10-03 (optional MCP item open) |
 | M1 (sim track) | 8 / 8 | **Done** 2026-10-06 (Producer sign-off after the M1-9 hardening; retro in docs/05) |
-| M2 (view track) | 10 / 10 (SimRunner interpolation, camera, terrain mesh + trees / mines, placeholder unit views, selection, orders, minimap, debug overlay, placeholder audio, 60 FPS playable check) | **Done** 2026-10-07 (Producer sign-off after the M2-H2 hardening; retro in docs/05; your playtest under For your review is feedback, not a gate) |
-| M3 (all three tracks) | **8 / 8** on `main` (resource entities; worker gather / return loop; building placement + construction + repair; production queues + rally + pop; Age II research and unlocks + Forge upgrades; factions fully defined in data (D3); HUD (M3-V3b); **Playable** (M3-V4's scripted run of your playtest, 2315)). Hardening done on every track (M3-H1 / H2, M3-V3b, D4); coverage rows ✅. **Sign-off held by one open S2** (BUG-0146: gatherers wedge out of reach of a tree open on one side; found by the scripted run): the sim fixes it first next session, then the Producer signs M3 off | Criteria complete; sign-off next session after BUG-0146 |
-| M4 (sim + view + data) | 1 / 10 ticked (damage formula); criterion 1 (attack, attack-move, chase, retaliation, priorities) is done except the `Attack(target)` order, criterion 4 (death, building destruction) done in the sim, corpses / rubble are the view's next task | In progress (M4-1 landed 2315) |
+| M2 (view track) | 10 / 10 | **Done** 2026-10-07 (Producer sign-off after the M2-H2 hardening; retro in docs/05; your playtest under For your review is feedback, not a gate) |
+| M3 (all three tracks) | 8 / 8 | **Done** 2026-10-08 (Producer sign-off after every track's hardening and the BUG-0146 fix; retro in docs/05; open S3 / S4 listed there; your ten-minute playtest is still wanted as feedback) |
+| M4 (sim + view + data) | **3 / 10** (1 attack / attack-move / chase / retaliation / priorities; 2 damage formula; 4 death, corpses, rubble). Next: 3 projectiles / splash / friendly fire (M4-2b), the counter-triangle rows, 5 fog (M4-3), 6 abilities (M4-4), 7 stealth (M4-5), 8 the four signature abilities, 10 the fog-on sandbox Playable | In progress |
 | M5-M9 | — | Planned |
 
 ## For your review
@@ -51,6 +49,99 @@ _Last updated: 2026-10-08 00:xx (session 2026-10-07-2315, which resumed the dead
 Non-blocking. Each entry says what was built or decided, what you'd notice in the game, and how
 to change it. To change anything, write it in `studio/inbox.md`, for example "use formations
 instead of clusters" or "make giving up take 2 seconds".
+
+### M3 is done: the whole base game (economy, buildings, production, Age II, the HUD) is signed off (all three tracks, 2026-10-08)
+
+- **What M3 is:** everything from mines and trees to Age II: workers gather and return, buildings are placed and built
+  by several workers and repaired, queues train units with rally points and a population cap, Age II and the Forge
+  upgrades are researched and enforced, both factions are fully in data with their text, and the HUD (resource bar,
+  selection panel, command card, build menus, placement ghost, queue strip, rally flags) runs it all in the window. Two
+  days of sessions over three tracks; the last criterion was proven by a scripted run of your own playtest script.
+- **I signed it off myself** (your autopilot setting `stop_at_milestone_end: no`). Conditions held: all eight criteria
+  verified, every M3 system covered by unit, fuzz and determinism tests, every track's clean-up session done, and no
+  serious open bug once BUG-0146 (the wedged laborers, below) was fixed and verified this session. The leftovers are
+  small and listed in the retro (docs/05): a loader corner nobody ships (BUG-0134), the crowd cost of the laborer fix
+  (BUG-0151, below), cosmetic view nits, a docs wording drift the data track tidies next.
+- **Your playtest is still wanted, as feedback:** the ten-minute script in the M3-V3 entry below. Write "M3 playable ok"
+  in the inbox, or what felt wrong; a complaint becomes a task ahead of roadmap work.
+- **What's next (M4):** projectiles and splash so archers, mages, catapults and sappers fight (sim), telling a unit to
+  attack a specific enemy in the window (view), then fog of war, abilities and stealth.
+
+### Laborers no longer get stuck short of a tree, and you can tell a unit to attack a specific enemy; the Battering Ram now only hits buildings (sim track, M4-2a, 2026-10-08)
+
+- **What was fixed first (BUG-0146, the S2 that held M3):** laborers sent to a tree with only one open side used to form a
+  column where only the front one could reach, and when it left, the next one "arrived" against the queue behind it and
+  stood there, 1.7 m short, chopping nothing for the rest of the match. The cause was in the walking rules, not the
+  economy: a worker walking to a node stopped up to a metre short of its spot, and stopped early against *any* standing
+  workmate, even one behind it. Now a worker walks right up to its spot, stops early only for a workmate who is nearer
+  the spot than itself, and each open side of a tree or mine has **three standing spots** (middle, left, right), so
+  three laborers chop one tree side by side with a fourth queued behind them. Checked on your seed-21 game (the one
+  that found it: 343 ticks of waiting at worst, was 14,575; wood 1,360 instead of 100) and on 160 hand-built pockets of
+  every shape.
+- **What was built:** the **"attack this unit / building" order** in the rules (the window's right-click on an enemy is
+  the view's next task). A unit told to attack a target chases it as far as it goes (no leash), ignores every other
+  enemy while the target lives, and stands idle where it is when the target dies or proves unreachable. Shift queues it
+  behind other orders. Workers obey it (they still never fight on their own). Spamming the order no longer cancels the
+  swing (a found-and-fixed bug would have made click-happy players deal zero damage). Attack-moving to a **new** point
+  while fighting re-picks the best target there, so you can pull a unit off a building onto the soldier killing it.
+  **The Battering Ram attacks buildings only**, through a new data field ("what this attack may target"), as the
+  Whirlwind page says. Replays now record whether combat was on (format 4) and the new order.
+- **What you'll see:** the laborers at a forest edge now stand three abreast on an open side and the wood counter keeps
+  rising. Nothing new to click yet for the attack order (next view task); in the rules it works and is fuzz-tested.
+- **Producer decisions, revisit any time:**
+  - *An ordered attacker has no leash but still gives up an unreachable target after about 2 s without gaining*, then
+    stands idle where it is (not walking home). Alternative: chase forever, or walk home.
+  - *A worker obeys an explicit Attack.* Alternative: workers ignore it (purely peaceful laborers).
+  - *Archers, mages, catapults and sappers drop an Attack order until next session's projectiles land* (they cannot
+    fight yet; the order is dropped, not queued).
+  - *The new "targets" field defaults to "all"*; only the ram says "buildings".
+  - *I accepted a slower crowded-gathering benchmark (BUG-0151):* a stress scene of 100 laborers on one tree and one mine
+    costs 0.32 ms a tick instead of 0.23 (its budget is 1 ms). The code is not slower per worker; the fix simply puts
+    39 % more laborers to work in a denser crowd, and they deliver 14-17 % more. The brief's "at most 10 % slower" bound
+    was a guard against waste, which this is not. Alternative: order a cheaper crowd (four variants were tried; each
+    broke a wedge case or saved little). Revisit with the crowd-cost work after M4.
+  - *Size: ~560 rule lines (budget 1,500), ~1,100 dev test lines, ~1,500 QA test lines, ~170 doc lines; two fix rounds
+    (three S2 bugs found and fixed in-session: a chaser bouncing between two targets forever, the swing-cancel on spam,
+    the attack-move that could not redirect).*
+- **Rough edges:** **BUG-0156 (S3, next sim task if cheap):** a unit hammering a building ignores the enemy soldier
+  killing it unless you give it an order (an attack-move onto the soldier now works). **BUG-0157 (S3):** very fast
+  A-click spam to *different* points (every 50-150 ms) still costs a brawl 10-26 % of its damage (same-point spam costs
+  nothing; clicks 250 ms apart cost nothing). **BUG-0151 (S3)** above. **A balance note for you:** crowded gathering is
+  now about 15 % more productive at 20 laborers on few nodes (1-10 laborers unchanged); the data track's balance pass
+  can tune rates if you want the old income curve.
+- **To change it:** the ram's rule is `"targets": "buildings"` on its attack in `game/data/factions/whirlwind/units.json`
+  (any unit can take `units` / `buildings` / `all`); the three standing spots and their spacing are
+  `EconomyConstants.StandPointsPerCell` / `StandPointSpacing`; the leash / give-up rules by inbox note.
+
+### You can see the fighting now: hp bars, hit flashes, bodies and rubble, and a kill counter (view track, M4-V1, 2026-10-08)
+
+- **What was built:** the view half of combat. A unit that has taken damage shows a small **hp bar** above it (green,
+  yellow, red by how much is left; only hurt units show one, like buildings). A unit **flashes white** for a moment when
+  it is hit. A dead unit vanishes and leaves a **flat dark disc** where it fell for 10 s of game time; a destroyed
+  building leaves a **low grey slab** over its footprint for 20 s. The resource bar reads **"K n / L n"** (your kills and
+  losses) under the population, and F12 shows both players'. The selection panel's hit points are live. Also fixed:
+  five of the studio's older test scenes that broke when units started fighting now run with a developer-only
+  "combat off" switch (`--no-combat`, never a game option) without changing what they check.
+- **Please watch a fight (two minutes):** `& $env:GODOT --path game`, box-select the grey army, press **A** and click on
+  the orange army far east. Watch bars appear and shrink, white flashes on hits, discs where units fall, the K / L
+  counter climbing top right; click a fighting unit and read its hit points dropping in the panel. When the slate
+  Town Hall or a Tent falls (send the whole army at it with A), a grey slab stays where it stood for 20 s.
+- **Producer decisions, revisit any time:**
+  - *Corpses are flat discs in the owner's colour at 35 %, rubble a grey slab*: placeholders until the M6 art pass (death
+    animations, real corpse models). QA found the discs read near-black for both teams (BUG-0160 item 3); the next view
+    task brightens them. Alternative: no corpses until M6.
+  - *A corpse lasts 10 s and rubble 20 s of game time* (so 8x speed shortens them); at most 2,000 markers, the oldest
+    replaced.
+  - *The flash is 0.15 s and restarts on every hit*, so a unit under a hail of blows stays lit.
+  - *Hp bars grow with zoom past 30 m* like the cargo cubes, so they stay readable zoomed out.
+  - *Size: ~450 game-code lines, ~280 view-helper lines, ~1,050 dev test lines, ~670 QA test lines, ~85 doc lines.*
+- **Rough edges (BUG-0160, S4, next view task):** the F12 overlay's second line runs through the K / L label; a unit
+  that is hit between being trained and its first frame shows a bar but never flashes; the corpse discs are too dark to
+  tell teams apart; two developer-overlay labels fall back to C# text if the text file is missing.
+- **To change it:** the labels in `game/data/common/ui.json` (`hud.kills`, `hud.losses`); the flash length
+  `HitFlash.DefaultSeconds`, lifetimes `DeathMarkers.UnitLifetimeTicks` / `BuildingLifetimeTicks`, the marker cap
+  `DeathMarkers.DefaultCapacity`, the bar colours `UnitHpBars.Full` / `Half` / `Empty` (all in
+  `sim/Rts.Sim/ViewApi/`); the disc / slab look in `game/scripts/CombatViews.cs`; the rest by inbox note.
 
 ### Units fight now: attack-move, chasing, fighting back, hit points and death are in the rules (sim track, M4-1, 2026-10-07/08)
 
@@ -93,16 +184,18 @@ instead of clusters" or "make giving up take 2 seconds".
     tick there; a 500 v 500 brawl costs 3.1 ms, within the 4 ms design budget).
   - *Size: ~1,250 rule lines (budget 1,500 for a clear design, ~800 for a new system: over, because two fix rounds
     added the give-up memory and its brawl exception), ~2,000 dev test lines, ~1,900 QA test lines, ~230 doc lines.*
-- **Rough edges:** **BUG-0146 (S2, fixed first next session; found by the view's scripted playtest, not by combat):**
+- **Rough edges:** **BUG-0146 (S2; found by the view's scripted playtest, not by combat):**
   laborers sent to a tree that is open on one side can stand 1.7 m short of it, "gathering" nothing for the rest of the
-  match; it holds the M3 sign-off. **BUG-0139 (S3, next sim task):** the ram attacks units (above). **BUG-0149 (S3, next
+  match; it holds the M3 sign-off. **Update 2026-10-08: fixed (M4-2a entry above); M3 signed off.** **BUG-0139 (S3):** the
+  ram attacks units (above). **Update 2026-10-08: fixed, the ram is buildings-only (M4-2a).** **BUG-0149 (S3, next
   sim clean-up):** a unit that gave up chasing something unreachable, and then spots a reachable enemy behind a short
   wall, may give that one up too and stand idle in sight of it. **BUG-0144 (S3):** while buildings are being placed every
   two seconds, chasers can wait up to 1.7 s for a path. **BUG-0142 (S4):** in a duel between two idle equal units already
   in reach, the one whose turn to look comes first wins by one hit; the placement ghost says "Units in the way" for a
   worker that is fighting inside the footprint while the order itself goes through. Not in yet (planned slices): the
   explicit "attack this unit" order (M4-2a, next), projectiles / misses / splash / friendly fire (M4-2b), fog (M4-3),
-  abilities (M4-4), stealth (M4-5).
+  abilities (M4-4), stealth (M4-5). **Update 2026-10-08: the explicit order is in (M4-2a entry above); the panel's live
+  hp, hp bars and bodies are in (M4-V1 entry above).**
 - **To change it:** attack, armor, hp, range, cooldown and wind-up per unit in `game/data/factions/<faction>/units.json`,
   the type-vs-armor table in `game/data/common/damage_table.json`; the leash, the grace, the worker rule and the give-up
   timing by inbox note (they are engine constants in `CombatConstants`, not data: say if you'd rather have them in a file).
@@ -137,7 +230,8 @@ instead of clusters" or "make giving up take 2 seconds".
 - **Rough edges:** **BUG-0146 (S2, sim; fixed first next session):** on seed 21 four laborers sent to a tree that is
   open only to the south stand in a column 1.7 m short of it, "gathering" nothing for 12 minutes; wood income from them
   is zero. You'd see it as workers standing still by a forest edge. The sim's next task fixes the arrival rule.
-  **BUG-0147 (S3, view's next task):** the five scenes above. **BUG-0148 items 1 and 3 (S4):** the sliver above; the
+  **Update 2026-10-08: fixed (M4-2a entry at the top).** **BUG-0147 (S3, view's next task):** the five scenes above.
+  **Update 2026-10-08: fixed (M4-V1 entry at the top: the scenes run with the developer-only combat-off switch).** **BUG-0148 items 1 and 3 (S4):** the sliver above; the
   script checks that a rallied laborer chops *some* tree, not the rally forest specifically.
 - **To change it:** the words in `game/data/common/ui.json` (`placement.requires`, `research.already_queued`,
   `research.already_researched`, `states.attacking`); the drawn tree / mine sizes in `game/scripts/PropsView.cs` (the
@@ -1844,16 +1938,23 @@ track right after S1/S2 bugs).
 16. Noted by the view (M3-V3 QA): `CanTrain` has no "pop cap" reason, so a train button stays live at the cap and the
     item waits inside the queue (the M3-4 rule). If the owner wants greyed buttons at the cap, the sim adds a
     `TrainError.PopFull` ordered after `CannotAfford` (one line + tests) and the view keys `train.pop_full`. Not requested.
-18. **From the view's M3-V4 QA (session 2315), the sim's next task's first item: BUG-0146 (S2).** Gatherers of a tree open
-    on one side stand `Gathering` 1.7 m out of reach for the rest of the match (seed 21 Playable replay attached to the
-    bug; `QA/GatherWedgeQaTests` skipped; the replay's header is the pre-D4 `data-hash` 702859B867AAC412, so the un-skip
-    substitutes the hash in code or rewrites the file through `ReplayFormat`). Also in that file: a dev-seen two-cell
-    corridor oscillation (seed 6), unreproduced by QA.
+18. ~~**From the view's M3-V4 QA (session 2315), the sim's next task's first item: BUG-0146 (S2).** Gatherers of a tree
+    open on one side stand `Gathering` 1.7 m out of reach for the rest of the match~~ → **done in M4-2a** (session
+    2026-10-08-0313): `MovementSystem.QueuesBehind` / `StandArrival2`, three stand points per cell edge; the seed-21 row
+    un-skipped (the hash substituted in code), `M3PlayableTest` seed 21 PASS. The seed-6 corridor oscillation did not
+    reproduce (a builder walking out against two gatherers, not the arrival rule); refile with a replay if seen.
 19. Available since M4-1 (session 2315) for the view's combat views: `UnitStore.Hp` (and `UnitDef.Hp` for the max),
     `UnitState.Attacking`, `UnitStore.Target` / `TargetIsBuilding` / `WindupTicks` (a swing is starting when it is set),
     `World.Deaths` (one tick's `DeathEvent`s: victim handle, building or not, type, owner, killer's owner, position; read
     between ticks, emptied at the next tick's start), `World.Kills` / `Losses` per player, `SimConfig.Combat` (the test
     switch, for the M2 scenes of BUG-0147). Nothing requested yet; the `Attack(target)` command comes with M4-2a.
+20. Available since M4-2a (session 2026-10-08-0313) for the view's M4-V2: `Command.Attack(player, unit, target,
+    isBuilding[, queued])` (kind 16; dropped by the sim for a dead / own / forbidden target or a unit that cannot fight
+    yet), `CombatMode.Ordered` (`UnitStore.Mode`), `UnitStore.QueuedTarget(entry)` for a queued Attack's handle (its
+    `QueuePosition` is **not** a point on an Attack entry: a waypoint overlay must skip it, BUG-0153 item 1),
+    `AttackDef.Targets`. Replay format 4 carries `combat`, so `ReplayPlayer.Run(replay, data)` needs no override (the
+    `combat:` parameter stays for format 3 files recorded off). Nothing requested yet. Noted for M4-2b: the view's M4-V3
+    projectile visuals need a projectile store with positions and a "landed" tick; the sim ships one in M4-2b.
 
 ## Feature queue: sim track (feature sessions, in order)
 
@@ -1861,14 +1962,15 @@ track right after S1/S2 bugs).
    **done** (session 1715; BUG-0113 / 0094 left for the next hardening).
 2. ~~M4-1 combat slice 1~~ → **done** (session 2315: melee acquisition, chase, leash, holders, damage formula, death;
    BUG-0139 / 0144 / 0149 / 0142 left).
-3. **Next: BUG-0146 (S2) first, then M4-2a**, QA full: the gather arrival fix with the seed-21 replay row un-skipped;
-   then `Command.Attack(target)` (kind 16, queueable; the explicit target outranks the scan and the leash), replay format
-   4 (the target handle, `combat` in the header; format 3 still loads), `attack.targets` schema field (`units` /
-   `buildings` / `all`; the ram's data says `buildings`: BUG-0139). Golden regenerated once by the sim. Details in
-   `studio/handoff.md`.
-4. Then M4-2b projectiles (travel, misses, splash falloff, friendly fire, min range) + counter-triangle scenarios, M4-3
-   fog + high-ground vision, M4-4 abilities / statuses / zones (schema → data track), M4-5 stealth / detection; hardening
-   at 4 feature sessions or M4's end.
+3. ~~BUG-0146 (S2) first, then M4-2a~~ → **done** (session 2026-10-08-0313: the wedge fix, `Command.Attack` kind 16,
+   `attack.targets`, replay format 4; BUG-0151 / 0156 / 0157 S3 and BUG-0153 S4 left).
+4. **Next: M4-2b**, QA full: `projectiles.json` schema (aimed 25 m/s / lob 12 m/s, hit tolerance), a projectile store,
+   misses, splash with the 40 % / 50 % falloff, friendly fire at 50 % (never buildings), minimum range, `CanFight` for
+   every unit, the counter-triangle scenario rows; BUG-0156 folded in if a few lines. Golden regenerated once
+   (`data-hash`). Details in `studio/handoff.md`.
+5. Then M4-3 fog + high-ground vision + tower attack / sight / detector fields, M4-4 abilities / statuses / zones (schema
+   → data track), M4-5 stealth / detection, the fog-on sandbox Playable; hardening at 4 feature sessions (2 more) or M4's
+   end.
 4. M6 (far ahead): agents can't download. The Producer lists under "Waiting on you", when M5
    starts, the exact links for the Godot 4.7.2 .NET export templates and the Kenney/KayKit/Quaternius
    packs (docs/04) with the `asset-sources/` folder for each (owner note 2026-10-05).
@@ -1879,13 +1981,13 @@ track right after S1/S2 bugs).
    left for the next view hardening).
 2. ~~M3-V4, the M3 "Playable" proof + BUG-0125 + BUG-0126 items 1-2~~ → **done** (session 2315; `M3PlayableTest.tscn`
    ticks the criterion; BUG-0147 / 0148 left).
-3. **Next: M4-V1**, QA standard: first **BUG-0147** (the M2 scenes DebugOverlay, Orders, QaH1, QaH2, QaM27 fail on `main`
-   because their start armies fight: a `--no-combat` launch flag that sets `SimConfig.Combat = false`, or `--units 0`;
-   expectations not loosened; QaM24 passes already), then the first combat views on M4-1: unit hp bars (only when hurt),
-   a hit flash, death (view freed from `World.Deaths`, a 10 s corpse marker, building rubble), kills / losses on F12 and
-   the resource bar, live hp in the selection panel; a scripted 20 v 20 scene + hash twin. Details in `studio/handoff.md`.
-4. Then the Attack-target cursor (F key with `Command.Attack`, after M4-2a), projectile visuals (M4-2b), the fog shader
-   + building ghosts (M4-3), ability feedback (M4-4).
+3. ~~M4-V1 (BUG-0147 + the first combat views)~~ → **done** (session 2026-10-08-0313; BUG-0160 S4 left).
+4. **Next: M4-V2**, QA standard: the Attack-target order in the HUD (right-click or A + click on an enemy unit / building
+   → `Command.Attack` per selected unit, Shift queues; a read-only unit pick in `ViewApi`; the panel's label from
+   `ui.json`; an optional pooled target ring), BUG-0160 items 1-4, the stale "until format 4" docs line; a headless
+   scene + hash twin. Details in `studio/handoff.md`.
+5. Then projectile visuals (M4-V3, after M4-2b), the fog shader + building ghosts (M4-3), ability feedback (M4-4), the
+   sandbox Playable; view hardening at 4 feature sessions (2 more) or M4's end.
 
 ## Feature queue: data track (feature sessions, in order; owner reviews every landed task)
 
@@ -1894,17 +1996,36 @@ track right after S1/S2 bugs).
 2. ~~D3 techs content~~ → **landed** (session 1715, through the sim's M3-H2); the review table is under For your review.
 3. ~~D4 shared techs text + BUG-0132 + golden regen~~ → **done** (session 2315; the review table is under For your
    review; BUG-0155 S4 left).
-4. **Next: STOP** until a schema it needs is on `main`: `attack.targets` (M4-2a: the Battering Ram's `buildings`, BUG-0139),
-   tower attack / sight / detector fields (M4-3; BUG-0090's last item), `abilities.json` / `statuses.json` (M4-4);
-   `ai.json` build orders (M5); M7-M9 faction data when those milestones open; balance passes (QA standard) after the
-   M4 sandbox. With its first task back: the docs/02 "Ages" wording drift (D4 QA note) with the `TechContentTests`
-   parser that reads it.
+4. ~~STOP until a schema it needs is on `main`~~ → `attack.targets` landed (M4-2a, session 2026-10-08-0313).
+5. **Next: D5**, QA light: pin `attack.targets` for all 14 units to the faction pages (the ram "buildings"), the docs/02
+   "Ages" wording drift with the `TechContentTests.G` parser, BUG-0155; no data value changes, no golden regen. Details
+   in `studio/handoff.md`.
+6. Then: tower attack / sight / detector fields (after M4-3; BUG-0090's last item), `abilities.json` / `statuses.json`
+   content (after M4-4's schema), a balance pass (QA standard) once the counter-triangle rows and the M4 sandbox give
+   numbers (incl. the +15 % crowd income from the BUG-0146 fix), `ai.json` build orders (M5), M7-M9 faction data.
 
 ## Debt backlog: sim track (hardening sessions only; the next one after 4 feature sessions or at M4's end)
 
-- **Not debt, next feature task:** BUG-0146 (S2, the gather wedge) and BUG-0139 (S3, the ram's `attack.targets`) go with
-  M4-2a; BUG-0144 (S3, chasers' field waits under placement churn, `ChasersUnderPlacementChurn_LongestFieldWait_AtMostOneSecond`
-  skipped) with M4-2 if the projectile work touches the chase path, else here.
+- ~~BUG-0146~~ (S2) and ~~BUG-0139~~ (S3) fixed in M4-2a (session 2026-10-08-0313), with ~~BUG-0150 / 0152 / 0154~~ (S2,
+  filed and fixed in-session) and BUG-0153 items 1-2. BUG-0144 (S3, chasers' field waits under placement churn,
+  `ChasersUnderPlacementChurn_LongestFieldWait_AtMostOneSecond` skipped) with M4-2b if the projectile work touches the
+  chase path, else here.
+- **Not debt, next feature task if a few lines:** BUG-0156 (S3, M4-1): `CombatSystem.Acquire` skips the scan while
+  "engaged in reach" whatever the target is, so a unit hitting a building never turns on the unit killing it. Producer
+  default: re-pick after the current swing when the target is a building and `LastAttacker` is set.
+- **BUG-0157 (S3, M4-2a fix round 1):** attack-move spam to a *new* point every 1-3 ticks drops out-of-reach chasers'
+  targets until their next scan (a brawl loses 10-26 % of its damage; same-point spam and 5+ ticks apart lose nothing).
+  Option: an AttackMove to a new point keeps a chase whose target is still in sight. Flip the skipped
+  `QA/AttackMoveRepickQaTests.BrawlSpam_JitteredAttackMove_StillDealsTheDamage(every: 3, jitter: true)`.
+- **BUG-0151 (S3, M4-2a, Producer re-triage):** the 200-worker gather row costs 0.32 ms (was 0.23; budget 1 ms) because
+  the wedge fix puts 39 % more workers to work in 2x denser crowds at the nodes (per-walker cost unchanged, +24-30 % per
+  resource delivered). Revisit with the crowd-cost work after the M4 sandbox (the same item as BUG-0028 / 0032 / 0046);
+  the dev tried four cheaper variants, each broke a `GatherPocketStressTests` row or cut little.
+- **BUG-0158 (S4, test-only, Producer):** `CombatScaleQaTests.TightBlob2500_OneEnemyAtTheFarCorner_ScansNearFree` alternates six
+  300-tick blob runs in one process; on this PC the first run is 4.35 ms and every later one 7.2 ms (sustained-load throttle),
+  so the delta fails alone on base and head alike. Discard a warm-up run or compare medians; check the machine.
+- **BUG-0153 items 3-4 (S4 notes):** the brief's `CombatFriendExceptionQaTests` row is skipped for BUG-0149 (fix with
+  it); `GatherWedgeQaTests` can only check checkpoints 1-19 of the seed-21 replay (the fix changes play from tick 20).
 - **BUG-0149 (S3, M4-1)**: `CombatSystem.Engage` keeps `ChaseStall` across a target switch (needed against the seed-4
   two-targets-in-turn livelock), so a chaser stalled on a cliff-top target gives a reachable Raider behind a short wall
   up on the next scan, twice, and reaches `MaxGiveUps` 10 m from it. Options in the bug: keep the count only when
@@ -1991,9 +2112,14 @@ track right after S1/S2 bugs).
 
 ## Debt backlog: view track (hardening sessions only; the next one after 4 feature sessions or at M4's end)
 
-- **Not debt, next feature task:** BUG-0147 (S3): five M2 scenes (DebugOverlay, Orders, QaH1, QaH2, QaM27) fail on
-  `main` since M4-1 because their start armies fight (QaM24 passes with the final sim); first item of M4-V1
-  (`SimConfig.Combat` off through a launch flag, or `--units 0`; expectations not loosened).
+- ~~BUG-0147~~ (S3) fixed in M4-V1 (session 2026-10-08-0313: the five M2 scenes pass `--no-combat`, launch arguments
+  only, no `Check` or threshold changed; loop 28 headless + 5 Shot + Playable).
+- **Not debt, next feature task:** BUG-0160 (S4, M4-V1 nits): the F12 second line runs through "K 0 / L 0"; a unit hit
+  between its spawn and its first frame shows a bar but never flashes (`HitFlash` takes a new generation's hp as its
+  baseline; compare with the type's max instead); corpse discs at owner colour x 0.35 read black for both teams;
+  `DebugOverlay` falls back to "K" / "L" C# literals. Also the docs/03 "Debug tooling" line "until replay format 4" is
+  stale since M4-2a (one line). Coverage gap noted in M4-1: the view hash twins run combat off; `CombatViewTest`'s twin
+  now runs on combat (closed).
 - ~~BUG-0125~~ fixed in M3-V4 (session 2315: `ResourcePicker.PickRay` tests `PropsView.Shape`, the drawn trunk + cone /
   block + gold block; 0 / 3,000 open-ground rays taken for a node). ~~BUG-0145~~ (the Playable re-task flake) fixed in
   the same session.
@@ -2049,6 +2175,7 @@ track right after S1/S2 bugs).
 
 | Date | Session | Task | Result |
 | --- | --- | --- | --- |
+| 2026-10-08 | [2026-10-08-0313](sessions/2026-10-08-0313.md) | sim M4-2a: the BUG-0146 wedge fix (`MovementSystem.QueuesBehind` / `StandArrival2`, three stand points per cell edge), `Command.Attack` (kind 16, `CombatMode.Ordered`, queued handle in the existing queue arrays), `attack.targets` schema (the ram `buildings`, BUG-0139), replay format 4 (`combat` header, targets on command lines; golden regen, `k` lines identical); fix rounds: BUG-0150 (lost-from-sight give-up on a switch), BUG-0152 (`ReaffirmAttack` / `KeepFightForAttackMove`), BUG-0154 (`UnitStore.Repick`); view M4-V1: `--no-combat` dev flag (BUG-0147's five scenes), `ViewApi.UnitHpBars` / `HitFlash` / `DeathMarkers`, `CombatViews` (bars, corpse discs, rubble), K / L counts, live panel hp, `CombatViewTest.tscn`; data STOP (planned) | sim ACCEPT after 2 fix rounds (QA FAIL x3, the last on BUG-0151 alone: Producer re-stated criterion 3 and re-triaged it S2 → S3; BUG-0156 / 0157 S3, BUG-0153 S4 open); view ACCEPT, 0 fix rounds (PASS_WITH_ISSUES: BUG-0160 S4). **M3 signed off**; M4 3 / 10; no open S1 / S2 |
 | 2026-10-07/08 | [2026-10-07-2315](sessions/2026-10-07-2315.md) (resumed the dead 2014 session, which left no log) | sim M4-1 combat slice 1 (`Rts.Sim.Combat`: `CombatSystem` acquire / attack / resolve, `DamageCalc`, `CombatMode`, give-up memory + friend exception, `SpatialHash.QueryEnemies`, `UnitState.Attacking`, `SimConfig.Combat` test switch, death events + kills / losses; BUG-0135 / 0136 / 0137 / 0138 / 0140 / 0141 / 0143 fixed in-session); view M3-V4 (`M3PlayableTest.tscn` scripted playtest through the real HUD, drawn-shape node pick BUG-0125, "Locked" / "Researched" / "In a queue" BUG-0126 1-2, `states.attacking`, BUG-0145 / 0148 2 + 4 fixed); data D4 (Age II description faction-neutral, seven shared techs pinned to docs/02, BUG-0132, golden `data-hash` A863BAF8637CC860) | **all three ACCEPT**: sim 2 fix rounds (QA FAIL / FAIL / PASS_WITH_ISSUES: BUG-0139 S3 → M4-2a, BUG-0144 S3, BUG-0149 S3, BUG-0142 S4 open), view 1 fix round (QA FAIL on BUG-0145 S2 → PASS_WITH_ISSUES: **BUG-0146 S2 filed against the sim**, BUG-0147 S3, BUG-0148 S4), data 0 (PASS_WITH_ISSUES: BUG-0155 S4). **M3 8 / 8**, sign-off held by BUG-0146; M4 1 / 10 |
 | 2026-10-07 | [2026-10-07-1715](sessions/2026-10-07-1715.md) | sim M3-H2 end-of-M3 hardening: D3 merged with the BUG-0112 fixture fixes (`TestSim.DataWithoutBuildingRequires`, golden `data-hash` regen, checkpoints identical), `Map/Plateaus` + plateau-bounded `FreeCellSearch` + per-plateau spawn memo (BUG-0097 / 0095), `SealCheck` memo on `NavGrid.Version` (BUG-0096), unmeetable requirements as load errors incl. any-of reachability (BUG-0100), BUG-0099 item 2, door fuzz kinds 0-15; view M3-V3b: the held M3-V3 HUD re-landed with two-hall Age II fixtures (BUG-0124), panel allocation-free + dimmed greyed buttons (BUG-0123), per-seed bench bound (BUG-0104), word wrap / Shift-click / ghost priority / reason text (BUG-0122), mauve sites / zoom-scaled cargo / resource-keyed minimap (BUG-0107), docs figures + split Perf rows (BUG-0105), terrain-occluded building + node ray picks; data STOP (planned) | sim ACCEPT, 0 fix rounds (QA PASS_WITH_ISSUES: BUG-0134 S3, BUG-0133 S4); view ACCEPT, 0 fix rounds (QA PASS_WITH_ISSUES: BUG-0125 S3 accepted open for M3-V4, BUG-0126 S4). **M3 7 / 8**: "factions fully defined in data" and "HUD" ticked; `main` smoke green again; no open S1 / S2 |
 | 2026-10-07 | [2026-10-07-1415](sessions/2026-10-07-1415.md) | sim M3-6 `requires` gating (`RequiresTechs` / `RequiresBuildings` resolved at load, `requiresAnyOf` by slot on `age_ii`, `Requires` reasons in `CanPlace` / `CanResearch`, real `LockedByRequirement`, queue-time rule, `PlayerLedger` finished counts, loader nits BUG-0008 / 0010 / 0098 / 0099); view M3-V3 selection panel + production card + queue strip + rally marker + pop + Age II flash, BUG-0108 / 0109 / 0110 fixed; data D3 techs text + building `requires` + page Techs tables + pins, BUG-0111 fixed | sim ACCEPT (on `main`), 0 fix rounds (QA PASS_WITH_ISSUES: 2 S3 (BUG-0100, BUG-0112) + 1 S4); **view ACCEPT then ESCALATE at integration** (QA PASS_WITH_ISSUES, 1 S3 BUG-0123; merged with M3-6 one fixture queues Age II without halls: BUG-0124 S2, branch held, `main` smoke red); **data REJECT-hold** (QA PASS_WITH_ISSUES, 1 S4; integration only: BUG-0112, lands via the sim's M3-H2). M3 5 / 8 on `main` |

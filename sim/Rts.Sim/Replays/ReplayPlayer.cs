@@ -15,11 +15,16 @@ public static class ReplayPlayer
     /// stamp is checked against the log. Checkpoints are hashed by a recorder on the playback sim,
     /// so recording and playback hash at the same point of the tick.
     /// </remarks>
-    public static ReplayResult Run(Replay replay, GameData data) => Run(replay, data, combat: true);
+    /// <remarks>The sim plays with the replay's own <see cref="Replay.Combat"/> switch (format 4; on for format 3).</remarks>
+    public static ReplayResult Run(Replay replay, GameData data)
+    {
+        ArgumentNullException.ThrowIfNull(replay);
+        return Run(replay, data, replay.Combat);
+    }
 
     /// <summary>
-    /// <see cref="Run(Replay, GameData)"/> with <see cref="SimConfig.Combat"/> given by the caller: for replays recorded
-    /// by a sim with combat off (the pre-M4 test scenes, BUG-0135). The replay format does not carry the switch yet.
+    /// <see cref="Run(Replay, GameData)"/> with <see cref="SimConfig.Combat"/> given by the caller, overriding the header's:
+    /// for format 3 replays recorded by a sim with combat off (the pre-M4 test scenes, BUG-0135), which can't say so.
     /// </summary>
     public static ReplayResult Run(Replay replay, GameData data, bool combat)
     {

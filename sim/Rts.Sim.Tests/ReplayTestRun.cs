@@ -88,6 +88,7 @@ public static class ReplayTestRun
     public static void AssertEqual(Replay expected, Replay actual)
     {
         Assert.Equal(expected.FormatVersion, actual.FormatVersion);
+        Assert.Equal(expected.Combat, actual.Combat);
         Assert.Equal(expected.SimVersion, actual.SimVersion);
         Assert.Equal(expected.DataHash, actual.DataHash);
         Assert.Equal(expected.Map, actual.Map);
@@ -114,15 +115,19 @@ public static class ReplayTestRun
             Assert.True(BitConverter.SingleToInt32Bits(a.Position.Y) == BitConverter.SingleToInt32Bits(b.Position.Y), at);
             Assert.True(a.Unit == b.Unit, at);
             Assert.True(a.Flags == b.Flags, at);
+            Assert.True(a.Target == b.Target, at);
+            Assert.True(a.TargetIsBuilding == b.TargetIsBuilding, at);
         }
         Assert.Equal(expected.Checkpoints.ToArray(), actual.Checkpoints.ToArray());
     }
 
     /// <summary>A copy of <paramref name="r"/> with some fields replaced.</summary>
     public static Replay With(Replay r, int? formatVersion = null, ulong? dataHash = null,
-        int? players = null, IEnumerable<Command>? commands = null, IEnumerable<ReplayCheckpoint>? checkpoints = null, string? simVersion = null) => new()
+        int? players = null, IEnumerable<Command>? commands = null, IEnumerable<ReplayCheckpoint>? checkpoints = null, string? simVersion = null,
+        bool? combat = null) => new()
     {
         FormatVersion = formatVersion ?? r.FormatVersion,
+        Combat = combat ?? r.Combat,
         SimVersion = simVersion ?? r.SimVersion,
         DataHash = dataHash ?? r.DataHash,
         Map = r.Map,
