@@ -1465,12 +1465,14 @@ Projectiles, misses, splash, friendly fire and the minimum range (M4 criterion 3
 `Rts.Sim.Entities.ProjectileStore`, `ProjectileImpact`. With it every shipped unit fights: `CombatSystem.CanFight` is
 "an attack with a value" (the M4-2a rule that dropped an Attack for a unit with a projectile is gone).
 
-**Data** (`game/data/common/projectiles.json`, sim-owned, required): `{ "projectiles": [ {id, kind, speed, hitTolerance?} ] }`.
-`kind` is `aimed` or `lob` (`DataLimits.ProjectileKindIds`); `speed` in m/s (positive, stored per tick: 25 m/s is 1.25 m
-a tick); `hitTolerance` in meters, aimed only, 0-2 m (`DataLimits.MaxHitTolerance`), default 0.3
-(`DataLimits.DefaultHitTolerance`, docs/02); on a lob it is an error. The shipped five are exactly the ids `units.json`
-names: `arrow`, `bolt`, `magic_bolt` (aimed, 25 m/s, 0.3 m; docs/02 gives no caster speed, so the magic bolt flies as an
-arrow does), `catapult_stone` and `sharper` (lobs, 12 m/s; docs/02 "thrown munitions"). A unit's `attack.projectile`
+**Data** (`game/data/common/projectiles.json`, sim-owned, required): `{ "projectiles": [ {id, kind, speed, hitTolerance?, leadSpeed?} ] }`.
+`kind` is `aimed` or `lob` (`DataLimits.ProjectileKindIds`); `speed` in m/s (at least 1, `DataLimits.MinProjectileSpeed`,
+BUG-0182; stored per tick: 25 m/s is 1.25 m a tick); `hitTolerance` in meters, aimed only, 0-2 m
+(`DataLimits.MaxHitTolerance`), default 0.3 (`DataLimits.DefaultHitTolerance`, docs/02); on a lob it is an error;
+`leadSpeed` in m/s, aimed only, not negative, default 0 (never leads; see "Leading" below), stored per tick
+(`ProjectileDef.LeadSpeedPerTick`); on a lob it is an error. The shipped five are exactly the ids `units.json`
+names: `arrow`, `bolt`, `magic_bolt` (aimed, 25 m/s, 0.3 m, lead up to 5 m/s; docs/02 gives no caster speed, so the
+magic bolt flies as an arrow does), `catapult_stone` and `sharper` (lobs, 12 m/s; docs/02 "thrown munitions"). A unit's `attack.projectile`
 resolves at load to `AttackDef.ProjectileTypeId` (the string is kept); an unknown id is one error at
 `units[i].attack.projectile`, and a broken projectiles file is reported once, not again per unit. An attack whose
 projectile is a lob must have a splash above 0 (a lob's only effect is its explosion). `GameData.Projectiles` /
@@ -1495,6 +1497,29 @@ attacker), in a straight line at the type's speed (the view draws any arc). It l
 ticks later: every tick, at the start of phase 10 (`ProjectileSystem.Fly`, before the swings, so a shot fired this tick
 first moves on the next), each projectile moves one step, the last one exactly onto its impact point. A Crossbowman 8 m
 from its target: `ceil(8 / 1.25)` = 7 ticks.
+
+**Leading (BUG-0183; builder's choice, flagged for the Producer's review).** An aimed shot at a *unit* whose step this
+tick (`UnitStore.Velocity`, the walk movement planned) is no longer than the projectile's `leadSpeed` is **led**: at
+firing it is aimed where that unit will be when it lands (`ProjectileSystem.Lead`: its position plus its step times the
+flight ticks, the flight re-estimated twice since it depends on the aim), and at the start of every phase 10 while it
+flies (`ProjectileSystem.Track`, before `Fly`) its impact point is re-led the same way and it steers there over its
+remaining ticks (`ProjectileStore.Steer`; the landing tick fixed at firing never moves; an unchanged point changes
+nothing, so a shot at a standing unit keeps its launch step). Not re-led: a dead target, a building, a unit stepping
+faster than `leadSpeed` that tick, and the landing tick's own step. A unit faster than `leadSpeed` is shot where it is
+and can dodge, as before. The shipped aimed shots lead up to 5 m/s: every foot unit (3.0-4.4 m/s) is led, the cavalry
+(Wickan Lancer 6.2, Horse Raider 6.6) is not. A lob is ground-targeted and never leads.
+
+Why this rule, not a smaller one: with docs/02's rule as written (fly to where the target was, hit within radius +
+0.3 m) a walking Heavy Infantry dodged every shot past 5 m, and a galloping Horse Raider every shot past 5 m too, so no
+choice of projectile speed or tolerance separates them (the Heavy Infantry walks 1.8 m during a 15 m flight; the Horse
+Raider 1.3 m during a 5 m one), and a tolerance that grows with flight time fails the same way. Some rule must depend on
+the target's speed. Leading at firing alone got 100 % to 12 m but 90-94 % at 14-16.3 m: walkers follow 8-direction
+flow-field legs and bend 45 degrees at a leg change, which a 13-tick flight cannot predict (misses landed 0.7-2.1 m off).
+Re-leading each tick removes those misses with no new stored state (who is led follows from the projectile type and the
+target's step), adds one loop over the live projectiles a tick, and keeps every number in data. Cost: the bolt bends a
+little in flight for a turning walker (the view draws positions, so this shows as a slight curve), and slow units never
+dodge by walking (docs/02 "almost never"); the 0.3 m tolerance now only decides shots at fast units and at units that
+change speed past the lead speed.
 
 **Landing (phase 11)**, after the queued melee hits, in slot order (`ProjectileSystem.Land`): an **aimed** shot hits its
 target if the target is alive and its center is within its collision radius + `hitTolerance` of the impact point (a
@@ -1530,13 +1555,15 @@ too-near target keeps the target and waits where it stands, Idle (the give-up co
 gives up); it fires as soon as the target is outside the minimum range again. There is no step back or kiting in this
 slice (Producer decision).
 
-**BUG-0156** (S3, folded in): a unit hitting a *building* in reach now re-picks between swings when an enemy unit has
-hit it (`LastAttacker` set): the scan runs, and the attacker (tier 0) wins; a unit target in reach, or any swing in
-progress, is still never thrown away.
+**BUG-0156** (S3, folded in): a unit hitting a *building* in reach now re-picks between swings when the enemy unit that
+last hit it (`LastAttacker`) is alive and within the radius its scan looks (sight; holding: reach;
+`CombatSystem.AttackerInScanRange`): the scan runs, and the attacker (tier 0) wins; a unit target in reach, or any swing
+in progress, is still never thrown away. An attacker that hit it and walked away out of sight is no reason to re-pick
+(BUG-0180): the unit keeps hitting the building as one never hit would.
 
 **For the view (M4-V3).** `World.Projectiles` (`ProjectileStore`): `Capacity`, `Count`, and read-only spans per slot:
 `Alive`, `Position`, `PrevPosition` (the launch point on the tick of the shot; interpolate between the two as for units),
-`Target` (the impact point), `ProjectileTypeId` (`GameData.Projectiles`), `Owner`. `World.Impacts`: this tick's landings
+`Target` (the impact point; a led shot's moves a little each tick as it is re-led), `ProjectileTypeId` (`GameData.Projectiles`), `Owner`. `World.Impacts`: this tick's landings
 (`ProjectileImpact`: position, projectile type, owner, `Hit`: an aimed hit or any lob; false for an aimed miss), slot
 order, emptied at the start of the next tick like `World.Deaths`. Splash victims show through hit points and
 `World.Deaths` as before.
@@ -1544,17 +1571,18 @@ order, emptied at the start of the next tick like `World.Deaths`. Splash victims
 **Hashing.** The store goes into `StateHash` after the buildings only while it holds a projectile: its count, then every
 live slot's index and fields (free slots hold their never-used values, and the slot a shot takes follows from the live
 ones), so a match without a shot hashes exactly as before and the golden replay's `k` lines did not move; its
-`data-hash` moved once for `projectiles.json`. `World.Impacts` is output, not hashed. Reflection audit: `StateHashTests.EveryProjectileStoreArray_IsHashed`. No replay format change
-(no new command; `ProjectileCapacity` is not in the header, a replay plays with the default).
+`data-hash` moved once for `projectiles.json`, and once more for its `leadSpeed` (BUG-0183; its `k` lines again unchanged, so no shot in the golden match changed). `World.Impacts` is output, not hashed. Reflection audit: `StateHashTests.EveryProjectileStoreArray_IsHashed`. No replay format change
+(no new command; `ProjectileCapacity` is not in the header, a replay plays with the default, and `ReplayRecorder`
+refuses a sim whose projectile store is not the default size, as it does for the building capacity: BUG-0181).
 
-**Hit rates** (`ProjectileTests.HitRateByDistance_Report`, docs/02's numbers: 25 m/s, radius + 0.3 m). A walker is
-missed once it moves more than radius + 0.3 m during the flight, so the cut is the flight time: a walking Heavy
-Infantry (0.15 m a tick, 0.7 m) is hit every time while the flight is at most 4 ticks (up to 4 m, and 5 m walking
-away), about a third of the time crossing at 5 m, and never from 6 m on, whichever way it walks (toward the shooter
-too: the bolt flies to where it was); a galloping Horse Raider (0.33 m a tick, 1.0 m) is hit only now and then within
-5 m and never from 6 m on. So "slow units almost never dodge" (docs/02)
-holds only at short range: ranged units hit standing and fighting units, and miss walking ones beyond a few meters.
-Reported for the Producer and the data track (`hitTolerance` is per projectile, Producer decision); not tuned here.
+**Hit rates** (`ProjectileTests.HitRateByDistance_Report`, the shipped numbers: 25 m/s, radius + 0.3 m, lead up to
+5 m/s; the last column is the crossbow's longest shot, range + both radii + the wind-up grace, 16.3 m at a Heavy
+Infantry and 16.6 m at a Horse Raider). A walking Heavy Infantry is led and hit 100 % at every distance from 3 m to
+16.3 m, walking across, toward or away (100 headings at 8 m, 12 m and 16.3 m: 100 / 100 each). A galloping Horse Raider
+is not led: crossing, it is hit 33 % at 3 m, 16 % at 4-5 m and 0 % from 6 m on; charging straight at the shooter, 66 %
+at 3 m and 0 % from 4 m on (a charge toward the shooter dodges as well as a crossing one does; docs/02 names only the
+crossing case). Before the lead rule the Heavy Infantry was hit about a third of the time at 5 m crossing and never from
+6 m on, whichever way it walked.
 
 **Cost** (Debug, this PC, each row alone, first run of a fresh process). Nothing allocates
 (`AllocationTests.MixedBrawlTicks_WithProjectilesAndSplash_AllocateNothing`, and the 1,000-bolt row); a tick with an empty
@@ -1562,7 +1590,9 @@ store pays one compare in `Fly` and one in `Land`. `CombatPerfTests.MixedBrawl50
 (500 v 500 mixed armies, `CombatScenes.MixedBrawl`): 1.73 ms over ticks 5-205, 1.23 ms over 205-605, up to 85
 projectiles in flight (cheaper than the melee brawl: shooters stand, and fewer units press into the front).
 `ThousandProjectilesInFlight_UnderPoint3MsATick_AndAllocateNothing`: 0.026 ms a tick in flight; the tick all 1,000 land
-on one Raider 2.0 ms (reported). Unchanged rows: the melee brawl 3.09 / 3.39 ms (M4-1: 3.06 / 3.47), the one-player
+on one Raider 2.0 ms (reported). With the BUG-0183 re-lead pass (`Track`, one more loop over the live projectiles):
+0.062 ms a tick in flight (budget 0.3), landing tick 2.06 ms; the mixed brawl 1.80 / 1.30 ms; the melee brawl 3.20 /
+3.49 ms; still 0 B a tick. Unchanged rows: the melee brawl 3.09 / 3.39 ms (M4-1: 3.06 / 3.47), the one-player
 2,500 tight blob 4.34 ms (budget 4.6), `GatherPerfTests.TwoHundredGatheringWorkersAlone` 0.318 ms (M4-2a: 0.32).
 
 ## Economy implementation
@@ -2107,7 +2137,7 @@ game/data/
     rules.json               # starting resources, pop cap, gather rates, repair factors
     resources.json           # resource node types: tree, gold mine (M3-1)
     techs.json               # techs every faction shares: Age II, Forge upgrades (M3-5)
-    projectiles.json         # projectile types: aimed / lob, speed, hit tolerance (M4-2b)
+    projectiles.json         # projectile types: aimed / lob, speed, hit tolerance, lead speed (M4-2b)
   factions/<faction_id>/
     faction.json             # id, displayName, bonus, palette, resource display names
     units.json
@@ -2173,7 +2203,7 @@ factions) arrives with the milestone that consumes it.
 | `faction.json` | `id` (must equal the folder name), `displayName`, `description`, `bonus {displayName, description}`, `resources {gold, wood: {displayName}}`, `palette {primary, secondary, accent}` as `#RRGGBB` |
 | `buildings.json` | `{ "buildings": [ ... ] }`, each `{id, displayName, description, slot, footprint {width, height}, hp, armor, cost {gold, wood}, buildTime, popProvided, dropOff}`: `slot` is one of the ten template slots (`DataLimits.BuildingSlotIds`), footprint sides 1-4 cells, `buildTime` in seconds (to ticks), `popProvided` a multiple of 0.5 (to half-pop), `dropOff` a required bool, `requires` an optional list of tech / building ids (M3-5; resolved and gating placement since M3-6). Ids unique across factions (M3-2, see "Economy implementation"); exactly one building per slot per faction (M3-6, BUG-0010) |
 | `techs.json` | `{ "techs": [ ... ] }` in `common/` (shared by every faction) and in each faction folder (its own), each `{id, displayName, description, researchedAt, cost {gold, wood}, researchTime, requires?, requiresAnyOf?, effects: [{stat, amount, appliesTo {attackType?, tags?, units?, siege?}}]}`: `researchedAt` is a building slot id (a common tech resolves to each faction's building of it; a faction without one is an error), `researchTime` in seconds (to ticks), `requires` tech / building ids (resolved and gating research since M3-6), `requiresAnyOf` `{count, of: [slot ids, or in a faction file its own building ids]}`: met when `count` of the distinct listed slots hold an own finished building (M3-6; shipped on `age_ii` only), `effects` may be empty. `stat` is one of `attack`, `armor`, `range`, `hp`, `abilityCooldown` (`DataLimits.TechStatIds`); `amount` is non-zero, whole for attack / armor / hp, meters for range, seconds for ability cooldown (to ticks, negative shortens it). `appliesTo` is required (`{}` = every unit); each filter it sets must match: `attackType` a damage type, `tags` any one of the unit's tags (each must be a tag some unit has), `units` unit ids (a faction tech's must be its own), `siege` true / false for the `siege` slot; a `tags` or `units` list set to `[]` is an error (M3-6, BUG-0098). Tech ids are unique across all techs files and may not equal a building id (M3-6); `DataLimits.AgeTechIds` (`age_ii`) must be a common tech (M3-5, see "Implementation (M3-5)") |
-| `projectiles.json` | `{ "projectiles": [ ... ] }`, each `{id, kind, speed, hitTolerance?}`: `kind` `aimed` or `lob`, `speed` m/s (positive), `hitTolerance` m (aimed only, 0-2, default 0.3; an error on a lob). Ids unique; every unit's `attack.projectile` must name one (M4-2b, see "Implementation (M4-2b)") |
+| `projectiles.json` | `{ "projectiles": [ ... ] }`, each `{id, kind, speed, hitTolerance?, leadSpeed?}`: `kind` `aimed` or `lob`, `speed` m/s (at least 1), `hitTolerance` m (aimed only, 0-2, default 0.3; an error on a lob), `leadSpeed` m/s (aimed only, not negative, default 0 = never leads; an error on a lob). Ids unique; every unit's `attack.projectile` must name one (M4-2b, see "Implementation (M4-2b)") |
 | `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge) |
 
 Validation rules: ids are `snake_case` and unique (a unit id is unique across all factions);

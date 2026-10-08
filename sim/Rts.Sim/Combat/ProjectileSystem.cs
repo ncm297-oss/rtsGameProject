@@ -9,30 +9,92 @@ namespace Rts.Sim.Combat;
 /// Projectiles and splash (M4-2b, docs/03 "Implementation (M4-2b)"): a ranged attack fires at its wind-up end
 /// (<see cref="Fire"/>, phase 10) toward where its target is then; every projectile flies one straight step a tick
 /// (<see cref="Fly"/>, the start of phase 10) and lands in phase 11 (<see cref="Land"/>, after the queued melee hits).
-/// An aimed shot hits its target only if the target is still within its radius + the projectile's hit tolerance of the
+/// An aimed shot at a unit walking no faster than its projectile's lead speed is aimed where that unit will be when it
+/// lands (<see cref="Lead"/>, BUG-0183) and re-led every tick it flies while that unit stays that slow; a faster one is
+/// shot where it is and can dodge. An aimed shot hits its target only if the target is still within its radius + the projectile's hit tolerance of the
 /// impact point, else it lands harmlessly; a lob always explodes. Splash (<see cref="Splash"/>) falls off from 100 % to
 /// 50 % at the edge, reaches own units only with friendly fire (at half), never own buildings.
 /// </summary>
 public static class ProjectileSystem
 {
-    /// <summary>Phase 10, before the swings: every projectile in flight moves one step (one fired this tick waits for the next).</summary>
+    /// <summary>
+    /// Phase 10, before the swings: every led shot is re-led (<see cref="Track"/>), then every projectile in flight moves
+    /// one step (one fired this tick waits for the next).
+    /// </summary>
     public static void Fly(World world)
     {
-        if (world.Projectiles.Count > 0) world.Projectiles.Fly();
+        if (world.Projectiles.Count == 0) return;
+        Track(world);
+        world.Projectiles.Fly();
+    }
+
+    /// <summary>
+    /// Re-leads every aimed shot in flight whose projectile leads (<see cref="ProjectileDef.LeadSpeedPerTick"/> above 0) at
+    /// a live unit walking no faster than that (BUG-0183): its impact point becomes where the unit will be when it lands, at
+    /// its step this tick, and it steers there over its remaining ticks (its landing tick is fixed at firing). A walker on
+    /// a flow-field path bends its course at cell corners; one led only at firing would dodge the shots it bends under.
+    /// A dead target, a building, or a unit now faster than the lead speed is not re-led: the shot keeps its course.
+    /// </summary>
+    private static void Track(World world)
+    {
+        ProjectileStore p = world.Projectiles;
+        UnitStore u = world.Units;
+        System.Collections.Immutable.ImmutableArray<ProjectileDef> projectiles = world.Data.Projectiles;
+        int end = p.End;
+        for (int k = 0; k < end; k++)
+        {
+            if (!p.Alive[k] || p.VictimIsBuilding[k]) continue;
+            int left = p.TicksLeft[k];
+            if (left <= 1) continue; // this step lands it: nothing left to steer (and nothing moves before it lands)
+            ProjectileDef pd = projectiles[p.ProjectileTypeId[k]];
+            float lead = pd.LeadSpeedPerTick;
+            if (!(lead > 0f) || pd.Kind != ProjectileKind.Aimed) continue;
+            EntityHandle v = p.Victim[k];
+            if (!u.IsAlive(v)) continue;
+            Vector2 step = u.Velocity[v.Index];
+            if (!(step.LengthSquared() <= lead * lead)) continue;
+            // It lands after `left` more Fly steps; the victim walks in the left - 1 ticks before the landing one.
+            p.Steer(k, u.Position[v.Index] + step * (left - 1));
+        }
     }
 
     /// <summary>
     /// Unit <paramref name="i"/>'s shot at its live target, at the wind-up end: a projectile from the unit's position to the
-    /// target's position now (a building: the footprint point nearest the unit). Lost when the store is full.
+    /// target's position now (a building: the footprint point nearest the unit), led for a slow enough walking unit
+    /// (<see cref="Lead"/>). Lost when the store is full.
     /// </summary>
     internal static void Fire(World world, int i)
     {
         UnitStore u = world.Units;
         int type = u.TypeId[i];
         ProjectileDef pd = world.Data.Projectiles[world.Data.Units[type].Attack.ProjectileTypeId];
-        world.Projectiles.TrySpawn(u.Position[i], CombatSystem.TargetPoint(world, i), pd.SpeedPerTick, pd.Id, u.Owner[i], type,
+        Vector2 from = u.Position[i], to = CombatSystem.TargetPoint(world, i);
+        if (!u.TargetIsBuilding[i] && pd.Kind == ProjectileKind.Aimed)
+            to = Lead(from, to, u.Velocity[u.Target[i].Index], pd);
+        world.Projectiles.TrySpawn(from, to, pd.SpeedPerTick, pd.Id, u.Owner[i], type,
             new EntityHandle(i, u.Generation[i]), u.Target[i], u.TargetIsBuilding[i]);
     }
+
+    /// <summary>
+    /// Where an aimed <paramref name="pd"/> fired from <paramref name="from"/> at a unit at <paramref name="at"/> walking
+    /// <paramref name="velocity"/> (m a tick, its last movement step) flies (BUG-0183, docs/03 "Implementation (M4-2b)"):
+    /// a unit no faster than <see cref="ProjectileDef.LeadSpeedPerTick"/> is led to where it will be after the flight at
+    /// that step, so one walking straight is hit whichever way it goes; a faster one (cavalry) is shot where it is now, so
+    /// it dodges a long shot. The flight time depends on the aim point, so the estimate is refined a fixed
+    /// <see cref="LeadPasses"/> times; the last refinement's error is at most a step or two of the walker.
+    /// </summary>
+    public static Vector2 Lead(Vector2 from, Vector2 at, Vector2 velocity, ProjectileDef pd)
+    {
+        float lead = pd.LeadSpeedPerTick;
+        if (velocity == Vector2.Zero || !(velocity.LengthSquared() <= lead * lead)) return at;
+        Vector2 aim = at;
+        for (int pass = 0; pass < LeadPasses; pass++)
+            aim = at + velocity * ProjectileStore.FlightTicks(Vector2.Distance(from, aim), pd.SpeedPerTick);
+        return aim;
+    }
+
+    /// <summary>Refinements of a led aim point: the first uses the flight to where the target is, the next the flight to that aim.</summary>
+    private const int LeadPasses = 2;
 
     /// <summary>
     /// Phase 11, after the queued hits: every projectile that reached its impact point this tick lands, in slot order, and

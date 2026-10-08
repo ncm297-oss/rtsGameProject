@@ -84,7 +84,7 @@ public class ProjectileLoaderQaTests
     /// hour, or a velocity of infinity / NaN in the hashed store.
     /// </summary>
     [Theory]
-    [InlineData("1e-50", Skip = "BUG-0182 item 1: a positive speed below float range loads as a 0 m step: the shot hovers 72,000 ticks")]
+    [InlineData("1e-50")]
     [InlineData("1e40")]
     public void ASpeedThatIsNoFloatStep_IsRejected(string raw)
     {

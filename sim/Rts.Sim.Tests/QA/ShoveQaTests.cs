@@ -39,9 +39,11 @@ public class ShoveQaTests
         public readonly int[] OrderTick;
         public readonly int[] Generation;
         public readonly bool[] Alive;
+        public readonly EntityHandle[] Target;
 
         public Before(int capacity)
         {
+            Target = new EntityHandle[capacity];
             Pos = new Vector2[capacity];
             State = new UnitState[capacity];
             OrderTick = new int[capacity];
@@ -56,6 +58,7 @@ public class ShoveQaTests
             Array.Copy(u.OrderTick, OrderTick, OrderTick.Length);
             Array.Copy(u.Generation, Generation, Generation.Length);
             Array.Copy(u.Alive, Alive, Alive.Length);
+            Array.Copy(u.Target, Target, Target.Length);
         }
     }
 
@@ -65,7 +68,8 @@ public class ShoveQaTests
     /// stand on passable ground, and a Moving unit of its own player must have started the tick
     /// within touching-plus-one-step of it, or (chain shove, M1-4d-3) it must have started the tick
     /// touching a unit of its own player that was shoved this tick too (shoves never cross players).
-    /// Every unit that was Moving and still is moved by exactly its own velocity. Returns an error or null.
+    /// A unit that started the tick with a combat target and got a new order tick took a chase step, not a shove: it is
+    /// held to its speed only. Every unit that was Moving and still is moved by exactly its own velocity. Returns an error or null.
     /// </summary>
     internal static string? CheckShoves(World w, Before b, ref int shoves)
     {
@@ -82,6 +86,13 @@ public class ShoveQaTests
             float d = Vector2.Distance(p, b.Pos[i]);
             if (d > u.Speed[i] + 1e-4f) return $"Idle unit {i} shoved {d:F4} m > speed {u.Speed[i]:F4}";
             if (u.Velocity[i] != Vector2.Zero) return $"shoved unit {i} has velocity {u.Velocity[i]}";
+            // A chase step, not a shove (BUG-0153 item 2): a unit that started the tick with a combat target can be sent a
+            // step after it (a new OrderTick) and stand down again within the tick. Still at most its speed (checked above).
+            if (u.OrderTick[i] != b.OrderTick[i] && b.Target[i].Generation != 0)
+            {
+                shoves--;
+                continue;
+            }
             if (u.OrderTick[i] != b.OrderTick[i]) return $"shoved unit {i} order tick {b.OrderTick[i]} -> {u.OrderTick[i]}";
             if (!g.WorldToCell(p, out int cx, out int cy) || !g.IsPassable(cx, cy)) return $"shoved unit {i} onto blocked ground at {p}";
             bool walker = false;

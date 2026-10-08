@@ -31,16 +31,20 @@ public class GatherWedgeQaTests
     /// <summary>
     /// Shipped data hashes that play the recorded match unchanged: the recording's own; D4's (A863BAF8637CC860: player-facing
     /// text only); M4-2a's <c>attack.targets</c> on the Battering Ram (no ram in this match); M4-2b's <c>projectiles.json</c>
-    /// (the projectile ids resolved; the checkpoint prefix below still plays bit-exact). Add one only for a data change
+    /// (the projectile ids resolved; the checkpoint prefix below still plays bit-exact); its <c>leadSpeed</c> (BUG-0183: a
+    /// rule for shots at walkers, and the prefix still plays bit-exact). Add one only for a data change
     /// that cannot touch this game, and keep <see cref="CheckpointPrefixTicks"/> passing: it proves the game is the same.
     /// </summary>
-    private static readonly ulong[] SameGameDataHashes = { RecordedDataHash, 0xA863BAF8637CC860, M4_2aDataHash, M4_2bDataHash };
+    private static readonly ulong[] SameGameDataHashes = { RecordedDataHash, 0xA863BAF8637CC860, M4_2aDataHash, M4_2bDataHash, M4_2bLeadDataHash };
 
     /// <summary>The shipped data hash after M4-2a (the ram's <c>attack.targets</c>).</summary>
     internal const ulong M4_2aDataHash = 0xFA1BFB5ECE056056;
 
     /// <summary>The shipped data hash after M4-2b (<c>common/projectiles.json</c>, the resolved <c>attack.projectile</c> ids).</summary>
     internal const ulong M4_2bDataHash = 0xFE4757D315C9E2C3;
+
+    /// <summary>The shipped data hash after BUG-0183 (the aimed projectiles' <c>leadSpeed</c>).</summary>
+    internal const ulong M4_2bLeadDataHash = 0xE50B452A91548DE1;
 
     /// <summary>
     /// Ticks the replay must still match its recorded checkpoints: the fix (M4-2a) first changes the match on tick 20, when

@@ -92,10 +92,11 @@ public static class CombatSystem
             if ((due || repick) && world.CombatEnemyExists[u.Owner[i]] && Scans(world, i)
                 // Mid-swing, or engaged in reach: keep fighting it (a swing is not thrown away for a better target), unless
                 // the player's new attack-move asks for the re-pick; the same pick keeps the swing (Engage). A building in
-                // reach is kept only while no enemy unit has hit this one (BUG-0156): between swings it re-picks, and the
-                // tier-0 attacker wins. A target inside the minimum range (M4-2b) is not "in reach": the scan re-picks.
+                // reach is kept only while no enemy unit that hit this one is within its scan (BUG-0156): between swings it
+                // re-picks, and the tier-0 attacker wins. One that hit it and went away is no reason (BUG-0180). A target
+                // inside the minimum range (M4-2b) is not "in reach": the scan re-picks.
                 && (repick || !(u.Target[i].Generation != 0 && (u.WindupTicks[i] > 0
-                    || ((!u.TargetIsBuilding[i] || u.LastAttacker[i].Generation == 0) && InReach(data.Units[u.TypeId[i]].Attack, Gap(world, i)))))))
+                    || ((!u.TargetIsBuilding[i] || !AttackerInScanRange(world, i)) && InReach(data.Units[u.TypeId[i]].Attack, Gap(world, i)))))))
             {
                 scanned = true;
                 int pick = PickTarget(world, i, out bool isBuilding);
@@ -442,6 +443,26 @@ public static class CombatSystem
             float limit = hold ? def.Attack.Range + u.Radius[i] : def.Sight;
             return BuildingDistanceSquared(world, j, u.Position[i]) <= limit * limit;
         }
+        return UnitInScanRange(world, i, j, def, hold);
+    }
+
+    /// <summary>
+    /// Whether the enemy unit that last hit unit <paramref name="i"/> is alive and within the radius its scan looks
+    /// (<see cref="PickTarget"/>'s), so a scan would rank it first: the BUG-0156 re-pick's condition (BUG-0180).
+    /// </summary>
+    private static bool AttackerInScanRange(World world, int i)
+    {
+        UnitStore u = world.Units;
+        EntityHandle a = u.LastAttacker[i];
+        if (a.Generation == 0 || !u.IsAlive(a)) return false;
+        bool hold = u.Hold[i] || u.GiveUps[i] >= CombatConstants.MaxGiveUps;
+        return UnitInScanRange(world, i, a.Index, world.Data.Units[u.TypeId[i]], hold);
+    }
+
+    /// <summary>Whether unit <paramref name="j"/> is within unit <paramref name="i"/>'s scan radius: its sight, or holding its reach.</summary>
+    private static bool UnitInScanRange(World world, int i, int j, UnitDef def, bool hold)
+    {
+        UnitStore u = world.Units;
         float radius = hold ? def.Attack.Range + u.Radius[i] + u.Radius[j] : def.Sight;
         return Vector2.DistanceSquared(u.Position[i], u.Position[j]) <= radius * radius;
     }

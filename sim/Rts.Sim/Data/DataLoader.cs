@@ -618,7 +618,9 @@ public static partial class DataLoader
     /// <c>common/projectiles.json</c> (M4-2b): ids unique (a repeat is an error at its second definition), indexed in ordinal
     /// order; <c>kind</c> one of <see cref="DataLimits.ProjectileKindIds"/>; <c>speed</c> (m/s) positive, stored per tick;
     /// <c>hitTolerance</c> (m) on an aimed kind only, 0 to <see cref="DataLimits.MaxHitTolerance"/>, default
-    /// <see cref="DataLimits.DefaultHitTolerance"/>; on a lob it is an error (a lob never tests a hit).
+    /// <see cref="DataLimits.DefaultHitTolerance"/>; on a lob it is an error (a lob never tests a hit). <c>speed</c> is at
+    /// least <see cref="DataLimits.MinProjectileSpeed"/> (BUG-0182). <c>leadSpeed</c> (m/s, BUG-0183) on an aimed kind only,
+    /// not negative, default 0 (no lead), stored per tick; on a lob it is an error (a lob is ground-targeted).
     /// </summary>
     private static ProjectileDef[] BuildProjectiles(Checker c, ProjectileFileJson j)
     {
@@ -649,7 +651,11 @@ public static partial class DataLoader
             int kind = DataLimits.ProjectileKindIds.IndexOf(kindKey);
             if (kindKey.Length > 0 && kind < 0)
                 c.Error(p + ".kind", $"unknown kind '{kindKey}' (expected one of {string.Join(", ", DataLimits.ProjectileKindIds)})");
-            double tolerance = 0;
+            double tolerance = 0, lead = 0;
+            if (kind == (int)ProjectileKind.Lob && x.LeadSpeed != null)
+                c.Error(p + ".leadSpeed", "a lob is ground-targeted at where its target is: it never leads");
+            else if (kind == (int)ProjectileKind.Aimed && x.LeadSpeed != null)
+                lead = c.NonNeg(x.LeadSpeed, p + ".leadSpeed");
             if (kind == (int)ProjectileKind.Lob && x.HitTolerance != null)
                 c.Error(p + ".hitTolerance", "a lob always explodes at its impact point: it has no hit tolerance");
             else if (kind == (int)ProjectileKind.Aimed)
@@ -661,13 +667,20 @@ public static partial class DataLoader
                     tolerance = 0;
                 }
             }
+            double speed = c.Pos(x.Speed, p + ".speed");
+            if (speed > 0 && speed < DataLimits.MinProjectileSpeed)
+            {
+                c.Error(p + ".speed", $"{speed} is below the minimum {DataLimits.MinProjectileSpeed} m/s");
+                speed = 0;
+            }
             defs[id] = new ProjectileDef
             {
                 Id = id,
                 Key = x.Id!,
                 Kind = (ProjectileKind)Math.Max(kind, 0),
-                SpeedPerTick = (float)(c.Pos(x.Speed, p + ".speed") / SimConstants.TicksPerSecond),
+                SpeedPerTick = (float)(speed / SimConstants.TicksPerSecond),
                 HitTolerance = (float)tolerance,
+                LeadSpeedPerTick = (float)(lead / SimConstants.TicksPerSecond),
             };
         }
         return defs;

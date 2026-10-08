@@ -171,6 +171,7 @@ public class SplashTests
         sim.Enqueue(Command.Attack(0, mage, target, isBuilding: false));
         int full = u.Hp[enemy.Index];
         RunUntil(sim, () => w.Projectiles.Count == 1, 300);
+        RunUntil(sim, () => w.Projectiles.TicksLeft[0] == 1, 20); // after its last re-lead (a shot tracks a slow target, BUG-0183)
         u.Position[target.Index] += new Vector2(0f, -3f);
         ProjectileTests.RunUntilImpact(sim);
         Assert.False(w.Impacts[0].Hit);

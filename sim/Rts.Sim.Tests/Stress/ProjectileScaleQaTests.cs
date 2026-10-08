@@ -13,6 +13,7 @@ namespace Rts.Sim.Tests.Stress;
 /// (the budgets are the developer's rows in <c>CombatPerfTests</c>). 2x and 5x the 500-unit design number in a mixed
 /// brawl, and the worst landing tick: every Catapult stone of a 400-Catapult battery landing in one tick on a dense blob.
 /// </summary>
+[Collection(SerialCollection.Name)]
 public class ProjectileScaleQaTests
 {
     private readonly ITestOutputHelper _out;

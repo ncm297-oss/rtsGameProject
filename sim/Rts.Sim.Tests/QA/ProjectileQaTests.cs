@@ -59,6 +59,8 @@ public class ProjectileQaTests
             sim.Tick();
             int full = u.Hp[r.Index];
             FireAt(w, s, r);
+            // Moved on the tick before it lands, after its last re-lead (a shot tracks a slow target, BUG-0183).
+            RunUntil(sim, () => w.Projectiles.TicksLeft[0] == 1, 20);
             float rad = deg * MathF.PI / 180f;
             u.Position[r.Index] = w.Projectiles.Target[0] + off * new Vector2(MathF.Cos(rad), MathF.Sin(rad));
             ProjectileTests.RunUntilImpact(sim);
@@ -73,8 +75,8 @@ public class ProjectileQaTests
     /// 2-4.5 m only.
     /// </summary>
     [Theory]
-    [InlineData(8f, Skip = "BUG-0183: a walking Heavy Infantry dodges every bolt past 5 m (0 / 100 at 8 m)")]
-    [InlineData(12f, Skip = "BUG-0183: a walking Heavy Infantry dodges every bolt past 5 m (0 / 100 at 12 m)")]
+    [InlineData(8f)]
+    [InlineData(12f)]
     public void HundredShotsAtAWalkingHeavyInfantry_AtEngagementRange_HitAtLeast95Percent(float distance)
     {
         int hits = 0;
@@ -406,7 +408,7 @@ public class ProjectileQaTests
     /// The replay header has no projectile-capacity line (docs/03, "a replay plays with the default"). A recorder must
     /// then refuse a sim with another capacity, as it does for the building capacity, or its replay must still play back.
     /// </summary>
-    [Fact(Skip = "BUG-0181: ReplayRecorder accepts a non-default ProjectileCapacity; the replay plays with the default and fails its first checkpoint")]
+    [Fact]
     public void ARecordingOfASimWithANonDefaultProjectileCapacity_IsRefusedOrPlaysBack()
     {
         SimConfig cfg = TestSim.Config(Seed: 2, PlayerCount: 2, UnitCapacity: 64, CommandCapacity: 256) with { ProjectileCapacity = 1 };
@@ -439,7 +441,7 @@ public class ProjectileQaTests
     /// only when that attacker dies, so a hit long ago by a Raider that walked away decides whether a Heavy Infantry hitting
     /// a Tent leaves it for a Laborer walking past. Control: a never-hit Heavy Infantry keeps the Tent.
     /// </summary>
-    [Fact(Skip = "BUG-0180: the BUG-0156 re-pick keys on any live LastAttacker, so a long-gone attacker makes a building-hitter leave the building for a passer-by")]
+    [Fact]
     public void BuildingHitter_WithAStaleLastAttacker_BehavesLikeANeverHitOne()
     {
         bool LeavesTheTent(bool hitBefore)

@@ -160,6 +160,7 @@ internal sealed class ProjectileJson
     public string? Kind { get; set; }
     public double? Speed { get; set; }
     public double? HitTolerance { get; set; }
+    public double? LeadSpeed { get; set; }
 }
 
 internal sealed class FootprintJson

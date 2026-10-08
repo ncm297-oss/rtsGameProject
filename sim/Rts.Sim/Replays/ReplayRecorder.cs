@@ -47,6 +47,11 @@ public sealed class ReplayRecorder
         // The format has no building-capacity line, and the capacity is in the state hash (M3-2).
         if (sim.World.Config.BuildingCapacity != Entities.BuildingStore.DefaultCapacity)
             throw new InvalidOperationException("The replay format records only the default building capacity.");
+        // Nor a projectile-capacity line (M4-2b): the player rebuilds the default store, so another size would lose
+        // different shots on playback (BUG-0181). An explicit size equal to the default plays back the same.
+        SimConfig config = sim.World.Config;
+        if (config.ProjectileCapacity != 0 && config.ProjectileSlots != (config with { ProjectileCapacity = 0 }).ProjectileSlots)
+            throw new InvalidOperationException("The replay format records only the default projectile capacity.");
 
         _sim = sim;
         CheckpointInterval = checkpointInterval;

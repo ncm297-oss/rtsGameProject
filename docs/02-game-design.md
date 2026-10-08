@@ -166,7 +166,10 @@ armor 1): `9 × 0.6 × 1.3 = 7.0 → 7 - 1 = 6` damage per bolt.
 Ranged attacks spawn a projectile at the damage point. Arrows and bolts fly at 25 m/s toward
 the target's position *at the moment of firing*. On arrival, the projectile hits if the target is
 still within its collision radius + 0.3 m of the impact point, otherwise it misses and lands.
-Fast units moving across the line of fire can dodge long shots; slow units almost never do.
+Fast units moving across the line of fire can dodge long shots; slow units almost never do: a
+shot at a unit moving no faster than the projectile's lead speed (data, 5 m/s: foot units, not
+cavalry) is led to where that unit will be when it lands, and kept on it in flight
+(2026-10-08, BUG-0183, pending the Producer's review; see docs/03 "Implementation (M4-2b)").
 Catapults and thrown munitions are ground-targeted lobs (12 m/s) that always explode at the
 impact point.
 

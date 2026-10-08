@@ -67,7 +67,10 @@ public sealed class ProjectileStore
     /// <summary>Per slot: position at the start of the last tick, for render interpolation (the launch point on the tick it was fired).</summary>
     public ReadOnlySpan<Vector2> PrevPosition => _prevPosition;
 
-    /// <summary>Per slot: the impact point (x, z) in meters: where the target was when it was fired. It flies there in a straight line.</summary>
+    /// <summary>
+    /// Per slot: the impact point (x, z) in meters: where the target was when it was fired, or for a led shot where it
+    /// will be when it lands (re-led each tick, BUG-0183). It flies toward it in a straight step each tick.
+    /// </summary>
     public ReadOnlySpan<Vector2> Target => _target;
 
     /// <summary>Per slot: projectile type id (<see cref="Data.GameData.Projectiles"/>).</summary>
@@ -106,9 +109,7 @@ public sealed class ProjectileStore
         while (i < _alive.Length && _alive[i]) i++;
         if (i >= _alive.Length) return false;
         float distance = Vector2.Distance(from, to);
-        float flight = distance / speedPerTick;
-        // A speed the loader accepts can still be tiny; cap the flight rather than overflow the tick count.
-        int ticks = flight < MaxFlightTicks ? Math.Max(1, (int)MathF.Ceiling(flight)) : MaxFlightTicks;
+        int ticks = FlightTicks(distance, speedPerTick);
         _alive[i] = true;
         _position[i] = from;
         _prevPosition[i] = from;
@@ -125,6 +126,26 @@ public sealed class ProjectileStore
         _firstFree = i + 1;
         if (i + 1 > _end) _end = i + 1;
         return true;
+    }
+
+    /// <summary>Ticks a shot <paramref name="distance"/> m long flies at <paramref name="speedPerTick"/>: <c>ceil(distance / speed)</c>, at least 1, at most an hour.</summary>
+    internal static int FlightTicks(float distance, float speedPerTick)
+    {
+        float flight = distance / speedPerTick;
+        // Cap the flight rather than overflow the tick count (the loader's speed floor keeps real data far below it).
+        return flight < MaxFlightTicks ? Math.Max(1, (int)MathF.Ceiling(flight)) : MaxFlightTicks;
+    }
+
+    /// <summary>
+    /// Re-aims slot <paramref name="k"/> at <paramref name="to"/>, keeping its landing tick: its step becomes the rest of the
+    /// way over its ticks left. Called before <see cref="Fly"/>. The same point changes nothing (a shot at a standing
+    /// target keeps its launch step).
+    /// </summary>
+    internal void Steer(int k, Vector2 to)
+    {
+        if (to == _target[k]) return;
+        _target[k] = to;
+        _velocity[k] = (to - _position[k]) / _ticksLeft[k];
     }
 
     /// <summary>Moves every projectile in flight one tick along its line (the last step lands exactly on its impact point).</summary>

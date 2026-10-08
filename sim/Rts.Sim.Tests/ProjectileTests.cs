@@ -10,8 +10,8 @@ namespace Rts.Sim.Tests;
 
 /// <summary>
 /// M4-2b criterion 2 (docs/02 "Projectiles", docs/03 "Implementation (M4-2b)"): a ranged attack fires at its wind-up end,
-/// the bolt flies a straight line to where the target was and lands after <c>ceil(distance / step)</c> ticks; an aimed
-/// shot hits only a target still within its radius + the hit tolerance of the impact point; a lob always explodes; the
+/// the bolt flies a straight line to where the target was (led, for a unit walking no faster than the projectile's lead
+/// speed: BUG-0183) and lands after <c>ceil(distance / step)</c> ticks; an aimed shot hits only a target still within its radius + the hit tolerance of the impact point; a lob always explodes; the
 /// view's spans and <see cref="World.Impacts"/>.
 /// </summary>
 public class ProjectileTests
@@ -93,7 +93,10 @@ public class ProjectileTests
         Assert.True(w.Impacts.IsEmpty);
     }
 
-    /// <summary>Waits for the worked example's bolt, then moves the Raider <paramref name="off"/> m sideways off the impact point before it lands.</summary>
+    /// <summary>
+    /// Waits for the worked example's bolt, then moves the Raider <paramref name="off"/> m sideways off the impact point on
+    /// the tick before it lands (after its last re-lead: a shot tracks a slow target, BUG-0183).
+    /// </summary>
     [Theory]
     [InlineData(0.65f, true)]
     [InlineData(0.75f, false)]
@@ -105,6 +108,7 @@ public class ProjectileTests
         UnitStore u = w.Units;
         int full = u.Hp[r.Index];
         RunUntil(sim, () => w.Projectiles.Count == 1, 300);
+        RunUntil(sim, () => w.Projectiles.TicksLeft[0] == 1, 20);
         u.Position[r.Index] += new Vector2(0f, off); // 0.4 m radius + 0.3 m tolerance = 0.7 m
         RunUntilImpact(sim);
         Assert.Equal(hits, w.Impacts[0].Hit);
@@ -134,7 +138,11 @@ public class ProjectileTests
     /// <paramref name="headingDeg"/> (0 = straight away from the shooter, 90 = across, 180 = toward it) that is
     /// <paramref name="distance"/> m away when the bolt is fired. Returns whether the bolt hit, and the distance at firing.
     /// </summary>
-    public static (bool Hit, float Distance) ShotAtAWalker(int type, float distance, float headingDeg)
+    public static (bool Hit, float Distance) ShotAtAWalker(int type, float distance, float headingDeg) =>
+        ShotAtAWalker(type, distance, headingDeg, 12);
+
+    /// <summary>As <see cref="ShotAtAWalker(int, float, float)"/>, the target walking <paramref name="warmup"/> ticks before the shot.</summary>
+    public static (bool Hit, float Distance) ShotAtAWalker(int type, float distance, float headingDeg, int warmup)
     {
         Simulation sim = Flat(size: 64, units: 8);
         World w = sim.World;
@@ -145,12 +153,12 @@ public class ProjectileTests
         sim.Enqueue(Command.HoldPosition(0, s));
         float rad = headingDeg * MathF.PI / 180f;
         var dir = new Vector2(MathF.Cos(rad), MathF.Sin(rad));
-        const int warmup = 12;
         float step = TestSim.Data.Units[type].SpeedPerTick;
         Vector2 atFire = shooterAt + new Vector2(distance, 0f);
         Vector2 start = atFire - dir * (step * warmup);
         EntityHandle t = Place(sim, 1, type, start);
-        sim.Enqueue(Command.Move(1, t, start + dir * 50f));
+        // 30 m: past the warm-up and the longest flight even at a gallop, and on the 128 m map from the longest shot.
+        sim.Enqueue(Command.Move(1, t, start + dir * 30f));
         for (int k = 0; k < warmup; k++) sim.Tick();
         Assert.Equal(UnitState.Moving, u.State[t.Index]);
         u.Target[s.Index] = t;
@@ -162,11 +170,7 @@ public class ProjectileTests
         return (w.Impacts[0].Hit, d);
     }
 
-    /// <summary>
-    /// A walking Heavy Infantry (3 m/s: 0.15 m a tick) is hit while the bolt's flight is at most 4 ticks (5 m), since it
-    /// then moves at most 0.6 m of its 0.7 m (radius + 0.3 m); 100 shots from 2 to 4.5 m, every heading. Past 5 m it
-    /// dodges every bolt whichever way it walks (<see cref="HitRateByDistance_Report"/>; reported to the Producer).
-    /// </summary>
+    /// <summary>A walking Heavy Infantry close in (2 to 4.5 m), 100 shots, every heading: hit at least 95 % (criterion 2).</summary>
     [Fact]
     public void HundredShotsAtAWalkingHeavyInfantry_InEveryDirection_Within4Point5m_HitAtLeast95Percent()
     {
@@ -175,6 +179,138 @@ public class ProjectileTests
             if (ShotAtAWalker(HeavyInfantry, 2f + k % 6 * 0.5f, k * 3.6f).Hit) hits++;
         _out.WriteLine($"walking Heavy Infantry, 2-4.5 m, 100 headings: {hits} hits");
         Assert.True(hits >= 95, $"{hits} / 100");
+    }
+
+    /// <summary>
+    /// The crossbow's longest shot: its range plus both radii plus the wind-up grace (the target may step that far out
+    /// while the bolt is drawn), center to center.
+    /// </summary>
+    public static float MaxShot(int target) =>
+        TestSim.Data.Units[Crossbowman].Attack.Range + TestSim.Data.Units[Crossbowman].Radius + TestSim.Data.Units[target].Radius
+        + CombatConstants.WindupGrace;
+
+    /// <summary>
+    /// Criterion 2 at engagement range (BUG-0183): a walking Heavy Infantry (3 m/s, under the bolt's 5 m/s lead speed) is
+    /// led, so 100 shots in every heading at 8 m, 12 m and the crossbow's longest shot hit at least 95 %. Before the lead
+    /// rule it dodged every one past 5 m.
+    /// </summary>
+    [Theory]
+    [InlineData(8f)]
+    [InlineData(12f)]
+    [InlineData(-1f)] // the crossbow's longest shot (MaxShot)
+    public void HundredShotsAtAWalkingHeavyInfantry_InEveryDirection_AtEngagementRange_HitAtLeast95Percent(float distance)
+    {
+        if (distance < 0f) distance = MaxShot(HeavyInfantry);
+        int hits = 0;
+        for (int k = 0; k < 100; k++)
+            if (ShotAtAWalker(HeavyInfantry, distance, k * 3.6f).Hit) hits++;
+        _out.WriteLine($"walking Heavy Infantry at {distance} m, 100 headings: {hits} hits");
+        Assert.True(hits >= 95, $"{hits} / 100 at {distance} m");
+    }
+
+    /// <summary>A galloping Horse Raider (6.6 m/s, over the lead speed) crossing at 5 m, 6 m, 8 m and the longest shot: under 50 % at each.</summary>
+    [Theory]
+    [InlineData(5f)]
+    [InlineData(6f)]
+    [InlineData(8f)]
+    [InlineData(-1f)]
+    public void AGallopingHorseRaiderCrossing_IsNotLed_AndDodgesMostShots(float distance)
+    {
+        if (distance < 0f) distance = MaxShot(HorseRaider);
+        int hits = 0;
+        for (int k = 0; k < 100; k++)
+        {
+            float heading = (k % 2 == 0 ? 90f : 270f) + (k % 7 - 3) * 5f; // across the line of fire, +-15 degrees
+            if (ShotAtAWalker(HorseRaider, distance, heading).Hit) hits++;
+        }
+        _out.WriteLine($"galloping Horse Raider crossing at {distance} m: {hits} hits");
+        Assert.True(hits < 50, $"{hits} / 100 at {distance} m");
+    }
+
+    [Fact]
+    public void Lead_AimsWhereASlowWalkerWillBe_ButNotAFastOneOrAStandingOne()
+    {
+        ProjectileDef bolt = TestSim.Data.Projectiles[Bolt];
+        Assert.Equal(5f / 20f, bolt.LeadSpeedPerTick, 5); // data: 5 m/s
+        Vector2 from = Vector2.Zero, at = new(10f, 0f);
+        Vector2 walk = new(0f, 0.15f); // 3 m/s across
+        Vector2 led = ProjectileSystem.Lead(from, at, walk, bolt);
+        int flight = (int)MathF.Ceiling(Vector2.Distance(from, led) / bolt.SpeedPerTick);
+        Assert.Equal(at + walk * flight, led); // where it will be when the bolt lands
+        // Exactly the lead speed is led; just over it is not.
+        Assert.NotEqual(at, ProjectileSystem.Lead(from, at, new Vector2(0f, bolt.LeadSpeedPerTick), bolt));
+        Assert.Equal(at, ProjectileSystem.Lead(from, at, new Vector2(0f, bolt.LeadSpeedPerTick * 1.01f), bolt));
+        Assert.Equal(at, ProjectileSystem.Lead(from, at, new Vector2(0f, 0.33f), bolt)); // a galloping Horse Raider
+        Assert.Equal(at, ProjectileSystem.Lead(from, at, Vector2.Zero, bolt));
+    }
+
+    /// <summary>
+    /// A led shot is re-led every tick it flies (BUG-0183): a Heavy Infantry that turns 90 degrees just after the bolt is
+    /// fired is still hit, and the bolt lands on the tick fixed at firing. Led only at firing it would land about 1.4 m
+    /// off its course (12 ticks x 0.15 m x sqrt 2 x ...) and miss.
+    /// </summary>
+    [Fact]
+    public void ALedShot_FollowsAWalkerThatTurnsInFlight()
+    {
+        Simulation sim = Flat(size: 64, units: 8);
+        World w = sim.World;
+        UnitStore u = w.Units;
+        EntityHandle s = Place(sim, 0, Crossbowman, At(sim, 20, 32));
+        u.CooldownTicks[s.Index] = 1_000_000;
+        sim.Enqueue(Command.HoldPosition(0, s));
+        EntityHandle t = Place(sim, 1, HeavyInfantry, At(sim, 27, 28));
+        sim.Enqueue(Command.Move(1, t, At(sim, 27, 50)));
+        for (int k = 0; k < 10; k++) sim.Tick();
+        u.Target[s.Index] = t;
+        ProjectileSystem.Fire(w, s.Index);
+        int ticks = w.Projectiles.TicksLeft[0];
+        Vector2 firstAim = w.Projectiles.Target[0];
+        Assert.True(ticks >= 10, $"setup: a {ticks}-tick flight");
+        sim.Enqueue(Command.Move(1, t, u.Position[t.Index] + new Vector2(30f, 0f))); // turns from walking +y to +x
+        int ran = RunUntilImpact(sim, 60);
+        Assert.Equal(ticks, ran);
+        Assert.True(Vector2.Distance(firstAim, u.Position[t.Index]) > 0.7f + 0.4f, "setup: the turn would have dodged the first aim");
+        Assert.True(w.Impacts[0].Hit);
+    }
+
+    /// <summary>A galloping Horse Raider is not re-led either: the bolt keeps the course it was fired on.</summary>
+    [Fact]
+    public void AShotAtAGallopingUnit_KeepsItsCourse()
+    {
+        Simulation sim = Flat(size: 64, units: 8);
+        World w = sim.World;
+        UnitStore u = w.Units;
+        EntityHandle s = Place(sim, 0, Crossbowman, At(sim, 20, 32));
+        u.CooldownTicks[s.Index] = 1_000_000;
+        sim.Enqueue(Command.HoldPosition(0, s));
+        EntityHandle t = Place(sim, 1, HorseRaider, At(sim, 25, 28));
+        sim.Enqueue(Command.Move(1, t, At(sim, 25, 50)));
+        for (int k = 0; k < 10; k++) sim.Tick();
+        u.Target[s.Index] = t;
+        ProjectileSystem.Fire(w, s.Index);
+        Vector2 aim = w.Projectiles.Target[0];
+        Assert.Equal(u.Position[t.Index], aim);
+        for (int k = 0; k < 3; k++)
+        {
+            sim.Tick();
+            Assert.Equal(aim, w.Projectiles.Target[0]);
+        }
+    }
+
+    [Fact]
+    public void ALobIsNeverLed_EvenAtASlowWalker()
+    {
+        Simulation sim = Flat(size: 64, units: 8);
+        World w = sim.World;
+        UnitStore u = w.Units;
+        EntityHandle c = Place(sim, 0, Catapult, At(sim, 20, 32));
+        EntityHandle t = Place(sim, 1, HeavyInfantry, At(sim, 32, 32));
+        sim.Enqueue(Command.Move(1, t, At(sim, 32, 60)));
+        for (int k = 0; k < 10; k++) sim.Tick();
+        Assert.NotEqual(Vector2.Zero, u.Velocity[t.Index]);
+        u.Target[c.Index] = t;
+        ProjectileSystem.Fire(w, c.Index);
+        Assert.Equal(u.Position[t.Index], w.Projectiles.Target[0]);
     }
 
     [Fact]
@@ -192,7 +328,8 @@ public class ProjectileTests
 
     /// <summary>
     /// Report row (not a gate): hit rates by distance for a walking Heavy Infantry (across, toward, away) and a
-    /// galloping Horse Raider across, with docs/02's numbers (25 m/s, radius + 0.3 m). For the data track's balance pass.
+    /// galloping Horse Raider (across, toward), with the shipped numbers (25 m/s, radius + 0.3 m, lead up to 5 m/s); the
+    /// last column is the crossbow's longest shot. For the data track's balance pass.
     /// </summary>
     [Fact]
     public void HitRateByDistance_Report()
@@ -203,10 +340,11 @@ public class ProjectileTests
             ("Heavy Infantry toward", HeavyInfantry, new[] { 170f, 180f, 190f }),
             ("Heavy Infantry away", HeavyInfantry, new[] { -10f, 0f, 10f }),
             ("Horse Raider across", HorseRaider, new[] { 80f, 90f, 100f, 260f, 270f, 280f }),
+            ("Horse Raider toward", HorseRaider, new[] { 170f, 180f, 190f }),
         })
         {
             var line = new System.Text.StringBuilder(name + ":");
-            foreach (float d in new[] { 3f, 4f, 5f, 6f, 8f, 10f, 12f, 15f })
+            foreach (float d in new[] { 3f, 4f, 5f, 6f, 8f, 10f, 12f, 15f, MaxShot(type) })
             {
                 int hits = headings.Count(h => ShotAtAWalker(type, d, h).Hit);
                 line.Append($" {d} m {100 * hits / headings.Length}%");

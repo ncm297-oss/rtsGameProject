@@ -112,6 +112,41 @@ public class ProjectileLoaderTests
         AssertErrorAt(r, "common/projectiles.json", "projectiles[0].speed");
     }
 
+    [Theory]
+    [InlineData("0.5")]
+    [InlineData("1e-50")]
+    public void ASpeedBelowTheFloor_IsAnErrorAtTheSpeed(string raw)
+    {
+        // BUG-0182: 1e-50 was a 0 m step, a shot hovering for an hour.
+        DataLoadResult r = LoadWith(dir => EditProjectile(dir, "arrow", p => p["speed"] = JsonNode.Parse(raw)));
+        AssertErrorAt(r, "common/projectiles.json", "projectiles[0].speed");
+        Assert.True(LoadWith(dir => EditProjectile(dir, "arrow", p => p["speed"] = DataLimits.MinProjectileSpeed)).Ok);
+    }
+
+    [Fact]
+    public void ALeadSpeedOnALob_IsAnErrorAtTheField()
+    {
+        DataLoadResult r = LoadWith(dir => EditProjectile(dir, "catapult_stone", p => p["leadSpeed"] = 5));
+        AssertErrorAt(r, "common/projectiles.json", "projectiles[2].leadSpeed");
+    }
+
+    [Fact]
+    public void ANegativeLeadSpeed_IsAnErrorAtTheField()
+    {
+        DataLoadResult r = LoadWith(dir => EditProjectile(dir, "bolt", p => p["leadSpeed"] = -1));
+        AssertErrorAt(r, "common/projectiles.json", "projectiles[1].leadSpeed");
+    }
+
+    [Fact]
+    public void AnAimedProjectileWithoutLeadSpeed_NeverLeads_AndTheShippedOnesLeadUpTo5mps()
+    {
+        DataLoadResult r = LoadWith(dir => EditProjectile(dir, "bolt", p => p.Remove("leadSpeed")));
+        Assert.True(r.Ok, string.Join("\n", r.Errors));
+        Assert.Equal(0f, r.Data!.Projectiles[r.Data.FindProjectile("bolt")].LeadSpeedPerTick);
+        foreach (ProjectileDef p in TestSim.Data.Projectiles)
+            Assert.Equal(p.Kind == ProjectileKind.Aimed ? 5f / 20f : 0f, p.LeadSpeedPerTick, 5);
+    }
+
     [Fact]
     public void AnUnknownField_IsAnError()
     {
@@ -178,9 +213,12 @@ public class ProjectileLoaderTests
         Assert.NotEqual(TestSim.Data.ContentHash(), faster.Data!.ContentHash());
         DataLoadResult wider = LoadWith(dir => EditProjectile(dir, "arrow", p => p["hitTolerance"] = 0.4));
         Assert.NotEqual(TestSim.Data.ContentHash(), wider.Data!.ContentHash());
+        DataLoadResult leads = LoadWith(dir => EditProjectile(dir, "arrow", p => p["leadSpeed"] = 6));
+        Assert.True(leads.Ok, string.Join("\n", leads.Errors));
+        Assert.NotEqual(TestSim.Data.ContentHash(), leads.Data!.ContentHash());
         DataLoadResult kind = LoadWith(dir =>
         {
-            EditProjectile(dir, "magic_bolt", p => { p["kind"] = "lob"; p.Remove("hitTolerance"); });
+            EditProjectile(dir, "magic_bolt", p => { p["kind"] = "lob"; p.Remove("hitTolerance"); p.Remove("leadSpeed"); });
         });
         Assert.True(kind.Ok, string.Join("\n", kind.Errors)); // both casters have splash, so a lob is allowed
         Assert.NotEqual(TestSim.Data.ContentHash(), kind.Data!.ContentHash());

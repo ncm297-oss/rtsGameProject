@@ -203,7 +203,7 @@ public class DataContentHashTests
         // M4-2b: every ProjectileDef field, on each shipped projectile type, and the attack's resolved id.
         foreach (ProjectileDef p in d.Projectiles)
             Check(p, x => With(d, projectile: x, projectileSlot: p.Id));
-        foreach (string f in new[] { "Id", "Key", "Kind", "SpeedPerTick", "HitTolerance" })
+        foreach (string f in new[] { "Id", "Key", "Kind", "SpeedPerTick", "HitTolerance", "LeadSpeedPerTick" })
             Assert.Contains($"ProjectileDef.{f}", checkedFields);
         Assert.Contains("AttackDef.ProjectileTypeId", checkedFields);
         Assert.True(checkedFields.Count >= 57, $"only {checkedFields.Count} fields checked");

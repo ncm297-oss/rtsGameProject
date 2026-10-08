@@ -169,6 +169,7 @@ public sealed class GameData
             h.Add((int)p.Kind);
             h.Add(p.SpeedPerTick);
             h.Add(p.HitTolerance);
+            h.Add(p.LeadSpeedPerTick);
         }
 
         h.Add(Buildings.Length);

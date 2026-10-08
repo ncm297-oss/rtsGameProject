@@ -26,7 +26,7 @@ public sealed record SimConfig(ulong Seed, int PlayerCount, int UnitCapacity, in
     /// <summary>
     /// Maximum number of projectiles in flight (M4-2b); the store is allocated once at this size, and a shot fired while it
     /// is full is lost. 0 (the default) sizes it from the data (<see cref="ProjectileSlots"/>). Not in the replay header: a
-    /// replay plays with the default.
+    /// replay plays with the default, and a recorder refuses a sim with another size (BUG-0181).
     /// </summary>
     public int ProjectileCapacity { get; init; }
 
