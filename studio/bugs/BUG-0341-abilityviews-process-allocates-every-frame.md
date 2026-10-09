@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-09-1155, task M4-V6a |
 | System | view: ability views (and the targeting click path) |
-| Fixed by | |
+| Fixed by | 9cf5368 (M4-V6a fix round 1), verified 2026-10-09-1155 |
 
 ## Repro
 1. `dotnet build RtsGame.sln`
@@ -38,3 +38,8 @@ the same cost). The brief's QA focus asked for 0 B over a 500-click spam. Each c
 Fix: a `static readonly StringName OrderQueue = "order_queue";` (as `GroupActions` / `_cardActions` already do) used in
 both places, and `AbilityViewTest.Steady` should measure the real `_Process` (or `SyncAll` should call it).
 Regression rows: `game/tests/QaV6aTest.cs` ("AbilityViews._Process allocated", "the click path allocated").
+
+## Verification (2026-10-09-1155, re-check round 1)
+Fix 9cf5368 caches `static readonly StringName OrderQueue` in AbilityViews, SelectionController (all 5 sites) and
+CommandCard. `scene-loop.ps1 -Filter QaV6aTest`: `AbilityViews._Process: 0 bytes over 100 frames`, click path
+`0 bytes over the last 500` (520/520 UseAbility sent), A-move click `0 then 0`, seeds 1 and 6. QA V6A TEST PASS.
