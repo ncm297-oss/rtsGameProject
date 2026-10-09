@@ -463,6 +463,8 @@ public class StateHashTests
         Changes("magnitude");
         s.TicksRemaining[0] = 79;
         Changes("ticks remaining");
+        s.PulseTicks[0] = 7;
+        Changes("pulse ticks");
         s.SourcePlayer[0] = 2;
         Changes("source player");
         Assert.True(s.Apply(0, 0, 10f, 80, 1));

@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | partly fixed (d by M4-4a fix round 1: pulse clock now starts at the apply, docs/03 states the trailing-fraction rule; a by QA; b, c open) |
 | Found | 2026-10-09-0724, task M4-4a |
 | System | studio records, QA memory bound, `AbilityPerfTests`, statuses |
 | Fixed by | |

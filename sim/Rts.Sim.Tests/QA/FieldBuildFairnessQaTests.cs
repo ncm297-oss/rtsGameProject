@@ -448,7 +448,9 @@ public class FieldBuildFairnessQaTests
             // ticks, point: 16 bytes), 4 cooldown ready ticks (16), and the status store's count plus 8 entries of (id,
             // magnitude, ticks, source) (4 + 128): 164 x 4,096 = 671,744 bytes; and the one-tick cast event list, 2 per slot
             // at 28 bytes (229,376), plus array headers: 231,658,712 measured (+966,040); the same 72 KB margin.
-            Assert.True(bytes < 231_731_000, $"{bytes / 1e6:F1} MB");
+            // M4-4a fix round 1 (BUG-0301): each status entry gains its own pulse clock (int, 4 bytes x 8 entries x 4,096
+            // slots = 131,072): 231,789,560 measured (+130,848); the same 72 KB margin.
+            Assert.True(bytes < 231_862_000, $"{bytes / 1e6:F1} MB");
         }
     }
 }

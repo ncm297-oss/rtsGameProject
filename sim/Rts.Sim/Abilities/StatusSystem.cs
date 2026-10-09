@@ -9,9 +9,10 @@ namespace Rts.Sim.Abilities;
 /// the expired ones end. Also the one place a unit's derived speed follows its slows.
 /// </summary>
 /// <remarks>
-/// Damage over time lands in pulses, one each time an entry's remaining ticks reach a multiple of
-/// <see cref="SimConstants.TicksPerSecond"/> (the last on its final tick): a 4 s Burning lands 4 pulses, the first a second
-/// after it was applied. A pulse is one hit through <see cref="DamageCalc"/> with the magnitude (damage per second) as the
+/// Damage over time lands in pulses, one every <see cref="SimConstants.TicksPerSecond"/> ticks from the first application,
+/// on the entry's own pulse clock (<see cref="StatusStore.PulseTicks"/>), which a refresh does not reset (BUG-0301): a 4 s
+/// Burning lands 4 pulses, the first a second after it was applied and the last on its final tick; a fraction of a second
+/// left at the end lands nothing. A pulse is one hit through <see cref="DamageCalc"/> with the magnitude (damage per second) as the
 /// attack value, of the status's damage type, against the victim's armor class and armor (Magic ignores armor), so its
 /// rounding is the combat rule's. The kill is credited to the entry's source player; nobody retaliates on a pulse. Units in
 /// slot order, each unit's entries in order; no allocation.
@@ -36,8 +37,9 @@ public static class StatusSystem
                 int at = i * StatusStore.PerUnit + k;
                 StatusDef def = data.Statuses[s.StatusId[at]];
                 int left = --s.TicksRemaining[at];
-                if (def.Kind == StatusKind.DamageOverTime && left % SimConstants.TicksPerSecond == 0)
+                if (def.Kind == StatusKind.DamageOverTime && --s.PulseTicks[at] == 0)
                 {
+                    s.PulseTicks[at] = SimConstants.TicksPerSecond;
                     int damage = PulseDamage(world, i, def.DamageType, s.Magnitude[at]);
                     CombatSystem.HitUnit(world, new PendingHit(default, s.SourcePlayer[at], new EntityHandle(i, generation), false, damage));
                     if (!u.Alive[i]) break; // died: the free cleared its statuses

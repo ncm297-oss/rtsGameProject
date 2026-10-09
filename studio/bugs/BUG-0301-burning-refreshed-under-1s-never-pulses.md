@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (no shipped path reaches it today short of ~27 staggered Cadre Mages; every slice-2 zone that reapplies a DoT each tick will) |
-| Status | open |
+| Status | fixed (M4-4a fix round 1) |
 | Found | 2026-10-09-0724, task M4-4a |
 | System | statuses (`StatusSystem.Run`, `StatusStore.Apply`) |
-| Fixed by | |
+| Fixed by | M4-4a fix round 1: per-entry `StatusStore.PulseTicks` pulse clock, kept across a refresh; `QA/AbilityQaTests.BurningRefreshedEvery10Ticks_StillBurns10ASecond` un-skipped |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter FullyQualifiedName~BurningRefreshedEvery10Ticks_StillBurns10ASecond` after

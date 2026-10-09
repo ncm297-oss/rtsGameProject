@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (acceptance criterion 7 "smoke PASS" not met on the sim branch, nor on its merge with the view head) |
-| Status | open (cross-track: the fix is a view-owned data line) |
+| Status | fixed (M4-4a fix round 1; cross-track ui.json line, Producer to rule) |
 | Found | 2026-10-09-0724, task M4-4a (reported by the developer as out of scope, confirmed by QA) |
 | System | view HUD text (`game/scripts/UiText.cs`) vs sim enum `UnitState` |
-| Fixed by | |
+| Fixed by | M4-4a fix round 1: `"casting": "Casting"` in `game/data/common/ui.json` `states` |
 
 ## Repro
 1. `powershell -File tools/qa/smoke.ps1` on `studio/2026-10-09-0724-sim` (9c5517a), or on a scratch merge of it with

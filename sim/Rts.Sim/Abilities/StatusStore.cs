@@ -5,7 +5,7 @@ namespace Rts.Sim.Abilities;
 
 /// <summary>
 /// Every unit's active statuses (M4-4a, docs/03 "Abilities, statuses, zones"): up to <see cref="PerUnit"/> per unit slot,
-/// each <c>(statusId, magnitude, ticksRemaining, sourcePlayer)</c>, kept in the order they were first applied. Owned by
+/// each <c>(statusId, magnitude, ticksRemaining, pulseTicks, sourcePlayer)</c>, kept in the order they were first applied. Owned by
 /// <see cref="Entities.UnitStore"/>, which clears a slot's statuses when it is freed or allocated. Hashed.
 /// </summary>
 /// <remarks>
@@ -26,6 +26,11 @@ public sealed class StatusStore
     public readonly float[] Magnitude;
     /// <summary>Ticks each entry has left; it ends on the tick this reaches 0.</summary>
     public readonly int[] TicksRemaining;
+    /// <summary>
+    /// Ticks until each entry's next damage-over-time pulse. Set to a second when the status is first applied and kept across
+    /// a refresh, so a status reapplied faster than once a second still pulses once a second (BUG-0301).
+    /// </summary>
+    public readonly int[] PulseTicks;
     /// <summary>The player whose ability applied each entry; credited with a kill its damage lands.</summary>
     public readonly int[] SourcePlayer;
 
@@ -39,6 +44,7 @@ public sealed class StatusStore
         StatusId = new int[capacity * PerUnit];
         Magnitude = new float[capacity * PerUnit];
         TicksRemaining = new int[capacity * PerUnit];
+        PulseTicks = new int[capacity * PerUnit];
         SourcePlayer = new int[capacity * PerUnit];
     }
 
@@ -75,6 +81,7 @@ public sealed class StatusStore
         StatusId[at] = status;
         Magnitude[at] = magnitude;
         TicksRemaining[at] = ticks;
+        PulseTicks[at] = SimConstants.TicksPerSecond;
         SourcePlayer[at] = source;
         Count[unit] = n + 1;
         return true;
@@ -89,11 +96,13 @@ public sealed class StatusStore
             StatusId[k] = StatusId[k + 1];
             Magnitude[k] = Magnitude[k + 1];
             TicksRemaining[k] = TicksRemaining[k + 1];
+            PulseTicks[k] = PulseTicks[k + 1];
             SourcePlayer[k] = SourcePlayer[k + 1];
         }
         StatusId[last] = 0;
         Magnitude[last] = 0f;
         TicksRemaining[last] = 0;
+        PulseTicks[last] = 0;
         SourcePlayer[last] = 0;
         if (--Count[unit] == 0) UnitsWithStatuses--;
     }
@@ -107,6 +116,7 @@ public sealed class StatusStore
         Array.Clear(StatusId, head, PerUnit);
         Array.Clear(Magnitude, head, PerUnit);
         Array.Clear(TicksRemaining, head, PerUnit);
+        Array.Clear(PulseTicks, head, PerUnit);
         Array.Clear(SourcePlayer, head, PerUnit);
     }
 
@@ -120,6 +130,7 @@ public sealed class StatusStore
             h.Add(StatusId[head + k]);
             h.Add(Magnitude[head + k]);
             h.Add(TicksRemaining[head + k]);
+            h.Add(PulseTicks[head + k]);
             h.Add(SourcePlayer[head + k]);
         }
     }

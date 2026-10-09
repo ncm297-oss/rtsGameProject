@@ -212,10 +212,10 @@ public class AbilityQaTests
 
     /// <summary>
     /// BUG-0301: Burning refreshed more often than once a second (several casters, or a slice-2 zone that reapplies every
-    /// tick) still burns at 10 a second (docs/02 "Burning: damage over time"). The pulse clock is the remaining count, so
-    /// every refresh resets it and a refresh every 10 ticks never lets it reach a multiple of 20.
+    /// tick) still burns at 10 a second (docs/02 "Burning: damage over time"). The pulse clock was the remaining count, so
+    /// every refresh reset it and a refresh every 10 ticks never let it reach a multiple of 20; it is now its own counter.
     /// </summary>
-    [Fact(Skip = "BUG-0301: a Burning refreshed every < 1 s never pulses (the pulse clock is the remaining duration)")]
+    [Fact]
     public void BurningRefreshedEvery10Ticks_StillBurns10ASecond()
     {
         Simulation sim = NoFights();

@@ -2237,7 +2237,7 @@ three gates below.
 
 - `AbilityDef` (data) → `AbilitySystem` executes cast timers and resolves `effects[]`.
 - `StatusSystem` stores active statuses per unit in a small fixed array (max 8) with
-  `(statusId, magnitude, ticksRemaining, sourcePlayer)`. Derived stats (speed, attack speed,
+  `(statusId, magnitude, ticksRemaining, pulseTicks, sourcePlayer)`. Derived stats (speed, attack speed,
   sight) are recomputed when the status set changes, not every tick.
 - `ZoneSystem` keeps active zones; each tick it applies their statuses to units inside (via the
   spatial hash) and marks their cells in a per-player "vision blocker" mask used by the vision
@@ -2278,14 +2278,16 @@ effect, passives and the AI's casting are slice 2.
   and may start a retaliation on the caster like any hit; `applyStatus` goes through the store. A unit trained in this
   tick's phase 3 is not yet in the spatial hash and is missed.
 - **Statuses.** `UnitStore.Statuses`, a `StatusStore`: up to `StatusStore.PerUnit` = 8 entries per unit slot, each
-  `(statusId, magnitude, ticksRemaining, sourcePlayer)`, in the order first applied. Stacking (docs/02): the same status
+  `(statusId, magnitude, ticksRemaining, pulseTicks, sourcePlayer)`, in the order first applied. Stacking (docs/02): the same status
   again keeps the longer remaining duration (a refresh never shortens one) and the stronger magnitude, and takes the
   stronger application's source (the latest on a tie); different statuses stack; a ninth is dropped. Each tick's phase 5
   counts every entry down by one and ends it on the tick it reaches 0. The store is cleared when the unit's slot is freed
   (death) or allocated.
 - **Damage over time (`damageOverTime`, Burning).** The magnitude is damage per second (a whole number). It lands in pulses
-  on the ticks an entry's remaining count reaches a multiple of 20 (one a second, the first a second after the apply, the
-  last on its final tick): a 4 s Burning lands 4 pulses. A pulse is one `DamageCalc` hit with the magnitude as the attack
+  on the entry's own pulse clock (`pulseTicks`): one every 20 ticks from the first application, the first a second after
+  it. A refresh extends the duration but does not reset the pulse clock, so a status reapplied faster than once a second
+  still pulses once a second (BUG-0301). A 4 s Burning lands 4 pulses, the last on its final tick; a duration that is not a
+  whole number of seconds lands nothing for the trailing fraction (2.5 s lands 2). A pulse is one `DamageCalc` hit with the magnitude as the attack
   value and the status's damage type, so its rounding is the combat rule's: Telas Fire's 10 magic a second is 10 on Light
   and Mounted, 13 on Heavy and Giant (10 x 1.25 = 12.5 rounds half up), 40 / 52 over 4 s. The kill (and the death event's
   killer) is the entry's source player; nobody retaliates on a pulse and it reveals nothing.
