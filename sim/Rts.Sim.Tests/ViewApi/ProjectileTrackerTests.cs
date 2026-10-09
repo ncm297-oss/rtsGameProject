@@ -303,6 +303,27 @@ public class ProjectileTrackerTests
 
     // ---- impact marks ----
 
+    // BUG-0221: a flash first drawn five ticks after it landed (8x at 30 fps) was drawn at age 1, alpha 0.
+    [Fact]
+    public void ImpactMarks_FirstDrawnLate_IsDrawnEarlyInItsLife_ThenExpires()
+    {
+        var m = new ImpactMarks(4);
+        var added = new int[1];
+        var removed = new int[4];
+        m.Collect(new[] { new ProjectileImpact(Vector2.Zero, Bolt, 0, Hit: true) }, Defs, 10, added);
+        int i = added[0];
+        float first = m.Age(i, 15, 0.5f);
+        Assert.Equal(1.5f / ImpactMarks.FlashTicks, first, 4);
+        Assert.True(0.85f * (1f - first) > 0.4f, $"first drawn at age {first}");
+        m.MarkDrawn(i);
+        // Drawn: it ages from its own tick again, so it is due and goes before the next frame.
+        Assert.Equal(1f, m.Age(i, 15, 0.5f));
+        Assert.Equal(1, m.Expire(16, removed));
+        // On time (the frame after its tick) nothing changes: age from the tick it landed.
+        m.Collect(new[] { new ProjectileImpact(Vector2.Zero, Bolt, 0, Hit: true) }, Defs, 20, added);
+        Assert.Equal(1.25f / ImpactMarks.FlashTicks, m.Age(added[0], 21, 0.25f), 4);
+    }
+
     [Fact]
     public void ImpactMarks_KindsLifetimesRingAndCollectOncePerTick()
     {

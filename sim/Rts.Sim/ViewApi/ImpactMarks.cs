@@ -152,12 +152,18 @@ public sealed class ImpactMarks
     }
 
     /// <summary>How far through its life mark <paramref name="slot"/> is at tick <paramref name="tick"/> plus render <paramref name="alpha"/>, in [0, 1].</summary>
+    /// <remarks>
+    /// A mark no frame has drawn yet is aged from one tick ago at most, so the frame that first draws it (maybe several
+    /// ticks late at 8x) shows it early in its life, not at age 1 (fully faded, BUG-0221). Once drawn it ages from its
+    /// own tick again; a late mark is then already due and goes before the next frame.
+    /// </remarks>
     public float Age(int slot, long tick, float alpha)
     {
         int life = LifetimeTicks(_kind[slot]);
         if (life <= 0) return 1f;
         float a = alpha > 0f ? MathF.Min(alpha, 1f) : 0f;
-        float t = ((tick - _start[slot]) + a) / life;
+        long start = _drawn[slot] ? _start[slot] : Math.Max(_start[slot], tick - 1);
+        float t = ((tick - start) + a) / life;
         return t > 0f ? MathF.Min(t, 1f) : 0f;
     }
 

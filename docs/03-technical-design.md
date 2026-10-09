@@ -3536,7 +3536,8 @@ Match.tscn  (new node)
   512 (`DefaultCapacity`; when full the oldest is replaced): an aimed **hit** a flash (0.2 s, `FlashTicks` 4) at the
   shot's height, an aimed **miss** a dust puff (0.3 s, `DustTicks` 6) on the ground, a **lob** a burst (0.4 s,
   `BurstTicks` 8, builder's choice) on the ground. Times are game ticks (game speed scales them), but a mark expires only
-  after a frame has drawn it, so a landing at 8x always shows at least once. One instance per pool slot, a transparent
+  after a frame has drawn it, so a landing at 8x always shows at least once, and a mark no frame has drawn yet is aged
+  from one tick ago at most, so that first frame shows it early in its life, not fully faded (BUG-0221). One instance per pool slot, a transparent
   sphere that grows (flash 0.25-0.55 m, dust 0.2-0.7 m, burst 30-100 % of its size) and fades with its age
   (`Age(slot, tick, alpha)`); a burst's size is 60 % of the widest `splash` among the attacks that throw that projectile
   (data: Catapult 2.5 m gives 1.5 m, Sapper 2 m gives 1.2 m; at least 0.6 m). A free slot has a zero transform.
@@ -3548,7 +3549,9 @@ Match.tscn  (new node)
   scene now passes `--no-combat` like BUG-0147's five, every `Check` unchanged; it prints any of the 40 that is not
   `Moving` with its alive flag, generation, hp, state, goal and target.
 - **BUG-0190:** (1) a corpse disc sits at `TerrainHeight.MaxUnder` (the highest of the centre and eight rim samples under
-  its rim's radius), so on a ramp it no longer sinks half into the slope (it floats a little on the downhill side);
+  its rim's radius), so on a ramp it no longer sinks half into the slope (it floats a little on the downhill side). Only
+  rim samples joined to the centre by a slope count: plateau to plateau, or a rise steeper than one level per cell, is a
+  cliff and is ignored, so a unit dying against a cliff keeps its disc on its own ground (BUG-0223);
   `CombatViewTest` checks every corpse's underside against it. (2) `UnitPicker.ResolveEnemy` counts a NaN entry (unit,
   building or prop) as nearest (0), so a unit passed with a NaN entry can no longer lose to the building behind it.
 - **Tests.** xUnit `ViewApi/ProjectileTrackerTests`: the launch on the firing tick and a tick late, a slot dropped when it

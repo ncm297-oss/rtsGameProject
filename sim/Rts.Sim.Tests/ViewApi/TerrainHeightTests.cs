@@ -125,6 +125,23 @@ public class TerrainHeightTests
         Assert.Equal(TerrainHeight.At(map, x, y), TerrainHeight.MaxUnder(map, x, y, float.NaN), 5);
     }
 
+    // BUG-0223: a rim sample on the cliff top beside flat low ground lifted the disc a whole level (4 m).
+    [Fact]
+    public void MaxUnder_BesideACliff_StaysOnItsOwnGround()
+    {
+        Heightmap map = HandMap();
+        const float cs = MapConstants.CellSize, r = 0.6f;
+        // Cell (2, 2) is level-0 ground; its west neighbour (1, 2) is the level-1 plateau, a cliff (no ramp).
+        float x = 2 * cs + 0.3f, y = 2.5f * cs;
+        Assert.Equal(MapConstants.LevelHeight, TerrainHeight.At(map, x - r, y), 5);
+        Assert.Equal(0f, TerrainHeight.MaxUnder(map, x, y, r), 5);
+        // Up on the plateau beside the same cliff: its own height, not lower.
+        Assert.Equal(MapConstants.LevelHeight, TerrainHeight.MaxUnder(map, 2 * cs - 0.3f, y, r), 5);
+        // At the foot of the ramp (on the low ground east of it) the rim on the ramp still lifts the disc a little.
+        float foot = TerrainHeight.MaxUnder(map, 3 * cs + 0.3f, 1.5f * cs, r);
+        Assert.True(foot > 0.1f && foot < 1f, $"ramp foot disc at {foot} m");
+    }
+
     private static void Near(float expected, float actual, string what) =>
         Assert.True(MathF.Abs(expected - actual) <= Tolerance, $"{what}: expected {expected}, got {actual}");
 }

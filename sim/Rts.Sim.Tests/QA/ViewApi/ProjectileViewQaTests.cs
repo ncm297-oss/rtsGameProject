@@ -180,9 +180,9 @@ public class ProjectileViewQaTests
     // ---- BUG-0190 item 1: a corpse disc at MaxUnder never hangs a level up at the foot of a cliff ----
 
     [Theory]
-    [InlineData(17UL, Skip = "BUG-0223: a unit within ~0.6 m of a blocked cliff cell puts a rim sample on the cliff top, so its corpse disc would hang 4 m up")]
+    [InlineData(17UL)]
     [InlineData(23UL)]
-    [InlineData(5UL, Skip = "BUG-0223: a unit within ~0.6 m of a blocked cliff cell puts a rim sample on the cliff top, so its corpse disc would hang 4 m up")]
+    [InlineData(5UL)]
     public void CorpseDisc_MaxUnderTheRim_StaysNearTheGroundWhereUnitsStandAndDie(ulong seed)
     {
         const float rimScale = 1.2f; // CombatViews.CorpseRimScale (game assembly)
@@ -347,7 +347,7 @@ public class ProjectileViewQaTests
     }
 
     // BUG-0221: a mark first drawn after its lifetime is drawn at age 1, which the view turns into alpha 0 (invisible).
-    [Fact(Skip = "BUG-0221: a mark held until drawn once is first drawn at Age 1 (alpha 0 in ProjectileViews) when a frame runs more ticks than its life (8x at 30 fps)")]
+    [Fact]
     public void ImpactMark_HeldUntilDrawn_IsDrawnBeforeTheEndOfItsLife()
     {
         int bolt = Data.FindProjectile("bolt");
