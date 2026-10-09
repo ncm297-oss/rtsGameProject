@@ -285,7 +285,8 @@ public partial class EconomyViewTest : Node
         string label = _match.GetNode<Label>("DebugOverlay/Label").Text;
         Check(overlay.GatheringUnits == g && overlay.ReturningUnits == r && overlay.BuildingUnits == b && g > 0,
             $"overlay counts {overlay.GatheringUnits} / {overlay.ReturningUnits} / {overlay.BuildingUnits}, sim {g} / {r} / {b}");
-        Check(label.Contains($"   workers gathering {g}, returning {r}, building {b}   "), $"overlay label lacks the worker counts: {label}");
+        // Its own line since M4-V2 (BUG-0160: the one long line ran under the resource bar).
+        Check(label.Contains($"\nworkers gathering {g}, returning {r}, building {b}\n"), $"overlay label lacks the worker counts: {label}");
         overlay.SetEnabled(false);
         await Frames();
     }

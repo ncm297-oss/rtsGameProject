@@ -227,7 +227,9 @@ public partial class QaV5Test : Node
         {
             await Frame();
             Check(BarOn(third.Index), $"phase 2: unit hurt before its first frame (hp {U.Hp[third.Index]}) has no bar");
-            GD.Print($"phase 2: slot {victim.Index} re-used (reused {reused}); spawned-and-hurt unit slot {third.Index}: bar {BarOn(third.Index)}, flash lit {_units.Flash.IsLit(third.Index)} (first sight: no flash by design)");
+            // BUG-0160 item 2 (M4-V2): a unit first seen below its type's hp flashes once.
+            Check(_units.Flash.IsLit(third.Index) && _units.ShownLit(third.Index), $"phase 2: unit hurt before its first frame (hp {U.Hp[third.Index]}) did not flash");
+            GD.Print($"phase 2: slot {victim.Index} re-used (reused {reused}); spawned-and-hurt unit slot {third.Index}: bar {BarOn(third.Index)}, flash lit {_units.Flash.IsLit(third.Index)} (first sight below max hp: one flash)");
         }
         else GD.Print($"phase 2: spawned-and-hurt row skipped (third {third}, ticks {hurtTicks})");
         await EndMatch();

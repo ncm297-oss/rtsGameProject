@@ -2632,7 +2632,8 @@ Match
 - **Edge panning** is suppressed while the mouse is over the minimap (`RtsCamera.EdgePanBlocker`),
   since the minimap touches the screen's left and bottom edges.
 - **Not shown yet:** fog of war (M4), alerts and pings (Alt + click), attack
-  orders, minimap zoom. Buildings will be added as dots or footprints when they exist.
+  orders (since M4-V2 a minimap right-click on an enemy dot is still a Move; the Attack half waits for fog, M4-3, see
+  "Implementation (M4-V2)"), minimap zoom. Buildings will be added as dots or footprints when they exist.
 - **Launch flag added:** `--no-hud` hides the HUD (clean screenshots, perf comparisons).
 - **Tests:** `ViewApi/MinimapRasterTests` (every cell against the mesh tint on the hand map and
   3 generated maps, dot pixels at corners, centres and the map's last float, dead units, unknown
@@ -3404,7 +3405,8 @@ Match.tscn  (new node)
 
 - **BUG-0147** (`--no-combat`, see "Debug tooling"): DebugOverlay, Orders, QaH1, QaH2 and QaM27 pass `--no-combat` on the
   matches whose armies used to stand or march through each other (their hash twins copy the match's `SimConfig`, so the
-  twin is off too). No expectation changed. QaM24 passes without it.
+  twin is off too). No expectation changed. QaM24 passed without it until M4-V3, when it and SfxTest took the flag too
+  (BUG-0212 / BUG-0213, see "Debug tooling").
 - **Hp bars** (`CombatViews`, pure `ViewApi.UnitHpBars`): each frame `UnitHpBars.Collect(Alive, TypeId, Hp, defs, slots)` lists
   the live units below their type's `hp` (as the building bars, M3-V1; hp tech bonuses are not applied by combat yet, so
   the type's `hp` is the maximum), in slot order. Each gets a dark back and a fill of `Hp / max` over the body
@@ -3425,7 +3427,7 @@ Match.tscn  (new node)
   (a new C# event raised after each tick it runs) and the frame loop (for scenes that tick the sim themselves).
   `DeathMarkers.Collect(deaths, tick, added)` takes a tick's deaths once, whichever comes first. Each `DeathEvent` adds a
   marker at its position on the terrain: a unit leaves a flat disc of its radius, 0.08 m high, in its owner's colour at
-  35 % (unshaded), for `DeathMarkers.UnitLifetimeTicks` (200 ticks = 10 s of game time, docs/02 "Death"); a building
+  35 % (unshaded; since M4-V2 85 % on a darker rim, BUG-0160), for `DeathMarkers.UnitLifetimeTicks` (200 ticks = 10 s of game time, docs/02 "Death"); a building
   leaves a 0.6 m grey box over 95 % of its footprint for `BuildingLifetimeTicks` (400 = 20 s). Lifetimes count sim ticks,
   so game speed scales them and a paused game keeps them. The pool is a fixed ring of `DeathMarkers.DefaultCapacity`
   (2,000, Producer default): when it is full the next death replaces the oldest marker. A marker is a position, what it
@@ -3467,6 +3469,189 @@ Match.tscn  (new node)
 - **Layout:** the age flash (M3-V3) moved down one line, below the kills / losses label.
 - **Not yet:** the Attack-target cursor and F key (after M4-2a), projectile visuals (M4-2b), the fog shader (M4-3), death
   animations, real corpse models and hit / death sounds (M6).
+
+### Implementation (M4-V2)
+
+The view half of M4 criterion 1: the player tells units to attack *this* enemy through M4-2a's `Command.Attack`
+(docs/02 "Controls and camera": right-click is the context command, A + click attack-moves). Plus BUG-0160's four
+M4-V1 nits.
+
+```
+Match.tscn  (new node)
+  World3D/TargetRing   Node3D, TargetRing.cs: one pooled red torus, the Attack order's feedback
+```
+
+- **What a click means** (`SelectionController.EnemyAt`): the camera ray is tested against unit bodies
+  (`ViewApi.UnitPicker.PickRay`, new), building boxes (`BuildingPicker.PickRay`, any owner) and resource props
+  (`ResourcePicker.PickRay`); the nearest of the three wins (`UnitPicker.ResolveEnemy`: ties to the unit, then the
+  building). When it is another player's live unit or building, the click means that target; an own unit or building or a
+  prop in front hides what is behind it, as the player sees it.
+  - **Right-click** with units selected: on an enemy, one `Command.Attack(player, unit, target, isBuilding, queued)` per
+    selected unit, workers included (they obey an explicit Attack, M4-2a decision (b)), Shift (`order_queue`) queues it;
+    anywhere else the old context order (Move, Gather, Repair, joining Build; a right-click on an own unit is a Move to
+    the ground under it, as before). With a building selected the right-click stays its rally rule (M3-V3).
+  - **A + click**: on an enemy an Attack (same as above), on the ground an AttackMove as before (unchanged). M + click is
+    always a Move.
+  - `SelectionController.AttackOrder(target, isBuilding, queued)` is the one path: prune, nothing with an empty selection,
+    the whole order dropped with a warning if it would overflow the command queue, one Command sound, the ring.
+    `IssuedCount(CommandKind.Attack)` counts the commands. The sim drops what it refuses (dead target, own target, a type
+    that cannot fight yet, a kind `attack.targets` forbids; "Implementation (M4-2a)"); the view never pre-filters.
+- **The unit pick** (`ViewApi.UnitPicker`, read-only, allocation-free; it takes the unit store's `Alive`, `PrevPosition`,
+  `Position`, `Radius` (and for `ResolveEnemy` `Owner`, `Generation`) as spans, never the store or `World`, which QA's
+  ViewApi source audit forbids): every live unit is the capsule the view
+  draws (`UnitViews`: radius `Radius`, height `2 x radius + ExtraBodyHeight`, standing on `TerrainHeight` at
+  `lerp(PrevPosition, Position, alpha)`, alpha clamped as `GroundPoint`); the ray's first entry wins (`Capsule`: the side
+  and both end spheres, the nearest entry). Terrain occludes as for buildings: a body entered only after the ray met the
+  ground farther than its radius from its centre is hidden (behind a ridge); ground met at its own feet doesn't hide it.
+  A brute-force pass over the store's spans (clicks only, a few thousand slots); `entry` is in the ray's own parameter so
+  it compares with the building and prop picks.
+- **Feedback.** The Command sound, as for any order. A **red ring** (`TargetRing`, one `MeshInstance3D` torus made in
+  `_Ready` and reused: no per-order node) round the target for `TargetMark.DefaultSeconds` (0.5 s of view time,
+  `ViewApi.TargetMark`: target, building flag, time left; a new order moves it). Each frame it follows a unit target's
+  interpolated position (1.7 x its radius, outside the green selection ring, 0.09 m up) or circles a building's footprint
+  (1.15 x half its longer side), and hides when the time is up or the target is dead or recycled. Moving a node allocates
+  nothing: 0 bytes a frame. No cursor art before M6.
+- **Selection panel:** a unit under an explicit Attack (`UnitStore.Mode == CombatMode.Ordered`) reads `ui.json`
+  `states.ordered_attack` ("Pursuing") while it chases (it is `Moving` with a target) and the existing `states.attacking`
+  ("Attacking") once it swings. `UiText.OrderedAttackText`; the key is required (a load error when missing), like every
+  state key. No C# literal.
+- **F12 overlay:** the counts line names the first live selected unit's target slot: `target u12`, `target b3` for a
+  building, `target -` for none (`DebugOverlay.TargetSlot` / `TargetIsBuilding`).
+- **Minimap right-click** stays a Move, also on an enemy dot: dots are not reliable until fog (M4-3), so the minimap's
+  Attack half (docs/02 "Minimap": "a move or attack order") waits for M4-3.
+- **BUG-0160** (M4-V1 nits):
+  1. *F12 overlap:* the overlay's second line ran under the resource bar's K / L label. It is now four short lines (units,
+     moving, fields, arrows / workers / kills, losses and the target slot / tick averages), each well left of the bar
+     (widest about 450 px at 1152 x 648; the bar starts at 682 px), and the tick graph moved below them (y 134).
+  2. *First-sight hit:* `HitFlash` took a new unit's hp as its baseline, so a unit trained or rallied into a fight and hit
+     between two frames (at 8x up to 5 ticks a frame) never flashed. Rule now (the `Update` overload with type ids and
+     each type's `hp`, which `UnitViews` uses): **a unit first seen below its type's full hp flashes once**, as a hit. A
+     unit first seen at full hp starts unlit as before. The overload without types keeps the M4-V1 rule.
+  3. *Corpse tint:* the owner colour at 35 % read near-black for both teams. A corpse is now a disc in its owner's colour
+     at 85 % (`CombatViews.CorpseShade`) on a 1.2x wider disc at 30 % (`CorpseRimShade`, a second `MultiMesh` with
+     the same pool slots, 0.06 m high under the fill's 0.08 m), so the grey-blue and gold teams read apart and the edge
+     reads on any ground (looked at in `combat-seed1-corpses-close.png`).
+  4. *Fallback literals:* `DebugOverlay`'s "K" / "L" fallbacks are empty, as `ResourceBar`'s (the bare numbers without
+     `ui.json`).
+- **Tests.** xUnit `ViewApi/UnitPickerTests`: the capsule's side, caps and misses; bad input, alpha clamping and the
+  unnormalized direction's parameter; the nearest of two in line and the enemy rule (own in front hides, a nearer prop or
+  building wins, an enemy building is a building target, roles swap for the other player); a ridge hiding a body, seen
+  from above, a body at the wall's foot; **1,000 rays over the 20 v 20 brawl** (`CombatViewScene`, seeds 1 and 6; 600 aimed
+  at a random point inside a random unit's capsule from a camera-like origin, 400 at the ground near the units; random
+  alpha) and 600 on a generated map, each against a marching oracle (4 mm steps until the ray goes under the terrain:
+  none only if no capsule certainly holds a step; a pick's entry on its capsule's surface, no other unit certainly hit
+  before it, any ground met first at its own feet) and **0 own units or buildings resolved as targets**; 0 bytes for 20
+  picks at 2,000 units with the resolve and the mark; `TargetMark`'s 0.5 s, restart, move and bad time; `HitFlash`'s
+  first-sight rule. Headless scene `res://tests/AttackOrderViewTest.tscn` ("ATTACK ORDER VIEW TEST PASS", seeds 1 and
+  6): a real Match with 10 Heavy Infantry v 10 Raiders and a Billet and a Tent, clicks pushed through the viewport. Since
+  M4-3a an Attack on an unseen enemy is dropped, so the staging (`game/tests/AttackStage.cs`, shared with QaV6Test) puts
+  every target in the player's sight (BUG-0218): two-column lines 2-3 cells either side of the centre (every Raider
+  within the Heavy Infantry's sight less 1.5 m of one, checked at staging), the Tent 10-16 cells behind the Raiders and
+  the player's Billet beside it as its spotter (12 m building sight); the panel row's chase target is the farthest enemy
+  within its unit's sight less 2 m. Rows:
+  right-click on an enemy (one Attack per selected unit, one Command sound, the ring on it; on the tick the commands
+  apply every selected unit holds that target with `CombatMode.Ordered`; the F12 line names it), A + click on an enemy
+  (the same, targeting ends), A + click on the ground (AttackMoves only, every unit in `CombatMode.AttackMove`), Shift +
+  right-click on two enemies while walking away (both queued as Attack entries, in order, `QueuedTarget` equal, type id 0),
+  right-click on the Tent (building target; ring sized to the footprint; F12 `target b`), on the own Billet (no Attack),
+  on an own unit (Moves), a minimap right-click on an enemy dot (a Move); the panel's ordered-attack text every tick of a
+  chase and "Attacking" once it swings; the ring at the target's interpolated position for 0.45 s, gone by 0.51 s, gone
+  on a recycled unit or building handle, one node; 300 steady brawl frames with the ring up 0 bytes (ring, panel, unit and
+  combat views); the `ui.json` key present and required; the hash twin (seed 1: 143 commands, 51 of them Attacks).
+  Windowed with `-- --shots <dir>` it saves `attack-ring-seedN.png`. BUG-0160 rows: `CombatViewTest` checks the F12
+  label's lines against the resource bar and the graph every 200 ticks with the label's font, each team's corpse fill
+  and rim colours (fill at `CorpseShade`, rim darker, luminance at least 0.2, the two teams at least 0.25 apart), and its
+  flash oracle counts a first sight below full hp as a hit; windowed it adds `combat-seedN-f12.png` (the overlay on) and
+  `combat-seedN-corpses-close.png` (a row of each team's corpses at zoom 14, through `AddDeaths`). `QaV5Test` phase 2 now
+  expects the unit hurt before its first frame to flash (it failed on the old rule: "did not flash").
+- **Not yet:** projectile visuals (M4-V3), the fog shader and the minimap's Attack half (M4-3), cursor art and attack
+  animations (M6), Patrol.
+
+### Implementation (M4-V3)
+
+The projectiles the sim has flown since M4-2b, drawn: bolts, arrows and magic bolts in a straight line, Catapult stones
+and Sapper sharpers on an arc, and a mark where each lands. Plus BUG-0210 (MinimapTest) and BUG-0190.
+
+```
+Match.tscn  (new node)
+  World3D/ProjectileViews   Node3D, ProjectileViews.cs: aimed and lob MultiMeshes + the impact mark MultiMesh
+```
+
+- **Shots** (`ProjectileViews`): two `MultiMesh`es sized to `World.Projectiles.Capacity` (`Bind`), written densely each
+  frame, one instance per live slot (`VisibleInstanceCount` = the shots of that kind). Aimed: a 1.2 x 0.12 m streak
+  (`StreakLength`, `StreakWidth`; bigger than a real bolt so it reads at the default zoom) yawed along `Position -
+  PrevPosition` (on the firing tick, toward `Target`), in its owner's colour lifted 55 % toward white (`StreakLift`), so
+  each side's volleys read apart. Lob: a dark stone, radius 0.28 m. Position: `lerp(PrevPosition, Position, alpha)` with
+  the runner's render alpha **clamped to [0, 1]** (never extrapolated: a re-led bolt can step 1.8 m in a tick,
+  BUG-0184; NaN draws the current tick), on `TerrainHeight` under that point plus `LaunchHeight` (1.2 m) for an aimed
+  shot, plus `StoneRide` (0.18 m) and the arc for a lob. Placeholder look until M6 (real models, trails, sounds).
+- **The tracker** (`ViewApi.ProjectileTracker`, view state, fixed arrays, read-only on the store's spans): the sim keeps
+  no launch point, so on the first observation of a live slot it records the launch point (`PrevPosition`: on the
+  firing tick and one tick later it is exactly the launch point), the flight length (launch to `Target`), the kind, type
+  and owner, and drops the slot when it is dead. `Observe(store, defs, tick)` runs on every `SimRunner.Ticked` (so it
+  sees every tick even at 8x, where a projectile slot freed in phase 11 is always seen dead before phase 10 of the next
+  tick reuses it) and again from the frame loop (once per tick number; a second call is a no-op), for scenes that tick
+  the sim themselves. An observer that skipped ticks may meet a different shot in a slot it still tracks; it starts that
+  slot over when it stands still (a firing tick), its type or owner changed, a lob's impact point moved (lobs never
+  re-aim), its `PrevPosition` is not where it was on the previous tick, or it is nearer its launch than before
+  (`Reused` counts these). A missed reuse of an aimed slot costs nothing (aimed shots draw without the launch point).
+- **The arc**: `height = apex x 4t(1 - t)` (`ArcHeight`), apex = a quarter of the flight length within 1-6 m
+  (`ProjectileTracker.Apex`: a 24 m Catapult shot peaks at 6 m, a short Sapper throw at 1 m). t is the distance from the
+  launch point over the arc's span, clamped to [0, 1]. The span ends **one step before the impact point**: the sim moves
+  a lob onto its impact point and frees it in the same tick, so its last drawn position is a step short; ending the arc a
+  step earlier still keeps the whole last drawn tick on the ground at any alpha (a stone touches down, rolls one tick,
+  then bursts). Span = `(n - 2) x step` with n = `ProjectileStore.FlightTicks(length, speed)`; a lob of 2 ticks or less
+  stays on the ground. A placeholder curve until M6.
+- **Impact marks** (`ViewApi.ImpactMarks`, like `DeathMarkers`): every `ProjectileImpact` of a tick (read on
+  `SimRunner.Ticked` while `World.Impacts` still holds it, and from the frame loop once per tick) adds a mark to a ring of
+  512 (`DefaultCapacity`; when full the oldest is replaced): an aimed **hit** a flash (0.2 s, `FlashTicks` 4) at the
+  shot's height, an aimed **miss** a dust puff (0.3 s, `DustTicks` 6) on the ground, a **lob** a burst (0.4 s,
+  `BurstTicks` 8, builder's choice) on the ground. Times are game ticks (game speed scales them), but a mark expires only
+  after a frame has drawn it, so a landing at 8x always shows at least once, and a mark no frame has drawn yet is aged
+  from one tick ago at most, so that first frame shows it early in its life, not fully faded (BUG-0221). One instance per pool slot, a transparent
+  sphere that grows (flash 0.25-0.55 m, dust 0.2-0.7 m, burst 30-100 % of its size) and fades with its age
+  (`Age(slot, tick, alpha)`); a burst's size is 60 % of the widest `splash` among the attacks that throw that projectile
+  (data: Catapult 2.5 m gives 1.5 m, Sapper 2 m gives 1.2 m; at least 0.6 m). A free slot has a zero transform.
+  Splash-radius rings are not drawn (the impact carries no radius).
+- **Cost**: per frame one pass over the projectile slots (200 by default) and one over the 512 mark slots, plus the
+  `MultiMesh` writes; 0 bytes a frame (the tracker, the ring and the views allocate only in `Bind`).
+- **BUG-0210** (`MinimapTest` red on `main` since M4-2b): the failing slot was **dead** (slot 0: `Alive` false,
+  generation bumped to 2, hp 0, State Idle: shot by the Whirlwind archers within the 3 s), not a sim regression. The
+  scene now passes `--no-combat` like BUG-0147's five, every `Check` unchanged; it prints any of the 40 that is not
+  `Moving` with its alive flag, generation, hp, state, goal and target.
+- **BUG-0190:** (1) a corpse disc sits at `TerrainHeight.MaxUnder` (the highest of the centre and eight rim samples under
+  its rim's radius), so on a ramp it no longer sinks half into the slope (it floats a little on the downhill side). Only
+  rim samples joined to the centre by the drawn surface count: the straight line from the centre to each sample is walked
+  cell edge by cell edge, and an edge where the two cells' surfaces differ by more than 0.15 m (a cliff, or a ramp's side
+  wall) drops that sample, so a unit dying against a cliff or beside a ramp's side keeps its disc on its own ground
+  (BUG-0223, BUG-0224; `CorpseDiscRimQaTests` compares it with a 64-step walk on five generated maps);
+  `CombatViewTest` checks every corpse's underside against it. (2) `UnitPicker.ResolveEnemy` counts a NaN entry (unit,
+  building or prop) as nearest (0), so a unit passed with a NaN entry can no longer lose to the building behind it.
+- **Tests.** xUnit `ViewApi/ProjectileTrackerTests`: the launch on the firing tick and a tick late, a slot dropped when it
+  dies, a slot that dies before the first observation (never tracked), slot reuse between two observations (next tick,
+  several ticks later; same type, a lob re-aimed, another type or owner), a full store of 300 tracked slot for slot, a
+  mismatched store refused, the same tick observed twice a no-op, 0 bytes over 20 ticks; the 24 m stone's arc (0 on the
+  firing tick, 0 at every alpha of the last drawn tick, 6 m peak), a 3 m Sapper throw above 0.5 m, the apex limits; a
+  500-tick mixed brawl with an every-tick and an every-third-tick tracker matching the store's count each time and the
+  sim hash equal to a bare twin's every tick; `ImpactMarks`' kinds, lifetimes, drawn-before-expiry rule, once per tick,
+  and the ring. `UnitPickerTests` NaN row; `TerrainHeightTests` `MaxUnder` row. Headless scene
+  `res://tests/ProjectileViewTest.tscn` ("PROJECTILE VIEW TEST PASS", seeds 1 and 6): a real Match, 15 Malazan (Heavy
+  Infantry, Crossbowmen, Sappers, Catapults) v 15 Whirlwind (Raiders, Desert Archers, Priests), A + click on an enemy
+  through the viewport, the match's own runner at 1x for 160 ticks and then 8x at 30 fps (frames of several ticks);
+  **every frame**: drawn instances = `Projectiles.Count`, each within one step of its slot's `Position`, aimed shots on
+  the segment `PrevPosition -> Position` at 1.2 m, lobs at most 0.2 m up on their firing tick and on their last drawn tick
+  and more than 0.5 m up between 40 and 60 % of the arc, a mark for every landing (counted by the test's own `Ticked`
+  handler), drawn the frame after its tick, at its landing point, never drawn past its life; after the fight no shot and
+  no mark drawn; the hash twin every tick. Then a 200 v 200 shooter-heavy brawl staged in two lines at the centre
+  (`--units 200` start blocks never had 100 shots in the air at once: the armies arrive strung out; 500 v 500 from the
+  start blocks peaked at 94): 300 frames from the first tick with 100 in flight (between a few and 200 in flight, mean
+  about 60: shipped flights are a third of a cooldown or less, so shots come in volleys), 0 bytes, hash twin; and 500 v
+  500 past the store's capacity (200 in flight, the store full for several ticks while the sim drops the shots that do
+  not fit): drawn = tracked = in flight every tick, hash twin. Windowed with `-- --shots <dir>` it saves
+  `projectiles-seedN.png` with bolts, arrows and a stone high in the air. `MinimapTest` with `--no-combat`;
+  `CombatViewTest`'s corpse-underside row.
+- **Not yet:** the fog shader, hiding unseen units and their shots, ghosts (M4-V4); real projectile models, trails and
+  sounds (M6); splash-radius rings.
 
 ## AI architecture
 
@@ -3626,7 +3811,13 @@ AiPlayer
   `SimConfig.Combat = false` (`LaunchOptions.NoCombat` -> `SimRunner.Combat`): units never scan, swing or die and enemies
   are only walls, as before M4. A **dev and test flag, never a game option**: it exists for the M2 scenes whose assertions
   are about a world without fights (marches across the enemy block, selections that must not lose units, overlay goals);
-  they pass it instead of changing an expectation. The start-up line ends with ", combat off". `--no-bases` (M3-V1) is
+  they pass it instead of changing an expectation. The scenes that pass it: DebugOverlayTest, OrdersTest, QaH1Test,
+  QaH2Test, QaM27Test (M4-V1), MinimapTest (M4-V3, BUG-0210: since M4-2b every unit fights, and the enemy's archers
+  shot one of the 40 units its minimap order moves), SfxTest and QaM24Test (M4-V3, BUG-0212 / BUG-0213: under the sim's
+  fog, M4-3a, the seed-1 fight starts differently, so SfxTest's clicked unit walks off its screen point and QaM24Test's
+  freed slot is taken by a death before its enemy spawn). The Attack-order scenes (AttackOrderViewTest, QaV6Test) never
+  take it: they stage every enemy they click inside the player's sight instead (BUG-0218, see "Implementation (M4-V2)").
+  The start-up line ends with ", combat off". `--no-bases` (M3-V1) is
   the other half of the armies-only M2 setup. A replay recorded from such a match records `combat 0` in its header
   (format 4, M4-2a), so `ReplayPlayer.Run(replay, data)` plays it back off by itself; the `combat:` override parameter
   stays for format-3 files recorded with combat off.
@@ -3634,7 +3825,9 @@ AiPlayer
   on, so `--screenshot` can capture it): the nav grid on the ground, the flow-field arrows of the
   selection's goal around the camera, a tick-time graph of the last 120 ticks with the 4 ms budget
   line, and a second label line with live / Moving units, cached fields and the graph's average and
-  worst. Off by default; while off its layers are hidden, have no `_Process` and aren't built.
+  worst. Since M4-V2 (BUG-0160) that is four short lines that clear the resource bar (counts and arrows; workers;
+  kills / losses and the first selected unit's target slot, `target u12` / `b3` / `-`; tick averages) with the graph
+  below them. Off by default; while off its layers are hidden, have no `_Process` and aren't built.
   Costs (2,000 units, zoom 60, Debug): about 0.09 ms per frame with a relist every frame (camera
   panning). Allocation: the overlay layers 0 bytes per frame; the label text is rebuilt (and
   allocates) only when a shown number changes, at most once a tick plus once a second for the FPS,

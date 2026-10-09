@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-08-1814 (resumed 1435 track), task M4-3a |
 | System | view test scenes (`game/tests/AttackOrderViewTest.cs`, `game/tests/QaV6Test.cs`, view-owned, from the M4-V2 held branch) vs the M4-3a vision gate on explicit Attack (`CombatSystem.MayAttack`) |
-| Fixed by | |
+| Fixed by | M4-V3 fix round 2 (view track): the scenes stage every clicked target in the player's sight (`game/tests/AttackStage.cs`); every `Check` kept |
 
 ## Repro
 1. Scratch clone of the repo; `git checkout -b integ studio/2026-10-08-1435-sim` (66e8cb5), then
@@ -46,3 +46,18 @@ been false since M4-3a.
 - The rows were never run against the fog sim. The 1435 QA ran the scene loop on the sim branch's own `game/tests`
   (29 scenes), and the view branch's QA runs on dd5b5b9's sim. So the conflict appears only when the branches merge.
 - Alongside BUG-0212 and BUG-0213, this gates the integration.
+
+## Fix (M4-V3 fix round 2, view track)
+- New `game/tests/AttackStage.cs`, the staging both scenes now share: Heavy Infantry and Raiders in two-column lines 2-3
+  cells either side of the centre (filled from the centre row out, skipping blocked cells; staging throws if any Raider is
+  farther than the Heavy Infantry's sight less 1.5 m from every own unit), the Tent 10-16 cells behind the Raiders as
+  before, and player 0's Billet moved from behind player 0 to beside the Tent (centre cell within 4 cells, 8 m, of a Tent
+  cell; 12 m building sight) as the spotter that sees it. The own-Billet right-click row still runs on seed 1 (on seed 6
+  the Billet has no clean pixel; the row was optional before too).
+- `AttackOrderViewTest.PanelRows`: the chase target is the farthest enemy within the unit's sight less 2 m (was: the
+  farthest on the map, which under fog may be unseen, and without fog, on seed 6 with the new lines, was 14.4 m off and
+  given up by the BUG-0137 rule before the unit swung).
+- No `--no-combat`, no sim change, every `Check` unchanged.
+- Proof: scratch merge of `studio/2026-10-08-1435-sim` (a27757c) into the view branch (8b7d654 + this fix): before the
+  fix `AttackOrderViewTest` FAILs with the repro's rows; after it, `scene-loop.ps1 -Filter AttackOrderViewTest` and
+  `-Filter QaV6Test` PASS on every run. View branch alone: both PASS on every run, and the full 33-scene loop is green.

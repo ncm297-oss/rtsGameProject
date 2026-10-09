@@ -20,7 +20,7 @@ namespace Rts.Game;
 /// "states": { "&lt;state&gt;": text }, "hud": { "&lt;label&gt;": text } }</c>. Command ids are <see cref="CommandIds"/>;
 /// the placement, train and research keys are the snake_case names of every <see cref="PlacementError"/>,
 /// <see cref="TrainError"/> and <see cref="ResearchError"/> member but <c>None</c> (<c>blocked</c>, <c>queue_full</c> ...),
-/// the state keys those of every <see cref="UnitState"/> (M3-V3), the hud keys those of <see cref="HudText"/>; so a member
+/// the state keys those of every <see cref="UnitState"/> (M3-V3) plus <see cref="OrderedAttackKey"/> (M4-V2), the hud keys those of <see cref="HudText"/>; so a member
 /// the sim adds later is a load error here until the file has its text. Each of the three reason sections must also
 /// carry <see cref="ForwardKey"/> (<c>requires</c>), the reason M3-6's <c>requires</c> gating adds: a key with no enum
 /// member yet is accepted (as is any extra key), so the file loads with or without that sim change. Loading is
@@ -35,6 +35,9 @@ public sealed class UiText
 
     /// <summary>The reason key every reason section carries before the sim has its enum member (M3-6's <c>requires</c> gating).</summary>
     public const string ForwardKey = "requires";
+
+    /// <summary>The <c>states</c> key of the panel's text for a unit chasing the target of an explicit Attack order (M4-V2; not a <see cref="UnitState"/>: a chaser is <c>Moving</c>).</summary>
+    public const string OrderedAttackKey = "ordered_attack";
 
     /// <summary>Largest number of entries a build menu can show (the 5 x 3 grid).</summary>
     public const int MaxMenuEntries = 15;
@@ -84,6 +87,9 @@ public sealed class UiText
 
     /// <summary>A unit state in plain words (<c>ui.json</c> <c>states</c>), for the selection panel.</summary>
     public string StateText(UnitState state) => (uint)state < (uint)_states.Length ? _states[(int)state] : "";
+
+    /// <summary>The selection panel's state text for a unit chasing an ordered Attack's target (<c>ui.json</c> <c>states.ordered_attack</c>, M4-V2).</summary>
+    public string OrderedAttackText { get; private set; } = "";
 
     /// <summary>A HUD label (<c>ui.json</c> <c>hud</c>): "Pop", the selection panel's stat names, "Needs".</summary>
     public string Hud(HudText label) => (uint)label < (uint)_hud.Length ? _hud[(int)label] : "";
@@ -176,6 +182,8 @@ public sealed class UiText
             ui.ForwardTrainText = Section<TrainError>(root, "train", ui._train, skipZero: true, forward: true, errors);
             ui.ForwardResearchText = Section<ResearchError>(root, "research", ui._research, skipZero: true, forward: true, errors);
             Section<UnitState>(root, "states", ui._states, skipZero: false, forward: false, errors);
+            if (root.TryGetProperty("states", out JsonElement states))
+                ui.OrderedAttackText = Text(states, OrderedAttackKey, $"states.{OrderedAttackKey}", errors);
             Section<HudText>(root, "hud", ui._hud, skipZero: false, forward: false, errors);
         }
         return errors.Count == before ? ui : null;

@@ -50,7 +50,8 @@
     "gathering": "Gathering",
     "returning": "Returning cargo",
     "building": "Building",
-    "attacking": "Attacking"
+    "attacking": "Attacking",
+    "ordered_attack": "Pursuing"
   },
   "hud": {
     "pop": "Pop",

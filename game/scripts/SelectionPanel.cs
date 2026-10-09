@@ -13,7 +13,8 @@ namespace Rts.Game;
 /// One unit: a placeholder portrait (a square in the type's colour with its initial), the <c>displayName</c>, hit points,
 /// attack, armor, range and speed from its <see cref="UnitDef"/>, each researched <c>World.TechBonus</c> as "+N" in a second
 /// colour (combat applies attack and armor bonuses since M4-1, hp and range not yet), and its state in plain words
-/// (<c>ui.json</c> <c>states</c>). Hp is live since M4-V1: the store's <c>Hp</c> over the type's <c>hp</c>. Several units: up to
+/// (<c>ui.json</c> <c>states</c>; since M4-V2 a unit chasing the target of an explicit Attack order reads
+/// <c>states.ordered_attack</c>, and "Attacking" once it swings). Hp is live since M4-V1: the store's <c>Hp</c> over the type's <c>hp</c>. Several units: up to
 /// <see cref="PortraitGrid.MaxPortraits"/> type-coloured portraits in selection order with a "+N" overflow, the active Tab
 /// subgroup's outlined; a click on one selects that unit alone (<see cref="SelectionController.SelectOnly"/>). A building:
 /// its <c>displayName</c> and hp (its production card is on the <see cref="CommandCard"/>, its queue on the
@@ -39,6 +40,8 @@ public partial class SelectionPanel : Control
     private static readonly Color HighlightColor = new(1f, 0.9f, 0.3f);
     private static readonly HudText[] StatRows = { HudText.Hp, HudText.Attack, HudText.Armor, HudText.Range, HudText.Speed };
     private const int Hp = 0, Attack = 1, Armor = 2, Range = 3, Speed = 4;
+    // The state label's value for an ordered chaser (not a UnitState).
+    private const int OrderedChase = -2;
 
     private SimRunner? _runner;
     private SelectionController _sel = null!;
@@ -295,10 +298,12 @@ public partial class SelectionPanel : Control
         SetStat(Range, def.Attack.Range, world.TechBonus(p, type, TechStat.Range));
         SetStat(Speed, def.SpeedPerTick * SimConstants.TicksPerSecond, 0f);
         int state = (int)u.State[slot];
+        // An explicit Attack (M4-2a: CombatMode.Ordered) still walking to its target: chasing is Moving with a target.
+        if (u.Mode[slot] == Rts.Sim.Combat.CombatMode.Ordered && u.State[slot] != UnitState.Attacking) state = OrderedChase;
         if (state != _stateShown)
         {
             _stateShown = state;
-            _state.Text = _ui.StateText((UnitState)state);
+            _state.Text = state == OrderedChase ? _ui.OrderedAttackText : _ui.StateText((UnitState)state);
             Rebuilds++;
         }
     }

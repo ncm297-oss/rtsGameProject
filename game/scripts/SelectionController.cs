@@ -23,7 +23,10 @@ namespace Rts.Game;
 /// the production card's train, research and queue-cancel presses enqueue through <see cref="Produce"/> and
 /// <see cref="CancelQueueItem"/>. A left click that hits no unit selects the own building whose box it
 /// hits (<see cref="SelectedBuilding"/>, M3-V2: alone, units cleared; a box never selects one). The
-/// command card (<see cref="Card"/>) sees keys and clicks first while its build menu or ghost is up. The geometry lives in the pure <see cref="ScreenPicker"/> and <see cref="GroundPicker"/>,
+/// command card (<see cref="Card"/>) sees keys and clicks first while its build menu or ghost is up. A right click or an
+/// A + click whose ray meets an enemy unit's drawn body or an enemy building's box first (<see cref="EnemyAt"/>, M4-V2) is an
+/// <c>Attack</c> on it for every selected unit (<see cref="AttackOrder"/>; Shift queues), marked by the red
+/// <see cref="TargetRing"/>; an own unit or building in front hides what is behind it, as the player sees it. The geometry lives in the pure <see cref="ScreenPicker"/> and <see cref="GroundPicker"/>,
 /// groups and subgroups in <see cref="ControlGroups"/> and <see cref="Rts.Sim.ViewApi.Subgroups"/>;
 /// the sim is changed only through <see cref="Simulation.Enqueue"/>. A selection action that leaves
 /// a changed, non-empty selection plays <see cref="SfxEvent.Select"/>; an order that enqueued
@@ -88,6 +91,9 @@ public partial class SelectionController : Node
 
     /// <summary>The command card that sees keys and clicks first (build menus, ghost); null without a HUD.</summary>
     public CommandCard? Card { get; set; }
+
+    /// <summary>The Attack order's red ring (M4-V2); null draws none.</summary>
+    public TargetRing? TargetRing { get; set; }
 
     /// <summary>Draws the selected building's footprint outline; null draws none.</summary>
     public BuildingOutline? Outline { get; set; }
@@ -261,11 +267,18 @@ public partial class SelectionController : Node
     /// <summary>What M does (M3-V2): arms Move targeting (a plain move ignoring enemies, today what a right click on ground does), only when something is selected.</summary>
     public void BeginMove() => _target = Selection.Count > 0 ? CommandKind.Move : CommandKind.Noop;
 
-    /// <summary>What a left click at <paramref name="screen"/> does while targeting: gives the armed order (<see cref="TargetKind"/>: attack-move after A, move after M) at the ground there (queued while <c>order_queue</c> is held) and disarms; false (still armed) when not targeting or off the map.</summary>
+    /// <summary>What a left click at <paramref name="screen"/> does while targeting: gives the armed order (<see cref="TargetKind"/>: attack-move after A, move after M) at the ground there (queued while <c>order_queue</c> is held) and disarms; false (still armed) when not targeting or off the map. After A, a click on an enemy unit or building (<see cref="EnemyAt"/>) is an <c>Attack</c> on it instead (M4-V2).</summary>
     public bool AttackMoveClick(Vector2 screen)
     {
         if (!Targeting) return false;
-        if (!OrderAt(_target, screen, Input.IsActionPressed("order_queue"))) return false;
+        bool queued = Input.IsActionPressed("order_queue");
+        if (_target == CommandKind.AttackMove && EnemyAt(screen, out EntityHandle enemy, out bool isBuilding))
+        {
+            AttackOrder(enemy, isBuilding, queued);
+            Targeting = false;
+            return true;
+        }
+        if (!OrderAt(_target, screen, queued)) return false;
         Targeting = false;
         return true;
     }
@@ -559,6 +572,12 @@ public partial class SelectionController : Node
     /// </summary>
     public bool CommandAt(Vector2 screen, bool queued)
     {
+        // An enemy under the cursor is an Attack (M4-V2); a selected building keeps its rally rule.
+        if (SelectedBuilding < 0 && EnemyAt(screen, out EntityHandle enemy, out bool isBuilding))
+        {
+            AttackOrder(enemy, isBuilding, queued);
+            return true;
+        }
         if (!ContextTarget(screen, out System.Numerics.Vector2 point, out int building)) return false;
         if (SelectedBuilding >= 0)
         {
@@ -566,6 +585,49 @@ public partial class SelectionController : Node
             return true;
         }
         ContextOrder(new Vector2(point.X, point.Y), queued);
+        return true;
+    }
+
+    /// <summary>
+    /// The enemy under screen point <paramref name="screen"/> (M4-V2): what the camera ray meets first among unit bodies
+    /// (<see cref="UnitPicker.PickRay"/>), building boxes (<see cref="BuildingPicker.PickRay(BuildingStore, System.Collections.Immutable.ImmutableArray{BuildingDef}, Rts.Sim.Map.NavGrid, Rts.Sim.Map.Heightmap, int, System.Numerics.Vector3, System.Numerics.Vector3, float, float, out float)"/>)
+    /// and resource props, when it is another player's live unit or building: its handle in <paramref name="target"/>,
+    /// <paramref name="isBuilding"/> for a building. False when the first thing hit is own, a prop, or nothing (the click
+    /// then means what it meant before). Allocation-free.
+    /// </summary>
+    public bool EnemyAt(Vector2 screen, out EntityHandle target, out bool isBuilding)
+    {
+        target = default;
+        isBuilding = false;
+        if (_runner?.Simulation is not Simulation sim) return false;
+        World world = sim.World;
+        Vector3 o = _camera.ProjectRayOrigin(screen), d = _camera.ProjectRayNormal(screen);
+        System.Numerics.Vector3 so = new(o.X, o.Y, o.Z), sd = new(d.X, d.Y, d.Z);
+        UnitStore u = world.Units;
+        int unit = UnitPicker.PickRay(u.Alive, u.PrevPosition, u.Position, u.Radius, world.Heightmap, (float)_runner.Alpha, so, sd, UnitViews.ExtraBodyHeight, out float unitT);
+        int building = BuildingPicker.PickRay(world.Buildings, world.Data.Buildings, world.NavGrid, world.Heightmap, -1,
+            so, sd, BuildingViews.BoxHeight, BuildingViews.SiteMinHeight, out float buildingT);
+        ResourceStore r = world.Resources;
+        ResourcePicker.PickRay(world.NavGrid, world.Data.Resources, r.Alive, r.TypeId, r.Cell, world.Heightmap, so, sd, PropsView.Shape, out float nodeT);
+        return UnitPicker.ResolveEnemy(u.Alive, u.Owner, u.Generation, unit, unitT, world.Buildings, building, buildingT, nodeT, LocalPlayer, out target, out isBuilding);
+    }
+
+    /// <summary>
+    /// The Attack order (M4-V2): one <c>Attack</c> on <paramref name="target"/> (a building handle when
+    /// <paramref name="isBuilding"/>) per selected live unit, workers too (they obey an explicit Attack), queued when
+    /// <paramref name="queued"/>; one Command sound and the red <see cref="TargetRing"/> on the target. Nothing with no
+    /// selection, or when the whole order doesn't fit the command queue. The sim drops what it refuses (docs/03 "Implementation
+    /// (M4-2a)"). Returns true if it enqueued.
+    /// </summary>
+    public bool AttackOrder(EntityHandle target, bool isBuilding, bool queued)
+    {
+        if (_runner?.Simulation is not Simulation sim) return false;
+        Selection.Prune(sim.World.Units.Alive, sim.World.Units.Generation);
+        if (Selection.Count == 0 || !RoomFor(sim, Selection.Count, "Attack")) return false;
+        foreach (EntityHandle h in Selection.Items) sim.Enqueue(Command.Attack(LocalPlayer, h, target, isBuilding, queued));
+        _issued[(int)CommandKind.Attack] += Selection.Count;
+        _sfx?.Play(SfxEvent.Command);
+        TargetRing?.Show(target, isBuilding);
         return true;
     }
 
