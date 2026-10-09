@@ -156,7 +156,7 @@ public partial class SfxTest : Node
         await Frame();
         _match = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
         AddChild(_match);
-        _match.Start(_data, LaunchOptions.Parse(mute ? new[] { "--units", "100", "--mute" } : new[] { "--units", "100" }));
+        _match.Start(_data, LaunchOptions.Parse(mute ? new[] { "--units", "100", "--no-combat", "--mute" } : new[] { "--units", "100", "--no-combat" }));
         _sfx = _match.GetNode<Sfx>("Sfx");
         _sel = _match.GetNode<SelectionController>("SelectionController");
         _camera = _match.GetNode<RtsCamera>("RtsCamera");

@@ -18,9 +18,12 @@ namespace Rts.Game;
 /// with the zoom, as the cargo cube does (M3-V1), so they keep their screen size.</para>
 /// <para><b>Markers.</b> Every <see cref="DeathEvent"/> (read between ticks: from <see cref="SimRunner.Ticked"/>, so a
 /// frame of several ticks misses none, and from the frame loop for scenes that tick the sim themselves) adds a marker to a
-/// <see cref="DeathMarkers"/> ring: a dark faction-tinted disc of the unit's radius for <see cref="DeathMarkers.UnitLifetimeTicks"/>,
+/// <see cref="DeathMarkers"/> ring: a disc of the unit's radius in its owner's colour (<see cref="CorpseShade"/>) on a wider,
+/// darker rim disc (<see cref="CorpseRimShade"/>, <see cref="CorpseRimScale"/>; M4-V2, BUG-0160: at 35 % both teams read
+/// black) for <see cref="DeathMarkers.UnitLifetimeTicks"/>,
 /// or a low grey box over a building's footprint for <see cref="DeathMarkers.BuildingLifetimeTicks"/>, both in game time
-/// (sim ticks), at the death position on the terrain. The markers are two more <see cref="MultiMesh"/>es with one instance per
+/// (sim ticks), at the death position on the terrain (a corpse at the highest ground under its rim,
+/// <see cref="TerrainHeight.MaxUnder"/>, so it reads whole on a ramp: BUG-0190). The markers are two more <see cref="MultiMesh"/>es with one instance per
 /// pool slot; an unused instance has a zero transform. A marker's transform is written only when it is added or removed,
 /// so a steady frame writes nothing for them. The pool is fixed (<see cref="DeathMarkers.DefaultCapacity"/>): a death storm
 /// replaces the oldest markers.</para>
@@ -41,8 +44,14 @@ public partial class CombatViews : Node3D
     // Placeholder looks until the M6 art pass (M2-1 rule).
     private static readonly Color BarBackColor = new(0.08f, 0.08f, 0.08f);
     private static readonly Color RubbleColor = new(0.42f, 0.40f, 0.37f);
-    /// <summary>A corpse is its owner's colour darkened to this share.</summary>
-    public const float CorpseShade = 0.35f;
+    /// <summary>A corpse's fill is its owner's colour at this share (M4-V2: 0.35 read black for both teams, BUG-0160).</summary>
+    public const float CorpseShade = 0.85f;
+
+    /// <summary>A corpse's rim is its owner's colour darkened to this share, so the disc's edge reads on any ground.</summary>
+    public const float CorpseRimShade = 0.3f;
+
+    /// <summary>The rim disc's radius over the corpse's, and its height (under the fill's <see cref="CorpseHeight"/>, so only the ring outside shows).</summary>
+    public const float CorpseRimScale = 1.2f, CorpseRimHeight = 0.06f;
 
     /// <summary>The runner whose sim is shown each frame; null shows nothing (tests call <see cref="Sync"/> directly).</summary>
     public SimRunner? Runner
@@ -60,9 +69,9 @@ public partial class CombatViews : Node3D
     public RtsCamera? Camera { get; set; }
 
     private SimRunner? _runner;
-    private MultiMesh _back = null!, _fill = null!, _corpses = null!, _rubble = null!;
+    private MultiMesh _back = null!, _fill = null!, _corpses = null!, _rims = null!, _rubble = null!;
     private GameData _data = null!;
-    private Color[] _corpseColors = Array.Empty<Color>();
+    private Color[] _corpseColors = Array.Empty<Color>(), _rimColors = Array.Empty<Color>();
     private float[] _bodyTop = Array.Empty<float>();
     private int[] _hurt = Array.Empty<int>();
     private float[] _shownFill = Array.Empty<float>();
@@ -104,6 +113,15 @@ public partial class CombatViews : Node3D
     /// <summary>The corpse multimesh (one instance per pool slot).</summary>
     public MultiMesh CorpseMesh => _corpses;
 
+    /// <summary>The corpse rim multimesh (one instance per pool slot, drawn with each corpse).</summary>
+    public MultiMesh CorpseRimMesh => _rims;
+
+    /// <summary>The fill colour of player <paramref name="player"/>'s corpses (black for an unknown player).</summary>
+    public Color CorpseColor(int player) => (uint)player < (uint)_corpseColors.Length ? _corpseColors[player] : Colors.Black;
+
+    /// <summary>The rim colour of player <paramref name="player"/>'s corpses.</summary>
+    public Color CorpseRimColor(int player) => (uint)player < (uint)_rimColors.Length ? _rimColors[player] : Colors.Black;
+
     /// <summary>The rubble multimesh (one instance per pool slot).</summary>
     public MultiMesh RubbleMesh => _rubble;
 
@@ -115,10 +133,12 @@ public partial class CombatViews : Node3D
         _bodyTop = new float[data.Units.Length];
         for (int t = 0; t < _bodyTop.Length; t++) _bodyTop[t] = UnitViews.BodyHeight(data.Units[t].Radius);
         _corpseColors = new Color[playerRgb.Length];
+        _rimColors = new Color[playerRgb.Length];
         for (int p = 0; p < playerRgb.Length; p++)
         {
             Color c = UnitViews.ColorFromRgb(playerRgb[p]);
             _corpseColors[p] = new Color(c.R * CorpseShade, c.G * CorpseShade, c.B * CorpseShade);
+            _rimColors[p] = new Color(c.R * CorpseRimShade, c.G * CorpseRimShade, c.B * CorpseRimShade);
         }
         _hurt = new int[unitCapacity];
         _shownFill = new float[unitCapacity];
@@ -134,12 +154,15 @@ public partial class CombatViews : Node3D
         _markerShown = new byte[markerCapacity];
         _markerTransform = new Transform3D[markerCapacity];
         var corpseMat = new StandardMaterial3D { VertexColorUseAsAlbedo = true, VertexColorIsSrgb = true, AlbedoColor = Colors.White, ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded };
-        _corpses = Multi("Corpses", new CylinderMesh { TopRadius = 1f, BottomRadius = 1f, Height = 1f, RadialSegments = 10, Rings = 1, Material = corpseMat }, markerCapacity, colors: true);
+        var disc = new CylinderMesh { TopRadius = 1f, BottomRadius = 1f, Height = 1f, RadialSegments = 16, Rings = 1, Material = corpseMat };
+        _rims = Multi("CorpseRims", disc, markerCapacity, colors: true);
+        _corpses = Multi("Corpses", disc, markerCapacity, colors: true);
         _rubble = Multi("Rubble", new BoxMesh { Size = Vector3.One, Material = new StandardMaterial3D { AlbedoColor = RubbleColor, Roughness = 1f } }, markerCapacity, colors: false);
         var hidden = new Transform3D(new Basis(Vector3.Zero, Vector3.Zero, Vector3.Zero), Vector3.Zero);
         for (int i = 0; i < markerCapacity; i++)
         {
             _corpses.SetInstanceTransform(i, hidden);
+            _rims.SetInstanceTransform(i, hidden);
             _rubble.SetInstanceTransform(i, hidden);
         }
     }
@@ -233,10 +256,15 @@ public partial class CombatViews : Node3D
         else
         {
             float r = _data.Units[Math.Clamp(type, 0, _data.Units.Length - 1)].Radius;
+            // At the highest ground under the rim, so a disc on a ramp is not half buried (BUG-0190 item 1).
+            y = TerrainHeight.MaxUnder(world.Heightmap, p.X, p.Y, r * CorpseRimScale);
             _markerTransform[slot] = new Transform3D(Basis.FromScale(new Vector3(r, CorpseHeight, r)), new Vector3(p.X, y + CorpseHeight / 2f, p.Y));
             _corpses.SetInstanceTransform(slot, _markerTransform[slot]);
+            float rr = r * CorpseRimScale;
+            _rims.SetInstanceTransform(slot, new Transform3D(Basis.FromScale(new Vector3(rr, CorpseRimHeight, rr)), new Vector3(p.X, y + CorpseRimHeight / 2f, p.Y)));
             int owner = Markers.Owner[slot];
-            _corpses.SetInstanceColor(slot, (uint)owner < (uint)_corpseColors.Length ? _corpseColors[owner] : Colors.Black);
+            _corpses.SetInstanceColor(slot, CorpseColor(owner));
+            _rims.SetInstanceColor(slot, CorpseRimColor(owner));
             _markerShown[slot] = 1;
         }
         MarkerWrites++;
@@ -245,7 +273,11 @@ public partial class CombatViews : Node3D
     private void HideMarker(int slot)
     {
         var hidden = new Transform3D(new Basis(Vector3.Zero, Vector3.Zero, Vector3.Zero), Vector3.Zero);
-        if (_markerShown[slot] == 1) _corpses.SetInstanceTransform(slot, hidden);
+        if (_markerShown[slot] == 1)
+        {
+            _corpses.SetInstanceTransform(slot, hidden);
+            _rims.SetInstanceTransform(slot, hidden);
+        }
         else if (_markerShown[slot] == 2) _rubble.SetInstanceTransform(slot, hidden);
         _markerShown[slot] = 0;
         _markerTransform[slot] = hidden;

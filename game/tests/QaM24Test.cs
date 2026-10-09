@@ -60,7 +60,7 @@ public partial class QaM24Test : Node
         _data = loaded.Data!;
         var match = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
         AddChild(match);
-        match.Start(_data, LaunchOptions.Parse(new[] { "--units", "1000" }));
+        match.Start(_data, LaunchOptions.Parse(new[] { "--units", "1000", "--no-combat" }));
         _mini = match.GetNode<Minimap>("Hud/Minimap");
         _camera = match.GetNode<RtsCamera>("RtsCamera");
         _camera.EdgePanEnabled = false;

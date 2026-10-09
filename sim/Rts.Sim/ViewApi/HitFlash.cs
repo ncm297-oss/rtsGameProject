@@ -5,8 +5,9 @@ namespace Rts.Sim.ViewApi;
 /// <summary>
 /// Hit-flash bookkeeping for the unit views (M4-V1): a unit whose hit points fell since the last <see cref="Update"/> is lit
 /// for <see cref="Seconds"/> of view time, and a later hit while lit starts the time again, so a unit under repeated hits
-/// stays lit. No sim event is needed: each slot remembers the hp and generation it last saw. Presentation only (a timer per
-/// slot); allocation-free after construction.
+/// stays lit. No sim event is needed: each slot remembers the hp and generation it last saw. Since M4-V2 a unit first seen
+/// below its type's maximum hp flashes once (the overload with types). Presentation only (a timer per slot); allocation-free
+/// after construction.
 /// </summary>
 public sealed class HitFlash
 {
@@ -56,7 +57,17 @@ public sealed class HitFlash
     /// unlit. The spans are the unit store's <c>Alive</c>, <c>Generation</c> and <c>Hp</c>. A negative or NaN
     /// <paramref name="dt"/> counts as 0.
     /// </summary>
-    public void Update(ReadOnlySpan<bool> alive, ReadOnlySpan<int> generation, ReadOnlySpan<int> hp, float dt)
+    public void Update(ReadOnlySpan<bool> alive, ReadOnlySpan<int> generation, ReadOnlySpan<int> hp, float dt) =>
+        Update(alive, generation, hp, ReadOnlySpan<int>.Empty, ReadOnlySpan<int>.Empty, dt);
+
+    /// <summary>
+    /// As the overload without types, plus the first-sight rule (M4-V2, BUG-0160 item 2): a unit seen for the first time
+    /// (a new generation in its slot) whose hp is already below its type's maximum was hit between the frame before and this
+    /// one (trained or rallied into a fight, at 8x up to 5 ticks a frame), so it flashes once, as a hit. A unit first seen at
+    /// full hp starts unlit as before. <paramref name="typeId"/> is the store's <c>TypeId</c>, <paramref name="maxHp"/> each
+    /// type's <c>hp</c>; with either empty (or a type out of range) no first-sight flash.
+    /// </summary>
+    public void Update(ReadOnlySpan<bool> alive, ReadOnlySpan<int> generation, ReadOnlySpan<int> hp, ReadOnlySpan<int> typeId, ReadOnlySpan<int> maxHp, float dt)
     {
         if (!(dt > 0f)) dt = 0f;
         int n = Math.Min(_left.Length, Math.Min(alive.Length, Math.Min(generation.Length, hp.Length)));
@@ -73,7 +84,8 @@ public sealed class HitFlash
             {
                 _lastGen[i] = generation[i];
                 _lastHp[i] = hp[i];
-                _left[i] = 0f;
+                hit = i < typeId.Length && (uint)typeId[i] < (uint)maxHp.Length && hp[i] < maxHp[typeId[i]];
+                _left[i] = hit ? Seconds : 0f;
             }
             else
             {

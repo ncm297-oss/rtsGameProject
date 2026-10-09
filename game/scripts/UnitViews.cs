@@ -20,7 +20,8 @@ namespace Rts.Game;
 /// allocates nothing.
 /// Hit flash (M4-V1): a unit whose hp fell since the last frame (<see cref="HitFlash"/>, comparing the store's <c>Hp</c>
 /// with what the last frame saw; no sim event) shows a white overlay for <see cref="HitFlash.DefaultSeconds"/> of view
-/// time, which a new hit starts again; it takes the place of the worker tint while lit. A dead unit's node is hidden on the
+/// time, which a new hit starts again; it takes the place of the worker tint while lit. A unit first seen below its type's
+/// <c>hp</c> (hit between two frames, before its view existed) flashes once too (M4-V2, BUG-0160). A dead unit's node is hidden on the
 /// first frame after its death (the slot reads not alive), so its view goes the frame the death is shown.
 /// </remarks>
 public partial class UnitViews : Node3D
@@ -56,6 +57,8 @@ public partial class UnitViews : Node3D
 
     private CapsuleMesh[] _meshes = Array.Empty<CapsuleMesh>();
     private float[] _halfHeight = Array.Empty<float>();
+    // Each type's hp, for the hit flash's first-sight rule (M4-V2).
+    private int[] _maxHp = Array.Empty<int>();
     private MeshInstance3D?[] _views = Array.Empty<MeshInstance3D?>();
     private int[] _viewType = Array.Empty<int>();
     private bool[] _shown = Array.Empty<bool>();
@@ -101,6 +104,7 @@ public partial class UnitViews : Node3D
 
         _meshes = new CapsuleMesh[data.Units.Length];
         _halfHeight = new float[data.Units.Length];
+        _maxHp = new int[data.Units.Length];
         for (int t = 0; t < _meshes.Length; t++)
         {
             UnitDef def = data.Units[t];
@@ -108,6 +112,7 @@ public partial class UnitViews : Node3D
             // Low-poly on purpose: 2,000 of these are on screen at once (M2-7 perf budget).
             _meshes[t] = new CapsuleMesh { Radius = def.Radius, Height = height, RadialSegments = 12, Rings = 3, Material = materials[def.Faction] };
             _halfHeight[t] = height / 2;
+            _maxHp[t] = def.Hp;
         }
 
         _views = new MeshInstance3D?[unitCapacity];
@@ -171,7 +176,7 @@ public partial class UnitViews : Node3D
     public void Sync(World world, float alpha, float delta = 0f)
     {
         UnitStore u = world.Units;
-        Flash.Update(u.Alive, u.Generation, u.Hp, delta);
+        Flash.Update(u.Alive, u.Generation, u.Hp, u.TypeId, _maxHp, delta);
         int n = Math.Min(u.Capacity, _views.Length);
         for (int i = 0; i < n; i++)
         {

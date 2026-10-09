@@ -49,7 +49,7 @@ public partial class MinimapTest : Node
         GameData data = loaded.Data!;
         var match = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
         AddChild(match);
-        match.Start(data, LaunchOptions.Parse(new[] { "--units", "1000", "--no-bases" })); // armies only, as in M2 (M3-V1)
+        match.Start(data, LaunchOptions.Parse(new[] { "--units", "1000", "--no-bases", "--no-combat" })); // armies only, no fights, as in M2 (M3-V1, M4-V1 BUG-0147; BUG-0210: since M4-2b the archers shot slot 0 dead)
         _mini = match.GetNode<Minimap>("Hud/Minimap");
         _camera = match.GetNode<RtsCamera>("RtsCamera");
         _camera.EdgePanEnabled = false;
@@ -147,6 +147,7 @@ public partial class MinimapTest : Node
         foreach (EntityHandle h in selected)
         {
             if (u.State[h.Index] == UnitState.Moving) moving++;
+            else GD.Print($"minimap right-click: slot {h.Index} not Moving: Alive {u.Alive[h.Index]}, generation {u.Generation[h.Index]} (selected {h.Generation}), Hp {u.Hp[h.Index]}, State {u.State[h.Index]}, Goal {u.Goal[h.Index]}, Target {u.Target[h.Index].Index}");
             if (System.Numerics.Vector2.Distance(u.Goal[h.Index], target) > MapConstants.CellSize * 2)
                 _failures.Add($"slot {h.Index} goal {u.Goal[h.Index]} is not the minimap point {target}");
         }

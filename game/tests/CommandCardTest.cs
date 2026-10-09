@@ -635,14 +635,15 @@ public partial class CommandCardTest : Node
             Check(three.All(h => U.BuildTarget[h.Index] == B.HandleOf(site)), "the joining Builds didn't join the site");
         }
 
-        // The enemy hall (damaged too): Moves.
+        // The enemy hall (damaged too): never a Repair. Since M4-V2 a right-click on an enemy building is an Attack on it
+        // (it was a Move before there was an Attack order).
         int enemy = HallSlot(1);
         DamageMethod.Invoke(B, new object[] { B.HandleOf(enemy), 100 });
         await Select(three);
         start = _sim.PendingCommandCount;
         RightClick(await GroundScreen(enemy));
         sent = Pending(start);
-        Check(sent.Count == 3 && sent.All(c => c.Kind == CommandKind.Move), $"right-click on the enemy hall: {Describe(sent)}");
+        Check(sent.Count == 3 && sent.All(c => c.Kind == CommandKind.Attack && c.TargetIsBuilding && c.Target == B.HandleOf(enemy)), $"right-click on the enemy hall: {Describe(sent)}");
         Tick(1);
         GD.Print($"repair: hall {B.Hp[hall]} / {max}, site {site}, house type {house}");
     }
