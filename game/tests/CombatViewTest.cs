@@ -119,7 +119,7 @@ public partial class CombatViewTest : Node
         AddChild(_match);
         _runner = _match.GetNode<SimRunner>("SimRunner");
         _runner.RecordCheckpointInterval = 1;
-        var args = new List<string> { "--seed", seed.ToString(CultureInfo.InvariantCulture), "--units", "0", "--no-bases", "--mute", "--debug-overlay", "--zoom", "30" };
+        var args = new List<string> { "--seed", seed.ToString(CultureInfo.InvariantCulture), "--units", "0", "--no-bases", "--mute", "--debug-overlay", "--zoom", "30", "--no-fog" }; // whole-map checks (M4-V4: every hurt unit has a bar, every death a marker)
         if (runnerTicks) args.AddRange(new[] { "--speed", "8" });
         _match.Start(_data, LaunchOptions.Parse(args.ToArray()));
         if (!runnerTicks) _runner.ProcessMode = ProcessModeEnum.Disabled; // the test ticks the sim itself

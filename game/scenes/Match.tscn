@@ -1,4 +1,4 @@
-[gd_scene load_steps=31 format=3]
+[gd_scene load_steps=32 format=3]
 
 [ext_resource type="Script" path="res://scripts/Match.cs" id="1_match"]
 [ext_resource type="Script" path="res://scripts/SimRunner.cs" id="2_runner"]
@@ -26,6 +26,7 @@
 [ext_resource type="Script" path="res://scripts/CombatViews.cs" id="24_combat"]
 [ext_resource type="Script" path="res://scripts/TargetRing.cs" id="25_target"]
 [ext_resource type="Script" path="res://scripts/ProjectileViews.cs" id="26_shots"]
+[ext_resource type="Script" path="res://scripts/FogOfWar.cs" id="27_fog"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMaterial_1"]
 sky_top_color = Color(0.36, 0.52, 0.72, 1)
@@ -59,6 +60,9 @@ shadow_enabled = true
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="World3D"]
 environment = SubResource("Environment_1")
+
+[node name="FogOfWar" type="Node" parent="World3D"]
+script = ExtResource("27_fog")
 
 [node name="TerrainView" type="MeshInstance3D" parent="World3D"]
 script = ExtResource("3_terrain")

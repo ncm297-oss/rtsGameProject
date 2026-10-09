@@ -82,7 +82,7 @@ public partial class QaV5Test : Node
         _match = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
         AddChild(_match);
         var args = new List<string> { "--seed", "3", "--units", units.ToString(CultureInfo.InvariantCulture), "--no-bases", "--mute", "--zoom", "30",
-            "--speed", speed.ToString(CultureInfo.InvariantCulture) };
+            "--speed", speed.ToString(CultureInfo.InvariantCulture), "--no-fog" }; // every hurt unit's bar is checked (M4-V4)
         _match.Start(_data, LaunchOptions.Parse(args.ToArray()));
         _runner = _match.GetNode<SimRunner>("SimRunner");
         if (!runnerTicks) _runner.ProcessMode = ProcessModeEnum.Disabled;

@@ -23,6 +23,10 @@ namespace Rts.Game;
 /// time, which a new hit starts again; it takes the place of the worker tint while lit. A unit first seen below its type's
 /// <c>hp</c> (hit between two frames, before its view existed) flashes once too (M4-V2, BUG-0160). A dead unit's node is hidden on the
 /// first frame after its death (the slot reads not alive), so its view goes the frame the death is shown.
+/// Fog (M4-V4): with <see cref="Fog"/> set, a unit the local player doesn't see (<c>Fog.CanSeeUnit</c> false, through
+/// <see cref="FogView.UnitShown"/>) is hidden like a dead one, and its cargo marker and flash with it. A unit that comes
+/// into sight is placed at its interpolated position before it is shown, in the same frame, so it never pops in at a
+/// stale spot; its flash timer kept running while it was hidden.
 /// </remarks>
 public partial class UnitViews : Node3D
 {
@@ -55,6 +59,9 @@ public partial class UnitViews : Node3D
     /// <summary>The runner whose sim is shown each frame; null shows nothing (tests call <see cref="Sync"/> directly).</summary>
     public SimRunner? Runner { get; set; }
 
+    /// <summary>The fog whose hide rule applies (M4-V4); null shows every live unit.</summary>
+    public FogOfWar? Fog { get; set; }
+
     private CapsuleMesh[] _meshes = Array.Empty<CapsuleMesh>();
     private float[] _halfHeight = Array.Empty<float>();
     // Each type's hp, for the hit flash's first-sight rule (M4-V2).
@@ -78,6 +85,9 @@ public partial class UnitViews : Node3D
 
     /// <summary>The overlay material of a lit (just hit) unit.</summary>
     public StandardMaterial3D FlashMaterial => _flashMat;
+
+    /// <summary>True while slot <paramref name="slot"/>'s view is drawn (a live unit the fog doesn't hide).</summary>
+    public bool IsShown(int slot) => (uint)slot < (uint)_shown.Length && _shown[slot];
 
     /// <summary>True while slot <paramref name="slot"/>'s view shows the hit flash.</summary>
     public bool ShownLit(int slot) => (uint)slot < (uint)_shownLit.Length && _shownLit[slot];
@@ -177,6 +187,7 @@ public partial class UnitViews : Node3D
     {
         UnitStore u = world.Units;
         Flash.Update(u.Alive, u.Generation, u.Hp, u.TypeId, _maxHp, delta);
+        FogView? fog = Fog?.Refreshed(world);
         int n = Math.Min(u.Capacity, _views.Length);
         for (int i = 0; i < n; i++)
         {
@@ -190,7 +201,17 @@ public partial class UnitViews : Node3D
                 }
                 continue;
             }
+            // A slot gets its node when it first holds a live unit, seen or not, so the fog never changes when nodes are made.
             view ??= CreateView(i);
+            if (fog != null && !fog.ShowsUnit(i))
+            {
+                if (_shown[i])
+                {
+                    view.Visible = false;
+                    _shown[i] = false;
+                }
+                continue;
+            }
             int type = u.TypeId[i];
             if (_viewType[i] != type)
             {
@@ -295,7 +316,7 @@ public partial class UnitViews : Node3D
 
     private MeshInstance3D CreateView(int slot)
     {
-        var view = new MeshInstance3D { Name = $"Unit{slot}" };
+        var view = new MeshInstance3D { Name = $"Unit{slot}", Visible = false };
         AddChild(view);
         _views[slot] = view;
         NodeCount++;

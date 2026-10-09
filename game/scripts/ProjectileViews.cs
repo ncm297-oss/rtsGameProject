@@ -22,6 +22,10 @@ namespace Rts.Game;
 /// <see cref="ImpactMarks"/> ring (<see cref="ImpactMarks.DefaultCapacity"/>): a flash for a hit, a dust puff for a miss,
 /// a burst for a lob sized by the widest splash of the attacks that throw it. One instance per pool slot; a mark grows and
 /// fades over its life; a free slot has a zero transform.</para>
+/// <para><b>Fog</b> (M4-V4): with <see cref="Fog"/> set, a shot is drawn only while its current cell (<c>Position</c>'s) is
+/// visible to the local player, and a mark only while its landing cell is (<see cref="FogView.ShowsPoint"/>). Combat may fire
+/// at a unit the screen still hides for up to 4 ticks (docs/03 "Vision, detection, fog", Known limits (1)), so the rule is
+/// the shot's own cell, not its target's. A hidden mark still counts as drawn, so it expires on time.</para>
 /// Views hold no gameplay state: shots are redrawn from the store each frame; the tracker and the marks are presentation.
 /// Everything is made in <see cref="Bind"/>, so a steady frame allocates nothing.
 /// </remarks>
@@ -77,6 +81,12 @@ public partial class ProjectileViews : Node3D
             if (_runner != null) _runner.Ticked += OnTicked;
         }
     }
+
+    /// <summary>The fog whose visible cells the shots and marks are drawn in (M4-V4); null draws all of them.</summary>
+    public FogOfWar? Fog { get; set; }
+
+    /// <summary>Shots in flight not drawn this frame because their cell is not visible.</summary>
+    public int HiddenShots { get; private set; }
 
     /// <summary>Each slot's launch point and arc (view state).</summary>
     public ProjectileTracker Tracker { get; private set; } = null!;
@@ -189,20 +199,26 @@ public partial class ProjectileViews : Node3D
         for (int k = 0; k < gone && k < _removed.Length; k++) HideMark(_removed[k]);
         if (gone > _removed.Length)
             for (int i = 0; i < Marks.Capacity; i++) if (!Marks.Active[i]) HideMark(i);
-        SyncShots(world, a);
-        SyncMarks(world, a);
+        FogView? fog = Fog?.Refreshed(world);
+        SyncShots(world, a, fog);
+        SyncMarks(world, a, fog);
     }
 
-    private void SyncShots(World world, float a)
+    private void SyncShots(World world, float a, FogView? fog)
     {
         ProjectileStore s = world.Projectiles;
         ReadOnlySpan<bool> alive = s.Alive;
         ReadOnlySpan<System.Numerics.Vector2> pos = s.Position, prev = s.PrevPosition, target = s.Target;
         ReadOnlySpan<int> owner = s.Owner;
-        int nAimed = 0, nLobs = 0, shown = 0;
+        int nAimed = 0, nLobs = 0, shown = 0, hidden = 0;
         for (int i = 0; i < alive.Length; i++)
         {
             if (!alive[i]) continue;
+            if (fog != null && !fog.ShowsPoint(world.Fog, pos[i]))
+            {
+                hidden++;
+                continue;
+            }
             System.Numerics.Vector2 at = System.Numerics.Vector2.Lerp(prev[i], pos[i], a);
             float ground = TerrainHeight.At(world.Heightmap, at.X, at.Y);
             bool lob = Tracker.IsLob[i];
@@ -233,15 +249,22 @@ public partial class ProjectileViews : Node3D
         ShownAimed = nAimed;
         ShownLobs = nLobs;
         Shown = shown;
+        HiddenShots = hidden;
     }
 
-    private void SyncMarks(World world, float a)
+    private void SyncMarks(World world, float a, FogView? fog)
     {
         ImpactMarks m = Marks;
         ReadOnlySpan<bool> active = m.Active;
         for (int i = 0; i < active.Length; i++)
         {
             if (!active[i]) continue;
+            if (fog != null && !fog.ShowsPoint(world.Fog, m.Position[i]))
+            {
+                if (_markTransform[i] != Hidden) HideMark(i);
+                m.MarkDrawn(i); // its frame has passed: it expires on time, unseen
+                continue;
+            }
             float age = m.Age(i, world.TickNumber, a);
             ImpactMarkKind kind = m.Kind[i];
             float from, to;

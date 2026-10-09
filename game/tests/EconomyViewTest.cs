@@ -113,7 +113,7 @@ public partial class EconomyViewTest : Node
 
     private async Task StartMatch(ulong seed, int units, int? workers)
     {
-        var args = new List<string> { "--seed", seed.ToString(), "--units", units.ToString(), "--mute" };
+        var args = new List<string> { "--seed", seed.ToString(), "--units", units.ToString(), "--mute", "--no-fog" }; // both players' halls and workers are checked (M4-V4)
         if (workers is int n) args.AddRange(new[] { "--workers", n.ToString() });
         _match = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
         AddChild(_match);

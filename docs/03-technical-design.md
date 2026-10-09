@@ -3553,7 +3553,8 @@ Match.tscn  (new node)
 - **F12 overlay:** the counts line names the first live selected unit's target slot: `target u12`, `target b3` for a
   building, `target -` for none (`DebugOverlay.TargetSlot` / `TargetIsBuilding`).
 - **Minimap right-click** stays a Move, also on an enemy dot: dots are not reliable until fog (M4-3), so the minimap's
-  Attack half (docs/02 "Minimap": "a move or attack order") waits for M4-3.
+  Attack half (docs/02 "Minimap": "a move or attack order") waits for M4-3. (Done in M4-V4: a right-click on a visible
+  enemy's dot is an Attack, see "Implementation (M4-V4)".)
 - **BUG-0160** (M4-V1 nits):
   1. *F12 overlap:* the overlay's second line ran under the resource bar's K / L label. It is now four short lines (units,
      moving, fields, arrows / workers / kills, losses and the target slot / tick averages), each well left of the bar
@@ -3696,8 +3697,116 @@ Match.tscn  (new node)
   not fit): drawn = tracked = in flight every tick, hash twin. Windowed with `-- --shots <dir>` it saves
   `projectiles-seedN.png` with bolts, arrows and a stone high in the air. `MinimapTest` with `--no-combat`;
   `CombatViewTest`'s corpse-underside row.
-- **Not yet:** the fog shader, hiding unseen units and their shots, ghosts (M4-V4); real projectile models, trails and
+- **Not yet:** the fog shader, hiding unseen units and their shots (done in M4-V4), ghosts (M4-V4 after M4-3b); real projectile models, trails and
   sounds (M6); splash-radius rings.
+
+### Implementation (M4-V4)
+
+The view half of M4 criterion 5: the player sees the fog M4-3a put in the rules. Unexplored ground is black, explored
+ground darkened, visible ground clear; enemy units, buildings and shots show only where the player sees them; the minimap
+draws the fog and its right-click attacks a visible enemy's dot.
+
+```
+Match.tscn  (new node)
+  World3D/FogOfWar   Node, FogOfWar.cs: the fog texture, the fog materials, the hide rule (ViewApi.FogView)
+game/shaders/        fog.gdshaderinc (shared uniforms and functions), terrain_fog / prop_fog / marker_fog.gdshader
+```
+
+- **The local player** is `SelectionController.LocalPlayer` (0) until the M6 lobby.
+- **Texture** (`FogOfWar`, pure packer `ViewApi.FogView`): an R8 `ImageTexture`, one texel per map cell, holding
+  `World.Fog.Visibility(local)`'s own bytes (0 / 1 / 2), so the texture *is* the fog's bytes. `FogView.PackTexture` copies
+  them into a reusable `byte[]` only when `Fog.Version(local)` differs from the version last packed (the first call always
+  packs); `FogOfWar.Sync` then `Image.SetData` + `ImageTexture.Update`: one upload per fog update, every 4 ticks at most
+  (measured: 225 uploads over 900 ticks). `FogOfWar.Uploads` counts them.
+- **Shaders.** `fog.gdshaderinc` holds the uniforms every fog material shares (`fog_tex`, filter linear, clamp; the map
+  size in meters; `fog_explored` = `FogView.ExploredBrightness` 0.4, set from C#) and the decode: state = texel x 255,
+  brightness 0 (unexplored, black) -> 0.4 (explored) -> 1 (visible), linear in between, and explored ground half
+  desaturated. An unset texture reads white, clamped to visible, so a fog material without a fog draws clear.
+  - `terrain_fog.gdshader`: the terrain's vertex colours (sRGB -> linear, as `StandardMaterial3D`'s
+    `vertex_color_is_srgb`) times the brightness of the **smoothly filtered** state at the fragment's world x / z (texel
+    centres are cell centres), so the fog edge is a soft gradient one cell wide; specular scaled down with it, so black
+    stays black.
+  - `prop_fog.gdshader` (trees' trunk and canopy, mines' slate and gold, rubble; lit, albedo and roughness from C#) and
+    `marker_fog.gdshader` (corpse discs and rims; unshaded, instance colour): the whole instance takes the **unfiltered**
+    state of the cell under its origin (`MODEL_MATRIX`'s translation, which holds the MultiMesh instance's): not drawn on
+    unexplored ground (`discard`), darkened and desaturated on explored ground. Nothing is relisted on the CPU when the fog
+    moves.
+  - Placeholder look (the M6 art pass owns it): flat black, a 40 % dim, no animated edge.
+- **The hide rule** (`FogView.Refresh(fog, tick, unitAlive, buildingAlive)`): `UnitShown[slot] = Fog.CanSeeUnit(local,
+  slot)` (own; or the unit's cell visible at the last update; or revealed by a high-ground hit), `BuildingShown[slot] =
+  Fog.CanSeeBuilding(local, slot)` (own, or any footprint cell visible). Both change only when a tick runs, so a call
+  with the last call's tick number does nothing: every view calls `FogOfWar.Refreshed(world)` first and the node order
+  doesn't matter. With the flag off (`--no-fog`), shown = alive.
+  - `UnitViews`: a unit not shown is hidden like a dead one (its cargo marker with it). A slot still gets its node the first
+    time it holds a live unit, seen or not, so the fog never changes when nodes are made (0 bytes when an enemy walks into
+    sight). A unit coming into sight is placed at its interpolated position in the same `Sync` that shows it: no frame at a
+    stale spot. Its hit-flash timer keeps running while hidden (the flash shows if it is still lit when seen).
+  - `BuildingViews`: an enemy building not shown is hidden like a freed slot (bar included) and placed afresh when seen.
+  - `CombatViews`: hp bars are collected over `UnitShown` instead of `Alive`, so a hidden unit has no bar.
+  - `ProjectileViews`: a shot is drawn only while its **current cell** (`Position`'s, `FogView.ShowsPoint` = `Fog.IsVisible`
+    of `FogView.CellOf`, the fog's own cell mapping) is visible to the local player; an impact mark only while its landing
+    cell is (a hidden mark still counts as drawn, so it expires on time). Combat may fire at a unit the screen still hides
+    for up to 4 ticks ("Vision, detection, fog", Known limits (1)); the rule is the shot's own cell, so a shot from a hidden
+    shooter appears as it flies into sight. `HiddenShots` counts the ones skipped this frame.
+  - `TargetRing`: not drawn while its target is hidden (its 0.5 s keep running).
+  - `SelectionController`: only what the screen draws is under the cursor. `EnemyAt` passes `UnitShown` to
+    `UnitPicker.PickRay` / `ResolveEnemy` in place of `Alive`, and `BuildingShown` to a new `BuildingPicker.PickRay`
+    overload with a `shown` filter (empty = every live building); `ContextTarget` uses the same filter. So a right-click or
+    A + click where a hidden enemy stands means the ground (a Move or an AttackMove), never an Attack the sim would drop.
+- **Minimap** (`Minimap`, pure `MinimapRaster`): a fog layer (`MinimapRaster.Fog`, RGBA, black with alpha
+  `FogView.MinimapAlpha`: 255 unexplored, 153 explored, 0 visible, the 3D brightness's complement) drawn over the terrain
+  and resources and under the dots. `Minimap.SyncFog` runs every frame and redraws and uploads the layer when the fog
+  texture's version moved, so the layer always equals the texture (`FogVersion`, `FogRefreshes`). Dots are drawn over
+  `UnitShown`, so a hidden enemy has no dot. **Right-click** (`Minimap.CommandAt`): with a building selected the rally
+  rule (M3-V3); else `MinimapRaster.EnemyDotAt(point, UnitShown, Position, Owner, local)`: a shown enemy unit whose 4 x 4
+  dot block (the 2 x 2 centre and its rim, at its position now) holds the clicked pixel, the nearest to the point winning;
+  if one, `SelectionController.AttackOrder` on it (one Attack per selected unit, the ring, the sound); else a Move there.
+  A click where a hidden enemy stands is a Move (it has no dot): the documented M4-V4 rule. Buildings have no minimap
+  dots yet, so the minimap attacks units only.
+- **Ghosts** (docs/02: last-known enemy buildings in explored fog): the sim's ghost list (M4-3b) was not on the tree, so
+  only the hook ships: `FogView.CollectGhosts(fog, typeId, anchor, owner)` returns 0, with a `TODO(M4-3b)` naming
+  `Fog.Ghosts(player)`. Once it lands: draw each at its anchor in its type's box, darkened, no bar, and make a right-click
+  on one an Attack on the building (the sim accepts it, M4-3b).
+- **Placement text**: `ui.json` `placement.unexplored` ("Unexplored"), a view-only key (`ui.json` is view data, "Implementation (M3-V2)")
+  for M4-3b's `PlacementError.Unexplored`. `UiText` requires it like the `requires` forward key
+  (`UiText.UnexploredKey`, `UnexploredPlacementText`; a load error when missing); once the sim has the member the ghost
+  shows it through `PlacementText` with no view change.
+- **`--no-fog`** (see "Debug tooling"): the whole-map scenes pass it.
+- **Cost**: `FogView.Refresh` is one `CanSeeUnit` per unit slot and one `CanSeeBuilding` per building slot, once per
+  tick; `PackTexture` a 16 KB copy per fog update (128 map); the minimap layer one pass over the cells per update; the
+  shaders one texture read per fragment (terrain) or vertex (props, markers). 0 bytes a frame (xUnit at 2,000 units; the
+  scene's 300 steady frames at `--units 500`).
+- **Tests.** xUnit `ViewApi/FogViewTests`: the texture equal to `Fog.Visibility(0)` after every tick of a 1,200-tick
+  brawl (`CombatViewScene`), packed exactly when the version moved, at most 1,200 / 4 + 1 uploads; all three states
+  present; the disabled view (all visible, one upload, every live slot shown); the hide rule equal to `CanSeeUnit` /
+  `CanSeeBuilding` and to an independent oracle (own, or the visible bit of `FogStore.CellOf(position)`, or revealed) for
+  both players every tick of the brawl, with enemies shown, hidden and flipping; a high-ground Crossbowman shown exactly
+  while its reveal lasts (never through the fog); `FogView.CellOf` equal to `FogStore.CellOf` on 20,000 points and the
+  NaN / infinite / out-of-map edges; `ShowsPoint` equal to the visible state of every cell; brightness and minimap alpha
+  of the three states (a stray value draws visible); the ghost hook returns 0; bad arguments; the minimap fog layer's
+  alpha per cell (opaque before the first draw, a short span unexplored past its end); `EnemyDotAt` (own dots, hidden
+  enemies, the nearer of two overlapping dots, the rim's corner and one cell past it, NaN, player 1's view, and exactly
+  the 16 pixels of a lone dot's drawn block); the building pick's filter; 0 bytes for refresh + pack + fog layer + dots +
+  dot pick + 200 shot checks over 8 ticks at 2,000 units; the hash twin (2,000 ticks with every read: equal to a bare
+  twin every tick). Headless scene `res://tests/FogViewTest.tscn` ("FOG VIEW TEST PASS", seeds 1 and 6, `-- --seed N`
+  for one): the `--no-fog` parse and the `ui.json` key (present, required); per seed a real Match with bases and 40
+  units a side; the terrain and corpse materials sample the fog texture; a minimap right-click on a visible enemy's dot
+  (one Attack per selected unit, recorded with that target) and on a hidden enemy's spot (a Move per selected unit, no
+  Attack), and every hidden enemy on screen refused by `EnemyAt`; then the armies attack-moved at each other for 900
+  ticks, one frame per tick, and **every frame**: the texture's version equal to the fog's and after every update its
+  bytes equal to the fog's (226 checks a seed) and the minimap layer equal to the texture; uploads at most ticks / 4 + 1;
+  every unit view shown exactly when `CanSeeUnit(0, slot)` and every building view exactly when `CanSeeBuilding(0,
+  slot)` (0 mismatches; seed 1: 12,082 enemy unit-frames shown, 942 hidden, 49 flips; the enemy Town Hall hidden 569
+  frames); bars only over shown units; drawn + hidden shots = in flight, every drawn shot in a visible cell; hash twins.
+  A Desert Archer 5 + 5 cells from a held Heavy Infantry (14.1 m: in its reach, outside the infantry's 14 m circle): its
+  arrows hidden until they fly into sight (seed 1: 70 drawn, 14 hidden frames), the archer never shown, twin. 300 steady
+  frames at `--units 500` after a 240-tick warm-up (every fog-reading view and the minimap): 0 bytes, 25 uploads over 100
+  ticks, twin. A `--no-fog` match: every live unit and building shown (8 the fog would hide), the texture all visible
+  and uploaded once, the minimap layer clear. Windowed with `-- --shots <dir>` it saves `fog-seedN-tickT.png` at ticks
+  2, about 300 and about 900 (looked at: black beyond the base's sight, cleared where the army walked, darkened behind it).
+  `AttackOrderViewTest`'s minimap row now expects an Attack on a visible enemy's dot (it expected the M4-V2 Move).
+- **Not yet:** ghosts and the Attack on a ghost (after M4-3b; the hook above); building dots on the minimap; the fog's
+  look and a soft animated edge (M6); stealth visuals (M4-5); zone vision (M4-4).
 
 ## AI architecture
 
@@ -3878,6 +3987,16 @@ AiPlayer
   the other half of the armies-only M2 setup. A replay recorded from such a match records `combat 0` in its header
   (format 4, M4-2a), so `ReplayPlayer.Run(replay, data)` plays it back off by itself; the `combat:` override parameter
   stays for format-3 files recorded with combat off.
+- **No-fog flag** (M4-V4): `& $env:GODOT --path game -- --no-fog` (takes no value) draws the match without the fog of war
+  (`LaunchOptions.NoFog` -> `FogOfWar.Bind(enabled: false)`): the fog texture is all visible (uploaded once), the minimap's
+  fog layer is clear, and every live unit, building, shot, impact mark and minimap dot is shown, as before M4-V4. **View
+  only**: the sim's fog, combat's sight rules and the Attack order's "the owner must see it" check are unchanged (a replay
+  needs no flag). A **dev and test flag, never a game option**, for the scenes whose checks look at the whole map (every
+  unit's view, every hurt unit's bar, every shot in flight, both players' halls and dots); they pass it instead of changing
+  an expectation. The scenes that pass it: CombatViewTest (every hurt unit's bar, every death's marker), EconomyViewTest
+  (both players' halls, workers and cargo), MinimapTest (every dot of both armies), ProjectileViewTest and QaV7Test (every
+  shot in flight drawn), QaV5Test (2,000 hurt units, 2,000 bars), QaV1Test (a full store of 256 buildings over the whole
+  map, every one shown). The start-up line ends with ", fog not drawn".
 - **Debug overlay** (M2-5; F12, input action `debug_overlay`; launch flag `--debug-overlay` starts it
   on, so `--screenshot` can capture it): the nav grid on the ground, the flow-field arrows of the
   selection's goal around the camera, a tick-time graph of the last 120 ticks with the 4 ms budget

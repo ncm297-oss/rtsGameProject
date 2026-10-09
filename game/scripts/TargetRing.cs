@@ -14,6 +14,7 @@ namespace Rts.Game;
 /// (target and time left) is a <see cref="TargetMark"/>; each frame the ring follows a unit target's interpolated position
 /// (radius <see cref="UnitScale"/> x its radius, outside the green selection ring) or sits round a building's footprint,
 /// and hides when the time is up or the target is dead or recycled. Moving a node allocates nothing, so a frame is 0 bytes.
+/// With <see cref="Fog"/> set (M4-V4) the ring is not drawn while the fog hides its target (its time keeps running).
 /// Holds view state only.
 /// </remarks>
 public partial class TargetRing : Node3D
@@ -32,6 +33,9 @@ public partial class TargetRing : Node3D
 
     private SimRunner? _runner;
     private MeshInstance3D _ring = null!;
+
+    /// <summary>The fog whose hide rule applies (M4-V4); null draws the ring on any live target.</summary>
+    public FogOfWar? Fog { get; set; }
 
     /// <summary>The mark: target and time left.</summary>
     public TargetMark Mark { get; } = new();
@@ -70,7 +74,9 @@ public partial class TargetRing : Node3D
     {
         Mark.Update(delta);
         if (Mark.Active && !TargetAlive(world)) Mark.Clear();
-        if (!Mark.Active)
+        FogView? fog = Fog?.Refreshed(world);
+        bool hidden = Mark.Active && fog != null && !(Mark.IsBuilding ? fog.ShowsBuilding(Mark.Target.Index) : fog.ShowsUnit(Mark.Target.Index));
+        if (!Mark.Active || hidden)
         {
             if (_ring.Visible) _ring.Visible = false;
             return;

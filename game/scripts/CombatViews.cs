@@ -27,6 +27,9 @@ namespace Rts.Game;
 /// pool slot; an unused instance has a zero transform. A marker's transform is written only when it is added or removed,
 /// so a steady frame writes nothing for them. The pool is fixed (<see cref="DeathMarkers.DefaultCapacity"/>): a death storm
 /// replaces the oldest markers.</para>
+/// <para><b>Fog</b> (M4-V4): with <see cref="Fog"/> set (before <see cref="Bind"/>), a unit the local player doesn't see gets no
+/// bar, and the corpse and rubble materials are the fog's: a marker on unexplored ground is not drawn, one on explored
+/// ground is darkened (the GPU reads the cell under each instance).</para>
 /// Views hold no gameplay state: a bar is redrawn from the store each frame, a marker is a position and a timer.
 /// Everything is made in <see cref="Bind"/>, so a steady frame allocates nothing.
 /// </remarks>
@@ -67,6 +70,9 @@ public partial class CombatViews : Node3D
 
     /// <summary>The camera whose zoom sizes the bars; null keeps the base size.</summary>
     public RtsCamera? Camera { get; set; }
+
+    /// <summary>The fog (M4-V4): its hide rule drops hidden units' bars, and its materials draw the markers; set before <see cref="Bind"/>. Null draws everything.</summary>
+    public FogOfWar? Fog { get; set; }
 
     private SimRunner? _runner;
     private MultiMesh _back = null!, _fill = null!, _corpses = null!, _rims = null!, _rubble = null!;
@@ -153,11 +159,13 @@ public partial class CombatViews : Node3D
         _removed = new int[markerCapacity];
         _markerShown = new byte[markerCapacity];
         _markerTransform = new Transform3D[markerCapacity];
-        var corpseMat = new StandardMaterial3D { VertexColorUseAsAlbedo = true, VertexColorIsSrgb = true, AlbedoColor = Colors.White, ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded };
+        Material corpseMat = Fog != null ? Fog.MarkerMaterial()
+            : new StandardMaterial3D { VertexColorUseAsAlbedo = true, VertexColorIsSrgb = true, AlbedoColor = Colors.White, ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded };
         var disc = new CylinderMesh { TopRadius = 1f, BottomRadius = 1f, Height = 1f, RadialSegments = 16, Rings = 1, Material = corpseMat };
         _rims = Multi("CorpseRims", disc, markerCapacity, colors: true);
         _corpses = Multi("Corpses", disc, markerCapacity, colors: true);
-        _rubble = Multi("Rubble", new BoxMesh { Size = Vector3.One, Material = new StandardMaterial3D { AlbedoColor = RubbleColor, Roughness = 1f } }, markerCapacity, colors: false);
+        Material rubbleMat = Fog != null ? Fog.PropMaterial(RubbleColor, 1f) : new StandardMaterial3D { AlbedoColor = RubbleColor, Roughness = 1f };
+        _rubble = Multi("Rubble", new BoxMesh { Size = Vector3.One, Material = rubbleMat }, markerCapacity, colors: false);
         var hidden = new Transform3D(new Basis(Vector3.Zero, Vector3.Zero, Vector3.Zero), Vector3.Zero);
         for (int i = 0; i < markerCapacity; i++)
         {
@@ -214,7 +222,9 @@ public partial class CombatViews : Node3D
     private void SyncBars(World world, float alpha)
     {
         UnitStore u = world.Units;
-        int n = UnitHpBars.Collect(u.Alive, u.TypeId, u.Hp, _data.Units, _hurt);
+        FogView? fog = Fog?.Refreshed(world);
+        // The hurt units the screen shows: through the fog's shown list, so a hidden unit gets no bar.
+        int n = UnitHpBars.Collect(fog != null ? fog.UnitShown : u.Alive, u.TypeId, u.Hp, _data.Units, _hurt);
         float len = BarLength * _barScale, thick = BarThickness * _barScale;
         for (int k = 0; k < n; k++)
         {

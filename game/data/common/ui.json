@@ -21,7 +21,8 @@
     "unit_in_the_way": "Units in the way",
     "cannot_afford": "Can't afford",
     "store_full": "Too many buildings",
-    "requires": "Locked"
+    "requires": "Locked",
+    "unexplored": "Unexplored"
   },
   "train": {
     "no_building": "No building",

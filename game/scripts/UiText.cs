@@ -23,7 +23,9 @@ namespace Rts.Game;
 /// the state keys those of every <see cref="UnitState"/> (M3-V3) plus <see cref="OrderedAttackKey"/> (M4-V2), the hud keys those of <see cref="HudText"/>; so a member
 /// the sim adds later is a load error here until the file has its text. Each of the three reason sections must also
 /// carry <see cref="ForwardKey"/> (<c>requires</c>), the reason M3-6's <c>requires</c> gating adds: a key with no enum
-/// member yet is accepted (as is any extra key), so the file loads with or without that sim change. Loading is
+/// member yet is accepted (as is any extra key), so the file loads with or without that sim change. The <c>placement</c>
+/// section must also carry <see cref="UnexploredKey"/> (M4-V4), the text for M4-3b's "footprint not explored" refusal: read
+/// the same way (<see cref="UnexploredPlacementText"/>), and through <see cref="PlacementText"/> once the sim has the member. Loading is
 /// fail-fast: a root that is not an object is one error (BUG-0110), every missing or empty key is one error naming it
 /// ("ui.json: missing commands.stop.displayName"), and with any error there is no <see cref="UiText"/> (the match logs
 /// them with <c>GD.PushError</c> and runs without the command card and the selection panel).
@@ -35,6 +37,9 @@ public sealed class UiText
 
     /// <summary>The reason key every reason section carries before the sim has its enum member (M3-6's <c>requires</c> gating).</summary>
     public const string ForwardKey = "requires";
+
+    /// <summary>The <c>placement</c> key of the refusal M4-3b adds for a footprint the player hasn't explored (M4-V4: the view's key, added before the sim's member).</summary>
+    public const string UnexploredKey = "unexplored";
 
     /// <summary>The <c>states</c> key of the panel's text for a unit chasing the target of an explicit Attack order (M4-V2; not a <see cref="UnitState"/>: a chaser is <c>Moving</c>).</summary>
     public const string OrderedAttackKey = "ordered_attack";
@@ -96,6 +101,9 @@ public sealed class UiText
 
     /// <summary>The <c>requires</c> text of the <c>placement</c> section (<see cref="ForwardKey"/>), readable before the sim has the reason.</summary>
     public string ForwardPlacementText { get; private set; } = "";
+
+    /// <summary>The <c>unexplored</c> text of the <c>placement</c> section (<see cref="UnexploredKey"/>), readable before the sim has the reason.</summary>
+    public string UnexploredPlacementText { get; private set; } = "";
 
     /// <summary>The <c>requires</c> text of the <c>train</c> section (<see cref="ForwardKey"/>).</summary>
     public string ForwardTrainText { get; private set; } = "";
@@ -179,6 +187,7 @@ public sealed class UiText
             ui.BasicMenu = Menu(menus, "basic", errors);
             ui.AdvancedMenu = Menu(menus, "advanced", errors);
             ui.ForwardPlacementText = Section<PlacementError>(root, "placement", ui._placement, skipZero: true, forward: true, errors);
+            ui.UnexploredPlacementText = Forward<PlacementError>(root, "placement", ui._placement, UnexploredKey, errors);
             ui.ForwardTrainText = Section<TrainError>(root, "train", ui._train, skipZero: true, forward: true, errors);
             ui.ForwardResearchText = Section<ResearchError>(root, "research", ui._research, skipZero: true, forward: true, errors);
             Section<UnitState>(root, "states", ui._states, skipZero: false, forward: false, errors);
@@ -206,6 +215,15 @@ public sealed class UiText
         foreach (T member in Enum.GetValues<T>())
             if (Key(member) == ForwardKey) return into[Convert.ToInt32(member, CultureInfo.InvariantCulture)];
         return Text(section, ForwardKey, $"{name}.{ForwardKey}", errors);
+    }
+
+    // A required key of a reason section that may not have its enum member yet: the member's text once it exists (already
+    // read and reported by Section), else the key read here. Nothing when the section itself is missing (reported once).
+    private static string Forward<T>(JsonElement root, string name, string[] read, string key, List<string> errors) where T : struct, Enum
+    {
+        foreach (T member in Enum.GetValues<T>())
+            if (Key(member) == key) return read[Convert.ToInt32(member, CultureInfo.InvariantCulture)];
+        return root.TryGetProperty(name, out JsonElement section) ? Text(section, key, $"{name}.{key}", errors) : "";
     }
 
     private static string[] Blank(int n)
