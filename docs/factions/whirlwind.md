@@ -67,18 +67,18 @@ can't shoot beyond 3 m and the army can't retreat quickly.
 
 ## Buildings
 
-| Slot | Name | Id | HP | Armor | Cost (G/W) | Build (s) | Footprint | Provides | Requires |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Town Hall | Holy Camp | `whirlwind_holy_camp` | 2400 | 5 | 275 / 275 | 90 | 4×4 | +10 pop, drop-off, trains Camp Follower, researches Age II | — |
-| House | Tent | `whirlwind_tent` | 500 | 3 | 0 / 50 | 20 | 2×2 | +8 pop | — |
-| Camp | Supply Cache | `whirlwind_supply_cache` | 600 | 3 | 0 / 75 | 25 | 2×2 | Drop-off | — |
-| Infantry Hall | Raider Camp | `whirlwind_raider_camp` | 1200 | 4 | 0 / 150 | 40 | 3×3 | Trains Raider, Zealot | — |
-| Ranged Hall | Archer Camp | `whirlwind_archer_camp` | 1200 | 4 | 0 / 150 | 40 | 3×3 | Trains Desert Archer | — |
-| Shock Hall | Horse Lines | `whirlwind_horse_lines` | 1200 | 4 | 75 / 150 | 45 | 3×3 | Trains Horse Raider | Raider Camp |
-| Forge | Smithy | `whirlwind_smithy` | 1000 | 4 | 100 / 100 | 40 | 3×3 | Upgrades, Dryjhna's Prophecy | — |
-| Caster Hall | Shrine of the Whirlwind | `whirlwind_shrine` | 1200 | 4 | 150 / 150 | 50 | 3×3 | Trains Priest of the Whirlwind | Age II |
-| Siege Works | Ram Yard | `whirlwind_ram_yard` | 1400 | 4 | 150 / 200 | 55 | 3×3 | Trains Battering Ram | Age II |
-| Watch Tower | Lookout Tower | `whirlwind_lookout_tower` | 800 | 5 | 50 / 125 | 35 | 2×2 | Attack 10 pierce / 2 s, range 18; sight 24; detector 16 m | Age II |
+| Slot | Name | Id | HP | Armor | Cost (G/W) | Build (s) | Footprint | Sight | Provides | Requires |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Town Hall | Holy Camp | `whirlwind_holy_camp` | 2400 | 5 | 275 / 275 | 90 | 4×4 | 12 | +10 pop, drop-off, trains Camp Follower, researches Age II | — |
+| House | Tent | `whirlwind_tent` | 500 | 3 | 0 / 50 | 20 | 2×2 | 12 | +8 pop | — |
+| Camp | Supply Cache | `whirlwind_supply_cache` | 600 | 3 | 0 / 75 | 25 | 2×2 | 12 | Drop-off | — |
+| Infantry Hall | Raider Camp | `whirlwind_raider_camp` | 1200 | 4 | 0 / 150 | 40 | 3×3 | 12 | Trains Raider, Zealot | — |
+| Ranged Hall | Archer Camp | `whirlwind_archer_camp` | 1200 | 4 | 0 / 150 | 40 | 3×3 | 12 | Trains Desert Archer | — |
+| Shock Hall | Horse Lines | `whirlwind_horse_lines` | 1200 | 4 | 75 / 150 | 45 | 3×3 | 12 | Trains Horse Raider | Raider Camp |
+| Forge | Smithy | `whirlwind_smithy` | 1000 | 4 | 100 / 100 | 40 | 3×3 | 12 | Upgrades, Dryjhna's Prophecy | — |
+| Caster Hall | Shrine of the Whirlwind | `whirlwind_shrine` | 1200 | 4 | 150 / 150 | 50 | 3×3 | 12 | Trains Priest of the Whirlwind | Age II |
+| Siege Works | Ram Yard | `whirlwind_ram_yard` | 1400 | 4 | 150 / 200 | 55 | 3×3 | 12 | Trains Battering Ram | Age II |
+| Watch Tower | Lookout Tower | `whirlwind_lookout_tower` | 800 | 5 | 50 / 125 | 35 | 2×2 | 24 | Attack 10 pierce / 2 s, range 18; sight 24; detector 16 m | Age II |
 
 Building stats follow the template in [02-game-design.md](../02-game-design.md#buildings).
 
@@ -166,7 +166,12 @@ pins only the winner; the margins are not asserted.
 | Shock beats Ranged | Horse Raider v Crossbowman | 1 | 13 (1248) v 15 (1215) | 10 / 13 | 960 / 1248 (77 %) | 18.2 s |
 | Ranged beats casters | Desert Archer v Cadre Mage | 0 | 18 (1224) v 8 (1200) | 16 / 18 | 1088 / 1224 (89 %) | 11.4 s |
 | Ranged beats casters | Desert Archer v Cadre Mage | 1 | 18 (1224) v 8 (1200) | 13 / 18 | 884 / 1224 (72 %) | 13.0 s |
-| Siege beats buildings | 1 Battering Ram v a Billet, against 4 Raiders | - | - | - | 13.8 s v 254.5 s (5 %) | - |
+
+Siege beats buildings (one siege unit, ordered to attack, against the same cost of its faction's line infantry):
+
+| Siege unit | Same cost of line infantry | Building | Siege time | Line time | Siege / line |
+| --- | --- | --- | --- | --- | --- |
+| 1 Battering Ram | 4 Raider | Billet | 13.8 s | 254.5 s | 5 % |
 
 The proposed band (winner keeps 40-65 % of its cost, both seats within 15 points) is a proposal for the owner; every
 Whirlwind row is above it today, Raider v Lancer (95-100 %) most.

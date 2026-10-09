@@ -202,9 +202,9 @@ public class BuildingContentTests
             Assert.Equal(Roster[faction].Length, rows.Length);
             for (int i = 0; i < rows.Length; i++)
             {
-                // Slot | Name | Id | HP | Armor | Cost (G/W) | Build (s) | Footprint | Provides | Requires
+                // Slot | Name | Id | HP | Armor | Cost (G/W) | Build (s) | Footprint | Sight | Provides | Requires (Sight: J)
                 string[] c = rows[i];
-                Assert.Equal(10, c.Length);
+                Assert.Equal(11, c.Length);
                 (BuildingSlot slot, string id, string name) = Roster[faction][i];
                 var t = Template[slot];
                 string where = $"{faction}.md Buildings row {name}";
@@ -215,7 +215,7 @@ public class BuildingContentTests
                 Assert.True($"{t.W}×{t.H}" == c[7], where + " footprint");
 
                 // Provides: pop, drop-off and the units trained here must agree with the data.
-                string provides = c[8];
+                string provides = c[9];
                 // BUG-0111: any "+N pop" claim must be the building's own pop (a 0-pop building claims none).
                 int[] popClaims = Regex.Matches(provides, @"\+(\d+) pop").Select(m => int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture)).ToArray();
                 Assert.True(popClaims.SequenceEqual(t.Pop > 0 ? new[] { t.Pop } : Array.Empty<int>()), where + $" pop claim in '{provides}'");
@@ -230,10 +230,10 @@ public class BuildingContentTests
                 string requires = PageRequires.TryGetValue(slot, out string? r)
                     ? (r == "InfantryHall" ? Roster[faction].Single(e => e.Slot == BuildingSlot.InfantryHall).Name : r)
                     : "—";
-                Assert.True(requires == c[9], where + $" requires '{c[9]}'");
+                Assert.True(requires == c[10], where + $" requires '{c[10]}'");
                 // ...and the data's requires, written as names, is that same cell.
                 BuildingDef b = Data.Buildings[Data.FindBuilding(id)];
-                Assert.True(RequiresText.Cell(Data, b.Requires) == c[9], where + $" requires '{c[9]}' vs data [{string.Join(", ", b.Requires)}]");
+                Assert.True(RequiresText.Cell(Data, b.Requires) == c[10], where + $" requires '{c[10]}' vs data [{string.Join(", ", b.Requires)}]");
             }
         }
     }
@@ -304,5 +304,140 @@ public class BuildingContentTests
     public void I2_TheNeedsReader_FindsEveryNamedRequirement(string description, string names)
     {
         Assert.Equal(names.Length == 0 ? Array.Empty<string>() : names.Split('|'), RequiresText.Needs(description));
+    }
+
+    // D7: the pages' Sight column. docs/02 "Buildings" gives the Watch Tower sight 24; "Vision and fog of war" gives every
+    // other building rules.json's buildingSight, 12 m (docs/03 "Vision, detection, fog").
+    private const int TowerSight = 24;
+    private const int DefaultBuildingSight = 12;
+    private const int SightColumn = 8;
+
+    /// <summary>
+    /// Every page Buildings row's Sight cell against its building's <see cref="BuildingDef.Sight"/>, and every building in
+    /// <paramref name="data"/> against a page row, so a change on either side is reported naming the building and field.
+    /// </summary>
+    private static List<string> SightMismatches(GameData data, Func<string, string[][]> table)
+    {
+        var failures = new List<string>();
+        var onPages = new List<string>();
+        foreach (string faction in Factions)
+            foreach (string[] c in table(faction))
+            {
+                string id = c[2];
+                onPages.Add(id);
+                int i = data.FindBuilding(id);
+                if (i < 0) { failures.Add($"{faction}.md Buildings {id} sight: on the page, not in the data"); continue; }
+                string inData = FactionPage.Text(data.Buildings[i].Sight);
+                if (c[SightColumn] != inData) failures.Add($"{faction}.md Buildings {id} sight: page {c[SightColumn]} vs data {inData}");
+            }
+        foreach (BuildingDef b in data.Buildings)
+            if (!onPages.Contains(b.Key)) failures.Add($"{b.Key} sight: data {FactionPage.Text(b.Sight)}, on no page's Buildings table");
+        return failures;
+    }
+
+    private static string[][] PageTable(string faction) => FactionPage.Table(faction, "Buildings");
+
+    [Fact]
+    public void J_PageSight_IsBuildingDefSight_ForAll20Buildings_BothWays()
+    {
+        Assert.Equal(20, Factions.Sum(f => PageTable(f).Length));
+        List<string> failures = SightMismatches(Data, PageTable);
+        Assert.True(failures.Count == 0, string.Join("\n", failures));
+    }
+
+    [Fact]
+    public void J2_TheSightPin_NamesBuildingAndField_WhenAPageCellChanges()
+    {
+        string[][] Mutated(string faction)
+        {
+            string[][] rows = PageTable(faction).Select(r => (string[])r.Clone()).ToArray();
+            foreach (string[] r in rows)
+            {
+                if (r[2] == "malazan_watchtower") r[SightColumn] = "18";
+                if (r[2] == "malazan_barracks") r[SightColumn] = "14";
+            }
+            return rows;
+        }
+        Assert.Equal(
+            new[]
+            {
+                "malazan.md Buildings malazan_barracks sight: page 14 vs data 12",
+                "malazan.md Buildings malazan_watchtower sight: page 18 vs data 24",
+            },
+            SightMismatches(Data, Mutated));
+    }
+
+    [Fact]
+    public void J3_TheSightPin_NamesBuildingAndField_WhenTheDataChanges()
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("factions/whirlwind/buildings.json", root =>
+        {
+            foreach (JsonObject b in root["buildings"]!.AsArray().Select(n => n!.AsObject()))
+            {
+                if ((string)b["id"]! == "whirlwind_lookout_tower") b["sight"] = 20;
+                if ((string)b["id"]! == "whirlwind_tent") b["sight"] = 14;
+            }
+        });
+        DataLoadResult r = DataLoader.LoadAll(dir.Path);
+        Assert.True(r.Ok, string.Join("\n", r.Errors));
+        Assert.Equal(
+            new[]
+            {
+                "whirlwind.md Buildings whirlwind_tent sight: page 12 vs data 14",
+                "whirlwind.md Buildings whirlwind_lookout_tower sight: page 24 vs data 20",
+            },
+            SightMismatches(r.Data!, PageTable));
+    }
+
+    [Fact]
+    public void J4_TowersCarrySight24_EveryOtherBuildingInheritsBuildingSight12()
+    {
+        // rules.json's buildingSight is the 12 every non-tower row of the pages shows.
+        JsonNode rules = JsonNode.Parse(File.ReadAllText(Path.Combine(TestDataDir.Shipped, "common", "rules.json")))!;
+        Assert.Equal(DefaultBuildingSight, (double)rules["buildingSight"]!);
+        Assert.Equal(DefaultBuildingSight, Data.Rules.BuildingSight);
+        foreach (string faction in Factions)
+        {
+            foreach (JsonNode? n in FileList(faction))
+            {
+                string id = (string)n!["id"]!;
+                BuildingSlot slot = Data.Buildings[Data.FindBuilding(id)].Slot;
+                JsonNode? sight = n["sight"];
+                if (slot == BuildingSlot.WatchTower)
+                    Assert.True(sight != null && (double)sight == TowerSight, $"{id} sight: data {sight?.ToJsonString() ?? "none"}, expected {TowerSight}");
+                else
+                    Assert.True(sight == null, $"{id} sight: data carries {sight?.ToJsonString()}, expected none (rules.json buildingSight)");
+            }
+            foreach (string[] c in PageTable(faction))
+            {
+                BuildingSlot slot = FactionPage.Slot<BuildingSlot>(c[0]);
+                string expected = FactionPage.Text(slot == BuildingSlot.WatchTower ? TowerSight : Data.Rules.BuildingSight);
+                Assert.True(expected == c[SightColumn], $"{faction}.md Buildings {c[2]} sight: page {c[SightColumn]}, expected {expected}");
+            }
+        }
+    }
+
+    [Fact]
+    public void J5_Docs02_StatesTheBuildingDefaultAndTheTowersSight()
+    {
+        float tower = Data.Buildings.Single(b => b.Key == "malazan_watchtower").Sight;
+        Assert.Equal(TowerSight, tower);
+        // The Buildings table: only the Watch Tower names a sight, the tower's.
+        foreach ((BuildingSlot slot, (string provides, string _)) in Docs02Rows())
+        {
+            Match m = Regex.Match(provides, @"sight (\d+)");
+            string said = m.Success ? m.Groups[1].Value : "none";
+            string expected = slot == BuildingSlot.WatchTower ? FactionPage.Text(tower) : "none";
+            Assert.True(expected == said, $"docs/02 Buildings {slot} sight: page {said}, expected {expected}");
+        }
+        // "Vision and fog of war": the default and the tower's, in meters.
+        string vision = FactionPage.DocText(Path.Combine("docs", "02-game-design.md"), "Vision and fog of war", 2);
+        Match d = Regex.Match(vision, @"Buildings see (\d+) m unless");
+        Assert.True(d.Success && d.Groups[1].Value == FactionPage.Text(Data.Rules.BuildingSight),
+            $"docs/02 Vision and fog buildingSight: page '{(d.Success ? d.Groups[1].Value : "none")}' vs data {FactionPage.Text(Data.Rules.BuildingSight)}");
+        Match w = Regex.Match(vision, @"Watch Tower sees (\d+) m");
+        Assert.True(w.Success && w.Groups[1].Value == FactionPage.Text(tower),
+            $"docs/02 Vision and fog Watch Tower sight: page '{(w.Success ? w.Groups[1].Value : "none")}' vs data {FactionPage.Text(tower)}");
     }
 }
