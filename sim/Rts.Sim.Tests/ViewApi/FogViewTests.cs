@@ -210,14 +210,152 @@ public class FogViewTests
         Assert.Equal(0, FogView.MinimapAlpha(200)); // a stray value draws as visible, never as a hole of black
     }
 
-    [Fact]
-    public void Ghosts_AreTheM43bHook_AndCollectNothingYet()
+    // ---- Ghosts (M4-V5) ----
+
+    /// <summary>A flat 64 map: player 1's Tent at cell (30, 30) (footprint 60-64 m), player 0's scout 5 m west of it (one fog update run).</summary>
+    private static (Simulation Sim, EntityHandle Scout, EntityHandle Tent, FogView View) GhostScene()
     {
-        Simulation sim = CombatViewScene.Create();
+        Simulation sim = Flat(size: 64);
+        EntityHandle tent = TowerTests.PlaceBuilding(sim, 1, TowerTests.Tent, 30, 30);
+        EntityHandle scout = Spotter(sim, 0, new Vector2(55f, 62f));
         World w = sim.World;
-        var view = new FogView(w.Fog.Width, w.Fog.Height, w.Units.Capacity, w.Buildings.Capacity, 0);
-        var a = new int[8];
-        Assert.Equal(0, view.CollectGhosts(w.Fog, a, a, a));
+        return (sim, scout, tent, new FogView(w.Fog.Width, w.Fog.Height, w.Units.Capacity, w.Buildings.Capacity, 0));
+    }
+
+    private static void Refresh(FogView view, World w) =>
+        view.Refresh(w.Fog, w.TickNumber, w.Units.Alive, w.Buildings.Alive, w.Buildings.Generation);
+
+    // The independent rule: a known entry whose building isn't the one drawn in its slot now.
+    private static bool Unseen(World w, int slot)
+    {
+        BuildingGhost g = w.Fog.Ghosts(0)[slot];
+        return g.Known && !(w.Fog.CanSeeBuilding(0, slot) && w.Buildings.Generation[slot] == g.Generation);
+    }
+
+    [Fact]
+    public void Ghosts_ASeenBuilding_IsAGhostOnlyWhileUnseen_AndGoesWhenItsGroundIsSeenAfterItDied()
+    {
+        (Simulation sim, EntityHandle scout, EntityHandle tent, FogView view) = GhostScene();
+        World w = sim.World;
+        Refresh(view, w);
+        Assert.True(view.ShowsBuilding(tent.Index));
+        Assert.False(view.ShowsGhost(tent.Index)); // in sight: drawn as itself, no ghost
+        Assert.Equal(0, view.GhostCount);
+        w.Units.Free(scout);
+        FogMaps.RunThroughNextUpdate(sim);
+        Refresh(view, w);
+        Assert.False(view.ShowsBuilding(tent.Index));
+        Assert.True(view.ShowsGhost(tent.Index));
+        Assert.Equal(1, view.GhostCount);
+        Assert.Equal(w.Fog.Ghosts(0)[tent.Index], view.Ghosts[tent.Index]);
+        Assert.Equal(tent, view.GhostHandle(tent.Index));
+        // Destroyed out of sight: the ghost stays until the ground is seen again.
+        Assert.True(w.Buildings.Free(tent));
+        for (int t = 0; t < 20; t++) { sim.Tick(); Refresh(view, w); }
+        Assert.True(view.ShowsGhost(tent.Index));
+        Spotter(sim, 0, new Vector2(55f, 62f)); // a fog update without a tick: the next tick's refresh reads it
+        sim.Tick();
+        Refresh(view, w);
+        Assert.False(view.ShowsGhost(tent.Index));
+        Assert.Equal(0, view.GhostCount);
+        Assert.Equal(default, view.GhostHandle(tent.Index));
+    }
+
+    [Fact]
+    public void Ghosts_SlotReusedByAnotherBuilding_TheOldGhostStaysBesideTheNewOne()
+    {
+        (Simulation sim, EntityHandle scout, EntityHandle tent, FogView view) = GhostScene();
+        World w = sim.World;
+        w.Units.Free(scout);
+        FogMaps.RunThroughNextUpdate(sim);
+        Assert.True(w.Buildings.Free(tent));
+        // The freed slot now holds one of player 0's own (shown: its owner sees it) at another cell, a newer generation.
+        EntityHandle own = TowerTests.PlaceBuilding(sim, 0, TowerTests.Tent, 5, 5);
+        Assert.Equal(tent.Index, own.Index);
+        Assert.NotEqual(tent.Generation, own.Generation);
+        sim.Tick();
+        Refresh(view, w);
+        Assert.True(view.ShowsBuilding(own.Index));
+        Assert.True(view.ShowsGhost(tent.Index), "the slot's new building hid the remembered one's ghost");
+        Assert.Equal(tent, view.GhostHandle(tent.Index));
+        Assert.Equal(30 * 64 + 30, view.Ghosts[tent.Index].Cell);
+        // Without the generations (the 4-argument Refresh) a shown slot hides its ghost: why the views pass them.
+        var plain = new FogView(w.Fog.Width, w.Fog.Height, w.Units.Capacity, w.Buildings.Capacity, 0);
+        plain.Refresh(w.Fog, w.TickNumber, w.Units.Alive, w.Buildings.Alive);
+        Assert.False(plain.ShowsGhost(tent.Index));
+    }
+
+    [Fact]
+    public void Ghosts_EqualTheSimsUnseenEntries_EveryTick_AScoutComingAndGoing()
+    {
+        // The scout walks away and back every 150 ticks; the Tent is destroyed unseen at 500 and its slot reused by a
+        // second Tent elsewhere at 520; a third one appears in sight later. Every tick the view's ghosts are the sim's
+        // unseen entries.
+        (Simulation sim, EntityHandle scout, EntityHandle tent, FogView view) = GhostScene();
+        World w = sim.World;
+        w.Units.Hold[scout.Index] = false;
+        int ghostTicks = 0, seenTicks = 0;
+        for (int t = 0; t < 1500; t++)
+        {
+            if (t % 150 == 0) sim.Enqueue(Command.Move(0, scout, t / 150 % 2 == 0 ? new Vector2(10f, 62f) : new Vector2(54f, 62f)));
+            if (t == 500) Assert.True(w.Buildings.Free(tent));
+            if (t == 520) TowerTests.PlaceBuilding(sim, 1, TowerTests.Tent, 30, 44);
+            if (t == 800) TowerTests.PlaceBuilding(sim, 1, TowerTests.Tent, 22, 30);
+            sim.Tick();
+            Refresh(view, w);
+            int want = 0;
+            for (int i = 0; i < w.Buildings.Capacity; i++)
+            {
+                bool unseen = Unseen(w, i);
+                Assert.True(unseen == view.ShowsGhost(i), $"tick {sim.TickNumber}: slot {i} ghost {view.ShowsGhost(i)}, unseen entry {unseen}");
+                if (unseen)
+                {
+                    want++;
+                    Assert.Equal(w.Fog.Ghosts(0)[i], view.Ghosts[i]);
+                }
+                else if (w.Fog.Ghosts(0)[i].Known) seenTicks++;
+            }
+            Assert.Equal(want, view.GhostCount);
+            if (want > 0) ghostTicks++;
+        }
+        _out.WriteLine($"1500 ticks: {ghostTicks} with a ghost, {seenTicks} slot-ticks known and in sight");
+        Assert.True(ghostTicks > 100 && seenTicks > 100, $"{ghostTicks} ghost ticks, {seenTicks} seen: the scene proved nothing");
+    }
+
+    [Fact]
+    public void Ghosts_NoneWhenDisabled()
+    {
+        (Simulation sim, EntityHandle scout, EntityHandle _, FogView _) = GhostScene();
+        World w = sim.World;
+        var view = new FogView(w.Fog.Width, w.Fog.Height, w.Units.Capacity, w.Buildings.Capacity, 0, enabled: false);
+        w.Units.Free(scout);
+        FogMaps.RunThroughNextUpdate(sim);
+        Assert.Equal(1, w.Fog.GhostCount(0));
+        Refresh(view, w);
+        Assert.Equal(0, view.GhostCount);
+        Assert.Equal(0, view.CollectGhosts(w.Fog, w.Buildings.Generation));
+    }
+
+    [Fact]
+    public void GhostPick_HitsTheRememberedBox_OnlyWhereAGhostIsDrawn()
+    {
+        (Simulation sim, EntityHandle scout, EntityHandle tent, FogView view) = GhostScene();
+        World w = sim.World;
+        w.Units.Free(scout);
+        FogMaps.RunThroughNextUpdate(sim);
+        Assert.True(w.Buildings.Free(tent)); // gone: the pick reads the remembered footprint, not the store
+        sim.Tick();
+        Refresh(view, w);
+        var origin = new Vector3(62f, 40f, 82f);
+        var dir = new Vector3(0f, -40f, -20f); // down onto the footprint's centre (62, 62)
+        int slot = BuildingPicker.PickGhostRay(view.GhostShown, view.Ghosts, w.Data.Buildings, w.NavGrid, w.Heightmap, origin, dir, 3f, out float t);
+        Assert.Equal(tent.Index, slot);
+        Assert.True(t > 0f && float.IsFinite(t));
+        Assert.Equal(-1, BuildingPicker.PickGhostRay(view.GhostShown, view.Ghosts, w.Data.Buildings, w.NavGrid, w.Heightmap,
+            new Vector3(20f, 40f, 40f), dir, 3f, out float miss));
+        Assert.True(float.IsPositiveInfinity(miss));
+        Assert.Equal(-1, BuildingPicker.PickGhostRay(new bool[w.Buildings.Capacity], view.Ghosts, w.Data.Buildings, w.NavGrid, w.Heightmap, origin, dir, 3f, out _));
+        Assert.Equal(-1, BuildingPicker.PickGhostRay(view.GhostShown, view.Ghosts, w.Data.Buildings, w.NavGrid, w.Heightmap, origin, new Vector3(float.NaN, 0f, 0f), 3f, out _));
     }
 
     [Fact]
@@ -335,7 +473,8 @@ public class FogViewTests
             for (int f = 0; f < 8; f++)
             {
                 sim.Tick(); // outside the view's cost, but on the measured thread: it allocates nothing either
-                view.Refresh(w.Fog, w.TickNumber, w.Units.Alive, w.Buildings.Alive);
+                view.Refresh(w.Fog, w.TickNumber, w.Units.Alive, w.Buildings.Alive, w.Buildings.Generation);
+                sum += view.CollectGhosts(w.Fog, w.Buildings.Generation);
                 if (view.PackTexture(w.Fog)) raster.DrawFog(view.Texture);
                 raster.DrawDots(view.UnitShown, w.Units.Position, w.Units.Owner);
                 sum += raster.EnemyDotAt(new Vector2(200f, 60f), view.UnitShown, w.Units.Position, w.Units.Owner, 0);
@@ -355,16 +494,15 @@ public class FogViewTests
         World w = viewed.World;
         var view = new FogView(w.Fog.Width, w.Fog.Height, w.Units.Capacity, w.Buildings.Capacity, 0);
         var raster = new MinimapRaster(w.Heightmap, w.NavGrid, new uint[] { 0x4B4F55, 0xC8892E }, w.Units.Capacity);
-        var a = new int[4];
         for (int t = 0; t < 2000; t++)
         {
             viewed.Tick();
             bare.Tick();
-            view.Refresh(w.Fog, w.TickNumber, w.Units.Alive, w.Buildings.Alive);
+            view.Refresh(w.Fog, w.TickNumber, w.Units.Alive, w.Buildings.Alive, w.Buildings.Generation);
             if (view.PackTexture(w.Fog)) raster.DrawFog(view.Texture);
             raster.EnemyDotAt(new Vector2(50f, 48f), view.UnitShown, w.Units.Position, w.Units.Owner, 0);
             view.ShowsPoint(w.Fog, new Vector2(50f, 48f));
-            view.CollectGhosts(w.Fog, a, a, a);
+            view.CollectGhosts(w.Fog, w.Buildings.Generation);
             Assert.Equal(bare.StateHash(), viewed.StateHash());
         }
     }

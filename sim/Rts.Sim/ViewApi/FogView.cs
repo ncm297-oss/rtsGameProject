@@ -1,5 +1,6 @@
 using System;
 using System.Numerics;
+using Rts.Sim.Entities;
 using Rts.Sim.Map;
 using Rts.Sim.Vision;
 
@@ -21,6 +22,9 @@ namespace Rts.Sim.ViewApi;
 /// with the tick number of the last call does nothing: every view may call it each frame.</para>
 /// <para><b>Disabled</b> (the <c>--no-fog</c> dev flag): the texture is all <see cref="VisionConstants.Visible"/> and every live
 /// slot is shown, the pre-M4-V4 screen.</para>
+/// <para><b>Ghosts</b> (M4-V5): <see cref="GhostShown"/> marks the slots whose last-known enemy building
+/// (<c>Fog.Ghosts(player)</c>) isn't drawn now; the views draw those darkened at the remembered anchor and a right-click
+/// on one is an Attack on its remembered handle. None when disabled.</para>
 /// </remarks>
 public sealed class FogView
 {
@@ -30,6 +34,8 @@ public sealed class FogView
     private readonly byte[] _texture;
     private readonly bool[] _unitShown;
     private readonly bool[] _buildingShown;
+    private readonly bool[] _ghostShown;
+    private readonly BuildingGhost[] _ghosts;
 
     /// <summary>Sizes the texture for a <paramref name="width"/> x <paramref name="height"/> cell map and the slot lists for the stores' capacities.</summary>
     /// <param name="player">The local player whose fog is drawn.</param>
@@ -44,6 +50,8 @@ public sealed class FogView
         _texture = new byte[width * height];
         _unitShown = new bool[Math.Max(0, unitCapacity)];
         _buildingShown = new bool[Math.Max(0, buildingCapacity)];
+        _ghostShown = new bool[_buildingShown.Length];
+        _ghosts = new BuildingGhost[_buildingShown.Length];
         if (!enabled) Array.Fill(_texture, VisionConstants.Visible);
     }
 
@@ -117,7 +125,14 @@ public sealed class FogView
     /// <param name="tick">The world's tick number now.</param>
     /// <param name="unitAlive">The unit store's <c>Alive</c> (used when disabled).</param>
     /// <param name="buildingAlive">The building store's <c>Alive</c> (used when disabled).</param>
-    public bool Refresh(FogStore fog, int tick, ReadOnlySpan<bool> unitAlive, ReadOnlySpan<bool> buildingAlive)
+    public bool Refresh(FogStore fog, int tick, ReadOnlySpan<bool> unitAlive, ReadOnlySpan<bool> buildingAlive) =>
+        Refresh(fog, tick, unitAlive, buildingAlive, ReadOnlySpan<int>.Empty);
+
+    /// <summary>
+    /// As the 4-argument overload, and also collects the ghosts (<see cref="CollectGhosts"/>) against the building store's
+    /// <paramref name="buildingGeneration"/> (M4-V5): what the views call.
+    /// </summary>
+    public bool Refresh(FogStore fog, int tick, ReadOnlySpan<bool> unitAlive, ReadOnlySpan<bool> buildingAlive, ReadOnlySpan<int> buildingGeneration)
     {
         if (tick == RefreshedTick) return false;
         RefreshedTick = tick;
@@ -126,6 +141,7 @@ public sealed class FogView
             units[i] = Enabled ? fog.CanSeeUnit(Player, i) : i < unitAlive.Length && unitAlive[i];
         for (int i = 0; i < buildings.Length; i++)
             buildings[i] = Enabled ? fog.CanSeeBuilding(Player, i) : i < buildingAlive.Length && buildingAlive[i];
+        CollectGhosts(fog, buildingGeneration);
         return true;
     }
 
@@ -159,16 +175,51 @@ public sealed class FogView
     public static byte MinimapAlpha(byte state) => MinimapRaster.ToByte(1f - Brightness(state));
 
     /// <summary>
-    /// The last-known enemy buildings to draw as ghosts in explored fog (docs/02 "Vision and fog of war"): writes up to the
-    /// spans' length of (type id, anchor cell, owner) and returns the count. The ghost hook: always 0 until the sim's ghost
-    /// list exists.
+    /// Per building slot: a last-known enemy building drawn as a ghost (M4-V5, docs/02 "Vision and fog of war"): the
+    /// slot's entry in <c>fog.Ghosts(Player)</c> is known and that building isn't drawn now (the slot isn't shown, or it
+    /// holds another generation). Filled by <see cref="CollectGhosts"/>; all false when disabled.
     /// </summary>
-    /// <remarks>TODO(M4-3b): read <c>fog.Ghosts(Player)</c> once the sim's ghost list is on the tree; the view then draws each at
-    /// its anchor, darkened, with no hp bar, and a right-click on one is an Attack on the building.</remarks>
-    public int CollectGhosts(FogStore fog, Span<int> typeId, Span<int> anchor, Span<int> owner)
+    public ReadOnlySpan<bool> GhostShown => _ghostShown;
+
+    /// <summary>Per building slot, the remembered entry as last collected (generation, type, anchor cell, owner); meaningful where <see cref="GhostShown"/> is true.</summary>
+    public ReadOnlySpan<BuildingGhost> Ghosts => _ghosts;
+
+    /// <summary>How many ghosts the last <see cref="CollectGhosts"/> found (the true entries of <see cref="GhostShown"/>).</summary>
+    public int GhostCount { get; private set; }
+
+    /// <summary>Whether building slot <paramref name="slot"/> is drawn as a ghost; false out of range.</summary>
+    public bool ShowsGhost(int slot) => (uint)slot < (uint)_ghostShown.Length && _ghostShown[slot];
+
+    /// <summary>The handle an Attack on slot <paramref name="slot"/>'s ghost names (the slot with its remembered generation); default when the slot shows no ghost.</summary>
+    public EntityHandle GhostHandle(int slot) => ShowsGhost(slot) ? new EntityHandle(slot, _ghosts[slot].Generation) : default;
+
+    /// <summary>
+    /// Fills <see cref="GhostShown"/> and <see cref="Ghosts"/> from <c>fog.Ghosts(Player)</c> and returns the count: a
+    /// known entry is a ghost unless <see cref="BuildingShown"/> marks its slot and <paramref name="buildingGeneration"/>
+    /// (the building store's <c>Generation</c>) says that slot still holds the remembered building (an empty span: shown
+    /// alone hides it). Call after <see cref="Refresh"/> for the same tick (the 5-argument <see cref="Refresh(FogStore, int, ReadOnlySpan{bool}, ReadOnlySpan{bool}, ReadOnlySpan{int})"/>
+    /// does). The sim's list changes only on a fog update tick, but the shown rule can change on any tick (a building
+    /// dies in sight, a slot is reused), so this runs whenever the slot lists do. Allocation-free.
+    /// </summary>
+    /// <remarks>An entry remembers no build progress, so a site seen once draws as a finished building (BUG-0275 item 1;
+    /// the sim's <see cref="BuildingGhost"/> would need the progress).</remarks>
+    public int CollectGhosts(FogStore fog, ReadOnlySpan<int> buildingGeneration)
     {
-        _ = fog;
-        _ = typeId.Length + anchor.Length + owner.Length;
-        return 0;
+        int count = 0;
+        if (Enabled)
+        {
+            ReadOnlySpan<BuildingGhost> list = fog.Ghosts(Player);
+            for (int i = 0; i < _ghostShown.Length; i++)
+            {
+                BuildingGhost g = i < list.Length ? list[i] : default;
+                bool drawn = _buildingShown[i] && (buildingGeneration.IsEmpty || (i < buildingGeneration.Length && buildingGeneration[i] == g.Generation));
+                bool ghost = g.Known && !drawn;
+                _ghostShown[i] = ghost;
+                _ghosts[i] = ghost ? g : default;
+                if (ghost) count++;
+            }
+        }
+        GhostCount = count;
+        return count;
     }
 }

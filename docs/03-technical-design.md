@@ -3884,10 +3884,8 @@ game/shaders/        fog.gdshaderinc (shared uniforms and functions), terrain_fo
   if one, `SelectionController.AttackOrder` on it (one Attack per selected unit, the ring, the sound); else a Move there.
   A click where a hidden enemy stands is a Move (it has no dot): the documented M4-V4 rule. Buildings have no minimap
   dots yet, so the minimap attacks units only.
-- **Ghosts** (docs/02: last-known enemy buildings in explored fog): the sim's ghost list (M4-3b) was not on the tree, so
-  only the hook ships: `FogView.CollectGhosts(fog, typeId, anchor, owner)` returns 0, with a `TODO(M4-3b)` naming
-  `Fog.Ghosts(player)`. Once it lands: draw each at its anchor in its type's box, darkened, no bar, and make a right-click
-  on one an Attack on the building (the sim accepts it, M4-3b).
+- **Ghosts** (docs/02: last-known enemy buildings in explored fog): M4-V4 shipped only a hook returning 0; M4-V5 draws
+  them from `Fog.Ghosts(player)`, see "Implementation (M4-V5)".
 - **Placement text**: `ui.json` `placement.unexplored` ("Unexplored"), a view-only key (`ui.json` is view data, "Implementation (M3-V2)")
   for M4-3b's `PlacementError.Unexplored`. `UiText` requires it like the `requires` forward key
   (`UiText.UnexploredKey`, `UnexploredPlacementText`; a load error when missing); once the sim has the member the ghost
@@ -3904,7 +3902,7 @@ game/shaders/        fog.gdshaderinc (shared uniforms and functions), terrain_fo
   both players every tick of the brawl, with enemies shown, hidden and flipping; a high-ground Crossbowman shown exactly
   while its reveal lasts (never through the fog); `FogView.CellOf` equal to `FogStore.CellOf` on 20,000 points and the
   NaN / infinite / out-of-map edges; `ShowsPoint` equal to the visible state of every cell; brightness and minimap alpha
-  of the three states (a stray value draws visible); the ghost hook returns 0; bad arguments; the minimap fog layer's
+  of the three states (a stray value draws visible); bad arguments; the minimap fog layer's
   alpha per cell (opaque before the first draw, a short span unexplored past its end); `EnemyDotAt` (own dots, hidden
   enemies, the nearer of two overlapping dots, the rim's corner and one cell past it, NaN, player 1's view, and exactly
   the 16 pixels of a lone dot's drawn block); the building pick's filter; 0 bytes for refresh + pack + fog layer + dots +
@@ -3926,8 +3924,70 @@ game/shaders/        fog.gdshaderinc (shared uniforms and functions), terrain_fo
   and uploaded once, the minimap layer clear. Windowed with `-- --shots <dir>` it saves `fog-seedN-tickT.png` at ticks
   2, about 300 and about 900 (looked at: black beyond the base's sight, cleared where the army walked, darkened behind it).
   `AttackOrderViewTest`'s minimap row now expects an Attack on a visible enemy's dot (it expected the M4-V2 Move).
-- **Not yet:** ghosts and the Attack on a ghost (after M4-3b; the hook above); building dots on the minimap; the fog's
-  look and a soft animated edge (M6); stealth visuals (M4-5); zone vision (M4-4).
+- **Not yet:** building dots on the minimap; the fog's look and a soft animated edge (M6); stealth visuals (M4-5); zone
+  vision (M4-4). (Ghosts and the Attack on a ghost: M4-V5.)
+
+### Implementation (M4-V5)
+
+The rest of M4 criterion 5 on screen: enemy buildings the player has seen stay as darkened ghosts in explored fog, and a
+right-click on one attacks it.
+
+- **Which slots are ghosts** (`FogView`, pure, `ViewApi/`): `FogView.Refresh(fog, tick, unitAlive, buildingAlive,
+  buildingGeneration)` (the overload the views call through `FogOfWar`) also runs `CollectGhosts(fog,
+  buildingGeneration)`: building slot *i* is a ghost when `fog.Ghosts(player)[i]` is `Known` and that building isn't drawn
+  now, i.e. not (`BuildingShown[i]` and the slot's generation is the entry's). The generation test matters for a reused
+  slot: the slot's new building (an own one, or a new enemy one seen between fog updates) is drawn and the old one's ghost
+  stays at its remembered anchor until the sim drops or refreshes the entry. Output: `GhostShown` (per slot), `Ghosts` (a
+  copy of each ghost's entry: generation, type, anchor, owner), `GhostCount`, `ShowsGhost`, `GhostHandle(slot)` (the slot
+  with the remembered generation, the handle an Attack names). Disabled (`--no-fog`): no ghosts. The 4-argument
+  `Refresh` (no generations) treats a shown slot as not a ghost. The sim's list changes only on fog updates (`tick % 4
+  == 1`), but the drawn rule can change any tick (a building dies in sight, a slot is reused), so it is recomputed with
+  the hide rule, once per tick; one pass over the building slots, allocation-free.
+- **Drawing** (`BuildingViews`): a per-slot ghost pool separate from the live boxes (a slot can show a new building and
+  the old one's ghost at once): a `MeshInstance3D` made the first time the slot has a ghost, given its remembered type's
+  box mesh, placed on the remembered footprint's centre at full height, in the owner's colour times
+  `FogView.ExploredBrightness` (one material per player, made in `Bind`), no bar; hidden when the entry goes or the
+  building is seen again; re-placed only when the entry's generation or anchor changes. `IsGhostShown`,
+  `GhostGeneration`, `GhostBoxOf`, `GhostsShown`, `GhostMaterial` for tests. A remembered site draws finished, full
+  height (BUG-0275 item 1: `BuildingGhost` keeps no progress or site flag; a sim field first).
+- **Picking**: `BuildingPicker.PickGhostRay(GhostShown, Ghosts, defs, grid, map, origin, direction, boxHeight, out
+  entry)`, the box ray test on each ghost's remembered footprint, full height, terrain occluding as for live boxes.
+  `SelectionController.EnemyAt` (right-click and A + click) takes a ghost when the ray enters its box before any drawn
+  unit, live box or resource prop: `Attack(local, unit, GhostHandle(slot), isBuilding: true)` per selected unit (the sim
+  accepts a remembered handle, M4-3b, also for a building that is already gone, which ends the order when its ground
+  comes into sight). `ContextTarget` (a right-click with a building selected: the rally) treats a ghost's footprint centre
+  like a box's. `TargetRing` draws the red ring on the remembered footprint while the mark's target is a shown ghost of
+  that generation (also once the building is gone), and on the live building otherwise.
+- **Placement text**: no change; the scene now proves the build ghost turns red with "Unexplored" over unexplored ground.
+- **Cost**: one more pass over the building slots per tick in `Refresh`, one per frame in `BuildingViews.Sync`, one ray
+  test per ghost per click. 0 bytes a frame (xUnit with `CollectGhosts` in the 2,000-unit block; the scene's 300 steady
+  frames at `--units 500` with the enemy hall a ghost in all of them).
+- **Tests.** xUnit `ViewApi/FogViewTests`: a seen building is no ghost in sight, a ghost once its cells are explored only
+  (entry, handle), stays when destroyed unseen, goes at the update that shows its ground; the slot-reused case (the
+  slot's own new building shown, the old ghost still drawn at its old anchor; the 4-argument `Refresh` hides it); 1,500
+  ticks of a scout walking to and from an enemy Tent that is destroyed unseen and replaced elsewhere: every tick, every
+  slot, `ShowsGhost` equals the sim's "known and not drawn" entries and `Ghosts` the entries; no ghosts when disabled;
+  `PickGhostRay` (hits a gone building's remembered box, misses beside it, nothing unshown, NaN). Headless scene
+  `res://tests/FogViewTest.tscn`: every frame of the two 900-tick seeds also checks a ghost box exactly for each unseen
+  entry, at the entry's generation and visible, and the count (0 mismatches; 304 frames with ghosts on seed 1, 572 on
+  seed 6); a ghost row per seed (a scout spawned by
+  player 1's Town Hall while player 1 starts a House site beside it; the scout walks home; both ghosts drawn, darkened,
+  at the remembered centre; player 1 cancels the site out of sight and its ghost stays; a right-click on the hall's
+  ghost (`EnemyAt` gives the remembered handle) sends one Attack per selected unit with that handle (5), recorded, the
+  ring on the remembered footprint, the sim takes the orders and the units walk there; a second scout on the flank shows
+  the cancelled site's ground and its ghost goes; twin. The scout is a worker (a soldier would knock the 1-hp site
+  down) and `--units 1` puts the bases at the west and east spots); a hover row (the build ghost over unexplored ground: `CanPlace` says
+  `Unexplored`, red, the label "Unexplored" from `ui.json`; over explored ground by the hall: as `CanPlace` says, not
+  "Unexplored"). Windowed `-- --shots <dir>` saves `ghost-seedN-remembered.png`, `ghost-seedN-site-gone.png` and
+  `hover-seedN-*.png` (looked at, seed 1: the hall and the site as dark brown boxes on grey explored ground, the site
+  full height; after the second scout the hall drawn live in ochre with its bar, the site gone; the red build box with
+  "Unexplored" over black ground).
+- **The seed 21 replay** (BUG-0273): `studio/bugs/BUG-0146-seed21-wood-wedge.replay` re-recorded from
+  `M3PlayableTest -- --seed 21 --break 19` on the M4-3b tree (data hash C22FBFEA0197CF3E; the scene now builds on
+  explored ground; 12,131 ticks), `GatherWedgeQaTests` un-skipped with that `RecordedDataHash` and every checkpoint
+  checked (longest out-of-reach stand 343 ticks). A later data-hash move needs another re-record.
+- **Not yet:** a remembered site drawn as a site (BUG-0275 item 1, needs a sim field); ghosts on the minimap; minimap
+  dots refreshed with the hide rule (BUG-0281 item 3).
 
 ## AI architecture
 

@@ -295,7 +295,7 @@ public class FogViewQaTests
             raster.DrawDots(view.UnitShown, w.Units.Position, w.Units.Owner);
             raster.EnemyDotAt(new Vector2(128f, 128f), view.UnitShown, w.Units.Position, w.Units.Owner, 0);
             view.ShowsPoint(w.Fog, new Vector2(128f, 128f));
-            view.CollectGhosts(w.Fog, a, a, a);
+            view.CollectGhosts(w.Fog, w.Buildings.Generation);
             Assert.Equal(bare.StateHash(), viewed.StateHash());
         }
     }

@@ -7,6 +7,7 @@ using Godot;
 using Rts.Sim;
 using Rts.Sim.Commands;
 using Rts.Sim.Data;
+using Rts.Sim.Economy;
 using Rts.Sim.Entities;
 using Rts.Sim.Replays;
 using Rts.Sim.ViewApi;
@@ -22,7 +23,11 @@ namespace Rts.Game.Tests;
 /// shown units; shots drawn only from visible cells (drawn + hidden = in flight); the minimap's fog layer equal to the
 /// texture (alpha per cell). The minimap right-click: on a visible enemy's dot one Attack per selected unit, on a hidden
 /// enemy's spot a Move. A Desert Archer shooting from outside a held Heavy Infantry's sight: its arrows hidden until they
-/// fly into a visible cell, the archer never shown. Then 300 steady frames at <c>--units 500</c> (0 bytes in the view syncs), the hash twins, and a
+/// fly into a visible cell, the archer never shown. M4-V5: every frame also checks a ghost box exactly for each of the sim's
+/// unseen last-known entries; per seed a ghost row (the enemy hall and a House site scouted, remembered as ghosts, the site
+/// cancelled unseen and its ghost kept until its ground is seen, a right-click on the hall's ghost an Attack per selected
+/// unit with the remembered handle); a hover row (the build ghost red with "Unexplored" over unexplored ground).
+/// Then 300 steady frames at <c>--units 500</c> with a ghost drawn (0 bytes in the view syncs), the hash twins, and a
 /// <c>--no-fog</c> match (everything shown, the texture all visible, uploaded once).
 /// </summary>
 /// <remarks>Headless. Run: <c>&amp; $env:GODOT --headless --path game res://tests/FogViewTest.tscn</c> (seeds 1 and 6;
@@ -49,6 +54,7 @@ public partial class FogViewTest : Node
     // Per-seed tallies.
     private int _frames, _unitMismatch, _buildingMismatch, _barMismatch, _shotMismatch, _textureChecks, _miniChecks;
     private int _enemyShown, _enemyHidden, _flips, _buildingShownEnemy, _buildingHiddenEnemy, _hiddenShots, _drawnShots;
+    private int _ghostMismatch, _ghostFrames;
     private bool[] _lastShown = Array.Empty<bool>();
 
     private World W => _sim.World;
@@ -71,6 +77,8 @@ public partial class FogViewTest : Node
             _data = loaded.Data!;
             CheckOptionsAndText();
             foreach (ulong seed in seeds) await Fog(seed);
+            foreach (ulong seed in seeds) await Ghosts(seed);
+            await UnexploredHover(seeds[0]);
             await HiddenShooter(seeds[0]);
             await Steady(seeds[0]);
             await NoFog(seeds[0]);
@@ -173,8 +181,8 @@ public partial class FogViewTest : Node
         }
         GD.Print($"seed {seed}: {_frames} frames, {_fog.Uploads - uploads0} uploads over 900 ticks ({_textureChecks} texture and {_miniChecks} minimap checks); " +
             $"enemy unit-frames shown {_enemyShown} hidden {_enemyHidden}, {_flips} flips; enemy building-frames shown {_buildingShownEnemy} hidden {_buildingHiddenEnemy}; " +
-            $"shots drawn {_drawnShots} hidden {_hiddenShots}; mismatches units {_unitMismatch} buildings {_buildingMismatch} bars {_barMismatch} shots {_shotMismatch}");
-        Check(_unitMismatch == 0 && _buildingMismatch == 0 && _barMismatch == 0 && _shotMismatch == 0,
+            $"shots drawn {_drawnShots} hidden {_hiddenShots}; ghost-frames {_ghostFrames}; mismatches units {_unitMismatch} buildings {_buildingMismatch} bars {_barMismatch} shots {_shotMismatch} ghosts {_ghostMismatch}");
+        Check(_unitMismatch == 0 && _buildingMismatch == 0 && _barMismatch == 0 && _shotMismatch == 0 && _ghostMismatch == 0,
             $"seed {seed}: mismatches units {_unitMismatch} buildings {_buildingMismatch} bars {_barMismatch} shots {_shotMismatch}");
         Check(_enemyShown > 0 && _enemyHidden > 0 && _flips > 0, $"seed {seed}: enemies shown {_enemyShown} / hidden {_enemyHidden}, {_flips} flips: the fog never hid or showed one");
         Check(_buildingHiddenEnemy > 0, $"seed {seed}: the enemy Town Hall was never hidden");
@@ -187,6 +195,7 @@ public partial class FogViewTest : Node
     {
         _frames = _unitMismatch = _buildingMismatch = _barMismatch = _shotMismatch = _textureChecks = _miniChecks = 0;
         _enemyShown = _enemyHidden = _flips = _buildingShownEnemy = _buildingHiddenEnemy = _hiddenShots = _drawnShots = 0;
+        _ghostMismatch = _ghostFrames = 0;
     }
 
     // What the views drew this frame against the fog (no tick ran since the frame: the test ticks before awaiting it).
@@ -231,6 +240,20 @@ public partial class FogViewTest : Node
             if (!b.Alive[i] || b.Owner[i] == 0) continue;
             if (shown) _buildingShownEnemy++; else _buildingHiddenEnemy++;
         }
+        // Ghosts (M4-V5): a ghost box exactly for each of the sim's known entries whose building isn't drawn now.
+        ReadOnlySpan<BuildingGhost> ghosts = W.Fog.Ghosts(0);
+        int ghostsWanted = 0;
+        for (int i = 0; i < b.Capacity; i++)
+        {
+            BuildingGhost g = ghosts[i];
+            bool want = g.Known && !(W.Fog.CanSeeBuilding(0, i) && b.Generation[i] == g.Generation), shown = _buildings.IsGhostShown(i);
+            if (want) ghostsWanted++;
+            if ((want != shown || (shown && (_buildings.GhostGeneration(i) != g.Generation || _buildings.GhostBoxOf(i) is not { Visible: true })))
+                && _ghostMismatch++ < 3)
+                Check(false, $"{at}: building slot {i} ghost drawn {shown} (gen {_buildings.GhostGeneration(i)}), sim entry known {g.Known} gen {g.Generation} unseen {want}");
+        }
+        if (ghostsWanted != _buildings.GhostsShown && _ghostMismatch++ < 3) Check(false, $"{at}: {_buildings.GhostsShown} ghosts drawn, {ghostsWanted} unseen entries");
+        if (ghostsWanted > 0) _ghostFrames++;
         for (int k = 0; k < _combat.ShownBars; k++)
             if (!W.Fog.CanSeeUnit(0, _combat.BarSlot(k)) && _barMismatch++ < 3) Check(false, $"{at}: a bar over hidden unit {_combat.BarSlot(k)}");
         ProjectileStore s = W.Projectiles;
@@ -359,6 +382,299 @@ public partial class FogViewTest : Node
         await EndMatch();
     }
 
+    // ---- 4a: ghosts (M4-V5) ----
+
+    // Player 0 scouts player 1's base (its Town Hall and a House site player 1 starts beside the scout), walks away: both
+    // stay as darkened ghosts. Player 1 cancels the site out of sight: its ghost stays. A right-click on the hall's ghost
+    // is one Attack per selected unit with the remembered handle; they walk there, and the cancelled site's ghost goes
+    // when their sight shows its ground. Every frame the ghosts drawn are the sim's unseen entries.
+    private async Task Ghosts(ulong seed)
+    {
+        // One unit a side puts the bases at the west and east start spots (with none they stand by the map centre); player
+        // 1's is held so it doesn't chase the scout.
+        StartMatch(seed, "--units", "1", "--zoom", "45");
+        _sim.Tick();
+        _sim.Tick();
+        for (int i = 0; i < U.Capacity; i++)
+            if (U.Alive[i] && U.Owner[i] == 1 && _data.Units[U.TypeId[i]].Slot != UnitSlot.Worker) _sim.Enqueue(Command.HoldPosition(1, new EntityHandle(i, U.Generation[i])));
+        BuildingStore b = W.Buildings;
+        int hall = FirstBuildingOf(1), home = FirstBuildingOf(0);
+        if (!Check(hall >= 0 && home >= 0, $"ghosts seed {seed}: no Town Halls")) { await EndMatch(); return; }
+        var hallH = new EntityHandle(hall, b.Generation[hall]);
+        System.Numerics.Vector2 hc = SelectionController.SiteCenter(W, hall), oc = SelectionController.SiteCenter(W, home);
+        System.Numerics.Vector2 toHome = System.Numerics.Vector2.Normalize(oc - hc);
+        System.Numerics.Vector2 side = new(-toHome.Y, toHome.X);
+        int hi = FirstArmyType(W.FactionOf(0));
+        // The scout is a worker (it never fights unless attack-moved, so it doesn't knock the 1-hp site down); the
+        // attackers wait behind the own base, out of sight of the enemy's.
+        int scoutType = WorkerType(W.FactionOf(0));
+        // Beside the far flank of the enemy's hall, where nothing of player 0's at home sees.
+        System.Numerics.Vector2 scoutAt = hc - toHome * 2f + side * 12f;
+        _sim.Enqueue(Command.SpawnUnit(0, scoutType, scoutAt));
+        int queued = 0;
+        for (int r = 12; r < 40 && queued < 4; r += 2)
+            for (int k = -6; k <= 6 && queued < 4; k += 3)
+            {
+                System.Numerics.Vector2 at = oc + toHome * r + side * k;
+                if (!W.NavGrid.WorldToCell(at, out int cx, out int cy) || !OpenAround(cx, cy)) continue;
+                _sim.Enqueue(Command.SpawnUnit(0, hi, at));
+                queued++;
+            }
+        _sim.Tick();
+        _sim.Tick();
+        var army = new List<EntityHandle>();
+        EntityHandle scout = default;
+        for (int i = 0; i < U.Capacity; i++)
+        {
+            if (!U.Alive[i] || U.Owner[i] != 0) continue;
+            var h = new EntityHandle(i, U.Generation[i]);
+            if (U.TypeId[i] == scoutType && System.Numerics.Vector2.Distance(U.Position[i], scoutAt) < 4f) scout = h;
+            else if (U.TypeId[i] == hi && System.Numerics.Vector2.Distance(U.Position[i], oc) < 50f) army.Add(h);
+        }
+        if (!Check(scout.Generation != 0 && army.Count >= 2, $"ghosts seed {seed}: scout {scout}, {army.Count} attackers spawned")) { await EndMatch(); return; }
+
+        // Player 1 starts a House site in the scout's sight (its worker walks there; the commands are recorded, as any player's).
+        int house = StartBase.BuildingOfSlot(_data, W.FactionOf(1), BuildingSlot.House);
+        int anchor = SiteNear(1, house, hc - toHome * 8f + side * 8f);
+        int worker = WorkerOf(1);
+        if (!Check(anchor >= 0 && worker >= 0, $"ghosts seed {seed}: no House spot ({anchor}) or worker ({worker}) for player 1")) { await EndMatch(); return; }
+        _sim.Enqueue(Command.Build(1, new EntityHandle(worker, U.Generation[worker]), house, PlacementGhost.AnchorPoint(W.NavGrid, anchor)));
+        _camera.SetFocus(hc.X, hc.Y);
+        ResetTallies();
+        int lastVersion = -1, site = -1;
+        for (int t = 0; t < 900 && !(site >= 0 && W.Fog.CanSeeBuilding(0, site) && W.Fog.CanSeeBuilding(0, hall)); t++)
+        {
+            _sim.Tick();
+            await Frame();
+            CheckFrame(seed, ref lastVersion);
+            site = b.SlotAt(anchor % W.NavGrid.Width, anchor / W.NavGrid.Width);
+        }
+        if (!Check(site >= 0 && site != hall && b.UnderConstruction[site] && W.Fog.CanSeeBuilding(0, site) && W.Fog.CanSeeBuilding(0, hall),
+            $"ghosts seed {seed}: player 0 never saw the hall and a House site (site slot {site})")) { await EndMatch(); return; }
+        var siteH = new EntityHandle(site, b.Generation[site]);
+        Check(!_buildings.IsGhostShown(hall) && !_buildings.IsGhostShown(site), $"ghosts seed {seed}: a ghost drawn over a building in sight");
+
+        // The scout walks home: both stay as ghosts.
+        _sim.Enqueue(Command.Move(0, scout, oc + toHome * 30f));
+        for (int t = 0; t < 900 && !(_buildings.IsGhostShown(hall) && _buildings.IsGhostShown(site)); t++)
+        {
+            _sim.Tick();
+            await Frame();
+            CheckFrame(seed, ref lastVersion);
+        }
+        if (!Check(_buildings.IsGhostShown(hall) && _buildings.IsGhostShown(site), $"ghosts seed {seed}: no ghosts once the scout left (hall {_buildings.IsGhostShown(hall)}, site {_buildings.IsGhostShown(site)}; " +
+            $"scout alive {U.IsAlive(scout)} at {U.Position[scout.Index]}, hall at {hc}, home at {oc}; sees hall {W.Fog.CanSeeBuilding(0, hall)} site {W.Fog.CanSeeBuilding(0, site)}; " +
+            $"entries {W.Fog.Ghosts(0)[hall].Known} {W.Fog.Ghosts(0)[site].Known})"))
+        { await EndMatch(); return; }
+        MeshInstance3D box = _buildings.GhostBoxOf(hall)!;
+        Check(!_buildings.IsShown(hall) && box.Visible && box.MaterialOverride == _buildings.GhostMaterial(1)
+            && Math.Abs(box.Position.X - hc.X) < 1e-3f && Math.Abs(box.Position.Z - hc.Y) < 1e-3f,
+            $"ghosts seed {seed}: hall ghost visible {box.Visible} at {box.Position}, want ({hc.X}, {hc.Y}) in the darkened material");
+        Check(_buildings.GhostMaterial(1).AlbedoColor.V < _buildings.PlayerMaterial(1).AlbedoColor.V, $"ghosts seed {seed}: the ghost material is not darker");
+        await Shot($"ghost-seed{seed}-remembered");
+
+        // Player 1 cancels the site out of sight: the sim keeps the entry, the ghost stays.
+        _sim.Enqueue(Command.Cancel(1, SelectionController.SiteCenter(W, site)));
+        for (int t = 0; t < 60; t++)
+        {
+            _sim.Tick();
+            await Frame();
+            CheckFrame(seed, ref lastVersion);
+        }
+        Check(!b.IsAlive(siteH) && _buildings.IsGhostShown(site) && _buildings.GhostGeneration(site) == siteH.Generation,
+            $"ghosts seed {seed}: cancelled unseen site alive {b.IsAlive(siteH)}, ghost {_buildings.IsGhostShown(site)}");
+
+        // A right-click on the hall's ghost: one Attack per selected unit on the remembered handle, the ring on its footprint.
+        _sel.Selection.Clear();
+        foreach (EntityHandle h in army) _sel.Selection.Add(h);
+        await Frame();
+        await Frame();
+        Vector3 mid = new(hc.X, Rts.Sim.ViewApi.TerrainHeight.At(W.Heightmap, hc.X, hc.Y) + BuildingViews.BoxHeight / 2f, hc.Y);
+        Vector2 px = _camera.UnprojectPosition(mid);
+        Check(_sel.EnemyAt(px, out EntityHandle picked, out bool isB) && isB && picked == hallH, $"ghosts seed {seed}: EnemyAt the ghost gave {picked} building {isB}, want {hallH}");
+        int attacks = _sel.IssuedCount(CommandKind.Attack), commands = _runner.Recorder!.CommandCount;
+        Push(Button(MouseButton.Right, true, px));
+        Push(Button(MouseButton.Right, false, px));
+        await Frame();
+        Check(_sel.IssuedCount(CommandKind.Attack) - attacks == army.Count, $"ghosts seed {seed}: right-click on the ghost issued {_sel.IssuedCount(CommandKind.Attack) - attacks} Attacks for {army.Count}");
+        var ring = _match.GetNode<TargetRing>("World3D/TargetRing");
+        _sim.Tick();
+        await Frame();
+        int good = 0;
+        for (int k = commands; k < _runner.Recorder.CommandCount; k++)
+        {
+            Command c = _runner.Recorder.CommandAt(k);
+            if (c.Kind == CommandKind.Attack && c.Player == 0 && c.Target == hallH && c.TargetIsBuilding) good++;
+        }
+        Check(good == army.Count, $"ghosts seed {seed}: {good} recorded Attacks on the hall's ghost, want {army.Count}");
+        Check(ring.Shown && Math.Abs(ring.Ring.Position.X - hc.X) < 1e-3f && Math.Abs(ring.Ring.Position.Z - hc.Y) < 1e-3f,
+            $"ghosts seed {seed}: ring shown {ring.Shown} at {ring.Ring.Position}, want the remembered footprint ({hc.X}, {hc.Y})");
+        _sim.Tick();
+        float before = MeanDistance(army, hc);
+        int accepted = 0;
+        foreach (EntityHandle h in army) if (U.Target[h.Index] == hallH) accepted++;
+        Check(accepted == army.Count, $"ghosts seed {seed}: the sim took {accepted} of {army.Count} Attacks on the ghost");
+
+        // They walk there; a second scout appears on the flank, and the cancelled site's ghost goes the first update its
+        // sight shows the ground.
+        int goneAt = -1;
+        for (int t = 0; t < 2400 && goneAt < 0; t++)
+        {
+            _sim.Tick();
+            await Frame();
+            CheckFrame(seed, ref lastVersion);
+            if (!_buildings.IsGhostShown(site)) goneAt = W.TickNumber;
+            if (t != 100) continue;
+            Check(MeanDistance(army, hc) < before - 3f, $"ghosts seed {seed}: the attackers didn't walk to the ghost ({before} m, now {MeanDistance(army, hc)} m)");
+            Check(_buildings.IsGhostShown(site), $"ghosts seed {seed}: the cancelled site's ghost went before its ground was seen");
+            _sim.Enqueue(Command.SpawnUnit(0, scoutType, scoutAt)); // a second scout looks at the flank
+
+        }
+        Check(goneAt >= 0 && !W.Fog.Ghosts(0)[site].Known && SeesAnyCell(_data.Buildings[house], anchor),
+            $"ghosts seed {seed}: the cancelled site's ghost {(goneAt < 0 ? "never went" : $"went at tick {goneAt}")}");
+        await Shot($"ghost-seed{seed}-site-gone");
+        GD.Print($"ghosts seed {seed}: hall {hall} and site {site} remembered, site cancelled unseen, ghost gone at tick {goneAt}; " +
+            $"{good} Attacks on the ghost; {_frames} frames, {_ghostFrames} with ghosts, mismatches ghosts {_ghostMismatch} buildings {_buildingMismatch} units {_unitMismatch}");
+        Check(_ghostMismatch == 0 && _buildingMismatch == 0 && _unitMismatch == 0, $"ghosts seed {seed}: mismatches ghosts {_ghostMismatch} buildings {_buildingMismatch} units {_unitMismatch}");
+        Twin(seed);
+        await EndMatch();
+    }
+
+    // ---- 4b: the placement ghost over unexplored ground (M4-V5) ----
+
+    private async Task UnexploredHover(ulong seed)
+    {
+        StartMatch(seed, "--units", "1", "--zoom", "40");
+        _sim.Tick();
+        _sim.Tick();
+        var ghost = _match.GetNode<BuildGhost>("World3D/BuildGhost");
+        int house = StartBase.BuildingOfSlot(_data, W.FactionOf(0), BuildingSlot.House);
+        BuildingDef def = _data.Buildings[house];
+        int home = FirstBuildingOf(0);
+        System.Numerics.Vector2 oc = SelectionController.SiteCenter(W, home);
+        // An unexplored spot CanPlace refuses for that alone, and an explored one by the hall.
+        int dark = -1, lit = -1;
+        int w = W.NavGrid.Width, h = W.NavGrid.Height;
+        float bestDark = float.MaxValue, bestLit = float.MaxValue;
+        for (int y = 2; y < h - 6; y += 2)
+            for (int x = 2; x < w - 6; x += 2)
+            {
+                int a = y * w + x;
+                System.Numerics.Vector2 c = StartBase.FootprintCenter(W.NavGrid, def, a);
+                float d = System.Numerics.Vector2.Distance(c, oc);
+                if (d > 40f && d < bestDark && AllAround(house, a, e => e == PlacementError.Unexplored)) (dark, bestDark) = (a, d);
+                if (d > 6f && d < bestLit && W.Fog.IsExplored(0, a) && AllAround(house, a, e => e != PlacementError.Unexplored && e != PlacementError.Blocked)) (lit, bestLit) = (a, d);
+            }
+        if (!Check(dark >= 0 && lit >= 0, $"hover: no unexplored ({dark}) or explored ({lit}) spot")) { await EndMatch(); return; }
+        ghost.Begin(house);
+        string unexplored = UiText.Shared!.UnexploredPlacementText;
+        foreach ((int spot, bool wantUnexplored) in new[] { (dark, true), (lit, false) })
+        {
+            System.Numerics.Vector2 c = StartBase.FootprintCenter(W.NavGrid, def, spot);
+            _camera.SetFocus(c.X, c.Y);
+            await Frame();
+            ghost.ScreenOverride = _camera.UnprojectPosition(new Vector3(c.X, Rts.Sim.ViewApi.TerrainHeight.At(W.Heightmap, c.X, c.Y), c.Y));
+            await Frame();
+            await Frame();
+            bool ok = W.CanPlace(0, house, ghost.Anchor, out PlacementError reason);
+            Check(ghost.Visible && ghost.Valid == ok && ghost.Reason == reason, $"hover {(wantUnexplored ? "unexplored" : "explored")}: ghost {ghost.Valid} {ghost.Reason} at {ghost.Anchor}, CanPlace {ok} {reason}");
+            if (wantUnexplored)
+                Check(reason == PlacementError.Unexplored && !ghost.Valid && ghost.Box.MaterialOverride == ghost.RedMaterial
+                    && ghost.ShownText == unexplored && ghost.ReasonLabel.Text == "Unexplored" && ghost.ReasonLabel.Visible,
+                    $"hover unexplored: reason {reason}, red {ghost.Box.MaterialOverride == ghost.RedMaterial}, text '{ghost.ShownText}'");
+            else
+                Check(reason != PlacementError.Unexplored && ghost.ShownText != unexplored
+                    && ghost.Box.MaterialOverride == (ok ? ghost.GreenMaterial : ghost.RedMaterial),
+                    $"hover explored: reason {reason}, text '{ghost.ShownText}'");
+            GD.Print($"hover {(wantUnexplored ? "unexplored" : "explored")} (seed {seed}): anchor {ghost.Anchor}, {(ok ? "green" : $"red '{ghost.ShownText}' ({reason})")}");
+            await Shot($"hover-seed{seed}-{(wantUnexplored ? "unexplored" : "explored")}");
+        }
+        ghost.ScreenOverride = null;
+        ghost.End();
+        await EndMatch();
+    }
+
+    private int FirstBuildingOf(int player)
+    {
+        for (int i = 0; i < W.Buildings.Capacity; i++)
+            if (W.Buildings.Alive[i] && W.Buildings.Owner[i] == player) return i;
+        return -1;
+    }
+
+    private int WorkerOf(int player)
+    {
+        for (int i = 0; i < U.Capacity; i++)
+            if (U.Alive[i] && U.Owner[i] == player && _data.Units[U.TypeId[i]].Slot == UnitSlot.Worker) return i;
+        return -1;
+    }
+
+    private int WorkerType(int faction)
+    {
+        for (int t = 0; t < _data.Units.Length; t++)
+            if (_data.Units[t].Faction == faction && _data.Units[t].Slot == UnitSlot.Worker) return t;
+        return 0;
+    }
+
+    private int FirstArmyType(int faction)
+    {
+        for (int t = 0; t < _data.Units.Length; t++)
+            if (_data.Units[t].Faction == faction && _data.Units[t].Slot != UnitSlot.Worker) return t;
+        return 0;
+    }
+
+    // The anchor nearest `near` where `player` may place `type` now, or -1.
+    private int SiteNear(int player, int type, System.Numerics.Vector2 near)
+    {
+        int w = W.NavGrid.Width, best = -1;
+        float bestD = float.MaxValue;
+        for (int y = 0; y < W.NavGrid.Height; y++)
+            for (int x = 0; x < w; x++)
+            {
+                System.Numerics.Vector2 c = StartBase.FootprintCenter(W.NavGrid, _data.Buildings[type], y * w + x);
+                float d = System.Numerics.Vector2.DistanceSquared(c, near);
+                if (d >= bestD || d > 400f || !W.CanPlace(player, type, y * w + x, out _)) continue;
+                (best, bestD) = (y * w + x, d);
+            }
+        return best;
+    }
+
+    // Whether every anchor within 2 cells of `anchor` gets a CanPlace reason `ok` accepts (the cursor's anchor may be a cell off).
+    private bool AllAround(int type, int anchor, Func<PlacementError, bool> ok)
+    {
+        int w = W.NavGrid.Width;
+        for (int dy = -2; dy <= 2; dy++)
+            for (int dx = -2; dx <= 2; dx++)
+            {
+                W.CanPlace(0, type, anchor + dy * w + dx, out PlacementError r);
+                if (!ok(r)) return false;
+            }
+        return true;
+    }
+
+    private bool OpenAround(int x, int y)
+    {
+        for (int dy = -1; dy <= 1; dy++)
+            for (int dx = -1; dx <= 1; dx++)
+                if (!W.NavGrid.IsPassable(x + dx, y + dy) || W.Buildings.SlotAt(x + dx, y + dy) >= 0) return false;
+        return true;
+    }
+
+    private bool SeesAnyCell(BuildingDef def, int anchor)
+    {
+        int w = W.NavGrid.Width;
+        for (int dy = 0; dy < def.FootprintHeight; dy++)
+            for (int dx = 0; dx < def.FootprintWidth; dx++)
+                if (W.Fog.IsVisible(0, anchor + dy * w + dx)) return true;
+        return false;
+    }
+
+    private float MeanDistance(List<EntityHandle> units, System.Numerics.Vector2 to)
+    {
+        float sum = 0f;
+        foreach (EntityHandle h in units) sum += System.Numerics.Vector2.Distance(U.Position[h.Index], to);
+        return sum / units.Count;
+    }
+
     // ---- 4: 300 steady frames at --units 500, 0 bytes ----
 
     private async Task Steady(ulong seed)
@@ -369,6 +685,16 @@ public partial class FogViewTest : Node
         System.Numerics.Vector2 west = Centroid(0), east = Centroid(1);
         for (int i = 0; i < U.Capacity; i++)
             if (U.Alive[i]) _sim.Enqueue(Command.AttackMove(U.Owner[i], new EntityHandle(i, U.Generation[i]), U.Owner[i] == 0 ? east : west));
+        // A scout by the enemy's hall that turns for home at once (M4-V5): the hall is a ghost through the measured frames.
+        int hall = FirstBuildingOf(1), home = FirstBuildingOf(0);
+        System.Numerics.Vector2 hc = SelectionController.SiteCenter(W, hall), oc = SelectionController.SiteCenter(W, home);
+        _sim.Enqueue(Command.SpawnUnit(0, FirstArmyType(W.FactionOf(0)), hc + System.Numerics.Vector2.Normalize(oc - hc) * 10f));
+        _sim.Tick();
+        _sim.Tick();
+        int scout = -1;
+        for (int i = 0; i < U.Capacity; i++)
+            if (U.Alive[i] && U.Owner[i] == 0 && System.Numerics.Vector2.Distance(U.Position[i], hc) < 13f) scout = i;
+        if (Check(scout >= 0, "steady: the scout was not spawned")) _sim.Enqueue(Command.Move(0, new EntityHandle(scout, U.Generation[scout]), oc));
         // Warm-up: every view and the minimap through a few hundred ticks (nodes, pools, the JIT).
         for (int t = 0; t < 240; t++)
         {
@@ -376,7 +702,7 @@ public partial class FogViewTest : Node
             SyncAll(0.5f);
         }
         long bytes = 0;
-        int uploads0 = _fog.Uploads, ticks0 = W.TickNumber, flips = 0;
+        int uploads0 = _fog.Uploads, ticks0 = W.TickNumber, flips = 0, ghostFrames = 0;
         for (int f = 0; f < 300; f++)
         {
             if (f % 3 == 0) _sim.Tick();
@@ -385,9 +711,11 @@ public partial class FogViewTest : Node
             bytes += GC.GetAllocatedBytesForCurrentThread() - before;
             for (int i = 0; i < U.Capacity; i++)
                 if (_units.IsShown(i) != W.Fog.CanSeeUnit(0, i)) flips++;
+            if (_buildings.GhostsShown > 0) ghostFrames++;
         }
         int uploads = _fog.Uploads - uploads0, ticks = W.TickNumber - ticks0;
-        GD.Print($"steady (seed {seed}, {U.Count} units): 300 frames, {ticks} ticks, {uploads} uploads: {bytes} bytes");
+        GD.Print($"steady (seed {seed}, {U.Count} units): 300 frames, {ticks} ticks, {uploads} uploads, {ghostFrames} frames with ghosts: {bytes} bytes");
+        Check(ghostFrames == 300, $"steady: ghosts drawn in {ghostFrames} of 300 frames (the 0 bytes must cover them)");
         Check(bytes == 0, $"steady: 300 frames at --units 500 allocated {bytes} bytes");
         Check(flips == 0, $"steady: {flips} unit views disagreed with CanSeeUnit");
         Check(uploads <= ticks / VisionConstants.UpdateInterval + 1 && uploads > 0, $"steady: {uploads} uploads over {ticks} ticks");

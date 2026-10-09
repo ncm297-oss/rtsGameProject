@@ -18,7 +18,7 @@ namespace Rts.Sim.Tests.QA;
 /// M4-H1 (BUG-0211): re-recorded from <c>M3PlayableTest -- --seed 21 --break 19</c> on the post-fix, fog-era build (the
 /// state hash covers the fog's explored and visible bits, which no older recording can match): 11,541 ticks, the
 /// scene's run up to its "Heavy Infantry panel" step. The row now checks every recorded checkpoint, so it proves the
-/// shipped data still plays the recorded game tick for tick. The file is headered with the data hash it was recorded at;
+/// shipped data still plays the recorded game tick for tick. M4-V5 (BUG-0273) re-recorded it the same way on the M4-3b tree (placement needs explored ground): 12,131 ticks. The file is headered with the data hash it was recorded at;
 /// <see cref="SameGameDataHashes"/> lists the shipped hashes since then whose changes do not touch this match (the header
 /// is substituted in code: the file is checksummed and lives in studio/).
 /// </para>
@@ -30,8 +30,8 @@ public class GatherWedgeQaTests
 
     public GatherWedgeQaTests(ITestOutputHelper output) => _out = output;
 
-    /// <summary>The replay's recorded data hash (M4-3a's shipped data: the towers' <c>sight</c>, <c>rules.json</c>'s <c>buildingSight</c>).</summary>
-    private const ulong RecordedDataHash = 0x1437FEB446E68586;
+    /// <summary>The replay's recorded data hash (M4-3b's shipped data; re-recorded in M4-V5, BUG-0273).</summary>
+    private const ulong RecordedDataHash = 0xC22FBFEA0197CF3E;
 
     /// <summary>
     /// Shipped data hashes that play the recorded match unchanged: the recording's own. Add one only for a data change that
@@ -43,14 +43,14 @@ public class GatherWedgeQaTests
 
     /// <summary>
     /// Ticks the replay must still match its recorded checkpoints: all of them (M4-H1, BUG-0211; before the re-recording
-    /// only the first 19, the setup before the M4-2a fix changed the match, and from M4-3a none).
+    /// only the first 19, the setup before the M4-2a fix changed the match, and from M4-3a none; M4-V5's re-recording,
+    /// BUG-0273, holds 12,131).
     /// </summary>
-    private const int CheckpointPrefixTicks = 11541;
+    private const int CheckpointPrefixTicks = 12131;
 
-    // M4-3b: the recorded match builds on ground player 0 hasn't explored (the Build at tick 616, a House at (113, 139) m),
-    // which placement refuses since M4-3b (docs/02 "Buildings"), so it no longer plays the recorded game from checkpoint
-    // 617 (and the shipped data hash moved for the towers). Re-record it from M3PlayableTest -- --seed 21 (BUG-0273).
-    [Fact(Skip = "BUG-0273: the seed 21 Playable replay builds on unexplored ground at tick 616; re-record it (M4-3b)")]
+    // M4-V5 (BUG-0273): re-recorded from M3PlayableTest -- --seed 21 --break 19 on the M4-3b tree, whose scene builds on
+    // explored ground (the old recording built a House on unexplored ground at tick 616, which placement refuses since M4-3b).
+    [Fact]
     public void Seed21PlayableReplay_NoGathererStandsOutOfReachForever()
     {
         string path = System.IO.Path.GetFullPath(System.IO.Path.Combine(TestDataDir.Shipped, "..", "..", "studio", "bugs", "BUG-0146-seed21-wood-wedge.replay"));
