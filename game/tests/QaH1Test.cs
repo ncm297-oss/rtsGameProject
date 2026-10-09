@@ -26,6 +26,8 @@ public partial class QaH1Test : Node
     private SelectionController _sel = null!;
     private RtsCamera _camera = null!;
     private Minimap _mini = null!;
+    private CommandCard _card = null!;
+    private SelectionPanel _panel = null!;
     private Simulation _sim = null!;
     private Vector2 _screen;
     private readonly Dictionary<string, int> _actionCounts = new();
@@ -68,6 +70,8 @@ public partial class QaH1Test : Node
         _camera = match.GetNode<RtsCamera>("RtsCamera");
         _camera.EdgePanEnabled = false;
         _mini = match.GetNode<Minimap>("Hud/Minimap");
+        _card = match.GetNode<CommandCard>("Hud/CommandCard");
+        _panel = match.GetNode<SelectionPanel>("Hud/SelectionPanel");
         Tick(3);
         await Frame();
         _screen = _camera.GetViewport().GetVisibleRect().Size;
@@ -416,6 +420,7 @@ public partial class QaH1Test : Node
         {
             if (!U.Alive[i] || U.Owner[i] != 0 || !OnScreen(i)) continue;
             Vector2 p = At(i);
+            if (OnCardButton(p)) continue; // M4-V6a: under a mage's ability button the click is the button's
             if (list.All(o => At(o).DistanceTo(p) > 14f)) list.Add(i);
         }
         return list;
@@ -440,10 +445,21 @@ public partial class QaH1Test : Node
             for (float x = _screen.X * 0.1f; x < _screen.X * 0.9f; x += 10)
             {
                 var p = new Vector2(x, y);
-                if (!mini.HasPoint(p) && units.All(u => u.DistanceTo(p) > 30f)) spots.Add(p);
+                // M4-V6a: a mage's ability button (the card's top row) is a visible HUD button, not ground.
+                if (!mini.HasPoint(p) && !OnCardButton(p) && units.All(u => u.DistanceTo(p) > 30f)) spots.Add(p);
             }
         if (spots.Count == 0) throw new InvalidOperationException("no empty ground on screen");
         return spots[rng.Next(spots.Count)];
+    }
+
+    // A visible card button or the selection panel's area (its portrait cells select): HUD, not the 3D view. The panel
+    // reaches y 498, inside the spots' band, so a pick there could select a portrait (seen once M4-V6a's buttons moved the
+    // picks).
+    private bool OnCardButton(Vector2 p)
+    {
+        for (int i = 0; i < CommandCard.Cells; i++)
+            if (_card.ButtonAt(i).IsVisibleInTree() && _card.ButtonAt(i).GetGlobalRect().Grow(4).HasPoint(p)) return true;
+        return _panel.IsVisibleInTree() && _panel.GetGlobalRect().Grow(4).HasPoint(p);
     }
 
     private void Check(bool ok, string message)

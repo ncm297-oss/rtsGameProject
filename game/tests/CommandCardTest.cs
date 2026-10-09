@@ -930,7 +930,7 @@ public partial class CommandCardTest : Node
             CardCommand w = want.TryGetValue(i, out CardCommand c) ? c : CardCommand.None;
             Button b = _card.ButtonAt(i);
             if (!Check(_card.ActionAt(i) == w && b.Visible == (w != CardCommand.None), $"{what}: cell {i} is {_card.ActionAt(i)} (visible {b.Visible}), want {w}")) continue;
-            if (w is CardCommand.None or CardCommand.Place or CardCommand.Train or CardCommand.Research) continue;
+            if (w is CardCommand.None or CardCommand.Place or CardCommand.Train or CardCommand.Research or CardCommand.Ability) continue;
             Check(_card.NameAt(i).Text == _ui.CommandName(w) && _card.HintAt(i).Text == _ui.CommandHint(w), $"{what}: cell {i} reads '{_card.NameAt(i).Text}' / '{_card.HintAt(i).Text}'");
         }
     }
@@ -970,7 +970,9 @@ public partial class CommandCardTest : Node
     {
         System.Numerics.Vector2 hall = HallCenter(0);
         return Enumerable.Range(0, U.Capacity)
-            .Where(i => U.Alive[i] && U.Owner[i] == 0 && _data.Units[U.TypeId[i]].Slot != UnitSlot.Worker)
+            .Where(i => U.Alive[i] && U.Owner[i] == 0 && _data.Units[U.TypeId[i]].Slot != UnitSlot.Worker
+            // M4-V6a: a caster's type puts its abilities on Q W E R; this scene's unit card is the plain one (AbilityViewTest has the row).
+            && _data.Units[U.TypeId[i]].Abilities.IsEmpty)
             .OrderBy(i => System.Numerics.Vector2.Distance(U.Position[i], hall)).Take(n)
             .Select(i => new EntityHandle(i, U.Generation[i])).ToList();
     }

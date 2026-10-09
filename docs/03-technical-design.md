@@ -4089,6 +4089,76 @@ right-click on one attacks it.
 - **Not yet:** a remembered site drawn as a site (BUG-0275 item 1, needs a sim field); ghosts on the minimap; minimap
   dots refreshed with the hide rule (BUG-0281 item 3).
 
+### Implementation (M4-V6a)
+
+Telas Fire from the window (M4 criterion 8 on screen, slice 1 of the ability view): an ability button on the command
+card, a targeting mode with the range ring and the radius ring, one `UseAbility` per click for the nearest ready selected
+caster, and the cast drawn on the caster. Reads only what "For the view (M4-V6)" lists; no sim change.
+
+```
+Match.tscn  (new node)
+  World3D/AbilityViews  Node3D, AbilityViews.cs: targeting rings, cast bars, cast-point rings
+sim/Rts.Sim/ViewApi/AbilityCaster.cs   the caster pick and the button's cooldown read (pure, allocation-free)
+```
+
+- **Caster rule** (`ViewApi.AbilityCaster`, docs/02 "only the nearest selected caster casts"): a selected unit is *ready*
+  for ability *a* when it is live, its type lists *a* (`IndexOf`: the index a `UseAbility` names) and
+  `AbilityReadyTick[slot * 4 + index] <= TickNumber`. `PickCaster` takes the ready unit whose centre is nearest the target
+  point, but one already casting or walking to cast *a* (`CastAbility == index`) only when no free one is ready (a second
+  click with two mages starts the second, not a recast of the first); a queued (Shift) click never picks a busy one (its
+  cast would pop after the resolve, on cooldown, and be dropped). Ties: the earlier unit in the selection.
+  `SoonestReady` is the button's read: 0 when some selected unit with *a* is off cooldown, else the fewest ticks until one
+  is, -1 when none has it. `Progress(castTicksLeft, defCastTicks)` is the cast bar's fill.
+- **Card** (`CommandCard`, M3-V2 layout): a unit card puts the abilities of the active Tab subgroup's type on the top row,
+  cells 0-3 (Q W E R, `card_0`..`card_3`), in the type's list order: the ability's `displayName`, the cell's grid key as the
+  hint, the tooltip "<description>\nRange 16 m  Radius 3 m  Cooldown 25 s" (labels `ui.json` `hud.range`, `hud.radius`,
+  `hud.cooldown`, units `hud.meters`, `hud.seconds`: the four new keys, required by `UiText`). The row is rebuilt when the
+  active subgroup's type changes (Tab). Each frame `SoonestReady` greys it: while no selected unit with the ability is
+  off cooldown the button is disabled, its name and hint dimmed (`DimAlpha`) and its bottom line reads the whole seconds
+  left rounded up ("12 s", strings made in `Init`); only a change of that number rewrites it. Its grid key (seen before the
+  controller's keys while a unit card is up) and its button both call `SelectionController.BeginAbility`, which arms only
+  when `SoonestReady` is 0: a dimmed press sends nothing and arms nothing. New `CardCommand.Ability`; `AbilityAt(i)`,
+  `AbilitySecondsAt(i)`.
+- **Targeting** (`SelectionController`, like A + click): `TargetKind` `UseAbility` with `TargetAbility` (the ability id).
+  The point is `AbilityPoint(screen)`: an enemy unit drawn under the cursor (`EnemyAt`) gives its position, else the
+  ground under the ray. A left click sends `AbilityOrder(ability, point, queued)`: exactly one
+  `Command.UseAbility(local, caster, index, point, queued)` for `PickCaster`'s unit, one Command sound, `LastCaster`;
+  nothing (no sound) when none is ready or the command queue is full; Shift queues it on that caster only. The click
+  disarms (off the map it stays armed). Right-click or Esc cancels with no command, as for A. The F12 first line ends
+  "cast <id>" while armed.
+- **Rings** (`AbilityViews`, each frame while armed): a ring of the ability's `radius` at `AbilityPoint(mouse)` and one of
+  its `range` round the caster `PickCaster` would choose there (interpolated position), hidden when no one is ready or the
+  cursor is off the map. Each is a flat torus whose outer radius is the def's value (band `RingWidth` 0.22 m), one mesh per
+  ability and ring, made the first time it is armed; a frame moves two nodes. Orange area, pale blue reach.
+- **Casts** (`AbilityViews`, each frame): every unit the fog shows in `UnitState.Casting` gets a violet cast bar
+  above its hp bar's place (`BarAbove` 0.25 m higher, the hp bar's zoom growth), filled to `Progress(CastTicks,
+  def.CastTicks)`; every own unit with `CastAbility` set (walking in or standing) gets an orange ring of the ability's radius
+  on its `CastPoint`. Two bar `MultiMesh`es and one ring `MultiMesh` (a unit torus scaled per instance), one instance per
+  unit slot, written densely. The selection panel already names the state ("Casting", `ui.json` `states.casting`); a
+  walker reads "Moving". The F12 overlay adds a line "casting N   statused M" (live units in `Casting`, live units with any
+  status), its fifth of six; the tick graph moved down a line to y 158 (the label ends at 146), as `CombatViewTest`'s
+  layout row checks.
+- **Cost.** One fog-filtered unit pick and one selection scan for the rings, one pass over the unit slots for the casts,
+  one selection scan per ability button: 0 bytes a frame (the scene's 300 frames at `--units 500` with the rings armed and
+  bars and cast rings drawn in 294 of them).
+- **Tests.** xUnit `ViewApi/AbilityCasterTests` (nearer of two ready mages, ties; the nearer on cooldown after a real
+  cast: the other, both: none and the soonest ticks; a busy caster passed over for a free one, recast only alone, never
+  queued; non-casters, dead and stale handles; `Progress`; 0 bytes). Headless scene `res://tests/AbilityViewTest.tscn`
+  ("ABILITY VIEW TEST PASS"; seeds 1 and 6, `--no-combat`, two Cadre Mages 20 m and 30 m west of four Raiders and a Laborer
+  spotter): `ui.json` rows (each new hud key present, its removal one named error); the card (Telas Fire on Q with the grid
+  key, the tooltip from the data and `ui.json`, live; the row follows Tab; steady frames don't rewrite it); Q, Esc, the
+  button and a right-click arm and cancel with no command; the rings (radius ring at the clicked Raider with outer radius
+  == the def's 3 m, range ring == 16 m round the nearer mage; a point by the far mage picks it); a click on a Raider through
+  the viewport sends exactly one `UseAbility` (the nearer mage, index 0, the Raider's position, not queued, one sound),
+  the mage walks in with its cast-point ring, stands "Casting" (panel, one cast bar at the cast's progress, "casting 1"
+  on F12), resolves, and the Raiders burn (`Statuses.Count > 0`), its button 25 s; Shift + click with it on cooldown sends
+  one queued `UseAbility` for the far mage only; both on cooldown: the button disabled and dimmed with "N s", Q, the button
+  and `AbilityOrder` send nothing; hash twins; 300 frames at `--units 500` (72 mages selected, two casts beside them every
+  30 frames, the cursor sweeping) 0 bytes, and its twin. Windowed `-- --shots <dir>` saves
+  `ability-seedN-targeting.png` and `ability-seedN-casting.png`.
+- **Not yet (M4-V6b):** Burning / Slowed markers from `Units.Statuses`, the resolve flash from `AbilityEvents`; zone and
+  stealth visuals; autocast toggles; enemy cast-point rings.
+
 ## AI architecture
 
 The AI lives in `Rts.Sim.Ai`, inside the sim assembly, because it must be deterministic (it uses

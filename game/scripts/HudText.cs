@@ -21,4 +21,12 @@ public enum HudText
     Kills,
     /// <summary>The resource bar's loss count label ("L"; M4-V1).</summary>
     Losses,
+    /// <summary>The ability tooltip's effect radius label ("Radius"; M4-V6a).</summary>
+    Radius,
+    /// <summary>The ability tooltip's cooldown label ("Cooldown"; M4-V6a).</summary>
+    Cooldown,
+    /// <summary>The unit after a number of seconds ("s"; M4-V6a: the ability tooltip and the cooldown left on its button).</summary>
+    Seconds,
+    /// <summary>The unit after a distance ("m"; M4-V6a: the ability tooltip's range and radius).</summary>
+    Meters,
 }

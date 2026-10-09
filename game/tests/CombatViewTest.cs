@@ -445,7 +445,7 @@ public partial class CombatViewTest : Node
         float right = float.MaxValue;
         foreach (Control c in new Control[] { _bar, _bar.PopLabel, _bar.KillsLabel }) right = Math.Min(right, c.GetGlobalRect().Position.X);
         string[] lines = label.Text.Split('\n');
-        Check(lines.Length == 5, $"seed {seed} tick {tick}: F12 label has {lines.Length} lines, want 5");
+        Check(lines.Length == 6, $"seed {seed} tick {tick}: F12 label has {lines.Length} lines, want 6 (M4-V6a: the casting line)");
         float widest = 0f;
         foreach (string line in lines)
         {

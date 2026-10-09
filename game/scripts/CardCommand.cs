@@ -25,4 +25,6 @@ public enum CardCommand
     Train,
     /// <summary>A production card entry (M3-V3): queues its tech at the selected building (<c>Command.Research</c>).</summary>
     Research,
+    /// <summary>An ability of the active subgroup's type (M4-V6a): arms ability targeting; labelled with the ability's <c>displayName</c>.</summary>
+    Ability,
 }

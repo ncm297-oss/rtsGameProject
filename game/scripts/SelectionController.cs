@@ -55,6 +55,8 @@ public partial class SelectionController : Node
     private static readonly int IssuedSlots = MaxKind() + 1;
     private readonly int[] _issued = new int[IssuedSlots];
     private CommandKind _target = CommandKind.Noop;
+    // The ability armed by its card button or grid key (M4-V6a), meaningful while _target is UseAbility.
+    private int _targetAbility = -1;
 
     // The selected building: slot and generation (view state only; -1 for none).
     private int _building = -1, _buildingGen;
@@ -90,8 +92,14 @@ public partial class SelectionController : Node
         private set { if (!value) _target = CommandKind.Noop; }
     }
 
-    /// <summary>The order the next targeting click gives: <see cref="CommandKind.AttackMove"/> (A), <see cref="CommandKind.Move"/> (M), or <see cref="CommandKind.Noop"/> when not targeting.</summary>
+    /// <summary>The order the next targeting click gives: <see cref="CommandKind.AttackMove"/> (A), <see cref="CommandKind.Move"/> (M), <see cref="CommandKind.UseAbility"/> (an ability button, M4-V6a), or <see cref="CommandKind.Noop"/> when not targeting.</summary>
     public CommandKind TargetKind => _target;
+
+    /// <summary>The ability id (index into <c>GameData.Abilities</c>) the next targeting click casts, or -1 when ability targeting is not armed (M4-V6a).</summary>
+    public int TargetAbility => _target == CommandKind.UseAbility ? _targetAbility : -1;
+
+    /// <summary>The unit the last ability order went to (M4-V6a); default before the first.</summary>
+    public EntityHandle LastCaster { get; private set; }
 
     /// <summary>The command card that sees keys and clicks first (build menus, ghost); null without a HUD.</summary>
     public CommandCard? Card { get; set; }
@@ -274,11 +282,96 @@ public partial class SelectionController : Node
     /// <summary>What M does (M3-V2): arms Move targeting (a plain move ignoring enemies, today what a right click on ground does), only when something is selected.</summary>
     public void BeginMove() => _target = Selection.Count > 0 ? CommandKind.Move : CommandKind.Noop;
 
-    /// <summary>What a left click at <paramref name="screen"/> does while targeting: gives the armed order (<see cref="TargetKind"/>: attack-move after A, move after M) at the ground there (queued while <c>order_queue</c> is held) and disarms; false (still armed) when not targeting or off the map. After A, a click on an enemy unit or building (<see cref="EnemyAt"/>) is an <c>Attack</c> on it instead (M4-V2).</summary>
+    /// <summary>
+    /// What an ability button or its grid key does (M4-V6a): arms targeting for ability <paramref name="abilityId"/> when
+    /// some selected unit has it off cooldown (<see cref="AbilityCaster.SoonestReady"/>); false (nothing armed, any
+    /// other targeting left as it was) otherwise.
+    /// </summary>
+    public bool BeginAbility(int abilityId)
+    {
+        if (_runner?.Simulation is not Simulation sim) return false;
+        World world = sim.World;
+        if ((uint)abilityId >= (uint)world.Data.Abilities.Length) return false;
+        Selection.Prune(world.Units.Alive, world.Units.Generation);
+        if (SoonestReady(abilityId) != 0) return false;
+        _target = CommandKind.UseAbility;
+        _targetAbility = abilityId;
+        return true;
+    }
+
+    /// <summary>
+    /// The point an ability click at <paramref name="screen"/> aims at (M4-V6a): an enemy unit drawn under the cursor
+    /// (<see cref="EnemyAt"/>) gives its position, so a click on a body means the unit and not the ground behind it; else
+    /// the ground under the ray. False when the ray meets neither. Allocation-free.
+    /// </summary>
+    public bool AbilityPoint(Vector2 screen, out System.Numerics.Vector2 point)
+    {
+        point = default;
+        if (_runner?.Simulation is not Simulation sim) return false;
+        World world = sim.World;
+        if (EnemyAt(screen, out EntityHandle enemy, out bool isBuilding) && !isBuilding && world.Units.IsAlive(enemy))
+        {
+            point = world.Units.Position[enemy.Index];
+            return true;
+        }
+        Vector3 o = _camera.ProjectRayOrigin(screen), d = _camera.ProjectRayNormal(screen);
+        if (!GroundPicker.TryPick(world.Heightmap, new(o.X, o.Y, o.Z), new(d.X, d.Y, d.Z), out System.Numerics.Vector3 hit)) return false;
+        point = new System.Numerics.Vector2(hit.X, hit.Z);
+        return true;
+    }
+
+    /// <summary>The selected unit that would cast ability <paramref name="abilityId"/> at <paramref name="point"/> (<see cref="AbilityCaster.PickCaster"/>: the nearest ready one), its list index in <paramref name="index"/>; -1 for none.</summary>
+    public int PickCaster(int abilityId, System.Numerics.Vector2 point, bool queued, out int index)
+    {
+        index = -1;
+        if (_runner?.Simulation is not Simulation sim || (uint)abilityId >= (uint)sim.World.Data.Abilities.Length) return -1;
+        World world = sim.World;
+        UnitStore u = world.Units;
+        return AbilityCaster.PickCaster(Selection.Items, u.Alive, u.Generation, u.TypeId, u.Position, u.CastAbility, u.AbilityReadyTick,
+            world.Data.Units, abilityId, world.TickNumber, point, queued, out index);
+    }
+
+    /// <summary>What the ability button shows for ability <paramref name="abilityId"/> (<see cref="AbilityCaster.SoonestReady"/> over the selection, live units only): 0 when a selected unit with it is off cooldown, else the fewest ticks until one is; -1 when none has it.</summary>
+    public int SoonestReady(int abilityId)
+    {
+        if (_runner?.Simulation is not Simulation sim || (uint)abilityId >= (uint)sim.World.Data.Abilities.Length) return -1;
+        World world = sim.World;
+        UnitStore u = world.Units;
+        return AbilityCaster.SoonestReady(Selection.Items, u.Alive, u.Generation, u.TypeId, u.AbilityReadyTick, world.Data.Units, abilityId, world.TickNumber);
+    }
+
+    /// <summary>
+    /// The ability order (M4-V6a, docs/02 "Ability system"): exactly one <c>UseAbility</c> of <paramref name="abilityId"/>
+    /// at <paramref name="point"/> for the nearest ready selected caster (<see cref="PickCaster"/>), queued when
+    /// <paramref name="queued"/>; one Command sound. Nothing when no selected unit is ready, the point is not finite or the
+    /// command queue is full. The sim walks the caster into range and drops what it refuses. Returns true if it enqueued.
+    /// </summary>
+    public bool AbilityOrder(int abilityId, System.Numerics.Vector2 point, bool queued)
+    {
+        if (_runner?.Simulation is not Simulation sim || !float.IsFinite(point.X) || !float.IsFinite(point.Y)) return false;
+        Selection.Prune(sim.World.Units.Alive, sim.World.Units.Generation);
+        int caster = PickCaster(abilityId, point, queued, out int index);
+        if (caster < 0 || !RoomFor(sim, 1, "Ability")) return false;
+        var h = new EntityHandle(caster, sim.World.Units.Generation[caster]);
+        sim.Enqueue(Command.UseAbility(LocalPlayer, h, index, point, queued));
+        LastCaster = h;
+        _issued[(int)CommandKind.UseAbility]++;
+        _sfx?.Play(SfxEvent.Command);
+        return true;
+    }
+
+    /// <summary>What a left click at <paramref name="screen"/> does while targeting: gives the armed order (<see cref="TargetKind"/>: attack-move after A, move after M) at the ground there (queued while <c>order_queue</c> is held) and disarms; false (still armed) when not targeting or off the map. After A, a click on an enemy unit or building (<see cref="EnemyAt"/>) is an <c>Attack</c> on it instead (M4-V2). After an ability button, the click is one <see cref="AbilityOrder"/> at <see cref="AbilityPoint"/> (M4-V6a), and disarms even when no caster is ready.</summary>
     public bool AttackMoveClick(Vector2 screen)
     {
         if (!Targeting) return false;
         bool queued = Input.IsActionPressed("order_queue");
+        if (_target == CommandKind.UseAbility)
+        {
+            if (!AbilityPoint(screen, out System.Numerics.Vector2 point)) return false;
+            int ability = _targetAbility;
+            Targeting = false;
+            return AbilityOrder(ability, point, queued);
+        }
         if (_target == CommandKind.AttackMove && EnemyAt(screen, out EntityHandle enemy, out bool isBuilding))
         {
             AttackOrder(enemy, isBuilding, queued);
