@@ -44,6 +44,8 @@ to the page so the next drift fails a test naming the row. Severity stays S3 (a 
 - The pages had no hp column, so "912 -> 888 hp" needed one: the group table gained "Winner hp left" (the surviving
   winners' summed hit points, `Side.Hp`) on both pages. Every other cell is unchanged except the Lancer seat-1 time
   (21.5 s -> 22.0 s); the siege tables are byte-identical.
-- Regression: `EveryPrintedRow_EqualsItsPageRow(malazan)` failed on the old page (time column, and the missing hp
-  column); `AMutatedPageCell_FailsNamingPairSeatAndColumn` writes 21.5 s / 912 back into the row in memory and checks the
+- Regression: `EveryPrintedRow_EqualsItsPageRow(malazan)` failed on the old page, but naming only the header (the
+  missing hp column): the header check returned before the rows, so the stale 21.5 s cell was not reported (BUG-0290;
+  corrected in D-H1, after which the old page reports the header and the 21.5 s cell together);
+  `AMutatedPageCell_FailsNamingPairSeatAndColumn` writes 21.5 s / 912 back into the row in memory and checks the
   failure names `malazan.md`, "Wickan Lancer v Desert Archer seat 1" and the column.

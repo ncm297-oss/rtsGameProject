@@ -440,4 +440,117 @@ public class BuildingContentTests
         Assert.True(w.Success && w.Groups[1].Value == FactionPage.Text(tower),
             $"docs/02 Vision and fog Watch Tower sight: page '{(w.Success ? w.Groups[1].Value : "none")}' vs data {FactionPage.Text(tower)}");
     }
+
+    // BUG-0090's last item: docs/02 "Buildings" gives the Watch Tower an attack and a detector ("Stealth and detection":
+    // Watch Towers detect at 16 m), and the towers' descriptions say so. A description says it shoots when it has the
+    // word "shoots" / "fires"; it says it detects when it "spots" / "reveals" / "detects" hidden enemies or units.
+    private static readonly Regex SaysShoots = new(@"\b(shoots|fires)\b", RegexOptions.IgnoreCase);
+    private static readonly Regex SaysDetects = new(@"\b(spots|reveals|detects) hidden (enemies|units)\b", RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// Every building's description against its <see cref="BuildingDef.Attack"/> and <see cref="BuildingDef.Detector"/>,
+    /// both ways: text that says it shoots / spots hidden enemies needs the field, and a building with the field says so.
+    /// Each mismatch names the building and the field, in <see cref="GameData.Buildings"/> order (ids ascending).
+    /// </summary>
+    private static List<string> TowerTextMismatches(GameData data)
+    {
+        var failures = new List<string>();
+        foreach (BuildingDef b in data.Buildings)
+        {
+            bool saysShoots = SaysShoots.IsMatch(b.Description), shoots = b.Attack != null;
+            if (saysShoots && !shoots) failures.Add($"{b.Key} attack: description says it shoots, data has no attack");
+            if (shoots && !saysShoots) failures.Add($"{b.Key} attack: data has an attack, description does not say it shoots");
+            bool saysDetects = SaysDetects.IsMatch(b.Description), detects = b.Detector > 0;
+            if (saysDetects && !detects) failures.Add($"{b.Key} detector: description says it spots hidden enemies, data has no detector");
+            if (detects && !saysDetects) failures.Add($"{b.Key} detector: data has detector {FactionPage.Text(b.Detector)}, description does not say it spots hidden enemies");
+        }
+        return failures;
+    }
+
+    [Fact]
+    public void K_BUG0090_ATowerThatSaysItShootsAndSpots_HasAttackAndDetector_BothWays()
+    {
+        List<string> failures = TowerTextMismatches(Data);
+        Assert.True(failures.Count == 0, string.Join("\n", failures));
+        // The shipped pair the pin is about: both towers say both, and carry both.
+        foreach (string faction in Factions)
+        {
+            BuildingDef t = Data.Buildings[Data.FindBuilding(Roster[faction].Single(e => e.Slot == BuildingSlot.WatchTower).Id)];
+            Assert.True(t.Attack != null && t.Detector > 0, $"{t.Key}: attack {(t.Attack != null)}, detector {FactionPage.Text(t.Detector)}");
+            Assert.True(SaysShoots.IsMatch(t.Description) && SaysDetects.IsMatch(t.Description), $"{t.Key} description: '{t.Description}'");
+        }
+    }
+
+    private static GameData LoadEdited(string faction, Action<JsonObject> edit)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson($"factions/{faction}/buildings.json", root =>
+        {
+            foreach (JsonObject b in root["buildings"]!.AsArray().Select(n => n!.AsObject())) edit(b);
+        });
+        DataLoadResult r = DataLoader.LoadAll(dir.Path);
+        Assert.True(r.Ok, string.Join("\n", r.Errors));
+        return r.Data!;
+    }
+
+    [Fact]
+    public void K2_TheTowerPin_NamesBuildingAndField_WhenTheDataChanges()
+    {
+        GameData malazan = LoadEdited("malazan", b =>
+        {
+            if ((string)b["id"]! == "malazan_watchtower") b.Remove("detector");
+        });
+        GameData whirlwind = LoadEdited("whirlwind", b =>
+        {
+            if ((string)b["id"]! == "whirlwind_lookout_tower") b.Remove("attack");
+            // A building that gains the fields without the words fails the other way.
+            if ((string)b["id"]! == "whirlwind_tent")
+            {
+                b["attack"] = JsonNode.Parse("""{ "value": 10, "type": "pierce", "cooldown": 2, "range": 18, "windup": 0.4, "projectile": "arrow", "targets": "units" }""");
+                b["detector"] = 16;
+            }
+        });
+        Assert.Equal(new[] { "malazan_watchtower detector: description says it spots hidden enemies, data has no detector" }, TowerTextMismatches(malazan));
+        Assert.Equal(
+            new[]
+            {
+                "whirlwind_lookout_tower attack: description says it shoots, data has no attack",
+                "whirlwind_tent attack: data has an attack, description does not say it shoots",
+                "whirlwind_tent detector: data has detector 16, description does not say it spots hidden enemies",
+            },
+            TowerTextMismatches(whirlwind));
+    }
+
+    [Fact]
+    public void K3_TheTowerPin_NamesBuildingAndField_WhenTheTextChanges()
+    {
+        GameData malazan = LoadEdited("malazan", b =>
+        {
+            if ((string)b["id"]! == "malazan_watchtower")
+                b["description"] = "A manned tower that watches the approaches and shoots at intruders; needs Age II.";
+            if ((string)b["id"]! == "malazan_billet")
+                b["description"] = "Bunks for a squad that shoots at anyone near, raising your population cap by 8.";
+        });
+        GameData whirlwind = LoadEdited("whirlwind", b =>
+        {
+            if ((string)b["id"]! == "whirlwind_lookout_tower")
+                b["description"] = "A tall lookout that watches the sands and spots hidden enemies; needs Age II.";
+            if ((string)b["id"]! == "whirlwind_tent")
+                b["description"] = "Shelter from the sun that spots hidden enemies, raising your population cap by 8.";
+        });
+        Assert.Equal(
+            new[]
+            {
+                "malazan_billet attack: description says it shoots, data has no attack",
+                "malazan_watchtower detector: data has detector 16, description does not say it spots hidden enemies",
+            },
+            TowerTextMismatches(malazan));
+        Assert.Equal(
+            new[]
+            {
+                "whirlwind_lookout_tower attack: data has an attack, description does not say it shoots",
+                "whirlwind_tent detector: description says it spots hidden enemies, data has no detector",
+            },
+            TowerTextMismatches(whirlwind));
+    }
 }

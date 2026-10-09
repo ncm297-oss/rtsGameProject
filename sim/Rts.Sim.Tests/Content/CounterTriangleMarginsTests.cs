@@ -117,7 +117,7 @@ public class CounterTriangleMarginsTests
     public void EveryPrintedRow_EqualsItsPageRow(string faction)
     {
         Report r = Measured.Value;
-        string[] lines = File.ReadAllLines(Path.Combine(TestDataDir.RepoRoot(), "docs", "factions", faction + ".md"));
+        string[] lines = PageTables.FactionLines(faction);
         string[] problems = PageProblems(faction, lines, r.Group, r.Siege);
         Assert.True(problems.Length == 0, $"docs/factions/{faction}.md \"Balance baseline\" differs from the harness (re-print it from " +
             "AllEightPairs_BothSeats_PrintTheMarginTable_AndTheDocWinnerWins' output):\n" + string.Join("\n", problems));
@@ -135,7 +135,7 @@ public class CounterTriangleMarginsTests
     public void AMutatedPageCell_FailsNamingPairSeatAndColumn(string faction, string rowMark, string cell, string mutant, string key, string column)
     {
         Report r = Measured.Value;
-        string[] lines = File.ReadAllLines(Path.Combine(TestDataDir.RepoRoot(), "docs", "factions", faction + ".md"));
+        string[] lines = PageTables.FactionLines(faction);
         int i = Array.FindIndex(lines, l => l.Contains(rowMark, StringComparison.Ordinal));
         Assert.True(i >= 0 && lines[i].Contains(cell, StringComparison.Ordinal), $"{faction}.md: no row '{rowMark}' with '{cell}'");
         lines[i] = lines[i].Replace(cell, mutant);
@@ -147,6 +147,58 @@ public class CounterTriangleMarginsTests
     }
 
     /// <summary>
+    /// The Malazan page in memory with one group-table column dropped and, optionally, one Lancer seat-1 cell put back.
+    /// Dropping column 5 ("Winner hp left") and putting 21.5 s back gives the group table as it stood before D8 (1a9925b):
+    /// every other cell is the current page's, which is what that page had.
+    /// </summary>
+    private static string[] PreD8MalazanPage(int dropColumn, string? staleCell, string? stale)
+    {
+        string[] lines = PageTables.FactionLines("malazan");
+        int i = PageTables.HeadingStartingWith(lines, "## Balance baseline");
+        while (!lines[i].StartsWith('|')) i++;
+        Assert.True(lines[i] == GroupHeader, $"malazan.md group header is '{lines[i]}', expected the printed one");
+        for (; i < lines.Length && lines[i].StartsWith('|'); i++)
+        {
+            List<string> cells = PageTables.Cells(lines[i]).ToList();
+            cells.RemoveAt(dropColumn);
+            lines[i] = "| " + string.Join(" | ", cells) + " |";
+            if (staleCell != null && lines[i].Contains("| Wickan Lancer v Desert Archer | 1 |", StringComparison.Ordinal))
+            {
+                Assert.Contains(staleCell, lines[i]);
+                lines[i] = lines[i].Replace(staleCell, stale!);
+            }
+        }
+        return lines;
+    }
+
+    /// <summary>
+    /// BUG-0290: a header change no longer hides the rows. The pre-D8 page reports its header (naming the missing column)
+    /// and, in the same run, the stale 21.5 s cell by pair, seat and column.
+    /// </summary>
+    [Fact]
+    public void BUG0290_AHeaderMismatch_StillReportsTheStaleCells()
+    {
+        Report r = Measured.Value;
+        string[] problems = PageProblems("malazan", PreD8MalazanPage(5, "| 22.0 s |", "| 21.5 s |"), r.Group, r.Siege);
+        Assert.True(problems.Length == 2, $"expected the header and one cell, got {problems.Length}:\n" + string.Join("\n", problems));
+        Assert.StartsWith("malazan.md group table: header '| Rule | Winner v loser | Winner seat | Fielded (winner v loser) | Winner left | Winner keeps (cost) | Time to last death |'", problems[0]);
+        Assert.Contains("page lacks 'Winner hp left'", problems[0]);
+        Assert.Contains("rows compared on the shared columns", problems[0]);
+        Assert.Equal("malazan.md group table: Wickan Lancer v Desert Archer seat 1, column 'Time to last death': page '21.5 s' vs sim '22.0 s'", problems[1]);
+    }
+
+    /// <summary>BUG-0290: when the page lacks a column that names a row, the header problem says the rows were not checked.</summary>
+    [Fact]
+    public void BUG0290_AHeaderWithoutARowKey_SaysTheRowsAreUnchecked()
+    {
+        Report r = Measured.Value;
+        string[] problems = PageProblems("malazan", PreD8MalazanPage(2, null, null), r.Group, r.Siege);
+        Assert.True(problems.Length == 1, $"expected one problem, got {problems.Length}:\n" + string.Join("\n", problems));
+        Assert.Contains("page lacks 'Winner seat'", problems[0]);
+        Assert.Contains("rows not checked (the page lacks the row key 'Winner seat')", problems[0]);
+    }
+
+    /// <summary>
     /// Compares the "## Balance baseline" section of a page with the printed rows: Malazan's page carries every row,
     /// another faction's page the rows its own unit wins. Each expected row must be on the page once with every cell
     /// equal, both headers must be the printed ones, and the page may have no row the harness does not print.
@@ -154,45 +206,57 @@ public class CounterTriangleMarginsTests
     internal static string[] PageProblems(string faction, string[] lines, Row[] group, Row[] siege)
     {
         var problems = new List<string>();
-        int i = Array.FindIndex(lines, l => l.StartsWith("## Balance baseline", StringComparison.Ordinal));
+        int i = PageTables.HeadingStartingWith(lines, "## Balance baseline");
         if (i < 0) return new[] { $"{faction}.md has no '## Balance baseline' heading" };
-        var tables = new List<List<string>>();
-        for (i++; i < lines.Length && !lines[i].StartsWith("## ", StringComparison.Ordinal); i++)
-        {
-            if (!lines[i].StartsWith('|')) continue;
-            if (i == 0 || !lines[i - 1].StartsWith('|')) tables.Add(new List<string>());
-            tables[^1].Add(lines[i].Trim());
-        }
+        List<List<string>> tables = PageTables.TablesInSection(lines, i);
         if (tables.Count != 2) return new[] { $"{faction}.md \"Balance baseline\": {tables.Count} tables, expected 2 (groups, siege)" };
         Compare(faction, "group", GroupHeader, tables[0], group, problems);
         Compare(faction, "siege", SiegeHeader, tables[1], siege, problems);
         return problems.ToArray();
     }
 
+    /// <summary>
+    /// One table against its printed rows. A header that differs is reported with the columns it lacks or adds, and the
+    /// rows are still compared on the columns both share, matched by name (BUG-0290: a re-print then fixes the header and
+    /// every stale cell in one round). Only when the page lacks a column that names a row are the rows left unchecked,
+    /// and the message says so.
+    /// </summary>
     private static void Compare(string faction, string table, string header, List<string> page, Row[] printed, List<string> problems)
     {
         string where = $"{faction}.md {table} table";
-        if (page[0] != header) { problems.Add($"{where}: header '{page[0]}' vs printed '{header}'"); return; }
-        string[] columns = Cells(header);
-        string[][] pageRows = page.Skip(2).Select(Cells).ToArray();
+        string[] columns = PageTables.Cells(header);
+        string[] pageColumns = PageTables.Cells(page[0]);
+        // For each printed column, where the page has it (-1: not on the page).
+        int[] at = columns.Select(c => Array.IndexOf(pageColumns, c)).ToArray();
         // Group rows are keyed by "Winner v loser" + seat, siege rows by the siege unit: the columns that name the row.
-        Func<string[], string> keyOf = table == "group" ? c => $"{c[1]} seat {c[2]}" : c => c[0];
+        int[] keyColumns = table == "group" ? new[] { 1, 2 } : new[] { 0 };
+        if (page[0] != header)
+        {
+            string missing = string.Join(", ", columns.Where(c => !pageColumns.Contains(c)).Select(c => $"'{c}'"));
+            string extra = string.Join(", ", pageColumns.Where(c => !columns.Contains(c)).Select(c => $"'{c}'"));
+            string[] unkeyed = keyColumns.Where(k => at[k] < 0).Select(k => $"'{columns[k]}'").ToArray();
+            problems.Add($"{where}: header '{page[0]}' vs printed '{header}'" +
+                (missing.Length > 0 ? $"; page lacks {missing}" : "") + (extra.Length > 0 ? $"; page adds {extra}" : "") +
+                (unkeyed.Length > 0 ? $"; rows not checked (the page lacks the row key {string.Join(", ", unkeyed)})" : "; rows compared on the shared columns"));
+            if (unkeyed.Length > 0) return;
+        }
+        string[][] pageRows = page.Skip(2).Select(r => PageTables.Cells(r)).ToArray();
+        string PrintedKey(string[] c) => table == "group" ? $"{c[1]} seat {c[2]}" : c[0];
+        string PageKey(string[] c) => table == "group" ? $"{c[at[1]]} seat {c[at[2]]}" : c[at[0]];
         var expected = printed.Where(r => faction == "malazan" || r.WinnerFaction == faction).ToArray();
         foreach (Row row in expected)
         {
-            string[] want = Cells(row.Markdown);
-            string k = keyOf(want);
-            string[][] found = pageRows.Where(c => c.Length == want.Length && keyOf(c) == k).ToArray();
+            string[] want = PageTables.Cells(row.Markdown);
+            string k = PrintedKey(want);
+            string[][] found = pageRows.Where(c => c.Length == pageColumns.Length && PageKey(c) == k).ToArray();
             if (found.Length != 1) { problems.Add($"{where}: {row.Key}: {found.Length} page rows, expected 1"); continue; }
             for (int c = 0; c < want.Length; c++)
-                if (found[0][c] != want[c])
-                    problems.Add($"{where}: {row.Key}, column '{columns[c]}': page '{found[0][c]}' vs sim '{want[c]}'");
+                if (at[c] >= 0 && found[0][at[c]] != want[c])
+                    problems.Add($"{where}: {row.Key}, column '{columns[c]}': page '{found[0][at[c]]}' vs sim '{want[c]}'");
         }
-        var expectedKeys = expected.Select(r => keyOf(Cells(r.Markdown))).ToHashSet(StringComparer.Ordinal);
+        var expectedKeys = expected.Select(r => PrintedKey(PageTables.Cells(r.Markdown))).ToHashSet(StringComparer.Ordinal);
         foreach (string[] c in pageRows)
-            if (c.Length != columns.Length || !expectedKeys.Contains(keyOf(c)))
+            if (c.Length != pageColumns.Length || !expectedKeys.Contains(PageKey(c)))
                 problems.Add($"{where}: page row '| {string.Join(" | ", c)} |' is not a row the harness prints for this page");
     }
-
-    private static string[] Cells(string markdownRow) => markdownRow.Trim().Trim('|').Split('|').Select(c => c.Trim()).ToArray();
 }

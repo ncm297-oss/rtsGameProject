@@ -388,8 +388,7 @@ public class TechContentTests
     /// </summary>
     internal static string AgesClauseBullet(string[] lines)
     {
-        int i = Array.IndexOf(lines, "### Ages");
-        Assert.True(i >= 0, "docs/02 has no '### Ages' heading");
+        int i = PageTables.Heading(lines, "### Ages", "docs/02");
         var bullets = new List<string>();
         for (i++; i < lines.Length && !lines[i].StartsWith('#'); i++)
         {
@@ -420,7 +419,7 @@ public class TechContentTests
         Pin(where, "Ages clause halls with the Forge", clause.Groups["m"].Value, CountWords[t.RequiresAnyOfCount - 1]);
     }
 
-    private static string[] Doc02Lines() => File.ReadAllLines(Path.Combine(TestDataDir.RepoRoot(), Doc02));
+    private static string[] Doc02Lines() => PageTables.Lines(Doc02);
 
     /// <summary>The rule sentence as docs/02 writes it; the mutants below replace it in memory.</summary>
     private const string AgesRuleSentence = "two production halls, or one hall and the Forge.";

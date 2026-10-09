@@ -9,7 +9,7 @@ internal static class FactionPage
     /// The first table after the <c>## <paramref name="section"/></c> heading, as trimmed cells per row (header and
     /// separator dropped). Backticks around ids are stripped.
     /// </summary>
-    public static string[][] Table(string faction, string section) => DocTable(Path.Combine("docs", "factions", faction + ".md"), section);
+    public static string[][] Table(string faction, string section) => DocTable(PageTables.FactionPath(faction), section);
 
     /// <summary>
     /// As <see cref="Table"/>, for any markdown file under the repo root (e.g. <c>docs/02-game-design.md</c>);
@@ -17,14 +17,9 @@ internal static class FactionPage
     /// </summary>
     public static string[][] DocTable(string relativePath, string section, int level = 2)
     {
-        string[] lines = File.ReadAllLines(Path.Combine(TestDataDir.RepoRoot(), relativePath));
-        string heading = new string('#', level) + " " + section;
-        int i = Array.IndexOf(lines, heading);
-        Assert.True(i >= 0, $"{relativePath} has no '{heading}' heading");
-        while (i < lines.Length && !lines[i].StartsWith('|')) i++;
-        var rows = new List<string[]>();
-        for (i += 2; i < lines.Length && lines[i].StartsWith('|'); i++)
-            rows.Add(lines[i].Trim().Trim('|').Split('|').Select(c => c.Trim().Trim('`')).ToArray());
+        string[] lines = PageTables.Lines(relativePath);
+        int i = PageTables.Heading(lines, new string('#', level) + " " + section, relativePath);
+        List<string[]> rows = PageTables.FirstTableRows(lines, i, stripBackticks: true);
         Assert.NotEmpty(rows);
         return rows.ToArray();
     }
@@ -35,9 +30,8 @@ internal static class FactionPage
     /// </summary>
     public static string Paragraph(string faction, string heading)
     {
-        string[] lines = File.ReadAllLines(Path.Combine(TestDataDir.RepoRoot(), "docs", "factions", faction + ".md"));
-        int i = Array.IndexOf(lines, "## " + heading);
-        Assert.True(i >= 0, $"{faction}.md has no '## {heading}' heading");
+        string[] lines = PageTables.FactionLines(faction);
+        int i = PageTables.Heading(lines, "## " + heading, faction + ".md");
         for (i++; i < lines.Length && lines[i].Trim().Length == 0; i++) { }
         var text = new List<string>();
         for (; i < lines.Length && lines[i].Trim().Length > 0; i++) text.Add(lines[i].Trim());
@@ -51,10 +45,8 @@ internal static class FactionPage
     /// </summary>
     public static string DocText(string relativePath, string section, int level)
     {
-        string[] lines = File.ReadAllLines(Path.Combine(TestDataDir.RepoRoot(), relativePath));
-        string heading = new string('#', level) + " " + section;
-        int i = Array.IndexOf(lines, heading);
-        Assert.True(i >= 0, $"{relativePath} has no '{heading}' heading");
+        string[] lines = PageTables.Lines(relativePath);
+        int i = PageTables.Heading(lines, new string('#', level) + " " + section, relativePath);
         var text = new List<string>();
         for (i++; i < lines.Length && !lines[i].StartsWith('#'); i++)
             if (lines[i].Trim().Length > 0) text.Add(lines[i].Trim());
@@ -68,10 +60,8 @@ internal static class FactionPage
     /// </summary>
     public static string[] Bullets(string faction, string section, int level)
     {
-        string[] lines = File.ReadAllLines(Path.Combine(TestDataDir.RepoRoot(), "docs", "factions", faction + ".md"));
-        string heading = new string('#', level) + " " + section;
-        int i = Array.IndexOf(lines, heading);
-        Assert.True(i >= 0, $"{faction}.md has no '{heading}' heading");
+        string[] lines = PageTables.FactionLines(faction);
+        int i = PageTables.Heading(lines, new string('#', level) + " " + section, faction + ".md");
         var bullets = new List<string>();
         for (i++; i < lines.Length && !lines[i].StartsWith('#'); i++)
         {
