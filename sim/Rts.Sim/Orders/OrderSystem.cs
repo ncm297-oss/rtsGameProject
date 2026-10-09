@@ -1,4 +1,5 @@
 using System.Numerics;
+using Rts.Sim.Abilities;
 using Rts.Sim.Combat;
 using Rts.Sim.Commands;
 using Rts.Sim.Economy;
@@ -45,7 +46,8 @@ public static class OrderSystem
         UnitStore u = world.Units;
         if (!u.IsAlive(command.Unit) || u.Owner[command.Unit.Index] != command.Player) return;
         int i = command.Unit.Index;
-        bool positional = command.Kind is CommandKind.Move or CommandKind.AttackMove or CommandKind.Gather or CommandKind.Build or CommandKind.Repair;
+        bool positional = command.Kind is CommandKind.Move or CommandKind.AttackMove or CommandKind.Gather or CommandKind.Build or CommandKind.Repair
+            or CommandKind.UseAbility;
         // A target off the map is dropped whether queued or not, so it never takes a queue entry.
         if (positional && !world.NavGrid.WorldToCell(command.Position, out _, out _)) return;
         // Only workers gather, build and repair (M3-2, M3-3); such an order to anyone else is dropped, queued or not.
@@ -53,9 +55,11 @@ public static class OrderSystem
         if (workerOrder && !EconomySystem.IsWorker(world, i)) return;
         // An Attack on nothing it may fight is dropped, queued or not (M4-2a); a queued one is checked again when it starts.
         if (command.Kind == CommandKind.Attack && !CombatSystem.MayAttack(world, i, command.Target, command.TargetIsBuilding)) return;
+        // M4-4a: an ability the unit's type lacks, or one on cooldown, is dropped, queued or not (checked again when a queued one starts).
+        if (command.Kind == CommandKind.UseAbility && !AbilitySystem.CanUse(world, i, command.TypeId, command.Position)) return;
         if (command.IsQueued)
         {
-            int at = Append(u, i, command.Kind, positional ? command.Position : Vector2.Zero, command.Kind == CommandKind.Build ? command.TypeId : 0);
+            int at = Append(u, i, command.Kind, positional ? command.Position : Vector2.Zero, command.Kind is CommandKind.Build or CommandKind.UseAbility ? command.TypeId : 0);
             if (at >= 0 && command.Kind == CommandKind.Attack) u.SetQueuedTarget(at, command.Target, command.TargetIsBuilding);
             return;
         }
@@ -71,6 +75,12 @@ public static class OrderSystem
                 return;
             }
             StartAttack(world, i, command.Target, command.TargetIsBuilding);
+            return;
+        }
+        if (command.Kind == CommandKind.UseAbility)
+        {
+            u.ClearQueue(i);
+            StartAbility(world, i, command.TypeId, command.Position);
             return;
         }
         // A Build or Repair with nothing to build or repair drops the whole command: queue and Hold stay.
@@ -162,6 +172,9 @@ public static class OrderSystem
             case CommandKind.Repair:
                 if (ConstructionSystem.StartRepair(world, i, target, replaceQueue: false)) CombatSystem.ClearForOrder(u, i);
                 break;
+            case CommandKind.UseAbility: // popped: dropped if on cooldown now; the rest of the queue stays, for after the cast
+                if (AbilitySystem.CanUse(world, i, typeId, target)) StartAbility(world, i, typeId, target);
+                break;
             case CommandKind.Attack: // popped: dropped if the target died or turned invalid while it waited; the rest of the queue stays
                 if (CombatSystem.MayAttack(world, i, attackTarget, typeId == 1)) StartAttack(world, i, attackTarget, typeId == 1);
                 break;
@@ -212,6 +225,19 @@ public static class OrderSystem
         Stop(u, i);
         u.Hold[i] = false;
         CombatSystem.StartAttack(world, i, target, isBuilding);
+    }
+
+    /// <summary>
+    /// Starts a UseAbility (M4-4a; already checked with <c>AbilitySystem.CanUse</c>): Hold, loops, the engagement and any
+    /// earlier cast end, the unit stops, and the cast starts (in range) or the walk to it does.
+    /// </summary>
+    private static void StartAbility(World world, int i, int slot, Vector2 point)
+    {
+        UnitStore u = world.Units;
+        CombatSystem.ClearForOrder(u, i);
+        Stop(u, i);
+        u.Hold[i] = false;
+        AbilitySystem.Begin(world, i, slot, point);
     }
 
     /// <summary>Removes the head entry, shifting the rest forward; the freed last entry goes back to default.</summary>

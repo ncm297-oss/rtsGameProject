@@ -66,13 +66,21 @@ public class DataContentHashTests
             return a.Length > 0 ? a.SetItem(0, a[0] with { Amount = a[0].Amount + 1f })
                 : a.Add(new TechEffect { Stat = TechStat.Armor, Amount = 1f, AttackType = -1, Tags = ImmutableArray<int>.Empty, Units = ImmutableArray<int>.Empty, Siege = -1 });
         }
+        if (t == typeof(ImmutableArray<AbilityEffect>))
+        {
+            var a = (ImmutableArray<AbilityEffect>)value!;
+            return a.Length > 0 ? a.SetItem(0, a[0] with { DurationTicks = a[0].DurationTicks + 1 })
+                : a.Add(new AbilityEffect { Kind = AbilityEffectKind.Damage, DamageType = 0, Amount = 1, Status = -1 });
+        }
         return null;
     }
 
     private static GameData With(GameData d, DamageTable? table = null, RulesDef? rules = null, FactionDef? faction = null, UnitDef? unit = null,
         ResourceDef? resource = null, int resourceSlot = 0, BuildingDef? building = null, int buildingSlot = 0, TechDef? tech = null, int techSlot = 0,
-        ProjectileDef? projectile = null, int projectileSlot = 0) => new()
+        ProjectileDef? projectile = null, int projectileSlot = 0, StatusDef? status = null, int statusSlot = 0, AbilityDef? ability = null, int abilitySlot = 0) => new()
     {
+        Statuses = status == null ? d.Statuses : d.Statuses.SetItem(statusSlot, status),
+        Abilities = ability == null ? d.Abilities : d.Abilities.SetItem(abilitySlot, ability),
         DamageTable = table ?? d.DamageTable,
         Rules = rules ?? d.Rules,
         Factions = faction == null ? d.Factions : d.Factions.SetItem(faction.Id, faction),
@@ -111,6 +119,58 @@ public class DataContentHashTests
         TechDef fewer = Clone(tech);
         typeof(TechDef).GetProperty(nameof(TechDef.Effects))!.SetValue(fewer, tech.Effects.RemoveAt(1));
         Assert.NotEqual(baseline, With(d, tech: fewer, techSlot: tech.Id).ContentHash());
+    }
+
+    /// <summary>M4-4a: every <see cref="AbilityEffect"/> field, the effect count, and both list lengths change the hash; so do edits to both files.</summary>
+    [Fact]
+    public void AbilityListLength_EffectCount_AndEveryEffectField_ChangeTheHash()
+    {
+        GameData d = TestSim.Data;
+        ulong baseline = d.ContentHash();
+        AbilityDef ability = d.Abilities[d.FindAbility("telas_fire")];
+        AbilityEffect e = ability.Effects[0];
+        var variants = new (string Field, AbilityEffect Changed)[]
+        {
+            ("Kind", e with { Kind = AbilityEffectKind.Damage }),
+            ("DamageType", e with { DamageType = e.DamageType + 1 }),
+            ("Amount", e with { Amount = e.Amount + 1 }),
+            ("Status", e with { Status = e.Status + 1 }),
+            ("Magnitude", e with { Magnitude = e.Magnitude + 0.5f }),
+            ("DurationTicks", e with { DurationTicks = e.DurationTicks + 1 }),
+        };
+        foreach ((string field, AbilityEffect changed) in variants)
+        {
+            AbilityDef copy = Clone(ability);
+            typeof(AbilityDef).GetProperty(nameof(AbilityDef.Effects))!.SetValue(copy, ability.Effects.SetItem(0, changed));
+            Assert.True(With(d, ability: copy, abilitySlot: ability.Id).ContentHash() != baseline, $"AbilityEffect.{field} is not in GameData.ContentHash");
+        }
+        Assert.Equal(6, typeof(AbilityEffect).GetProperties().Length); // a new field must be added above and to ContentHash
+        AbilityDef more = Clone(ability);
+        typeof(AbilityDef).GetProperty(nameof(AbilityDef.Effects))!.SetValue(more, ability.Effects.Add(e));
+        Assert.NotEqual(baseline, With(d, ability: more, abilitySlot: ability.Id).ContentHash());
+        GameData fewer = With(d);
+        typeof(GameData).GetProperty(nameof(GameData.Abilities))!.SetValue(fewer, ImmutableArray<AbilityDef>.Empty);
+        Assert.NotEqual(baseline, fewer.ContentHash());
+        GameData noStatuses = With(d);
+        typeof(GameData).GetProperty(nameof(GameData.Statuses))!.SetValue(noStatuses, d.Statuses.RemoveAt(1));
+        Assert.NotEqual(baseline, noStatuses.ContentHash());
+    }
+
+    /// <summary>M4-4a: an edit to <c>common/statuses.json</c> or to <c>malazan/abilities.json</c> changes the hash.</summary>
+    [Theory]
+    [InlineData("common/statuses.json")]
+    [InlineData("factions/malazan/abilities.json")]
+    public void AStatusesOrAbilitiesFileEdit_ChangesTheHash(string file)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson(file, root =>
+        {
+            if (file.StartsWith("common")) root["statuses"]![0]!["description"] = "Edited.";
+            else root["abilities"]![0]!["cooldown"] = 24;
+        });
+        DataLoadResult load = DataLoader.LoadAll(dir.Path);
+        Assert.True(load.Ok, string.Join("\n", load.Errors));
+        Assert.NotEqual(TestSim.Data.ContentHash(), load.Data!.ContentHash());
     }
 
     [Fact]
@@ -208,6 +268,18 @@ public class DataContentHashTests
         foreach (string f in new[] { "Id", "Key", "Kind", "SpeedPerTick", "HitTolerance", "LeadSpeedPerTick" })
             Assert.Contains($"ProjectileDef.{f}", checkedFields);
         Assert.Contains("AttackDef.ProjectileTypeId", checkedFields);
+        // M4-4a: every StatusDef and AbilityDef field, on each shipped entry (the effects' own fields:
+        // AbilityListLength_EffectCount_AndEveryEffectField_ChangeTheHash), and a unit's ability list.
+        foreach (StatusDef st in d.Statuses)
+            Check(st, x => With(d, status: x, statusSlot: st.Id));
+        foreach (string f in new[] { "Id", "Key", "DisplayName", "Description", "Kind", "DamageType" })
+            Assert.Contains($"StatusDef.{f}", checkedFields);
+        foreach (AbilityDef ab in d.Abilities)
+            Check(ab, x => With(d, ability: x, abilitySlot: ab.Id));
+        foreach (string f in new[] { "Id", "Key", "Faction", "DisplayName", "Description", "Kind", "Range", "Radius", "CastTicks", "CooldownTicks",
+            "DurationTicks", "Affects", "Effects" })
+            Assert.Contains($"AbilityDef.{f}", checkedFields);
+        Assert.Contains("UnitDef.Abilities", checkedFields);
         Assert.True(checkedFields.Count >= 57, $"only {checkedFields.Count} fields checked");
     }
 

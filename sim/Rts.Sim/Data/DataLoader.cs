@@ -15,7 +15,7 @@ namespace Rts.Sim.Data;
 /// Seconds become ticks and per-second rates become per-tick rates here; the sim never sees seconds.
 /// <c>trainedAt</c> resolves to an own-faction building type id (M3-4); every <c>requires</c> entry resolves to a tech or
 /// building type id (M3-6, kept as a string too); <c>attack.projectile</c> resolves to a <c>common/projectiles.json</c> id
-/// (M4-2b, kept as a string too); <c>model</c> stays an unresolved string until assets exist (docs/03 "Data format").
+/// (M4-2b, kept as a string too); <c>abilities</c> resolves to own-faction ability ids (M4-4a); <c>model</c> stays an unresolved string until assets exist (docs/03 "Data format").
 /// </remarks>
 public static partial class DataLoader
 {
@@ -40,6 +40,11 @@ public static partial class DataLoader
         int errorsBeforeProjectiles = c.Errors.Count;
         ProjectileDef[]? projectiles = projectilesJson == null ? null : BuildProjectiles(c, projectilesJson);
         if (c.Errors.Count != errorsBeforeProjectiles) projectiles = null;
+        // M4-4a: the status types; a broken file is reported once, not again through every applyStatus naming its ids.
+        StatusFileJson? statusesJson = c.Read("common/statuses.json", DataJsonContext.Default.StatusFileJson);
+        int errorsBeforeStatuses = c.Errors.Count;
+        StatusDef[]? statuses = statusesJson == null ? null : BuildStatuses(c, statusesJson, table);
+        if (c.Errors.Count != errorsBeforeStatuses) statuses = null;
 
         string[] folders = Array.Empty<string>();
         string factionsDir = Path.Combine(dataDir, "factions");
@@ -112,6 +117,12 @@ public static partial class DataLoader
             factions[f] = BuildFaction(c, factionJsons[f]!, folders[f], f, own.ToImmutable());
         }
 
+        // M4-4a: abilities (optional per faction), then each unit's list; a broken abilities file is reported once.
+        int errorsBeforeAbilities = c.Errors.Count;
+        AbilityDef[] abilities = BuildAbilities(c, folders, table, statuses);
+        if (c.Errors.Count == errorsBeforeAbilities)
+            ResolveUnitAbilities(c, folders, unitFiles, accepted, unitKeys, units, abilities);
+
         int errorsBeforeBuildings = c.Errors.Count;
         BuildingDef[] buildings = BuildBuildings(c, folders, rules, table, projectiles, out BuildingFileJson?[] buildingFiles, out List<(int Faction, int Index)> acceptedBuildings);
         // A broken buildings file is reported once, not again through every unit naming one of its buildings.
@@ -140,7 +151,7 @@ public static partial class DataLoader
             ageTechs = techs.AgeTechs();
         }
 
-        if (c.Errors.Count > 0 || table == null || rules == null || resources == null || projectiles == null)
+        if (c.Errors.Count > 0 || table == null || rules == null || resources == null || projectiles == null || statuses == null)
             return new DataLoadResult(null, c.Errors);
         var data = new GameData
         {
@@ -156,6 +167,8 @@ public static partial class DataLoader
             Research = ResearchPerBuilding(techDefs, buildings),
             UnitTags = ImmutableArray.Create(unitTags),
             AgeTechs = ImmutableArray.Create(ageTechs),
+            Statuses = ImmutableArray.Create(statuses),
+            Abilities = ImmutableArray.Create(abilities),
         };
         return new DataLoadResult(data, c.Errors);
     }
@@ -744,6 +757,9 @@ public static partial class DataLoader
         public string CurrentFile { get; set; } = "";
 
         public void Error(string path, string message) => Errors.Add(new DataError(CurrentFile, path, message));
+
+        /// <summary>Whether <paramref name="relPath"/> exists under the data directory (an optional file, M4-4a).</summary>
+        public bool Exists(string relPath) => File.Exists(Path.Combine(_dir, relPath));
 
         private static ReadOnlySpan<byte> Utf8Bom => new byte[] { 0xEF, 0xBB, 0xBF };
 

@@ -444,7 +444,11 @@ public class FieldBuildFairnessQaTests
             // measured; the bound keeps a 72 KB margin (the old one kept 2 MB over M1-4c's figure, 24 KB over dd5b5b9's).
             // M4-H1 (BUG-0215) re-baselines: the visible bits are hashed state, packed like the explored bits, one more bit a
             // cell a player (2 x 131,072 = 262,144 bytes, + array headers): 230,692,672 measured; the same 72 KB margin.
-            Assert.True(bytes < 230_765_000, $"{bytes / 1e6:F1} MB");
+            // M4-4a re-baselines: the ability state docs/03 "Implementation (M4-4a)" requires, per unit slot: the cast (ability,
+            // ticks, point: 16 bytes), 4 cooldown ready ticks (16), and the status store's count plus 8 entries of (id,
+            // magnitude, ticks, source) (4 + 128): 164 x 4,096 = 671,744 bytes; and the one-tick cast event list, 2 per slot
+            // at 28 bytes (229,376), plus array headers: 231,658,712 measured (+966,040); the same 72 KB margin.
+            Assert.True(bytes < 231_731_000, $"{bytes / 1e6:F1} MB");
         }
     }
 }

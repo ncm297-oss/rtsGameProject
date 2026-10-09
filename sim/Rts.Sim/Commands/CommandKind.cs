@@ -58,4 +58,10 @@ public enum CommandKind
     /// fight yet.
     /// </summary>
     Attack = 16,
+
+    /// <summary>
+    /// Casts ability <see cref="Command.TypeId"/> (an index into the unit's type's ability list) of <see cref="Command.Unit"/>
+    /// at <see cref="Command.Position"/> (M4-4a); out of range the unit walks first. Queueable.
+    /// </summary>
+    UseAbility = 17,
 }

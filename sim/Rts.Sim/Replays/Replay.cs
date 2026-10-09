@@ -102,7 +102,7 @@ public sealed class Replay
             // The rule Simulation.Enqueue applies, so everything it accepts reads back (BUG-0054).
             if (!c.IsWellFormed()) return ReplayError.InvalidCommand;
             // Format 3 lines have no attack target, so an Attack can't be written there.
-            if (FormatVersion < 4 && c.Kind == CommandKind.Attack) return ReplayError.InvalidCommand;
+            if (FormatVersion < 4 && c.Kind is CommandKind.Attack or CommandKind.UseAbility) return ReplayError.InvalidCommand;
             if (c.Sequence != nextSequence[c.Player]) return ReplayError.InvalidCommand;
             nextSequence[c.Player]++;
         }

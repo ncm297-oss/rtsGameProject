@@ -65,7 +65,9 @@ public class PlacementTests
         Assert.Equal(PlacementError.SealsGround, Reason(sim, 0, House, 2, 1)); // walls (1, 1) in with the tree and the border
         Assert.Equal(PlacementError.UnitInTheWay, Reason(sim, 0, House, 3, 12)); // enemy
         Assert.Equal(PlacementError.UnitInTheWay, Reason(sim, 0, House, 10, 11)); // own holder
-        Assert.Equal(PlacementError.UnitInTheWay, Reason(sim, 1, WhirlwindHouse, 10, 11)); // the holder is player 1's enemy
+        // The holder is player 1's enemy but out of its Laborer's sight: hidden, so not in the way of the query (BUG-0280).
+        Assert.False(sim.World.Fog.CanSeeUnit(1, holder.Index));
+        Assert.Equal(PlacementError.None, Reason(sim, 1, WhirlwindHouse, 10, 11));
     }
 
     [Fact]
@@ -130,6 +132,33 @@ public class PlacementTests
         Assert.True(g.IsPassable(12, 3));
     }
 
+    /// <summary>
+    /// BUG-0280: an enemy unit the player can't see doesn't refuse <see cref="World.CanPlace"/> (the build ghost revealed it),
+    /// a seen one does, and a Build onto the hidden one is still refused when it applies (nothing paid, no site).
+    /// </summary>
+    [Fact]
+    public void HiddenEnemyUnit_IsNotInTheWayForCanPlace_ButStillRefusesTheBuild()
+    {
+        Simulation sim = BuildMaps.NewSim(Terrain(), players: 2, combat: false);
+        World w = sim.World;
+        EntityHandle worker = Unit(sim, At(sim, 2, 2));
+        EntityHandle enemy = Unit(sim, At(sim, 12, 12), player: 1, type: Laborer);
+        Run(sim, 4); // past a fog update
+        Assert.True(w.Fog.IsExplored(0, Cell(sim, 12, 12)));
+        Assert.False(w.Fog.CanSeeUnit(0, enemy.Index));
+        Assert.Equal(PlacementError.None, Reason(sim, 0, House, 12, 12));
+        Assert.Equal(PlacementError.None, Reason(sim, 0, House, 11, 11)); // the unit at (12, 12) is in this footprint too
+        int wood = w.Wood[0], count = w.Buildings.Count;
+        sim.Enqueue(Command.Build(0, worker, House, At(sim, 12, 12)));
+        Run(sim, 2);
+        Assert.Equal((wood, count), (w.Wood[0], w.Buildings.Count));
+        // Seen, the same unit is in the way again.
+        Unit(sim, At(sim, 9, 12));
+        Run(sim, 4);
+        Assert.True(w.Fog.CanSeeUnit(0, enemy.Index));
+        Assert.Equal(PlacementError.UnitInTheWay, Reason(sim, 0, House, 12, 12));
+    }
+
     [Fact]
     public void CanPlace_ChangesNothing()
     {
@@ -174,12 +203,30 @@ public class PlacementTests
             bool ok = sim.World.CanPlace(p, type, anchor, out _);
             int count = b.Count, gold = sim.World.Gold[p], wood = sim.World.Wood[p];
             sim.Tick();
+            // BUG-0280: CanPlace ignores enemy units the player can't see; the Build still counts them.
+            if (ok && b.Count == count && HiddenEnemyIn(sim, p, type, anchor)) ok = false;
             Assert.True(ok == (b.Count == count + 1), $"seed {seed} placement {k}: CanPlace {ok}, count {count} -> {b.Count}");
             if (!ok) Assert.True(gold == sim.World.Gold[p] && wood == sim.World.Wood[p], "a dropped Build cost something");
             if (ok) placed++; else refused++;
             if (k % 25 == 24) Run(sim, 20); // let builders walk and some sites rise
         }
         Assert.True(placed >= 10 && refused >= 10, $"placed {placed}, refused {refused}");
+    }
+
+    /// <summary>A live enemy unit <paramref name="player"/> can't see stands in the footprint of <paramref name="type"/> at <paramref name="anchor"/>.</summary>
+    private static bool HiddenEnemyIn(Simulation sim, int player, int type, int anchor)
+    {
+        if ((uint)type >= (uint)TestSim.Data.Buildings.Length) return false;
+        var def = TestSim.Data.Buildings[type];
+        int width = sim.World.NavGrid.Width, x0 = anchor % width, y0 = anchor / width;
+        UnitStore u = sim.World.Units;
+        for (int i = 0; i < u.Capacity; i++)
+        {
+            if (!u.Alive[i] || u.Owner[i] == player || sim.World.Fog.CanSeeUnit(player, i)) continue;
+            Vector2 q = u.Position[i] / MapConstants.CellSize;
+            if (q.X >= x0 && q.X < x0 + def.FootprintWidth && q.Y >= y0 && q.Y < y0 + def.FootprintHeight) return true;
+        }
+        return false;
     }
 
     private static int FactionType(int faction, int slot) =>

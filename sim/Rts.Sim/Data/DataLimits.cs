@@ -69,4 +69,31 @@ public static class DataLimits
     /// "Ages": Age I at start, Age II researched). Each must exist in <c>common/techs.json</c>. A rule of the format.
     /// </summary>
     public static readonly ImmutableArray<string> AgeTechIds = ImmutableArray.Create("age_ii");
+
+    /// <summary>Most abilities one unit type may list (M4-4a): the command card's ability row (docs/02 "Controls and camera").</summary>
+    public const int MaxUnitAbilities = 4;
+
+    /// <summary>
+    /// Largest ability <c>radius</c> in meters (M4-4a): the resolve queries the spatial hash over the circle, so a radius is a
+    /// per-cast cost. Far above any designed area (docs/factions: 3-3.5 m); a Producer default.
+    /// </summary>
+    public const double MaxAbilityRadius = 16;
+
+    /// <summary>JSON spelling of each <see cref="StatusKind"/>, indexed by the enum value (<c>common/statuses.json</c>, M4-4a).</summary>
+    public static readonly ImmutableArray<string> StatusKindIds = ImmutableArray.Create("damageOverTime", "slow");
+
+    /// <summary>JSON spelling of each supported <see cref="AbilityKind"/>, indexed by the enum value (M4-4a).</summary>
+    public static readonly ImmutableArray<string> AbilityKindIds = ImmutableArray.Create("targetGround");
+
+    /// <summary>Ability kinds of docs/02 the format knows but the sim doesn't run yet: refused as "not supported yet" (slice 2).</summary>
+    public static readonly ImmutableArray<string> PlannedAbilityKindIds = ImmutableArray.Create("targetUnit", "selfAura", "summon");
+
+    /// <summary>JSON spelling of each supported <see cref="AbilityEffectKind"/>, indexed by the enum value (M4-4a).</summary>
+    public static readonly ImmutableArray<string> AbilityEffectKindIds = ImmutableArray.Create("damage", "applyStatus");
+
+    /// <summary>Effect kinds of docs/02 the format knows but the sim doesn't run yet: refused as "not supported yet" (slice 2).</summary>
+    public static readonly ImmutableArray<string> PlannedAbilityEffectKindIds = ImmutableArray.Create("createZone", "teleport", "spawn");
+
+    /// <summary>JSON spelling of each <see cref="AbilityAffects"/>, indexed by the enum value (M4-4a).</summary>
+    public static readonly ImmutableArray<string> AbilityAffectsIds = ImmutableArray.Create("enemy_units", "own_units", "all_units");
 }

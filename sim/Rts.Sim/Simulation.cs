@@ -1,5 +1,6 @@
 using System;
 using System.Numerics;
+using Rts.Sim.Abilities;
 using Rts.Sim.Combat;
 using Rts.Sim.Commands;
 using Rts.Sim.Data;
@@ -77,6 +78,7 @@ public sealed class Simulation
         World.Units.SnapshotPrevPositions();
         World.ClearDeaths(); // the last tick's death events have been read by now
         World.ClearImpacts(); // and its projectile landings (M4-2b)
+        World.ClearAbilityEvents(); // and its cast starts and resolves (M4-4a)
 
         // M4-3a: the initial fog stamp, before the first tick's commands, so units already in the world (placed before
         // the first tick) are seen from tick 0. The first phase-12 update is tick 1's, the tick the start commands apply in.
@@ -99,6 +101,12 @@ public sealed class Simulation
         EconomySystem.Run(World);
         // M3-3: builders and repairers, after the gatherers.
         ConstructionSystem.Run(World);
+
+        // Phase 5: statuses count down, damage over time lands, the expired end (M4-4a).
+        StatusSystem.Run(World);
+
+        // Phase 6: casters walk into range, cast timers count down, finished casts resolve (M4-4a).
+        AbilitySystem.Run(World);
 
         // Phase 7: Idle units start their next shift-queued order, then target acquisition (M4-1).
         OrderSystem.Run(World);
@@ -168,9 +176,10 @@ public sealed class Simulation
             h.Add(u.TypeId[i]);
             // Orders (M1-7) ride in the high half of the state word, which is zero for a unit with
             // no Hold and an empty queue, so such a unit hashes exactly as before the queue existed.
-            // M4-1: bit 17 flags combat state, added after the economy words.
+            // M4-1: bit 17 flags combat state, added after the economy words. M4-4a: bit 18 ability state, after the combat words.
             bool combat = HasCombat(World, i);
-            h.Add((ulong)(byte)u.State[i] | ((ulong)(OrderBits(u, i) | (combat ? 1u << 17 : 0u)) << 32));
+            bool ability = HasAbilityState(u, i);
+            h.Add((ulong)(byte)u.State[i] | ((ulong)(OrderBits(u, i) | (combat ? 1u << 17 : 0u) | (ability ? 1u << 18 : 0u)) << 32));
             h.Add(u.Goal[i]);
             h.Add(u.GoalCell[i]);
             h.Add(u.OrderTick[i]);
@@ -190,6 +199,7 @@ public sealed class Simulation
                 h.Add(u.BuildTarget[i].Generation);
             }
             if (combat) AddCombatToHash(ref h, u, i);
+            if (ability) AddAbilityToHash(ref h, u, i);
         }
         h.Add(u.FreeCount);
         for (int i = 0; i < u.FreeCount; i++)
@@ -316,6 +326,32 @@ public sealed class Simulation
         h.Add((ulong)(uint)u.ChasePrev[i].Generation | (u.ChasePrevIsBuilding[i] ? 1UL << 32 : 0UL));
     }
 
+    /// <summary>
+    /// True when any ability field (M4-4a) of unit <paramref name="i"/> isn't at its spawn value: a cast or walk to one,
+    /// a cooldown ever started, or a status. Flagged by bit 18 of the order word, so a unit that never cast nor was hit by
+    /// an ability hashes exactly as before M4-4a.
+    /// </summary>
+    private static bool HasAbilityState(UnitStore u, int i)
+    {
+        if (u.CastAbility[i] != -1 || u.CastTicks[i] != 0 || u.CastPoint[i] != Vector2.Zero || u.Statuses.Count[i] != 0) return true;
+        int head = i * Data.DataLimits.MaxUnitAbilities;
+        for (int k = 0; k < Data.DataLimits.MaxUnitAbilities; k++)
+            if (u.AbilityReadyTick[head + k] != 0) return true;
+        return false;
+    }
+
+    /// <summary>Unit <paramref name="i"/>'s ability fields, as flagged by bit 18: the cast, every cooldown's ready tick, and every status field.</summary>
+    private static void AddAbilityToHash(ref StateHasher h, UnitStore u, int i)
+    {
+        h.Add(u.CastAbility[i]);
+        h.Add(u.CastTicks[i]);
+        h.Add(u.CastPoint[i]);
+        int head = i * Data.DataLimits.MaxUnitAbilities;
+        for (int k = 0; k < Data.DataLimits.MaxUnitAbilities; k++)
+            h.Add(u.AbilityReadyTick[head + k]);
+        u.Statuses.AddToHash(ref h, i);
+    }
+
     /// <summary>True when any gather-loop or cargo field (M3-2) or the build target (M3-3) of unit <paramref name="i"/> isn't default; flagged in <see cref="OrderBits"/>, then hashed.</summary>
     private static bool HasEconomy(UnitStore u, int i) =>
         u.BuildTarget[i] != default || u.GatherNode[i] != default || u.GatherSite[i] != Vector2.Zero || u.GatherProgress[i] != 0f || u.Cargo[i] != 0 || u.CargoKind[i] != default;
@@ -354,6 +390,7 @@ public sealed class Simulation
             case CommandKind.Build:
             case CommandKind.Repair:
             case CommandKind.Attack:
+            case CommandKind.UseAbility:
                 OrderSystem.Apply(World, in command);
                 break;
             case CommandKind.Cancel:

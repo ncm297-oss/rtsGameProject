@@ -113,6 +113,7 @@ internal sealed class UnitJson
     public string? TrainedAt { get; set; }
     public List<string?>? Requires { get; set; }
     public List<string?>? Tags { get; set; }
+    public List<string?>? Abilities { get; set; }
 }
 
 internal sealed class AttackJson
@@ -231,4 +232,49 @@ internal sealed class AppliesToJson
     public List<string?>? Tags { get; set; }
     public List<string?>? Units { get; set; }
     public bool? Siege { get; set; }
+}
+
+internal sealed class StatusFileJson
+{
+    public List<StatusJson?>? Statuses { get; set; }
+}
+
+internal sealed class StatusJson
+{
+    public string? Id { get; set; }
+    public string? DisplayName { get; set; }
+    public string? Description { get; set; }
+    public string? Kind { get; set; }
+    public string? DamageType { get; set; }
+}
+
+internal sealed class AbilityFileJson
+{
+    public List<AbilityJson?>? Abilities { get; set; }
+}
+
+internal sealed class AbilityJson
+{
+    public string? Id { get; set; }
+    public string? DisplayName { get; set; }
+    public string? Description { get; set; }
+    public string? Kind { get; set; }
+    public double? Range { get; set; }
+    public double? Radius { get; set; }
+    public double? CastTime { get; set; }
+    public double? Cooldown { get; set; }
+    public double? Duration { get; set; }
+    public string? Affects { get; set; }
+    public bool? Autocast { get; set; }
+    public List<AbilityEffectJson?>? Effects { get; set; }
+}
+
+internal sealed class AbilityEffectJson
+{
+    public string? Kind { get; set; }
+    public string? Type { get; set; }
+    public int? Amount { get; set; }
+    public string? Status { get; set; }
+    public double? Magnitude { get; set; }
+    public double? Duration { get; set; }
 }

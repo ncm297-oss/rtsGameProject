@@ -1,0 +1,17 @@
+{
+  "statuses": [
+    {
+      "id": "burning",
+      "displayName": "Burning",
+      "description": "Takes magic damage every second until the flames die down.",
+      "kind": "damageOverTime",
+      "damageType": "magic"
+    },
+    {
+      "id": "slowed",
+      "displayName": "Slowed",
+      "description": "Moves more slowly for a while.",
+      "kind": "slow"
+    }
+  ]
+}

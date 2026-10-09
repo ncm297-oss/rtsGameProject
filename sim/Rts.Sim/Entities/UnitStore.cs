@@ -142,6 +142,22 @@ public sealed class UnitStore
     /// phase 7, so never set between ticks, though hashed (Simulation.AddCombatToHash).
     /// </summary>
     public readonly bool[] Repick;
+    /// <summary>
+    /// The index in its type's <see cref="UnitDef.Abilities"/> of the ability the unit is casting or walking into range to
+    /// cast (M4-4a), -1 for none. See <see cref="Abilities.AbilitySystem"/>.
+    /// </summary>
+    public readonly int[] CastAbility;
+    /// <summary>Ticks of the cast still to stand (M4-4a): 0 while walking into range, then counting down to the resolve.</summary>
+    public readonly int[] CastTicks;
+    /// <summary>The cast's target point in meters (M4-4a); default with no cast.</summary>
+    public readonly Vector2[] CastPoint;
+    /// <summary>
+    /// Per unit, <see cref="Data.DataLimits.MaxUnitAbilities"/> entries (index <c>slot * MaxUnitAbilities + ability</c>): the
+    /// tick from which each ability may be used again (M4-4a); 0 = never used. Hashed.
+    /// </summary>
+    public readonly int[] AbilityReadyTick;
+    /// <summary>Each unit's active statuses (M4-4a): up to 8, cleared when the slot is freed or allocated.</summary>
+    public readonly Abilities.StatusStore Statuses;
     /// <summary>Whether the slot holds a live unit.</summary>
     public readonly bool[] Alive;
 
@@ -153,6 +169,9 @@ public sealed class UnitStore
     public const int WalkBackPending = 2;
     /// <summary>Per-slot generation; a handle is valid only while it matches.</summary>
     public readonly int[] Generation;
+
+    /// <summary>Live units with a cast or a walk to one (<see cref="CastAbility"/> set), so phase 6 skips its scan when none; derived, not hashed.</summary>
+    internal int CasterCount;
 
     private readonly int[] _freeList;
     // Per slot: the half-pop CountPop added for it (M3-4), so Free gives back exactly that; derived, not hashed.
@@ -213,6 +232,12 @@ public sealed class UnitStore
         ChasePrevIsBuilding = new bool[capacity];
         GiveUps = new int[capacity];
         Repick = new bool[capacity];
+        CastAbility = new int[capacity];
+        Array.Fill(CastAbility, -1);
+        CastTicks = new int[capacity];
+        CastPoint = new Vector2[capacity];
+        AbilityReadyTick = new int[capacity * DataLimits.MaxUnitAbilities];
+        Statuses = new Abilities.StatusStore(capacity);
         Alive = new bool[capacity];
         Generation = new int[capacity];
         _freeList = new int[capacity];
@@ -268,6 +293,7 @@ public sealed class UnitStore
         ClearQueue(index);
         ClearEconomy(index);
         ClearCombat(index);
+        ClearAbilities(index);
         Hp[index] = 0;
         _countedHalfPop[index] = 0;
         Alive[index] = true;
@@ -334,6 +360,8 @@ public sealed class UnitStore
         ClearQueue(handle.Index);
         ClearEconomy(handle.Index);
         ClearCombat(handle.Index);
+        // M4-4a: a dead unit's cast, cooldowns and statuses go with it.
+        ClearAbilities(handle.Index);
         Hp[handle.Index] = 0;
         // A freed slot stands still: since units die (M4-1), a scan over slots must not count a dead walker as Moving.
         State[handle.Index] = UnitState.Idle;
@@ -399,11 +427,21 @@ public sealed class UnitStore
         Repick[index] = false;
     }
 
+    private void ClearAbilities(int index)
+    {
+        if (CastAbility[index] >= 0) CasterCount--;
+        CastAbility[index] = -1;
+        CastTicks[index] = 0;
+        CastPoint[index] = default;
+        Array.Clear(AbilityReadyTick, index * DataLimits.MaxUnitAbilities, DataLimits.MaxUnitAbilities);
+        Statuses.Clear(index);
+    }
+
     /// <summary>
     /// True when slot <paramref name="index"/> stands its ground: holding position, or Attacking (M4-1). Movement never
     /// shoves such a unit and treats it as a hard wall, and the placement rule never pushes it out of a footprint.
     /// </summary>
-    public bool IsPlanted(int index) => Hold[index] || State[index] == UnitState.Attacking;
+    public bool IsPlanted(int index) => Hold[index] || State[index] is UnitState.Attacking or UnitState.Casting;
 
     /// <summary>Copies Position into PrevPosition and Facing into PrevFacing for every live unit (start of tick).</summary>
     public void SnapshotPrevPositions()

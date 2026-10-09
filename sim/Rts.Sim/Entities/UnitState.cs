@@ -24,4 +24,10 @@ public enum UnitState : byte
     /// </summary>
     /// <remarks>Chasing is not a state of its own: a chasing unit is <see cref="Moving"/> with a live target, so movement walks it unchanged.</remarks>
     Attacking = 5,
+
+    /// <summary>
+    /// Standing to cast an ability (M4-4a): planted like an attacker (never shoved, a wall to walkers), takes no queued
+    /// order and scans for nothing until the cast resolves or a new order cancels it.
+    /// </summary>
+    Casting = 6,
 }

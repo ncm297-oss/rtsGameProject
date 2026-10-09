@@ -35,6 +35,8 @@ public static class ConstructionSystem
     /// answer's pass / fail is the same either way, only the reason reported for a spot breaking several rules differs.
     /// The requirement rule (M3-6) comes right after the faction's, before any map rule. The explored rule (M4-3b) comes after
     /// the terrain rules (the never-seal one too, unless <paramref name="sealLast"/>) and before the units in the way.
+    /// Without <paramref name="sealLast"/> (the <see cref="World.CanPlace"/> query) an enemy unit the player can't see is
+    /// not in the way (BUG-0280); the Build apply path still counts it.
     /// </summary>
     private static PlacementError Check(World world, int player, int typeId, int anchorCell, int worker, bool sealLast)
     {
@@ -60,6 +62,9 @@ public static class ConstructionSystem
         for (int i = 0; i < u.Capacity; i++)
         {
             if (!u.Alive[i] || i == worker || (u.Owner[i] == player && !u.IsPlanted(i))) continue;
+            // BUG-0280: the query (the build ghost) counts only enemy units the player sees, so it reveals no hidden one;
+            // the Build apply path (sealLast) counts every unit, so a Build onto a hidden enemy is still refused.
+            if (!sealLast && u.Owner[i] != player && !world.Fog.CanSeeUnit(player, i)) continue;
             if (Inside(u.Position[i], x0, y0, def)) return PlacementError.UnitInTheWay;
         }
         if (world.Gold[player] < def.CostGold || world.Wood[player] < def.CostWood) return PlacementError.CannotAfford;
