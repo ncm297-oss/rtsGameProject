@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (the merged tree's test suite is red; neither branch is red alone) |
-| Status | open (merge-time fix; Producer to land it in the merge commit or a follow-up) |
+| Status | fixed (verified by QA 2026-10-09-0724, re-check round 2) |
 | Found | 2026-10-09-0724, task M4-4a QA re-check round 1 |
 | System | `sim/Rts.Sim.Tests/QA/GatherWedgeQaTests` (QA row) vs M4-4a's shipped data |
-| Fixed by | |
+| Fixed by | 37c482d (M4-4a round 2): `0x7E04011FC88881F3` added to `SameGameDataHashes` |
 
 ## Repro
 1. Scratch clone; check out `studio/2026-10-09-0724-sim` (c62d7b5), merge `studio/2026-10-09-0724-view` (0dd8952).
@@ -30,3 +30,8 @@ QA probed the fix in the scratch merge only: with `0x7E04011FC88881F3` added to 
 replays all 12,131 recorded checkpoints tick for tick (1 s), so M4-4a's data and hash additions do not change this match.
 The fix is that one array entry in the merge (with a comment: "M4-4a: abilities / statuses data, nobody casts in this
 match"), not a re-recording.
+
+## Verification (2026-10-09-0724, re-check round 2)
+Fixed in 37c482d (one line, test code only). QA scratch merge of 37c482d + `studio/2026-10-09-0724-view` (0dd8952):
+`GatherWedgeQaTests.cs` auto-merges cleanly (only `studio/bugs/README.md` and `studio/qa/coverage.md` conflict).
+`GatherWedgeQaTests` 3/3 passes. The non-Perf suite is 4,258 passed / 0 failed / 11 skipped (12 m 57 s), and smoke prints PASS.
