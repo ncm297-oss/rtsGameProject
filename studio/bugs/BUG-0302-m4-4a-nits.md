@@ -30,3 +30,6 @@ d. Either the loader requires whole seconds for a DoT duration, or docs/03 state
 
 ## Notes
 d shares its cause with BUG-0301 (the pulse clock is the remaining count).
+
+## QA re-check (2026-10-09-0724, round 1)
+(d) fixed: the pulse clock starts at the apply and docs/03 states the trailing-fraction rule (pinned by `QA/StatusPulseClockQaTests`). (b) still open for the original ~65 KB; the round-1 raise (+131,072 itemized, +130,848 measured) is fully explained. (c) open.

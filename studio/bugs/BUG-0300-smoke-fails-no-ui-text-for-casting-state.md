@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (acceptance criterion 7 "smoke PASS" not met on the sim branch, nor on its merge with the view head) |
-| Status | fixed (M4-4a fix round 1; cross-track ui.json line, Producer to rule) |
+| Status | fixed, verified by QA (M4-4a fix round 1; cross-track ui.json line, Producer to rule) |
 | Found | 2026-10-09-0724, task M4-4a (reported by the developer as out of scope, confirmed by QA) |
 | System | view HUD text (`game/scripts/UiText.cs`) vs sim enum `UnitState` |
 | Fixed by | M4-4a fix round 1: `"casting": "Casting"` in `game/data/common/ui.json` `states` |
@@ -31,3 +31,6 @@ loop green (see the QA report).
 M4-4a added `UnitState.Casting = 6`; `UiText` requires a `states.<name>` entry for every enum value (a good guard: it
 caught this). `ui.json` is view-owned this session, so the sim developer correctly did not touch it. Producer's call:
 land the one line in the view track (or in the merge commit) before accepting M4-4a, or accept with this open.
+
+## QA re-check (2026-10-09-0724, round 1)
+Verified on c62d7b5: `ui.json` `states.casting` present; `tools/qa/smoke.ps1` PASS on the worktree and on a scratch merge with the view head 0dd8952 (the view branch does not touch `ui.json`, so the line merges cleanly). The line is a cross-track edit of a view-owned file; the Producer rules on ownership.
