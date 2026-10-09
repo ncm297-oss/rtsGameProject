@@ -15,4 +15,8 @@ public readonly record struct AbilityEffect
     public float Magnitude { get; init; }
     /// <summary>ApplyStatus: how long the status lasts, in ticks (at least 1); 0 otherwise.</summary>
     public int DurationTicks { get; init; }
+    /// <summary>Damage (M4-4b-1): other players' buildings whose footprint is within the radius take the hit too, as structure.</summary>
+    public bool Buildings { get; init; }
+    /// <summary>Damage (M4-4b-1): the fraction 0-1 of its hit the caster's own units in the radius take (the caster too; never own buildings); 0 for none.</summary>
+    public float FriendlyFire { get; init; }
 }

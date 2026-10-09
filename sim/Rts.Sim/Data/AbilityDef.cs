@@ -35,4 +35,6 @@ public sealed class AbilityDef
     public AbilityAffects Affects { get; init; }
     /// <summary>The effects, in file order; applied in this order to each affected unit.</summary>
     public required ImmutableArray<AbilityEffect> Effects { get; init; }
+    /// <summary>Whether any damage effect reaches buildings (M4-4b-1, <see cref="AbilityEffect.Buildings"/>): the resolve looks at buildings only then.</summary>
+    public bool HitsBuildings { get; init; }
 }

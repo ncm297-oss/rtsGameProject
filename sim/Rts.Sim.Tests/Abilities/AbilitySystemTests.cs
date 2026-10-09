@@ -253,4 +253,93 @@ public class AbilitySystemTests
         GatherMaps.Run(sim, 40);
         Assert.Equal(0, u.Statuses.Count[target.Index]);
     }
+
+    // M4-4b-1 criterion 3: the Sapper's Cusser (docs/factions/malazan.md "Abilities": 6 / 3.5 m / 1.0 s / 45 s, 120 siege,
+    // full damage to buildings, friendly fire at 50 %).
+
+    private static int Sapper => TestSim.Data.FindUnit("malazan_sapper");
+
+    /// <summary>The Cusser's point, 3.4 m west of an enemy Keep's footprint (anchor 14, 19: x 28-36 m, y 38-46 m).</summary>
+    private static readonly Vector2 CusserPoint = new(24.6f, 42f);
+
+    /// <summary>
+    /// 3.4 m from an enemy Keep's footprint: the Keep takes 120 x 3.0 - 5 = 355; an enemy Light unit 60 - 0; an own Heavy
+    /// unit half of 90 - 3 (43.5 rounds to 44); an own Keep 2 m away nothing; units 3.51 m out nothing; the Sapper 4 m away
+    /// nothing; a Light unit it kills is the caster owner's kill. Cast 1.0 s, cooldown 45 s.
+    /// </summary>
+    [Fact]
+    public void Cusser_HitsEnemyBuildingsAndUnits_OwnUnitsAtHalf_NeverOwnBuildings_NothingPastTheRadius()
+    {
+        Simulation sim = NoFights();
+        World w = sim.World;
+        UnitStore u = w.Units;
+        EntityHandle hall = GatherMaps.Building(sim, 14, 19, player: 1);
+        EntityHandle ownHall = GatherMaps.Building(sim, 8, 22, player: 0); // x 16-24, y 44-52: 2.1 m from the point
+        int hallHp = w.Buildings.Hp[hall.Index], ownHallHp = w.Buildings.Hp[ownHall.Index];
+        Vector2 p = CusserPoint;
+        EntityHandle sapper = Place(sim, 0, Sapper, Off(p, -4f));
+        EntityHandle light = Place(sim, 1, Crossbowman, Off(p, 0f, -2f));
+        u.Hp[light.Index] = 200;
+        EntityHandle doomed = Place(sim, 1, Crossbowman, Off(p, 1.5f, 1.5f)); // 55 hp: 60 kills it
+        EntityHandle heavy = Place(sim, 0, HeavyInfantry, Off(p, -2f, -1f));
+        EntityHandle outEnemy = Place(sim, 1, Crossbowman, Off(p, 0f, -3.51f));
+        EntityHandle outOwn = Place(sim, 0, Crossbowman, Off(p, 0f, 3.51f));
+        sim.Enqueue(Command.UseAbility(0, sapper, 0, p));
+        int start = TickOf(sim, sapper, resolved: false);
+        bool doomedDied = false;
+        int resolve = -1;
+        for (int t = 0; t < 40 && resolve < 0; t++)
+        {
+            sim.Tick();
+            if (Had(sim, sapper, resolved: true)) resolve = sim.TickNumber - 1;
+            foreach (Combat.DeathEvent d in w.Deaths)
+                if (d.Victim == doomed) { doomedDied = true; Assert.Equal((0, 1, false), (d.KillerOwner, d.VictimOwner, d.IsBuilding)); }
+        }
+        Assert.Equal(20, resolve - start + 1); // 1.0 s
+        Assert.Equal(resolve + 900, u.AbilityReadyTick[Slot(sapper)]); // 45 s
+        Assert.Equal(hallHp - 355, w.Buildings.Hp[hall.Index]);
+        Assert.Equal(200 - 60, u.Hp[light.Index]);
+        Assert.True(doomedDied);
+        Assert.False(u.IsAlive(doomed));
+        Assert.Equal(1, w.Kills[0]);
+        Assert.Equal(130 - 44, u.Hp[heavy.Index]);
+        Assert.Equal(ownHallHp, w.Buildings.Hp[ownHall.Index]);
+        Assert.Equal(55, u.Hp[outEnemy.Index]);
+        Assert.Equal(55, u.Hp[outOwn.Index]);
+        Assert.Equal(70, u.Hp[sapper.Index]);
+    }
+
+    /// <summary>
+    /// Cast 2 m from itself the Sapper takes half its own hit (60 - 1 = 59, half 29.5 rounds to 30); an own unit it kills is
+    /// the caster owner's kill and loss (the splash convention); an enemy Keep brought to 0 is destroyed the normal way.
+    /// </summary>
+    [Fact]
+    public void Cusser_HurtsTheSapperItself_CreditsAnOwnKillToItsOwner_AndDestroysABuildingAt0()
+    {
+        Simulation sim = NoFights();
+        World w = sim.World;
+        UnitStore u = w.Units;
+        EntityHandle hall = GatherMaps.Building(sim, 14, 19, player: 1);
+        w.Buildings.Damage(hall, w.Buildings.Hp[hall.Index] - 300); // 300 left: 355 destroys it
+        Vector2 p = CusserPoint;
+        EntityHandle sapper = Place(sim, 0, Sapper, Off(p, -2f));
+        EntityHandle own = Place(sim, 0, Crossbowman, Off(p, 0f, -2f));
+        u.Hp[own.Index] = 10;
+        int navVersion = w.NavGrid.Version;
+        sim.Enqueue(Command.UseAbility(0, sapper, 0, p));
+        var deaths = new List<Combat.DeathEvent>();
+        for (int t = 0; t < 40; t++)
+        {
+            sim.Tick();
+            deaths.AddRange(w.Deaths.ToArray());
+            if (Had(sim, sapper, resolved: true)) break;
+        }
+        Assert.Equal(70 - 30, u.Hp[sapper.Index]);
+        Assert.Contains(deaths, d => d.Victim == own && !d.IsBuilding && d.KillerOwner == 0 && d.VictimOwner == 0);
+        Assert.Contains(deaths, d => d.Victim == hall && d.IsBuilding && d.KillerOwner == 0 && d.VictimOwner == 1);
+        Assert.False(w.Buildings.IsAlive(hall));
+        Assert.NotEqual(navVersion, w.NavGrid.Version); // its cells reopened
+        Assert.Equal((2, 1), (w.Kills[0], w.Losses[0])); // the Keep and its own Crossbowman; the Crossbowman
+        Assert.Equal(1, w.Losses[1]);
+    }
 }

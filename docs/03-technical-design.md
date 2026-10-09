@@ -2248,8 +2248,9 @@ three gates below.
 Slice 1 of M4 criterion 6 (data-driven abilities) and the start of criterion 8 (Telas Fire): the schema for statuses and
 abilities, `Command.UseAbility`, the *target ground* kind with the `damage` and `applyStatus` effects, and the status store
 with damage over time (Burning) and slows (Slowed). Code: `sim/Rts.Sim/Abilities/` (`AbilitySystem`, `StatusSystem`,
-`StatusStore`, `AbilityEvent`), the defs in `Data/`. Zones, summons, self / aura, autocast, the `abilityCooldown` tech
-effect, passives and the AI's casting are slice 2.
+`StatusStore`, `AbilityEvent`), the defs in `Data/`. Zones, summons, self / aura, autocast, passives and the AI's casting
+are slice 2; the `abilityCooldown` tech effect, buildings and friendly fire on `damage`, and the whole-seconds rule for damage
+over time came in M4-4b-1 (below).
 
 - **Data.** `common/statuses.json` (required) and `factions/<id>/abilities.json` (optional: a faction without one has no
   abilities); a unit lists its abilities by id (`abilities`, at most `DataLimits.MaxUnitAbilities` = 4, own faction only, no
@@ -2272,7 +2273,7 @@ effect, passives and the AI's casting are slice 2.
   = this tick + `cooldown` ticks; the ability is usable again from that tick on, so 25 s after the resolve) and the effects
   land on every live unit whose center is within `radius` m of the point (`SpatialHash.QueryRadius`, hash order, exact
   distance test) that `affects` allows: `enemy_units` (any other player's), `own_units` (the caster's owner's, the caster
-  included) or `all_units`. Buildings are never affected in this slice (Telas Fire: "no effect on buildings"). Each unit
+  included) or `all_units`. Buildings are affected only by a `damage` effect with `buildings` (M4-4b-1, below). Each unit
   takes the effects in file order: `damage` is one hit through `DamageCalc` (the amount as the attack value, the type's
   multiplier for the unit's armor class, its armor and armor techs; Magic ignores armor), credited to the caster's owner,
   and may start a retaliation on the caster like any hit; `applyStatus` goes through the store. A unit trained in this
@@ -2324,7 +2325,45 @@ only), `range` (m, above 0, at most 64), `radius` (m, above 0, at most 16), `cas
 or `{ "kind": "applyStatus", "status": <statuses.json id>, "magnitude": <damage per second, whole, for damageOverTime; a
 fraction above 0 and below 1 for slow>, "duration": <s, at least a tick> }`. The other docs/02 kinds and effects load as
 "not supported yet" errors. A unit's `abilities` lists its own faction's ids. Player-facing text only in `displayName` /
-`description` (statuses too).
+`description` (statuses too). M4-4b-1 additions: see "Implementation (M4-4b-1)" below.
+
+### Implementation (M4-4b-1)
+
+The second signature ability (M4 criterion 8: the Sapper's Cusser) from data, the `abilityCooldown` tech effect, and a
+load rule for damage over time. Code: `AbilitySystem.CooldownOf` and `Resolve`, `DataLoader.Abilities.cs`.
+
+- **Cooldown techs.** At the resolve the ready tick is `tick + max(1, cooldown ticks + the owner's abilityCooldown bonus for
+  the caster's type)` (`World.TechBonus`, the loader already converted the seconds to ticks; negative shortens it). It
+  applies to every ability of a unit type the tech's `appliesTo` matches. It is read at the resolve only: a tech finishing
+  while a cooldown runs leaves that one as it is and shortens the next. Shipped: Moranth Supply takes the Cusser from 45 s
+  to 30 s (600 ticks); Dryjhna's Prophecy does the same for any Priest ability. A bonus at or below minus the cooldown
+  floors at 1 tick (usable again on the next tick).
+- **`damage` on buildings (`"buildings": true`).** After the units, every other player's building (sites too) whose
+  footprint rectangle is within `radius` of the point (`CombatSystem.BuildingDistanceSquared`, 0 inside it), in slot
+  order, takes the effect as one hit of armor class `structure` with the building's armor through `DamageCalc`, applied
+  through `CombatSystem.HitBuilding` (the normal destruction path: a death event credited to the caster's owner, the
+  building freed, its cells reopened). Never an own building. The Cusser on a Town Hall: `120 x 3.0 - 5 = 355`. The scan
+  walks the building slots (no allocation), only for an ability with such an effect (`AbilityDef.HitsBuildings`).
+- **Friendly fire (`"friendlyFire": f`, 0-1).** On an `enemy_units` ability, each of the caster owner's units in the
+  radius (the caster too, when within it) takes the damage effect's hit times `f`, rounded half up, at least 1 (as splash's
+  friendly fire, `ProjectileSystem.Scale`). Other effects of the ability still skip own units. An own unit killed is the
+  caster owner's kill and loss (the splash convention); no retaliation on an own hit.
+- **No falloff.** An ability's hit is the same anywhere in its radius (unlike projectile splash); the radius test is exact
+  (`<=`), so a unit 3.51 m from a 3.5 m Cusser is untouched.
+- **Damage over time is whole seconds.** An `applyStatus` of a `damageOverTime` status must have a `duration` that is a
+  whole number of seconds, at least 1 (2.5, 0.5 and 0 are load errors at the effect's `duration`); a slow's duration is
+  any length of at least a tick.
+- **Hash.** No new state: the ready tick was already hashed. `GameData.ContentHash` adds `AbilityDef.HitsBuildings` and the
+  two effect fields; the golden replay's checkpoints are unchanged (no Sapper casts in it), only its `data-hash` moved.
+- **Tests.** `Abilities/AbilityCooldownTechTests`, `Abilities/AbilitySystemTests.Cusser_*`, `Data/AbilityLoaderTests`
+  (the Cusser, the duration rule, the two fields), `Stress/AbilityFuzzStressTests` (6 Sappers a side and 4 Keeps a side),
+  `DataContentHashTests`.
+
+**For the data track (M4-4b-1).** A `damage` effect also takes `"buildings": true` (other players' buildings in the radius
+take the hit as structure; not allowed with `affects: own_units`) and `"friendlyFire": <0-1>` (the fraction of the hit the
+caster's own units take; above 0 only with `affects: enemy_units`). Both are errors on an `applyStatus` effect. An
+`applyStatus` of a damage-over-time status needs a whole-second `duration`, at least 1 s. Shipped: Malazan `cusser` on the
+Sapper.
 
 ## Vision, detection, fog
 
@@ -2522,7 +2561,7 @@ the milestone that consumes it.
 | `projectiles.json` | `{ "projectiles": [ ... ] }`, each `{id, kind, speed, hitTolerance?, leadSpeed?}`: `kind` `aimed` or `lob`, `speed` m/s (at least 1), `hitTolerance` m (aimed only, 0-2, default 0.3; an error on a lob), `leadSpeed` m/s (aimed only, not negative, default 0 = never leads; an error on a lob). Ids unique; every unit's `attack.projectile` must name one (M4-2b, see "Implementation (M4-2b)") |
 | `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge). `abilities` (M4-4a, optional): ability ids of the unit's own faction, at most 4 (`DataLimits.MaxUnitAbilities`), no repeats; resolved to `UnitDef.Abilities`; shipped on the Cadre Mage (`telas_fire`) |
 | `statuses.json` | `{ "statuses": [ ... ] }` (M4-4a), each `{id, displayName, description, kind, damageType?}`: `kind` `damageOverTime` or `slow` (`DataLimits.StatusKindIds`); `damageType` (a damage table type) required on `damageOverTime`, an error on any other kind. The magnitude and duration come from the effect applying it. Ids unique; shipped `burning` (magic damage over time) and `slowed` |
-| `abilities.json` | `{ "abilities": [ ... ] }` (M4-4a, per faction, optional), each `{id, displayName, description, kind, range, radius, castTime, cooldown, duration?, affects, autocast?, effects}`: `kind` `targetGround` (`targetUnit`, `selfAura`, `summon`: "not supported yet"); `range` m above 0 and at most `DataLimits.MaxSight` (64); `radius` m above 0 and at most `DataLimits.MaxAbilityRadius` (16); `castTime` s, 0 or more, to ticks; `cooldown` s above 0, to ticks (at least 1); `duration` s, optional (0), to ticks; `affects` `enemy_units`, `own_units` or `all_units`; `autocast` only `false` ("not supported yet"); `effects` at least one, each `{kind: damage, type, amount}` (a whole amount, at least 1) or `{kind: applyStatus, status, magnitude, duration}` (a `statuses.json` id; magnitude whole and at least 1 for damage over time, above 0 and below 1 for a slow; duration s, at least a tick); `createZone`, `teleport`, `spawn`: "not supported yet"; a field the effect kind doesn't use is an error. Ids unique across factions. Shipped: Malazan `telas_fire` |
+| `abilities.json` | `{ "abilities": [ ... ] }` (M4-4a, per faction, optional), each `{id, displayName, description, kind, range, radius, castTime, cooldown, duration?, affects, autocast?, effects}`: `kind` `targetGround` (`targetUnit`, `selfAura`, `summon`: "not supported yet"); `range` m above 0 and at most `DataLimits.MaxSight` (64); `radius` m above 0 and at most `DataLimits.MaxAbilityRadius` (16); `castTime` s, 0 or more, to ticks; `cooldown` s above 0, to ticks (at least 1); `duration` s, optional (0), to ticks; `affects` `enemy_units`, `own_units` or `all_units`; `autocast` only `false` ("not supported yet"); `effects` at least one, each `{kind: damage, type, amount, buildings?, friendlyFire?}` (a whole amount, at least 1; M4-4b-1: `buildings` true also hits other players' buildings as structure, not with `own_units`; `friendlyFire` 0-1, the fraction own units take, above 0 only with `enemy_units`) or `{kind: applyStatus, status, magnitude, duration}` (a `statuses.json` id; magnitude whole and at least 1 for damage over time, above 0 and below 1 for a slow; duration s, at least a tick, and for damage over time a whole number of seconds, at least 1, M4-4b-1); `createZone`, `teleport`, `spawn`: "not supported yet"; a field the effect kind doesn't use is an error. Ids unique across factions. Shipped: Malazan `telas_fire`, `cusser` (M4-4b-1) |
 
 Validation rules: ids are `snake_case` and unique (a unit id is unique across all factions);
 `slot` is one of the seven template slots; `armorClass`, `attack.type`, and `bonusVs` keys exist in
