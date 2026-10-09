@@ -17,7 +17,7 @@ namespace Rts.Game;
 /// minimap; M + click is a plain Move (M3-V2). A right click on a live resource node with a worker
 /// selected is a Gather for the workers and a Move for the rest (<see cref="ContextOrder"/>, M3-V1),
 /// on an own damaged building a Repair and on an own site a joining Build (M3-V2); the minimap's
-/// right click stays a Move. A right click whose ray meets a building's drawn box first means that building (its
+/// right click is a Move, or an Attack on a visible enemy unit's dot (M4-V4). A right click whose ray meets a building's drawn box first means that building (its
 /// footprint centre), not the ground behind it (<see cref="ContextTarget"/>, BUG-0108). With an own finished building
 /// selected a right click (3D view or minimap) sets its rally point, and one on the building itself clears it (M3-V3);
 /// the production card's train, research and queue-cancel presses enqueue through <see cref="Produce"/> and
@@ -26,7 +26,9 @@ namespace Rts.Game;
 /// command card (<see cref="Card"/>) sees keys and clicks first while its build menu or ghost is up. A right click or an
 /// A + click whose ray meets an enemy unit's drawn body or an enemy building's box first (<see cref="EnemyAt"/>, M4-V2) is an
 /// <c>Attack</c> on it for every selected unit (<see cref="AttackOrder"/>; Shift queues), marked by the red
-/// <see cref="TargetRing"/>; an own unit or building in front hides what is behind it, as the player sees it. The geometry lives in the pure <see cref="ScreenPicker"/> and <see cref="GroundPicker"/>,
+/// <see cref="TargetRing"/>; an own unit or building in front hides what is behind it, as the player sees it. Under the fog
+/// (M4-V4) only what the screen draws is under the cursor: an enemy the <see cref="Fog"/> hides is neither a target nor a
+/// building to right-click, so a click there means the ground. The geometry lives in the pure <see cref="ScreenPicker"/> and <see cref="GroundPicker"/>,
 /// groups and subgroups in <see cref="ControlGroups"/> and <see cref="Rts.Sim.ViewApi.Subgroups"/>;
 /// the sim is changed only through <see cref="Simulation.Enqueue"/>. A selection action that leaves
 /// a changed, non-empty selection plays <see cref="SfxEvent.Select"/>; an order that enqueued
@@ -94,6 +96,9 @@ public partial class SelectionController : Node
 
     /// <summary>The Attack order's red ring (M4-V2); null draws none.</summary>
     public TargetRing? TargetRing { get; set; }
+
+    /// <summary>The fog (M4-V4): a unit or building it hides is not under the cursor (no Attack, no context target); null sees everything.</summary>
+    public FogOfWar? Fog { get; set; }
 
     /// <summary>Draws the selected building's footprint outline; null draws none.</summary>
     public BuildingOutline? Outline { get; set; }
@@ -609,12 +614,15 @@ public partial class SelectionController : Node
         Vector3 o = _camera.ProjectRayOrigin(screen), d = _camera.ProjectRayNormal(screen);
         System.Numerics.Vector3 so = new(o.X, o.Y, o.Z), sd = new(d.X, d.Y, d.Z);
         UnitStore u = world.Units;
-        int unit = UnitPicker.PickRay(u.Alive, u.PrevPosition, u.Position, u.Radius, world.Heightmap, (float)_runner.Alpha, so, sd, UnitViews.ExtraBodyHeight, out float unitT);
+        // Only what the screen draws can be clicked (M4-V4): the fog's shown lists stand in for Alive.
+        FogView? fog = Fog?.Refreshed(world);
+        ReadOnlySpan<bool> units = fog != null ? fog.UnitShown : u.Alive;
+        int unit = UnitPicker.PickRay(units, u.PrevPosition, u.Position, u.Radius, world.Heightmap, (float)_runner.Alpha, so, sd, UnitViews.ExtraBodyHeight, out float unitT);
         int building = BuildingPicker.PickRay(world.Buildings, world.Data.Buildings, world.NavGrid, world.Heightmap, -1,
-            so, sd, BuildingViews.BoxHeight, BuildingViews.SiteMinHeight, out float buildingT);
+            so, sd, BuildingViews.BoxHeight, BuildingViews.SiteMinHeight, fog != null ? fog.BuildingShown : ReadOnlySpan<bool>.Empty, out float buildingT);
         ResourceStore r = world.Resources;
         ResourcePicker.PickRay(world.NavGrid, world.Data.Resources, r.Alive, r.TypeId, r.Cell, world.Heightmap, so, sd, PropsView.Shape, out float nodeT);
-        return UnitPicker.ResolveEnemy(u.Alive, u.Owner, u.Generation, unit, unitT, world.Buildings, building, buildingT, nodeT, LocalPlayer, out target, out isBuilding);
+        return UnitPicker.ResolveEnemy(units, u.Owner, u.Generation, unit, unitT, world.Buildings, building, buildingT, nodeT, LocalPlayer, out target, out isBuilding);
     }
 
     /// <summary>
@@ -651,8 +659,9 @@ public partial class SelectionController : Node
         World world = _runner.Simulation!.World;
         Vector3 o = _camera.ProjectRayOrigin(screen), d = _camera.ProjectRayNormal(screen);
         System.Numerics.Vector3 so = new(o.X, o.Y, o.Z), sd = new(d.X, d.Y, d.Z);
+        FogView? fog = Fog?.Refreshed(world);
         building = BuildingPicker.PickRay(world.Buildings, world.Data.Buildings, world.NavGrid, world.Heightmap, -1,
-            so, sd, BuildingViews.BoxHeight, BuildingViews.SiteMinHeight, out float buildingT);
+            so, sd, BuildingViews.BoxHeight, BuildingViews.SiteMinHeight, fog != null ? fog.BuildingShown : ReadOnlySpan<bool>.Empty, out float buildingT);
         ResourceStore r = world.Resources;
         int node = ResourcePicker.PickRay(world.NavGrid, world.Data.Resources, r.Alive, r.TypeId, r.Cell, world.Heightmap, so, sd,
             PropsView.Shape, out float nodeT);

@@ -69,6 +69,16 @@ public sealed class MinimapRaster
     /// <summary>Resource layer, same size, drawn between terrain and dots; transparent where no node stands.</summary>
     public byte[] Resources { get; }
 
+    /// <summary>
+    /// Fog layer (M4-V4), same size, drawn over the resources and under the dots: black, with alpha
+    /// <see cref="FogView.MinimapAlpha"/> of the cell's fog state (opaque unexplored, 60 % explored, clear visible).
+    /// Opaque black until the first <see cref="DrawFog"/>.
+    /// </summary>
+    public byte[] Fog { get; }
+
+    /// <summary>Times the fog layer was redrawn (test and debug readout).</summary>
+    public int FogDraws { get; private set; }
+
     /// <summary>The <see cref="NavGrid.Version"/> of the last resource fill; -1 before the first.</summary>
     public int ResourceVersion { get; private set; } = -1;
 
@@ -87,6 +97,8 @@ public sealed class MinimapRaster
         Terrain = new byte[Width * Height * 4];
         Dots = new byte[Terrain.Length];
         Resources = new byte[Terrain.Length];
+        Fog = new byte[Terrain.Length];
+        for (int i = 3; i < Fog.Length; i += 4) Fog[i] = 255;
         _resourcePixels = new int[Width * Height];
         _ownerRgb = (uint[])ownerRgb.Clone();
         _rimRgb = new uint[_ownerRgb.Length];
@@ -167,6 +179,57 @@ public sealed class MinimapRaster
         ResourceVersion = version;
         ResourceDraws++;
         return true;
+    }
+
+    /// <summary>
+    /// Redraws the fog layer from a player's fog bytes (<c>Fog.Visibility(player)</c> or <see cref="FogView.Texture"/>: one byte
+    /// a cell, row-major, the raster's size): every pixel black with alpha <see cref="FogView.MinimapAlpha"/>. A short span
+    /// leaves the cells past its end unexplored. Allocates nothing.
+    /// </summary>
+    public void DrawFog(ReadOnlySpan<byte> visibility)
+    {
+        byte[] d = Fog;
+        int cells = Width * Height;
+        for (int c = 0; c < cells; c++)
+        {
+            byte state = c < visibility.Length ? visibility[c] : (byte)0;
+            d[c * 4 + 3] = FogView.MinimapAlpha(state); // RGB stay black
+        }
+        FogDraws++;
+    }
+
+    /// <summary>
+    /// The enemy unit whose dot covers the minimap pixel of ground point <paramref name="point"/> (m), for the minimap's
+    /// right-click Attack (M4-V4): a unit of another player than <paramref name="localPlayer"/> that <paramref name="shown"/>
+    /// marks (the view's live and seen units: a hidden enemy has no dot, so a click there is a Move) whose 4 x 4 dot block
+    /// (<see cref="CentreOf"/>'s 2 x 2 centre and its rim) holds that pixel, at its position now. The nearest to the point
+    /// wins (ties to the lower slot); -1 for none or a non-finite point. Allocates nothing.
+    /// </summary>
+    /// <param name="shown">Per unit slot, whether its dot is drawn (<see cref="FogView.UnitShown"/>).</param>
+    /// <param name="positions">The unit store's <c>Position</c>.</param>
+    /// <param name="owners">The unit store's <c>Owner</c>.</param>
+    public int EnemyDotAt(Vector2 point, ReadOnlySpan<bool> shown, ReadOnlySpan<Vector2> positions, ReadOnlySpan<int> owners, int localPlayer)
+    {
+        if (!TryPixelOf(point, out int px, out int py)) return -1;
+        int n = Math.Min(shown.Length, Math.Min(positions.Length, owners.Length));
+        int best = -1;
+        float bestD = float.PositiveInfinity;
+        for (int s = 0; s < n; s++)
+        {
+            if (!shown[s] || owners[s] == localPlayer || (uint)owners[s] >= (uint)_ownerRgb.Length) continue;
+            Vector2 p = positions[s];
+            if (!float.IsFinite(p.X) || !float.IsFinite(p.Y)) continue;
+            int c = CentreOf(p);
+            int cy = c / Width, cx = c - cy * Width;
+            if (px < cx - 1 || px > cx + 2 || py < cy - 1 || py > cy + 2) continue;
+            float d = Vector2.DistanceSquared(p, point);
+            if (d < bestD)
+            {
+                bestD = d;
+                best = s;
+            }
+        }
+        return best;
     }
 
     /// <summary>The rim colour for a dot of colour <paramref name="rgb"/>: <see cref="LightRim"/> when the dot is dark (Rec. 601 luma under 0.35), else <see cref="DarkRim"/>.</summary>

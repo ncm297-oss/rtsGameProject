@@ -565,7 +565,7 @@ public partial class QaV1Test : Node
 
     private async Task StartMatch(ulong seed, int units, int? workers)
     {
-        var args = new List<string> { "--seed", seed.ToString(), "--units", units.ToString(), "--mute" };
+        var args = new List<string> { "--seed", seed.ToString(), "--units", units.ToString(), "--mute", "--no-fog" }; // whole-map checks: all 256 buildings, both players' halls (M4-V4)
         if (workers is int n) args.AddRange(new[] { "--workers", n.ToString() });
         _match = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
         AddChild(_match);

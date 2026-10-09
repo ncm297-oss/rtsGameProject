@@ -4,11 +4,11 @@ using Rts.Sim.ViewApi;
 
 namespace Rts.Game;
 
-/// <summary>Shows the match terrain: copies the pure <see cref="TerrainMeshBuilder"/> output into an <see cref="ArrayMesh"/>.</summary>
+/// <summary>Shows the match terrain: copies the pure <see cref="TerrainMeshBuilder"/> output into an <see cref="ArrayMesh"/>; with a fog, its material darkens the ground by the fog texture (M4-V4).</summary>
 public partial class TerrainView : MeshInstance3D
 {
-    /// <summary>Builds the mesh once for the match's heightmap.</summary>
-    public void Build(Heightmap map)
+    /// <summary>Builds the mesh once for the match's heightmap; with <paramref name="fog"/> its material is the fog's terrain shader, else the plain vertex-colour material.</summary>
+    public void Build(Heightmap map, FogOfWar? fog = null)
     {
         TerrainMesh src = TerrainMeshBuilder.Build(map);
         int n = src.Positions.Length;
@@ -33,7 +33,7 @@ public partial class TerrainView : MeshInstance3D
 
         var mesh = new ArrayMesh();
         mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
-        mesh.SurfaceSetMaterial(0, new StandardMaterial3D
+        mesh.SurfaceSetMaterial(0, fog != null ? fog.TerrainMaterial() : new StandardMaterial3D
         {
             VertexColorUseAsAlbedo = true,
             VertexColorIsSrgb = true,

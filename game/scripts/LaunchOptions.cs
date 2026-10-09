@@ -18,7 +18,9 @@ namespace Rts.Game;
 /// <see cref="DefaultForests"/> and <see cref="DefaultMines"/>), <c>--workers &lt;n&gt;</c> (starting workers per player
 /// beside each Town Hall, 0 to <see cref="MaxWorkers"/>; default <c>rules.json</c> <c>startingWorkers</c>, M3-V1),
 /// <c>--no-bases</c> (dev / tests: no Town Halls and no starting workers, the M2 armies-only match), <c>--no-combat</c>
-/// (dev / tests: <c>SimConfig.Combat = false</c>, units never fight; M4-V1, never a game option). Bad values are
+/// (dev / tests: <c>SimConfig.Combat = false</c>, units never fight; M4-V1, never a game option), <c>--no-fog</c> (dev / tests:
+/// the view draws no fog and shows every unit and building; the sim's fog and combat's sight rules are unchanged; M4-V4,
+/// never a game option). Bad values are
 /// warned about and ignored; a token starting with <c>--</c> is never taken as a value (BUG-0041).
 /// </remarks>
 public sealed class LaunchOptions
@@ -74,6 +76,14 @@ public sealed class LaunchOptions
     /// game option.
     /// </summary>
     public bool NoCombat { get; private set; }
+
+    /// <summary>
+    /// True to draw the match without the fog of war (<c>--no-fog</c>; takes no value; M4-V4): the terrain and props clear
+    /// everywhere, every unit, building, shot and minimap dot shown, as before M4-V4. View only: the sim's fog and the
+    /// sight rules combat and orders follow are unchanged. A dev / test flag for the scenes that look at the whole map, never
+    /// a game option.
+    /// </summary>
+    public bool NoFog { get; private set; }
 
     /// <summary>Start zoom override in meters, or null for the default.</summary>
     public float? Zoom { get; private set; }
@@ -167,6 +177,9 @@ public sealed class LaunchOptions
                     continue; // takes no value
                 case "--no-combat":
                     o.NoCombat = true;
+                    continue; // takes no value
+                case "--no-fog":
+                    o.NoFog = true;
                     continue; // takes no value
                 default:
                     continue;

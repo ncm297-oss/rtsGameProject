@@ -110,6 +110,7 @@ public partial class QaV4Test : Node
         // A Barracks site: a site doesn't count for the Corral's requires.
         SetMoney(5000, 5000);
         int siteAnchor = FreeAnchor(barracksType, 12f, 40f);
+        Check(ExploredGround.Scout(_sim, _worker, _data.Buildings[barracksType], siteAnchor) >= 0, $"BUG-0274: {siteAnchor} not explored");
         _sim.Enqueue(Command.Build(0, _worker, barracksType, G.CellCenter(siteAnchor % G.Width, siteAnchor / G.Width)));
         Tick(2);
         int site = B.SlotAt(siteAnchor % G.Width, siteAnchor / G.Width);
@@ -283,8 +284,9 @@ public partial class QaV4Test : Node
             if (d >= bestD || d < minD || d > maxD) continue;
             int x = cell % G.Width, y = cell / G.Width;
             if (_taken.Any(t => Math.Abs(t % G.Width - x) < 8 && Math.Abs(t / G.Width - y) < 8)) continue;
+            // BUG-0274: the sim refuses unexplored ground since M4-3b; a dev spawn ignores it, a Build path scouts first.
             bool ok = W.CanPlace(0, type, cell, out PlacementError r);
-            if (!ok && r != PlacementError.CannotAfford && !(r == PlacementError.Requires && B.Fits(type, cell))) continue;
+            if (!ok && r != PlacementError.CannotAfford && !(r == PlacementError.Requires && B.Fits(type, cell)) && !ExploredGround.IsUnexplored(r)) continue;
             bool empty = true;
             for (int i = 0; i < U.Capacity && empty; i++)
                 if (U.Alive[i] && MathF.Abs(U.Position[i].X - c.X) < def.FootprintWidth + 3f && MathF.Abs(U.Position[i].Y - c.Y) < def.FootprintHeight + 3f) empty = false;

@@ -49,7 +49,7 @@ public partial class MinimapTest : Node
         GameData data = loaded.Data!;
         var match = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
         AddChild(match);
-        match.Start(data, LaunchOptions.Parse(new[] { "--units", "1000", "--no-bases", "--no-combat" })); // armies only, no fights, as in M2 (M3-V1, M4-V1 BUG-0147; BUG-0210: since M4-2b the archers shot slot 0 dead)
+        match.Start(data, LaunchOptions.Parse(new[] { "--units", "1000", "--no-bases", "--no-combat", "--no-fog" })); // armies only, no fights, as in M2 (M3-V1, M4-V1 BUG-0147; BUG-0210: since M4-2b the archers shot slot 0 dead; M4-V4: every dot of both players is checked)
         _mini = match.GetNode<Minimap>("Hud/Minimap");
         _camera = match.GetNode<RtsCamera>("RtsCamera");
         _camera.EdgePanEnabled = false;

@@ -65,7 +65,27 @@ public static class BuildingPicker
     /// <param name="siteMinShare">Smallest share of <paramref name="boxHeight"/> a site's box has.</param>
     /// <param name="entry">Ray parameter of the hit.</param>
     public static int PickRay(BuildingStore buildings, ImmutableArray<BuildingDef> defs, NavGrid grid, Heightmap map, int owner,
-        Vector3 origin, Vector3 direction, float boxHeight, float siteMinShare, out float entry)
+        Vector3 origin, Vector3 direction, float boxHeight, float siteMinShare, out float entry) =>
+        PickRay(buildings, defs, grid, map, owner, origin, direction, boxHeight, siteMinShare, ReadOnlySpan<bool>.Empty, out entry);
+
+    /// <summary>
+    /// As the overload without <paramref name="shown"/>, but only among the slots <paramref name="shown"/> marks (M4-V4: the
+    /// buildings the screen draws, <see cref="FogView.BuildingShown"/>; a building hidden by the fog is not under the cursor).
+    /// An empty span means every live building.
+    /// </summary>
+    /// <param name="buildings">The match's building store (read only).</param>
+    /// <param name="defs">Building types, for footprints and site progress.</param>
+    /// <param name="grid">The nav grid (cell indices to coordinates).</param>
+    /// <param name="map">Terrain, for each box's base height.</param>
+    /// <param name="owner">Only this player's buildings, or every building when negative.</param>
+    /// <param name="origin">Ray start (the camera), view coordinates.</param>
+    /// <param name="direction">Ray direction; need not be normalized.</param>
+    /// <param name="boxHeight">A finished building's box height in meters.</param>
+    /// <param name="siteMinShare">Smallest share of <paramref name="boxHeight"/> a site's box has.</param>
+    /// <param name="shown">Per building slot, whether it is drawn (a slot past its end is not); empty for every slot.</param>
+    /// <param name="entry">Ray parameter of the hit.</param>
+    public static int PickRay(BuildingStore buildings, ImmutableArray<BuildingDef> defs, NavGrid grid, Heightmap map, int owner,
+        Vector3 origin, Vector3 direction, float boxHeight, float siteMinShare, ReadOnlySpan<bool> shown, out float entry)
     {
         entry = float.PositiveInfinity;
         if (!IsFinite(origin) || !IsFinite(direction) || direction == Vector3.Zero) return -1;
@@ -79,6 +99,7 @@ public static class BuildingPicker
         for (int i = 0; i < buildings.Capacity; i++)
         {
             if (!alive[i] || (owner >= 0 && buildings.Owner[i] != owner)) continue;
+            if (!shown.IsEmpty && (i >= shown.Length || !shown[i])) continue;
             BuildingDef def = defs[buildings.TypeId[i]];
             int anchor = buildings.Cell[i];
             float x0 = anchor % w * cs, z0 = anchor / w * cs;

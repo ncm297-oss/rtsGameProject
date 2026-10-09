@@ -42,9 +42,13 @@ public partial class Match : Node3D
         Simulation sim = _runner.Simulation!;
 
         Heightmap map = sim.World.Heightmap;
-        GetNode<TerrainView>("World3D/TerrainView").Build(map);
+        // The local player's fog (M4-V4): bound before the views, whose materials and hide rule read it.
+        var fog = GetNode<FogOfWar>("World3D/FogOfWar");
+        fog.Bind(sim.World, SelectionController.LocalPlayer, enabled: !options.NoFog);
+        fog.Runner = _runner;
+        GetNode<TerrainView>("World3D/TerrainView").Build(map, fog);
         var props = GetNode<PropsView>("World3D/PropsView");
-        props.Bind(data, sim.World.Resources.Capacity);
+        props.Bind(data, sim.World.Resources.Capacity, fog);
         props.Runner = _runner;
         props.Sync(sim.World);
 
@@ -58,6 +62,7 @@ public partial class Match : Node3D
         var units = GetNode<UnitViews>("World3D/UnitViews");
         units.Bind(data, sim.World.Units.Capacity);
         units.Runner = _runner;
+        units.Fog = fog;
         units.Camera = camera;
 
         // Player p plays faction p until the M6 lobby (World.FactionOf), so a player's colour is that faction's.
@@ -66,21 +71,26 @@ public partial class Match : Node3D
         var buildings = GetNode<BuildingViews>("World3D/BuildingViews");
         buildings.Bind(data, sim.World.Buildings.Capacity, playerRgb);
         buildings.Runner = _runner;
+        buildings.Fog = fog;
         var combat = GetNode<CombatViews>("World3D/CombatViews");
+        combat.Fog = fog;
         combat.Bind(data, sim.World.Units.Capacity, playerRgb);
         combat.Runner = _runner;
         combat.Camera = camera;
         var shots = GetNode<ProjectileViews>("World3D/ProjectileViews");
         shots.Bind(data, sim.World.Projectiles.Capacity, playerRgb);
         shots.Runner = _runner;
+        shots.Fog = fog;
 
         Sfx.SetMuted(options.Mute);
         var selection = GetNode<SelectionController>("SelectionController");
         selection.Init(_runner, camera, GetNode<SelectionRings>("World3D/SelectionRings"), GetNode<Sfx>("Sfx"));
         selection.Outline = GetNode<BuildingOutline>("World3D/BuildingOutline");
+        selection.Fog = fog;
         GetNode<RallyMarker>("World3D/RallyMarker").Init(_runner, selection);
         var targetRing = GetNode<TargetRing>("World3D/TargetRing");
         targetRing.Init(_runner);
+        targetRing.Fog = fog;
         selection.TargetRing = targetRing;
 
         System.Numerics.Vector2[][] blocks = SpawnArmies(sim, options.UnitsPerPlayer, out System.Numerics.Vector2 focus);
@@ -97,6 +107,7 @@ public partial class Match : Node3D
         if (!options.NoHud)
         {
             minimap = hud.GetNode<Minimap>("Minimap");
+            minimap.Fog = fog;
             minimap.Init(_runner, camera, selection, playerRgb);
             // Resource names come from the local player's faction data (CLAUDE.md rule 8).
             FactionDef local = data.Factions[sim.World.FactionOf(SelectionController.LocalPlayer)];
@@ -136,7 +147,7 @@ public partial class Match : Node3D
         GD.Print($"Match started: seed {unchecked((ulong)_runner.Seed)}, map {map.Width} x {map.Height}, " +
             $"speed {_runner.GameSpeed:0.##}x, {options.UnitsPerPlayer} units per player, " +
             $"forests {placed.Forests} trees {placed.Trees} mines {placed.Mines}, " +
-            $"town halls {Halls(Bases)}, {WorkersPerPlayer} workers per player" + (options.NoCombat ? ", combat off" : ""));
+            $"town halls {Halls(Bases)}, {WorkersPerPlayer} workers per player" + (options.NoCombat ? ", combat off" : "") + (options.NoFog ? ", fog not drawn" : ""));
     }
 
     /// <summary>Enqueues each player's start army in its <see cref="StartLayout"/> block; returns each player's block, and player 0's block centre (meters) in <paramref name="focus"/>.</summary>

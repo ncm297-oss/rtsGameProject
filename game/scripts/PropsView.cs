@@ -15,6 +15,9 @@ namespace Rts.Game;
 /// data only. Instance transforms come from the pure <see cref="PropLayout"/>, which relists only when
 /// <see cref="NavGrid.Version"/> changes; the instance buffer is uploaded only then, so a steady frame
 /// costs one int compare and allocates nothing. Holds no gameplay state.
+/// Fog (M4-V4): bound with a <see cref="FogOfWar"/>, every surface's material is the fog's prop shader in the same colour,
+/// so a tree or mine on unexplored ground is not drawn and one on explored ground is darkened (the GPU reads the cell under
+/// each instance; nothing is relisted when the fog moves).
 /// </remarks>
 public partial class PropsView : Node3D
 {
@@ -65,8 +68,8 @@ public partial class PropsView : Node3D
     /// <summary>The MultiMesh child of resource type <paramref name="type"/>.</summary>
     public MultiMeshInstance3D InstanceOf(int type) => GetNode<MultiMeshInstance3D>(type.ToString());
 
-    /// <summary>Builds one MultiMesh child per resource type, sized for <paramref name="capacity"/> nodes (the store's); call once before the first <see cref="Sync"/>.</summary>
-    public void Bind(GameData data, int capacity)
+    /// <summary>Builds one MultiMesh child per resource type, sized for <paramref name="capacity"/> nodes (the store's); call once before the first <see cref="Sync"/>. With <paramref name="fog"/> the props are drawn under the fog.</summary>
+    public void Bind(GameData data, int capacity, FogOfWar? fog = null)
     {
         _layout = new PropLayout(data.Resources, capacity);
         _mms = new MultiMesh[data.Resources.Length];
@@ -78,7 +81,7 @@ public partial class PropsView : Node3D
             _mms[t] = new MultiMesh
             {
                 TransformFormat = MultiMesh.TransformFormatEnum.Transform3D,
-                Mesh = def.Resource == ResourceKind.Gold ? MineMesh(def) : TreeMesh(def),
+                Mesh = def.Resource == ResourceKind.Gold ? MineMesh(def, fog) : TreeMesh(def, fog),
                 InstanceCount = capacity,
                 VisibleInstanceCount = 0,
             };
@@ -115,35 +118,35 @@ public partial class PropsView : Node3D
     }
 
     // A cone canopy on a trunk cylinder, standing on the origin, inside the footprint.
-    private static ArrayMesh TreeMesh(ResourceDef def)
+    private static ArrayMesh TreeMesh(ResourceDef def, FogOfWar? fog)
     {
         float side = Math.Min(def.FootprintWidth, def.FootprintHeight) * MapConstants.CellSize;
         float canopy = side * CanopyFill / 2;
         var mesh = new ArrayMesh();
         // Few segments on purpose: up to 4,096 trees, and the facets show the yaw variety.
         Append(mesh, new CylinderMesh { TopRadius = TrunkRadius, BottomRadius = TrunkRadius, Height = TrunkHeight, RadialSegments = 6, Rings = 1 },
-            TrunkHeight / 2, TrunkColor);
+            TrunkHeight / 2, TrunkColor, fog);
         Append(mesh, new CylinderMesh { TopRadius = 0f, BottomRadius = canopy, Height = TreeHeight - TrunkHeight, RadialSegments = 7, Rings = 1 },
-            TrunkHeight + (TreeHeight - TrunkHeight) / 2, CanopyColor);
+            TrunkHeight + (TreeHeight - TrunkHeight) / 2, CanopyColor, fog);
         return mesh;
     }
 
     // A slate block covering the footprint with a smaller gold block on top.
-    private static ArrayMesh MineMesh(ResourceDef def)
+    private static ArrayMesh MineMesh(ResourceDef def, FogOfWar? fog)
     {
         float w = def.FootprintWidth * MapConstants.CellSize, d = def.FootprintHeight * MapConstants.CellSize;
         var mesh = new ArrayMesh();
-        Append(mesh, new BoxMesh { Size = new Vector3(w, MineHeight, d) }, MineHeight / 2, SlateColor);
-        Append(mesh, new BoxMesh { Size = new Vector3(w * GoldFill, GoldHeight, d * GoldFill) }, MineHeight + GoldHeight / 2, GoldColor);
+        Append(mesh, new BoxMesh { Size = new Vector3(w, MineHeight, d) }, MineHeight / 2, SlateColor, fog);
+        Append(mesh, new BoxMesh { Size = new Vector3(w * GoldFill, GoldHeight, d * GoldFill) }, MineHeight + GoldHeight / 2, GoldColor, fog);
         return mesh;
     }
 
     // Adds a primitive as a new surface of `mesh`, lifted by `y`, with its own material.
-    private static void Append(ArrayMesh mesh, PrimitiveMesh part, float y, Color color)
+    private static void Append(ArrayMesh mesh, PrimitiveMesh part, float y, Color color, FogOfWar? fog)
     {
         var st = new SurfaceTool();
         st.AppendFrom(part, 0, new Transform3D(Basis.Identity, new Vector3(0f, y, 0f)));
         st.Commit(mesh);
-        mesh.SurfaceSetMaterial(mesh.GetSurfaceCount() - 1, new StandardMaterial3D { AlbedoColor = color, Roughness = 0.9f });
+        mesh.SurfaceSetMaterial(mesh.GetSurfaceCount() - 1, fog != null ? fog.PropMaterial(color, 0.9f) : new StandardMaterial3D { AlbedoColor = color, Roughness = 0.9f });
     }
 }

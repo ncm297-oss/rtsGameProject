@@ -91,7 +91,7 @@ public partial class ProjectileViewTest : Node
         AddChild(_match);
         _runner = _match.GetNode<SimRunner>("SimRunner");
         _runner.RecordCheckpointInterval = 1;
-        var args = new List<string> { "--seed", seed.ToString(CultureInfo.InvariantCulture), "--no-bases", "--mute" };
+        var args = new List<string> { "--seed", seed.ToString(CultureInfo.InvariantCulture), "--no-bases", "--mute", "--no-fog" }; // every shot in flight is checked (M4-V4)
         args.AddRange(extra);
         _match.Start(_data, LaunchOptions.Parse(args.ToArray()));
         _runner.ProcessMode = ProcessModeEnum.Disabled; // ticked by the test until the fight starts

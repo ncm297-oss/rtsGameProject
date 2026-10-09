@@ -18,6 +18,10 @@ namespace Rts.Game;
 /// transform is only written when they change. Meshes (one per building type, plus one bar) and materials (one per
 /// player, site, and the bar colours) are made in <see cref="Bind"/>, so a steady frame allocates nothing. Views hold no
 /// gameplay state: the per-slot values kept here only say what is already drawn.
+/// Fog (M4-V4): with <see cref="Fog"/> set, an enemy building the local player doesn't see (<c>Fog.CanSeeBuilding</c>
+/// false, through <see cref="FogView.BuildingShown"/>) is hidden like a freed slot, bar included, and placed afresh when it
+/// comes into sight. Last-known ghosts in explored fog wait for the sim's ghost list (M4-3b; the hook is
+/// <see cref="FogView.CollectGhosts"/>).
 /// </remarks>
 public partial class BuildingViews : Node3D
 {
@@ -47,6 +51,9 @@ public partial class BuildingViews : Node3D
 
     /// <summary>The runner whose sim is shown each frame; null shows nothing (tests call <see cref="Sync"/> directly).</summary>
     public SimRunner? Runner { get; set; }
+
+    /// <summary>The fog whose hide rule applies (M4-V4); null shows every live building.</summary>
+    public FogOfWar? Fog { get; set; }
 
     private BoxMesh[] _meshes = Array.Empty<BoxMesh>();
     private BoxMesh _barMesh = null!;
@@ -112,10 +119,13 @@ public partial class BuildingViews : Node3D
     public void Sync(World world)
     {
         BuildingStore b = world.Buildings;
+        FogView? fog = Fog?.Refreshed(world);
         int n = Math.Min(b.Capacity, _roots.Length);
         for (int i = 0; i < n; i++)
         {
-            if (!b.Alive[i])
+            // A slot gets its nodes when it first holds a live building, seen or not (as the unit views).
+            if (b.Alive[i] && _roots[i] == null) CreateView(i).Visible = false;
+            if (!b.Alive[i] || (fog != null && !fog.ShowsBuilding(i)))
             {
                 if (_shownGen[i] != 0)
                 {
@@ -152,7 +162,7 @@ public partial class BuildingViews : Node3D
     /// <summary>The bar fill node of slot <paramref name="slot"/> (exists once <see cref="ViewOf"/> does).</summary>
     public MeshInstance3D BarFillOf(int slot) => _fills[slot];
 
-    /// <summary>True while slot <paramref name="slot"/>'s view is shown.</summary>
+    /// <summary>True while slot <paramref name="slot"/>'s view is shown (a live building the fog doesn't hide).</summary>
     public bool IsShown(int slot) => (uint)slot < (uint)_shownGen.Length && _shownGen[slot] != 0;
 
     /// <summary>The bar slot <paramref name="slot"/> shows, and its fill in [0, 1].</summary>

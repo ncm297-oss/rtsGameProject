@@ -24,8 +24,8 @@ namespace Rts.Game.Tests;
 /// a right-click on an enemy unit (every selected unit holds that target, <c>CombatMode.Ordered</c>, the next tick), A + click on
 /// an enemy (the same), A + click on the ground (an AttackMove, no Attack), Shift + right-click on two enemies while walking
 /// away (both queued as Attack entries, in order, <c>QueuedTarget</c>), a right-click on the enemy Tent (a building target), a
-/// right-click on an own unit (a Move), a minimap right-click on an enemy dot (a Move: the minimap's Attack half waits for
-/// M4-3); the Command sound; the panel's ordered-attack label while chasing and "Attacking" while swinging; the red ring
+/// right-click on an own unit (a Move), a minimap right-click on a visible enemy's dot (an Attack per selected unit since
+/// M4-V4; a Move before it); the Command sound; the panel's ordered-attack label while chasing and "Attacking" while swinging; the red ring
 /// (one pooled node, on the target, gone after 0.5 s, gone when the target dies, 0 bytes over 300 steady brawl frames); the
 /// F12 line's target slot; and the hash twin (the scene's command stream replayed bare equals the views' sim every tick).
 /// </summary>
@@ -315,14 +315,15 @@ public partial class AttackOrderViewTest : Node
     private async Task MinimapRightClick(ulong seed)
     {
         int n = SelectAllOwn();
+        // An enemy the player sees (staged in sight): since M4-V4 a right-click on its dot is an Attack (the minimap's Attack half).
         int enemy = -1;
-        for (int i = 0; i < U.Capacity && enemy < 0; i++) if (U.Alive[i] && U.Owner[i] == 1) enemy = i;
-        if (!Check(enemy >= 0, $"seed {seed}: no enemy for the minimap row")) return;
+        for (int i = 0; i < U.Capacity && enemy < 0; i++) if (U.Alive[i] && U.Owner[i] == 1 && W.Fog.CanSeeUnit(0, i)) enemy = i;
+        if (!Check(enemy >= 0, $"seed {seed}: no visible enemy for the minimap row")) return;
         System.Numerics.Vector2 dot = _mini.Fit.ToPixel(U.Position[enemy]);
         int attacks = _sel.IssuedCount(CommandKind.Attack), moves = _sel.IssuedCount(CommandKind.Move);
         _mini._GuiInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = true, Position = new Vector2(dot.X, dot.Y) });
-        Check(_sel.IssuedCount(CommandKind.Attack) == attacks && _sel.IssuedCount(CommandKind.Move) == moves + n,
-            $"seed {seed} minimap right-click on an enemy dot: {_sel.IssuedCount(CommandKind.Attack) - attacks} Attacks, {_sel.IssuedCount(CommandKind.Move) - moves} Moves");
+        Check(_sel.IssuedCount(CommandKind.Attack) == attacks + n && _sel.IssuedCount(CommandKind.Move) == moves,
+            $"seed {seed} minimap right-click on a visible enemy's dot: {_sel.IssuedCount(CommandKind.Attack) - attacks} Attacks, {_sel.IssuedCount(CommandKind.Move) - moves} Moves for {n}");
         ApplyOrders();
         await Gap();
     }
