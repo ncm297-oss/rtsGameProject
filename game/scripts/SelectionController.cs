@@ -28,7 +28,9 @@ namespace Rts.Game;
 /// <c>Attack</c> on it for every selected unit (<see cref="AttackOrder"/>; Shift queues), marked by the red
 /// <see cref="TargetRing"/>; an own unit or building in front hides what is behind it, as the player sees it. Under the fog
 /// (M4-V4) only what the screen draws is under the cursor: an enemy the <see cref="Fog"/> hides is neither a target nor a
-/// building to right-click, so a click there means the ground. The geometry lives in the pure <see cref="ScreenPicker"/> and <see cref="GroundPicker"/>,
+/// building to right-click, so a click there means the ground. A fog ghost (M4-V5, a remembered enemy building drawn in
+/// explored fog) is picked like a box: a right click or A + click on it is an Attack on its remembered handle, and a right
+/// click with a building selected rallies to its remembered footprint. The geometry lives in the pure <see cref="ScreenPicker"/> and <see cref="GroundPicker"/>,
 /// groups and subgroups in <see cref="ControlGroups"/> and <see cref="Rts.Sim.ViewApi.Subgroups"/>;
 /// the sim is changed only through <see cref="Simulation.Enqueue"/>. A selection action that leaves
 /// a changed, non-empty selection plays <see cref="SfxEvent.Select"/>; an order that enqueued
@@ -622,8 +624,28 @@ public partial class SelectionController : Node
             so, sd, BuildingViews.BoxHeight, BuildingViews.SiteMinHeight, fog != null ? fog.BuildingShown : ReadOnlySpan<bool>.Empty, out float buildingT);
         ResourceStore r = world.Resources;
         ResourcePicker.PickRay(world.NavGrid, world.Data.Resources, r.Alive, r.TypeId, r.Cell, world.Heightmap, so, sd, PropsView.Shape, out float nodeT);
+        // A ghost (M4-V5) met before anything drawn is an Attack on the remembered building; the sim accepts the handle.
+        int ghost = PickGhost(world, fog, so, sd, out float ghostT);
+        if (ghost >= 0 && ghostT < unitT && ghostT < buildingT && ghostT <= nodeT)
+        {
+            target = fog!.GhostHandle(ghost);
+            isBuilding = true;
+            return true;
+        }
         return UnitPicker.ResolveEnemy(units, u.Owner, u.Generation, unit, unitT, world.Buildings, building, buildingT, nodeT, LocalPlayer, out target, out isBuilding);
     }
+
+    // The ghost (FogView.GhostShown) whose box the ray meets first, or -1 (no fog, or none).
+    private static int PickGhost(World world, FogView? fog, System.Numerics.Vector3 so, System.Numerics.Vector3 sd, out float entry)
+    {
+        entry = float.PositiveInfinity;
+        if (fog == null || fog.GhostCount == 0) return -1;
+        return BuildingPicker.PickGhostRay(fog.GhostShown, fog.Ghosts, world.Data.Buildings, world.NavGrid, world.Heightmap, so, sd, BuildingViews.BoxHeight, out entry);
+    }
+
+    /// <summary>The remembered footprint centre (meters) of slot <paramref name="slot"/>'s ghost in <paramref name="fog"/>.</summary>
+    public static System.Numerics.Vector2 GhostCenter(World world, FogView fog, int slot) =>
+        StartBase.FootprintCenter(world.NavGrid, world.Data.Buildings[fog.Ghosts[slot].TypeId], fog.Ghosts[slot].Cell);
 
     /// <summary>
     /// The Attack order (M4-V2): one <c>Attack</c> on <paramref name="target"/> (a building handle when
@@ -665,6 +687,14 @@ public partial class SelectionController : Node
         ResourceStore r = world.Resources;
         int node = ResourcePicker.PickRay(world.NavGrid, world.Data.Resources, r.Alive, r.TypeId, r.Cell, world.Heightmap, so, sd,
             PropsView.Shape, out float nodeT);
+        int ghost = PickGhost(world, fog, so, sd, out float ghostT);
+        if (ghost >= 0 && ghostT < buildingT && ghostT <= nodeT)
+        {
+            // A ghost's remembered footprint is a point like a drawn box's (M4-V5); it is no live building to name.
+            building = -1;
+            point = GhostCenter(world, fog!, ghost);
+            return true;
+        }
         if (node >= 0 && nodeT < buildingT)
         {
             building = -1;

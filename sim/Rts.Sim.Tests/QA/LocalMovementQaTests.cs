@@ -293,7 +293,8 @@ public class LocalMovementQaTests
             if (!f.FieldType.IsArray || f.Name.StartsWith("_")) continue;
             if (derived.Contains(f.Name)) continue;
             var arr = (Array)f.GetValue(u)!;
-            int perUnit = arr.Length == u.Capacity ? 1 : arr.Length == u.Capacity * OrderConstants.QueueCapacity ? OrderConstants.QueueCapacity : 0;
+            int perUnit = arr.Length == u.Capacity ? 1 : arr.Length == u.Capacity * OrderConstants.QueueCapacity ? OrderConstants.QueueCapacity
+                : arr.Length == u.Capacity * Rts.Sim.Data.DataLimits.MaxUnitAbilities ? Rts.Sim.Data.DataLimits.MaxUnitAbilities : 0; // M4-4a: cooldowns
             Assert.True(perUnit > 0, $"{f.Name}: length {arr.Length} is neither per unit nor per queue entry; extend the audit");
             for (int e = perUnit; e < 2 * perUnit; e++) // unit 1's elements
             {

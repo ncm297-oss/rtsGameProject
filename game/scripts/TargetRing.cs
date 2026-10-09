@@ -14,7 +14,8 @@ namespace Rts.Game;
 /// (target and time left) is a <see cref="TargetMark"/>; each frame the ring follows a unit target's interpolated position
 /// (radius <see cref="UnitScale"/> x its radius, outside the green selection ring) or sits round a building's footprint,
 /// and hides when the time is up or the target is dead or recycled. Moving a node allocates nothing, so a frame is 0 bytes.
-/// With <see cref="Fog"/> set (M4-V4) the ring is not drawn while the fog hides its target (its time keeps running).
+/// With <see cref="Fog"/> set (M4-V4) the ring is not drawn while the fog hides its target (its time keeps running); a
+/// building target the fog draws as a ghost (M4-V5) gets the ring on its remembered footprint, even once it is gone.
 /// Holds view state only.
 /// </remarks>
 public partial class TargetRing : Node3D
@@ -73,9 +74,13 @@ public partial class TargetRing : Node3D
     public void Sync(World world, float alpha, float delta)
     {
         Mark.Update(delta);
-        if (Mark.Active && !TargetAlive(world)) Mark.Clear();
         FogView? fog = Fog?.Refreshed(world);
-        bool hidden = Mark.Active && fog != null && !(Mark.IsBuilding ? fog.ShowsBuilding(Mark.Target.Index) : fog.ShowsUnit(Mark.Target.Index));
+        // A building target the fog shows as a ghost (M4-V5) is marked on its remembered footprint, also once it is gone.
+        bool ghost = Mark.Active && Mark.IsBuilding && fog != null && fog.ShowsGhost(Mark.Target.Index)
+            && fog.Ghosts[Mark.Target.Index].Generation == Mark.Target.Generation;
+        bool alive = Mark.Active && TargetAlive(world);
+        if (Mark.Active && !alive && !ghost) Mark.Clear();
+        bool hidden = Mark.Active && !ghost && fog != null && !(Mark.IsBuilding ? fog.ShowsBuilding(Mark.Target.Index) : fog.ShowsUnit(Mark.Target.Index));
         if (!Mark.Active || hidden)
         {
             if (_ring.Visible) _ring.Visible = false;
@@ -86,8 +91,10 @@ public partial class TargetRing : Node3D
         int slot = Mark.Target.Index;
         if (Mark.IsBuilding)
         {
-            BuildingDef def = world.Data.Buildings[world.Buildings.TypeId[slot]];
-            System.Numerics.Vector2 c = StartBase.FootprintCenter(world.NavGrid, def, world.Buildings.Cell[slot]);
+            int type = ghost ? fog!.Ghosts[slot].TypeId : world.Buildings.TypeId[slot];
+            int anchor = ghost ? fog!.Ghosts[slot].Cell : world.Buildings.Cell[slot];
+            BuildingDef def = world.Data.Buildings[type];
+            System.Numerics.Vector2 c = StartBase.FootprintCenter(world.NavGrid, def, anchor);
             at = new Vector3(c.X, TerrainHeight.At(world.Heightmap, c.X, c.Y), c.Y);
             radius = Math.Max(def.FootprintWidth, def.FootprintHeight) * MapConstants.CellSize / 2f * BuildingScale;
         }

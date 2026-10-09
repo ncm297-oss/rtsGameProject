@@ -160,7 +160,8 @@ public class SimHardeningQaTests
     {
         Simulation inTheWay = LongWall(closedAtTheBottom: false);
         Give(inTheWay, 0, 1_000_000, 1_000_000);
-        Unit(inTheWay, At(inTheWay, 65, 2), player: 1);
+        EntityHandle enemy = Unit(inTheWay, At(inTheWay, 65, 2), player: 1);
+        CombatScenes.Spot(inTheWay, 0, enemy); // BUG-0280: CanPlace counts only an enemy unit the player sees
         Assert.False(inTheWay.World.CanPlace(0, House, Cell(inTheWay, 64, 1), out PlacementError why));
         Assert.Equal(PlacementError.UnitInTheWay, why);
         double a = HundredBuilds(inTheWay, PlacementError.UnitInTheWay, "enemy unit in the way");

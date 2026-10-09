@@ -20,8 +20,13 @@ namespace Rts.Game;
 /// gameplay state: the per-slot values kept here only say what is already drawn.
 /// Fog (M4-V4): with <see cref="Fog"/> set, an enemy building the local player doesn't see (<c>Fog.CanSeeBuilding</c>
 /// false, through <see cref="FogView.BuildingShown"/>) is hidden like a freed slot, bar included, and placed afresh when it
-/// comes into sight. Last-known ghosts in explored fog wait for the sim's ghost list (M4-3b; the hook is
-/// <see cref="FogView.CollectGhosts"/>).
+/// comes into sight.
+/// Ghosts (M4-V5): a slot the fog marks in <see cref="FogView.GhostShown"/> (an enemy building seen once and not seen now,
+/// from <c>Fog.Ghosts</c>) also gets a ghost box: its remembered type's box at its remembered anchor, full height, in the
+/// owner's colour darkened to <see cref="FogView.ExploredBrightness"/>, with no bar. Ghost boxes are their own per-slot
+/// pool (a slot can show a new building and the old one's ghost at once until the next fog update), created the first time
+/// the slot has a ghost and hidden when the sim drops the entry or the building is seen again. A remembered site draws
+/// finished (BUG-0275 item 1: the entry keeps no progress).
 /// </remarks>
 public partial class BuildingViews : Node3D
 {
@@ -71,6 +76,11 @@ public partial class BuildingViews : Node3D
     private BuildingBarKind[] _shownBar = Array.Empty<BuildingBarKind>();
     private float[] _shownFill = Array.Empty<float>();
     private float[] _barLength = Array.Empty<float>();
+    private StandardMaterial3D[] _ghostMats = Array.Empty<StandardMaterial3D>();
+    private MeshInstance3D?[] _ghostBoxes = Array.Empty<MeshInstance3D?>();
+    // What each slot's ghost box shows now: the remembered generation (0: hidden) and anchor.
+    private int[] _ghostGen = Array.Empty<int>();
+    private int[] _ghostCell = Array.Empty<int>();
 
     /// <summary>View roots created so far (one per slot ever used).</summary>
     public int NodeCount { get; private set; }
@@ -91,6 +101,13 @@ public partial class BuildingViews : Node3D
         _playerMats = new StandardMaterial3D[playerRgb.Length];
         for (int p = 0; p < playerRgb.Length; p++)
             _playerMats[p] = new StandardMaterial3D { AlbedoColor = UnitViews.ColorFromRgb(playerRgb[p]), Roughness = 0.85f };
+        _ghostMats = new StandardMaterial3D[playerRgb.Length];
+        for (int p = 0; p < playerRgb.Length; p++)
+        {
+            Color c = UnitViews.ColorFromRgb(playerRgb[p]);
+            float k = FogView.ExploredBrightness;
+            _ghostMats[p] = new StandardMaterial3D { AlbedoColor = new Color(c.R * k, c.G * k, c.B * k), Roughness = 0.95f };
+        }
         _siteMat = new StandardMaterial3D { AlbedoColor = SiteColor, Roughness = 0.95f };
         _barMesh = new BoxMesh { Size = Vector3.One };
         var back = new StandardMaterial3D { AlbedoColor = BarBackColor, ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded };
@@ -108,6 +125,9 @@ public partial class BuildingViews : Node3D
         _shownBar = new BuildingBarKind[capacity];
         _shownFill = new float[capacity];
         _barLength = new float[capacity];
+        _ghostBoxes = new MeshInstance3D?[capacity];
+        _ghostGen = new int[capacity];
+        _ghostCell = new int[capacity];
     }
 
     public override void _Process(double delta)
@@ -151,6 +171,65 @@ public partial class BuildingViews : Node3D
             }
             if (bar != _shownBar[i] || fill != _shownFill[i]) ShowBar(i, bar, fill);
         }
+        SyncGhosts(world, fog);
+    }
+
+    /// <summary>Ghost boxes drawn now.</summary>
+    public int GhostsShown { get; private set; }
+
+    /// <summary>Ghost box nodes created so far (one per slot that ever had a ghost).</summary>
+    public int GhostNodeCount { get; private set; }
+
+    /// <summary>True while slot <paramref name="slot"/>'s ghost box is drawn.</summary>
+    public bool IsGhostShown(int slot) => (uint)slot < (uint)_ghostGen.Length && _ghostGen[slot] != 0;
+
+    /// <summary>The remembered generation slot <paramref name="slot"/>'s ghost box shows (0 when none).</summary>
+    public int GhostGeneration(int slot) => (uint)slot < (uint)_ghostGen.Length ? _ghostGen[slot] : 0;
+
+    /// <summary>The ghost box of slot <paramref name="slot"/>, or null if the slot never had a ghost.</summary>
+    public MeshInstance3D? GhostBoxOf(int slot) => (uint)slot < (uint)_ghostBoxes.Length ? _ghostBoxes[slot] : null;
+
+    /// <summary>The darkened material of player <paramref name="player"/>'s ghosts.</summary>
+    public StandardMaterial3D GhostMaterial(int player) => _ghostMats[player];
+
+    // The fog's ghost list onto the ghost pool: placed when an entry appears or changes, hidden when it goes.
+    private void SyncGhosts(World world, FogView? fog)
+    {
+        int n = Math.Min(world.Buildings.Capacity, _ghostBoxes.Length), count = 0;
+        for (int i = 0; i < n; i++)
+        {
+            if (fog == null || !fog.ShowsGhost(i))
+            {
+                if (_ghostGen[i] != 0)
+                {
+                    _ghostBoxes[i]!.Visible = false;
+                    _ghostGen[i] = 0;
+                }
+                continue;
+            }
+            count++;
+            Rts.Sim.Vision.BuildingGhost g = fog.Ghosts[i];
+            if (_ghostGen[i] == g.Generation && _ghostCell[i] == g.Cell) continue;
+            MeshInstance3D box = _ghostBoxes[i] ?? CreateGhost(i);
+            BuildingDef def = world.Data.Buildings[g.TypeId];
+            System.Numerics.Vector2 c = StartBase.FootprintCenter(world.NavGrid, def, g.Cell);
+            box.Position = new Vector3(c.X, TerrainHeight.At(world.Heightmap, c.X, c.Y) + BoxHeight / 2f, c.Y);
+            box.Mesh = _meshes[g.TypeId];
+            box.MaterialOverride = _ghostMats[Math.Clamp(g.Owner, 0, _ghostMats.Length - 1)];
+            box.Visible = true;
+            _ghostGen[i] = g.Generation;
+            _ghostCell[i] = g.Cell;
+        }
+        GhostsShown = count;
+    }
+
+    private MeshInstance3D CreateGhost(int slot)
+    {
+        var box = new MeshInstance3D { Name = $"Ghost{slot}" };
+        AddChild(box);
+        _ghostBoxes[slot] = box;
+        GhostNodeCount++;
+        return box;
     }
 
     /// <summary>The root node of building slot <paramref name="slot"/>, or null if the slot has never held a building.</summary>

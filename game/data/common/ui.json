@@ -52,6 +52,7 @@
     "returning": "Returning cargo",
     "building": "Building",
     "attacking": "Attacking",
+    "casting": "Casting",
     "ordered_attack": "Pursuing"
   },
   "hud": {

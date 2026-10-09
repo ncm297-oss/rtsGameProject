@@ -418,6 +418,86 @@ public class StateHashTests
         Assert.NotEqual(first, sim.StateHash());
     }
 
+    // ---------- M4-4a: casts, cooldowns and statuses ----------
+
+    /// <summary>
+    /// M4-4a criterion 5: the cast (ability, timer, point), every cooldown entry, and every status field are hashed; a unit with
+    /// none of them hashes as before (the flag bit is clear), and putting each field back gives the first hash again.
+    /// </summary>
+    [Fact]
+    public void Hash_CoversTheCast_EveryCooldown_AndEveryStatusField()
+    {
+        var sim = new Simulation(Config(6));
+        sim.Enqueue(Command.SpawnUnit(0, typeId: 0, new Vector2(20f, 20f)));
+        sim.Tick();
+        sim.Tick();
+        UnitStore u = sim.World.Units;
+        ulong h0 = sim.StateHash();
+        var seen = new HashSet<ulong> { h0 };
+        void Changes(string what) => Assert.True(seen.Add(sim.StateHash()), what);
+
+        u.CastAbility[0] = 0;
+        Changes("cast ability");
+        u.CastAbility[0] = -1;
+        Assert.Equal(h0, sim.StateHash());
+        u.CastTicks[0] = 7;
+        Changes("cast ticks");
+        u.CastTicks[0] = 0;
+        u.CastPoint[0] = new Vector2(3f, 4f);
+        Changes("cast point");
+        u.CastPoint[0] = Vector2.Zero;
+        Assert.Equal(h0, sim.StateHash());
+        for (int k = 0; k < Data.DataLimits.MaxUnitAbilities; k++)
+        {
+            u.AbilityReadyTick[k] = 500;
+            Changes($"cooldown {k}");
+            u.AbilityReadyTick[k] = 0;
+            Assert.Equal(h0, sim.StateHash());
+        }
+        Abilities.StatusStore s = u.Statuses;
+        Assert.True(s.Apply(0, 0, 10f, 80, 1));
+        Changes("a status");
+        s.StatusId[0] = 1;
+        Changes("status id");
+        s.Magnitude[0] = 11f;
+        Changes("magnitude");
+        s.TicksRemaining[0] = 79;
+        Changes("ticks remaining");
+        s.PulseTicks[0] = 7;
+        Changes("pulse ticks");
+        s.SourcePlayer[0] = 2;
+        Changes("source player");
+        Assert.True(s.Apply(0, 0, 10f, 80, 1));
+        Changes("a second status");
+        s.Clear(0);
+        Assert.Equal(h0, sim.StateHash());
+    }
+
+    /// <summary>M4-4a: two sims casting Telas Fire the same way hash equal every tick; a cast on a different tick differs.</summary>
+    [Fact]
+    public void Hash_ACastScene_EqualTwins_AndATickLaterDiffers()
+    {
+        static Simulation Scene(int delay, List<ulong> hashes)
+        {
+            Simulation sim = AbilityScenes.NoFights();
+            EntityHandle mage = CombatScenes.Place(sim, 0, AbilityScenes.Mage, CombatScenes.At(sim, 10, 20));
+            CombatScenes.Place(sim, 1, CombatScenes.Crossbowman, CombatScenes.At(sim, 14, 20));
+            for (int t = 0; t < 140; t++)
+            {
+                if (t == delay) sim.Enqueue(Command.UseAbility(0, mage, 0, CombatScenes.At(sim, 14, 20)));
+                sim.Tick();
+                hashes.Add(sim.StateHash());
+            }
+            return sim;
+        }
+        List<ulong> a = new(), b = new(), c = new();
+        Scene(3, a);
+        Scene(3, b);
+        Scene(4, c);
+        Assert.Equal(a, b);
+        Assert.NotEqual(a[^1], c[^1]);
+    }
+
     // ---------- M3-1: resource nodes and the nav grid version ----------
 
     private static Simulation Trees(int capacity = ResourceStore.DefaultCapacity, params (int X, int Y)[] cells)

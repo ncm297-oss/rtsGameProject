@@ -89,6 +89,7 @@ public sealed class World
         MaxUnitSpeed = maxSpeed;
         Hits = new PendingHit[config.UnitCapacity]; // one swing lands per unit per tick at most
         _deaths = new DeathEvent[config.UnitCapacity]; // one death per hit at most
+        _abilityEvents = new Abilities.AbilityEvent[2 * config.UnitCapacity]; // M4-4a: a cast starts and resolves once per unit per tick at most
         Projectiles = new ProjectileStore(config.ProjectileSlots);
         _impacts = new ProjectileImpact[config.ProjectileSlots]; // each projectile lands once
         CombatBuildings = new int[config.BuildingCapacity];
@@ -106,6 +107,26 @@ public sealed class World
 
     private readonly DeathEvent[] _deaths;
     private readonly ProjectileImpact[] _impacts;
+    private readonly Abilities.AbilityEvent[] _abilityEvents;
+
+    /// <summary>
+    /// The casts that started or resolved in the last tick run (M4-4a), in the order they happened (phase 1 starts, then
+    /// phase 6 in slot order, then phase 7 popped starts). Emptied at the start of every tick like <see cref="Deaths"/>.
+    /// Output for views, not state: not hashed.
+    /// </summary>
+    public ReadOnlySpan<Abilities.AbilityEvent> AbilityEvents => _abilityEvents.AsSpan(0, AbilityEventCount);
+
+    /// <summary>Number of entries in <see cref="AbilityEvents"/>.</summary>
+    internal int AbilityEventCount { get; private set; }
+
+    /// <summary>Appends a cast moment to this tick's <see cref="AbilityEvents"/>; past capacity (a unit re-ordered to cast again and again in one tick) it is not recorded.</summary>
+    internal void RecordAbilityEvent(in Abilities.AbilityEvent e)
+    {
+        if (AbilityEventCount < _abilityEvents.Length) _abilityEvents[AbilityEventCount++] = e;
+    }
+
+    /// <summary>Empties <see cref="AbilityEvents"/> (start of a tick).</summary>
+    internal void ClearAbilityEvents() => AbilityEventCount = 0;
 
     /// <summary>
     /// Projectiles in flight (M4-2b): read-only spans for the view (position, last position, impact point, type, owner).

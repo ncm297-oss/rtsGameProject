@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open (sim rule; for the sim track, likely with M4-3b's placement fog rules) |
+| Status | fixed (M4-4a) |
 | Found | 2026-10-09-0125, task M4-V4 (reported by the developer as out of scope, confirmed by QA) |
 | System | economy / building placement (`ConstructionSystem.Check`), shown by the view's build ghost |
-| Fixed by | |
+| Fixed by | M4-4a: `ConstructionSystem.Check` skips enemy units `Fog.CanSeeUnit` hides for the `CanPlace` query; the Build apply path still counts them. Regression: `PlacementTests.HiddenEnemyUnit_IsNotInTheWayForCanPlace_ButStillRefusesTheBuild` |
 
 ## Repro
 1. Start a match with fog on (`& $env:GODOT --path game`), seed 1.

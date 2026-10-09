@@ -64,7 +64,7 @@ public partial class FogOfWar : Node
     public bool Sync(World world)
     {
         if (View == null) return false;
-        View.Refresh(world.Fog, world.TickNumber, world.Units.Alive, world.Buildings.Alive);
+        View.Refresh(world.Fog, world.TickNumber, world.Units.Alive, world.Buildings.Alive, world.Buildings.Generation);
         if (!View.PackTexture(world.Fog)) return false;
         Image.SetData(View.Width, View.Height, false, Image.Format.R8, View.Texture);
         Texture.Update(Image);
@@ -75,7 +75,7 @@ public partial class FogOfWar : Node
     /// <summary>The hide rule refreshed for <paramref name="world"/>'s tick (a no-op after the first call of a tick); null before <see cref="Bind"/>.</summary>
     public FogView? Refreshed(World world)
     {
-        View?.Refresh(world.Fog, world.TickNumber, world.Units.Alive, world.Buildings.Alive);
+        View?.Refresh(world.Fog, world.TickNumber, world.Units.Alive, world.Buildings.Alive, world.Buildings.Generation);
         return View;
     }
 

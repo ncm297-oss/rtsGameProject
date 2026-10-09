@@ -60,4 +60,11 @@ public sealed class UnitDef
     public ImmutableArray<int> RequiresBuildings { get; internal set; } = ImmutableArray<int>.Empty;
     /// <summary>Free-form tags used by bonuses and targeting (e.g. <c>infantry</c>).</summary>
     public required ImmutableArray<string> Tags { get; init; }
+    /// <summary>
+    /// Ability ids (index into <see cref="GameData.Abilities"/>) of the unit's <c>abilities</c> list, in file order (M4-4a):
+    /// own-faction abilities, at most <see cref="DataLimits.MaxUnitAbilities"/>, no repeats. A <c>UseAbility</c> names one by
+    /// its index in this list.
+    /// </summary>
+    /// <remarks>Set once by the loader; never written afterwards. Empty in hand-built data and for a unit without abilities.</remarks>
+    public ImmutableArray<int> Abilities { get; internal set; } = ImmutableArray<int>.Empty;
 }

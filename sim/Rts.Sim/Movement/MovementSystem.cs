@@ -780,11 +780,11 @@ public static class MovementSystem
     /// Holders block their own army too (BUG-0055, Producer decision 2026-10-05): a unit told to hold a
     /// choke means nobody through. They are rare, so the crowd rows, which hold friendly walls soft, don't move.
     /// </remarks>
-    // Holding or Attacking (UnitStore.IsPlanted) is written out in this file: Debug builds don't inline, and these run per neighbor.
+    // Holding, Attacking or Casting (UnitStore.IsPlanted) is written out in this file: Debug builds don't inline, and these run per neighbor.
     private static bool IsHardWall(UnitStore u, int i, int j)
     {
         UnitState s = u.State[j];
-        return s != UnitState.Moving && (u.Owner[j] != u.Owner[i] || u.Hold[j] || s == UnitState.Attacking);
+        return s != UnitState.Moving && (u.Owner[j] != u.Owner[i] || u.Hold[j] || s is UnitState.Attacking or UnitState.Casting);
     }
 
     /// <summary>
@@ -793,7 +793,7 @@ public static class MovementSystem
     /// the chain shove): another player's unit that isn't walking, or one of i's own army holding position.
     /// </summary>
     private static bool StandsHard(UnitStore u, int i, int k) =>
-        u.Owner[k] != u.Owner[i] ? !(u.State[k] == UnitState.Moving && u.Velocity[k] != Vector2.Zero) : (u.Hold[k] || u.State[k] == UnitState.Attacking);
+        u.Owner[k] != u.Owner[i] ? !(u.State[k] == UnitState.Moving && u.Velocity[k] != Vector2.Zero) : (u.Hold[k] || u.State[k] is UnitState.Attacking or UnitState.Casting);
 
     /// <summary>
     /// For <see cref="Constrain"/>: false if neighbor <paramref name="j"/> is no wall to walker
@@ -840,7 +840,7 @@ public static class MovementSystem
     private static Vector2 ShoveDirection(World world, UnitStore u, int i, int j, int goalCell, bool pushArrived, Vector2 normal)
     {
         // A unit holding position (M1-7) is never shoved: a plain wall, soft to friends, hard to enemies.
-        if (u.State[j] == UnitState.Moving || u.Owner[j] != u.Owner[i] || u.GoalCell[j] == goalCell || (u.Hold[j] || u.State[j] == UnitState.Attacking)) return Vector2.Zero;
+        if (u.State[j] == UnitState.Moving || u.Owner[j] != u.Owner[i] || u.GoalCell[j] == goalCell || (u.Hold[j] || u.State[j] is UnitState.Attacking or UnitState.Casting)) return Vector2.Zero;
         if (u.GoalCell[j] < 0) return normal;
         float toGoal2 = Vector2.DistanceSquared(u.Position[j], u.Goal[j]);
         if (toGoal2 > MovementConstants.ArrivalDistance * MovementConstants.ArrivalDistance) return normal; // tethered: KeepLinks
@@ -884,7 +884,7 @@ public static class MovementSystem
             for (int q = 0; q < count && n < chain.Length; q++)
             {
                 int k = near[q];
-                if (k == i || !u.Alive[k] || u.State[k] == UnitState.Moving || u.Owner[k] != owner || u.GoalCell[k] == goalCell || (u.Hold[k] || u.State[k] == UnitState.Attacking)) continue;
+                if (k == i || !u.Alive[k] || u.State[k] == UnitState.Moving || u.Owner[k] != owner || u.GoalCell[k] == goalCell || (u.Hold[k] || u.State[k] is UnitState.Attacking or UnitState.Casting)) continue;
                 if (u.GoalCell[k] >= 0 && !withAnchored) continue;
                 if (InChain(chain, n, k)) continue;
                 Vector2 d = u.Position[k] - pm;
@@ -1107,7 +1107,7 @@ public static class MovementSystem
         UnitStore u = world.Units;
         NavGrid grid = world.NavGrid;
         u.WalkBack[i] = UnitStore.WalkBackUsed;
-        if (u.State[i] == UnitState.Moving || u.GoalCell[i] >= 0 || (u.Hold[i] || u.State[i] == UnitState.Attacking) || !grid.WorldToCell(u.Goal[i], out int x, out int y)) return;
+        if (u.State[i] == UnitState.Moving || u.GoalCell[i] >= 0 || (u.Hold[i] || u.State[i] is UnitState.Attacking or UnitState.Casting) || !grid.WorldToCell(u.Goal[i], out int x, out int y)) return;
         u.State[i] = UnitState.Moving;
         u.GoalCell[i] = y * grid.Width + x;
         u.StuckTicks[i] = 0;
@@ -1188,7 +1188,7 @@ public static class MovementSystem
         {
             int k = near[m];
             if (k == i || !u.Alive[k] || (u.State[k] == UnitState.Moving && u.Velocity[k] != Vector2.Zero)) continue;
-            if (u.Owner[k] != u.Owner[i] || (u.Hold[k] || u.State[k] == UnitState.Attacking)) enemyNear = true; // a standing enemy or holder in reach: ShovedIntoEnemy checks the final step
+            if (u.Owner[k] != u.Owner[i] || (u.Hold[k] || u.State[k] is UnitState.Attacking or UnitState.Casting)) enemyNear = true; // a standing enemy or holder in reach: ShovedIntoEnemy checks the final step
             Vector2 toK = u.Position[k] - pos;
             float dist = toK.Length();
             Vector2 normal = dist > 0f ? toK / dist : -CoincidentDirection(i, k);

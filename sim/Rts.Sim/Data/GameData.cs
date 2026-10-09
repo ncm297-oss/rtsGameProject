@@ -40,6 +40,12 @@ public sealed class GameData
     /// <summary>Techs of <c>common/techs.json</c> and every faction's <c>techs.json</c>, indexed by tech id (ordinal order of their string ids across the files), M3-5. Empty for hand-built data.</summary>
     public ImmutableArray<TechDef> Techs { get; init; } = ImmutableArray<TechDef>.Empty;
 
+    /// <summary>Every status type (<c>common/statuses.json</c>, M4-4a), indexed by status id (ordinal order of the string ids).</summary>
+    public ImmutableArray<StatusDef> Statuses { get; init; } = ImmutableArray<StatusDef>.Empty;
+
+    /// <summary>Every ability of every faction (<c>factions/&lt;id&gt;/abilities.json</c>, M4-4a), indexed by ability id (ordinal order of the string ids).</summary>
+    public ImmutableArray<AbilityDef> Abilities { get; init; } = ImmutableArray<AbilityDef>.Empty;
+
     /// <summary>Per building type id, the tech ids it researches (a tech of its slot, common or of its faction), ascending; built at load (M3-5). Empty for hand-built data.</summary>
     /// <remarks>Derived from the techs' slot and faction and the buildings', which <see cref="ContentHash"/> covers.</remarks>
     public ImmutableArray<ImmutableArray<int>> Research { get; init; } = ImmutableArray<ImmutableArray<int>>.Empty;
@@ -135,6 +141,7 @@ public sealed class GameData
             AddAll(ref h, u.RequiresTechs);
             AddAll(ref h, u.RequiresBuildings);
             AddAll(ref h, u.Tags);
+            AddAll(ref h, u.Abilities); // M4-4a
         }
 
         h.Add(Resources.Length);
@@ -218,6 +225,43 @@ public sealed class GameData
                 h.Add(e.Siege);
             }
         }
+        // M4-4a: the status types and the abilities. Hand-built data has none and adds two words.
+        h.Add(Statuses.Length);
+        foreach (StatusDef st in Statuses)
+        {
+            h.Add(st.Id);
+            h.Add(st.Key);
+            h.Add(st.DisplayName);
+            h.Add(st.Description);
+            h.Add((int)st.Kind);
+            h.Add(st.DamageType);
+        }
+        h.Add(Abilities.Length);
+        foreach (AbilityDef a in Abilities)
+        {
+            h.Add(a.Id);
+            h.Add(a.Key);
+            h.Add(a.Faction);
+            h.Add(a.DisplayName);
+            h.Add(a.Description);
+            h.Add((int)a.Kind);
+            h.Add(a.Range);
+            h.Add(a.Radius);
+            h.Add(a.CastTicks);
+            h.Add(a.CooldownTicks);
+            h.Add(a.DurationTicks);
+            h.Add((int)a.Affects);
+            h.Add(a.Effects.Length);
+            foreach (AbilityEffect e in a.Effects)
+            {
+                h.Add((int)e.Kind);
+                h.Add(e.DamageType);
+                h.Add(e.Amount);
+                h.Add(e.Status);
+                h.Add(e.Magnitude);
+                h.Add(e.DurationTicks);
+            }
+        }
         return h.Value;
     }
 
@@ -271,6 +315,12 @@ public sealed class GameData
 
     /// <summary>Tech id for a string id, or -1.</summary>
     public int FindTech(string key) => Find(Techs, static t => t.Key, key);
+
+    /// <summary>Status id for a string id, or -1 (M4-4a).</summary>
+    public int FindStatus(string key) => Find(Statuses, static x => x.Key, key);
+
+    /// <summary>Ability id for a string id, or -1 (M4-4a).</summary>
+    public int FindAbility(string key) => Find(Abilities, static x => x.Key, key);
 
     /// <summary>Faction id for a string id, or -1.</summary>
     public int FindFaction(string key) => Find(Factions, static f => f.Key, key);

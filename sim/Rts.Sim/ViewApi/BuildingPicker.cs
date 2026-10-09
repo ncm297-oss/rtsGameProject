@@ -4,6 +4,7 @@ using System.Numerics;
 using Rts.Sim.Data;
 using Rts.Sim.Entities;
 using Rts.Sim.Map;
+using Rts.Sim.Vision;
 
 namespace Rts.Sim.ViewApi;
 
@@ -107,6 +108,52 @@ public static class BuildingPicker
             float baseY = TerrainHeight.At(map, (x0 + x1) / 2f, (z0 + z1) / 2f);
             float top = baseY + boxHeight * BoxRise(buildings, defs, i, siteMinShare);
             if (!Box(origin, direction, x0, x1, baseY, top, z0, z1, bestT, out float t0)) continue;
+            if (Hidden(t0, groundT, ground, x0, x1, z0, z1)) continue;
+            if (t0 < bestT)
+            {
+                bestT = t0;
+                best = i;
+            }
+        }
+        if (best >= 0) entry = bestT;
+        return best;
+    }
+
+    /// <summary>
+    /// The remembered building (M4-V5: a ghost, <see cref="FogView.GhostShown"/>) whose drawn box the ray meets first, or
+    /// -1: each marked slot's footprint from its <see cref="BuildingGhost"/> (type and anchor as last seen), a full
+    /// <paramref name="boxHeight"/> tall (a ghost draws finished), standing on the terrain at its centre; terrain occludes
+    /// as for a live box. <paramref name="entry"/> is the ray parameter where it enters the box (+infinity for -1).
+    /// Allocation-free.
+    /// </summary>
+    /// <param name="shown">Per building slot, whether a ghost is drawn there (a slot past its end is not).</param>
+    /// <param name="ghosts">Per building slot, the remembered entry (read where <paramref name="shown"/> is true).</param>
+    /// <param name="defs">Building types, for footprints.</param>
+    /// <param name="grid">The nav grid (cell indices to coordinates).</param>
+    /// <param name="map">Terrain, for each box's base height.</param>
+    /// <param name="origin">Ray start (the camera), view coordinates.</param>
+    /// <param name="direction">Ray direction; need not be normalized.</param>
+    /// <param name="boxHeight">A finished building's box height in meters.</param>
+    /// <param name="entry">Ray parameter of the hit.</param>
+    public static int PickGhostRay(ReadOnlySpan<bool> shown, ReadOnlySpan<BuildingGhost> ghosts, ImmutableArray<BuildingDef> defs, NavGrid grid,
+        Heightmap map, Vector3 origin, Vector3 direction, float boxHeight, out float entry)
+    {
+        entry = float.PositiveInfinity;
+        if (!IsFinite(origin) || !IsFinite(direction) || direction == Vector3.Zero) return -1;
+        const float cs = MapConstants.CellSize;
+        int w = grid.Width, best = -1;
+        float bestT = float.PositiveInfinity;
+        float groundT = GroundEntry(map, origin, direction, out Vector3 ground);
+        int n = Math.Min(shown.Length, ghosts.Length);
+        for (int i = 0; i < n; i++)
+        {
+            if (!shown[i] || (uint)ghosts[i].TypeId >= (uint)defs.Length) continue;
+            BuildingDef def = defs[ghosts[i].TypeId];
+            int anchor = ghosts[i].Cell;
+            float x0 = anchor % w * cs, z0 = anchor / w * cs;
+            float x1 = x0 + def.FootprintWidth * cs, z1 = z0 + def.FootprintHeight * cs;
+            float baseY = TerrainHeight.At(map, (x0 + x1) / 2f, (z0 + z1) / 2f);
+            if (!Box(origin, direction, x0, x1, baseY, baseY + boxHeight, z0, z1, bestT, out float t0)) continue;
             if (Hidden(t0, groundT, ground, x0, x1, z0, z1)) continue;
             if (t0 < bestT)
             {
