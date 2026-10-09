@@ -1,0 +1,18 @@
+{
+  "abilities": [
+    {
+      "id": "telas_fire",
+      "displayName": "Telas Fire",
+      "description": "Sets the ground ablaze: enemy units in the area burn for 10 magic damage a second for 4 seconds. Buildings are unharmed.",
+      "kind": "targetGround",
+      "range": 16,
+      "radius": 3,
+      "castTime": 0.8,
+      "cooldown": 25,
+      "affects": "enemy_units",
+      "effects": [
+        { "kind": "applyStatus", "status": "burning", "magnitude": 10, "duration": 4 }
+      ]
+    }
+  ]
+}

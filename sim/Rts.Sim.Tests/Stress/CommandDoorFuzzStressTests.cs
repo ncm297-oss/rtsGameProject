@@ -30,10 +30,10 @@ public class CommandDoorFuzzStressTests
     /// <summary>docs/03: a defined kind, no flag but Queued, and Queued only on a unit order (Move, Stop, HoldPosition, AttackMove, Gather, Build, Repair, Attack; not SpawnBuilding, M3-2, Cancel, M3-3, the production kinds, M3-4, or Research, M3-5); an attack target on an Attack only (M4-2a).</summary>
     private static bool OracleWellFormed(int kind, int flags, bool hasTarget)
     {
-        if (kind < 0 || kind > 16) return false; // M3-4: 11-14 Train, CancelTrain, SetRally, ClearRally; M3-5: 15 Research; M4-2a: 16 Attack
+        if (kind < 0 || kind > 17) return false; // M3-4: 11-14 Train, CancelTrain, SetRally, ClearRally; M3-5: 15 Research; M4-2a: 16 Attack; M4-4a: 17 UseAbility
         if ((flags & ~1) != 0) return false;
         if (hasTarget && kind != 16) return false;
-        return flags == 0 || (kind >= 2 && kind <= 10 && kind != 6 && kind != 9) || kind == 16;
+        return flags == 0 || (kind >= 2 && kind <= 10 && kind != 6 && kind != 9) || kind == 16 || kind == 17;
     }
 
     /// <summary>M4-2a: an Attack's target: a live unit or building of either player most of the time, else a stale or bogus handle.</summary>
@@ -83,7 +83,7 @@ public class CommandDoorFuzzStressTests
         // M3-H2: the building kinds aim at a live building's point most of the time (else the random point).
         Vector2 at = rng.NextInt(0, 4) != 0 ? BuildingPoint(ref rng, sim, p) : p;
         int buildingCell = rng.NextInt(0, 3) != 0 && sim.World.NavGrid.WorldToCell(at, out int bx, out int by) ? by * sim.World.NavGrid.Width + bx : rng.NextInt(-2, sim.World.NavGrid.Width * sim.World.NavGrid.Height + 2);
-        Command c = rng.NextInt(0, 18) switch
+        Command c = rng.NextInt(0, 19) switch
         {
             0 or 1 => Command.SpawnUnit(rng.NextInt(0, Players), rng.NextInt(-1, TestSim.UnitTypeCount + 1), p),
             2 => Command.Noop(player),
@@ -102,12 +102,14 @@ public class CommandDoorFuzzStressTests
             16 => rng.NextInt(0, 2) == 0 ? Command.SetRally(player, buildingCell, p) : Command.ClearRally(player, at),
             // M4-2a: Attack, on live, stale and bogus targets of either player, units and buildings.
             10 or 11 => AttackOn(ref rng, sim, player, h, queued),
+            // M4-4a: UseAbility, any index (most units have none; a mage has one).
+            17 => Command.UseAbility(player, h, rng.NextInt(-1, 3), p, queued),
             _ => Command.Move(player, h, p, queued),
         };
         // About one command in five is malformed in one way.
         switch (rng.NextInt(0, 25))
         {
-            case 0: c.Kind = (CommandKind)(17 + rng.NextInt(0, 3)); break; // 8-10 Build, Cancel, Repair (M3-3); 11-14 production (M3-4); 15 Research (M3-5); 16 Attack (M4-2a)
+            case 0: c.Kind = (CommandKind)(18 + rng.NextInt(0, 3)); break; // 8-10 Build, Cancel, Repair (M3-3); 11-14 production (M3-4); 15 Research (M3-5); 16 Attack (M4-2a)
             case 1: c.Kind = (CommandKind)(-1 - rng.NextInt(0, 3)); break;
             case 2: c.Kind = (CommandKind)int.MinValue; break;
             case 3: c.Flags = 2 << rng.NextInt(0, 30); break;
@@ -200,7 +202,7 @@ public class CommandDoorFuzzStressTests
         var bornAt = new Vector2[unitCapacity];
         var bornOnGround = new bool[unitCapacity];
         int accepted = 0, malformed = 0, badPlayer = 0, full = 0;
-        var perKind = new int[17];
+        var perKind = new int[18];
         for (int t = 0; t < ticks; t++)
         {
             int n = rng.NextInt(0, 2) == 0 ? rng.NextInt(0, 6) : rng.NextInt(0, 36); // bursts fill the queue (36 since M3-2: longer runs of orders that drop at apply)

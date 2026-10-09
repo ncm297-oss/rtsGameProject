@@ -84,7 +84,8 @@ public class PushOutTests
         Simulation sim = BuildMaps.NewSim(Flat(30, 20), players: 2);
         EntityHandle holder = Unit(sim, At(sim, 5, 5));
         sim.Enqueue(Command.HoldPosition(0, holder));
-        Unit(sim, At(sim, 15, 5), player: 1);
+        EntityHandle enemy = Unit(sim, At(sim, 15, 5), player: 1);
+        CombatScenes.Spot(sim, 0, enemy); // BUG-0280: a hidden enemy is not in the way of the query; this one is seen
         EntityHandle w = Unit(sim, At(sim, 2, 15));
         Assert.False(sim.World.CanPlace(0, House, Cell(sim, 4, 4), out PlacementError a));
         Assert.False(sim.World.CanPlace(0, House, Cell(sim, 15, 5), out PlacementError b));

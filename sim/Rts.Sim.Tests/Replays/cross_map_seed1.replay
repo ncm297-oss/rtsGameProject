@@ -1,6 +1,6 @@
 rts-replay 4
 sim-version 0.0.1
-data-hash C22FBFEA0197CF3E
+data-hash 7E04011FC88881F3
 seed 1
 players 1
 unit-capacity 200
@@ -448,4 +448,4 @@ k 1300 12D3B3ABD2754171
 k 1400 2D93AA83C62314FA
 k 1500 C3FD467A4D0A93F4
 end
-checksum B6380B38C12CDD99
+checksum BBA7C9C0B25EBF57

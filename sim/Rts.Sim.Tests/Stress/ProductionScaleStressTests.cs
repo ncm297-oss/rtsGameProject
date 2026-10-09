@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Numerics;
 using Rts.Sim.Commands;
 using Rts.Sim.Economy;
 using Rts.Sim.Entities;
@@ -37,7 +38,8 @@ public class ProductionScaleStressTests
         BuildMaps.Give(sim, 1, 100_000_000, 100_000_000);
         var anchors = new List<int>();
         for (int c = 0; c < g.Width * g.Height && anchors.Count < hallCount; c += 37)
-            if (sim.World.CanPlace(1, HolyCamp, c, out _) && anchors.All(a => Math.Abs(a % g.Width - c % g.Width) > 5 || Math.Abs(a / g.Width - c / g.Width) > 5)) anchors.Add(c);
+            // BUG-0280: CanPlace ignores player 0's marchers player 1 can't see; the dev SpawnBuilding refuses any unit.
+            if (sim.World.CanPlace(1, HolyCamp, c, out _) && !AnyUnitIn(sim, HolyCamp, c) && anchors.All(a => Math.Abs(a % g.Width - c % g.Width) > 5 || Math.Abs(a / g.Width - c / g.Width) > 5)) anchors.Add(c);
         Assert.Equal(hallCount, anchors.Count);
         foreach (int a in anchors) sim.Enqueue(Command.SpawnBuilding(1, HolyCamp, g.CellCenter(a % g.Width, a / g.Width)));
         sim.Tick();
@@ -49,6 +51,21 @@ public class ProductionScaleStressTests
         Assert.Equal(hallCount, halls.Count);
         foreach (int k in halls) sim.Enqueue(Command.SetRally(1, b.Cell[k], g.CellCenter(b.Cell[k] % g.Width + 2, b.Cell[k] / g.Width + 7)));
         return (sim, halls);
+    }
+
+    /// <summary>Whether any live unit's center lies in the footprint of <paramref name="type"/> anchored at <paramref name="anchor"/>.</summary>
+    private static bool AnyUnitIn(Simulation sim, int type, int anchor)
+    {
+        int w = sim.World.NavGrid.Width;
+        var def = TestSim.Data.Buildings[type];
+        UnitStore u = sim.World.Units;
+        for (int i = 0; i < u.Capacity; i++)
+        {
+            if (!u.Alive[i]) continue;
+            Vector2 q = u.Position[i] / MapConstants.CellSize;
+            if (q.X >= anchor % w && q.X < anchor % w + def.FootprintWidth && q.Y >= anchor / w && q.Y < anchor / w + def.FootprintHeight) return true;
+        }
+        return false;
     }
 
     private static void TopUp(Simulation sim, List<int> halls)

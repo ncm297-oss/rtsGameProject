@@ -417,7 +417,7 @@ ten-minute playtest (STATE "For your review", M3-V3 entry) stands as feedback, n
       position) for the view, `World.Kills` / `Losses` per player (hashed); a building at 0 goes through
       `BuildingStore.Damage` (freed, cells by the pocket rule, queue refunded); a site's damage sticks under construction
       (BUG-0138). Corpses and rubble are the view's (next view task).)_
-- [ ] Three-state fog of war per player; high-ground vision rule (low ground can't see up; attacker reveal); terrain fog shader; building ghosts.
+- [x] Three-state fog of war per player; high-ground vision rule (low ground can't see up; attacker reveal); terrain fog shader; building ghosts.
       _(Sim half **accepted in session 2026-10-08-1814 (resumed 1435), task M4-3a**, held one session on its branch for
       BUG-0219 (a view-owned xUnit QA row written before fog queued Attacks on unseen Raiders; the view fixed it first thing
       in session 2026-10-08-2144, commit 2cddf26) and **on `main` since the 2026-10-08-2144 integration together with the
@@ -455,9 +455,32 @@ ten-minute playtest (STATE "For your review", M3-V3 entry) stands as feedback, n
       full suite incl. Perf 4,313 / 0 failed, scene loop 35 / 35. **Still owed for this criterion: the view draws the ghosts**
       (`FogView.CollectGhosts` is a hook returning 0; M4-V5 draws them from `Fog.Ghosts` and wires the right-click Attack on
       one). Open: BUG-0270 / 0273 / 0280 (S3), BUG-0271 / 0272 / 0275 / 0281 (S4).)_
+      _(**Ticked in session 2026-10-09-0724, view M4-V5:** the remembered enemy buildings are drawn as darkened ghosts
+      (`FogView.CollectGhosts` / `GhostShown` / `Ghosts` from `Fog.Ghosts(local)`, a pooled `BuildingViews` ghost box at
+      owner colour x 0.4, no bar; gone when the ground is seen again), a right-click or A + click on a ghost is an
+      `Attack(isBuilding)` on the remembered handle (`BuildingPicker.PickGhostRay`, the red ring on the remembered
+      footprint), the placement ghost reads "Unexplored" in a scene row, and the seed-21 Playable replay is re-recorded
+      (BUG-0273). QA standard: `ViewApi/FogViewTests` + QA's `GhostQaTests` (2 seeds x 3,000 ticks, 0 ghost mismatches
+      both players, 0 B at 1,990 units), `FogViewTest.tscn` + `QaGhostViewTest.tscn`, scene loop 35 / 35. The sim's
+      BUG-0280 (hidden enemies no longer block the build ghost) landed the same session (M4-4a). Open: BUG-0310 (S3, view:
+      a ghost flashes 1-3 ticks over a building killed in sight), BUG-0311 (S3, sim: an Attack on a gone building's ghost
+      ends ~1 m before the fog shows the ground; the ghost stays), BUG-0270 (S3), BUG-0271 / 0272 / 0275 / 0281 (S4).)_
 - [ ] Ability system (target ground, self/aura, summon) and status effects; zones.
+      _(Slice 1 **accepted in session 2026-10-09-0724, sim M4-4a** (2 fix rounds): `common/statuses.json` (`damageOverTime`,
+      `slow`; shipped `burning`, `slowed`) and `factions/<id>/abilities.json` (`targetGround` only; effects `damage`,
+      `applyStatus`; the other kinds / effects load as "not supported yet"), `UnitDef.Abilities` (max 4),
+      `Command.UseAbility` (kind 17, replay format 4 unchanged), `AbilitySystem` (phase 6: walk into range, cast timer,
+      resolve through the spatial hash, cooldown from the resolve, cancelled free by any new order), `StatusStore` (8 per
+      unit, hashed, pulse clock per entry) + `StatusSystem` (phase 5: DoT pulses once a second through `DamageCalc`, slows
+      recompute speed), `UnitState.Casting`, `World.AbilityEvents` for the view. QA full: `AbilityQaTests`,
+      `StatusPulseClockQaTests`, `AbilityInvariantFuzzStressTests` (4 seeds x 2,000, 3 players, twins equal),
+      `AbilityScalePerfTests` (0.004-0.02 ms a tick, 0 B). **Still owed:** zones (incl. Darkness / Sandstorm vision
+      blockers), summons, self / aura, autocast, the `abilityCooldown` tech effect (M4-4b). Open: BUG-0302 (S4).)_
 - [ ] Stealth and detection system (tested now, even though Shadow arrives in M8).
 - [ ] Telas Fire, Sapper Sharpers + Cusser, Sandstorm, Zealot passives all work.
+      _(Telas Fire works since M4-4a (session 2026-10-09-0724): 16 m / 3 m / 0.8 s cast / 25 s cooldown, Burning 10 magic a
+      second for 4 s on enemy units only (40 on Light, 52 on Heavy / Giant: magic x1.25 per pulse), no effect on buildings.
+      The other three need slice 2 (zones for Sandstorm; passives / Cusser's launch rule) and the data track's D10 content.)_
 - [x] Scenario tests for the counter triangle (Line beats Shock, Shock beats Ranged, Ranged beats
       Light, Siege beats buildings).
       _(Ticked in session 2026-10-08-0913, task M4-2b: `Scenario/CounterTriangleTests`, equal-cost groups attack-moved

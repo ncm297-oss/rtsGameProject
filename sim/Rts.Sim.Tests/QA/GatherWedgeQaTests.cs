@@ -39,7 +39,7 @@ public class GatherWedgeQaTests
     /// change of the state hash's composition (any newly hashed state) fails every checkpoint: re-record then (docs/03
     /// "Save/load and replays", hash format).
     /// </summary>
-    private static readonly ulong[] SameGameDataHashes = { RecordedDataHash };
+    private static readonly ulong[] SameGameDataHashes = { RecordedDataHash, 0x7E04011FC88881F3 }; // M4-4a: statuses/abilities files, BUG-0303
 
     /// <summary>
     /// Ticks the replay must still match its recorded checkpoints: all of them (M4-H1, BUG-0211; before the re-recording

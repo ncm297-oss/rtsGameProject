@@ -256,6 +256,8 @@ public static class CombatSystem
     internal static void ClearForOrder(UnitStore u, int i)
     {
         Disengage(u, i);
+        // M4-4a: a new order cancels a cast in progress, or the walk to one, with no cooldown.
+        Abilities.AbilitySystem.Cancel(u, i);
         // A new order forgets what the unit gave up on (BUG-0137).
         u.Ignored[i] = default;
         u.IgnoredIsBuilding[i] = false;

@@ -83,8 +83,13 @@ phases in this fixed order:
    before phase 7, so a worker that arrived last tick is taken up again before queued orders are
    looked at; see "Implementation (M3-2)". M3-3: then `ConstructionSystem.Run`, builders and
    repairers; see "Implementation (M3-3)".)
-5. **Status effects and zones:** expire, tick DoTs and regen, apply zone effects.
-6. **Abilities:** cast timers, effect resolution.
+5. **Status effects and zones:** expire, tick DoTs and regen, apply zone effects. (M4-4a: `StatusSystem.Run`: every unit
+   with statuses, in slot order, counts each down, lands damage-over-time pulses and ends the expired ones; a slow that ends
+   restores the unit's speed. Zones are slice 2. See "Implementation (M4-4a)".)
+6. **Abilities:** cast timers, effect resolution. (M4-4a: `AbilitySystem.Run`: every caster in slot order starts casting
+   once in range (or drops a walk that stopped short), counts its cast down, and on the last tick resolves the effects on
+   the units in the radius and starts the cooldown. Before phase 7, so a caster whose cast resolved takes its next queued
+   order in the same tick. See "Implementation (M4-4a)".)
 7. **Orders and targeting:** order queue advance, target acquisition (staggered scans). (M1-7:
    `OrderSystem.Run`: every live Idle unit with a shift-queued order, in slot order, starts the
    head of its queue, so a queued order given to an Idle unit walks in the tick it applies, and a
@@ -1701,6 +1706,13 @@ after the terrain rules (`Blocked`, and `SealsGround` where it is checked first)
 from their workers start explored (`TestSim.Explored`, a seam over `FogStore.ExploreAllForTests`; `BuildMaps.NewSim` uses
 it); the rule's own rows are `PlacementTests.Unexplored_*`.
 
+**Hidden enemies aren't in the way of the query (BUG-0280).** `World.CanPlace` counts an enemy unit for `UnitInTheWay`
+only if the player sees it (`Fog.CanSeeUnit`), so sweeping the build ghost over explored fog reveals nothing. The `Build`
+apply path still counts every unit: a Build onto a hidden enemy is dropped when it applies (nothing paid, no site), as
+the worker would find the spot taken in other RTS games. Hidden enemy *buildings* still refuse as `Blocked` (footprints
+can't overlap, and a remembered building is already shown as a ghost). Row: `PlacementTests.HiddenEnemyUnit_*`;
+`PlacementTests.ABuildIsDroppedExactlyWhenCanPlaceSaysSo` allows exactly that one difference.
+
 **Cost** (Debug, this PC, the machine shared with other test runs). `Combat/TowerPerfTests.TwentyTowersAmong500Enemies_CostAtMost02MsATick`:
 20 Watchtowers among 500 holding Raiders against the same scene with Billets (same footprint, no attack), alternating
 300-tick runs: 0.210-0.219 ms a tick with towers against 0.207-0.216 ms with Billets, a difference of 0.001-0.012 ms
@@ -2225,11 +2237,94 @@ three gates below.
 
 - `AbilityDef` (data) → `AbilitySystem` executes cast timers and resolves `effects[]`.
 - `StatusSystem` stores active statuses per unit in a small fixed array (max 8) with
-  `(statusId, magnitude, ticksRemaining, sourcePlayer)`. Derived stats (speed, attack speed,
+  `(statusId, magnitude, ticksRemaining, pulseTicks, sourcePlayer)`. Derived stats (speed, attack speed,
   sight) are recomputed when the status set changes, not every tick.
 - `ZoneSystem` keeps active zones; each tick it applies their statuses to units inside (via the
   spatial hash) and marks their cells in a per-player "vision blocker" mask used by the vision
   pass.
+
+### Implementation (M4-4a)
+
+Slice 1 of M4 criterion 6 (data-driven abilities) and the start of criterion 8 (Telas Fire): the schema for statuses and
+abilities, `Command.UseAbility`, the *target ground* kind with the `damage` and `applyStatus` effects, and the status store
+with damage over time (Burning) and slows (Slowed). Code: `sim/Rts.Sim/Abilities/` (`AbilitySystem`, `StatusSystem`,
+`StatusStore`, `AbilityEvent`), the defs in `Data/`. Zones, summons, self / aura, autocast, the `abilityCooldown` tech
+effect, passives and the AI's casting are slice 2.
+
+- **Data.** `common/statuses.json` (required) and `factions/<id>/abilities.json` (optional: a faction without one has no
+  abilities); a unit lists its abilities by id (`abilities`, at most `DataLimits.MaxUnitAbilities` = 4, own faction only, no
+  repeats), resolved at load to `UnitDef.Abilities` (ability ids, file order). Shapes and rules: "Data format" below.
+- **`UseAbility(player, unit, abilityIndex, point[, queued])`** (`CommandKind.UseAbility` = 17; the index rides in
+  `TypeId`, the point in `Position`, so the replay line is unchanged and format 4 holds it; a format-3 replay may not carry
+  one). Dropped, queued or not, like a bad Gather: a dead or recycled unit, another player's, an index the unit's type
+  doesn't have (negative included), the ability on cooldown, a point off the map or not finite. A queued one is checked
+  again when it is popped. Unqueued it replaces the queue, ends Hold, loops and the engagement (and any earlier cast).
+- **Walk, then cast.** In range (the caster's center within `range` m of the point) it starts casting at once; out of range
+  it walks there (a Move to the point) and starts casting on the first phase 6 it is in range. A walk that stops short
+  (arrived as near as the ground allows, or stuck) drops the cast with no cooldown. The walker doesn't scan (a plain Move).
+- **Casting.** `UnitState.Casting` (6): the caster stands planted like an attacker (never shoved, a hard wall, not pushed
+  out by a placement, and it counts in the way of its owner's placement), scans nothing, isn't retaliating, and its shift
+  queue waits. The cast lasts `castTime` ticks counting the tick it starts (0.8 s = 16 ticks: started in tick T's phase 1,
+  it resolves in tick T + 15's phase 6; a queued cast popped in phase 7 starts counting in the next tick's phase 6). Any new
+  order (Move, Stop, Hold, Attack, attack-move, Gather, Build, Repair, another UseAbility) cancels it with no cooldown
+  (`CombatSystem.ClearForOrder` calls `AbilitySystem.Cancel`); anything else that takes it off `Casting` drops it too.
+- **Resolve.** On its last tick the cast ends (the caster stands Idle), the cooldown starts (`UnitStore.AbilityReadyTick`
+  = this tick + `cooldown` ticks; the ability is usable again from that tick on, so 25 s after the resolve) and the effects
+  land on every live unit whose center is within `radius` m of the point (`SpatialHash.QueryRadius`, hash order, exact
+  distance test) that `affects` allows: `enemy_units` (any other player's), `own_units` (the caster's owner's, the caster
+  included) or `all_units`. Buildings are never affected in this slice (Telas Fire: "no effect on buildings"). Each unit
+  takes the effects in file order: `damage` is one hit through `DamageCalc` (the amount as the attack value, the type's
+  multiplier for the unit's armor class, its armor and armor techs; Magic ignores armor), credited to the caster's owner,
+  and may start a retaliation on the caster like any hit; `applyStatus` goes through the store. A unit trained in this
+  tick's phase 3 is not yet in the spatial hash and is missed.
+- **Statuses.** `UnitStore.Statuses`, a `StatusStore`: up to `StatusStore.PerUnit` = 8 entries per unit slot, each
+  `(statusId, magnitude, ticksRemaining, pulseTicks, sourcePlayer)`, in the order first applied. Stacking (docs/02): the same status
+  again keeps the longer remaining duration (a refresh never shortens one) and the stronger magnitude, and takes the
+  stronger application's source (the latest on a tie); different statuses stack; a ninth is dropped. Each tick's phase 5
+  counts every entry down by one and ends it on the tick it reaches 0. The store is cleared when the unit's slot is freed
+  (death) or allocated.
+- **Damage over time (`damageOverTime`, Burning).** The magnitude is damage per second (a whole number). It lands in pulses
+  on the entry's own pulse clock (`pulseTicks`): one every 20 ticks from the first application, the first a second after
+  it. A refresh extends the duration but does not reset the pulse clock, so a status reapplied faster than once a second
+  still pulses once a second (BUG-0301). A 4 s Burning lands 4 pulses, the last on its final tick; a duration that is not a
+  whole number of seconds lands nothing for the trailing fraction (2.5 s lands 2). A pulse is one `DamageCalc` hit with the magnitude as the attack
+  value and the status's damage type, so its rounding is the combat rule's: Telas Fire's 10 magic a second is 10 on Light
+  and Mounted, 13 on Heavy and Giant (10 x 1.25 = 12.5 rounds half up), 40 / 52 over 4 s. The kill (and the death event's
+  killer) is the entry's source player; nobody retaliates on a pulse and it reveals nothing.
+- **Slow (`slow`, Slowed).** The unit's `Speed` is its type's speed x (1 - the strongest slow magnitude it has),
+  recomputed when a slow is applied stronger or ends, not every tick. Slowed 0.3 walks 70 % as far.
+- **State hash.** A unit with any ability state (a cast or a walk to one, any cooldown entry ever set, any status) sets bit 18
+  of its order word and hashes, after the combat words: the cast ability, cast ticks, cast point, every cooldown entry, then
+  the status count and every field of every entry. A unit with none hashes as before M4-4a, so the golden replays' hashes
+  move only with `data-hash` (the data files are hashed). `Speed` stays derived (it follows from the type and the statuses).
+- **Cost.** Phase 5 scans the unit slots' status counts; phase 6 the cast slots; a resolve is one spatial-hash query. No
+  allocation. The Perf row (500 units, 50 Burning and 50 Slowed, a cast every tick) is `AbilityPerfTests`.
+- **Tests.** `Data/StatusLoaderTests`, `Data/AbilityLoaderTests`, `Abilities/AbilitySystemTests`,
+  `Abilities/StatusStoreTests`, `Abilities/AbilityPerfTests`, `StateHashTests.Hash_CoversTheCast_*` and
+  `Hash_ACastScene_*`, `DataContentHashTests` (both files), `Stress/AbilityFuzzStressTests`.
+
+**For the view (M4-V6).** Read-only, all on `World` (no `ViewApi/` type is needed for slice 1):
+
+- Per unit slot: `Data.Units[type].Abilities` (ability ids, the command card's ability row; `Data.Abilities[id]` has the
+  `DisplayName`, `Description`, `Range`, `Radius` for the targeting circle, `CastTicks`, `CooldownTicks`); the cooldown left
+  of ability k is `max(0, Units.AbilityReadyTick[slot * DataLimits.MaxUnitAbilities + k] - TickNumber)` ticks; a cast in
+  progress is `Units.State[slot] == UnitState.Casting` with `Units.CastAbility` (the index), `Units.CastTicks` (ticks left)
+  and `Units.CastPoint`; `CastAbility >= 0` while `Moving` means walking into range to cast.
+- Per unit slot, its statuses: `Units.Statuses.Count[slot]` entries at `slot * StatusStore.PerUnit + k` in `StatusId`
+  (`Data.Statuses[id]` has the text and `Kind`), `Magnitude`, `TicksRemaining`, `SourcePlayer`.
+- `World.AbilityEvents`: the casts that started (`Resolved` false) or resolved (true) in the last tick, with caster,
+  owner, ability id and point, emptied at the start of every tick like `World.Deaths` (a Burning kill appears in `Deaths`).
+- "Only the nearest selected caster casts" (docs/02) is the view's choice: the sim casts for every `UseAbility` it gets.
+- `UnitState.Casting` is new: a view that switches on states should treat it as standing.
+
+**For the data track.** `abilities.json` accepts, per entry: `id`, `displayName`, `description`, `kind` (`targetGround`
+only), `range` (m, above 0, at most 64), `radius` (m, above 0, at most 16), `castTime` (s, 0 or more), `cooldown` (s, above
+0), `duration` (s, optional, unused until zones), `affects` (`enemy_units`, `own_units`, `all_units`), `autocast` (only
+`false` for now), `effects` (at least one): `{ "kind": "damage", "type": <damage type>, "amount": <whole, at least 1> }`
+or `{ "kind": "applyStatus", "status": <statuses.json id>, "magnitude": <damage per second, whole, for damageOverTime; a
+fraction above 0 and below 1 for slow>, "duration": <s, at least a tick> }`. The other docs/02 kinds and effects load as
+"not supported yet" errors. A unit's `abilities` lists its own faction's ids. Player-facing text only in `displayName` /
+`description` (statuses too).
 
 ## Vision, detection, fog
 
@@ -2355,12 +2450,13 @@ game/data/
     resources.json           # resource node types: tree, gold mine (M3-1)
     techs.json               # techs every faction shares: Age II, Forge upgrades (M3-5)
     projectiles.json         # projectile types: aimed / lob, speed, hit tolerance, lead speed (M4-2b)
+    statuses.json            # status types: damage over time, slow (M4-4a)
   factions/<faction_id>/
     faction.json             # id, displayName, bonus, palette, resource display names
     units.json
     buildings.json           # building types (M3-2 schema; all ten slots per faction since D1)
     techs.json               # the faction upgrade (M3-5)
-    abilities.json
+    abilities.json           # optional (M4-4a): the faction's abilities
     ai.json                  # build orders, compositions, attack thresholds per difficulty
   maps/<map_id>.json         # size, seed or heightmap ref, start locations, resources, biome
 ```
@@ -2411,8 +2507,9 @@ checked. The data-validation test is `DataValidationTests.ShippedData_LoadsWithN
 
 Shipped files: `common/damage_table.json`, `common/rules.json`, `common/resources.json` (M3-1), `common/techs.json`
 (M3-5), `common/projectiles.json` (M4-2b), and `faction.json` + `units.json` + `buildings.json` (M3-2) + `techs.json`
-(M3-5) for `malazan` and `whirlwind`. All thirteen are required. Everything else in the tree above (`statuses`, `abilities`, `ai`, `maps`, other
-factions) arrives with the milestone that consumes it.
+(M3-5) for `malazan` and `whirlwind`, and `common/statuses.json` (M4-4a). All fourteen are required. `factions/<id>/abilities.json`
+(M4-4a) is optional: shipped for `malazan` only. Everything else in the tree above (`ai`, `maps`, other factions) arrives with
+the milestone that consumes it.
 
 | File | Shape |
 | --- | --- |
@@ -2423,7 +2520,9 @@ factions) arrives with the milestone that consumes it.
 | `buildings.json` | `{ "buildings": [ ... ] }`, each `{id, displayName, description, slot, footprint {width, height}, hp, armor, cost {gold, wood}, buildTime, popProvided, dropOff}`: `slot` is one of the ten template slots (`DataLimits.BuildingSlotIds`), footprint sides 1-4 cells, `buildTime` in seconds (to ticks), `popProvided` a multiple of 0.5 (to half-pop), `dropOff` a required bool, `requires` an optional list of tech / building ids (M3-5; resolved and gating placement since M3-6), `sight` optional meters (M4-3a: above 0 and at most 64, default `rules.json` `buildingSight`; shipped 24 on both watch towers, docs/02), `attack` optional (M4-3b: the unit `attack` object; value at least 1, range above 0, an aimed `projectile` required, `targets` not `buildings`; shipped on both watch towers), `detector` optional meters (M4-3b: above 0 and at most 64; shipped 16 on both watch towers; unused until M4-5). Ids unique across factions (M3-2, see "Economy implementation"); exactly one building per slot per faction (M3-6, BUG-0010) |
 | `techs.json` | `{ "techs": [ ... ] }` in `common/` (shared by every faction) and in each faction folder (its own), each `{id, displayName, description, researchedAt, cost {gold, wood}, researchTime, requires?, requiresAnyOf?, effects: [{stat, amount, appliesTo {attackType?, tags?, units?, siege?}}]}`: `researchedAt` is a building slot id (a common tech resolves to each faction's building of it; a faction without one is an error), `researchTime` in seconds (to ticks), `requires` tech / building ids (resolved and gating research since M3-6), `requiresAnyOf` `{count, of: [slot ids, or in a faction file its own building ids]}`: met when `count` of the distinct listed slots hold an own finished building (M3-6; shipped on `age_ii` only), `effects` may be empty. `stat` is one of `attack`, `armor`, `range`, `hp`, `abilityCooldown` (`DataLimits.TechStatIds`); `amount` is non-zero, whole for attack / armor / hp, meters for range, seconds for ability cooldown (to ticks, negative shortens it). `appliesTo` is required (`{}` = every unit); each filter it sets must match: `attackType` a damage type, `tags` any one of the unit's tags (each must be a tag some unit has), `units` unit ids (a faction tech's must be its own), `siege` true / false for the `siege` slot; a `tags` or `units` list set to `[]` is an error (M3-6, BUG-0098). Tech ids are unique across all techs files and may not equal a building id (M3-6); `DataLimits.AgeTechIds` (`age_ii`) must be a common tech (M3-5, see "Implementation (M3-5)") |
 | `projectiles.json` | `{ "projectiles": [ ... ] }`, each `{id, kind, speed, hitTolerance?, leadSpeed?}`: `kind` `aimed` or `lob`, `speed` m/s (at least 1), `hitTolerance` m (aimed only, 0-2, default 0.3; an error on a lob), `leadSpeed` m/s (aimed only, not negative, default 0 = never leads; an error on a lob). Ids unique; every unit's `attack.projectile` must name one (M4-2b, see "Implementation (M4-2b)") |
-| `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge) |
+| `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge). `abilities` (M4-4a, optional): ability ids of the unit's own faction, at most 4 (`DataLimits.MaxUnitAbilities`), no repeats; resolved to `UnitDef.Abilities`; shipped on the Cadre Mage (`telas_fire`) |
+| `statuses.json` | `{ "statuses": [ ... ] }` (M4-4a), each `{id, displayName, description, kind, damageType?}`: `kind` `damageOverTime` or `slow` (`DataLimits.StatusKindIds`); `damageType` (a damage table type) required on `damageOverTime`, an error on any other kind. The magnitude and duration come from the effect applying it. Ids unique; shipped `burning` (magic damage over time) and `slowed` |
+| `abilities.json` | `{ "abilities": [ ... ] }` (M4-4a, per faction, optional), each `{id, displayName, description, kind, range, radius, castTime, cooldown, duration?, affects, autocast?, effects}`: `kind` `targetGround` (`targetUnit`, `selfAura`, `summon`: "not supported yet"); `range` m above 0 and at most `DataLimits.MaxSight` (64); `radius` m above 0 and at most `DataLimits.MaxAbilityRadius` (16); `castTime` s, 0 or more, to ticks; `cooldown` s above 0, to ticks (at least 1); `duration` s, optional (0), to ticks; `affects` `enemy_units`, `own_units` or `all_units`; `autocast` only `false` ("not supported yet"); `effects` at least one, each `{kind: damage, type, amount}` (a whole amount, at least 1) or `{kind: applyStatus, status, magnitude, duration}` (a `statuses.json` id; magnitude whole and at least 1 for damage over time, above 0 and below 1 for a slow; duration s, at least a tick); `createZone`, `teleport`, `spawn`: "not supported yet"; a field the effect kind doesn't use is an error. Ids unique across factions. Shipped: Malazan `telas_fire` |
 
 Validation rules: ids are `snake_case` and unique (a unit id is unique across all factions);
 `slot` is one of the seven template slots; `armorClass`, `attack.type`, and `bonusVs` keys exist in
@@ -2451,8 +2550,9 @@ building type ids, ascending; the strings are kept): one error at an entry namin
 `requires` cycle. The gates `CanTrain` / `CanPlace` / `CanResearch` check them (see "Implementation (M3-6)").
 `attack.projectile` resolves at load (M4-2b) to `AttackDef.ProjectileTypeId` (one error at the field for an unknown id); a
 building's `attack` (M4-3b) resolves the same way to `BuildingDef.Attack`.
-Not resolved yet (kept as a plain string): `model` (M2/M6 asset pipeline). Unit passives, abilities, detection, and faction modifiers (e.g. Whirlwind's gather
-bonus) are also not in the M1 schema; they arrive with `abilities.json` / `statuses.json` and the
+Not resolved yet (kept as a plain string): `model` (M2/M6 asset pipeline). `abilities` resolves at load (M4-4a) to
+`UnitDef.Abilities` (own-faction ability ids; one error at an entry naming an unknown, foreign or repeated id). Unit passives,
+detection on units, and faction modifiers (e.g. Whirlwind's gather bonus) are not in the schema yet; they arrive with the
 systems that use them. Collision radii in the shipped units (0.4 foot, 0.7 mounted, 0.9 siege) are
 first-pass values; the faction pages don't list them.
 

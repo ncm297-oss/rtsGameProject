@@ -25,12 +25,12 @@ public struct Command
     /// Unit type for <see cref="CommandKind.SpawnUnit"/> and <see cref="CommandKind.Train"/>; building type for
     /// <see cref="CommandKind.SpawnBuilding"/> and <see cref="CommandKind.Build"/>; the queue index for
     /// <see cref="CommandKind.CancelTrain"/>; the building's nav cell for <see cref="CommandKind.SetRally"/>; the tech for
-    /// <see cref="CommandKind.Research"/>.
+    /// <see cref="CommandKind.Research"/>; the ability's index in the unit's type's list for <see cref="CommandKind.UseAbility"/>.
     /// </summary>
     public int TypeId;
     /// <summary>Target position (x, z) in meters.</summary>
     public Vector2 Position;
-    /// <summary>The unit a unit order (<see cref="CommandKind.Move"/>, Stop, HoldPosition, AttackMove, Gather, Build, Repair, Attack) applies to.</summary>
+    /// <summary>The unit a unit order (<see cref="CommandKind.Move"/>, Stop, HoldPosition, AttackMove, Gather, Build, Repair, Attack, UseAbility) applies to.</summary>
     public EntityHandle Unit;
     /// <summary>Option bits; see <see cref="QueuedFlag"/>.</summary>
     public int Flags;
@@ -44,7 +44,7 @@ public struct Command
 
     /// <summary>True for the kinds addressed to one unit (<see cref="Unit"/>), which can be queued.</summary>
     public readonly bool IsUnitOrder => Kind is CommandKind.Move or CommandKind.Stop or CommandKind.HoldPosition or CommandKind.AttackMove or CommandKind.Gather
-        or CommandKind.Build or CommandKind.Repair or CommandKind.Attack;
+        or CommandKind.Build or CommandKind.Repair or CommandKind.Attack or CommandKind.UseAbility;
 
     /// <summary>True when <see cref="Kind"/> is a defined <see cref="CommandKind"/> and <see cref="Flags"/> holds only known bits, set on unit orders only: what <c>Simulation.Enqueue</c> accepts and a replay may hold.</summary>
     /// <remarks>
@@ -61,7 +61,7 @@ public struct Command
             or CommandKind.HoldPosition or CommandKind.AttackMove or CommandKind.SpawnBuilding or CommandKind.Gather
             or CommandKind.Build or CommandKind.Cancel or CommandKind.Repair
             or CommandKind.Train or CommandKind.CancelTrain or CommandKind.SetRally or CommandKind.ClearRally
-            or CommandKind.Research or CommandKind.Attack;
+            or CommandKind.Research or CommandKind.Attack or CommandKind.UseAbility;
         if (!knownKind || (Flags & ~KnownFlags) != 0) return false;
         if (Kind != CommandKind.Attack && (Target.Index != 0 || Target.Generation != 0 || TargetIsBuilding)) return false;
         return Flags == 0 || IsUnitOrder;
@@ -75,7 +75,8 @@ public struct Command
         {
             CommandKind.SpawnUnit or CommandKind.Move or CommandKind.AttackMove or CommandKind.SpawnBuilding or CommandKind.Gather
                 or CommandKind.Build or CommandKind.Cancel or CommandKind.Repair
-                or CommandKind.Train or CommandKind.CancelTrain or CommandKind.SetRally or CommandKind.ClearRally or CommandKind.Research =>
+                or CommandKind.Train or CommandKind.CancelTrain or CommandKind.SetRally or CommandKind.ClearRally or CommandKind.Research
+                or CommandKind.UseAbility =>
                 float.IsFinite(Position.X) && float.IsFinite(Position.Y),
             _ => true,
         };
@@ -165,6 +166,18 @@ public struct Command
         Command c = UnitOrder(CommandKind.Attack, player, unit, default, queued);
         c.Target = target;
         c.TargetIsBuilding = isBuilding;
+        return c;
+    }
+
+    /// <summary>
+    /// A command ordering <paramref name="player"/>'s <paramref name="unit"/> to cast ability <paramref name="abilityIndex"/>
+    /// (an index into its type's <c>UnitDef.Abilities</c>) at <paramref name="target"/> (meters) (M4-4a); out of range it walks
+    /// first. <paramref name="queued"/> appends it to the unit's order queue.
+    /// </summary>
+    public static Command UseAbility(int player, EntityHandle unit, int abilityIndex, Vector2 target, bool queued = false)
+    {
+        Command c = UnitOrder(CommandKind.UseAbility, player, unit, target, queued);
+        c.TypeId = abilityIndex;
         return c;
     }
 
