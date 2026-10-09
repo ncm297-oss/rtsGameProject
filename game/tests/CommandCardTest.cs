@@ -560,8 +560,9 @@ public partial class CommandCardTest : Node
         Check(_sel.SelectedBuilding == site, $"house site click selected {_sel.SelectedBuilding}");
         start = _sim.PendingCommandCount;
         _card.ButtonAt(14).EmitSignal(BaseButton.SignalName.Pressed);
+        _card.ButtonAt(14).EmitSignal(BaseButton.SignalName.Pressed); // BUG-0126 item 4: a second press before the tick sends nothing
         sent = Pending(start);
-        Check(sent.Count == 1 && sent[0].Kind == CommandKind.Cancel && sent[0].Position == SelectionController.SiteCenter(W, site), $"Cancel button sent {Describe(sent)}");
+        Check(sent.Count == 1 && sent[0].Kind == CommandKind.Cancel && sent[0].Position == SelectionController.SiteCenter(W, site), $"Cancel button pressed twice sent {Describe(sent)}");
         // A Build the same tick takes the freed slot back (free list): the selection must not follow it.
         int house = B.TypeId[site];
         int gen = B.Generation[site];
@@ -639,11 +640,20 @@ public partial class CommandCardTest : Node
         // (it was a Move before there was an Attack order).
         int enemy = HallSlot(1);
         DamageMethod.Invoke(B, new object[] { B.HandleOf(enemy), 100 });
+        // Since M4-3a an Attack on an unseen target is dropped: a Laborer of player 0 beside the enemy hall spots it (a
+        // worker never fights unless ordered), so the Attacks below are accepted, not silently dropped (the M4-VH1 sweep).
+        SpotEnemyHall(enemy);
+        Check(W.Fog.CanSeeBuilding(0, enemy), "the enemy hall is not seen by player 0 after the spotter's fog update");
         await Select(three);
         start = _sim.PendingCommandCount;
         RightClick(await GroundScreen(enemy));
         sent = Pending(start);
         Check(sent.Count == 3 && sent.All(c => c.Kind == CommandKind.Attack && c.TargetIsBuilding && c.Target == B.HandleOf(enemy)), $"right-click on the enemy hall: {Describe(sent)}");
+        Tick(2); // a command applies on the second tick after it is enqueued
+        Check(three.All(h => U.Target[h.Index] == B.HandleOf(enemy) && U.TargetIsBuilding[h.Index]),
+            $"the Attacks on the seen enemy hall were not accepted: {string.Join(", ", three.Select(h => $"u{h.Index} target {U.Target[h.Index]} state {U.State[h.Index]}"))}");
+        // Back to idle at home for the later rows (they ran with these three not marching across the map).
+        foreach (EntityHandle h in three) _sim.Enqueue(Command.Stop(0, h));
         Tick(1);
         GD.Print($"repair: hall {B.Hp[hall]} / {max}, site {site}, house type {house}");
     }
@@ -965,6 +975,21 @@ public partial class CommandCardTest : Node
             .Select(i => new EntityHandle(i, U.Generation[i])).ToList();
     }
 
+    // A Laborer of player 0 on the passable cell nearest a point 2 cells outside the hall's footprint, then ticks until a
+    // fog update has run (at most 40 ticks) so player 0 sees the hall.
+    private void SpotEnemyHall(int hall)
+    {
+        BuildingDef def = _data.Buildings[B.TypeId[hall]];
+        System.Numerics.Vector2 c = StartBase.FootprintCenter(G, def, B.Cell[hall]);
+        float off = (def.FootprintWidth / 2f + 2f) * MapConstants.CellSize;
+        System.Numerics.Vector2 toward = c.X > G.Width * MapConstants.CellSize / 2f ? new(-off, 0f) : new(off, 0f);
+        System.Numerics.Vector2 p = c + toward;
+        int cell = Rts.Sim.Pathfinding.FlowField.NearestPassable(G, (int)(p.Y / MapConstants.CellSize) * G.Width + (int)(p.X / MapConstants.CellSize));
+        int laborer = StartBase.UnitOfSlot(_data, W.FactionOf(0), UnitSlot.Worker);
+        _sim.Enqueue(Command.SpawnUnit(0, laborer, G.CellCenter(cell % G.Width, cell / G.Width)));
+        for (int t = 0; t < 40 && !W.Fog.CanSeeBuilding(0, hall); t++) _sim.Tick();
+    }
+
     private int HallSlot(int player)
     {
         for (int k = 0; k < B.Capacity; k++)
@@ -1107,7 +1132,7 @@ public partial class CommandCardTest : Node
         return new(hit.X, hit.Z);
     }
 
-    private async Task SoundGap() => await ToSignal(GetTree().CreateTimer(Sfx.MinGapMs / 1000.0 + 0.02), SceneTreeTimer.SignalName.Timeout);
+    private Task SoundGap() => WallClock.Wait(this, Sfx.MinGapMs + 20); // the wall clock, as Sfx's gap reads it (BUG-0220)
 
     private void Tick(int n)
     {

@@ -372,7 +372,10 @@ public partial class QaV6Test : Node
         Vector2 north = _camera.UnprojectPosition(new Vector3(c.X, 0f, c.Y - halfH)), south = _camera.UnprojectPosition(new Vector3(c.X, 0f, c.Y + halfH));
         float side = south.Y > north.Y ? 1f : -1f;
         var alive = (bool[])U.Alive.Clone();
-        _sim.Enqueue(Command.SpawnUnit(1, _raider, c + new System.Numerics.Vector2(0f, side * (halfH + 0.7f))));
+        // BUG-0226: close to the box (its radius plus 0.15 m off the footprint) so rays through its upper body go on into the
+        // box; 0.7 m out, the ray through its pixel met the ground first and the box was never behind it.
+        float gap = _data.Units[_raider].Radius + 0.15f;
+        _sim.Enqueue(Command.SpawnUnit(1, _raider, c + new System.Numerics.Vector2(0f, side * (halfH + gap))));
         _sim.Tick();
         _sim.Tick();
         int front = -1;
@@ -381,9 +384,22 @@ public partial class QaV6Test : Node
         await Frame();
         Vector2 px = default;
         if (!Check(front >= 0 && _sel.TryScreenPosition(front, out px), "tent row: no front unit")) return;
+        // A pixel on the Raider whose ray also enters the Tent box behind it (BUG-0226): from the top of its body down.
         int b = -1;
-        Vector3 o = _camera.ProjectRayOrigin(px), d = _camera.ProjectRayNormal(px);
-        b = BuildingPicker.PickRay(B, _data.Buildings, G, W.Heightmap, -1, new(o.X, o.Y, o.Z), new(d.X, d.Y, d.Z), BuildingViews.BoxHeight, BuildingViews.SiteMinHeight, out _);
+        System.Numerics.Vector2 fp = U.Position[front];
+        float ground = TerrainHeight.At(W.Heightmap, fp.X, fp.Y), r = U.Radius[front];
+        for (float h = UnitViews.BodyHeight(r) - 0.05f; h > 0.2f && b != _tent; h -= 0.1f)
+            foreach (float dx in new[] { 0f, -0.5f * r, 0.5f * r })
+            {
+                Vector2 q = _camera.UnprojectPosition(new Vector3(fp.X + dx, ground + h, fp.Y));
+                if (UnitUnder(q) != front) continue;
+                Vector3 qo = _camera.ProjectRayOrigin(q), qd = _camera.ProjectRayNormal(q);
+                if (BuildingPicker.PickRay(B, _data.Buildings, G, W.Heightmap, -1, new(qo.X, qo.Y, qo.Z), new(qd.X, qd.Y, qd.Z), BuildingViews.BoxHeight, BuildingViews.SiteMinHeight, out _) != _tent) continue;
+                b = _tent;
+                px = q;
+                break;
+            }
+        Check(b == _tent, "tent row: no pixel on the Raider has the Tent box behind it (the row would not test what it says)");
         bool onUnit = _sel.EnemyAt(px, out EntityHandle t, out bool isB);
         Check(onUnit && !isB && t.Index == front, $"tent row: the Raider before the Tent (box behind it: {b == _tent}) resolved to {t} building {isB}");
         // A pixel on the box's top centre (no unit there): the Tent.
@@ -513,7 +529,7 @@ public partial class QaV6Test : Node
 
     private async Task Gap()
     {
-        await ToSignal(GetTree().CreateTimer(0.07), SceneTreeTimer.SignalName.Timeout);
+        await WallClock.Wait(this, 70); // the wall clock, as Sfx's gap reads it (BUG-0220)
         await Frame();
     }
 

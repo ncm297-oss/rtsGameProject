@@ -724,7 +724,7 @@ public partial class EconomyViewTest : Node
     }
 
     // The Command sound is rate-limited to one per 50 ms; wait it out so a play is counted.
-    private async Task SoundGap() => await ToSignal(GetTree().CreateTimer(Sfx.MinGapMs / 1000.0 + 0.02), SceneTreeTimer.SignalName.Timeout);
+    private Task SoundGap() => WallClock.Wait(this, Sfx.MinGapMs + 20); // the wall clock, as Sfx's gap reads it (BUG-0220)
 
     private void Tick(int n)
     {

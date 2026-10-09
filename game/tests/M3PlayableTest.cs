@@ -189,7 +189,7 @@ public partial class M3PlayableTest : Node
         for (int k = 0; k < more; k++) Key(Godot.Key.Q);
         await Ticks(2);
         Expect(B.QueueCount[_hall] >= queued + more - 1, $"queue {queued} -> {B.QueueCount[_hall]} after {more} more Q");
-        int laborers = await TrainedAndChopping(oldLaborers);
+        int laborers = await TrainedAndChopping(oldLaborers, tree);
         GD.Print($"  {laborers} laborers born after the rally walked to the forest and gathered wood");
         Done();
 
@@ -352,8 +352,13 @@ public partial class M3PlayableTest : Node
     // ---- composite steps ----
 
     // Waits until a laborer born after the rally (not in `known`) stands Gathering wood; returns how many were born by then.
-    private async Task<int> TrainedAndChopping(HashSet<int> known)
+    // BUG-0148 item 3: the wood it gathers is the rally tree or, if that was felled first, a tree of the rally forest: within
+    // the sim's node search radius (rules.json nodeSearchRadius) of the rally tree, where a Gather on a felled tree resolves.
+    private async Task<int> TrainedAndChopping(HashSet<int> known, int rallyTree)
     {
+        System.Numerics.Vector2 rallyAt = NodeCentre(rallyTree);
+        float reach = _data.Rules.NodeSearchRadius;
+        int gatherer = -1, gathered = -1;
         var born = new List<int>();
         await Until(() =>
         {
@@ -363,10 +368,20 @@ public partial class M3PlayableTest : Node
             {
                 EntityHandle node = U.GatherNode[i];
                 if (U.State[i] == UnitState.Gathering && W.Resources.IsAlive(node) && _data.Resources[W.Resources.TypeId[node.Index]].Resource == ResourceKind.Wood)
+                {
+                    gatherer = i;
+                    gathered = node.Index;
                     return true;
+                }
             }
             return false;
         }, "a new laborer gathering wood");
+        if (gathered >= 0)
+        {
+            float d = System.Numerics.Vector2.Distance(NodeCentre(gathered), rallyAt);
+            Expect(gathered == rallyTree || d <= reach, $"laborer {gatherer} gathers tree {gathered}, {d:F1} m from the rally tree {rallyTree} (more than {reach} m: not the rally forest)");
+            GD.Print($"  laborer {gatherer} gathers {(gathered == rallyTree ? "the rally tree" : $"tree {gathered}, {d:F1} m from the rally tree")}");
+        }
         return born.Count;
     }
 

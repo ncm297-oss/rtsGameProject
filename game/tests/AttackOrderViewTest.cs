@@ -52,6 +52,7 @@ public partial class AttackOrderViewTest : Node
     private Vector2 _screen;
     private string? _shots;
     private int _tent = -1, _billet = -1;
+    private System.Numerics.Vector2 _mid; // the staging's central cell, where the camera looks
 
     private World W => _sim.World;
     private UnitStore U => _sim.World.Units;
@@ -139,6 +140,7 @@ public partial class AttackOrderViewTest : Node
     {
         StartMatch(seed);
         System.Numerics.Vector2 mid = Stage();
+        _mid = mid;
         _sim.Tick();
         _sim.Tick();
         for (int i = 0; i < B.Capacity; i++)
@@ -261,13 +263,31 @@ public partial class AttackOrderViewTest : Node
         await Frame();
         await Frame();
         Check(Label().Contains($"target b{_tent}"), $"seed {seed} right-click Tent: F12 label lacks 'target b{_tent}'");
-        // Own building: not a target (a right-click on it is the old context order, never an Attack).
-        if (TryBuildingPixel(_billet, out Vector2 own))
+        // Own building: not a target (a right-click on it is the old context order, never an Attack). BUG-0226: the row must
+        // run on every seed; when the fight's camera has no clean Billet pixel (seed 6: units in front of it), look from
+        // over the Billet, then back.
+        bool ownPx = TryBuildingPixel(_billet, out Vector2 own), moved = false;
+        if (!ownPx)
+        {
+            System.Numerics.Vector2 bc = StartBase.FootprintCenter(G, _data.Buildings[B.TypeId[_billet]], B.Cell[_billet]);
+            _camera.SetFocus(bc.X, bc.Y);
+            moved = true;
+            await Frame();
+            await Frame();
+            ownPx = TryBuildingPixel(_billet, out own);
+        }
+        if (Check(ownPx, $"seed {seed}: the own Billet has no clean pixel, even from over it (the own-building row did not run)"))
         {
             int before = _sel.IssuedCount(CommandKind.Attack);
             RightClick(own);
             Check(_sel.IssuedCount(CommandKind.Attack) == before, $"seed {seed}: a right-click on the own Billet sent Attacks");
-            GD.Print($"seed {seed}: right-click on the own Billet: no Attack");
+            GD.Print($"seed {seed}: right-click on the own Billet: no Attack{(moved ? " (camera over the Billet)" : "")}");
+        }
+        if (moved)
+        {
+            _camera.SetFocus(_mid.X, _mid.Y);
+            await Frame();
+            await Frame();
         }
         GD.Print($"seed {seed}: right-click on the Tent: {n} building Attacks");
         await Gap();
@@ -589,7 +609,7 @@ public partial class AttackOrderViewTest : Node
     // The Command sound has a 50 ms gap (Sfx.MinGapMs): wait past it so the next row's sound counts.
     private async Task Gap()
     {
-        await ToSignal(GetTree().CreateTimer(0.07), SceneTreeTimer.SignalName.Timeout);
+        await WallClock.Wait(this, 70); // the wall clock, as Sfx's gap reads it (BUG-0220)
         await Frame();
     }
 

@@ -499,13 +499,17 @@ public partial class SelectionController : Node
         return workers;
     }
 
-    /// <summary>What the card's Cancel does (M3-V2): one <c>Cancel</c> at the selected own site's footprint centre; false (nothing enqueued) when no own site is selected or the command queue is full.</summary>
+    // The site the last Cancel was sent for, and the tick it was sent between (BUG-0126 item 4).
+    private int _cancelSlot = -1, _cancelGeneration, _cancelTick = -1;
+
+    /// <summary>What the card's Cancel does (M3-V2): one <c>Cancel</c> at the selected own site's footprint centre; false (nothing enqueued) when no own site is selected, a Cancel for this site is already waiting for the next tick (a second press, BUG-0126), or the command queue is full.</summary>
     public bool CancelSelectedSite()
     {
         if (_runner?.Simulation is not Simulation sim) return false;
         int slot = SelectedBuilding;
         BuildingStore b = sim.World.Buildings;
         if (slot < 0 || !b.UnderConstruction[slot] || b.Owner[slot] != LocalPlayer) return false;
+        if (sim.TickNumber == _cancelTick && slot == _cancelSlot && b.Generation[slot] == _cancelGeneration) return false;
         if (sim.PendingCommandCount + 1 > sim.World.Config.CommandCapacity)
         {
             DroppedOrders++;
@@ -513,6 +517,7 @@ public partial class SelectionController : Node
             return false;
         }
         sim.Enqueue(Command.Cancel(LocalPlayer, SiteCenter(sim.World, slot)));
+        (_cancelSlot, _cancelGeneration, _cancelTick) = (slot, b.Generation[slot], sim.TickNumber);
         _issued[(int)CommandKind.Cancel]++;
         _sfx?.Play(SfxEvent.Command);
         return true;

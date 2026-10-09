@@ -5,7 +5,8 @@ using Xunit.Abstractions;
 namespace Rts.Sim.Tests.QA.ViewApi;
 
 /// <summary>
-/// QA (M4-V3 fix round 2, BUG-0224): <see cref="TerrainHeight.MaxUnder"/>'s cell-edge walk with its 0.15 m seam slack.
+/// QA (M4-V3 fix round 2, BUG-0224): <see cref="TerrainHeight.MaxUnder"/>'s cell-edge walk (a 0.15 m seam slack then; since
+/// M4-VH1, BUG-0226, a step over about 5 cm caps the rim at the step's top plus 0.08 m and one over 0.15 m is a wall).
 /// Random (not grid) points and radii near every edge of generated maps against a fine 512-step wall-aware reference;
 /// 0 bytes per call; hostile inputs (NaN, infinities, off-map, huge radii) stay finite and terminate; the size of the
 /// steps generated maps actually have at cell edges, so the slack is known to sit between seams and walls.
@@ -91,8 +92,9 @@ public class MaxUnderEdgeWalkQaTests
         return (points, sunk, worstSink, worstHang, overTenth, at);
     }
 
-    // BUG-0190 item 1 kept at random points: never sinks below the wall-free ground. The hang guard (0.75 m) pins the
-    // residual of BUG-0226 (a side wall's foot under the 0.15 m slack lets the disc up the ramp): ~0.27-0.52 m today.
+    // BUG-0190 item 1 kept at random points: never sinks below the wall-free ground. The hang guard (0.75 m) pinned the
+    // residual of BUG-0226 (a side wall's foot under the 0.15 m slack let the disc up the ramp, 0.27-0.52 m); since the
+    // M4-VH1 fix the worst hang is 0.19-0.23 m (the quarter-metre row below).
     [Theory]
     [MemberData(nameof(Seeds))]
     public void MaxUnder_RandomPointsAndRadii_NeverSinks_AndHangsUnderThreeQuartersOfAMetre(ulong seed)
@@ -102,8 +104,9 @@ public class MaxUnderEdgeWalkQaTests
         Assert.True(p.worstHang < 0.75f, $"seed {seed}: hang {p.worstHang:F3} m at {p.at}");
     }
 
-    // BUG-0226: the BUG-0224 row's own bound (0.25 m) at random points instead of its 6 x 6 grid.
-    [Theory(Skip = "BUG-0226: beside a ramp's side wall near its foot the disc still hangs up to ~0.5 m over the wall-free ground")]
+    // BUG-0226: the BUG-0224 row's own bound (0.25 m) at random points instead of its 6 x 6 grid (flipped from a skip in
+    // M4-VH1: a step over the straddle caps the rim sample at the step's top plus 0.08 m).
+    [Theory]
     [MemberData(nameof(Seeds))]
     public void MaxUnder_RandomPointsAndRadii_HangsUnderAQuarterMetre(ulong seed)
     {
@@ -112,9 +115,9 @@ public class MaxUnderEdgeWalkQaTests
     }
 
     // The steps generated maps have where two edge-adjacent cells' drawn surfaces meet (17 points along every edge that
-    // touches a ramp). TerrainHeight's SeamSlack comment says slope edges have "a few generated seams about 0.1 m high";
-    // QA finds none (BUG-0226): ramp-to-ramp edges meet exactly, and no edge is offset along its whole length. The only
-    // sub-slack steps are the feet of ramp side walls (a wall growing from 0 m), which is what the slack lets through.
+    // touches a ramp). TerrainHeight's old SeamSlack comment said slope edges have "a few generated seams about 0.1 m
+    // high"; QA finds none (BUG-0226): ramp-to-ramp edges meet exactly, and no edge is offset along its whole length. The
+    // only small steps are the feet of ramp side walls (a wall growing from 0 m), which TerrainHeight now says.
     [Theory]
     [MemberData(nameof(Seeds))]
     public void EdgeSteps_OnGeneratedMaps_RampToRampEdgesMeetExactly_SmallStepsAreOnlySideWallFeet(ulong seed)
