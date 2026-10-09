@@ -5,6 +5,7 @@ using Rts.Sim.Data;
 using Rts.Sim.Determinism;
 using Rts.Sim.Entities;
 using Rts.Sim.Map;
+using Rts.Sim.Vision;
 using Xunit.Abstractions;
 using static Rts.Sim.Tests.GatherMaps;
 using static Rts.Sim.Tests.ResourceMaps;
@@ -72,6 +73,7 @@ public class CombatFuzzTests
         var ordered = new bool[cap];
         var orderedNext = new bool[cap];
         var wasAttacking = new bool[cap];
+        var forgotten = new EntityHandle[cap]; // a gone building the owner's list dropped this update tick (BUG-0275)
         var wasHolding = new bool[cap];
         var lastPos = new Vector2[cap];
         var lastGen = new int[cap];
@@ -164,6 +166,12 @@ public class CombatFuzzTests
 
             for (int i = 0; i < cap; i++)
             {
+                // A gone building dropped from the owner's list by an update tick's phase 12 is let go at the next phase 7.
+                if (forgotten[i].Generation != 0)
+                {
+                    Assert.False(u.Alive[i] && u.TargetIsBuilding[i] && u.Target[i] == forgotten[i], $"seed {seed} tick {ran}: unit {i} still holds {forgotten[i]} a tick after its owner forgot it");
+                    forgotten[i] = default;
+                }
                 if (!u.Alive[i])
                 {
                     wasAttacking[i] = wasHolding[i] = false;
@@ -179,7 +187,10 @@ public class CombatFuzzTests
                     // M4-3b: an ordered Attack holds a building its owner remembers (the last-known list) until the owner sees
                     // its ground; gone meanwhile, the unit walks on to it but never swings at it.
                     bool remembered = u.TargetIsBuilding[i] && u.Mode[i] == CombatMode.Ordered && w.Fog.HasGhost(u.Owner[i], u.Target[i]);
-                    Assert.True(live || remembered, $"seed {seed} tick {ran}: unit {i} targets dead {(u.TargetIsBuilding[i] ? "building" : "unit")} {u.Target[i]}");
+                    // BUG-0275: on an update tick the list can drop the entry after this tick's phase 7, so the unit holds it one tick more.
+                    bool lag = !live && !remembered && u.TargetIsBuilding[i] && u.Mode[i] == CombatMode.Ordered && VisionSystem.IsUpdateTick(ran);
+                    if (lag) forgotten[i] = u.Target[i];
+                    Assert.True(live || remembered || lag, $"seed {seed} tick {ran}: unit {i} targets dead {(u.TargetIsBuilding[i] ? "building" : "unit")} {u.Target[i]}");
                     if (!live) Assert.True(u.State[i] != UnitState.Attacking && u.WindupTicks[i] == 0, $"seed {seed} tick {ran}: unit {i} swings at a gone building");
                 }
                 bool same = lastGen[i] == u.Generation[i] && !ordered[i];

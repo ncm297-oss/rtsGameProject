@@ -11,7 +11,8 @@ namespace Rts.Sim.Tests;
 /// M4-3b criterion 2: buildings that shoot. A finished Watchtower kills an unprotected enemy walking through its 18 m; a
 /// site never shoots; a tower never targets a building; a target its owner can't see (up a plateau) is ignored until a
 /// spotter shows it; one shot every 2 s after a 0.4 s wind-up, from the footprint's centre, in <see cref="World.Projectiles"/>;
-/// the unit priority; Ranged Weapons reaches towers; a unit hit by a tower answers it.
+/// the unit priority; Ranged Weapons reaches towers; a tower's hit starts no retaliation (the victim takes the tower only
+/// through its own scans, and only within its sight).
 /// </summary>
 public class TowerTests
 {

@@ -26,7 +26,7 @@ public class SimHardeningTests
     /// <summary>A 128 x 128 map with a one-tree wall down x = 64 (y 3-121): a House in the top gap has sides that meet only round the bottom, so its seal check floods most of the map.</summary>
     private static Simulation LongWall(int commands)
     {
-        var sim = new Simulation(TestSim.Config(Seed: 5, PlayerCount: 1, UnitCapacity: 128, CommandCapacity: commands) with { ResourceCapacity = 256 }, Flat(128, 128));
+        var sim = TestSim.Explored(new Simulation(TestSim.Config(Seed: 5, PlayerCount: 1, UnitCapacity: 128, CommandCapacity: commands) with { ResourceCapacity = 256 }, Flat(128, 128)));
         for (int y = 3; y < 122; y++) Spawn(sim.World, Tree, 64, y, TreeWood);
         return sim;
     }
