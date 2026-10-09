@@ -148,3 +148,52 @@ Expand   2nd Garrison Keep when army >= 12 pop and no enemy army near base for 6
 | Sharper | Fire-pot |
 | Cusser | Satchel Charge |
 | Heavy Infantry, Crossbowman, Catapult, Sapper, Laborer, all buildings | Keep (generic) |
+
+## Balance baseline (M4-2b, 2026-10-08)
+
+Measured at sim commit `dd5b5b9` by `Content/CounterTriangleMarginsTests` (D6), on the scene of
+`Scenario/CounterTriangleTests`: a flat map, 1,200 gold + wood a side (the whole number of units nearest to it), two
+blocks 5 wide whose fronts start 24 m apart, every unit attack-moved into the other block, seed 7, run in both seats.
+No abilities, upgrades, terrain or orders beyond the attack-move. Malazan is the balance reference (docs/02 "Template
+baseline stats"); the Whirlwind page carries its own winners' rows. The test pins only the winner (docs/02 "Faction
+template"); the margins are not asserted.
+
+| Rule | Winner v loser | Winner seat | Fielded (winner v loser) | Winner left | Winner keeps (cost) | Time to last death |
+| --- | --- | --- | --- | --- | --- | --- |
+| Line beats Shock | Heavy Infantry v Horse Raider | 0 | 16 (1184) v 13 (1248) | 15 / 16 | 1110 / 1184 (94 %) | 23.1 s |
+| Line beats Shock | Heavy Infantry v Horse Raider | 1 | 16 (1184) v 13 (1248) | 14 / 16 | 1036 / 1184 (88 %) | 20.5 s |
+| Line beats Shock | Raider v Wickan Lancer | 0 | 19 (1216) v 10 (1200) | 19 / 19 | 1216 / 1216 (100 %) | 17.4 s |
+| Line beats Shock | Raider v Wickan Lancer | 1 | 19 (1216) v 10 (1200) | 18 / 19 | 1152 / 1216 (95 %) | 18.3 s |
+| Shock beats Ranged | Wickan Lancer v Desert Archer | 0 | 10 (1200) v 18 (1224) | 7 / 10 | 840 / 1200 (70 %) | 25.1 s |
+| Shock beats Ranged | Wickan Lancer v Desert Archer | 1 | 10 (1200) v 18 (1224) | 8 / 10 | 960 / 1200 (80 %) | 21.5 s |
+| Shock beats Ranged | Horse Raider v Crossbowman | 0 | 13 (1248) v 15 (1215) | 9 / 13 | 864 / 1248 (69 %) | 20.9 s |
+| Shock beats Ranged | Horse Raider v Crossbowman | 1 | 13 (1248) v 15 (1215) | 10 / 13 | 960 / 1248 (77 %) | 18.2 s |
+| Ranged beats casters | Crossbowman v Priest of the Whirlwind | 0 | 15 (1215) v 10 (1200) | 13 / 15 | 1053 / 1215 (87 %) | 11.6 s |
+| Ranged beats casters | Crossbowman v Priest of the Whirlwind | 1 | 15 (1215) v 10 (1200) | 10 / 15 | 810 / 1215 (67 %) | 11.9 s |
+| Ranged beats casters | Desert Archer v Cadre Mage | 0 | 18 (1224) v 8 (1200) | 16 / 18 | 1088 / 1224 (89 %) | 11.4 s |
+| Ranged beats casters | Desert Archer v Cadre Mage | 1 | 18 (1224) v 8 (1200) | 13 / 18 | 884 / 1224 (72 %) | 13.0 s |
+
+Siege beats buildings (one siege unit, ordered to attack, against the same cost of its faction's line infantry):
+
+| Siege unit | Same cost of line infantry | Building | Siege time | Line time | Siege / line |
+| --- | --- | --- | --- | --- | --- |
+| 1 Catapult | 5 Heavy Infantry | Tent | 17.0 s | 192.2 s | 9 % |
+| 1 Battering Ram | 4 Raider | Billet | 13.8 s | 254.5 s | 5 % |
+
+**Proposed target (a proposal for the owner, not a decision; no number changes until he picks one):** in this scene
+the counter's winner keeps **40-65 % of its cost**, in both seats, and the two seats differ by at most 15 points.
+Below about 40 % one Forge level (+1 / +1) or a faction bonus on the loser's side can flip the fight, so the counter
+stops being reliable; above about 65 % the loser trades away almost nothing, which makes the counter a "don't build
+that" decided at build time rather than a fight where positioning matters (docs/01, "Counters matter"). Today every
+row is above the band: Line v Shock at 88-100 % is the outlier; Shock v Ranged (69-80 %) and Ranged v casters
+(67-89 %) are 2-24 points over. Casters fight without their signature abilities until M4-4, so the Ranged v casters
+rows should be re-measured then before any tuning. Siege has no band: buildings are its job, and 5-9 % of the line
+infantry's time is the point of the slot.
+
+**Sapper self-splash (BUG-0182 item 2; `Content/SapperSplashReportTests`, same commit).** On a flat map, 4 Sappers
+behind 4 Heavy Infantry against 8 Horse Raiders: shipped data, 15 Sharpers thrown, 0 friendly-fire deaths, 41 hit
+points of own splash taken (9 of them by the Sapper that threw it); all four Sappers die to the riders, all four
+Heavy Infantry live, the riders are wiped out (22.6 s). With `minRange` 2 m: 0 deaths, 61 own splash (0 on the
+thrower), same outcome. With splash 1 m: 0 own splash, 2 Sappers and 1 Heavy Infantry left (29.4 s). 4 Sappers alone
+lose to the 8 riders in every variant (12 / 3 / 0 own splash). The self-splash is small next to what the riders do;
+the Sapper stays "Fragile; wants an escort".

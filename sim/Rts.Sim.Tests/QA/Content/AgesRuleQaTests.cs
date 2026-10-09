@@ -9,6 +9,7 @@ namespace Rts.Sim.Tests.QA.Content;
 /// and the Forge". TechContentTests.G pins the parenthesis before it but not the clause, so "three production halls,
 /// or the Forge alone" passed every test. This pins the clause to <c>age_ii.requiresAnyOf</c>: n halls, or n - 1
 /// halls and the Forge, where n is the any-of count and the listed slots are the production halls plus the Forge.
+/// D6 (BUG-0200): <c>TechContentTests.G</c> now carries the same check; this row stays as QA's independent oracle.
 /// </summary>
 public class AgesRuleQaTests
 {

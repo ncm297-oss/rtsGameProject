@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (set by the Producer at the 2026-10-08-2144 PLAN; residual: BUG-0226 item 1) |
 | Found | 2026-10-08-0913, task M4-V2 |
 | System | combat views (`CombatViews` corpse markers), `ViewApi.UnitPicker.ResolveEnemy` |
-| Fixed by | |
+| Fixed by | M4-V3 (session 2026-10-08-1814, on `main` 853a60c): item 1 `ViewApi.TerrainHeight.MaxUnder` (the disc sits on the highest ground under its rim joined to the centre; `CombatViewTest` corpse-underside row, QA's `CorpseDiscRimQaTests` / `MaxUnderEdgeWalkQaTests`); item 2 `UnitPicker.ResolveEnemy` counts a NaN entry as nearest (`UnitPickerTests` NaN row). Residual ≤ ~0.5 m near a ramp's foot beside its side wall: BUG-0226 item 1 |
 
 ## Repro
 1. **Corpse on a ramp.** `& $env:GODOT --path game res://tests/CombatViewTest.tscn -- --seed 1 --shots <dir>`, open

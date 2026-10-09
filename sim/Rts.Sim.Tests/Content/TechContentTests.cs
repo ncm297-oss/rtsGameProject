@@ -371,6 +371,12 @@ public class TechContentTests
     /// </summary>
     private static readonly Regex AgeAnyOf = new(@"Requires finished buildings in (?<k>\w+) different slots \(any (?<n>\w+) of (?<of>[^)]+)\):");
 
+    /// <summary>
+    /// The any-of rule again in plain words, right after the slot list: "...Forge): two production halls, or one hall and
+    /// the Forge." (BUG-0200, folded in from QA's <c>AgesRuleQaTests</c>).
+    /// </summary>
+    private static readonly Regex AgeClause = new(@"\(any \w+ of [^)]+\): (?<n>\w+) production halls, or (?<m>\w+) halls? and the Forge\.");
+
     /// <summary>"Age II unlocks: Caster Hall, Siege Works, ..., and the faction upgrade."</summary>
     private static readonly Regex AgeUnlocks = new(@"Age II unlocks: (?<u>[^.]+)\.");
 
@@ -403,6 +409,16 @@ public class TechContentTests
         Pin(where, "description any-of kinds", string.Join(", ", pageSlots.Select(s => SlotWord[s]).OrderBy(w => w, StringComparer.Ordinal)),
             string.Join(", ", said.Value.Kinds.OrderBy(w => w, StringComparer.Ordinal)));
         RequiresText.AssertMatches(Data, where, d, t.Requires);
+
+        // The trailing clause (BUG-0200): with the three production halls and the Forge listed, "any n" means n halls, or
+        // n - 1 halls and the Forge. A wrong rule sentence ("three production halls, or the Forge alone") fails here.
+        Match clause = AgeClause.Match(page);
+        Assert.True(clause.Success, $"{where} Ages clause: page '{page}' has no '...): <n> production halls, or <n-1> hall(s) and the Forge.'");
+        BuildingSlot[] clauseSlots = { BuildingSlot.InfantryHall, BuildingSlot.RangedHall, BuildingSlot.ShockHall, BuildingSlot.Forge };
+        Pin(where, "Ages clause slots (three halls + Forge)", string.Join(", ", clauseSlots.OrderBy(s => s)),
+            string.Join(", ", t.RequiresAnyOfSlots.Select(s => (BuildingSlot)s).OrderBy(s => s)));
+        Pin(where, "Ages clause halls", clause.Groups["n"].Value, CountWords[t.RequiresAnyOfCount]);
+        Pin(where, "Ages clause halls with the Forge", clause.Groups["m"].Value, CountWords[t.RequiresAnyOfCount - 1]);
 
         // What Age II unlocks, each item checked against the data and said in the description in neutral words.
         Match un = AgeUnlocks.Match(page);
