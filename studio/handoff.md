@@ -1,7 +1,18 @@
 # Handoff: brief for the next session
 
 Written by the Producer at the ACCEPT of session **2026-10-08-2144** (all three tracks accepted; the fog lands on `main` with
-this integration). The next session's PLAN re-checks `main`, the inbox and the caps before using this.
+this integration). **Confirmed at the PLAN of session 2026-10-09-0125** (base `40a7b67` = `origin/main`, clean; inbox empty;
+build 0 warnings, non-Perf 4,079 / 10 skipped / 0 failed in 12 m 27 s, smoke PASS at tick 86; the 2144 merge precondition is on
+`main`):
+the three "Current session plan" sections below are this session's briefs, with these PLAN-time additions:
+- **`ui.json` exception (both briefs):** `game/data/common/ui.json` is view-only text (docs/03 "Data formats"); the **view**
+  adds the `placement.unexplored` key there this session; the sim does **not** touch `ui.json`. The sim's only `game/data/`
+  edits are the two `buildings.json` (towers' `attack` / `detector`) plus any `common/rules.json` constant M4-3b needs.
+- **Ghosts in the view:** draw from `Fog.Ghosts(local)` only if the sim branch has it on the merged tree at integration time;
+  otherwise ship the hook (one adapter method, a TODO naming M4-3b) and say so in the report. Not a criterion either way.
+- **Bug ids:** sim from BUG-0270, view from BUG-0280, data from BUG-0290.
+- **Integration order default:** view → data → sim unless a first commit fixes a red row; full non-Perf + 33-scene loop + smoke
+  on each merged result; BUG-0251 rerun-once rule for `EconomyViewTest`.
 
 ## Where we are
 
