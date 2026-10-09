@@ -53,10 +53,10 @@ Age II, at the Armory, 200 G / 150 W, 45 s. Sapper **Cusser cooldown 45 → 30 s
 
 ## Abilities
 
-| Ability | Unit | Kind | Range | Radius | Cast | Cooldown | Effect |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Telas Fire | Cadre Mage | Target ground | 16 | 3 m | 0.8 s | 25 s | Enemy units in the area are Burning: 10 magic damage/s for 4 s. No effect on buildings |
-| Cusser | Sapper | Target ground | 6 | 3.5 m | 1.0 s | 45 s | 120 siege damage in the area, full damage to buildings (≈355 to a Town Hall), friendly fire at 50% |
+| Ability | Unit | Kind | Range | Radius | Cast | Cooldown | Duration | Effect |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Telas Fire | Cadre Mage | Target ground | 16 | 3 m | 0.8 s | 25 s | — | Enemy units in the area are Burning: 10 magic damage/s for 4 s. No effect on buildings |
+| Cusser | Sapper | Target ground | 6 | 3.5 m | 1.0 s | 45 s | — | 120 siege damage in the area, full damage to buildings (≈355 to a Town Hall), friendly fire at 50% |
 
 Telas Fire is the faction's signature caster ability: a short, decisive area denial that punishes
 clumped Heavy units. Cusser is the unique unit's identity: a satchel charge that deletes

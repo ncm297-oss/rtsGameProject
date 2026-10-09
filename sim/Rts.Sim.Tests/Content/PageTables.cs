@@ -60,6 +60,18 @@ internal static class PageTables
         return rows;
     }
 
+    /// <summary>
+    /// The header cells and body rows of the first table under <c>## <paramref name="section"/></c> (a faction page's
+    /// "Abilities"), so a pin can find its columns by name; fails naming <paramref name="where"/> when the heading is missing.
+    /// </summary>
+    public static (string[] Header, List<string[]> Rows) NamedTable(string[] lines, string section, string where)
+    {
+        int i = Heading(lines, "## " + section, where);
+        while (i < lines.Length && !lines[i].StartsWith('|')) i++;
+        Assert.True(i < lines.Length, $"{where} has no table under '## {section}'");
+        return (Cells(lines[i]), FirstTableRows(lines, i, stripBackticks: true));
+    }
+
     /// <summary>"| a | b |" -> ["a", "b"]: one row's cells, trimmed; with <paramref name="stripBackticks"/>, <c>`id`</c> reads as <c>id</c>.</summary>
     public static string[] Cells(string markdownRow, bool stripBackticks = false)
     {
