@@ -11,7 +11,7 @@ Status legend: **Next** = start here, **Planned** = not started, **Done** = acce
 | M1 | Core sim, no graphics | **Done** (2026-10-06, Producer sign-off) | 200 units path across the map deterministically, fast |
 | M2 | Presentation | **Done** (2026-10-07, Producer sign-off after the M2-H2 hardening) | Move an army around a 3D map |
 | M3 | Economy & buildings | **Done** (2026-10-08, Producer sign-off in session 2026-10-08-0313 after every track's end-of-M3 hardening (M3-H1 / H2, M3-V3b, D4) and the BUG-0146 fix; retro below) | Build a Malazan base |
-| M4 | Combat, fog, abilities | **In progress** (since 2026-10-07-2315; 5 / 10 ticked: melee + the Attack order, the damage formula, projectiles / splash / friendly fire, death / corpses / rubble, the counter-triangle rows; the fog's sim half (M4-3a + M4-H1) on `main` since 2026-10-09) | Malazan vs. Whirlwind armies fight with abilities and fog |
+| M4 | Combat, fog, abilities | **In progress** (since 2026-10-07-2315; 5 / 10 ticked: melee + the Attack order, the damage formula, projectiles / splash / friendly fire, death / corpses / rubble, the counter-triangle rows; the fog's sim half (M4-3a + M4-H1) on `main` since 2026-10-09, the fog on screen (M4-V4) + towers / the ghost list / explored placement (M4-3b) with the 2026-10-09-0125 integration; criterion 5 owes only the view's ghost drawing, M4-V5) | Malazan vs. Whirlwind armies fight with abilities and fog |
 | M5 | AI opponent | Planned | Lose to a Whirlwind AI |
 | M6 | Game shell & real art | Planned | A friend can play it |
 | M7 | Teblor | Planned | Third faction: scale and population systems proven |
@@ -438,6 +438,23 @@ ten-minute playtest (STATE "For your review", M3-V3 entry) stands as feedback, n
       and towers that shoot (sim, M4-3b). ~~BUG-0219 (S2)~~, ~~BUG-0211 / 0215 (S3)~~, ~~BUG-0216 (S4)~~ fixed in session
       2026-10-08-2144. Open after M4-H1: BUG-0241 (S3, a chaser whose scans take two or three unreachable targets in turn
       along a cliff never gives up; also before M4-H1), BUG-0242 (S4).)_
+      _(Session 2026-10-09-0125, **sim M4-3b + view M4-V4 accepted, integrated together.** Sim: `buildings.json` `attack` /
+      `detector` schema (both watch towers 10 pierce / 2 s / 18 m, wind-up 0.4, bolt / arrow, detector 16), `TowerSystem`
+      (phases 7 / 10: a finished building with an attack scans by the unit priority, never a building, only what its owner
+      sees with itself as the viewer, fires a led aimed projectile from its footprint centre; a site never shoots; Ranged
+      Weapons reaches towers per docs/02; a tower's hit starts no retaliation and reveals nothing from high ground, BUG-0270),
+      `Fog.Ghosts(player)` (one last-known entry per enemy building slot: generation, type, anchor, owner; kept until the
+      ground is seen with the building gone; hashed; an explicit Attack on a remembered-but-unseen building is accepted and
+      walks there), `PlacementError.Unexplored` (a footprint must be explored). View: `FogOfWar` + `ViewApi.FogView` (an R8
+      texture of the fog bytes uploaded per fog update; terrain / prop / marker shaders: black, 40 % dark + half desaturated,
+      clear), enemy units / buildings / bars / shots / marks hidden by `CanSeeUnit` / `CanSeeBuilding` / the shot's own cell,
+      picks only on what is drawn, the minimap's fog layer and Attack on a visible enemy dot, `--no-fog` for 7 whole-map
+      scenes, `placement.unexplored` "Unexplored". QA full / standard: `TowerTests`, `GhostListTests`, `TowerFuzzStressTests`,
+      QA's `TowerGhostQaTests` + `GhostAttackHostileFuzzStressTests` (4 seeds x 3,000, twins equal), `FogViewTests` +
+      `FogViewQaTests` (3 seeds x 2,400: hide rule == the fog every tick), `FogViewTest.tscn` / `QaFogViewTest.tscn`; merged
+      full suite incl. Perf 4,313 / 0 failed, scene loop 35 / 35. **Still owed for this criterion: the view draws the ghosts**
+      (`FogView.CollectGhosts` is a hook returning 0; M4-V5 draws them from `Fog.Ghosts` and wires the right-click Attack on
+      one). Open: BUG-0270 / 0273 / 0280 (S3), BUG-0271 / 0272 / 0275 / 0281 (S4).)_
 - [ ] Ability system (target ground, self/aura, summon) and status effects; zones.
 - [ ] Stealth and detection system (tested now, even though Shadow arrives in M8).
 - [ ] Telas Fire, Sapper Sharpers + Cusser, Sandstorm, Zealot passives all work.
