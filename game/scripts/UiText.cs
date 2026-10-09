@@ -33,7 +33,7 @@ namespace Rts.Game;
 public sealed class UiText
 {
     /// <summary>The <c>commands</c> key of each <see cref="CardCommand"/> (index = enum value); empty for the ones without their own text.</summary>
-    public static readonly string[] CommandIds = { "", "move", "attack_move", "stop", "hold", "build_basic", "build_advanced", "cancel", "", "", "" };
+    public static readonly string[] CommandIds = { "", "move", "attack_move", "stop", "hold", "build_basic", "build_advanced", "cancel", "", "", "", "" };
 
     /// <summary>The reason key every reason section carries before the sim has its enum member (M3-6's <c>requires</c> gating).</summary>
     public const string ForwardKey = "requires";

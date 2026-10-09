@@ -137,6 +137,8 @@ public class DataContentHashTests
             ("Status", e with { Status = e.Status + 1 }),
             ("Magnitude", e with { Magnitude = e.Magnitude + 0.5f }),
             ("DurationTicks", e with { DurationTicks = e.DurationTicks + 1 }),
+            ("Buildings", e with { Buildings = !e.Buildings }),
+            ("FriendlyFire", e with { FriendlyFire = e.FriendlyFire + 0.5f }),
         };
         foreach ((string field, AbilityEffect changed) in variants)
         {
@@ -144,7 +146,7 @@ public class DataContentHashTests
             typeof(AbilityDef).GetProperty(nameof(AbilityDef.Effects))!.SetValue(copy, ability.Effects.SetItem(0, changed));
             Assert.True(With(d, ability: copy, abilitySlot: ability.Id).ContentHash() != baseline, $"AbilityEffect.{field} is not in GameData.ContentHash");
         }
-        Assert.Equal(6, typeof(AbilityEffect).GetProperties().Length); // a new field must be added above and to ContentHash
+        Assert.Equal(8, typeof(AbilityEffect).GetProperties().Length); // a new field must be added above and to ContentHash
         AbilityDef more = Clone(ability);
         typeof(AbilityDef).GetProperty(nameof(AbilityDef.Effects))!.SetValue(more, ability.Effects.Add(e));
         Assert.NotEqual(baseline, With(d, ability: more, abilitySlot: ability.Id).ContentHash());
@@ -277,7 +279,7 @@ public class DataContentHashTests
         foreach (AbilityDef ab in d.Abilities)
             Check(ab, x => With(d, ability: x, abilitySlot: ab.Id));
         foreach (string f in new[] { "Id", "Key", "Faction", "DisplayName", "Description", "Kind", "Range", "Radius", "CastTicks", "CooldownTicks",
-            "DurationTicks", "Affects", "Effects" })
+            "DurationTicks", "Affects", "Effects", "HitsBuildings" })
             Assert.Contains($"AbilityDef.{f}", checkedFields);
         Assert.Contains("UnitDef.Abilities", checkedFields);
         Assert.True(checkedFields.Count >= 57, $"only {checkedFields.Count} fields checked");

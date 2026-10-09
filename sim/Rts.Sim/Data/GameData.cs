@@ -251,6 +251,7 @@ public sealed class GameData
             h.Add(a.CooldownTicks);
             h.Add(a.DurationTicks);
             h.Add((int)a.Affects);
+            h.Add(a.HitsBuildings);
             h.Add(a.Effects.Length);
             foreach (AbilityEffect e in a.Effects)
             {
@@ -260,6 +261,8 @@ public sealed class GameData
                 h.Add(e.Status);
                 h.Add(e.Magnitude);
                 h.Add(e.DurationTicks);
+                h.Add(e.Buildings);
+                h.Add(e.FriendlyFire);
             }
         }
         return h.Value;

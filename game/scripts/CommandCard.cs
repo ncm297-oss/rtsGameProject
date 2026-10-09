@@ -27,10 +27,17 @@ namespace Rts.Game;
 /// <see cref="UiText"/> or the building's, unit's or tech's <c>displayName</c>, the tooltip from its <c>description</c>,
 /// cost (faction resource names) and <c>requires</c> ("Needs ..." with display names), all built in <see cref="Init"/>;
 /// a button's text is written only when the card's contents change (<see cref="Layouts"/>), so a steady frame allocates
-/// nothing. Holds view state only (which menu is open).
+/// nothing. Since M4-V6a a unit card also shows the abilities of the active Tab subgroup's type on the top row (Q W E R,
+/// docs/03 "Implementation (M4-V6a)"): the ability's <c>displayName</c>, its grid key, a tooltip of its <c>description</c>
+/// and range / radius / cooldown (<c>ui.json</c> <c>hud</c> labels); dimmed with the seconds left while no selected unit
+/// that has it is off cooldown (<see cref="AbilityCaster.SoonestReady"/>); a press or its key arms ability targeting
+/// (<see cref="SelectionController.BeginAbility"/>). Holds view state only (which menu is open).
 /// </remarks>
 public partial class CommandCard : Control
 {
+    // Cached so per-frame and per-click lookups do not allocate a StringName from a string (BUG-0341).
+    private static readonly StringName OrderQueue = "order_queue";
+
     /// <summary>Grid columns and rows (docs/02: 5 x 3).</summary>
     public const int Columns = 5, Rows = 3, Cells = Columns * Rows;
 
@@ -83,6 +90,10 @@ public partial class CommandCard : Control
     // Per cell: the name's font size on show; per building / unit / tech id: the size its displayName fits at (BUG-0122).
     private readonly int[] _nameSizeShown = new int[Cells];
     private int[] _placeNameSize = Array.Empty<int>(), _unitNameSize = Array.Empty<int>(), _techNameSize = Array.Empty<int>();
+    // M4-V6a: per ability id its tooltip and name size; per whole second of cooldown its "12 s" text; the type whose abilities are on show.
+    private string[] _abilityTip = Array.Empty<string>(), _secondsText = Array.Empty<string>();
+    private int[] _abilityNameSize = Array.Empty<int>();
+    private int _abilityType = -1;
 
     /// <summary>The name label's font size, and the smallest it shrinks to so a long word ("Quartermaster's") never breaks mid-word.</summary>
     public const int NameFontSize = 12, NameMinFontSize = 9;
@@ -110,6 +121,12 @@ public partial class CommandCard : Control
 
     /// <summary>The refusal a production or build-menu cell shows now (<see cref="TrainError"/> for a Train cell, <see cref="ResearchError"/> for a Research cell, <see cref="PlacementError"/> for a Place cell, as int; 0 = live), or -1 for any other cell.</summary>
     public int ReasonAt(int i) => (uint)i < Cells && _actions[i] is CardCommand.Train or CardCommand.Research or CardCommand.Place ? _shownReason[i] : -1;
+
+    /// <summary>The ability id of an <see cref="CardCommand.Ability"/> cell, else -1 (M4-V6a).</summary>
+    public int AbilityAt(int i) => (uint)i < Cells && _actions[i] == CardCommand.Ability ? _types[i] : -1;
+
+    /// <summary>The whole seconds of cooldown an <see cref="CardCommand.Ability"/> cell shows (0 = live; -1 not set yet or not an ability cell; M4-V6a).</summary>
+    public int AbilitySecondsAt(int i) => (uint)i < Cells && _actions[i] == CardCommand.Ability ? _shownReason[i] : -1;
 
     /// <summary>The button of grid cell <paramref name="i"/>.</summary>
     public Button ButtonAt(int i) => _buttons[i];
@@ -220,6 +237,19 @@ public partial class CommandCard : Control
         for (int t = 0; t < _data.Units.Length; t++) _unitNameSize[t] = FitNameSize(_data.Units[t].DisplayName);
         _techNameSize = new int[_data.Techs.Length];
         for (int t = 0; t < _data.Techs.Length; t++) _techNameSize[t] = FitNameSize(_data.Techs[t].DisplayName);
+        _abilityTip = new string[_data.Abilities.Length];
+        _abilityNameSize = new int[_data.Abilities.Length];
+        int maxSeconds = 0;
+        for (int a = 0; a < _data.Abilities.Length; a++)
+        {
+            AbilityDef def = _data.Abilities[a];
+            _abilityTip[a] = AbilityTooltip(def, ui);
+            _abilityNameSize[a] = FitNameSize(def.DisplayName);
+            maxSeconds = Math.Max(maxSeconds, CeilSeconds(def.CooldownTicks));
+        }
+        _secondsText = new string[maxSeconds + 1];
+        for (int sec = 0; sec <= maxSeconds; sec++)
+            _secondsText[sec] = string.Create(CultureInfo.InvariantCulture, $"{sec} {ui.Hud(HudText.Seconds)}");
         selection.Card = this;
         _shown = Mode.None;
         Sync();
@@ -253,9 +283,42 @@ public partial class CommandCard : Control
             want = _sel.Selection.Count > 0 ? Mode.Units : Mode.Empty;
         }
         else want = MenuOpen ? _menu : Mode.Workers;
+        // A unit card's ability row follows the active Tab subgroup's type (M4-V6a).
+        if (want is Mode.Units or Mode.Workers && _shown == want && _sel.Subgroups.ActiveType != _abilityType) _shown = Mode.None;
         if (want != _shown) Layout(want, building);
         if (_shown == Mode.Production) Grey(sim.World, building);
         else if (_shown is Mode.BasicMenu or Mode.AdvancedMenu) GreyPlaces(sim.World);
+        else if (_shown is Mode.Units or Mode.Workers) GreyAbilities();
+    }
+
+    // Dims each ability button while no selected unit that has it is off cooldown, with the whole seconds left (rounded
+    // up) as its bottom line; touches a button only when that number changed.
+    private void GreyAbilities()
+    {
+        for (int i = 0; i < Cells; i++)
+        {
+            if (_actions[i] != CardCommand.Ability) continue;
+            int left = _sel.SoonestReady(_types[i]);
+            int seconds = Math.Min(left <= 0 ? 0 : CeilSeconds(left), _secondsText.Length - 1);
+            if (seconds == _shownReason[i]) continue;
+            _shownReason[i] = seconds;
+            bool ok = seconds == 0;
+            _buttons[i].Disabled = !ok;
+            _costs[i].Text = ok ? "" : _secondsText[seconds];
+            _costs[i].AddThemeColorOverride(FontColor, CostColor);
+            _names[i].Modulate = _hints[i].Modulate = ok ? Colors.White : Dimmed;
+        }
+    }
+
+    private static int CeilSeconds(int ticks) => (ticks + SimConstants.TicksPerSecond - 1) / SimConstants.TicksPerSecond;
+
+    // "<description>\nRange 16 m  Radius 3 m  Cooldown 25 s" (labels and units from ui.json hud).
+    private static string AbilityTooltip(AbilityDef def, UiText ui)
+    {
+        string m = ui.Hud(HudText.Meters), sec = ui.Hud(HudText.Seconds);
+        float cooldown = def.CooldownTicks / (float)SimConstants.TicksPerSecond;
+        return string.Create(CultureInfo.InvariantCulture,
+            $"{def.Description}\n{ui.Hud(HudText.Range)} {def.Range:0.##} {m}  {ui.Hud(HudText.Radius)} {def.Radius:0.##} {m}  {ui.Hud(HudText.Cooldown)} {cooldown:0.##} {sec}");
     }
 
     // Greys each production button the sim would refuse now; touches a button only when its reason changed.
@@ -397,6 +460,16 @@ public partial class CommandCard : Control
                 return true;
             }
         }
+        if (_shown is Mode.Units or Mode.Workers)
+        {
+            // The ability row's grid keys (M4-V6a); the other unit commands keep their own actions.
+            for (int i = 0; i < Cells; i++)
+            {
+                if (_actions[i] != CardCommand.Ability || !e.IsActionPressed(_cardActions[i])) continue;
+                Press(i);
+                return true;
+            }
+        }
         if (_shown == Mode.Workers)
         {
             if (e.IsActionPressed("build_basic")) return OpenMenu(false);
@@ -409,7 +482,7 @@ public partial class CommandCard : Control
     public void Press(int i)
     {
         if ((uint)i >= Cells || _runner == null) return;
-        bool queued = Input.IsActionPressed("order_queue");
+        bool queued = Input.IsActionPressed(OrderQueue);
         switch (_actions[i])
         {
             case CardCommand.Move: _sel.BeginMove(); break;
@@ -433,6 +506,8 @@ public partial class CommandCard : Control
             // Produce asks CanTrain / CanResearch again: a greyed press (its key) enqueues nothing and plays nothing.
             case CardCommand.Train: _sel.Produce(_types[i], isTech: false); break;
             case CardCommand.Research: _sel.Produce(_types[i], isTech: true); break;
+            // BeginAbility asks the cooldowns again: a dimmed key press arms nothing.
+            case CardCommand.Ability: _sel.BeginAbility(_types[i]); break;
         }
     }
 
@@ -444,10 +519,21 @@ public partial class CommandCard : Control
         Array.Clear(_actions);
         Array.Fill(_types, -1);
         Array.Fill(_shownReason, -1);
+        _abilityType = -1;
         switch (mode)
         {
             case Mode.Units:
             case Mode.Workers:
+                _abilityType = _sel.Subgroups.ActiveType;
+                if ((uint)_abilityType < (uint)_data.Units.Length)
+                {
+                    System.Collections.Immutable.ImmutableArray<int> abilities = _data.Units[_abilityType].Abilities;
+                    for (int k = 0; k < abilities.Length && k < Columns; k++)
+                    {
+                        _actions[k] = CardCommand.Ability;
+                        _types[k] = abilities[k];
+                    }
+                }
                 _actions[AttackCell] = CardCommand.AttackMove;
                 _actions[StopCell] = CardCommand.Stop;
                 _actions[HoldCell] = CardCommand.Hold;
@@ -518,6 +604,15 @@ public partial class CommandCard : Control
                 b.TooltipText = _techTip[def.Id];
                 _hints[i].Text = _gridKeys[i];
                 _costs[i].Text = _techCost[def.Id];
+            }
+            else if (c == CardCommand.Ability)
+            {
+                AbilityDef def = _data.Abilities[_types[i]];
+                _names[i].Text = def.DisplayName;
+                SetNameSize(i, _abilityNameSize[def.Id]);
+                b.TooltipText = _abilityTip[def.Id];
+                _hints[i].Text = _gridKeys[i];
+                _costs[i].Text = "";
             }
             else
             {

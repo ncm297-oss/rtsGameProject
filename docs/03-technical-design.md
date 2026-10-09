@@ -2248,8 +2248,9 @@ three gates below.
 Slice 1 of M4 criterion 6 (data-driven abilities) and the start of criterion 8 (Telas Fire): the schema for statuses and
 abilities, `Command.UseAbility`, the *target ground* kind with the `damage` and `applyStatus` effects, and the status store
 with damage over time (Burning) and slows (Slowed). Code: `sim/Rts.Sim/Abilities/` (`AbilitySystem`, `StatusSystem`,
-`StatusStore`, `AbilityEvent`), the defs in `Data/`. Zones, summons, self / aura, autocast, the `abilityCooldown` tech
-effect, passives and the AI's casting are slice 2.
+`StatusStore`, `AbilityEvent`), the defs in `Data/`. Zones, summons, self / aura, autocast, passives and the AI's casting
+are slice 2; the `abilityCooldown` tech effect, buildings and friendly fire on `damage`, and the whole-seconds rule for damage
+over time came in M4-4b-1 (below).
 
 - **Data.** `common/statuses.json` (required) and `factions/<id>/abilities.json` (optional: a faction without one has no
   abilities); a unit lists its abilities by id (`abilities`, at most `DataLimits.MaxUnitAbilities` = 4, own faction only, no
@@ -2272,7 +2273,7 @@ effect, passives and the AI's casting are slice 2.
   = this tick + `cooldown` ticks; the ability is usable again from that tick on, so 25 s after the resolve) and the effects
   land on every live unit whose center is within `radius` m of the point (`SpatialHash.QueryRadius`, hash order, exact
   distance test) that `affects` allows: `enemy_units` (any other player's), `own_units` (the caster's owner's, the caster
-  included) or `all_units`. Buildings are never affected in this slice (Telas Fire: "no effect on buildings"). Each unit
+  included) or `all_units`. Buildings are affected only by a `damage` effect with `buildings` (M4-4b-1, below). Each unit
   takes the effects in file order: `damage` is one hit through `DamageCalc` (the amount as the attack value, the type's
   multiplier for the unit's armor class, its armor and armor techs; Magic ignores armor), credited to the caster's owner,
   and may start a retaliation on the caster like any hit; `applyStatus` goes through the store. A unit trained in this
@@ -2324,7 +2325,45 @@ only), `range` (m, above 0, at most 64), `radius` (m, above 0, at most 16), `cas
 or `{ "kind": "applyStatus", "status": <statuses.json id>, "magnitude": <damage per second, whole, for damageOverTime; a
 fraction above 0 and below 1 for slow>, "duration": <s, at least a tick> }`. The other docs/02 kinds and effects load as
 "not supported yet" errors. A unit's `abilities` lists its own faction's ids. Player-facing text only in `displayName` /
-`description` (statuses too).
+`description` (statuses too). M4-4b-1 additions: see "Implementation (M4-4b-1)" below.
+
+### Implementation (M4-4b-1)
+
+The second signature ability (M4 criterion 8: the Sapper's Cusser) from data, the `abilityCooldown` tech effect, and a
+load rule for damage over time. Code: `AbilitySystem.CooldownOf` and `Resolve`, `DataLoader.Abilities.cs`.
+
+- **Cooldown techs.** At the resolve the ready tick is `tick + max(1, cooldown ticks + the owner's abilityCooldown bonus for
+  the caster's type)` (`World.TechBonus`, the loader already converted the seconds to ticks; negative shortens it). It
+  applies to every ability of a unit type the tech's `appliesTo` matches. It is read at the resolve only: a tech finishing
+  while a cooldown runs leaves that one as it is and shortens the next. Shipped: Moranth Supply takes the Cusser from 45 s
+  to 30 s (600 ticks); Dryjhna's Prophecy does the same for any Priest ability. A bonus at or below minus the cooldown
+  floors at 1 tick (usable again on the next tick).
+- **`damage` on buildings (`"buildings": true`).** After the units, every other player's building (sites too) whose
+  footprint rectangle is within `radius` of the point (`CombatSystem.BuildingDistanceSquared`, 0 inside it), in slot
+  order, takes the effect as one hit of armor class `structure` with the building's armor through `DamageCalc`, applied
+  through `CombatSystem.HitBuilding` (the normal destruction path: a death event credited to the caster's owner, the
+  building freed, its cells reopened). Never an own building. The Cusser on a Town Hall: `120 x 3.0 - 5 = 355`. The scan
+  walks the building slots (no allocation), only for an ability with such an effect (`AbilityDef.HitsBuildings`).
+- **Friendly fire (`"friendlyFire": f`, 0-1).** On an `enemy_units` ability, each of the caster owner's units in the
+  radius (the caster too, when within it) takes the damage effect's hit times `f`, rounded half up, at least 1 (as splash's
+  friendly fire, `ProjectileSystem.Scale`). Other effects of the ability still skip own units. An own unit killed is the
+  caster owner's kill and loss (the splash convention); no retaliation on an own hit.
+- **No falloff.** An ability's hit is the same anywhere in its radius (unlike projectile splash); the radius test is exact
+  (`<=`), so a unit 3.51 m from a 3.5 m Cusser is untouched.
+- **Damage over time is whole seconds.** An `applyStatus` of a `damageOverTime` status must have a `duration` that is a
+  whole number of seconds, at least 1 (2.5, 0.5 and 0 are load errors at the effect's `duration`); a slow's duration is
+  any length of at least a tick.
+- **Hash.** No new state: the ready tick was already hashed. `GameData.ContentHash` adds `AbilityDef.HitsBuildings` and the
+  two effect fields; the golden replay's checkpoints are unchanged (no Sapper casts in it), only its `data-hash` moved.
+- **Tests.** `Abilities/AbilityCooldownTechTests`, `Abilities/AbilitySystemTests.Cusser_*`, `Data/AbilityLoaderTests`
+  (the Cusser, the duration rule, the two fields), `Stress/AbilityFuzzStressTests` (6 Sappers a side and 4 Keeps a side),
+  `DataContentHashTests`.
+
+**For the data track (M4-4b-1).** A `damage` effect also takes `"buildings": true` (other players' buildings in the radius
+take the hit as structure; not allowed with `affects: own_units`) and `"friendlyFire": <0-1>` (the fraction of the hit the
+caster's own units take; above 0 only with `affects: enemy_units`). Both are errors on an `applyStatus` effect. An
+`applyStatus` of a damage-over-time status needs a whole-second `duration`, at least 1 s. Shipped: Malazan `cusser` on the
+Sapper.
 
 ## Vision, detection, fog
 
@@ -2522,7 +2561,7 @@ the milestone that consumes it.
 | `projectiles.json` | `{ "projectiles": [ ... ] }`, each `{id, kind, speed, hitTolerance?, leadSpeed?}`: `kind` `aimed` or `lob`, `speed` m/s (at least 1), `hitTolerance` m (aimed only, 0-2, default 0.3; an error on a lob), `leadSpeed` m/s (aimed only, not negative, default 0 = never leads; an error on a lob). Ids unique; every unit's `attack.projectile` must name one (M4-2b, see "Implementation (M4-2b)") |
 | `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge). `abilities` (M4-4a, optional): ability ids of the unit's own faction, at most 4 (`DataLimits.MaxUnitAbilities`), no repeats; resolved to `UnitDef.Abilities`; shipped on the Cadre Mage (`telas_fire`) |
 | `statuses.json` | `{ "statuses": [ ... ] }` (M4-4a), each `{id, displayName, description, kind, damageType?}`: `kind` `damageOverTime` or `slow` (`DataLimits.StatusKindIds`); `damageType` (a damage table type) required on `damageOverTime`, an error on any other kind. The magnitude and duration come from the effect applying it. Ids unique; shipped `burning` (magic damage over time) and `slowed` |
-| `abilities.json` | `{ "abilities": [ ... ] }` (M4-4a, per faction, optional), each `{id, displayName, description, kind, range, radius, castTime, cooldown, duration?, affects, autocast?, effects}`: `kind` `targetGround` (`targetUnit`, `selfAura`, `summon`: "not supported yet"); `range` m above 0 and at most `DataLimits.MaxSight` (64); `radius` m above 0 and at most `DataLimits.MaxAbilityRadius` (16); `castTime` s, 0 or more, to ticks; `cooldown` s above 0, to ticks (at least 1); `duration` s, optional (0), to ticks; `affects` `enemy_units`, `own_units` or `all_units`; `autocast` only `false` ("not supported yet"); `effects` at least one, each `{kind: damage, type, amount}` (a whole amount, at least 1) or `{kind: applyStatus, status, magnitude, duration}` (a `statuses.json` id; magnitude whole and at least 1 for damage over time, above 0 and below 1 for a slow; duration s, at least a tick); `createZone`, `teleport`, `spawn`: "not supported yet"; a field the effect kind doesn't use is an error. Ids unique across factions. Shipped: Malazan `telas_fire` |
+| `abilities.json` | `{ "abilities": [ ... ] }` (M4-4a, per faction, optional), each `{id, displayName, description, kind, range, radius, castTime, cooldown, duration?, affects, autocast?, effects}`: `kind` `targetGround` (`targetUnit`, `selfAura`, `summon`: "not supported yet"); `range` m above 0 and at most `DataLimits.MaxSight` (64); `radius` m above 0 and at most `DataLimits.MaxAbilityRadius` (16); `castTime` s, 0 or more, to ticks; `cooldown` s above 0, to ticks (at least 1); `duration` s, optional (0), to ticks; `affects` `enemy_units`, `own_units` or `all_units`; `autocast` only `false` ("not supported yet"); `effects` at least one, each `{kind: damage, type, amount, buildings?, friendlyFire?}` (a whole amount, at least 1; M4-4b-1: `buildings` true also hits other players' buildings as structure, not with `own_units`; `friendlyFire` 0-1, the fraction own units take, above 0 only with `enemy_units`) or `{kind: applyStatus, status, magnitude, duration}` (a `statuses.json` id; magnitude whole and at least 1 for damage over time, above 0 and below 1 for a slow; duration s, at least a tick, and for damage over time a whole number of seconds, at least 1, M4-4b-1); `createZone`, `teleport`, `spawn`: "not supported yet"; a field the effect kind doesn't use is an error. Ids unique across factions. Shipped: Malazan `telas_fire`, `cusser` (M4-4b-1) |
 
 Validation rules: ids are `snake_case` and unique (a unit id is unique across all factions);
 `slot` is one of the seven template slots; `armorClass`, `attack.type`, and `bonusVs` keys exist in
@@ -4088,6 +4127,76 @@ right-click on one attacks it.
   checked (longest out-of-reach stand 343 ticks). A later data-hash move needs another re-record.
 - **Not yet:** a remembered site drawn as a site (BUG-0275 item 1, needs a sim field); ghosts on the minimap; minimap
   dots refreshed with the hide rule (BUG-0281 item 3).
+
+### Implementation (M4-V6a)
+
+Telas Fire from the window (M4 criterion 8 on screen, slice 1 of the ability view): an ability button on the command
+card, a targeting mode with the range ring and the radius ring, one `UseAbility` per click for the nearest ready selected
+caster, and the cast drawn on the caster. Reads only what "For the view (M4-V6)" lists; no sim change.
+
+```
+Match.tscn  (new node)
+  World3D/AbilityViews  Node3D, AbilityViews.cs: targeting rings, cast bars, cast-point rings
+sim/Rts.Sim/ViewApi/AbilityCaster.cs   the caster pick and the button's cooldown read (pure, allocation-free)
+```
+
+- **Caster rule** (`ViewApi.AbilityCaster`, docs/02 "only the nearest selected caster casts"): a selected unit is *ready*
+  for ability *a* when it is live, its type lists *a* (`IndexOf`: the index a `UseAbility` names) and
+  `AbilityReadyTick[slot * 4 + index] <= TickNumber`. `PickCaster` takes the ready unit whose centre is nearest the target
+  point, but one already casting or walking to cast *a* (`CastAbility == index`) only when no free one is ready (a second
+  click with two mages starts the second, not a recast of the first); a queued (Shift) click never picks a busy one (its
+  cast would pop after the resolve, on cooldown, and be dropped). Ties: the earlier unit in the selection.
+  `SoonestReady` is the button's read: 0 when some selected unit with *a* is off cooldown, else the fewest ticks until one
+  is, -1 when none has it. `Progress(castTicksLeft, defCastTicks)` is the cast bar's fill.
+- **Card** (`CommandCard`, M3-V2 layout): a unit card puts the abilities of the active Tab subgroup's type on the top row,
+  cells 0-3 (Q W E R, `card_0`..`card_3`), in the type's list order: the ability's `displayName`, the cell's grid key as the
+  hint, the tooltip "<description>\nRange 16 m  Radius 3 m  Cooldown 25 s" (labels `ui.json` `hud.range`, `hud.radius`,
+  `hud.cooldown`, units `hud.meters`, `hud.seconds`: the four new keys, required by `UiText`). The row is rebuilt when the
+  active subgroup's type changes (Tab). Each frame `SoonestReady` greys it: while no selected unit with the ability is
+  off cooldown the button is disabled, its name and hint dimmed (`DimAlpha`) and its bottom line reads the whole seconds
+  left rounded up ("12 s", strings made in `Init`); only a change of that number rewrites it. Its grid key (seen before the
+  controller's keys while a unit card is up) and its button both call `SelectionController.BeginAbility`, which arms only
+  when `SoonestReady` is 0: a dimmed press sends nothing and arms nothing. New `CardCommand.Ability`; `AbilityAt(i)`,
+  `AbilitySecondsAt(i)`.
+- **Targeting** (`SelectionController`, like A + click): `TargetKind` `UseAbility` with `TargetAbility` (the ability id).
+  The point is `AbilityPoint(screen)`: an enemy unit drawn under the cursor (`EnemyAt`) gives its position, else the
+  ground under the ray. A left click sends `AbilityOrder(ability, point, queued)`: exactly one
+  `Command.UseAbility(local, caster, index, point, queued)` for `PickCaster`'s unit, one Command sound, `LastCaster`;
+  nothing (no sound) when none is ready or the command queue is full; Shift queues it on that caster only. The click
+  disarms (off the map it stays armed). Right-click or Esc cancels with no command, as for A. The F12 first line ends
+  "cast <id>" while armed.
+- **Rings** (`AbilityViews`, each frame while armed): a ring of the ability's `radius` at `AbilityPoint(mouse)` and one of
+  its `range` round the caster `PickCaster` would choose there (interpolated position), hidden when no one is ready or the
+  cursor is off the map. Each is a flat torus whose outer radius is the def's value (band `RingWidth` 0.22 m), one mesh per
+  ability and ring, made the first time it is armed; a frame moves two nodes. Orange area, pale blue reach.
+- **Casts** (`AbilityViews`, each frame): every unit the fog shows in `UnitState.Casting` gets a violet cast bar
+  above its hp bar's place (`BarAbove` 0.25 m higher, the hp bar's zoom growth), filled to `Progress(CastTicks,
+  def.CastTicks)`; every own unit with `CastAbility` set (walking in or standing) gets an orange ring of the ability's radius
+  on its `CastPoint`. Two bar `MultiMesh`es and one ring `MultiMesh` (a unit torus scaled per instance), one instance per
+  unit slot, written densely. The selection panel already names the state ("Casting", `ui.json` `states.casting`); a
+  walker reads "Moving". The F12 overlay adds a line "casting N   statused M" (live units in `Casting`, live units with any
+  status), its fifth of six; the tick graph moved down a line to y 158 (the label ends at 146), as `CombatViewTest`'s
+  layout row checks.
+- **Cost.** One fog-filtered unit pick and one selection scan for the rings, one pass over the unit slots for the casts,
+  one selection scan per ability button: 0 bytes a frame (the scene's 300 frames at `--units 500` with the rings armed and
+  bars and cast rings drawn in 294 of them).
+- **Tests.** xUnit `ViewApi/AbilityCasterTests` (nearer of two ready mages, ties; the nearer on cooldown after a real
+  cast: the other, both: none and the soonest ticks; a busy caster passed over for a free one, recast only alone, never
+  queued; non-casters, dead and stale handles; `Progress`; 0 bytes). Headless scene `res://tests/AbilityViewTest.tscn`
+  ("ABILITY VIEW TEST PASS"; seeds 1 and 6, `--no-combat`, two Cadre Mages 20 m and 30 m west of four Raiders and a Laborer
+  spotter): `ui.json` rows (each new hud key present, its removal one named error); the card (Telas Fire on Q with the grid
+  key, the tooltip from the data and `ui.json`, live; the row follows Tab; steady frames don't rewrite it); Q, Esc, the
+  button and a right-click arm and cancel with no command; the rings (radius ring at the clicked Raider with outer radius
+  == the def's 3 m, range ring == 16 m round the nearer mage; a point by the far mage picks it); a click on a Raider through
+  the viewport sends exactly one `UseAbility` (the nearer mage, index 0, the Raider's position, not queued, one sound),
+  the mage walks in with its cast-point ring, stands "Casting" (panel, one cast bar at the cast's progress, "casting 1"
+  on F12), resolves, and the Raiders burn (`Statuses.Count > 0`), its button 25 s; Shift + click with it on cooldown sends
+  one queued `UseAbility` for the far mage only; both on cooldown: the button disabled and dimmed with "N s", Q, the button
+  and `AbilityOrder` send nothing; hash twins; 300 frames at `--units 500` (72 mages selected, two casts beside them every
+  30 frames, the cursor sweeping) 0 bytes, and its twin. Windowed `-- --shots <dir>` saves
+  `ability-seedN-targeting.png` and `ability-seedN-casting.png`.
+- **Not yet (M4-V6b):** Burning / Slowed markers from `Units.Statuses`, the resolve flash from `AbilityEvents`; zone and
+  stealth visuals; autocast toggles; enemy cast-point rings.
 
 ## AI architecture
 

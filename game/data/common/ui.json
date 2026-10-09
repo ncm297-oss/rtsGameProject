@@ -64,6 +64,10 @@
     "speed": "Speed",
     "needs": "Needs",
     "kills": "K",
-    "losses": "L"
+    "losses": "L",
+    "radius": "Radius",
+    "cooldown": "Cooldown",
+    "seconds": "s",
+    "meters": "m"
   }
 }

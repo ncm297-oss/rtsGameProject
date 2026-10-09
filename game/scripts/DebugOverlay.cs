@@ -16,7 +16,7 @@ namespace Rts.Game;
 /// (<see cref="TickGraph"/>) and a second label line with entity counts, the workers gathering, returning and
 /// building (M3-V1), each player's kills and losses (M4-V1, <c>World.Kills</c> / <c>Losses</c>, labelled from <c>ui.json</c>
 /// <c>hud.kills</c> / <c>hud.losses</c>), the selected unit's target slot (M4-V2: "target u12", "target b3" for a building,
-/// "target -"), and tick averages. Since M4-V2 (BUG-0160) those are four short lines under the first, so none runs under the
+/// "target -"), the units casting and the units with any status (M4-V6a: "casting 1   statused 4"), and tick averages. Since M4-V2 (BUG-0160) those are four short lines under the first, so none runs under the
 /// resource bar's labels at the top right, and the tick graph sits below them. It is off by
 /// default; while off its layers are hidden, have no <c>_Process</c> and are not even built.
 /// Reads the sim only; never enqueues.
@@ -58,6 +58,12 @@ public partial class DebugOverlay : CanvasLayer
 
     /// <summary>Live units <see cref="UnitState.Returning"/> at the last <see cref="SyncLayers"/>.</summary>
     public int ReturningUnits { get; private set; }
+
+    /// <summary>Live units <see cref="UnitState.Casting"/> at the last <see cref="SyncLayers"/> (M4-V6a).</summary>
+    public int CastingUnits { get; private set; }
+
+    /// <summary>Live units with at least one status at the last <see cref="SyncLayers"/> (M4-V6a).</summary>
+    public int StatusedUnits { get; private set; }
 
     /// <summary>Live units <see cref="UnitState.Building"/> at the last <see cref="SyncLayers"/>.</summary>
     public int BuildingUnits { get; private set; }
@@ -151,7 +157,7 @@ public partial class DebugOverlay : CanvasLayer
             Selection?.Selection.Count ?? 0, sub?.Count ?? 0, sub?.ActiveType ?? 0, sub?.Index ?? 0, (int)(Selection?.TargetKind ?? Rts.Sim.Commands.CommandKind.Noop),
             Enabled, LiveUnits, MovingUnits, CachedFields, sim.World.FlowFields.Capacity, ring.Average, ring.Worst, ring.Count,
             ShownGoal >= 0 ? _arrows?.ShownCount ?? 0 : -1, GatheringUnits, ReturningUnits, BuildingUnits, Selection?.SelectedBuilding ?? -1,
-            Kills0, Losses0, Kills1, Losses1, TargetSlot, TargetIsBuilding);
+            Kills0, Losses0, Kills1, Losses1, TargetSlot, TargetIsBuilding, CastingUnits, StatusedUnits);
         if (LabelBuilds > 0 && shown == _shown) return;
         _shown = shown;
         LabelBuilds++;
@@ -166,6 +172,7 @@ public partial class DebugOverlay : CanvasLayer
                 $"\nworkers gathering {GatheringUnits}, returning {ReturningUnits}, building {BuildingUnits}" +
                 $"\np0 {_killsName} {Kills0} / {_lossesName} {Losses0}  p1 {_killsName} {Kills1} / {_lossesName} {Losses1}   " +
                 (TargetSlot < 0 ? "target -" : $"target {(TargetIsBuilding ? "b" : "u")}{TargetSlot}") +
+                $"\ncasting {CastingUnits}   statused {StatusedUnits}" +
                 $"\ntick avg {ring.Average:0.000} ms   worst {ring.Worst:0.000} ms ({ring.Count})";
         }
         _label.Text = text;
@@ -178,7 +185,7 @@ public partial class DebugOverlay : CanvasLayer
     private readonly record struct LabelValues(long Tick, double Speed, double TickMs, double Fps, int Selected, int SubCount, int SubType,
         int SubIndex, int Targeting, bool On, int Live, int Moving, int Fields, int FieldCapacity, double Avg, double Worst, int Samples, int Arrows,
         int Gathering, int Returning, int Building, int SelectedBuilding, int Kills0, int Losses0, int Kills1, int Losses1, int Target,
-        bool TargetBuilding);
+        bool TargetBuilding, int Casting, int Statused);
 
     // The first live selected unit's UnitStore.Target slot (M4-V2), -1 when it has none or nothing is selected.
     private void ReadTarget(World world)
@@ -217,6 +224,12 @@ public partial class DebugOverlay : CanvasLayer
         GatheringUnits = DebugCounts.InState(world.Units.Alive, world.Units.State, UnitState.Gathering);
         ReturningUnits = DebugCounts.InState(world.Units.Alive, world.Units.State, UnitState.Returning);
         BuildingUnits = DebugCounts.InState(world.Units.Alive, world.Units.State, UnitState.Building);
+        CastingUnits = DebugCounts.InState(world.Units.Alive, world.Units.State, UnitState.Casting);
+        int statused = 0;
+        ReadOnlySpan<int> statusCount = world.Units.Statuses.Count;
+        for (int i = 0; i < world.Units.Capacity; i++)
+            if (world.Units.Alive[i] && statusCount[i] > 0) statused++;
+        StatusedUnits = statused;
         CachedFields = world.FlowFields.Count;
         _graph.QueueRedraw();
         _watch.Stop();
@@ -230,6 +243,11 @@ public partial class DebugOverlay : CanvasLayer
         Rts.Sim.ViewApi.Subgroups sub = Selection.Subgroups;
         string text = sub.Count > 0 ? $"   sub {sub.ActiveType} {sub.Index + 1}/{sub.Count}" : "";
         if (!Selection.Targeting) return text;
-        return text + (Selection.TargetKind == Rts.Sim.Commands.CommandKind.Move ? "   M" : "   A");
+        return text + Selection.TargetKind switch
+        {
+            Rts.Sim.Commands.CommandKind.Move => "   M",
+            Rts.Sim.Commands.CommandKind.UseAbility => $"   cast {Selection.TargetAbility}",
+            _ => "   A",
+        };
     }
 }

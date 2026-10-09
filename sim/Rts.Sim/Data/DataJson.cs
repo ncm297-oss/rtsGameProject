@@ -277,4 +277,6 @@ internal sealed class AbilityEffectJson
     public string? Status { get; set; }
     public double? Magnitude { get; set; }
     public double? Duration { get; set; }
+    public bool? Buildings { get; set; }
+    public double? FriendlyFire { get; set; }
 }
