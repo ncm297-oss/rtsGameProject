@@ -1,5 +1,25 @@
 # Handoff: brief for the current session
 
+## Resumption 2026-10-08-1814 (session 1435 died mid-way; same plan, all three tracks resumed)
+
+Base `dd5b5b9` (main's code = `660a19c`; green per the 1435 plan check). Every track goes **straight to QA** on its
+branch as it stands; the briefs below are unchanged. Fix rounds (cap 2 per session): sim **1 used, 1 left**; view
+**round 1 in flight** (fix present, re-check pending; 1 more after it); data **0 used**.
+- **Sim** `studio/2026-10-08-1435-sim` @ `b90539f`: implement 977db1d, QA FAIL (3 S2), fix 34931b8, QA re-check round 1
+  **PASS_WITH_ISSUES committed 18:17 by the 1435 QA agent** (BUG-0214 / 0217 fixed; BUG-0212 / 0213 view-owned, fixed on
+  the view branch). Non-Perf 3,922 / 13 / 0; Perf alone 139 / 3. QA now: confirm, don't redo (fog filter + the memory row
+  + golden + Perf fog rows alone + scene loop 27 / 29 with only MinimapTest / SfxTest red).
+- **View** `studio/2026-10-08-1435-view` @ `e1f3333`: QA PASS_WITH_ISSUES (S3 BUG-0220 / 0221 / 0223, S4 0222); the
+  recovered commit is the unreviewed fix round 1: BUG-0221 (`ImpactMarks.Age`), BUG-0223 (`TerrainHeight.MaxUnder` rim
+  rule), `--no-combat` in SfxTest + QaM24Test (BUG-0212 / 0213), 3 QA rows un-skipped. **Known gap:** docs/03's
+  `--no-combat` scene list (line ~3741) still omits SfxTest / QaM24Test. QA re-check round 1 now; scene loop must be 33 / 33
+  with SfxTest / QaM24Test run several times.
+- **Data** `studio/2026-10-08-1435-data` @ `03711a1`: QA PASS_WITH_ISSUES, only S4 BUG-0230 (stays open; data hardening).
+  QA confirm (content filter, no `game/data` diff), then ACCEPT.
+- **Conductor:** process 45600 (claude.exe, started 14:35) was still committing in the sim worktree at 18:17; make sure
+  the 1435 session is dead before builders / QA touch the worktrees. Merge order sim, view, data; the integration scene
+  loop (33 scenes) must be fully green after sim + view merge.
+
 Written by the Producer at the PLAN of session **2026-10-08-1435** (base `660a19c`; third full session of 2026-10-08,
 cap 8). Three tracks, all **feature** sessions (the 4th since each track's last hardening for sim and view: their
 hardening sessions come next; data 2 / 4). Sim **M4-3a** (fog of war, QA full), view **BUG-0210 then M4-V3** (QA
