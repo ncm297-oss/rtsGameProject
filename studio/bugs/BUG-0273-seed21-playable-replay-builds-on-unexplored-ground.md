@@ -27,3 +27,11 @@ Not a sim bug: the input is invalid under the new rule. Fix: re-record `studio/b
 from `M3PlayableTest -- --seed 21` on the merged M4-3b tree (the scripted build must pick explored ground, or the
 recording just reflects the refusal), update `RecordedDataHash`, and un-skip the row. The sim track may not write
 `studio/**`; left for the view track / QA. Skipped in M4-3b with this id.
+
+## QA (2026-10-09-0125, M4-3b inspection)
+Confirmed the row is skipped (`[Fact(Skip = "BUG-0273 ...")]`); the non-Perf run reports it among 11 skips. The skip is
+a loosening of a QA row, but the recorded input is invalid under the new docs/02 rule, so it can't pass unchanged. A
+re-record depends on BUG-0274: on the merged tree `M3PlayableTest -- --seed 21` must play to the end, and today
+`M3PlayableTest` stops at step 16 (seed 6) on the explored rule. Until then BUG-0146's wedge (a gatherer out of reach
+forever) has no long-replay guard; the dev's `GatherWedgeTests` rows still run. Fix order: BUG-0274's
+`M3PlayableTest` spot search first, then re-record, update `RecordedDataHash`, and un-skip.

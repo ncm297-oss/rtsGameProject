@@ -30,3 +30,18 @@ no player rule) can accept `Unexplored` as they accept `CannotAfford`; the ghost
 player has explored (`World.Fog.IsExplored(player, cell)` over the footprint), or walk a worker there first. The sim's
 xUnit scenes that build far from their workers start explored through `TestSim.Explored` (internal seam); a Godot
 scene can't call it.
+
+## QA (2026-10-09-0125, M4-3b inspection)
+Confirmed on a fresh scratch merge of the sim branch (a86fd01) onto the view head **0d02db7** (M4-V4 QA'd; the dev
+merged onto 38cf064): smoke PASS, scene loop **30 / 35**, the same five failures with the same messages
+(`ProductionHudTest`, `QaV3bTest`, `QaV3Test`, `QaV4Test`, `M3PlayableTest` at step 16, seed 6, tick 8274).
+`AttackOrderViewTest`, `QaV6Test`, `QaV7Test`, `FogViewTest`, `QaFogViewTest`, `BenchTest` pass.
+
+Fix size, tried in the scratch clone only (reverted): adding `r != PlacementError.Unexplored` to the `FreeAnchor`
+acceptance line turns `QaV3Test` green (1 line). `QaV3bTest` / `QaV4Test` then fail later ("forge site not placed",
+"barracks site not placed"): they place those sites with real worker Builds, so those calls need an explored anchor
+(filter `FreeAnchor` on `World.Fog.IsExplored(0, cell)` over the footprint for the Build-path calls, or walk or spawn an own
+unit there first). `ProductionHudTest` needs the same for its clicked green anchor, and `M3PlayableTest`'s spot search
+needs to keep to explored cells. That is roughly 5-40 lines across five `game/tests/` files. It is view-track work (the
+sim can't edit `game/`), and a Godot scene can't call the internal `ExploreAllForTests` seam. No product code changes:
+the real placement ghost already refuses `Unexplored` with the view's `placement.unexplored` text.
