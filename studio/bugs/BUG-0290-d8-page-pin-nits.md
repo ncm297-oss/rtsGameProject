@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-09-0125, task D8 |
 | System | content tests (data track): `Content/CounterTriangleMarginsTests.PageProblems` / `Compare`; studio/bugs/BUG-0243 |
-| Fixed by | |
+| Fixed by | D-H1 (data track): `Compare` reports a header mismatch with the columns the page lacks / adds and still compares the rows on the shared columns, matched by name; only a page without a row-key column leaves the rows unchecked, and says so. Regressions `CounterTriangleMarginsTests.BUG0290_AHeaderMismatch_StillReportsTheStaleCells` (failed on the early return), `BUG0290_AHeaderWithoutARowKey_SaysTheRowsAreUnchecked`; BUG-0243's D8 note corrected |
 
 ## Repro
 1. In a scratch clone of the D8 tree, put the pre-D8 page back:
@@ -31,3 +31,14 @@ and convenience only.
 - Also cosmetic: a mutated key cell (the siege unit, "Winner v loser" or the seat) is reported as "0 page rows,
   expected 1" plus "page row ... is not a row the harness prints", not by column. That is reasonable for a key, noted
   only so nobody expects a column name there.
+
+## D-H1 fix (2026-10-09)
+- `Compare` maps each printed column to the page's column of the same name. A differing header is one problem
+  ("header '...' vs printed '...'; page lacks 'Winner hp left'; rows compared on the shared columns"), and every row is
+  still compared on the columns both have, so a stale cell is named by pair, seat and column in the same run. If the page
+  lacks a column that names a row ("Winner v loser", "Winner seat", the siege unit), the problem ends "rows not checked
+  (the page lacks the row key '...')" and the rows are skipped.
+- Scratch run with the real pre-D8 page (`git show 1a9925b:docs/factions/malazan.md`, restored after):
+  `EveryPrintedRow_EqualsItsPageRow(malazan)` now lists two problems, the header (page lacks 'Winner hp left') and
+  `Wickan Lancer v Desert Archer seat 1, column 'Time to last death': page '21.5 s' vs sim '22.0 s'`.
+- The Notes item (a mutated key cell reads as "0 page rows" plus "not a row the harness prints") is unchanged, as noted.
