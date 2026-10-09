@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (`main` has a red Godot scene test; it blocks the view branch's merge) |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-08-0913, integration (the conductor's post-merge scene loop; reproduced on `main` at 941a35a with no view code) |
 | System | view scene test `game/tests/MinimapTest.cs` (M2-4) on top of sim M4-2b (`CanFight` = attack > 0, projectiles); filed by the Producer |
-| Fixed by | |
+| Fixed by | M4-V3 a1ccd91 (view track, session 2026-10-08-1814): `MinimapTest` launches with `--no-combat`, launch arguments only, every `Check` unchanged. Cause confirmed by the view QA with a tick trace: slot 0 was hit by player 1's arrows at ticks 38-54 (hp 51 -> 0) and died, killer owner 1; no sim regression. Scene loop 33 / 33 on the branch and on the sim + view scratch merge |
 
 ## Repro
 1. On `main` at 941a35a (sim M4-2b merged): `powershell -File tools/qa/scene-loop.ps1` → 30 / 31, `MinimapTest` FAIL:

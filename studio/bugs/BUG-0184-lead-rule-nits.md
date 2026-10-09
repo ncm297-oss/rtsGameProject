@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open (item 1 fixed) |
 | Found | 2026-10-08-0913, task M4-2b QA re-check round 1 (sim track, QA full) |
 | System | sim: `ProjectileSystem.Lead` / `Track` (BUG-0183 lead rule); a note for the view track |
-| Fixed by | |
+| Fixed by | Item 1: M4-3a 977db1d (`ProjectileSystem.WithinLead`, 1e-4 relative slack; `Lead_AStepOfExactlyTheLeadSpeed_IsLedInEveryHeading` un-skipped and green). Item 2 (the re-led bolt's 1.8 m step) is a view note: M4-V3 interpolates and never extrapolates, so it is handled on the drawing side; stays open as a sim nit |
 
 ## Repro
 1. **The boundary.** Run `QA/ProjectileLeadQaTests.Lead_AStepOfExactlyTheLeadSpeed_IsLedInEveryHeading`, which is
@@ -41,3 +41,8 @@
   stepped this tick".
 - **Item 2** is a note for M4-V3 (projectile views). It is not a sim change: interpolating `PrevPosition` to `Position`
   already draws whatever the sim does.
+
+## QA note (2026-10-08-1435, M4-3a)
+Item 1 (the boundary) is fixed in 977db1d: `ProjectileSystem.WithinLead` tests the step against the lead speed with a
+1e-4 relative slack, and `QA/ProjectileLeadQaTests.Lead_AStepOfExactlyTheLeadSpeed_IsLedInEveryHeading` is un-skipped
+and passes (QA ran it). Item 2 (a re-led bolt's step, the view's interpolation note) is unchanged; the bug stays open for it.

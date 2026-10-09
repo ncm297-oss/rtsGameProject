@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-08-0913, task D5 |
 | System | content tests (`sim/Rts.Sim.Tests/Content/TechContentTests.cs` G, `UnitContentTests.cs` C) |
-| Fixed by | |
+| Fixed by | D6 9e73f49 (data track, session 2026-10-08-1814): `TechContentTests.G` pins the trailing clause (`AgeClause`: n halls, or n - 1 halls and the Forge, against `age_ii.requiresAnyOf`; QA's `AgesRuleQaTests` row kept as the independent oracle); `UnitContentTests.C` reads "written out although it is the default (style rule ...)" for an explicit `"targets": "all"`. Residual: an appended contradicting sentence after the clause still passes (BUG-0230 item 1, S4) |
 
 ## Repro
 Scratch clone of 3f70d8c, one edit at a time, then `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~Content"`:
