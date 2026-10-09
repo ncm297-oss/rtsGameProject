@@ -250,6 +250,8 @@ every tick and can modify vision. Darkness (Andii) and Sandstorm (Whirlwind) are
   buildings shown, darkened), **visible** (everything shown).
 - Vision is circular from each unit and building (sight radius). No line-of-sight blocking by
   terrain in v1.
+- Buildings see 12 m unless their row in "Buildings" says otherwise (`buildingSight` in
+  `rules.json`); the Watch Tower sees 24 m. The faction pages list each building's sight.
 - Enemy buildings seen once stay visible as "last known" ghosts in explored fog until the cell is
   seen again.
 - Vision modifiers: Darkness and Sandstorm zones hide their contents from enemies outside them

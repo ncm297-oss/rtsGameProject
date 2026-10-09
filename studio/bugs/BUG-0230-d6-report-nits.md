@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open (items 1 and 3 fixed in D7; item 2 is the sim track's, D8 switches the copy) |
 | Found | 2026-10-08-1435, task D6 |
 | System | content tests (data track), docs/factions pages |
-| Fixed by | |
+| Fixed by | item 1: D7 anchors `TechContentTests.AgeClause` to the end of its bullet (all eight mutants of Repro 1 fail G). item 3: D7 gives `docs/factions/whirlwind.md` "Balance baseline" a separate siege table like the Malazan page's (numbers unchanged). item 2: open |
 
 ## Repro
 1. **Ages clause, surviving mutant.** In a scratch clone, change docs/02 line 115 to
@@ -36,3 +36,20 @@ As in Repro.
 ## Notes
 None of these change a number or a shipped rule. Item 2 is a request for the sim track (make `Fight` / `TimeToKill`
 public or move them to `CombatScenes`), not a data-track fix.
+
+## D7 update (2026-10-08)
+- **Item 1 fixed.** `TechContentTests.AgeClause` now requires the clause to end its bullet (only the next "- " bullet or
+  the end of the "### Ages" section may follow). Mutant results against `TechContentTests.G` (and QA's
+  `AgesRuleQaTests`): appended "Or the Forge alone." fails G (QA's row still passes it; QA's oracle was not touched);
+  "three production halls, or two halls and the Forge", "two production halls, or the Forge alone", "two production
+  halls, or two halls and the Forge", "two Barracks, or one Barracks and the Forge", "one production hall, or one hall
+  and the Forge", "..., or one hall and the Forge, or the Forge alone." and "three production halls, or the Forge alone."
+  all fail both.
+- **Item 3 fixed.** The Whirlwind page's Battering Ram row is in its own "Siege beats buildings" table with the Malazan
+  page's columns (Siege unit | Same cost of line infantry | Building | Siege time | Line time | Siege / line); numbers
+  unchanged (13.8 s, 254.5 s, 5 %).
+- **Item 2 happened.** On the D7 base (the M4-3a fog branch with main merged), the copy went red: M4-3a added a spotter
+  to `Scenario/CounterTriangleTests.TimeToKill` (the fog drops an Attack on an unseen building) and the copy did not
+  follow, so both siege rows printed "not done" and `CounterTriangleMarginsTests` failed. D7 mirrors the one spotter
+  line into the copy (public `CombatScenes.Spotter` / `At`); every printed row, group and siege, is again identical to
+  the pages. The item stays open until D8 switches the copy to the sim's shared helper.

@@ -101,6 +101,9 @@ public class CounterTriangleMarginsTests
         Simulation sim = Flat(size: 48, units: n + 4);
         World w = sim.World;
         Assert.True(w.Buildings.Spawn(1, data.FindBuilding(buildingKey), 24 * w.NavGrid.Width + 24, out EntityHandle b));
+        // M4-3a, as in the scenario: the attackers start out of sight of the building (the fog would drop their Attack),
+        // so a spotter stands on its far side.
+        Spotter(sim, 0, At(sim, 24 + data.Buildings[data.FindBuilding(buildingKey)].FootprintWidth + 3, 24));
         int type = data.FindUnit(attackerKey);
         for (int k = 0; k < n; k++)
         {
