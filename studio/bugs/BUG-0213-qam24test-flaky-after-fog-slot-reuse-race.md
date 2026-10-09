@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-08-1435, task M4-3a |
 | System | view test scene (`game/tests/QaM24Test.cs`, view-owned) vs sim combat under fog |
-| Fixed by | |
+| Fixed by | M4-V3 fix round 1, e1f3333 (view track): `--no-combat` in `QaM24Test`'s `--units 1000` launch list, every `Check` unchanged. Verified by the view QA on a sim + view scratch merge (2026-10-08-1814: 8 / 8 quiet, 6 / 6 under load) and by the 33 / 33 merge loop |
 
 ## Repro
 1. Sim branch 977db1d: `powershell -File tools/qa/scene-loop.ps1 -Filter QaM24Test -SkipPlayable`, 12 runs alone:

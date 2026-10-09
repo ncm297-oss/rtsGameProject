@@ -4,38 +4,37 @@ The dashboard. The Producer rewrites it at the end of every session. **Owner: re
 you" first.** "For your review" (further down) is non-blocking: what the studio built or decided
 on its own, explained in terms of what you'd see in the game.
 
-_Last updated: 2026-10-08 (session 2026-10-08-0913, integration update): **every unit fights now**: arrows, bolts, magic bolts, catapult stones and sharpers fly, miss, splash and hurt your own side (sim, M4-2b, on `main`); the faction pages pin what each unit may target (data, D5, on `main`). **Right-click an enemy to attack it** (view, M4-V2) is accepted but **held on its branch one session**: M4-2b turned one old 2,000-unit test scene red on `main` (BUG-0210: archers now shoot, so one of 40 walkers is gone after 3 s); the view fixes that scene first next session and merges. M4 is at 5 / 10. One decision to review: shots at walking foot units **lead** the target (the M4-2b entry). Your art-direction note is processed (inbox)._
+_Last updated: 2026-10-08 (session 2026-10-08-1814, the resumption of 1435): **fog of war is in the rules** (sim, M4-3a: each side sees only what its units and buildings see, low ground can't see up, a shot from a hill reveals the shooter for 2 s; nothing drawn yet, the shader is the view's next feature); **you can see the arrows, bolts and catapult stones fly** and the held right-click attack is on `main` (view, M4-V3 + M4-V2); **the first balance report** with a proposed target margin for you to decide (data, D6). M4 stays 5 / 10 (the fog criterion is half done). Next session: clean-up for sim and view, the towers' sight on the pages for data. Two things to review: the balance proposal (D6 entry) and a process note (the 3-hour session lock)._
 
 ## Waiting on you
 
-- **Nothing blocking.** For your information (the escalate rule asks me to list it): `main` has one red Godot scene test
-  (`MinimapTest`, BUG-0210, S2) since M4-2b merged; build, sim tests and the boot check are green. The view's accepted
-  M4-V2 work waits on its branch (`origin/studio/2026-10-08-0913-view`) and merges after the view's next session fixes
-  the scene (a one-line `--no-combat`, as for the five M2 scenes in M4-V1). No action needed unless you'd rather I hold
-  the sim track too; say so in the inbox.
-- **Wanted, not blocking:** play the M3 base (ten minutes, instructions in the M3-V3 entry
-  under For your review), watch a fight with archers and catapults in it and try the right-click attack (two minutes,
-  the M4-2b and M4-V2 entries); write what felt wrong in the inbox.
+- **Nothing blocking.** `main` is green again once this session's three branches merge (the red `MinimapTest` of BUG-0210 is
+  fixed). The studio continues on its own.
+- **Wanted, not blocking:** (1) your answer on the **balance proposal** (the D6 entry under For your review: a target band
+  and the Line-beats-Shock margin; the data track changes no number until you say); (2) the **session-lock window** (the
+  process note under For your review: refresh the lock each step or widen it to ~5 h, in your routine file); (3) play the M3
+  base (ten minutes, the M3-V3 entry), watch a fight with the shots now visible and try the right-click attack (two minutes,
+  the M4-V3 and M4-V2 entries); write what felt wrong in the inbox.
 
 ## Now
 
 | Field | Value |
 | --- | --- |
-| Sim: milestone | **M4 combat, 5 / 10**: M4-1 melee, M4-2a (`Attack(target)`, `attack.targets`), **M4-2b** (projectiles with misses and a lead rule, splash with falloff, friendly fire, minimum range, every unit fights, the counter-triangle rows, BUG-0156) on `main`; criteria 1, 2, 3, 4 and the counter-triangle rows ticked |
-| Sim: next task | **M4-3, first slice**: three-state fog per player + the high-ground vision rule + read-only visibility spans for the view (towers' attack / sight / detector fields second if it fits); BUG-0184 item 1 and one doc comment folded in · feature (the 4th: hardening next) · QA full · **new rule: sim QA runs `tools/qa/scene-loop.ps1` whenever a sim change alters unit behaviour (BUG-0210)** |
+| Sim: milestone | **M4 combat, 5 / 10**: M4-1 melee, M4-2a (`Attack(target)`), M4-2b (projectiles, splash, friendly fire, the counter-triangle rows) and **M4-3a** (three-state fog per player, the high-ground rule, vision-gated targeting, the 2 s high-ground reveal, buildings' `sight`, the view's read-only fog surface) on `main` after this integration; criterion 5's sim half annotated in docs/05, its shader / ghosts owed |
+| Sim: next task | **M4-H1, the sim's hardening session (4 / 4)**: BUG-0215 (hash the visible bits: Producer decision), BUG-0211 (re-record the seed-21 replay), BUG-0216, BUG-0230 item 2 (public counter-triangle helpers), then BUG-0149 / 0144 / 0157 / 0134 / 0158 / 0113 / 0094 / 0153 / 0142 as they fit · hardening · QA standard · then M4-3b (towers shoot, the ghost list, placement on explored ground) |
 | Sim: gate | **GO** |
-| View: milestone | **M4 views**: M4-V1 (hp bars, hit flash, corpses / rubble, K / L counts) on `main`; **M4-V2** (right-click / A + click on an enemy = Attack, red target ring, "Pursuing" panel label, F12 target slot, BUG-0160 fixed) **accepted, held on `origin/studio/2026-10-08-0913-view`** (ESCALATE at integration: `main` itself fails `MinimapTest` since M4-2b, BUG-0210) |
-| View: next task | **BUG-0210 first** (MinimapTest with `--no-combat` as BUG-0147, confirm the cause; merge `main` into the branch, scene loop 31 / 31, the conductor merges), **then M4-V3**: projectile visuals from `World.Projectiles` / `World.Impacts` (pooled, interpolated; arcs for lobs; impact / miss marks), BUG-0190 item 2 folded in · feature (the 4th: hardening next) · QA standard |
+| View: milestone | **M4 views**: M4-V1 (hp bars, flashes, corpses, K / L), **M4-V2** (right-click / A + click = Attack, red ring, "Pursuing") and **M4-V3** (aimed streaks, lob stones on an arc, hit / miss / burst marks; BUG-0210 / 0190 fixed; the Attack-order scenes stage seen targets) on `main` after this integration |
+| View: next task | **M4-VH1, the view's hardening session (4 / 4)**: BUG-0220 (SfxTest flake under load), BUG-0226 (corpse disc near a ramp's foot + scene nits), BUG-0222 (projectile nits), BUG-0190 status, BUG-0148 / 0126 leftovers, export hygiene · hardening · QA standard · then M4-V4 (the fog shader from `World.Fog`, unit hiding, the minimap's fog layer and Attack half) |
 | View: gate | **GO** |
-| Data: milestone | M3 Done (D1-D4); **D5** (`attack.targets` pinned to the pages, docs/02 "Ages" wording + parser, BUG-0155) on `main`; M4 data waits on schemas: towers (M4-3), abilities (M4-4) |
-| Data: next task | **D6**: BUG-0200, the first counter-triangle balance report (Line beats Shock 14-15 of 16 surviving: propose margins for the owner, no number change without a For your review table), the Sapper self-splash note (BUG-0182 item 2) · feature · QA light |
+| Data: milestone | M3 Done (D1-D4); D5 (targets pinned) and **D6** (the balance baseline on both pages, the Sapper self-splash numbers, BUG-0200) on `main` after this integration; M4 data: the towers' `sight` schema is on `main` now (M4-3a), abilities wait for M4-4 |
+| Data: next task | **D7**: a Sight column on both pages' Buildings tables pinned to the data (towers 24 m, the rest 12 m), BUG-0230 items 1 and 3; the owner's inbox answer on the balance proposal comes first if present · feature · QA light |
 | Data: gate | **GO** |
 | Tools on this PC | Godot 4.7.2 .NET, .NET SDK 8.0.425, Git 2.53 + LFS 3.7; `GODOT` user variable set |
-| Build | All three session branches build with 0 warnings; smoke PASS on the sim (tick 85) and view (tick 86) branches (the data branch touches no `game/` file). **Integration:** sim merged to `main` (941a35a, after two docs-only owner merges: non-Perf 3,848 / 12 / 0, 0 warnings); view merged `main` into its branch (build 0 warnings, non-Perf 3,870 / 12 / 0, smoke PASS) but the scene loop is **30 / 31: `MinimapTest` fails on `main` itself** (BUG-0210, S2) → view **held on its branch**; data merges after the sim (no `game/` code). Golden: the sim regenerated twice for `data-hash` (`projectiles.json`, then `leadSpeed`), every `k` line identical both times |
-| Tests | QA: sim non-Perf 3,816 / 3,827 clean clone and 3,848 / 3,860 (12 skipped, each a filed bug) / 0 failed, all 87 Perf methods green alone on the first run (`TightBlob2500` 4.54 of 4.6 ms); view non-Perf 3,659 / 3,670 / 0 + 12 QA rows, scene loop 31 / 31, view Perf 11 / 11 alone; data content filter 124 / 124 + a 21-mutation sweep. Producer reruns (sim and view suites at once, ~16 min each): **sim 3,848 / 3,860 (12 skipped) / 0 failed; view 3,671 / 3,682 (11 skipped) / 0 failed; data filter 210 / 210**; sim Perf rows alone: `MixedBrawl500v500`, `ThousandProjectilesInFlight`, `TightBlob2500_OnePlayer` all PASS; the Perf category in one process still fails 8-9 wall-clock rows on base and head alike (machine load, BUG-0158: a Perf failure counts only alone) |
-| Open bugs | **30** (S1: 0, **S2: 1: BUG-0210**, S3: 13, S4: 16). **New at integration: BUG-0210 (S2, filed by the Producer): `MinimapTest.tscn` red on `main` since M4-2b (a pre-combat 2,000-unit scene; archers now shoot); view fixes it first next session.** Fixed this session: BUG-0156 (S3), **BUG-0183 (S2, filed and fixed in-session: walkers dodged every shot past 5 m)**, BUG-0180 / 0181 (S3, filed and fixed in-session), BUG-0182 item 1 (sim); BUG-0160 (S4, view); BUG-0155 (S4, data). New open, all S4: BUG-0182 item 2 (sim data note: Sappers splash themselves in melee), BUG-0184 (sim: lead-rule rounding at exactly 5 m/s; a re-led bolt can step 1.8 m in a tick), BUG-0190 (view: corpse discs half-buried on a ramp edge; a NaN entry edge in `ResolveEnemy`), BUG-0200 (data: a docs/02 clause was unpinned, QA row added; a misleading test message) |
-| Sessions today | 2 / 8 on 2026-10-08. Feature sessions since last hardening: sim 3 / 4, view 3 / 4, data 1 / 4 |
-| Last session | 2026-10-08-0913 · sim M4-2b (1 fix round, ACCEPT, on `main`; the lead rule accepted as a Producer decision) · view M4-V2 (0 fix rounds, **ACCEPT then ESCALATE at integration**: `main` red on `MinimapTest`, BUG-0210; branch kept) · data D5 (0 fix rounds, ACCEPT) · M4 5 / 10 |
+| Build | All three session branches build with 0 warnings; smoke PASS on the sim (tick 85) and view (tick 85) branches; the data branch touches no `game/` file. **Integration (Producer's scratch merge, view @ ea9e1dd + sim @ a27757c):** build 0 errors, smoke PASS, the five integration-sensitive scenes green, fog tests green in the merged build; QA's independent merge: scene loop **33 / 33**. Merge order **view, sim, data** (every intermediate `main` green), **after** the view's one-line precondition (QA's `MaxUnderEdgeWalkQaTests` allocation row into the Serial collection; `SerialCollectionTests` green). Golden: regenerated once for M4-3a (`data-hash` + the hashed fog; every `k` line equal with the fog excluded locally) |
+| Tests | QA: sim non-Perf 3,927 / 3,940 (13 skipped, each a filed bug) / 0 failed, Perf alone 139 / 3 skipped, fog rows alone `Fog2500OnePlayer` 0.064-0.068 ms and `Fog1000v1000` 0.086-0.093 ms at 0 B, `TightBlob2500` 4.49 ms quiet; view non-Perf 3,910 / 3,923 (13 skipped) / 0, view Perf 11 / 11, scene loop 33 / 33 on the branch and on the merge; data content filter 138 / 138. Producer reruns (sim and view suites at once): **sim 3,927 / 3,940 (13 skipped) / 0 failed (14 m 16 s); view 3,926 / 3,941 (14 skipped) / 1 failed (13 m 45 s: `SerialCollectionTests` trips on QA's own record file `MaxUnderEdgeWalkQaTests.cs`, added after QA's green full run; a one-attribute QA-owned fix is the view's merge precondition); data content filter 138 / 138**; the Perf category under three tracks' load fails 3-9 wall-clock rows on base and head alike (BUG-0158: a Perf failure counts only alone) |
+| Open bugs | **33** (S1: 0, **S2: 0**, S3: 15, S4: 18). **Fixed this session:** BUG-0210 (S2, the red `MinimapTest`: the slot was shot dead, no sim regression), BUG-0212 / 0213 / 0218 (S2, view scenes vs the fog: `--no-combat` or staged-in-sight targets), BUG-0214 (S2, the 1024-map memory bound re-baselined with the fog's 2.4 MB itemised), BUG-0217 / 0221 / 0223 / 0224 (S3), BUG-0225 / 0200 (S4), BUG-0184 item 1, BUG-0190 both items (file on the view branch still reads open). **New open:** BUG-0211 (S3, sim: re-record a test replay), BUG-0215 (S3, sim: the fog's visible bits are state, not derived: hash them next), BUG-0220 (S3, view: an old sound scene flakes when the PC is busy), BUG-0216 (S4, sim nits), BUG-0222 / 0226 (S4, view nits), BUG-0230 (S4, data nits) |
+| Sessions today | 3 / 8 on 2026-10-08 (0313, 0913, 1814; the 1435 session was resumed as 1814). Feature sessions since last hardening: **sim 4 / 4, view 4 / 4**, data 2 / 4 |
+| Last session | 2026-10-08-1814 (resumed 1435) · sim M4-3a (1 fix round, ACCEPT) · view M4-V3 + the held M4-V2 (2 fix rounds, ACCEPT) · data D6 (0 fix rounds, ACCEPT) · M4 5 / 10, criterion 5 half done · merge order view, sim, data |
 
 ## Milestone progress
 
@@ -45,7 +44,7 @@ _Last updated: 2026-10-08 (session 2026-10-08-0913, integration update): **every
 | M1 (sim track) | 8 / 8 | **Done** 2026-10-06 (Producer sign-off after the M1-9 hardening; retro in docs/05) |
 | M2 (view track) | 10 / 10 | **Done** 2026-10-07 (Producer sign-off after the M2-H2 hardening; retro in docs/05; your playtest under For your review is feedback, not a gate) |
 | M3 (all three tracks) | 8 / 8 | **Done** 2026-10-08 (Producer sign-off after every track's hardening and the BUG-0146 fix; retro in docs/05; open S3 / S4 listed there; your ten-minute playtest is still wanted as feedback) |
-| M4 (sim + view + data) | **5 / 10** (1 attack / attack-move / chase / retaliation / priorities, sim + view; 2 damage formula; 3 projectiles / splash / friendly fire; 4 death, corpses, rubble; the counter-triangle rows). Next: 5 fog + high ground + fog shader + building ghosts (M4-3), 6 abilities (M4-4), 7 stealth (M4-5), 8 the four signature abilities, 10 the fog-on sandbox Playable. Hardening per track after one more feature session | In progress |
+| M4 (sim + view + data) | **5 / 10** (1 attack / attack-move / chase / retaliation / priorities, sim + view; 2 damage formula; 3 projectiles / splash / friendly fire; 4 death, corpses, rubble; the counter-triangle rows). **5 fog: sim half done (M4-3a)**, owed: the fog shader + unit hiding + minimap fog (view M4-V4), the ghost list + shooting towers (sim M4-3b). Then 6 abilities (M4-4), 7 stealth (M4-5), 8 the four signature abilities, 10 the fog-on sandbox Playable. Next session: hardening for sim and view | In progress |
 | M5-M9 | — | Planned |
 
 ## For your review
@@ -53,6 +52,119 @@ _Last updated: 2026-10-08 (session 2026-10-08-0913, integration update): **every
 Non-blocking. Each entry says what was built or decided, what you'd notice in the game, and how
 to change it. To change anything, write it in `studio/inbox.md`, for example "use formations
 instead of clusters" or "make giving up take 2 seconds".
+
+### Fog of war is in the rules: each side sees only what its own units and buildings see, high ground sees down but low ground can't see up, and a shot from a hill briefly gives the shooter away (sim track, M4-3a, 2026-10-08)
+
+- **What was built:** the first half of fog of war, in the rules only (nothing is drawn yet: the darkened map is the view's
+  next feature after its clean-up). Every player has a map of what it has **never seen** (black later), has **seen before**
+  (darkened later) and **sees now**, refreshed five times a second from every one of its units and buildings (a building
+  under construction looks around too). Each unit sees a circle of its sight range (10-18 m by type); a building sees **12 m**
+  and the **Watch Tower / Lookout Tower 24 m**. **High ground:** a unit sees everything on its own level and below, but
+  nothing on a higher plateau unless it is within 4 m of it (you see the lip of the cliff you stand under); a unit on a ramp
+  counts as standing on the lower level. **Fighting uses it:** a unit only picks, chases or fires back at enemies its side can
+  see, and an attack order on something nobody on your side can see is dropped; an attacker hitting from higher ground is
+  **revealed to the victim's side for 2 seconds** after every hit, so the low side can shoot back or run. Everything the view
+  will need (the per-player map, a change counter, "can this player see that unit") is ready and read-only.
+- **What you'll see in the game:** nothing new on screen yet (the map still draws everything until the fog shader lands), but
+  the behaviour has changed: units at the foot of a plateau ignore archers on top until those archers shoot, then they have
+  two seconds to fire back; a lone unit sent to attack something far off that none of your units or buildings can see just
+  stays put (the order is dropped); scouting matters once the shader hides what you can't see.
+- **Producer decisions, revisit any time:**
+  - *A building with no sight of its own sees 12 m* (the design doc only gives the towers' 24 m). The number is
+    `buildingSight` in `game/data/common/rules.json`.
+  - *A building under construction sees too* (so you can watch your site being attacked). Alternative: only finished buildings.
+  - *The reveal is keyed on where the attacker fired from* (a catapult that shoots from a hill and walks down is still revealed
+    where it is). Alternative: where it stands when the hit lands.
+  - *Every player's fog refreshes on the same tick, every 4 ticks* (builder's choice; it could be spread across ticks later).
+  - *One-level fights play exactly as before:* a unit always counts what its own sight circle covers right now, besides its
+    side's map, so nothing changed on flat ground (the counter-triangle results are byte-identical).
+  - *Changed after QA (BUG-0215):* I had asked for the "sees now" map to be rebuilt from scratch rather than saved; QA proved
+    that between two refreshes it depends on where units *were*, which a save file wouldn't know. The sim's clean-up session
+    next makes it part of the saved state (a few bytes per 64 map cells). Alternative: only allow saving right after a refresh.
+  - *Size: ~760 rule lines (budget ~800-1,000 for a new system), ~1,450 dev test lines, ~650 QA test lines, ~115 doc lines; one
+    fix round (a memory bound re-baselined with the fog's 2.4 MB written down; the targeting check reordered so big fights on
+    hills cost less than before the fog).*
+- **Rough edges:** **BUG-0215 (S3, above; fixed next session).** **BUG-0211 (S3):** one test replay recorded before the fog can
+  no longer prove its first 19 ticks (the fog is now part of the fingerprint); it is re-recorded next session. **BUG-0216
+  (S4):** a 64 m sight on a tiny test map misses a few cells (nothing shipped comes near 64 m); a Catapult told to hold position
+  no longer shoots things between 18 m (its sight) and 26 m (its reach) unless something else of yours sees them (the rule
+  working as designed; the docs said otherwise and will be corrected); once the shader exists, a unit may start shooting a
+  target the screen still hides for up to a fifth of a second (the screen refreshes every 4 ticks, combat looks every tick).
+- **To change it:** `buildingSight` in `game/data/common/rules.json`; `sight` per unit and per building in
+  `game/data/factions/<faction>/units.json` / `buildings.json` (any building may carry one); the 4 m lip, the 2 s reveal and
+  the 4-tick refresh are rule constants (`VisionConstants`), by inbox note.
+
+### You can see the arrows, bolts and catapult stones now, and the right-click attack from last session is on `main` (view track, M4-V3 with M4-V2 landed, 2026-10-08)
+
+- **What was built:** the shots the sim has been flying since M4-2b are drawn: an aimed shot (bolt, arrow, magic bolt) is a
+  short **light streak** in a pale shade of its owner's colour flying at chest height along its path; a **catapult stone or
+  sharper** is a small dark **stone on an arc** (its peak a quarter of the throw's length, between 1 and 6 m). Where a shot
+  lands: a **yellow flash** on a hit (0.2 s), a **dust puff** on a miss (0.3 s), an **orange burst** for a stone or sharper
+  (0.4 s, sized by its splash). Also fixed: `main`'s one red test scene (BUG-0210: the view QA proved the "missing" walker
+  had been shot dead by arrows, so the pre-combat scene now runs with combat off like the five before it), and the corpse
+  discs that were half-buried on ramps now sit on the highest ground under their rim (BUG-0190). And the accepted
+  **right-click attack** from the M4-V2 entry below is on `main` with this.
+- **Try it (two minutes):** `& $env:GODOT --path game`, box-select the grey army, press **A** and click the orange army. Pale
+  streaks fly from the crossbowmen at the back, stones arc from the catapults and burst orange where they land, yellow
+  flashes pop on units being hit. Right-click one orange soldier: the red ring and "Pursuing" from M4-V2.
+- **Producer decisions, revisit any time:**
+  - *Placeholder looks until the M6 art pass:* streak 1.2 m long at 1.2 m up, stone radius 0.28 m, mark colours and the arc
+    curve are constants in `game/scripts/ProjectileViews.cs` and `ProjectileTracker` / `ImpactMarks` (in `sim/Rts.Sim/ViewApi/`).
+  - *Marks live in game time* (8x speed shortens them) and at most 512 are kept, the oldest replaced.
+  - *A stone that lands "slides" its last 0.6 m along the ground* and vanishes just short of its burst (BUG-0222, S4): barely
+    visible at normal zoom; a note for the M6 projectile pass.
+  - *The studio's attack-order test scenes now stage their targets within sight* (a consequence of the fog rule, not a visual
+    change: an attack on an unseen enemy is dropped).
+  - *Size: ~305 game-code lines, ~457 view-helper lines, ~1,100 dev test lines, ~1,070 QA test lines, ~105 doc lines; two fix
+    rounds (a mark could be drawn fully transparent at 8x on a slow frame; corpse discs floated 4 m beside a cliff, then
+    2 m beside a ramp's side wall: both fixed).*
+- **Rough edges (next view clean-up):** **BUG-0226 (S4):** a corpse disc on low ground right beside a ramp's side wall, near
+  the ramp's foot, can still float up to half a metre; two of the attack-order test scene's rows check a little less than
+  their text says. **BUG-0222 (S4):** the slide above; two technical edges not reachable in play. **BUG-0220 (S3):** an old
+  sound test fails when the PC is busy with something else (it passes 8 / 8 when quiet); nothing in the game.
+- **To change it:** the constants above; the `--no-combat` scene list is in docs/03; the rest by inbox note.
+
+### The first balance report: how wide each counter wins, a proposed target for you to decide, and the Sapper's self-splash measured (data track, D6, 2026-10-08)
+
+- **What happened:** the data track measured the eight counter-triangle fights from the sim's tests (equal cost, both seats,
+  flat ground, no upgrades or abilities) and wrote the table into both faction pages ("Balance baseline"). **How much of its
+  cost the winner keeps:** Heavy Infantry v Horse Raider **88-94 %**, Raider v Wickan Lancer **95-100 %** (Line beats Shock);
+  Wickan Lancer v Desert Archer 70-80 %, Horse Raider v Crossbowman 69-77 % (Shock beats Ranged); Crossbowman v Priest
+  67-87 %, Desert Archer v Cadre Mage 72-89 % (Ranged beats casters); a Catapult kills a Tent in 9 % of the time the same cost
+  of Heavy Infantry needs, a Battering Ram a Billet in 5 %. **The Sapper's self-splash (BUG-0182 item 2):** 4 Sappers behind
+  4 Heavy Infantry against 8 Horse Raiders throw 15 sharpers, wound their own side for 41 hit points in total (9 of them the
+  thrower itself), kill nobody of their own, and the riders are wiped out while all four Sappers die to them anyway. A 2 m
+  minimum range makes it worse (61 points); a 1 m splash removes it but the fight goes worse (fewer survivors). Four Sappers
+  alone lose to the riders in every variant.
+- **Your call (non-blocking; nothing changes until you answer):**
+  1. **The target band.** The data track proposes: *the winner keeps 40-65 % of its cost, in both seats, seats within 15
+     points.* Below ~40 % one upgrade level can flip the fight; above ~65 % the loser trades away almost nothing, so the counter
+     is decided at build time instead of in the fight. **Every pair is above the band today**; Line v Shock (88-100 %) is the
+     outlier. Casters fight without their abilities until M4-4, so those rows should be re-measured then before tuning.
+  2. **Line v Shock.** If you want it narrowed, say roughly how much (for example "aim for 60 %"); the data track then proposes
+     exact numbers (a Horse Raider or Wickan Lancer hp / attack nudge, or a Heavy Infantry cost nudge) in a table here before
+     shipping. Or "leave balance until the fog-on sandbox" and it waits.
+  3. **The Sapper.** Recommendation: **keep it** (the self-splash is small next to what the riders do; "Fragile; wants an
+     escort" is the intended trade-off). Alternatives: a 2 m minimum range or a 1 m splash.
+- **Change table: nothing numeric changed; no name or description changed; no data file changed; the replay fingerprint did
+  not move.** Also fixed: BUG-0200 (the design doc's Age II clause is now pinned by the dev's own test; a misleading test
+  message reworded).
+- **Rough edges (BUG-0230, S4, next data task):** a contradicting sentence appended after the Age II clause would still pass
+  the test; the balance table's fight harness is a copy of the sim test's (the sim makes it shared next session); the
+  Whirlwind page's siege row uses the wrong column.
+- **To change it:** an inbox line ("balance band 40-65 ok, narrow Line v Shock to about 60 %", "Sapper: keep"), then the data
+  track's next task is the tweak with a table here; the measured scene is `Scenario/CounterTriangleTests`.
+
+### Process note: the 3-hour session lock declared a live session dead, again (studio, 2026-10-08)
+
+- The 14:35 session's builds and QA ran long under three tracks' load (the sim build alone took 1 h 52 min), so at 18:14 its
+  lock was over three hours old and the next session took over, as the routine says. The old session noticed, stopped
+  cleanly and left a note; nothing was lost (this session resumed every track from the committed work and finished it). It is
+  the second time (the first was 2026-10-07-2014).
+- **Suggestion for your routine file (not mine to change):** have a session refresh the lock's time at each step, or widen the
+  window to about 5 hours; and have a resume check for running studio processes before taking over. The old conductor's note
+  is an uncommitted file in your checkout (`studio/sessions/2026-10-08-1435-incident.md`); its content is in this session's
+  log, so you can delete it.
 
 ### Arrows, bolts and catapult stones fly now: every unit of both factions fights, shots can miss, splash hurts your own side, and the counter triangle is proven in tests (sim track, M4-2b, 2026-10-08)
 
@@ -105,7 +217,8 @@ instead of clusters" or "make giving up take 2 seconds".
   splash, or leave it). **BUG-0184 (S4):** a unit walking at exactly 5.0 m/s is led on 93 % of its steps (float rounding;
   no shipped unit walks at exactly 5), and a re-aimed bolt can jump 1.8 m in one tick instead of 1.25 (a note for the
   view's projectile drawing). **A balance note:** Line beats Shock by a very wide margin (14-15 of 16 Heavy Infantry
-  survive a same-cost Horse Raider charge); the data track's balance report is next.
+  survive a same-cost Horse Raider charge); the data track's balance report is next. **Update 1814: BUG-0184's rounding edge
+  is fixed (M4-3a); the Sapper numbers and the margins are in the D6 entry near the top.**
 - **To change it:** speeds, the hit tolerance and the lead speed in `game/data/common/projectiles.json`; each unit's
   splash radius, friendly-fire flag, minimum range and projectile in `game/data/factions/<faction>/units.json`; the splash
   falloff (40 % / 50 %) and the friendly-fire 50 % are rule constants (`CombatConstants`), the rest by inbox note.
@@ -117,7 +230,8 @@ instead of clusters" or "make giving up take 2 seconds".
   on `main` itself, with no view code involved: now that archers shoot, one of 40 walkers is gone 3 s after a minimap
   order (BUG-0210). The branch is kept; the fix is the same one-line "combat off" switch five other old scenes got in
   M4-V1, and it lands first thing in the view's next session, after which this entry's "Try it" works from `main`
-  (today it works from the branch `studio/2026-10-08-0913-view`).
+  (today it works from the branch `studio/2026-10-08-0913-view`). **Update 1814: landed on `main` with M4-V3 (the entry near
+  the top); the "Try it" below works from `main`; BUG-0190 (both rough edges) fixed.**
 - **What was built:** the window half of the attack order from last session. With units selected, a **right-click on an
   enemy unit or building** sends every selected unit to attack *that* target (they chase it anywhere and ignore everything
   else until it dies); **A then a click on an enemy** does the same, A then a click on the ground is still attack-move;
@@ -162,7 +276,7 @@ instead of clusters" or "make giving up take 2 seconds".
 - **Rough edges (BUG-0200, S4, next data task):** the docs/02 clause "two production halls, or one hall and the Forge"
   was not checked by the dev's test (QA's row covers it now); and a test message for an unneeded explicit `"targets":
   "all"` in a data file is misleading. Note: the Shadow page's "Edur Ram: attacks buildings only" has no test until Shadow
-  data exists (M8).
+  data exists (M8). **Update 1814: both fixed in D6 (the entry near the top).**
 - **To change it:** the pages `docs/factions/malazan.md` / `whirlwind.md` and the data together (the tests say which side
   disagrees), or an inbox note.
 
@@ -2083,6 +2197,15 @@ track right after S1/S2 bugs).
     the view draws any arc. BUG-0184 note: a re-led bolt can step up to 1.8 m in one tick (nominal 1.25); interpolate
     `PrevPosition` → `Position`, never extrapolate. Docs/03 "Implementation (M4-2b)", "For the view (M4-V3)". Nothing
     requested yet. Data track: no request (D5 needed no schema; towers wait for M4-3, abilities for M4-4).
+22. Available since M4-3a (session 2026-10-08-1814) for the view's M4-V4: `World.Fog` (`FogStore`, read-only): `Visibility(player)`
+    (`ReadOnlySpan<byte>`, row-major `y * Width + x`, 0 unexplored / 1 explored / 2 visible, changes only on update ticks
+    `tick % 4 == 1`), `Version(player)` (+1 per update: re-upload the texture when it moves), `IsVisible` / `IsExplored(player,
+    cell)`, `CanSeeUnit(player, slot)` (own, cell visible, or revealed by a high-ground hit), `CanSeeBuilding(player, slot)` (any
+    footprint cell visible). Combat also counts a unit's own sight at this tick, so for up to 4 ticks a unit may fire at what
+    `CanSeeUnit` still hides (BUG-0216 item 3). Docs/03 "For the view (M4-V4)". The last-known-buildings ghost list comes with
+    M4-3b. **Data track requests:** (a) BUG-0230 item 2: make `Scenario/CounterTriangleTests`' `Fight` / `TimeToKill` public (or
+    move them to `CombatScenes`) so `Content/CounterTriangleMarginsTests` shares the scene (sim hardening next); (b) the towers'
+    `sight` schema is on `main`: D7 pins it (no request); `attack` / `detector` still wait for M4-3b.
 
 ## Feature queue: sim track (feature sessions, in order)
 
@@ -2095,13 +2218,15 @@ track right after S1/S2 bugs).
 4. ~~M4-2b projectiles / splash / friendly fire / min range + the counter-triangle rows + BUG-0156~~ → **done** (session
    2026-10-08-0913; 1 fix round: the lead rule BUG-0183, BUG-0180 / 0181 / 0182 item 1; BUG-0182 item 2 and BUG-0184 S4
    left; golden `data-hash` moved twice, `k` lines identical).
-5. **Next: M4-3, first slice**, QA full: three-state fog per player (explored bits hashed, visible bits derived every 4
-   ticks), the high-ground vision rule (low ground can't see up; attacking from high ground reveals the attacker 2 s),
-   read-only visibility spans + a version counter for the view's shader; the towers' `attack` / `sight` / `detector`
-   schema (Requests 8b) as a second slice if the first fits. Fold in BUG-0184 item 1 and the `ProjectileImpact.Position`
-   doc comment. Details in `studio/handoff.md`. **Then the sim's hardening session** (4 / 4).
-6. Then M4-3's second slice (towers shoot), M4-4 abilities / statuses / zones (schema → data track), M4-5 stealth /
-   detection, the four signature abilities, the fog-on sandbox Playable.
+5. ~~M4-3a fog of war + the high-ground rule + vision-gated targeting + the reveal + buildings' `sight` + the view surface~~ →
+   **done** (session 2026-10-08-1814, resumed 1435; 1 fix round: BUG-0214 re-baseline, BUG-0217 gate cost; BUG-0184 item 1
+   folded in; golden regenerated once; BUG-0211 / 0215 S3 and BUG-0216 S4 left).
+6. **Next: M4-H1, the sim's hardening session (4 / 4)**, QA standard: BUG-0215 (hash the visible bits, Producer decision),
+   BUG-0211 (re-record the seed-21 replay), BUG-0216 (4 items), BUG-0230 item 2 (public counter-triangle helpers), then the
+   S3 / S4 debt below as it fits; docs drift (the save sentence, the holding Catapult). Details in `studio/handoff.md`.
+7. Then M4-3b (towers' `attack` / `detector` and buildings that shoot, the last-known-buildings ghost list, placement needs
+   explored ground; schema → data D8), M4-4 abilities / statuses / zones (schema → data track), M4-5 stealth / detection,
+   the four signature abilities, the fog-on sandbox Playable.
 4. M6 (far ahead): agents can't download. **Owner note 2026-10-08: the art direction is grounded / realistic
    (Quaternius Universal Base Characters + Modular Outfits + Universal Animation Library 1 / 2, Mixamo packs for gaps;
    KayKit a fallback only; docs/04 and docs/01 updated by the owner), and the packs are already in `asset-sources/`
@@ -2120,14 +2245,15 @@ track right after S1/S2 bugs).
 4. ~~M4-V2 the Attack-target order in the HUD + BUG-0160~~ → **accepted** (session 2026-10-08-0913, 0 fix rounds; BUG-0190
    S4 left) but **held on `origin/studio/2026-10-08-0913-view`** (ESCALATE at integration: BUG-0210, `main` red on
    `MinimapTest` since M4-2b).
-5. **Next, first: BUG-0210** (S2): `MinimapTest` with `--no-combat` as BUG-0147 (print the failing slot's `Alive` / `Hp` /
-   `State` once; if it is alive and stopped on a plain Move, refile against the sim), merge `main` into the branch,
-   scene loop 31 / 31; the conductor merges. **Then M4-V3**, QA standard: projectile visuals from `World.Projectiles` / `World.Impacts` (Requests 21): one pooled
-   MultiMesh instance per live slot interpolated `PrevPosition` → `Position`, a drawn arc for lobs, impact / miss marks
-   from `Impacts` (placeholders until M6); 0 B per steady frame; a headless scene seeds 1 / 6 + hash twin. Fold in
-   BUG-0190 item 2 (and item 1 if cheap). Details in `studio/handoff.md`. **Then the view's hardening session** (4 / 4).
-6. Then the fog shader + explored-building ghosts + the minimap's fog layer and Attack half (M4-3), ability feedback
-   (M4-4), the fog-on sandbox Playable.
+5. ~~BUG-0210 first, then M4-V3 projectile visuals + BUG-0190~~ → **done** (session 2026-10-08-1814, resumed 1435; 2 fix
+   rounds: BUG-0221 / 0223 / 0224 corpse-disc and mark fixes, BUG-0218 `AttackStage`, BUG-0212 / 0213 `--no-combat`; the held
+   M4-V2 lands with it; BUG-0220 S3, BUG-0222 / 0226 S4 left).
+6. **Next: M4-VH1, the view's hardening session (4 / 4)**, QA standard: BUG-0220 (SfxTest wall-clock wait), BUG-0226 (5
+   items), BUG-0222 (3 items), BUG-0190 status to fixed, BUG-0148 items 1 / 3, BUG-0126 items 3-6, export hygiene, the
+   minimap dot-timing flake. Details in `studio/handoff.md`.
+7. Then M4-V4: the fog shader from `World.Fog.Visibility` / `Version` (Requests 22), units hidden by `CanSeeUnit`, enemy
+   buildings by `CanSeeBuilding` (ghosts after M4-3b), the minimap's fog layer and Attack half, `placement.unexplored` text
+   when M4-3b lands; ability feedback (M4-4); the fog-on sandbox Playable.
 
 ## Feature queue: data track (feature sessions, in order; owner reviews every landed task)
 
@@ -2139,18 +2265,33 @@ track right after S1/S2 bugs).
 4. ~~STOP until a schema it needs is on `main`~~ → `attack.targets` landed (M4-2a, session 2026-10-08-0313).
 5. ~~D5 `attack.targets` pins, docs/02 "Ages" wording + parser, BUG-0155~~ → **done** (session 2026-10-08-0913, 0 fix
    rounds; BUG-0200 S4 left; nothing numeric changed).
-6. **Next: D6**, QA light (standard if a number changes): BUG-0200 (the "Ages" clause check into `TechContentTests.G`,
-   C's message), the first **counter-triangle balance report** from `Scenario/CounterTriangleTests` (survivors and time
-   per pair; Line beats Shock 14-15 of 16 surviving at equal cost: compare with docs/02 "Faction template" and propose
-   target margins for the owner), the Sapper self-splash note (BUG-0182 item 2: numbers + options for the owner; the
-   Malazan page's "fragile; wants an escort" reads as intended). Any number change: a For your review table and a golden
-   `data-hash` regen with the reason. Details in `studio/handoff.md`.
-7. Then: tower content (after M4-3's fields; BUG-0090's last item), `abilities.json` / `statuses.json` content (after
-   M4-4's schema), the full balance pass (QA standard) once the M4 sandbox gives numbers (incl. the +15 % crowd income
-   from the BUG-0146 fix), `ai.json` build orders (M5), M7-M9 faction data.
+6. ~~D6 BUG-0200 + the counter-triangle balance report + the Sapper self-splash numbers~~ → **done** (session
+   2026-10-08-1814, resumed 1435, 0 fix rounds; the proposal is under For your review; BUG-0230 S4 left; nothing numeric
+   changed).
+7. **Next: D7**, QA light: a `Sight` column on both pages' Buildings tables pinned to `BuildingDef.Sight` both ways (towers
+   24, the rest `buildingSight` 12), docs/02 Buildings table checked, BUG-0090's tower-sight item closed (attack / detector
+   wait for M4-3b), BUG-0230 items 1 and 3. **An inbox answer on the balance proposal comes first** (then: the tweak with a
+   For your review table and a golden `data-hash` regen). Details in `studio/handoff.md`.
+8. Then: the towers' `attack` / `detector` (after M4-3b; D8), `abilities.json` / `statuses.json` content (after M4-4's
+   schema), the full balance pass (QA standard) once the fog-on sandbox gives numbers (incl. the +15 % crowd income from the
+   BUG-0146 fix), `ai.json` build orders (M5), M7-M9 faction data.
 
-## Debt backlog: sim track (hardening sessions only; the next one after 4 feature sessions or at M4's end)
+## Debt backlog: sim track (hardening sessions only; the next one is the next session: M4-H1)
 
+- **BUG-0215 (S3, M4-3a; Producer decision at the 1814 ACCEPT):** the fog's visible bits depend on the last update's unit
+  positions, so they are state: hash them packed (one `ulong` per 64 cells per player, ≤ ~20 µs), keep `Version` derived,
+  rewrite docs/03's "a save re-stamps at load" (M6 saves them), flip QA's skipped
+  `FogQaTests.TwoWorldsWithTheSameStateHash_PlayTheSameFuture`, golden regen once with the proof, docs/01 row (d).
+- **BUG-0211 (S3, M4-3a):** `GatherWedgeQaTests` `CheckpointPrefixTicks` is 0 (the pre-fog seed-21 recording can't match hashed
+  fog checkpoints); re-record from `M3PlayableTest -- --seed 21` on the post-M4-3a build, restore the prefix (≥ 19), prune
+  `SameGameDataHashes`; a "hash format" note in docs/03 Replays.
+- **BUG-0216 (S4, M4-3a nits):** `FogStore` caps limits at `max(w, h)^2` not `w^2 + h^2` (sight 64 on < 46-cell maps; flip the
+  skipped `MaxSight64_OnA24CellMap_MatchesTheOracle`); docs/03's holding-Catapult sentences (a holder scans at reach beyond its
+  sight and needs a spotter there); the view / combat 4-tick disagreement noted for M4-V4; `MaxSight` applies to units too.
+- **BUG-0230 item 2 (data request):** `Scenario/CounterTriangleTests`' `Fight` / `TimeToKill` public (or in `CombatScenes`).
+- ~~BUG-0214~~ (S2, the 1024-map memory bound re-baselined 228 → 230.5 MB with the fog itemised) and ~~BUG-0217~~ (S3, the
+  vision check after the best-candidate compare) fixed in the M4-3a fix round; ~~BUG-0184 item 1~~ fixed in M4-3a (item 2 is
+  a view note, handled by interpolation).
 - ~~BUG-0146~~ (S2) and ~~BUG-0139~~ (S3) fixed in M4-2a (session 2026-10-08-0313), with ~~BUG-0150 / 0152 / 0154~~ (S2,
   filed and fixed in-session) and BUG-0153 items 1-2. BUG-0144 (S3, chasers' field waits under placement churn,
   `ChasersUnderPlacementChurn_LongestFieldWait_AtMostOneSecond` skipped) with M4-2b if the projectile work touches the
@@ -2263,8 +2404,22 @@ track right after S1/S2 bugs).
   recorded but not checked; no depletion events (views poll); .NET 8 support ends 2026-11-10, move
   to the next LTS at M6.
 
-## Debt backlog: view track (hardening sessions only; the next one after 4 feature sessions or at M4's end)
+## Debt backlog: view track (hardening sessions only; the next one is the next session: M4-VH1)
 
+- **BUG-0220 (S3, pre-existing, confirmed in M4-V3):** `SfxTest` flakes under CPU contention (`Expect` waits a 60 ms scene-tree
+  timer against `Sfx.Play`'s 50 ms wall-clock rate limit): wait on `Time.GetTicksUsec` in the test, or drive `Sfx.Play` with an
+  explicit clock; 10 runs under load green.
+- **BUG-0226 (S4, M4-V3 round 2 nits):** `TerrainHeight.MaxUnder`'s 0.15 m `SeamSlack` lets a disc ~0.5 m up a ramp beside a side
+  wall's foot (count a crossing as joined only at ~0 step; the comment's "generated seams" don't exist: flip the skipped
+  `MaxUnderEdgeWalkQaTests.MaxUnder_RandomPointsAndRadii_HangsUnderAQuarterMetre`); `AttackOrderViewTest`'s seed-6 own-Billet
+  row silently skipped; `QaV6Test`'s Tent row never has the box behind the Raider's pixel; docs/03 "10-16 cells behind the
+  Raiders" is measured from the centre.
+- **BUG-0222 (S4, M4-V3 nits):** a skipping `ProjectileTracker` misses a same-type / owner / target lob reuse (check the lob lies
+  on its launch → target line; flip the skipped `SkippingObserver_SameTargetLobFromAnotherLaunch_IsANewShot`); the lob's
+  last-step slide (M6 note); `ImpactMarks.Add` replaces a live mark at `_head` while free slots exist (doc or code).
+- **BUG-0190 (S4):** both items fixed in M4-V3 (`MaxUnder`, the NaN guard); the file and README row on the view branch still
+  read `open`: set `fixed` (residual: BUG-0226 item 1). ~~BUG-0221 / 0223 / 0224~~ (S3) and ~~BUG-0225~~ (S4) fixed in the M4-V3
+  fix rounds; ~~BUG-0210 / 0212 / 0213 / 0218~~ (S2, scenes vs combat and fog) fixed in M4-V3.
 - ~~BUG-0147~~ (S3) fixed in M4-V1 (session 2026-10-08-0313: the five M2 scenes pass `--no-combat`, launch arguments
   only, no `Check` or threshold changed; loop 28 headless + 5 Shot + Playable).
 - ~~BUG-0160~~ (S4) fixed in M4-V2 (session 2026-10-08-0913: four F12 lines, the first-sight flash rule in `HitFlash`'s
@@ -2318,12 +2473,14 @@ track right after S1/S2 bugs).
 - ~~BUG-0155 (S4, D4)~~ fixed in D5 (session 2026-10-08-0913: H any-case, faction tech names covered). ~~Docs drift (D4
   QA note)~~: docs/02 "Ages" reads "level II" and the exact any-two-of rule since D5; `TechContentTests.G` parses it.
   Watch Tower's attack (docs/02 Buildings table) is not in the sim until M4-3.
-- **BUG-0200 (S4, D5; next data task):** the docs/02 "Ages" trailing clause ("two production halls, or one hall and the
-  Forge") is pinned only by QA's `QA/Content/AgesRuleQaTests` (fold into G); `UnitContentTests.C`'s "file attack.targets"
-  message says "page (absent)" for an explicit `"targets": "all"` (a style rule, reword).
-- **Balance notes waiting for D6:** Line beats Shock by 1,036-1,216 of ~1,200 cost in `Scenario/CounterTriangleTests`;
-  Sapper self-splash / friendly fire 23-28 % of deaths in shooter-heavy fuzz (BUG-0182 item 2); crowd income +15 % at 20
-  workers (BUG-0146 fix).
+- ~~BUG-0200 (S4, D5)~~ fixed in D6 (session 2026-10-08-1814: G pins the clause, C's message states the style rule).
+- **BUG-0230 (S4, D6; next data task, items 1 and 3; item 2 is a sim request):** an appended contradicting sentence after the
+  Ages clause passes G and QA's row (anchor the regex to the bullet's end); `Content/CounterTriangleMarginsTests.Fight` /
+  `TimeToKill` are copies of the scenario's private helpers (sim: make them public); the Whirlwind page's siege row misuses
+  the "Winner keeps" column (a separate siege table as on the Malazan page).
+- **Balance notes (measured in D6, on both pages; the owner's call is under For your review):** winner keeps 67-100 % of its
+  cost in every pair (proposed band 40-65 %); Line v Shock 88-100 % is the outlier; casters re-measured after M4-4; the Sapper's
+  self-splash is small (keep); crowd income +15 % at 20 workers (BUG-0146 fix) still to fold into the full balance pass.
 - Note: a QA row (`AnEmptyBuildingList_Loads_...`) now pins "exactly Whirlwind's ten remain"; it moves
   again whenever a building is added or removed (intended: the roster is pinned).
 
@@ -2331,6 +2488,7 @@ track right after S1/S2 bugs).
 
 | Date | Session | Task | Result |
 | --- | --- | --- | --- |
+| 2026-10-08 | [2026-10-08-1814](sessions/2026-10-08-1814.md) (the resumption of 1435, which the 3-hour lock rule declared dead mid-fix-loop; incident folded into the log) | sim M4-3a: `Rts.Sim.Vision` (`FogStore` per player: byte per cell + packed explored bits, circle masks per radius, row-span stamping per level with the high-ground rule and the 4 m lip, every 4 ticks + a tick-0 stamp; `VisionSystem` phase 12, `UnitSeesUnit / Building` for scans / retaliation / explicit Attack / kept targets, the 40-tick high-ground reveal keyed on the firing level via `PendingHit.AttackerLevel` / `ProjectileStore.Level`), buildings' `sight` + `rules.json` `buildingSight` 12 (towers 24), `World.Fog` read-only surface, BUG-0184 item 1; fix round: BUG-0214 (memory bound re-baselined, itemised), BUG-0217 (gate after the compare, 1,000 v 1,000 on 3 levels 29.5 → 23.4 ms); golden regen once (`k` lines equal with the fog excluded); view M4-V3: `ProjectileViews` (aimed streaks, lob stones on an arc, flash / dust / burst marks), `ViewApi.ProjectileTracker` / `ImpactMarks` / `TerrainHeight.MaxUnder`, BUG-0210 (`--no-combat`, the slot was shot dead), BUG-0190, `AttackStage.cs` for BUG-0218, `--no-combat` for BUG-0212 / 0213, `ProjectileViewTest.tscn` + QA's `QaV7Test`; the held M4-V2 lands with it; data D6: `Content/CounterTriangleMarginsTests` (8 pairs x 2 seats, winner pinned, table on both pages with the proposed 40-65 % band), `SapperSplashReportTests` (shipped / minRange 2 m / splash 1 m), BUG-0200 | **all three ACCEPT**: sim 1 fix round (QA FAIL → PASS_WITH_ISSUES → confirm FAIL on the view-owned BUG-0218, fixed on the view branch; BUG-0211 / 0215 S3, BUG-0216 S4 open), view 2 fix rounds (PASS_WITH_ISSUES x3; BUG-0220 S3 pre-existing, BUG-0222 / 0226 S4 open), data 0 (PASS_WITH_ISSUES: BUG-0230 S4). Producer's scratch merge: build, smoke and the five integration-sensitive scenes green; QA's merge 33 / 33. **M4 5 / 10**, criterion 5's sim half annotated; no open S1 / S2; merge order view, sim, data; hardening next for sim and view |
 | 2026-10-08 | [2026-10-08-0913](sessions/2026-10-08-0913.md) (integration update: **view ESCALATE**, `main` red on `MinimapTest` since M4-2b, BUG-0210 S2; the view branch kept, fix first next session; data merges) | sim M4-2b: `common/projectiles.json` schema (`aimed` / `lob`, `speed`, `hitTolerance`, `leadSpeed`), `ProjectileStore` (SoA, hashed while in flight) + `ProjectileSystem` (Fly / Fire / Track / Land, splash with falloff, friendly fire at 50 % never buildings, `attack.minRange` no kiting), `CanFight` for every attack, BUG-0156 via `AttackerInScanRange`, `Scenario/CounterTriangleTests` (8 pairs both seats), `World.Impacts` + view spans; fix round: the lead rule (BUG-0183 S2), BUG-0180 / 0181 / 0182 item 1; golden `data-hash` x2, `k` identical; view M4-V2: `ViewApi.UnitPicker` (capsule ray pick + `ResolveEnemy`), `TargetMark` / `TargetRing`, right-click / A + click Attack per selected unit, `states.ordered_attack` "Pursuing", F12 target slot, BUG-0160 (four F12 lines, first-sight flash, corpse rim, no literals), `AttackOrderViewTest.tscn`, QA's `QaV6Test` + `tools/qa/scene-loop.ps1`; data D5: Targets column on both faction pages + pins (C / G / new H), docs/02 "Ages" exact wording + `TechContentTests.G` parser, BUG-0155 (H any-case + faction tech names), QA's `AgesRuleQaTests` | **all three ACCEPT**: sim 1 fix round (QA FAIL → PASS_WITH_ISSUES; the lead rule accepted as a Producer decision, docs/02 rewritten at ACCEPT; BUG-0182 item 2 / BUG-0184 S4 open), view 0 (PASS_WITH_ISSUES: BUG-0190 S4), data 0 (PASS_WITH_ISSUES: BUG-0200 S4). **M4 5 / 10** (criterion 3 and the counter-triangle rows ticked; criterion 1's view half landed); no open S1 / S2 |
 | 2026-10-08 | [2026-10-08-0313](sessions/2026-10-08-0313.md) | sim M4-2a: the BUG-0146 wedge fix (`MovementSystem.QueuesBehind` / `StandArrival2`, three stand points per cell edge), `Command.Attack` (kind 16, `CombatMode.Ordered`, queued handle in the existing queue arrays), `attack.targets` schema (the ram `buildings`, BUG-0139), replay format 4 (`combat` header, targets on command lines; golden regen, `k` lines identical); fix rounds: BUG-0150 (lost-from-sight give-up on a switch), BUG-0152 (`ReaffirmAttack` / `KeepFightForAttackMove`), BUG-0154 (`UnitStore.Repick`); view M4-V1: `--no-combat` dev flag (BUG-0147's five scenes), `ViewApi.UnitHpBars` / `HitFlash` / `DeathMarkers`, `CombatViews` (bars, corpse discs, rubble), K / L counts, live panel hp, `CombatViewTest.tscn`; data STOP (planned) | sim ACCEPT after 2 fix rounds (QA FAIL x3, the last on BUG-0151 alone: Producer re-stated criterion 3 and re-triaged it S2 → S3; BUG-0156 / 0157 S3, BUG-0153 S4 open); view ACCEPT, 0 fix rounds (PASS_WITH_ISSUES: BUG-0160 S4). **M3 signed off**; M4 3 / 10; no open S1 / S2 |
 | 2026-10-07/08 | [2026-10-07-2315](sessions/2026-10-07-2315.md) (resumed the dead 2014 session, which left no log) | sim M4-1 combat slice 1 (`Rts.Sim.Combat`: `CombatSystem` acquire / attack / resolve, `DamageCalc`, `CombatMode`, give-up memory + friend exception, `SpatialHash.QueryEnemies`, `UnitState.Attacking`, `SimConfig.Combat` test switch, death events + kills / losses; BUG-0135 / 0136 / 0137 / 0138 / 0140 / 0141 / 0143 fixed in-session); view M3-V4 (`M3PlayableTest.tscn` scripted playtest through the real HUD, drawn-shape node pick BUG-0125, "Locked" / "Researched" / "In a queue" BUG-0126 1-2, `states.attacking`, BUG-0145 / 0148 2 + 4 fixed); data D4 (Age II description faction-neutral, seven shared techs pinned to docs/02, BUG-0132, golden `data-hash` A863BAF8637CC860) | **all three ACCEPT**: sim 2 fix rounds (QA FAIL / FAIL / PASS_WITH_ISSUES: BUG-0139 S3 → M4-2a, BUG-0144 S3, BUG-0149 S3, BUG-0142 S4 open), view 1 fix round (QA FAIL on BUG-0145 S2 → PASS_WITH_ISSUES: **BUG-0146 S2 filed against the sim**, BUG-0147 S3, BUG-0148 S4), data 0 (PASS_WITH_ISSUES: BUG-0155 S4). **M3 8 / 8**, sign-off held by BUG-0146; M4 1 / 10 |

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-08-1435, task M4-3a |
 | System | view test scene (`game/tests/SfxTest.cs`, view-owned) vs sim combat under fog |
-| Fixed by | |
+| Fixed by | M4-V3 fix round 1, e1f3333 (view track): `--no-combat` in both `SfxTest.StartMatch` launch lists, every `Check` unchanged. Verified by the view QA on a sim + view scratch merge (2026-10-08-1814: 8 / 8 quiet; causality: with the flag removed it fails 2 / 2 with this bug's message) and by the 33 / 33 merge loop |
 
 ## Repro
 1. Sim branch 977db1d, after `tools/qa/smoke.ps1`: `powershell -File tools/qa/scene-loop.ps1 -Filter SfxTest -SkipPlayable`

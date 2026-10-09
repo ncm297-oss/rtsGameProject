@@ -418,6 +418,20 @@ ten-minute playtest (STATE "For your review", M3-V3 entry) stands as feedback, n
       `BuildingStore.Damage` (freed, cells by the pocket rule, queue refunded); a site's damage sticks under construction
       (BUG-0138). Corpses and rubble are the view's (next view task).)_
 - [ ] Three-state fog of war per player; high-ground vision rule (low ground can't see up; attacker reveal); terrain fog shader; building ghosts.
+      _(Sim half landed in session 2026-10-08-1814 (resumed 1435), task M4-3a: `Rts.Sim.Vision` (`FogStore`: per player a
+      byte per cell, 0 unexplored / 1 explored / 2 visible, rebuilt in phase 12 on ticks where `tick % 4 == 1` plus an
+      initial stamp at tick 0, circle masks per distinct radius with squared integer distances, row-span stamping with the
+      high-ground rule per cell and the 4 m lip; `VisionSystem`: the target-validity rule for scans / retaliation / explicit
+      `Attack` / a kept target, and the 2 s high-ground reveal keyed on the attacker's firing or striking level), buildings'
+      optional `sight` with `rules.json` `buildingSight` (12 m default; both watch towers 24 m), read-only
+      `World.Fog.Visibility / Version / IsVisible / IsExplored / CanSeeUnit / CanSeeBuilding` for the view's M4-V4. Explored
+      bits and reveals hashed, visible bits derived (BUG-0215 S3: they depend on the last update's positions, so the M6 save
+      plan needs them stored or re-derived; the sim's hardening session decides). Golden regenerated once with the proof
+      (fog excluded locally: every `k` line equal). QA full: two independent oracles (float and integer), `FogFuzzStressTests` +
+      QA's `FogHostileFuzzQaTests` (6 seeds x 1,200 ticks, 3 levels, twins equal), `VisionGateOrderQaTests`; Perf alone:
+      `Fog2500OnePlayer` 0.064 ms, `Fog1000v1000` 0.086 ms, 0 B; BUG-0217 (gate cost) fixed in the fix round. Still owed
+      for this criterion: the terrain fog shader + unit hiding + minimap fog (view, M4-V4), the last-known buildings ghost list
+      and towers that shoot (sim, M4-3b). Open: BUG-0211 (S3, re-record the seed-21 replay), BUG-0215 (S3), BUG-0216 (S4).)_
 - [ ] Ability system (target ground, self/aura, summon) and status effects; zones.
 - [ ] Stealth and detection system (tested now, even though Shadow arrives in M8).
 - [ ] Telas Fire, Sapper Sharpers + Cusser, Sandstorm, Zealot passives all work.
