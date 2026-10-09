@@ -409,13 +409,14 @@ public class CombatTests
     }
 
     /// <summary>
-    /// BUG-0143 (found by the fix): a chaser that switches from one target to another keeps its stall count, so two
-    /// targets a scan takes in turn (one drifting in and out of sight) can't restart it every scan and keep the chase
-    /// going forever. Here a cliff-top Laborer is chased from below, then a cliff-top Crossbowman (higher priority) comes
-    /// into sight mid-stall.
+    /// BUG-0143 kept the stall count across every switch, so two targets a scan takes in turn (one drifting in and out of
+    /// sight) can't restart it every scan; BUG-0149 (M4-H1) narrows that to a switch back to the target held just before
+    /// (or the given-up one): a switch to a new target is a fresh chase. Here a cliff-top Laborer is chased from below,
+    /// then a cliff-top Crossbowman (higher priority) comes into sight mid-stall: the switch restarts the count, the
+    /// Laborer is remembered as the one before, and the chase of two unreachable targets still ends.
     /// </summary>
     [Fact]
-    public void SwitchingTargetsMidChase_KeepsTheStallCount()
+    public void SwitchingTargetsMidChase_ToANewTarget_StartsAFreshChase_AndTheChaseStillEnds()
     {
         var rows = new string[40];
         for (int y = 0; y < 40; y++)
@@ -437,7 +438,40 @@ public class CombatTests
         Spot(sim, 0, high);
         RunUntil(sim, () => u.Target[a.Index] != low, 40);
         Assert.Equal(high, u.Target[a.Index]);
-        Assert.True(u.ChaseStall[a.Index] >= 3, $"the switch restarted the stall count: {u.ChaseStall[a.Index]}");
+        Assert.True(u.ChaseStall[a.Index] < 3, $"the switch to a new target kept the stall count: {u.ChaseStall[a.Index]}");
+        Assert.Equal(low, u.ChasePrev[a.Index]);
+        // Neither is reachable: the chase ends (the fresh chase gets its GiveUpScans scans), and it doesn't restart.
+        int ended = RunUntil(sim, () => u.Target[a.Index] == default && u.Mode[a.Index] == Combat.CombatMode.None, 2 * Combat.CombatConstants.GiveUpScans * Combat.CombatConstants.ScanInterval + 200);
+        Assert.True(u.Target[a.Index] == default, $"still chasing {u.Target[a.Index]} after {ended} ticks (give-ups {u.GiveUps[a.Index]})");
+    }
+
+    /// <summary>
+    /// BUG-0149's other half: a switch back to the target held just before keeps the stall count (else two targets taken
+    /// in turn would restart it on every switch). Set up through the store: chasing B with A as the one before and a stall
+    /// of 5, A turns tier 0 (it targets the chaser), so the next scan switches back to it.
+    /// </summary>
+    [Fact]
+    public void SwitchingBackToTheTargetHeldJustBefore_KeepsTheStallCount()
+    {
+        Simulation sim = Flat(size: 64, units: 8);
+        UnitStore u = sim.World.Units;
+        EntityHandle c = Place(sim, 0, HeavyInfantry, At(sim, 30, 24));
+        EntityHandle first = Place(sim, 1, Laborer, At(sim, 30, 24, dx: 8f));
+        EntityHandle second = Place(sim, 1, Laborer, At(sim, 30, 24, dx: -8f));
+        sim.Enqueue(Command.HoldPosition(1, first));
+        sim.Enqueue(Command.HoldPosition(1, second));
+        sim.Tick();
+        u.Target[c.Index] = second;
+        u.Mode[c.Index] = Combat.CombatMode.Retaliate;
+        u.AnchorPosition[c.Index] = u.Position[c.Index];
+        u.ChasePrev[c.Index] = first;
+        u.ChaseStall[c.Index] = 5;
+        u.ChaseBest[c.Index] = 0.1f; // no progress shows on the next scan
+        u.Target[first.Index] = c; // tier 0 now: it beats the second
+        RunUntil(sim, () => u.Target[c.Index] == first, 8);
+        Assert.Equal(first, u.Target[c.Index]);
+        Assert.True(u.ChaseStall[c.Index] >= 5, $"the switch back restarted the stall count: {u.ChaseStall[c.Index]}");
+        Assert.Equal(second, u.ChasePrev[c.Index]);
     }
 
     /// <summary>

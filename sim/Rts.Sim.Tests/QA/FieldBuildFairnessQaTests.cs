@@ -442,7 +442,9 @@ public class FieldBuildFairnessQaTests
             // bit a cell (131,072), and per unit slot per player two reveal ints (4,096 x 2 x 2 x 4 = 65,536): 2 x 1,179,648
             // + 65,536 = 2,424,832 bytes, plus 26,592 of circle masks, per-player boxes and array headers. 230,427,848
             // measured; the bound keeps a 72 KB margin (the old one kept 2 MB over M1-4c's figure, 24 KB over dd5b5b9's).
-            Assert.True(bytes < 230_500_000, $"{bytes / 1e6:F1} MB");
+            // M4-H1 (BUG-0215) re-baselines: the visible bits are hashed state, packed like the explored bits, one more bit a
+            // cell a player (2 x 131,072 = 262,144 bytes, + array headers): 230,692,672 measured; the same 72 KB margin.
+            Assert.True(bytes < 230_765_000, $"{bytes / 1e6:F1} MB");
         }
     }
 }

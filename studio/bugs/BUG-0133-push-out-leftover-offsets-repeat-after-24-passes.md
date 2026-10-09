@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-07-1715, task M3-H2 |
 | System | construction push-out (`ConstructionSystem.PushOut`, `LeftoverOffset`) |
-| Fixed by | |
+| Fixed by | M4-H1 (sim track): passes past 24 take turned directions at van der Corput radii (no repeat); `QA/PlateauSealMemoQaTests.FourHundredPushedOntoATinyPlateau_NoTwoOnOnePoint` un-skipped, the pin replaced by `OneHundredFiftyPushed_NoTwoOnOnePoint`; docs/03 push-out line |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~PlateauSealMemoQaTests.Bug0133Pin"`.

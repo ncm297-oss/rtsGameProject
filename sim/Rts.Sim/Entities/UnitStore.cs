@@ -125,6 +125,13 @@ public sealed class UnitStore
     /// <summary>True when <see cref="Ignored"/> is a building handle.</summary>
     public readonly bool[] IgnoredIsBuilding;
     /// <summary>
+    /// The target the unit held before its current one, when its scan switched straight from one to the other (BUG-0149):
+    /// a switch back to it keeps the stall count, a switch to any other target starts a fresh chase. Default for none.
+    /// </summary>
+    public readonly EntityHandle[] ChasePrev;
+    /// <summary>True when <see cref="ChasePrev"/> is a building handle.</summary>
+    public readonly bool[] ChasePrevIsBuilding;
+    /// <summary>
     /// Chases given up since the unit's last order or last landed hit (BUG-0137); at
     /// <see cref="Combat.CombatConstants.MaxGiveUps"/> its scans take only targets in reach.
     /// </summary>
@@ -202,6 +209,8 @@ public sealed class UnitStore
         ChaseStall = new int[capacity];
         Ignored = new EntityHandle[capacity];
         IgnoredIsBuilding = new bool[capacity];
+        ChasePrev = new EntityHandle[capacity];
+        ChasePrevIsBuilding = new bool[capacity];
         GiveUps = new int[capacity];
         Repick = new bool[capacity];
         Alive = new bool[capacity];
@@ -384,6 +393,8 @@ public sealed class UnitStore
         ChaseStall[index] = 0;
         Ignored[index] = default;
         IgnoredIsBuilding[index] = false;
+        ChasePrev[index] = default;
+        ChasePrevIsBuilding[index] = false;
         GiveUps[index] = 0;
         Repick[index] = false;
     }

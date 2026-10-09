@@ -22,9 +22,11 @@ namespace Rts.Sim.Vision;
 /// lower level.
 /// </para>
 /// <para>
-/// State: the explored bits (a packed copy of "not unexplored", kept as cells are first seen) and the reveals are hashed;
-/// the visible bits and <see cref="Version"/> are derived, rebuilt at every update, and not hashed (a save, M6, stamps
-/// again at load).
+/// State (hashed): the explored bits (a packed copy of "not unexplored", kept as cells are first seen), the visible bits
+/// (a packed copy of "visible", rewritten at every update; combat reads them) and the reveals. The visible bits are a
+/// function of where the units stood at the last update, which the state no longer holds, so they are state, not
+/// derived (BUG-0215): a save (M6) stores them. Derived and not hashed: the byte map (the two bit sets per cell, for the
+/// view), <see cref="Version"/> and the stamp boxes.
 /// </para>
 /// </remarks>
 public sealed class FogStore
@@ -40,6 +42,7 @@ public sealed class FogStore
 
     private readonly byte[][] _visibility;
     private readonly ulong[][] _explored;
+    private readonly ulong[][] _visible;
     private readonly int[] _version;
 
     // Per (unit slot, player): the tick a high-ground reveal ends, and the slot's generation when it was set (a recycled
@@ -78,10 +81,12 @@ public sealed class FogStore
         _scratch = scratch;
         _visibility = new byte[players][];
         _explored = new ulong[players][];
+        _visible = new ulong[players][];
         for (int p = 0; p < players; p++)
         {
             _visibility[p] = new byte[cells];
             _explored[p] = new ulong[(cells + 63) / 64];
+            _visible[p] = new ulong[(cells + 63) / 64];
         }
         _version = new int[players];
         _visibleBox = new int[4 * players];
@@ -92,7 +97,8 @@ public sealed class FogStore
             if (_levels[i] > 0) MultiLevel = true;
 
         // One mask per distinct radius (sights, and the lip cut to each sight), ascending, so a bigger index covers a smaller one.
-        int maxLimit = Math.Max(_width, _height) * Math.Max(_width, _height);
+        // No cell is farther than the map's diagonal, so a bigger circle adds nothing (BUG-0216: not its longer side).
+        int maxLimit = _width * _width + _height * _height;
         var limits = new int[2 * (data.Units.Length + data.Buildings.Length)];
         int count = 0;
         foreach (UnitDef u in data.Units) AddLimits(limits, ref count, u.Sight, maxLimit);
@@ -134,11 +140,11 @@ public sealed class FogStore
 
     /// <summary>Whether <paramref name="cell"/> was inside one of <paramref name="player"/>'s sight circles at the last update; false out of range.</summary>
     public bool IsVisible(int player, int cell) =>
-        (uint)player < (uint)_players && (uint)cell < (uint)_levels.Length && _visibility[player][cell] == VisionConstants.Visible;
+        (uint)player < (uint)_players && (uint)cell < (uint)_levels.Length && Bit(_visible[player], cell);
 
     /// <summary>Whether <paramref name="player"/> has ever seen <paramref name="cell"/> (explored or visible); false out of range.</summary>
     public bool IsExplored(int player, int cell) =>
-        (uint)player < (uint)_players && (uint)cell < (uint)_levels.Length && _visibility[player][cell] != VisionConstants.Unexplored;
+        (uint)player < (uint)_players && (uint)cell < (uint)_levels.Length && Bit(_explored[player], cell);
 
     /// <summary>
     /// Whether <paramref name="player"/> sees live unit slot <paramref name="slot"/>: its own, its cell visible at the last
@@ -163,19 +169,22 @@ public sealed class FogStore
 
     /// <summary>Unit slot <paramref name="slot"/>'s cell is visible to <paramref name="player"/>, or the unit is revealed to it.</summary>
     internal bool SeesUnit(int player, int slot) =>
-        _visibility[player][CellOf(_units.Position[slot])] == VisionConstants.Visible || Revealed(player, slot);
+        Bit(_visible[player], CellOf(_units.Position[slot])) || Revealed(player, slot);
 
     /// <summary>Any footprint cell of building slot <paramref name="slot"/> is visible to <paramref name="player"/>.</summary>
     internal bool SeesBuildingCells(int player, int slot)
     {
-        byte[] vis = _visibility[player];
+        ulong[] vis = _visible[player];
         int anchor = _buildings.Cell[slot];
         BuildingDef def = _data.Buildings[_buildings.TypeId[slot]];
         for (int dy = 0; dy < def.FootprintHeight; dy++)
             for (int dx = 0; dx < def.FootprintWidth; dx++)
-                if (vis[anchor + dy * _width + dx] == VisionConstants.Visible) return true;
+                if (Bit(vis, anchor + dy * _width + dx)) return true;
         return false;
     }
+
+    /// <summary>Bit <paramref name="cell"/> of a packed cell set (64 cells a word).</summary>
+    private static bool Bit(ulong[] bits, int cell) => (bits[cell >> 6] & (1UL << (cell & 63))) != 0;
 
     /// <summary>Whether unit slot <paramref name="slot"/> is revealed to <paramref name="player"/> (a high-ground hit's reveal not yet over, set on this unit, not an earlier one in the slot).</summary>
     internal bool Revealed(int player, int slot)
@@ -347,6 +356,7 @@ public sealed class FogStore
     {
         byte[] vis = _visibility[p];
         ulong[] bits = _explored[p];
+        ulong[] seen = _visible[p];
         byte[] levels = _levels;
         int[] s = _scratch;
         int w = _width, n = levels.Length, n2 = 2 * n;
@@ -399,12 +409,21 @@ public sealed class FogStore
                 // The high-ground rule: a layer sees its own level and below; the top one (and the lip) every level.
                 if (run2 > 0 || (run1 > 0 && level <= 1) || (run0 > 0 && level == 0))
                 {
-                    if (state == VisionConstants.Unexplored) bits[c >> 6] |= 1UL << (c & 63);
+                    if (state != VisionConstants.Visible)
+                    {
+                        seen[c >> 6] |= 1UL << (c & 63);
+                        if (state == VisionConstants.Unexplored) bits[c >> 6] |= 1UL << (c & 63);
+                    }
                     vis[c] = VisionConstants.Visible;
+                }
+                else if (state == VisionConstants.Visible)
+                {
+                    seen[c >> 6] &= ~(1UL << (c & 63));
+                    vis[c] = VisionConstants.Explored;
                 }
                 else
                 {
-                    vis[c] = state == VisionConstants.Visible ? VisionConstants.Explored : (byte)state;
+                    vis[c] = (byte)state;
                 }
             }
         }
@@ -424,14 +443,21 @@ public sealed class FogStore
     }
 
     /// <summary>
-    /// Mixes the fog's state into a state hash: every player's explored bits (64 cells a word), then the count and every
-    /// reveal still in force at tick <paramref name="tick"/> (slot, player, end). The visible bits and versions are derived.
+    /// Mixes the fog's state into a state hash: every player's explored bits, then every player's visible bits (64 cells
+    /// a word; BUG-0215: combat reads them, and they follow from the positions at the last update, not the ones now), then
+    /// the count and every reveal still in force at tick <paramref name="tick"/> (slot, player, end). The byte map,
+    /// versions and boxes are derived.
     /// </summary>
     internal void AddToHash(ref StateHasher h, int tick)
     {
         for (int p = 0; p < _players; p++)
         {
             ulong[] bits = _explored[p];
+            for (int k = 0; k < bits.Length; k++) h.AddWord(bits[k]);
+        }
+        for (int p = 0; p < _players; p++)
+        {
+            ulong[] bits = _visible[p];
             for (int k = 0; k < bits.Length; k++) h.AddWord(bits[k]);
         }
         int live = 0;

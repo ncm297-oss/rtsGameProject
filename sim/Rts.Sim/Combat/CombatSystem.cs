@@ -325,6 +325,8 @@ public static class CombatSystem
         u.TargetIsBuilding[i] = isBuilding;
         u.WindupTicks[i] = 0;
         u.ChaseStall[i] = 0;
+        u.ChasePrev[i] = default;
+        u.ChasePrevIsBuilding[i] = false;
         u.ChaseBest[i] = Gap(world, i);
         u.Mode[i] = CombatMode.Ordered;
         u.AnchorPosition[i] = Vector2.Zero;
@@ -344,6 +346,8 @@ public static class CombatSystem
         u.IgnoredIsBuilding[i] = false;
         u.GiveUps[i] = 0;
         u.ChaseStall[i] = 0;
+        u.ChasePrev[i] = default;
+        u.ChasePrevIsBuilding[i] = false;
         u.ChaseBest[i] = Gap(world, i);
         u.Mode[i] = CombatMode.Ordered;
         u.AnchorPosition[i] = Vector2.Zero;
@@ -544,9 +548,24 @@ public static class CombatSystem
     {
         UnitStore u = world.Units;
         if (u.Target[i] == target && u.TargetIsBuilding[i] == isBuilding) return;
-        // A switch from one target to another keeps the stall count (BUG-0143): two targets the scan takes in turn
-        // (one drifting in and out of sight) would otherwise restart it every scan and the chase would never end.
-        if (u.Target[i].Generation == 0) u.ChaseStall[i] = 0;
+        if (u.Target[i].Generation == 0)
+        {
+            u.ChaseStall[i] = 0;
+            u.ChasePrev[i] = default;
+            u.ChasePrevIsBuilding[i] = false;
+        }
+        else
+        {
+            // A switch back to the target held just before, or to one it gave up, keeps the stall count (BUG-0143): two
+            // targets the scan takes in turn (one drifting in and out of sight) would otherwise restart it every scan and
+            // the chase would never end. A switch to any other target is a fresh chase (BUG-0149): a reachable enemy
+            // behind a detour gets its full GiveUpScans, not what the stalled chase left over.
+            bool back = (target == u.ChasePrev[i] && isBuilding == u.ChasePrevIsBuilding[i])
+                || (target == u.Ignored[i] && isBuilding == u.IgnoredIsBuilding[i]);
+            if (!back) u.ChaseStall[i] = 0;
+            u.ChasePrev[i] = u.Target[i];
+            u.ChasePrevIsBuilding[i] = u.TargetIsBuilding[i];
+        }
         u.Target[i] = target;
         u.TargetIsBuilding[i] = isBuilding;
         u.WindupTicks[i] = 0;
@@ -567,6 +586,8 @@ public static class CombatSystem
         u.WindupTicks[i] = 0;
         u.ChaseBest[i] = 0f;
         u.ChaseStall[i] = 0;
+        u.ChasePrev[i] = default;
+        u.ChasePrevIsBuilding[i] = false;
         if (u.State[i] == UnitState.Attacking) Stand(u, i, UnitState.Idle);
     }
 

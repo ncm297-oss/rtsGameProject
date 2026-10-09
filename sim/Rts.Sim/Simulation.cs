@@ -134,9 +134,9 @@ public sealed class Simulation
         _recorder = recorder;
     }
 
-    /// <summary>64-bit FNV-1a hash of all gameplay state: tick, units (Hold, order queues, gather loops and cargo, combat state included), RNG streams, flow-field cache metadata, nav grid versions (and the movement pass's last seen block version), resource nodes, buildings, projectiles in flight (production queues, research items and rally points included), the fog's explored bits and high-ground reveals (M4-3a), player totals, researched techs, kills and losses, and pending commands.</summary>
+    /// <summary>64-bit FNV-1a hash of all gameplay state: tick, units (Hold, order queues, gather loops and cargo, combat state included), RNG streams, flow-field cache metadata, nav grid versions (and the movement pass's last seen block version), resource nodes, buildings, projectiles in flight (production queues, research items and rally points included), the fog's explored and visible bits and high-ground reveals (M4-3a; visible bits BUG-0215), player totals, researched techs, kills and losses, and pending commands.</summary>
     /// <remarks>
-    /// Derived state is left out: the spatial hash (rebuilt from the units every tick), the fog's visible bits (M4-3a: rebuilt every update),
+    /// Derived state is left out: the spatial hash (rebuilt from the units every tick), the fog's byte map and update versions (M4-3a: copies of its hashed bits),
     /// Speed/Radius (they follow from TypeId), and population (M3-4: <see cref="World.HalfPop"/> follows from the live
     /// units and the started production items, <see cref="World.HalfPopCap"/> from the finished buildings). The flow-field cache's keys, versions and LRU stamps
     /// are in, because they decide which units wait under the build cap (BUG-0021); the fields'
@@ -209,7 +209,7 @@ public sealed class Simulation
         World.Buildings.AddToHash(ref h);
         // M4-2b: projectiles in flight; an empty store adds nothing, so a match without a shot hashes as before.
         World.Projectiles.AddToHash(ref h);
-        // M4-3a: the fog's explored bits and the high-ground reveals in force (its visible bits are derived).
+        // M4-3a: the fog's explored and visible bits (BUG-0215: the visible bits are state) and the high-ground reveals in force.
         World.Fog.AddToHash(ref h, World.TickNumber);
         for (int p = 0; p < World.Gold.Length; p++)
         {
@@ -283,7 +283,7 @@ public sealed class Simulation
         return u.Hp[i] != fullHp || u.Target[i] != default || u.TargetIsBuilding[i] || u.CooldownTicks[i] != 0 || u.WindupTicks[i] != 0
             || u.LastAttacker[i] != default || u.AnchorPosition[i] != Vector2.Zero || u.Mode[i] != CombatMode.None
             || u.ChaseBest[i] != 0f || u.ChaseStall[i] != 0 || u.Ignored[i] != default || u.IgnoredIsBuilding[i] || u.GiveUps[i] != 0
-            || u.Repick[i];
+            || u.Repick[i] || u.ChasePrev[i] != default || u.ChasePrevIsBuilding[i];
     }
 
     /// <summary>Unit <paramref name="i"/>'s combat fields, as flagged by bit 17 of <see cref="OrderBits"/>.</summary>
@@ -306,6 +306,9 @@ public sealed class Simulation
         h.Add(u.Ignored[i].Index);
         h.Add((ulong)(uint)u.Ignored[i].Generation | (u.IgnoredIsBuilding[i] ? 1UL << 32 : 0UL));
         h.Add(u.GiveUps[i]);
+        // BUG-0149: the target held before this one (a switch back keeps the stall count).
+        h.Add(u.ChasePrev[i].Index);
+        h.Add((ulong)(uint)u.ChasePrev[i].Generation | (u.ChasePrevIsBuilding[i] ? 1UL << 32 : 0UL));
     }
 
     /// <summary>True when any gather-loop or cargo field (M3-2) or the build target (M3-3) of unit <paramref name="i"/> isn't default; flagged in <see cref="OrderBits"/>, then hashed.</summary>

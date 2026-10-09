@@ -115,9 +115,10 @@ public class CombatFriendExceptionQaTests
     /// straight line, so the gap does not shrink at first). A fresh chase of it gets <see cref="CombatConstants.GiveUpScans"/>
     /// scans; with the stall count carried over from the cliff chase it gives the Raider up on the switch's next scan,
     /// twice, reaches <see cref="CombatConstants.MaxGiveUps"/> and stands Idle 10 m from a reachable enemy it can see.
-    /// With the count reset on a switch (the round-1 rule) it walks round and fights it by tick 168.
+    /// With the count reset on a switch (the round-1 rule) it walks round and fights it by tick 168. Fixed (M4-H1): a switch
+    /// to a target other than the one held just before (or one given up) is a fresh chase.
     /// </summary>
-    [Fact(Skip = "BUG-0149: a stall count carried across a target switch makes the chaser give up a reachable enemy behind a short detour")]
+    [Fact]
     public void StalledChaser_SwitchesToAnEnemyBehindAWall_WalksRoundAndFightsIt()
     {
         string[] rows = PlateauMap();

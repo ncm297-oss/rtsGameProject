@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-08-1435, task M4-3a |
 | System | fog of war / combat targeting / docs |
-| Fixed by | |
+| Fixed by | M4-H1 (sim track): item 1 `FogStore` caps a circle at the map's diagonal (`QA/FogQaTests.MaxSight64_OnA24CellMap_MatchesTheOracle` un-skipped); items 2-4 docs/03 (target validity: a holder scans at reach, needs a spotter beyond its sight; fog "Known limits": the 4-tick view / combat disagreement, `MaxSight` caps units too) |
 
 ## Repro
 1. **Circle capped at the map's side, not its diagonal.** `FogQaTests.MaxSight64_OnA24CellMap_MatchesTheOracle`

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open (items 1-2 fixed in `fea7963`; 3-4 are notes for the Producer) |
+| Status | fixed |
 | Found | 2026-10-08-0313, task M4-2a |
 | System | sim: orders queue storage; QA rows; brief wording (sim track) |
-| Fixed by | `fea7963`: item 1 (doc remarks on `QueuePosition` / `QueueTypeId` point to `QueuedTarget`), item 2 (ShoveQaTests 2-player row back on combat) |
+| Fixed by | items 1-2 `fea7963`; items 3-4 M4-H1 (sim track): BUG-0149 fixed and its row un-skipped; the seed-21 replay re-recorded, `GatherWedgeQaTests` checks every checkpoint (BUG-0211) |
 
 ## Repro / Actual
 1. **`UnitStore.QueuePosition` holds non-positions.** A queued Attack keeps its target as `(slot, generation)` floats in

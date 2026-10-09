@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-08-0313, Producer ACCEPT reruns (sim track; test-only) |
 | System | QA Perf row `sim/Rts.Sim.Tests/Stress/CombatScaleQaTests.cs` (M4-1) |
-| Fixed by | |
+| Fixed by | M4-H1 (sim track): the row discards a warm-up pair, then runs four pairs in alternating order and compares medians |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --no-build --filter "FullyQualifiedName~TightBlob2500_OneEnemyAtTheFarCorner_ScansNearFree"`

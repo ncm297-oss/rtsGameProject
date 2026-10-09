@@ -16,7 +16,7 @@ namespace Rts.Sim.Tests.QA;
 /// hand-built three-level map (corners, edges, the lip from level 0 onto level 2, buildings at the border, viewers
 /// sharing a cell in both orders, many updates with explored = the union of every past oracle); tiny and huge sights;
 /// the 4-tick staleness of the owner's fog; the Catapult (range 24 > sight 18) with and without a spotter; a shot whose
-/// shooter walked down before it landed; and a hash-equal pair of worlds whose fog differs.
+/// shooter walked down before it landed; and pairs of worlds whose hashes and fog agree (or don't) (BUG-0215).
 /// </summary>
 public class FogQaTests
 {
@@ -207,10 +207,10 @@ public class FogQaTests
     }
 
     /// <summary>
-    /// A map smaller than the sight circle's diameter: the stamp's radius is capped at the map's longer side, not its
-    /// diagonal, so a corner viewer of sight 64 m misses the far cells it should see on a 24-cell map (BUG-0216).
+    /// A map smaller than the sight circle's diameter: the stamp's radius is capped at the map's diagonal, so a corner
+    /// viewer of sight 64 m sees every cell within it on a 24-cell map (BUG-0216: it was capped at the longer side).
     /// </summary>
-    [Fact(Skip = "BUG-0216: a sight circle is capped at the map's side, not its diagonal")]
+    [Fact]
     public void MaxSight64_OnA24CellMap_MatchesTheOracle() => MaxSight64_AndTinySight_FromCornersAndCentre_MatchTheOracle(24);
 
     /// <summary>
@@ -296,20 +296,21 @@ public class FogQaTests
     }
 
     /// <summary>
-    /// Docs/03 says the visible bits are derived ("a save re-stamps at load"). They are a function of the positions at the
-    /// last update, not of the state now: two worlds with the same state hash (same explored bits, same positions), one
-    /// whose spotter stood next to the enemy at the last update, differ in what their holding Catapult takes before the
-    /// next update. A save taken between updates and re-stamped at load would play differently from the uninterrupted run
-    /// (BUG-0215).
+    /// The visible bits are a function of the positions at the last update, not of the state now, so they are hashed
+    /// (BUG-0215). Two worlds reach one state by different paths (b's spotter visits a third point between updates, which
+    /// no update sees); their hashes are equal, their fog is equal, and the same Attack order plays the same future.
     /// </summary>
-    [Fact(Skip = "BUG-0215: the fog's visible bits are not derived from hashed state between updates")]
-    public void TwoWorldsWithTheSameStateHash_PlayTheSameFuture() => SameHashDifferentFog(assertSameFuture: true);
-
-    /// <summary>The setup of <see cref="TwoWorldsWithTheSameStateHash_PlayTheSameFuture"/>, pinned as it is today (BUG-0215).</summary>
     [Fact]
-    public void Bug0215_TwoWorldsWithTheSameStateHash_DifferInTheirFog() => SameHashDifferentFog(assertSameFuture: false);
+    public void TwoWorldsWithTheSameStateHash_PlayTheSameFuture() => SameHashScene(bLastUpdateNear: true, bDetour: true);
 
-    private void SameHashDifferentFog(bool assertSameFuture)
+    /// <summary>
+    /// BUG-0215's scene: at the last update a's spotter stood beside the enemy and b's far away; right after it a's is put
+    /// where b's is. The positions match but the fog doesn't, and (since the fix) neither do the hashes.
+    /// </summary>
+    [Fact]
+    public void Bug0215_TwoWorldsWhoseFogDiffers_HashDifferently() => SameHashScene(bLastUpdateNear: false, bDetour: false);
+
+    private void SameHashScene(bool bLastUpdateNear, bool bDetour)
     {
         Simulation a = Flat(size: 64, units: 16), b = Flat(size: 64, units: 16);
         var cats = new EntityHandle[2];
@@ -325,7 +326,7 @@ public class FogQaTests
             s.Enqueue(Command.HoldPosition(0, spotter));
             k++;
         }
-        Vector2 near = At(a, 10, 32, 27f), far = At(a, 10, 5);
+        Vector2 near = At(a, 10, 32, 27f), far = At(a, 10, 5), aside = At(a, 50, 50);
         void Set(Simulation s, Vector2 p) => s.World.Units.Position[2] = s.World.Units.PrevPosition[2] = p;
         void ToNextUpdate()
         {
@@ -337,32 +338,43 @@ public class FogQaTests
         Set(b, far);
         ToNextUpdate(); // both explore far too
         Set(a, near);
-        ToNextUpdate(); // the last update: a's spotter near, b's far
+        if (bDetour)
+        {
+            // b's spotter stands aside for the ticks between updates, and is near again just before the update.
+            Set(b, aside);
+            a.Tick();
+            b.Tick();
+            Assert.False(VisionSystem.IsUpdateTick(a.TickNumber - 1));
+        }
+        if (bLastUpdateNear) Set(b, near);
+        ToNextUpdate(); // the last update
         Set(a, far);    // the same positions again
+        Set(b, far);
         ulong ha = a.StateHash(), hb = b.StateHash();
         bool sameFog = a.World.Fog.Visibility(0).SequenceEqual(b.World.Fog.Visibility(0));
         _out.WriteLine($"tick {a.TickNumber}: hash a {ha:X16}, b {hb:X16}; same fog: {sameFog}");
+        if (!bLastUpdateNear)
+        {
+            Assert.False(sameFog);
+            Assert.NotEqual(ha, hb);
+            return;
+        }
+        Assert.True(sameFog);
         Assert.Equal(ha, hb);
         // The same order in both.
         a.Enqueue(Command.Attack(0, cats[0], targets[0], isBuilding: false));
         b.Enqueue(Command.Attack(0, cats[1], targets[1], isBuilding: false));
         int diverged = -1;
-        for (int t = 0; t < 3 && diverged < 0; t++)
+        bool taken = false;
+        for (int t = 0; t < 40 && diverged < 0; t++)
         {
             a.Tick();
             b.Tick();
+            taken |= a.World.Units.Target[cats[0].Index] == targets[0];
             if (a.StateHash() != b.StateHash()) diverged = a.TickNumber - 1;
         }
         _out.WriteLine($"diverged at tick {diverged}; a's catapult target {a.World.Units.Target[cats[0].Index]}, b's {b.World.Units.Target[cats[1].Index]}");
-        if (assertSameFuture)
-        {
-            Assert.True(sameFog);
-            Assert.Equal(-1, diverged);
-        }
-        else
-        {
-            Assert.False(sameFog);
-            Assert.True(diverged >= 0, "the two runs never diverged");
-        }
+        Assert.Equal(-1, diverged);
+        Assert.True(taken, "the order was never taken: the future is idle in both"); // (it is dropped at the next update: no spotter)
     }
 }

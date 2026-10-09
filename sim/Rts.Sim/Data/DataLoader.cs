@@ -744,13 +744,35 @@ public static partial class DataLoader
             catch (JsonException e)
             {
                 string where = e.LineNumber is long line ? $"line {line + 1}, byte {e.BytePositionInLine + 1}" : "unknown position";
-                Error(e.Path ?? "$", $"malformed JSON at {where}: {e.Message}");
+                string? expected = ExpectedKind(e.Message);
+                // BUG-0113: a well-formed file with a value of the wrong type names what the field wants, not a CLR type.
+                Error(e.Path ?? "$", expected != null ? $"wrong type of value at {where}: expected {expected}" : $"malformed JSON at {where}: {e.Message}");
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
                 Error("", $"cannot read file: {e.Message}");
             }
             return null;
+        }
+
+        /// <summary>
+        /// What a field wants, in an author's words, when <paramref name="message"/> is System.Text.Json's "could not be
+        /// converted to" error (a value of the wrong type in a well-formed file); null for any other error (a syntax error).
+        /// </summary>
+        private static string? ExpectedKind(string message)
+        {
+            const string Marker = "could not be converted to ";
+            int at = message.IndexOf(Marker, StringComparison.Ordinal);
+            if (at < 0) return null;
+            string type = message[(at + Marker.Length)..];
+            int end = type.IndexOf(". Path:", StringComparison.Ordinal);
+            if (end >= 0) type = type[..end];
+            if (type.Contains("System.Int32", StringComparison.Ordinal) || type.Contains("System.Int64", StringComparison.Ordinal)) return "a whole number";
+            if (type.Contains("System.Double", StringComparison.Ordinal) || type.Contains("System.Single", StringComparison.Ordinal)) return "a number";
+            if (type.Contains("System.Boolean", StringComparison.Ordinal)) return "true or false";
+            if (type.Contains("List`1", StringComparison.Ordinal) || type.EndsWith("[]", StringComparison.Ordinal)) return "a list";
+            if (type == "System.String") return "a string";
+            return "an object";
         }
 
         /// <summary>

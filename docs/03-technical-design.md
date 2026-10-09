@@ -1223,9 +1223,13 @@ every brawl gave up three crowd-blocked chases, went reach-only and stood Idle 2
 worker) does not count: it may never move, and chasers pressing behind it never stopped (a 200-unit cross-map scene).
 Nor does a building target, which can take minutes to fall; chasers that find no room at a building give it up as
 before. A target on another plateau, behind a wall, or outrunning the chaser has no friend of the chaser fighting it,
-so those chases still end. Switching from one target to another keeps the stall count (`Engage` resets it only for a
-unit that had no target): a unit whose scans took two targets in turn (one drifting in and out of its sight) restarted
-the count every scan and chased forever. So does a retaliator
+so those chases still end. Switching back to the target held just before (`UnitStore.ChasePrev`, set by each straight
+switch, cleared with the target), or to the one it gave up, keeps the stall count: a unit whose scans took two targets
+in turn (one drifting in and out of its sight) restarted the count every scan and chased forever. A switch to any
+other target is a fresh chase (M4-H1, BUG-0149: before, every switch kept the count, so a chaser stalled below a cliff
+that switched to a reachable enemy behind a short wall gave it up on the next scan, three times, and stood Idle in
+sight of it; `QA/CombatFriendExceptionQaTests.StalledChaser_SwitchesToAnEnemyBehindAWall_WalksRoundAndFightsIt`; a known limit:
+three or more targets taken in a cycle are each a fresh chase). So does a retaliator
 the leash pulls back, and a chaser that loses sight of its target while not gaining on it, whether or not its scan
 then finds another target (BUG-0150, M4-2a fix round: before, a switch to another target in sight did not give the
 lost one up, and a caster at the sight edge reached by a path leading out of sight and a nearer worker took turns
@@ -1817,7 +1821,9 @@ repair"; the ghost is view work that calls `World.CanPlace`). Closes BUG-0078 by
   **plateau** (M3-H2, BUG-0097, see "Implementation (M3-4)": never onto another plateau of the same level). Once the
   plateau has no free cell (found once, not once per unit), the rest, the leftovers, spread over its passable cells by
   the same ring order, one leftover per cell before any cell takes a second, each pass set off the cell's center in its
-  own direction (M3-H2, BUG-0095: they used to stack on one point), so no two units share a point and two leftovers
+  own direction (M3-H2, BUG-0095: they used to stack on one point; passes 1-24 take eight directions at three radii, later
+  ones eight turned directions at radii that never repeat, M4-H1, BUG-0133: the 24 offsets used to repeat), so no two
+  units share a point and two leftovers
   share a cell only when there are more of them than cells; only a plateau with no passable cell left outside the
   footprint falls back to the nearest passable cell. Occupants come from the spatial hash, rebuilt once per push-out so it
   matches the units of that moment, each cell's answer kept in the flow-field builder's scratch; a pushed unit's
@@ -2081,7 +2087,12 @@ three gates below.
   faction, or a common or own tech, becomes reachable once everything its resolved `requires` names is, and (a tech) at
   least `count` of its any-of slots hold a reachable own building. A `requiresAnyOf` some faction can never fill is one
   error at the field, naming the factions. So an any-of whose members need its own tech first (Age II over three halls
-  that each need Age II) is caught; cycles through plain `requires` stay BUG-0099's error. Also (BUG-0099 item 2): a tech
+  that each need Age II) is caught; cycles through plain `requires` stay BUG-0099's error. Since M4-H1 (BUG-0134) the fixpoint
+  also asks where things are made: a tech becomes reachable only once the faction's building of its `researchedAt` slot
+  is, and a unit only once its `trainedAt` building and its `requires` are. A faction with no any-of error that still
+  can never have some building, tech or unit (the Armory requiring Melee Weapons, which is researched only at the Armory's
+  slot) is one error at the first such entry (a building's `requires`, else a tech's `researchedAt`, else a unit's
+  `trainedAt`), naming the faction and the rest it locks (`QA/RequirementReachQaTests.ABuildingRequiringATechResearchedOnlyAtItself_IsAnError`). Also (BUG-0099 item 2): a tech
   effect whose filters no unit meets (any faction's for a common tech, its own faction's for a faction upgrade) is one
   error at its `appliesTo`, since the tech would be paid for and change nothing. Shipped data and D3's load with 0
   errors.
@@ -2114,10 +2125,10 @@ come later (see "Not yet" below).
 
 - **The grid.** `World.Fog` (`FogStore`): per player a `byte[]` of map cells, row-major (`y * Width + x`), 0 unexplored,
   1 explored, 2 visible (`VisionConstants.Unexplored` / `Explored` / `Visible`). Allocated with the world: one byte a
-  cell a player, plus a packed explored bit a cell, plus two reveal ints per unit slot per player. On the 1,024-cell
-  map with 4,096 slots and 2 players that is 2.42 MB (2 x 1.18 MB + 64 KB), which took the world from 227.98 MB to
-  230.43 MB; `FieldBuildFairnessQaTests.World_1024Map_CacheStays32_MemoryBounded`'s bound was re-baselined from 228 to
-  230.5 MB for it (BUG-0214).
+  cell a player, plus a packed explored bit and a packed visible bit a cell (M4-H1), plus two reveal ints per unit slot
+  per player. On the 1,024-cell map with 4,096 slots and 2 players that is 2.68 MB (2 x 1.31 MB + 64 KB), which took
+  the world from 227.98 MB to 230.69 MB; `FieldBuildFairnessQaTests.World_1024Map_CacheStays32_MemoryBounded`'s bound
+  was re-baselined from 228 to 230.5 MB for M4-3a (BUG-0214) and to 230.765 MB for the visible bits (BUG-0215).
 - **When.** Phase 12 (`VisionSystem.Run`) rebuilds every player's fog on the ticks where `tick % 4 == 1`
   (`VisionConstants.UpdateInterval` 4, `UpdatePhase` 1: 5 Hz). All players update on the same tick (not spread over the
   four: the update is cheap, see Cost). Tick 1 is the first because the commands queued before the match's first tick
@@ -2140,10 +2151,18 @@ come later (see "Not yet" below).
   Flying units would see every level; none exists yet (no code).
 - **Visible to explored.** A cell visible at the last update that no circle covers now becomes explored; explored stays
   for the match. A dead unit's circle is gone at the next update.
-- **State and hashing.** The explored bits (a `ulong` per 64 cells per player, set when a cell is first seen) and the
-  high-ground reveals in force are hashed. The visible bits, `Version` and the stamp boxes are derived: rebuilt by every
-  update, not hashed (`StateHashTests.FogVisibleBits_Versions_AndBoxes_AreDerived_AndNotHashed`). A save (M6) must run an
-  update after it restores the units so the visible bits exist before the first tick.
+- **State and hashing.** Hashed: the explored bits (a `ulong` per 64 cells per player, set when a cell is first seen),
+  the visible bits (packed the same way, rewritten by every update) and the high-ground reveals in force. The visible
+  bits are state, not derived (M4-H1, BUG-0215): between updates they follow from where the units stood at the last
+  update, which the state no longer holds, and combat reads them (`FogStore.SeesUnit` / `SeesBuildingCells` read the
+  packed bits). So two worlds with one hash see the same cells and play the same future
+  (`QA/FogQaTests.TwoWorldsWithTheSameStateHash_PlayTheSameFuture`, `StateHashTests.Hash_CoversEveryVisibleBit_OfEveryPlayer`).
+  Derived and not hashed: the byte map (the view's copy of the two bit sets), `Version` and the stamp boxes
+  (`StateHashTests.FogByteMap_Versions_AndBoxes_AreDerived_AndNotHashed`). A save (M6) stores the explored and visible
+  bits and the reveals, and rebuilds the byte map from the bits at load; it must not run an update at load (that would
+  re-stamp from the restored positions, which is not the uninterrupted run's fog between updates).
+  The golden was regenerated once for the visible bits: with them left out of the hash locally the old golden
+  reproduced every `k` line, so no trajectory changed, only the hash composition.
 - **Target validity** (combat, M4-3a). A unit may take an enemy unit (scan, retaliation, an explicit Attack, keeping a
   target) when its owner sees it: (a) the unit sees it itself now: within its sight, and at or below its own level
   unless within 4 m (the stamp's rule measured unit to unit at this tick, so a unit never misses what its own circle
@@ -2153,12 +2172,15 @@ come later (see "Not yet" below).
   when it starts), on a target its owner doesn't see is dropped like a forbidden one. A unit with a target checks on its
   scan tick; a target its owner no longer sees (it walked up a plateau out of sight, or out of every own circle) is lost
   as the scan losing it is: given up when the chaser wasn't gaining on it (BUG-0137), else dropped, and a scan may take
-  another. A friendly-fire or splash victim needs no visibility (a hit, not an acquisition). Since the scan radius is the
-  unit's sight, (a) holds for every scan candidate on a one-level map, and every `Scenario/CounterTriangleTests` row plays
+  another. A friendly-fire or splash victim needs no visibility (a hit, not an acquisition). Since a walking unit's scan radius is
+  its sight, (a) holds for every scan candidate of a walking unit on a one-level map, and every `Scenario/CounterTriangleTests` row plays
   exactly as before M4-3a (the two siege-against-a-building rows now place a spotter beside the building: their
-  attackers start out of sight of it, and their explicit Attack would be dropped). The Catapult (range 24 m, sight 18 m) is the one shipped unit that outranges its sight: on its
-  own it acquires at 18 m as before; an explicit Attack on a target no own unit or building sees is dropped (M4-3b's
-  last-known buildings list relaxes that for buildings).
+  attackers start out of sight of it, and their explicit Attack would be dropped). The Catapult (range 24 m, sight 18 m) is the one shipped unit that outranges its sight: walking, on
+  its own it acquires at 18 m as before; an explicit Attack on a target no own unit or building sees is dropped (M4-3b's
+  last-known buildings list relaxes that for buildings). A holding unit (and one past `MaxGiveUps`) scans at its reach
+  instead (24 + 0.9 + 0.9 = 25.8 m for a holding Catapult), so a candidate beyond its sight passes only through (b) or
+  (c): with no spotter a holding Catapult takes nothing between 18 and 25.8 m on a flat map (BUG-0216;
+  `QA/FogQaTests.Catapult_OutrangesItsSight_NeedsASpotter_...`). A holder's reach beyond its sight needs a spotter.
 - **The high-ground reveal.** A hit that lands on an enemy unit or building (a melee hit, a projectile's impact, or its
   splash) from an attacker standing on a higher level than the victim reveals that attacker to the victim's owner until
   `tick + VisionConstants.HighGroundRevealTicks` (40 = 2 s, docs/02), refreshed by every such hit. The attacker's level
@@ -2180,6 +2202,14 @@ come later (see "Not yet" below).
   candidate that would beat its best so far (BUG-0217; asking every candidate cost 257k calls a tick at 1,000 v 1,000).
   `Vision/VisionGatePerfTests` (whole tick, `MapBrawl` on seed 3's 3-level map, alone, two runs): 250 v 250 3.84 ms
   before, 3.50 ms after (budget 4 ms); 1,000 v 1,000 (reported) 30.3 ms before, 25.2 ms after (24.7 ms without fog).
+- **Known limits** (M4-3a, BUG-0216). (1) The view and combat can disagree for up to 4 ticks: `Fog.CanSeeUnit` (what
+  the view hides by) is the last update's fog, while combat also counts each unit's own sight at this tick (rule (a)
+  above), so a unit can start shooting an enemy the player's screen still hides until the next update (a builder's
+  choice: one-level fights play as before M4-3a; M4-V4 should not be surprised by it). (2) `DataLimits.MaxSight` (64 m)
+  caps a unit's `sight` as well as a building's (one fog mask per distinct radius); shipped sights are 10-24 m. (3) A
+  circle is capped at the map's diagonal (since BUG-0216; it was capped at the longer side, which cut a 64 m sight in
+  the corner of a map under 46 cells). (4) The byte map and the packed bits are two copies of the visible set; combat
+  reads the bits, the view the bytes; both are written only by the update.
 - **Not yet.** M4-3b: towers' `attack` and `detector` fields and buildings that shoot, the per-player "last known
   buildings" list (ghosts in explored fog, docs/02), the placement rule "footprint explored by the player". M4-4: zone
   vision (Darkness / Sandstorm: per-player vision blocker masks applied after the stamp). M4-5: `bool[] Detected` per
@@ -2252,7 +2282,9 @@ Example unit definition (one entry of the `"units"` array in `units.json`):
 `Rts.Sim.Data.DataLoader.LoadAll(dataDir)` returns a `DataLoadResult`: either an immutable
 `GameData` or the full list of `DataError`s (file relative to `game/data/`, field path such as
 `units[2].attack.type`, message). It never throws on bad data: a missing file, malformed JSON
-(reported with line and byte), or a bad field each become one error, and every file is still
+(reported with line and byte), a value of the wrong type in a well-formed file (line and byte, and what the field
+wants: "expected a whole number", "a number", "true or false", "a string", "a list", "an object"; M4-H1, BUG-0113: it
+used to print the CLR type), or a bad field each become one error, and every file is still
 checked. The data-validation test is `DataValidationTests.ShippedData_LoadsWithNoErrors`.
 
 Shipped files: `common/damage_table.json`, `common/rules.json`, `common/resources.json` (M3-1), `common/techs.json`
@@ -3724,6 +3756,14 @@ AiPlayer
   it, for format 3 test replays recorded with combat off, which can't say so), enqueues each command when `TickNumber == command.Tick - 1`
   in log order, checks the sim stamps it with the logged tick and sequence, hashes with its own
   recorder, and stops at the first checkpoint whose hash differs, reporting the tick and both hashes.
+- **Hash format** (M4-H1, BUG-0211). A checkpoint is `Simulation.StateHash()` as the build that recorded it composed
+  it. The file has no hash-format version: any change to what the state hash covers (a newly hashed field, such as the
+  fog's explored bits in M4-3a and its visible bits in M4-H1) changes every checkpoint of every pre-recorded replay
+  even when the game plays identically, so playback reports a checkpoint mismatch at the first checkpoint. That is
+  expected: re-record (or, for the golden, regenerate) in the same change, after checking with the new state left out
+  of the hash locally that the old checkpoints still match (the proof that only the composition moved). Replays kept
+  as bug repros (`studio/bugs/*.replay`) are re-recorded from their scene the same way
+  (`QA/GatherWedgeQaTests`' seed-21 recording was, in M4-H1).
 - **Data hash:** `GameData.ContentHash()` is FNV-1a (`StateHasher`) over every field of every def
   in id order, strings char by char (never `string.GetHashCode`). Display text is included, so any
   data edit, a balance change or a rename, refuses old replays. A test changes every field of every
@@ -3757,8 +3797,9 @@ AiPlayer
   `cross_map_seed1.replay`: `CrossMapScenario` seed 1, 200 units ordered across the map, exactly
   1,500 ticks, checkpoints every 100 (about 16 KB). Regenerated in M3-1 (format 3, the
   resource store and grid version in the hash, `resources.json` in the data hash; its commands and
-  unit trajectories are unchanged); last in M4-2a (format 4: the `combat` line and 13-field command lines; the data
-  hash for the ram's `attack.targets`; every `k` line identical). `ReplayGoldenTests` plays it back and fails on
+  unit trajectories are unchanged); in M4-2a (format 4: the `combat` line and 13-field command lines; the data
+  hash for the ram's `attack.targets`; every `k` line identical); last in M4-H1 (the fog's visible bits in the state
+  hash, BUG-0215: every `k` line moved, and with the visible bits left out locally the old file reproduced every one). `ReplayGoldenTests` plays it back and fails on
   the first mismatching checkpoint. When a deliberate change alters outcomes (movement, tick order,
   RNG use, any `game/data` edit), run the tests once with the environment variable
   `RTS_REGEN_GOLDEN=1`: the test rewrites the file and then fails with "golden regenerated; rerun
@@ -3779,7 +3820,9 @@ AiPlayer
 - The 2,500-unit crowd rows (M1-9, `CrowdPerfTests`, BUG-0044 / BUG-0047): the one-player tight
   blob (seed 99, 2,500 units within 12 path cells of the central cell, all ordered to it; 5 warm-up
   ticks, a full GC, 300 timed ticks) must average at most 4.6 ms (the M1-4d-3 target was 4.5 ms; widened in M4-1 for
-  the combat checks' +0.08 ms, BUG-0140, see "Implementation (M4-1)"). Two report rows
+  the combat checks' +0.08 ms, BUG-0140, see "Implementation (M4-1)"). Headroom (M4-H1 note): alone, in a fresh process,
+  it measures 4.49-4.54 ms on the dev PC, 0.06-0.1 ms under the bound, so it fails under any other load or once the PC
+  slows after a few seconds of sustained load (BUG-0158); only a failure alone counts. Two report rows
   guard the plug test's cost where two players overlap all the time: the same blob with owners
   alternating (both players contest the point) under 10.5 ms, and 2,500 units to 4 points, one player
   per point, seed 1, 600 ticks, under 3.7 ms: what each cost before the plug answers were cached.

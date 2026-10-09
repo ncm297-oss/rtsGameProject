@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open: item 2 done on the sim side in M4-H1 (`Scenario/CounterTriangleScene` public: `Fight`, `TimeToKill`, `Side`, the scene constants); the data track's `Content/CounterTriangleMarginsTests` should call it (items 1, 3 and the switch are data-track work) |
 | Found | 2026-10-08-1435, task D6 |
 | System | content tests (data track), docs/factions pages |
-| Fixed by | |
+| Fixed by | M4-H1 item 2 (sim half): `sim/Rts.Sim.Tests/Scenario/CounterTriangleScene.cs`; `Scenario/CounterTriangleTests` uses it, its 14 printed lines unchanged |
 
 ## Repro
 1. **Ages clause, surviving mutant.** In a scratch clone, change docs/02 line 115 to

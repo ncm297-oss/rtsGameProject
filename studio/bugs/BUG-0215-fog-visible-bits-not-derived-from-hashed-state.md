@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-08-1435, task M4-3a |
 | System | fog of war / state hash / (M6) save-load |
-| Fixed by | |
+| Fixed by | M4-H1 (sim track): the visible bits are hashed, packed one `ulong` a 64 cells a player (`FogStore._visible`, read by combat); golden regenerated once (with the visible bits left out locally the old golden reproduced every `k` line); `QA/FogQaTests.TwoWorldsWithTheSameStateHash_PlayTheSameFuture` un-skipped, `Bug0215_TwoWorldsWhoseFogDiffers_HashDifferently` asserts the opposite of the old pin; `StateHashTests.Hash_CoversEveryVisibleBit_OfEveryPlayer`, `PackedVisibleBits_MatchTheByteMap_AndAreWhatTheFogAnswers`; docs/03 "State and hashing" and docs/01 row (d) rewritten |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~FogQaTests.Bug0215"` (passes: it pins today's behavior).

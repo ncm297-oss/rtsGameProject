@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-07-2315 (re-check round 2 of 2026-10-07-2014), task M4-1 fix round 2 |
 | System | combat (BUG-0137 / BUG-0143 give-up: `CombatSystem.Engage` keeps `ChaseStall` when switching targets) |
-| Fixed by | |
+| Fixed by | M4-H1 (sim track): `UnitStore.ChasePrev` (hashed): a switch keeps the stall count only back to the target held just before or to the given-up one, else a fresh chase; `QA/CombatFriendExceptionQaTests.StalledChaser_SwitchesToAnEnemyBehindAWall_WalksRoundAndFightsIt` un-skipped; `CrowdRowSweepStressTests.FiveHundredUnitsTo500RandomGoals_Seeds1To4_AllTerminate` green |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~StalledChaser_SwitchesToAnEnemyBehindAWall_WalksRoundAndFightsIt"`

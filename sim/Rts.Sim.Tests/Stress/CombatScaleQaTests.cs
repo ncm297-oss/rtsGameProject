@@ -62,23 +62,29 @@ public class CombatScaleQaTests
 
     /// <summary>
     /// Brief criterion 8: "scanning in a world with no enemy in sight must be near free". The 2,500 blob with one enemy at
-    /// the far corner (so every unit's scan runs, and finds only its own buckets) against the same blob alone, alternated
-    /// three times in one process: the enemy costs at most 0.25 ms a tick on average. Also asserts the far enemy is
-    /// never targeted and the blob's movement is bit-identical to the alone run.
+    /// the far corner (so every unit's scan runs, and finds only its own buckets) against the same blob alone: the enemy
+    /// costs at most 0.25 ms a tick, median against median. BUG-0158: a first pair of runs is discarded (the machine slows
+    /// after about two seconds of sustained load, which an alone-first order read as the enemy's cost), then four pairs
+    /// run with the order alternating (alone first, then enemy first), so a slowdown's onset lands on both sides alike.
+    /// Also asserts the far enemy is never targeted and the blob's movement is bit-identical to the alone run.
     /// </summary>
     [Fact]
     [Trait("Category", "Perf")]
     public void TightBlob2500_OneEnemyAtTheFarCorner_ScansNearFree()
     {
+        Average(Blob(farEnemy: false), 300); // warm-up pair, discarded
+        Average(Blob(farEnemy: true), 300);
         var alone = new List<double>();
         var withEnemy = new List<double>();
-        for (int r = 0; r < 3; r++)
+        for (int r = 0; r < 4; r++)
         {
+            bool enemyFirst = r % 2 == 1;
+            if (enemyFirst) withEnemy.Add(Average(Blob(farEnemy: true), 300));
             alone.Add(Average(Blob(farEnemy: false), 300));
-            withEnemy.Add(Average(Blob(farEnemy: true), 300));
+            if (!enemyFirst) withEnemy.Add(Average(Blob(farEnemy: true), 300));
         }
-        double a = alone.Average(), e = withEnemy.Average();
-        _out.WriteLine($"2,500 one-player blob: alone {string.Join(" / ", alone.Select(x => x.ToString("F2")))} ms, one far enemy {string.Join(" / ", withEnemy.Select(x => x.ToString("F2")))} ms; delta {e - a:+0.000;-0.000} ms");
+        double a = Median(alone), e = Median(withEnemy);
+        _out.WriteLine($"2,500 one-player blob: alone {string.Join(" / ", alone.Select(x => x.ToString("F2")))} ms, one far enemy {string.Join(" / ", withEnemy.Select(x => x.ToString("F2")))} ms; median delta {e - a:+0.000;-0.000} ms");
 
         // Same blob behavior with and without the far enemy: nobody engages it.
         Simulation s0 = Blob(false), s1 = Blob(true);
@@ -94,6 +100,15 @@ public class CombatScaleQaTests
             Assert.Equal(default, u1.Target[i]);
         }
         Assert.True(e - a <= 0.25, $"one enemy at the far corner costs {e - a:F3} ms a tick over the blob alone ({a:F2} ms)");
+    }
+
+    /// <summary>The median of <paramref name="xs"/> (the mean of the middle two for an even count).</summary>
+    internal static double Median(List<double> xs)
+    {
+        var sorted = new List<double>(xs);
+        sorted.Sort();
+        int n = sorted.Count;
+        return n % 2 == 1 ? sorted[n / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2.0;
     }
 
     /// <summary>A 2,500 one-player blob with one enemy at the far corner: its scan ticks allocate nothing.</summary>

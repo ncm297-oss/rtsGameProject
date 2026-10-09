@@ -804,7 +804,7 @@ public class StateHashTests
     // ---------- M4-1: combat state ----------
 
     /// <summary>The combat fields of UnitStore (M4-1); each one, mutated on a live unit, must flip the hash.</summary>
-    private static readonly string[] CombatFields = { "Hp", "Target", "TargetIsBuilding", "CooldownTicks", "WindupTicks", "LastAttacker", "AnchorPosition", "Mode", "ChaseBest", "ChaseStall", "Ignored", "IgnoredIsBuilding", "GiveUps" };
+    private static readonly string[] CombatFields = { "Hp", "Target", "TargetIsBuilding", "CooldownTicks", "WindupTicks", "LastAttacker", "AnchorPosition", "Mode", "ChaseBest", "ChaseStall", "Ignored", "IgnoredIsBuilding", "GiveUps", "ChasePrev", "ChasePrevIsBuilding" };
 
     [Fact]
     public void Hash_CoversEveryCombatField_OnALiveUnit_AndRestoringItRestoresTheHash()
@@ -1071,23 +1071,80 @@ public class StateHashTests
     }
 
     /// <summary>
-    /// M4-3a: the visible bits, the update versions and the boxes are rebuilt by every update (derived), so they are not
-    /// hashed; a save (M6) stamps again at load. Changing them leaves the hash alone; the explored bits stay hashed.
+    /// BUG-0215: the visible bits are state (they follow from where the units stood at the last update, and combat reads
+    /// them), so every one of every player is hashed: flipping one moves the hash, flipping it back restores it.
     /// </summary>
     [Fact]
-    public void FogVisibleBits_Versions_AndBoxes_AreDerived_AndNotHashed()
+    public void Hash_CoversEveryVisibleBit_OfEveryPlayer()
+    {
+        Simulation a = Fogged(), b = Fogged();
+        Assert.Equal(a.StateHash(), b.StateHash());
+        ulong h0 = a.StateHash();
+        var visible = FogField<ulong[][]>(a.World, "_visible");
+        Assert.Equal(2, visible.Length);
+        Assert.Equal(48 * 48 / 64, visible[0].Length);
+        foreach (int p in new[] { 0, 1 })
+        {
+            int seen = -1;
+            for (int c = 0; c < 48 * 48 && seen < 0; c++)
+                if (a.World.Fog.IsVisible(p, c)) seen = c;
+            Assert.True(seen >= 0, $"player {p} sees nothing");
+            foreach (int bit in new[] { 0, 63, 64, 48 * 48 - 1, seen })
+            {
+                visible[p][bit >> 6] ^= 1UL << (bit & 63);
+                Assert.True(a.StateHash() != h0, $"player {p} cell {bit}");
+                visible[p][bit >> 6] ^= 1UL << (bit & 63);
+                Assert.Equal(h0, a.StateHash());
+            }
+        }
+    }
+
+    /// <summary>
+    /// The packed visible bits match the byte map on every cell after every update, and combat's read
+    /// (<see cref="Vision.FogStore.IsVisible"/>) is the packed bit: clearing it hides the cell though the byte still says visible.
+    /// </summary>
+    [Fact]
+    public void PackedVisibleBits_MatchTheByteMap_AndAreWhatTheFogAnswers()
+    {
+        Simulation a = Fogged();
+        a.Enqueue(Command.Move(0, new EntityHandle(0, a.World.Units.Generation[0]), CombatScenes.At(a, 30, 12)));
+        var visible = FogField<ulong[][]>(a.World, "_visible");
+        for (int t = 0; t < 60; t++)
+        {
+            a.Tick();
+            for (int p = 0; p < 2; p++)
+            {
+                ReadOnlySpan<byte> bytes = a.World.Fog.Visibility(p);
+                for (int c = 0; c < bytes.Length; c++)
+                    Assert.True((bytes[c] == Vision.VisionConstants.Visible) == ((visible[p][c >> 6] >> (c & 63) & 1) != 0), $"tick {t}, player {p}, cell {c}");
+            }
+        }
+        int seen = -1;
+        for (int c = 0; c < 48 * 48 && seen < 0; c++)
+            if (a.World.Fog.IsVisible(0, c)) seen = c;
+        visible[0][seen >> 6] &= ~(1UL << (seen & 63));
+        Assert.False(a.World.Fog.IsVisible(0, seen));
+        Assert.Equal(Vision.VisionConstants.Visible, a.World.Fog.Visibility(0)[seen]);
+    }
+
+    /// <summary>
+    /// The byte map (the view's copy of the explored and visible bits), the update versions and the stamp boxes are
+    /// derived, so they are not hashed: changing them leaves the hash alone.
+    /// </summary>
+    [Fact]
+    public void FogByteMap_Versions_AndBoxes_AreDerived_AndNotHashed()
     {
         Simulation a = Fogged(), b = Fogged();
         World w = a.World;
         byte[][] vis = FogField<byte[][]>(w, "_visibility");
         int seen = Array.IndexOf(vis[0], Vision.VisionConstants.Visible);
         Assert.True(seen >= 0);
-        vis[0][seen] = Vision.VisionConstants.Explored; // visible -> explored: the explored bit is unchanged
+        vis[0][seen] = Vision.VisionConstants.Explored; // the byte only: the packed bits are unchanged
         FogField<int[]>(w, "_version")[0] += 5;
         FogField<int[]>(w, "_visibleBox")[0]--;
         Assert.Equal(b.StateHash(), a.StateHash());
         // The audit: every FogStore array is one of these or hashed (above); a new one must be classified here.
-        var classified = new HashSet<string> { "_visibility", "_version", "_visibleBox", "_explored", "_revealUntil", "_revealGeneration",
+        var classified = new HashSet<string> { "_visibility", "_version", "_visibleBox", "_explored", "_visible", "_revealUntil", "_revealGeneration",
             "_levels", "_halfWidths", "_unitMask", "_buildingMask", "_lipMask", "_scratch", "_levelUsed", "_box" };
         foreach (FieldInfo f in typeof(Vision.FogStore).GetFields(BindingFlags.NonPublic | BindingFlags.Instance))
             if (f.FieldType.IsArray) Assert.True(classified.Contains(f.Name), $"FogStore.{f.Name} is not classified as hashed or derived");

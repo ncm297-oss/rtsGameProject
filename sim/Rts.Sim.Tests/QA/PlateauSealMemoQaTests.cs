@@ -257,9 +257,10 @@ public class PlateauSealMemoQaTests
 
     /// <summary>
     /// The dev's report: leftovers "share cells (never points)". With more than 24 leftovers per cell the per-pass offset
-    /// (8 directions x 3 radii) repeats, so leftovers of pass k and k + 24 in one cell stand on one point. BUG-0133.
+    /// (8 directions x 3 radii) repeated, so leftovers of pass k and k + 24 in one cell stood on one point. BUG-0133, fixed in
+    /// M4-H1: later passes take turned directions at radii that never repeat.
     /// </summary>
-    [Fact(Skip = "BUG-0133: past 24 leftovers a cell, the leftover offsets repeat and units share a point")]
+    [Fact]
     public void FourHundredPushedOntoATinyPlateau_NoTwoOnOnePoint()
     {
         (Simulation sim, int worker) = FourHundredInAHouseOnATinyPlateau(400);
@@ -267,18 +268,13 @@ public class PlateauSealMemoQaTests
         Assert.Equal(0, IdenticalPairs(sim.World.Units, 400));
     }
 
-    /// <summary>Pin for BUG-0133 (today's behaviour): up to 24 per cell no point is shared; at 400 some are. Flip to the skipped test above when fixed.</summary>
+    /// <summary>Up to 24 per cell the offsets are those of before the BUG-0133 fix (no point shared), and so are 150 pushed.</summary>
     [Fact]
-    public void Bug0133Pin_LeftoverOffsetsRepeatAfter24Passes()
+    public void OneHundredFiftyPushed_NoTwoOnOnePoint()
     {
         (Simulation few, int fw) = FourHundredInAHouseOnATinyPlateau(6 * 25); // 6 centers + 144 leftovers: 24 passes
         Assert.True(ConstructionSystem.StartBuild(few.World, fw, House, At(few, 22, 22), replaceQueue: true));
         Assert.Equal(0, IdenticalPairs(few.World.Units, 150));
-        (Simulation many, int mw) = FourHundredInAHouseOnATinyPlateau(400);
-        Assert.True(ConstructionSystem.StartBuild(many.World, mw, House, At(many, 22, 22), replaceQueue: true));
-        int same = IdenticalPairs(many.World.Units, 400);
-        _out.WriteLine($"400 pushed: {same} identical-position pairs");
-        Assert.True(same > 0, "BUG-0133 looks fixed: flip this pin to FourHundredPushedOntoATinyPlateau_NoTwoOnOnePoint");
     }
 
     private static int IdenticalPairs(UnitStore u, int count)

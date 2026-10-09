@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open: item 1 fixed in M4-H1 (sim track); item 2 (the 10k-unit load times a failing load) open |
 | Found | 2026-10-07-1415, task M3-6 |
 | System | data loader, QA load test |
-| Fixed by | |
+| Fixed by | M4-H1 item 1: a wrong-typed value reads "wrong type of value at line L, byte B: expected a whole number" (or a number, true or false, a string, a list, an object); `DataValidationTests.BrokenBuildingField_YieldsExactlyOneError` rows |
 
 ## Repro
 1. In `common/techs.json` set `age_ii.requiresAnyOf.count` to `"2"`, `2.5` or `1e10`. The one error reads:

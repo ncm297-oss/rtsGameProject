@@ -149,7 +149,7 @@ public class RequirementReachQaTests
     /// forge is reachable either. docs/03 and BUG-0100 ask that a requirement that can never be met be a load error; this
     /// one loads. BUG-0134.
     /// </summary>
-    [Theory(Skip = "BUG-0134: a building requiring a tech researched only at its own slot loads clean")]
+    [Theory]
     [InlineData("malazan_armory", "[\"melee_weapons_1\"]")]
     [InlineData("malazan_armory", "[\"moranth_supply\"]")]
     public void ABuildingRequiringATechResearchedOnlyAtItself_IsAnError(string id, string raw)
@@ -159,17 +159,10 @@ public class RequirementReachQaTests
         DataLoadResult r = DataLoader.LoadAll(dir.Path);
         Assert.Null(r.Data);
         Assert.NotEmpty(r.Errors);
-    }
-
-    /// <summary>Pin for BUG-0134 (today's behaviour). Flip to the skipped theory above when fixed.</summary>
-    [Theory]
-    [InlineData("malazan_armory", "[\"melee_weapons_1\"]")]
-    [InlineData("malazan_armory", "[\"moranth_supply\"]")]
-    public void Bug0134Pin_ABuildingRequiringATechResearchedOnlyAtItself_LoadsClean(string id, string raw)
-    {
-        using TestDataDir dir = TestDataDir.CopyOfShipped();
-        SetRequires(dir, id, raw);
-        DataLoadResult r = DataLoader.LoadAll(dir.Path);
-        Assert.True(r.Ok, "BUG-0134 looks fixed: flip this pin. " + string.Join("; ", r.Errors));
+        // BUG-0134 (fixed M4-H1): one error, at the Armory's requires, naming the faction and what it locks.
+        DataError e = Assert.Single(r.Errors);
+        Assert.Contains("buildings[", e.Path);
+        Assert.Contains("malazan", e.Message);
+        Assert.Contains(id, e.Message);
     }
 }

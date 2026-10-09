@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-08-1435, task M4-3a |
 | System | QA regression rows / replays |
-| Fixed by | |
+| Fixed by | M4-H1 (sim track): `studio/bugs/BUG-0146-seed21-wood-wedge.replay` re-recorded from `M3PlayableTest -- --seed 21 --break 19` (format 4, 11,541 ticks, data hash 1437FEB446E68586); `GatherWedgeQaTests` checks all 11,541 checkpoints, `SameGameDataHashes` pruned to the recording's own; docs/03 "Hash format" note |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~GatherWedgeQaTests"` on M4-3a (977db1d) with

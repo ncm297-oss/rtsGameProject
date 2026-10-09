@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-07-1715, task M3-H2 |
 | System | data loader (requires reachability, `CheckAnyOfReachable`) |
-| Fixed by | |
+| Fixed by | M4-H1 (sim track): the reachability fixpoint needs a tech's `researchedAt` building and a unit's `trainedAt` building; anything a faction can still never have is one error at the first entry; `QA/RequirementReachQaTests.ABuildingRequiringATechResearchedOnlyAtItself_IsAnError` un-skipped (pin removed) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~RequirementReachQaTests.Bug0134Pin"` (passes: it pins

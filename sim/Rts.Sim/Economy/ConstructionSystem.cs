@@ -221,12 +221,33 @@ public static class ConstructionSystem
         new(0.7f, 0.7f), new(-0.7f, 0.7f), new(-0.7f, -0.7f), new(0.7f, -0.7f),
     };
 
-    /// <summary>Where in its cell a leftover of pass <paramref name="pass"/> (1 or more) stands, relative to the center: inside the cell, never the center itself.</summary>
+    // The same eight turned by 22.5 degrees (cos 0.9239, sin 0.3827), for passes past the first 24 (BUG-0133).
+    private static readonly Vector2[] s_leftoverTurned =
+    {
+        new(0.9239f, 0.3827f), new(-0.3827f, 0.9239f), new(-0.9239f, -0.3827f), new(0.3827f, -0.9239f),
+        new(0.3827f, 0.9239f), new(-0.9239f, 0.3827f), new(-0.3827f, -0.9239f), new(0.9239f, -0.3827f),
+    };
+
+    /// <summary>
+    /// Where in its cell a leftover of pass <paramref name="pass"/> (1 or more) stands, relative to the center: inside the
+    /// cell, never the center itself, and never where another pass stands. Passes 1-24 take the eight directions at three
+    /// radii; later ones the turned directions at radii 0.2-0.4 cells, a new radius every eight passes (the van der Corput
+    /// sequence, so radii never repeat), so leftovers in one cell share no point however many there are (BUG-0133).
+    /// </summary>
     private static Vector2 LeftoverOffset(int pass)
     {
         int k = pass - 1;
-        float radius = MapConstants.CellSize * (0.2f + 0.1f * (k / 8 % 3));
-        return s_leftoverDirections[k % 8] * radius;
+        if (k < 24) return s_leftoverDirections[k % 8] * (MapConstants.CellSize * (0.2f + 0.1f * (k / 8)));
+        return s_leftoverTurned[k % 8] * (MapConstants.CellSize * (0.2f + 0.2f * VanDerCorput(k / 8 - 2)));
+    }
+
+    /// <summary>The base-2 van der Corput number of <paramref name="n"/> (1 or more): its bits mirrored behind the point, in (0, 1), distinct for distinct n.</summary>
+    private static float VanDerCorput(int n)
+    {
+        float result = 0f, unit = 0.5f;
+        for (; n > 0; n >>= 1, unit *= 0.5f)
+            if ((n & 1) != 0) result += unit;
+        return result;
     }
 
     /// <summary>

@@ -340,7 +340,7 @@ public static partial class DataLoader
             }
             FindCycles(edges);
             // Reachability means something only on otherwise clean data: a broken any-of or requires entry is reported once.
-            if (_c.Errors.Count == 0) CheckAnyOfReachable();
+            if (_c.Errors.Count == 0) CheckAnyOfReachable(buildingFiles, buildings, unitFiles, units);
         }
 
         /// <summary>One <c>requires</c> entry as a graph edge: the node it names, and where it is written (for the error).</summary>
@@ -398,12 +398,18 @@ public static partial class DataLoader
         /// <c>requires</c> names is reachable and (a tech) its any-of has at least <c>count</c> listed slots whose own
         /// building is reachable. A tech whose any-of some faction can't fill so is one error at its
         /// <c>requiresAnyOf</c>, naming the factions. Members that require the tech themselves, directly or through
-        /// others, never become reachable before it, so they don't count. Load time only.
+        /// others, never become reachable before it, so they don't count. BUG-0134: a tech is reachable only once the
+        /// faction's building of its <c>researchedAt</c> slot is, and a unit once its <c>trainedAt</c> building and its
+        /// <c>requires</c> are; a faction with no any-of error that still can never have some building, tech or unit (a
+        /// building requiring a tech researched only at its own slot, say) is one error at the first such entry, naming
+        /// them all. Load time only.
         /// </summary>
-        private void CheckAnyOfReachable()
+        private void CheckAnyOfReachable(BuildingFileJson?[] buildingFiles, List<(int Faction, int Index)> buildings,
+            UnitFileJson?[] unitFiles, List<(int Faction, int Index)> units)
         {
             int techs = _keys.Length;
             var blocked = new List<string>?[techs];
+            var unreachable = new List<(string File, string Path, string Ids)>(); // one per faction, in faction order
             for (int f = 0; f < _folders.Length; f++)
             {
                 var techOk = new bool[techs];
@@ -425,6 +431,8 @@ public static partial class DataLoader
                     {
                         if ((td.Faction >= 0 && td.Faction != f) || techOk[td.Id] || !AllOk(td.RequiresTechs, td.RequiresBuildings, techOk, buildingOk)) continue;
                         if (AnyOfReachable(td, inSlot, buildingOk) < td.RequiresAnyOfCount) continue;
+                        int at = inSlot[(int)td.ResearchedAtSlot];
+                        if (at < 0 || !buildingOk[at]) continue; // BUG-0134: researched only at a building it can't have yet
                         techOk[td.Id] = changed = true;
                     }
                 }
@@ -433,6 +441,7 @@ public static partial class DataLoader
                     if ((td.Faction >= 0 && td.Faction != f) || td.RequiresAnyOfCount <= 0) continue;
                     if (AnyOfReachable(td, inSlot, buildingOk) < td.RequiresAnyOfCount) (blocked[td.Id] ??= new List<string>()).Add(_folders[f]);
                 }
+                if (!AnyBlocked(blocked, _folders[f])) AddUnreachable(f, techOk, buildingOk, buildingFiles, buildings, unitFiles, units, unreachable);
             }
             foreach ((int file, int i) in _accepted)
             {
@@ -444,6 +453,58 @@ public static partial class DataLoader
                 _c.Error($"techs[{i}].requiresAnyOf", $"needs {td.RequiresAnyOfCount} of its slots built, but faction(s) {string.Join(", ", factions)} can "
                     + "never have that many (the other listed buildings need this tech first, directly or through others)");
             }
+            foreach ((string file, string path, string message) in unreachable)
+            {
+                _c.CurrentFile = file;
+                _c.Error(path, message);
+            }
+        }
+
+        private static bool AnyBlocked(List<string>?[] blocked, string folder)
+        {
+            foreach (List<string>? factions in blocked)
+                if (factions != null && factions.Contains(folder)) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// BUG-0134: after faction <paramref name="f"/>'s fixpoint, its buildings, the techs it may research (common or own)
+        /// and its units that it can still never have, as one entry at the first of them (a building's <c>requires</c>, else
+        /// a tech's <c>researchedAt</c>, else a unit's <c>trainedAt</c>), naming the rest.
+        /// </summary>
+        private void AddUnreachable(int f, bool[] techOk, bool[] buildingOk, BuildingFileJson?[] buildingFiles, List<(int Faction, int Index)> buildings,
+            UnitFileJson?[] unitFiles, List<(int Faction, int Index)> units, List<(string File, string Path, string Ids)> into)
+        {
+            var ids = new List<string>();
+            string? file = null, path = null;
+            foreach ((int bf, int i) in buildings)
+            {
+                if (bf != f) continue;
+                BuildingDef bd = _buildings[Array.BinarySearch(_buildingKeys, buildingFiles[bf]!.Buildings![i]!.Id!, StringComparer.Ordinal)];
+                if (buildingOk[bd.Id]) continue;
+                ids.Add(bd.Key);
+                if (path == null) (file, path) = ($"factions/{_folders[f]}/buildings.json", $"buildings[{i}].requires");
+            }
+            foreach ((int tf, int i) in _accepted)
+            {
+                TechDef td = _defs[Array.BinarySearch(_keys, _files[tf]!.Techs![i]!.Id!, StringComparer.Ordinal)];
+                if ((td.Faction >= 0 && td.Faction != f) || techOk[td.Id]) continue;
+                ids.Add(td.Key);
+                if (path == null) (file, path) = (FileOf(tf), $"techs[{i}].researchedAt");
+            }
+            foreach ((int uf, int i) in units)
+            {
+                if (uf != f) continue;
+                UnitDef ud = _units[Array.BinarySearch(_unitKeys, unitFiles[uf]!.Units![i]!.Id!, StringComparer.Ordinal)];
+                bool ok = (uint)ud.TrainedAtTypeId < (uint)buildingOk.Length && buildingOk[ud.TrainedAtTypeId] && AllOk(ud.RequiresTechs, ud.RequiresBuildings, techOk, buildingOk);
+                if (ok) continue;
+                ids.Add(ud.Key);
+                if (path == null) (file, path) = ($"factions/{_folders[f]}/units.json", $"units[{i}].trainedAt");
+            }
+            if (path == null) return;
+            string rest = ids.Count == 1 ? "" : $" (nor {string.Join(", ", ids.GetRange(1, ids.Count - 1))})";
+            into.Add((file!, path, $"faction '{_folders[f]}' can never have '{ids[0]}'{rest}: each needs something that needs it first "
+                + "(for example a tech researched only at a building that requires it)"));
         }
 
         private static bool AllOk(ImmutableArray<int> techs, ImmutableArray<int> buildings, bool[] techOk, bool[] buildingOk)

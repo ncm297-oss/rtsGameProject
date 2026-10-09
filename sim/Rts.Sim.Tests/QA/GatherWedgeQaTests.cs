@@ -9,14 +9,19 @@ namespace Rts.Sim.Tests.QA;
 
 /// <summary>
 /// QA M3-V4 (2026-10-07-2014), BUG-0146: on the M3 Playable scene's seed 21 run, four laborers gathering the tree at
-/// cell (57, 45) stand in <see cref="UnitState.Gathering"/> 1.7-3.8 m from its footprint (out of
-/// <see cref="EconomyConstants.Reach"/>), so player 0's wood income stops; unit 10 for 14,575 ticks (about 1,240 to 15,815).
-/// The replay (the scene's own command stream, a checkpoint every tick) is attached to the bug. The row replays it and
-/// requires that no worker on a wood loop stays out of reach and within 1 m of one spot for more than 600 ticks in a
-/// row (its 20-tick retry walks end where they started). Un-skipped with the fix (M4-2a). The file is headered with the
-/// data hash it was recorded at; <see cref="SameGameDataHashes"/> lists the shipped hashes since then whose changes do
-/// not touch this match (the header is substituted in code: the file is checksummed and lives in studio/), and the row
-/// checks the replay still plays bit-exact to its checkpoints up to where the fix first changes an arrival.
+/// cell (57, 45) stood in <see cref="UnitState.Gathering"/> 1.7-3.8 m from its footprint (out of
+/// <see cref="EconomyConstants.Reach"/>), so player 0's wood income stopped. The replay (the scene's own command stream,
+/// a checkpoint every tick) is attached to the bug. The row replays it and requires that no worker on a wood loop stays
+/// out of reach and within 1 m of one spot for more than 600 ticks in a row (its 20-tick retry walks end where they
+/// started). Un-skipped with the fix (M4-2a).
+/// <para>
+/// M4-H1 (BUG-0211): re-recorded from <c>M3PlayableTest -- --seed 21 --break 19</c> on the post-fix, fog-era build (the
+/// state hash covers the fog's explored and visible bits, which no older recording can match): 11,541 ticks, the
+/// scene's run up to its "Heavy Infantry panel" step. The row now checks every recorded checkpoint, so it proves the
+/// shipped data still plays the recorded game tick for tick. The file is headered with the data hash it was recorded at;
+/// <see cref="SameGameDataHashes"/> lists the shipped hashes since then whose changes do not touch this match (the header
+/// is substituted in code: the file is checksummed and lives in studio/).
+/// </para>
 /// </summary>
 [Collection(SerialCollection.Name)]
 public class GatherWedgeQaTests
@@ -25,44 +30,22 @@ public class GatherWedgeQaTests
 
     public GatherWedgeQaTests(ITestOutputHelper output) => _out = output;
 
-    /// <summary>The replay's recorded data hash.</summary>
-    private const ulong RecordedDataHash = 0x702859B867AAC412;
+    /// <summary>The replay's recorded data hash (M4-3a's shipped data: the towers' <c>sight</c>, <c>rules.json</c>'s <c>buildingSight</c>).</summary>
+    private const ulong RecordedDataHash = 0x1437FEB446E68586;
 
     /// <summary>
-    /// Shipped data hashes that play the recorded match unchanged: the recording's own; D4's (A863BAF8637CC860: player-facing
-    /// text only); M4-2a's <c>attack.targets</c> on the Battering Ram (no ram in this match); M4-2b's <c>projectiles.json</c>
-    /// (the projectile ids resolved; the checkpoint prefix below still plays bit-exact); its <c>leadSpeed</c> (BUG-0183: a
-    /// rule for shots at walkers, and the prefix still plays bit-exact); M4-3a's building <c>sight</c> and <c>buildingSight</c>
-    /// (vision only, and this match plays bit-exact with the fog left out of the hash: see <see cref="CheckpointPrefixTicks"/>). Add one only for a data change
-    /// that cannot touch this game, and keep <see cref="CheckpointPrefixTicks"/> passing: it proves the game is the same.
+    /// Shipped data hashes that play the recorded match unchanged: the recording's own. Add one only for a data change that
+    /// cannot touch this game, and keep <see cref="CheckpointPrefixTicks"/> passing: it proves the game is the same. A
+    /// change of the state hash's composition (any newly hashed state) fails every checkpoint: re-record then (docs/03
+    /// "Save/load and replays", hash format).
     /// </summary>
-    private static readonly ulong[] SameGameDataHashes = { RecordedDataHash, 0xA863BAF8637CC860, M4_2aDataHash, M4_2bDataHash, M4_2bLeadDataHash, M4_3aDataHash };
-
-    /// <summary>The shipped data hash after M4-3a (the towers' <c>sight</c>, <c>rules.json</c>'s <c>buildingSight</c>).</summary>
-    internal const ulong M4_3aDataHash = 0x1437FEB446E68586;
-
-    /// <summary>The shipped data hash after M4-2a (the ram's <c>attack.targets</c>).</summary>
-    internal const ulong M4_2aDataHash = 0xFA1BFB5ECE056056;
-
-    /// <summary>The shipped data hash after M4-2b (<c>common/projectiles.json</c>, the resolved <c>attack.projectile</c> ids).</summary>
-    internal const ulong M4_2bDataHash = 0xFE4757D315C9E2C3;
-
-    /// <summary>The shipped data hash after BUG-0183 (the aimed projectiles' <c>leadSpeed</c>).</summary>
-    internal const ulong M4_2bLeadDataHash = 0xE50B452A91548DE1;
+    private static readonly ulong[] SameGameDataHashes = { RecordedDataHash };
 
     /// <summary>
-    /// Ticks the replay must still match its recorded checkpoints: the fix (M4-2a) first changes the match on tick 20, when
-    /// the first gather walks walk on to their stand points instead of stopping up to 1 m short, so only the ticks before
-    /// that (the setup: spawns, the bases and the first orders) can still match. They show the header substitution plays
-    /// the recorded game; everything after is the fixed game, which is what the row tests.
-    /// <para>
-    /// M4-3a: 0. The state hash covers the fog's explored bits since then, which the recorded checkpoints can't have, so no
-    /// checkpoint of a recording made before M4-3a can match. With the fog left out of the hash by a local, uncommitted
-    /// edit the 19-tick prefix (and this row) passed on the M4-3a data hash (M4-3a report). Re-recording the match from
-    /// M3PlayableTest -- --seed 21 brings the check back (BUG-0211).
-    /// </para>
+    /// Ticks the replay must still match its recorded checkpoints: all of them (M4-H1, BUG-0211; before the re-recording
+    /// only the first 19, the setup before the M4-2a fix changed the match, and from M4-3a none).
     /// </summary>
-    private const int CheckpointPrefixTicks = 0;
+    private const int CheckpointPrefixTicks = 11541;
 
     [Fact]
     public void Seed21PlayableReplay_NoGathererStandsOutOfReachForever()
@@ -75,11 +58,13 @@ public class GatherWedgeQaTests
         Assert.Equal(RecordedDataHash, replay!.DataHash);
         Assert.True(Array.IndexOf(SameGameDataHashes, data.ContentHash()) >= 0,
             $"shipped data hash {data.ContentHash():X16} is not one known to play the recorded match ({replay.DataHash:X16}): re-record it from M3PlayableTest -- --seed 21, or add the hash for a change that cannot touch this game");
+        Assert.True(replay.Checkpoints.Length >= CheckpointPrefixTicks, $"the replay holds {replay.Checkpoints.Length} checkpoints, fewer than the {CheckpointPrefixTicks} the row checks");
         var sim = new Simulation(new SimConfig(replay.Seed, replay.PlayerCount, replay.UnitCapacity, replay.CommandCapacity)
         {
             Data = data,
             Map = replay.Map,
             ResourceCapacity = replay.ResourceCapacity,
+            Combat = replay.Combat,
         });
         World w = sim.World;
         UnitStore u = w.Units;
