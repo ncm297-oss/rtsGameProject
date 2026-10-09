@@ -148,28 +148,6 @@ public class MaxUnderEdgeWalkQaTests
         Assert.Equal(0, offsetEdges);
     }
 
-    // 0 bytes per call (a corpse disc per dead unit is placed every frame).
-    [Fact]
-    public void MaxUnder_AllocatesNothing_OnEdgeCells()
-    {
-        Heightmap map = Rts.Sim.Tests.ViewApi.TerrainHeightTests.GeneratedMap(17);
-        const float cs = MapConstants.CellSize;
-        float sink = 0f;
-        for (int i = 0; i < 1000; i++) sink += TerrainHeight.MaxUnder(map, (i % 120 + 0.37f) * cs, (i / 120 * 13 % 120 + 0.61f) * cs, 1.08f);
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int cy = 0; cy < map.Height; cy++)
-        for (int cx = 0; cx < map.Width; cx++)
-        {
-            if (!NearAnEdge(map, cx, cy)) continue;
-            sink += TerrainHeight.MaxUnder(map, (cx + 0.13f) * cs, (cy + 0.87f) * cs, 1.08f);
-            sink += TerrainHeight.MaxUnder(map, (cx + 0.5f) * cs, (cy + 0.5f) * cs, 0.48f);
-            sink += TerrainHeight.MaxUnder(map, (cx + 0.99f) * cs, (cy + 0.01f) * cs, 25f);
-        }
-        long bytes = GC.GetAllocatedBytesForCurrentThread() - before;
-        Assert.True(float.IsFinite(sink));
-        Assert.Equal(0L, bytes);
-    }
-
     // NaN, infinities, far off the map, a radius larger than the map, a denormal radius: finite, at least the centre, returns.
     [Fact]
     public void MaxUnder_HostileInputs_StayFiniteAndTerminate()
@@ -219,5 +197,32 @@ public class MaxUnderEdgeWalkQaTests
         // One-cell ramps exist only on hand-made test maps (generated ramps rise a level over 4 cells); today 1.67 m
         // (BUG-0226 note). Guard: never half a level.
         Assert.True(worst < MapConstants.LevelHeight / 2f, $"lift {worst:F3} m at {at}, reference {worstRef:F3}");
+    }
+
+    /// <summary>Runs alone (allocation measurement).</summary>
+    [Collection(SerialCollection.Name)]
+    public class Serial
+    {
+        // 0 bytes per call (a corpse disc per dead unit is placed every frame).
+        [Fact]
+        public void MaxUnder_AllocatesNothing_OnEdgeCells()
+        {
+            Heightmap map = Rts.Sim.Tests.ViewApi.TerrainHeightTests.GeneratedMap(17);
+            const float cs = MapConstants.CellSize;
+            float sink = 0f;
+            for (int i = 0; i < 1000; i++) sink += TerrainHeight.MaxUnder(map, (i % 120 + 0.37f) * cs, (i / 120 * 13 % 120 + 0.61f) * cs, 1.08f);
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            for (int cy = 0; cy < map.Height; cy++)
+            for (int cx = 0; cx < map.Width; cx++)
+            {
+                if (!NearAnEdge(map, cx, cy)) continue;
+                sink += TerrainHeight.MaxUnder(map, (cx + 0.13f) * cs, (cy + 0.87f) * cs, 1.08f);
+                sink += TerrainHeight.MaxUnder(map, (cx + 0.5f) * cs, (cy + 0.5f) * cs, 0.48f);
+                sink += TerrainHeight.MaxUnder(map, (cx + 0.99f) * cs, (cy + 0.01f) * cs, 25f);
+            }
+            long bytes = GC.GetAllocatedBytesForCurrentThread() - before;
+            Assert.True(float.IsFinite(sink));
+            Assert.Equal(0L, bytes);
+        }
     }
 }
