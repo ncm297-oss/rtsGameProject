@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open (items 1-2 and 4 fixed) |
 | Found | 2026-10-07-1715, task M3-V3b (QA) |
 | System | HUD / command card / build ghost / props (view), `game/data/common/ui.json`, perf rows |
-| Fixed by | items 1-2: df37a8c (M3-V4), regression rows `ProductionHudTests.AgeII_QueuedThenAHallLost_ReadsInAQueue_ThenResearched`, `BuildMenu_NoAnchor_IsRequiresExactlyWhileLocked_CadreTowerUntilAgeII`, `QaV3bTest` (NOTE flipped to a check), QA `game/tests/QaV4Test.tscn`; items 3-6 open |
+| Fixed by | items 1-2: df37a8c (M3-V4, see above); item 4: 08dc8e3 (M4-VH1, `SelectionController.CancelSelectedSite` drops a second press for the same site before the next tick; `CommandCardTest` presses twice and expects one Cancel); items 3, 5, 6 open |
 
 ## Repro
 1. Items 1-2: with D3's `buildings.json` copied in (`git checkout origin/studio/2026-10-07-1415-data --
@@ -59,3 +59,10 @@
 - Item 2: Age II's button read "In a queue" with the sim at `Requires` (queued, Forge lost), and "Researched" with the
   sim at `Requires` (one hall slot left, and again with every hall lost).
 - Items 3-6 not touched by M3-V4: still open.
+
+## Re-check (QA 2026-10-08-2144, M4-VH1)
+- Item 4 **fixed**. A second Cancel for the same site (slot and generation) on the same tick sends nothing, and docs/03
+  says so. `CommandCardTest` emits Pressed twice and checks that exactly one Cancel is pending; it passes in both scene
+  loops. Small leftover: the guard is not reset if the `Simulation` instance changes, filed as BUG-0250 item 3
+  (theoretical).
+- Items 3, 5 and 6 were not touched and are still open.

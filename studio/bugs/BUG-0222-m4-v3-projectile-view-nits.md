@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (items 1-3; item 2 is an M6 docs note by design) |
 | Found | 2026-10-08-1435, task M4-V3 |
 | System | view: `sim/Rts.Sim/ViewApi/ProjectileTracker.cs`, `ImpactMarks.cs`, `game/scripts/ProjectileViews.cs` |
-| Fixed by | |
+| Fixed by | 08dc8e3 (M4-VH1): item 1 `ProjectileTracker` off-line test + `ProjectileViewQaTests.SkippingObserver_SameTargetLobFromAnotherLaunch_IsANewShot` un-skipped; item 2 docs/03 M6 note; item 3 docs (`ImpactMarks` summary and docs/03 say the ring replaces the next slot, even with others expired) |
 
 ## Item 1: a tracker that skips ticks misses a reuse by a lob of the same type, owner and target
 Repro: `ProjectileViewQaTests.SkippingObserver_SameTargetLobFromAnotherLaunch_IsANewShot` (skipped until fixed). A
@@ -28,3 +28,13 @@ placeholder curve, and it's barely visible at RTS zoom. Note it for the M6 proje
 `ImpactMarks.Add` always writes at `_head`. If the head slot is still live (an 8-tick burst, or a mark not drawn yet), it
 is replaced (`Replaced++`) even when other slots have already expired. The summary says replacement happens "when every
 mark is in use". It is still the oldest mark, and 512 slots make this rare, so either the doc or the code should change.
+
+## Verification (QA 2026-10-08-2144, M4-VH1)
+- Item 1: the un-skipped row passes: `Reused` 1, the launch is the new shot's, and the arc is not flat. QA's
+  `QA/ViewApi/LobReuseHostileQaTests` uses three slots, one owner, one type and two impact points, with random launches
+  and an observer on 30 % of ticks. 0 stale arcs in about 3,400 observations on each of four seeds. An every-tick
+  observer never restarts a real flight, including at (1020, 1010) on a 1024 m map. Residual: a reuse on the old
+  shot's own line is still missed (5 per 3,300 observations; skipping observer only), filed as BUG-0250 item 1.
+- Item 2: docs/03 now carries the M6 note (the stone slides its last 0.6 m).
+- Item 3: closed by changing the docs, which the bug offered as an option. The code is unchanged and the docs now say
+  what it does.
