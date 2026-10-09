@@ -38,6 +38,9 @@ namespace Rts.Game;
 /// </remarks>
 public partial class SelectionController : Node
 {
+    // Cached so per-frame and per-click lookups do not allocate a StringName from a string (BUG-0341).
+    private static readonly StringName OrderQueue = "order_queue";
+
     /// <summary>The human player's index until the match setup screen exists.</summary>
     public const int LocalPlayer = 0;
 
@@ -209,7 +212,7 @@ public partial class SelectionController : Node
                 // A placement ghost takes the click: a green one places, a red one does nothing; it never selects.
                 if (Card != null && Card.GhostActive)
                 {
-                    Card.GhostClick(Input.IsActionPressed("order_queue"), mb.Position);
+                    Card.GhostClick(Input.IsActionPressed(OrderQueue), mb.Position);
                     return;
                 }
                 // The selection may have died since the last _Process; then this is a normal click (BUG-0067).
@@ -235,7 +238,7 @@ public partial class SelectionController : Node
             {
                 if (Card != null && Card.MenuOpen) Card.CloseMenu(); // closes a build menu (and its ghost), orders nothing
                 else if (Targeting) CancelTargeting(); // right click cancels targeting and orders nothing
-                else CommandAt(mb.Position, Input.IsActionPressed("order_queue"));
+                else CommandAt(mb.Position, Input.IsActionPressed(OrderQueue));
             }
         }
         else if (e is InputEventMouseMotion motion && _pressing)
@@ -255,7 +258,7 @@ public partial class SelectionController : Node
     {
         // Build menus own the grid keys while open (docs/02 "Grid hotkeys"); B / V and a site's Cancel too.
         if (Card != null && Card.HandleKey(e)) return;
-        bool queued = Input.IsActionPressed("order_queue");
+        bool queued = Input.IsActionPressed(OrderQueue);
         if (e.IsActionPressed("order_cancel")) CancelTargeting();
         else if (e.IsActionPressed("order_attack_move")) BeginAttackMove();
         else if (e.IsActionPressed("order_move")) BeginMove();
@@ -364,7 +367,7 @@ public partial class SelectionController : Node
     public bool AttackMoveClick(Vector2 screen)
     {
         if (!Targeting) return false;
-        bool queued = Input.IsActionPressed("order_queue");
+        bool queued = Input.IsActionPressed(OrderQueue);
         if (_target == CommandKind.UseAbility)
         {
             if (!AbilityPoint(screen, out System.Numerics.Vector2 point)) return false;

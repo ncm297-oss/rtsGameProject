@@ -24,6 +24,9 @@ namespace Rts.Game;
 /// </remarks>
 public partial class AbilityViews : Node3D
 {
+    // Cached so per-frame and per-click lookups do not allocate a StringName from a string (BUG-0341).
+    private static readonly StringName OrderQueue = "order_queue";
+
     /// <summary>Width of a targeting ring's band, and of a cast ring's band as a share of its radius, in meters.</summary>
     public const float RingWidth = 0.22f, CastRingShare = 0.08f;
 
@@ -123,7 +126,7 @@ public partial class AbilityViews : Node3D
 
     public override void _Process(double delta)
     {
-        if (_runner?.Simulation is Simulation sim) Sync(sim.World, (float)_runner.Alpha, GetViewport().GetMousePosition(), Input.IsActionPressed("order_queue"));
+        if (_runner?.Simulation is Simulation sim) Sync(sim.World, (float)_runner.Alpha, GetViewport().GetMousePosition(), Input.IsActionPressed(OrderQueue));
     }
 
     /// <summary>One frame: the targeting rings for the cursor at <paramref name="mouse"/> (screen pixels; <paramref name="queued"/>: Shift held), then the cast bars and cast-point rings. Allocation-free once each armed ability's meshes exist.</summary>

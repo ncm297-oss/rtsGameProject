@@ -35,6 +35,9 @@ namespace Rts.Game;
 /// </remarks>
 public partial class CommandCard : Control
 {
+    // Cached so per-frame and per-click lookups do not allocate a StringName from a string (BUG-0341).
+    private static readonly StringName OrderQueue = "order_queue";
+
     /// <summary>Grid columns and rows (docs/02: 5 x 3).</summary>
     public const int Columns = 5, Rows = 3, Cells = Columns * Rows;
 
@@ -479,7 +482,7 @@ public partial class CommandCard : Control
     public void Press(int i)
     {
         if ((uint)i >= Cells || _runner == null) return;
-        bool queued = Input.IsActionPressed("order_queue");
+        bool queued = Input.IsActionPressed(OrderQueue);
         switch (_actions[i])
         {
             case CardCommand.Move: _sel.BeginMove(); break;
