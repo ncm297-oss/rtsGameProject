@@ -113,40 +113,15 @@ public partial class QaV6Test : Node
         await Frame();
     }
 
-    // As AttackOrderViewTest.Stage: 10 v 10 either side of the centre, a Billet behind player 0 and a Tent behind player 1.
+    // AttackOrderViewTest's staging (AttackStage): 10 v 10 within player 0's sight, the Tent behind the Raiders with
+    // player 0's Billet beside it as the spotter (an Attack on an unseen enemy is dropped since M4-3a, BUG-0218).
     private System.Numerics.Vector2 Stage()
     {
-        int center = FlowField.NearestPassable(G, G.Height / 2 * G.Width + G.Width / 2);
-        int cx = center % G.Width, cy = center / G.Width;
-        FlowField field = FlowField.Build(G, center);
-        int billet = _data.FindBuilding("malazan_billet"), tent = _data.FindBuilding("whirlwind_tent");
-        for (int p = 0; p < 2; p++)
-        {
-            int dir = p == 0 ? -1 : 1, type = p == 0 ? billet : tent, anchor = -1;
-            float best = float.MaxValue;
-            for (int c = 0; c < G.Width * G.Height; c++)
-            {
-                int x = c % G.Width, y = c / G.Width;
-                if ((x - cx) * dir < 10 || (x - cx) * dir > 16 || !(field.CostAt(c) <= 30f) || !B.Fits(type, c)) continue;
-                float d = field.CostAt(c) + Math.Abs(y - cy);
-                if (d < best) { best = d; anchor = c; }
-            }
-            if (anchor < 0) throw new InvalidOperationException($"no spot for player {p}'s building");
-            _sim.Enqueue(Command.SpawnBuilding(p, type, G.CellCenter(anchor % G.Width, anchor / G.Width)));
-            int placed = 0;
-            for (int ring = 0; ring < 30 && placed < PerSide; ring++)
-                for (int c = 0; c < G.Width * G.Height && placed < PerSide; c++)
-                {
-                    int x = c % G.Width, y = c / G.Width, dx = (x - cx) * dir;
-                    if (dx < 3 || dx > 6 || Math.Abs(y - cy) != ring || !(field.CostAt(c) <= 20f)) continue;
-                    _sim.Enqueue(Command.SpawnUnit(p, p == 0 ? _hi : _raider, G.CellCenter(x, y)));
-                    placed++;
-                }
-        }
+        System.Numerics.Vector2 mid = AttackStage.Stage(_sim, _data, PerSide);
         _sim.Tick();
         _sim.Tick();
         for (int i = 0; i < B.Capacity; i++) if (B.Alive[i] && B.Owner[i] == 1) _tent = i;
-        return G.CellCenter(cx, cy);
+        return mid;
     }
 
     // ---- match 1: spam, queue + Stop, A + click own, twin ----

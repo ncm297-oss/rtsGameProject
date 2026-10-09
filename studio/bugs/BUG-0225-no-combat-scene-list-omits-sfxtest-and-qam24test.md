@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-08-1814, task M4-V3 (QA re-check of fix round 1, e1f3333) |
 | System | docs: `docs/03-technical-design.md` ("Debug tooling" no-combat flag; "Implementation (M4-V1)" BUG-0147) |
-| Fixed by | |
+| Fixed by | M4-V3 fix round 2 (view track): docs/03 lines updated |
 
 ## Repro
 1. `git -C .claude/worktrees/studio-view grep -n "no-combat" e1f3333 -- game/tests` lists DebugOverlayTest, MinimapTest,
@@ -27,3 +27,7 @@ The recovered fix commit (e1f3333) changed the two scenes' launch arguments and 
 
 ## Notes
 Known gap named in the 1814 resumption note. Docs-only; no behaviour impact.
+
+## Fix (M4-V3 fix round 2, view track)
+docs/03 "No-combat flag" lists SfxTest and QaM24Test with BUG-0212 / BUG-0213 and their reason, and says the Attack-order
+scenes never take the flag (BUG-0218); the BUG-0147 line now says QaM24 passed without it until M4-V3.

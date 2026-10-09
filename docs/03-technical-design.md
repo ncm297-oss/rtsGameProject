@@ -3340,7 +3340,8 @@ Match.tscn  (new node)
 
 - **BUG-0147** (`--no-combat`, see "Debug tooling"): DebugOverlay, Orders, QaH1, QaH2 and QaM27 pass `--no-combat` on the
   matches whose armies used to stand or march through each other (their hash twins copy the match's `SimConfig`, so the
-  twin is off too). No expectation changed. QaM24 passes without it.
+  twin is off too). No expectation changed. QaM24 passed without it until M4-V3, when it and SfxTest took the flag too
+  (BUG-0212 / BUG-0213, see "Debug tooling").
 - **Hp bars** (`CombatViews`, pure `ViewApi.UnitHpBars`): each frame `UnitHpBars.Collect(Alive, TypeId, Hp, defs, slots)` lists
   the live units below their type's `hp` (as the building bars, M3-V1; hp tech bonuses are not applied by combat yet, so
   the type's `hp` is the maximum), in slot order. Each gets a dark back and a fill of `Hp / max` over the body
@@ -3477,7 +3478,12 @@ Match.tscn  (new node)
   before it, any ground met first at its own feet) and **0 own units or buildings resolved as targets**; 0 bytes for 20
   picks at 2,000 units with the resolve and the mark; `TargetMark`'s 0.5 s, restart, move and bad time; `HitFlash`'s
   first-sight rule. Headless scene `res://tests/AttackOrderViewTest.tscn` ("ATTACK ORDER VIEW TEST PASS", seeds 1 and
-  6): a real Match with 10 Heavy Infantry v 10 Raiders and a Billet and a Tent, clicks pushed through the viewport:
+  6): a real Match with 10 Heavy Infantry v 10 Raiders and a Billet and a Tent, clicks pushed through the viewport. Since
+  M4-3a an Attack on an unseen enemy is dropped, so the staging (`game/tests/AttackStage.cs`, shared with QaV6Test) puts
+  every target in the player's sight (BUG-0218): two-column lines 2-3 cells either side of the centre (every Raider
+  within the Heavy Infantry's sight less 1.5 m of one, checked at staging), the Tent 10-16 cells behind the Raiders and
+  the player's Billet beside it as its spotter (12 m building sight); the panel row's chase target is the farthest enemy
+  within its unit's sight less 2 m. Rows:
   right-click on an enemy (one Attack per selected unit, one Command sound, the ring on it; on the tick the commands
   apply every selected unit holds that target with `CombatMode.Ordered`; the F12 line names it), A + click on an enemy
   (the same, targeting ends), A + click on the ground (AttackMoves only, every unit in `CombatMode.AttackMove`), Shift +
@@ -3550,8 +3556,10 @@ Match.tscn  (new node)
   `Moving` with its alive flag, generation, hp, state, goal and target.
 - **BUG-0190:** (1) a corpse disc sits at `TerrainHeight.MaxUnder` (the highest of the centre and eight rim samples under
   its rim's radius), so on a ramp it no longer sinks half into the slope (it floats a little on the downhill side). Only
-  rim samples joined to the centre by a slope count: plateau to plateau, or a rise steeper than one level per cell, is a
-  cliff and is ignored, so a unit dying against a cliff keeps its disc on its own ground (BUG-0223);
+  rim samples joined to the centre by the drawn surface count: the straight line from the centre to each sample is walked
+  cell edge by cell edge, and an edge where the two cells' surfaces differ by more than 0.15 m (a cliff, or a ramp's side
+  wall) drops that sample, so a unit dying against a cliff or beside a ramp's side keeps its disc on its own ground
+  (BUG-0223, BUG-0224; `CorpseDiscRimQaTests` compares it with a 64-step walk on five generated maps);
   `CombatViewTest` checks every corpse's underside against it. (2) `UnitPicker.ResolveEnemy` counts a NaN entry (unit,
   building or prop) as nearest (0), so a unit passed with a NaN entry can no longer lose to the building behind it.
 - **Tests.** xUnit `ViewApi/ProjectileTrackerTests`: the launch on the firing tick and a tick late, a slot dropped when it
@@ -3739,8 +3747,12 @@ AiPlayer
   are only walls, as before M4. A **dev and test flag, never a game option**: it exists for the M2 scenes whose assertions
   are about a world without fights (marches across the enemy block, selections that must not lose units, overlay goals);
   they pass it instead of changing an expectation. The scenes that pass it: DebugOverlayTest, OrdersTest, QaH1Test,
-  QaH2Test, QaM27Test (M4-V1) and MinimapTest (M4-V3, BUG-0210: since M4-2b every unit fights, and the enemy's archers
-  shot one of the 40 units its minimap order moves). The start-up line ends with ", combat off". `--no-bases` (M3-V1) is
+  QaH2Test, QaM27Test (M4-V1), MinimapTest (M4-V3, BUG-0210: since M4-2b every unit fights, and the enemy's archers
+  shot one of the 40 units its minimap order moves), SfxTest and QaM24Test (M4-V3, BUG-0212 / BUG-0213: under the sim's
+  fog, M4-3a, the seed-1 fight starts differently, so SfxTest's clicked unit walks off its screen point and QaM24Test's
+  freed slot is taken by a death before its enemy spawn). The Attack-order scenes (AttackOrderViewTest, QaV6Test) never
+  take it: they stage every enemy they click inside the player's sight instead (BUG-0218, see "Implementation (M4-V2)").
+  The start-up line ends with ", combat off". `--no-bases` (M3-V1) is
   the other half of the armies-only M2 setup. A replay recorded from such a match records `combat 0` in its header
   (format 4, M4-2a), so `ReplayPlayer.Run(replay, data)` plays it back off by itself; the `combat:` override parameter
   stays for format-3 files recorded with combat off.

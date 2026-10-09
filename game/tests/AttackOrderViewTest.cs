@@ -18,8 +18,9 @@ using Rts.Sim.ViewApi;
 namespace Rts.Game.Tests;
 
 /// <summary>
-/// M4-V2 on the real Match scene: the Attack order from the HUD. 10 Heavy Infantry v 10 Raiders near the map centre with a
-/// Billet and a Tent behind the lines; clicks go through the viewport (<c>PushInput</c>), as the player's do. Rows per seed:
+/// M4-V2 on the real Match scene: the Attack order from the HUD. 10 Heavy Infantry v 10 Raiders near the map centre, a
+/// Tent behind the Raiders and the player's Billet beside it as a spotter, all staged in the player's sight (<see cref="AttackStage"/>:
+/// since M4-3a an Attack on an unseen enemy is dropped, BUG-0218); clicks go through the viewport (<c>PushInput</c>), as the player's do. Rows per seed:
 /// a right-click on an enemy unit (every selected unit holds that target, <c>CombatMode.Ordered</c>, the next tick), A + click on
 /// an enemy (the same), A + click on the ground (an AttackMove, no Attack), Shift + right-click on two enemies while walking
 /// away (both queued as Attack entries, in order, <c>QueuedTarget</c>), a right-click on the enemy Tent (a building target), a
@@ -131,40 +132,8 @@ public partial class AttackOrderViewTest : Node
         await Frame();
     }
 
-    // 10 v 10 three to eight cells either side of the central cell, a Billet behind player 0 and a Tent behind player 1.
-    private System.Numerics.Vector2 Stage()
-    {
-        int center = FlowField.NearestPassable(G, G.Height / 2 * G.Width + G.Width / 2);
-        int cx = center % G.Width, cy = center / G.Width;
-        FlowField field = FlowField.Build(G, center);
-        int hi = _data.FindUnit("malazan_heavy_infantry"), raider = _data.FindUnit("whirlwind_raider");
-        int billet = _data.FindBuilding("malazan_billet"), tent = _data.FindBuilding("whirlwind_tent");
-        for (int p = 0; p < 2; p++)
-        {
-            int dir = p == 0 ? -1 : 1, type = p == 0 ? billet : tent, anchor = -1;
-            float best = float.MaxValue;
-            for (int c = 0; c < G.Width * G.Height; c++)
-            {
-                int x = c % G.Width, y = c / G.Width;
-                if ((x - cx) * dir < 10 || (x - cx) * dir > 16 || !(field.CostAt(c) <= 30f) || !B.Fits(type, c)) continue;
-                float d = field.CostAt(c) + Math.Abs(y - cy);
-                if (d < best) { best = d; anchor = c; }
-            }
-            if (anchor < 0) throw new InvalidOperationException($"no spot for player {p}'s building");
-            _sim.Enqueue(Command.SpawnBuilding(p, type, G.CellCenter(anchor % G.Width, anchor / G.Width)));
-            int placed = 0;
-            for (int ring = 0; ring < 30 && placed < PerSide; ring++)
-                for (int c = 0; c < G.Width * G.Height && placed < PerSide; c++)
-                {
-                    int x = c % G.Width, y = c / G.Width, dx = (x - cx) * dir;
-                    if (dx < 3 || dx > 6 || Math.Abs(y - cy) != ring || !(field.CostAt(c) <= 20f)) continue;
-                    _sim.Enqueue(Command.SpawnUnit(p, p == 0 ? hi : raider, G.CellCenter(x, y)));
-                    placed++;
-                }
-            if (placed < PerSide) throw new InvalidOperationException($"only {placed} spots for player {p}");
-        }
-        return G.CellCenter(cx, cy);
-    }
+    // Every target a row clicks is staged in player 0's sight (AttackStage; an Attack on an unseen enemy is dropped, BUG-0218).
+    private System.Numerics.Vector2 Stage() => AttackStage.Stage(_sim, _data, PerSide);
 
     private async Task Run(ulong seed)
     {
@@ -298,6 +267,7 @@ public partial class AttackOrderViewTest : Node
             int before = _sel.IssuedCount(CommandKind.Attack);
             RightClick(own);
             Check(_sel.IssuedCount(CommandKind.Attack) == before, $"seed {seed}: a right-click on the own Billet sent Attacks");
+            GD.Print($"seed {seed}: right-click on the own Billet: no Attack");
         }
         GD.Print($"seed {seed}: right-click on the Tent: {n} building Attacks");
         await Gap();
@@ -337,7 +307,7 @@ public partial class AttackOrderViewTest : Node
         await Gap();
     }
 
-    // One unit selected, ordered onto the farthest enemy: the panel reads states.ordered_attack while it chases, "Attacking" once it swings.
+    // One unit selected, ordered onto the farthest enemy in its sight: the panel reads states.ordered_attack while it chases, "Attacking" once it swings.
     private async Task PanelRows(ulong seed)
     {
         EntityHandle me = default;
@@ -345,13 +315,15 @@ public partial class AttackOrderViewTest : Node
             if (U.Alive[i] && U.Owner[i] == 0 && _sel.TryScreenPosition(i, out Vector2 p) && InPlayArea(p)) me = new EntityHandle(i, U.Generation[i]);
         if (!Check(me != default, $"seed {seed}: no unit for the panel row")) return;
         _sel.SelectOnly(me);
+        // The farthest enemy still inside its sight (less 2 m): one outside is dropped as unseen under fog (M4-3a,
+        // BUG-0218), and a chase that loses sight of its target without gaining gives it up (BUG-0137).
         EntityHandle far = default;
-        float best = -1f;
+        float best = -1f, sight = _data.Units[U.TypeId[me.Index]].Sight - 2f;
         for (int i = 0; i < U.Capacity; i++)
         {
             if (!U.Alive[i] || U.Owner[i] != 1) continue;
             float d = System.Numerics.Vector2.Distance(U.Position[i], U.Position[me.Index]);
-            if (d > best) { best = d; far = new EntityHandle(i, U.Generation[i]); }
+            if (d > best && d <= sight) { best = d; far = new EntityHandle(i, U.Generation[i]); }
         }
         if (!Check(far != default && best > 3f, $"seed {seed}: no far enemy ({best:0.0} m)")) return;
         Check(_sel.AttackOrder(far, false, queued: false), $"seed {seed}: AttackOrder refused");

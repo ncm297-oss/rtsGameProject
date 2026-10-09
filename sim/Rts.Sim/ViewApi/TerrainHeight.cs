@@ -23,15 +23,16 @@ public static class TerrainHeight
     // Unit offsets of the eight rim samples of MaxUnder (every 45 degrees; constants, no trig).
     private const float Diag = 0.70710678f;
 
-    // The steepest slope a drawn ramp cell can have (rise over run): one level across one cell.
-    private const float SteepestRamp = MapConstants.LevelHeight / MapConstants.CellSize;
+    // Largest height step (m) at a cell edge still read as one surface. Slope edges meet exactly (CellCorners) except a
+    // few generated seams about 0.1 m high, which a disc may straddle; a wall is a whole level or a ramp's side (BUG-0224).
+    private const float SeamSlack = 0.15f;
 
     /// <summary>
     /// The highest surface height (m) among the centre and eight points round the rim of the disc of
     /// <paramref name="radius"/> m at (x, y), so a flat disc placed there is not half buried on a ramp (BUG-0190). Only
-    /// ground joined to the centre by a slope counts: a rim point on another plateau cell when the centre is on one too,
-    /// or one higher than any ramp could rise over the radius, is across a cliff and is ignored, so a disc beside a cliff
-    /// stays on its own ground (BUG-0223). A non-positive or NaN radius samples the centre only.
+    /// ground joined to the centre by the drawn surface counts: a rim point whose straight line from the centre crosses a
+    /// cell edge where the two cells' surfaces don't meet (a cliff, or a ramp's side wall) is ignored, so a disc beside a
+    /// cliff or a ramp's side stays on its own ground (BUG-0223, BUG-0224). A non-positive or NaN radius samples the centre only.
     /// </summary>
     public static float MaxUnder(Heightmap map, float x, float y, float radius)
     {
@@ -39,31 +40,53 @@ public static class TerrainHeight
         int cy = ClampCell(y / MapConstants.CellSize, map.Height);
         float centre = InCell(map, cx, cy, x, y);
         if (!(radius > 0f)) return centre;
-        bool centreRamp = map.IsRamp(cx, cy);
-        // A ramp can lift a rim point at most radius x slope; the small slack absorbs float rounding.
-        float maxRise = radius * SteepestRamp * 1.001f + 1e-4f;
         float d = radius * Diag;
         float best = centre;
-        best = Rim(map, x + radius, y, centre, centreRamp, maxRise, best);
-        best = Rim(map, x - radius, y, centre, centreRamp, maxRise, best);
-        best = Rim(map, x, y + radius, centre, centreRamp, maxRise, best);
-        best = Rim(map, x, y - radius, centre, centreRamp, maxRise, best);
-        best = Rim(map, x + d, y + d, centre, centreRamp, maxRise, best);
-        best = Rim(map, x + d, y - d, centre, centreRamp, maxRise, best);
-        best = Rim(map, x - d, y + d, centre, centreRamp, maxRise, best);
-        best = Rim(map, x - d, y - d, centre, centreRamp, maxRise, best);
+        best = Rim(map, x, y, x + radius, y, best);
+        best = Rim(map, x, y, x - radius, y, best);
+        best = Rim(map, x, y, x, y + radius, best);
+        best = Rim(map, x, y, x, y - radius, best);
+        best = Rim(map, x, y, x + d, y + d, best);
+        best = Rim(map, x, y, x + d, y - d, best);
+        best = Rim(map, x, y, x - d, y + d, best);
+        best = Rim(map, x, y, x - d, y - d, best);
         return best;
     }
 
-    // One rim sample of MaxUnder: counts only if a slope joins it to the centre (BUG-0223).
-    private static float Rim(Heightmap map, float x, float y, float centre, bool centreRamp, float maxRise, float best)
+    // One rim sample (x1, y1) of MaxUnder: counts only if the surface is joined along the line from the centre (x0, y0).
+    private static float Rim(Heightmap map, float x0, float y0, float x1, float y1, float best)
     {
-        int cx = ClampCell(x / MapConstants.CellSize, map.Width);
-        int cy = ClampCell(y / MapConstants.CellSize, map.Height);
-        // Plateau to plateau is either the same height (no lift) or a cliff.
-        if (!centreRamp && !map.IsRamp(cx, cy)) return best;
-        float h = InCell(map, cx, cy, x, y);
-        return h - centre <= maxRise ? MathF.Max(best, h) : best;
+        if (!Joined(map, x0, y0, x1, y1)) return best;
+        int cx = ClampCell(x1 / MapConstants.CellSize, map.Width);
+        int cy = ClampCell(y1 / MapConstants.CellSize, map.Height);
+        return MathF.Max(best, InCell(map, cx, cy, x1, y1));
+    }
+
+    // Walks the cells the segment (x0, y0) -> (x1, y1) passes through (a grid walk, edge by edge) and compares the two
+    // cells' surfaces at each crossing point: a step bigger than SeamSlack is a wall. Within a cell the surface is one
+    // plane, so the crossings are the only places a wall can be.
+    private static bool Joined(Heightmap map, float x0, float y0, float x1, float y1)
+    {
+        const float cs = MapConstants.CellSize;
+        int ix = ClampCell(x0 / cs, map.Width), iy = ClampCell(y0 / cs, map.Height);
+        int tx = ClampCell(x1 / cs, map.Width), ty = ClampCell(y1 / cs, map.Height);
+        float dx = x1 - x0, dy = y1 - y0;
+        int sx = tx > ix ? 1 : tx < ix ? -1 : 0, sy = ty > iy ? 1 : ty < iy ? -1 : 0;
+        // Each step moves at least one cell toward the target, so this bound is never reached on a finite segment.
+        for (int guard = Math.Abs(tx - ix) + Math.Abs(ty - iy); guard > 0 && (ix != tx || iy != ty); guard--)
+        {
+            // Segment parameter of the next vertical and horizontal cell edge (beyond 1 or none: infinity).
+            float px = ix != tx && dx != 0f ? ((sx > 0 ? ix + 1 : ix) * cs - x0) / dx : float.PositiveInfinity;
+            float py = iy != ty && dy != 0f ? ((sy > 0 ? iy + 1 : iy) * cs - y0) / dy : float.PositiveInfinity;
+            if (float.IsPositiveInfinity(px) && float.IsPositiveInfinity(py)) return true; // clamped off the map
+            float t = MathF.Min(px, py);
+            int nx = ix != tx && px <= t ? ix + sx : ix, ny = iy != ty && py <= t ? iy + sy : iy;
+            float ex = x0 + dx * t, ey = y0 + dy * t;
+            if (MathF.Abs(InCell(map, ix, iy, ex, ey) - InCell(map, nx, ny, ex, ey)) > SeamSlack) return false;
+            ix = nx;
+            iy = ny;
+        }
+        return true;
     }
 
     // Clamps in float before the cast: an out-of-range float-to-int cast is int.MinValue on x64,

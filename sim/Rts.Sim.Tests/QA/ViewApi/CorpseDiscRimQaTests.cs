@@ -125,7 +125,7 @@ public class CorpseDiscRimQaTests
 
     // BUG-0224: on low ground beside a ramp's side wall, a rim sample up on the ramp (within radius x one level per cell
     // of the centre) is counted, so the disc hangs up to 2.16 m (a 0.9 m unit) in the air beside the wall.
-    [Theory(Skip = "BUG-0224: a corpse disc beside a ramp's side wall hangs up to 2.16 m above its own ground")]
+    [Theory]
     [MemberData(nameof(Seeds))]
     public void MaxUnder_BesideARampsSideWall_NeverHangsAboveTheWallFreeGround_OnGeneratedMaps(ulong seed)
     {

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-08-1814, task M4-V3 (QA re-check of fix round 1, e1f3333) |
 | System | view: `sim/Rts.Sim/ViewApi/TerrainHeight.cs` (`MaxUnder` / `Rim`), drawn by `game/scripts/CombatViews.cs` |
-| Fixed by | |
+| Fixed by | M4-V3 fix round 2 (view track): `TerrainHeight.MaxUnder` walks the centre-to-rim line cell edge by cell edge; `CorpseDiscRimQaTests.MaxUnder_BesideARampsSideWall_...` un-skipped |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~CorpseDiscRimQaTests"` with the `Skip` removed from
@@ -43,3 +43,12 @@ on generated maps (their ramps are 4 cells long).
 - Possible fix: count a rim sample on another cell only if the edge it crosses is not a wall, e.g. compare the two
   cells' `CellCorners` heights on the shared edge (equal = joined), or walk centre to rim in a few steps as the QA
   reference does. A tighter `maxRise` (the ramp's own slope, not one level per cell) would also shrink it on generated maps.
+
+## Fix (M4-V3 fix round 2, view track)
+`TerrainHeight.MaxUnder` no longer infers a slope from the rise (`maxRise` and the plateau-to-plateau shortcut are gone):
+a rim sample counts only if the straight line from the centre crosses every cell edge at a point where the two cells'
+drawn surfaces meet (a step of at most 0.15 m; generated maps have a few ~0.1 m seams between slope cells). A cliff or a
+ramp's side wall drops the sample. Regression: the QA row
+`MaxUnder_BesideARampsSideWall_NeverHangsAboveTheWallFreeGround_OnGeneratedMaps` failed on all five seeds before (worst
+2.16 m) and passes after (worst hang 0.10 m, at one of those seams for the 0.48 m radius, where the 64-step reference
+reads the seam as a wall); the sink row stays at 0 sunk.
