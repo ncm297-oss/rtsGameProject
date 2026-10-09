@@ -141,6 +141,7 @@ public partial class QaV3bTest : Node
         int forgeType = StartBase.BuildingOfSlot(_data, f, BuildingSlot.Forge);
         int siteAnchor = FreeAnchor(forgeType, taken, 12f, 40f, allowRequires: false);
         taken.Add(siteAnchor);
+        Check(ExploredGround.Scout(_sim, Workers()[0], _data.Buildings[forgeType], siteAnchor) >= 0, $"BUG-0274: {siteAnchor} not explored");
         SetMoney(5000, 5000);
         _sim.Enqueue(Command.Build(0, Workers()[0], forgeType, G.CellCenter(siteAnchor % G.Width, siteAnchor / G.Width)));
         Tick(2);
@@ -397,6 +398,7 @@ public partial class QaV3bTest : Node
         var taken = Enumerable.Range(0, B.Capacity).Where(k => B.Alive[k]).Select(k => B.Cell[k]).ToList();
         int houseType = StartBase.BuildingOfSlot(_data, f, BuildingSlot.House);
         int a = FreeAnchor(houseType, taken, 10f, 40f, allowRequires: false);
+        Check(ExploredGround.Scout(_sim, Workers()[1], _data.Buildings[houseType], a) >= 0, $"BUG-0274: {a} not explored");
         _sim.Enqueue(Command.Build(0, Workers()[1], houseType, G.CellCenter(a % G.Width, a / G.Width)));
         Tick(2);
         int site = B.SlotAt(a % G.Width, a / G.Width);
@@ -500,8 +502,9 @@ public partial class QaV3bTest : Node
             if (d >= bestD || d < minD || d > maxD) continue;
             int x = cell % G.Width, y = cell / G.Width;
             if (taken.Any(t => Math.Abs(t % G.Width - x) < 8 && Math.Abs(t / G.Width - y) < 8)) continue;
+            // BUG-0274: the sim refuses unexplored ground since M4-3b; a dev spawn ignores it, a Build path scouts first.
             bool ok = W.CanPlace(0, type, cell, out PlacementError r);
-            if (!ok && r != PlacementError.CannotAfford && !(allowRequires && r == PlacementError.Requires && B.Fits(type, cell))) continue;
+            if (!ok && r != PlacementError.CannotAfford && !(allowRequires && r == PlacementError.Requires && B.Fits(type, cell)) && !ExploredGround.IsUnexplored(r)) continue;
             bool empty = true;
             for (int i = 0; i < U.Capacity && empty; i++)
                 if (U.Alive[i] && MathF.Abs(U.Position[i].X - c.X) < def.FootprintWidth + 3f && MathF.Abs(U.Position[i].Y - c.Y) < def.FootprintHeight + 3f) empty = false;

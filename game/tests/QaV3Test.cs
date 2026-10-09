@@ -769,6 +769,7 @@ public partial class QaV3Test : Node
         int house = StartBase.BuildingOfSlot(_data, W.FactionOf(0), BuildingSlot.House);
         var taken = Enumerable.Range(0, B.Capacity).Where(k => B.Alive[k]).Select(k => B.Cell[k]).ToList();
         int a = FreeAnchor(house, taken, 10f, 45f);
+        Check(ExploredGround.Scout(_sim, two[0], _data.Buildings[house], a) >= 0, $"BUG-0274: {a} not explored");
         _sim.Enqueue(Command.Build(0, two[0], house, PlacementGhost.AnchorPoint(G, a)));
         Tick(40);
         int site = B.SlotAt(a % G.Width, a / G.Width);
@@ -960,9 +961,10 @@ public partial class QaV3Test : Node
             if (d >= bestD || d < minD || d > maxD) continue;
             int x = cell % G.Width, y = cell / G.Width;
             if (taken.Any(t => Math.Abs(t % G.Width - x) < 8 && Math.Abs(t / G.Width - y) < 8)) continue;
+            // BUG-0274: the sim refuses unexplored ground since M4-3b; a dev spawn ignores it, a Build path scouts first.
             bool ok = W.CanPlace(0, type, cell, out PlacementError r);
             // A locked type answers Requires before any map rule: probe the map rule itself (the dev spawn ignores requirements).
-            if (!ok && r != PlacementError.CannotAfford && !(r == PlacementError.Requires && B.Fits(type, cell))) continue;
+            if (!ok && r != PlacementError.CannotAfford && !(r == PlacementError.Requires && B.Fits(type, cell)) && !ExploredGround.IsUnexplored(r)) continue;
             bool empty = true;
             for (int i = 0; i < U.Capacity && empty; i++)
                 if (U.Alive[i] && MathF.Abs(U.Position[i].X - c.X) < def.FootprintWidth + 3f && MathF.Abs(U.Position[i].Y - c.Y) < def.FootprintHeight + 3f) empty = false;

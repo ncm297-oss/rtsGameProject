@@ -300,7 +300,9 @@ public partial class M3PlayableTest : Node
 
         // 14. V, W after Age II: the Engineers' Yard is live, placed on green and built.
         Step("V, W: Engineers' Yard");
-        int yard = await PlaceWithWorkers(BuildingSlot.SiegeWorks, advanced: true, Godot.Key.W, _yardType);
+        // BUG-0274: out to 60 m, since the explored ground within 40 m of the hall is already spaced out by the other
+        // buildings on some seeds (seed 6); nearest first, so a seed with room nearer is unchanged.
+        int yard = await PlaceWithWorkers(BuildingSlot.SiegeWorks, advanced: true, Godot.Key.W, _yardType, maxD: 60f);
         Done();
 
         // 15. A Heavy Infantry from the Barracks (Q), then a Sapper from the Yard (W): Age 2 and a live Sapper.
@@ -815,6 +817,9 @@ public partial class M3PlayableTest : Node
         }
         foreach ((float _, int cell) in spots.OrderBy(s => s.D))
         {
+            // BUG-0274: a green spot must lie on ground the player has explored (the sim refuses the rest since M4-3b); a
+            // Locked one answers Requires first either way.
+            if (!ignoreRequires && !ExploredGround.Footprint(W, def, cell)) continue;
             bool ok = W.CanPlace(0, type, cell, out PlacementError why);
             if (!ok && !(ignoreRequires && why == PlacementError.Requires && B.Fits(type, cell))) continue;
             System.Numerics.Vector2 c = StartBase.FootprintCenter(G, def, cell);
