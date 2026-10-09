@@ -20,7 +20,9 @@ namespace Rts.Sim.ViewApi;
 /// runs every tick always sees it dead in between. One that skips ticks (a test that ticks the sim itself, or a frame
 /// loop) may see a different shot in a slot it still tracks: that shows as a position jump, so a tracked slot starts
 /// over when it stands still (a firing tick), changes type or owner, a lob's impact point moves (a lob never re-aims),
-/// its last position is not where it was on the previous tick, or it is nearer its launch point than before.</para>
+/// a lob is off the line from its recorded launch point to its impact point (a lob flies straight, so a same-target lob
+/// fired from elsewhere shows here, BUG-0222), its last position is not where it was on the previous tick, or it is
+/// nearer its launch point than before.</para>
 /// </remarks>
 public sealed class ProjectileTracker
 {
@@ -32,6 +34,10 @@ public sealed class ProjectileTracker
 
     // Slack for "nearer its launch point than before" (float rounding of a straight flight).
     private const float BackwardSlack = 1e-3f;
+
+    // Slack (m) for "a lob is on the line from its launch to its impact point": float rounding of launch + j x step over a
+    // long flight stays far under a centimetre, and a shot from another launch point is metres off.
+    private const float OffLineSlack = 1e-2f;
 
     private readonly bool[] _tracked, _lob;
     private readonly Vector2[] _launch, _target, _lastSeen;
@@ -116,6 +122,7 @@ public sealed class ProjectileTracker
                 || type[i] != _type[i]
                 || owner[i] != _owner[i]
                 || (_lob[i] && target[i] != _target[i])
+                || (_lob[i] && OffLine(_launch[i], _target[i], pos))
                 || (_lastTick[i] == tick - 1 && prev[i] != _lastSeen[i])
                 || Vector2.Distance(pos, _launch[i]) < _lastFlown[i] - BackwardSlack;
             if (fresh)
@@ -129,6 +136,15 @@ public sealed class ProjectileTracker
             _lastFlown[i] = Vector2.Distance(pos, _launch[i]);
         }
         LastObservedTick = tick;
+    }
+
+    // Distance of p from the line through a and b is over OffLineSlack (a and b equal: from a).
+    private static bool OffLine(Vector2 a, Vector2 b, Vector2 p)
+    {
+        Vector2 d = b - a, r = p - a;
+        float len = d.Length();
+        if (!(len > OffLineSlack)) return r.Length() > OffLineSlack;
+        return MathF.Abs(d.X * r.Y - d.Y * r.X) / len > OffLineSlack;
     }
 
     private void Start(int i, Vector2 launch, Vector2 target, int type, int owner, ReadOnlySpan<ProjectileDef> defs)

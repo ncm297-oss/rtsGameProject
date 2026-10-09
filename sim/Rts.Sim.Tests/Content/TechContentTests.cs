@@ -373,9 +373,11 @@ public class TechContentTests
 
     /// <summary>
     /// The any-of rule again in plain words, right after the slot list: "...Forge): two production halls, or one hall and
-    /// the Forge." (BUG-0200, folded in from QA's <c>AgesRuleQaTests</c>).
+    /// the Forge." (BUG-0200, folded in from QA's <c>AgesRuleQaTests</c>). The clause must end its bullet: only the next
+    /// bullet ("- ...") or the end of the section may follow, so a sentence appended after it that contradicts it ("Or
+    /// the Forge alone.") fails (BUG-0230 item 1).
     /// </summary>
-    private static readonly Regex AgeClause = new(@"\(any \w+ of [^)]+\): (?<n>\w+) production halls, or (?<m>\w+) halls? and the Forge\.");
+    private static readonly Regex AgeClause = new(@"\(any \w+ of [^)]+\): (?<n>\w+) production halls, or (?<m>\w+) halls? and the Forge\.(?=\s+-\s|\s*$)");
 
     /// <summary>"Age II unlocks: Caster Hall, Siege Works, ..., and the faction upgrade."</summary>
     private static readonly Regex AgeUnlocks = new(@"Age II unlocks: (?<u>[^.]+)\.");
@@ -413,7 +415,7 @@ public class TechContentTests
         // The trailing clause (BUG-0200): with the three production halls and the Forge listed, "any n" means n halls, or
         // n - 1 halls and the Forge. A wrong rule sentence ("three production halls, or the Forge alone") fails here.
         Match clause = AgeClause.Match(page);
-        Assert.True(clause.Success, $"{where} Ages clause: page '{page}' has no '...): <n> production halls, or <n-1> hall(s) and the Forge.'");
+        Assert.True(clause.Success, $"{where} Ages clause: page '{page}' has no '...): <n> production halls, or <n-1> hall(s) and the Forge.' ending its bullet");
         BuildingSlot[] clauseSlots = { BuildingSlot.InfantryHall, BuildingSlot.RangedHall, BuildingSlot.ShockHall, BuildingSlot.Forge };
         Pin(where, "Ages clause slots (three halls + Forge)", string.Join(", ", clauseSlots.OrderBy(s => s)),
             string.Join(", ", t.RequiresAnyOfSlots.Select(s => (BuildingSlot)s).OrderBy(s => s)));

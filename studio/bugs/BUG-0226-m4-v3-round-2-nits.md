@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (items 1-5) |
 | Found | 2026-10-08-1814, task M4-V3 (QA re-check of fix round 2, bb5451d) |
 | System | view: `sim/Rts.Sim/ViewApi/TerrainHeight.cs` (`MaxUnder` / `Joined`, `SeamSlack`); view test scenes `game/tests/AttackOrderViewTest.cs`, `game/tests/QaV6Test.cs` |
-| Fixed by | |
+| Fixed by | 08dc8e3 (M4-VH1): `TerrainHeight` three step bands (straddle / capped at the step top + 0.08 m / wall); `MaxUnderEdgeWalkQaTests.MaxUnder_RandomPointsAndRadii_HangsUnderAQuarterMetre` un-skipped; AttackOrderViewTest Billet camera fallback as a `Check`; QaV6Test Tent row picks a pixel with the box behind (`Check`); docs/03 and `AttackStage` wording |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~MaxUnderEdgeWalkQaTests"`. The skipped row
@@ -53,3 +53,17 @@
   `BuildingPicker.PickRay` first), or reword the header.
 - docs/03 and the `AttackStage` summary say "the Tent 10-16 cells behind the Raiders". The code measures 10-16 cells
   from the centre, which is 7-14 cells behind the Raider lines.
+
+## Verification (QA 2026-10-08-2144, M4-VH1)
+- Item 1: the flipped row is green on its 7 seeds. QA's `QA/ViewApi/MaxUnderBandsQaTests` covers 16 seeds the fix was
+  not measured on, with points only on ramp cells and their neighbours (3-level maps; the real rim radii 0.48 / 0.84 /
+  1.08 plus a random one; 1,980-2,520 points a seed). Result: 0 sinks, worst hang over the 512-step oracle 0.132-0.225 m
+  (< 0.25). Structurally a capped sample is at most 0.15 + 0.08 = 0.23 m over the step's low side. The straddle term
+  copies the oracle's discretisation, an S4 note in BUG-0250 item 2.
+- Item 2 (comment/docs): the `SeamSlack` comment is gone; the new comment and docs/03 say there are no seams.
+- Item 3: the scene loop prints `seed 6: right-click on the own Billet: no Attack (camera over the Billet)`. The row now
+  runs on both seeds and fails loudly if no pixel is found.
+- Item 4: QaV6Test prints `tent row: Raider 23 before the Tent (box behind: True) -> unit`, and a `Check` guards it.
+- Docs item: docs/03 and the `AttackStage` summary now say "the Tent's anchor 10-16 cells east of the centre (7-14
+  cells behind the Raider lines)".
+- No silent skips: the full run has 13 skips, none under `ViewApi`.

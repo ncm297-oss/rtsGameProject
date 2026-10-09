@@ -153,8 +153,9 @@ public class ProjectileViewQaTests
     }
 
     // A skipping observer, a slot reused by a lob of the same type and owner at the same impact point from another launch
-    // point that lies farther from the old launch: none of the tracker's five "new shot" tests fire.
-    [Fact(Skip = "BUG-0222 item 1: a skipping observer misses a same-type, same-owner, same-target lob reuse from a farther launch (its arc is drawn flat); the Match observes every tick, so not reachable in the game")]
+    // point that lies farther from the old launch: none of the tracker's first five "new shot" tests fire; the lob's
+    // off-the-launch-line test does (BUG-0222 item 1, flipped from a skip), and the new arc is drawn from the new launch.
+    [Fact]
     public void SkippingObserver_SameTargetLobFromAnotherLaunch_IsANewShot()
     {
         int sharper = Data.FindProjectile("sharper");
@@ -175,6 +176,8 @@ public class ProjectileViewQaTests
         t.Observe(s, Defs, 20);
         _out.WriteLine($"launch {t.Launch[0]} (want {second + (target - second) * (speed / 8f)} or nearer), arc at its position {t.ArcHeight(0, s.Position[0]):F2} m, reused {t.Reused}");
         Assert.Equal(1, t.Reused);
+        Assert.True(Vector2.Distance(t.Launch[0], second + (target - second) * (speed / 8f)) < 1e-3f, $"launch {t.Launch[0]}");
+        Assert.True(t.ArcHeight(0, s.Position[0]) > 0f, "the new lob's arc is drawn flat");
     }
 
     // ---- BUG-0190 item 1: a corpse disc at MaxUnder never hangs a level up at the foot of a cliff ----

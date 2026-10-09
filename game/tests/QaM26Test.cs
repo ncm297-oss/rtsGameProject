@@ -370,7 +370,7 @@ public partial class QaM26Test : Node
 
     private async Task Gap()
     {
-        await ToSignal(GetTree().CreateTimer(0.06), SceneTreeTimer.SignalName.Timeout);
+        await WallClock.Wait(this, 60); // the wall clock, as Sfx's gap reads it (BUG-0220)
         await Frame();
     }
 

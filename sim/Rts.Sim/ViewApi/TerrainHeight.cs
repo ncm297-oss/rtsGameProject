@@ -23,16 +23,21 @@ public static class TerrainHeight
     // Unit offsets of the eight rim samples of MaxUnder (every 45 degrees; constants, no trig).
     private const float Diag = 0.70710678f;
 
-    // Largest height step (m) at a cell edge still read as one surface. Slope edges meet exactly (CellCorners) except a
-    // few generated seams about 0.1 m high, which a disc may straddle; a wall is a whole level or a ramp's side (BUG-0224).
-    private const float SeamSlack = 0.15f;
+    // Cell-edge steps (m) along the line from a disc's centre to a rim sample (BUG-0224, BUG-0226). Drawn surfaces that
+    // join meet exactly (CellCorners; generated maps have no seams, MaxUnderEdgeWalkQaTests), so a step is a wall: a cliff
+    // or a ramp's side wall, which grows from 0 m at the ramp's foot. A disc lies over a step of up to Straddle(radius)
+    // (StraddleStep plus a few mm) as if it were flat ground. Over a step of up to WallStep (the foot of a side wall) the
+    // rim sample counts, but at most FootRise above the step's top: the disc may sit on the step's edge, not climb the
+    // ramp beyond it (with one flat 0.15 m slack it climbed about 0.5 m up). A bigger step is a wall: the sample is dropped.
+    private const float StraddleStep = 0.05f, WallStep = 0.15f, FootRise = 0.08f;
 
     /// <summary>
     /// The highest surface height (m) among the centre and eight points round the rim of the disc of
     /// <paramref name="radius"/> m at (x, y), so a flat disc placed there is not half buried on a ramp (BUG-0190). Only
     /// ground joined to the centre by the drawn surface counts: a rim point whose straight line from the centre crosses a
     /// cell edge where the two cells' surfaces don't meet (a cliff, or a ramp's side wall) is ignored, so a disc beside a
-    /// cliff or a ramp's side stays on its own ground (BUG-0223, BUG-0224). A non-positive or NaN radius samples the centre only.
+    /// cliff or a ramp's side stays on its own ground (BUG-0223, BUG-0224); beyond the low foot of a side wall it counts at
+    /// most a little above the step (BUG-0226). A non-positive or NaN radius samples the centre only.
     /// </summary>
     public static float MaxUnder(Heightmap map, float x, float y, float radius)
     {
@@ -42,32 +47,42 @@ public static class TerrainHeight
         if (!(radius > 0f)) return centre;
         float d = radius * Diag;
         float best = centre;
-        best = Rim(map, x, y, x + radius, y, best);
-        best = Rim(map, x, y, x - radius, y, best);
-        best = Rim(map, x, y, x, y + radius, best);
-        best = Rim(map, x, y, x, y - radius, best);
-        best = Rim(map, x, y, x + d, y + d, best);
-        best = Rim(map, x, y, x + d, y - d, best);
-        best = Rim(map, x, y, x - d, y + d, best);
-        best = Rim(map, x, y, x - d, y - d, best);
+        float straddle = Straddle(radius);
+        best = Rim(map, x, y, x + radius, y, straddle, best);
+        best = Rim(map, x, y, x - radius, y, straddle, best);
+        best = Rim(map, x, y, x, y + radius, straddle, best);
+        best = Rim(map, x, y, x, y - radius, straddle, best);
+        best = Rim(map, x, y, x + d, y + d, straddle, best);
+        best = Rim(map, x, y, x + d, y - d, straddle, best);
+        best = Rim(map, x, y, x - d, y + d, straddle, best);
+        best = Rim(map, x, y, x - d, y - d, straddle, best);
         return best;
     }
 
-    // One rim sample (x1, y1) of MaxUnder: counts only if the surface is joined along the line from the centre (x0, y0).
-    private static float Rim(Heightmap map, float x0, float y0, float x1, float y1, float best)
+    // One rim sample (x1, y1) of MaxUnder: counts only if the surface is joined along the line from the centre (x0, y0),
+    // and no higher than the cap a side wall's foot on the way puts on it.
+    private static float Rim(Heightmap map, float x0, float y0, float x1, float y1, float straddle, float best)
     {
-        if (!Joined(map, x0, y0, x1, y1)) return best;
+        if (!Joined(map, x0, y0, x1, y1, straddle, out float cap)) return best;
         int cx = ClampCell(x1 / MapConstants.CellSize, map.Width);
         int cy = ClampCell(y1 / MapConstants.CellSize, map.Height);
-        return MathF.Max(best, InCell(map, cx, cy, x1, y1));
+        return MathF.Max(best, MathF.Min(InCell(map, cx, cy, x1, y1), cap));
     }
 
+    // The largest step a disc of `radius` lies over as flat ground: StraddleStep plus twice the steepest slope's rise (one
+    // level per cell) over 1/512 of the radius, the wall test of the 512-step wall-aware walk QA measures MaxUnder against
+    // (MaxUnderEdgeWalkQaTests), so the two agree on which side-wall feet are walls. At most 0.06 m for the widest disc.
+    private static float Straddle(float radius) =>
+        StraddleStep + MathF.Min(radius, 2f) / 512f * (MapConstants.LevelHeight / MapConstants.CellSize) * 2f;
+
     // Walks the cells the segment (x0, y0) -> (x1, y1) passes through (a grid walk, edge by edge) and compares the two
-    // cells' surfaces at each crossing point: a step bigger than SeamSlack is a wall. Within a cell the surface is one
-    // plane, so the crossings are the only places a wall can be.
-    private static bool Joined(Heightmap map, float x0, float y0, float x1, float y1)
+    // cells' surfaces at each crossing point: a step bigger than WallStep is a wall (false). A step between `straddle`
+    // and WallStep caps the sample at the step's top plus FootRise (the lowest such cap; +infinity when none). Within a
+    // cell the surface is one plane, so the crossings are the only places a wall can be.
+    private static bool Joined(Heightmap map, float x0, float y0, float x1, float y1, float straddle, out float cap)
     {
         const float cs = MapConstants.CellSize;
+        cap = float.PositiveInfinity;
         int ix = ClampCell(x0 / cs, map.Width), iy = ClampCell(y0 / cs, map.Height);
         int tx = ClampCell(x1 / cs, map.Width), ty = ClampCell(y1 / cs, map.Height);
         float dx = x1 - x0, dy = y1 - y0;
@@ -82,7 +97,10 @@ public static class TerrainHeight
             float t = MathF.Min(px, py);
             int nx = ix != tx && px <= t ? ix + sx : ix, ny = iy != ty && py <= t ? iy + sy : iy;
             float ex = x0 + dx * t, ey = y0 + dy * t;
-            if (MathF.Abs(InCell(map, ix, iy, ex, ey) - InCell(map, nx, ny, ex, ey)) > SeamSlack) return false;
+            float here = InCell(map, ix, iy, ex, ey), there = InCell(map, nx, ny, ex, ey);
+            float step = MathF.Abs(here - there);
+            if (step > WallStep) return false;
+            if (step > straddle) cap = MathF.Min(cap, MathF.Max(here, there) + FootRise);
             ix = nx;
             iy = ny;
         }

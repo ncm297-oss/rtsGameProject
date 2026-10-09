@@ -10,7 +10,9 @@ namespace Rts.Sim.ViewApi;
 /// <see cref="ImpactMarkKind.Flash"/> for an aimed hit (<see cref="FlashTicks"/>, 0.2 s), a <see cref="ImpactMarkKind.Dust"/>
 /// puff for an aimed miss (<see cref="DustTicks"/>, 0.3 s) and a <see cref="ImpactMarkKind.Burst"/> for a lob
 /// (<see cref="BurstTicks"/>, 0.4 s), timed in sim ticks so game speed scales them. A fixed pool used as a ring like
-/// <see cref="DeathMarkers"/>: when every mark is in use the next one replaces the oldest. A mark that ran out of time
+/// <see cref="DeathMarkers"/>: each mark takes the next ring slot, and if that slot's mark is still live (the oldest one
+/// added) it is replaced, even when other slots have expired (BUG-0222: cheap, and with 512 slots it needs a burst of
+/// landings far past a real fight's). A mark that ran out of time
 /// before any frame drew it (several ticks in one frame at 8x) is kept until one has, so every landing shows at least once.
 /// Presentation only; allocation-free after construction.
 /// </summary>
@@ -59,7 +61,7 @@ public sealed class ImpactMarks
     /// <summary>Marks ever added.</summary>
     public long Added { get; private set; }
 
-    /// <summary>Marks that replaced a live one because the pool was full.</summary>
+    /// <summary>Marks that replaced a live one (the next ring slot was still in use).</summary>
     public long Replaced { get; private set; }
 
     /// <summary>Marks removed because their time ran out.</summary>
@@ -109,7 +111,7 @@ public sealed class ImpactMarks
         return impact.Hit ? ImpactMarkKind.Flash : ImpactMarkKind.Dust;
     }
 
-    /// <summary>Adds one mark for <paramref name="impact"/> seen at tick <paramref name="tick"/>; returns its slot (the oldest mark's when the pool is full).</summary>
+    /// <summary>Adds one mark for <paramref name="impact"/> seen at tick <paramref name="tick"/> at the next ring slot (replacing the mark there if it is still live, the oldest added); returns its slot.</summary>
     public int Add(in ProjectileImpact impact, ImpactMarkKind kind, long tick)
     {
         int slot = _head;

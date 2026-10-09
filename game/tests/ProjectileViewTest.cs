@@ -450,7 +450,8 @@ public partial class ProjectileViewTest : Node
     {
         for (int i = 0; i < U.Capacity; i++)
         {
-            if (!U.Alive[i] || U.Owner[i] != 1) continue;
+            // Only an enemy player 0 sees: an Attack on an unseen one is dropped since M4-3a (the M4-VH1 sweep).
+            if (!U.Alive[i] || U.Owner[i] != 1 || !W.Fog.CanSeeUnit(0, i)) continue;
             if (!_sel.TryScreenPosition(i, out px) || !InPlayArea(px) || UnitUnder(px) != i) continue;
             if (!_sel.EnemyAt(px, out enemy, out bool b) || b || enemy.Index != i) continue;
             return true;

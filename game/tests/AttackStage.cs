@@ -13,7 +13,7 @@ namespace Rts.Game.Tests;
 /// explicit Attack on a target its owner doesn't see is dropped (docs/03 "Vision, detection, fog"; BUG-0218), so every
 /// target those scenes click is staged inside player 0's sight: Heavy Infantry and Raiders in two-column lines two and
 /// three cells either side of the central cell (checked: every Raider within the Heavy Infantry's sight less 1.5 m of an
-/// own unit), the Tent 10 to 16 cells behind the Raiders, and player 0's Billet beside the Tent as its spotter (its centre
+/// own unit), the Tent's anchor 10 to 16 cells east of the centre (7 to 14 cells behind the Raider lines), and player 0's Billet beside the Tent as its spotter (its centre
 /// cell at most 4 cells, 8 m, from a Tent cell: a building sees 12 m, rules.json <c>buildingSight</c>). Without fog (before
 /// M4-3a) the same layout serves.
 /// </summary>

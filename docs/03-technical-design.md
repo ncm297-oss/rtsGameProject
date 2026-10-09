@@ -3159,7 +3159,8 @@ game/data/common/ui.json  view-only text and menu lists (UiText.cs); the sim's D
   units selected drops it. `SelectedBuilding` is the slot or -1, a view selection (slot + generation): a freed or reused
   slot reads -1 from the next read on. Tab does nothing with a building selected. `BuildingOutline` draws four thin
   flat bars just outside the footprint, moved only when the selection changes. The F12 label says "sel building".
-  Cancel: `Command.Cancel(player, footprint centre)` (`CancelSelectedSite`), one Command sound.
+  Cancel: `Command.Cancel(player, footprint centre)` (`CancelSelectedSite`), one Command sound; a second press before
+  the next tick sends nothing (BUG-0126).
 - **Right-click Repair / join** (`ContextOrder`, with a worker selected): on a node's cell a Gather (M3-V1); else on an
   own finished building below full hit points (`ViewApi.BuildingPicker.SlotAt`, the store's `SlotAt` in meters) a
   `Repair(player, worker, point)`; on an own site a `Build` of the site's type at its anchor cell's centre (it joins);
@@ -3580,7 +3581,8 @@ Match.tscn  (new node)
   6): a real Match with 10 Heavy Infantry v 10 Raiders and a Billet and a Tent, clicks pushed through the viewport. Since
   M4-3a an Attack on an unseen enemy is dropped, so the staging (`game/tests/AttackStage.cs`, shared with QaV6Test) puts
   every target in the player's sight (BUG-0218): two-column lines 2-3 cells either side of the centre (every Raider
-  within the Heavy Infantry's sight less 1.5 m of one, checked at staging), the Tent 10-16 cells behind the Raiders and
+  within the Heavy Infantry's sight less 1.5 m of one, checked at staging), the Tent's anchor 10-16 cells east of the
+  centre (7-14 cells behind the Raider lines) and
   the player's Billet beside it as its spotter (12 m building sight); the panel row's chase target is the farthest enemy
   within its unit's sight less 2 m. Rows:
   right-click on an enemy (one Attack per selected unit, one Command sound, the ring on it; on the tick the commands
@@ -3627,18 +3629,23 @@ Match.tscn  (new node)
   tick reuses it) and again from the frame loop (once per tick number; a second call is a no-op), for scenes that tick
   the sim themselves. An observer that skipped ticks may meet a different shot in a slot it still tracks; it starts that
   slot over when it stands still (a firing tick), its type or owner changed, a lob's impact point moved (lobs never
-  re-aim), its `PrevPosition` is not where it was on the previous tick, or it is nearer its launch than before
-  (`Reused` counts these). A missed reuse of an aimed slot costs nothing (aimed shots draw without the launch point).
+  re-aim), a lob is more than 1 cm off the line from its recorded launch point to its impact point (a lob flies straight,
+  so a same-target lob fired from elsewhere starts over: BUG-0222), its `PrevPosition` is not where it was on the
+  previous tick, or it is nearer its launch than before (`Reused` counts these). A missed reuse of an aimed slot costs nothing (aimed shots draw without the launch point).
 - **The arc**: `height = apex x 4t(1 - t)` (`ArcHeight`), apex = a quarter of the flight length within 1-6 m
   (`ProjectileTracker.Apex`: a 24 m Catapult shot peaks at 6 m, a short Sapper throw at 1 m). t is the distance from the
   launch point over the arc's span, clamped to [0, 1]. The span ends **one step before the impact point**: the sim moves
   a lob onto its impact point and frees it in the same tick, so its last drawn position is a step short; ending the arc a
   step earlier still keeps the whole last drawn tick on the ground at any alpha (a stone touches down, rolls one tick,
   then bursts). Span = `(n - 2) x step` with n = `ProjectileStore.FlightTicks(length, speed)`; a lob of 2 ticks or less
-  stays on the ground. A placeholder curve until M6.
+  stays on the ground. A placeholder curve until M6. **M6 note (BUG-0222):** the touched-down stone slides its last step
+  (0.6 m at 12 m/s) along the ground and vanishes that far short of its burst; the M6 projectile pass should end the
+  drawn flight at the impact point (or start the burst where the stone was last drawn).
 - **Impact marks** (`ViewApi.ImpactMarks`, like `DeathMarkers`): every `ProjectileImpact` of a tick (read on
   `SimRunner.Ticked` while `World.Impacts` still holds it, and from the frame loop once per tick) adds a mark to a ring of
-  512 (`DefaultCapacity`; when full the oldest is replaced): an aimed **hit** a flash (0.2 s, `FlashTicks` 4) at the
+  512 (`DefaultCapacity`) written in ring order: each mark takes the next ring slot, and if that slot's mark is still
+  live (the oldest added, an undrawn or not yet expired mark) it is replaced, even when other slots have expired
+  (BUG-0222; with 512 slots and marks of 0.2-0.4 s this needs over 60 landings a tick): an aimed **hit** a flash (0.2 s, `FlashTicks` 4) at the
   shot's height, an aimed **miss** a dust puff (0.3 s, `DustTicks` 6) on the ground, a **lob** a burst (0.4 s,
   `BurstTicks` 8, builder's choice) on the ground. Times are game ticks (game speed scales them), but a mark expires only
   after a frame has drawn it, so a landing at 8x always shows at least once, and a mark no frame has drawn yet is aged
@@ -3658,7 +3665,12 @@ Match.tscn  (new node)
   rim samples joined to the centre by the drawn surface count: the straight line from the centre to each sample is walked
   cell edge by cell edge, and an edge where the two cells' surfaces differ by more than 0.15 m (a cliff, or a ramp's side
   wall) drops that sample, so a unit dying against a cliff or beside a ramp's side keeps its disc on its own ground
-  (BUG-0223, BUG-0224; `CorpseDiscRimQaTests` compares it with a 64-step walk on five generated maps);
+  (BUG-0223, BUG-0224; `CorpseDiscRimQaTests` compares it with a 64-step walk on five generated maps). Drawn surfaces that
+  join meet exactly (generated maps have no seams), so a smaller step is the foot of a ramp's side wall, which grows from
+  0 m: a disc lies over one of up to about 5 cm as flat ground (0.05 m plus twice one level per cell over 1/512 of its
+  radius, the wall test of QA's 512-step walk, `MaxUnderEdgeWalkQaTests`), and beyond a bigger one the rim sample counts
+  at most 0.08 m above the step's top, so the disc can't climb the ramp beside it (BUG-0226: with one flat 0.15 m slack it
+  hung up to 0.52 m; now at most 0.23 m over the 512-step walk on seven maps);
   `CombatViewTest` checks every corpse's underside against it. (2) `UnitPicker.ResolveEnemy` counts a NaN entry (unit,
   building or prop) as nearest (0), so a unit passed with a NaN entry can no longer lose to the building behind it.
 - **Tests.** xUnit `ViewApi/ProjectileTrackerTests`: the launch on the firing tick and a tick late, a slot dropped when it
@@ -3925,17 +3937,21 @@ AiPlayer
 
 ## Build and export
 
-- Godot export preset "Windows Desktop" (committed in `game/export_presets.cfg`; Godot 4.3+ keeps
-  credentials out of it).
+- Godot export preset "Windows Desktop" (to be committed in `game/export_presets.cfg`; Godot 4.3+ keeps
+  credentials out of it). Not in the repo yet (checked 2026-10-08, M4-VH1): it lands with the export work in M6.
 - Export templates for 4.7.x .NET must be installed once per machine (SETUP.md).
-- `tools/export.ps1`: builds the solution in Release, runs the tests, exports
+- `tools/export.ps1` (planned, not written yet): builds the solution in Release, runs the tests, exports
   `build/RtsGame/RtsGame.exe`, and zips it as `build/RtsGame-<version>.zip`.
 - **M6 notes (from the M2 hardening, M2-H2):**
   - **Leave `game/tests/` out of the release.** The test and screenshot scenes (and their scripts)
     are dev tools; some start the game binary as a child process (`OS.Execute`). Exclude them in the
-    preset (resources filter `tests/*`) and check the exported `.pck` holds no `tests/` path.
+    preset (resources filter `tests/*`) and check the exported `.pck` holds no `tests/` path. (M4-VH1
+    count: 38 scenes. Their C# still compiles into `RtsGame.dll`, which the resources filter does not
+    strip: harmless, as nothing in `scenes/` references `Rts.Game.Tests`, but moving them to their own
+    assembly is the clean fix if the dll's size or contents matter.)
   - **Load `game/data/` in a `.pck`-safe way.** Today `Main` and the test scenes call
-    `DataLoader.LoadAll(ProjectSettings.GlobalizePath("res://data"))`, which reads the JSON from disk:
+    `DataLoader.LoadAll(ProjectSettings.GlobalizePath("res://data"))`, and `UiText.DefaultPath` globalizes
+    `res://data/common/ui.json` for `File.ReadAllText`; both read the JSON from disk:
     fine in the editor, but in an exported game `res://` lives inside the `.pck` and the globalized
     path doesn't exist. Read the files through Godot (`DirAccess` / `FileAccess` on `res://data`)
     and hand their text to a loader overload that takes text, or ship `data/` beside the exe and

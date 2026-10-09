@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (a red xUnit row on the merged result; gates the M4-3a sim merge) |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-08-1814, integration (the conductor's full non-Perf run on `origin/main` 853a60c merged into `studio/2026-10-08-1435-sim`, a84ff0d; confirmed by the Producer alone) |
 | System | view-owned QA row `sim/Rts.Sim.Tests/QA/ViewApi/UnitPickerQaTests.cs` (M4-V2, line ~280) vs the M4-3a vision gate on explicit `Attack` (`CombatSystem.MayAttack`) |
-| Fixed by | |
+| Fixed by | 2cddf26 (M4-VH1, first commit, this test only: `CombatScenes.Spot` on the three Raiders, every assertion kept) |
 
 ## Repro
 1. In the sim worktree at a84ff0d (M4-3a + the view's M4-V3 from `main`): `dotnet build RtsGame.sln`, then
@@ -38,3 +38,9 @@ scene loop on their scratch merges, and the row is an xUnit QA row, not a scene.
   (not only the scene loop). New integration rule (Producer, 2026-10-08-1814): **the integration gate runs the full non-Perf
   xUnit suite on the merged result, in addition to the scene loop and smoke.**
 - Planned: first item of the view track's next session (a few lines, QA light), then the sim branch merges.
+
+## Verification (QA 2026-10-08-2144, M4-VH1)
+- 2cddf26 sits directly on the diff base 4c1f168 and touches only `UnitPickerQaTests.cs` (+5 lines: three `Spot` calls
+  and a comment). In a scratch clone the row fails at 4c1f168 (`Assert.Equal() Failure`) and passes at 2cddf26.
+- Full non-Perf at 08dc8e3: 4,022 / 13 skipped / 1 failed. The one failure is `Content/CounterTriangleMarginsTests`
+  (data track, fixed on the data branch), not this row.

@@ -25,6 +25,8 @@ public partial class SfxTest : Node
     private SelectionController _sel = null!;
     private RtsCamera _camera = null!;
     private Simulation _sim = null!;
+    private Vector2 _atA; // an own unit's screen point (Selecting)
+    private ulong _lastActionUsec; // wall clock right after the last Expect action: any play it made was at or before this
 
     public override async void _Ready()
     {
@@ -41,6 +43,7 @@ public partial class SfxTest : Node
             await StartMatch(mute: false);
             Check(!Sfx.Muted, "master bus muted without --mute");
             await Selecting();
+            await FastGameClock();
             await Ordering();
             await StartMatch(mute: true);
             Check(Sfx.Muted, "master bus not muted with --mute");
@@ -175,6 +178,7 @@ public partial class SfxTest : Node
         for (int i = 0; i < u.Capacity && a < 0; i++)
             if (u.Alive[i] && u.Owner[i] == SelectionController.LocalPlayer && _sel.TryScreenPosition(i, out atA) && atA.X > 50 && atA.Y > 50 && atA.X < screen.X - 50 && atA.Y < screen.Y - 50) a = i;
         Check(a >= 0, "no own unit on screen");
+        _atA = atA;
         Vector2 empty = FindEmpty(screen);
         await Expect("click own unit", SfxEvent.Select, 1, () => Click(atA));
         await Expect("box", SfxEvent.Select, 1, () => Box(new Vector2(1, 1), screen - new Vector2(1, 1)));
@@ -225,14 +229,46 @@ public partial class SfxTest : Node
         GD.Print($"orders to {n} units: Command played {_sfx.PlayCount(SfxEvent.Command)} times, last frame {_sfx.LastPlayedFrame(SfxEvent.Command)}");
     }
 
-    // Waits past the 50 ms gap and a frame, runs the action, and checks how many times each event played.
+    // BUG-0220 regression: with the game clock 8x the wall clock (Engine.TimeScale), a scene-tree timer of 0.06 s fires
+    // after about 7.5 ms of wall time, so a wait on it lands inside Sfx's 50 ms wall-clock gap and the play is dropped (the
+    // same disagreement a stalled frame's clamped delta causes under CPU load). Expect waits on the wall clock, so these
+    // rows hold whatever the game clock does.
+    private async Task FastGameClock()
+    {
+        Vector2 screen = _camera.GetViewport().GetVisibleRect().Size;
+        Vector2 empty = FindEmpty(screen);
+        double scale = Engine.TimeScale;
+        Engine.TimeScale = 8.0;
+        try
+        {
+            // Box (all) and a click on one unit alternate, so every selection is a change (re-selecting the same set is silent).
+            for (int k = 0; k < 3; k++)
+            {
+                await Expect($"8x game clock, box {k + 1}", SfxEvent.Select, 1, () => Box(new Vector2(1, 1), screen - new Vector2(1, 1)));
+                await Expect($"8x game clock, click own unit {k + 1}", SfxEvent.Select, 1, () => Click(_atA));
+            }
+            // Orders last: they move the units off _atA.
+            for (int k = 0; k < 3; k++) await Expect($"8x game clock, right-click {k + 1}", SfxEvent.Command, 1, () => RightClick(empty));
+        }
+        finally
+        {
+            Engine.TimeScale = scale;
+        }
+    }
+
+    // Waits until the wall clock (the one Sfx's rate limit reads) is past the 50 ms gap since the last action, plus at
+    // least one frame, runs the action, and checks how many times each event played. BUG-0220: waiting on a scene-tree
+    // timer instead counted frame deltas, which can run ahead of the wall clock (a clamped delta after a stalled frame,
+    // or a time scale), so under CPU load a play was dropped as too soon.
     private async Task Expect(string what, SfxEvent e, int want, Action action)
     {
-        await ToSignal(GetTree().CreateTimer(0.06), SceneTreeTimer.SignalName.Timeout);
-        await Frame();
+        ulong gapUsec = (ulong)(Sfx.MinGapMs * 1000) + 10_000;
+        do await Frame();
+        while (Time.GetTicksUsec() - _lastActionUsec < gapUsec);
         SfxEvent other = e == SfxEvent.Select ? SfxEvent.Command : SfxEvent.Select;
         int before = _sfx.PlayCount(e), otherBefore = _sfx.PlayCount(other);
         action();
+        _lastActionUsec = Time.GetTicksUsec();
         int got = _sfx.PlayCount(e) - before, otherGot = _sfx.PlayCount(other) - otherBefore;
         GD.Print($"{what}: {e} +{got}, {other} +{otherGot}");
         Check(got == want, $"{what}: {e} played {got} times, expected {want}");

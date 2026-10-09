@@ -6,7 +6,7 @@
 | Status | open |
 | Found | 2026-10-06-1744, task D1 |
 | System | data (buildings.json), Rts.Sim.Data comments |
-| Fixed by | comment item: b4b423c (M3-3) rewrote `BuildingSlot.cs:4`. Requirements item: 8bcca04 (D3) sets `requires` to match every "needs X" in the building descriptions, pinned by `BuildingContentTests.I_BUG0090_...` (QA 2026-10-07-1415 checked: dropping a `requires` or adding a "needs" sentence fails it); gating itself lands with M3-6. Forge item: consistent (techs `researchedAt: forge`). Still open: the towers' attack / sight / detector text (M4 fields) |
+| Fixed by | comment item: b4b423c (M3-3) rewrote `BuildingSlot.cs:4`. Requirements item: 8bcca04 (D3) sets `requires` to match every "needs X" in the building descriptions, pinned by `BuildingContentTests.I_BUG0090_...` (QA 2026-10-07-1415 checked: dropping a `requires` or adding a "needs" sentence fails it); gating itself lands with M3-6. Forge item: consistent (techs `researchedAt: forge`). Tower sight item: M4-3a gave both towers `sight` 24 (every other building `rules.json` `buildingSight` 12); D7 put a Sight column on both faction pages pinned both ways to `BuildingDef.Sight` (`BuildingContentTests.J*`). Still open: the towers' attack / detector text (M4-3b fields) |
 
 ## Repro
 1. Read `game/data/factions/*/buildings.json` (D1) and `sim/Rts.Sim/Data/BuildingSlot.cs:4`.

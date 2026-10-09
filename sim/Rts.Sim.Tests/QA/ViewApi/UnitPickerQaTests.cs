@@ -43,9 +43,9 @@ public class UnitPickerQaTests
 
     /// <summary>
     /// Twin A is driven as the view drives it: three frames a tick, each with 40 camera rays picked and resolved, the hit
-    /// flash (with types) and a target mark updated; on some frames the resolved enemy gets an Attack from a random subset
-    /// of player 0's units (queued or not). Twin B gets exactly A's commands. Hash equal every tick, and no frame of picks
-    /// moves A's hash.
+    /// flash (with types) and a target mark updated; on some frames the resolved enemy, if player 0 sees it, gets an Attack
+    /// from a random subset of player 0's units (queued or not). Twin B gets exactly A's commands. Hash equal every tick,
+    /// and no frame of picks moves A's hash.
     /// </summary>
     [Theory]
     [InlineData(1UL)]
@@ -62,7 +62,7 @@ public class UnitPickerQaTests
         var mark = new TargetMark();
         var maxHp = new int[w.Data.Units.Length];
         for (int t = 0; t < maxHp.Length; t++) maxHp[t] = w.Data.Units[t].Hp;
-        int attacks = 0, picks = 0, enemies = 0;
+        int attacks = 0, picks = 0, enemies = 0, seen = 0;
         var frameOrders = new List<Command>();
         for (int tick = 0; tick < 900; tick++)
         {
@@ -80,6 +80,10 @@ public class UnitPickerQaTests
                     if (Pick(w, alpha, origin, target - origin, out _) >= 0) picks++;
                     if (!EnemyAt(w, alpha, origin, target - origin, 0, out EntityHandle e, out bool isB)) continue;
                     enemies++;
+                    // Order only what player 0 sees, as the player can (an Attack on an unseen target is dropped since
+                    // M4-3a, so it would prove nothing): the M4-VH1 sweep.
+                    if (!(isB ? w.Fog.CanSeeBuilding(0, e.Index) : w.Fog.CanSeeUnit(0, e.Index))) continue;
+                    seen++;
                     if (rng.Next(25) != 0) continue;
                     mark.Mark(e, isB);
                     bool queued = rng.Next(3) == 0;
@@ -102,7 +106,7 @@ public class UnitPickerQaTests
             b.Tick();
             Assert.True(a.StateHash() == b.StateHash(), $"seed {seed}: twins differ at tick {a.World.TickNumber}");
         }
-        _out.WriteLine($"seed {seed}: 900 ticks x 3 frames x 40 rays: {picks} unit picks, {enemies} enemy resolutions, {attacks} Attack commands; twins equal every tick; {w.Kills[0] + w.Kills[1]} kills");
+        _out.WriteLine($"seed {seed}: 900 ticks x 3 frames x 40 rays: {picks} unit picks, {enemies} enemy resolutions ({seen} seen), {attacks} Attack commands; twins equal every tick; {w.Kills[0] + w.Kills[1]} kills");
         Assert.True(attacks > 50 && enemies > 500, $"too few orders ({attacks}) or enemy picks ({enemies}) to mean anything");
     }
 
@@ -245,8 +249,11 @@ public class UnitPickerQaTests
             a.Enqueue(Command.Attack(0, ha[k], target, false));
             b.Enqueue(Command.Attack(0, hb[k], target, false));
         }
-        // Let them close in and start swinging.
-        for (int t = 0; t < 30; t++) { a.Tick(); b.Tick(); }
+        // Let them close in and start swinging. The Raider is in their sight, so the first click is taken (not dropped as
+        // unseen, which would make the twin trivially equal: the M4-VH1 sweep).
+        for (int t = 0; t < 2; t++) { a.Tick(); b.Tick(); } // a command applies on the second tick after it is enqueued
+        for (int k = 0; k < 10; k++) Assert.True(a.World.Units.Target[ha[k].Index] == target && a.World.Units.Mode[ha[k].Index] == CombatMode.Ordered, $"unit {k} did not take the Attack");
+        for (int t = 2; t < 30; t++) { a.Tick(); b.Tick(); }
         Assert.Equal(a.StateHash(), b.StateHash());
         int clicks = 1;
         for (int t = 0; t < 400; t++)
@@ -282,6 +289,11 @@ public class UnitPickerQaTests
         Simulation sim = Flat(units: 16);
         EntityHandle[] h = Spawn(sim, (0, HeavyInfantry, new Vector2(20f, 40f)), (1, Raider, new Vector2(40f, 30f)),
             (1, Raider, new Vector2(40f, 40f)), (1, Raider, new Vector2(40f, 50f)));
+        // BUG-0219: since the fog, an Attack on an unseen target is dropped; reveal the Raiders to player 0 so the three
+        // orders are accepted, while they stay outside the infantry's own 14 m scan.
+        Spot(sim, 0, h[1]);
+        Spot(sim, 0, h[2]);
+        Spot(sim, 0, h[3]);
         UnitStore u = sim.World.Units;
         EntityHandle me = h[0];
         sim.Enqueue(Command.Attack(0, me, h[1], false));

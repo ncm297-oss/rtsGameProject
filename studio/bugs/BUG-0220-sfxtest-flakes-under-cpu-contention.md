@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (flaky test; the scene loop goes red when another track's build or QA runs) |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-08-1435, task M4-V3 (proposed by the developer, confirmed by QA) |
 | System | view scene test `game/tests/SfxTest.cs` (M2-6), `game/scripts/Sfx.cs` |
-| Fixed by | |
+| Fixed by | 08dc8e3 (M4-VH1): `game/tests/WallClock.cs`; `SfxTest.Expect` waits on `Time.GetTicksUsec` since the last action; regression rows "8x game clock" (`SfxTest.FastGameClock`) |
 
 ## Repro
 1. While another worktree runs `dotnet test` or Godot scenes: `& $env:GODOT --headless --path game res://tests/SfxTest.tscn`.
@@ -30,3 +30,11 @@ example, a delta clamped after a long frame). The play is then dropped as too so
 Not caused by M4-V3: same code since M2-6, and the M4-V3 head passes 8 / 8 when the machine is quiet. Possible fixes:
 wait on the wall clock in the test (loop frames until `Time.GetTicksUsec()` has moved 60 ms past the last play), or
 drive `Sfx.Play(e, frame, nowUsec)` with an explicit clock as the criterion-4 block of the same test already does.
+
+## Verification (QA 2026-10-08-2144, M4-VH1)
+- SfxTest under load (the full non-Perf suite, a second Godot scene loop and the other tracks' runs): 10 / 10, then a
+  second batch of 10 / 10. Also PASS in both scene loops.
+- The regression rows fail with the old wait. In a scratch clone at 08dc8e3, with `Expect` put back to
+  `CreateTimer(0.06)` plus one frame, the 8x rows fail 6 of 9 ("8x game clock, click own unit 1: Select played 0
+  times, expected 1", ...), and so does the following "right-click" row.
+- The seven other scenes that waited out the sound gap with a scene-tree timer now use `WallClock.Wait`.

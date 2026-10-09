@@ -57,7 +57,7 @@ public class CorpseDiscRimQaTests
     {
         public int Points, Sunk, OverOne, RampCentres, RampBesideHigher;
         public float WorstSink, WorstHang, WorstHangRamp, WorstHangPlateau, WorstReachableLift;
-        public string WorstHangAt = "";
+        public string WorstHangAt = "", WorstSinkAt = "";
     }
 
     // Every cell next to a ramp or a cliff, a 6 x 6 grid of points per cell, three rim radii.
@@ -87,7 +87,12 @@ public class CorpseDiscRimQaTests
                     if (ramp) st.RampCentres++;
                     if (besideHigher) st.RampBesideHigher++;
                     float sink = want - got;
-                    if (sink > 1e-3f) { st.Sunk++; st.WorstSink = MathF.Max(st.WorstSink, sink); }
+                    if (sink > 1e-3f)
+                    {
+                        st.Sunk++;
+                        if (sink > st.WorstSink) st.WorstSinkAt = $"({x:R}, {y:R}) r {r} cell ({cx},{cy}) {(ramp ? "ramp" : "plateau")} e{map.ElevationAt(cx, cy):F1}";
+                        st.WorstSink = MathF.Max(st.WorstSink, sink);
+                    }
                     float hang = got - want;
                     if (hang > 1f) st.OverOne++;
                     if (hang > st.WorstHang)
@@ -105,7 +110,7 @@ public class CorpseDiscRimQaTests
             }
         }
         _out.WriteLine($"seed {seed}: {st.Points} points ({st.RampCentres} on ramps, {st.RampBesideHigher} on ramps beside a higher plateau)");
-        _out.WriteLine($"  sunk below the wall-free rim: {st.Sunk} (worst {st.WorstSink:F3} m)");
+        _out.WriteLine($"  sunk below the wall-free rim: {st.Sunk} (worst {st.WorstSink:F3} m{(st.Sunk > 0 ? $" at {st.WorstSinkAt}" : "")})");
         _out.WriteLine($"  hang over the wall-free reference: worst {st.WorstHang:F3} m at {st.WorstHangAt}; ramp centres {st.WorstHangRamp:F3}, plateau centres {st.WorstHangPlateau:F3}; {st.OverOne} over 1 m");
         _out.WriteLine($"  plateau centres (ramp feet): worst wall-free lift {st.WorstReachableLift:F3} m");
         return st;
