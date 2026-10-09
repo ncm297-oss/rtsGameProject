@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-08-1435, task M4-3a |
 | System | fog of war (memory) / QA memory bound |
-| Fixed by | |
+| Fixed by | 34931b8 (bound re-baselined 228,000,000 -> 230,500,000 B with the fog's share itemised in the test comment and docs/03 "Vision, detection, fog"); regression: the row itself |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~World_1024Map_CacheStays32_MemoryBounded"`
@@ -27,3 +27,14 @@ The growth is real and expected (maps above 256 cells are unsupported for gamepl
 call: either re-baseline the bound with the fog's share written in the test comment and docs/03 (QA recommends this:
 about 2.3 MB on a 1024 map, linear in cells x players), or allocate the fog lazily / smaller. Until one happens the
 non-Perf suite is red, which blocks ACCEPT.
+
+## QA re-check (2026-10-08-1435, round 1)
+- Arithmetic checked: per player 1,024 x 1,024 = 1,048,576 visibility bytes + 131,072 explored-bit bytes = 1,179,648;
+  x 2 players = 2,359,296; reveals 4,096 slots x 2 ints x 2 players x 4 B = 65,536; fog total 2,424,832 B.
+  227,976,424 (dd5b5b9) + 2,424,832 + 26,592 (masks, boxes, headers) = 230,427,848, the developer's figure.
+  QA measured 230,427,816 B on 34931b8 (32 B run-to-run); margin to 230,500,000 is 72,184 B. The old bound's margin
+  over dd5b5b9 was 23,576 B, so the bound moved by exactly the fog plus a margin of the same order: not loosened
+  beyond the regression.
+- The explanation meets CLAUDE.md ("don't loosen a threshold without explaining the regression"): the test comment
+  names the old measurement and commit, itemises the fog arrays by docs/03 section, and docs/03 states the same figure.
+- Full non-Perf run on 34931b8: 3,922 passed / 13 skipped / 0 failed of 3,935 in 12 m 42 s. Verified fixed.

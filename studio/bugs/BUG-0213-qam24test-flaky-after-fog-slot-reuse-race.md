@@ -26,3 +26,9 @@ The sim behaviour is per docs/02; the scene assumes no deaths.
 ## Notes
 Owner: the view. Fix: `--no-combat` in `QaM24Test`'s launch arguments (its subject is minimap routing and dots, not
 combat), every `Check` unchanged; land it with or before the sim merge.
+
+## QA re-check (2026-10-08-1435, round 1)
+Still open by design: the scene file is view-owned and not changed on the sim branch (34931b8 touches no `game/` file).
+The local view branch `studio/2026-10-08-1435-view` (e1f3333, "recovered work from interrupted session") already passes
+`--no-combat` in this scene's `LaunchOptions.Parse` list(s); QA did not run it there. Owned by the view; it gates the
+integration: after the sim and view merge, the scene loop must show this scene green (QaM24Test: repeated runs).

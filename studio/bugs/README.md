@@ -186,7 +186,7 @@ bugs outrank new features.
 | [BUG-0211](BUG-0211-seed21-wedge-replay-checkpoints-unhashable-after-fog.md) | S3 | open | `GatherWedgeQaTests`' checkpoint prefix is off (19 -> 0) since M4-3a hashes the fog: re-record the seed-21 replay |
 | [BUG-0212](BUG-0212-sfxtest-red-after-fog-units-move-off-the-click-point.md) | S2 | open | `SfxTest` red on the M4-3a sim (the clicked unit leaves its screen point; fights start differently): view adds `--no-combat` |
 | [BUG-0213](BUG-0213-qam24test-flaky-after-fog-slot-reuse-race.md) | S2 | open | `QaM24Test` fails ~1 run in 3 on the M4-3a sim ("slot not reused by the enemy"): view adds `--no-combat` |
-| [BUG-0214](BUG-0214-1024-world-memory-bound-red-after-fog.md) | S2 | open | `World_1024Map_CacheStays32_MemoryBounded` red: 230.4 MB vs 228 MB (the fog's ~2.3 MB); Producer re-baseline call |
+| [BUG-0214](BUG-0214-1024-world-memory-bound-red-after-fog.md) | S2 | fixed | `World_1024Map_CacheStays32_MemoryBounded` red: 230.4 MB vs 228 MB (the fog's ~2.3 MB); Producer re-baseline call |
 | [BUG-0215](BUG-0215-fog-visible-bits-not-derived-from-hashed-state.md) | S3 | open | The fog's visible bits are not a function of hashed state: equal hashes, different futures; docs/03's "save re-stamps at load" is wrong |
 | [BUG-0216](BUG-0216-fog-small-findings.md) | S4 | open | Fog nits: circle capped by the map's side not its diagonal (sight 64 on < 46-cell maps), holding Catapult reach vs docs, view/combat 4-tick disagreement |
-| [BUG-0217](BUG-0217-vision-gate-cost-in-multilevel-brawls.md) | S3 | open | The vision gate costs ~25 % of the tick in big 3-level brawls (257k calls a tick at 1,000 v 1,000); no perf row covers it |
+| [BUG-0217](BUG-0217-vision-gate-cost-in-multilevel-brawls.md) | S3 | fixed | The vision gate costs ~25 % of the tick in big 3-level brawls (257k calls a tick at 1,000 v 1,000); no perf row covers it |

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-08-1435, task M4-3a |
 | System | combat targeting (fog gate) / perf |
-| Fixed by | |
+| Fixed by | 34931b8 (`CombatSystem.PickTarget` asks `VisionSystem.UnitSeesUnit` only of a would-be winner); perf rows `Vision/VisionGatePerfTests`; QA order regressions `QA/VisionGateOrderQaTests` |
 
 ## Repro
 Ad-hoc timing (scratch clones of dd5b5b9 and 977db1d, not committed): `CombatScenes.MapBrawl(seed, perSide)` on the
@@ -35,3 +35,20 @@ a candidate that would win.
 Cheap fixes: test visibility only when the candidate would beat the current best (as `PickBuilding` does), and hoist
 the scanner's sight / level out of the loop (a same-or-lower-level candidate within sight is seen). Add a Perf row:
 a 500-unit fight on a generated 3-level map.
+
+## QA re-check (2026-10-08-1435, round 1)
+- **Same pick, by argument:** before, a candidate replaced the best iff (seen AND better than best); now iff (better
+  than best AND seen). `UnitSeesUnit` / `FogStore.SeesUnit` / `LevelAt` are pure reads and best / bestTier / bestD2
+  change only on a replacement, so the two conjunctions accept the same candidates in the same order. Visibility
+  can't change mid-scan (the fog only changes in phase 12). `PickBuilding` is untouched.
+- **Same pick, by experiment:** scratch clones of 34931b8 with and without the reorder (6ed39a0's `CombatSystem.cs`):
+  per-tick `StateHash` of the hostile fog fuzz on seeds 11-22 (1,200 ticks each, ranged, Catapults, holds, towers on
+  every level) and `MapBrawl` 250 v 250 on seeds 3, 5, 7, 9 (600 ticks): 16,816 hashes, byte-identical files.
+- **Edges (new permanent rows, `QA/VisionGateOrderQaTests`, 5 cases):** an unseen plateau enemy scanned before / after
+  a farther seen one; an exact distance tie with the unseen one in the lower slot and scanned first; an unseen tier-0
+  last attacker scanned first against a seen tier-1; seen far, unseen near, seen middle in that scan order. Green on
+  both the old and the new gate; mutation-checked: a scan that moves best distance / tier before the vision check
+  fails 4 / 5, a scan with no gate fails 5 / 5.
+- **Perf (Debug, alone, interleaved old / new, two runs):** 1,000 v 1,000 seed 3: 29.48 / 29.45 -> 23.38 / 23.40 ms
+  (dd5b5b9 without fog measured 24.4-24.9 in round 0); 250 v 250 seed 3: 3.59 / 3.58 -> 3.08 / 3.09 ms (budget 4).
+  Worktree runs: 3.11 / 3.09 and 23.51 / 23.42 ms. Verified fixed.

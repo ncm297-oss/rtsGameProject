@@ -31,3 +31,9 @@ stands still, the BUG-0147 / BUG-0210 class.
 Owner: the view (the sim can't edit `game/tests/`). Fix: launch arguments only, `--no-combat` on both
 `LaunchOptions.Parse` lists in `SfxTest.StartMatch`, as BUG-0147's five scenes and the view's BUG-0210 fix for
 `MinimapTest` do; every `Check` stays. Must land with or before the sim merge, or `main`'s scene loop goes red.
+
+## QA re-check (2026-10-08-1435, round 1)
+Still open by design: the scene file is view-owned and not changed on the sim branch (34931b8 touches no `game/` file).
+The local view branch `studio/2026-10-08-1435-view` (e1f3333, "recovered work from interrupted session") already passes
+`--no-combat` in this scene's `LaunchOptions.Parse` list(s); QA did not run it there. Owned by the view; it gates the
+integration: after the sim and view merge, the scene loop must show this scene green (QaM24Test: repeated runs).
