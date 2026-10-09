@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (the scene loop is red on the merged M4-3b tree) |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-09-0125, task M4-3b (scratch merge of the sim branch onto studio/2026-10-09-0125-view 38cf064) |
 | System | view test scenes (`game/tests/`), placement on explored ground |
-| Fixed by | |
+| Fixed by | view 25a9670 (`game/tests/ExploredGround.cs`; QaV3 / QaV3b / QaV4 / ProductionHud `FreeAnchor` take `Unexplored` for dev spawns and scout real-Build / ghost-click spots first; M3Playable spot search keeps to explored footprints, Yard search to 60 m); regression = the scene loop itself |
 
 ## Repro
 1. Scratch merge of the M4-3b sim changes onto the view branch; `powershell -File tools/qa/smoke.ps1` (PASS), then
@@ -45,3 +45,13 @@ unit there first). `ProductionHudTest` needs the same for its clicked green anch
 needs to keep to explored cells. That is roughly 5-40 lines across five `game/tests/` files. It is view-track work (the
 sim can't edit `game/`), and a Godot scene can't call the internal `ExploreAllForTests` seam. No product code changes:
 the real placement ghost already refuses `Unexplored` with the view's `placement.unexplored` text.
+
+## QA re-check (2026-10-09-0125, round 1)
+Verified on a fresh scratch merge (`qa-inspector-recheck`: sim 1ab51c5 + view 25a9670): build 0 warnings, smoke PASS,
+`tools/qa/scene-loop.ps1` **35 / 35** (QaV3 15.3 s, QaV3b 3.8 s, QaV4 4.9 s, ProductionHud 15.9 s, M3Playable 140.3 s with
+seed 1's Yard at anchor 9007 and seed 6's at 11704, the seed that failed before). The diff changes no assertion: dev
+`SpawnBuilding` spots accept `Unexplored` (the dev command checks no player rule), and every real Build or ghost-click spot
+is scouted by the worker that will build it, with a failing `Check` if it is still unexplored after 2,000 ticks, so the
+scenes still drive the real player Build path on legal ground. Gap left (not a bug): no Godot scene hovers the ghost over
+unexplored ground and checks it reads red with the `placement.unexplored` text; only the text's loading is tested
+(`FogViewTest`).

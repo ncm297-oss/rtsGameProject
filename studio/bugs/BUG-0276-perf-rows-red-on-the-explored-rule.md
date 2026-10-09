@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (the full `dotnet test sim/Rts.Sim.Tests` is red; CLAUDE.md "Definition of done" 1) |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-09-0125, task M4-3b (QA full) |
 | System | tests (placement on explored ground) |
-| Fixed by | |
+| Fixed by | sim 1ab51c5 (`SimHardeningTests.LongWall` and `ProductionScaleStressTests.Scene` wrapped in `TestSim.Explored`); the two rows are their own regression tests |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~HundredUnaffordableBuildsAtALongDetourAnchor|FullyQualifiedName~ProductionScene_At1x2x5x_Report"`
@@ -29,3 +29,9 @@ The developer ran only `Category!=Perf`, so these two rows never ran. Other Perf
 `ProductionPerfTests`, `RequirementPerfQaTests`). Each fix is one line: wrap the scene's `new Simulation(...)` in
 `TestSim.Explored(...)` (`SimHardeningTests.LongWall`, and `ProductionScaleStressTests.Scene` around `MoveScenario.Spawn`'s
 sim), the same seam the other scenes about another placement rule use.
+
+## QA re-check (2026-10-09-0125, round 1)
+Verified on a fresh scratch merge (`qa-inspector-recheck`: sim 1ab51c5 + view 25a9670). Both rows pass alone
+(`HundredUnaffordableBuildsAtALongDetourAnchor` gets `CannotAfford` again, the production scene places all 20 halls), and
+the full `dotnet test sim/Rts.Sim.Tests`, Perf included, is green: 4313 passed, 14 skipped, 0 failed in 14 m 43 s. The
+fix only makes the setup explored; neither row's assertion or threshold changed.

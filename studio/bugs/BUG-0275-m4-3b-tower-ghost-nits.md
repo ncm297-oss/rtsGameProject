@@ -6,7 +6,7 @@
 | Status | open |
 | Found | 2026-10-09-0125, task M4-3b (QA full) |
 | System | vision (last-known list), tests |
-| Fixed by | |
+| Fixed by | items 3 and 4: sim 1ab51c5 (`TowerTests` summary; `Stress/CombatFuzzTests` allows the update-tick lag and asserts the target is gone a tick later). Items 1 and 2 open |
 
 ## Repro
 1. **A site's ghost.** Player 0 sees player 1's construction site (1 hp, `UnderConstruction`), then looks away.
@@ -39,3 +39,11 @@
 None of these change play today. Item 1 matters when the view draws ghosts. A cheap fix is a `bool Site` on
 `BuildingGhost`, refreshed with the rest (and hashed). For item 4, the exemptions could allow the update-tick lag the way
 the new QA fuzz does.
+
+## QA re-check (2026-10-09-0125, round 1)
+Items 3 and 4 fixed in 1ab51c5 and verified. The new `CombatFuzzTests` exemption applies only when the tick just run is a fog
+update tick (`World.TickNumber` is bumped at the end of `Tick`, so `IsUpdateTick(ran)` names the right tick), only to an
+ordered building target, and the next tick asserts the unit no longer holds that handle; a unit that keeps a forgotten
+building is still caught. `CombatFuzzTests` and `GhostAttackHostileFuzzStressTests` pass. Items 1 (no site flag on a
+ghost; matters when M4-V5 draws ghosts) and 2 (`ExploreAllForTests` seam in Rts.Sim) are unchanged, so the bug stays open
+at S4 for the Producer to schedule or wontfix.
