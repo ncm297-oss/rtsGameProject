@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-08-1435, task M4-V3 |
 | System | view: `game/scripts/CombatViews.cs` (`ShowMarker`), `sim/Rts.Sim/ViewApi/TerrainHeight.cs` (`MaxUnder`) |
-| Fixed by | |
+| Fixed by | e1f3333 (`TerrainHeight.MaxUnder` rim rule); regression rows `ProjectileViewQaTests.CorpseDisc_MaxUnderTheRim_...` seeds 5 / 17 un-skipped, `TerrainHeightTests.MaxUnder_BesideACliff_StaysOnItsOwnGround`, `QA/ViewApi/CorpseDiscRimQaTests` |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~CorpseDisc_MaxUnderTheRim"` with the `Skip` removed from
@@ -33,3 +33,10 @@ regression from the BUG-0190 item 1 fix, and a worse look than the half-buried r
 ## Notes
 Possible fixes: only take samples from the centre's own cell and ramp cells, skip blocked cells, or cap the lift at what
 a ramp can give over the rim radius (the ramp case needs only a few tenths of a meter).
+
+## QA re-check (2026-10-08-1814, fix round 1, e1f3333)
+Fixed for the plateau cliff this bug is about: seeds 17 / 23 / 5 give worst death-spot lift 0.00 / 0.00 / 0.29 m (the
+0.29 m is the uphill rim on a ramp, equal to the wall-free reference) and worst unit lift 0.29 / 0.00 / 0.29 m, 0 over
+1 m. BUG-0190 item 1 holds: over ~620k (point, radius) samples on 5 generated maps the disc never sinks below the ground
+reachable from its centre without a wall, and on a ramp cell (also beside a plateau one level up) it equals that ground.
+The rest of the class, a disc beside a **ramp's side wall** (up to 2.16 m), is filed as BUG-0224.

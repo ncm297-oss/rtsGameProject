@@ -21,7 +21,7 @@ namespace Rts.Game.Tests;
 /// the end of 900 ticks, every frame's <c>CollectTick</c> + <c>Sync</c> allocates 0 bytes, drawn == in flight == tracked,
 /// and the hash twin holds. (2) 500 v 500 archer-heavy lines past the projectile store's capacity, five ticks a frame (8x
 /// at 30 fps): 0 bytes while the store is full, every aimed shot on its segment even for the longest (re-led) step, and the
-/// share of impact marks whose first drawn frame is fully transparent (BUG-0221, printed, not failed). (3) Render alpha
+/// no impact mark's first drawn frame is fully transparent (BUG-0221; its age read before Sync marks it drawn). (3) Render alpha
 /// outside [0, 1] and NaN never extrapolate; <c>Sync</c> leaves the sim hash unchanged.
 /// </summary>
 /// <remarks>Headless: <c>&amp; $env:GODOT --headless --path game res://tests/QaV7Test.tscn</c>; prints "QA M4-V3 TEST PASS".</remarks>
@@ -168,6 +168,7 @@ public partial class QaV7Test : Node
         float longestStep = 0f, longestLobGap = 0f;
         long fullBytes = 0;
         var undrawn = new bool[_views.Marks.Capacity];
+        var firstAge = new float[_views.Marks.Capacity];
         var lastPos = new System.Numerics.Vector2[cap];
         var wasAlive = new bool[cap];
         for (int t = 0; t < 1200; t += 5)
@@ -187,7 +188,13 @@ public partial class QaV7Test : Node
                     if (wasAlive[i] && !W.Projectiles.Alive[i] && _views.Tracker.Launch.Length > i)
                         longestLobGap = MathF.Max(longestLobGap, LobGap(i, lastPos[i]));
             }
-            for (int i = 0; i < undrawn.Length; i++) undrawn[i] = _views.Marks.Active[i] && !_views.Marks.Drawn[i];
+            // Age depends on the Drawn flag (BUG-0221), so the age Sync draws a new mark at is read before Sync marks it drawn
+            // (same tick and alpha; Sync's CollectTick is a no-op for this tick and Expire never takes an undrawn mark).
+            for (int i = 0; i < undrawn.Length; i++)
+            {
+                undrawn[i] = _views.Marks.Active[i] && !_views.Marks.Drawn[i];
+                firstAge[i] = undrawn[i] ? _views.Marks.Age(i, W.TickNumber, 0.5f) : 0f;
+            }
             long b1 = GC.GetAllocatedBytesForCurrentThread();
             _views.Sync(W, 0.5f);
             viewBytes += GC.GetAllocatedBytesForCurrentThread() - b1;
@@ -198,7 +205,8 @@ public partial class QaV7Test : Node
                 if (!undrawn[i]) continue;
                 newMarks++;
                 // ProjectileViews draws a mark at alpha 0.85 x (1 - age); the headless renderer keeps no instance colours to read back.
-                if (0.85f * (1f - _views.Marks.Age(i, W.TickNumber, 0.5f)) < 0.02f) invisibleFirst++;
+                if (!_views.Marks.Drawn[i]) Check(false, $"lines tick {W.TickNumber}: mark {i} not marked drawn by Sync");
+                if (0.85f * (1f - firstAge[i]) < 0.02f) invisibleFirst++;
             }
             most = Math.Max(most, W.Projectiles.Count);
             for (int k = 0; k < _views.Shown; k++)
@@ -219,6 +227,7 @@ public partial class QaV7Test : Node
         Check(full > 0, $"lines: the store never filled (most {most} of {cap})");
         Check(fullBytes == 0, $"lines: {fullBytes} bytes over {full} frames that filled the store");
         Check(offSegment == 0, $"lines: {offSegment} aimed shots drawn off PrevPosition -> Position");
+        Check(newMarks > 0 && invisibleFirst == 0, $"lines: {invisibleFirst} of {newMarks} marks first drawn fully transparent (BUG-0221)");
 
         // (3) Alpha outside [0, 1] and NaN: never extrapolated; the sim hash does not move across Sync.
         if (W.Projectiles.Count == 0) for (int k = 0; k < 40 && W.Projectiles.Count == 0; k++) Tick();
