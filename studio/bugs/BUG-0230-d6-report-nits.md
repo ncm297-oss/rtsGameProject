@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open: items 1 and 3 fixed in D7; item 2 done on the sim side in M4-H1 (`Scenario/CounterTriangleScene` public: `Fight`, `TimeToKill`, `Side`, the scene constants), D8 switches the data track's copy in `Content/CounterTriangleMarginsTests` to it |
+| Status | fixed (items 1 and 3 in D7; item 2 in D8) |
 | Found | 2026-10-08-1435, task D6 |
 | System | content tests (data track), docs/factions pages |
-| Fixed by | item 1: D7 anchors `TechContentTests.AgeClause` to the end of its bullet (all eight mutants of Repro 1 fail G). item 3: D7 gives `docs/factions/whirlwind.md` "Balance baseline" a separate siege table like the Malazan page's (numbers unchanged). item 2 (sim half): M4-H1, `sim/Rts.Sim.Tests/Scenario/CounterTriangleScene.cs`; `Scenario/CounterTriangleTests` uses it; the data half is D8 |
+| Fixed by | item 1: D7 anchors `TechContentTests.AgeClause` to the end of its bullet (all eight mutants of Repro 1 fail G). item 3: D7 gives `docs/factions/whirlwind.md` "Balance baseline" a separate siege table like the Malazan page's (numbers unchanged). item 2 (sim half): M4-H1, `sim/Rts.Sim.Tests/Scenario/CounterTriangleScene.cs`; `Scenario/CounterTriangleTests` uses it; the data half: D8, `Content/CounterTriangleMarginsTests` has no harness of its own and calls `CounterTriangleScene.Fight` / `TimeToKill` / `SameCostCount` |
 
 ## Repro
 1. **Ages clause, surviving mutant.** In a scratch clone, change docs/02 line 115 to
@@ -53,3 +53,11 @@ public or move them to `CombatScenes`), not a data-track fix.
   follow, so both siege rows printed "not done" and `CounterTriangleMarginsTests` failed. D7 mirrors the one spotter
   line into the copy (public `CombatScenes.Spotter` / `At`); every printed row, group and siege, is again identical to
   the pages. The item stays open until D8 switches the copy to the sim's shared helper.
+
+## D8 update (2026-10-09)
+- **Item 2 fixed (data half).** `Content/CounterTriangleMarginsTests` lost its private `Fight` / `TimeToKill` / constants and
+  calls `Rts.Sim.Tests.Scenario.CounterTriangleScene` (`Fight`, `TimeToKill`, `SameCostCount`, `Side`). It also prints the
+  scenario's own 14 lines (same format as `Scenario/CounterTriangleTests`) for a byte diff, and pins every printed table
+  row to the faction pages cell for cell (`EveryPrintedRow_EqualsItsPageRow`), so a scene change can no longer leave the
+  pages describing a different scene silently.
+- Item 1's residual (" - Or the Forge alone." on the same line) is BUG-0260, also fixed in D8.

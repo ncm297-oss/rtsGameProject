@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open (routed to the data track: D8, next data session) |
+| Status | fixed |
 | Found | 2026-10-08-2144, task M4-H1 |
 | System | combat (BUG-0149 switch rule) vs `docs/factions/malazan.md` "Balance baseline" (data track) |
-| Fixed by | |
+| Fixed by | D8 (data track): both pages' "Balance baseline" tables re-printed from `CounterTriangleScene` at 1a9925b (Lancer v Archer seat 1: 888 hp, 22.0 s; a new "Winner hp left" column); `Content/CounterTriangleMarginsTests.EveryPrintedRow_EqualsItsPageRow` pins every cell |
 
 ## Repro
 1. Run `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~Scenario.CounterTriangleTests" --logger "console;verbosity=detailed"`
@@ -39,3 +39,11 @@ and the row's winner, survivors and cost kept are unchanged; only the fight's le
 re-print both pages' "Balance baseline" tables from the shared `CounterTriangleScene` harness (so the time column is the
 harness's), update the Malazan page's Lancer-v-Archer seat-1 row (21.5 s → 22.0 s, 912 → 888 hp), and pin every printed row
 to the page so the next drift fails a test naming the row. Severity stays S3 (a docs number only; no data value is wrong).
+
+## D8 update (2026-10-09)
+- The pages had no hp column, so "912 -> 888 hp" needed one: the group table gained "Winner hp left" (the surviving
+  winners' summed hit points, `Side.Hp`) on both pages. Every other cell is unchanged except the Lancer seat-1 time
+  (21.5 s -> 22.0 s); the siege tables are byte-identical.
+- Regression: `EveryPrintedRow_EqualsItsPageRow(malazan)` failed on the old page (time column, and the missing hp
+  column); `AMutatedPageCell_FailsNamingPairSeatAndColumn` writes 21.5 s / 912 back into the row in memory and checks the
+  failure names `malazan.md`, "Wickan Lancer v Desert Archer seat 1" and the column.

@@ -6,7 +6,7 @@
 | Status | fixed |
 | Found | 2026-10-08-2144, task M4-H1 (sim track, while working BUG-0230 item 2) |
 | System | content test (data track): `sim/Rts.Sim.Tests/Content/CounterTriangleMarginsTests.cs` `TimeToKill` |
-| Fixed by | D7 (data track, 7576d4b): `Content/CounterTriangleMarginsTests.TimeToKill` gained the one `Spotter(...)` line of `Scenario/CounterTriangleTests.cs:111`; green on the 2026-10-08-2144 integration (QA: non-Perf 4041 / 0 failed). D8 switches the copy to `CounterTriangleScene` (BUG-0230 item 2) |
+| Fixed by | D7 (data track, 7576d4b): `Content/CounterTriangleMarginsTests.TimeToKill` gained the one `Spotter(...)` line of `Scenario/CounterTriangleTests.cs:111`; green on the 2026-10-08-2144 integration (QA: non-Perf 4041 / 0 failed). D8 removed the copy: the test calls `CounterTriangleScene.TimeToKill` (BUG-0230 item 2) |
 
 ## Repro
 1. On the session base `4c1f168` (M4-3a + main), unchanged:
@@ -30,3 +30,8 @@ gained a spotter beside the building in M4-3a, the copy did not. Every Attack is
   unchanged. Fix (data track, `Content/` is theirs): call `CounterTriangleScene.Fight` / `TimeToKill` instead of the
   copies.
 - S2 because it reds the gate suite on `main` once this tree merges; the data track's D7 may already carry a fix.
+
+## D8 update (2026-10-09)
+The copy is gone: `Content/CounterTriangleMarginsTests` calls `CounterTriangleScene.Fight` / `TimeToKill`, so the siege
+rows follow the scenario's spotter (and any later scene change) by construction. Both siege rows print 13.8 s / 254.5 s
+(ram) and 17.0 s / 192.2 s (catapult), equal to the scenario's lines and pinned to the pages.
