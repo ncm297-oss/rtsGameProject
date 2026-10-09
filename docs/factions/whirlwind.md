@@ -151,21 +151,22 @@ Expand   2nd Holy Camp at ~9:00 regardless of threat (relies on army presence)
 
 ## Balance baseline (M4-2b, 2026-10-08)
 
-Measured at sim commit `dd5b5b9` by `Content/CounterTriangleMarginsTests` (D6), on the scene of
+Measured at sim commit `dd5b5b9` by `Content/CounterTriangleMarginsTests` (D6), re-printed at `1a9925b` (D8) from the shared
+`Scenario/CounterTriangleScene` harness, the scene of
 `Scenario/CounterTriangleTests`: a flat map, 1,200 gold + wood a side, two blocks 5 wide whose fronts start 24 m apart,
 every unit attack-moved into the other block, seed 7, both seats; no abilities, upgrades or terrain. These are the
 rows a Whirlwind unit wins; the full table, the scene and the proposed target margins are in
 [malazan.md "Balance baseline"](malazan.md#balance-baseline-m4-2b-2026-10-08) (Malazan is the balance reference). The test
-pins only the winner; the margins are not asserted.
+asserts only the winner as a rule; the margins have no target yet, but every cell here is pinned to the harness's output.
 
-| Rule | Winner v loser | Winner seat | Fielded (winner v loser) | Winner left | Winner keeps (cost) | Time to last death |
-| --- | --- | --- | --- | --- | --- | --- |
-| Line beats Shock | Raider v Wickan Lancer | 0 | 19 (1216) v 10 (1200) | 19 / 19 | 1216 / 1216 (100 %) | 17.4 s |
-| Line beats Shock | Raider v Wickan Lancer | 1 | 19 (1216) v 10 (1200) | 18 / 19 | 1152 / 1216 (95 %) | 18.3 s |
-| Shock beats Ranged | Horse Raider v Crossbowman | 0 | 13 (1248) v 15 (1215) | 9 / 13 | 864 / 1248 (69 %) | 20.9 s |
-| Shock beats Ranged | Horse Raider v Crossbowman | 1 | 13 (1248) v 15 (1215) | 10 / 13 | 960 / 1248 (77 %) | 18.2 s |
-| Ranged beats casters | Desert Archer v Cadre Mage | 0 | 18 (1224) v 8 (1200) | 16 / 18 | 1088 / 1224 (89 %) | 11.4 s |
-| Ranged beats casters | Desert Archer v Cadre Mage | 1 | 18 (1224) v 8 (1200) | 13 / 18 | 884 / 1224 (72 %) | 13.0 s |
+| Rule | Winner v loser | Winner seat | Fielded (winner v loser) | Winner left | Winner hp left | Winner keeps (cost) | Time to last death |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Line beats Shock | Raider v Wickan Lancer | 0 | 19 (1216) v 10 (1200) | 19 / 19 | 1656 | 1216 / 1216 (100 %) | 17.4 s |
+| Line beats Shock | Raider v Wickan Lancer | 1 | 19 (1216) v 10 (1200) | 18 / 19 | 1581 | 1152 / 1216 (95 %) | 18.3 s |
+| Shock beats Ranged | Horse Raider v Crossbowman | 0 | 13 (1248) v 15 (1215) | 9 / 13 | 1152 | 864 / 1248 (69 %) | 20.9 s |
+| Shock beats Ranged | Horse Raider v Crossbowman | 1 | 13 (1248) v 15 (1215) | 10 / 13 | 1197 | 960 / 1248 (77 %) | 18.2 s |
+| Ranged beats casters | Desert Archer v Cadre Mage | 0 | 18 (1224) v 8 (1200) | 16 / 18 | 602 | 1088 / 1224 (89 %) | 11.4 s |
+| Ranged beats casters | Desert Archer v Cadre Mage | 1 | 18 (1224) v 8 (1200) | 13 / 18 | 525 | 884 / 1224 (72 %) | 13.0 s |
 
 Siege beats buildings (one siege unit, ordered to attack, against the same cost of its faction's line infantry):
 

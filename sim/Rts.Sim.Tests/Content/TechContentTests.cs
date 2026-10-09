@@ -375,9 +375,80 @@ public class TechContentTests
     /// The any-of rule again in plain words, right after the slot list: "...Forge): two production halls, or one hall and
     /// the Forge." (BUG-0200, folded in from QA's <c>AgesRuleQaTests</c>). The clause must end its bullet: only the next
     /// bullet ("- ...") or the end of the section may follow, so a sentence appended after it that contradicts it ("Or
-    /// the Forge alone.") fails (BUG-0230 item 1).
+    /// the Forge alone.") fails (BUG-0230 item 1). It is matched against the clause's own bullet read from the file's lines
+    /// (<see cref="AgesClauseBullet"/>), not the space-joined section, so " - Or the Forge alone." written on the same line
+    /// is not mistaken for the next bullet (BUG-0260).
     /// </summary>
-    private static readonly Regex AgeClause = new(@"\(any \w+ of [^)]+\): (?<n>\w+) production halls, or (?<m>\w+) halls? and the Forge\.(?=\s+-\s|\s*$)");
+    private static readonly Regex AgeClause = new(@"\(any \w+ of [^)]+\): (?<n>\w+) production halls, or (?<m>\w+) halls? and the Forge\.$");
+
+    /// <summary>
+    /// The docs/02 "### Ages" bullet that states the any-of rule: a bullet starts at a line beginning "- " and runs over
+    /// its continuation lines (joined by spaces, trimmed, <c>**</c> removed) to the next such line, blank line or heading.
+    /// Exactly one bullet may mention "production halls".
+    /// </summary>
+    internal static string AgesClauseBullet(string[] lines)
+    {
+        int i = Array.IndexOf(lines, "### Ages");
+        Assert.True(i >= 0, "docs/02 has no '### Ages' heading");
+        var bullets = new List<string>();
+        for (i++; i < lines.Length && !lines[i].StartsWith('#'); i++)
+        {
+            string line = lines[i].Trim();
+            if (line.Length == 0) continue;
+            if (lines[i].StartsWith("- ", StringComparison.Ordinal) || bullets.Count == 0) bullets.Add(line);
+            else bullets[^1] += " " + line;
+        }
+        string[] withRule = bullets.Where(b => b.Contains("production halls", StringComparison.Ordinal)).ToArray();
+        Assert.True(withRule.Length == 1, $"docs/02 Ages: {withRule.Length} bullets mention 'production halls', expected 1");
+        return withRule[0].Replace("**", "");
+    }
+
+    /// <summary>
+    /// The trailing clause (BUG-0200): with the three production halls and the Forge listed, "any n" means n halls, or
+    /// n - 1 halls and the Forge, and the clause ends <paramref name="bullet"/>. A wrong rule sentence ("three production
+    /// halls, or the Forge alone") or anything after it in the bullet fails.
+    /// </summary>
+    private static void CheckAgeClause(string bullet, TechDef t)
+    {
+        const string where = "age_ii";
+        Match clause = AgeClause.Match(bullet);
+        Assert.True(clause.Success, $"{where} Ages clause: bullet '{bullet}' does not end with '...): <n> production halls, or <n-1> hall(s) and the Forge.'");
+        BuildingSlot[] clauseSlots = { BuildingSlot.InfantryHall, BuildingSlot.RangedHall, BuildingSlot.ShockHall, BuildingSlot.Forge };
+        Pin(where, "Ages clause slots (three halls + Forge)", string.Join(", ", clauseSlots.OrderBy(s => s)),
+            string.Join(", ", t.RequiresAnyOfSlots.Select(s => (BuildingSlot)s).OrderBy(s => s)));
+        Pin(where, "Ages clause halls", clause.Groups["n"].Value, CountWords[t.RequiresAnyOfCount]);
+        Pin(where, "Ages clause halls with the Forge", clause.Groups["m"].Value, CountWords[t.RequiresAnyOfCount - 1]);
+    }
+
+    private static string[] Doc02Lines() => File.ReadAllLines(Path.Combine(TestDataDir.RepoRoot(), Doc02));
+
+    /// <summary>The rule sentence as docs/02 writes it; the mutants below replace it in memory.</summary>
+    private const string AgesRuleSentence = "two production halls, or one hall and the Forge.";
+
+    /// <summary>
+    /// G's clause check rejects every wrong or contradicted rule sentence QA found: the eight BUG-0230 mutants and BUG-0260's
+    /// " - Or the Forge alone." on the same line, each written into docs/02's own lines in memory.
+    /// </summary>
+    [Theory]
+    [InlineData("two production halls, or one hall and the Forge. Or the Forge alone.")]
+    [InlineData("three production halls, or two halls and the Forge.")]
+    [InlineData("two production halls, or the Forge alone.")]
+    [InlineData("two production halls, or two halls and the Forge.")]
+    [InlineData("two Barracks, or one Barracks and the Forge.")]
+    [InlineData("one production hall, or one hall and the Forge.")]
+    [InlineData("two production halls, or one hall and the Forge, or the Forge alone.")]
+    [InlineData("three production halls, or the Forge alone.")]
+    [InlineData("two production halls, or one hall and the Forge. - Or the Forge alone.")]
+    public void G_AgesClause_RejectsAWrongOrContradictedRuleSentence(string mutant)
+    {
+        string[] lines = Doc02Lines();
+        int at = Array.FindIndex(lines, l => l.EndsWith(AgesRuleSentence, StringComparison.Ordinal));
+        Assert.True(at >= 0, $"docs/02: no line ends with '{AgesRuleSentence}'");
+        lines[at] = lines[at][..^AgesRuleSentence.Length] + mutant;
+        TechDef t = Tech("age_ii");
+        // A mutant whose rule sentence no longer mentions "production halls" leaves no clause bullet: also a failure.
+        Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => CheckAgeClause(AgesClauseBullet(lines), t));
+    }
 
     /// <summary>"Age II unlocks: Caster Hall, Siege Works, ..., and the faction upgrade."</summary>
     private static readonly Regex AgeUnlocks = new(@"Age II unlocks: (?<u>[^.]+)\.");
@@ -413,14 +484,9 @@ public class TechContentTests
         RequiresText.AssertMatches(Data, where, d, t.Requires);
 
         // The trailing clause (BUG-0200): with the three production halls and the Forge listed, "any n" means n halls, or
-        // n - 1 halls and the Forge. A wrong rule sentence ("three production halls, or the Forge alone") fails here.
-        Match clause = AgeClause.Match(page);
-        Assert.True(clause.Success, $"{where} Ages clause: page '{page}' has no '...): <n> production halls, or <n-1> hall(s) and the Forge.' ending its bullet");
-        BuildingSlot[] clauseSlots = { BuildingSlot.InfantryHall, BuildingSlot.RangedHall, BuildingSlot.ShockHall, BuildingSlot.Forge };
-        Pin(where, "Ages clause slots (three halls + Forge)", string.Join(", ", clauseSlots.OrderBy(s => s)),
-            string.Join(", ", t.RequiresAnyOfSlots.Select(s => (BuildingSlot)s).OrderBy(s => s)));
-        Pin(where, "Ages clause halls", clause.Groups["n"].Value, CountWords[t.RequiresAnyOfCount]);
-        Pin(where, "Ages clause halls with the Forge", clause.Groups["m"].Value, CountWords[t.RequiresAnyOfCount - 1]);
+        // n - 1 halls and the Forge. A wrong rule sentence ("three production halls, or the Forge alone") fails here, and
+        // so does anything after it in its bullet (read from the file's lines, BUG-0260).
+        CheckAgeClause(AgesClauseBullet(Doc02Lines()), t);
 
         // What Age II unlocks, each item checked against the data and said in the description in neutral words.
         Match un = AgeUnlocks.Match(page);

@@ -1,47 +1,38 @@
-using System.Numerics;
-using Rts.Sim.Commands;
 using Rts.Sim.Data;
-using Rts.Sim.Entities;
+using Rts.Sim.Tests.Scenario;
 using Xunit.Abstractions;
-using static Rts.Sim.Tests.CombatScenes;
+using static Rts.Sim.Tests.Scenario.CounterTriangleScene;
 
 namespace Rts.Sim.Tests.Content;
 
 /// <summary>
 /// D6 balance report (M4-2b): how wide each counter-triangle win is at equal cost. The six group pairs of
-/// <c>Scenario/CounterTriangleTests</c> run in both seats on the same scene, and its two siege rows run as there; the test
-/// prints one markdown table (the "Balance baseline" section of docs/factions/malazan.md and whirlwind.md). It pins only
-/// what docs/02 "Faction template" pins, the winner: the margins are the owner's call, so no margin is asserted.
+/// <c>Scenario/CounterTriangleTests</c> run in both seats and its two siege rows run as there, all on the sim's shared
+/// <see cref="CounterTriangleScene"/> (D8, BUG-0230 item 2 / BUG-0240: no copy of the scene here, so a scene change
+/// reaches this report). The test prints the two markdown tables of the "Balance baseline" section of
+/// docs/factions/malazan.md (every row) and whirlwind.md (the rows a Whirlwind unit wins), plus the scenario's own 14
+/// lines for a byte diff against <c>Scenario/CounterTriangleTests</c>.
 /// <para>
-/// The scene is a copy of <c>CounterTriangleTests</c>' private <c>Fight</c> / <c>TimeToKill</c> on the public
-/// <see cref="CombatScenes"/> helpers (the data track does not edit the sim's scenario file): 1,200 gold + wood a side,
-/// two blocks 5 wide, fronts 24 m apart, seed 7, attack-move to the far block's center, 3,000 ticks at most.
+/// Two kinds of pin. The rule's: docs/02 "Faction template"'s winner wins (the margins are the owner's call, so no margin
+/// is asserted). The page's (D8, BUG-0243): every printed row equals its page row cell for cell, so when the sim moves a
+/// number the test fails naming the page, pair, seat and column, and the page is re-printed from this test's output.
 /// </para>
 /// </summary>
 public class CounterTriangleMarginsTests
 {
-    private const int Budget = 1200;
-    private const int MaxTicks = 3000;
-    private const int SiegeMaxTicks = 6000;
-
     private readonly ITestOutputHelper _out;
 
     public CounterTriangleMarginsTests(ITestOutputHelper output) => _out = output;
 
-    private static int Cost(UnitDef d) => d.CostGold + d.CostWood;
-
-    /// <summary>One side after the fight: units fielded and left, their cost.</summary>
-    private readonly record struct Side(string Key, int Fielded, int FieldedCost, int Left, int CostLeft);
-
-    /// <summary>The docs/02 counter pairs: rule, the doc's winner, its loser (as in <c>CounterTriangleTests</c>).</summary>
-    private static readonly (string Rule, string Winner, string Loser)[] Pairs =
+    /// <summary>The docs/02 counter pairs: the page's rule name, the scenario's, the doc's winner, its loser (as in <c>CounterTriangleTests</c>).</summary>
+    private static readonly (string Rule, string ScenarioRule, string Winner, string Loser)[] Pairs =
     {
-        ("Line beats Shock", "malazan_heavy_infantry", "whirlwind_horse_raider"),
-        ("Line beats Shock", "whirlwind_raider", "malazan_wickan_lancer"),
-        ("Shock beats Ranged", "malazan_wickan_lancer", "whirlwind_desert_archer"),
-        ("Shock beats Ranged", "whirlwind_horse_raider", "malazan_crossbowman"),
-        ("Ranged beats casters", "malazan_crossbowman", "whirlwind_priest"),
-        ("Ranged beats casters", "whirlwind_desert_archer", "malazan_cadre_mage"),
+        ("Line beats Shock", "Line beats Shock", "malazan_heavy_infantry", "whirlwind_horse_raider"),
+        ("Line beats Shock", "Line beats Shock", "whirlwind_raider", "malazan_wickan_lancer"),
+        ("Shock beats Ranged", "Shock beats Ranged", "malazan_wickan_lancer", "whirlwind_desert_archer"),
+        ("Shock beats Ranged", "Shock beats Ranged", "whirlwind_horse_raider", "malazan_crossbowman"),
+        ("Ranged beats casters", "Ranged beats Light (casters)", "malazan_crossbowman", "whirlwind_priest"),
+        ("Ranged beats casters", "Ranged beats Light (casters)", "whirlwind_desert_archer", "malazan_cadre_mage"),
     };
 
     /// <summary>docs/02 "Siege beats buildings": siege unit, the same cost of its faction's line infantry, the enemy building.</summary>
@@ -51,103 +42,157 @@ public class CounterTriangleMarginsTests
         ("whirlwind_battering_ram", "whirlwind_raider", "malazan_billet"),
     };
 
-    /// <summary><c>CounterTriangleTests.Fight</c>: <paramref name="keyA"/> as player <paramref name="seatA"/> against <paramref name="keyB"/>; ticks until one side is gone.</summary>
-    private static (Side A, Side B, int Ticks) Fight(string keyA, string keyB, int seatA)
-    {
-        GameData data = TestSim.Data;
-        int typeA = data.FindUnit(keyA), typeB = data.FindUnit(keyB);
-        int nA = Math.Max(1, (int)Math.Round((double)Budget / Cost(data.Units[typeA]), MidpointRounding.AwayFromZero));
-        int nB = Math.Max(1, (int)Math.Round((double)Budget / Cost(data.Units[typeB]), MidpointRounding.AwayFromZero));
-        Simulation sim = Flat(size: 64, units: nA + nB + 4, seed: 7);
-        UnitStore u = sim.World.Units;
-        var center = new Vector2(64f, 64f);
-        var mid = new Vector2[2];
-        var handles = new List<EntityHandle>[] { new(), new() };
-        int[] seats = { seatA, 1 - seatA };
-        int[] types = { typeA, typeB };
-        int[] counts = { nA, nB };
-        int[] order = seatA == 0 ? new[] { 0, 1 } : new[] { 1, 0 };
-        foreach (int side in order)
-        {
-            float dir = (side == 0) == (seatA == 0) ? -1f : 1f;
-            const int width = 5;
-            const float spacing = 1.8f;
-            int ranks = (counts[side] + width - 1) / width;
-            mid[side] = center + new Vector2(dir * (12f + (ranks - 1) * spacing / 2f), 0f);
-            for (int k = 0; k < counts[side]; k++)
-            {
-                int rank = k / width, file = k % width;
-                var at = center + new Vector2(dir * (12f + rank * spacing), (file - (width - 1) / 2f) * spacing);
-                handles[side].Add(Place(sim, seats[side], types[side], at));
-            }
-        }
-        foreach (int side in order)
-            foreach (EntityHandle h in handles[side])
-                sim.Enqueue(Command.AttackMove(seats[side], h, mid[1 - side]));
-        int ticks = RunUntil(sim, () => !handles[0].Any(u.IsAlive) || !handles[1].Any(u.IsAlive), MaxTicks);
-        Side Result(int side)
-        {
-            int cost = Cost(data.Units[types[side]]);
-            int left = handles[side].Count(u.IsAlive);
-            return new Side(new[] { keyA, keyB }[side], counts[side], counts[side] * cost, left, left * cost);
-        }
-        return (Result(0), Result(1), ticks);
-    }
+    private const string GroupHeader = "| Rule | Winner v loser | Winner seat | Fielded (winner v loser) | Winner left | Winner hp left | Winner keeps (cost) | Time to last death |";
+    private const string SiegeHeader = "| Siege unit | Same cost of line infantry | Building | Siege time | Line time | Siege / line |";
 
-    /// <summary><c>CounterTriangleTests.TimeToKill</c>: ticks for <paramref name="n"/> <paramref name="attackerKey"/> to destroy a <paramref name="buildingKey"/>; <see cref="int.MaxValue"/> if not within <see cref="SiegeMaxTicks"/>.</summary>
-    private static int TimeToKill(string attackerKey, int n, string buildingKey)
-    {
-        GameData data = TestSim.Data;
-        Simulation sim = Flat(size: 48, units: n + 4);
-        World w = sim.World;
-        Assert.True(w.Buildings.Spawn(1, data.FindBuilding(buildingKey), 24 * w.NavGrid.Width + 24, out EntityHandle b));
-        // M4-3a, as in the scenario: the attackers start out of sight of the building (the fog would drop their Attack),
-        // so a spotter stands on its far side.
-        Spotter(sim, 0, At(sim, 24 + data.Buildings[data.FindBuilding(buildingKey)].FootprintWidth + 3, 24));
-        int type = data.FindUnit(attackerKey);
-        for (int k = 0; k < n; k++)
-        {
-            EntityHandle a = Place(sim, 0, type, new Vector2(30f, 44f + 2f * k));
-            sim.Enqueue(Command.Attack(0, a, b, isBuilding: true));
-        }
-        int t = RunUntil(sim, () => !w.Buildings.IsAlive(b), SiegeMaxTicks);
-        return w.Buildings.IsAlive(b) ? int.MaxValue : t;
-    }
+    /// <summary>One printed table row: the faction whose unit wins it (the page that carries it besides Malazan's), its key for messages, its markdown.</summary>
+    internal readonly record struct Row(string WinnerFaction, string Key, string Markdown);
+
+    /// <summary>Everything the harness gives, computed once for both facts.</summary>
+    private sealed record Report(Row[] Group, Row[] Siege, string[] ScenarioLines, string[] WinnerFailures);
+
+    private static readonly Lazy<Report> Measured = new(Measure);
 
     private static string Name(string key) => TestSim.Data.Units[TestSim.Data.FindUnit(key)].DisplayName;
 
+    private static string Faction(string unitKey) => TestSim.Data.Factions[TestSim.Data.Units[TestSim.Data.FindUnit(unitKey)].Faction].Key;
+
     private static string Seconds(int ticks) => ticks == int.MaxValue ? "not done" : FormattableString.Invariant($"{ticks / 20f:F1} s");
 
-    [Fact]
-    public void AllEightPairs_BothSeats_PrintTheMarginTable_AndTheDocWinnerWins()
+    private static string Describe(Side s) => $"{s.Key} {s.Left}/{s.Fielded} left ({s.Hp} hp, cost {s.CostLeft} of {s.FieldedCost})";
+
+    private static Report Measure()
     {
+        GameData data = TestSim.Data;
+        var group = new List<Row>();
+        var siege = new List<Row>();
+        var scenario = new List<string>();
         var failures = new List<string>();
-        _out.WriteLine("| Rule | Winner v loser | Winner seat | Fielded (winner v loser) | Winner left | Winner keeps (cost) | Time to last death |");
-        _out.WriteLine("| --- | --- | --- | --- | --- | --- | --- |");
-        foreach ((string rule, string winner, string loser) in Pairs)
+        foreach ((string rule, string scenarioRule, string winner, string loser) in Pairs)
             for (int seat = 0; seat < 2; seat++)
             {
                 (Side w, Side l, int ticks) = Fight(winner, loser, seat);
                 int keeps = (int)Math.Round(100.0 * w.CostLeft / w.FieldedCost, MidpointRounding.AwayFromZero);
-                _out.WriteLine(FormattableString.Invariant(
-                    $"| {rule} | {Name(winner)} v {Name(loser)} | {seat} | {w.Fielded} ({w.FieldedCost}) v {l.Fielded} ({l.FieldedCost}) | {w.Left} / {w.Fielded} | {w.CostLeft} / {w.FieldedCost} ({keeps} %) | {Seconds(ticks)} |"));
-                // The only pin: docs/02's winner wins (the loser is wiped out, the winner is not).
+                group.Add(new Row(Faction(winner), $"{Name(winner)} v {Name(loser)} seat {seat}", FormattableString.Invariant(
+                    $"| {rule} | {Name(winner)} v {Name(loser)} | {seat} | {w.Fielded} ({w.FieldedCost}) v {l.Fielded} ({l.FieldedCost}) | {w.Left} / {w.Fielded} | {w.Hp} | {w.CostLeft} / {w.FieldedCost} ({keeps} %) | {Seconds(ticks)} |")));
+                // Scenario/CounterTriangleTests' line, character for character.
+                scenario.Add($"{scenarioRule}, {winner} as player {seat}: {Describe(w)} v {Describe(l)} after {ticks} ticks ({ticks / 20f:F1} s)");
                 if (!(w.Left > 0 && l.Left == 0))
                     failures.Add($"{rule}: {winner} as player {seat} left {w.Left}, {loser} left {l.Left} after {ticks} ticks");
             }
-
-        _out.WriteLine("");
-        _out.WriteLine("| Rule | Siege unit | Same cost of line infantry | Building | Siege time | Line time | Siege / line |");
-        _out.WriteLine("| --- | --- | --- | --- | --- | --- | --- |");
-        GameData data = TestSim.Data;
-        foreach ((string siege, string line, string building) in SiegeRows)
+        foreach ((string siegeKey, string line, string building) in SiegeRows)
         {
-            int n = Math.Max(1, (int)Math.Round((double)Cost(data.Units[data.FindUnit(siege)]) / Cost(data.Units[data.FindUnit(line)]), MidpointRounding.AwayFromZero));
-            int s = TimeToKill(siege, 1, building), l = TimeToKill(line, n, building);
+            int n = SameCostCount(data, siegeKey, line);
+            int s = TimeToKill(siegeKey, 1, building), l = TimeToKill(line, n, building);
             string ratio = s == int.MaxValue || l == int.MaxValue ? "-" : FormattableString.Invariant($"{100.0 * s / l:F0} %");
-            _out.WriteLine($"| Siege beats buildings | 1 {Name(siege)} | {n} {Name(line)} | {data.Buildings[data.FindBuilding(building)].DisplayName} | {Seconds(s)} | {Seconds(l)} | {ratio} |");
-            if (!(s < l)) failures.Add($"Siege beats buildings: 1 {siege} {Seconds(s)} is not faster than {n} {line} {Seconds(l)} on a {building}");
+            siege.Add(new Row(Faction(siegeKey), $"1 {Name(siegeKey)} on a {data.Buildings[data.FindBuilding(building)].DisplayName}",
+                $"| 1 {Name(siegeKey)} | {n} {Name(line)} | {data.Buildings[data.FindBuilding(building)].DisplayName} | {Seconds(s)} | {Seconds(l)} | {ratio} |"));
+            string Show(int t) => t == int.MaxValue ? $"not in {SiegeMaxTicks} ticks" : $"{t} ticks ({t / 20f:F1} s)";
+            scenario.Add($"{building}: 1 {siegeKey} {Show(s)}; {n} {line} {Show(l)}");
+            if (!(s < l)) failures.Add($"Siege beats buildings: 1 {siegeKey} {Seconds(s)} is not faster than {n} {line} {Seconds(l)} on a {building}");
         }
-        Assert.True(failures.Count == 0, "The doc's winner does not win:\n" + string.Join("\n", failures));
+        return new Report(group.ToArray(), siege.ToArray(), scenario.ToArray(), failures.ToArray());
     }
+
+    [Fact]
+    public void AllEightPairs_BothSeats_PrintTheMarginTable_AndTheDocWinnerWins()
+    {
+        Report r = Measured.Value;
+        _out.WriteLine(GroupHeader);
+        _out.WriteLine("| --- | --- | --- | --- | --- | --- | --- | --- |");
+        foreach (Row row in r.Group) _out.WriteLine(row.Markdown);
+        _out.WriteLine("");
+        _out.WriteLine(SiegeHeader);
+        _out.WriteLine("| --- | --- | --- | --- | --- | --- |");
+        foreach (Row row in r.Siege) _out.WriteLine(row.Markdown);
+        _out.WriteLine("");
+        _out.WriteLine("Scenario/CounterTriangleTests' lines on the same harness:");
+        foreach (string line in r.ScenarioLines) _out.WriteLine(line);
+        Assert.True(r.WinnerFailures.Length == 0, "The doc's winner does not win:\n" + string.Join("\n", r.WinnerFailures));
+    }
+
+    [Theory]
+    [InlineData("malazan")]
+    [InlineData("whirlwind")]
+    public void EveryPrintedRow_EqualsItsPageRow(string faction)
+    {
+        Report r = Measured.Value;
+        string[] lines = File.ReadAllLines(Path.Combine(TestDataDir.RepoRoot(), "docs", "factions", faction + ".md"));
+        string[] problems = PageProblems(faction, lines, r.Group, r.Siege);
+        Assert.True(problems.Length == 0, $"docs/factions/{faction}.md \"Balance baseline\" differs from the harness (re-print it from " +
+            "AllEightPairs_BothSeats_PrintTheMarginTable_AndTheDocWinnerWins' output):\n" + string.Join("\n", problems));
+    }
+
+    /// <summary>
+    /// The pin can fail (D8 criterion 2): one page cell changed in memory (the Malazan Lancer seat-1 row's time or hp, the
+    /// Whirlwind ram's line time) gives exactly one problem, naming the page, the pair, the seat and the column.
+    /// </summary>
+    [Theory]
+    [InlineData("malazan", "| Wickan Lancer v Desert Archer | 1 |", "| 22.0 s |", "| 21.5 s |", "Wickan Lancer v Desert Archer seat 1", "Time to last death")]
+    [InlineData("malazan", "| Wickan Lancer v Desert Archer | 1 |", "| 888 |", "| 912 |", "Wickan Lancer v Desert Archer seat 1", "Winner hp left")]
+    [InlineData("whirlwind", "| Raider v Wickan Lancer | 0 |", "| 19 / 19 |", "| 18 / 19 |", "Raider v Wickan Lancer seat 0", "Winner left")]
+    [InlineData("whirlwind", "| 1 Battering Ram |", "| 254.5 s |", "| 250.0 s |", "1 Battering Ram on a Billet", "Line time")]
+    public void AMutatedPageCell_FailsNamingPairSeatAndColumn(string faction, string rowMark, string cell, string mutant, string key, string column)
+    {
+        Report r = Measured.Value;
+        string[] lines = File.ReadAllLines(Path.Combine(TestDataDir.RepoRoot(), "docs", "factions", faction + ".md"));
+        int i = Array.FindIndex(lines, l => l.Contains(rowMark, StringComparison.Ordinal));
+        Assert.True(i >= 0 && lines[i].Contains(cell, StringComparison.Ordinal), $"{faction}.md: no row '{rowMark}' with '{cell}'");
+        lines[i] = lines[i].Replace(cell, mutant);
+        string[] problems = PageProblems(faction, lines, r.Group, r.Siege);
+        Assert.True(problems.Length == 1, $"expected one problem, got {problems.Length}:\n" + string.Join("\n", problems));
+        Assert.Contains(key, problems[0]);
+        Assert.Contains($"column '{column}'", problems[0]);
+        Assert.Contains(faction + ".md", problems[0]);
+    }
+
+    /// <summary>
+    /// Compares the "## Balance baseline" section of a page with the printed rows: Malazan's page carries every row,
+    /// another faction's page the rows its own unit wins. Each expected row must be on the page once with every cell
+    /// equal, both headers must be the printed ones, and the page may have no row the harness does not print.
+    /// </summary>
+    internal static string[] PageProblems(string faction, string[] lines, Row[] group, Row[] siege)
+    {
+        var problems = new List<string>();
+        int i = Array.FindIndex(lines, l => l.StartsWith("## Balance baseline", StringComparison.Ordinal));
+        if (i < 0) return new[] { $"{faction}.md has no '## Balance baseline' heading" };
+        var tables = new List<List<string>>();
+        for (i++; i < lines.Length && !lines[i].StartsWith("## ", StringComparison.Ordinal); i++)
+        {
+            if (!lines[i].StartsWith('|')) continue;
+            if (i == 0 || !lines[i - 1].StartsWith('|')) tables.Add(new List<string>());
+            tables[^1].Add(lines[i].Trim());
+        }
+        if (tables.Count != 2) return new[] { $"{faction}.md \"Balance baseline\": {tables.Count} tables, expected 2 (groups, siege)" };
+        Compare(faction, "group", GroupHeader, tables[0], group, problems);
+        Compare(faction, "siege", SiegeHeader, tables[1], siege, problems);
+        return problems.ToArray();
+    }
+
+    private static void Compare(string faction, string table, string header, List<string> page, Row[] printed, List<string> problems)
+    {
+        string where = $"{faction}.md {table} table";
+        if (page[0] != header) { problems.Add($"{where}: header '{page[0]}' vs printed '{header}'"); return; }
+        string[] columns = Cells(header);
+        string[][] pageRows = page.Skip(2).Select(Cells).ToArray();
+        // Group rows are keyed by "Winner v loser" + seat, siege rows by the siege unit: the columns that name the row.
+        Func<string[], string> keyOf = table == "group" ? c => $"{c[1]} seat {c[2]}" : c => c[0];
+        var expected = printed.Where(r => faction == "malazan" || r.WinnerFaction == faction).ToArray();
+        foreach (Row row in expected)
+        {
+            string[] want = Cells(row.Markdown);
+            string k = keyOf(want);
+            string[][] found = pageRows.Where(c => c.Length == want.Length && keyOf(c) == k).ToArray();
+            if (found.Length != 1) { problems.Add($"{where}: {row.Key}: {found.Length} page rows, expected 1"); continue; }
+            for (int c = 0; c < want.Length; c++)
+                if (found[0][c] != want[c])
+                    problems.Add($"{where}: {row.Key}, column '{columns[c]}': page '{found[0][c]}' vs sim '{want[c]}'");
+        }
+        var expectedKeys = expected.Select(r => keyOf(Cells(r.Markdown))).ToHashSet(StringComparer.Ordinal);
+        foreach (string[] c in pageRows)
+            if (c.Length != columns.Length || !expectedKeys.Contains(keyOf(c)))
+                problems.Add($"{where}: page row '| {string.Join(" | ", c)} |' is not a row the harness prints for this page");
+    }
+
+    private static string[] Cells(string markdownRow) => markdownRow.Trim().Trim('|').Split('|').Select(c => c.Trim()).ToArray();
 }
