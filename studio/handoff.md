@@ -1,248 +1,220 @@
-# Handoff: brief for the current session
+# Handoff: brief for the next session
 
-Written by the Producer at the PLAN of session **2026-10-08-2144** (scheduled; base `78b9014`; fourth full session of
-2026-10-08, cap 8). Decision **GO** on all three tracks: sim **M4-H1** (hardening, 4 / 4), view **BUG-0219 then M4-VH1**
-(hardening, 4 / 4), data **D7** (feature, QA light).
-
-## Branch starts and integration order (read first, conductor and builders)
-
-- **Every track branches from `origin/studio/2026-10-08-1435-sim` (249924a)** with **`origin/main` (78b9014) merged in first**
-  (verified clean with `git merge-tree`: `main` adds only the D6 data merge and studio files). That branch is the accepted
-  M4-3a fog work with `main` 853a60c already merged; it is the tree `main` becomes this session, so every track builds and
-  tests on it (the view's hardening on the fog-era sim, the data track's D7 on `BuildingDef.Sight`).
-- **Integration order: view, then sim, then data.** The view branch's first commit is the BUG-0219 fix, so once it merges,
-  `main` carries M4-3a + the fix and is green on the full suite. The sim branch then adds only M4-H1; the data branch only D7.
-- **Gate on every merged result:** the full non-Perf xUnit suite, the 33-scene loop (`tools/qa/scene-loop.ps1`) and smoke.
-- Known red on the common base: exactly one row, `QA.ViewApi.UnitPickerQaTests.ThreeQueuedAttacks_ThenStop_ClearsEverything`
-  (BUG-0219, view-owned). The sim's and data's own full runs show it until they scratch-merge the view's fix commit.
-- Bug ids: sim from **BUG-0240**, view from **BUG-0250**, data from **BUG-0260**.
+Written by the Producer at the ACCEPT of session **2026-10-08-2144** (all three tracks accepted; the fog lands on `main` with
+this integration). The next session's PLAN re-checks `main`, the inbox and the caps before using this.
 
 ## Where we are
 
-- M0-M3 Done. **M4: 5 / 10** on `main`; criterion 5's sim half (M4-3a) lands this session through the view branch.
-- Hardening counters before this session: sim 4 / 4, view 4 / 4, data 2 / 4. After it: sim 0, view 0, data 3.
-- Open S2: BUG-0219 only (fixed first by the view). `main` 78b9014: build 0 warnings; non-Perf suite run at this PLAN.
-- No inbox notes. The owner's balance answer (D6 entry) is still wanted; D7 ships no number.
+- M0-M3 Done. **M4: 5 / 10** on `main`. Criterion 5 (fog) has its sim half on `main` (M4-3a + M4-H1); it still owes the view's
+  shader / hiding / minimap fog (M4-V4) and the sim's ghost list + shooting towers (M4-3b).
+- Hardening counters: sim **0 / 4**, view **0 / 4**, data **3 / 4** (data's next hardening after one more feature task).
+- Open S1 / S2: **none** (BUG-0219 and BUG-0240 fixed this session). Open S3 worth knowing: BUG-0241 (sim, a chase that never
+  ends when unreachable targets are taken in turn along a cliff; also pre-existing), BUG-0243 (data: one stale time on the
+  Malazan page), BUG-0251 (view: `EconomyViewTest` can FATAL at Godot shutdown after PASS under load; rerun once), BUG-0157.
+- Integration order used: view → data → sim (every pushed `main` green). The sim merge has a precondition: QA's
+  `[Collection(SerialCollection.Name)]` on `QA/FogVisibleBitsQaTests` (its Perf row and allocation measurement trip
+  `SerialCollectionTests`). Expected `main` after it: the three branch tips merged, studio files unioned.
+- The owner's balance answer (D6 entry under For your review) is still wanted; the data track changes no number until it comes.
+- Bug ids next session: sim from **BUG-0270**, view from **BUG-0280**, data from **BUG-0290**.
 
 ## Sim track
 
-### Current session plan: M4-H1, the sim's hardening session · hardening · QA standard
+### Current session plan: M4-3b, towers that shoot, the ghost list, placement on explored ground · feature · QA full
 
-**Goal:** work the sim's debt backlog on the fog-era tree: make the fog's visible bits part of the hashed state (BUG-0215),
-re-record the seed-21 replay (BUG-0211), close the M4-3a nits (BUG-0216), hand the data track a shared fight harness
-(BUG-0230 item 2), then the older S3 / S4 debt as it fits `max_task_lines` 1,500.
+**Goal:** finish the sim's share of M4 criterion 5. Buildings can carry an attack (the Watch Tower / Lookout Tower: docs/02
+"10 pierce / 2 s, range 18; sight 24; detector 16 m"), each player keeps a "last known" list of enemy buildings it has seen
+(ghosts in explored fog), and a building may be placed only on ground the player has explored.
 
-**Scope, in this order (stop when the budget is spent; say which items were not reached):**
-1. **BUG-0215 (S3, Producer decision, owner may revisit):** hash the visible bits packed (one `ulong` per 64 cells per
-   player, like the explored bits; ≤ ~20 µs a tick on 2,500 units), keep `Version` derived; rewrite docs/03's "a save
-   re-stamps at load" (M6 saves the visible bits); flip QA's skipped `FogQaTests.TwoWorldsWithTheSameStateHash_PlayTheSameFuture`
-   (the `Bug0215_...` row then asserts the opposite); `StateHashTests` row for the visible bits; docs/01's M4-3a row (d).
-   Golden regenerated **once** with the usual proof (every `k` line equal with the fog arrays excluded locally; say so in the
-   commit).
-2. **BUG-0211 (S3):** re-record `studio/bugs/BUG-0146-seed21-wood-wedge.replay` from `M3PlayableTest -- --seed 21` on the
-   post-item-1 build (a headless scene run; no view file edited), set `RecordedDataHash`, restore `GatherWedgeQaTests`
-   `CheckpointPrefixTicks` to ≥ 19, prune the `SameGameDataHashes` entries the recording covers; docs/03 Replays: a
-   "hash format" note (any hashed-state addition invalidates pre-recorded checkpoints).
-3. **BUG-0216 (S4, 4 items):** `FogStore` limit `w*w + h*h` (flip the skipped `MaxSight64_OnA24CellMap_MatchesTheOracle`);
-   docs/03's holding-Catapult sentences (a holder's reach beyond its sight needs a spotter); the view / combat 4-tick
-   disagreement in docs/03 "Known limits"; `MaxSight` applies to units too (one docs line or the validation).
-4. **BUG-0230 item 2 (data request):** make `Scenario/CounterTriangleTests`' `Fight` / `TimeToKill` public helpers (or move
-   them into `CombatScenes`) with the scene parameters named, so `Content/CounterTriangleMarginsTests` can call them next
-   session (**do not edit `Content/`**: data-owned). Note the new helper's name in the session report.
-5. Then as they fit: **BUG-0149** (S3, `ChaseStall` across a target switch; flip
-   `CombatFriendExceptionQaTests.StalledChaser_SwitchesToAnEnemyBehindAWall_WalksRoundAndFightsIt`, keep seed 4 of
-   `CrowdRowSweepStressTests.FiveHundredUnitsTo500RandomGoals` green), **BUG-0157** (S3, an AttackMove to a new point keeps a
-   chase whose target is in sight; flip the skipped jittered-spam row), **BUG-0144** (S3), **BUG-0134** (S3, `CheckAnyOfReachable`
-   honours `researchedAt` / `trainedAt`; flip `ABuildingRequiringATechResearchedOnlyAtItself_IsAnError`), **BUG-0158** (S4,
-   warm-up run or medians), **BUG-0113 / 0094** (S4), **BUG-0153 items 3-4**, **BUG-0142 items 1-2**, **BUG-0133** (S4).
-   **BUG-0151** stays (crowd-cost work after M4).
-6. Docs drift sweep: docs/03 "Known limits" gains the fog's (above); the `TightBlob2500` headroom note (4.49-4.54 of 4.6 ms
-   alone; fails under load, BUG-0158); every bug file touched gets its status and "Fixed by" (commit + test).
+**Scope:**
+1. **Schema (sim-owned):** `BuildingDef.Attack` (optional, the unit `attack` object: `type`, `damage`, `range`, `cooldown`,
+   `windup`, `projectile` (aimed), `targets`) and `BuildingDef.Detector` (optional radius, ≤ `DataLimits.MaxSight`; stored
+   and validated now, used by M4-5), with validation and `ContentHash`; ship the two towers' values in
+   `game/data/factions/*/buildings.json` (the minimum the sim's tests need; the data track's D8 does not touch those files
+   this session: name them in both briefs). `DataValidationTests` rows.
+2. **Buildings that shoot:** a finished building with an attack scans every `ScanInterval` ticks (staggered by slot) within its
+   range through the spatial hash, takes a target by the unit priority (nearest enemy unit; never a building), fires a projectile
+   from its footprint centre at the unit's `Fire` rule (led the same way), honours vision (its owner must see the target: the
+   building's own sight circle counts like a unit's, rule (a)), applies Forge attack bonuses if docs/02 says so (check: towers get
+   `ranged` upgrades? If the docs are silent, no bonus, Producer default, say so in docs/01). A site (under construction) never
+   shoots. Death / damage unchanged. Hash: the building's cooldown / target fields.
+3. **Ghost list:** per player, for each enemy building slot ever seen: the type, anchor cell and generation when last seen, kept
+   until the player sees the cell again and the building is gone (then dropped) or sees it again (refreshed). Hashed. Read-only
+   view surface `World.Fog.Ghosts(player)` (a span of structs) for the view's M4-V4 / the minimap. An explicit `Attack` on a
+   ghosted building the player cannot see now is **accepted** (docs/03 said M4-3b relaxes that for buildings): the unit walks to
+   it and attacks when seen; if the building is gone when the cell comes into sight the order ends.
+4. **Placement:** `World.CanPlace` adds `PlacementError.Unexplored` (ordered after the terrain checks, before units in the way)
+   when any footprint cell is unexplored for the player; the view's `ui.json` key `placement.unexplored` is the view's
+   (Requests entry; the view may add the key in the same session).
+5. Docs/03 "Vision, detection, fog" (the "Not yet" list shrinks), "Implementation (M4-3b)", the data-format rows; docs/02 is
+   the reference; docs/01 rows for any Producer default.
 
-**Out of scope:** M4-3b (towers' `attack` / `detector`, ghosts, placement on explored ground), any `ViewApi/`, `Content/`,
-`QA/Content/`, `game/` file other than `game/data/common/**` if a rule constant needs a home; no behaviour change the docs
-don't already describe except the items above.
+**Out of scope:** abilities / statuses / zones (M4-4), stealth / detection behaviour (M4-5: the field is stored only), the AI,
+anything under `game/` except `game/data/common/**` and the two `buildings.json` values, `ViewApi/`, `Content/`, `QA/Content/`,
+`docs/factions/**` (the data track's D8 pins the towers' text after this lands).
 
 **Acceptance criteria:**
-1. The visible bits are hashed: two worlds with equal state hashes play the same future (the flipped QA row green; the
-   `StateHashTests` row proves a flipped visible bit changes the hash); `Fog2500OnePlayer` still < 0.25 ms and 0 B alone;
-   golden regenerated once with the exclusion proof stated in the commit.
-2. The seed-21 replay is re-recorded on the new hash: `GatherWedgeQaTests` checks ≥ 19 checkpoint ticks (prefix restored),
-   `RecordedDataHash` matches, the row and `M3PlayableTest --seed 21` (headless) pass.
-3. BUG-0216 items 1-4 closed: the skipped 64-sight row flipped and green; the docs/03 sentences corrected.
-4. A public fight harness exists in `sim/Rts.Sim.Tests` (name reported) and `Scenario/CounterTriangleTests` uses it with
-   unchanged printed numbers (the pages' claim "on the scene of `Scenario/CounterTriangleTests`" stays true).
-5. Every item from 5 that was taken has its skipped row flipped (or its test added) and green; untouched items are listed.
-6. Build 0 warnings; non-Perf suite green except the known BUG-0219 row on the sim branch alone (green on a scratch merge
-   with the view's BUG-0219 commit, which QA runs); Perf rows alone within budget; smoke PASS; scene loop 33 / 33 on the
-   scratch merge with the view branch; docs updated with every behaviour change; bug files set.
+1. The schema loads the two towers (attack 10 pierce / 2 s cooldown, range 18, detector 16) and refuses bad values (range 0,
+   negative detector, a building `projectile` that is a lob, `targets: buildings`) with errors naming the field; `ContentHash`
+   covers both; golden `data-hash` regenerated once (every `k` line identical, since no unit moves differently).
+2. A finished Watch Tower kills an unprotected enemy walking through 18 m; a site does not shoot; a tower never targets a
+   building; a target its owner cannot see (unexplored plateau above) is ignored; the shot is a projectile that the view's
+   `World.Projectiles` span shows; hash twins equal over a 2,000-tick fuzz with towers on three levels.
+3. The ghost list: a building seen once stays listed when the cell falls back to explored; it is dropped the first update the cell
+   is visible again and the building is gone; it is refreshed on being seen again; an Attack on a listed-but-unseen building is
+   accepted and ends cleanly when the building is gone; hashed (a `StateHashTests` row per field).
+4. `CanPlace` returns `Unexplored` for a footprint touching unexplored cells and nothing else changes for explored ground
+   (`NeverSealTests` and `ConstructionFuzzStressTests` green).
+5. `TightBlob2500` alone within 4.6 ms; a 20-tower x 500-unit brawl row reports its cost (budget: ≤ 0.2 ms a tick for the towers);
+   0 B per tick in the tower scan.
+6. Build 0 warnings; non-Perf suite green on the branch and on a scratch merge with the view branch; scene loop 33 / 33 there
+   (towers now shoot in the `--units 500` start: check `AttackOrderViewTest` / `QaV6Test` / `QaV7Test` still hold, or stage them);
+   smoke PASS; docs updated; bug files set.
 
-**Design references:** docs/03 "Vision, detection, fog" (hashing, the view surface, the 4-tick update), "Replays"
-(format 4, checkpoints), "Known limits"; docs/02 "Vision and fog" (the high-ground rule); the bug files named above.
+**Design references:** docs/02 "Buildings" (the Watch Tower row), "Vision and fog of war" (ghosts, placement), "Combat"
+(priorities, projectiles); docs/03 "Vision, detection, fog" ("Not yet"), "Implementation (M4-2b)" (Fire / lead), "Buildings"
+(`CanPlace` order); BUG-0090 (the towers' text).
 
-**Tests required:** the flipped QA rows named above; a `StateHashTests` row for the visible bits; the fog fuzz
-(`Stress/FogFuzzStressTests`, QA's `FogHostileFuzzQaTests`) and replay round trip still green; `GatherWedgeQaTests` on the new
-recording; a regression test for each S3 fixed (the skipped rows are those).
+**Tests required:** loader rows; `Combat/TowerTests` (shoot, site, no buildings, vision, cooldown); `Vision/GhostListTests`;
+`StateHashTests` rows; a tower fuzz (`Stress/`) with twins + replay round trip; the `CanPlace` rows; a Perf row.
 
-**Constraints:** no per-tick allocation (the packed hash loops over arrays); no `Dictionary` iteration; determinism (golden
-regen once, reason in the commit); no Godot in `Rts.Sim`; the sim track never edits `ViewApi/`, `Content/`, `QA/Content/`,
-`docs/factions/`; studio files append-only.
+**Constraints:** no per-tick allocation (the ghost list is a fixed-capacity store per player sized by the building capacity);
+no `Dictionary` iteration; determinism (golden regen once, reason in the commit); no Godot in `Rts.Sim`; the sim track never
+edits `ViewApi/`, `Content/`, `QA/Content/`, `docs/factions/`; studio files append-only; **do not edit
+`sim/Rts.Sim.Tests/Content/CounterTriangleMarginsTests.cs`** (D8 rewrites it this session).
 
-**QA focus (standard):** attack the hash change hardest: hash twins after random fog updates, a save-like copy of the hashed
-state at a non-update tick resumes to the same future; the replay round trip with the fog; the golden's `k` lines with the fog
-excluded; the packed visible bits vs the byte map on every cell (3-level maps, 6 seeds); perf of `AddToHash` on a 1024 map
-(bound the cost); the re-recorded replay checks ≥ 19 ticks; for each flipped S3 row, a hostile variant (BUG-0149: two
-unreachable then one reachable; BUG-0157: jitter every 1, 2, 3 ticks). Full non-Perf suite on a scratch merge with the
-view's branch (its BUG-0219 commit) and the 33-scene loop there.
+**QA focus (full):** towers vs the fog (a tower on level 0 must not shoot a unit on level 1 beyond the lip; one on level 2 shoots
+down), the ghost list under hostile sequences (seen, destroyed unseen, rebuilt in the same slot with a new generation, seen
+again), an Attack on a ghost whose slot was reused by an own building; placement at the fog edge (one cell unexplored);
+twins and replay round trip; the 33-scene loop on the merge (towers change the `--units 500` start).
 
 ### Watch-outs (sim)
 
-- Item 2 depends on item 1 (the hash changes); record the replay after item 1 is final.
-- `TightBlob2500_OnePlayer` has ~0.06-0.1 ms of headroom alone; a Perf failure counts only alone, fresh process.
 - `World.Neighbors` / `FlowFields.BuildScratch` are shared scratch; the fog's layers lie over `BuildScratch` in phase 12.
 - Any test that orders an explicit Attack must stage the target in the owner's sight (`CombatScenes.Spot` / `Spotter`).
-
-Then **M4-3b** (towers' `attack` / `detector` fields and buildings that shoot, the last-known-buildings ghost list, placement
-needs explored ground; schema → data D8), M4-4 abilities / statuses / zones, M4-5 stealth / detection, the four signature
-abilities, the fog-on sandbox.
+- BUG-0241 (chase livelock along a cliff) is the first item of the next sim hardening, with BUG-0157's kept-chase rule
+  (bound by the mean), BUG-0144, BUG-0142 items 1-2, BUG-0113 item 2, BUG-0094, BUG-0242.
 
 ## View track
 
-### Current session plan: BUG-0219 first, then M4-VH1, the view's hardening session · hardening · QA standard
+### Current session plan: M4-V4, the fog on screen · feature · QA standard
 
-**Goal:** land the three-line BUG-0219 fix as the first, separate commit (it unblocks the fog on `main`), then work the
-view's debt backlog on the fog-era sim: the `SfxTest` flake, the M4-V3 nits, the older S4 leftovers, and a sweep so no other
-view test orders an Attack on an unseen target.
+**Goal:** the player sees the fog: unexplored ground black, explored ground darkened, visible ground clear; enemy units hidden
+unless seen; enemy buildings hidden unless seen or ghosted (the ghost list arrives with the sim's M4-3b this session: draw
+ghosts only if it is on the merged tree by the time the view integrates, else leave a hook and say so); the minimap draws the
+fog and sends Attacks on enemy dots.
 
-**Scope, in this order:**
-0. **BUG-0219 (S2) — first commit, nothing else in it:** in `sim/Rts.Sim.Tests/QA/ViewApi/UnitPickerQaTests.cs`
-   `ThreeQueuedAttacks_ThenStop_ClearsEverything` (line ~280), after the spawns add `CombatScenes.Spot(sim, 0, h[1])`, `h[2]`,
-   `h[3]` (reveals the Raiders to player 0; they stay 20 m out, beyond the 14 m scan, so "nothing pulls it back after Stop"
-   still holds). Every assertion kept. Prove: the row green, then the **full non-Perf suite green on the branch** (it already
-   contains the fog). Commit as `M4-VH1: fix BUG-0219 ...` before any other change.
-1. **BUG-0220 (S3):** `SfxTest` flakes under CPU load (`Expect` waits a 60 ms scene-tree timer against `Sfx.Play`'s 50 ms
-   wall-clock rate limit): wait on `Time.GetTicksUsec` in the test, or drive `Sfx.Play` with an explicit clock as the
-   criterion-4 block does; 10 runs under load (another testhost running) green.
-2. **BUG-0226 (S4, 5 items):** `TerrainHeight.MaxUnder`'s 0.15 m `SeamSlack` (count a crossing as joined only at ~0 step;
-   fix the comment: generated maps have no seams; flip the skipped
-   `MaxUnderEdgeWalkQaTests.MaxUnder_RandomPointsAndRadii_HangsUnderAQuarterMetre`); `AttackOrderViewTest`'s seed-6 own-Billet
-   row silently skipped (print or move the camera); `QaV6Test`'s Tent row never has the box behind the Raider (place it so the
-   ray reaches the box, or reword the row); docs/03 "10-16 cells behind the Raiders" → from the centre.
-3. **BUG-0222 (S4, 3 nits):** a skipping `ProjectileTracker` misses a same-target lob reuse (a lob must lie on its launch →
-   target line; flip the skipped `SkippingObserver_SameTargetLobFromAnotherLaunch_IsANewShot`); the lob's last 0.6 m slide (a
-   docs/03 note for M6); `ImpactMarks.Add` replaces a live mark while free slots exist (doc or code).
-4. **Sweep:** grep `Command.Attack` in `sim/Rts.Sim.Tests/QA/ViewApi/`, `sim/Rts.Sim.Tests/ViewApi/` and `game/tests/`; every
-   explicit Attack on an enemy stages the target seen (`CombatScenes.Spot` / `Spotter` / `AttackStage`); list what was found.
-5. As they fit: **BUG-0148 items 1 / 3**, **BUG-0126 items 3-6** (`PropLayout` relists on `NavGrid.Version`; a double Cancel
-   enqueues two Cancels; the split minimap Perf rows leave the sum unguarded; the resource bar's ~1.2 KB over 300 repair
-   ticks), the minimap dot-timing flake (`DotRefresh_2000Units_...` under contention), export hygiene notes (docs only).
-6. Bug files: BUG-0190 is already set `fixed` by the Producer (this PLAN); set each bug fixed here with its commit + test.
+**Scope:**
+1. **Terrain fog:** an R8 texture of `World.Fog.Visibility(local)` (one byte per cell), re-uploaded when `Version(local)` moves
+   (every 4 ticks at most), sampled by the terrain shader: 0 → black (unexplored), 1 → darkened (~40 %), 2 → clear; props
+   (trees, mines) and corpse / rubble markers under the same rule (hidden on unexplored, darkened on explored). A
+   `--no-fog` dev flag for the existing scenes that look at the whole map (list them in docs/03 as for `--no-combat`).
+2. **Units:** an enemy unit's view is hidden when `!Fog.CanSeeUnit(local, slot)` (hp bars, flashes, streaks of its shots too:
+   a projectile is drawn only if its current cell is visible to the local player); it reappears without a pop when seen.
+3. **Buildings:** an enemy building is drawn only when `CanSeeBuilding(local, slot)`; if the sim's ghost list is on the merged
+   tree, draw a ghost (the last-known type at its anchor, darkened, no hp bar) from `Fog.Ghosts(local)`; a right-click on a ghost
+   is an Attack on the building (the sim accepts it, M4-3b).
+4. **Minimap:** the fog layer (black / darkened) under the dots; enemy dots only where visible; a right-click on an enemy dot
+   is an Attack on it (the M4-V2 "waits for fog" item); `placement.unexplored` key in `ui.json` ("Unexplored") shown by the ghost
+   when `CanPlace` says so (if M4-3b has landed; else the key only).
+5. Scene test `FogViewTest.tscn` (seeds 1 / 6): texture == fog bytes every update, hidden units == `!CanSeeUnit`, hidden
+   buildings == `!CanSeeBuilding`, 300 steady frames 0 B at `--units 500`, hash twin; the `--no-fog` scenes unchanged.
 
-**Out of scope:** M4-V4 (the fog shader, unit hiding, the minimap's fog layer and Attack half): next session; any sim file
-outside `ViewApi/` (read-only additions only there); `game/data/**`.
+**Out of scope:** the fog's look (the M6 art pass), ability feedback (M4-4), stealth visuals (M4-5), any sim file outside
+`ViewApi/` (read-only additions only there), `game/data/**` except `ui.json`'s new key.
 
 **Acceptance criteria:**
-1. BUG-0219: the row green on the branch; the full non-Perf suite green on the branch (0 failed, skips each a filed bug);
-   the fix is the branch's first commit and touches only that test.
-2. BUG-0220: `SfxTest` passes 10 / 10 with another testhost running at the same time (say how the load was produced).
-3. BUG-0226 items 1-5 closed: the flipped QA row green; the seed-6 Billet row and the Tent row no longer silently skip; the
-   docs line corrected.
-4. BUG-0222 items 1-3 closed (item 2 as a docs/03 note is enough).
-5. The sweep's result is listed in the report (file, row, how staged); no view test orders an Attack on an unseen target.
-6. Build 0 warnings; smoke PASS; scene loop 33 / 33 on the branch; view Perf rows alone within budget; no `Check` or threshold
-   loosened (every changed assertion listed); docs/03 updated; bug files set.
+1. Windowed on seed 1: the map starts black beyond the base's sight, clears as units walk, darkens behind them; a screenshot
+   (`--screenshot`) looked at and named in the report.
+2. Enemy units and buildings appear only when seen (the scene's per-frame checks against `CanSeeUnit` / `CanSeeBuilding`, 0
+   mismatches over 900 ticks); their shots are hidden with them.
+3. The minimap's fog layer matches the texture; a right-click on a visible enemy dot sends one Attack per selected unit; on a
+   hidden one a Move (documented).
+4. Texture uploads only when `Version` moves (count them: ≤ ticks / 4 + 1); 0 B per frame in the fog sync at 500 units.
+5. Build 0 warnings; smoke PASS; scene loop green (new scene included); view Perf rows alone within budget; docs/03
+   "Implementation (M4-V4)" + the `--no-fog` list; hash twins equal.
 
-**Design references:** docs/03 "Implementation (M4-V3)", "Debug tooling" (`--no-combat`), "For the view (M4-V4)" (the fog
-surface, read-only), "Build and export"; the bug files named above.
+**Design references:** docs/02 "Vision and fog of war"; docs/03 "For the view (M4-V4)", "Vision, detection, fog" Known limits
+(1): combat may fire at a unit the screen still hides for up to 4 ticks: draw the shot only from a visible cell.
 
-**Tests required:** the flipped QA rows above; a regression row for BUG-0220 (the clock-driven `Expect`); the scene loop.
+**Tests required:** `ViewApi/FogViewTests` (the texture packer against the bytes, the hide rule, 0 B), `FogViewTest.tscn`, the
+scene loop.
 
-**Constraints:** `ViewApi/` stays read-only (no sim state, tick or hash change; hash twins equal); no gameplay in views; no
-C# player-facing text; the view never edits `game/data/**`, `sim/**` outside `ViewApi/` and its own test folders.
+**Constraints:** `ViewApi/` stays read-only; no gameplay in views; player-facing text in `ui.json` only; the view never edits
+`game/data/factions/**` or `sim/**` outside `ViewApi/` and its own test folders.
 
-**QA focus (standard):** run the full non-Perf suite on the branch (the fog is in it) and the scene loop twice, once under
-load; attack `MaxUnder` with random points and radii on 3-level maps near ramp feet and side walls (bound the hang); the
-tracker's lob reuse with hostile sequences (same owner / type / target, different launch); `SfxTest` 10 runs under load;
-confirm the sweep found every explicit Attack in view-owned tests.
+**QA focus (standard):** the texture against the bytes on every update of 3 seeds; units at the fog edge (a cell boundary) over
+many frames; a unit revealed by a high-ground hit shown for exactly the reveal; the minimap Attack on a dot whose unit died this
+tick; the `--no-fog` scenes still green; 0 B at 2,000 units.
 
 ### Watch-outs (view)
 
-- The branch already contains the fog: `World.Fog` is there (`Visibility` changes only on `tick % 4 == 1`); combat may fire
-  at what `CanSeeUnit` still hides for up to 4 ticks (BUG-0216 item 3): M4-V4 should know; nothing for this session.
-- `--no-combat` scenes: DebugOverlayTest, OrdersTest, QaH1Test, QaH2Test, QaM27Test, MinimapTest, SfxTest, QaM24Test; never
-  the Attack-order or combat-view scenes.
-
-Then **M4-V4**: the fog shader from `World.Fog.Visibility(player)` / `Version(player)` (an R8 texture re-uploaded on version
-change; black / darkened / clear), units hidden when `!Fog.CanSeeUnit(local, slot)` and enemy buildings when `!CanSeeBuilding`
-(until M4-3b's ghosts), the minimap's fog layer and Attack half, `placement.unexplored` when M4-3b's rule lands.
+- `World.Fog.Visibility(player)` changes only on ticks where `tick % 4 == 1`; `Version` is the cheap change test.
+- BUG-0251: `EconomyViewTest` can FATAL at shutdown after PASS under load (rerun once; test-side fix at the next view hardening:
+  dispose the scene's references and `GC.Collect()` before `Quit`).
+- Next view hardening: BUG-0251, BUG-0250 (3 items), BUG-0148 item 1, BUG-0126 items 3 / 5 / 6, export hygiene (M6).
 
 ## Data track
 
-### Current session plan: D7, the buildings' sight on both faction pages · feature · QA light
+### Current session plan: D8, the shared harness, the stale time, the bullet anchor · feature · QA light
 
-**Goal:** the fog gave every building a sight radius (towers 24 m from their own `sight`; every other building 12 m from
-`rules.json` `buildingSight`). Put that on both faction pages and in the design doc, pinned to the data both ways, and close
-the D6 nits that are the data track's.
+**Goal:** close the last D6 / D7 nits: `Content/CounterTriangleMarginsTests` calls the sim's public harness instead of its copy
+(BUG-0230 item 2, BUG-0240), both pages' balance tables are re-printed from it and pinned row by row (BUG-0243: the Malazan page's
+Lancer-v-Archer seat-1 row reads 21.5 s / 912 hp; the sim now plays it in 22.0 s / 888 hp), and `TechContentTests.G` reads the
+Ages bullet from the file's own lines (BUG-0260).
 
 **Scope:**
-- `docs/factions/malazan.md` and `docs/factions/whirlwind.md`: a **Sight** column in the Buildings table (after Footprint):
-  24 for `malazan_watchtower` / `whirlwind_lookout_tower`, 12 for the other nine each. The existing columns stay byte-identical
-  except for the inserted column (the pins read them). The towers' "Provides" text keeps "sight 24" (it will carry attack /
-  detector until M4-3b).
-- `sim/Rts.Sim.Tests/Content/BuildingContentTests.cs`: a pin both ways (page Sight == `BuildingDef.Sight` per building; a
-  changed page value or data value fails naming the building and the field); a row that the non-tower buildings carry no
-  `sight` in data (they inherit `buildingSight`), and that `rules.json` `buildingSight` == 12 == the page's non-tower column.
-- `docs/02-game-design.md` "Vision and fog" paragraph (line ~251): one sentence: buildings see 12 m unless their table row
-  says otherwise (`buildingSight` in `rules.json`); Watch Towers 24 m. The Buildings table there already reads "sight 24" for
-  the Watch Tower: check, don't restructure.
-- **BUG-0230 item 1:** anchor the Ages-clause pin (`TechContentTests.G`'s `AgeClause` regex) to the bullet's end so an appended
-  contradicting sentence fails; **item 3:** a separate siege table on the Whirlwind page's "Balance baseline" like the
-  Malazan page's (numbers unchanged). Item 2 is the sim's this session (a shared harness); switch
-  `Content/CounterTriangleMarginsTests` to it **next** session (D8), not now.
-- **BUG-0090:** close the tower-sight item in the file (attack / detector stay open for M4-3b).
-- **Files this track may touch:** the two pages, docs/02 (the two spots), `sim/Rts.Sim.Tests/Content/**`,
-  `sim/Rts.Sim.Tests/QA/Content/**`, `studio/bugs/BUG-0090*`, `BUG-0230*`, `studio/qa/**`. **No `game/data/` edit** (nothing
-  numeric changes; the golden does not move).
+- `sim/Rts.Sim.Tests/Content/CounterTriangleMarginsTests.cs`: delete the private `Fight` / `TimeToKill` copies; call
+  `Rts.Sim.Tests.Scenario.CounterTriangleScene.Fight(keyA, keyB, seatA)` / `TimeToKill(attacker, n, building)`; print the same
+  table; **pin every printed row to the page's row** (units left, hp, cost kept, time), so a sim change that moves a number fails
+  the test naming the pair, seat and column (the test is the alarm; the page is updated by the data track after a Producer OK).
+- Both pages' "Balance baseline" tables: re-print from the harness on the merged `main` and copy in (only the Lancer seat-1 row
+  should change: 912 → 888 hp, 21.5 s → 22.0 s; say so if anything else moves and stop to report).
+- `TechContentTests.G`: take the Ages clause's bullet from the file's lines (a bullet starts at a line beginning "- ") and anchor
+  the clause to that bullet's end, as QA's `AgesRuleQaTests.ClauseBullet` does; the " - Or the Forge alone." mutant fails G.
+- BUG-0230, 0240, 0243, 0260 files and index rows set.
+- **Files this track may touch:** the two pages, `sim/Rts.Sim.Tests/Content/**`, `sim/Rts.Sim.Tests/QA/Content/**`, the four bug
+  files, `studio/qa/**`. **No `game/data/` edit** (the sim's M4-3b edits the two `buildings.json` this session).
 
-**Out of scope:** any balance number (the owner's answer on the D6 proposal is still wanted; nothing changes until it
-arrives); `attack` / `detector` for towers (M4-3b); abilities (M4-4); any C# outside the content test folders.
+**Out of scope:** any balance number (the owner's answer on the D6 proposal is still wanted); the towers' `attack` / `detector`
+pins (D9, after M4-3b is on `main`); abilities (M4-4).
 
 **Acceptance criteria:**
-1. Both pages' Buildings tables carry a Sight column: towers 24, the rest 12; the other columns byte-identical to before.
-2. A content test pins page Sight == `BuildingDef.Sight` for all 20 buildings both ways (prove with two scratch mutations:
-   a page value and, in a scratch copy of the data, a tower's `sight`; both fail naming the building and the field), and
-   `buildingSight` 12 == the non-tower column.
-3. docs/02 states the 12 m default and the towers' 24 m in the vision paragraph; `grep` finds "12 m" there.
-4. BUG-0230 item 1: the appended-contradiction mutant from the bug's repro fails `TechContentTests.G`; the seven other mutants
-   still fail. Item 3: the Whirlwind page's siege rows are in their own table with proper columns, numbers unchanged.
-5. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~Content"` green; `DataValidationTests` green; no diff under
-   `game/`, `sim/Rts.Sim/`, `*.replay`; build 0 warnings; BUG-0090 / 0230 files updated.
+1. `CounterTriangleMarginsTests` has no private fight harness (grep: no `Flat(` / `Place(` scene setup of its own beyond the
+   siege rows' call); its 14 printed lines equal `Scenario/CounterTriangleTests`' on the same tree.
+2. Every printed row is pinned to the page: a scratch mutation of one page cell (a time, an hp) fails naming pair, seat and column.
+3. The Malazan page's Lancer seat-1 row reads 888 hp / 22.0 s; no other number on either page changed (QA diffs the tables).
+4. BUG-0260's same-line mutant fails G; the nine BUG-0230 / 0260 mutants fail G.
+5. Content + DataValidation green; no diff under `game/`, `sim/Rts.Sim/`, `*.replay`; build 0 warnings; bug files set.
 
-**Design references:** docs/02 "Buildings" table (Watch Tower: sight 24) and "Vision and fog"; docs/03 "Vision, detection,
-fog" (data: `sight` per building, `buildingSight` 12, `DataLimits.MaxSight` 64); `docs/factions/malazan.md` /
-`whirlwind.md` Buildings tables; BUG-0230, BUG-0090.
+**Design references:** `docs/factions/malazan.md` / `whirlwind.md` "Balance baseline"; docs/02 "Ages"; BUG-0230 / 0240 / 0243 /
+0260; `Scenario/CounterTriangleScene.cs` (the harness and its constants).
 
-**Tests required:** the Sight pins (both ways) in `BuildingContentTests`; the regex pin's mutant proof (in the QA report);
-the existing content suite green.
+**Tests required:** the row pins; the G anchor; the existing content suite green.
 
-**Constraints:** the data track writes no C# outside `sim/Rts.Sim.Tests/Content/` and `QA/Content/`; the pages' existing
-tables stay byte-identical apart from the new column; docs edits small; no `game/data/` edit this session.
+**Constraints:** the data track writes no C# outside `Content/` and `QA/Content/`; the pages' other tables byte-identical; no
+`game/data/` edit this session.
 
-**QA focus (light):** criteria, build / tests, docs conformance: mutate the page (a tower 24 → 18, a Barracks 12 → 14) and the
-data (in a scratch copy) and confirm each fails naming the building and field; the BUG-0230 mutants; check both pages' tables
-against `buildings.json` by hand for all 20 rows; confirm no replay / golden / `game/` diff.
+**QA focus (light):** criteria, build / tests, docs conformance: the 14 lines against the scenario's, the page mutations, the
+mutant sweep; confirm no `game/` diff.
 
 ### Watch-outs (data)
 
-- The branch base contains the fog and `BuildingDef.Sight`; `main` 78b9014 (merged in) has D6's pages and tests.
-- The margins harness copy (BUG-0230 item 2) is the sim's this session; D8 switches to it.
+- The sim's M4-3b edits `game/data/factions/*/buildings.json` (the towers' `attack` / `detector`) this session: D8 does not
+  touch `game/data/`. D9 pins the towers' text once that is on `main`.
+- Data's hardening counter is 3 / 4 after D8 → the session after is a data hardening (D-H1): BUG-0090 leftovers, the content
+  tests' shared helpers, docs/factions drift.
 
 ## Watch-outs (all tracks)
 
-- **Integration gate:** the full non-Perf suite, the 33-scene loop and smoke on each **merged** result (view → sim → data).
+- **Integration gate:** the full non-Perf suite, the 33-scene loop and smoke on each **merged** result; the order is view → data
+  → sim unless a branch's first commit fixes a red row (then that branch first). Push only green states.
 - Expected conflicts: `studio/qa/coverage.md` (append all sides), docs/03 (one subsection per track), docs/01 (rows appended),
   `studio/bugs/README.md` (union by id).
-- **Sessions:** the 3-hour lock window declared a live session dead twice; the owner has the suggestion under For your
-  review. A conductor should check for running studio processes before resuming.
-- **Perf:** three tracks' suites at once fail 3-9 wall-clock rows on base and head alike; a failure counts only alone.
+- **Sessions:** the 3-hour lock window declared a live session dead twice; the owner has the suggestion under For your review.
+  A conductor should check for running studio processes before resuming.
+- **Perf:** three tracks' suites at once fail 4-15 wall-clock rows on base and head alike; a failure counts only alone.
+- QA scratch directories carry the agent's name (`qa<session>_*`); never `rm -rf` a shared scratchpad name.
+- **Every QA brief:** after committing its own test files, QA reruns `SerialCollectionTests` (a Perf row or an allocation
+  measurement outside the Serial collection reds the suite; it happened in 1814 and 2144) and the full non-Perf suite's
+  final count must include its own files.
 - `CLAUDE.md` still says "Current milestone: M1" (the owner's file).

@@ -1228,8 +1228,10 @@ switch, cleared with the target), or to the one it gave up, keeps the stall coun
 in turn (one drifting in and out of its sight) restarted the count every scan and chased forever. A switch to any
 other target is a fresh chase (M4-H1, BUG-0149: before, every switch kept the count, so a chaser stalled below a cliff
 that switched to a reachable enemy behind a short wall gave it up on the next scan, three times, and stood Idle in
-sight of it; `QA/CombatFriendExceptionQaTests.StalledChaser_SwitchesToAnEnemyBehindAWall_WalksRoundAndFightsIt`; a known limit:
-three or more targets taken in a cycle are each a fresh chase). So does a retaliator
+sight of it; `QA/CombatFriendExceptionQaTests.StalledChaser_SwitchesToAnEnemyBehindAWall_WalksRoundAndFightsIt`; a known limit,
+BUG-0241: two or more unreachable targets taken in turn along a cliff keep the chase alive, because every switch re-takes
+`ChaseBest` from the new target's gap and the walk along the cliff toward it counts as progress; the stall count never climbs
+whatever a switch does with it). So does a retaliator
 the leash pulls back, and a chaser that loses sight of its target while not gaining on it, whether or not its scan
 then finds another target (BUG-0150, M4-2a fix round: before, a switch to another target in sight did not give the
 lost one up, and a caster at the sight edge reached by a path leading out of sight and a nearer worker took turns

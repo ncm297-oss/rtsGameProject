@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | open (routed to the data track: D8, next data session) |
 | Found | 2026-10-08-2144, task M4-H1 |
 | System | combat (BUG-0149 switch rule) vs `docs/factions/malazan.md` "Balance baseline" (data track) |
 | Fixed by | |
@@ -32,3 +32,10 @@ The winner, survivors and cost kept are unchanged.
   harness before the BUG-0149 change went in at 22:24. The harness is faithful; the "unchanged numbers" claim is not.
 - The sim track may not edit `docs/factions/`, so the data track has to update the time (21.5 s -> 22.0 s). The data
   branch's `CounterTriangleMarginsTests` is green on the scratch merge, so it doesn't pin the time column.
+
+## Producer triage (2026-10-08-2144 ACCEPT)
+Accepted with the sim's M4-H1: the behaviour change is BUG-0149's intended rule (a switch to a new target is a fresh chase),
+and the row's winner, survivors and cost kept are unchanged; only the fight's length moved by 11 ticks. **D8 (data track):**
+re-print both pages' "Balance baseline" tables from the shared `CounterTriangleScene` harness (so the time column is the
+harness's), update the Malazan page's Lancer-v-Archer seat-1 row (21.5 s → 22.0 s, 912 → 888 hp), and pin every printed row
+to the page so the next drift fails a test naming the row. Severity stays S3 (a docs number only; no data value is wrong).

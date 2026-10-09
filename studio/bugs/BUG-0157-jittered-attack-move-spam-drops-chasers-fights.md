@@ -59,3 +59,13 @@ At 30, 50 and 60 a side the kept-chase rule is better on average (95 / 91 / 95 %
 intervals swing by 10 points either way in every variant, so a per-interval 90 % bound on one 400-tick brawl is noise
 for both rules. For the Producer: either take the kept-chase rule and bound the mean over intervals (or several brawl
 sizes), or keep the row skipped. Row unchanged (skipped).
+
+## Producer decision (2026-10-08-2144 ACCEPT, owner may revisit)
+Take the **kept-chase rule** ("an AttackMove to a new point keeps a chase whose target is still in sight", with the re-pick)
+in the **next sim hardening session**, not now: it is better on average at every brawl size measured (94-95 % against 86-92 %)
+and never worse by more than noise, but a per-interval 90 % bound on one 400-tick brawl is noise for either rule. Bound it
+as the dev proposed: the **mean over intervals 1-20 at 40 v 40 at least 90 %** of one order's damage, and no single interval
+under 80 %; keep the `(10, true)` row green under that bound (re-state it the same way). Until then the row stays skipped
+and the docs/03 "Redirecting" sentence is true only for units fighting in reach (a known limit; say so there when the fix
+lands). Rationale: the game ships with same-point spam lossless and 200 ms clicks at most 4 % off; the rule is a small
+average gain that is not worth a fix round inside a hardening session already at its budget.

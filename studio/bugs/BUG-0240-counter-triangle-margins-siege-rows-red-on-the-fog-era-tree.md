@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-08-2144, task M4-H1 (sim track, while working BUG-0230 item 2) |
 | System | content test (data track): `sim/Rts.Sim.Tests/Content/CounterTriangleMarginsTests.cs` `TimeToKill` |
-| Fixed by | |
+| Fixed by | D7 (data track, 7576d4b): `Content/CounterTriangleMarginsTests.TimeToKill` gained the one `Spotter(...)` line of `Scenario/CounterTriangleTests.cs:111`; green on the 2026-10-08-2144 integration (QA: non-Perf 4041 / 0 failed). D8 switches the copy to `CounterTriangleScene` (BUG-0230 item 2) |
 
 ## Repro
 1. On the session base `4c1f168` (M4-3a + main), unchanged:

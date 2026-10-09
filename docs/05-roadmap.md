@@ -10,8 +10,8 @@ Status legend: **Next** = start here, **Planned** = not started, **Done** = acce
 | M0 | Environment & skeleton | **Done** (2026-10-03) | Tools installed, empty projects build, tests and headless boot pass |
 | M1 | Core sim, no graphics | **Done** (2026-10-06, Producer sign-off) | 200 units path across the map deterministically, fast |
 | M2 | Presentation | **Done** (2026-10-07, Producer sign-off after the M2-H2 hardening) | Move an army around a 3D map |
-| M3 | Economy & buildings | **Criteria complete, sign-off pending** (8 / 8 on `main` after session 2026-10-07-2315; every track's end-of-M3 hardening done (M3-H1 / H2, M3-V3b, D4); sign-off held by BUG-0146 (S2, sim: gatherers wedge out of reach of a tree), fixed in session 2026-10-08-0313) | Build a Malazan base |
-| M4 | Combat, fog, abilities | **In progress** (sim track since 2026-10-07-2315: M4-1 melee combat on `main`; 1 / 10 ticked) | Malazan vs. Whirlwind armies fight with abilities and fog |
+| M3 | Economy & buildings | **Done** (2026-10-08, Producer sign-off in session 2026-10-08-0313 after every track's end-of-M3 hardening (M3-H1 / H2, M3-V3b, D4) and the BUG-0146 fix; retro below) | Build a Malazan base |
+| M4 | Combat, fog, abilities | **In progress** (since 2026-10-07-2315; 5 / 10 ticked: melee + the Attack order, the damage formula, projectiles / splash / friendly fire, death / corpses / rubble, the counter-triangle rows; the fog's sim half (M4-3a + M4-H1) on `main` since 2026-10-09) | Malazan vs. Whirlwind armies fight with abilities and fog |
 | M5 | AI opponent | Planned | Lose to a Whirlwind AI |
 | M6 | Game shell & real art | Planned | A friend can play it |
 | M7 | Teblor | Planned | Third faction: scale and population systems proven |
@@ -418,11 +418,11 @@ ten-minute playtest (STATE "For your review", M3-V3 entry) stands as feedback, n
       `BuildingStore.Damage` (freed, cells by the pocket rule, queue refunded); a site's damage sticks under construction
       (BUG-0138). Corpses and rubble are the view's (next view task).)_
 - [ ] Three-state fog of war per player; high-ground vision rule (low ground can't see up; attacker reveal); terrain fog shader; building ghosts.
-      _(Sim half **accepted in session 2026-10-08-1814 (resumed 1435), task M4-3a, and held on its branch
-      `studio/2026-10-08-1435-sim` at integration**: with `main`'s view work merged in, one view-owned xUnit QA row
-      (`UnitPickerQaTests.ThreeQueuedAttacks_ThenStop_ClearsEverything`, written before fog) queues Attacks on Raiders 20 m
-      out of sight, which the fog drops (BUG-0219, S2); the view stages the row's targets in sight first thing next session,
-      then the sim branch merges. What M4-3a built: `Rts.Sim.Vision` (`FogStore`: per player a
+      _(Sim half **accepted in session 2026-10-08-1814 (resumed 1435), task M4-3a**, held one session on its branch for
+      BUG-0219 (a view-owned xUnit QA row written before fog queued Attacks on unseen Raiders; the view fixed it first thing
+      in session 2026-10-08-2144, commit 2cddf26) and **on `main` since the 2026-10-08-2144 integration together with the
+      sim's hardening M4-H1** (the visible bits hashed as state, BUG-0215; the seed-21 replay re-recorded, BUG-0211; the
+      M4-3a nits, BUG-0216; the public `Scenario/CounterTriangleScene` harness). What M4-3a built: `Rts.Sim.Vision` (`FogStore`: per player a
       byte per cell, 0 unexplored / 1 explored / 2 visible, rebuilt in phase 12 on ticks where `tick % 4 == 1` plus an
       initial stamp at tick 0, circle masks per distinct radius with squared integer distances, row-span stamping with the
       high-ground rule per cell and the 4 m lip; `VisionSystem`: the target-validity rule for scans / retaliation / explicit
@@ -435,8 +435,9 @@ ten-minute playtest (STATE "For your review", M3-V3 entry) stands as feedback, n
       QA's `FogHostileFuzzQaTests` (6 seeds x 1,200 ticks, 3 levels, twins equal), `VisionGateOrderQaTests`; Perf alone:
       `Fog2500OnePlayer` 0.064 ms, `Fog1000v1000` 0.086 ms, 0 B; BUG-0217 (gate cost) fixed in the fix round. Still owed
       for this criterion: the terrain fog shader + unit hiding + minimap fog (view, M4-V4), the last-known buildings ghost list
-      and towers that shoot (sim, M4-3b). Open: BUG-0219 (S2, the view row above; holds the merge), BUG-0211 (S3, re-record the
-      seed-21 replay), BUG-0215 (S3), BUG-0216 (S4).)_
+      and towers that shoot (sim, M4-3b). ~~BUG-0219 (S2)~~, ~~BUG-0211 / 0215 (S3)~~, ~~BUG-0216 (S4)~~ fixed in session
+      2026-10-08-2144. Open after M4-H1: BUG-0241 (S3, a chaser whose scans take two or three unreachable targets in turn
+      along a cliff never gives up; also before M4-H1), BUG-0242 (S4).)_
 - [ ] Ability system (target ground, self/aura, summon) and status effects; zones.
 - [ ] Stealth and detection system (tested now, even though Shadow arrives in M8).
 - [ ] Telas Fire, Sapper Sharpers + Cusser, Sandstorm, Zealot passives all work.
