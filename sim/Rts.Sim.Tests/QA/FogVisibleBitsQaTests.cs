@@ -18,6 +18,7 @@ namespace Rts.Sim.Tests.QA;
 /// next or not, resumes to the same hash on every later tick; and every flipped visible bit moves the hash. Plus the
 /// <c>AddToHash</c> cost on a 1024 map.
 /// </summary>
+[Collection(SerialCollection.Name)]
 public class FogVisibleBitsQaTests
 {
     private const int PerSide = 40;
