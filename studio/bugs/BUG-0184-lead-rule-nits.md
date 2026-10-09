@@ -41,3 +41,8 @@
   stepped this tick".
 - **Item 2** is a note for M4-V3 (projectile views). It is not a sim change: interpolating `PrevPosition` to `Position`
   already draws whatever the sim does.
+
+## QA note (2026-10-08-1435, M4-3a)
+Item 1 (the boundary) is fixed in 977db1d: `ProjectileSystem.WithinLead` tests the step against the lead speed with a
+1e-4 relative slack, and `QA/ProjectileLeadQaTests.Lead_AStepOfExactlyTheLeadSpeed_IsLedInEveryHeading` is un-skipped
+and passes (QA ran it). Item 2 (a re-led bolt's step, the view's interpolation note) is unchanged; the bug stays open for it.
