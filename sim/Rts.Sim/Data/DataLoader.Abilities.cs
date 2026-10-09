@@ -110,11 +110,15 @@ public static partial class DataLoader
         List<AbilityEffectJson?>? list = c.Obj(a.Effects, p + ".effects");
         if (list != null && list.Count == 0) c.Error(p + ".effects", $"ability '{a.Id}' has no effects");
         var effects = ImmutableArray.CreateBuilder<AbilityEffect>(list?.Count ?? 0);
+        bool hitsBuildings = false;
         for (int e = 0; list != null && e < list.Count; e++)
         {
             string q = $"{p}.effects[{e}]";
             AbilityEffectJson? x = c.Obj(list[e], q);
-            if (x != null) effects.Add(BuildEffect(c, x, q, table, statuses, statusKeys));
+            if (x == null) continue;
+            AbilityEffect fx = BuildEffect(c, x, q, a.Id, affects, table, statuses, statusKeys);
+            hitsBuildings |= fx.Buildings;
+            effects.Add(fx);
         }
         return new AbilityDef
         {
@@ -131,15 +135,19 @@ public static partial class DataLoader
             DurationTicks = a.Duration == null ? 0 : c.Ticks(a.Duration, p + ".duration", 0),
             Affects = (AbilityAffects)Math.Max(affects, 0),
             Effects = effects.ToImmutable(),
+            HitsBuildings = hitsBuildings,
         };
     }
 
     /// <summary>
-    /// One effect (M4-4a): <c>damage {type, amount}</c> (amount a whole number, at least 1) or <c>applyStatus {status,
+    /// One effect (M4-4a): <c>damage {type, amount, buildings?, friendlyFire?}</c> (amount a whole number, at least 1;
+    /// M4-4b-1: <c>buildings</c> true reaches other players' buildings, not with <c>own_units</c>; <c>friendlyFire</c> 0-1, above
+    /// 0 only with <c>enemy_units</c>) or <c>applyStatus {status,
     /// magnitude, duration}</c> (a damage-over-time status takes a whole magnitude of at least 1, damage per second; a slow
-    /// one a fraction above 0 and below 1; duration seconds, at least a tick). A field the kind doesn't use is an error.
+    /// one a fraction above 0 and below 1; duration seconds, at least a tick, and for damage over time a whole number of seconds,
+    /// at least 1, M4-4b-1). A field the kind doesn't use is an error.
     /// </summary>
-    private static AbilityEffect BuildEffect(Checker c, AbilityEffectJson x, string q, DamageTable? table, StatusDef[]? statuses, string[]? statusKeys)
+    private static AbilityEffect BuildEffect(Checker c, AbilityEffectJson x, string q, string? ability, int affects, DamageTable? table, StatusDef[]? statuses, string[]? statusKeys)
     {
         int kind = KindOf(c, x.Kind, q + ".kind", DataLimits.AbilityEffectKindIds, DataLimits.PlannedAbilityEffectKindIds);
         if (kind < 0) return new AbilityEffect { Kind = AbilityEffectKind.Damage, DamageType = -1, Status = -1 };
@@ -149,16 +157,41 @@ public static partial class DataLoader
             if (x.Status != null) Unused(c, q + ".status", name);
             if (x.Magnitude != null) Unused(c, q + ".magnitude", name);
             if (x.Duration != null) Unused(c, q + ".duration", name);
+            double friendly = 0;
+            if (x.FriendlyFire != null)
+            {
+                friendly = x.FriendlyFire.Value;
+                if (!(friendly >= 0 && friendly <= 1))
+                {
+                    c.Error(q + ".friendlyFire", $"{friendly} is outside 0-1 (the fraction of the hit the caster's own units take)");
+                    friendly = 0;
+                }
+                else if (friendly > 0 && affects >= 0 && affects != (int)AbilityAffects.EnemyUnits)
+                {
+                    c.Error(q + ".friendlyFire", $"ability '{ability}' affects '{DataLimits.AbilityAffectsIds[affects]}', which already takes the caster's own units in full");
+                    friendly = 0;
+                }
+            }
+            bool buildings = x.Buildings == true;
+            if (buildings && affects == (int)AbilityAffects.OwnUnits)
+            {
+                c.Error(q + ".buildings", $"ability '{ability}' affects only own units; 'buildings' reaches only other players' buildings");
+                buildings = false;
+            }
             return new AbilityEffect
             {
                 Kind = AbilityEffectKind.Damage,
                 DamageType = c.Ref(table?.DamageTypeKeys, x.Type, q + ".type", "damage type"),
                 Amount = c.Int(x.Amount, q + ".amount", 1),
                 Status = -1,
+                Buildings = buildings,
+                FriendlyFire = (float)friendly,
             };
         }
         if (x.Type != null) Unused(c, q + ".type", name);
         if (x.Amount != null) Unused(c, q + ".amount", name);
+        if (x.Buildings != null) Unused(c, q + ".buildings", name);
+        if (x.FriendlyFire != null) Unused(c, q + ".friendlyFire", name);
         int status = -1;
         if (x.Status == null) c.Error(q + ".status", "missing required field");
         else if (statusKeys != null)
@@ -185,13 +218,21 @@ public static partial class DataLoader
                 magnitude = 0;
             }
         }
+        int duration = c.Ticks(x.Duration, q + ".duration", 1);
+        // M4-4b-1 (docs/01): damage over time pulses once a whole second, so a fraction of a second would land nothing.
+        if (status >= 0 && duration > 0 && statuses![status].Kind == StatusKind.DamageOverTime
+            && (x.Duration!.Value < 1 || x.Duration.Value != Math.Floor(x.Duration.Value)))
+        {
+            c.Error(q + ".duration", $"{x.Duration} s is not a whole number of seconds, at least 1 (damage over time '{x.Status}' pulses once a second)");
+            duration = 0;
+        }
         return new AbilityEffect
         {
             Kind = AbilityEffectKind.ApplyStatus,
             DamageType = -1,
             Status = status,
             Magnitude = (float)magnitude,
-            DurationTicks = c.Ticks(x.Duration, q + ".duration", 1),
+            DurationTicks = duration,
         };
     }
 

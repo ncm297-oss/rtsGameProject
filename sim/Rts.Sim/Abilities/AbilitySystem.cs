@@ -17,7 +17,8 @@ namespace Rts.Sim.Abilities;
 /// dropped with no cooldown. Casting, it stands (<see cref="UnitState.Casting"/>: planted, no scans, its queue waits) for
 /// <see cref="AbilityDef.CastTicks"/> ticks counting the tick it starts; any new order cancels the cast with no cooldown.
 /// On the last tick the effects land on every unit whose center is within <see cref="AbilityDef.Radius"/> of the point and
-/// that <see cref="AbilityDef.Affects"/> allows (never a building), the cooldown starts, and the caster stands Idle.
+/// that <see cref="AbilityDef.Affects"/> allows (M4-4b-1: and other players' buildings, and own units at a fraction, for a
+/// damage effect that says so), the cooldown starts (with the owner's <c>abilityCooldown</c> techs), and the caster stands Idle.
 /// </remarks>
 public static class AbilitySystem
 {
@@ -97,10 +98,22 @@ public static class AbilitySystem
             u.CasterCount--;
             u.CastPoint[i] = default;
             u.State[i] = UnitState.Idle;
-            u.AbilityReadyTick[i * DataLimits.MaxUnitAbilities + slot] = world.TickNumber + a.CooldownTicks;
+            u.AbilityReadyTick[i * DataLimits.MaxUnitAbilities + slot] = world.TickNumber + CooldownOf(world, i, a);
             world.RecordAbilityEvent(new AbilityEvent(caster, u.Owner[i], a.Id, point, true));
             Resolve(world, caster, u.Owner[i], a, point);
         }
+    }
+
+    /// <summary>
+    /// The cooldown <paramref name="a"/> starts for unit slot <paramref name="i"/> (M4-4b-1): its own ticks plus its owner's
+    /// <see cref="TechStat.AbilityCooldown"/> bonus for its type (negative shortens it), at least 1 tick. Read at the resolve,
+    /// so a tech finishing while a cooldown runs changes the next one, not that one.
+    /// </summary>
+    internal static int CooldownOf(World world, int i, AbilityDef a)
+    {
+        UnitStore u = world.Units;
+        float bonus = world.Techs.Bonus(u.Owner[i], u.TypeId[i], TechStat.AbilityCooldown);
+        return Math.Max(1, a.CooldownTicks + (int)MathF.Round(bonus, MidpointRounding.AwayFromZero));
     }
 
     /// <summary>The ability unit slot <paramref name="i"/> is casting (its <see cref="UnitStore.CastAbility"/> entry of its type's list).</summary>
@@ -129,8 +142,12 @@ public static class AbilitySystem
 
     /// <summary>
     /// The effects of <paramref name="a"/> cast by <paramref name="owner"/>'s <paramref name="caster"/> at
-    /// <paramref name="point"/>: on each unit in the radius that <see cref="AbilityDef.Affects"/> allows, every effect in
-    /// order. A damage effect is a hit through <see cref="DamageCalc"/> (a unit it kills takes no later effect).
+    /// <paramref name="point"/>: on each unit in the radius, in hash order, every effect in file order, where
+    /// <see cref="AbilityDef.Affects"/> allows the unit or (M4-4b-1) the effect is a damage effect with friendly fire and the
+    /// unit is the caster owner's; then each other player's building whose footprint is within the radius, in slot order,
+    /// takes every damage effect with <see cref="AbilityEffect.Buildings"/>. A damage effect is one hit through
+    /// <see cref="DamageCalc"/> with no falloff (an own unit's scaled by the friendly-fire fraction, rounded like splash); a
+    /// unit it kills takes no later effect.
     /// </summary>
     private static void Resolve(World world, EntityHandle caster, int owner, AbilityDef a, Vector2 point)
     {
@@ -144,19 +161,39 @@ public static class AbilitySystem
             int j = found[e];
             if (!u.Alive[j] || Vector2.DistanceSquared(u.Position[j], point) > r2) continue;
             bool own = u.Owner[j] == owner;
-            if (a.Affects == AbilityAffects.EnemyUnits ? own : a.Affects == AbilityAffects.OwnUnits && !own) continue;
+            bool affected = a.Affects == AbilityAffects.EnemyUnits ? !own : a.Affects != AbilityAffects.OwnUnits || own;
             EntityHandle victim = new(j, u.Generation[j]);
             foreach (AbilityEffect fx in a.Effects)
             {
                 if (!u.IsAlive(victim)) break;
                 if (fx.Kind == AbilityEffectKind.Damage)
                 {
+                    // Friendly fire only reaches own units an enemy_units ability passes over (the loader refuses it elsewhere).
+                    float factor = affected ? 1f : own && fx.FriendlyFire > 0f ? fx.FriendlyFire : 0f;
+                    if (factor <= 0f) continue;
                     UnitDef vdef = data.Units[u.TypeId[j]];
                     int armor = vdef.Armor + DamageCalc.Points(world.Techs.Bonus(u.Owner[j], u.TypeId[j], TechStat.Armor));
-                    int damage = DamageCalc.Compute(data.DamageTable, fx.DamageType, vdef.ArmorClass, fx.Amount, 1f, armor);
+                    int damage = ProjectileSystem.Scale(DamageCalc.Compute(data.DamageTable, fx.DamageType, vdef.ArmorClass, fx.Amount, 1f, armor), factor);
                     CombatSystem.HitUnit(world, new PendingHit(caster, owner, victim, false, damage));
                 }
-                else StatusSystem.Apply(world, j, fx.Status, fx.Magnitude, fx.DurationTicks, owner);
+                else if (affected) StatusSystem.Apply(world, j, fx.Status, fx.Magnitude, fx.DurationTicks, owner);
+            }
+        }
+        if (!a.HitsBuildings || world.StructureClass < 0) return;
+        BuildingStore b = world.Buildings;
+        ReadOnlySpan<bool> alive = b.Alive;
+        for (int j = 0; j < alive.Length; j++)
+        {
+            // Never an own building (docs/02 "Splash and friendly fire").
+            if (!alive[j] || b.Owner[j] == owner || CombatSystem.BuildingDistanceSquared(world, j, point) > r2) continue;
+            EntityHandle victim = b.HandleOf(j);
+            int armor = data.Buildings[b.TypeId[j]].Armor;
+            foreach (AbilityEffect fx in a.Effects)
+            {
+                if (!b.IsAlive(victim)) break;
+                if (fx.Kind != AbilityEffectKind.Damage || !fx.Buildings) continue;
+                int damage = DamageCalc.Compute(data.DamageTable, fx.DamageType, world.StructureClass, fx.Amount, 1f, armor);
+                CombatSystem.HitBuilding(world, new PendingHit(caster, owner, victim, true, damage));
             }
         }
     }

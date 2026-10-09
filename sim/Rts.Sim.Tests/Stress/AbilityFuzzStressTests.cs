@@ -15,12 +15,14 @@ namespace Rts.Sim.Tests.Stress;
 /// (in and out of range, queued, any ability index, dead and recycled casters, other players' units, points off the map
 /// and NaN) mixed with Moves and attack-moves. Twins hash-equal after every tick; every status is a known id with ticks
 /// left on a live unit; no unit carries a cast it has no ability for; casts resolved and statuses ticked; the recorded
-/// replay round-trips and plays back equal.
+/// replay round-trips and plays back equal. M4-4b-1: Sappers on both sides throw the Cusser (friendly fire, enemy
+/// buildings) among four Keeps a side, some casts aimed at a building.
 /// </summary>
 public class AbilityFuzzStressTests
 {
     private const int Ticks = 2000;
     private const int PerSide = 40;
+    private const int SappersPerSide = 6;
     private readonly ITestOutputHelper _out;
 
     public AbilityFuzzStressTests(ITestOutputHelper output) => _out = output;
@@ -30,7 +32,7 @@ public class AbilityFuzzStressTests
 
     private static Simulation NewSim(ulong seed, ReplayRecorder?[] recorder)
     {
-        var sim = new Simulation(TestSim.Config(Seed: seed, PlayerCount: 2, UnitCapacity: 2 * PerSide, CommandCapacity: 16 * PerSide + 64));
+        var sim = new Simulation(TestSim.Config(Seed: seed, PlayerCount: 2, UnitCapacity: 2 * (PerSide + SappersPerSide), CommandCapacity: 16 * PerSide + 128));
         if (recorder.Length > 0) recorder[0] = new ReplayRecorder(sim, checkpointInterval: 50);
         NavGrid g = sim.World.NavGrid;
         List<int> open = Open(g);
@@ -41,6 +43,21 @@ public class AbilityFuzzStressTests
                 int c = open[rng.NextInt(0, open.Count)];
                 int type = TestSim.Data.FindUnit((side == 0 ? Army0 : Army1)[rng.NextInt(0, 4)]);
                 sim.Enqueue(Command.SpawnUnit(side, type, g.CellCenter(c % g.Width, c / g.Width)));
+            }
+        // M4-4b-1: Sappers and Keeps from their own stream, so the armies above are the M4-4a ones.
+        var extra = new SimRng(seed, 173);
+        for (int k = 0; k < SappersPerSide; k++)
+            for (int side = 0; side < 2; side++)
+            {
+                int c = open[extra.NextInt(0, open.Count)];
+                sim.Enqueue(Command.SpawnUnit(side, TestSim.Data.FindUnit("malazan_sapper"), g.CellCenter(c % g.Width, c / g.Width)));
+            }
+        for (int k = 0; k < 4; k++)
+            for (int side = 0; side < 2; side++)
+            {
+                int c = open[extra.NextInt(0, open.Count)];
+                int keep = TestSim.Data.FindBuilding(side == 0 ? "malazan_garrison_keep" : "whirlwind_holy_camp");
+                sim.Enqueue(Command.SpawnBuilding(side, keep, g.CellCenter(c % g.Width, c / g.Width)));
             }
         return sim;
     }
@@ -74,6 +91,11 @@ public class AbilityFuzzStressTests
             int shape = rng.NextInt(0, 12);
             if (shape == 0) point = new Vector2(-10f, point.Y);                       // off the map
             else if (shape == 1) point = new Vector2(float.NaN, point.Y);              // garbage
+            else if (shape == 6 && sim.World.Buildings.Count > 0)
+            {
+                int j = rng.NextInt(0, sim.World.Buildings.Capacity);
+                if (sim.World.Buildings.Alive[j]) point = Combat.CombatSystem.BuildingCentre(sim.World, j) + new Vector2(rng.NextFloat() * 8f - 4f, 0f);
+            }
             else if (shape <= 5 && u.Alive[h.Index]) point = u.Position[h.Index] + new Vector2(rng.NextFloat() * 20f - 10f, rng.NextFloat() * 20f - 10f); // near: often in range
             int index = rng.NextInt(0, 8) == 0 ? rng.NextInt(-1, 5) : 0;
             bool queued = rng.NextInt(0, 4) == 0;
@@ -100,7 +122,8 @@ public class AbilityFuzzStressTests
         var rngB = new SimRng(seed, 172);
         var seenA = new List<EntityHandle>();
         var seenB = new List<EntityHandle>();
-        int starts = 0, resolves = 0, statusTicks = 0;
+        int starts = 0, resolves = 0, statusTicks = 0, cussers = 0;
+        int cusser = w.Data.FindAbility("cusser");
         for (int t = 0; t < Ticks; t++)
         {
             if (t % 5 == 3)
@@ -112,7 +135,10 @@ public class AbilityFuzzStressTests
             b.Tick();
             Assert.True(a.StateHash() == b.StateHash(), $"seed {seed}: twins differ after tick {t}");
             foreach (AbilityEvent e in w.AbilityEvents)
+            {
                 if (e.Resolved) resolves++; else starts++;
+                if (e.Resolved && e.Ability == cusser) cussers++;
+            }
             int casters = 0, withStatuses = 0;
             for (int i = 0; i < u.Capacity; i++)
             {
@@ -137,9 +163,10 @@ public class AbilityFuzzStressTests
             // The phase skips' counters match the stores.
             Assert.True(casters == u.CasterCount && withStatuses == s.UnitsWithStatuses, $"seed {seed} tick {t}: counters {u.CasterCount}/{s.UnitsWithStatuses}, actual {casters}/{withStatuses}");
         }
-        _out.WriteLine($"seed {seed}: cast starts {starts}, resolves {resolves}, status-ticks {statusTicks}, kills {w.Kills[0]}/{w.Kills[1]}");
+        _out.WriteLine($"seed {seed}: cast starts {starts}, resolves {resolves} ({cussers} Cussers), buildings left {w.Buildings.Count}, status-ticks {statusTicks}, kills {w.Kills[0]}/{w.Kills[1]}");
         Assert.True(resolves > 5, $"only {resolves} casts resolved");
         Assert.True(statusTicks > 0, "nobody burned");
+        Assert.True(cussers > 3, $"only {cussers} Cussers resolved");
         Replay replay = rec[0]!.ToReplay();
         Assert.Equal(ReplayError.None, ReplayFormat.TryRead(ReplayFormat.Write(replay), out Replay? back));
         ReplayResult result = ReplayPlayer.Run(back!, TestSim.Data);

@@ -13,6 +13,20 @@
       "effects": [
         { "kind": "applyStatus", "status": "burning", "magnitude": 10, "duration": 4 }
       ]
+    },
+    {
+      "id": "cusser",
+      "displayName": "Cusser",
+      "description": "Throws a Moranth munition: 120 siege damage to enemy units and buildings in the area. Your own units in the blast take half, the Sapper too.",
+      "kind": "targetGround",
+      "range": 6,
+      "radius": 3.5,
+      "castTime": 1.0,
+      "cooldown": 45,
+      "affects": "enemy_units",
+      "effects": [
+        { "kind": "damage", "type": "siege", "amount": 120, "buildings": true, "friendlyFire": 0.5 }
+      ]
     }
   ]
 }

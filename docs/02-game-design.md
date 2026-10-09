@@ -206,7 +206,9 @@ cooldown but **no mana**.
 
 Each ability is data: `kind, range, radius, castTime, cooldown, duration, effects[]`. Effects are a
 small fixed vocabulary: `damage`, `applyStatus`, `createZone`, `teleport`, `spawn`. New abilities
-combine these; a new effect type is a code change and needs a design reason.
+combine these; a new effect type is a code change and needs a design reason. A `damage` effect
+says per effect whether it also reaches enemy buildings and what fraction of it the caster's own
+units take (friendly fire; never own buildings), e.g. the Cusser.
 
 Casting: the player selects the ability (hotkey or button), then clicks a target. If several
 casters are selected, only the one nearest the target casts. Abilities flagged `autocast` can be

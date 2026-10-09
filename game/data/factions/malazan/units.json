@@ -145,7 +145,8 @@
       "trainTime": 20,
       "trainedAt": "malazan_engineers_yard",
       "requires": ["age_ii"],
-      "tags": ["infantry", "biological"]
+      "tags": ["infantry", "biological"],
+      "abilities": ["cusser"]
     }
   ]
 }

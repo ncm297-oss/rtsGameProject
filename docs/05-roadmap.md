@@ -476,11 +476,27 @@ ten-minute playtest (STATE "For your review", M3-V3 entry) stands as feedback, n
       `StatusPulseClockQaTests`, `AbilityInvariantFuzzStressTests` (4 seeds x 2,000, 3 players, twins equal),
       `AbilityScalePerfTests` (0.004-0.02 ms a tick, 0 B). **Still owed:** zones (incl. Darkness / Sandstorm vision
       blockers), summons, self / aura, autocast, the `abilityCooldown` tech effect (M4-4b). Open: BUG-0302 (S4).)_
+      _(Slice 2a **accepted in session 2026-10-09-1155, sim M4-4b-1** (0 fix rounds): the `abilityCooldown` tech effect
+      applied at the resolve (`max(1, CooldownTicks + round(bonus))`; a tech landing mid-cooldown changes the next one),
+      the `damage` effect's `buildings` (other players' buildings whose footprint is within the radius, as `structure`;
+      never own) and `friendlyFire` (0-1, own units incl. the caster, scaled like splash), no falloff on abilities, the
+      DoT whole-seconds loader rule; golden `data-hash` 41842085985611BF. QA full: `CusserQaTests`, `CusserLoaderQaTests`,
+      `CusserThreePlayerFuzzStressTests`. **View half (M4-V6a, same session):** the card's ability row (Q W E R, tooltip,
+      cooldown seconds), targeting with the range ring + radius circle, one `UseAbility` per click from the nearest ready
+      caster (`ViewApi.AbilityCaster`), Shift queues, the cast bar + cast-point rings; `AbilityViewTest.tscn`, QA's
+      `QaV6aTest`. **Still owed:** zones (Darkness / Sandstorm vision blockers), Blinded, summons, self / aura, autocast
+      (M4-4b-2 / -3); status markers + the resolve flash on screen (M4-V6b). Open: BUG-0330 (S3, sim, pre-existing),
+      BUG-0340 / 0342 (S4, view).)_
 - [ ] Stealth and detection system (tested now, even though Shadow arrives in M8).
 - [ ] Telas Fire, Sapper Sharpers + Cusser, Sandstorm, Zealot passives all work.
       _(Telas Fire works since M4-4a (session 2026-10-09-0724): 16 m / 3 m / 0.8 s cast / 25 s cooldown, Burning 10 magic a
       second for 4 s on enemy units only (40 on Light, 52 on Heavy / Giant: magic x1.25 per pulse), no effect on buildings.
       The other three need slice 2 (zones for Sandstorm; passives / Cusser's launch rule) and the data track's D10 content.)_
+      _(**The Cusser works since M4-4b-1** (session 2026-10-09-1155): 6 m / 3.5 m / 1.0 s cast / 45 s cooldown (30 s after
+      Moranth Supply), 120 siege in the circle with no falloff: 355 to a Town Hall at its footprint edge, 60 - armor to a
+      Light unit, own units in the blast (the Sapper too) take half, own buildings never. The page row is on the data
+      track's pin list (D10a's allowance; D10b pins it fully, BUG-0350). Sandstorm needs zones + Blinded (M4-4b-2); the
+      Zealot passives need passives (M4-4b-3); Sharpers is the Sapper's normal attack (M4-2b).)_
 - [x] Scenario tests for the counter triangle (Line beats Shock, Shock beats Ranged, Ranged beats
       Light, Siege beats buildings).
       _(Ticked in session 2026-10-08-0913, task M4-2b: `Scenario/CounterTriangleTests`, equal-cost groups attack-moved

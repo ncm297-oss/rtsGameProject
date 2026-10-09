@@ -4,36 +4,37 @@ The dashboard. The Producer rewrites it at the end of every session. **Owner: re
 you" first.** "For your review" (further down) is non-blocking: what the studio built or decided
 on its own, explained in terms of what you'd see in the game.
 
-_Last updated: 2026-10-09 (session 2026-10-09-0724, all three tracks accepted): **the first ability is in the rules** (the sim's M4-4a: the Cadre Mage's Telas Fire burns enemy units in a 3 m circle for 4 s; Burning and Slowed statuses; hidden enemies no longer block your build ghost), **remembered enemy buildings stay on screen as dark ghosts and you can right-click one to attack it** (the view's M4-V5, which completes M4 criterion 5), **D-H1** (the data track's first clean-up: two bugs closed, the towers' text pinned to their numbers, no number changed). M4 is **6 / 10**. The ability has no button yet (the view's next task); until then only tests cast it. Still wanted: your balance answer (D6 entry)._
+_Last updated: 2026-10-09 (session 2026-10-09-1155, all three tracks accepted): **you can cast from the window now** (the view's M4-V6a: select a Cadre Mage, press Q or the "Telas Fire" button, a ring and a circle appear, click, the nearest ready mage walks up and casts with a cast bar), **the Cusser is in the rules** (the sim's M4-4b-1: the Sapper's satchel charge hits enemy buildings for 355 and your own units in the blast for half; Moranth Supply shortens ability cooldowns), **D10a** (every ability's and status's page row is pinned to the data; nothing numeric changed). M4 is **6 / 10**. Weekly usage reached 94 % of the 95 % stop: the studio pauses itself until 2026-10-10 02:00, then resumes at normal task sizes. Still wanted: your balance answer (D6 entry)._
 
 ## Waiting on you
 
 - **Nothing blocking.** `main` is green once this session's three branches are integrated (sim → view → data, gated on the
-  non-Perf suite + the 35-scene loop + smoke); no open S1 / S2. The studio continues on its own.
+  non-Perf suite + the 37-scene loop + smoke); no open S1 / S2. The studio continues on its own after the usage reset
+  (2026-10-10 02:00 local).
 - **Wanted, not blocking:** (1) your answer on the **balance proposal** (the D6 entry under For your review; the data track
-  changes no number until you say); (2) the **session-lock window** (the process note under For your review); (3) **play
-  with the fog on** (the M4-V4 / M4-V5 entries: scout the enemy base, walk away, see their buildings stay as dark ghosts,
-  right-click one), and the M3 base / fight entries if you haven't; write what felt wrong in the inbox.
+  changes no number until you say); (2) the **session-lock window** (the process note under For your review); (3) **cast a
+  spell** (the M4-V6a entry: select a Cadre Mage, Q, click on enemies) and **play with the fog on** (the M4-V4 / M4-V5
+  entries); write what felt wrong in the inbox.
 
 ## Now
 
 | Field | Value |
 | --- | --- |
-| Sim: milestone | **M4 combat, 6 / 10**: M4-1 melee, M4-2a (`Attack(target)`), M4-2b (projectiles, splash, friendly fire, the counter-triangle rows), M4-3a fog + M4-H1, M4-3b (towers, the last-known list, explored placement), **M4-4a on `main` with this integration** (BUG-0280; `statuses.json` / `abilities.json` schema, `Command.UseAbility`, `AbilitySystem` phase 6, `StatusStore` / `StatusSystem` phase 5, Telas Fire, `UnitState.Casting`, `World.AbilityEvents`) |
-| Sim: next task | **M4-4b, abilities slice 2**: zones (Darkness / Sandstorm as vision blockers and status areas), summons, self / aura, autocast, the `abilityCooldown` tech effect, the whole-seconds DoT loader rule, BUG-0311 only if it touches the vision rules · feature · QA full |
+| Sim: milestone | **M4 combat, 6 / 10**: M4-1 melee, M4-2a (`Attack(target)`), M4-2b (projectiles, splash, friendly fire, the counter-triangle rows), M4-3a fog + M4-H1, M4-3b (towers, the last-known list, explored placement), M4-4a (statuses, abilities, Telas Fire), **M4-4b-1 on `main` with this integration** (the `abilityCooldown` tech effect at the resolve, the `damage` effect's `buildings` / `friendlyFire`, the DoT whole-seconds rule, the Cusser from data) |
+| Sim: next task | **M4-4b-2, abilities slice 2b**: zones (`createZone`: a timed area applying its status every tick, Darkness / Sandstorm as per-player vision blockers the vision pass honours, `ZoneStore` hashed), the Blinded status (sight 2 m, acquire / attack ≤ 3 m), Sandstorm shipped from `whirlwind/abilities.json`; BUG-0311 only if the vision rules are touched · feature · QA full · normal size after the usage reset |
 | Sim: gate | **GO** |
-| View: milestone | **M4 views**: M4-V1 (hp bars, flashes, corpses, K / L), M4-V2 (Attack order, red ring, "Pursuing"), M4-V3 (streaks, lob stones, marks), M4-VH1, M4-V4 (the fog on screen), **M4-V5 on `main` with this integration** (ghosts of remembered buildings, right-click a ghost = Attack, "Unexplored" row, the seed-21 replay re-recorded) · **criterion 5 complete** |
-| View: next task | **M4-V6, ability feedback**: the command card's ability button (hotkey, cooldown sweep) + the targeting circle (range / radius from the data), "Only the nearest selected caster casts", a cast bar / `states.casting` label (the text key exists), Burning / Slowed markers from `Units.Statuses`, cast / resolve flashes from `World.AbilityEvents`; BUG-0310 if a few lines · feature · QA standard |
+| View: milestone | **M4 views**: M4-V1 (hp bars, flashes, corpses, K / L), M4-V2 (Attack order), M4-V3 (shots), M4-VH1, M4-V4 (the fog on screen), M4-V5 (ghosts), **M4-V6a on `main` with this integration** (the card's ability row Q W E R with cooldown seconds, targeting rings, one cast per click from the nearest ready caster, Shift queues, the cast bar, `ViewApi.AbilityCaster`) |
+| View: next task | **M4-V6b, ability feedback part 2**: Burning / Slowed markers over units from `Units.Statuses`, the cast / resolve flash from `World.AbilityEvents`, the Cusser's button on the Sapper works as-is (data-driven; verify in the test scene), BUG-0342 (cast bar readability, Shift + click stays armed), BUG-0310 (ghost flash), BUG-0340 + the `Minimap.cs` string lookup · feature · QA standard |
 | View: gate | **GO** |
-| Data: milestone | M3 Done (D1-D4); D5 (targets), D6 (the balance report, proposal under For your review), D7 (Sight pinned), D8 (every page cell pinned), **D-H1 on `main` with this integration** (BUG-0290 / 0090 closed, the towers' text pinned both ways, `Content/PageTables.cs`); nothing numeric changed since M3 |
-| Data: next task | **D9**: the towers' Attack / Detector columns on both faction pages + pins both ways (schema on `main` since M4-3b) · feature · QA light · the owner's inbox answer on the balance proposal first if present · then D10 (abilities content against the M4-4a schema) |
+| Data: milestone | M3 Done (D1-D4); D5-D8, D-H1, **D10a on `main` with this integration** (`Content/AbilityContentTests`: every loaded ability's page row and every status name pinned both ways, with a landed-allowance for Cusser / Sandstorm; the Duration column on the Malazan page); D9 dropped (Producer decision); nothing numeric changed since M3 |
+| Data: next task | **D10b**: BUG-0350 (the Cusser row pinned fully now that `buildings` / `friendlyFire` load: drop it from the allowance), BUG-0351, the statuses' `description` review, the Cusser's text review (a wording change is a request to the sim's next task, or data-only if the sim is off `abilities.json`) · feature · QA light · the owner's inbox answer on the balance proposal first if present |
 | Data: gate | **GO** |
 | Tools on this PC | Godot 4.7.2 .NET, .NET SDK 8.0.425, Git 2.53 + LFS 3.7; `GODOT` user variable set |
-| Build | All three session branches 0 warnings. **Integration (this session): sim db39a28 → view 0dd8952 → data 62e52f7**; the only merge conflicts are the record files `studio/bugs/README.md` and `studio/qa/coverage.md` (keep both sides). QA's scratch merge sim + view (r2): non-Perf 4,258 / 11 skipped / 0 failed, GatherWedge 3 / 3, smoke PASS; r1 on the sim branch: **full suite incl. Perf 4,392 / 14 / 0**, merged scene loop 36 / 36. Golden `data-hash` moved once (M4-4a: `statuses.json` + `abilities.json` in `ContentHash`, every `k` line equal, 7E04011FC88881F3); the view's re-recorded seed-21 replay is whitelisted for it |
-| Tests | Producer (targeted, beside the other tracks): sim 434 / 2 / 0, view 909 / 1 / 0, data Content + DataValidation 262 / 262; builds 0 warnings. QA: sim abilities 500 units + 100 statuses + 20 casts / s 0.0044 ms a tick, 0 B; hostile 3-player cast fuzz 4 seeds x 2,000 twins equal; view ghost fuzz 2 seeds x 3,000 both players 0 mismatches, 0 B at 1,990 units; data printed tables byte-identical. Thin Perf margins to watch (pass alone): `EmptyTick(2500)` < 3 %, `TightBlob2500` 4.52 of 4.6 ms |
-| Open bugs | **S1: 0, S2: 0** (BUG-0300 / 0303 filed and fixed in the sim's fix rounds), S3: 15, S4: 15 (by the index). **Fixed this session:** BUG-0280 / 0273 / 0301 (S3), BUG-0090 / 0290 (S4), BUG-0302 a + d. **New open:** BUG-0311 (S3, sim: an Attack on a gone building's ghost ends ~1 m before the fog shows the ground, the ghost stays), BUG-0310 (S3, view: a ghost flashes 1-3 ticks over a building killed in sight), BUG-0302 b + c (S4, sim nits) |
-| Sessions today | 2 / 8 on 2026-10-09 (0125, 0724 done). Feature sessions since last hardening: **sim 2 / 4, view 2 / 4, data 0 / 4** |
-| Last session | 2026-10-09-0724 · sim M4-4a (feature, 2 fix rounds, ACCEPT) · view M4-V5 (feature, 0 fix rounds, ACCEPT, criterion 5 complete) · data D-H1 (hardening, 0 fix rounds, ACCEPT) · M4 6 / 10 · Telas Fire is in the rules, ghosts are on screen |
+| Build | All three session branches 0 warnings. **Integration (this session): sim 1b63697 → view 3511873 → data 9c21324**; expected conflicts only in `studio/bugs/README.md` and `studio/qa/coverage.md` (keep both sides) and possibly docs/03 / docs/01 (append both). Sim branch: non-Perf 4,282 / 11 skipped / 0 failed, Perf alone 145 / 3 / 0, smoke PASS. View branch (r1): non-Perf 4,279 / 11 / 0, scene loop 37 / 37, smoke PASS. Data branch: non-Perf 4,292 / 11 / 0. Golden `data-hash` moved once (M4-4b-1, the Cusser: 7E04011FC88881F3 → 41842085985611BF, every `k` line equal; in `SameGameDataHashes`) |
+| Tests | Producer (usage-capped, targeted): the data track's `AbilityContentTests` on a scratch tree of the sim branch + the data test files **24 / 24** (the real Cusser lands green under the allowance); diffs read in full. QA: sim 3-player Cusser fuzz 3 seeds x 2,000 twins equal, building scan 0 B, Perf alone `EmptyTick(2500)` 476 µs of 500 and `TightBlob2500` 4.48 of 4.6 ms (thin, pass alone); view 520-click spam one command each, `_Process` 0 B after BUG-0341, oracle fuzz 4 seeds x 1,500 twins equal; data 9 def mutants + 15 page mutants caught by name |
+| Open bugs | **S1: 0, S2: 0** (BUG-0341 filed and fixed in the view's fix round), S3: 18, S4: 18 (by the index). **New open:** BUG-0330 (S3, sim, pre-existing: the per-tick death list is sized for units only; more unit + building deaths than unit slots in one tick throw), BUG-0350 (S3, data: the Cusser row can't leave the pin allowance), BUG-0340 / 0342 (S4, view), BUG-0351 (S4, data) |
+| Sessions today | 3 / 8 on 2026-10-09 (0125, 0724, 1155 done). Feature sessions since last hardening: **sim 3 / 4, view 3 / 4, data 1 / 4** (the next session is the fourth for sim and view: feature; the one after is their hardening) |
+| Last session | 2026-10-09-1155 · sim M4-4b-1 (feature, 0 fix rounds, ACCEPT) · view M4-V6a (feature, 1 fix round, ACCEPT) · data D10a (feature, 0 fix rounds, ACCEPT) · M4 6 / 10 · the Cusser is in the rules, spells are castable from the window |
 
 ## Milestone progress
 
@@ -43,7 +44,7 @@ _Last updated: 2026-10-09 (session 2026-10-09-0724, all three tracks accepted): 
 | M1 (sim track) | 8 / 8 | **Done** 2026-10-06 (Producer sign-off after the M1-9 hardening; retro in docs/05) |
 | M2 (view track) | 10 / 10 | **Done** 2026-10-07 (Producer sign-off after the M2-H2 hardening; retro in docs/05; your playtest under For your review is feedback, not a gate) |
 | M3 (all three tracks) | 8 / 8 | **Done** 2026-10-08 (Producer sign-off after every track's hardening and the BUG-0146 fix; retro in docs/05; open S3 / S4 listed there; your ten-minute playtest is still wanted as feedback) |
-| M4 (sim + view + data) | **6 / 10** (1 attack / attack-move / chase / retaliation / priorities, sim + view; 2 damage formula; 3 projectiles / splash / friendly fire; 4 death, corpses, rubble; **5 fog: rules, screen, towers, remembered buildings drawn as ghosts (M4-V5, this session)**; the counter-triangle rows). Then 6 abilities (slice 1 landed: M4-4a; zones / summons / self-aura / autocast in M4-4b), 7 stealth (M4-5), 8 the four signature abilities (Telas Fire works; the other three need slice 2 + D10), 10 the fog-on sandbox Playable | In progress |
+| M4 (sim + view + data) | **6 / 10** (1 attack / attack-move / chase / retaliation / priorities, sim + view; 2 damage formula; 3 projectiles / splash / friendly fire; 4 death, corpses, rubble; 5 fog: rules, screen, towers, ghosts; the counter-triangle rows). Then 6 abilities (slices M4-4a + M4-4b-1 landed and castable from the window since M4-V6a; **zones / Blinded (M4-4b-2), summons / self-aura / autocast (M4-4b-3), status markers on screen (M4-V6b) still owed**), 7 stealth (M4-5), 8 the four signature abilities (**Telas Fire and the Cusser work**; Sandstorm needs zones, the Zealot passives need passives), 10 the fog-on sandbox Playable | In progress |
 | M5-M9 | — | Planned |
 
 ## For your review
@@ -51,6 +52,104 @@ _Last updated: 2026-10-09 (session 2026-10-09-0724, all three tracks accepted): 
 Non-blocking. Each entry says what was built or decided, what you'd notice in the game, and how
 to change it. To change anything, write it in `studio/inbox.md`, for example "use formations
 instead of clusters" or "make giving up take 2 seconds".
+
+### You can cast a spell from the window: select a Cadre Mage, press Q, click, and the nearest ready mage walks up and sets the ground ablaze (view track, M4-V6a, 2026-10-09)
+
+**What was built.** The command card now shows a unit's abilities as buttons (Q, W, E, R from left to right), with a
+tooltip that says what the spell does and its range, area and cooldown in metres and seconds. Press the button (or Q)
+and the game enters targeting: a pale-blue ring shows the reach of the mage that would cast, an orange circle under
+your cursor shows where the fire will land. Left-click sends exactly one cast, from the selected mage nearest the click
+that is ready (not on cooldown). The mage walks into range if it has to, stands still with a violet cast bar filling over
+its head, and the enemies in the circle start burning. Right-click or Esc cancels targeting. Shift + click queues the
+cast after the mage's current orders.
+
+**What you'll see.** Start a match, select a Cadre Mage (the Malazan caster; train one at the Mage Cadre once you're in
+Age II, or use the test scene `game/tests/AbilityViewTest.tscn`). The card's top row has a "Telas Fire" button with a Q
+in the corner. Press Q: the ring and circle appear. Click on a knot of enemies: the mage casts (about a second), the
+"Casting" label shows in the panel, and the enemies burn for 4 seconds. The button goes dim and counts down "25 s"
+until the mage can cast again. With two mages selected, the ready one casts; with both on cooldown nothing is sent and
+the button shows the shortest wait. While a mage walks to cast, a small orange ring sits on the spot it's heading for.
+The Sapper's new Cusser (next entry) gets its button the same way, since it's all read from the data.
+
+**Decisions made by the builder (Producer accepted; owner may revisit).** (a) With a mixed selection, the card shows
+the abilities of the unit type that is "active" (the one Tab cycles to), like its other buttons; Malazan mixes put the
+Cadre Mage first, so Q works without Tab. (b) Clicking an enemy's body while targeting aims at that enemy's position
+(no "homing"; the spell lands where it stood). (c) Only your own units show the walking-to-cast ring. (d) A targeting
+click always leaves targeting mode, even when no mage could cast (nothing is sent). (e) The rings are flat painted
+rings on the ground until the art pass (M6).
+
+**Rough edges.** BUG-0342 (S4): early in a cast the cast bar reads as an empty black dash (hard to tell it's started),
+and Shift + click leaves targeting after one queued cast instead of staying armed for several; fixed in the next view
+task (M4-V6b). BUG-0340 (S4, older): a small memory allocation when the selection panel's "+N" overflow count changes,
+and one more when you right-click the minimap with Shift held; harmless, same fix round. Burning / Slowed units have no
+marker over them yet, and there's no flash where a spell lands: that is M4-V6b (next session).
+
+**How to change it.** The hotkey letters come from `game/data/common/ui.json` (the card grid); the ring colours and
+widths are constants in `game/scripts/AbilityViews.cs` (an inbox note like "make the area circle red" is enough). The
+rules in (a)-(d) change with an inbox note.
+
+### The Cusser is in the rules: the Sapper's satchel charge now blasts enemy buildings and units, and your own troops in the blast take half; Moranth Supply shortens ability cooldowns (sim track, M4-4b-1, 2026-10-09)
+
+**What was built.** The second signature ability from the Malazan page works from data: the Sapper throws a Cusser 6 m
+with a 3.5 m blast, 1 s to throw, 45 s cooldown, 120 siege damage with no falloff (everything inside the circle takes
+the full hit, unlike a catapult's splash). It is the first ability that hurts buildings (a Town Hall at the edge of the
+circle takes 355 of its hit points, as the page promised) and the first with friendly fire: your own units in the
+blast, the Sapper included, take half. Your own buildings are never hurt. Two general rules came with it: the
+`abilityCooldown` effect that Moranth Supply (and Dryjhna's Prophecy) already carried in the tech data now actually
+shortens ability cooldowns (Cusser 45 s → 30 s), and a damage-over-time spell's duration must be whole seconds (a
+fraction would deal nothing, since burning ticks once a second), checked when the data loads.
+
+**What you'll see.** Nothing in the window until the view's next task adds the Cusser's button to the Sapper's card
+(the button system is data-driven, so it should appear as soon as both land together; the view will verify). In the
+rules: a Sapper told to cast on an enemy Town Hall walks to 6 m, stands for a second, and the hall loses 355 hp; a Light
+unit in the circle loses 60 minus its armour; your own Heavy infantry standing next to the target loses 44; a Sapper that
+throws at its own feet hurts itself for 30. A Sapper caught in its own blast dies if low enough, and it counts as your
+loss and your kill at once. After researching Moranth Supply, the next Cusser is ready in 30 s instead of 45.
+
+**Producer decisions (owner may revisit).** (a) No falloff on abilities: an area spell is exact to its radius (docs/01
+row; splash from catapults keeps its falloff). (b) A tech finishing while a cooldown is already running doesn't shorten
+that one, only the next (simplest; the player rarely notices). (c) Friendly fire is per damage effect and only allowed
+on "enemy units" abilities; a "buildings" flag is refused on "own units" abilities (two load-time checks beyond the
+brief; they catch nonsense data early). (d) Durations of damage-over-time spells must be whole seconds (from 0724).
+
+**Player-facing text added (data).** Cusser, "Throws a Moranth munition: 120 siege damage to enemy units and buildings
+in the area. Your own units in the blast take half, the Sapper too." ("Moranth" is a Malazan codename; the pre-release
+rename pass is data-only.)
+
+**Rough edges.** BUG-0330 (S3, older than this task): the per-tick death list is sized for units only, so a single tick
+in which every unit slot dies *and* a building dies would crash; needs an extreme fight (every unit on the map dying in
+the same tick) and goes to the sim's next hardening. docs/02's "Splash and friendly fire" still says "allied and own
+units" though the game has no alliances yet (wording only).
+
+**How to change it.** All the Cusser's numbers are in `game/data/factions/malazan/abilities.json` (`range`, `radius`,
+`castTime`, `cooldown`, `amount`, `friendlyFire` 0-1, `buildings` true / false); the Moranth Supply bonus is in
+`malazan/techs.json`. An inbox note like "friendly fire should be 100 %" is enough.
+
+### The abilities' and statuses' names and numbers are pinned to their design pages, so a drifting number fails a test by name; nothing numeric changed (data track, D10a, 2026-10-09)
+
+**What was built.** A test now reads the "Abilities" table on each faction page and checks every loaded ability against
+the data, cell by cell: the unit it belongs to, kind, range, radius, cast time, cooldown, duration, and the numbers in
+the effect text ("10 magic damage/s for 4 s", "Enemy units", "No effect on buildings"). The same for statuses: the names
+Burning and Slowed must appear in the design doc's status table with the matching effect wording. Rows the game can't
+load yet (Cusser's page row until this session, Sandstorm, and the Stealthed / Revealed / Frenzied / Regenerating /
+Blinded statuses) sit on a named allowance list; when one lands, the test reports it so the list shrinks. The Malazan
+page's Abilities table gained a "Duration" column ("—" for both rows) so both faction pages share one header.
+
+**What changed in the data.** Nothing: no number, no text, no file under `game/data/`.
+
+**Telas Fire's text as shipped (reviewed against the page, no change proposed):** "Telas Fire", "Sets the ground
+ablaze: enemy units in the area burn for 10 magic damage a second for 4 seconds. Buildings are unharmed." Burning:
+"Takes magic damage every second until the flames die down." Slowed: "Moves more slowly for a while."
+
+**Rough edges.** BUG-0350 (S3): the check expects "No effect on buildings" and "Enemy units"-first wording, so the Cusser's
+row (which hurts buildings and has friendly fire) can't yet leave the allowance; its numbers are reported, not enforced,
+until the next data task (D10b) teaches the check the Cusser's phrasing. BUG-0351 (S4): the builder skipped the review
+table (this entry replaces it) and one mismatch message reads oddly ("lacks the unit 's'"). The Producer dropped **D9**
+(separate Attack / Detector columns for the towers): the pages' Provides text already carries those numbers and they are
+pinned both ways since D-H1; nothing you can't read today.
+
+**How to change it.** Edit the page row or the data file; the test names whichever disagrees. Text or number requests go
+in the inbox as before.
 
 ### The first spell is in the rules: a Cadre Mage can set the ground ablaze with Telas Fire, and statuses (Burning, Slowed) exist; hidden enemies no longer block your build ghost (sim track, M4-4a, 2026-10-09)
 
@@ -2517,11 +2616,15 @@ track right after S1/S2 bugs).
 8. ~~BUG-0280 first (Requests 25), then M4-4 slice 1~~ → **done as M4-4a** (session 2026-10-09-0724, 2 fix rounds: BUG-0300 /
    0303 S2 (the `ui.json` line, the replay whitelist), BUG-0301 S3 (the pulse clock), BUG-0302 a + d; BUG-0302 b + c S4 left;
    golden `data-hash` moved once, `k` lines identical).
-9. **Next: M4-4b, abilities slice 2**, QA full: zones (`createZone`: a timed area that applies its status every tick to units
-   inside and, for Darkness / Sandstorm, marks a per-player vision-blocker mask the vision pass honours), summons (`spawn`),
-   `selfAura` / `targetUnit` kinds, `autocast`, the `abilityCooldown` tech effect wired, the whole-seconds DoT loader rule
-   (Producer decision 0724); BUG-0311 only if the vision rules are touched. Then M4-5 stealth / detection (the `detector` field is
-   stored already; BUG-0311 first), the four signature abilities (data track content, D10), the fog-on sandbox Playable.
+9. ~~M4-4b-1 the `abilityCooldown` tech effect + the DoT whole-seconds rule + the Cusser (`damage` `buildings` / `friendlyFire`)~~ →
+   **done** (session 2026-10-09-1155, 0 fix rounds, half-size under the usage cap; BUG-0330 S3 pre-existing filed; golden
+   `data-hash` moved once, `k` lines identical, 41842085985611BF in `SameGameDataHashes`).
+10. **Next: M4-4b-2, abilities slice 2b**, QA full: zones (`createZone`: a timed area that applies its status every tick to
+    units inside and, for Darkness / Sandstorm, marks a per-player vision-blocker mask the vision pass honours; `ZoneStore`
+    hashed), the Blinded status (sight 2 m, acquire / attack ≤ 3 m), Sandstorm shipped from `whirlwind/abilities.json` with
+    its `affects` (non-Whirlwind units), `World.Zones` read-only for the view; BUG-0311 only if the vision rules are touched.
+    Then M4-4b-3 (summons `spawn`, `selfAura` / `targetUnit`, `autocast`, passives for the Zealot), the sim's hardening
+    (counter 3 / 4 → due after the next feature session), M4-5 stealth / detection (BUG-0311 first), the fog-on sandbox Playable.
 4. M6 (far ahead): agents can't download. **Owner note 2026-10-08: the art direction is grounded / realistic
    (Quaternius Universal Base Characters + Modular Outfits + Universal Animation Library 1 / 2, Mixamo packs for gaps;
    KayKit a fallback only; docs/04 and docs/01 updated by the owner), and the packs are already in `asset-sources/`
@@ -2551,11 +2654,14 @@ track right after S1/S2 bugs).
    left; ghosts shipped as a hook only).
 8. ~~M4-V5 ghosts drawn, right-click a ghost, the "Unexplored" row, BUG-0273~~ → **done** (session 2026-10-09-0724, 0 fix
    rounds; criterion 5 complete; BUG-0310 S3 (view) and BUG-0311 S3 (sim) filed; BUG-0281 item 3 not reached).
-9. **Next: M4-V6 ability feedback**, QA standard (Requests 26): the command card's ability button (hotkey, cooldown sweep,
-   `Data.Abilities` text), the targeting circle (range + radius), "only the nearest selected caster casts" (docs/02), a cast
-   bar / the "Casting" label, Burning / Slowed markers over units from `Units.Statuses`, cast / resolve flashes from
-   `World.AbilityEvents`, a test scene; BUG-0310 if a few lines. Then stealth visuals (M4-5), zone visuals (after M4-4b), the
-   fog-on sandbox Playable.
+9. ~~M4-V6a the card's ability row, targeting rings, one cast per click from the nearest ready caster, the cast bar~~ → **done**
+   (session 2026-10-09-1155, 1 fix round: BUG-0341 S2 the `order_queue` string lookup; `ViewApi.AbilityCaster`,
+   `AbilityViews`, `AbilityViewTest.tscn`, QA's `QaV6aTest`; BUG-0340 / 0342 S4 left; item 5 not reached).
+10. **Next: M4-V6b ability feedback part 2**, QA standard: Burning / Slowed markers over units from `Units.Statuses`
+    (fog-gated like bars), the cast / resolve flash from `World.AbilityEvents`, the Cusser's button on the Sapper verified
+    in the test scene (W or Q by the card's row order), BUG-0342 (cast bar readability; Shift + click stays armed), BUG-0310
+    (ghost flash), BUG-0340 + the `Minimap.cs:198` string lookup. Then the view's hardening (counter 3 / 4 → due after the
+    next feature session), zone visuals (after M4-4b-2), stealth visuals (M4-5), the fog-on sandbox Playable.
 
 ## Feature queue: data track (feature sessions, in order; owner reviews every landed task)
 
@@ -2576,17 +2682,26 @@ track right after S1/S2 bugs).
    a new "Winner hp left" column on both pages; BUG-0290 S4 left; nothing numeric changed). Data's counter is 4 / 4.
 9. ~~D-H1, the first data hardening~~ → **done** (session 2026-10-09-0724, 0 fix rounds, QA PASS: BUG-0290 / 0090 fixed,
    `Content/PageTables.cs`, no number / text / `data-hash` change). Data's counter is 0 / 4.
-10. **Next: D9**, QA light: the towers' Attack / Detector columns on both faction pages (`docs/factions/*.md` Buildings tables)
-    + `BuildingContentTests` pins both ways (schema on `main` since M4-3b; the K rows from D-H1 cover the text). **An inbox
-    answer on the balance proposal comes first.**
-11. Then: **D10** abilities content against the M4-4a schema (Requests 26: `targetGround` + `damage` / `applyStatus` only until
-    M4-4b; an "Abilities" table on both pages pinned to `abilities.json`; Telas Fire's text review; Sharpers / Cusser /
-    Sandstorm / Zealot passives as soon as their kinds load), `statuses.json` text, the full balance pass (QA standard) once the
-    fog-on sandbox gives numbers (incl. the +15 % crowd income from the BUG-0146 fix), `ai.json` build orders (M5), M7-M9
-    faction data.
+10. ~~D9 the towers' Attack / Detector columns~~ → **dropped** (Producer decision, session 2026-10-09-1155 PLAN: the pages'
+    Provides text carries both numbers and D-H1 pinned them both ways; owner may revisit).
+11. ~~D10a every loaded ability's page row + every status name pinned both ways, the landed-allowance, the Duration column~~ →
+    **done** (session 2026-10-09-1155, 0 fix rounds; BUG-0350 S3 + BUG-0351 S4 left; no number / text / `data-hash` change).
+12. **Next: D10b**, QA light: BUG-0350 (the Cusser row pinned fully: `damage` amount / type, "full damage to buildings" ↔
+    `buildings`, "friendly fire at 50%" ↔ `friendlyFire` 0.5, drop it from `PendingAbilities`), BUG-0351 (the message; the
+    review table in the report), the statuses' `description` review and the Cusser's text review (a wording change is a
+    data-only edit if the sim is off `malazan/abilities.json` that session, else a request). **An inbox answer on the balance
+    proposal comes first.** Then Sandstorm's row after M4-4b-2, `whirlwind/abilities.json` text review, the full balance pass
+    (QA standard) once the fog-on sandbox gives numbers (incl. the +15 % crowd income from the BUG-0146 fix), `ai.json` build
+    orders (M5), M7-M9 faction data.
 
-## Debt backlog: sim track (hardening sessions only; the next one after 4 feature sessions, counter 2 / 4)
+## Debt backlog: sim track (hardening sessions only; the next one after 4 feature sessions, counter 3 / 4)
 
+- **BUG-0330 (S3, M4-4b-1 QA, pre-existing):** the per-tick death list (`World.RecordDeath`) is sized `UnitCapacity` but
+  buildings record deaths in it too, so more unit + building deaths than unit slots in one tick throw `IndexOutOfRange`
+  (needs every unit slot dying in one tick; a skipped regression row in `CusserQaTests`). Fix: size it units + buildings.
+- **Docs wording (M4-4b-1 QA note):** docs/02 "Splash and friendly fire" says "allied and own units"; the sim has no
+  alliances. Drop "allied" or keep it for M5's alliances; one line at the next hardening.
+- ~~Producer decision (0724) for M4-4b: the DoT whole-seconds rule~~ → landed in M4-4b-1 (docs/01 row 2026-10-09).
 - **BUG-0311 (S3, M4-V5 QA; Requests 27):** an Attack on a gone building's ghost ends ~1 m before the fog shows a footprint
   cell (`UnitSeesFootprint` measures to the rectangle's nearest point, the fog by cell centres), so the ghost stays 19-26 s
   and a new Attack is refused. Fix: end the order on `fog.SeesFootprint`. First item of M4-5 (stealth touches the vision
@@ -2722,8 +2837,15 @@ track right after S1/S2 bugs).
   recorded but not checked; no depletion events (views poll); .NET 8 support ends 2026-11-10, move
   to the next LTS at M6.
 
-## Debt backlog: view track (hardening sessions only; the next one after 4 feature sessions, counter 2 / 4)
+## Debt backlog: view track (hardening sessions only; the next one after 4 feature sessions, counter 3 / 4)
 
+- **BUG-0342 (S4, M4-V6a QA):** the cast bar reads as an empty black dash early in a cast (the back box hides the fill);
+  Shift + click disarms targeting after one queued cast instead of staying armed. Planned in M4-V6b (touches the same code).
+- **BUG-0340 (S4, M4-V6a QA, pre-existing):** `SelectionPanel.cs` ~389 allocates a "+N" string (~56 B) when the overflow
+  count changes; `Minimap.cs:198` still uses `Input.IsActionPressed("order_queue")` with a string (96 B per minimap
+  right-click; the other sites were fixed in BUG-0341). Planned in M4-V6b if a few lines, else the view's hardening.
+- ~~BUG-0341 (S2, M4-V6a QA)~~ fixed in the session's fix round (a cached `StringName OrderQueue` in `AbilityViews`,
+  `SelectionController`, `CommandCard`; `QaV6aTest` 0 B rows).
 - **BUG-0310 (S3, M4-V5 QA):** a building destroyed (or a site cancelled) in plain sight is drawn as a ghost over visible ground
   for 1-3 ticks (deaths in phase 11, the sim's list updates every 4th tick); the target ring stays on it. Fix in
   `FogView.CollectGhosts`: skip an entry whose remembered footprint has a visible cell (then un-skip
@@ -2788,6 +2910,12 @@ track right after S1/S2 bugs).
 
 ## Debt backlog: data track
 
+- **BUG-0350 (S3, D10a QA):** `AbilityContentTests` hard-codes "No effect on buildings" and "Enemy units"-first wording, so
+  the Cusser's page row can never leave `PendingAbilities` (its numbers are reported, not pinned). Fix in **D10b** (next
+  data task, not a hardening item): parse "full damage to buildings" ↔ `Buildings`, "friendly fire at N%" ↔ `FriendlyFire`.
+- **BUG-0351 (S4, D10a QA):** the For your review table was not in the report (the Producer wrote the entry); a Duration
+  mismatch against "—" reads "lacks the unit 's'". D10b.
+- Data counter 1 / 4 after D10a. D9 dropped (Producer decision, session 2026-10-09-1155 PLAN).
 - ~~BUG-0090 (S4)~~ **closed in D-H1** (session 2026-10-09-0724): the last item, the towers' shooting / detection text, is pinned
   both ways to `BuildingDef.Attack` / `Detector` by `BuildingContentTests` K / K2 / K3 (5 / 5 mutations caught). ~~BUG-0290
   (S4)~~ fixed in D-H1 (compare by column name, header + stale cells reported, "rows not checked" on a lost key column;
@@ -2817,6 +2945,7 @@ track right after S1/S2 bugs).
 
 | Date | Session | Task | Result |
 | --- | --- | --- | --- |
+| 2026-10-09 | [2026-10-09-1155](sessions/2026-10-09-1155.md) | sim M4-4b-1: `AbilitySystem.CooldownOf` (the `abilityCooldown` tech bonus at the resolve, floor 1 tick), the `damage` effect's `buildings` (other players' buildings whose footprint is within the radius via `CombatSystem.BuildingDistanceSquared`, as `structure`, through `HitBuilding`; never own) and `friendlyFire` (0-1, own units incl. the caster, `ProjectileSystem.Scale`), no falloff, the DoT whole-seconds loader rule + two extra loader rules, `cusser` in `malazan/abilities.json` + the Sapper's `abilities`, `ContentHash` extended, golden `data-hash` → 41842085985611BF; view M4-V6a: `ViewApi.AbilityCaster` (nearest ready caster pick, busy rule, `SoonestReady`, `Progress`), `AbilityViews` (range ring, radius circle, fog-gated cast bars, cast-point rings), the card's ability row (Q W E R, tooltip, "N s" dimmed), targeting in `SelectionController` (one `UseAbility` per click, Shift queues, Esc / right-click cancel), `ui.json` hud keys, `AbilityViewTest.tscn`; fix round: BUG-0341 (cached `StringName`); data D10a: `Content/AbilityContentTests` (24) + `PageTables.NamedTable`, every loaded ability's page row and every status name pinned both ways, `PendingAbilities` / `PendingStatuses` allowances, the Duration column on malazan.md, no data change | **all three ACCEPT**: sim 0 fix rounds (PASS_WITH_ISSUES: BUG-0330 S3 pre-existing), view 1 (FAIL → PASS_WITH_ISSUES: BUG-0340 / 0342 S4), data 0 (PASS_WITH_ISSUES: BUG-0350 S3, BUG-0351 S4). Half-size tasks under the 94 % usage cap; Producer verification targeted (the data pins on a scratch tree with the real Cusser 24 / 24). Integration sim → view → data. **M4 6 / 10 (criteria 6 and 8 advanced); the Cusser in the rules, spells castable from the window; no open S1 / S2** |
 | 2026-10-09 | [2026-10-09-0724](sessions/2026-10-09-0724.md) | sim M4-4a: BUG-0280 (`CanPlace` ignores hidden enemy units; a Build onto one is dropped on apply), `common/statuses.json` (`damageOverTime` / `slow`; `burning`, `slowed`) + `factions/malazan/abilities.json` (`telas_fire`) + the Cadre Mage's `abilities`, `UnitDef.Abilities` (max 4), `Command.UseAbility` (kind 17, format 4 unchanged), `AbilitySystem` phase 6 (walk then cast, `UnitState.Casting` planted, any order cancels free, cooldown from the resolve, resolve through the spatial hash by `affects`), `StatusStore` (8 per unit, hashed under bit 18, pulse clock per entry) + `StatusSystem` phase 5 (DoT pulses once a second through `DamageCalc`, slows recompute `Speed`), `World.AbilityEvents`; fix rounds: BUG-0300 (the `ui.json` `states.casting` line, cross-track, allowed), BUG-0301 (`PulseTicks`), BUG-0303 (the M4-4a hash in `GatherWedgeQaTests`); view M4-V5: `FogView.CollectGhosts` / `GhostShown` / `Ghosts` / `GhostHandle`, `BuildingPicker.PickGhostRay`, `BuildingViews` ghost pool (owner colour x 0.4, no bar), right-click / A + click on a ghost = Attack on the remembered handle, the "Unexplored" hover row, the seed-21 replay re-recorded (BUG-0273, 12,131 checkpoints), `QaGhostViewTest.tscn`; data D-H1: BUG-0290 (compare by column name), BUG-0090 closed (tower text pinned both ways, K / K2 / K3), `Content/PageTables.cs`, no number / text change | **all three ACCEPT**: sim 2 fix rounds (QA FAIL → FAIL → PASS_WITH_ISSUES; BUG-0302 b + c S4 open), view 0 (PASS_WITH_ISSUES: BUG-0310 S3 view, BUG-0311 S3 → sim), data 0 (PASS). Integration sim → view → data; QA's scratch merge sim + view non-Perf 4,258 / 0 failed, smoke PASS, loop 36 / 36; sim branch full suite incl. Perf 4,392 / 0. **M4 6 / 10 (criterion 5 complete); Telas Fire in the rules; no open S1 / S2** |
 | 2026-10-09 | [2026-10-09-0125](sessions/2026-10-09-0125.md) | sim M4-3b: `buildings.json` `attack` / `detector` schema + both towers' values, `TowerSystem` (phases 7 / 10: scan by the unit priority, never a building, the building as the vision viewer, a led aimed shot from the footprint centre, Ranged Weapons reaches towers, no retaliation / reveal on a tower's hit), `Fog.Ghosts` (one last-known entry per enemy building slot, hashed; an Attack on a remembered-but-unseen building accepted, ends when the ground is seen empty), `PlacementError.Unexplored`; fix round: BUG-0276 (two Perf rows' setup), BUG-0274 (five view scenes, fixed on the view branch); view M4-V4: `FogOfWar` + `ViewApi.FogView` (R8 fog texture per update, three shaders black / 40 % dark + desaturated / clear), units / buildings / bars / shots / marks hidden by the fog, picks only on what is drawn, the minimap's fog layer + Attack on a visible dot, `--no-fog` (7 scenes), `placement.unexplored` "Unexplored", `FogViewTest.tscn` + QA's `QaFogViewTest`; data D8: `CounterTriangleMarginsTests` on the shared `CounterTriangleScene`, every page cell pinned (a new "Winner hp left" column), the Lancer seat-1 time 21.5 → 22.0 s (BUG-0243), the Ages anchor on the file's lines (BUG-0260) | **all three ACCEPT**: sim 1 fix round (QA FAIL → PASS_WITH_ISSUES; BUG-0270 / 0273 S3, BUG-0271 / 0272 / 0275 S4 open), view 1 conductor-dispatched round for the sim's BUG-0274 (PASS_WITH_ISSUES: BUG-0280 S3 → sim, BUG-0281 S4), data 0 (PASS_WITH_ISSUES: BUG-0290 S4). **Sim + view integrate together** (the sim alone fails smoke on the view's `ui.json` key); merged full suite incl. Perf 4,313 / 0 failed, loop 35 / 35. **M4 5 / 10; criterion 5 owes only the ghost drawing (M4-V5); no open S1 / S2** |
 | 2026-10-08/09 | [2026-10-08-2144](sessions/2026-10-08-2144.md) | sim M4-H1 hardening: the fog's visible bits packed and hashed (BUG-0215, golden regen once with the proof), the seed-21 replay re-recorded and checked on all 11,541 ticks (BUG-0211), BUG-0216's four nits, the public `Scenario/CounterTriangleScene` harness (BUG-0230 item 2), `UnitStore.ChasePrev` (BUG-0149: a new target is a fresh chase), `CheckAnyOfReachable` honours `researchedAt` / `trainedAt` (BUG-0134), van der Corput leftover radii (BUG-0133), medians in the blob-scan Perf row (BUG-0158), wrong-type load messages (BUG-0113 item 1); view BUG-0219 first (one commit, +5), then M4-VH1 hardening: `WallClock.Wait` + `SfxTest` on the wall clock with 8x regression rows (BUG-0220), `TerrainHeight.MaxUnder` three step bands (BUG-0226), the lob off-line restart (BUG-0222), the unseen-target Attack sweep, the rally-forest check (BUG-0148 item 3), the double-Cancel guard (BUG-0126 item 4), dot-refresh rows best of three batches, docs/03 "Build and export" corrected; data D7: a Sight column on both pages pinned both ways (`BuildingContentTests` J-J5), docs/02's 12 m / 24 m sentence, BUG-0230 items 1 and 3, BUG-0090's tower item, the BUG-0240 spotter line | **all three ACCEPT**, 0 fix rounds each (PASS_WITH_ISSUES x3: sim BUG-0241 S3 pre-existing + BUG-0243 S3 → data + BUG-0242 S4; view BUG-0251 S3 flake + BUG-0250 S4; data BUG-0260 S4). The common base was red on two rows (BUG-0219 view, BUG-0240 data), both fixed; **integration view → data → sim** so every pushed `main` is green; QA's scratch integration 4,041 / 0 failed, loop 33 / 33. **The fog lands on `main`; M4 5 / 10; no open S1 / S2** |

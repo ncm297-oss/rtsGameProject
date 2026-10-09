@@ -38,7 +38,7 @@ public class AbilityLoaderTests
     public void Shipped_TelasFire_MatchesTheFactionPage_AndTheCadreMageHasIt()
     {
         GameData d = TestSim.Data;
-        Assert.Single(d.Abilities);
+        Assert.Equal(2, d.Abilities.Length); // telas_fire, cusser (M4-4b-1)
         AbilityDef a = d.Abilities[d.FindAbility("telas_fire")];
         Assert.Equal(d.FindFaction("malazan"), a.Faction);
         Assert.Equal(AbilityKind.TargetGround, a.Kind);
@@ -56,8 +56,9 @@ public class AbilityLoaderTests
         Assert.Equal(80, e.DurationTicks); // 4 s
         UnitDef mage = d.Units[d.FindUnit("malazan_cadre_mage")];
         Assert.Equal(new[] { a.Id }, mage.Abilities.ToArray());
+        int sapper = d.FindUnit("malazan_sapper");
         foreach (UnitDef u in d.Units)
-            if (u.Id != mage.Id) Assert.True(u.Abilities.IsEmpty, $"{u.Key} has abilities");
+            if (u.Id != mage.Id && u.Id != sapper) Assert.True(u.Abilities.IsEmpty, $"{u.Key} has abilities");
     }
 
     [Fact]
@@ -67,6 +68,7 @@ public class AbilityLoaderTests
         using TestDataDir dir = TestDataDir.CopyOfShipped();
         File.Delete(dir.FullPath(Abilities));
         dir.EditJson(MalazanUnits, root => root["units"]![UnitIndex("malazan", "malazan_cadre_mage")]!.AsObject().Remove("abilities"));
+        dir.EditJson(MalazanUnits, root => root["units"]![UnitIndex("malazan", "malazan_sapper")]!.AsObject().Remove("abilities"));
         DataLoadResult r = DataLoader.LoadAll(dir.Path);
         Assert.True(r.Ok, string.Join("\n", r.Errors));
         Assert.Empty(r.Data!.Abilities);
@@ -160,5 +162,70 @@ public class AbilityLoaderTests
         using TestDataDir dir = TestDataDir.CopyOfShipped();
         File.WriteAllText(dir.FullPath("factions/whirlwind/abilities.json"), File.ReadAllText(dir.FullPath(Abilities)));
         AssertErrorAt(DataLoader.LoadAll(dir.Path), "factions/whirlwind/abilities.json", "abilities[0].id", "duplicate ability id");
+    }
+
+    /// <summary>M4-4b-1: a damage-over-time duration is a whole number of seconds, at least 1; a slow's isn't held to it.</summary>
+    [Theory]
+    [InlineData(2.5, false)]
+    [InlineData(0.5, false)]
+    [InlineData(0.0, false)]
+    [InlineData(1.0, true)]
+    [InlineData(4.0, true)]
+    public void ADamageOverTimeDuration_MustBeWholeSecondsAtLeastOne(double seconds, bool ok)
+    {
+        DataLoadResult r = LoadWith(a => a["effects"]![0]!["duration"] = seconds);
+        if (ok)
+        {
+            Assert.True(r.Ok, string.Join("\n", r.Errors));
+            Assert.Equal((int)(seconds * 20), r.Data!.Abilities[r.Data.FindAbility("telas_fire")].Effects[0].DurationTicks);
+        }
+        else AssertErrorAt(r, Abilities, "abilities[0].effects[0].duration");
+        if (seconds is 2.5 or 0.5) AssertErrorAt(r, Abilities, "abilities[0].effects[0].duration", "whole number of seconds");
+    }
+
+    [Fact]
+    public void ASlowsDuration_MayBeAFractionOfASecond()
+    {
+        DataLoadResult r = LoadWith(a => { a["effects"]![0]!["status"] = "slowed"; a["effects"]![0]!["magnitude"] = 0.3; a["effects"]![0]!["duration"] = 2.5; });
+        Assert.True(r.Ok, string.Join("\n", r.Errors));
+        Assert.Equal(50, r.Data!.Abilities[r.Data.FindAbility("telas_fire")].Effects[0].DurationTicks);
+    }
+
+    /// <summary>M4-4b-1: the Cusser as docs/factions/malazan.md "Abilities" gives it, on the Sapper.</summary>
+    [Fact]
+    public void Shipped_Cusser_MatchesTheFactionPage_AndTheSapperHasIt()
+    {
+        GameData d = TestSim.Data;
+        AbilityDef a = d.Abilities[d.FindAbility("cusser")];
+        Assert.Equal((AbilityKind.TargetGround, 6f, 3.5f, 20, 900), (a.Kind, a.Range, a.Radius, a.CastTicks, a.CooldownTicks));
+        Assert.Equal(AbilityAffects.EnemyUnits, a.Affects);
+        Assert.True(a.HitsBuildings);
+        AbilityEffect e = Assert.Single(a.Effects);
+        Assert.Equal((AbilityEffectKind.Damage, d.DamageTable.DamageTypeKeys.IndexOf("siege"), 120, true, 0.5f),
+            (e.Kind, e.DamageType, e.Amount, e.Buildings, e.FriendlyFire));
+        Assert.Equal(new[] { a.Id }, d.Units[d.FindUnit("malazan_sapper")].Abilities.ToArray());
+        Assert.False(d.Abilities[d.FindAbility("telas_fire")].HitsBuildings);
+    }
+
+    /// <summary>M4-4b-1: <c>buildings</c> and <c>friendlyFire</c> belong to a damage effect; friendly fire is 0-1, and only on an <c>enemy_units</c> ability.</summary>
+    [Fact]
+    public void BuildingsAndFriendlyFire_AreCheckedPerKindAndRange()
+    {
+        AssertErrorAt(LoadWith(a => a["effects"]![0]!["buildings"] = true), Abilities, "abilities[0].effects[0].buildings", "no such field");
+        AssertErrorAt(LoadWith(a => a["effects"]![0]!["friendlyFire"] = 0.5), Abilities, "abilities[0].effects[0].friendlyFire", "no such field");
+        static JsonArray Damage(double ff) => new(new JsonObject { ["kind"] = "damage", ["type"] = "siege", ["amount"] = 120, ["friendlyFire"] = ff });
+        AssertErrorAt(LoadWith(a => a["effects"] = Damage(1.5)), Abilities, "abilities[0].effects[0].friendlyFire", "outside 0-1");
+        AssertErrorAt(LoadWith(a => a["effects"] = Damage(-0.1)), Abilities, "abilities[0].effects[0].friendlyFire", "outside 0-1");
+        foreach (double ok in new[] { 0.0, 1.0 })
+        {
+            DataLoadResult r = LoadWith(a => a["effects"] = Damage(ok));
+            Assert.True(r.Ok, string.Join("\n", r.Errors));
+        }
+        AssertErrorAt(LoadWith(a => { a["effects"] = Damage(0.5); a["affects"] = "all_units"; }), Abilities, "abilities[0].effects[0].friendlyFire", "already takes");
+        AssertErrorAt(LoadWith(a =>
+        {
+            a["affects"] = "own_units";
+            a["effects"] = new JsonArray(new JsonObject { ["kind"] = "damage", ["type"] = "siege", ["amount"] = 1, ["buildings"] = true });
+        }), Abilities, "abilities[0].effects[0].buildings", "only own units");
     }
 }
