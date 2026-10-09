@@ -44,6 +44,15 @@ public sealed class BuildingDef
     /// <see cref="RulesDef.BuildingSight"/>, resolved at load; 0 (sees nothing) in hand-built data.
     /// </summary>
     public float Sight { get; init; }
+    /// <summary>
+    /// The building's attack (M4-3b; the unit <c>attack</c> object, docs/02 "Buildings": the Watch Tower's), or null for a
+    /// building that never shoots. A finished building with one scans for enemy units and fires an aimed projectile from its
+    /// footprint's centre (<see cref="Combat.TowerSystem"/>); never at a building. The loader requires a range above 0 and an
+    /// aimed projectile, and refuses <c>targets: buildings</c>.
+    /// </summary>
+    public AttackDef? Attack { get; init; }
+    /// <summary>Detection radius in meters (M4-3b: <c>detector</c>, docs/02 "Stealth and detection"; above 0 and at most <see cref="DataLimits.MaxSight"/>); 0 for none. Stored only until stealth (M4-5).</summary>
+    public float Detector { get; init; }
     /// <summary>Tech / building ids it requires, as written (M3-5: every id exists, checked at load). Empty when none. Kept for tools; the sim reads <see cref="RequiresTechs"/> / <see cref="RequiresBuildings"/>.</summary>
     public ImmutableArray<string> Requires { get; init; } = ImmutableArray<string>.Empty;
     /// <summary><see cref="Requires"/>' tech ids, resolved at load (M3-6), ascending: each must be researched to place the building.</summary>

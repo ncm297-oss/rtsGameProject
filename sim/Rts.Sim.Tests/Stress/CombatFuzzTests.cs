@@ -176,7 +176,11 @@ public class CombatFuzzTests
                 if (u.Target[i] != default)
                 {
                     bool live = u.TargetIsBuilding[i] ? w.Buildings.IsAlive(u.Target[i]) : u.IsAlive(u.Target[i]);
-                    Assert.True(live, $"seed {seed} tick {ran}: unit {i} targets dead {(u.TargetIsBuilding[i] ? "building" : "unit")} {u.Target[i]}");
+                    // M4-3b: an ordered Attack holds a building its owner remembers (the last-known list) until the owner sees
+                    // its ground; gone meanwhile, the unit walks on to it but never swings at it.
+                    bool remembered = u.TargetIsBuilding[i] && u.Mode[i] == CombatMode.Ordered && w.Fog.HasGhost(u.Owner[i], u.Target[i]);
+                    Assert.True(live || remembered, $"seed {seed} tick {ran}: unit {i} targets dead {(u.TargetIsBuilding[i] ? "building" : "unit")} {u.Target[i]}");
+                    if (!live) Assert.True(u.State[i] != UnitState.Attacking && u.WindupTicks[i] == 0, $"seed {seed} tick {ran}: unit {i} swings at a gone building");
                 }
                 bool same = lastGen[i] == u.Generation[i] && !ordered[i];
                 bool attacking = u.State[i] == UnitState.Attacking;

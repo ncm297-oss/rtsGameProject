@@ -44,6 +44,9 @@ public sealed class BuildingStore
     private readonly int[] _progress;
     private readonly bool[] _hasRally;
     private readonly Vector2[] _rallyPosition;
+    private readonly EntityHandle[] _towerTarget;
+    private readonly int[] _towerCooldown;
+    private readonly int[] _towerWindup;
     private readonly int[] _freeList;
     private readonly NavGrid _grid;
     private readonly ImmutableArray<BuildingDef> _defs;
@@ -85,6 +88,9 @@ public sealed class BuildingStore
         _repairProgress = new long[capacity];
         _repairGold = new long[capacity];
         _repairWood = new long[capacity];
+        _towerTarget = new EntityHandle[capacity];
+        _towerCooldown = new int[capacity];
+        _towerWindup = new int[capacity];
         _freeList = new int[capacity];
         // Push in reverse so the first spawns take slots 0, 1, 2...
         for (int i = 0; i < capacity; i++)
@@ -165,6 +171,21 @@ public sealed class BuildingStore
 
     /// <summary>Each slot's rally point (x, z) in meters; zero without one.</summary>
     public ReadOnlySpan<Vector2> RallyPosition => _rallyPosition;
+
+    /// <summary>
+    /// Each slot's target unit (M4-3b, a building with an attack: <see cref="Combat.TowerSystem"/>); default for none. A
+    /// tower never targets a building. Read it to aim a tower's view; only the sim writes.
+    /// </summary>
+    public ReadOnlySpan<EntityHandle> TowerTarget => _towerTarget;
+
+    /// <summary>Writable tower state of a slot (M4-3b): its target unit.</summary>
+    internal EntityHandle[] TowerTargets => _towerTarget;
+
+    /// <summary>Writable tower state of a slot (M4-3b): ticks until it may start its next shot (counts down every tick).</summary>
+    internal int[] TowerCooldown => _towerCooldown;
+
+    /// <summary>Writable tower state of a slot (M4-3b): ticks left of the shot it is winding up (0: none); it fires at 0.</summary>
+    internal int[] TowerWindup => _towerWindup;
 
     /// <summary>The half-pop slot <paramref name="slot"/>'s started head item reserves (0 when nothing has started).</summary>
     public int ReservedHalfPop(int slot)
@@ -400,6 +421,9 @@ public sealed class BuildingStore
         _hp[index] = site ? 1 : def.Hp;
         _underConstruction[index] = site;
         _work[index] = 0;
+        _towerTarget[index] = default;
+        _towerCooldown[index] = 0;
+        _towerWindup[index] = 0;
         if (!site)
         {
             _ledger?.AddProvided(owner, def.HalfPopProvided);
@@ -453,6 +477,9 @@ public sealed class BuildingStore
         _repairProgress[index] = 0;
         _repairGold[index] = 0;
         _repairWood[index] = 0;
+        _towerTarget[index] = default;
+        _towerCooldown[index] = 0;
+        _towerWindup[index] = 0;
         _generation[index]++;
         _freeList[_freeCount++] = index;
         return true;
@@ -496,7 +523,8 @@ public sealed class BuildingStore
 
     /// <summary>
     /// Slot <paramref name="i"/>'s production summary: bit 0 a queue, bit 1 progress, bit 2 a rally, bit 3 a non-zero rally
-    /// point, bit 4 + k queue entry k non-zero, bit 9 + k queue entry k a tech (M3-5; the flag itself, no word follows).
+    /// point, bit 4 + k queue entry k non-zero, bit 9 + k queue entry k a tech (M3-5; the flag itself, no word follows), bit
+    /// 31 tower state (M4-3b: a target, a cooldown or a wind-up), so a building that never shot hashes as before.
     /// </summary>
     private uint ProductionBits(int i)
     {
@@ -511,6 +539,7 @@ public sealed class BuildingStore
             if (_queueTypeId[head + k] != 0) bits |= 16u << k;
             if (_queueIsTech[head + k]) bits |= (16u << EconomyConstants.ProductionQueueCapacity) << k;
         }
+        if (_towerTarget[i] != default || _towerCooldown[i] != 0 || _towerWindup[i] != 0) bits |= TowerBit;
         return bits;
     }
 
@@ -523,5 +552,15 @@ public sealed class BuildingStore
         int head = i * EconomyConstants.ProductionQueueCapacity;
         for (int k = 0; k < EconomyConstants.ProductionQueueCapacity; k++)
             if ((bits & (16u << k)) != 0) h.Add(_queueTypeId[head + k]);
+        if ((bits & TowerBit) != 0)
+        {
+            h.Add(_towerTarget[i].Index);
+            h.Add(_towerTarget[i].Generation);
+            h.Add(_towerCooldown[i]);
+            h.Add(_towerWindup[i]);
+        }
     }
+
+    /// <summary><see cref="ProductionBits"/>' flag for tower state (M4-3b), clear of the queue bits.</summary>
+    private const uint TowerBit = 1u << 31;
 }

@@ -71,7 +71,8 @@ public class PlacementTests
     [Fact]
     public void CostAndStoreLimits_GiveTheirReasons()
     {
-        var sim = new Simulation(TestSim.Config(Seed: 5, PlayerCount: 1, UnitCapacity: 8, CommandCapacity: 32) with { BuildingCapacity = 1 }, Flat(30, 20));
+        // M4-3b: explored (no unit of the player's stands there; the rows are about cost and the store).
+        var sim = TestSim.Explored(new Simulation(TestSim.Config(Seed: 5, PlayerCount: 1, UnitCapacity: 8, CommandCapacity: 32) with { BuildingCapacity = 1 }, Flat(30, 20)));
         Assert.Equal(PlacementError.CannotAfford, Reason(sim, 0, Keep, 3, 3)); // 275 / 275 against 200 / 200
         SetTotals(sim, 0, 1000, 49);
         Assert.Equal(PlacementError.CannotAfford, Reason(sim, 0, House, 3, 3)); // 0 / 50
@@ -79,6 +80,54 @@ public class PlacementTests
         Assert.Equal(PlacementError.None, Reason(sim, 0, House, 3, 3));
         Building(sim, 20, 10);
         Assert.Equal(PlacementError.StoreFull, Reason(sim, 0, House, 3, 3));
+    }
+
+    /// <summary>
+    /// M4-3b criterion 4: a footprint with any cell the player hasn't explored is <see cref="PlacementError.Unexplored"/>,
+    /// after the terrain rules and before the units in the way; a Build there is dropped (nothing paid, no site), and the
+    /// same spot is legal once explored.
+    /// </summary>
+    [Fact]
+    public void Unexplored_IsRefused_AfterTheTerrainRules_BeforeUnitsInTheWay_AndABuildThereIsDropped()
+    {
+        // Not explored up front: player 0's only eyes are a Laborer at (3, 8).
+        Simulation sim = new(TestSim.Config(Seed: 5, PlayerCount: 2, UnitCapacity: 32, CommandCapacity: 512), Terrain());
+        World w = sim.World;
+        NavGrid g = w.NavGrid;
+        EntityHandle worker = Unit(sim, At(sim, 3, 8));
+        Run(sim, 4); // past a fog update
+        Assert.Equal(PlacementError.None, Reason(sim, 0, House, 3, 3));
+        Assert.False(w.Fog.IsExplored(0, Cell(sim, 12, 3)));
+        Assert.Equal(PlacementError.Unexplored, Reason(sim, 0, House, 12, 3));
+        // A footprint with one cell explored and one not.
+        int straddle = -1;
+        for (int x = 1; x < 14 && straddle < 0; x++)
+            if (w.Fog.IsExplored(0, Cell(sim, x, 3)) && !w.Fog.IsExplored(0, Cell(sim, x + 1, 3))) straddle = x;
+        Assert.True(straddle > 0);
+        Assert.Equal(PlacementError.Unexplored, Reason(sim, 0, House, straddle, 3));
+        // Terrain first: an unexplored cliff, ramp or off-map footprint keeps its terrain reason.
+        Assert.False(w.Fog.IsExplored(0, Cell(sim, 15, 2)));
+        Assert.Equal(PlacementError.Blocked, Reason(sim, 0, House, 15, 2));  // cliff
+        Assert.Equal(PlacementError.Blocked, Reason(sim, 0, House, 14, 7));  // ramp
+        Assert.Equal(PlacementError.OffMap, Reason(sim, 0, House, 23, 3));
+        // Before the units: an enemy unit standing in unexplored ground doesn't show through the rule.
+        Unit(sim, At(sim, 12, 12), player: 1, type: Laborer);
+        Assert.False(w.Fog.IsExplored(0, Cell(sim, 12, 12)));
+        Assert.Equal(PlacementError.Unexplored, Reason(sim, 0, House, 12, 12));
+        // The Build is dropped there: nothing paid, no site.
+        int wood = w.Wood[0], count = w.Buildings.Count;
+        sim.Enqueue(Command.Build(0, worker, House, At(sim, 12, 3)));
+        Run(sim, 2);
+        Assert.Equal((wood, count), (w.Wood[0], w.Buildings.Count));
+        // The other player's fog is its own: player 1 explored round its Laborer, not player 0's ground.
+        Assert.True(w.Fog.IsExplored(1, Cell(sim, 12, 12)));
+        Assert.Equal(PlacementError.None, Reason(sim, 1, WhirlwindHouse, 12, 12)); // explored by player 1; its own unit isn't in the way
+        // Walked there, the spot is explored and legal.
+        sim.Enqueue(Command.Move(0, worker, At(sim, 11, 5)));
+        Run(sim, 120);
+        Assert.True(w.Fog.IsExplored(0, Cell(sim, 12, 3)) && w.Fog.IsExplored(0, Cell(sim, 13, 4)));
+        Assert.Equal(PlacementError.None, Reason(sim, 0, House, 12, 3));
+        Assert.True(g.IsPassable(12, 3));
     }
 
     [Fact]

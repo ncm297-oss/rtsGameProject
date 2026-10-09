@@ -91,7 +91,7 @@ public class PlateauSealMemoQaTests
     public void ThirtySixSameLevelIslands_256Map_EachIsAPlateau_PushOutStaysOnItsIsland()
     {
         const int per = 7; // 7 x 7 = 49 islands at 20..200
-        var sim = new Simulation(TestSim.Config(Seed: 5, PlayerCount: 1, UnitCapacity: 256, CommandCapacity: 512), Islands(256, per));
+        var sim = TestSim.Explored(new Simulation(TestSim.Config(Seed: 5, PlayerCount: 1, UnitCapacity: 256, CommandCapacity: 512), Islands(256, per))); // M4-3b: placement here is about another rule
         World w = sim.World;
         NavGrid g = w.NavGrid;
         Assert.Equal(per * per + 1, w.Plateaus.Count);
@@ -202,7 +202,7 @@ public class PlateauSealMemoQaTests
             if (y == 22) row[19] = 'r';
             rows[y] = new string(row);
         }
-        var sim = new Simulation(TestSim.Config(Seed: 5, PlayerCount: 1, UnitCapacity: count + 8, CommandCapacity: count + 64), FromRows(rows));
+        var sim = TestSim.Explored(new Simulation(TestSim.Config(Seed: 5, PlayerCount: 1, UnitCapacity: count + 8, CommandCapacity: count + 64), FromRows(rows))); // M4-3b: placement here is about another rule
         NavGrid g = sim.World.NavGrid;
         for (int k = 0; k <= count; k++) sim.Enqueue(Command.SpawnUnit(0, Laborer, g.CellCenter(2 + k % 60, 30 + k / 60)));
         Run(sim, 2);
@@ -313,7 +313,7 @@ public class PlateauSealMemoQaTests
     /// <summary>A 64 x 64 flat map with a tree wall at x = 32 from y = 3 to the bottom border: a House in the top gap seals the map.</summary>
     private static Simulation Wall(int units = 16)
     {
-        var sim = new Simulation(TestSim.Config(Seed: 5, PlayerCount: 1, UnitCapacity: units, CommandCapacity: 256) with { ResourceCapacity = 128, BuildingCapacity = 64 }, Flat(64, 64));
+        var sim = TestSim.Explored(new Simulation(TestSim.Config(Seed: 5, PlayerCount: 1, UnitCapacity: units, CommandCapacity: 256) with { ResourceCapacity = 128, BuildingCapacity = 64 }, Flat(64, 64))); // M4-3b: placement here is about another rule
         for (int y = 3; y < 63; y++) Spawn(sim.World, Tree, 32, y, TreeWood);
         return sim;
     }
@@ -413,7 +413,7 @@ public class PlateauSealMemoQaTests
     public void SealMemo_ACancelEarlierInTheSameTick_OpensTheGap_TheLaterBuildIsPlaced()
     {
         // The tree wall with a two-cell gap at y 40-41, closed by a House site at (32, 40).
-        var sim = new Simulation(TestSim.Config(Seed: 5, PlayerCount: 1, UnitCapacity: 16, CommandCapacity: 256) with { ResourceCapacity = 128, BuildingCapacity = 64 }, Flat(64, 64));
+        var sim = TestSim.Explored(new Simulation(TestSim.Config(Seed: 5, PlayerCount: 1, UnitCapacity: 16, CommandCapacity: 256) with { ResourceCapacity = 128, BuildingCapacity = 64 }, Flat(64, 64))); // M4-3b: placement here is about another rule
         World w = sim.World;
         for (int y = 3; y < 63; y++) if (y != 40 && y != 41) Spawn(w, Tree, 32, y, TreeWood);
         Give(sim, 0, 100_000, 100_000);
@@ -440,7 +440,7 @@ public class PlateauSealMemoQaTests
     [Fact]
     public void SealMemo_ATreeFelledByAWorker_TheNextBuildAtTheGapIsPlaced()
     {
-        var sim = new Simulation(TestSim.Config(Seed: 5, PlayerCount: 1, UnitCapacity: 16, CommandCapacity: 256) with { ResourceCapacity = 128, BuildingCapacity = 64 }, Flat(64, 64));
+        var sim = TestSim.Explored(new Simulation(TestSim.Config(Seed: 5, PlayerCount: 1, UnitCapacity: 16, CommandCapacity: 256) with { ResourceCapacity = 128, BuildingCapacity = 64 }, Flat(64, 64))); // M4-3b: placement here is about another rule
         World w = sim.World;
         for (int y = 3; y < 63; y++) Spawn(w, Tree, 32, y, y == 40 ? 1 : TreeWood);
         Give(sim, 0, 100_000, 100_000);

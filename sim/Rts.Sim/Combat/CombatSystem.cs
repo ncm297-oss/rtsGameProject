@@ -91,7 +91,7 @@ public static class CombatSystem
             // Out of its owner's sight (M4-3a: walked up out of vision, or out of every own circle): lost on the scan tick,
             // as the scan losing it does: given up if the chaser wasn't gaining on it (BUG-0137), and a scan may take another.
             bool lost = false;
-            if (due && u.Target[i].Generation != 0 && !VisionSystem.UnitSees(world, i, u.Target[i], u.TargetIsBuilding[i]))
+            if (due && u.Target[i].Generation != 0 && !HeldByGhost(world, i) && !VisionSystem.UnitSees(world, i, u.Target[i], u.TargetIsBuilding[i]))
             {
                 if (!u.Hold[i] && u.ChaseStall[i] > 0) GiveUp(u, i);
                 else Disengage(u, i);
@@ -138,7 +138,9 @@ public static class CombatSystem
             AttackDef attack = data.Units[u.TypeId[i]].Attack;
             // Too near to fire at (M4-2b): never walk closer. No step back either (no kiting in this slice): it waits.
             if (attack.MinRange > 0f && Gap(world, i) < attack.MinRange) continue;
-            if (u.State[i] == UnitState.Idle ? Gap(world, i) > attack.Range : scanned || (due && u.Mode[i] == CombatMode.Ordered))
+            // An ordered attacker standing in reach of a building it doesn't see now (M4-3b: a last-known one; the Catapult
+            // outranges its sight) walks on: it attacks when it sees it.
+            if (u.State[i] == UnitState.Idle ? Gap(world, i) > attack.Range || Blind(world, i) : scanned || (due && u.Mode[i] == CombatMode.Ordered))
                 Chase(world, i);
         }
     }
@@ -157,6 +159,14 @@ public static class CombatSystem
             if (!TargetAlive(world, i))
             {
                 Disengage(u, i); // a site cancelled, a unit freed since phase 7
+                continue;
+            }
+            // M4-3b: an ordered target building it doesn't see now (a last-known one, gone or not, or one it outranges its
+            // sight to) is not swung at, and a swing at one it lost sight of is lost: it walks on (phase 7) until it sees it.
+            if (u.TargetIsBuilding[i] && Blind(world, i))
+            {
+                u.WindupTicks[i] = 0;
+                if (u.State[i] == UnitState.Attacking) Stand(u, i, UnitState.Idle);
                 continue;
             }
             AttackDef attack = data.Units[u.TypeId[i]].Attack;
@@ -219,7 +229,9 @@ public static class CombatSystem
             Vector2 at = !splash ? default : hit.IsBuilding ? NearestFootprintPoint(world, hit.Victim.Index, u.Position[hit.Attacker.Index]) : u.Position[hit.Victim.Index];
             if (hit.IsBuilding) HitBuilding(world, in hit);
             else HitUnit(world, in hit);
-            if (splash) ProjectileSystem.Splash(world, at, attackerType, hit.AttackerOwner, hit.Attacker, hit.Victim, hit.IsBuilding, hit.AttackerLevel);
+            if (splash)
+                ProjectileSystem.Splash(world, at, world.Data.Units[attackerType].Attack, AttackBonus(world, hit.AttackerOwner, attackerType, false),
+                    hit.AttackerOwner, hit.Attacker, false, hit.Victim, hit.IsBuilding, hit.AttackerLevel);
         }
         world.HitCount = 0;
         // Then the projectiles that arrived this tick (M4-2b), slot order: hits and splash in the same phase, so a unit
@@ -307,8 +319,14 @@ public static class CombatSystem
         if (isBuilding)
         {
             BuildingStore b = world.Buildings;
-            return def.Attack.Targets != AttackTargets.Units && b.IsAlive(target) && b.Owner[target.Index] != u.Owner[i]
-                && VisionSystem.UnitSeesBuilding(world, i, target.Index);
+            if (def.Attack.Targets == AttackTargets.Units) return false;
+            if (b.IsAlive(target) && b.Owner[target.Index] != u.Owner[i] && VisionSystem.UnitSeesBuilding(world, i, target.Index)) return true;
+            // M4-3b: a building on its owner's last-known list is accepted unseen, alive or gone (the player can't tell):
+            // the unit walks to it and attacks when it sees it. Gone, with its ground in sight now, it is known gone.
+            if (!world.Fog.HasGhost(u.Owner[i], target)) return false;
+            if (b.IsAlive(target)) return b.Owner[target.Index] != u.Owner[i];
+            ref readonly BuildingGhost g = ref world.Fog.GhostAt(u.Owner[i], target.Index);
+            return !VisionSystem.UnitSeesFootprint(world, i, g.TypeId, g.Cell);
         }
         return def.Attack.Targets != AttackTargets.Buildings && u.IsAlive(target) && u.Owner[target.Index] != u.Owner[i]
             && VisionSystem.UnitSeesUnit(world, i, target.Index);
@@ -700,7 +718,62 @@ public static class CombatSystem
     {
         UnitStore u = world.Units;
         if (!u.TargetIsBuilding[i]) return u.Position[u.Target[i].Index];
-        return NearestFootprintPoint(world, u.Target[i].Index, u.Position[i]);
+        TargetRect(world, i, out Vector2 min, out Vector2 max);
+        return Vector2.Clamp(u.Position[i], min, max);
+    }
+
+    /// <summary>
+    /// Unit <paramref name="i"/>'s target building's footprint in meters: the live building's, or (M4-3b) for one gone that
+    /// it still walks to under an ordered Attack, the footprint its owner remembers (<see cref="FogStore.Ghosts"/>).
+    /// </summary>
+    private static void TargetRect(World world, int i, out Vector2 min, out Vector2 max)
+    {
+        UnitStore u = world.Units;
+        EntityHandle t = u.Target[i];
+        if (world.Buildings.IsAlive(t))
+        {
+            BuildingRect(world, t.Index, out min, out max);
+            return;
+        }
+        ref readonly BuildingGhost g = ref world.Fog.GhostAt(u.Owner[i], t.Index);
+        FootprintRect(world, g.TypeId, g.Cell, out min, out max);
+    }
+
+    /// <summary>
+    /// M4-3b: unit <paramref name="i"/> holds its target under an explicit Attack through its owner's last-known list: a
+    /// building target (<see cref="CombatMode.Ordered"/>) its owner remembers with that generation. Such a target is not
+    /// lost when unseen; the unit walks to it.
+    /// </summary>
+    private static bool HeldByGhost(World world, int i)
+    {
+        UnitStore u = world.Units;
+        return u.TargetIsBuilding[i] && u.Mode[i] == CombatMode.Ordered && world.Fog.HasGhost(u.Owner[i], u.Target[i]);
+    }
+
+    /// <summary>
+    /// M4-3b: unit <paramref name="i"/>'s ordered target building is gone, but its owner still remembers it (the
+    /// last-known list) and doesn't see its ground now: the unit keeps walking to where it was. Once the ground is in sight
+    /// (its own sight now, or a footprint cell visible in its owner's fog) the player knows, and the order ends.
+    /// </summary>
+    private static bool GoneButRemembered(World world, int i)
+    {
+        if (!HeldByGhost(world, i)) return false;
+        UnitStore u = world.Units;
+        ref readonly BuildingGhost g = ref world.Fog.GhostAt(u.Owner[i], u.Target[i].Index);
+        return !VisionSystem.UnitSeesFootprint(world, i, g.TypeId, g.Cell);
+    }
+
+    /// <summary>
+    /// M4-3b: unit <paramref name="i"/> holds an ordered building target it does not see now (gone but remembered, or alive
+    /// out of its owner's sight: a last-known building, or one the Catapult outranges its sight to). It neither swings nor
+    /// stops in reach: it walks on and attacks once it sees it.
+    /// </summary>
+    private static bool Blind(World world, int i)
+    {
+        UnitStore u = world.Units;
+        if (!u.TargetIsBuilding[i] || u.Mode[i] != CombatMode.Ordered) return false;
+        if (!world.Buildings.IsAlive(u.Target[i])) return true; // gone but remembered (else TargetAlive dropped it)
+        return !VisionSystem.UnitSeesBuilding(world, i, u.Target[i].Index);
     }
 
     /// <summary>The point of building slot <paramref name="j"/>'s footprint nearest <paramref name="p"/> (m).</summary>
@@ -718,7 +791,12 @@ public static class CombatSystem
     {
         UnitStore u = world.Units;
         int j = u.Target[i].Index;
-        if (u.TargetIsBuilding[i]) return MathF.Sqrt(BuildingDistanceSquared(world, j, u.Position[i])) - u.Radius[i];
+        if (u.TargetIsBuilding[i])
+        {
+            TargetRect(world, i, out Vector2 min, out Vector2 max);
+            Vector2 p = u.Position[i];
+            return Vector2.Distance(p, Vector2.Clamp(p, min, max)) - u.Radius[i];
+        }
         return Vector2.Distance(u.Position[i], u.Position[j]) - u.Radius[i] - u.Radius[j];
     }
 
@@ -730,20 +808,38 @@ public static class CombatSystem
     }
 
     /// <summary>Building slot <paramref name="j"/>'s footprint in meters.</summary>
-    private static void BuildingRect(World world, int j, out Vector2 min, out Vector2 max)
+    internal static void BuildingRect(World world, int j, out Vector2 min, out Vector2 max)
     {
         BuildingStore b = world.Buildings;
+        FootprintRect(world, b.TypeId[j], b.Cell[j], out min, out max);
+    }
+
+    /// <summary>The footprint in meters of a building of type <paramref name="typeId"/> anchored at <paramref name="anchor"/>.</summary>
+    internal static void FootprintRect(World world, int typeId, int anchor, out Vector2 min, out Vector2 max)
+    {
         int w = world.NavGrid.Width;
-        BuildingDef def = world.Data.Buildings[b.TypeId[j]];
+        BuildingDef def = world.Data.Buildings[typeId];
         const float cs = MapConstants.CellSize;
-        min = new Vector2(b.Cell[j] % w * cs, b.Cell[j] / w * cs);
+        min = new Vector2(anchor % w * cs, anchor / w * cs);
         max = min + new Vector2(def.FootprintWidth * cs, def.FootprintHeight * cs);
     }
 
+    /// <summary>Building slot <paramref name="j"/>'s footprint centre in meters (a tower fires from here, M4-3b).</summary>
+    internal static Vector2 BuildingCentre(World world, int j)
+    {
+        BuildingRect(world, j, out Vector2 min, out Vector2 max);
+        return (min + max) * 0.5f;
+    }
+
+    /// <summary>
+    /// Whether unit <paramref name="i"/>'s target is still there: a live unit or building, or (M4-3b) a building gone that its
+    /// owner still remembers and doesn't see the ground of, under an ordered Attack (<see cref="GoneButRemembered"/>).
+    /// </summary>
     private static bool TargetAlive(World world, int i)
     {
         UnitStore u = world.Units;
-        return u.TargetIsBuilding[i] ? world.Buildings.IsAlive(u.Target[i]) : u.IsAlive(u.Target[i]);
+        if (!u.TargetIsBuilding[i]) return u.IsAlive(u.Target[i]);
+        return world.Buildings.IsAlive(u.Target[i]) || GoneButRemembered(world, i);
     }
 
     /// <summary>Turns unit <paramref name="i"/> toward its target.</summary>
@@ -798,26 +894,42 @@ public static class CombatSystem
     }
 
     /// <summary>One hit's damage by an attacker of unit type <paramref name="attackerType"/> owned by <paramref name="owner"/> on unit slot <paramref name="j"/>: both owners' techs applied.</summary>
-    internal static int DamageToUnit(World world, int attackerType, int owner, int j)
+    internal static int DamageToUnit(World world, int attackerType, int owner, int j) =>
+        DamageToUnit(world, world.Data.Units[attackerType].Attack, AttackBonus(world, owner, attackerType, false), j);
+
+    /// <summary>One hit's damage by <paramref name="attack"/> with <paramref name="attackBonus"/> points of the attacker's techs on unit slot <paramref name="j"/>, the victim's armor techs applied.</summary>
+    internal static int DamageToUnit(World world, AttackDef attack, int attackBonus, int j)
     {
-        GameData data = world.Data;
         UnitStore u = world.Units;
-        int attackBonus = DamageCalc.Points(world.Techs.Bonus(owner, attackerType, TechStat.Attack));
-        UnitDef vdef = data.Units[u.TypeId[j]];
+        UnitDef vdef = world.Data.Units[u.TypeId[j]];
         int armor = vdef.Armor + DamageCalc.Points(world.Techs.Bonus(u.Owner[j], u.TypeId[j], TechStat.Armor));
-        return DamageCalc.Compute(data.DamageTable, data.Units[attackerType].Attack, attackBonus, vdef.ArmorClass, armor);
+        return DamageCalc.Compute(world.Data.DamageTable, attack, attackBonus, vdef.ArmorClass, armor);
     }
 
     /// <summary>One hit's damage by an attacker of unit type <paramref name="attackerType"/> owned by <paramref name="owner"/> on building slot <paramref name="j"/>, as structure; 0 when the data has no structure class.</summary>
-    internal static int DamageToBuilding(World world, int attackerType, int owner, int j)
+    internal static int DamageToBuilding(World world, int attackerType, int owner, int j) =>
+        DamageToBuilding(world, world.Data.Units[attackerType].Attack, AttackBonus(world, owner, attackerType, false), j);
+
+    /// <summary>One hit's damage by <paramref name="attack"/> with <paramref name="attackBonus"/> points of techs on building slot <paramref name="j"/>, as structure; 0 when the data has no structure class.</summary>
+    internal static int DamageToBuilding(World world, AttackDef attack, int attackBonus, int j)
     {
         int structure = world.StructureClass;
         if (structure < 0) return 0;
-        GameData data = world.Data;
-        int attackBonus = DamageCalc.Points(world.Techs.Bonus(owner, attackerType, TechStat.Attack));
-        BuildingDef bdef = data.Buildings[world.Buildings.TypeId[j]];
-        return DamageCalc.Compute(data.DamageTable, data.Units[attackerType].Attack, attackBonus, structure, bdef.Armor);
+        BuildingDef bdef = world.Data.Buildings[world.Buildings.TypeId[j]];
+        return DamageCalc.Compute(world.Data.DamageTable, attack, attackBonus, structure, bdef.Armor);
     }
+
+    /// <summary>The attack of unit type <paramref name="type"/>, or of building type <paramref name="type"/> with <paramref name="isBuilding"/> (M4-3b: a tower's, never null for a building that fired).</summary>
+    internal static AttackDef AttackOf(World world, int type, bool isBuilding) =>
+        isBuilding ? world.Data.Buildings[type].Attack! : world.Data.Units[type].Attack;
+
+    /// <summary>
+    /// The whole attack points <paramref name="owner"/>'s techs add to unit type <paramref name="type"/>'s attack, or with
+    /// <paramref name="isBuilding"/> to building type <paramref name="type"/>'s (M4-3b: the attack-type upgrades, docs/02
+    /// "Forge upgrades": Ranged Weapons reaches towers).
+    /// </summary>
+    internal static int AttackBonus(World world, int owner, int type, bool isBuilding) =>
+        DamageCalc.Points(isBuilding ? world.Techs.BuildingAttackBonus(owner, type) : world.Techs.Bonus(owner, type, TechStat.Attack));
 
     /// <summary>Applies one hit to a unit (phase 11): its damage, death (freed, event, kill and loss counted), else the attacker remembered and retaliated on.</summary>
     internal static void HitUnit(World world, in PendingHit hit)
@@ -826,7 +938,8 @@ public static class CombatSystem
         if (!u.IsAlive(hit.Victim)) return; // killed earlier this phase
         int v = hit.Victim.Index;
         // M4-3a: a hit from a higher level reveals the attacker to the victim's owner (before the retaliation below asks).
-        if (hit.AttackerLevel > 0) VisionSystem.OnHit(world, hit.Attacker, hit.AttackerLevel, u.Owner[v], world.Fog.LevelAt(u.Position[v]));
+        // Not a tower's (M4-3b): reveals are per unit slot.
+        if (hit.AttackerLevel > 0 && !hit.AttackerIsBuilding) VisionSystem.OnHit(world, hit.Attacker, hit.AttackerLevel, u.Owner[v], world.Fog.LevelAt(u.Position[v]));
         u.Hp[v] -= hit.Damage;
         if (u.Hp[v] <= 0)
         {
@@ -835,6 +948,9 @@ public static class CombatSystem
             u.Free(hit.Victim);
             return;
         }
+        // A tower's hit (M4-3b) is no unit's attack: a tower is never a LastAttacker (a unit handle) and is not retaliated
+        // on; the victim's scans take it like any enemy building (after units, within sight).
+        if (hit.AttackerIsBuilding) return;
         // Friendly fire (M4-2b) is no attack: an own unit is never a last attacker, nor retaliated on.
         if (!u.IsAlive(hit.Attacker) || u.Owner[hit.Attacker.Index] == u.Owner[v]) return;
         u.LastAttacker[v] = hit.Attacker;
@@ -858,7 +974,7 @@ public static class CombatSystem
         BuildingStore b = world.Buildings;
         if (!b.IsAlive(hit.Victim)) return;
         int j = hit.Victim.Index;
-        if (hit.AttackerLevel > 0) VisionSystem.OnHit(world, hit.Attacker, hit.AttackerLevel, b.Owner[j], world.Fog.BuildingLevel(j)); // M4-3a
+        if (hit.AttackerLevel > 0 && !hit.AttackerIsBuilding) VisionSystem.OnHit(world, hit.Attacker, hit.AttackerLevel, b.Owner[j], world.Fog.BuildingLevel(j)); // M4-3a
         if (hit.Damage >= b.Hp[j])
         {
             BuildingRect(world, j, out Vector2 min, out Vector2 max);

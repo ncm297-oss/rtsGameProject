@@ -113,7 +113,7 @@ public static partial class DataLoader
         }
 
         int errorsBeforeBuildings = c.Errors.Count;
-        BuildingDef[] buildings = BuildBuildings(c, folders, rules, out BuildingFileJson?[] buildingFiles, out List<(int Faction, int Index)> acceptedBuildings);
+        BuildingDef[] buildings = BuildBuildings(c, folders, rules, table, projectiles, out BuildingFileJson?[] buildingFiles, out List<(int Faction, int Index)> acceptedBuildings);
         // A broken buildings file is reported once, not again through every unit naming one of its buildings.
         bool buildingsClean = c.Errors.Count == errorsBeforeBuildings;
         if (buildingsClean)
@@ -419,7 +419,7 @@ public static partial class DataLoader
     /// Every faction's <c>buildings.json</c> (required, M3-2): ids unique across factions (a repeat is an
     /// error at its second definition), indexed in ordinal order of their string ids.
     /// </summary>
-    private static BuildingDef[] BuildBuildings(Checker c, string[] folders, RulesDef? rules, out BuildingFileJson?[] files, out List<(int Faction, int Index)> accepted)
+    private static BuildingDef[] BuildBuildings(Checker c, string[] folders, RulesDef? rules, DamageTable? table, ProjectileDef[]? projectiles, out BuildingFileJson?[] files, out List<(int Faction, int Index)> accepted)
     {
         files = new BuildingFileJson?[folders.Length];
         var firstFile = new Dictionary<string, string>(StringComparer.Ordinal); // load-time only
@@ -488,6 +488,9 @@ public static partial class DataLoader
                 Requires = c.Ids(b.Requires, p + ".requires"),
                 // M4-3a: optional; absent takes the rules' default (0 when rules.json failed, which is reported already).
                 Sight = b.Sight == null ? rules?.BuildingSight ?? 0f : (float)c.Sight(b.Sight, p + ".sight", b.Id!),
+                // M4-3b: optional; a building without them never shoots and detects nothing.
+                Attack = b.Attack == null ? null : BuildBuildingAttack(c, b.Attack, p + ".attack", b.Id!, table, projectiles),
+                Detector = b.Detector == null ? 0f : (float)c.Sight(b.Detector, p + ".detector", b.Id!, "detector"),
             };
         }
         // BUG-0010: every faction fills the ten building template slots, one building each (docs/02 "Buildings").
@@ -602,6 +605,29 @@ public static partial class DataLoader
             Targets = AttackTargetsOf(c, a?.Targets, p + ".targets"),
             BonusVs = ImmutableArray.Create(bonus),
         };
+    }
+
+    /// <summary>
+    /// A building's <c>attack</c> (M4-3b): the unit attack object (<see cref="BuildAttack"/>), plus what a building that
+    /// shoots needs: a value of at least 1, a range above 0, an aimed projectile (a building fires from its footprint, so
+    /// it has no melee blow and lobs nothing), and targets other than <c>buildings</c> (a building shoots only units; absent,
+    /// <c>all</c> and <c>units</c> all mean units). Each refusal is one error at its field, naming the building.
+    /// </summary>
+    private static AttackDef BuildBuildingAttack(Checker c, AttackJson a, string p, string owner, DamageTable? table, ProjectileDef[]? projectiles)
+    {
+        int errorsBefore = c.Errors.Count;
+        AttackDef def = BuildAttack(c, a, p, table, projectiles);
+        if (a.Value != null && def.Value == 0 && c.Errors.Count == errorsBefore)
+            c.Error(p + ".value", $"{owner}: a building's attack needs a value of at least 1");
+        if (a.Range != null && def.Range == 0f && c.Errors.Count == errorsBefore)
+            c.Error(p + ".range", $"{owner}: a building's attack needs a range above 0 m");
+        if (a.Projectile == null)
+            c.Error(p + ".projectile", $"{owner}: a building's attack needs an aimed projectile (it fires from its footprint)");
+        else if (def.ProjectileTypeId >= 0 && projectiles![def.ProjectileTypeId].Kind != ProjectileKind.Aimed)
+            c.Error(p + ".projectile", $"{owner}: projectile '{a.Projectile}' is a lob; a building's attack fires an aimed projectile");
+        if (def.Targets == AttackTargets.Buildings)
+            c.Error(p + ".targets", $"{owner}: a building's attack shoots units only (targets 'buildings' is not allowed)");
+        return def;
     }
 
     /// <summary>
@@ -948,11 +974,11 @@ public static partial class DataLoader
         /// A sight radius in meters (M4-3a): required, above 0 and at most <see cref="DataLimits.MaxSight"/>. The message
         /// names <paramref name="owner"/> (the unit or building id, or <c>rules</c>) as well as the path's field.
         /// </summary>
-        public double Sight(double? value, string path, string owner)
+        public double Sight(double? value, string path, string owner, string what = "sight")
         {
             if (value == null) Error(path, $"{owner}: missing required field");
-            else if (!(value > 0)) Error(path, $"{owner}: sight {value} must be positive");
-            else if (!(value <= DataLimits.MaxSight)) Error(path, $"{owner}: sight {value} m is above the maximum {DataLimits.MaxSight} m");
+            else if (!(value > 0)) Error(path, $"{owner}: {what} {value} must be positive");
+            else if (!(value <= DataLimits.MaxSight)) Error(path, $"{owner}: {what} {value} m is above the maximum {DataLimits.MaxSight} m");
             else return value.Value;
             return 0;
         }

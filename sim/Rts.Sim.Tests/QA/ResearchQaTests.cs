@@ -408,7 +408,7 @@ public class ResearchQaTests
         Simulation sim = Scene(out _, out _, out _);
         TechState ts = sim.World.Techs;
         var hashed = new HashSet<string> { "_flags" };
-        var derived = new HashSet<string> { "_table", "_bonus" };
+        var derived = new HashSet<string> { "_table", "_bonus", "_buildingTable", "_buildingBonus" }; // M4-3b: the building attack bonuses
         int audited = 0;
         foreach (FieldInfo f in typeof(TechState).GetFields(BindingFlags.NonPublic | BindingFlags.Instance))
         {
@@ -442,7 +442,7 @@ public class ResearchQaTests
             }
             audited++;
         }
-        Assert.Equal(3, audited);
+        Assert.Equal(5, audited); // M4-3b: + the building attack table and sums
     }
 
     [Fact]

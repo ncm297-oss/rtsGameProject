@@ -99,7 +99,8 @@ public class ProjectileLoaderQaTests
     {
         DataLoadResult r = LoadWith(dir => WriteRaw(dir, "{ \"projectiles\": [ ] }"));
         Assert.False(r.Ok);
-        Assert.Equal(6, r.Errors.Count(e => e.Path.EndsWith(".attack.projectile", StringComparison.Ordinal)));
+        // Six units and, since M4-3b, the two watch towers name a projectile.
+        Assert.Equal(8, r.Errors.Count(e => e.Path.EndsWith(".attack.projectile", StringComparison.Ordinal)));
     }
 
     [Fact]

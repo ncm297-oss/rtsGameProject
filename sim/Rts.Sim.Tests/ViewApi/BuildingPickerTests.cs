@@ -23,6 +23,7 @@ public class BuildingPickerTests
     {
         (Simulation sim, Vector2[][] blocks, StartBasePlan plan) = StartBaseTests.MatchSetup(seed, 20, 5);
         StartBaseTests.Apply(sim, blocks, plan);
+        TestSim.Explored(sim); // M4-3b: the scene's spots and the ghost sweeps reach past the start bases' sight
         World w = sim.World;
         NavGrid g = w.NavGrid;
         int house0 = StartBase.BuildingOfSlot(w.Data, w.FactionOf(0), BuildingSlot.House);

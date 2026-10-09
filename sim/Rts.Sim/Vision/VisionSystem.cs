@@ -56,6 +56,45 @@ public static class VisionSystem
         return fog.SeesBuildingCells(u.Owner[i], j);
     }
 
+    /// <summary>
+    /// Whether tower (building slot) <paramref name="j"/>'s owner may take enemy unit <paramref name="unit"/> (M4-3b): the
+    /// unit rule with the building as the viewer: within the building's sight of its footprint's centre and not on a higher
+    /// level than the building (its centre cell's) unless within the lip, or the unit's cell visible in the owner's fog, or
+    /// the unit revealed to the owner.
+    /// </summary>
+    internal static bool BuildingSeesUnit(World world, int j, int unit)
+    {
+        BuildingStore b = world.Buildings;
+        FogStore fog = world.Fog;
+        UnitStore u = world.Units;
+        float sight = world.Data.Buildings[b.TypeId[j]].Sight;
+        float d2 = Vector2.DistanceSquared(CombatSystem.BuildingCentre(world, j), u.Position[unit]);
+        if (d2 <= sight * sight && (!fog.MultiLevel || d2 <= VisionConstants.LipRadius * VisionConstants.LipRadius
+            || fog.LevelAt(u.Position[unit]) <= fog.BuildingLevel(j)))
+            return true;
+        return fog.SeesUnit(b.Owner[j], unit);
+    }
+
+    /// <summary>
+    /// Whether unit <paramref name="i"/>'s owner sees the ground of a remembered building now (M4-3b, an ordered Attack on a
+    /// last-known building that is gone): within <paramref name="i"/>'s sight of the footprint (type
+    /// <paramref name="typeId"/> at <paramref name="anchor"/>) and not above it unless within the lip, or a footprint cell
+    /// visible in the owner's fog. Then the player knows the building is gone.
+    /// </summary>
+    internal static bool UnitSeesFootprint(World world, int i, int typeId, int anchor)
+    {
+        UnitStore u = world.Units;
+        FogStore fog = world.Fog;
+        float sight = world.Data.Units[u.TypeId[i]].Sight;
+        CombatSystem.FootprintRect(world, typeId, anchor, out Vector2 min, out Vector2 max);
+        Vector2 p = u.Position[i];
+        float d2 = Vector2.DistanceSquared(p, Vector2.Clamp(p, min, max));
+        if (d2 <= sight * sight && (!fog.MultiLevel || d2 <= VisionConstants.LipRadius * VisionConstants.LipRadius
+            || fog.LevelAt((min + max) * 0.5f) <= fog.LevelAt(p)))
+            return true;
+        return fog.SeesFootprint(u.Owner[i], typeId, anchor);
+    }
+
     /// <summary>Whether unit <paramref name="i"/>'s owner may take <paramref name="target"/> (a unit, or a building with <paramref name="isBuilding"/>; live, checked by the caller).</summary>
     internal static bool UnitSees(World world, int i, EntityHandle target, bool isBuilding) =>
         isBuilding ? UnitSeesBuilding(world, i, target.Index) : UnitSeesUnit(world, i, target.Index);
@@ -71,6 +110,7 @@ public static class VisionSystem
         if (attackerLevel <= victimLevel || (uint)victimOwner >= (uint)world.Config.PlayerCount) return;
         UnitStore u = world.Units;
         if (!u.IsAlive(attacker) || u.Owner[attacker.Index] == victimOwner) return;
+        // (A building's hit never comes here: reveals are per unit slot, M4-3b; the callers skip it.)
         world.Fog.Reveal(attacker, victimOwner, world.TickNumber + VisionConstants.HighGroundRevealTicks);
     }
 }

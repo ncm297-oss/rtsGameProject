@@ -237,7 +237,7 @@ public class CombatQaTests
     [Fact]
     public void WorkerOnABuildOrder_IsHit_NeverRetaliates()
     {
-        Simulation sim = Flat();
+        Simulation sim = TestSim.Explored(Flat()); // M4-3b: the site is 48 m from the worker
         sim.World.Ledger.Gold[0] = 10_000;
         sim.World.Ledger.Wood[0] = 10_000;
         EntityHandle w = Place(sim, 0, Laborer, At(sim, 6, 20));
@@ -449,7 +449,7 @@ public class CombatQaTests
     [Fact]
     public void BuildingCancelledMidWindup_NoHitNoKill_AttackerDropsIt()
     {
-        Simulation sim = Flat();
+        Simulation sim = TestSim.Explored(Flat()); // M4-3b: the site is 44 m from the worker
         int tent = TestSim.Data.FindBuilding("whirlwind_tent");
         sim.World.Ledger.Wood[1] = 10_000;
         EntityHandle w = Place(sim, 1, TestSim.Data.FindUnit("whirlwind_camp_follower"), At(sim, 2, 2));

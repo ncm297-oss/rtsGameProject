@@ -50,6 +50,12 @@ public sealed class FogStore
     private readonly int[] _revealUntil;
     private readonly int[] _revealGeneration;
 
+    // M4-3b: per (player, building slot) the last-known building there (hashed), and per player the entries in use
+    // (derived from them, kept as entries change).
+    private readonly BuildingGhost[] _ghosts;
+    private readonly int[] _ghostCount;
+    private readonly int _buildingSlots;
+
     // Circle masks, ascending by radius: per mask, the half-width of each row from -R to R.
     private readonly int[][] _halfWidths;
     private readonly int[] _unitMask;
@@ -93,6 +99,9 @@ public sealed class FogStore
         for (int p = 0; p < players; p++) _visibleBox[4 * p] = int.MaxValue; // empty
         _revealUntil = new int[units.Capacity * players];
         _revealGeneration = new int[units.Capacity * players];
+        _buildingSlots = buildings.Capacity;
+        _ghosts = new BuildingGhost[players * _buildingSlots];
+        _ghostCount = new int[players];
         for (int i = 0; i < cells; i++)
             if (_levels[i] > 0) MultiLevel = true;
 
@@ -164,6 +173,57 @@ public sealed class FogStore
         return _buildings.Owner[slot] == player || SeesBuildingCells(player, slot);
     }
 
+    /// <summary>
+    /// <paramref name="player"/>'s last-known enemy buildings (M4-3b, docs/02: ghosts in explored fog), indexed by building
+    /// slot (<see cref="Entities.BuildingStore.Capacity"/> entries; an empty one has <see cref="BuildingGhost.Generation"/>
+    /// 0). An entry is set (or refreshed) at every fog update the building is seen (any footprint cell visible), and kept
+    /// while it isn't, also after the building is gone; it is dropped at the first update that shows any of its footprint
+    /// cells while that building is gone. Changes only on an update tick; empty for no such player.
+    /// </summary>
+    public ReadOnlySpan<BuildingGhost> Ghosts(int player) =>
+        (uint)player < (uint)_players ? _ghosts.AsSpan(player * _buildingSlots, _buildingSlots) : ReadOnlySpan<BuildingGhost>.Empty;
+
+    /// <summary>How many entries of <see cref="Ghosts"/> are in use for <paramref name="player"/>; 0 for no such player.</summary>
+    public int GhostCount(int player) => (uint)player < (uint)_players ? _ghostCount[player] : 0;
+
+    /// <summary>Whether <paramref name="player"/>'s last-known list holds <paramref name="building"/> (its slot, with that generation).</summary>
+    internal bool HasGhost(int player, EntityHandle building) =>
+        (uint)player < (uint)_players && (uint)building.Index < (uint)_buildingSlots && building.Generation != 0
+        && _ghosts[player * _buildingSlots + building.Index].Generation == building.Generation;
+
+    /// <summary><paramref name="player"/>'s entry for building slot <paramref name="slot"/> (both in range).</summary>
+    internal ref readonly BuildingGhost GhostAt(int player, int slot) => ref _ghosts[player * _buildingSlots + slot];
+
+    /// <summary>Whether any cell of a footprint of type <paramref name="typeId"/> anchored at <paramref name="anchor"/> is visible to <paramref name="player"/>.</summary>
+    internal bool SeesFootprint(int player, int typeId, int anchor)
+    {
+        ulong[] vis = _visible[player];
+        BuildingDef def = _data.Buildings[typeId];
+        for (int dy = 0; dy < def.FootprintHeight; dy++)
+            for (int dx = 0; dx < def.FootprintWidth; dx++)
+                if (Bit(vis, anchor + dy * _width + dx)) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// Test seam (M4-3b): every cell explored for every player, as if the whole map had been seen once (visible cells stay
+    /// visible). For the construction scenes whose subject is another placement rule; a match never calls it.
+    /// </summary>
+    internal void ExploreAllForTests()
+    {
+        for (int p = 0; p < _players; p++)
+        {
+            byte[] vis = _visibility[p];
+            ulong[] bits = _explored[p];
+            for (int c = 0; c < vis.Length; c++)
+            {
+                bits[c >> 6] |= 1UL << (c & 63);
+                if (vis[c] == VisionConstants.Unexplored) vis[c] = VisionConstants.Explored;
+            }
+            _version[p]++;
+        }
+    }
+
     /// <summary>True when any cell of the map is above level 0: else the high-ground compares are skipped.</summary>
     internal bool MultiLevel { get; }
 
@@ -172,16 +232,7 @@ public sealed class FogStore
         Bit(_visible[player], CellOf(_units.Position[slot])) || Revealed(player, slot);
 
     /// <summary>Any footprint cell of building slot <paramref name="slot"/> is visible to <paramref name="player"/>.</summary>
-    internal bool SeesBuildingCells(int player, int slot)
-    {
-        ulong[] vis = _visible[player];
-        int anchor = _buildings.Cell[slot];
-        BuildingDef def = _data.Buildings[_buildings.TypeId[slot]];
-        for (int dy = 0; dy < def.FootprintHeight; dy++)
-            for (int dx = 0; dx < def.FootprintWidth; dx++)
-                if (Bit(vis, anchor + dy * _width + dx)) return true;
-        return false;
-    }
+    internal bool SeesBuildingCells(int player, int slot) => SeesFootprint(player, _buildings.TypeId[slot], _buildings.Cell[slot]);
 
     /// <summary>Bit <paramref name="cell"/> of a packed cell set (64 cells a word).</summary>
     private static bool Bit(ulong[] bits, int cell) => (bits[cell >> 6] & (1UL << (cell & 63))) != 0;
@@ -270,6 +321,38 @@ public sealed class FogStore
                 if (m >= 0) StampViewer(vis, CentreCell(j), m);
             }
             Combine(p);
+            UpdateGhosts(p);
+        }
+    }
+
+    /// <summary>
+    /// Player <paramref name="p"/>'s last-known list after its fog update (M4-3b): every enemy building with a footprint cell
+    /// visible now is recorded or refreshed in its slot's entry; an entry whose building is not seen now is kept, unless
+    /// that building is gone (its slot free, or holding a newer one) and a cell of the remembered footprint is visible now,
+    /// which drops it. One pass over the building slots; allocation-free.
+    /// </summary>
+    private void UpdateGhosts(int p)
+    {
+        ReadOnlySpan<bool> alive = _buildings.Alive;
+        ReadOnlySpan<int> owner = _buildings.Owner;
+        ReadOnlySpan<int> generation = _buildings.Generation;
+        ReadOnlySpan<int> type = _buildings.TypeId;
+        ReadOnlySpan<int> cell = _buildings.Cell;
+        int head = p * _buildingSlots;
+        for (int j = 0; j < _buildingSlots; j++)
+        {
+            ref BuildingGhost g = ref _ghosts[head + j];
+            bool enemy = alive[j] && owner[j] != p;
+            if (enemy && SeesFootprint(p, type[j], cell[j]))
+            {
+                if (g.Generation == 0) _ghostCount[p]++;
+                g = new BuildingGhost(generation[j], type[j], cell[j], owner[j]);
+                continue;
+            }
+            if (g.Generation == 0 || (enemy && generation[j] == g.Generation)) continue; // nothing known, or still there unseen
+            if (!SeesFootprint(p, g.TypeId, g.Cell)) continue; // gone, but the player hasn't looked yet
+            g = default;
+            _ghostCount[p]--;
         }
     }
 
@@ -464,7 +547,39 @@ public sealed class FogStore
         for (int k = 0; k < _revealUntil.Length; k++)
             if (RevealLive(k, tick)) live++;
         h.Add(live);
-        if (live == 0) return;
+        if (live > 0) AddRevealsToHash(ref h, tick);
+        AddGhostsToHash(ref h);
+    }
+
+    /// <summary>
+    /// M4-3b: every player's last-known list, only when some player has an entry (so a match where no enemy building was
+    /// ever seen hashes as before): each player's count, then each entry in use (slot and fields), slot order.
+    /// </summary>
+    private void AddGhostsToHash(ref StateHasher h)
+    {
+        int total = 0;
+        for (int p = 0; p < _players; p++) total += _ghostCount[p];
+        if (total == 0) return;
+        for (int p = 0; p < _players; p++)
+        {
+            h.Add(_ghostCount[p]);
+            int head = p * _buildingSlots;
+            for (int j = 0; j < _buildingSlots; j++)
+            {
+                BuildingGhost g = _ghosts[head + j];
+                if (g.Generation == 0) continue;
+                h.Add(j);
+                h.Add(g.Generation);
+                h.Add(g.TypeId);
+                h.Add(g.Cell);
+                h.Add(g.Owner);
+            }
+        }
+    }
+
+    /// <summary>Every reveal in force at tick <paramref name="tick"/>: its entry index and end tick, entry order.</summary>
+    private void AddRevealsToHash(ref StateHasher h, int tick)
+    {
         for (int k = 0; k < _revealUntil.Length; k++)
         {
             if (!RevealLive(k, tick)) continue;

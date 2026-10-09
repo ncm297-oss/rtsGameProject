@@ -48,9 +48,9 @@ public class RequirementGatingTests
     private static int CadreTower => TestSim.Data.FindBuilding("malazan_cadre_tower");
     private static int ArcherCamp => TestSim.Data.FindBuilding("whirlwind_archer_camp");
 
-    /// <summary>A sim on a flat 48 x 32 map with <paramref name="data"/> (shipped by default).</summary>
+    /// <summary>A sim on a flat 48 x 32 map with <paramref name="data"/> (shipped by default), explored by every player (M4-3b: the placement rows are about requirements).</summary>
     public static Simulation NewSim(GameData? data = null, int players = 2) =>
-        new(new SimConfig(5, players, 64, 512) { Data = data ?? TestSim.Data }, ResourceMaps.Flat(48, 32));
+        TestSim.Explored(new(new SimConfig(5, players, 64, 512) { Data = data ?? TestSim.Data }, ResourceMaps.Flat(48, 32)));
 
     private static TrainError Train(World w, int player, int slot, int type)
     {

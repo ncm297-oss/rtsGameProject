@@ -56,7 +56,9 @@ public class NeverSealTests
         // refused for Requires forever and starve the placement floor; this test is about geometry only.
         var config = TestSim.ConfigWithoutBuildingRequires(Seed: seed, PlayerCount: 1, UnitCapacity: 8, CommandCapacity: 16)
             with { Map = MapGenParams.Default with { Forests = 12, GoldMines = 8 }, BuildingCapacity = 512 };
-        var sim = new Simulation(config);
+        // M4-3b: explored by the player (the test places anywhere on the map; it is about the seal rule). A generated map
+        // with no replay recorded, so the seam is safe.
+        var sim = TestSim.Explored(new Simulation(config));
         NavGrid g = sim.World.NavGrid;
         Assert.Equal(0, Unreached(g));
         Give(sim, 0, 10_000_000, 10_000_000);

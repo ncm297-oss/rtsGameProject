@@ -12,4 +12,8 @@ namespace Rts.Sim.Combat;
 /// The level the attacker struck from (M4-3a): its cell's at the melee hit, the firing level for a projectile; a hit from
 /// above its victim reveals the attacker (<see cref="Vision.VisionSystem.OnHit"/>). -1: none known, no reveal.
 /// </param>
-internal readonly record struct PendingHit(EntityHandle Attacker, int AttackerOwner, EntityHandle Victim, bool IsBuilding, int Damage, int AttackerLevel = -1);
+/// <param name="AttackerIsBuilding">
+/// True for a tower's shot (M4-3b): <paramref name="Attacker"/> is a building handle. It reveals nothing (reveals are per
+/// unit), is never anyone's <c>LastAttacker</c> and starts no retaliation.
+/// </param>
+internal readonly record struct PendingHit(EntityHandle Attacker, int AttackerOwner, EntityHandle Victim, bool IsBuilding, int Damage, int AttackerLevel = -1, bool AttackerIsBuilding = false);

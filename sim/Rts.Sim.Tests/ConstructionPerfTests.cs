@@ -22,6 +22,7 @@ public class ConstructionPerfTests
     public void FiveHundredMarchersAndFiftyWorkersOnTenSites_AverageTickUnder1Point2Ms()
     {
         Simulation sim = MoveScenario.Spawn(7, units: 500, maxCost: 12f, out int center, capacity: 550, players: 1, map: ResourceMap);
+        TestSim.Explored(sim); // M4-3b: the sites are picked map-wide
         NavGrid g = sim.World.NavGrid;
         FlowField fromCenter = FlowField.Build(g, center);
         int far = center;
@@ -59,7 +60,9 @@ public class ConstructionPerfTests
     [Trait("Category", "Perf")]
     public void OneCanPlace_IncludingTheFlood_Under0Point3Ms()
     {
-        var sim = new Simulation(TestSim.Config(Seed: 7, PlayerCount: 1, UnitCapacity: 512, CommandCapacity: 16) with { Map = ResourceMap });
+        // M4-3b: explored, so every anchor runs the whole rule chain (the flood, the explored cells, the units) as a
+        // placement in sight would.
+        var sim = TestSim.Explored(new Simulation(TestSim.Config(Seed: 7, PlayerCount: 1, UnitCapacity: 512, CommandCapacity: 16) with { Map = ResourceMap }));
         NavGrid g = sim.World.NavGrid;
         BuildMaps.Give(sim, 0, 100_000, 100_000);
         // A warm-up sweep, a timed sweep, then the 20 slowest anchors (footprints beside a cliff, forest or border, whose

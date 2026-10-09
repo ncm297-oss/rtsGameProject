@@ -140,7 +140,8 @@ public class PlateauTests
     /// <summary>A sim on <see cref="SmallPlateau"/>(64, 28, 28) with 30 own Laborers standing inside a House footprint at (30, 30) and one worker far off.</summary>
     public static (Simulation Sim, int Worker) ThirtyOnASmallPlateau()
     {
-        var sim = new Simulation(TestSim.Config(Seed: 5, PlayerCount: 1, UnitCapacity: 64, CommandCapacity: 128), SmallPlateau(64, 28, 28));
+        // M4-3b: explored, so the Build far from the far-off worker is about the plateau, not the explored rule.
+        var sim = TestSim.Explored(new Simulation(TestSim.Config(Seed: 5, PlayerCount: 1, UnitCapacity: 64, CommandCapacity: 128), SmallPlateau(64, 28, 28)));
         NavGrid g = sim.World.NavGrid;
         for (int k = 0; k < 31; k++) sim.Enqueue(Command.SpawnUnit(0, Laborer, g.CellCenter(4 + k, 4)));
         Run(sim, 2);
@@ -205,7 +206,8 @@ public class PlateauTests
     /// <summary>A 64 x 64 flat map with a tree wall at x = 32 from y = 3 to the bottom border: a House in the top gap seals the map.</summary>
     private static Simulation Wall()
     {
-        var sim = new Simulation(TestSim.Config(Seed: 5, PlayerCount: 1, UnitCapacity: 128, CommandCapacity: 256) with { ResourceCapacity = 128 }, Flat(64, 64));
+        // M4-3b: explored, so the refusals are the seal rule's, not the explored rule's.
+        var sim = TestSim.Explored(new Simulation(TestSim.Config(Seed: 5, PlayerCount: 1, UnitCapacity: 128, CommandCapacity: 256) with { ResourceCapacity = 128 }, Flat(64, 64)));
         for (int y = 3; y < 63; y++) Spawn(sim.World, Tree, 32, y, TreeWood);
         return sim;
     }

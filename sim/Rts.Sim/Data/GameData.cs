@@ -121,19 +121,7 @@ public sealed class GameData
             h.Add(u.Hp);
             h.Add(u.Armor);
             h.Add(u.ArmorClass);
-            AttackDef a = u.Attack;
-            h.Add(a.Value);
-            h.Add(a.DamageType);
-            h.Add(a.CooldownTicks);
-            h.Add(a.WindupTicks);
-            h.Add(a.Range);
-            h.Add(a.MinRange);
-            h.Add(a.Splash);
-            h.Add(a.FriendlyFire);
-            h.Add(a.Projectile);
-            h.Add(a.ProjectileTypeId);
-            h.Add((int)a.Targets);
-            AddAll(ref h, a.BonusVs);
+            AddAttack(ref h, u.Attack);
             h.Add(u.SpeedPerTick);
             h.Add(u.Sight);
             h.Add(u.Radius);
@@ -195,6 +183,10 @@ public sealed class GameData
             AddAll(ref h, b.RequiresTechs);
             AddAll(ref h, b.RequiresBuildings);
             h.Add(b.Sight); // M4-3a
+            // M4-3b: a flag, then the attack's fields when it has one; then the detector radius.
+            h.Add(b.Attack != null);
+            if (b.Attack != null) AddAttack(ref h, b.Attack);
+            h.Add(b.Detector);
         }
 
         h.Add(Techs.Length);
@@ -227,6 +219,23 @@ public sealed class GameData
             }
         }
         return h.Value;
+    }
+
+    /// <summary>Every field of an attack (a unit's, or since M4-3b a building's).</summary>
+    private static void AddAttack(ref StateHasher h, AttackDef a)
+    {
+        h.Add(a.Value);
+        h.Add(a.DamageType);
+        h.Add(a.CooldownTicks);
+        h.Add(a.WindupTicks);
+        h.Add(a.Range);
+        h.Add(a.MinRange);
+        h.Add(a.Splash);
+        h.Add(a.FriendlyFire);
+        h.Add(a.Projectile);
+        h.Add(a.ProjectileTypeId);
+        h.Add((int)a.Targets);
+        AddAll(ref h, a.BonusVs);
     }
 
     private static void AddAll(ref StateHasher h, ImmutableArray<int> items)

@@ -18,6 +18,9 @@ public class CommandCardHashTwinTests
     {
         (Simulation a, int house, int site, int enemy) = BuildingPickerTests.Base(1);
         (Simulation b, _, _, _) = BuildingPickerTests.Base(1);
+        // M4-3b: both twins explored, so the ghost's sweep round the house (up to 22 m off) meets green spots, as before.
+        TestSim.Explored(a);
+        TestSim.Explored(b);
         World w = a.World;
         NavGrid g = w.NavGrid;
         BuildingStore bs = w.Buildings;

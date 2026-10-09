@@ -33,7 +33,8 @@ public static class ConstructionSystem
     /// it in the way (BUG-0092). With <paramref name="sealLast"/> (the Build apply path, which needs only pass / fail)
     /// the never-seal flood runs after every cheap rule has passed, so a refused Build costs no flood (BUG-0091); the
     /// answer's pass / fail is the same either way, only the reason reported for a spot breaking several rules differs.
-    /// The requirement rule (M3-6) comes right after the faction's, before any map rule.
+    /// The requirement rule (M3-6) comes right after the faction's, before any map rule. The explored rule (M4-3b) comes after
+    /// the terrain rules (the never-seal one too, unless <paramref name="sealLast"/>) and before the units in the way.
     /// </summary>
     private static PlacementError Check(World world, int player, int typeId, int anchorCell, int worker, bool sealLast)
     {
@@ -51,6 +52,10 @@ public static class ConstructionSystem
         // Terrain, nodes and buildings: the store's rule (passable, no ramp, one level).
         if (!world.Buildings.Fits(typeId, anchorCell)) return PlacementError.Blocked;
         if (!sealLast && !world.Seal.KeepsConnected(x0, y0, def.FootprintWidth, def.FootprintHeight)) return PlacementError.SealsGround;
+        // M4-3b: every footprint cell explored by the player (docs/02), after the terrain rules, before the units in the way.
+        for (int y = y0; y < y0 + def.FootprintHeight; y++)
+            for (int x = x0; x < x0 + def.FootprintWidth; x++)
+                if (!world.Fog.IsExplored(player, y * w + x)) return PlacementError.Unexplored;
         UnitStore u = world.Units;
         for (int i = 0; i < u.Capacity; i++)
         {

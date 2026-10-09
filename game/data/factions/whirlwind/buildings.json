@@ -139,7 +139,9 @@
       "popProvided": 0,
       "dropOff": false,
       "requires": ["age_ii"],
-      "sight": 24
+      "sight": 24,
+      "attack": { "value": 10, "type": "pierce", "cooldown": 2, "range": 18, "windup": 0.4, "projectile": "arrow", "targets": "units" },
+      "detector": 16
     }
   ]
 }

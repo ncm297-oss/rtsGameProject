@@ -55,6 +55,26 @@ public class DataValidationTests
         Assert.Equal("malazan_crossbow_range", u.TrainedAt);
     }
 
+    /// <summary>M4-3b: both watch towers carry docs/02's "Attack 10 pierce / 2 s, range 18; sight 24; detector 16 m".</summary>
+    [Theory]
+    [InlineData("malazan_watchtower")]
+    [InlineData("whirlwind_lookout_tower")]
+    public void ShippedData_WatchTower_MatchesDocs02(string id)
+    {
+        GameData data = Load(TestDataDir.Shipped);
+        BuildingDef b = data.Buildings[data.FindBuilding(id)];
+        Assert.Equal(BuildingSlot.WatchTower, b.Slot);
+        AttackDef a = b.Attack!;
+        Assert.Equal(10, a.Value);
+        Assert.Equal("pierce", data.DamageTable.DamageTypeKeys[a.DamageType]);
+        Assert.Equal(40, a.CooldownTicks); // 2 s
+        Assert.Equal(18f, a.Range);
+        Assert.Equal(AttackTargets.Units, a.Targets);
+        Assert.Equal(ProjectileKind.Aimed, data.Projectiles[a.ProjectileTypeId].Kind);
+        Assert.Equal(24f, b.Sight);
+        Assert.Equal(16f, b.Detector);
+    }
+
     [Fact]
     public void ShippedData_DamageTableAndRules_MatchDocs02()
     {

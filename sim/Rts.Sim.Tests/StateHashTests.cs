@@ -566,7 +566,7 @@ public class StateHashTests
     /// <summary>A one-player sim with a House site (slot 0) and its builder (slot 0), hashed equal to its twin.</summary>
     private static Simulation Site()
     {
-        Simulation sim = GatherMaps.NewSim(ResourceMaps.Flat(16, 16));
+        Simulation sim = TestSim.Explored(GatherMaps.NewSim(ResourceMaps.Flat(16, 16))); // M4-3b: the site is 12 m off
         EntityHandle w = GatherMaps.Unit(sim, GatherMaps.At(sim, 2, 2));
         sim.Enqueue(Command.Build(0, w, BuildMaps.House, GatherMaps.At(sim, 8, 8)));
         sim.Tick();
@@ -670,6 +670,7 @@ public class StateHashTests
                     long x => x + 1,
                     bool x => !x,
                     Vector2 x => x + new Vector2(0.25f, 0f),
+                    EntityHandle x => new EntityHandle(x.Index + 1, x.Generation + 1), // M4-3b: the tower's target
                     _ => throw new InvalidOperationException($"{f.Name}: element type {f.FieldType} not covered by the audit"),
                 };
                 arr.SetValue(changed, e);
@@ -1145,6 +1146,7 @@ public class StateHashTests
         Assert.Equal(b.StateHash(), a.StateHash());
         // The audit: every FogStore array is one of these or hashed (above); a new one must be classified here.
         var classified = new HashSet<string> { "_visibility", "_version", "_visibleBox", "_explored", "_visible", "_revealUntil", "_revealGeneration",
+            "_ghosts", "_ghostCount", // M4-3b: hashed (Hash_CoversEveryGhostField)
             "_levels", "_halfWidths", "_unitMask", "_buildingMask", "_lipMask", "_scratch", "_levelUsed", "_box" };
         foreach (FieldInfo f in typeof(Vision.FogStore).GetFields(BindingFlags.NonPublic | BindingFlags.Instance))
             if (f.FieldType.IsArray) Assert.True(classified.Contains(f.Name), $"FogStore.{f.Name} is not classified as hashed or derived");
@@ -1162,5 +1164,144 @@ public class StateHashTests
             b.Tick();
             Assert.Equal(a.StateHash(), b.StateHash());
         }
+    }
+
+    // ---------- M4-3b: towers, the last-known buildings list ----------
+
+    /// <summary>A Watchtower of player 0 shooting a holding Raider of player 1 (mid-cooldown after 30 ticks), hashed equal to its twin.</summary>
+    private static Simulation Tower()
+    {
+        Simulation sim = CombatScenes.Flat(size: 64);
+        TowerTests.PlaceBuilding(sim, 0, TowerTests.Watchtower, 30, 30);
+        EntityHandle r = CombatScenes.Place(sim, 1, CombatScenes.Raider, new Vector2(62f, 48f));
+        sim.Enqueue(Command.HoldPosition(1, r));
+        for (int t = 0; t < 30; t++) sim.Tick();
+        Assert.NotEqual(default, sim.World.Buildings.TowerTarget[0]);
+        Assert.True(sim.World.Buildings.TowerCooldown[0] > 0);
+        return sim;
+    }
+
+    public static IEnumerable<object[]> TowerFields() => new[]
+    {
+        new object[] { "TowerTarget.Index", (Action<World>)(w => w.Buildings.TowerTargets[0] = new EntityHandle(w.Buildings.TowerTargets[0].Index + 1, w.Buildings.TowerTargets[0].Generation)) },
+        new object[] { "TowerTarget.Generation", (Action<World>)(w => w.Buildings.TowerTargets[0] = new EntityHandle(w.Buildings.TowerTargets[0].Index, w.Buildings.TowerTargets[0].Generation + 1)) },
+        new object[] { "TowerTarget none", (Action<World>)(w => w.Buildings.TowerTargets[0] = default) },
+        new object[] { "TowerCooldown", (Action<World>)(w => w.Buildings.TowerCooldown[0]++) },
+        new object[] { "TowerWindup", (Action<World>)(w => w.Buildings.TowerWindup[0]++) },
+    };
+
+    [Theory]
+    [MemberData(nameof(TowerFields))]
+    public void Hash_CoversEveryTowerField(string field, Action<World> change)
+    {
+        Simulation a = Tower(), b = Tower();
+        Assert.Equal(a.StateHash(), b.StateHash());
+        change(a.World);
+        Assert.True(a.StateHash() != b.StateHash(), field);
+    }
+
+    [Fact]
+    public void Hash_ATowerWithItsStateZeroed_HashesAsAPlainBuilding_AndATowersShotIsFlagged()
+    {
+        Simulation a = Tower();
+        ulong live = a.StateHash();
+        EntityHandle t = a.World.Buildings.TowerTargets[0];
+        int cd = a.World.Buildings.TowerCooldown[0], wu = a.World.Buildings.TowerWindup[0];
+        a.World.Buildings.TowerTargets[0] = default;
+        a.World.Buildings.TowerCooldown[0] = 0;
+        a.World.Buildings.TowerWindup[0] = 0;
+        Assert.NotEqual(live, a.StateHash());
+        a.World.Buildings.TowerTargets[0] = t;
+        a.World.Buildings.TowerCooldown[0] = cd;
+        a.World.Buildings.TowerWindup[0] = wu;
+        Assert.Equal(live, a.StateHash());
+        // A tower's projectile and a unit's with every other field equal hash differently.
+        Simulation c = Tower(), d = Tower();
+        CombatScenes.RunUntil(c, () => c.World.Projectiles.Count > 0, 60);
+        CombatScenes.RunUntil(d, () => d.World.Projectiles.Count > 0, 60);
+        Assert.Equal(c.StateHash(), d.StateHash());
+        int k = 0;
+        while (!c.World.Projectiles.Alive[k]) k++;
+        Assert.True(c.World.Projectiles.AttackerIsBuilding[k]);
+        c.World.Projectiles.AttackerIsBuilding[k] = false;
+        Assert.NotEqual(c.StateHash(), d.StateHash());
+    }
+
+    /// <summary>Player 0's scout saw player 1's Tent and then died: the Tent is on player 0's last-known list; twins hash equal.</summary>
+    private static Simulation Ghosted()
+    {
+        Simulation sim = CombatScenes.Flat(size: 64);
+        TowerTests.PlaceBuilding(sim, 1, TowerTests.Tent, 30, 30);
+        EntityHandle scout = CombatScenes.Spotter(sim, 0, new Vector2(55f, 62f));
+        sim.World.Units.Free(scout);
+        FogMaps.RunThroughNextUpdate(sim);
+        Assert.Equal(1, sim.World.Fog.GhostCount(0));
+        return sim;
+    }
+
+    private static Vision.BuildingGhost[] Ghosts(World w) => FogField<Vision.BuildingGhost[]>(w, "_ghosts");
+
+    private static int[] GhostCounts(World w) => FogField<int[]>(w, "_ghostCount");
+
+    public static IEnumerable<object[]> GhostFields() => new[]
+    {
+        new object[] { "Generation", (Action<World>)(w => Ghosts(w)[0] = Ghosts(w)[0] with { Generation = Ghosts(w)[0].Generation + 1 }) },
+        new object[] { "TypeId", (Action<World>)(w => Ghosts(w)[0] = Ghosts(w)[0] with { TypeId = Ghosts(w)[0].TypeId + 1 }) },
+        new object[] { "Cell", (Action<World>)(w => Ghosts(w)[0] = Ghosts(w)[0] with { Cell = Ghosts(w)[0].Cell + 1 }) },
+        new object[] { "Owner", (Action<World>)(w => Ghosts(w)[0] = Ghosts(w)[0] with { Owner = 0 }) },
+        new object[] { "the slot", (Action<World>)(w =>
+        {
+            Ghosts(w)[1] = Ghosts(w)[0];
+            Ghosts(w)[0] = default;
+        }) },
+        new object[] { "the player", (Action<World>)(w =>
+        {
+            Ghosts(w)[w.Buildings.Capacity] = Ghosts(w)[0];
+            Ghosts(w)[0] = default;
+            GhostCounts(w)[0] = 0;
+            GhostCounts(w)[1] = 1;
+        }) },
+        new object[] { "dropped", (Action<World>)(w =>
+        {
+            Ghosts(w)[0] = default;
+            GhostCounts(w)[0] = 0;
+        }) },
+    };
+
+    [Theory]
+    [MemberData(nameof(GhostFields))]
+    public void Hash_CoversEveryGhostField(string field, Action<World> change)
+    {
+        Simulation a = Ghosted(), b = Ghosted();
+        Assert.Equal(a.StateHash(), b.StateHash());
+        change(a.World);
+        Assert.True(a.StateHash() != b.StateHash(), field);
+    }
+
+    [Fact]
+    public void Hash_AnEmptyGhostList_AddsNothing()
+    {
+        // With no entry the fog hashes as it did before M4-3b (the golden replay's k lines did not move).
+        Simulation a = Ghosted();
+        var listed = new StateHasher();
+        a.World.Fog.AddToHash(ref listed, a.TickNumber);
+        Vision.BuildingGhost g = Ghosts(a.World)[0];
+        Ghosts(a.World)[0] = default;
+        GhostCounts(a.World)[0] = 0;
+        var empty = new StateHasher();
+        a.World.Fog.AddToHash(ref empty, a.TickNumber);
+        Assert.NotEqual(listed.Value, empty.Value);
+        // The empty list's stream is the explored bits, the visible bits and the reveal count, nothing after them.
+        var expected = new StateHasher();
+        foreach (string f in new[] { "_explored", "_visible" })
+            foreach (ulong[] bits in FogField<ulong[][]>(a.World, f))
+                foreach (ulong word in bits) expected.AddWord(word);
+        expected.Add(0); // no reveal in force
+        Assert.Equal(expected.Value, empty.Value);
+        Ghosts(a.World)[0] = g;
+        GhostCounts(a.World)[0] = 1;
+        var again = new StateHasher();
+        a.World.Fog.AddToHash(ref again, a.TickNumber);
+        Assert.Equal(listed.Value, again.Value);
     }
 }

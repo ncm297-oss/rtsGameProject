@@ -91,7 +91,8 @@ phases in this fixed order:
    unit that arrives or gives up in phase 9 starts its next leg on the next tick; a unit with a
    combat target waits (M4-1). Then (M4-1) `CombatSystem.Acquire`: dead targets dropped, finished
    engagements ended, the leash applied, and every unit due (slot s on ticks where
-   `(tick + s) % 4 == 0`) scans; see "Implementation (M4-1)".)
+   `(tick + s) % 4 == 0`) scans; see "Implementation (M4-1)". M4-3b: then `TowerSystem.Acquire`, finished buildings
+   with an attack pick an enemy unit; see "Implementation (M4-3b)".)
 8. **Pathfinding requests:** build or fetch flow fields for new move targets. (M1-4c: the first
    step of `MovementSystem.Run`: Moving units are sorted by (goal cell, slot), every goal that
    needs a field and has it cached is touched, and the missing ones are built oldest order first,
@@ -103,14 +104,16 @@ phases in this fixed order:
 10. **Combat:** attack wind-ups and cooldowns, projectile flight and impact, splash. (M4-1:
     `CombatSystem.Attack`: cooldowns count down, units with a target stand and swing in
     reach, chase out of it, and land wind-ups as queued hits. M4-2b: first every projectile in flight moves one step
-    (`ProjectileSystem.Fly`); a wind-up of an attack with a projectile ends in a shot instead of a queued hit.)
+    (`ProjectileSystem.Fly`); a wind-up of an attack with a projectile ends in a shot instead of a queued hit. M4-3b:
+    after the units, `TowerSystem.Attack`: towers count their cooldowns down, wind up and fire.)
 11. **Damage and death:** apply queued damage, kill entities, emit death events. (M4-1:
     `CombatSystem.Resolve`: hits in attacker slot order, the dead freed at once with their
     population, kills and losses counted, death events recorded, stale targets cleared. M4-2b: after the queued hits,
     the projectiles that arrived this tick land in slot order, with their splash, before the stale targets are cleared.)
 12. **Vision and detection:** recompute fog every 4 ticks (5 Hz) per player. (M4-3a: `VisionSystem.Run` rebuilds every
     player's unexplored / explored / visible grid on the ticks where `tick % 4 == 1`, from its own units' and buildings'
-    sight with the high-ground rule; an initial stamp also runs at the start of tick 0; see "Vision, detection, fog".)
+    sight with the high-ground rule; an initial stamp also runs at the start of tick 0; see "Vision, detection, fog".
+    M4-3b: right after each player's grid, its last-known buildings list.)
 13. **Cleanup:** free dead handles, finalize the tick's event list, bump `TickNumber`. (M4-1: the
     dead are freed in phase 11 already; the tick's death events stay readable in `World.Deaths`
     until the next tick starts, which empties the buffer first thing.)
@@ -1603,6 +1606,115 @@ on one Raider 2.0 ms (reported). With the BUG-0183 re-lead pass (`Track`, one mo
 3.49 ms; still 0 B a tick. Unchanged rows: the melee brawl 3.09 / 3.39 ms (M4-1: 3.06 / 3.47), the one-player
 2,500 tight blob 4.34 ms (budget 4.6), `GatherPerfTests.TwoHundredGatheringWorkersAlone` 0.318 ms (M4-2a: 0.32).
 
+### Implementation (M4-3b)
+
+Buildings that shoot, the last-known buildings list, and placement on explored ground (M4 criterion 5, the sim's share);
+`Rts.Sim.Combat.TowerSystem`, `Rts.Sim.Vision.BuildingGhost`, `FogStore.Ghosts`, `PlacementError.Unexplored`.
+
+**Data.** `buildings.json` takes an optional `attack` (the unit `attack` object: `value`, `type`, `cooldown`, `range`,
+`windup`, `projectile`, `targets`, and `minRange` / `splash` / `friendlyFire` / `bonusVs` as for units) and an optional
+`detector` (meters, above 0 and at most `DataLimits.MaxSight`; `BuildingDef.Detector`, stored for M4-5's stealth, unused
+until then). A building's attack must have a value of at least 1, a range above 0 and an **aimed** projectile (a building
+fires from its footprint, so it has no melee blow and lobs nothing), and `targets` may not be `buildings` (absent, `all`
+and `units` all mean units); each refusal is one error at its field naming the building (`Data/TowerAttackLoaderTests`).
+`BuildingDef.Attack` is null for a building without one. `ContentHash` covers both (a flag, then the attack's fields; the
+detector). Shipped: both watch towers (`malazan_watchtower`, `whirlwind_lookout_tower`) `{ value 10, pierce, cooldown 2,
+range 18, windup 0.4, projectile bolt / arrow, targets units }`, `detector 16` (docs/02 "Buildings"; the wind-up is docs/02
+"Stats"' ranged default, 0.4 s). The hook is the field, never the slot: any building with an attack shoots.
+
+**Towers (`TowerSystem`, phases 7 and 10).** Both phases walk this tick's live-building list (`World.CombatBuildings`,
+collected by `CombatSystem.Acquire`) and skip everything when no building type in the data has an attack
+(`World.AnyBuildingAttack`). A **construction site never shoots** and holds no tower state. Per building slot
+(`BuildingStore.TowerTarget` read-only for the view; target unit, cooldown, wind-up; reset by Spawn and Free):
+- **Acquire** (phase 7, after the units): a target that died is dropped at once; on the tower's scan tick
+  (`(tick + slot) % ScanInterval == 0`, interval 4, staggered by slot like the units') a target out of reach or that its
+  owner no longer sees is dropped, never mid-wind-up. A tower with no target picks one on its scan tick: one
+  `SpatialHash.QueryEnemies` around the footprint's centre (range + the largest unit radius + the half-diagonal), then the
+  **unit priority** (docs/03 "Implementation (M4-1)"): units whose target is this tower, then units that can attack, then
+  other units; then the nearest to the footprint, then the lowest slot. In reach means edge to edge from the footprint
+  (the footprint's nearest point to the unit's centre, less its radius) within `range` and not inside `minRange`.
+  **Never a building.**
+- **Vision** (`VisionSystem.BuildingSeesUnit`): the unit rule with the building as the viewer: (a) within the building's
+  `sight` of its footprint's centre, at or below its level (its centre cell's) unless within the 4 m lip; or (b) the unit's
+  cell visible in the owner's fog; or (c) revealed. Asked only of a candidate that would win (BUG-0217's gate). On a flat
+  map a tower always sees what it can shoot (sight 24 m from the centre, reach at most 18 + 2.9 + 0.9 m).
+- **Attack** (phase 10, after the units' swings): the cooldown counts down every tick; with a live target in reach and the
+  cooldown at 0 it starts a shot (cooldown = `attack.cooldown`, wind-up = `attack.windup`); at the wind-up's end it fires if
+  the target is within reach + `WindupGrace` (0.5 m), else the shot is lost (the unit `Fire` rule). Out of reach between
+  shots the target is dropped and the next scan picks again. So the first shot leaves `windup` ticks after the scan that
+  took the target, then one every `cooldown` ticks (`TowerTests.OneShotEvery2s_...`).
+- **The shot** (`TowerSystem.Fire`): an aimed projectile from the footprint's centre, led exactly as a unit's
+  (`ProjectileSystem.Lead`, and re-led in flight by `Track`). `ProjectileStore` gains `AttackerIsBuilding` (one byte a
+  slot): the attacker handle and type are then a building's; the landing reads the attack through `CombatSystem.AttackOf`
+  and its tech points through `AttackBonus`. `PendingHit` gains the same flag.
+- **Forge upgrades.** docs/02 says Ranged Weapons is "+1 / +2 attack for pierce units **and towers**", so towers get it:
+  `TechState.MatchesBuilding` applies an `attack` effect to a building's attack when its only filter is `attackType` and it
+  matches the attack's damage type (tags, units and siege name unit properties; an unfiltered effect is "every unit"). A
+  per-(player, building type) sum (`BuildingAttackBonus`) is kept like the units' (derived, recomputed when a flag changes).
+- **Hits by a tower.** A tower is never a unit's `LastAttacker` (a unit handle), its hit starts no retaliation, and a hit
+  from a tower on high ground **reveals nothing** (reveals are stored per unit slot; BUG-0270). The victim's scans take the
+  tower like any enemy building: after every enemy unit, within its sight (a retaliation that its next scan would drop
+  again, for a tower beyond its sight, was tried and left out). A tower that outranges the victim's sight is not answered,
+  as a Catapult isn't (M4-3a).
+- **Projectile store size.** Towers fire into the same store as units (`SimConfig.ProjectileSlots`, sized by the
+  population caps' shooters); a shot fired while it is full is lost, as before. Every tower has at most one shot in the air
+  (an 18 m flight is 15 ticks, the cooldown 40), so a match only loses tower shots with the store full of unit shots
+  (every population slot a shooter with one in flight). Not sized up for towers: 256 more slots would cost about 30 KB
+  on the 1,024-cell map, more than the 8 KB left under `FieldBuildFairnessQaTests`' bound after M4-3b (BUG-0271).
+- **Hashing.** Bit 31 of a building's production word flags tower state (a target, a cooldown or a wind-up), followed by
+  the target's index and generation, the cooldown and the wind-up; a building that never shot hashes as before. A tower's
+  projectile sets bit 8 of its level word. Reflection audits: `StateHashTests.EveryBuildingStoreArray_IsHashed` (now
+  covers the target handles) and `EveryProjectileStoreArray_IsHashed`; rows `Hash_CoversEveryTowerField`.
+
+**The last-known buildings list (`FogStore.Ghosts(player)`).** docs/02: enemy buildings seen once stay as ghosts in
+explored fog until the cell is seen again. Per player one `BuildingGhost` per building slot (`Generation`, `TypeId`,
+`Cell` = anchor, `Owner`; `Generation` 0 = empty), a fixed array sized by `BuildingCapacity`, updated right after each
+player's fog update (phase 12, every 4 ticks; the tick-0 initial stamp too): an enemy building with any footprint cell
+visible now is recorded (or refreshed) in its slot's entry; an entry whose building is not seen now is **kept** (also
+after the building is gone) unless the building is gone (slot free, or a newer generation) **and** a cell of the
+remembered footprint is visible now, which drops it. So a ghost is dropped the first update its ground is in sight with the
+building gone, never earlier, and the player learns of a death only by looking. One entry per slot: if a ghosted
+building's slot is reused while the player isn't looking, the old ghost stays until either footprint is seen; once the
+new building is seen it replaces the old entry, though the old ground was never looked at (a known limit, BUG-0272; slots
+recycle lowest-free-first, so this needs a building destroyed and another built unseen). Read-only for the view:
+`Ghosts(player)` (a span, slot-indexed), `GhostCount(player)`. Never one's own buildings. Hashed (after the reveals,
+only while some player has an entry, so a match where no enemy building was ever seen hashes as before; the golden's `k`
+lines did not move): each player's count, then each entry's slot and fields (`StateHashTests.Hash_CoversEveryGhostField`).
+A save (M6) stores the entries.
+
+**Attack on a last-known building.** An explicit `Attack` on a building its owner can't see now but whose ghost it holds
+(slot and generation) is **accepted** (`CombatSystem.MayAttack`), alive or gone, since the player can't tell; one gone
+whose remembered ground the unit or the fog shows right now is dropped (known gone). The unit holds the target
+(`CombatMode.Ordered`, `HeldByGhost`): the scan-tick "lost out of sight" check skips it, the chase walks to the live
+footprint or, gone, to the remembered one (`TargetRect`), and it neither plants nor swings while it doesn't see the
+building (`Blind`; this also covers the Catapult, whose range outruns its sight: it walks on until it sees the target).
+It attacks once it sees it. A building gone while remembered stays the target only while the unit's owner doesn't see its
+ground (`GoneButRemembered`: the unit's own sight now, or a footprint cell in its owner's fog); the tick the ground comes
+into sight the order ends as for a dead target (`Settle`: Idle where it stands, no mode). Only the explicit order: scans,
+retaliation and attack-move still take only what the owner sees. Rows: `Vision/GhostListTests`.
+
+**Placement on explored ground.** `World.CanPlace` (and so `Command.Build`) refuses with `PlacementError.Unexplored`
+(value 10, declared after `SealsGround` so no earlier value moves) when any footprint cell is unexplored for the player:
+after the terrain rules (`Blocked`, and `SealsGround` where it is checked first) and before `UnitInTheWay`. The dev
+`SpawnBuilding` command doesn't check it (nor any player rule). The view's text key is `placement.unexplored`
+(`ui.json`, view-owned). Explored ground plays exactly as before. Test scenes about other placement rules that build far
+from their workers start explored (`TestSim.Explored`, a seam over `FogStore.ExploreAllForTests`; `BuildMaps.NewSim` uses
+it); the rule's own rows are `PlacementTests.Unexplored_*`.
+
+**Cost** (Debug, this PC, the machine shared with other test runs). `Combat/TowerPerfTests.TwentyTowersAmong500Enemies_CostAtMost02MsATick`:
+20 Watchtowers among 500 holding Raiders against the same scene with Billets (same footprint, no attack), alternating
+300-tick runs: 0.210-0.219 ms a tick with towers against 0.207-0.216 ms with Billets, a difference of 0.001-0.012 ms
+(budget 0.2 ms), the towers firing throughout (120 hits in each 300-tick window). The towers outrange the Raiders, so the
+scene isolates the towers' own work: scans every 4 ticks, wind-ups, shots, flights, hits. The tower phases, the ghost update and the placement rule allocate nothing
+(`TowerTicks_AllocateNothing`). The ghost update is one pass over the building slots per player per fog update. Memory: the 1,024-cell world with
+4,096 unit slots and 2 players grows 30,032 bytes (230,726,944 -> 230,756,976; the ghost entries, 16 bytes a building
+slot a player, the tower state, 16 bytes a building slot, the building attack bonus tables, the projectiles' building
+flag), under `FieldBuildFairnessQaTests`' 230,765,000 bound with 8 KB to spare (BUG-0271's note on the margin). The
+one-player 2,500 tight blob (no building), three alternating runs against the M4-3a base on a machine at about 85 % load
+from other test runs: 4.82-4.87 ms against 4.91-5.10 ms for the base, so no cost from M4-3b (both over the 4.6 ms budget
+under that load; the absolute figure needs a quiet machine). The placement and requirement Perf rows likewise measured
+equal to the base, alternating (`ConstructionPerfTests`, `RequirementPerfTests`, `ResearchPerfTests`).
+
 ## Economy implementation
 
 - Resource nodes are entities with a remaining amount. There is no gather slot list: workers queue
@@ -2121,9 +2233,9 @@ three gates below.
 
 ## Vision, detection, fog
 
-Fog of war and the high-ground rule are in since M4-3a (`sim/Rts.Sim/Vision/`); detection and stealth (M4-5), zones'
-vision effects (M4-4), the last-known building ghosts and buildings that shoot (M4-3b) and the AI's `PlayerView` (M5)
-come later (see "Not yet" below).
+Fog of war and the high-ground rule are in since M4-3a (`sim/Rts.Sim/Vision/`); the last-known building ghosts, buildings
+that shoot and placement on explored ground since M4-3b (see "Implementation (M4-3b)"); detection and stealth (M4-5),
+zones' vision effects (M4-4) and the AI's `PlayerView` (M5) come later (see "Not yet" below).
 
 - **The grid.** `World.Fog` (`FogStore`): per player a `byte[]` of map cells, row-major (`y * Width + x`), 0 unexplored,
   1 explored, 2 visible (`VisionConstants.Unexplored` / `Explored` / `Visible`). Allocated with the world: one byte a
@@ -2178,8 +2290,8 @@ come later (see "Not yet" below).
   its sight, (a) holds for every scan candidate of a walking unit on a one-level map, and every `Scenario/CounterTriangleTests` row plays
   exactly as before M4-3a (the two siege-against-a-building rows now place a spotter beside the building: their
   attackers start out of sight of it, and their explicit Attack would be dropped). The Catapult (range 24 m, sight 18 m) is the one shipped unit that outranges its sight: walking, on
-  its own it acquires at 18 m as before; an explicit Attack on a target no own unit or building sees is dropped (M4-3b's
-  last-known buildings list relaxes that for buildings). A holding unit (and one past `MaxGiveUps`) scans at its reach
+  its own it acquires at 18 m as before; an explicit Attack on a target no own unit or building sees is dropped, except a
+  building on the owner's last-known list (M4-3b: accepted; the unit walks until it sees it, "Implementation (M4-3b)"). A holding unit (and one past `MaxGiveUps`) scans at its reach
   instead (24 + 0.9 + 0.9 = 25.8 m for a holding Catapult), so a candidate beyond its sight passes only through (b) or
   (c): with no spotter a holding Catapult takes nothing between 18 and 25.8 m on a flat map (BUG-0216;
   `QA/FogQaTests.Catapult_OutrangesItsSight_NeedsASpotter_...`). A holder's reach beyond its sight needs a spotter.
@@ -2190,12 +2302,20 @@ come later (see "Not yet" below).
   slot, hashed). A dead attacker reveals nothing. It is stored per (unit slot, player) as the end tick and the slot's
   generation, so a recycled slot never inherits a reveal (2 ints a slot a player). A same-level attacker outside every
   sight circle of the victim's owner is not revealed, and so not answered (docs/02; M4-5's Revealed status).
+- **Last-known buildings** (M4-3b): `Fog.Ghosts(player)`, one `BuildingGhost` per building slot (type, anchor cell,
+  generation, owner of the enemy building last seen there), kept until the player sees the ground again with the building
+  gone; hashed. A building tower targets units under the same rule as a unit, with itself as the viewer
+  (`VisionSystem.BuildingSeesUnit`). Details in "Implementation (M4-3b)".
+- **Placement** (M4-3b): a footprint must be explored by the player (`PlacementError.Unexplored`).
 - **For the view (M4-V4).** Read between ticks, never write:
   - `Fog.Visibility(player)`: `ReadOnlySpan<byte>`, row-major `Fog.Width` x `Fog.Height` cells, the three values above;
     upload it to the fog texture when `Fog.Version(player)` (+1 per update that ran for that player) changes.
   - `Fog.IsVisible(player, cell)`, `Fog.IsExplored(player, cell)` (explored or visible).
   - `Fog.CanSeeUnit(player, slot)`: an own unit, its cell visible at the last update, or revealed to the player (hide
     enemy unit views where this is false). `Fog.CanSeeBuilding(player, slot)`: own, or any footprint cell visible.
+  - `Fog.Ghosts(player)` / `Fog.GhostCount(player)` (M4-3b): draw a ghost for each entry with `Known` whose footprint
+    the player doesn't see now (`CanSeeBuilding` false, or the slot holds another building); the list changes only on an
+    update tick.
   - Out-of-range players, cells and dead slots answer false (or an empty span / 0).
 - **Cost** (Debug, first run, 2026-10-08, the machine shared with other test runs): `Vision/FogPerfTests`: 2,500 units of
   one player spread over a flat 128 map, 0.06 ms a tick amortized (budget 0.25 ms); 1,000 v 1,000 on a generated
@@ -2212,14 +2332,14 @@ come later (see "Not yet" below).
   circle is capped at the map's diagonal (since BUG-0216; it was capped at the longer side, which cut a 64 m sight in
   the corner of a map under 46 cells). (4) The byte map and the packed bits are two copies of the visible set; combat
   reads the bits, the view the bytes; both are written only by the update.
-- **Not yet.** M4-3b: towers' `attack` and `detector` fields and buildings that shoot, the per-player "last known
-  buildings" list (ghosts in explored fog, docs/02), the placement rule "footprint explored by the player". M4-4: zone
+- **Not yet.** (M4-3b's towers, last-known list and explored-placement rule are in.) The `detector` radius is loaded and
+  hashed but unused until M4-5. A tower's hit from high ground reveals nothing (BUG-0270). M4-4: zone
   vision (Darkness / Sandstorm: per-player vision blocker masks applied after the stamp). M4-5: `bool[] Detected` per
   player (detector circles stamped like sight), stealth, the Revealed status (attacking or casting reveals for 3 s); the
   target validity check then also requires "not stealthed, or detected". M5: the AI reads the world only through a
   `PlayerView` facade that applies these checks. **Rendering** (M4-V4): the local player's grid uploads to an R8 texture
   each update; the terrain shader samples it with smooth filtering (unexplored black, explored desaturated and dark,
-  visible full color); unit views are hidden when not visible; ghosts come from the last-known list (M4-3b).
+  visible full color); unit views are hidden when not visible; ghosts come from the last-known list (`Fog.Ghosts`).
 
 ## Data format
 
@@ -2300,7 +2420,7 @@ factions) arrives with the milestone that consumes it.
 | `resources.json` | `{ "resources": [ ... ] }`, each `{id, displayName, description, resource, footprint {width, height}}`: `resource` is `gold` or `wood`, footprint sides are cells, 1-4 (`DataLimits.MaxFootprint`). Amounts are not here: a tree holds `rules.json` `treeWood`, a mine `startMines.gold` (M3-1, see "Economy implementation") |
 | `rules.json` | docs/02 Economy table: `startingGold`, `startingWood`, `startingWorkers`, `popCap`, `workerCarry`, `gatherRate {gold, wood}` (per second), `startMines` / `expansionMines {count, gold}`, `treeWood`, `nodeSearchRadius`, `repair {rateFactor, costFactor}` (M3-3), `buildingSight` (M4-3a: meters, above 0 and at most 64, the sight of a building whose entry gives none; shipped 12, a Producer default: docs/02 gives sight only for the Watch Tower). Pop provided by buildings comes with `buildings.json` (M3); the Age II cost with `techs.json` (M3-5) |
 | `faction.json` | `id` (must equal the folder name), `displayName`, `description`, `bonus {displayName, description}`, `resources {gold, wood: {displayName}}`, `palette {primary, secondary, accent}` as `#RRGGBB` |
-| `buildings.json` | `{ "buildings": [ ... ] }`, each `{id, displayName, description, slot, footprint {width, height}, hp, armor, cost {gold, wood}, buildTime, popProvided, dropOff}`: `slot` is one of the ten template slots (`DataLimits.BuildingSlotIds`), footprint sides 1-4 cells, `buildTime` in seconds (to ticks), `popProvided` a multiple of 0.5 (to half-pop), `dropOff` a required bool, `requires` an optional list of tech / building ids (M3-5; resolved and gating placement since M3-6), `sight` optional meters (M4-3a: above 0 and at most 64, default `rules.json` `buildingSight`; shipped 24 on both watch towers, docs/02). Ids unique across factions (M3-2, see "Economy implementation"); exactly one building per slot per faction (M3-6, BUG-0010) |
+| `buildings.json` | `{ "buildings": [ ... ] }`, each `{id, displayName, description, slot, footprint {width, height}, hp, armor, cost {gold, wood}, buildTime, popProvided, dropOff}`: `slot` is one of the ten template slots (`DataLimits.BuildingSlotIds`), footprint sides 1-4 cells, `buildTime` in seconds (to ticks), `popProvided` a multiple of 0.5 (to half-pop), `dropOff` a required bool, `requires` an optional list of tech / building ids (M3-5; resolved and gating placement since M3-6), `sight` optional meters (M4-3a: above 0 and at most 64, default `rules.json` `buildingSight`; shipped 24 on both watch towers, docs/02), `attack` optional (M4-3b: the unit `attack` object; value at least 1, range above 0, an aimed `projectile` required, `targets` not `buildings`; shipped on both watch towers), `detector` optional meters (M4-3b: above 0 and at most 64; shipped 16 on both watch towers; unused until M4-5). Ids unique across factions (M3-2, see "Economy implementation"); exactly one building per slot per faction (M3-6, BUG-0010) |
 | `techs.json` | `{ "techs": [ ... ] }` in `common/` (shared by every faction) and in each faction folder (its own), each `{id, displayName, description, researchedAt, cost {gold, wood}, researchTime, requires?, requiresAnyOf?, effects: [{stat, amount, appliesTo {attackType?, tags?, units?, siege?}}]}`: `researchedAt` is a building slot id (a common tech resolves to each faction's building of it; a faction without one is an error), `researchTime` in seconds (to ticks), `requires` tech / building ids (resolved and gating research since M3-6), `requiresAnyOf` `{count, of: [slot ids, or in a faction file its own building ids]}`: met when `count` of the distinct listed slots hold an own finished building (M3-6; shipped on `age_ii` only), `effects` may be empty. `stat` is one of `attack`, `armor`, `range`, `hp`, `abilityCooldown` (`DataLimits.TechStatIds`); `amount` is non-zero, whole for attack / armor / hp, meters for range, seconds for ability cooldown (to ticks, negative shortens it). `appliesTo` is required (`{}` = every unit); each filter it sets must match: `attackType` a damage type, `tags` any one of the unit's tags (each must be a tag some unit has), `units` unit ids (a faction tech's must be its own), `siege` true / false for the `siege` slot; a `tags` or `units` list set to `[]` is an error (M3-6, BUG-0098). Tech ids are unique across all techs files and may not equal a building id (M3-6); `DataLimits.AgeTechIds` (`age_ii`) must be a common tech (M3-5, see "Implementation (M3-5)") |
 | `projectiles.json` | `{ "projectiles": [ ... ] }`, each `{id, kind, speed, hitTolerance?, leadSpeed?}`: `kind` `aimed` or `lob`, `speed` m/s (at least 1), `hitTolerance` m (aimed only, 0-2, default 0.3; an error on a lob), `leadSpeed` m/s (aimed only, not negative, default 0 = never leads; an error on a lob). Ids unique; every unit's `attack.projectile` must name one (M4-2b, see "Implementation (M4-2b)") |
 | `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge) |
@@ -2329,7 +2449,8 @@ search, for load time, tests, and tooling only (`FindResource` too, since M3-1).
 `requires` (units, buildings, techs) resolves at load (M3-6) to `RequiresTechs` / `RequiresBuildings` (tech ids and
 building type ids, ascending; the strings are kept): one error at an entry naming neither, one at the entry closing a
 `requires` cycle. The gates `CanTrain` / `CanPlace` / `CanResearch` check them (see "Implementation (M3-6)").
-`attack.projectile` resolves at load (M4-2b) to `AttackDef.ProjectileTypeId` (one error at the field for an unknown id).
+`attack.projectile` resolves at load (M4-2b) to `AttackDef.ProjectileTypeId` (one error at the field for an unknown id); a
+building's `attack` (M4-3b) resolves the same way to `BuildingDef.Attack`.
 Not resolved yet (kept as a plain string): `model` (M2/M6 asset pipeline). Unit passives, abilities, detection, and faction modifiers (e.g. Whirlwind's gather
 bonus) are also not in the M1 schema; they arrive with `abilities.json` / `statuses.json` and the
 systems that use them. Collision radii in the shipped units (0.4 foot, 0.7 mounted, 0.9 siege) are

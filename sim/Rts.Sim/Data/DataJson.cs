@@ -190,6 +190,8 @@ internal sealed class BuildingJson
     public bool? DropOff { get; set; }
     public List<string?>? Requires { get; set; }
     public double? Sight { get; set; }
+    public AttackJson? Attack { get; set; }
+    public double? Detector { get; set; }
 }
 
 internal sealed class TechFileJson

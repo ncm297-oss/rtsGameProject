@@ -266,8 +266,10 @@ public class ProductionFuzzTests
         for (int p = 0; p < 2; p++)
         {
             int c = p == 0 ? 0 : g.Width * g.Height - 1;
-            // Starting gold (200) can't pay for a hall, but the dev command doesn't charge: every other rule must pass.
-            while (!w.CanPlace(p, halls[p], c, out Economy.PlacementError why) && why != Economy.PlacementError.CannotAfford) c += p == 0 ? 37 : -37;
+            // Starting gold (200) can't pay for a hall, but the dev command doesn't charge: every other rule must pass. Nor does
+            // it need explored ground (M4-3b): no unit has looked yet, and the units-in-the-way rule after it has no unit to find.
+            while (!w.CanPlace(p, halls[p], c, out Economy.PlacementError why) && why != Economy.PlacementError.CannotAfford
+                && why != Economy.PlacementError.Unexplored) c += p == 0 ? 37 : -37;
             anchors[p] = c;
             sim.Enqueue(Command.SpawnBuilding(p, halls[p], g.CellCenter(c % g.Width, c / g.Width)));
         }

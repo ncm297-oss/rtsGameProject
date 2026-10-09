@@ -27,6 +27,7 @@ public class ProductionPerfTests
     internal static (Simulation Sim, List<int> Halls) Scene()
     {
         Simulation sim = MoveScenario.Spawn(7, units: 500, maxCost: 12f, out int center, capacity: 650, players: 1, map: ResourceMap);
+        TestSim.Explored(sim); // M4-3b: the halls are picked map-wide
         NavGrid g = sim.World.NavGrid;
         FlowField fromCenter = FlowField.Build(g, center);
         int far = center;

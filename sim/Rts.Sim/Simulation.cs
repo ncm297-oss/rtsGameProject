@@ -102,7 +102,11 @@ public sealed class Simulation
 
         // Phase 7: Idle units start their next shift-queued order, then target acquisition (M4-1).
         OrderSystem.Run(World);
-        if (World.CombatEnabled) CombatSystem.Acquire(World);
+        if (World.CombatEnabled)
+        {
+            CombatSystem.Acquire(World);
+            TowerSystem.Acquire(World); // M4-3b: buildings that shoot pick a unit
+        }
 
         // Phases 8-9: flow fields (fetched or built on demand) and movement.
         MovementSystem.Run(World);
@@ -114,6 +118,7 @@ public sealed class Simulation
         {
             ProjectileSystem.Fly(World);
             CombatSystem.Attack(World);
+            TowerSystem.Attack(World); // M4-3b: towers wind up and fire, after the units
             CombatSystem.Resolve(World);
         }
 

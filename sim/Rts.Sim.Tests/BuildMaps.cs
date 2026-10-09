@@ -48,7 +48,11 @@ public static class BuildMaps
         return cells.Take(n).Select(c => Unit(sim, At(sim, c.X, c.Y), player)).ToArray();
     }
 
-    /// <summary>A sim on a hand-made map with <paramref name="players"/> players, plenty of command room; <paramref name="combat"/> false: no fights (BUG-0135).</summary>
+    /// <summary>
+    /// A sim on a hand-made map with <paramref name="players"/> players, plenty of command room; <paramref name="combat"/>
+    /// false: no fights (BUG-0135). The map starts explored for every player (M4-3b, <see cref="TestSim.Explored"/>): these
+    /// scenes build anywhere on it, and the explored rule has its own rows (<c>PlacementTests</c>).
+    /// </summary>
     public static Simulation NewSim(Heightmap map, int units = 32, int players = 1, bool combat = true) =>
-        new(TestSim.Config(Seed: 5, PlayerCount: players, UnitCapacity: units, CommandCapacity: 512) with { Combat = combat }, map);
+        TestSim.Explored(new(TestSim.Config(Seed: 5, PlayerCount: players, UnitCapacity: units, CommandCapacity: 512) with { Combat = combat }, map));
 }

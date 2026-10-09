@@ -130,7 +130,7 @@ public class SimHardeningQaTests
     /// <summary>The dev's long wall (one tree wide down x = 64 from y 3), optionally down to the bottom border so the top gap is the only way round.</summary>
     private static Simulation LongWall(bool closedAtTheBottom, int buildingCapacity = 64)
     {
-        var sim = new Simulation(TestSim.Config(Seed: 5, PlayerCount: 2, UnitCapacity: 160, CommandCapacity: 512) with { ResourceCapacity = 256, BuildingCapacity = buildingCapacity }, Flat(128, 128));
+        var sim = TestSim.Explored(new Simulation(TestSim.Config(Seed: 5, PlayerCount: 2, UnitCapacity: 160, CommandCapacity: 512) with { ResourceCapacity = 256, BuildingCapacity = buildingCapacity }, Flat(128, 128))); // M4-3b: placement here is about another rule
         for (int y = 3; y < (closedAtTheBottom ? 127 : 122); y++) Spawn(sim.World, Tree, 64, y, TreeWood);
         return sim;
     }
@@ -232,7 +232,7 @@ public class SimHardeningQaTests
 
     private static (Simulation Sim, int Worker) Stack400()
     {
-        var sim = new Simulation(TestSim.Config(Seed: 5, PlayerCount: 1, UnitCapacity: 512, CommandCapacity: 1024), Flat(128, 128));
+        var sim = TestSim.Explored(new Simulation(TestSim.Config(Seed: 5, PlayerCount: 1, UnitCapacity: 512, CommandCapacity: 1024), Flat(128, 128))); // M4-3b: placement here is about another rule
         NavGrid g = sim.World.NavGrid;
         for (int k = 0; k < 401; k++) sim.Enqueue(Command.SpawnUnit(0, Laborer, g.CellCenter(4 + k % 100, 4 + k / 100 * 2)));
         Run(sim, 2);
@@ -326,7 +326,7 @@ public class SimHardeningQaTests
             if (y == 60) row[57] = 'r';
             rows[y] = new string(row);
         }
-        var sim = new Simulation(TestSim.Config(Seed: 5, PlayerCount: 1, UnitCapacity: 64, CommandCapacity: 128), FromRows(rows));
+        var sim = TestSim.Explored(new Simulation(TestSim.Config(Seed: 5, PlayerCount: 1, UnitCapacity: 64, CommandCapacity: 128), FromRows(rows))); // M4-3b: placement here is about another rule
         NavGrid g = sim.World.NavGrid;
         for (int k = 0; k < 31; k++) sim.Enqueue(Command.SpawnUnit(0, Laborer, g.CellCenter(4 + k, 4)));
         Run(sim, 2);

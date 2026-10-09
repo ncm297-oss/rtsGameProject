@@ -511,7 +511,7 @@ public class ConstructionQaTests
     [Fact]
     public void FourThousandBuildsAtOneAnchor_OneSite_OnePayment_EveryWorkerJoins()
     {
-        var sim = new Simulation(TestSim.Config(Seed: 5, PlayerCount: 1, UnitCapacity: 64, CommandCapacity: 4200), Flat(48, 48));
+        var sim = TestSim.Explored(new Simulation(TestSim.Config(Seed: 5, PlayerCount: 1, UnitCapacity: 64, CommandCapacity: 4200), Flat(48, 48))); // M4-3b: placement here is about another rule
         SetTotals(sim, 0, 1000, 1000);
         for (int i = 0; i < 64; i++) sim.Enqueue(Command.SpawnUnit(0, Laborer, At(sim, 4 + i % 16 * 2, 4 + i / 16 * 2)));
         Run(sim, 2);
@@ -601,7 +601,7 @@ public class ConstructionQaTests
     /// <summary>A <paramref name="size"/> map with a one-tree wall down x = size / 2 from y = 3 to size - 6: a House in the top gap has sides that meet only round the bottom.</summary>
     internal static (Simulation Sim, int AnchorX) LongWall(int size, int commands = 64)
     {
-        var sim = new Simulation(TestSim.Config(Seed: 5, PlayerCount: 1, UnitCapacity: 8, CommandCapacity: commands) with { ResourceCapacity = 2 * size }, Flat(size, size));
+        var sim = TestSim.Explored(new Simulation(TestSim.Config(Seed: 5, PlayerCount: 1, UnitCapacity: 8, CommandCapacity: commands) with { ResourceCapacity = 2 * size }, Flat(size, size))); // M4-3b: placement here is about another rule
         int x = size / 2;
         for (int y = 3; y < size - 6; y++) Spawn(sim.World, Tree, x, y, TreeWood);
         return (sim, x);

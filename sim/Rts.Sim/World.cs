@@ -94,6 +94,7 @@ public sealed class World
         CombatBuildings = new int[config.BuildingCapacity];
         CombatBuildingsOf = new int[config.PlayerCount];
         CombatEnemyExists = new bool[config.PlayerCount];
+        foreach (BuildingDef b in config.Data.Buildings) AnyBuildingAttack |= b.Attack != null;
         CombatantType = new bool[config.Data.Units.Length];
         for (int t = 0; t < CombatantType.Length; t++) CombatantType[t] = CombatSystem.IsCombatant(config.Data.Units[t]);
 
@@ -179,6 +180,9 @@ public sealed class World
 
     /// <summary>Scratch for <see cref="CombatSystem"/>: per player, whether any other owner has a unit or a building this tick (else its units skip their scans); derived, not hashed.</summary>
     internal bool[] CombatEnemyExists { get; }
+
+    /// <summary>Whether any building type in the data has an attack (M4-3b): else <see cref="TowerSystem"/> skips its loops.</summary>
+    internal bool AnyBuildingAttack { get; }
 
     /// <summary>Per unit type: whether it counts as "can attack" in the target priority (<see cref="CombatSystem.IsCombatant"/>), read from the data once.</summary>
     internal bool[] CombatantType { get; }

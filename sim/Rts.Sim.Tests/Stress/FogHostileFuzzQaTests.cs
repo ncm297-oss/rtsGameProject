@@ -145,7 +145,16 @@ public class FogHostileFuzzQaTests
                 bool targetAlive = u.TargetIsBuilding[i] ? w.Buildings.IsAlive(u.Target[i]) : u.IsAlive(u.Target[i]);
                 if (!targetAlive) continue; // dropped at the next phase 7 / 10
                 if (!u.TargetIsBuilding[i] && w.Fog.Revealed(u.Owner[i], u.Target[i].Index)) revealTicks++;
-                unseenFor[i] = VisionSystem.UnitSees(w, i, u.Target[i], u.TargetIsBuilding[i]) ? 0 : unseenFor[i] + 1;
+                bool seesIt = VisionSystem.UnitSees(w, i, u.Target[i], u.TargetIsBuilding[i]);
+                // M4-3b: an explicit Attack on a building its owner remembers (the last-known list) is held unseen by design
+                // (docs/03 "Implementation (M4-3b)"); the unit walks on and never swings at it while it doesn't see it.
+                if (!seesIt && u.TargetIsBuilding[i] && u.Mode[i] == CombatMode.Ordered && w.Fog.HasGhost(u.Owner[i], u.Target[i]))
+                {
+                    Assert.True(u.State[i] != UnitState.Attacking && u.WindupTicks[i] == 0, $"seed {seed} tick {t}: unit {i} swings at an unseen remembered building");
+                    unseenFor[i] = 0;
+                    continue;
+                }
+                unseenFor[i] = seesIt ? 0 : unseenFor[i] + 1;
                 worstUnseen = Math.Max(worstUnseen, unseenFor[i]);
                 Assert.True(unseenFor[i] <= CombatConstants.ScanInterval + 1,
                     $"seed {seed} tick {t}: unit {i} kept target {u.Target[i]} (building {u.TargetIsBuilding[i]}) unseen for {unseenFor[i]} ticks");

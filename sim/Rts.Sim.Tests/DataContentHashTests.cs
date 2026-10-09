@@ -187,7 +187,8 @@ public class DataContentHashTests
         foreach (BuildingDef b in d.Buildings)
             Check(b, x => With(d, building: x, buildingSlot: b.Id));
         foreach (string f in new[] { "Id", "Key", "Faction", "Slot", "DisplayName", "Description", "FootprintWidth", "FootprintHeight",
-            "Hp", "Armor", "CostGold", "CostWood", "BuildTicks", "HalfPopProvided", "DropOff", "Requires", "RequiresTechs", "RequiresBuildings", "Sight" })
+            "Hp", "Armor", "CostGold", "CostWood", "BuildTicks", "HalfPopProvided", "DropOff", "Requires", "RequiresTechs", "RequiresBuildings", "Sight",
+            "Detector" }) // M4-3b (the attack: TowerAttack_EveryField_AndItsPresence_ChangeTheHash)
             Assert.Contains($"BuildingDef.{f}", checkedFields);
         // M3-5: every TechDef field, on each shipped tech (the effects' own fields: TechListLength_EffectCount_AndEveryEffectField_ChangeTheHash).
         foreach (TechDef t in d.Techs)
@@ -208,5 +209,38 @@ public class DataContentHashTests
             Assert.Contains($"ProjectileDef.{f}", checkedFields);
         Assert.Contains("AttackDef.ProjectileTypeId", checkedFields);
         Assert.True(checkedFields.Count >= 57, $"only {checkedFields.Count} fields checked");
+    }
+
+    /// <summary>
+    /// M4-3b: a building's attack is hashed: every <see cref="AttackDef"/> field of a tower's, changed in turn, and the attack
+    /// taken away (null) or given to a building without one, each change the hash.
+    /// </summary>
+    [Fact]
+    public void TowerAttack_EveryField_AndItsPresence_ChangeTheHash()
+    {
+        GameData d = TestSim.Data;
+        ulong baseline = d.ContentHash();
+        BuildingDef tower = d.Buildings[d.FindBuilding("malazan_watchtower")];
+        AttackDef attack = tower.Attack!;
+        int fields = 0;
+        foreach (PropertyInfo p in Settable(typeof(AttackDef)))
+        {
+            object? changed = Changed(p.GetValue(attack), p.PropertyType);
+            Assert.True(changed != null, $"AttackDef.{p.Name}: unknown field type {p.PropertyType}");
+            AttackDef a = Clone(attack);
+            p.SetValue(a, changed);
+            BuildingDef b = Clone(tower);
+            typeof(BuildingDef).GetProperty(nameof(BuildingDef.Attack))!.SetValue(b, a);
+            Assert.True(With(d, building: b, buildingSlot: tower.Id).ContentHash() != baseline, $"a building's AttackDef.{p.Name} is not in GameData.ContentHash");
+            fields++;
+        }
+        Assert.True(fields >= 12, $"only {fields} attack fields checked");
+        BuildingDef none = Clone(tower);
+        typeof(BuildingDef).GetProperty(nameof(BuildingDef.Attack))!.SetValue(none, null);
+        Assert.NotEqual(baseline, With(d, building: none, buildingSlot: tower.Id).ContentHash());
+        BuildingDef keep = d.Buildings[d.FindBuilding("malazan_garrison_keep")];
+        BuildingDef armed = Clone(keep);
+        typeof(BuildingDef).GetProperty(nameof(BuildingDef.Attack))!.SetValue(armed, attack);
+        Assert.NotEqual(baseline, With(d, building: armed, buildingSlot: keep.Id).ContentHash());
     }
 }

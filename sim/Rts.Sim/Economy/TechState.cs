@@ -27,6 +27,11 @@ internal sealed class TechState
     private readonly float[] _table;
     // (player x units + unit) x StatCount + stat: the sum over the player's researched techs.
     private readonly float[] _bonus;
+    private readonly int _buildings;
+    // building x techs + tech: what tech adds to that building type's attack (M4-3b: an attack-type upgrade).
+    private readonly float[] _buildingTable;
+    // player x buildings + building: the sum over the player's researched techs.
+    private readonly float[] _buildingBonus;
 
     /// <summary>No techs researched, for <paramref name="players"/> players of <paramref name="data"/>.</summary>
     public TechState(int players, GameData data)
@@ -47,7 +52,24 @@ internal sealed class TechState
                     if (Matches(data, e, data.Units[u])) _table[(u * StatCount + (int)e.Stat) * _techs + t] += e.Amount;
             }
         }
+        _buildings = data.Buildings.Length;
+        _buildingTable = new float[_buildings * _techs];
+        _buildingBonus = new float[players * _buildings];
+        for (int t = 0; t < _techs; t++)
+            foreach (TechEffect e in data.Techs[t].Effects)
+                for (int b = 0; b < _buildings; b++)
+                    if (MatchesBuilding(e, data.Buildings[b])) _buildingTable[b * _techs + t] += e.Amount;
     }
+
+    /// <summary>
+    /// True if effect <paramref name="e"/> applies to building type <paramref name="b"/>'s attack (M4-3b): an
+    /// <c>attack</c> effect filtered by attack type alone, of the building's damage type (docs/02 "Forge upgrades": Ranged
+    /// Weapons is "+1 / +2 attack for pierce units and towers"). Every other filter (tags, units, siege) names unit
+    /// properties a building has none of, and an unfiltered effect is "every unit": neither reaches a building.
+    /// </summary>
+    public static bool MatchesBuilding(in TechEffect e, BuildingDef b) =>
+        b.Attack != null && e.Stat == TechStat.Attack && e.AttackType >= 0 && e.AttackType == b.Attack.DamageType
+        && e.Siege < 0 && e.Units.IsDefaultOrEmpty && e.Tags.IsDefaultOrEmpty;
 
     /// <summary>Hashed words per player (0 with no techs in the data).</summary>
     public int WordsPerPlayer { get; }
@@ -100,6 +122,13 @@ internal sealed class TechState
                 _bonus[(player * _units + u) * StatCount + s] = sum;
             }
         }
+        for (int b = 0; b < _buildings; b++)
+        {
+            float sum = 0f;
+            for (int t = 0; t < _techs; t++)
+                if (Has(player, t)) sum += _buildingTable[b * _techs + t];
+            _buildingBonus[player * _buildings + b] = sum;
+        }
     }
 
     /// <summary>True if <paramref name="player"/> has researched anything.</summary>
@@ -129,6 +158,13 @@ internal sealed class TechState
     {
         if ((uint)player >= (uint)_players || (uint)unitType >= (uint)_units || (uint)stat >= (uint)StatCount) return 0f;
         return _bonus[(player * _units + unitType) * StatCount + (int)stat];
+    }
+
+    /// <summary>The sum of the player's researched effects on the attack of building type <paramref name="buildingType"/> (M4-3b, <see cref="MatchesBuilding"/>); 0 for out-of-range ids.</summary>
+    public float BuildingAttackBonus(int player, int buildingType)
+    {
+        if ((uint)player >= (uint)_players || (uint)buildingType >= (uint)_buildings) return 0f;
+        return _buildingBonus[player * _buildings + buildingType];
     }
 
     /// <summary>Mixes <paramref name="player"/>'s flag words into a state hash.</summary>

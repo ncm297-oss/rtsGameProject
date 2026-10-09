@@ -45,7 +45,7 @@ public class RequirementPerfQaTests
     [Trait("Category", "Perf")]
     public void ALockedAnswer_IsCheaperThanAnAllowedOne_ForEveryGate()
     {
-        var sim = new Simulation(new SimConfig(5, 1, 64, 512) { Data = Fixture }, ResourceMaps.Flat(128, 128));
+        var sim = TestSim.Explored(new Simulation(new SimConfig(5, 1, 64, 512) { Data = Fixture }, ResourceMaps.Flat(128, 128))); // M4-3b: placement here is about requirements
         World w = sim.World;
         Building(sim, 4, 4);
         int bar = Building(sim, 12, 4, type: Barracks).Index;
@@ -84,7 +84,7 @@ public class RequirementPerfQaTests
     public void FiveThousandLockedCommands_FromThreePlayers_OfEveryKind_InOneTick_Under3Ms()
     {
         GameData d = Fixture;
-        var sim = new Simulation(new SimConfig(5, 3, 64, 16384) { Data = d }, ResourceMaps.Flat(128, 128));
+        var sim = TestSim.Explored(new Simulation(new SimConfig(5, 3, 64, 16384) { Data = d }, ResourceMaps.Flat(128, 128))); // M4-3b: placement here is about requirements
         World w = sim.World;
         int tower = d.FindBuilding("malazan_cadre_tower");
         var keep = new int[3];

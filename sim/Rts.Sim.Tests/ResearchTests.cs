@@ -400,7 +400,8 @@ public class ResearchTests
         Map.NavGrid g = w.NavGrid;
         // Starting totals (200 / 200) only: the replay can't carry a test seam's gift. The dev spawn doesn't charge.
         int c = 0;
-        while (!w.CanPlace(0, ResearchMaps.Armory, c, out PlacementError why) && why != PlacementError.CannotAfford) c += 37;
+        // M4-3b: nor does it need explored ground (no unit has looked yet).
+        while (!w.CanPlace(0, ResearchMaps.Armory, c, out PlacementError why) && why != PlacementError.CannotAfford && why != PlacementError.Unexplored) c += 37;
         sim.Enqueue(Command.SpawnBuilding(0, ResearchMaps.Armory, g.CellCenter(c % g.Width, c / g.Width)));
         Run(sim, 2);
         Vector2 at = g.CellCenter(c % g.Width + 1, c / g.Width + 1);

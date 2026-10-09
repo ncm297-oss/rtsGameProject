@@ -1,6 +1,9 @@
 namespace Rts.Sim.Economy;
 
-/// <summary>Why <see cref="World.CanPlace"/> refuses a building placement (M3-3); the first rule broken, in this order.</summary>
+/// <summary>
+/// Why <see cref="World.CanPlace"/> refuses a building placement (M3-3); the first rule broken, in the order declared here
+/// (<see cref="Unexplored"/>, added in M4-3b, keeps the next free value so no earlier value moves).
+/// </summary>
 public enum PlacementError
 {
     /// <summary>The placement is legal.</summary>
@@ -23,6 +26,9 @@ public enum PlacementError
 
     /// <summary>Taking the footprint would cut some passable cells off from others (BUG-0078: a placement never seals ground).</summary>
     SealsGround = 6,
+
+    /// <summary>A footprint cell is unexplored by the player (M4-3b, docs/02 "Buildings": the footprint must be explored).</summary>
+    Unexplored = 10,
 
     /// <summary>An enemy unit, or one of the player's own units holding position, has its center in the footprint.</summary>
     UnitInTheWay = 7,

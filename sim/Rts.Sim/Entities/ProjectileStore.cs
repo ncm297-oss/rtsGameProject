@@ -22,6 +22,7 @@ public sealed class ProjectileStore
     private readonly int[] _owner;
     private readonly int[] _attackerType;
     private readonly EntityHandle[] _attacker;
+    private readonly bool[] _attackerIsBuilding;
     private readonly EntityHandle[] _victim;
     private readonly bool[] _victimIsBuilding;
     private readonly byte[] _level;
@@ -49,6 +50,7 @@ public sealed class ProjectileStore
         _owner = new int[capacity];
         _attackerType = new int[capacity];
         _attacker = new EntityHandle[capacity];
+        _attackerIsBuilding = new bool[capacity];
         _victim = new EntityHandle[capacity];
         _victimIsBuilding = new bool[capacity];
         _level = new byte[capacity];
@@ -84,11 +86,14 @@ public sealed class ProjectileStore
     /// <summary>Per slot: ticks of flight left; 0 on the tick it reaches <see cref="Target"/> (it lands that tick).</summary>
     internal int[] TicksLeft => _ticksLeft;
 
-    /// <summary>Per slot: the unit type whose attack it carries (its damage, splash and friendly fire).</summary>
+    /// <summary>Per slot: the unit type whose attack it carries (its damage, splash and friendly fire); a building type when <see cref="AttackerIsBuilding"/> (M4-3b).</summary>
     internal int[] AttackerType => _attackerType;
 
-    /// <summary>Per slot: the unit that fired it (may be dead by the time it lands).</summary>
+    /// <summary>Per slot: the unit that fired it (may be dead by the time it lands); a building handle when <see cref="AttackerIsBuilding"/>.</summary>
     internal EntityHandle[] Attacker => _attacker;
+
+    /// <summary>Per slot: fired by a building (M4-3b, a tower): <see cref="Attacker"/> and <see cref="AttackerType"/> are a building's.</summary>
+    internal bool[] AttackerIsBuilding => _attackerIsBuilding;
 
     /// <summary>Per slot: what it was fired at (an aimed shot hits only this); a building handle when <see cref="VictimIsBuilding"/>.</summary>
     internal EntityHandle[] Victim => _victim;
@@ -108,7 +113,7 @@ public sealed class ProjectileStore
     /// impact point. False (nothing changes) when the store is full: the shot is lost.
     /// </summary>
     internal bool TrySpawn(Vector2 from, Vector2 to, float speedPerTick, int typeId, int owner, int attackerType,
-        EntityHandle attacker, EntityHandle victim, bool victimIsBuilding, int level = 0)
+        EntityHandle attacker, EntityHandle victim, bool victimIsBuilding, int level = 0, bool attackerIsBuilding = false)
     {
         int i = _firstFree;
         while (i < _alive.Length && _alive[i]) i++;
@@ -125,6 +130,7 @@ public sealed class ProjectileStore
         _owner[i] = owner;
         _attackerType[i] = attackerType;
         _attacker[i] = attacker;
+        _attackerIsBuilding[i] = attackerIsBuilding;
         _victim[i] = victim;
         _victimIsBuilding[i] = victimIsBuilding;
         _level[i] = (byte)level;
@@ -181,6 +187,7 @@ public sealed class ProjectileStore
         _position[i] = _prevPosition[i] = _velocity[i] = _target[i] = Vector2.Zero;
         _ticksLeft[i] = _typeId[i] = _owner[i] = _attackerType[i] = 0;
         _attacker[i] = _victim[i] = default;
+        _attackerIsBuilding[i] = false;
         _victimIsBuilding[i] = false;
         _level[i] = 0;
         Count--;
@@ -213,7 +220,8 @@ public sealed class ProjectileStore
             h.Add(_attacker[i].Generation);
             h.Add(_victim[i].Index);
             h.Add((ulong)(uint)_victim[i].Generation | (_victimIsBuilding[i] ? 1UL << 32 : 0UL));
-            h.Add((int)_level[i]); // M4-3a
+            // M4-3a: the firing level; M4-3b: a tower's shot flags bit 8, so a unit's hashes as before.
+            h.Add((int)_level[i] | (_attackerIsBuilding[i] ? 1 << 8 : 0));
         }
     }
 }
