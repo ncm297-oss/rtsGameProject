@@ -282,6 +282,11 @@ public class UnitPickerQaTests
         Simulation sim = Flat(units: 16);
         EntityHandle[] h = Spawn(sim, (0, HeavyInfantry, new Vector2(20f, 40f)), (1, Raider, new Vector2(40f, 30f)),
             (1, Raider, new Vector2(40f, 40f)), (1, Raider, new Vector2(40f, 50f)));
+        // BUG-0219: since the fog, an Attack on an unseen target is dropped; reveal the Raiders to player 0 so the three
+        // orders are accepted, while they stay outside the infantry's own 14 m scan.
+        Spot(sim, 0, h[1]);
+        Spot(sim, 0, h[2]);
+        Spot(sim, 0, h[3]);
         UnitStore u = sim.World.Units;
         EntityHandle me = h[0];
         sim.Enqueue(Command.Attack(0, me, h[1], false));
