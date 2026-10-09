@@ -437,14 +437,13 @@ public static class CombatSystem
                 float near = minRange + u.Radius[i] + u.Radius[j];
                 if (d2 < near * near) continue;
             }
-            // Only what its owner sees (M4-3a): its own sight now, the owner's fog, or a high-ground reveal.
+            if (!(tier < bestTier || d2 < bestD2 || (d2 == bestD2 && j < best))) continue;
+            // Only what its owner sees (M4-3a): its own sight now, the owner's fog, or a high-ground reveal. Asked only of
+            // a candidate that would win (BUG-0217): the best so far is always a seen one, so the pick is the same.
             if (!(oneLevel && d2 <= sight2) && !VisionSystem.UnitSeesUnit(world, i, j)) continue;
-            if (tier < bestTier || d2 < bestD2 || (d2 == bestD2 && j < best))
-            {
-                best = j;
-                bestTier = tier;
-                bestD2 = d2;
-            }
+            best = j;
+            bestTier = tier;
+            bestD2 = d2;
         }
         if (best >= 0 || targets == AttackTargets.Units) return best;
         return PickBuilding(world, i, def, pos, owner, hold, radius, ignoredGen, out isBuilding);

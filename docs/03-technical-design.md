@@ -2114,7 +2114,10 @@ come later (see "Not yet" below).
 
 - **The grid.** `World.Fog` (`FogStore`): per player a `byte[]` of map cells, row-major (`y * Width + x`), 0 unexplored,
   1 explored, 2 visible (`VisionConstants.Unexplored` / `Explored` / `Visible`). Allocated with the world: one byte a
-  cell a player, plus a packed explored bit a cell.
+  cell a player, plus a packed explored bit a cell, plus two reveal ints per unit slot per player. On the 1,024-cell
+  map with 4,096 slots and 2 players that is 2.42 MB (2 x 1.18 MB + 64 KB), which took the world from 227.98 MB to
+  230.43 MB; `FieldBuildFairnessQaTests.World_1024Map_CacheStays32_MemoryBounded`'s bound was re-baselined from 228 to
+  230.5 MB for it (BUG-0214).
 - **When.** Phase 12 (`VisionSystem.Run`) rebuilds every player's fog on the ticks where `tick % 4 == 1`
   (`VisionConstants.UpdateInterval` 4, `UpdatePhase` 1: 5 Hz). All players update on the same tick (not spread over the
   four: the update is cheap, see Cost). Tick 1 is the first because the commands queued before the match's first tick
@@ -2173,7 +2176,10 @@ come later (see "Not yet" below).
 - **Cost** (Debug, first run, 2026-10-08, the machine shared with other test runs): `Vision/FogPerfTests`: 2,500 units of
   one player spread over a flat 128 map, 0.06 ms a tick amortized (budget 0.25 ms); 1,000 v 1,000 on a generated
   3-level 128 map, 0.09 ms (budget 0.4 ms); the tight blob of 2,500, 0.02 ms (most of its stamps skipped). Updates
-  allocate nothing.
+  allocate nothing. The targeting gate: on a multi-level map the scan asks `VisionSystem.UnitSeesUnit` only of a
+  candidate that would beat its best so far (BUG-0217; asking every candidate cost 257k calls a tick at 1,000 v 1,000).
+  `Vision/VisionGatePerfTests` (whole tick, `MapBrawl` on seed 3's 3-level map, alone, two runs): 250 v 250 3.84 ms
+  before, 3.50 ms after (budget 4 ms); 1,000 v 1,000 (reported) 30.3 ms before, 25.2 ms after (24.7 ms without fog).
 - **Not yet.** M4-3b: towers' `attack` and `detector` fields and buildings that shoot, the per-player "last known
   buildings" list (ghosts in explored fog, docs/02), the placement rule "footprint explored by the player". M4-4: zone
   vision (Darkness / Sandstorm: per-player vision blocker masks applied after the stamp). M4-5: `bool[] Detected` per

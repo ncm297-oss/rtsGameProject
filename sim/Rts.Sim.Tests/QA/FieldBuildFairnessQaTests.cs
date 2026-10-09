@@ -424,7 +424,7 @@ public class FieldBuildFairnessQaTests
             Assert.True(p99 < 8.0, $"p99 {p99:F2} ms (docs/03: p99 < 8 ms)");
         }
 
-        /// <summary>A 1024 x 1024 world keeps the 32-field floor and doesn't grow past M1-4b's 221 MB by more than the documented index (4.2 MB).</summary>
+        /// <summary>A 1024 x 1024 world keeps the 32-field floor and doesn't grow past M1-4b's 221 MB by more than the documented index (4.2 MB) and fog (2.4 MB).</summary>
         [Fact]
         public void World_1024Map_CacheStays32_MemoryBounded()
         {
@@ -435,9 +435,14 @@ public class FieldBuildFairnessQaTests
             long bytes = AllocationProbe.Measure(create);
             Assert.NotNull(world);
             Assert.Equal(32, world!.FlowFields.Capacity);
-            _out.WriteLine($"1024 x 1024 world, 4096 unit slots: {bytes / 1e6:F1} MB allocated, cache {world.FlowFields.Capacity}");
-            // M1-4b: 221 MB. M1-4c adds the 4-byte cell-to-slot index (4.2 MB here): 226 MB measured.
-            Assert.True(bytes < 228_000_000, $"{bytes / 1e6:F1} MB");
+            _out.WriteLine($"1024 x 1024 world, 4096 unit slots: {bytes / 1e6:F1} MB ({bytes} bytes) allocated, cache {world.FlowFields.Capacity}");
+            // M1-4b: 221 MB. M1-4c adds the 4-byte cell-to-slot index (4.2 MB here): 226 MB measured, bound 228 MB.
+            // M4-3a (BUG-0214) re-baselines: before the fog 227,976,424 bytes were measured (dd5b5b9). The fog the design
+            // requires (docs/03 "Vision, detection, fog") adds per player a byte a cell (1,048,576) and a packed explored
+            // bit a cell (131,072), and per unit slot per player two reveal ints (4,096 x 2 x 2 x 4 = 65,536): 2 x 1,179,648
+            // + 65,536 = 2,424,832 bytes, plus 26,592 of circle masks, per-player boxes and array headers. 230,427,848
+            // measured; the bound keeps a 72 KB margin (the old one kept 2 MB over M1-4c's figure, 24 KB over dd5b5b9's).
+            Assert.True(bytes < 230_500_000, $"{bytes / 1e6:F1} MB");
         }
     }
 }
