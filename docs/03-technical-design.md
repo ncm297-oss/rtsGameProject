@@ -4405,7 +4405,8 @@ game/scripts/AbilityViews.cs           draws both, and the cast bar's new look
   Windowed `-- --shots <dir>` adds `ability-seedN-first-tick.png`, `-flash.png`, `-burning.png`, `-cusser.png` and
   `-statuses.png` (looked at, seeds 1 and 6).
 - **Not yet (M4-V6c and later):** zone discs and the Sandstorm, the Blinded marker (it draws pale through the generic
-  path until then), stealth visuals, autocast toggles, a status name tooltip, enemy cast-point rings.
+  path until then), stealth visuals, autocast toggles, a status name tooltip, enemy cast-point rings. (Zone discs and the
+  Blinded marker landed in M4-V6c, see "Implementation (M4-V6c)".)
 
 ### Implementation (M4-VH2)
 
@@ -4472,6 +4473,59 @@ game/tests/SceneExit.cs                the test scenes' shutdown path
   `FogViewTest` adds a last-seen tree row (felled in explored fog: still listed and on the minimap with no relist; seen
   again: gone in one relist) and refreshes the dots before its minimap clicks; `PropsViewTest` runs with bases (steady
   frames relist nothing).
+
+### Implementation (M4-V6c)
+
+The storm on screen: a disc on the ground per zone the local player may see, and the Blinded marker's own colour, so a
+Sandstorm's victims read as Blinded + Slowed. No sim change outside `ViewApi`.
+
+```
+sim/Rts.Sim/ViewApi/ZoneDiscs.cs   which zones to draw for a player (pure, allocation-free); ZoneDisc.cs its record
+game/scripts/AbilityViews.cs       draws them, and the Blinded marker colour
+game/shaders/zone_disc.gdshader    the disc: a translucent fill and a more opaque rim band, per instance
+```
+
+- **The rule** (`ZoneDiscs.Collect(zones, fog, player, fogOn, discs)`; the stores, not `World`, as every ViewApi read):
+  one `ZoneDisc(slot, center, radius, alpha, own)` per live zone, slots ascending, at most the output's length
+  (`ZoneStore.Capacity` holds every case). A zone of the player's own is always drawn. Another player's zone is drawn only
+  when a fog cell whose centre is within the zone's radius plus `RimWidth` (2 m) is visible (`Fog.Visibility == 2`) at the
+  last fog update: a cell inside is visible only to an own unit standing in the storm (the fog holds the hidden cells as
+  explored, "Implementation (M4-4b-2)"), and a visible cell of the rim ring (radius < d <= radius + 2 m) means the
+  player's sight reaches the storm's edge from outside. Explored-only ground draws nothing (docs/02: explored fog shows
+  remembered terrain, not live effects); `--no-fog` draws every live zone. The rule reads only the zones' `Alive`,
+  `Owner`, `Center`, `Radius` and `TicksRemaining` and the player's visibility bytes, so it can never show a storm the
+  fog hides. A seen disc is drawn whole (also over unexplored ground beyond the seen rim): the storm is one thing.
+- **Cost.** Per enemy zone a scan of the cells in its radius + 2 m box, stopping at the first visible one (a Sandstorm:
+  at most 10 x 10 cells); own zones cost a copy. With no zone nothing runs but the slot loop's early stop on `Count`.
+- **The fade.** `alpha` is `DiscAlpha` (0.35) while the zone has more than `FadeTicks` (20, one second) left, then
+  `0.35 x (ticks left - 1) / 20`: one step a tick, 0 on its last tick (`TicksRemaining` 1). A Sandstorm's disc is drawn
+  from its resolve for its 240 ticks and gone on the 241st (the tick that frees it). Per tick, not interpolated: 20 steps
+  over one second.
+- **Drawing** (`AbilityViews`). One `MultiMesh` of `ZoneStore.Capacity` instances (a 2 x 2 plane scaled by the radius,
+  colour + custom data), written densely each frame, so a disc goes the frame its zone frees or the rule stops showing it.
+  Each disc sits `ZoneLift` 0.1 m over the terrain at its centre (`TerrainHeight.At`, the resolve flash's rule: on a slope
+  it may dip into the ground). Fill `ZoneFillColor` (a dusty ochre) at the disc's alpha; a rim band `ZoneRimWidth` 0.35 m
+  wide, 2.2 x as opaque, in `OwnZoneRimColor` (deeper sand) for an own zone and in the owner's player colour (the faction
+  colour, `playerRgb` from `Match`) for another player's. Taste defaults until the M6 art pass.
+- **Blinded marker.** `AbilityViews.BlindColor` (0.5, 0.06, 0.62), a dark violet, in the `StatusKind` switch beside
+  Burning's flame and Slowed's deep blue; any other kind stays `OtherStatusColor`. Looked at in the windowed shots at
+  zoom 30 on sand and on grass, three markers side by side on a Raider (`ability-seedN-blinded.png`).
+- **Tests.** xUnit `ViewApi/ZoneDiscsTests`: a real Sandstorm (a Priest's cast): one own disc with the def's radius for
+  exactly 240 ticks, alpha 0.35 then strictly falling over the last 20, none on the 241st; an enemy storm with the
+  player's sight 10 m short of its rim (unexplored) none, walked to see a rim cell one, stepped inside (Blinded, no rim
+  cell seen) one; on explored-only ground none for 40 ticks; the rim ring by cell centre; three storms slots ascending, a
+  full store fits a `Capacity` output; 64 zones x 2 players, fog on and off, 0 bytes; the hash twin (collecting every
+  tick for both players, fog on and off, over 2 seeds x 1,200 ticks with storms cast on both sides, changes no state hash).
+  Headless `AbilityViewTest` adds per seed: an own Priest's Sandstorm on two fresh Raiders (the disc drawn exactly the 240
+  ticks, at the centre's terrain height + 0.1 m, the rule's alpha, sand rim; the Raiders' Blinded marker beside Slowed in
+  `BlindColor`; a mage's Telas Fire adds Burning, three distinct colours); an enemy Priest's storm under the fog, live
+  but not drawn until an own Lancer walking up sees its rim, then drawn exactly while `ZoneDiscs.SeesStorm` holds, in the
+  owner's colour; the steady match (`--units 500`) with 8 zones staged after the twin (two Sandstorms, six of a
+  non-blocking copy), all drawn in every frame, 0 bytes. Windowed `-- --shots <dir>` adds `ability-seedN-storm.png`,
+  `-blinded.png` and `-storm-enemy.png` (looked at, seeds 1 and 6).
+- **Not yet:** the Frenzied marker (one `StatusKind` arm once the sim's `Frenzied` kind lands; pale until then), stealth
+  visuals (M4-5), zone dots on the minimap, a zone or status tooltip, a fog-darkened look for an enemy storm seen over
+  unexplored ground (M6 fog-look pass).
 
 ## AI architecture
 

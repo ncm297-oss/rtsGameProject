@@ -8,7 +8,7 @@ using Rts.Sim.ViewApi;
 
 namespace Rts.Game;
 
-/// <summary>The ability views (M4-V6a, M4-V6b): the targeting rings while an ability is armed, the casts on the map, the status markers over units and the resolve flashes.</summary>
+/// <summary>The ability views (M4-V6a, M4-V6b, M4-V6c): the targeting rings while an ability is armed, the casts on the map, the status markers over units, the resolve flashes and the zone discs.</summary>
 /// <remarks>
 /// <para><b>Targeting.</b> While <see cref="SelectionController.TargetAbility"/> is set, the ground under the cursor
 /// (<see cref="SelectionController.AbilityPoint"/>) gets a ring of the ability's <c>radius</c> (where the effects would land)
@@ -24,7 +24,7 @@ namespace Rts.Game;
 /// bar from the cast's first tick.</para>
 /// <para><b>Statuses</b> (M4-V6b). Every unit the screen shows gets one small marker per active status
 /// (<see cref="StatusMarkers.Collect"/>), side by side above its cast bar's place, in a colour by the status's
-/// <see cref="StatusKind"/> (Burning flame, Slowed deep blue, any other kind pale). One coloured <see cref="MultiMesh"/>
+/// <see cref="StatusKind"/> (Burning flame, Slowed deep blue, Blinded dark violet since M4-V6c, any other kind pale). One coloured <see cref="MultiMesh"/>
 /// sized for every slot's <see cref="StatusStore.PerUnit"/> entries, written densely each frame.</para>
 /// <para><b>Resolve flashes</b> (M4-V6b). Every resolved cast in <c>World.AbilityEvents</c> (read from
 /// <see cref="SimRunner.Ticked"/>, so a frame of several ticks misses none, and from the frame loop for scenes that tick the
@@ -32,6 +32,12 @@ namespace Rts.Game;
 /// ability's <c>radius</c> and fades over <see cref="ResolveFlashes.LifetimeTicks"/> (0.5 s) from its first frame, drawn
 /// only when the point's cell was visible on that frame (<see cref="FogView.ShowsPoint"/>, decided once: M4-VH2, BUG-0371).
 /// A cast start draws no flash.</para>
+/// <para><b>Zone discs</b> (M4-V6c). Every live zone the local player may see (<see cref="ZoneDiscs.Collect"/>: its own
+/// always, another player's only where a cell within its radius plus 2 m is visible; every zone with <c>--no-fog</c>) is a
+/// flat translucent sand-coloured disc of the zone's radius on the terrain at its centre (the flash's height rule), with a
+/// rim in sand for an own zone and in the owner's colour for an enemy's, fading over the zone's last second. One
+/// <see cref="MultiMesh"/> of <see cref="ZoneStore.Capacity"/> instances, written densely each frame, so a disc goes the
+/// frame its zone is freed or the rule stops showing it.</para>
 /// Views hold no gameplay state: everything is redrawn from the store and the selection each frame. Everything but the
 /// per-ability ring meshes is made in <see cref="Bind"/>, so a steady frame allocates nothing.
 /// </remarks>
@@ -58,6 +64,9 @@ public partial class AbilityViews : Node3D
     /// <summary>A resolve flash's opacity at the start of its life (it fades to 0).</summary>
     public const float FlashAlpha = 0.75f;
 
+    /// <summary>A zone disc's rim band (m) and its height above the ground at the zone's centre (m; just under the flashes' and rings' <see cref="Lift"/>, so a flash inside a storm draws on top).</summary>
+    public const float ZoneRimWidth = 0.35f, ZoneLift = 0.1f;
+
     // UI tints until the M6 art pass: the area reads fire-orange, the reach pale blue, the bar violet (magic).
     private static readonly Color RadiusColor = new(1f, 0.55f, 0.1f);
     private static readonly Color RangeColor = new(0.6f, 0.8f, 1f);
@@ -72,8 +81,20 @@ public partial class AbilityViews : Node3D
     /// <summary>The Slowed (slow) marker's colour: a deep saturated blue, so it reads on sand and pale bodies at zoom 30 (BUG-0371 a; was a pale blue-grey; a taste default until the M6 art pass).</summary>
     public static readonly Color SlowColor = new(0.08f, 0.3f, 0.95f);
 
-    /// <summary>A marker of any other status kind (M4-V6c adds its own): pale.</summary>
+    /// <summary>The Blinded (blind) marker's colour (M4-V6c): a dark violet, apart from Burning's orange and Slowed's blue on sand and on both factions' bodies at zoom 30 (a taste default until the M6 art pass).</summary>
+    public static readonly Color BlindColor = new(0.5f, 0.06f, 0.62f);
+
+    /// <summary>A marker of any other status kind: pale.</summary>
     public static readonly Color OtherStatusColor = new(0.92f, 0.92f, 0.88f);
+
+    /// <summary>A zone disc's fill (its alpha is the disc's, <see cref="ZoneDiscs.Alpha"/>): sand and dust.</summary>
+    public static readonly Color ZoneFillColor = new(0.6f, 0.45f, 0.26f);
+
+    /// <summary>An own zone's rim: a deeper sand.</summary>
+    public static readonly Color OwnZoneRimColor = new(0.72f, 0.5f, 0.22f);
+
+    /// <summary>An enemy zone's rim when its owner has no colour (no player colours bound): red.</summary>
+    public static readonly Color EnemyZoneRimColor = new(0.85f, 0.15f, 0.1f);
 
     /// <summary>The resolve flash's colour (its alpha fades).</summary>
     public static readonly Color FlashColor = new(1f, 0.78f, 0.35f);
@@ -96,6 +117,10 @@ public partial class AbilityViews : Node3D
     private Color[] _statusColor = Array.Empty<Color>();
     private Transform3D[] _flashTransform = Array.Empty<Transform3D>();
     private int[] _removed = Array.Empty<int>();
+    private MultiMesh _zones = null!;
+    private ZoneDisc[] _discs = Array.Empty<ZoneDisc>();
+    private Vector3[] _discAt = Array.Empty<Vector3>();
+    private Color[] _discFill = Array.Empty<Color>(), _discRim = Array.Empty<Color>(), _playerColor = Array.Empty<Color>();
 
     /// <summary>The camera whose zoom sizes the cast bars (the hp bar rule); null keeps the base size.</summary>
     public RtsCamera? Camera { get; set; }
@@ -172,14 +197,35 @@ public partial class AbilityViews : Node3D
     /// <inheritdoc cref="MarkerMesh"/>
     public MultiMesh FlashMesh => _flashes;
 
+    /// <summary>The zone disc multimesh (<see cref="ZoneStore.Capacity"/> instances; the first <see cref="ShownZones"/> drawn).</summary>
+    public MultiMesh ZoneMesh => _zones;
+
+    /// <summary>Zone discs drawn this frame.</summary>
+    public int ShownZones { get; private set; }
+
+    /// <summary>Zone disc <paramref name="k"/> as drawn this frame (slots ascending).</summary>
+    public ZoneDisc ZoneDiscAt(int k) => _discs[k];
+
+    /// <summary>Where zone disc <paramref name="k"/> was drawn (its instance's centre).</summary>
+    public Vector3 ZoneDiscPosition(int k) => _discAt[k];
+
+    /// <summary>Zone disc <paramref name="k"/>'s fill colour as drawn (alpha: its opacity).</summary>
+    public Color ZoneDiscFill(int k) => _discFill[k];
+
+    /// <summary>Zone disc <paramref name="k"/>'s rim colour as drawn (alpha: the rim band's share of the radius).</summary>
+    public Color ZoneDiscRim(int k) => _discRim[k];
+
     public override void _Ready()
     {
         _range = Ring("RangeRing");
         _radius = Ring("RadiusRing");
     }
 
-    /// <summary>Creates the bar, ring, marker and flash pools; call once before the first <see cref="Sync"/>.</summary>
-    public void Bind(GameData data, int unitCapacity, SimRunner? runner, SelectionController? selection, int flashCapacity = ResolveFlashes.DefaultCapacity)
+    /// <summary>Creates the bar, ring, marker, flash and zone disc pools; call once before the first <see cref="Sync"/>.</summary>
+    /// <param name="playerRgb">Per player, its colour (0xRRGGBB) for an enemy zone's rim; null draws every enemy rim <see cref="EnemyZoneRimColor"/>.</param>
+    /// <param name="zoneCapacity">The world's <see cref="ZoneStore.Capacity"/>.</param>
+    public void Bind(GameData data, int unitCapacity, SimRunner? runner, SelectionController? selection, int flashCapacity = ResolveFlashes.DefaultCapacity,
+        uint[]? playerRgb = null, int zoneCapacity = ZoneStore.DefaultCapacity)
     {
         _data = data;
         if (_runner != null) _runner.Ticked -= OnTicked;
@@ -206,6 +252,7 @@ public partial class AbilityViews : Node3D
             {
                 StatusKind.DamageOverTime => DamageOverTimeColor,
                 StatusKind.Slow => SlowColor,
+                StatusKind.Blind => BlindColor,
                 _ => OtherStatusColor,
             };
         int markCapacity = unitCapacity * StatusStore.PerUnit;
@@ -229,6 +276,16 @@ public partial class AbilityViews : Node3D
             _flashes.SetInstanceTransform(i, Hidden);
             _flashTransform[i] = Hidden;
         }
+
+        _playerColor = new Color[playerRgb?.Length ?? 0];
+        for (int p = 0; p < _playerColor.Length; p++) _playerColor[p] = UnitViews.ColorFromRgb(playerRgb![p]);
+        int zones = Math.Max(1, zoneCapacity);
+        _discs = new ZoneDisc[zones];
+        _discAt = new Vector3[zones];
+        _discFill = new Color[zones];
+        _discRim = new Color[zones];
+        var zoneMat = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/zone_disc.gdshader") };
+        _zones = Multi("ZoneDiscs", new PlaneMesh { Size = new Vector2(2f, 2f), Material = zoneMat }, zones, colors: true, custom: true);
     }
 
     public override void _ExitTree()
@@ -257,6 +314,7 @@ public partial class AbilityViews : Node3D
         SyncCasts(world, alpha, fog);
         SyncMarkers(world, alpha, fog);
         SyncFlashes(world, alpha, fog);
+        SyncZones(world, fog);
     }
 
     private void SyncTargeting(World world, float alpha, Vector2 mouse, bool queued)
@@ -402,6 +460,34 @@ public partial class AbilityViews : Node3D
         ShownFlashes = shown;
     }
 
+    private void SyncZones(World world, FogView? fog)
+    {
+        // The rule is ZoneDiscs' (fog bytes only); this only draws what it returns.
+        int player = fog?.Player ?? SelectionController.LocalPlayer;
+        int n = ZoneDiscs.Collect(world.Zones, world.Fog, player, fog != null && fog.Enabled, _discs);
+        ReadOnlySpan<int> owner = world.Zones.Owner;
+        for (int k = 0; k < n; k++)
+        {
+            ZoneDisc d = _discs[k];
+            var at = new Vector3(d.Center.X, TerrainHeight.At(world.Heightmap, d.Center.X, d.Center.Y) + ZoneLift, d.Center.Y);
+            int who = owner[d.Slot];
+            Color rim = d.Own ? OwnZoneRimColor : (uint)who < (uint)_playerColor.Length ? _playerColor[who] : EnemyZoneRimColor;
+            var fill = new Color(ZoneFillColor.R, ZoneFillColor.G, ZoneFillColor.B, d.Alpha);
+            rim.A = Math.Min(0.5f, ZoneRimWidth / Math.Max(0.01f, d.Radius));
+            _zones.SetInstanceTransform(k, new Transform3D(Basis.FromScale(new Vector3(d.Radius, 1f, d.Radius)), at));
+            _zones.SetInstanceColor(k, fill);
+            _zones.SetInstanceCustomData(k, rim);
+            _discAt[k] = at;
+            _discFill[k] = fill;
+            _discRim[k] = rim;
+        }
+        if (n != ShownZones)
+        {
+            _zones.VisibleInstanceCount = n;
+            ShownZones = n;
+        }
+    }
+
     private void HideFlash(int slot)
     {
         _flashes.SetInstanceTransform(slot, Hidden);
@@ -426,9 +512,9 @@ public partial class AbilityViews : Node3D
         return node;
     }
 
-    private MultiMesh Multi(string name, Mesh mesh, int count, bool colors = false)
+    private MultiMesh Multi(string name, Mesh mesh, int count, bool colors = false, bool custom = false)
     {
-        var mm = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, UseColors = colors, Mesh = mesh, InstanceCount = count, VisibleInstanceCount = 0 };
+        var mm = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, UseColors = colors, UseCustomData = custom, Mesh = mesh, InstanceCount = count, VisibleInstanceCount = 0 };
         AddChild(new MultiMeshInstance3D { Name = name, Multimesh = mm, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
         return mm;
     }
