@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+
 namespace Rts.Sim.Data;
 
 /// <summary>One entry of an ability's <c>effects</c> (M4-4a), converted to sim units; the fields a kind doesn't use are -1 / 0.</summary>
@@ -19,4 +21,8 @@ public readonly record struct AbilityEffect
     public bool Buildings { get; init; }
     /// <summary>Damage (M4-4b-1): the fraction 0-1 of its hit the caster's own units in the radius take (the caster too; never own buildings); 0 for none.</summary>
     public float FriendlyFire { get; init; }
+    /// <summary>CreateZone (M4-4b-2): the zone hides its cells from the other players' units outside it; false otherwise.</summary>
+    public bool BlocksVision { get; init; }
+    /// <summary>CreateZone (M4-4b-2): the statuses the zone applies to the units inside every tick, in file order; empty otherwise.</summary>
+    public ImmutableArray<ZoneStatus> ZoneStatuses { get; init; }
 }

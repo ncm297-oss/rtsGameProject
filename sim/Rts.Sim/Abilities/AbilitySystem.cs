@@ -147,7 +147,7 @@ public static class AbilitySystem
     /// unit is the caster owner's; then each other player's building whose footprint is within the radius, in slot order,
     /// takes every damage effect with <see cref="AbilityEffect.Buildings"/>. A damage effect is one hit through
     /// <see cref="DamageCalc"/> with no falloff (an own unit's scaled by the friendly-fire fraction, rounded like splash); a
-    /// unit it kills takes no later effect.
+    /// unit it kills takes no later effect. M4-4b-2: then the ability's zone, if it leaves one (<see cref="ZoneSystem.Create"/>).
     /// </summary>
     private static void Resolve(World world, EntityHandle caster, int owner, AbilityDef a, Vector2 point)
     {
@@ -176,9 +176,11 @@ public static class AbilitySystem
                     int damage = ProjectileSystem.Scale(DamageCalc.Compute(data.DamageTable, fx.DamageType, vdef.ArmorClass, fx.Amount, 1f, armor), factor);
                     CombatSystem.HitUnit(world, new PendingHit(caster, owner, victim, false, damage));
                 }
-                else if (affected) StatusSystem.Apply(world, j, fx.Status, fx.Magnitude, fx.DurationTicks, owner);
+                else if (affected && fx.Kind == AbilityEffectKind.ApplyStatus) StatusSystem.Apply(world, j, fx.Status, fx.Magnitude, fx.DurationTicks, owner);
             }
         }
+        // M4-4b-2: the zone, after the units took the other effects (it applies its statuses at once).
+        if (a.ZoneEffect >= 0) ZoneSystem.Create(world, owner, a, point);
         if (!a.HitsBuildings || world.StructureClass < 0) return;
         BuildingStore b = world.Buildings;
         ReadOnlySpan<bool> alive = b.Alive;

@@ -37,6 +37,13 @@ public sealed class StatusStore
     /// <summary>Unit slots with at least one status, so phase 5 skips its scan when none; derived, not hashed.</summary>
     internal int UnitsWithStatuses;
 
+    // M4-4b-2: per unit slot, the blind status in force (its id + 1, 0 for none): the one with the smallest sight. Derived
+    // from the entries (like the unit's speed from its slows), recomputed when a blind is applied or ends; not hashed.
+    private readonly int[] _blind;
+
+    /// <summary>Unit slots with a blind in force (M4-4b-2), so the fog stamp skips the per-unit look when none; derived, not hashed.</summary>
+    internal int BlindedUnits;
+
     /// <summary>A store for <paramref name="capacity"/> unit slots, all empty.</summary>
     public StatusStore(int capacity)
     {
@@ -46,6 +53,21 @@ public sealed class StatusStore
         TicksRemaining = new int[capacity * PerUnit];
         PulseTicks = new int[capacity * PerUnit];
         SourcePlayer = new int[capacity * PerUnit];
+        _blind = new int[capacity];
+    }
+
+    /// <summary>
+    /// The blind status (M4-4b-2) in force on unit slot <paramref name="unit"/>, or -1: of its blind statuses, the one with the
+    /// smallest sight (then the smallest reach, then the lowest id). Derived, not hashed.
+    /// </summary>
+    public int BlindOf(int unit) => _blind[unit] - 1;
+
+    /// <summary>Records <paramref name="status"/> (or -1) as unit slot <paramref name="unit"/>'s blind in force (<see cref="Abilities.StatusSystem.RecomputeBlind"/>).</summary>
+    internal void SetBlind(int unit, int status)
+    {
+        if (_blind[unit] == 0 && status >= 0) BlindedUnits++;
+        else if (_blind[unit] != 0 && status < 0) BlindedUnits--;
+        _blind[unit] = status + 1;
     }
 
     /// <summary>The entry index of status <paramref name="status"/> on unit slot <paramref name="unit"/>, or -1.</summary>
@@ -112,6 +134,8 @@ public sealed class StatusStore
     {
         if (Count[unit] > 0) UnitsWithStatuses--;
         Count[unit] = 0;
+        if (_blind[unit] != 0) BlindedUnits--;
+        _blind[unit] = 0;
         int head = unit * PerUnit;
         Array.Clear(StatusId, head, PerUnit);
         Array.Clear(Magnitude, head, PerUnit);

@@ -1,5 +1,6 @@
 using System;
 using System.Numerics;
+using Rts.Sim.Abilities;
 using Rts.Sim.Data;
 using Rts.Sim.Determinism;
 using Rts.Sim.Entities;
@@ -18,7 +19,8 @@ namespace Rts.Sim.Combat;
 /// hash only (<see cref="Spatial.SpatialHash.QueryEnemies"/>), buildings through a list of live building slots rebuilt
 /// once a tick (at most <see cref="SimConfig.BuildingCapacity"/>). Since M4-2b every attack fights: one with a projectile
 /// fires it at the wind-up end (<see cref="ProjectileSystem"/>) instead of queuing a hit, and an attack with a minimum
-/// range neither swings at nor walks toward a target inside it.
+/// range neither swings at nor walks toward a target inside it. Since M4-4b-2 a Blinded unit takes and strikes nothing
+/// farther than its blind's reach (<see cref="RangeLimit"/>): it walks closer to an ordered target instead.
 /// <para>
 /// Every walk combat starts (a chase, an attack-mover's leg again, a walk back home) starts in phase 7, before movement,
 /// as every order does; phases 10 and 11 only stand units still (plant, stand down), so a unit never turns Moving after
@@ -70,7 +72,7 @@ public static class CombatSystem
             if (due && u.Target[i].Generation != 0 && !u.Hold[i] && u.WindupTicks[i] == 0)
             {
                 float gap = Gap(world, i);
-                if (gap <= data.Units[u.TypeId[i]].Attack.Range || gap < u.ChaseBest[i] - CombatConstants.ChaseProgress)
+                if (gap <= Range(world, i, data.Units[u.TypeId[i]].Attack) || gap < u.ChaseBest[i] - CombatConstants.ChaseProgress)
                 {
                     u.ChaseBest[i] = gap;
                     u.ChaseStall[i] = 0;
@@ -106,7 +108,7 @@ public static class CombatSystem
                 // re-picks, and the tier-0 attacker wins. One that hit it and went away is no reason (BUG-0180). A target
                 // inside the minimum range (M4-2b) is not "in reach": the scan re-picks.
                 && (repick || !(u.Target[i].Generation != 0 && (u.WindupTicks[i] > 0
-                    || ((!u.TargetIsBuilding[i] || !AttackerInScanRange(world, i)) && InReach(data.Units[u.TypeId[i]].Attack, Gap(world, i)))))))
+                    || ((!u.TargetIsBuilding[i] || !AttackerInScanRange(world, i)) && InReachOfTarget(world, i, data.Units[u.TypeId[i]].Attack, Gap(world, i)))))))
             {
                 scanned = true;
                 int pick = PickTarget(world, i, out bool isBuilding);
@@ -140,7 +142,7 @@ public static class CombatSystem
             if (attack.MinRange > 0f && Gap(world, i) < attack.MinRange) continue;
             // An ordered attacker standing in reach of a building it doesn't see now (M4-3b: a last-known one; the Catapult
             // outranges its sight) walks on: it attacks when it sees it.
-            if (u.State[i] == UnitState.Idle ? Gap(world, i) > attack.Range || Blind(world, i) : scanned || (due && u.Mode[i] == CombatMode.Ordered))
+            if (u.State[i] == UnitState.Idle ? Gap(world, i) > Range(world, i, attack) || Blind(world, i) : scanned || (due && u.Mode[i] == CombatMode.Ordered))
                 Chase(world, i);
         }
     }
@@ -171,6 +173,8 @@ public static class CombatSystem
             }
             AttackDef attack = data.Units[u.TypeId[i]].Attack;
             float gap = Gap(world, i);
+            // The attack's range, or (M4-4b-2) less when Blinded (the counter test first: Debug doesn't inline the call).
+            float range = u.Statuses.BlindedUnits == 0 ? attack.Range : RangeLimit(world, i, attack);
             // Inside the minimum range (M4-2b) it can't fire: no swing, and a chaser or a planted unit stands where it is.
             bool tooNear = gap < attack.MinRange;
             if (u.WindupTicks[i] > 0)
@@ -180,9 +184,9 @@ public static class CombatSystem
                 Face(world, i);
                 if (--u.WindupTicks[i] == 0)
                 {
-                    if (gap <= attack.Range + CombatConstants.WindupGrace && !tooNear) Strike(world, i, attack);
+                    if (gap <= range + CombatConstants.WindupGrace && !tooNear) Strike(world, i, attack);
                     // The swing is over: out of reach, it stands down now, so an Attacking unit is always in reach or mid-swing.
-                    if (gap > attack.Range || tooNear) Stand(u, i, UnitState.Idle);
+                    if (gap > range || tooNear) Stand(u, i, UnitState.Idle);
                 }
                 continue;
             }
@@ -192,7 +196,7 @@ public static class CombatSystem
                 else if (u.State[i] == UnitState.Attacking) Stand(u, i, UnitState.Idle);
                 continue;
             }
-            if (gap <= attack.Range)
+            if (gap <= range)
             {
                 if (u.State[i] != UnitState.Attacking) Plant(u, i);
                 Face(world, i);
@@ -278,11 +282,33 @@ public static class CombatSystem
     {
         UnitStore u = world.Units;
         if (u.Target[i].Generation == 0 || !TargetAlive(world, i)) return false;
-        return u.WindupTicks[i] > 0 || InReach(world.Data.Units[u.TypeId[i]].Attack, Gap(world, i));
+        return u.WindupTicks[i] > 0 || InReachOfTarget(world, i, world.Data.Units[u.TypeId[i]].Attack, Gap(world, i));
     }
 
     /// <summary>Whether an edge-to-edge <paramref name="gap"/> (m) is one <paramref name="attack"/> can strike at: within its range and not inside its minimum range (M4-2b).</summary>
     internal static bool InReach(AttackDef attack, float gap) => gap <= attack.Range && !(gap < attack.MinRange);
+
+    /// <summary><see cref="InReach"/> for unit <paramref name="i"/>'s live target, with its range limited by its blind's reach (M4-4b-2, <see cref="RangeLimit"/>).</summary>
+    private static bool InReachOfTarget(World world, int i, AttackDef attack, float gap) => gap <= Range(world, i, attack) && !(gap < attack.MinRange);
+
+    /// <summary><see cref="RangeLimit"/>, skipping the per-unit look while nobody is Blinded.</summary>
+    private static float Range(World world, int i, AttackDef attack) => world.Units.Statuses.BlindedUnits == 0 ? attack.Range : RangeLimit(world, i, attack);
+
+    /// <summary>Unit <paramref name="i"/>'s blind's reach (<see cref="StatusSystem.ReachOf"/>), or infinity while nobody is Blinded (M4-4b-2).</summary>
+    private static float BlindReach(World world, int i) => world.Units.Statuses.BlindedUnits == 0 ? float.PositiveInfinity : StatusSystem.ReachOf(world, i);
+
+    /// <summary>
+    /// The largest edge-to-edge gap at which unit <paramref name="i"/> strikes its live target with <paramref name="attack"/>:
+    /// the attack's range, or for a Blinded unit (M4-4b-2) less when its blind's reach (center to center, or to the footprint
+    /// for a building) is nearer: reach less both radii (a building: less its own). Negative when the reach is inside them.
+    /// </summary>
+    internal static float RangeLimit(World world, int i, AttackDef attack)
+    {
+        UnitStore u = world.Units;
+        if (u.Statuses.BlindOf(i) < 0) return attack.Range;
+        float cap = StatusSystem.ReachOf(world, i) - u.Radius[i] - (u.TargetIsBuilding[i] ? 0f : u.Radius[u.Target[i].Index]);
+        return cap < attack.Range ? cap : attack.Range;
+    }
 
     /// <summary>
     /// An unqueued attack-move to <paramref name="destination"/> for unit <paramref name="i"/>, which keeps its target, swing,
@@ -422,6 +448,12 @@ public static class CombatSystem
         // Holding, or after MaxGiveUps chases given up (BUG-0137): only what is in reach.
         bool hold = u.Hold[i] || u.GiveUps[i] >= CombatConstants.MaxGiveUps;
         float radius = hold ? def.Attack.Range + u.Radius[i] + world.MaxUnitRadius : def.Sight;
+        // M4-4b-2: Blinded, nothing farther than its reach (center to center; to the footprint for a building).
+        if (u.Statuses.BlindedUnits > 0)
+        {
+            float blindReach = StatusSystem.ReachOf(world, i);
+            if (blindReach < radius) radius = blindReach;
+        }
         // The target it last gave up (BUG-0137) is taken again only in reach; index -1 when that is none or a building.
         int ignoredGen = u.Ignored[i].Generation;
         int ignoredIndex = u.IgnoredIsBuilding[i] || ignoredGen == 0 ? -1 : u.Ignored[i].Index;
@@ -430,9 +462,10 @@ public static class CombatSystem
         if (targets == AttackTargets.Buildings) return PickBuilding(world, i, def, pos, owner, hold, radius, ignoredGen, out isBuilding);
         int myGen = u.Generation[i], lastIndex = u.LastAttacker[i].Index, lastGen = u.LastAttacker[i].Generation;
         float minRange = def.Attack.MinRange;
-        // M4-3a: on a one-level map a candidate within sight is seen by the scanner itself; else ask the vision rule.
+        // M4-3a: on a one-level map a candidate within sight is seen by the scanner itself; else ask the vision rule
+        // (M4-4b-2: also while a zone hides cells, which the rule knows).
         float sight2 = def.Sight * def.Sight;
-        bool oneLevel = !world.Fog.MultiLevel;
+        bool oneLevel = !world.Fog.MultiLevel && world.Zones.BlockerCount == 0;
         bool[] combatant = world.CombatantType;
         int[] found = world.Neighbors; // movement's scratch: free in phase 7
         int n = Math.Min(world.Spatial.QueryEnemies(pos, radius, owner, found), found.Length);
@@ -483,6 +516,8 @@ public static class CombatSystem
         if (u.TargetIsBuilding[i])
         {
             float limit = hold ? def.Attack.Range + u.Radius[i] : def.Sight;
+            float reach = BlindReach(world, i); // M4-4b-2
+            if (reach < limit) limit = reach;
             return BuildingDistanceSquared(world, j, u.Position[i]) <= limit * limit;
         }
         return UnitInScanRange(world, i, j, def, hold);
@@ -502,11 +537,13 @@ public static class CombatSystem
         return UnitInScanRange(world, i, a.Index, world.Data.Units[u.TypeId[i]], hold) && VisionSystem.UnitSeesUnit(world, i, a.Index);
     }
 
-    /// <summary>Whether unit <paramref name="j"/> is within unit <paramref name="i"/>'s scan radius: its sight, or holding its reach.</summary>
+    /// <summary>Whether unit <paramref name="j"/> is within unit <paramref name="i"/>'s scan radius: its sight, or holding its reach (M4-4b-2: and Blinded, its blind's reach).</summary>
     private static bool UnitInScanRange(World world, int i, int j, UnitDef def, bool hold)
     {
         UnitStore u = world.Units;
         float radius = hold ? def.Attack.Range + u.Radius[i] + u.Radius[j] : def.Sight;
+        float reach = BlindReach(world, i);
+        if (reach < radius) radius = reach;
         return Vector2.DistanceSquared(u.Position[i], u.Position[j]) <= radius * radius;
     }
 
@@ -520,12 +557,14 @@ public static class CombatSystem
         int best = -1;
         float bestD2 = float.MaxValue;
         int ignoredBuilding = u.IgnoredIsBuilding[i] ? u.Ignored[i].Index : -1;
+        float reach = BlindReach(world, i); // M4-4b-2: Blinded, nothing beyond its reach
         for (int k = 0; k < world.CombatBuildingCount; k++)
         {
             int j = world.CombatBuildings[k];
             if (b.Owner[j] == owner) continue;
             float d2 = BuildingDistanceSquared(world, j, pos);
             float limit = hold || (j == ignoredBuilding && b.Generation[j] == ignoredGen) ? def.Attack.Range + u.Radius[i] : radius;
+            if (reach < limit) limit = reach;
             if (!(d2 <= limit * limit)) continue;
             float near = def.Attack.MinRange + u.Radius[i];
             if (def.Attack.MinRange > 0f && d2 < near * near) continue; // inside the minimum range (M4-2b)
@@ -785,6 +824,15 @@ public static class CombatSystem
         return Vector2.Clamp(p, min, max);
     }
 
+    /// <summary>Whether unit <paramref name="j"/>'s center is within unit <paramref name="i"/>'s blind's reach (M4-4b-2); always true for a unit not Blinded.</summary>
+    private static bool WithinReach(World world, int i, int j)
+    {
+        UnitStore u = world.Units;
+        if (u.Statuses.BlindedUnits == 0 || u.Statuses.BlindOf(i) < 0) return true;
+        float reach = StatusSystem.ReachOf(world, i);
+        return Vector2.DistanceSquared(u.Position[i], u.Position[j]) <= reach * reach;
+    }
+
     /// <summary>Edge-to-edge distance (m) between units <paramref name="i"/> and <paramref name="j"/>: centers less both radii.</summary>
     private static float UnitGap(UnitStore u, int i, int j) => Vector2.Distance(u.Position[i], u.Position[j]) - u.Radius[i] - u.Radius[j];
 
@@ -962,10 +1010,12 @@ public static class CombatSystem
         // Nor a buildings-only attacker (M4-2a, attack.targets): it never takes a unit.
         // Nor one inside its minimum range (M4-2b): it couldn't fire at it, and its next scan would only drop it again.
         // Nor one its owner can't see (M4-3a): a same-level shooter outside every own circle; a high one is revealed above.
+        // Nor (M4-4b-2), Blinded, one beyond its reach.
         AttackDef attack = world.Data.Units[u.TypeId[v]].Attack;
         if (u.Target[v].Generation == 0 && Scans(world, v) && (u.IgnoredIsBuilding[v] || u.Ignored[v] != hit.Attacker)
             && attack.Targets != AttackTargets.Buildings
             && !(attack.MinRange > 0f && UnitGap(u, v, hit.Attacker.Index) < attack.MinRange)
+            && WithinReach(world, v, hit.Attacker.Index)
             && VisionSystem.UnitSeesUnit(world, v, hit.Attacker.Index))
             Engage(world, v, hit.Attacker, false);
     }

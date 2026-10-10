@@ -29,7 +29,7 @@ public sealed class AbilityDef
     public int CastTicks { get; init; }
     /// <summary>Ticks from the resolve until the caster may use it again (at least 1).</summary>
     public int CooldownTicks { get; init; }
-    /// <summary>The ability's own <c>duration</c> in ticks (0 when absent); unused until zones (slice 2).</summary>
+    /// <summary>The ability's own <c>duration</c> in ticks (0 when absent): since M4-4b-2 the lifetime of the zone its <c>createZone</c> effect leaves (required then).</summary>
     public int DurationTicks { get; init; }
     /// <summary>Which units the effects land on.</summary>
     public AbilityAffects Affects { get; init; }
@@ -37,4 +37,6 @@ public sealed class AbilityDef
     public required ImmutableArray<AbilityEffect> Effects { get; init; }
     /// <summary>Whether any damage effect reaches buildings (M4-4b-1, <see cref="AbilityEffect.Buildings"/>): the resolve looks at buildings only then.</summary>
     public bool HitsBuildings { get; init; }
+    /// <summary>The index in <see cref="Effects"/> of its <c>createZone</c> effect (M4-4b-2; at most one), or -1.</summary>
+    public int ZoneEffect { get; init; } = -1;
 }

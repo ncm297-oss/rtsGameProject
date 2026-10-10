@@ -232,7 +232,9 @@ magnitude. Different statuses stack freely.
 ### Zones
 
 Zones are persistent ground areas (circle, duration, owner) that apply statuses to units inside
-every tick and can modify vision. Darkness (Andii) and Sandstorm (Whirlwind) are zones.
+every tick and can modify vision. Darkness (Andii) and Sandstorm (Whirlwind) are zones. A unit keeps
+a zone's statuses for their duration after it leaves (Sandstorm: 1 s). A zone that hides its contents
+is seen into only by its owner and by an enemy's own units standing inside it, as far as they see.
 
 ## Stealth and detection
 

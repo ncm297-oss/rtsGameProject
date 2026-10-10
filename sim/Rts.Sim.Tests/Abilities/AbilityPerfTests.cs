@@ -113,4 +113,88 @@ public class AbilityPerfTests
         _out.WriteLine($"status + ability phases: avg {avg:F4} ms, worst {ms.Max():F4} ms a tick; {resolves} resolves, {burning} burning, {slowed} slowed");
         Assert.True(avg <= 0.1, $"avg {avg:F4} ms over the 0.1 ms budget");
     }
+
+    /// <summary>
+    /// M4-4b-2 criterion 6: 500 units (two players), 8 live zones over player 0's units (two of them blocking vision): ticks
+    /// allocate nothing; the zone phase costs at most 0.1 ms a tick and a fog update with the two blockers at most 0.1 ms
+    /// more than one without zones.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Perf")]
+    public void FiveHundredUnits_8Zones_TwoBlockers_TicksAllocateNothing_ZonesAndBlockersCheap()
+    {
+        GameData data = ZoneData();
+        var sim = TestSim.Explored(new Simulation(
+            TestSim.ConfigNoCombat(Seed: 1, PlayerCount: 2, UnitCapacity: 512, CommandCapacity: 1024) with { Data = data }, LocalMovementTests.Flat(128)));
+        World w = sim.World;
+        for (int k = 0; k < 400; k++)
+            CombatScenes.Place(sim, 0, CombatScenes.Crossbowman, new Vector2(30f + 2f * (k % 40), 40f + 2.5f * (k / 40)));
+        for (int k = 0; k < 100; k++)
+            CombatScenes.Place(sim, 1, CombatScenes.Raider, new Vector2(30f + 2f * (k % 40), 90f + 2.5f * (k / 40)));
+        sim.Tick();
+        // Fog update cost without zones, for the comparison below.
+        long freq = Stopwatch.Frequency;
+        double FogMs()
+        {
+            const int Runs = 50;
+            long start = Stopwatch.GetTimestamp();
+            for (int r = 0; r < Runs; r++) w.Fog.Update();
+            return (Stopwatch.GetTimestamp() - start) * 1000.0 / freq / Runs;
+        }
+        FogMs();
+        double fogPlain = FogMs();
+        AbilityDef storm = data.Abilities[data.FindAbility("test_storm")], dust = data.Abilities[data.FindAbility("test_dust")];
+        for (int k = 0; k < 8; k++)
+            ZoneSystem.Create(w, 1, k < 2 ? storm : dust, new Vector2(40f + 18f * (k % 4), 45f + 12f * (k / 4)));
+        Assert.Equal((8, 2), (w.Zones.Count, w.Zones.BlockerCount));
+        for (int t = 0; t < 40; t++) sim.Tick();
+        const int Measured = 200;
+        var ms = new double[Measured];
+        for (int t = 0; t < Measured; t++)
+        {
+            sim.Tick();
+            long start = Stopwatch.GetTimestamp();
+            ZoneSystem.Run(w);
+            ms[t] = (Stopwatch.GetTimestamp() - start) * 1000.0 / freq;
+        }
+        FogMs();
+        double fogZones = FogMs();
+        int blinded = 0;
+        int blind = data.FindStatus("blinded");
+        for (int i = 0; i < w.Units.Capacity; i++)
+            if (w.Units.Alive[i] && w.Units.Statuses.BlindOf(i) == blind) blinded++;
+        Assert.Equal((8, 2), (w.Zones.Count, w.Zones.BlockerCount));
+        Assert.True(blinded >= 100, $"only {blinded} units Blinded");
+        AllocationProbe.AssertZero(() =>
+        {
+            for (int t = 0; t < 20; t++) sim.Tick();
+        }, _out);
+        double avg = ms.Average();
+        _out.WriteLine($"zone phase: avg {avg:F4} ms, worst {ms.Max():F4} ms a tick; fog update {fogPlain:F4} ms without zones, {fogZones:F4} ms with 2 blockers; {blinded} Blinded");
+        Assert.True(avg <= 0.1, $"zone phase avg {avg:F4} ms over the 0.1 ms budget");
+        Assert.True(fogZones - fogPlain <= 0.1, $"the blockers add {fogZones - fogPlain:F4} ms to a fog update (budget 0.1 ms)");
+    }
+
+    /// <summary>The shipped data plus two test zone abilities for the Priest (60 s each, Blinded + Slowed): one blocks vision, one doesn't.</summary>
+    private static GameData ZoneData()
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        File.WriteAllText(dir.FullPath("factions/whirlwind/abilities.json"), """
+            { "abilities": [
+              { "id": "sandstorm", "displayName": "S", "description": "S.", "kind": "targetGround", "range": 18, "radius": 6, "castTime": 1.2,
+                "cooldown": 45, "duration": 12, "affects": "enemy_units",
+                "effects": [ { "kind": "createZone", "blocksVision": true, "statuses": [ { "status": "blinded", "duration": 1 } ] } ] },
+              { "id": "test_storm", "displayName": "T", "description": "T.", "kind": "targetGround", "range": 18, "radius": 6, "castTime": 1,
+                "cooldown": 45, "duration": 60, "affects": "enemy_units",
+                "effects": [ { "kind": "createZone", "blocksVision": true,
+                  "statuses": [ { "status": "blinded", "duration": 1 }, { "status": "slowed", "magnitude": 0.3, "duration": 1 } ] } ] },
+              { "id": "test_dust", "displayName": "D", "description": "D.", "kind": "targetGround", "range": 18, "radius": 6, "castTime": 1,
+                "cooldown": 45, "duration": 60, "affects": "enemy_units",
+                "effects": [ { "kind": "createZone",
+                  "statuses": [ { "status": "blinded", "duration": 1 }, { "status": "slowed", "magnitude": 0.3, "duration": 1 } ] } ] } ] }
+            """);
+        DataLoadResult r = DataLoader.LoadAll(dir.Path);
+        Assert.True(r.Ok, string.Join(Environment.NewLine, r.Errors));
+        return r.Data!;
+    }
 }

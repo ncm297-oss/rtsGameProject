@@ -11,6 +11,18 @@ public class AbilityLoaderTests
 {
     private const string Abilities = "factions/malazan/abilities.json";
     private const string MalazanUnits = "factions/malazan/units.json";
+    private const string Whirlwind = "factions/whirlwind/abilities.json";
+
+    /// <summary>M4-4b-2: loads the shipped data with Sandstorm (the Whirlwind file's entry 0) edited.</summary>
+    private static DataLoadResult LoadWithSandstorm(Action<JsonObject> editSandstorm)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson(Whirlwind, root => editSandstorm(root["abilities"]![0]!.AsObject()));
+        return DataLoader.LoadAll(dir.Path);
+    }
+
+    /// <summary>Sandstorm's zone effect (its effect 0) in an edit.</summary>
+    private static JsonObject Zone(JsonObject sandstorm) => sandstorm["effects"]![0]!.AsObject();
 
     private static DataLoadResult LoadWith(Action<JsonObject> editTelasFire)
     {
@@ -38,7 +50,7 @@ public class AbilityLoaderTests
     public void Shipped_TelasFire_MatchesTheFactionPage_AndTheCadreMageHasIt()
     {
         GameData d = TestSim.Data;
-        Assert.Equal(2, d.Abilities.Length); // telas_fire, cusser (M4-4b-1)
+        Assert.Equal(3, d.Abilities.Length); // telas_fire, cusser (M4-4b-1), sandstorm (M4-4b-2)
         AbilityDef a = d.Abilities[d.FindAbility("telas_fire")];
         Assert.Equal(d.FindFaction("malazan"), a.Faction);
         Assert.Equal(AbilityKind.TargetGround, a.Kind);
@@ -56,17 +68,18 @@ public class AbilityLoaderTests
         Assert.Equal(80, e.DurationTicks); // 4 s
         UnitDef mage = d.Units[d.FindUnit("malazan_cadre_mage")];
         Assert.Equal(new[] { a.Id }, mage.Abilities.ToArray());
-        int sapper = d.FindUnit("malazan_sapper");
+        int sapper = d.FindUnit("malazan_sapper"), priest = d.FindUnit("whirlwind_priest");
         foreach (UnitDef u in d.Units)
-            if (u.Id != mage.Id && u.Id != sapper) Assert.True(u.Abilities.IsEmpty, $"{u.Key} has abilities");
+            if (u.Id != mage.Id && u.Id != sapper && u.Id != priest) Assert.True(u.Abilities.IsEmpty, $"{u.Key} has abilities");
     }
 
     [Fact]
     public void AFactionWithoutAbilitiesJson_LoadsEmpty()
     {
-        Assert.False(File.Exists(Path.Combine(TestDataDir.Shipped, "factions", "whirlwind", "abilities.json")));
         using TestDataDir dir = TestDataDir.CopyOfShipped();
         File.Delete(dir.FullPath(Abilities));
+        File.Delete(dir.FullPath(Whirlwind)); // M4-4b-2: both factions ship one now
+        dir.EditJson("factions/whirlwind/units.json", root => root["units"]![UnitIndex("whirlwind", "whirlwind_priest")]!.AsObject().Remove("abilities"));
         dir.EditJson(MalazanUnits, root => root["units"]![UnitIndex("malazan", "malazan_cadre_mage")]!.AsObject().Remove("abilities"));
         dir.EditJson(MalazanUnits, root => root["units"]![UnitIndex("malazan", "malazan_sapper")]!.AsObject().Remove("abilities"));
         DataLoadResult r = DataLoader.LoadAll(dir.Path);
@@ -104,7 +117,7 @@ public class AbilityLoaderTests
         AssertErrorAt(LoadWith(a => a["kind"] = "fireball"), Abilities, "abilities[0].kind", "unknown");
         AssertErrorAt(LoadWith(a => a["kind"] = "summon"), Abilities, "abilities[0].kind", "not supported yet");
         AssertErrorAt(LoadWith(a => a["kind"] = "selfAura"), Abilities, "abilities[0].kind", "not supported yet");
-        AssertErrorAt(LoadWith(a => a["effects"]![0]!["kind"] = "createZone"), Abilities, "abilities[0].effects[0].kind", "not supported yet");
+        AssertErrorAt(LoadWith(a => a["effects"]![0]!["kind"] = "teleport"), Abilities, "abilities[0].effects[0].kind", "not supported yet");
         AssertErrorAt(LoadWith(a => a["effects"]![0]!["kind"] = "heal"), Abilities, "abilities[0].effects[0].kind", "unknown");
         AssertErrorAt(LoadWith(a => a["autocast"] = true), Abilities, "abilities[0].autocast", "not supported yet");
         AssertErrorAt(LoadWith(a => a["affects"] = "enemy_buildings"), Abilities, "abilities[0].affects", "unknown");
@@ -227,5 +240,106 @@ public class AbilityLoaderTests
             a["affects"] = "own_units";
             a["effects"] = new JsonArray(new JsonObject { ["kind"] = "damage", ["type"] = "siege", ["amount"] = 1, ["buildings"] = true });
         }), Abilities, "abilities[0].effects[0].buildings", "only own units");
+    }
+
+    /// <summary>M4-4b-2: Sandstorm as docs/factions/whirlwind.md "Abilities" gives it (18 m, 6 m, 1.2 s, 45 s, 12 s), on the Priest.</summary>
+    [Fact]
+    public void Shipped_Sandstorm_MatchesTheFactionPage_AndThePriestHasIt()
+    {
+        GameData d = TestSim.Data;
+        AbilityDef a = d.Abilities[d.FindAbility("sandstorm")];
+        Assert.Equal(d.FindFaction("whirlwind"), a.Faction);
+        Assert.Equal((AbilityKind.TargetGround, 18f, 6f, 24, 900, 240), (a.Kind, a.Range, a.Radius, a.CastTicks, a.CooldownTicks, a.DurationTicks));
+        Assert.Equal(AbilityAffects.EnemyUnits, a.Affects); // Producer decision (a): "non-Whirlwind" read as enemy
+        Assert.Equal("Sandstorm", a.DisplayName);
+        Assert.False(a.HitsBuildings);
+        Assert.Equal(0, a.ZoneEffect);
+        AbilityEffect e = Assert.Single(a.Effects);
+        Assert.Equal(AbilityEffectKind.CreateZone, e.Kind);
+        Assert.True(e.BlocksVision);
+        Assert.Equal(new[]
+        {
+            new ZoneStatus { Status = d.FindStatus("blinded"), Magnitude = 0f, DurationTicks = 20 },
+            new ZoneStatus { Status = d.FindStatus("slowed"), Magnitude = 0.3f, DurationTicks = 20 },
+        }, e.ZoneStatuses.ToArray());
+        Assert.Equal(new[] { a.Id }, d.Units[d.FindUnit("whirlwind_priest")].Abilities.ToArray());
+        Assert.Equal(-1, d.Abilities[d.FindAbility("telas_fire")].ZoneEffect);
+        Assert.True(d.Abilities[d.FindAbility("telas_fire")].Effects[0].ZoneStatuses.IsEmpty);
+    }
+
+    /// <summary>M4-4b-2 criterion 1: a zone ability needs a duration (the zone's lifetime) of at least a tick.</summary>
+    [Fact]
+    public void AZoneAbility_WithoutADuration_IsAnErrorAtTheDuration()
+    {
+        AssertErrorAt(LoadWithSandstorm(a => a.Remove("duration")), Whirlwind, "abilities[0].duration", "leaves a zone");
+        AssertErrorAt(LoadWithSandstorm(a => a["duration"] = 0), Whirlwind, "abilities[0].duration");
+        AssertErrorAt(LoadWithSandstorm(a => a["duration"] = 0.01), Whirlwind, "abilities[0].duration", "rounds to 0 ticks");
+        DataLoadResult r = LoadWithSandstorm(a => a["duration"] = 0.05);
+        Assert.True(r.Ok, string.Join("\n", r.Errors));
+        Assert.Equal(1, r.Data!.Abilities[r.Data.FindAbility("sandstorm")].DurationTicks);
+        // An ability without a zone still may leave its duration out, or give 0.
+        Assert.True(LoadWith(a => a["duration"] = 0).Ok);
+    }
+
+    /// <summary>M4-4b-2 criterion 1: <c>blocksVision</c> and <c>statuses</c> belong to a <c>createZone</c> effect only.</summary>
+    [Fact]
+    public void BlocksVision_AndStatuses_OnANonZoneEffect_AreErrors()
+    {
+        AssertErrorAt(LoadWith(a => a["effects"]![0]!["blocksVision"] = true), Abilities, "abilities[0].effects[0].blocksVision", "no such field");
+        AssertErrorAt(LoadWith(a => a["effects"]![0]!["blocksVision"] = false), Abilities, "abilities[0].effects[0].blocksVision", "no such field");
+        AssertErrorAt(LoadWith(a => a["effects"]![0]!["statuses"] = new JsonArray()), Abilities, "abilities[0].effects[0].statuses", "no such field");
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson(Abilities, root => root["abilities"]![1]!["effects"]![0]!["blocksVision"] = true); // the Cusser's damage effect
+        AssertErrorAt(DataLoader.LoadAll(dir.Path), Abilities, "abilities[1].effects[0].blocksVision", "no such field");
+    }
+
+    /// <summary>M4-4b-2 criterion 1: a zone needs at least one status; its own fields are <c>blocksVision</c> and <c>statuses</c>.</summary>
+    [Fact]
+    public void AZone_WithNoStatuses_OrAnotherKindsField_IsAnError()
+    {
+        AssertErrorAt(LoadWithSandstorm(a => Zone(a)["statuses"] = new JsonArray()), Whirlwind, "abilities[0].effects[0].statuses", "at least one status");
+        AssertErrorAt(LoadWithSandstorm(a => Zone(a).Remove("statuses")), Whirlwind, "abilities[0].effects[0].statuses", "missing");
+        AssertErrorAt(LoadWithSandstorm(a => Zone(a)["status"] = "slowed"), Whirlwind, "abilities[0].effects[0].status", "no such field");
+        AssertErrorAt(LoadWithSandstorm(a => Zone(a)["duration"] = 3), Whirlwind, "abilities[0].effects[0].duration", "no such field");
+        AssertErrorAt(LoadWithSandstorm(a => Zone(a)["amount"] = 3), Whirlwind, "abilities[0].effects[0].amount", "no such field");
+        Assert.False(LoadWithSandstorm(a => Zone(a)["radius"] = 3).Ok); // an unknown field
+        // blocksVision is optional (default false).
+        DataLoadResult r = LoadWithSandstorm(a => Zone(a).Remove("blocksVision"));
+        Assert.True(r.Ok, string.Join("\n", r.Errors));
+        Assert.False(r.Data!.Abilities[r.Data.FindAbility("sandstorm")].Effects[0].BlocksVision);
+        // At most one zone per ability.
+        AssertErrorAt(LoadWithSandstorm(a => a["effects"]!.AsArray().Add(Zone(a).DeepClone())), Whirlwind, "abilities[0].effects[1].kind", "at most one");
+    }
+
+    /// <summary>M4-4b-2 criterion 1: each zone status follows the <c>applyStatus</c> rules, the whole-seconds rule for damage over time included.</summary>
+    [Fact]
+    public void ZoneStatuses_FollowTheApplyStatusRules_AtTheirPaths()
+    {
+        static JsonObject Entry(JsonObject a, int k) => Zone(a)["statuses"]![k]!.AsObject();
+        AssertErrorAt(LoadWithSandstorm(a => Entry(a, 1)["status"] = "frozen"), Whirlwind, "abilities[0].effects[0].statuses[1].status", "unknown status");
+        AssertErrorAt(LoadWithSandstorm(a => Entry(a, 1)["magnitude"] = 1), Whirlwind, "abilities[0].effects[0].statuses[1].magnitude", "below 1");
+        AssertErrorAt(LoadWithSandstorm(a => Entry(a, 1).Remove("magnitude")), Whirlwind, "abilities[0].effects[0].statuses[1].magnitude", "missing");
+        AssertErrorAt(LoadWithSandstorm(a => Entry(a, 1).Remove("duration")), Whirlwind, "abilities[0].effects[0].statuses[1].duration", "missing");
+        AssertErrorAt(LoadWithSandstorm(a => Entry(a, 0)["magnitude"] = 1), Whirlwind, "abilities[0].effects[0].statuses[0].magnitude", "takes no magnitude");
+        Assert.False(LoadWithSandstorm(a => Entry(a, 0)["kind"] = "slow").Ok); // an unknown field
+        // Damage over time in a zone: whole seconds, at least 1 (M4-4b-1's rule).
+        static void Burning(JsonObject a, double seconds) =>
+            Zone(a)["statuses"]!.AsArray().Add(new JsonObject { ["status"] = "burning", ["magnitude"] = 5, ["duration"] = seconds });
+        AssertErrorAt(LoadWithSandstorm(a => Burning(a, 2.5)), Whirlwind, "abilities[0].effects[0].statuses[2].duration", "whole number of seconds");
+        AssertErrorAt(LoadWithSandstorm(a => Burning(a, 0.5)), Whirlwind, "abilities[0].effects[0].statuses[2].duration", "whole number of seconds");
+        DataLoadResult r = LoadWithSandstorm(a => Burning(a, 2));
+        Assert.True(r.Ok, string.Join("\n", r.Errors));
+        Assert.Equal(new ZoneStatus { Status = r.Data!.FindStatus("burning"), Magnitude = 5f, DurationTicks = 40 },
+            r.Data.Abilities[r.Data.FindAbility("sandstorm")].Effects[0].ZoneStatuses[2]);
+    }
+
+    /// <summary>M4-4b-2: an <c>applyStatus</c> of a blind status takes no magnitude (the status holds its sight and reach).</summary>
+    [Fact]
+    public void ABlindApplyStatus_TakesNoMagnitude()
+    {
+        AssertErrorAt(LoadWith(a => a["effects"]![0]!["status"] = "blinded"), Abilities, "abilities[0].effects[0].magnitude", "takes no magnitude");
+        DataLoadResult r = LoadWith(a => { a["effects"]![0]!["status"] = "blinded"; a["effects"]![0]!.AsObject().Remove("magnitude"); });
+        Assert.True(r.Ok, string.Join("\n", r.Errors));
+        Assert.Equal(0f, r.Data!.Abilities[r.Data.FindAbility("telas_fire")].Effects[0].Magnitude);
     }
 }
