@@ -31,6 +31,13 @@ public sealed record SimConfig(ulong Seed, int PlayerCount, int UnitCapacity, in
     public int ProjectileCapacity { get; init; }
 
     /// <summary>
+    /// Maximum number of live zones (M4-4b-2); the store is allocated once at this size, and a zone cast while it is full is
+    /// not made (the cast still resolves). Default <see cref="Abilities.ZoneStore.DefaultCapacity"/> (64). Not in the replay
+    /// header: a replay plays with the default.
+    /// </summary>
+    public int ZoneCapacity { get; init; } = Abilities.ZoneStore.DefaultCapacity;
+
+    /// <summary>
     /// The projectile store's size: <see cref="ProjectileCapacity"/>, or by default as many shooters as the players'
     /// population caps allow (<c>players x rules.popCap / the smallest pop of a unit with a projectile</c>, at most
     /// <see cref="UnitCapacity"/>, at least 1): every shipped shot lands before its shooter's next one (flight shorter than
@@ -69,6 +76,7 @@ public sealed record SimConfig(ulong Seed, int PlayerCount, int UnitCapacity, in
         if (ResourceCapacity < 1) throw new ArgumentOutOfRangeException(nameof(ResourceCapacity));
         if (BuildingCapacity < 1) throw new ArgumentOutOfRangeException(nameof(BuildingCapacity));
         if (ProjectileCapacity < 0) throw new ArgumentOutOfRangeException(nameof(ProjectileCapacity));
+        if (ZoneCapacity < 1) throw new ArgumentOutOfRangeException(nameof(ZoneCapacity));
         if (Data == null) throw new ArgumentNullException(nameof(Data));
         if (Map == null) throw new ArgumentNullException(nameof(Map));
         Map.Validate();

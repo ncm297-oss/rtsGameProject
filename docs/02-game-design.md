@@ -232,7 +232,9 @@ magnitude. Different statuses stack freely.
 ### Zones
 
 Zones are persistent ground areas (circle, duration, owner) that apply statuses to units inside
-every tick and can modify vision. Darkness (Andii) and Sandstorm (Whirlwind) are zones.
+every tick and can modify vision. Darkness (Andii) and Sandstorm (Whirlwind) are zones. A unit keeps
+a zone's statuses for their duration after it leaves (Sandstorm: 1 s). A zone that hides its contents
+is seen into only by its owner and by an enemy's own units standing inside it, as far as they see.
 
 ## Stealth and detection
 
@@ -321,7 +323,7 @@ Shipped maps (working titles):
 | H | Hold position |
 | M + click | Move (ignore enemies) |
 | P + click | Patrol |
-| Shift + any command | Queue the command |
+| Shift + any command | Queue the command (after an ability key, Shift + click keeps the ability armed for the next cast) |
 | Ctrl + 1-9 | Assign control group |
 | Shift + 1-9 | Add selection to control group |
 | 1-9 | Select group; double-tap to center the camera on it |

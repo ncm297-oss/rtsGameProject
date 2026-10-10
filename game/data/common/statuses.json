@@ -12,6 +12,14 @@
       "displayName": "Slowed",
       "description": "Moves more slowly for a while.",
       "kind": "slow"
+    },
+    {
+      "id": "blinded",
+      "displayName": "Blinded",
+      "description": "Can barely see: sight drops to 2 m, and it can't target anything more than 3 m away.",
+      "kind": "blind",
+      "sight": 2,
+      "reach": 3
     }
   ]
 }

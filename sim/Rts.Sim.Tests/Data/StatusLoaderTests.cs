@@ -29,7 +29,7 @@ public class StatusLoaderTests
     public void Shipped_BurningIsMagicDamageOverTime_SlowedIsASlow()
     {
         GameData d = TestSim.Data;
-        Assert.Equal(2, d.Statuses.Length);
+        Assert.Equal(3, d.Statuses.Length); // + blinded (M4-4b-2)
         StatusDef burning = d.Statuses[d.FindStatus("burning")];
         Assert.Equal(StatusKind.DamageOverTime, burning.Kind);
         Assert.Equal(d.DamageTable.DamageTypeKeys.IndexOf("magic"), burning.DamageType);
@@ -60,6 +60,34 @@ public class StatusLoaderTests
         AssertErrorAt(LoadWith(r => Entry(r, "slowed")["id"] = "burning"), StatusFile, "statuses[1].id", "duplicate");
         AssertErrorAt(LoadWith(r => Entry(r, "burning").Remove("displayName")), StatusFile, "statuses[0].displayName");
         Assert.False(LoadWith(r => Entry(r, "burning")["magnitude"] = 3).Ok);
+    }
+
+    /// <summary>M4-4b-2: Blinded is a blind status with docs/02's sight 2 m and reach 3 m, in the data, not in C#.</summary>
+    [Fact]
+    public void Shipped_Blinded_IsABlind_Sight2_Reach3()
+    {
+        GameData d = TestSim.Data;
+        StatusDef blinded = d.Statuses[d.FindStatus("blinded")];
+        Assert.Equal(StatusKind.Blind, blinded.Kind);
+        Assert.Equal((2f, 3f), (blinded.Sight, blinded.Reach));
+        Assert.Equal("Blinded", blinded.DisplayName);
+        Assert.False(string.IsNullOrWhiteSpace(blinded.Description));
+        Assert.Equal(-1, blinded.DamageType);
+        Assert.Equal((0f, 0f), (d.Statuses[d.FindStatus("slowed")].Sight, d.Statuses[d.FindStatus("burning")].Reach));
+    }
+
+    /// <summary>M4-4b-2 criterion 1: a blind status needs a sight and a reach (m, above 0, at most 64); no other kind takes them.</summary>
+    [Fact]
+    public void ABlind_NeedsSightAndReach_AndNoOtherKindHasThem()
+    {
+        AssertErrorAt(LoadWith(r => Entry(r, "blinded").Remove("sight")), StatusFile, "statuses[2].sight", "missing");
+        AssertErrorAt(LoadWith(r => Entry(r, "blinded").Remove("reach")), StatusFile, "statuses[2].reach", "missing");
+        AssertErrorAt(LoadWith(r => Entry(r, "blinded")["sight"] = 0), StatusFile, "statuses[2].sight", "must be positive");
+        AssertErrorAt(LoadWith(r => Entry(r, "blinded")["reach"] = -1), StatusFile, "statuses[2].reach", "must be positive");
+        AssertErrorAt(LoadWith(r => Entry(r, "blinded")["reach"] = DataLimits.MaxSight + 1), StatusFile, "statuses[2].reach", "above the maximum");
+        AssertErrorAt(LoadWith(r => Entry(r, "slowed")["sight"] = 2), StatusFile, "statuses[1].sight", "only a blind");
+        AssertErrorAt(LoadWith(r => Entry(r, "burning")["reach"] = 3), StatusFile, "statuses[0].reach", "only a blind");
+        AssertErrorAt(LoadWith(r => Entry(r, "blinded")["damageType"] = "magic"), StatusFile, "statuses[2].damageType", "only a damageOverTime");
     }
 
     [Fact]

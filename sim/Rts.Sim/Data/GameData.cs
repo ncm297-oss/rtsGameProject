@@ -235,6 +235,8 @@ public sealed class GameData
             h.Add(st.Description);
             h.Add((int)st.Kind);
             h.Add(st.DamageType);
+            h.Add(st.Sight); // M4-4b-2
+            h.Add(st.Reach);
         }
         h.Add(Abilities.Length);
         foreach (AbilityDef a in Abilities)
@@ -252,6 +254,7 @@ public sealed class GameData
             h.Add(a.DurationTicks);
             h.Add((int)a.Affects);
             h.Add(a.HitsBuildings);
+            h.Add(a.ZoneEffect); // M4-4b-2
             h.Add(a.Effects.Length);
             foreach (AbilityEffect e in a.Effects)
             {
@@ -263,6 +266,16 @@ public sealed class GameData
                 h.Add(e.DurationTicks);
                 h.Add(e.Buildings);
                 h.Add(e.FriendlyFire);
+                // M4-4b-2: a zone's vision flag and statuses (empty on every other kind).
+                h.Add(e.BlocksVision);
+                int zs = e.ZoneStatuses.IsDefault ? 0 : e.ZoneStatuses.Length;
+                h.Add(zs);
+                for (int k = 0; k < zs; k++)
+                {
+                    h.Add(e.ZoneStatuses[k].Status);
+                    h.Add(e.ZoneStatuses[k].Magnitude);
+                    h.Add(e.ZoneStatuses[k].DurationTicks);
+                }
             }
         }
         return h.Value;

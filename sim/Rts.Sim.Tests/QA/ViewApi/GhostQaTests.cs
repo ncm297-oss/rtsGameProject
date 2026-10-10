@@ -26,11 +26,13 @@ public class GhostQaTests
     private static void Refresh(FogView view, World w) =>
         view.Refresh(w.Fog, w.TickNumber, w.Units.Alive, w.Buildings.Alive, w.Buildings.Generation);
 
-    // The independent rule (docs/03 "Implementation (M4-V5)"): a known entry whose building isn't the one drawn in its slot now.
+    // The independent rule (docs/03 "Implementation (M4-V5)"): a known entry whose building isn't the one drawn in its slot
+    // now, and (M4-V6b, BUG-0310) whose remembered footprint has no visible cell: ghosts are in explored fog.
     private static bool Unseen(World w, int player, int slot)
     {
         BuildingGhost g = w.Fog.Ghosts(player)[slot];
-        return g.Known && !(w.Fog.CanSeeBuilding(player, slot) && w.Buildings.Generation[slot] == g.Generation);
+        return g.Known && !(w.Fog.CanSeeBuilding(player, slot) && w.Buildings.Generation[slot] == g.Generation)
+            && !AnyFootprintCellVisible(w, player, g.TypeId, g.Cell);
     }
 
     private static bool AnyFootprintCellVisible(World w, int player, int type, int anchor)
@@ -185,7 +187,7 @@ public class GhostQaTests
     /// until the next fog update (up to 4 ticks), and CollectGhosts marks it a ghost meanwhile: a darkened box flashes
     /// over visible ground where the building just died, and the TargetRing keeps marking it.
     /// </summary>
-    [Fact(Skip = "BUG-0310: a building destroyed in sight is drawn as a ghost over visible ground until the next fog update")]
+    [Fact]
     public void ABuildingDestroyedInSight_IsNeverAGhostOverVisibleGround()
     {
         Simulation sim = Flat(size: 64);

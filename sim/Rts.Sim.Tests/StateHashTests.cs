@@ -498,6 +498,96 @@ public class StateHashTests
         Assert.NotEqual(a[^1], c[^1]);
     }
 
+    // ---------- M4-4b-2: zones ----------
+
+    private static T ZoneField<T>(World w, string name) =>
+        (T)typeof(Abilities.ZoneStore).GetField(name, BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(w.Zones)!;
+
+    /// <summary>
+    /// M4-4b-2 criterion 5: every zone field (slot, owner, centre, ability, ticks remaining) is hashed, a zone with one tick
+    /// left differs from none, no zone hashes as before, and the radius / vision flag / loop bound are derived.
+    /// </summary>
+    [Fact]
+    public void Hash_CoversEveryZoneField_AndAZoneWithOneTickLeftDiffersFromNone()
+    {
+        Simulation sim = AbilityScenes.NoFights();
+        World w = sim.World;
+        sim.Tick();
+        ulong h0 = sim.StateHash();
+        Data.AbilityDef sandstorm = w.Data.Abilities[w.Data.FindAbility("sandstorm")];
+        var seen = new HashSet<ulong> { h0 };
+        void Changes(string what) => Assert.True(seen.Add(sim.StateHash()), what);
+
+        int k = w.Zones.Add(1, sandstorm, new Vector2(30f, 30f));
+        Assert.Equal(0, k);
+        Changes("a zone");
+        ZoneField<int[]>(w, "_owner")[k] = 0;
+        Changes("owner");
+        ZoneField<Vector2[]>(w, "_center")[k] = new Vector2(30.5f, 30f);
+        Changes("centre");
+        ZoneField<int[]>(w, "_abilityId")[k] = w.Data.FindAbility("telas_fire");
+        Changes("ability");
+        ZoneField<int[]>(w, "_ticksRemaining")[k] = 1;
+        Changes("ticks remaining (one tick left)");
+        // Derived: the radius, the vision flag, the blocker count and the loop bound.
+        ulong h = sim.StateHash();
+        ZoneField<float[]>(w, "_radius")[k] += 1f;
+        ZoneField<bool[]>(w, "_blocksVision")[k] = false;
+        Assert.Equal(h, sim.StateHash());
+        ZoneField<float[]>(w, "_radius")[k] -= 1f;
+        ZoneField<bool[]>(w, "_blocksVision")[k] = true;
+        w.Zones.Free(k);
+        Assert.Equal(h0, sim.StateHash()); // none: as before M4-4b-2
+        // The slot is hashed: the same zone in slot 1 differs from it in slot 0.
+        w.Zones.Add(1, sandstorm, new Vector2(30f, 30f));
+        ulong inSlot0 = sim.StateHash();
+        w.Zones.Add(1, sandstorm, new Vector2(30f, 30f));
+        w.Zones.Free(0);
+        Assert.NotEqual(inSlot0, sim.StateHash());
+        // The audit: every ZoneStore array is hashed (above) or derived.
+        var classified = new HashSet<string> { "_alive", "_owner", "_center", "_abilityId", "_ticksRemaining", "_radius", "_blocksVision" };
+        foreach (FieldInfo f in typeof(Abilities.ZoneStore).GetFields(BindingFlags.NonPublic | BindingFlags.Instance))
+            if (f.FieldType.IsArray) Assert.True(classified.Contains(f.Name), $"ZoneStore.{f.Name} is not classified as hashed or derived");
+    }
+
+    /// <summary>M4-4b-2: a Blinded unit's blind in force (its derived sight and reach) is derived from its hashed statuses and never hashed.</summary>
+    [Fact]
+    public void Hash_TheBlindInForce_IsDerived_AndNotHashed()
+    {
+        Simulation sim = AbilityScenes.NoFights();
+        EntityHandle a = CombatScenes.Place(sim, 0, CombatScenes.Crossbowman, CombatScenes.At(sim, 10, 10));
+        sim.Tick();
+        Abilities.StatusSystem.Apply(sim.World, a.Index, sim.World.Data.FindStatus("blinded"), 0f, 40, 1);
+        ulong h = sim.StateHash();
+        Assert.True(sim.World.Units.Statuses.BlindOf(a.Index) >= 0);
+        sim.World.Units.Statuses.SetBlind(a.Index, -1);
+        Assert.Equal(h, sim.StateHash());
+    }
+
+    /// <summary>M4-4b-2: two sims casting Sandstorm over an enemy the same way hash equal every tick; a cast a tick later differs.</summary>
+    [Fact]
+    public void Hash_ASandstormScene_EqualTwins_AndATickLaterDiffers()
+    {
+        static void Scene(int delay, List<ulong> hashes)
+        {
+            Simulation sim = AbilityScenes.NoFights();
+            EntityHandle priest = CombatScenes.Place(sim, 1, ZoneSystemTests.Priest, CombatScenes.At(sim, 10, 20));
+            CombatScenes.Place(sim, 0, CombatScenes.Crossbowman, CombatScenes.At(sim, 15, 20));
+            for (int t = 0; t < 300; t++)
+            {
+                if (t == delay) sim.Enqueue(Command.UseAbility(1, priest, 0, CombatScenes.At(sim, 15, 20)));
+                sim.Tick();
+                hashes.Add(sim.StateHash());
+            }
+        }
+        List<ulong> a = new(), b = new(), c = new();
+        Scene(3, a);
+        Scene(3, b);
+        Scene(4, c);
+        Assert.Equal(a, b);
+        Assert.NotEqual(a[100], c[100]);
+    }
+
     // ---------- M3-1: resource nodes and the nav grid version ----------
 
     private static Simulation Trees(int capacity = ResourceStore.DefaultCapacity, params (int X, int Y)[] cells)
@@ -1227,7 +1317,8 @@ public class StateHashTests
         // The audit: every FogStore array is one of these or hashed (above); a new one must be classified here.
         var classified = new HashSet<string> { "_visibility", "_version", "_visibleBox", "_explored", "_visible", "_revealUntil", "_revealGeneration",
             "_ghosts", "_ghostCount", // M4-3b: hashed (Hash_CoversEveryGhostField)
-            "_levels", "_halfWidths", "_unitMask", "_buildingMask", "_lipMask", "_scratch", "_levelUsed", "_box" };
+            "_levels", "_halfWidths", "_unitMask", "_buildingMask", "_lipMask", "_scratch", "_levelUsed", "_box",
+            "_limits", "_statusMask" }; // M4-4b-2: derived from the data
         foreach (FieldInfo f in typeof(Vision.FogStore).GetFields(BindingFlags.NonPublic | BindingFlags.Instance))
             if (f.FieldType.IsArray) Assert.True(classified.Contains(f.Name), $"FogStore.{f.Name} is not classified as hashed or derived");
     }

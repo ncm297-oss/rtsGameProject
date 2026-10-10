@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-09-0724, task M4-V5 (view track) |
 | System | fog view: `FogView.CollectGhosts`, `BuildingViews` ghost pool, `TargetRing` |
-| Fixed by | |
+| Fixed by | ed18d2f (M4-V6b), verified 2026-10-10-0215 |
 
 ## Repro
 1. Un-skip `sim/Rts.Sim.Tests/QA/ViewApi/GhostQaTests.cs` `ABuildingDestroyedInSight_IsNeverAGhostOverVisibleGround`.

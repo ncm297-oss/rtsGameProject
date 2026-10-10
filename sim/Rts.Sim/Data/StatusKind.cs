@@ -8,4 +8,10 @@ public enum StatusKind
 
     /// <summary>Movement speed x (1 - magnitude) (Slowed); the strongest slow on a unit wins.</summary>
     Slow = 1,
+
+    /// <summary>
+    /// Blinded (M4-4b-2): the unit's fog circle shrinks to the status's <see cref="StatusDef.Sight"/> and it neither takes
+    /// nor strikes a target farther than <see cref="StatusDef.Reach"/>; the strongest (smallest sight) blind on a unit wins.
+    /// </summary>
+    Blind = 2,
 }

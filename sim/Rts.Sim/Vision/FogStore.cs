@@ -1,5 +1,6 @@
 using System;
 using System.Numerics;
+using Rts.Sim.Abilities;
 using Rts.Sim.Data;
 using Rts.Sim.Determinism;
 using Rts.Sim.Entities;
@@ -20,6 +21,10 @@ namespace Rts.Sim.Vision;
 /// The high-ground rule (docs/02) is applied per cell: a cell above the viewer's level is visible only within
 /// <see cref="VisionConstants.LipRadius"/>. The viewer's level is its own cell's, so a unit on a ramp sees as from the
 /// lower level.
+/// </para>
+/// <para>
+/// M4-4b-2: a Blinded unit stamps its blind status's smaller circle, and after the stamps each zone that blocks vision hides
+/// its cells from every player but its owner, except the cells that player's own units standing inside it see.
 /// </para>
 /// <para>
 /// State (hashed): the explored bits (a packed copy of "not unexplored", kept as cells are first seen), the visible bits
@@ -56,9 +61,11 @@ public sealed class FogStore
     private readonly int[] _ghostCount;
     private readonly int _buildingSlots;
 
-    // Circle masks, ascending by radius: per mask, the half-width of each row from -R to R.
+    // Circle masks, ascending by radius: per mask, the half-width of each row from -R to R, and its squared cell limit.
     private readonly int[][] _halfWidths;
+    private readonly int[] _limits;
     private readonly int[] _unitMask;
+    private readonly int[] _statusMask; // M4-4b-2: per status, a blind's sight mask (-1 for other kinds)
     private readonly int[] _buildingMask;
     private readonly int[] _lipMask;
 
@@ -108,16 +115,20 @@ public sealed class FogStore
         // One mask per distinct radius (sights, and the lip cut to each sight), ascending, so a bigger index covers a smaller one.
         // No cell is farther than the map's diagonal, so a bigger circle adds nothing (BUG-0216: not its longer side).
         int maxLimit = _width * _width + _height * _height;
-        var limits = new int[2 * (data.Units.Length + data.Buildings.Length)];
+        var limits = new int[2 * (data.Units.Length + data.Buildings.Length + data.Statuses.Length)];
         int count = 0;
         foreach (UnitDef u in data.Units) AddLimits(limits, ref count, u.Sight, maxLimit);
         foreach (BuildingDef b in data.Buildings) AddLimits(limits, ref count, b.Sight, maxLimit);
+        // M4-4b-2: a Blinded unit stamps its blind's sight.
+        foreach (StatusDef st in data.Statuses)
+            if (st.Kind == StatusKind.Blind) AddLimits(limits, ref count, st.Sight, maxLimit);
         Array.Sort(limits, 0, count);
         int distinct = 0;
         for (int k = 0; k < count; k++)
             if (distinct == 0 || limits[k] != limits[distinct - 1]) limits[distinct++] = limits[k];
         _halfWidths = new int[distinct][];
         for (int m = 0; m < distinct; m++) _halfWidths[m] = Circle(limits[m]);
+        _limits = limits[..distinct];
         _lipMask = new int[distinct];
         for (int m = 0; m < distinct; m++)
             _lipMask[m] = Array.BinarySearch(limits, 0, distinct, Math.Min(limits[m], Limit(VisionConstants.LipRadius, maxLimit)));
@@ -125,6 +136,9 @@ public sealed class FogStore
         for (int t = 0; t < _unitMask.Length; t++) _unitMask[t] = MaskOf(limits, distinct, data.Units[t].Sight, maxLimit);
         _buildingMask = new int[data.Buildings.Length];
         for (int t = 0; t < _buildingMask.Length; t++) _buildingMask[t] = MaskOf(limits, distinct, data.Buildings[t].Sight, maxLimit);
+        _statusMask = new int[data.Statuses.Length];
+        for (int t = 0; t < _statusMask.Length; t++)
+            _statusMask[t] = data.Statuses[t].Kind == StatusKind.Blind ? MaskOf(limits, distinct, data.Statuses[t].Sight, maxLimit) : -1;
     }
 
     /// <summary>Map width in cells (the visibility arrays are row-major, <c>y * Width + x</c>).</summary>
@@ -272,6 +286,13 @@ public sealed class FogStore
         return y * _width + x;
     }
 
+    /// <summary>The centre (m) of the cell holding <paramref name="p"/>, clamped onto the map (M4-4b-2: whether a zone covers a unit's cell).</summary>
+    internal Vector2 CellCentreOf(Vector2 p)
+    {
+        int c = CellOf(p);
+        return new Vector2((c % _width + 0.5f) * MapConstants.CellSize, (c / _width + 0.5f) * MapConstants.CellSize);
+    }
+
     /// <summary>The level of the cell holding <paramref name="p"/> (a ramp reports its lower level).</summary>
     internal int LevelAt(Vector2 p) => _levels[CellOf(p)];
 
@@ -305,14 +326,21 @@ public sealed class FogStore
         ReadOnlySpan<bool> bAlive = _buildings.Alive;
         ReadOnlySpan<int> bOwner = _buildings.Owner;
         ReadOnlySpan<int> bType = _buildings.TypeId;
+        ZoneStore zones = _world.Zones;
+        int[] inside = _world.Neighbors; // movement's scratch: free in phase 12 (and between ticks)
         for (int p = 0; p < _players; p++)
         {
             byte[] vis = _visibility[p];
+            // M4-4b-2: whether a zone hides cells from p (one that blocks vision, of another owner), and p's units inside one.
+            bool blocked = zones.BlockerCount > 0 && BlocksFor(zones, p);
+            bool blinded = u.Statuses.BlindedUnits > 0;
+            int insideCount = 0;
             for (int i = 0; i < u.Capacity; i++)
             {
                 if (!u.Alive[i] || u.Owner[i] != p) continue;
-                int m = _unitMask[u.TypeId[i]];
+                int m = blinded ? UnitMask(i) : _unitMask[u.TypeId[i]];
                 if (m >= 0) StampViewer(vis, CellOf(u.Position[i]), m);
+                if (blocked && InsideBlocker(zones, p, u.Position[i])) inside[insideCount++] = i;
             }
             for (int j = 0; j < bAlive.Length; j++)
             {
@@ -320,9 +348,117 @@ public sealed class FogStore
                 int m = _buildingMask[bType[j]];
                 if (m >= 0) StampViewer(vis, CentreCell(j), m);
             }
+            if (blocked) MarkBlocked(zones, p, vis, inside, insideCount);
             Combine(p);
+            if (blocked) ClearBlocked(zones, p, vis);
             UpdateGhosts(p);
         }
+    }
+
+    /// <summary>
+    /// The fog mask unit slot <paramref name="i"/> stamps: its type's sight, or (M4-4b-2) its blind's when that circle is
+    /// smaller (masks ascend by radius). The derived sight; nothing here is hashed.
+    /// </summary>
+    private int UnitMask(int i)
+    {
+        int m = _unitMask[_units.TypeId[i]];
+        int b = _units.Statuses.BlindOf(i);
+        if (b >= 0 && _statusMask[b] >= 0 && _statusMask[b] < m) m = _statusMask[b];
+        return m;
+    }
+
+    /// <summary>Whether live zone <paramref name="k"/> hides cells from <paramref name="p"/> (M4-4b-2): it blocks vision and is another player's.</summary>
+    private static bool HidesFrom(ZoneStore zones, int k, int p) => zones.Alive[k] && zones.BlocksVision(k) && zones.Owner[k] != p;
+
+    /// <summary>Whether any live zone hides cells from player <paramref name="p"/> (M4-4b-2).</summary>
+    private static bool BlocksFor(ZoneStore zones, int p)
+    {
+        for (int k = 0; k < zones.End; k++)
+            if (HidesFrom(zones, k, p)) return true;
+        return false;
+    }
+
+    /// <summary>Whether <paramref name="pos"/> (a unit of <paramref name="p"/>) stands inside a zone that hides cells from <paramref name="p"/> (M4-4b-2).</summary>
+    private static bool InsideBlocker(ZoneStore zones, int p, Vector2 pos)
+    {
+        for (int k = 0; k < zones.End; k++)
+            if (HidesFrom(zones, k, p) && zones.Contains(k, pos)) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// M4-4b-2, after <paramref name="p"/>'s stamps: every cell whose centre is within a zone that hides cells from
+    /// <paramref name="p"/> is marked blocked (the high bit of its visibility byte) unless one of <paramref name="p"/>'s units
+    /// standing inside that same zone (<paramref name="inside"/>: p's units inside any such zone) sees it by the stamp's rule
+    /// with its sight now (Blinded or not). <see cref="Combine"/> treats a blocked cell as uncovered. The pass covers each
+    /// zone's bounding box only.
+    /// </summary>
+    private void MarkBlocked(ZoneStore zones, int p, byte[] vis, int[] inside, int insideCount)
+    {
+        for (int k = 0; k < zones.End; k++)
+        {
+            if (!HidesFrom(zones, k, p)) continue;
+            Vector2 centre = zones.Center[k];
+            float r = zones.Radius(k), r2 = r * r;
+            ZoneBox(centre, r, out int x0, out int y0, out int x1, out int y1);
+            for (int y = y0; y <= y1; y++)
+            {
+                float cy = (y + 0.5f) * MapConstants.CellSize - centre.Y;
+                for (int x = x0; x <= x1; x++)
+                {
+                    float cx = (x + 0.5f) * MapConstants.CellSize - centre.X;
+                    if (cx * cx + cy * cy > r2) continue;
+                    int c = y * _width + x;
+                    if (!SeenFromInside(zones, k, c, x, y, inside, insideCount)) vis[c] |= BlockedBit;
+                }
+            }
+        }
+    }
+
+    /// <summary>Clears the blocked marks <see cref="MarkBlocked"/> left outside the cells <see cref="Combine"/> rewrote (M4-4b-2).</summary>
+    private void ClearBlocked(ZoneStore zones, int p, byte[] vis)
+    {
+        for (int k = 0; k < zones.End; k++)
+        {
+            if (!HidesFrom(zones, k, p)) continue;
+            ZoneBox(zones.Center[k], zones.Radius(k), out int x0, out int y0, out int x1, out int y1);
+            for (int y = y0; y <= y1; y++)
+                for (int c = y * _width + x0, end = y * _width + x1; c <= end; c++)
+                    vis[c] &= StateMask;
+        }
+    }
+
+    /// <summary>The cells (inclusive, clamped onto the map) whose centres may lie within <paramref name="r"/> m of <paramref name="centre"/>.</summary>
+    private void ZoneBox(Vector2 centre, float r, out int x0, out int y0, out int x1, out int y1)
+    {
+        x0 = Math.Max(0, (int)MathF.Floor((centre.X - r) / MapConstants.CellSize));
+        y0 = Math.Max(0, (int)MathF.Floor((centre.Y - r) / MapConstants.CellSize));
+        x1 = Math.Min(_width - 1, (int)MathF.Floor((centre.X + r) / MapConstants.CellSize));
+        y1 = Math.Min(_height - 1, (int)MathF.Floor((centre.Y + r) / MapConstants.CellSize));
+    }
+
+    /// <summary>
+    /// Whether one of the units in <paramref name="inside"/> that stands inside zone <paramref name="k"/> sees cell
+    /// <paramref name="c"/> (at <paramref name="x"/>, <paramref name="y"/>) by the stamp's rule: within its circle now, and
+    /// not above its level unless within its lip.
+    /// </summary>
+    private bool SeenFromInside(ZoneStore zones, int k, int c, int x, int y, int[] inside, int insideCount)
+    {
+        for (int n = 0; n < insideCount; n++)
+        {
+            int i = inside[n];
+            Vector2 pos = _units.Position[i];
+            if (!zones.Contains(k, pos)) continue;
+            int m = UnitMask(i);
+            if (m < 0) continue;
+            int uc = CellOf(pos);
+            int dx = x - uc % _width, dy = y - uc / _width;
+            int d2 = dx * dx + dy * dy;
+            if (d2 > _limits[m]) continue;
+            if (MultiLevel && _levels[c] > _levels[uc] && d2 > _limits[_lipMask[m]]) continue;
+            return true;
+        }
+        return false;
     }
 
     /// <summary>
@@ -488,9 +624,11 @@ public sealed class FogStore
                 run1 += s[n + c];
                 run2 += s[n2 + c];
                 int level = levels[c];
-                int state = vis[c] & StateMask; // without a stamp mark
+                int raw = vis[c];
+                int state = raw & StateMask; // without a stamp mark or a zone's blocked mark
                 // The high-ground rule: a layer sees its own level and below; the top one (and the lip) every level.
-                if (run2 > 0 || (run1 > 0 && level <= 1) || (run0 > 0 && level == 0))
+                // M4-4b-2: a cell a zone hides (marked blocked) is uncovered whatever the layers say.
+                if ((raw & BlockedBit) == 0 && (run2 > 0 || (run1 > 0 && level <= 1) || (run0 > 0 && level == 0)))
                 {
                     if (state != VisionConstants.Visible)
                     {
@@ -601,8 +739,14 @@ public sealed class FogStore
     /// <summary>Where a stamp mark starts in the visibility byte.</summary>
     private const int MarkShift = 2;
 
-    /// <summary>Largest mark (6 bits): masks from this index on are never skipped (no shipped data has that many radii).</summary>
-    private const int MaxMark = 63;
+    /// <summary>
+    /// Largest mark (5 bits, bits 2-6; M4-4b-2 took bit 7 for <see cref="BlockedBit"/>): masks from this index on are never
+    /// skipped (no shipped data has that many radii; a skip is only a saving).
+    /// </summary>
+    private const int MaxMark = 31;
+
+    /// <summary>M4-4b-2: the visibility byte's top bit marks a cell a zone hides during an update only (cleared by its end).</summary>
+    private const byte BlockedBit = 0x80;
 
     /// <summary>The largest squared cell distance inside a sight of <paramref name="sight"/> m: (dx^2 + dy^2) x cell^2 &lt;= sight^2.</summary>
     private static int Limit(float sight, int maxLimit)

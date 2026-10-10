@@ -363,7 +363,7 @@ public partial class SelectionController : Node
         return true;
     }
 
-    /// <summary>What a left click at <paramref name="screen"/> does while targeting: gives the armed order (<see cref="TargetKind"/>: attack-move after A, move after M) at the ground there (queued while <c>order_queue</c> is held) and disarms; false (still armed) when not targeting or off the map. After A, a click on an enemy unit or building (<see cref="EnemyAt"/>) is an <c>Attack</c> on it instead (M4-V2). After an ability button, the click is one <see cref="AbilityOrder"/> at <see cref="AbilityPoint"/> (M4-V6a), and disarms even when no caster is ready.</summary>
+    /// <summary>What a left click at <paramref name="screen"/> does while targeting: gives the armed order (<see cref="TargetKind"/>: attack-move after A, move after M) at the ground there (queued while <c>order_queue</c> is held) and disarms; false (still armed) when not targeting or off the map. After A, a click on an enemy unit or building (<see cref="EnemyAt"/>) is an <c>Attack</c> on it instead (M4-V2). After an ability button, the click is one <see cref="AbilityOrder"/> at <see cref="AbilityPoint"/> (M4-V6a), and disarms even when no caster is ready; with <c>order_queue</c> held and the cast sent it stays armed for the next queued cast (M4-V6b, BUG-0342).</summary>
     public bool AttackMoveClick(Vector2 screen)
     {
         if (!Targeting) return false;
@@ -372,8 +372,11 @@ public partial class SelectionController : Node
         {
             if (!AbilityPoint(screen, out System.Numerics.Vector2 point)) return false;
             int ability = _targetAbility;
-            Targeting = false;
-            return AbilityOrder(ability, point, queued);
+            bool sent = AbilityOrder(ability, point, queued);
+            // Shift keeps the ability armed after a cast went out, so several casts queue from one key press (BUG-0342,
+            // the common RTS convention); right-click or Esc ends it. A click that sent nothing disarms as before.
+            if (!(queued && sent)) Targeting = false;
+            return sent;
         }
         if (_target == CommandKind.AttackMove && EnemyAt(screen, out EntityHandle enemy, out bool isBuilding))
         {

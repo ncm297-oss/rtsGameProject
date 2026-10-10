@@ -1,0 +1,26 @@
+{
+  "abilities": [
+    {
+      "id": "sandstorm",
+      "displayName": "Sandstorm",
+      "description": "Calls up a sandstorm for 12 seconds: enemy units inside are Blinded and Slowed by 30%, and enemies outside can't see into the storm. Whirlwind units are unaffected.",
+      "kind": "targetGround",
+      "range": 18,
+      "radius": 6,
+      "castTime": 1.2,
+      "cooldown": 45,
+      "duration": 12,
+      "affects": "enemy_units",
+      "effects": [
+        {
+          "kind": "createZone",
+          "blocksVision": true,
+          "statuses": [
+            { "status": "blinded", "duration": 1 },
+            { "status": "slowed", "magnitude": 0.3, "duration": 1 }
+          ]
+        }
+      ]
+    }
+  ]
+}

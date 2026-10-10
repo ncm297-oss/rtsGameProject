@@ -102,8 +102,10 @@ public sealed class Simulation
         // M3-3: builders and repairers, after the gatherers.
         ConstructionSystem.Run(World);
 
-        // Phase 5: statuses count down, damage over time lands, the expired end (M4-4a).
+        // Phase 5: statuses count down, damage over time lands, the expired end (M4-4a); then zones count down and apply
+        // their statuses (M4-4b-2), after the countdown so a zone's status lasts its full duration after the unit leaves.
         StatusSystem.Run(World);
+        ZoneSystem.Run(World);
 
         // Phase 6: casters walk into range, cast timers count down, finished casts resolve (M4-4a).
         AbilitySystem.Run(World);
@@ -147,10 +149,10 @@ public sealed class Simulation
         _recorder = recorder;
     }
 
-    /// <summary>64-bit FNV-1a hash of all gameplay state: tick, units (Hold, order queues, gather loops and cargo, combat state included), RNG streams, flow-field cache metadata, nav grid versions (and the movement pass's last seen block version), resource nodes, buildings, projectiles in flight (production queues, research items and rally points included), the fog's explored and visible bits and high-ground reveals (M4-3a; visible bits BUG-0215), player totals, researched techs, kills and losses, and pending commands.</summary>
+    /// <summary>64-bit FNV-1a hash of all gameplay state: tick, units (Hold, order queues, gather loops and cargo, combat state included), RNG streams, flow-field cache metadata, nav grid versions (and the movement pass's last seen block version), resource nodes, buildings, projectiles in flight (production queues, research items and rally points included), the fog's explored and visible bits and high-ground reveals (M4-3a; visible bits BUG-0215), live zones (M4-4b-2), player totals, researched techs, kills and losses, and pending commands.</summary>
     /// <remarks>
     /// Derived state is left out: the spatial hash (rebuilt from the units every tick), the fog's byte map and update versions (M4-3a: copies of its hashed bits),
-    /// Speed/Radius (they follow from TypeId), and population (M3-4: <see cref="World.HalfPop"/> follows from the live
+    /// Speed/Radius (they follow from TypeId), a unit's blind in force (M4-4b-2: from its statuses), and population (M3-4: <see cref="World.HalfPop"/> follows from the live
     /// units and the started production items, <see cref="World.HalfPopCap"/> from the finished buildings). The flow-field cache's keys, versions and LRU stamps
     /// are in, because they decide which units wait under the build cap (BUG-0021); the fields'
     /// contents are not, since they follow from the grid and the key.
@@ -226,6 +228,8 @@ public sealed class Simulation
         World.Projectiles.AddToHash(ref h);
         // M4-3a: the fog's explored and visible bits (BUG-0215: the visible bits are state) and the high-ground reveals in force.
         World.Fog.AddToHash(ref h, World.TickNumber);
+        // M4-4b-2: the live zones; none adds nothing, so a match without one hashes as before.
+        World.Zones.AddToHash(ref h);
         for (int p = 0; p < World.Gold.Length; p++)
         {
             // M3-5: a player with any researched tech sets the high half of its gold word and its tech words follow;

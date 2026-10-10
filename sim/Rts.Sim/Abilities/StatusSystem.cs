@@ -6,7 +6,8 @@ namespace Rts.Sim.Abilities;
 
 /// <summary>
 /// Tick phase 5 (M4-4a, docs/03 "Implementation (M4-4a)"): every unit's statuses count down, damage over time lands, and
-/// the expired ones end. Also the one place a unit's derived speed follows its slows.
+/// the expired ones end. Also the one place a unit's derived speed follows its slows, and (M4-4b-2) its blind in force
+/// follows its blind statuses.
 /// </summary>
 /// <remarks>
 /// Damage over time lands in pulses, one every <see cref="SimConstants.TicksPerSecond"/> ticks from the first application,
@@ -30,7 +31,7 @@ public static class StatusSystem
         {
             if (s.Count[i] == 0 || !u.Alive[i]) continue;
             int generation = u.Generation[i];
-            bool slowChanged = false;
+            bool slowChanged = false, blindChanged = false;
             int k = 0;
             while (k < s.Count[i])
             {
@@ -50,20 +51,69 @@ public static class StatusSystem
                     continue;
                 }
                 if (def.Kind == StatusKind.Slow) slowChanged = true;
+                else if (def.Kind == StatusKind.Blind) blindChanged = true;
                 s.RemoveAt(i, at);
             }
             if (slowChanged && u.Alive[i]) RecomputeSpeed(world, i);
+            if (blindChanged && u.Alive[i]) RecomputeBlind(world, i);
         }
     }
 
     /// <summary>
     /// Applies status <paramref name="status"/> to unit slot <paramref name="i"/> by the stacking rule (<see cref="StatusStore.Apply"/>)
-    /// and recomputes its speed when a slow changed.
+    /// and recomputes its speed when a slow changed, its blind in force when a blind was added (M4-4b-2).
     /// </summary>
     internal static void Apply(World world, int i, int status, float magnitude, int ticks, int source)
     {
         bool changed = world.Units.Statuses.Apply(i, status, magnitude, ticks, source);
-        if (changed && world.Data.Statuses[status].Kind == StatusKind.Slow) RecomputeSpeed(world, i);
+        if (!changed) return;
+        StatusKind kind = world.Data.Statuses[status].Kind;
+        if (kind == StatusKind.Slow) RecomputeSpeed(world, i);
+        else if (kind == StatusKind.Blind) RecomputeBlind(world, i);
+    }
+
+    /// <summary>
+    /// Unit slot <paramref name="i"/>'s blind in force (M4-4b-2, <see cref="StatusStore.BlindOf"/>): of its blind statuses
+    /// the one with the smallest sight, then the smallest reach, then the lowest id; none when it has no blind. Called when
+    /// its blinds change, not every tick.
+    /// </summary>
+    internal static void RecomputeBlind(World world, int i)
+    {
+        StatusStore s = world.Units.Statuses;
+        int best = -1;
+        int head = i * StatusStore.PerUnit;
+        for (int k = 0; k < s.Count[i]; k++)
+        {
+            int id = s.StatusId[head + k];
+            StatusDef def = world.Data.Statuses[id];
+            if (def.Kind != StatusKind.Blind) continue;
+            if (best >= 0)
+            {
+                StatusDef b = world.Data.Statuses[best];
+                if (def.Sight > b.Sight || (def.Sight == b.Sight && (def.Reach > b.Reach || (def.Reach == b.Reach && id > best)))) continue;
+            }
+            best = id;
+        }
+        s.SetBlind(i, best);
+    }
+
+    /// <summary>
+    /// The farthest unit slot <paramref name="i"/> takes or strikes a target (M4-4b-2): its blind's <see cref="StatusDef.Reach"/>
+    /// (center to center; to the footprint for a building), or infinity when it is not blinded.
+    /// </summary>
+    internal static float ReachOf(World world, int i)
+    {
+        int b = world.Units.Statuses.BlindOf(i);
+        return b < 0 ? float.PositiveInfinity : world.Data.Statuses[b].Reach;
+    }
+
+    /// <summary>Unit slot <paramref name="i"/>'s sight now (M4-4b-2): its type's, or its blind's when that is smaller. Its fog circle; derived, never hashed.</summary>
+    public static float SightOf(World world, int i)
+    {
+        UnitStore u = world.Units;
+        float sight = world.Data.Units[u.TypeId[i]].Sight;
+        int b = u.Statuses.BlindOf(i);
+        return b >= 0 && world.Data.Statuses[b].Sight < sight ? world.Data.Statuses[b].Sight : sight;
     }
 
     /// <summary>
