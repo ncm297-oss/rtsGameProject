@@ -27,8 +27,7 @@ namespace Rts.Game.Tests;
 /// and a click on it is an Attack on the live hall.
 /// </summary>
 /// <remarks>Headless: <c>&amp; $env:GODOT --headless --path game res://tests/QaGhostViewTest.tscn</c>; prints
-/// "QA GHOST VIEW TEST PASS" and exits 0, or each failure and exits 1. Known-bug rows (BUG-0311) print "KNOWN" and fail
-/// only with <c>-- --strict</c>.</remarks>
+/// "QA GHOST VIEW TEST PASS" and exits 0, or each failure and exits 1.</remarks>
 public partial class QaGhostViewTest : Node
 {
     private readonly List<string> _failures = new();
@@ -223,8 +222,11 @@ public partial class QaGhostViewTest : Node
         for (int t = 0; t < 12; t++) { _sim.Tick(); await Frame(); CheckGhosts(seed); }
         if (!Check(!b.IsAlive(siteH) && _buildings.IsGhostShown(site), $"gone ghost seed {seed}: site alive {b.IsAlive(siteH)}, ghost {_buildings.IsGhostShown(site)}")) { await EndMatch(); return; }
 
-        // Attackers by the own hall, selected; the right-click on the gone site's ghost.
+        // Attackers spawned beyond the own hall, selected; the right-click on the gone site's ghost. Only the spawned ones:
+        // a starting unit may stand a few metres from the ghost's sight range, and the walk is what the scene checks.
         int army = FirstArmyType(W.FactionOf(0)), queued = 0;
+        var existing = new HashSet<int>();
+        for (int i = 0; i < U.Capacity; i++) if (U.Alive[i]) existing.Add(i);
         for (int r = 12; r < 40 && queued < 3; r += 3)
             for (int k = -6; k <= 6 && queued < 3; k += 4)
             {
@@ -237,7 +239,7 @@ public partial class QaGhostViewTest : Node
         _sim.Tick();
         var selected = new List<EntityHandle>();
         for (int i = 0; i < U.Capacity; i++)
-            if (U.Alive[i] && U.Owner[i] == 0 && U.TypeId[i] == army && System.Numerics.Vector2.Distance(U.Position[i], oc) < 50f) selected.Add(new EntityHandle(i, U.Generation[i]));
+            if (U.Alive[i] && !existing.Contains(i) && U.Owner[i] == 0 && U.TypeId[i] == army && System.Numerics.Vector2.Distance(U.Position[i], oc) < 50f) selected.Add(new EntityHandle(i, U.Generation[i]));
         if (!Check(selected.Count >= 2, $"gone ghost seed {seed}: {selected.Count} attackers")) { await EndMatch(); return; }
         _sel.Selection.Clear();
         foreach (EntityHandle h in selected) _sel.Selection.Add(h);
@@ -265,15 +267,40 @@ public partial class QaGhostViewTest : Node
         Check(_ring.Shown && Math.Abs(_ring.Ring.Position.X - sc.X) < 1e-3f && Math.Abs(_ring.Ring.Position.Z - sc.Y) < 1e-3f,
             $"gone ghost seed {seed}: ring shown {_ring.Shown} at {_ring.Ring.Position}, want ({sc.X}, {sc.Y})");
         float before = MeanDistance(selected, sc);
+        var start = new float[selected.Count];
+        for (int k = 0; k < selected.Count; k++) start[k] = FootprintDistance(U.Position[selected[k].Index], house, anchor);
+        var path = new float[selected.Count];
+        var last = new System.Numerics.Vector2[selected.Count];
+        for (int k = 0; k < selected.Count; k++) last[k] = U.Position[selected[k].Index];
+        int nearest = -1;
+        float nearestAt = float.MaxValue;
         int ghostGone = -1, ordersEnded = -1, ringLeft = -1, ringWhileGhost = 0, framesWithGhost = 0;
         for (int t = 0; t < 2400 && (ghostGone < 0 || ordersEnded < 0); t++)
         {
             _sim.Tick();
             await Frame();
             CheckGhosts(seed);
+            if (ghostGone < 0)
+                for (int k = 0; k < selected.Count; k++)
+                {
+                    if (!U.IsAlive(selected[k])) continue;
+                    System.Numerics.Vector2 p = U.Position[selected[k].Index];
+                    path[k] += System.Numerics.Vector2.Distance(p, last[k]);
+                    last[k] = p;
+                }
             bool ghostNow = _buildings.IsGhostShown(site) && _buildings.GhostGeneration(site) == siteH.Generation;
             if (ghostNow) { framesWithGhost++; if (_ring.Shown) ringWhileGhost++; }
-            if (ghostGone < 0 && !ghostNow) ghostGone = W.TickNumber;
+            if (ghostGone < 0 && !ghostNow)
+            {
+                ghostGone = W.TickNumber;
+                // The unit that ended the order: the selected one nearest the footprint when the ghost went.
+                for (int k = 0; k < selected.Count; k++)
+                {
+                    if (!U.IsAlive(selected[k])) continue;
+                    float d = FootprintDistance(U.Position[selected[k].Index], house, anchor);
+                    if (d < nearestAt) (nearest, nearestAt) = (k, d);
+                }
+            }
             if (ordersEnded < 0 && selected.All(h => !U.IsAlive(h) || U.Target[h.Index] != siteH))
             {
                 ordersEnded = W.TickNumber;
@@ -285,15 +312,16 @@ public partial class QaGhostViewTest : Node
         float after = MeanDistance(selected, sc);
         GD.Print($"gone ghost seed {seed}: site {site} cancelled unseen, {good} Attacks on its ghost; walked {before:F1} -> {after:F1} m; ghost gone {ghostGone}, orders ended {ordersEnded}, ring off {ringLeft}; ring on {ringWhileGhost}/{framesWithGhost} ghost frames (mark time permitting); ghost mismatches {_ghostBad} over {_ghostFrames} frames with ghosts");
         Check(ghostGone > 0 && ordersEnded > 0, $"gone ghost seed {seed}: ghost gone {ghostGone}, orders ended {ordersEnded}");
-        // BUG-0311 (sim): the order ends when a unit is within sight of the footprint rect's nearest point, while the fog
-        // (cell centres) may show no footprint cell, so the ghost outlives the order. Reported; fails only with -- --strict.
-        if (Math.Abs(ordersEnded - ghostGone) > VisionConstants.UpdateInterval)
-        {
-            string msg = $"gone ghost seed {seed}: KNOWN BUG-0311: orders ended at {ordersEnded}, ghost gone at {ghostGone}";
-            GD.Print(msg);
-            Check(!OS.GetCmdlineUserArgs().Contains("--strict"), msg);
-        }
-        Check(after < before - 10f, $"gone ghost seed {seed}: the units did not walk to the ghost ({before} -> {after} m)");
+        // The orders end on the update that shows the ground, the same one that drops the ghost (BUG-0311).
+        Check(Math.Abs(ordersEnded - ghostGone) <= VisionConstants.UpdateInterval,
+            $"gone ghost seed {seed}: orders ended at {ordersEnded}, ghost gone at {ghostGone}");
+        // The unit that ended the order walked there: it is within its sight of the footprint and closed at least 10 m.
+        // (Not the group mean: the order ends as soon as the nearest unit sees the ground, so the others may still be far.)
+        float sight = nearest >= 0 ? _data.Units[U.TypeId[selected[nearest].Index]].Sight : 0f;
+        float walked = nearest >= 0 ? start[nearest] - nearestAt : 0f;
+        GD.Print($"gone ghost seed {seed}: nearest unit {(nearest >= 0 ? selected[nearest].Index : -1)} walked {(nearest >= 0 ? start[nearest] : 0f):F1} -> {nearestAt:F1} m to the footprint (sight {sight}), path {(nearest >= 0 ? path[nearest] : 0f):F1} m");
+        Check(nearest >= 0 && nearestAt <= sight && walked >= 10f,
+            $"gone ghost seed {seed}: the unit that ended the order did not walk to the ghost (unit {nearest}, {(nearest >= 0 ? start[nearest] : 0f)} -> {nearestAt} m, sight {sight})");
         Check(ringLeft < 0 || ringLeft >= ghostGone, $"gone ghost seed {seed}: ring left at {ringLeft}, before the ghost went at {ghostGone}");
         Check(!_ring.Shown, $"gone ghost seed {seed}: the ring still shows after the ghost went");
         Check(_ghostBad == 0, $"gone ghost seed {seed}: {_ghostBad} ghost mismatches");
@@ -323,6 +351,17 @@ public partial class QaGhostViewTest : Node
             parts.Add($"[{h.Index} d {d:F2} sight {_data.Units[U.TypeId[h.Index]].Sight} lvl {W.Heightmap.Levels[cy * w + cx]} tgt {U.Target[h.Index]} mode {U.Mode[h.Index]} state {U.State[h.Index]} stall {U.ChaseStall[h.Index]}]");
         }
         return string.Join(" ", parts);
+    }
+
+    // Distance from a point to the footprint rect of a building of this type at this anchor (0 inside).
+    private float FootprintDistance(System.Numerics.Vector2 p, int type, int anchor)
+    {
+        BuildingDef def = _data.Buildings[type];
+        int w = W.NavGrid.Width;
+        const float cs = Rts.Sim.Map.MapConstants.CellSize;
+        var min = new System.Numerics.Vector2(anchor % w * cs, anchor / w * cs);
+        var max = min + new System.Numerics.Vector2(def.FootprintWidth * cs, def.FootprintHeight * cs);
+        return System.Numerics.Vector2.Distance(p, System.Numerics.Vector2.Clamp(p, min, max));
     }
 
     private bool FootprintVisible(BuildingGhost g)

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open (view track / QA scene `game/tests/QaGhostViewTest.cs`; **blocks the merged scene loop**: Producer triage at the 2026-10-10-0624 ACCEPT: a conductor-dispatched view round at integration rewrites the check per the note below (no `Check` weakened); else the view's first item next session) |
+| Status | fixed |
 | Found | 2026-10-10-0624, task M4-H2 |
 | System | Godot-side QA scene (`game/tests/QaGhostViewTest.cs`, `GoneGhostAttack`) |
-| Fixed by | |
+| Fixed by | M4-VH2 integration fix round 1 (view track, 2026-10-10): `GoneGhostAttack` selects only the attackers it spawns, checks per unit that the selected unit nearest the footprint when the ghost went is within its sight of the footprint rect and closed at least 10 m on it, and always fails when orders-ended and ghost-gone ticks differ by more than `UpdateInterval` (no `--strict` gate) |
 
 ## Repro
 1. On the sim branch at 5c2de85: `powershell -File tools/qa/smoke.ps1`, then
@@ -38,7 +38,14 @@ longer holds.
 - Suggested replacement, which says what the scene means and is no weaker: the unit that ended the order (the selected unit
   nearest the footprint when the ghost went) got within its sight of the footprint, *and* walked at least 10 m toward it
   (track per-unit start distances). Also drop the `--strict` gate around the BUG-0311 check so it always fails when
-  `|ordersEnded - ghostGone| > UpdateInterval`.
+  when orders-ended and ghost-gone ticks differ by more than `UpdateInterval`.
 - This is a view-track file and the sim developer was barred from it. Not fixed by QA from the sim worktree, to avoid a
   conflicting edit with the view track's concurrent session. The conductor or the view track should change it before or at
   the merge, since the merged scene loop is the gate.
+
+## Fix note (2026-10-10, view track)
+- The suggested per-unit check alone still failed on seed 6: the nearest unit there was the match's starting army unit,
+  which began 21.4 m from the footprint rect (sight 16) and walked 7.7 m of path in total, so no "10 m" measure could hold
+  without lowering the threshold. The scene now selects only the three attackers it spawns beyond its own hall (the
+  starting unit stays out of the selection), so the walk is the thing under test. Results: seed 1: 48.2 -> 14.8 m (path 35.8 m), ghost gone
+  350, orders ended 351; seed 6: 47.2 -> 14.8 m (path 39.7 m), ghost gone 338, orders ended 339.
