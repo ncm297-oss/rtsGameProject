@@ -240,13 +240,15 @@ public partial class FogViewTest : Node
             if (!b.Alive[i] || b.Owner[i] == 0) continue;
             if (shown) _buildingShownEnemy++; else _buildingHiddenEnemy++;
         }
-        // Ghosts (M4-V5): a ghost box exactly for each of the sim's known entries whose building isn't drawn now.
+        // Ghosts (M4-V5): a ghost box exactly for each of the sim's known entries whose building isn't drawn now, on a
+        // footprint with no visible cell (M4-V6b, BUG-0310: ghosts are in explored fog).
         ReadOnlySpan<BuildingGhost> ghosts = W.Fog.Ghosts(0);
         int ghostsWanted = 0;
         for (int i = 0; i < b.Capacity; i++)
         {
             BuildingGhost g = ghosts[i];
-            bool want = g.Known && !(W.Fog.CanSeeBuilding(0, i) && b.Generation[i] == g.Generation), shown = _buildings.IsGhostShown(i);
+            bool want = g.Known && !(W.Fog.CanSeeBuilding(0, i) && b.Generation[i] == g.Generation) && !SeesAnyCell(_data.Buildings[g.TypeId], g.Cell),
+                shown = _buildings.IsGhostShown(i);
             if (want) ghostsWanted++;
             if ((want != shown || (shown && (_buildings.GhostGeneration(i) != g.Generation || _buildings.GhostBoxOf(i) is not { Visible: true })))
                 && _ghostMismatch++ < 3)

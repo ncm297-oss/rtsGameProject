@@ -325,7 +325,16 @@ public partial class QaGhostViewTest : Node
         return string.Join(" ", parts);
     }
 
-    // Ghost boxes drawn == the sim's known entries not drawn as themselves, every frame.
+    private bool FootprintVisible(BuildingGhost g)
+    {
+        BuildingDef def = W.Data.Buildings[g.TypeId];
+        for (int dy = 0; dy < def.FootprintHeight; dy++)
+            for (int dx = 0; dx < def.FootprintWidth; dx++)
+                if (W.Fog.IsVisible(0, g.Cell + dy * W.NavGrid.Width + dx)) return true;
+        return false;
+    }
+
+    // Ghost boxes drawn == the sim's known entries not drawn as themselves (and not over visible ground), every frame.
     private void CheckGhosts(ulong seed)
     {
         BuildingStore b = W.Buildings;
@@ -334,7 +343,7 @@ public partial class QaGhostViewTest : Node
         for (int i = 0; i < b.Capacity; i++)
         {
             BuildingGhost g = list[i];
-            bool unseen = g.Known && !(W.Fog.CanSeeBuilding(0, i) && b.Generation[i] == g.Generation);
+            bool unseen = g.Known && !(W.Fog.CanSeeBuilding(0, i) && b.Generation[i] == g.Generation) && !FootprintVisible(g); // M4-V6b, BUG-0310
             if (unseen) want++;
             bool drawn = _buildings.IsGhostShown(i) && _buildings.GhostBoxOf(i) is { Visible: true } && _buildings.GhostGeneration(i) == g.Generation;
             if (unseen != drawn && _ghostBad++ < 3) Check(false, $"seed {seed} tick {W.TickNumber}: slot {i} ghost drawn {drawn}, unseen entry {unseen}");

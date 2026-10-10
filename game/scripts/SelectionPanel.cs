@@ -63,6 +63,8 @@ public partial class SelectionPanel : Control
     private Label _hpMax = null!;
     // "0" .. "maxHp" for every hp a unit or building can show; built once (BUG-0123).
     private string[] _intText = Array.Empty<string>();
+    // "+N" for every overflow a selection can have, built in Init so a death in a big selection allocates nothing (BUG-0340).
+    private string[] _overflowText = Array.Empty<string>();
 
     // Grid.
     private Control _grid = null!;
@@ -221,6 +223,8 @@ public partial class SelectionPanel : Control
         foreach (BuildingDef b in _data.Buildings) maxHp = Math.Max(maxHp, b.Hp);
         _intText = new string[maxHp + 1];
         for (int i = 0; i <= maxHp; i++) _intText[i] = i.ToString(CultureInfo.InvariantCulture);
+        _overflowText = new string[PortraitGrid.Overflow(runner.Simulation!.World.Units.Capacity) + 1];
+        for (int i = 1; i < _overflowText.Length; i++) _overflowText[i] = string.Create(CultureInfo.InvariantCulture, $"+{i}");
         _kind = Kind.None;
         Sync();
     }
@@ -387,7 +391,7 @@ public partial class SelectionPanel : Control
         {
             _shownOverflow = over;
             _overflow.Visible = over > 0;
-            if (over > 0) _overflow.Text = string.Create(CultureInfo.InvariantCulture, $"+{over}");
+            if (over > 0) _overflow.Text = over < _overflowText.Length ? _overflowText[over] : string.Create(CultureInfo.InvariantCulture, $"+{over}");
             Rebuilds++;
         }
     }

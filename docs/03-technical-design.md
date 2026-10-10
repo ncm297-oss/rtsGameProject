@@ -2448,7 +2448,8 @@ zones' vision effects (M4-4) and the AI's `PlayerView` (M5) come later (see "Not
   - `Fog.CanSeeUnit(player, slot)`: an own unit, its cell visible at the last update, or revealed to the player (hide
     enemy unit views where this is false). `Fog.CanSeeBuilding(player, slot)`: own, or any footprint cell visible.
   - `Fog.Ghosts(player)` / `Fog.GhostCount(player)` (M4-3b): draw a ghost for each entry with `Known` whose footprint
-    the player doesn't see now (`CanSeeBuilding` false, or the slot holds another building); the list changes only on an
+    the player doesn't see now (`CanSeeBuilding` false, or the slot holds another building) and has no visible cell (M4-V6b,
+    BUG-0310: an entry outlives a building that dies in sight until the next update); the list changes only on an
     update tick.
   - Out-of-range players, cells and dead slots answer false (or an empty span / 0).
 - **Cost** (Debug, first run, 2026-10-08, the machine shared with other test runs): `Vision/FogPerfTests`: 2,500 units of
@@ -4074,7 +4075,8 @@ right-click on one attacks it.
 - **Which slots are ghosts** (`FogView`, pure, `ViewApi/`): `FogView.Refresh(fog, tick, unitAlive, buildingAlive,
   buildingGeneration)` (the overload the views call through `FogOfWar`) also runs `CollectGhosts(fog,
   buildingGeneration)`: building slot *i* is a ghost when `fog.Ghosts(player)[i]` is `Known` and that building isn't drawn
-  now, i.e. not (`BuildingShown[i]` and the slot's generation is the entry's). The generation test matters for a reused
+  now, i.e. not (`BuildingShown[i]` and the slot's generation is the entry's), and (M4-V6b) no cell of its remembered
+  footprint is visible now. The generation test matters for a reused
   slot: the slot's new building (an own one, or a new enemy one seen between fog updates) is drawn and the old one's ghost
   stays at its remembered anchor until the sim drops or refreshes the entry. Output: `GhostShown` (per slot), `Ghosts` (a
   copy of each ghost's entry: generation, type, anchor, owner), `GhostCount`, `ShowsGhost`, `GhostHandle(slot)` (the slot
@@ -4197,6 +4199,70 @@ sim/Rts.Sim/ViewApi/AbilityCaster.cs   the caster pick and the button's cooldown
   `ability-seedN-targeting.png` and `ability-seedN-casting.png`.
 - **Not yet (M4-V6b):** Burning / Slowed markers from `Units.Statuses`, the resolve flash from `AbilityEvents`; zone and
   stealth visuals; autocast toggles; enemy cast-point rings.
+
+### Implementation (M4-V6b)
+
+The rest of the ability view for what the sim has (M4 criterion 6 on screen): status markers over units, a flash where a
+spell landed, the Cusser checked from data alone, and three small view bugs (BUG-0342, BUG-0310, BUG-0340). No sim change.
+
+```
+sim/Rts.Sim/ViewApi/StatusMarkers.cs   which markers to draw (pure, allocation-free); StatusMark.cs its record
+sim/Rts.Sim/ViewApi/ResolveFlashes.cs  the resolve flash pool (a ring like ImpactMarks)
+game/scripts/AbilityViews.cs           draws both, and the cast bar's new look
+```
+
+- **Status markers** (`StatusMarkers.Collect(statuses, shown, statusCount, marks)`): one `StatusMark(unit, status, place,
+  row)` per entry of `Units.Statuses` whose `TicksRemaining` is above 0 (and whose id is a known status), for every unit
+  slot `shown` marks: the fog's `UnitShown` (`Fog.CanSeeUnit`, the hp bar rule), or `Alive` without fog. Slots ascending,
+  each unit's entries in store order (first applied first); a unit whose row would not fit the output is left out whole.
+  `RowOffset(place, row, spacing)` centres a row on the unit. `AbilityViews` draws each as a small cube (`MarkerSize`
+  0.26 m, `MarkerSpacing` 0.34 m, side by side along x) `MarkerAbove` 0.62 m over the hp bar's place (above the cast bar),
+  grown with the zoom like the bars, coloured by the status's `Kind` (data): `DamageOverTimeColor` flame for Burning,
+  `SlowColor` blue-grey for Slowed, `OtherStatusColor` pale for any other kind (so a new status of a known kind needs no
+  code). One coloured `MultiMesh` of unit capacity x `StatusStore.PerUnit` instances, written densely every frame, so a
+  marker goes the frame its entry ends or its unit dies (the store is cleared with the slot) or the fog hides it. No status
+  text is drawn yet (the names would come from `Data.Statuses[id].DisplayName`).
+- **Resolve flash** (`ResolveFlashes`): every `World.AbilityEvents` entry with `Resolved` true adds a flash (ability, owner,
+  point) to a ring of `DefaultCapacity` 256; a cast start adds nothing (no optional start ring). Collected from
+  `SimRunner.Ticked` (every tick of a multi-tick frame) and from `Sync` (scenes that tick the sim themselves), once per
+  tick. A flash lives `LifetimeTicks` 10 (0.5 s of game time) from its resolve; one no frame has drawn is kept until one has
+  (the `ImpactMarks` rule); a full ring replaces the oldest (`Replaced`). `AbilityViews` draws it as a flat translucent
+  disc on the terrain at the point, from `FlashFrom` 0.5 of the ability's `radius` to the full radius at 40 % of its life,
+  fading from `FlashAlpha` 0.75 to 0, only while the point's cell is visible (`FogView.ShowsPoint`); a hidden one is
+  counted as drawn so it expires on time.
+- **The Cusser** (M4-4b-1) needed no view code: a Sapper's card shows "Cusser" on Q (its first ability in
+  `Data.Units[type].Abilities` order) with the tooltip from data, and Q arms it with a 6 m range ring and a 3.5 m radius ring.
+- **BUG-0342.** The cast bar is thicker (`BarThickness` 0.2 m, 0.3 m over the hp bar's place), its back a dim violet
+  instead of black, and its fill never shorter than the bar is thick (`BarFillLength`), so the first tick shows a violet
+  bar with a bright nub. With `order_queue` (Shift) held, an ability click that sent a cast leaves the ability armed for
+  the next one (right-click or Esc ends it; a click that sent nothing still disarms; A and M targeting are unchanged). Two
+  queued clicks in the same tick can both pick the same mage, since the first cast is not in the store until its command
+  applies: the second is then dropped at its pop (cooldown).
+- **BUG-0310.** `FogView.CollectGhosts` also skips an entry whose remembered footprint has a visible cell
+  (`FogStore.SeesFootprint`, the rule the sim drops the entry by at its next update), so a building that dies, or a site
+  cancelled, in sight leaves no darkened box for the 1-3 ticks before the update, and `TargetRing` (which keeps its ring
+  only on a shown ghost) clears with it. Cost: a footprint scan per known entry per refresh.
+- **BUG-0340.** `SelectionPanel` builds every "+N" overflow string in `Init` (unit capacity minus `MaxPortraits`);
+  `Minimap._GuiInput` uses cached `StringName`s for `select`, `command` and `order_queue`.
+- **Cost.** One pass over the unit slots' status counts and one over the flash ring per frame. 0 bytes a frame: the
+  `AbilityViewTest` steady match (`--units 500`, 72 mages selected, casts running, 100 statuses on own units, the
+  selection panel now in the span) and 8 minimap right-clicks (a Move for 72 units each).
+- **Tests.** xUnit `ViewApi/StatusMarkersTests` (a real Telas Fire: a marker exactly while the entry has ticks left, 79-80
+  ticks, none after; two statuses side by side in applied order with centred offsets; hidden, dead, expired and unknown
+  entries draw nothing; a full output drops a whole row; 500 units x 8 statuses, 0 bytes) and `ViewApi/ResolveFlashesTests`
+  (a real cast: one flash at the point on the resolve, none for the start, once per tick; aging and expiry only once drawn;
+  200 resolves in a tick, a second storm replaces the oldest, 0 bytes); `QA/ViewApi/GhostQaTests.ABuildingDestroyedInSight_*`
+  un-skipped, and its fuzz oracle and `FogViewTests`' with the footprint rule. Headless `AbilityViewTest` adds per seed: the
+  first-tick bar, the flash (none for the start, one at the cast point, widest = the def's radius, gone after 10 ticks),
+  the Burning markers checked every tick against the store until the flames die, the Shift click staying armed, an enemy
+  mage casting under the fog (collected, never drawn, gone on time), Shift + two clicks = two queued `UseAbility` on the two
+  mages from one Q and a right-click ending it, the Sapper's Cusser card and rings, and after the twin (test staging writes
+  the store through reflection: no shipped ability applies Slowed) Slowed + Burning side by side on a fresh Raider and both
+  hidden once every own unit walks out of sight. `FogViewTest` and `QaGhostViewTest` check ghosts with the new rule.
+  Windowed `-- --shots <dir>` adds `ability-seedN-first-tick.png`, `-flash.png`, `-burning.png`, `-cusser.png` and
+  `-statuses.png` (looked at, seeds 1 and 6).
+- **Not yet (M4-V6c and later):** zone discs and the Sandstorm, the Blinded marker (it draws pale through the generic
+  path until then), stealth visuals, autocast toggles, a status name tooltip, enemy cast-point rings.
 
 ## AI architecture
 

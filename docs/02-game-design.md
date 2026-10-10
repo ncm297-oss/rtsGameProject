@@ -321,7 +321,7 @@ Shipped maps (working titles):
 | H | Hold position |
 | M + click | Move (ignore enemies) |
 | P + click | Patrol |
-| Shift + any command | Queue the command |
+| Shift + any command | Queue the command (after an ability key, Shift + click keeps the ability armed for the next cast) |
 | Ctrl + 1-9 | Assign control group |
 | Shift + 1-9 | Add selection to control group |
 | 1-9 | Select group; double-tap to center the camera on it |

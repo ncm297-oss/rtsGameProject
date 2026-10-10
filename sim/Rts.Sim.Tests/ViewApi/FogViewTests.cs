@@ -225,11 +225,17 @@ public class FogViewTests
     private static void Refresh(FogView view, World w) =>
         view.Refresh(w.Fog, w.TickNumber, w.Units.Alive, w.Buildings.Alive, w.Buildings.Generation);
 
-    // The independent rule: a known entry whose building isn't the one drawn in its slot now.
+    // The independent rule: a known entry whose building isn't the one drawn in its slot now, on a footprint with no
+    // visible cell (M4-V6b, BUG-0310: ghosts are in explored fog).
     private static bool Unseen(World w, int slot)
     {
         BuildingGhost g = w.Fog.Ghosts(0)[slot];
-        return g.Known && !(w.Fog.CanSeeBuilding(0, slot) && w.Buildings.Generation[slot] == g.Generation);
+        if (!g.Known || (w.Fog.CanSeeBuilding(0, slot) && w.Buildings.Generation[slot] == g.Generation)) return false;
+        var def = w.Data.Buildings[g.TypeId];
+        for (int dy = 0; dy < def.FootprintHeight; dy++)
+            for (int dx = 0; dx < def.FootprintWidth; dx++)
+                if (w.Fog.IsVisible(0, g.Cell + dy * w.NavGrid.Width + dx)) return false;
+        return true;
     }
 
     [Fact]

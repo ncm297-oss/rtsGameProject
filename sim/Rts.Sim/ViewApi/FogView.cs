@@ -176,8 +176,9 @@ public sealed class FogView
 
     /// <summary>
     /// Per building slot: a last-known enemy building drawn as a ghost (M4-V5, docs/02 "Vision and fog of war"): the
-    /// slot's entry in <c>fog.Ghosts(Player)</c> is known and that building isn't drawn now (the slot isn't shown, or it
-    /// holds another generation). Filled by <see cref="CollectGhosts"/>; all false when disabled.
+    /// slot's entry in <c>fog.Ghosts(Player)</c> is known, that building isn't drawn now (the slot isn't shown, or it
+    /// holds another generation), and no cell of the remembered footprint is visible (M4-V6b, BUG-0310). Filled by
+    /// <see cref="CollectGhosts"/>; all false when disabled.
     /// </summary>
     public ReadOnlySpan<bool> GhostShown => _ghostShown;
 
@@ -197,7 +198,8 @@ public sealed class FogView
     /// Fills <see cref="GhostShown"/> and <see cref="Ghosts"/> from <c>fog.Ghosts(Player)</c> and returns the count: a
     /// known entry is a ghost unless <see cref="BuildingShown"/> marks its slot and <paramref name="buildingGeneration"/>
     /// (the building store's <c>Generation</c>) says that slot still holds the remembered building (an empty span: shown
-    /// alone hides it). Call after <see cref="Refresh"/> for the same tick (the 5-argument <see cref="Refresh(FogStore, int, ReadOnlySpan{bool}, ReadOnlySpan{bool}, ReadOnlySpan{int})"/>
+    /// alone hides it), or any cell of its remembered footprint is visible now (the rule the sim drops the entry by at the
+    /// next update; a building that dies in sight leaves no ghost over visible ground, BUG-0310). Call after <see cref="Refresh"/> for the same tick (the 5-argument <see cref="Refresh(FogStore, int, ReadOnlySpan{bool}, ReadOnlySpan{bool}, ReadOnlySpan{int})"/>
     /// does). The sim's list changes only on a fog update tick, but the shown rule can change on any tick (a building
     /// dies in sight, a slot is reused), so this runs whenever the slot lists do. Allocation-free.
     /// </summary>
@@ -213,7 +215,9 @@ public sealed class FogView
             {
                 BuildingGhost g = i < list.Length ? list[i] : default;
                 bool drawn = _buildingShown[i] && (buildingGeneration.IsEmpty || (i < buildingGeneration.Length && buildingGeneration[i] == g.Generation));
-                bool ghost = g.Known && !drawn;
+                // Ghosts are "in explored fog" (docs/02): a remembered footprint with a visible cell is not one, even in
+                // the up to 3 ticks before the next fog update drops the entry of a building that died in sight (BUG-0310).
+                bool ghost = g.Known && !drawn && !fog.SeesFootprint(Player, g.TypeId, g.Cell);
                 _ghostShown[i] = ghost;
                 _ghosts[i] = ghost ? g : default;
                 if (ghost) count++;

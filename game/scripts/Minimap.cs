@@ -29,6 +29,9 @@ public partial class Minimap : Control
     /// <summary>Sim ticks between dot refreshes: 20 Hz / 4 = 5 Hz (docs/03 "Rendering and presentation").</summary>
     public const int RefreshTicks = 4;
 
+    // Cached so a click does not allocate a StringName from a string (BUG-0340, as BUG-0341 for the ability views).
+    private static readonly StringName SelectAction = "select", CommandAction = "command", OrderQueue = "order_queue";
+
     private static readonly Color Backdrop = new(0f, 0f, 0f, 0.6f);
     private static readonly Color OutlineColor = new(1f, 1f, 1f);
 
@@ -184,18 +187,18 @@ public partial class Minimap : Control
         if (Raster == null) return;
         if (e is InputEventMouseButton mb)
         {
-            if (mb.IsActionPressed("select"))
+            if (mb.IsActionPressed(SelectAction))
             {
                 _jumping = true;
                 JumpTo(mb.Position);
             }
-            else if (mb.IsActionReleased("select")) _jumping = false;
-            else if (mb.IsActionPressed("command"))
+            else if (mb.IsActionReleased(SelectAction)) _jumping = false;
+            else if (mb.IsActionPressed(CommandAction))
             {
                 // A right-click while A is armed cancels it and orders nothing, as on the 3D view (BUG-0068).
                 if (_selection.Targeting) _selection.CancelTargeting();
                 else if (Fit.TryToMap(new(mb.Position.X, mb.Position.Y), out System.Numerics.Vector2 p))
-                    CommandAt(p, Input.IsActionPressed("order_queue"));
+                    CommandAt(p, Input.IsActionPressed(OrderQueue));
             }
             AcceptEvent();
         }
