@@ -19,3 +19,8 @@
    231,862,000 to 231,920,000 (+58,000) for +4,144 bytes measured. The rest restores the 72 KB margin that M4-4b-2 and M4-H2
    had used up. The itemisation is exact (base 231,843,112, head 231,847,256, both measured alone by QA), and the brief
    asked for a re-baseline. Noted so the Producer sees that the margin was restored rather than kept at 18.9 KB.
+
+## Producer triage (2026-10-10-1015 ACCEPT)
+Item 1 **fixed by the Producer at ACCEPT** (docs/03 line 2569 reads `µs`; a docs fix). Item 2 is a documented rule (consistent with
+splash and ability resolves): no change planned. Item 3 accepted as is: the brief asked for a re-baseline and the policy margin is
+72 KB; the itemisation is exact. Items 2-3 close as notes at the end-of-M4 hardening; status stays `open` until then.

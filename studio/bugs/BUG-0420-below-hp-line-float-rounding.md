@@ -30,3 +30,9 @@ Use an exact comparison. For example, have the loader store the fraction as a ra
 `decimal`) and compare `hp * 1000 < perMille * maxHp` in integers, or compare in `decimal`. Plain double doesn't fix it,
 because 0.15 * 100 is also 15.000000000000002 in double. Whatever form is picked should go in docs/03, which now says
 "in single precision" and also "exactly at the line is not below". Those two statements disagree for these fractions.
+
+## Producer triage (2026-10-10-1015 ACCEPT)
+S3 confirmed, not blocking: no shipped fraction is affected (0.5 is exact). Fix direction (Producer default): compare in integers
+(`hp * 1000 < perMille * maxHp` with the fraction stored per mille at load, or an equivalent exact form) and say so in docs/03
+where it now reads "in single precision". Fold into **M4-4b-3b** if that task touches `PassiveSystem` (a few lines), else the
+end-of-M4 sim hardening. Un-skip `PassiveQaTests.ExactlyAtTheLine_IsNeverBelow_ForDecimalFractions` with the fix.

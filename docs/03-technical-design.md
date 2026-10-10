@@ -2566,7 +2566,7 @@ death hook in `CombatSystem.HitUnit`, `UnitStore.BelowHpUnits`; data in `Data/Da
   otherwise reads one flag per slot. `onDeath` costs one field read per unit death (`UnitDef.DeathPassive`) and a spatial
   query only for a type that has it. Frenzied costs one read of the unit's status count per swing start (the entry scan
   only for a unit with statuses). No allocation (`PassivePerfTests`). Measured (Debug, 2026-10-10, medians of three runs alternating with the base
-  fa33196): `EmptyTick(2500)` 478 Âµs here, 482 Âµs on the base (budget 500); `TightBlob2500` 4.51 / 4.53 ms (budget 4.6);
+  fa33196): `EmptyTick(2500)` 478 µs here, 482 µs on the base (budget 500); `TightBlob2500` 4.51 / 4.53 ms (budget 4.6);
   the 500-unit brawl with 100 Zealots (`PassivePerfTests.ZealotBrawl500_*`) 1.78 ms a tick over ticks 5-205 (the brawl
   rows' budget, 4 ms), 0 B a tick with Frenzied swings and Martyrdom deaths.
 - **Memory.** One bool per unit slot (4,096 + a 24-byte header on the 1,024-cell world with 4,096 slots) and 24 bytes of the
