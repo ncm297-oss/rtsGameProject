@@ -30,13 +30,13 @@ _Last updated: 2026-10-10 (session 2026-10-10-0624, all three tracks accepted): 
 | View: next task | **M4-V6c** zone visuals: BUG-0390's `QaGhostViewTest` rewrite first if the conductor's round did not land it (Requests 29); a storm disc per live zone from `World.Zones` (own always, an enemy's only where the player may see it), the Blinded marker colour, `ViewApi.ZoneDiscs` + hash twin, `AbilityViewTest` rows · feature · QA standard |
 | View: gate | **GO** |
 | Data: milestone | M3 Done (D1-D4); D5-D8, D-H1, D10a, D10b, **D10c on `main` with this integration** (Sandstorm + Blinded pinned by field, BUG-0380, the three description tweaks + Sandstorm's "Your own units", golden `data-hash` EA5CB5A0AFCEEDBE); D9 dropped (Producer decision); nothing numeric changed since M3 |
-| Data: next task | **STOP (planned)** unless an inbox note (a wording or the balance answer comes first, QA light): M4-4b-3 edits `common/statuses.json` and the Whirlwind units, so the pending `blinded` text waits for **D11** (the session after M4-4b-3 lands: pins for the new content, the `blinded` text, BUG-0410, one golden regen) |
-| Data: gate | **HOLD** (nothing unblocked this session; an inbox note re-opens it) |
+| Data: next task | **D-H2** (session 2026-10-10-1015, in progress): the data hardening taken one session early (counter 3 / 4; D11 is blocked this session because M4-4b-3a edits `common/statuses.json` and the Whirlwind units): BUG-0410 (description numbers checked by role), the D10b / D-H1 QA notes, a Content-test wording sweep; tests only, no `game/data/**` or page edit, `data-hash` unchanged · hardening · QA light. **Then D11** next session (pins for Frenzied + the Zealot passives, the `blinded` text, one golden regen) |
+| Data: gate | **GO** |
 | Tools on this PC | Godot 4.7.2 .NET, .NET SDK 8.0.425, Git 2.53 + LFS 3.7; `GODOT` user variable set |
 | Build | All three session branches 0 warnings. **Integration (this session): sim 4f91e37 → view aa1c149 → data 194aaab**, with **one conductor-dispatched view round before the merged scene loop: BUG-0390** (`QaGhostViewTest` seed 6's stale mean-walk check; Requests 29). Expected conflicts: `studio/bugs/README.md` (union by id: the sim's rows for 0157 / 0241 / 0242 / 0270 / 0311 / 0330 / 0360 / 0361 / 0363, the view's for 0126 / 0250 / 0251 / 0281 / 0370 / 0371, the data's for 0380; new 0390 / 0391 / 0400 / 0410), `studio/qa/coverage.md` (all three sides), docs/01 (the sim's M4-H2 row and the data's D10c row both appended: keep both), docs/03 (different sections). Sim branch: non-Perf 4,478 / 9 / 0, Perf alone 147 / 3 / 0, smoke PASS, loop 38 / 39 (BUG-0390). View branch: full suite incl. Perf 4,618 / 17 / 0, loop 39 / 39, smoke PASS. Data branch: non-Perf 4,521 / 14 / 0; golden `data-hash` moved once (D10c text: 5896D3E7C9FD36AD → EA5CB5A0AFCEEDBE, every `k` line equal; in `SameGameDataHashes`) |
 | Tests | Producer: all three diffs read in full; builds 0 warnings in all three worktrees; non-Perf suites run by the Producer (side by side): sim **4,494 / 9 skipped / 0 failed**, view **4,483 / 14 / 0**, data **4,542 / 15 / 0**; smoke **PASS** on the view worktree (import + boot, `Rts.Sim 0.0.1`, no ERROR); `QaGhostViewTest` headless on the sim branch reproduces BUG-0390 (ghost gone 218 / orders ended 219 on seed 1, 138 / 139 on seed 6: BUG-0311 fixed; the seed-6 10 m mean-walk check fails). QA: sim 12 un-skipped rows fail on the base and pass on head, oracle fuzz 7 seeds 0 mismatches, 2,050 deaths in one tick held, kept-chase means 93.7-98.8 % over 9 brawl variants, `EmptyTick(2500)` paired 482.9 / 484.8 µs base / head, far-blocker ratio 1.22x / 1.80x → 1.08x / 1.32x; view 3 Shift clicks x 4 click gaps none lost, `SeenResources` 3 seeds x 2,000 ticks 0 out-of-sight changes, `EconomyViewTest` 30 / 30 under load, hash twin 2 seeds x 1,200; data 22 pin attacks, `EmptyTick(2500)` base 564 / 531 / 515 vs head 527 / 518 / 510 µs (contention, no sim change) |
-| Open bugs | **S1: 0, S2: 0**, S3: 11, S4: 20 (by the merged index; partly-fixed multi-item nits counted). **New open:** BUG-0390 (S3, a view test file, found by the sim QA: fixed at integration), BUG-0391 (S4, sim), BUG-0400 (S4, view), BUG-0410 (S4, data). **Closed this session:** BUG-0157 / 0241 / 0242 / 0270 / 0311 / 0330 / 0360 / 0361 (sim, + 0363 items 1-2), BUG-0251 / 0370 / 0371 (view, + 0281 items 1 + 3, 0250 items 1 + 3, 0126 item 3), BUG-0380 (data) |
-| Sessions today | 2 / 8 on 2026-10-10 (0215, 0624 done). Feature sessions since last hardening: **sim 0 / 4, view 0 / 4, data 3 / 4** |
+| Open bugs | **S1: 0, S2: 0**, S3: 12, S4: 20 (by the merged index; partly-fixed multi-item nits counted). **New open:** BUG-0401 (S3, sim, filed by the view QA at the 0624 fix round: a player's Attack on a reachable building is dropped after 2 s when the path first leads away; triaged at the 1015 PLAN: first item of the end-of-M4 sim hardening, direction in the bug file), BUG-0391 (S4, sim), BUG-0400 (S4, view), BUG-0410 (S4, data; D-H2 this session). BUG-0390 (S3, a view test file) **fixed at the 0624 integration** (cc85fdf, verified on `main` at the 1015 PLAN). **Closed this session:** BUG-0157 / 0241 / 0242 / 0270 / 0311 / 0330 / 0360 / 0361 (sim, + 0363 items 1-2), BUG-0251 / 0370 / 0371 (view, + 0281 items 1 + 3, 0250 items 1 + 3, 0126 item 3), BUG-0380 (data) |
+| Sessions today | 3 / 8 on 2026-10-10 (0215, 0624 done; 1015 in progress: sim M4-4b-3a, view M4-V6c, data D-H2). Feature sessions since last hardening at PLAN: **sim 0 / 4, view 0 / 4, data 3 / 4** |
 | Last session | 2026-10-10-0624 · sim M4-H2 (hardening, 0 fix rounds, ACCEPT) · view M4-VH2 (hardening, 0 fix rounds, ACCEPT) · data D10c (feature, 0 fix rounds, ACCEPT) · M4 6 / 10 · ten sim bugs and six view bugs closed, Sandstorm + Blinded pinned, the wording tweaks shipped |
 
 ## Milestone progress
@@ -2960,15 +2960,23 @@ track right after S1/S2 bugs).
     `PendingAbilities` empty, BUG-0380 fixed, the three descriptions as proposed + Sandstorm's "Your own units are unaffected",
     the whirlwind.md row reworded, `blinded` kept with a proposal; golden `data-hash` 5896D3E7C9FD36AD → EA5CB5A0AFCEEDBE, every
     `k` line equal; BUG-0410 S4 left; ~840 lines). Counter 3 / 4.
-14. **Next: STOP (planned)** unless an inbox note (a wording or the balance answer comes first, QA light, one golden regen, off
-    the files the sim edits that session): M4-4b-3 edits `common/statuses.json` and the Whirlwind units, so the `blinded` text
-    waits; no new schema is on `main` yet. **Then D11** (the session after M4-4b-3 lands): pin the Frenzied row and the Zealot
-    passives' text, the `blinded` text ("can't attack", Producer proposal), BUG-0410, one golden regen. Then the full balance
+14. **D-H2, in progress (session 2026-10-10-1015):** the data hardening one session early (the Producer's call: D11 is blocked
+    because M4-4b-3a edits `common/statuses.json` and the Whirlwind units this session, and the counter is 3 / 4): BUG-0410 (the
+    description-number check by role), the D10b `Compare` / `CompareStatuses` note, `AgesRuleQaTests` on `PageTables.Heading`, a
+    wording sweep; Content tests only, no data or page edit, `data-hash` unchanged. Counter → 0 / 4.
+15. **Then D11** (next session, M4-4b-3a on `main`): pin the Frenzied row and the Zealot passives' page text to
+    `UnitDef.Passives`, the Frenzied `description`, the `blinded` text ("can't attack", Producer proposal), one golden regen. Then the full balance
     pass (QA standard) once the fog-on sandbox gives numbers (incl. the +15 % crowd income from the BUG-0146 fix), `ai.json`
     build orders (M5), M7-M9 faction data.
 
 ## Debt backlog: sim track (hardening sessions only; counter **0 / 4** after M4-H2, session 2026-10-10-0624; the end-of-M4 hardening comes before sign-off)
 
+- **BUG-0401 (S3, filed by the view QA at the 0624 fix round; triaged at the 1015 PLAN: first item of the end-of-M4 sim
+  hardening):** a player's Attack on a reachable building is silently dropped after `GiveUpScans` (10) stalled scans (2 s) when
+  the route first leads away (a ramp round a cliff); the give-up rule has no exception for `CombatMode.Ordered` and the
+  friend-fights exception never fires for a building target. Direction (Producer default, owner may revisit): an ordered chase
+  whose target is reachable (finite flow-field cost at the unit's cell) never counts stalled scans; an unreachable one still
+  gives up. Regression scene: the seed-6 `QaGhostViewTest` layout as an xUnit row.
 - **BUG-0391 (S4, M4-H2 QA):** `CombatSystem.GoneButRemembered`'s summary still says "its own sight now"; two `StateHashTests`
   ghost rows on one line.
 - **Memory bound (BUG-0302 b note, M4-H2 QA):** 231,843,112 of 231,862,000 bytes on the 1024 map (18.9 KB left). M4-H2's

@@ -31,6 +31,14 @@ The order is dropped with no feedback after 10 scans (2 s) of non-closing walk. 
 Idle 48 m away while the others attack. The scene's checks don't catch it: they look at the nearest unit only, and
 `accepted == selected.Count` is sampled 2 ticks after the click.
 
+## Producer triage (2026-10-10-1015 PLAN)
+S3 confirmed, sim track, **end-of-M4 hardening, first item** (a silently dropped player order will show in the fog-on
+sandbox playtest, so it goes before sign-off). Direction (Producer default, owner may revisit): option 1 below: a chase in
+`CombatMode.Ordered` whose target is reachable (finite flow-field cost at the unit's cell) never counts stalled scans toward
+the give-up; building targets included; an unreachable ordered target still gives up by the existing rule, so a unit never
+paces a cliff forever. Regression test: the seed-6 `QaGhostViewTest` layout as an xUnit scene (a level-1 unit whose path
+first leads away from a level-1 footprint), plus the same with an unreachable footprint (still gives up).
+
 ## Notes
 - This is a rules question as much as a bug. Options for the Producer: exempt `Mode == Ordered` chases whose flow field
   reaches the target (finite cost at the unit's cell) from the stall count; measure stall progress as path distance
