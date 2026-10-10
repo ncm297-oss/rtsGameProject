@@ -1,10 +1,10 @@
-# BUG-0421: An own storm's rim and a Whirlwind enemy's storm rim are nearly the same colour
+# BUG-0431: An own storm's rim and a Whirlwind enemy's storm rim are nearly the same colour
 
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
 | Status | open |
-| Found | 2026-10-10-1015, task M4-V6c |
+| Found | 2026-10-10-1015, task M4-V6c (filed as BUG-0421 by QA; renumbered to the view track's id range at ACCEPT) |
 | System | ability views: zone discs (`AbilityViews.OwnZoneRimColor`, enemy rim = owner's `palette.primary`) |
 | Fixed by | |
 

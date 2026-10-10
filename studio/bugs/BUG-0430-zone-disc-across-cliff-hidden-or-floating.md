@@ -1,10 +1,10 @@
-# BUG-0420: A zone disc that crosses a cliff is hidden under the higher ground or floats over the lower ground
+# BUG-0430: A zone disc that crosses a cliff is hidden under the higher ground or floats over the lower ground
 
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
 | Status | open |
-| Found | 2026-10-10-1015, task M4-V6c |
+| Found | 2026-10-10-1015, task M4-V6c (filed as BUG-0420 by QA; renumbered to the view track's id range at ACCEPT) |
 | System | ability views: zone discs (`game/scripts/AbilityViews.cs` `SyncZones`) |
 | Fixed by | |
 
