@@ -465,6 +465,12 @@ ten-minute playtest (STATE "For your review", M3-V3 entry) stands as feedback, n
       BUG-0280 (hidden enemies no longer block the build ghost) landed the same session (M4-4a). Open: BUG-0310 (S3, view:
       a ghost flashes 1-3 ticks over a building killed in sight), BUG-0311 (S3, sim: an Attack on a gone building's ghost
       ends ~1 m before the fog shows the ground; the ghost stays), BUG-0270 (S3), BUG-0271 / 0272 / 0275 / 0281 (S4).)_
+      _(Hardening, session 2026-10-10-0624: ~~BUG-0311~~ (a ghost Attack ends on the fog's own rule, the update the ghost
+      goes), ~~BUG-0270~~ (a tower's hit from high ground reveals the tower 2 s, per building slot and player, hashed while
+      in force), ~~BUG-0251~~ (the test scenes' shutdown FATAL), BUG-0281 items 1 + 3 (trees felled out of sight stay drawn
+      as last seen; a minimap right-click acts on the dots as drawn) fixed. BUG-0390 (S3): the `QaGhostViewTest` mean-walk
+      check went stale with the BUG-0311 fix (a view-file rewrite at integration). Open: BUG-0271 / 0272 / 0275 (S4),
+      BUG-0281 item 2 (M6 fog-look pass).)_
 - [ ] Ability system (target ground, self/aura, summon) and status effects; zones.
       _(Slice 1 **accepted in session 2026-10-09-0724, sim M4-4a** (2 fix rounds): `common/statuses.json` (`damageOverTime`,
       `slow`; shipped `burning`, `slowed`) and `factions/<id>/abilities.json` (`targetGround` only; effects `damage`,
@@ -505,6 +511,11 @@ ten-minute playtest (STATE "For your review", M3-V3 entry) stands as feedback, n
       on screen (M4-V6c). Open: BUG-0360 (S3, the blocker's cell rule vs the statuses' centre rule at the rim), BUG-0361
       (S3, recorder vs `ZoneCapacity`), BUG-0363 (S4), BUG-0370 (S3, view: Shift-queued casts on walking mages pick one mage),
       BUG-0371 (S4, view).)_
+      _(Hardening, session 2026-10-10-0624, sim M4-H2 + view M4-VH2: ~~BUG-0360~~ (a storm hides a unit by its own centre,
+      the statuses' test; per-zone fog records hashed while live), ~~BUG-0361~~, BUG-0363 items 1-2 (far storms keep the scan
+      shortcut; a new storm hides at once), ~~BUG-0370~~ (a queued cast and a cast sent this tick count as busy: two Shift
+      clicks on two walking mages queue one each), ~~BUG-0371~~ (Slowed marker deep blue; a flash decided on its first frame)
+      fixed. Open: BUG-0391 / 0400 (S4 nits).)_
 - [ ] Stealth and detection system (tested now, even though Shadow arrives in M8).
 - [ ] Telas Fire, Sapper Sharpers + Cusser, Sandstorm, Zealot passives all work.
       _(Telas Fire works since M4-4a (session 2026-10-09-0724): 16 m / 3 m / 0.8 s cast / 25 s cooldown, Burning 10 magic a
@@ -518,8 +529,10 @@ ten-minute playtest (STATE "For your review", M3-V3 entry) stands as feedback, n
       _(**Sandstorm works since M4-4b-2** (session 2026-10-10-0215): the Priest of the Whirlwind calls a 6 m storm at up to
       18 m, 1.2 s cast, 45 s cooldown (30 s after Dryjhna's Prophecy), lasting 12 s; enemy units inside are Blinded (sight
       2 m, nothing targeted beyond 3 m) and Slowed 30 %, both lingering 1 s after they step out; enemies outside can't see
-      into it, Whirlwind units are unaffected. **The Cusser's page row is pinned fully since D10b** (same session, BUG-0350
-      closed); the Sandstorm row and Blinded are pinned in D10c. Left: the Zealot passives (M4-4b-3).)_
+      into it, your own units are unaffected (the text follows the `enemy_units` data since D10c). **The Cusser's page row
+      is pinned fully since D10b** (same session, BUG-0350 closed); **the Sandstorm row and Blinded are pinned since D10c**
+      (session 2026-10-10-0624: `createZone` and `blind` compared field by field; `PendingAbilities` is empty). Left: the
+      Zealot passives (M4-4b-3).)_
 - [x] Scenario tests for the counter triangle (Line beats Shock, Shock beats Ranged, Ranged beats
       Light, Siege beats buildings).
       _(Ticked in session 2026-10-08-0913, task M4-2b: `Scenario/CounterTriangleTests`, equal-cost groups attack-moved

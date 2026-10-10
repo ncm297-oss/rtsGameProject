@@ -72,7 +72,22 @@ public static class CombatSystem
             if (due && u.Target[i].Generation != 0 && !u.Hold[i] && u.WindupTicks[i] == 0)
             {
                 float gap = Gap(world, i);
-                if (gap <= Range(world, i, data.Units[u.TypeId[i]].Attack) || gap < u.ChaseBest[i] - CombatConstants.ChaseProgress)
+                bool inReach = gap <= Range(world, i, data.Units[u.TypeId[i]].Attack);
+                // Targets its scans take in turn (BUG-0241): each switch re-takes the progress mark from the new target's
+                // gap, and walking toward each in turn passes for progress, so the stall count can't climb. A chase that
+                // switched GiveUpScans times without getting closer to any target or landing a blow ends here instead,
+                // unless a friend fights the target (a brawl's back ranks re-pick often while the front lands the blows).
+                if (!inReach && u.ChaseSwitches[i] >= CombatConstants.GiveUpScans)
+                {
+                    if (FriendFightsTarget(world, i)) u.ChaseSwitches[i] = 0;
+                    else
+                    {
+                        GiveUp(u, i);
+                        Settle(world, i);
+                        continue;
+                    }
+                }
+                if (inReach || gap < u.ChaseBest[i] - CombatConstants.ChaseProgress)
                 {
                     u.ChaseBest[i] = gap;
                     u.ChaseStall[i] = 0;
@@ -285,6 +300,21 @@ public static class CombatSystem
         return u.WindupTicks[i] > 0 || InReachOfTarget(world, i, world.Data.Units[u.TypeId[i]].Attack, Gap(world, i));
     }
 
+    /// <summary>
+    /// Whether unit <paramref name="i"/> has a live target (a unit, or a building standing) that its owner sees now
+    /// (<see cref="VisionSystem.UnitSees"/>): a chase an attack-move to a new point keeps (BUG-0157). A gone building it
+    /// walks to through the last-known list is not one.
+    /// </summary>
+    internal static bool ChasesInSight(World world, int i)
+    {
+        UnitStore u = world.Units;
+        EntityHandle t = u.Target[i];
+        if (t.Generation == 0) return false;
+        bool building = u.TargetIsBuilding[i];
+        if (building ? !world.Buildings.IsAlive(t) : !u.IsAlive(t)) return false;
+        return VisionSystem.UnitSees(world, i, t, building);
+    }
+
     /// <summary>Whether an edge-to-edge <paramref name="gap"/> (m) is one <paramref name="attack"/> can strike at: within its range and not inside its minimum range (M4-2b).</summary>
     internal static bool InReach(AttackDef attack, float gap) => gap <= attack.Range && !(gap < attack.MinRange);
 
@@ -373,6 +403,8 @@ public static class CombatSystem
         u.ChaseStall[i] = 0;
         u.ChasePrev[i] = default;
         u.ChasePrevIsBuilding[i] = false;
+        u.ChaseSwitches[i] = 0;
+        u.ChaseChainBest[i] = 0f;
         u.ChaseBest[i] = Gap(world, i);
         u.Mode[i] = CombatMode.Ordered;
         u.AnchorPosition[i] = Vector2.Zero;
@@ -394,6 +426,8 @@ public static class CombatSystem
         u.ChaseStall[i] = 0;
         u.ChasePrev[i] = default;
         u.ChasePrevIsBuilding[i] = false;
+        u.ChaseSwitches[i] = 0;
+        u.ChaseChainBest[i] = 0f;
         u.ChaseBest[i] = Gap(world, i);
         u.Mode[i] = CombatMode.Ordered;
         u.AnchorPosition[i] = Vector2.Zero;
@@ -463,9 +497,10 @@ public static class CombatSystem
         int myGen = u.Generation[i], lastIndex = u.LastAttacker[i].Index, lastGen = u.LastAttacker[i].Generation;
         float minRange = def.Attack.MinRange;
         // M4-3a: on a one-level map a candidate within sight is seen by the scanner itself; else ask the vision rule
-        // (M4-4b-2: also while a zone hides cells, which the rule knows).
+        // (M4-4b-2: also while a zone that may hide a candidate reaches into the scan's disc, which the rule knows; a storm
+        // far away leaves the shortcut on, BUG-0363).
         float sight2 = def.Sight * def.Sight;
-        bool oneLevel = !world.Fog.MultiLevel && world.Zones.BlockerCount == 0;
+        bool oneLevel = !world.Fog.MultiLevel && (world.Zones.BlockerCount == 0 || !VisionSystem.BlockerNear(world, owner, pos, radius));
         bool[] combatant = world.CombatantType;
         int[] found = world.Neighbors; // movement's scratch: free in phase 7
         int n = Math.Min(world.Spatial.QueryEnemies(pos, radius, owner, found), found.Length);
@@ -622,6 +657,14 @@ public static class CombatSystem
             bool back = (target == u.ChasePrev[i] && isBuilding == u.ChasePrevIsBuilding[i])
                 || (target == u.Ignored[i] && isBuilding == u.IgnoredIsBuilding[i]);
             if (!back) u.ChaseStall[i] = 0;
+            // BUG-0241: the run of switches counts only those that brought the chase no closer to any target than it had
+            // been (the target left got nearer than the run's best: a fresh run, at 1).
+            if (u.ChaseSwitches[i] == 0 || u.ChaseBest[i] < u.ChaseChainBest[i] - CombatConstants.ChaseProgress)
+            {
+                u.ChaseChainBest[i] = u.ChaseBest[i];
+                u.ChaseSwitches[i] = 1;
+            }
+            else if (u.ChaseSwitches[i] < byte.MaxValue) u.ChaseSwitches[i]++;
             u.ChasePrev[i] = u.Target[i];
             u.ChasePrevIsBuilding[i] = u.TargetIsBuilding[i];
         }
@@ -647,6 +690,8 @@ public static class CombatSystem
         u.ChaseStall[i] = 0;
         u.ChasePrev[i] = default;
         u.ChasePrevIsBuilding[i] = false;
+        u.ChaseSwitches[i] = 0;
+        u.ChaseChainBest[i] = 0f;
         if (u.State[i] == UnitState.Attacking) Stand(u, i, UnitState.Idle);
     }
 
@@ -928,6 +973,8 @@ public static class CombatSystem
     private static void Strike(World world, int i, AttackDef attack)
     {
         world.Units.GiveUps[i] = 0; // it lands one: the chases it gave up before no longer hold it back (BUG-0137)
+        world.Units.ChaseSwitches[i] = 0; // nor do the switches before it (BUG-0241)
+        world.Units.ChaseChainBest[i] = 0f;
         if (attack.ProjectileTypeId >= 0) ProjectileSystem.Fire(world, i);
         else QueueHit(world, i);
     }
@@ -987,9 +1034,9 @@ public static class CombatSystem
         UnitStore u = world.Units;
         if (!u.IsAlive(hit.Victim)) return; // killed earlier this phase
         int v = hit.Victim.Index;
-        // M4-3a: a hit from a higher level reveals the attacker to the victim's owner (before the retaliation below asks).
-        // Not a tower's (M4-3b): reveals are per unit slot.
-        if (hit.AttackerLevel > 0 && !hit.AttackerIsBuilding) VisionSystem.OnHit(world, hit.Attacker, hit.AttackerLevel, u.Owner[v], world.Fog.LevelAt(u.Position[v]));
+        // M4-3a: a hit from a higher level reveals the attacker to the victim's owner (before the retaliation below asks);
+        // a tower too since BUG-0270.
+        if (hit.AttackerLevel > 0) VisionSystem.OnHit(world, hit.Attacker, hit.AttackerIsBuilding, hit.AttackerLevel, u.Owner[v], world.Fog.LevelAt(u.Position[v]));
         u.Hp[v] -= hit.Damage;
         if (u.Hp[v] <= 0)
         {
@@ -1026,7 +1073,7 @@ public static class CombatSystem
         BuildingStore b = world.Buildings;
         if (!b.IsAlive(hit.Victim)) return;
         int j = hit.Victim.Index;
-        if (hit.AttackerLevel > 0 && !hit.AttackerIsBuilding) VisionSystem.OnHit(world, hit.Attacker, hit.AttackerLevel, b.Owner[j], world.Fog.BuildingLevel(j)); // M4-3a
+        if (hit.AttackerLevel > 0) VisionSystem.OnHit(world, hit.Attacker, hit.AttackerIsBuilding, hit.AttackerLevel, b.Owner[j], world.Fog.BuildingLevel(j)); // M4-3a, BUG-0270
         if (hit.Damage >= b.Hp[j])
         {
             BuildingRect(world, j, out Vector2 min, out Vector2 max);

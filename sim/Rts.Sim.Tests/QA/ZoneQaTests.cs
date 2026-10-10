@@ -235,7 +235,7 @@ public class ZoneQaTests
     /// centre (inside: an enemy there would be Blinded) should be hidden from a Crossbowman outside, and a Raider 6.01 m out
     /// (outside: not Blinded) should not be. BUG-0360.
     /// </summary>
-    [Fact(Skip = "BUG-0360: the blocker hides by cell centre (2 m cells), so a unit inside the radius can stand visible and one outside hidden")]
+    [Fact]
     public void TheBlockerAndTheStatuses_AgreeOnWhoIsInside()
     {
         Simulation sim = Scene(combat: false);
@@ -251,9 +251,13 @@ public class ZoneQaTests
         Assert.True(w.Fog.CanSeeUnit(0, outside.Index), "a Raider outside the storm (6.01 m) is hidden");
     }
 
-    /// <summary>The current behaviour behind BUG-0360, pinned so a fix shows up: the edge disagreement both ways.</summary>
+    /// <summary>
+    /// BUG-0360's old pin, flipped to the fixed rule: at the radius edge the statuses and the blocker both go by the unit's
+    /// centre. A Malazan Laborer inside by its centre (its cell's centre is outside) is Blinded; a Raider inside by its
+    /// centre in an "outside" cell is hidden; one outside by its centre in an "inside" cell is seen.
+    /// </summary>
     [Fact]
-    public void TheRadiusEdge_CurrentBehaviour_StatusesByCenter_BlockerByCell()
+    public void TheRadiusEdge_StatusesAndTheBlocker_BothGoByTheUnitsCentre()
     {
         Simulation sim = Scene(combat: false);
         World w = sim.World;
@@ -266,8 +270,8 @@ public class ZoneQaTests
         ZoneSystem.Create(w, 1, Sandstorm, centre);
         Assert.Equal(Blinded, w.Units.Statuses.BlindOf(inside.Index));
         FogMaps.RunThroughNextUpdate(sim);
-        Assert.True(w.Fog.CanSeeUnit(0, insideRaider.Index));   // inside the radius, yet seen from outside
-        Assert.False(w.Fog.CanSeeUnit(0, outsideRaider.Index)); // outside the radius, yet hidden
+        Assert.False(w.Fog.CanSeeUnit(0, insideRaider.Index));  // inside the radius: hidden (the Laborer's 2 m doesn't reach it)
+        Assert.True(w.Fog.CanSeeUnit(0, outsideRaider.Index));  // outside the radius: seen
     }
 
     // ---------- replays ----------
@@ -286,19 +290,28 @@ public class ZoneQaTests
     /// other than the default is the same case: playback rebuilds 64 slots, so a store-full cast makes a zone on playback
     /// that the recording didn't. BUG-0361.
     /// </summary>
-    [Fact(Skip = "BUG-0361: ReplayRecorder accepts a non-default SimConfig.ZoneCapacity, which playback can't reproduce")]
+    [Fact]
     public void TheRecorder_RefusesANonDefaultZoneCapacity()
     {
         var sim = new Simulation(TestSim.Config(Seed: 3, PlayerCount: 2, UnitCapacity: 16, CommandCapacity: 64) with { ZoneCapacity = 1 });
         Assert.Throws<InvalidOperationException>(() => new ReplayRecorder(sim));
     }
 
-    /// <summary>The consequence behind BUG-0361, pinned: a recorded run with ZoneCapacity 1 and a store-full cast fails its own playback.</summary>
+    /// <summary>
+    /// The consequence behind BUG-0361, kept as the guard's reason: a run with ZoneCapacity 1 and a store-full cast (recorded
+    /// commands, no recorder: the recorder refuses it since the fix) plays back with 64 slots and two zones, so its own
+    /// checkpoints would not match. Here the same commands on the default store make both zones.
+    /// </summary>
     [Fact]
-    public void ANonDefaultZoneCapacity_Recorded_FailsItsOwnPlayback()
+    public void ANonDefaultZoneCapacity_WouldFailItsOwnPlayback_SoTheRecorderRefusesIt()
     {
-        var sim = new Simulation(TestSim.Config(Seed: 3, PlayerCount: 2, UnitCapacity: 16, CommandCapacity: 64) with { ZoneCapacity = 1 });
-        var rec = new ReplayRecorder(sim, checkpointInterval: 10);
+        Assert.Equal(1, StoreFullCasts(1));
+        Assert.Equal(2, StoreFullCasts(ZoneStore.DefaultCapacity));
+    }
+
+    private static int StoreFullCasts(int zoneCapacity)
+    {
+        var sim = new Simulation(TestSim.Config(Seed: 3, PlayerCount: 2, UnitCapacity: 16, CommandCapacity: 64) with { ZoneCapacity = zoneCapacity });
         NavGrid g = sim.World.NavGrid;
         List<int> open = MiddleCells(g);
         Vector2 p0 = g.CellCenter(open[0] % g.Width, open[0] / g.Width);
@@ -314,10 +327,7 @@ public class ZoneQaTests
         sim.Enqueue(Command.UseAbility(1, priests[0], 0, u.Position[priests[0].Index]));
         sim.Enqueue(Command.UseAbility(1, priests[1], 0, u.Position[priests[1].Index]));
         for (int t = 0; t < 60; t++) sim.Tick();
-        Assert.Equal(1, sim.World.Zones.Count); // the second cast found the store full
-        ReplayResult result = ReplayPlayer.Run(rec.ToReplay(), TestSim.Data);
-        Assert.False(result.Ok); // plays back with 64 slots: two zones, a different hash
-        Assert.Equal(ReplayError.CheckpointMismatch, result.Error);
+        return sim.World.Zones.Count; // with one slot the second cast found the store full
     }
 
     /// <summary>

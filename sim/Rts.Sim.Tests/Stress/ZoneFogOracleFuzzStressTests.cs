@@ -16,8 +16,9 @@ namespace Rts.Sim.Tests.Stress;
 /// ramps and overlapping each other. The oracle restates docs/01 2026-10-10 (c) and docs/03 "Implementation (M4-4b-2)":
 /// a viewer stamps its sight now (its type's, or its smallest blind's when smaller) by the high-ground rule; then every
 /// cell whose centre is within a live blocking zone of another player is visible only if one of the player's own units
-/// whose center is inside that same zone sees it by the same rule. Also checks explored never regresses, and that combat's
-/// own-sight rule (<see cref="VisionSystem.ZoneHides"/>) agrees with the fog's cell rule.
+/// whose center is inside that same zone sees it by the same rule. Also checks explored never regresses, and (re-derived
+/// for BUG-0360's fix) that <see cref="FogStore.CanSeeUnit"/> and combat's own-sight rule (<see cref="VisionSystem.ZoneHides"/>)
+/// hide a unit by its own centre, not its cell's.
 /// </summary>
 [Collection(SerialCollection.Name)]
 public class ZoneFogOracleFuzzStressTests
@@ -55,8 +56,8 @@ public class ZoneFogOracleFuzzStressTests
 
     private static bool InZone(ZoneStore z, int k, Vector2 p) => Vector2.DistanceSquared(p, z.Center[k]) <= z.Radius(k) * z.Radius(k);
 
-    /// <summary>The oracle's visible set for <paramref name="player"/> (units only; the scenes have no buildings).</summary>
-    private static bool[] Expected(World w, int player)
+    /// <summary>The oracle's visible set for <paramref name="player"/> (units only; the scenes have no buildings); <paramref name="zones"/> false leaves the zones out (the circles' cover alone, Blinded sight included).</summary>
+    private static bool[] Expected(World w, int player, bool zones = true)
     {
         Heightmap hm = w.Heightmap;
         UnitStore u = w.Units;
@@ -71,6 +72,7 @@ public class ZoneFogOracleFuzzStressTests
                 for (int x = 0; x < hm.Width; x++)
                     if (Sees(hm, vx, vy, sight, x, y)) seen[y * hm.Width + x] = true;
         }
+        if (!zones) return seen;
         for (int y = 0; y < hm.Height; y++)
             for (int x = 0; x < hm.Width; x++)
             {
@@ -109,6 +111,44 @@ public class ZoneFogOracleFuzzStressTests
                 if (everVisible[p][c] && vis[c] == VisionConstants.Unexplored) wrong.Add($"cell {c} lost its explored state");
             }
             Assert.True(wrong.Count == 0, $"{context} player {p}: {string.Join("; ", wrong)}");
+            AssertUnits(w, p, context);
+        }
+    }
+
+    /// <summary>
+    /// BUG-0360's unit rule (docs/02 "Zones", docs/03 "Implementation (M4-4b-2)"), re-derived for the oracle: an enemy unit
+    /// whose own centre lies in one or more blocking zones of other owners than <paramref name="player"/> is seen only when,
+    /// for each of those zones, a unit of <paramref name="player"/> whose centre is in that zone sees the unit's cell by the
+    /// stamp's rule; a unit outside every such zone is seen when <paramref name="player"/>'s circles cover its cell (the
+    /// zones aside). Checked right after an update, so the positions are the update's. Own units are always seen.
+    /// </summary>
+    private static void AssertUnits(World w, int player, string context)
+    {
+        Heightmap hm = w.Heightmap;
+        UnitStore u = w.Units;
+        ZoneStore z = w.Zones;
+        bool[] plain = Expected(w, player, zones: false);
+        for (int j = 0; j < u.Capacity; j++)
+        {
+            if (!u.Alive[j] || u.Owner[j] == player) continue;
+            (int x, int y) = CellXY(hm, u.Position[j]);
+            bool inAny = false, expected = true;
+            for (int k = 0; k < z.Capacity; k++)
+            {
+                if (!z.Alive[k] || !z.BlocksVision(k) || z.Owner[k] == player || !InZone(z, k, u.Position[j])) continue;
+                inAny = true;
+                bool fromInside = false;
+                for (int i = 0; i < u.Capacity && !fromInside; i++)
+                {
+                    if (!u.Alive[i] || u.Owner[i] != player || !InZone(z, k, u.Position[i])) continue;
+                    (int vx, int vy) = CellXY(hm, u.Position[i]);
+                    fromInside = Sees(hm, vx, vy, OracleSight(w, i), x, y);
+                }
+                if (!fromInside) expected = false;
+            }
+            if (!inAny) expected = plain[y * hm.Width + x];
+            Assert.True(expected == w.Fog.CanSeeUnit(player, j),
+                $"{context} player {player}: unit {j} at {u.Position[j]} (cell {x}, {y}, in a zone {inAny}): fog {!expected}, oracle {expected}");
         }
     }
 
@@ -122,6 +162,9 @@ public class ZoneFogOracleFuzzStressTests
     [InlineData(2UL)]
     [InlineData(7UL)]
     [InlineData(42UL)]
+    [InlineData(99UL)] // QA M4-H2 (2026-10-10-0624): three more seeds on the re-derived unit rule
+    [InlineData(2026UL)]
+    [InlineData(31337UL)]
     public void TheFogWithZonesAndBlinds_MatchesTheBruteForceOracle_OnTheTwoLevelMap(ulong seed)
     {
         var rng = new SimRng(seed, 4242);
@@ -167,23 +210,21 @@ public class ZoneFogOracleFuzzStressTests
                 ReadOnlySpan<byte> vis = w.Fog.Visibility(p);
                 for (int c = 0; c < plain.Length; c++) if (plain[c] && vis[c] != VisionConstants.Visible) hiddenByZone++;
             }
-            // Combat's own-sight rule agrees with the cell rule: for every pair of a viewer and an enemy unit, ZoneHides says
-            // "hidden" exactly when a blocking zone of another owner than the viewer's holds the target's cell centre and the
-            // viewer's center is outside that zone.
+            // Combat's own-sight rule agrees with the unit rule (BUG-0360): for every pair of a viewer and an enemy unit,
+            // ZoneHides says "hidden" exactly when a blocking zone of another owner than the viewer's holds the target's own
+            // centre and the viewer's center is outside that zone.
             for (int i = 0; i < u.Capacity; i++)
             {
                 if (!u.Alive[i]) continue;
                 for (int j = 0; j < u.Capacity; j++)
                 {
                     if (!u.Alive[j] || u.Owner[j] == u.Owner[i]) continue;
-                    (int tx, int ty) = CellXY(w.Heightmap, u.Position[j]);
-                    Vector2 tc = FogMaps.Cell(tx, ty);
                     bool expect = false;
                     for (int k = 0; k < w.Zones.Capacity; k++)
-                        if (w.Zones.Alive[k] && w.Zones.BlocksVision(k) && w.Zones.Owner[k] != u.Owner[i] && InZone(w.Zones, k, tc) && !InZone(w.Zones, k, u.Position[i]))
+                        if (w.Zones.Alive[k] && w.Zones.BlocksVision(k) && w.Zones.Owner[k] != u.Owner[i] && InZone(w.Zones, k, u.Position[j]) && !InZone(w.Zones, k, u.Position[i]))
                             expect = true;
                     Assert.True(expect == VisionSystem.ZoneHides(w, u.Owner[i], u.Position[i], true, u.Position[j]),
-                        $"seed {seed} scene {scene}: ZoneHides({i} -> {j}) disagrees with the cell rule");
+                        $"seed {seed} scene {scene}: ZoneHides({i} -> {j}) disagrees with the unit rule");
                 }
             }
             // Then walk: random Moves every 10 ticks, a fresh zone every 50; compare after each update tick.

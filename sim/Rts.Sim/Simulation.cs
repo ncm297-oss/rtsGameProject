@@ -302,7 +302,7 @@ public sealed class Simulation
         return u.Hp[i] != fullHp || u.Target[i] != default || u.TargetIsBuilding[i] || u.CooldownTicks[i] != 0 || u.WindupTicks[i] != 0
             || u.LastAttacker[i] != default || u.AnchorPosition[i] != Vector2.Zero || u.Mode[i] != CombatMode.None
             || u.ChaseBest[i] != 0f || u.ChaseStall[i] != 0 || u.Ignored[i] != default || u.IgnoredIsBuilding[i] || u.GiveUps[i] != 0
-            || u.Repick[i] || u.ChasePrev[i] != default || u.ChasePrevIsBuilding[i];
+            || u.Repick[i] || u.ChasePrev[i] != default || u.ChasePrevIsBuilding[i] || u.ChaseSwitches[i] != 0 || u.ChaseChainBest[i] != 0f;
     }
 
     /// <summary>Unit <paramref name="i"/>'s combat fields, as flagged by bit 17 of <see cref="OrderBits"/>.</summary>
@@ -321,13 +321,16 @@ public sealed class Simulation
         h.Add((int)u.Mode[i] | (u.Repick[i] ? 1 << 8 : 0));
         // BUG-0137's chase memory.
         h.Add(u.ChaseBest[i]);
-        h.Add(u.ChaseStall[i]);
+        // BUG-0241's switch count rides above the stall count (at most GiveUpScans): with no switch the word is as before.
+        h.Add(u.ChaseStall[i] | (u.ChaseSwitches[i] << 16));
         h.Add(u.Ignored[i].Index);
         h.Add((ulong)(uint)u.Ignored[i].Generation | (u.IgnoredIsBuilding[i] ? 1UL << 32 : 0UL));
         h.Add(u.GiveUps[i]);
         // BUG-0149: the target held before this one (a switch back keeps the stall count).
         h.Add(u.ChasePrev[i].Index);
         h.Add((ulong)(uint)u.ChasePrev[i].Generation | (u.ChasePrevIsBuilding[i] ? 1UL << 32 : 0UL));
+        // BUG-0241: the run of switches' best gap (its count rides in the stall word above).
+        h.Add(u.ChaseChainBest[i]);
     }
 
     /// <summary>

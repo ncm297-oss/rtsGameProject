@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-09-0125, task M4-3b (builder's known limit) |
 | System | combat / vision (towers, high-ground reveal) |
-| Fixed by | |
+| Fixed by | 5c2de85 (M4-H2): `TowerTests.ATowerHittingFromHighGround_IsRevealedToItsVictimsOwner_For40Ticks`, `TowerTests.ARevealedTower_IsShotBackAt_FromBelow`, `StateHashTests.Hash_CoversATowersReveal_OnlyWhileInForce`; QA `QA/SimHardeningH2QaTests.ATowersReveal_OnAGeneratedMap_TwinsEqual_ReplayRoundTrips` |
 
 ## Repro
 1. `FogMaps.TwoLevel()`: a Watchtower of player 0 on the plateau (`TowerTests.PlaceBuilding(sim, 0, Watchtower, 22, 30)`),
@@ -27,3 +27,6 @@ units unanswered.
 Fix sketch: a per (building slot, player) reveal pair like the units', read by `FogStore.CanSeeBuilding` /
 `SeesBuildingCells` (and so by the ghost list and `UnitSeesBuilding`), hashed. Memory: 2 ints x 256 slots x players.
 Left out of M4-3b to keep the slice to its brief; recorded in docs/03 "Implementation (M4-3b)" and docs/01's M4-3b row (d).
+
+## QA verification (2026-10-10-0624, M4-H2)
+Verified by QA 2026-10-10-0624 (M4-H2): `ARevealedTower_IsShotBackAt_FromBelow` failed on the base 63efab2 and passes on 5c2de85. The reveal lasts exactly 40 ticks after the last hit and is hashed only while in force; the golden `cross_map_seed1.replay` is unchanged. On a generated map (seed 9) a Watchtower on a cliff top kept the reveal live for 195 ticks while it shot a Crossbowman below; twins were equal every tick and the replay round-tripped through the text format, equal at every checkpoint. docs/01 M4-3b row (d) and the M4-H2 row (c) are updated.

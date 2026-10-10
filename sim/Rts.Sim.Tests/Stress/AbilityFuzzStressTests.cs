@@ -107,6 +107,30 @@ public class AbilityFuzzStressTests
         }
     }
 
+    /// <summary>The first live Cadre Mage (slot order) off cooldown and not casting, with an enemy unit within 12 m, casts Telas Fire at the nearest one.</summary>
+    private static void AimedCast(Simulation sim)
+    {
+        UnitStore u = sim.World.Units;
+        int mage = TestSim.Data.FindUnit("malazan_cadre_mage");
+        for (int i = 0; i < u.Capacity; i++)
+        {
+            if (!u.Alive[i] || u.TypeId[i] != mage || u.CastAbility[i] >= 0) continue;
+            if (u.AbilityReadyTick[i * Data.DataLimits.MaxUnitAbilities] > sim.TickNumber) continue; // on cooldown
+            Assert.Equal(TestSim.Data.FindAbility("telas_fire"), TestSim.Data.Units[mage].Abilities[0]);
+            int best = -1;
+            float bestD2 = 144f;
+            for (int j = 0; j < u.Capacity; j++)
+            {
+                if (!u.Alive[j] || u.Owner[j] == u.Owner[i]) continue;
+                float d2 = Vector2.DistanceSquared(u.Position[i], u.Position[j]);
+                if (d2 < bestD2) (best, bestD2) = (j, d2);
+            }
+            if (best < 0) continue;
+            sim.Enqueue(Command.UseAbility(u.Owner[i], new EntityHandle(i, u.Generation[i]), 0, u.Position[best]));
+            return;
+        }
+    }
+
     [Theory]
     [InlineData(1UL)]
     [InlineData(2UL)]
@@ -131,6 +155,13 @@ public class AbilityFuzzStressTests
             {
                 Spam(a, open, ref rngA, seenA);
                 Spam(b, open, ref rngB, seenB);
+            }
+            // M4-H2: an aimed Telas Fire every 400 ticks (a command, so the twins and the replay see it), so the run always
+            // holds statuses for the invariants below; the random spam alone burned one unit or none on seed 1.
+            if (t % 400 == 200)
+            {
+                AimedCast(a);
+                AimedCast(b);
             }
             a.Tick();
             b.Tick();

@@ -78,27 +78,20 @@ public class ChasePrevQaTests
     /// turn (each 1, 2 or 3 scan intervals a different one targets the chaser, so it is the tier-0 pick: the seam the dev's
     /// <c>SwitchingBackToTheTargetHeldJustBefore_KeepsTheStallCount</c> uses). docs/03 says two targets taken in turn can't
     /// restart the count forever; the chase must end within a generous bound (3 x 3 x GiveUpScans scans + 400 ticks).
-    /// It never does, on this branch and on its base 4c1f168: every switch re-takes <c>ChaseBest</c> from the new gap, and
-    /// the chaser's walk along the cliff toward the new target counts as progress, so the stall count never passes 3. BUG-0241.
+    /// It never did before BUG-0241's fix: every switch re-took <c>ChaseBest</c> from the new gap, and the chaser's walk
+    /// along the cliff toward the new target counted as progress, so the stall count never passed 3. Since the fix a chase
+    /// that switched <c>GiveUpScans</c> times without landing a blow (no friend fighting the target) is given up.
     /// </summary>
-    [Theory(Skip = "BUG-0241: targets taken in turn reset the chase's progress mark on every switch; the chase never ends")]
+    [Theory]
     [InlineData(2, 1)]
     [InlineData(2, 2)]
     [InlineData(2, 3)]
     [InlineData(3, 1)]
     [InlineData(3, 2)]
     [InlineData(3, 3)]
-    public void UnreachableTargetsTakenInTurn_TheChaseStillEnds(int targets, int scansPerTurn) => TakenInTurn(targets, scansPerTurn, expectEnd: true);
+    public void UnreachableTargetsTakenInTurn_TheChaseStillEnds(int targets, int scansPerTurn) => TakenInTurn(targets, scansPerTurn);
 
-    /// <summary>Pin for BUG-0241 (today's behaviour, also on 4c1f168): the chase is still on after the bound. Flip to the skipped theory above when fixed.</summary>
-    [Theory]
-    [InlineData(2, 1)]
-    [InlineData(2, 3)]
-    [InlineData(3, 1)]
-    [InlineData(3, 3)]
-    public void Bug0241Pin_UnreachableTargetsTakenInTurn_NeverEnd(int targets, int scansPerTurn) => TakenInTurn(targets, scansPerTurn, expectEnd: false);
-
-    private void TakenInTurn(int targets, int scansPerTurn, bool expectEnd)
+    private void TakenInTurn(int targets, int scansPerTurn)
     {
         Simulation sim = PlateauSim(wall: false);
         UnitStore u = sim.World.Units;
@@ -119,11 +112,6 @@ public class ChasePrevQaTests
             if (t > 40 && u.Target[c.Index] == default && u.Mode[c.Index] == CombatMode.None) { endedAt = t; break; }
         }
         _out.WriteLine($"{targets} targets, rotation every {scansPerTurn} scan(s): ended at {endedAt}, switches {switches}, max stall {maxStall}, give-ups {u.GiveUps[c.Index]}, pos {u.Position[c.Index]}");
-        if (!expectEnd)
-        {
-            Assert.True(endedAt < 0, "BUG-0241 looks fixed: flip this pin to UnreachableTargetsTakenInTurn_TheChaseStillEnds");
-            return;
-        }
         Assert.True(endedAt >= 0, $"{targets} targets, rotation every {scansPerTurn} scan(s): still chasing after {limit} ticks ({switches} switches, stall never above {maxStall}, give-ups {u.GiveUps[c.Index]})");
     }
 

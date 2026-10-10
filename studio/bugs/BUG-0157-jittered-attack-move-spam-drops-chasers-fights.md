@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-08-0313, task M4-2a re-check round 2 (present since round 1, `fea7963`; not caused by the BUG-0154 fix) |
 | System | sim: orders / combat (`Orders/OrderSystem.Apply` AttackMove branch), sim track |
-| Fixed by | |
+| Fixed by | 5c2de85 (M4-H2): un-skipped `QA/AttackMoveRepickQaTests.BrawlSpam_JitteredAttackMove_StillDealsTheDamage(3, true)`, `...MeanOverIntervals1To20_AtLeast90Percent`; QA `QA/SimHardeningH2QaTests.KeptChase_MeanBound_HoldsOnOtherBrawls` |
 
 ## Repro
 1. `sim/Rts.Sim.Tests/QA/AttackMoveRepickQaTests.cs` `BrawlSpam_JitteredAttackMove_StillDealsTheDamage(every: 3, jitter: true)`
@@ -69,3 +69,6 @@ under 80 %; keep the `(10, true)` row green under that bound (re-state it the sa
 and the docs/03 "Redirecting" sentence is true only for units fighting in reach (a known limit; say so there when the fix
 lands). Rationale: the game ships with same-point spam lossless and 200 ms clicks at most 4 % off; the rule is a small
 average gain that is not worth a fix round inside a hardening session already at its budget.
+
+## QA verification (2026-10-10-0624, M4-H2)
+Verified by QA 2026-10-10-0624 (M4-H2). The jittered rows' per-row bound went 90 -> 80 %, and the 90 % now applies to the mean over the intervals. Both are the Producer's 2026-10-08-2144 bound; same-point spam keeps 90 %. Builder detail: the chase is kept only for a unit already on an attack-move leg (not for a `Retaliate` chase on the first attack-move); recorded in docs/01 (b) and docs/03 with the 200 v 200 reason. QA measured the bound on 9 brawl variants (jitter phase 0-3, fronts 6 / 8 / 10 m apart, 4 / 5 / 8 ranks, seed 1 / 7). Head: means 93.7-98.8 %, worst interval 84-94 %. Base: means 75.7-93.7 %, worst 60-85 %. The seed changes nothing in this flat scene. Five of the variants are now a permanent row.

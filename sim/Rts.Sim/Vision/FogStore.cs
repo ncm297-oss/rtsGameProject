@@ -24,7 +24,9 @@ namespace Rts.Sim.Vision;
 /// </para>
 /// <para>
 /// M4-4b-2: a Blinded unit stamps its blind status's smaller circle, and after the stamps each zone that blocks vision hides
-/// its cells from every player but its owner, except the cells that player's own units standing inside it see.
+/// its cells from every player but its owner, except the cells that player's own units standing inside it see. A unit
+/// (BUG-0360) is hidden by its own centre, not its cell's: each blocking zone keeps, per player, which cells of its box the
+/// units inside it saw and which the player's circles covered at the last update (<see cref="ZoneStore"/>, hashed with it).
 /// </para>
 /// <para>
 /// State (hashed): the explored bits (a packed copy of "not unexplored", kept as cells are first seen), the visible bits
@@ -54,6 +56,10 @@ public sealed class FogStore
     // slot never inherits it).
     private readonly int[] _revealUntil;
     private readonly int[] _revealGeneration;
+
+    // BUG-0270: the same pair per (building slot, player), for a tower's hit from high ground.
+    private readonly int[] _buildingRevealUntil;
+    private readonly int[] _buildingRevealGeneration;
 
     // M4-3b: per (player, building slot) the last-known building there (hashed), and per player the entries in use
     // (derived from them, kept as entries change).
@@ -107,6 +113,8 @@ public sealed class FogStore
         _revealUntil = new int[units.Capacity * players];
         _revealGeneration = new int[units.Capacity * players];
         _buildingSlots = buildings.Capacity;
+        _buildingRevealUntil = new int[_buildingSlots * players];
+        _buildingRevealGeneration = new int[_buildingSlots * players];
         _ghosts = new BuildingGhost[players * _buildingSlots];
         _ghostCount = new int[players];
         for (int i = 0; i < cells; i++)
@@ -172,7 +180,10 @@ public sealed class FogStore
     /// <summary>
     /// Whether <paramref name="player"/> sees live unit slot <paramref name="slot"/>: its own, its cell visible at the last
     /// update, or revealed to it by a high-ground hit. What the view shows; combat adds each unit's own sight right now
-    /// (<see cref="VisionSystem"/>). False for a dead slot or no such player.
+    /// (<see cref="VisionSystem"/>). M4-4b-2 / BUG-0360: a unit whose centre stands in another player's live zone that blocks
+    /// vision is seen only through the eyes of <paramref name="player"/>'s units inside that zone, whatever its cell's
+    /// centre; one outside every such zone is seen where <paramref name="player"/>'s circles covered its cell, also a cell
+    /// the zone hides. False for a dead slot or no such player.
     /// </summary>
     public bool CanSeeUnit(int player, int slot)
     {
@@ -180,7 +191,7 @@ public sealed class FogStore
         return _units.Owner[slot] == player || SeesUnit(player, slot);
     }
 
-    /// <summary>Whether <paramref name="player"/> sees live building slot <paramref name="slot"/>: its own, or any footprint cell visible at the last update. False for a dead slot or no such player.</summary>
+    /// <summary>Whether <paramref name="player"/> sees live building slot <paramref name="slot"/>: its own, any footprint cell visible at the last update, or (BUG-0270) a tower revealed to it by a hit from high ground. False for a dead slot or no such player.</summary>
     public bool CanSeeBuilding(int player, int slot)
     {
         if ((uint)player >= (uint)_players || (uint)slot >= (uint)_buildings.Capacity || !_buildings.Alive[slot]) return false;
@@ -241,12 +252,42 @@ public sealed class FogStore
     /// <summary>True when any cell of the map is above level 0: else the high-ground compares are skipped.</summary>
     internal bool MultiLevel { get; }
 
-    /// <summary>Unit slot <paramref name="slot"/>'s cell is visible to <paramref name="player"/>, or the unit is revealed to it.</summary>
-    internal bool SeesUnit(int player, int slot) =>
-        Bit(_visible[player], CellOf(_units.Position[slot])) || Revealed(player, slot);
+    /// <summary>
+    /// Unit slot <paramref name="slot"/>'s cell is visible to <paramref name="player"/>, or the unit is revealed to it. While a
+    /// zone that blocks vision lives (BUG-0360) whether such a zone hides the unit goes by the unit's own centre, as its
+    /// statuses do, not by its cell's (<see cref="SeesUnitNearZones"/>).
+    /// </summary>
+    internal bool SeesUnit(int player, int slot)
+    {
+        if (_world.Zones.BlockerCount > 0) return SeesUnitNearZones(player, slot);
+        return Bit(_visible[player], CellOf(_units.Position[slot])) || Revealed(player, slot);
+    }
 
-    /// <summary>Any footprint cell of building slot <paramref name="slot"/> is visible to <paramref name="player"/>.</summary>
-    internal bool SeesBuildingCells(int player, int slot) => SeesFootprint(player, _buildings.TypeId[slot], _buildings.Cell[slot]);
+    /// <summary>Any footprint cell of building slot <paramref name="slot"/> is visible to <paramref name="player"/>, or (BUG-0270) the building is revealed to it.</summary>
+    internal bool SeesBuildingCells(int player, int slot) =>
+        SeesFootprint(player, _buildings.TypeId[slot], _buildings.Cell[slot]) || BuildingRevealed(player, slot);
+
+    /// <summary>Whether building slot <paramref name="slot"/> is revealed to <paramref name="player"/> (BUG-0270: a tower's hit from high ground, not yet over, set on the building now in the slot).</summary>
+    internal bool BuildingRevealed(int player, int slot)
+    {
+        int k = slot * _players + player;
+        return _buildingRevealUntil[k] > _world.TickNumber && _buildingRevealGeneration[k] == _buildings.Generation[slot];
+    }
+
+    /// <summary>The tick building slot <paramref name="slot"/>'s reveal to <paramref name="player"/> ends; 0 when none was set on the building now in the slot.</summary>
+    internal int BuildingRevealEnd(int player, int slot)
+    {
+        int k = slot * _players + player;
+        return _buildingRevealGeneration[k] == _buildings.Generation[slot] ? _buildingRevealUntil[k] : 0;
+    }
+
+    /// <summary>Reveals building <paramref name="attacker"/> (a tower) to <paramref name="player"/> until tick <paramref name="until"/> (a later hit refreshes it).</summary>
+    internal void RevealBuilding(EntityHandle attacker, int player, int until)
+    {
+        int k = attacker.Index * _players + player;
+        _buildingRevealUntil[k] = until;
+        _buildingRevealGeneration[k] = attacker.Generation;
+    }
 
     /// <summary>Bit <paramref name="cell"/> of a packed cell set (64 cells a word).</summary>
     private static bool Bit(ulong[] bits, int cell) => (bits[cell >> 6] & (1UL << (cell & 63))) != 0;
@@ -349,7 +390,7 @@ public sealed class FogStore
                 if (m >= 0) StampViewer(vis, CentreCell(j), m);
             }
             if (blocked) MarkBlocked(zones, p, vis, inside, insideCount);
-            Combine(p);
+            Combine(p, blocked ? zones : null);
             if (blocked) ClearBlocked(zones, p, vis);
             UpdateGhosts(p);
         }
@@ -391,13 +432,16 @@ public sealed class FogStore
     /// <paramref name="p"/> is marked blocked (the high bit of its visibility byte) unless one of <paramref name="p"/>'s units
     /// standing inside that same zone (<paramref name="inside"/>: p's units inside any such zone) sees it by the stamp's rule
     /// with its sight now (Blinded or not). <see cref="Combine"/> treats a blocked cell as uncovered. The pass covers each
-    /// zone's bounding box only.
+    /// zone's bounding box only. BUG-0360: it also records, for every cell of the box, whether such a unit inside the zone
+    /// sees it (the zone's seen-from-inside bits, which <see cref="SeesUnit"/> reads for a unit standing in the zone).
     /// </summary>
     private void MarkBlocked(ZoneStore zones, int p, byte[] vis, int[] inside, int insideCount)
     {
+        int side = zones.BoxSide;
         for (int k = 0; k < zones.End; k++)
         {
             if (!HidesFrom(zones, k, p)) continue;
+            zones.ClearFogBits(k, p);
             Vector2 centre = zones.Center[k];
             float r = zones.Radius(k), r2 = r * r;
             ZoneBox(centre, r, out int x0, out int y0, out int x1, out int y1);
@@ -407,12 +451,89 @@ public sealed class FogStore
                 for (int x = x0; x <= x1; x++)
                 {
                     float cx = (x + 0.5f) * MapConstants.CellSize - centre.X;
-                    if (cx * cx + cy * cy > r2) continue;
+                    bool centreInside = cx * cx + cy * cy <= r2;
+                    if (!centreInside && insideCount == 0) continue; // nothing to record: no unit of p inside
                     int c = y * _width + x;
-                    if (!SeenFromInside(zones, k, c, x, y, inside, insideCount)) vis[c] |= BlockedBit;
+                    bool seen = SeenFromInside(zones, k, c, x, y, inside, insideCount);
+                    if (seen) zones.SetFogBit(false, k, p, (y - y0) * side + (x - x0));
+                    else if (centreInside) vis[c] |= BlockedBit;
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// BUG-0360, in <see cref="Combine"/> before the layers are zeroed: for every zone that hides cells from
+    /// <paramref name="p"/>, the cells of its box that <paramref name="p"/>'s stamps cover by the high-ground rule, zones
+    /// aside (the zone's covered bits: a unit standing outside every zone in a cell the zone hides is seen if they are set).
+    /// Each row's marks are summed from the stamped box's left edge (<paramref name="nx0"/>; no mark lies left of it).
+    /// </summary>
+    private void RecordCovered(ZoneStore zones, int p, int nx0, int ny0, int nx1, int ny1)
+    {
+        if (nx0 == int.MaxValue) return; // nothing stamped: nothing covered
+        int[] s = _scratch;
+        int w = _width, n = _levels.Length, n2 = 2 * n, side = zones.BoxSide;
+        for (int k = 0; k < zones.End; k++)
+        {
+            if (!HidesFrom(zones, k, p)) continue;
+            ZoneBox(zones.Center[k], zones.Radius(k), out int x0, out int y0, out int x1, out int y1);
+            int ya = Math.Max(y0, ny0), yb = Math.Min(y1, ny1), xb = Math.Min(x1, nx1);
+            for (int y = ya; y <= yb; y++)
+            {
+                int run0 = 0, run1 = 0, run2 = 0;
+                for (int x = nx0; x <= xb; x++)
+                {
+                    int c = y * w + x;
+                    run0 += s[c];
+                    run1 += s[n + c];
+                    run2 += s[n2 + c];
+                    if (x < x0) continue;
+                    int level = _levels[c];
+                    if (run2 > 0 || (run1 > 0 && level <= 1) || (run0 > 0 && level == 0))
+                        zones.SetFogBit(true, k, p, (y - y0) * side + (x - x0));
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// BUG-0360: <see cref="SeesUnit"/> while a zone that blocks vision lives. A unit whose own centre stands inside one or
+    /// more zones that hide cells from <paramref name="player"/> (the statuses' test, live zones) is seen only where, at the
+    /// last update, a unit of <paramref name="player"/> standing inside each of those zones saw its cell (a zone made since
+    /// has no record yet: it hides at once). A unit outside every such zone is seen where its cell is visible, or where its
+    /// cell is one a live zone hides by its centre and <paramref name="player"/>'s circles covered it at the last update.
+    /// </summary>
+    private bool SeesUnitNearZones(int player, int slot)
+    {
+        ZoneStore zones = _world.Zones;
+        Vector2 pos = _units.Position[slot];
+        int c = CellOf(pos);
+        int x = c % _width, y = c / _width;
+        bool inside = false;
+        for (int k = 0; k < zones.End; k++)
+        {
+            if (!HidesFrom(zones, k, player) || !zones.Contains(k, pos)) continue;
+            inside = true;
+            int bit = BoxBit(zones, k, x, y);
+            if (bit < 0 || !zones.FogBit(false, k, player, bit)) return Revealed(player, slot);
+        }
+        if (inside || Bit(_visible[player], c)) return true;
+        var centre = new Vector2((x + 0.5f) * MapConstants.CellSize, (y + 0.5f) * MapConstants.CellSize);
+        for (int k = 0; k < zones.End; k++)
+        {
+            if (!HidesFrom(zones, k, player) || !zones.Contains(k, centre)) continue;
+            int bit = BoxBit(zones, k, x, y);
+            if (bit >= 0 && zones.FogBit(true, k, player, bit)) return true;
+        }
+        return Revealed(player, slot);
+    }
+
+    /// <summary>Cell (<paramref name="x"/>, <paramref name="y"/>)'s bit in live zone <paramref name="k"/>'s fog record, or -1 outside its box.</summary>
+    private int BoxBit(ZoneStore zones, int k, int x, int y)
+    {
+        ZoneBox(zones.Center[k], zones.Radius(k), out int x0, out int y0, out int x1, out int y1);
+        if (x < x0 || x > x1 || y < y0 || y > y1) return -1;
+        return (y - y0) * zones.BoxSide + (x - x0);
     }
 
     /// <summary>Clears the blocked marks <see cref="MarkBlocked"/> left outside the cells <see cref="Combine"/> rewrote (M4-4b-2).</summary>
@@ -479,7 +600,7 @@ public sealed class FogStore
         {
             ref BuildingGhost g = ref _ghosts[head + j];
             bool enemy = alive[j] && owner[j] != p;
-            if (enemy && SeesFootprint(p, type[j], cell[j]))
+            if (enemy && (SeesFootprint(p, type[j], cell[j]) || BuildingRevealed(p, j))) // BUG-0270: a revealed tower is seen
             {
                 if (g.Generation == 0) _ghostCount[p]++;
                 g = new BuildingGhost(generation[j], type[j], cell[j], owner[j]);
@@ -569,9 +690,11 @@ public sealed class FogStore
     /// <summary>
     /// Player <paramref name="p"/>'s new fog from the stamped layers, over the box holding last update's visible cells and
     /// this update's stamps: covered cells its viewers may see become visible (the first sight sets the explored bit), the
-    /// rest that were visible become explored. Then the stamped boxes are zeroed for the next player.
+    /// rest that were visible become explored. Then (BUG-0360, with <paramref name="blockers"/>: a zone hides cells from
+    /// <paramref name="p"/>) each such zone records the cells of its box the stamps cover, and the stamped boxes are zeroed
+    /// for the next player.
     /// </summary>
-    private void Combine(int p)
+    private void Combine(int p, ZoneStore? blockers)
     {
         byte[] vis = _visibility[p];
         ulong[] bits = _explored[p];
@@ -652,6 +775,7 @@ public sealed class FogStore
         _visibleBox[vb + 1] = ny0;
         _visibleBox[vb + 2] = nx1;
         _visibleBox[vb + 3] = ny1;
+        if (blockers != null) RecordCovered(blockers, p, nx0, ny0, nx1, ny1);
         for (int layer = 0; layer < MapConstants.LevelCount; layer++)
         {
             if (!_levelUsed[layer]) continue;
@@ -684,9 +808,31 @@ public sealed class FogStore
         int live = 0;
         for (int k = 0; k < _revealUntil.Length; k++)
             if (RevealLive(k, tick)) live++;
-        h.Add(live);
+        // BUG-0270: the towers' reveals in force, only while any is (bit 30 of the count word flags them), so a match
+        // without one hashes as before.
+        int buildingLive = 0;
+        for (int k = 0; k < _buildingRevealUntil.Length; k++)
+            if (BuildingRevealLive(k, tick)) buildingLive++;
+        h.Add(live | (buildingLive > 0 ? 1 << 30 : 0));
         if (live > 0) AddRevealsToHash(ref h, tick);
+        if (buildingLive > 0)
+        {
+            h.Add(buildingLive);
+            for (int k = 0; k < _buildingRevealUntil.Length; k++)
+            {
+                if (!BuildingRevealLive(k, tick)) continue;
+                h.Add(k);
+                h.Add(_buildingRevealUntil[k]);
+            }
+        }
         AddGhostsToHash(ref h);
+    }
+
+    /// <summary>Whether building reveal entry <paramref name="k"/> (slot x players + player) is in force at tick <paramref name="tick"/> on the building it was set on.</summary>
+    private bool BuildingRevealLive(int k, int tick)
+    {
+        int slot = k / _players;
+        return _buildingRevealUntil[k] > tick && _buildings.Alive[slot] && _buildingRevealGeneration[k] == _buildings.Generation[slot];
     }
 
     /// <summary>

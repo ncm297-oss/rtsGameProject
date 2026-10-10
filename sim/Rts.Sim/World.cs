@@ -88,10 +88,11 @@ public sealed class World
         MaxUnitRadius = maxRadius;
         MaxUnitSpeed = maxSpeed;
         Hits = new PendingHit[config.UnitCapacity]; // one swing lands per unit per tick at most
-        _deaths = new DeathEvent[config.UnitCapacity]; // one death per hit at most
+        // Every unit and every building dies at most once a tick, and units and buildings share the list (BUG-0330).
+        _deaths = new DeathEvent[config.UnitCapacity + config.BuildingCapacity];
         _abilityEvents = new Abilities.AbilityEvent[2 * config.UnitCapacity]; // M4-4a: a cast starts and resolves once per unit per tick at most
         Projectiles = new ProjectileStore(config.ProjectileSlots);
-        Zones = new Abilities.ZoneStore(config.ZoneCapacity, config.Data); // M4-4b-2
+        Zones = new Abilities.ZoneStore(config.ZoneCapacity, config.PlayerCount, config.Data); // M4-4b-2
         _impacts = new ProjectileImpact[config.ProjectileSlots]; // each projectile lands once
         CombatBuildings = new int[config.BuildingCapacity];
         CombatBuildingsOf = new int[config.PlayerCount];

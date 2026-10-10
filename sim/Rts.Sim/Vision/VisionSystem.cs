@@ -28,9 +28,9 @@ public static class VisionSystem
     /// a higher level unless within the lip), or its owner's fog shows <paramref name="j"/>'s cell visible, or
     /// <paramref name="j"/> is revealed to that owner. The first part is the stamp's rule measured unit to unit at this
     /// tick, so a unit never misses what its own circle covers between updates. M4-4b-2: the first part also fails when
-    /// <paramref name="j"/>'s cell is inside a zone that hides it from <paramref name="i"/>'s owner and <paramref name="i"/>
-    /// stands outside that zone (<see cref="ZoneHides"/>); it uses the type's sight (a Blinded unit's targets are capped by
-    /// its reach in combat instead, so it takes one out to its reach though its fog circle is smaller).
+    /// <paramref name="j"/> stands (by its centre, BUG-0360) inside a zone that hides it from <paramref name="i"/>'s owner and
+    /// <paramref name="i"/> stands outside that zone (<see cref="ZoneHides"/>); it uses the type's sight (a Blinded unit's
+    /// targets are capped by its reach in combat instead, so it takes one out to its reach though its fog circle is smaller).
     /// </summary>
     internal static bool UnitSeesUnit(World world, int i, int j)
     {
@@ -84,40 +84,49 @@ public static class VisionSystem
 
     /// <summary>
     /// Whether unit <paramref name="i"/>'s owner sees the ground of a remembered building now (M4-3b, an ordered Attack on a
-    /// last-known building that is gone): within <paramref name="i"/>'s sight of the footprint (type
-    /// <paramref name="typeId"/> at <paramref name="anchor"/>) and not above it unless within the lip, or a footprint cell
-    /// visible in the owner's fog. Then the player knows the building is gone.
+    /// last-known building that is gone): a footprint cell (type <paramref name="typeId"/> at <paramref name="anchor"/>)
+    /// visible in the owner's fog. Then the player knows the building is gone. BUG-0311: the fog's own rule, the one that
+    /// drops the last-known entry (and the view its ghost), not the unit's sight to the footprint's nearest point, so the
+    /// order ends at the update the ghost goes, and a ghost still drawn can always be attacked.
     /// </summary>
-    internal static bool UnitSeesFootprint(World world, int i, int typeId, int anchor)
-    {
-        UnitStore u = world.Units;
-        FogStore fog = world.Fog;
-        float sight = world.Data.Units[u.TypeId[i]].Sight;
-        CombatSystem.FootprintRect(world, typeId, anchor, out Vector2 min, out Vector2 max);
-        Vector2 p = u.Position[i];
-        float d2 = Vector2.DistanceSquared(p, Vector2.Clamp(p, min, max));
-        if (d2 <= sight * sight && (!fog.MultiLevel || d2 <= VisionConstants.LipRadius * VisionConstants.LipRadius
-            || fog.LevelAt((min + max) * 0.5f) <= fog.LevelAt(p)))
-            return true;
-        return fog.SeesFootprint(u.Owner[i], typeId, anchor);
-    }
+    internal static bool UnitSeesFootprint(World world, int i, int typeId, int anchor) =>
+        world.Fog.SeesFootprint(world.Units.Owner[i], typeId, anchor);
 
     /// <summary>
     /// M4-4b-2: whether a live zone hides what stands at <paramref name="target"/> (m) from a viewer of
     /// <paramref name="viewerOwner"/> at <paramref name="viewer"/>: a zone that blocks vision, of another owner, whose circle
-    /// holds the centre of <paramref name="target"/>'s cell (the fog's rule for a cell), with the viewer outside it (its
-    /// center not within the radius; a building, <paramref name="viewerIsUnit"/> false, never views from inside). Live zones,
-    /// not the last fog update's: the rule holds from the tick a zone is made to the tick it is freed.
+    /// holds <paramref name="target"/> itself (BUG-0360: the point, the statuses' test, not its cell's centre), with the
+    /// viewer outside it (its center not within the radius; a building, <paramref name="viewerIsUnit"/> false, never views
+    /// from inside). Live zones, not the last fog update's: the rule holds from the tick a zone is made to the tick it is
+    /// freed, and so does the fog's half for a unit standing in one (<see cref="FogStore.SeesUnit"/>: a new zone has no
+    /// record of who sees into it yet), so a unit outside a new storm can't take one inside it in the ticks before the next
+    /// fog update either (BUG-0363 item 2).
     /// </summary>
     internal static bool ZoneHides(World world, int viewerOwner, Vector2 viewer, bool viewerIsUnit, Vector2 target)
     {
         ZoneStore z = world.Zones;
         if (z.BlockerCount == 0) return false;
-        Vector2 cell = world.Fog.CellCentreOf(target);
         for (int k = 0; k < z.End; k++)
         {
-            if (!z.Alive[k] || !z.BlocksVision(k) || z.Owner[k] == viewerOwner || !z.Contains(k, cell)) continue;
+            if (!z.Alive[k] || !z.BlocksVision(k) || z.Owner[k] == viewerOwner || !z.Contains(k, target)) continue;
             if (!viewerIsUnit || !z.Contains(k, viewer)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// BUG-0363 item 1: whether a live zone that blocks vision, of another owner than <paramref name="viewerOwner"/>, reaches
+    /// within <paramref name="radius"/> m of <paramref name="at"/> (its circle and that disc overlap or touch). When none does,
+    /// nothing within the disc stands in such a zone, so <see cref="ZoneHides"/> is false for every target in it.
+    /// </summary>
+    internal static bool BlockerNear(World world, int viewerOwner, Vector2 at, float radius)
+    {
+        ZoneStore z = world.Zones;
+        for (int k = 0; k < z.End; k++)
+        {
+            if (!z.Alive[k] || !z.BlocksVision(k) || z.Owner[k] == viewerOwner) continue;
+            float reach = radius + z.Radius(k);
+            if (Vector2.DistanceSquared(at, z.Center[k]) <= reach * reach) return true;
         }
         return false;
     }
@@ -130,14 +139,21 @@ public static class VisionSystem
     /// A hit by <paramref name="attacker"/> (alive, standing on <paramref name="attackerLevel"/>: its cell's level at the
     /// melee hit, or at firing for a projectile) on something of <paramref name="victimOwner"/> standing on
     /// <paramref name="victimLevel"/>: from a higher level it reveals the attacker to the victim's owner for
-    /// <see cref="VisionConstants.HighGroundRevealTicks"/> (docs/02 "High ground"; refreshed by every such hit).
+    /// <see cref="VisionConstants.HighGroundRevealTicks"/> (docs/02 "High ground"; refreshed by every such hit). A tower's
+    /// hit (<paramref name="attackerIsBuilding"/>, a building handle; BUG-0270) reveals the tower the same way.
     /// </summary>
-    internal static void OnHit(World world, EntityHandle attacker, int attackerLevel, int victimOwner, int victimLevel)
+    internal static void OnHit(World world, EntityHandle attacker, bool attackerIsBuilding, int attackerLevel, int victimOwner, int victimLevel)
     {
         if (attackerLevel <= victimLevel || (uint)victimOwner >= (uint)world.Config.PlayerCount) return;
+        int until = world.TickNumber + VisionConstants.HighGroundRevealTicks;
+        if (attackerIsBuilding)
+        {
+            BuildingStore b = world.Buildings;
+            if (b.IsAlive(attacker) && b.Owner[attacker.Index] != victimOwner) world.Fog.RevealBuilding(attacker, victimOwner, until);
+            return;
+        }
         UnitStore u = world.Units;
         if (!u.IsAlive(attacker) || u.Owner[attacker.Index] == victimOwner) return;
-        // (A building's hit never comes here: reveals are per unit slot, M4-3b; the callers skip it.)
-        world.Fog.Reveal(attacker, victimOwner, world.TickNumber + VisionConstants.HighGroundRevealTicks);
+        world.Fog.Reveal(attacker, victimOwner, until);
     }
 }

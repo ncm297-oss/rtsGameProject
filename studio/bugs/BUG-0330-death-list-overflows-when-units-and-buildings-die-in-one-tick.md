@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-09-1155, task M4-4b-1 |
 | System | combat / world (death events) |
-| Fixed by | |
+| Fixed by | 5c2de85 (M4-H2): un-skipped `QA/CusserQaTests.ACusserKillingEveryUnitSlotAndABuilding_InOneTick_DoesNotOverflowTheDeathList`; QA `QA/SimHardeningH2QaTests.TwoThousandUnitsAndFiftyBuildings_DieInOneTick_TheDeathListHoldsAll` |
 
 ## Repro
 1. Un-skip `QA/CusserQaTests.ACusserKillingEveryUnitSlotAndABuilding_InOneTick_DoesNotOverflowTheDeathList`.
@@ -33,3 +33,6 @@ Pre-existing since buildings could die (M4-1 melee/ranged, M4-2b splash reaches 
 own units and buildings in one resolve) makes the shape easier to hit. Reaching it needs more deaths in one tick than
 there are unit slots, i.e. essentially every unit slot full and dying together plus a building, so it's far from normal
 play at the shipped 200+ capacities: S3, not S1. Fix: size the list `UnitCapacity + BuildingCapacity`.
+
+## QA verification (2026-10-10-0624, M4-H2)
+Verified by QA 2026-10-10-0624 (M4-H2): the death list is `UnitCapacity + BuildingCapacity`. 2,000 units (every slot) and 50 buildings (every slot) killed by 50 Cussers in one tick: 2,050 death events in that tick, nothing left, no throw (the same test throws IndexOutOfRangeException on the base 63efab2).

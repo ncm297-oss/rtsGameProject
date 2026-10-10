@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open (sim track) |
+| Status | fixed (sim); the view's `QaGhostViewTest` heuristic needs updating, BUG-0390 |
 | Found | 2026-10-09-0724, task M4-V5 (view track) |
 | System | combat / vision: `VisionSystem.UnitSeesFootprint` vs `FogStore.SeesFootprint` (M4-3b) |
-| Fixed by | |
+| Fixed by | 5c2de85 (M4-H2): `Vision/GhostListTests.AnAttackOnAGoneGhost_WithinSightButNoFootprintCellVisible_IsAccepted_AndEndsWithTheGhost` |
 
 ## Repro
 1. `dotnet build RtsGame.sln`
@@ -36,3 +36,6 @@ Fix options (sim track): end the order on the fog's own rule (`fog.SeesFootprint
 walk on until a footprint cell centre is within sight. The view mirrors the sim correctly (0 ghost mismatches over
 1,408 frames with ghosts in the same run), so no view change is needed. Related: BUG-0310 (the opposite lag, a ghost
 drawn over visible ground for up to 3 ticks).
+
+## QA verification (2026-10-10-0624, M4-H2)
+Verified by QA 2026-10-10-0624 (M4-H2): `UnitSeesFootprint` is now the fog's `SeesFootprint`. The regression test failed on the base 63efab2 and passes on 5c2de85 (it uses the 13.4 m / sight 14 geometry, the same mechanism as the 15.7-15.96 m case). In `QaGhostViewTest` the orders now end one tick after the ghost goes on both seeds (seed 1: 218 / 219; seed 6: 138 / 139; on the base, 361 / 738 and 339 / 862), so the KNOWN BUG-0311 line no longer prints and the scene can run `--strict`. The same scene's "walked at least 10 m on average" check now fails on seed 6, because the run ends at tick 139 when the nearest attacker sees the ground: see BUG-0390.

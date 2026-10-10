@@ -178,6 +178,18 @@ public class ReplayPlayerTests
             new Simulation(TestSim.Config(Seed: 3, PlayerCount: 1, UnitCapacity: 4, CommandCapacity: 4)), checkpointInterval: 0));
     }
 
+    /// <summary>BUG-0361: the format has no zone-capacity line, so the recorder refuses any but the default; the default given explicitly attaches.</summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(63)]
+    [InlineData(65)]
+    public void Recorder_RefusesANonDefaultZoneCapacity(int capacity)
+    {
+        SimConfig config = TestSim.Config(Seed: 3, PlayerCount: 2, UnitCapacity: 4, CommandCapacity: 4);
+        Assert.Throws<InvalidOperationException>(() => new ReplayRecorder(new Simulation(config with { ZoneCapacity = capacity })));
+        _ = new ReplayRecorder(new Simulation(config with { ZoneCapacity = Abilities.ZoneStore.DefaultCapacity }));
+    }
+
     [Fact]
     public void Recorder_DoesNotCountACommandTheFullQueueRefused()
     {

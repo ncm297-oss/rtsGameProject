@@ -1238,10 +1238,17 @@ switch, cleared with the target), or to the one it gave up, keeps the stall coun
 in turn (one drifting in and out of its sight) restarted the count every scan and chased forever. A switch to any
 other target is a fresh chase (M4-H1, BUG-0149: before, every switch kept the count, so a chaser stalled below a cliff
 that switched to a reachable enemy behind a short wall gave it up on the next scan, three times, and stood Idle in
-sight of it; `QA/CombatFriendExceptionQaTests.StalledChaser_SwitchesToAnEnemyBehindAWall_WalksRoundAndFightsIt`; a known limit,
-BUG-0241: two or more unreachable targets taken in turn along a cliff keep the chase alive, because every switch re-takes
-`ChaseBest` from the new target's gap and the walk along the cliff toward it counts as progress; the stall count never climbs
-whatever a switch does with it). So does a retaliator
+sight of it; `QA/CombatFriendExceptionQaTests.StalledChaser_SwitchesToAnEnemyBehindAWall_WalksRoundAndFightsIt`).
+**Targets taken in turn** (BUG-0241, fixed in M4-H2): two or three unreachable targets the scans take in turn along a cliff
+kept the chase alive, because every switch re-takes `ChaseBest` from the new target's gap and the walk along the cliff
+toward it counts as progress, so the stall count never climbed. Each straight switch now counts in
+`UnitStore.ChaseSwitches` (a byte) unless it brought the chase closer to some target than the run had been: the target left
+got nearer (`ChaseBest`) than the run's best (`ChaseChainBest`) by `ChaseProgress`, which starts a fresh run at 1. The count
+is cleared with the target, by an order and by every blow the unit lands; a chaser out of reach whose count reaches
+`GiveUpScans` (10) on a scan gives the target up as a stalled one does, unless a friend fights it (the same
+`FriendFightsTarget` exception: a brawl's back ranks re-pick often while the front lands the blows; the count then starts
+again). The switch count rides above the stall count in the hash word, and the run's best is hashed with the chase memory
+(the golden replay has one player and no combat, so its checkpoints are unchanged) (`QA/ChasePrevQaTests.UnreachableTargetsTakenInTurn_TheChaseStillEnds`, 2 and 3 targets, a turn every 1-3 scans). So does a retaliator
 the leash pulls back, and a chaser that loses sight of its target while not gaining on it, whether or not its scan
 then finds another target (BUG-0150, M4-2a fix round: before, a switch to another target in sight did not give the
 lost one up, and a caster at the sight edge reached by a path leading out of sight and a nearer worker took turns
@@ -1296,7 +1303,9 @@ position: a building's footprint center) to a buffer sized to the unit capacity 
 the killer's owner and one loss for the victim's (`World.Kills` / `Losses`). A unit hit by an enemy
 records it as `LastAttacker` and, if it scans and has no target, takes it on at once (retaliation).
 After any death one pass clears every stale target (the attacker stands down; phase 7 settles it)
-and last attacker, and ends the build or repair order of every worker whose building died. `World.Deaths` holds one tick's events: the next tick empties it first.
+and last attacker, and ends the build or repair order of every worker whose building died. `World.Deaths` holds one tick's events: the next tick empties it first. It is sized `UnitCapacity + BuildingCapacity`
+(every unit and building can die once a tick; BUG-0330, M4-H2: it held `UnitCapacity`, so units and a building dying in one
+tick with every unit slot full overflowed it, `QA/CusserQaTests.ACusserKillingEveryUnitSlotAndABuilding_...`).
 
 **Hashing.** The combat fields go in only when one isn't at its spawn value (hp below or above the
 type's, a target, cooldown, wind-up, last attacker, anchor, mode, or the chase memory `ChaseBest`, `ChaseStall`,
@@ -1466,9 +1475,20 @@ not this arrival rule (the walker never arrives), and not reproduced; left to it
   the leg's resolved end: the Move rule's "already there"): the order sets `UnitStore.Repick`, and that tick's phase 7
   scans the unit at once, due or not and in reach or not, by the usual priority. The same pick keeps the swing (`Engage`
   with the target it has changes nothing), so spam to the same point, or to a new point by a unit fighting in reach,
-  still lands every hit; a better pick (an attacker, a unit over a building) is taken at once. A chaser still out of
-  reach given a new point does lose its target until its next scan (BUG-0157, S3: jittered A-click spam every 1-3
-  ticks costs a brawl 10-26 % of its damage; same-point spam and spam 5+ ticks apart cost nothing). Another point in the leg's own cell counts as a new point here
+  still lands every hit; a better pick (an attacker, a unit over a building) is taken at once. **A chase in sight is kept
+  too** (BUG-0157, fixed in M4-H2 by the Producer's 2026-10-08-2144 decision): a chaser out of reach on an attack-move
+  leg given a new point keeps its target and re-picks the same way when its owner still sees the target
+  (`CombatSystem.ChasesInSight`: a live unit, or a standing building, `VisionSystem.UnitSees`); before, it lost the
+  target until its next scan, and jittered A-click spam every 1-3 ticks cost a brawl 10-26 % of its damage. One 400-tick
+  brawl swings by about 10 points either way, so the bound is the mean: jittered spam over intervals 1-20 ticks at
+  40 v 40 deals at least 90 % of one order's damage on average, and no interval under 80 %
+  (`QA/AttackMoveRepickQaTests.BrawlSpam_JitteredAttackMove_MeanOverIntervals1To20_AtLeast90Percent`: 94.8 % mean, worst
+  89 % (at 4 and 10 ticks); 92.1 % mean, worst 73 %, before; one order 1,827 both). A chaser whose target its owner doesn't
+  see still drops it for the new point, and so does a unit chasing in `Retaliate` mode (an Idle unit that took a target by
+  itself): the first attack-move sends it off on the leg as before. Keeping those chases too was tried and left out: in
+  the 200 v 200 generated-map brawl (attack-moved two ticks after the armies spawn in sight of each other) the kept,
+  crowd-blocked retaliation chases gave up three times and a unit stood reach-only in sight of enemies for 1,100 ticks
+  (`QA/CombatGiveUpQaTests.Brawl_IsFoughtToAFinish_...`). Another point in the leg's own cell counts as a new point here
   (QA's repro attack-moved onto a Raider standing in that cell) but keeps the give-up memory. The flag is cleared in the
   same phase 7 (and by `ClearForOrder`), so it is never set between ticks; it is hashed above the mode's byte (`Simulation.AddCombatToHash`), which leaves every hash between ticks, and the goldens, as they were. Rows:
   `AttackOrderTests.ReissuedAttack_...`, `ReissuedAttackMove_...`, `AttackMove_ToANewLeg_MidSwing_...`,
@@ -1658,11 +1678,16 @@ collected by `CombatSystem.Acquire`) and skip everything when no building type i
   `TechState.MatchesBuilding` applies an `attack` effect to a building's attack when its only filter is `attackType` and it
   matches the attack's damage type (tags, units and siege name unit properties; an unfiltered effect is "every unit"). A
   per-(player, building type) sum (`BuildingAttackBonus`) is kept like the units' (derived, recomputed when a flag changes).
-- **Hits by a tower.** A tower is never a unit's `LastAttacker` (a unit handle), its hit starts no retaliation, and a hit
-  from a tower on high ground **reveals nothing** (reveals are stored per unit slot; BUG-0270). The victim's scans take the
-  tower like any enemy building: after every enemy unit, within its sight (a retaliation that its next scan would drop
-  again, for a tower beyond its sight, was tried and left out). A tower that outranges the victim's sight is not answered,
-  as a Catapult isn't (M4-3a).
+- **Hits by a tower.** A tower is never a unit's `LastAttacker` (a unit handle) and its hit starts no retaliation. A hit
+  from a tower on high ground **reveals the tower** to the victim's owner for 2 s (BUG-0270, M4-H2; until then it revealed
+  nothing): `VisionSystem.OnHit` with a building attacker sets a per (building slot, player) end tick and generation
+  (`FogStore.RevealBuilding`, the units' pair for buildings, 2 ints a building slot a player), read by `CanSeeBuilding` /
+  `SeesBuildingCells` (so by `UnitSeesBuilding`, the view and the last-known list), and hashed only while in force (bit 30
+  of the reveal count word flags them, so the golden's checkpoints are unchanged; `StateHashTests.Hash_CoversATowersReveal_OnlyWhileInForce`;
+  `TowerTests.ATowerHittingFromHighGround_IsRevealedToItsVictimsOwner_For40Ticks`, `ARevealedTower_IsShotBackAt_FromBelow`).
+  The victim's scans take the tower like any enemy building: after every enemy unit, within its sight (a retaliation that
+  its next scan would drop again, for a tower beyond its sight, was tried and left out). A tower that outranges the
+  victim's sight is not answered, as a Catapult isn't (M4-3a).
 - **Projectile store size.** Towers fire into the same store as units (`SimConfig.ProjectileSlots`, sized by the
   population caps' shooters); a shot fired while it is full is lost, as before. Every tower has at most one shot in the air
   (an 18 m flight is 15 ticks, the cooldown 40), so a match only loses tower shots with the store full of unit shots
@@ -1675,9 +1700,9 @@ collected by `CombatSystem.Acquire`) and skip everything when no building type i
 
 **The last-known buildings list (`FogStore.Ghosts(player)`).** docs/02: enemy buildings seen once stay as ghosts in
 explored fog until the cell is seen again. Per player one `BuildingGhost` per building slot (`Generation`, `TypeId`,
-`Cell` = anchor, `Owner`; `Generation` 0 = empty), a fixed array sized by `BuildingCapacity`, updated right after each
-player's fog update (phase 12, every 4 ticks; the tick-0 initial stamp too): an enemy building with any footprint cell
-visible now is recorded (or refreshed) in its slot's entry; an entry whose building is not seen now is **kept** (also
+`Cell` = anchor, `Owner`; `Generation` 0 = empty), a fixed array sized by `BuildingCapacity`,
+updated right after each player's fog update (phase 12, every 4 ticks; the tick-0 initial stamp too): an enemy building
+with any footprint cell visible now (or, BUG-0270, revealed to the player) is recorded (or refreshed) in its slot's entry; an entry whose building is not seen now is **kept** (also
 after the building is gone) unless the building is gone (slot free, or a newer generation) **and** a cell of the
 remembered footprint is visible now, which drops it. So a ghost is dropped the first update its ground is in sight with the
 building gone, never earlier, and the player learns of a death only by looking. One entry per slot: if a ghosted
@@ -1691,13 +1716,17 @@ A save (M6) stores the entries.
 
 **Attack on a last-known building.** An explicit `Attack` on a building its owner can't see now but whose ghost it holds
 (slot and generation) is **accepted** (`CombatSystem.MayAttack`), alive or gone, since the player can't tell; one gone
-whose remembered ground the unit or the fog shows right now is dropped (known gone). The unit holds the target
+whose remembered ground the fog shows right now is dropped (known gone). The unit holds the target
 (`CombatMode.Ordered`, `HeldByGhost`): the scan-tick "lost out of sight" check skips it, the chase walks to the live
 footprint or, gone, to the remembered one (`TargetRect`), and it neither plants nor swings while it doesn't see the
 building (`Blind`; this also covers the Catapult, whose range outruns its sight: it walks on until it sees the target).
 It attacks once it sees it. A building gone while remembered stays the target only while the unit's owner doesn't see its
-ground (`GoneButRemembered`: the unit's own sight now, or a footprint cell in its owner's fog); the tick the ground comes
-into sight the order ends as for a dead target (`Settle`: Idle where it stands, no mode). Only the explicit order: scans,
+ground (`GoneButRemembered`: a footprint cell visible in its owner's fog, `VisionSystem.UnitSeesFootprint`); the tick
+after the update that shows the ground (the one that drops the ghost) the order ends as for a dead target (`Settle`: Idle
+where it stands, no mode). BUG-0311 (M4-H2): until then the unit's own sight to the footprint's nearest point also
+counted, which ended the order about 1 m before the fog showed a cell (sight 16 m at 15.7-15.96 m), left the ghost drawn
+for another 19-26 s, and refused a new Attack on it; now order, list and view go by the one fog rule
+(`GhostListTests.AnAttackOnAGoneGhost_WithinSightButNoFootprintCellVisible_IsAccepted_AndEndsWithTheGhost`). Only the explicit order: scans,
 retaliation and attack-move still take only what the owner sees. Rows: `Vision/GhostListTests`.
 
 **Placement on explored ground.** `World.CanPlace` (and so `Command.Build`) refuses with `PlacementError.Unexplored`
@@ -2383,6 +2412,9 @@ Zones, the Blinded status and the Whirlwind signature Sandstorm, from data (M4 c
 - **Making a zone.** At the resolve, after the units took the other effects, `ZoneSystem.Create` puts the zone in the
   lowest free slot of `World.Zones` (`SimConfig.ZoneCapacity`, default 64) and applies it at once. **Store full:** the zone
   is not made; the cast still resolves and its cooldown starts (`ZoneSystemTests.AStoreFullCast_MakesNoZone_...`).
+  `ZoneCapacity` is not in the replay header (a replay plays with the default), so `ReplayRecorder` refuses a sim whose
+  zone store is not the default size, as it does for the building and projectile capacities (BUG-0361, M4-H2:
+  `ReplayPlayerTests.Recorder_RefusesANonDefaultZoneCapacity`).
 - **Life.** A zone lives its duration counting the tick it is made: Sandstorm, made in tick T's phase 6 with 240 ticks,
   applies in T and in every phase 5 from T + 1 to T + 239, and is freed in T + 240's phase 5 (`TicksRemaining` is 1
   between T + 239 and T + 240). Phase 5 runs `StatusSystem` first, then `ZoneSystem`, which skips its pass when
@@ -2411,12 +2443,30 @@ Zones, the Blinded status and the Whirlwind signature Sandstorm, from data (M4 c
   The owner sees into its zone normally; buildings never view from inside. Cost: per hiding zone its bounding box only,
   each cell against the player's units inside (collected during the stamp loop into `World.Neighbors`, free in phase 12).
   The mask follows the vision cadence (a zone made between updates hides from the next update; one freed stays hidden
-  until then); nothing new is hashed for it (the visible bits it changes are). **Combat's own-sight rule** (a) also
-  fails for a target whose cell is in a live hiding zone of another player when the viewer stands outside it
+  until then). **Units go by their own centre** (BUG-0360, fixed in M4-H2): the ground is hidden cell by cell, but
+  whether a zone hides a *unit* is the statuses' test, the unit's centre within the radius (the edge counts), so a
+  Raider 5.2 m into a 6 m storm (in a cell whose centre is 6.3 m out) is hidden and one 6.01 m out (in a cell whose
+  centre is exactly 6 m, a hidden cell) is seen. For that, each blocking zone keeps per player two bit sets over its
+  box (`ZoneStore`, `BoxSide` cells a side from the widest zone radius in the data): the cells a unit of that player
+  standing inside the zone saw (written by `MarkBlocked`), and the cells the player's circles cover, zones aside
+  (`FogStore.RecordCovered`, summed from the layers before they are zeroed). `FogStore.SeesUnit` (and so
+  `CanSeeUnit` and combat's fallback (b)), while any blocker lives: a unit whose centre is in one or more blocking
+  zones of other players is seen only where, for each of them, a unit of the player inside it saw its cell at the last
+  update (a zone made since has no record yet, so it hides at once); a unit outside every such zone is seen where its
+  cell is visible, or where a live zone hides its cell by the centre and the player's circles covered it. The records
+  are cleared when a zone is made or freed and hashed with the zone (`ZoneStore.AddToHash`, only while a zone lives),
+  since they follow from the positions at the last update as the visible bits do. **Combat's own-sight rule** (a) also
+  fails for a target whose centre is in a live hiding zone of another player when the viewer stands outside it
   (`VisionSystem.ZoneHides`; live zones, not the last update's), so a Crossbowman 10 m from a Sandstorm can't take a
-  Raider in it; the one-level scan shortcut is off while any blocker lives.
+  Raider in it. The one-level scan shortcut is off for a scan whose disc a blocking zone of another player reaches
+  (`VisionSystem.BlockerNear`, one pass over the zones a scan; BUG-0363 item 1): storms far from a fight cost it
+  nothing. **No acquire window** (BUG-0363 item 2): before M4-H2 combat fell back on the fog's visible bits, which can
+  be 3 ticks old, so for up to 3 ticks after a storm appeared a unit outside could still take one inside; the fallback
+  now reads the zone's records, which a new zone doesn't have, so it can't (every zone holding the unit must have seen
+  it, a new one included). A tower's
+  wind-up started before a storm appears still fires (BUG-0363 item 3, a note: wind-ups check only the gap, units too).
 - **State hash.** Only when a zone is live: the count, then per live slot its index, owner, centre, ability id and ticks
-  remaining (`ZoneStore.AddToHash`, after the fog). The radius, the vision flag, `BlockerCount` and the blind in force are
+  remaining, and (since M4-H2, BUG-0360) every player's two fog record bit sets (`ZoneStore.AddToHash`, after the fog). The radius, the vision flag, `BlockerCount` and the blind in force are
   derived. The golden replay's checkpoints are unchanged (no zone in it): only `data-hash` moved (41842085985611BF to
   5896D3E7C9FD36AD), which `GatherWedgeQaTests.SameGameDataHashes` lists (no Priest casts in the seed-21 match).
 - **Cost** (Debug, 2026-10-10): `AbilityPerfTests.FiveHundredUnits_8Zones_TwoBlockers_...` (500 units, 8 zones over
@@ -2437,7 +2487,8 @@ ability's `"duration": <s>` (the zone's lifetime) and takes the ability's `radiu
 `blocksVision` and `statuses` are errors on `damage` and `applyStatus`. Shipped: `common/statuses.json` `blinded` (2 / 3),
 `factions/whirlwind/abilities.json` `sandstorm` (18 m, 6 m, 1.2 s, 45 s, 12 s, `enemy_units`, a blocking zone of Blinded
 1 s + Slowed 0.3 for 1 s) on the Priest; Dryjhna's Prophecy's `abilityCooldown` -15 s makes it 30 s. The Sandstorm page
-row and the Blinded docs/02 row are the data track's to pin (D10c).
+row and the Blinded docs/02 row are pinned by the data track since D10c (`Content/AbilityContentTests`: a `createZone`
+effect and a `blind` status compared field by field; `PendingAbilities` is empty).
 
 **For the view (M4-V6c).** Read-only on `World.Zones` between ticks: `Capacity`, `Count`, `BlockerCount`, per slot
 `Alive`, `Owner`, `Center` (m), `AbilityId` (`Data.Abilities[id]` for the name), `TicksRemaining` (1 on its last tick),
@@ -2517,7 +2568,9 @@ and the Blinded sight since M4-4b-2 (see "Implementation (M4-4b-2)"); detection 
   is its cell's at the melee hit, and for a projectile the level it was fired from (`ProjectileStore.Level`, one byte a
   slot, hashed). A dead attacker reveals nothing. It is stored per (unit slot, player) as the end tick and the slot's
   generation, so a recycled slot never inherits a reveal (2 ints a slot a player). A same-level attacker outside every
-  sight circle of the victim's owner is not revealed, and so not answered (docs/02; M4-5's Revealed status).
+  sight circle of the victim's owner is not revealed, and so not answered (docs/02; M4-5's Revealed status). A tower is an
+  attacker too (BUG-0270, M4-H2): its hit from high ground reveals it the same way, through a per (building slot, player)
+  pair hashed only while in force ("Implementation (M4-3b)", "Hits by a tower").
 - **Last-known buildings** (M4-3b): `Fog.Ghosts(player)`, one `BuildingGhost` per building slot (type, anchor cell,
   generation, owner of the enemy building last seen there), kept until the player sees the ground again with the building
   gone; hashed. A building tower targets units under the same rule as a unit, with itself as the viewer
@@ -2528,7 +2581,9 @@ and the Blinded sight since M4-4b-2 (see "Implementation (M4-4b-2)"); detection 
     upload it to the fog texture when `Fog.Version(player)` (+1 per update that ran for that player) changes.
   - `Fog.IsVisible(player, cell)`, `Fog.IsExplored(player, cell)` (explored or visible).
   - `Fog.CanSeeUnit(player, slot)`: an own unit, its cell visible at the last update, or revealed to the player (hide
-    enemy unit views where this is false). `Fog.CanSeeBuilding(player, slot)`: own, or any footprint cell visible.
+    enemy unit views where this is false; since M4-H2 a unit standing in an enemy's blocking zone goes by its own centre,
+    "Implementation (M4-4b-2)"). `Fog.CanSeeBuilding(player, slot)`: own, any footprint cell visible, or (M4-H2) a tower
+    revealed by a hit from high ground.
   - `Fog.Ghosts(player)` / `Fog.GhostCount(player)` (M4-3b): draw a ghost for each entry with `Known` whose footprint
     the player doesn't see now (`CanSeeBuilding` false, or the slot holds another building) and has no visible cell (M4-V6b,
     BUG-0310: an entry outlives a building that dies in sight until the next update); the list changes only on an
@@ -2550,7 +2605,7 @@ and the Blinded sight since M4-4b-2 (see "Implementation (M4-4b-2)"); detection 
   the corner of a map under 46 cells). (4) The byte map and the packed bits are two copies of the visible set; combat
   reads the bits, the view the bytes; both are written only by the update.
 - **Not yet.** (M4-3b's towers, last-known list and explored-placement rule are in.) The `detector` radius is loaded and
-  hashed but unused until M4-5. A tower's hit from high ground reveals nothing (BUG-0270). (Zone vision landed in
+  hashed but unused until M4-5. (A tower's hit from high ground reveals it since M4-H2, BUG-0270. Zone vision landed in
   M4-4b-2.) M4-5: `bool[] Detected` per
   player (detector circles stamped like sight), stealth, the Revealed status (attacking or casting reveals for 3 s); the
   target validity check then also requires "not stealthed, or detected". M5: the AI reads the world only through a

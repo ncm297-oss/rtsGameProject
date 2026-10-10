@@ -302,6 +302,7 @@ public class LocalMovementQaTests
                 object changed = old switch
                 {
                     int x => x + 1,
+                    byte x => (byte)(x + 1), // M4-H2: ChaseSwitches (BUG-0241)
                     float x => float.IsFinite(x) ? x + 1.5f : 2.5f,
                     bool x => !x,
                     Vector2 x => x + new Vector2(0.25f, 0f),

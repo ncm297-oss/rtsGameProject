@@ -809,10 +809,13 @@ public static partial class DataLoader
             string type = message[(at + Marker.Length)..];
             int end = type.IndexOf(". Path:", StringComparison.Ordinal);
             if (end >= 0) type = type[..end];
+            // The containers first (BUG-0242): their names carry their element types ("Dictionary`2[System.String,System.Double]"),
+            // which the scalar tests below would match. A wrong value inside one names the element's own type.
+            if (type.Contains("Dictionary`2", StringComparison.Ordinal)) return "an object";
+            if (type.Contains("List`1", StringComparison.Ordinal) || type.EndsWith("[]", StringComparison.Ordinal)) return "a list";
             if (type.Contains("System.Int32", StringComparison.Ordinal) || type.Contains("System.Int64", StringComparison.Ordinal)) return "a whole number";
             if (type.Contains("System.Double", StringComparison.Ordinal) || type.Contains("System.Single", StringComparison.Ordinal)) return "a number";
             if (type.Contains("System.Boolean", StringComparison.Ordinal)) return "true or false";
-            if (type.Contains("List`1", StringComparison.Ordinal) || type.EndsWith("[]", StringComparison.Ordinal)) return "a list";
             if (type == "System.String") return "a string";
             return "an object";
         }
