@@ -26,12 +26,17 @@ public class AbilityContentTests
     public static readonly string[] PendingAbilities = Array.Empty<string>();
 
     /// <summary>
-    /// docs/02 "Status effects" rows the data track hasn't pinned yet (stealth, Frenzied, Regenerating), whether or not
-    /// <c>statuses.json</c> has the entry: a landed one (Frenzied from M4-4b-3a, pinned in D11) is compared like any other,
-    /// but its differences, description numbers included, are reported, not failed, until it is removed here (Blinded left
-    /// in D10c).
+    /// docs/02 "Status effects" rows the data track hasn't pinned yet (stealth, Regenerating), whether or not
+    /// <c>statuses.json</c> has the entry: a landed one is compared like any other, but its differences, description
+    /// numbers included, are reported, not failed, until it is removed here (Blinded left in D10c, Frenzied in D11).
     /// </summary>
-    public static readonly string[] PendingStatuses = { "Stealthed", "Revealed", "Frenzied", "Regenerating" };
+    public static readonly string[] PendingStatuses = { "Stealthed", "Revealed", "Regenerating" };
+
+    /// <summary>
+    /// D11: docs/02's Effect cell for a <c>frenzied</c> status, the kind's exact rule (docs/03 "Implementation (M4-4b-3a)":
+    /// the swing's cooldown is <c>cooldown / (1 + m)</c> for the largest magnitude, the wind-up untouched).
+    /// </summary>
+    public const string FrenziedEffect = "Attacks faster: the attack cooldown is divided by 1 + the strength; the wind-up is unchanged; only the strongest counts";
 
     private const string StatusDoc = "docs/02-game-design.md";
 
@@ -819,10 +824,22 @@ public class AbilityContentTests
             {
                 StatusKind.DamageOverTime => $"Damage over time ({data.DamageTable.DamageTypeKeys[s.DamageType]})",
                 StatusKind.Slow => "Movement speed × (1 - magnitude)",
+                StatusKind.Frenzied => FrenziedEffect,
                 _ => "",
             };
             if (row[1] != effect) sink.Add($"status '{s.Key}' Effect: docs/02 '{row[1]}', data {s.Kind} -> '{effect}'");
         }
+        // D11: each unit passive that applies a status lists "<unit> passive" as one of its typical sources.
+        foreach (UnitDef u in data.Units)
+            foreach (UnitPassive p in u.Passives)
+            {
+                if (p.Status < 0 || p.Status >= statuses.Count) continue;
+                string name = statuses[p.Status].DisplayName;
+                string[]? row = rows.FirstOrDefault(c => c[0] == name);
+                string source = u.DisplayName + " passive";
+                if (row == null || row[2].Split(',').Select(x => x.Trim()).Contains(source)) continue;
+                (pendingNames.Contains(name) ? r.Reports : r.Problems).Add($"status '{name}' Typical source '{row[2]}' does not list '{source}', which applies it");
+            }
         // Each loaded ability that applies a status (directly or through a zone) is listed as one of its typical sources.
         foreach (AbilityDef a in abilities)
             foreach (int status in AppliedStatuses(a))
@@ -874,21 +891,69 @@ public class AbilityContentTests
     }
 
     /// <summary>
-    /// D10b criterion 3, kept after Blinded's pin (D10c): a status landing while pending, of a kind this pin doesn't know
-    /// (an in-memory Frenzied of kind 99, the <c>_ =&gt; ""</c> arm), reports and passes.
+    /// D10b criterion 3, kept after Blinded's (D10c) and Frenzied's (D11) pins: a status landing while pending, of a kind
+    /// this pin doesn't know (an in-memory Regenerating of kind 99, the <c>_ =&gt; ""</c> arm), reports and passes.
     /// </summary>
     [Fact]
     public void ALandedPendingStatus_PassesWithAReportLine()
     {
-        var frenzied = new StatusDef { Id = Data.Statuses.Length, Key = "frenzied", DisplayName = "Frenzied", Description = "", Kind = (StatusKind)99 };
-        var statuses = Data.Statuses.Add(frenzied);
+        var regen = new StatusDef { Id = Data.Statuses.Length, Key = "regenerating", DisplayName = "Regenerating", Description = "", Kind = (StatusKind)99 };
+        var statuses = Data.Statuses.Add(regen);
 
         Result r = CompareStatuses(Data, statuses, Data.Abilities, FactionPage.DocTable(StatusDoc, "Status effects", level: 3));
         foreach (string line in r.Reports) _out.WriteLine(line);
 
         Assert.True(r.Problems.Count == 0, string.Join("\n", r.Problems));
-        Assert.Contains(r.Reports, l => l.Contains("Frenzied", StringComparison.Ordinal) && l.Contains("landed", StringComparison.Ordinal));
-        Assert.Contains(r.Reports, l => l.Contains("frenzied", StringComparison.Ordinal) && l.Contains("Effect", StringComparison.Ordinal));
+        Assert.Contains(r.Reports, l => l.Contains("Regenerating", StringComparison.Ordinal) && l.Contains("landed", StringComparison.Ordinal));
+        Assert.Contains(r.Reports, l => l.Contains("regenerating", StringComparison.Ordinal) && l.Contains("Effect", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Frenzied_IsLoaded_AndStrictlyPinned()
+    {
+        StatusDef frenzied = Assert.Single(Data.Statuses, s => s.DisplayName == "Frenzied");
+        Assert.Equal(StatusKind.Frenzied, frenzied.Kind);
+        Assert.DoesNotContain("Frenzied", PendingStatuses);
+        // Its sources are passives, not abilities: the typical-source pin must see one, or it would pass vacuously.
+        Assert.Contains(Data.Units, u => u.Passives.Any(p => p.Status == frenzied.Id));
+    }
+
+    /// <summary>D11 criterion 2: docs/02's Frenzied row changed in memory fails naming Frenzied (its Effect or its source).</summary>
+    [Theory]
+    [InlineData("Effect", "divided by 1 + the strength", "divided by the strength")]
+    [InlineData("Effect", "the wind-up is unchanged", "the wind-up is shorter too")]
+    [InlineData("Effect", "; only the strongest counts", "; frenzies add up")]
+    [InlineData("Effect", "Attacks faster", "Attacks faster and harder")]
+    [InlineData("Typical source", "Zealot passive", "Zealot ability")]
+    public void AMutatedDocs02FrenziedRow_FailsNamingFrenzied(string field, string text, string mutant)
+    {
+        string[][] rows = FactionPage.DocTable(StatusDoc, "Status effects", level: 3);
+        string[] row = rows.Single(c => c[0] == "Frenzied");
+        int cell = field == "Typical source" ? 2 : 1;
+        Assert.True(row[cell].Contains(text, StringComparison.Ordinal), $"docs/02 Frenzied row has no '{text}'");
+        row[cell] = row[cell].Replace(text, mutant, StringComparison.Ordinal);
+
+        Result r = CompareStatuses(Data, Data.Statuses, Data.Abilities, rows);
+
+        string want = field == "Typical source" ? "'Frenzied' Typical source" : "'frenzied' Effect:";
+        Assert.True(r.Problems.Any(p => p.Contains(want, StringComparison.Ordinal)), $"no problem '{want}':\n" + string.Join("\n", r.Problems));
+    }
+
+    /// <summary>
+    /// D11: the shipped Frenzied description is numberless (its strength is each source's), so any number written into it
+    /// fails by name now that Frenzied is pinned: a status has no magnitude or duration of its own.
+    /// </summary>
+    [Theory]
+    [InlineData("Attacks faster", "Attacks 50% faster")]
+    [InlineData("Only the strongest frenzy counts.", "Only the strongest frenzy counts. Lasts 5 s.")]
+    [InlineData("Attacks faster", "Attacks 2 times faster")]
+    public void ANumberInTheFrenziedDescription_Fails(string text, string mutant)
+    {
+        (ImmutableArray<AbilityDef> abilities, ImmutableArray<StatusDef> statuses) = WithDescription("frenzied", text, mutant);
+
+        List<string> problems = DescriptionProblems(Data, abilities, statuses);
+
+        Assert.Contains(problems, p => p.StartsWith("frenzied description", StringComparison.Ordinal));
     }
 
     [Fact]

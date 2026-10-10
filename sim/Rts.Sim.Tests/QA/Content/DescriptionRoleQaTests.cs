@@ -93,7 +93,7 @@ public class DescriptionRoleQaTests
     [Theory]
     [InlineData("sandstorm", "Calls up a sandstorm for 12 seconds: enemy units inside are Blinded and Slowed by 30%,", "Calls up a sandstorm: enemy units inside are Blinded and Slowed,")]
     [InlineData("cusser", "120 siege damage", "siege damage")]
-    [InlineData("blinded", "sight drops to 2 m, and it can't target anything more than 3 m away", "sight drops, and it can't target far")]
+    [InlineData("blinded", "sight drops to 2 m, and it can't attack anything more than 3 m away", "sight drops, and it can't attack far")]
     public void ADescriptionWithNoNumbers_Passes(string key, string text, string mutant)
     {
         (ImmutableArray<AbilityDef> abilities, ImmutableArray<StatusDef> statuses) = AbilityContentTests.WithDescription(key, text, mutant);
@@ -158,24 +158,28 @@ public class DescriptionRoleQaTests
     }
 
     /// <summary>
-    /// The scratch-tree case in memory: a landed pending Frenzied of a kind no check knows, with numbers in every role, and
-    /// a non-pending ability applying it, neither throws; the status only reports.
+    /// The scratch-tree case in memory: a landed pending status of a kind no check knows, with numbers in every role, and
+    /// a non-pending ability applying it, neither throws; the status only reports. D11 pinned Frenzied, so the pending
+    /// status here is an in-memory Regenerating (still in the allowance); the same text on the shipped Frenzied now fails.
     /// </summary>
     [Fact]
-    public void ALandedFrenziedOfAnUnknownKind_StatingNumbers_ReportsOnly()
+    public void ALandedPendingStatusOfAnUnknownKind_StatingNumbers_ReportsOnly()
     {
-        var frenzied = new StatusDef
+        const string Text = "Attacks 25% faster and deals 5 magic damage a second for 8 s, up to 4 m away; 30 s cooldown.";
+        var regen = new StatusDef
         {
-            Id = Data.Statuses.Length, Key = "frenzied", DisplayName = "Frenzied",
-            Description = "Attacks 25% faster and deals 5 magic damage a second for 8 s, up to 4 m away; 30 s cooldown.",
-            Kind = (StatusKind)3,
+            Id = Data.Statuses.Length, Key = "regenerating", DisplayName = "Regenerating", Description = Text, Kind = (StatusKind)99,
         };
-        Assert.Contains("Frenzied", AbilityContentTests.PendingStatuses);
+        Assert.Contains("Regenerating", AbilityContentTests.PendingStatuses);
         var reports = new List<string>();
 
-        List<string> problems = AbilityContentTests.DescriptionProblems(Data, Data.Abilities, Data.Statuses.Add(frenzied), reports);
+        List<string> problems = AbilityContentTests.DescriptionProblems(Data, Data.Abilities, Data.Statuses.Add(regen), reports);
 
         Assert.True(problems.Count == 0, string.Join("\n", problems));
-        Assert.True(reports.Count(r => r.StartsWith("frenzied description", StringComparison.Ordinal)) >= 5, string.Join("\n", reports));
+        Assert.True(reports.Count(r => r.StartsWith("regenerating description", StringComparison.Ordinal)) >= 5, string.Join("\n", reports));
+
+        (ImmutableArray<AbilityDef> abilities, ImmutableArray<StatusDef> statuses) =
+            AbilityContentTests.WithDescription("frenzied", Data.Statuses.Single(x => x.Key == "frenzied").Description, Text);
+        Assert.True(AbilityContentTests.DescriptionProblems(Data, abilities, statuses).Count(p => p.StartsWith("frenzied description", StringComparison.Ordinal)) >= 5);
     }
 }

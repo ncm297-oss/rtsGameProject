@@ -221,7 +221,7 @@ toggled with right-click on the button (AI always manages its own casting).
 | Stealthed | Invisible and untargetable to enemies without detection | Shadow forest stealth, Shadow Archer |
 | Revealed | Cannot be stealthed (overrides Stealthed) | Attacking from stealth, detector abilities |
 | Slowed | Movement speed × (1 - magnitude) | Sandstorm, war-dog bite, Frenzy aftermath |
-| Frenzied | Attack speed and/or damage up | Blood-oil Frenzy, Zealot passive |
+| Frenzied | Attacks faster: the attack cooldown is divided by 1 + the strength; the wind-up is unchanged; only the strongest counts | Blood-oil Frenzy, Zealot passive |
 | Regenerating | +HP per second | Andii and Teblor passives |
 | Blinded | Sight radius 2 m; can't acquire or attack targets more than 3 m away | Sandstorm, Darkness |
 | Burning | Damage over time (magic) | Telas Fire |

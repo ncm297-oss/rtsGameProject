@@ -54,7 +54,9 @@ Age II, at the Smithy, 200 G / 150 W, 45 s. Zealots **+20 HP**; Sandstorm **cool
   1 damage); melee units kill it.
 - **Zealot (unique, Age II):** cheap, fast, and frenzied. Passive **Frenzy of the Apocalypse**:
   below 50% HP gains Frenzied (+50% attack speed). Passive **Martyrdom**: when a Zealot dies,
-  Zealots within 6 m gain Frenzied for 5 s.
+  Zealots within 6 m gain Frenzied (+50% attack speed) for 5 s.
+
+`Content/PassiveContentTests` pins the two Zealot passives above to the Zealot's `passives` in `units.json`, both ways.
 
 ## Abilities
 

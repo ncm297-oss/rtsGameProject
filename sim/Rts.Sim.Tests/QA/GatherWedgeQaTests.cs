@@ -39,7 +39,7 @@ public class GatherWedgeQaTests
     /// change of the state hash's composition (any newly hashed state) fails every checkpoint: re-record then (docs/03
     /// "Save/load and replays", hash format).
     /// </summary>
-    private static readonly ulong[] SameGameDataHashes = { RecordedDataHash, 0x7E04011FC88881F3, 0x41842085985611BF, 0x5896D3E7C9FD36AD, 0xEA5CB5A0AFCEEDBE, 0xD22C849A175F9ED5 }; // M4-4a: statuses/abilities files, BUG-0303; M4-4b-1: the Cusser (no Sapper in this match); M4-4b-2: Blinded, Sandstorm (no Priest casts in it); D10c: description text only; M4-4b-3a: Frenzied, the Zealot's passives (no Zealot in it)
+    private static readonly ulong[] SameGameDataHashes = { RecordedDataHash, 0x7E04011FC88881F3, 0x41842085985611BF, 0x5896D3E7C9FD36AD, 0xEA5CB5A0AFCEEDBE, 0xD22C849A175F9ED5, 0x4383EBB9345FABF7 }; // M4-4a: statuses/abilities files, BUG-0303; M4-4b-1: the Cusser (no Sapper in this match); M4-4b-2: Blinded, Sandstorm (no Priest casts in it); D10c: description text only; M4-4b-3a: Frenzied, the Zealot's passives (no Zealot in it); D11: Frenzied / Blinded description text only
 
     /// <summary>
     /// Ticks the replay must still match its recorded checkpoints: all of them (M4-H1, BUG-0211; before the re-recording
