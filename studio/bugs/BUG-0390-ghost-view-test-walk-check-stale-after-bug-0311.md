@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open (view track / QA scene `game/tests/QaGhostViewTest.cs`) |
+| Status | open (view track / QA scene `game/tests/QaGhostViewTest.cs`; **blocks the merged scene loop**: Producer triage at the 2026-10-10-0624 ACCEPT: a conductor-dispatched view round at integration rewrites the check per the note below (no `Check` weakened); else the view's first item next session) |
 | Found | 2026-10-10-0624, task M4-H2 |
 | System | Godot-side QA scene (`game/tests/QaGhostViewTest.cs`, `GoneGhostAttack`) |
 | Fixed by | |

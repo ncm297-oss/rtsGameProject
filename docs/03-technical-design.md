@@ -2487,7 +2487,8 @@ ability's `"duration": <s>` (the zone's lifetime) and takes the ability's `radiu
 `blocksVision` and `statuses` are errors on `damage` and `applyStatus`. Shipped: `common/statuses.json` `blinded` (2 / 3),
 `factions/whirlwind/abilities.json` `sandstorm` (18 m, 6 m, 1.2 s, 45 s, 12 s, `enemy_units`, a blocking zone of Blinded
 1 s + Slowed 0.3 for 1 s) on the Priest; Dryjhna's Prophecy's `abilityCooldown` -15 s makes it 30 s. The Sandstorm page
-row and the Blinded docs/02 row are the data track's to pin (D10c).
+row and the Blinded docs/02 row are pinned by the data track since D10c (`Content/AbilityContentTests`: a `createZone`
+effect and a `blind` status compared field by field; `PendingAbilities` is empty).
 
 **For the view (M4-V6c).** Read-only on `World.Zones` between ticks: `Capacity`, `Count`, `BlockerCount`, per slot
 `Alive`, `Owner`, `Center` (m), `AbilityId` (`Data.Abilities[id]` for the name), `TicksRemaining` (1 on its last tick),
