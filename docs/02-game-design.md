@@ -125,6 +125,9 @@ expansions, and making them build a full Town Hall for that is wrong for an AoE-
 | Armor | +1 / +2 armor for all non-siege units | 125 G / 50 W, 35 s | 200 G / 125 W, 45 s |
 | Faction upgrade | One per faction, see faction pages | — | 200 G / 150 W, 45 s |
 
+An upgrade that adds hit points raises both the maximum and the current hit points of the player's living units by the
+same amount when it finishes (a Zealot at 41 / 63 becomes 61 / 83); units made later start at the new maximum.
+
 ## Combat
 
 ### Stats

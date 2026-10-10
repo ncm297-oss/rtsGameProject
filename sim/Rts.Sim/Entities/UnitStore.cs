@@ -91,7 +91,10 @@ public sealed class UnitStore
     public readonly int[] Cargo;
     /// <summary>What <see cref="Cargo"/> is; on a gather loop also the kind of node it works.</summary>
     public readonly ResourceKind[] CargoKind;
-    /// <summary>Hit points (M4-1): the type's <c>hp</c> at spawn; the unit dies when a hit takes them to 0. 0 for a slot allocated without a type.</summary>
+    /// <summary>
+    /// Hit points (M4-1): at spawn the type's <c>hp</c> plus the owner's <c>hp</c> tech bonus (M4-4b-3b, BUG-0421; the maximum is
+    /// <see cref="World.MaxHp"/>); the unit dies when a hit takes them to 0. 0 for a slot allocated without a type.
+    /// </summary>
     public readonly int[] Hp;
     /// <summary>What the unit fights (M4-1): a unit handle, or a building handle when <see cref="TargetIsBuilding"/>; default for none.</summary>
     public readonly EntityHandle[] Target;
@@ -171,6 +174,12 @@ public sealed class UnitStore
     public readonly int[] AbilityReadyTick;
     /// <summary>Each unit's active statuses (M4-4a): up to 8, cleared when the slot is freed or allocated.</summary>
     public readonly Abilities.StatusStore Statuses;
+    /// <summary>
+    /// A summoned unit's end (M4-4b-3b): the number of the tick in whose phase 5 it is taken away (its summon's resolve tick
+    /// plus the spawn effect's lifetime); 0 for a permanent unit. Hashed. A unit is summoned exactly when this is not 0
+    /// (<see cref="IsSummoned"/>).
+    /// </summary>
+    public readonly int[] ExpiresAtTick;
     /// <summary>Whether the slot holds a live unit.</summary>
     public readonly bool[] Alive;
 
@@ -192,6 +201,15 @@ public sealed class UnitStore
     /// </summary>
     internal int BelowHpUnits;
 
+    /// <summary>
+    /// Live summoned units (M4-4b-3b, <see cref="ExpiresAtTick"/> not 0), so phase 5's expiry pass skips when none; derived,
+    /// not hashed.
+    /// </summary>
+    internal int SummonedUnits;
+
+    // M4-4b-3b: the owners' hp techs, for a unit's hit points at its spawn; null for a store outside a world (tests).
+    private readonly Economy.TechState? _techs;
+
     // M4-4b-3a: per slot, whether the unit was counted in BelowHpUnits at its spawn (its type has a whenBelowHp passive), so
     // Free takes back exactly what TrySpawn counted; derived from TypeId, not hashed.
     private readonly bool[] _belowHp;
@@ -203,14 +221,18 @@ public sealed class UnitStore
     private int _freeCount;
 
     /// <summary>Creates a store with a fixed number of slots (no population tracking: <see cref="CountPop"/> does nothing).</summary>
-    public UnitStore(int capacity) : this(capacity, null)
+    public UnitStore(int capacity) : this(capacity, null, null)
     {
     }
 
-    /// <summary>A store whose units count toward <paramref name="ledger"/>'s population (the world's store).</summary>
-    internal UnitStore(int capacity, Economy.PlayerLedger? ledger)
+    /// <summary>
+    /// A store whose units count toward <paramref name="ledger"/>'s population and spawn with <paramref name="techs"/>' hp
+    /// bonus (the world's store).
+    /// </summary>
+    internal UnitStore(int capacity, Economy.PlayerLedger? ledger, Economy.TechState? techs)
     {
         _ledger = ledger;
+        _techs = techs;
         if (capacity < 1) throw new ArgumentOutOfRangeException(nameof(capacity));
         Position = new Vector2[capacity];
         PrevPosition = new Vector2[capacity];
@@ -263,6 +285,7 @@ public sealed class UnitStore
         CastPoint = new Vector2[capacity];
         AbilityReadyTick = new int[capacity * DataLimits.MaxUnitAbilities];
         Statuses = new Abilities.StatusStore(capacity);
+        ExpiresAtTick = new int[capacity];
         _belowHp = new bool[capacity];
         Alive = new bool[capacity];
         Generation = new int[capacity];
@@ -321,6 +344,7 @@ public sealed class UnitStore
         ClearCombat(index);
         ClearAbilities(index);
         Hp[index] = 0;
+        ExpiresAtTick[index] = 0;
         _countedHalfPop[index] = 0;
         Alive[index] = true;
         handle = new EntityHandle(index, Generation[index]);
@@ -329,10 +353,18 @@ public sealed class UnitStore
 
     /// <summary>
     /// Allocates a unit of type <paramref name="typeId"/> (<paramref name="def"/>) for <paramref name="owner"/> at <paramref name="position"/> (the dev
-    /// <c>SpawnUnit</c> command and production, M3-4): position, owner, type, speed and radius set, the rest as
-    /// <see cref="TryAlloc"/> leaves it, and its population counted. False when the store is full.
+    /// <c>SpawnUnit</c> command and production, M3-4): position, owner, type, speed and radius set, full hit points (the
+    /// type's plus the owner's hp techs, M4-4b-3b), the rest as <see cref="TryAlloc"/> leaves it, and its population counted.
+    /// False when the store is full.
     /// </summary>
-    internal bool TrySpawn(int owner, int typeId, UnitDef def, Vector2 position, out EntityHandle handle)
+    internal bool TrySpawn(int owner, int typeId, UnitDef def, Vector2 position, out EntityHandle handle) =>
+        TrySpawn(owner, typeId, def, position, 0, out handle);
+
+    /// <summary>
+    /// As <see cref="TrySpawn(int, int, UnitDef, Vector2, out EntityHandle)"/>, but a summoned unit (M4-4b-3b) when
+    /// <paramref name="expiresAtTick"/> is not 0: it ends in that tick's phase 5 and takes no population.
+    /// </summary>
+    internal bool TrySpawn(int owner, int typeId, UnitDef def, Vector2 position, int expiresAtTick, out EntityHandle handle)
     {
         if (!TryAlloc(out handle)) return false;
         int i = handle.Index;
@@ -342,8 +374,15 @@ public sealed class UnitStore
         TypeId[i] = typeId;
         Speed[i] = def.SpeedPerTick;
         Radius[i] = def.Radius;
-        Hp[i] = def.Hp;
-        CountPop(i, def.HalfPop);
+        // BUG-0421: a unit starts at its maximum, its owner's hp techs included (World.MaxHpOf; at least 1).
+        Hp[i] = _techs == null ? def.Hp : Math.Max(1, def.Hp + Combat.DamageCalc.Points(_techs.Bonus(owner, typeId, TechStat.Hp)));
+        if (expiresAtTick != 0)
+        {
+            // M4-4b-3b: a summoned unit is free: no population (docs/factions/shadow.md, the Wraith).
+            ExpiresAtTick[i] = expiresAtTick;
+            SummonedUnits++;
+        }
+        else CountPop(i, def.HalfPop);
         if (def.BelowHpPassive >= 0)
         {
             _belowHp[i] = true;
@@ -351,6 +390,9 @@ public sealed class UnitStore
         }
         return true;
     }
+
+    /// <summary>Whether live slot <paramref name="index"/> holds a summoned unit (M4-4b-3b: <see cref="ExpiresAtTick"/> not 0); derived. M4-5's stealth reads it (a summoned unit can't be stealthed).</summary>
+    public bool IsSummoned(int index) => ExpiresAtTick[index] != 0;
 
     /// <summary>Whether live slot <paramref name="index"/>'s type has a <c>whenBelowHp</c> passive and was spawned with it counted (M4-4b-3a); derived, not hashed.</summary>
     internal bool HasBelowHpPassive(int index) => _belowHp[index];
@@ -393,6 +435,11 @@ public sealed class UnitStore
         {
             _belowHp[handle.Index] = false;
             BelowHpUnits--;
+        }
+        if (ExpiresAtTick[handle.Index] != 0)
+        {
+            ExpiresAtTick[handle.Index] = 0;
+            SummonedUnits--;
         }
         Alive[handle.Index] = false;
         Hold[handle.Index] = false;

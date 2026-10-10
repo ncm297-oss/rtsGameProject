@@ -115,7 +115,7 @@ public class AbilityLoaderTests
     public void UnknownKind_IsAnError_AndAPlannedKindIsNotSupportedYet()
     {
         AssertErrorAt(LoadWith(a => a["kind"] = "fireball"), Abilities, "abilities[0].kind", "unknown");
-        AssertErrorAt(LoadWith(a => a["kind"] = "summon"), Abilities, "abilities[0].kind", "not supported yet");
+        // M4-4b-3b: summon and spawn are supported; targetUnit, teleport and autocast stay deferred.
         AssertErrorAt(LoadWith(a => a["kind"] = "targetUnit"), Abilities, "abilities[0].kind", "not supported yet");
         AssertErrorAt(LoadWith(a => a["effects"]![0]!["kind"] = "teleport"), Abilities, "abilities[0].effects[0].kind", "not supported yet");
         AssertErrorAt(LoadWith(a => a["effects"]![0]!["kind"] = "heal"), Abilities, "abilities[0].effects[0].kind", "unknown");
@@ -153,7 +153,108 @@ public class AbilityLoaderTests
         Assert.True(damage.Ok, string.Join("\n", damage.Errors));
     }
 
-    /// <summary>M4-4b-3a criterion 1: an <c>applyStatus</c> of a frenzied status needs a magnitude above 0 (any fraction: the attack-speed increase).</summary>
+    /// <summary>Telas Fire made a summon of <paramref name="count"/> Heavy Infantry for <paramref name="lifetime"/> s, with no range and no radius.</summary>
+    private static void Summon(JsonObject a, object? count = null, object? lifetime = null, string unit = "malazan_heavy_infantry")
+    {
+        a["kind"] = "summon";
+        a.Remove("range");
+        a.Remove("radius");
+        a["effects"] = new JsonArray(Spawn(unit, count ?? 3, lifetime ?? 20));
+    }
+
+    private static JsonObject Spawn(string unit, object count, object lifetime)
+    {
+        var o = new JsonObject { ["kind"] = "spawn", ["unit"] = unit };
+        if (count is not "absent") o["count"] = JsonValue.Create(count);
+        if (lifetime is not "absent") o["lifetime"] = JsonValue.Create(lifetime);
+        return o;
+    }
+
+    /// <summary>
+    /// M4-4b-3b criterion 3: a <c>summon</c> ability with a <c>spawn</c> effect loads (neither is "not supported yet" now): no
+    /// range, the radius optional (0 when absent), the unit, count and lifetime converted.
+    /// </summary>
+    [Fact]
+    public void Summon_WithASpawnEffect_Loads()
+    {
+        DataLoadResult ok = LoadWith(a => Summon(a));
+        Assert.True(ok.Ok, string.Join("\n", ok.Errors));
+        GameData d = ok.Data!;
+        AbilityDef s = d.Abilities[d.FindAbility("telas_fire")];
+        Assert.Equal((AbilityKind.Summon, 0f, 0f), (s.Kind, s.Range, s.Radius));
+        AbilityEffect e = Assert.Single(s.Effects);
+        Assert.Equal((AbilityEffectKind.Spawn, d.FindUnit("malazan_heavy_infantry"), 3, 400), (e.Kind, e.Unit, e.Count, e.LifetimeTicks));
+        Assert.Equal((-1, -1), (e.Status, e.DamageType));
+        Assert.DoesNotContain("summon", DataLimits.PlannedAbilityKindIds);
+        Assert.DoesNotContain("spawn", DataLimits.PlannedAbilityEffectKindIds);
+        Assert.Equal(2, DataLimits.AbilityKindIds.IndexOf("summon"));
+        Assert.Equal(3, DataLimits.AbilityEffectKindIds.IndexOf("spawn"));
+        Assert.Equal((2, 3), ((int)AbilityKind.Summon, (int)AbilityEffectKind.Spawn));
+        // Every other effect keeps Unit -1 and no count or lifetime.
+        foreach (AbilityDef a in TestSim.Data.Abilities)
+            foreach (AbilityEffect x in a.Effects) Assert.Equal((-1, 0, 0), (x.Unit, x.Count, x.LifetimeTicks));
+        // A radius is allowed (the summon's other effects land within it), and the count's ends load.
+        Assert.True(LoadWith(a => { Summon(a); a["radius"] = 2; }).Ok);
+        Assert.True(LoadWith(a => Summon(a, count: 1, lifetime: 0.05)).Ok);
+        Assert.True(LoadWith(a => Summon(a, count: DataLimits.MaxSummonCount)).Ok);
+        // Two spawn effects, and a spawn beside an applyStatus (which then needs the radius).
+        Assert.True(LoadWith(a => { Summon(a); a["effects"]!.AsArray().Add(Spawn("malazan_laborer", 1, 5)); }).Ok);
+        DataLoadResult mixed = LoadWith(a =>
+        {
+            Summon(a);
+            a["radius"] = 4;
+            a["effects"]!.AsArray().Add(new JsonObject { ["kind"] = "applyStatus", ["status"] = "slowed", ["magnitude"] = 0.3, ["duration"] = 1 });
+        });
+        Assert.True(mixed.Ok, string.Join("\n", mixed.Errors));
+    }
+
+    /// <summary>M4-4b-3b criterion 3: a summon takes no range (0 included); it needs a spawn effect; its other effects need a radius.</summary>
+    [Fact]
+    public void Summon_RangeIsAnError_ASpawnIsRequired_AndOtherEffectsNeedARadius()
+    {
+        foreach (double range in new[] { 16.0, 0.0 })
+            AssertErrorAt(LoadWith(a => { Summon(a); a["range"] = range; }), Abilities, "abilities[0].range", "summon ability has no range");
+        AssertErrorAt(LoadWith(a => { a["kind"] = "summon"; a.Remove("range"); }), Abilities, "abilities[0].effects", "needs at least one 'spawn' effect");
+        AssertErrorAt(LoadWith(a =>
+        {
+            Summon(a);
+            a["effects"]!.AsArray().Add(new JsonObject { ["kind"] = "applyStatus", ["status"] = "slowed", ["magnitude"] = 0.3, ["duration"] = 1 });
+        }), Abilities, "abilities[0].radius", "missing");
+    }
+
+    /// <summary>M4-4b-3b criterion 3: a spawn effect on a targetGround or a selfAura ability is an error at its kind.</summary>
+    [Fact]
+    public void ASpawnEffect_OnlyOnASummon()
+    {
+        AssertErrorAt(LoadWith(a => a["effects"] = new JsonArray(Spawn("malazan_heavy_infantry", 3, 20))),
+            Abilities, "abilities[0].effects[0].kind", "belongs on a summon ability");
+        AssertErrorAt(LoadWith(a => { a["kind"] = "selfAura"; a.Remove("range"); a["effects"] = new JsonArray(Spawn("malazan_heavy_infantry", 3, 20)); }),
+            Abilities, "abilities[0].effects[0].kind", "belongs on a summon ability");
+    }
+
+    /// <summary>M4-4b-3b criterion 3: each spawn field's refusals, each at its path.</summary>
+    [Fact]
+    public void SpawnFields_AreChecked_EachAtItsPath()
+    {
+        const string P = "abilities[0].effects[0]";
+        AssertErrorAt(LoadWith(a => Summon(a, unit: "whirlwind_raider")), Abilities, P + ".unit", "belongs to faction 'whirlwind'");
+        AssertErrorAt(LoadWith(a => Summon(a, unit: "malazan_wraith")), Abilities, P + ".unit", "unknown unit");
+        AssertErrorAt(LoadWith(a => { Summon(a); a["effects"]![0]!.AsObject().Remove("unit"); }), Abilities, P + ".unit", "missing");
+        foreach (object count in new object[] { 0, 9, -1 })
+            AssertErrorAt(LoadWith(a => Summon(a, count: count)), Abilities, P + ".count", "outside 1-8");
+        AssertErrorAt(LoadWith(a => Summon(a, count: 2.5)), Abilities, P + ".count", "not a whole number");
+        AssertErrorAt(LoadWith(a => Summon(a, count: "absent")), Abilities, P + ".count", "missing");
+        AssertErrorAt(LoadWith(a => Summon(a, lifetime: 0)), Abilities, P + ".lifetime", "must be positive");
+        AssertErrorAt(LoadWith(a => Summon(a, lifetime: "absent")), Abilities, P + ".lifetime", "missing");
+        AssertErrorAt(LoadWith(a => Summon(a, lifetime: 0.01)), Abilities, P + ".lifetime", "rounds to 0 ticks");
+        // The other effects' fields are errors on a spawn, and the spawn fields on the other effects.
+        foreach ((string field, JsonNode value) in new (string, JsonNode)[] { ("amount", 3), ("type", "magic"), ("status", "slowed"), ("magnitude", 0.3), ("duration", 1), ("buildings", true), ("friendlyFire", 0.5), ("blocksVision", true) })
+            AssertErrorAt(LoadWith(a => { Summon(a); a["effects"]![0]![field] = value.DeepClone(); }), Abilities, $"{P}.{field}", "no such field");
+        foreach ((string field, JsonNode value) in new (string, JsonNode)[] { ("unit", "malazan_heavy_infantry"), ("count", 3), ("lifetime", 20) })
+            AssertErrorAt(LoadWith(a => a["effects"]![0]![field] = value.DeepClone()), Abilities, $"{P}.{field}", "no such field");
+    }
+
+    /// <summary>M4-4a criterion 1: an <c>applyStatus</c> of a frenzied status needs a magnitude above 0 (any fraction: the attack-speed increase).</summary>
     [Fact]
     public void AFrenziedEffect_NeedsAMagnitudeAbove0()
     {

@@ -2173,7 +2173,7 @@ bonuses are a read-only query that M4 combat will apply. The research button and
   matched against every unit type into a (unit, stat, tech) table; when a flag changes the player's sums per unit type
   and stat are recomputed, so `World.TechBonus(player, unitType, TechStat)` is one array read (allocation-free; 0 for
   out-of-range ids). **Combat does not apply it yet** (M4 adds `TechBonus` to attack, armor, range, hp, and ability
-  cooldowns).
+  cooldowns; hp since M4-4b-3b, see "Implementation (M4-4b-3b)").
 - **Hash.** The flags are state: a player with any tech sets the high half of its gold word and its flag words follow;
   a queue entry's tech flag is bit 9 + k of the building's production bits (no extra word); research progress is the
   building's `Progress`, hashed since M3-4. The bonus sums are derived and not hashed. A world with no tech researched
@@ -2533,7 +2533,7 @@ death hook in `CombatSystem.HitUnit`, `UnitStore.BelowHpUnits`; data in `Data/Da
   status with its magnitude for `PassiveSystem.HeldTicks` (2) by the stacking rule, its owner as the source; the countdown
   leaves 1, so it is in force until the next phase 5 looks again. **The boundary rule:** below means `hp < hpFraction x
   maxHp` in single precision, `maxHp` the type's `hp` plus the owner's `hp` tech bonus for the type (whole points); exactly
-  at the line is not below. Zealot (63 hp, 0.5): 31 is Frenzied (31 < 31.5), 32 is not; with Dryjhna's Prophecy (+20, 83):
+  at the line is not below. (Since M4-4b-3b, BUG-0420, the compare is exact: see "Implementation (M4-4b-3b)".) Zealot (63 hp, 0.5): 31 is Frenzied (31 < 31.5), 32 is not; with Dryjhna's Prophecy (+20, 83):
   41 is (41 < 41.5), 42 is not. A unit taken below the line in phase 11 is Frenzied from the next tick's phase 5 (its next
   swing after that is the short one); one back above it (nothing heals yet) loses it in the next phase 5. Because a refresh
   never shortens an entry, a longer one (Martyrdom's 100 ticks) runs its course and the passive then keeps the entry going.
@@ -2583,8 +2583,8 @@ death hook in `CombatSystem.HitUnit`, `UnitStore.BelowHpUnits`; data in `Data/Da
   blind in force 16,408, the 64-slot zone store 1,832, the zone store object and the fog's blind tables 296) and M4-H2's
   +35,016.
 - **Known limits.** (1) One entry per status id: a stronger Frenzied merged into an entry the `whenBelowHp` passive holds
-  stays at that strength while the passive holds it (the shipped magnitudes are equal, 0.5). (2) The `hp` tech raises the
-  passive's line but not yet the unit's hit points (combat does not apply hp techs, see "Implementation (M3-5)"). (3)
+  stays at that strength while the passive holds it (the shipped magnitudes are equal, 0.5). (2) The `hp` tech raised the
+  passive's line but not the unit's hit points (BUG-0421; fixed in M4-4b-3b, which raises them). (3)
   `whenBelowHp` acts from the phase 5 after the hit, not on the hit.
 - **Tests.** `Data/PassiveLoaderTests`, `Data/StatusLoaderTests` (Frenzied), `Data/AbilityLoaderTests` (`selfAura`, the
   frenzied magnitude), `Abilities/FrenziedTests`, `Abilities/PassiveTests`, `Abilities/SelfAuraTests`,
@@ -2610,6 +2610,126 @@ default arm). `AbilityDef.Kind == AbilityKind.SelfAura` means the card needs no 
 on-map point (the caster's position is the natural one; the sim ignores it); `Range` is 0 and the radius is drawn around
 the caster; for such a cast `Units.CastPoint` and both `AbilityEvent.Point`s are the caster's position (at the start and at
 the resolve). A unit's passives are `Data.Units[type].Passives` (the player-facing text stays the unit's description).
+
+### Implementation (M4-4b-3b)
+
+The last owed piece of M4 criterion 6 (summons) and two fixes in the hp rules: hp techs raise hit points (BUG-0421, M4
+criterion 8's Prophecy) and the `whenBelowHp` line is exact (BUG-0420). Code: `sim/Rts.Sim/Abilities/SummonSystem.cs`,
+`AbilitySystem.AtCaster`, `UnitStore.TrySpawn` / `ExpiresAtTick` / `SummonedUnits` / `IsSummoned`, `World.MaxHp` /
+`MaxHpOf`, `ProductionSystem.Researched`, `TechState.Adds`, `FreeCellSearch.NearestWithin`, `PassiveSystem.LineOf` /
+`IsBelow`; data in `Data/DataLoader.Abilities.cs` (`BuildSpawn`). `targetUnit` and `autocast` are **deferred** until a
+faction's data needs them (Producer decision, docs/01): the loader keeps refusing both; the M5 AI casts through `UseAbility`.
+
+- **Hit points and hp techs (BUG-0421).** A unit's maximum hit points are its type's `hp` plus its owner's `hp` tech bonus
+  for the type (whole points, at least 1): `World.MaxHpOf(player, unitType)`, and for a live slot `World.MaxHp(slot)`
+  (`PassiveSystem.MaxHp` is the same read). Every spawn path (`UnitStore.TrySpawn`: production, the dev spawn, summons)
+  starts a unit at its maximum. When research finishes (phase 3, `ProductionSystem.Researched`), a tech with an `hp` effect
+  changes every live unit of the researching player whose maximum it changes by that change, at once, current hit points
+  included: maximum and current move together (the usual RTS rule). A Zealot at 63 / 63 with Dryjhna's Prophecy is
+  83 / 83 from that tick, one at 41 / 63 is 61 / 83 (above the 41.5 line, so not Frenzied). A negative change leaves at
+  least 1. A dead unit is not touched (a unit hit to 0 is freed by that hit, so no live unit is ever at 0). The change per
+  unit is the maximum after the flag minus the maximum without this tech's own amount for the type (`TechState.Adds`):
+  hp amounts are whole (the loader's rule), so the float sums are exact and nothing is stored. `Techs.Set` alone (a test
+  seam) changes the flags and bonuses but no hit points. Hit points stay the only hashed hp state; the maximum is derived.
+  (`Simulation.HasCombat` still compares hit points with the type's `hp`, so a full unit with an hp bonus hashes its combat
+  words: Hp is hashed either way.)
+- **The `whenBelowHp` line is exact (BUG-0420).** The fraction is held in whole millionths (`PassiveSystem.LineScale`,
+  `UnitPassive.HpLine`, set whenever the hashed `HpFraction` float is, a `with` copy included; not hashed itself) and below means
+  `hp x 1,000,000 < line x maxHp` in 64-bit integers. A float in (0, 1) is within 3e-8 of the decimal it was read from, so
+  any fraction written with up to six decimals is exact: 0.15 x 100 is 15 (not below; single precision made it
+  15.000001), 14 is below; 0.3 x 63 is 18.9 (18 below, 19 not). The shipped Zealot's 0.5 behaves as before. The content
+  hash is unchanged (it hashes the float, as before).
+- **`summon`** (`AbilityKind.Summon` = 2; `DataLimits.PlannedAbilityKindIds` keeps only `targetUnit`). Cast exactly like a
+  `selfAura` ability (`AbilitySystem.AtCaster`): no `range` (a load error, 0 included), the command's point must be on the
+  map and is otherwise ignored, the caster never walks and casts at once (phase 1, or when a queued one is popped in phase
+  7), `UnitState.Casting` for `castTime` ticks, any new order cancels it with no cooldown, `Units.CastPoint` and both
+  `AbilityEvent.Point`s are the caster's position, the cooldown starts at the resolve. It must carry at least one `spawn`
+  effect. Its `radius` is optional (0 when absent); other effects (`damage`, `applyStatus`, `createZone`) may ride along,
+  then need a `radius`, and land as a `selfAura`'s do; the summoned units appear after them and take none. `affects` is
+  required as on every ability (it matters only to those other effects).
+- **`spawn`** (`AbilityEffectKind.Spawn` = 3; `PlannedAbilityEffectKindIds` keeps only `teleport`), on a `summon` only:
+  `unit` (an own-faction unit type), `count` (1 to `DataLimits.MaxSummonCount` = 8), `lifetime` (seconds, at least a tick).
+  **Placement** (`SummonSystem.Summon`, at the resolve, after the other effects): each spawn effect in file order, each of
+  its units one by one, takes the free cell nearest the caster's position among the cells within
+  `SummonSystem.SearchRings` (3) rings of the caster's cell: `FreeCellSearch`'s ring walk (production's spawn search) with
+  the caster's cell as a 1 x 1 footprint, nearest ring first, then nearest the caster, ties to the lower cell index; a
+  cell is free when it is passable, on the caster's plateau and holds no live unit's centre (the spatial hash, plus the
+  cells this resolve already used). So 3 summons beside a caster standing on a cell centre take the 4 orthogonal
+  neighbours in index order ((x, y - 1), (x - 1, y), (x + 1, y), (x, y + 1)) minus any taken. The answers are cached in the flow-field
+  builder's idle per-cell scratch (`FlowFieldCache.BuildScratch`, as production does in phase 3), cleared over the 7 x 7
+  box first. A full unit store or no free cell left within the rings **drops the rest** (the cast still resolves and its
+  cooldown starts). A summoned unit has full hit points (its owner's hp techs included), costs nothing, takes no
+  population (never counted in `HalfPop`, `TrySpawn` with an end tick skips `CountPop`), stands Idle with no order, and
+  carries `UnitStore.ExpiresAtTick` = the resolve tick + `lifetime` ticks. When a resolve placed units the spatial hash is
+  rebuilt at once, so later resolves in the same phase 6, and phase 7's scans, see them. Otherwise a summoned unit is an
+  ordinary unit: it moves, fights, takes statuses, is a target, has its type's passives (a summoned Zealot counts in
+  `BelowHpUnits`), and lies in a Martyrdom radius if its type is listed.
+- **Expiry** (`SummonSystem.Run`, phase 5 first, before the passives and the status countdown). Every live unit whose
+  `ExpiresAtTick` is this tick is taken away, in slot order, through the death path: a `DeathEvent` with `Expired` true
+  and `KillerOwner` -1, then `UnitStore.Free` (its statuses, cast, queue and target go with the slot). An expiry counts no
+  kill and no loss (`World.RecordDeath` skips the ledger) and runs no `onDeath` passive. Summoned in tick R's phase 6 with
+  `lifetime` L ticks, a unit is live from R's phase 7 to R + L's phase 4 (L phase-10/11 combat steps) and its expiry is in
+  `World.Deaths` after tick R + L. Between ticks every live summoned unit has `ExpiresAtTick` above the number of the tick
+  just run (`>= World.TickNumber`). A summoned unit killed before its time is an ordinary death (kill, loss, `onDeath`);
+  its slot's end tick is cleared by `Free`, so it never expires again and a unit later spawned in the slot is permanent.
+  `World.Deaths`' list (unit + building capacity) is full only if a summon reuses slots freed earlier in the same tick
+  past that count; an event past it is not recorded (the kill and loss counts still are).
+- **The summoned flag** is derived: `UnitStore.IsSummoned(slot)` is `ExpiresAtTick != 0` (M4-5's stealth reads it: "can't
+  be stealthed"). `UnitStore.SummonedUnits` counts the live summoned units (derived: `TrySpawn` adds, `Free` takes back).
+- **State hash.** A live summoned unit sets bit 19 of its order word and hashes its `ExpiresAtTick` last; a permanent unit
+  hashes exactly as before. The flag and the count are derived. `GameData.ContentHash` adds a spawn effect's `unit`,
+  `count` and lifetime ticks only on that kind (the ability's kind word was already hashed), so the shipped data's hash is
+  unchanged (`data-hash` D22C849A175F9ED5) and the golden replay plays back with no edit.
+- **Cost.** The expiry pass returns at once while `SummonedUnits` is 0 (10,000 passes over 2,500 slots with no summoned
+  unit: 0.026 ms) and otherwise scans one int per slot. A summon's resolve walks at most 48 cells and rebuilds the spatial
+  hash once. The research hp change is one pass over the unit slots, only for a tech with an `hp` effect. No allocation:
+  the 500-unit brawl with 20 Cadre Mages summoning on cooldown (`SummonPerfTests`, up to 60 summons live, about 100
+  expiries in the 100 measured ticks) allocates 0 B a tick. Measured (Debug, 2026-10-10, alone): that brawl 1.70 ms a
+  tick over ticks 5-205 (worst 5.0 ms; the brawl rows' budget, 4 ms), 1.46 ms over ticks 205-605, 464 expiries, up to 60
+  summons live; `EmptyTick(2500)` median of six runs alternating with the base d980ff0: 487 us here, 485 us on the base
+  (budget 500; each side had one noisy run, 593 / 647 us). The passive pass over 2,500 full-hp Zealots
+  (`Stress/PassiveScaleQaTests.PassivePass_2500FullHpZealots_Reported`, budget 100 us): 47 us here, 70 us on the base
+  (the line is computed once when the fraction is set, and the passive is read by reference, not copied).
+- **Memory.** On the 1,024-cell world with 4,096 slots (`QA/FieldBuildFairnessQaTests.World_1024Map_CacheStays32_MemoryBounded`):
+  231,873,016 bytes against 231,839,184 on the base, +33,832: `UnitStore.ExpiresAtTick` (int x 4,096 = 16,384 + a 24-byte
+  header = 16,408); `DeathEvent` grows from 32 to 36 bytes with `Expired`, over the death list's 4,096 + 256 entries
+  (17,408); 16 bytes of `UnitStore` fields (the tech state reference and `SummonedUnits`). Under the existing bound
+  (231,920,000, 47 KB to spare), so it is not re-baselined.
+- **Known limits.** (1) The summon search stops at 3 rings: a caster in a dense crowd may summon fewer units (no
+  spill-over farther out). (2) Hit points follow an hp tech only when research completes (phase 3); nothing else changes a
+  player's techs in a match. (3) A summoned unit is Idle with no order (it scans and fights like any Idle unit; a view or
+  the AI orders it). (4) `World.Deaths` may drop an event past its capacity (above).
+- **Tests.** `Abilities/HpTechTests`, `Abilities/PassiveTests.TheLine_IsExact_*`, `QA/PassiveQaTests` (BUG-0420's row
+  un-skipped; `ProphecyResearchedMidFight_*` re-stated to the real rule), `Data/AbilityLoaderTests` (`Summon_*`,
+  `ASpawnEffect_OnlyOnASummon`, `SpawnFields_*`), `Abilities/SummonTests`, `Abilities/SummonPerfTests`,
+  `StateHashTests.Hash_TheExpiryTickMovesIt_*`, `DataContentHashTests.EverySpawnField_AndTheSummonKind_*`,
+  `Stress/SummonFuzzStressTests` (3 seeds x 2,000 ticks, 3 players, 12 summoners casting on cooldown in a 64-slot store
+  that fills, twins and a replay round trip). The test-only abilities are `SummonTests.AddTo` (`zz_test_summon`: 3 Heavy
+  Infantry for 20 s, 1.0 s cast, 50 s cooldown, the Summon Wraiths numbers of docs/factions/shadow.md, which is not shipped
+  before M8).
+
+**For the data track (M4-4b-3b).** An ability may be `"kind": "summon"`: no `range` (an error, 0 included), `radius`
+optional (m, above 0, at most 16; required when the ability has an effect other than `spawn`), `castTime`, `cooldown`,
+`affects`, `displayName`, `description` as for every ability; at least one effect of
+`{ "kind": "spawn", "unit": <own-faction unit id>, "count": <whole, 1-8>, "lifetime": <s, at least a tick> }`. Refused, each
+at `abilities[k].effects[j].<field>`: `unit` missing, unknown or of another faction; `count` missing, not whole, below 1 or
+above 8; `lifetime` missing, 0 or below a tick (0.01 s); any of `type`, `amount`, `buildings`, `friendlyFire`, `status`,
+`magnitude`, `duration`, `blocksVision`, `statuses` on a spawn; `unit`, `count`, `lifetime` on any other effect; a `spawn`
+on a `targetGround` or `selfAura` ability (at its `kind`); a `summon` with no `spawn` (at `abilities[k].effects`).
+`targetUnit`, `teleport` and `autocast: true` are still "not supported yet". Example (shadow.md's Summon Wraiths, once a
+Wraith unit exists): `{ "id": "summon_wraiths", "kind": "summon", "castTime": 1.0, "cooldown": 50, "affects": "own_units",
+"effects": [ { "kind": "spawn", "unit": "shadow_wraith", "count": 3, "lifetime": 20 } ] }`. The summoned unit's stats are
+an ordinary `units.json` entry; its cost and population are not charged.
+
+**For the view (M4-V7).** `AbilityDef.Kind == AbilityKind.Summon` is a no-target card like `SelfAura`: the button casts,
+sending any on-map point (the caster's position); `Range` is 0 and `Radius` may be 0 (nothing to draw). The summoned
+units arrive as ordinary new unit slots at the resolve (`AbilityEvent` with `Resolved`, point = the caster's position).
+`Units.IsSummoned(slot)` / `Units.ExpiresAtTick[slot]`: a live summoned unit's lifetime left is `ExpiresAtTick -
+TickNumber` ticks until the tick it is taken away (a lifetime bar or a fade-out). Its end is a `World.Deaths` entry with
+`Expired` true and `KillerOwner` -1: a vanish, not a kill (no corpse, no kill feed; it counts no kill or loss). **Max hp:**
+read `World.MaxHp(slot)` (the type's `hp` plus the owner's hp techs); `ViewApi.UnitHpBars` and "Implementation (M4-V1)"
+still use the type's `hp`, so a Zealot at 83 / 83 with Prophecy would read above full and one at 70 / 83 would show no
+bar: switch the bar's maximum to `World.MaxHp`.
 
 ## Vision, detection, fog
 

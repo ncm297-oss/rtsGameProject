@@ -82,17 +82,26 @@ public static class DataLimits
     /// <summary>JSON spelling of each <see cref="StatusKind"/>, indexed by the enum value (<c>common/statuses.json</c>, M4-4a).</summary>
     public static readonly ImmutableArray<string> StatusKindIds = ImmutableArray.Create("damageOverTime", "slow", "blind", "frenzied");
 
-    /// <summary>JSON spelling of each supported <see cref="AbilityKind"/>, indexed by the enum value (M4-4a; selfAura M4-4b-3a).</summary>
-    public static readonly ImmutableArray<string> AbilityKindIds = ImmutableArray.Create("targetGround", "selfAura");
+    /// <summary>JSON spelling of each supported <see cref="AbilityKind"/>, indexed by the enum value (M4-4a; selfAura M4-4b-3a; summon M4-4b-3b).</summary>
+    public static readonly ImmutableArray<string> AbilityKindIds = ImmutableArray.Create("targetGround", "selfAura", "summon");
 
-    /// <summary>Ability kinds of docs/02 the format knows but the sim doesn't run yet: refused as "not supported yet" (slice 2).</summary>
-    public static readonly ImmutableArray<string> PlannedAbilityKindIds = ImmutableArray.Create("targetUnit", "summon");
+    /// <summary>
+    /// Ability kinds of docs/02 the format knows but the sim doesn't run yet: refused as "not supported yet". <c>targetUnit</c>
+    /// is deferred until a faction's data needs it (docs/01, 2026-10-10).
+    /// </summary>
+    public static readonly ImmutableArray<string> PlannedAbilityKindIds = ImmutableArray.Create("targetUnit");
 
-    /// <summary>JSON spelling of each supported <see cref="AbilityEffectKind"/>, indexed by the enum value (M4-4a; createZone M4-4b-2).</summary>
-    public static readonly ImmutableArray<string> AbilityEffectKindIds = ImmutableArray.Create("damage", "applyStatus", "createZone");
+    /// <summary>JSON spelling of each supported <see cref="AbilityEffectKind"/>, indexed by the enum value (M4-4a; createZone M4-4b-2; spawn M4-4b-3b).</summary>
+    public static readonly ImmutableArray<string> AbilityEffectKindIds = ImmutableArray.Create("damage", "applyStatus", "createZone", "spawn");
 
-    /// <summary>Effect kinds of docs/02 the format knows but the sim doesn't run yet: refused as "not supported yet" (slice 2).</summary>
-    public static readonly ImmutableArray<string> PlannedAbilityEffectKindIds = ImmutableArray.Create("teleport", "spawn");
+    /// <summary>Effect kinds of docs/02 the format knows but the sim doesn't run yet: refused as "not supported yet".</summary>
+    public static readonly ImmutableArray<string> PlannedAbilityEffectKindIds = ImmutableArray.Create("teleport");
+
+    /// <summary>
+    /// Most units one <c>spawn</c> effect may summon (M4-4b-3b): each is placed by a ring search round the caster, so a count
+    /// is a per-cast cost. Far above any designed summon (docs/factions/shadow.md: 3 Wraiths); a Producer default.
+    /// </summary>
+    public const int MaxSummonCount = 8;
 
     /// <summary>JSON spelling of each <see cref="AbilityAffects"/>, indexed by the enum value (M4-4a).</summary>
     public static readonly ImmutableArray<string> AbilityAffectsIds = ImmutableArray.Create("enemy_units", "own_units", "all_units");
