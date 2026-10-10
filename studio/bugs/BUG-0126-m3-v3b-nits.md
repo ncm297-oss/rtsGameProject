@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open (items 1-2 and 4 fixed) |
+| Status | open (items 1-4 fixed) |
 | Found | 2026-10-07-1715, task M3-V3b (QA) |
 | System | HUD / command card / build ghost / props (view), `game/data/common/ui.json`, perf rows |
-| Fixed by | items 1-2: df37a8c (M3-V4, see above); item 4: 08dc8e3 (M4-VH1, `SelectionController.CancelSelectedSite` drops a second press for the same site before the next tick; `CommandCardTest` presses twice and expects one Cancel); items 3, 5, 6 open |
+| Fixed by | items 1-2: df37a8c (M3-V4); item 4: 08dc8e3 (M4-VH1); item 3: 956eab3 (M4-VH2, the props relist on the fog's last-seen copy version, not `NavGrid.Version`; `PropsViewTest` now runs with bases); items 5, 6 open |
 
 ## Repro
 1. Items 1-2: with D3's `buildings.json` copied in (`git checkout origin/studio/2026-10-07-1415-data --
@@ -66,3 +66,10 @@
   loops. Small leftover: the guard is not reset if the `Simulation` instance changes, filed as BUG-0250 item 3
   (theoretical).
 - Items 3, 5 and 6 were not touched and are still open.
+
+## Re-check (QA 2026-10-10-0624, M4-VH2)
+- Item 3 **fixed** under a fog node (every Match has one, also with `--no-fog`): `PropLayout` relists on
+  `SeenResources.Version`, which a building spawn, site or cancel doesn't move. `PropsViewTest` runs with bases and
+  passes in the scene loop (steady frames relist nothing); `SeenResourcesTests` checks a store-key bump with no node
+  change relists nothing.
+- Items 5 and 6 not reached.

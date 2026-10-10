@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (flaky merge gate: the scene loop goes red) |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-08-2144, task M4-VH1 (QA); not caused by M4-VH1 as far as QA can tell, see Notes |
 | System | view scene test `game/tests/EconomyViewTest.cs`; Godot 4.7.2 .NET shutdown |
-| Fixed by | |
+| Fixed by | 956eab3 (M4-VH2): `game/tests/SceneExit.cs` (free the scene, wait a frame, GC + finalizers, wait a frame, quit) used by every test and shot scene |
 
 ## Repro
 1. Load the machine (for example `dotnet test sim/Rts.Sim.Tests --filter Category!=Perf` in any worktree), then run
@@ -43,3 +43,8 @@ from C# at quit) while Godot is tearing the C# language down.
   scene that instances `Match.tscn` probably holds the same references.
 - If the scene loop goes red on `EconomyViewTest` with a FATAL after PASS, rerun it once before treating it as a
   regression.
+
+## Verification (QA 2026-10-10-0624, M4-VH2)
+- `EconomyViewTest.tscn` 30 runs under load (the full sim suite, then the non-Perf suite, plus the other tracks' builds):
+  30 / 30 PASS, exit 0, 0 FATAL, 0 "Leaked unsafe reference" lines.
+- Scene loop 39 / 39 PASS with no rerun. The "rerun once" note above no longer applies.

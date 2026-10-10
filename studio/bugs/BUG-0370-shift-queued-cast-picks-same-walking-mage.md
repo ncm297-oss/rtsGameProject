@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-10-0215, task M4-V6b |
 | System | view: ability targeting (`AbilityCaster.PickCaster`, `SelectionController.AbilityOrder`) |
-| Fixed by | |
+| Fixed by | 956eab3 (M4-VH2): `AbilityCaster.HasQueuedCast` + `SentCasts`; regression `QA/ViewApi/ShiftQueuedCastQaTests.TwoShiftClicks_OnWalkingMages_*` (un-skipped), `ViewApi/AbilityCasterTests` (2 rows), `AbilityViewTest` walking-mages row |
 
 ## Repro
 1. `dotnet build RtsGame.sln`
@@ -39,3 +39,11 @@ Suggested direction (developer's call): treat a caster as busy for the pick if i
 `UseAbility` of that ability (`QueueKind` / the queued type id), or remember the casters this armed session already sent
 until the next tick. Shift-queuing casts while the army is moving is the common case for the feature, so the bug
 shows in normal play: a second spell is silently lost while a ready mage idles.
+
+## Verification (QA 2026-10-10-0624, M4-VH2)
+- The un-skipped row passes. `AbilityViewTest` walking row on seeds 1 and 6: three Shift clicks in one frame send two
+  queued casts on different mages, the third is refused, both resolve (209 / 80 ticks).
+- QA `QA/ViewApi/ViewHardening2QaTests`: three Shift clicks with two walking mages at click gaps of 0, 1, 2 and 10 ticks
+  (one cast each, the third sends nothing, exactly 1 + 1 resolves); a caster freed mid-queue (the live one takes the
+  click); a caster on cooldown (passed over, alone refused); a recycled slot is not busy through the sent memory.
+  The hash twin (`NewViewApiHelpers_DoNotChangeTheSim_*`) now runs the pick with the queue scan and the memory each tick.

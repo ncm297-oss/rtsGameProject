@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-10-0215, task M4-V6b |
 | System | view: ability views (status markers, resolve flashes) |
-| Fixed by | |
+| Fixed by | 956eab3 (M4-VH2): `SlowColor` (0.08, 0.3, 0.95); `ResolveFlashes.MarkDrawn(slot, tick, shown)` decides once; regression `ViewApi/ResolveFlashesTests.ALateFirstDraw_*` and `TheFirstFramesFogAnswer_*` |
 
 ## Repro
 1. `dotnet build RtsGame.sln`
@@ -32,3 +32,10 @@ c. **Late first draw jumps.** `ResolveFlashes.Age` ages a flash no frame has dra
 None affects the sim or determinism (`StatusFlashQaTests.NewViewApiHelpers_DoNotChangeTheSim_*` proves the helpers are
 read-only). The headless renderer keeps no MultiMesh instance data (`GetInstanceColor` reads black), so marker colours
 can only be checked windowed; `QaV6bTest` skips the colour readback when headless.
+
+## Verification (QA 2026-10-10-0624, M4-VH2)
+- a: QA `game/tests/QaVH2MarkerShot.tscn` windowed at zoom 20 (the camera's minimum; 15 clamps to 20), 30 and 60 on
+  sand with both factions' bodies, Slowed alone and Slowed + Burning: the deep-blue marker reads at all three. Taste
+  default; the owner may revisit.
+- b, c: the two new `ResolveFlashesTests` rows pass; `AbilityViews.SyncFlashes` calls `MarkDrawn` once on the first
+  frame and skips a flash whose `Shown` is false (code read). Expiry runs from the same origin.
