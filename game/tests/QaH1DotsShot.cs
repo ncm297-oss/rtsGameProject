@@ -113,6 +113,6 @@ public partial class QaH1DotsShot : Node
             GD.Print($"{what}: {(found ? "spawned" : "MISSING")}, crop pixel ({px.X * 4:F0}, {px.Y * 4:F0}), screen ({r.Position.X + px.X:F0}, {r.Position.Y + px.Y:F0})");
         }
         GD.Print($"saved {full}; {alive}/{_lone.Count} lone units alive; {u.Count} units");
-        GetTree().Quit();
+        SceneExit.Quit(this, 0);
     }
 }

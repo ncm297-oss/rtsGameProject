@@ -15,8 +15,11 @@ public class AbilityCasterTests
     private static int TelasFire => TestSim.Data.FindAbility("telas_fire");
 
     private static int Pick(Simulation sim, EntityHandle[] sel, Vector2 point, bool queued, out int index) =>
+        Pick(sim, sel, point, queued, ReadOnlySpan<EntityHandle>.Empty, out index);
+
+    private static int Pick(Simulation sim, EntityHandle[] sel, Vector2 point, bool queued, ReadOnlySpan<EntityHandle> sent, out int index) =>
         AbilityCaster.PickCaster(sel, U(sim).Alive, U(sim).Generation, U(sim).TypeId, U(sim).Position, U(sim).CastAbility, U(sim).AbilityReadyTick,
-            sim.World.Data.Units, TelasFire, sim.World.TickNumber, point, queued, out index);
+            U(sim).QueueCount, U(sim).QueueKind, U(sim).QueueTypeId, sent, sim.World.Data.Units, TelasFire, sim.World.TickNumber, point, queued, out index);
 
     private static UnitStore U(Simulation sim) => sim.World.Units;
 
@@ -82,6 +85,105 @@ public class AbilityCasterTests
     }
 
     [Fact]
+    public void ACastWaitingInAWalkingMagesQueue_IsBusy_TheNextQueuedClickGoesToTheOther_BothResolve()
+    {
+        // BUG-0370: two mages walk under a Move; a Shift-queued cast sits behind it (CastAbility still -1).
+        Simulation sim = NoFights();
+        EntityHandle a = Place(sim, 0, Mage, At(sim, 10, 20)), b = Place(sim, 0, Mage, At(sim, 10, 26));
+        var sel = new[] { a, b };
+        sim.Enqueue(Command.Move(0, a, At(sim, 40, 20)));
+        sim.Enqueue(Command.Move(0, b, At(sim, 40, 26)));
+        sim.Tick();
+        sim.Tick(); // the Moves apply in the second Tick(): walking
+        Vector2 p1 = At(sim, 30, 21), p2 = At(sim, 30, 22);
+        Assert.Equal(a.Index, Pick(sim, sel, p1, true, out _));
+        sim.Enqueue(Command.UseAbility(0, a, 0, p1, queued: true));
+        sim.Tick();
+        sim.Tick(); // stamped for the next tick number: in the queue after the second Tick()
+        UnitStore u = U(sim);
+        Assert.Equal((-1, 1, UnitState.Moving), (u.CastAbility[a.Index], u.QueueCount[a.Index], u.State[a.Index]));
+        Assert.True(AbilityCaster.HasQueuedCast(u.QueueCount, u.QueueKind, u.QueueTypeId, a.Index, 0));
+        Assert.False(AbilityCaster.HasQueuedCast(u.QueueCount, u.QueueKind, u.QueueTypeId, b.Index, 0));
+        Assert.False(AbilityCaster.HasQueuedCast(u.QueueCount, u.QueueKind, u.QueueTypeId, a.Index, 1)); // another list index
+        // a is nearer p2, but its cast is queued: the queued click and a plain one both take b.
+        Assert.Equal(b.Index, Pick(sim, sel, p2, true, out int k));
+        Assert.Equal(0, k);
+        Assert.Equal(b.Index, Pick(sim, sel, p2, false, out _));
+        // Alone, a queued click has no free caster; a plain click recasts (it replaces the queue).
+        Assert.Equal(-1, Pick(sim, new[] { a }, p2, true, out _));
+        Assert.Equal(a.Index, Pick(sim, new[] { a }, p2, false, out _));
+        sim.Enqueue(Command.UseAbility(0, b, 0, p2, queued: true));
+        int resolves = 0;
+        for (int t = 0; t < 600; t++)
+        {
+            sim.Tick();
+            resolves += (Had(sim, a, resolved: true) ? 1 : 0) + (Had(sim, b, resolved: true) ? 1 : 0);
+        }
+        Assert.Equal(2, resolves);
+    }
+
+    [Fact]
+    public void TwoClicksInOneTick_TheSentMemoryPicksTwoMages_UntilTheCommandsApply()
+    {
+        Simulation sim = NoFights();
+        EntityHandle a = Place(sim, 0, Mage, At(sim, 10, 20)), b = Place(sim, 0, Mage, At(sim, 30, 20));
+        var sel = new[] { a, b };
+        var sent = new SentCasts(4);
+        Vector2 p = At(sim, 12, 20);
+        int Click(bool queued)
+        {
+            int tick = sim.World.TickNumber;
+            int c = Pick(sim, sel, p, queued, sent.For(tick, TelasFire), out int k);
+            if (c < 0) return c;
+            var h = c == a.Index ? a : b;
+            sim.Enqueue(Command.UseAbility(0, h, k, p, queued));
+            sent.Note(tick + 1, TelasFire, h);
+            return c;
+        }
+        Assert.Equal(a.Index, Click(true));
+        // Before the command applies nothing in the store shows it: without the memory the same mage is picked again.
+        Assert.Equal(a.Index, Pick(sim, sel, p, true, out _));
+        Assert.Equal(b.Index, Click(true));
+        Assert.Equal(-1, Click(true)); // a third queued click with two mages: refused, nothing sent
+        Assert.Equal(a.Index, Pick(sim, sel, p, false, sent.For(sim.World.TickNumber, TelasFire), out _)); // a plain one: the nearer recasts
+        sim.Tick(); // the commands are stamped for the tick after this one: still pending, still remembered
+        Assert.Equal(2, sent.For(sim.World.TickNumber, TelasFire).Length);
+        Assert.Equal(0, sent.For(sim.World.TickNumber, TelasFire + 1).Length); // per ability
+        Assert.Equal(-1, Pick(sim, sel, p, true, sent.For(sim.World.TickNumber, TelasFire), out _));
+        sim.Tick(); // applied: the store says busy (a casts at once, b walks in), the memory lets them go
+        Assert.Equal(0, sent.For(sim.World.TickNumber, TelasFire).Length);
+        Assert.Equal(0, sent.Count);
+        Assert.Equal((0, 0), (U(sim).CastAbility[a.Index], U(sim).CastAbility[b.Index]));
+        Assert.Equal(-1, Pick(sim, sel, p, true, out _));
+        int resolves = 0;
+        for (int t = 0; t < 600; t++)
+        {
+            sim.Tick();
+            resolves += (Had(sim, a, resolved: true) ? 1 : 0) + (Had(sim, b, resolved: true) ? 1 : 0);
+        }
+        Assert.Equal(2, resolves);
+    }
+
+    [Fact]
+    public void SentCasts_FullDropsTheOldest_ClearForgets_ZeroCapacityThrows()
+    {
+        var sent = new SentCasts(3);
+        for (int i = 0; i < 5; i++) sent.Note(10, 7, new EntityHandle(i, 1));
+        ReadOnlySpan<EntityHandle> kept = sent.For(10, 7);
+        Assert.Equal(3, kept.Length);
+        Assert.Equal(new EntityHandle(2, 1), kept[0]);
+        Assert.Equal(new EntityHandle(4, 1), kept[2]);
+        Assert.Equal(3, sent.For(9, 7).Length); // an earlier tick (never asked in play): nothing applied yet
+        sent.Clear();
+        Assert.Equal(0, sent.For(10, 7).Length);
+        sent.Note(10, 7, new EntityHandle(1, 1));
+        sent.Note(12, 7, new EntityHandle(2, 1));
+        Assert.Equal(1, sent.For(11, 7).Length); // the first applied in tick 10
+        Assert.Equal(new EntityHandle(2, 1), sent.For(11, 7)[0]);
+        Assert.Throws<ArgumentOutOfRangeException>(() => new SentCasts(0));
+    }
+
+    [Fact]
     public void NoCaster_DeadAndStaleHandles_AreNeverPicked()
     {
         Simulation sim = NoFights();
@@ -113,16 +215,22 @@ public class AbilityCasterTests
         Simulation sim = NoFights();
         EntityHandle a = Place(sim, 0, Mage, At(sim, 10, 20)), b = Place(sim, 0, Mage, At(sim, 30, 20));
         var sel = new[] { a, b };
+        // A queued cast behind a Move, so the queue scan runs too.
+        sim.Enqueue(Command.Move(0, a, At(sim, 40, 20)));
+        sim.Enqueue(Command.UseAbility(0, a, 0, At(sim, 30, 20), queued: true));
+        sim.Tick();
+        var sent = new SentCasts();
         Pick(sim, sel, At(sim, 12, 20), false, out _);
         Soonest(sim, sel, 0);
         long before = GC.GetAllocatedBytesForCurrentThread();
         int sum = 0;
         for (int i = 0; i < 1000; i++)
         {
-            sum += Pick(sim, sel, At(sim, 12 + i % 5, 20), (i & 1) == 0, out _);
+            sent.Note(i / 3 + 1, TelasFire, (i & 1) == 0 ? a : b);
+            sum += Pick(sim, sel, At(sim, 12 + i % 5, 20), (i & 1) == 0, sent.For(i / 3, TelasFire), out _);
             sum += Soonest(sim, sel, i);
         }
         Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
-        Assert.True(sum >= 0);
+        Assert.True(sum >= -4000);
     }
 }

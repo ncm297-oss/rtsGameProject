@@ -33,7 +33,7 @@ public partial class UnitViewsTest : Node
         }
         foreach (string f in _failures) GD.Print($"UNITVIEWS TEST FAIL: {f}");
         if (_failures.Count == 0) GD.Print("UNITVIEWS TEST PASS");
-        GetTree().Quit(_failures.Count == 0 ? 0 : 1);
+        SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
     private void Run()

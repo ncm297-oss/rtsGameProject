@@ -47,7 +47,7 @@ public partial class OrdersTest : Node
         foreach (string m in Modifiers) Input.ActionRelease(m);
         foreach (string f in _failures) GD.Print($"ORDERS TEST FAIL: {f}");
         if (_failures.Count == 0) GD.Print("ORDERS TEST PASS");
-        GetTree().Quit(_failures.Count == 0 ? 0 : 1);
+        SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
     private async Task Run()

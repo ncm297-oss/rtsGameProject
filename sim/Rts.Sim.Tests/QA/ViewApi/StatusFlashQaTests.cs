@@ -46,7 +46,9 @@ public class StatusFlashQaTests
         var marks = new StatusMark[w.Units.Capacity * StatusStore.PerUnit];
         var flashes = new ResolveFlashes(16);
         var removed = new int[16];
-        int markTotal = 0, flashTotal = 0;
+        var sent = new SentCasts(); // M4-VH2 (BUG-0370): the pick's queue scan and the sent-cast memory
+        int telas = TestSim.Data.FindAbility("telas_fire");
+        int markTotal = 0, flashTotal = 0, pickTotal = 0;
         for (int t = 0; t < 900; t++)
         {
             if (t % 60 == 0)
@@ -72,14 +74,23 @@ public class StatusFlashQaTests
                 if (!flashes.Active[i]) continue;
                 view.ShowsPoint(w.Fog, flashes.Point[i]);
                 flashes.Age(i, w.TickNumber, 0.5f);
-                flashes.MarkDrawn(i);
+                flashes.MarkDrawn(i, w.TickNumber);
             }
             flashes.Expire(w.TickNumber, removed);
+            int picked = AbilityCaster.PickCaster(magesB, w.Units.Alive, w.Units.Generation, w.Units.TypeId, w.Units.Position, w.Units.CastAbility,
+                w.Units.AbilityReadyTick, w.Units.QueueCount, w.Units.QueueKind, w.Units.QueueTypeId, sent.For(w.TickNumber, telas), w.Data.Units, telas, w.TickNumber,
+                At(viewed, 17, 31), queued: t % 2 == 0, out _);
+            if (picked >= 0)
+            {
+                pickTotal++;
+                sent.Note(w.TickNumber + 1, telas, new EntityHandle(picked, w.Units.Generation[picked]));
+            }
+            AbilityCaster.HasQueuedCast(w.Units.QueueCount, w.Units.QueueKind, w.Units.QueueTypeId, magesB[1].Index, 0);
             Assert.Equal(before, viewed.StateHash());
             Assert.Equal(bare.StateHash(), viewed.StateHash());
         }
-        _out.WriteLine($"seed {seed}: {markTotal} markers, {flashTotal} flashes over 900 ticks, hashes equal");
-        Assert.True(markTotal > 0 && flashTotal >= 2, $"{markTotal} markers, {flashTotal} flashes: the run must exercise both");
+        _out.WriteLine($"seed {seed}: {markTotal} markers, {flashTotal} flashes, {pickTotal} picks over 900 ticks, hashes equal");
+        Assert.True(markTotal > 0 && flashTotal >= 2 && pickTotal > 0, $"{markTotal} markers, {flashTotal} flashes, {pickTotal} picks: the run must exercise all three");
     }
 
     /// <summary>
@@ -185,7 +196,7 @@ public class StatusFlashQaTests
             Assert.Equal(resolvesPerTick, flashes.Collect(events, tick));
             Assert.Equal(0, flashes.Collect(events, tick));
             for (int i = 0; i < flashes.Capacity; i++)
-                if (flashes.Active[i]) { Assert.InRange(flashes.Age(i, tick, 0.3f), 0f, 1f); flashes.MarkDrawn(i); }
+                if (flashes.Active[i]) { Assert.InRange(flashes.Age(i, tick, 0.3f), 0f, 1f); flashes.MarkDrawn(i, tick); }
             flashes.Expire(tick, removed);
             maxCount = Math.Max(maxCount, flashes.Count);
             Assert.InRange(flashes.Count, 0, flashes.Capacity);
@@ -194,7 +205,7 @@ public class StatusFlashQaTests
         for (int k = 0; k <= ResolveFlashes.LifetimeTicks; k++, tick++)
         {
             Assert.Equal(0, flashes.Collect(ReadOnlySpan<AbilityEvent>.Empty, tick));
-            for (int i = 0; i < flashes.Capacity; i++) if (flashes.Active[i]) flashes.MarkDrawn(i);
+            for (int i = 0; i < flashes.Capacity; i++) if (flashes.Active[i]) flashes.MarkDrawn(i, tick);
             flashes.Expire(tick, removed);
         }
         int active = 0;
@@ -218,16 +229,16 @@ public class StatusFlashQaTests
         Assert.Equal(1, one.Replaced);
         Assert.Equal(1, one.Ability[0]);
         Assert.Equal(0f, one.Age(0, 2, 0f)); // a tick before the start: clamped, not negative
-        one.MarkDrawn(0);
+        one.MarkDrawn(0, 5);
         Assert.Equal(1f, one.Age(0, 100, float.NaN)); // NaN render alpha: no NaN age
         Assert.Equal(0f, one.Age(0, 5, float.NaN));
         var pool = new ResolveFlashes(8);
-        for (int i = 0; i < 8; i++) { pool.Add(0, 0, Vector2.Zero, 0); pool.MarkDrawn(i); }
+        for (int i = 0; i < 8; i++) { pool.Add(0, 0, Vector2.Zero, 0); pool.MarkDrawn(i, 0); }
         var tiny = new int[3];
         Assert.Equal(8, pool.Expire(ResolveFlashes.LifetimeTicks, tiny));
         Assert.Equal(0, pool.Count);
-        pool.MarkDrawn(-1);
-        pool.MarkDrawn(99);
+        pool.MarkDrawn(-1, 0);
+        pool.MarkDrawn(99, 0);
     }
 
     /// <summary>BUG-0310 rule against every footprint cell, every tick, in a fuzz where a building dies in sight, out of sight and with a scout on the footprint's edge: never a ghost over a visible cell, and every known unseen entry over fully hidden ground is a ghost.</summary>
@@ -287,11 +298,11 @@ public class ShiftQueuedCastQaTests
     private static int Pick(Simulation sim, EntityHandle[] sel, Vector2 point)
     {
         UnitStore u = sim.World.Units;
-        return AbilityCaster.PickCaster(sel, u.Alive, u.Generation, u.TypeId, u.Position, u.CastAbility, u.AbilityReadyTick,
-            sim.World.Data.Units, TestSim.Data.FindAbility("telas_fire"), sim.World.TickNumber, point, queued: true, out _);
+        return AbilityCaster.PickCaster(sel, u.Alive, u.Generation, u.TypeId, u.Position, u.CastAbility, u.AbilityReadyTick, u.QueueCount, u.QueueKind, u.QueueTypeId, ReadOnlySpan<EntityHandle>.Empty, sim.World.Data.Units, TestSim.Data.FindAbility("telas_fire"),
+            sim.World.TickNumber, point, queued: true, out _);
     }
 
-    [Fact(Skip = "BUG-0370: a Shift-queued cast waiting in a walking mage's queue doesn't count as busy; the next Shift click picks the same mage and its cooldown drops the second cast")]
+    [Fact]
     public void TwoShiftClicks_OnWalkingMages_GoToBothMages_BothCastsResolve()
     {
         Simulation sim = NoFights();

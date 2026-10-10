@@ -49,7 +49,7 @@ public partial class DebugOverlayTest : Node
         Engine.TimeScale = 1.0;
         foreach (string f in _failures) GD.Print($"DEBUG OVERLAY TEST FAIL: {f}");
         if (_failures.Count == 0) GD.Print("DEBUG OVERLAY TEST PASS");
-        GetTree().Quit(_failures.Count == 0 ? 0 : 1);
+        SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
     private async Task Run()

@@ -59,7 +59,7 @@ public sealed class PropLayout
     /// <summary>Number of resource types.</summary>
     public int TypeCount => _counts.Length;
 
-    /// <summary>The <see cref="NavGrid.Version"/> of the last fill; -1 before the first.</summary>
+    /// <summary>The version key of the last fill (<see cref="NavGrid.Version"/>, or <see cref="SeenResources.Version"/> under fog); -1 before the first.</summary>
     public int BuiltVersion { get; private set; } = -1;
 
     /// <summary>Times the lists were rebuilt (test and debug readout).</summary>
@@ -83,9 +83,18 @@ public sealed class PropLayout
     /// <param name="alive">The resource store's <c>Alive</c>.</param>
     /// <param name="typeId">The resource store's <c>TypeId</c>.</param>
     /// <param name="cell">The resource store's <c>Cell</c> (footprint anchor, lowest x, y).</param>
-    public bool Refresh(Heightmap map, NavGrid grid, ReadOnlySpan<bool> alive, ReadOnlySpan<int> typeId, ReadOnlySpan<int> cell)
+    public bool Refresh(Heightmap map, NavGrid grid, ReadOnlySpan<bool> alive, ReadOnlySpan<int> typeId, ReadOnlySpan<int> cell) =>
+        Refresh(map, grid.Width, grid.Version, alive, typeId, cell);
+
+    /// <summary>
+    /// Relists every type from the given spans if <paramref name="version"/> differs from the last fill's (or nothing was
+    /// filled yet); returns true if it did. With fog the view hands it <see cref="SeenResources"/>' last-seen copy and its
+    /// <see cref="SeenResources.Version"/> (M4-VH2, BUG-0281 item 1), so a tree felled out of sight stays listed and a
+    /// building change relists nothing (BUG-0126 item 3).
+    /// </summary>
+    public bool Refresh(Heightmap map, int gridWidth, int version, ReadOnlySpan<bool> alive, ReadOnlySpan<int> typeId, ReadOnlySpan<int> cell)
     {
-        if (Rebuilds > 0 && grid.Version == BuiltVersion) return false;
+        if (Rebuilds > 0 && version == BuiltVersion) return false;
         // Each type's list is compared with the last one as it is rewritten: same slots at the same anchors, in the
         // same order and count, means the same transforms (the terrain never changes).
         for (int t = 0; t < _counts.Length; t++) _changed[t] = Rebuilds == 0;
@@ -94,7 +103,7 @@ public sealed class PropLayout
         Array.Copy(_counts, oldCounts, types);
         Array.Clear(_counts);
         int n = Math.Min(alive.Length, Math.Min(typeId.Length, cell.Length));
-        int w = grid.Width;
+        int w = gridWidth;
         for (int s = 0; s < n; s++)
         {
             int t = typeId[s];
@@ -118,7 +127,7 @@ public sealed class PropLayout
             _counts[t] = k + 1;
         }
         for (int t = 0; t < types; t++) if (_counts[t] != oldCounts[t]) _changed[t] = true;
-        BuiltVersion = grid.Version;
+        BuiltVersion = version;
         Rebuilds++;
         return true;
     }

@@ -36,7 +36,7 @@ public partial class MinimapTest : Node
         Engine.TimeScale = 1.0;
         foreach (string f in _failures) GD.Print($"MINIMAP TEST FAIL: {f}");
         if (_failures.Count == 0) GD.Print("MINIMAP TEST PASS");
-        GetTree().Quit(_failures.Count == 0 ? 0 : 1);
+        SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
     private async Task Run()

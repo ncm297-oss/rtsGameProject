@@ -3974,8 +3974,10 @@ Match.tscn  (new node)
   the sim themselves. An observer that skipped ticks may meet a different shot in a slot it still tracks; it starts that
   slot over when it stands still (a firing tick), its type or owner changed, a lob's impact point moved (lobs never
   re-aim), a lob is more than 1 cm off the line from its recorded launch point to its impact point (a lob flies straight,
-  so a same-target lob fired from elsewhere starts over: BUG-0222), its `PrevPosition` is not where it was on the
-  previous tick, or it is nearer its launch than before (`Reused` counts these). A missed reuse of an aimed slot costs nothing (aimed shots draw without the launch point).
+  so a same-target lob fired from elsewhere starts over: BUG-0222, unless it was fired from a point on the old shot's line:
+  BUG-0250 item 1), its `PrevPosition` is not where it was on the previous tick, or it is nearer its launch than before
+  (`Reused` counts these). A skipping observer can keep a collinear reuse's old launch (QA: 5 in about 3,300 lob
+  observations); the Match observes every tick, so the game never meets it. A missed reuse of an aimed slot costs nothing (aimed shots draw without the launch point).
 - **The arc**: `height = apex x 4t(1 - t)` (`ArcHeight`), apex = a quarter of the flight length within 1-6 m
   (`ProjectileTracker.Apex`: a 24 m Catapult shot peaks at 6 m, a short Sapper throw at 1 m). t is the distance from the
   launch point over the arc's span, clamped to [0, 1]. The span ends **one step before the impact point**: the sim moves
@@ -4104,7 +4106,8 @@ game/shaders/        fog.gdshaderinc (shared uniforms and functions), terrain_fo
   rule (M3-V3); else `MinimapRaster.EnemyDotAt(point, UnitShown, Position, Owner, local)`: a shown enemy unit whose 4 x 4
   dot block (the 2 x 2 centre and its rim, at its position now) holds the clicked pixel, the nearest to the point winning;
   if one, `SelectionController.AttackOrder` on it (one Attack per selected unit, the ring, the sound); else a Move there.
-  A click where a hidden enemy stands is a Move (it has no dot): the documented M4-V4 rule. Buildings have no minimap
+  A click where a hidden enemy stands is a Move (it has no dot): the documented M4-V4 rule. (M4-VH2, BUG-0281 item 3: the
+  pick is now `DrawnEnemyDotAt` over the dots as last drawn, see "Implementation (M4-VH2)".) Buildings have no minimap
   dots yet, so the minimap attacks units only.
 - **Ghosts** (docs/02: last-known enemy buildings in explored fog): M4-V4 shipped only a hook returning 0; M4-V5 draws
   them from `Fog.Ghosts(player)`, see "Implementation (M4-V5)".
@@ -4229,7 +4232,9 @@ sim/Rts.Sim/ViewApi/AbilityCaster.cs   the caster pick and the button's cooldown
   `AbilityReadyTick[slot * 4 + index] <= TickNumber`. `PickCaster` takes the ready unit whose centre is nearest the target
   point, but one already casting or walking to cast *a* (`CastAbility == index`) only when no free one is ready (a second
   click with two mages starts the second, not a recast of the first); a queued (Shift) click never picks a busy one (its
-  cast would pop after the resolve, on cooldown, and be dropped). Ties: the earlier unit in the selection.
+  cast would pop after the resolve, on cooldown, and be dropped). Ties: the earlier unit in the selection. (M4-VH2,
+  BUG-0370: *busy* also covers a `UseAbility` of *a* waiting in the unit's order queue and a cast the view sent that has not
+  applied yet; see "Implementation (M4-VH2)".)
   `SoonestReady` is the button's read: 0 when some selected unit with *a* is off cooldown, else the fewest ticks until one
   is, -1 when none has it. `Progress(castTicksLeft, defCastTicks)` is the cast bar's fill.
 - **Card** (`CommandCard`, M3-V2 layout): a unit card puts the abilities of the active Tab subgroup's type on the top row,
@@ -4300,7 +4305,7 @@ game/scripts/AbilityViews.cs           draws both, and the cast bar's new look
   `RowOffset(place, row, spacing)` centres a row on the unit. `AbilityViews` draws each as a small cube (`MarkerSize`
   0.26 m, `MarkerSpacing` 0.34 m, side by side along x) `MarkerAbove` 0.62 m over the hp bar's place (above the cast bar),
   grown with the zoom like the bars, coloured by the status's `Kind` (data): `DamageOverTimeColor` flame for Burning,
-  `SlowColor` blue-grey for Slowed, `OtherStatusColor` pale for any other kind (so a new status of a known kind needs no
+  `SlowColor` deep blue for Slowed (a pale blue-grey until M4-VH2, BUG-0371 a), `OtherStatusColor` pale for any other kind (so a new status of a known kind needs no
   code). One coloured `MultiMesh` of unit capacity x `StatusStore.PerUnit` instances, written densely every frame, so a
   marker goes the frame its entry ends or its unit dies (the store is cleared with the slot) or the fog hides it. No status
   text is drawn yet (the names would come from `Data.Statuses[id].DisplayName`).
@@ -4310,16 +4315,17 @@ game/scripts/AbilityViews.cs           draws both, and the cast bar's new look
   tick. A flash lives `LifetimeTicks` 10 (0.5 s of game time) from its resolve; one no frame has drawn is kept until one has
   (the `ImpactMarks` rule); a full ring replaces the oldest (`Replaced`). `AbilityViews` draws it as a flat translucent
   disc on the terrain at the point, from `FlashFrom` 0.5 of the ability's `radius` to the full radius at 40 % of its life,
-  fading from `FlashAlpha` 0.75 to 0, only while the point's cell is visible (`FogView.ShowsPoint`); a hidden one is
-  counted as drawn so it expires on time.
+  fading from `FlashAlpha` 0.75 to 0, only if the point's cell is visible (`FogView.ShowsPoint`) on the flash's first
+  frame; a hidden one is counted as drawn so it expires on time. (M4-VH2, BUG-0371 b / c: that first frame decides once,
+  and the age runs from it; see "Implementation (M4-VH2)".)
 - **The Cusser** (M4-4b-1) needed no view code: a Sapper's card shows "Cusser" on Q (its first ability in
   `Data.Units[type].Abilities` order) with the tooltip from data, and Q arms it with a 6 m range ring and a 3.5 m radius ring.
 - **BUG-0342.** The cast bar is thicker (`BarThickness` 0.2 m, 0.3 m over the hp bar's place), its back a dim violet
   instead of black, and its fill never shorter than the bar is thick (`BarFillLength`), so the first tick shows a violet
   bar with a bright nub. With `order_queue` (Shift) held, an ability click that sent a cast leaves the ability armed for
   the next one (right-click or Esc ends it; a click that sent nothing still disarms; A and M targeting are unchanged). Two
-  queued clicks in the same tick can both pick the same mage, since the first cast is not in the store until its command
-  applies: the second is then dropped at its pop (cooldown).
+  queued clicks before the first cast's command applies (or with the mages walking, the first cast waiting in a queue)
+  could both pick the same mage until M4-VH2 closed it (BUG-0370, "Implementation (M4-VH2)").
 - **BUG-0310.** `FogView.CollectGhosts` also skips an entry whose remembered footprint has a visible cell
   (`FogStore.SeesFootprint`, the rule the sim drops the entry by at its next update), so a building that dies, or a site
   cancelled, in sight leaves no darkened box for the 1-3 ticks before the update, and `TargetRing` (which keeps its ring
@@ -4345,6 +4351,72 @@ game/scripts/AbilityViews.cs           draws both, and the cast bar's new look
   `-statuses.png` (looked at, seeds 1 and 6).
 - **Not yet (M4-V6c and later):** zone discs and the Sandstorm, the Blinded marker (it draws pale through the generic
   path until then), stealth visuals, autocast toggles, a status name tooltip, enemy cast-point rings.
+
+### Implementation (M4-VH2)
+
+View hardening: Shift-queued casts on walking mages, the Slowed marker's contrast, the resolve flash's first frame, the
+test scenes' shutdown, the fog view's last-seen resources and the minimap click. No sim change.
+
+```
+sim/Rts.Sim/ViewApi/SentCasts.cs       casters sent a UseAbility whose command has not applied yet
+sim/Rts.Sim/ViewApi/SeenResources.cs   resource nodes as the local player last saw them
+game/tests/SceneExit.cs                the test scenes' shutdown path
+```
+
+- **Busy casters (BUG-0370).** A ready caster is *busy* with ability *a* (passed over for a free one; never picked by a
+  queued click) when `CastAbility == index` (casting or walking in), when its order queue holds a `UseAbility` of *a*
+  (`AbilityCaster.HasQueuedCast` over `QueueCount` / `QueueKind` / `QueueTypeId`, whose type id is the ability's list
+  index), or when it is in `SentCasts.For(tick, a)`. `Simulation.Enqueue` stamps a command for `TickNumber + 1`, so a
+  click's `UseAbility` shows in the store only after two `Tick()` calls; `SelectionController.AbilityOrder` notes each
+  caster with that apply tick and `For` drops the entries whose tick has run. So two Shift clicks on two walking mages
+  queue one cast each and both resolve, two clicks in one frame pick two mages, and a third queued click with two mages is
+  refused (nothing sent, the ability disarms, as for any click that sends nothing). The memory is cleared when the
+  `Simulation` instance changes, and so is the double-Cancel guard (BUG-0250 item 3). `PickCaster` takes the three queue
+  spans and the sent span; the ring preview uses the same rule.
+- **Slowed marker (BUG-0371 a).** `SlowColor` is a deep saturated blue (0.08, 0.3, 0.95), readable on sand and pale
+  bodies at zoom 30 (windowed `ability-seedN-statuses.png`, before / after). A taste default: the owner or the M6 art pass
+  may change it.
+- **Resolve flash, first frame (BUG-0371 b, c).** `ResolveFlashes.MarkDrawn(slot, tick, shown)` is called once, on the
+  first frame that reaches the flash: it fixes `Shown` (the fog's answer at its point then) and the age origin (one tick
+  before that frame at most, the `ImpactMarks` rule). `AbilityViews` never draws a flash whose `Shown` is false, so a
+  resolve the fog hid is not drawn mid-fade when its cell comes into sight, and a flash first drawn several ticks late runs
+  its whole fade from that frame (no jump to its real age on the next frame). Expiry counts from the same origin.
+- **Test-scene shutdown (BUG-0251).** Every scene in `game/tests/` ends through `SceneExit.Quit(this, code)`: it frees the
+  scene node (and the Match under it), waits a frame, runs `GC.Collect`, `GC.WaitForPendingFinalizers` and `GC.Collect`
+  so the finalizers of the Godot wrappers the test held (the Match `PackedScene`, meshes, materials) run while Godot is
+  alive, waits another frame, then quits. A bare `Quit` left them to the finalizer thread during the C# language's
+  teardown, which crashed after the PASS line under load (about 6 % of `EconomyViewTest` runs).
+- **Last-seen resources (BUG-0281 item 1, BUG-0126 item 3).** `FogOfWar.Resources(world)` keeps a `SeenResources`: a copy
+  of the resource store's `Alive` / `TypeId` / `Cell` that takes a slot's change only when a cell of the old or the new
+  node's footprint is visible to the local player (at once with `--no-fog`). The store is compared slot by slot only when
+  `NavGrid.Version` moves; the differing slots wait in a pending list checked each frame. `PropsView` relists from the copy
+  on its `Version` (`PropLayout.Refresh` overload with a version key) and the minimap's resource layer redraws on it, so
+  a tree felled in explored fog stays drawn (darkened) on both until it is seen, and a building's spawn, site or cancel no
+  longer relists the props. The right-click resource pick still reads the store (a click on a remembered stump is a Gather
+  the sim resolves to a live node within `nodeSearchRadius`, or drops).
+- **New corpses and rubble in explored fog (BUG-0281 item 2):** left to the M6 fog-look pass. A death marker is added for
+  every death and drawn darkened on explored ground, also when the death happened out of sight. With two players that
+  needs a death out of the player's sight on ground it explored; a "seen at death" filter belongs with the per-cell
+  last-seen copy M6 plans for props and markers.
+- **Minimap click (BUG-0281 item 3).** `MinimapRaster.DrawDots` records each dot's unit slot and position;
+  `DrawnEnemyDotAt(point, local)` applies `EnemyDotAt`'s rule (the 4 x 4 block, nearest wins) to those dots as drawn.
+  `Minimap.CommandAt` attacks the picked dot's unit (its generation recorded at the refresh) while it is still live and
+  shown; a dot whose unit died or went out of sight since the refresh gives a Move (the sim drops an Attack on an unseen
+  unit), and an enemy that came into sight since has no dot yet, so a click there is a Move too.
+- **Tests.** xUnit `ViewApi/AbilityCasterTests` (a cast waiting in a walking mage's queue is busy, the next queued and
+  plain clicks go to the other mage, alone a queued click is refused and a plain one recasts, both casts resolve; two
+  clicks in one tick through `SentCasts` pick two mages, a third is refused, the memory lasts until the commands apply;
+  `SentCasts` capacity and clear; 0 bytes with the queue scan and the memory), `ViewApi/ResolveFlashesTests` (a late first
+  draw ages from that frame, no jump; the first frame's fog answer kept for the flash's life),
+  `ViewApi/SeenResourcesTests` (a fell out of sight kept until seen, in sight at once; `--no-fog`; a building change moves
+  nothing and relists nothing; a reused slot; 0 bytes), `ViewApi/FogViewTests.MinimapDrawnDotPick_*`;
+  `QA/ViewApi/ShiftQueuedCastQaTests.TwoShiftClicks_OnWalkingMages_*` un-skipped; the hash twin
+  (`NewViewApiHelpers_DoNotChangeTheSim_*`) also picks casters with the queue scan and `SentCasts` every tick;
+  `QA/AbilityCasterQaTests`' oracle has the queue rule. Headless `AbilityViewTest` adds a walking-mages row (both mages
+  under a Move, Shift + Q, three clicks in one frame: one queued cast per mage, the third refused, both resolve);
+  `FogViewTest` adds a last-seen tree row (felled in explored fog: still listed and on the minimap with no relist; seen
+  again: gone in one relist) and refreshes the dots before its minimap clicks; `PropsViewTest` runs with bases (steady
+  frames relist nothing).
 
 ## AI architecture
 
@@ -4602,8 +4674,8 @@ AiPlayer
 - **M6 notes (from the M2 hardening, M2-H2):**
   - **Leave `game/tests/` out of the release.** The test and screenshot scenes (and their scripts)
     are dev tools; some start the game binary as a child process (`OS.Execute`). Exclude them in the
-    preset (resources filter `tests/*`) and check the exported `.pck` holds no `tests/` path. (M4-VH1
-    count: 38 scenes. Their C# still compiles into `RtsGame.dll`, which the resources filter does not
+    preset (resources filter `tests/*`) and check the exported `.pck` holds no `tests/` path. (M4-VH2
+    count: 39 test scenes and 5 screenshot scenes, all ending through `SceneExit.Quit`, which only test scenes call. Their C# still compiles into `RtsGame.dll`, which the resources filter does not
     strip: harmless, as nothing in `scenes/` references `Rts.Game.Tests`, but moving them to their own
     assembly is the clean fix if the dll's size or contents matter.)
   - **Load `game/data/` in a `.pck`-safe way.** Today `Main` and the test scenes call

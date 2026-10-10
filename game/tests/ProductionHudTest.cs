@@ -70,7 +70,7 @@ public partial class ProductionHudTest : Node
         Input.ActionRelease("order_queue");
         foreach (string f in _failures) GD.Print($"PRODUCTION HUD TEST FAIL: {f}");
         if (_failures.Count == 0) GD.Print("PRODUCTION HUD TEST PASS");
-        GetTree().Quit(_failures.Count == 0 ? 0 : 1);
+        SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
     private async Task Run()

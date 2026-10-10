@@ -323,15 +323,31 @@ public partial class SelectionController : Node
         return true;
     }
 
-    /// <summary>The selected unit that would cast ability <paramref name="abilityId"/> at <paramref name="point"/> (<see cref="AbilityCaster.PickCaster"/>: the nearest ready one), its list index in <paramref name="index"/>; -1 for none.</summary>
+    /// <summary>The selected unit that would cast ability <paramref name="abilityId"/> at <paramref name="point"/> (<see cref="AbilityCaster.PickCaster"/>: the nearest ready one, a free one before one already casting, queued or sent it this tick), its list index in <paramref name="index"/>; -1 for none.</summary>
     public int PickCaster(int abilityId, System.Numerics.Vector2 point, bool queued, out int index)
     {
         index = -1;
         if (_runner?.Simulation is not Simulation sim || (uint)abilityId >= (uint)sim.World.Data.Abilities.Length) return -1;
         World world = sim.World;
+        ForgetIfNewMatch(sim);
         UnitStore u = world.Units;
         return AbilityCaster.PickCaster(Selection.Items, u.Alive, u.Generation, u.TypeId, u.Position, u.CastAbility, u.AbilityReadyTick,
+            u.QueueCount, u.QueueKind, u.QueueTypeId, _sentCasts.For(world.TickNumber, abilityId),
             world.Data.Units, abilityId, world.TickNumber, point, queued, out index);
+    }
+
+    // The casters sent a UseAbility whose command has not applied yet (BUG-0370): a second click before it applies passes them over.
+    private readonly SentCasts _sentCasts = new();
+
+    // The match the per-tick click memories (sent casters, the last Cancel) belong to; a new Simulation clears them (BUG-0250 item 3).
+    private Simulation? _memorySim;
+
+    private void ForgetIfNewMatch(Simulation sim)
+    {
+        if (ReferenceEquals(sim, _memorySim)) return;
+        _memorySim = sim;
+        _sentCasts.Clear();
+        (_cancelSlot, _cancelGeneration, _cancelTick) = (-1, 0, -1);
     }
 
     /// <summary>What the ability button shows for ability <paramref name="abilityId"/> (<see cref="AbilityCaster.SoonestReady"/> over the selection, live units only): 0 when a selected unit with it is off cooldown, else the fewest ticks until one is; -1 when none has it.</summary>
@@ -357,6 +373,7 @@ public partial class SelectionController : Node
         if (caster < 0 || !RoomFor(sim, 1, "Ability")) return false;
         var h = new EntityHandle(caster, sim.World.Units.Generation[caster]);
         sim.Enqueue(Command.UseAbility(LocalPlayer, h, index, point, queued));
+        _sentCasts.Note(sim.World.TickNumber + 1, abilityId, h); // Enqueue stamps it for the next tick number
         LastCaster = h;
         _issued[(int)CommandKind.UseAbility]++;
         _sfx?.Play(SfxEvent.Command);
@@ -605,7 +622,7 @@ public partial class SelectionController : Node
         return workers;
     }
 
-    // The site the last Cancel was sent for, and the tick it was sent between (BUG-0126 item 4).
+    // The site the last Cancel was sent for, and the tick it was sent between (BUG-0126 item 4); cleared with the match (BUG-0250 item 3).
     private int _cancelSlot = -1, _cancelGeneration, _cancelTick = -1;
 
     /// <summary>What the card's Cancel does (M3-V2): one <c>Cancel</c> at the selected own site's footprint centre; false (nothing enqueued) when no own site is selected, a Cancel for this site is already waiting for the next tick (a second press, BUG-0126), or the command queue is full.</summary>
@@ -615,6 +632,7 @@ public partial class SelectionController : Node
         int slot = SelectedBuilding;
         BuildingStore b = sim.World.Buildings;
         if (slot < 0 || !b.UnderConstruction[slot] || b.Owner[slot] != LocalPlayer) return false;
+        ForgetIfNewMatch(sim);
         if (sim.TickNumber == _cancelTick && slot == _cancelSlot && b.Generation[slot] == _cancelGeneration) return false;
         if (sim.PendingCommandCount + 1 > sim.World.Config.CommandCapacity)
         {

@@ -56,7 +56,7 @@ public partial class QaM25Test : Node
         Engine.TimeScale = 1.0;
         foreach (string f in _failures) GD.Print($"QA M2-5 TEST FAIL: {f}");
         if (_failures.Count == 0) GD.Print("QA M2-5 TEST PASS");
-        GetTree().Quit(_failures.Count == 0 ? 0 : 1);
+        SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
     private async Task FlagWithNoHud()

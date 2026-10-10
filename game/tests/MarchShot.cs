@@ -59,7 +59,7 @@ public partial class MarchShot : Node
         if (DisplayServer.GetName() == "headless")
         {
             GD.Print("MarchShot: capture unavailable in headless mode.");
-            GetTree().Quit(0);
+            SceneExit.Quit(this, 0);
             return;
         }
         UnitStore u = _sim.World.Units;
@@ -118,6 +118,6 @@ public partial class MarchShot : Node
         int side = Math.Min(240, Math.Min(shot.GetWidth(), shot.GetHeight()));
         Error b = shot.GetRegion(new Rect2I(0, shot.GetHeight() - side, side, side)).SavePng(mini);
         GD.Print($"MarchShot: {_onRamp} own units on ramp cells at tick {_sim.TickNumber}; saved {ramp} ({a}), {mini} ({b})");
-        GetTree().Quit(a == Error.Ok && b == Error.Ok ? 0 : 1);
+        SceneExit.Quit(this, a == Error.Ok && b == Error.Ok ? 0 : 1);
     }
 }

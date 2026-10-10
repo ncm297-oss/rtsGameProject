@@ -44,6 +44,8 @@ public partial class Minimap : Control
     private readonly Stopwatch _watch = new();
     private int _lastRefreshTick = -RefreshTicks;
     private bool _jumping;
+    // The generation of each dot's unit at the last dot refresh (BUG-0281 item 3: a click acts on the dots as drawn).
+    private int[] _dotGeneration = Array.Empty<int>();
 
     /// <summary>The minimap's pixels; null until <see cref="Init"/>.</summary>
     public MinimapRaster? Raster { get; private set; }
@@ -88,6 +90,7 @@ public partial class Minimap : Control
         _selection = selection;
         World world = runner.Simulation!.World;
         Raster = new MinimapRaster(world.Heightmap, world.NavGrid, playerRgb, world.Units.Capacity);
+        _dotGeneration = new int[world.Units.Capacity];
         _terrainTexture = ImageTexture.CreateFromImage(Image.CreateFromData(Raster.Width, Raster.Height, false, Image.Format.Rgba8, Raster.Terrain));
         DotsImage = Image.CreateFromData(Raster.Width, Raster.Height, false, Image.Format.Rgba8, Raster.Dots);
         _dotsTexture = ImageTexture.CreateFromImage(DotsImage);
@@ -112,15 +115,21 @@ public partial class Minimap : Control
         _watch.Restart();
         World world = sim.World;
         ResourceStore r = world.Resources;
-        // Keyed on the resource set (FreeCount rises with each fell), not NavGrid.Version, which every building change bumps (BUG-0107).
-        if (Raster!.DrawResources(world.Data.Resources, r.FreeCount, r.Alive, r.TypeId, r.Cell))
+        // Under the fog, the nodes as last seen, keyed on that copy's version (BUG-0281 item 1); without one, keyed on the
+        // resource set (FreeCount rises with each fell), not NavGrid.Version, which every building change bumps (BUG-0107).
+        SeenResources? seen = Fog?.Resources(world);
+        bool drew = seen != null
+            ? Raster!.DrawResources(world.Data.Resources, seen.Version, seen.Alive, seen.TypeId, seen.Cell)
+            : Raster!.DrawResources(world.Data.Resources, r.FreeCount, r.Alive, r.TypeId, r.Cell);
+        if (drew)
         {
             ResourcesImage.SetData(Raster.Width, Raster.Height, false, Image.Format.Rgba8, Raster.Resources);
             _resourcesTexture.Update(ResourcesImage);
         }
         FogView? fog = SyncFog(world);
         UnitStore u = world.Units;
-        Raster!.DrawDots(fog != null ? fog.UnitShown : u.Alive, u.Position, u.Owner);
+        int dots = Raster!.DrawDots(fog != null ? fog.UnitShown : u.Alive, u.Position, u.Owner);
+        for (int k = 0; k < dots; k++) _dotGeneration[k] = u.Generation[Raster.DrawnSlot(k)];
         DotsImage.SetData(Raster.Width, Raster.Height, false, Image.Format.Rgba8, Raster.Dots);
         _dotsTexture.Update(DotsImage);
         _watch.Stop();
@@ -211,9 +220,10 @@ public partial class Minimap : Control
 
     /// <summary>
     /// What a right click at ground point <paramref name="point"/> (m) orders: with a building selected its rally point
-    /// (M3-V3, as on the 3D view); on a visible enemy unit's dot (<see cref="MinimapRaster.EnemyDotAt"/> over the fog's
-    /// shown units at their positions now) one Attack on it per selected unit (M4-V4); else a Move there (also where a hidden
-    /// enemy stands: it has no dot). Queued with <paramref name="queued"/>. Returns what it ordered: <see cref="CommandKind.Attack"/>,
+    /// (M3-V3, as on the 3D view); on an enemy unit's dot as last drawn (<see cref="MinimapRaster.DrawnEnemyDotAt"/>: the
+    /// dots and positions of the last 5 Hz refresh, so the click matches the picture, BUG-0281 item 3) one Attack on it per
+    /// selected unit (M4-V4) while it is still live and shown; else a Move there (also where a hidden enemy stands: it has no
+    /// dot; and on a dot whose unit died or went out of sight since the refresh). Queued with <paramref name="queued"/>. Returns what it ordered: <see cref="CommandKind.Attack"/>,
     /// <see cref="CommandKind.Move"/>, or <see cref="CommandKind.SetRally"/> for the rally order.
     /// </summary>
     public CommandKind CommandAt(System.Numerics.Vector2 point, bool queued)
@@ -228,11 +238,17 @@ public partial class Minimap : Control
             World world = sim.World;
             UnitStore u = world.Units;
             FogView? fog = Fog?.Refreshed(world);
-            int enemy = Raster.EnemyDotAt(point, fog != null ? fog.UnitShown : u.Alive, u.Position, u.Owner, SelectionController.LocalPlayer);
-            if (enemy >= 0)
+            // Picked among the dots as drawn, at their drawn positions (BUG-0281 item 3); an Attack only while that unit is
+            // still live and shown, since the sim drops an Attack on an unseen unit (a dot that went dark gives a Move).
+            int dot = Raster.DrawnEnemyDotAt(point, SelectionController.LocalPlayer);
+            if (dot >= 0)
             {
-                _selection.AttackOrder(new EntityHandle(enemy, u.Generation[enemy]), isBuilding: false, queued);
-                return CommandKind.Attack;
+                var enemy = new EntityHandle(Raster.DrawnSlot(dot), _dotGeneration[dot]);
+                if (u.IsAlive(enemy) && (fog == null || fog.ShowsUnit(enemy.Index)))
+                {
+                    _selection.AttackOrder(enemy, isBuilding: false, queued);
+                    return CommandKind.Attack;
+                }
             }
         }
         _selection.Order(CommandKind.Move, new Vector2(point.X, point.Y), queued);

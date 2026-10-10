@@ -24,13 +24,14 @@ namespace Rts.Game;
 /// bar from the cast's first tick.</para>
 /// <para><b>Statuses</b> (M4-V6b). Every unit the screen shows gets one small marker per active status
 /// (<see cref="StatusMarkers.Collect"/>), side by side above its cast bar's place, in a colour by the status's
-/// <see cref="StatusKind"/> (Burning flame, Slowed blue-grey, any other kind pale). One coloured <see cref="MultiMesh"/>
+/// <see cref="StatusKind"/> (Burning flame, Slowed deep blue, any other kind pale). One coloured <see cref="MultiMesh"/>
 /// sized for every slot's <see cref="StatusStore.PerUnit"/> entries, written densely each frame.</para>
 /// <para><b>Resolve flashes</b> (M4-V6b). Every resolved cast in <c>World.AbilityEvents</c> (read from
 /// <see cref="SimRunner.Ticked"/>, so a frame of several ticks misses none, and from the frame loop for scenes that tick the
 /// sim themselves) adds a <see cref="ResolveFlashes"/> entry: a flat disc on the ground at the cast point that grows to the
-/// ability's <c>radius</c> and fades over <see cref="ResolveFlashes.LifetimeTicks"/> (0.5 s), drawn only while the point's
-/// cell is visible (<see cref="FogView.ShowsPoint"/>). A cast start draws no flash.</para>
+/// ability's <c>radius</c> and fades over <see cref="ResolveFlashes.LifetimeTicks"/> (0.5 s) from its first frame, drawn
+/// only when the point's cell was visible on that frame (<see cref="FogView.ShowsPoint"/>, decided once: M4-VH2, BUG-0371).
+/// A cast start draws no flash.</para>
 /// Views hold no gameplay state: everything is redrawn from the store and the selection each frame. Everything but the
 /// per-ability ring meshes is made in <see cref="Bind"/>, so a steady frame allocates nothing.
 /// </remarks>
@@ -68,8 +69,8 @@ public partial class AbilityViews : Node3D
     /// <summary>The Burning (damage over time) marker's colour: flame.</summary>
     public static readonly Color DamageOverTimeColor = new(1f, 0.42f, 0.05f);
 
-    /// <summary>The Slowed (slow) marker's colour: blue-grey.</summary>
-    public static readonly Color SlowColor = new(0.55f, 0.66f, 0.82f);
+    /// <summary>The Slowed (slow) marker's colour: a deep saturated blue, so it reads on sand and pale bodies at zoom 30 (BUG-0371 a; was a pale blue-grey; a taste default until the M6 art pass).</summary>
+    public static readonly Color SlowColor = new(0.08f, 0.3f, 0.95f);
 
     /// <summary>A marker of any other status kind (M4-V6c adds its own): pale.</summary>
     public static readonly Color OtherStatusColor = new(0.92f, 0.92f, 0.88f);
@@ -382,11 +383,12 @@ public partial class AbilityViews : Node3D
         {
             if (!active[i]) continue;
             System.Numerics.Vector2 p = f.Point[i];
-            if (fog != null && !fog.ShowsPoint(world.Fog, p))
+            // The first frame decides once whether it shows (BUG-0371 b): a resolve the fog hid then never appears mid-fade.
+            if (!f.Drawn[i]) f.MarkDrawn(i, world.TickNumber, fog == null || fog.ShowsPoint(world.Fog, p));
+            if (!f.Shown[i])
             {
                 if (_flashTransform[i] != Hidden) HideFlash(i);
-                f.MarkDrawn(i); // its frame has passed: it expires on time, unseen
-                continue;
+                continue; // it expires on time, unseen
             }
             float age = f.Age(i, world.TickNumber, a);
             int ability = f.Ability[i];
@@ -395,7 +397,6 @@ public partial class AbilityViews : Node3D
             _flashTransform[i] = new Transform3D(Basis.FromScale(new Vector3(r, 0.06f, r)), new Vector3(p.X, TerrainHeight.At(world.Heightmap, p.X, p.Y) + Lift, p.Y));
             _flashes.SetInstanceTransform(i, _flashTransform[i]);
             _flashes.SetInstanceColor(i, new Color(FlashColor.R, FlashColor.G, FlashColor.B, FlashAlpha * (1f - age)));
-            f.MarkDrawn(i);
             shown++;
         }
         ShownFlashes = shown;

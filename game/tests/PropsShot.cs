@@ -73,7 +73,7 @@ public partial class PropsShot : Node
         string full = ProjectSettings.GlobalizePath(_out);
         Error err = GetViewport().GetTexture().GetImage().SavePng(full);
         GD.Print($"saved {full} ({err}): tick {_sim.TickNumber}, army mean {Mean(u)}");
-        GetTree().Quit(err == Error.Ok ? 0 : 1);
+        SceneExit.Quit(this, err == Error.Ok ? 0 : 1);
     }
 
     private static System.Numerics.Vector2 Mean(UnitStore u)

@@ -83,7 +83,7 @@ public partial class QaV3bTest : Node
         foreach (string f in _failures.Take(60)) GD.Print($"QA M3-V3b TEST FAIL: {f}");
         if (_failures.Count > 60) GD.Print($"QA M3-V3b TEST FAIL: ... {_failures.Count - 60} more");
         if (_failures.Count == 0) GD.Print("QA M3-V3b TEST PASS");
-        GetTree().Quit(_failures.Count == 0 ? 0 : 1);
+        SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
     private async Task StartMatch()

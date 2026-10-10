@@ -53,7 +53,7 @@ public partial class QaM23Test : Node
         ReleaseAll();
         foreach (string f in _failures) GD.Print($"QA M2-3 TEST FAIL: {f}");
         if (_failures.Count == 0) GD.Print("QA M2-3 TEST PASS");
-        GetTree().Quit(_failures.Count == 0 ? 0 : 1);
+        SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
     private async Task Setup()
