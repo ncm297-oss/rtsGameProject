@@ -143,7 +143,12 @@
       "trainTime": 10,
       "trainedAt": "whirlwind_raider_camp",
       "requires": ["age_ii"],
-      "tags": ["infantry", "biological"]
+      "tags": ["infantry", "biological"],
+      "passives": [
+        { "trigger": "whenBelowHp", "hpFraction": 0.5, "status": "frenzied", "magnitude": 0.5 },
+        { "trigger": "onDeath", "status": "frenzied", "magnitude": 0.5, "duration": 5, "radius": 6,
+          "units": ["whirlwind_zealot"] }
+      ]
     }
   ]
 }

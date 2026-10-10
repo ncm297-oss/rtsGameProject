@@ -67,4 +67,14 @@ public sealed class UnitDef
     /// </summary>
     /// <remarks>Set once by the loader; never written afterwards. Empty in hand-built data and for a unit without abilities.</remarks>
     public ImmutableArray<int> Abilities { get; internal set; } = ImmutableArray<int>.Empty;
+    /// <summary>
+    /// The unit's <c>passives</c> in file order (M4-4b-3a): at most <see cref="DataLimits.MaxUnitPassives"/>, one per trigger.
+    /// Data, so never hashed as state; <see cref="GameData.ContentHash"/> covers it.
+    /// </summary>
+    /// <remarks>Set once by the loader, with <see cref="BelowHpPassive"/> and <see cref="DeathPassive"/>; never written afterwards. Empty in hand-built data.</remarks>
+    public ImmutableArray<UnitPassive> Passives { get; internal set; } = ImmutableArray<UnitPassive>.Empty;
+    /// <summary>The index in <see cref="Passives"/> of its <see cref="PassiveTrigger.WhenBelowHp"/> passive, or -1 (the per-type flag phase 5 reads, M4-4b-3a).</summary>
+    public int BelowHpPassive { get; internal set; } = -1;
+    /// <summary>The index in <see cref="Passives"/> of its <see cref="PassiveTrigger.OnDeath"/> passive, or -1 (the per-type flag the death path reads, M4-4b-3a).</summary>
+    public int DeathPassive { get; internal set; } = -1;
 }

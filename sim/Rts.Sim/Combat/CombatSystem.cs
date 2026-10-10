@@ -217,7 +217,8 @@ public static class CombatSystem
                 Face(world, i);
                 if (u.CooldownTicks[i] == 0)
                 {
-                    u.CooldownTicks[i] = attack.CooldownTicks;
+                    // M4-4b-3a: Frenzied shortens the cooldown (the status count first: no scan for a unit without statuses).
+                    u.CooldownTicks[i] = u.Statuses.Count[i] == 0 ? attack.CooldownTicks : StatusSystem.AttackCooldown(world, i, attack.CooldownTicks);
                     u.WindupTicks[i] = attack.WindupTicks;
                     if (attack.WindupTicks == 0) Strike(world, i, attack);
                 }
@@ -1042,6 +1043,8 @@ public static class CombatSystem
         {
             u.Hp[v] = 0;
             world.RecordDeath(new DeathEvent(hit.Victim, false, u.TypeId[v], u.Owner[v], hit.AttackerOwner, u.Position[v]));
+            // M4-4b-3a: an onDeath passive (Martyrdom) acts before the slot is freed, in death order.
+            if (world.Data.Units[u.TypeId[v]].DeathPassive >= 0) PassiveSystem.OnDeath(world, v);
             u.Free(hit.Victim);
             return;
         }

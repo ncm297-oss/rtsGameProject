@@ -14,4 +14,10 @@ public enum StatusKind
     /// nor strikes a target farther than <see cref="StatusDef.Reach"/>; the strongest (smallest sight) blind on a unit wins.
     /// </summary>
     Blind = 2,
+
+    /// <summary>
+    /// Frenzied (M4-4b-3a): the unit's attack cooldown becomes <c>max(1, round(cooldown / (1 + magnitude)))</c> ticks
+    /// (magnitude 0.5 = +50 % attack speed); the wind-up is unchanged; the largest magnitude on a unit wins.
+    /// </summary>
+    Frenzied = 3,
 }

@@ -596,6 +596,73 @@ public class StateHashTests
         Assert.Equal(h, sim.StateHash());
     }
 
+    /// <summary>
+    /// M4-4b-3a: the passives add no hashed per-unit field. The whenBelowHp slot flag and the live count follow from the
+    /// unit's type (its data), so they are derived and never hashed; a passive's Frenzied is a status entry, hashed with
+    /// every other (its id, magnitude and ticks, FrenziedTests.TheHash_CoversTheEntry_AndTwinsAgree); the attack cooldown
+    /// it shortens is the existing hashed CooldownTicks (the frenzy itself is read at the swing, never stored).
+    /// </summary>
+    [Fact]
+    public void Hash_ThePassiveFlagAndCount_AreDerived_AndNotHashed_TheirFrenziedIs()
+    {
+        Simulation sim = AbilityScenes.NoFights();
+        UnitStore u = sim.World.Units;
+        EntityHandle z = CombatScenes.Place(sim, 0, sim.World.Data.FindUnit("whirlwind_zealot"), CombatScenes.At(sim, 10, 10));
+        sim.Tick();
+        ulong h = sim.StateHash();
+        FieldInfo flag = typeof(UnitStore).GetField("_belowHp", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var flags = (bool[])flag.GetValue(u)!;
+        Assert.True(flags[z.Index]);
+        flags[z.Index] = false;
+        u.BelowHpUnits = 0;
+        Assert.Equal(h, sim.StateHash());
+        flags[z.Index] = true;
+        u.BelowHpUnits = 1;
+        u.Hp[z.Index] = 31;
+        ulong hurt = sim.StateHash();
+        sim.Tick(); // Frenzied now: a status entry, so the unit's ability word and its entry are hashed
+        Assert.NotEqual(hurt, sim.StateHash());
+        int at = u.Statuses.IndexOf(z.Index, sim.World.Data.FindStatus("frenzied"));
+        Assert.True(at >= 0);
+        ulong frenzied = sim.StateHash();
+        u.Statuses.Magnitude[at] = 0.75f;
+        Assert.NotEqual(frenzied, sim.StateHash());
+    }
+
+    /// <summary>M4-4b-3a: two sims of a Zealot skirmish (passives firing, Martyrdom on each death) hash equal every tick.</summary>
+    [Fact]
+    public void Hash_AZealotSkirmish_EqualTwins()
+    {
+        static List<ulong> Scene(ulong seed)
+        {
+            Simulation sim = CombatScenes.Flat(seed: seed);
+            int zealot = sim.World.Data.FindUnit("whirlwind_zealot");
+            for (int k = 0; k < 8; k++)
+            {
+                CombatScenes.Place(sim, 0, zealot, CombatScenes.At(sim, 10, 10 + k));
+                CombatScenes.Place(sim, 1, k % 2 == 0 ? zealot : CombatScenes.HeavyInfantry, CombatScenes.At(sim, 14, 10 + k));
+            }
+            var hashes = new List<ulong>();
+            int frenzied = sim.World.Data.FindStatus("frenzied"), deaths = 0, frenziedTicks = 0;
+            for (int t = 0; t < 400; t++)
+            {
+                for (int i = 0; i < sim.World.Units.Capacity; i++)
+                    if (sim.World.Units.Alive[i] && sim.World.Units.Statuses.IndexOf(i, frenzied) >= 0) frenziedTicks++;
+                deaths += sim.World.Deaths.Length;
+                if (t == 1)
+                    for (int i = 0; i < sim.World.Units.Capacity; i++)
+                        if (sim.World.Units.Alive[i])
+                            sim.Enqueue(Command.AttackMove(sim.World.Units.Owner[i], new EntityHandle(i, sim.World.Units.Generation[i]), CombatScenes.At(sim, 12, 14)));
+                sim.Tick();
+                hashes.Add(sim.StateHash());
+            }
+            Assert.True(deaths > 2 && frenziedTicks > 0, $"{deaths} deaths, {frenziedTicks} frenzied unit-ticks");
+            return hashes;
+        }
+        List<ulong> a = Scene(3), b = Scene(3);
+        Assert.Equal(a, b);
+    }
+
     /// <summary>M4-4b-2: two sims casting Sandstorm over an enemy the same way hash equal every tick; a cast a tick later differs.</summary>
     [Fact]
     public void Hash_ASandstormScene_EqualTwins_AndATickLaterDiffers()

@@ -450,7 +450,18 @@ public class FieldBuildFairnessQaTests
             // at 28 bytes (229,376), plus array headers: 231,658,712 measured (+966,040); the same 72 KB margin.
             // M4-4a fix round 1 (BUG-0301): each status entry gains its own pulse clock (int, 4 bytes x 8 entries x 4,096
             // slots = 131,072): 231,789,560 measured (+130,848); the same 72 KB margin.
-            Assert.True(bytes < 231_862_000, $"{bytes / 1e6:F1} MB");
+            // M4-4b-3a re-baselines (BUG-0302 b), every step since itemised:
+            // - M4-4b-2, +18,536 (231,808,096 on 63efab2): the per-slot blind in force (StatusStore._blind, int x 4,096 =
+            //   16,384 + a 24-byte header); the zone store's 64 slots (alive 64, owner 256, centre 512, ability 256, ticks 256,
+            //   radius 256, vision flag 64 = 1,664, + 7 x 24 headers = 1,832); the last 296 bytes are the ZoneStore object and the
+            //   fog's blind tables (the per-status mask index and the 2 m circle mask).
+            // - M4-H2, +35,016 (231,843,112 on 5c2de85): UnitStore.ChaseSwitches + ChaseChainBest 4,096 x 5 = 20,480; the death
+            //   list's extra BuildingCapacity 256 x 32-byte DeathEvent = 8,192; the towers' reveal pair 256 x 2 players x 4 x 2 =
+            //   4,096; the zone fog records 64 x 2 players x 1 word x 8 x 2 = 2,048; about 200 bytes of array headers.
+            // - M4-4b-3a, +4,144: the per-slot whenBelowHp passive flag (UnitStore._belowHp, bool x 4,096 = 4,096 + a 24-byte
+            //   header); 24 bytes of the fog's per-status tables for one more status (frenzied) and their alignment.
+            // 231,847,256 measured; the bound keeps the same 72 KB margin over it.
+            Assert.True(bytes < 231_920_000, $"{bytes / 1e6:F1} MB");
         }
     }
 }
