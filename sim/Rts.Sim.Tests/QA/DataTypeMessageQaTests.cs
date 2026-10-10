@@ -43,22 +43,12 @@ public class DataTypeMessageQaTests
     }
 
     /// <summary>A map of numbers given a number or a list: the field wants an object (a name-to-number map), not a number. BUG-0242.</summary>
-    [Theory(Skip = "BUG-0242: a map-of-numbers field given the wrong type says 'expected a number', not 'an object'")]
+    [Theory]
     [InlineData("attack.bonusVs", "1.5")]
     [InlineData("attack.bonusVs", "[1.5]")]
     public void MapOfNumbersField_GivenANumberOrAList_SaysExpectedAnObject(string field, string raw)
     {
         DataError e = LoadWith(field, raw);
         Assert.Contains("expected an object", e.Message);
-    }
-
-    /// <summary>Pin for BUG-0242 (today's behaviour). Flip to the skipped theory above when fixed.</summary>
-    [Theory]
-    [InlineData("attack.bonusVs", "1.5")]
-    [InlineData("attack.bonusVs", "[1.5]")]
-    public void Bug0242Pin_MapOfNumbersField_SaysExpectedANumber(string field, string raw)
-    {
-        DataError e = LoadWith(field, raw);
-        Assert.Contains("expected a number", e.Message);
     }
 }

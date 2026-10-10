@@ -48,7 +48,7 @@ public partial class QaM24Test : Node
         Engine.TimeScale = 1.0;
         foreach (string f in _failures) GD.Print($"QA M2-4 TEST FAIL: {f}");
         if (_failures.Count == 0) GD.Print("QA M2-4 TEST PASS");
-        GetTree().Quit(_failures.Count == 0 ? 0 : 1);
+        SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
     private async Task Setup()

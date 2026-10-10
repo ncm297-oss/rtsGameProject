@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Immutable;
 using System.Numerics;
+using Rts.Sim.Commands;
 using Rts.Sim.Data;
 using Rts.Sim.Entities;
+using Rts.Sim.Orders;
 
 namespace Rts.Sim.ViewApi;
 
@@ -10,16 +12,18 @@ namespace Rts.Sim.ViewApi;
 /// The view's casting rules over a selection (M4-V6a, docs/02 "Ability system"): which selected unit casts when the player
 /// clicks a target, and what the command card's ability button shows. Read-only, allocation-free, no <see cref="World"/>:
 /// the unit store's arrays come in as spans (<c>Alive</c>, <c>Generation</c>, <c>TypeId</c>, <c>Position</c>,
-/// <c>CastAbility</c>, <c>AbilityReadyTick</c>).
+/// <c>CastAbility</c>, <c>AbilityReadyTick</c>, the order queue's <c>QueueCount</c> / <c>QueueKind</c> / <c>QueueTypeId</c>).
 /// </summary>
 /// <remarks>
 /// "Only the nearest selected caster casts" is the view's choice (docs/03 "For the view (M4-V6)"): the sim casts for every
 /// <c>UseAbility</c> it gets. A caster is <em>ready</em> when it is live, its type lists the ability and its cooldown is
-/// over (<c>AbilityReadyTick &lt;= tick</c>). Among the ready ones a caster already casting or walking to cast that same
-/// ability is passed over while another is free (a second click with two mages selected starts the second mage, not a
-/// recast of the first); when every ready one is busy, the nearest busy one recasts (a plain click replaces a cast, docs/03
-/// "Implementation (M4-4a)"). A queued click never picks a busy one: its queued cast would pop after the resolve, on
-/// cooldown, and be dropped. Ties go to the earlier unit in the selection.
+/// over (<c>AbilityReadyTick &lt;= tick</c>). A ready caster is <em>busy</em> with the ability when it is casting or walking
+/// to cast it (<c>CastAbility</c>), when its order queue already holds a <c>UseAbility</c> of it (a Shift-queued cast
+/// behind a Move, BUG-0370), or when the view sent it one whose command has not applied yet (<see cref="SentCasts"/>: two
+/// clicks before the next ticks run). Among the ready ones a busy caster is passed over while another is free (a second click with two mages selected
+/// starts the second mage, not a recast of the first); when every ready one is busy, the nearest busy one recasts (a plain
+/// click replaces a cast, docs/03 "Implementation (M4-4a)"). A queued click never picks a busy one: its queued cast would
+/// pop after the first resolve, on cooldown, and be dropped. Ties go to the earlier unit in the selection.
 /// </remarks>
 public static class AbilityCaster
 {
@@ -38,10 +42,12 @@ public static class AbilityCaster
 
     /// <summary>
     /// The selected unit that casts ability <paramref name="abilityId"/> at <paramref name="point"/> (rules in the remarks):
-    /// its slot, with its list index in <paramref name="index"/>; -1 (index -1) when no selected unit is ready.
+    /// its slot, with its list index in <paramref name="index"/>; -1 (index -1) when no selected unit is ready (or, for a
+    /// queued click, none is ready and free). <paramref name="sent"/> is <see cref="SentCasts.For"/> of this tick and ability.
     /// </summary>
     public static int PickCaster(ReadOnlySpan<EntityHandle> selection, ReadOnlySpan<bool> alive, ReadOnlySpan<int> generation,
         ReadOnlySpan<int> typeId, ReadOnlySpan<Vector2> position, ReadOnlySpan<int> castAbility, ReadOnlySpan<int> readyTick,
+        ReadOnlySpan<int> queueCount, ReadOnlySpan<CommandKind> queueKind, ReadOnlySpan<int> queueTypeId, ReadOnlySpan<EntityHandle> sent,
         ImmutableArray<UnitDef> defs, int abilityId, int tick, Vector2 point, bool queued, out int index)
     {
         int best = -1;
@@ -54,7 +60,7 @@ public static class AbilityCaster
             if ((uint)i >= (uint)alive.Length || !alive[i] || generation[i] != h.Generation) continue;
             int k = IndexOf(defs[typeId[i]], abilityId);
             if (k < 0 || CooldownLeft(readyTick, i, k, tick) > 0) continue;
-            bool busy = castAbility[i] == k;
+            bool busy = castAbility[i] == k || HasQueuedCast(queueCount, queueKind, queueTypeId, i, k) || Contains(sent, h);
             if (busy && queued) continue;
             float d = Vector2.DistanceSquared(position[i], point);
             // A free caster beats a busy one at any distance; then the nearer; a tie keeps the earlier.
@@ -65,6 +71,23 @@ public static class AbilityCaster
             bestD = d;
         }
         return best;
+    }
+
+    /// <summary>Whether unit slot <paramref name="slot"/>'s order queue holds a <c>UseAbility</c> of its ability <paramref name="index"/> (a queued entry's type id is the ability's list index).</summary>
+    public static bool HasQueuedCast(ReadOnlySpan<int> queueCount, ReadOnlySpan<CommandKind> queueKind, ReadOnlySpan<int> queueTypeId, int slot, int index)
+    {
+        if ((uint)slot >= (uint)queueCount.Length) return false;
+        int from = slot * OrderConstants.QueueCapacity, n = Math.Min(queueCount[slot], OrderConstants.QueueCapacity);
+        for (int q = from; q < from + n; q++)
+            if (queueKind[q] == CommandKind.UseAbility && queueTypeId[q] == index) return true;
+        return false;
+    }
+
+    private static bool Contains(ReadOnlySpan<EntityHandle> handles, EntityHandle h)
+    {
+        for (int j = 0; j < handles.Length; j++)
+            if (handles[j] == h) return true;
+        return false;
     }
 
     /// <summary>

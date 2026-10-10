@@ -3,6 +3,7 @@ using Rts.Sim.Combat;
 using Rts.Sim.Commands;
 using Rts.Sim.Data;
 using Rts.Sim.Entities;
+using Rts.Sim.Vision;
 using static Rts.Sim.Tests.CombatScenes;
 
 namespace Rts.Sim.Tests;
@@ -106,6 +107,62 @@ public class TowerTests
         w.Buildings.SetWork(site.Index, w.Buildings.WorkNeeded(Watchtower));
         Assert.False(w.Buildings.UnderConstruction[site.Index]);
         Assert.NotEmpty(ShotTicks(sim, 0, 20));
+    }
+
+    /// <summary>
+    /// BUG-0270 (docs/02 "High ground": attacking from high ground reveals the attacker for 2 s): a Watchtower on the plateau
+    /// hitting a Crossbowman below reveals itself to the Crossbowman's owner for 40 ticks from the hit, refreshed by each
+    /// hit; the Crossbowman then takes it as a target; out of the tower's reach no hit refreshes it and it ends on time.
+    /// </summary>
+    [Fact]
+    public void ATowerHittingFromHighGround_IsRevealedToItsVictimsOwner_For40Ticks()
+    {
+        Simulation sim = FogMaps.Sim(FogMaps.TwoLevel());
+        World w = sim.World;
+        UnitStore u = w.Units;
+        EntityHandle tower = PlaceBuilding(sim, 0, Watchtower, 22, 30); // on the plateau (level 1)
+        EntityHandle xb = Place(sim, 1, Crossbowman, FogMaps.Cell(14, 31)); // below (level 0), no unit of player 0 anywhere
+        sim.Enqueue(Command.HoldPosition(1, xb));
+        int hp = u.Hp[xb.Index];
+        int hitTick = -1;
+        for (int t = 0; t < 200 && hitTick < 0; t++)
+        {
+            Assert.False(w.Fog.CanSeeBuilding(1, tower.Index), $"tick {sim.TickNumber}: seen before any hit");
+            sim.Tick();
+            if (u.Hp[xb.Index] < hp) hitTick = sim.TickNumber - 1;
+        }
+        Assert.True(hitTick >= 0, "the tower never hit the Crossbowman");
+        Assert.Equal(hitTick + VisionConstants.HighGroundRevealTicks, w.Fog.BuildingRevealEnd(1, tower.Index));
+        Assert.True(w.Fog.CanSeeBuilding(1, tower.Index));
+        Assert.False(w.Fog.BuildingRevealed(0, tower.Index)); // never to its own owner
+        // The low side answers: within the Crossbowman's sight (18 m), revealed, so it may take it (holding: in reach only).
+        Assert.True(VisionSystem.UnitSeesBuilding(w, xb.Index, tower.Index));
+        // Out of the tower's reach (a test seam: set down 40 m west), no hit refreshes the reveal; it ends 40 ticks after the last one.
+        int lastHit = hitTick;
+        hp = u.Hp[xb.Index];
+        u.Position[xb.Index] = FogMaps.Cell(2, 31);
+        while (sim.TickNumber <= lastHit + VisionConstants.HighGroundRevealTicks + 1)
+        {
+            int before = u.Hp[xb.Index];
+            sim.Tick();
+            if (u.Hp[xb.Index] < before) lastHit = sim.TickNumber - 1; // a shot already in flight
+        }
+        Assert.Equal(lastHit + VisionConstants.HighGroundRevealTicks, w.Fog.BuildingRevealEnd(1, tower.Index));
+        Assert.False(w.Fog.BuildingRevealed(1, tower.Index));
+        Assert.False(w.Fog.CanSeeBuilding(1, tower.Index));
+    }
+
+    /// <summary>BUG-0270: the Crossbowman below shoots back at the revealed tower (a tower never reveals from the same level).</summary>
+    [Fact]
+    public void ARevealedTower_IsShotBackAt_FromBelow()
+    {
+        Simulation sim = FogMaps.Sim(FogMaps.TwoLevel());
+        World w = sim.World;
+        EntityHandle tower = PlaceBuilding(sim, 0, Watchtower, 22, 30);
+        EntityHandle xb = Place(sim, 1, Crossbowman, FogMaps.Cell(14, 31));
+        int towerHp = w.Buildings.Hp[tower.Index];
+        RunUntil(sim, () => w.Buildings.Hp[tower.Index] < towerHp, 400);
+        Assert.True(w.Buildings.Hp[tower.Index] < towerHp, $"the Crossbowman never shot the tower (target {w.Units.Target[xb.Index]})");
     }
 
     [Fact]

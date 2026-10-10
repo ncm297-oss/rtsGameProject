@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-10-0215, task M4-4b-2 |
 | System | vision / zones (`FogStore.MarkBlocked`, `VisionSystem.ZoneHides`, `ZoneSystem.Apply`) |
-| Fixed by | |
+| Fixed by | 5c2de85 (M4-H2): `Vision/ZoneVisionTests.AtTheRim_TheUnitsOwnCentreDecides_ForTheFogAndForCombat`, un-skipped `QA/ZoneQaTests.TheBlockerAndTheStatuses_AgreeOnWhoIsInside` |
 
 ## Repro
 1. Un-skip `QA/ZoneQaTests.TheBlockerAndTheStatuses_AgreeOnWhoIsInside` and run
@@ -42,3 +42,6 @@ Options for the Producer:
 ## Producer triage (2026-10-10-0215 ACCEPT)
 
 S3 stays. Planned for the sim hardening next session (first item): option (a), hide a unit by its own centre in `ZoneHides` and `CanSeeUnit` (so the blocker and the statuses agree on who is inside) and keep the cell rule for ground; docs/02 and docs/03 to say the same thing afterwards. Un-skip `TheBlockerAndTheStatuses_AgreeOnWhoIsInside` and retire the current-behaviour pin.
+
+## QA verification (2026-10-10-0624, M4-H2)
+Verified by QA 2026-10-10-0624 (M4-H2). Option (a): a unit is hidden by its own centre (edge counts) in `FogStore.CanSeeUnit` and `VisionSystem.ZoneHides`; the ground keeps the cell rule. The un-skipped row failed on the base 63efab2 and passes on 5c2de85. Rim checked: 5.2 m in hidden + never acquired, 6.01 m out seen + shot, exactly 6.0 m hidden; a Blinded Laborer inside by its centre in an "outside" cell sees from inside. QA added `QA/SimHardeningH2QaTests` rows: three players (the storm hides a third player's unit by its centre from everyone but its owner; failed on the base), overlapping storms (a unit in both needs a viewer inside each), the map's four corners (clipped box records). `Stress/ZoneFogOracleFuzzStressTests` (re-derived unit oracle) green on 7 seeds (3 added by QA): 0 mismatches. docs/02 "Zones" and docs/03 "Implementation (M4-4b-2)" agree.

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open (items 1 and 3 fixed; item 2 open) |
 | Found | 2026-10-08-2144, task M4-VH1 (QA) |
 | System | view: `sim/Rts.Sim/ViewApi/ProjectileTracker.cs`, `TerrainHeight.cs`; `game/scripts/SelectionController.cs`; docs/03 |
-| Fixed by | |
+| Fixed by | items 1, 3: 956eab3 (M4-VH2): item 1 by docs (docs/03 now states the collinear exception and the QA rate); item 3 `SelectionController.ForgetIfNewMatch` clears the Cancel guard and the sent-cast memory when the `Simulation` instance changes (no regression test: BUG-0400 item 2) |
 
 ## Item 1: collinear same-target lob reuse, skipping observer
 Repro: `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~LobReuseHostileQaTests.CollinearReuse" --logger
@@ -49,3 +49,11 @@ match it belongs to.
 
 ## Notes
 None of these is reachable in normal play, and none blocks M4-VH1.
+
+## Verification (QA 2026-10-10-0624, M4-VH2)
+- Item 1: docs/03's projectile tracker paragraph now says a same-target lob fired from a point on the old shot's line
+  can keep the old launch for a skipping observer, with the measured rate; the Match observes every tick. Docs fix, as
+  the bug offered.
+- Item 3: `CancelSelectedSite` calls `ForgetIfNewMatch(sim)` before the guard check (code read). No test can reach it
+  today (one Match per `SelectionController`); see BUG-0400 item 2.
+- Item 2 (`TerrainHeight.Straddle` constant) not reached.

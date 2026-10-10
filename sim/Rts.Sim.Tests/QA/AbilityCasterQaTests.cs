@@ -56,7 +56,7 @@ public class AbilityCasterQaTests
             bool queued = rng.Next(4) == 0;
             int tickNow = a.World.TickNumber;
 
-            int picked = AbilityCaster.PickCaster(sel, u.Alive, u.Generation, u.TypeId, u.Position, u.CastAbility, u.AbilityReadyTick,
+            int picked = AbilityCaster.PickCaster(sel, u.Alive, u.Generation, u.TypeId, u.Position, u.CastAbility, u.AbilityReadyTick, u.QueueCount, u.QueueKind, u.QueueTypeId, ReadOnlySpan<EntityHandle>.Empty,
                 a.World.Data.Units, ability, tickNow, point, queued, out int index);
             int soonest = AbilityCaster.SoonestReady(sel, u.Alive, u.Generation, u.TypeId, u.AbilityReadyTick, a.World.Data.Units, ability, tickNow);
             int oracle = Oracle(a, sel, ability, point, queued, out int oracleIndex);
@@ -64,7 +64,7 @@ public class AbilityCasterQaTests
             Assert.Equal(oracleIndex, index);
             Assert.Equal(OracleSoonest(a, sel, ability), soonest);
             // The button is live exactly when a plain click would send something.
-            int plain = AbilityCaster.PickCaster(sel, u.Alive, u.Generation, u.TypeId, u.Position, u.CastAbility, u.AbilityReadyTick,
+            int plain = AbilityCaster.PickCaster(sel, u.Alive, u.Generation, u.TypeId, u.Position, u.CastAbility, u.AbilityReadyTick, u.QueueCount, u.QueueKind, u.QueueTypeId, ReadOnlySpan<EntityHandle>.Empty,
                 a.World.Data.Units, ability, tickNow, point, false, out _);
             if ((soonest == 0) != (plain >= 0)) readyMismatch++;
             foreach (EntityHandle h in sel) if (!u.IsAlive(h)) deadInSelection++;
@@ -112,7 +112,7 @@ public class AbilityCasterQaTests
         var sel = new[] { m1, m2 };
         for (int k = 0; k < 500; k++)
         {
-            AbilityCaster.PickCaster(sel, u.Alive, u.Generation, u.TypeId, u.Position, u.CastAbility, u.AbilityReadyTick,
+            AbilityCaster.PickCaster(sel, u.Alive, u.Generation, u.TypeId, u.Position, u.CastAbility, u.AbilityReadyTick, u.QueueCount, u.QueueKind, u.QueueTypeId, ReadOnlySpan<EntityHandle>.Empty,
                 sim.World.Data.Units, TelasFire, tick, At(sim, k % 48, 20), k % 2 == 0, out _);
             AbilityCaster.SoonestReady(sel, u.Alive, u.Generation, u.TypeId, u.AbilityReadyTick, sim.World.Data.Units, TelasFire, tick);
         }
@@ -120,8 +120,9 @@ public class AbilityCasterQaTests
         Assert.Equal(tick, sim.World.TickNumber);
     }
 
-    // Brute force of the documented rule: live, has the ability, off cooldown; busy (casting that ability) only when no free
-    // one is ready and never when queued; nearest; tie = earlier in the selection.
+    // Brute force of the documented rule: live, has the ability, off cooldown; busy (casting that ability, or a UseAbility of
+    // it waiting in the order queue: BUG-0370) only when no free one is ready and never when queued; nearest; tie = earlier
+    // in the selection.
     private static int Oracle(Simulation sim, EntityHandle[] sel, int ability, Vector2 point, bool queued, out int index)
     {
         UnitStore u = sim.World.Units;
@@ -135,7 +136,7 @@ public class AbilityCasterQaTests
             if (k < 0) continue;
             if (u.AbilityReadyTick[h.Index * DataLimits.MaxUnitAbilities + k] > sim.World.TickNumber) continue;
             float d = Vector2.DistanceSquared(u.Position[h.Index], point);
-            if (u.CastAbility[h.Index] == k)
+            if (u.CastAbility[h.Index] == k || QueuedCast(u, h.Index, k))
             {
                 if (queued) continue;
                 if (d < dBusy) { dBusy = d; bestBusy = h.Index; busyK = k; }
@@ -145,6 +146,16 @@ public class AbilityCasterQaTests
         if (bestFree >= 0) { index = freeK; return bestFree; }
         index = busyK;
         return bestBusy;
+    }
+
+    private static bool QueuedCast(UnitStore u, int slot, int k)
+    {
+        for (int q = 0; q < u.QueueCount[slot]; q++)
+        {
+            int at = slot * Rts.Sim.Orders.OrderConstants.QueueCapacity + q;
+            if (u.QueueKind[at] == CommandKind.UseAbility && u.QueueTypeId[at] == k) return true;
+        }
+        return false;
     }
 
     private static int OracleSoonest(Simulation sim, EntityHandle[] sel, int ability)

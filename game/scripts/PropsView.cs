@@ -17,7 +17,8 @@ namespace Rts.Game;
 /// costs one int compare and allocates nothing. Holds no gameplay state.
 /// Fog (M4-V4): bound with a <see cref="FogOfWar"/>, every surface's material is the fog's prop shader in the same colour,
 /// so a tree or mine on unexplored ground is not drawn and one on explored ground is darkened (the GPU reads the cell under
-/// each instance; nothing is relisted when the fog moves).
+/// each instance). The instances are the fog's last-seen nodes (<see cref="FogOfWar.Resources"/>, M4-VH2): a tree felled out
+/// of sight stays until its footprint is seen, and a relist happens only when that copy changes (not on building changes).
 /// </remarks>
 public partial class PropsView : Node3D
 {
@@ -46,6 +47,7 @@ public partial class PropsView : Node3D
     private static readonly Color GoldColor = new(0.90f, 0.70f, 0.15f);
 
     private PropLayout? _layout;
+    private FogOfWar? _fog;
     private MultiMesh[] _mms = Array.Empty<MultiMesh>();
     private float[][] _buffers = Array.Empty<float[]>();
     private int[] _typeUploads = Array.Empty<int>();
@@ -71,6 +73,7 @@ public partial class PropsView : Node3D
     /// <summary>Builds one MultiMesh child per resource type, sized for <paramref name="capacity"/> nodes (the store's); call once before the first <see cref="Sync"/>. With <paramref name="fog"/> the props are drawn under the fog.</summary>
     public void Bind(GameData data, int capacity, FogOfWar? fog = null)
     {
+        _fog = fog;
         _layout = new PropLayout(data.Resources, capacity);
         _mms = new MultiMesh[data.Resources.Length];
         _buffers = new float[_mms.Length][];
@@ -95,12 +98,16 @@ public partial class PropsView : Node3D
         if (Runner?.Simulation is Simulation sim) Sync(sim.World);
     }
 
-    /// <summary>Relists and uploads the props if the grid's version changed since the last upload.</summary>
+    /// <summary>Relists and uploads the props if the nodes changed since the last upload: the fog's last-seen copy (<see cref="FogOfWar.Resources"/>) when bound with a fog, else the store on the grid's version.</summary>
     public void Sync(World world)
     {
         if (_layout == null) return;
         ResourceStore r = world.Resources;
-        if (!_layout.Refresh(world.Heightmap, world.NavGrid, r.Alive, r.TypeId, r.Cell)) return;
+        // Under the fog node, the nodes as last seen and relisted only when that copy changes (BUG-0281 item 1, BUG-0126 item 3).
+        bool relisted = _fog?.Resources(world) is SeenResources seen
+            ? _layout.Refresh(world.Heightmap, world.NavGrid.Width, seen.Version, seen.Alive, seen.TypeId, seen.Cell)
+            : _layout.Refresh(world.Heightmap, world.NavGrid, r.Alive, r.TypeId, r.Cell);
+        if (!relisted) return;
         bool any = false;
         for (int t = 0; t < _mms.Length; t++)
         {

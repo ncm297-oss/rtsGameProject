@@ -81,6 +81,6 @@ public partial class DebugOverlayShot : Node
         var overlay = _match.GetNode<DebugOverlay>("DebugOverlay");
         GD.Print($"saved {full} ({err}): tick {_sim.TickNumber}, goal {overlay.ShownGoal}, arrows {_match.GetNode<FlowArrowsView>("World3D/FlowArrows").ShownCount}, " +
             $"moving {overlay.MovingUnits}, fields {overlay.CachedFields}, overlay frame {overlay.LastLayersMs:F3} ms");
-        GetTree().Quit(err == Error.Ok ? 0 : 1);
+        SceneExit.Quit(this, err == Error.Ok ? 0 : 1);
     }
 }

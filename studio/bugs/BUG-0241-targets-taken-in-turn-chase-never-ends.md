@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-08-2144, task M4-H1 (QA hostile variant of BUG-0149) |
 | System | combat give-up (`CombatSystem.Engage` / `Acquire`: `ChaseBest`, `ChaseStall`, `ChasePrev`) |
-| Fixed by | |
+| Fixed by | 5c2de85 (M4-H2): un-skipped `QA/ChasePrevQaTests.UnreachableTargetsTakenInTurn_TheChaseStillEnds` (6 rows); the `Bug0241Pin_*` row deleted |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~ChasePrevQaTests"`. The skipped theory
@@ -43,3 +43,6 @@ The chaser shuttles along the cliff foot (y 39-42 m) for the whole run.
   targets don't pull the chaser along a wall.
 - Possible fix: keep `ChaseBest` per remembered target (or don't re-take it on a switch back), or give up a chase whose
   total switches since the last landed hit pass a bound.
+
+## QA verification (2026-10-10-0624, M4-H2)
+Verified by QA 2026-10-10-0624 (M4-H2): all 6 un-skipped rows failed on the base 63efab2 and pass on 5c2de85. Option chosen: bound the switches (`UnitStore.ChaseSwitches`, reset by a landed blow, a target loss, an order, or a switch that got closer; `GiveUpScans` = 10, an existing constant) with the friend-fights exception. The switch count is hashed above the stall count and `ChaseChainBest` with the chase memory (`StateHashTests.Hash_CoversEveryCombatField_...`). Brawl rows (`CombatGiveUpQaTests`, counter triangle) still green.

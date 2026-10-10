@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-10-0215, task M4-4b-2 |
 | System | replays (`ReplayRecorder` constructor), zones (`SimConfig.ZoneCapacity`) |
-| Fixed by | |
+| Fixed by | 5c2de85 (M4-H2): un-skipped `QA/ZoneQaTests.TheRecorder_RefusesANonDefaultZoneCapacity`, `ReplayPlayerTests.Recorder_RefusesANonDefaultZoneCapacity` (1, 63, 65; 64 attaches) |
 
 ## Repro
 1. Un-skip `QA/ZoneQaTests.TheRecorder_RefusesANonDefaultZoneCapacity`. It fails with `Assert.Throws() Failure: No exception was thrown`.
@@ -27,3 +27,6 @@ the replay header: a replay plays with the default", but nothing enforces it.
 ## Notes
 The fix is one `if` next to the two existing guards in `ReplayRecorder`'s constructor. Player impact is low: today only tests
 and tools set the capacity.
+
+## QA verification (2026-10-10-0624, M4-H2)
+Verified by QA 2026-10-10-0624 (M4-H2): the un-skipped row failed on the base 63efab2 and passes on 5c2de85; the guard sits beside the building / projectile ones in `ReplayRecorder`'s constructor.

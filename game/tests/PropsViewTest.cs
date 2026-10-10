@@ -35,7 +35,7 @@ public partial class PropsViewTest : Node
         }
         foreach (string f in _failures) GD.Print($"PROPS VIEW TEST FAIL: {f}");
         if (_failures.Count == 0) GD.Print("PROPS VIEW TEST PASS");
-        GetTree().Quit(_failures.Count == 0 ? 0 : 1);
+        SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
     private async Task Run()
@@ -69,7 +69,7 @@ public partial class PropsViewTest : Node
 
     private async Task MatchWith(string[] flags, int forests, int mines, bool deep)
     {
-        var args = new List<string> { "--units", "20", "--no-bases" }; // armies only, as in M2 (M3-V1)
+        var args = new List<string> { "--units", "20" }; // with bases: a building change relists nothing since M4-VH2 (BUG-0126 item 3)
         args.AddRange(flags);
         var match = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
         AddChild(match);

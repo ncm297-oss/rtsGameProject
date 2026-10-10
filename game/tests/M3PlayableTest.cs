@@ -105,7 +105,7 @@ public partial class M3PlayableTest : Node
             catch (Exception save) { GD.Print($"  replay not saved: {save.Message}"); }
         }
         GD.Print(failure.Length == 0 ? "M3 PLAYABLE TEST PASS" : $"M3 PLAYABLE TEST FAIL {failure}");
-        GetTree().Quit(failure.Length == 0 ? 0 : 1);
+        SceneExit.Quit(this, failure.Length == 0 ? 0 : 1);
     }
 
     // ---- the script ----

@@ -72,7 +72,7 @@ public partial class QaV2Test : Node
         Input.ActionRelease("order_queue");
         foreach (string f in _failures) GD.Print($"QA M3-V2 TEST FAIL: {f}");
         if (_failures.Count == 0) GD.Print("QA M3-V2 TEST PASS");
-        GetTree().Quit(_failures.Count == 0 ? 0 : 1);
+        SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
     // ui.json fail-fast: a root (or section) of the wrong JSON kind must be an error, never a UiText with empty texts.

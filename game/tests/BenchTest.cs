@@ -51,7 +51,7 @@ public partial class BenchTest : Node
         }
         foreach (string f in _failures) GD.Print($"BENCH TEST FAIL: {f}");
         if (_failures.Count == 0) GD.Print("BENCH TEST PASS");
-        GetTree().Quit(_failures.Count == 0 ? 0 : 1);
+        SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
     private void ParseRows()

@@ -435,6 +435,42 @@ public class FogViewTests
         Assert.Equal(MinimapRaster.DotCells, hits);
     }
 
+    /// <summary>M4-VH2 (BUG-0281 item 3): the minimap click picks among the dots as last drawn, at their drawn positions: a unit that moved, went hidden or came into sight since the refresh doesn't change what a click on the picture hits.</summary>
+    [Fact]
+    public void MinimapDrawnDotPick_IsOverTheDotsAsDrawn_NotTheUnitsNow()
+    {
+        Heightmap map = LocalMovementTests.Flat(48);
+        var raster = new MinimapRaster(map, new NavGrid(map), new uint[] { 0x4B4F55, 0xC8892E }, 8);
+        Assert.Equal(-1, raster.DrawnEnemyDotAt(new Vector2(41f, 41f), 0)); // nothing drawn yet
+        Vector2[] pos = { new(21f, 21f), new(41f, 41f), new(44.5f, 41f), new(61f, 61f), new(81f, 81f) };
+        int[] owner = { 0, 1, 1, 1, 1 };
+        bool[] shown = { true, true, true, false, true };
+        Assert.Equal(4, raster.DrawDots(shown, pos, owner));
+        Assert.Equal(4, raster.DrawnCount);
+        // Same answers as the live rule while nothing moved (dot k -> its slot).
+        foreach (Vector2 p in new[] { new Vector2(21f, 21f), new Vector2(41.2f, 41f), new Vector2(44f, 41f), new Vector2(61f, 61f), new Vector2(83.9f, 79.1f), new Vector2(86.1f, 81f) })
+        {
+            int k = raster.DrawnEnemyDotAt(p, 0);
+            Assert.Equal(raster.EnemyDotAt(p, shown, pos, owner, 0), k < 0 ? -1 : raster.DrawnSlot(k));
+        }
+        // Since the refresh: slots 1 and 2 walked off, slot 3 came into sight, slot 4 went hidden.
+        Vector2[] now = (Vector2[])pos.Clone();
+        now[1] = new Vector2(47f, 41f);
+        now[2] = new Vector2(30f, 10f);
+        bool[] shownNow = { true, true, true, true, false };
+        Assert.Equal(1, raster.DrawnSlot(raster.DrawnEnemyDotAt(new Vector2(41f, 41f), 0))); // its drawn dot still picks it
+        Assert.Equal(-1, raster.EnemyDotAt(new Vector2(41f, 41f), shownNow, now, owner, 0)); // the live rule: empty ground
+        Assert.Equal(-1, raster.DrawnEnemyDotAt(new Vector2(61f, 61f), 0)); // no dot drawn there yet
+        Assert.Equal(4, raster.DrawnSlot(raster.DrawnEnemyDotAt(new Vector2(81f, 81f), 0))); // still drawn; the Minimap checks it is shown
+        Assert.Equal(0, raster.DrawnSlot(raster.DrawnEnemyDotAt(new Vector2(21f, 21f), 1))); // roles swap for player 1
+        Assert.Equal(-1, raster.DrawnEnemyDotAt(new Vector2(float.NaN, 3f), 0));
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        int sum = 0;
+        for (int i = 0; i < 1000; i++) sum += raster.DrawnEnemyDotAt(new Vector2(40f + i % 8, 41f), 0);
+        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
+        Assert.NotEqual(0, sum);
+    }
+
     [Fact]
     public void BuildingPick_SkipsSlotsTheViewDoesNotShow()
     {

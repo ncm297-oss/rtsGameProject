@@ -68,7 +68,7 @@ public partial class QaV6aTest : Node
         }
         foreach (string f in _failures.Take(40)) GD.Print($"QA V6A TEST FAIL: {f}");
         if (_failures.Count == 0) GD.Print("QA V6A TEST PASS");
-        GetTree().Quit(_failures.Count == 0 ? 0 : 1);
+        SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
     private void StartMatch(ulong seed, params string[] extra)

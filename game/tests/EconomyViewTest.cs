@@ -53,7 +53,7 @@ public partial class EconomyViewTest : Node
         Input.ActionRelease("order_queue");
         foreach (string f in _failures) GD.Print($"ECONOMY VIEW TEST FAIL: {f}");
         if (_failures.Count == 0) GD.Print("ECONOMY VIEW TEST PASS");
-        GetTree().Quit(_failures.Count == 0 ? 0 : 1);
+        SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
     private async Task Run()

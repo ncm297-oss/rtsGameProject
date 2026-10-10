@@ -16,6 +16,9 @@ namespace Rts.Game;
 /// <para><b>Hide rule.</b> <see cref="View"/>'s <c>UnitShown</c> / <c>BuildingShown</c> (<c>CanSeeUnit</c> /
 /// <c>CanSeeBuilding</c> of the local player); each view refreshes it itself (once per tick, whichever asks first), so the
 /// node order in the scene doesn't matter.</para>
+/// <para><b>Last-seen resources</b> (M4-VH2, BUG-0281 item 1): <see cref="Resources"/> keeps <see cref="Rts.Sim.ViewApi.SeenResources"/>,
+/// the nodes as the player last saw them, so a tree felled in explored fog stays drawn (darkened) on the map and the
+/// minimap until its footprint is in sight again.</para>
 /// <para><b>Disabled</b> (<c>--no-fog</c>, a dev and test flag): the texture is all visible and every live slot is shown.</para>
 /// Holds no gameplay state; reads the sim only.
 /// </remarks>
@@ -44,11 +47,15 @@ public partial class FogOfWar : Node
     /// <summary>Texture uploads so far (one per fog version seen, plus the first).</summary>
     public int Uploads { get; private set; }
 
+    /// <summary>The resource nodes as the local player last saw them (BUG-0281 item 1), kept by <see cref="Resources"/>; null before <see cref="Bind"/>.</summary>
+    public SeenResources? SeenResources { get; private set; }
+
     /// <summary>Sizes the texture for the match's map and makes the hide rule for <paramref name="player"/>; call once after the sim exists, before the views bind.</summary>
     /// <param name="enabled">False for <c>--no-fog</c>.</param>
     public void Bind(World world, int player, bool enabled)
     {
         View = new FogView(world.Fog.Width, world.Fog.Height, world.Units.Capacity, world.Buildings.Capacity, player, enabled);
+        SeenResources = new SeenResources(world.Data.Resources, world.Resources.Capacity);
         Image = Image.CreateFromData(View.Width, View.Height, false, Image.Format.R8, View.Texture);
         Texture = ImageTexture.CreateFromImage(Image);
         _worldSize = new Vector2(View.Width * MapConstants.CellSize, View.Height * MapConstants.CellSize);
@@ -77,6 +84,19 @@ public partial class FogOfWar : Node
     {
         View?.Refresh(world.Fog, world.TickNumber, world.Units.Alive, world.Buildings.Alive, world.Buildings.Generation);
         return View;
+    }
+
+    /// <summary>
+    /// The last-seen resource nodes brought up to this frame (<see cref="SeenResources.Update"/>: only slots that changed in
+    /// the store are checked against the fog), for the props and the minimap's resource layer; null before <see cref="Bind"/>.
+    /// Allocation-free.
+    /// </summary>
+    public SeenResources? Resources(World world)
+    {
+        if (View == null || SeenResources == null) return null;
+        Rts.Sim.Entities.ResourceStore r = world.Resources;
+        SeenResources.Update(world.NavGrid.Version, r.Alive, r.TypeId, r.Cell, world.Fog, View.Player, View.Enabled, world.NavGrid.Width);
+        return SeenResources;
     }
 
     /// <summary>The terrain's material: vertex colours under the fog, per fragment.</summary>

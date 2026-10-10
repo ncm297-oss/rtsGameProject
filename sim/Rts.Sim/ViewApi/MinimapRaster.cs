@@ -49,6 +49,9 @@ public sealed class MinimapRaster
     private readonly uint[] _ownerPx, _rimPx;
     // Centre (top-left of the 2 x 2), own cell and owner of each dot drawn last time (the centres are also what the next call clears).
     private readonly int[] _centre, _own, _centreOwner;
+    // The unit slot and position of each dot drawn last time (BUG-0281 item 3: the minimap click picks among these).
+    private readonly int[] _dotSlot;
+    private readonly Vector2[] _dotPos;
     private int _drawn;
     // Pixels the resource layer painted last time: what the next fill clears.
     private readonly int[] _resourcePixels;
@@ -114,6 +117,8 @@ public sealed class MinimapRaster
         _centre = new int[maxDots];
         _own = new int[maxDots];
         _centreOwner = new int[maxDots];
+        _dotSlot = new int[maxDots];
+        _dotPos = new Vector2[maxDots];
         for (int y = 0; y < Height; y++)
         {
             for (int x = 0; x < Width; x++)
@@ -232,6 +237,40 @@ public sealed class MinimapRaster
         return best;
     }
 
+    /// <summary>Dots the last <see cref="DrawDots"/> drew.</summary>
+    public int DrawnCount => _drawn;
+
+    /// <summary>The unit slot of dot <paramref name="k"/> (0 to <see cref="DrawnCount"/> - 1) as last drawn.</summary>
+    public int DrawnSlot(int k) => _dotSlot[k];
+
+    /// <summary>
+    /// The enemy dot the last <see cref="DrawDots"/> drew over the minimap pixel of ground point <paramref name="point"/>
+    /// (M4-VH2, BUG-0281 item 3): <see cref="EnemyDotAt"/>'s rule (another owner than <paramref name="localPlayer"/>, the 4 x 4
+    /// block holds the pixel, nearest wins, ties to the earlier dot) over the dots as drawn, at their drawn positions, so a
+    /// click acts on what the minimap shows rather than on units and positions that moved since. Returns the dot's index
+    /// (<see cref="DrawnSlot"/> gives its unit), or -1. Allocates nothing.
+    /// </summary>
+    public int DrawnEnemyDotAt(Vector2 point, int localPlayer)
+    {
+        if (!TryPixelOf(point, out int px, out int py)) return -1;
+        int best = -1;
+        float bestD = float.PositiveInfinity;
+        for (int k = 0; k < _drawn; k++)
+        {
+            if (_centreOwner[k] == localPlayer) continue;
+            int c = _centre[k];
+            int cy = c / Width, cx = c - cy * Width;
+            if (px < cx - 1 || px > cx + 2 || py < cy - 1 || py > cy + 2) continue;
+            float d = Vector2.DistanceSquared(_dotPos[k], point);
+            if (d < bestD)
+            {
+                bestD = d;
+                best = k;
+            }
+        }
+        return best;
+    }
+
     /// <summary>The rim colour for a dot of colour <paramref name="rgb"/>: <see cref="LightRim"/> when the dot is dark (Rec. 601 luma under 0.35), else <see cref="DarkRim"/>.</summary>
     public static uint RimFor(uint rgb)
     {
@@ -295,6 +334,8 @@ public sealed class MinimapRaster
             }
             else Fill(d, c, -1, 4, rim);
             _centre[_drawn] = c;
+            _dotSlot[_drawn] = s;
+            _dotPos[_drawn] = positions[s];
             _own[_drawn] = y * w + x;
             _centreOwner[_drawn++] = owners[s];
         }

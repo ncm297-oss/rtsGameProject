@@ -33,7 +33,7 @@ public partial class QaM22Test : Node
         }
         foreach (string f in _failures) GD.Print($"QA M2-2 TEST FAIL: {f}");
         if (_failures.Count == 0) GD.Print("QA M2-2 TEST PASS");
-        GetTree().Quit(_failures.Count == 0 ? 0 : 1);
+        SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
     private void ParserRows()

@@ -126,7 +126,12 @@ public class ZoneVisionTests
         Assert.Equal(raider, u.Target[crossbow.Index]);
     }
 
-    /// <summary>The blocker follows the vision cadence: a zone made between updates hides nothing until the next update, and one freed leaves its cells hidden until then.</summary>
+    /// <summary>
+    /// The ground mask follows the vision cadence: a zone made between updates hides no cell until the next update, and one
+    /// freed leaves its cells hidden until then. A unit standing in a new zone is hidden at once (BUG-0363 item 2: the zone
+    /// has no record of who sees into it yet), as combat's own-sight rule hides it; a unit in a freed zone's cell stays
+    /// hidden with its cell until the next update.
+    /// </summary>
     [Fact]
     public void TheMask_IsStampedOnTheVisionCadence()
     {
@@ -139,14 +144,89 @@ public class ZoneVisionTests
         NextUpdate(sim); // tick 1 updated
         ZoneSystem.Create(w, 1, Sandstorm, centre);
         sim.Tick(); // tick 2: no update
-        Assert.True(fog.CanSeeUnit(0, raider.Index));
+        Assert.True(fog.IsVisible(0, fog.CellOf(centre)));  // the ground: not yet
+        Assert.False(fog.CanSeeUnit(0, raider.Index));       // the unit in it: at once
         NextUpdate(sim);
+        Assert.False(fog.IsVisible(0, fog.CellOf(centre)));
         Assert.False(fog.CanSeeUnit(0, raider.Index));
         w.Zones.Free(0); // a test seam: the zone ends between updates
         sim.Tick();
         Assert.False(fog.CanSeeUnit(0, raider.Index));
         NextUpdate(sim);
         Assert.True(fog.CanSeeUnit(0, raider.Index));
+    }
+
+    // ---------- BUG-0360: the rim, by the unit's centre ----------
+
+    /// <summary>
+    /// BUG-0360: a Raider 5.2 m into a 6 m storm (its cell's centre 6.3 m out) is hidden from a Crossbowman outside and never
+    /// taken; one 6.01 m out (its cell's centre exactly 6 m: a hidden cell) is seen and taken; one exactly 6.0 m out is
+    /// inside (the edge counts, as for the statuses) and hidden. Both for the fog (<see cref="FogStore.CanSeeUnit"/>) and
+    /// for combat's own-sight rule (<see cref="VisionSystem.ZoneHides"/>).
+    /// </summary>
+    [Fact]
+    public void AtTheRim_TheUnitsOwnCentreDecides_ForTheFogAndForCombat()
+    {
+        Simulation sim = Scene(combat: true);
+        World w = sim.World;
+        UnitStore u = w.Units;
+        Vector2 centre = At(sim, 24, 24); // (49, 49)
+        EntityHandle crossbow = Place(sim, 0, Crossbowman, Off(centre, -10f));
+        u.Hold[crossbow.Index] = true;
+        EntityHandle inside = Place(sim, 1, Raider, Off(centre, 5.1f, 1.1f));   // 5.2 m: cell (27, 25), centre 6.3 m out
+        EntityHandle outside = Place(sim, 1, Raider, Off(centre, 0f, -6.01f));  // cell (24, 21), centre exactly 6 m: hidden cell
+        EntityHandle edge = Place(sim, 1, Raider, Off(centre, 0f, 6f));         // exactly on the edge: inside
+        foreach (EntityHandle r in new[] { inside, outside, edge }) u.Hold[r.Index] = true;
+        ZoneSystem.Create(w, 1, Sandstorm, centre);
+        Assert.Equal(new Vector2(49f, 43f), w.Fog.CellCentreOf(u.Position[outside.Index]));
+        Vector2 xb = u.Position[crossbow.Index];
+        Assert.True(VisionSystem.ZoneHides(w, 0, xb, true, u.Position[inside.Index]));
+        Assert.False(VisionSystem.ZoneHides(w, 0, xb, true, u.Position[outside.Index]));
+        Assert.True(VisionSystem.ZoneHides(w, 0, xb, true, u.Position[edge.Index]));
+        NextUpdate(sim);
+        Assert.False(w.Fog.IsVisible(0, w.Fog.CellOf(u.Position[outside.Index])), "setup: the 6.01 m Raider's cell should be a hidden one");
+        Assert.True(w.Fog.IsVisible(0, w.Fog.CellOf(u.Position[inside.Index])), "setup: the 5.2 m Raider's cell should be outside the mask");
+        Assert.False(w.Fog.CanSeeUnit(0, inside.Index), "a Raider 5.2 m into the storm is visible from outside");
+        Assert.True(w.Fog.CanSeeUnit(0, outside.Index), "a Raider 6.01 m out is hidden");
+        Assert.False(w.Fog.CanSeeUnit(0, edge.Index), "a Raider exactly on the edge is visible from outside");
+        Assert.False(VisionSystem.UnitSeesUnit(w, crossbow.Index, inside.Index));
+        Assert.True(VisionSystem.UnitSeesUnit(w, crossbow.Index, outside.Index));
+        // Combat: the holding Crossbowman (range 15) takes only the one outside, for the whole storm.
+        for (int t = 0; t < 200 && w.Zones.Count > 0; t++)
+        {
+            sim.Tick();
+            Assert.NotEqual(inside, u.Target[crossbow.Index]);
+            Assert.NotEqual(edge, u.Target[crossbow.Index]);
+        }
+        Assert.True(!u.IsAlive(outside) || u.Hp[outside.Index] < w.Data.Units[Raider].Hp, "the Raider 6.01 m out was never shot");
+    }
+
+    /// <summary>
+    /// BUG-0360: a Blinded Malazan Laborer inside the storm by its centre, though its cell's centre is outside, views from
+    /// inside: its 2 m shows a Raider 1.6 m from it in the storm (whose cell the mask hides), which the Crossbowman outside
+    /// can't see for itself.
+    /// </summary>
+    [Fact]
+    public void ABlindedUnitInsideByItsCentre_InAnOutsideCell_SeesFromInside()
+    {
+        Simulation sim = Scene(combat: false);
+        World w = sim.World;
+        UnitStore u = w.Units;
+        Vector2 centre = At(sim, 24, 24);
+        EntityHandle crossbow = Place(sim, 0, Crossbowman, Off(centre, -10f));
+        EntityHandle laborer = Place(sim, 0, Laborer, Off(centre, 5.1f, 1.1f)); // 5.2 m in; cell (27, 25), centre 6.3 m out
+        EntityHandle raider = Place(sim, 1, Raider, Off(centre, 5.1f, -0.5f));  // 5.12 m in; cell (27, 24), centre 6.0 m: hidden cell
+        sim.Tick(); // the spatial hash learns the placed units
+        ZoneSystem.Create(w, 1, Sandstorm, centre);
+        Assert.Equal(w.Data.FindStatus("blinded"), u.Statuses.BlindOf(laborer.Index));
+        NextUpdate(sim);
+        Assert.True(w.Fog.CanSeeUnit(0, raider.Index), "the Laborer inside doesn't see the Raider 1.6 m away");
+        Assert.True(VisionSystem.ZoneHides(w, 0, u.Position[crossbow.Index], true, u.Position[raider.Index]));
+        Assert.False(VisionSystem.ZoneHides(w, 0, u.Position[laborer.Index], true, u.Position[raider.Index]));
+        // The Laborer walks out (east, away from the storm): at the next update nobody of player 0 sees into it.
+        u.Position[laborer.Index] = Off(centre, 9f, 1.1f);
+        NextUpdate(sim);
+        Assert.False(w.Fog.CanSeeUnit(0, raider.Index));
     }
 
     /// <summary>A building of the zone owner's enemy never views from inside: a tower can't take a unit in an enemy storm by its own sight.</summary>

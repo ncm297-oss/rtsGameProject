@@ -55,21 +55,69 @@ public class ResolveFlashesTests
     {
         var flashes = new ResolveFlashes(4);
         var removed = new int[4];
-        int slot = flashes.Add(0, 0, new Vector2(5f, 5f), 100);
-        Assert.Equal(0, flashes.Expire(200, removed)); // never drawn: kept, and first drawn early in its life
-        Assert.InRange(flashes.Age(slot, 200, 0f), 0.09f, 0.11f);
-        flashes.MarkDrawn(slot);
-        Assert.Equal(1f, flashes.Age(slot, 200, 0f));
-        Assert.Equal(1, flashes.Expire(200, removed));
-        Assert.Equal(slot, removed[0]);
-        Assert.Equal(0, flashes.Count);
-        slot = flashes.Add(0, 0, Vector2.Zero, 300);
-        flashes.MarkDrawn(slot);
+        int slot = flashes.Add(0, 0, Vector2.Zero, 300);
+        Assert.Equal(0, flashes.Expire(400, removed)); // never drawn: kept
+        flashes.MarkDrawn(slot, 300);
         Assert.Equal(0f, flashes.Age(slot, 300, 0f));
         Assert.Equal(0.55f, flashes.Age(slot, 305, 0.5f), 5);
         Assert.Equal(0, flashes.Expire(300 + ResolveFlashes.LifetimeTicks - 1, removed));
         Assert.Equal(1, flashes.Expire(300 + ResolveFlashes.LifetimeTicks, removed));
+        Assert.Equal(slot, removed[0]);
+        Assert.Equal(0, flashes.Count);
         Assert.Equal(10, ResolveFlashes.LifetimeTicks); // 0.5 s at 20 Hz
+    }
+
+    /// <summary>BUG-0371 (c): a flash first drawn several ticks after its resolve (a frame covering several ticks) starts its age one tick before that frame and runs on from there: no jump to its real age on the next frame, and its full fade before it expires.</summary>
+    [Fact]
+    public void ALateFirstDraw_StartsItsAgeAtThatFrame_NoJumpOnTheNext()
+    {
+        var flashes = new ResolveFlashes(4);
+        var removed = new int[4];
+        int slot = flashes.Add(0, 0, new Vector2(5f, 5f), 100);
+        // Collected at tick 100, first frame at tick 103 (alpha 0.5).
+        float first = flashes.Age(slot, 103, 0.5f);
+        flashes.MarkDrawn(slot, 103);
+        Assert.Equal(first, flashes.Age(slot, 103, 0.5f));
+        Assert.Equal(0.15f, first, 5);
+        float next = flashes.Age(slot, 104, 0.5f);
+        Assert.Equal(0.25f, next, 5); // one tick on, not (104 - 100 + 0.5) / 10 = 0.45
+        Assert.Equal(1f, flashes.Age(slot, 112, 0f));
+        Assert.Equal(0, flashes.Expire(111, removed));
+        Assert.Equal(1, flashes.Expire(112, removed));
+        // A flash long overdue (never drawn for 100 ticks) still shows its fade from the start when a frame reaches it.
+        slot = flashes.Add(0, 0, Vector2.Zero, 100);
+        flashes.MarkDrawn(slot, 200);
+        Assert.InRange(flashes.Age(slot, 200, 0f), 0.09f, 0.11f);
+        Assert.Equal(0, flashes.Expire(200, removed));
+        Assert.Equal(1, flashes.Expire(209, removed));
+        Assert.Equal(100, flashes.StartTick[slot]); // the resolve's tick is kept for readers
+    }
+
+    /// <summary>BUG-0371 (b): the first frame's fog answer is kept for the flash's life: hidden then, never drawn later when its cell comes into sight mid-fade; shown then, still drawn (the fade finishes) if the fog closes. Either way it expires on time.</summary>
+    [Fact]
+    public void TheFirstFramesFogAnswer_IsKeptForTheFlashsLife()
+    {
+        var flashes = new ResolveFlashes(4);
+        var removed = new int[4];
+        int hidden = flashes.Add(0, 1, new Vector2(60f, 60f), 50);
+        int seen = flashes.Add(0, 0, new Vector2(10f, 10f), 50);
+        Assert.False(flashes.Drawn[hidden]);
+        flashes.MarkDrawn(hidden, 50, shown: false);
+        flashes.MarkDrawn(seen, 50, shown: true);
+        for (long t = 51; t < 60; t++)
+        {
+            flashes.MarkDrawn(hidden, t, shown: true); // the cell came into sight: no change
+            flashes.MarkDrawn(seen, t, shown: false); // the fog closed: no change
+            Assert.False(flashes.Shown[hidden]);
+            Assert.True(flashes.Shown[seen]);
+        }
+        Assert.True(flashes.Drawn[hidden]);
+        Assert.Equal(2, flashes.Expire(60, removed));
+        // A slot reused by a new flash is undecided again.
+        int again = flashes.Add(0, 0, Vector2.One, 70);
+        Assert.False(flashes.Drawn[again] || flashes.Shown[again]);
+        flashes.MarkDrawn(again, 70);
+        Assert.True(flashes.Shown[again]);
     }
 
     [Fact]
@@ -91,7 +139,7 @@ public class ResolveFlashesTests
             tick++;
             flashes.Collect(events, tick);
             for (int i = 0; i < flashes.Capacity; i++)
-                if (flashes.Active[i]) { sum += flashes.Age(i, tick, 0.5f); flashes.MarkDrawn(i); }
+                if (flashes.Active[i]) { sum += flashes.Age(i, tick, 0.5f); flashes.MarkDrawn(i, tick, (i & 1) == 0); }
             flashes.Expire(tick, removed);
         }, _out);
         Assert.True(flashes.Count <= ResolveFlashes.DefaultCapacity);

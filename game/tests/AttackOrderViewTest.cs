@@ -85,7 +85,7 @@ public partial class AttackOrderViewTest : Node
         foreach (string f in _failures.Take(60)) GD.Print($"ATTACK ORDER VIEW TEST FAIL: {f}");
         if (_failures.Count > 60) GD.Print($"ATTACK ORDER VIEW TEST FAIL: ... {_failures.Count - 60} more");
         if (_failures.Count == 0) GD.Print("ATTACK ORDER VIEW TEST PASS");
-        GetTree().Quit(_failures.Count == 0 ? 0 : 1);
+        SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
     // states.ordered_attack is data: present in the shipped file, required by the loader, never a C# literal.

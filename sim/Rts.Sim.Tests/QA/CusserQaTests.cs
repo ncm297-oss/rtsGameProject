@@ -241,7 +241,7 @@ public class CusserQaTests
     /// Every unit slot dies in one tick and a building with them: the tick's death list holds units + buildings. A world
     /// with 2 unit slots: the Sapper kills itself, the enemy Crossbowman and the enemy Keep in one resolve (3 deaths).
     /// </summary>
-    [Fact(Skip = "BUG-0330: the death list holds UnitCapacity events; units + buildings dying in one tick overflow it")]
+    [Fact]
     public void ACusserKillingEveryUnitSlotAndABuilding_InOneTick_DoesNotOverflowTheDeathList()
     {
         Simulation sim = NoFights(units: 2);

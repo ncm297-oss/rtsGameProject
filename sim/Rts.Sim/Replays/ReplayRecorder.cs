@@ -52,6 +52,10 @@ public sealed class ReplayRecorder
         SimConfig config = sim.World.Config;
         if (config.ProjectileCapacity != 0 && config.ProjectileSlots != (config with { ProjectileCapacity = 0 }).ProjectileSlots)
             throw new InvalidOperationException("The replay format records only the default projectile capacity.");
+        // Nor a zone-capacity line (M4-4b-2): playback rebuilds the default store, so a store-full cast would make a zone
+        // there that the recording didn't (BUG-0361).
+        if (config.ZoneCapacity != Abilities.ZoneStore.DefaultCapacity)
+            throw new InvalidOperationException("The replay format records only the default zone capacity.");
 
         _sim = sim;
         CheckpointInterval = checkpointInterval;

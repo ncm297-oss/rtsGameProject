@@ -43,7 +43,7 @@ public partial class QaM27Test : Node
         }
         foreach (string f in _failures) GD.Print($"QA M2-7 TEST FAIL: {f}");
         if (_failures.Count == 0) GD.Print("QA M2-7 TEST PASS");
-        GetTree().Quit(_failures.Count == 0 ? 0 : 1);
+        SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
     // Shortest signed turn from a to b in double, in [-π, π).

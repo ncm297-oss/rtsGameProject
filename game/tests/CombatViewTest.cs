@@ -67,7 +67,7 @@ public partial class CombatViewTest : Node
         for (int i = 0; i < shown; i++) GD.Print($"COMBAT VIEW TEST FAIL: {_failures[i]}");
         if (_failures.Count > shown) GD.Print($"COMBAT VIEW TEST FAIL: ... and {_failures.Count - shown} more");
         if (_failures.Count == 0) GD.Print("COMBAT VIEW TEST PASS");
-        GetTree().Quit(_failures.Count == 0 ? 0 : 1);
+        SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
     private async Task Run()

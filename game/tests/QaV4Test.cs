@@ -69,7 +69,7 @@ public partial class QaV4Test : Node
         foreach (string f in _failures.Take(40)) GD.Print($"QA M3-V4 TEST FAIL: {f}");
         if (_failures.Count > 40) GD.Print($"QA M3-V4 TEST FAIL: ... {_failures.Count - 40} more");
         if (_failures.Count == 0) GD.Print("QA M3-V4 TEST PASS");
-        GetTree().Quit(_failures.Count == 0 ? 0 : 1);
+        SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
     private async Task StartMatch()

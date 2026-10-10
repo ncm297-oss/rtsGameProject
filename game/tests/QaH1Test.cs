@@ -51,7 +51,7 @@ public partial class QaH1Test : Node
         if (_failures.Count > 40) GD.Print($"QA M2-H1 TEST FAIL: ... {_failures.Count - 40} more");
         GD.Print($"fuzz: {string.Join(", ", _actionCounts.OrderBy(k => k.Key).Select(k => $"{k.Key} {k.Value}"))}; A armed {_armed} times, {_attackOrders} attack-move orders, {_moveOrders} move orders, {_rallyOrders} rally orders");
         if (_failures.Count == 0) GD.Print("QA M2-H1 TEST PASS");
-        GetTree().Quit(_failures.Count == 0 ? 0 : 1);
+        SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
     private async Task Setup()

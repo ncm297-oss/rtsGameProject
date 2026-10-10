@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | partly fixed (items 1-2 by M4-H2; item 3 a note, documented in docs/03) |
 | Found | 2026-10-10-0215, task M4-4b-2 |
 | System | vision / combat scans / zones |
-| Fixed by | |
+| Fixed by | 5c2de85 (M4-H2): item 1 `VisionSystem.BlockerNear` (far-blocker ratio below); item 2 `Vision/ZoneVisionTests.TheMask_IsStampedOnTheVisionCadence` (a unit in a new storm is hidden at once) |
 
 ## Repro
 1. Run `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~ZoneScalePerfTests" --logger "console;verbosity=detailed"`.
@@ -31,3 +31,6 @@
 
 ## Notes
 None of these affects an acceptance criterion. Item 1 matters only when many storms are live at once.
+
+## QA verification (2026-10-10-0624, M4-H2)
+Verified by QA 2026-10-10-0624 (M4-H2). Item 1: `ZoneScalePerfTests` paired runs, base 63efab2 vs 5c2de85 (3 rounds each, no other test host running): 16 storms 1.12-1.23x -> 1.01-1.11x, 64 storms 1.74-1.90x -> 1.24-1.38x of the zone-free tick; 0 bytes a tick. `EmptyTick(2500)` paired medians 482.9 us base / 484.8 us head (8 runs each; both sides cross 500 us now and then on this machine, BUG-0140's thin margin). Item 2: fixed by the fog's per-zone records (a new zone has none, so it hides at once); docs/03 says so. Item 3 stays a documented note.

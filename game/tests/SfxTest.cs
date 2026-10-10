@@ -61,7 +61,7 @@ public partial class SfxTest : Node
         foreach (string a in new[] { "order_queue", "select_add", "select_type", "group_assign", "group_add" }) Input.ActionRelease(a);
         foreach (string f in _failures) GD.Print($"SFX TEST FAIL: {f}");
         if (_failures.Count == 0) GD.Print("SFX TEST PASS");
-        GetTree().Quit(_failures.Count == 0 ? 0 : 1);
+        SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
     // Criterion 1: length, peak, quiet edges, no NaN, both as floats and as the 16-bit clip.

@@ -36,7 +36,7 @@ public partial class SelectionTest : Node
         Input.ActionRelease("select_add");
         foreach (string f in _failures) GD.Print($"SELECTION TEST FAIL: {f}");
         if (_failures.Count == 0) GD.Print("SELECTION TEST PASS");
-        GetTree().Quit(_failures.Count == 0 ? 0 : 1);
+        SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
     private async Task Run()

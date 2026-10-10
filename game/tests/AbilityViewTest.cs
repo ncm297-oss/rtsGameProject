@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Threading.Tasks;
 using Godot;
 using Rts.Sim;
+using Rts.Sim.Abilities;
 using Rts.Sim.Commands;
 using Rts.Sim.Data;
 using Rts.Sim.Entities;
@@ -99,7 +100,7 @@ public partial class AbilityViewTest : Node
         foreach (string f in _failures.Take(60)) GD.Print($"ABILITY VIEW TEST FAIL: {f}");
         if (_failures.Count > 60) GD.Print($"ABILITY VIEW TEST FAIL: ... {_failures.Count - 60} more");
         if (_failures.Count == 0) GD.Print("ABILITY VIEW TEST PASS");
-        GetTree().Quit(_failures.Count == 0 ? 0 : 1);
+        SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
     // The four new hud keys are data: present in the shipped file, each required by the loader.
@@ -223,6 +224,7 @@ public partial class AbilityViewTest : Node
         await BothOnCooldown(seed);
         FogFlashRow(seed);
         await ShiftTwoRow(seed);
+        await WalkingShiftRow(seed);
         await CusserRow(seed);
         Twin(seed);
         await StatusRows(seed);
@@ -537,6 +539,62 @@ public partial class AbilityViewTest : Node
         while (ticks < 400 && !(U.CastAbility[_near.Index] < 0 && U.CastAbility[_far.Index] < 0 && U.QueueCount[_near.Index] == 0 && U.QueueCount[_far.Index] == 0)) { _sim.Tick(); ticks++; }
         GD.Print($"seed {seed}: Shift held: one Q, two queued UseAbility (units {(first.Count > 0 ? first[0].Unit.Index : -1)}, {(second.Count > 0 ? second[0].Unit.Index : -1)}), still armed; right-click ended it");
         await Gap();
+    }
+
+    // M4-VH2 (BUG-0370): both mages walking under a Move, Shift + Q, three clicks in one frame with no tick between: one
+    // queued cast for each mage (a cast waiting in a queue, or sent and not yet applied, makes its mage busy), the third
+    // refused (nothing sent, disarmed), and both casts resolve once the walks end.
+    private async Task WalkingShiftRow(ulong seed)
+    {
+        int waited = 0;
+        while (waited < 800 && !(OffCooldown(_near) && OffCooldown(_far))) { _sim.Tick(); waited++; }
+        if (!Check(OffCooldown(_near) && OffCooldown(_far), $"seed {seed} walking shift: the mages never both came off cooldown")) return;
+        foreach (EntityHandle m in new[] { _near, _far })
+        {
+            System.Numerics.Vector2 at = U.Position[m.Index];
+            _sim.Enqueue(Command.Move(SelectionController.LocalPlayer, m, at + new System.Numerics.Vector2(-6f, 0f)));
+        }
+        _sim.Tick();
+        _sim.Tick(); // the Moves apply in the second tick
+        Check(U.State[_near.Index] == UnitState.Moving && U.State[_far.Index] == UnitState.Moving,
+            $"seed {seed} walking shift: mages {U.State[_near.Index]} / {U.State[_far.Index]}, want Moving");
+        await Select(_near, _far);
+        // The Raiders may have burned by now: aim at the ground where they stood.
+        Vector2 px = _camera.UnprojectPosition(new Vector3(_knot.X, TerrainHeight.At(W.Heightmap, _knot.X, _knot.Y), _knot.Y));
+        if (!InPlayArea(px) && !TryGroundPixel(out px)) { Check(false, $"seed {seed} walking shift: no ground pixel"); return; }
+        Input.ActionPress("order_queue");
+        Key(Godot.Key.Q);
+        int from = PendingCount();
+        LeftClick(px);
+        LeftClick(px);
+        bool armed = _sel.Targeting && _sel.TargetAbility == _telas;
+        LeftClick(px);
+        List<Command> sent = Pending(from);
+        bool disarmed = !_sel.Targeting;
+        Input.ActionRelease("order_queue");
+        Check(sent.Count == 2 && sent[0].Kind == CommandKind.UseAbility && sent[1].Kind == CommandKind.UseAbility && sent[0].IsQueued && sent[1].IsQueued
+            && sent[0].Unit != sent[1].Unit, $"seed {seed} walking shift: three clicks in one tick sent {Describe(sent)}, want one queued cast per mage");
+        Check(armed && disarmed, $"seed {seed} walking shift: armed after two clicks {armed}, disarmed by the refused third {disarmed}");
+        int nearResolves = 0, farResolves = 0, ticks = 0;
+        while (ticks < 700 && (nearResolves == 0 || farResolves == 0))
+        {
+            _sim.Tick();
+            ticks++;
+            nearResolves += Resolves(_near);
+            farResolves += Resolves(_far);
+        }
+        Check(nearResolves == 1 && farResolves == 1, $"seed {seed} walking shift: resolves near {nearResolves}, far {farResolves} in {ticks} ticks, want one each");
+        GD.Print($"seed {seed}: two walking mages, three Shift clicks in one tick: {sent.Count} queued casts on units {(sent.Count > 0 ? sent[0].Unit.Index : -1)}, {(sent.Count > 1 ? sent[1].Unit.Index : -1)}, the third refused; both resolved in {ticks} ticks");
+        while (ticks < 1000 && !(U.CastAbility[_near.Index] < 0 && U.CastAbility[_far.Index] < 0 && U.QueueCount[_near.Index] == 0 && U.QueueCount[_far.Index] == 0)) { _sim.Tick(); ticks++; }
+        await Gap();
+    }
+
+    // Resolves of `caster` in the last tick's ability events (a sync helper: spans can't be walked in an async method).
+    private int Resolves(EntityHandle caster)
+    {
+        int n = 0;
+        foreach (AbilityEvent e in W.AbilityEvents) if (e.Resolved && e.Caster == caster) n++;
+        return n;
     }
 
     private bool OffCooldown(EntityHandle mage) => U.IsAlive(mage) && U.AbilityReadyTick[mage.Index * DataLimits.MaxUnitAbilities] <= W.TickNumber && U.CastAbility[mage.Index] < 0;

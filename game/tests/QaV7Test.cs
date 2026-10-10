@@ -59,7 +59,7 @@ public partial class QaV7Test : Node
         foreach (string f in _failures.Take(60)) GD.Print($"QA M4-V3 TEST FAIL: {f}");
         if (_failures.Count > 60) GD.Print($"QA M4-V3 TEST FAIL: ... {_failures.Count - 60} more");
         if (_failures.Count == 0) GD.Print("QA M4-V3 TEST PASS");
-        GetTree().Quit(_failures.Count == 0 ? 0 : 1);
+        SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
     private void StartMatch(ulong seed, params string[] extra)

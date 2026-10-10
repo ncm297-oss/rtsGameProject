@@ -44,7 +44,7 @@ public partial class QaH2Test : Node
         }
         foreach (string f in _failures) GD.Print($"QA M2-H2 TEST FAIL: {f}");
         if (_failures.Count == 0) GD.Print("QA M2-H2 TEST PASS");
-        GetTree().Quit(_failures.Count == 0 ? 0 : 1);
+        SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
     // The 10 s bench's march: the centre shift depends on the seed's terrain and on the idle enemy block in the path
@@ -139,7 +139,9 @@ public partial class QaH2Test : Node
     // BUG-0086 in the real scene: a felled tree re-uploads only the trees; a felled mine only the mines.
     private async Task PropsFell()
     {
-        Match match = StartMatch("--units", "10", "--mute", "--no-bases", "--no-combat"); // armies only, no fights, as in M2 (M3-V1, M4-V1 BUG-0147)
+        // Armies only, no fights, as in M2 (M3-V1, M4-V1 BUG-0147); no fog, since the staged fells are wherever the first
+        // slots stand and a fell out of sight keeps the last-seen node without a relist (M4-VH2, BUG-0281: FogViewTest's row).
+        Match match = StartMatch("--units", "10", "--mute", "--no-bases", "--no-combat", "--no-fog");
         Simulation sim = match.GetNode<SimRunner>("SimRunner").Simulation!;
         var props = match.GetNode<PropsView>("World3D/PropsView");
         for (int i = 0; i < 10; i++) await Frame();

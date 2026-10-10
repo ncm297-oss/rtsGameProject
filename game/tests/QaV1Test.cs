@@ -88,7 +88,7 @@ public partial class QaV1Test : Node
             if (_shots != null && DisplayServer.GetName() != "headless")
             {
                 await Shots(size);
-                GetTree().Quit(0);
+                SceneExit.Quit(this, 0);
                 return;
             }
             await FreshTreeAndMine();
@@ -107,7 +107,7 @@ public partial class QaV1Test : Node
         Input.ActionRelease("order_queue");
         foreach (string f in _failures) GD.Print($"QA M3-V1 TEST FAIL: {f}");
         if (_failures.Count == 0) GD.Print("QA M3-V1 TEST PASS");
-        GetTree().Quit(_failures.Count == 0 ? 0 : 1);
+        SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
     // 200 workers + 100 soldiers: one Gather per worker-type unit, one Move per other, one sound; 0 workers: Moves;

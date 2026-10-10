@@ -70,7 +70,7 @@ public partial class MinimapDotsShot : Node
         crop.SavePng(cropPath);
         GD.Print($"saved {full} and {cropPath} (minimap at {r.Position}, {r.Size}; {_sim.World.Units.Count} units)");
         MinimapTransformPrint(mini);
-        GetTree().Quit();
+        SceneExit.Quit(this, 0);
     }
 
     // Prints where each lone unit's dot sits in the 4x crop, to find it when looking.

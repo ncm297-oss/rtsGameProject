@@ -28,7 +28,9 @@ namespace Rts.Game.Tests;
 /// cancelled unseen and its ghost kept until its ground is seen, a right-click on the hall's ghost an Attack per selected
 /// unit with the remembered handle); a hover row (the build ghost red with "Unexplored" over unexplored ground).
 /// Then 300 steady frames at <c>--units 500</c> with a ghost drawn (0 bytes in the view syncs), the hash twins, and a
-/// <c>--no-fog</c> match (everything shown, the texture all visible, uploaded once).
+/// <c>--no-fog</c> match (everything shown, the texture all visible, uploaded once). M4-VH2 (BUG-0281): a tree felled in
+/// explored fog stays drawn and on the minimap (no relist) until its cell is seen again; the minimap click picks among the
+/// dots as drawn.
 /// </summary>
 /// <remarks>Headless. Run: <c>&amp; $env:GODOT --headless --path game res://tests/FogViewTest.tscn</c> (seeds 1 and 6;
 /// <c>-- --seed N</c> for one); prints "FOG VIEW TEST PASS" and exits 0, or each failure and exits 1. Windowed with
@@ -79,6 +81,7 @@ public partial class FogViewTest : Node
             foreach (ulong seed in seeds) await Fog(seed);
             foreach (ulong seed in seeds) await Ghosts(seed);
             await UnexploredHover(seeds[0]);
+            await LastSeenTree(seeds[0]);
             await HiddenShooter(seeds[0]);
             await Steady(seeds[0]);
             await NoFog(seeds[0]);
@@ -90,7 +93,7 @@ public partial class FogViewTest : Node
         foreach (string f in _failures.Take(60)) GD.Print($"FOG VIEW TEST FAIL: {f}");
         if (_failures.Count > 60) GD.Print($"FOG VIEW TEST FAIL: ... {_failures.Count - 60} more");
         if (_failures.Count == 0) GD.Print("FOG VIEW TEST PASS");
-        GetTree().Quit(_failures.Count == 0 ? 0 : 1);
+        SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
     // ---- 0: the flag and the text ----
@@ -274,6 +277,7 @@ public partial class FogViewTest : Node
     private async Task MinimapClicks(ulong seed)
     {
         Rect2 rect = _mini.GetGlobalRect();
+        _mini.Refresh(_sim); // the click picks among the dots as drawn (BUG-0281 item 3): draw them where the units stand now
         int n = _sel.BoxSelect(Vector2.Zero, _screen, add: false);
         if (!Check(n > 0, $"seed {seed}: nothing selected by the screen box")) return;
         // A visible enemy whose dot no other enemy's dot overlaps, and a hidden one with no shown enemy within 6 cells.
@@ -382,6 +386,90 @@ public partial class FogViewTest : Node
         Check(_unitMismatch == 0 && _shotMismatch == 0 && _barMismatch == 0, $"hidden shooter: mismatches units {_unitMismatch} shots {_shotMismatch} bars {_barMismatch}");
         Twin(seed);
         await EndMatch();
+    }
+
+    // ---- M4-VH2 (BUG-0281 item 1): a tree felled in explored fog stays as last seen ----
+
+    // A scout beside a tree sees it, walks away (the tree's cell explored, not visible), the tree is felled out of sight
+    // (test staging: ResourceStore.Take through reflection): the props and the minimap keep it, with no relist; the scout
+    // walks back, sees the stump, and both drop it in one relist.
+    private async Task LastSeenTree(ulong seed)
+    {
+        StartMatch(seed, "--units", "0", "--no-bases");
+        var props = _match.GetNode<PropsView>("World3D/PropsView");
+        Rts.Sim.Map.NavGrid g = W.NavGrid;
+        ResourceStore r = W.Resources;
+        int tree = -1, standX = 0, standY = 0, farX = 0, farY = 0;
+        for (int s = 0; s < r.Capacity && tree < 0; s++)
+        {
+            if (!r.Alive[s]) continue;
+            ResourceDef def = _data.Resources[r.TypeId[s]];
+            if (def.Resource != ResourceKind.Wood || def.FootprintWidth != 1 || def.FootprintHeight != 1) continue;
+            int x = r.Cell[s] % g.Width, y = r.Cell[s] / g.Width;
+            if (!g.IsPassable(x + 1, y) || !FarStand(g, x + 1, y, out farX, out farY)) continue;
+            (tree, standX, standY) = (s, x + 1, y);
+        }
+        if (!Check(tree >= 0, "last-seen tree: no tree with an open cell beside it and open ground 16 cells away")) { await EndMatch(); return; }
+        int type = r.TypeId[tree], cell = r.Cell[tree];
+        _sim.Enqueue(Command.SpawnUnit(0, _data.FindUnit("malazan_laborer"), g.CellCenter(standX, standY)));
+        await TickUntil(() => W.Fog.IsVisible(0, cell), 40);
+        int scout = -1;
+        for (int i = 0; i < U.Capacity; i++) if (U.Alive[i] && U.Owner[i] == 0) scout = i;
+        if (!Check(scout >= 0 && W.Fog.IsVisible(0, cell), $"last-seen tree: scout {scout}, tree cell visible {W.Fog.IsVisible(0, cell)}")) { await EndMatch(); return; }
+        var scoutH = new EntityHandle(scout, U.Generation[scout]);
+        _sim.Enqueue(Command.Move(0, scoutH, g.CellCenter(farX, farY)));
+        await TickUntil(() => !W.Fog.IsVisible(0, cell), 800);
+        props.Sync(W);
+        _mini.Refresh(_sim);
+        if (!Check(!W.Fog.IsVisible(0, cell) && W.Fog.IsExplored(0, cell) && Listed(props, type, tree) && MiniPixel(cell),
+            $"last-seen tree: after the walk visible {W.Fog.IsVisible(0, cell)} explored {W.Fog.IsExplored(0, cell)}, listed {Listed(props, type, tree)}, minimap {MiniPixel(cell)}"))
+        { await EndMatch(); return; }
+        int rebuilds = props.Layout!.Rebuilds, draws = _mini.Raster!.ResourceDraws;
+        typeof(ResourceStore).GetMethod("Take", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+            .Invoke(r, new object[] { r.HandleOf(tree), r.Remaining[tree] });
+        Check(!r.Alive[tree], "last-seen tree: the staging Take left the tree alive");
+        for (int t = 0; t < 8; t++)
+        {
+            _sim.Tick();
+            await Frame();
+        }
+        props.Sync(W);
+        _mini.Refresh(_sim);
+        Check(Listed(props, type, tree) && MiniPixel(cell) && props.Layout.Rebuilds == rebuilds && _mini.Raster.ResourceDraws == draws,
+            $"last-seen tree: felled out of sight: listed {Listed(props, type, tree)}, minimap {MiniPixel(cell)}, relists {props.Layout.Rebuilds - rebuilds}, minimap redraws {_mini.Raster.ResourceDraws - draws}");
+        _sim.Enqueue(Command.Move(0, scoutH, g.CellCenter(standX, standY)));
+        await TickUntil(() => W.Fog.IsVisible(0, cell), 800);
+        props.Sync(W);
+        _mini.Refresh(_sim);
+        Check(W.Fog.IsVisible(0, cell) && !Listed(props, type, tree) && !MiniPixel(cell) && props.Layout.Rebuilds == rebuilds + 1 && _mini.Raster.ResourceDraws == draws + 1,
+            $"last-seen tree: seen again: visible {W.Fog.IsVisible(0, cell)}, listed {Listed(props, type, tree)}, minimap {MiniPixel(cell)}, relists {props.Layout.Rebuilds - rebuilds}, minimap redraws {_mini.Raster.ResourceDraws - draws}");
+        GD.Print($"last-seen tree (seed {seed}): tree slot {tree} felled in explored fog stayed drawn and on the minimap with no relist; gone in one relist once seen");
+        await EndMatch();
+    }
+
+    // An open cell 16 or more cells from (x, y) on the same level, for the scout to walk to.
+    private bool FarStand(Rts.Sim.Map.NavGrid g, int x, int y, out int fx, out int fy)
+    {
+        foreach ((int dx, int dy) in new[] { (16, 0), (-16, 0), (0, 16), (0, -16), (12, 12), (-12, 12), (12, -12), (-12, -12) })
+        {
+            (fx, fy) = (x + dx, y + dy);
+            if (g.IsPassable(fx, fy) && W.Heightmap.LevelAt(fx, fy) == W.Heightmap.LevelAt(x, y)) return true;
+        }
+        (fx, fy) = (0, 0);
+        return false;
+    }
+
+    private static bool Listed(PropsView props, int type, int slot) => props.Layout!.SlotsOf(type).IndexOf(slot) >= 0;
+
+    private bool MiniPixel(int cell) => _mini.Raster!.Resources[cell * 4 + 3] != 0;
+
+    private async Task TickUntil(Func<bool> done, int max)
+    {
+        for (int t = 0; t < max && !done(); t++)
+        {
+            _sim.Tick();
+            await Frame();
+        }
     }
 
     // ---- 4a: ghosts (M4-V5) ----
