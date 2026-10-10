@@ -1,10 +1,10 @@
-# BUG-0431: D-H2 nits: a few description wordings bind a number to the wrong role; the bug index still lists BUG-0410 open
+# BUG-0440: D-H2 nits: a few description wordings bind a number to the wrong role; the bug index still lists BUG-0410 open
 
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
 | Status | open |
-| Found | 2026-10-10-1015, task D-H2 |
+| Found | 2026-10-10-1015, task D-H2 (filed as BUG-0431 by QA; renumbered to the data track's id range at ACCEPT) |
 | System | content tests (`Content/AbilityContentTests.DescriptionProblems` / `DurationRole` / `DescriptionNumber`), `studio/bugs/README.md` |
 | Fixed by | |
 
@@ -29,6 +29,7 @@ Each line: `AbilityContentTests.WithDescription(key, text, mutant)` then `Descri
    its effects linger after it leaves" fails (`'12 seconds' reads as a lingering duration`): the whole clause, not the
    number's own phrase, picks Lingering.
 5. **Index row stale.** `studio/bugs/README.md` still lists BUG-0410 as `open` though its file says `fixed` (D-H2).
+   **Fixed by the Producer at the 2026-10-10-1015 ACCEPT** (the row reads `fixed`); items 1-4 stay open.
 
 ## Expected
 Brief D-H2 / BUG-0410 fix: a number is checked against the field its words name; a wrong number in any of these common
