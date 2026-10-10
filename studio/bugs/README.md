@@ -236,4 +236,5 @@ bugs outrank new features.
 | [BUG-0363](BUG-0363-m4-4b-2-zone-nits.md) | S4 | open | M4-4b-2 nits: far blockers cost scan time, a 3-tick acquire window after a storm appears, the `ZoneHides` summary |
 | [BUG-0370](BUG-0370-shift-queued-cast-picks-same-walking-mage.md) | S3 | open | Shift-queued casts on walking mages all pick the same mage (its queued cast doesn't count as busy); its cooldown drops every cast after the first |
 | [BUG-0371](BUG-0371-m4-v6b-status-and-flash-nits.md) | S4 | open | M4-V6b nits: Slowed marker hard to see at RTS zoom; a fog-hidden resolve can flash in mid-fade; late first draw jumps |
-| [BUG-0380](BUG-0380-extra-page-damage-claim-passes.md) | S3 | open | Data track: an extra page damage claim ("plus 30 magic damage") passes the ability pin when the ability has another damage effect that matches |
+| [BUG-0380](BUG-0380-extra-page-damage-claim-passes.md) | S3 | fixed | Data track: an extra page damage claim ("plus 30 magic damage") passes the ability pin when the ability has another damage effect that matches |
+| [BUG-0410](BUG-0410-description-numbers-matched-in-any-role.md) | S4 | open | Data track: the description pin accepts a stale number equal to another of the entry's data numbers ("for 18 seconds" on Sandstorm passes) |

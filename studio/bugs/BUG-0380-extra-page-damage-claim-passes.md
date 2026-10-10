@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-10-0215, task D10b |
 | System | content tests (`Content/AbilityContentTests.EffectProblems`) |
-| Fixed by | |
+| Fixed by | D10c (2026-10-10-0624, data track); verified by QA D10c: the row is un-skipped and green, plus `QA/Content/SandstormBlindedPinQaTests` before / after / two-effect cases |
 
 ## Repro
 1. Un-skip `Rts.Sim.Tests.QA.Content.AbilityPinQaTests.AnExtraPageDamageClaim_WithNoDataEffect_Fails`.
