@@ -132,6 +132,19 @@ public sealed class UnitStore
     /// <summary>True when <see cref="ChasePrev"/> is a building handle.</summary>
     public readonly bool[] ChasePrevIsBuilding;
     /// <summary>
+    /// Switches from one target straight to another that brought the chase no closer to any target (BUG-0241), counted
+    /// since the unit last landed a blow, had no target, or got closer than <see cref="ChaseChainBest"/>; 0 for none. At
+    /// <see cref="Combat.CombatConstants.GiveUpScans"/>, out of reach and with no friend fighting the target, it gives the
+    /// target up, so targets its scans take in turn can't keep a chase going forever. Saturates at 255.
+    /// </summary>
+    public readonly byte[] ChaseSwitches;
+    /// <summary>
+    /// The nearest gap (m) to any target this run of switches has reached (BUG-0241): a switch whose last target's
+    /// <see cref="ChaseBest"/> beat it by <see cref="Combat.CombatConstants.ChaseProgress"/> lowers it and restarts
+    /// <see cref="ChaseSwitches"/> at 1; 0 with no switch.
+    /// </summary>
+    public readonly float[] ChaseChainBest;
+    /// <summary>
     /// Chases given up since the unit's last order or last landed hit (BUG-0137); at
     /// <see cref="Combat.CombatConstants.MaxGiveUps"/> its scans take only targets in reach.
     /// </summary>
@@ -230,6 +243,8 @@ public sealed class UnitStore
         IgnoredIsBuilding = new bool[capacity];
         ChasePrev = new EntityHandle[capacity];
         ChasePrevIsBuilding = new bool[capacity];
+        ChaseSwitches = new byte[capacity];
+        ChaseChainBest = new float[capacity];
         GiveUps = new int[capacity];
         Repick = new bool[capacity];
         CastAbility = new int[capacity];
@@ -423,6 +438,8 @@ public sealed class UnitStore
         IgnoredIsBuilding[index] = false;
         ChasePrev[index] = default;
         ChasePrevIsBuilding[index] = false;
+        ChaseSwitches[index] = 0;
+        ChaseChainBest[index] = 0f;
         GiveUps[index] = 0;
         Repick[index] = false;
     }

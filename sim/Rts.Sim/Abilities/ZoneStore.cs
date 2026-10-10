@@ -28,11 +28,21 @@ public sealed class ZoneStore
     private readonly float[] _radius;
     private readonly bool[] _blocksVision;
 
+    // BUG-0360: per (slot, player), the fog update's record of a blocking zone's box (the cells whose centres may lie within
+    // its radius, FogStore.ZoneBox): which cells a unit of that player standing inside this zone saw, and which cells that
+    // player's circles covered, zones aside. Written by the fog update (FogStore), cleared when a zone is made or freed;
+    // hashed with the zone (they follow from the positions at the last update, as the fog's visible bits do).
+    private readonly int _players;
+    private readonly int _boxSide;
+    private readonly int _boxWords;
+    private readonly ulong[] _seenInside;
+    private readonly ulong[] _covered;
+
     /// <summary>Every live slot is below this (a loop bound); reset when the store empties. Not state.</summary>
     private int _end;
 
-    /// <summary>Creates an empty store of <paramref name="capacity"/> slots for zones of <paramref name="data"/>'s abilities.</summary>
-    internal ZoneStore(int capacity, GameData data)
+    /// <summary>Creates an empty store of <paramref name="capacity"/> slots for <paramref name="players"/> players' zones of <paramref name="data"/>'s abilities.</summary>
+    internal ZoneStore(int capacity, int players, GameData data)
     {
         if (capacity < 1) throw new ArgumentOutOfRangeException(nameof(capacity));
         _data = data;
@@ -43,6 +53,40 @@ public sealed class ZoneStore
         _ticksRemaining = new int[capacity];
         _radius = new float[capacity];
         _blocksVision = new bool[capacity];
+        // The widest box any zone in the data can have: a radius r spans at most floor(2r / cell) + 2 cells a side.
+        float maxRadius = 0f;
+        foreach (AbilityDef a in data.Abilities)
+            if (a.ZoneEffect >= 0 && a.Radius > maxRadius) maxRadius = a.Radius;
+        _players = players;
+        _boxSide = maxRadius > 0f ? (int)(2f * maxRadius / Map.MapConstants.CellSize) + 2 : 0;
+        _boxWords = (_boxSide * _boxSide + 63) / 64;
+        _seenInside = new ulong[capacity * players * _boxWords];
+        _covered = new ulong[capacity * players * _boxWords];
+    }
+
+    /// <summary>Cells along a side of the fog record of a zone's box (BUG-0360): a cell (x, y) of the box is bit <c>(y - y0) * BoxSide + (x - x0)</c>.</summary>
+    internal int BoxSide => _boxSide;
+
+    /// <summary>Whether bit <paramref name="bit"/> of slot <paramref name="slot"/>'s record for <paramref name="player"/> is set: <paramref name="covered"/> picks the covered cells, else the cells seen from inside.</summary>
+    internal bool FogBit(bool covered, int slot, int player, int bit)
+    {
+        int at = (slot * _players + player) * _boxWords + (bit >> 6);
+        return ((covered ? _covered : _seenInside)[at] & (1UL << (bit & 63))) != 0;
+    }
+
+    /// <summary>Sets bit <paramref name="bit"/> of slot <paramref name="slot"/>'s record for <paramref name="player"/> (the fog update's).</summary>
+    internal void SetFogBit(bool covered, int slot, int player, int bit)
+    {
+        int at = (slot * _players + player) * _boxWords + (bit >> 6);
+        (covered ? _covered : _seenInside)[at] |= 1UL << (bit & 63);
+    }
+
+    /// <summary>Clears slot <paramref name="slot"/>'s records for <paramref name="player"/> (the fog update's, before it writes them).</summary>
+    internal void ClearFogBits(int slot, int player)
+    {
+        int at = (slot * _players + player) * _boxWords;
+        Array.Clear(_seenInside, at, _boxWords);
+        Array.Clear(_covered, at, _boxWords);
     }
 
     /// <summary>Number of slots.</summary>
@@ -94,6 +138,7 @@ public sealed class ZoneStore
         _ticksRemaining[k] = Math.Max(1, ability.DurationTicks);
         _radius[k] = ability.Radius;
         _blocksVision[k] = ability.Effects[ability.ZoneEffect].BlocksVision;
+        ClearFogRecord(k); // no fog update has seen it yet: nothing inside it is seen until one has
         Count++;
         if (_blocksVision[k]) BlockerCount++;
         if (k >= _end) _end = k + 1;
@@ -114,7 +159,16 @@ public sealed class ZoneStore
         _ticksRemaining[slot] = 0;
         _radius[slot] = 0f;
         _blocksVision[slot] = false;
+        ClearFogRecord(slot);
         if (--Count == 0) _end = 0;
+    }
+
+    /// <summary>Clears slot <paramref name="slot"/>'s fog records for every player.</summary>
+    private void ClearFogRecord(int slot)
+    {
+        int n = _players * _boxWords;
+        Array.Clear(_seenInside, slot * n, n);
+        Array.Clear(_covered, slot * n, n);
     }
 
     /// <summary>
@@ -125,12 +179,14 @@ public sealed class ZoneStore
 
     /// <summary>
     /// Mixes the zones into a state hash, only when any is live (so a match without one hashes as before M4-4b-2): the
-    /// count, then every live slot in slot order with its owner, centre, ability and ticks remaining.
+    /// count, then every live slot in slot order with its owner, centre, ability and ticks remaining, and (BUG-0360) the fog
+    /// update's records of it, every player's.
     /// </summary>
     internal void AddToHash(ref StateHasher h)
     {
         if (Count == 0) return;
         h.Add(Count);
+        int n = _players * _boxWords;
         for (int k = 0; k < _end; k++)
         {
             if (!_alive[k]) continue;
@@ -139,6 +195,11 @@ public sealed class ZoneStore
             h.Add(_center[k]);
             h.Add(_abilityId[k]);
             h.Add(_ticksRemaining[k]);
+            for (int w = k * n, end = w + n; w < end; w++)
+            {
+                h.AddWord(_seenInside[w]);
+                h.AddWord(_covered[w]);
+            }
         }
     }
 }

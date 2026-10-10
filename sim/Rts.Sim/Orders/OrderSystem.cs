@@ -116,9 +116,14 @@ public static class OrderSystem
                 // asking for a re-pick (BUG-0154): a unit fighting in reach or mid-swing re-picks by priority in this
                 // tick's phase 7, keeping its swing only if the pick is the target it has. Only the leg's own point (within
                 // ArrivalDistance, the Move rule's "already there") skips the re-pick; a new cell also forgets the give-up
-                // memory, as any new order does. It walks to the leg's end when the fight is over.
+                // memory, as any new order does. It walks to the leg's end when the fight is over. A unit on an attack-move
+                // leg chasing a target its owner still sees keeps the chase the same way (BUG-0157: else click spam to new
+                // points drops the back ranks' chases on every click), and re-picks too. Not a retaliator or an Idle
+                // scanner's chase: the first attack-move sends it off on the leg as before (kept, crowd-blocked
+                // retaliation chases in a brawl gave up three times and left units standing reach-only in sight of enemies).
                 bool sameLeg = OnLegTo(world, i, cell);
-                if (u.Target[i].Generation != 0 && (sameLeg || CombatSystem.FightsInReach(world, i)))
+                if (u.Target[i].Generation != 0 && (sameLeg || CombatSystem.FightsInReach(world, i)
+                    || (u.Mode[i] == CombatMode.AttackMove && CombatSystem.ChasesInSight(world, i))))
                 {
                     const float same2 = MovementConstants.ArrivalDistance * MovementConstants.ArrivalDistance;
                     bool samePoint = sameLeg && Vector2.DistanceSquared(goal, u.AnchorPosition[i]) <= same2;

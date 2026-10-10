@@ -26,13 +26,15 @@ public class AttackMoveRepickQaTests
     /// <summary>
     /// A 40 v 40 brawl (Heavy Infantry v Raiders, 5 ranks): player 0's whole army is re-attack-moved every
     /// <paramref name="every"/> ticks toward the enemy block, either to the same point or to a point jittered by 2-3 m
-    /// (a human's click spam). Over 400 ticks player 0 must deal at least 90 % of the damage one order deals (BUG-0152's
-    /// bound): a re-pick that keeps the same target keeps the swing.
+    /// (a human's click spam). Over 400 ticks player 0 must deal at least 90 % of the damage one order deals with spam to the
+    /// same point (BUG-0152's bound: a re-pick that keeps the same target keeps the swing). Jittered spam is bounded as the
+    /// Producer decided for BUG-0157 (2026-10-08-2144): no single interval under 80 % (one 400-tick brawl swings by about
+    /// 10 points either way), and the mean over the intervals at least 90 % (<see cref="BrawlSpam_JitteredAttackMove_MeanOverIntervals1To20_AtLeast90Percent"/>).
     /// </summary>
     [Theory]
     [InlineData(1, false)]
     [InlineData(3, false)]
-    [InlineData(3, true, Skip = "BUG-0157: attack-move spam to a new cell every 3 ticks drops chasers' fights (74 % of one order's damage; round-1 code 81 %)")]
+    [InlineData(3, true)]
     [InlineData(5, true)]
     [InlineData(10, true)]
     public void BrawlSpam_JitteredAttackMove_StillDealsTheDamage(int every, bool jitter)
@@ -41,7 +43,34 @@ public class AttackMoveRepickQaTests
         int spam = BrawlDamage(every, jitter, out int switches);
         _out.WriteLine($"damage dealt in 400 ticks: one order {once} (target switches {switchesOnce}); re-issued every {every} ticks, jitter {jitter}: {spam} (target switches {switches})");
         Assert.True(once > 0, "setup: no damage");
-        Assert.True(spam * 10 >= once * 9, $"spam every {every} (jitter {jitter}): {spam} damage vs {once} with one order");
+        int percent = jitter ? 8 : 9;
+        Assert.True(spam * 10 >= once * percent, $"spam every {every} (jitter {jitter}): {spam} damage vs {once} with one order (bound {percent}0 %)");
+    }
+
+    /// <summary>
+    /// BUG-0157's bound (Producer decision 2026-10-08-2144): with the kept-chase rule (an attack-move to a new point keeps a
+    /// chase whose target its owner still sees, and re-picks), jittered spam over intervals 1-20 ticks at 40 v 40 deals on
+    /// average at least 90 % of one order's damage in 400 ticks, and no interval under 80 %.
+    /// </summary>
+    [Fact]
+    public void BrawlSpam_JitteredAttackMove_MeanOverIntervals1To20_AtLeast90Percent()
+    {
+        int[] intervals = { 1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 15, 20 };
+        int once = BrawlDamage(0, false, out _);
+        Assert.True(once > 0, "setup: no damage");
+        double sum = 0, worst = double.MaxValue;
+        var row = new List<string>();
+        foreach (int every in intervals)
+        {
+            double share = 100.0 * BrawlDamage(every, true, out _) / once;
+            sum += share;
+            worst = Math.Min(worst, share);
+            row.Add($"{every}: {share:F0} %");
+        }
+        double mean = sum / intervals.Length;
+        _out.WriteLine($"one order {once}; jittered spam {string.Join(", ", row)}; mean {mean:F1} %, worst {worst:F0} %");
+        Assert.True(mean >= 90.0, $"mean {mean:F1} % of one order's damage ({string.Join(", ", row)})");
+        Assert.True(worst >= 80.0, $"an interval under 80 %: {string.Join(", ", row)}");
     }
 
     private static int BrawlDamage(int every, bool jitter, out int switches)

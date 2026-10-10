@@ -176,8 +176,8 @@ ground-targeted lobs (12 m/s) that always explode at the impact point.
 ### Splash and friendly fire
 
 Splash damage is 100% within 40% of the radius and falls off linearly to 50% at the edge. Attacks
-flagged **friendly fire** (Sappers, Catapults) also hit allied and own units in the radius, at 50%
-damage. Friendly fire never damages buildings.
+flagged **friendly fire** (Sappers, Catapults) also hit own units in the radius, at 50% damage
+(alliances arrive with M5). Friendly fire never damages buildings.
 
 ### Flying units
 
@@ -235,6 +235,8 @@ Zones are persistent ground areas (circle, duration, owner) that apply statuses 
 every tick and can modify vision. Darkness (Andii) and Sandstorm (Whirlwind) are zones. A unit keeps
 a zone's statuses for their duration after it leaves (Sandstorm: 1 s). A zone that hides its contents
 is seen into only by its owner and by an enemy's own units standing inside it, as far as they see.
+A unit is inside a zone when its centre is within the radius (the edge counts): the same test decides
+whether the zone's statuses take it and whether the zone hides it (the ground is hidden cell by cell).
 
 ## Stealth and detection
 

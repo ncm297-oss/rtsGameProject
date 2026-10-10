@@ -141,6 +141,38 @@ public class GhostListTests
         Assert.False(Ghost(w, 0, tent).Known);
     }
 
+    /// <summary>
+    /// BUG-0311: a unit within its sight of a gone building's footprint (13.4 m from the corner, sight 14) whose fog shows
+    /// none of its cells (its cell's centre is 7.07 cells from the nearest one) still has the ghost on its list: an Attack on
+    /// it is accepted, and the order ends at the update that shows the ground, the same one that drops the ghost.
+    /// </summary>
+    [Fact]
+    public void AnAttackOnAGoneGhost_WithinSightButNoFootprintCellVisible_IsAccepted_AndEndsWithTheGhost()
+    {
+        (Simulation sim, EntityHandle scout, EntityHandle tent) = Scene();
+        World w = sim.World;
+        w.Units.Free(scout);
+        Assert.True(w.Buildings.Free(tent)); // gone unseen
+        EntityHandle hi = Place(sim, 0, HeavyInfantry, new Vector2(50.5f, 50.5f)); // the footprint's corner (60, 60) 13.4 m away
+        FogMaps.RunThroughNextUpdate(sim);
+        Assert.True(Ghost(w, 0, tent).Known, "setup: the ghost went though no footprint cell is visible");
+        Assert.True(Vector2.Distance(w.Units.Position[hi.Index], new Vector2(60f, 60f)) < w.Data.Units[HeavyInfantry].Sight, "setup: not within sight of the footprint");
+        sim.Enqueue(Command.Attack(0, hi, tent, isBuilding: true));
+        sim.Tick();
+        sim.Tick();
+        Assert.Equal(tent, w.Units.Target[hi.Index]); // before the fix: refused (the unit "saw" the footprint)
+        int gone = -1, ended = -1;
+        for (int t = 0; t < 400 && ended < 0; t++)
+        {
+            sim.Tick();
+            if (gone < 0 && !Ghost(w, 0, tent).Known) gone = sim.TickNumber - 1;
+            if (w.Units.Target[hi.Index].Generation == 0) ended = sim.TickNumber - 1;
+            Assert.True(ended < 0 || gone >= 0, $"tick {ended}: the order ended while the ghost is still listed");
+        }
+        // The ghost goes in phase 12 of an update tick; the order, which reads the same fog, ends in the next tick's phase 7.
+        Assert.True(gone >= 0 && ended - gone is >= 0 and <= 1, $"ghost gone at {gone}, order ended at {ended}");
+    }
+
     [Fact]
     public void AnAttackOnAnUnlistedUnseenBuilding_IsStillDropped()
     {

@@ -545,9 +545,41 @@ public class StateHashTests
         w.Zones.Free(0);
         Assert.NotEqual(inSlot0, sim.StateHash());
         // The audit: every ZoneStore array is hashed (above) or derived.
-        var classified = new HashSet<string> { "_alive", "_owner", "_center", "_abilityId", "_ticksRemaining", "_radius", "_blocksVision" };
+        var classified = new HashSet<string> { "_alive", "_owner", "_center", "_abilityId", "_ticksRemaining", "_radius", "_blocksVision",
+            "_seenInside", "_covered" }; // BUG-0360: hashed (Hash_CoversAZonesFogRecord)
         foreach (FieldInfo f in typeof(Abilities.ZoneStore).GetFields(BindingFlags.NonPublic | BindingFlags.Instance))
             if (f.FieldType.IsArray) Assert.True(classified.Contains(f.Name), $"ZoneStore.{f.Name} is not classified as hashed or derived");
+    }
+
+    /// <summary>
+    /// BUG-0360: a blocking zone's fog record (per player, the cells of its box seen from inside it and the cells covered)
+    /// follows from the positions at the last update, and combat reads it: every bit of both sets, for every player, moves
+    /// the hash while the zone lives; making or freeing a zone clears its record.
+    /// </summary>
+    [Fact]
+    public void Hash_CoversAZonesFogRecord()
+    {
+        Simulation sim = AbilityScenes.NoFights();
+        World w = sim.World;
+        Data.AbilityDef sandstorm = w.Data.Abilities[w.Data.FindAbility("sandstorm")];
+        int k = w.Zones.Add(1, sandstorm, new Vector2(30f, 30f));
+        ulong h0 = sim.StateHash();
+        int bits = w.Zones.BoxSide * w.Zones.BoxSide;
+        Assert.True(bits > 0);
+        foreach (bool covered in new[] { false, true })
+            foreach (int p in new[] { 0, 1 })
+                foreach (int bit in new[] { 0, bits - 1 })
+                {
+                    w.Zones.SetFogBit(covered, k, p, bit);
+                    Assert.True(sim.StateHash() != h0, $"covered {covered} player {p} bit {bit}");
+                    w.Zones.ClearFogBits(k, p);
+                    Assert.Equal(h0, sim.StateHash());
+                }
+        w.Zones.SetFogBit(true, k, 0, 3);
+        w.Zones.Free(k);
+        Assert.Equal(k, w.Zones.Add(1, sandstorm, new Vector2(30f, 30f)));
+        Assert.False(w.Zones.FogBit(true, k, 0, 3)); // a new zone starts with no record
+        Assert.Equal(h0, sim.StateHash());
     }
 
     /// <summary>M4-4b-2: a Blinded unit's blind in force (its derived sight and reach) is derived from its hashed statuses and never hashed.</summary>
@@ -975,7 +1007,7 @@ public class StateHashTests
     // ---------- M4-1: combat state ----------
 
     /// <summary>The combat fields of UnitStore (M4-1); each one, mutated on a live unit, must flip the hash.</summary>
-    private static readonly string[] CombatFields = { "Hp", "Target", "TargetIsBuilding", "CooldownTicks", "WindupTicks", "LastAttacker", "AnchorPosition", "Mode", "ChaseBest", "ChaseStall", "Ignored", "IgnoredIsBuilding", "GiveUps", "ChasePrev", "ChasePrevIsBuilding" };
+    private static readonly string[] CombatFields = { "Hp", "Target", "TargetIsBuilding", "CooldownTicks", "WindupTicks", "LastAttacker", "AnchorPosition", "Mode", "ChaseBest", "ChaseStall", "Ignored", "IgnoredIsBuilding", "GiveUps", "ChasePrev", "ChasePrevIsBuilding", "ChaseSwitches", "ChaseChainBest" };
 
     [Fact]
     public void Hash_CoversEveryCombatField_OnALiveUnit_AndRestoringItRestoresTheHash()
@@ -995,6 +1027,7 @@ public class StateHashTests
             object changed = old switch
             {
                 int x => x - 1,
+                byte x => (byte)(x + 1), // BUG-0241's switch count
                 float x => x + 0.25f,
                 bool x => !x,
                 Vector2 x => x + new Vector2(0.25f, 0f),
@@ -1242,6 +1275,47 @@ public class StateHashTests
     }
 
     /// <summary>
+    /// BUG-0270: a tower's reveal (per building slot and player) is hashed only while in force, so a match without one
+    /// hashes as before: its end, its player and its building move the hash; one that is over, or on a recycled slot's
+    /// earlier building, hashes as none; each of the pair's arrays, changed under a live reveal, moves the hash.
+    /// </summary>
+    [Fact]
+    public void Hash_CoversATowersReveal_OnlyWhileInForce()
+    {
+        Simulation a = CombatScenes.Flat(units: 8), b = CombatScenes.Flat(units: 8);
+        EntityHandle ta = TowerTests.PlaceBuilding(a, 0, TowerTests.Watchtower, 10, 10);
+        EntityHandle tb = TowerTests.PlaceBuilding(b, 0, TowerTests.Watchtower, 10, 10);
+        World w = a.World;
+        ulong h0 = a.StateHash();
+        Assert.Equal(h0, b.StateHash());
+        w.Fog.RevealBuilding(ta, 1, w.TickNumber + 40);
+        ulong h1 = a.StateHash();
+        Assert.NotEqual(h0, h1);
+        w.Fog.RevealBuilding(ta, 1, w.TickNumber + 41);
+        Assert.NotEqual(h1, a.StateHash());
+        b.World.Fog.RevealBuilding(tb, 0, w.TickNumber + 40); // the other player (its own: OnHit never sets it, the store doesn't care)
+        Assert.NotEqual(h1, b.StateHash());
+        Assert.NotEqual(h0, b.StateHash());
+        w.Fog.RevealBuilding(ta, 1, w.TickNumber); // over
+        Assert.Equal(h0, a.StateHash());
+        w.Fog.RevealBuilding(new EntityHandle(ta.Index, ta.Generation + 1), 1, w.TickNumber + 40); // not the building in the slot
+        Assert.Equal(h0, a.StateHash());
+        Assert.False(w.Fog.CanSeeBuilding(1, ta.Index));
+        w.Fog.RevealBuilding(ta, 1, w.TickNumber + 40);
+        Assert.True(w.Fog.CanSeeBuilding(1, ta.Index));
+        ulong live = a.StateHash();
+        foreach (string f in new[] { "_buildingRevealUntil", "_buildingRevealGeneration" })
+        {
+            int[] arr = FogField<int[]>(w, f);
+            int k = ta.Index * w.Config.PlayerCount + 1;
+            arr[k]++;
+            Assert.True(a.StateHash() != live, f);
+            arr[k]--;
+            Assert.Equal(live, a.StateHash());
+        }
+    }
+
+    /// <summary>
     /// BUG-0215: the visible bits are state (they follow from where the units stood at the last update, and combat reads
     /// them), so every one of every player is hashed: flipping one moves the hash, flipping it back restores it.
     /// </summary>
@@ -1317,6 +1391,7 @@ public class StateHashTests
         // The audit: every FogStore array is one of these or hashed (above); a new one must be classified here.
         var classified = new HashSet<string> { "_visibility", "_version", "_visibleBox", "_explored", "_visible", "_revealUntil", "_revealGeneration",
             "_ghosts", "_ghostCount", // M4-3b: hashed (Hash_CoversEveryGhostField)
+            "_buildingRevealUntil", "_buildingRevealGeneration", // BUG-0270: hashed while in force (Hash_CoversATowersReveal_OnlyWhileInForce)
             "_levels", "_halfWidths", "_unitMask", "_buildingMask", "_lipMask", "_scratch", "_levelUsed", "_box",
             "_limits", "_statusMask" }; // M4-4b-2: derived from the data
         foreach (FieldInfo f in typeof(Vision.FogStore).GetFields(BindingFlags.NonPublic | BindingFlags.Instance))
@@ -1419,8 +1494,7 @@ public class StateHashTests
         new object[] { "Generation", (Action<World>)(w => Ghosts(w)[0] = Ghosts(w)[0] with { Generation = Ghosts(w)[0].Generation + 1 }) },
         new object[] { "TypeId", (Action<World>)(w => Ghosts(w)[0] = Ghosts(w)[0] with { TypeId = Ghosts(w)[0].TypeId + 1 }) },
         new object[] { "Cell", (Action<World>)(w => Ghosts(w)[0] = Ghosts(w)[0] with { Cell = Ghosts(w)[0].Cell + 1 }) },
-        new object[] { "Owner", (Action<World>)(w => Ghosts(w)[0] = Ghosts(w)[0] with { Owner = 0 }) },
-        new object[] { "the slot", (Action<World>)(w =>
+        new object[] { "Owner", (Action<World>)(w => Ghosts(w)[0] = Ghosts(w)[0] with { Owner = 0 }) },        new object[] { "the slot", (Action<World>)(w =>
         {
             Ghosts(w)[1] = Ghosts(w)[0];
             Ghosts(w)[0] = default;
