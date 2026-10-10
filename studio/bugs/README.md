@@ -230,3 +230,7 @@ bugs outrank new features.
 | [BUG-0342](BUG-0342-m4-v6a-ability-ui-nits.md) | S4 | open | M4-V6a nits: the cast bar is hard to read early in a cast; Shift + click disarms after one queued cast |
 | [BUG-0350](BUG-0350-cusser-allowance-can-never-be-retired.md) | S3 | open | The ability pin hard-codes "No effect on buildings" and enemy/own wording, so a landed Cusser (buildings + 50% friendly fire) can never leave `PendingAbilities` |
 | [BUG-0351](BUG-0351-d10a-small-gaps.md) | S4 | open | D10a: no "For your review" table; Duration mismatch against "—" reads as a missing unit |
+| [BUG-0360](BUG-0360-zone-blocker-cell-rule-disagrees-with-unit-inside-rule.md) | S3 | open | Sandstorm's vision blocker hides by cell centre while its statuses use the unit's center: a unit inside the rim can stand visible from outside, one just outside hidden |
+| [BUG-0361](BUG-0361-replay-recorder-accepts-non-default-zone-capacity.md) | S3 | open | `ReplayRecorder` accepts a non-default `ZoneCapacity`; the replay then fails its own playback |
+| [BUG-0362](BUG-0362-data-test-pending-sandstorm-fails-once-sim-lands-it.md) | S2 | open | Data track: `AnUnknownPageRow_Fails_ButAPendingOneDoesNot` fails once Sandstorm has landed (sim + data merge red) |
+| [BUG-0363](BUG-0363-m4-4b-2-zone-nits.md) | S4 | open | M4-4b-2 nits: far blockers cost scan time, a 3-tick acquire window after a storm appears, the `ZoneHides` summary |
