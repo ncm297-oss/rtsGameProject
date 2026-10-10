@@ -26,8 +26,10 @@ public class AbilityContentTests
     public static readonly string[] PendingAbilities = Array.Empty<string>();
 
     /// <summary>
-    /// docs/02 "Status effects" rows with no <c>statuses.json</c> entry yet (stealth, frenzy, passives). A landed one is
-    /// compared like any other, but its differences are reported, not failed, until it is removed here (Blinded left in D10c).
+    /// docs/02 "Status effects" rows the data track hasn't pinned yet (stealth, Frenzied, Regenerating), whether or not
+    /// <c>statuses.json</c> has the entry: a landed one (Frenzied from M4-4b-3a, pinned in D11) is compared like any other,
+    /// but its differences, description numbers included, are reported, not failed, until it is removed here (Blinded left
+    /// in D10c).
     /// </summary>
     public static readonly string[] PendingStatuses = { "Stealthed", "Revealed", "Frenzied", "Regenerating" };
 
@@ -289,34 +291,27 @@ public class AbilityContentTests
     }
 
     [Fact]
-    public void EveryAbilityAndStatusDescription_StatesOnlyItsOwnDataNumbers()
+    public void EveryAbilityAndStatusDescription_StatesItsOwnDataNumbersInTheirRoles()
     {
-        List<string> problems = DescriptionProblems(Data, Data.Abilities, Data.Statuses);
+        var reports = new List<string>();
+        List<string> problems = DescriptionProblems(Data, Data.Abilities, Data.Statuses, reports);
+        foreach (string line in reports) _out.WriteLine(line);
         Assert.True(problems.Count == 0, string.Join("\n", problems));
     }
 
-    /// <summary>D10c: the description pin can fail, by name, for a stale number in an ability or a status tooltip.</summary>
-    [Theory]
-    [InlineData("cusser", "120 siege", "100 siege")]
-    [InlineData("telas_fire", "for 4 seconds", "for 5 seconds")]
-    [InlineData("sandstorm", "Slowed by 30%", "Slowed by 40%")]
-    [InlineData("sandstorm", "for 12 seconds", "for 10 seconds")]
-    [InlineData("cusser", "take half", "take a quarter")]
-    [InlineData("blinded", "drops to 2 m", "drops to 4 m")]
-    [InlineData("blinded", "more than 3 m", "more than 5 m")]
-    public void AStaleNumberInADescription_FailsNamingIt(string key, string text, string mutant)
+    /// <summary>
+    /// The loaded abilities and statuses with <paramref name="text"/> replaced by <paramref name="mutant"/> in the description
+    /// of the ability or status <paramref name="key"/> (which must contain it).
+    /// </summary>
+    public static (ImmutableArray<AbilityDef> Abilities, ImmutableArray<StatusDef> Statuses) WithDescription(string key, string text, string mutant)
     {
         ImmutableArray<AbilityDef> abilities = Data.Abilities;
         ImmutableArray<StatusDef> statuses = Data.Statuses;
-        if (key == "blinded")
+        StatusDef? s = statuses.SingleOrDefault(x => x.Key == key);
+        if (s != null)
         {
-            StatusDef b = statuses.Single(s => s.Key == key);
-            Assert.Contains(text, b.Description, StringComparison.Ordinal);
-            statuses = statuses.SetItem(b.Id, new StatusDef
-            {
-                Id = b.Id, Key = b.Key, DisplayName = b.DisplayName, Description = b.Description.Replace(text, mutant, StringComparison.Ordinal),
-                Kind = b.Kind, DamageType = b.DamageType, Sight = b.Sight, Reach = b.Reach,
-            });
+            Assert.Contains(text, s.Description, StringComparison.Ordinal);
+            statuses = statuses.SetItem(s.Id, CopyStatus(s, s.Description.Replace(text, mutant, StringComparison.Ordinal)));
         }
         else
         {
@@ -330,6 +325,27 @@ public class AbilityContentTests
                 DurationTicks = c.DurationTicks, Affects = c.Affects, Effects = c.Effects, HitsBuildings = c.HitsBuildings, ZoneEffect = c.ZoneEffect,
             });
         }
+        return (abilities, statuses);
+    }
+
+    /// <summary>A copy of <paramref name="s"/> with another description (StatusDef has no <c>with</c>).</summary>
+    private static StatusDef CopyStatus(StatusDef s, string description) => new()
+    {
+        Id = s.Id, Key = s.Key, DisplayName = s.DisplayName, Description = description, Kind = s.Kind, DamageType = s.DamageType, Sight = s.Sight, Reach = s.Reach,
+    };
+
+    /// <summary>D10c: the description pin can fail, by name, for a stale number in an ability or a status tooltip.</summary>
+    [Theory]
+    [InlineData("cusser", "120 siege", "100 siege")]
+    [InlineData("telas_fire", "for 4 seconds", "for 5 seconds")]
+    [InlineData("sandstorm", "Slowed by 30%", "Slowed by 40%")]
+    [InlineData("sandstorm", "for 12 seconds", "for 10 seconds")]
+    [InlineData("cusser", "take half", "take a quarter")]
+    [InlineData("blinded", "drops to 2 m", "drops to 4 m")]
+    [InlineData("blinded", "more than 3 m", "more than 5 m")]
+    public void AStaleNumberInADescription_FailsNamingIt(string key, string text, string mutant)
+    {
+        (ImmutableArray<AbilityDef> abilities, ImmutableArray<StatusDef> statuses) = WithDescription(key, text, mutant);
 
         List<string> problems = DescriptionProblems(Data, abilities, statuses);
 
@@ -338,26 +354,190 @@ public class AbilityContentTests
     }
 
     /// <summary>
-    /// Each number in an ability's or a status's <c>description</c> is one of its own data numbers (ability: range, radius,
-    /// cast, cooldown, duration in seconds, damage amounts, friendly fire as a percentage, each applied status's magnitude,
-    /// percentage and duration; status: sight, reach), and "half" / "a quarter" of the hit is the data's friendly fire. The
-    /// words around the numbers (who, buildings, which status) are not parsed here; the page pins hold those.
+    /// BUG-0410 (D-H2 criterion 1): a description number that equals another data field (or no field of its role) fails,
+    /// naming the entry, the number and the role its words give it.
     /// </summary>
-    public static List<string> DescriptionProblems(GameData data, IEnumerable<AbilityDef> abilities, IEnumerable<StatusDef> statuses)
+    [Theory]
+    [InlineData("sandstorm", "for 12 seconds", "for 18 seconds", "'18 seconds'", "duration")]        // the range, as a duration
+    [InlineData("sandstorm", "for 12 seconds", "for 45 seconds", "'45 seconds'", "duration")]        // the cooldown, as a duration
+    [InlineData("sandstorm", "for 12 seconds", "for 1 second", "'1 second'", "duration")]            // the zone statuses' linger, as the zone's life
+    [InlineData("sandstorm", "Slowed by 30%", "Slowed by 45%", "'45%'", "percentage")]              // the cooldown, as a percentage
+    [InlineData("sandstorm", "Slowed by 30%", "Slowed by 12%", "'12%'", "percentage")]              // the duration, as a percentage
+    [InlineData("telas_fire", "4 seconds", "4 m", "'4 m'", "distance")]                              // the burn, as a distance
+    [InlineData("telas_fire", "for 4 seconds", "for 16 seconds", "'16 seconds'", "duration")]        // the range, as a duration
+    [InlineData("telas_fire", "taking 10 magic damage a second", "taking 4 magic damage a second", "'4'", "damage per second")]
+    [InlineData("cusser", "120 siege damage", "45 siege damage", "'45'", "damage amount")]           // the cooldown, as damage
+    [InlineData("cusser", "in the area", "in a 45 m area", "'45 m'", "distance")]                    // the cooldown, as a distance
+    [InlineData("blinded", "drops to 2 m", "drops to 2 seconds", "'2 seconds'", "duration")]         // a status has no duration of its own
+    public void ADescriptionNumberInTheWrongRole_FailsNamingEntryNumberAndRole(string key, string text, string mutant, string number, string role)
+    {
+        (ImmutableArray<AbilityDef> abilities, ImmutableArray<StatusDef> statuses) = WithDescription(key, text, mutant);
+
+        List<string> problems = DescriptionProblems(Data, abilities, statuses);
+
+        Assert.True(problems.Any(p => p.StartsWith(key + " description", StringComparison.Ordinal) && p.Contains(number, StringComparison.Ordinal)
+                && p.Contains("reads as a " + role, StringComparison.Ordinal)),
+            $"no '{key}' problem naming {number} as a {role}:\n" + string.Join("\n", problems));
+    }
+
+    /// <summary>
+    /// The duration words choose the field (BUG-0410): "45 s cooldown", "every 45 s", "recharges in 45 s" are the cooldown,
+    /// "takes 1.2 s to cast" the cast, "lingers 1 s after leaving" a zone status's duration; each passes with the right
+    /// number and fails with the number of another field.
+    /// </summary>
+    [Theory]
+    [InlineData(" (45 s cooldown)", true)]
+    [InlineData(" (12 s cooldown)", false)]
+    [InlineData(" Usable every 45 seconds.", true)]
+    [InlineData(" Usable every 12 seconds.", false)]
+    [InlineData(" Recharges in 45 s.", true)]
+    [InlineData(" Cooldown of 45 s.", true)]
+    [InlineData(" Takes 1.2 s to cast.", true)]
+    [InlineData(" Takes 12 s to cast.", false)]
+    [InlineData(" Both linger 1 s after a unit leaves.", true)]
+    [InlineData(" Blinded for 1 second after leaving the storm.", true)]
+    [InlineData(" Blinded for 12 seconds after leaving the storm.", false)]
+    [InlineData(" Range 18 m, radius 6 m.", true)]
+    [InlineData(" Radius 7 m.", false)]
+    public void TheWordsAroundADuration_ChooseItsField(string sentence, bool passes)
+    {
+        AbilityDef a = Data.Abilities.Single(x => x.Key == "sandstorm");
+        (ImmutableArray<AbilityDef> abilities, ImmutableArray<StatusDef> statuses) = WithDescription("sandstorm", a.Description, a.Description + sentence);
+
+        List<string> problems = DescriptionProblems(Data, abilities, statuses);
+
+        if (passes) Assert.True(problems.Count == 0, string.Join("\n", problems));
+        else Assert.Contains(problems, p => p.StartsWith("sandstorm description", StringComparison.Ordinal));
+    }
+
+    /// <summary>A number with no unit or damage word is still checked as before: one of the entry's data numbers, any role.</summary>
+    [Theory]
+    [InlineData("Calls up a sandstorm", "Calls up 6 sandstorms", true)]
+    [InlineData("Calls up a sandstorm", "Calls up 7 sandstorms", false)]
+    public void ANumberWithNoRoleWord_MustBeOneOfTheDataNumbers(string text, string mutant, bool passes)
+    {
+        (ImmutableArray<AbilityDef> abilities, ImmutableArray<StatusDef> statuses) = WithDescription("sandstorm", text, mutant);
+
+        List<string> problems = DescriptionProblems(Data, abilities, statuses);
+
+        if (passes) Assert.True(problems.Count == 0, string.Join("\n", problems));
+        else Assert.Contains(problems, p => p.StartsWith("sandstorm description: '7'", StringComparison.Ordinal) && p.Contains("no unit word", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// A status still in <see cref="PendingStatuses"/> (here an in-memory Regenerating of a kind no check knows, stating
+    /// numbers) only reports its description numbers, never fails: the data track pins a landed status's text later.
+    /// </summary>
+    [Fact]
+    public void APendingStatusDescription_ReportsItsNumbers_ButNeverFails()
+    {
+        var regen = new StatusDef
+        {
+            Id = Data.Statuses.Length, Key = "regenerating", DisplayName = "Regenerating", Description = "Heals 5 hp a second for 10 s, 50% faster.",
+            Kind = (StatusKind)99,
+        };
+        var reports = new List<string>();
+
+        List<string> problems = DescriptionProblems(Data, Data.Abilities, Data.Statuses.Add(regen), reports);
+
+        Assert.True(problems.Count == 0, string.Join("\n", problems));
+        Assert.Contains(reports, l => l.StartsWith("regenerating description", StringComparison.Ordinal) && l.Contains("pending", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// D10b QA note (D-H2 criterion 2): <see cref="Compare"/> and <see cref="CompareStatuses"/> resolve applied statuses
+    /// through the list they are given, so an in-memory ability applying an in-memory status compares without a throw and
+    /// names the right problems: the page's Burning text is a status nothing applies, the new status's text is missing,
+    /// and the new status has no docs/02 row nor lists the ability as a source.
+    /// </summary>
+    [Fact]
+    public void AnInMemoryAbilityApplyingAnInMemoryStatus_ComparesThroughThePassedList()
+    {
+        var dazed = new StatusDef { Id = Data.Statuses.Length, Key = "dazed", DisplayName = "Dazed", Description = "Moves more slowly.", Kind = StatusKind.Slow };
+        ImmutableArray<StatusDef> statuses = Data.Statuses.Add(dazed);
+        ImmutableArray<AbilityDef> abilities = With("Telas Fire", a => Copy(a, ImmutableArray.Create(new AbilityEffect
+        {
+            Kind = AbilityEffectKind.ApplyStatus, DamageType = -1, Status = dazed.Id, Magnitude = 0.2f, DurationTicks = 4 * SimConstants.TicksPerSecond,
+        }), a.DurationTicks));
+        string[] lines = PageTables.FactionLines("malazan");
+        string[][] rows = FactionPage.DocTable(StatusDoc, "Status effects", level: 3);
+
+        Result page = Compare(Data, abilities, "malazan", lines, statuses: statuses);
+        Result docs = CompareStatuses(Data, statuses, abilities, rows);
+
+        Assert.Contains(page.Problems, p => p.Contains("'Telas Fire' Effect:", StringComparison.Ordinal) && p.Contains("'Dazed 20%'", StringComparison.Ordinal));
+        Assert.Contains(page.Problems, p => p.Contains("'Telas Fire' Effect status", StringComparison.Ordinal) && p.Contains("'Burning'", StringComparison.Ordinal));
+        Assert.Contains(docs.Problems, p => p.Contains("'dazed' (Dazed): no docs/02", StringComparison.Ordinal));
+
+        // The page row saying what the in-memory ability does passes on Effect; a docs/02 Dazed row listing it passes too.
+        int row = Array.FindIndex(lines, l => l.StartsWith("| Telas Fire |", StringComparison.Ordinal));
+        string[] cells = PageTables.Cells(lines[row]);
+        cells[^1] = "Enemy units in the area are Dazed 20%. No effect on buildings";
+        lines[row] = "| " + string.Join(" | ", cells) + " |";
+        string[][] withDazed = rows.Append(new[] { "Dazed", "Movement speed × (1 - magnitude)", "Telas Fire" }).ToArray();
+
+        Result fixedPage = Compare(Data, abilities, "malazan", lines, statuses: statuses);
+        Result fixedDocs = CompareStatuses(Data, statuses, abilities, withDazed);
+
+        Assert.DoesNotContain(fixedPage.Problems, p => p.Contains("'Telas Fire' Effect", StringComparison.Ordinal));
+        Assert.True(fixedDocs.Problems.Count == 0, string.Join("\n", fixedDocs.Problems));
+    }
+
+    /// <summary>The same through a zone: an in-memory Sandstorm whose zone applies an in-memory status names it by the passed list.</summary>
+    [Fact]
+    public void AnInMemoryZoneStatus_ComparesThroughThePassedList()
+    {
+        var dazed = new StatusDef { Id = Data.Statuses.Length, Key = "dazed", DisplayName = "Dazed", Description = "", Kind = StatusKind.Slow };
+        ImmutableArray<StatusDef> statuses = Data.Statuses.Add(dazed);
+        ImmutableArray<AbilityDef> abilities = WithSandstorm(a => EditZone(a, e => e with
+        {
+            ZoneStatuses = e.ZoneStatuses.Add(new ZoneStatus { Status = dazed.Id, Magnitude = 0.2f, DurationTicks = SimConstants.TicksPerSecond }),
+        }));
+
+        Result r = Compare(Data, abilities, "whirlwind", PageTables.FactionLines("whirlwind"), statuses: statuses);
+
+        Assert.Contains(r.Problems, p => p.Contains("'Sandstorm' Effect status", StringComparison.Ordinal) && p.Contains("'Dazed'", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// BUG-0410: each number in an ability's or a status's <c>description</c> is checked against the data field its words
+    /// name (its <see cref="Role"/>), so a stale number that happens to equal another field still fails. "&lt;n&gt; s" /
+    /// "seconds" is a duration: "&lt;n&gt; s cooldown" / "every &lt;n&gt; s" the cooldown, "&lt;n&gt; s to cast" the cast
+    /// time, "lingers &lt;n&gt; s" / "&lt;n&gt; s after leaving" a zone status's duration, anything else ("for &lt;n&gt; s")
+    /// the ability's duration or an applied status's. "&lt;n&gt; m" / "metres" is a distance: the range or radius (a status:
+    /// sight or reach). "&lt;n&gt;%" is a magnitude x 100 or the friendly fire x 100. "&lt;n&gt; [type] damage" is a damage
+    /// amount, "... damage a second" (or "/s") a damage-over-time magnitude. A number no shape claims must still be one of
+    /// the entry's data numbers. "half" / "a quarter" of the hit is the data's friendly fire. The words around the numbers
+    /// (who, buildings, which status) are not parsed here; the page pins hold those. A status still in
+    /// <see cref="PendingStatuses"/> (one the data track hasn't pinned) goes to <paramref name="reports"/>, never fails.
+    /// Statuses are resolved through <paramref name="statuses"/>, so in-memory statuses work.
+    /// </summary>
+    public static List<string> DescriptionProblems(GameData data, IEnumerable<AbilityDef> abilities, IReadOnlyList<StatusDef> statuses,
+        List<string>? reports = null)
     {
         var problems = new List<string>();
         foreach (AbilityDef a in abilities)
         {
-            var allowed = new List<double> { a.Range, a.Radius, Seconds(a.CastTicks), Seconds(a.CooldownTicks), Seconds(a.DurationTicks) };
+            Dictionary<Role, List<double>> roles = NoRoles();
+            roles[Role.Distance].AddRange(new double[] { a.Range, a.Radius });
+            roles[Role.Cast].Add(Seconds(a.CastTicks));
+            roles[Role.Cooldown].Add(Seconds(a.CooldownTicks));
+            if (a.DurationTicks > 0) roles[Role.Duration].Add(Seconds(a.DurationTicks));
             double ff = 0;
             foreach (AbilityEffect e in a.Effects)
             {
-                if (e.Kind == AbilityEffectKind.Damage) { allowed.Add(e.Amount); allowed.Add(e.FriendlyFire * 100.0); ff = Math.Max(ff, e.FriendlyFire); }
-                if (e.Kind == AbilityEffectKind.ApplyStatus) { allowed.Add(e.Magnitude); allowed.Add(e.Magnitude * 100.0); allowed.Add(Seconds(e.DurationTicks)); }
+                if (e.Kind == AbilityEffectKind.Damage)
+                {
+                    roles[Role.Damage].Add(e.Amount);
+                    if (e.FriendlyFire > 0) roles[Role.Percent].Add(e.FriendlyFire * 100.0);
+                    ff = Math.Max(ff, e.FriendlyFire);
+                }
+                if (e.Kind == AbilityEffectKind.ApplyStatus)
+                    AddStatusNumbers(roles, statuses, e.Status, e.Magnitude, e.DurationTicks, Role.Duration);
                 if (e.Kind == AbilityEffectKind.CreateZone && !e.ZoneStatuses.IsDefault)
-                    foreach (ZoneStatus z in e.ZoneStatuses) { allowed.Add(z.Magnitude); allowed.Add(z.Magnitude * 100.0); allowed.Add(Seconds(z.DurationTicks)); }
+                    foreach (ZoneStatus z in e.ZoneStatuses) AddStatusNumbers(roles, statuses, z.Status, z.Magnitude, z.DurationTicks, Role.Lingering);
             }
-            NumbersNotIn(a.Key, a.Description, allowed, problems);
+            RoleProblems(a.Key, a.Description, roles, problems);
             foreach ((string word, double fraction) in new[] { ("half", 0.5), ("a quarter", 0.25) })
                 if (Regex.IsMatch(a.Description, @"\btake " + word + @"\b", RegexOptions.CultureInvariant) && Math.Abs(ff - fraction) > 1e-4)
                     problems.Add($"{a.Key} description says 'take {word}', data friendlyFire {FactionPage.Text(Math.Round(ff, 4))}");
@@ -365,17 +545,104 @@ public class AbilityContentTests
                 problems.Add($"{a.Key} description: data friendlyFire {FactionPage.Text(Math.Round(ff, 4))}, the text doesn't say what own units take");
         }
         foreach (StatusDef s in statuses)
-            NumbersNotIn(s.Key, s.Description, new List<double> { s.Sight, s.Reach }, problems);
+        {
+            // A status's own numbers are a blind's sight and reach; its magnitude and duration belong to whoever applies it.
+            Dictionary<Role, List<double>> roles = NoRoles();
+            if (s.Sight > 0) roles[Role.Distance].Add(s.Sight);
+            if (s.Reach > 0) roles[Role.Distance].Add(s.Reach);
+            var found = new List<string>();
+            RoleProblems(s.Key, s.Description, roles, found);
+            if (!PendingStatuses.Contains(s.DisplayName)) problems.AddRange(found);
+            else reports?.AddRange(found.Select(f => f + " (pending status: reported, not failed)"));
+        }
         return problems;
     }
 
-    private static void NumbersNotIn(string key, string description, List<double> allowed, List<string> problems)
+    /// <summary>The data field a description number's words name (BUG-0410).</summary>
+    public enum Role { Duration, Lingering, Cooldown, Cast, Distance, Percent, Damage, DamageRate }
+
+    private static Dictionary<Role, List<double>> NoRoles() => Enum.GetValues<Role>().ToDictionary(r => r, _ => new List<double>());
+
+    private static string RoleText(Role role) => role switch
     {
-        foreach (Match m in Regex.Matches(description, @"\d+(?:\.\d+)?", RegexOptions.CultureInvariant))
+        Role.Duration => "duration",
+        Role.Lingering => "lingering duration",
+        Role.Cooldown => "cooldown",
+        Role.Cast => "cast time",
+        Role.Distance => "distance (range / radius / sight / reach)",
+        Role.Percent => "percentage (magnitude / friendly fire x 100)",
+        Role.Damage => "damage amount",
+        _ => "damage per second",
+    };
+
+    /// <summary>An applied (or zone) status's magnitude and duration, filed under the roles its kind's text would use.</summary>
+    private static void AddStatusNumbers(Dictionary<Role, List<double>> roles, IReadOnlyList<StatusDef> statuses, int status, float magnitude,
+        int durationTicks, Role durationRole)
+    {
+        roles[durationRole].Add(Seconds(durationTicks));
+        // A damage over time's magnitude is damage per second; any other magnitude (a slow's fraction) reads as a percentage.
+        // A status id outside the list (the loader rejects those) gets both readings rather than a throw.
+        bool known = status >= 0 && status < statuses.Count;
+        bool dot = known && statuses[status].Kind == StatusKind.DamageOverTime;
+        if (!known || dot) roles[Role.DamageRate].Add(magnitude);
+        if ((!known || !dot) && magnitude > 0) roles[Role.Percent].Add(magnitude * 100.0);
+    }
+
+    /// <summary>A number in a description, with the unit word that may follow it ("12 seconds", "30%", "2 m").</summary>
+    private static readonly Regex DescriptionNumber = new(
+        @"(?<![\w.])(?<n>\d+(?:\.\d+)?)(?:(?<pct>\s?%|\s?per ?cent\b)|\s?(?<sec>s|secs?|seconds?)\b|\s?(?<m>m|metres?|meters?)\b)?",
+        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
+    /// <summary>"... damage a second" / "damage/s" right after a bare number: a damage-over-time rate.</summary>
+    private static readonly Regex DamageRateAfter = new(@"^\s+(?:[a-z_]+\s+)?damage(?:/s\b|\s+(?:a|per|each|every)\s+second\b)",
+        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
+    /// <summary>"... damage" right after a bare number ("120 siege damage").</summary>
+    private static readonly Regex DamageAfter = new(@"^\s+(?:[a-z_]+\s+)?damage\b", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
+    private const RegexOptions Words = RegexOptions.CultureInvariant | RegexOptions.IgnoreCase;
+
+    private static readonly char[] ClauseEnds = { '.', ',', ';', ':' };
+
+    /// <summary>The role of a number followed by a duration word, from the words around it.</summary>
+    private static Role DurationRole(string before, string after)
+    {
+        if (Regex.IsMatch(after, @"^\s*(?:cooldown|recharge)", Words) || Regex.IsMatch(before, @"(?:\b(?:cooldown|recharge)s?(?:\s+(?:of|is|in))?|\bevery)\s*$", Words))
+            return Role.Cooldown;
+        if (Regex.IsMatch(after, @"^\s*(?:to\s+)?cast", Words) || Regex.IsMatch(before, @"\bcast(?:s|ing)?(?:\s+(?:time|in|for|of|takes))*\s*$", Words))
+            return Role.Cast;
+        // The clause the number sits in: from the last punctuation before it to the next one after.
+        string clause = before[(before.LastIndexOfAny(ClauseEnds) + 1)..] + " " + after.Split(ClauseEnds)[0];
+        if (Regex.IsMatch(clause, @"\blinger|\bafter (?:leaving|it leaves|they leave)", Words)) return Role.Lingering;
+        return Role.Duration;
+    }
+
+    /// <summary>
+    /// Each number in <paramref name="description"/> against the data numbers of its role; a number with no role word must
+    /// be one of the entry's numbers in any role. Problems name the entry, the number and the role.
+    /// </summary>
+    private static void RoleProblems(string key, string description, Dictionary<Role, List<double>> roles, List<string> problems)
+    {
+        foreach (Match m in DescriptionNumber.Matches(description))
         {
-            double n = double.Parse(m.Value, CultureInfo.InvariantCulture);
-            if (!allowed.Any(v => Math.Abs(v - n) < 1e-3))
-                problems.Add($"{key} description: '{m.Value}' is none of its data numbers ('{description}')");
+            double n = double.Parse(m.Groups["n"].Value, CultureInfo.InvariantCulture);
+            string after = description[(m.Index + m.Length)..];
+            Role? role =
+                m.Groups["pct"].Success ? Role.Percent :
+                m.Groups["m"].Success ? Role.Distance :
+                m.Groups["sec"].Success ? DurationRole(description[..m.Index], after) :
+                DamageRateAfter.IsMatch(after) ? Role.DamageRate :
+                DamageAfter.IsMatch(after) ? Role.Damage :
+                null;
+            if (role is Role r)
+            {
+                List<double> want = roles[r];
+                if (want.Any(v => Math.Abs(v - n) < 1e-3)) continue;
+                string list = want.Count == 0 ? "none" : string.Join(", ", want.Select(v => FactionPage.Text(Math.Round(v, 4))));
+                problems.Add($"{key} description: '{m.Value.Trim()}' reads as a {RoleText(r)}, but its data {RoleText(r)} is {list} ('{description}')");
+            }
+            else if (!roles.Values.Any(vs => vs.Any(v => Math.Abs(v - n) < 1e-3)))
+                problems.Add($"{key} description: '{m.Value}' has no unit word and is none of its data numbers ('{description}')");
         }
     }
 
@@ -606,7 +873,10 @@ public class AbilityContentTests
         if (shape != Want) yield return ("Effect", $"docs/02 '{effect}', data Blind -> '{Want.Replace("#", "<n>")}'");
     }
 
-    /// <summary>D10b criterion 3, kept after Blinded's pin (D10c): a status landing while pending (stand-in: a Frenzied of a kind this pin doesn't know) reports and passes.</summary>
+    /// <summary>
+    /// D10b criterion 3, kept after Blinded's pin (D10c): a status landing while pending, of a kind this pin doesn't know
+    /// (an in-memory Frenzied of kind 99, the <c>_ =&gt; ""</c> arm), reports and passes.
+    /// </summary>
     [Fact]
     public void ALandedPendingStatus_PassesWithAReportLine()
     {
@@ -721,11 +991,14 @@ public class AbilityContentTests
     /// Compares <paramref name="faction"/>'s "Abilities" table in <paramref name="lines"/> to its loaded
     /// <paramref name="abilities"/>, both ways. A pending ability's differences go to <c>Reports</c>, every other one to
     /// <c>Problems</c>. <paramref name="pendingAbilities"/> stands in for <see cref="PendingAbilities"/> (tests of the allowance itself).
+    /// The statuses the abilities apply are resolved through <paramref name="statuses"/> (default the loaded ones), as in
+    /// <see cref="CompareStatuses"/>, so an in-memory ability may apply an in-memory status.
     /// </summary>
     public static Result Compare(GameData data, IEnumerable<AbilityDef> abilities, string faction, string[] lines,
-        IReadOnlyCollection<string>? pendingAbilities = null)
+        IReadOnlyCollection<string>? pendingAbilities = null, IReadOnlyList<StatusDef>? statuses = null)
     {
         IReadOnlyCollection<string> pendingNames = pendingAbilities ?? PendingAbilities;
+        IReadOnlyList<StatusDef> statusList = statuses ?? data.Statuses;
         var r = new Result(new List<string>(), new List<string>());
         string where = $"{faction}.md \"Abilities\"";
         (string[] header, List<string[]> rows) = PageTables.NamedTable(lines, "Abilities", faction + ".md");
@@ -749,7 +1022,7 @@ public class AbilityContentTests
                 sink.Add($"{where} '{a.DisplayName}' Ability: no row for loaded ability '{a.Key}'");
                 continue;
             }
-            foreach ((string column, string problem) in CellProblems(data, a, name => row[Col(name)]))
+            foreach ((string column, string problem) in CellProblems(data, statusList, a, name => row[Col(name)]))
                 sink.Add($"{where} '{a.DisplayName}' {column}: {problem}");
         }
         foreach (string[] row in rows)
@@ -762,7 +1035,7 @@ public class AbilityContentTests
         return r;
     }
 
-    private static IEnumerable<(string Column, string Problem)> CellProblems(GameData data, AbilityDef a, Func<string, string> cell)
+    private static IEnumerable<(string Column, string Problem)> CellProblems(GameData data, IReadOnlyList<StatusDef> statuses, AbilityDef a, Func<string, string> cell)
     {
         string[] units = data.Units.Where(u => u.Abilities.Contains(a.Id)).Select(u => u.DisplayName).ToArray();
         string unitText = string.Join(", ", units);
@@ -798,7 +1071,7 @@ public class AbilityContentTests
             if (problem != null) yield return ("Duration", problem);
         }
 
-        foreach ((string column, string problem) in EffectProblems(data, a, cell("Effect")))
+        foreach ((string column, string problem) in EffectProblems(data, statuses, a, cell("Effect")))
             yield return (column, problem);
     }
 
@@ -816,7 +1089,7 @@ public class AbilityContentTests
     /// friendly-fire fraction, and each status's text. Each problem's column names the data field it disagrees with
     /// (<c>Effect amount</c>, <c>Effect type</c>, <c>Effect buildings</c>, <c>Effect friendlyFire</c>, ...).
     /// </summary>
-    private static IEnumerable<(string Column, string Problem)> EffectProblems(GameData data, AbilityDef a, string effect)
+    private static IEnumerable<(string Column, string Problem)> EffectProblems(GameData data, IReadOnlyList<StatusDef> statuses, AbilityDef a, string effect)
     {
         bool Says(string text) => effect.Contains(text, StringComparison.OrdinalIgnoreCase);
 
@@ -894,7 +1167,7 @@ public class AbilityContentTests
         foreach (AbilityEffect e in a.Effects)
         {
             if (e.Kind == AbilityEffectKind.Damage || e.Kind == AbilityEffectKind.CreateZone) continue;
-            string want = e.Kind == AbilityEffectKind.ApplyStatus ? StatusText(data, e) : e.Kind.ToString();
+            string want = e.Kind == AbilityEffectKind.ApplyStatus ? StatusText(data, statuses, e) : e.Kind.ToString();
             if (!effect.Contains(want, StringComparison.Ordinal)) yield return ("Effect", $"'{effect}' does not say '{want}' ({e.Kind})");
         }
 
@@ -907,7 +1180,7 @@ public class AbilityContentTests
             blocks |= e.BlocksVision;
             if (e.ZoneStatuses.IsDefault) continue;
             foreach (ZoneStatus z in e.ZoneStatuses)
-                foreach ((string column, string problem) in ZoneStatusProblems(data, z, effect))
+                foreach ((string column, string problem) in ZoneStatusProblems(data, statuses, z, effect))
                     yield return (column, problem);
         }
         Match blockClaim = BlocksVisionClaim.Match(effect);
@@ -918,7 +1191,7 @@ public class AbilityContentTests
 
         // The reverse: a status the cell names that no effect applies is a promise the data doesn't keep.
         var applied = AppliedStatuses(a).ToHashSet();
-        foreach (StatusDef s in data.Statuses)
+        foreach (StatusDef s in statuses)
             if (!applied.Contains(s.Id) && SaysStatus(effect, s.DisplayName))
                 yield return ("Effect status", $"'{effect}' names '{s.DisplayName}', which no data effect applies");
     }
@@ -935,9 +1208,9 @@ public class AbilityContentTests
     /// a slow as "Slowed 30%" (or "Slowed by 30%"), a damage over time as "Burning: 10 magic damage/s". A blind has no magnitude.
     /// The status's own duration (how long it lingers after a unit leaves) is data only: the page doesn't state it.
     /// </summary>
-    private static IEnumerable<(string Column, string Problem)> ZoneStatusProblems(GameData data, ZoneStatus z, string effect)
+    private static IEnumerable<(string Column, string Problem)> ZoneStatusProblems(GameData data, IReadOnlyList<StatusDef> statuses, ZoneStatus z, string effect)
     {
-        StatusDef s = data.Statuses[z.Status];
+        StatusDef s = statuses[z.Status];
         if (!SaysStatus(effect, s.DisplayName))
         {
             yield return ("Effect status", $"'{effect}' does not name '{s.DisplayName}' (data zone status '{s.Key}')");
@@ -960,9 +1233,9 @@ public class AbilityContentTests
         }
     }
 
-    private static string StatusText(GameData data, AbilityEffect e)
+    private static string StatusText(GameData data, IReadOnlyList<StatusDef> statuses, AbilityEffect e)
     {
-        StatusDef s = data.Statuses[e.Status];
+        StatusDef s = statuses[e.Status];
         return s.Kind switch
         {
             StatusKind.DamageOverTime =>

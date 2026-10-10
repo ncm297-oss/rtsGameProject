@@ -42,12 +42,23 @@ public class AgesRuleQaTests
         Assert.True(m.Groups["m"].Value == CountWords[n - 1], $"age_ii Ages clause halls with the Forge: page {m.Groups["m"].Value} vs data {CountWords[n - 1]}");
     }
 
-    /// <summary>The "### Ages" bullet that states the any-of rule, its continuation lines joined by spaces.</summary>
-    private static string ClauseBullet()
+    /// <summary>D-H2: the heading is found through <c>PageTables.Heading</c>, so a missing "### Ages" fails by name.</summary>
+    [Fact]
+    public void AMissingAgesHeading_FailsNamingIt()
     {
-        string[] lines = File.ReadAllLines(Path.Combine(TestDataDir.RepoRoot(), "docs", "02-game-design.md"));
-        int i = Array.IndexOf(lines, "### Ages");
-        Assert.True(i >= 0, "docs/02 has no '### Ages' heading");
+        string[] lines = PageTables.Lines(Doc).Select(l => l == "### Ages" ? "### Eras" : l).ToArray();
+        var e = Assert.ThrowsAny<Exception>(() => ClauseBullet(lines));
+        Assert.Contains("docs/02-game-design.md has no '### Ages' heading", e.Message, StringComparison.Ordinal);
+    }
+
+    private const string Doc = "docs/02-game-design.md";
+
+    /// <summary>The "### Ages" bullet that states the any-of rule, its continuation lines joined by spaces.</summary>
+    private static string ClauseBullet() => ClauseBullet(PageTables.Lines(Doc));
+
+    private static string ClauseBullet(string[] lines)
+    {
+        int i = PageTables.Heading(lines, "### Ages", Doc);
         var bullets = new List<string>();
         for (i++; i < lines.Length && !lines[i].StartsWith('#'); i++)
         {

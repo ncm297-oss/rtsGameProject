@@ -2358,6 +2358,13 @@ fraction above 0 and below 1 for slow>, "duration": <s, at least a tick> }`. The
 "not supported yet" errors. A unit's `abilities` lists its own faction's ids. Player-facing text only in `displayName` /
 `description` (statuses too). M4-4b-1 additions: see "Implementation (M4-4b-1)" below.
 
+Description numbers (D-H2, BUG-0410): the content tests read each number in an ability or status `description` by the
+word after it and check it against that field only. "N s" / "N seconds" is the ability's `duration` or an applied status's
+(`every N s`, `N s cooldown`, `recharges in N s`: the `cooldown`; `N s to cast`: the `castTime`; `lingers N s` / `N s after
+leaving`: a zone status's `duration`); "N m" is the `range` or `radius` (a status's `sight` or `reach`); "N%" is a
+`magnitude` x 100 or `friendlyFire` x 100; "N <type> damage" a damage `amount`, "N <type> damage a second" a
+damage-over-time `magnitude`. A number with no such word must still equal one of the entry's numbers.
+
 ### Implementation (M4-4b-1)
 
 The second signature ability (M4 criterion 8: the Sapper's Cusser) from data, the `abilityCooldown` tech effect, and a

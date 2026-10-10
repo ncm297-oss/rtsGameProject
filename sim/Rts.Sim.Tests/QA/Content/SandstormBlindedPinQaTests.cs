@@ -216,17 +216,18 @@ public class SandstormBlindedPinQaTests
     }
 
     /// <summary>
-    /// BUG-0410: the description pin checks a bag of numbers, so a stale duration that happens to equal another data number
-    /// (Sandstorm's 18 m range, 45 s cooldown, the 30% slow) passes: "for 18 seconds" or "Slowed by 45%" are not caught.
+    /// BUG-0410 (fixed in D-H2): a stale duration or slow that happens to equal another data number (Sandstorm's 18 m range,
+    /// 45 s cooldown, the 30% slow, the 12 s duration) fails, naming the entry, the number and the role its words give it.
     /// </summary>
-    [Theory(Skip = "BUG-0410: description numbers are matched against any data number, not the one their words name")]
-    [InlineData("for 12 seconds", "for 18 seconds")]
-    [InlineData("for 12 seconds", "for 45 seconds")]
-    [InlineData("Slowed by 30%", "Slowed by 45%")]
-    [InlineData("Slowed by 30%", "Slowed by 12%")]
-    public void ADescriptionNumber_InTheWrongRole_Fails(string from, string to)
+    [Theory]
+    [InlineData("for 12 seconds", "for 18 seconds", "'18 seconds'", "duration")]
+    [InlineData("for 12 seconds", "for 45 seconds", "'45 seconds'", "duration")]
+    [InlineData("Slowed by 30%", "Slowed by 45%", "'45%'", "percentage")]
+    [InlineData("Slowed by 30%", "Slowed by 12%", "'12%'", "percentage")]
+    public void ADescriptionNumber_InTheWrongRole_Fails(string from, string to, string number, string role)
     {
         List<string> problems = SandstormDescription(from, to);
-        Assert.Contains(problems, p => p.StartsWith("sandstorm description", StringComparison.Ordinal));
+        Assert.Contains(problems, p => p.StartsWith("sandstorm description", StringComparison.Ordinal)
+            && p.Contains(number, StringComparison.Ordinal) && p.Contains("reads as a " + role, StringComparison.Ordinal));
     }
 }

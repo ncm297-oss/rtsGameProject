@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-10-0624, task D10c |
 | System | content tests (`Content/AbilityContentTests.DescriptionProblems`) |
-| Fixed by | |
+| Fixed by | D-H2 (2026-10-10-1015, data track): `DescriptionProblems` checks each number against the field its words name; `QA/Content/SandstormBlindedPinQaTests.ADescriptionNumber_InTheWrongRole_Fails` un-skipped (4 / 4 fail naming entry, number, role), plus `Content/AbilityContentTests.ADescriptionNumberInTheWrongRole_FailsNamingEntryNumberAndRole` and `TheWordsAroundADuration_ChooseItsField` |
 
 ## Repro
 1. Un-skip `Rts.Sim.Tests.QA.Content.SandstormBlindedPinQaTests.ADescriptionNumber_InTheWrongRole_Fails`.
@@ -31,3 +31,11 @@ Outside the D10c criteria (no criterion asked for role-aware description numbers
 report. Possible fix: bind the common shapes to their field ("for <n> seconds" -> duration, "<n>%" after a status name
 -> that status's magnitude, "<n> <type> damage" -> a damage amount, "<n> m" in a status -> sight / reach), and keep the
 bag check only for numbers no shape claims.
+
+## Fix (D-H2)
+Roles by the words after (and before) each number: "s" / "second(s)" is a duration, refined by "cooldown" / "recharge(s
+in)" / "every" (cooldown), "to cast" / "cast time" (cast), "linger" / "after leaving" in the clause (a zone status's
+duration), else the ability's duration or an applied status's; "m" / "metre(s)" a distance (range, radius; a status's
+sight, reach); "%" a magnitude x 100 or the friendly fire x 100; "<n> [type] damage" an amount, "... damage a second" /
+"damage/s" a damage-over-time magnitude. A number no shape claims keeps the old any-field check. A status in
+`PendingStatuses` reports its description problems and never fails.
