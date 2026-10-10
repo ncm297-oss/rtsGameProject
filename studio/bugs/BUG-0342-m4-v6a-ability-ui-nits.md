@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-09-1155, task M4-V6a |
 | System | view: ability views, targeting |
-| Fixed by | |
+| Fixed by | ed18d2f (M4-V6b), verified 2026-10-10-0215 |
 
 ## Repro
 1. Windowed: `& $env:GODOT --path game res://tests/AbilityViewTest.tscn -- --seed 1 --shots <dir>` and open
