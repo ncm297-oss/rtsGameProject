@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-09-1155, task D10a |
 | System | content tests / studio records |
-| Fixed by | |
+| Fixed by | 4f4e3ca (D10b): `ADurationAgainstADash_ReadsAsAValueMismatch` pins "page '—', data 6 s"; the For your review table came in the D10b report and is under STATE "For your review" (2026-10-10-0215) |
 
 ## Repro
 1. Brief scope item (5) asks for "the For your review table"; the developer report says it was not

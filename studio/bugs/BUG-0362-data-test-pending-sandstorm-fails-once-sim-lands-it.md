@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-10-0215, task M4-4b-2 (cross-track: the defect is in the data track's D10b test file) |
 | System | content tests (`sim/Rts.Sim.Tests/Content/AbilityContentTests.cs`, data track) |
-| Fixed by | |
+| Fixed by | cfaa3ea (D10b fix round 1, data track): the test accepts "pending" or "landed" in the report line; QA re-check: six mutants on each side of the merge still fail, scratch merge sim 62dcaeb + data cfaa3ea non-Perf 4,444 / 15 skipped / 0 failed; verified at the 2026-10-10-0215 ACCEPT |
 
 ## Repro
 1. Make a scratch clone of the sim branch at 9febc27 and run `git merge f74a0f2` (data D10b plus its QA). It merges cleanly.

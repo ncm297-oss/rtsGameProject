@@ -38,3 +38,7 @@ Options for the Producer:
 - (a) Hide by the unit's center in `ZoneHides` and in `CanSeeUnit`, and keep the cell rule for ground.
 - (b) Mark every cell the circle touches: a conservative mask that hides a little more ground but never shows a unit inside.
 - (c) Accept it and reword docs/02.
+
+## Producer triage (2026-10-10-0215 ACCEPT)
+
+S3 stays. Planned for the sim hardening next session (first item): option (a), hide a unit by its own centre in `ZoneHides` and `CanSeeUnit` (so the blocker and the statuses agree on who is inside) and keep the cell rule for ground; docs/02 and docs/03 to say the same thing afterwards. Un-skip `TheBlockerAndTheStatuses_AgreeOnWhoIsInside` and retire the current-behaviour pin.
