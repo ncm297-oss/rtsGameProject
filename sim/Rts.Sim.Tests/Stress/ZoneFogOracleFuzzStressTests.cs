@@ -162,6 +162,9 @@ public class ZoneFogOracleFuzzStressTests
     [InlineData(2UL)]
     [InlineData(7UL)]
     [InlineData(42UL)]
+    [InlineData(99UL)] // QA M4-H2 (2026-10-10-0624): three more seeds on the re-derived unit rule
+    [InlineData(2026UL)]
+    [InlineData(31337UL)]
     public void TheFogWithZonesAndBlinds_MatchesTheBruteForceOracle_OnTheTwoLevelMap(ulong seed)
     {
         var rng = new SimRng(seed, 4242);

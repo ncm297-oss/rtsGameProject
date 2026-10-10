@@ -33,3 +33,12 @@ d shares its cause with BUG-0301 (the pulse clock is the remaining count).
 
 ## QA re-check (2026-10-09-0724, round 1)
 (d) fixed: the pulse clock starts at the apply and docs/03 states the trailing-fraction rule (pinned by `QA/StatusPulseClockQaTests`). (b) still open for the original ~65 KB; the round-1 raise (+131,072 itemized, +130,848 measured) is fully explained. (c) open.
+
+## QA note (2026-10-10-0624, M4-H2): (b) margin now 18.9 KB
+`QA/FieldBuildFairnessQaTests.World_1024Map_CacheStays32_MemoryBounded` measures 231,808,096 bytes on the base 63efab2 and
+231,843,112 on 5c2de85, against the 231,862,000 bound (the comment block still ends at M4-4a fix round 1's 231,789,560).
+The base's +18,536 bytes came with M4-4b-2 (the zone store) and are not itemised. M4-H2's +35,016 bytes are explained:
+`UnitStore.ChaseSwitches` + `ChaseChainBest` 4,096 x 5 = 20,480; the death list's extra `BuildingCapacity` 256 x 32-byte
+`DeathEvent` = 8,192; the towers' reveal pair 256 x 2 players x 4 x 2 = 4,096; the zone fog records 64 x 2 players x 1 word
+x 8 x 2 = 2,048; about 200 bytes of array headers. The next session that adds per-slot state will cross the bound, so
+re-baseline it then with these items written into the comment.

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-08-2144, task M4-H1 (QA on BUG-0113 item 1's fix) |
 | System | data loader (`DataLoader.ExpectedKind`) |
-| Fixed by | |
+| Fixed by | 5c2de85 (M4-H2): un-skipped `QA/DataTypeMessageQaTests.MapOfNumbersField_GivenANumberOrAList_SaysExpectedAnObject` |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~DataTypeMessageQaTests"`. The skipped theory
@@ -27,3 +27,6 @@ fields is ``Dictionary`2[System.String,System.Double]``, so the number test matc
 ``List`1``) before the element types. The other shapes are right: object, list of strings, string, whole number, bool,
 and a wrong value inside the map (`bonusVs.mounted: "high"` says "expected a number"). Those are now
 `WrongTypedValue_NamesWhatTheFieldWants` rows.
+
+## QA verification (2026-10-10-0624, M4-H2)
+Verified by QA 2026-10-10-0624 (M4-H2): both rows failed on the base 63efab2 and pass on 5c2de85 (containers are tested before scalars in `DataLoader.ExpectedKind`). Note: a `List<Dictionary<..>>` field would now say "an object"; no such field exists in the schema today.
