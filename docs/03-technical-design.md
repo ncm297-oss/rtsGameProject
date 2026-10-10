@@ -4637,9 +4637,124 @@ game/shaders/zone_disc.gdshader    the disc: a translucent fill and a more opaqu
   owner's colour; the steady match (`--units 500`) with 8 zones staged after the twin (two Sandstorms, six of a
   non-blocking copy), all drawn in every frame, 0 bytes. Windowed `-- --shots <dir>` adds `ability-seedN-storm.png`,
   `-blinded.png` and `-storm-enemy.png` (looked at, seeds 1 and 6).
-- **Not yet:** the Frenzied marker (one `StatusKind` arm once the sim's `Frenzied` kind lands; pale until then), stealth
-  visuals (M4-5), zone dots on the minimap, a zone or status tooltip, a fog-darkened look for an enemy storm seen over
-  unexplored ground (M6 fog-look pass).
+- **Not yet:** the Frenzied marker (one `StatusKind` arm once the sim's `Frenzied` kind lands; pale until then; landed in
+  M4-V6d, see "Implementation (M4-V6d)"), stealth visuals (M4-5), zone dots on the minimap, a zone or status tooltip, a
+  fog-darkened look for an enemy storm seen over unexplored ground (M6 fog-look pass).
+
+### Implementation (M4-V6d)
+
+The view side of M4 criterion 6's last pieces: the Frenzied marker and the card for a no-target (`selfAura`) ability.
+Reads only what "For the view (M4-V6d)" lists; no sim change outside `ViewApi`.
+
+```
+sim/Rts.Sim/ViewApi/AbilityCaster.cs   Lead: the reference point of a no-target cast (pure, allocation-free)
+game/scripts/SelectionController.cs    BeginAbility casts a selfAura at once; SelfCaster, SelfAbilityOrder
+game/scripts/CommandCard.cs            HoveredAbility; the press passes Shift; a selfAura tooltip has no range
+game/scripts/AbilityViews.cs           FrenzyColor; the hover ring round the caster
+```
+
+- **Frenzied marker.** `AbilityViews.FrenzyColor` (1, 0.2, 0.75), a hot magenta, is the `StatusKind.Frenzied` arm of the
+  marker colour switch. Its largest per-channel difference to each other marker colour is at least 0.4 (Burning 0.70,
+  Slowed 0.92, Blinded 0.50, the pale default 0.72), and it stays off the Whirlwind's crimson accent. Looked at, with all
+  four markers side by side on a Heavy Infantry and a Raider at zoom 30 on sand and on grass
+  (`ability-seedN-frenzied.png`). A taste default until the M6 art pass.
+- **The no-target card** (`AbilityDef.Kind == AbilityKind.SelfAura`). Its button and grid key never arm targeting:
+  `SelectionController.BeginAbility(ability, queued)` ends any targeting and sends `SelfAbilityOrder`: exactly one
+  `UseAbility` for `SelfCaster`'s unit, at that unit's own position (the sim ignores the point but needs one on the map),
+  queued while `order_queue` (Shift) is held, one Command sound; nothing when no selected unit is ready (a queued press:
+  ready and free) or the command queue is full. `SelfCaster` keeps the nearest-ready-caster rule: `PickCaster` at
+  `AbilityCaster.Lead`, the position of the first selected unit whose type lists the ability (ready or not), so the lead
+  casts when it is ready and free, else the ready free caster nearest it (the busy rule of "Implementation (M4-VH2)"
+  unchanged). The tooltip leaves out the range: "<description>\nRadius 4 m  Cooldown 10 s" (existing `ui.json` keys, no
+  new one).
+- **Hover ring.** While the cursor rests on a no-target ability's button (`CommandCard.HoveredAbility`, from the buttons'
+  hover state) and nothing is armed, `AbilityViews` draws the ability's radius ring round the unit a press would cast with
+  (interpolated position; `SelfRingShown`; `RangeCaster` is that unit) and no range ring (a no-target ability gets no
+  range mesh). After a press the ring moves to the caster the next press would pick (the lead is on cooldown).
+- **Resolve flash.** No new code: for a `selfAura` cast `AbilityEvent.Point` is the caster's position at the resolve, so
+  the flash lands on the caster.
+- **Cost.** The hover read is 15 `IsHovered` calls; the ring one selection scan and one caster pick. 0 bytes a frame (120
+  frames with the hover ring drawn, both seeds).
+- **Tests.** xUnit `ViewApi/AbilityCasterTests.Lead_*` (the first live selected unit with the ability, ready or not; the
+  pick then takes the ready one nearest it; stale handles and units without it skipped; none; 0 bytes). Headless `AbilityViewTest`
+  adds the colour row (each gap at least 0.4) and, per seed (1, 6), a match on test data (the shipped data plus
+  `SelfAuraTests.AddTo`'s two test-only abilities on the Heavy Infantry, written to a copy in Godot's user data folder;
+  Requests 30): `StatusColor(frenzied) == FrenzyColor`; the card (both abilities on Q and W, the tooltip without a range);
+  the hover through the viewport (ring round the lead, the def's 4 m, no range ring, nothing armed); 120 hover frames at
+  0 bytes; a click on the button through the viewport sends exactly one `UseAbility` for the lead at its position, not
+  queued, no targeting, one sound; the resolve at the lead's position with one flash there; the rally's Frenzied markers
+  on the two Heavies within 4 m in `FrenzyColor`, none on the far one; Shift + click with the lead on cooldown queues one
+  for the second Heavy at its position; W (the zone ability's grid key) casts at once for the lead and the zone sits on
+  it; the hash twin; then (test staging after the twin) Burning, Slowed, Blinded and Frenzied written into the store on a
+  Heavy and a Raider, four markers each in four colours. Windowed `-- --shots <dir>` adds `ability-seedN-aura-hover.png`,
+  `-aura-frenzied.png` and `-frenzied.png` (looked at, seeds 1 and 6).
+- **Not yet:** the `summon` kind's arm (the same card; next session), autocast toggles, a status name tooltip.
+
+### Implementation (M4-V7)
+
+M4 criterion 10 on screen, slice 1: the fog-on sandbox Playable, a scripted Malazan-vs-Whirlwind fight through the real
+HUD, as `M3PlayableTest` proved M3. Test code only (`game/tests/M4PlayableTest.tscn` + `.cs`); no game or sim change.
+
+- **The scene** (`res://tests/M4PlayableTest.tscn`, "M4 PLAYABLE TEST PASS" / "M4 PLAYABLE TEST FAIL <step> (seed,
+  tick): <what>", exit code 0 / 1; seeds 1 and 6, `-- --seed N` for one; `-- --break <n>` makes step n fail once, as
+  M3's). A real `Match` (`--units 0 --no-bases --mute --speed 8`, shipped data, the fog on and drawn), the sim ticked by
+  its own `SimRunner` at 8x, every checkpoint recorded. Every action of the local player is input pushed into the
+  viewport: box drags, clicks, right clicks, grid keys, Tab, Ctrl + 1 and 1, Shift (the `order_queue` action held) and
+  minimap clicks to move the camera; never a controller call or a player-0 sim command.
+- **Staging** (dev commands, which ignore requirements and costs; the enemy has no AI before M5): the two start bases
+  through the match's own `Match.SpawnBases`, beside stand-in blocks a fifth of the map in from the west and east edges
+  (with no army the planner puts the halls either side of the centre gap, 28 m apart and in sight of each other); per
+  side three buildings on its hall's plateau (`StartBase.IsHallSpot` on the hall's level: Barracks, Billet, Armory /
+  Raider Camp, Tent behind the hall, Smithy); a Malazan army 20 m in front of its hall (8 Heavy Infantry, 5 Crossbowmen,
+  a Cadre Mage, a Catapult and a Priest of the Whirlwind of its own: the local player is player 0, Malazan, until the M6
+  lobby, so a Sandstorm through the HUD needs an own Priest) and a Sapper behind it; a Whirlwind army 18 m in front of
+  its hall (4 Raiders, 3 Zealots, 2 Horse Raiders standing in for the brief's "Lancers", 3 Desert Archers, a Priest).
+  The halls stand 140-150 m apart. The only enemy orders are the Zealot duel's two `Attack`s.
+- **Steps** (each prints the tick it ended on and its ticks): (1) fog: over 95 % of the map unexplored, the enemy
+  hall's fog cell 0 in the sim and in the fog texture, no enemy unit or building drawn or seen, every own unit drawn;
+  (2) the Sapper clicked, right-clicked 45 m short of the enemy army and Shift + H (it holds there); the army
+  box-selected (exactly its 16 units), Ctrl + 1, A, a click on the ground under the fog where the enemy army stands: one
+  attack-move per unit, every unit in `CombatMode.AttackMove`; (3) the approach: the first enemy unit drawn, and seen;
+  (4) Tab to the own Priest, Q, a click on the biggest visible Whirlwind blob within 40 m of it (two units within 6 m; any
+  visible enemy after 60 ticks without one): the cast resolves, an own zone lives, its disc is drawn and a seen Whirlwind
+  unit shows the Blinded marker; (5) Tab to the Cadre Mage, Q, a click on a blob (two within 3 m): Burning markers over
+  seen Whirlwind units; (6) a kill and a loss, the resource bar's K / L equal to the sim's, then the fight decided (the
+  army stands; at most two enemy army units live, none seen for 100 ticks); (7) 1 and a right click 30 m back pull the
+  army off the base, the Sapper (clicked) right-clicks its way beside the enemy building nearest it (the Town Hall last)
+  until within the Cusser's 6 m, Q and a click on the footprint's centre: the cast aims there and resolves, the building
+  loses at least 300 hit points (360 siege to a structure, less its armor); a right click on it for the Sapper and for
+  the army (1) finishes it, and its rubble marker is drawn on the footprint, in sight; (8) two fresh enemy Zealots attack
+  our Billet and Barracks (staging `Attack`s), a fresh Cadre Mage 18 m off (out of both Zealots' sight and they of its)
+  is clicked, Q, a click on Zealot A, Shift + right click back to where it stood: Burning takes A from 63 to 23 hit
+  points, under half, so it is Frenzied (the sim's `whenBelowHp` passive) and its marker is drawn in `FrenzyColor`, none
+  over the unhurt B; over the next 60 ticks A starts more swings than B (4-5 against 3: a 13-tick cooldown against 20;
+  a swing start is counted when `CooldownTicks` rises, read on `SimRunner.Ticked`); (9) the hash twin: the recorder's
+  replay played into a bare sim by `ReplayPlayer`, a checkpoint every tick, equal.
+- **The fog rule, every frame.** Every wait goes through one frame helper that checks, on each frame of the whole run,
+  that no enemy unit view (`UnitViews.IsShown` or its node visible), hp bar, status marker or cast bar is drawn while
+  `Fog.CanSeeUnit(0, unit)` is false, no dead unit is drawn, and no enemy building view is shown while `CanSeeBuilding`
+  is false. Counters are printed: seed 1 about 370-450 frames of the approach (A-click to first contact) and 1,900-2,500
+  in all, 0 violations; seed 6 520-640 and 2,500-3,500, 0.
+- **What a player would also do** (the script's robustness, each printed when it happens): a cast the sim drops (the
+  caster's walk-in ended short of the range) is clicked again on a fresh blob, at most twice; the Sapper is walked to the
+  building with plain Moves rather than a long Cusser walk-in, and a Move that stops short is clicked again to the next
+  spot round it; the army is pulled back before the Sapper goes in (on seed 6 our attacking units, which stand as walls,
+  shut the Sapper's way down a rise).
+- **Tick budget** 5,500 per seed (`M4PlayableTest.TickBudget`, 4 min 35 s of game time); runs headless and windowed:
+  seed 1 2,560-2,607, seed 6 3,424-3,878, so at least 1,600 ticks (40 %) of margin; 40-70 s of wall time for both
+  seeds headless. The commands land on whichever tick the frame clock reaches, so runs differ by a few hundred ticks. On
+  any failure the replay so far is saved to Godot's user data folder (`m4playable-seed<N>-fail-tick<T>.replay`, or
+  `-exception-`).
+- **Stills.** Windowed `-- --shots <dir>` saves `m4-seedN-first-contact.png`, `-storm.png`, `-telas-fire.png`,
+  `-cusser-rubble.png` and `-frenzied-zealot.png` (looked at, seeds 1 and 6). No storm crossed a cliff in these runs, so
+  BUG-0430 did not show.
+- **Seen for the sim track** (not fixed here): a `UseAbility` whose walk-in ends short is dropped, and in this sandbox it
+  happened to long walk-ins (a Priest on a rise 19.2 m from a low-ground point, range 18; a Sapper on a rise 22.9 m from
+  a building below and once 31.5 m off on flat ground, range 6); and a Sapper that had wandered onto a rise at about
+  (187, 111) on seed 6 (level 1, an idle chase) took no step on eight Move orders toward the Raider Camp below while the
+  army attacked there.
+- **Not yet (slice 2):** an enemy Priest's storm over the player's own army (a scripted enemy cast, or the M5 AI),
+  stealth (M4-5), summons on screen, the minimap's zone dots.
 
 ## AI architecture
 

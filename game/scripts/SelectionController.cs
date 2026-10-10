@@ -288,17 +288,55 @@ public partial class SelectionController : Node
     /// <summary>
     /// What an ability button or its grid key does (M4-V6a): arms targeting for ability <paramref name="abilityId"/> when
     /// some selected unit has it off cooldown (<see cref="AbilityCaster.SoonestReady"/>); false (nothing armed, any
-    /// other targeting left as it was) otherwise.
+    /// other targeting left as it was) otherwise. M4-V6d: a no-target ability (<see cref="AbilityKind.SelfAura"/>) arms
+    /// nothing: the press casts at once (<see cref="SelfAbilityOrder"/>, queued when <paramref name="queued"/>) and ends any
+    /// targeting; true if it enqueued.
     /// </summary>
-    public bool BeginAbility(int abilityId)
+    public bool BeginAbility(int abilityId, bool queued = false)
     {
         if (_runner?.Simulation is not Simulation sim) return false;
         World world = sim.World;
         if ((uint)abilityId >= (uint)world.Data.Abilities.Length) return false;
         Selection.Prune(world.Units.Alive, world.Units.Generation);
         if (SoonestReady(abilityId) != 0) return false;
+        if (world.Data.Abilities[abilityId].Kind == AbilityKind.SelfAura)
+        {
+            Targeting = false;
+            return SelfAbilityOrder(abilityId, queued);
+        }
         _target = CommandKind.UseAbility;
         _targetAbility = abilityId;
+        return true;
+    }
+
+    /// <summary>
+    /// The selected unit that would cast no-target ability <paramref name="abilityId"/> now (M4-V6d): <see cref="PickCaster"/>
+    /// at the selection's <see cref="AbilityCaster.Lead"/> (the first selected unit with the ability), so the lead casts when
+    /// it is ready and free, else the ready free one nearest it; -1 for none. Allocation-free.
+    /// </summary>
+    public int SelfCaster(int abilityId, bool queued, out int index)
+    {
+        index = -1;
+        if (_runner?.Simulation is not Simulation sim || (uint)abilityId >= (uint)sim.World.Data.Abilities.Length) return -1;
+        UnitStore u = sim.World.Units;
+        if (!AbilityCaster.Lead(Selection.Items, u.Alive, u.Generation, u.TypeId, u.Position, sim.World.Data.Units, abilityId, out System.Numerics.Vector2 lead))
+            return -1;
+        return PickCaster(abilityId, lead, queued, out index);
+    }
+
+    /// <summary>
+    /// The no-target cast (M4-V6d, docs/03 "For the view (M4-V6d)"): exactly one <c>UseAbility</c> of
+    /// <paramref name="abilityId"/> for <see cref="SelfCaster"/>'s unit at that unit's own position (the sim ignores the
+    /// point but needs one on the map), queued when <paramref name="queued"/>; one Command sound. Nothing when no selected
+    /// unit is ready (a queued press: ready and free) or the command queue is full. Returns true if it enqueued.
+    /// </summary>
+    public bool SelfAbilityOrder(int abilityId, bool queued)
+    {
+        if (_runner?.Simulation is not Simulation sim) return false;
+        Selection.Prune(sim.World.Units.Alive, sim.World.Units.Generation);
+        int caster = SelfCaster(abilityId, queued, out int index);
+        if (caster < 0 || !RoomFor(sim, 1, "Ability")) return false;
+        SendCast(sim, abilityId, caster, index, sim.World.Units.Position[caster], queued);
         return true;
     }
 
@@ -371,13 +409,18 @@ public partial class SelectionController : Node
         Selection.Prune(sim.World.Units.Alive, sim.World.Units.Generation);
         int caster = PickCaster(abilityId, point, queued, out int index);
         if (caster < 0 || !RoomFor(sim, 1, "Ability")) return false;
+        SendCast(sim, abilityId, caster, index, point, queued);
+        return true;
+    }
+
+    private void SendCast(Simulation sim, int abilityId, int caster, int index, System.Numerics.Vector2 point, bool queued)
+    {
         var h = new EntityHandle(caster, sim.World.Units.Generation[caster]);
         sim.Enqueue(Command.UseAbility(LocalPlayer, h, index, point, queued));
         _sentCasts.Note(sim.World.TickNumber + 1, abilityId, h); // Enqueue stamps it for the next tick number
         LastCaster = h;
         _issued[(int)CommandKind.UseAbility]++;
         _sfx?.Play(SfxEvent.Command);
-        return true;
     }
 
     /// <summary>What a left click at <paramref name="screen"/> does while targeting: gives the armed order (<see cref="TargetKind"/>: attack-move after A, move after M) at the ground there (queued while <c>order_queue</c> is held) and disarms; false (still armed) when not targeting or off the map. After A, a click on an enemy unit or building (<see cref="EnemyAt"/>) is an <c>Attack</c> on it instead (M4-V2). After an ability button, the click is one <see cref="AbilityOrder"/> at <see cref="AbilityPoint"/> (M4-V6a), and disarms even when no caster is ready; with <c>order_queue</c> held and the cast sent it stays armed for the next queued cast (M4-V6b, BUG-0342).</summary>

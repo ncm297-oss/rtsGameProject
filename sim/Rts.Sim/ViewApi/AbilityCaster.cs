@@ -73,6 +73,26 @@ public static class AbilityCaster
         return best;
     }
 
+    /// <summary>
+    /// The reference point of a no-target (<see cref="AbilityKind.SelfAura"/>) cast (M4-V6d): the position of the first live
+    /// unit of the selection whose type lists ability <paramref name="abilityId"/>, ready or not; false when none does. The
+    /// card's button and its key have no map point, so <see cref="PickCaster"/> takes this one: the lead casts when it is
+    /// ready and free, else the ready free caster nearest it (the busy rule unchanged).
+    /// </summary>
+    public static bool Lead(ReadOnlySpan<EntityHandle> selection, ReadOnlySpan<bool> alive, ReadOnlySpan<int> generation,
+        ReadOnlySpan<int> typeId, ReadOnlySpan<Vector2> position, ImmutableArray<UnitDef> defs, int abilityId, out Vector2 point)
+    {
+        foreach (EntityHandle h in selection)
+        {
+            int i = h.Index;
+            if ((uint)i >= (uint)alive.Length || !alive[i] || generation[i] != h.Generation || IndexOf(defs[typeId[i]], abilityId) < 0) continue;
+            point = position[i];
+            return true;
+        }
+        point = default;
+        return false;
+    }
+
     /// <summary>Whether unit slot <paramref name="slot"/>'s order queue holds a <c>UseAbility</c> of its ability <paramref name="index"/> (a queued entry's type id is the ability's list index).</summary>
     public static bool HasQueuedCast(ReadOnlySpan<int> queueCount, ReadOnlySpan<CommandKind> queueKind, ReadOnlySpan<int> queueTypeId, int slot, int index)
     {

@@ -40,8 +40,14 @@ namespace Rts.Game.Tests;
 /// an enemy Priest's storm under the fog, alive in the store but never drawn until an own unit walking up sees its rim
 /// (drawn exactly while <see cref="ZoneDiscs.SeesStorm"/> holds, in the owner's rim colour); and in the steady match 8
 /// zones (two blocking) drawn at 0 B.
+/// M4-V6d adds: <see cref="AbilityViews.FrenzyColor"/> at least 0.4 from each other marker colour in some channel; and per
+/// seed a match on test data (the two selfAura abilities of the sim's <c>SelfAuraTests.AddTo</c> on the Heavy Infantry):
+/// hovering the button rings the lead with the radius and arms nothing (0 B a frame), a click on it sends exactly one
+/// <c>UseAbility</c> at the lead's position, the flash lands on the lead and the rally's Frenzied markers show in
+/// FrenzyColor, Shift + click queues one for the second Heavy, the zone ability's key casts at once; its twin; and all four
+/// markers side by side on a Heavy and a Raider.
 /// </summary>
-/// <remarks>Headless. Run: <c>&amp; $env:GODOT --headless --path game res://tests/AbilityViewTest.tscn</c> (seeds 1 and 6; <c>-- --seed N</c> for one); prints "ABILITY VIEW TEST PASS" and exits 0, or each failure and exits 1. Windowed with <c>-- --shots &lt;dir&gt;</c> it also saves <c>ability-seedN-targeting.png</c>, <c>ability-seedN-casting.png</c>, <c>ability-seedN-first-tick.png</c>, <c>ability-seedN-flash.png</c>, <c>ability-seedN-burning.png</c>, <c>ability-seedN-cusser.png</c>, <c>ability-seedN-statuses.png</c>, <c>ability-seedN-storm.png</c>, <c>ability-seedN-blinded.png</c> and <c>ability-seedN-storm-enemy.png</c>.</remarks>
+/// <remarks>Headless. Run: <c>&amp; $env:GODOT --headless --path game res://tests/AbilityViewTest.tscn</c> (seeds 1 and 6; <c>-- --seed N</c> for one); prints "ABILITY VIEW TEST PASS" and exits 0, or each failure and exits 1. Windowed with <c>-- --shots &lt;dir&gt;</c> it also saves <c>ability-seedN-targeting.png</c>, <c>ability-seedN-casting.png</c>, <c>ability-seedN-first-tick.png</c>, <c>ability-seedN-flash.png</c>, <c>ability-seedN-burning.png</c>, <c>ability-seedN-cusser.png</c>, <c>ability-seedN-statuses.png</c>, <c>ability-seedN-storm.png</c>, <c>ability-seedN-blinded.png</c>, <c>ability-seedN-storm-enemy.png</c>, <c>ability-seedN-aura-hover.png</c>, <c>ability-seedN-aura-frenzied.png</c> and <c>ability-seedN-frenzied.png</c>.</remarks>
 public partial class AbilityViewTest : Node
 {
     private static readonly FieldInfo CommandsField = typeof(Simulation).GetField("_commands", BindingFlags.NonPublic | BindingFlags.Instance)!;
@@ -99,6 +105,8 @@ public partial class AbilityViewTest : Node
             _blinded = _data.FindStatus("blinded");
             UiRows();
             foreach (ulong seed in seeds) await Run(seed);
+            FrenzyColourRow();
+            foreach (ulong seed in seeds) await SelfAuraRun(seed);
             await Steady(seeds[0]);
         }
         catch (Exception ex)
@@ -131,7 +139,9 @@ public partial class AbilityViewTest : Node
         GD.Print($"ui: hud radius '{_ui.Hud(HudText.Radius)}', cooldown '{_ui.Hud(HudText.Cooldown)}', seconds '{_ui.Hud(HudText.Seconds)}', meters '{_ui.Hud(HudText.Meters)}'");
     }
 
-    private void StartMatch(ulong seed, params string[] extra)
+    private void StartMatch(ulong seed, params string[] extra) => StartMatch(seed, _data, extra);
+
+    private void StartMatch(ulong seed, GameData data, params string[] extra)
     {
         _match = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
         AddChild(_match);
@@ -139,7 +149,7 @@ public partial class AbilityViewTest : Node
         _runner.RecordCheckpointInterval = 1;
         var args = new List<string> { "--seed", seed.ToString(CultureInfo.InvariantCulture), "--mute", "--debug-overlay", "--zoom", "30" };
         args.AddRange(extra);
-        _match.Start(_data, LaunchOptions.Parse(args.ToArray()));
+        _match.Start(data, LaunchOptions.Parse(args.ToArray()));
         _runner.ProcessMode = ProcessModeEnum.Disabled; // the test ticks the sim itself
         _sim = _runner.Simulation!;
         _sel = _match.GetNode<SelectionController>("SelectionController");
@@ -973,6 +983,233 @@ public partial class AbilityViewTest : Node
         await Frame();
     }
 
+    // ---- M4-V6d: the Frenzied colour and the no-target (selfAura) card ----
+
+    // The largest per-channel difference of two colours (the marker colours must differ by at least 0.4 in some channel).
+    private static float ChannelGap(Color a, Color b) => Math.Max(Math.Abs(a.R - b.R), Math.Max(Math.Abs(a.G - b.G), Math.Abs(a.B - b.B)));
+
+    // FrenzyColor against the other three markers and the pale default; StatusColor(frenzied) checked in SelfAuraRun's match.
+    private void FrenzyColourRow()
+    {
+        foreach ((string name, Color other) in new[] { ("Burning", AbilityViews.DamageOverTimeColor), ("Slowed", AbilityViews.SlowColor),
+                     ("Blinded", AbilityViews.BlindColor), ("other", AbilityViews.OtherStatusColor) })
+        {
+            float gap = ChannelGap(AbilityViews.FrenzyColor, other);
+            Check(gap >= 0.4f, $"frenzy colour: {AbilityViews.FrenzyColor} is only {gap:0.00} from {name} {other}");
+            GD.Print($"frenzy colour: {gap:0.00} from {name}");
+        }
+    }
+
+    private static GameData? _auraData;
+
+    // The shipped data plus SelfAuraTests.AddTo's two test-only selfAura abilities on the Heavy Infantry (Requests 30: no shipped
+    // ability uses the kind), written to a copy under the user data folder and loaded from there.
+    private static GameData AuraData()
+    {
+        if (_auraData != null) return _auraData;
+        string from = ProjectSettings.GlobalizePath("res://data"), to = System.IO.Path.Combine(OS.GetUserDataDir(), "abilityview-selfaura-data");
+        if (System.IO.Directory.Exists(to)) System.IO.Directory.Delete(to, recursive: true);
+        foreach (string dir in System.IO.Directory.GetDirectories(from, "*", System.IO.SearchOption.AllDirectories))
+            System.IO.Directory.CreateDirectory(dir.Replace(from, to));
+        System.IO.Directory.CreateDirectory(to);
+        foreach (string file in System.IO.Directory.GetFiles(from, "*.json", System.IO.SearchOption.AllDirectories))
+            System.IO.File.Copy(file, file.Replace(from, to));
+        string abilities = System.IO.Path.Combine(to, "factions", "malazan", "abilities.json");
+        var root = System.Text.Json.Nodes.JsonNode.Parse(System.IO.File.ReadAllText(abilities))!;
+        var list = root["abilities"]!.AsArray();
+        list.Add(System.Text.Json.Nodes.JsonNode.Parse("""
+            { "id": "zz_test_rally", "displayName": "Test Rally", "description": "Test only.", "kind": "selfAura", "radius": 4,
+              "castTime": 0.5, "cooldown": 10, "affects": "own_units", "autocast": false,
+              "effects": [ { "kind": "applyStatus", "status": "frenzied", "magnitude": 0.5, "duration": 5 } ] }
+            """));
+        list.Add(System.Text.Json.Nodes.JsonNode.Parse("""
+            { "id": "zz_test_aura_zone", "displayName": "Test Aura Zone", "description": "Test only.", "kind": "selfAura", "radius": 3,
+              "castTime": 0, "cooldown": 10, "duration": 4, "affects": "enemy_units", "autocast": false,
+              "effects": [ { "kind": "createZone", "statuses": [ { "status": "slowed", "magnitude": 0.3, "duration": 1 } ] } ] }
+            """));
+        System.IO.File.WriteAllText(abilities, root.ToJsonString());
+        string units = System.IO.Path.Combine(to, "factions", "malazan", "units.json");
+        var unitRoot = System.Text.Json.Nodes.JsonNode.Parse(System.IO.File.ReadAllText(units))!;
+        foreach (System.Text.Json.Nodes.JsonNode? u in unitRoot["units"]!.AsArray())
+            if ((string?)u!["id"] == "malazan_heavy_infantry") u["abilities"] = new System.Text.Json.Nodes.JsonArray("zz_test_rally", "zz_test_aura_zone");
+        System.IO.File.WriteAllText(units, unitRoot.ToJsonString());
+        DataLoadResult r = DataLoader.LoadAll(to);
+        if (!r.Ok) throw new InvalidOperationException("selfAura test data: " + string.Join("; ", r.Errors));
+        return _auraData = r.Data!;
+    }
+
+    // M4-V6d on a match whose Heavy Infantry carry the two test selfAura abilities: three Heavies (a lead, a second 10 m
+    // east, a third 2 m from the lead) and a Raider 12 m off. Hovering the button rings the lead with the radius and arms
+    // nothing; a click on the button through the viewport sends exactly one UseAbility at the lead's position (no targeting,
+    // one sound), the resolve flash lands on the lead and the rally's Frenzied markers show in FrenzyColor; Shift + click
+    // queues one for the second Heavy; the hotkey (W) casts the zone at once; 0 B a frame with the hover ring drawn; the twin.
+    private async Task SelfAuraRun(ulong seed)
+    {
+        GameData shipped = _data;
+        GameData data = AuraData();
+        _data = data;
+        try
+        {
+            StartMatch(seed, data, "--units", "0", "--no-bases", "--no-combat");
+            int heavy = data.FindUnit("malazan_heavy_infantry"), raider = data.FindUnit("whirlwind_raider");
+            int rally = data.FindAbility("zz_test_rally"), zone = data.FindAbility("zz_test_aura_zone");
+            AbilityDef rallyDef = data.Abilities[rally];
+            int center = FlowField.NearestPassable(G, G.Height / 2 * G.Width + G.Width / 2);
+            System.Numerics.Vector2 c = G.CellCenter(center % G.Width, center / G.Width);
+            _sim.Enqueue(Command.SpawnUnit(0, heavy, c));
+            _sim.Enqueue(Command.SpawnUnit(0, heavy, c + new System.Numerics.Vector2(10f, 0f)));
+            _sim.Enqueue(Command.SpawnUnit(0, heavy, c + new System.Numerics.Vector2(0f, 2f)));
+            _sim.Enqueue(Command.SpawnUnit(1, raider, c + new System.Numerics.Vector2(0f, -12f)));
+            for (int t = 0; t < 8; t++) _sim.Tick();
+            var heavies = new List<EntityHandle>();
+            for (int i = 0; i < U.Capacity; i++) if (U.Alive[i] && U.TypeId[i] == heavy) heavies.Add(new EntityHandle(i, U.Generation[i]));
+            heavies.Sort((a, b) => System.Numerics.Vector2.Distance(U.Position[a.Index], c).CompareTo(System.Numerics.Vector2.Distance(U.Position[b.Index], c)));
+            if (!Check(heavies.Count == 3, $"seed {seed} aura: {heavies.Count} Heavies staged")) return;
+            // Sorted by distance from c: the lead (0 m), the third (2 m), the second (10 m).
+            EntityHandle lead = heavies[0], near = heavies[1], second = heavies[2];
+            _camera.SetFocus(c.X + 4f, c.Y);
+            Check(_views.StatusColor(data.FindStatus("frenzied")) == AbilityViews.FrenzyColor, $"seed {seed} aura: StatusColor(frenzied) {_views.StatusColor(data.FindStatus("frenzied"))}, want FrenzyColor");
+            await Select(lead, second);
+
+            // The card: both on the top row, the tooltip without a range.
+            string m = _ui.Hud(HudText.Meters), s = _ui.Hud(HudText.Seconds);
+            string tip = $"{rallyDef.Description}\n{_ui.Hud(HudText.Radius)} 4 {m}  {_ui.Hud(HudText.Cooldown)} 10 {s}";
+            Check(_card.AbilityAt(0) == rally && _card.AbilityAt(1) == zone && _card.ButtonAt(0).TooltipText == tip,
+                $"seed {seed} aura card: cells {_card.AbilityAt(0)} {_card.AbilityAt(1)}, tooltip '{_card.ButtonAt(0).TooltipText}', want '{tip}'");
+
+            // Hover: the radius ring round the lead, no range ring, nothing armed.
+            Vector2 button = _card.ButtonAt(0).GetGlobalRect().GetCenter();
+            Push(new InputEventMouseMotion { Position = button });
+            await Frames();
+            _views.Sync(W, 0.5f, button, false);
+            Vector3 leadAt = UnitViews.GroundPoint(W, lead.Index, 0.5f);
+            Check(_card.HoveredAbility == rally && _views.SelfRingShown && _views.RadiusRing.Visible && !_views.RangeRing.Visible && _views.ShownRadius == rallyDef.Radius
+                && _views.RangeCaster == lead.Index && Math.Abs(_views.RadiusRing.Position.X - leadAt.X) < 1e-3f && Math.Abs(_views.RadiusRing.Position.Z - leadAt.Z) < 1e-3f && !_sel.Targeting,
+                $"seed {seed} aura hover: hovered {_card.HoveredAbility}, ring {_views.SelfRingShown} at {_views.RadiusRing.Position} round {_views.RangeCaster} (lead {lead.Index} at {leadAt}), radius {_views.ShownRadius}, range ring {_views.RangeRing.Visible}, targeting {_sel.Targeting}");
+            await Shot($"ability-seed{seed}-aura-hover");
+
+            // 0 B a frame with the hover ring drawn (the card's hover read, the caster pick, the ring).
+            long bytes = 0;
+            int ringFrames = 0;
+            for (int f = 0; f < 160; f++)
+            {
+                if (f % 3 == 0) _sim.Tick();
+                long before = GC.GetAllocatedBytesForCurrentThread();
+                _views.Sync(W, f % 3 / 3f, button, false);
+                _card.Sync();
+                long spent = GC.GetAllocatedBytesForCurrentThread() - before;
+                if (f >= 40) bytes += spent;
+                if (f >= 40 && _views.SelfRingShown) ringFrames++;
+            }
+            Check(bytes == 0 && ringFrames == 120, $"seed {seed} aura hover: {bytes} bytes over 120 frames, ring in {ringFrames}");
+            GD.Print($"seed {seed}: selfAura hover ring round the lead in {ringFrames} of 120 frames, {bytes} bytes");
+
+            // A click on the button: one UseAbility at the lead's position, no targeting, one sound.
+            int from = PendingCount(), sounds = _sfx.PlayCount(SfxEvent.Command);
+            await Gap();
+            sounds = _sfx.PlayCount(SfxEvent.Command);
+            LeftClick(button);
+            List<Command> sent = Pending(from);
+            System.Numerics.Vector2 leadPos = U.Position[lead.Index];
+            Check(sent.Count == 1 && sent[0].Kind == CommandKind.UseAbility && sent[0].Unit == lead && sent[0].TypeId == 0 && sent[0].Position == leadPos && !sent[0].IsQueued,
+                $"seed {seed} aura click: sent {Describe(sent)}, want one UseAbility for {lead} #0 at {leadPos}");
+            Check(!_sel.Targeting && _sel.TargetAbility < 0 && _sfx.PlayCount(SfxEvent.Command) == sounds + 1,
+                $"seed {seed} aura click: targeting {_sel.Targeting} ({_sel.TargetKind}), sounds {_sfx.PlayCount(SfxEvent.Command) - sounds}");
+            long added = _views.Flashes.Added;
+            int ticks = 0;
+            while (!Resolved(lead) && ticks < 40) { _sim.Tick(); ticks++; }
+            System.Numerics.Vector2 resolvedAt = ResolvePoint(lead);
+            _views.Sync(W, 1f, Vector2.Zero, false);
+            int flash = -1;
+            for (int k = 0; k < _views.Flashes.Active.Length; k++) if (_views.Flashes.Active[k] && _views.Flashes.Ability[k] == rally) flash = k;
+            Check(Resolved(lead) && resolvedAt == U.Position[lead.Index] && _views.Flashes.Added == added + 1 && flash >= 0 && _views.Flashes.Point[flash] == U.Position[lead.Index] && _views.ShownFlashes == 1,
+                $"seed {seed} aura resolve: resolved {Resolved(lead)} after {ticks} ticks at {resolvedAt} (lead at {U.Position[lead.Index]}), flashes +{_views.Flashes.Added - added}, at {(flash >= 0 ? _views.Flashes.Point[flash] : default)}");
+            // The rally made the lead and the Heavy beside it Frenzied: their markers in FrenzyColor; the far one has none.
+            int frenzied = data.FindStatus("frenzied");
+            Check(Marks(lead.Index, frenzied) == 1 && Marks(near.Index, frenzied) == 1 && Marks(second.Index, frenzied) == 0 && _views.MarkerAt(MarkIndex(lead.Index, frenzied)).Status == frenzied,
+                $"seed {seed} aura: Frenzied markers lead {Marks(lead.Index, frenzied)}, beside {Marks(near.Index, frenzied)}, far {Marks(second.Index, frenzied)}");
+            await Shot($"ability-seed{seed}-aura-frenzied");
+            GD.Print($"seed {seed}: selfAura click: one UseAbility at the lead's position, resolved after {ticks} ticks with the flash on it; Frenzied on the two Heavies within 4 m");
+
+            // Shift + click with the lead on cooldown: one queued UseAbility for the second Heavy at its own position.
+            await Gap();
+            from = PendingCount();
+            sounds = _sfx.PlayCount(SfxEvent.Command);
+            Input.ActionPress("order_queue");
+            LeftClick(button);
+            Input.ActionRelease("order_queue");
+            sent = Pending(from);
+            Check(sent.Count == 1 && sent[0].Kind == CommandKind.UseAbility && sent[0].Unit == second && sent[0].IsQueued && sent[0].Position == U.Position[second.Index] && !_sel.Targeting
+                && _sfx.PlayCount(SfxEvent.Command) == sounds + 1,
+                $"seed {seed} aura shift: sent {Describe(sent)}, want one queued UseAbility for {second}; targeting {_sel.Targeting}");
+            ticks = 0;
+            while (!Resolved(second) && ticks < 40) { _sim.Tick(); ticks++; }
+            Check(Resolved(second), $"seed {seed} aura shift: the queued cast never resolved");
+
+            // The hotkey of the zone ability (cell 1, W): it casts at once for the lead (its own cooldown), a zone on the lead.
+            from = PendingCount();
+            Push(new InputEventMouseMotion { Position = _screen / 2f });
+            await Frame();
+            Key(Godot.Key.W);
+            sent = Pending(from);
+            leadPos = U.Position[lead.Index];
+            Check(sent.Count == 1 && sent[0].Kind == CommandKind.UseAbility && sent[0].Unit == lead && sent[0].TypeId == 1 && sent[0].Position == leadPos && !_sel.Targeting,
+                $"seed {seed} aura hotkey: sent {Describe(sent)}, want one UseAbility for {lead} #1 at {leadPos}; targeting {_sel.Targeting}");
+            _sim.Tick();
+            _sim.Tick();
+            bool zoneOnLead = false;
+            for (int k = 0; k < W.Zones.Capacity; k++) if (W.Zones.Alive[k] && W.Zones.Owner[k] == 0 && W.Zones.Center[k] == leadPos) zoneOnLead = true;
+            Check(zoneOnLead, $"seed {seed} aura hotkey: no own zone on the lead at {leadPos}");
+            Twin(seed);
+
+            // All four markers side by side on a Raider and on a Heavy at zoom 30 (test staging after the twin).
+            await FourMarkersRow(seed, lead, data);
+            GD.Print($"seed {seed}: selfAura Shift click queued one for the second Heavy; W cast the zone at once on the lead");
+        }
+        finally
+        {
+            await EndMatch();
+            _data = shipped;
+        }
+    }
+
+    // Burning, Slowed, Blinded and Frenzied written into the store on a Heavy and a Raider standing side by side: four markers
+    // each, four distinct colours, the Frenzied one in FrenzyColor (the windowed still is the one the owner looks at).
+    private async Task FourMarkersRow(ulong seed, EntityHandle heavyUnit, GameData data)
+    {
+        int raiderType = data.FindUnit("whirlwind_raider");
+        var before = new HashSet<int>();
+        for (int i = 0; i < U.Capacity; i++) if (U.Alive[i]) before.Add(i);
+        System.Numerics.Vector2 at = U.Position[heavyUnit.Index] + new System.Numerics.Vector2(2.5f, 0f);
+        _sim.Enqueue(Command.SpawnUnit(1, raiderType, at));
+        for (int t = 0; t < 6; t++) _sim.Tick();
+        int raider = -1;
+        for (int i = 0; i < U.Capacity; i++) if (U.Alive[i] && !before.Contains(i) && U.TypeId[i] == raiderType) raider = i;
+        if (!Check(raider >= 0 && W.Fog.CanSeeUnit(0, raider), $"seed {seed} four markers: raider {raider}")) return;
+        int frenzied = data.FindStatus("frenzied");
+        foreach (int unit in new[] { heavyUnit.Index, raider })
+        {
+            ApplyStatus.Invoke(U.Statuses, new object[] { unit, _burning, 1f, 2400, 0 });
+            ApplyStatus.Invoke(U.Statuses, new object[] { unit, _slowed, 0.3f, 2400, 0 });
+            ApplyStatus.Invoke(U.Statuses, new object[] { unit, _blinded, 0f, 2400, 0 });
+            ApplyStatus.Invoke(U.Statuses, new object[] { unit, frenzied, 0.5f, 2400, 0 });
+        }
+        System.Numerics.Vector2 mid = (U.Position[heavyUnit.Index] + U.Position[raider]) / 2f;
+        _camera.SetFocus(mid.X, mid.Y);
+        await Frames();
+        _views.Sync(W, 0.5f, Vector2.Zero, false);
+        foreach (int unit in new[] { heavyUnit.Index, raider })
+        {
+            int kf = MarkIndex(unit, frenzied);
+            var colours = new HashSet<Color>();
+            foreach (int st in new[] { _burning, _slowed, _blinded, frenzied }) if (MarkIndex(unit, st) >= 0) colours.Add(_views.StatusColor(st));
+            Check(kf >= 0 && colours.Count == 4 && _views.StatusColor(frenzied) == AbilityViews.FrenzyColor,
+                $"seed {seed} four markers: unit {unit} Frenzied marker {kf}, {colours.Count} distinct colours");
+        }
+        await Shot($"ability-seed{seed}-frenzied");
+        GD.Print($"seed {seed}: Burning, Slowed, Blinded and Frenzied side by side on Heavy {heavyUnit.Index} and Raider {raider}");
+    }
+
     // ---- 300 steady frames at --units 500 ----
 
     private async Task Steady(ulong seed)
@@ -1137,6 +1374,13 @@ public partial class AbilityViewTest : Node
         Check(twin.Ok && replay.Checkpoints.Length == replay.TickCount, $"seed {seed}: twin {twin.Error} at tick {twin.Tick} ({twin.ExpectedHash:x} vs {twin.ActualHash:x})");
         int uses = replay.Commands.Count(c => c.Kind == CommandKind.UseAbility);
         GD.Print($"seed {seed}: hash twin {replay.Commands.Length} commands ({uses} UseAbility), {replay.Checkpoints.Length} checkpoints equal");
+    }
+
+    private System.Numerics.Vector2 ResolvePoint(EntityHandle caster)
+    {
+        foreach (Rts.Sim.Abilities.AbilityEvent e in W.AbilityEvents)
+            if (e.Caster == caster && e.Resolved) return e.Point;
+        return new System.Numerics.Vector2(float.NaN, float.NaN);
     }
 
     private bool Resolved(EntityHandle caster)
