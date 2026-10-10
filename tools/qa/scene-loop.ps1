@@ -1,4 +1,4 @@
-# QA scene loop: runs every headless game/tests/*Test.tscn (M3PlayableTest last, or skipped with -SkipPlayable), and
+# QA scene loop: runs every headless game/tests/*Test.tscn (the playables M3PlayableTest and M4PlayableTest last, or skipped with -SkipPlayable), and
 # fails a scene on a non-zero exit, a missing "PASS" line, or any ERROR / SCRIPT ERROR / Unhandled / Exception line.
 # Godot's exit code alone hides script load failures, hence the log checks. Does not build: run smoke.ps1 (or
 # dotnet build RtsGame.sln) first, since headless Godot loads whatever RtsGame.dll is on disk.
@@ -17,8 +17,12 @@ if (-not $godot -or -not (Test-Path $godot)) { Write-Host "FAIL: GODOT env var n
 $gamePath = Join-Path $root 'game'
 if ($LogDir -and -not (Test-Path $LogDir)) { New-Item -ItemType Directory -Force $LogDir | Out-Null }
 
-$scenes = Get-ChildItem (Join-Path $gamePath 'tests') -Filter "$Filter.tscn" | Sort-Object Name | Where-Object { $_.BaseName -ne 'M3PlayableTest' }
-if (-not $SkipPlayable -and ('M3PlayableTest' -like $Filter)) { $scenes += Get-Item (Join-Path $gamePath 'tests\M3PlayableTest.tscn') }
+$playables = @('M3PlayableTest', 'M4PlayableTest')
+$scenes = Get-ChildItem (Join-Path $gamePath 'tests') -Filter "$Filter.tscn" | Sort-Object Name | Where-Object { $playables -notcontains $_.BaseName }
+foreach ($p in $playables) {
+    $path = Join-Path $gamePath "tests\$p.tscn"
+    if (-not $SkipPlayable -and ($p -like $Filter) -and (Test-Path $path)) { $scenes += Get-Item $path }
+}
 
 $failed = @()
 foreach ($s in $scenes) {
