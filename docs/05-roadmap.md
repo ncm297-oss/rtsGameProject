@@ -487,6 +487,24 @@ ten-minute playtest (STATE "For your review", M3-V3 entry) stands as feedback, n
       `QaV6aTest`. **Still owed:** zones (Darkness / Sandstorm vision blockers), Blinded, summons, self / aura, autocast
       (M4-4b-2 / -3); status markers + the resolve flash on screen (M4-V6b). Open: BUG-0330 (S3, sim, pre-existing),
       BUG-0340 / 0342 (S4, view).)_
+      _(Slice 2b **accepted in session 2026-10-10-0215, sim M4-4b-2** (0 fix rounds): zones from data (`createZone`:
+      `blocksVision`, `statuses`; the ability's `duration` is the zone's lifetime, its `radius` the circle; `ZoneStore` 64
+      slots, hashed while any is live; `ZoneSystem` in phase 5 after the status countdown, so a zone's statuses linger
+      exactly their `duration` after a unit leaves; a store-full cast makes no zone), the `blind` status kind (`sight` /
+      `reach` in `statuses.json`; shipped `blinded` 2 m / 3 m: a Blinded unit stamps a 2 m fog circle, acquires, retaliates
+      against and strikes nothing beyond 3 m, walks closer to an ordered target, casts at full range), the vision blocker
+      (a zone of another owner hides its cells from a player except what that player's own units inside it see; combat's
+      own-sight rule honours live zones; the mask follows the fog cadence), Sandstorm shipped in `whirlwind/abilities.json`
+      on the Priest (18 m / 6 m / 1.2 s / 45 s / 12 s, Blinded + Slowed 30 % lingering 1 s; 30 s after Dryjhna's Prophecy);
+      golden `data-hash` 5896D3E7C9FD36AD (every `k` line equal). QA full: `ZoneQaTests`, `ZoneLoaderQaTests`,
+      `Stress/ZoneFogOracleFuzzStressTests` (brute-force fog oracle on cliffs / ramps / overlapping storms, 0 mismatches),
+      `Stress/ZoneScalePerfTests`; `EmptyTick(2500)` 473-480 µs of 500. **View half (M4-V6b, same session):** Burning /
+      Slowed markers over units (`ViewApi.StatusMarkers`, fog-gated, MultiMesh, 0 B at 4,000 markers), the resolve flash
+      (`ViewApi.ResolveFlashes`, 256-slot ring, 0.5 s, fog-gated), the Cusser's card verified from data alone, BUG-0342 /
+      0310 / 0340 fixed. **Still owed:** summons, self / aura, autocast, passives (M4-4b-3); zone discs + the Blinded marker
+      on screen (M4-V6c). Open: BUG-0360 (S3, the blocker's cell rule vs the statuses' centre rule at the rim), BUG-0361
+      (S3, recorder vs `ZoneCapacity`), BUG-0363 (S4), BUG-0370 (S3, view: Shift-queued casts on walking mages pick one mage),
+      BUG-0371 (S4, view).)_
 - [ ] Stealth and detection system (tested now, even though Shadow arrives in M8).
 - [ ] Telas Fire, Sapper Sharpers + Cusser, Sandstorm, Zealot passives all work.
       _(Telas Fire works since M4-4a (session 2026-10-09-0724): 16 m / 3 m / 0.8 s cast / 25 s cooldown, Burning 10 magic a
@@ -497,6 +515,11 @@ ten-minute playtest (STATE "For your review", M3-V3 entry) stands as feedback, n
       Light unit, own units in the blast (the Sapper too) take half, own buildings never. The page row is on the data
       track's pin list (D10a's allowance; D10b pins it fully, BUG-0350). Sandstorm needs zones + Blinded (M4-4b-2); the
       Zealot passives need passives (M4-4b-3); Sharpers is the Sapper's normal attack (M4-2b).)_
+      _(**Sandstorm works since M4-4b-2** (session 2026-10-10-0215): the Priest of the Whirlwind calls a 6 m storm at up to
+      18 m, 1.2 s cast, 45 s cooldown (30 s after Dryjhna's Prophecy), lasting 12 s; enemy units inside are Blinded (sight
+      2 m, nothing targeted beyond 3 m) and Slowed 30 %, both lingering 1 s after they step out; enemies outside can't see
+      into it, Whirlwind units are unaffected. **The Cusser's page row is pinned fully since D10b** (same session, BUG-0350
+      closed); the Sandstorm row and Blinded are pinned in D10c. Left: the Zealot passives (M4-4b-3).)_
 - [x] Scenario tests for the counter triangle (Line beats Shock, Shock beats Ranged, Ranged beats
       Light, Siege beats buildings).
       _(Ticked in session 2026-10-08-0913, task M4-2b: `Scenario/CounterTriangleTests`, equal-cost groups attack-moved

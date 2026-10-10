@@ -19,4 +19,8 @@ public sealed class StatusDef
     public StatusKind Kind { get; init; }
     /// <summary>Damage type id of a <see cref="StatusKind.DamageOverTime"/> status; -1 for any other kind.</summary>
     public int DamageType { get; init; } = -1;
+    /// <summary>Blind (M4-4b-2): the sight in meters of a unit with this status (its fog circle); 0 for any other kind.</summary>
+    public float Sight { get; init; }
+    /// <summary>Blind (M4-4b-2): the farthest in meters a unit with this status takes or strikes a target (center to center; to a footprint for a building); 0 for any other kind.</summary>
+    public float Reach { get; init; }
 }

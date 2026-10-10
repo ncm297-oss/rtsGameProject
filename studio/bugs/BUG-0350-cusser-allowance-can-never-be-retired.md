@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-09-1155, task D10a |
 | System | content tests (`Content/AbilityContentTests`) |
-| Fixed by | |
+| Fixed by | 4f4e3ca (D10b): `AbilityContentTests.EffectProblems` reads "<amount> <type> damage", "full damage to buildings" / "No effect on buildings" and "friendly fire at N%" / "own units take half"; `PendingAbilities = { "Sandstorm" }`; `Cusser_IsLoaded_AndStrictlyPinned`, `AMutatedCusserField_*` (5), `AMutatedCusserCell_*` (15), QA `QA/Content/AbilityPinQaTests` (16); verified at the 2026-10-10-0215 ACCEPT |
 
 ## Repro
 1. Scratch clone of `studio/2026-10-09-1155-data` (7a9a0ac). Add `cusser` to

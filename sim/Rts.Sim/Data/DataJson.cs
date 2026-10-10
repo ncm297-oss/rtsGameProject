@@ -246,6 +246,8 @@ internal sealed class StatusJson
     public string? Description { get; set; }
     public string? Kind { get; set; }
     public string? DamageType { get; set; }
+    public double? Sight { get; set; }
+    public double? Reach { get; set; }
 }
 
 internal sealed class AbilityFileJson
@@ -279,4 +281,13 @@ internal sealed class AbilityEffectJson
     public double? Duration { get; set; }
     public bool? Buildings { get; set; }
     public double? FriendlyFire { get; set; }
+    public bool? BlocksVision { get; set; }
+    public List<ZoneStatusJson?>? Statuses { get; set; }
+}
+
+internal sealed class ZoneStatusJson
+{
+    public string? Status { get; set; }
+    public double? Magnitude { get; set; }
+    public double? Duration { get; set; }
 }

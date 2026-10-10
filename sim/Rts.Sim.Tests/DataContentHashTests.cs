@@ -121,6 +121,31 @@ public class DataContentHashTests
         Assert.NotEqual(baseline, With(d, tech: fewer, techSlot: tech.Id).ContentHash());
     }
 
+    /// <summary>M4-4b-2: every <see cref="ZoneStatus"/> field of Sandstorm's zone, and the zone status count, change the hash.</summary>
+    [Fact]
+    public void EveryZoneStatusField_AndTheirCount_ChangeTheHash()
+    {
+        GameData d = TestSim.Data;
+        ulong baseline = d.ContentHash();
+        AbilityDef ability = d.Abilities[d.FindAbility("sandstorm")];
+        AbilityEffect e = ability.Effects[ability.ZoneEffect];
+        ZoneStatus z = e.ZoneStatuses[1];
+        var variants = new (string Field, ImmutableArray<ZoneStatus> Changed)[]
+        {
+            ("Status", e.ZoneStatuses.SetItem(1, z with { Status = z.Status + 1 })),
+            ("Magnitude", e.ZoneStatuses.SetItem(1, z with { Magnitude = z.Magnitude + 0.1f })),
+            ("DurationTicks", e.ZoneStatuses.SetItem(1, z with { DurationTicks = z.DurationTicks + 1 })),
+            ("count", e.ZoneStatuses.RemoveAt(1)),
+        };
+        foreach ((string field, ImmutableArray<ZoneStatus> changed) in variants)
+        {
+            AbilityDef copy = Clone(ability);
+            typeof(AbilityDef).GetProperty(nameof(AbilityDef.Effects))!.SetValue(copy, ability.Effects.SetItem(ability.ZoneEffect, e with { ZoneStatuses = changed }));
+            Assert.True(With(d, ability: copy, abilitySlot: ability.Id).ContentHash() != baseline, $"ZoneStatus {field} is not in GameData.ContentHash");
+        }
+        Assert.Equal(3, typeof(ZoneStatus).GetProperties().Length); // a new field must be added above and to ContentHash
+    }
+
     /// <summary>M4-4a: every <see cref="AbilityEffect"/> field, the effect count, and both list lengths change the hash; so do edits to both files.</summary>
     [Fact]
     public void AbilityListLength_EffectCount_AndEveryEffectField_ChangeTheHash()
@@ -139,6 +164,8 @@ public class DataContentHashTests
             ("DurationTicks", e with { DurationTicks = e.DurationTicks + 1 }),
             ("Buildings", e with { Buildings = !e.Buildings }),
             ("FriendlyFire", e with { FriendlyFire = e.FriendlyFire + 0.5f }),
+            ("BlocksVision", e with { BlocksVision = !e.BlocksVision }), // M4-4b-2
+            ("ZoneStatuses", e with { ZoneStatuses = ImmutableArray.Create(new ZoneStatus { Status = 0, Magnitude = 0f, DurationTicks = 20 }) }),
         };
         foreach ((string field, AbilityEffect changed) in variants)
         {
@@ -146,7 +173,7 @@ public class DataContentHashTests
             typeof(AbilityDef).GetProperty(nameof(AbilityDef.Effects))!.SetValue(copy, ability.Effects.SetItem(0, changed));
             Assert.True(With(d, ability: copy, abilitySlot: ability.Id).ContentHash() != baseline, $"AbilityEffect.{field} is not in GameData.ContentHash");
         }
-        Assert.Equal(8, typeof(AbilityEffect).GetProperties().Length); // a new field must be added above and to ContentHash
+        Assert.Equal(10, typeof(AbilityEffect).GetProperties().Length); // a new field must be added above and to ContentHash
         AbilityDef more = Clone(ability);
         typeof(AbilityDef).GetProperty(nameof(AbilityDef.Effects))!.SetValue(more, ability.Effects.Add(e));
         Assert.NotEqual(baseline, With(d, ability: more, abilitySlot: ability.Id).ContentHash());

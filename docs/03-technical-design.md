@@ -85,7 +85,8 @@ phases in this fixed order:
    repairers; see "Implementation (M3-3)".)
 5. **Status effects and zones:** expire, tick DoTs and regen, apply zone effects. (M4-4a: `StatusSystem.Run`: every unit
    with statuses, in slot order, counts each down, lands damage-over-time pulses and ends the expired ones; a slow that ends
-   restores the unit's speed. Zones are slice 2. See "Implementation (M4-4a)".)
+   restores the unit's speed. See "Implementation (M4-4a)". M4-4b-2: then `ZoneSystem.Run`: every live zone, in slot order,
+   counts down (freed when its time is up) or applies its statuses to the units inside; see "Implementation (M4-4b-2)".)
 6. **Abilities:** cast timers, effect resolution. (M4-4a: `AbilitySystem.Run`: every caster in slot order starts casting
    once in range (or drops a walk that stopped short), counts its cast down, and on the last tick resolves the effects on
    the units in the radius and starts the cooldown. Before phase 7, so a caster whose cast resolved takes its next queued
@@ -118,7 +119,8 @@ phases in this fixed order:
 12. **Vision and detection:** recompute fog every 4 ticks (5 Hz) per player. (M4-3a: `VisionSystem.Run` rebuilds every
     player's unexplored / explored / visible grid on the ticks where `tick % 4 == 1`, from its own units' and buildings'
     sight with the high-ground rule; an initial stamp also runs at the start of tick 0; see "Vision, detection, fog".
-    M4-3b: right after each player's grid, its last-known buildings list.)
+    M4-3b: right after each player's grid, its last-known buildings list. M4-4b-2: a Blinded unit stamps its blind's circle,
+    and the zones that block vision hide their cells before each player's grid is combined.)
 13. **Cleanup:** free dead handles, finalize the tick's event list, bump `TickNumber`. (M4-1: the
     dead are freed in phase 11 already; the tick's death events stay readable in `World.Deaths`
     until the next tick starts, which empties the buffer first thing.)
@@ -2365,11 +2367,91 @@ caster's own units take; above 0 only with `affects: enemy_units`). Both are err
 `applyStatus` of a damage-over-time status needs a whole-second `duration`, at least 1 s. Shipped: Malazan `cusser` on the
 Sapper.
 
+### Implementation (M4-4b-2)
+
+Zones, the Blinded status and the Whirlwind signature Sandstorm, from data (M4 criteria 6 and 8). Code:
+`sim/Rts.Sim/Abilities/ZoneStore.cs`, `ZoneSystem.cs`, `StatusSystem.RecomputeBlind` / `ReachOf` / `SightOf`,
+`StatusStore.BlindOf`, the blocker pass in `Vision/FogStore.cs` (`MarkBlocked`), `VisionSystem.ZoneHides`,
+`CombatSystem.RangeLimit`; data in `DataLoader.Abilities.cs`.
+
+- **Data.** A `createZone` effect (`DataLimits.PlannedAbilityEffectKindIds` no longer lists it) takes `blocksVision`
+  (optional, default false) and `statuses` (at least one `{status, magnitude, duration}`, each by the `applyStatus` rules,
+  the whole-seconds rule for damage over time included). The ability's `duration` (required with a zone, at least a tick)
+  is the zone's lifetime; its `radius` the zone's radius; the zone's centre is the cast point and its owner the caster's
+  owner. At most one `createZone` per ability (`AbilityDef.ZoneEffect`, its index, or -1). A status of kind `blind` takes
+  `sight` and `reach` (m, above 0, at most 64) in `statuses.json` and no `magnitude` where it is applied.
+- **Making a zone.** At the resolve, after the units took the other effects, `ZoneSystem.Create` puts the zone in the
+  lowest free slot of `World.Zones` (`SimConfig.ZoneCapacity`, default 64) and applies it at once. **Store full:** the zone
+  is not made; the cast still resolves and its cooldown starts (`ZoneSystemTests.AStoreFullCast_MakesNoZone_...`).
+- **Life.** A zone lives its duration counting the tick it is made: Sandstorm, made in tick T's phase 6 with 240 ticks,
+  applies in T and in every phase 5 from T + 1 to T + 239, and is freed in T + 240's phase 5 (`TicksRemaining` is 1
+  between T + 239 and T + 240). Phase 5 runs `StatusSystem` first, then `ZoneSystem`, which skips its pass when
+  `ZoneStore.Count` is 0.
+- **Applying.** Every live unit whose center is within the radius (the edge counts; `SpatialHash.QueryRadius`, exact test)
+  and that the ability's `affects` allows, relative to the zone's owner, takes each zone status by the stacking rule (the
+  zone's owner is the source). Applied after the statuses counted down, a unit inside ends every tick with the full
+  duration, so it keeps the statuses exactly that long after its last tick inside (Sandstorm's 1 s: gone on the 20th tick
+  outside). Damage over time in a zone pulses once a second on its own clock (a refresh never resets it, BUG-0301).
+- **Blinded.** `StatusStore.BlindOf(slot)` is the blind status in force: of the unit's blind statuses the one with the
+  smallest sight (then reach, then id), recomputed when a blind is applied or ends, like `Speed` from slows; derived, never
+  hashed. (1) **Fog:** the unit stamps its blind's circle when that is smaller than its type's (`FogStore` builds a mask for
+  every blind status's sight at construction): 2 m covers the unit's cell and the four next to it. (2) **Combat:** the unit
+  takes and strikes nothing farther than the blind's `reach`, center to center (to the footprint for a building): scans,
+  retaliation, keeping a target, and the swing / shot (`CombatSystem.RangeLimit`: the attack's range, or reach less both
+  radii when nearer); an ordered target beyond it is walked to and struck once in reach, so a ranged unit fights at 3 m.
+  Combat's own-sight rule keeps the type's sight, so a Blinded unit takes a target out to 3 m though its fog circle is
+  2 m (the view and combat disagree there, as in "Vision, detection, fog", Known limits (1)). An attack whose minimum
+  range is beyond the reach can't fire while Blinded. A cast point is not a target: a Blinded caster casts at full range.
+  Buildings have no statuses, so a tower is never Blinded.
+- **The vision blocker** (`blocksVision`). On every fog update, after a player's stamps and before its grid is combined,
+  every cell whose centre is within a zone that blocks vision and is another player's is marked hidden (the visibility
+  byte's top bit, cleared by the end of the update; stamp marks now use 5 bits) unless one of that player's own live units
+  standing inside the same zone sees it by the stamp's rule with its sight now (Blinded: 2 m). A hidden cell is uncovered:
+  visible turns explored, explored stays explored, unexplored stays unexplored. Overlapping zones each apply their rule.
+  The owner sees into its zone normally; buildings never view from inside. Cost: per hiding zone its bounding box only,
+  each cell against the player's units inside (collected during the stamp loop into `World.Neighbors`, free in phase 12).
+  The mask follows the vision cadence (a zone made between updates hides from the next update; one freed stays hidden
+  until then); nothing new is hashed for it (the visible bits it changes are). **Combat's own-sight rule** (a) also
+  fails for a target whose cell is in a live hiding zone of another player when the viewer stands outside it
+  (`VisionSystem.ZoneHides`; live zones, not the last update's), so a Crossbowman 10 m from a Sandstorm can't take a
+  Raider in it; the one-level scan shortcut is off while any blocker lives.
+- **State hash.** Only when a zone is live: the count, then per live slot its index, owner, centre, ability id and ticks
+  remaining (`ZoneStore.AddToHash`, after the fog). The radius, the vision flag, `BlockerCount` and the blind in force are
+  derived. The golden replay's checkpoints are unchanged (no zone in it): only `data-hash` moved (41842085985611BF to
+  5896D3E7C9FD36AD), which `GatherWedgeQaTests.SameGameDataHashes` lists (no Priest casts in the seed-21 match).
+- **Cost** (Debug, 2026-10-10): `AbilityPerfTests.FiveHundredUnits_8Zones_TwoBlockers_...` (500 units, 8 zones over
+  player 0's units, two blocking): zone phase 0.015 ms a tick; a fog update 0.071 ms without zones, 0.111 ms with the two
+  blockers (every 4 ticks); ticks allocate nothing. With no zone and nobody Blinded the new checks are counter tests
+  (`ZoneStore.Count`, `BlockerCount`, `StatusStore.BlindedUnits`): `EmptyTick(2500)` 472 µs on base, 478 µs here
+  (medians of three alternating runs alone; budget 500), `TightBlob2500` 4.54 / 4.51 ms (budget 4.6).
+- **Tests.** `Data/AbilityLoaderTests` (Sandstorm, the zone rows), `Data/StatusLoaderTests` (Blinded, the blind rows),
+  `Abilities/ZoneSystemTests`, `Combat/BlindedTests`, `Vision/ZoneVisionTests`, `StateHashTests.Hash_CoversEveryZoneField_*`,
+  `Hash_TheBlindInForce_*`, `Hash_ASandstormScene_*`, `Stress/AbilityFuzzStressTests.Sandstorms_ThreePlayers_*`,
+  `AbilityPerfTests` (the zone row), `DataContentHashTests.EveryZoneStatusField_*`.
+
+**For the data track (M4-4b-2).** A status of `"kind": "blind"` needs `"sight": <m>` and `"reach": <m>` (above 0, at most
+64; any other kind refuses both). An effect `{ "kind": "createZone", "blocksVision": <true|false, optional>, "statuses": [
+{ "status": <id>, "magnitude": <as applyStatus; omitted for a blind status>, "duration": <s> }, ... ] }` (at least one
+status; `type`, `amount`, `buildings`, `friendlyFire`, `status`, `magnitude`, `duration` are errors on it) needs the
+ability's `"duration": <s>` (the zone's lifetime) and takes the ability's `radius`; at most one per ability.
+`blocksVision` and `statuses` are errors on `damage` and `applyStatus`. Shipped: `common/statuses.json` `blinded` (2 / 3),
+`factions/whirlwind/abilities.json` `sandstorm` (18 m, 6 m, 1.2 s, 45 s, 12 s, `enemy_units`, a blocking zone of Blinded
+1 s + Slowed 0.3 for 1 s) on the Priest; Dryjhna's Prophecy's `abilityCooldown` -15 s makes it 30 s. The Sandstorm page
+row and the Blinded docs/02 row are the data track's to pin (D10c).
+
+**For the view (M4-V6c).** Read-only on `World.Zones` between ticks: `Capacity`, `Count`, `BlockerCount`, per slot
+`Alive`, `Owner`, `Center` (m), `AbilityId` (`Data.Abilities[id]` for the name), `TicksRemaining` (1 on its last tick),
+`Radius(slot)`, `BlocksVision(slot)`. A unit's blind in force: `Units.Statuses.BlindOf(slot)` (-1 none);
+`StatusSystem.SightOf(world, slot)` its fog sight now. Draw a zone for a player only where it may see it (an enemy's
+blocking zone hides the units in it, and `Fog.CanSeeUnit` already says so); `Fog.Visibility` holds the hidden cells as
+explored.
+
 ## Vision, detection, fog
 
 Fog of war and the high-ground rule are in since M4-3a (`sim/Rts.Sim/Vision/`); the last-known building ghosts, buildings
-that shoot and placement on explored ground since M4-3b (see "Implementation (M4-3b)"); detection and stealth (M4-5),
-zones' vision effects (M4-4) and the AI's `PlayerView` (M5) come later (see "Not yet" below).
+that shoot and placement on explored ground since M4-3b (see "Implementation (M4-3b)"); zones that hide their contents
+and the Blinded sight since M4-4b-2 (see "Implementation (M4-4b-2)"); detection and stealth (M4-5) and the AI's
+`PlayerView` (M5) come later (see "Not yet" below).
 
 - **The grid.** `World.Fog` (`FogStore`): per player a `byte[]` of map cells, row-major (`y * Width + x`), 0 unexplored,
   1 explored, 2 visible (`VisionConstants.Unexplored` / `Explored` / `Visible`). Allocated with the world: one byte a
@@ -2468,8 +2550,8 @@ zones' vision effects (M4-4) and the AI's `PlayerView` (M5) come later (see "Not
   the corner of a map under 46 cells). (4) The byte map and the packed bits are two copies of the visible set; combat
   reads the bits, the view the bytes; both are written only by the update.
 - **Not yet.** (M4-3b's towers, last-known list and explored-placement rule are in.) The `detector` radius is loaded and
-  hashed but unused until M4-5. A tower's hit from high ground reveals nothing (BUG-0270). M4-4: zone
-  vision (Darkness / Sandstorm: per-player vision blocker masks applied after the stamp). M4-5: `bool[] Detected` per
+  hashed but unused until M4-5. A tower's hit from high ground reveals nothing (BUG-0270). (Zone vision landed in
+  M4-4b-2.) M4-5: `bool[] Detected` per
   player (detector circles stamped like sight), stealth, the Revealed status (attacking or casting reveals for 3 s); the
   target validity check then also requires "not stealthed, or detected". M5: the AI reads the world only through a
   `PlayerView` facade that applies these checks. **Rendering** (M4-V4): the local player's grid uploads to an R8 texture
@@ -2548,7 +2630,7 @@ checked. The data-validation test is `DataValidationTests.ShippedData_LoadsWithN
 Shipped files: `common/damage_table.json`, `common/rules.json`, `common/resources.json` (M3-1), `common/techs.json`
 (M3-5), `common/projectiles.json` (M4-2b), and `faction.json` + `units.json` + `buildings.json` (M3-2) + `techs.json`
 (M3-5) for `malazan` and `whirlwind`, and `common/statuses.json` (M4-4a). All fourteen are required. `factions/<id>/abilities.json`
-(M4-4a) is optional: shipped for `malazan` only. Everything else in the tree above (`ai`, `maps`, other factions) arrives with
+(M4-4a) is optional: shipped for `malazan` and (M4-4b-2) `whirlwind`. Everything else in the tree above (`ai`, `maps`, other factions) arrives with
 the milestone that consumes it.
 
 | File | Shape |
@@ -2560,9 +2642,9 @@ the milestone that consumes it.
 | `buildings.json` | `{ "buildings": [ ... ] }`, each `{id, displayName, description, slot, footprint {width, height}, hp, armor, cost {gold, wood}, buildTime, popProvided, dropOff}`: `slot` is one of the ten template slots (`DataLimits.BuildingSlotIds`), footprint sides 1-4 cells, `buildTime` in seconds (to ticks), `popProvided` a multiple of 0.5 (to half-pop), `dropOff` a required bool, `requires` an optional list of tech / building ids (M3-5; resolved and gating placement since M3-6), `sight` optional meters (M4-3a: above 0 and at most 64, default `rules.json` `buildingSight`; shipped 24 on both watch towers, docs/02), `attack` optional (M4-3b: the unit `attack` object; value at least 1, range above 0, an aimed `projectile` required, `targets` not `buildings`; shipped on both watch towers), `detector` optional meters (M4-3b: above 0 and at most 64; shipped 16 on both watch towers; unused until M4-5). Ids unique across factions (M3-2, see "Economy implementation"); exactly one building per slot per faction (M3-6, BUG-0010) |
 | `techs.json` | `{ "techs": [ ... ] }` in `common/` (shared by every faction) and in each faction folder (its own), each `{id, displayName, description, researchedAt, cost {gold, wood}, researchTime, requires?, requiresAnyOf?, effects: [{stat, amount, appliesTo {attackType?, tags?, units?, siege?}}]}`: `researchedAt` is a building slot id (a common tech resolves to each faction's building of it; a faction without one is an error), `researchTime` in seconds (to ticks), `requires` tech / building ids (resolved and gating research since M3-6), `requiresAnyOf` `{count, of: [slot ids, or in a faction file its own building ids]}`: met when `count` of the distinct listed slots hold an own finished building (M3-6; shipped on `age_ii` only), `effects` may be empty. `stat` is one of `attack`, `armor`, `range`, `hp`, `abilityCooldown` (`DataLimits.TechStatIds`); `amount` is non-zero, whole for attack / armor / hp, meters for range, seconds for ability cooldown (to ticks, negative shortens it). `appliesTo` is required (`{}` = every unit); each filter it sets must match: `attackType` a damage type, `tags` any one of the unit's tags (each must be a tag some unit has), `units` unit ids (a faction tech's must be its own), `siege` true / false for the `siege` slot; a `tags` or `units` list set to `[]` is an error (M3-6, BUG-0098). Tech ids are unique across all techs files and may not equal a building id (M3-6); `DataLimits.AgeTechIds` (`age_ii`) must be a common tech (M3-5, see "Implementation (M3-5)") |
 | `projectiles.json` | `{ "projectiles": [ ... ] }`, each `{id, kind, speed, hitTolerance?, leadSpeed?}`: `kind` `aimed` or `lob`, `speed` m/s (at least 1), `hitTolerance` m (aimed only, 0-2, default 0.3; an error on a lob), `leadSpeed` m/s (aimed only, not negative, default 0 = never leads; an error on a lob). Ids unique; every unit's `attack.projectile` must name one (M4-2b, see "Implementation (M4-2b)") |
-| `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge). `abilities` (M4-4a, optional): ability ids of the unit's own faction, at most 4 (`DataLimits.MaxUnitAbilities`), no repeats; resolved to `UnitDef.Abilities`; shipped on the Cadre Mage (`telas_fire`) |
-| `statuses.json` | `{ "statuses": [ ... ] }` (M4-4a), each `{id, displayName, description, kind, damageType?}`: `kind` `damageOverTime` or `slow` (`DataLimits.StatusKindIds`); `damageType` (a damage table type) required on `damageOverTime`, an error on any other kind. The magnitude and duration come from the effect applying it. Ids unique; shipped `burning` (magic damage over time) and `slowed` |
-| `abilities.json` | `{ "abilities": [ ... ] }` (M4-4a, per faction, optional), each `{id, displayName, description, kind, range, radius, castTime, cooldown, duration?, affects, autocast?, effects}`: `kind` `targetGround` (`targetUnit`, `selfAura`, `summon`: "not supported yet"); `range` m above 0 and at most `DataLimits.MaxSight` (64); `radius` m above 0 and at most `DataLimits.MaxAbilityRadius` (16); `castTime` s, 0 or more, to ticks; `cooldown` s above 0, to ticks (at least 1); `duration` s, optional (0), to ticks; `affects` `enemy_units`, `own_units` or `all_units`; `autocast` only `false` ("not supported yet"); `effects` at least one, each `{kind: damage, type, amount, buildings?, friendlyFire?}` (a whole amount, at least 1; M4-4b-1: `buildings` true also hits other players' buildings as structure, not with `own_units`; `friendlyFire` 0-1, the fraction own units take, above 0 only with `enemy_units`) or `{kind: applyStatus, status, magnitude, duration}` (a `statuses.json` id; magnitude whole and at least 1 for damage over time, above 0 and below 1 for a slow; duration s, at least a tick, and for damage over time a whole number of seconds, at least 1, M4-4b-1); `createZone`, `teleport`, `spawn`: "not supported yet"; a field the effect kind doesn't use is an error. Ids unique across factions. Shipped: Malazan `telas_fire`, `cusser` (M4-4b-1) |
+| `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge). `abilities` (M4-4a, optional): ability ids of the unit's own faction, at most 4 (`DataLimits.MaxUnitAbilities`), no repeats; resolved to `UnitDef.Abilities`; shipped on the Cadre Mage (`telas_fire`), the Sapper (`cusser`) and the Priest of the Whirlwind (`sandstorm`) |
+| `statuses.json` | `{ "statuses": [ ... ] }` (M4-4a), each `{id, displayName, description, kind, damageType?, sight?, reach?}`: `kind` `damageOverTime`, `slow` or (M4-4b-2) `blind` (`DataLimits.StatusKindIds`); `damageType` (a damage table type) required on `damageOverTime`, an error on any other kind; `sight` and `reach` (m, above 0, at most 64) required on `blind`, errors on any other kind. The magnitude and duration come from the effect applying it (a blind takes no magnitude). Ids unique; shipped `burning` (magic damage over time), `slowed` and `blinded` (2 / 3, M4-4b-2) |
+| `abilities.json` | `{ "abilities": [ ... ] }` (M4-4a, per faction, optional), each `{id, displayName, description, kind, range, radius, castTime, cooldown, duration?, affects, autocast?, effects}`: `kind` `targetGround` (`targetUnit`, `selfAura`, `summon`: "not supported yet"); `range` m above 0 and at most `DataLimits.MaxSight` (64); `radius` m above 0 and at most `DataLimits.MaxAbilityRadius` (16); `castTime` s, 0 or more, to ticks; `cooldown` s above 0, to ticks (at least 1); `duration` s, optional (0), to ticks (required with a `createZone` effect, M4-4b-2); `affects` `enemy_units`, `own_units` or `all_units`; `autocast` only `false` ("not supported yet"); `effects` at least one, each `{kind: damage, type, amount, buildings?, friendlyFire?}` (a whole amount, at least 1; M4-4b-1: `buildings` true also hits other players' buildings as structure, not with `own_units`; `friendlyFire` 0-1, the fraction own units take, above 0 only with `enemy_units`) or `{kind: applyStatus, status, magnitude, duration}` (a `statuses.json` id; magnitude whole and at least 1 for damage over time, above 0 and below 1 for a slow; duration s, at least a tick, and for damage over time a whole number of seconds, at least 1, M4-4b-1); M4-4b-2: `{kind: createZone, blocksVision?, statuses: [{status, magnitude, duration}]}` (at least one status, each by the `applyStatus` rules, a blind status without a magnitude; the ability's `duration`, at least a tick, is then required: the zone's lifetime; at most one per ability); `teleport`, `spawn`: "not supported yet"; a field the effect kind doesn't use is an error. Ids unique across factions. Shipped: Malazan `telas_fire`, `cusser` (M4-4b-1); Whirlwind `sandstorm` (M4-4b-2) |
 
 Validation rules: ids are `snake_case` and unique (a unit id is unique across all factions);
 `slot` is one of the seven template slots; `armorClass`, `attack.type`, and `bonusVs` keys exist in

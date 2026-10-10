@@ -80,7 +80,7 @@ public static class DataLimits
     public const double MaxAbilityRadius = 16;
 
     /// <summary>JSON spelling of each <see cref="StatusKind"/>, indexed by the enum value (<c>common/statuses.json</c>, M4-4a).</summary>
-    public static readonly ImmutableArray<string> StatusKindIds = ImmutableArray.Create("damageOverTime", "slow");
+    public static readonly ImmutableArray<string> StatusKindIds = ImmutableArray.Create("damageOverTime", "slow", "blind");
 
     /// <summary>JSON spelling of each supported <see cref="AbilityKind"/>, indexed by the enum value (M4-4a).</summary>
     public static readonly ImmutableArray<string> AbilityKindIds = ImmutableArray.Create("targetGround");
@@ -88,11 +88,11 @@ public static class DataLimits
     /// <summary>Ability kinds of docs/02 the format knows but the sim doesn't run yet: refused as "not supported yet" (slice 2).</summary>
     public static readonly ImmutableArray<string> PlannedAbilityKindIds = ImmutableArray.Create("targetUnit", "selfAura", "summon");
 
-    /// <summary>JSON spelling of each supported <see cref="AbilityEffectKind"/>, indexed by the enum value (M4-4a).</summary>
-    public static readonly ImmutableArray<string> AbilityEffectKindIds = ImmutableArray.Create("damage", "applyStatus");
+    /// <summary>JSON spelling of each supported <see cref="AbilityEffectKind"/>, indexed by the enum value (M4-4a; createZone M4-4b-2).</summary>
+    public static readonly ImmutableArray<string> AbilityEffectKindIds = ImmutableArray.Create("damage", "applyStatus", "createZone");
 
     /// <summary>Effect kinds of docs/02 the format knows but the sim doesn't run yet: refused as "not supported yet" (slice 2).</summary>
-    public static readonly ImmutableArray<string> PlannedAbilityEffectKindIds = ImmutableArray.Create("createZone", "teleport", "spawn");
+    public static readonly ImmutableArray<string> PlannedAbilityEffectKindIds = ImmutableArray.Create("teleport", "spawn");
 
     /// <summary>JSON spelling of each <see cref="AbilityAffects"/>, indexed by the enum value (M4-4a).</summary>
     public static readonly ImmutableArray<string> AbilityAffectsIds = ImmutableArray.Create("enemy_units", "own_units", "all_units");

@@ -91,6 +91,7 @@ public sealed class World
         _deaths = new DeathEvent[config.UnitCapacity]; // one death per hit at most
         _abilityEvents = new Abilities.AbilityEvent[2 * config.UnitCapacity]; // M4-4a: a cast starts and resolves once per unit per tick at most
         Projectiles = new ProjectileStore(config.ProjectileSlots);
+        Zones = new Abilities.ZoneStore(config.ZoneCapacity, config.Data); // M4-4b-2
         _impacts = new ProjectileImpact[config.ProjectileSlots]; // each projectile lands once
         CombatBuildings = new int[config.BuildingCapacity];
         CombatBuildingsOf = new int[config.PlayerCount];
@@ -127,6 +128,12 @@ public sealed class World
 
     /// <summary>Empties <see cref="AbilityEvents"/> (start of a tick).</summary>
     internal void ClearAbilityEvents() => AbilityEventCount = 0;
+
+    /// <summary>
+    /// The live zones (M4-4b-2): read-only spans for the view (owner, centre, ability, ticks remaining) and per-slot radius
+    /// and vision flag. Hashed state; written only by the ability phases (made in phase 6, counted down in phase 5).
+    /// </summary>
+    public Abilities.ZoneStore Zones { get; }
 
     /// <summary>
     /// Projectiles in flight (M4-2b): read-only spans for the view (position, last position, impact point, type, owner).
