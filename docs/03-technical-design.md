@@ -4723,15 +4723,19 @@ HUD, as `M3PlayableTest` proved M3. Test code only (`game/tests/M4PlayableTest.t
   army off the base, the Sapper (clicked) right-clicks its way beside the enemy building nearest it (the Town Hall last)
   until within the Cusser's 6 m, Q and a click on the footprint's centre: the cast aims there and resolves, the building
   loses at least 300 hit points (360 siege to a structure, less its armor); a right click on it for the Sapper and for
-  the army (1) finishes it, and its rubble marker is drawn on the footprint, in sight; (8) two fresh enemy Zealots attack
+  the army (1) finishes it, and its rubble marker is drawn on the footprint, in sight (any footprint cell visible, `CanSeeBuilding`'s rule:
+  the attackers stand at the footprint's edge, so its centre cell can lie past their sight, BUG-0460); (8) two fresh enemy Zealots attack
   our Billet and Barracks (staging `Attack`s), a fresh Cadre Mage 18 m off (out of both Zealots' sight and they of its)
   is clicked, Q, a click on Zealot A, Shift + right click back to where it stood: Burning takes A from 63 to 23 hit
   points, under half, so it is Frenzied (the sim's `whenBelowHp` passive) and its marker is drawn in `FrenzyColor`, none
   over the unhurt B; over the next 60 ticks A starts more swings than B (4-5 against 3: a 13-tick cooldown against 20;
   a swing start is counted when `CooldownTicks` rises, read on `SimRunner.Ticked`); (9) the hash twin: the recorder's
   replay played into a bare sim by `ReplayPlayer`, a checkpoint every tick, equal.
+- **Fresh units by handle.** Staging and the duel find their spawns as the live handles (slot and generation) that were
+  not live before the spawn commands, never by slot: a unit that dies on the spawn tick frees its slot, a spawn takes it,
+  and only the generation tells them apart (BUG-0460).
 - **The fog rule, every frame.** Every wait goes through one frame helper that checks, on each frame of the whole run,
-  that no enemy unit view (`UnitViews.IsShown` or its node visible), hp bar, status marker or cast bar is drawn while
+  (the `--shots` frames included) that no enemy unit view (`UnitViews.IsShown` or its node visible), hp bar, status marker or cast bar is drawn while
   `Fog.CanSeeUnit(0, unit)` is false, no dead unit is drawn, and no enemy building view is shown while `CanSeeBuilding`
   is false. Counters are printed: seed 1 about 370-450 frames of the approach (A-click to first contact) and 1,900-2,500
   in all, 0 violations; seed 6 520-640 and 2,500-3,500, 0.

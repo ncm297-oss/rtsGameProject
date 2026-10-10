@@ -430,12 +430,14 @@ public partial class M4PlayableTest : Node
             await RightClick(Screen(c, BuildingViews.BoxHeight * 0.5f));
             await Ticks(2);
         }
-        int gen = B.Generation[building];
+        int gen = B.Generation[building], anchor = B.Cell[building];
         await Until(() => !B.Alive[building] || B.Generation[building] != gen, $"the {def.DisplayName} destroyed", () => $"hp {B.Hp[building]}");
         int rubble = -1;
         await Until(() => (rubble = RubbleAt(c)) >= 0, "rubble shown on its footprint");
-        Expect(W.Fog.IsVisible(0, CellOf(c)), "the rubble is not in sight");
-        GD.Print($"  {def.DisplayName} destroyed on tick {Tick}; rubble marker {rubble} drawn at {_combat.MarkerTransform(rubble).Origin}");
+        // In sight as the building was: any footprint cell (BUG-0460: the attackers stand at the footprint's edge, so its
+        // centre cell can lie just past their sight).
+        Expect(SeesFootprint(anchor, def), "the rubble is not in sight (no footprint cell visible)");
+        GD.Print($"  {def.DisplayName} destroyed on tick {Tick}; rubble marker {rubble} drawn at {_combat.MarkerTransform(rubble).Origin}, in sight (centre cell {(W.Fog.IsVisible(0, CellOf(c)) ? "visible" : "not visible")})");
         await Shot("cusser-rubble");
     }
 
@@ -455,12 +457,12 @@ public partial class M4PlayableTest : Node
             .Select(o => Free(aAt + o)).FirstOrDefault(p => System.Numerics.Vector2.Distance(p, aAt) >= 18f && System.Numerics.Vector2.Distance(p, bAt) >= 18f, new System.Numerics.Vector2(-1f, -1f));
         Expect(mageAt.X >= 0f, "no spot for the duel's mage 18 m from both Zealots");
         Expect(System.Numerics.Vector2.Distance(aAt, bAt) > 8f, $"the duel's Zealots stand {System.Numerics.Vector2.Distance(aAt, bAt):0.0} m apart");
-        var before = new HashSet<int>(Enumerable.Range(0, U.Capacity).Where(i => U.Alive[i]));
+        HashSet<EntityHandle> before = LiveHandles();
         _sim.Enqueue(Command.SpawnUnit(1, _zealotType, aAt));
         _sim.Enqueue(Command.SpawnUnit(1, _zealotType, bAt));
         _sim.Enqueue(Command.SpawnUnit(0, _mageType, mageAt));
         await Ticks(2);
-        var fresh = Enumerable.Range(0, U.Capacity).Where(i => U.Alive[i] && !before.Contains(i)).ToList();
+        List<int> fresh = Fresh(before);
         var zealots = fresh.Where(i => U.TypeId[i] == _zealotType).OrderBy(i => System.Numerics.Vector2.Distance(U.Position[i], aAt)).ToList();
         int za = zealots.Count == 2 ? zealots[0] : -1, zb = zealots.Count == 2 ? zealots[1] : -1;
         int m = fresh.FirstOrDefault(i => U.TypeId[i] == _mageType, -1);
@@ -619,15 +621,14 @@ public partial class M4PlayableTest : Node
         SpawnArmy(1, whirlwind, _army1At, -dir, taken);
         System.Numerics.Vector2 sapperAt = Free(h0 - dir * 9f);
         _sim.Enqueue(Command.SpawnUnit(0, _sapperType, sapperAt));
-        var before = new HashSet<int>(Enumerable.Range(0, U.Capacity).Where(i => U.Alive[i]));
+        HashSet<EntityHandle> before = LiveHandles();
         await Ticks(2);
 
         _army.Clear();
         _enemyArmy.Clear();
         _sapper = default;
-        for (int i = 0; i < U.Capacity; i++)
+        foreach (int i in Fresh(before))
         {
-            if (!U.Alive[i] || before.Contains(i)) continue;
             var h = new EntityHandle(i, U.Generation[i]);
             if (U.Owner[i] == 1) _enemyArmy.Add(h);
             else if (U.TypeId[i] == _sapperType) _sapper = h;
@@ -646,6 +647,34 @@ public partial class M4PlayableTest : Node
             buildings++;
         }
         GD.Print($"seed {_seed}: staged {buildings} buildings, {_army.Count} Malazan ({Census(_army)}) {System.Numerics.Vector2.Distance(army0, _army1At):0} m from {_enemyArmy.Count} Whirlwind ({Census(_enemyArmy)}), a Sapper at home; tick {Tick}");
+    }
+
+    // Live units by handle (slot and generation), not by slot: a unit that dies while spawns are pending frees its slot,
+    // and a spawn may take that slot in the same tick (BUG-0460). The freed slot's generation moves on, so the spawn's handle
+    // is new even though its slot is not.
+    private HashSet<EntityHandle> LiveHandles()
+    {
+        var live = new HashSet<EntityHandle>();
+        for (int i = 0; i < U.Capacity; i++) if (U.Alive[i]) live.Add(new EntityHandle(i, U.Generation[i]));
+        return live;
+    }
+
+    // The slots of live units whose handle was not live in `before`, in slot order.
+    private List<int> Fresh(HashSet<EntityHandle> before)
+    {
+        var fresh = new List<int>();
+        for (int i = 0; i < U.Capacity; i++) if (U.Alive[i] && !before.Contains(new EntityHandle(i, U.Generation[i]))) fresh.Add(i);
+        return fresh;
+    }
+
+    // Whether player 0 sees any cell of a footprint (CanSeeBuilding's rule, which still holds after the building is gone).
+    private bool SeesFootprint(int anchor, BuildingDef def)
+    {
+        int x0 = anchor % G.Width, y0 = anchor / G.Width;
+        for (int y = y0; y < y0 + def.FootprintHeight; y++)
+            for (int x = x0; x < x0 + def.FootprintWidth; x++)
+                if (x >= 0 && y >= 0 && x < G.Width && y < G.Height && W.Fog.IsVisible(0, y * G.Width + x)) return true;
+        return false;
     }
 
     private string Census(List<EntityHandle> units) =>
@@ -1005,7 +1034,12 @@ public partial class M4PlayableTest : Node
     private async Task Shot(string name)
     {
         if (_shots == null || DisplayServer.GetName() == "headless") return;
-        for (int i = 0; i < 3; i++) await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+        // These frames are drawn too, so they take the fog check like every other (BUG-0462).
+        for (int i = 0; i < 3; i++)
+        {
+            await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+            CheckFog();
+        }
         string path = $"{_shots}/m4-seed{_seed}-{name}.png";
         GetViewport().GetTexture().GetImage().SavePng(path);
         GD.Print($"  screenshot {path}");
