@@ -72,6 +72,12 @@ public class DataContentHashTests
             return a.Length > 0 ? a.SetItem(0, a[0] with { DurationTicks = a[0].DurationTicks + 1 })
                 : a.Add(new AbilityEffect { Kind = AbilityEffectKind.Damage, DamageType = 0, Amount = 1, Status = -1 });
         }
+        if (t == typeof(ImmutableArray<UnitPassive>)) // M4-4b-3a (each field: EveryPassiveField_AndTheirCount_ChangeTheHash)
+        {
+            var a = (ImmutableArray<UnitPassive>)value!;
+            return a.Length > 0 ? a.SetItem(0, a[0] with { Magnitude = a[0].Magnitude + 0.5f })
+                : a.Add(new UnitPassive { Trigger = PassiveTrigger.WhenBelowHp, HpFraction = 0.5f, Status = 0, Magnitude = 0.5f, Units = ImmutableArray<int>.Empty });
+        }
         return null;
     }
 
@@ -144,6 +150,51 @@ public class DataContentHashTests
             Assert.True(With(d, ability: copy, abilitySlot: ability.Id).ContentHash() != baseline, $"ZoneStatus {field} is not in GameData.ContentHash");
         }
         Assert.Equal(3, typeof(ZoneStatus).GetProperties().Length); // a new field must be added above and to ContentHash
+    }
+
+    /// <summary>
+    /// M4-4b-3a: every <see cref="UnitPassive"/> field of the Zealot's two passives, and their count, change the hash; so does
+    /// a passive edited in <c>whirlwind/units.json</c>.
+    /// </summary>
+    [Fact]
+    public void EveryPassiveField_AndTheirCount_ChangeTheHash()
+    {
+        GameData d = TestSim.Data;
+        ulong baseline = d.ContentHash();
+        UnitDef zealot = d.Units[d.FindUnit("whirlwind_zealot")];
+        Assert.Equal(2, zealot.Passives.Length);
+        int fields = 0;
+        foreach (int k in new[] { zealot.BelowHpPassive, zealot.DeathPassive })
+        {
+            UnitPassive p = zealot.Passives[k];
+            var variants = new (string Field, UnitPassive Changed)[]
+            {
+                ("Trigger", p with { Trigger = p.Trigger == PassiveTrigger.OnDeath ? PassiveTrigger.WhenBelowHp : PassiveTrigger.OnDeath }),
+                ("HpFraction", p with { HpFraction = p.HpFraction + 0.1f }),
+                ("Status", p with { Status = p.Status + 1 }),
+                ("Magnitude", p with { Magnitude = p.Magnitude + 0.1f }),
+                ("DurationTicks", p with { DurationTicks = p.DurationTicks + 1 }),
+                ("Radius", p with { Radius = p.Radius + 0.5f }),
+                ("Units", p with { Units = p.Units.Add(zealot.Id) }),
+            };
+            foreach ((string field, UnitPassive changed) in variants)
+            {
+                UnitDef copy = Clone(zealot);
+                typeof(UnitDef).GetProperty(nameof(UnitDef.Passives))!.SetValue(copy, zealot.Passives.SetItem(k, changed));
+                Assert.True(With(d, unit: copy).ContentHash() != baseline, $"UnitPassive.{field} (passive {k}) is not in GameData.ContentHash");
+                fields++;
+            }
+        }
+        Assert.Equal(14, fields);
+        Assert.Equal(7, typeof(UnitPassive).GetProperties().Length); // a new field must be added above and to ContentHash
+        UnitDef fewer = Clone(zealot);
+        typeof(UnitDef).GetProperty(nameof(UnitDef.Passives))!.SetValue(fewer, zealot.Passives.RemoveAt(1));
+        Assert.NotEqual(baseline, With(d, unit: fewer).ContentHash());
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.SetUnitField("whirlwind", "whirlwind_zealot", "passives", "[{ \"trigger\": \"whenBelowHp\", \"hpFraction\": 0.4, \"status\": \"frenzied\", \"magnitude\": 0.5 }]");
+        DataLoadResult load = DataLoader.LoadAll(dir.Path);
+        Assert.True(load.Ok, string.Join("\n", load.Errors));
+        Assert.NotEqual(baseline, load.Data!.ContentHash());
     }
 
     /// <summary>M4-4a: every <see cref="AbilityEffect"/> field, the effect count, and both list lengths change the hash; so do edits to both files.</summary>
@@ -309,7 +360,9 @@ public class DataContentHashTests
             "DurationTicks", "Affects", "Effects", "HitsBuildings" })
             Assert.Contains($"AbilityDef.{f}", checkedFields);
         Assert.Contains("UnitDef.Abilities", checkedFields);
-        Assert.True(checkedFields.Count >= 57, $"only {checkedFields.Count} fields checked");
+        foreach (string f in new[] { "Passives", "BelowHpPassive", "DeathPassive" }) // M4-4b-3a
+            Assert.Contains($"UnitDef.{f}", checkedFields);
+        Assert.True(checkedFields.Count >= 60, $"only {checkedFields.Count} fields checked");
     }
 
     /// <summary>

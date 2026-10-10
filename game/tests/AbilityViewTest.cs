@@ -34,8 +34,14 @@ namespace Rts.Game.Tests;
 /// from one Q, right-click ends it); a Sapper's card with "Cusser" on Q and its 6 m / 3.5 m rings; after the twin, Slowed
 /// and Burning side by side and hidden under the fog with their unit; and in the steady match 100 statuses drawn, the
 /// selection panel back in the 0 B span (BUG-0340) and minimap right-clicks at 0 B.
+/// M4-V6c adds: an own Priest's Sandstorm on two fresh Raiders (one disc at the resolve, the def's radius, drawn exactly
+/// the zone's 240 ticks with the rule's alpha, falling over the last 20, gone at the 241st; the Raiders' Blinded marker
+/// beside their Slowed one in <see cref="AbilityViews.BlindColor"/>; Telas Fire adds Burning, three markers side by side);
+/// an enemy Priest's storm under the fog, alive in the store but never drawn until an own unit walking up sees its rim
+/// (drawn exactly while <see cref="ZoneDiscs.SeesStorm"/> holds, in the owner's rim colour); and in the steady match 8
+/// zones (two blocking) drawn at 0 B.
 /// </summary>
-/// <remarks>Headless. Run: <c>&amp; $env:GODOT --headless --path game res://tests/AbilityViewTest.tscn</c> (seeds 1 and 6; <c>-- --seed N</c> for one); prints "ABILITY VIEW TEST PASS" and exits 0, or each failure and exits 1. Windowed with <c>-- --shots &lt;dir&gt;</c> it also saves <c>ability-seedN-targeting.png</c>, <c>ability-seedN-casting.png</c>, <c>ability-seedN-first-tick.png</c>, <c>ability-seedN-flash.png</c>, <c>ability-seedN-burning.png</c>, <c>ability-seedN-cusser.png</c> and <c>ability-seedN-statuses.png</c>.</remarks>
+/// <remarks>Headless. Run: <c>&amp; $env:GODOT --headless --path game res://tests/AbilityViewTest.tscn</c> (seeds 1 and 6; <c>-- --seed N</c> for one); prints "ABILITY VIEW TEST PASS" and exits 0, or each failure and exits 1. Windowed with <c>-- --shots &lt;dir&gt;</c> it also saves <c>ability-seedN-targeting.png</c>, <c>ability-seedN-casting.png</c>, <c>ability-seedN-first-tick.png</c>, <c>ability-seedN-flash.png</c>, <c>ability-seedN-burning.png</c>, <c>ability-seedN-cusser.png</c>, <c>ability-seedN-statuses.png</c>, <c>ability-seedN-storm.png</c>, <c>ability-seedN-blinded.png</c> and <c>ability-seedN-storm-enemy.png</c>.</remarks>
 public partial class AbilityViewTest : Node
 {
     private static readonly FieldInfo CommandsField = typeof(Simulation).GetField("_commands", BindingFlags.NonPublic | BindingFlags.Instance)!;
@@ -57,7 +63,7 @@ public partial class AbilityViewTest : Node
     private RtsCamera _camera = null!;
     private Vector2 _screen;
     private string? _shots;
-    private int _telas, _cusser, _burning, _slowed;
+    private int _telas, _cusser, _burning, _slowed, _sandstorm, _blinded;
     private AbilityDef _def = null!;
     private EntityHandle _near, _far, _spotter, _sapper;
     private System.Numerics.Vector2 _knot;
@@ -89,6 +95,8 @@ public partial class AbilityViewTest : Node
             _cusser = _data.FindAbility("cusser");
             _burning = _data.FindStatus("burning");
             _slowed = _data.FindStatus("slowed");
+            _sandstorm = _data.FindAbility("sandstorm");
+            _blinded = _data.FindStatus("blinded");
             UiRows();
             foreach (ulong seed in seeds) await Run(seed);
             await Steady(seeds[0]);
@@ -226,6 +234,8 @@ public partial class AbilityViewTest : Node
         await ShiftTwoRow(seed);
         await WalkingShiftRow(seed);
         await CusserRow(seed);
+        await StormRow(seed);
+        await EnemyStormRow(seed);
         Twin(seed);
         await StatusRows(seed);
         await EndMatch();
@@ -629,6 +639,233 @@ public partial class AbilityViewTest : Node
         GD.Print($"seed {seed}: Sapper card '{_card.NameAt(0).Text}' on {_card.GridKey(0)}; rings {_views.ShownRange} m / {_views.ShownRadius} m");
     }
 
+    // M4-V6c: an own Priest's Sandstorm on two fresh Raiders. One disc from the resolve for the zone's 240 ticks, the def's
+    // radius on the ground at the centre, the rule's alpha (0.35, falling over the last 20 ticks), a sand rim; gone at the
+    // 241st. The Raiders inside show Blinded beside Slowed; a mage's Telas Fire on them adds Burning (three markers).
+    private async Task StormRow(ulong seed)
+    {
+        AbilityDef storm = _data.Abilities[_sandstorm];
+        int raider = _data.FindUnit("whirlwind_raider"), priest = _data.FindUnit("whirlwind_priest");
+        var before = new HashSet<int>();
+        for (int i = 0; i < U.Capacity; i++) if (U.Alive[i]) before.Add(i);
+        System.Numerics.Vector2 point = _knot + new System.Numerics.Vector2(0f, 1f);
+        _sim.Enqueue(Command.SpawnUnit(1, raider, _knot));
+        _sim.Enqueue(Command.SpawnUnit(1, raider, _knot + new System.Numerics.Vector2(0f, 2f)));
+        _sim.Enqueue(Command.SpawnUnit(0, priest, _knot - new System.Numerics.Vector2(12f, 0f)));
+        // A fresh mage for the Telas Fire (the two staged ones are on their 25 s cooldown from the rows before).
+        int mageType = _data.FindUnit("malazan_cadre_mage");
+        _sim.Enqueue(Command.SpawnUnit(0, mageType, _knot - new System.Numerics.Vector2(10f, 3f)));
+        for (int t = 0; t < 6; t++) _sim.Tick();
+        var fresh = new List<EntityHandle>();
+        EntityHandle caster = default, mage = default;
+        for (int i = 0; i < U.Capacity; i++)
+        {
+            if (!U.Alive[i] || before.Contains(i)) continue;
+            if (U.TypeId[i] == raider) fresh.Add(new EntityHandle(i, U.Generation[i]));
+            else if (U.TypeId[i] == priest) caster = new EntityHandle(i, U.Generation[i]);
+            else if (U.TypeId[i] == mageType) mage = new EntityHandle(i, U.Generation[i]);
+        }
+        if (!Check(fresh.Count == 2 && caster.Generation != 0 && mage.Generation != 0, $"seed {seed} storm: {fresh.Count} fresh Raiders, priest {caster}, mage {mage}")) return;
+        _camera.SetFocus(point.X, point.Y);
+        _sim.Enqueue(Command.UseAbility(0, caster, 0, point));
+        int ticks = 0, early = 0;
+        while (ticks < 200 && !Resolved(caster))
+        {
+            _sim.Tick();
+            ticks++;
+            _views.Sync(W, 0.5f, Vector2.Zero, false);
+            if (!Resolved(caster) && DiscAt(point) >= 0) early++;
+        }
+        if (!Check(Resolved(caster) && early == 0, $"seed {seed} storm: resolved {Resolved(caster)} after {ticks} ticks, a disc before it on {early}")) return;
+        var alphas = new List<float>();
+        int bad = 0, gone = 0;
+        bool sideBySide = false, three = false, fired = false;
+        string firstBad = "";
+        for (int t = 0; t < 400; t++)
+        {
+            if (t > 0)
+            {
+                _sim.Tick();
+                _views.Sync(W, 0.5f, Vector2.Zero, false);
+            }
+            int k = DiscAt(point);
+            if (k < 0)
+            {
+                gone = t;
+                break;
+            }
+            ZoneDisc d = _views.ZoneDiscAt(k);
+            Vector3 at = _views.ZoneDiscPosition(k);
+            Color fill = _views.ZoneDiscFill(k), rim = _views.ZoneDiscRim(k);
+            bool ok = d.Own && d.Radius == storm.Radius && W.Zones.Alive[d.Slot] && fill.A == ZoneDiscs.Alpha(W.Zones.TicksRemaining[d.Slot])
+                && Math.Abs(at.Y - (TerrainHeight.At(W.Heightmap, point.X, point.Y) + AbilityViews.ZoneLift)) < 1e-4f && at.X == point.X && at.Z == point.Y
+                && SameRgb(rim, AbilityViews.OwnZoneRimColor) && SameRgb(fill, AbilityViews.ZoneFillColor);
+            if (!ok && bad++ == 0) firstBad = $"tick {t}: {d}, at {at}, fill {fill}, rim {rim}, {W.Zones.TicksRemaining[d.Slot]} ticks left";
+            alphas.Add(fill.A);
+            if (t == 10)
+            {
+                // Both fresh Raiders stand in the storm: Blinded beside Slowed, in their colours.
+                EntityHandle r = fresh[0];
+                int kb = MarkIndex(r.Index, _blinded), ks = MarkIndex(r.Index, _slowed);
+                sideBySide = Check(kb >= 0 && ks >= 0 && Marks(fresh[1].Index, _blinded) == 1 && Marks(fresh[1].Index, _slowed) == 1
+                    && _views.StatusColor(_blinded) == AbilityViews.BlindColor && _views.StatusColor(_slowed) == AbilityViews.SlowColor
+                    && Math.Abs(Math.Abs(_views.MarkerPosition(kb).X - _views.MarkerPosition(ks).X) - AbilityViews.MarkerSpacing * MarkerScale()) < 1e-3f
+                    && Math.Abs(_views.MarkerPosition(kb).Y - _views.MarkerPosition(ks).Y) < 1e-4f,
+                    $"seed {seed} storm: Raider {r.Index} markers blinded {kb}, slowed {ks}; Raider {fresh[1].Index} {Marks(fresh[1].Index, _blinded)}+{Marks(fresh[1].Index, _slowed)}");
+                await Shot($"ability-seed{seed}-storm");
+            }
+            if (t == 10)
+            {
+                // The fresh mage's Telas Fire on the Raiders.
+                fired = true;
+                _sim.Enqueue(Command.UseAbility(0, mage, 0, U.Position[fresh[0].Index]));
+            }
+            if (t > 10 && !three)
+                foreach (EntityHandle r in fresh)
+                {
+                    if (!U.IsAlive(r) || Marks(r.Index, _burning) != 1 || Marks(r.Index, _blinded) != 1 || Marks(r.Index, _slowed) != 1) continue;
+                    three = true;
+                    Color cb = _views.StatusColor(_blinded), cs = _views.StatusColor(_slowed), cd = _views.StatusColor(_burning);
+                    Check(cb != cs && cb != cd && cb != AbilityViews.OtherStatusColor && cs != cd,
+                        $"seed {seed} blinded: colours {cb} {cs} {cd} not distinct");
+                    await Shot($"ability-seed{seed}-blinded");
+                    GD.Print($"seed {seed}: Raider {r.Index} shows Blinded, Slowed and Burning side by side at storm tick {t}");
+                    break;
+                }
+        }
+        int n = alphas.Count;
+        bool holds = n == storm.DurationTicks;
+        for (int t = 0; t < n - ZoneDiscs.FadeTicks && holds; t++) holds = alphas[t] == ZoneDiscs.DiscAlpha;
+        bool falls = n > ZoneDiscs.FadeTicks;
+        for (int t = n - ZoneDiscs.FadeTicks; t < n && falls; t++) falls = alphas[t] < alphas[t - 1];
+        Check(bad == 0, $"seed {seed} storm: {bad} wrong discs, first {firstBad}");
+        Check(holds && falls && gone == storm.DurationTicks && storm.DurationTicks == 240,
+            $"seed {seed} storm: drawn {n} ticks (gone at {gone}), want {storm.DurationTicks}; alpha holds {holds}, falls {falls}");
+        Check(sideBySide && fired && three, $"seed {seed} storm: Blinded beside Slowed {sideBySide}, Telas Fire sent {fired}, three markers {three}");
+        GD.Print($"seed {seed}: own Sandstorm drawn {n} ticks, alpha {alphas[0]} to {alphas[n - 1]} over the last {ZoneDiscs.FadeTicks}; gone at tick {gone}");
+        System.Numerics.Vector2 mid = (U.Position[_near.Index] + _knot) / 2f;
+        _camera.SetFocus(mid.X, mid.Y);
+        await Frames();
+    }
+
+    // M4-V6c: an enemy Priest's Sandstorm under the fog is alive in the store but never drawn until an own unit walking up
+    // sees its rim; from then it is drawn exactly while a cell within its radius + 2 m is visible, in the owner's colour.
+    private async Task EnemyStormRow(ulong seed)
+    {
+        AbilityDef storm = _data.Abilities[_sandstorm];
+        int priest = _data.FindUnit("whirlwind_priest");
+        int cell = HiddenCellNear(36f);
+        if (!Check(cell >= 0, $"seed {seed} enemy storm: no hidden cell")) return;
+        System.Numerics.Vector2 p = G.CellCenter(cell % G.Width, cell / G.Width);
+        var before = new HashSet<int>();
+        for (int i = 0; i < U.Capacity; i++) if (U.Alive[i]) before.Add(i);
+        // A Wickan Lancer (fast) of our own on the way from the army, 6 m beyond where its sight would reach the rim.
+        int lancer = _data.FindUnit("malazan_wickan_lancer");
+        float sight = _data.Units[lancer].Sight;
+        System.Numerics.Vector2 dir = System.Numerics.Vector2.Normalize(Centroid(0) - p);
+        _sim.Enqueue(Command.SpawnUnit(1, priest, p));
+        _sim.Enqueue(Command.SpawnUnit(0, lancer, p + dir * (storm.Radius + ZoneDiscs.RimWidth + sight + 6f)));
+        _sim.Tick();
+        _sim.Tick();
+        EntityHandle caster = default, walker = default;
+        for (int i = 0; i < U.Capacity; i++)
+        {
+            if (!U.Alive[i] || before.Contains(i)) continue;
+            if (U.TypeId[i] == priest) caster = new EntityHandle(i, U.Generation[i]);
+            else if (U.TypeId[i] == lancer) walker = new EntityHandle(i, U.Generation[i]);
+        }
+        if (!Check(caster.Generation != 0 && walker.Generation != 0, $"seed {seed} enemy storm: priest {caster}, walker {walker}")) return;
+        // The walker stops where half its sight reaches past the storm's edge: the rim is seen, nothing inside is.
+        System.Numerics.Vector2 to = p + dir * (storm.Radius + 0.5f * sight);
+        _sim.Enqueue(Command.UseAbility(1, caster, 0, p));
+        int slot = -1, ticks = 0, hidden = 0, drawn = 0, wrong = 0;
+        bool shot = false;
+        string firstWrong = "";
+        Color owner = UnitViews.ColorFromRgb(_data.Factions[W.FactionOf(1)].PrimaryColor);
+        for (; ticks < 400; ticks++)
+        {
+            _sim.Tick();
+            _views.Sync(W, 0.5f, Vector2.Zero, false);
+            if (slot < 0)
+            {
+                for (int k = 0; k < W.Zones.Capacity; k++)
+                    if (W.Zones.Alive[k] && W.Zones.Owner[k] == 1 && W.Zones.Center[k] == p) slot = k;
+                if (slot >= 0) _sim.Enqueue(Command.Move(0, walker, to)); // the walk starts once the storm is up
+            }
+            if (slot < 0) continue;
+            if (!W.Zones.Alive[slot]) break;
+            bool sees = ZoneDiscs.SeesStorm(W.Fog.Visibility(0), W.Fog.Width, W.Fog.Height, p, storm.Radius);
+            int at = DiscAt(p);
+            if ((at >= 0) != sees && wrong++ == 0) firstWrong = $"tick {ticks}: drawn {at >= 0}, rim seen {sees}";
+            if (at < 0)
+            {
+                if (drawn == 0) hidden++;
+                continue;
+            }
+            drawn++;
+            ZoneDisc d = _views.ZoneDiscAt(at);
+            if ((d.Own || d.Slot != slot || !SameRgb(_views.ZoneDiscRim(at), owner)) && wrong++ == 0) firstWrong = $"tick {ticks}: {d}, rim {_views.ZoneDiscRim(at)}, want {owner}";
+            if (!shot && drawn >= 4)
+            {
+                shot = true;
+                System.Numerics.Vector2 mid = (U.Position[walker.Index] + p) / 2f;
+                _camera.SetFocus(mid.X, mid.Y);
+                await Shot($"ability-seed{seed}-storm-enemy");
+            }
+            if (drawn >= 40) break;
+        }
+        Check(slot >= 0 && hidden >= Rts.Sim.Vision.VisionConstants.UpdateInterval && drawn > 0 && wrong == 0,
+            $"seed {seed} enemy storm: slot {slot}, live but hidden {hidden} ticks, then drawn {drawn}; {wrong} wrong, first {firstWrong}; walker {System.Numerics.Vector2.Distance(U.Position[walker.Index], p):0.0} m from the centre");
+        GD.Print($"seed {seed}: an enemy Sandstorm under the fog: live, not drawn for {hidden} ticks, drawn once the walker saw its rim ({drawn} ticks checked)");
+        System.Numerics.Vector2 back = (U.Position[_near.Index] + _knot) / 2f;
+        _camera.SetFocus(back.X, back.Y);
+        await Frames();
+    }
+
+    // The passable cell no own unit sees, at least `far` m from every own unit and 12 cells in from the map's edges, nearest
+    // the own units (so the walk up to it is short and the shot shows the ground round it).
+    private int HiddenCellNear(float far)
+    {
+        int best = -1;
+        float bestD = float.MaxValue;
+        for (int y = 12; y < G.Height - 12; y += 2)
+            for (int x = 12; x < G.Width - 12; x += 2)
+            {
+                int c = y * G.Width + x;
+                if (!G.IsPassable(x, y) || W.Fog.IsVisible(0, c)) continue;
+                System.Numerics.Vector2 p = G.CellCenter(x, y);
+                float d = float.MaxValue;
+                for (int i = 0; i < U.Capacity; i++)
+                    if (U.Alive[i] && U.Owner[i] == 0) d = Math.Min(d, System.Numerics.Vector2.Distance(U.Position[i], p));
+                if (d >= far && d < bestD) { bestD = d; best = c; }
+            }
+        return best;
+    }
+
+    // The drawn disc whose zone is centred on `point`, or -1.
+    private int DiscAt(System.Numerics.Vector2 point)
+    {
+        for (int k = 0; k < _views.ShownZones; k++)
+            if (_views.ZoneDiscAt(k).Center == point) return k;
+        return -1;
+    }
+
+    // The marker of `status` over `unit`, or -1.
+    private int MarkIndex(int unit, int status)
+    {
+        for (int k = 0; k < _views.ShownMarkers; k++)
+        {
+            Rts.Sim.ViewApi.StatusMark m = _views.MarkerAt(k);
+            if (m.Unit == unit && m.Status == status) return k;
+        }
+        return -1;
+    }
+
+    // The bars' zoom growth (the markers' spacing grows with it).
+    private float MarkerScale() => Math.Max(1f, _camera.Zoom / CombatViews.BarFullZoom);
+
+    private static bool SameRgb(Color a, Color b) => Math.Abs(a.R - b.R) < 1e-5f && Math.Abs(a.G - b.G) < 1e-5f && Math.Abs(a.B - b.B) < 1e-5f;
+
     // After the twin (the store is written directly): Slowed and Burning side by side, then hidden under the fog with their unit.
     private async Task StatusRows(ulong seed)
     {
@@ -773,8 +1010,9 @@ public partial class AbilityViewTest : Node
             ApplyStatus.Invoke(U.Statuses, new object[] { i, statused % 2 == 0 ? _burning : _slowed, statused % 2 == 0 ? 1f : 0.3f, 2400, 0 });
             statused++;
         }
+        StageZones();
         for (int f = 0; f < 3; f++) SyncAll(0.5f, f);
-        int firstMarkers = _views.ShownMarkers, markerFrames = 0, panelRebuilds = _panel.Rebuilds;
+        int firstMarkers = _views.ShownMarkers, markerFrames = 0, zoneFrames = 0, panelRebuilds = _panel.Rebuilds;
         long bytes = 0;
         for (int f = 0; f < 300; f++)
         {
@@ -790,14 +1028,37 @@ public partial class AbilityViewTest : Node
             if (_views.ShownBars > 0) barFrames++;
             if (_views.ShownCircles > 0) ringFrames++;
             if (_views.ShownMarkers > 0) markerFrames++;
+            if (_views.ShownZones == 8) zoneFrames++;
         }
-        GD.Print($"steady (seed {seed}, {U.Count} units, {mages} mages selected, {casts} casts, {statused} statuses, {firstMarkers} markers at the start): 300 frames, armed {armedFrames}, bars {barFrames}, cast rings {ringFrames}, markers {markerFrames}, panel rewrites {_panel.Rebuilds - panelRebuilds}, panel '{_panel.OverflowLabel.Text}': {bytes} bytes");
+        GD.Print($"steady (seed {seed}, {U.Count} units, {mages} mages selected, {casts} casts, {statused} statuses, {firstMarkers} markers at the start, {W.Zones.Count} zones ({W.Zones.BlockerCount} blocking), discs in {zoneFrames} frames): 300 frames, armed {armedFrames}, bars {barFrames}, cast rings {ringFrames}, markers {markerFrames}, panel rewrites {_panel.Rebuilds - panelRebuilds}, panel '{_panel.OverflowLabel.Text}': {bytes} bytes");
         Check(mages >= 2 && casts >= 4, $"steady: {mages} mages, {casts} casts");
         Check(armedFrames > 200 && ringFrames > 0 && barFrames > 0, $"steady: rings armed in {armedFrames} frames, cast rings in {ringFrames} (the 0 bytes must cover them)");
         Check(statused == 100 && firstMarkers >= 100 && markerFrames == 300, $"steady: {statused} statuses staged, {firstMarkers} markers drawn, markers in {markerFrames} frames");
+        Check(zoneFrames == 300, $"steady: 8 zone discs drawn in {zoneFrames} of 300 frames ({W.Zones.Count} live, {W.Zones.BlockerCount} blocking)");
         Check(bytes == 0, $"steady: 300 frames at --units 500 allocated {bytes} bytes");
         MinimapRightClicks();
         await EndMatch();
+    }
+
+    // Test staging after the twin (M4-V6c): 8 zones over the two armies, alternating owners, two of them Sandstorms (blocking)
+    // and six a Sandstorm copy that does not block (no shipped zone ability is non-blocking), made through the sim's own
+    // ZoneSystem.Create; each lasts 240 ticks, past the 100 ticks the measured frames run.
+    private void StageZones()
+    {
+        MethodInfo create = typeof(Rts.Sim.Abilities.ZoneSystem).GetMethod("Create", BindingFlags.NonPublic | BindingFlags.Static)!;
+        AbilityDef storm = _data.Abilities[_sandstorm];
+        var dust = (AbilityDef)typeof(object).GetMethod("MemberwiseClone", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(storm, null)!;
+        typeof(AbilityDef).GetProperty(nameof(AbilityDef.Effects))!.SetValue(dust,
+            storm.Effects.SetItem(storm.ZoneEffect, storm.Effects[storm.ZoneEffect] with { BlocksVision = false }));
+        System.Numerics.Vector2 west = Centroid(0), east = Centroid(1), mid = (west + east) / 2f;
+        for (int k = 0; k < 8; k++)
+        {
+            // Own zones anywhere; the enemy's on player 0's army, where it sees them.
+            System.Numerics.Vector2 at = (k & 1) == 0 ? mid + new System.Numerics.Vector2(0f, 14f * (k - 3)) : west + new System.Numerics.Vector2(8f * (k - 4), 6f);
+            create.Invoke(null, new object[] { W, k & 1, k < 2 ? storm : dust, at });
+        }
+        for (int t = 0; t < 8; t++) _sim.Tick(); // a fog update or two with the zones in place
+        Check(W.Zones.Count == 8 && W.Zones.BlockerCount == 2, $"steady: staged {W.Zones.Count} zones, {W.Zones.BlockerCount} blocking");
     }
 
     // BUG-0340: a right-click on the minimap (a Move for the 72 selected mages) allocates nothing once warm.

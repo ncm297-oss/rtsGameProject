@@ -83,7 +83,9 @@ phases in this fixed order:
    before phase 7, so a worker that arrived last tick is taken up again before queued orders are
    looked at; see "Implementation (M3-2)". M3-3: then `ConstructionSystem.Run`, builders and
    repairers; see "Implementation (M3-3)".)
-5. **Status effects and zones:** expire, tick DoTs and regen, apply zone effects. (M4-4a: `StatusSystem.Run`: every unit
+5. **Status effects and zones:** expire, tick DoTs and regen, apply zone effects. (M4-4b-3a: first `PassiveSystem.Run`:
+   every live unit whose type has a `whenBelowHp` passive and is below its line takes the passive's status; skipped when no
+   live unit has such a type; see "Implementation (M4-4b-3a)". M4-4a: `StatusSystem.Run`: every unit
    with statuses, in slot order, counts each down, lands damage-over-time pulses and ends the expired ones; a slow that ends
    restores the unit's speed. See "Implementation (M4-4a)". M4-4b-2: then `ZoneSystem.Run`: every live zone, in slot order,
    counts down (freed when its time is up) or applies its statuses to the units inside; see "Implementation (M4-4b-2)".)
@@ -2268,8 +2270,8 @@ three gates below.
 
 - `AbilityDef` (data) → `AbilitySystem` executes cast timers and resolves `effects[]`.
 - `StatusSystem` stores active statuses per unit in a small fixed array (max 8) with
-  `(statusId, magnitude, ticksRemaining, pulseTicks, sourcePlayer)`. Derived stats (speed, attack speed,
-  sight) are recomputed when the status set changes, not every tick.
+  `(statusId, magnitude, ticksRemaining, pulseTicks, sourcePlayer)`. Derived stats (speed, sight) are recomputed when the
+  status set changes, not every tick; attack speed (Frenzied, M4-4b-3a) is read when a swing starts.
 - `ZoneSystem` keeps active zones; each tick it applies their statuses to units inside (via the
   spatial hash) and marks their cells in a per-player "vision blocker" mask used by the vision
   pass.
@@ -2504,6 +2506,111 @@ effect and a `blind` status compared field by field; `PendingAbilities` is empty
 blocking zone hides the units in it, and `Fog.CanSeeUnit` already says so); `Fog.Visibility` holds the hidden cells as
 explored.
 
+### Implementation (M4-4b-3a)
+
+The status and passive half of M4 criterion 6 and the Zealot's passives of criterion 8, from data: the Frenzied status,
+a small fixed set of unit passives (`whenBelowHp`, `onDeath`) as data hooks, and the *self / aura* ability kind. Code:
+`sim/Rts.Sim/Abilities/PassiveSystem.cs`, `StatusSystem.AttackCooldown`, the `selfAura` branches of `AbilitySystem`, the
+death hook in `CombatSystem.HitUnit`, `UnitStore.BelowHpUnits`; data in `Data/DataLoader.Passives.cs`, `UnitPassive`,
+`PassiveTrigger`. Summons (`spawn`, temporary units), `targetUnit` and `autocast` are slice b (M4-4b-3b).
+
+- **Frenzied** (`statuses.json` kind `frenzied`, `StatusKind.Frenzied` = 3, appended: the other kinds keep their values).
+  Its applied magnitude is the attack-speed increase as a fraction (0.5 = +50 %), any value above 0. When a unit starts a
+  swing (phase 10) its cooldown is `max(1, round(cooldown / (1 + m)))` ticks, rounded half away from zero in single
+  precision, for the largest magnitude `m` among its frenzied entries (docs/02 stacking rule: entries of two frenzied
+  statuses don't add; the same status again keeps the stronger magnitude): a 20-tick (1.0 s) cooldown at +50 % is 13 ticks,
+  at +20 % 17. The wind-up is unchanged (Producer default: "attack speed" is the swing rate). It is read at the swing, so a
+  cooldown already running is not shortened and the first swing after the status ends is back to the full cooldown; never
+  stored (derived from the hashed statuses and the data). Towers have no statuses. The "damage up" half of docs/02's
+  "attack speed and/or damage up" is **not** in this slice: no shipped status uses it before M7's Blood-oil Frenzy, which
+  will add it as a field or a kind. Status ids follow the ordinal order of the string ids, so `frenzied` took dense id 2 and
+  `slowed` moved from 2 to 3; nothing keys on the dense ids (code and the view look statuses up by key or by kind).
+- **Passives** (`units.json` `passives`, `UnitDef.Passives` in file order with `BelowHpPassive` / `DeathPassive`, the index
+  of each trigger's or -1): at most `DataLimits.MaxUnitPassives` (2), one per trigger. Data, not state: the content hash
+  covers every field; nothing about them is hashed per unit.
+- **`whenBelowHp`** (Frenzy of the Apocalypse). Phase 5 starts with `PassiveSystem.Run`, before the statuses count down:
+  every live unit whose type has the passive, in slot order, whose hit points are below the line takes the passive's
+  status with its magnitude for `PassiveSystem.HeldTicks` (2) by the stacking rule, its owner as the source; the countdown
+  leaves 1, so it is in force until the next phase 5 looks again. **The boundary rule:** below means `hp < hpFraction x
+  maxHp` in single precision, `maxHp` the type's `hp` plus the owner's `hp` tech bonus for the type (whole points); exactly
+  at the line is not below. Zealot (63 hp, 0.5): 31 is Frenzied (31 < 31.5), 32 is not; with Dryjhna's Prophecy (+20, 83):
+  41 is (41 < 41.5), 42 is not. A unit taken below the line in phase 11 is Frenzied from the next tick's phase 5 (its next
+  swing after that is the short one); one back above it (nothing heals yet) loses it in the next phase 5. Because a refresh
+  never shortens an entry, a longer one (Martyrdom's 100 ticks) runs its course and the passive then keeps the entry going.
+  A damage-over-time status held this way pulses on its own clock (the entry is refreshed, not remade).
+- **`onDeath`** (Martyrdom). In the death path, whatever phase the death is in (damage over time in phase 5, an ability in
+  6, hits, splash and projectiles in 11): when a unit whose type has the passive dies (`CombatSystem.HitUnit`, after its
+  death event, before its slot is freed), every **other live** unit of **its owner** whose type is in `units` and whose
+  center is within `radius` of the dying unit's position (the edge counts, as for zones: `<=` on squared distance) takes the
+  status for `duration` by the stacking rule, the owner as source. The spatial hash (phase 1 positions) is queried at the
+  radius plus the fastest unit's step plus 0.5 m into `World.ShoveNeighbors` (movement's second scratch, free outside phases
+  8-9; the ability resolve and splash hold `Neighbors` while their hits kill), then the exact test runs on current
+  positions; a unit trained in this tick's phase 3 is not in the hash yet and is missed (as for an ability resolve).
+  **Order:** deaths resolve in death order. A unit that dies later in the same tick is still live when an earlier death
+  resolves and takes the status (its slot loses it when it dies); a unit freed earlier is not live. A phase-5 death lands
+  inside the countdown pass: a unit in a later slot counts the new entry down that same tick (99 left), one in an earlier
+  slot does not (100). Martyrdom from a phase-11 death (100 ticks) is in force through the next 99 ticks' phase 10 and ends
+  in the 100th's phase 5. Shipped: Zealots within 6 m, Frenzied +50 % for 5 s (the 0.5 is a Producer default: the faction
+  page gives none).
+- **`selfAura`** (`AbilityKind.SelfAura` = 1; `DataLimits.PlannedAbilityKindIds` no longer lists it). No target and no
+  range: a `range` on it is a load error, 0 included (`AbilityDef.Range` is 0). `UseAbility`'s point must still be a point
+  on the map (the rule every positional order goes through) and is otherwise ignored: the caster never walks and starts
+  casting at once (phase 1, or when a queued one is popped in phase 7) exactly as an in-range target-ground cast:
+  `UnitState.Casting`, the cast timer, cancelled by any order with no cooldown. `Units.CastPoint` holds where the caster
+  stood when it started. At the resolve every effect (`damage`, `applyStatus`, `createZone`) lands within `radius` of the
+  **caster's position at the resolve** (`own_units` takes the caster too; a zone is made there), the resolve's
+  `AbilityEvent.Point` is that position, and the cooldown starts then. No shipped ability uses the kind yet (a shipped one
+  needs a faction-page row for the data track's pins); the tests use two test-only abilities (`SelfAuraTests.AddTo`).
+- **State hash.** No new hashed field. A Frenzied entry is a status entry (id, magnitude, ticks, pulse clock, source), the
+  shortened cooldown is the hashed `CooldownTicks`; the per-slot passive flag (`UnitStore._belowHp`) and the live count
+  (`BelowHpUnits`) follow from the unit's type and are derived; the frenzy factor is read at the swing. `GameData.ContentHash`
+  adds each unit's passives (trigger, fraction, status, magnitude, duration, radius, units) and the two indices: the golden
+  replay's `data-hash` moved once (EA5CB5A0AFCEEDBE to D22C849A175F9ED5), every `k` line equal (no Zealot in it), and
+  `GatherWedgeQaTests.SameGameDataHashes` lists the new hash (no Zealot in the seed-21 match).
+- **Cost.** A live unit whose type has a `whenBelowHp` passive is flagged at its spawn (`UnitStore.TrySpawn`, which every
+  spawn path uses) and counted in `UnitStore.BelowHpUnits`; `Free` takes it back. The phase-5 pass returns at once when the
+  count is 0 (a world with no such unit pays a counter test: 10,000 passes over 2,500 slots take about 0.04 ms) and
+  otherwise reads one flag per slot. `onDeath` costs one field read per unit death (`UnitDef.DeathPassive`) and a spatial
+  query only for a type that has it. Frenzied costs one read of the unit's status count per swing start (the entry scan
+  only for a unit with statuses). No allocation (`PassivePerfTests`). Measured (Debug, 2026-10-10, medians of three runs alternating with the base
+  fa33196): `EmptyTick(2500)` 478 µs here, 482 µs on the base (budget 500); `TightBlob2500` 4.51 / 4.53 ms (budget 4.6);
+  the 500-unit brawl with 100 Zealots (`PassivePerfTests.ZealotBrawl500_*`) 1.78 ms a tick over ticks 5-205 (the brawl
+  rows' budget, 4 ms), 0 B a tick with Frenzied swings and Martyrdom deaths.
+- **Memory.** One bool per unit slot (4,096 + a 24-byte header on the 1,024-cell world with 4,096 slots) and 24 bytes of the
+  fog's per-status tables for one more status: 231,847,256 bytes (+4,144). The bound
+  (`QA/FieldBuildFairnessQaTests.World_1024Map_CacheStays32_MemoryBounded`) is re-baselined to 231,920,000 (the same 72 KB
+  margin) with every step since M4-4a fix round 1 itemised in its comment (BUG-0302 b): M4-4b-2's +18,536 (the per-slot
+  blind in force 16,408, the 64-slot zone store 1,832, the zone store object and the fog's blind tables 296) and M4-H2's
+  +35,016.
+- **Known limits.** (1) One entry per status id: a stronger Frenzied merged into an entry the `whenBelowHp` passive holds
+  stays at that strength while the passive holds it (the shipped magnitudes are equal, 0.5). (2) The `hp` tech raises the
+  passive's line but not yet the unit's hit points (combat does not apply hp techs, see "Implementation (M3-5)"). (3)
+  `whenBelowHp` acts from the phase 5 after the hit, not on the hit.
+- **Tests.** `Data/PassiveLoaderTests`, `Data/StatusLoaderTests` (Frenzied), `Data/AbilityLoaderTests` (`selfAura`, the
+  frenzied magnitude), `Abilities/FrenziedTests`, `Abilities/PassiveTests`, `Abilities/SelfAuraTests`,
+  `Abilities/PassivePerfTests`, `StateHashTests.Hash_ThePassiveFlagAndCount_*` and `Hash_AZealotSkirmish_*`,
+  `DataContentHashTests.EveryPassiveField_*`, `Stress/PassiveFuzzStressTests` (3 seeds x 2,000 ticks, 3 armies with
+  Zealots, twins and a replay round trip), `Stress/AbilityInvariantFuzzStressTests` (two seeds with a selfAura caster).
+
+**For the data track (M4-4b-3a).** A status of `"kind": "frenzied"` takes no `damageType`, `sight` or `reach` (errors at
+their paths); where it is applied its `magnitude` is required and above 0 (the attack-speed increase: 0.5 = +50 %). A unit
+takes `"passives": [ ... ]`, at most 2, one per trigger:
+`{ "trigger": "whenBelowHp", "hpFraction": <above 0, below 1>, "status": <statuses.json id>, "magnitude": <as applyStatus> }`
+(`duration`, `radius`, `units` are errors on it) and
+`{ "trigger": "onDeath", "status": <id>, "magnitude": <as applyStatus>, "duration": <s, at least a tick; whole seconds for
+damage over time>, "radius": <m, above 0, at most 64>, "units": [<own-faction unit ids, at least one, no repeats>] }`
+(`hpFraction` is an error on it). Magnitude by the status kind: whole and at least 1 for damage over time, above 0 and
+below 1 for a slow, none for a blind, above 0 for frenzied. Errors name `units[k].passives[j].<field>`. An ability's
+`"kind": "selfAura"` takes no `range`. Shipped: `common/statuses.json` `frenzied` ("Frenzied", a numberless description to
+pin and reword in D11); the Zealot's `whenBelowHp` 0.5 / `frenzied` 0.5 and `onDeath` `frenzied` 0.5 / 5 s / 6 m /
+`["whirlwind_zealot"]`. No `abilities.json` entry uses `selfAura` yet.
+
+**For the view (M4-V6d).** `StatusKind.Frenzied` is a new arm for the status markers (until it has a colour it falls to the
+default arm). `AbilityDef.Kind == AbilityKind.SelfAura` means the card needs no target click: the button casts, sending any
+on-map point (the caster's position is the natural one; the sim ignores it); `Range` is 0 and the radius is drawn around
+the caster; for such a cast `Units.CastPoint` and both `AbilityEvent.Point`s are the caster's position (at the start and at
+the resolve). A unit's passives are `Data.Units[type].Passives` (the player-facing text stays the unit's description).
+
 ## Vision, detection, fog
 
 Fog of war and the high-ground rule are in since M4-3a (`sim/Rts.Sim/Vision/`); the last-known building ghosts, buildings
@@ -2634,7 +2741,7 @@ game/data/
     resources.json           # resource node types: tree, gold mine (M3-1)
     techs.json               # techs every faction shares: Age II, Forge upgrades (M3-5)
     projectiles.json         # projectile types: aimed / lob, speed, hit tolerance, lead speed (M4-2b)
-    statuses.json            # status types: damage over time, slow (M4-4a)
+    statuses.json            # status types: damage over time, slow (M4-4a), blind (M4-4b-2), frenzied (M4-4b-3a)
   factions/<faction_id>/
     faction.json             # id, displayName, bonus, palette, resource display names
     units.json
@@ -2704,9 +2811,9 @@ the milestone that consumes it.
 | `buildings.json` | `{ "buildings": [ ... ] }`, each `{id, displayName, description, slot, footprint {width, height}, hp, armor, cost {gold, wood}, buildTime, popProvided, dropOff}`: `slot` is one of the ten template slots (`DataLimits.BuildingSlotIds`), footprint sides 1-4 cells, `buildTime` in seconds (to ticks), `popProvided` a multiple of 0.5 (to half-pop), `dropOff` a required bool, `requires` an optional list of tech / building ids (M3-5; resolved and gating placement since M3-6), `sight` optional meters (M4-3a: above 0 and at most 64, default `rules.json` `buildingSight`; shipped 24 on both watch towers, docs/02), `attack` optional (M4-3b: the unit `attack` object; value at least 1, range above 0, an aimed `projectile` required, `targets` not `buildings`; shipped on both watch towers), `detector` optional meters (M4-3b: above 0 and at most 64; shipped 16 on both watch towers; unused until M4-5). Ids unique across factions (M3-2, see "Economy implementation"); exactly one building per slot per faction (M3-6, BUG-0010) |
 | `techs.json` | `{ "techs": [ ... ] }` in `common/` (shared by every faction) and in each faction folder (its own), each `{id, displayName, description, researchedAt, cost {gold, wood}, researchTime, requires?, requiresAnyOf?, effects: [{stat, amount, appliesTo {attackType?, tags?, units?, siege?}}]}`: `researchedAt` is a building slot id (a common tech resolves to each faction's building of it; a faction without one is an error), `researchTime` in seconds (to ticks), `requires` tech / building ids (resolved and gating research since M3-6), `requiresAnyOf` `{count, of: [slot ids, or in a faction file its own building ids]}`: met when `count` of the distinct listed slots hold an own finished building (M3-6; shipped on `age_ii` only), `effects` may be empty. `stat` is one of `attack`, `armor`, `range`, `hp`, `abilityCooldown` (`DataLimits.TechStatIds`); `amount` is non-zero, whole for attack / armor / hp, meters for range, seconds for ability cooldown (to ticks, negative shortens it). `appliesTo` is required (`{}` = every unit); each filter it sets must match: `attackType` a damage type, `tags` any one of the unit's tags (each must be a tag some unit has), `units` unit ids (a faction tech's must be its own), `siege` true / false for the `siege` slot; a `tags` or `units` list set to `[]` is an error (M3-6, BUG-0098). Tech ids are unique across all techs files and may not equal a building id (M3-6); `DataLimits.AgeTechIds` (`age_ii`) must be a common tech (M3-5, see "Implementation (M3-5)") |
 | `projectiles.json` | `{ "projectiles": [ ... ] }`, each `{id, kind, speed, hitTolerance?, leadSpeed?}`: `kind` `aimed` or `lob`, `speed` m/s (at least 1), `hitTolerance` m (aimed only, 0-2, default 0.3; an error on a lob), `leadSpeed` m/s (aimed only, not negative, default 0 = never leads; an error on a lob). Ids unique; every unit's `attack.projectile` must name one (M4-2b, see "Implementation (M4-2b)") |
-| `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge). `abilities` (M4-4a, optional): ability ids of the unit's own faction, at most 4 (`DataLimits.MaxUnitAbilities`), no repeats; resolved to `UnitDef.Abilities`; shipped on the Cadre Mage (`telas_fire`), the Sapper (`cusser`) and the Priest of the Whirlwind (`sandstorm`) |
-| `statuses.json` | `{ "statuses": [ ... ] }` (M4-4a), each `{id, displayName, description, kind, damageType?, sight?, reach?}`: `kind` `damageOverTime`, `slow` or (M4-4b-2) `blind` (`DataLimits.StatusKindIds`); `damageType` (a damage table type) required on `damageOverTime`, an error on any other kind; `sight` and `reach` (m, above 0, at most 64) required on `blind`, errors on any other kind. The magnitude and duration come from the effect applying it (a blind takes no magnitude). Ids unique; shipped `burning` (magic damage over time), `slowed` and `blinded` (2 / 3, M4-4b-2) |
-| `abilities.json` | `{ "abilities": [ ... ] }` (M4-4a, per faction, optional), each `{id, displayName, description, kind, range, radius, castTime, cooldown, duration?, affects, autocast?, effects}`: `kind` `targetGround` (`targetUnit`, `selfAura`, `summon`: "not supported yet"); `range` m above 0 and at most `DataLimits.MaxSight` (64); `radius` m above 0 and at most `DataLimits.MaxAbilityRadius` (16); `castTime` s, 0 or more, to ticks; `cooldown` s above 0, to ticks (at least 1); `duration` s, optional (0), to ticks (required with a `createZone` effect, M4-4b-2); `affects` `enemy_units`, `own_units` or `all_units`; `autocast` only `false` ("not supported yet"); `effects` at least one, each `{kind: damage, type, amount, buildings?, friendlyFire?}` (a whole amount, at least 1; M4-4b-1: `buildings` true also hits other players' buildings as structure, not with `own_units`; `friendlyFire` 0-1, the fraction own units take, above 0 only with `enemy_units`) or `{kind: applyStatus, status, magnitude, duration}` (a `statuses.json` id; magnitude whole and at least 1 for damage over time, above 0 and below 1 for a slow; duration s, at least a tick, and for damage over time a whole number of seconds, at least 1, M4-4b-1); M4-4b-2: `{kind: createZone, blocksVision?, statuses: [{status, magnitude, duration}]}` (at least one status, each by the `applyStatus` rules, a blind status without a magnitude; the ability's `duration`, at least a tick, is then required: the zone's lifetime; at most one per ability); `teleport`, `spawn`: "not supported yet"; a field the effect kind doesn't use is an error. Ids unique across factions. Shipped: Malazan `telas_fire`, `cusser` (M4-4b-1); Whirlwind `sandstorm` (M4-4b-2) |
+| `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge). `abilities` (M4-4a, optional): ability ids of the unit's own faction, at most 4 (`DataLimits.MaxUnitAbilities`), no repeats; resolved to `UnitDef.Abilities`; shipped on the Cadre Mage (`telas_fire`), the Sapper (`cusser`) and the Priest of the Whirlwind (`sandstorm`). `passives` (M4-4b-3a, optional): at most 2 (`DataLimits.MaxUnitPassives`), one per `trigger` (`DataLimits.PassiveTriggerIds`): `{trigger: whenBelowHp, hpFraction, status, magnitude}` or `{trigger: onDeath, status, magnitude, duration, radius, units}` (see "Implementation (M4-4b-3a)"); resolved to `UnitDef.Passives`; shipped on the Zealot only |
+| `statuses.json` | `{ "statuses": [ ... ] }` (M4-4a), each `{id, displayName, description, kind, damageType?, sight?, reach?}`: `kind` `damageOverTime`, `slow`, (M4-4b-2) `blind` or (M4-4b-3a) `frenzied` (`DataLimits.StatusKindIds`); `damageType` (a damage table type) required on `damageOverTime`, an error on any other kind; `sight` and `reach` (m, above 0, at most 64) required on `blind`, errors on any other kind. The magnitude and duration come from the effect applying it (a blind takes no magnitude). Ids unique; shipped `burning` (magic damage over time), `slowed`, `blinded` (2 / 3, M4-4b-2) and `frenzied` (M4-4b-3a; its magnitude, the attack-speed increase, any fraction above 0, is the applying effect's or passive's) |
+| `abilities.json` | `{ "abilities": [ ... ] }` (M4-4a, per faction, optional), each `{id, displayName, description, kind, range, radius, castTime, cooldown, duration?, affects, autocast?, effects}`: `kind` `targetGround` or (M4-4b-3a) `selfAura` (`targetUnit`, `summon`: "not supported yet"); `range` m above 0 and at most `DataLimits.MaxSight` (64), required on `targetGround` and an error on `selfAura` (0 included); `radius` m above 0 and at most `DataLimits.MaxAbilityRadius` (16); `castTime` s, 0 or more, to ticks; `cooldown` s above 0, to ticks (at least 1); `duration` s, optional (0), to ticks (required with a `createZone` effect, M4-4b-2); `affects` `enemy_units`, `own_units` or `all_units`; `autocast` only `false` ("not supported yet"); `effects` at least one, each `{kind: damage, type, amount, buildings?, friendlyFire?}` (a whole amount, at least 1; M4-4b-1: `buildings` true also hits other players' buildings as structure, not with `own_units`; `friendlyFire` 0-1, the fraction own units take, above 0 only with `enemy_units`) or `{kind: applyStatus, status, magnitude, duration}` (a `statuses.json` id; magnitude whole and at least 1 for damage over time, above 0 and below 1 for a slow; duration s, at least a tick, and for damage over time a whole number of seconds, at least 1, M4-4b-1); M4-4b-2: `{kind: createZone, blocksVision?, statuses: [{status, magnitude, duration}]}` (at least one status, each by the `applyStatus` rules, a blind status without a magnitude; the ability's `duration`, at least a tick, is then required: the zone's lifetime; at most one per ability); `teleport`, `spawn`: "not supported yet"; a field the effect kind doesn't use is an error. Ids unique across factions. Shipped: Malazan `telas_fire`, `cusser` (M4-4b-1); Whirlwind `sandstorm` (M4-4b-2) |
 
 Validation rules: ids are `snake_case` and unique (a unit id is unique across all factions);
 `slot` is one of the seven template slots; `armorClass`, `attack.type`, and `bonusVs` keys exist in
@@ -4412,7 +4519,8 @@ game/scripts/AbilityViews.cs           draws both, and the cast bar's new look
   Windowed `-- --shots <dir>` adds `ability-seedN-first-tick.png`, `-flash.png`, `-burning.png`, `-cusser.png` and
   `-statuses.png` (looked at, seeds 1 and 6).
 - **Not yet (M4-V6c and later):** zone discs and the Sandstorm, the Blinded marker (it draws pale through the generic
-  path until then), stealth visuals, autocast toggles, a status name tooltip, enemy cast-point rings.
+  path until then), stealth visuals, autocast toggles, a status name tooltip, enemy cast-point rings. (Zone discs and the
+  Blinded marker landed in M4-V6c, see "Implementation (M4-V6c)".)
 
 ### Implementation (M4-VH2)
 
@@ -4479,6 +4587,59 @@ game/tests/SceneExit.cs                the test scenes' shutdown path
   `FogViewTest` adds a last-seen tree row (felled in explored fog: still listed and on the minimap with no relist; seen
   again: gone in one relist) and refreshes the dots before its minimap clicks; `PropsViewTest` runs with bases (steady
   frames relist nothing).
+
+### Implementation (M4-V6c)
+
+The storm on screen: a disc on the ground per zone the local player may see, and the Blinded marker's own colour, so a
+Sandstorm's victims read as Blinded + Slowed. No sim change outside `ViewApi`.
+
+```
+sim/Rts.Sim/ViewApi/ZoneDiscs.cs   which zones to draw for a player (pure, allocation-free); ZoneDisc.cs its record
+game/scripts/AbilityViews.cs       draws them, and the Blinded marker colour
+game/shaders/zone_disc.gdshader    the disc: a translucent fill and a more opaque rim band, per instance
+```
+
+- **The rule** (`ZoneDiscs.Collect(zones, fog, player, fogOn, discs)`; the stores, not `World`, as every ViewApi read):
+  one `ZoneDisc(slot, center, radius, alpha, own)` per live zone, slots ascending, at most the output's length
+  (`ZoneStore.Capacity` holds every case). A zone of the player's own is always drawn. Another player's zone is drawn only
+  when a fog cell whose centre is within the zone's radius plus `RimWidth` (2 m) is visible (`Fog.Visibility == 2`) at the
+  last fog update: a cell inside is visible only to an own unit standing in the storm (the fog holds the hidden cells as
+  explored, "Implementation (M4-4b-2)"), and a visible cell of the rim ring (radius < d <= radius + 2 m) means the
+  player's sight reaches the storm's edge from outside. Explored-only ground draws nothing (docs/02: explored fog shows
+  remembered terrain, not live effects); `--no-fog` draws every live zone. The rule reads only the zones' `Alive`,
+  `Owner`, `Center`, `Radius` and `TicksRemaining` and the player's visibility bytes, so it can never show a storm the
+  fog hides. A seen disc is drawn whole (also over unexplored ground beyond the seen rim): the storm is one thing.
+- **Cost.** Per enemy zone a scan of the cells in its radius + 2 m box, stopping at the first visible one (a Sandstorm:
+  at most 10 x 10 cells); own zones cost a copy. With no zone nothing runs but the slot loop's early stop on `Count`.
+- **The fade.** `alpha` is `DiscAlpha` (0.35) while the zone has more than `FadeTicks` (20, one second) left, then
+  `0.35 x (ticks left - 1) / 20`: one step a tick, 0 on its last tick (`TicksRemaining` 1). A Sandstorm's disc is drawn
+  from its resolve for its 240 ticks and gone on the 241st (the tick that frees it). Per tick, not interpolated: 20 steps
+  over one second.
+- **Drawing** (`AbilityViews`). One `MultiMesh` of `ZoneStore.Capacity` instances (a 2 x 2 plane scaled by the radius,
+  colour + custom data), written densely each frame, so a disc goes the frame its zone frees or the rule stops showing it.
+  Each disc sits `ZoneLift` 0.1 m over the terrain at its centre (`TerrainHeight.At`, the resolve flash's rule: on a slope
+  it may dip into the ground). Fill `ZoneFillColor` (a dusty ochre) at the disc's alpha; a rim band `ZoneRimWidth` 0.35 m
+  wide, 2.2 x as opaque, in `OwnZoneRimColor` (deeper sand) for an own zone and in the owner's player colour (the faction
+  colour, `playerRgb` from `Match`) for another player's. Taste defaults until the M6 art pass.
+- **Blinded marker.** `AbilityViews.BlindColor` (0.5, 0.06, 0.62), a dark violet, in the `StatusKind` switch beside
+  Burning's flame and Slowed's deep blue; any other kind stays `OtherStatusColor`. Looked at in the windowed shots at
+  zoom 30 on sand and on grass, three markers side by side on a Raider (`ability-seedN-blinded.png`).
+- **Tests.** xUnit `ViewApi/ZoneDiscsTests`: a real Sandstorm (a Priest's cast): one own disc with the def's radius for
+  exactly 240 ticks, alpha 0.35 then strictly falling over the last 20, none on the 241st; an enemy storm with the
+  player's sight 10 m short of its rim (unexplored) none, walked to see a rim cell one, stepped inside (Blinded, no rim
+  cell seen) one; on explored-only ground none for 40 ticks; the rim ring by cell centre; three storms slots ascending, a
+  full store fits a `Capacity` output; 64 zones x 2 players, fog on and off, 0 bytes; the hash twin (collecting every
+  tick for both players, fog on and off, over 2 seeds x 1,200 ticks with storms cast on both sides, changes no state hash).
+  Headless `AbilityViewTest` adds per seed: an own Priest's Sandstorm on two fresh Raiders (the disc drawn exactly the 240
+  ticks, at the centre's terrain height + 0.1 m, the rule's alpha, sand rim; the Raiders' Blinded marker beside Slowed in
+  `BlindColor`; a mage's Telas Fire adds Burning, three distinct colours); an enemy Priest's storm under the fog, live
+  but not drawn until an own Lancer walking up sees its rim, then drawn exactly while `ZoneDiscs.SeesStorm` holds, in the
+  owner's colour; the steady match (`--units 500`) with 8 zones staged after the twin (two Sandstorms, six of a
+  non-blocking copy), all drawn in every frame, 0 bytes. Windowed `-- --shots <dir>` adds `ability-seedN-storm.png`,
+  `-blinded.png` and `-storm-enemy.png` (looked at, seeds 1 and 6).
+- **Not yet:** the Frenzied marker (one `StatusKind` arm once the sim's `Frenzied` kind lands; pale until then), stealth
+  visuals (M4-5), zone dots on the minimap, a zone or status tooltip, a fog-darkened look for an enemy storm seen over
+  unexplored ground (M6 fog-look pass).
 
 ## AI architecture
 

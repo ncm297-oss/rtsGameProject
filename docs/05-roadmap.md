@@ -516,6 +516,22 @@ ten-minute playtest (STATE "For your review", M3-V3 entry) stands as feedback, n
       shortcut; a new storm hides at once), ~~BUG-0370~~ (a queued cast and a cast sent this tick count as busy: two Shift
       clicks on two walking mages queue one each), ~~BUG-0371~~ (Slowed marker deep blue; a flash decided on its first frame)
       fixed. Open: BUG-0391 / 0400 (S4 nits).)_
+      _(Slice 3a **accepted in session 2026-10-10-1015, sim M4-4b-3a** (0 fix rounds): the `frenzied` status kind
+      (`StatusKind.Frenzied` = 3, appended; its magnitude is the attack-speed increase: the attack cooldown becomes
+      `max(1, round(cooldown / (1 + m)))` at the swing, 20 ticks → 13 at +50 %, the wind-up unchanged, the largest magnitude
+      counts; the "damage up" half deferred to M7), unit passives from data (`units.json` `passives`, at most 2, one per
+      trigger: `whenBelowHp` re-applies a status each phase 5 while `hp < fraction x maxHp`; `onDeath` gives a status to own
+      units of listed types within a radius in the death path, death order; `PassiveSystem`, 0 B, no work for units without
+      one), the `selfAura` ability kind (no target, no `range`; effects land around the caster's position at the resolve;
+      test-only abilities for now), the Zealot's Frenzy of the Apocalypse + Martyrdom shipped; golden `data-hash`
+      D22C849A175F9ED5 (every `k` line equal). QA full: `PassiveQaTests` (a Martyrdom brute-force oracle over 3 seeds x 900
+      ticks of real combat, 20 same-tick deaths), `PassiveLoaderQaTests`, `PassiveScaleQaTests`; `EmptyTick(2500)` paired
+      481.0 / 483.5 µs. **View half (M4-V6c, same session):** a disc per live zone the player may see (`ViewApi.ZoneDiscs`:
+      own always, an enemy's where a visible cell lies within its radius + 2 m; fading over the last second; oracle-equal over
+      6 seeds x 900 ticks, hash-neutral, 0 B at 64 zones), the Blinded marker dark violet. **Still owed:** summons `spawn`,
+      `targetUnit`, `autocast` (M4-4b-3b); the Frenzied marker + the `selfAura` card (M4-V6d). Open: BUG-0420 (S3, the
+      exact-line float rounding for unshipped fractions), BUG-0421 (S3, hp techs never raise hit points: pre-existing),
+      BUG-0422 (S4), BUG-0430 (S3, view: a disc across a cliff is hidden or floats), BUG-0431 (S4, view: own vs Whirlwind rim).)_
 - [ ] Stealth and detection system (tested now, even though Shadow arrives in M8).
 - [ ] Telas Fire, Sapper Sharpers + Cusser, Sandstorm, Zealot passives all work.
       _(Telas Fire works since M4-4a (session 2026-10-09-0724): 16 m / 3 m / 0.8 s cast / 25 s cooldown, Burning 10 magic a
@@ -533,6 +549,12 @@ ten-minute playtest (STATE "For your review", M3-V3 entry) stands as feedback, n
       is pinned fully since D10b** (same session, BUG-0350 closed); **the Sandstorm row and Blinded are pinned since D10c**
       (session 2026-10-10-0624: `createZone` and `blind` compared field by field; `PendingAbilities` is empty). Left: the
       Zealot passives (M4-4b-3).)_
+      _(**The Zealot passives work since M4-4b-3a** (session 2026-10-10-1015): Frenzy of the Apocalypse (below 50 % hp the
+      Zealot is Frenzied +50 %: a 1.0 s swing every 0.65 s; 31 / 63 is Frenzied, 32 / 63 is not) and Martyrdom (a dying
+      Zealot gives Frenzied +50 % for 5 s to own Zealots within 6 m, the edge counts, never itself, never Raiders or enemy
+      Zealots). **Not ticked yet:** BUG-0421 (S3, pre-existing since M3-5): hp techs never raise a unit's hit points, so after
+      Dryjhna's Prophecy the Zealot frenzies at 41 / 63 (65 % of its real hp) instead of 41 / 83; the first item of M4-4b-3b,
+      and the tick comes with that fix. The data track pins the passives and the Frenzied text to the page in D11.)_
 - [x] Scenario tests for the counter triangle (Line beats Shock, Shock beats Ranged, Ranged beats
       Light, Siege beats buildings).
       _(Ticked in session 2026-10-08-0913, task M4-2b: `Scenario/CounterTriangleTests`, equal-cost groups attack-moved

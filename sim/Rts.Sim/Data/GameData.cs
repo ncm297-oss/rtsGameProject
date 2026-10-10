@@ -142,6 +142,22 @@ public sealed class GameData
             AddAll(ref h, u.RequiresBuildings);
             AddAll(ref h, u.Tags);
             AddAll(ref h, u.Abilities); // M4-4a
+            // M4-4b-3a: the passives, every field, and the per-trigger indices.
+            int passives = u.Passives.IsDefault ? 0 : u.Passives.Length;
+            h.Add(passives);
+            for (int k = 0; k < passives; k++)
+            {
+                UnitPassive ps = u.Passives[k];
+                h.Add((int)ps.Trigger);
+                h.Add(ps.HpFraction);
+                h.Add(ps.Status);
+                h.Add(ps.Magnitude);
+                h.Add(ps.DurationTicks);
+                h.Add(ps.Radius);
+                AddAll(ref h, ps.Units);
+            }
+            h.Add(u.BelowHpPassive);
+            h.Add(u.DeathPassive);
         }
 
         h.Add(Resources.Length);

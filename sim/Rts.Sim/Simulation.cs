@@ -104,6 +104,8 @@ public sealed class Simulation
 
         // Phase 5: statuses count down, damage over time lands, the expired end (M4-4a); then zones count down and apply
         // their statuses (M4-4b-2), after the countdown so a zone's status lasts its full duration after the unit leaves.
+        // M4-4b-3a: first the whenBelowHp passives (re-applied for 2 ticks before the countdown, so 1 is left after it).
+        PassiveSystem.Run(World);
         StatusSystem.Run(World);
         ZoneSystem.Run(World);
 

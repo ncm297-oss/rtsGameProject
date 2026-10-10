@@ -20,6 +20,12 @@
       "kind": "blind",
       "sight": 2,
       "reach": 3
+    },
+    {
+      "id": "frenzied",
+      "displayName": "Frenzied",
+      "description": "Attacks faster until it wears off. Only the strongest frenzy counts.",
+      "kind": "frenzied"
     }
   ]
 }

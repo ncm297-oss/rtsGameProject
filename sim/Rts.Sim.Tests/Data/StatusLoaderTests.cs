@@ -29,7 +29,7 @@ public class StatusLoaderTests
     public void Shipped_BurningIsMagicDamageOverTime_SlowedIsASlow()
     {
         GameData d = TestSim.Data;
-        Assert.Equal(3, d.Statuses.Length); // + blinded (M4-4b-2)
+        Assert.Equal(4, d.Statuses.Length); // + blinded (M4-4b-2), frenzied (M4-4b-3a)
         StatusDef burning = d.Statuses[d.FindStatus("burning")];
         Assert.Equal(StatusKind.DamageOverTime, burning.Kind);
         Assert.Equal(d.DamageTable.DamageTypeKeys.IndexOf("magic"), burning.DamageType);
@@ -88,6 +88,37 @@ public class StatusLoaderTests
         AssertErrorAt(LoadWith(r => Entry(r, "slowed")["sight"] = 2), StatusFile, "statuses[1].sight", "only a blind");
         AssertErrorAt(LoadWith(r => Entry(r, "burning")["reach"] = 3), StatusFile, "statuses[0].reach", "only a blind");
         AssertErrorAt(LoadWith(r => Entry(r, "blinded")["damageType"] = "magic"), StatusFile, "statuses[2].damageType", "only a damageOverTime");
+    }
+
+    /// <summary>
+    /// M4-4b-3a criterion 1: Frenzied is a frenzied status with no damage type, sight or reach, and text without a number (the
+    /// data track pins it); the kind is appended, so the existing kinds keep their values.
+    /// </summary>
+    [Fact]
+    public void Shipped_Frenzied_IsAFrenziedStatus_AndTheOldKindsKeepTheirValues()
+    {
+        GameData d = TestSim.Data;
+        StatusDef frenzied = d.Statuses[d.FindStatus("frenzied")];
+        Assert.Equal(StatusKind.Frenzied, frenzied.Kind);
+        Assert.Equal("Frenzied", frenzied.DisplayName);
+        Assert.False(string.IsNullOrWhiteSpace(frenzied.Description));
+        Assert.DoesNotContain(frenzied.Description, char.IsDigit);
+        Assert.Equal((-1, 0f, 0f), (frenzied.DamageType, frenzied.Sight, frenzied.Reach));
+        Assert.Equal((0, 1, 2, 3), ((int)StatusKind.DamageOverTime, (int)StatusKind.Slow, (int)StatusKind.Blind, (int)StatusKind.Frenzied));
+        Assert.Equal(new[] { "damageOverTime", "slow", "blind", "frenzied" }, DataLimits.StatusKindIds.ToArray());
+        // The entry is the file's last (appended after blinded).
+        JsonArray list = JsonNode.Parse(File.ReadAllText(Path.Combine(TestDataDir.Shipped, "common", "statuses.json")))!["statuses"]!.AsArray();
+        Assert.Equal("frenzied", (string)list[^1]!["id"]!);
+    }
+
+    /// <summary>M4-4b-3a criterion 1: a frenzied status refuses <c>sight</c>, <c>reach</c> and <c>damageType</c>, each at its path.</summary>
+    [Fact]
+    public void AFrenzied_RefusesSightReachAndDamageType()
+    {
+        AssertErrorAt(LoadWith(r => Entry(r, "frenzied")["sight"] = 2), StatusFile, "statuses[3].sight", "only a blind");
+        AssertErrorAt(LoadWith(r => Entry(r, "frenzied")["reach"] = 3), StatusFile, "statuses[3].reach", "only a blind");
+        AssertErrorAt(LoadWith(r => Entry(r, "frenzied")["damageType"] = "magic"), StatusFile, "statuses[3].damageType", "only a damageOverTime");
+        Assert.False(LoadWith(r => Entry(r, "frenzied")["magnitude"] = 0.5).Ok); // the magnitude is the applying effect's
     }
 
     [Fact]

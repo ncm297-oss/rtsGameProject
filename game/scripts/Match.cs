@@ -95,7 +95,7 @@ public partial class Match : Node3D
         var abilityViews = GetNode<AbilityViews>("World3D/AbilityViews");
         abilityViews.Fog = fog;
         abilityViews.Camera = camera;
-        abilityViews.Bind(data, sim.World.Units.Capacity, _runner, selection);
+        abilityViews.Bind(data, sim.World.Units.Capacity, _runner, selection, playerRgb: playerRgb, zoneCapacity: sim.World.Zones.Capacity);
 
         System.Numerics.Vector2[][] blocks = SpawnArmies(sim, options.UnitsPerPlayer, out System.Numerics.Vector2 focus);
         Bases = options.NoBases ? null : SpawnBases(sim, blocks, WorkersPerPlayer, out _);

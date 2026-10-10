@@ -107,7 +107,13 @@ public static partial class DataLoader
     private static AbilityDef BuildAbility(Checker c, AbilityJson a, string p, int id, int faction, DamageTable? table, StatusDef[]? statuses, string[]? statusKeys)
     {
         int kind = KindOf(c, a.Kind, p + ".kind", DataLimits.AbilityKindIds, DataLimits.PlannedAbilityKindIds);
-        double range = c.Pos(a.Range, p + ".range");
+        // M4-4b-3a: a self / aura ability has no target, so no range: any `range` on it is refused (0 included).
+        double range = 0;
+        if (kind == (int)AbilityKind.SelfAura)
+        {
+            if (a.Range != null) c.Error(p + ".range", $"ability '{a.Id}': a selfAura ability has no range (its effects land around the caster)");
+        }
+        else range = c.Pos(a.Range, p + ".range");
         if (range > DataLimits.MaxSight)
         {
             c.Error(p + ".range", $"ability '{a.Id}': range {range} m is above the maximum {DataLimits.MaxSight} m (the largest sight)");
@@ -281,6 +287,24 @@ public static partial class DataLoader
     private static void StatusEntry(Checker c, string? key, double? magnitudeJson, double? durationJson, string q, StatusDef[]? statuses, string[]? statusKeys,
         out int status, out float magnitudeOut, out int duration)
     {
+        StatusAndMagnitude(c, key, magnitudeJson, q, statuses, statusKeys, out status, out magnitudeOut);
+        duration = c.Ticks(durationJson, q + ".duration", 1);
+        // M4-4b-1 (docs/01): damage over time pulses once a whole second, so a fraction of a second would land nothing.
+        if (status >= 0 && duration > 0 && statuses![status].Kind == StatusKind.DamageOverTime
+            && (durationJson!.Value < 1 || durationJson.Value != Math.Floor(durationJson.Value)))
+        {
+            c.Error(q + ".duration", $"{durationJson} s is not a whole number of seconds, at least 1 (damage over time '{key}' pulses once a second)");
+            duration = 0;
+        }
+    }
+
+    /// <summary>
+    /// The <c>status</c> and <c>magnitude</c> of a status application at <paramref name="q"/> (<see cref="StatusEntry"/>'s rules
+    /// without the duration; M4-4b-3a: a unit passive's too). A frenzied status takes any magnitude above 0.
+    /// </summary>
+    private static void StatusAndMagnitude(Checker c, string? key, double? magnitudeJson, string q, StatusDef[]? statuses, string[]? statusKeys,
+        out int status, out float magnitudeOut)
+    {
         status = -1;
         if (key == null) c.Error(q + ".status", "missing required field");
         else if (statusKeys != null)
@@ -314,15 +338,8 @@ public static partial class DataLoader
                     c.Error(q + ".magnitude", $"{magnitude} must be below 1 (the fraction of speed '{key}' takes away)");
                     magnitude = 0;
                 }
+                // M4-4b-3a: a frenzied magnitude is any fraction above 0 (the attack-speed increase; 0.5 = +50 %).
             }
-        }
-        duration = c.Ticks(durationJson, q + ".duration", 1);
-        // M4-4b-1 (docs/01): damage over time pulses once a whole second, so a fraction of a second would land nothing.
-        if (status >= 0 && duration > 0 && statuses![status].Kind == StatusKind.DamageOverTime
-            && (durationJson!.Value < 1 || durationJson.Value != Math.Floor(durationJson.Value)))
-        {
-            c.Error(q + ".duration", $"{durationJson} s is not a whole number of seconds, at least 1 (damage over time '{key}' pulses once a second)");
-            duration = 0;
         }
         magnitudeOut = (float)magnitude;
     }
