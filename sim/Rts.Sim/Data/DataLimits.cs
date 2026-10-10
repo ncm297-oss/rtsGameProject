@@ -80,13 +80,13 @@ public static class DataLimits
     public const double MaxAbilityRadius = 16;
 
     /// <summary>JSON spelling of each <see cref="StatusKind"/>, indexed by the enum value (<c>common/statuses.json</c>, M4-4a).</summary>
-    public static readonly ImmutableArray<string> StatusKindIds = ImmutableArray.Create("damageOverTime", "slow", "blind");
+    public static readonly ImmutableArray<string> StatusKindIds = ImmutableArray.Create("damageOverTime", "slow", "blind", "frenzied");
 
-    /// <summary>JSON spelling of each supported <see cref="AbilityKind"/>, indexed by the enum value (M4-4a).</summary>
-    public static readonly ImmutableArray<string> AbilityKindIds = ImmutableArray.Create("targetGround");
+    /// <summary>JSON spelling of each supported <see cref="AbilityKind"/>, indexed by the enum value (M4-4a; selfAura M4-4b-3a).</summary>
+    public static readonly ImmutableArray<string> AbilityKindIds = ImmutableArray.Create("targetGround", "selfAura");
 
     /// <summary>Ability kinds of docs/02 the format knows but the sim doesn't run yet: refused as "not supported yet" (slice 2).</summary>
-    public static readonly ImmutableArray<string> PlannedAbilityKindIds = ImmutableArray.Create("targetUnit", "selfAura", "summon");
+    public static readonly ImmutableArray<string> PlannedAbilityKindIds = ImmutableArray.Create("targetUnit", "summon");
 
     /// <summary>JSON spelling of each supported <see cref="AbilityEffectKind"/>, indexed by the enum value (M4-4a; createZone M4-4b-2).</summary>
     public static readonly ImmutableArray<string> AbilityEffectKindIds = ImmutableArray.Create("damage", "applyStatus", "createZone");
@@ -96,4 +96,16 @@ public static class DataLimits
 
     /// <summary>JSON spelling of each <see cref="AbilityAffects"/>, indexed by the enum value (M4-4a).</summary>
     public static readonly ImmutableArray<string> AbilityAffectsIds = ImmutableArray.Create("enemy_units", "own_units", "all_units");
+
+    /// <summary>Most passives one unit type may list (M4-4b-3a): one per trigger of <see cref="PassiveTriggerIds"/>.</summary>
+    public const int MaxUnitPassives = 2;
+
+    /// <summary>JSON spelling of each <see cref="PassiveTrigger"/>, indexed by the enum value (a unit's <c>passives[].trigger</c>, M4-4b-3a).</summary>
+    public static readonly ImmutableArray<string> PassiveTriggerIds = ImmutableArray.Create("whenBelowHp", "onDeath");
+
+    /// <summary>
+    /// Largest <c>onDeath</c> passive <c>radius</c> in meters (M4-4b-3a): a death queries the spatial hash over the circle, so a
+    /// radius is a per-death cost. The largest sight; far above any designed aura (docs/factions: 6 m). A Producer default.
+    /// </summary>
+    public const double MaxPassiveRadius = 64;
 }

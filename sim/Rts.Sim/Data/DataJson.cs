@@ -114,6 +114,18 @@ internal sealed class UnitJson
     public List<string?>? Requires { get; set; }
     public List<string?>? Tags { get; set; }
     public List<string?>? Abilities { get; set; }
+    public List<PassiveJson?>? Passives { get; set; }
+}
+
+internal sealed class PassiveJson
+{
+    public string? Trigger { get; set; }
+    public double? HpFraction { get; set; }
+    public string? Status { get; set; }
+    public double? Magnitude { get; set; }
+    public double? Duration { get; set; }
+    public double? Radius { get; set; }
+    public List<string?>? Units { get; set; }
 }
 
 internal sealed class AttackJson

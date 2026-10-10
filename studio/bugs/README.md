@@ -242,5 +242,8 @@ bugs outrank new features.
 | [BUG-0400](BUG-0400-m4-vh2-nits.md) | S4 | open (item 1 closed by QA test) | M4-VH2 nits: the hash twin skipped three new ViewApi reads (QA added it); the BUG-0250 item 3 fix has no test; a reused resource slot can copy an unseen node (not reachable) |
 | [BUG-0401](BUG-0401-ordered-attack-on-building-dropped-on-detour.md) | S3 | open | A player's Attack on a reachable building is silently dropped after 10 stalled scans (2 s) when the unit's path first leads away (ramp detour); the chase give-up rule has no exception for explicit orders |
 | [BUG-0410](BUG-0410-description-numbers-matched-in-any-role.md) | S4 | open | Data track: the description pin accepts a stale number equal to another of the entry's data numbers ("for 18 seconds" on Sandstorm passes) |
+| [BUG-0420](BUG-0420-below-hp-line-float-rounding.md) | S3 | open | `whenBelowHp` counts a unit exactly at the line as below for many decimal fractions (single-precision line: 0.15 x 100 = 15.000001) |
+| [BUG-0421](BUG-0421-hp-techs-raise-passive-line-not-hit-points.md) | S3 | open | hp techs never raise unit hit points, so with Dryjhna's Prophecy the Zealot frenzies at 41 / 63 (65 % of its real hp) |
+| [BUG-0422](BUG-0422-m4-4b-3a-nits.md) | S4 | open | M4-4b-3a nits: docs/03 mojibake, Martyrdom misses a unit trained this tick, memory margin restored |
 | [BUG-0430](BUG-0430-zone-disc-across-cliff-hidden-or-floating.md) | S3 | open | A zone disc that crosses a cliff is hidden under the higher ground or floats 4 m over the lower ground (flat at its centre's height) |
 | [BUG-0431](BUG-0431-own-zone-rim-same-as-whirlwind-colour.md) | S4 | open | An own storm's rim and a Whirlwind enemy's storm rim are nearly the same colour (mirror matches can't tell them apart) |

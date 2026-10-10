@@ -186,6 +186,16 @@ public sealed class UnitStore
     /// <summary>Live units with a cast or a walk to one (<see cref="CastAbility"/> set), so phase 6 skips its scan when none; derived, not hashed.</summary>
     internal int CasterCount;
 
+    /// <summary>
+    /// Live units whose type has a <c>whenBelowHp</c> passive (M4-4b-3a, <see cref="HasBelowHpPassive"/>), so phase 5's
+    /// passive pass skips when none; derived, not hashed.
+    /// </summary>
+    internal int BelowHpUnits;
+
+    // M4-4b-3a: per slot, whether the unit was counted in BelowHpUnits at its spawn (its type has a whenBelowHp passive), so
+    // Free takes back exactly what TrySpawn counted; derived from TypeId, not hashed.
+    private readonly bool[] _belowHp;
+
     private readonly int[] _freeList;
     // Per slot: the half-pop CountPop added for it (M3-4), so Free gives back exactly that; derived, not hashed.
     private readonly int[] _countedHalfPop;
@@ -253,6 +263,7 @@ public sealed class UnitStore
         CastPoint = new Vector2[capacity];
         AbilityReadyTick = new int[capacity * DataLimits.MaxUnitAbilities];
         Statuses = new Abilities.StatusStore(capacity);
+        _belowHp = new bool[capacity];
         Alive = new bool[capacity];
         Generation = new int[capacity];
         _freeList = new int[capacity];
@@ -333,8 +344,16 @@ public sealed class UnitStore
         Radius[i] = def.Radius;
         Hp[i] = def.Hp;
         CountPop(i, def.HalfPop);
+        if (def.BelowHpPassive >= 0)
+        {
+            _belowHp[i] = true;
+            BelowHpUnits++;
+        }
         return true;
     }
+
+    /// <summary>Whether live slot <paramref name="index"/>'s type has a <c>whenBelowHp</c> passive and was spawned with it counted (M4-4b-3a); derived, not hashed.</summary>
+    internal bool HasBelowHpPassive(int index) => _belowHp[index];
 
     /// <summary>Counts <paramref name="halfPop"/> toward the owner's population for live slot <paramref name="index"/>; <see cref="Free"/> gives it back (M3-4).</summary>
     internal void CountPop(int index, int halfPop)
@@ -369,6 +388,11 @@ public sealed class UnitStore
         {
             _ledger?.AddHalfPop(Owner[handle.Index], -_countedHalfPop[handle.Index]);
             _countedHalfPop[handle.Index] = 0;
+        }
+        if (_belowHp[handle.Index])
+        {
+            _belowHp[handle.Index] = false;
+            BelowHpUnits--;
         }
         Alive[handle.Index] = false;
         Hold[handle.Index] = false;

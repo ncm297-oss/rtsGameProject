@@ -15,7 +15,8 @@ namespace Rts.Sim.Data;
 /// Seconds become ticks and per-second rates become per-tick rates here; the sim never sees seconds.
 /// <c>trainedAt</c> resolves to an own-faction building type id (M3-4); every <c>requires</c> entry resolves to a tech or
 /// building type id (M3-6, kept as a string too); <c>attack.projectile</c> resolves to a <c>common/projectiles.json</c> id
-/// (M4-2b, kept as a string too); <c>abilities</c> resolves to own-faction ability ids (M4-4a); <c>model</c> stays an unresolved string until assets exist (docs/03 "Data format").
+/// (M4-2b, kept as a string too); <c>abilities</c> resolves to own-faction ability ids (M4-4a); <c>passives</c> to
+/// <see cref="UnitPassive"/>s naming status ids and own-faction unit ids (M4-4b-3a); <c>model</c> stays an unresolved string until assets exist (docs/03 "Data format").
 /// </remarks>
 public static partial class DataLoader
 {
@@ -116,6 +117,9 @@ public static partial class DataLoader
                 if (units[id] != null && units[id].Faction == f) own.Add(id);
             factions[f] = BuildFaction(c, factionJsons[f]!, folders[f], f, own.ToImmutable());
         }
+
+        // M4-4b-3a: each unit's passives (they name statuses and own-faction unit types).
+        ResolveUnitPassives(c, folders, unitFiles, accepted, unitKeys, units, statuses);
 
         // M4-4a: abilities (optional per faction), then each unit's list; a broken abilities file is reported once.
         int errorsBeforeAbilities = c.Errors.Count;

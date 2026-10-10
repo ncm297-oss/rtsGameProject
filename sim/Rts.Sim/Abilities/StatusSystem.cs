@@ -1,3 +1,4 @@
+using System;
 using Rts.Sim.Combat;
 using Rts.Sim.Data;
 using Rts.Sim.Entities;
@@ -129,6 +130,23 @@ public static class StatusSystem
         for (int k = 0; k < s.Count[i]; k++)
             if (world.Data.Statuses[s.StatusId[head + k]].Kind == StatusKind.Slow && s.Magnitude[head + k] > slow) slow = s.Magnitude[head + k];
         u.Speed[i] = world.Data.Units[u.TypeId[i]].SpeedPerTick * (1f - slow);
+    }
+
+    /// <summary>
+    /// The attack cooldown in ticks unit slot <paramref name="i"/> starts a swing with (M4-4b-3a): <paramref name="cooldownTicks"/>,
+    /// or with a frenzied status <c>max(1, round(cooldownTicks / (1 + magnitude)))</c> (half away from zero) for the
+    /// largest frenzied magnitude it has (a 20-tick cooldown at +50 % is 13). Read when a swing starts, so a Frenzied
+    /// applied or ended mid-cooldown changes the next swing; never stored (derived from the hashed statuses).
+    /// </summary>
+    internal static int AttackCooldown(World world, int i, int cooldownTicks)
+    {
+        StatusStore s = world.Units.Statuses;
+        float frenzy = 0f;
+        int head = i * StatusStore.PerUnit;
+        for (int k = 0; k < s.Count[i]; k++)
+            if (world.Data.Statuses[s.StatusId[head + k]].Kind == StatusKind.Frenzied && s.Magnitude[head + k] > frenzy) frenzy = s.Magnitude[head + k];
+        if (frenzy <= 0f) return cooldownTicks;
+        return Math.Max(1, (int)MathF.Round(cooldownTicks / (1f + frenzy), MidpointRounding.AwayFromZero));
     }
 
     /// <summary>One damage-over-time pulse on unit slot <paramref name="i"/>: <paramref name="perSecond"/> as an attack of <paramref name="damageType"/>, its armor techs applied.</summary>

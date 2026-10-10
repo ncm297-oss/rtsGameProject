@@ -116,11 +116,57 @@ public class AbilityLoaderTests
     {
         AssertErrorAt(LoadWith(a => a["kind"] = "fireball"), Abilities, "abilities[0].kind", "unknown");
         AssertErrorAt(LoadWith(a => a["kind"] = "summon"), Abilities, "abilities[0].kind", "not supported yet");
-        AssertErrorAt(LoadWith(a => a["kind"] = "selfAura"), Abilities, "abilities[0].kind", "not supported yet");
+        AssertErrorAt(LoadWith(a => a["kind"] = "targetUnit"), Abilities, "abilities[0].kind", "not supported yet");
         AssertErrorAt(LoadWith(a => a["effects"]![0]!["kind"] = "teleport"), Abilities, "abilities[0].effects[0].kind", "not supported yet");
         AssertErrorAt(LoadWith(a => a["effects"]![0]!["kind"] = "heal"), Abilities, "abilities[0].effects[0].kind", "unknown");
         AssertErrorAt(LoadWith(a => a["autocast"] = true), Abilities, "abilities[0].autocast", "not supported yet");
         AssertErrorAt(LoadWith(a => a["affects"] = "enemy_buildings"), Abilities, "abilities[0].affects", "unknown");
+    }
+
+    /// <summary>
+    /// M4-4b-3a criterion 1: a <c>selfAura</c> ability loads (no longer "not supported yet") with no range; a <c>range</c> on it,
+    /// 0 included, is an error at its path.
+    /// </summary>
+    [Fact]
+    public void SelfAura_Loads_WithNoRange_AndARangeOnItIsAnError()
+    {
+        DataLoadResult ok = LoadWith(a => { a["kind"] = "selfAura"; a.Remove("range"); });
+        Assert.True(ok.Ok, string.Join("\n", ok.Errors));
+        AbilityDef aura = ok.Data!.Abilities[ok.Data.FindAbility("telas_fire")];
+        Assert.Equal((AbilityKind.SelfAura, 0f, 3f), (aura.Kind, aura.Range, aura.Radius));
+        Assert.DoesNotContain("selfAura", DataLimits.PlannedAbilityKindIds);
+        Assert.Equal(1, DataLimits.AbilityKindIds.IndexOf("selfAura"));
+        Assert.Equal(1, (int)AbilityKind.SelfAura);
+        foreach (double range in new[] { 16.0, 0.0 })
+            AssertErrorAt(LoadWith(a => { a["kind"] = "selfAura"; a["range"] = range; }), Abilities, "abilities[0].range", "selfAura ability has no range");
+        // A target-ground ability still needs one.
+        AssertErrorAt(LoadWith(a => a.Remove("range")), Abilities, "abilities[0].range", "missing");
+        // Every existing effect loads in it: a zone and a damage effect too.
+        DataLoadResult zone = LoadWithSandstorm(a => { a["kind"] = "selfAura"; a.Remove("range"); });
+        Assert.True(zone.Ok, string.Join("\n", zone.Errors));
+        DataLoadResult damage = LoadWith(a =>
+        {
+            a["kind"] = "selfAura";
+            a.Remove("range");
+            a["effects"] = new JsonArray(new JsonObject { ["kind"] = "damage", ["type"] = "magic", ["amount"] = 10 });
+        });
+        Assert.True(damage.Ok, string.Join("\n", damage.Errors));
+    }
+
+    /// <summary>M4-4b-3a criterion 1: an <c>applyStatus</c> of a frenzied status needs a magnitude above 0 (any fraction: the attack-speed increase).</summary>
+    [Fact]
+    public void AFrenziedEffect_NeedsAMagnitudeAbove0()
+    {
+        foreach (double m in new[] { 0.5, 0.2, 2.0 })
+        {
+            DataLoadResult ok = LoadWith(a => { a["effects"]![0]!["status"] = "frenzied"; a["effects"]![0]!["magnitude"] = m; });
+            Assert.True(ok.Ok, string.Join("\n", ok.Errors));
+            Assert.Equal((float)m, ok.Data!.Abilities[ok.Data.FindAbility("telas_fire")].Effects[0].Magnitude);
+        }
+        AssertErrorAt(LoadWith(a => { a["effects"]![0]!["status"] = "frenzied"; a["effects"]![0]!["magnitude"] = 0; }),
+            Abilities, "abilities[0].effects[0].magnitude", "must be positive");
+        AssertErrorAt(LoadWith(a => { a["effects"]![0]!["status"] = "frenzied"; a["effects"]![0]!.AsObject().Remove("magnitude"); }),
+            Abilities, "abilities[0].effects[0].magnitude", "missing");
     }
 
     [Fact]
