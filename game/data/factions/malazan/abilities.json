@@ -3,7 +3,7 @@
     {
       "id": "telas_fire",
       "displayName": "Telas Fire",
-      "description": "Sets the ground ablaze: enemy units in the area burn for 10 magic damage a second for 4 seconds. Buildings are unharmed.",
+      "description": "Sets the ground ablaze: enemy units in the area are Burning, taking 10 magic damage a second for 4 seconds. Buildings are unharmed.",
       "kind": "targetGround",
       "range": 16,
       "radius": 3,
@@ -17,7 +17,7 @@
     {
       "id": "cusser",
       "displayName": "Cusser",
-      "description": "Throws a Moranth munition: 120 siege damage to enemy units and buildings in the area. Your own units in the blast take half, the Sapper too.",
+      "description": "Throws a Moranth munition: 120 siege damage to enemy units and buildings in the area. Your own units caught in the blast, the Sapper included, take half; your buildings are safe.",
       "kind": "targetGround",
       "range": 6,
       "radius": 3.5,

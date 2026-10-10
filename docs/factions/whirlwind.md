@@ -60,7 +60,7 @@ Age II, at the Smithy, 200 G / 150 W, 45 s. Zealots **+20 HP**; Sandstorm **cool
 
 | Ability | Unit | Kind | Range | Radius | Cast | Cooldown | Duration | Effect |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Sandstorm | Priest of the Whirlwind | Target ground (zone) | 18 | 6 m | 1.2 s | 45 s | 12 s | Non-Whirlwind units inside are Blinded and Slowed 30%. Enemies outside can't see into the storm. Whirlwind units are unaffected |
+| Sandstorm | Priest of the Whirlwind | Target ground (zone) | 18 | 6 m | 1.2 s | 45 s | 12 s | Enemy units inside are Blinded and Slowed 30%. Enemies outside can't see into the storm. Your own units are unaffected. No effect on buildings |
 
 Sandstorm is the signature: drop it on the enemy army as the swarm engages, so enemy ranged units
 can't shoot beyond 3 m and the army can't retreat quickly.

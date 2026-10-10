@@ -10,7 +10,7 @@
     {
       "id": "slowed",
       "displayName": "Slowed",
-      "description": "Moves more slowly for a while.",
+      "description": "Moves more slowly until it wears off. Only the strongest slow counts.",
       "kind": "slow"
     },
     {

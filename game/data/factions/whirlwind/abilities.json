@@ -3,7 +3,7 @@
     {
       "id": "sandstorm",
       "displayName": "Sandstorm",
-      "description": "Calls up a sandstorm for 12 seconds: enemy units inside are Blinded and Slowed by 30%, and enemies outside can't see into the storm. Whirlwind units are unaffected.",
+      "description": "Calls up a sandstorm for 12 seconds: enemy units inside are Blinded and Slowed by 30%, and enemies outside can't see into the storm. Your own units are unaffected.",
       "kind": "targetGround",
       "range": 18,
       "radius": 6,

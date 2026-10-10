@@ -7,8 +7,8 @@ namespace Rts.Sim.Tests.QA.Content;
 /// <summary>
 /// QA D10b (BUG-0350): attacks on <c>AbilityContentTests.Compare</c>'s Cusser pin beyond the developer's mutants: reordered
 /// columns, rows and Effect phrases must not invent problems; data mutants in the other direction still fail by name; two
-/// friendly-fire wordings that disagree fail; a landed Sandstorm shaped like the sim branch's (an unknown zone effect kind
-/// carrying the Blinded status, plus a Slowed status) and a landed Blinded status of an unknown kind report and pass.
+/// friendly-fire wordings that disagree fail; every page damage claim is consumed by a data effect (BUG-0380); the landed
+/// Sandstorm and Blinded are pinned, not pending (D10c).
 /// </summary>
 public class AbilityPinQaTests
 {
@@ -157,9 +157,9 @@ public class AbilityPinQaTests
 
     /// <summary>
     /// A second damage claim on the page with no matching damage effect (e.g. "plus 30 fire damage" left over from an old
-    /// design) should fail; the pin only checks that every data effect has a claim, not the reverse.
+    /// design) fails: since BUG-0380 every page claim must be consumed by a data effect, not only the reverse.
     /// </summary>
-    [Fact(Skip = "BUG-0380: a page damage claim with no matching damage effect passes when the ability has another damage effect")]
+    [Fact]
     public void AnExtraPageDamageClaim_WithNoDataEffect_Fails()
     {
         string[] lines = Malazan();
@@ -172,54 +172,63 @@ public class AbilityPinQaTests
             "an extra '30 magic damage' claim on the page passed:\n" + string.Join("\n", r.Problems));
     }
 
+    /// <summary>BUG-0380: with a second damage effect in memory, the same two claims both match and pass.</summary>
+    [Fact]
+    public void TwoPageDamageClaims_MatchingTwoDataEffects_Pass()
+    {
+        string[] lines = Malazan();
+        int row = Row(lines, "Cusser");
+        lines[row] = lines[row].Replace("take 120 siege damage", "take 120 siege damage plus 30 magic damage", StringComparison.Ordinal);
+        int magic = Data.DamageTable.DamageTypeKeys.IndexOf("magic");
+        AbilityDef a = Data.Abilities.Single(x => x.DisplayName == "Cusser");
+        ImmutableArray<AbilityDef> abilities = Data.Abilities.SetItem(Data.Abilities.IndexOf(a),
+            Copy(a, a.Effects.Add(new AbilityEffect { Kind = AbilityEffectKind.Damage, DamageType = magic, Amount = 30, Status = -1 }), a.Affects));
+
+        AbilityContentTests.Result r = Compare(abilities, lines);
+
+        Assert.True(r.Problems.Count == 0, string.Join("\n", r.Problems));
+    }
+
+    /// <summary>BUG-0380: one claim can't stand for two effects; a page with one "120 siege damage" for two such effects fails.</summary>
+    [Fact]
+    public void OneClaimForTwoEqualDataEffects_Fails()
+    {
+        AbilityDef a = Data.Abilities.Single(x => x.DisplayName == "Cusser");
+        ImmutableArray<AbilityDef> abilities = Data.Abilities.SetItem(Data.Abilities.IndexOf(a), Copy(a, a.Effects.AddRange(a.Effects), a.Affects));
+
+        AbilityContentTests.Result r = Compare(abilities, Malazan());
+
+        Assert.Contains(r.Problems, p => p.Contains("'Cusser' Effect amount", StringComparison.Ordinal));
+    }
+
+    /// <summary>A repeated claim with a single effect is a second, unconsumed claim and fails too.</summary>
+    [Fact]
+    public void ARepeatedPageClaim_ForOneDataEffect_Fails()
+    {
+        string[] lines = Malazan();
+        int row = Row(lines, "Cusser");
+        lines[row] = lines[row].Replace("friendly fire at 50%", "friendly fire at 50%; then 120 siege damage again", StringComparison.Ordinal);
+
+        AbilityContentTests.Result r = Compare(Data.Abilities, lines);
+
+        Assert.Contains(r.Problems, p => p.Contains("'Cusser' Effect amount", StringComparison.Ordinal) && p.Contains("no data damage effect", StringComparison.Ordinal));
+    }
+
     /// <summary>
-    /// D10b criterion 3, shaped like the sim branch's landing: Sandstorm with a zone effect of a kind this build doesn't
-    /// know (stands in for <c>createZone</c>) plus the statuses it applies, and Blinded with an unknown status kind (stands
-    /// in for <c>blind</c>). Both pins must report, not fail, and must not throw.
+    /// D10b criterion 3 became D10c's pin: the loaded Sandstorm and Blinded are out of the allowances and both pins pass on
+    /// the real pages, with no report line left naming either as pending or landed.
     /// </summary>
     [Fact]
-    public void ALandedSandstormAndBlinded_ShapedLikeTheSimBranch_ReportAndPass()
+    public void TheLandedSandstormAndBlinded_ArePinned_AndPass()
     {
-        var blinded = new StatusDef { Id = Data.Statuses.Length, Key = "blinded", DisplayName = "Blinded", Description = "Can barely see.", Kind = (StatusKind)2 };
-        ImmutableArray<StatusDef> statuses = Data.Statuses.Add(blinded);
-        int slowed = Data.Statuses.Single(s => s.Key == "slowed").Id;
-        var sandstorm = new AbilityDef
-        {
-            Id = Data.Abilities.Length,
-            Key = "sandstorm",
-            Faction = Data.FindFaction("whirlwind"),
-            DisplayName = "Sandstorm",
-            Description = "A storm of sand.",
-            Kind = AbilityKind.TargetGround,
-            Range = 18,
-            Radius = 6,
-            CastTicks = 24,
-            CooldownTicks = 45 * SimConstants.TicksPerSecond,
-            DurationTicks = 12 * SimConstants.TicksPerSecond,
-            Affects = AbilityAffects.EnemyUnits,
-            Effects = ImmutableArray.Create(
-                new AbilityEffect { Kind = (AbilityEffectKind)2, DamageType = -1, Status = blinded.Id, DurationTicks = 12 * SimConstants.TicksPerSecond },
-                new AbilityEffect { Kind = AbilityEffectKind.ApplyStatus, DamageType = -1, Status = blinded.Id, DurationTicks = SimConstants.TicksPerSecond },
-                new AbilityEffect { Kind = AbilityEffectKind.ApplyStatus, DamageType = -1, Status = slowed, Magnitude = 0.3f, DurationTicks = SimConstants.TicksPerSecond }),
-        };
-        ImmutableArray<AbilityDef> abilities = Data.Abilities.Add(sandstorm);
-        // Compare reads statuses from GameData (the real load), which has no Blinded here; once the sim lands it the loaded
-        // GameData carries it. So the ability-side check drops the in-memory applyStatus(blinded) effect.
-        var sandstormForPage = new AbilityDef
-        {
-            Id = sandstorm.Id, Key = sandstorm.Key, Faction = sandstorm.Faction, DisplayName = sandstorm.DisplayName,
-            Description = sandstorm.Description, Kind = sandstorm.Kind, Range = sandstorm.Range, Radius = sandstorm.Radius,
-            CastTicks = sandstorm.CastTicks, CooldownTicks = sandstorm.CooldownTicks, DurationTicks = sandstorm.DurationTicks,
-            Affects = sandstorm.Affects, Effects = ImmutableArray.Create(sandstorm.Effects[0], sandstorm.Effects[2]),
-        };
-        ImmutableArray<AbilityDef> pageAbilities = Data.Abilities.Add(sandstormForPage);
+        Assert.Empty(AbilityContentTests.PendingAbilities);
+        Assert.DoesNotContain("Blinded", AbilityContentTests.PendingStatuses);
 
-        AbilityContentTests.Result a = AbilityContentTests.Compare(Data, pageAbilities, "whirlwind", PageTables.FactionLines("whirlwind"));
-        AbilityContentTests.Result m = AbilityContentTests.Compare(Data, pageAbilities, "malazan", Malazan());
-        AbilityContentTests.Result s = AbilityContentTests.CompareStatuses(Data, statuses, abilities, FactionPage.DocTable("docs/02-game-design.md", "Status effects", level: 3));
+        AbilityContentTests.Result a = AbilityContentTests.Compare(Data, Data.Abilities, "whirlwind", PageTables.FactionLines("whirlwind"));
+        AbilityContentTests.Result s = AbilityContentTests.CompareStatuses(Data, Data.Statuses, Data.Abilities, FactionPage.DocTable("docs/02-game-design.md", "Status effects", level: 3));
 
-        Assert.True(a.Problems.Count + m.Problems.Count + s.Problems.Count == 0, string.Join("\n", a.Problems.Concat(m.Problems).Concat(s.Problems)));
-        Assert.Contains(a.Reports, l => l.Contains("Sandstorm", StringComparison.Ordinal) && l.Contains("landed", StringComparison.Ordinal));
-        Assert.Contains(s.Reports, l => l.Contains("Blinded", StringComparison.Ordinal) && l.Contains("landed", StringComparison.Ordinal));
+        Assert.True(a.Problems.Count + s.Problems.Count == 0, string.Join("\n", a.Problems.Concat(s.Problems)));
+        Assert.DoesNotContain(a.Reports, l => l.Contains("Sandstorm", StringComparison.Ordinal));
+        Assert.DoesNotContain(s.Reports, l => l.Contains("Blinded", StringComparison.Ordinal));
     }
 }
