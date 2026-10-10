@@ -248,3 +248,4 @@ bugs outrank new features.
 | [BUG-0430](BUG-0430-zone-disc-across-cliff-hidden-or-floating.md) | S3 | open | A zone disc that crosses a cliff is hidden under the higher ground or floats 4 m over the lower ground (flat at its centre's height) |
 | [BUG-0431](BUG-0431-own-zone-rim-same-as-whirlwind-colour.md) | S4 | open | An own storm's rim and a Whirlwind enemy's storm rim are nearly the same colour (mirror matches can't tell them apart) |
 | [BUG-0440](BUG-0440-d-h2-description-role-nits.md) | S4 | open | D-H2 nits: "cooldown: N s" and "N-second" wordings slip past the role check, "dmg" unread, linger bound per clause; index row for BUG-0410 stale |
+| [BUG-0470](BUG-0470-d11-passive-pin-nits.md) | S4 | open | D11 nits: a second same-trigger passive sentence on a page is never compared; docs/03 and STATE.md still quote the pre-D11 text |
