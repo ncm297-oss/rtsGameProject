@@ -26,3 +26,10 @@
 1. The ring follows the ground (or is clipped sensibly) like the disc fix BUG-0430 asks for. 2. The stills the docs
 promise exist (or the docs say seed 1 only). 3. Some gap between neighbouring units' marker rows. 4. Every frame of
 the run checked, as docs/03 states ("on each frame of the whole run").
+
+## Re-check (QA, 2026-10-10-1314 round 1)
+- Item 2 fixed by bf3c75e: `build/shots/m4-v7/` now holds the five seed-6 stills (first-contact, storm, telas-fire,
+  cusser-rubble, frenzied-zealot). QA looked at cusser-rubble (grey rubble box drawn on the footprint, in sight) and
+  frenzied-zealot (magenta marker over the hurt Zealot, none over B).
+- Item 4 fixed by bf3c75e: `Shot()` calls `CheckFog()` after each `FramePostDraw` wait.
+- Items 1 and 3 are still open, as the developer said.

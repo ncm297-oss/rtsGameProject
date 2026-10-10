@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-10-1314, task M4-V6d (QA) |
 | System | test scene `game/tests/M4PlayableTest.cs` (M4-V7 slice 1) |
-| Fixed by | |
+| Fixed by | bf3c75e (`M4PlayableTest`: fresh units by `EntityHandle` via `LiveHandles`/`Fresh`; rubble checked with `SeesFootprint`, any footprint cell). Verified by QA 2026-10-10-1314 round 1 |
 
 ## Repro
 1. `dotnet build RtsGame.sln`
@@ -43,3 +43,13 @@ Two separate script faults, both timing-dependent:
   the units whose generation changed; check the rubble with `CanSeeBuilding`'s rule (any footprint cell) or wait for
   an own unit in sight of the centre, as a player would.
 - The four green runs: seed 1 2,594-2,610 ticks, seed 6 3,232-3,874 of the 5,500 budget; fog 0 violations in all.
+
+## Verification (QA, 2026-10-10-1314 round 1)
+- Diff read: `Stage()` and `ZealotDuel()` now diff live `EntityHandle`s (`EntityHandle` is a `record struct`, so set
+  membership compares index and generation); `SeesFootprint` loops the same `FootprintWidth x FootprintHeight` cells
+  from `B.Cell` (the anchor, saved before the building dies) as `FogStore.SeesFootprint`.
+- 23 seed-runs headless: 10 scene runs (18 seed-runs, all while the non-Perf suite ran), 3 `--seed 6`, and the scene loop (2): no step-7 or
+  step-8 slot/rubble failure. The rubble was in sight every time (centre cell visible in all of them). Step 8 found its
+  three spawns every time. `--seed 6 --break 7`, `--seed 6 --break 8`, `--seed 1 --break 7` each failed at the named
+  step and exited 1. The full scene loop ran 41/41 PASS.
+- The scene is still flaky for two other reasons (step 5 caster death, step 8 window length): BUG-0463.
