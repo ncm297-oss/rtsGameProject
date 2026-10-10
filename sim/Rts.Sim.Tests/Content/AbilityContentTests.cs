@@ -114,7 +114,8 @@ public class AbilityContentTests
     [Fact]
     public void AnUnknownPageRow_Fails_ButAPendingOneDoesNot()
     {
-        // A copy of the pending Sandstorm row renamed: the copy fails, the pending original is only reported.
+        // A copy of the pending Sandstorm row renamed: the copy fails, the pending original is only reported. The report reads
+        // "pending" before the sim lands Sandstorm and "landed" after; both must pass so this test holds across the merge.
         var lines = PageTables.FactionLines("whirlwind").ToList();
         int row = lines.FindIndex(l => l.StartsWith("| Sandstorm |", StringComparison.Ordinal));
         Assert.True(row >= 0, "whirlwind.md has no Sandstorm row");
@@ -124,7 +125,8 @@ public class AbilityContentTests
 
         Assert.Contains(r.Problems, p => p.Contains("Grenado", StringComparison.Ordinal));
         Assert.Single(r.Problems);
-        Assert.Contains(r.Reports, l => l.Contains("Sandstorm", StringComparison.Ordinal) && l.Contains("pending", StringComparison.Ordinal));
+        Assert.Contains(r.Reports, l => l.Contains("Sandstorm", StringComparison.Ordinal)
+            && (l.Contains("pending", StringComparison.Ordinal) || l.Contains("landed", StringComparison.Ordinal)));
     }
 
     /// <summary>
