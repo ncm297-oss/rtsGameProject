@@ -2,11 +2,19 @@
 
 | Field | Value |
 | --- | --- |
-| Severity | S3 |
+| Severity | S4 (filed S3; Producer ruling at the 2026-10-11-0314 ACCEPT, below) |
 | Status | open |
 | Found | 2026-10-11-0314, task M5-1 |
 | System | AI `PlayerView`, perf |
 | Fixed by | |
+
+## Producer ruling (2026-10-11-0314 ACCEPT)
+The banded gate stands as M5-1's criterion 5 row. The 0.3 ms figure was written as a per-tick budget, but an AI reads its
+view once per think (`thinkInterval` 0.5-2 s = 10-40 ticks), so even the interleaved worst case (0.6 ms units, ~1 ms whole
+read, Debug, for all eight players at once) is under 0.1 ms a tick amortised, against the 4 ms tick budget (docs/03). The
+layout and the numbers were disclosed in the report and docs/03. Downgraded to S4. **Fix for the next sim hardening (or
+M5-2 if it touches `PlayerViewPerfTests`):** a second, gated row for the interleaved layout with its own number (1.0 ms
+Debug for the units, 1.5 ms whole read), so a regression in the worst case fails by name; docs/03 "Cost" states both.
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~PlayerViewPerfTests.EightPlayers" --logger "console;verbosity=detailed"`

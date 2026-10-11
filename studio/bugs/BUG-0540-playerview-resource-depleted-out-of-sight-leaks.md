@@ -27,6 +27,15 @@ drops out of the answers at once"), and the brief's scope 1 said "resource nodes
 written rule; it still contradicts docs/02's rule. Same shape for a node spawned on explored, unseen ground (no match path
 spawns nodes today).
 
+## Producer ruling (2026-10-11-0314 ACCEPT)
+A real leak, S3 stands: the human player's screen keeps a felled tree drawn until its ground is seen again
+(`ViewApi.SeenResources`, M4-VH2), so the AI would know more than the player. The brief's "resource nodes only on explored
+cells" was my under-specification. **Owner: the sim track, M5-2** (the economy manager is the first consumer of node
+answers): per-player node memory in the fog (one last-known entry per resource slot, like `Fog.Ghosts` for buildings, or the
+`SeenResources` rule moved sim-side), `PlayerView.TryGetResource` / `NextResource` answering the remembered node until a
+footprint cell is visible; the skipped QA row `ANodeDepletedOutOfSight_IsStillAnswered_UntilItsGroundIsSeen` un-skipped and
+the "today" row removed; docs/03 "Lifetime" reworded. M5 criterion 1 is not ticked until this is fixed.
+
 ## Notes
 The M5-2 `Blackboard` can't fix it alone: it can only remember what the view told it, and the view tells it the node is
 gone. A fix needs per-player node memory in the fog (as `Fog.Ghosts` for buildings) or a view rule "known nodes = nodes
