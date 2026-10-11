@@ -3,9 +3,12 @@
 Written by the Producer at the ACCEPT of session **2026-10-10-1314** (fourth full session of 2026-10-10, cap 8). All three
 tracks accepted: sim **M4-4b-3b** (hp techs raise hit points, the exact `whenBelowHp` line, summons; 0 fix rounds), view
 **M4-V6d + M4-V7 slice 1** (the Frenzied marker, the `selfAura` card, `M4PlayableTest.tscn`; 2 fix rounds for the scene's own
-timing flakes), data **D11** (the Zealot passives and Frenzied pinned, the Blinded / Frenzied wording; 0 fix rounds).
-Integration order sim → view → data; **only the data branch moves the golden** (`data-hash` D22C849A175F9ED5 →
-4383EBB9345FABF7, every `k` line equal, in `SameGameDataHashes`).
+timing flakes), data **D11** (the Zealot passives and Frenzied pinned, the Blinded / Frenzied wording; 0 fix rounds) **accepted but held at
+integration**. Sim merged (736bcd2), view merged (8bb7513; merged tree 4,873 / 8 / 0, smoke PASS, loop 41 / 41). **Data held**
+on `origin/studio/2026-10-10-1314-data` @ 9978bd6 (`main` merged in): the merged tree fails one test,
+`DataContentHashTests.EverySpawnField_AndTheSummonKind_ChangeTheHash` (`sim/Rts.Sim.Tests/DataContentHashTests.cs:251`), which
+asserts the shipped `ContentHash` is the literal `0xD22C849A175F9ED5UL`; D11 moved the golden to 4383EBB9345FABF7 on purpose.
+**`main`'s golden is still D22C849A175F9ED5**; the shipped Blinded / Frenzied text on `main` is the pre-D11 one.
 
 ## Where we are
 
@@ -37,7 +40,10 @@ Integration order sim → view → data; **only the data branch moves the golden
   brief says so and the sim stays off the file; (5) when a sim brief changes a behaviour a view QA scene asserts on, the same
   session's view brief carries a named item for that scene (**M4-5 changes `Fog.CanSeeUnit` for stealthed units: no shipped
   stealth unit exists, so no scene changes; say so**); (6) a sim task that adds a `Command` kind adds it to
-  `CommandDoorFuzzStressTests`; (7) new: a sim task that adds a per-slot store field states the memory delta in its report.
+  `CommandDoorFuzzStressTests`; (7) new: a sim task that adds a per-slot store field states the memory delta in its report;
+  (8) new (the D11 hold): **the shipped `data-hash` is pinned in one place only, the golden replay (+ `SameGameDataHashes`)**;
+  a test that needs it reads `GatherWedgeQaTests.RecordedDataHash` or the replay header, never a literal; a brief that says
+  "leave the shipped hash unchanged" means "no `game/data/**` edit", not "assert the number".
 
 ## Sim track
 
@@ -84,9 +90,14 @@ end-of-M4 view hardening), BUG-0431, any `game/data/**` edit. Then M4-V8 stealth
 
 ## Data track
 
-### Next task candidate: inbox tweaks from the D11 review first; else D-H3 early · hardening · QA light · ~400 lines
+### First: land the held D11 (one line) · then inbox tweaks from the D11 review; else D-H3 early · QA light · ~400 lines
 
-If the owner answers the D11 table (the Frenzied / Blinded wording, Martyrdom's +50 %), plan those tweaks first (one golden
+**Item 0, before anything else:** on `origin/studio/2026-10-10-1314-data` (9978bd6, `main` already merged in) change
+`sim/Rts.Sim.Tests/DataContentHashTests.cs:251` from `Assert.Equal(0xD22C849A175F9ED5UL, baseline)` to a compare against the
+golden's recorded hash (`GatherWedgeQaTests.RecordedDataHash`, or parse `Replays/cross_map_seed1.replay`'s `data-hash` line) and
+fix the row's summary comment; a **sim-owned file edited on the data branch as a named exception** (conductor-dispatched or the
+data builder, the brief says so); non-Perf suite green on the branch (expect 4,945 / 9 / 0), smoke, then merge to `main`. Only
+then does the data track's counter read 1 / 4 and `main`'s golden become 4383EBB9345FABF7. If the owner answers the D11 table (the Frenzied / Blinded wording, Martyrdom's +50 %), plan those tweaks first (one golden
 regen, rule 3). Else **D-H3** (the data hardening one session early, as D-H2 was): BUG-0470 item 1 (`PassiveContentTests.Compare`
 counts page sentences per (unit, trigger) and fails a second one naming both; un-skip QA's
 `ASecondSameTriggerPageSentence_WithOtherNumbers_Fails`), BUG-0440's four wordings (`DescriptionProblems`: "(cooldown: N s)",
@@ -97,11 +108,10 @@ fill before then. If neither the inbox nor D-H3 applies, the data track STOPs ch
 
 ## Watch-outs (all tracks)
 
-- **Integration order sim → view → data.** Expected conflicts: `studio/bugs/README.md` (union by id: sim rows 0420 / 0421
-  `fixed` + 0450 / 0451 / 0452; view rows 0460-0463; data row 0470), `studio/qa/coverage.md` (three sides), docs/03 (sim:
-  "Implementation (M4-4b-3b)" + the M3-5 / M4-4b-3a edits + the Producer's Martyrdom-bullet fix; view: "Implementation
-  (M4-V6d)" / "(M4-V7)" + the V6c "Not yet" line), docs/02 (sim: the hp sentence under techs; data: the Frenzied row), docs/01
-  (sim row only). Only D11 moves the golden; the sim's `ContentHash` change hashes nothing for shipped data.
+- **The held D11 lands first next session** (item 0 of the data track). Until it does, `main`'s `data-hash` is
+  D22C849A175F9ED5 and `statuses.json` carries the pre-D11 Blinded / Frenzied text; the data branch already has `main` merged
+  (studio/bugs/README.md and studio/qa/coverage.md conflicts resolved by keeping both). A sim or view task that session must
+  not touch `DataContentHashTests.cs` or `game/data/**`.
 - **The merged scene loop** is the integration gate (41 scenes, both playables last; `M4PlayableTest` ~40 s). Perf under
   three suites fails on base and head alike; a failure counts only alone.
 - The view must not reference stealth kinds before the sim's M4-5 is on `main`; the sim's M4-5 must not edit `ui.json`.

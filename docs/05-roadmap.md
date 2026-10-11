@@ -580,8 +580,9 @@ ten-minute playtest (STATE "For your review", M3-V3 entry) stands as feedback, n
       current hit points at once (maximum and current move together; floor 1; a dead unit untouched): a Zealot at 63 / 63
       with Dryjhna's Prophecy is 83 / 83, one at 41 / 63 is 61 / 83 and not Frenzied, a Zealot trained later starts at 83,
       another player's Zealots and the owner's Raiders are untouched (`Abilities/HpTechTests`, fail-first; QA's
-      `HpTechQaTests`). All four signature abilities now work with their real numbers. **Pinned the same session (data
-      D11):** both Zealot passives field by field to whirlwind.md both ways (`Content/PassiveContentTests`; the page now
+      `HpTechQaTests`). All four signature abilities now work with their real numbers. **Pinned the same session (data D11,
+      accepted; held on its branch at integration by a sim test that pinned the old `data-hash` as a literal, lands next
+      session):** both Zealot passives field by field to whirlwind.md both ways (`Content/PassiveContentTests`; the page now
       states Martyrdom's "+50% attack speed", a Producer default the owner may revisit), the Frenzied row to its exact rule
       (`Frenzied` out of `PendingStatuses`); golden `data-hash` 4383EBB9345FABF7 (every `k` line equal). Open: BUG-0450 (S3,
       view: the hp bar's maximum is still the type's hp; first item of the next view task).)_
