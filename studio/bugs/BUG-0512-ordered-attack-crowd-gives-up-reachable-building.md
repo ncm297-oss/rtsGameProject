@@ -38,3 +38,9 @@ goal cell's field cost is finite but the target is out of reach from it), or tre
 exception (friends attacking the same target nearby: wait). Not a regression (the base gives everyone up earlier). The
 unreachable case still behaves: `AnOrderedAttackOnAnUnreachableBuilding_GivesUp_AndNobodyPaces` (60 units, ramp walled
 off by buildings) passes on head and base.
+
+## Producer triage (2026-10-11, ACCEPT of 2026-10-10-2334)
+S3 confirmed; not a regression (the base gave all 500 up at tick 39; the detour half of BUG-0401 is fixed and the brief's
+regression row holds). Second item of the next sim hardening: test the goal field's cost at the unit's cell whatever its state,
+keeping the give-up only where the walk ended at the nearest ground (goal cost finite, target out of reach from there), or treat a
+stuck stop beside friends attacking the same target like the BUG-0143 friend exception; un-skip QA's 500-unit row.

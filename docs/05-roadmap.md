@@ -11,8 +11,8 @@ Status legend: **Next** = start here, **Planned** = not started, **Done** = acce
 | M1 | Core sim, no graphics | **Done** (2026-10-06, Producer sign-off) | 200 units path across the map deterministically, fast |
 | M2 | Presentation | **Done** (2026-10-07, Producer sign-off after the M2-H2 hardening) | Move an army around a 3D map |
 | M3 | Economy & buildings | **Done** (2026-10-08, Producer sign-off in session 2026-10-08-0313 after every track's end-of-M3 hardening (M3-H1 / H2, M3-V3b, D4) and the BUG-0146 fix; retro below) | Build a Malazan base |
-| M4 | Combat, fog, abilities | **In progress** (since 2026-10-07-2315; 5 / 10 ticked: melee + the Attack order, the damage formula, projectiles / splash / friendly fire, death / corpses / rubble, the counter-triangle rows; the fog's sim half (M4-3a + M4-H1) on `main` since 2026-10-09, the fog on screen (M4-V4) + towers / the ghost list / explored placement (M4-3b) with the 2026-10-09-0125 integration; criterion 5 owes only the view's ghost drawing, M4-V5) | Malazan vs. Whirlwind armies fight with abilities and fog |
-| M5 | AI opponent | Planned | Lose to a Whirlwind AI |
+| M4 | Combat, fog, abilities | **Done** (2026-10-11, Producer sign-off in session 2026-10-10-2334 after every track's end-of-M4 hardening (M4-H3, M4-VH3, D-H3); the data track's D12 is accepted and held on its branch, landing at the next session's data merge; 10 / 10 criteria, in progress since 2026-10-07-2315; retro below) | Malazan vs. Whirlwind armies fight with abilities and fog |
+| M5 | AI opponent | **Next** (since 2026-10-11) | Lose to a Whirlwind AI |
 | M6 | Game shell & real art | Planned | A friend can play it |
 | M7 | Teblor | Planned | Third faction: scale and population systems proven |
 | M8 | Shadow | Planned | Fourth faction: stealth polish, summons |
@@ -637,6 +637,16 @@ ten-minute playtest (STATE "For your review", M3-V3 entry) stands as feedback, n
       BUG-0461 (S3, sim: a cast's walk-in hemmed in by own attackers is dropped after 1 s, seen three times in this
       sandbox; the scene works round it), BUG-0462 (S4, view nits incl. the overstated tick-budget margin).)_
 
+_(**M4 signed off 2026-10-11** by the Producer under autopilot, session 2026-10-10-2334, after every track's end-of-M4
+hardening: sim M4-H3 (BUG-0461's cast half: a cast's walk-in waits behind its own side's fight and has 3 s of patience, a
+dropped cast raises an `AbilityEvent` with `Dropped`; BUG-0480 / 0481 / 0482; BUG-0401: a player's Attack on a reachable
+target never times out; the `EmptyTick(2500)` gate 550 µs), view M4-VH3 (zone discs and rings on both levels of a cliff,
+the own storm rim teal, one max-hp fill a frame), data D-H3 (one session early). D12 (the casters' `detector 10`, golden
+`data-hash` → C4C16BD39408471A) is accepted and **held on its branch** (a test-file conflict with M4-H3 the conductor may not
+hand-resolve); it lands at the next session's data merge with the Producer-recorded resolution, and the sign-off stands with
+it held. Conditions: 10 / 10 criteria verified on `main`; coverage ✅ Unit / Invariant fuzz / Determinism on every M4 row; no
+open S1 / S2. Retro below; open S3 / S4 listed there.)_
+
 ## M5 — AI opponent
 
 **Done when:**
@@ -787,3 +797,67 @@ Add one section per completed milestone below.
   cliff strips 2 m; ramps 6 x 8 m; 2 field builds per tick, cache metadata hashed; own standing units
   soft, enemies and holders hard; plugs up to 32; replays bound to the exact data content hash;
   malformed commands refused at `Enqueue`; maps over 256 unsupported; BUG-0046 kept as a known limit.
+
+### M3 retro (2026-10-08, signed off by the Producer under autopilot; written at the M4 sign-off, 2026-10-11, when the
+Producer found the table said "retro below" and none existed)
+- What shipped: the whole base game. Gold mines and trees (depletion updates the nav grid); workers that gather and carry
+  home by themselves; placement that can never wall off a patch of ground, multi-builder construction, repair and cancel
+  with full refunds; five-deep training queues with rally points and a population cap; Age II and the Forge upgrades
+  researched at the Town Hall and the Forge with real requirements; both factions fully in data with their text (D1-D4);
+  the HUD (resource bar, selection panel, command card with grid hotkeys, build menus, the placement ghost, queue strip,
+  rally flags, population) running it all in the window; the ten-minute playtest script proven by a scripted run through
+  the real HUD (`M3PlayableTest.tscn`). 2026-10-06 to 2026-10-08 over three tracks (the data track started with M3);
+  every M3 coverage row ✅ for Unit / fuzz / Determinism.
+- What was harder than expected: integrating three tracks. The view's HUD landed one session late (BUG-0124: a fixture
+  queued Age II without its halls once the sim's `requires` gating merged) and the data track's D3 waited a session for
+  the sim's fixture fix (BUG-0112), which produced the "schemas before content" rule and the rule that every pushed
+  `main` is green (integration order chosen so). The last S2 (BUG-0146, laborers wedged out of reach of a tree) was found
+  by the view's playtest scene, not by the sim's own tests.
+- What to change in the process or the plan: (1) a track's brief names every file another track may also touch and the
+  final state both must agree on; (2) a "Playable" criterion is proven by a scripted scene through the real HUD, then the
+  owner's windowed playtest is feedback; (3) crowd cost at shared resource nodes (BUG-0151) is accepted debt until the M4
+  sandbox shows whether it matters.
+- Decisions made (also recorded in 01-vision.md): refused build orders are free; impossible requirements are load errors;
+  Age II needs two different halls; techs queue in the same five-deep queue; a tech behind a pop-blocked unit waits.
+- Open S3/S4 carried into M4 (none block): BUG-0134 (S3, a loader corner), BUG-0151 (S3, the gather crowd cost after the
+  wedge fix), BUG-0144 / 0142 / 0113 item 2 / 0094 (sim nits), BUG-0126 items 3-6 and BUG-0148 (view nits), BUG-0155 (data).
+
+### M4 retro (2026-10-11, signed off by the Producer under autopilot)
+- What shipped: combat, fog and abilities. Melee and the explicit Attack order; the damage formula (attack x type-vs-class
+  table, armor floor, magic, techs); projectiles that can miss, splash, friendly fire, minimum range; death, corpses and
+  rubble on screen with kill / loss counts; fog of war per player with the high-ground rule, the shot-from-a-hill reveal,
+  watch towers that shoot, remembered enemy buildings as ghosts you can attack, explored-only placement; the ability
+  system (target-ground, self / aura, summon) with statuses (Burning, Slowed, Blinded, Frenzied, Stealthed, Revealed),
+  zones (Sandstorm), unit passives (the Zealot's Frenzy and Martyrdom), hp techs that raise hit points, stealth and
+  detection (test-only sources until M8; the casters' 10 m detector, D12, accepted and held one session); the HUD's ability row with targeting rings, cast
+  bars, markers, resolve flashes and zone discs that lie on the terrain across cliffs; the fog-on sandbox battle
+  (`M4PlayableTest.tscn`, seeds 1 and 6) through the real HUD with the fog rule checked on every frame. 2026-10-07 to
+  2026-10-11: 14 sim sessions (3 hardening), 13 view sessions (3 hardening), 12 data sessions (3 hardening); 41 + 1
+  headless scenes in the loop; ~5,300 tests; every M4 coverage row ✅ for Unit / Invariant fuzz / Determinism.
+- What was harder than expected: (1) silent give-ups. Three different "the unit quietly stops" bugs came from the
+  playtest scene (a cast's walk-in behind own attackers, BUG-0461; an ordered Attack on a reachable building, BUG-0401;
+  chasers along cliffs, BUG-0241): each needed its own patience rule, and the rules still have edges (BUG-0511 / 0512).
+  (2) Memory and perf budgets at 2,500 units: the 1024-map bound was re-baselined twice (itemised every byte since), and
+  the idle-tick gate crept with a QA scene that spawns most of its units off the map (BUG-0510), not with the M4 passes.
+  (3) Golden replays under three tracks: the data hash moved eight times; the rules "every `k` line equal", "the shipped
+  hash pinned only by the golden" and "whoever moves it appends to `SameGameDataHashes`" came one by one from failures.
+  (4) Conflicting test files between the sim and data tracks when content changed a pinned value (D11's hash literal,
+  D12's "no shipped detector" assertion): fixed by naming the shared file in both briefs.
+- What to change in the process or the plan: (1) a brief names every test the other track's change will break and the
+  final assertion; (2) a chase or walk-in rule ships with a crowd-scale row (500 units) in the same task; (3) the
+  `EmptyTick` scene gets a true idle row (BUG-0510) before M5's AI adds per-player work; (4) the next per-slot array
+  re-baselines the memory bound (11,088 B margin); (5) the `Dropped` cast event needs a HUD cue (M5 / M6) so the player
+  learns a click was lost; (6) M5's AI reads the world only through `PlayerView`, which `Fog.CanSeeUnit` and
+  `World.HiddenFrom` already make fog- and stealth-correct.
+- Decisions made (also recorded in 01-vision.md): the damage formula and counter table; the lead rule for aimed shots;
+  friendly fire at 50 % never on buildings; fog every 4 ticks with a tick-0 stamp, high ground sees down, the 40-tick
+  reveal; towers never pick stealthed units; ghosts dropped only when their ground is seen empty; the DoT whole-seconds
+  rule; Frenzied as swing rate; hp techs raise current hp with the max; `targetUnit` / `autocast` deferred; summons free
+  and temporary; stealth: proximity 3 m, reveal at delivery / resolve, summoned never stealthed, Revealed overrides;
+  a cast's walk-in waits behind its own side's fight with 3 s of patience and raises `Dropped`; an ordered Attack on a
+  reachable target never times out; the stealth visuals moved to M8.
+- Open S3/S4 carried into M5 (none block): S3: BUG-0461 (the 0.17 m two-tick wobble, unreproduced), BUG-0511 (an own
+  fighter beside a stuck caster holds it), BUG-0512 (an ordered Attack given up in the crowd at a reachable building),
+  and the old crowd / movement limits BUG-0005 / 0023 / 0025 / 0028 / 0032 / 0046 / 0050 / 0080 / 0144 / 0151. S4:
+  BUG-0510 / 0513 (sim), BUG-0520 / 0521 / 0400 item 1 / 0281 item 2 / 0462 (view), BUG-0113 item 2 / 0184 / 0302 b /
+  0422 items 2-3 / 0002 / 0026 / 0040 (older), BUG-0275 item 2 (the `ExploreAllForTests` seam).

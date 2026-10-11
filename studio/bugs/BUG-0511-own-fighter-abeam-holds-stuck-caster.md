@@ -38,3 +38,10 @@ half-plane, at any angle up to 90 degrees, on any level. Suggested: require the 
 and on the caster's level / a legal step away. docs/01's row and docs/03 say "its centre in front of the direction of
 travel", which describes the half-plane: the docs need the same fix. The hold is not a lost click (the cast still fires if
 the way opens), hence S3, but a caster beside its own skirmish line can stand "walking" indefinitely.
+
+## Producer triage (2026-10-11, ACCEPT of 2026-10-10-2334)
+S3 confirmed (the click is held, not lost; criterion 1's "ahead" held for the sandbox layouts). First item of the next sim
+hardening: narrow `OwnFighterAhead` to the caster's swept corridor (lateral offset ≤ r_i + r_j + a small slack) on the caster's
+level or a legal step away; reword docs/01 / docs/03 "its centre in front of the direction of travel" with it; un-skip the two
+QA rows. Decided here: a caster ringed by its own attackers in an endless fight waits for good (criterion 1 governs; the QA-focus
+line "must drop after 3 s" was the over-specification).

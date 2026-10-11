@@ -4640,8 +4640,9 @@ right-click on one attacks it.
   box mesh, placed on the remembered footprint's centre at full height, in the owner's colour times
   `FogView.ExploredBrightness` (one material per player, made in `Bind`), no bar; hidden when the entry goes or the
   building is seen again; re-placed only when the entry's generation or anchor changes. `IsGhostShown`,
-  `GhostGeneration`, `GhostBoxOf`, `GhostsShown`, `GhostMaterial` for tests. A remembered site draws finished, full
-  height (BUG-0275 item 1: `BuildingGhost` keeps no progress or site flag; a sim field first).
+  `GhostGeneration`, `GhostBoxOf`, `GhostsShown`, `GhostMaterial` for tests. A remembered site still draws finished, full
+  height (BUG-0275 item 1: since M4-H3 `BuildingGhost.Site` says it was a site when last seen, view-only and not hashed;
+  drawing a remembered site as a foundation is a view item for the next view hardening).
 - **Picking**: `BuildingPicker.PickGhostRay(GhostShown, Ghosts, defs, grid, map, origin, direction, boxHeight, out
   entry)`, the box ray test on each ghost's remembered footprint, full height, terrain occluding as for live boxes.
   `SelectionController.EnemyAt` (right-click and A + click) takes a ghost when the ray enters its box before any drawn

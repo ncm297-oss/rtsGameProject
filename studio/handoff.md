@@ -1,182 +1,133 @@
-# Handoff: brief for the current session
+# Handoff: brief for the next session
 
-Written by the Producer at the PLAN of session **2026-10-10-2334** (sixth full session of 2026-10-10, cap 8). Base `main` fa74130
-(the 2026-10-10-1954 integration: M4-5, M4-V7 slice 2, D11 + D-H3 all landed; build 0 warnings). **M4: 10 / 10 criteria met**, coverage
-✅ ✅ ✅ (Unit / Invariant fuzz / Determinism) on every M4 system row, no open S1 / S2. This session is **every track's end-of-M4 work**:
-sim **M4-H3** (hardening), view **M4-VH3** (hardening), data **D12** (the casters' `detector 10`). The **M4 sign-off** is the Producer's at
-this session's ACCEPT if all three are accepted (retro in docs/05, M5 set to Next), else at the next.
+Written by the Producer at the ACCEPT of session **2026-10-10-2334** (sixth and last full session of 2026-10-10; the next
+session falls on 2026-10-11, 0 / 8). All three tracks accepted (sim M4-H3, view M4-VH3 on `main`; data D12 **accepted and held
+on `origin/studio/2026-10-10-2334-data` @ c0dd350**: it conflicts with M4-H3 in two test files and the conductor may not
+hand-resolve code). **M4 signed off** (docs/05 retro, docs/01 row; the sign-off stands with D12 held: accepted content waiting
+on a mechanical rebase); **M5 (AI opponent) is Next.** **The data track's first item next session is the D12 rebase** with the
+Producer-recorded resolution (session log table; reproducible: `StealthLoaderTests.cs` = D12's two hunks on top of `main`'s
+file, `StealthContentHashTests.cs` = `main`'s file as is, `studio/bugs/README.md` union by id; the resolved copies are also in
+the 2334 session's scratchpad `resolved/`).
 
 ## Where we are
 
-- M0-M3 Done. M4 10 / 10. Counters before this session: sim 3 / 4, view 3 / 4, data 0 / 4 (sim and view take the end-of-milestone
-  hardening regardless; they reset to 0 / 4 after it).
-- **Golden** `sim/Rts.Sim.Tests/Replays/cross_map_seed1.replay`: `data-hash` **889D6BEA3A49F08E** (verified on `main` at this PLAN).
-  **Only D12 moves it this session** (`data-hash` + `checksum`; every `k` line equal; appended to `GatherWedgeQaTests.SameGameDataHashes`).
-  **The sim's M4-H3 leaves the golden bit-identical**: a fix that would change its `k` lines (a movement change the cross-map march feels)
-  is out of scope this session (document it in the bug instead).
-- **Integration order this session: data → sim → view** (data moves the golden alone; the sim's fixes touch no `game/data/**`; the view
-  touches neither). Expected conflicts: `studio/bugs/README.md` (union by id), `studio/qa/coverage.md` (sim + view rows: keep both).
-- **Memory bound** 231,920,000: 231,890,440 used (29,560 B margin). BUG-0480's scratch (`int[UnitCapacity]` ≈ 16,408 B) fits once; any
-  further per-slot array re-baselines, itemised in the brief and the report (rule 7).
-- **`EmptyTick(2500)`** on its 500 µs gate on base and head alike (BUG-0451): the counting rule stands (a Perf failure counts only alone and
-  above base). M4-H3 decides (see the sim brief).
-- **Bug ids this session:** sim from **BUG-0510**, view from **BUG-0520**, data from **BUG-0530**.
-- Standing rules unchanged (1-8: full suite incl. Perf alone + the merged scene loop for vision / combat / loader changes; a new `UnitState`
-  ships its `ui.json` line; whoever moves `data-hash` adds it to `SameGameDataHashes`; `ui.json` keys named in the brief; a sim behaviour
-  change a view scene asserts on gets a named item in the view brief; a new `Command` kind goes into `CommandDoorFuzzStressTests`;
-  per-slot memory itemised; the shipped `data-hash` pinned in the golden only, never a literal).
-- `CLAUDE.md` still says "Current milestone: M1" (the owner's file).
+- M0-M4 Done. M5 0 / 6: (1) `PlayerView` facade, the AI reads nothing hidden (a test enforces it); (2) the build-order executor
+  from `ai.json` + economy / production / military / ability / scout managers; (3) expansion, defense, attack waves, retreat,
+  rebuilding, scouting ramps and high ground before attacking up; (4) Easy / Normal / Hard per docs/02 "AI opponent"; (5) an
+  AI-vs-AI headless 20-minute match completes without errors and one side wins; (6) the owner can win on Easy and lose on Hard.
+- Counters: sim 0 / 4, view 0 / 4, data 1 / 4. Next hardening after 4 feature sessions per track (or sooner for an S2).
+- **Golden** `sim/Rts.Sim.Tests/Replays/cross_map_seed1.replay`: `data-hash` **889D6BEA3A49F08E on `main`** (verify at the PLAN);
+  the D12 rebase moves it to **C4C16BD39408471A** (`checksum` D3392E846CAC0118, every `k` line equal; already in D12's
+  `SameGameDataHashes`). Whoever else moves it appends to `GatherWedgeQaTests.SameGameDataHashes`. **The sim's M5-1 must not touch
+  `game/data/**`, the golden, or the two stealth test files** so the rebase stays trivial.
+- **Memory bound** 231,920,000: 231,908,912 used (**11,088 B margin**). **The next per-slot array re-baselines** (itemised in the
+  brief and the row's comment; M5's AI state is the likely one). Say so in every sim brief.
+- **Perf:** `EmptyTick(2500)` gate 550 µs (481-489 alone); `TightBlob2500` 4.5 ms with ~0.1 ms headroom alone. A Perf failure counts
+  only alone and above base. BUG-0510: the EmptyTick scene is a pile-up, not an idle tick (QA's to fix before the AI adds per-player work).
+- **Bug ids next session:** sim from **BUG-0540**, view from **BUG-0550**, data from **BUG-0560**.
+- Standing rules (1-8 unchanged: full suite incl. Perf alone + the merged scene loop for vision / combat / loader changes; a new
+  `UnitState` ships its `ui.json` line; whoever moves `data-hash` adds it to `SameGameDataHashes`; `ui.json` keys named in the
+  brief; a sim behaviour change a view scene asserts on gets a named item in the view brief; a new `Command` kind goes into
+  `CommandDoorFuzzStressTests`; per-slot memory itemised; the shipped `data-hash` pinned in the golden only). **New rule 9 (from
+  BUG-0530):** a brief names every test file another track's change will break and the final assertion both agree on; both tracks'
+  briefs carry the line, and the brief says which branch ships the edit (the one that merges first) so no merge conflict arises.
+- **Integration order is always sim → view → data** (the conductor's rule); plan around it, never against it.
+- `CLAUDE.md` still says "Current milestone: M1" (the owner's file; drift noted, not mine to change without a decision).
+- Open S3 (13): BUG-0511, 0512 (next sim hardening, first two items), BUG-0461 movement half, 0144, and the old crowd limits
+  (0005 / 0023 / 0025 / 0028 / 0032 / 0046 / 0050 / 0080 / 0151). S4 (12): sim 0510 / 0513 / 0113 item 2 / 0184 / 0002 / 0026 /
+  0040; view 0520 / 0521 / 0281 item 2; data none. No S1 / S2.
 
 ## Sim track
 
-### Current session plan: M4-H3, the end-of-M4 sim hardening · hardening · QA full for the BUG-0461 rule, standard for the rest · up to ~1,500 lines incl. QA
+### Next task candidate: M5-1, `PlayerView` + the `ai.json` schema · feature · QA full · ~1,200 lines incl. QA
 
-**Goal.** Close the sim's M4 debt so M4 can be signed off: the three M4-5 bugs, the cast walk-in that drops silently behind own
-attackers, the ordered chase that gives up a reachable building, and the perf-gate decision; then as much of the older backlog as fits.
-Every fix gets a regression test that failed first.
+**Goal.** The AI's only window on the world and the file its build orders will come from, so the data track can start writing
+`ai.json` while the sim writes the managers. No AI decisions yet.
 
-**Scope, most valuable first:**
-1. **BUG-0461 (S3), QA full.** The cast rule (Producer default, owner may revisit): a cast's walk-in whose caster is blocked by an **own
-   unit within 1.5 m in its direction of travel** does not count stuck ticks; and a cast's walk-in has **its own patience of 3 s** of
-   genuinely stuck ticks (not the plain Move's 1 s) before the cast is dropped. A dropped cast raises an `AbilityEvent` with a **`Dropped`**
-   flag (the view ignores it this session; an M5 / M6 HUD item). The 0.17 m 2-tick limit cycle on flat ground (replay 3; BUG-0035 / 0037
-   family) is a movement bug: fix it if it is a few lines **and leaves the golden's `k` lines bit-identical**, else document it in docs/03
-   "Known limits" and leave BUG-0461's movement half open with a note. The three sandbox replays in the bug file are the regression scenes
-   (rebuilt as xUnit rows: a caster hemmed in by own `Attacking` units at a ramp top and on flat ground must still cast once the way clears
-   or must wait the full 3 s before dropping). `M4PlayableTest` must still pass on seeds 1 and 6 in the merged scene loop.
-2. **BUG-0480 (S3).** `StealthSystem.OnStealthStarted` writes into `World.ShoveNeighbors` while `PassiveSystem.OnDeath` iterates it: give
-   detection its own scratch (`World.DetectNeighbors`, `int[UnitCapacity]`, itemised in the memory note), un-skip QA's
-   `AnOnDeathPassiveApplyingStealthed_ReachesEveryListedFriend(true)`; docs/03 "Implementation (M4-5)" known limit (2) updated.
-3. **BUG-0481 (S3).** The loader requires **exactly one `revealed` kind when any `stealthed` kind is present** (error at `statuses`); a
-   `Data/StealthLoaderTests` row; QA's `StealthedWithoutARevealedStatus_IsRefusedAtLoad` un-skipped; the docs/03 `statuses.json` bullet.
-4. **BUG-0482 (S4)** if a few lines: a reveal replaces the oldest non-stealth entry when the store is full; else document the limit.
-5. **BUG-0451 decision (Producer):** one profiling pass on the idle path of `EmptyTick(2500)` (movement / scan / hash of 2,500 idle
-   units); if a buy-back of **≥ 5 %** is found in ≤ ~200 lines, take it; else **re-baseline the gate to 550 µs** with the trend itemised in
-   the row's comment (M4-4a → M4-5 steps). Either way the bug file records the measurement and closes (`fixed` or `wontfix`).
-6. **BUG-0401 (S3).** An ordered chase (`CombatMode.Ordered`) whose target is reachable (finite flow-field cost at the unit's cell) never
-   counts stalled scans; an unreachable one still gives up. The seed-6 `QaGhostViewTest` layout as an xUnit row (a ramp detour round a cliff).
-7. Then as they fit: BUG-0302 b / c (the memory itemisation note; `AbilityPerfTests` phases run twice), BUG-0275 items 1-2 (**item 1 only
-   if it moves no golden `k` line**; else decide and record), BUG-0271 / 0272 (the dev recommends `wontfix` as documented limits: decide and
-   record), BUG-0144, BUG-0142 items 1-2, BUG-0113 item 2, BUG-0094, BUG-0391, BUG-0422 items 2-3; bug files set `fixed` / `wontfix` with
-   the proving test named; the README index rows.
-8. docs/03 updated with every behaviour change; a docs/01 row for each rule decided (BUG-0461's cast patience and own-blocker rule,
-   BUG-0401's reachable-chase rule) marked "Producer decision, owner may revisit".
+**Scope.**
+1. `Rts.Sim.Ai.PlayerView(world, player)`: read-only; units / buildings / resource nodes / ghosts / explored cells / visible cells
+   / own ledger, techs, population; every enemy unit answer goes through `Fog.CanSeeUnit` (which applies `World.HiddenFrom`:
+   stealth), every enemy building through `CanSeeBuilding` or the ghost list; own units always; no `World` reference escapes.
+   docs/03 "AI" (the Blackboard reads only the `PlayerView`), docs/02 "AI opponent" (the AI plays by the same rules).
+2. The test for criterion 1: a fuzz over 3 seeds x 2,000 ticks comparing every `PlayerView` answer against a brute-force
+   fog-and-stealth oracle (0 leaks), and an architecture test that `Rts.Sim.Ai` never references `World` outside `PlayerView`.
+3. `game/data/factions/<id>/ai.json` schema (docs/03 "Data format": think interval, build order steps (build / train / research /
+   expand at a count or a time), army compositions, attack thresholds, retreat rule, per difficulty) with validation,
+   `DataValidationTests`, and the minimum entries the loader tests need (one step per faction); whether `ai.json` enters
+   `ContentHash` is the dev's call (if it does: one golden regen, `k` lines equal, the hash appended).
+4. Perf: a `PlayerView` snapshot for 8 players at 2,500 units under 0.3 ms a tick, 0 B steady state (pre-sized per-player arrays:
+   itemised; **this is the re-baseline** if per-slot).
+5. Out of scope: any manager, any command the AI sends, BUG-0511 / 0512 unless the task touches their code.
 
-**Out of scope:** any feature; `game/data/factions/**` (D12 writes both `units.json` this session); `game/data/common/**` (no data-hash
-move from the sim); `ui.json`; `DataContentHashTests.cs`; `cross_map_seed1.replay` (bit-identical at the end); `GatherWedgeQaTests.SameGameDataHashes`.
+**QA focus.** Leaks: a unit that becomes hidden mid-tick (stealthed in phase 5, a storm's blocker, a ghost dropped on sight), the
+tick-0 stamp, players past 2, a `PlayerView` kept across ticks; the brute-force oracle every tick; determinism (reads leave the
+hash unchanged); 0 B.
 
-**Acceptance criteria:**
-1. BUG-0461: a caster hemmed in by own `Attacking` units within 1.5 m ahead counts no stuck ticks and casts when the way clears (xUnit rows
-   from replays 1 and 2's layouts); a genuinely stuck walk-in drops the cast after 3 s, not 1 s; the drop raises an `AbilityEvent` with
-   `Dropped`; each row fails on the base; `M4PlayableTest` seeds 1 and 6 pass in the merged loop.
-2. BUG-0480: QA's row un-skipped and green; the scratch itemised (memory delta stated; margin after it stated).
-3. BUG-0481: shipped data minus `revealed` is refused at `statuses` with one error; QA's row un-skipped.
-4. BUG-0451: the measurement in the bug file; either `EmptyTick(2500)` passes alone with ≥ 5 % headroom under 500 µs, or the gate is 550 µs
-   with the trend itemised in the comment.
-5. BUG-0401: the ramp-detour row passes (the building is attacked), fails on the base; an unreachable target still gives up.
-6. Full suite incl. Perf alone green (BUG-0451 rule); smoke PASS; merged scene loop 41 / 41; 0 warnings; the golden file byte-identical to
-   `main`'s (`git diff --stat` shows no `Replays/` change).
-7. docs/03 + docs/01 rows; every worked bug file `fixed` / `wontfix` with the proving test; README index rows.
-
-**Design references:** docs/02 "Ability system" (the player clicks a target; a dropped click is not acceptable silently), docs/03
-"Implementation (M4-4a)" walk-in rule, "Implementation (M4-5)" known limits, docs/03 "Who is shoved", the BUG-0461 / 0401 / 0451 files.
-
-**Tests required:** regression rows above (fail-first on base, named in the report); `Vision/StealthTests` + QA's stealth rows green;
-`ReplayGoldenTests` green on the untouched golden; `AllocationTests` 0 B rows still green after the scratch; Perf alone.
-
-**Constraints:** no allocation in per-tick code (the scratch is pre-sized); no Dictionary iteration; every number (1.5 m, 3 s) in
-`rules.json` or `SimConfig` with a loader default, never a C# literal in a system; `Rts.Sim` warnings as errors; no `game/data/**` edit.
+### Alternatives (if the owner's inbox asks otherwise)
+BUG-0511 + 0512 as a small hardening task (both have skipped QA rows and clear directions); BUG-0144.
 
 ## View track
 
-### Current session plan: M4-VH3, the end-of-M4 view hardening · hardening · QA standard · up to ~1,500 lines incl. QA
+### Next task candidate: M5-V1, the lost-cast cue + the flat rings (+ export hygiene if budget remains) · feature · QA standard · ~1,000 lines incl. QA
 
-**Goal.** Close the view's M4 debt so M4 can be signed off: discs and rings that cross a cliff, the sandbox's stated range, and the
-smaller nits.
+**Scope.** (1) The HUD reacts to `AbilityEvent.Dropped` (Requests 34): the caster's cast bar / cast-point ring ends with a short
+red flash on the caster and the existing order-refused sound; any text from `ui.json` (name the keys in the brief). `AbilityViewTest`
+rows: a walk-in blocked by enemies drops after 3 s and shows the cue; a cast cancelled by a new order shows nothing; the twin hash
+unchanged. (2) BUG-0520: cast-point rings and resolve flashes as `GroundDisc`s (a small pool); the cliff row from `QaVh3Test`'s
+layout. (3) BUG-0521 item 1. (4) If budget remains: exclude `game/tests/` from the release build (an export preset; docs/03 "Build
+and export"); the `.pck`-safe data load waits on Requests 33. Out of scope: `game/data/**`, replays, `DataContentHashTests.cs`,
+any `sim/**` beyond read-only `ViewApi` additions.
 
-**Scope, most valuable first:**
-1. **BUG-0430 (S3) + BUG-0462 item 1.** A zone disc, the `selfAura` hover ring and the targeting ring are flat planes at the centre's
-   height, so across a 4 m cliff they sink under the higher ground or float over the lower. Project them onto the terrain: a Godot `Decal`
-   projecting a runtime-generated disc texture downward over the zone's footprint (height span ≥ 2 levels), **or** a terrain-hugging mesh
-   whose vertices sample `TerrainHeight.At` (depth test on), **or** a heightmap-sampling shader. The dev chooses and says why. Windowed
-   stills at the cliff (`qa-v6c-cliff-zoom30/50` as the before) looked at; if a mesh, a test that every rim vertex sits on `TerrainHeight.At`
-   within 0.05 m on a two-level map; a zone centred on a plateau edge shows its disc on both the plateau and the low ground.
-2. **BUG-0490 (S4):** `TickBudget`'s comment and docs/03 state the measured range (QA's 3,081 / 4,488); one `FillMaxHp` a frame shared by
-   `UnitViews` and `CombatViews`.
-3. **BUG-0431 (S4):** a distinct own-storm rim colour (not within 0.06 of Whirlwind's `#C8892E`), checked in a windowed still.
-4. **BUG-0462 item 3** (marker rows merge at zoom 60: fix or an M6 note), **BUG-0400**, **BUG-0250 item 2**, **BUG-0148 item 1**,
-   **BUG-0126 items 5 / 6**; then, if budget remains, **export hygiene** (exclude `game/tests/` from the release build; load `game/data/`
-   and `ui.json` in a `.pck`-safe way), docs/03 "Build and export".
-5. Bug files + README rows; docs/03 per change.
+**QA focus.** The cue fires once per drop (QA's `ADroppedCast_FiresOneDroppedEvent_*` is the sim side); no cue on the player's own
+cancel; `M4PlayableTest` seeds 1 / 6 still pass (it works round BUG-0461 with plain Moves); the ring pool allocation-free; the
+merged loop 42 / 42.
 
-**Out of scope:** stealth visuals (M8); any `game/data/**`, replay or `DataContentHashTests.cs` edit; any `sim/**` edit outside
-`sim/Rts.Sim/ViewApi/**` read-only additions. The sim's M4-H3 adds an `AbilityEvent` `Dropped` flag and a longer cast walk-in patience:
-`M4PlayableTest` works round BUG-0461 with plain Moves, so no scene change is expected; the view ignores `Dropped` this session.
-
-**Acceptance criteria:**
-1. BUG-0430: on a two-level map a Sandstorm disc crossing the cliff is visible on both levels (the still looked at and named in the
-   report); the hover and targeting rings the same; the fog rule for discs (`ZoneDiscs`) unchanged and QA's oracle rows still green.
-2. BUG-0490: the comment and docs/03 carry the measured range; exactly one max-hp fill per frame (a test or an allocation / call-count row).
-3. BUG-0431: own-storm rim colour differs from `#C8892E` by more than 0.06 in every channel distance measure the test uses; a still.
-4. Every worked bug's regression (xUnit or a scene row) failed first; merged scene loop 41 / 41; smoke PASS; 0 warnings; no new
-   player-facing literal; docs/03; bug files `fixed` / `wontfix` with the proving test; README rows.
-
-**Design references:** docs/03 "Implementation (M4-V6c)" ("a disc on the ground per zone"), "Implementation (M4-V7)" (`TickBudget`),
-docs/03 "Dumb views"; the BUG-0430 / 0462 / 0490 / 0431 files.
-
-**Constraints:** dumb views (no gameplay state in views; `ViewApi` additions read-only, hash twin unchanged); no sim mutation; player-facing
-text only from `ui.json`; `--no-fog` / `--no-combat` flags keep working.
+### Later
+M5-V2 an AI seat in the sandbox (`--ai <difficulty>`, seat 1, the match end printed) once M5-1 and the first managers are on `main`;
+a remembered site drawn as a foundation (`Fog.Ghosts` `Site`); then the M6 shell.
 
 ## Data track
 
-### Current session plan: D12, the casters' detection · feature · QA light · ~500 lines incl. QA
+### First, always: the D12 rebase · ~50 lines · QA light (the suite is the gate)
 
-**Base:** `main` fa74130 (the `detector` schema and the `stealthed` / `revealed` statuses are on it). Files this task may write under
-`game/data/`: `game/data/factions/malazan/units.json`, `game/data/factions/whirlwind/units.json` (**no other track writes `game/data/**`
-this session**); `docs/factions/malazan.md`, `docs/factions/whirlwind.md`; `sim/Rts.Sim.Tests/Content/**`, `sim/Rts.Sim.Tests/QA/Content/**`;
-`sim/Rts.Sim.Tests/Replays/cross_map_seed1.replay` + the `SameGameDataHashes` line in `QA/GatherWedgeQaTests.cs` (the one golden regen;
-named exception). **The data branch merges first this session.**
+The data branch `origin/studio/2026-10-10-2334-data` @ c0dd350 is accepted. The data dev merges `main` (after the sim's and
+view's 2334 commits) into it and resolves: `sim/Rts.Sim.Tests/Data/StealthLoaderTests.cs` → D12's side of both conflict
+hunks (test name `Shipped_TheKindsAndRulesLoad_AndOnlyTheCastersDetect`, assertion `u.Slot == UnitSlot.Caster ? 10f : 0f`;
+`main`'s BUG-0481 row and `Remove` helper stay); `sim/Rts.Sim.Tests/Vision/StealthContentHashTests.cs` → `main`'s file as is
+(D12's only change there, "10" → "12", is already in `main`'s "12" / "13" mutants; D12's "revealed gone" mutants no longer load
+under BUG-0481); `studio/bugs/README.md` and `studio/qa/coverage.md` → union / keep both. D12's golden and `SameGameDataHashes`
+line stand. Then `dotnet build` 0 warnings and the full non-Perf suite green (the Producer's scratch merge of exactly this:
+980 / 3 / 0 on the affected filters), and the branch is ready to merge. This is a named exception to "no C# outside the data
+test folders" for those two files only. Acceptance: the two files equal the recorded resolution; suite green; `main`'s golden
+header reads C4C16BD39408471A after the merge. **If it merges first in the session (data before sim this once) nothing else
+changes; otherwise the sim's M5-1 must not touch those files.**
 
-**Scope:**
-1. `"detector": 10` on **`malazan_cadre_mage`** and **`whirlwind_priest`** (the two shipped casters; docs/02 line 33 "Caster" class row
-   ("detector") and "Stealth and detection" line 248: "all casters (10 m)").
-2. A Detector cell on both faction pages (the unit tables or the Unit notes, in the pages' existing style) pinned both ways by
-   `Content/UnitContentTests` (or the page compare the pages already use), with mutants that fail by name (a page saying 12 m, data saying 12 m).
-3. The `stealthed` / `revealed` texts pinned against docs/02 "Status effects" rows 224-225 (`Stealthed` "Invisible and untargetable to
-   enemies without detection", `Revealed` "Cannot be stealthed (overrides Stealthed)"): out of `AbilityContentTests.PendingStatuses`; the
-   shipped descriptions in `common/statuses.json` are the sim's (numberless): the data track may propose a rewording in the report, never
-   edit `common/**`.
-4. One golden regen (`data-hash` 889D6BEA3A49F08E → new; every `k` line equal; appended to `SameGameDataHashes` with the reason "D12:
-   casters' detector").
-5. BUG-0500 (the two linger patterns, QA's row un-skipped) and the BUG-0470 status line (item 3 was fixed at the 1314 ACCEPT) if a few lines.
-6. The review table in the report (unit / field / old → new / why; the two page cells quoted).
+### Then: inbox tweaks first; else the balance pass · feature · QA standard · ~800 lines incl. QA
 
-**Out of scope:** the balance pass (after the M4 sign-off, on the owner's D6 answer or the Producer default 40-65 %); any `common/**`
-edit; any C# outside the data test folders; any other `game/data/**` file.
+**Scope.** The counter-triangle margins (both pages' tables, `Content/CounterTriangleMarginsTests`) into the **40-65 % winner-cost
+band** (the Producer default from D6, docs/02 "Balance" + the D6 table; the owner's answer overrides if it is in the inbox at the
+PLAN): change only attack / armor / hp / cost in `game/data/factions/malazan/units.json` and `whirlwind/units.json` (no speed,
+radius, sight, detector or text; the Line v Shock outlier first); re-pin every page cell; the review table (unit / field / old → new
+/ one-line why) in the report. **Named exceptions:** the golden `cross_map_seed1.replay` re-record (hp is hashed, so `k` lines move
+if any unit in that march changes hp; state which) + `SameGameDataHashes`; and, by rule 9, the sim-track tests that pin shipped
+numbers (`Data/UnitLoaderTests`? the dev lists them at the start and the brief names them). QA standard: the fight harness numbers
+(`CounterTriangleScene`), `DataValidationTests`, `DescriptionProblems` 0.
 
-**Acceptance criteria:**
-1. `DataValidationTests` green; both casters load with `UnitDef.Detector` 10 m (a content test asserts it); no other unit has one.
-2. The page cells pinned both ways (mutants fail by name, listed in the report).
-3. `PendingStatuses` without Stealthed / Revealed; `DescriptionProblems` 0 on shipped text.
-4. The golden diff is `data-hash` + `checksum` only (every `k` line equal, stated); `ReplayGoldenTests` + `GatherWedgeQaTests` green;
-   `TheShippedContentHash_IsTheGoldenReplaysHeader` green.
-5. Non-Perf suite green, 0 warnings; the review table in the report.
+**Design references.** docs/02 "Unit classes", "Balance" / the counter triangle; docs/factions/malazan.md and whirlwind.md unit
+tables and the "Winner hp left" column; the D6 entry under For your review.
 
-**Design references:** docs/02 "Unit classes" (line 33), "Stealth and detection" (lines 244-257), "Status effects" (lines 224-225);
-docs/factions/malazan.md and whirlwind.md unit tables; docs/03 "For the data track (M4-5)".
-
-**Constraints:** data only; no C# outside `sim/Rts.Sim.Tests/Content/` and `QA/Content/`; the golden is the only hash pin (rule 8).
+### After that
+`ai.json` build orders for both factions once M5-1's schema is on `main` (QA light; the economy / army / attack numbers per
+difficulty from docs/02 "AI opponent"); M7-M9 faction data later.
 
 ## Watch-outs (all tracks)
 
-- **Integration order this session: data → sim → view.** Data alone moves the golden (`data-hash` + `checksum`); the sim's golden is
-  bit-identical to `main`'s (checked at ACCEPT by `git diff --stat`); the view touches no replay. Conflicts foreseen: `studio/bugs/README.md`
-  (union by id), `studio/qa/coverage.md` (sim + view rows: keep both). docs/03 auto-merges (different sections). The merged scene loop (41,
-  both playables last) is the gate.
-- **The M4 sign-off** at this ACCEPT if all three tracks are accepted: every required criterion verified (10 / 10 on `main`), coverage ✅ for
-  Unit / Invariant fuzz / Determinism on every M4 row (true at this PLAN; the Abilities row's Scenario 🟡 is not a required column), no open
-  S1 / S2, the retro in docs/05 (open S3 / S4 listed), M5 set to Next, a For your review entry on how to try M4. If a track is rejected,
-  the sign-off waits for that track's redo.
+- At the PLAN: `main` does **not** carry D12 (golden 889D6BEA3A49F08E, no `detector` in `units.json`); the data track rebases it
+  first (above); the sim and view briefs say nothing touches the two stealth test files, `game/data/**` or the golden. The M4
+  sign-off is recorded as standing with D12 held; if the rebase cannot land green, reopen it at that ACCEPT.
+- The roadmap now has the M3 and M4 retros (the M3 one was missing; written at this ACCEPT). The M2 retro has a duplicated
+  "Decisions made" paragraph (M1's lines) left as found.
+- Scratch worktrees: the Producer's `producer-merge` worktree (in the 2334 session's scratchpad, detached at a scratch merge
+  commit; the permission system refused its removal) is one more housekeeping entry: `git worktree remove --force <path>` then
+  `git worktree prune`. 15+ owner-housekeeping entries remain in `git worktree list`.
 - Perf under three suites fails on base and head alike (`TightBlob2500`, `EmptyTick(2500)`); a failure counts only alone and above base.
-- Scratch directories in the shared scratchpad carry the agents' names; never `rm -rf` a shared name. 16 entries in `git worktree list`
-  are owner / conductor housekeeping (`git worktree prune` after deleting the folders).
