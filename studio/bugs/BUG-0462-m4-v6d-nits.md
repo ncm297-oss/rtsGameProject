@@ -42,3 +42,11 @@ the run checked, as docs/03 states ("on each frame of the whole run").
   650-760, with kills 19 against 18. The margin was still 1,288 ticks (23 %). A worst-case Telas recast that waits for
   the 25 s cooldown adds about 500 ticks, so the stated margin isn't a guarantee. Update the measured range or the
   budget note.
+
+## Re-check (QA, 2026-10-10-1954, M4-V7b)
+- Item 5 fixed: `TickBudget`'s comment and docs/03 now give a measured range with step 9 (seed 1 2,869-3,028, seed 6
+  3,710-4,372), name the 4,212 run, and state the margin as measured, not guaranteed. QA's 14 seed-runs went slightly past
+  that range (seed 1 up to 3,081, seed 6 up to 4,488, still 1,012 ticks / 18 % under 5,500). Filed as BUG-0490 item 1
+  (S4), not reopened here.
+- Items 1 and 3 not in this task's scope (end-of-M4 view hardening).
+

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-10-1314, task M4-4b-3b (QA, sim track; the code is the view track's) |
 | System | view: `ViewApi.UnitHpBars`, `ViewApi.HitFlash`, `game/scripts/CombatViews.cs`, `game/scripts/UnitViews.cs` |
-| Fixed by | |
+| Fixed by | 273d56b (M4-V7b, view branch): per-slot `World.MaxHp` via `UnitViews.FillMaxHp`, `UnitHpBars.Collect(shown, hp, maxHp, slots)`, `HitFlash.UpdateWithSlotMax`; regression `QA/ViewApi/UnitHpBarsMaxHpQaTests.AProphecyZealotAt70Of83_ShowsABar` (un-skipped) and `QA/ViewApi/MaxHpExpiryQaTests` |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter FullyQualifiedName~UnitHpBarsMaxHpQaTests` and un-skip
@@ -28,3 +28,11 @@ techs). A hurt unit shows a bar of hp / that maximum.
 ## Notes
 Not a sim defect: the sim brief named this as a view concern and docs/03 tells the view to switch to `World.MaxHp`. Filed
 so it is not lost: the M4-V7 sandbox can research Prophecy. Only shipped hp tech today: Prophecy (+20 Zealot).
+
+## Re-check (QA, 2026-10-10-1954, M4-V7b)
+Fixed and verified. `AProphecyZealotAt70Of83_ShowsABar` passes un-skipped; the headless `AbilityViewTest` Prophecy row
+(seeds 1 and 6) shows a bar of 0.843 at 70 / 83, none at 83 / 83, and a first-sight flash on the 70 / 83 one. QA added
+`QA/ViewApi/MaxHpExpiryQaTests`: exactly 63 / 83 has a bar and flashes; Prophecy researched mid-fight changes the bars on
+the next read (41 / 63 becomes 61 / 83, 63 / 63 becomes 83 / 83, no bar) with no flash; a fresh unit in a freed slot reads
+its own maximum. `CombatViewTest` (oracle on `World.MaxHp`) passes in the scene loop.
+
