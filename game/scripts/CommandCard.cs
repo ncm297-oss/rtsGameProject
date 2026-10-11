@@ -31,7 +31,8 @@ namespace Rts.Game;
 /// docs/03 "Implementation (M4-V6a)"): the ability's <c>displayName</c>, its grid key, a tooltip of its <c>description</c>
 /// and range / radius / cooldown (<c>ui.json</c> <c>hud</c> labels); dimmed with the seconds left while no selected unit
 /// that has it is off cooldown (<see cref="AbilityCaster.SoonestReady"/>); a press or its key arms ability targeting
-/// (<see cref="SelectionController.BeginAbility"/>). Holds view state only (which menu is open).
+/// (<see cref="SelectionController.BeginAbility"/>); M4-V6d: a no-target (selfAura) ability's press casts at once instead
+/// (Shift queues it) and its tooltip has no range. Holds view state only (which menu is open).
 /// </remarks>
 public partial class CommandCard : Control
 {
@@ -127,6 +128,17 @@ public partial class CommandCard : Control
 
     /// <summary>The whole seconds of cooldown an <see cref="CardCommand.Ability"/> cell shows (0 = live; -1 not set yet or not an ability cell; M4-V6a).</summary>
     public int AbilitySecondsAt(int i) => (uint)i < Cells && _actions[i] == CardCommand.Ability ? _shownReason[i] : -1;
+
+    /// <summary>The ability id of the visible <see cref="CardCommand.Ability"/> button under the cursor, else -1 (M4-V6d: <see cref="AbilityViews"/> draws a no-target ability's radius round its caster while it is hovered). Allocation-free.</summary>
+    public int HoveredAbility
+    {
+        get
+        {
+            for (int i = 0; i < Cells; i++)
+                if (_actions[i] == CardCommand.Ability && _buttons[i].Visible && _buttons[i].IsHovered()) return _types[i];
+            return -1;
+        }
+    }
 
     /// <summary>The button of grid cell <paramref name="i"/>.</summary>
     public Button ButtonAt(int i) => _buttons[i];
@@ -317,8 +329,10 @@ public partial class CommandCard : Control
     {
         string m = ui.Hud(HudText.Meters), sec = ui.Hud(HudText.Seconds);
         float cooldown = def.CooldownTicks / (float)SimConstants.TicksPerSecond;
+        // A no-target (selfAura) ability has no range: its line starts at the radius (M4-V6d).
+        string range = def.Kind == AbilityKind.SelfAura ? "" : string.Create(CultureInfo.InvariantCulture, $"{ui.Hud(HudText.Range)} {def.Range:0.##} {m}  ");
         return string.Create(CultureInfo.InvariantCulture,
-            $"{def.Description}\n{ui.Hud(HudText.Range)} {def.Range:0.##} {m}  {ui.Hud(HudText.Radius)} {def.Radius:0.##} {m}  {ui.Hud(HudText.Cooldown)} {cooldown:0.##} {sec}");
+            $"{def.Description}\n{range}{ui.Hud(HudText.Radius)} {def.Radius:0.##} {m}  {ui.Hud(HudText.Cooldown)} {cooldown:0.##} {sec}");
     }
 
     // Greys each production button the sim would refuse now; touches a button only when its reason changed.
@@ -507,7 +521,8 @@ public partial class CommandCard : Control
             case CardCommand.Train: _sel.Produce(_types[i], isTech: false); break;
             case CardCommand.Research: _sel.Produce(_types[i], isTech: true); break;
             // BeginAbility asks the cooldowns again: a dimmed key press arms nothing.
-            case CardCommand.Ability: _sel.BeginAbility(_types[i]); break;
+            // A no-target (selfAura) ability casts here at once, Shift queuing it (M4-V6d).
+            case CardCommand.Ability: _sel.BeginAbility(_types[i], queued); break;
         }
     }
 

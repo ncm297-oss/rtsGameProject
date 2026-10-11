@@ -20,7 +20,8 @@ namespace Rts.Sim.Abilities;
 /// that <see cref="AbilityDef.Affects"/> allows (M4-4b-1: and other players' buildings, and own units at a fraction, for a
 /// damage effect that says so), the cooldown starts (with the owner's <c>abilityCooldown</c> techs), and the caster stands Idle.
 /// M4-4b-3a: a <see cref="AbilityKind.SelfAura"/> ability ignores the command's point, never walks, and resolves around the
-/// caster's position at the resolve.
+/// caster's position at the resolve. M4-4b-3b: a <see cref="AbilityKind.Summon"/> ability is cast the same way, and at the
+/// resolve its spawn effects put units beside the caster (<see cref="SummonSystem.Summon"/>).
 /// </remarks>
 public static class AbilitySystem
 {
@@ -52,8 +53,8 @@ public static class AbilitySystem
         u.CastTicks[i] = 0;
         AbilityDef a = AbilityOf(world, i);
         // M4-4b-3a: a self / aura ability ignores the command's point; its cast point is where the caster stands (informational:
-        // the effects land around the caster's position at the resolve).
-        u.CastPoint[i] = a.Kind == AbilityKind.SelfAura ? u.Position[i] : point;
+        // the effects land around the caster's position at the resolve). M4-4b-3b: a summon too.
+        u.CastPoint[i] = AtCaster(a) ? u.Position[i] : point;
         if (InRange(u, i, a)) StartCasting(world, i, a);
         else if (!OrderSystem.MoveTo(world, i, point)) Cancel(u, i);
     }
@@ -96,8 +97,8 @@ public static class AbilitySystem
             }
             if (--u.CastTicks[i] > 0) continue;
             int slot = u.CastAbility[i];
-            // M4-4b-3a: a self / aura ability resolves around the caster where it stands now.
-            Vector2 point = a.Kind == AbilityKind.SelfAura ? u.Position[i] : u.CastPoint[i];
+            // M4-4b-3a: a self / aura ability (M4-4b-3b: and a summon) resolves around the caster where it stands now.
+            Vector2 point = AtCaster(a) ? u.Position[i] : u.CastPoint[i];
             EntityHandle caster = new(i, u.Generation[i]);
             u.CastAbility[i] = -1;
             u.CasterCount--;
@@ -128,9 +129,12 @@ public static class AbilitySystem
         return world.Data.Abilities[world.Data.Units[u.TypeId[i]].Abilities[u.CastAbility[i]]];
     }
 
-    // M4-4b-3a: a self / aura ability has no range: always "in range", so it never walks.
+    // M4-4b-3a: a self / aura ability has no range: always "in range", so it never walks. M4-4b-3b: nor has a summon.
     private static bool InRange(UnitStore u, int i, AbilityDef a) =>
-        a.Kind == AbilityKind.SelfAura || Vector2.DistanceSquared(u.Position[i], u.CastPoint[i]) <= a.Range * a.Range;
+        AtCaster(a) || Vector2.DistanceSquared(u.Position[i], u.CastPoint[i]) <= a.Range * a.Range;
+
+    /// <summary>Whether <paramref name="a"/> has no target and resolves round the caster (self / aura, M4-4b-3a; summon, M4-4b-3b).</summary>
+    internal static bool AtCaster(AbilityDef a) => a.Kind is AbilityKind.SelfAura or AbilityKind.Summon;
 
     /// <summary>Unit slot <paramref name="i"/> stands to cast <paramref name="a"/>: planted, its walk ended, the timer set (this tick counts as the first).</summary>
     private static void StartCasting(World world, int i, AbilityDef a)
@@ -187,6 +191,8 @@ public static class AbilitySystem
         }
         // M4-4b-2: the zone, after the units took the other effects (it applies its statuses at once).
         if (a.ZoneEffect >= 0) ZoneSystem.Create(world, owner, a, point);
+        // M4-4b-3b: a summon's units appear after the other effects landed, so they take none of them.
+        if (a.Kind == AbilityKind.Summon) SummonSystem.Summon(world, owner, a, point);
         if (!a.HitsBuildings || world.StructureClass < 0) return;
         BuildingStore b = world.Buildings;
         ReadOnlySpan<bool> alive = b.Alive;

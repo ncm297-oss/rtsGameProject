@@ -8,13 +8,15 @@ using Rts.Sim.ViewApi;
 
 namespace Rts.Game;
 
-/// <summary>The ability views (M4-V6a, M4-V6b, M4-V6c): the targeting rings while an ability is armed, the casts on the map, the status markers over units, the resolve flashes and the zone discs.</summary>
+/// <summary>The ability views (M4-V6a, M4-V6b, M4-V6c, M4-V6d): the targeting rings while an ability is armed, the casts on the map, the status markers over units, the resolve flashes and the zone discs.</summary>
 /// <remarks>
 /// <para><b>Targeting.</b> While <see cref="SelectionController.TargetAbility"/> is set, the ground under the cursor
 /// (<see cref="SelectionController.AbilityPoint"/>) gets a ring of the ability's <c>radius</c> (where the effects would land)
 /// and the selected unit that would cast there (<see cref="SelectionController.PickCaster"/>: the nearest ready one) a ring of
 /// its <c>range</c>. Each ring is a flat torus whose outer radius is the def's value, one mesh per ability and ring made the
-/// first time it is armed; a frame only moves the two nodes.</para>
+/// first time it is armed; a frame only moves the two nodes. M4-V6d: a no-target (<see cref="AbilityKind.SelfAura"/>) ability
+/// is never armed (its button casts at once); while the cursor rests on its button the radius ring is drawn round the unit
+/// the press would cast with (<see cref="SelectionController.SelfCaster"/>) and no range ring.</para>
 /// <para><b>Casts.</b> Every unit the screen shows (the fog's shown list, M4-V4) standing in <see cref="UnitState.Casting"/>
 /// gets a cast bar over its hp bar's place: the share of the def's <c>castTime</c> stood (<see cref="AbilityCaster.Progress"/>
 /// of <c>UnitStore.CastTicks</c>). Every own unit with a cast in hand (<c>CastAbility</c> set: walking into range or standing)
@@ -24,7 +26,7 @@ namespace Rts.Game;
 /// bar from the cast's first tick.</para>
 /// <para><b>Statuses</b> (M4-V6b). Every unit the screen shows gets one small marker per active status
 /// (<see cref="StatusMarkers.Collect"/>), side by side above its cast bar's place, in a colour by the status's
-/// <see cref="StatusKind"/> (Burning flame, Slowed deep blue, Blinded dark violet since M4-V6c, any other kind pale). One coloured <see cref="MultiMesh"/>
+/// <see cref="StatusKind"/> (Burning flame, Slowed deep blue, Blinded dark violet since M4-V6c, Frenzied hot magenta since M4-V6d, any other kind pale). One coloured <see cref="MultiMesh"/>
 /// sized for every slot's <see cref="StatusStore.PerUnit"/> entries, written densely each frame.</para>
 /// <para><b>Resolve flashes</b> (M4-V6b). Every resolved cast in <c>World.AbilityEvents</c> (read from
 /// <see cref="SimRunner.Ticked"/>, so a frame of several ticks misses none, and from the frame loop for scenes that tick the
@@ -84,6 +86,9 @@ public partial class AbilityViews : Node3D
     /// <summary>The Blinded (blind) marker's colour (M4-V6c): a dark violet, apart from Burning's orange and Slowed's blue on sand and on both factions' bodies at zoom 30 (a taste default until the M6 art pass).</summary>
     public static readonly Color BlindColor = new(0.5f, 0.06f, 0.62f);
 
+    /// <summary>The Frenzied (frenzied) marker's colour (M4-V6d): a hot magenta, at least 0.4 apart in some channel from Burning's orange, Slowed's blue, Blinded's violet and the pale default, and off the Whirlwind's crimson accent (a taste default until the M6 art pass).</summary>
+    public static readonly Color FrenzyColor = new(1f, 0.2f, 0.75f);
+
     /// <summary>A marker of any other status kind: pale.</summary>
     public static readonly Color OtherStatusColor = new(0.92f, 0.92f, 0.88f);
 
@@ -128,8 +133,11 @@ public partial class AbilityViews : Node3D
     /// <summary>The fog whose hide rule applies to the cast bars; null shows every live caster's.</summary>
     public FogOfWar? Fog { get; set; }
 
-    /// <summary>True while the two targeting rings' state is drawn (an ability armed and the cursor on the map).</summary>
+    /// <summary>True while the radius ring is drawn: an ability armed and the cursor on the map, or (M4-V6d) a no-target ability's button hovered with a caster ready.</summary>
     public bool TargetingShown => _radius.Visible;
+
+    /// <summary>True while the radius ring is the hover ring of a no-target ability's button, drawn round its caster (M4-V6d); the range ring is hidden then.</summary>
+    public bool SelfRingShown { get; private set; }
 
     /// <summary>The ability the targeting rings are drawn for, or -1.</summary>
     public int ShownAbility { get; private set; } = -1;
@@ -143,7 +151,7 @@ public partial class AbilityViews : Node3D
     /// <summary>The radius ring's centre (sim x, y in meters) as last drawn.</summary>
     public System.Numerics.Vector2 RadiusCenter { get; private set; }
 
-    /// <summary>The unit slot the range ring is drawn round (the caster that would cast), or -1 when it is hidden.</summary>
+    /// <summary>The unit slot the range ring is drawn round (the caster that would cast), or -1 when it is hidden; for a hovered no-target ability (M4-V6d) the caster the radius ring is drawn round.</summary>
     public int RangeCaster { get; private set; } = -1;
 
     /// <summary>The range ring node.</summary>
@@ -253,6 +261,7 @@ public partial class AbilityViews : Node3D
                 StatusKind.DamageOverTime => DamageOverTimeColor,
                 StatusKind.Slow => SlowColor,
                 StatusKind.Blind => BlindColor,
+                StatusKind.Frenzied => FrenzyColor,
                 _ => OtherStatusColor,
             };
         int markCapacity = unitCapacity * StatusStore.PerUnit;
@@ -320,18 +329,19 @@ public partial class AbilityViews : Node3D
     private void SyncTargeting(World world, float alpha, Vector2 mouse, bool queued)
     {
         int ability = _sel?.TargetAbility ?? -1;
-        if (ability < 0 || !_sel!.AbilityPoint(mouse, out System.Numerics.Vector2 point))
+        if (ability < 0)
+        {
+            SyncSelfRing(world, alpha, queued);
+            return;
+        }
+        SelfRingShown = false;
+        if (!_sel!.AbilityPoint(mouse, out System.Numerics.Vector2 point))
         {
             HideTargeting();
             return;
         }
         AbilityDef def = _data.Abilities[ability];
-        if (ShownAbility != ability)
-        {
-            ShownAbility = ability;
-            _radius.Mesh = _radiusMesh[ability] ??= RingMesh(def.Radius, RadiusColor);
-            _range.Mesh = _rangeMesh[ability] ??= RingMesh(def.Range, RangeColor);
-        }
+        ShowMeshes(ability, def);
         RadiusCenter = point;
         _radius.Position = new Vector3(point.X, TerrainHeight.At(world.Heightmap, point.X, point.Y) + Lift, point.Y);
         if (!_radius.Visible) _radius.Visible = true;
@@ -344,6 +354,38 @@ public partial class AbilityViews : Node3D
         }
         _range.Position = UnitViews.GroundPoint(world, caster, alpha) + new Vector3(0f, Lift, 0f);
         if (!_range.Visible) _range.Visible = true;
+    }
+
+    private void ShowMeshes(int ability, AbilityDef def)
+    {
+        if (ShownAbility == ability) return;
+        ShownAbility = ability;
+        _radius.Mesh = _radiusMesh[ability] ??= RingMesh(def.Radius, RadiusColor);
+        // A no-target ability has no range (0): it never draws a range ring, so it gets no mesh.
+        _range.Mesh = def.Range > 0f ? (_rangeMesh[ability] ??= RingMesh(def.Range, RangeColor)) : null;
+    }
+
+    // M4-V6d: while the cursor rests on a no-target (selfAura) ability's button, its radius ring is drawn round the unit
+    // the press would cast with (SelfCaster: the nearest ready caster rule at the selection's lead); nothing when none is ready.
+    private void SyncSelfRing(World world, float alpha, bool queued)
+    {
+        int ability = _sel?.Card?.HoveredAbility ?? -1;
+        int caster = -1;
+        if (ability >= 0 && _data.Abilities[ability].Kind == AbilityKind.SelfAura) caster = _sel!.SelfCaster(ability, queued, out _);
+        if (caster < 0)
+        {
+            SelfRingShown = false;
+            HideTargeting();
+            return;
+        }
+        ShowMeshes(ability, _data.Abilities[ability]);
+        Vector3 at = UnitViews.GroundPoint(world, caster, alpha);
+        RadiusCenter = new System.Numerics.Vector2(at.X, at.Z);
+        _radius.Position = at + new Vector3(0f, Lift, 0f);
+        if (!_radius.Visible) _radius.Visible = true;
+        if (_range.Visible) _range.Visible = false;
+        RangeCaster = caster;
+        SelfRingShown = true;
     }
 
     private void HideTargeting()

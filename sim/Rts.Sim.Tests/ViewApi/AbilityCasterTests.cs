@@ -200,6 +200,34 @@ public class AbilityCasterTests
     }
 
     [Fact]
+    public void Lead_IsTheFirstLiveSelectedUnitWithTheAbility_ReadyOrNot_AndAllocatesNothing()
+    {
+        // M4-V6d: a no-target cast's reference point for the nearest-caster pick.
+        Simulation sim = NoFights();
+        EntityHandle soldier = Place(sim, 0, HeavyInfantry, At(sim, 10, 20));
+        EntityHandle first = Place(sim, 0, Mage, At(sim, 20, 20)), second = Place(sim, 0, Mage, At(sim, 30, 20));
+        var stale = new EntityHandle(second.Index, second.Generation + 1);
+        UnitStore u = U(sim);
+        bool Lead(EntityHandle[] sel, out Vector2 p) =>
+            AbilityCaster.Lead(sel, u.Alive, u.Generation, u.TypeId, u.Position, sim.World.Data.Units, TelasFire, out p);
+        Assert.True(Lead(new[] { soldier, first, second }, out Vector2 at));
+        Assert.Equal(u.Position[first.Index], at);
+        Cooldown(sim, first, 100); // on cooldown it still leads; the pick then takes the ready one nearest it
+        Assert.True(Lead(new[] { first, second }, out at));
+        Assert.Equal(u.Position[first.Index], at);
+        Assert.Equal(second.Index, Pick(sim, new[] { first, second }, at, false, out _));
+        Assert.True(Lead(new[] { stale, soldier, second }, out at));
+        Assert.Equal(u.Position[second.Index], at);
+        Assert.False(Lead(new[] { soldier, stale }, out at));
+        Assert.Equal(default, at);
+        var sel = new[] { soldier, first, second };
+        Lead(sel, out _);
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 1000; i++) Lead(sel, out _);
+        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
+    }
+
+    [Fact]
     public void Progress_RunsFromZeroToOneOverTheCast()
     {
         Assert.Equal(0f, AbilityCaster.Progress(16, 16));

@@ -224,7 +224,9 @@ public class DataContentHashTests
             typeof(AbilityDef).GetProperty(nameof(AbilityDef.Effects))!.SetValue(copy, ability.Effects.SetItem(0, changed));
             Assert.True(With(d, ability: copy, abilitySlot: ability.Id).ContentHash() != baseline, $"AbilityEffect.{field} is not in GameData.ContentHash");
         }
-        Assert.Equal(10, typeof(AbilityEffect).GetProperties().Length); // a new field must be added above and to ContentHash
+        // A new field must be added above and to ContentHash. M4-4b-3b's three spawn fields (Unit, Count, LifetimeTicks) are
+        // hashed only on a spawn effect, so they are varied on one: EverySpawnField_AndTheSummonKind_ChangeTheHash.
+        Assert.Equal(13, typeof(AbilityEffect).GetProperties().Length);
         AbilityDef more = Clone(ability);
         typeof(AbilityDef).GetProperty(nameof(AbilityDef.Effects))!.SetValue(more, ability.Effects.Add(e));
         Assert.NotEqual(baseline, With(d, ability: more, abilitySlot: ability.Id).ContentHash());
@@ -234,6 +236,51 @@ public class DataContentHashTests
         GameData noStatuses = With(d);
         typeof(GameData).GetProperty(nameof(GameData.Statuses))!.SetValue(noStatuses, d.Statuses.RemoveAt(1));
         Assert.NotEqual(baseline, noStatuses.ContentHash());
+    }
+
+    /// <summary>
+    /// M4-4b-3b criterion 5: the summon kind and every field of a spawn effect move the hash, for an in-memory ability (no
+    /// shipped ability has either, so the shipped data's hash stays D22C849A175F9ED5: the spawn fields are hashed only on that
+    /// kind). The kind's "no target" ripples nowhere else: the summon's Range and Radius are the hashed fields they were.
+    /// </summary>
+    [Fact]
+    public void EverySpawnField_AndTheSummonKind_ChangeTheHash()
+    {
+        GameData d = TestSim.Data;
+        ulong baseline = d.ContentHash();
+        Assert.Equal(0xD22C849A175F9ED5UL, baseline);
+        AbilityDef ability = d.Abilities[d.FindAbility("telas_fire")];
+        AbilityDef summon = Clone(ability);
+        typeof(AbilityDef).GetProperty(nameof(AbilityDef.Kind))!.SetValue(summon, AbilityKind.Summon);
+        ulong kindOnly = With(d, ability: summon, abilitySlot: ability.Id).ContentHash();
+        Assert.NotEqual(baseline, kindOnly);
+        var spawn = new AbilityEffect
+        {
+            Kind = AbilityEffectKind.Spawn, DamageType = -1, Status = -1, ZoneStatuses = ImmutableArray<ZoneStatus>.Empty,
+            Unit = d.FindUnit("malazan_heavy_infantry"), Count = 3, LifetimeTicks = 400,
+        };
+        AbilityDef withSpawn = Clone(summon);
+        typeof(AbilityDef).GetProperty(nameof(AbilityDef.Effects))!.SetValue(withSpawn, ImmutableArray.Create(spawn));
+        ulong spawned = With(d, ability: withSpawn, abilitySlot: ability.Id).ContentHash();
+        Assert.NotEqual(kindOnly, spawned);
+        var variants = new (string Field, AbilityEffect Changed)[]
+        {
+            ("Unit", spawn with { Unit = spawn.Unit + 1 }),
+            ("Count", spawn with { Count = spawn.Count + 1 }),
+            ("LifetimeTicks", spawn with { LifetimeTicks = spawn.LifetimeTicks + 1 }),
+        };
+        foreach ((string field, AbilityEffect changed) in variants)
+        {
+            AbilityDef copy = Clone(withSpawn);
+            typeof(AbilityDef).GetProperty(nameof(AbilityDef.Effects))!.SetValue(copy, ImmutableArray.Create(changed));
+            Assert.True(With(d, ability: copy, abilitySlot: ability.Id).ContentHash() != spawned, $"AbilityEffect.{field} of a spawn is not in GameData.ContentHash");
+        }
+        // The same three fields on a non-spawn effect are not hashed (they are always -1 / 0 there), which is what keeps the
+        // shipped hash: a test-only check that the rule is the one documented.
+        AbilityEffect status = ability.Effects[0];
+        AbilityDef odd = Clone(ability);
+        typeof(AbilityDef).GetProperty(nameof(AbilityDef.Effects))!.SetValue(odd, ImmutableArray.Create(status with { Count = 5 }));
+        Assert.Equal(baseline, With(d, ability: odd, abilitySlot: ability.Id).ContentHash());
     }
 
     /// <summary>M4-4a: an edit to <c>common/statuses.json</c> or to <c>malazan/abilities.json</c> changes the hash.</summary>

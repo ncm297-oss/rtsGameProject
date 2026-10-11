@@ -31,7 +31,7 @@ public sealed class World
         Config = config;
         _ledger = new PlayerLedger(config.PlayerCount, config.Data);
         Techs = new TechState(config.PlayerCount, config.Data);
-        Units = new UnitStore(config.UnitCapacity, _ledger);
+        Units = new UnitStore(config.UnitCapacity, _ledger, Techs);
         _rngs = new SimRng[RngStream.Count(config.PlayerCount)];
         for (int i = 0; i < _rngs.Length; i++)
             _rngs[i] = new SimRng(config.Seed, (ulong)i);
@@ -176,11 +176,15 @@ public sealed class World
     /// <summary>Number of entries in <see cref="Deaths"/>.</summary>
     internal int DeathCount { get; private set; }
 
-    /// <summary>Appends a death to this tick's <see cref="Deaths"/> and counts it in the killer's kills and the victim owner's losses.</summary>
+    /// <summary>
+    /// Appends a death to this tick's <see cref="Deaths"/> and counts it in the killer's kills and the victim owner's losses
+    /// (M4-4b-3b: an expiry, <see cref="DeathEvent.Expired"/>, counts neither). Past the list's capacity the event is not
+    /// recorded (the counts still are): only a summon reusing slots freed earlier in the same tick could get there.
+    /// </summary>
     internal void RecordDeath(in DeathEvent e)
     {
-        _deaths[DeathCount++] = e;
-        _ledger.CountDeath(e.KillerOwner, e.VictimOwner);
+        if (DeathCount < _deaths.Length) _deaths[DeathCount++] = e;
+        if (!e.Expired) _ledger.CountDeath(e.KillerOwner, e.VictimOwner);
     }
 
     /// <summary>Empties <see cref="Deaths"/> (start of a tick).</summary>
@@ -286,6 +290,20 @@ public sealed class World
 
     /// <summary>Per-player researched techs (M3-5): the flags are hashed state, the bonus sums derived.</summary>
     internal TechState Techs { get; }
+
+    /// <summary>
+    /// The maximum hit points of a unit of <paramref name="unitType"/> owned by <paramref name="player"/> (M4-4b-3b, BUG-0421):
+    /// the type's <c>hp</c> plus the player's <c>hp</c> tech bonus for the type (whole points), at least 1. A unit spawns with
+    /// it; 0 for an unknown type.
+    /// </summary>
+    public int MaxHpOf(int player, int unitType)
+    {
+        if ((uint)unitType >= (uint)Data.Units.Length) return 0;
+        return Math.Max(1, Data.Units[unitType].Hp + DamageCalc.Points(Techs.Bonus(player, unitType, TechStat.Hp)));
+    }
+
+    /// <summary>Live unit slot <paramref name="unitSlot"/>'s maximum hit points (<see cref="MaxHpOf"/> for its owner and type): the read for an hp bar.</summary>
+    public int MaxHp(int unitSlot) => MaxHpOf(Units.Owner[unitSlot], Units.TypeId[unitSlot]);
 
     /// <summary>
     /// Whether <paramref name="player"/> may place a building of <paramref name="typeId"/> with its anchor (lowest x, y)

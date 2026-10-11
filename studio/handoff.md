@@ -1,246 +1,109 @@
-# Handoff: brief for the current session
+# Handoff: brief for the next session
 
-Written by the Producer at the PLAN of session **2026-10-10-1314** (fourth full session of 2026-10-10, cap 8; base
-`093329a` = `origin/main` after the 1015 integration). Three tracks GO. Checks at PLAN: inbox empty; build 0 warnings;
-non-Perf suite run by the Producer alone on `main`: **4,794 / 8 skipped / 0 failed (13 m 38 s)**; claim verified (`StatusKind.Frenzied` = 3 asserted in
-`StatusLoaderTests`, the Zealot's two passives in `whirlwind/units.json`, D22C849A175F9ED5 in `SameGameDataHashes` and the
-golden); no open S1 / S2; counters sim 1 / 4, view 1 / 4, data 0 / 4 → feature sessions.
+Written by the Producer at the ACCEPT of session **2026-10-10-1314** (fourth full session of 2026-10-10, cap 8). All three
+tracks accepted: sim **M4-4b-3b** (hp techs raise hit points, the exact `whenBelowHp` line, summons; 0 fix rounds), view
+**M4-V6d + M4-V7 slice 1** (the Frenzied marker, the `selfAura` card, `M4PlayableTest.tscn`; 2 fix rounds for the scene's own
+timing flakes), data **D11** (the Zealot passives and Frenzied pinned, the Blinded / Frenzied wording; 0 fix rounds).
+Integration order sim → view → data; **only the data branch moves the golden** (`data-hash` D22C849A175F9ED5 →
+4383EBB9345FABF7, every `k` line equal, in `SameGameDataHashes`).
 
 ## Where we are
 
-- M0-M3 Done. **M4: 6 / 10.** This session closes criterion 6 (summons are the last owed piece; the Frenzied marker and the
-  `selfAura` card on the view side) and ticks criterion 8 (BUG-0421). Then 7 stealth (M4-5 sim + visuals), 10 the fog-on
-  sandbox Playable (view M4-V7, started this session), the end-of-M4 hardening per track, sign-off.
-- **Producer decision (this PLAN, owner may revisit): `targetUnit` and `autocast` are deferred** until a faction's data
-  needs them. Criterion 6 reads "target ground, self/aura, summon"; docs/02 lists target-unit as "reserved for later
-  heroes" and no faction page (M7-M9 included) flags an ability `autocast`; the loader keeps refusing both ("not supported
-  yet"), so content cannot drift onto them. The AI (M5) casts through `UseAbility` like the player and needs no autocast.
-  Recorded at ACCEPT in the roadmap note, docs/01 and For your review.
-- **Golden:** `data-hash` is **D22C849A175F9ED5**. **D11 moves it this session** (the Frenzied / Blinded text); the sim's
-  M4-4b-3b must leave it where it is: no `game/data/**` edit, and `GameData.ContentHash` extended so a new field counts
-  only where an entry uses it (shipped data has none). Rule 3 for the data track: the new hash into `SameGameDataHashes`
-  in the same commit.
-- **Bug ids this session:** sim from **BUG-0450**, view from **BUG-0460**, data from **BUG-0470**. Say so in every QA brief.
-- Memory bound 231,920,000 (72 KB margin, itemised through M4-4b-3a). `EmptyTick(2500)` ~481 µs of 500: a summon store
-  must add no per-tick work while no summoned unit is live (the `BelowHpUnits` counter pattern).
-- Standing rules unchanged: (1) a sim task that changes a placement, vision, combat or data-loading rule runs the full
-  suite incl. Perf once alone and the merged scene loop before it reports; (2) a sim task that adds a `UnitState` ships the
-  `ui.json` `states.*` line itself; (3) whoever moves `data-hash` adds the new hash to `SameGameDataHashes` in the same
-  commit when the seed-21 match is unaffected; (4) when the view needs a `ui.json` key the brief says so and the sim stays
-  off the file; (5) when a sim brief changes a behaviour a view QA scene asserts on, the same session's view brief carries a
-  named item for that scene (none this session: no view scene researches an hp tech or summons); (6) a sim task that adds a
-  `Command` kind adds it to `CommandDoorFuzzStressTests` (none added this session).
+- M0-M3 Done. **M4: 9 / 10.** Criteria 6 (abilities incl. summons; the view's Frenzied marker + selfAura card), 8 (all four
+  signature abilities with real numbers: BUG-0421 fixed) and 10 (the fog-on sandbox Playable, `M4PlayableTest`) ticked this
+  session. **Left: criterion 7, stealth / detection** (sim M4-5, then view M4-V8 visuals), then the end-of-M4 hardening per
+  track (sim counter 2 / 4, view 2 / 4, data 1 / 4: the milestone-end hardening comes regardless), then the sign-off.
+- **Producer decisions this session (owner may revisit, docs/01 row 2026-10-10 "Hp upgrades and summons"):** max and current
+  hit points move together when an hp tech lands; `targetUnit` and `autocast` deferred until a faction's data needs them;
+  summons placed within 3 rings (6 m), cap 8 per spawn effect, an expiry counts no kill / loss. View: `FrenzyColor` magenta
+  (taste default), the lead-caster rule for no-target casts, the sandbox's staging deviations (own Priest, Horse Raiders for
+  "Lancers"). Data: Martyrdom's "+50% attack speed" written onto whirlwind.md (a Producer default); the Blinded "can't attack"
+  proposal shipped (the owner did not veto).
+- **No open S1 / S2.** New S3: BUG-0450 (view: hp bars use the type's hp as max; **first item of the next view task**),
+  BUG-0451 (pre-existing: `EmptyTick(2500)` sits on its 500 µs gate; triage in the bug file: buy back cost, else re-baseline to
+  550 µs with the trend itemised; until then a failure counts only alone and above base in a paired run), BUG-0461 (sim: a
+  cast's walk-in hemmed in by own `Attacking` units is dropped after 1 s; **first item of the end-of-M4 sim hardening**,
+  direction in the sim debt backlog). S4: BUG-0452 (summon loader nits), BUG-0462 (view nits incl. the overstated tick-budget
+  margin), BUG-0470 (a second same-trigger page sentence is never compared).
+- **Memory bound** 231,920,000: now 231,873,016 used (47 KB margin, +33,832 itemised in docs/03 M4-4b-3b). The next per-slot
+  field re-baselines: say so in the brief, every byte itemised.
+- **`EmptyTick(2500)`** paired 495 / 500 µs head / base: a summon-free tick does no new work (the counter pattern). M4-5 must
+  keep it that way (a stealth pass gated on a `StealthedUnits` counter).
+- **Bug ids next session:** sim from **BUG-0480**, view from **BUG-0490**, data from **BUG-0500**. Say so in every QA brief.
+- Standing rules unchanged (see the previous handoffs): (1) a sim task that changes a placement, vision, combat or
+  data-loading rule runs the full suite incl. Perf once alone and the merged scene loop before it reports; (2) a sim task that
+  adds a `UnitState` ships the `ui.json` `states.*` line itself; (3) whoever moves `data-hash` adds the new hash to
+  `SameGameDataHashes` in the same commit when the seed-21 match is unaffected; (4) when the view needs a `ui.json` key the
+  brief says so and the sim stays off the file; (5) when a sim brief changes a behaviour a view QA scene asserts on, the same
+  session's view brief carries a named item for that scene (**M4-5 changes `Fog.CanSeeUnit` for stealthed units: no shipped
+  stealth unit exists, so no scene changes; say so**); (6) a sim task that adds a `Command` kind adds it to
+  `CommandDoorFuzzStressTests`; (7) new: a sim task that adds a per-slot store field states the memory delta in its report.
 
 ## Sim track
 
-### Current session plan: M4-4b-3b · feature · QA full · budget ~1,200 lines (QA included)
+### Next task candidate: M4-5 stealth / detection · feature · QA full · budget ~1,200 lines (QA included)
 
-**Goal.** Make hp upgrades real (BUG-0421: Dryjhna's Prophecy's +20 HP never touched a unit's hit points, so the Zealot's
-frenzy line sits at 65 % of its real health) and ship summons, the last owed piece of M4 criterion 6: a `summon` ability
-kind with a `spawn` effect that puts temporary, free units beside the caster for a lifetime, then takes them away.
+Criterion 7: "Stealth and detection system (tested now, even though Shadow arrives in M8)". Design: docs/02 "Status effects"
+(Stealthed: invisible and untargetable to enemies without detection; Revealed: cannot be stealthed, overrides Stealthed;
+sources: Shadow forest stealth, Shadow Archer stand-still; attacking from stealth reveals), docs/02 Buildings (towers
+`detector` 16 m, schema on `main` since M4-3b), docs/factions/shadow.md (the Wraith can't be stealthed; the Hounds / Stalker
+rows), docs/03 "Vision, detection, fog" and "Implementation (M4-4b-3a)" (the status / passive patterns). Shape (Producer
+default; the builder may propose better, say so): `stealthed` / `revealed` status kinds in `statuses.json` (common; the data
+track is off that file that session), a `detector` field on `UnitDef` (m) beside the buildings' one; a stealthed unit is a
+unit with a live Stealthed entry and no Revealed one and not summoned (`Units.IsSummoned`); an enemy sees it only if one of
+that enemy's detectors (unit or tower) has it within its detector range **and** within normal sight (the fog's `CanSeeUnit`
+false otherwise, so the view, combat acquisition, retaliation and explicit Attacks all follow the one rule); a stealthed unit
+that lands a hit gets Revealed for a data duration (docs/02); stealth as a passive trigger (`whenStanding` 2 s still, or
+in-forest) only if cheap; test-only units and statuses (no Shadow data before M8); cost rule: a `StealthedUnits` counter, 0 B,
+`EmptyTick` unchanged; hash: the statuses are already hashed, nothing new unless a detector memo is added (then classify it).
+Docs: docs/03 "Implementation (M4-5)", "For the view (M4-V8)" (what to draw for own stealthed units and detected enemies), "For
+the data track (M4-5)" (shapes), docs/01 row. Fold BUG-0452 if the loader is touched. **Out of scope:** BUG-0461 (hardening),
+Shadow content, forest detection of trees (M8), any `game/data/factions/**` edit.
 
-**Scope.**
-1. **BUG-0421 first (S3).** `UnitStore.TrySpawn` sets `Hp = def.Hp + Points(Techs.Bonus(owner, type, TechStat.Hp))` for
-   every spawn path. When an hp tech lands (`ProductionSystem` line ~156, `Techs.Set(..., true)`), every live unit of each
-   affected type owned by that player gains the delta to its current hp at once (Producer default, recorded in BUG-0421:
-   max and current move together; a dead or dying unit is not touched). `PassiveSystem.MaxHp` stays. Any view-side max hp
-   reader (`UnitDef.Hp` for hp bars) is a view concern: name it in docs/03 "For the view" (`Units.MaxHp(slot)` or the same
-   `Points(Bonus)` formula; add the read-only accessor if cheap).
-2. **Fold BUG-0420 (S3)** since `PassiveSystem` is touched: the below-the-line test becomes an exact integer compare (e.g.
-   `hp * 1000 < fractionPerMille * maxHp` with the per-mille computed at load, or an equivalent that makes 0.15 x 100
-   exactly 15 not below). Un-skip QA's BUG-0420 row.
-3. **Summons.** `"kind": "summon"` (`AbilityKind.Summon` = 2, out of `PlannedAbilityKindIds`): no target and no `range`
-   (as `selfAura`: `range` is a load error, the command's point must be on the map and is ignored, the caster never walks,
-   casts at once, resolves at the caster's position; `radius` optional, 0 when absent); it must carry at least one `spawn`
-   effect; `spawn` (`AbilityEffectKind.Spawn`, out of `PlannedAbilityEffectKindIds`) is accepted on `summon` only:
-   `{ "kind": "spawn", "unit": <own-faction unit id>, "count": 1..DataLimits.MaxSummonCount (8), "lifetime": <s, at
-   least a tick> }`; errors at `abilities[k].effects[j].<field>`. At the resolve, `count` units of the type spawn for the
-   caster's owner at free cells round the resolve point (`FreeCellSearch`, the production spawn's ring search: same
-   plateau, nearest first, slot / file order), at full hp (incl. the owner's hp bonus), with no cost and no population
-   (never counted in `HalfPop`; a full unit store or no free cell drops the rest, documented). Each carries
-   `UnitStore.ExpiresAtTick` (0 = permanent; hashed) and a `Summoned` flag (derived or hashed: pick, document; M4-5
-   reads it: "can't be stealthed"). **Expiry** (choose the phase, document it; phase 5 beside the status countdown is the
-   natural one): a summoned unit whose tick has come is freed through the death path with a `DeathEvent` whose new
-   `Expired` flag is true (killer owner -1): no Loss, no Kill, no `onDeath` passive, its statuses and target gone like any
-   death. A summoned unit killed before its time is an ordinary death. Otherwise summoned units are ordinary: they move,
-   fight, take statuses, are targets, count for Martyrdom's radius if listed. Cost: a `SummonedUnits` counter; the expiry
-   pass returns at once at 0; 0 B. Test-only abilities only (`SelfAuraTests.AddTo` pattern; summon an existing unit type,
-   e.g. a Raider, since no Wraith exists in data); shadow.md's Summon Wraiths (3 units, 20 s, 1.0 s cast, 50 s cooldown)
-   is the design reference, **not** shipped (Shadow is M8).
-4. Docs: docs/03 "Implementation (M4-4b-3b)" (the hp rule, the summon kind, the spawn effect, placement, expiry, the
-   hash, the cost, known limits), "For the data track (M4-4b-3b)" with the exact JSON shapes and what is refused, "For the
-   view (M4-V7)" (`AbilityKind.Summon` = a no-target card like `SelfAura`; `DeathEvent.Expired`; `Units.ExpiresAtTick`;
-   the max-hp read); docs/02 one sentence under techs or units: an hp upgrade raises max and current hit points of living
-   units by the same amount; docs/01 change-log row (the hp rule; `targetUnit` / `autocast` deferred); the BUG-0421 and
-   BUG-0420 files `fixed` with the proving tests.
-**Out of scope:** `targetUnit`, `autocast` (deferred, see above); stealth (M4-5); any `game/data/**` edit (D11 owns
-every data file this session: `common/statuses.json`, `factions/**`); `AbilityViews`; a new `Command` kind; replay format.
-
-**Acceptance criteria.**
-1. `Abilities/HpTechTests` (new; the regression fails first): a Zealot at 63 / 63 whose owner researches Prophecy reads
-   83 / 83 next tick; one at 41 / 63 reads 61 / 83 and is **not** Frenzied; a Zealot spawned after the tech reads 83;
-   another player's Zealots and the owner's Raiders are untouched; a unit hit to 0 on the landing tick is dead, not healed;
-   `PassiveQaTests.ProphecyResearchedMidFight_*` re-stated to the real rule (say so in the report; QA re-checks it).
-2. BUG-0420: `PassiveTests` rows for 0.15 x 100 (15 is not below, 14 is) and 0.3 x 63 (18 is below 18.9, 19 is not); QA's
-   skipped BUG-0420 row un-skipped and green.
-3. `Data/AbilityLoaderTests`: `summon` loads; `range` on it fails; a `summon` without a `spawn` fails; `spawn` on a
-   `targetGround` / `selfAura` fails; `unit` of another faction, unknown, `count` 0 / 9 / non-integer, `lifetime` 0 / missing /
-   below a tick each fail at their path; "not supported yet" gone for `summon` and `spawn`.
-4. `Abilities/SummonTests`: 3 units appear at the resolve (not at the cast start) round the caster on free cells, owner =
-   caster's, hp full incl. an hp bonus, `HalfPop` unchanged, gold / wood unchanged; they expire exactly `lifetime` ticks after
-   the resolve (one `DeathEvent` each, `Expired` true, no Loss / Kill, no Martyrdom from an expiring listed type); one killed
-   early is a normal death (Loss counted) and does not expire again; a full store spawns what fits; no free cell within the
-   search drops the rest; the caster dying mid-cast summons nothing; a queued summon pops like a `selfAura`.
-5. `StateHashTests`: `ExpiresAtTick` changes the hash; a `Summoned` flag classified (hashed or derived) in a row;
-   `DataContentHashTests`: every `spawn` field and the `summon` kind move `ContentHash` for an in-memory ability; **the
-   shipped `data-hash` stays D22C849A175F9ED5** (`ReplayGoldenTests` green with no golden edit).
-6. `Stress/SummonFuzzStressTests`: 3 seeds x 2,000 ticks, 3 players, summoners casting on cooldown among real combat,
-   twins equal every tick + a replay round trip; the per-tick invariant: every live summoned unit has `ExpiresAtTick >
-   TickNumber`, and `SummonedUnits` equals the count of live flagged slots.
-7. Perf alone: `EmptyTick(2500)` within 500 µs and not above the base by more than noise; a 500-unit brawl with 60 summons
-   live and expiring 0 B a tick (a `PassivePerfTests`-style row); `World_1024Map_CacheStays32_MemoryBounded` re-baselined
-   only if needed, every byte itemised in its comment.
-8. Full suite incl. Perf green once alone (rule 1: a data-loading and combat rule changed), `CommandDoorFuzz` untouched and
-   green, smoke PASS, the merged scene loop green, 0 warnings.
-9. Docs as in scope item 4; BUG-0420 / 0421 files `fixed`.
-
-**Design references.** docs/02 "Ability system" (the kinds table: Summon "Spawns temporary units"; the effect vocabulary
-`spawn`), "Status effects" stacking; docs/factions/shadow.md lines 40, 54, 61 (the Wraith: temporary, 20 s, no cost or pop,
-can't be stealthed; Summon Wraiths 3 beside the caster); docs/factions/whirlwind.md line 91 (Prophecy: Zealot +20 HP);
-docs/03 "Implementation (M4-4b-3a)" (`selfAura` casting rules to mirror; `PassiveSystem` cost pattern; the hash rules),
-"Implementation (M3-5)" (`TechBonus`, `Points`); BUG-0421 / BUG-0420 files.
-
-**Constraints.** No Godot; no new NuGet; no `System.Random`; placement in slot / file order (never a dictionary); no
-allocation per tick (the expiry pass and the spawn loop into existing scratch); every number in data or a named, documented
-mechanism constant; `Rts.Sim` warnings as errors; **no `game/data/**` edit** (the golden collision); no new `Command` kind.
+Then: the end-of-M4 sim hardening (BUG-0461 first, BUG-0451 decision, BUG-0401, 0452, 0302 b / c, 0275, 0271 / 0272 decision,
+0144, 0142, 0113 item 2, 0094, 0391, 0422 items 2-3).
 
 ## View track
 
-### Current session plan: M4-V6d + M4-V7 (first slice) · feature · QA standard · budget ~1,400 lines (QA included)
+### Next task candidate: M4-V7 slice 2 · feature · QA standard · budget ~900 lines (QA included)
 
-**Goal.** Finish the view side of criterion 6 (the Frenzied marker, the `selfAura` card) and start criterion 10, the
-fog-on sandbox Playable: a scripted Malazan-vs-Whirlwind fight through the real HUD with fog on, the way `M3PlayableTest`
-proved M3.
-
-**Scope.**
-1. **M4-V6d.** `AbilityViews`' `StatusKind` switch gets a `Frenzied` arm with its own colour (`FrenzyColor`, apart from
-   orange Burning / deep-blue Slowed / violet Blinded on sand and on both factions' bodies at zoom 30; a windowed shot
-   looked at). The **`selfAura` card**: `AbilityDef.Kind == AbilityKind.SelfAura` → the button (or hotkey) casts at once
-   with no targeting state, sending the caster's position; while hovering the button the radius ring is drawn round the
-   caster (nearest ready caster rule unchanged); Shift queues it. A headless `AbilityViewTest` row with a test-only
-   `selfAura` ability (in-memory data, the `SelfAuraTests.AddTo` pattern; Requests 30). `AbilityKind.Summon` lands on
-   `main` with the sim this session: **do not reference it** (not on your base); next session adds its arm (same card).
-2. **M4-V7, slice 1: `game/tests/M4PlayableTest.tscn` + `.cs`** after `M3PlayableTest`'s pattern (real `Match`, shipped
-   data, fog **on**, 8x, every action injected input, each step checked against the sim, the whole command stream replayed
-   into a bare twin at the end). Stage with the dev spawn commands (`SpawnUnit` / `SpawnBuilding` ignore requirements):
-   both sides a Town Hall + a few buildings on their start plateaus and an Age-II-style army (Malazan: Heavy Infantry,
-   Crossbowmen, a Cadre Mage, a Sapper, a Catapult; Whirlwind: Raiders, Desert Archers, Lancers, a Priest, Zealots). Script
-   at least: (a) the map starts black past own sight and the enemy army is **not** drawn until seen (`Check` through
-   `Fog.CanSeeUnit` per visible view); (b) an attack-move with the Malazan army toward the enemy base through the real HUD
-   (A + click), first contact seen, kills / losses move; (c) a Telas Fire cast on a Whirlwind blob (Q + click) and its
-   Burning markers appear; (d) a Sandstorm cast by the Priest (the enemy side, so stage it as the player's own on seed 2,
-   or make the scene play both seats in two runs: pick, say); (e) a Cusser on a building, rubble shown; (f) a Zealot under
-   half hp shows the Frenzied marker (your V6d colour) and, with the sim's `Frenzied` on `main`, swings faster (count swings
-   in a 60-tick window vs an unhurt Zealot); (g) ends with `M4 PLAYABLE TEST PASS` / `FAIL <step>: <what>` and exit code,
-   `-- --break <n>` as M3's. Seeds 1 and 6 (or 1 and 2 if the two seats need it). Windowed `-- --shots <dir>` saves 4-6
-   stills (first contact under fog, the storm, the Cusser rubble, the Frenzied Zealot) for the owner. Keep the tick budget
-   fixed and print the ticks per step. If the budget runs out, land V6d + steps (a) (b) (c) (g) and list the rest for slice 2.
-3. **Watch BUG-0430** in the sandbox stills: if a storm across a cliff looks broken in the fight, say so (pulled into the
-   end-of-M4 hardening or forward, Producer's call at ACCEPT).
-**Out of scope:** stealth visuals (M4-5), the minimap zone dots, BUG-0430 / 0431 fixes, summons on screen, any
-`game/data/**` edit, any `sim/` edit outside `ViewApi/` (read-only accessors only; if the scene needs a sim seam, write it
-under Requests for the sim track and work round it).
-
-**Acceptance criteria.**
-1. `AbilityViews.StatusColor(frenzied) == FrenzyColor`, channel gap ≥ 0.4 to each other marker colour (a unit test row);
-   a windowed shot at zoom 30 with all four markers side by side on a Raider and a Heavy, looked at by the dev and QA.
-2. `AbilityViewTest` rows (headless, seeds 1 and 6): a `selfAura` button click sends exactly one `UseAbility` with the
-   caster's position and no targeting state is entered; hovering shows the ring round the caster; Shift queues one; the
-   resolve flash lands at the caster; 0 B per frame.
-3. `M4PlayableTest.tscn` PASS on both seeds headless, every step printing its tick; the end-of-run twin replay hash equals
-   the match's; the FAIL path proven with `--break`.
-4. The fog rule holds in the scene: no enemy unit view is visible while `Fog.CanSeeUnit` is false for it, checked every
-   frame of the approach (a counter printed).
-5. Scene loop green (the new scene added to it), smoke PASS, 0 warnings, no new string literal in `AbilityViews` / the HUD
-   (text through `ui.json` keys that already exist; a new key needed → say so, the sim is off `ui.json` this session so the
-   view may add it).
-6. docs/03 "Implementation (M4-V6d)" and "(M4-V7)" paragraphs; the sandbox's stills listed for the owner.
-
-**Design references.** docs/05 M4 criteria 6 and 10; docs/02 "Ability system" (casting: nearest caster, Shift), "Status
-effects"; docs/03 "For the view (M4-V6d)" and "Implementation (M4-V6a/b/c)"; `M3PlayableTest.cs` (the pattern and its
-`TickBudget` note); Requests 30.
-
-**Constraints.** Dumb views (rules in `ViewApi`, nodes only draw); read-only on the sim (hash twins prove it); C# only;
-`.tscn` text; no `game/data/**` edit; input injected through the viewport, never a controller call; look at the stills.
+1. **BUG-0450 first (S3):** `UnitHpBars.Collect`, `CombatViews.SyncBars` and `UnitViews._maxHp` (the first-sight `HitFlash`)
+   take the maximum from `World.MaxHp(slot)` (Requests 31), per slot; un-skip
+   `QA/ViewApi/UnitHpBarsMaxHpQaTests.AProphecyZealotAt70Of83_ShowsABar`; a headless row with a Prophecy Zealot at 70 / 83
+   showing a bar and one at 83 / 83 none; the `UnitHpBars` remark corrected; docs/03 "Implementation (M4-V1)" note.
+2. The **`AbilityKind.Summon` card arm**: the same no-target card as `SelfAura` (`BeginAbility`, `SelfCaster`, the hover ring;
+   `Radius` may be 0: no ring then); a test-only summon in `AbilityViewTest` (`SummonTests.AddTo` is the sim-test pattern): the
+   three units appear at the resolve with views, an expiring unit's view goes with `DeathEvent.Expired` and leaves **no corpse
+   disc** (`CombatViews` must check `Expired`), K / L unchanged by an expiry.
+3. The sandbox's **enemy-storm step**: a scripted enemy Priest casts Sandstorm over the player's army (a staging `UseAbility` for
+   player 1, like the duel's Attacks): Blinded markers on own units inside, the enemy disc drawn where seen, own units' sight
+   shrinks on the fog texture; keep the tick budget and print the step's ticks.
+4. BUG-0462 item 5: the measured range in `TickBudget`'s comment and docs/03 (state the 4,212 run; the margin as measured).
+**Out of scope:** stealth visuals (M4-V8, after the sim's M4-5 is on `main`), BUG-0430 / 0462 item 1 (the ring across a cliff:
+end-of-M4 view hardening), BUG-0431, any `game/data/**` edit. Then M4-V8 stealth visuals, then the end-of-M4 view hardening.
 
 ## Data track
 
-### Current session plan: D11 · feature · QA light · budget ~600 lines · inbox tweaks first if any (none at PLAN)
+### Next task candidate: inbox tweaks from the D11 review first; else D-H3 early · hardening · QA light · ~400 lines
 
-**Goal.** Pin the content the sim landed in M4-4b-3a (the Frenzied status, the Zealot's two passives) to its design pages
-both ways, so a drifting number fails a test by name, and ship the one wording the Producer proposed for Blinded.
-
-**Files (yours alone this session):** `game/data/common/statuses.json` (`frenzied`, `blinded` `description` only),
-`docs/factions/whirlwind.md` (lines 55-57, the Zealot passives; a Frenzied row if the page's status table needs one),
-`docs/02-game-design.md` "Status effects" (the Frenzied Effect cell only), `sim/Rts.Sim.Tests/Content/**`,
-`sim/Rts.Sim.Tests/QA/Content/**`, `GatherWedgeQaTests.SameGameDataHashes` (the named exception), the golden replay
-file(s) regenerated once. The sim and view tracks touch none of these.
-
-**Scope.**
-1. Pin `UnitDef.Passives` both ways to whirlwind.md: Frenzy of the Apocalypse (`whenBelowHp` 0.5 → "below 50% HP",
-   magnitude 0.5 → "+50% attack speed") and Martyrdom (`onDeath` 6 m / 5 s / +50 % / `["whirlwind_zealot"]`): the page
-   must state the +50 % and "Zealots" for Martyrdom (add it: today lines 56-57 give 6 m and 5 s only; the strength is a
-   Producer default the owner may revisit, say so in the review table). A page number drifting from the data fails
-   naming the passive and the field.
-2. The docs/02 "Status effects" Frenzied Effect cell reworded to the kind's exact effect ("Attacks faster: the attack
-   cooldown is divided by 1 + the strength; the wind-up is unchanged; only the strongest counts"), pinned as the other
-   rows are; `Frenzied` out of `PendingStatuses`. Its `description` may state a number only if every shipped source applies
-   that magnitude and the pin covers it (today both Zealot passives are 0.5, so "+50 %" is pinnable; numberless is also
-   fine: choose, say why).
-3. `blinded.description`: "can't target anything more than 3 m away" → "can't attack anything more than 3 m away" (the
-   Producer proposal under For your review since D10c; the owner has not vetoed; the number pins unchanged).
-4. One golden regeneration: every `k` line equal, the new `data-hash` into `SameGameDataHashes` in the same commit, said in
-   the commit message. Content suite green with no new skip; `DescriptionProblems` 0 for shipped text.
-**Out of scope:** any number change; `abilities.json`; `units.json` beyond text (none needed); BUG-0440 (debt, the next
-data hardening); summons content (no Wraith before M8).
-
-**Acceptance criteria.**
-1. `Content/PassiveContentTests` (new): both Zealot passives pinned field by field to whirlwind.md both ways; a mutated page
-   number and a mutated data number each fail naming the passive and field (QA mutants).
-2. `Frenzied` absent from `PendingStatuses`; the Frenzied row pinned by its kind's effect wording; `StatusContent` tests
-   green; `DescriptionProblems` 0 problems on shipped text.
-3. `blinded.description` reads "can't attack anything more than 3 m away"; its 2 m / 3 m pins green.
-4. `git diff --stat` only the files above; `data-hash` moved once; `ReplayGoldenTests` + `Seed21PlayableReplay_*` green;
-   `SameGameDataHashes` carries the new hash; non-Perf suite green; 0 warnings.
-5. The review table for the owner (what text changed, old → new, why) in the dev report.
-
-**Design references.** docs/factions/whirlwind.md lines 55-57, 91; docs/02 "Status effects" (Frenzied, Blinded rows),
-"Stacking rule"; docs/03 "Implementation (M4-4b-3a)" (the exact cooldown rule), "For the data track (M4-4b-3a)" (shapes);
-the D10c entry under For your review (the Blinded proposal); the Frenzied row in the M4-4b-3a review table.
-
-**Constraints.** No C# outside `Content/` and `QA/Content/` (+ the `SameGameDataHashes` line); player-facing text only in
-data; numbers must match the page; one golden regen, hash said in the commit; never touch `units.json` numbers.
-
-## QA focus (per track; ids sim 0450+, view 0460+, data 0470+)
-
-- **Sim (full):** hp-delta edge cases (a unit at 0 on the landing tick, two hp techs / overlapping `appliesTo`, a unit mid-DoT,
-  hp techs for a type with no live unit then a spawn), the Frenzied line after the fix (41 / 83 real), BUG-0420's integer line
-  across fractions 0.001-0.999 x hp 1-400 against a decimal oracle; summons: expiry on the same tick as a killing blow (one
-  death, one event, one free), a summoned unit's slot re-used the next tick, a summon landing on the fog cadence, placement
-  beside cliffs / map edges / a full ring, store full mid-count, 3-player fuzz twins + replay round trip, the `SummonedUnits`
-  counter vs live flags every tick, no per-tick work at 0 summons (paired `EmptyTick`), 0 B with 200 live and expiring, Perf
-  alone, memory itemised, the shipped `data-hash` unchanged.
-- **View (standard):** read-only twins (the card and the scene never move the hash), the `selfAura` click never enters
-  targeting, the Frenzied colour against the other three in stills, the sandbox scene's fog check every frame of the
-  approach, a FAIL step named with `--break`, 0 B rows, the scene loop; look at every still.
-- **Data (light):** page / data mutants both ways for both passives and the Frenzied cell, `DescriptionProblems` by role on
-  the new wording, the golden `k` lines unchanged, diff confined to the named files, no number drift.
+If the owner answers the D11 table (the Frenzied / Blinded wording, Martyrdom's +50 %), plan those tweaks first (one golden
+regen, rule 3). Else **D-H3** (the data hardening one session early, as D-H2 was): BUG-0470 item 1 (`PassiveContentTests.Compare`
+counts page sentences per (unit, trigger) and fails a second one naming both; un-skip QA's
+`ASecondSameTriggerPageSentence_WithOtherNumbers_Fails`), BUG-0440's four wordings (`DescriptionProblems`: "(cooldown: N s)",
+"N-second", "dmg", the linger window), the known-gap notes in docs/03. Tests only, no data / page / golden change. **The full
+balance pass** (QA standard) waits for the owner's answer to the D6 band (or a Producer default at the end of M4: the proposed
+40-65 % band); the sandbox now exists for its numbers. The `summon` / `spawn` schema is on `main` for M8's Wraiths; nothing to
+fill before then. If neither the inbox nor D-H3 applies, the data track STOPs cheaply.
 
 ## Watch-outs (all tracks)
 
-- **Integration order sim → view → data.** Expected conflicts: `studio/bugs/README.md` (union by id), `studio/qa/coverage.md`
-  (three sides), docs/03 (different sections), docs/01 (sim + data rows: keep both). Only D11 moves the golden.
-- **Perf:** three suites at once fail wall-clock rows on base and head alike; a failure counts only alone.
-- The view's `selfAura` row needs no shipped ability: in-memory data. The view must not reference `AbilityKind.Summon` yet.
-- QA scratch directories carry the agent's name; never `rm -rf` a shared scratchpad name.
+- **Integration order sim → view → data.** Expected conflicts: `studio/bugs/README.md` (union by id: sim rows 0420 / 0421
+  `fixed` + 0450 / 0451 / 0452; view rows 0460-0463; data row 0470), `studio/qa/coverage.md` (three sides), docs/03 (sim:
+  "Implementation (M4-4b-3b)" + the M3-5 / M4-4b-3a edits + the Producer's Martyrdom-bullet fix; view: "Implementation
+  (M4-V6d)" / "(M4-V7)" + the V6c "Not yet" line), docs/02 (sim: the hp sentence under techs; data: the Frenzied row), docs/01
+  (sim row only). Only D11 moves the golden; the sim's `ContentHash` change hashes nothing for shipped data.
+- **The merged scene loop** is the integration gate (41 scenes, both playables last; `M4PlayableTest` ~40 s). Perf under
+  three suites fails on base and head alike; a failure counts only alone.
+- The view must not reference stealth kinds before the sim's M4-5 is on `main`; the sim's M4-5 must not edit `ui.json`.
 - `CLAUDE.md` still says "Current milestone: M1" (the owner's file).
+- Scratch directories in the shared scratchpad carry the agents' names; never `rm -rf` a shared name.

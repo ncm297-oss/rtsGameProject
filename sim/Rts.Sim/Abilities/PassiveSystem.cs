@@ -41,25 +41,39 @@ public static class PassiveSystem
         {
             if (!u.HasBelowHpPassive(i) || !u.Alive[i]) continue;
             UnitDef def = data.Units[u.TypeId[i]];
-            UnitPassive p = def.Passives[def.BelowHpPassive];
-            if (!IsBelow(u.Hp[i], MaxHp(world, i), p.HpFraction)) continue;
+            ref readonly UnitPassive p = ref def.Passives.ItemRef(def.BelowHpPassive);
+            // World.MaxHp's rule, inline: this pass visits every such unit every tick.
+            int maxHp = Math.Max(1, def.Hp + Combat.DamageCalc.Points(world.Techs.Bonus(u.Owner[i], u.TypeId[i], TechStat.Hp)));
+            if (!IsBelow(u.Hp[i], maxHp, p.HpLine)) continue;
             StatusSystem.Apply(world, i, p.Status, p.Magnitude, HeldTicks, u.Owner[i]);
         }
     }
 
     /// <summary>
-    /// The boundary rule (docs/03 "Implementation (M4-4b-3a)"): <paramref name="hp"/> is below <paramref name="fraction"/>
-    /// of <paramref name="maxHp"/> when <c>hp &lt; fraction x maxHp</c> in single precision; exactly at the fraction is not
-    /// below (a Zealot at 31 / 63 is, at 32 / 63 is not: 31.5 is the line).
+    /// The scale of a <c>whenBelowHp</c> line (BUG-0420): the fraction is held in whole millionths, so any fraction the data
+    /// writes with up to six decimals is exact and the boundary test is an integer compare. A rule of the mechanism.
     /// </summary>
-    internal static bool IsBelow(int hp, int maxHp, float fraction) => hp < fraction * maxHp;
+    internal const int LineScale = 1_000_000;
 
-    /// <summary>Unit slot <paramref name="i"/>'s maximum hit points: its type's <c>hp</c> plus its owner's hp tech bonus for its type (whole points).</summary>
-    internal static int MaxHp(World world, int i)
-    {
-        UnitStore u = world.Units;
-        return world.Data.Units[u.TypeId[i]].Hp + Combat.DamageCalc.Points(world.Techs.Bonus(u.Owner[i], u.TypeId[i], TechStat.Hp));
-    }
+    /// <summary>
+    /// <paramref name="fraction"/> (the loader's float of the JSON number) in whole millionths, rounded to the nearest: exact
+    /// for up to six decimals, since a float in (0, 1) is within 3e-8 of the decimal it was read from (BUG-0420).
+    /// </summary>
+    internal static int LineOf(float fraction) => (int)Math.Round((double)fraction * LineScale, MidpointRounding.AwayFromZero);
+
+    /// <summary>
+    /// The boundary rule (docs/03 "Implementation (M4-4b-3a)", exact since BUG-0420): <paramref name="hp"/> is below a line of
+    /// <paramref name="line"/> millionths of <paramref name="maxHp"/> when <c>hp x 1,000,000 &lt; line x maxHp</c> in 64-bit
+    /// integers; exactly at the line is not below (a Zealot at 31 / 63 is, at 32 / 63 is not: 31.5 is the line; 15 / 100
+    /// with 0.15 is not, 14 is).
+    /// </summary>
+    internal static bool IsBelow(int hp, int maxHp, int line) => (long)hp * LineScale < (long)line * maxHp;
+
+    /// <summary>As <see cref="IsBelow(int, int, int)"/> for a fraction as the loader stores it (<see cref="LineOf"/>).</summary>
+    internal static bool IsBelow(int hp, int maxHp, float fraction) => IsBelow(hp, maxHp, LineOf(fraction));
+
+    /// <summary>Unit slot <paramref name="i"/>'s maximum hit points (<see cref="World.MaxHp"/>): its type's <c>hp</c> plus its owner's hp tech bonus for its type.</summary>
+    internal static int MaxHp(World world, int i) => world.MaxHp(i);
 
     /// <summary>
     /// Unit slot <paramref name="v"/> (live, its hit points at 0, about to be freed) dies and its type has an <c>onDeath</c>

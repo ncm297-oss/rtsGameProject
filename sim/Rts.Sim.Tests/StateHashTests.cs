@@ -1616,4 +1616,51 @@ public class StateHashTests
         a.World.Fog.AddToHash(ref again, a.TickNumber);
         Assert.Equal(listed.Value, again.Value);
     }
+    /// <summary>
+    /// M4-4b-3b criterion 5: a summoned unit's end tick (<c>UnitStore.ExpiresAtTick</c>) is hashed (bit 19 of its order word,
+    /// then the tick), so moving it moves the hash. The summoned flag is derived (<c>IsSummoned</c> is the end tick not 0) and
+    /// the live count <c>SummonedUnits</c> follows from the end ticks: not hashed. A permanent unit's words are as before.
+    /// </summary>
+    [Fact]
+    public void Hash_TheExpiryTickMovesIt_TheSummonedFlagAndCountAreDerived()
+    {
+        Simulation sim = SummonTests.Sim();
+        UnitStore u = sim.World.Units;
+        EntityHandle mage = CombatScenes.Place(sim, 0, SummonTests.Data.FindUnit("malazan_cadre_mage"), CombatScenes.At(sim, 20, 20));
+        ulong permanent = sim.StateHash();
+        sim.Enqueue(Command.UseAbility(0, mage, 1, CombatScenes.At(sim, 20, 20)));
+        AbilityScenes.TickOf(sim, mage, resolved: true);
+        EntityHandle s = SummonTests.Summoned(sim.World)[0];
+        ulong h = sim.StateHash();
+        Assert.NotEqual(permanent, h);
+        u.ExpiresAtTick[s.Index]++;
+        Assert.NotEqual(h, sim.StateHash());
+        u.ExpiresAtTick[s.Index]--;
+        Assert.Equal(h, sim.StateHash());
+        u.SummonedUnits += 5;
+        Assert.Equal(h, sim.StateHash());
+        u.SummonedUnits -= 5;
+        // Clearing the end tick makes it a permanent unit: a different hash (the flag is the tick).
+        int end = u.ExpiresAtTick[s.Index];
+        u.ExpiresAtTick[s.Index] = 0;
+        Assert.False(u.IsSummoned(s.Index));
+        Assert.NotEqual(h, sim.StateHash());
+        u.ExpiresAtTick[s.Index] = end;
+        // Twins agree through the summon and the expiry.
+        static List<ulong> Run()
+        {
+            Simulation t = SummonTests.Sim();
+            EntityHandle m = CombatScenes.Place(t, 0, SummonTests.Data.FindUnit("malazan_cadre_mage"), CombatScenes.At(t, 20, 20));
+            t.Enqueue(Command.UseAbility(0, m, 1, CombatScenes.At(t, 30, 30)));
+            var hashes = new List<ulong>();
+            for (int k = 0; k < 430; k++)
+            {
+                t.Tick();
+                hashes.Add(t.StateHash());
+            }
+            Assert.Equal(0, t.World.Units.SummonedUnits);
+            return hashes;
+        }
+        Assert.Equal(Run(), Run());
+    }
 }

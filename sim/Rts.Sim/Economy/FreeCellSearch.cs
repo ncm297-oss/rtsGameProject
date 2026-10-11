@@ -28,7 +28,14 @@ internal static class FreeCellSearch
     /// a unit there. Occupants come from the spatial hash, which must hold the units as they stand, except those so marked.
     /// </summary>
     public static int Nearest(World world, int x0, int y0, int fw, int fh, Vector2 from, int[] taken) =>
-        Walk(world, x0, y0, fw, fh, from, taken, 0);
+        Walk(world, x0, y0, fw, fh, from, taken, 0, int.MaxValue);
+
+    /// <summary>
+    /// As <see cref="Nearest"/>, looking no farther than ring <paramref name="maxRing"/> (M4-4b-3b, a summon's placement):
+    /// -1 when no free cell of the plateau lies within it. Only cells within that many rings of the footprint are read.
+    /// </summary>
+    public static int NearestWithin(World world, int x0, int y0, int fw, int fh, Vector2 from, int[] taken, int maxRing) =>
+        Walk(world, x0, y0, fw, fh, from, taken, 0, maxRing);
 
     /// <summary>
     /// For a push-out on a plateau with no free cell left (M3-H2, BUG-0095): the nearest passable cell of the plateau,
@@ -38,15 +45,18 @@ internal static class FreeCellSearch
     /// or the plateau has none outside the footprint.
     /// </summary>
     public static int NearestForLeftover(World world, int x0, int y0, int fw, int fh, Vector2 from, int[] taken, int pass) =>
-        Walk(world, x0, y0, fw, fh, from, taken, pass);
+        Walk(world, x0, y0, fw, fh, from, taken, pass, int.MaxValue);
 
-    /// <summary>The ring walk; <paramref name="pass"/> 0 asks for a free cell, more for a leftover's cell (see <see cref="NearestForLeftover"/>).</summary>
-    private static int Walk(World world, int x0, int y0, int fw, int fh, Vector2 from, int[] taken, int pass)
+    /// <summary>
+    /// The ring walk; <paramref name="pass"/> 0 asks for a free cell, more for a leftover's cell (see <see cref="NearestForLeftover"/>);
+    /// it gives up after ring <paramref name="maxRing"/>.
+    /// </summary>
+    private static int Walk(World world, int x0, int y0, int fw, int fh, Vector2 from, int[] taken, int pass, int maxRing)
     {
         NavGrid g = world.NavGrid;
         int plateau = world.Plateaus.At(y0 * g.Width + x0);
         if (!world.Plateaus.Bounds(plateau, out int minX, out int minY, out int maxX, out int maxY)) return -1;
-        for (int r = 1; ; r++)
+        for (int r = 1; r <= maxRing; r++)
         {
             int left = x0 - r, right = x0 + fw - 1 + r, top = y0 - r, bottom = y0 + fh - 1 + r;
             // The ring encloses the plateau's box: it and every ring after it lie outside the plateau.
@@ -70,6 +80,7 @@ internal static class FreeCellSearch
             }
             if (best >= 0) return best;
         }
+        return -1;
     }
 
     private static void Consider(World world, int[] taken, int x, int y, int plateau, Vector2 from, int pass, ref int best, ref float bestD2)

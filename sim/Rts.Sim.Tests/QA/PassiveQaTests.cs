@@ -148,9 +148,13 @@ public class PassiveQaTests
 
     // ---------------------------------------------------------------- hp boundaries
 
-    /// <summary>A Zealot at 41 / 63 is above its 31.5 line; Dryjhna's Prophecy finishing mid-fight moves the line to 41.5 and the next phase 5 frenzies it.</summary>
+    /// <summary>
+    /// A Zealot at 41 / 63 is above its 31.5 line. M4-4b-3b re-states this row to the real rule (BUG-0421): Dryjhna's Prophecy
+    /// finishing mid-fight raises its maximum and current hit points together, to 61 / 83, still above the new 41.5 line, so
+    /// the next phase 5 does not frenzy it; taken down to 41 / 83 it is.
+    /// </summary>
     [Fact]
-    public void ProphecyResearchedMidFight_FrenziesAZealotNowBelowTheNewLine_NextTick()
+    public void ProphecyResearchedMidFight_RaisesItTo61Of83_NotFrenzied_UntilBelowTheNewLine()
     {
         Simulation sim = NoFights();
         UnitStore u = sim.World.Units;
@@ -161,10 +165,14 @@ public class PassiveQaTests
             sim.Tick();
             Assert.Equal(0, u.Statuses.Count[z.Index]);
         }
-        sim.World.Techs.Set(0, sim.World.Data.FindTech("dryjhnas_prophecy"), true);
+        Economy.ProductionSystem.Researched(sim.World, 0, sim.World.Data.FindTech("dryjhnas_prophecy")); // as phase 3 does
+        sim.Tick();
+        Assert.Equal(61, u.Hp[z.Index]);
+        Assert.Equal(83, PassiveSystem.MaxHp(sim.World, z.Index));
+        Assert.Equal(0, u.Statuses.Count[z.Index]);
+        u.Hp[z.Index] = 41;
         sim.Tick();
         Assert.Equal((0.5f, 1), StatusOf(sim, z, Frenzied));
-        Assert.Equal(83, PassiveSystem.MaxHp(sim.World, z.Index));
     }
 
     /// <summary>A Zealot at 1 hp is Frenzied; its death (one more hit) gives Martyrdom to the Zealot beside it and leaves no entry behind in its slot.</summary>
@@ -186,11 +194,11 @@ public class PassiveQaTests
     }
 
     /// <summary>
-    /// The boundary rule in single precision: for every two- and three-decimal fraction in (0, 1) and every max hp 1-400
+    /// The boundary rule (exact since BUG-0420's fix): for every two- and three-decimal fraction in (0, 1) and every max hp 1-400
     /// where fraction x max hp is a whole number in decimal, a unit at exactly that hp is not below the line (the line is
     /// computed from the loader's float of the JSON double, as the sim does).
     /// </summary>
-    [Fact(Skip = "BUG-0420: hpFraction x maxHp in single precision lands above whole lines (0.15 x 100 = 15.000001), so exactly-at-the-line is below")]
+    [Fact] // BUG-0420, fixed in M4-4b-3b: the line is compared in whole millionths
     public void ExactlyAtTheLine_IsNeverBelow_ForDecimalFractions()
     {
         var bad = new List<string>();

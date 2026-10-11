@@ -59,8 +59,10 @@ public static partial class DataLoader
     /// Every faction's <c>abilities.json</c> (M4-4a; optional: a faction without one has no abilities). Ids unique across
     /// factions (a repeat is an error at its second definition), indexed in ordinal order of their string ids. When
     /// <paramref name="statuses"/> is null (its file failed) <c>applyStatus</c> ids aren't checked: that file's error says why.
+    /// M4-4b-3b: a <c>spawn</c> effect names a unit of <paramref name="unitKeys"/> (<paramref name="units"/>, null where a
+    /// unit failed) of the ability's own faction.
     /// </summary>
-    private static AbilityDef[] BuildAbilities(Checker c, string[] folders, DamageTable? table, StatusDef[]? statuses)
+    private static AbilityDef[] BuildAbilities(Checker c, string[] folders, DamageTable? table, StatusDef[]? statuses, string[] unitKeys, UnitDef[] units)
     {
         var files = new AbilityFileJson?[folders.Length];
         var firstFile = new Dictionary<string, string>(StringComparer.Ordinal); // load-time only
@@ -99,19 +101,24 @@ public static partial class DataLoader
             c.CurrentFile = $"factions/{folders[f]}/abilities.json";
             AbilityJson a = files[f]!.Abilities![i]!;
             int id = Array.BinarySearch(keys, a.Id!, StringComparer.Ordinal);
-            defs[id] = BuildAbility(c, a, $"abilities[{i}]", id, f, table, statuses, statusKeys);
+            defs[id] = BuildAbility(c, a, $"abilities[{i}]", id, f, table, statuses, statusKeys, new UnitRefs(folders, unitKeys, units));
         }
         return defs;
     }
 
-    private static AbilityDef BuildAbility(Checker c, AbilityJson a, string p, int id, int faction, DamageTable? table, StatusDef[]? statuses, string[]? statusKeys)
+    /// <summary>What a <c>spawn</c> effect's <c>unit</c> is checked against (M4-4b-3b): the faction folders, the sorted unit ids and their defs.</summary>
+    private readonly record struct UnitRefs(string[] Folders, string[] Keys, UnitDef[] Units);
+
+    private static AbilityDef BuildAbility(Checker c, AbilityJson a, string p, int id, int faction, DamageTable? table, StatusDef[]? statuses, string[]? statusKeys,
+        UnitRefs unitRefs)
     {
         int kind = KindOf(c, a.Kind, p + ".kind", DataLimits.AbilityKindIds, DataLimits.PlannedAbilityKindIds);
-        // M4-4b-3a: a self / aura ability has no target, so no range: any `range` on it is refused (0 included).
+        // M4-4b-3a: a self / aura ability has no target, so no range: any `range` on it is refused (0 included). M4-4b-3b: nor
+        // has a summon (it resolves round the caster).
         double range = 0;
-        if (kind == (int)AbilityKind.SelfAura)
+        if (kind == (int)AbilityKind.SelfAura || kind == (int)AbilityKind.Summon)
         {
-            if (a.Range != null) c.Error(p + ".range", $"ability '{a.Id}': a selfAura ability has no range (its effects land around the caster)");
+            if (a.Range != null) c.Error(p + ".range", $"ability '{a.Id}': a {DataLimits.AbilityKindIds[kind]} ability has no range (its effects land around the caster)");
         }
         else range = c.Pos(a.Range, p + ".range");
         if (range > DataLimits.MaxSight)
@@ -119,7 +126,8 @@ public static partial class DataLoader
             c.Error(p + ".range", $"ability '{a.Id}': range {range} m is above the maximum {DataLimits.MaxSight} m (the largest sight)");
             range = 0;
         }
-        double radius = c.Pos(a.Radius, p + ".radius");
+        // M4-4b-3b: a summon's radius is optional (0 when absent; required below when it has an effect that lands on units).
+        double radius = kind == (int)AbilityKind.Summon && a.Radius == null ? 0 : c.Pos(a.Radius, p + ".radius");
         if (radius > DataLimits.MaxAbilityRadius)
         {
             c.Error(p + ".radius", $"ability '{a.Id}': radius {radius} m is above the maximum {DataLimits.MaxAbilityRadius} m");
@@ -130,15 +138,17 @@ public static partial class DataLoader
         List<AbilityEffectJson?>? list = c.Obj(a.Effects, p + ".effects");
         if (list != null && list.Count == 0) c.Error(p + ".effects", $"ability '{a.Id}' has no effects");
         var effects = ImmutableArray.CreateBuilder<AbilityEffect>(list?.Count ?? 0);
-        bool hitsBuildings = false;
+        bool hitsBuildings = false, spawns = false, landsOnUnits = false;
         int zoneEffect = -1;
         for (int e = 0; list != null && e < list.Count; e++)
         {
             string q = $"{p}.effects[{e}]";
             AbilityEffectJson? x = c.Obj(list[e], q);
             if (x == null) continue;
-            AbilityEffect fx = BuildEffect(c, x, q, a.Id, affects, table, statuses, statusKeys);
+            AbilityEffect fx = BuildEffect(c, x, q, a.Id, kind, faction, affects, table, statuses, statusKeys, unitRefs);
             hitsBuildings |= fx.Buildings;
+            if (fx.Kind == AbilityEffectKind.Spawn) spawns = true;
+            else landsOnUnits = true;
             if (fx.Kind == AbilityEffectKind.CreateZone)
             {
                 // M4-4b-2: one zone per cast (its lifetime is the ability's one duration).
@@ -146,6 +156,14 @@ public static partial class DataLoader
                 else zoneEffect = effects.Count;
             }
             effects.Add(fx);
+        }
+        if (kind == (int)AbilityKind.Summon)
+        {
+            // M4-4b-3b: a summon is for its spawn effects; any other effect lands within its radius, which it must then give.
+            if (list != null && list.Count > 0 && !spawns)
+                c.Error(p + ".effects", $"ability '{a.Id}': a summon ability needs at least one 'spawn' effect");
+            if (landsOnUnits && a.Radius == null)
+                c.Error(p + ".radius", $"ability '{a.Id}': missing required field (a summon's other effects land within its radius)");
         }
         // M4-4b-2: the zone lasts the ability's duration, so a zone ability must give one (at least a tick).
         int durationTicks;
@@ -184,11 +202,17 @@ public static partial class DataLoader
     /// at least 1, M4-4b-1). M4-4b-2: <c>createZone {blocksVision?, statuses}</c> (<see cref="BuildZone"/>). A field the kind
     /// doesn't use is an error.
     /// </summary>
-    private static AbilityEffect BuildEffect(Checker c, AbilityEffectJson x, string q, string? ability, int affects, DamageTable? table, StatusDef[]? statuses, string[]? statusKeys)
+    private static AbilityEffect BuildEffect(Checker c, AbilityEffectJson x, string q, string? ability, int abilityKind, int faction, int affects, DamageTable? table,
+        StatusDef[]? statuses, string[]? statusKeys, UnitRefs unitRefs)
     {
         int kind = KindOf(c, x.Kind, q + ".kind", DataLimits.AbilityEffectKindIds, DataLimits.PlannedAbilityEffectKindIds);
-        if (kind < 0) return new AbilityEffect { Kind = AbilityEffectKind.Damage, DamageType = -1, Status = -1, ZoneStatuses = ImmutableArray<ZoneStatus>.Empty };
+        if (kind < 0) return new AbilityEffect { Kind = AbilityEffectKind.Damage, DamageType = -1, Status = -1, ZoneStatuses = ImmutableArray<ZoneStatus>.Empty, Unit = -1 };
         string name = DataLimits.AbilityEffectKindIds[kind];
+        if (kind == (int)AbilityEffectKind.Spawn) return BuildSpawn(c, x, q, name, ability, abilityKind, faction, unitRefs);
+        // M4-4b-3b: the spawn fields belong to a spawn effect only.
+        if (x.Unit != null) Unused(c, q + ".unit", name);
+        if (x.Count != null) Unused(c, q + ".count", name);
+        if (x.Lifetime != null) Unused(c, q + ".lifetime", name);
         if (kind == (int)AbilityEffectKind.Damage)
         {
             if (x.Status != null) Unused(c, q + ".status", name);
@@ -226,6 +250,7 @@ public static partial class DataLoader
                 Buildings = buildings,
                 FriendlyFire = (float)friendly,
                 ZoneStatuses = ImmutableArray<ZoneStatus>.Empty,
+                Unit = -1,
             };
         }
         if (x.Type != null) Unused(c, q + ".type", name);
@@ -244,6 +269,7 @@ public static partial class DataLoader
             Magnitude = magnitude,
             DurationTicks = duration,
             ZoneStatuses = ImmutableArray<ZoneStatus>.Empty,
+            Unit = -1,
         };
     }
 
@@ -275,6 +301,55 @@ public static partial class DataLoader
             Status = -1,
             BlocksVision = x.BlocksVision == true,
             ZoneStatuses = entries.ToImmutable(),
+            Unit = -1,
+        };
+    }
+
+    /// <summary>
+    /// A <c>spawn</c> effect (M4-4b-3b), on a <c>summon</c> ability only: <c>unit</c> a unit id of the ability's own faction,
+    /// <c>count</c> a whole number 1 to <see cref="DataLimits.MaxSummonCount"/>, <c>lifetime</c> seconds, at least a tick. Every
+    /// other effect field is an error on it.
+    /// </summary>
+    private static AbilityEffect BuildSpawn(Checker c, AbilityEffectJson x, string q, string name, string? ability, int abilityKind, int faction, UnitRefs refs)
+    {
+        if (abilityKind >= 0 && abilityKind != (int)AbilityKind.Summon)
+            c.Error(q + ".kind", $"ability '{ability}' is a {DataLimits.AbilityKindIds[abilityKind]} ability; a 'spawn' effect belongs on a summon ability");
+        if (x.Type != null) Unused(c, q + ".type", name);
+        if (x.Amount != null) Unused(c, q + ".amount", name);
+        if (x.Buildings != null) Unused(c, q + ".buildings", name);
+        if (x.FriendlyFire != null) Unused(c, q + ".friendlyFire", name);
+        if (x.Status != null) Unused(c, q + ".status", name);
+        if (x.Magnitude != null) Unused(c, q + ".magnitude", name);
+        if (x.Duration != null) Unused(c, q + ".duration", name);
+        if (x.BlocksVision != null) Unused(c, q + ".blocksVision", name);
+        if (x.Statuses != null) Unused(c, q + ".statuses", name);
+        int unit = -1;
+        string key = c.Id(x.Unit, q + ".unit");
+        if (key.Length > 0)
+        {
+            int id = Array.BinarySearch(refs.Keys, key, StringComparer.Ordinal);
+            if (id < 0 || refs.Units[id] == null)
+                c.Error(q + ".unit", $"unknown unit '{key}' (not in any units.json)");
+            else if (refs.Units[id].Faction != faction)
+                c.Error(q + ".unit", $"unit '{key}' belongs to faction '{refs.Folders[refs.Units[id].Faction]}', not '{refs.Folders[faction]}'");
+            else
+                unit = id;
+        }
+        int count = 0;
+        if (x.Count == null) c.Error(q + ".count", "missing required field");
+        else if (x.Count.Value != Math.Floor(x.Count.Value)) c.Error(q + ".count", $"{x.Count.Value} is not a whole number (the units summoned)");
+        else if (!(x.Count.Value >= 1 && x.Count.Value <= DataLimits.MaxSummonCount))
+            c.Error(q + ".count", $"{x.Count.Value} is outside 1-{DataLimits.MaxSummonCount} (the units one spawn effect summons)");
+        else count = (int)x.Count.Value;
+        return new AbilityEffect
+        {
+            Kind = AbilityEffectKind.Spawn,
+            DamageType = -1,
+            Status = -1,
+            ZoneStatuses = ImmutableArray<ZoneStatus>.Empty,
+            Unit = unit,
+            Count = count,
+            LifetimeTicks = c.Ticks(x.Lifetime, q + ".lifetime", 1),
         };
     }
 

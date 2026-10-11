@@ -292,6 +292,13 @@ public sealed class GameData
                     h.Add(e.ZoneStatuses[k].Magnitude);
                     h.Add(e.ZoneStatuses[k].DurationTicks);
                 }
+                // M4-4b-3b: a spawn effect's unit, count and lifetime, only on that kind, so data without one hashes as before.
+                if (e.Kind == AbilityEffectKind.Spawn)
+                {
+                    h.Add(e.Unit);
+                    h.Add(e.Count);
+                    h.Add(e.LifetimeTicks);
+                }
             }
         }
         return h.Value;
