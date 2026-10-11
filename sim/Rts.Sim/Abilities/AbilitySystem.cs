@@ -84,15 +84,15 @@ public static class AbilitySystem
                 if (InRange(u, i, a)) StartCasting(world, i, a);
                 else
                 {
-                    // Stopped short (arrived as near as the ground allows, or stuck): no cast, no cooldown.
-                    if (u.State[i] != UnitState.Moving) Cancel(u, i);
+                    // Stopped short (arrived as near as the ground allows, or stuck): no cast, no cooldown (M4-H3: and an event).
+                    if (u.State[i] != UnitState.Moving) Drop(world, i, a);
                     continue;
                 }
             }
             else if (u.State[i] != UnitState.Casting)
             {
                 // Something other than an order moved it off its cast: it is lost like a cancelled one.
-                Cancel(u, i);
+                Drop(world, i, a);
                 continue;
             }
             if (--u.CastTicks[i] > 0) continue;
@@ -111,6 +111,17 @@ public static class AbilitySystem
             StealthSystem.OnAttackOrCast(world, i);
             Resolve(world, caster, u.Owner[i], a, point);
         }
+    }
+
+    /// <summary>
+    /// M4-H3 (BUG-0461): unit slot <paramref name="i"/>'s cast of <paramref name="a"/> is lost without a new order: cancelled
+    /// (no cooldown), and an <see cref="AbilityEvent"/> with <see cref="AbilityEvent.Dropped"/> says so.
+    /// </summary>
+    private static void Drop(World world, int i, AbilityDef a)
+    {
+        UnitStore u = world.Units;
+        world.RecordAbilityEvent(new AbilityEvent(new EntityHandle(i, u.Generation[i]), u.Owner[i], a.Id, u.CastPoint[i], false, true));
+        Cancel(u, i);
     }
 
     /// <summary>

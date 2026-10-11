@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-10-1954, task M4-5 |
 | System | stealth / passives (`StealthSystem.OnStealthStarted`, `PassiveSystem.OnDeath`) |
-| Fixed by | |
+| Fixed by | M4-H3 (sim): `World.DetectNeighbors`, detection's own scratch |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~QA.StealthQaTests.AnOnDeathPassiveApplyingStealthed_ReachesEveryListedFriend"`
@@ -36,3 +36,11 @@ S3 confirmed; not reachable with shipped data (no stealth source before M8) but 
 **end-of-M4 sim hardening** (M4-H3), right after BUG-0461. Direction: give detection its own `int[UnitCapacity]` scratch (about
 16 KB: itemise it in the memory row; the margin is 29,560 B, so this is the last per-slot array before a re-baseline) rather than
 deferring the "detect at once" step; un-skip the QA row.
+
+## Fix (M4-H3, 2026-10-11)
+`StealthSystem.OnStealthStarted` queries into its own scratch, `World.DetectNeighbors` (`int[UnitCapacity]`), so a caller
+iterating `World.Neighbors` (a resolve, a splash) or `World.ShoveNeighbors` (a death passive) keeps its list. Proof:
+`QA/StealthQaTests.AnOnDeathPassiveApplyingStealthed_ReachesEveryListedFriend(true)` un-skipped and green (5 of 5; 1 of 5 on
+the base). Memory: +16,408 bytes on the 1,024-cell world with 4,096 slots (4,096 x 4 + a 24-byte header), itemised in
+`QA/FieldBuildFairnessQaTests.World_1024Map_CacheStays32_MemoryBounded`'s comment with the margin left under the bound.
+docs/03 "Implementation (M4-5)" ("When", known limit (2)).

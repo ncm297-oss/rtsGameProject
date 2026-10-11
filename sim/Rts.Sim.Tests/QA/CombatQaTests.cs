@@ -550,7 +550,7 @@ public class CombatQaTests
     /// The view's placement answer (CanPlace) and the Build it previews must agree: the player's own worker stands
     /// Attacking inside a footprint and is given the Build there.
     /// </summary>
-    [Fact(Skip = "BUG-0142 item 1: CanPlace counts the issuing worker, Build does not")]
+    [Fact(Skip = "BUG-0142 item 1 (wontfix, M4-H3): CanPlace counts the issuing worker, Build does not; the BUG-0092 shape, docs/03 Implementation (M3-3)")]
     public void CanPlace_AgreesWithBuild_WhenTheIssuingWorkerIsAttackingInsideTheFootprint()
     {
         Simulation sim = Flat();

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-09-0125, task M4-3b (QA full) |
 | System | vision (last-known list), tests |
-| Fixed by | items 3 and 4: sim 1ab51c5 (`TowerTests` summary; `Stress/CombatFuzzTests` allows the update-tick lag and asserts the target is gone a tick later). Items 1 and 2 open |
+| Fixed by | items 3-4: sim 1ab51c5; item 1: M4-H3 (`BuildingGhost.Site`); item 2: kept as a marked seam (M4-H3) |
 
 ## Repro
 1. **A site's ghost.** Player 0 sees player 1's construction site (1 hp, `UnderConstruction`), then looks away.
@@ -47,3 +47,15 @@ ordered building target, and the next tick asserts the unit no longer holds that
 building is still caught. `CombatFuzzTests` and `GhostAttackHostileFuzzStressTests` pass. Items 1 (no site flag on a
 ghost; matters when M4-V5 draws ghosts) and 2 (`ExploreAllForTests` seam in Rts.Sim) are unchanged, so the bug stays open
 at S4 for the Producer to schedule or wontfix.
+
+## Resolution (M4-H3, 2026-10-11)
+1. **Fixed.** `BuildingGhost` gains `Site` (the building was `UnderConstruction` when last seen), refreshed with the rest.
+   It is view-only (no sim rule reads it) and **not hashed**: hashing it moved the recorded seed-21 playable replay's
+   checkpoint 26 (`QA/GatherWedgeQaTests.Seed21PlayableReplay_*`, a remembered site), which is out of scope to re-record;
+   the golden (one player, no ghost) is untouched either way. Proof: `Vision/GhostListTests.ASiteSeen_IsRememberedAsASite_UntilItIsSeenFinished`;
+   `StateHashTests.Hash_LeavesTheGhostSiteFlagOut_ItIsViewOnly`; `Stress/TowerFuzzStressTests`' seen-entry check compares it.
+   The view can now draw a remembered site as a foundation (docs/03 "Implementation (M4-V5)" still says "a sim field
+   first": the view track's line to update).
+2. **Kept (wontfix as a change).** `FogStore.ExploreAllForTests` is internal (reachable only through `InternalsVisibleTo`)
+   and its summary already marks it "Test seam (M4-3b) ... a match never calls it", the way the `Reveal(..., int.MaxValue)`
+   seam is used; moving it out would need a public mutator, which is worse.

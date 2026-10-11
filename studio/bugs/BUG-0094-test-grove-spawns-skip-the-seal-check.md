@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-07-0800, task M3-H1 |
 | System | test tooling (`ResourceStore.Spawn` via `ResourceMaps.Spawn`, dev-only) |
-| Fixed by | QA harness half: `Stress/PocketRuleFuzzStressTests.Grove` (session 2026-10-07-0800) now spawns a grove tree only where `World.Seal.KeepsConnected(x, y, 1, 1)` allows |
+| Fixed by | QA harness half (2026-10-07-0800); helper half: M4-H3 `ResourceMaps.SpawnSealSafe` |
 
 ## Repro
 1. Before the harness fix (as committed in 76d2ec2): `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~PocketRuleFuzzStressTests"`.
@@ -30,3 +30,9 @@ assertion fails on the setup, not on the code under test.
 - Not reachable in play: no player or dev command spawns resource nodes. Hence S4.
 - Options: a `ResourceMaps.SpawnSealSafe` helper (or a seal check inside `ResourceMaps.Spawn` with an opt-out for the
   tests that build hollows on purpose, e.g. `ResourceQaTests`' hollow grove), so the next fuzz author doesn't repeat it.
+
+## Fix (M4-H3, 2026-10-11)
+`ResourceMaps.SpawnSealSafe(world, type, x, y, amount)` spawns a node only where it fits and `World.Seal.KeepsConnected`
+allows (the never-seal rule placements follow), returning whether it did; `ResourceMaps.Spawn`'s summary now warns that it
+runs no seal check and points at the safe one. Proof: `ResourceStoreTests.SpawnSealSafe_NeverWallsACellIn_ThePlainHelperDoes`
+(a ring of 8 trees: the safe helper refuses the closing tree and the centre stays reachable; the plain one walls it in).

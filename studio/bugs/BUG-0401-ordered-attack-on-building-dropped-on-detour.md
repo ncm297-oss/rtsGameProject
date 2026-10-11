@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-10-0624, task M4-VH2 (fix round 1 re-check) |
 | System | combat chase give-up (`CombatSystem` scan block, `CombatConstants.GiveUpScans`); sim track |
-| Fixed by | |
+| Fixed by | M4-H3 (sim): an ordered chase on a reachable target counts no stalled scan |
 
 ## Repro
 1. Merged sim+view state at cc85fdf. `QaGhostViewTest`, seed 6, `GoneGhostAttack`: three spawned army units (slots
@@ -45,3 +45,18 @@ first leads away from a level-1 footprint), plus the same with an unreachable fo
   rather than straight-line gap; or document that explicit orders give up too.
 - It is not caused by the M4-VH2 fix. The fix's re-selection (spawned units only) just made it visible: before the fix
   this unit was one of four, and the mean-distance check hid it.
+
+## Fix (M4-H3, 2026-10-11)
+The Producer's option 1: in `CombatSystem.Acquire`'s stall count, a unit in `CombatMode.Ordered` that is `Moving`, with its
+goal cell's flow field cached and a finite cost at its own cell (`CombatSystem.ReachableOnFoot`, read with
+`FlowFieldCache.PeekCached`, so no hashed LRU state moves), never gives up by the count; building targets included. The
+count itself is held at `GiveUpScans - 1` rather than zeroed, so BUG-0150's "lost from sight while not gaining" give-up is
+unchanged (`FogTargetingTests.AChasedTargetWalkingUpOutOfVision_IsGivenUp` pins it; a first version that zeroed the count
+broke it). A unit whose
+walk ended (no route, or the nearest ground out of reach) gives up after 10 stalled scans as before. QA's `TowerGhostQaTests.ARangedOrderOnARememberedBuildingUpACliff_EndsWithin2Minutes(false)` assumed the old give-up: the Tent up the cliff is reachable by the map's ramp, so the Crossbowman now walks up and shoots it; the row now accepts the order ending or the Tent taking a hit (reason in its summary).
+Proof: `Combat/OrderedChaseReachTests.AnOrderedAttackOnAReachableBuilding_WalksARouteThatFirstLeadsAway_AndAttacksIt` (the
+seed-6 ramp-detour layout: a level-1 unit across a canyon from a level-1 Tent, the only route leading 34 m away first; on
+the base it dropped the order on tick 39) and `AnOrderedAttackOnAnUnreachableTarget_StillGivesUp` (green on base and head).
+An unreachable *building* can't be built in a test map (the pocket rule seals a plateau with no ramp, and a footprint there
+is refused), so the unreachable row uses a unit target on a sealed cliff-top, as `QA/CombatGiveUpQaTests` does.
+docs/03 "Giving up a chase"; docs/01 row (Producer decision, owner may revisit).

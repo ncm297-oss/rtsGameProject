@@ -38,21 +38,34 @@ public static class StealthSystem
 
     /// <summary>
     /// Unit slot <paramref name="j"/> just got its first Stealthed status (any phase): its detection bits are worked out now,
-    /// so it is never hidden for the rest of the tick from a player whose unit stands beside it. Uses the second movement
-    /// scratch (phase 6's resolve and phase 11's splash hold the first) and the spatial hash as it was built in phase 1.
+    /// so it is never hidden for the rest of the tick from a player whose unit stands beside it. Uses its own scratch
+    /// (<see cref="World.DetectNeighbors"/>, BUG-0480: its callers may be iterating either movement scratch: phase 6's resolve
+    /// and phase 11's splash hold the first, a death passive the second) and the spatial hash as it was built in phase 1.
     /// </summary>
-    internal static void OnStealthStarted(World world, int j) => Detect(world, j, world.ShoveNeighbors, -1);
+    internal static void OnStealthStarted(World world, int j) => Detect(world, j, world.DetectNeighbors, -1);
 
     /// <summary>
     /// Unit slot <paramref name="i"/>'s attack landed (a melee hit, a projectile's impact or splash, a damage effect of its
     /// cast) or its cast resolved: if it carries a Stealthed status it is Revealed for <c>stealth.revealSeconds</c> (the
     /// stacking rule: a reveal refreshes, never shortens). A unit without one is not touched, so a match without stealth
-    /// adds no status.
+    /// adds no status. M4-H3 (BUG-0482): a reveal always fits: on a unit already carrying <see cref="StatusStore.PerUnit"/>
+    /// statuses and no Revealed, it replaces the oldest entry that is not stealthed (the stealth it overrides stays, dormant).
     /// </summary>
     internal static void OnAttackOrCast(World world, int i)
     {
         UnitStore u = world.Units;
-        if (u.Statuses.StealthedUnits == 0 || !u.Statuses.HasStealth(i) || world.RevealedStatus < 0 || world.Data.Rules.RevealTicks <= 0) return;
+        StatusStore s = u.Statuses;
+        if (s.StealthedUnits == 0 || !s.HasStealth(i) || world.RevealedStatus < 0 || world.Data.Rules.RevealTicks <= 0) return;
+        if (s.Count[i] >= StatusStore.PerUnit && s.IndexOf(i, world.RevealedStatus) < 0)
+        {
+            int head = i * StatusStore.PerUnit;
+            for (int k = 0; k < s.Count[i]; k++)
+            {
+                if (world.Data.Statuses[s.StatusId[head + k]].Kind == StatusKind.Stealthed) continue;
+                StatusSystem.RemoveEntry(world, i, head + k);
+                break;
+            }
+        }
         StatusSystem.Apply(world, i, world.RevealedStatus, 0f, world.Data.Rules.RevealTicks, u.Owner[i]);
     }
 

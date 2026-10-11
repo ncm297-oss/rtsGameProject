@@ -9,7 +9,12 @@ namespace Rts.Sim.Vision;
 /// <param name="TypeId">Its building type (<see cref="Data.GameData.Buildings"/>) when last seen.</param>
 /// <param name="Cell">Its anchor cell (the footprint's lowest x, y; <c>y * Width + x</c>) when last seen.</param>
 /// <param name="Owner">Its owner.</param>
-public readonly record struct BuildingGhost(int Generation, int TypeId, int Cell, int Owner)
+/// <param name="Site">
+/// M4-H3 (BUG-0275 item 1): it was a construction site when last seen (<c>UnderConstruction</c>), so the view can draw a
+/// remembered site as a foundation; refreshed with the rest whenever the building is seen again. View-only: no sim rule reads
+/// it, so it is not hashed (hash it the day one does).
+/// </param>
+public readonly record struct BuildingGhost(int Generation, int TypeId, int Cell, int Owner, bool Site = false)
 {
     /// <summary>True for an entry that holds a building (its generation is never 0).</summary>
     public bool Known => Generation != 0;

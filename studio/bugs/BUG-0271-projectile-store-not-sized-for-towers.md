@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | wontfix |
 | Found | 2026-10-09-0125, task M4-3b (builder's known limit) |
 | System | combat (projectiles, towers) |
-| Fixed by | |
+| Fixed by | M4-H3: kept as a documented limit |
 
 ## Repro
 Reasoning, not observed: `SimConfig.ProjectileSlots` defaults to `players x popCap / smallest shooter pop` (200 for two
@@ -26,3 +26,8 @@ Sizing the default up by `BuildingCapacity` costs about 30 KB on the 1,024-cell 
 (`FieldBuildFairnessQaTests.World_1024Map_CacheStays32_MemoryBounded`: 230,726,944 bytes before M4-3b, 230,756,976 after,
 bound 230,765,000, so 8 KB left); a smaller term
 (towers a player can afford, a data cap on towers) needs a design rule. Producer's call.
+
+## Decision (M4-H3, 2026-10-11)
+Wontfix, kept as the documented limit in docs/03 "Implementation (M4-3b)" ("Projectile store size"): losing a tower shot
+needs every population slot to be a shooter with a shot in the air on the same tick (200 for two players), and sizing for
+towers needs a design rule (towers a player can afford, or a data cap), not a sim change. Revisit if a tower cap lands in data.

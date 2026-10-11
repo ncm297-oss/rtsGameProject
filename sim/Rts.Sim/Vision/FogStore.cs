@@ -613,7 +613,7 @@ public sealed class FogStore
             if (enemy && (SeesFootprint(p, type[j], cell[j]) || BuildingRevealed(p, j))) // BUG-0270: a revealed tower is seen
             {
                 if (g.Generation == 0) _ghostCount[p]++;
-                g = new BuildingGhost(generation[j], type[j], cell[j], owner[j]);
+                g = new BuildingGhost(generation[j], type[j], cell[j], owner[j], _buildings.UnderConstruction[j]);
                 continue;
             }
             if (g.Generation == 0 || (enemy && generation[j] == g.Generation)) continue; // nothing known, or still there unseen
@@ -867,6 +867,8 @@ public sealed class FogStore
                 h.Add(g.TypeId);
                 h.Add(g.Cell);
                 h.Add(g.Owner);
+                // Not Site (M4-H3, BUG-0275 item 1): view-only, no rule reads it; hashing it moved the recorded seed-21
+                // replay's checkpoints. Hash it the day a rule reads it.
             }
         }
     }

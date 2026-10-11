@@ -26,6 +26,28 @@ public class GhostListTests
 
     private static BuildingGhost Ghost(World w, int player, EntityHandle building) => w.Fog.Ghosts(player)[building.Index];
 
+    /// <summary>
+    /// BUG-0275 item 1 (M4-H3): a construction site seen is remembered as a site (<see cref="BuildingGhost.Site"/>), and stays
+    /// one while unseen even after it is finished; seen again finished, its entry says so.
+    /// </summary>
+    [Fact]
+    public void ASiteSeen_IsRememberedAsASite_UntilItIsSeenFinished()
+    {
+        Simulation sim = Flat(size: 64);
+        World w = sim.World;
+        EntityHandle site = TowerTests.PlaceBuilding(sim, 1, TowerTests.Tent, 30, 30, site: true);
+        EntityHandle scout = Spotter(sim, 0, new Vector2(55f, 62f));
+        Assert.Equal(new BuildingGhost(site.Generation, TowerTests.Tent, 30 * 64 + 30, 1, Site: true), Ghost(w, 0, site));
+        w.Units.Free(scout);
+        FogMaps.RunThroughNextUpdate(sim);
+        w.Buildings.SetWork(site.Index, int.MaxValue); // finished while unseen
+        FogMaps.RunThroughNextUpdate(sim);
+        Assert.False(w.Buildings.UnderConstruction[site.Index]);
+        Assert.True(Ghost(w, 0, site).Site, "unseen, the ghost is the site last seen");
+        Spotter(sim, 0, new Vector2(55f, 62f));
+        Assert.Equal(new BuildingGhost(site.Generation, TowerTests.Tent, 30 * 64 + 30, 1, Site: false), Ghost(w, 0, site));
+    }
+
     [Fact]
     public void ABuildingSeenOnce_IsListed_WithItsTypeCellGenerationAndOwner_AndStaysWhenItsCellsFallBackToExplored()
     {

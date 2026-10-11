@@ -79,6 +79,20 @@ public static class StatusSystem
     }
 
     /// <summary>
+    /// Removes entry <paramref name="at"/> of unit slot <paramref name="i"/> before it ran out (M4-H3, BUG-0482: a reveal
+    /// making room) and recomputes what it fed: the speed for a slow, the blind in force for a blind, the stealth count.
+    /// </summary>
+    internal static void RemoveEntry(World world, int i, int at)
+    {
+        StatusStore s = world.Units.Statuses;
+        StatusKind kind = world.Data.Statuses[s.StatusId[at]].Kind;
+        if (kind == StatusKind.Stealthed) s.CountStealth(i, -1);
+        s.RemoveAt(i, at);
+        if (kind == StatusKind.Slow) RecomputeSpeed(world, i);
+        else if (kind == StatusKind.Blind) RecomputeBlind(world, i);
+    }
+
+    /// <summary>
     /// Unit slot <paramref name="i"/>'s blind in force (M4-4b-2, <see cref="StatusStore.BlindOf"/>): of its blind statuses
     /// the one with the smallest sight, then the smallest reach, then the lowest id; none when it has no blind. Called when
     /// its blinds change, not every tick.

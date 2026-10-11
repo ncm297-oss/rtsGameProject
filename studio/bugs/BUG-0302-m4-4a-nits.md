@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | partly fixed (d by M4-4a fix round 1: pulse clock now starts at the apply, docs/03 states the trailing-fraction rule; a by QA; b, c open) |
+| Status | fixed (a, b, d) / wontfix (c) |
 | Found | 2026-10-09-0724, task M4-4a |
 | System | studio records, QA memory bound, `AbilityPerfTests`, statuses |
-| Fixed by | |
+| Fixed by | a: QA; d: M4-4a fix round 1; b: M4-H3 (the bound comment itemised to date); c: wontfix (M4-H3) |
 
 ## Repro / Actual
 a. `studio/bugs/README.md` index still lists BUG-0280 as "open (sim track)" while its file says "fixed (M4-4a)". (QA has
@@ -42,3 +42,16 @@ The base's +18,536 bytes came with M4-4b-2 (the zone store) and are not itemised
 `DeathEvent` = 8,192; the towers' reveal pair 256 x 2 players x 4 x 2 = 4,096; the zone fog records 64 x 2 players x 1 word
 x 8 x 2 = 2,048; about 200 bytes of array headers. The next session that adds per-slot state will cross the bound, so
 re-baseline it then with these items written into the comment.
+
+## Resolution (M4-H3, 2026-10-11)
+b. **Fixed as far as it can be.** `QA/FieldBuildFairnessQaTests.World_1024Map_CacheStays32_MemoryBounded`'s comment now
+   itemises every step since M4-4b-2: M4-4b-3b +25,760 (`UnitStore.ExpiresAtTick` 16,408, the rest rounding), M4-5 +17,424
+   (the stealth arrays), M4-H3 +16,408 + rounding (`World.DetectNeighbors`), with the 11,088 bytes left under the bound. The
+   original M4-4a residue (~65 KB of 966,040) can't be re-measured without the old trees; this figure moves by several KB
+   between runs of one tree (3584a3a read 231,889,912 to 231,897,088 in three runs), the probe's allocation-context
+   rounding that M4-5 also measured, which is the best explanation on record.
+c. **Wontfix.** Timing the two phases inside the real tick needs a stopwatch seam in `Simulation.Tick` (production code for a
+   test) or a copy of `Tick`'s phase order in the test (which drifts). The row's extra pass times the same per-pass work on the
+   tick's own state (statuses age two ticks a tick, so the Burning / Slowed counts are refreshed every 20 ticks to hold the
+   load); the full-tick rows (`Stress/AbilityScalePerfTests`, the brawls) time the real tick. Its summary could say so; the
+   Producer may reopen if a seam is wanted.

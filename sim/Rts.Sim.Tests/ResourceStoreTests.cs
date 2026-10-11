@@ -22,6 +22,35 @@ public class ResourceStoreTests
 
     private static World NewWorld(int capacity = ResourceStore.DefaultCapacity) => NewSim(FromRows(Rows), resourceCapacity: capacity).World;
 
+    /// <summary>
+    /// BUG-0094 (M4-H3): a ring of trees round a cell built with <see cref="ResourceMaps.SpawnSealSafe"/> never walls it in:
+    /// the tree that would close the ring is refused and the cell is still reached on foot; the plain helper closes it.
+    /// </summary>
+    [Fact]
+    public void SpawnSealSafe_NeverWallsACellIn_ThePlainHelperDoes()
+    {
+        foreach (bool safe in new[] { true, false })
+        {
+            World w = NewSim(LocalMovementTests.Flat(12)).World;
+            NavGrid g = w.NavGrid;
+            int refused = 0;
+            for (int dy = -1; dy <= 1; dy++)
+                for (int dx = -1; dx <= 1; dx++)
+                {
+                    if (dx == 0 && dy == 0) continue;
+                    if (safe) refused += SpawnSealSafe(w, Tree, 6 + dx, 6 + dy, TreeWood) ? 0 : 1;
+                    else Spawn(w, Tree, 6 + dx, 6 + dy, TreeWood);
+                }
+            float cost = Pathfinding.FlowField.Build(g, 2 * g.Width + 2).CostAt(6 * g.Width + 6);
+            if (safe)
+            {
+                Assert.True(refused >= 1, "the closing tree was spawned");
+                Assert.True(cost < float.PositiveInfinity, "the ring's centre is walled in");
+            }
+            else Assert.Equal(float.PositiveInfinity, cost);
+        }
+    }
+
     [Fact]
     public void Spawn_TakesSlotsInOrder_BlocksTheFootprint_AndBumpsVersionOncePerNode()
     {

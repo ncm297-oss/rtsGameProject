@@ -278,7 +278,17 @@ public class SimCoreStressTests
             for (int i = 0; i < 100; i++) sim.StateHash();
             hsw.Stop();
             _out.WriteLine($"{units} units: avg tick {avgMs * 1000:F1} us, StateHash {hsw.Elapsed.TotalMilliseconds / 100:F3} ms");
-            Assert.True(avgMs < 0.5, $"avg empty tick {avgMs} ms with {units} units");
+            // M4-H3 (BUG-0451, Producer decision): the 2,500 row's gate is 550 us (500 and 1,000 keep 500 us). The trend, run
+            // alone in Debug: ~481 us (handoff, M4-4a), 485-487 (M4-4b-3b report), 476.1 alone / 490.9-501.7 in paired runs
+            // with the base (M4-4b-3b QA), a 488 median of six (M4-5), each step a counter-gated per-unit pass (statuses,
+            // passives, zones, summons, stealth) of under 0.2 us a tick. M4-H3's profile (phase by phase, 2,000 ticks): the
+            // counter-gated phases 0.5 us together, spatial rebuild 51, vision 34, swings 36, movement 15, economy and
+            // construction 21, and target acquisition 305-327 us (75 %), of which PickTarget 244 us for 149 scans a tick that
+            // find no enemy: 2,244 of the 2,500 units spawn off the 256 m map at (i, i) and clamp into the corner bucket, so
+            // each of their scans walks that bucket (BUG-0510). No buy-back of 5 % in 200 lines that isn't this scene's
+            // artifact, so the gate moved instead; the scene is QA's to change.
+            double budgetMs = units >= 2500 ? 0.55 : 0.5;
+            Assert.True(avgMs < budgetMs, $"avg empty tick {avgMs} ms with {units} units (budget {budgetMs} ms)");
         }
     }
 }

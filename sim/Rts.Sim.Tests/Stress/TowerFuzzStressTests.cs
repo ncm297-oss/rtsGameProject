@@ -152,7 +152,7 @@ public class TowerFuzzStressTests
                     Assert.NotEqual(p, ghosts[j].Owner);
                     // Seen now: the entry is that building as it stands.
                     if (bs.Alive[j] && bs.Owner[j] != p && w.Fog.CanSeeBuilding(p, j))
-                        Assert.Equal(new BuildingGhost(bs.Generation[j], bs.TypeId[j], bs.Cell[j], bs.Owner[j]), ghosts[j]);
+                        Assert.Equal(new BuildingGhost(bs.Generation[j], bs.TypeId[j], bs.Cell[j], bs.Owner[j], bs.UnderConstruction[j]), ghosts[j]);
                 }
                 Assert.Equal(n, w.Fog.GhostCount(p));
                 maxGhosts = Math.Max(maxGhosts, n);

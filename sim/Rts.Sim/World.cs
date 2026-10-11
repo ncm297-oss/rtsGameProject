@@ -64,6 +64,7 @@ public sealed partial class World
         PlannedRemaining = new float[config.UnitCapacity];
         ShoveStep = new Vector2[config.UnitCapacity];
         ShoveNeighbors = new int[config.UnitCapacity];
+        DetectNeighbors = new int[config.UnitCapacity];
         ShovedGoals = new int[config.UnitCapacity];
         AnchorQueue = new int[config.UnitCapacity];
         AnchorLinked = new bool[config.UnitCapacity];
@@ -114,6 +115,9 @@ public sealed partial class World
 
         StructureClass = config.Data.DamageTable.ArmorClassKeys.IndexOf(CombatConstants.StructureClassKey);
         CombatEnabled = config.Combat;
+        // M4-H3 (BUG-0461): the cast walk-in's patience and own-blocker range, from the config.
+        CastWalkInPatienceTicks = Math.Max(1, (int)MathF.Round(config.CastWalkInPatienceSeconds * SimConstants.TicksPerSecond, MidpointRounding.AwayFromZero));
+        CastWalkInBlockerRange = config.CastWalkInBlockerRange;
         // The placer's closings happened before any unit existed; only later ones reset progress marks.
         SeenBlockVersion = NavGrid.BlockVersion;
     }
@@ -350,6 +354,13 @@ public sealed partial class World
     /// <summary>Scratch for <see cref="Movement.MovementSystem"/>: a second neighbor query while <see cref="Neighbors"/> is in use (does a parked unit stand alone?); derived, not hashed.</summary>
     internal int[] ShoveNeighbors { get; }
 
+    /// <summary>
+    /// Scratch for <see cref="Abilities.StealthSystem.OnStealthStarted"/> (M4-H3, BUG-0480): the enemies round a unit that just
+    /// got its first Stealthed status, in any phase. Its own array, so a caller iterating <see cref="Neighbors"/> or
+    /// <see cref="ShoveNeighbors"/> (a death passive, a resolve, a splash) that applies a stealth keeps its list; derived, not hashed.
+    /// </summary>
+    internal int[] DetectNeighbors { get; }
+
     /// <summary>Scratch for <see cref="Movement.MovementSystem"/>: goal cells of the units a shove moved this tick, whose groups re-check their anchors; derived, not hashed.</summary>
     internal int[] ShovedGoals { get; }
 
@@ -457,6 +468,15 @@ public sealed partial class World
 
     /// <summary>False for the test seam's hand-made maps, which a replay (seed + map params) can't rebuild.</summary>
     internal bool HasGeneratedMap { get; }
+
+    /// <summary>
+    /// M4-H3 (BUG-0461): stuck ticks a caster walking into range takes before it stops and its cast is dropped
+    /// (<see cref="SimConfig.CastWalkInPatienceSeconds"/> in ticks, at least 1).
+    /// </summary>
+    public int CastWalkInPatienceTicks { get; }
+
+    /// <summary>M4-H3 (BUG-0461): <see cref="SimConfig.CastWalkInBlockerRange"/> (m).</summary>
+    public float CastWalkInBlockerRange { get; }
 
     /// <summary>The match setup this world was built from.</summary>
     public SimConfig Config { get; }

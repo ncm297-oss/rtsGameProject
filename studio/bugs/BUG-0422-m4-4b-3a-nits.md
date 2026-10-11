@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-10-1015, task M4-4b-3a |
 | System | docs, unit passives |
-| Fixed by | |
+| Fixed by | item 1: the Producer at the 1015 ACCEPT; items 2-3 closed as notes at M4-H3 |
 
 ## Repro / items
 1. **Mojibake in docs/03.** Line 2569 ("Implementation (M4-4b-3a)", Cost) reads `478 Âµs here, 482 Âµs on the base`.
@@ -24,3 +24,8 @@
 Item 1 **fixed by the Producer at ACCEPT** (docs/03 line 2569 reads `µs`; a docs fix). Item 2 is a documented rule (consistent with
 splash and ability resolves): no change planned. Item 3 accepted as is: the brief asked for a re-baseline and the policy margin is
 72 KB; the itemisation is exact. Items 2-3 close as notes at the end-of-M4 hardening; status stays `open` until then.
+
+## Closed (M4-H3, 2026-10-11)
+Items 2 and 3 close as notes, as the Producer's triage said: item 2 is the documented phase-3 rule (a unit trained this tick
+is not in the spatial hash, like ability resolves and splash); item 3 was accepted as is (the itemisation is exact). Nothing
+to change.

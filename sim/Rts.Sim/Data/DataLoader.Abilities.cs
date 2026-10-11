@@ -12,14 +12,15 @@ public static partial class DataLoader
     /// order; <c>kind</c> one of <see cref="DataLimits.StatusKindIds"/>; <c>damageType</c> required on a damage-over-time
     /// status and refused on any other kind; M4-4b-2: <c>sight</c> and <c>reach</c> (m, above 0, at most
     /// <see cref="DataLimits.MaxSight"/>) required on a blind status and refused on any other kind. M4-5: at most one
-    /// <c>revealed</c> status (the one an attack or cast from stealth applies), refused at the second.
+    /// <c>revealed</c> status (the one an attack or cast from stealth applies), refused at the second; M4-H3 (BUG-0481): and
+    /// exactly one when any status is <c>stealthed</c>, refused at <c>statuses</c> (else an attack from stealth never reveals).
     /// </summary>
     private static StatusDef[] BuildStatuses(Checker c, StatusFileJson j, DamageTable? table)
     {
         List<StatusJson?>? list = c.Obj(j.Statuses, "statuses");
         int[] accepted = AcceptIds(c, list, "statuses", x => x?.Id, out string[] sorted);
         var defs = new StatusDef[sorted.Length];
-        string? revealed = null;
+        string? revealed = null, stealthed = null;
         foreach (int i in accepted)
         {
             StatusJson x = list![i]!;
@@ -31,6 +32,7 @@ public static partial class DataLoader
                 if (revealed != null) c.Error(p + ".kind", $"status '{x.Id}': '{revealed}' is already the revealed status (an attack or cast from stealth applies the one)");
                 else revealed = x.Id;
             }
+            else if (kind == (int)StatusKind.Stealthed) stealthed ??= x.Id;
             int damageType = -1;
             if (kind == (int)StatusKind.DamageOverTime)
                 damageType = c.Ref(table?.DamageTypeKeys, x.DamageType, p + ".damageType", "damage type");
@@ -59,6 +61,8 @@ public static partial class DataLoader
                 Reach = (float)reach,
             };
         }
+        if (stealthed != null && revealed == null)
+            c.Error("statuses", $"status '{stealthed}' is stealthed but no status has kind 'revealed' (the one an attack or cast from stealth applies)");
         return defs;
     }
 
@@ -415,6 +419,11 @@ public static partial class DataLoader
             // M4-5: stealth and reveal are on or off.
             if (magnitudeJson != null)
                 c.Error(q + ".magnitude", $"{DataLimits.StatusKindIds[(int)statuses[status].Kind]} status '{key}' takes no magnitude (it is on or off)");
+        }
+        else if (statusKeys == null && magnitudeJson == null)
+        {
+            // M4-H3: common/statuses.json failed, so whether this status takes a magnitude is unknown; that file's error says
+            // why (a missing magnitude here was a second, misleading error for a blind or stealth status).
         }
         else
         {

@@ -1058,6 +1058,14 @@ BUG-0034: the distinct-targets perf row averages 100 ticks, budget unchanged.
   (`ChasersUnderPlacementChurn_LongestFieldWait_AtMostOneSecond`).
 - **Perf is measured in Debug on the dev machine**; the 2,500-unit two-player contest costs about
   1.6x the one-player blob (6.8 vs 4.3 ms). The 4 ms design budget is for 500 units (0.6 ms today).
+- **A two-tick limit cycle on flat ground near planted own units** (BUG-0461's movement half, open, BUG-0035 / 0037
+  family): in the M4 sandbox (seed 1, tick 1644) a Sapper on open level-0 ground with three of its own units `Attacking`
+  1.5-2.0 m ahead stepped (0.043, -0.164) then (-0.043, +0.164) every tick for a second, 0.17 m back and forth, and the
+  same cycle showed in an earlier Retaliate chase. It is not reproduced outside that replay (which no longer loads after
+  the data hash moved): six hand-built layouts of three planted crossbowmen 1.5-2.0 m ahead walk round them cleanly. Since
+  M4-H3 a caster's walk-in in that spot waits (the own-fighter rule) instead of giving up, so where the cycle happens the
+  caster would vibrate for as long as the fight lasts; a plain Move still gives up after 1 s. Needs the sandbox to save a
+  replay of it again under the current data.
 
 ## Orders and unit states
 
@@ -1197,7 +1205,11 @@ unit with a target does not pop its queue.
 **Acquisition (phase 7, after the queue).** Every live unit, slot order: a dead `LastAttacker` or
 target is dropped; a finished engagement ends; the leash is checked; then a unit that scans and is
 due (`(tick + slot) % CombatConstants.ScanInterval == 0`, interval 4) and is neither mid-swing nor
-already in reach of a live target picks one (a swing is never thrown away for a better target). The pick is one pass over `SpatialHash.QueryEnemies` (other owners within
+already in reach of a live target picks one (a swing is never thrown away for a better target). A known limit of the
+stagger (BUG-0142 item 2, kept at M4-H3): two equal units spawned Idle already in reach of each other engage on their own
+scan ticks, so the one whose slot scans first lands the first blow and wins a mirror duel; attack-moved or ordered units
+engage on reach in phase 10 and are symmetric (`AttackMoveDuel_AnySlotOrder_*`). Units meet in reach without a scan only
+in test spawns and production at a fight's edge. The pick is one pass over `SpatialHash.QueryEnemies` (other owners within
 sight, or within reach for a holder): tier 0 enemies whose `Target` is this unit or that are its
 `LastAttacker`, tier 1 units that can attack (`attack.value > 0`, not the worker slot), tier 2 other
 units; then nearest (squared center distance), then lowest slot. Only when no unit qualifies are
@@ -1263,6 +1275,18 @@ only, so it also counts its give-ups (`GiveUps`); at `CombatConstants.MaxGiveUps
 reach, like a holder's, so two unreachable enemies can't take turns forever. Any order taken
 (`ClearForOrder`) forgets both; landing a hit resets the count. A chase that stalls because the target runs as
 fast as the chaser ends the same way, which is intended (the attack-mover goes on, the retaliator goes home).
+**An ordered chase on a reachable target** (M4-H3, BUG-0401, Producer decision 2026-10-10, owner may revisit): a unit
+with `CombatMode.Ordered` (the player's own Attack) never gives the target up by the stall count while it walks a route
+that reaches its goal: it is `Moving` and its goal cell's flow field is cached with a finite cost at the cell it stands in
+(`CombatSystem.ReachableOnFoot`, read with `FlowFieldCache.PeekCached`, which moves no hashed LRU state). Building targets
+included. Builder detail: the stalled scans still count, held at `GiveUpScans - 1`, so such a chaser that loses sight of a
+unit target while not gaining on it still gives it up (BUG-0150's rule, unchanged). So a route that first leads away from the target (a ramp round a cliff) is walked to the end; before, the order
+was dropped after 2 s with no feedback (one of three selected units stood Idle 48 m away). Once its walk ends out of reach
+(a target on a cliff-top with no way up: the walk ends on the nearest ground below it, or movement finds no route and drops
+the goal) the unit stands, the scans count and the order is given up by the rule above, so a unit never paces a cliff for
+ever; a field still waiting for its build counts as no route for that scan. Auto-acquired chases (attack-move,
+retaliation) keep the 10-scan rule. `Combat/OrderedChaseReachTests` (the seed-6 ramp-detour layout, and a target on a
+sealed cliff-top).
 Known limits of the friend exception: a friend fighting an enemy the chaser can't reach (both on a plateau the chaser
 can't climb) keeps the chaser pressing below for as long as that fight lasts; a target that never dies would keep its
 queued chasers queued. Brawl finish ticks after the fix (QA's scenes; f2879b9, which had no give-up at all, in
@@ -1694,7 +1718,9 @@ collected by `CombatSystem.Acquire`) and skip everything when no building type i
   population caps' shooters); a shot fired while it is full is lost, as before. Every tower has at most one shot in the air
   (an 18 m flight is 15 ticks, the cooldown 40), so a match only loses tower shots with the store full of unit shots
   (every population slot a shooter with one in flight). Not sized up for towers: 256 more slots would cost about 30 KB
-  on the 1,024-cell map, more than the 8 KB left under `FieldBuildFairnessQaTests`' bound after M4-3b (BUG-0271).
+  on the 1,024-cell map, more than the 8 KB left under `FieldBuildFairnessQaTests`' bound after M4-3b (BUG-0271; kept as a
+  documented limit at M4-H3: it needs 200 shooters all with a shot in the air on one tick, and a size rule for towers is a
+  design call).
 - **Hashing.** Bit 31 of a building's production word flags tower state (a target, a cooldown or a wind-up), followed by
   the target's index and generation, the cooldown and the wind-up; a building that never shot hashes as before. A tower's
   projectile sets bit 8 of its level word. Reflection audits: `StateHashTests.EveryBuildingStoreArray_IsHashed` (now
@@ -1702,7 +1728,8 @@ collected by `CombatSystem.Acquire`) and skip everything when no building type i
 
 **The last-known buildings list (`FogStore.Ghosts(player)`).** docs/02: enemy buildings seen once stay as ghosts in
 explored fog until the cell is seen again. Per player one `BuildingGhost` per building slot (`Generation`, `TypeId`,
-`Cell` = anchor, `Owner`; `Generation` 0 = empty), a fixed array sized by `BuildingCapacity`,
+`Cell` = anchor, `Owner`, and since M4-H3 `Site`: it was a construction site when last seen, BUG-0275 item 1;
+`Generation` 0 = empty), a fixed array sized by `BuildingCapacity`,
 updated right after each player's fog update (phase 12, every 4 ticks; the tick-0 initial stamp too): an enemy building
 with any footprint cell visible now (or, BUG-0270, revealed to the player) is recorded (or refreshed) in its slot's entry; an entry whose building is not seen now is **kept** (also
 after the building is gone) unless the building is gone (slot free, or a newer generation) **and** a cell of the
@@ -1710,10 +1737,13 @@ remembered footprint is visible now, which drops it. So a ghost is dropped the f
 building gone, never earlier, and the player learns of a death only by looking. One entry per slot: if a ghosted
 building's slot is reused while the player isn't looking, the old ghost stays until either footprint is seen; once the
 new building is seen it replaces the old entry, though the old ground was never looked at (a known limit, BUG-0272; slots
-recycle lowest-free-first, so this needs a building destroyed and another built unseen). Read-only for the view:
+recycle lowest-free-first, so this needs a building destroyed and another built unseen; kept as a limit at M4-H3: a ghost
+per remembered building would need entries beyond the slots, bounded only by the map). Read-only for the view:
 `Ghosts(player)` (a span, slot-indexed), `GhostCount(player)`. Never one's own buildings. Hashed (after the reveals,
 only while some player has an entry, so a match where no enemy building was ever seen hashes as before; the golden's `k`
-lines did not move): each player's count, then each entry's slot and fields (`StateHashTests.Hash_CoversEveryGhostField`).
+lines did not move): each player's count, then each entry's slot and fields (`StateHashTests.Hash_CoversEveryGhostField`), except `Site`
+(M4-H3): view-only, no rule reads it, and hashing it moved the recorded seed-21 replay's checkpoints
+(`StateHashTests.Hash_LeavesTheGhostSiteFlagOut_ItIsViewOnly`; `Vision/GhostListTests.ASiteSeen_IsRememberedAsASite_UntilItIsSeenFinished`).
 A save (M6) stores the entries.
 
 **Attack on a last-known building.** An explicit `Attack` on a building its owner can't see now but whose ghost it holds
@@ -2296,6 +2326,17 @@ over time came in M4-4b-1 (below).
 - **Walk, then cast.** In range (the caster's center within `range` m of the point) it starts casting at once; out of range
   it walks there (a Move to the point) and starts casting on the first phase 6 it is in range. A walk that stops short
   (arrived as near as the ground allows, or stuck) drops the cast with no cooldown. The walker doesn't scan (a plain Move).
+  M4-H3 (BUG-0461, Producer decision 2026-10-10, owner may revisit): a caster's walk has its own patience,
+  `SimConfig.CastWalkInPatienceSeconds` (3 s, `World.CastWalkInPatienceTicks` = 60 stuck ticks, not a Move's 20), and a
+  tick without progress in which an own unit that is `Attacking` or `Casting` (planted, never shoved) stands within
+  `SimConfig.CastWalkInBlockerRange` (1.5 m, body edge to body edge) with its centre ahead of the caster's direction of
+  travel counts as waiting behind its own side (the stuck count holds, as behind a flowing group: `MovementSystem.
+  OwnFighterAhead`, one spatial query, only for a stuck caster's walk). The fight ends and frees the way, so a caster
+  hemmed in by its own army at a ramp waits and casts rather than losing the click after 1 s. A holder doesn't count
+  (it may never move), nor does an Idle unit (it is shoved, or pushed after `PushAfterStuckTicks`). A cast lost without
+  a new order (the walk stopped short, or something took the caster off `Casting`) records an `AbilityEvent` with
+  `Dropped` true (`Resolved` false, the cast point, the ability); a new order's cancel records nothing. The view ignores
+  it for now (an M5 / M6 HUD item). `Abilities/CastWalkInTests` (the sandbox replays' layouts).
 - **Casting.** `UnitState.Casting` (6): the caster stands planted like an attacker (never shoved, a hard wall, not pushed
   out by a placement, and it counts in the way of its owner's placement), scans nothing, isn't retaliating, and its shift
   queue waits. The cast lasts `castTime` ticks counting the tick it starts (0.8 s = 16 ticks: started in tick T's phase 1,
@@ -2314,7 +2355,7 @@ over time came in M4-4b-1 (below).
 - **Statuses.** `UnitStore.Statuses`, a `StatusStore`: up to `StatusStore.PerUnit` = 8 entries per unit slot, each
   `(statusId, magnitude, ticksRemaining, pulseTicks, sourcePlayer)`, in the order first applied. Stacking (docs/02): the same status
   again keeps the longer remaining duration (a refresh never shortens one) and the stronger magnitude, and takes the
-  stronger application's source (the latest on a tie); different statuses stack; a ninth is dropped. Each tick's phase 5
+  stronger application's source (the latest on a tie); different statuses stack; a ninth is dropped (except a Revealed, M4-H3: see "Implementation (M4-5)", Reveal). Each tick's phase 5
   counts every entry down by one and ends it on the tick it reaches 0. The store is cleared when the unit's slot is freed
   (death) or allocated.
 - **Damage over time (`damageOverTime`, Burning).** The magnitude is damage per second (a whole number). It lands in pulses
@@ -2348,6 +2389,8 @@ over time came in M4-4b-1 (below).
   (`Data.Statuses[id]` has the text and `Kind`), `Magnitude`, `TicksRemaining`, `SourcePlayer`.
 - `World.AbilityEvents`: the casts that started (`Resolved` false) or resolved (true) in the last tick, with caster,
   owner, ability id and point, emptied at the start of every tick like `World.Deaths` (a Burning kill appears in `Deaths`).
+  M4-H3: a cast lost without a new order is an entry with `Dropped` true (and `Resolved` false): skip it where only starts
+  are wanted.
 - "Only the nearest selected caster casts" (docs/02) is the view's choice: the sim casts for every `UseAbility` it gets.
 - `UnitState.Casting` is new: a view that switches on states should treat it as standing.
 
@@ -2870,7 +2913,9 @@ counters in `StatusStore` (`HasStealth`, `StealthedUnits`), `FogStore.SeesUnitCe
 - **Data.** Two status kinds: `stealthed` (`StatusKind.Stealthed` = 4) and `revealed` (`StatusKind.Revealed` = 5), shipped
   in `common/statuses.json` as `stealthed` / `revealed`. Both take no `magnitude` (on or off) and no `sight`, `reach` or
   `damageType`; a `duration` as every status application. At most one `revealed` status (the one an attack or cast from
-  stealth applies; a second is refused at its `kind`). `rules.json` `stealth: { "proximity": 3, "revealSeconds": 3 }`
+  stealth applies; a second is refused at its `kind`), and exactly one when any status is `stealthed` (M4-H3, BUG-0481:
+  else an attack from stealth would never reveal; refused at `statuses` with one error naming the missing kind; data with
+  neither kind loads). `rules.json` `stealth: { "proximity": 3, "revealSeconds": 3 }`
   (required; `proximity` m, above 0, at most `DataLimits.MaxSight`; `revealSeconds` at least a tick, to ticks at load:
   `RulesDef.StealthProximity`, `RevealTicks` = 60). A unit's optional `detector` (m, above 0, at most `MaxSight`;
   `UnitDef.Detector`, 0 for none) beside the buildings' (M4-3b). `ContentHash` covers the rules fields and `Detector`.
@@ -2892,8 +2937,10 @@ counters in `StatusStore` (`HasStealth`, `StealthedUnits`), `FogStore.SeesUnitCe
   most once a player (a 64-bit "settled" mask). So phases 6-12 (casts, scans, towers, swings, retaliation) and the view
   between ticks read one answer, made from this tick's statuses and positions (as of phase 1's spatial hash) and the last
   fog update. A unit that gets its first Stealthed status at any other moment (a cast resolving in phase 6, a test seam)
-  has its bits worked out at once (`StealthSystem.OnStealthStarted`, on the second movement scratch), so it is never
-  hidden for the rest of that tick from an enemy standing beside it.
+  has its bits worked out at once (`StealthSystem.OnStealthStarted`), so it is never hidden for the rest of that tick from
+  an enemy standing beside it. M4-H3 (BUG-0480): that query has its own scratch, `World.DetectNeighbors` (an int a unit
+  slot), because its callers may be iterating either movement scratch (a resolve or a splash the first, a death passive
+  the second); before, a death passive applying a stealth reached only its first listed friend.
 - **The one hook.** `World.HiddenFrom(p, slot)`: an enemy's unit, stealthed, not detected by p. `VisionSystem.UnitSeesUnit`
   and `BuildingSeesUnit` answer false for it first (whatever the unit's own sight, the fog or a high-ground reveal say),
   and `Fog.CanSeeUnit` likewise for the view. Through them: no scan acquires it (the one-level shortcut in
@@ -2910,7 +2957,10 @@ counters in `StatusStore` (`HasStealth`, `StealthedUnits`), `FogStore.SeesUnitCe
   shot reveals nothing. Applied in tick t, it ends in tick t + 60's phase 5: revealed after ticks t to t + 59, stealthed
   again after t + 60 if its Stealthed status still lives. A unit with no Stealthed status is never given Revealed this way
   (Producer-flagged builder choice: a match without stealth gains no status entry; the cost is that a unit that attacked
-  and is stealthed within 3 s is stealthed at once).
+  and is stealthed within 3 s is stealthed at once). M4-H3 (BUG-0482): a reveal always fits: on a unit already carrying
+  `StatusStore.PerUnit` = 8 statuses and no Revealed, it replaces the oldest entry that is not a Stealthed one
+  (`StatusSystem.RemoveEntry`: a slow removed this way recomputes the speed, a blind the blind in force). The one exception
+  to "a ninth status is dropped"; unreachable with the shipped six status ids.
 - **State and hashing.** No new hashed field: the Stealthed and Revealed entries are status entries (hashed with every
   other). Derived and not hashed: the detection bits, `StatusStore._stealth` (Stealthed entries per slot) and
   `StealthedUnits` (slots with one), kept by `StatusSystem.Apply` / `Run` and `StatusStore.Clear`
@@ -2932,7 +2982,8 @@ counters in `StatusStore` (`HasStealth`, `StealthedUnits`), `FogStore.SeesUnitCe
   entries: 9,288 + about 100; the rest is the probe's allocation-context rounding (zero-sizing the three arrays measures
   +160 over the base). Under the bound (231,920,000; 29.5 KB left), so it is not re-baselined.
 - **Known limits.** (1) Detection lags the fog by up to 4 ticks (its update interval) and movement by one tick (phase 5).
-  (2) A unit first stealthed after movement (phase 11: an onDeath passive) is checked against phase 1's spatial hash.
+  (2) A unit first stealthed after movement (phase 11: an onDeath passive) is checked against phase 1's spatial hash (its
+  own scratch since M4-H3, so the passive's loop over its friends is no longer cut short: BUG-0480).
   (3) Only a stealth carrier is revealed by attacking (above). (4) Players past 64 are not deduplicated in a pass (correct,
   only slower).
 - **Tests.** `Vision/StealthTests` (unseen and untargetable by any enemy, explicit Attack dropped, no retaliation, owner
@@ -4594,8 +4645,9 @@ right-click on one attacks it.
   box mesh, placed on the remembered footprint's centre at full height, in the owner's colour times
   `FogView.ExploredBrightness` (one material per player, made in `Bind`), no bar; hidden when the entry goes or the
   building is seen again; re-placed only when the entry's generation or anchor changes. `IsGhostShown`,
-  `GhostGeneration`, `GhostBoxOf`, `GhostsShown`, `GhostMaterial` for tests. A remembered site draws finished, full
-  height (BUG-0275 item 1: `BuildingGhost` keeps no progress or site flag; a sim field first).
+  `GhostGeneration`, `GhostBoxOf`, `GhostsShown`, `GhostMaterial` for tests. A remembered site still draws finished, full
+  height (BUG-0275 item 1: since M4-H3 `BuildingGhost.Site` says it was a site when last seen, view-only and not hashed;
+  drawing a remembered site as a foundation is a view item for the next view hardening).
 - **Picking**: `BuildingPicker.PickGhostRay(GhostShown, Ghosts, defs, grid, map, origin, direction, boxHeight, out
   entry)`, the box ray test on each ghost's remembered footprint, full height, terrain occluding as for live boxes.
   `SelectionController.EnemyAt` (right-click and A + click) takes a ghost when the ray enters its box before any drawn
@@ -5291,6 +5343,11 @@ AiPlayer
   alternating (both players contest the point) under 10.5 ms, and 2,500 units to 4 points, one player
   per point, seed 1, 600 ticks, under 3.7 ms: what each cost before the plug answers were cached.
   Wall-clock rows are sensitive to other load on the machine: re-run a failure once alone first.
+- `Stress/SimCoreStressTests.EmptyTick_WithManyUnits_IsCheap`: 500 and 1,000 units under 500 µs a tick; the 2,500 row
+  under 550 µs since M4-H3 (BUG-0451, Producer decision: it had crept from ~481 to 476-502 µs, inside run-to-run noise of
+  its 500 µs gate). The profile behind it: target acquisition is three quarters of that tick, mostly scans that find
+  nothing because 2,244 of the scene's units spawn off the map and share the corner bucket (BUG-0510, QA's scene); the
+  per-unit passes M4 added (statuses, passives, zones, summons, stealth) cost under 1 µs together.
 - Every `Category=Perf` test and every allocation-measuring test is in the xUnit collection
   `SerialCollection` (`DisableParallelization = true`), so it runs alone after the parallel batch;
   classes that also hold heavy unmeasured tests put the measured ones in a nested `Serial` class.
