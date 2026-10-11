@@ -68,6 +68,7 @@
     "radius": "Radius",
     "cooldown": "Cooldown",
     "seconds": "s",
-    "meters": "m"
+    "meters": "m",
+    "cast_lost": "Cast lost"
   }
 }

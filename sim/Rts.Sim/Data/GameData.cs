@@ -46,6 +46,13 @@ public sealed class GameData
     /// <summary>Every ability of every faction (<c>factions/&lt;id&gt;/abilities.json</c>, M4-4a), indexed by ability id (ordinal order of the string ids).</summary>
     public ImmutableArray<AbilityDef> Abilities { get; init; } = ImmutableArray<AbilityDef>.Empty;
 
+    /// <summary>
+    /// Per faction id, its <c>ai.json</c> (M5-1): difficulties, build order, compositions, attack and retreat thresholds. The
+    /// loader always sets one per faction; empty for hand-built data. Not in <see cref="ContentHash"/> until the AI sends
+    /// commands (M5-2): nothing the sim runs reads it yet.
+    /// </summary>
+    public ImmutableArray<AiDef> Ai { get; init; } = ImmutableArray<AiDef>.Empty;
+
     /// <summary>Per building type id, the tech ids it researches (a tech of its slot, common or of its faction), ascending; built at load (M3-5). Empty for hand-built data.</summary>
     /// <remarks>Derived from the techs' slot and faction and the buildings', which <see cref="ContentHash"/> covers.</remarks>
     public ImmutableArray<ImmutableArray<int>> Research { get; init; } = ImmutableArray<ImmutableArray<int>>.Empty;

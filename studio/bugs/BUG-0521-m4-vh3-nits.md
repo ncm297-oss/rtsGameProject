@@ -6,11 +6,11 @@
 | Status | open |
 | Found | 2026-10-10-2334, task M4-VH3 (QA) |
 | System | view: `game/scripts/GroundDisc.cs`, `sim/Rts.Sim/ViewApi/SeenResources.cs`, `game/scripts/CombatViews.cs` |
-| Fixed by | |
+| Fixed by | Item 1: 36248fa (M5-V1), `GroundDisc.Place` clamps the hole before comparing; test `AbilityViewTest.Bug0521Row` (a 0.1 m ring placed 5 times: 1 rebuild; 5 before). Items 2 and 3 open. Verified by QA 2026-10-11-0314 |
 
 None of these is reachable with the shipped data or the current game paths.
 
-## Item 1: `GroundDisc.Place` never takes its early return when `hole` < 0
+## Item 1 (fixed, M5-V1): `GroundDisc.Place` never takes its early return when `hole` < 0
 `Place` stores `Hole = Math.Max(0f, hole)` but compares the caller's raw `hole == Hole`. `AbilityViews.PlaceRing` passes
 `radius - RingWidth`, which is negative for a radius under 0.22 m, so such a ring would rebuild its mesh (and bump
 `Rebuilds`) every frame even when it doesn't move. No shipped ability has a radius between 0 and 0.22 m (a radius-0

@@ -97,6 +97,7 @@ public partial class Match : Node3D
         abilityViews.Fog = fog;
         abilityViews.Camera = camera;
         abilityViews.Bind(data, sim.World.Units.Capacity, _runner, selection, playerRgb: playerRgb, zoneCapacity: sim.World.Zones.Capacity);
+        abilityViews.Sound = GetNode<Sfx>("Sfx"); // M5-V1: the lost-cast sound
 
         System.Numerics.Vector2[][] blocks = SpawnArmies(sim, options.UnitsPerPlayer, out System.Numerics.Vector2 focus);
         Bases = options.NoBases ? null : SpawnBases(sim, blocks, WorkersPerPlayer, out _);
@@ -117,6 +118,8 @@ public partial class Match : Node3D
             // Resource names come from the local player's faction data (CLAUDE.md rule 8).
             FactionDef local = data.Factions[sim.World.FactionOf(SelectionController.LocalPlayer)];
             UiText? ui = UiText.Shared;
+            // M5-V1: the words over a lost cast's caster are HUD text (none without the HUD or ui.json).
+            abilityViews.CastLostText = ui?.Hud(HudText.CastLost) ?? "";
             hud.GetNode<ResourceBar>("ResourceBar").Init(_runner, SelectionController.LocalPlayer, local.GoldName, local.WoodName, ui?.Hud(HudText.Pop) ?? "",
                 ui?.Hud(HudText.Kills) ?? "", ui?.Hud(HudText.Losses) ?? "");
             // The card's and panel's labels and menus are view data (ui.json); without them they stay hidden and the errors are logged.

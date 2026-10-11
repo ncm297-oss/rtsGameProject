@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-10-2334, task M4-VH3 (proposed by the developer, confirmed by QA) |
 | System | ability views: `game/scripts/AbilityViews.cs` cast rings (`_circles`) and resolve flashes (`_flashes`) |
-| Fixed by | |
+| Fixed by | 36248fa (M5-V1): cast-point rings and resolve flashes are pooled `GroundDisc`s (`GroundDiscPool`), the flash grows through the shader's `scale`; test `AbilityViewTest.CliffCastRows` (seeds 1, 6: ring 72 points 0 off, flash 144 / 216 points 0 off, every vertex on its cell; the flat drawing misses 27 / 50), pool row 0 B; QA `game/tests/QaM5V1Test.tscn` (12 rings at once, 0 B, no new node). Verified by QA 2026-10-11-0314 |
 
 ## Repro
 1. Read `AbilityViews.cs`: the cast-point ring (an own unit with `CastAbility` set gets an orange ring of the ability's

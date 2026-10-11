@@ -2,6 +2,7 @@
 // it, each cell's own top surface (GroundPatch), so it lies on the ground on both sides of a cliff; UV is the ground offset
 // from the centre over the radius, so the circle is cut out here per pixel. A fill out to the rim, and a rim band of
 // `rim_share` of the radius at the edge; a ring is a rim with a clear fill (the cells inside it are not even in the mesh).
+// M5-V1: `scale` draws the circle at that share of the meshed radius (a resolve flash grows without a mesh rebuild).
 shader_type spatial;
 render_mode unshaded, cull_disabled, depth_draw_never, shadows_disabled;
 
@@ -10,9 +11,10 @@ render_mode unshaded, cull_disabled, depth_draw_never, shadows_disabled;
 uniform vec4 fill_color : source_color = vec4(0.0);
 uniform vec4 rim_color : source_color = vec4(1.0);
 uniform float rim_share = 0.05;
+uniform float scale = 1.0;
 
 void fragment() {
-	float r = length(UV);
+	float r = length(UV) / max(scale, 1e-3);
 	float aa = max(fwidth(r), 1e-4);
 	if (r > 1.0) {
 		discard;

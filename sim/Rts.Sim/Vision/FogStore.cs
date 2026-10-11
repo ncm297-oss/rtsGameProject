@@ -194,6 +194,55 @@ public sealed class FogStore
         return SeesUnit(player, slot);
     }
 
+    /// <summary>
+    /// M5-1: the first unit slot at or after <paramref name="from"/> that <paramref name="player"/> sees by
+    /// <see cref="CanSeeUnit"/> (a valid player), or the store's capacity when none: <c>PlayerView</c>'s unit cursor as one
+    /// loop. While no zone blocks vision the cell test is inlined and stealth is asked only of an enemy already in sight; the
+    /// answer is <see cref="CanSeeUnit"/>'s, slot for slot (the PlayerView oracle fuzz compares them every tick).
+    /// </summary>
+    internal int NextSeenUnit(int player, int from)
+    {
+        UnitStore u = _units;
+        int n = u.Capacity;
+        if (from < 0) from = 0;
+        if (_world.Zones.BlockerCount > 0)
+        {
+            for (int s = from; s < n; s++)
+                if (u.Alive[s] && CanSeeUnit(player, s)) return s;
+            return n;
+        }
+        // CellOf and Revealed written out in the loop: eight players walk every slot each think, and the tests' Debug build
+        // pays for each call (M5-1 perf row). The PlayerView oracle fuzz holds this loop to CanSeeUnit slot for slot.
+        bool[] alive = u.Alive;
+        int[] owner = u.Owner;
+        int[] generation = u.Generation;
+        Vector2[] position = u.Position;
+        ulong[] visible = _visible[player];
+        int[] revealUntil = _revealUntil, revealGeneration = _revealGeneration;
+        int tick = _world.TickNumber, players = _players, width = _width, height = _height;
+        bool stealth = u.Statuses.StealthedUnits != 0;
+        for (int s = from; s < n; s++)
+        {
+            if (!alive[s]) continue;
+            if (owner[s] == player) return s;
+            Vector2 at = position[s];
+            int x = (int)(at.X / MapConstants.CellSize), y = (int)(at.Y / MapConstants.CellSize);
+            if (!(x >= 0)) x = 0;
+            else if (x >= width) x = width - 1;
+            if (!(y >= 0)) y = 0;
+            else if (y >= height) y = height - 1;
+            int c = y * width + x;
+            if ((visible[c >> 6] & (1UL << (c & 63))) == 0)
+            {
+                int k = s * players + player;
+                if (!(revealUntil[k] > tick && revealGeneration[k] == generation[s])) continue;
+            }
+            if (stealth && u.Statuses.HasStealth(s) && _world.HiddenFrom(player, s)) continue;
+            return s;
+        }
+        return n;
+    }
+
     /// <summary>Whether <paramref name="player"/> sees live building slot <paramref name="slot"/>: its own, any footprint cell visible at the last update, or (BUG-0270) a tower revealed to it by a hit from high ground. False for a dead slot or no such player.</summary>
     public bool CanSeeBuilding(int player, int slot)
     {
