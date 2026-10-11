@@ -3,6 +3,7 @@ using System.Numerics;
 using System.Reflection;
 using System.Text;
 using Rts.Sim.Commands;
+using Rts.Sim.Data;
 using Rts.Sim.Map;
 using Rts.Sim.Replays;
 
@@ -101,6 +102,7 @@ public class ReplayFormatTests
         }
         Replay r = new()
         {
+            Seats = ReplayTestRun.HumanSeats(3), // M5-2
             SimVersion = SimInfo.Version, DataHash = 0xFEDCBA9876543210UL, Map = map, Seed = ulong.MaxValue, PlayerCount = 3,
             UnitCapacity = 7, CommandCapacity = 9, ResourceCapacity = 33, CheckpointInterval = 7, TickCount = 20,
             Commands = ImmutableArrayOf(), Checkpoints = new[] { new ReplayCheckpoint(7, 1), new ReplayCheckpoint(14, ulong.MaxValue) }.ToImmutableArray(),
@@ -207,15 +209,15 @@ public class ReplayFormatTests
         Assert.Throws<ArgumentException>(() => ReplayFormat.Write(bad)); // the writer won't write it either
     }
 
-    /// <summary>M1-7: format 2 added the flags field; M3-1: format 3 the resource lines; M4-2a: format 4 the combat line and attack targets. Any version but 3 and 4 is refused by version first.</summary>
+    /// <summary>M1-7: format 2 added the flags field; M3-1: format 3 the resource lines; M4-2a: format 4 the combat line and attack targets; M5-2: format 5 the seat lines. Any version but 3 to 5 is refused by version first.</summary>
     [Theory]
     [InlineData(1)]
     [InlineData(2)]
-    [InlineData(5)]
+    [InlineData(6)]
     [InlineData(0)]
     public void OtherFormatVersion_IsRefusedAsVersionMismatch(int version)
     {
-        Assert.Equal(4, Replay.CurrentFormatVersion);
+        Assert.Equal(5, Replay.CurrentFormatVersion);
         Assert.Equal(3, Replay.OldestFormatVersion);
         string text = Text(Small).Replace($"rts-replay {Replay.CurrentFormatVersion}\n", $"rts-replay {version}\n");
         Assert.Equal(ReplayError.FormatVersionMismatch, Read(Reseal(text)));
@@ -256,7 +258,8 @@ public class ReplayFormatTests
         string text = Encoding.ASCII.GetString(File.ReadAllBytes(ReplayTestRun.GoldenPath));
         string[] lines = text[..text.LastIndexOf("checksum ", StringComparison.Ordinal)].Split('\n');
         Assert.Contains("combat 1", lines);
-        var format3 = lines.Where(l => l != "combat 1").Select(l =>
+        // M5-2: and no seat lines (format 5's).
+        var format3 = lines.Where(l => l != "combat 1" && !l.StartsWith("seat ", StringComparison.Ordinal)).Select(l =>
             l.StartsWith("rts-replay ", StringComparison.Ordinal) ? "rts-replay 3"
             : l.StartsWith("c ", StringComparison.Ordinal) ? string.Join(' ', l.Split(' ')[..10]) + " " + l.Split(' ')[^1]
             : l);
@@ -293,7 +296,7 @@ public class ReplayFormatTests
     public void Format4_HasTheCombatLine_AndThirteenFieldCommandLines()
     {
         string text = Text(Small);
-        Assert.StartsWith("rts-replay 4\n", text);
+        Assert.StartsWith("rts-replay 5\n", text); // M5-2: format 5 keeps format 4's combat line and command lines
         string[] lines = text.Split('\n');
         Assert.Equal("combat 1", lines[Array.FindIndex(lines, l => l.StartsWith("ticks ", StringComparison.Ordinal)) + 1]);
         Assert.All(lines.Where(l => l.StartsWith("c ", StringComparison.Ordinal)), l => Assert.Equal(14, l.Split(' ').Length));
@@ -430,6 +433,7 @@ public class ReplayFormatTests
         // Played on the default (resource-free) map instead, the same log diverges at the first checkpoint.
         Replay bare = new()
         {
+            Seats = r.Seats, // M5-2
             SimVersion = r.SimVersion, DataHash = r.DataHash, Map = MapGenParams.Default, Seed = r.Seed, PlayerCount = r.PlayerCount,
             UnitCapacity = r.UnitCapacity, CommandCapacity = r.CommandCapacity, ResourceCapacity = r.ResourceCapacity,
             CheckpointInterval = r.CheckpointInterval, TickCount = r.TickCount, Commands = r.Commands, Checkpoints = r.Checkpoints,
@@ -554,6 +558,7 @@ public class ReplayFormatTests
     {
         Replay Header(int ticks, int interval) => new()
         {
+            Seats = Small.Seats, // M5-2
             SimVersion = Small.SimVersion,
             DataHash = Small.DataHash,
             Map = Small.Map,
@@ -586,5 +591,126 @@ public class ReplayFormatTests
         Assert.Equal(Replay.MaxTickCount, recorder.ToReplay().TickCount); // at the limit: written (checkpoints skipped by the seam)
         sim.World.TickNumber = Replay.MaxTickCount + 1;
         Assert.Throws<InvalidOperationException>(() => recorder.ToReplay());
+    }
+
+    // ---------- M5-2: format 5 (seat lines) and format 4 still reads ----------
+
+    [Fact]
+    public void Format5_HasOneSeatLinePerPlayer_RightAfterPlayers()
+    {
+        string text = Text(Small);
+        Assert.StartsWith("rts-replay 5\n", text);
+        Assert.Contains("\nplayers 2\nseat 0 malazan human normal\nseat 1 whirlwind human normal\nunit-capacity ", text);
+        Assert.Equal(new[] { new ReplaySeat("malazan", SeatController.Human, AiDifficulty.Normal), new ReplaySeat("whirlwind", SeatController.Human, AiDifficulty.Normal) }, Small.Seats.ToArray());
+    }
+
+    /// <summary>The golden rewritten as format 4 wrote it (header 4, no seat lines).</summary>
+    private static string GoldenAsFormat4()
+    {
+        string text = Encoding.ASCII.GetString(File.ReadAllBytes(ReplayTestRun.GoldenPath));
+        string[] lines = text[..text.LastIndexOf("checksum ", StringComparison.Ordinal)].Split('\n');
+        Assert.Contains(lines, l => l.StartsWith("seat ", StringComparison.Ordinal));
+        return string.Join('\n', lines.Where(l => !l.StartsWith("seat ", StringComparison.Ordinal))
+            .Select(l => l.StartsWith("rts-replay ", StringComparison.Ordinal) ? "rts-replay 4" : l));
+    }
+
+    [Fact]
+    public void Format4File_StillReads_WithDefaultSeats_WritesBackByteForByte_AndPlays()
+    {
+        byte[] bytes = ReplayFormat.Seal(GoldenAsFormat4());
+        Assert.Equal(ReplayError.None, ReplayFormat.TryRead(bytes, out Replay? r));
+        Assert.Equal(4, r!.FormatVersion);
+        Assert.True(r.Seats.IsEmpty);
+        Assert.Equal(bytes, ReplayFormat.Write(r)); // a format 4 replay writes back as format 4, byte for byte
+        ReplayResult played = ReplayPlayer.Run(r, TestSim.Data);
+        Assert.True(played.Ok, played.ToString());
+    }
+
+    [Fact]
+    public void SeatsBelongToFormat5Only()
+    {
+        Assert.Equal(ReplayError.InvalidHeader, ReplayTestRun.With(Small, formatVersion: 4, seats: Small.Seats).Validate());
+        Assert.Equal(ReplayError.InvalidHeader, ReplayTestRun.With(Small, seats: Array.Empty<ReplaySeat>()).Validate());
+        Assert.Equal(ReplayError.InvalidHeader, ReplayTestRun.With(Small, seats: Small.Seats.Take(1)).Validate());
+        Assert.Equal(ReplayError.InvalidHeader, ReplayTestRun.With(Small, seats: new[] { Small.Seats[0], Small.Seats[1] with { Faction = "Whirl wind" } }).Validate());
+        Assert.Equal(ReplayError.InvalidHeader, ReplayTestRun.With(Small, seats: new[] { Small.Seats[0], Small.Seats[1] with { Controller = (SeatController)5 } }).Validate());
+        Assert.Equal(ReplayError.InvalidHeader, ReplayTestRun.With(Small, seats: new[] { Small.Seats[0], Small.Seats[1] with { Difficulty = (AiDifficulty)(-1) } }).Validate());
+        Assert.Equal(ReplayError.None, ReplayTestRun.With(Small, formatVersion: 4).Validate());
+    }
+
+    [Theory]
+    [InlineData("seat 0 malazan human normal\n", "", "player 0's seat missing")]
+    [InlineData("seat 1 whirlwind human normal\n", "", "player 1's seat missing")]
+    [InlineData("seat 0 malazan human normal\nseat 1 whirlwind human normal\n", "seat 1 whirlwind human normal\nseat 0 malazan human normal\n", "out of order")]
+    [InlineData("seat 1 whirlwind human normal\n", "seat 1 whirlwind human normal\nseat 2 malazan human normal\n", "one seat too many")]
+    [InlineData("players 2\n", "players 3\n", "fewer seats than players")]
+    [InlineData("seat 0 malazan human normal\n", "seat 0 malazan robot normal\n", "an unknown controller")]
+    [InlineData("seat 0 malazan human normal\n", "seat 0 malazan Human normal\n", "a controller not in lowercase")]
+    [InlineData("seat 0 malazan human normal\n", "seat 0 malazan human insane\n", "an unknown difficulty")]
+    [InlineData("seat 0 malazan human normal\n", "seat 0 Malazan human normal\n", "a faction not snake_case")]
+    [InlineData("seat 0 malazan human normal\n", "seat 0 9malazan human normal\n", "a faction starting with a digit")]
+    [InlineData("seat 0 malazan human normal\n", "seat 0 malazan human\n", "a field short")]
+    [InlineData("seat 0 malazan human normal\n", "seat 0 malazan human normal x\n", "a field too many")]
+    [InlineData("seat 0 malazan human normal\n", "seat 00 malazan human normal\n", "a non-canonical player")]
+    [InlineData("seat 0 malazan human normal\n", "seat -0 malazan human normal\n", "a signed zero")]
+    [InlineData("seat 0 malazan human normal\n", "seat  0 malazan human normal\n", "two spaces")]
+    [InlineData("seat 0 malazan human normal\n", "seats 0 malazan human normal\n", "another key")]
+    public void AHostileSeatLine_IsMalformed(string find, string replace, string what)
+    {
+        string text = Text(Small);
+        Assert.Contains(find, text);
+        Assert.Equal(ReplayError.Malformed, Read(Reseal(text.Replace(find, replace))));
+        _ = what;
+    }
+
+    /// <summary>A seat naming a faction the data hasn't (or "-", for data without factions) reads, but playback refuses it before any tick.</summary>
+    [Theory]
+    [InlineData("atlantis")]
+    [InlineData("-")]
+    public void ASeatsUnknownFaction_ReadsButIsRefusedAtPlayback(string faction)
+    {
+        string text = Text(Small).Replace("seat 1 whirlwind ", "seat 1 " + faction + " ");
+        Assert.Equal(ReplayError.None, ReplayFormat.TryRead(Reseal(text), out Replay? r));
+        Assert.Equal(faction, r!.Seats[1].Faction);
+        ReplayResult played = ReplayPlayer.Run(r, TestSim.Data);
+        Assert.Equal(ReplayError.InvalidHeader, played.Error);
+        Assert.Equal(-1, played.Tick);
+    }
+
+    /// <summary>
+    /// Playback builds the sim with the header's factions: player 0 recorded as the Whirlwind (not its default Malazan) places a
+    /// tent; the replay plays to every checkpoint, and the same log with the seat edited to Malazan diverges (the Build of a
+    /// Whirlwind tent is refused for a Malazan player).
+    /// </summary>
+    [Fact]
+    public void Playback_UsesTheHeadersFactions()
+    {
+        int whirlwind = TestSim.Data.FindFaction("whirlwind");
+        SimConfig config = TestSim.Config(Seed: 4, PlayerCount: 1, UnitCapacity: 8, CommandCapacity: 16)
+            with { Seats = ImmutableArray.Create(new PlayerSeat(whirlwind, SeatController.Human, AiDifficulty.Normal)) };
+        var sim = new Simulation(config);
+        var rec = new ReplayRecorder(sim, checkpointInterval: 20);
+        NavGrid g = sim.World.NavGrid;
+        int centre = MoveScenario.CentralCell(g);
+        sim.Enqueue(Command.SpawnUnit(0, TestSim.Data.FindUnit("whirlwind_camp_follower"), MoveScenario.Center(g, centre)));
+        for (int t = 0; t < 10; t++) sim.Tick();
+        int anchor = -1;
+        for (int r = 2; r < 8 && anchor < 0; r++)
+            for (int dx = -r; dx <= r && anchor < 0; dx++)
+            {
+                int c = centre + r * g.Width + dx;
+                if (sim.World.CanPlace(0, BuildMaps.WhirlwindHouse, c, out _)) anchor = c;
+            }
+        Assert.True(anchor >= 0);
+        // Paid with the starting wood: a replay can't carry a test's gift.
+        sim.Enqueue(Command.Build(0, MoveScenario.Handle(sim, 0), BuildMaps.WhirlwindHouse, g.CellCenter(anchor % g.Width, anchor / g.Width)));
+        for (int t = 0; t < 70; t++) sim.Tick();
+        Assert.Equal(1, sim.World.Buildings.Count);
+        Replay played = rec.ToReplay();
+        Assert.Equal("whirlwind", played.Seats[0].Faction);
+        Assert.True(ReplayPlayer.Run(played, TestSim.Data).Ok);
+        string text = Text(played).Replace("seat 0 whirlwind ", "seat 0 malazan ");
+        Assert.Equal(ReplayError.None, ReplayFormat.TryRead(Reseal(text), out Replay? edited));
+        Assert.Equal(ReplayError.CheckpointMismatch, ReplayPlayer.Run(edited!, TestSim.Data).Error);
     }
 }

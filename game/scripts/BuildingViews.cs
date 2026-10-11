@@ -25,8 +25,9 @@ namespace Rts.Game;
 /// from <c>Fog.Ghosts</c>) also gets a ghost box: its remembered type's box at its remembered anchor, full height, in the
 /// owner's colour darkened to <see cref="FogView.ExploredBrightness"/>, with no bar. Ghost boxes are their own per-slot
 /// pool (a slot can show a new building and the old one's ghost at once until the next fog update), created the first time
-/// the slot has a ghost and hidden when the sim drops the entry or the building is seen again. A remembered site draws
-/// finished (BUG-0275 item 1: the entry keeps no progress).
+/// the slot has a ghost and hidden when the sim drops the entry or the building is seen again. A remembered site
+/// (<c>BuildingGhost.Site</c>, M6-V1) draws as a foundation: the site's box at its lowest (<see cref="SiteMinHeight"/>; the
+/// entry keeps no progress) in the site colour darkened the same way.
 /// </remarks>
 public partial class BuildingViews : Node3D
 {
@@ -81,6 +82,8 @@ public partial class BuildingViews : Node3D
     // What each slot's ghost box shows now: the remembered generation (0: hidden) and anchor.
     private int[] _ghostGen = Array.Empty<int>();
     private int[] _ghostCell = Array.Empty<int>();
+    private bool[] _ghostSite = Array.Empty<bool>();
+    private StandardMaterial3D _ghostSiteMat = null!;
 
     /// <summary>View roots created so far (one per slot ever used).</summary>
     public int NodeCount { get; private set; }
@@ -109,6 +112,8 @@ public partial class BuildingViews : Node3D
             _ghostMats[p] = new StandardMaterial3D { AlbedoColor = new Color(c.R * k, c.G * k, c.B * k), Roughness = 0.95f };
         }
         _siteMat = new StandardMaterial3D { AlbedoColor = SiteColor, Roughness = 0.95f };
+        float e = FogView.ExploredBrightness;
+        _ghostSiteMat = new StandardMaterial3D { AlbedoColor = new Color(SiteColor.R * e, SiteColor.G * e, SiteColor.B * e), Roughness = 0.95f };
         _barMesh = new BoxMesh { Size = Vector3.One };
         var back = new StandardMaterial3D { AlbedoColor = BarBackColor, ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded };
         _barMesh.Material = back;
@@ -128,6 +133,7 @@ public partial class BuildingViews : Node3D
         _ghostBoxes = new MeshInstance3D?[capacity];
         _ghostGen = new int[capacity];
         _ghostCell = new int[capacity];
+        _ghostSite = new bool[capacity];
     }
 
     public override void _Process(double delta)
@@ -189,6 +195,12 @@ public partial class BuildingViews : Node3D
     /// <summary>The ghost box of slot <paramref name="slot"/>, or null if the slot never had a ghost.</summary>
     public MeshInstance3D? GhostBoxOf(int slot) => (uint)slot < (uint)_ghostBoxes.Length ? _ghostBoxes[slot] : null;
 
+    /// <summary>True while slot <paramref name="slot"/>'s ghost is drawn as a remembered site (a foundation, M6-V1).</summary>
+    public bool GhostShownAsSite(int slot) => IsGhostShown(slot) && _ghostSite[slot];
+
+    /// <summary>The darkened site material of remembered sites (any owner: sites are drawn in the site colour).</summary>
+    public StandardMaterial3D GhostSiteMaterial => _ghostSiteMat;
+
     /// <summary>The darkened material of player <paramref name="player"/>'s ghosts.</summary>
     public StandardMaterial3D GhostMaterial(int player) => _ghostMats[player];
 
@@ -209,16 +221,20 @@ public partial class BuildingViews : Node3D
             }
             count++;
             Rts.Sim.Vision.BuildingGhost g = fog.Ghosts[i];
-            if (_ghostGen[i] == g.Generation && _ghostCell[i] == g.Cell) continue;
+            if (_ghostGen[i] == g.Generation && _ghostCell[i] == g.Cell && _ghostSite[i] == g.Site) continue;
             MeshInstance3D box = _ghostBoxes[i] ?? CreateGhost(i);
             BuildingDef def = world.Data.Buildings[g.TypeId];
             System.Numerics.Vector2 c = StartBase.FootprintCenter(world.NavGrid, def, g.Cell);
-            box.Position = new Vector3(c.X, TerrainHeight.At(world.Heightmap, c.X, c.Y) + BoxHeight / 2f, c.Y);
+            // A remembered site stands as a foundation, the box at its lowest, growing upward from the ground as a live site's.
+            float rise = g.Site ? SiteMinHeight : 1f;
+            box.Transform = new Transform3D(Basis.FromScale(new Vector3(1f, rise, 1f)),
+                new Vector3(c.X, TerrainHeight.At(world.Heightmap, c.X, c.Y) + BoxHeight * rise / 2f, c.Y));
             box.Mesh = _meshes[g.TypeId];
-            box.MaterialOverride = _ghostMats[Math.Clamp(g.Owner, 0, _ghostMats.Length - 1)];
+            box.MaterialOverride = g.Site ? _ghostSiteMat : _ghostMats[Math.Clamp(g.Owner, 0, _ghostMats.Length - 1)];
             box.Visible = true;
             _ghostGen[i] = g.Generation;
             _ghostCell[i] = g.Cell;
+            _ghostSite[i] = g.Site;
         }
         GhostsShown = count;
     }

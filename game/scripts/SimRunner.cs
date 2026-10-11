@@ -53,6 +53,9 @@ public partial class SimRunner : Node
     /// <summary>Forests the map generator places (<see cref="MapGenParams.Forests"/>).</summary>
     [Export] public int Forests { get; set; } = LaunchOptions.DefaultForests;
 
+    /// <summary>Square map side in cells (<see cref="MapGenParams.Width"/> and <see cref="MapGenParams.Height"/>); the default is the 128 map (M6-V1: the skirmish setup's map size).</summary>
+    [Export] public int MapSize { get; set; } = MapGenParams.Default.Width;
+
     /// <summary>Gold mines the map generator places (<see cref="MapGenParams.GoldMines"/>).</summary>
     [Export] public int GoldMines { get; set; } = LaunchOptions.DefaultMines;
 
@@ -77,13 +80,13 @@ public partial class SimRunner : Node
     /// <summary>The recorder attached by <see cref="Start"/> when <see cref="RecordCheckpointInterval"/> is set, else null.</summary>
     public ReplayRecorder? Recorder { get; private set; }
 
-    /// <summary>Creates the simulation from loaded data on the default 128 map with <see cref="Forests"/> and <see cref="GoldMines"/>; ticking starts on the next frame.</summary>
+    /// <summary>Creates the simulation from loaded data on a <see cref="MapSize"/> map (the generator's other defaults) with <see cref="Forests"/> and <see cref="GoldMines"/>; ticking starts on the next frame.</summary>
     public void Start(GameData data)
     {
         var config = new SimConfig(unchecked((ulong)Seed), PlayerCount, UnitCapacity, CommandCapacity)
         {
             Data = data,
-            Map = MapGenParams.Default with { Forests = Forests, GoldMines = GoldMines },
+            Map = MapGenParams.Default with { Width = MapSize, Height = MapSize, Forests = Forests, GoldMines = GoldMines },
             Combat = Combat,
         };
         Simulation = new Simulation(config);

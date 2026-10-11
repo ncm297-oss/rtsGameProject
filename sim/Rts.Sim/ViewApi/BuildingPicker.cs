@@ -136,7 +136,17 @@ public static class BuildingPicker
     /// <param name="boxHeight">A finished building's box height in meters.</param>
     /// <param name="entry">Ray parameter of the hit.</param>
     public static int PickGhostRay(ReadOnlySpan<bool> shown, ReadOnlySpan<BuildingGhost> ghosts, ImmutableArray<BuildingDef> defs, NavGrid grid,
-        Heightmap map, Vector3 origin, Vector3 direction, float boxHeight, out float entry)
+        Heightmap map, Vector3 origin, Vector3 direction, float boxHeight, out float entry) =>
+        PickGhostRay(shown, ghosts, defs, grid, map, origin, direction, boxHeight, 1f, out entry);
+
+    /// <summary>
+    /// <see cref="PickGhostRay(ReadOnlySpan{bool}, ReadOnlySpan{BuildingGhost}, ImmutableArray{BuildingDef}, NavGrid, Heightmap, Vector3, Vector3, float, out float)"/>
+    /// with remembered sites drawn as foundations (M6-V1): a ghost whose <see cref="BuildingGhost.Site"/> is set is
+    /// <paramref name="siteShare"/> x <paramref name="boxHeight"/> tall (the entry keeps no progress, so the view draws a site
+    /// at its lowest), the others full height. Allocation-free.
+    /// </summary>
+    public static int PickGhostRay(ReadOnlySpan<bool> shown, ReadOnlySpan<BuildingGhost> ghosts, ImmutableArray<BuildingDef> defs, NavGrid grid,
+        Heightmap map, Vector3 origin, Vector3 direction, float boxHeight, float siteShare, out float entry)
     {
         entry = float.PositiveInfinity;
         if (!IsFinite(origin) || !IsFinite(direction) || direction == Vector3.Zero) return -1;
@@ -153,7 +163,7 @@ public static class BuildingPicker
             float x0 = anchor % w * cs, z0 = anchor / w * cs;
             float x1 = x0 + def.FootprintWidth * cs, z1 = z0 + def.FootprintHeight * cs;
             float baseY = TerrainHeight.At(map, (x0 + x1) / 2f, (z0 + z1) / 2f);
-            if (!Box(origin, direction, x0, x1, baseY, baseY + boxHeight, z0, z1, bestT, out float t0)) continue;
+            if (!Box(origin, direction, x0, x1, baseY, baseY + (ghosts[i].Site ? boxHeight * siteShare : boxHeight), z0, z1, bestT, out float t0)) continue;
             if (Hidden(t0, groundT, ground, x0, x1, z0, z1)) continue;
             if (t0 < bestT)
             {

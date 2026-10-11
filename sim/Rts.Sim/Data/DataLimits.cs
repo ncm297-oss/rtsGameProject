@@ -138,4 +138,10 @@ public static class DataLimits
 
     /// <summary>Largest difficulty <c>waveSizeMultiplier</c> (M5-1): a wave ten times the attack threshold; a Producer default.</summary>
     public const double MaxAiWaveSizeMultiplier = 10;
+
+    /// <summary>M5-2: the largest <c>rules.json</c> <c>ai.placementSearchRadius</c> and <c>ai.expandHallReach</c>, meters (bounds a site search to 65 x 65 cells).</summary>
+    public const double MaxAiSearchRadius = 64;
+
+    /// <summary>M5-2: the largest <c>rules.json</c> <c>ai.buildingSpacing</c>, meters.</summary>
+    public const double MaxAiSpacing = 8;
 }

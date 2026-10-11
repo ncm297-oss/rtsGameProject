@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Immutable;
 using Rts.Sim.Commands;
 using Rts.Sim.Data;
 
@@ -15,7 +16,7 @@ public static class ReplayPlayer
     /// stamp is checked against the log. Checkpoints are hashed by a recorder on the playback sim,
     /// so recording and playback hash at the same point of the tick.
     /// </remarks>
-    /// <remarks>The sim plays with the replay's own <see cref="Replay.Combat"/> switch (format 4; on for format 3).</remarks>
+    /// <remarks>The sim plays with the replay's own <see cref="Replay.Combat"/> switch (format 4; on for format 3) and (format 5) the header's factions with every seat human (no AI runs: its commands are in the log); a seat naming a faction the data lacks is <see cref="ReplayError.InvalidHeader"/>.</remarks>
     public static ReplayResult Run(Replay replay, GameData data)
     {
         ArgumentNullException.ThrowIfNull(replay);
@@ -34,12 +35,27 @@ public static class ReplayPlayer
         if (invalid != ReplayError.None) return Refused(invalid);
         if (data.ContentHash() != replay.DataHash) return Refused(ReplayError.DataMismatch);
 
+        // M5-2 (format 5): the header's factions, every seat human: the AI's recorded commands play its part, so playback
+        // never runs an AI. A format 3 / 4 replay was recorded with the default seats.
+        ImmutableArray<PlayerSeat> seats = ImmutableArray<PlayerSeat>.Empty;
+        if (!replay.Seats.IsDefaultOrEmpty)
+        {
+            var builder = ImmutableArray.CreateBuilder<PlayerSeat>(replay.Seats.Length);
+            foreach (ReplaySeat seat in replay.Seats)
+            {
+                int faction = seat.Faction == "-" ? -1 : data.FindFaction(seat.Faction);
+                if (faction < 0 && (seat.Faction != "-" || data.Factions.Length > 0)) return Refused(ReplayError.InvalidHeader);
+                builder.Add(new PlayerSeat(faction, SeatController.Human, seat.Difficulty));
+            }
+            seats = builder.MoveToImmutable();
+        }
         var config = new SimConfig(replay.Seed, replay.PlayerCount, replay.UnitCapacity, replay.CommandCapacity)
         {
             Data = data,
             Map = replay.Map,
             ResourceCapacity = replay.ResourceCapacity,
             Combat = combat,
+            Seats = seats,
         };
         var sim = new Simulation(config);
         var recorder = new ReplayRecorder(sim, replay.CheckpointInterval, replay.TickCount, replay.Commands.Length);

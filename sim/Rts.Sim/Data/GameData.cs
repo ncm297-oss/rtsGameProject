@@ -53,6 +53,12 @@ public sealed class GameData
     /// </summary>
     public ImmutableArray<AiDef> Ai { get; init; } = ImmutableArray<AiDef>.Empty;
 
+    /// <summary>
+    /// The AI's generic tunables (<c>common/rules.json</c> <c>ai</c>, M5-2): gold share, house margin, placement search and
+    /// spacing, expansion reach. Not in <see cref="ContentHash"/> yet (with <see cref="Ai"/>, M5-3); all zero for hand-built data.
+    /// </summary>
+    public AiRulesDef AiRules { get; init; } = new();
+
     /// <summary>Per building type id, the tech ids it researches (a tech of its slot, common or of its faction), ascending; built at load (M3-5). Empty for hand-built data.</summary>
     /// <remarks>Derived from the techs' slot and faction and the buildings', which <see cref="ContentHash"/> covers.</remarks>
     public ImmutableArray<ImmutableArray<int>> Research { get; init; } = ImmutableArray<ImmutableArray<int>>.Empty;

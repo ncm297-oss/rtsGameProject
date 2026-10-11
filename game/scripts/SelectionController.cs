@@ -801,7 +801,9 @@ public partial class SelectionController : Node
     {
         entry = float.PositiveInfinity;
         if (fog == null || fog.GhostCount == 0) return -1;
-        return BuildingPicker.PickGhostRay(fog.GhostShown, fog.Ghosts, world.Data.Buildings, world.NavGrid, world.Heightmap, so, sd, BuildingViews.BoxHeight, out entry);
+        // A remembered site is drawn as a foundation (M6-V1), so it is picked as one.
+        return BuildingPicker.PickGhostRay(fog.GhostShown, fog.Ghosts, world.Data.Buildings, world.NavGrid, world.Heightmap, so, sd, BuildingViews.BoxHeight,
+            BuildingViews.SiteMinHeight, out entry);
     }
 
     /// <summary>The remembered footprint centre (meters) of slot <paramref name="slot"/>'s ghost in <paramref name="fog"/>.</summary>

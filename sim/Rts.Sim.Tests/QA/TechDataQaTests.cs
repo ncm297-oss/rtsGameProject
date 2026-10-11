@@ -238,7 +238,20 @@ public class TechDataQaTests
     public void AnEmptyFactionTechsList_Loads_TheFactionSimplyHasNoUpgrade()
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
-        dir.EditJson(MalazanTechs, root => root["techs"] = new JsonArray());
+        var removed = new List<string>();
+        dir.EditJson(MalazanTechs, root =>
+        {
+            foreach (JsonNode? t in root["techs"]!.AsArray()) removed.Add((string)t!["id"]!);
+            root["techs"] = new JsonArray();
+        });
+        // A shipped build order may research a faction tech; with the techs gone such a step names an unknown tech, so it
+        // goes too (BUG-0571: whatever the shipped ai.json holds).
+        dir.EditJson("factions/malazan/ai.json", root =>
+        {
+            JsonArray steps = root["buildOrder"]!.AsArray();
+            for (int i = steps.Count - 1; i >= 0; i--)
+                if ((string?)steps[i]!["do"] == "research" && removed.Contains((string)steps[i]!["id"]!)) steps.RemoveAt(i);
+        });
         GameData d = Loads(dir);
         Assert.Equal(8, d.Techs.Length);
         Assert.Equal(-1, d.FindTech("moranth_supply"));

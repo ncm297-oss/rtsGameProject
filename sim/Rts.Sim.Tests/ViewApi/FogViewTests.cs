@@ -365,6 +365,33 @@ public class FogViewTests
     }
 
     [Fact]
+    public void GhostPick_ARememberedSite_IsPickedAsAFoundation()
+    {
+        (Simulation sim, EntityHandle scout, EntityHandle tent, FogView view) = GhostScene();
+        World w = sim.World;
+        w.Units.Free(scout);
+        FogMaps.RunThroughNextUpdate(sim);
+        sim.Tick();
+        Refresh(view, w);
+        Assert.True(view.ShowsGhost(tent.Index));
+        BuildingGhost[] ghosts = view.Ghosts.ToArray();
+        float baseY = TerrainHeight.At(w.Heightmap, 62f, 62f);
+        // Level with the footprint's centre (62, 62), 1 m over the ground: inside a 3 m box, over a 0.45 m foundation.
+        var origin = new Vector3(90f, baseY + 1f, 62f);
+        var dir = new Vector3(-1f, 0f, 0f);
+        const float share = 0.15f;
+        Assert.Equal(tent.Index, BuildingPicker.PickGhostRay(view.GhostShown, ghosts, w.Data.Buildings, w.NavGrid, w.Heightmap, origin, dir, 3f, share, out _));
+        ghosts[tent.Index] = ghosts[tent.Index] with { Site = true };
+        Assert.Equal(-1, BuildingPicker.PickGhostRay(view.GhostShown, ghosts, w.Data.Buildings, w.NavGrid, w.Heightmap, origin, dir, 3f, share, out float miss));
+        Assert.True(float.IsPositiveInfinity(miss));
+        // The old overload still picks every ghost full height, and a ray 0.2 m up still meets the foundation.
+        Assert.Equal(tent.Index, BuildingPicker.PickGhostRay(view.GhostShown, ghosts, w.Data.Buildings, w.NavGrid, w.Heightmap, origin, dir, 3f, out _));
+        Assert.Equal(tent.Index, BuildingPicker.PickGhostRay(view.GhostShown, ghosts, w.Data.Buildings, w.NavGrid, w.Heightmap,
+            origin with { Y = baseY + 0.2f }, dir, 3f, share, out float low));
+        Assert.True(low > 0f && float.IsFinite(low));
+    }
+
+    [Fact]
     public void BadArguments_AnswerFalse_OrThrowOnConstruction()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => new FogView(0, 4, 1, 1, 0));

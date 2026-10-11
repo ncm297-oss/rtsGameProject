@@ -67,8 +67,11 @@ phases in this fixed order:
 1. **Apply commands** queued for this tick, sorted by (player, sequence number), then rebuild
    the spatial hash so later phases (and this tick's spawns) see current positions. A `Move`
    only records the unit's goal here; the walking happens in phases 8-9 of the same tick.
-2. **AI think:** each AI player runs on its own cadence (default every 10 ticks, staggered by
-   player index) and enqueues commands for the *next* tick, the same as a human.
+2. **AI think:** each AI player runs on its own cadence and enqueues commands for the *next* tick, the same as a human.
+   (M5-2: it runs **before** phase 1, at the very start of the tick (after tick 0's initial fog stamp), for each AI seat
+   in player order when `TickNumber % thinkTicks == 0` (its difficulty's `thinkInterval`; not staggered). It reads only
+   its `PlayerView` and sends through `Simulation.Enqueue`, so its commands are stamped `TickNumber + 1` exactly as input
+   sent between ticks: nothing it sends changes the running tick. See "Implementation (M5-2)".)
 3. **Production:** training and research timers, spawning finished units at rally points. (M3-4:
    `ProductionSystem.Run`: every finished building with a queue, in slot order, starts its head item when the owner's
    population has room, counts it, and spawns the unit when it is complete, sending it to the rally point; after the
@@ -122,7 +125,8 @@ phases in this fixed order:
     player's unexplored / explored / visible grid on the ticks where `tick % 4 == 1`, from its own units' and buildings'
     sight with the high-ground rule; an initial stamp also runs at the start of tick 0; see "Vision, detection, fog".
     M4-3b: right after each player's grid, its last-known buildings list. M4-4b-2: a Blinded unit stamps its blind's circle,
-    and the zones that block vision hide their cells before each player's grid is combined.)
+    and the zones that block vision hide their cells before each player's grid is combined. M5-2 (BUG-0540): then its
+    resource-node memory, see "Implementation (M5-1)", Lifetime.)
 13. **Cleanup:** free dead handles, finalize the tick's event list, bump `TickNumber`. (M4-1: the
     dead are freed in phase 11 already; the tick's death events stay readable in `World.Deaths`
     until the next tick starts, which empties the buffer first thing.)
@@ -4648,9 +4652,10 @@ right-click on one attacks it.
   box mesh, placed on the remembered footprint's centre at full height, in the owner's colour times
   `FogView.ExploredBrightness` (one material per player, made in `Bind`), no bar; hidden when the entry goes or the
   building is seen again; re-placed only when the entry's generation or anchor changes. `IsGhostShown`,
-  `GhostGeneration`, `GhostBoxOf`, `GhostsShown`, `GhostMaterial` for tests. A remembered site still draws finished, full
-  height (BUG-0275 item 1: since M4-H3 `BuildingGhost.Site` says it was a site when last seen, view-only and not hashed;
-  drawing a remembered site as a foundation is a view item for the next view hardening).
+  `GhostGeneration`, `GhostBoxOf`, `GhostsShown`, `GhostMaterial` for tests. Since M6-V1 a remembered site (BUG-0275 item 1:
+  since M4-H3 `BuildingGhost.Site` says it was a site when last seen, view-only and not hashed) draws as a foundation:
+  the site box at `SiteMinHeight` in the site colour darkened the same way (`GhostShownAsSite`, `GhostSiteMaterial`), and
+  `PickGhostRay`'s `siteShare` overload picks it at that height.
 - **Picking**: `BuildingPicker.PickGhostRay(GhostShown, Ghosts, defs, grid, map, origin, direction, boxHeight, out
   entry)`, the box ray test on each ghost's remembered footprint, full height, terrain occluding as for live boxes.
   `SelectionController.EnemyAt` (right-click and A + click) takes a ghost when the ray enters its box before any drawn
@@ -4687,7 +4692,7 @@ right-click on one attacks it.
   `M3PlayableTest -- --seed 21 --break 19` on the M4-3b tree (data hash C22FBFEA0197CF3E; the scene now builds on
   explored ground; 12,131 ticks), `GatherWedgeQaTests` un-skipped with that `RecordedDataHash` and every checkpoint
   checked (longest out-of-reach stand 343 ticks). A later data-hash move needs another re-record.
-- **Not yet:** a remembered site drawn as a site (BUG-0275 item 1, needs a sim field); ghosts on the minimap; minimap
+- **Not yet:** ghosts on the minimap; minimap
   dots refreshed with the hide rule (BUG-0281 item 3).
 
 ### Implementation (M4-V6a)
@@ -5262,10 +5267,98 @@ game/export_presets.cfg               "Windows Desktop": game/tests/ left out, d
   (looked at): `ability-seedN-cast-lost.png`, `-cliff-cast-ring.png`, `-cliff-flash.png`.
 - **Export preset.** See "Build and export".
 
+### Implementation (M6-V1)
+
+The game's first shell: a main menu, a skirmish setup screen and a pause menu around the unchanged match; remembered
+sites drawn as foundations; BUG-0560. No sim change outside `ViewApi`.
+
+```
+game/scenes/Main.tscn          Main only (Match.tscn is no longer a child: the shell instantiates one per match)
+game/scripts/Main.cs           boot + shell: banner, data, then the menu or the match; Esc / pause / quit to menu
+game/scripts/MainMenu.cs       CanvasLayer: title, Skirmish, Quit
+game/scripts/SkirmishSetup.cs  CanvasLayer: seed (field + Random), map size, two slots, Start, Back
+game/scripts/PauseMenu.cs      CanvasLayer (layer 20, runs while paused): title, Resume, Quit to menu
+game/scripts/ShellUi.cs        the screens' shared controls (backdrop, centred column, heading, button)
+game/scripts/MenuText.cs, SetupText.cs, PauseText.cs   the ui.json keys of the three new sections
+game/tests/ShellTest.tscn      the headless flow test
+```
+
+- **Boot rule.** `Main._Ready` prints the banner and loads `res://data` as before. With any match flag among the user
+  args (`LaunchOptions.HasMatchFlag`: every flag `Parse` reads, listed in `LaunchOptions.MatchFlags`) the match starts at
+  once exactly as before M6-V1, so `--seed`, `--units`, `--screenshot`, `--bench` and every script and test that passes
+  them are unchanged; `--skirmish` (no value) is the flag for "the default match, no menu". With none, the main menu
+  shows. `tools/qa/smoke.ps1` passes no args, so since M6-V1 its 600 frames boot to the menu (banner, data, the three
+  screens built) and no longer tick a match: `-- --skirmish` is the old smoke run. If `ui.json` fails to load there is no
+  menu text: the errors are logged (as before) and the match starts at once. Test scenes instantiate `Match.tscn`
+  themselves and never meet the shell.
+- **Match lifetime.** `Main.StartMatch` instantiates `Match.tscn` (named `Match`, `ProcessMode = Pausable`), adds it
+  (its `_Ready` runs) and calls `Match.Start(data, options)`, the same order as when the match was a child of
+  `Main.tscn`. The setup's Start builds its options through the command-line parser (`--seed <n> --map-size <n>`), so a
+  skirmish and a dev run differ only in their flags. Quit to menu unpauses, removes the match from the tree and frees it:
+  the sim, every view node and the HUD go with it; Skirmish again makes a fresh one. The shell holds only which screen is
+  up and the setup's picks.
+- **Map size.** `--map-size 128|192|256` (`LaunchOptions.MapSize`, `LaunchOptions.MapSizes`) sets `SimRunner.MapSize`,
+  which `SimRunner.Start` puts in `MapGenParams.Width` and `Height`; the generator's other values stay at their defaults,
+  so a bigger map has the same plateau count and sizes, 12 forests and 8 mines (the 128 map's numbers; scaling them is a
+  later map slice). Without the flag the map is `MapGenParams.Default` exactly as before.
+- **Setup screen.** Seed: a text field (digits, 0 to 2^64 - 1; Start is disabled while it holds anything else) starting
+  at 1, the match's default, and Random, which writes a fresh number from a view-side `RandomNumberGenerator` (the seed is
+  the sim's input, so view randomness is fine here). Map size: a list of the three sizes. Two slots, "You" and "AI"
+  (`setup.slot_human`, `setup.slot_ai`): each shows the faction it plays today (player p plays faction p,
+  `World.FactionOf`'s rule, by data `displayName`) and the AI slot a difficulty, both **disabled** with the `coming_soon`
+  text (the difficulty list's one item and both lists' tooltip); M6-V2 wires them to the seats with M5-V2's `--ai`. Back
+  (or Esc) returns to the menu; the picks are kept for the next visit.
+- **Pause.** Esc (`ui_cancel`, in Main's `_Input`, which runs before any `_UnhandledInput`) in a match: when a targeting
+  order is armed (A, M, an ability: `SelectionController.Targeting`), a build menu is open or a placement ghost is up
+  (`CommandCard.MenuOpen` / `GhostActive`), Esc is left to them (`order_cancel`, also Esc, cancels them as before);
+  otherwise it pauses. Pausing sets `SceneTree.Paused`: the match is `Pausable`, so `SimRunner._Process` doesn't run (no
+  tick; the fixed-step clock gets no frame time, so nothing is caught up after), the camera, views and sounds stop, and
+  paused nodes receive no input (`_UnhandledInput`, GUI); the pause menu's full-screen backdrop also takes every click.
+  `Main` runs `Always` (it answers Esc while paused) and the screens inherit that. Esc or Resume unpauses; Quit to menu
+  ends the match. A test scene that hosts the shell must run `Always` itself.
+- **Text.** Every word on the three screens is `ui.json` (CLAUDE.md rule 8): new sections `menu` (`title`, `skirmish`,
+  `quit`), `setup` (`title`, `seed`, `random`, `map_size`, `slot_human`, `slot_ai`, `faction`, `difficulty`,
+  `coming_soon`, `start`, `back`) and `pause` (`title`, `resume`, `quit_to_menu`), read through `UiText.Menu`, `Setup`
+  and `Pause` (enums `MenuText`, `SetupText`, `PauseText`) and required like `hud` (a missing key is one load error naming
+  it). The only C# literal on screen is the map size item, "N × N": numbers and a sign. The title is "RtsGame", the
+  project's name, until the owner names the game.
+- **Tests.** Headless `ShellTest` (in the scene loop): the boot rule rows (no args or an unknown flag show the menu; every
+  flag `Parse` reads is in `MatchFlags`, read from `LaunchOptions.cs`'s `case` labels), the `--map-size` / `--skirmish`
+  parse and the unchanged defaults; the `ui.json` key rows (17 keys, each present, and each missing key or section one
+  error naming it). Then `Main.tscn` with no user args: the menu with its text and no match node; Skirmish -> setup (slot
+  names, both faction lists disabled with the data names and the coming-soon tooltip, difficulty disabled); Back and in
+  again; Random writes a number; the seed field clicked and typed: 7, then x (Start disabled), Backspace; map 192; Start:
+  the sim's seed is 7 and its heightmap and nav grid 192 x 192, and it ticks. A selected unit, A armed, Esc: the targeting
+  ends and nothing pauses. Esc: the tree paused, the pause menu up with its text; over half a second of real time no tick,
+  and A plus a click reach nothing (selection and targeting unchanged). Esc resumes and ticks move. Esc, Quit to menu: no
+  `Match`, `SimRunner`, view, controller or HUD node anywhere under the root, the old match and runner freed, the tree
+  unpaused, the menu up. Skirmish again keeps seed 7 and 192 and starts a fresh match (exactly one `Match`) that ticks.
+  With the pause's `SceneTree.Paused` line removed the test fails 11 rows. Windowed with `-- --shots <dir>` it saves
+  `shell-menu.png`, `shell-setup.png`, `shell-match.png`, `shell-pause.png`.
+- **Remembered sites (BUG-0275 item 1).** A ghost whose `BuildingGhost.Site` is set (it was a construction site when last
+  seen) draws as a foundation: its type's box scaled to `BuildingViews.SiteMinHeight` (0.45 m of the 3 m box; the entry
+  keeps no progress, so the lowest a site can be), standing on the ground, in the site colour darkened by
+  `FogView.ExploredBrightness` (`GhostSiteMaterial`, one for every owner, as live sites share one). It is re-placed when
+  the entry's generation, anchor or site flag changes. Picking matches the drawing: `BuildingPicker.PickGhostRay` has an
+  overload with a `siteShare` that makes a site ghost's box that share of `boxHeight` tall (the old overload, full height
+  for every ghost, is kept for its callers), and `SelectionController` passes `SiteMinHeight`. Tests: xUnit
+  `FogViewTests.GhostPick_ARememberedSite_IsPickedAsAFoundation` (a ray 1 m up meets the remembered box, misses it once the
+  entry is a site, still meets the foundation 0.2 m up; the old overload unchanged); headless `FogViewTest` adds, per seed,
+  that the House seen as a site is drawn as a foundation (flag, material, scale, base on the ground) and the finished
+  hall's ghost stays full height.
+- **BUG-0560 (`M4PlayableTest` step 5).** The step cast Telas Fire up to three times and waited for a Burning marker; a
+  recast after the 25 s cooldown could find the fight over, and `CastOnBlob` then waited for a visible enemy until the
+  5,500-tick budget. Step 5 now casts once and is done when the cast resolves (a Burning marker over a seen enemy is printed
+  when there is one); `CastOnBlob` fails at once with "the fight ended before Telas Fire burned anyone" when the enemy army
+  is gone and nothing is in sight. The Burning marker is asserted in step 8 instead, on the staged Zealot A that the duel's
+  mage burns: the marker over A, none over B, while A burns.
+
 ## AI architecture
 
 The AI lives in `Rts.Sim.Ai`, inside the sim assembly, because it must be deterministic (it uses
-its own RNG stream) for replays to work. A replay only needs the human's commands and the seed.
+its own RNG stream). Its commands go through the same door as the player's (`Simulation.Enqueue`) and are recorded in
+the replay like a human's; playback re-enqueues them and never runs the AI (Producer decision, M5-2 PLAN), so a replay
+needs the seed, the seats and every player's commands, the AI's included.
 
 ```
 AiPlayer
@@ -5302,18 +5395,29 @@ enums `AiDifficulty` / `AiStepTrigger` / `AiStepAction`, `Data/DataLoader.Ai.cs`
     the player doesn't see now (or the slot now holds another), and no cell of whose remembered footprint is visible (so a
     building that died in sight shows no ghost even before the next update, BUG-0310). A ghost may outlive its building (it
     died unseen): it is what the player last saw.
-  - Resource nodes: a live node with a footprint cell the player has explored; `Remaining` only while a footprint cell is
-    visible, -1 otherwise.
+  - Resource nodes: the player's node memory (M5-2, BUG-0540; Lifetime below): a node it saw, alive or gone out of its
+    sight, until it sees that ground again; `Remaining` only for a live node with a footprint cell visible, -1 otherwise.
   - Cells: `IsExplored(cell)`, `IsVisible(cell)` (the fog's hashed bits), `MapWidth`, `MapHeight`; and `TickNumber`.
 - **What it never answers.** An enemy unit or building the fog hides (its slot answers false with a default record, so the
-  out value leaks nothing), another player's economy, techs or queues (0 / false / -1), a node on unexplored ground, how much
-  is left in a node out of sight, and no reference: every answer is a value (ids, handles, positions, the records); no
+  out value leaks nothing), another player's economy, techs or queues (0 / false / -1), a node it never saw, whether a
+  remembered node out of sight still stands, how much is left in a node out of sight, and no reference: every answer is a value (ids, handles, positions, the records); no
   `World`, store or `FogStore` leaves it (`Ai/PlayerViewArchitectureTests.PlayerView_HandsOutValuesOnly`). Out-of-range slots,
   cells and cursors answer false.
 - **Lifetime.** Stateless: it caches nothing, so a view kept across ticks always answers for the current state, the same as
-  one built fresh (the fuzz checks both). Read it between ticks, as the view does. It does not remember: a node felled out
-  of sight drops out of the answers at once, and an enemy that walked into the fog is simply not answered. What the AI
-  believes about the hidden world (last-seen positions, felled trees it hasn't seen fall) is its `Blackboard`'s, M5-2.
+  one built fresh (the fuzz checks both). Read it between ticks, as the view does. What the player remembers lives in the
+  fog, per player: the ghost list for buildings, and since M5-2 (BUG-0540) the **node memory**, one last-known entry per
+  resource slot (`FogStore.NodeAt`, the `Fog.Ghosts` pattern and the view's `ViewApi.SeenResources` rule). At every fog
+  update a live node with a footprint cell visible is recorded in its slot; an entry whose node is gone (felled, mined out,
+  or the slot reused) is kept until an update shows a cell of the remembered footprint, which drops it. So a node felled
+  out of sight stays answered (`Remaining` -1) until the player sees its ground again; one felled in sight leaves the
+  answers at once (its ground is visible: the view answers false before the next update drops the entry). A node the
+  player never saw is not answered even on explored ground (no match path spawns one there). The explore seam
+  (`ExploreAllForTests`) records every live node for every player. An enemy that walked into the fog is simply not answered;
+  what the AI believes about the enemy beyond the view (last-seen positions) is M5-3's.
+  **Not hashed** (why): no sim rule reads it (only `PlayerView`, for the AI, whose state is outside the hash, and placement
+  through the view), and it is a function of the hashed history (the visible bits at every update and the resource store),
+  so two equal runs hold equal memories; hashing it would move every recorded replay's checkpoints on a map with nodes for
+  no change in play.
 - **Enumeration.** Slot order through a cursor, allocation-free and with no callback:
   `int s = -1; while (view.NextUnit(ref s, out SeenUnit u)) { ... }` (likewise `NextBuilding`, `NextGhost`, `NextResource`).
   At the end the cursor parks at the store's capacity; a cursor at `int.MaxValue` does not wrap. The unit cursor is one loop,
@@ -5345,16 +5449,19 @@ enums `AiDifficulty` / `AiStepTrigger` / `AiStepAction`, `Data/DataLoader.Ai.cs`
   player's units interleaved over the whole map so each view answers nearly all of them (19,389 answers): 0.53-0.56 ms for
   the units, 0.95 ms whole. In that case the cost is the answers themselves (building 19,389 records; `CanSeeUnit` alone
   over the same slots is 0.44 ms). Reading allocates nothing; building a view allocates the object alone (72 B).
-- **Memory.** No per-player buffer: a `PlayerView` is six references and two ints (72 B), built by whoever reads (the M5-2
-  `AiPlayer`), not by the world. `World` gains nothing: `QA/FieldBuildFairnessQaTests.World_1024Map_CacheStays32_MemoryBounded`
-  is unchanged (itemised there as +0). `GameData.Ai` is load-time data, a few hundred bytes a faction, outside the world.
+- **Memory.** No per-player buffer in the view: a `PlayerView` is six references and two ints (72 B), built by whoever reads
+  (the M5-2 `AiPlayer`), not by the world. M5-1 added nothing to `World` (itemised as +0 in
+  `QA/FieldBuildFairnessQaTests.World_1024Map_CacheStays32_MemoryBounded`). M5-2's node memory (BUG-0540) lives in the fog:
+  a 12-byte `NodeMemory` (generation, type, anchor cell) per resource slot per player, **12 B x `ResourceCapacity` x
+  players**: 98,304 B for the default 4,096 slots and two players (+ a 24-byte header; that test's figure, re-baselined and
+  itemised there), 393 KB for eight. `GameData.Ai` is load-time data, a few hundred bytes a faction, outside the world.
 - **State and hashing.** No sim state, no new `Command`, no phase. `ai.json` is **not** in `GameData.ContentHash` (Producer
   decision for M5-1: nothing the sim runs reads it yet; `Data/AiLoaderTests.AnAiJsonEdit_LeavesTheContentHash`). The golden is
   untouched.
-- **Not yet.** `ai.json` into `ContentHash` with one golden regen (M5-2, when the AI first sends commands); the managers,
-  `AiPlayer`, the `Blackboard`; what a step's `count` and `buildOrderSlack` mean at run time (the executor's, M5-2);
-  difficulty display names (M5-4 / the M6 lobby). Placement for the AI: `World.CanPlace` still counts hidden enemy buildings
-  (docs/01, 2026-10-09), so it needs a fog-safe form before an AI places anything.
+- **Not yet.** `ai.json` into `ContentHash` (moved to M5-3 by the Producer: after D14 lands, so M5-2's golden regen was
+  header-only); difficulty display names (M5-4 / the M6 lobby). Done in M5-2 ("Implementation (M5-2)"): the managers,
+  `AiPlayer`, the `Blackboard`, the executor's run-time meaning of `count` and `buildOrderSlack`, and a fog-safe placement
+  rule (`PlayerView.CanPlace`).
 
 **For the data track (M5-1).** `factions/<id>/ai.json`, required for every faction (a missing file is one error). Unknown fields
 and repeated keys are errors, as everywhere. Shape:
@@ -5409,15 +5516,137 @@ and repeated keys are errors, as everywhere. Shape:
   line + ranged + shock compositions, attack at 10 pop / 800 cost, retreat at 0.3 / 0.5. The real build orders are the data
   track's next task.
 
+### Implementation (M5-2)
+
+An AI seat that runs its faction's `ai.json` build order, a basic economy and production, reading only its `PlayerView` and
+acting only through commands. Code: `sim/Rts.Sim/Ai/AiPlayer.cs`, `Blackboard.cs`, `BuildOrderExecutor.cs`,
+`EconomyManager.cs`, `ProductionManager.cs`, `ICommandSink.cs`, `PendingOrder.cs` / `PendingKind.cs`; seats in `PlayerSeat`,
+`SeatController`, `SimConfig.Seats`; the AI tunables in `Data/AiRulesDef.cs` (`GameData.AiRules`); `PlayerView.CanPlace`,
+`CanTrain`, `CanResearch`; the node memory in `FogStore` (BUG-0540, "Implementation (M5-1)", Lifetime).
+
+- **Seats.** `SimConfig.Seats` holds one `PlayerSeat(Faction, Controller, Difficulty)` per player, or is empty (the
+  default): player p plays faction `p mod factions`, every seat Human, difficulty Normal (`SimConfig.SeatOf`), so every
+  existing test, scene and `Match.cs` builds the same match. `World.FactionOf` reads the seat. `Validate` refuses a seat count
+  other than the players', an unknown faction id (-1 only with data that has no factions), controller or difficulty, and an
+  AI seat whose faction has no loaded `ai.json` (`ArgumentException` / `ArgumentOutOfRangeException`).
+- **Who runs the AI.** The `Simulation` builds one `AiPlayer` per AI seat at construction, with a `PlayerView` it keeps and
+  its own `SimRng` (seed, stream `RngStream.Ai(p)`: a copy, so the world's stream of that id stays undrawn and the AI's draws
+  move no hashed state). The AI gets the sim as an `ICommandSink` (an internal interface the `Simulation` implements: its
+  `TryEnqueue` is `Enqueue` for a well-formed command of a match player with room in the queue, else false with nothing
+  queued, never an exception), so no `Ai/` file names `World`, `Simulation`, a store or the fog
+  (`Ai/PlayerViewArchitectureTests`). `Simulation.AiOf(p)` hands it to tests.
+- **The think point.** At the start of `Tick()`, after tick 0's initial fog stamp and before phase 1, each AI seat in player
+  order thinks when `TickNumber % thinkTicks == 0` (its difficulty's `thinkInterval`: Easy 40 ticks, Normal 20, Hard 10).
+  It reads the state the previous tick left, as input between ticks does, and every command it sends is stamped
+  `TickNumber + 1`: it applies in the next tick's phase 1, never in the running one.
+- **Recorded commands (Producer decision 1, M5-2 PLAN).** The AI's commands go through `Simulation.Enqueue`, so an attached
+  `ReplayRecorder` logs them in enqueue order like a human's; playback re-enqueues each when `TickNumber == Tick - 1`, i.e.
+  between the same ticks, and builds the sim with the header's factions and **every seat human**: the AI never runs on
+  playback (if it did, its commands would be sent twice: `Ai/AiReplayTests`). Replay format 5 carries the seats.
+- **AI state is not sim state.** Not in `StateHash`: the `Blackboard`, the census, the AI's RNG, its retry marks. What it
+  does reaches the hash only through its commands (the queue, the sequence numbers, their effects). A save (M6) will store
+  the blackboards (as "Save/load and replays" lists).
+- **A think.** A census of the view (own live units per type and the workers, own buildings with their queues, the Town
+  Hall), then the executor, the economy manager, the production manager, in that order, with one budget: the gold and wood
+  the view showed, less each command's cost as it is sent. Allocation-free after construction (every buffer sized from the
+  match: unit and building slots, unit types, steps). At most one command per think per step, per idle worker, per house,
+  and one production Train; a full command queue ends the think's sending.
+- **Executor semantics** (`BuildOrderExecutor`; fixed, the data track writes build orders against them):
+  - Every step whose trigger is reached and that is not complete is worked **each think, in file order, at most one command
+    per step per think**: steps run side by side, and within a think the executor's commands follow file order.
+  - A step is **due** from the first think its trigger holds and stays due: `time` (s since tick 0) when the tick number
+    reaches it (due at that time, not at the think); `workers` when the player's live workers (`UnitSlot.Worker`) number at
+    least that many; `pop` when its population (half-pop, queued items' reservations included) reaches it.
+  - `buildOrderSlack`: seconds the AI waits after a step is due before its first command. An `expand` also waits for the
+    difficulty's `expandAfter`.
+  - `train`: `count` Train commands **accepted** over the step's life, one a think; `build`, `research` and `expand`:
+    complete on the first accepted command (a `research` also once the tech is researched or queued, by anyone).
+  - **Accepted** is read from the player's own state at the first think after the command applied (`PendingOrder`): a Build
+    by an own building (site or finished) of its type at its anchor; a Train by one more item of its type in that building's
+    queue (one less allowed if the head, of that type, may have finished since; the one case this can't tell, refused while
+    such a head hadn't finished, counts as accepted); a Research by the tech researched or queued. Until judged the step
+    sends nothing.
+  - **A refused command is retried at a later think, never spammed**: one command per step per think at most; a refused
+    Build's anchor gets a retry mark (the last 16 are kept) so the search moves on; a step that can't act (not enough gold
+    or wood left, no site, no free worker, no building that trains or researches it) simply waits and costs nothing. A think
+    never stalls: every loop is bounded by the match's slots and the search radius.
+  - `build`: a site found by **`PlayerView.CanPlace`** searched outward from the own Town Hall (its first finished one, else
+    its first site; without a hall its first building), a `camp` from the known tree nearest the hall. The search walks
+    Chebyshev rings out to `placementSearchRadius` (not at all when a cell-free rule fails: `PlayerView.CanPlaceAnywhere`,
+    the type, faction, `requires`, cost and a free building slot, BUG-0572; each ring in a fixed order: top row, right column, bottom row, left
+    column), the footprint centred on the ring cell, skipping retry marks and anchors that would put a building within
+    `buildingSpacing` of an own building, of a site this think's Builds took, or of a known gold mine. The Build goes to the
+    nearest idle worker, else the nearest gathering or returning one (never one whose last AI command hasn't applied yet),
+    through `Command.Build`.
+  - `train`: `Command.Train` at the own finished building that trains the type, with room in its queue and no AI command
+    waiting on it, shortest queue first (slot order on ties), when `PlayerView.CanTrain` holds and the budget pays.
+  - `research`: `Command.Research` at the first own finished building where `PlayerView.CanResearch` holds.
+  - `expand`: a Town Hall built (as `build`) round the known gold mine nearest the player's hall with no own Town Hall, and
+    no enemy one it sees or remembers (ghost), within `expandHallReach` of it; none such: it waits.
+- **`PlayerView.CanPlace(type, cell, out reason)`** (fog-safe; docs/01 2026-10-09: `World.CanPlace` counts hidden enemy
+  buildings): the type, the player's faction and the type's `requires`; the map; every footprint cell explored (before the
+  terrain, so it reveals nothing of unexplored ground); terrain (passable, no ramp, one level); a cell a building covers
+  refuses only if the player knows that building (its own, one it sees now, or its ghost of it), and every ghost's
+  remembered footprint refuses (also a building gone unseen); a live node's cell refuses (on explored ground the player saw
+  it), and so does a node it remembers that is gone; then cost and a free building slot. Not checked: units in the way and
+  the never-seal rule; the Build applies them, a refused Build costs nothing and the executor's retry mark moves it on.
+  `CanTrain` / `CanResearch` are `World.CanTrain` / `CanResearch` for the player: they read only its own state.
+- **Economy manager.** The house rule first: a house (the faction's `House` slot) is placed (as `build`, round the hall)
+  when `HalfPopCap - HalfPop` is within `houseWhenPopWithin` pop, the cap is below the rules' `popCap`, and no own house is
+  under construction or waiting to be judged. Then every idle worker (Idle, no AI command waiting on it) is sent with
+  `Command.Gather` to the known node nearest it of the wanted kind: gold while fewer than `round(goldShare x gatherers)` are
+  on gold (gatherers: the workers the AI last sent to gold or wood that are still at it, plus the idle ones), else wood; the
+  other kind when none of that kind is known. With no node known a worker stays idle (finding far resources is scouting,
+  M5-3). A Gather to a remembered node that is gone (BUG-0540's memory) is dropped at apply and the worker stays Idle
+  (BUG-0570): an idle worker whose last AI order was a Gather that applied, to a node the player doesn't see now, marks
+  that node (slot and generation; the AI sends no worker there again, what a human sees too: the worker didn't move) and
+  tries the other kind first this think. A node in sight is never marked, and a worker seen at work clears its Gather.
+- **Production manager.** Only on a think the executor sent nothing: the current age's composition unit with the lowest
+  `(own live + queued) / weight` (composition order, ascending unit ids, on ties) **among those a finished own building
+  with an empty queue and no AI command waiting on it may train now**; trained if the budget pays, else the think waits (it
+  doesn't spend on a cheaper unit). Builder reading: choosing among the units a free building trains keeps every building
+  busy; the mix then follows the weights while several buildings are free and the buildings once only one is.
+- **Tunables.** `common/rules.json` `ai` (required; `DataValidationTests` rows): `goldShare` 0.6 (a fraction 0-1),
+  `houseWhenPopWithin` 2 (pop, a multiple of 0.5, at most `popCap`), `placementSearchRadius` 32 m, `buildingSpacing` 2 m,
+  `expandHallReach` 40 m (meters above 0, at most 64; spacing 0-8; to whole cells rounded up: 16, 1, 20). Not in
+  `ContentHash` yet, with `ai.json` (M5-3): playback runs no AI, so a replay doesn't depend on them.
+- **Tests.** `Ai/AiPlayerTests` (criterion 3: the shipped steps of both factions run on every difficulty; a 10-step order
+  with time / workers / pop triggers, counts, slack and concurrent steps fires in the documented order on Easy and Hard; a
+  Build without wood waits and is sent at the first think after the wood, once; a Build the sim refuses (an enemy unit holding
+  in the footprint) is retried one think later at the next anchor, one a think, each refused anchor marked, until accepted;
+  the house rule; the composition fill), `Ai/AiReplayTests` (criterion 2: AI matches recorded, format 5 round trip, played back
+  without the AI to equal checkpoints; the recorder twin), `Ai/AiDeterminismTests` (criterion 4: two AI seats, 3 seeds x 2,000
+  ticks, two runs equal every tick), `Stress/CommandDoorFuzzStressTests` (an AI seat under the random commands, every AI command
+  legal for what it saw), `Ai/AiPerfTests` (criterion 5), `Ai/PlayerViewMemoryTests` (the node memory, `CanPlace`),
+  `SeatConfigTests`, `ReplayFormatTests` (format 5 rows), `QA/PlayerViewQaTests.ANodeDepletedOutOfSight_IsStillAnswered_UntilItsGroundIsSeen`
+  and the oracle fuzz (`Ai/PlayerViewOracle` keeps its own node memory from the byte map; the scene now empties every 9th node
+  at ticks 500 and 1,100).
+- **Cost** (Debug, `Ai/AiPerfTests`, the machine shared with the other tracks' suites): eight Hard AI seats over 2,500 units
+  on a generated 128 map, each player far over its population cap so the house rule searches a site at every think it has
+  none building: a think averages about 0.06 ms (p95 0.15 ms, worst 0.3-0.4 ms; gate 1 ms). With the building store full
+  (`QA/AiThinkCostQaTests`, 200-374 nodes) also about 0.06 ms: the search stops before its first candidate (BUG-0572; it
+  was 1.6-2.2 ms walking all 1,089). A steady-state think allocates
+  nothing; nor does a tick with AI seats (`AllocationProbe`).
+- **Memory.** Per AI seat: per unit slot four ints and a byte (blackboard; two of the ints the Gather's node, BUG-0570) and
+  an int (census), per resource slot an int (dropped-Gather marks), per building slot an int (blackboard) and three ints and a bool (census), per step three ints, a bool and a 32-byte pending order, three ints a unit
+  type, and small fixed scratch: about 73 KB for a 2,500-unit, 256-building, 4,096-node match (37 KB before BUG-0570's 20 KB of
+  Gather nodes and 16 KB of node marks). Built only for AI seats, never by `World`. The fog's node memory:
+  "Implementation (M5-1)", Memory.
+- **Not yet** (M5-3 and later): military, attack, scout and ability managers and the enemy memory; `ai.json` and
+  `rules.json` `ai` into `ContentHash`; difficulty tuning (M5-4, the gather bonus); the sandbox's AI seat (view, M5-V2).
+
 ## Save/load and replays
 
 - **Replay file** (M1-6, `Rts.Sim.Replays`): a `Replay` holds a header, the command log, and
   checkpoints.
-  - Header: format version (`Replay.CurrentFormatVersion` = 4 since M4-2a, which added the `combat` line and an
-    attack target on every command line; 3 (M3-1) still reads and plays, `Replay.OldestFormatVersion`; 2 was M1-7,
-    without the resource lines, 1 was M1-6, without command flags; both are refused with `FormatVersionMismatch`),
+  - Header: format version (`Replay.CurrentFormatVersion` = 5 since M5-2, which added one seat line per player; 4
+    (M4-2a, which added the `combat` line and an attack target on every command line) and 3 (M3-1) still read and play,
+    `Replay.OldestFormatVersion` = 3; 2 was M1-7, without the resource lines, 1 was M1-6, without command flags; both are
+    refused with `FormatVersionMismatch`),
     `SimInfo.Version` (informational, not checked on playback), data hash (`GameData.ContentHash()`),
-    seed, player count, unit, command and (M3-1) resource capacity (they decide outcomes: the unit and
+    seed, player count, (format 5) every player's seat (`Replay.Seats`: the faction's string id, `human` or `ai`, the
+    difficulty; a format 3 / 4 replay has none and was recorded with the default seats), unit, command and (M3-1) resource
+    capacity (they decide outcomes: the unit and
     resource capacities are in the state hash and a full store drops spawns), checkpoint interval,
     tick count, (format 4) `combat 0 / 1` (`SimConfig.Combat` when recorded, `Replay.Combat`; a format 3 file has no
     such line and was recorded with combat on), and every `MapGenParams` field (M3-1 added `map.forests`,
@@ -5425,18 +5654,22 @@ and repeated keys are errors, as everywhere. Shape:
     the map, resource nodes included, is rebuilt from seed + params.
   - Command log: every command `Simulation.Enqueue` accepted, as stamped (tick, player, sequence,
     kind, type id, position, unit handle, (format 4) attack target handle and building flag, flags), in enqueue order. Commands stamped for a tick after the
-    recorded span are left out.
+    recorded span are left out. Since M5-2 that includes an AI seat's commands, sent at the start of a tick and stamped for
+    the next one exactly as between-ticks input.
   - Checkpoints: `(tick, StateHash())` right after each tick whose new `TickNumber` is a multiple of
     the interval (default 100, 5 s), so exactly `tickCount / interval` of them.
 - **Recording:** `new ReplayRecorder(sim)` attaches to a sim that hasn't ticked or queued anything
   and wasn't built on a hand-made map; one recorder per sim. `Enqueue` reports each accepted command
   and `Tick` reports its end (phase 14). The checkpoint buffer is preallocated (default: one hour of
   ticks), so recording adds no allocation to `Tick()`; past that it doubles. The command log doubles
-  when full inside `Enqueue`, which input calls between ticks; once the AI enqueues during a tick
-  (M5), size the recorder's command capacity for the match. `ToReplay()` snapshots the recording.
+  when full inside `Enqueue`; since M5-2 an AI seat enqueues at the start of `Tick()`, so with AI seats
+  size the recorder's command capacity for the match. `ToReplay()` snapshots the recording, the seats
+  as played (the defaults written out, a faction by its string id; `-` for data without factions).
 - **Text format** (`ReplayFormat`, extension `.replay`): ASCII, LF line endings, one `key value`
-  line per header field in a fixed order (a replay is written in its own `FormatVersion`, so a format 3 file read
-  back writes back byte for byte; the recorder makes format 4), `commands N` then N lines
+  line per header field in a fixed order (a replay is written in its own `FormatVersion`, so a format 3 or 4 file read
+  back writes back byte for byte; the recorder makes format 5; format 5's seat lines,
+  `seat <p> <faction> <human|ai> <easy|normal|hard>`, one per player in player order right after `players`, the faction
+  snake_case or `-`), `commands N` then N lines
   `c tick player sequence kind typeId x y unitIndex unitGeneration targetIndex targetGeneration targetIsBuilding flags`
   (13 fields since format 4, the three target fields `0 0 0` on every kind but `Attack`, flags kept last; format 3
   lines have 10, without the target; format 2 added `flags`), `checkpoints N` then N lines
@@ -5457,7 +5690,9 @@ and repeated keys are errors, as everywhere. Shape:
 - **Playback** (`ReplayPlayer.Run(replay, data)`): refuses before any tick with
   `FormatVersionMismatch`, another validation code, or `DataMismatch` when the data hash differs.
   Otherwise it builds the `SimConfig` (since format 4 with the header's `combat`; `Run(replay, data, combat)` overrides
-  it, for format 3 test replays recorded with combat off, which can't say so), enqueues each command when `TickNumber == command.Tick - 1`
+  it, for format 3 test replays recorded with combat off, which can't say so; since format 5 with the header's factions
+  and **every seat human**: the AI's commands are in the log, so playback runs no AI; a seat naming a faction the data
+  lacks is `InvalidHeader` before any tick), enqueues each command when `TickNumber == command.Tick - 1`
   in log order, checks the sim stamps it with the logged tick and sequence, hashes with its own
   recorder, and stops at the first checkpoint whose hash differs, reporting the tick and both hashes.
 - **Hash format** (M4-H1, BUG-0211). A checkpoint is `Simulation.StateHash()` as the build that recorded it composed
@@ -5494,7 +5729,7 @@ and repeated keys are errors, as everywhere. Shape:
 | Determinism | Same scenario twice → same hash; different seeds → different hash | Every change |
 | Replay golden tests | Recorded replays reproduce checkpoint hashes | Sim changes |
 | Perf benchmarks | Tick cost under budget: 500 units, average tick < 4 ms, p99 < 8 ms | `Category=Perf` |
-| Headless smoke | Godot boots the main scene, runs an AI-vs-AI match for 600 frames, exits 0 | `game/` changes |
+| Headless smoke | Godot boots the main scene (the main menu since M6-V1; `-- --skirmish` runs the match) for 600 frames, exits 0 with the banner and no ERROR | `game/` changes |
 | Visual check | Windowed run + screenshot inspected by Claude | Visual changes |
 
 - Golden replays live in `sim/Rts.Sim.Tests/Replays/`. The first (M1-6) is
@@ -5583,6 +5818,9 @@ and repeated keys are errors, as everywhere. Shape:
   (both players' halls, workers and cargo), MinimapTest (every dot of both armies), ProjectileViewTest and QaV7Test (every
   shot in flight drawn), QaV5Test (2,000 hurt units, 2,000 bars), QaV1Test (a full store of 256 buildings over the whole
   map, every one shown). The start-up line ends with ", fog not drawn".
+- **Map size and skirmish flags** (M6-V1): `--map-size 128|192|256` picks the square map's side (default the 128 map);
+  `--skirmish` (no value) starts the default match without the main menu. Any match flag skips the menu; see
+  "Implementation (M6-V1)".
 - **Debug overlay** (M2-5; F12, input action `debug_overlay`; launch flag `--debug-overlay` starts it
   on, so `--screenshot` can capture it): the nav grid on the ground, the flow-field arrows of the
   selection's goal around the camera, a tick-time graph of the last 120 ticks with the 4 ms budget

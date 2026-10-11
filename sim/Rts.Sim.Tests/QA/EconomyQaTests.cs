@@ -538,7 +538,7 @@ public class EconomyQaTests
             sim.Tick();
         }
         Replay r = rec.ToReplay();
-        Assert.Equal(4, Replay.CurrentFormatVersion); // M4-2a: format 4
+        Assert.Equal(5, Replay.CurrentFormatVersion); // M4-2a: format 4; M5-2: format 5 (seat lines)
         Assert.Equal(Replay.CurrentFormatVersion, r.FormatVersion);
         Assert.Equal(ReplayError.None, ReplayFormat.TryRead(ReplayFormat.Write(r), out Replay? back));
         ReplayResult res = ReplayPlayer.Run(back!, TestSim.Data);

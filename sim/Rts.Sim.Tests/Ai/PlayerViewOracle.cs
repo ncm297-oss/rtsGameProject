@@ -23,7 +23,7 @@ internal static class PlayerViewOracle
     {
         public long Leaks, Misses, FieldMismatches, OracleDisagreements;
         public long OwnUnits, EnemyUnitsSeen, EnemyUnitsHidden, StealthHidden, StealthDetected, Revealed, InStorm;
-        public long OwnBuildings, EnemyBuildingsSeen, Ghosts, GhostsOfDeadBuildings, GhostSites, Resources, ResourcesUnknownAmount;
+        public long OwnBuildings, EnemyBuildingsSeen, Ghosts, GhostsOfDeadBuildings, GhostSites, Resources, ResourcesUnknownAmount, ResourcesRemembered;
         public long QueueItems;
         public string First = "";
 
@@ -35,7 +35,7 @@ internal static class PlayerViewOracle
         public override string ToString() =>
             $"leaks {Leaks}, misses {Misses}, field mismatches {FieldMismatches}, oracle v fog {OracleDisagreements}; units own {OwnUnits} / enemy seen {EnemyUnitsSeen} / hidden {EnemyUnitsHidden} " +
             $"(stealth hidden {StealthHidden}, detected {StealthDetected}, high-ground revealed {Revealed}, in a storm {InStorm}); buildings own {OwnBuildings} / enemy seen {EnemyBuildingsSeen}; " +
-            $"ghosts {Ghosts} (of dead buildings {GhostsOfDeadBuildings}, sites {GhostSites}); resources {Resources} (amount unknown {ResourcesUnknownAmount}); queue items {QueueItems}";
+            $"ghosts {Ghosts} (of dead buildings {GhostsOfDeadBuildings}, sites {GhostSites}); resources {Resources} (amount unknown {ResourcesUnknownAmount}, remembered gone {ResourcesRemembered}); queue items {QueueItems}";
     }
 
     /// <summary>Compares every answer of <paramref name="view"/> (player <paramref name="p"/>) with the oracle, adding to <paramref name="t"/>.</summary>
@@ -151,29 +151,30 @@ internal static class PlayerViewOracle
         End(t, view.NextGhost(ref gCursor, out BuildingGhost gEnd), gCursor, b.Capacity, gEnd == default, $"{at}: the ghost cursor");
         Field(t, !view.TryGetBuilding(-1, out _) && !view.TryGetGhost(-1, out _) && !view.TryGetGhost(b.Capacity, out _) && view.QueueCount(-1) == 0, $"{at}: a building slot out of range");
 
-        // Resource nodes: live, on explored ground; the amount only in sight.
+        // Resource nodes (M5-2, BUG-0540): the node the player last saw in each slot, alive or gone out of its sight, until
+        // the player sees that ground again; the amount only for a live node in sight. The oracle keeps its own memory per
+        // world, rebuilt at every fog update from the byte map (NodeOracle).
+        NodeOracle nodes = NodeOracle.For(w);
+        nodes.Observe(w, p, t, at);
         int rCursor = -1;
         for (int k = 0; k < r.Capacity; k++)
         {
-            bool explored = false, visible = false;
-            if (r.Alive[k])
+            bool expected = false, visible = false, live = false;
+            (int gen, int type, int cell) m = nodes.Entry(p, k);
+            if (m.gen != 0)
             {
-                ResourceDef def = w.Data.Resources[r.TypeId[k]];
-                for (int dy = 0; dy < def.FootprintHeight; dy++)
-                    for (int dx = 0; dx < def.FootprintWidth; dx++)
-                    {
-                        int c = r.Cell[k] + dy * fog.Width + dx;
-                        explored |= vis[c] != VisionConstants.Unexplored;
-                        visible |= vis[c] == VisionConstants.Visible;
-                    }
+                live = r.Alive[k] && r.Generation[k] == m.gen;
+                visible = NodeVisible(w, vis, m.type, m.cell);
+                expected = live || !visible;
             }
             bool got = view.TryGetResource(k, out SeenResource sr);
-            Compare(t, got, explored, $"{at}: resource {k}");
-            if (got && explored)
+            Compare(t, got, expected, $"{at}: resource {k}");
+            if (got && expected)
             {
-                Field(t, sr == new SeenResource(new EntityHandle(k, r.Generation[k]), r.TypeId[k], r.Cell[k], visible ? r.Remaining[k] : -1), $"{at}: resource {k}'s fields");
+                Field(t, sr == new SeenResource(new EntityHandle(k, m.gen), m.type, m.cell, live && visible ? r.Remaining[k] : -1), $"{at}: resource {k}'s fields");
                 t.Resources++;
-                if (!visible) t.ResourcesUnknownAmount++;
+                if (!(live && visible)) t.ResourcesUnknownAmount++;
+                if (!live) t.ResourcesRemembered++;
                 bool next = view.NextResource(ref rCursor, out SeenResource nr);
                 Cursor(t, next, rCursor, k, nr == sr, $"{at}: the resource cursor");
             }
@@ -206,6 +207,69 @@ internal static class PlayerViewOracle
         if (sees && storm) t.InStorm++;
         if (sees) t.EnemyUnitsSeen++; else t.EnemyUnitsHidden++;
         return sees;
+    }
+
+    private static bool NodeVisible(World w, ReadOnlySpan<byte> vis, int type, int anchor)
+    {
+        ResourceDef def = w.Data.Resources[type];
+        for (int dy = 0; dy < def.FootprintHeight; dy++)
+            for (int dx = 0; dx < def.FootprintWidth; dx++)
+                if (vis[anchor + dy * w.Fog.Width + dx] == VisionConstants.Visible) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// The oracle's own node memory (M5-2, BUG-0540), one per world, written again from the rule: at every fog update (a new
+    /// <c>Fog.Version</c>) each live node with a footprint cell visible in the byte map is recorded in its slot, and a recorded
+    /// node that is gone (slot free or reused) is dropped once a cell of its remembered footprint is visible. The callers check
+    /// every player after every tick, so it sees every update (a skipped one is reported).
+    /// </summary>
+    internal sealed class NodeOracle
+    {
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<World, NodeOracle> s_all = new();
+        private readonly int[] _gen, _type, _cell, _version;
+        private readonly int _slots;
+
+        private NodeOracle(World w)
+        {
+            _slots = w.Resources.Capacity;
+            int players = w.Config.PlayerCount;
+            _gen = new int[players * _slots];
+            _type = new int[players * _slots];
+            _cell = new int[players * _slots];
+            _version = new int[players];
+        }
+
+        internal static NodeOracle For(World w) => s_all.GetValue(w, x => new NodeOracle(x));
+
+        internal (int Gen, int Type, int Cell) Entry(int p, int k) => (_gen[p * _slots + k], _type[p * _slots + k], _cell[p * _slots + k]);
+
+        internal void Observe(World w, int p, Tally t, string at)
+        {
+            int version = w.Fog.Version(p);
+            if (version == _version[p]) return;
+            if (version != _version[p] + 1)
+            {
+                t.FieldMismatches++;
+                t.Fail($"{at}: the node oracle missed a fog update (version {_version[p]} to {version})");
+            }
+            _version[p] = version;
+            ReadOnlySpan<byte> vis = w.Fog.Visibility(p);
+            ResourceStore r = w.Resources;
+            for (int k = 0; k < _slots; k++)
+            {
+                int e = p * _slots + k;
+                if (r.Alive[k] && NodeVisible(w, vis, r.TypeId[k], r.Cell[k]))
+                {
+                    _gen[e] = r.Generation[k];
+                    _type[e] = r.TypeId[k];
+                    _cell[e] = r.Cell[k];
+                    continue;
+                }
+                if (_gen[e] == 0 || r.Alive[k] && r.Generation[k] == _gen[e]) continue;
+                if (NodeVisible(w, vis, _type[e], _cell[e])) _gen[e] = 0;
+            }
+        }
     }
 
     private static bool FootprintVisible(World w, ReadOnlySpan<byte> vis, int type, int anchor)
@@ -347,10 +411,19 @@ internal static class PlayerViewScene
     /// Sandstorm on an enemy; every 40 ticks each Heavy Infantry casts its stealth with chance 1/3; every 200 ticks each town
     /// hall queues a worker. Read from the world (test-side, as a script would), sent as commands. At ticks 600 and 1200 the
     /// first live house of each player is destroyed through the test seam (<c>BuildingStore.Free</c>, as GhostListTests do),
-    /// wherever it stands: a building gone in some players' sight and out of others'.
+    /// wherever it stands: a building gone in some players' sight and out of others'. M5-2 (BUG-0540): at ticks 500 and 1100
+    /// every 9th live resource node is emptied through the seam (<c>ResourceStore.Take</c>), wherever it stands: nodes felled
+    /// in some players' sight and out of others'.
     /// </summary>
     internal static void Orders(Simulation sim, int t, ref SimRng rng)
     {
+        if (t == 500 || t == 1100)
+        {
+            ResourceStore r = sim.World.Resources;
+            int live = 0;
+            for (int k = 0; k < r.Capacity; k++)
+                if (r.Alive[k] && live++ % 9 == 0) r.Take(r.HandleOf(k), int.MaxValue);
+        }
         World w = sim.World;
         UnitStore u = w.Units;
         BuildingStore b = w.Buildings;

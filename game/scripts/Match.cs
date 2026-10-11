@@ -32,6 +32,7 @@ public partial class Match : Node3D
     {
         if (options.Seed is ulong seed) _runner.Seed = unchecked((long)seed);
         if (options.Speed is double speed) _runner.GameSpeed = speed;
+        if (options.MapSize is int mapSize) _runner.MapSize = mapSize;
         _runner.Forests = options.Forests;
         _runner.GoldMines = options.Mines;
         _runner.Combat = !options.NoCombat;

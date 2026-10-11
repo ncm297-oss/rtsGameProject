@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Immutable;
 using Rts.Sim.Data;
 using Rts.Sim.Map;
 
@@ -82,7 +83,35 @@ public sealed record SimConfig(ulong Seed, int PlayerCount, int UnitCapacity, in
     /// </summary>
     public float CastWalkInPatienceSeconds { get; init; } = 3f;
 
-    /// <summary>Throws if any size is out of range.</summary>
+    /// <summary>
+    /// M5-2: one seat per player (faction, Human / AI, AI difficulty), or empty (the default) for today's seats: player p plays
+    /// faction <c>p mod factions</c> in id order, every seat human, difficulty Normal (<see cref="SeatOf"/>). An AI seat makes
+    /// the sim run an <c>AiPlayer</c> for that player (<see cref="Simulation"/>). Recorded in the replay header (format 5);
+    /// a replay plays back with the header's factions and every seat human (the recorded AI commands play its part).
+    /// </summary>
+    public ImmutableArray<PlayerSeat> Seats { get; init; } = ImmutableArray<PlayerSeat>.Empty;
+
+    /// <summary>Player <paramref name="player"/>'s seat: <see cref="Seats"/>' entry, or the default (<c>p mod factions</c>, human, Normal; faction -1 with no factions).</summary>
+    public PlayerSeat SeatOf(int player)
+    {
+        if (!Seats.IsDefaultOrEmpty && (uint)player < (uint)Seats.Length) return Seats[player];
+        int factions = Data?.Factions.Length ?? 0;
+        return new PlayerSeat(factions > 0 && player >= 0 ? player % factions : -1, SeatController.Human, AiDifficulty.Normal);
+    }
+
+    /// <summary>Whether any seat is played by the AI.</summary>
+    public bool HasAiSeat
+    {
+        get
+        {
+            if (Seats.IsDefaultOrEmpty) return false;
+            foreach (PlayerSeat s in Seats)
+                if (s.Controller == SeatController.Ai) return true;
+            return false;
+        }
+    }
+
+    /// <summary>Throws if any size is out of range, or (M5-2) a seat is bad: a count other than the players', an unknown faction, controller or difficulty, or an AI seat whose faction has no loaded <c>ai.json</c>.</summary>
     public void Validate()
     {
         if (PlayerCount < 1) throw new ArgumentOutOfRangeException(nameof(PlayerCount));
@@ -97,5 +126,23 @@ public sealed record SimConfig(ulong Seed, int PlayerCount, int UnitCapacity, in
         if (Data == null) throw new ArgumentNullException(nameof(Data));
         if (Map == null) throw new ArgumentNullException(nameof(Map));
         Map.Validate();
+        ValidateSeats();
+    }
+
+    private void ValidateSeats()
+    {
+        if (Seats.IsDefaultOrEmpty) return;
+        if (Seats.Length != PlayerCount) throw new ArgumentException($"{Seats.Length} seats for {PlayerCount} players.", nameof(Seats));
+        int factions = Data.Factions.Length;
+        for (int p = 0; p < Seats.Length; p++)
+        {
+            PlayerSeat s = Seats[p];
+            bool factionOk = factions == 0 ? s.Faction == -1 : (uint)s.Faction < (uint)factions;
+            if (!factionOk) throw new ArgumentOutOfRangeException(nameof(Seats), $"Seat {p}: unknown faction id {s.Faction}.");
+            if (s.Controller is not (SeatController.Human or SeatController.Ai)) throw new ArgumentOutOfRangeException(nameof(Seats), $"Seat {p}: unknown controller {(int)s.Controller}.");
+            if (s.Difficulty is not (AiDifficulty.Easy or AiDifficulty.Normal or AiDifficulty.Hard)) throw new ArgumentOutOfRangeException(nameof(Seats), $"Seat {p}: unknown difficulty {(int)s.Difficulty}.");
+            if (s.Controller == SeatController.Ai && (s.Faction < 0 || s.Faction >= Data.Ai.Length || Data.Ai[s.Faction] == null))
+                throw new ArgumentException($"Seat {p}: an AI seat of faction {s.Faction}, which has no loaded ai.json.", nameof(Seats));
+        }
     }
 }

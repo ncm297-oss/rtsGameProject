@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-11-0314, task M5-1 |
 | System | AI `PlayerView` (resource nodes) |
-| Fixed by | |
+| Fixed by | M5-2 (6d1f9c9): per-player node memory in `FogStore` (`NodeAt`); `QA/PlayerViewQaTests.ANodeDepletedOutOfSight_IsStillAnswered_UntilItsGroundIsSeen` un-skipped, `Ai/PlayerViewMemoryTests`, oracle fuzz with node emptying |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~PlayerViewQaTests.ANodeDepletedOutOfSight"`.
@@ -41,3 +41,10 @@ The M5-2 `Blackboard` can't fix it alone: it can only remember what the view tol
 gone. A fix needs per-player node memory in the fog (as `Fog.Ghosts` for buildings) or a view rule "known nodes = nodes
 seen alive at the last update that showed their ground". Producer call whether this is M5-2 work or accepted (the human
 player's own screen: check whether the view removes a felled tree out of sight too).
+
+## Verified (QA, 2026-10-11-0634)
+Status set by QA: the dev can't edit `studio/**`. The un-skipped row passes in the full non-Perf run (5,438 / 5,449, 11
+skipped, 0 failed); the oracle fuzz (3 seeds x 2,000 ticks, nodes emptied at 500 / 1,100) reports `remembered gone` > 0
+with 0 leaks / misses; QA's twin-world row (`QA/AiSeatQaTests.TwinWorlds_...`) answers a tree felled out of sight the same as
+the standing one. Mutation "memory never forgets" caught (see the 0634 report). Follow-on: BUG-0570 (the economy manager
+gathers at a remembered node that is gone).

@@ -11,5 +11,6 @@
   "nodeSearchRadius": 20,
   "repair": { "rateFactor": 0.5, "costFactor": 0.25 },
   "buildingSight": 12,
-  "stealth": { "proximity": 3, "revealSeconds": 3 }
+  "stealth": { "proximity": 3, "revealSeconds": 3 },
+  "ai": { "goldShare": 0.6, "houseWhenPopWithin": 2, "placementSearchRadius": 32, "buildingSpacing": 2, "expandHallReach": 40 }
 }

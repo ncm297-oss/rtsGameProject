@@ -138,7 +138,7 @@ public class AttackOrderFuzzStressTests
         _out.WriteLine($"seed {seed}: {attackOrders} Attack orders, {orderedTicks} unit-ticks Ordered with a target, longest Ordered engagement {maxOrderedRun} ticks; kills {w.Kills[0]}/{w.Kills[1]}, units {u.Count}");
         Assert.True(orderedTicks > 0, "no Attack order was ever taken");
         Replay replay = rec!.ToReplay();
-        Assert.Equal(4, replay.FormatVersion);
+        Assert.Equal(5, replay.FormatVersion); // M5-2: format 5 (seat lines)
         Assert.True(replay.Combat);
         Assert.Equal(ReplayError.None, ReplayFormat.TryRead(ReplayFormat.Write(replay), out Replay? back));
         Assert.Contains(back!.Commands, c => c.Kind == CommandKind.Attack && c.TargetIsBuilding);

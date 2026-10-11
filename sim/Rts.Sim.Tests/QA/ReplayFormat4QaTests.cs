@@ -70,7 +70,8 @@ public class ReplayFormat4QaTests
         string misplaced = missing[..(end + 1)] + "combat 1\n" + missing[(end + 1)..];
         Assert.Equal(ReplayError.Malformed, ReplayFormat.TryRead(Reseal(misplaced), out _));
         // A combat line in a format 3 file is an unknown line there.
-        string format3 = text.Replace("rts-replay 4\n", "rts-replay 3\n");
+        // M5-2: the recorder writes format 5; without its seat lines it is format 4's shape.
+        string format3 = string.Join('\n', text.Replace("rts-replay 5\n", "rts-replay 3\n").Split('\n').Where(l => !l.StartsWith("seat ", StringComparison.Ordinal)));
         Assert.NotEqual(ReplayError.None, ReplayFormat.TryRead(Reseal(format3), out _));
     }
 

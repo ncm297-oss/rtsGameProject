@@ -28,18 +28,27 @@ $import = cmd /c "`"$godot`" --headless --path `"$gamePath`" --import 2>&1"
 $importExit = $LASTEXITCODE
 $smoke = cmd /c "`"$godot`" --headless --path `"$gamePath`" --quit-after $Frames 2>&1"
 $smokeExit = $LASTEXITCODE
+# Since M6-V1 a no-arg boot stops at the main menu, so a second pass starts the default match (--skirmish) to keep
+# the match path (sim start, every view, the HUD) under the gate as it was before the shell existed.
+$match = cmd /c "`"$godot`" --headless --path `"$gamePath`" --quit-after $Frames -- --skirmish 2>&1"
+$matchExit = $LASTEXITCODE
 
 $problems = @()
 if ($importExit -ne 0) { $problems += "import exit $importExit" }
 if ($smokeExit -ne 0) { $problems += "smoke exit $smokeExit" }
-$bad = @($import) + @($smoke) | Where-Object { $_ -match 'ERROR|Unhandled|Exception' }
+if ($matchExit -ne 0) { $problems += "match smoke exit $matchExit" }
+$bad = @($import) + @($smoke) + @($match) | Where-Object { $_ -match 'ERROR|Unhandled|Exception' }
 foreach ($line in $bad) { $problems += "log: $line" }
 if (-not ($smoke | Where-Object { $_ -match [regex]::Escape($banner) })) { $problems += "banner '$banner' missing from smoke log" }
+if (-not ($match | Where-Object { $_ -match [regex]::Escape($banner) })) { $problems += "banner '$banner' missing from the match smoke log" }
+if (-not ($match | Where-Object { $_ -match '^Match started:' })) { $problems += "'Match started:' missing from the --skirmish smoke log" }
 
 $smoke | ForEach-Object { Write-Host "  | $_" }
+Write-Host "  -- match pass (-- --skirmish) --"
+$match | ForEach-Object { Write-Host "  | $_" }
 if ($problems.Count -gt 0) {
     $problems | ForEach-Object { Write-Host "FAIL: $_" }
     exit 1
 }
-Write-Host "PASS: import + smoke exit 0, '$banner' printed, no ERROR lines"
+Write-Host "PASS: import + smoke (menu and --skirmish match) exit 0, '$banner' printed, no ERROR lines"
 exit 0

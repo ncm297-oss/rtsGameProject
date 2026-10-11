@@ -1,6 +1,7 @@
 using System;
 using System.Numerics;
 using Rts.Sim.Abilities;
+using Rts.Sim.Ai;
 using Rts.Sim.Combat;
 using Rts.Sim.Commands;
 using Rts.Sim.Data;
@@ -22,11 +23,16 @@ namespace Rts.Sim;
 /// <see cref="Tick"/>. Phase order follows docs/03 "Tick model"; phases after "apply commands"
 /// are added by later milestones.
 /// </remarks>
-public sealed class Simulation
+public sealed class Simulation : ICommandSink
 {
     private readonly CommandQueue _commands;
     private readonly int[] _nextSequence;
     private ReplayRecorder? _recorder;
+
+    // M5-2: per player its AI (null for a human seat), and how many there are. Not sim state (docs/03 "Implementation
+    // (M5-2)"): their commands are, through Enqueue; a replay plays them back without any AI.
+    private readonly AiPlayer?[] _ai;
+    private readonly int _aiSeats;
 
     /// <summary>Creates a simulation for the given match setup.</summary>
     public Simulation(SimConfig config) : this(config, null)
@@ -39,7 +45,20 @@ public sealed class Simulation
         World = new World(config, map);
         _commands = new CommandQueue(config.CommandCapacity);
         _nextSequence = new int[config.PlayerCount];
+        _ai = new AiPlayer?[config.PlayerCount];
+        for (int p = 0; p < config.PlayerCount; p++)
+        {
+            PlayerSeat seat = config.SeatOf(p);
+            if (seat.Controller != SeatController.Ai) continue;
+            // Its own stream: the world's RngStream.Ai(p) seeded alike but never drawn, so the AI's draws move no hashed state.
+            var rng = new SimRng(config.Seed, (ulong)RngStream.Ai(p));
+            _ai[p] = new AiPlayer(new PlayerView(World, p), config.Data, config.Data.Ai[seat.Faction], seat.Difficulty, rng, this);
+            _aiSeats++;
+        }
     }
+
+    /// <summary>Player <paramref name="player"/>'s AI, or null for a human seat (tests and tooling).</summary>
+    internal AiPlayer? AiOf(int player) => (uint)player < (uint)_ai.Length ? _ai[player] : null;
 
     /// <summary>The simulated state. Read it; never write it from outside the sim.</summary>
     public World World { get; }
@@ -72,6 +91,17 @@ public sealed class Simulation
         _recorder?.OnEnqueued(in command);
     }
 
+    /// <summary>
+    /// The AI's door (M5-2): <see cref="Enqueue"/> for a command the queue has room for and that is well formed, for a player
+    /// of the match; false, with nothing queued and no exception, otherwise (an AI think must never stall the tick).
+    /// </summary>
+    bool ICommandSink.TryEnqueue(in Command command)
+    {
+        if (_commands.Count >= _commands.Capacity || (uint)command.Player >= (uint)_nextSequence.Length || !command.IsWellFormed()) return false;
+        Enqueue(command);
+        return true;
+    }
+
     /// <summary>Runs one tick: applies this tick's commands in (player, sequence) order, rebuilds the spatial hash, trains and spawns units, runs gather loops, then builders and repairers, starts queued orders, acquires targets, moves units, swings and applies damage and death, then bumps <see cref="TickNumber"/>.</summary>
     public void Tick()
     {
@@ -83,6 +113,13 @@ public sealed class Simulation
         // M4-3a: the initial fog stamp, before the first tick's commands, so units already in the world (placed before
         // the first tick) are seen from tick 0. The first phase-12 update is tick 1's, the tick the start commands apply in.
         if (World.TickNumber == 0) World.Fog.Update();
+
+        // M5-2: the AI seats think, in player order, each on its own interval, reading only their views. Their commands are
+        // stamped for the next tick exactly as if sent between ticks (the recorder logs them; playback re-enqueues them
+        // between the same ticks), so nothing they send changes this tick.
+        if (_aiSeats > 0)
+            for (int p = 0; p < _ai.Length; p++)
+                _ai[p]?.Think();
 
         // Phase 1: apply commands.
         _commands.Sort();
