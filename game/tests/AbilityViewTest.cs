@@ -111,7 +111,9 @@ public partial class AbilityViewTest : Node
             _blinded = _data.FindStatus("blinded");
             UiRows();
             foreach (ulong seed in seeds) await Run(seed);
+            foreach (ulong seed in seeds) await CliffRun(seed);
             FrenzyColourRow();
+            OwnRimColourRow();
             foreach (ulong seed in seeds) await SelfAuraRun(seed);
             foreach (ulong seed in seeds) await SummonRun(seed);
             await Steady(seeds[0]);
@@ -326,6 +328,11 @@ public partial class AbilityViewTest : Node
         Check(_views.RadiusCenter == enemyAt, $"seed {seed} rings: radius ring at {_views.RadiusCenter}, enemy at {enemyAt}");
         Check(_views.RangeCaster == _near.Index, $"seed {seed} rings: range ring round {_views.RangeCaster}, want the nearer mage {_near.Index}");
         Check(Math.Abs(_views.RadiusRing.Position.X - enemyAt.X) < 1e-3f && Math.Abs(_views.RadiusRing.Position.Z - enemyAt.Y) < 1e-3f, $"seed {seed} rings: radius node at {_views.RadiusRing.Position}");
+        Vector3 nearAt = UnitViews.GroundPoint(W, _near.Index, 0.5f);
+        (int radiusOff, int radiusPoints, _, _, string radiusFirst) = OnGround((x, z) => _views.RingSurfaceAt(false, x, z), _views.RadiusCenter, new[] { _def.Radius - AbilityViews.RingWidth / 2f }, AbilityViews.Lift);
+        (int rangeOff, int rangePoints, _, _, string rangeFirst) = OnGround((x, z) => _views.RingSurfaceAt(true, x, z), new System.Numerics.Vector2(nearAt.X, nearAt.Z), new[] { _def.Range - AbilityViews.RingWidth / 2f }, AbilityViews.Lift);
+        Check(radiusOff == 0 && rangeOff == 0 && radiusPoints > 40 && rangePoints > 40,
+            $"seed {seed} rings: not on the ground: radius {radiusOff} of {radiusPoints} (first {radiusFirst}), range {rangeOff} of {rangePoints} (first {rangeFirst})");
         // A point by the far mage: it would cast there.
         System.Numerics.Vector2 byFar = U.Position[_far.Index] + new System.Numerics.Vector2(-3f, 0f);
         Check(_sel.PickCaster(_telas, byFar, false, out int k) == _far.Index && k == 0, $"seed {seed}: a point by the far mage picks {_sel.PickCaster(_telas, byFar, false, out _)}");
@@ -765,6 +772,143 @@ public partial class AbilityViewTest : Node
         await Frames();
     }
 
+    // BUG-0430 / BUG-0462 item 1 (M4-VH3): two own Sandstorms across a cliff (one centred on the plateau 1 m from the drop,
+    // one on the low ground 3 m off it) and Telas Fire's two targeting rings there (the radius ring on the cursor 1 m from
+    // the drop, the 16 m range ring round a mage on the plateau): every sampled point of each disc and ring is drawn on the
+    // terrain under it (within 0.05 m of TerrainHeight.At + its lift) on both levels.
+    private async Task CliffRun(ulong seed)
+    {
+        StartMatch(seed, "--units", "0", "--no-bases", "--no-combat", "--no-fog");
+        for (int t = 0; t < 4; t++) _sim.Tick();
+        Heightmap hm = W.Heightmap;
+        // A straight east-facing cliff over 9 rows: two plateau cells, then a plain cell one level lower (no ramp).
+        int fx = -1, fy = -1;
+        for (int y = 12; y < hm.Height - 12 && fx < 0; y++)
+            for (int x = 12; x < hm.Width - 12 && fx < 0; x++)
+            {
+                int level = hm.LevelAt(x, y);
+                bool ok = level >= 1;
+                for (int dy = -4; dy <= 4 && ok; dy++)
+                    ok = hm.LevelAt(x, y + dy) == level && hm.LevelAt(x - 1, y + dy) == level && !hm.IsRamp(x, y + dy) && !hm.IsRamp(x - 1, y + dy)
+                        && hm.LevelAt(x + 1, y + dy) == level - 1 && !hm.IsRamp(x + 1, y + dy);
+                if (ok) (fx, fy) = (x, y);
+            }
+        if (!Check(fx >= 0, $"seed {seed} cliff: no straight plateau edge found")) { await EndMatch(); return; }
+        const float cs = MapConstants.CellSize;
+        float drop = (fx + 1) * cs, row = (fy + 0.5f) * cs;
+        System.Numerics.Vector2 high = new(drop - 1f, row), low = new(drop + 3f, row);
+        MethodInfo create = typeof(ZoneSystem).GetMethod("Create", BindingFlags.NonPublic | BindingFlags.Static)!;
+        AbilityDef storm = _data.Abilities[_sandstorm];
+        create.Invoke(null, new object[] { W, 0, storm, high });
+        create.Invoke(null, new object[] { W, 0, storm, low });
+        _views.Sync(W, 0.5f, Vector2.Zero, false);
+        if (!Check(_views.ShownZones == 2, $"seed {seed} cliff: {_views.ShownZones} discs, want 2")) { await EndMatch(); return; }
+        float[] discRadii = { 0.3f * storm.Radius, 0.65f * storm.Radius, storm.Radius - AbilityViews.ZoneRimWidth / 2f };
+        for (int k = 0; k < 2; k++)
+        {
+            int kk = k;
+            ZoneDisc d = _views.ZoneDiscAt(k);
+            (int bad, int n, float lo, float hi, string first) = OnGround((x, z) => _views.ZoneSurfaceAt(kk, x, z), d.Center, discRadii, AbilityViews.ZoneLift);
+            GD.Print($"seed {seed} cliff: storm {k} at {d.Center} (cliff at x {drop}, cell ({fx}, {fy}) level {hm.LevelAt(fx, fy)}): {n} points on ground {lo:0.0}-{hi:0.0} m, {bad} off it");
+            Check(bad == 0 && n > 150 && hi - lo >= MapConstants.LevelHeight - 0.01f,
+                $"seed {seed} cliff: storm {k} at {d.Center}: {bad} of {n} points not on the ground (ground {lo:0.00}-{hi:0.00} m), first {first}");
+        }
+        for (int k = 0; k < 2; k++)
+        {
+            int off = MeshOffGround(_views.ZoneNode(_views.ZoneDiscAt(k).Slot), out int verts, out string firstOff);
+            Check(off == 0 && verts >= 6, $"seed {seed} cliff: storm {k}'s mesh: {off} of {verts} vertices off their cell's ground, first {firstOff}");
+        }
+        _camera.SetFocus(drop + 1f, row);
+        await Frames();
+        await Shot($"ability-seed{seed}-cliff-storms");
+
+        // The targeting rings: a mage on the plateau, Telas Fire armed, the cursor on `high`.
+        int mageType = _data.FindUnit("malazan_cadre_mage");
+        _sim.Enqueue(Command.SpawnUnit(0, mageType, new System.Numerics.Vector2(drop - 3f, row - 2f)));
+        _sim.Tick();
+        _sim.Tick();
+        EntityHandle mage = default;
+        for (int i = 0; i < U.Capacity; i++) if (U.Alive[i] && U.TypeId[i] == mageType) mage = new EntityHandle(i, U.Generation[i]);
+        if (!Check(mage.Generation != 0, $"seed {seed} cliff: no mage")) { await EndMatch(); return; }
+        await Select(mage);
+        Check(_sel.BeginAbility(_telas), $"seed {seed} cliff: Telas Fire not armed");
+        Vector2 px = _camera.UnprojectPosition(new Vector3(high.X, TerrainHeight.At(hm, high.X, high.Y), high.Y));
+        _views.Sync(W, 0.5f, px, false);
+        if (Check(_views.TargetingShown && _views.RangeRing.Visible && _views.RangeCaster == mage.Index && System.Numerics.Vector2.Distance(_views.RadiusCenter, high) < 0.5f,
+            $"seed {seed} cliff rings: shown {_views.TargetingShown}, range {_views.RangeRing.Visible} round {_views.RangeCaster} (mage {mage.Index}), radius ring at {_views.RadiusCenter}, want {high}"))
+        {
+            Vector3 mageAt = UnitViews.GroundPoint(W, mage.Index, 0.5f);
+            (int bad, int n, float lo, float hi, string first) = OnGround((x, z) => _views.RingSurfaceAt(false, x, z), _views.RadiusCenter,
+                new[] { _views.ShownRadius - AbilityViews.RingWidth / 2f }, AbilityViews.Lift);
+            Check(bad == 0 && n > 40 && hi - lo >= MapConstants.LevelHeight - 0.01f, $"seed {seed} cliff: radius ring: {bad} of {n} points not on the ground ({lo:0.00}-{hi:0.00} m), first {first}");
+            (int rbad, int rn, float rlo, float rhi, string rfirst) = OnGround((x, z) => _views.RingSurfaceAt(true, x, z), new System.Numerics.Vector2(mageAt.X, mageAt.Z),
+                new[] { _views.ShownRange - AbilityViews.RingWidth / 2f }, AbilityViews.Lift);
+            Check(rbad == 0 && rn > 40 && rhi - rlo >= MapConstants.LevelHeight - 0.01f, $"seed {seed} cliff: range ring: {rbad} of {rn} points not on the ground ({rlo:0.00}-{rhi:0.00} m), first {rfirst}");
+            GD.Print($"seed {seed} cliff rings: radius {n} points ({lo:0.0}-{hi:0.0} m) {bad} off; range {rn} points ({rlo:0.0}-{rhi:0.0} m) {rbad} off");
+            foreach (GroundDisc ring in new[] { _views.RadiusRing, _views.RangeRing })
+            {
+                int off = MeshOffGround(ring, out int verts, out string firstOff);
+                Check(off == 0 && verts >= 6, $"seed {seed} cliff: {ring.Name}'s mesh: {off} of {verts} vertices off their cell's ground, first {firstOff}");
+            }
+        }
+        Input.WarpMouse(px);
+        await Shot($"ability-seed{seed}-cliff-rings");
+        _sel.CancelTargeting();
+        await EndMatch();
+    }
+
+    // Reads the disc's drawn mesh back from Godot: every vertex (node position + vertex) must lie on the top surface of the
+    // cell its triangle covers (the cell of the triangle's centroid) plus the disc's lift, within 0.05 m (in fact exact).
+    private int MeshOffGround(GroundDisc disc, out int verts, out string first)
+    {
+        verts = 0;
+        first = "";
+        if (disc.Mesh is not ImmediateMesh mesh || mesh.GetSurfaceCount() != 1) return 1;
+        Vector3[] v = mesh.SurfaceGetArrays(0)[(int)Mesh.ArrayType.Vertex].AsVector3Array();
+        verts = v.Length;
+        int off = 0;
+        const float cs = MapConstants.CellSize;
+        for (int t = 0; t + 2 < v.Length; t += 3)
+        {
+            Vector3 c = disc.Position + (v[t] + v[t + 1] + v[t + 2]) / 3f;
+            int cx = (int)MathF.Floor(c.X / cs), cy = (int)MathF.Floor(c.Z / cs);
+            for (int i = t; i < t + 3; i++)
+            {
+                Vector3 w = disc.Position + v[i];
+                float ground = TerrainHeight.InCell(W.Heightmap, cx, cy, w.X, w.Z) + disc.Lift;
+                if (!(Math.Abs(w.Y - ground) <= 0.05f) && off++ == 0) first = $"{w} on cell ({cx}, {cy}) at {ground:0.00}";
+            }
+        }
+        return off;
+    }
+
+    // Samples `surface` (the drawn height at a ground point, NaN where nothing is drawn) on circles of `radii` round `c`, 72
+    // points each, against the terrain + `lift`. A point within 1 cm of a cell edge is skipped (at a cliff both heights are
+    // the ground there, and At takes the larger cell's), as is one off the map. Returns the misses, the points, the ground's
+    // lowest and highest height among them, and the first miss.
+    private (int Bad, int Points, float Lo, float Hi, string First) OnGround(Func<float, float, float> surface, System.Numerics.Vector2 c, float[] radii, float lift)
+    {
+        const float cs = MapConstants.CellSize;
+        Heightmap hm = W.Heightmap;
+        int bad = 0, n = 0;
+        float lo = float.MaxValue, hi = float.MinValue;
+        string first = "";
+        foreach (float r in radii)
+            for (int a = 0; a < 72; a++)
+            {
+                float x = c.X + r * MathF.Cos(a * MathF.Tau / 72f), z = c.Y + r * MathF.Sin(a * MathF.Tau / 72f);
+                if (x < 0f || z < 0f || x >= hm.Width * cs || z >= hm.Height * cs) continue;
+                float ux = x / cs - MathF.Floor(x / cs), uz = z / cs - MathF.Floor(z / cs);
+                if (ux < 0.005f || ux > 0.995f || uz < 0.005f || uz > 0.995f) continue;
+                float ground = TerrainHeight.At(hm, x, z), drawn = surface(x, z);
+                n++;
+                lo = Math.Min(lo, ground);
+                hi = Math.Max(hi, ground);
+                if (!(Math.Abs(drawn - (ground + lift)) <= 0.05f) && bad++ == 0) first = $"({x:0.00}, {z:0.00}) drawn {drawn:0.00}, ground {ground:0.00} + {lift}";
+            }
+        return (bad, n, lo, hi, first);
+    }
+
     // M4-V6c: an enemy Priest's Sandstorm under the fog is alive in the store but never drawn until an own unit walking up
     // sees its rim; from then it is drawn exactly while a cell within its radius + 2 m is visible, in the owner's colour.
     private async Task EnemyStormRow(ulong seed)
@@ -1007,6 +1151,20 @@ public partial class AbilityViewTest : Node
         }
     }
 
+    // BUG-0431 (M4-VH3): an own zone's rim is far from every faction's colour (an enemy zone's rim), so a Whirlwind
+    // mirror's own and enemy storms read apart: some channel at least 0.4 apart (the marker colours' rule; the old deeper
+    // sand was 0.064 from the Whirlwind's #C8892E at most).
+    private void OwnRimColourRow()
+    {
+        foreach (FactionDef f in _data.Factions)
+        {
+            Color enemy = UnitViews.ColorFromRgb(f.PrimaryColor);
+            float gap = ChannelGap(AbilityViews.OwnZoneRimColor, enemy);
+            Check(gap >= 0.4f, $"own rim colour: {AbilityViews.OwnZoneRimColor} is only {gap:0.000} from {f.Key}'s {enemy}");
+            GD.Print($"own rim colour: {gap:0.00} from {f.Key}'s primary");
+        }
+    }
+
     private static GameData? _auraData;
 
     // The shipped data plus SelfAuraTests.AddTo's two test-only selfAura abilities on the Heavy Infantry (Requests 30: no shipped
@@ -1100,6 +1258,9 @@ public partial class AbilityViewTest : Node
             Check(_card.HoveredAbility == rally && _views.SelfRingShown && _views.RadiusRing.Visible && !_views.RangeRing.Visible && _views.ShownRadius == rallyDef.Radius
                 && _views.RangeCaster == lead.Index && Math.Abs(_views.RadiusRing.Position.X - leadAt.X) < 1e-3f && Math.Abs(_views.RadiusRing.Position.Z - leadAt.Z) < 1e-3f && !_sel.Targeting,
                 $"seed {seed} aura hover: hovered {_card.HoveredAbility}, ring {_views.SelfRingShown} at {_views.RadiusRing.Position} round {_views.RangeCaster} (lead {lead.Index} at {leadAt}), radius {_views.ShownRadius}, range ring {_views.RangeRing.Visible}, targeting {_sel.Targeting}");
+            (int hoverOff, int hoverPoints, _, _, string hoverFirst) = OnGround((x, z) => _views.RingSurfaceAt(false, x, z), _views.RadiusCenter,
+                new[] { _views.ShownRadius - AbilityViews.RingWidth / 2f }, AbilityViews.Lift);
+            Check(hoverOff == 0 && hoverPoints > 40, $"seed {seed} aura hover: {hoverOff} of {hoverPoints} ring points not on the ground, first {hoverFirst}");
             await Shot($"ability-seed{seed}-aura-hover");
 
             // 0 B a frame with the hover ring drawn (the card's hover read, the caster pick, the ring).

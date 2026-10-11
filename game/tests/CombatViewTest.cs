@@ -565,7 +565,7 @@ public partial class CombatViewTest : Node
         for (int f = 0; f < 10 && U.Count < 2 * PerSide; f++) await Frame();
         for (int i = 0; i < U.Capacity; i++)
             if (U.Alive[i]) _sim.Enqueue(Command.AttackMove(U.Owner[i], new EntityHandle(i, U.Generation[i]), U.Owner[i] == 0 ? goal0 : goal1));
-        int maxTicksPerFrame = 0, frames = 0;
+        int maxTicksPerFrame = 0, frames = 0, fillsBefore = UnitViews.MaxHpFills;
         var watch = System.Diagnostics.Stopwatch.StartNew();
         while (W.Losses[0] + W.Losses[1] < 15 && watch.Elapsed.TotalSeconds < 120)
         {
@@ -579,6 +579,11 @@ public partial class CombatViewTest : Node
         Check(deaths >= 15, $"8x: only {deaths} deaths in 120 s");
         Check(_combat.Markers.Added == deaths, $"8x: {deaths} deaths, {_combat.Markers.Added} markers (a death missed between frames?)");
         Check(maxTicksPerFrame > 1, $"8x: never more than {maxTicksPerFrame} tick a frame, the row proves nothing");
+        // BUG-0490 item 2: the bars and the first-sight flash share one per-slot max hp fill a frame (at most one; none on a
+        // frame the runner ran no tick, as the maximum moves only on a tick).
+        int fills = UnitViews.MaxHpFills - fillsBefore;
+        GD.Print($"8x: {fills} max hp fills over {frames} frames");
+        Check(fills > 0 && fills <= frames && ReferenceEquals(_combat.MaxHp, _units.MaxHp), $"8x: {fills} max hp fills over {frames} frames, want at most one a frame (shared array {ReferenceEquals(_combat.MaxHp, _units.MaxHp)})");
         await EndMatch();
     }
 

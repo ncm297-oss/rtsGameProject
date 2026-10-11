@@ -43,12 +43,14 @@ namespace Rts.Game.Tests;
 public partial class M4PlayableTest : Node
 {
     /// <summary>
-    /// Most sim ticks one seed may take (4 min 35 s of game time). Measured with step 9 (the enemy storm, about 276 ticks;
-    /// 2026-10-10, M4-V7b, 9 runs of both seeds headless, part of them beside a full <c>dotnet test</c>): seed 1 2,869-3,028,
-    /// seed 6 3,710-4,372. The 4,372 run's step 6 (the fight) took 1,360 ticks against the usual 700-790: the same long
-    /// fight as QA's 4,212-tick run before step 9 existed (BUG-0462 item 5; about 4,490 with it). So the measured margin
-    /// is at least 1,128 ticks (20 %), about 1,000 (18 %) on QA's outlier; a Telas Fire recast that waits out its 25 s
-    /// cooldown adds about 500, so the margin is what was measured, not a guarantee.
+    /// Most sim ticks one seed may take (4 min 35 s of game time). Measured with step 9 (the enemy storm, about 276 ticks):
+    /// the developer's 9 runs of both seeds (2026-10-10, M4-V7b), QA's 14 seed-runs (BUG-0490, beside a full
+    /// <c>dotnet test</c>) and the M4-VH3 scene loop (beside the other tracks' suites) together give seed 1 2,869-3,081 and
+    /// seed 6 3,692-4,493 ticks. The seed-6 tops (4,372 to 4,493) are runs whose step 6 (the fight) took 1,360-1,554 ticks
+    /// against the usual 650-790, the same long fight as QA's 4,212-tick run before step 9 existed (BUG-0462 item 5). So
+    /// the worst measured margin is 1,007 ticks (18 %); a
+    /// Telas Fire recast that waits out its 25 s cooldown adds about 500, so the margin is what was measured, not a
+    /// guarantee.
     /// </summary>
     public const int TickBudget = 5500;
 

@@ -4142,6 +4142,8 @@ and researched buttons).
   block `GoldHeight` tall (two slab tests). Both stand on the terrain at the footprint centre, as drawn; terrain occludes
   as before (ground met inside the node's own footprint doesn't hide it). The circles contain the 7- and 6-sided meshes
   (a facet's middle is at most 8 cm inside). A tree first gets one box test round its drawn shape. Allocation-free.
+  (BUG-0148 item 1, closed wontfix in M4-VH3: 0.7-1.7 % of rays through a sliver name the tree; an exact prism test is
+  left for the M6 art pass, which replaces these placeholder props.)
 - **Locked build-menu entries** (BUG-0126 item 1): `ui.json` `placement.requires` is "Locked" (was "Needs more", which
   read like money). While a B / V menu is open the card asks `World.CanPlace(player, type, BuildMenu.NoAnchor = -1)` per
   entry each frame: the sim checks the type, the faction and `requires` before any map rule (M3-6), so an off-map anchor
@@ -4204,7 +4206,10 @@ Match.tscn  (new node)
   `UnitViews.FillMaxHp(world, maxHp)` copies it per live slot (0 for a dead one; `ViewApi` never reads the `World`, a QA
   source guard), and `CombatViews` calls `UnitHpBars.Collect(shown, hp, maxHp, slots)` and `Shows(hp, maxHp[slot])`, so a
   Zealot with Dryjhna's Prophecy at 70 / 83 has a bar of 70 / 83 and one at 83 / 83 none. The form with each type's `hp`
-  stays for data-only callers.
+  stays for data-only callers. **Since M4-VH3 (BUG-0490 item 2)** the per-slot copy is one `SlotMaxHp` that `Match` hands
+  to both `UnitViews` (`MaxHp`) and `CombatViews` (`MaxHp`): `Refreshed(world)` fills it on the first read of a new tick
+  (or world) and returns the same array to every later read, so a frame fills it at most once (none on a frame with no
+  tick). `CombatViewTest`'s 8x row counts the fills: 417 over 419 frames (838 before, two a frame).
 - **Hit flash** (`UnitViews`, pure `ViewApi.HitFlash`): no sim event. Each `UnitViews.Sync` compares every slot's `Hp`
   and `Generation` with what the last call saw: the same unit with less hp is lit for `HitFlash.DefaultSeconds` (0.15 s of
   view time, `_Process`'s delta), and a later hit starts the time again, so a unit under repeated hits stays lit. A new
@@ -4672,7 +4677,9 @@ sim/Rts.Sim/ViewApi/AbilityCaster.cs   the caster pick and the button's cooldown
 - **Rings** (`AbilityViews`, each frame while armed): a ring of the ability's `radius` at `AbilityPoint(mouse)` and one of
   its `range` round the caster `PickCaster` would choose there (interpolated position), hidden when no one is ready or the
   cursor is off the map. Each is a flat torus whose outer radius is the def's value (band `RingWidth` 0.22 m), one mesh per
-  ability and ring, made the first time it is armed; a frame moves two nodes. Orange area, pale blue reach.
+  ability and ring, made the first time it is armed; a frame moves two nodes. Orange area, pale blue reach. (Since M4-VH3
+  each ring is a `GroundDisc` band on the terrain cells under it, so it lies on both levels of a cliff: see
+  "Implementation (M4-VH3)".)
 - **Casts** (`AbilityViews`, each frame): every unit the fog shows in `UnitState.Casting` gets a violet cast bar
   above its hp bar's place (`BarAbove` 0.25 m higher, the hp bar's zoom growth), filled to `Progress(CastTicks,
   def.CastTicks)`; every own unit with `CastAbility` set (walking in or standing) gets an orange ring of the ability's radius
@@ -4804,7 +4811,9 @@ game/tests/SceneExit.cs                the test scenes' shutdown path
   teardown, which crashed after the PASS line under load (about 6 % of `EconomyViewTest` runs).
 - **Last-seen resources (BUG-0281 item 1, BUG-0126 item 3).** `FogOfWar.Resources(world)` keeps a `SeenResources`: a copy
   of the resource store's `Alive` / `TypeId` / `Cell` that takes a slot's change only when a cell of the old or the new
-  node's footprint is visible to the local player (at once with `--no-fog`). The store is compared slot by slot only when
+  node's footprint is visible to the local player (at once with `--no-fog`). Since M4-VH3 (BUG-0400 item 3) a slot reused
+  by a new node elsewhere takes only the removal when just the old footprint is seen, and the new node once its own
+  footprint is (nodes spawn only at map setup today, so this is for later regrowth or spawned nodes). The store is compared slot by slot only when
   `NavGrid.Version` moves; the differing slots wait in a pending list checked each frame. `PropsView` relists from the copy
   on its `Version` (`PropLayout.Refresh` overload with a version key) and the minimap's resource layer redraws on it, so
   a tree felled in explored fog stays drawn (darkened) on both until it is seen, and a building's spawn, site or cancel no
@@ -4842,7 +4851,8 @@ Sandstorm's victims read as Blinded + Slowed. No sim change outside `ViewApi`.
 ```
 sim/Rts.Sim/ViewApi/ZoneDiscs.cs   which zones to draw for a player (pure, allocation-free); ZoneDisc.cs its record
 game/scripts/AbilityViews.cs       draws them, and the Blinded marker colour
-game/shaders/zone_disc.gdshader    the disc: a translucent fill and a more opaque rim band, per instance
+game/shaders/zone_disc.gdshader    the disc: a translucent fill and a more opaque rim band, per instance (replaced by
+                                   ground_disc.gdshader in M4-VH3)
 ```
 
 - **The rule** (`ZoneDiscs.Collect(zones, fog, player, fogOn, discs)`; the stores, not `World`, as every ViewApi read):
@@ -4866,7 +4876,10 @@ game/shaders/zone_disc.gdshader    the disc: a translucent fill and a more opaqu
   Each disc sits `ZoneLift` 0.1 m over the terrain at its centre (`TerrainHeight.At`, the resolve flash's rule: on a slope
   it may dip into the ground). Fill `ZoneFillColor` (a dusty ochre) at the disc's alpha; a rim band `ZoneRimWidth` 0.35 m
   wide, 2.2 x as opaque, in `OwnZoneRimColor` (deeper sand) for an own zone and in the owner's player colour (the faction
-  colour, `playerRgb` from `Match`) for another player's. Taste defaults until the M6 art pass.
+  colour, `playerRgb` from `Match`) for another player's. Taste defaults until the M6 art pass. **Since M4-VH3** a disc is
+  a `GroundDisc` on the terrain cells it covers (no longer a `MultiMesh` instance at the centre's height, which sank under a
+  plateau or floated over the low ground across a cliff, BUG-0430), and the own rim is a light teal (BUG-0431): see
+  "Implementation (M4-VH3)".
 - **Blinded marker.** `AbilityViews.BlindColor` (0.5, 0.06, 0.62), a dark violet, in the `StatusKind` switch beside
   Burning's flame and Slowed's deep blue; any other kind stays `OtherStatusColor`. Looked at in the windowed shots at
   zoom 30 on sand and on grass, three markers side by side on a Raider (`ability-seedN-blinded.png`).
@@ -5011,17 +5024,19 @@ HUD, as `M3PlayableTest` proved M3. Test code only (`game/tests/M4PlayableTest.t
   spot round it; the army is pulled back before the Sapper goes in (on seed 6 our attacking units, which stand as walls,
   shut the Sapper's way down a rise).
 - **Tick budget** 5,500 per seed (`M4PlayableTest.TickBudget`, 4 min 35 s of game time); runs headless and windowed.
-  Measured with step 9 (M4-V7b, 9 runs of both seeds headless, part of them beside a full `dotnet test`): seed 1
-  2,869-3,028, seed 6 3,710-4,372. The 4,372 run's step 6 took 1,360 ticks against the usual 700-790, the same long fight
-  as QA's 4,212-tick seed-6 run before step 9 existed (BUG-0462 item 5; about 4,490 with step 9). So the measured margin
-  is at least 1,128 ticks (20 %), and about 1,000 (18 %) on QA's outlier; a Telas Fire recast that waits out its 25 s
-  cooldown adds about 500 more, so the margin is what was measured, not a guarantee. (Before step 9: seed 1
+  Measured with step 9 (the developer's 9 runs of both seeds headless in M4-V7b, QA's 14 seed-runs in BUG-0490 and the
+  M4-VH3 scene loop, part of them beside a full `dotnet test` or the other tracks' suites): seed 1 2,869-3,081, seed 6
+  3,692-4,493. The seed-6 tops (4,372 to 4,493) are runs whose step 6 took 1,360-1,554 ticks against the usual 650-790,
+  the same long fight as QA's 4,212-tick seed-6 run before step 9 existed (BUG-0462 item 5). So the worst measured margin
+  is 1,007 ticks (18 %); a Telas Fire recast that
+  waits out its 25 s cooldown adds about 500 more, so the margin is what was measured, not a guarantee (M4-VH3,
+  BUG-0490 item 1). (Before step 9: seed 1
   2,560-2,903, seed 6 3,424-3,878 and QA's 4,212.) 45-52 s of wall time for both seeds headless. The commands land on whichever tick the frame clock reaches, so runs differ by a few hundred ticks. On
   any failure the replay so far is saved to Godot's user data folder (`m4playable-seed<N>-fail-tick<T>.replay`, or
   `-exception-`).
 - **Stills.** Windowed `-- --shots <dir>` saves `m4-seedN-first-contact.png`, `-storm.png`, `-telas-fire.png`,
   `-cusser-rubble.png`, `-frenzied-zealot.png` and (M4-V7b) `-enemy-storm.png` (looked at, seeds 1 and 6). No storm
-  crossed a cliff in these runs, so BUG-0430 did not show.
+  crossed a cliff in these runs, so BUG-0430 did not show (fixed in M4-VH3).
 - **Seen for the sim track** (not fixed here): a `UseAbility` whose walk-in ends short is dropped, and in this sandbox it
   happened to long walk-ins (a Priest on a rise 19.2 m from a low-ground point, range 18; a Sapper on a rise 22.9 m from
   a building below and once 31.5 m off on flat ground, range 6); and a Sapper that had wandered onto a rise at about
@@ -5058,7 +5073,81 @@ HUD, as `M3PlayableTest` proved M3. Test code only (`game/tests/M4PlayableTest.t
     failed on the base view scripts). `CombatViewTest`'s bar and flash oracles take `World.MaxHp` too. Windowed `--shots`
     adds `ability-seedN-summoned.png`.
 - **Not yet:** a lifetime bar or fade-out for summoned units, stealth visuals (M4-V8, after the sim's M4-5), the
-  minimap's zone dots, the rings across a cliff (BUG-0430 / BUG-0462 item 1).
+  minimap's zone dots. (The rings across a cliff, BUG-0430 / BUG-0462 item 1, landed in M4-VH3.)
+
+### Implementation (M4-VH3)
+
+End-of-M4 view hardening: zone discs and the ability rings lie on the terrain across a cliff, the own storm's rim has its
+own colour, one max-hp fill a frame, the sandbox's measured tick range, and smaller nits. No sim change outside `ViewApi`.
+
+```
+sim/Rts.Sim/ViewApi/GroundPatch.cs   the terrain cells under a disc or ring band, each its own top surface (pure); GroundQuad.cs its record
+game/scripts/GroundDisc.cs           a disc or ring drawn on those cells (ImmediateMesh, rebuilt only when it moves)
+game/shaders/ground_disc.gdshader    cuts the circle out per pixel: fill, rim band, clear inside a ring
+game/scripts/SlotMaxHp.cs            the per-slot maximum hp, filled once a tick, shared by UnitViews and CombatViews
+```
+
+- **Discs and rings on the ground (BUG-0430, BUG-0462 item 1).** A zone disc, the targeting radius ring, the range ring
+  and the no-target hover ring were flat meshes at the terrain height under their centre: across a 4 m cliff the part over
+  the higher ground was drawn under it (hidden) and the part over the lower ground floated 4 m up (drawn shifted at the
+  camera's pitch). Three ways were weighed: a Godot `Decal` projected down (it also paints the units and buildings standing
+  in the storm unless the terrain gets its own render layer, and decals need a texture per rim colour); a vertex shader
+  that samples a heightmap texture (a regular grid still stretches a sheet across each cliff between a plateau vertex and
+  a low one); and a mesh made of the terrain cells themselves, chosen. Every cell's drawn top is one plane (flat, or a
+  ramp's tilted plane, `TerrainHeight.CellCorners`, which the terrain mesh shares), so `GroundPatch.Collect(map, x, y,
+  outer, inner, quads)` lists the cells that overlap the disc (or a ring's band between `inner` and `outer`) with their
+  four corner heights, and `GroundDisc.Place(map, centre, radius, hole, lift)` writes one quad per cell at those heights +
+  the lift (0.1 m for a zone, 0.12 m for a ring) into an `ImmediateMesh`. Cells share no vertices, so a cliff leaves a
+  step in the disc, not a slanted sheet; the depth test stays on, so a cliff in front hides what is behind it as it hides
+  the ground. `ground_disc.gdshader` gets the ground offset over the radius as UV and cuts the circle per pixel: the fill
+  out to the rim, a rim band of `rim_share` of the radius (anti-aliased with `fwidth`), and for a ring a clear fill (the
+  cells inside its hole are not even in the mesh). Colours are shader parameters, written only when they change.
+- **Cost.** A mesh is rebuilt only when its centre, radius, hole or lift changes: a zone once, when it first shows (one
+  node per `ZoneStore` slot, 64, made in `Bind`; a node is hidden the frame its zone stops showing); the targeting rings on
+  the frames the cursor or the caster moves. A Sandstorm (6 m) covers 39-45 cells and a 16 m range ring's band 63-75,
+  by where the centre sits in its cell; a rebuild is two `ImmediateMesh` calls a vertex, six vertices a cell. Every
+  buffer is kept between frames (a ring's grows once per larger radius), so a steady frame allocates nothing: `AbilityViewTest`'s steady match (811 units, 72 mages armed, 8 zones)
+  measured 0 bytes over 300 frames.
+- **API.** `AbilityViews.RadiusRing` / `RangeRing` are `GroundDisc`s (`Position` the centre on the terrain + lift, as
+  before); `ZoneMesh` (the `MultiMesh`) is replaced by `ZoneNodes` (the node count, `ZoneStore.Capacity`),
+  `ZoneNodesVisible` and `ZoneNode(slot)`; `ZoneDiscPosition(k)` is the node's position (centre on the terrain + 0.1 m).
+  `ZoneSurfaceAt(k, x, z)` and `RingSurfaceAt(range, x, z)` give the drawn height at a ground point (NaN off the disc or
+  band), read from the quads the mesh was written from.
+- **Own storm rim (BUG-0431).** `OwnZoneRimColor` is a light teal (0.2, 0.8, 0.9): at least 0.4 apart in some channel from
+  every faction's primary colour (an enemy storm's rim; 0.72 from the Whirlwind's `#C8892E`, 0.57 from the Malazan grey).
+  The deeper sand it replaces was at most 0.064 from the Whirlwind gold, so a Whirlwind mirror's own and enemy storms read
+  alike. A taste default until the M6 team-colour pass.
+- **One max-hp fill a frame (BUG-0490 item 2).** `SlotMaxHp`, see "Implementation (M4-V1)".
+- **Measured tick range (BUG-0490 item 1).** `M4PlayableTest.TickBudget`'s comment and "Implementation (M4-V7)" give seed 1
+  2,869-3,081 and seed 6 3,692-4,493 (QA's 14 seed-runs and this task's scene loop included), a worst margin of 1,007
+  ticks (18 %).
+- **Nits.** BUG-0400 item 2: `CommandCardTest.RestartMatchCancel` starts two bare sims of one seed in turn under the same
+  `SelectionController` and cancels the same site (slot, generation, tick) in each: one Cancel each (with the guard's reset
+  removed, the second sent none). BUG-0400 item 3: `SeenResources` takes only the removal of a reused slot when just the old
+  footprint is seen (see "Implementation (M4-VH2)"). BUG-0126 item 5: `PropsMeasureTests` holds the minimap refresh after a
+  fell (dots + forced redraw) to the whole 0.5 ms refresh budget. BUG-0250 item 2: `TerrainHeight.Straddle` keeps its
+  radius term, now with its reason: with a flat 5 cm, QA's wall-aware walk found discs up to 0.26 m under the ramp ground
+  beside ramp feet on 4 seeds. Closed wontfix with a reason: BUG-0126 item 6 (the resource bar rebuilds its one text when a
+  total changes, the M2-H2 rule; allocation-free would need split labels, the M6 HUD pass), BUG-0148 item 1 (facet slivers,
+  the M6 props), BUG-0462 item 3 (two neighbours' marker rows touch at zoom 60: polish for the M6 art pass).
+- **Tests.** xUnit `ViewApi/GroundPatchTests`: on a two-level map (a straight cliff and a ramp) every point of a 6 m and a
+  3 m disc's rim lies on its quad within 0.05 m of `TerrainHeight.At`, the rim spanning both levels; on the two-level map
+  and generated seeds 1, 6, 11, 300 random discs and rings each: every quad corner is exactly its cell's surface (and within
+  0.05 m of `At` just inside the cell), no cell twice, every cell the disc or band overlaps listed and none wholly outside;
+  edge cases (off the map, NaN, a short output); 0 bytes; the hash twin (collecting under every live unit each tick of a
+  brawl, 2 seeds x 600 ticks, hash equal to a bare twin's). `SeenResourcesTests.AReusedSlot_SeeingOnlyTheOldFootprint_*`.
+  Headless `AbilityViewTest` adds per seed (1, 6) a cliff run (`--no-fog`): two own Sandstorms beside a straight cliff
+  (one 1 m onto the plateau, one 3 m off it on the low ground) and Telas Fire armed with the cursor 1 m from the drop
+  (radius ring) and a mage on the plateau (16 m range ring): 72 points on each of three circles per disc and on each ring's
+  band are drawn within 0.05 m of the terrain + lift, spanning both levels (failed on the flat drawing: 119 of 208 points
+  off on seed 1's plateau storm, 27 of 72 on the radius ring), and every vertex of each mesh, read back from Godot, lies on
+  its cell's surface; the existing targeting and hover rows check their rings the same way; the own-rim colour row (failed
+  at 0.064 on the old colour). `CombatViewTest`'s 8x row counts max-hp fills (failed at 838 over 419 frames). Windowed
+  stills in `build/shots/m4-vh3/` (looked at): `ability-seedN-cliff-storms.png`, `-cliff-rings.png`, `-storm.png` (teal
+  own rim) beside `-storm-enemy.png` (gold Whirlwind rim), `-aura-hover.png`, and QA's `qa-v6c-cliff-zoom30/50.png` (the
+  BUG-0430 repro: storm B's west part now lies on the plateau strip, storm A's arc on the higher plateau's top).
+- **Not yet:** the cast-point rings and the resolve flashes are still flat at their centre's height (BUG-0520); export
+  hygiene (see "Build and export").
 
 ## AI architecture
 
@@ -5329,3 +5418,5 @@ AiPlayer
     locate it from `OS.GetExecutablePath()`. Either way `.json` is a non-resource file, so the preset
     needs the include filter `data/*.json`. A smoke check runs the exported exe headless and looks
     for the `Rts.Sim <version>` banner.
+  - Not done in M4-VH3 (checked 2026-10-11): there is still no export preset, and the text-taking `DataLoader` overload is
+    sim-track work; both stay with the M6 export task.

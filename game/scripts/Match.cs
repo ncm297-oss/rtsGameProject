@@ -74,6 +74,7 @@ public partial class Match : Node3D
         buildings.Fog = fog;
         var combat = GetNode<CombatViews>("World3D/CombatViews");
         combat.Fog = fog;
+        combat.MaxHp = units.MaxHp; // one max-hp fill a frame for the bars and the hit flash (BUG-0490)
         combat.Bind(data, sim.World.Units.Capacity, playerRgb);
         combat.Runner = _runner;
         combat.Camera = camera;

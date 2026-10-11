@@ -63,10 +63,11 @@ public partial class UnitViews : Node3D
     /// <summary>The fog whose hide rule applies (M4-V4); null shows every live unit.</summary>
     public FogOfWar? Fog { get; set; }
 
+    /// <summary>Each slot's maximum hp this tick (World.MaxHp), for the hit flash's first-sight rule (M4-V2, M4-V7); made in <see cref="Bind"/> and shared with <see cref="CombatViews.MaxHp"/> by <c>Match</c>, so it is filled once a frame (BUG-0490).</summary>
+    public SlotMaxHp MaxHp { get; private set; } = new(0);
+
     private CapsuleMesh[] _meshes = Array.Empty<CapsuleMesh>();
     private float[] _halfHeight = Array.Empty<float>();
-    // Each slot's maximum hp this frame (World.MaxHp), for the hit flash's first-sight rule (M4-V2, M4-V7).
-    private int[] _slotMaxHp = Array.Empty<int>();
     private MeshInstance3D?[] _views = Array.Empty<MeshInstance3D?>();
     private int[] _viewType = Array.Empty<int>();
     private bool[] _shown = Array.Empty<bool>();
@@ -124,7 +125,7 @@ public partial class UnitViews : Node3D
             _halfHeight[t] = height / 2;
         }
 
-        _slotMaxHp = new int[unitCapacity];
+        MaxHp = new SlotMaxHp(unitCapacity);
         _views = new MeshInstance3D?[unitCapacity];
         _viewType = new int[unitCapacity];
         Array.Fill(_viewType, -1);
@@ -186,8 +187,7 @@ public partial class UnitViews : Node3D
     public void Sync(World world, float alpha, float delta = 0f)
     {
         UnitStore u = world.Units;
-        FillMaxHp(world, _slotMaxHp);
-        Flash.UpdateWithSlotMax(u.Alive, u.Generation, u.Hp, _slotMaxHp, delta);
+        Flash.UpdateWithSlotMax(u.Alive, u.Generation, u.Hp, MaxHp.Refreshed(world), delta);
         FogView? fog = Fog?.Refreshed(world);
         int n = Math.Min(u.Capacity, _views.Length);
         for (int i = 0; i < n; i++)
@@ -277,6 +277,9 @@ public partial class UnitViews : Node3D
         Material = new StandardMaterial3D { AlbedoColor = c, Roughness = 0.6f },
     };
 
+    /// <summary>Calls of <see cref="FillMaxHp"/> since the program started (a test counter: BUG-0490's one fill a frame).</summary>
+    public static int MaxHpFills { get; private set; }
+
     /// <summary>
     /// Writes each live slot's maximum hit points, <c>World.MaxHp(slot)</c> (the type's <c>hp</c> plus its owner's hp techs),
     /// into <paramref name="maxHp"/>, 0 for a dead slot (M4-V7, BUG-0450: the hp bar's and the first-sight flash's maximum).
@@ -284,6 +287,7 @@ public partial class UnitViews : Node3D
     /// </summary>
     public static void FillMaxHp(World world, Span<int> maxHp)
     {
+        MaxHpFills++;
         UnitStore u = world.Units;
         int n = Math.Min(u.Capacity, maxHp.Length);
         for (int i = 0; i < n; i++) maxHp[i] = u.Alive[i] ? world.MaxHp(i) : 0;

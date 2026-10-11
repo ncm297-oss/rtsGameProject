@@ -13,8 +13,9 @@ namespace Rts.Game;
 /// <para><b>Targeting.</b> While <see cref="SelectionController.TargetAbility"/> is set, the ground under the cursor
 /// (<see cref="SelectionController.AbilityPoint"/>) gets a ring of the ability's <c>radius</c> (where the effects would land)
 /// and the selected unit that would cast there (<see cref="SelectionController.PickCaster"/>: the nearest ready one) a ring of
-/// its <c>range</c>. Each ring is a flat torus whose outer radius is the def's value, one mesh per ability and ring made the
-/// first time it is armed; a frame only moves the two nodes. M4-V6d: a no-target (<see cref="AbilityKind.SelfAura"/>, and
+/// its <c>range</c>. Each ring is a <see cref="GroundDisc"/> band <see cref="RingWidth"/> wide whose outer radius is the def's
+/// value, drawn on the terrain cells under it (M4-VH3, BUG-0430 / BUG-0462 item 1: on both sides of a cliff); its mesh is
+/// rebuilt only when its centre moves. M4-V6d: a no-target (<see cref="AbilityKind.SelfAura"/>, and
 /// <see cref="AbilityKind.Summon"/> since M4-V7: <see cref="AbilityCaster.IsNoTarget"/>) ability is never armed (its button
 /// casts at once); while the cursor rests on its button the radius ring is drawn round the unit the press would cast with
 /// (<see cref="SelectionController.SelfCaster"/>) and no range ring; an ability of radius 0 (a summon) draws no ring.</para>
@@ -37,12 +38,14 @@ namespace Rts.Game;
 /// A cast start draws no flash.</para>
 /// <para><b>Zone discs</b> (M4-V6c). Every live zone the local player may see (<see cref="ZoneDiscs.Collect"/>: its own
 /// always, another player's only where a cell within its radius plus 2 m is visible; every zone with <c>--no-fog</c>) is a
-/// flat translucent sand-coloured disc of the zone's radius on the terrain at its centre (the flash's height rule), with a
-/// rim in sand for an own zone and in the owner's colour for an enemy's, fading over the zone's last second. One
-/// <see cref="MultiMesh"/> of <see cref="ZoneStore.Capacity"/> instances, written densely each frame, so a disc goes the
-/// frame its zone is freed or the rule stops showing it.</para>
-/// Views hold no gameplay state: everything is redrawn from the store and the selection each frame. Everything but the
-/// per-ability ring meshes is made in <see cref="Bind"/>, so a steady frame allocates nothing.
+/// translucent sand-coloured disc of the zone's radius lying on the terrain (M4-VH3: a <see cref="GroundDisc"/> on the cells
+/// it covers, so across a cliff it lies on the plateau and on the low ground, BUG-0430), with a rim in a light teal for an
+/// own zone (BUG-0431) and in the owner's colour for an enemy's, fading over the zone's last second. One node per
+/// <see cref="ZoneStore"/> slot, its mesh built once when its zone first shows; a node is hidden the frame its zone is freed
+/// or the rule stops showing it.</para>
+/// Views hold no gameplay state: everything is redrawn from the store and the selection each frame. Every node and pool is
+/// made in <see cref="_Ready"/> and <see cref="Bind"/> (a ring's quad buffer grows once per larger radius), so a steady frame
+/// allocates nothing.
 /// </remarks>
 public partial class AbilityViews : Node3D
 {
@@ -52,7 +55,7 @@ public partial class AbilityViews : Node3D
     /// <summary>Width of a targeting ring's band, and of a cast ring's band as a share of its radius, in meters.</summary>
     public const float RingWidth = 0.22f, CastRingShare = 0.08f;
 
-    /// <summary>Height of the rings above the ground at their centre (the target ring sits at 0.09), in meters.</summary>
+    /// <summary>Height of the rings above the ground under them (the target ring sits at 0.09), in meters.</summary>
     public const float Lift = 0.12f;
 
     /// <summary>The cast bar's length and thickness at zoom up to <see cref="CombatViews.BarFullZoom"/>, and its height over the hp bar's place, in meters.</summary>
@@ -67,8 +70,11 @@ public partial class AbilityViews : Node3D
     /// <summary>A resolve flash's opacity at the start of its life (it fades to 0).</summary>
     public const float FlashAlpha = 0.75f;
 
-    /// <summary>A zone disc's rim band (m) and its height above the ground at the zone's centre (m; just under the flashes' and rings' <see cref="Lift"/>, so a flash inside a storm draws on top).</summary>
+    /// <summary>A zone disc's rim band (m) and its height above the ground under it (m; just under the flashes' and rings' <see cref="Lift"/>, so a flash inside a storm draws on top).</summary>
     public const float ZoneRimWidth = 0.35f, ZoneLift = 0.1f;
+
+    /// <summary>A zone disc's rim is this many times as opaque as its fill (capped at 1), and fades with it.</summary>
+    public const float RimBoost = 2.2f;
 
     // UI tints until the M6 art pass: the area reads fire-orange, the reach pale blue, the bar violet (magic).
     private static readonly Color RadiusColor = new(1f, 0.55f, 0.1f);
@@ -96,8 +102,8 @@ public partial class AbilityViews : Node3D
     /// <summary>A zone disc's fill (its alpha is the disc's, <see cref="ZoneDiscs.Alpha"/>): sand and dust.</summary>
     public static readonly Color ZoneFillColor = new(0.6f, 0.45f, 0.26f);
 
-    /// <summary>An own zone's rim: a deeper sand.</summary>
-    public static readonly Color OwnZoneRimColor = new(0.72f, 0.5f, 0.22f);
+    /// <summary>An own zone's rim: a light teal, at least 0.4 apart in some channel from every faction's colour (an enemy zone's rim), so a mirror match's own and enemy storms read apart (BUG-0431; was a deeper sand within 0.064 of the Whirlwind's gold). A taste default until the M6 team-colour pass.</summary>
+    public static readonly Color OwnZoneRimColor = new(0.2f, 0.8f, 0.9f);
 
     /// <summary>An enemy zone's rim when its owner has no colour (no player colours bound): red.</summary>
     public static readonly Color EnemyZoneRimColor = new(0.85f, 0.15f, 0.1f);
@@ -110,8 +116,8 @@ public partial class AbilityViews : Node3D
     private SimRunner? _runner;
     private SelectionController? _sel;
     private GameData _data = null!;
-    private MeshInstance3D _range = null!, _radius = null!;
-    private TorusMesh?[] _rangeMesh = Array.Empty<TorusMesh?>(), _radiusMesh = Array.Empty<TorusMesh?>();
+    private GroundDisc _range = null!, _radius = null!;
+    private float _shownRadius, _shownRange;
     private MultiMesh _barBack = null!, _barFill = null!, _circles = null!;
     private float[] _bodyTop = Array.Empty<float>();
     private int[] _barSlot = Array.Empty<int>(), _circleSlot = Array.Empty<int>();
@@ -123,7 +129,8 @@ public partial class AbilityViews : Node3D
     private Color[] _statusColor = Array.Empty<Color>();
     private Transform3D[] _flashTransform = Array.Empty<Transform3D>();
     private int[] _removed = Array.Empty<int>();
-    private MultiMesh _zones = null!;
+    private GroundDisc[] _zones = Array.Empty<GroundDisc>();
+    private bool[] _zoneDrawn = Array.Empty<bool>();
     private ZoneDisc[] _discs = Array.Empty<ZoneDisc>();
     private Vector3[] _discAt = Array.Empty<Vector3>();
     private Color[] _discFill = Array.Empty<Color>(), _discRim = Array.Empty<Color>(), _playerColor = Array.Empty<Color>();
@@ -144,10 +151,10 @@ public partial class AbilityViews : Node3D
     public int ShownAbility { get; private set; } = -1;
 
     /// <summary>The radius ring's drawn outer radius (m): the def's <c>radius</c>.</summary>
-    public float ShownRadius => _radius.Mesh is TorusMesh t ? t.OuterRadius : 0f;
+    public float ShownRadius => _shownRadius;
 
     /// <summary>The range ring's drawn outer radius (m): the def's <c>range</c>.</summary>
-    public float ShownRange => _range.Mesh is TorusMesh t ? t.OuterRadius : 0f;
+    public float ShownRange => _shownRange;
 
     /// <summary>The radius ring's centre (sim x, y in meters) as last drawn.</summary>
     public System.Numerics.Vector2 RadiusCenter { get; private set; }
@@ -156,10 +163,10 @@ public partial class AbilityViews : Node3D
     public int RangeCaster { get; private set; } = -1;
 
     /// <summary>The range ring node.</summary>
-    public MeshInstance3D RangeRing => _range;
+    public GroundDisc RangeRing => _range;
 
     /// <summary>The radius ring node.</summary>
-    public MeshInstance3D RadiusRing => _radius;
+    public GroundDisc RadiusRing => _radius;
 
     /// <summary>Cast bars drawn this frame.</summary>
     public int ShownBars { get; private set; }
@@ -206,8 +213,22 @@ public partial class AbilityViews : Node3D
     /// <inheritdoc cref="MarkerMesh"/>
     public MultiMesh FlashMesh => _flashes;
 
-    /// <summary>The zone disc multimesh (<see cref="ZoneStore.Capacity"/> instances; the first <see cref="ShownZones"/> drawn).</summary>
-    public MultiMesh ZoneMesh => _zones;
+    /// <summary>Zone disc nodes: one per <see cref="ZoneStore"/> slot (<see cref="ZoneStore.Capacity"/>), made in <see cref="Bind"/>.</summary>
+    public int ZoneNodes => _zones.Length;
+
+    /// <summary>Zone disc nodes visible now (equal to <see cref="ShownZones"/> after a <see cref="Sync"/>).</summary>
+    public int ZoneNodesVisible
+    {
+        get
+        {
+            int n = 0;
+            foreach (GroundDisc d in _zones) if (d.Visible) n++;
+            return n;
+        }
+    }
+
+    /// <summary>The node drawing zone slot <paramref name="slot"/>'s disc.</summary>
+    public GroundDisc ZoneNode(int slot) => _zones[slot];
 
     /// <summary>Zone discs drawn this frame.</summary>
     public int ShownZones { get; private set; }
@@ -223,6 +244,12 @@ public partial class AbilityViews : Node3D
 
     /// <summary>Zone disc <paramref name="k"/>'s rim colour as drawn (alpha: the rim band's share of the radius).</summary>
     public Color ZoneDiscRim(int k) => _discRim[k];
+
+    /// <summary>The drawn height of zone disc <paramref name="k"/>'s surface at ground point (x, z), NaN where it draws nothing (<see cref="GroundDisc.SurfaceAt"/>).</summary>
+    public float ZoneSurfaceAt(int k, float x, float z) => _zones[_discs[k].Slot].SurfaceAt(x, z);
+
+    /// <summary>The drawn height of the radius ring (or with <paramref name="range"/> the range ring) at ground point (x, z), NaN off its band.</summary>
+    public float RingSurfaceAt(bool range, float x, float z) => (range ? _range : _radius).SurfaceAt(x, z);
 
     public override void _Ready()
     {
@@ -243,8 +270,6 @@ public partial class AbilityViews : Node3D
         _sel = selection;
         _bodyTop = new float[data.Units.Length];
         for (int t = 0; t < _bodyTop.Length; t++) _bodyTop[t] = UnitViews.BodyHeight(data.Units[t].Radius);
-        _rangeMesh = new TorusMesh?[data.Abilities.Length];
-        _radiusMesh = new TorusMesh?[data.Abilities.Length];
         _barSlot = new int[unitCapacity];
         _circleSlot = new int[unitCapacity];
         _barFillShown = new float[unitCapacity];
@@ -294,8 +319,15 @@ public partial class AbilityViews : Node3D
         _discAt = new Vector3[zones];
         _discFill = new Color[zones];
         _discRim = new Color[zones];
-        var zoneMat = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/zone_disc.gdshader") };
-        _zones = Multi("ZoneDiscs", new PlaneMesh { Size = new Vector2(2f, 2f), Material = zoneMat }, zones, colors: true, custom: true);
+        foreach (GroundDisc old in _zones) old.QueueFree();
+        _zones = new GroundDisc[zones];
+        _zoneDrawn = new bool[zones];
+        for (int z = 0; z < zones; z++)
+        {
+            _zones[z] = new GroundDisc { Name = $"ZoneDisc{z}" };
+            AddChild(_zones[z]);
+        }
+        ShownZones = 0;
     }
 
     public override void _ExitTree()
@@ -344,7 +376,7 @@ public partial class AbilityViews : Node3D
         AbilityDef def = _data.Abilities[ability];
         ShowMeshes(ability, def);
         RadiusCenter = point;
-        _radius.Position = new Vector3(point.X, TerrainHeight.At(world.Heightmap, point.X, point.Y) + Lift, point.Y);
+        PlaceRing(_radius, world, point, def.Radius);
         if (!_radius.Visible) _radius.Visible = true;
         int caster = _sel.PickCaster(ability, point, queued, out _);
         RangeCaster = caster;
@@ -353,7 +385,8 @@ public partial class AbilityViews : Node3D
             if (_range.Visible) _range.Visible = false;
             return;
         }
-        _range.Position = UnitViews.GroundPoint(world, caster, alpha) + new Vector3(0f, Lift, 0f);
+        Vector3 casterAt = UnitViews.GroundPoint(world, caster, alpha);
+        PlaceRing(_range, world, new System.Numerics.Vector2(casterAt.X, casterAt.Z), def.Range);
         if (!_range.Visible) _range.Visible = true;
     }
 
@@ -361,9 +394,9 @@ public partial class AbilityViews : Node3D
     {
         if (ShownAbility == ability) return;
         ShownAbility = ability;
-        _radius.Mesh = _radiusMesh[ability] ??= RingMesh(def.Radius, RadiusColor);
-        // A no-target ability has no range (0): it never draws a range ring, so it gets no mesh.
-        _range.Mesh = def.Range > 0f ? (_rangeMesh[ability] ??= RingMesh(def.Range, RangeColor)) : null;
+        _shownRadius = def.Radius;
+        // A no-target ability has no range (0): it never draws a range ring.
+        _shownRange = def.Range > 0f ? def.Range : 0f;
     }
 
     // M4-V6d: while the cursor rests on a no-target (selfAura or summon) ability's button, its radius ring is drawn round the
@@ -383,7 +416,7 @@ public partial class AbilityViews : Node3D
         ShowMeshes(ability, _data.Abilities[ability]);
         Vector3 at = UnitViews.GroundPoint(world, caster, alpha);
         RadiusCenter = new System.Numerics.Vector2(at.X, at.Z);
-        _radius.Position = at + new Vector3(0f, Lift, 0f);
+        PlaceRing(_radius, world, RadiusCenter, _shownRadius);
         if (!_radius.Visible) _radius.Visible = true;
         if (_range.Visible) _range.Visible = false;
         RangeCaster = caster;
@@ -510,26 +543,28 @@ public partial class AbilityViews : Node3D
         int player = fog?.Player ?? SelectionController.LocalPlayer;
         int n = ZoneDiscs.Collect(world.Zones, world.Fog, player, fog != null && fog.Enabled, _discs);
         ReadOnlySpan<int> owner = world.Zones.Owner;
+        // One node per zone slot, so a zone's mesh is built once (its centre and radius never change) however the list shifts.
+        Array.Clear(_zoneDrawn);
         for (int k = 0; k < n; k++)
         {
             ZoneDisc d = _discs[k];
-            var at = new Vector3(d.Center.X, TerrainHeight.At(world.Heightmap, d.Center.X, d.Center.Y) + ZoneLift, d.Center.Y);
             int who = owner[d.Slot];
             Color rim = d.Own ? OwnZoneRimColor : (uint)who < (uint)_playerColor.Length ? _playerColor[who] : EnemyZoneRimColor;
             var fill = new Color(ZoneFillColor.R, ZoneFillColor.G, ZoneFillColor.B, d.Alpha);
             rim.A = Math.Min(0.5f, ZoneRimWidth / Math.Max(0.01f, d.Radius));
-            _zones.SetInstanceTransform(k, new Transform3D(Basis.FromScale(new Vector3(d.Radius, 1f, d.Radius)), at));
-            _zones.SetInstanceColor(k, fill);
-            _zones.SetInstanceCustomData(k, rim);
-            _discAt[k] = at;
+            GroundDisc node = _zones[d.Slot];
+            node.Place(world.Heightmap, d.Center, d.Radius, 0f, ZoneLift);
+            // The rim is RimBoost x as opaque as the fill, and fades with it.
+            node.SetColors(fill, new Color(rim.R, rim.G, rim.B, Math.Min(1f, d.Alpha * RimBoost)), rim.A);
+            if (!node.Visible) node.Visible = true;
+            _zoneDrawn[d.Slot] = true;
+            _discAt[k] = node.Position;
             _discFill[k] = fill;
             _discRim[k] = rim;
         }
-        if (n != ShownZones)
-        {
-            _zones.VisibleInstanceCount = n;
-            ShownZones = n;
-        }
+        for (int z = 0; z < _zones.Length; z++)
+            if (!_zoneDrawn[z] && _zones[z].Visible) _zones[z].Visible = false;
+        ShownZones = n;
     }
 
     private void HideFlash(int slot)
@@ -538,27 +573,28 @@ public partial class AbilityViews : Node3D
         _flashTransform[slot] = Hidden;
     }
 
-    // A flat ring whose outer edge is `radius` m from its centre.
-    private static TorusMesh RingMesh(float radius, Color c) => new()
+    // A ring on the ground whose outer edge is `radius` m from its centre, RingWidth wide (BUG-0430: on the terrain on both
+    // sides of a cliff, as the zone discs).
+    private void PlaceRing(GroundDisc ring, World world, System.Numerics.Vector2 center, float radius)
     {
-        InnerRadius = Math.Max(0.01f, radius - RingWidth),
-        OuterRadius = radius,
-        Rings = Math.Clamp((int)(radius * 8f), 32, 160),
-        RingSegments = 4,
-        Material = Flat(c),
-    };
+        ring.Place(world.Heightmap, center, radius, radius - RingWidth, Lift);
+        ring.SetColors(_ringFill[ring == _range ? 1 : 0], _ringRim[ring == _range ? 1 : 0], radius > 0f ? Math.Min(1f, RingWidth / radius) : 1f);
+    }
 
-    private MeshInstance3D Ring(string name)
+    private GroundDisc Ring(string name)
     {
-        // Flattened in Y like the selection ring, so it reads as painted on the ground.
-        var node = new MeshInstance3D { Name = name, Scale = new Vector3(1f, 0.3f, 1f), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, Visible = false };
+        var node = new GroundDisc { Name = name };
         AddChild(node);
         return node;
     }
 
-    private MultiMesh Multi(string name, Mesh mesh, int count, bool colors = false, bool custom = false)
+    // The rings' colours: [0] the radius ring, [1] the range ring; a clear fill and an opaque rim band.
+    private static readonly Color[] _ringRim = { RadiusColor, RangeColor };
+    private static readonly Color[] _ringFill = { new(RadiusColor.R, RadiusColor.G, RadiusColor.B, 0f), new(RangeColor.R, RangeColor.G, RangeColor.B, 0f) };
+
+    private MultiMesh Multi(string name, Mesh mesh, int count, bool colors = false)
     {
-        var mm = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, UseColors = colors, UseCustomData = custom, Mesh = mesh, InstanceCount = count, VisibleInstanceCount = 0 };
+        var mm = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, UseColors = colors, Mesh = mesh, InstanceCount = count, VisibleInstanceCount = 0 };
         AddChild(new MultiMeshInstance3D { Name = name, Multimesh = mm, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
         return mm;
     }

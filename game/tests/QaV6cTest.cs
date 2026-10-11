@@ -206,9 +206,9 @@ public partial class QaV6cTest : Node
                 if (Drawn(exploredSlot)) leaked++;
             }
             if (!Drawn(ownSlot)) ownMissing++;
-            if (_views.ZoneMesh.VisibleInstanceCount != _views.ShownZones) meshMismatch++;
+            if (_views.ZoneNodesVisible != _views.ShownZones) meshMismatch++;
         }
-        Check(_views.ZoneMesh.InstanceCount == W.Zones.Capacity, $"leaks: zone mesh {_views.ZoneMesh.InstanceCount} instances, store {W.Zones.Capacity}");
+        Check(_views.ZoneNodes == W.Zones.Capacity, $"leaks: zone nodes {_views.ZoneNodes}, store {W.Zones.Capacity}");
         GD.Print($"leaks seed {seed}: unexplored enemy storm slot {enemySlot}, explored-only slot {exploredSlot}, own slot {ownSlot}: explored-only dark {exploredDark} frames, leaked {leaked} frames, own missing {ownMissing}, mesh mismatch {meshMismatch}");
         Check(exploredDark >= 100, $"leaks seed {seed}: the explored-only storm was dark only {exploredDark} of 120 frames (staging failed)");
         Check(leaked == 0 && ownMissing == 0 && meshMismatch == 0, $"leaks seed {seed}: leaked {leaked}, own missing {ownMissing}, mesh mismatch {meshMismatch} of 120 frames");
@@ -246,13 +246,13 @@ public partial class QaV6cTest : Node
             }
             if (enemyWasAlive && !W.Zones.Alive[e]) { enemyWasAlive = false; if (Drawn(e)) lateEnemy = ticks; }
             if (ownWasAlive && !W.Zones.Alive[o]) { ownWasAlive = false; if (Drawn(o)) lateOwn = ticks; }
-            if (_views.ZoneMesh.VisibleInstanceCount != _views.ShownZones || _views.ShownZones > W.Zones.Count)
-                Check(false, $"freed: tick {ticks} mesh {_views.ZoneMesh.VisibleInstanceCount}, shown {_views.ShownZones}, live {W.Zones.Count}");
+            if (_views.ZoneNodesVisible != _views.ShownZones || _views.ShownZones > W.Zones.Count)
+                Check(false, $"freed: tick {ticks} mesh {_views.ZoneNodesVisible}, shown {_views.ShownZones}, live {W.Zones.Count}");
         }
         bool offUpdate = !Rts.Sim.Vision.VisionSystem.IsUpdateTick(_sim.TickNumber - 1);
         GD.Print($"freed seed {seed}: both storms over after {ticks} ticks (expiry {(offUpdate ? "off" : "on")} an update tick); enemy drawn {enemyDrawnFrames} frames; late frames enemy {lateEnemy}, own {lateOwn}; fade first {firstFade}, last {lastFrame}; shown now {_views.ShownZones}");
         Check(enemyDrawnFrames > 200, $"freed: the seen enemy storm drawn only {enemyDrawnFrames} frames");
-        Check(lateEnemy < 0 && lateOwn < 0 && _views.ShownZones == 0 && _views.ZoneMesh.VisibleInstanceCount == 0, $"freed: drawn after its slot freed (enemy {lateEnemy}, own {lateOwn}), {_views.ShownZones} left");
+        Check(lateEnemy < 0 && lateOwn < 0 && _views.ShownZones == 0 && _views.ZoneNodesVisible == 0, $"freed: drawn after its slot freed (enemy {lateEnemy}, own {lateOwn}), {_views.ShownZones} left");
         Check(Math.Abs(firstFade - 0.35f * 19f / 20f) < 1e-6f && lastFrame == 0f, $"fade: first {firstFade}, last {lastFrame}");
         await EndMatch();
     }

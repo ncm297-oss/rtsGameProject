@@ -70,8 +70,10 @@ public static class TerrainHeight
     }
 
     // The largest step a disc of `radius` lies over as flat ground: StraddleStep plus twice the steepest slope's rise (one
-    // level per cell) over 1/512 of the radius, the wall test of the 512-step wall-aware walk QA measures MaxUnder against
-    // (MaxUnderEdgeWalkQaTests), so the two agree on which side-wall feet are walls. At most 0.06 m for the widest disc.
+    // level per cell) over 1/512 of the radius, at most 1.6 cm more for the widest disc. It is the wall test of QA's 512-step
+    // wall-aware walk (MaxUnderEdgeWalkQaTests), kept so the two agree on which side-wall feet are walls: with a flat 5 cm
+    // instead (tried in M4-VH3, BUG-0250 item 2) that walk found discs up to 0.26 m under the ramp ground it counts beside
+    // ramp feet, on 4 seeds.
     private static float Straddle(float radius) =>
         StraddleStep + MathF.Min(radius, 2f) / 512f * (MapConstants.LevelHeight / MapConstants.CellSize) * 2f;
 

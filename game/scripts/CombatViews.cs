@@ -77,12 +77,15 @@ public partial class CombatViews : Node3D
     /// <summary>The fog (M4-V4): its hide rule drops hidden units' bars, and its materials draw the markers; set before <see cref="Bind"/>. Null draws everything.</summary>
     public FogOfWar? Fog { get; set; }
 
+    /// <summary>The per-slot maximum hp the bars read (BUG-0490: <c>Match</c> sets <see cref="UnitViews.MaxHp"/> before <see cref="Bind"/>, so one fill a frame serves both); null at <see cref="Bind"/> makes an own one.</summary>
+    public SlotMaxHp? MaxHp { get; set; }
+
     private SimRunner? _runner;
     private MultiMesh _back = null!, _fill = null!, _corpses = null!, _rims = null!, _rubble = null!;
     private GameData _data = null!;
     private Color[] _corpseColors = Array.Empty<Color>(), _rimColors = Array.Empty<Color>();
     private float[] _bodyTop = Array.Empty<float>();
-    private int[] _hurt = Array.Empty<int>(), _maxHp = Array.Empty<int>();
+    private int[] _hurt = Array.Empty<int>();
     private float[] _shownFill = Array.Empty<float>();
     private Color[] _shownColor = Array.Empty<Color>();
     // The transform written for each marker instance (the dummy renderer of headless runs keeps no instance data to read back).
@@ -150,7 +153,7 @@ public partial class CombatViews : Node3D
             _rimColors[p] = new Color(c.R * CorpseRimShade, c.G * CorpseRimShade, c.B * CorpseRimShade);
         }
         _hurt = new int[unitCapacity];
-        _maxHp = new int[unitCapacity];
+        MaxHp ??= new SlotMaxHp(unitCapacity);
         _shownFill = new float[unitCapacity];
         _shownColor = new Color[unitCapacity];
         _back = Multi("HpBack", new BoxMesh { Size = Vector3.One, Material = Flat(BarBackColor, vertexColor: false) }, unitCapacity, colors: false);
@@ -229,14 +232,14 @@ public partial class CombatViews : Node3D
         UnitStore u = world.Units;
         FogView? fog = Fog?.Refreshed(world);
         // The hurt units the screen shows: through the fog's shown list, so a hidden unit gets no bar.
-        UnitViews.FillMaxHp(world, _maxHp);
-        int n = UnitHpBars.Collect(fog != null ? fog.UnitShown : u.Alive, u.Hp, _maxHp, _hurt);
+        int[] maxHp = MaxHp!.Refreshed(world);
+        int n = UnitHpBars.Collect(fog != null ? fog.UnitShown : u.Alive, u.Hp, maxHp, _hurt);
         float len = BarLength * _barScale, thick = BarThickness * _barScale;
         for (int k = 0; k < n; k++)
         {
             int i = _hurt[k];
             int type = u.TypeId[i];
-            UnitHpBars.Shows(u.Hp[i], _maxHp[i], out float fill);
+            UnitHpBars.Shows(u.Hp[i], maxHp[i], out float fill);
             _shownFill[k] = fill;
             Vector3 top = UnitViews.GroundPoint(world, i, alpha) + new Vector3(0f, _bodyTop[type] + BarGap * _barScale, 0f);
             _back.SetInstanceTransform(k, new Transform3D(Basis.FromScale(new Vector3(len, thick * 0.8f, thick * 0.8f)), top));

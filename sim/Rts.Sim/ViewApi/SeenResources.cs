@@ -99,11 +99,18 @@ public sealed class SeenResources
             int s = _pending[k];
             if (Differs(s, alive, typeId, cell))
             {
-                // Either footprint in sight (the remembered node's or the store's new one) shows the change.
-                bool seen = !fogEnabled
-                    || _alive[s] && Sees(fog, player, gridWidth, _type[s], _cell[s])
-                    || alive[s] && Sees(fog, player, gridWidth, typeId[s], cell[s]);
-                if (!seen) continue;
+                // The remembered node goes when its footprint is in sight; the store's new node comes only when its own
+                // footprint is (BUG-0400 item 3: a slot reused elsewhere must not show a node the player has not seen).
+                bool seeOld = _alive[s] && Sees(fog, player, gridWidth, _type[s], _cell[s]);
+                bool seeNew = alive[s] && Sees(fog, player, gridWidth, typeId[s], cell[s]);
+                if (fogEnabled && !seeOld && !seeNew) continue;
+                if (fogEnabled && alive[s] && !seeNew)
+                {
+                    // Only the old footprint is seen: take the removal; the slot waits for its new node to be seen.
+                    _alive[s] = false;
+                    changed = true;
+                    continue;
+                }
                 Copy(s, alive, typeId, cell);
                 changed = true;
             }

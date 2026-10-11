@@ -112,4 +112,35 @@ public class SeenResourcesTests
         Assert.Equal(0, changes);
         Assert.Throws<ArgumentOutOfRangeException>(() => new SeenResources(w.Data.Resources, -1));
     }
+
+    // BUG-0400 item 3 (M4-VH3): a slot felled out of sight and reused by a new node elsewhere, also out of sight. Seeing the
+    // old footprint shows the removal only (the new node has not been seen); the new node appears once its own footprint is.
+    [Fact]
+    public void AReusedSlot_SeeingOnlyTheOldFootprint_TakesTheRemovalButNotTheUnseenNewNode()
+    {
+        (Simulation sim, _, EntityHandle far, _) = Stage();
+        World w = sim.World;
+        var seen = new SeenResources(w.Data.Resources, w.Resources.Capacity);
+        Update(seen, w);
+        w.Resources.Take(far, 50); // felled out of sight
+        EntityHandle again = ResourceMaps.Spawn(w, ResourceMaps.Tree, 20, 40, 50); // the slot reused, out of sight too
+        Assert.Equal(far.Index, again.Index);
+        Assert.False(w.Fog.IsVisible(0, 40 * 48 + 20));
+        Assert.False(Update(seen, w));
+        Assert.True(seen.Alive[far.Index] && seen.Cell[far.Index] == 40 * 48 + 40);
+
+        Spotter(sim, 0, w.NavGrid.CellCenter(40, 41)); // the old stump in sight, the new tree not
+        Assert.True(w.Fog.IsVisible(0, 40 * 48 + 40) && !w.Fog.IsVisible(0, 40 * 48 + 20));
+        Assert.True(Update(seen, w));
+        Assert.False(seen.Alive[far.Index], $"the copy took the unseen new tree at cell {seen.Cell[far.Index]}");
+        Assert.Equal(1, seen.PendingCount);
+        int version = seen.Version;
+        Assert.False(Update(seen, w)); // steady: nothing more to show
+        Assert.Equal(version, seen.Version);
+
+        Spotter(sim, 0, w.NavGrid.CellCenter(20, 41)); // now the new tree is seen
+        Assert.True(Update(seen, w));
+        Assert.True(seen.Alive[again.Index] && seen.Cell[again.Index] == 40 * 48 + 20);
+        Assert.Equal(0, seen.PendingCount);
+    }
 }

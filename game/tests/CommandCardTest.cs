@@ -94,7 +94,43 @@ public partial class CommandCardTest : Node
         await Bug0122ReasonText();
         await LockedTypeGhost();
         await IdleAllocation();
+        RestartMatchCancel();
         await EndMatch();
+    }
+
+    // BUG-0400 item 2, the regression row for BUG-0250 item 3: the double-Cancel guard (one Cancel per site per tick) belongs
+    // to its match. Two bare Simulations of one seed started in turn under the same SelectionController (a "restart match"),
+    // the same Billet site (slot and generation) cancelled on the same tick number in each: the second match's first press
+    // still sends its Cancel. Runs last: it replaces the match's sim.
+    private void RestartMatchCancel()
+    {
+        var runner = _match.GetNode<SimRunner>("SimRunner");
+        int laborer = _data.FindUnit("malazan_laborer"), billet = _data.FindBuilding("malazan_billet");
+        var sent = new int[2];
+        var sites = new (int Slot, int Generation, int Tick)[2];
+        for (int run = 0; run < 2; run++)
+        {
+            runner.Start(_data); // the same seed, no bases: both runs reach the same state
+            _sim = runner.Simulation!;
+            int centre = Rts.Sim.Pathfinding.FlowField.NearestPassable(G, G.Height / 2 * G.Width + G.Width / 2);
+            System.Numerics.Vector2 c = G.CellCenter(centre % G.Width, centre / G.Width);
+            _sim.Enqueue(Command.SpawnUnit(0, laborer, c));
+            Tick(2);
+            List<EntityHandle> workers = Workers();
+            int anchor = GreenAnchor(billet, c, exclude: null);
+            if (!Check(workers.Count == 1 && anchor >= 0, $"restart run {run}: {workers.Count} workers, anchor {anchor}")) return;
+            _sim.Enqueue(Command.Build(0, workers[0], billet, PlacementGhost.AnchorPoint(G, anchor)));
+            Tick(2);
+            int site = B.SlotAt(anchor % G.Width, anchor / G.Width);
+            if (!Check(site >= 0 && B.UnderConstruction[site] && _sel.SelectBuilding(site), $"restart run {run}: no site to select at {anchor} (slot {site})")) return;
+            int start = _sim.PendingCommandCount;
+            _sel.CancelSelectedSite();
+            sent[run] = _sim.PendingCommandCount - start;
+            sites[run] = (site, B.Generation[site], _sim.TickNumber);
+        }
+        GD.Print($"restart: site {sites[0]} then {sites[1]}, Cancels sent {sent[0]} then {sent[1]}");
+        Check(sites[0] == sites[1], $"restart: the two matches' sites differ: {sites[0]} / {sites[1]} (the row proves nothing)");
+        Check(sent[0] == 1 && sent[1] == 1, $"restart: Cancels sent {sent[0]} then {sent[1]}: the second match's first press was swallowed by the first's guard");
     }
 
     // ui.json: every key the card and ghost need is present and non-empty; a missing key fails loudly with its name.
