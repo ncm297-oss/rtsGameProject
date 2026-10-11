@@ -38,6 +38,7 @@ public partial class Sfx : Node
     {
         new[] { new Note(1320f, 70f) },                    // Select: one short high blip
         new[] { new Note(660f, 60f), new Note(990f, 60f) }, // Command: a rising two-note confirm
+        new[] { new Note(392f, 80f), new Note(262f, 110f) }, // Refused: a low falling two-note "no" (M5-V1)
     };
 
     private readonly AudioStreamWav[] _clips = new AudioStreamWav[Table.Length];

@@ -2335,8 +2335,8 @@ over time came in M4-4b-1 (below).
   hemmed in by its own army at a ramp waits and casts rather than losing the click after 1 s. A holder doesn't count
   (it may never move), nor does an Idle unit (it is shoved, or pushed after `PushAfterStuckTicks`). A cast lost without
   a new order (the walk stopped short, or something took the caster off `Casting`) records an `AbilityEvent` with
-  `Dropped` true (`Resolved` false, the cast point, the ability); a new order's cancel records nothing. The view ignores
-  it for now (an M5 / M6 HUD item). `Abilities/CastWalkInTests` (the sandbox replays' layouts).
+  `Dropped` true (`Resolved` false, the cast point, the ability); a new order's cancel records nothing. The view shows it
+  as the lost-cast cue since M5-V1 (see "Implementation (M5-V1)"). `Abilities/CastWalkInTests` (the sandbox replays' layouts).
 - **Casting.** `UnitState.Casting` (6): the caster stands planted like an attacker (never shoved, a hard wall, not pushed
   out by a placement, and it counts in the way of its owner's placement), scans nothing, isn't retaliating, and its shift
   queue waits. The cast lasts `castTime` ticks counting the tick it starts (0.8 s = 16 ticks: started in tick T's phase 1,
@@ -3661,10 +3661,11 @@ Match
 ```
 
 - **Reads nothing from the sim.** `Sfx` has no `Rts.Sim` reference and no `_Process`; callers
-  decide that an event happened and call `Sfx.Play(SfxEvent)`. Today the only caller is
-  `SelectionController`. Tone synthesis stays in `game/scripts/` (it uses `Math.Sin`, which the
+  decide that an event happened and call `Sfx.Play(SfxEvent)`. The callers are
+  `SelectionController` and (M5-V1, the lost-cast sound) `AbilityViews`. Tone synthesis stays in `game/scripts/` (it uses `Math.Sin`, which the
   architecture scan forbids in `Rts.Sim`).
-- **Events and clips:** `SfxEvent` (`Select`, `Command`) indexes a table of notes played back to
+- **Events and clips:** `SfxEvent` (`Select`, `Command`, and since M5-V1 `Refused`, played by `AbilityViews` for a lost
+  cast: 392 Hz for 80 ms then 262 Hz for 110 ms, a low falling "no") indexes a table of notes played back to
   back; `_Ready` turns each row into an `AudioStreamWav` (mono, 16-bit PCM, 44.1 kHz) once.
   `Select` is one 1,320 Hz note of 70 ms; `Command` is 660 Hz then 990 Hz, 60 ms each (120 ms).
   Each note is a sine at amplitude 0.8 shaped by a cubic attack (6 ms), an exponential decay (30 ms)
@@ -5199,7 +5200,65 @@ game/scripts/SlotMaxHp.cs            the per-slot maximum hp, filled once a tick
   own rim) beside `-storm-enemy.png` (gold Whirlwind rim), `-aura-hover.png`, and QA's `qa-v6c-cliff-zoom30/50.png` (the
   BUG-0430 repro: storm B's west part now lies on the plateau strip, storm A's arc on the higher plateau's top).
 - **Not yet:** the cast-point rings and the resolve flashes are still flat at their centre's height (BUG-0520); export
-  hygiene (see "Build and export").
+  hygiene (see "Build and export"). Both done in M5-V1.
+
+### Implementation (M5-V1)
+
+The lost-cast cue, the last two flat ring types on the ground across a cliff, a nit, and the export preset. No sim change
+outside `ViewApi`.
+
+```
+sim/Rts.Sim/ViewApi/LostCastCues.cs   the own dropped casts to show: a ring pool like ResolveFlashes (pure)
+game/scripts/GroundDiscPool.cs        GroundDisc nodes keyed by a caster / flash / cue slot, grown only past the high mark
+game/export_presets.cfg               "Windows Desktop": game/tests/ left out, data/*.json in
+```
+
+- **The lost-cast cue (Requests 34).** M4-H3's `AbilityEvent` with `Dropped` true (a cast lost without a new order: the
+  walk-in stuck for its 3 s patience, or the caster taken off `Casting`) was ignored by the view, so a spell the player
+  ordered could vanish silently. `LostCastCues.Collect(events, tick, player)` adds one cue per such event whose `Owner` is the
+  local player, once per tick (read from `SimRunner.Ticked` and from the frame loop, as the resolve flashes are). A start,
+  a resolve, an enemy's drop and a cast the player cancelled with a new order (the sim records no event for it) add
+  nothing. Each cue lasts `LostCastCues.LifetimeTicks` (10 ticks, 0.5 s) from the first frame that draws it, so a drop
+  shows even when frames lag. `AbilityViews` draws it as a red `GroundDisc` under the caster (its body radius + 0.9 m,
+  fill 0.55 and rim fading to 0, 0.14 m over the ground, following the caster) and the words of `ui.json` **`hud.cast_lost`**
+  ("Cast lost", `HudText.CastLost`, a view key added under the brief's named exception) in a billboard `Label3D` over its
+  cast bar's place, sized with the zoom like the placement refusal's text; the frame that first sees new cues plays
+  `SfxEvent.Refused` once. It shows whatever is selected (the HUD may be on another unit). The cast bar and the cast-point
+  ring end on their own: the sim cleared the cast. A cue whose caster died draws nothing and expires on time. Without the
+  HUD (`--no-hud`) or `ui.json` there are no words; the disc and the sound stay. Red and the sound are taste defaults until
+  the M6 art and audio pass. The brief named "the existing order-refused sound": there was none (`SfxEvent` had `Select`
+  and `Command` only), so `Refused` is new; nothing else plays it yet.
+- **Cast-point rings and resolve flashes on the ground (BUG-0520).** Both were the last flat meshes at their centre's
+  height (a `MultiMesh` torus and cylinder). Each is now a `GroundDisc` (see "Implementation (M4-VH3)") from a
+  `GroundDiscPool`: a cast ring is keyed by its caster's unit slot and keeps its node while the cast lasts, so its mesh is
+  rebuilt only when the cast point changes (a band `CastRingShare` of the radius wide, 0.12 m up); a flash is keyed by
+  its `ResolveFlashes` slot and meshed once at the ability's full radius; it grows from half to full size through a new
+  shader parameter (`ground_disc.gdshader` `scale`, `GroundDisc.SetScale` / `DrawnShare`: the circle is cut at that share of
+  the meshed radius), so growing never rebuilds. A radius-0 ability (a summon) draws no ring and no flash disc. A pool
+  starts with 16 nodes (cues 4) and doubles only when a frame needs more than ever before (up to one per key); nodes
+  freed in a frame go back on a stack whose top is the most recently used, so a frame never touches a cold node (and its
+  first-use quad buffer) unless it exceeds the old high mark. API: `CastRing(k)`, `CastRingSurfaceAt(k, x, z)`,
+  `CastRingPool`, `FlashNode(slot)`, `FlashSurfaceAt(slot, x, z)`, `FlashPool`; `FlashTransform(slot)` keeps its meaning
+  (drawn radius and centre, a zero basis when hidden); `FlashMesh` is gone. Cost: a 3 m Telas Fire ring or flash covers
+  about 12-20 cells, one rebuild when it appears.
+- **BUG-0521 item 1.** `GroundDisc.Place` clamps the hole before comparing it with the stored one, so a ring whose band is
+  wider than its radius (a negative hole, radius under 0.22 m: no shipped ability) no longer rebuilds every frame.
+- **Tests.** xUnit `ViewApi/LostCastCuesTests`: a mage ringed by eight holding enemy Raiders drops its walk-in after the 3 s
+  patience: exactly one cue for its owner (the caster, point and ability), none for the other player, a second collect of
+  the tick adds none; a walk-in stopped by a new order and a resolved cast add none; the cue's age, expiry only once drawn
+  and the ring's replacement; 0 bytes over 1,000 ticks of collect, draw and expire; the hash twin (collecting every tick,
+  2 seeds x 300 ticks with drops, equal to a bare run). Headless `AbilityViewTest`, per seed (1, 6): the same ring on the
+  real map through the player's path, another unit selected: one drop on the 62nd tick of the order, exactly one cue, one
+  `Refused` sound, the disc on the caster and the words over it on each of 10 ticks, then nothing, the cast ring gone
+  with the cast; the same walk-in stopped with S after 1 s: no drop, no cue, no sound over 100 ticks; then the hash twin.
+  The cliff run adds the plateau mage's Telas Fire 1 m from the drop: the cast ring's 72 band points and the flash's
+  points (on its first frame at 0.56 of its radius, then grown) all within 0.05 m of the terrain + lift on both levels,
+  every vertex on its cell's surface, no rebuild while the cast point stays or the flash grows (a flat drawing at the
+  centre's height misses 27 of 72 ring points and 50 of 216 flash points on seed 1); a 0.1 m ring placed five times
+  rebuilds once (5 before the fix). The steady match adds two rounds of 12 mages casting at once (12-13 rings, then
+  flashes): 0 bytes over the second round's 120 frames, no new pool node. Windowed stills in `build/shots/m5-v1/`
+  (looked at): `ability-seedN-cast-lost.png`, `-cliff-cast-ring.png`, `-cliff-flash.png`.
+- **Export preset.** See "Build and export".
 
 ## AI architecture
 
@@ -5454,13 +5513,17 @@ AiPlayer
 
 ## Build and export
 
-- Godot export preset "Windows Desktop" (to be committed in `game/export_presets.cfg`; Godot 4.3+ keeps
-  credentials out of it). Not in the repo yet (checked 2026-10-08, M4-VH1): it lands with the export work in M6.
+- Godot export preset "Windows Desktop" in `game/export_presets.cfg` (M5-V1; Godot 4.3+ keeps credentials out of it):
+  all resources, include filter `data/*.json` (non-resource files the `.pck`-safe load will read), exclude filter `tests/*`,
+  x86_64, the `.pck` beside the exe, export path `../build/RtsGame/RtsGame.exe`. Only the options that matter are written;
+  Godot fills the rest with its defaults. Checked without export templates (none are installed on this machine) by a
+  pack-only export: `& $env:GODOT --headless --path game --export-pack "Windows Desktop" <out>.pck` stores 67 files, none
+  under `res://tests/` and all 17 data JSON files (with the exclude filter removed it stores 218, 102 of them tests).
 - Export templates for 4.7.x .NET must be installed once per machine (SETUP.md).
 - `tools/export.ps1` (planned, not written yet): builds the solution in Release, runs the tests, exports
   `build/RtsGame/RtsGame.exe`, and zips it as `build/RtsGame-<version>.zip`.
 - **M6 notes (from the M2 hardening, M2-H2):**
-  - **Leave `game/tests/` out of the release.** The test and screenshot scenes (and their scripts)
+  - **Leave `game/tests/` out of the release.** Done in the preset (M5-V1, above). The test and screenshot scenes (and their scripts)
     are dev tools; some start the game binary as a child process (`OS.Execute`). Exclude them in the
     preset (resources filter `tests/*`) and check the exported `.pck` holds no `tests/` path. (M4-VH2
     count: 39 test scenes and 5 screenshot scenes, all ending through `SceneExit.Quit`, which only test scenes call. Their C# still compiles into `RtsGame.dll`, which the resources filter does not
@@ -5476,4 +5539,6 @@ AiPlayer
     needs the include filter `data/*.json`. A smoke check runs the exported exe headless and looks
     for the `Rts.Sim <version>` banner.
   - Not done in M4-VH3 (checked 2026-10-11): there is still no export preset, and the text-taking `DataLoader` overload is
-    sim-track work; both stay with the M6 export task.
+    sim-track work; both stay with the M6 export task. M5-V1 added the preset; the `.pck`-safe load still waits on the
+    overload (Requests 33), so an exported game can't load its data yet, and `tools/export.ps1` and its exported-exe smoke
+    check stay with M6.

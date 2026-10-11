@@ -8,7 +8,7 @@ using Rts.Sim.ViewApi;
 
 namespace Rts.Game;
 
-/// <summary>The ability views (M4-V6a, M4-V6b, M4-V6c, M4-V6d): the targeting rings while an ability is armed, the casts on the map, the status markers over units, the resolve flashes and the zone discs.</summary>
+/// <summary>The ability views (M4-V6a, M4-V6b, M4-V6c, M4-V6d, M5-V1): the targeting rings while an ability is armed, the casts on the map, the status markers over units, the resolve flashes, the zone discs and the lost-cast cues.</summary>
 /// <remarks>
 /// <para><b>Targeting.</b> While <see cref="SelectionController.TargetAbility"/> is set, the ground under the cursor
 /// (<see cref="SelectionController.AbilityPoint"/>) gets a ring of the ability's <c>radius</c> (where the effects would land)
@@ -22,8 +22,10 @@ namespace Rts.Game;
 /// <para><b>Casts.</b> Every unit the screen shows (the fog's shown list, M4-V4) standing in <see cref="UnitState.Casting"/>
 /// gets a cast bar over its hp bar's place: the share of the def's <c>castTime</c> stood (<see cref="AbilityCaster.Progress"/>
 /// of <c>UnitStore.CastTicks</c>). Every own unit with a cast in hand (<c>CastAbility</c> set: walking into range or standing)
-/// gets a ring of the ability's radius on its <c>CastPoint</c>, so the player sees where the walking mage will cast. Bars and
-/// rings are three <see cref="MultiMesh"/>es with one instance per unit slot, written densely each frame. M4-V6b (BUG-0342):
+/// gets a ring of the ability's radius on its <c>CastPoint</c>, so the player sees where the walking mage will cast. The bars
+/// are two <see cref="MultiMesh"/>es with one instance per unit slot, written densely each frame; each cast-point ring is a
+/// <see cref="GroundDisc"/> band from a <see cref="GroundDiscPool"/> keyed by the caster's slot (M5-V1, BUG-0520: on the
+/// terrain on both sides of a cliff), rebuilt only when its cast point changes. M4-V6b (BUG-0342):
 /// the bar is thicker, its back a dim violet rather than black and its fill never shorter than it is thick, so it reads as a
 /// bar from the cast's first tick.</para>
 /// <para><b>Statuses</b> (M4-V6b). Every unit the screen shows gets one small marker per active status
@@ -32,10 +34,17 @@ namespace Rts.Game;
 /// sized for every slot's <see cref="StatusStore.PerUnit"/> entries, written densely each frame.</para>
 /// <para><b>Resolve flashes</b> (M4-V6b). Every resolved cast in <c>World.AbilityEvents</c> (read from
 /// <see cref="SimRunner.Ticked"/>, so a frame of several ticks misses none, and from the frame loop for scenes that tick the
-/// sim themselves) adds a <see cref="ResolveFlashes"/> entry: a flat disc on the ground at the cast point that grows to the
+/// sim themselves) adds a <see cref="ResolveFlashes"/> entry: a disc on the ground at the cast point that grows to the
 /// ability's <c>radius</c> and fades over <see cref="ResolveFlashes.LifetimeTicks"/> (0.5 s) from its first frame, drawn
 /// only when the point's cell was visible on that frame (<see cref="FogView.ShowsPoint"/>, decided once: M4-VH2, BUG-0371).
-/// A cast start draws no flash.</para>
+/// A cast start draws no flash. M5-V1 (BUG-0520): each drawn flash is a pooled <see cref="GroundDisc"/> meshed once at the
+/// full radius on the terrain cells under it; it grows through <see cref="GroundDisc.SetScale"/>, not a rebuild.</para>
+/// <para><b>Lost casts</b> (M5-V1). Every own cast the sim drops without a new order (an <see cref="AbilityEvent"/> with
+/// <c>Dropped</c>: a walk-in stuck for 3 s, or the caster taken off its cast) adds a <see cref="LostCastCues"/> entry: a red
+/// disc on the ground under the caster and the <c>ui.json</c> <c>hud.cast_lost</c> words over it, fading over
+/// <see cref="LostCastCues.LifetimeTicks"/> (0.5 s), and one <see cref="SfxEvent.Refused"/> sound, whatever is selected. The
+/// cast bar and cast-point ring end on their own (the sim cleared the cast). A cast the player cancels with a new order
+/// records no event and gets no cue.</para>
 /// <para><b>Zone discs</b> (M4-V6c). Every live zone the local player may see (<see cref="ZoneDiscs.Collect"/>: its own
 /// always, another player's only where a cell within its radius plus 2 m is visible; every zone with <c>--no-fog</c>) is a
 /// translucent sand-coloured disc of the zone's radius lying on the terrain (M4-VH3: a <see cref="GroundDisc"/> on the cells
@@ -44,8 +53,8 @@ namespace Rts.Game;
 /// <see cref="ZoneStore"/> slot, its mesh built once when its zone first shows; a node is hidden the frame its zone is freed
 /// or the rule stops showing it.</para>
 /// Views hold no gameplay state: everything is redrawn from the store and the selection each frame. Every node and pool is
-/// made in <see cref="_Ready"/> and <see cref="Bind"/> (a ring's quad buffer grows once per larger radius), so a steady frame
-/// allocates nothing.
+/// made in <see cref="_Ready"/> and <see cref="Bind"/> (a ring's quad buffer grows once per larger radius; a disc pool grows
+/// only past its high mark), so a steady frame allocates nothing.
 /// </remarks>
 public partial class AbilityViews : Node3D
 {
@@ -80,6 +89,7 @@ public partial class AbilityViews : Node3D
     private static readonly Color RadiusColor = new(1f, 0.55f, 0.1f);
     private static readonly Color RangeColor = new(0.6f, 0.8f, 1f);
     private static readonly Color CastRingColor = new(1f, 0.4f, 0.05f);
+    private static readonly Color CastRingFill = new(1f, 0.4f, 0.05f, 0f);
     // BUG-0342: a black back read as an empty dash; a dim violet back reads as the bar's empty part.
     private static readonly Color BarBackColor = new(0.28f, 0.2f, 0.38f);
     private static readonly Color BarFillColor = new(0.85f, 0.55f, 1f);
@@ -111,6 +121,24 @@ public partial class AbilityViews : Node3D
     /// <summary>The resolve flash's colour (its alpha fades).</summary>
     public static readonly Color FlashColor = new(1f, 0.78f, 0.35f);
 
+    /// <summary>A resolve flash's rim band, as a share of its drawn radius, and how many times as opaque as the fill it is (a slightly stronger edge).</summary>
+    public const float FlashRimShare = 0.12f, FlashRimBoost = 1.3f;
+
+    /// <summary>The lost-cast cue's red (M5-V1; its alpha fades). A taste default until the M6 art pass.</summary>
+    public static readonly Color CueColor = new(0.95f, 0.08f, 0.06f);
+
+    /// <summary>The lost-cast cue's words' colour: a light red that reads over the ground (the placement refusal's tint).</summary>
+    public static readonly Color CueTextColor = new(1f, 0.62f, 0.58f);
+
+    /// <summary>A lost-cast cue's disc reaches this far past the caster's body (m), its fill opacity at the start, its rim band's share of its radius, and its height over the ground (m; over the rings and flashes).</summary>
+    public const float CueMargin = 0.9f, CueFillAlpha = 0.55f, CueRimShare = 0.25f, CueLift = 0.14f;
+
+    /// <summary>The lost-cast cue's words sit this far over the caster's cast bar's place (m, grown with the zoom as the bars are).</summary>
+    public const float CueTextAbove = 1.1f;
+
+    /// <summary>Disc nodes each pool makes up front (cast rings, flashes, cues); a pool doubles past it only when a frame needs more.</summary>
+    public const int CastRingNodes = 16, FlashNodes = 16, CueNodes = 4;
+
     private static readonly Transform3D Hidden = new(new Basis(Vector3.Zero, Vector3.Zero, Vector3.Zero), Vector3.Zero);
 
     private SimRunner? _runner;
@@ -118,12 +146,18 @@ public partial class AbilityViews : Node3D
     private GameData _data = null!;
     private GroundDisc _range = null!, _radius = null!;
     private float _shownRadius, _shownRange;
-    private MultiMesh _barBack = null!, _barFill = null!, _circles = null!;
+    private MultiMesh _barBack = null!, _barFill = null!;
+    private GroundDiscPool? _castRings, _flashDiscs, _cueDiscs;
+    private Label3D[] _cueLabels = Array.Empty<Label3D>();
+    private int[] _cueSlot = Array.Empty<int>(), _cueRemoved = Array.Empty<int>();
+    private bool[] _cueShown = Array.Empty<bool>();
+    private long _cuesSounded;
+    private string _castLostText = "";
     private float[] _bodyTop = Array.Empty<float>();
     private int[] _barSlot = Array.Empty<int>(), _circleSlot = Array.Empty<int>();
     private float[] _barFillShown = Array.Empty<float>(), _barFillLength = Array.Empty<float>();
     private float _barScale = 1f;
-    private MultiMesh _markers = null!, _flashes = null!;
+    private MultiMesh _markers = null!;
     private StatusMark[] _marks = Array.Empty<StatusMark>();
     private Vector3[] _markAt = Array.Empty<Vector3>();
     private Color[] _statusColor = Array.Empty<Color>();
@@ -186,6 +220,15 @@ public partial class AbilityViews : Node3D
     /// <summary>The caster slot of cast-point ring <paramref name="k"/>.</summary>
     public int CircleSlot(int k) => _circleSlot[k];
 
+    /// <summary>The node drawing cast-point ring <paramref name="k"/> (M5-V1: a <see cref="GroundDisc"/> band, BUG-0520).</summary>
+    public GroundDisc CastRing(int k) => _castRings!.NodeOf(_circleSlot[k])!;
+
+    /// <summary>The drawn height of cast-point ring <paramref name="k"/> at ground point (x, z), NaN off its band (<see cref="GroundDisc.SurfaceAt"/>).</summary>
+    public float CastRingSurfaceAt(int k, float x, float z) => CastRing(k).SurfaceAt(x, z);
+
+    /// <summary>The cast-point rings' node pool.</summary>
+    public GroundDiscPool CastRingPool => _castRings!;
+
     /// <summary>Status markers drawn this frame.</summary>
     public int ShownMarkers { get; private set; }
 
@@ -201,17 +244,55 @@ public partial class AbilityViews : Node3D
     /// <summary>The resolve flashes' pool.</summary>
     public ResolveFlashes Flashes { get; private set; } = null!;
 
-    /// <summary>The transform written to flash instance <paramref name="slot"/> (a zero basis while unused or hidden by the fog).</summary>
+    /// <summary>Flash slot <paramref name="slot"/> as drawn: a basis scaled by its drawn radius at its node's centre (on the terrain + <see cref="Lift"/>), or a zero basis while unused or hidden by the fog.</summary>
     public Transform3D FlashTransform(int slot) => _flashTransform[slot];
+
+    /// <summary>The node drawing flash slot <paramref name="slot"/> (M5-V1, BUG-0520), or null when it isn't drawn.</summary>
+    public GroundDisc? FlashNode(int slot) => _flashDiscs?.NodeOf(slot);
+
+    /// <summary>The drawn height of flash slot <paramref name="slot"/> at ground point (x, z), NaN where it draws nothing.</summary>
+    public float FlashSurfaceAt(int slot, float x, float z) => FlashNode(slot)?.SurfaceAt(x, z) ?? float.NaN;
+
+    /// <summary>The resolve flashes' node pool.</summary>
+    public GroundDiscPool FlashPool => _flashDiscs!;
+
+    /// <summary>The lost-cast cues' pool (M5-V1).</summary>
+    public LostCastCues LostCasts { get; private set; } = null!;
+
+    /// <summary>Lost-cast cues drawn this frame.</summary>
+    public int ShownCues { get; private set; }
+
+    /// <summary>The cue slot of drawn cue <paramref name="k"/>.</summary>
+    public int CueSlot(int k) => _cueSlot[k];
+
+    /// <summary>The disc of cue slot <paramref name="slot"/>, or null when it isn't drawn.</summary>
+    public GroundDisc? CueNode(int slot) => _cueDiscs?.NodeOf(slot);
+
+    /// <summary>The words over cue slot <paramref name="slot"/>.</summary>
+    public Label3D CueLabel(int slot) => _cueLabels[slot];
+
+    /// <summary>The lost-cast cues' disc pool.</summary>
+    public GroundDiscPool CuePool => _cueDiscs!;
+
+    /// <summary>Where the lost-cast sound goes (<see cref="SfxEvent.Refused"/>); null plays none.</summary>
+    public Sfx? Sound { get; set; }
+
+    /// <summary>The words over a lost cast's caster (<c>ui.json</c> <c>hud.cast_lost</c>); empty shows none (no <c>ui.json</c>, or no HUD).</summary>
+    public string CastLostText
+    {
+        get => _castLostText;
+        set
+        {
+            _castLostText = value ?? "";
+            foreach (Label3D l in _cueLabels) l.Text = _castLostText;
+        }
+    }
 
     /// <summary>Flashes drawn (not hidden) by the last frame.</summary>
     public int ShownFlashes { get; private set; }
 
-    /// <summary>The marker and flash multimeshes.</summary>
+    /// <summary>The marker multimesh.</summary>
     public MultiMesh MarkerMesh => _markers;
-
-    /// <inheritdoc cref="MarkerMesh"/>
-    public MultiMesh FlashMesh => _flashes;
 
     /// <summary>Zone disc nodes: one per <see cref="ZoneStore"/> slot (<see cref="ZoneStore.Capacity"/>), made in <see cref="Bind"/>.</summary>
     public int ZoneNodes => _zones.Length;
@@ -276,8 +357,8 @@ public partial class AbilityViews : Node3D
         _barFillLength = new float[unitCapacity];
         _barBack = Multi("CastBack", new BoxMesh { Size = Vector3.One, Material = Flat(BarBackColor) }, unitCapacity);
         _barFill = Multi("CastFill", new BoxMesh { Size = Vector3.One, Material = Flat(BarFillColor) }, unitCapacity);
-        var unitRing = new TorusMesh { InnerRadius = 1f - CastRingShare, OuterRadius = 1f, Rings = 48, RingSegments = 4, Material = Flat(CastRingColor) };
-        _circles = Multi("CastRings", unitRing, unitCapacity);
+        _castRings?.Free();
+        _castRings = new GroundDiscPool(this, "CastRing", unitCapacity, CastRingNodes);
 
         // Marker colours follow the status's kind (data), so a new status of a known kind needs no code.
         _statusColor = new Color[data.Statuses.Length];
@@ -299,18 +380,29 @@ public partial class AbilityViews : Node3D
         Flashes = new ResolveFlashes(flashCapacity);
         _removed = new int[flashCapacity];
         _flashTransform = new Transform3D[flashCapacity];
-        var flashMat = new StandardMaterial3D
+        Array.Fill(_flashTransform, Hidden);
+        _flashDiscs?.Free();
+        _flashDiscs = new GroundDiscPool(this, "Flash", flashCapacity, FlashNodes);
+
+        LostCasts = new LostCastCues();
+        _cuesSounded = 0;
+        _cueSlot = new int[LostCasts.Capacity];
+        _cueRemoved = new int[LostCasts.Capacity];
+        _cueShown = new bool[LostCasts.Capacity];
+        _cueDiscs?.Free();
+        _cueDiscs = new GroundDiscPool(this, "LostCast", LostCasts.Capacity, CueNodes);
+        foreach (Label3D old in _cueLabels) old.QueueFree();
+        _cueLabels = new Label3D[LostCasts.Capacity];
+        for (int c = 0; c < _cueLabels.Length; c++)
         {
-            VertexColorUseAsAlbedo = true, VertexColorIsSrgb = true, AlbedoColor = Colors.White,
-            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
-        };
-        _flashes = Multi("ResolveFlashes", new CylinderMesh { TopRadius = 1f, BottomRadius = 1f, Height = 1f, RadialSegments = 32, Rings = 1, Material = flashMat }, flashCapacity, colors: true);
-        _flashes.VisibleInstanceCount = -1;
-        for (int i = 0; i < flashCapacity; i++)
-        {
-            _flashes.SetInstanceTransform(i, Hidden);
-            _flashTransform[i] = Hidden;
+            _cueLabels[c] = new Label3D
+            {
+                Name = $"LostCastText{c}", Billboard = BaseMaterial3D.BillboardModeEnum.Enabled, NoDepthTest = true, FontSize = BuildGhost.ReasonFontSize,
+                OutlineSize = 12, Modulate = CueTextColor, Text = _castLostText, Visible = false, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            };
+            AddChild(_cueLabels[c]);
         }
+        ShownCues = 0;
 
         _playerColor = new Color[playerRgb?.Length ?? 0];
         for (int p = 0; p < _playerColor.Length; p++) _playerColor[p] = UnitViews.ColorFromRgb(playerRgb![p]);
@@ -335,18 +427,22 @@ public partial class AbilityViews : Node3D
         if (_runner != null) _runner.Ticked -= OnTicked;
     }
 
-    // Each tick the runner runs: take its resolves while they are still in World.AbilityEvents.
+    // Each tick the runner runs: take its resolves and drops while they are still in World.AbilityEvents.
     private void OnTicked(Simulation sim) => CollectTick(sim.World);
 
-    /// <summary>Adds the flashes of the last tick's resolves (once per tick; a later call for the same tick does nothing).</summary>
-    public void CollectTick(World world) => Flashes?.Collect(world.AbilityEvents, world.TickNumber);
+    /// <summary>Adds the flashes of the last tick's resolves and the cues of its own dropped casts (once per tick; a later call for the same tick does nothing).</summary>
+    public void CollectTick(World world)
+    {
+        Flashes?.Collect(world.AbilityEvents, world.TickNumber);
+        LostCasts?.Collect(world.AbilityEvents, world.TickNumber, SelectionController.LocalPlayer);
+    }
 
     public override void _Process(double delta)
     {
         if (_runner?.Simulation is Simulation sim) Sync(sim.World, (float)_runner.Alpha, GetViewport().GetMousePosition(), Input.IsActionPressed(OrderQueue));
     }
 
-    /// <summary>One frame: the targeting rings for the cursor at <paramref name="mouse"/> (screen pixels; <paramref name="queued"/>: Shift held), then the cast bars and cast-point rings, the status markers and the resolve flashes. Allocation-free once each armed ability's meshes exist.</summary>
+    /// <summary>One frame: the targeting rings for the cursor at <paramref name="mouse"/> (screen pixels; <paramref name="queued"/>: Shift held), then the cast bars and cast-point rings, the status markers, the resolve flashes, the zone discs and the lost-cast cues. Allocation-free once each armed ability's meshes exist and the disc pools have reached their high marks.</summary>
     public void Sync(World world, float alpha, Vector2 mouse, bool queued)
     {
         if (_barBack == null) return;
@@ -357,6 +453,7 @@ public partial class AbilityViews : Node3D
         SyncMarkers(world, alpha, fog);
         SyncFlashes(world, alpha, fog);
         SyncZones(world, fog);
+        SyncCues(world, alpha);
     }
 
     private void SyncTargeting(World world, float alpha, Vector2 mouse, bool queued)
@@ -436,6 +533,7 @@ public partial class AbilityViews : Node3D
         ReadOnlySpan<bool> shown = fog != null ? fog.UnitShown : u.Alive;
         float len = BarLength * _barScale, thick = BarThickness * _barScale;
         int bars = 0, circles = 0;
+        _castRings!.Begin();
         for (int i = 0; i < u.Capacity; i++)
         {
             if (!u.Alive[i] || u.CastAbility[i] < 0) continue;
@@ -458,27 +556,28 @@ public partial class AbilityViews : Node3D
                 _barFillLength[bars] = filled;
                 bars++;
             }
-            if (u.Owner[i] == SelectionController.LocalPlayer)
+            // A radius-0 ability (a summon) has no area to ring.
+            if (u.Owner[i] == SelectionController.LocalPlayer && def.Radius > 0f)
             {
-                System.Numerics.Vector2 p = u.CastPoint[i];
+                // BUG-0520: a band on the terrain cells under it, so across a cliff it lies on both levels; its node is
+                // the caster's for as long as it holds the cast, so the mesh is rebuilt only when the cast point moves.
                 float r = def.Radius;
-                var at = new Vector3(p.X, TerrainHeight.At(world.Heightmap, p.X, p.Y) + Lift, p.Y);
-                _circles.SetInstanceTransform(circles, new Transform3D(Basis.FromScale(new Vector3(r, 0.3f, r)), at));
+                GroundDisc ring = _castRings.Take(i);
+                ring.Place(world.Heightmap, u.CastPoint[i], r, r * (1f - CastRingShare), Lift);
+                ring.SetColors(CastRingFill, CastRingColor, CastRingShare);
+                if (!ring.Visible) ring.Visible = true;
                 _circleSlot[circles] = i;
                 circles++;
             }
         }
+        _castRings.End();
         if (bars != ShownBars)
         {
             _barBack.VisibleInstanceCount = bars;
             _barFill.VisibleInstanceCount = bars;
             ShownBars = bars;
         }
-        if (circles != ShownCircles)
-        {
-            _circles.VisibleInstanceCount = circles;
-            ShownCircles = circles;
-        }
+        ShownCircles = circles;
     }
 
     private void SyncMarkers(World world, float alpha, FogView? fog)
@@ -514,6 +613,7 @@ public partial class AbilityViews : Node3D
         float a = float.IsNaN(alpha) ? 1f : Math.Clamp(alpha, 0f, 1f);
         ReadOnlySpan<bool> active = f.Active;
         int shown = 0;
+        _flashDiscs!.Begin();
         for (int i = 0; i < active.Length; i++)
         {
             if (!active[i]) continue;
@@ -522,19 +622,81 @@ public partial class AbilityViews : Node3D
             if (!f.Drawn[i]) f.MarkDrawn(i, world.TickNumber, fog == null || fog.ShowsPoint(world.Fog, p));
             if (!f.Shown[i])
             {
-                if (_flashTransform[i] != Hidden) HideFlash(i);
-                continue; // it expires on time, unseen
+                _flashTransform[i] = Hidden;
+                continue; // it expires on time, unseen (its node, if any, goes back to the pool at End)
             }
             float age = f.Age(i, world.TickNumber, a);
             int ability = f.Ability[i];
             float radius = (uint)ability < (uint)_data.Abilities.Length ? _data.Abilities[ability].Radius : 1f;
-            float r = radius * (FlashFrom + (1f - FlashFrom) * Math.Min(1f, age / FlashGrowShare));
-            _flashTransform[i] = new Transform3D(Basis.FromScale(new Vector3(r, 0.06f, r)), new Vector3(p.X, TerrainHeight.At(world.Heightmap, p.X, p.Y) + Lift, p.Y));
-            _flashes.SetInstanceTransform(i, _flashTransform[i]);
-            _flashes.SetInstanceColor(i, new Color(FlashColor.R, FlashColor.G, FlashColor.B, FlashAlpha * (1f - age)));
+            float share = FlashFrom + (1f - FlashFrom) * Math.Min(1f, age / FlashGrowShare);
+            float r = radius * share;
+            float y = TerrainHeight.At(world.Heightmap, p.X, p.Y) + Lift;
+            if (radius > 0f)
+            {
+                // BUG-0520: meshed once at the full radius on the cells under it (both levels of a cliff); it grows in the shader.
+                GroundDisc disc = _flashDiscs.Take(i);
+                disc.Place(world.Heightmap, p, radius, 0f, Lift);
+                disc.SetScale(share);
+                var fill = new Color(FlashColor.R, FlashColor.G, FlashColor.B, FlashAlpha * (1f - age));
+                disc.SetColors(fill, new Color(fill.R, fill.G, fill.B, Math.Min(1f, fill.A * FlashRimBoost)), FlashRimShare);
+                if (!disc.Visible) disc.Visible = true;
+                y = disc.Position.Y;
+            }
+            _flashTransform[i] = new Transform3D(Basis.FromScale(new Vector3(r, 0.06f, r)), new Vector3(p.X, y, p.Y));
             shown++;
         }
+        _flashDiscs.End();
         ShownFlashes = shown;
+    }
+
+    // M5-V1: the lost-cast cues. A new drop plays the refused sound once (the frame that first sees it); each live cue is a
+    // red disc under its caster, fading over its 0.5 s, with the hud.cast_lost words over it. A cue whose caster died or
+    // whose slot was reused draws nothing and expires on time.
+    private void SyncCues(World world, float alpha)
+    {
+        LostCastCues c = LostCasts;
+        if (c == null) return;
+        if (c.Added != _cuesSounded)
+        {
+            _cuesSounded = c.Added;
+            Sound?.Play(SfxEvent.Refused);
+        }
+        c.Expire(world.TickNumber, _cueRemoved);
+        UnitStore u = world.Units;
+        float a = float.IsNaN(alpha) ? 1f : Math.Clamp(alpha, 0f, 1f);
+        float pixel = Camera != null ? BuildGhost.ReasonPixelPerZoom * Camera.Zoom : 0.01f;
+        Array.Clear(_cueShown);
+        _cueDiscs!.Begin();
+        int shown = 0;
+        ReadOnlySpan<bool> active = c.Active;
+        for (int i = 0; i < active.Length; i++)
+        {
+            if (!active[i]) continue;
+            if (!c.Drawn[i]) c.MarkDrawn(i, world.TickNumber);
+            EntityHandle h = c.Caster[i];
+            if ((uint)h.Index >= (uint)u.Capacity || !u.Alive[h.Index] || u.Generation[h.Index] != h.Generation) continue;
+            float fade = 1f - c.Age(i, world.TickNumber, a);
+            Vector3 at = UnitViews.GroundPoint(world, h.Index, alpha);
+            GroundDisc disc = _cueDiscs.Take(i);
+            disc.Place(world.Heightmap, new System.Numerics.Vector2(at.X, at.Z), u.Radius[h.Index] + CueMargin, 0f, CueLift);
+            disc.SetColors(new Color(CueColor.R, CueColor.G, CueColor.B, CueFillAlpha * fade), new Color(CueColor.R, CueColor.G, CueColor.B, fade), CueRimShare);
+            if (!disc.Visible) disc.Visible = true;
+            if (_castLostText.Length > 0)
+            {
+                Label3D label = _cueLabels[i];
+                if (label.PixelSize != pixel) label.PixelSize = pixel;
+                int type = u.TypeId[h.Index];
+                label.Position = at + new Vector3(0f, _bodyTop[type] + (CombatViews.BarGap + BarAbove) * _barScale + CueTextAbove * _barScale, 0f);
+                label.Modulate = new Color(CueTextColor.R, CueTextColor.G, CueTextColor.B, fade);
+                if (!label.Visible) label.Visible = true;
+                _cueShown[i] = true;
+            }
+            _cueSlot[shown++] = i;
+        }
+        _cueDiscs.End();
+        for (int i = 0; i < _cueLabels.Length; i++)
+            if (!_cueShown[i] && _cueLabels[i].Visible) _cueLabels[i].Visible = false;
+        ShownCues = shown;
     }
 
     private void SyncZones(World world, FogView? fog)
@@ -567,11 +729,7 @@ public partial class AbilityViews : Node3D
         ShownZones = n;
     }
 
-    private void HideFlash(int slot)
-    {
-        _flashes.SetInstanceTransform(slot, Hidden);
-        _flashTransform[slot] = Hidden;
-    }
+    private void HideFlash(int slot) => _flashTransform[slot] = Hidden;
 
     // A ring on the ground whose outer edge is `radius` m from its centre, RingWidth wide (BUG-0430: on the terrain on both
     // sides of a cliff, as the zone discs).

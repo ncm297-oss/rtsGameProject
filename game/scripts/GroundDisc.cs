@@ -19,7 +19,7 @@ namespace Rts.Game;
 /// </remarks>
 public partial class GroundDisc : MeshInstance3D
 {
-    private static readonly StringName FillParam = "fill_color", RimParam = "rim_color", RimShareParam = "rim_share";
+    private static readonly StringName FillParam = "fill_color", RimParam = "rim_color", RimShareParam = "rim_share", ScaleParam = "scale";
     private static Shader? _shader;
 
     private readonly ImmediateMesh _mesh = new();
@@ -27,7 +27,7 @@ public partial class GroundDisc : MeshInstance3D
     private GroundQuad[] _quads = Array.Empty<GroundQuad>();
     private Heightmap? _map;
     private Color _fill = new(-1f, -1f, -1f, -1f), _rim = new(-1f, -1f, -1f, -1f);
-    private float _rimShare = -1f;
+    private float _rimShare = -1f, _scale = 1f;
 
     /// <summary>A hidden disc with its own material; place it with <see cref="Place"/>.</summary>
     public GroundDisc()
@@ -64,11 +64,14 @@ public partial class GroundDisc : MeshInstance3D
     /// </summary>
     public void Place(Heightmap map, System.Numerics.Vector2 center, float radius, float hole, float lift)
     {
+        // BUG-0521 item 1: compare the hole as stored (clamped), so a ring whose band is wider than its radius (a negative
+        // hole) that hasn't moved isn't rebuilt every frame.
+        hole = Math.Max(0f, hole);
         if (ReferenceEquals(map, _map) && center == Center && radius == Radius && hole == Hole && lift == Lift) return;
         _map = map;
         Center = center;
         Radius = radius;
-        Hole = Math.Max(0f, hole);
+        Hole = hole;
         Lift = lift;
         float baseY = TerrainHeight.At(map, center.X, center.Y) + lift;
         Position = new Vector3(center.X, baseY, center.Y);
@@ -110,15 +113,26 @@ public partial class GroundDisc : MeshInstance3D
         if (rimShare != _rimShare) _material.SetShaderParameter(RimShareParam, _rimShare = rimShare);
     }
 
+    /// <summary>The share of <see cref="Radius"/> the circle is drawn at (M5-V1: a resolve flash grows through it); 1 by default.</summary>
+    public float DrawnShare => _scale;
+
+    /// <summary>Draws the circle at <paramref name="scale"/> of the meshed radius (clamped to [0.001, 1]) without rebuilding the mesh; writes the shader parameter only when it changed.</summary>
+    public void SetScale(float scale)
+    {
+        scale = float.IsNaN(scale) ? 1f : Math.Clamp(scale, 0.001f, 1f);
+        if (scale != _scale) _material.SetShaderParameter(ScaleParam, _scale = scale);
+    }
+
     /// <summary>
     /// The drawn height (m) at ground point (x, z): the surface of the mesh's quad over that point, or NaN where the disc
-    /// draws nothing (hidden, outside its radius or in its hole, or no cell there). For tests and the QA oracle.
+    /// draws nothing (hidden, outside its drawn radius (<see cref="Radius"/> x <see cref="DrawnShare"/>) or in its hole, or no
+    /// cell there). For tests and the QA oracle.
     /// </summary>
     public float SurfaceAt(float x, float z)
     {
         if (!Visible || _map == null) return float.NaN;
-        float dx = x - Center.X, dz = z - Center.Y, d2 = dx * dx + dz * dz;
-        if (d2 > Radius * Radius || d2 < Hole * Hole) return float.NaN;
+        float dx = x - Center.X, dz = z - Center.Y, d2 = dx * dx + dz * dz, drawn = Radius * _scale;
+        if (d2 > drawn * drawn || d2 < Hole * Hole) return float.NaN;
         int cx = (int)MathF.Floor(x / MapConstants.CellSize), cy = (int)MathF.Floor(z / MapConstants.CellSize);
         for (int i = 0; i < Cells; i++)
             if (_quads[i].X == cx && _quads[i].Y == cy) return GroundPatch.HeightIn(_quads[i], x, z) + Lift;

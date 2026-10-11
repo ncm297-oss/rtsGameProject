@@ -29,4 +29,6 @@ public enum HudText
     Seconds,
     /// <summary>The unit after a distance ("m"; M4-V6a: the ability tooltip's range and radius).</summary>
     Meters,
+    /// <summary>The words shown over an own caster whose cast was lost without a new order ("Cast lost"; M5-V1).</summary>
+    CastLost,
 }

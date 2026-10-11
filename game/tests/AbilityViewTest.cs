@@ -52,8 +52,13 @@ namespace Rts.Game.Tests;
 /// appear with their views at the resolve; at the expiry three <c>Expired</c> deaths, the views gone, no corpse marker and
 /// K / L unchanged (sim, resource bar, F12 overlay); Shift + W through the viewport queues one for the second mage; the
 /// twin; then (staging) Prophecy Zealots: 70 / 83 flashes on first sight and has a bar of 70 / 83, 83 / 83 neither (BUG-0450).
+/// M5-V1 adds, per seed: the lost-cast cue (a mage ringed by holding enemy Raiders, another unit selected, drops its walk-in
+/// after 3 s: exactly one cue, one Refused sound, the red disc and the <c>hud.cast_lost</c> words on the caster for 0.5 s; the
+/// same walk-in cancelled by the player's Stop shows nothing), before the twin; in the cliff run the cast-point ring and the
+/// resolve flash on the terrain on both levels (BUG-0520) and a sub-band ring placed twice rebuilt once (BUG-0521 item 1);
+/// and in the steady match two rounds of 12 mages casting at once, the second at 0 B with no new pool node.
 /// </summary>
-/// <remarks>Headless. Run: <c>&amp; $env:GODOT --headless --path game res://tests/AbilityViewTest.tscn</c> (seeds 1 and 6; <c>-- --seed N</c> for one); prints "ABILITY VIEW TEST PASS" and exits 0, or each failure and exits 1. Windowed with <c>-- --shots &lt;dir&gt;</c> it also saves <c>ability-seedN-targeting.png</c>, <c>ability-seedN-casting.png</c>, <c>ability-seedN-first-tick.png</c>, <c>ability-seedN-flash.png</c>, <c>ability-seedN-burning.png</c>, <c>ability-seedN-cusser.png</c>, <c>ability-seedN-statuses.png</c>, <c>ability-seedN-storm.png</c>, <c>ability-seedN-blinded.png</c>, <c>ability-seedN-storm-enemy.png</c>, <c>ability-seedN-aura-hover.png</c>, <c>ability-seedN-aura-frenzied.png</c>, <c>ability-seedN-frenzied.png</c> and <c>ability-seedN-summoned.png</c>.</remarks>
+/// <remarks>Headless. Run: <c>&amp; $env:GODOT --headless --path game res://tests/AbilityViewTest.tscn</c> (seeds 1 and 6; <c>-- --seed N</c> for one); prints "ABILITY VIEW TEST PASS" and exits 0, or each failure and exits 1. Windowed with <c>-- --shots &lt;dir&gt;</c> it also saves <c>ability-seedN-targeting.png</c>, <c>ability-seedN-casting.png</c>, <c>ability-seedN-first-tick.png</c>, <c>ability-seedN-flash.png</c>, <c>ability-seedN-burning.png</c>, <c>ability-seedN-cusser.png</c>, <c>ability-seedN-statuses.png</c>, <c>ability-seedN-storm.png</c>, <c>ability-seedN-blinded.png</c>, <c>ability-seedN-storm-enemy.png</c>, <c>ability-seedN-aura-hover.png</c>, <c>ability-seedN-aura-frenzied.png</c>, <c>ability-seedN-frenzied.png</c>, <c>ability-seedN-summoned.png</c>, <c>ability-seedN-cast-lost.png</c>, <c>ability-seedN-cliff-cast-ring.png</c> and <c>ability-seedN-cliff-flash.png</c>.</remarks>
 public partial class AbilityViewTest : Node
 {
     private static readonly FieldInfo CommandsField = typeof(Simulation).GetField("_commands", BindingFlags.NonPublic | BindingFlags.Instance)!;
@@ -255,6 +260,7 @@ public partial class AbilityViewTest : Node
         await CusserRow(seed);
         await StormRow(seed);
         await EnemyStormRow(seed);
+        await LostCastRows(seed);
         Twin(seed);
         await StatusRows(seed);
         await EndMatch();
@@ -772,6 +778,177 @@ public partial class AbilityViewTest : Node
         await Frames();
     }
 
+    // M5-V1 (Requests 34): the lost-cast cue. A fresh mage ringed by eight holding enemy Raiders is ordered (through the
+    // selection) to cast Telas Fire on the knot, out of range: its walk-in is stuck and the sim drops the cast after 3 s (one
+    // Dropped event). With another unit selected, the cue fires exactly once: one LostCastCues entry, one Refused sound, the
+    // red disc under the mage and the hud.cast_lost words over it for 0.5 s, then nothing; the cast-point ring ends with the
+    // cast. Then the same walk-in, cancelled after 1 s by the player's Stop (S), shows nothing over 100 ticks.
+    private async Task LostCastRows(ulong seed)
+    {
+        int mageType = _data.FindUnit("malazan_cadre_mage"), raider = _data.FindUnit("whirlwind_raider");
+        System.Numerics.Vector2 at = OpenSpot(U.Position[_near.Index] + new System.Numerics.Vector2(0f, 12f));
+        if (!Check(!float.IsNaN(at.X), $"seed {seed} lost cast: no open spot")) return;
+        var before = new HashSet<int>();
+        for (int i = 0; i < U.Capacity; i++) if (U.Alive[i]) before.Add(i);
+        _sim.Enqueue(Command.SpawnUnit(0, mageType, at));
+        for (int k = 0; k < 8; k++)
+        {
+            float a = k * MathF.Tau / 8f;
+            _sim.Enqueue(Command.SpawnUnit(1, raider, at + new System.Numerics.Vector2(MathF.Cos(a), MathF.Sin(a))));
+        }
+        _sim.Tick();
+        _sim.Tick();
+        EntityHandle mage = default;
+        int walls = 0;
+        for (int i = 0; i < U.Capacity; i++)
+        {
+            if (!U.Alive[i] || before.Contains(i)) continue;
+            var h = new EntityHandle(i, U.Generation[i]);
+            if (U.TypeId[i] == mageType) mage = h;
+            else
+            {
+                _sim.Enqueue(Command.HoldPosition(1, h));
+                walls++;
+            }
+        }
+        if (!Check(mage.Generation != 0 && walls == 8, $"seed {seed} lost cast: staged mage {mage}, {walls} Raiders")) return;
+        _sim.Tick();
+        _camera.SetFocus(at.X, at.Y);
+        Check(_views.CastLostText == _ui.Hud(HudText.CastLost) && _ui.Hud(HudText.CastLost).Length > 0,
+            $"seed {seed} lost cast: the views' text '{_views.CastLostText}', ui.json hud.cast_lost '{_ui.Hud(HudText.CastLost)}'");
+
+        // (1) The drop: ordered through the selection, then the HUD moves on to another unit.
+        await Select(mage);
+        System.Numerics.Vector2 point = _knot;
+        Check(System.Numerics.Vector2.Distance(at, point) > _def.Range + 2f, $"seed {seed} lost cast: the knot is only {System.Numerics.Vector2.Distance(at, point):0.0} m off");
+        int from = PendingCount();
+        Check(_sel.AbilityOrder(_telas, point, false) && Pending(from).Count == 1, $"seed {seed} lost cast: the order sent {Describe(Pending(from))}");
+        await Select(_spotter);
+        await Gap(); // past the order's Command sound, so a Refused one counts
+        long cues = _views.LostCasts.Added;
+        int refused = _sfx.PlayCount(SfxEvent.Refused);
+        int drops = 0, dropTick = -1, cueTicks = 0, ringTicks = 0, wrong = 0, ticks = 0;
+        string firstWrong = "";
+        bool shot = false;
+        for (; ticks < 200; ticks++)
+        {
+            _sim.Tick();
+            _views.Sync(W, 0.5f, Vector2.Zero, false);
+            int d = Drops(mage);
+            drops += d;
+            if (d > 0) dropTick = ticks;
+            bool ring = false;
+            for (int k = 0; k < _views.ShownCircles; k++) if (_views.CircleSlot(k) == mage.Index) ring = true;
+            if (ring) ringTicks++;
+            if (dropTick < 0)
+            {
+                // The order applies in the second tick (stamped for the next tick number); the ring shows from then on.
+                if ((_views.ShownCues != 0 || (!ring && ticks > 0)) && wrong++ == 0) firstWrong = $"tick {ticks} before the drop: {_views.ShownCues} cues, ring {ring}";
+                continue;
+            }
+            if (ring && wrong++ == 0) firstWrong = $"tick {ticks}: the cast ring outlived the drop";
+            if (_views.ShownCues == 0) continue;
+            cueTicks++;
+            int slot = _views.CueSlot(0);
+            GroundDisc? disc = _views.CueNode(slot);
+            Label3D label = _views.CueLabel(slot);
+            Vector3 ground = UnitViews.GroundPoint(W, mage.Index, 0.5f);
+            bool ok = _views.ShownCues == 1 && _views.LostCasts.Caster[slot] == mage && disc != null && disc.Visible
+                && Math.Abs(disc.Position.X - ground.X) < 1e-3f && Math.Abs(disc.Position.Z - ground.Z) < 1e-3f
+                && disc.Radius > U.Radius[mage.Index] && Math.Abs(disc.Lift - AbilityViews.CueLift) < 1e-6f
+                && label.Visible && label.Text == _ui.Hud(HudText.CastLost) && label.Position.Y > ground.Y + 1f;
+            if (!ok && wrong++ == 0) firstWrong = $"tick {ticks}: {_views.ShownCues} cues, caster {_views.LostCasts.Caster[slot]}, disc {disc?.Visible} at {disc?.Position} r {disc?.Radius} (mage at {ground}), label {label.Visible} '{label.Text}' at {label.Position}";
+            if (!shot)
+            {
+                shot = true;
+                await Shot($"ability-seed{seed}-cast-lost");
+            }
+            if (ticks > dropTick + 30) break;
+        }
+        for (int t = 0; t < 30 && dropTick >= 0; t++)
+        {
+            _sim.Tick();
+            ticks++;
+            _views.Sync(W, 0.5f, Vector2.Zero, false);
+            drops += Drops(mage);
+            if (_views.ShownCues != 0) cueTicks++;
+        }
+        bool labelsHidden = true;
+        for (int c = 0; c < _views.LostCasts.Capacity; c++) if (_views.CueLabel(c).Visible) labelsHidden = false;
+        GD.Print($"seed {seed}: lost cast: ringed mage {mage.Index} dropped its walk-in on tick {dropTick} of the order (ring drawn {ringTicks} ticks), "
+            + $"{_views.LostCasts.Added - cues} cue, {_sfx.PlayCount(SfxEvent.Refused) - refused} Refused sound, the cue drawn {cueTicks} ticks, selection {_sel.Selection.Count} ({(_sel.Selection.Count > 0 ? _sel.Selection.Items[0].Index : -1)})");
+        Check(drops == 1 && dropTick >= 59 && dropTick <= 90, $"seed {seed} lost cast: {drops} drops, the first on tick {dropTick} (want one, after the 3 s patience)");
+        Check(_views.LostCasts.Added == cues + 1 && _sfx.PlayCount(SfxEvent.Refused) == refused + 1,
+            $"seed {seed} lost cast: {_views.LostCasts.Added - cues} cues, {_sfx.PlayCount(SfxEvent.Refused) - refused} Refused sounds, want one each");
+        Check(wrong == 0, $"seed {seed} lost cast: {wrong} wrong frames, first {firstWrong}");
+        Check(cueTicks >= LostCastCues.LifetimeTicks - 1 && cueTicks <= LostCastCues.LifetimeTicks + 1 && _views.ShownCues == 0 && labelsHidden && _views.CuePool.InUse == 0,
+            $"seed {seed} lost cast: the cue drawn {cueTicks} ticks (want {LostCastCues.LifetimeTicks}), {_views.ShownCues} left, labels hidden {labelsHidden}, {_views.CuePool.InUse} discs in use");
+        Check(_sel.Selection.Count == 1 && _sel.Selection.Items[0] == _spotter, $"seed {seed} lost cast: the selection moved");
+
+        // (2) The player's own cancel: the same walk-in, a Stop 1 s in. No event, no cue, no sound.
+        await Select(mage);
+        Check(_sel.AbilityOrder(_telas, point, false), $"seed {seed} cancel: no order sent");
+        for (int t = 0; t < 20; t++)
+        {
+            _sim.Tick();
+            _views.Sync(W, 0.5f, Vector2.Zero, false);
+        }
+        Check(U.CastAbility[mage.Index] >= 0 && U.State[mage.Index] == UnitState.Moving, $"seed {seed} cancel: the mage is {U.State[mage.Index]} cast {U.CastAbility[mage.Index]}, want walking in");
+        await Gap();
+        cues = _views.LostCasts.Added;
+        refused = _sfx.PlayCount(SfxEvent.Refused);
+        int stops = _sel.IssuedCount(CommandKind.Stop);
+        Key(Godot.Key.S);
+        Check(_sel.IssuedCount(CommandKind.Stop) == stops + 1, $"seed {seed} cancel: S sent {_sel.IssuedCount(CommandKind.Stop) - stops} Stops");
+        int cancelDrops = 0, cancelCues = 0;
+        for (int t = 0; t < 100; t++)
+        {
+            _sim.Tick();
+            _views.Sync(W, 0.5f, Vector2.Zero, false);
+            cancelDrops += Drops(mage);
+            if (_views.ShownCues != 0) cancelCues++;
+        }
+        Check(U.CastAbility[mage.Index] < 0 && cancelDrops == 0 && cancelCues == 0 && _views.LostCasts.Added == cues && _sfx.PlayCount(SfxEvent.Refused) == refused,
+            $"seed {seed} cancel: cast {U.CastAbility[mage.Index]}, {cancelDrops} drops, cue drawn {cancelCues} ticks, {_views.LostCasts.Added - cues} cues, {_sfx.PlayCount(SfxEvent.Refused) - refused} sounds; want none");
+        GD.Print($"seed {seed}: cancel: the walk-in stopped by S: no drop, no cue, no sound over 100 ticks");
+        System.Numerics.Vector2 mid = (U.Position[_near.Index] + _knot) / 2f;
+        _camera.SetFocus(mid.X, mid.Y);
+        await Frames();
+    }
+
+    // Dropped events of `caster` in the last tick.
+    private int Drops(EntityHandle caster)
+    {
+        int n = 0;
+        foreach (AbilityEvent e in W.AbilityEvents) if (e.Dropped && e.Caster == caster) n++;
+        return n;
+    }
+
+    // The point nearest `near` whose cells within 3 m are all passable plain ground of one level with no unit within 5 m; NaN if none.
+    private System.Numerics.Vector2 OpenSpot(System.Numerics.Vector2 near)
+    {
+        Heightmap hm = W.Heightmap;
+        int nx = (int)(near.X / MapConstants.CellSize), ny = (int)(near.Y / MapConstants.CellSize);
+        var best = new System.Numerics.Vector2(float.NaN, float.NaN);
+        float bestD = float.MaxValue;
+        for (int y = Math.Max(3, ny - 20); y <= Math.Min(G.Height - 4, ny + 20); y++)
+            for (int x = Math.Max(3, nx - 20); x <= Math.Min(G.Width - 4, nx + 20); x++)
+            {
+                System.Numerics.Vector2 p = G.CellCenter(x, y);
+                float d = System.Numerics.Vector2.Distance(p, near);
+                if (d >= bestD) continue;
+                bool ok = true;
+                for (int dy = -2; dy <= 2 && ok; dy++)
+                    for (int dx = -2; dx <= 2 && ok; dx++)
+                        ok = G.IsPassable(x + dx, y + dy) && !hm.IsRamp(x + dx, y + dy) && hm.LevelAt(x + dx, y + dy) == hm.LevelAt(x, y);
+                for (int i = 0; i < U.Capacity && ok; i++) if (U.Alive[i] && System.Numerics.Vector2.Distance(U.Position[i], p) < 5f) ok = false;
+                if (!ok) continue;
+                best = p;
+                bestD = d;
+            }
+        return best;
+    }
+
     // BUG-0430 / BUG-0462 item 1 (M4-VH3): two own Sandstorms across a cliff (one centred on the plateau 1 m from the drop,
     // one on the low ground 3 m off it) and Telas Fire's two targeting rings there (the radius ring on the cursor 1 m from
     // the drop, the 16 m range ring round a mage on the plateau): every sampled point of each disc and ring is drawn on the
@@ -854,7 +1031,87 @@ public partial class AbilityViewTest : Node
         Input.WarpMouse(px);
         await Shot($"ability-seed{seed}-cliff-rings");
         _sel.CancelTargeting();
+        await CliffCastRows(seed, mage, high);
+        Bug0521Row(seed, high);
         await EndMatch();
+    }
+
+    // BUG-0520 (M5-V1): the plateau mage casts Telas Fire on `high` (1 m from the drop, so its 3 m area spans both levels).
+    // Its cast-point ring while it casts and the resolve flash (on its first frame, half grown, and grown) are drawn on the
+    // terrain + lift at every sampled point, on both levels, every vertex on its cell's surface; the ring isn't rebuilt while
+    // its cast point stays put. (Flat at the centre's height, the part over the low ground floated 4 m up.)
+    private async Task CliffCastRows(ulong seed, EntityHandle mage, System.Numerics.Vector2 high)
+    {
+        if (!Check(_sel.AbilityOrder(_telas, high, false), $"seed {seed} cliff cast: no order sent")) return;
+        int ticks = 0;
+        while (U.State[mage.Index] != UnitState.Casting && ticks < 60) { _sim.Tick(); ticks++; }
+        _sim.Tick();
+        _views.Sync(W, 0.5f, Vector2.Zero, false);
+        int k = -1;
+        for (int c = 0; c < _views.ShownCircles; c++) if (_views.CircleSlot(c) == mage.Index) k = c;
+        if (!Check(U.State[mage.Index] == UnitState.Casting && k >= 0, $"seed {seed} cliff cast: the mage is {U.State[mage.Index]}, ring {k}")) return;
+        float r = _def.Radius;
+        GroundDisc ring = _views.CastRing(k);
+        (int bad, int n, float lo, float hi, string first) = OnGround((x, z) => _views.CastRingSurfaceAt(k, x, z), U.CastPoint[mage.Index],
+            new[] { r * (1f - AbilityViews.CastRingShare / 2f) }, AbilityViews.Lift);
+        Check(bad == 0 && n > 40 && hi - lo >= MapConstants.LevelHeight - 0.01f, $"seed {seed} cliff: cast ring: {bad} of {n} points not on the ground ({lo:0.00}-{hi:0.00} m), first {first}");
+        int off = MeshOffGround(ring, out int verts, out string firstOff);
+        Check(off == 0 && verts >= 6, $"seed {seed} cliff: the cast ring's mesh: {off} of {verts} vertices off their cell's ground, first {firstOff}");
+        // The row tells the old drawing apart: a flat ring at the centre's height misses points over the other level.
+        System.Numerics.Vector2 cp = U.CastPoint[mage.Index];
+        float flatY = TerrainHeight.At(W.Heightmap, cp.X, cp.Y) + AbilityViews.Lift;
+        (int flatBad, int flatN, _, _, _) = OnGround((x, z) => flatY, cp, new[] { r * (1f - AbilityViews.CastRingShare / 2f) }, AbilityViews.Lift);
+        Check(flatBad > 0, $"seed {seed} cliff: a flat ring at the centre's height would miss no point ({flatN} sampled): the row can't tell the bug");
+        int rebuilds = ring.Rebuilds;
+        for (int t = 0; t < 3; t++)
+        {
+            _sim.Tick();
+            _views.Sync(W, 0.5f, Vector2.Zero, false);
+        }
+        Check(ring.Rebuilds == rebuilds && _views.CastRing(k) == ring, $"seed {seed} cliff: the cast ring was rebuilt {ring.Rebuilds - rebuilds} times with its cast point still");
+        GD.Print($"seed {seed} cliff cast ring: {n} points ({lo:0.0}-{hi:0.0} m) {bad} off (flat at the centre's height: {flatBad} of {flatN} off), {verts} vertices {off} off, no rebuild over 3 ticks");
+        await Shot($"ability-seed{seed}-cliff-cast-ring");
+
+        ticks = 0;
+        while (!Resolved(mage) && ticks < 40) { _sim.Tick(); ticks++; }
+        _views.Sync(W, 0.5f, Vector2.Zero, false);
+        int slot = FlashAt(high);
+        if (!Check(Resolved(mage) && slot >= 0 && _views.FlashNode(slot) is { Visible: true }, $"seed {seed} cliff flash: resolved {Resolved(mage)}, slot {slot}")) return;
+        GroundDisc flash = _views.FlashNode(slot)!;
+        float share = flash.DrawnShare;
+        (int fbad, int fn, float flo, float fhi, string ffirst) = OnGround((x, z) => _views.FlashSurfaceAt(slot, x, z), high, new[] { 0.2f * r, 0.4f * r }, AbilityViews.Lift);
+        Check(share < 0.7f && fbad == 0 && fn > 60 && fhi - flo >= MapConstants.LevelHeight - 0.01f,
+            $"seed {seed} cliff: the flash's first frame (share {share:0.00}): {fbad} of {fn} points not on the ground ({flo:0.00}-{fhi:0.00} m), first {ffirst}");
+        int frebuilds = flash.Rebuilds;
+        for (int t = 0; t < 5; t++)
+        {
+            _sim.Tick();
+            _views.Sync(W, 0.5f, Vector2.Zero, false);
+        }
+        (int gbad, int gn, float glo, float ghi, string gfirst) = OnGround((x, z) => _views.FlashSurfaceAt(slot, x, z), high, new[] { 0.3f * r, 0.65f * r, 0.95f * r }, AbilityViews.Lift);
+        Check(flash.DrawnShare == 1f && gbad == 0 && gn > 150 && ghi - glo >= MapConstants.LevelHeight - 0.01f,
+            $"seed {seed} cliff: the grown flash (share {flash.DrawnShare:0.00}): {gbad} of {gn} points not on the ground ({glo:0.00}-{ghi:0.00} m), first {gfirst}");
+        float flashFlatY = TerrainHeight.At(W.Heightmap, high.X, high.Y) + AbilityViews.Lift;
+        (int flashFlatBad, _, _, _, _) = OnGround((x, z) => flashFlatY, high, new[] { 0.3f * r, 0.65f * r, 0.95f * r }, AbilityViews.Lift);
+        Check(flashFlatBad > 0, $"seed {seed} cliff: a flat flash at the centre's height would miss no point");
+        int foff = MeshOffGround(flash, out int fverts, out string ffoff);
+        Check(foff == 0 && fverts >= 6 && flash.Rebuilds == frebuilds, $"seed {seed} cliff: the flash's mesh: {foff} of {fverts} vertices off, rebuilt {flash.Rebuilds - frebuilds} times while it grew");
+        GD.Print($"seed {seed} cliff flash: first frame {fn} points ({flo:0.0}-{fhi:0.0} m) {fbad} off at share {share:0.00}; grown {gn} points {gbad} off (flat: {flashFlatBad} off); {fverts} vertices {foff} off; no rebuild while growing");
+        await Shot($"ability-seed{seed}-cliff-flash");
+    }
+
+    // BUG-0521 item 1 (M5-V1): a ring whose band is wider than its radius (a negative hole) placed again where it is isn't
+    // rebuilt (Place compared the raw hole with the clamped one it stored, so it rebuilt every frame).
+    private void Bug0521Row(ulong seed, System.Numerics.Vector2 at)
+    {
+        var tiny = new GroundDisc { Name = "Bug0521Ring" };
+        AddChild(tiny);
+        float radius = 0.1f;
+        for (int f = 0; f < 5; f++) tiny.Place(W.Heightmap, at, radius, radius - AbilityViews.RingWidth, AbilityViews.Lift);
+        Check(tiny.Rebuilds == 1 && tiny.Hole == 0f && tiny.Radius == radius, $"seed {seed} BUG-0521: a 0.1 m ring placed 5 times in one spot was rebuilt {tiny.Rebuilds} times (hole {tiny.Hole})");
+        GD.Print($"seed {seed}: BUG-0521 item 1: a {radius} m ring (hole {radius - AbilityViews.RingWidth:0.00}) placed 5 times: {tiny.Rebuilds} rebuild");
+        RemoveChild(tiny);
+        tiny.QueueFree();
     }
 
     // Reads the disc's drawn mesh back from Godot: every vertex (node position + vertex) must lie on the top surface of the
@@ -1710,8 +1967,47 @@ public partial class AbilityViewTest : Node
         Check(statused == 100 && firstMarkers >= 100 && markerFrames == 300, $"steady: {statused} statuses staged, {firstMarkers} markers drawn, markers in {markerFrames} frames");
         Check(zoneFrames == 300, $"steady: 8 zone discs drawn in {zoneFrames} of 300 frames ({W.Zones.Count} live, {W.Zones.BlockerCount} blocking)");
         Check(bytes == 0, $"steady: 300 frames at --units 500 allocated {bytes} bytes");
+        PoolRow();
         MinimapRightClicks();
         await EndMatch();
+    }
+
+    // M5-V1 (BUG-0520): the cast-point rings and the resolve flashes come from GroundDisc pools. Two rounds in which 12 ready
+    // selected mages each cast beside themselves in one frame (12 rings at once, then their flashes): the first warms the
+    // pools; over the second's 120 frames the views allocate 0 B and neither pool makes a node.
+    private void PoolRow()
+    {
+        _sel.CancelTargeting();
+        var ready = new List<EntityHandle>();
+        int[] sent = new int[2], rings = new int[2], flashes = new int[2];
+        int ringNodes = 0, flashNodes = 0;
+        long bytes = 0;
+        for (int round = 0; round < 2; round++)
+        {
+            ready.Clear();
+            foreach (EntityHandle h in _sel.Selection.Items) if (OffCooldown(h)) ready.Add(h);
+            foreach (EntityHandle h in ready)
+                if (sent[round] < 12 && _sel.AbilityOrder(_telas, U.Position[h.Index] + new System.Numerics.Vector2(3f, 0f), false)) sent[round]++;
+            if (round == 1)
+            {
+                ringNodes = _views.CastRingPool.Nodes;
+                flashNodes = _views.FlashPool.Nodes;
+            }
+            for (int f = 0; f < 120; f++)
+            {
+                if (f % 2 == 0) _sim.Tick();
+                long before = GC.GetAllocatedBytesForCurrentThread();
+                _views.Sync(W, f % 2 / 2f, Vector2.Zero, false);
+                long spent = GC.GetAllocatedBytesForCurrentThread() - before;
+                if (round == 1) bytes += spent;
+                rings[round] = Math.Max(rings[round], _views.ShownCircles);
+                flashes[round] = Math.Max(flashes[round], _views.ShownFlashes);
+            }
+        }
+        GD.Print($"pool: rounds of {sent[0]} and {sent[1]} casts: at most {rings[0]} / {rings[1]} rings and {flashes[0]} / {flashes[1]} flashes at once; pools {_views.CastRingPool.Nodes} ring and {_views.FlashPool.Nodes} flash nodes (were {ringNodes} / {flashNodes}); {bytes} B over the second round's 120 frames");
+        Check(sent[0] == 12 && sent[1] == 12 && rings[1] >= 10 && flashes[1] >= 10, $"pool: sent {sent[0]} / {sent[1]}, rings {rings[1]}, flashes {flashes[1]} at once in round 2");
+        Check(bytes == 0 && _views.CastRingPool.Nodes == ringNodes && _views.FlashPool.Nodes == flashNodes,
+            $"pool: {bytes} B over the second round; ring nodes {ringNodes} -> {_views.CastRingPool.Nodes}, flash nodes {flashNodes} -> {_views.FlashPool.Nodes}");
     }
 
     // Test staging after the twin (M4-V6c): 8 zones over the two armies, alternating owners, two of them Sandstorms (blocking)
