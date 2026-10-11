@@ -356,9 +356,9 @@ public partial class CombatViewTest : Node
         for (int i = 0; i < U.Capacity; i++)
         {
             bool same = U.Alive[i] && U.Generation[i] == _lastGen[i];
-            // M4-V2 (BUG-0160 item 2): a unit first seen below its type's hp counts as hit once.
+            // M4-V2 (BUG-0160 item 2): a unit first seen below its maximum counts as hit once (World.MaxHp since M4-V7, BUG-0450).
             bool first = U.Alive[i] && !same;
-            bool hit = same ? U.Hp[i] < _lastHp[i] : first && U.Hp[i] < _data.Units[U.TypeId[i]].Hp;
+            bool hit = same ? U.Hp[i] < _lastHp[i] : first && U.Hp[i] < W.MaxHp(i);
             if (hit)
             {
                 if (_sinceHit[i] <= 3) _hitWhileLit++;
@@ -406,13 +406,13 @@ public partial class CombatViewTest : Node
         int k = 0;
         for (int i = 0; i < U.Capacity; i++)
         {
-            if (!U.Alive[i] || U.Hp[i] >= _data.Units[U.TypeId[i]].Hp) continue;
+            if (!U.Alive[i] || U.Hp[i] >= W.MaxHp(i)) continue;
             if (k >= _combat.ShownBars || _combat.BarSlot(k) != i)
             {
                 Check(false, $"seed {seed} tick {tick}: hurt unit {i} has no bar (bar {k} is {(k < _combat.ShownBars ? _combat.BarSlot(k) : -1)})");
                 return;
             }
-            float fill = Math.Clamp((float)U.Hp[i] / _data.Units[U.TypeId[i]].Hp, 0f, 1f);
+            float fill = Math.Clamp((float)U.Hp[i] / W.MaxHp(i), 0f, 1f);
             System.Numerics.Vector3 c = UnitHpBars.Color(fill);
             Color drawn = _combat.BarColor(k);
             if (Math.Abs(_combat.BarFill(k) - fill) > 1e-5f || Math.Abs(drawn.R - c.X) > 0.01f || Math.Abs(drawn.G - c.Y) > 0.01f)

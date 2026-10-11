@@ -5,7 +5,8 @@ using Rts.Sim.Combat;
 namespace Rts.Sim.ViewApi;
 
 /// <summary>
-/// The corpse and rubble markers the view leaves where things died (M4-V1, docs/02 "Death"): one per <see cref="DeathEvent"/>,
+/// The corpse and rubble markers the view leaves where things died (M4-V1, docs/02 "Death"): one per <see cref="DeathEvent"/>
+/// that is not an expiry (a summoned unit's lifetime running out is a vanish, not a death: no corpse, M4-V7),
 /// a unit's corpse for <see cref="UnitLifetimeTicks"/> (10 s of game time) and a building's rubble for
 /// <see cref="BuildingLifetimeTicks"/> (20 s), timed in sim ticks so game speed scales them. A fixed pool used as a ring:
 /// when every marker is in use the next death replaces the oldest one, so a death storm never grows it. A marker is
@@ -100,19 +101,23 @@ public sealed class DeathMarkers
 
     /// <summary>
     /// Adds a marker for every death of tick number <paramref name="tick"/> (the sim's <c>Deaths</c>, read between ticks),
-    /// once: a second call for the same tick adds nothing, so a per-tick hook and the frame loop may both call it. The
-    /// slots written go to <paramref name="added"/> (as many as fit). Returns the number of deaths taken.
+    /// once: a second call for the same tick adds nothing, so a per-tick hook and the frame loop may both call it. An
+    /// expiry (<see cref="DeathEvent.Expired"/>: a summoned unit's lifetime ran out) adds no marker (M4-V7). The slots
+    /// written go to <paramref name="added"/> (as many as fit). Returns the number of markers added.
     /// </summary>
     public int Collect(ReadOnlySpan<DeathEvent> deaths, long tick, Span<int> added)
     {
         if (tick == _lastCollected) return 0;
         _lastCollected = tick;
+        int n = 0;
         for (int i = 0; i < deaths.Length; i++)
         {
+            if (deaths[i].Expired) continue;
             int slot = Add(deaths[i], tick);
-            if (i < added.Length) added[i] = slot;
+            if (n < added.Length) added[n] = slot;
+            n++;
         }
-        return deaths.Length;
+        return n;
     }
 
     /// <summary>Removes every marker whose time is up at tick <paramref name="tick"/>; writes their slots to <paramref name="removed"/> (as many as fit) and returns how many were removed.</summary>

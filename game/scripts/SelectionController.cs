@@ -288,7 +288,8 @@ public partial class SelectionController : Node
     /// <summary>
     /// What an ability button or its grid key does (M4-V6a): arms targeting for ability <paramref name="abilityId"/> when
     /// some selected unit has it off cooldown (<see cref="AbilityCaster.SoonestReady"/>); false (nothing armed, any
-    /// other targeting left as it was) otherwise. M4-V6d: a no-target ability (<see cref="AbilityKind.SelfAura"/>) arms
+    /// other targeting left as it was) otherwise. M4-V6d: a no-target ability (<see cref="AbilityCaster.IsNoTarget"/>:
+    /// <see cref="AbilityKind.SelfAura"/>, and <see cref="AbilityKind.Summon"/> since M4-V7) arms
     /// nothing: the press casts at once (<see cref="SelfAbilityOrder"/>, queued when <paramref name="queued"/>) and ends any
     /// targeting; true if it enqueued.
     /// </summary>
@@ -299,7 +300,7 @@ public partial class SelectionController : Node
         if ((uint)abilityId >= (uint)world.Data.Abilities.Length) return false;
         Selection.Prune(world.Units.Alive, world.Units.Generation);
         if (SoonestReady(abilityId) != 0) return false;
-        if (world.Data.Abilities[abilityId].Kind == AbilityKind.SelfAura)
+        if (AbilityCaster.IsNoTarget(world.Data.Abilities[abilityId].Kind))
         {
             Targeting = false;
             return SelfAbilityOrder(abilityId, queued);

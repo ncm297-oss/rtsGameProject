@@ -6,8 +6,9 @@ namespace Rts.Sim.ViewApi;
 /// Hit-flash bookkeeping for the unit views (M4-V1): a unit whose hit points fell since the last <see cref="Update"/> is lit
 /// for <see cref="Seconds"/> of view time, and a later hit while lit starts the time again, so a unit under repeated hits
 /// stays lit. No sim event is needed: each slot remembers the hp and generation it last saw. Since M4-V2 a unit first seen
-/// below its type's maximum hp flashes once (the overload with types). Presentation only (a timer per slot); allocation-free
-/// after construction.
+/// below its maximum hp flashes once (the overload with types, or since M4-V7 the one with a maximum per slot, which the
+/// view fills from the world's <c>MaxHp(slot)</c>, BUG-0450). Presentation only (a timer per slot); allocation-free after
+/// construction.
 /// </summary>
 public sealed class HitFlash
 {
@@ -67,7 +68,19 @@ public sealed class HitFlash
     /// full hp starts unlit as before. <paramref name="typeId"/> is the store's <c>TypeId</c>, <paramref name="maxHp"/> each
     /// type's <c>hp</c>; with either empty (or a type out of range) no first-sight flash.
     /// </summary>
-    public void Update(ReadOnlySpan<bool> alive, ReadOnlySpan<int> generation, ReadOnlySpan<int> hp, ReadOnlySpan<int> typeId, ReadOnlySpan<int> maxHp, float dt)
+    public void Update(ReadOnlySpan<bool> alive, ReadOnlySpan<int> generation, ReadOnlySpan<int> hp, ReadOnlySpan<int> typeId, ReadOnlySpan<int> maxHp, float dt) =>
+        Step(alive, generation, hp, typeId, maxHp, ReadOnlySpan<int>.Empty, dt);
+
+    /// <summary>
+    /// The view's form (M4-V7, BUG-0450): as the overload with types, but the first-sight maximum is
+    /// <paramref name="slotMaxHp"/>[slot] (the world's <c>MaxHp(slot)</c>: the type's <c>hp</c> plus the owner's hp techs),
+    /// so an upgraded unit first seen at 70 / 83 flashes and one at 83 / 83 does not. A slot past its end: no first-sight flash.
+    /// </summary>
+    public void UpdateWithSlotMax(ReadOnlySpan<bool> alive, ReadOnlySpan<int> generation, ReadOnlySpan<int> hp, ReadOnlySpan<int> slotMaxHp, float dt) =>
+        Step(alive, generation, hp, ReadOnlySpan<int>.Empty, ReadOnlySpan<int>.Empty, slotMaxHp, dt);
+
+    // One frame. The first-sight maximum is slotMaxHp[i] when that span is given, else maxHp[typeId[i]] (none when empty).
+    private void Step(ReadOnlySpan<bool> alive, ReadOnlySpan<int> generation, ReadOnlySpan<int> hp, ReadOnlySpan<int> typeId, ReadOnlySpan<int> maxHp, ReadOnlySpan<int> slotMaxHp, float dt)
     {
         if (!(dt > 0f)) dt = 0f;
         int n = Math.Min(_left.Length, Math.Min(alive.Length, Math.Min(generation.Length, hp.Length)));
@@ -84,7 +97,8 @@ public sealed class HitFlash
             {
                 _lastGen[i] = generation[i];
                 _lastHp[i] = hp[i];
-                hit = i < typeId.Length && (uint)typeId[i] < (uint)maxHp.Length && hp[i] < maxHp[typeId[i]];
+                hit = !slotMaxHp.IsEmpty ? i < slotMaxHp.Length && hp[i] < slotMaxHp[i]
+                    : i < typeId.Length && (uint)typeId[i] < (uint)maxHp.Length && hp[i] < maxHp[typeId[i]];
                 _left[i] = hit ? Seconds : 0f;
             }
             else

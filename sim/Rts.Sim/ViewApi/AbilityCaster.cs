@@ -27,6 +27,13 @@ namespace Rts.Sim.ViewApi;
 /// </remarks>
 public static class AbilityCaster
 {
+    /// <summary>
+    /// True for an ability kind cast with no target (M4-V6d / M4-V7): <see cref="AbilityKind.SelfAura"/> and
+    /// <see cref="AbilityKind.Summon"/>. Its card button and grid key cast at once for the lead caster (no targeting); the
+    /// sim ignores the command's point.
+    /// </summary>
+    public static bool IsNoTarget(AbilityKind kind) => kind is AbilityKind.SelfAura or AbilityKind.Summon;
+
     /// <summary>The index of ability <paramref name="abilityId"/> in <paramref name="def"/>'s list (what <c>UseAbility</c> names), or -1.</summary>
     public static int IndexOf(UnitDef def, int abilityId)
     {

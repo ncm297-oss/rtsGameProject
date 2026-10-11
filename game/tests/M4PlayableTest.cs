@@ -26,7 +26,9 @@ namespace Rts.Game.Tests;
 /// (the Zealot duel's two Attacks) are staging commands, like the spawns. Each step is checked against the sim and prints
 /// the tick it completed at. Every frame of the whole run checks the fog rule: no enemy unit view, hp bar, status marker or
 /// cast bar is drawn while <c>Fog.CanSeeUnit</c> is false for its unit, and no enemy building view while
-/// <c>CanSeeBuilding</c> is false (the counters are printed). At the end the whole command stream is replayed into a bare
+/// <c>CanSeeBuilding</c> is false (the counters are printed). M4-V7b adds step 9: a staged enemy Priest's Sandstorm over
+/// the held army, with the Blinded markers on our units inside, the enemy disc drawn exactly while our fog sees a cell within
+/// its radius + 2 m, and our sight inside the storm shrinking in the fog texture. At the end the whole command stream is replayed into a bare
 /// twin sim (<see cref="ReplayPlayer"/>, a checkpoint every tick): equal hashes prove the views and the HUD only read the sim.
 /// </summary>
 /// <remarks>
@@ -34,13 +36,20 @@ namespace Rts.Game.Tests;
 /// <c>... -- --seed 6</c> for one. Prints "M4 PLAYABLE TEST PASS" and exits 0, else "M4 PLAYABLE TEST FAIL &lt;step&gt;: &lt;what&gt;"
 /// and exits 1. <c>-- --break &lt;step number&gt;</c> makes that step expect the wrong answer once, to show a failure names its
 /// step. Windowed with <c>-- --shots &lt;dir&gt;</c> it saves <c>m4-seedN-first-contact.png</c>, <c>-storm.png</c>,
-/// <c>-telas-fire.png</c>, <c>-cusser-rubble.png</c> and <c>-frenzied-zealot.png</c>. The own Priest of the Whirlwind in the
+/// <c>-telas-fire.png</c>, <c>-cusser-rubble.png</c>, <c>-frenzied-zealot.png</c> and <c>-enemy-storm.png</c>. The own Priest of the Whirlwind in the
 /// Malazan army is staging (a dev spawn for player 0): the local player is player 0 (Malazan) until the M6 lobby, so a
 /// Sandstorm cast through the HUD needs a Priest of its own.
 /// </remarks>
 public partial class M4PlayableTest : Node
 {
-    /// <summary>Most sim ticks one seed may take (4 min 35 s of game time). Measured (2026-10-10, 46 seed-runs headless under a parallel <c>dotnet test</c>, after BUG-0463): seed 1 2,560-2,903, seed 6 3,424-3,878, so at least 1,600 ticks (40 %) of margin.</summary>
+    /// <summary>
+    /// Most sim ticks one seed may take (4 min 35 s of game time). Measured with step 9 (the enemy storm, about 276 ticks;
+    /// 2026-10-10, M4-V7b, 9 runs of both seeds headless, part of them beside a full <c>dotnet test</c>): seed 1 2,869-3,028,
+    /// seed 6 3,710-4,372. The 4,372 run's step 6 (the fight) took 1,360 ticks against the usual 700-790: the same long
+    /// fight as QA's 4,212-tick run before step 9 existed (BUG-0462 item 5; about 4,490 with it). So the measured margin
+    /// is at least 1,128 ticks (20 %), about 1,000 (18 %) on QA's outlier; a Telas Fire recast that waits out its 25 s
+    /// cooldown adds about 500, so the margin is what was measured, not a guarantee.
+    /// </summary>
     public const int TickBudget = 5500;
 
     private sealed class StepFailed : Exception
@@ -283,7 +292,13 @@ public partial class M4PlayableTest : Node
         await ZealotDuel();
         Done();
 
-        // 9. The hash twin: the command stream, replayed into a bare sim, hashes equal every tick.
+        // 9. An enemy Priest's Sandstorm over our army (a staged enemy cast: the enemy has no AI before M5): our units inside
+        // show the Blinded marker, the enemy disc is drawn exactly while our sight reaches the storm, and our sight shrinks.
+        Step("an enemy Sandstorm over our army");
+        await EnemyStorm();
+        Done();
+
+        // 10. The hash twin: the command stream, replayed into a bare sim, hashes equal every tick.
         Step("hash twin");
         Replay replay = _runner.Recorder!.ToReplay();
         ReplayResult twin = ReplayPlayer.Run(replay, _data);
@@ -569,6 +584,196 @@ public partial class M4PlayableTest : Node
         Expect(b >= 2 && a > b, $"over ticks {start + 1}-{start + window} Zealot A (hp {U.Hp[za]}, Frenzied) swung {a} times, unhurt B {b} (swing ticks A {string.Join(",", _swingTicksA.Where(t => t > start))}; B {string.Join(",", _swingTicksB.Where(t => t > start))})");
         GD.Print($"  Zealot A at {U.Hp[za]} / {_data.Units[_zealotType].Hp} hp, Frenzied (marker {AbilityViews.FrenzyColor}): {a} swings in ticks {start + 1}-{start + window} (the frame clock ran to {Tick}); unhurt Zealot B: {b}");
         _duelA = _duelB = default;
+    }
+
+    // The army holds (1, H: a player bracing for it); a fresh enemy Priest is staged out of our sight (every own unit at least
+    // our longest sight + 1.5 m off, its cell not visible) and casts Sandstorm (a staging UseAbility for player 1, like the
+    // duel's Attacks) at a point within its range that covers the most of our army. Then, every frame the storm lives: the
+    // enemy disc is drawn exactly when ZoneDiscs.SeesStorm holds for our fog (the M4-V6c rule: a visible cell within its
+    // radius + 2 m); our units inside show the Blinded marker; and after a fog update our visible cells inside the storm are
+    // fewer than before the cast, in the sim and in the fog texture alike (Blinded sight is 2 m, and the storm hides its
+    // inside from sight outside it).
+    private async Task EnemyStorm()
+    {
+        AbilityDef def = _data.Abilities[_sandstorm];
+        Key(Godot.Key.Key1);
+        await Frames(1);
+        int alive = _army.Count(h => U.IsAlive(h));
+        Expect(alive > 0 && _sel.Selection.Count == alive, $"1 recalled {_sel.Selection.Count} of {alive} live army units");
+        Key(Godot.Key.H);
+        await Ticks(3);
+        Expect(_army.All(h => !U.IsAlive(h) || U.State[h.Index] != UnitState.Moving), "the army still moving after H");
+
+        EntityHandle priest = default;
+        System.Numerics.Vector2 point = default;
+        int seenBefore = 0;
+        for (int attempt = 0; ; attempt++)
+        {
+            Expect(attempt < 3, "the enemy Priest was killed before its Sandstorm resolved three times");
+            (System.Numerics.Vector2 at, System.Numerics.Vector2 aim, int covered, bool hidden) = StormSpot(def);
+            Expect(covered > 0, "no spot for the enemy Priest within Sandstorm's range of our army");
+            HashSet<EntityHandle> before = LiveHandles();
+            _sim.Enqueue(Command.SpawnUnit(1, _priestType, at));
+            await Ticks(2);
+            int slot = Fresh(before).FirstOrDefault(i => U.TypeId[i] == _priestType, -1);
+            Expect(slot >= 0, $"no enemy Priest spawned at {at}");
+            priest = new EntityHandle(slot, U.Generation[slot]);
+            point = aim;
+            seenBefore = SeenWithin(point, def.Radius, out _);
+            int resolves = _resolves.Count;
+            _sim.Enqueue(Command.UseAbility(1, priest, 0, point));
+            int sent = Tick;
+            GD.Print($"  enemy Priest {slot} staged at {at} ({(hidden ? "out of our sight" : "in our sight: no hidden spot")}, {MinOwnDistance(at):0.0} m from our nearest unit), Sandstorm at {point} over {covered} of our units on tick {sent}; {seenBefore} of our visible cells inside");
+            EntityHandle p = priest;
+            await Until(() => _resolves.Skip(resolves).Any(r => r.Caster == p) || !U.IsAlive(p) || Tick > sent + 3 && U.CastAbility[p.Index] < 0,
+                "the enemy Sandstorm resolved");
+            if (_resolves.Skip(resolves).Any(r => r.Caster == p)) break;
+            Expect(!U.IsAlive(p), $"the enemy Priest dropped its cast (at {U.Position[p.Index]}, {System.Numerics.Vector2.Distance(U.Position[p.Index], point):0.0} m from {point})");
+            GD.Print($"  the enemy Priest was killed before its Sandstorm resolved (tick {Tick}); staging another");
+        }
+        int zone = -1;
+        for (int k = 0; k < W.Zones.Capacity; k++)
+            if (W.Zones.Alive[k] && W.Zones.Owner[k] == 1 && System.Numerics.Vector2.Distance(W.Zones.Center[k], point) < 0.01f) zone = k;
+        Expect(zone >= 0, $"no enemy zone at {point} after the resolve");
+        System.Numerics.Vector2 centre = W.Zones.Center[zone];
+        float radius = W.Zones.Radius(zone);
+        await LookAt(centre);
+
+        int resolvedAt = Tick, drawnFrames = 0, hiddenFrames = 0, mismatches = 0, blindedFrames = 0, mostBlinded = 0, fewest = int.MaxValue, textureOff = 0;
+        string firstMismatch = "";
+        bool shot = false;
+        while (W.Zones.Alive[zone] && W.Zones.Owner[zone] == 1 && W.Zones.Center[zone] == centre)
+        {
+            if (Tick > TickBudget) throw new StepFailed($"the enemy storm: not over by tick {TickBudget}");
+            await Frame();
+            if (!W.Zones.Alive[zone] || W.Zones.Center[zone] != centre) break;
+            bool sees = ZoneDiscs.SeesStorm(W.Fog.Visibility(0), W.Fog.Width, W.Fog.Height, centre, radius);
+            bool drawn = EnemyDiscDrawn(zone);
+            if (drawn != sees && mismatches++ == 0) firstMismatch = $"tick {Tick}: disc drawn {drawn}, an own visible cell within {radius} + {ZoneDiscs.RimWidth} m {sees}";
+            if (drawn) drawnFrames++; else hiddenFrames++;
+            int blinded = OwnBlindedInside(centre, radius);
+            if (blinded > 0) blindedFrames++;
+            mostBlinded = Math.Max(mostBlinded, blinded);
+            // The fog after an update since the resolve: our sight inside the storm, the sim's and the texture's.
+            if (Tick > resolvedAt + VisionConstants.UpdateInterval)
+            {
+                int seen = SeenWithin(centre, radius, out int texture);
+                if (seen != texture) textureOff++;
+                fewest = Math.Min(fewest, seen);
+            }
+            if (!shot && blinded > 0 && drawn)
+            {
+                await Shot("enemy-storm");
+                shot = true;
+            }
+        }
+        Expect(mismatches == 0, $"the enemy disc and our sight disagreed on {mismatches} frames, first {firstMismatch}");
+        Expect(drawnFrames > 0 && blindedFrames > 0, $"the enemy storm: disc drawn on {drawnFrames} frames, an own Blinded marker inside on {blindedFrames}");
+        Expect(textureOff == 0 && fewest < seenBefore, $"our visible cells inside the storm: {seenBefore} before, at least {fewest} during (texture off on {textureOff} frames)");
+        GD.Print($"  enemy storm at {centre} (r {radius} m) from tick {resolvedAt} to {Tick}: disc drawn on {drawnFrames} frames and hidden on {hiddenFrames}, always as our sight of it; up to {mostBlinded} own units Blinded inside (on {blindedFrames} frames); our visible cells inside {seenBefore} before, {fewest} at the fewest (sim and texture equal)");
+        await Frames(2);
+        Expect(!EnemyDiscDrawnAt(centre), "the enemy disc still drawn after the storm");
+    }
+
+    // Where to stage the enemy Priest and where it aims: a free cell out of our sight (every own unit at least our longest
+    // sight + 1.5 m off, the cell not visible) within reach of an own army unit, aiming `range - 0.5` m toward that unit; the
+    // spot whose storm covers the most of our army (within its radius - 1 m). Falls back to a spot in sight (at least 12 m
+    // from every own unit) when none is hidden. Returns the spot, the aim, the army units covered and whether it is hidden.
+    private (System.Numerics.Vector2, System.Numerics.Vector2, int, bool) StormSpot(AbilityDef def)
+    {
+        var own = new List<System.Numerics.Vector2>();
+        float sight = 0f;
+        for (int i = 0; i < U.Capacity; i++)
+            if (U.Alive[i] && U.Owner[i] == 0)
+            {
+                own.Add(U.Position[i]);
+                sight = Math.Max(sight, _data.Units[U.TypeId[i]].Sight);
+            }
+        byte[] vis = W.Fog.Visibility(0).ToArray();
+        float aimAt = def.Range - 0.5f, inner = def.Radius - 1f;
+        for (int pass = 0; pass < 2; pass++)
+        {
+            float away = pass == 0 ? sight + 1.5f : 12f;
+            System.Numerics.Vector2 bestAt = default, bestAim = default;
+            int best = 0;
+            foreach (EntityHandle t in _army)
+            {
+                if (!U.IsAlive(t)) continue;
+                System.Numerics.Vector2 tp = U.Position[t.Index];
+                int r = (int)MathF.Ceiling((aimAt + inner) / MapConstants.CellSize);
+                int cx = (int)(tp.X / MapConstants.CellSize), cy = (int)(tp.Y / MapConstants.CellSize);
+                for (int y = Math.Max(0, cy - r); y <= Math.Min(G.Height - 1, cy + r); y++)
+                    for (int x = Math.Max(0, cx - r); x <= Math.Min(G.Width - 1, cx + r); x++)
+                    {
+                        if (!G.IsPassable(x, y) || B.SlotAt(x, y) >= 0) continue;
+                        if (pass == 0 && vis[y * G.Width + x] == VisionConstants.Visible) continue;
+                        System.Numerics.Vector2 at = G.CellCenter(x, y);
+                        float d = System.Numerics.Vector2.Distance(at, tp);
+                        if (d < away || d > aimAt + inner) continue;
+                        bool clear = true;
+                        foreach (System.Numerics.Vector2 o in own)
+                            if (System.Numerics.Vector2.Distance(o, at) < away) { clear = false; break; }
+                        if (!clear) continue;
+                        System.Numerics.Vector2 aim = at + (tp - at) / d * Math.Min(aimAt, d);
+                        int covered = 0;
+                        foreach (EntityHandle h in _army) if (U.IsAlive(h) && System.Numerics.Vector2.Distance(U.Position[h.Index], aim) <= inner) covered++;
+                        if (covered > best) (best, bestAt, bestAim) = (covered, at, aim);
+                    }
+            }
+            if (best > 0) return (bestAt, bestAim, best, pass == 0);
+        }
+        return (default, default, 0, false);
+    }
+
+    private float MinOwnDistance(System.Numerics.Vector2 p)
+    {
+        float d = float.MaxValue;
+        for (int i = 0; i < U.Capacity; i++) if (U.Alive[i] && U.Owner[i] == 0) d = Math.Min(d, System.Numerics.Vector2.Distance(U.Position[i], p));
+        return d;
+    }
+
+    // Our visible cells whose centre is within `radius` of `centre` in the sim's fog; `texture`: the same count in the fog texture.
+    private int SeenWithin(System.Numerics.Vector2 centre, float radius, out int texture)
+    {
+        byte[] vis = W.Fog.Visibility(0).ToArray();
+        byte[] tex = _fog.Image.GetData();
+        int n = 0;
+        texture = 0;
+        for (int y = 0; y < G.Height; y++)
+            for (int x = 0; x < G.Width; x++)
+            {
+                if (System.Numerics.Vector2.Distance(G.CellCenter(x, y), centre) > radius) continue;
+                int cell = y * G.Width + x;
+                if (vis[cell] == VisionConstants.Visible) n++;
+                if (tex[cell] == VisionConstants.Visible) texture++;
+            }
+        return n;
+    }
+
+    private bool EnemyDiscDrawn(int zone)
+    {
+        for (int k = 0; k < _views.ShownZones; k++)
+            if (_views.ZoneDiscAt(k).Slot == zone && !_views.ZoneDiscAt(k).Own) return true;
+        return false;
+    }
+
+    private bool EnemyDiscDrawnAt(System.Numerics.Vector2 centre)
+    {
+        for (int k = 0; k < _views.ShownZones; k++)
+            if (!_views.ZoneDiscAt(k).Own && _views.ZoneDiscAt(k).Center == centre) return true;
+        return false;
+    }
+
+    // Own units within `radius` of `centre` with a Blinded marker drawn.
+    private int OwnBlindedInside(System.Numerics.Vector2 centre, float radius)
+    {
+        int n = 0;
+        for (int k = 0; k < _views.ShownMarkers; k++)
+        {
+            Rts.Sim.ViewApi.StatusMark m = _views.MarkerAt(k);
+            if (m.Status == _blinded && U.Alive[m.Unit] && U.Owner[m.Unit] == 0 && System.Numerics.Vector2.Distance(U.Position[m.Unit], centre) <= radius) n++;
+        }
+        return n;
     }
 
     // ---- setup ----

@@ -7,9 +7,11 @@ namespace Rts.Sim.ViewApi;
 
 /// <summary>Which units show an hp bar, how full, and in what colour (M4-V1). Read-only, allocation-free.</summary>
 /// <remarks>
-/// A bar shows only on a live unit whose hit points are below its type's <c>hp</c> (as the building bars do, M3-V1); the
-/// fill is <c>Hp / max</c> clamped to [0, 1]. Hp tech bonuses are not applied by combat yet (docs/03 "Implementation
-/// (M4-1)"), so the type's <c>hp</c> is the maximum.
+/// A bar shows only on a live unit whose hit points are below its maximum (as the building bars do, M3-V1); the fill is
+/// <c>Hp / max</c> clamped to [0, 1]. Since hp techs raise a unit's hit points (M4-4b-3b, BUG-0421) the maximum is the
+/// world's <c>MaxHp(slot)</c> (the type's <c>hp</c> plus its owner's hp techs): the view copies it per slot each frame and
+/// passes it to <see cref="Collect(ReadOnlySpan{bool}, ReadOnlySpan{int}, ReadOnlySpan{int}, Span{int})"/> (M4-V7,
+/// BUG-0450: a Prophecy Zealot at 70 / 83 is hurt). The form with the unit defs takes each type's <c>hp</c>, no techs.
 /// </remarks>
 public static class UnitHpBars
 {
@@ -39,8 +41,29 @@ public static class UnitHpBars
     }
 
     /// <summary>
-    /// Writes the slots of every live hurt unit, ascending, into <paramref name="slots"/> and returns how many (at most its
-    /// length). The spans are the unit store's <c>Alive</c>, <c>TypeId</c> and <c>Hp</c>.
+    /// The view's form (M4-V7, BUG-0450): writes the slots set in <paramref name="shown"/> (the store's <c>Alive</c>, or the
+    /// fog's shown list) whose <paramref name="hp"/> is below their <paramref name="maxHp"/> (per slot: the world's
+    /// <c>MaxHp(slot)</c>, hp techs included), ascending, into <paramref name="slots"/> and returns how many (at most its
+    /// length). A slot past any span's end is skipped. Allocation-free.
+    /// </summary>
+    public static int Collect(ReadOnlySpan<bool> shown, ReadOnlySpan<int> hp, ReadOnlySpan<int> maxHp, Span<int> slots)
+    {
+        int n = Math.Min(shown.Length, Math.Min(hp.Length, maxHp.Length)), k = 0;
+        for (int i = 0; i < n && k < slots.Length; i++)
+        {
+            if (!shown[i]) continue;
+            int max = maxHp[i];
+            if (max <= 0 || hp[i] >= max) continue;
+            slots[k++] = i;
+        }
+        return k;
+    }
+
+    /// <summary>
+    /// The M4-V1 form, with each type's <c>hp</c> as the maximum (no hp techs): writes the slots of every live unit below it,
+    /// ascending, into <paramref name="slots"/> and returns how many (at most its length). The spans are the unit store's
+    /// <c>Alive</c>, <c>TypeId</c> and <c>Hp</c>. Equal to the per-slot form only while no hp tech is researched; a match's
+    /// view uses that one (BUG-0450).
     /// </summary>
     public static int Collect(ReadOnlySpan<bool> alive, ReadOnlySpan<int> typeId, ReadOnlySpan<int> hp, ImmutableArray<UnitDef> defs, Span<int> slots)
     {

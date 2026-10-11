@@ -46,8 +46,14 @@ namespace Rts.Game.Tests;
 /// <c>UseAbility</c> at the lead's position, the flash lands on the lead and the rally's Frenzied markers show in
 /// FrenzyColor, Shift + click queues one for the second Heavy, the zone ability's key casts at once; its twin; and all four
 /// markers side by side on a Heavy and a Raider.
+/// M4-V7b adds, per seed, a match on test data (a test-only summon on the Cadre Mage, after the sim's <c>SummonTests.AddTo</c>;
+/// Dryjhna's Prophecy without its Age II requirement): the summon's card (W, a tooltip without range or radius); hovering
+/// draws no ring and arms nothing; a click sends exactly one <c>UseAbility</c> at the lead's position; the three Heavies
+/// appear with their views at the resolve; at the expiry three <c>Expired</c> deaths, the views gone, no corpse marker and
+/// K / L unchanged (sim, resource bar, F12 overlay); Shift + W through the viewport queues one for the second mage; the
+/// twin; then (staging) Prophecy Zealots: 70 / 83 flashes on first sight and has a bar of 70 / 83, 83 / 83 neither (BUG-0450).
 /// </summary>
-/// <remarks>Headless. Run: <c>&amp; $env:GODOT --headless --path game res://tests/AbilityViewTest.tscn</c> (seeds 1 and 6; <c>-- --seed N</c> for one); prints "ABILITY VIEW TEST PASS" and exits 0, or each failure and exits 1. Windowed with <c>-- --shots &lt;dir&gt;</c> it also saves <c>ability-seedN-targeting.png</c>, <c>ability-seedN-casting.png</c>, <c>ability-seedN-first-tick.png</c>, <c>ability-seedN-flash.png</c>, <c>ability-seedN-burning.png</c>, <c>ability-seedN-cusser.png</c>, <c>ability-seedN-statuses.png</c>, <c>ability-seedN-storm.png</c>, <c>ability-seedN-blinded.png</c>, <c>ability-seedN-storm-enemy.png</c>, <c>ability-seedN-aura-hover.png</c>, <c>ability-seedN-aura-frenzied.png</c> and <c>ability-seedN-frenzied.png</c>.</remarks>
+/// <remarks>Headless. Run: <c>&amp; $env:GODOT --headless --path game res://tests/AbilityViewTest.tscn</c> (seeds 1 and 6; <c>-- --seed N</c> for one); prints "ABILITY VIEW TEST PASS" and exits 0, or each failure and exits 1. Windowed with <c>-- --shots &lt;dir&gt;</c> it also saves <c>ability-seedN-targeting.png</c>, <c>ability-seedN-casting.png</c>, <c>ability-seedN-first-tick.png</c>, <c>ability-seedN-flash.png</c>, <c>ability-seedN-burning.png</c>, <c>ability-seedN-cusser.png</c>, <c>ability-seedN-statuses.png</c>, <c>ability-seedN-storm.png</c>, <c>ability-seedN-blinded.png</c>, <c>ability-seedN-storm-enemy.png</c>, <c>ability-seedN-aura-hover.png</c>, <c>ability-seedN-aura-frenzied.png</c>, <c>ability-seedN-frenzied.png</c> and <c>ability-seedN-summoned.png</c>.</remarks>
 public partial class AbilityViewTest : Node
 {
     private static readonly FieldInfo CommandsField = typeof(Simulation).GetField("_commands", BindingFlags.NonPublic | BindingFlags.Instance)!;
@@ -107,6 +113,7 @@ public partial class AbilityViewTest : Node
             foreach (ulong seed in seeds) await Run(seed);
             FrenzyColourRow();
             foreach (ulong seed in seeds) await SelfAuraRun(seed);
+            foreach (ulong seed in seeds) await SummonRun(seed);
             await Steady(seeds[0]);
         }
         catch (Exception ex)
@@ -1004,16 +1011,23 @@ public partial class AbilityViewTest : Node
 
     // The shipped data plus SelfAuraTests.AddTo's two test-only selfAura abilities on the Heavy Infantry (Requests 30: no shipped
     // ability uses the kind), written to a copy under the user data folder and loaded from there.
-    private static GameData AuraData()
+    // A fresh copy of the shipped data's JSON in the user data folder under `name`; returns its path.
+    private static string CopyOfShippedData(string name)
     {
-        if (_auraData != null) return _auraData;
-        string from = ProjectSettings.GlobalizePath("res://data"), to = System.IO.Path.Combine(OS.GetUserDataDir(), "abilityview-selfaura-data");
+        string from = ProjectSettings.GlobalizePath("res://data"), to = System.IO.Path.Combine(OS.GetUserDataDir(), name);
         if (System.IO.Directory.Exists(to)) System.IO.Directory.Delete(to, recursive: true);
         foreach (string dir in System.IO.Directory.GetDirectories(from, "*", System.IO.SearchOption.AllDirectories))
             System.IO.Directory.CreateDirectory(dir.Replace(from, to));
         System.IO.Directory.CreateDirectory(to);
         foreach (string file in System.IO.Directory.GetFiles(from, "*.json", System.IO.SearchOption.AllDirectories))
             System.IO.File.Copy(file, file.Replace(from, to));
+        return to;
+    }
+
+    private static GameData AuraData()
+    {
+        if (_auraData != null) return _auraData;
+        string to = CopyOfShippedData("abilityview-selfaura-data");
         string abilities = System.IO.Path.Combine(to, "factions", "malazan", "abilities.json");
         var root = System.Text.Json.Nodes.JsonNode.Parse(System.IO.File.ReadAllText(abilities))!;
         var list = root["abilities"]!.AsArray();
@@ -1208,6 +1222,268 @@ public partial class AbilityViewTest : Node
         }
         await Shot($"ability-seed{seed}-frenzied");
         GD.Print($"seed {seed}: Burning, Slowed, Blinded and Frenzied side by side on Heavy {heavyUnit.Index} and Raider {raider}");
+    }
+
+    // ---- M4-V7b: the summon card, summoned views, and the hp bar's maximum (BUG-0450) ----
+
+    private static GameData? _summonData;
+
+    // The shipped data plus a test-only summon on the Cadre Mage (SummonTests.AddTo's pattern; no shipped ability is a
+    // summon): zz_test_summon, 3 Heavy Infantry for 3 s, 0.5 s cast, 10 s cooldown, radius 0, as the mage's ability 1 (W).
+    // Dryjhna's Prophecy loses its Age II requirement and takes 0.1 s, so the Prophecy row can research it by command.
+    private static GameData SummonData()
+    {
+        if (_summonData != null) return _summonData;
+        string to = CopyOfShippedData("abilityview-summon-data");
+        string abilities = System.IO.Path.Combine(to, "factions", "malazan", "abilities.json");
+        var root = System.Text.Json.Nodes.JsonNode.Parse(System.IO.File.ReadAllText(abilities))!;
+        root["abilities"]!.AsArray().Add(System.Text.Json.Nodes.JsonNode.Parse("""
+            { "id": "zz_test_summon", "displayName": "Test Summon", "description": "Test only.", "kind": "summon",
+              "castTime": 0.5, "cooldown": 10, "affects": "own_units", "autocast": false,
+              "effects": [ { "kind": "spawn", "unit": "malazan_heavy_infantry", "count": 3, "lifetime": 3 } ] }
+            """));
+        System.IO.File.WriteAllText(abilities, root.ToJsonString());
+        string units = System.IO.Path.Combine(to, "factions", "malazan", "units.json");
+        var unitRoot = System.Text.Json.Nodes.JsonNode.Parse(System.IO.File.ReadAllText(units))!;
+        foreach (System.Text.Json.Nodes.JsonNode? u in unitRoot["units"]!.AsArray())
+            if ((string?)u!["id"] == "malazan_cadre_mage") u["abilities"] = new System.Text.Json.Nodes.JsonArray("telas_fire", "zz_test_summon");
+        System.IO.File.WriteAllText(units, unitRoot.ToJsonString());
+        string techs = System.IO.Path.Combine(to, "factions", "whirlwind", "techs.json");
+        var techRoot = System.Text.Json.Nodes.JsonNode.Parse(System.IO.File.ReadAllText(techs))!;
+        foreach (System.Text.Json.Nodes.JsonNode? t in techRoot["techs"]!.AsArray())
+            if ((string?)t!["id"] == "dryjhnas_prophecy")
+            {
+                t["requires"] = new System.Text.Json.Nodes.JsonArray();
+                t["researchTime"] = 0.1;
+            }
+        System.IO.File.WriteAllText(techs, techRoot.ToJsonString());
+        DataLoadResult r = DataLoader.LoadAll(to);
+        if (!r.Ok) throw new InvalidOperationException("summon test data: " + string.Join("; ", r.Errors));
+        return _summonData = r.Data!;
+    }
+
+    // M4-V7b on a match whose Cadre Mages carry the test summon: two mages (a lead, a second 8 m east). The card (W, the
+    // tooltip without range or radius); hovering the button draws no ring (radius 0) and arms nothing; a click on it sends
+    // exactly one UseAbility at the lead's position (no targeting, one sound); the three Heavies appear at the resolve with
+    // their views drawn; at their expiry the Deaths list has three Expired entries, the views go, no corpse marker is added
+    // and K / L (the sim, the resource bar, the F12 overlay) stay; Shift + W (pushed through the viewport) queues one for the
+    // second mage; the twin; then (staging after the twin) the BUG-0450 bar row.
+    private async Task SummonRun(ulong seed)
+    {
+        GameData shipped = _data;
+        GameData data = SummonData();
+        _data = data;
+        try
+        {
+            StartMatch(seed, data, "--units", "0", "--no-bases", "--no-combat");
+            UnitViews units = _match.GetNode<UnitViews>("World3D/UnitViews");
+            CombatViews combat = _match.GetNode<CombatViews>("World3D/CombatViews");
+            ResourceBar bar = _match.GetNode<ResourceBar>("Hud/ResourceBar");
+            int mage = data.FindUnit("malazan_cadre_mage"), heavy = data.FindUnit("malazan_heavy_infantry");
+            int summon = data.FindAbility("zz_test_summon");
+            AbilityDef def = data.Abilities[summon];
+            int center = FlowField.NearestPassable(G, G.Height / 2 * G.Width + G.Width / 2);
+            System.Numerics.Vector2 c = G.CellCenter(center % G.Width, center / G.Width);
+            _sim.Enqueue(Command.SpawnUnit(0, mage, c));
+            _sim.Enqueue(Command.SpawnUnit(0, mage, c + new System.Numerics.Vector2(8f, 0f)));
+            for (int t = 0; t < 8; t++) _sim.Tick();
+            var mages = new List<EntityHandle>();
+            for (int i = 0; i < U.Capacity; i++) if (U.Alive[i] && U.TypeId[i] == mage) mages.Add(new EntityHandle(i, U.Generation[i]));
+            mages.Sort((a, b) => System.Numerics.Vector2.Distance(U.Position[a.Index], c).CompareTo(System.Numerics.Vector2.Distance(U.Position[b.Index], c)));
+            if (!Check(mages.Count == 2 && def.Kind == AbilityKind.Summon && def.Radius == 0f && def.Range == 0f,
+                $"seed {seed} summon: {mages.Count} mages staged, kind {def.Kind}, radius {def.Radius}, range {def.Range}")) return;
+            EntityHandle lead = mages[0], second = mages[1];
+            _camera.SetFocus(c.X + 4f, c.Y);
+            await Select(lead, second);
+
+            // The card: the summon on W, its tooltip without a range or a radius (a summon has neither).
+            string tip = $"{def.Description}\n{_ui.Hud(HudText.Cooldown)} 10 {_ui.Hud(HudText.Seconds)}";
+            Check(_card.AbilityAt(1) == summon && _card.GridKey(1) == "W" && _card.ButtonAt(1).TooltipText == tip,
+                $"seed {seed} summon card: cell 1 {_card.AbilityAt(1)} key '{_card.GridKey(1)}', tooltip '{_card.ButtonAt(1).TooltipText}', want '{tip}'");
+
+            // Hover: nothing armed, and no ring (radius 0).
+            Vector2 button = _card.ButtonAt(1).GetGlobalRect().GetCenter();
+            Push(new InputEventMouseMotion { Position = button });
+            await Frames();
+            _views.Sync(W, 0.5f, button, false);
+            Check(_card.HoveredAbility == summon && !_views.SelfRingShown && !_views.RadiusRing.Visible && !_views.RangeRing.Visible && !_sel.Targeting,
+                $"seed {seed} summon hover: hovered {_card.HoveredAbility}, ring {_views.SelfRingShown} radius {_views.RadiusRing.Visible} range {_views.RangeRing.Visible}, targeting {_sel.Targeting}");
+
+            // A click on the button: one UseAbility for the lead at its own position, no targeting, one sound.
+            await Gap();
+            int from = PendingCount(), sounds = _sfx.PlayCount(SfxEvent.Command);
+            LeftClick(button);
+            List<Command> sent = Pending(from);
+            System.Numerics.Vector2 leadPos = U.Position[lead.Index];
+            Check(sent.Count == 1 && sent[0].Kind == CommandKind.UseAbility && sent[0].Unit == lead && sent[0].TypeId == 1 && sent[0].Position == leadPos && !sent[0].IsQueued,
+                $"seed {seed} summon click: sent {Describe(sent)}, want one UseAbility for {lead} #1 at {leadPos}");
+            Check(!_sel.Targeting && _sel.TargetAbility < 0 && _sfx.PlayCount(SfxEvent.Command) == sounds + 1,
+                $"seed {seed} summon click: targeting {_sel.Targeting} ({_sel.TargetKind}), sounds {_sfx.PlayCount(SfxEvent.Command) - sounds}");
+
+            // The resolve: nothing summoned before it; three Heavies with their views drawn after it.
+            int[] kl = { W.Kills[0], W.Kills[1], W.Losses[0], W.Losses[1] };
+            int ticks = 0, early = 0;
+            bool resolved = false;
+            while (ticks < 40)
+            {
+                _sim.Tick();
+                ticks++;
+                if (resolved = Resolved(lead)) break;
+                if (SummonedCount() != 0) early++;
+                await Frame();
+            }
+            int resolveTick = W.TickNumber - 1; // the tick that ran the resolve
+            await Frames();
+            var summoned = new List<EntityHandle>();
+            for (int i = 0; i < U.Capacity; i++) if (U.Alive[i] && U.IsSummoned(i)) summoned.Add(new EntityHandle(i, U.Generation[i]));
+            int expires = summoned.Count > 0 ? U.ExpiresAtTick[summoned[0].Index] : -1;
+            bool drawn = summoned.All(h => units.IsShown(h.Index) && units.ViewOf(h.Index) is { Visible: true });
+            if (!Check(resolved, $"seed {seed} summon: no resolve in {ticks} ticks")) return;
+            Check(early == 0 && summoned.Count == 3 && summoned.All(h => U.TypeId[h.Index] == heavy && U.Owner[h.Index] == 0 && U.ExpiresAtTick[h.Index] == expires) && drawn
+                && expires == resolveTick + 60,
+                $"seed {seed} summon resolve (tick {resolveTick}): {early} ticks with a summon before it, {summoned.Count} summoned, views drawn {drawn}, expiry tick {expires} (want {resolveTick + 60}: 3 s)");
+            GD.Print($"seed {seed}: summon click: one UseAbility at the lead's position; resolved on tick {resolveTick}, 3 Heavies drawn, expiring on {expires}");
+            await Shot($"ability-seed{seed}-summoned");
+
+            // The expiry: three Expired deaths, no killer; the views go; no corpse marker; K / L stay.
+            long markersBefore = combat.Markers.Added;
+            int shownBefore = 0, expired = 0, expiredOn = -1;
+            while (summoned.Any(h => U.IsAlive(h)) && ticks++ < 200)
+            {
+                int running = W.TickNumber;
+                _sim.Tick();
+                int e = ExpiredAmong(summoned);
+                if (e > 0) expiredOn = running;
+                expired += e;
+                await Frame();
+                if (summoned.All(h => U.IsAlive(h) && units.IsShown(h.Index))) shownBefore++;
+            }
+            await Frames();
+            bool gone = summoned.All(h => !U.IsAlive(h) && !units.IsShown(h.Index) && units.ViewOf(h.Index) is not { Visible: true });
+            int corpses = 0;
+            for (int k = 0; k < combat.Markers.Capacity; k++) if (combat.MarkerShown(k) != 0) corpses++;
+            Check(expired == 3 && expiredOn == expires && gone && combat.Markers.Added == markersBefore && corpses == 0,
+                $"seed {seed} summon expiry (tick {expiredOn}, want {expires}): {expired} Expired deaths, views gone {gone}, markers +{combat.Markers.Added - markersBefore}, {corpses} drawn");
+            Check(shownBefore >= 50 && W.Kills[0] == kl[0] && W.Kills[1] == kl[1] && W.Losses[0] == kl[2] && W.Losses[1] == kl[3]
+                && bar.ShownKills == W.Kills[0] && bar.ShownLosses == W.Losses[0] && _overlay.Kills0 == kl[0] && _overlay.Losses0 == kl[2] && _overlay.Kills1 == kl[1] && _overlay.Losses1 == kl[3],
+                $"seed {seed} summon expiry: drawn on {shownBefore} frames before it; K / L sim {W.Kills[0]}/{W.Losses[0]} {W.Kills[1]}/{W.Losses[1]} (was {string.Join(",", kl)}), bar {bar.ShownKills}/{bar.ShownLosses}, overlay {_overlay.Kills0}/{_overlay.Losses0}");
+            GD.Print($"seed {seed}: summon expiry on tick {expiredOn}: 3 Expired deaths, views gone, 0 corpse markers, K / L unchanged; drawn on {shownBefore} frames before it");
+
+            // Shift + W through the viewport, the lead on cooldown: one queued UseAbility for the second mage at its position.
+            Push(new InputEventMouseMotion { Position = _screen / 2f });
+            await Gap();
+            from = PendingCount();
+            sounds = _sfx.PlayCount(SfxEvent.Command);
+            Input.ActionPress("order_queue");
+            PushKey(Godot.Key.W);
+            Input.ActionRelease("order_queue");
+            sent = Pending(from);
+            Check(sent.Count == 1 && sent[0].Kind == CommandKind.UseAbility && sent[0].Unit == second && sent[0].TypeId == 1 && sent[0].IsQueued
+                && sent[0].Position == U.Position[second.Index] && !_sel.Targeting && _sfx.PlayCount(SfxEvent.Command) == sounds + 1,
+                $"seed {seed} summon Shift + W: sent {Describe(sent)}, want one queued UseAbility for {second} #1; targeting {_sel.Targeting}");
+            ticks = 0;
+            while (!Resolved(second) && ticks < 40) { _sim.Tick(); ticks++; }
+            await Frames();
+            int second3 = 0;
+            for (int i = 0; i < U.Capacity; i++) if (U.Alive[i] && U.IsSummoned(i) && units.IsShown(i)) second3++;
+            Check(Resolved(second) && second3 == 3, $"seed {seed} summon Shift + W: resolved {Resolved(second)}, {second3} summoned drawn");
+            Twin(seed);
+
+            await ProphecyBarRow(seed, data, units, combat, c);
+        }
+        finally
+        {
+            await EndMatch();
+            _data = shipped;
+        }
+    }
+
+    // BUG-0450 on screen (staging after the twin): Whirlwind researches Dryjhna's Prophecy (a Smithy and a Research command,
+    // the test data's 0.1 s), two fresh Zealots of theirs by our mages spawn at 83 / 83; one is set to 70 before its view's
+    // first frame. It flashes on first sight and gets a bar of 70 / 83; the one at 83 / 83 neither flashes nor has a bar.
+    private async Task ProphecyBarRow(ulong seed, GameData data, UnitViews units, CombatViews combat, System.Numerics.Vector2 c)
+    {
+        int zealot = data.FindUnit("whirlwind_zealot"), prophecy = data.FindTech("dryjhnas_prophecy");
+        int smithy = StartBase.BuildingOfSlot(data, W.FactionOf(1), BuildingSlot.Forge);
+        int site = -1;
+        for (int k = 0; k < 16 && site < 0; k++)
+        {
+            float a = k * MathF.PI / 8f;
+            System.Numerics.Vector2 p = c + new System.Numerics.Vector2(MathF.Cos(a), MathF.Sin(a)) * 24f;
+            int cell = FlowField.NearestPassable(G, Math.Clamp((int)(p.Y / MapConstants.CellSize), 0, G.Height - 1) * G.Width + Math.Clamp((int)(p.X / MapConstants.CellSize), 0, G.Width - 1));
+            _sim.Enqueue(Command.SpawnBuilding(1, smithy, G.CellCenter(cell % G.Width, cell / G.Width)));
+            _sim.Tick();
+            _sim.Tick();
+            for (int b = 0; b < W.Buildings.Capacity; b++) if (W.Buildings.Alive[b] && W.Buildings.Owner[b] == 1 && W.Buildings.TypeId[b] == smithy) site = b;
+        }
+        if (!Check(site >= 0, $"seed {seed} prophecy: no spot for the Smithy")) return;
+        _sim.Enqueue(Command.Research(1, SelectionController.SiteCenter(W, site), prophecy));
+        for (int t = 0; t < 20 && W.MaxHpOf(1, zealot) != 83; t++) _sim.Tick();
+        if (!Check(W.MaxHpOf(1, zealot) == 83 && data.Units[zealot].Hp == 63, $"seed {seed} prophecy: Zealot max {W.MaxHpOf(1, zealot)}, type hp {data.Units[zealot].Hp}")) return;
+
+        var before = new HashSet<EntityHandle>();
+        for (int i = 0; i < U.Capacity; i++) if (U.Alive[i]) before.Add(new EntityHandle(i, U.Generation[i]));
+        // Two free cells 3-6 m from the mage at `c`, on its level (a Zealot below a rise, or above it, may be out of its sight).
+        int level = G.LevelAt((int)(c.X / MapConstants.CellSize), (int)(c.Y / MapConstants.CellSize));
+        var spots = new List<System.Numerics.Vector2>();
+        for (int y = 0; y < G.Height; y++)
+            for (int x = 0; x < G.Width; x++)
+            {
+                System.Numerics.Vector2 p = G.CellCenter(x, y);
+                float d = System.Numerics.Vector2.Distance(p, c);
+                if (d < 3f || d > 6f || !G.IsPassable(x, y) || G.LevelAt(x, y) != level || W.Buildings.SlotAt(x, y) >= 0) continue;
+                bool clear = true;
+                for (int i = 0; i < U.Capacity && clear; i++) if (U.Alive[i] && System.Numerics.Vector2.Distance(U.Position[i], p) < 1.5f) clear = false;
+                if (clear && spots.All(q => System.Numerics.Vector2.Distance(q, p) >= 2.5f)) spots.Add(p);
+            }
+        if (!Check(spots.Count >= 2, $"seed {seed} prophecy: {spots.Count} free spots by the mage")) return;
+        _sim.Enqueue(Command.SpawnUnit(1, zealot, spots[0]));
+        _sim.Enqueue(Command.SpawnUnit(1, zealot, spots[1]));
+        _sim.Tick();
+        _sim.Tick(); // a command applies on the tick after the one it was enqueued before
+        var fresh = new List<int>();
+        for (int i = 0; i < U.Capacity; i++) if (U.Alive[i] && U.TypeId[i] == zealot && !before.Contains(new EntityHandle(i, U.Generation[i]))) fresh.Add(i);
+        if (!Check(fresh.Count == 2 && fresh.All(i => U.Hp[i] == 83), $"seed {seed} prophecy: {fresh.Count} fresh Zealots, hp {string.Join(",", fresh.Select(i => U.Hp[i]))}")) return;
+        int hurt = fresh[0], full = fresh[1];
+        U.Hp[hurt] = 70; // before any view frame saw it
+        await Frame();
+        Check(units.Flash.IsLit(hurt) && !units.Flash.IsLit(full), $"seed {seed} prophecy flash: 70 / 83 lit {units.Flash.IsLit(hurt)}, 83 / 83 lit {units.Flash.IsLit(full)}");
+        // Seen (a fog update), then the bars: 70 / 83 has one, 83 / 83 none.
+        for (int t = 0; t <= Rts.Sim.Vision.VisionConstants.UpdateInterval; t++) _sim.Tick();
+        await Frames();
+        int barHurt = -1, barFull = -1;
+        for (int k = 0; k < combat.ShownBars; k++)
+        {
+            if (combat.BarSlot(k) == hurt) barHurt = k;
+            if (combat.BarSlot(k) == full) barFull = k;
+        }
+        bool seen = W.Fog.CanSeeUnit(0, hurt) && W.Fog.CanSeeUnit(0, full);
+        Check(seen && barHurt >= 0 && Math.Abs(combat.BarFill(barHurt) - 70f / 83f) < 1e-5f && barFull < 0 && U.Hp[full] == 83 && W.MaxHp(hurt) == 83,
+            $"seed {seed} prophecy bars: seen {seen}, 70 / 83 bar {barHurt} fill {(barHurt >= 0 ? combat.BarFill(barHurt) : -1)} (want {70f / 83f}), 83 / 83 bar {barFull}");
+        GD.Print($"seed {seed}: Prophecy Zealots: 70 / 83 flashed on first sight and has a bar of {(barHurt >= 0 ? combat.BarFill(barHurt) : -1):0.000}; 83 / 83 neither");
+    }
+
+    private int SummonedCount()
+    {
+        int n = 0;
+        for (int i = 0; i < U.Capacity; i++) if (U.Alive[i] && U.IsSummoned(i)) n++;
+        return n;
+    }
+
+    // The last tick's expiries (Expired, no killer) of units in `units`.
+    private int ExpiredAmong(List<EntityHandle> units)
+    {
+        int n = 0;
+        foreach (Rts.Sim.Combat.DeathEvent d in W.Deaths)
+            if (d.Expired && d.KillerOwner == -1 && units.Contains(d.Victim)) n++;
+        return n;
+    }
+
+    // A key pressed and released through the viewport (the player's path: the card's grid key, M4-V7b).
+    private void PushKey(Key key)
+    {
+        Push(new InputEventKey { Keycode = key, PhysicalKeycode = key, Pressed = true });
+        Push(new InputEventKey { Keycode = key, PhysicalKeycode = key, Pressed = false });
     }
 
     // ---- 300 steady frames at --units 500 ----

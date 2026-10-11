@@ -14,9 +14,10 @@ namespace Rts.Game;
 /// (<see cref="SelectionController.AbilityPoint"/>) gets a ring of the ability's <c>radius</c> (where the effects would land)
 /// and the selected unit that would cast there (<see cref="SelectionController.PickCaster"/>: the nearest ready one) a ring of
 /// its <c>range</c>. Each ring is a flat torus whose outer radius is the def's value, one mesh per ability and ring made the
-/// first time it is armed; a frame only moves the two nodes. M4-V6d: a no-target (<see cref="AbilityKind.SelfAura"/>) ability
-/// is never armed (its button casts at once); while the cursor rests on its button the radius ring is drawn round the unit
-/// the press would cast with (<see cref="SelectionController.SelfCaster"/>) and no range ring.</para>
+/// first time it is armed; a frame only moves the two nodes. M4-V6d: a no-target (<see cref="AbilityKind.SelfAura"/>, and
+/// <see cref="AbilityKind.Summon"/> since M4-V7: <see cref="AbilityCaster.IsNoTarget"/>) ability is never armed (its button
+/// casts at once); while the cursor rests on its button the radius ring is drawn round the unit the press would cast with
+/// (<see cref="SelectionController.SelfCaster"/>) and no range ring; an ability of radius 0 (a summon) draws no ring.</para>
 /// <para><b>Casts.</b> Every unit the screen shows (the fog's shown list, M4-V4) standing in <see cref="UnitState.Casting"/>
 /// gets a cast bar over its hp bar's place: the share of the def's <c>castTime</c> stood (<see cref="AbilityCaster.Progress"/>
 /// of <c>UnitStore.CastTicks</c>). Every own unit with a cast in hand (<c>CastAbility</c> set: walking into range or standing)
@@ -365,13 +366,14 @@ public partial class AbilityViews : Node3D
         _range.Mesh = def.Range > 0f ? (_rangeMesh[ability] ??= RingMesh(def.Range, RangeColor)) : null;
     }
 
-    // M4-V6d: while the cursor rests on a no-target (selfAura) ability's button, its radius ring is drawn round the unit
-    // the press would cast with (SelfCaster: the nearest ready caster rule at the selection's lead); nothing when none is ready.
+    // M4-V6d: while the cursor rests on a no-target (selfAura or summon) ability's button, its radius ring is drawn round the
+    // unit the press would cast with (SelfCaster: the nearest ready caster rule at the selection's lead); nothing when none is
+    // ready or the radius is 0 (a summon has nothing to ring).
     private void SyncSelfRing(World world, float alpha, bool queued)
     {
         int ability = _sel?.Card?.HoveredAbility ?? -1;
         int caster = -1;
-        if (ability >= 0 && _data.Abilities[ability].Kind == AbilityKind.SelfAura) caster = _sel!.SelfCaster(ability, queued, out _);
+        if (ability >= 0 && AbilityCaster.IsNoTarget(_data.Abilities[ability].Kind) && _data.Abilities[ability].Radius > 0f) caster = _sel!.SelfCaster(ability, queued, out _);
         if (caster < 0)
         {
             SelfRingShown = false;

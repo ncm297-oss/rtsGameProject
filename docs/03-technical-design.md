@@ -2729,7 +2729,7 @@ TickNumber` ticks until the tick it is taken away (a lifetime bar or a fade-out)
 `Expired` true and `KillerOwner` -1: a vanish, not a kill (no corpse, no kill feed; it counts no kill or loss). **Max hp:**
 read `World.MaxHp(slot)` (the type's `hp` plus the owner's hp techs); `ViewApi.UnitHpBars` and "Implementation (M4-V1)"
 still use the type's `hp`, so a Zealot at 83 / 83 with Prophecy would read above full and one at 70 / 83 would show no
-bar: switch the bar's maximum to `World.MaxHp`.
+bar: switch the bar's maximum to `World.MaxHp`. (Done in M4-V7b, BUG-0450: see "Implementation (M4-V1)".)
 
 ## Vision, detection, fog
 
@@ -4081,11 +4081,17 @@ Match.tscn  (new node)
   (`UnitHpBars.Color`, linear between). Two `MultiMesh`es with one instance per bar, written densely with
   `VisibleInstanceCount` = the count, so a unit that dies or heals simply isn't listed the next frame. 1.2 m x 0.16 m at
   zoom up to 30 m, then grown with the zoom like the cargo cube (M3-V1). The colour written per instance is kept too, since
-  the headless dummy renderer keeps no instance data to read back.
+  the headless dummy renderer keeps no instance data to read back. **Since M4-V7b (BUG-0450)** the maximum is
+  `World.MaxHp(slot)`, the type's `hp` plus the owner's hp techs (real since M4-4b-3b, BUG-0421): each frame
+  `UnitViews.FillMaxHp(world, maxHp)` copies it per live slot (0 for a dead one; `ViewApi` never reads the `World`, a QA
+  source guard), and `CombatViews` calls `UnitHpBars.Collect(shown, hp, maxHp, slots)` and `Shows(hp, maxHp[slot])`, so a
+  Zealot with Dryjhna's Prophecy at 70 / 83 has a bar of 70 / 83 and one at 83 / 83 none. The form with each type's `hp`
+  stays for data-only callers.
 - **Hit flash** (`UnitViews`, pure `ViewApi.HitFlash`): no sim event. Each `UnitViews.Sync` compares every slot's `Hp`
   and `Generation` with what the last call saw: the same unit with less hp is lit for `HitFlash.DefaultSeconds` (0.15 s of
   view time, `_Process`'s delta), and a later hit starts the time again, so a unit under repeated hits stays lit. A new
-  unit in the slot, a dead slot or a heal never lights. While lit, the body's overlay is a translucent white
+  unit in the slot, a dead slot or a heal never lights (since M4-V2 a unit first seen below its maximum flashes once; since
+  M4-V7b that maximum is `World.MaxHp`, per slot through `HitFlash.UpdateWithSlotMax(alive, generation, hp, maxHp, dt)`). While lit, the body's overlay is a translucent white
   (`UnitViews.FlashMaterial`) in place of the worker tint. `Sync(world, alpha)` without a delta still works (the flash
   doesn't fade), so older scenes are unchanged.
 - **Deaths, corpses and rubble** (`CombatViews`, pure `ViewApi.DeathMarkers`). A dead unit's or building's view goes the
@@ -4100,7 +4106,9 @@ Match.tscn  (new node)
   (2,000, Producer default): when it is full the next death replaces the oldest marker. A marker is a position, what it
   was, its owner and an expiry tick; nothing else. Two `MultiMesh`es (corpses with per-instance colour, rubble) hold one
   instance per pool slot; an unused instance has a zero transform. Transforms are written only when a marker is added or
-  expires, so a steady frame writes none. `CombatViews.AddDeaths` feeds a synthetic list (the death-storm test).
+  expires, so a steady frame writes none. `CombatViews.AddDeaths` feeds a synthetic list (the death-storm test). Since
+  M4-V7b a summoned unit's expiry (`DeathEvent.Expired`) adds no marker: it vanishes (`DeathMarkers.Collect` skips it and
+  returns the markers added).
 - **Kills and losses**: `ResourceBar.KillsLabel`, a child under "Pop", shows "<hud.kills> n / <hud.losses> n" (`ui.json`
   `hud.kills` = "K", `hud.losses` = "L"; new `HudText` members) from `World.Kills` / `Losses` of the local player, rebuilt
   only when a number changes. The F12 overlay's second line adds "p0 K n / L n  p1 K n / L n" with the same labels.
@@ -4808,12 +4816,13 @@ game/scripts/AbilityViews.cs           FrenzyColor; the hover ring round the cas
   it; the hash twin; then (test staging after the twin) Burning, Slowed, Blinded and Frenzied written into the store on a
   Heavy and a Raider, four markers each in four colours. Windowed `-- --shots <dir>` adds `ability-seedN-aura-hover.png`,
   `-aura-frenzied.png` and `-frenzied.png` (looked at, seeds 1 and 6).
-- **Not yet:** the `summon` kind's arm (the same card; next session), autocast toggles, a status name tooltip.
+- **Not yet:** the `summon` kind's arm (the same card; landed in M4-V7b, see "Implementation (M4-V7)"), autocast toggles, a status name tooltip.
 
 ### Implementation (M4-V7)
 
 M4 criterion 10 on screen, slice 1: the fog-on sandbox Playable, a scripted Malazan-vs-Whirlwind fight through the real
-HUD, as `M3PlayableTest` proved M3. Test code only (`game/tests/M4PlayableTest.tscn` + `.cs`); no game or sim change.
+HUD, as `M3PlayableTest` proved M3. Test code only (`game/tests/M4PlayableTest.tscn` + `.cs`); no game or sim change. Slice 2
+(M4-V7b) adds step 9, the enemy storm, the summon card, and BUG-0450's hp maximum (see "Slice 2" below).
 
 - **The scene** (`res://tests/M4PlayableTest.tscn`, "M4 PLAYABLE TEST PASS" / "M4 PLAYABLE TEST FAIL <step> (seed,
   tick): <what>", exit code 0 / 1; seeds 1 and 6, `-- --seed N` for one; `-- --break <n>` makes step n fail once, as
@@ -4852,16 +4861,26 @@ HUD, as `M3PlayableTest` proved M3. Test code only (`game/tests/M4PlayableTest.t
   over the unhurt B; over exactly the next 60 ticks A starts more swings than B (4-5 against 3: a 13-tick cooldown against 20;
   a swing start is recorded with its tick when `CooldownTicks` rises, read on `SimRunner.Ticked`, and the window is the 60
   ticks after the start, counted by tick: at 8x a frame spans several ticks, and a frame-measured 61-tick window let
-  both start 4, BUG-0463); (9) the hash twin: the recorder's
-  replay played into a bare sim by `ReplayPlayer`, a checkpoint every tick, equal.
+  both start 4, BUG-0463); (9) the enemy storm (M4-V7b): 1 and H hold the army; a fresh enemy Priest is staged out of our
+  sight (every own unit at least our longest sight, 18 m, + 1.5 m off and its cell not visible; a spot in sight 12 m off
+  only when none is hidden) and casts Sandstorm through a staging `UseAbility` for player 1 (like the duel's `Attack`s) at
+  a point 17.5 m toward the army, picked to cover the most army units within the radius - 1 m (5-10 in these runs); a
+  Priest killed before its resolve is staged again, at most twice. Then on every frame of the storm's 240 ticks: the enemy
+  disc is drawn exactly when `ZoneDiscs.SeesStorm` holds for player 0's fog (a visible cell within the radius + 2 m: the
+  M4-V6c rule; 0 mismatches), at least one own unit inside shows the Blinded marker (up to 6 on seed 1, 10 on seed 6), and
+  after a fog update our visible cells inside the storm, counted in the sim's fog and in the uploaded fog texture alike,
+  fall below the count before the cast (seed 1 30 -> 12, seed 6 29 -> 14: Blinded sight is 2 m and the storm hides its
+  inside from sight outside it); after it the enemy disc is gone. About 276 ticks. Our units stand inside the storm the
+  whole time, so the disc is never hidden in this step; the hidden case is `AbilityViewTest`'s (M4-V6c). (10) the hash
+  twin: the recorder's replay played into a bare sim by `ReplayPlayer`, a checkpoint every tick, equal.
 - **Fresh units by handle.** Staging and the duel find their spawns as the live handles (slot and generation) that were
   not live before the spawn commands, never by slot: a unit that dies on the spawn tick frees its slot, a spawn takes it,
   and only the generation tells them apart (BUG-0460).
 - **The fog rule, every frame.** Every wait goes through one frame helper that checks, on each frame of the whole run,
   (the `--shots` frames included) that no enemy unit view (`UnitViews.IsShown` or its node visible), hp bar, status marker or cast bar is drawn while
   `Fog.CanSeeUnit(0, unit)` is false, no dead unit is drawn, and no enemy building view is shown while `CanSeeBuilding`
-  is false. Counters are printed: seed 1 about 370-450 frames of the approach (A-click to first contact) and 1,900-2,500
-  in all, 0 violations; seed 6 520-640 and 2,500-3,500, 0.
+  is false. Counters are printed: seed 1 about 420-450 frames of the approach (A-click to first contact) and 2,550-2,720
+  in all, 0 violations; seed 6 550-640 and 3,250-3,520, 0 (M4-V7b runs, step 9 included).
 - **What a player would also do** (the script's robustness, each printed when it happens): a cast the sim drops (the
   caster's walk-in ended short of the range) is clicked again on a fresh blob, at most twice; a caster killed in the fight
   before its cast resolves (it can die on the very tick its command applies) is checked before "took no cast", and the
@@ -4873,22 +4892,55 @@ HUD, as `M3PlayableTest` proved M3. Test code only (`game/tests/M4PlayableTest.t
   building with plain Moves rather than a long Cusser walk-in, and a Move that stops short is clicked again to the next
   spot round it; the army is pulled back before the Sapper goes in (on seed 6 our attacking units, which stand as walls,
   shut the Sapper's way down a rise).
-- **Tick budget** 5,500 per seed (`M4PlayableTest.TickBudget`, 4 min 35 s of game time); runs headless and windowed:
-  seed 1 2,560-2,903, seed 6 3,424-3,878 (2,903 a run whose Telas Fire missed and was cast again after the
-  cooldown), so at least 1,600 ticks (40 %) of margin; 40-70 s of wall time for both
-  seeds headless. The commands land on whichever tick the frame clock reaches, so runs differ by a few hundred ticks. On
+- **Tick budget** 5,500 per seed (`M4PlayableTest.TickBudget`, 4 min 35 s of game time); runs headless and windowed.
+  Measured with step 9 (M4-V7b, 9 runs of both seeds headless, part of them beside a full `dotnet test`): seed 1
+  2,869-3,028, seed 6 3,710-4,372. The 4,372 run's step 6 took 1,360 ticks against the usual 700-790, the same long fight
+  as QA's 4,212-tick seed-6 run before step 9 existed (BUG-0462 item 5; about 4,490 with step 9). So the measured margin
+  is at least 1,128 ticks (20 %), and about 1,000 (18 %) on QA's outlier; a Telas Fire recast that waits out its 25 s
+  cooldown adds about 500 more, so the margin is what was measured, not a guarantee. (Before step 9: seed 1
+  2,560-2,903, seed 6 3,424-3,878 and QA's 4,212.) 45-52 s of wall time for both seeds headless. The commands land on whichever tick the frame clock reaches, so runs differ by a few hundred ticks. On
   any failure the replay so far is saved to Godot's user data folder (`m4playable-seed<N>-fail-tick<T>.replay`, or
   `-exception-`).
 - **Stills.** Windowed `-- --shots <dir>` saves `m4-seedN-first-contact.png`, `-storm.png`, `-telas-fire.png`,
-  `-cusser-rubble.png` and `-frenzied-zealot.png` (looked at, seeds 1 and 6). No storm crossed a cliff in these runs, so
-  BUG-0430 did not show.
+  `-cusser-rubble.png`, `-frenzied-zealot.png` and (M4-V7b) `-enemy-storm.png` (looked at, seeds 1 and 6). No storm
+  crossed a cliff in these runs, so BUG-0430 did not show.
 - **Seen for the sim track** (not fixed here): a `UseAbility` whose walk-in ends short is dropped, and in this sandbox it
   happened to long walk-ins (a Priest on a rise 19.2 m from a low-ground point, range 18; a Sapper on a rise 22.9 m from
   a building below and once 31.5 m off on flat ground, range 6); and a Sapper that had wandered onto a rise at about
   (187, 111) on seed 6 (level 1, an idle chase) took no step on eight Move orders toward the Raider Camp below while the
   army attacked there.
-- **Not yet (slice 2):** an enemy Priest's storm over the player's own army (a scripted enemy cast, or the M5 AI),
-  stealth (M4-5), summons on screen, the minimap's zone dots.
+- **Slice 2 (M4-V7b).** Three view changes and the sandbox's step 9 above:
+  - **BUG-0450, the hp maximum.** `CombatViews` (bars) and `UnitViews` (the first-sight flash) read `World.MaxHp(slot)`
+    copied per live slot each frame by `UnitViews.FillMaxHp(world, maxHp)` (one call a unit; the `ViewApi` stays
+    `World`-free) and passed to the new per-slot forms `UnitHpBars.Collect(shown, hp, maxHp, slots)` and
+    `HitFlash.UpdateWithSlotMax(alive, generation, hp, maxHp, dt)`. See "Implementation (M4-V1)".
+  - **The summon card.** `AbilityCaster.IsNoTarget(kind)` is true for `selfAura` and `summon`; `BeginAbility`, the hover
+    ring and the tooltip use it, so a summon's button or grid key sends exactly one `UseAbility` for `SelfCaster`'s unit at
+    its own position (queued with Shift) and never arms targeting. A no-target ability of radius 0 (a summon) draws no
+    hover ring, and its tooltip has neither range nor radius ("<description>" then "Cooldown 10 s"; existing `ui.json`
+    keys). The summoned units are ordinary new slots: their views appear on the frame after the resolve tick.
+  - **An expiry is a vanish.** `DeathMarkers.Collect` skips a `DeathEvent` with `Expired` (and `CombatViews.AddDeaths` too):
+    a summoned unit's view goes the frame its slot frees, as any death's, and no corpse disc is left. K / L do not move
+    (the sim counts no kill or loss for an expiry).
+  - **Tests.** xUnit `ViewApi/MaxHpAndExpiryViewTests` (the Prophecy Zealots: 70 / 83 listed, 83 / 83 not, the other
+    player's 62 / 63 listed, the fill 70 / 83, the per-type form listing only the unupgraded hurt one; the per-slot form against
+    a brute force on `World.MaxHp` every tick of the brawl; the shown filter and short spans; the first-sight flash at
+    70 / 83 and none at 83 / 83; an `Expired` death adds no marker, and a real summon's three expiries add none and count
+    no kill or loss; 0 bytes) and `ViewApi/NoTargetKindTests`; QA's `UnitHpBarsMaxHpQaTests.AProphecyZealotAt70Of83_ShowsABar`
+    un-skipped (re-pointed at the per-slot form, filled from `World.MaxHp`). Headless `AbilityViewTest` adds per seed (1, 6) a match on test data (the
+    shipped data plus a test-only `zz_test_summon` on the Cadre Mage: 3 Heavy Infantry for 3 s, 0.5 s cast, 10 s cooldown;
+    and Dryjhna's Prophecy without its Age II requirement, 0.1 s; written to a copy in Godot's user data folder): the card
+    (W, the tooltip), the hover (no ring, nothing armed), a click on the button sends one `UseAbility` for the lead at its
+    position (no targeting, one sound); no summoned unit before the resolve, three Heavies with views drawn after it, their
+    expiry 60 ticks after the resolve tick; on the expiry tick three `Expired` deaths with no killer, the views gone, no
+    marker added or drawn, K / L unchanged in the sim, the resource bar and the F12 overlay; Shift + W pushed through the
+    viewport queues one for the second mage, which resolves with three more drawn; the twin; then (staging after the
+    twin) the Prophecy row: Whirlwind researches it by command at a staged Smithy, two fresh Zealots spawn at 83 / 83, one
+    set to 70 before its view's first frame flashes and gets a bar of 70 / 83 (fill 0.843), the other neither (both
+    failed on the base view scripts). `CombatViewTest`'s bar and flash oracles take `World.MaxHp` too. Windowed `--shots`
+    adds `ability-seedN-summoned.png`.
+- **Not yet:** a lifetime bar or fade-out for summoned units, stealth visuals (M4-V8, after the sim's M4-5), the
+  minimap's zone dots, the rings across a cliff (BUG-0430 / BUG-0462 item 1).
 
 ## AI architecture
 

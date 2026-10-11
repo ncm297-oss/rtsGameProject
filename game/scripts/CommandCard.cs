@@ -324,15 +324,16 @@ public partial class CommandCard : Control
 
     private static int CeilSeconds(int ticks) => (ticks + SimConstants.TicksPerSecond - 1) / SimConstants.TicksPerSecond;
 
-    // "<description>\nRange 16 m  Radius 3 m  Cooldown 25 s" (labels and units from ui.json hud).
+    // "<description>\nRange 16 m  Radius 3 m  Cooldown 25 s" (labels and units from ui.json hud). A no-target ability has no
+    // range (M4-V6d); one of radius 0 (a summon, M4-V7) has no radius either: "<description>\nCooldown 50 s".
     private static string AbilityTooltip(AbilityDef def, UiText ui)
     {
         string m = ui.Hud(HudText.Meters), sec = ui.Hud(HudText.Seconds);
         float cooldown = def.CooldownTicks / (float)SimConstants.TicksPerSecond;
-        // A no-target (selfAura) ability has no range: its line starts at the radius (M4-V6d).
-        string range = def.Kind == AbilityKind.SelfAura ? "" : string.Create(CultureInfo.InvariantCulture, $"{ui.Hud(HudText.Range)} {def.Range:0.##} {m}  ");
+        string range = AbilityCaster.IsNoTarget(def.Kind) ? "" : string.Create(CultureInfo.InvariantCulture, $"{ui.Hud(HudText.Range)} {def.Range:0.##} {m}  ");
+        string radius = def.Radius > 0f ? string.Create(CultureInfo.InvariantCulture, $"{ui.Hud(HudText.Radius)} {def.Radius:0.##} {m}  ") : "";
         return string.Create(CultureInfo.InvariantCulture,
-            $"{def.Description}\n{range}{ui.Hud(HudText.Radius)} {def.Radius:0.##} {m}  {ui.Hud(HudText.Cooldown)} {cooldown:0.##} {sec}");
+            $"{def.Description}\n{range}{radius}{ui.Hud(HudText.Cooldown)} {cooldown:0.##} {sec}");
     }
 
     // Greys each production button the sim would refuse now; touches a button only when its reason changed.

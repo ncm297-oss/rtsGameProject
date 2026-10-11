@@ -20,8 +20,9 @@ namespace Rts.Game;
 /// allocates nothing.
 /// Hit flash (M4-V1): a unit whose hp fell since the last frame (<see cref="HitFlash"/>, comparing the store's <c>Hp</c>
 /// with what the last frame saw; no sim event) shows a white overlay for <see cref="HitFlash.DefaultSeconds"/> of view
-/// time, which a new hit starts again; it takes the place of the worker tint while lit. A unit first seen below its type's
-/// <c>hp</c> (hit between two frames, before its view existed) flashes once too (M4-V2, BUG-0160). A dead unit's node is hidden on the
+/// time, which a new hit starts again; it takes the place of the worker tint while lit. A unit first seen below its maximum
+/// hp (hit between two frames, before its view existed) flashes once too (M4-V2, BUG-0160); the maximum is
+/// <c>World.MaxHp</c>, hp techs included, copied per slot each frame (<see cref="FillMaxHp"/>; M4-V7, BUG-0450). A dead unit's node is hidden on the
 /// first frame after its death (the slot reads not alive), so its view goes the frame the death is shown.
 /// Fog (M4-V4): with <see cref="Fog"/> set, a unit the local player doesn't see (<c>Fog.CanSeeUnit</c> false, through
 /// <see cref="FogView.UnitShown"/>) is hidden like a dead one, and its cargo marker and flash with it. A unit that comes
@@ -64,8 +65,8 @@ public partial class UnitViews : Node3D
 
     private CapsuleMesh[] _meshes = Array.Empty<CapsuleMesh>();
     private float[] _halfHeight = Array.Empty<float>();
-    // Each type's hp, for the hit flash's first-sight rule (M4-V2).
-    private int[] _maxHp = Array.Empty<int>();
+    // Each slot's maximum hp this frame (World.MaxHp), for the hit flash's first-sight rule (M4-V2, M4-V7).
+    private int[] _slotMaxHp = Array.Empty<int>();
     private MeshInstance3D?[] _views = Array.Empty<MeshInstance3D?>();
     private int[] _viewType = Array.Empty<int>();
     private bool[] _shown = Array.Empty<bool>();
@@ -114,7 +115,6 @@ public partial class UnitViews : Node3D
 
         _meshes = new CapsuleMesh[data.Units.Length];
         _halfHeight = new float[data.Units.Length];
-        _maxHp = new int[data.Units.Length];
         for (int t = 0; t < _meshes.Length; t++)
         {
             UnitDef def = data.Units[t];
@@ -122,9 +122,9 @@ public partial class UnitViews : Node3D
             // Low-poly on purpose: 2,000 of these are on screen at once (M2-7 perf budget).
             _meshes[t] = new CapsuleMesh { Radius = def.Radius, Height = height, RadialSegments = 12, Rings = 3, Material = materials[def.Faction] };
             _halfHeight[t] = height / 2;
-            _maxHp[t] = def.Hp;
         }
 
+        _slotMaxHp = new int[unitCapacity];
         _views = new MeshInstance3D?[unitCapacity];
         _viewType = new int[unitCapacity];
         Array.Fill(_viewType, -1);
@@ -186,7 +186,8 @@ public partial class UnitViews : Node3D
     public void Sync(World world, float alpha, float delta = 0f)
     {
         UnitStore u = world.Units;
-        Flash.Update(u.Alive, u.Generation, u.Hp, u.TypeId, _maxHp, delta);
+        FillMaxHp(world, _slotMaxHp);
+        Flash.UpdateWithSlotMax(u.Alive, u.Generation, u.Hp, _slotMaxHp, delta);
         FogView? fog = Fog?.Refreshed(world);
         int n = Math.Min(u.Capacity, _views.Length);
         for (int i = 0; i < n; i++)
@@ -275,6 +276,18 @@ public partial class UnitViews : Node3D
         Size = new Vector3(CargoSize, CargoSize, CargoSize),
         Material = new StandardMaterial3D { AlbedoColor = c, Roughness = 0.6f },
     };
+
+    /// <summary>
+    /// Writes each live slot's maximum hit points, <c>World.MaxHp(slot)</c> (the type's <c>hp</c> plus its owner's hp techs),
+    /// into <paramref name="maxHp"/>, 0 for a dead slot (M4-V7, BUG-0450: the hp bar's and the first-sight flash's maximum).
+    /// One array read per live unit; allocation-free.
+    /// </summary>
+    public static void FillMaxHp(World world, Span<int> maxHp)
+    {
+        UnitStore u = world.Units;
+        int n = Math.Min(u.Capacity, maxHp.Length);
+        for (int i = 0; i < n; i++) maxHp[i] = u.Alive[i] ? world.MaxHp(i) : 0;
+    }
 
     /// <summary>A unit's interpolated ground point in view coordinates: lerp(PrevPosition, Position, alpha) with alpha clamped to [0, 1], on the terrain surface.</summary>
     public static Vector3 GroundPoint(World world, int slot, float alpha)

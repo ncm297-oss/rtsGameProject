@@ -14,7 +14,9 @@ namespace Rts.Sim.Tests.QA.ViewApi;
 /// </summary>
 public class UnitHpBarsMaxHpQaTests
 {
-    [Fact(Skip = "BUG-0450: UnitHpBars uses the type's hp as the maximum; a Prophecy Zealot at 70 / 83 shows no bar")]
+    // Un-skipped by M4-V7b (BUG-0450 fixed): re-pointed at the view's read, UnitHpBars.Collect(shown, hp, maxHp per slot,
+    // slots) with each slot's World.MaxHp (what UnitViews.FillMaxHp copies each frame).
+    [Fact]
     public void AProphecyZealotAt70Of83_ShowsABar()
     {
         Simulation sim = NoFights();
@@ -25,8 +27,11 @@ public class UnitHpBarsMaxHpQaTests
         u.Hp[z.Index] = 70;
         Assert.Equal(83, w.MaxHp(z.Index));
         var slots = new int[8];
-        int n = UnitHpBars.Collect(u.Alive, u.TypeId, u.Hp, w.Data.Units, slots);
-        Assert.Equal(1, n); // fails today: 70 >= the type's 63, so no bar
+        var maxHp = new int[u.Capacity];
+        for (int i = 0; i < u.Capacity; i++) maxHp[i] = u.Alive[i] ? w.MaxHp(i) : 0;
+        int n = UnitHpBars.Collect(u.Alive, u.Hp, maxHp, slots);
+        Assert.Equal(1, n); // failed before the fix: 70 >= the type's 63, so no bar
+        Assert.Equal(z.Index, slots[0]);
     }
 
     /// <summary>What the bar reads today, pinned so the change is visible: the type's hp as the max, so 70 / 63 shows nothing.</summary>

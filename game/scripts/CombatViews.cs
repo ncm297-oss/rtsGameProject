@@ -11,12 +11,14 @@ namespace Rts.Game;
 
 /// <summary>The first combat views (M4-V1): hp bars over hurt units, and corpse and rubble markers where things died.</summary>
 /// <remarks>
-/// <para><b>Hp bars.</b> Each frame the live units below their type's <c>hp</c> (<see cref="UnitHpBars.Collect"/>) get a
+/// <para><b>Hp bars.</b> Each frame the live units below their maximum <c>World.MaxHp</c> (the type's <c>hp</c> plus the
+/// owner's hp techs, M4-V7, BUG-0450, copied per slot by <see cref="UnitViews.FillMaxHp"/>;
+/// <see cref="UnitHpBars.Collect(ReadOnlySpan{bool}, ReadOnlySpan{int}, ReadOnlySpan{int}, Span{int})"/>) get a
 /// bar over the body at their interpolated position: a dark back and a fill of <c>Hp / max</c>, green through yellow to
 /// red (<see cref="UnitHpBars.Color"/>). Two <see cref="MultiMesh"/>es (back, fill) hold one instance per bar, written
 /// densely, so a dead or healed unit simply isn't listed the next frame. Above <see cref="BarFullZoom"/> the bars grow
 /// with the zoom, as the cargo cube does (M3-V1), so they keep their screen size.</para>
-/// <para><b>Markers.</b> Every <see cref="DeathEvent"/> (read between ticks: from <see cref="SimRunner.Ticked"/>, so a
+/// <para><b>Markers.</b> Every <see cref="DeathEvent"/> but an expiry (read between ticks: from <see cref="SimRunner.Ticked"/>, so a
 /// frame of several ticks misses none, and from the frame loop for scenes that tick the sim themselves) adds a marker to a
 /// <see cref="DeathMarkers"/> ring: a disc of the unit's radius in its owner's colour (<see cref="CorpseShade"/>) on a wider,
 /// darker rim disc (<see cref="CorpseRimShade"/>, <see cref="CorpseRimScale"/>; M4-V2, BUG-0160: at 35 % both teams read
@@ -26,7 +28,8 @@ namespace Rts.Game;
 /// <see cref="TerrainHeight.MaxUnder"/>, so it reads whole on a ramp: BUG-0190). The markers are two more <see cref="MultiMesh"/>es with one instance per
 /// pool slot; an unused instance has a zero transform. A marker's transform is written only when it is added or removed,
 /// so a steady frame writes nothing for them. The pool is fixed (<see cref="DeathMarkers.DefaultCapacity"/>): a death storm
-/// replaces the oldest markers.</para>
+/// replaces the oldest markers. A summoned unit whose lifetime ran out (<see cref="DeathEvent.Expired"/>, M4-V7) vanishes:
+/// it leaves no corpse (<see cref="DeathMarkers.Collect"/> skips it).</para>
 /// <para><b>Fog</b> (M4-V4): with <see cref="Fog"/> set (before <see cref="Bind"/>), a unit the local player doesn't see gets no
 /// bar, and the corpse and rubble materials are the fog's: a marker on unexplored ground is not drawn, one on explored
 /// ground is darkened (the GPU reads the cell under each instance).</para>
@@ -79,7 +82,7 @@ public partial class CombatViews : Node3D
     private GameData _data = null!;
     private Color[] _corpseColors = Array.Empty<Color>(), _rimColors = Array.Empty<Color>();
     private float[] _bodyTop = Array.Empty<float>();
-    private int[] _hurt = Array.Empty<int>();
+    private int[] _hurt = Array.Empty<int>(), _maxHp = Array.Empty<int>();
     private float[] _shownFill = Array.Empty<float>();
     private Color[] _shownColor = Array.Empty<Color>();
     // The transform written for each marker instance (the dummy renderer of headless runs keeps no instance data to read back).
@@ -147,6 +150,7 @@ public partial class CombatViews : Node3D
             _rimColors[p] = new Color(c.R * CorpseRimShade, c.G * CorpseRimShade, c.B * CorpseRimShade);
         }
         _hurt = new int[unitCapacity];
+        _maxHp = new int[unitCapacity];
         _shownFill = new float[unitCapacity];
         _shownColor = new Color[unitCapacity];
         _back = Multi("HpBack", new BoxMesh { Size = Vector3.One, Material = Flat(BarBackColor, vertexColor: false) }, unitCapacity, colors: false);
@@ -202,10 +206,11 @@ public partial class CombatViews : Node3D
             if (m.Active[slot]) ShowMarker(world, slot);
     }
 
-    /// <summary>Adds markers for <paramref name="deaths"/> as if seen at tick <paramref name="tick"/> (test hook for death storms the sim can't stage in one tick).</summary>
+    /// <summary>Adds markers for <paramref name="deaths"/> as if seen at tick <paramref name="tick"/> (test hook for death storms the sim can't stage in one tick); an expiry adds none.</summary>
     public void AddDeaths(World world, ReadOnlySpan<DeathEvent> deaths, long tick)
     {
-        for (int i = 0; i < deaths.Length; i++) ShowMarker(world, Markers.Add(deaths[i], tick));
+        for (int i = 0; i < deaths.Length; i++)
+            if (!deaths[i].Expired) ShowMarker(world, Markers.Add(deaths[i], tick));
     }
 
     /// <summary>One frame: deaths of the last tick, expired markers, and every hurt unit's bar. No allocation.</summary>
@@ -224,13 +229,14 @@ public partial class CombatViews : Node3D
         UnitStore u = world.Units;
         FogView? fog = Fog?.Refreshed(world);
         // The hurt units the screen shows: through the fog's shown list, so a hidden unit gets no bar.
-        int n = UnitHpBars.Collect(fog != null ? fog.UnitShown : u.Alive, u.TypeId, u.Hp, _data.Units, _hurt);
+        UnitViews.FillMaxHp(world, _maxHp);
+        int n = UnitHpBars.Collect(fog != null ? fog.UnitShown : u.Alive, u.Hp, _maxHp, _hurt);
         float len = BarLength * _barScale, thick = BarThickness * _barScale;
         for (int k = 0; k < n; k++)
         {
             int i = _hurt[k];
             int type = u.TypeId[i];
-            UnitHpBars.Shows(u.Hp[i], _data.Units[type].Hp, out float fill);
+            UnitHpBars.Shows(u.Hp[i], _maxHp[i], out float fill);
             _shownFill[k] = fill;
             Vector3 top = UnitViews.GroundPoint(world, i, alpha) + new Vector3(0f, _bodyTop[type] + BarGap * _barScale, 0f);
             _back.SetInstanceTransform(k, new Transform3D(Basis.FromScale(new Vector3(len, thick * 0.8f, thick * 0.8f)), top));
