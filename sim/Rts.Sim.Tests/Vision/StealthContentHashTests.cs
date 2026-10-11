@@ -36,7 +36,7 @@ public class StealthContentHashTests
             HashWith(d => d.EditJson("common/statuses.json", r => r["statuses"]!.AsArray().RemoveAt(5))), // revealed gone
             HashWith(d => d.EditJson("common/rules.json", r => r["stealth"]!["proximity"] = 3.5)),
             HashWith(d => d.EditJson("common/rules.json", r => r["stealth"]!["revealSeconds"] = 4)),
-            HashWith(d => d.SetUnitField("malazan", "malazan_cadre_mage", "detector", "10")),
+            HashWith(d => d.SetUnitField("malazan", "malazan_cadre_mage", "detector", "12")),
             HashWith(d => d.SetUnitField("malazan", "malazan_cadre_mage", "detector", "11")),
         };
         Assert.Equal(hashes.Count, hashes.Distinct().Count());

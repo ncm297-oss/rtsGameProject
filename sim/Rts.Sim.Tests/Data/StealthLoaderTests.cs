@@ -40,7 +40,7 @@ public class StealthLoaderTests
     }
 
     [Fact]
-    public void Shipped_TheKindsAndRulesLoad_AndNoShippedUnitDetectsYet()
+    public void Shipped_TheKindsAndRulesLoad_AndOnlyTheCastersDetect()
     {
         GameData d = TestSim.Data;
         StatusDef stealthed = d.Statuses[d.FindStatus("stealthed")];
@@ -54,8 +54,8 @@ public class StealthLoaderTests
         Assert.Equal("revealed", DataLimits.StatusKindIds[5]);
         Assert.Equal(3f, d.Rules.StealthProximity);
         Assert.Equal(60, d.Rules.RevealTicks);
-        // The casters' 10 m is the data track's (D12): until then no shipped unit has a detector; the towers have theirs.
-        Assert.All(d.Units, u => Assert.Equal(0f, u.Detector));
+        // docs/02: every caster detects at 10 m (D12), no other unit detects; the towers have theirs.
+        Assert.All(d.Units, u => Assert.Equal(u.Slot == UnitSlot.Caster ? 10f : 0f, u.Detector));
         Assert.Equal(16f, d.Buildings[d.FindBuilding("malazan_watchtower")].Detector);
     }
 
