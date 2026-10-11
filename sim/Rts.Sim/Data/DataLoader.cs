@@ -327,6 +327,7 @@ public static partial class DataLoader
         MinesJson? start = c.Obj(j.StartMines, "startMines");
         MinesJson? exp = c.Obj(j.ExpansionMines, "expansionMines");
         RepairJson? repair = c.Obj(j.Repair, "repair");
+        StealthJson? stealth = c.Obj(j.Stealth, "stealth");
         return new RulesDef
         {
             StartingGold = c.Int(j.StartingGold, "startingGold", 0),
@@ -345,6 +346,9 @@ public static partial class DataLoader
             RepairRateFactor = repair == null ? 0f : Factor(c, repair.RateFactor, "repair.rateFactor"),
             RepairCostFactor = repair == null ? 0f : Factor(c, repair.CostFactor, "repair.costFactor"),
             BuildingSight = (float)c.Sight(j.BuildingSight, "buildingSight", "rules"),
+            // M4-5: required; a missing object is one error.
+            StealthProximity = stealth == null ? 0f : (float)c.Sight(stealth.Proximity, "stealth.proximity", "rules", "proximity"),
+            RevealTicks = stealth == null ? 0 : c.Ticks(stealth.RevealSeconds, "stealth.revealSeconds", 1),
         };
     }
 
@@ -585,6 +589,8 @@ public static partial class DataLoader
             TrainedAt = c.Text(u.TrainedAt, p + ".trainedAt"),
             Requires = c.Ids(u.Requires, p + ".requires"),
             Tags = c.Ids(u.Tags, p + ".tags"),
+            // M4-5: optional; a unit without one detects only by proximity.
+            Detector = u.Detector == null ? 0f : (float)c.Sight(u.Detector, p + ".detector", u.Id!, "detector"),
         };
     }
 

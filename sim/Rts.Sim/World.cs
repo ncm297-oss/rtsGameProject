@@ -14,7 +14,7 @@ namespace Rts.Sim;
 
 /// <summary>All gameplay state of one match: terrain, entity stores, RNG streams, and the tick counter.</summary>
 /// <remarks>Only systems run by <see cref="Simulation.Tick"/> may write it.</remarks>
-public sealed class World
+public sealed partial class World
 {
     private readonly SimRng[] _rngs;
     private readonly PlayerLedger _ledger;
@@ -101,6 +101,17 @@ public sealed class World
         CombatantType = new bool[config.Data.Units.Length];
         for (int t = 0; t < CombatantType.Length; t++) CombatantType[t] = CombatSystem.IsCombatant(config.Data.Units[t]);
 
+        // M4-5: stealth and detection (World.Stealth.cs).
+        _detectBytes = (config.PlayerCount + 7) / 8;
+        _detectedBy = new byte[config.UnitCapacity * _detectBytes];
+        DetectorBuildings = new int[config.BuildingCapacity];
+        RevealedStatus = -1;
+        for (int s = 0; s < config.Data.Statuses.Length; s++)
+            if (config.Data.Statuses[s].Kind == StatusKind.Revealed) { RevealedStatus = s; break; }
+        float detect = config.Data.Rules.StealthProximity;
+        foreach (UnitDef t in config.Data.Units) detect = Math.Max(detect, t.Detector);
+        StealthQueryRadius = detect;
+
         StructureClass = config.Data.DamageTable.ArmorClassKeys.IndexOf(CombatConstants.StructureClassKey);
         CombatEnabled = config.Combat;
         // The placer's closings happened before any unit existed; only later ones reset progress marks.
@@ -169,7 +180,9 @@ public sealed class World
     /// <summary>
     /// The killing blows of the last tick run (M4-1), in the order they landed (attacker slot order): one per unit or
     /// building that died. Emptied at the start of every tick, so between ticks it holds exactly the last tick's deaths.
-    /// Output for views and stats, not state: not hashed.
+    /// Output for views and stats, not state: not hashed. It holds as many events as there are unit and building slots;
+    /// past that (only a summon reusing slots freed earlier in the same tick, dying again, could get there: BUG-0452) a
+    /// death is counted but not listed, so a view would not hear of it.
     /// </summary>
     public ReadOnlySpan<DeathEvent> Deaths => _deaths.AsSpan(0, DeathCount);
 
@@ -183,6 +196,7 @@ public sealed class World
     /// </summary>
     internal void RecordDeath(in DeathEvent e)
     {
+        System.Diagnostics.Debug.Assert(DeathCount < _deaths.Length, "death list full: an event is dropped (BUG-0452)");
         if (DeathCount < _deaths.Length) _deaths[DeathCount++] = e;
         if (!e.Expired) _ledger.CountDeath(e.KillerOwner, e.VictimOwner);
     }

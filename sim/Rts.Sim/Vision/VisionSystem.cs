@@ -31,10 +31,12 @@ public static class VisionSystem
     /// <paramref name="j"/> stands (by its centre, BUG-0360) inside a zone that hides it from <paramref name="i"/>'s owner and
     /// <paramref name="i"/> stands outside that zone (<see cref="ZoneHides"/>); it uses the type's sight (a Blinded unit's
     /// targets are capped by its reach in combat instead, so it takes one out to its reach though its fog circle is smaller).
+    /// M4-5: never an enemy's stealthed unit the owner doesn't detect (<see cref="World.HiddenFrom"/>), whatever the rest.
     /// </summary>
     internal static bool UnitSeesUnit(World world, int i, int j)
     {
         UnitStore u = world.Units;
+        if (u.Statuses.StealthedUnits != 0 && world.HiddenFrom(u.Owner[i], j)) return false;
         FogStore fog = world.Fog;
         float sight = world.Data.Units[u.TypeId[i]].Sight;
         float d2 = Vector2.DistanceSquared(u.Position[i], u.Position[j]);
@@ -66,13 +68,14 @@ public static class VisionSystem
     /// Whether tower (building slot) <paramref name="j"/>'s owner may take enemy unit <paramref name="unit"/> (M4-3b): the
     /// unit rule with the building as the viewer: within the building's sight of its footprint's centre and not on a higher
     /// level than the building (its centre cell's) unless within the lip, or the unit's cell visible in the owner's fog, or
-    /// the unit revealed to the owner.
+    /// the unit revealed to the owner. M4-5: never an enemy's stealthed unit the owner doesn't detect.
     /// </summary>
     internal static bool BuildingSeesUnit(World world, int j, int unit)
     {
         BuildingStore b = world.Buildings;
         FogStore fog = world.Fog;
         UnitStore u = world.Units;
+        if (u.Statuses.StealthedUnits != 0 && world.HiddenFrom(b.Owner[j], unit)) return false;
         float sight = world.Data.Buildings[b.TypeId[j]].Sight;
         float d2 = Vector2.DistanceSquared(CombatSystem.BuildingCentre(world, j), u.Position[unit]);
         if (d2 <= sight * sight && (!fog.MultiLevel || d2 <= VisionConstants.LipRadius * VisionConstants.LipRadius

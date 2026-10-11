@@ -246,9 +246,12 @@ whether the zone's statuses take it and whether the zone hides it (the ground is
 - A stealthed unit is invisible and cannot be targeted by an enemy player unless it stands inside
   the detection radius of one of that player's detectors **and** in a cell that player can see.
 - Detectors: Watch Towers (16 m), all casters (10 m), the Andii Great Raven (14 m).
-- **Proximity:** any enemy unit within 3 m of a stealthed unit detects it. This keeps stealth
-  beatable before Age II, when no faction has towers or casters yet.
-- Attacking or casting reveals the attacker for 3 s (the Revealed status).
+- **Proximity:** any enemy unit within 3 m of a stealthed unit detects it (like a detector, only in a
+  cell that player can see). This keeps stealth beatable before Age II, when no faction has towers or
+  casters yet.
+- Attacking or casting reveals the attacker for 3 s (the Revealed status): from the moment its attack
+  lands or its cast resolves, refreshed by each. Revealed overrides Stealthed. Summoned units can't be
+  stealthed.
 - Stealth sources: Shadow's faction bonus (forest stealth), the Shadow Archer's stand-still
   stealth. Other factions have no stealth.
 - Stealthed friendly units render semi-transparent for their owner.
@@ -281,9 +284,10 @@ whether the zone's statuses take it and whether the zone hides it (the ground is
   (you can see the lip of the ramp you're standing under); vision from your own units already on
   the high ground works normally.
 - Attacking from high ground **reveals the attacker** to the target's owner for 2 s, so the low
-  side can shoot back or retreat instead of dying to an invisible enemy. Until M4-5's Revealed status only attacks from
-  high ground reveal: a same-level attacker outside every sight circle of the target's owner stays unseen (and can't be
-  shot back at).
+  side can shoot back or retreat instead of dying to an invisible enemy. That is the only reveal for an ordinary unit: a
+  same-level attacker outside every sight circle of the target's owner stays unseen (and can't be shot back at). A
+  stealthed unit is Revealed for 3 s whenever its attack lands or its cast resolves ("Stealth and detection"), which shows
+  it to every enemy whose sight covers its cell.
 - No damage bonus in v1. An Age of Empires-style elevation damage bonus is a possible tuning lever
   later; it would be a single number in `rules.json`.
 - Consequences to design around: towers and ranged units on high ground are strong; spotting

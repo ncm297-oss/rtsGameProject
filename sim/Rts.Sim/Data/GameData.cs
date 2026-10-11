@@ -95,6 +95,8 @@ public sealed class GameData
         h.Add(r.RepairRateFactor);
         h.Add(r.RepairCostFactor);
         h.Add(r.BuildingSight); // M4-3a
+        h.Add(r.StealthProximity); // M4-5
+        h.Add(r.RevealTicks);
 
         h.Add(Factions.Length);
         foreach (FactionDef f in Factions)
@@ -158,6 +160,7 @@ public sealed class GameData
             }
             h.Add(u.BelowHpPassive);
             h.Add(u.DeathPassive);
+            h.Add(u.Detector); // M4-5
         }
 
         h.Add(Resources.Length);
