@@ -207,6 +207,7 @@ public class DataValidationTests
     [InlineData("factions/whirlwind/faction.json")]
     [InlineData("factions/whirlwind/units.json")]
     [InlineData("factions/whirlwind/buildings.json")]
+    [InlineData("factions/whirlwind/ai.json")] // M5-1: required for every faction
     public void MissingRequiredFile_YieldsOneError(string rel)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
@@ -567,6 +568,42 @@ public class DataValidationTests
         dir.EditJson(MalazanBuildings, root => root["buildings"]![0]!["hp"] = 0);
         DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
         Assert.Equal(MalazanBuildings, e.File);
+    }
+
+    /// <summary>
+    /// M5-1 criterion 4: each <c>ai.json</c> fault the brief names is exactly one error, at its file and field: an unknown id,
+    /// another faction's id, a missing difficulty, a negative think interval, a repeated build-order step.
+    /// </summary>
+    [Theory]
+    [InlineData("unknown id", "buildOrder[0].id", "unknown unit 'malazan_ghost'")]
+    [InlineData("foreign-faction id", "buildOrder[0].id", "unit 'whirlwind_raider' belongs to faction 'whirlwind', not 'malazan'")]
+    [InlineData("missing difficulty", "difficulties.hard", "missing required field")]
+    [InlineData("negative interval", "difficulties.easy.thinkInterval", "-1 must be positive")]
+    [InlineData("duplicate step", "buildOrder[1]", "the same step as buildOrder[0]")]
+    public void BrokenAiJson_YieldsExactlyOneErrorAtTheField(string fault, string path, string message)
+    {
+        const string MalazanAi = "factions/malazan/ai.json";
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson(MalazanAi, root =>
+        {
+            JsonArray steps = root["buildOrder"]!.AsArray();
+            switch (fault)
+            {
+                case "unknown id": steps[0]!["id"] = "malazan_ghost"; break;
+                case "foreign-faction id": steps[0]!["id"] = "whirlwind_raider"; break;
+                case "missing difficulty": root["difficulties"]!.AsObject().Remove("hard"); break;
+                case "negative interval": root["difficulties"]!["easy"]!["thinkInterval"] = -1; break;
+                case "duplicate step": steps.Add(steps[0]!.DeepClone()); break;
+                default: throw new ArgumentException(fault);
+            }
+        });
+
+        DataLoadResult r = DataLoader.LoadAll(dir.Path);
+        DataError e = Assert.Single(r.Errors);
+        Assert.Null(r.Data);
+        Assert.Equal(MalazanAi, e.File);
+        Assert.Equal(path, e.Path);
+        Assert.Contains(message, e.Message);
     }
 
     private static GameData Load(string dir)

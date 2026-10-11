@@ -155,6 +155,11 @@ public static partial class DataLoader
             ageTechs = techs.AgeTechs();
         }
 
+        // M5-1: the AI data. Its ids are checked only when the files they point into loaded clean, so a broken units,
+        // buildings or techs file is reported once, not again through every ai.json entry naming its ids.
+        bool aiRefs = buildingsClean && unitFilesOk && techs.FilesOk && NoErrorIn(c, "/units.json", "/buildings.json", "/techs.json");
+        AiDef[] ai = BuildAi(c, folders, aiRefs, unitKeys, units, buildings, techDefs);
+
         if (c.Errors.Count > 0 || table == null || rules == null || resources == null || projectiles == null || statuses == null)
             return new DataLoadResult(null, c.Errors);
         var data = new GameData
@@ -173,6 +178,7 @@ public static partial class DataLoader
             AgeTechs = ImmutableArray.Create(ageTechs),
             Statuses = ImmutableArray.Create(statuses),
             Abilities = ImmutableArray.Create(abilities),
+            Ai = ImmutableArray.Create(ai),
         };
         return new DataLoadResult(data, c.Errors);
     }

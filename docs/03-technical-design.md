@@ -2789,7 +2789,7 @@ bar: switch the bar's maximum to `World.MaxHp`. (Done in M4-V7b, BUG-0450: see "
 Fog of war and the high-ground rule are in since M4-3a (`sim/Rts.Sim/Vision/`); the last-known building ghosts, buildings
 that shoot and placement on explored ground since M4-3b (see "Implementation (M4-3b)"); zones that hide their contents
 and the Blinded sight since M4-4b-2 (see "Implementation (M4-4b-2)"); stealth and detection since M4-5 (see
-"Implementation (M4-5)"); the AI's `PlayerView` (M5) comes later (see "Not yet" below).
+"Implementation (M4-5)"); the AI's `PlayerView` since M5-1 (see "AI architecture", "Implementation (M5-1)").
 
 - **The grid.** `World.Fog` (`FogStore`): per player a `byte[]` of map cells, row-major (`y * Width + x`), 0 unexplored,
   1 explored, 2 visible (`VisionConstants.Unexplored` / `Explored` / `Visible`). Allocated with the world: one byte a
@@ -2898,7 +2898,7 @@ and the Blinded sight since M4-4b-2 (see "Implementation (M4-4b-2)"); stealth an
   Archer's stand-still stealth (a `whenStanding` passive trigger) and its first-shot bonus are M8's, built on the M4-5
   status; the casters' 10 m `detector` is the data track's next task (D12). Detection is not stamped into the fog: it is a
   per-unit answer for stealthed units only ("Implementation (M4-5)"). M5: the AI reads the world only through a
-  `PlayerView` facade that applies these checks (`Fog.CanSeeUnit` already applies stealth). **Rendering** (M4-V4): the local player's grid uploads to an R8 texture
+  `PlayerView` facade that applies these checks (`Fog.CanSeeUnit` already applies stealth); in since M5-1 ("AI architecture"). **Rendering** (M4-V4): the local player's grid uploads to an R8 texture
   each update; the terrain shader samples it with smooth filtering (unexplored black, explored desaturated and dark,
   visible full color); unit views are hidden when not visible; ghosts come from the last-known list (`Fog.Ghosts`).
 
@@ -3037,7 +3037,7 @@ game/data/
     buildings.json           # building types (M3-2 schema; all ten slots per faction since D1)
     techs.json               # the faction upgrade (M3-5)
     abilities.json           # optional (M4-4a): the faction's abilities
-    ai.json                  # build orders, compositions, attack thresholds per difficulty
+    ai.json                  # build orders, compositions, attack thresholds per difficulty (M5-1; required)
   maps/<map_id>.json         # size, seed or heightmap ref, start locations, resources, biome
 ```
 
@@ -3087,8 +3087,8 @@ checked. The data-validation test is `DataValidationTests.ShippedData_LoadsWithN
 
 Shipped files: `common/damage_table.json`, `common/rules.json`, `common/resources.json` (M3-1), `common/techs.json`
 (M3-5), `common/projectiles.json` (M4-2b), and `faction.json` + `units.json` + `buildings.json` (M3-2) + `techs.json`
-(M3-5) for `malazan` and `whirlwind`, and `common/statuses.json` (M4-4a). All fourteen are required. `factions/<id>/abilities.json`
-(M4-4a) is optional: shipped for `malazan` and (M4-4b-2) `whirlwind`. Everything else in the tree above (`ai`, `maps`, other factions) arrives with
+(M3-5) for `malazan` and `whirlwind`, and `common/statuses.json` (M4-4a). All fourteen are required, and since M5-1 `factions/<id>/ai.json` for every faction (sixteen). `factions/<id>/abilities.json`
+(M4-4a) is optional: shipped for `malazan` and (M4-4b-2) `whirlwind`. Everything else in the tree above (`maps`, other factions) arrives with
 the milestone that consumes it.
 
 | File | Shape |
@@ -3103,6 +3103,7 @@ the milestone that consumes it.
 | `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge). `abilities` (M4-4a, optional): ability ids of the unit's own faction, at most 4 (`DataLimits.MaxUnitAbilities`), no repeats; resolved to `UnitDef.Abilities`; shipped on the Cadre Mage (`telas_fire`), the Sapper (`cusser`) and the Priest of the Whirlwind (`sandstorm`). `passives` (M4-4b-3a, optional): at most 2 (`DataLimits.MaxUnitPassives`), one per `trigger` (`DataLimits.PassiveTriggerIds`): `{trigger: whenBelowHp, hpFraction, status, magnitude}` or `{trigger: onDeath, status, magnitude, duration, radius, units}` (see "Implementation (M4-4b-3a)"); resolved to `UnitDef.Passives`; shipped on the Zealot only. `detector` (M4-5, optional): meters, above 0, at most 64 (`UnitDef.Detector`; see "Implementation (M4-5)") |
 | `statuses.json` | `{ "statuses": [ ... ] }` (M4-4a), each `{id, displayName, description, kind, damageType?, sight?, reach?}`: `kind` `damageOverTime`, `slow`, (M4-4b-2) `blind`, (M4-4b-3a) `frenzied`, or (M4-5) `stealthed` / `revealed` (`DataLimits.StatusKindIds`; at most one `revealed`); `damageType` (a damage table type) required on `damageOverTime`, an error on any other kind; `sight` and `reach` (m, above 0, at most 64) required on `blind`, errors on any other kind. The magnitude and duration come from the effect applying it (a blind, stealthed or revealed status takes no magnitude). Ids unique; shipped `burning` (magic damage over time), `slowed`, `blinded` (2 / 3, M4-4b-2) and `frenzied` (M4-4b-3a; its magnitude, the attack-speed increase, any fraction above 0, is the applying effect's or passive's), `stealthed` and `revealed` (M4-5, "Implementation (M4-5)") |
 | `abilities.json` | `{ "abilities": [ ... ] }` (M4-4a, per faction, optional), each `{id, displayName, description, kind, range, radius, castTime, cooldown, duration?, affects, autocast?, effects}`: `kind` `targetGround` or (M4-4b-3a) `selfAura` (`targetUnit`, `summon`: "not supported yet"); `range` m above 0 and at most `DataLimits.MaxSight` (64), required on `targetGround` and an error on `selfAura` (0 included); `radius` m above 0 and at most `DataLimits.MaxAbilityRadius` (16); `castTime` s, 0 or more, to ticks; `cooldown` s above 0, to ticks (at least 1); `duration` s, optional (0), to ticks (required with a `createZone` effect, M4-4b-2); `affects` `enemy_units`, `own_units` or `all_units`; `autocast` only `false` ("not supported yet"); `effects` at least one, each `{kind: damage, type, amount, buildings?, friendlyFire?}` (a whole amount, at least 1; M4-4b-1: `buildings` true also hits other players' buildings as structure, not with `own_units`; `friendlyFire` 0-1, the fraction own units take, above 0 only with `enemy_units`) or `{kind: applyStatus, status, magnitude, duration}` (a `statuses.json` id; magnitude whole and at least 1 for damage over time, above 0 and below 1 for a slow; duration s, at least a tick, and for damage over time a whole number of seconds, at least 1, M4-4b-1); M4-4b-2: `{kind: createZone, blocksVision?, statuses: [{status, magnitude, duration}]}` (at least one status, each by the `applyStatus` rules, a blind status without a magnitude; the ability's `duration`, at least a tick, is then required: the zone's lifetime; at most one per ability); `teleport`, `spawn`: "not supported yet"; a field the effect kind doesn't use is an error. Ids unique across factions. Shipped: Malazan `telas_fire`, `cusser` (M4-4b-1); Whirlwind `sandstorm` (M4-4b-2) |
+| `ai.json` | (M5-1, per faction, required) `{difficulties {easy, normal, hard}, buildOrder, compositions, attack, retreat}`: the shape and every refusal in "AI architecture", "For the data track (M5-1)". Not in `ContentHash` yet (M5-2 adds it) |
 
 Validation rules: ids are `snake_case` and unique (a unit id is unique across all factions);
 `slot` is one of the seven template slots; `armorClass`, `attack.type`, and `bonusVs` keys exist in
@@ -5279,6 +5280,133 @@ AiPlayer
 - Cadence and quality knobs per difficulty come from `ai.json` (think interval, build-order
   slack, wave size multiplier, micro flags, gather bonus).
 - The AI never reads `World` directly; it gets a `PlayerView`, which enforces fog and stealth.
+
+### Implementation (M5-1)
+
+M5 criterion 1: the AI's only window on the world, and the `ai.json` schema the data track writes build orders into. No AI
+decision and no AI command yet (M5-2). Code: `sim/Rts.Sim/Ai/PlayerView.cs` (+ the value records `SeenUnit`, `SeenBuilding`,
+`SeenResource`), `FogStore.NextSeenUnit`; data in `Data/AiDef.cs`, `AiDifficultyDef.cs`, `AiStep.cs`, `AiComposition.cs`, the
+enums `AiDifficulty` / `AiStepTrigger` / `AiStepAction`, `Data/DataLoader.Ai.cs`, `GameData.Ai`.
+
+- **What `PlayerView` answers.** `new PlayerView(world, player)` (a player of the match; else `ArgumentOutOfRangeException`).
+  - Own, always: every live unit and building of the player; `Gold`, `Wood`, `HalfPop`, `HalfPopCap`, `Age`, `HasTech(id)`;
+    the queue of each own building (`QueueCount`, `TryGetQueueItem(slot, item, out type, out isTech)`, `QueueProgress`).
+  - Enemy units: only where `Fog.CanSeeUnit(player, slot)` holds: the unit's cell visible at the last fog update (by the
+    unit's own centre while a blocking zone lives) or a high-ground reveal in force, and never an enemy's stealthed unit the
+    player doesn't detect (`World.HiddenFrom`). A unit stealthed between ticks (a test seam) or mid-tick (a cast in phase 6)
+    is hidden at once: its detection bits are worked out when the status starts ("Implementation (M4-5)").
+  - Enemy buildings: live (`TryGetBuilding` / `NextBuilding`) only where `Fog.CanSeeBuilding` holds (a footprint cell
+    visible, or a tower revealed by its own hit from high ground); otherwise as a ghost (`TryGetGhost` / `NextGhost`, the
+    `BuildingGhost` of `Fog.Ghosts(player)`), by the rule the view draws ghosts with: an entry that is known, whose building
+    the player doesn't see now (or the slot now holds another), and no cell of whose remembered footprint is visible (so a
+    building that died in sight shows no ghost even before the next update, BUG-0310). A ghost may outlive its building (it
+    died unseen): it is what the player last saw.
+  - Resource nodes: a live node with a footprint cell the player has explored; `Remaining` only while a footprint cell is
+    visible, -1 otherwise.
+  - Cells: `IsExplored(cell)`, `IsVisible(cell)` (the fog's hashed bits), `MapWidth`, `MapHeight`; and `TickNumber`.
+- **What it never answers.** An enemy unit or building the fog hides (its slot answers false with a default record, so the
+  out value leaks nothing), another player's economy, techs or queues (0 / false / -1), a node on unexplored ground, how much
+  is left in a node out of sight, and no reference: every answer is a value (ids, handles, positions, the records); no
+  `World`, store or `FogStore` leaves it (`Ai/PlayerViewArchitectureTests.PlayerView_HandsOutValuesOnly`). Out-of-range slots,
+  cells and cursors answer false.
+- **Lifetime.** Stateless: it caches nothing, so a view kept across ticks always answers for the current state, the same as
+  one built fresh (the fuzz checks both). Read it between ticks, as the view does. It does not remember: a node felled out
+  of sight drops out of the answers at once, and an enemy that walked into the fog is simply not answered. What the AI
+  believes about the hidden world (last-seen positions, felled trees it hasn't seen fall) is its `Blackboard`'s, M5-2.
+- **Enumeration.** Slot order through a cursor, allocation-free and with no callback:
+  `int s = -1; while (view.NextUnit(ref s, out SeenUnit u)) { ... }` (likewise `NextBuilding`, `NextGhost`, `NextResource`).
+  At the end the cursor parks at the store's capacity; a cursor at `int.MaxValue` does not wrap. The unit cursor is one loop,
+  `FogStore.NextSeenUnit`: `CanSeeUnit`'s rule with the cell and reveal tests written out (each is a call in the tests' Debug
+  build, and a player's view walks every slot) and stealth asked only of an enemy already in sight; while a zone blocks
+  vision it asks `CanSeeUnit` itself. The fuzz holds it to `CanSeeUnit` slot for slot.
+- **The rule for AI code** (`Ai/PlayerViewArchitectureTests`, the ViewApi guard's pattern): no file under `sim/Rts.Sim/Ai/` but
+  `PlayerView.cs` names `World`, `Simulation`, a store (`UnitStore`, `BuildingStore`, `ResourceStore`, `StatusStore`,
+  `ZoneStore`, `ProjectileStore`) or `FogStore` in code (comment lines may); a planted reference fails it.
+- **Tests.** `Ai/PlayerViewOracleFuzzTests` (criterion 1): 3 seeds x 2,000 ticks of four players (indices past 2) on a
+  generated map with forests and mines, the stealth test data (`StealthTests.Data`: Heavy Infantry casting the test-only
+  stealth mid-run, Laborers detecting 10 m), towers, Sandstorms, spies that see every base at the start until the towers
+  shoot them, and a house of each player destroyed through the test seam at ticks 600 and 1,200. After every tick every
+  answer of every player's view (a kept one, and every 50th tick a fresh one) equals `Ai/PlayerViewOracle`'s, which walks
+  the stores and decides each answer again from the fog's byte map, `IsStealthed` / `IsDetectedBy`, the zone rule and the
+  two reveals, and is itself checked against `CanSeeUnit` / `CanSeeBuilding`: 0 leaks, 0 misses (a cursor answer the
+  oracle hides counts as a leak). Each seed must reach hidden and detected stealthed units, units seen while a storm lives,
+  ghosts of buildings that are gone, nodes in and out of sight and read queues; seeds 4 and 7 also see units through a
+  high-ground reveal. A mutation that drops the stealth test from `TryGetUnit` or from the cursor fails it at tick 4.
+  `Ai/PlayerViewTests` (one rule at a time: stealth from the moment it starts, detection, a tower revealed from high ground
+  then remembered, a building that died unseen, enemy queues), `Ai/PlayerViewHashTwinTests` (criterion 3: every player's
+  view read whole every tick, 2 seeds x 1,000 ticks, the hash equal to a bare twin's and unmoved by the reads),
+  `Ai/PlayerViewArchitectureTests` (criterion 2), `Ai/PlayerViewPerfTests` (criterion 5), `Data/AiLoaderTests` and the
+  `ai.json` rows of `DataValidationTests` (criterion 4).
+- **Cost** (Debug, 2026-10-11, the machine shared with the other tracks' suites; `Ai/PlayerViewPerfTests`). Eight players,
+  2,500 units (25 stealthed), 64 buildings, 200 nodes on a generated 128 map. Gated: each player's units in its own band of
+  the map, every view's unit cursor walked whole each tick: 0.21-0.24 ms for all eight (budget 0.3 ms; 5,260 answers).
+  Reported: the whole read (buildings, ghosts, nodes, queues) 0.46 ms, with every cell 1.5 ms; the worst case, every
+  player's units interleaved over the whole map so each view answers nearly all of them (19,389 answers): 0.53-0.56 ms for
+  the units, 0.95 ms whole. In that case the cost is the answers themselves (building 19,389 records; `CanSeeUnit` alone
+  over the same slots is 0.44 ms). Reading allocates nothing; building a view allocates the object alone (72 B).
+- **Memory.** No per-player buffer: a `PlayerView` is six references and two ints (72 B), built by whoever reads (the M5-2
+  `AiPlayer`), not by the world. `World` gains nothing: `QA/FieldBuildFairnessQaTests.World_1024Map_CacheStays32_MemoryBounded`
+  is unchanged (itemised there as +0). `GameData.Ai` is load-time data, a few hundred bytes a faction, outside the world.
+- **State and hashing.** No sim state, no new `Command`, no phase. `ai.json` is **not** in `GameData.ContentHash` (Producer
+  decision for M5-1: nothing the sim runs reads it yet; `Data/AiLoaderTests.AnAiJsonEdit_LeavesTheContentHash`). The golden is
+  untouched.
+- **Not yet.** `ai.json` into `ContentHash` with one golden regen (M5-2, when the AI first sends commands); the managers,
+  `AiPlayer`, the `Blackboard`; what a step's `count` and `buildOrderSlack` mean at run time (the executor's, M5-2);
+  difficulty display names (M5-4 / the M6 lobby). Placement for the AI: `World.CanPlace` still counts hidden enemy buildings
+  (docs/01, 2026-10-09), so it needs a fog-safe form before an AI places anything.
+
+**For the data track (M5-1).** `factions/<id>/ai.json`, required for every faction (a missing file is one error). Unknown fields
+and repeated keys are errors, as everywhere. Shape:
+
+```json
+{
+  "difficulties": {
+    "easy":   { "thinkInterval": 2,   "buildOrderSlack": 30, "waveSizeMultiplier": 0.6,  "gatherBonus": 0,
+                "focusFire": false, "pullBackWounded": false, "useAbilities": false, "expandAfter": 900 },
+    "normal": { "thinkInterval": 1,   "buildOrderSlack": 5,  "waveSizeMultiplier": 1,    "gatherBonus": 0,
+                "focusFire": false, "pullBackWounded": false, "useAbilities": true,  "expandAfter": 480 },
+    "hard":   { "thinkInterval": 0.5, "buildOrderSlack": 0,  "waveSizeMultiplier": 1.25, "gatherBonus": 0.25,
+                "focusFire": true,  "pullBackWounded": true,  "useAbilities": true,  "expandAfter": 300 }
+  },
+  "buildOrder": [
+    { "at": { "time": 0 }, "do": "train", "id": "malazan_laborer", "count": 1 },
+    { "at": { "workers": 6 }, "do": "build", "id": "malazan_billet" },
+    { "at": { "pop": 12 }, "do": "research", "id": "age_ii" },
+    { "at": { "time": 480 }, "do": "expand" }
+  ],
+  "compositions": [
+    { "age": 1, "units": { "malazan_heavy_infantry": 2, "malazan_crossbowman": 1 } },
+    { "age": 2, "units": { "malazan_heavy_infantry": 2, "malazan_crossbowman": 1, "malazan_wickan_lancer": 1 } }
+  ],
+  "attack": { "minArmyPop": 10, "minArmyCost": 800 },
+  "retreat": { "hpFraction": 0.3, "lossFraction": 0.5 }
+}
+```
+
+- `difficulties`: `easy`, `normal` and `hard` (`DataLimits.AiDifficultyIds`), each required, each with every field:
+  `thinkInterval` s, above 0, to ticks, at least 1 tick (docs/02: Easy 2 s, Hard 0.5 s); `buildOrderSlack` s, 0 or more;
+  `waveSizeMultiplier` above 0, at most 10 (`DataLimits.MaxAiWaveSizeMultiplier`); `gatherBonus` a fraction 0-1 (docs/02: Hard
+  0.25, shown in the skirmish setup); `focusFire`, `pullBackWounded`, `useAbilities` true / false; `expandAfter` s, 0 or more.
+  Durations at most 3,600 s, as every duration. Another key (`"insane"`) is an unknown field.
+- `buildOrder`: 1 to 256 steps (`DataLimits.MaxAiBuildOrderSteps`; more is one error at `buildOrder`), in order. `at` sets
+  exactly one of `time` (s, 0 or more), `workers` (a count, 0 or more) or `pop` (0 or more, a multiple of 0.5). `do` is
+  `build`, `train`, `research` or `expand` (`DataLimits.AiStepActionIds`). `build` names a building of the faction, `train`
+  a unit of the faction, `research` a common tech or one of the faction's (another faction's id: "... belongs to faction
+  ..."; an unknown one, or one of another kind: "unknown ..."); `expand` names no id. `count` 1-200
+  (`DataLimits.MaxAiStepCount`), default 1; a `research` step takes none. Two steps with the same `at`, `do` and `id` are one
+  step written twice: an error at the second (merge the counts).
+- `compositions`: one entry per age, `{age, units}`: `age` 1 (Age I) or 2 (Age II; one age per `DataLimits.AgeTechIds` entry
+  after Age I); `units` a non-empty map of the faction's unit ids to weights above 0. A missing age, a second entry for an
+  age and an age past the last are errors.
+- `attack`: `minArmyPop` (pop, 0 or more, a multiple of 0.5) and `minArmyCost` (gold + wood, a whole number, 0 or more), the
+  army an AI gathers before a wave, scaled per difficulty by `waveSizeMultiplier`. `retreat`: `hpFraction` (a unit below it
+  is wounded) and `lossFraction` (a wave that lost this much falls back), each 0-1.
+- Every fault is one error at its field (`buildOrder[3].id`, `difficulties.hard.thinkInterval`,
+  `compositions[1].units.whirlwind_raider`), all at once; ids are checked only when the units, buildings and techs files
+  loaded clean (a broken one is reported once, not again through ai.json). Shipped (M5-1, the sim's minimum): docs/02's difficulty numbers above (Normal's 1 s think and every number
+  docs/02 doesn't give are the sim's defaults), one real step (train a worker at 0 s), Age I line + ranged and Age II
+  line + ranged + shock compositions, attack at 10 pop / 800 cost, retreat at 0.3 / 0.5. The real build orders are the data
+  track's next task.
 
 ## Save/load and replays
 

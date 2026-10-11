@@ -1,0 +1,43 @@
+{
+  "difficulties": {
+    "easy": {
+      "thinkInterval": 2,
+      "buildOrderSlack": 30,
+      "waveSizeMultiplier": 0.6,
+      "gatherBonus": 0,
+      "focusFire": false,
+      "pullBackWounded": false,
+      "useAbilities": false,
+      "expandAfter": 900
+    },
+    "normal": {
+      "thinkInterval": 1,
+      "buildOrderSlack": 5,
+      "waveSizeMultiplier": 1,
+      "gatherBonus": 0,
+      "focusFire": false,
+      "pullBackWounded": false,
+      "useAbilities": true,
+      "expandAfter": 480
+    },
+    "hard": {
+      "thinkInterval": 0.5,
+      "buildOrderSlack": 0,
+      "waveSizeMultiplier": 1.25,
+      "gatherBonus": 0.25,
+      "focusFire": true,
+      "pullBackWounded": true,
+      "useAbilities": true,
+      "expandAfter": 300
+    }
+  },
+  "buildOrder": [
+    { "at": { "time": 0 }, "do": "train", "id": "whirlwind_camp_follower", "count": 1 }
+  ],
+  "compositions": [
+    { "age": 1, "units": { "whirlwind_raider": 2, "whirlwind_desert_archer": 1 } },
+    { "age": 2, "units": { "whirlwind_raider": 2, "whirlwind_desert_archer": 1, "whirlwind_horse_raider": 1 } }
+  ],
+  "attack": { "minArmyPop": 10, "minArmyCost": 800 },
+  "retreat": { "hpFraction": 0.3, "lossFraction": 0.5 }
+}

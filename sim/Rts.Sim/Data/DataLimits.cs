@@ -117,4 +117,25 @@ public static class DataLimits
     /// radius is a per-death cost. The largest sight; far above any designed aura (docs/factions: 6 m). A Producer default.
     /// </summary>
     public const double MaxPassiveRadius = 64;
+
+    /// <summary>JSON key of each <see cref="AiDifficulty"/> under <c>ai.json</c> <c>difficulties</c>, indexed by the enum value (M5-1, docs/02 "AI opponent").</summary>
+    public static readonly ImmutableArray<string> AiDifficultyIds = ImmutableArray.Create("easy", "normal", "hard");
+
+    /// <summary>JSON key of each <see cref="AiStepTrigger"/> in a build-order step's <c>at</c>, indexed by the enum value (M5-1).</summary>
+    public static readonly ImmutableArray<string> AiStepTriggerIds = ImmutableArray.Create("time", "workers", "pop");
+
+    /// <summary>JSON spelling of each <see cref="AiStepAction"/> (a build-order step's <c>do</c>), indexed by the enum value (M5-1).</summary>
+    public static readonly ImmutableArray<string> AiStepActionIds = ImmutableArray.Create("build", "train", "research", "expand");
+
+    /// <summary>
+    /// Most steps one <c>ai.json</c> <c>buildOrder</c> may hold (M5-1): the executor walks it every think, so a step is a
+    /// per-think cost. Far above any written opening (docs/02: a dozen or two); a Producer default.
+    /// </summary>
+    public const int MaxAiBuildOrderSteps = 256;
+
+    /// <summary>Largest <c>count</c> of one build-order step (M5-1): far above a population cap's worth of one unit; a Producer default.</summary>
+    public const int MaxAiStepCount = 200;
+
+    /// <summary>Largest difficulty <c>waveSizeMultiplier</c> (M5-1): a wave ten times the attack threshold; a Producer default.</summary>
+    public const double MaxAiWaveSizeMultiplier = 10;
 }
