@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed (D12 round 1, session 2026-10-10-2334; verified by QA) |
 | Found | 2026-10-10-2334, task D12 |
 | System | sim tests (`Data/StealthLoaderTests`, `Vision/StealthContentHashTests`), owned by the sim track |
-| Fixed by | |
+| Fixed by | D12 345ac3d: `Data/StealthLoaderTests.Shipped_TheKindsAndRulesLoad_AndOnlyTheCastersDetect` (Caster slot 10 m, every other unit 0) and `Vision/StealthContentHashTests` Cadre Mage mutant "10" -> "12"; both failed at 8fbede1, pass at 345ac3d; non-Perf 5,175/0 failed |
 
 The data change itself is correct (docs/02 line 33 Caster row and line 248 "all casters (10 m)"). The two tests were written
 in M4-5 to hold "no shipped unit detects until D12"; D12 made that false on purpose. The D12 brief forbids C# outside the data

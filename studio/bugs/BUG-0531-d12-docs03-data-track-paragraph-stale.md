@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (D12 round 1, session 2026-10-10-2334; verified by QA) |
 | Found | 2026-10-10-2334, task D12 |
 | System | docs/03 "For the data track (M4-5)" |
-| Fixed by | |
+| Fixed by | D12 345ac3d: docs/03 "For the data track (M4-5)" paragraph rewritten as shipped (Cadre Mage + Priest of the Whirlwind 10 m, pinned by `Content/UnitContentTests`; Stealthed/Revealed out of `PendingStatuses`, pinned by `StealthedAndRevealed_AreLoaded_AndStrictlyPinned`) |
 
 ## Repro
 1. `docs/03-technical-design.md` lines ~2960-2966: "the shipped casters' 10 m ... is D12, with the page rows and one golden

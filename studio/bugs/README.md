@@ -261,5 +261,5 @@ bugs outrank new features.
 | [BUG-0482](BUG-0482-full-status-store-drops-reveal.md) | S4 | open | A stealthed attacker that already carries 8 statuses is never Revealed (the reveal is dropped as a ninth status) |
 | [BUG-0490](BUG-0490-m4-v7b-nits.md) | S4 | open | M4-V7b nits: the stated M4PlayableTest tick range is already exceeded on both seeds; the per-slot max hp is filled twice a frame |
 | [BUG-0500](BUG-0500-d-h3-linger-phrase-and-index-nits.md) | S4 | fixed (D12) | D-H3 nits: per-phrase linger misses "a 1 s linger" / "linger on a unit for 1 s" (passed at the base, now false failures); BUG-0470 indexed fixed with item 3 open |
-| [BUG-0530](BUG-0530-d12-stale-sim-track-stealth-tests-red.md) | S2 | open | D12 leaves the non-Perf suite red: `StealthLoaderTests` (no shipped detector) and `StealthContentHashTests` (mutant "10" = shipped) assert the pre-D12 state; sim-track files |
-| [BUG-0531](BUG-0531-d12-docs03-data-track-paragraph-stale.md) | S4 | open | D12 nit: docs/03 "For the data track (M4-5)" still says the casters' 10 m and the stealth text pins are pending |
+| [BUG-0530](BUG-0530-d12-stale-sim-track-stealth-tests-red.md) | S2 | fixed | D12 leaves the non-Perf suite red: `StealthLoaderTests` (no shipped detector) and `StealthContentHashTests` (mutant "10" = shipped) assert the pre-D12 state; sim-track files |
+| [BUG-0531](BUG-0531-d12-docs03-data-track-paragraph-stale.md) | S4 | fixed | D12 nit: docs/03 "For the data track (M4-5)" still says the casters' 10 m and the stealth text pins are pending |
