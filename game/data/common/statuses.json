@@ -16,7 +16,7 @@
     {
       "id": "blinded",
       "displayName": "Blinded",
-      "description": "Can barely see: sight drops to 2 m, and it can't target anything more than 3 m away.",
+      "description": "Can barely see: sight drops to 2 m, and it can't attack anything more than 3 m away.",
       "kind": "blind",
       "sight": 2,
       "reach": 3
@@ -24,8 +24,20 @@
     {
       "id": "frenzied",
       "displayName": "Frenzied",
-      "description": "Attacks faster until it wears off. Only the strongest frenzy counts.",
+      "description": "Attacks faster: less time between swings, though each swing winds up as before. Only the strongest frenzy counts.",
       "kind": "frenzied"
+    },
+    {
+      "id": "stealthed",
+      "displayName": "Stealthed",
+      "description": "Unseen by enemies, who can't target it unless they detect it: a detector near it, or any of their units right beside it.",
+      "kind": "stealthed"
+    },
+    {
+      "id": "revealed",
+      "displayName": "Revealed",
+      "description": "Can't be stealthed while it lasts. Attacking or casting from stealth reveals a unit for a short while.",
+      "kind": "revealed"
     }
   ]
 }

@@ -39,6 +39,13 @@ internal sealed class RulesJson
     public double? NodeSearchRadius { get; set; }
     public RepairJson? Repair { get; set; }
     public double? BuildingSight { get; set; }
+    public StealthJson? Stealth { get; set; }
+}
+
+internal sealed class StealthJson
+{
+    public double? Proximity { get; set; }
+    public double? RevealSeconds { get; set; }
 }
 
 internal sealed class RepairJson
@@ -115,6 +122,7 @@ internal sealed class UnitJson
     public List<string?>? Tags { get; set; }
     public List<string?>? Abilities { get; set; }
     public List<PassiveJson?>? Passives { get; set; }
+    public double? Detector { get; set; }
 }
 
 internal sealed class PassiveJson

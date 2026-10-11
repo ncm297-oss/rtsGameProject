@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (items 1-4, D-H3; item 5 by the Producer at the 1015 ACCEPT) |
 | Found | 2026-10-10-1015, task D-H2 (filed as BUG-0431 by QA; renumbered to the data track's id range at ACCEPT) |
 | System | content tests (`Content/AbilityContentTests.DescriptionProblems` / `DurationRole` / `DescriptionNumber`), `studio/bugs/README.md` |
-| Fixed by | |
+| Fixed by | D-H3 (session 2026-10-10-1954, data track) |
 
 No shipped description uses any of these wordings, so the shipped pin is correct today; they are gaps a future tooltip
 could fall into. Numbers below are from QA probes in a scratch copy (Sandstorm: duration 12 s, cooldown 45 s, cast 1.2 s,
@@ -43,3 +43,20 @@ Possible fix: allow `[:\s]*` after "cooldown" / "recharge" in the `before` regex
 unit word; add `dmg`; for linger, look only at the words between the previous clause end and the number plus the few words
 after it ("after <anything> leaves"). Item 5 is a one-line index edit. Pinned by QA in
 `QA/Content/DescriptionRoleQaTests` only for the wordings that work today; these probes are not permanent tests.
+
+## Fix (D-H3)
+In `Content/AbilityContentTests` (the description role reader):
+1. `DurationRole`'s cooldown `before` pattern allows a colon after "cooldown" / "recharge" ("(cooldown: 45 s)").
+2. `DescriptionNumber` accepts a hyphen as well as a space before the time or distance word ("a 12-second storm",
+   "a 6-metre circle").
+3. `DamageAfter` / `DamageRateAfter` read "dmg" as "damage".
+4. The lingering role is read from the number's own phrase only: the linger word at most two words before it
+   (`LingerBefore`), or "after" + up to three words + leave(s) / leaving / left right after it (`LingerAfter`); the clause is
+   no longer searched.
+
+Proof: `AbilityContentTests.BUG0440_AWordingNamesItsField`, 15 rows; the 11 that failed before the fix (each wrong
+number now fails naming its role: '12 s' cooldown, '18-second' duration, '45-metre' distance, '4' damage per second, '45'
+damage amount, '12 seconds' lingering duration, '1 second' duration; and the right-number rows "(cooldown: 45 s)",
+"(recharge: 45 s)", "1 second after a unit leaves", "for 12 seconds and its effects linger after it leaves" now pass);
+`DescriptionProblems` is 0 on shipped text; `DescriptionRoleQaTests` and `TheWordsAroundADuration_ChooseItsField` unchanged
+and green.

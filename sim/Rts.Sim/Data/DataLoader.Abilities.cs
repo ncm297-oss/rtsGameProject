@@ -11,19 +11,26 @@ public static partial class DataLoader
     /// <c>common/statuses.json</c> (M4-4a): ids unique (a repeat is an error at its second definition), indexed in ordinal
     /// order; <c>kind</c> one of <see cref="DataLimits.StatusKindIds"/>; <c>damageType</c> required on a damage-over-time
     /// status and refused on any other kind; M4-4b-2: <c>sight</c> and <c>reach</c> (m, above 0, at most
-    /// <see cref="DataLimits.MaxSight"/>) required on a blind status and refused on any other kind.
+    /// <see cref="DataLimits.MaxSight"/>) required on a blind status and refused on any other kind. M4-5: at most one
+    /// <c>revealed</c> status (the one an attack or cast from stealth applies), refused at the second.
     /// </summary>
     private static StatusDef[] BuildStatuses(Checker c, StatusFileJson j, DamageTable? table)
     {
         List<StatusJson?>? list = c.Obj(j.Statuses, "statuses");
         int[] accepted = AcceptIds(c, list, "statuses", x => x?.Id, out string[] sorted);
         var defs = new StatusDef[sorted.Length];
+        string? revealed = null;
         foreach (int i in accepted)
         {
             StatusJson x = list![i]!;
             string p = $"statuses[{i}]";
             int id = Array.BinarySearch(sorted, x.Id!, StringComparer.Ordinal);
             int kind = KindOf(c, x.Kind, p + ".kind", DataLimits.StatusKindIds, ImmutableArray<string>.Empty);
+            if (kind == (int)StatusKind.Revealed)
+            {
+                if (revealed != null) c.Error(p + ".kind", $"status '{x.Id}': '{revealed}' is already the revealed status (an attack or cast from stealth applies the one)");
+                else revealed = x.Id;
+            }
             int damageType = -1;
             if (kind == (int)StatusKind.DamageOverTime)
                 damageType = c.Ref(table?.DamageTypeKeys, x.DamageType, p + ".damageType", "damage type");
@@ -126,7 +133,8 @@ public static partial class DataLoader
             c.Error(p + ".range", $"ability '{a.Id}': range {range} m is above the maximum {DataLimits.MaxSight} m (the largest sight)");
             range = 0;
         }
-        // M4-4b-3b: a summon's radius is optional (0 when absent; required below when it has an effect that lands on units).
+        // M4-4b-3b: a summon's radius is optional (0 when absent; required below when it has an effect that lands on units,
+        // refused when it has none: BUG-0452).
         double radius = kind == (int)AbilityKind.Summon && a.Radius == null ? 0 : c.Pos(a.Radius, p + ".radius");
         if (radius > DataLimits.MaxAbilityRadius)
         {
@@ -134,8 +142,10 @@ public static partial class DataLoader
             radius = 0;
         }
         if (a.Autocast == true) c.Error(p + ".autocast", $"ability '{a.Id}': autocast is not supported yet");
-        int affects = KindOf(c, a.Affects, p + ".affects", DataLimits.AbilityAffectsIds, ImmutableArray<string>.Empty);
         List<AbilityEffectJson?>? list = c.Obj(a.Effects, p + ".effects");
+        // BUG-0452: a summon whose effects are all spawns reads no `affects`: optional there (own_units when absent).
+        int affects = kind == (int)AbilityKind.Summon && a.Affects == null && OnlySpawns(list) ? (int)AbilityAffects.OwnUnits
+            : KindOf(c, a.Affects, p + ".affects", DataLimits.AbilityAffectsIds, ImmutableArray<string>.Empty);
         if (list != null && list.Count == 0) c.Error(p + ".effects", $"ability '{a.Id}' has no effects");
         var effects = ImmutableArray.CreateBuilder<AbilityEffect>(list?.Count ?? 0);
         bool hitsBuildings = false, spawns = false, landsOnUnits = false;
@@ -164,6 +174,9 @@ public static partial class DataLoader
                 c.Error(p + ".effects", $"ability '{a.Id}': a summon ability needs at least one 'spawn' effect");
             if (landsOnUnits && a.Radius == null)
                 c.Error(p + ".radius", $"ability '{a.Id}': missing required field (a summon's other effects land within its radius)");
+            // BUG-0452: the spawns are placed round the caster's cell whatever the radius, so one on a spawn-only summon misleads.
+            if (spawns && !landsOnUnits && a.Radius != null)
+                c.Error(p + ".radius", $"ability '{a.Id}': a summon with spawn effects only has no radius (its units appear beside the caster)");
         }
         // M4-4b-2: the zone lasts the ability's duration, so a zone ability must give one (at least a tick).
         int durationTicks;
@@ -397,6 +410,12 @@ public static partial class DataLoader
             if (magnitudeJson != null)
                 c.Error(q + ".magnitude", $"blind status '{key}' takes no magnitude (its sight and reach are in common/statuses.json)");
         }
+        else if (status >= 0 && statuses![status].Kind is StatusKind.Stealthed or StatusKind.Revealed)
+        {
+            // M4-5: stealth and reveal are on or off.
+            if (magnitudeJson != null)
+                c.Error(q + ".magnitude", $"{DataLimits.StatusKindIds[(int)statuses[status].Kind]} status '{key}' takes no magnitude (it is on or off)");
+        }
         else
         {
             magnitude = c.Pos(magnitudeJson, q + ".magnitude");
@@ -420,6 +439,15 @@ public static partial class DataLoader
     }
 
     private static void Unused(Checker c, string path, string kind) => c.Error(path, $"a '{kind}' effect has no such field");
+
+    /// <summary>Whether <paramref name="list"/> has at least one effect and every one is a <c>spawn</c> (BUG-0452: such a summon reads no <c>affects</c>).</summary>
+    private static bool OnlySpawns(List<AbilityEffectJson?>? list)
+    {
+        if (list == null || list.Count == 0) return false;
+        foreach (AbilityEffectJson? e in list)
+            if (e?.Kind != DataLimits.AbilityEffectKindIds[(int)AbilityEffectKind.Spawn]) return false;
+        return true;
+    }
 
     /// <summary>
     /// A required spelling from <paramref name="ids"/> (its index), or -1 after one error: "not supported yet" for a

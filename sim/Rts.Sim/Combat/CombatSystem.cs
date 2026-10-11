@@ -502,6 +502,7 @@ public static class CombatSystem
         // far away leaves the shortcut on, BUG-0363).
         float sight2 = def.Sight * def.Sight;
         bool oneLevel = !world.Fog.MultiLevel && (world.Zones.BlockerCount == 0 || !VisionSystem.BlockerNear(world, owner, pos, radius));
+        bool stealth = u.Statuses.StealthedUnits != 0; // M4-5: the shortcut doesn't know stealth; ask the rule's stealth half
         bool[] combatant = world.CombatantType;
         int[] found = world.Neighbors; // movement's scratch: free in phase 7
         int n = Math.Min(world.Spatial.QueryEnemies(pos, radius, owner, found), found.Length);
@@ -533,6 +534,7 @@ public static class CombatSystem
             if (!(tier < bestTier || d2 < bestD2 || (d2 == bestD2 && j < best))) continue;
             // Only what its owner sees (M4-3a): its own sight now, the owner's fog, or a high-ground reveal. Asked only of
             // a candidate that would win (BUG-0217): the best so far is always a seen one, so the pick is the same.
+            if (stealth && world.HiddenFrom(owner, j)) continue;
             if (!(oneLevel && d2 <= sight2) && !VisionSystem.UnitSeesUnit(world, i, j)) continue;
             best = j;
             bestTier = tier;
@@ -1035,6 +1037,8 @@ public static class CombatSystem
         UnitStore u = world.Units;
         if (!u.IsAlive(hit.Victim)) return; // killed earlier this phase
         int v = hit.Victim.Index;
+        // M4-5: an attack landing from stealth reveals its attacker (before the retaliation below asks).
+        if (u.Statuses.StealthedUnits != 0 && !hit.AttackerIsBuilding && u.IsAlive(hit.Attacker)) StealthSystem.OnAttackOrCast(world, hit.Attacker.Index);
         // M4-3a: a hit from a higher level reveals the attacker to the victim's owner (before the retaliation below asks);
         // a tower too since BUG-0270.
         if (hit.AttackerLevel > 0) VisionSystem.OnHit(world, hit.Attacker, hit.AttackerIsBuilding, hit.AttackerLevel, u.Owner[v], world.Fog.LevelAt(u.Position[v]));
@@ -1076,6 +1080,8 @@ public static class CombatSystem
         BuildingStore b = world.Buildings;
         if (!b.IsAlive(hit.Victim)) return;
         int j = hit.Victim.Index;
+        UnitStore u = world.Units;
+        if (u.Statuses.StealthedUnits != 0 && !hit.AttackerIsBuilding && u.IsAlive(hit.Attacker)) StealthSystem.OnAttackOrCast(world, hit.Attacker.Index); // M4-5
         if (hit.AttackerLevel > 0) VisionSystem.OnHit(world, hit.Attacker, hit.AttackerIsBuilding, hit.AttackerLevel, b.Owner[j], world.Fog.BuildingLevel(j)); // M4-3a, BUG-0270
         if (hit.Damage >= b.Hp[j])
         {

@@ -77,4 +77,9 @@ public sealed class UnitDef
     public int BelowHpPassive { get; internal set; } = -1;
     /// <summary>The index in <see cref="Passives"/> of its <see cref="PassiveTrigger.OnDeath"/> passive, or -1 (the per-type flag the death path reads, M4-4b-3a).</summary>
     public int DeathPassive { get; internal set; } = -1;
+    /// <summary>
+    /// Detection radius in meters (M4-5: <c>detector</c>, optional, docs/02 "Stealth and detection": casters 10 m); above 0
+    /// and at most <see cref="DataLimits.MaxSight"/>; 0 for none.
+    /// </summary>
+    public float Detector { get; init; }
 }

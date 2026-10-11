@@ -29,7 +29,7 @@ public class StatusLoaderTests
     public void Shipped_BurningIsMagicDamageOverTime_SlowedIsASlow()
     {
         GameData d = TestSim.Data;
-        Assert.Equal(4, d.Statuses.Length); // + blinded (M4-4b-2), frenzied (M4-4b-3a)
+        Assert.Equal(6, d.Statuses.Length); // + blinded (M4-4b-2), frenzied (M4-4b-3a), stealthed and revealed (M4-5)
         StatusDef burning = d.Statuses[d.FindStatus("burning")];
         Assert.Equal(StatusKind.DamageOverTime, burning.Kind);
         Assert.Equal(d.DamageTable.DamageTypeKeys.IndexOf("magic"), burning.DamageType);
@@ -105,10 +105,10 @@ public class StatusLoaderTests
         Assert.DoesNotContain(frenzied.Description, char.IsDigit);
         Assert.Equal((-1, 0f, 0f), (frenzied.DamageType, frenzied.Sight, frenzied.Reach));
         Assert.Equal((0, 1, 2, 3), ((int)StatusKind.DamageOverTime, (int)StatusKind.Slow, (int)StatusKind.Blind, (int)StatusKind.Frenzied));
-        Assert.Equal(new[] { "damageOverTime", "slow", "blind", "frenzied" }, DataLimits.StatusKindIds.ToArray());
-        // The entry is the file's last (appended after blinded).
+        Assert.Equal(new[] { "damageOverTime", "slow", "blind", "frenzied", "stealthed", "revealed" }, DataLimits.StatusKindIds.ToArray()); // M4-5 appended two
+        // The entry follows blinded (appended after it; M4-5's stealthed and revealed come after it).
         JsonArray list = JsonNode.Parse(File.ReadAllText(Path.Combine(TestDataDir.Shipped, "common", "statuses.json")))!["statuses"]!.AsArray();
-        Assert.Equal("frenzied", (string)list[^1]!["id"]!);
+        Assert.Equal("frenzied", (string)list[3]!["id"]!);
     }
 
     /// <summary>M4-4b-3a criterion 1: a frenzied status refuses <c>sight</c>, <c>reach</c> and <c>damageType</c>, each at its path.</summary>

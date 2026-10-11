@@ -26,12 +26,17 @@ public class AbilityContentTests
     public static readonly string[] PendingAbilities = Array.Empty<string>();
 
     /// <summary>
-    /// docs/02 "Status effects" rows the data track hasn't pinned yet (stealth, Frenzied, Regenerating), whether or not
-    /// <c>statuses.json</c> has the entry: a landed one (Frenzied from M4-4b-3a, pinned in D11) is compared like any other,
-    /// but its differences, description numbers included, are reported, not failed, until it is removed here (Blinded left
-    /// in D10c).
+    /// docs/02 "Status effects" rows the data track hasn't pinned yet (stealth, Regenerating), whether or not
+    /// <c>statuses.json</c> has the entry: a landed one is compared like any other, but its differences, description
+    /// numbers included, are reported, not failed, until it is removed here (Blinded left in D10c, Frenzied in D11).
     /// </summary>
-    public static readonly string[] PendingStatuses = { "Stealthed", "Revealed", "Frenzied", "Regenerating" };
+    public static readonly string[] PendingStatuses = { "Stealthed", "Revealed", "Regenerating" };
+
+    /// <summary>
+    /// D11: docs/02's Effect cell for a <c>frenzied</c> status, the kind's exact rule (docs/03 "Implementation (M4-4b-3a)":
+    /// the swing's cooldown is <c>cooldown / (1 + m)</c> for the largest magnitude, the wind-up untouched).
+    /// </summary>
+    public const string FrenziedEffect = "Attacks faster: the attack cooldown is divided by 1 + the strength; the wind-up is unchanged; only the strongest counts";
 
     private const string StatusDoc = "docs/02-game-design.md";
 
@@ -410,6 +415,42 @@ public class AbilityContentTests
         else Assert.Contains(problems, p => p.StartsWith("sandstorm description", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// BUG-0440: four more wordings bind their number to the field they name, so the wrong number fails as that role and the
+    /// right one passes. "(cooldown: N s)" with a colon is the cooldown; "N-second" / "N-metre" carry their unit word; "dmg"
+    /// is a damage word; the linger reading is the number's own phrase ("linger N s", "N s after &lt;someone&gt; leaves"),
+    /// not anything else in its clause. Sandstorm: duration 12 s, cooldown 45 s, range 18 m, radius 6 m, zone statuses
+    /// linger 1 s; Telas Fire: 10 magic damage a second for 4 s; Cusser: 120 siege damage, cooldown 45 s.
+    /// </summary>
+    [Theory]
+    [InlineData("sandstorm", "Slowed by 30%", "Slowed by 30% (cooldown: 12 s)", "'12 s'", "cooldown")]
+    [InlineData("sandstorm", "Slowed by 30%", "Slowed by 30% (cooldown: 45 s)", null, null)]
+    [InlineData("sandstorm", "Slowed by 30%", "Slowed by 30% (recharge: 45 s)", null, null)]
+    [InlineData("sandstorm", "a sandstorm for 12 seconds", "an 18-second sandstorm", "'18-second'", "duration")]
+    [InlineData("sandstorm", "a sandstorm for 12 seconds", "a 12-second sandstorm", null, null)]
+    [InlineData("sandstorm", "a sandstorm for 12 seconds", "a 45-metre sandstorm for 12 seconds", "'45-metre'", "distance")]
+    [InlineData("sandstorm", "a sandstorm for 12 seconds", "a 6-metre sandstorm for 12 seconds", null, null)]
+    [InlineData("telas_fire", "taking 10 magic damage a second", "taking 4 magic dmg a second", "'4'", "damage per second")]
+    [InlineData("telas_fire", "taking 10 magic damage a second", "taking 10 magic dmg a second", null, null)]
+    [InlineData("cusser", "120 siege damage", "45 siege dmg", "'45'", "damage amount")]
+    [InlineData("cusser", "120 siege damage", "120 siege dmg", null, null)]
+    [InlineData("sandstorm", "Your own units are unaffected.", "Your own units are unaffected. Blinded for 1 second after a unit leaves.", null, null)]
+    [InlineData("sandstorm", "Your own units are unaffected.", "Your own units are unaffected. Blinded for 12 seconds after a unit leaves.", "'12 seconds'", "lingering duration")]
+    [InlineData("sandstorm", "for 12 seconds:", "for 12 seconds and its effects linger after it leaves:", null, null)]
+    [InlineData("sandstorm", "for 12 seconds:", "for 1 second and its effects linger after it leaves:", "'1 second'", "duration")]
+    public void BUG0440_AWordingNamesItsField(string key, string text, string mutant, string? number, string? role)
+    {
+        (ImmutableArray<AbilityDef> abilities, ImmutableArray<StatusDef> statuses) = WithDescription(key, text, mutant);
+
+        List<string> problems = DescriptionProblems(Data, abilities, statuses);
+
+        if (number == null) Assert.True(problems.Count == 0, string.Join("\n", problems));
+        else
+            Assert.True(problems.Any(p => p.StartsWith(key + " description", StringComparison.Ordinal) && p.Contains(number, StringComparison.Ordinal)
+                    && p.Contains("reads as a " + role, StringComparison.Ordinal)),
+                $"no '{key}' problem naming {number} as a {role}:\n" + string.Join("\n", problems));
+    }
+
     /// <summary>A number with no unit or damage word is still checked as before: one of the entry's data numbers, any role.</summary>
     [Theory]
     [InlineData("Calls up a sandstorm", "Calls up 6 sandstorms", true)]
@@ -588,32 +629,40 @@ public class AbilityContentTests
         if ((!known || !dot) && magnitude > 0) roles[Role.Percent].Add(magnitude * 100.0);
     }
 
-    /// <summary>A number in a description, with the unit word that may follow it ("12 seconds", "30%", "2 m").</summary>
+    /// <summary>
+    /// A number in a description, with the unit word that may follow it ("12 seconds", "30%", "2 m"), a hyphen allowed before
+    /// a time or distance word ("a 12-second storm", "a 6-metre circle": BUG-0440).
+    /// </summary>
     private static readonly Regex DescriptionNumber = new(
-        @"(?<![\w.])(?<n>\d+(?:\.\d+)?)(?:(?<pct>\s?%|\s?per ?cent\b)|\s?(?<sec>s|secs?|seconds?)\b|\s?(?<m>m|metres?|meters?)\b)?",
+        @"(?<![\w.])(?<n>\d+(?:\.\d+)?)(?:(?<pct>\s?%|\s?per ?cent\b)|[\s-]?(?<sec>s|secs?|seconds?)\b|[\s-]?(?<m>m|metres?|meters?)\b)?",
         RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
-    /// <summary>"... damage a second" / "damage/s" right after a bare number: a damage-over-time rate.</summary>
-    private static readonly Regex DamageRateAfter = new(@"^\s+(?:[a-z_]+\s+)?damage(?:/s\b|\s+(?:a|per|each|every)\s+second\b)",
+    /// <summary>"... damage a second" / "damage/s" right after a bare number: a damage-over-time rate ("dmg" too: BUG-0440).</summary>
+    private static readonly Regex DamageRateAfter = new(@"^\s+(?:[a-z_]+\s+)?(?:damage|dmg)(?:/s\b|\s+(?:a|per|each|every)\s+second\b)",
         RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
-    /// <summary>"... damage" right after a bare number ("120 siege damage").</summary>
-    private static readonly Regex DamageAfter = new(@"^\s+(?:[a-z_]+\s+)?damage\b", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+    /// <summary>"... damage" (or "dmg") right after a bare number ("120 siege damage").</summary>
+    private static readonly Regex DamageAfter = new(@"^\s+(?:[a-z_]+\s+)?(?:damage|dmg)\b", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     private const RegexOptions Words = RegexOptions.CultureInvariant | RegexOptions.IgnoreCase;
 
-    private static readonly char[] ClauseEnds = { '.', ',', ';', ':' };
+    /// <summary>"linger 1 s", "lingers for 1 s": the linger word at most two words before the number.</summary>
+    private static readonly Regex LingerBefore = new(@"\bling(?:er|ers|ering)\b(?:\s+[\w']+){0,2}\s*$", Words);
+
+    /// <summary>"1 s after leaving", "1 second after a unit leaves": "after", up to three words, then the leaving verb.</summary>
+    private static readonly Regex LingerAfter = new(@"^\s*after\s+(?:[\w']+\s+){0,3}?(?:leaves|leave|leaving|left)\b", Words);
 
     /// <summary>The role of a number followed by a duration word, from the words around it.</summary>
     private static Role DurationRole(string before, string after)
     {
-        if (Regex.IsMatch(after, @"^\s*(?:cooldown|recharge)", Words) || Regex.IsMatch(before, @"(?:\b(?:cooldown|recharge)s?(?:\s+(?:of|is|in))?|\bevery)\s*$", Words))
+        // "cooldown: 45 s" with a colon too (BUG-0440).
+        if (Regex.IsMatch(after, @"^\s*(?:cooldown|recharge)", Words) || Regex.IsMatch(before, @"(?:\b(?:cooldown|recharge)s?(?:\s*:|\s+(?:of|is|in))?|\bevery)\s*$", Words))
             return Role.Cooldown;
         if (Regex.IsMatch(after, @"^\s*(?:to\s+)?cast", Words) || Regex.IsMatch(before, @"\bcast(?:s|ing)?(?:\s+(?:time|in|for|of|takes))*\s*$", Words))
             return Role.Cast;
-        // The clause the number sits in: from the last punctuation before it to the next one after.
-        string clause = before[(before.LastIndexOfAny(ClauseEnds) + 1)..] + " " + after.Split(ClauseEnds)[0];
-        if (Regex.IsMatch(clause, @"\blinger|\bafter (?:leaving|it leaves|they leave)", Words)) return Role.Lingering;
+        // A lingering duration is read from the number's own phrase only (BUG-0440), not from anywhere in its clause:
+        // "for 12 seconds and its effects linger after it leaves" states the storm's own duration.
+        if (LingerBefore.IsMatch(before) || LingerAfter.IsMatch(after)) return Role.Lingering;
         return Role.Duration;
     }
 
@@ -819,10 +868,22 @@ public class AbilityContentTests
             {
                 StatusKind.DamageOverTime => $"Damage over time ({data.DamageTable.DamageTypeKeys[s.DamageType]})",
                 StatusKind.Slow => "Movement speed × (1 - magnitude)",
+                StatusKind.Frenzied => FrenziedEffect,
                 _ => "",
             };
             if (row[1] != effect) sink.Add($"status '{s.Key}' Effect: docs/02 '{row[1]}', data {s.Kind} -> '{effect}'");
         }
+        // D11: each unit passive that applies a status lists "<unit> passive" as one of its typical sources.
+        foreach (UnitDef u in data.Units)
+            foreach (UnitPassive p in u.Passives)
+            {
+                if (p.Status < 0 || p.Status >= statuses.Count) continue;
+                string name = statuses[p.Status].DisplayName;
+                string[]? row = rows.FirstOrDefault(c => c[0] == name);
+                string source = u.DisplayName + " passive";
+                if (row == null || row[2].Split(',').Select(x => x.Trim()).Contains(source)) continue;
+                (pendingNames.Contains(name) ? r.Reports : r.Problems).Add($"status '{name}' Typical source '{row[2]}' does not list '{source}', which applies it");
+            }
         // Each loaded ability that applies a status (directly or through a zone) is listed as one of its typical sources.
         foreach (AbilityDef a in abilities)
             foreach (int status in AppliedStatuses(a))
@@ -874,21 +935,69 @@ public class AbilityContentTests
     }
 
     /// <summary>
-    /// D10b criterion 3, kept after Blinded's pin (D10c): a status landing while pending, of a kind this pin doesn't know
-    /// (an in-memory Frenzied of kind 99, the <c>_ =&gt; ""</c> arm), reports and passes.
+    /// D10b criterion 3, kept after Blinded's (D10c) and Frenzied's (D11) pins: a status landing while pending, of a kind
+    /// this pin doesn't know (an in-memory Regenerating of kind 99, the <c>_ =&gt; ""</c> arm), reports and passes.
     /// </summary>
     [Fact]
     public void ALandedPendingStatus_PassesWithAReportLine()
     {
-        var frenzied = new StatusDef { Id = Data.Statuses.Length, Key = "frenzied", DisplayName = "Frenzied", Description = "", Kind = (StatusKind)99 };
-        var statuses = Data.Statuses.Add(frenzied);
+        var regen = new StatusDef { Id = Data.Statuses.Length, Key = "regenerating", DisplayName = "Regenerating", Description = "", Kind = (StatusKind)99 };
+        var statuses = Data.Statuses.Add(regen);
 
         Result r = CompareStatuses(Data, statuses, Data.Abilities, FactionPage.DocTable(StatusDoc, "Status effects", level: 3));
         foreach (string line in r.Reports) _out.WriteLine(line);
 
         Assert.True(r.Problems.Count == 0, string.Join("\n", r.Problems));
-        Assert.Contains(r.Reports, l => l.Contains("Frenzied", StringComparison.Ordinal) && l.Contains("landed", StringComparison.Ordinal));
-        Assert.Contains(r.Reports, l => l.Contains("frenzied", StringComparison.Ordinal) && l.Contains("Effect", StringComparison.Ordinal));
+        Assert.Contains(r.Reports, l => l.Contains("Regenerating", StringComparison.Ordinal) && l.Contains("landed", StringComparison.Ordinal));
+        Assert.Contains(r.Reports, l => l.Contains("regenerating", StringComparison.Ordinal) && l.Contains("Effect", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Frenzied_IsLoaded_AndStrictlyPinned()
+    {
+        StatusDef frenzied = Assert.Single(Data.Statuses, s => s.DisplayName == "Frenzied");
+        Assert.Equal(StatusKind.Frenzied, frenzied.Kind);
+        Assert.DoesNotContain("Frenzied", PendingStatuses);
+        // Its sources are passives, not abilities: the typical-source pin must see one, or it would pass vacuously.
+        Assert.Contains(Data.Units, u => u.Passives.Any(p => p.Status == frenzied.Id));
+    }
+
+    /// <summary>D11 criterion 2: docs/02's Frenzied row changed in memory fails naming Frenzied (its Effect or its source).</summary>
+    [Theory]
+    [InlineData("Effect", "divided by 1 + the strength", "divided by the strength")]
+    [InlineData("Effect", "the wind-up is unchanged", "the wind-up is shorter too")]
+    [InlineData("Effect", "; only the strongest counts", "; frenzies add up")]
+    [InlineData("Effect", "Attacks faster", "Attacks faster and harder")]
+    [InlineData("Typical source", "Zealot passive", "Zealot ability")]
+    public void AMutatedDocs02FrenziedRow_FailsNamingFrenzied(string field, string text, string mutant)
+    {
+        string[][] rows = FactionPage.DocTable(StatusDoc, "Status effects", level: 3);
+        string[] row = rows.Single(c => c[0] == "Frenzied");
+        int cell = field == "Typical source" ? 2 : 1;
+        Assert.True(row[cell].Contains(text, StringComparison.Ordinal), $"docs/02 Frenzied row has no '{text}'");
+        row[cell] = row[cell].Replace(text, mutant, StringComparison.Ordinal);
+
+        Result r = CompareStatuses(Data, Data.Statuses, Data.Abilities, rows);
+
+        string want = field == "Typical source" ? "'Frenzied' Typical source" : "'frenzied' Effect:";
+        Assert.True(r.Problems.Any(p => p.Contains(want, StringComparison.Ordinal)), $"no problem '{want}':\n" + string.Join("\n", r.Problems));
+    }
+
+    /// <summary>
+    /// D11: the shipped Frenzied description is numberless (its strength is each source's), so any number written into it
+    /// fails by name now that Frenzied is pinned: a status has no magnitude or duration of its own.
+    /// </summary>
+    [Theory]
+    [InlineData("Attacks faster", "Attacks 50% faster")]
+    [InlineData("Only the strongest frenzy counts.", "Only the strongest frenzy counts. Lasts 5 s.")]
+    [InlineData("Attacks faster", "Attacks 2 times faster")]
+    public void ANumberInTheFrenziedDescription_Fails(string text, string mutant)
+    {
+        (ImmutableArray<AbilityDef> abilities, ImmutableArray<StatusDef> statuses) = WithDescription("frenzied", text, mutant);
+
+        List<string> problems = DescriptionProblems(Data, abilities, statuses);
+
+        Assert.Contains(problems, p => p.StartsWith("frenzied description", StringComparison.Ordinal));
     }
 
     [Fact]

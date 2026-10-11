@@ -2362,10 +2362,15 @@ fraction above 0 and below 1 for slow>, "duration": <s, at least a tick> }`. The
 
 Description numbers (D-H2, BUG-0410): the content tests read each number in an ability or status `description` by the
 word after it and check it against that field only. "N s" / "N seconds" is the ability's `duration` or an applied status's
-(`every N s`, `N s cooldown`, `recharges in N s`: the `cooldown`; `N s to cast`: the `castTime`; `lingers N s` / `N s after
-leaving`: a zone status's `duration`); "N m" is the `range` or `radius` (a status's `sight` or `reach`); "N%" is a
-`magnitude` x 100 or `friendlyFire` x 100; "N <type> damage" a damage `amount`, "N <type> damage a second" a
-damage-over-time `magnitude`. A number with no such word must still equal one of the entry's numbers.
+(`every N s`, `N s cooldown`, `cooldown: N s`, `recharges in N s`: the `cooldown`; `N s to cast`: the `castTime`;
+`lingers N s` / `N s after leaving` / `N s after a unit leaves`: a zone status's `duration`, read from the number's own
+phrase only, so "for 12 s and its effects linger after it leaves" is the ability's `duration`); "N m" is the `range` or
+`radius` (a status's `sight` or `reach`); a hyphen may join the number and its word ("a 12-second storm", "a 6-metre
+circle"); "N%" is a `magnitude` x 100 or `friendlyFire` x 100; "N <type> damage" (or "dmg") a damage `amount`,
+"N <type> damage a second" a damage-over-time `magnitude`. A number with no such word must still equal one of the entry's
+numbers. The four wordings above that BUG-0440 found (the colon, the hyphen, "dmg", the per-phrase linger) are pinned
+by `AbilityContentTests.BUG0440_AWordingNamesItsField` (D-H3); other free wordings ("a cooldown lasting N s") still fall to
+the duration or any-role reading, so a new tooltip phrasing gets a mutant row when it ships.
 
 ### Implementation (M4-4b-1)
 
@@ -2551,7 +2556,8 @@ death hook in `CombatSystem.HitUnit`, `UnitStore.BelowHpUnits`; data in `Data/Da
   inside the countdown pass: a unit in a later slot counts the new entry down that same tick (99 left), one in an earlier
   slot does not (100). Martyrdom from a phase-11 death (100 ticks) is in force through the next 99 ticks' phase 10 and ends
   in the 100th's phase 5. Shipped: Zealots within 6 m, Frenzied +50 % for 5 s (the 0.5 was a Producer default; since D11 the faction
-  page states "+50% attack speed" and `Content/PassiveContentTests` pins it both ways).
+  page states "+50% attack speed" and `Content/PassiveContentTests` pins it both ways; a second page sentence of the same
+  trigger for one unit fails naming both passives, since the data holds one passive per trigger: BUG-0470, D-H3).
 - **`selfAura`** (`AbilityKind.SelfAura` = 1; `DataLimits.PlannedAbilityKindIds` no longer lists it). No target and no
   range: a `range` on it is a load error, 0 included (`AbilityDef.Range` is 0). `UseAbility`'s point must still be a point
   on the map (the rule every positional order goes through) and is otherwise ignored: the caster never walks and starts
@@ -2646,7 +2652,9 @@ faction's data needs them (Producer decision, docs/01): the loader keeps refusin
   `AbilityEvent.Point`s are the caster's position, the cooldown starts at the resolve. It must carry at least one `spawn`
   effect. Its `radius` is optional (0 when absent); other effects (`damage`, `applyStatus`, `createZone`) may ride along,
   then need a `radius`, and land as a `selfAura`'s do; the summoned units appear after them and take none. `affects` is
-  required as on every ability (it matters only to those other effects).
+  required as on every ability when it has such other effects (it matters only to them). Since BUG-0452 (M4-5), a summon
+  whose effects are all `spawn` takes no `affects` (optional, `own_units` when absent) and refuses a `radius` ("a summon
+  with spawn effects only has no radius": its units always appear within 3 rings of the caster's cell).
 - **`spawn`** (`AbilityEffectKind.Spawn` = 3; `PlannedAbilityEffectKindIds` keeps only `teleport`), on a `summon` only:
   `unit` (an own-faction unit type), `count` (1 to `DataLimits.MaxSummonCount` = 8), `lifetime` (seconds, at least a tick).
   **Placement** (`SummonSystem.Summon`, at the resolve, after the other effects): each spawn effect in file order, each of
@@ -2673,7 +2681,8 @@ faction's data needs them (Producer decision, docs/01): the loader keeps refusin
   just run (`>= World.TickNumber`). A summoned unit killed before its time is an ordinary death (kill, loss, `onDeath`);
   its slot's end tick is cleared by `Free`, so it never expires again and a unit later spawned in the slot is permanent.
   `World.Deaths`' list (unit + building capacity) is full only if a summon reuses slots freed earlier in the same tick
-  past that count; an event past it is not recorded (the kill and loss counts still are).
+  past that count; an event past it is not recorded (the kill and loss counts still are). Since BUG-0452 this is said at
+  `World.Deaths` (the view's read), and `RecordDeath` asserts it in Debug builds.
 - **The summoned flag** is derived: `UnitStore.IsSummoned(slot)` is `ExpiresAtTick != 0` (M4-5's stealth reads it: "can't
   be stealthed"). `UnitStore.SummonedUnits` counts the live summoned units (derived: `TrySpawn` adds, `Free` takes back).
 - **State hash.** A live summoned unit sets bit 19 of its order word and hashes its `ExpiresAtTick` last; a permanent unit
@@ -2709,8 +2718,9 @@ faction's data needs them (Producer decision, docs/01): the loader keeps refusin
   before M8).
 
 **For the data track (M4-4b-3b).** An ability may be `"kind": "summon"`: no `range` (an error, 0 included), `radius`
-optional (m, above 0, at most 16; required when the ability has an effect other than `spawn`), `castTime`, `cooldown`,
-`affects`, `displayName`, `description` as for every ability; at least one effect of
+optional (m, above 0, at most 16; required when the ability has an effect other than `spawn`, and since BUG-0452 refused
+when it has none), `castTime`, `cooldown`, `displayName`, `description` as for every ability, `affects` likewise except
+that a summon whose effects are all `spawn` may leave it out (BUG-0452: `own_units`); at least one effect of
 `{ "kind": "spawn", "unit": <own-faction unit id>, "count": <whole, 1-8>, "lifetime": <s, at least a tick> }`. Refused, each
 at `abilities[k].effects[j].<field>`: `unit` missing, unknown or of another faction; `count` missing, not whole, below 1 or
 above 8; `lifetime` missing, 0 or below a tick (0.01 s); any of `type`, `amount`, `buildings`, `friendlyFire`, `status`,
@@ -2735,8 +2745,8 @@ bar: switch the bar's maximum to `World.MaxHp`. (Done in M4-V7b, BUG-0450: see "
 
 Fog of war and the high-ground rule are in since M4-3a (`sim/Rts.Sim/Vision/`); the last-known building ghosts, buildings
 that shoot and placement on explored ground since M4-3b (see "Implementation (M4-3b)"); zones that hide their contents
-and the Blinded sight since M4-4b-2 (see "Implementation (M4-4b-2)"); detection and stealth (M4-5) and the AI's
-`PlayerView` (M5) come later (see "Not yet" below).
+and the Blinded sight since M4-4b-2 (see "Implementation (M4-4b-2)"); stealth and detection since M4-5 (see
+"Implementation (M4-5)"); the AI's `PlayerView` (M5) comes later (see "Not yet" below).
 
 - **The grid.** `World.Fog` (`FogStore`): per player a `byte[]` of map cells, row-major (`y * Width + x`), 0 unexplored,
   1 explored, 2 visible (`VisionConstants.Unexplored` / `Explored` / `Visible`). Allocated with the world: one byte a
@@ -2782,7 +2792,8 @@ and the Blinded sight since M4-4b-2 (see "Implementation (M4-4b-2)"); detection 
   target) when its owner sees it: (a) the unit sees it itself now: within its sight, and at or below its own level
   unless within 4 m (the stamp's rule measured unit to unit at this tick, so a unit never misses what its own circle
   covers between updates); or (b) the target's cell is visible in its owner's fog (another own unit or building sees it);
-  or (c) the target is revealed to its owner. An enemy building: the distance to its footprint and its centre cell's
+  or (c) the target is revealed to its owner; and since M4-5, whatever (a)-(c) say, never an enemy's stealthed unit the
+  owner doesn't detect ("Implementation (M4-5)"). An enemy building: the distance to its footprint and its centre cell's
   level for (a), any footprint cell visible for (b). An explicit Attack, queued or not (a queued one is checked again
   when it starts), on a target its owner doesn't see is dropped like a forbidden one. A unit with a target checks on its
   scan tick; a target its owner no longer sees (it walked up a plateau out of sight, or out of every own circle) is lost
@@ -2802,7 +2813,7 @@ and the Blinded sight since M4-4b-2 (see "Implementation (M4-4b-2)"); detection 
   is its cell's at the melee hit, and for a projectile the level it was fired from (`ProjectileStore.Level`, one byte a
   slot, hashed). A dead attacker reveals nothing. It is stored per (unit slot, player) as the end tick and the slot's
   generation, so a recycled slot never inherits a reveal (2 ints a slot a player). A same-level attacker outside every
-  sight circle of the victim's owner is not revealed, and so not answered (docs/02; M4-5's Revealed status). A tower is an
+  sight circle of the victim's owner is not revealed, and so not answered (docs/02; a stealthed attacker is Revealed, "Implementation (M4-5)"). A tower is an
   attacker too (BUG-0270, M4-H2): its hit from high ground reveals it the same way, through a per (building slot, player)
   pair hashed only while in force ("Implementation (M4-3b)", "Hits by a tower").
 - **Last-known buildings** (M4-3b): `Fog.Ghosts(player)`, one `BuildingGhost` per building slot (type, anchor cell,
@@ -2816,7 +2827,8 @@ and the Blinded sight since M4-4b-2 (see "Implementation (M4-4b-2)"); detection 
   - `Fog.IsVisible(player, cell)`, `Fog.IsExplored(player, cell)` (explored or visible).
   - `Fog.CanSeeUnit(player, slot)`: an own unit, its cell visible at the last update, or revealed to the player (hide
     enemy unit views where this is false; since M4-H2 a unit standing in an enemy's blocking zone goes by its own centre,
-    "Implementation (M4-4b-2)"). `Fog.CanSeeBuilding(player, slot)`: own, any footprint cell visible, or (M4-H2) a tower
+    "Implementation (M4-4b-2)"; since M4-5 false for an enemy's stealthed unit the player doesn't detect, "For the view
+    (M4-V8)"). `Fog.CanSeeBuilding(player, slot)`: own, any footprint cell visible, or (M4-H2) a tower
     revealed by a hit from high ground.
   - `Fog.Ghosts(player)` / `Fog.GhostCount(player)` (M4-3b): draw a ghost for each entry with `Known` whose footprint
     the player doesn't see now (`CanSeeBuilding` false, or the slot holds another building) and has no visible cell (M4-V6b,
@@ -2838,14 +2850,120 @@ and the Blinded sight since M4-4b-2 (see "Implementation (M4-4b-2)"); detection 
   circle is capped at the map's diagonal (since BUG-0216; it was capped at the longer side, which cut a 64 m sight in
   the corner of a map under 46 cells). (4) The byte map and the packed bits are two copies of the visible set; combat
   reads the bits, the view the bytes; both are written only by the update.
-- **Not yet.** (M4-3b's towers, last-known list and explored-placement rule are in.) The `detector` radius is loaded and
-  hashed but unused until M4-5. (A tower's hit from high ground reveals it since M4-H2, BUG-0270. Zone vision landed in
-  M4-4b-2.) M4-5: `bool[] Detected` per
-  player (detector circles stamped like sight), stealth, the Revealed status (attacking or casting reveals for 3 s); the
-  target validity check then also requires "not stealthed, or detected". M5: the AI reads the world only through a
-  `PlayerView` facade that applies these checks. **Rendering** (M4-V4): the local player's grid uploads to an R8 texture
+- **Not yet.** (M4-3b's towers, last-known list and explored-placement rule, M4-4b-2's zone vision and M4-5's stealth and
+  detection are in.) Stealth has no shipped source before M8: Shadow's forest stealth (a tree/forest rule), the Shadow
+  Archer's stand-still stealth (a `whenStanding` passive trigger) and its first-shot bonus are M8's, built on the M4-5
+  status; the casters' 10 m `detector` is the data track's next task (D12). Detection is not stamped into the fog: it is a
+  per-unit answer for stealthed units only ("Implementation (M4-5)"). M5: the AI reads the world only through a
+  `PlayerView` facade that applies these checks (`Fog.CanSeeUnit` already applies stealth). **Rendering** (M4-V4): the local player's grid uploads to an R8 texture
   each update; the terrain shader samples it with smooth filtering (unexplored black, explored desaturated and dark,
   visible full color); unit views are hidden when not visible; ghosts come from the last-known list (`Fog.Ghosts`).
+
+### Implementation (M4-5)
+
+M4 criterion 7: stealth and detection, tested now with test-only sources (no faction stealths before M8). Code:
+`sim/Rts.Sim/Abilities/StealthSystem.cs`, `World.Stealth.cs` (`IsStealthed`, `IsDetectedBy`, `HiddenFrom`), the stealth
+counters in `StatusStore` (`HasStealth`, `StealthedUnits`), `FogStore.SeesUnitCell`, and the hooks in
+`VisionSystem.UnitSeesUnit` / `BuildingSeesUnit`, `FogStore.CanSeeUnit`, `CombatSystem.PickTarget` / `HitUnit` /
+`HitBuilding` and `AbilitySystem.Run`; data in `Data/DataLoader.cs` / `DataLoader.Abilities.cs`.
+
+- **Data.** Two status kinds: `stealthed` (`StatusKind.Stealthed` = 4) and `revealed` (`StatusKind.Revealed` = 5), shipped
+  in `common/statuses.json` as `stealthed` / `revealed`. Both take no `magnitude` (on or off) and no `sight`, `reach` or
+  `damageType`; a `duration` as every status application. At most one `revealed` status (the one an attack or cast from
+  stealth applies; a second is refused at its `kind`). `rules.json` `stealth: { "proximity": 3, "revealSeconds": 3 }`
+  (required; `proximity` m, above 0, at most `DataLimits.MaxSight`; `revealSeconds` at least a tick, to ticks at load:
+  `RulesDef.StealthProximity`, `RevealTicks` = 60). A unit's optional `detector` (m, above 0, at most `MaxSight`;
+  `UnitDef.Detector`, 0 for none) beside the buildings' (M4-3b). `ContentHash` covers the rules fields and `Detector`.
+- **The predicate.** `World.IsStealthed(slot)`: a live unit carrying a Stealthed status **and** no Revealed status **and**
+  not summoned (`IsSummoned`; the Wraith can't be stealthed). Revealed overrides Stealthed: a Stealthed applied while
+  Revealed is stored (it counts down as any status) but has no effect until Revealed ends. Its owner always sees it.
+- **Detection.** Enemy player p detects stealthed unit j when j's cell is visible to p **and** (a live unit of p stands
+  within `stealth.proximity` of j, or within that unit's own `detector`, or a **finished** building of p has j within its
+  `detector` of its footprint's centre). Distances centre to centre, the edge counts. "Cell visible" is the fog's at its
+  last update (`FogStore.SeesUnitCell`: the visible bits, and while a blocking zone lives the zone rule by the unit's own
+  centre; a high-ground reveal doesn't count), so a Blinded enemy beside a stealthed unit whose cell its 2 m circle
+  doesn't cover doesn't detect it, nor does a detector below a cliff. The answer is a per-slot bit per player
+  (`World._detectedBy`, `(players + 7) / 8` bytes a slot: one for up to 8 players), read through `World.IsDetectedBy(p,
+  slot)`; meaningful only while the slot carries a Stealthed status (false otherwise, and for the unit's own owner).
+- **When.** Phase 5, last: `SummonSystem`, `PassiveSystem`, `StatusSystem`, `ZoneSystem`, then `StealthSystem.Run`, which
+  returns at once while `StatusStore.StealthedUnits` is 0 and otherwise rebuilds the bits of every live slot with a
+  Stealthed status, in slot order: one `SpatialHash.QueryEnemies` at `max(proximity, largest unit detector)` round it, then
+  the finished detector buildings (collected once a pass into `World.DetectorBuildings`, slot order). The fog is asked at
+  most once a player (a 64-bit "settled" mask). So phases 6-12 (casts, scans, towers, swings, retaliation) and the view
+  between ticks read one answer, made from this tick's statuses and positions (as of phase 1's spatial hash) and the last
+  fog update. A unit that gets its first Stealthed status at any other moment (a cast resolving in phase 6, a test seam)
+  has its bits worked out at once (`StealthSystem.OnStealthStarted`, on the second movement scratch), so it is never
+  hidden for the rest of that tick from an enemy standing beside it.
+- **The one hook.** `World.HiddenFrom(p, slot)`: an enemy's unit, stealthed, not detected by p. `VisionSystem.UnitSeesUnit`
+  and `BuildingSeesUnit` answer false for it first (whatever the unit's own sight, the fog or a high-ground reveal say),
+  and `Fog.CanSeeUnit` likewise for the view. Through them: no scan acquires it (the one-level shortcut in
+  `CombatSystem.PickTarget` asks `HiddenFrom` itself, only of a candidate that would win), no retaliation, an explicit
+  `Attack` on it is dropped when it applies (as on an unseen target), a kept target that goes hidden is lost on the
+  chaser's next scan like a target lost from sight (BUG-0150's give-up rule), and towers never pick or keep it. Area
+  effects (splash, ability damage, zones) still hit it: they are hits, not acquisitions. A stealthed unit inside an enemy's
+  storm is hidden unless detected; the storm's owner sees into it but not through stealth. Ghosts are buildings: untouched.
+- **Reveal.** A unit carrying a Stealthed status (in force or dormant) is given the Revealed status for `RevealTicks` when
+  its attack lands on a unit or building (`CombatSystem.HitUnit` / `HitBuilding`: a melee hit, a projectile's impact or
+  splash, a damage effect of its cast; the same moment the high-ground reveal is granted, before retaliation asks) or its
+  cast resolves (`AbilitySystem.Run`, before the effects land, so a stealth cast from the open doesn't reveal its caster
+  but one re-cast from stealth does). The stacking rule refreshes it (never shortens). A shot in flight or a missed aimed
+  shot reveals nothing. Applied in tick t, it ends in tick t + 60's phase 5: revealed after ticks t to t + 59, stealthed
+  again after t + 60 if its Stealthed status still lives. A unit with no Stealthed status is never given Revealed this way
+  (Producer-flagged builder choice: a match without stealth gains no status entry; the cost is that a unit that attacked
+  and is stealthed within 3 s is stealthed at once).
+- **State and hashing.** No new hashed field: the Stealthed and Revealed entries are status entries (hashed with every
+  other). Derived and not hashed: the detection bits, `StatusStore._stealth` (Stealthed entries per slot) and
+  `StealthedUnits` (slots with one), kept by `StatusSystem.Apply` / `Run` and `StatusStore.Clear`
+  (`StateHashTests.Hash_TheDetectionMaskAndTheStealthCounts_AreDerived_AndNotHashed_TheEntriesAre`). No new `Command`. The
+  shipped data hash moves (two statuses, two rules fields, the units' detector word): the golden was regenerated once, its
+  trajectory unchanged (no stealth in that match), and the new hash appended to `GatherWedgeQaTests.SameGameDataHashes`.
+- **Cost.** A stealth-free tick reads `StealthedUnits` once in phase 5 and once per vision check (`UnitSeesUnit`,
+  `BuildingSeesUnit`, `CanSeeUnit`, per scan): 10,000 detection passes over 2,500 slots with no stealthed unit take
+  0.024 ms (`Vision/StealthPerfTests.NoStealthedUnits_*`). With stealth, a pass costs one spatial query per stealthed unit
+  plus the detector buildings; a reveal is one status application. Nothing allocates: the 500-unit brawl with 50
+  stealthed Heavy Infantry and 10 detecting Laborers (`StealthPerfTests`) allocates 0 B a tick. Measured (Debug,
+  2026-10-10, the Perf suite alone): that brawl 1.91 ms a tick over ticks 5-205 (worst 3.6 ms; the brawl rows' budget,
+  4 ms), 1.66 ms over ticks 205-605; `EmptyTick(2500)` 478 us in the run, and over six quiet runs alternating with the
+  base (3bfc6b8) a median of 488 us here against 499 us on the base (budget 500).
+- **Memory.** On the 1,024-cell world with 4,096 slots and 2 players (`QA/FieldBuildFairnessQaTests.World_1024Map_CacheStays32_MemoryBounded`):
+  231,890,440 bytes against 231,873,016 on the base (3bfc6b8, measured alone the same way), +17,424. The arrays:
+  `StatusStore._stealth` (a byte a slot: 4,096 + a 24-byte header), `World._detectedBy` (a byte a slot for up to 8
+  players: 4,120), `World.DetectorBuildings` (an int a building slot, 256: 1,048), a few counters and two more fog limit
+  entries: 9,288 + about 100; the rest is the probe's allocation-context rounding (zero-sizing the three arrays measures
+  +160 over the base). Under the bound (231,920,000; 29.5 KB left), so it is not re-baselined.
+- **Known limits.** (1) Detection lags the fog by up to 4 ticks (its update interval) and movement by one tick (phase 5).
+  (2) A unit first stealthed after movement (phase 11: an onDeath passive) is checked against phase 1's spatial hash.
+  (3) Only a stealth carrier is revealed by attacking (above). (4) Players past 64 are not deduplicated in a pass (correct,
+  only slower).
+- **Tests.** `Vision/StealthTests` (unseen and untargetable by any enemy, explicit Attack dropped, no retaliation, owner
+  sees; the test detector at 9.9 / 10 / 10.1 m, the Watchtower at 15.9 / 16.1 m, a site, high ground from below,
+  proximity 2.5 / 3.0 / 3.05 m, a Blinded enemy at 2.9 m; melee, projectile and cast reveals for exactly 60 ticks with
+  refresh; Revealed over a later Stealthed; summoned; a chaser dropping its target within a scan; the counter),
+  `Data/StealthLoaderTests` (the schema refusals, BUG-0452 items 1-2), `Vision/StealthContentHashTests`,
+  `Vision/StealthPerfTests`, `Stress/StealthFuzzStressTests` (3 seeds x 2,000 ticks, 3 players, stealth casts, detectors,
+  towers, Sandstorms: twins, the counter, no enemy sees or takes a hidden unit, a kept hidden target dropped within two
+  scans, a replay round trip). Test-only sources (`StealthTests.AddTo`): `zz_test_stealth` (selfAura, Stealthed on the
+  caster for 60 s) and `zz_test_shout` (selfAura, Frenzied) on the Heavy Infantry, and a 10 m `detector` on the Laborer.
+
+**For the view (M4-V8).** Read between ticks:
+- `World.IsStealthed(slot)`: draw the local player's own stealthed units semi-transparent (docs/02). An enemy's stealthed
+  unit the player doesn't detect is already hidden by `Fog.CanSeeUnit(player, slot)`; hide its view as for fog.
+- `World.IsDetectedBy(player, slot)`: an enemy unit shown because it is detected (`IsStealthed` and `IsDetectedBy`) is drawn
+  as normal and may carry a "detected" marker; a Revealed one (`IsStealthed` false while it has a Stealthed status,
+  `Units.Statuses.HasStealth(slot)`) is simply visible. The Stealthed and Revealed entries are ordinary statuses (their
+  `displayName` / `description` in `statuses.json`) for the status row.
+- Detector rings: `UnitDef.Detector` / `BuildingDef.Detector` (m, 0 for none), centred on the unit, or on the building's
+  footprint centre (finished buildings only detect).
+- No shipped unit can be stealthed before M8, so no view scene changes by itself; a test scene needs a test-only source
+  (`StealthTests.AddTo` is the sim-side pattern).
+
+**For the data track (M4-5).** `units.json` takes an optional `"detector": <m>` (above 0, at most 64; refused at
+`units[k].detector`): the shipped casters' 10 m (docs/02 "Caster" row, "Stealth and detection": Cadre Mage, Galain
+Sorcerer, Shaman, Priest of the Whirlwind, and later the K'risnan Sorcerer and the Great Raven's 14 m) is D12, with the
+page rows and one golden regen. `statuses.json` has `stealthed` and `revealed` (`displayName` "Stealthed" / "Revealed",
+numberless descriptions, no `magnitude` in any application); they are in `AbilityContentTests.PendingStatuses` until the
+data track pins their texts against docs/02's rows. `rules.json` `stealth.proximity` / `revealSeconds` hold docs/02's 3 m
+and 3 s. Stealth sources (Shadow's forest stealth, the Archer's stand-still) are M8's.
 
 ## Data format
 
@@ -2926,13 +3044,13 @@ the milestone that consumes it.
 | --- | --- |
 | `damage_table.json` | `armorClasses: [{id, displayName}]`, `damageTypes: [{id, displayName, ignoresArmor?, multipliers: {<armorClass>: x}}]`. Every type must list every class. `ignoresArmor` (default false) is how Magic skips armor |
 | `resources.json` | `{ "resources": [ ... ] }`, each `{id, displayName, description, resource, footprint {width, height}}`: `resource` is `gold` or `wood`, footprint sides are cells, 1-4 (`DataLimits.MaxFootprint`). Amounts are not here: a tree holds `rules.json` `treeWood`, a mine `startMines.gold` (M3-1, see "Economy implementation") |
-| `rules.json` | docs/02 Economy table: `startingGold`, `startingWood`, `startingWorkers`, `popCap`, `workerCarry`, `gatherRate {gold, wood}` (per second), `startMines` / `expansionMines {count, gold}`, `treeWood`, `nodeSearchRadius`, `repair {rateFactor, costFactor}` (M3-3), `buildingSight` (M4-3a: meters, above 0 and at most 64, the sight of a building whose entry gives none; shipped 12, a Producer default: docs/02 gives sight only for the Watch Tower). Pop provided by buildings comes with `buildings.json` (M3); the Age II cost with `techs.json` (M3-5) |
+| `rules.json` | docs/02 Economy table: `startingGold`, `startingWood`, `startingWorkers`, `popCap`, `workerCarry`, `gatherRate {gold, wood}` (per second), `startMines` / `expansionMines {count, gold}`, `treeWood`, `nodeSearchRadius`, `repair {rateFactor, costFactor}` (M3-3), `buildingSight` (M4-3a: meters, above 0 and at most 64, the sight of a building whose entry gives none; shipped 12, a Producer default: docs/02 gives sight only for the Watch Tower), `stealth {proximity, revealSeconds}` (M4-5: meters and seconds, above 0; shipped 3 and 3, docs/02 "Stealth and detection"). Pop provided by buildings comes with `buildings.json` (M3); the Age II cost with `techs.json` (M3-5) |
 | `faction.json` | `id` (must equal the folder name), `displayName`, `description`, `bonus {displayName, description}`, `resources {gold, wood: {displayName}}`, `palette {primary, secondary, accent}` as `#RRGGBB` |
 | `buildings.json` | `{ "buildings": [ ... ] }`, each `{id, displayName, description, slot, footprint {width, height}, hp, armor, cost {gold, wood}, buildTime, popProvided, dropOff}`: `slot` is one of the ten template slots (`DataLimits.BuildingSlotIds`), footprint sides 1-4 cells, `buildTime` in seconds (to ticks), `popProvided` a multiple of 0.5 (to half-pop), `dropOff` a required bool, `requires` an optional list of tech / building ids (M3-5; resolved and gating placement since M3-6), `sight` optional meters (M4-3a: above 0 and at most 64, default `rules.json` `buildingSight`; shipped 24 on both watch towers, docs/02), `attack` optional (M4-3b: the unit `attack` object; value at least 1, range above 0, an aimed `projectile` required, `targets` not `buildings`; shipped on both watch towers), `detector` optional meters (M4-3b: above 0 and at most 64; shipped 16 on both watch towers; unused until M4-5). Ids unique across factions (M3-2, see "Economy implementation"); exactly one building per slot per faction (M3-6, BUG-0010) |
 | `techs.json` | `{ "techs": [ ... ] }` in `common/` (shared by every faction) and in each faction folder (its own), each `{id, displayName, description, researchedAt, cost {gold, wood}, researchTime, requires?, requiresAnyOf?, effects: [{stat, amount, appliesTo {attackType?, tags?, units?, siege?}}]}`: `researchedAt` is a building slot id (a common tech resolves to each faction's building of it; a faction without one is an error), `researchTime` in seconds (to ticks), `requires` tech / building ids (resolved and gating research since M3-6), `requiresAnyOf` `{count, of: [slot ids, or in a faction file its own building ids]}`: met when `count` of the distinct listed slots hold an own finished building (M3-6; shipped on `age_ii` only), `effects` may be empty. `stat` is one of `attack`, `armor`, `range`, `hp`, `abilityCooldown` (`DataLimits.TechStatIds`); `amount` is non-zero, whole for attack / armor / hp, meters for range, seconds for ability cooldown (to ticks, negative shortens it). `appliesTo` is required (`{}` = every unit); each filter it sets must match: `attackType` a damage type, `tags` any one of the unit's tags (each must be a tag some unit has), `units` unit ids (a faction tech's must be its own), `siege` true / false for the `siege` slot; a `tags` or `units` list set to `[]` is an error (M3-6, BUG-0098). Tech ids are unique across all techs files and may not equal a building id (M3-6); `DataLimits.AgeTechIds` (`age_ii`) must be a common tech (M3-5, see "Implementation (M3-5)") |
 | `projectiles.json` | `{ "projectiles": [ ... ] }`, each `{id, kind, speed, hitTolerance?, leadSpeed?}`: `kind` `aimed` or `lob`, `speed` m/s (at least 1), `hitTolerance` m (aimed only, 0-2, default 0.3; an error on a lob), `leadSpeed` m/s (aimed only, not negative, default 0 = never leads; an error on a lob). Ids unique; every unit's `attack.projectile` must name one (M4-2b, see "Implementation (M4-2b)") |
-| `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge). `abilities` (M4-4a, optional): ability ids of the unit's own faction, at most 4 (`DataLimits.MaxUnitAbilities`), no repeats; resolved to `UnitDef.Abilities`; shipped on the Cadre Mage (`telas_fire`), the Sapper (`cusser`) and the Priest of the Whirlwind (`sandstorm`). `passives` (M4-4b-3a, optional): at most 2 (`DataLimits.MaxUnitPassives`), one per `trigger` (`DataLimits.PassiveTriggerIds`): `{trigger: whenBelowHp, hpFraction, status, magnitude}` or `{trigger: onDeath, status, magnitude, duration, radius, units}` (see "Implementation (M4-4b-3a)"); resolved to `UnitDef.Passives`; shipped on the Zealot only |
-| `statuses.json` | `{ "statuses": [ ... ] }` (M4-4a), each `{id, displayName, description, kind, damageType?, sight?, reach?}`: `kind` `damageOverTime`, `slow`, (M4-4b-2) `blind` or (M4-4b-3a) `frenzied` (`DataLimits.StatusKindIds`); `damageType` (a damage table type) required on `damageOverTime`, an error on any other kind; `sight` and `reach` (m, above 0, at most 64) required on `blind`, errors on any other kind. The magnitude and duration come from the effect applying it (a blind takes no magnitude). Ids unique; shipped `burning` (magic damage over time), `slowed`, `blinded` (2 / 3, M4-4b-2) and `frenzied` (M4-4b-3a; its magnitude, the attack-speed increase, any fraction above 0, is the applying effect's or passive's) |
+| `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge). `abilities` (M4-4a, optional): ability ids of the unit's own faction, at most 4 (`DataLimits.MaxUnitAbilities`), no repeats; resolved to `UnitDef.Abilities`; shipped on the Cadre Mage (`telas_fire`), the Sapper (`cusser`) and the Priest of the Whirlwind (`sandstorm`). `passives` (M4-4b-3a, optional): at most 2 (`DataLimits.MaxUnitPassives`), one per `trigger` (`DataLimits.PassiveTriggerIds`): `{trigger: whenBelowHp, hpFraction, status, magnitude}` or `{trigger: onDeath, status, magnitude, duration, radius, units}` (see "Implementation (M4-4b-3a)"); resolved to `UnitDef.Passives`; shipped on the Zealot only. `detector` (M4-5, optional): meters, above 0, at most 64 (`UnitDef.Detector`; see "Implementation (M4-5)") |
+| `statuses.json` | `{ "statuses": [ ... ] }` (M4-4a), each `{id, displayName, description, kind, damageType?, sight?, reach?}`: `kind` `damageOverTime`, `slow`, (M4-4b-2) `blind`, (M4-4b-3a) `frenzied`, or (M4-5) `stealthed` / `revealed` (`DataLimits.StatusKindIds`; at most one `revealed`); `damageType` (a damage table type) required on `damageOverTime`, an error on any other kind; `sight` and `reach` (m, above 0, at most 64) required on `blind`, errors on any other kind. The magnitude and duration come from the effect applying it (a blind, stealthed or revealed status takes no magnitude). Ids unique; shipped `burning` (magic damage over time), `slowed`, `blinded` (2 / 3, M4-4b-2) and `frenzied` (M4-4b-3a; its magnitude, the attack-speed increase, any fraction above 0, is the applying effect's or passive's), `stealthed` and `revealed` (M4-5, "Implementation (M4-5)") |
 | `abilities.json` | `{ "abilities": [ ... ] }` (M4-4a, per faction, optional), each `{id, displayName, description, kind, range, radius, castTime, cooldown, duration?, affects, autocast?, effects}`: `kind` `targetGround` or (M4-4b-3a) `selfAura` (`targetUnit`, `summon`: "not supported yet"); `range` m above 0 and at most `DataLimits.MaxSight` (64), required on `targetGround` and an error on `selfAura` (0 included); `radius` m above 0 and at most `DataLimits.MaxAbilityRadius` (16); `castTime` s, 0 or more, to ticks; `cooldown` s above 0, to ticks (at least 1); `duration` s, optional (0), to ticks (required with a `createZone` effect, M4-4b-2); `affects` `enemy_units`, `own_units` or `all_units`; `autocast` only `false` ("not supported yet"); `effects` at least one, each `{kind: damage, type, amount, buildings?, friendlyFire?}` (a whole amount, at least 1; M4-4b-1: `buildings` true also hits other players' buildings as structure, not with `own_units`; `friendlyFire` 0-1, the fraction own units take, above 0 only with `enemy_units`) or `{kind: applyStatus, status, magnitude, duration}` (a `statuses.json` id; magnitude whole and at least 1 for damage over time, above 0 and below 1 for a slow; duration s, at least a tick, and for damage over time a whole number of seconds, at least 1, M4-4b-1); M4-4b-2: `{kind: createZone, blocksVision?, statuses: [{status, magnitude, duration}]}` (at least one status, each by the `applyStatus` rules, a blind status without a magnitude; the ability's `duration`, at least a tick, is then required: the zone's lifetime; at most one per ability); `teleport`, `spawn`: "not supported yet"; a field the effect kind doesn't use is an error. Ids unique across factions. Shipped: Malazan `telas_fire`, `cusser` (M4-4b-1); Whirlwind `sandstorm` (M4-4b-2) |
 
 Validation rules: ids are `snake_case` and unique (a unit id is unique across all factions);

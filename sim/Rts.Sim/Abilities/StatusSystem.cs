@@ -53,6 +53,7 @@ public static class StatusSystem
                 }
                 if (def.Kind == StatusKind.Slow) slowChanged = true;
                 else if (def.Kind == StatusKind.Blind) blindChanged = true;
+                else if (def.Kind == StatusKind.Stealthed) s.CountStealth(i, -1); // M4-5
                 s.RemoveAt(i, at);
             }
             if (slowChanged && u.Alive[i]) RecomputeSpeed(world, i);
@@ -62,15 +63,19 @@ public static class StatusSystem
 
     /// <summary>
     /// Applies status <paramref name="status"/> to unit slot <paramref name="i"/> by the stacking rule (<see cref="StatusStore.Apply"/>)
-    /// and recomputes its speed when a slow changed, its blind in force when a blind was added (M4-4b-2).
+    /// and recomputes its speed when a slow changed, its blind in force when a blind was added (M4-4b-2). M4-5: a new
+    /// stealthed entry is counted, and a unit that had none is checked for detection at once (<see cref="StealthSystem.OnStealthStarted"/>).
     /// </summary>
     internal static void Apply(World world, int i, int status, float magnitude, int ticks, int source)
     {
-        bool changed = world.Units.Statuses.Apply(i, status, magnitude, ticks, source);
+        StatusStore s = world.Units.Statuses;
+        int before = s.Count[i];
+        bool changed = s.Apply(i, status, magnitude, ticks, source);
         if (!changed) return;
         StatusKind kind = world.Data.Statuses[status].Kind;
         if (kind == StatusKind.Slow) RecomputeSpeed(world, i);
         else if (kind == StatusKind.Blind) RecomputeBlind(world, i);
+        else if (kind == StatusKind.Stealthed && s.Count[i] > before && s.CountStealth(i, 1)) StealthSystem.OnStealthStarted(world, i);
     }
 
     /// <summary>
