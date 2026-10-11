@@ -3009,11 +3009,12 @@ counters in `StatusStore` (`HasStealth`, `StealthedUnits`), `FogStore.SeesUnitCe
   (`StealthTests.AddTo` is the sim-side pattern).
 
 **For the data track (M4-5).** `units.json` takes an optional `"detector": <m>` (above 0, at most 64; refused at
-`units[k].detector`): the shipped casters' 10 m (docs/02 "Caster" row, "Stealth and detection": Cadre Mage, Galain
-Sorcerer, Shaman, Priest of the Whirlwind, and later the K'risnan Sorcerer and the Great Raven's 14 m) is D12, with the
-page rows and one golden regen. `statuses.json` has `stealthed` and `revealed` (`displayName` "Stealthed" / "Revealed",
-numberless descriptions, no `magnitude` in any application); they are in `AbilityContentTests.PendingStatuses` until the
-data track pins their texts against docs/02's rows. `rules.json` `stealth.proximity` / `revealSeconds` hold docs/02's 3 m
+`units[k].detector`): D12 shipped the casters' 10 m (docs/02 "Caster" row, "Stealth and detection") on the Cadre Mage
+and the Priest of the Whirlwind, pinned to the faction pages' notes by `Content/UnitContentTests`, with one golden regen;
+the Galain Sorcerer, Shaman, K'risnan Sorcerer and the Great Raven's 14 m come with their factions. `statuses.json` has
+`stealthed` and `revealed` (`displayName` "Stealthed" / "Revealed", numberless descriptions, no `magnitude` in any
+application); D12 took them out of `AbilityContentTests.PendingStatuses` and pins their texts against docs/02's rows
+(`StealthedAndRevealed_AreLoaded_AndStrictlyPinned`). `rules.json` `stealth.proximity` / `revealSeconds` hold docs/02's 3 m
 and 3 s. Stealth sources (Shadow's forest stealth, the Archer's stand-still) are M8's.
 
 ## Data format

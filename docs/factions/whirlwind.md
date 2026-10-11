@@ -58,6 +58,8 @@ Age II, at the Smithy, 200 G / 150 W, 45 s. Zealots **+20 HP**; Sandstorm **cool
 
 `Content/PassiveContentTests` pins the two Zealot passives above to the Zealot's `passives` in `units.json`, both ways.
 
+`Content/UnitContentTests` pins each note's "detector N m" to the unit's `detector` in `units.json`, both ways.
+
 ## Abilities
 
 | Ability | Unit | Kind | Range | Radius | Cast | Cooldown | Duration | Effect |

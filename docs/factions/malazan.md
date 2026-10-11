@@ -51,6 +51,8 @@ Age II, at the Armory, 200 G / 150 W, 45 s. Sapper **Cusser cooldown 45 → 30 s
 - **Sapper (unique, Age II):** throws **Sharpers**, small munitions with 2.0 m splash and
   **friendly fire**. Ability **Cusser** (below). Fragile; wants an escort.
 
+`Content/UnitContentTests` pins each note's "detector N m" to the unit's `detector` in `units.json`, both ways.
+
 ## Abilities
 
 | Ability | Unit | Kind | Range | Radius | Cast | Cooldown | Duration | Effect |

@@ -40,7 +40,7 @@ public class StealthLoaderTests
     }
 
     [Fact]
-    public void Shipped_TheKindsAndRulesLoad_AndOnlyTheCastersMayDetect()
+    public void Shipped_TheKindsAndRulesLoad_AndOnlyTheCastersDetect()
     {
         GameData d = TestSim.Data;
         StatusDef stealthed = d.Statuses[d.FindStatus("stealthed")];
@@ -54,9 +54,8 @@ public class StealthLoaderTests
         Assert.Equal("revealed", DataLimits.StatusKindIds[5]);
         Assert.Equal(3f, d.Rules.StealthProximity);
         Assert.Equal(60, d.Rules.RevealTicks);
-        // The casters' 10 m is the data track's (D12, merged in the same session as M4-H3): no other shipped unit has a
-        // detector, and a caster has none or 10 m (Content/UnitContentTests pins which); the towers have theirs.
-        Assert.All(d.Units, u => Assert.True(u.Detector == 0f || (u.Key is "malazan_cadre_mage" or "whirlwind_priest" && u.Detector == 10f), $"{u.Key}: {u.Detector}"));
+        // docs/02: every caster detects at 10 m (D12), no other unit detects; the towers have theirs.
+        Assert.All(d.Units, u => Assert.Equal(u.Slot == UnitSlot.Caster ? 10f : 0f, u.Detector));
         Assert.Equal(16f, d.Buildings[d.FindBuilding("malazan_watchtower")].Detector);
     }
 

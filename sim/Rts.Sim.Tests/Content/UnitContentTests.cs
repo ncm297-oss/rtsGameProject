@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Rts.Sim.Data;
@@ -263,5 +264,184 @@ public class UnitContentTests
                 Assert.True(Roster[faction].Any(r => n.StartsWith(r.Name + ":", StringComparison.Ordinal) || n.StartsWith(r.Name + " (", StringComparison.Ordinal)),
                     $"{faction}.md Unit notes: '{n}' says 'attacks ... only' but names no unit of the roster");
         }
+    }
+
+    // D12: docs/02 "Stealth and detection" ("Detectors: ... all casters (10 m)") and the "Caster" class row ("detector"),
+    // typed here: the two shipped casters detect at 10 m and no other unit has a detector.
+    private static readonly Dictionary<string, double> Detectors = new()
+    {
+        ["malazan_cadre_mage"] = 10,
+        ["whirlwind_priest"] = 10,
+    };
+
+    /// <summary>"detector 10 m" / "detector (14 m)" in a unit note; the radius is absent when the note says only "detector".</summary>
+    private static readonly Regex NoteDetector = new(@"\bdetector\b(?:\s+\(?(?<n>\d+(?:\.\d+)?) m\)?)?", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    /// <summary>A description says it detects when it "detects" / "spots" / "reveals" hidden units or enemies (the towers' wording).</summary>
+    private static readonly Regex SaysDetects = new(@"\b(spots|reveals|detects) hidden (enemies|units)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    /// <summary>docs/02 "Stealth and detection": "all casters (10 m)".</summary>
+    private static readonly Regex CastersDetect = new(@"\ball casters \((?<n>\d+(?:\.\d+)?) m\)", RegexOptions.CultureInvariant);
+
+    private static bool IsNoteOf(string note, string name) =>
+        note.StartsWith(name + ":", StringComparison.Ordinal) || note.StartsWith(name + " (", StringComparison.Ordinal);
+
+    /// <summary>A detector radius as the pages write it, "none" for 0.</summary>
+    private static string DetectorText(double meters) => meters > 0 ? FactionPage.Text(Math.Round(meters, 4)) : "none";
+
+    /// <summary>
+    /// D12: each roster unit's "Unit notes" detector ("detector 10 m", or none) against <see cref="UnitDef.Detector"/>, both
+    /// ways; a note stating a detector for a unit outside the roster fails too. Problems name the page, the unit and the field.
+    /// </summary>
+    internal static List<string> PageDetectorProblems(GameData data, string faction, string[] notes)
+    {
+        var problems = new List<string>();
+        foreach (var r in Roster[faction])
+        {
+            string where = $"{faction}.md Unit notes {r.Name} detector";
+            string[] own = notes.Where(n => IsNoteOf(n, r.Name)).ToArray();
+            if (own.Length > 1) { problems.Add($"{where}: {own.Length} notes"); continue; }
+            Match m = own.Length == 1 ? NoteDetector.Match(own[0]) : Match.Empty;
+            string page = !m.Success ? "none"
+                : m.Groups["n"].Success ? DetectorText(double.Parse(m.Groups["n"].Value, CultureInfo.InvariantCulture))
+                : "'detector' without a radius";
+            string have = DetectorText(data.Units[data.FindUnit(r.Id)].Detector);
+            if (page != have) problems.Add($"{where}: page {page} vs data {have}");
+        }
+        foreach (string n in notes.Where(n => NoteDetector.IsMatch(n)))
+            if (!Roster[faction].Any(r => IsNoteOf(n, r.Name)))
+                problems.Add($"{faction}.md Unit notes: '{n}' states a detector but names no unit of the roster");
+        return problems;
+    }
+
+    /// <summary>D12: every unit's description says it detects hidden units exactly when the data gives it a detector.</summary>
+    internal static List<string> DescriptionDetectorProblems(GameData data)
+    {
+        var problems = new List<string>();
+        foreach (UnitDef u in data.Units)
+        {
+            bool says = SaysDetects.IsMatch(u.Description), detects = u.Detector > 0;
+            if (says && !detects) problems.Add($"{u.Key} detector: description says it detects hidden units, data has no detector");
+            if (detects && !says) problems.Add($"{u.Key} detector: data has detector {DetectorText(u.Detector)}, description does not say it detects hidden units");
+        }
+        return problems;
+    }
+
+    /// <summary>D12: docs/02 "Stealth and detection"'s "all casters (&lt;n&gt; m)" against every Caster-slot unit's detector.</summary>
+    internal static List<string> Docs02CasterDetectorProblems(GameData data, string text)
+    {
+        Match m = CastersDetect.Match(text);
+        if (!m.Success) return new List<string> { "docs/02 Stealth and detection all casters: states no casters' detector radius" };
+        string page = DetectorText(double.Parse(m.Groups["n"].Value, CultureInfo.InvariantCulture));
+        var problems = new List<string>();
+        foreach (UnitDef u in data.Units)
+            if (u.Slot == UnitSlot.Caster && DetectorText(u.Detector) != page)
+                problems.Add($"docs/02 Stealth and detection all casters: page {page} vs data {u.Key} {DetectorText(u.Detector)}");
+        return problems;
+    }
+
+    private static string Docs02Stealth() => FactionPage.DocText(Path.Combine("docs", "02-game-design.md"), "Stealth and detection", 2);
+
+    private static string[] ShippedNotes(string faction) => FactionPage.Bullets(faction, "Unit notes", 3);
+
+    /// <summary>Every detector problem for <paramref name="data"/> against the given pages' notes and docs/02 text.</summary>
+    private static List<string> AllDetectorProblems(GameData data, Func<string, string[]> notes, string docs02)
+    {
+        var problems = new List<string>();
+        foreach (string faction in Factions) problems.AddRange(PageDetectorProblems(data, faction, notes(faction)));
+        problems.AddRange(DescriptionDetectorProblems(data));
+        problems.AddRange(Docs02CasterDetectorProblems(data, docs02));
+        return problems;
+    }
+
+    [Fact]
+    public void I_OnlyTheTwoCasters_Detect_At10m()
+    {
+        foreach (UnitDef u in Data.Units)
+            Pin(u.Key, "detector", DetectorText(Detectors.GetValueOrDefault(u.Key)), DetectorText(u.Detector));
+        foreach (string id in Detectors.Keys)
+        {
+            Assert.Equal(UnitSlot.Caster, Unit(id).Slot);
+            Assert.Equal(10f, Unit(id).Detector);
+        }
+        // Every caster of the roster detects (docs/02 "Caster" row: "detector").
+        Assert.All(Data.Units.Where(u => u.Slot == UnitSlot.Caster), u => Assert.True(u.Detector > 0, $"{u.Key}: a caster without a detector"));
+    }
+
+    [Fact]
+    public void J_TheDetectors_MatchTheUnitNotes_TheDescriptions_AndDocs02_BothWays()
+    {
+        List<string> problems = AllDetectorProblems(Data, ShippedNotes, Docs02Stealth());
+        Assert.True(problems.Count == 0, string.Join("\n", problems));
+        // Not vacuous: both pages state the casters' detector, and docs/02 states the casters' radius.
+        foreach ((string faction, string name) in new[] { ("malazan", "Cadre Mage"), ("whirlwind", "Priest of the Whirlwind") })
+            Assert.Contains(ShippedNotes(faction), n => IsNoteOf(n, name) && n.Contains("detector 10 m", StringComparison.Ordinal));
+        Assert.Matches(CastersDetect, Docs02Stealth());
+    }
+
+    /// <summary>D12 criterion 2, the page side: a unit note changed in memory fails naming the page, the unit and the field.</summary>
+    [Theory]
+    [InlineData("malazan", "Cadre Mage:", "detector 10 m", "detector 12 m", "malazan.md Unit notes Cadre Mage detector: page 12 vs data 10")]
+    [InlineData("whirlwind", "Priest of the Whirlwind:", ", detector 10 m", "", "whirlwind.md Unit notes Priest of the Whirlwind detector: page none vs data 10")]
+    [InlineData("whirlwind", "Priest of the Whirlwind:", "detector 10 m", "detector", "whirlwind.md Unit notes Priest of the Whirlwind detector: page 'detector' without a radius vs data 10")]
+    [InlineData("malazan", "Crossbowman:", "than a bow.", "than a bow. Detector 8 m.", "malazan.md Unit notes Crossbowman detector: page 8 vs data none")]
+    [InlineData("whirlwind", "Desert Archer:", "Desert Archer: fires faster but hits softer than the template. Fast on foot.",
+        "Desert Scout: fires faster. Detector 8 m.", "whirlwind.md Unit notes: 'Desert Scout: fires faster. Detector 8 m.' states a detector but names no unit of the roster")]
+    public void K_AMutatedUnitNote_FailsNamingTheUnit(string faction, string note, string text, string mutant, string want)
+    {
+        string[] notes = ShippedNotes(faction);
+        int i = Array.FindIndex(notes, n => n.StartsWith(note, StringComparison.Ordinal));
+        Assert.True(i >= 0 && notes[i].Contains(text, StringComparison.Ordinal), $"{faction}.md has no '{note}' note with '{text}'");
+        notes[i] = notes[i].Replace(text, mutant, StringComparison.Ordinal);
+
+        List<string> problems = AllDetectorProblems(Data, f => f == faction ? notes : ShippedNotes(f), Docs02Stealth());
+
+        Assert.Contains(want, problems);
+    }
+
+    /// <summary>D12 criterion 2, docs/02's side: "all casters (10 m)" changed in memory fails naming each caster.</summary>
+    [Theory]
+    [InlineData("all casters (10 m)", "all casters (12 m)", "docs/02 Stealth and detection all casters: page 12 vs data malazan_cadre_mage 10")]
+    [InlineData("all casters (10 m)", "all casters (12 m)", "docs/02 Stealth and detection all casters: page 12 vs data whirlwind_priest 10")]
+    [InlineData("all casters (10 m)", "all casters", "docs/02 Stealth and detection all casters: states no casters' detector radius")]
+    public void K2_AMutatedDocs02Detectors_FailsNamingTheCaster(string text, string mutant, string want)
+    {
+        string docs02 = Docs02Stealth();
+        Assert.Contains(text, docs02);
+
+        List<string> problems = AllDetectorProblems(Data, ShippedNotes, docs02.Replace(text, mutant, StringComparison.Ordinal));
+
+        Assert.Contains(want, problems);
+    }
+
+    private static GameData LoadEdited(Action<TestDataDir> edit)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        edit(dir);
+        DataLoadResult r = DataLoader.LoadAll(dir.Path);
+        Assert.True(r.Ok, string.Join("\n", r.Errors));
+        return r.Data!;
+    }
+
+    /// <summary>
+    /// D12 criterion 2, the data side: a detector (or a caster's description) changed in a copy of the data fails naming the
+    /// unit and the field on the page, the description and docs/02 alike; each row lists every message it must produce.
+    /// </summary>
+    [Theory]
+    [InlineData("malazan", "malazan_cadre_mage", "detector", "12",
+        "malazan.md Unit notes Cadre Mage detector: page 10 vs data 12|docs/02 Stealth and detection all casters: page 10 vs data malazan_cadre_mage 12")]
+    [InlineData("whirlwind", "whirlwind_priest", "detector", null,
+        "whirlwind.md Unit notes Priest of the Whirlwind detector: page 10 vs data none|whirlwind_priest detector: description says it detects hidden units, data has no detector|docs/02 Stealth and detection all casters: page 10 vs data whirlwind_priest none")]
+    [InlineData("malazan", "malazan_crossbowman", "detector", "10",
+        "malazan.md Unit notes Crossbowman detector: page none vs data 10|malazan_crossbowman detector: data has detector 10, description does not say it detects hidden units")]
+    [InlineData("whirlwind", "whirlwind_priest", "description", "\"Calls down the goddess's storm to blind and slow the enemy.\"",
+        "whirlwind_priest detector: data has detector 10, description does not say it detects hidden units")]
+    public void K3_AMutatedDetectorInTheData_FailsNamingTheUnit(string faction, string unit, string field, string? rawJson, string wants)
+    {
+        GameData data = LoadEdited(dir => dir.SetUnitField(faction, unit, field, rawJson));
+
+        List<string> problems = AllDetectorProblems(data, ShippedNotes, Docs02Stealth());
+
+        Assert.Equal(wants.Split('|'), problems);
     }
 }

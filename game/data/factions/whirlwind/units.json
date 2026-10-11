@@ -96,6 +96,7 @@
                   "splash": 1.5, "projectile": "magic_bolt" },
       "speed": 3.2,
       "sight": 16,
+      "detector": 10,
       "radius": 0.4,
       "cost": { "gold": 80, "wood": 40 },
       "pop": 2,

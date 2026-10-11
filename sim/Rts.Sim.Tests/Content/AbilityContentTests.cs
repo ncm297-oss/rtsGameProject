@@ -28,9 +28,28 @@ public class AbilityContentTests
     /// <summary>
     /// docs/02 "Status effects" rows the data track hasn't pinned yet (stealth, Regenerating), whether or not
     /// <c>statuses.json</c> has the entry: a landed one is compared like any other, but its differences, description
-    /// numbers included, are reported, not failed, until it is removed here (Blinded left in D10c, Frenzied in D11).
+    /// numbers included, are reported, not failed, until it is removed here (Blinded left in D10c, Frenzied in D11,
+    /// Stealthed and Revealed in D12).
     /// </summary>
-    public static readonly string[] PendingStatuses = { "Stealthed", "Revealed", "Regenerating" };
+    public static readonly string[] PendingStatuses = { "Regenerating" };
+
+    /// <summary>D12: docs/02's Effect cell for a <c>stealthed</c> status (docs/02 "Stealth and detection" is the rule in full).</summary>
+    public const string StealthedEffect = "Invisible and untargetable to enemies without detection";
+
+    /// <summary>D12: docs/02's Effect cell for a <c>revealed</c> status.</summary>
+    public const string RevealedEffect = "Cannot be stealthed (overrides Stealthed)";
+
+    /// <summary>
+    /// D12: the rule words a stealth status's (numberless) description must carry, so a rewording that drops the rule fails:
+    /// Stealthed is unseen by enemies, untargetable, and beaten by detection; Revealed can't be stealthed.
+    /// </summary>
+    private static readonly (StatusKind Kind, string Claim, Regex Says)[] StealthClaims =
+    {
+        (StatusKind.Stealthed, "unseen by enemies", new Regex(@"\b(?:unseen|invisible)\b[^.]*\benem(?:y|ies)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)),
+        (StatusKind.Stealthed, "untargetable", new Regex(@"\b(?:can't|cannot|can not) target\b|\buntargetable\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)),
+        (StatusKind.Stealthed, "unless detected", new Regex(@"\bdetect(?:s|ed|ion|or)?\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)),
+        (StatusKind.Revealed, "can't be stealthed", new Regex(@"\b(?:can't|cannot|can not) be stealthed\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)),
+    };
 
     /// <summary>
     /// D11: docs/02's Effect cell for a <c>frenzied</c> status, the kind's exact rule (docs/03 "Implementation (M4-4b-3a)":
@@ -451,6 +470,31 @@ public class AbilityContentTests
                 $"no '{key}' problem naming {number} as a {role}:\n" + string.Join("\n", problems));
     }
 
+    /// <summary>
+    /// BUG-0500: a linger noun right after the number ("a 1 s linger") or the linger verb four words before it ("linger on a
+    /// unit for 1 s") reads the zone statuses' 1 s, so the right number passes and the storm's 12 s fails as a lingering
+    /// duration; a linger five words back is outside the number's phrase and reads as the storm's duration again.
+    /// </summary>
+    [Theory]
+    [InlineData(" A 1 s linger after leaving.", null)]
+    [InlineData(" A 1-second linger after leaving.", null)]
+    [InlineData(" The effects linger on a unit for 1 s.", null)]
+    [InlineData(" A 12 s linger after leaving.", "lingering duration")]
+    [InlineData(" A 12-second linger after leaving.", "lingering duration")]
+    [InlineData(" The effects linger on a unit for 12 s.", "lingering duration")]
+    [InlineData(" The effects linger on a unit for a while, 1 s.", "duration")]
+    public void BUG0500_ALingerWordAfterTheNumberOrFourWordsBefore_ReadsAsLingering(string sentence, string? role)
+    {
+        const string Anchor = "Your own units are unaffected.";
+        (ImmutableArray<AbilityDef> abilities, ImmutableArray<StatusDef> statuses) = WithDescription("sandstorm", Anchor, Anchor + sentence);
+
+        List<string> problems = DescriptionProblems(Data, abilities, statuses);
+
+        if (role == null) Assert.True(problems.Count == 0, sentence + "\n" + string.Join("\n", problems));
+        else Assert.True(problems.Any(p => p.StartsWith("sandstorm description", StringComparison.Ordinal) && p.Contains("reads as a " + role + ",", StringComparison.Ordinal)),
+            $"no sandstorm problem reading as a {role}:\n" + string.Join("\n", problems));
+    }
+
     /// <summary>A number with no unit or damage word is still checked as before: one of the entry's data numbers, any role.</summary>
     [Theory]
     [InlineData("Calls up a sandstorm", "Calls up 6 sandstorms", true)]
@@ -646,11 +690,17 @@ public class AbilityContentTests
 
     private const RegexOptions Words = RegexOptions.CultureInvariant | RegexOptions.IgnoreCase;
 
-    /// <summary>"linger 1 s", "lingers for 1 s": the linger word at most two words before the number.</summary>
-    private static readonly Regex LingerBefore = new(@"\bling(?:er|ers|ering)\b(?:\s+[\w']+){0,2}\s*$", Words);
+    /// <summary>
+    /// "linger 1 s", "lingers for 1 s", "linger on a unit for 1 s": the linger word at most four words before the number,
+    /// in the same phrase (punctuation ends the run of words). Four, not two, since BUG-0500.
+    /// </summary>
+    private static readonly Regex LingerBefore = new(@"\bling(?:er|ers|ering)\b(?:\s+[\w']+){0,4}\s*$", Words);
 
-    /// <summary>"1 s after leaving", "1 second after a unit leaves": "after", up to three words, then the leaving verb.</summary>
-    private static readonly Regex LingerAfter = new(@"^\s*after\s+(?:[\w']+\s+){0,3}?(?:leaves|leave|leaving|left)\b", Words);
+    /// <summary>
+    /// "1 s after leaving", "1 second after a unit leaves": "after", up to three words, then the leaving verb; or the linger
+    /// noun right after the number ("a 1 s linger", "a 1-second linger": BUG-0500).
+    /// </summary>
+    private static readonly Regex LingerAfter = new(@"^(?:\s*after\s+(?:[\w']+\s+){0,3}?(?:leaves|leave|leaving|left)\b|[\s-]*ling(?:er|ers|ering)\b)", Words);
 
     /// <summary>The role of a number followed by a duration word, from the words around it.</summary>
     private static Role DurationRole(string before, string after)
@@ -869,9 +919,15 @@ public class AbilityContentTests
                 StatusKind.DamageOverTime => $"Damage over time ({data.DamageTable.DamageTypeKeys[s.DamageType]})",
                 StatusKind.Slow => "Movement speed × (1 - magnitude)",
                 StatusKind.Frenzied => FrenziedEffect,
+                StatusKind.Stealthed => StealthedEffect,
+                StatusKind.Revealed => RevealedEffect,
                 _ => "",
             };
             if (row[1] != effect) sink.Add($"status '{s.Key}' Effect: docs/02 '{row[1]}', data {s.Kind} -> '{effect}'");
+            // D12: a stealth status's description states its docs/02 rule in words (its numbers are rules.json's, not its own).
+            foreach ((StatusKind kind, string claim, Regex says) in StealthClaims)
+                if (s.Kind == kind && !says.IsMatch(s.Description))
+                    sink.Add($"status '{s.Key}' ({s.DisplayName}) description: does not say '{claim}' (docs/02 '{row[1]}'): '{s.Description}'");
         }
         // D11: each unit passive that applies a status lists "<unit> passive" as one of its typical sources.
         foreach (UnitDef u in data.Units)
@@ -998,6 +1054,81 @@ public class AbilityContentTests
         List<string> problems = DescriptionProblems(Data, abilities, statuses);
 
         Assert.Contains(problems, p => p.StartsWith("frenzied description", StringComparison.Ordinal));
+    }
+
+    /// <summary>D12 criterion 3: Stealthed and Revealed are loaded, out of the allowance, and their shipped texts pass the strict pins.</summary>
+    [Fact]
+    public void StealthedAndRevealed_AreLoaded_AndStrictlyPinned()
+    {
+        StatusDef stealthed = Assert.Single(Data.Statuses, s => s.DisplayName == "Stealthed");
+        StatusDef revealed = Assert.Single(Data.Statuses, s => s.DisplayName == "Revealed");
+        Assert.Equal((StatusKind.Stealthed, StatusKind.Revealed), (stealthed.Kind, revealed.Kind));
+        Assert.DoesNotContain("Stealthed", PendingStatuses);
+        Assert.DoesNotContain("Revealed", PendingStatuses);
+        string[][] rows = FactionPage.DocTable(StatusDoc, "Status effects", level: 3);
+        Assert.Equal(StealthedEffect, rows.Single(c => c[0] == "Stealthed")[1]);
+        Assert.Equal(RevealedEffect, rows.Single(c => c[0] == "Revealed")[1]);
+
+        Result r = CompareStatuses(Data, Data.Statuses, Data.Abilities, rows);
+        List<string> problems = DescriptionProblems(Data, Data.Abilities, Data.Statuses);
+
+        Assert.True(r.Problems.Count == 0, string.Join("\n", r.Problems));
+        Assert.True(problems.Count == 0, string.Join("\n", problems));
+        Assert.DoesNotContain(r.Reports, l => l.Contains("Stealthed", StringComparison.Ordinal) || l.Contains("Revealed", StringComparison.Ordinal));
+    }
+
+    /// <summary>D12 criterion 3: docs/02's Stealthed / Revealed row changed in memory fails naming the status's Effect.</summary>
+    [Theory]
+    [InlineData("Stealthed", "Invisible and untargetable", "Invisible")]
+    [InlineData("Stealthed", "enemies without detection", "enemies without detection or proximity")]
+    [InlineData("Stealthed", "untargetable to enemies", "untargetable to everyone")]
+    [InlineData("Revealed", "Cannot be stealthed", "Can be stealthed")]
+    [InlineData("Revealed", " (overrides Stealthed)", "")]
+    public void AMutatedDocs02StealthRow_FailsNamingTheStatus(string name, string text, string mutant)
+    {
+        string[][] rows = FactionPage.DocTable(StatusDoc, "Status effects", level: 3);
+        string[] row = rows.Single(c => c[0] == name);
+        Assert.True(row[1].Contains(text, StringComparison.Ordinal), $"docs/02 {name} row has no '{text}'");
+        row[1] = row[1].Replace(text, mutant, StringComparison.Ordinal);
+
+        Result r = CompareStatuses(Data, Data.Statuses, Data.Abilities, rows);
+
+        string want = $"status '{name.ToLowerInvariant()}' Effect:";
+        Assert.True(r.Problems.Any(p => p.StartsWith(want, StringComparison.Ordinal)), $"no problem '{want}':\n" + string.Join("\n", r.Problems));
+    }
+
+    /// <summary>
+    /// D12 criterion 3: the shipped stealth descriptions are numberless (the 3 m and 3 s are rules.json's, docs/02 "Stealth and
+    /// detection"), so a number written into one fails by name now that both are pinned, as does a rewording that drops the rule.
+    /// </summary>
+    [Theory]
+    [InlineData("stealthed", "right beside it.", "within 3 m of it.", "stealthed description")]
+    [InlineData("stealthed", "a detector near it", "a detector within 10 m", "stealthed description")]
+    [InlineData("revealed", "for a short while.", "for 3 s.", "revealed description")]
+    [InlineData("revealed", "Can't be stealthed while it lasts.", "Can't be stealthed for 3 seconds.", "revealed description")]
+    public void ANumberInAStealthDescription_Fails(string key, string text, string mutant, string want)
+    {
+        (ImmutableArray<AbilityDef> abilities, ImmutableArray<StatusDef> statuses) = WithDescription(key, text, mutant);
+
+        List<string> problems = DescriptionProblems(Data, abilities, statuses);
+
+        Assert.Contains(problems, p => p.StartsWith(want, StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("stealthed", "Unseen by enemies, who can't target it", "Harder to hit, though enemies can still target it", "unseen by enemies")]
+    [InlineData("stealthed", "who can't target it unless", "who see it only if", "untargetable")]
+    [InlineData("stealthed", " unless they detect it: a detector near it, or any of their units right beside it.", ".", "unless detected")]
+    [InlineData("revealed", "Can't be stealthed while it lasts.", "Shows up on the enemy's map.", "can't be stealthed")]
+    public void AStealthDescriptionThatDropsItsRule_FailsNamingTheClaim(string key, string text, string mutant, string claim)
+    {
+        (ImmutableArray<AbilityDef> abilities, ImmutableArray<StatusDef> statuses) = WithDescription(key, text, mutant);
+
+        Result r = CompareStatuses(Data, statuses, abilities, FactionPage.DocTable(StatusDoc, "Status effects", level: 3));
+
+        string want = $"status '{key}' (";
+        Assert.True(r.Problems.Any(p => p.StartsWith(want, StringComparison.Ordinal) && p.Contains($"does not say '{claim}'", StringComparison.Ordinal)),
+            $"no problem '{want}... {claim}':\n" + string.Join("\n", r.Problems));
     }
 
     [Fact]
