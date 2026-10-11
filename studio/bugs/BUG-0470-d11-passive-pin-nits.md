@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (item 1, D-H3); item 2 already fixed on `main`; item 3 is the Producer's (`studio/STATE.md`) |
 | Found | 2026-10-10-1314, task D11 |
 | System | content tests (`Content/PassiveContentTests.Compare`), docs/03 "Implementation (M4-4b-3a)", `studio/STATE.md` |
-| Fixed by | |
+| Fixed by | D-H3 (session 2026-10-10-1954, data track) |
 
 Nothing shipped is wrong today: the shipped page and data agree. These are a gap in the new pin and two stale quotes.
 
@@ -35,3 +35,15 @@ Nothing shipped is wrong today: the shipped page and data agree. These are a gap
 ## Notes
 Fix for 1: in `Compare`, count page sentences per (unit, trigger) and fail the second naming both passives. Then unskip the
 QA test.
+
+## Fix (D-H3)
+1. `PassiveContentTests.Compare`, page -> data: a sentence whose (unit, trigger) an earlier sentence on the page already
+   states fails `'<Unit>' passive '<second>' trigger: a second <trigger> sentence for '<Unit>' after '<first>' (first '...',
+   second '...')`, naming both passives and quoting both sentences (reported, not failed, only when both are pending).
+   Proof: `QA/Content/ZealotPassivePinQaTests.ASecondSameTriggerPageSentence_WithOtherNumbers_Fails` un-skipped (now also
+   asserts 'Martyrdom' is named) and `Content/PassiveContentTests.ASecondSameTriggerSentence_FailsNamingBoth` (three rows: an
+   onDeath twin with the same numbers, one with other numbers, a whenBelowHp twin); all four failed with the check removed
+   and pass with it. Shipped pages: 0 problems.
+2. docs/03's `onDeath` bullet already reads "the 0.5 was a Producer default; since D11 the faction page states '+50% attack
+   speed'" (fixed at the 1314 integration); D-H3 adds the BUG-0470 rule to it.
+3. `studio/STATE.md` is not the data track's file: left for the Producer.

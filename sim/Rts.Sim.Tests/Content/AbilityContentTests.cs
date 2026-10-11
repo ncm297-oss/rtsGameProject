@@ -415,6 +415,42 @@ public class AbilityContentTests
         else Assert.Contains(problems, p => p.StartsWith("sandstorm description", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// BUG-0440: four more wordings bind their number to the field they name, so the wrong number fails as that role and the
+    /// right one passes. "(cooldown: N s)" with a colon is the cooldown; "N-second" / "N-metre" carry their unit word; "dmg"
+    /// is a damage word; the linger reading is the number's own phrase ("linger N s", "N s after &lt;someone&gt; leaves"),
+    /// not anything else in its clause. Sandstorm: duration 12 s, cooldown 45 s, range 18 m, radius 6 m, zone statuses
+    /// linger 1 s; Telas Fire: 10 magic damage a second for 4 s; Cusser: 120 siege damage, cooldown 45 s.
+    /// </summary>
+    [Theory]
+    [InlineData("sandstorm", "Slowed by 30%", "Slowed by 30% (cooldown: 12 s)", "'12 s'", "cooldown")]
+    [InlineData("sandstorm", "Slowed by 30%", "Slowed by 30% (cooldown: 45 s)", null, null)]
+    [InlineData("sandstorm", "Slowed by 30%", "Slowed by 30% (recharge: 45 s)", null, null)]
+    [InlineData("sandstorm", "a sandstorm for 12 seconds", "an 18-second sandstorm", "'18-second'", "duration")]
+    [InlineData("sandstorm", "a sandstorm for 12 seconds", "a 12-second sandstorm", null, null)]
+    [InlineData("sandstorm", "a sandstorm for 12 seconds", "a 45-metre sandstorm for 12 seconds", "'45-metre'", "distance")]
+    [InlineData("sandstorm", "a sandstorm for 12 seconds", "a 6-metre sandstorm for 12 seconds", null, null)]
+    [InlineData("telas_fire", "taking 10 magic damage a second", "taking 4 magic dmg a second", "'4'", "damage per second")]
+    [InlineData("telas_fire", "taking 10 magic damage a second", "taking 10 magic dmg a second", null, null)]
+    [InlineData("cusser", "120 siege damage", "45 siege dmg", "'45'", "damage amount")]
+    [InlineData("cusser", "120 siege damage", "120 siege dmg", null, null)]
+    [InlineData("sandstorm", "Your own units are unaffected.", "Your own units are unaffected. Blinded for 1 second after a unit leaves.", null, null)]
+    [InlineData("sandstorm", "Your own units are unaffected.", "Your own units are unaffected. Blinded for 12 seconds after a unit leaves.", "'12 seconds'", "lingering duration")]
+    [InlineData("sandstorm", "for 12 seconds:", "for 12 seconds and its effects linger after it leaves:", null, null)]
+    [InlineData("sandstorm", "for 12 seconds:", "for 1 second and its effects linger after it leaves:", "'1 second'", "duration")]
+    public void BUG0440_AWordingNamesItsField(string key, string text, string mutant, string? number, string? role)
+    {
+        (ImmutableArray<AbilityDef> abilities, ImmutableArray<StatusDef> statuses) = WithDescription(key, text, mutant);
+
+        List<string> problems = DescriptionProblems(Data, abilities, statuses);
+
+        if (number == null) Assert.True(problems.Count == 0, string.Join("\n", problems));
+        else
+            Assert.True(problems.Any(p => p.StartsWith(key + " description", StringComparison.Ordinal) && p.Contains(number, StringComparison.Ordinal)
+                    && p.Contains("reads as a " + role, StringComparison.Ordinal)),
+                $"no '{key}' problem naming {number} as a {role}:\n" + string.Join("\n", problems));
+    }
+
     /// <summary>A number with no unit or damage word is still checked as before: one of the entry's data numbers, any role.</summary>
     [Theory]
     [InlineData("Calls up a sandstorm", "Calls up 6 sandstorms", true)]
@@ -593,32 +629,40 @@ public class AbilityContentTests
         if ((!known || !dot) && magnitude > 0) roles[Role.Percent].Add(magnitude * 100.0);
     }
 
-    /// <summary>A number in a description, with the unit word that may follow it ("12 seconds", "30%", "2 m").</summary>
+    /// <summary>
+    /// A number in a description, with the unit word that may follow it ("12 seconds", "30%", "2 m"), a hyphen allowed before
+    /// a time or distance word ("a 12-second storm", "a 6-metre circle": BUG-0440).
+    /// </summary>
     private static readonly Regex DescriptionNumber = new(
-        @"(?<![\w.])(?<n>\d+(?:\.\d+)?)(?:(?<pct>\s?%|\s?per ?cent\b)|\s?(?<sec>s|secs?|seconds?)\b|\s?(?<m>m|metres?|meters?)\b)?",
+        @"(?<![\w.])(?<n>\d+(?:\.\d+)?)(?:(?<pct>\s?%|\s?per ?cent\b)|[\s-]?(?<sec>s|secs?|seconds?)\b|[\s-]?(?<m>m|metres?|meters?)\b)?",
         RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
-    /// <summary>"... damage a second" / "damage/s" right after a bare number: a damage-over-time rate.</summary>
-    private static readonly Regex DamageRateAfter = new(@"^\s+(?:[a-z_]+\s+)?damage(?:/s\b|\s+(?:a|per|each|every)\s+second\b)",
+    /// <summary>"... damage a second" / "damage/s" right after a bare number: a damage-over-time rate ("dmg" too: BUG-0440).</summary>
+    private static readonly Regex DamageRateAfter = new(@"^\s+(?:[a-z_]+\s+)?(?:damage|dmg)(?:/s\b|\s+(?:a|per|each|every)\s+second\b)",
         RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
-    /// <summary>"... damage" right after a bare number ("120 siege damage").</summary>
-    private static readonly Regex DamageAfter = new(@"^\s+(?:[a-z_]+\s+)?damage\b", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+    /// <summary>"... damage" (or "dmg") right after a bare number ("120 siege damage").</summary>
+    private static readonly Regex DamageAfter = new(@"^\s+(?:[a-z_]+\s+)?(?:damage|dmg)\b", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     private const RegexOptions Words = RegexOptions.CultureInvariant | RegexOptions.IgnoreCase;
 
-    private static readonly char[] ClauseEnds = { '.', ',', ';', ':' };
+    /// <summary>"linger 1 s", "lingers for 1 s": the linger word at most two words before the number.</summary>
+    private static readonly Regex LingerBefore = new(@"\bling(?:er|ers|ering)\b(?:\s+[\w']+){0,2}\s*$", Words);
+
+    /// <summary>"1 s after leaving", "1 second after a unit leaves": "after", up to three words, then the leaving verb.</summary>
+    private static readonly Regex LingerAfter = new(@"^\s*after\s+(?:[\w']+\s+){0,3}?(?:leaves|leave|leaving|left)\b", Words);
 
     /// <summary>The role of a number followed by a duration word, from the words around it.</summary>
     private static Role DurationRole(string before, string after)
     {
-        if (Regex.IsMatch(after, @"^\s*(?:cooldown|recharge)", Words) || Regex.IsMatch(before, @"(?:\b(?:cooldown|recharge)s?(?:\s+(?:of|is|in))?|\bevery)\s*$", Words))
+        // "cooldown: 45 s" with a colon too (BUG-0440).
+        if (Regex.IsMatch(after, @"^\s*(?:cooldown|recharge)", Words) || Regex.IsMatch(before, @"(?:\b(?:cooldown|recharge)s?(?:\s*:|\s+(?:of|is|in))?|\bevery)\s*$", Words))
             return Role.Cooldown;
         if (Regex.IsMatch(after, @"^\s*(?:to\s+)?cast", Words) || Regex.IsMatch(before, @"\bcast(?:s|ing)?(?:\s+(?:time|in|for|of|takes))*\s*$", Words))
             return Role.Cast;
-        // The clause the number sits in: from the last punctuation before it to the next one after.
-        string clause = before[(before.LastIndexOfAny(ClauseEnds) + 1)..] + " " + after.Split(ClauseEnds)[0];
-        if (Regex.IsMatch(clause, @"\blinger|\bafter (?:leaving|it leaves|they leave)", Words)) return Role.Lingering;
+        // A lingering duration is read from the number's own phrase only (BUG-0440), not from anywhere in its clause:
+        // "for 12 seconds and its effects linger after it leaves" states the storm's own duration.
+        if (LingerBefore.IsMatch(before) || LingerAfter.IsMatch(after)) return Role.Lingering;
         return Role.Duration;
     }
 

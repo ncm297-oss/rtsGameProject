@@ -162,6 +162,27 @@ public class PassiveContentTests
         Assert.Contains(r.Problems, p => p.Contains("'Zealot' passive onDeath:", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// BUG-0470: a second sentence with an already-stated trigger for the same unit fails naming both passives and quoting
+    /// both sentences, whatever its numbers (units.json holds one passive per trigger, so data -> page reads only the first).
+    /// </summary>
+    [Theory]
+    [InlineData("Last Rites", "Martyrdom", "when a Zealot dies, Zealots within 6 m gain Frenzied (+50% attack speed) for 5 s.")]
+    [InlineData("Last Rites", "Martyrdom", "when a Zealot dies, Zealots within 12 m gain Frenzied (+90% attack speed) for 9 s.")]
+    [InlineData("Last Stand", "Frenzy of the Apocalypse", "below 25% HP gains Frenzied (+80% attack speed).")]
+    public void ASecondSameTriggerSentence_FailsNamingBoth(string second, string first, string text)
+    {
+        string[] lines = Mutated("whirlwind", "for 5 s.", $"for 5 s. Passive **{second}**: {text}");
+
+        AbilityContentTests.Result r = Compare(Data, "whirlwind", lines);
+
+        Assert.Contains(r.Problems, p => p.Contains($"'Zealot' passive '{second}' trigger: a second", StringComparison.Ordinal)
+            && p.Contains($"after '{first}'", StringComparison.Ordinal) && p.Contains(text.TrimEnd('.'), StringComparison.Ordinal));
+        // Pending on both sides it is reported, not failed (no shipped pair today; guards the allowance's shape).
+        AbilityContentTests.Result pending = Compare(Data, "whirlwind", lines, pendingPassives: new[] { first, second });
+        Assert.DoesNotContain(pending.Problems, p => p.Contains("a second", StringComparison.Ordinal));
+    }
+
     /// <summary>The allowance works both ways: an unknown page passive fails, a pending one is only reported.</summary>
     [Fact]
     public void AnUnknownPagePassive_Fails_ButAPendingOneDoesNot()
@@ -262,11 +283,23 @@ public class PassiveContentTests
                     sink.Add($"{where} '{u.DisplayName}' passive '{pp.Name}' {field}: {problem}");
             }
 
-        // Page -> data: every sentence is a loaded passive of its unit, or pending.
-        foreach (PagePassive pp in page)
+        // Page -> data: every sentence is a loaded passive of its unit, or pending; and at most one sentence per (unit,
+        // trigger), because units.json holds at most one passive per trigger (BUG-0470): data -> page above reads only the
+        // first, so a second one's numbers would otherwise never be compared.
+        for (int i = 0; i < page.Count; i++)
         {
+            PagePassive pp = page[i];
             UnitDef? u = units.FirstOrDefault(x => x.DisplayName == pp.Unit);
             PassiveTrigger? t = TriggerOf(pp.Text);
+            PagePassive? first = t == null ? null : page.Take(i).FirstOrDefault(x => x.Unit == pp.Unit && TriggerOf(x.Text) == t);
+            if (first != null)
+            {
+                string twice = $"{where} '{pp.Unit}' passive '{pp.Name}' trigger: a second {TriggerId(t!.Value)} sentence for '{pp.Unit}' after '{first.Name}' "
+                    + $"(first '{first.Text}', second '{pp.Text}'); units.json holds one passive per trigger, so both can't be true";
+                if (pending.Contains(pp.Name) && pending.Contains(first.Name)) r.Reports.Add(twice + " (pending: reported, not failed)");
+                else r.Problems.Add(twice);
+                continue;
+            }
             bool loaded = u != null && t is PassiveTrigger trigger && of(u).Any(p => p.Trigger == trigger);
             if (loaded) continue;
             string what = u == null ? $"no {faction} unit is named '{pp.Unit}'"

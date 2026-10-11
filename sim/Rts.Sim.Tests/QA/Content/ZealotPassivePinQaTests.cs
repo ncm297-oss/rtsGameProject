@@ -124,10 +124,11 @@ public class ZealotPassivePinQaTests
 
     /// <summary>
     /// BUG-0470: a second page sentence with the same trigger for the same unit (here a contradicting "Last Rites" with other
-    /// numbers) passes, because page -> data only asks that the unit has a passive of that trigger and data -> page compares
-    /// only the first matching sentence. The data allows one passive per trigger, so two sentences can't both be true.
+    /// numbers) used to pass, because page -> data only asked that the unit has a passive of that trigger and data -> page
+    /// compares only the first matching sentence. The data allows one passive per trigger, so two sentences can't both be
+    /// true: it now fails naming both.
     /// </summary>
-    [Fact(Skip = "BUG-0470: a second same-trigger page passive sentence is never compared")]
+    [Fact]
     public void ASecondSameTriggerPageSentence_WithOtherNumbers_Fails()
     {
         string[] lines = PageTables.FactionLines("whirlwind");
@@ -137,6 +138,6 @@ public class ZealotPassivePinQaTests
 
         AbilityContentTests.Result r = PassiveContentTests.Compare(Data, "whirlwind", lines);
 
-        Assert.Contains(r.Problems, p => p.Contains("'Last Rites'", StringComparison.Ordinal));
+        Assert.Contains(r.Problems, p => p.Contains("'Last Rites'", StringComparison.Ordinal) && p.Contains("'Martyrdom'", StringComparison.Ordinal));
     }
 }

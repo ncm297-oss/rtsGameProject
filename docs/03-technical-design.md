@@ -2362,10 +2362,15 @@ fraction above 0 and below 1 for slow>, "duration": <s, at least a tick> }`. The
 
 Description numbers (D-H2, BUG-0410): the content tests read each number in an ability or status `description` by the
 word after it and check it against that field only. "N s" / "N seconds" is the ability's `duration` or an applied status's
-(`every N s`, `N s cooldown`, `recharges in N s`: the `cooldown`; `N s to cast`: the `castTime`; `lingers N s` / `N s after
-leaving`: a zone status's `duration`); "N m" is the `range` or `radius` (a status's `sight` or `reach`); "N%" is a
-`magnitude` x 100 or `friendlyFire` x 100; "N <type> damage" a damage `amount`, "N <type> damage a second" a
-damage-over-time `magnitude`. A number with no such word must still equal one of the entry's numbers.
+(`every N s`, `N s cooldown`, `cooldown: N s`, `recharges in N s`: the `cooldown`; `N s to cast`: the `castTime`;
+`lingers N s` / `N s after leaving` / `N s after a unit leaves`: a zone status's `duration`, read from the number's own
+phrase only, so "for 12 s and its effects linger after it leaves" is the ability's `duration`); "N m" is the `range` or
+`radius` (a status's `sight` or `reach`); a hyphen may join the number and its word ("a 12-second storm", "a 6-metre
+circle"); "N%" is a `magnitude` x 100 or `friendlyFire` x 100; "N <type> damage" (or "dmg") a damage `amount`,
+"N <type> damage a second" a damage-over-time `magnitude`. A number with no such word must still equal one of the entry's
+numbers. The four wordings above that BUG-0440 found (the colon, the hyphen, "dmg", the per-phrase linger) are pinned
+by `AbilityContentTests.BUG0440_AWordingNamesItsField` (D-H3); other free wordings ("a cooldown lasting N s") still fall to
+the duration or any-role reading, so a new tooltip phrasing gets a mutant row when it ships.
 
 ### Implementation (M4-4b-1)
 
@@ -2551,7 +2556,8 @@ death hook in `CombatSystem.HitUnit`, `UnitStore.BelowHpUnits`; data in `Data/Da
   inside the countdown pass: a unit in a later slot counts the new entry down that same tick (99 left), one in an earlier
   slot does not (100). Martyrdom from a phase-11 death (100 ticks) is in force through the next 99 ticks' phase 10 and ends
   in the 100th's phase 5. Shipped: Zealots within 6 m, Frenzied +50 % for 5 s (the 0.5 was a Producer default; since D11 the faction
-  page states "+50% attack speed" and `Content/PassiveContentTests` pins it both ways).
+  page states "+50% attack speed" and `Content/PassiveContentTests` pins it both ways; a second page sentence of the same
+  trigger for one unit fails naming both passives, since the data holds one passive per trigger: BUG-0470, D-H3).
 - **`selfAura`** (`AbilityKind.SelfAura` = 1; `DataLimits.PlannedAbilityKindIds` no longer lists it). No target and no
   range: a `range` on it is a load error, 0 included (`AbilityDef.Range` is 0). `UseAbility`'s point must still be a point
   on the map (the rule every positional order goes through) and is otherwise ignored: the caster never walks and starts
