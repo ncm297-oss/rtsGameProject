@@ -28,3 +28,9 @@ added since M4-4a (statuses, passives, now the summon counter test) and is now i
 session can see it go red without a regression. Producer's call: re-baseline with an explanation, or buy back
 per-tick cost (the counter-gated passes are already ~3 ns each; the remainder is the movement / scan / hash work of 2,500
 idle units). QA must not loosen it.
+
+## Producer triage (2026-10-10-1314 ACCEPT)
+S3, not blocking (M4-4b-3b's head is not above the base in the pairing). End-of-M4 sim hardening: first try to buy back
+per-tick cost in the idle path (the movement / scan / hash work of 2,500 idle units); if nothing cheap is found, re-baseline
+the gate to 550 µs with the trend itemised in the row's comment (statuses, passives, summons each added a counter-gated
+pass). Until then a failure of this row counts only when rerun alone and above the base in a paired run.

@@ -27,3 +27,9 @@ As above.
 
 ## Notes
 None of these is reachable in shipped data (no summon ships before Shadow, M8).
+
+## Producer triage (2026-10-10-1314 ACCEPT)
+S4, end-of-M4 sim hardening (or with M4-5 if the loader is touched): (1) `affects` optional on a summon whose effects are
+all `spawn` (default `own_units`, documented); (2) `radius` refused on such a summon ("a summon with spawn effects only has
+no radius"); (3) the dropped event documented at `World.Deaths` (the view's read) and a `Debug.Assert` in `RecordDeath`.
+docs/03 "For the data track (M4-4b-3b)" updated with the fix.

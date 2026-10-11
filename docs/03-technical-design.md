@@ -2550,8 +2550,8 @@ death hook in `CombatSystem.HitUnit`, `UnitStore.BelowHpUnits`; data in `Data/Da
   resolves and takes the status (its slot loses it when it dies); a unit freed earlier is not live. A phase-5 death lands
   inside the countdown pass: a unit in a later slot counts the new entry down that same tick (99 left), one in an earlier
   slot does not (100). Martyrdom from a phase-11 death (100 ticks) is in force through the next 99 ticks' phase 10 and ends
-  in the 100th's phase 5. Shipped: Zealots within 6 m, Frenzied +50 % for 5 s (the 0.5 is a Producer default: the faction
-  page gives none).
+  in the 100th's phase 5. Shipped: Zealots within 6 m, Frenzied +50 % for 5 s (the 0.5 was a Producer default; since D11 the faction
+  page states "+50% attack speed" and `Content/PassiveContentTests` pins it both ways).
 - **`selfAura`** (`AbilityKind.SelfAura` = 1; `DataLimits.PlannedAbilityKindIds` no longer lists it). No target and no
   range: a `range` on it is a load error, 0 included (`AbilityDef.Range` is 0). `UseAbility`'s point must still be a point
   on the map (the rule every positional order goes through) and is otherwise ignored: the caster never walks and starts

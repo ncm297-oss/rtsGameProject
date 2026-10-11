@@ -471,7 +471,7 @@ ten-minute playtest (STATE "For your review", M3-V3 entry) stands as feedback, n
       as last seen; a minimap right-click acts on the dots as drawn) fixed. BUG-0390 (S3): the `QaGhostViewTest` mean-walk
       check went stale with the BUG-0311 fix (a view-file rewrite at integration). Open: BUG-0271 / 0272 / 0275 (S4),
       BUG-0281 item 2 (M6 fog-look pass).)_
-- [ ] Ability system (target ground, self/aura, summon) and status effects; zones.
+- [x] Ability system (target ground, self/aura, summon) and status effects; zones.
       _(Slice 1 **accepted in session 2026-10-09-0724, sim M4-4a** (2 fix rounds): `common/statuses.json` (`damageOverTime`,
       `slow`; shipped `burning`, `slowed`) and `factions/<id>/abilities.json` (`targetGround` only; effects `damage`,
       `applyStatus`; the other kinds / effects load as "not supported yet"), `UnitDef.Abilities` (max 4),
@@ -532,8 +532,28 @@ ten-minute playtest (STATE "For your review", M3-V3 entry) stands as feedback, n
       `targetUnit`, `autocast` (M4-4b-3b); the Frenzied marker + the `selfAura` card (M4-V6d). Open: BUG-0420 (S3, the
       exact-line float rounding for unshipped fractions), BUG-0421 (S3, hp techs never raise hit points: pre-existing),
       BUG-0422 (S4), BUG-0430 (S3, view: a disc across a cliff is hidden or floats), BUG-0431 (S4, view: own vs Whirlwind rim).)_
+      _(**Ticked in session 2026-10-10-1314**, slice 3b, sim M4-4b-3b (0 fix rounds): the `summon` ability kind
+      (`AbilityKind.Summon` = 2, cast like a `selfAura`: no target, no `range`, resolves at the caster) with the `spawn` effect
+      (`unit` of the own faction, `count` 1-8, `lifetime` seconds): the units take the free cells nearest the caster within 3
+      rings (6 m) of its cell at the resolve, at full hit points incl. the owner's hp techs, free (no cost, no population), and
+      are taken away `lifetime` ticks later as an expiry (`DeathEvent.Expired`, killer -1: no kill, no loss, no `onDeath`
+      passive); killed earlier they die normally; `UnitStore.ExpiresAtTick` hashed (bit 19), the flag and `SummonedUnits`
+      derived; a full store or no free cell drops the rest. Test-only abilities (shadow.md's Summon Wraiths numbers; nothing
+      shipped before M8), so the golden `data-hash` is unchanged. **Hp techs raise hit points** (BUG-0421) and the
+      `whenBelowHp` line is an exact integer compare (BUG-0420), see criterion 8. **`targetUnit` and `autocast` are deferred**
+      until a faction's data needs them (Producer decision, docs/01 row 2026-10-10; the loader keeps refusing both). QA full:
+      `HpTechQaTests` (overlapping techs either order, the -100 floor, mid-burn, a decimal-line oracle over ~80 M triples),
+      `SummonQaTests` (expiry vs a lethal pulse over 39 offsets, same-tick slot reuse, cliffs / ramps / corners, store full
+      mid-count), `SummonQaFuzzStressTests` (3 seeds x 1,500 ticks of command spam, twins + replay), `SummonScaleQaTests` (240
+      live / 480 expiring, 0 B); `EmptyTick(2500)` paired 495 / 500 µs head / base. **View half (M4-V6d, same session):** the
+      Frenzied marker (`FrenzyColor` hot magenta, every channel gap ≥ 0.4 to the other three), the `selfAura` card (the button
+      or key casts at once for the lead caster, no targeting; the hover ring round the caster; Shift queues). The `summon`
+      kind's card arm (the same card) comes with M4-V7 slice 2: no shipped summon exists. Open: BUG-0450 (S3, view: hp bars
+      still use the type's hp as the maximum), BUG-0451 (S3, the `EmptyTick(2500)` gate has no headroom, pre-existing),
+      BUG-0452 (S4, summon loader nits), BUG-0461 (S3, sim: a cast's walk-in behind own attackers is dropped), BUG-0462 (S4,
+      view nits).)_
 - [ ] Stealth and detection system (tested now, even though Shadow arrives in M8).
-- [ ] Telas Fire, Sapper Sharpers + Cusser, Sandstorm, Zealot passives all work.
+- [x] Telas Fire, Sapper Sharpers + Cusser, Sandstorm, Zealot passives all work.
       _(Telas Fire works since M4-4a (session 2026-10-09-0724): 16 m / 3 m / 0.8 s cast / 25 s cooldown, Burning 10 magic a
       second for 4 s on enemy units only (40 on Light, 52 on Heavy / Giant: magic x1.25 per pulse), no effect on buildings.
       The other three need slice 2 (zones for Sandstorm; passives / Cusser's launch rule) and the data track's D10 content.)_
@@ -555,6 +575,16 @@ ten-minute playtest (STATE "For your review", M3-V3 entry) stands as feedback, n
       Zealots). **Not ticked yet:** BUG-0421 (S3, pre-existing since M3-5): hp techs never raise a unit's hit points, so after
       Dryjhna's Prophecy the Zealot frenzies at 41 / 63 (65 % of its real hp) instead of 41 / 83; the first item of M4-4b-3b,
       and the tick comes with that fix. The data track pins the passives and the Frenzied text to the page in D11.)_
+      _(**Ticked in session 2026-10-10-1314**, sim M4-4b-3b: BUG-0421 fixed. A unit spawns at its type's `hp` plus its owner's
+      hp tech bonus (`World.MaxHpOf`), and when an hp tech finishes every living unit it affects gains the change to its
+      current hit points at once (maximum and current move together; floor 1; a dead unit untouched): a Zealot at 63 / 63
+      with Dryjhna's Prophecy is 83 / 83, one at 41 / 63 is 61 / 83 and not Frenzied, a Zealot trained later starts at 83,
+      another player's Zealots and the owner's Raiders are untouched (`Abilities/HpTechTests`, fail-first; QA's
+      `HpTechQaTests`). All four signature abilities now work with their real numbers. **Pinned the same session (data
+      D11):** both Zealot passives field by field to whirlwind.md both ways (`Content/PassiveContentTests`; the page now
+      states Martyrdom's "+50% attack speed", a Producer default the owner may revisit), the Frenzied row to its exact rule
+      (`Frenzied` out of `PendingStatuses`); golden `data-hash` 4383EBB9345FABF7 (every `k` line equal). Open: BUG-0450 (S3,
+      view: the hp bar's maximum is still the type's hp; first item of the next view task).)_
 - [x] Scenario tests for the counter triangle (Line beats Shock, Shock beats Ranged, Ranged beats
       Light, Siege beats buildings).
       _(Ticked in session 2026-10-08-0913, task M4-2b: `Scenario/CounterTriangleTests`, equal-cost groups attack-moved
@@ -564,7 +594,25 @@ ten-minute playtest (STATE "For your review", M3-V3 entry) stands as feedback, n
       Desert Archer v Cadre Mage (Ranged beats the casters, 810-1,088); a Catapult kills a Tent in 341 ticks against
       3,844 for the same cost of Heavy Infantry, a Battering Ram a Billet in 276 against 5,090 for Raiders. The rows
       assert the winner and print survivors and time. The view's attack-target click landed the same session (M4-V2).)_
-- [ ] Playable: Malazan vs. Whirlwind armies fight in a sandbox with fog on.
+- [x] Playable: Malazan vs. Whirlwind armies fight in a sandbox with fog on.
+      _(**Ticked in session 2026-10-10-1314**, view M4-V7 slice 1 (2 fix rounds for the scene's own timing flakes, BUG-0460 /
+      0463): `game/tests/M4PlayableTest.tscn`, a scripted Malazan-vs-Whirlwind battle through the real HUD with the fog on,
+      after `M3PlayableTest`'s pattern: a real `Match` on shipped data at 8x, seeds 1 and 6, both start bases + three
+      buildings each, a 17-unit Malazan army (with an own Priest of the Whirlwind: the local player is seat 0 until the M6
+      lobby) and a 13-unit Whirlwind army; every player action is injected input (box drags, grid keys, Tab, clicks). Steps:
+      the map black past own sight and no enemy drawn; attack-move into the fog; first contact; a Sandstorm (own zone, disc
+      drawn, a Blinded marker on a seen enemy); Telas Fire (Burning markers); kills / losses on the resource bar equal to the
+      sim's and the fight decided; a Cusser on a building (-300 hp or more) then its rubble drawn in sight; a Frenzied Zealot
+      (23 / 63) starting 4-5 swings against an unhurt one's 3 in exactly 60 ticks; the whole command stream replayed into a
+      bare twin with equal checkpoints every tick. The fog rule (no enemy unit, bar, marker, cast bar or building drawn while
+      `CanSeeUnit` / `CanSeeBuilding` is false) is checked on every frame of the run: 0 violations over ~3,100 frames a run.
+      QA: 26 / 26 seed-runs PASS after the fixes (14 under suite load), `--break 4 / 5 / 8` fail naming their step; the
+      Producer's own run PASS on both seeds (2,922 / 3,632 of 5,500 ticks) and `--seed 1 --break 5` exits 1. Stills
+      (`build/shots/m4-v7/`, seeds 1 and 6: first contact, storm, Telas Fire, Cusser rubble, Frenzied Zealot) looked at by
+      the dev, QA and the Producer's notes. Slice 2 (polish, not owed by the criterion): an enemy storm over the player's
+      army, the `summon` card arm, BUG-0450. The owner's own windowed run is feedback, not a gate (as for M2 / M3). Open:
+      BUG-0461 (S3, sim: a cast's walk-in hemmed in by own attackers is dropped after 1 s, seen three times in this
+      sandbox; the scene works round it), BUG-0462 (S4, view nits incl. the overstated tick-budget margin).)_
 
 ## M5 — AI opponent
 
