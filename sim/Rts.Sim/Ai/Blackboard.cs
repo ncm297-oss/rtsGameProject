@@ -1,4 +1,5 @@
 using System;
+using Rts.Sim.Entities;
 
 namespace Rts.Sim.Ai;
 
@@ -19,7 +20,7 @@ internal sealed class Blackboard
     private int _badNext;
 
     /// <summary>Sizes the bookkeeping for <paramref name="steps"/> build-order steps and the match's unit and building slots.</summary>
-    internal Blackboard(int steps, int unitSlots, int buildingSlots)
+    internal Blackboard(int steps, int unitSlots, int buildingSlots, int resourceSlots)
     {
         StepDueTick = new int[steps];
         Array.Fill(StepDueTick, -1);
@@ -30,6 +31,8 @@ internal sealed class Blackboard
         Array.Fill(UnitOrderedUntil, -1);
         UnitGeneration = new int[unitSlots];
         GatherKind = new byte[unitSlots];
+        GatherNode = new EntityHandle[unitSlots];
+        NodeDropped = new int[resourceSlots];
         BuildingBusyUntil = new int[buildingSlots];
         Array.Fill(BuildingBusyUntil, -1);
         Array.Fill(_badCell, -1);
@@ -61,6 +64,16 @@ internal sealed class Blackboard
 
     /// <summary>Per unit slot, the resource the AI last sent the worker to: 0 none, 1 gold, 2 wood.</summary>
     internal byte[] GatherKind { get; }
+
+    /// <summary>Per unit slot, the node the AI last sent the worker to gather at (default: none).</summary>
+    internal EntityHandle[] GatherNode { get; }
+
+    /// <summary>
+    /// Per resource slot, the generation of the node there a Gather was dropped at (0: none; BUG-0570): the worker was still
+    /// Idle after the order applied and the player doesn't see the node, so it is gone; the economy manager sends no more
+    /// workers there. What a human sees too: the worker didn't move.
+    /// </summary>
+    internal int[] NodeDropped { get; }
 
     /// <summary>Per building slot, the tick the AI's last command to it applies (-1: none): until then its queue doesn't show it.</summary>
     internal int[] BuildingBusyUntil { get; }

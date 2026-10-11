@@ -68,7 +68,7 @@ public class AiThinkCostQaTests
         return (sim, ais);
     }
 
-    [Theory(Skip = "BUG-0572: with the building store full every site candidate fails late; a think averages 1.6-2.2 ms (Debug)")]
+    [Theory]
     [Trait("Category", "Perf")]
     [InlineData(6)]
     [InlineData(12)]

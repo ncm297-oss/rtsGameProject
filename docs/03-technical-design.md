@@ -5485,7 +5485,8 @@ acting only through commands. Code: `sim/Rts.Sim/Ai/AiPlayer.cs`, `Blackboard.cs
     never stalls: every loop is bounded by the match's slots and the search radius.
   - `build`: a site found by **`PlayerView.CanPlace`** searched outward from the own Town Hall (its first finished one, else
     its first site; without a hall its first building), a `camp` from the known tree nearest the hall. The search walks
-    Chebyshev rings out to `placementSearchRadius` (each ring in a fixed order: top row, right column, bottom row, left
+    Chebyshev rings out to `placementSearchRadius` (not at all when a cell-free rule fails: `PlayerView.CanPlaceAnywhere`,
+    the type, faction, `requires`, cost and a free building slot, BUG-0572; each ring in a fixed order: top row, right column, bottom row, left
     column), the footprint centred on the ring cell, skipping retry marks and anchors that would put a building within
     `buildingSpacing` of an own building, of a site this think's Builds took, or of a known gold mine. The Build goes to the
     nearest idle worker, else the nearest gathering or returning one (never one whose last AI command hasn't applied yet),
@@ -5509,7 +5510,10 @@ acting only through commands. Code: `sim/Rts.Sim/Ai/AiPlayer.cs`, `Blackboard.cs
   `Command.Gather` to the known node nearest it of the wanted kind: gold while fewer than `round(goldShare x gatherers)` are
   on gold (gatherers: the workers the AI last sent to gold or wood that are still at it, plus the idle ones), else wood; the
   other kind when none of that kind is known. With no node known a worker stays idle (finding far resources is scouting,
-  M5-3).
+  M5-3). A Gather to a remembered node that is gone (BUG-0540's memory) is dropped at apply and the worker stays Idle
+  (BUG-0570): an idle worker whose last AI order was a Gather that applied, to a node the player doesn't see now, marks
+  that node (slot and generation; the AI sends no worker there again, what a human sees too: the worker didn't move) and
+  tries the other kind first this think. A node in sight is never marked, and a worker seen at work clears its Gather.
 - **Production manager.** Only on a think the executor sent nothing: the current age's composition unit with the lowest
   `(own live + queued) / weight` (composition order, ascending unit ids, on ties) **among those a finished own building
   with an empty queue and no AI command waiting on it may train now**; trained if the budget pays, else the think waits (it
@@ -5532,11 +5536,14 @@ acting only through commands. Code: `sim/Rts.Sim/Ai/AiPlayer.cs`, `Blackboard.cs
   at ticks 500 and 1,100).
 - **Cost** (Debug, `Ai/AiPerfTests`, the machine shared with the other tracks' suites): eight Hard AI seats over 2,500 units
   on a generated 128 map, each player far over its population cap so the house rule searches a site at every think it has
-  none building: a think averages about 0.06 ms (p95 0.15 ms, worst 0.3-0.4 ms; gate 1 ms). A steady-state think allocates
+  none building: a think averages about 0.06 ms (p95 0.15 ms, worst 0.3-0.4 ms; gate 1 ms). With the building store full
+  (`QA/AiThinkCostQaTests`, 200-374 nodes) also about 0.06 ms: the search stops before its first candidate (BUG-0572; it
+  was 1.6-2.2 ms walking all 1,089). A steady-state think allocates
   nothing; nor does a tick with AI seats (`AllocationProbe`).
-- **Memory.** Per AI seat: per unit slot two ints and a byte (blackboard) and an int (census), per building slot an int
-  (blackboard) and three ints and a bool (census), per step three ints, a bool and a 32-byte pending order, three ints a unit
-  type, and small fixed scratch: about 37 KB for a 2,500-unit, 256-building match. Built only for AI seats, never by `World`. The fog's node memory:
+- **Memory.** Per AI seat: per unit slot four ints and a byte (blackboard; two of the ints the Gather's node, BUG-0570) and
+  an int (census), per resource slot an int (dropped-Gather marks), per building slot an int (blackboard) and three ints and a bool (census), per step three ints, a bool and a 32-byte pending order, three ints a unit
+  type, and small fixed scratch: about 73 KB for a 2,500-unit, 256-building, 4,096-node match (37 KB before BUG-0570's 20 KB of
+  Gather nodes and 16 KB of node marks). Built only for AI seats, never by `World`. The fog's node memory:
   "Implementation (M5-1)", Memory.
 - **Not yet** (M5-3 and later): military, attack, scout and ability managers and the enemy memory; `ai.json` and
   `rules.json` `ai` into `ContentHash`; difficulty tuning (M5-4, the gather bonus); the sandbox's AI seat (view, M5-V2).

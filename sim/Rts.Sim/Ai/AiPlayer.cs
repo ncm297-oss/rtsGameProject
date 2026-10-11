@@ -39,7 +39,7 @@ internal sealed class AiPlayer
         Knobs = def.Difficulty(difficulty);
         Rules = data.AiRules;
         ThinkTicks = Math.Max(1, Knobs.ThinkTicks);
-        Board = new Blackboard(def.BuildOrder.Length, view.UnitSlots, view.BuildingSlots);
+        Board = new Blackboard(def.BuildOrder.Length, view.UnitSlots, view.BuildingSlots, view.ResourceSlots);
         Live = new int[data.Units.Length];
         Queued = new int[data.Units.Length];
         WorkerSlots = new int[view.UnitSlots];
@@ -246,12 +246,13 @@ internal sealed class AiPlayer
     internal bool OrderedNotApplied(int slot, int generation) =>
         Board.UnitGeneration[slot] == generation && Board.UnitOrderedUntil[slot] >= Now;
 
-    /// <summary>Notes a command to unit slot <paramref name="slot"/> applying at <see cref="Stamp"/>.</summary>
-    internal void MarkOrdered(int slot, int generation, byte gatherKind)
+    /// <summary>Notes a command to unit slot <paramref name="slot"/> applying at <see cref="Stamp"/> (a Gather: the kind and the node it is for).</summary>
+    internal void MarkOrdered(int slot, int generation, byte gatherKind, EntityHandle gatherNode = default)
     {
         Board.UnitGeneration[slot] = generation;
         Board.UnitOrderedUntil[slot] = Stamp;
         Board.GatherKind[slot] = gatherKind;
+        Board.GatherNode[slot] = gatherNode;
     }
 
     /// <summary>
@@ -391,6 +392,8 @@ internal sealed class AiPlayer
     /// </summary>
     internal int FindSite(int type, int centreCell)
     {
+        // A rule no cell can pass (cost, a full building store, the type's requires) fails every candidate: don't search (BUG-0572).
+        if (!View.CanPlaceAnywhere(type, out _)) return -1;
         BuildingDef def = Data.Buildings[type];
         int w = View.MapWidth, h = View.MapHeight, fw = def.FootprintWidth, fh = def.FootprintHeight;
         int cx = centreCell % w, cy = centreCell / w, radius = Rules.PlacementSearchCells;

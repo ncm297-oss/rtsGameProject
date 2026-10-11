@@ -143,6 +143,28 @@ public class PlayerViewMemoryTests
         Assert.Equal(PlacementError.CannotAfford, ViewSays(sim, house, 20, 20));
     }
 
+    /// <summary>
+    /// BUG-0572: <see cref="PlayerView.CanPlaceAnywhere"/> (the cell-free rules the site search checks once) answers as
+    /// <see cref="PlayerView.CanPlace"/> does on open explored ground: none, wrong faction, unknown type, can't afford.
+    /// </summary>
+    [Fact]
+    public void CanPlaceAnywhere_AnswersAsCanPlace_OnOpenGround()
+    {
+        Simulation sim = Placement();
+        var view = new PlayerView(sim.World, 0);
+        int house = BuildMaps.House;
+        foreach (int type in new[] { house, BuildMaps.WhirlwindHouse, -1 })
+        {
+            view.CanPlaceAnywhere(type, out PlacementError anywhere);
+            Assert.Equal(ViewSays(sim, type, 20, 20), anywhere);
+        }
+        Assert.True(view.CanPlaceAnywhere(house, out _));
+        BuildMaps.SetTotals(sim, 0, 0, 0);
+        Assert.False(view.CanPlaceAnywhere(house, out PlacementError poor));
+        Assert.Equal(PlacementError.CannotAfford, poor);
+        Assert.Equal(poor, ViewSays(sim, house, 20, 20));
+    }
+
     /// <summary>An enemy building the player never saw (built in its explored, unseen ground) doesn't refuse in the view, as it does in <see cref="World.CanPlace"/>: the view reveals nothing.</summary>
     [Fact]
     public void CanPlace_AHiddenEnemyBuildingNeverSeen_DoesNotRefuse()

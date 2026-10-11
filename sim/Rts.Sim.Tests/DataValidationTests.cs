@@ -655,7 +655,7 @@ public class DataValidationTests
                 case "foreign-faction id": steps[0]!["id"] = "whirlwind_raider"; break;
                 case "missing difficulty": root["difficulties"]!.AsObject().Remove("hard"); break;
                 case "negative interval": root["difficulties"]!["easy"]!["thinkInterval"] = -1; break;
-                case "duplicate step": steps.Add(steps[0]!.DeepClone()); break;
+                case "duplicate step": steps.Insert(1, steps[0]!.DeepClone()); break; // at [1] whatever the shipped order's length (BUG-0571)
                 default: throw new ArgumentException(fault);
             }
         });

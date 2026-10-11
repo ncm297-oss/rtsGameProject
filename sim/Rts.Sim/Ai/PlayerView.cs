@@ -327,12 +327,38 @@ public sealed class PlayerView
         return reason == PlacementError.None;
     }
 
+    /// <summary>
+    /// The rules of <see cref="CanPlace"/> that don't depend on the cell (the type, the player's faction, the type's
+    /// <c>requires</c>, cost, a free building slot): when this fails, <see cref="CanPlace"/> fails at every anchor, so a site
+    /// search can stop before it starts (BUG-0572). Reveals nothing <see cref="CanPlace"/> doesn't.
+    /// </summary>
+    public bool CanPlaceAnywhere(int typeId, out PlacementError reason)
+    {
+        reason = (uint)typeId >= (uint)_data.Buildings.Length ? PlacementError.UnknownType : CheckTypeRules(_data.Buildings[typeId]);
+        if (reason == PlacementError.None) reason = CheckSpend(_data.Buildings[typeId]);
+        return reason == PlacementError.None;
+    }
+
+    private PlacementError CheckTypeRules(BuildingDef def)
+    {
+        if (Faction != def.Faction) return PlacementError.WrongFaction;
+        if (!Requirements.Met(_world, _player, def.RequiresTechs, def.RequiresBuildings)) return PlacementError.Requires;
+        return PlacementError.None;
+    }
+
+    private PlacementError CheckSpend(BuildingDef def)
+    {
+        if (Gold < def.CostGold || Wood < def.CostWood) return PlacementError.CannotAfford;
+        if (_buildings.FreeCount == 0) return PlacementError.StoreFull;
+        return PlacementError.None;
+    }
+
     private PlacementError CheckPlace(int typeId, int anchorCell)
     {
         if ((uint)typeId >= (uint)_data.Buildings.Length) return PlacementError.UnknownType;
         BuildingDef def = _data.Buildings[typeId];
-        if (Faction != def.Faction) return PlacementError.WrongFaction;
-        if (!Requirements.Met(_world, _player, def.RequiresTechs, def.RequiresBuildings)) return PlacementError.Requires;
+        PlacementError typeRules = CheckTypeRules(def);
+        if (typeRules != PlacementError.None) return typeRules;
         NavGrid g = _world.NavGrid;
         int w = g.Width;
         if ((uint)anchorCell >= (uint)(w * g.Height)) return PlacementError.OffMap;
@@ -376,9 +402,7 @@ public sealed class PlayerView
             ResourceDef rd = _data.Resources[m.TypeId];
             if (Overlaps(m.Cell, rd.FootprintWidth, rd.FootprintHeight, x0, y0, fw, fh, w)) return PlacementError.Blocked;
         }
-        if (Gold < def.CostGold || Wood < def.CostWood) return PlacementError.CannotAfford;
-        if (_buildings.FreeCount == 0) return PlacementError.StoreFull;
-        return PlacementError.None;
+        return CheckSpend(def);
     }
 
     /// <summary>Whether the player knows live building slot <paramref name="k"/> is there: its own, one it sees now, or one its ghost list holds (same building).</summary>

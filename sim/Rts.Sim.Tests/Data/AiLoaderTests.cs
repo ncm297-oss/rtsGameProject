@@ -35,6 +35,11 @@ public class AiLoaderTests
             Assert.NotEmpty(ai.BuildOrder);
             foreach (AiStep step in ai.BuildOrder)
             {
+                if (step.Action == AiStepAction.Expand)
+                {
+                    Assert.Equal(-1, step.Target); // an expand names no type
+                    continue;
+                }
                 Assert.True(step.Target >= 0);
                 int owner = step.Action switch
                 {
@@ -54,10 +59,13 @@ public class AiLoaderTests
                 Assert.All(c.Weights, x => Assert.True(x > 0));
             }
         }
+        // The steps, counts and thresholds themselves are content (the data track's, D14; BUG-0571): only the shape is pinned
+        // here. Every shipped order opens by training its faction's worker at once.
         AiStep first = d.Ai[d.FindFaction("malazan")].BuildOrder[0];
-        Assert.Equal((AiStepTrigger.Time, 0, AiStepAction.Train, d.FindUnit("malazan_laborer"), "malazan_laborer", 1),
-            (first.Trigger, first.At, first.Action, first.Target, first.TargetKey, first.Count));
-        Assert.Equal(20, d.Ai[0].AttackMinHalfPop); // 10 pop
+        Assert.Equal((AiStepTrigger.Time, 0, AiStepAction.Train, d.FindUnit("malazan_laborer"), "malazan_laborer"),
+            (first.Trigger, first.At, first.Action, first.Target, first.TargetKey));
+        Assert.True(first.Count >= 1);
+        Assert.All(d.Ai, ai => Assert.True(ai.AttackMinHalfPop > 0));
     }
 
     /// <summary>Every step kind and trigger resolves, seconds become ticks and pop half-pop.</summary>

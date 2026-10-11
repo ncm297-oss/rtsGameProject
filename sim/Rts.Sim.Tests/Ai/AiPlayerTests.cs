@@ -23,7 +23,12 @@ public class AiPlayerTests
 
     private static int Building(string key) => TestSim.Data.FindBuilding(key);
 
-    /// <summary>The shipped ai.json steps run: each faction's AI trains its worker in its first think (tick 0, applied at tick 1), and the step completes.</summary>
+    /// <summary>
+    /// The shipped ai.json steps run (any valid shipped order, BUG-0571): each faction's opening step (a train due at time 0,
+    /// as every shipped order opens) sends its Train at the first think past the difficulty's slack (applied the next tick),
+    /// at most one a think and never past the step's count; the step completes once its count is accepted; the idle workers
+    /// are sent to gather.
+    /// </summary>
     [Theory]
     [InlineData(AiDifficulty.Easy)]
     [InlineData(AiDifficulty.Normal)]
@@ -41,17 +46,34 @@ public class AiPlayerTests
         for (int p = 0; p < 2; p++)
         {
             AiStep step = TestSim.Data.Ai[sim.World.FactionOf(p)].BuildOrder[0];
-            Assert.Equal(AiStepAction.Train, step.Action);
-            Command train = Assert.Single(logs[p], c => c.Kind == CommandKind.Train);
-            Assert.Equal(step.Target, train.TypeId);
-            Assert.Equal(firstThink + 1, train.Tick); // sent at that think, applied in the next tick
+            Assert.Equal((AiStepTrigger.Time, 0, AiStepAction.Train), (step.Trigger, step.At, step.Action));
+            List<Command> trains = logs[p].Where(c => c.Kind == CommandKind.Train && c.TypeId == step.Target).ToList();
+            Assert.NotEmpty(trains);
+            Assert.Equal(firstThink + 1, trains[0].Tick); // sent at that think, applied in the next tick
+            Assert.All(trains.GroupBy(c => c.Tick), g => Assert.Single(g)); // one a think
+            Assert.True(trains.Count <= Math.Min(step.Count, 2), $"player {p}: {trains.Count} Trains in two thinks, count {step.Count}");
             AiPlayer ai = sim.AiOf(p)!;
-            Assert.True(ai.Board.StepDone[0], $"player {p}: the shipped step did not complete");
-            Assert.Equal(1, ai.Board.StepQueued[0]);
+            // Accepted Trains count once judged: the first by now; a second, sent at the last think, may not be judged yet.
+            Assert.InRange(ai.Board.StepQueued[0], 1, trains.Count);
+            Assert.Equal(ai.Board.StepQueued[0] == step.Count, ai.Board.StepDone[0]);
             // The idle workers were sent to gather.
             Assert.Contains(logs[p], c => c.Kind == CommandKind.Gather);
         }
     }
+
+    /// <summary>An ai.json for malazan whose only step can't fire for an hour, so a scene's commands are the managers' alone (BUG-0571: not the shipped order's).</summary>
+    private static readonly Lazy<GameData> s_quietOrder = new(() => AiScenes.DataWithAi("malazan", root =>
+        root["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1))));
+
+    /// <summary>
+    /// The composition tests' own ai.json for malazan (BUG-0571): one worker Train due at once (so the first think is the
+    /// executor's) and an Age I composition of Heavy Infantry 2 : Crossbowman 1.
+    /// </summary>
+    private static readonly Lazy<GameData> s_compositionOrder = new(() => AiScenes.DataWithAi("malazan", root =>
+    {
+        root["buildOrder"] = AiScenes.BuildOrder(("time", 0, "train", "malazan_laborer", 1));
+        root["compositions"]![0]!["units"] = new JsonObject { ["malazan_heavy_infantry"] = 2, ["malazan_crossbowman"] = 1 };
+    }));
 
     /// <summary>The 10-step test order (<see cref="TenSteps"/>): triggers of every kind, counts, slack, concurrent steps.</summary>
     private static GameData TenStepData() => AiScenes.DataWithAi("malazan", root =>
@@ -255,8 +277,8 @@ public class AiPlayerTests
     public void HouseRule_OneHouseWhenNearTheCap_NoneWhileOneIsBuilding()
     {
         PlayerSeat[] seats = AiScenes.Seats(AiDifficulty.Hard, SeatController.Ai, SeatController.Human);
-        // 9 workers: pop 18 half-pop of the hall's 20, within the rule's 4.
-        Simulation sim = AiScenes.Flat(seats, workers: 9);
+        // 9 workers: pop 18 half-pop of the hall's 20, within the rule's 4. A quiet build order: only the house rule builds.
+        Simulation sim = AiScenes.Flat(seats, s_quietOrder.Value, workers: 9);
         BuildMaps.SetTotals(sim, 0, 1000, 1000);
         List<Command> rec = AiScenes.Log(sim, 0);
         int house = Building("malazan_billet");
@@ -273,7 +295,7 @@ public class AiPlayerTests
         List<Command> houses = rec.Where(c => c.Kind == CommandKind.Build && c.TypeId == house).ToList();
         Command one = Assert.Single(houses);
         Assert.Equal(1, one.Tick); // the first think saw the cap within 2 pop
-        // Pop stays at or below 20 + 2 (the shipped order trains one laborer): 36 - 20 > 4, so no house for a while.
+        // Pop stays 18 half-pop (the quiet order trains nothing): 36 - 18 > 4, so no second house.
         for (int t = 0; t < 20 * think; t++) sim.Tick();
         Assert.Single(rec, c => c.Kind == CommandKind.Build && c.TypeId == house);
     }
@@ -282,7 +304,7 @@ public class AiPlayerTests
     public void HouseRule_AtTheRulesCap_PlacesNone()
     {
         PlayerSeat[] seats = AiScenes.Seats(AiDifficulty.Hard, SeatController.Ai, SeatController.Human);
-        Simulation sim = AiScenes.Flat(seats, workers: 9);
+        Simulation sim = AiScenes.Flat(seats, s_quietOrder.Value, workers: 9);
         BuildMaps.SetTotals(sim, 0, 1000, 1000);
         // Houses enough for the cap (100 pop): the hall's 10 and 12 billets of 8, spawned straight into the store.
         int house = Building("malazan_billet");
@@ -297,7 +319,7 @@ public class AiPlayerTests
     }
 
     /// <summary>
-    /// The composition fill (Heavy Infantry 2 : Crossbowman 1, shipped Age I): with a barracks and a crossbow range free and
+    /// The composition fill (Heavy Infantry 2 : Crossbowman 1, the test's own Age I composition): with a barracks and a crossbow range free and
     /// plenty to spend, the first think the build order sends nothing trains the most under-weighted unit (own live + queued
     /// per unit of weight; composition order, ascending unit ids, on a tie); the think the executor sent something (tick 0's
     /// worker) trains nothing.
@@ -316,7 +338,10 @@ public class AiPlayerTests
         List<Command> log = AiScenes.Log(sim, 0);
         int think = sim.AiOf(0)!.ThinkTicks;
         for (int t = 0; t < think + 1; t++) sim.Tick();
-        AiComposition mix = TestSim.Data.Ai[0].Compositions[0];
+        AiComposition mix = s_compositionOrder.Value.Ai[0].Compositions[0];
+        Assert.Equal(2, mix.Units.Length);
+        Assert.Contains(heavy, mix.Units);
+        Assert.Contains(bow, mix.Units);
         float Share(int type, int live) => live / mix.Weights[mix.Units.IndexOf(type)];
         float h = Share(heavy, heavyLive), b = Share(bow, bowLive);
         int expected = h < b ? heavy : b < h ? bow : mix.Units[0];
@@ -352,10 +377,10 @@ public class AiPlayerTests
         Assert.True(hc >= 8 && bc >= 8, $"heavy {hc}, crossbow {bc}: a building stood idle");
     }
 
-    /// <summary>The flat scene for player 0 (Hard) with a finished barracks and crossbow range and plenty to spend.</summary>
+    /// <summary>The flat scene for player 0 (Hard, the composition tests' own ai.json) with a finished barracks and crossbow range and plenty to spend.</summary>
     private static Simulation CompositionScene(out int heavy, out int bow)
     {
-        Simulation sim = AiScenes.Flat(AiScenes.Seats(AiDifficulty.Hard, SeatController.Ai, SeatController.Human));
+        Simulation sim = AiScenes.Flat(AiScenes.Seats(AiDifficulty.Hard, SeatController.Ai, SeatController.Human), s_compositionOrder.Value);
         Assert.True(sim.World.Buildings.Spawn(0, Building("malazan_barracks"), 20 * AiScenes.FlatSize + 20, out _));
         Assert.True(sim.World.Buildings.Spawn(0, Building("malazan_crossbow_range"), 20 * AiScenes.FlatSize + 26, out _));
         BuildMaps.SetTotals(sim, 0, 100_000, 100_000);

@@ -43,7 +43,7 @@ public class AiSeatQaTests
     /// worker must not be sent to the same place over and over (40 thinks here): it should go to wood (trees are known and in
     /// sight), or at least walk there and learn the mine is gone.
     /// </summary>
-    [Fact(Skip = "BUG-0570: the economy manager re-sends idle workers every think to a remembered mine that is gone (the Gather is dropped)")]
+    [Fact]
     public void IdleWorkers_AreNotSentForever_ToARememberedMineThatIsGone()
     {
         PlayerSeat[] seats = AiScenes.Seats(AiDifficulty.Hard, SeatController.Ai, SeatController.Human);
