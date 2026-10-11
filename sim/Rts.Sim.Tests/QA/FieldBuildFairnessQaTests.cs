@@ -470,6 +470,10 @@ public class FieldBuildFairnessQaTests
             // - M4-H3, +16,408 + rounding (231,908,912 on its head, three runs alike): World.DetectNeighbors, detection's own
             //   query scratch (BUG-0480), an int a slot: 4,096 x 4 = 16,384 + a 24-byte header. 11,088 bytes left under the
             //   bound: the next per-slot array (16 KB) crosses it, so that session re-baselines with these items.
+            // - M5-1, +0 (re-baselined by item, the bound unchanged): the AI's PlayerView holds no per-player buffer (six
+            //   references and two ints, 72 B a view, built by its reader, not by the world; Ai/PlayerViewPerfTests measures
+            //   it) and the world gains no array; GameData.Ai is load-time data, outside this measurement (docs/03
+            //   "Implementation (M5-1)", Memory). 231,900,840 measured alone on M5-1's tree (the probe's rounding: -8 KB).
             Assert.True(bytes < 231_920_000, $"{bytes / 1e6:F1} MB");
         }
     }

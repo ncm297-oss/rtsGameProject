@@ -314,3 +314,66 @@ internal sealed class ZoneStatusJson
     public double? Magnitude { get; set; }
     public double? Duration { get; set; }
 }
+
+// M5-1: factions/<id>/ai.json (docs/03 "AI architecture", "For the data track (M5-1)").
+
+internal sealed class AiFileJson
+{
+    public AiDifficultiesJson? Difficulties { get; set; }
+    public List<AiStepJson?>? BuildOrder { get; set; }
+    public List<AiCompositionJson?>? Compositions { get; set; }
+    public AiAttackJson? Attack { get; set; }
+    public AiRetreatJson? Retreat { get; set; }
+}
+
+internal sealed class AiDifficultiesJson
+{
+    public AiDifficultyJson? Easy { get; set; }
+    public AiDifficultyJson? Normal { get; set; }
+    public AiDifficultyJson? Hard { get; set; }
+}
+
+internal sealed class AiDifficultyJson
+{
+    public double? ThinkInterval { get; set; }
+    public double? BuildOrderSlack { get; set; }
+    public double? WaveSizeMultiplier { get; set; }
+    public double? GatherBonus { get; set; }
+    public bool? FocusFire { get; set; }
+    public bool? PullBackWounded { get; set; }
+    public bool? UseAbilities { get; set; }
+    public double? ExpandAfter { get; set; }
+}
+
+internal sealed class AiStepJson
+{
+    public AiAtJson? At { get; set; }
+    public string? Do { get; set; }
+    public string? Id { get; set; }
+    public int? Count { get; set; }
+}
+
+internal sealed class AiAtJson
+{
+    public double? Time { get; set; }
+    public int? Workers { get; set; }
+    public double? Pop { get; set; }
+}
+
+internal sealed class AiCompositionJson
+{
+    public int? Age { get; set; }
+    public Dictionary<string, double>? Units { get; set; }
+}
+
+internal sealed class AiAttackJson
+{
+    public double? MinArmyPop { get; set; }
+    public int? MinArmyCost { get; set; }
+}
+
+internal sealed class AiRetreatJson
+{
+    public double? HpFraction { get; set; }
+    public double? LossFraction { get; set; }
+}
