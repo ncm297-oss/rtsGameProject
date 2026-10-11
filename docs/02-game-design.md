@@ -48,7 +48,8 @@ balance reference.
 | Caster | 60 | 0 | 9 | Magic | 2.2 | 12 | 3.2 | 16 | 100 / 50 | 2 | 30 |
 | Heavy / siege | 220 | 4 | 50 | Siege | 5.0 | 24 | 2.2 | 18 | 200 / 150 | 3 | 40 |
 
-Template bonuses: Line deals ×1.5 vs Mounted. Shock deals ×1.5 vs Light. Casters splash
+Template bonuses: Line deals ×1.1 vs Mounted (×1.5 until D13, 2026-10-11: the counter rests mostly on
+the line's hp, armor and cost, faction pages' "Balance baseline"). Shock deals ×1.5 vs Light. Casters splash
 (radius 1.5 m) and detect stealth within 10 m. Siege engines with range have a 6 m minimum range
 and 2.5 m splash.
 

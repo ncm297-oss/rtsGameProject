@@ -19,14 +19,14 @@ public class UnitRosterQaTests
     private static readonly (string Id, string Faction, UnitSlot Slot, string Name, int Hp, int Armor, string Class, int Atk, string Type, int CdTicks, float Range, float Min, double Speed, int Sight, int Gold, int Wood, int Pop, int TrainTicks, string At, float Splash, bool Ff, string Bonus)[] Expected =
     {
         ("malazan_laborer", "malazan", UnitSlot.Worker, "Laborer", 40, 0, "light", 4, "melee", 30, M, 0, 4.0, 14, 50, 0, 1, 240, "malazan_garrison_keep", 0, false, ""),
-        ("malazan_heavy_infantry", "malazan", UnitSlot.Line, "Heavy Infantry", 130, 3, "heavy", 10, "melee", 30, M, 0, 3.0, 14, 54, 20, 1, 280, "malazan_barracks", 0, false, "mounted=1.5"),
+        ("malazan_heavy_infantry", "malazan", UnitSlot.Line, "Heavy Infantry", 130, 3, "heavy", 10, "melee", 30, M, 0, 3.0, 14, 54, 20, 1, 280, "malazan_barracks", 0, false, "mounted=1.1"),
         ("malazan_crossbowman", "malazan", UnitSlot.Ranged, "Crossbowman", 55, 0, "light", 9, "pierce", 44, 15, 0, 3.2, 18, 36, 45, 1, 320, "malazan_crossbow_range", 0, false, "heavy=1.3"),
         ("malazan_wickan_lancer", "malazan", UnitSlot.Shock, "Wickan Lancer", 150, 1, "mounted", 12, "melee", 36, M, 0, 6.2, 16, 90, 30, 2, 520, "malazan_wickan_corral", 0, false, "light=1.5"),
         ("malazan_cadre_mage", "malazan", UnitSlot.Caster, "Cadre Mage", 60, 0, "light", 9, "magic", 44, 12, 0, 3.2, 16, 100, 50, 2, 600, "malazan_cadre_tower", 1.5f, false, ""),
         ("malazan_catapult", "malazan", UnitSlot.Siege, "Catapult", 220, 4, "heavy", 50, "siege", 100, 24, 6, 2.2, 18, 200, 150, 3, 800, "malazan_engineers_yard", 2.5f, true, ""),
         ("malazan_sapper", "malazan", UnitSlot.Unique, "Sapper", 70, 1, "light", 20, "siege", 60, 8, 0, 3.4, 16, 72, 40, 1, 400, "malazan_engineers_yard", 2.0f, true, ""),
         ("whirlwind_camp_follower", "whirlwind", UnitSlot.Worker, "Camp Follower", 36, 0, "light", 4, "melee", 30, M, 0, 4.0, 14, 40, 0, 1, 240, "whirlwind_holy_camp", 0, false, ""),
-        ("whirlwind_raider", "whirlwind", UnitSlot.Line, "Raider", 108, 1, "heavy", 11, "melee", 30, M, 0, 3.4, 14, 48, 16, 1, 360, "whirlwind_raider_camp", 0, false, "heavy=1.2,mounted=1.5"),
+        ("whirlwind_raider", "whirlwind", UnitSlot.Line, "Raider", 108, 1, "heavy", 11, "melee", 30, M, 0, 3.4, 14, 48, 16, 1, 360, "whirlwind_raider_camp", 0, false, "heavy=1.2,mounted=1.1"),
         ("whirlwind_desert_archer", "whirlwind", UnitSlot.Ranged, "Desert Archer", 50, 0, "light", 7, "pierce", 36, 14, 0, 3.6, 18, 32, 36, 1, 400, "whirlwind_archer_camp", 0, false, ""),
         ("whirlwind_horse_raider", "whirlwind", UnitSlot.Shock, "Horse Raider", 135, 0, "mounted", 11, "melee", 32, M, 0, 6.6, 18, 72, 24, 2, 520, "whirlwind_horse_lines", 0, false, "light=1.5"),
         ("whirlwind_priest", "whirlwind", UnitSlot.Caster, "Priest of the Whirlwind", 54, 0, "light", 9, "magic", 44, 12, 0, 3.2, 16, 80, 40, 2, 600, "whirlwind_shrine", 1.5f, false, ""),

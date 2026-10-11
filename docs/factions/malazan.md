@@ -41,7 +41,7 @@ Age II, at the Armory, 200 G / 150 W, 45 s. Sapper **Cusser cooldown 45 → 30 s
 
 ### Unit notes
 
-- **Heavy Infantry:** ×1.5 vs Mounted. Passive **Shield Wall**: +3 armor against pierce attacks
+- **Heavy Infantry:** ×1.1 vs Mounted (×1.5 until D13). Passive **Shield Wall**: +3 armor against pierce attacks
   while not moving. Slightly slower than the template line.
 - **Crossbowman:** ×1.3 vs Heavy (bolts punch through armor). Slower rate of fire than a bow.
 - **Wickan Lancer:** ×1.5 vs Light. Passive **Charge**: the first attack after moving at least
@@ -153,22 +153,22 @@ Expand   2nd Garrison Keep when army >= 12 pop and no enemy army near base for 6
 
 ## Balance baseline (M4-2b, 2026-10-08)
 
-Measured at sim commit `dd5b5b9` by `Content/CounterTriangleMarginsTests` (D6), re-printed at `1a9925b` (D8) from the shared
+Measured at sim commit `dd5b5b9` by `Content/CounterTriangleMarginsTests` (D6), re-printed at `1a9925b` (D8) and, for the four Line v Shock rows, in D13 (2026-10-11) from the shared
 `Scenario/CounterTriangleScene` harness, the scene of
 `Scenario/CounterTriangleTests`: a flat map, 1,200 gold + wood a side (the whole number of units nearest to it), two
 blocks 5 wide whose fronts start 24 m apart, every unit attack-moved into the other block, seed 7, run in both seats.
 No abilities, upgrades, terrain or orders beyond the attack-move. Malazan is the balance reference (docs/02 "Template
 baseline stats"); the Whirlwind page carries its own winners' rows. The test asserts only the winner as a rule (docs/02
-"Faction template"); the margins have no target yet. Every cell of both tables is pinned to the harness's output, so a
+"Faction template"); the margins are not asserted (the target band below is a Producer default). Every cell of both tables is pinned to the harness's output, so a
 sim change that moves a number fails the test naming the row, seat and column until the table is re-printed from it.
 "Winner hp left" is the surviving winners' summed hit points.
 
 | Rule | Winner v loser | Winner seat | Fielded (winner v loser) | Winner left | Winner hp left | Winner keeps (cost) | Time to last death |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Line beats Shock | Heavy Infantry v Horse Raider | 0 | 16 (1184) v 13 (1248) | 15 / 16 | 1462 | 1110 / 1184 (94 %) | 23.1 s |
-| Line beats Shock | Heavy Infantry v Horse Raider | 1 | 16 (1184) v 13 (1248) | 14 / 16 | 1556 | 1036 / 1184 (88 %) | 20.5 s |
-| Line beats Shock | Raider v Wickan Lancer | 0 | 19 (1216) v 10 (1200) | 19 / 19 | 1656 | 1216 / 1216 (100 %) | 17.4 s |
-| Line beats Shock | Raider v Wickan Lancer | 1 | 19 (1216) v 10 (1200) | 18 / 19 | 1581 | 1152 / 1216 (95 %) | 18.3 s |
+| Line beats Shock | Heavy Infantry v Horse Raider | 0 | 16 (1184) v 13 (1248) | 14 / 16 | 1228 | 1036 / 1184 (88 %) | 29.8 s |
+| Line beats Shock | Heavy Infantry v Horse Raider | 1 | 16 (1184) v 13 (1248) | 14 / 16 | 1356 | 1036 / 1184 (88 %) | 33.0 s |
+| Line beats Shock | Raider v Wickan Lancer | 0 | 19 (1216) v 10 (1200) | 19 / 19 | 1546 | 1216 / 1216 (100 %) | 23.5 s |
+| Line beats Shock | Raider v Wickan Lancer | 1 | 19 (1216) v 10 (1200) | 17 / 19 | 1451 | 1088 / 1216 (89 %) | 23.0 s |
 | Shock beats Ranged | Wickan Lancer v Desert Archer | 0 | 10 (1200) v 18 (1224) | 7 / 10 | 828 | 840 / 1200 (70 %) | 25.1 s |
 | Shock beats Ranged | Wickan Lancer v Desert Archer | 1 | 10 (1200) v 18 (1224) | 8 / 10 | 888 | 960 / 1200 (80 %) | 22.0 s |
 | Shock beats Ranged | Horse Raider v Crossbowman | 0 | 13 (1248) v 15 (1215) | 9 / 13 | 1152 | 864 / 1248 (69 %) | 20.9 s |
@@ -185,13 +185,19 @@ Siege beats buildings (one siege unit, ordered to attack, against the same cost 
 | 1 Catapult | 5 Heavy Infantry | Tent | 17.0 s | 192.2 s | 9 % |
 | 1 Battering Ram | 4 Raider | Billet | 13.8 s | 254.5 s | 5 % |
 
-**Proposed target (a proposal for the owner, not a decision; no number changes until he picks one):** in this scene
+**Target band (proposed in D6; adopted as the Producer's default on 2026-10-11, owner may revisit):** in this scene
 the counter's winner keeps **40-65 % of its cost**, in both seats, and the two seats differ by at most 15 points.
 Below about 40 % one Forge level (+1 / +1) or a faction bonus on the loser's side can flip the fight, so the counter
 stops being reliable; above about 65 % the loser trades away almost nothing, which makes the counter a "don't build
-that" decided at build time rather than a fight where positioning matters (docs/01, "Counters matter"). Today every
-row is above the band: Line v Shock at 88-100 % is the outlier; Shock v Ranged (69-80 %) and Ranged v casters
-(67-89 %) are 2-24 points over. Casters fight without their signature abilities until M4-4, so the Ranged v casters
+that" decided at build time rather than a fight where positioning matters (docs/01, "Counters matter"). Every row
+is still above the band. **Line v Shock (D13):** the one lever tried was the line units' bonus vs Mounted, the same
+value on both factions, swept 1.5 / 1.4 / 1.3 / 1.2 / 1.1 / 1.0 (the four cells above, in order: 94 / 88 / 100 / 95 %
+at 1.5, 88 / 94 / 100 / 89 % at 1.4, 88 / 94 / 95 / 89 % at 1.3, 94 / 88 / 100 / 89 % at 1.2, 88 / 88 / 100 / 89 % at
+1.1, 88 / 94 / 84 / 79 % at 1.0). No value reaches the band and Line wins every cell at every value. 1.0 came nearest,
+but it broke a sim stress floor (seed 11 of the Sandstorm fuzz cast 4 storms, its floor is 5), so the shipped value is
+one step back, ×1.1. The counter comes from the line units' hp, armor and cost per body, not the bonus; closing the
+gap needs one of those levers (a later pass). Shock v Ranged (69-80 %) and Ranged v casters (67-89 %) are 2-24 points
+over. Casters fight without their signature abilities until M4-4, so the Ranged v casters
 rows should be re-measured then before any tuning. Siege has no band: buildings are its job, and 5-9 % of the line
 infantry's time is the point of the slot.
 

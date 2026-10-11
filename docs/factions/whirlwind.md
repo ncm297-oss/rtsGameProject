@@ -44,7 +44,7 @@ Age II, at the Smithy, 200 G / 150 W, 45 s. Zealots **+20 HP**; Sandstorm **cool
 
 ### Unit notes
 
-- **Raider:** ×1.5 vs Mounted, ×1.2 vs Heavy (flails wrap around shields). Lighter armor and a
+- **Raider:** ×1.1 vs Mounted (×1.5 until D13), ×1.2 vs Heavy (flails wrap around shields). Lighter armor and a
   bit faster than template line infantry.
 - **Desert Archer:** fires faster but hits softer than the template. Fast on foot.
 - **Horse Raider:** ×1.5 vs Light. The fastest template unit in the vertical slice; built to raid
@@ -155,18 +155,18 @@ Expand   2nd Holy Camp at ~9:00 regardless of threat (relies on army presence)
 
 ## Balance baseline (M4-2b, 2026-10-08)
 
-Measured at sim commit `dd5b5b9` by `Content/CounterTriangleMarginsTests` (D6), re-printed at `1a9925b` (D8) from the shared
+Measured at sim commit `dd5b5b9` by `Content/CounterTriangleMarginsTests` (D6), re-printed at `1a9925b` (D8) and, for the two Line v Shock rows, in D13 (2026-10-11) from the shared
 `Scenario/CounterTriangleScene` harness, the scene of
 `Scenario/CounterTriangleTests`: a flat map, 1,200 gold + wood a side, two blocks 5 wide whose fronts start 24 m apart,
 every unit attack-moved into the other block, seed 7, both seats; no abilities, upgrades or terrain. These are the
 rows a Whirlwind unit wins; the full table, the scene and the proposed target margins are in
 [malazan.md "Balance baseline"](malazan.md#balance-baseline-m4-2b-2026-10-08) (Malazan is the balance reference). The test
-asserts only the winner as a rule; the margins have no target yet, but every cell here is pinned to the harness's output.
+asserts only the winner as a rule; the margins are not asserted, but every cell here is pinned to the harness's output.
 
 | Rule | Winner v loser | Winner seat | Fielded (winner v loser) | Winner left | Winner hp left | Winner keeps (cost) | Time to last death |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Line beats Shock | Raider v Wickan Lancer | 0 | 19 (1216) v 10 (1200) | 19 / 19 | 1656 | 1216 / 1216 (100 %) | 17.4 s |
-| Line beats Shock | Raider v Wickan Lancer | 1 | 19 (1216) v 10 (1200) | 18 / 19 | 1581 | 1152 / 1216 (95 %) | 18.3 s |
+| Line beats Shock | Raider v Wickan Lancer | 0 | 19 (1216) v 10 (1200) | 19 / 19 | 1546 | 1216 / 1216 (100 %) | 23.5 s |
+| Line beats Shock | Raider v Wickan Lancer | 1 | 19 (1216) v 10 (1200) | 17 / 19 | 1451 | 1088 / 1216 (89 %) | 23.0 s |
 | Shock beats Ranged | Horse Raider v Crossbowman | 0 | 13 (1248) v 15 (1215) | 9 / 13 | 1152 | 864 / 1248 (69 %) | 20.9 s |
 | Shock beats Ranged | Horse Raider v Crossbowman | 1 | 13 (1248) v 15 (1215) | 10 / 13 | 1197 | 960 / 1248 (77 %) | 18.2 s |
 | Ranged beats casters | Desert Archer v Cadre Mage | 0 | 18 (1224) v 8 (1200) | 16 / 18 | 602 | 1088 / 1224 (89 %) | 11.4 s |
@@ -178,5 +178,7 @@ Siege beats buildings (one siege unit, ordered to attack, against the same cost 
 | --- | --- | --- | --- | --- | --- |
 | 1 Battering Ram | 4 Raider | Billet | 13.8 s | 254.5 s | 5 % |
 
-The proposed band (winner keeps 40-65 % of its cost, both seats within 15 points) is a proposal for the owner; every
-Whirlwind row is above it today, Raider v Lancer (95-100 %) most.
+The target band (winner keeps 40-65 % of its cost, both seats within 15 points; proposed in D6, the Producer's default
+since 2026-10-11, owner may revisit): every Whirlwind row is still above it, Raider v Lancer (89-100 %) most. D13 cut
+the line units' bonus vs Mounted from ×1.5 to ×1.1, the nearest the band that lever could go (the sweep is in
+malazan.md); Raider v Lancer moved from 95-100 % to 89-100 %.

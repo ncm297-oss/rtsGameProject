@@ -71,12 +71,12 @@ public class DamageCalcTests
     [Fact]
     public void MissingBonusVs_IsOne_AndAGivenOneApplies()
     {
-        // Heavy Infantry: bonusVs { mounted: 1.5 } only.
+        // Heavy Infantry: bonusVs { mounted: 1.1 } only (D13: was 1.5), 10 x 1.0 x 1.1 = 11.
         UnitDef hi = TestSim.Data.Units[TestSim.Data.FindUnit("malazan_heavy_infantry")];
         Assert.Equal(1f, hi.Attack.BonusVs[Class("light")]);
         Assert.Equal(10, DamageCalc.Compute(Table, hi.Attack, 0, Class("light"), 0));
         Assert.Equal(10, DamageCalc.Compute(Table, hi.Attack, 0, Class("heavy"), 0));
-        Assert.Equal(15, DamageCalc.Compute(Table, hi.Attack, 0, Class("mounted"), 0));
+        Assert.Equal(11, DamageCalc.Compute(Table, hi.Attack, 0, Class("mounted"), 0));
         // Two Heavy Infantry: 10 x 1.0 x 1.0 - 3 = 7 (M4-1 criterion 2's hit).
         Assert.Equal(7, DamageCalc.Compute(Table, hi.Attack, 0, hi.ArmorClass, hi.Armor));
     }
