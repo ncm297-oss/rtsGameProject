@@ -4706,18 +4706,19 @@ HUD, as `M3PlayableTest` proved M3. Test code only (`game/tests/M4PlayableTest.t
   (with no army the planner puts the halls either side of the centre gap, 28 m apart and in sight of each other); per
   side three buildings on its hall's plateau (`StartBase.IsHallSpot` on the hall's level: Barracks, Billet, Armory /
   Raider Camp, Tent behind the hall, Smithy); a Malazan army 20 m in front of its hall (8 Heavy Infantry, 5 Crossbowmen,
-  a Cadre Mage, a Catapult and a Priest of the Whirlwind of its own: the local player is player 0, Malazan, until the M6
+  two Cadre Mages, a Catapult and a Priest of the Whirlwind of its own: the local player is player 0, Malazan, until the M6
   lobby, so a Sandstorm through the HUD needs an own Priest) and a Sapper behind it; a Whirlwind army 18 m in front of
   its hall (4 Raiders, 3 Zealots, 2 Horse Raiders standing in for the brief's "Lancers", 3 Desert Archers, a Priest).
   The halls stand 140-150 m apart. The only enemy orders are the Zealot duel's two `Attack`s.
 - **Steps** (each prints the tick it ended on and its ticks): (1) fog: over 95 % of the map unexplored, the enemy
   hall's fog cell 0 in the sim and in the fog texture, no enemy unit or building drawn or seen, every own unit drawn;
   (2) the Sapper clicked, right-clicked 45 m short of the enemy army and Shift + H (it holds there); the army
-  box-selected (exactly its 16 units), Ctrl + 1, A, a click on the ground under the fog where the enemy army stands: one
+  box-selected (exactly its 17 units), Ctrl + 1, A, a click on the ground under the fog where the enemy army stands: one
   attack-move per unit, every unit in `CombatMode.AttackMove`; (3) the approach: the first enemy unit drawn, and seen;
-  (4) Tab to the own Priest, Q, a click on the biggest visible Whirlwind blob within 40 m of it (two units within 6 m; any
-  visible enemy after 60 ticks without one): the cast resolves, an own zone lives, its disc is drawn and a seen Whirlwind
-  unit shows the Blinded marker; (5) Tab to the Cadre Mage, Q, a click on a blob (two within 3 m): Burning markers over
+  (4) Tab to the own Priest, Q, a click on the biggest visible Whirlwind blob of standing units (none moved on the last
+  tick, none a caster is already shooting) within 40 m of it (two units within 6 m; any standing visible enemy after 60 ticks without one, any visible enemy
+  after 120): the cast resolves, an own zone lives, its disc is drawn and a seen Whirlwind unit shows the Blinded marker
+  before the storm ends (else the step fails as "the storm ended without a Blinded marker"); (5) Tab to the Cadre Mages, Q, a click on a blob (two within 3 m; the HUD picks the nearest ready mage): Burning markers over
   seen Whirlwind units; (6) a kill and a loss, the resource bar's K / L equal to the sim's, then the fight decided (the
   army stands; at most two enemy army units live, none seen for 100 ticks); (7) 1 and a right click 30 m back pull the
   army off the base, the Sapper (clicked) right-clicks its way beside the enemy building nearest it (the Town Hall last)
@@ -4728,8 +4729,10 @@ HUD, as `M3PlayableTest` proved M3. Test code only (`game/tests/M4PlayableTest.t
   our Billet and Barracks (staging `Attack`s), a fresh Cadre Mage 18 m off (out of both Zealots' sight and they of its)
   is clicked, Q, a click on Zealot A, Shift + right click back to where it stood: Burning takes A from 63 to 23 hit
   points, under half, so it is Frenzied (the sim's `whenBelowHp` passive) and its marker is drawn in `FrenzyColor`, none
-  over the unhurt B; over the next 60 ticks A starts more swings than B (4-5 against 3: a 13-tick cooldown against 20;
-  a swing start is counted when `CooldownTicks` rises, read on `SimRunner.Ticked`); (9) the hash twin: the recorder's
+  over the unhurt B; over exactly the next 60 ticks A starts more swings than B (4-5 against 3: a 13-tick cooldown against 20;
+  a swing start is recorded with its tick when `CooldownTicks` rises, read on `SimRunner.Ticked`, and the window is the 60
+  ticks after the start, counted by tick: at 8x a frame spans several ticks, and a frame-measured 61-tick window let
+  both start 4, BUG-0463); (9) the hash twin: the recorder's
   replay played into a bare sim by `ReplayPlayer`, a checkpoint every tick, equal.
 - **Fresh units by handle.** Staging and the duel find their spawns as the live handles (slot and generation) that were
   not live before the spawn commands, never by slot: a unit that dies on the spawn tick frees its slot, a spawn takes it,
@@ -4740,12 +4743,19 @@ HUD, as `M3PlayableTest` proved M3. Test code only (`game/tests/M4PlayableTest.t
   is false. Counters are printed: seed 1 about 370-450 frames of the approach (A-click to first contact) and 1,900-2,500
   in all, 0 violations; seed 6 520-640 and 2,500-3,500, 0.
 - **What a player would also do** (the script's robustness, each printed when it happens): a cast the sim drops (the
-  caster's walk-in ended short of the range) is clicked again on a fresh blob, at most twice; the Sapper is walked to the
+  caster's walk-in ended short of the range) is clicked again on a fresh blob, at most twice; a caster killed in the fight
+  before its cast resolves (it can die on the very tick its command applies) is checked before "took no cast", and the
+  click goes again, the HUD picking the next live caster of the type (hence two Cadre Mages: the front one is often the
+  first Malazan loss); a Telas Fire that burns no one (the clicked unit was killed before the 0.8 s cast resolved, often
+  by the mage's own bolts) is cast again, at most twice, after the button's cooldown when no mage is ready; a blob tie
+  goes to the unit with the most hit points, and blobs are of standing units no caster is shooting first, since a cast at a unit on the move
+  lands where it was and can catch no one (all BUG-0463); the Sapper is walked to the
   building with plain Moves rather than a long Cusser walk-in, and a Move that stops short is clicked again to the next
   spot round it; the army is pulled back before the Sapper goes in (on seed 6 our attacking units, which stand as walls,
   shut the Sapper's way down a rise).
 - **Tick budget** 5,500 per seed (`M4PlayableTest.TickBudget`, 4 min 35 s of game time); runs headless and windowed:
-  seed 1 2,560-2,607, seed 6 3,424-3,878, so at least 1,600 ticks (40 %) of margin; 40-70 s of wall time for both
+  seed 1 2,560-2,903, seed 6 3,424-3,878 (2,903 a run whose Telas Fire missed and was cast again after the
+  cooldown), so at least 1,600 ticks (40 %) of margin; 40-70 s of wall time for both
   seeds headless. The commands land on whichever tick the frame clock reaches, so runs differ by a few hundred ticks. On
   any failure the replay so far is saved to Godot's user data folder (`m4playable-seed<N>-fail-tick<T>.replay`, or
   `-exception-`).

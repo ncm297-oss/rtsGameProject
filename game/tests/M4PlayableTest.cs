@@ -40,7 +40,7 @@ namespace Rts.Game.Tests;
 /// </remarks>
 public partial class M4PlayableTest : Node
 {
-    /// <summary>Most sim ticks one seed may take (4 min 35 s of game time). Measured (2026-10-10, seven runs headless and windowed): seed 1 2,560-2,607, seed 6 3,424-3,878, so at least 1,600 ticks (40 %) of margin.</summary>
+    /// <summary>Most sim ticks one seed may take (4 min 35 s of game time). Measured (2026-10-10, 46 seed-runs headless under a parallel <c>dotnet test</c>, after BUG-0463): seed 1 2,560-2,903, seed 6 3,424-3,878, so at least 1,600 ticks (40 %) of margin.</summary>
     public const int TickBudget = 5500;
 
     private sealed class StepFailed : Exception
@@ -78,8 +78,11 @@ public partial class M4PlayableTest : Node
 
     // Per tick (SimRunner.Ticked): resolved casts by caster, and the duel's swing starts.
     private readonly List<(EntityHandle Caster, int Ability, System.Numerics.Vector2 Point, int Tick)> _resolves = new();
+    // Swings are kept by the tick they started on, so a window is counted by tick, however far a frame runs past its end
+    // (at 8x one frame spans several ticks; BUG-0463).
     private EntityHandle _duelA, _duelB;
-    private int _swingsA, _swingsB, _cooldownA, _cooldownB;
+    private readonly List<int> _swingTicksA = new(), _swingTicksB = new();
+    private int _cooldownA, _cooldownB;
 
     // The fog rule, checked every frame.
     private long _fogFrames, _enemyShownFrames, _enemyHiddenFrames, _fogViolations, _approachFrames;
@@ -219,23 +222,34 @@ public partial class M4PlayableTest : Node
         // 4. Tab to the own Priest (the most fragile caster, so first), Q, a click on a blob: the storm is drawn and the
         // Whirlwind inside are Blinded.
         Step("Sandstorm by the own Priest (Tab, Q, click)");
-        EntityHandle priest = _army.First(h => U.TypeId[h.Index] == _priestType);
-        System.Numerics.Vector2 stormAt = await CastOnBlob(priest, _sandstorm, 6f, 1, "Sandstorm");
+        System.Numerics.Vector2 stormAt = await CastOnBlob(_priestType, _sandstorm, 6f, 1, "Sandstorm");
         int zone = -1;
         for (int k = 0; k < W.Zones.Capacity; k++) if (W.Zones.Alive[k] && W.Zones.Owner[k] == 0) zone = k;
         Expect(zone >= 0, "no own zone after the resolve");
-        await Until(() => OwnDiscs() > 0 && BlindedEnemyMarkers() > 0, "the storm drawn and a Blinded marker over an enemy",
-            () => $"discs {_views.ShownZones}, blinded markers {BlindedEnemyMarkers()}");
+        // Bounded by the storm's life, so a storm that catches no one fails as that (its 45 s cooldown outlasts the fight).
+        await Until(() => OwnDiscs() > 0 && BlindedEnemyMarkers() > 0 || !W.Zones.Alive[zone],
+            "the storm drawn and a Blinded marker over an enemy", () => $"discs {_views.ShownZones}, blinded markers {BlindedEnemyMarkers()}");
+        Expect(OwnDiscs() > 0 && BlindedEnemyMarkers() > 0, $"the storm at {stormAt} ended on tick {Tick} without a Blinded marker over a seen Whirlwind unit");
         GD.Print($"  storm at {W.Zones.Center[zone]} (cast at {stormAt}), {OwnDiscs()} own disc, {BlindedEnemyMarkers()} Blinded markers");
         await LookAt(W.Zones.Center[zone]);
         await Shot("storm");
         Done();
 
-        // 5. Tab to the Cadre Mage, Q, a click on a Whirlwind blob: the cast resolves and the Burning markers appear.
+        // 5. Tab to the Cadre Mages, Q (the HUD picks the nearest ready one), a click on a Whirlwind blob: the cast resolves and
+        // the Burning markers appear. A cast that burns no one (the clicked unit was killed in the fight, often by the mage's
+        // own bolts, before the 0.8 s cast resolved; BUG-0463) is cast again, as a player would: at most twice more.
         Step("Telas Fire on a Whirlwind blob (Tab, Q, click)");
-        EntityHandle mage = _army.First(h => U.TypeId[h.Index] == _mageType);
-        await CastOnBlob(mage, _telas, 3f, 1, "Telas Fire");
-        await Until(() => BurningEnemyMarkers() > 0, "a Burning marker over an enemy");
+        for (int cast = 0; ; cast++)
+        {
+            await CastOnBlob(_mageType, _telas, 3f, 1, "Telas Fire", again: cast > 0);
+            int resolvedAt = Tick;
+            // A burning enemy out of sight may still walk into it while it burns; none burning at all is a miss.
+            await Until(() => BurningEnemyMarkers() > 0 || Tick >= resolvedAt + 20 && !EnemyBurning(), "a Burning marker over an enemy",
+                () => $"{EnemyBurning()} enemy burning");
+            if (BurningEnemyMarkers() > 0) break;
+            Expect(cast < 2, "Telas Fire resolved three times and burned no seen Whirlwind unit");
+            GD.Print($"  Telas Fire burned no one (its blob died or walked off before the resolve); casting again on tick {Tick}");
+        }
         GD.Print($"  {BurningEnemyMarkers()} Burning markers over Whirlwind units");
         await Shot("telas-fire");
         Done();
@@ -284,71 +298,114 @@ public partial class M4PlayableTest : Node
         await Frames(2);
     }
 
-    // Tab to the caster's subgroup, wait for a visible enemy with `others` more visible enemies within `within` m (a blob)
-    // within 40 m of the caster, look at it, the ability's grid key, a click on the enemy: exactly one UseAbility for
-    // the caster; waits for the resolve. A cast the sim drops (the caster's walk in stopped short, as at a cliff edge) is
-    // clicked again on a fresh blob, as a player would, at most twice more; each drop is printed.
-    private async Task<System.Numerics.Vector2> CastOnBlob(EntityHandle caster, int ability, float within, int others, string what)
+    // Tab to the casters' subgroup (`casterType` in the army), wait for a visible enemy with `others` more visible enemies
+    // within `within` m (a blob) within 40 m of a live caster, look at it, the ability's grid key, a click on the enemy:
+    // exactly one UseAbility, for the caster the HUD picks (one of the live casters); waits for the resolve. A cast the sim
+    // drops (the caster's walk in stopped short, as at a cliff edge) is clicked again on a fresh blob, as a player would, at
+    // most twice more; each drop is printed. So is a caster killed in the fight before its cast resolves (it can die on the
+    // very tick its command applies, BUG-0463): the click goes again, and the HUD picks the next live caster of the type.
+    // `again`: a second cast of the step, so the button may first count down (the HUD's own SoonestReady) before it is pressed.
+    private async Task<System.Numerics.Vector2> CastOnBlob(int casterType, int ability, float within, int others, string what, bool again = false)
     {
-        Expect(U.IsAlive(caster), $"the {_data.Units[U.TypeId[caster.Index]].DisplayName} died before {what}");
+        string casterName = _data.Units[casterType].DisplayName;
         int cell = -1;
-        int abilityIndex = AbilityCaster.IndexOf(_data.Units[U.TypeId[caster.Index]], ability);
-        // What is in front of the caster: within 40 m (the walk in may be long; a drop is clicked again).
+        int abilityIndex = AbilityCaster.IndexOf(_data.Units[casterType], ability);
+        // What is in front of the casters: within 40 m (the walk in may be long; a drop is clicked again).
         const float reach = 40f;
         string dropped = "";
-        for (int attempt = 0; attempt < 3; attempt++)
+        int drops = 0, deaths = 0;
+        while (drops < 3)
         {
-            // The biggest blob; after 60 ticks without one of `others` + 1, any visible enemy in front of the caster will do.
+            if (again && _sel.SoonestReady(ability) > 0)
+            {
+                GD.Print($"  {what}: every live {casterName} cooling down on tick {Tick}; waiting {_sel.SoonestReady(ability)} ticks for the button");
+                await Until(() => _sel.SoonestReady(ability) <= 0, $"{what}'s button ready again");
+            }
+            List<EntityHandle> casters = _army.Where(h => U.IsAlive(h) && U.TypeId[h.Index] == casterType).ToList();
+            Expect(casters.Count > 0, $"every {casterName} died before {what}{dropped}");
+            // The biggest blob of standing units (a cast on a unit on the move lands where it was, and may catch no one:
+            // BUG-0463); after 60 ticks without one of `others` + 1, any standing visible enemy in front of a caster will do,
+            // and after 120 any visible enemy.
             int target = -1, since = Tick;
-            await Until(() => (target = Blob(caster, within, Tick - since < 60 ? others : 0, reach)) >= 0, $"a visible Whirlwind unit within {reach} m for {what}");
-            GD.Print($"  {what}: a blob round unit {target} ({_data.Units[U.TypeId[target]].Key}) at {U.Position[target]} on tick {Tick}, the caster {System.Numerics.Vector2.Distance(U.Position[target], U.Position[caster.Index]):0} m off");
+            await Until(() => (target = Blob(casters, within, Tick - since < 60 ? others : 0, reach, Tick - since < 120)) >= 0 || casters.All(h => !U.IsAlive(h)),
+                $"a visible Whirlwind unit within {reach} m of a {casterName} for {what}");
+            if (target < 0) continue; // every caster in the list died meanwhile: the top of the loop says so
+            GD.Print($"  {what}: a blob round unit {target} ({_data.Units[U.TypeId[target]].Key}) at {U.Position[target]} on tick {Tick}, {casters.Count(h => U.IsAlive(h))} live {casterName}");
             await LookAt(U.Position[target]);
             // Tab now: a type dying out since an earlier Tab may have moved the active subgroup.
-            await TabTo(U.TypeId[caster.Index]);
+            await TabTo(casterType);
             for (int f = 0; f < 3 && (cell = Enumerable.Range(0, CommandCard.Cells).FirstOrDefault(i => _card.AbilityAt(i) == ability, -1)) < 0; f++) await Frame();
             Expect(cell >= 0, $"{what} not on the card (active subgroup {_sel.Subgroups.ActiveType}, cell 0 {_card.ActionAt(0)} {_card.AbilityAt(0)})");
             Expect(_card.AbilitySecondsAt(cell) == 0, $"{what}'s button shows {_card.AbilitySecondsAt(cell)} s");
+            if (!U.Alive[target]) continue; // the blob's unit died on the way here: pick a fresh one
             Vector2 px = ScreenOf(target);
             int issued = _sel.IssuedCount(CommandKind.UseAbility), resolves = _resolves.Count;
             Key(KeyOf(cell));
             await Frames(1);
             Expect(_sel.TargetAbility == ability, $"{_card.GridKey(cell)} armed {_sel.TargetKind} {_sel.TargetAbility}");
             await LeftClick(px);
-            Expect(_sel.IssuedCount(CommandKind.UseAbility) == issued + 1 && _sel.LastCaster == caster && !_sel.Targeting,
-                $"{_sel.IssuedCount(CommandKind.UseAbility) - issued} UseAbility, caster {_sel.LastCaster} (want {caster}), targeting {_sel.Targeting}");
+            EntityHandle caster = _sel.LastCaster;
+            Expect(_sel.IssuedCount(CommandKind.UseAbility) == issued + 1 && _army.Contains(caster) && U.TypeId[caster.Index] == casterType && !_sel.Targeting,
+                $"{_sel.IssuedCount(CommandKind.UseAbility) - issued} UseAbility, caster {caster} (want a {casterName} of the army), targeting {_sel.Targeting}");
             await Ticks(2);
             bool Resolved() => _resolves.Skip(resolves).Any(r => r.Caster == caster && r.Ability == ability);
-            Expect(U.CastAbility[caster.Index] == abilityIndex || Resolved(), $"the caster took no cast (cast ability {U.CastAbility[caster.Index]})");
+            // A dead caster first: a unit killed in the fight holds no cast, and "took no cast" would name the wrong fault.
+            if (!U.IsAlive(caster) && !Resolved())
+            {
+                deaths++;
+                dropped += $"; a {casterName} ({caster.Index}) was killed in the fight before its cast resolved (by tick {Tick})";
+                GD.Print($"  {what}: the {casterName} ({caster.Index}) the click picked was killed in the fight by tick {Tick}, before its cast resolved; clicking again");
+                continue;
+            }
+            Expect(U.CastAbility[caster.Index] == abilityIndex || Resolved(), $"the {casterName} ({caster.Index}, alive) took no cast (cast ability {U.CastAbility[caster.Index]})");
             System.Numerics.Vector2 aim = U.CastPoint[caster.Index];
             await Until(() => Resolved() || !U.IsAlive(caster) || U.CastAbility[caster.Index] != abilityIndex, $"{what} resolved");
-            Expect(U.IsAlive(caster), $"the caster died before {what} resolved");
+            if (!U.IsAlive(caster) && !Resolved())
+            {
+                deaths++;
+                dropped += $"; a {casterName} ({caster.Index}) was killed mid-cast on tick {Tick}";
+                GD.Print($"  {what}: the {casterName} ({caster.Index}) was killed mid-cast on tick {Tick}; clicking again");
+                continue;
+            }
             if (Resolved())
             {
                 var r = _resolves.Skip(resolves).First(r => r.Caster == caster && r.Ability == ability);
-                GD.Print($"  {what}: {_card.GridKey(cell)} + click on unit {target} ({_data.Units[U.TypeId[target]].Key}); cast at {r.Point} on tick {r.Tick}{dropped}");
+                GD.Print($"  {what}: {_card.GridKey(cell)} + click on unit {target} ({_data.Units[U.TypeId[target]].Key}); cast by {caster.Index} at {r.Point} on tick {r.Tick}{dropped}");
                 return r.Point;
             }
+            drops++;
             System.Numerics.Vector2 at = U.Position[caster.Index];
             dropped += $"; an earlier click dropped by the sim: the caster stopped at {at} (level {LevelAt(at)}), {System.Numerics.Vector2.Distance(at, aim):0.0} m from {aim} (level {LevelAt(aim)})";
             GD.Print($"  {what} dropped on tick {Tick}: the caster stopped at {at} (level {LevelAt(at)}), {System.Numerics.Vector2.Distance(at, aim):0.0} m from the point {aim} (level {LevelAt(aim)}), range {_data.Abilities[ability].Range} m; clicking again");
         }
-        throw new StepFailed($"{what} dropped three times{dropped}");
+        throw new StepFailed($"{what} dropped three times ({deaths} casters killed besides){dropped}");
     }
 
     private int LevelAt(System.Numerics.Vector2 p) => G.LevelAt(CellOf(p) % G.Width, CellOf(p) / G.Width);
 
-    // A visible enemy unit within `reach` m of the caster with at least `others` other visible enemies within `within` m, the
-    // one with the most; -1 for none.
-    private int Blob(EntityHandle caster, float within, int others, float reach)
+    // A visible enemy unit within `reach` m of a live caster with at least `others` other visible enemies within `within` m,
+    // the one with the most; when `standing`, only a unit that did not move on the last tick and that no caster is shooting
+    // (the caster's own bolts kill it before a 0.8 s cast resolves); -1 for none.
+    private int Blob(List<EntityHandle> casters, float within, int others, float reach, bool standing)
     {
         int best = -1, bestN = others - 1;
         for (int i = 0; i < U.Capacity; i++)
         {
-            if (!U.Alive[i] || U.Owner[i] != 1 || !_units.IsShown(i) || System.Numerics.Vector2.Distance(U.Position[i], U.Position[caster.Index]) > reach) continue;
+            if (!U.Alive[i] || U.Owner[i] != 1 || !_units.IsShown(i)) continue;
+            if (standing && U.Position[i] != U.PrevPosition[i]) continue;
+            bool near = false, shot = false;
+            foreach (EntityHandle c in casters)
+            {
+                if (!U.IsAlive(c)) continue;
+                near |= System.Numerics.Vector2.Distance(U.Position[i], U.Position[c.Index]) <= reach;
+                shot |= U.Target[c.Index].Index == i && !U.TargetIsBuilding[c.Index] && U.State[c.Index] == UnitState.Attacking;
+            }
+            if (!near || standing && shot) continue;
             int n = 0;
             for (int j = 0; j < U.Capacity; j++)
                 if (j != i && U.Alive[j] && U.Owner[j] == 1 && _units.IsShown(j) && System.Numerics.Vector2.Distance(U.Position[i], U.Position[j]) <= within) n++;
-            if (n > bestN) (best, bestN) = (i, n);
+            // Ties to the unit with the most hp: a unit about to die takes a cast with it (BUG-0463).
+            if (n > bestN || n == bestN && best >= 0 && U.Hp[i] > U.Hp[best]) (best, bestN) = (i, n);
         }
         return best;
     }
@@ -472,8 +529,9 @@ public partial class M4PlayableTest : Node
         var mage = new EntityHandle(m, U.Generation[m]);
         _sim.Enqueue(Command.Attack(1, _duelA, new EntityHandle(_billet0, B.Generation[_billet0]), true));
         _sim.Enqueue(Command.Attack(1, _duelB, new EntityHandle(_barracks0, B.Generation[_barracks0]), true));
-        (_swingsA, _swingsB) = (0, 0);
-        await Until(() => _swingsA > 0 && _swingsB > 0, "both Zealots swinging at the buildings");
+        _swingTicksA.Clear();
+        _swingTicksB.Clear();
+        await Until(() => _swingTicksA.Count > 0 && _swingTicksB.Count > 0, "both Zealots swinging at the buildings");
 
         // The mage: clicked alone, Q, a click on Zealot A, then Shift + right-click back to where it stood.
         await SelectAlone(mage);
@@ -501,13 +559,15 @@ public partial class M4PlayableTest : Node
         Expect(_views.StatusColor(_frenzied) == AbilityViews.FrenzyColor && Marks(zb, _frenzied) == 0 && W.Fog.CanSeeUnit(0, za),
             $"colour {_views.StatusColor(_frenzied)}, B's Frenzied markers {Marks(zb, _frenzied)}");
         await Shot("frenzied-zealot");
-        // 60 ticks of swings.
-        (_swingsA, _swingsB) = (0, 0);
+        // Exactly the next 60 ticks of swings, counted by tick (the 60 Ticked calls after `start`), not by frame: in 60 ticks
+        // a 13-tick cooldown starts at least 4 swings and a 20-tick one at most 3, but in 61 both can start 4 (BUG-0463).
+        const int window = 60;
         int start = Tick;
-        await Until(() => Tick >= start + 60, "60 ticks of swings");
-        int a = _swingsA, b = _swingsB, ticks = Tick - start;
-        Expect(U.IsAlive(_duelA) && b >= 2 && a > b, $"over {ticks} ticks Zealot A (hp {U.Hp[za]}, Frenzied) swung {a} times, unhurt B {b}");
-        GD.Print($"  Zealot A at {U.Hp[za]} / {_data.Units[_zealotType].Hp} hp, Frenzied (marker {AbilityViews.FrenzyColor}): {a} swings in {ticks} ticks; unhurt Zealot B: {b}");
+        await Until(() => Tick >= start + window, $"{window} ticks of swings");
+        Expect(U.IsAlive(_duelA), "Zealot A died during the swing count");
+        int a = _swingTicksA.Count(t => t > start && t <= start + window), b = _swingTicksB.Count(t => t > start && t <= start + window);
+        Expect(b >= 2 && a > b, $"over ticks {start + 1}-{start + window} Zealot A (hp {U.Hp[za]}, Frenzied) swung {a} times, unhurt B {b} (swing ticks A {string.Join(",", _swingTicksA.Where(t => t > start))}; B {string.Join(",", _swingTicksB.Where(t => t > start))})");
+        GD.Print($"  Zealot A at {U.Hp[za]} / {_data.Units[_zealotType].Hp} hp, Frenzied (marker {AbilityViews.FrenzyColor}): {a} swings in ticks {start + 1}-{start + window} (the frame clock ran to {Tick}); unhurt Zealot B: {b}");
         _duelA = _duelB = default;
     }
 
@@ -610,7 +670,9 @@ public partial class M4PlayableTest : Node
         var malazan = new List<int>();
         malazan.AddRange(Enumerable.Repeat(heavy, 8));
         malazan.AddRange(Enumerable.Repeat(crossbow, 5));
-        malazan.AddRange(new[] { _mageType, _priestType, catapult });
+        // Two Cadre Mages: the one the HUD picks for Telas Fire can be killed in the fight on the tick its cast applies, and a
+        // player would click again with the other (BUG-0463).
+        malazan.AddRange(new[] { _mageType, _mageType, _priestType, catapult });
         var whirlwind = new List<int>();
         whirlwind.AddRange(Enumerable.Repeat(raider, 4));
         whirlwind.AddRange(Enumerable.Repeat(_zealotType, 3));
@@ -771,13 +833,13 @@ public partial class M4PlayableTest : Node
         if (_duelA.Generation != 0 && w.Units.IsAlive(_duelA))
         {
             int cd = w.Units.CooldownTicks[_duelA.Index];
-            if (cd > _cooldownA) _swingsA++;
+            if (cd > _cooldownA) _swingTicksA.Add(w.TickNumber);
             _cooldownA = cd;
         }
         if (_duelB.Generation != 0 && w.Units.IsAlive(_duelB))
         {
             int cd = w.Units.CooldownTicks[_duelB.Index];
-            if (cd > _cooldownB) _swingsB++;
+            if (cd > _cooldownB) _swingTicksB.Add(w.TickNumber);
             _cooldownB = cd;
         }
     }
@@ -817,6 +879,13 @@ public partial class M4PlayableTest : Node
     }
 
     private int BurningEnemyMarkers() => EnemyMarkers(_burning);
+
+    // Whether any live enemy unit burns in the sim, seen or not.
+    private bool EnemyBurning()
+    {
+        for (int i = 0; i < U.Capacity; i++) if (U.Alive[i] && U.Owner[i] == 1 && HasStatus(i, _burning)) return true;
+        return false;
+    }
 
     private int BlindedEnemyMarkers() => EnemyMarkers(_blinded);
 
