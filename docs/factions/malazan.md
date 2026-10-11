@@ -100,27 +100,69 @@ table and the "Faction upgrade" line above to the data.
 - **Weak:** no standout mobility (Lancers are only template-fast). Friendly fire punishes sloppy
   play. Crossbows fire slowly, so swarms (Whirlwind) can close the gap.
 
-## AI build order sketch (Normal)
+## AI build order (Normal)
 
-```
-Workers: train continuously to 20 in Age I, 30 in Age II.
-Start:   3 workers on gold, 2 on wood.
-pop 6    Billet
-pop 8    Quartermaster's Depot at the nearest forest
-pop 10   Legion Barracks (rally to base choke)
-pop 12   Billet
-pop 14   Crossbow Range
-pop 16   Armory -> Melee Weapons I
-pop 18+  a Billet every ~7 pop
-~6:30    Age II
-Age II   Cadre Tower, Engineers' Yard, Wickan Corral, Moranth Supply, Watchtower at the choke
-Expand   2nd Garrison Keep when army >= 12 pop and no enemy army near base for 60 s
-```
+The AI opponent's `game/data/factions/malazan/ai.json` (docs/03 "For the data track (M5-1)"): one row per `buildOrder`
+step, in file order. The steps run side by side, not one after another: each think the executor works every step whose
+trigger is reached and which is not done, in this order, one command per step (a step earlier in the list gets the gold
+first). **At** is the trigger: `time` in seconds of match time, `pop` the AI's population (workers and army). **Count**
+is how many `train` commands the step queues over its life; a `build`, `research` or `expand` is done once its command
+is accepted (1). The AI starts with 5 Laborers, 3 on gold and 2 on wood (the economy manager's split, not a step). On
+Easy each step waits `buildOrderSlack` (30 s) after it is due, on Hard none. `Content/AiContentTests` pins this table,
+the composition table and the wave and retreat lines below to the file, both ways.
+
+| # | At | Do | Id | Count | Why |
+| --- | --- | --- | --- | --- | --- |
+| 1 | time 0 | train | `malazan_laborer` | 15 | Workers to 20 in Age I (5 at the start + 15) |
+| 2 | pop 6 | build | `malazan_billet` | 1 | First Billet |
+| 3 | pop 8 | build | `malazan_depot` | 1 | Quartermaster's Depot at the nearest forest |
+| 4 | pop 10 | build | `malazan_barracks` | 1 | Legion Barracks |
+| 5 | pop 12 | build | `malazan_billet` | 1 | Second Billet |
+| 6 | pop 14 | build | `malazan_crossbow_range` | 1 | Crossbow Range |
+| 7 | pop 16 | build | `malazan_armory` | 1 | The Forge |
+| 8 | pop 16 | research | `melee_weapons_1` | 1 | Its first upgrade, Melee Weapons (refused, and retried, until the Armory stands) |
+| 9 | pop 18 | build | `malazan_billet` | 1 | From pop 18 a Billet every 7 pop |
+| 10 | pop 25 | build | `malazan_billet` | 1 | |
+| 11 | pop 32 | build | `malazan_billet` | 1 | |
+| 12 | pop 39 | build | `malazan_billet` | 1 | |
+| 13 | pop 46 | build | `malazan_billet` | 1 | |
+| 14 | pop 53 | build | `malazan_billet` | 1 | |
+| 15 | pop 60 | build | `malazan_billet` | 1 | |
+| 16 | pop 67 | build | `malazan_billet` | 1 | |
+| 17 | pop 74 | build | `malazan_billet` | 1 | |
+| 18 | pop 81 | build | `malazan_billet` | 1 | The 12th Billet: Keep 10 + 12 × 8 = 106, past the 100 cap |
+| 19 | time 390 | research | `age_ii` | 1 | Age II at 6:30 (needs two of Barracks, Range, Armory: all three stand) |
+| 20 | time 390 | train | `malazan_laborer` | 10 | Workers to 30 in Age II |
+| 21 | time 450 | build | `malazan_cadre_tower` | 1 | 7:30, when Age II (60 s) is in |
+| 22 | time 480 | build | `malazan_engineers_yard` | 1 | Catapults and Sappers |
+| 23 | time 480 | expand | — | 1 | 2nd Garrison Keep near the nearest free gold mine, at Normal's `expandAfter` (480 s) |
+| 24 | time 510 | build | `malazan_wickan_corral` | 1 | The Corral needs only the Barracks; the AI waits for Age II so Age I spends on the line |
+| 25 | time 540 | research | `moranth_supply` | 1 | The faction upgrade, at the Armory |
+| 26 | time 570 | build | `malazan_watchtower` | 1 | Watchtower |
+
+Not in the file, because the schema has no field for it (requests to the sim track): the sketch's expansion condition
+(army ≥ 12 pop and no enemy army near the base for 60 s; the step fires at its time), the Barracks rally to the base
+choke and the Watchtower's spot at the choke (the executor places every building near the Keep), and the 3 : 2 gold /
+wood split (the economy manager's `goldShare`, a common rule).
+
+**Army composition (`compositions`), weights by pop.** Age I lists only the units the Age I steps can train (the Corral
+waits for Age II), so its weights sum to 65.
+
+| Unit | Age I | Age II |
+| --- | --- | --- |
+| `malazan_heavy_infantry` | 35 | 35 |
+| `malazan_crossbowman` | 30 | 30 |
+| `malazan_wickan_lancer` | — | 10 |
+| `malazan_cadre_mage` | — | 10 |
+| `malazan_sapper` | — | 10 |
+| `malazan_catapult` | — | 5 |
 
 - **Composition target (by pop):** 35% Heavy Infantry, 30% Crossbowman, 10% Wickan Lancer,
   10% Cadre Mage, 10% Sapper, 5% Catapult.
-- **Attack waves:** first at 20 army pop; then every 3 minutes or when army pop ≥ 1.3× the last
-  wave. Sappers target buildings; Mages cast Telas Fire on the largest enemy clump.
+- **Attack waves:** first at 20 army pop and 1,544 gold + wood (`attack`; the cost of 20 pop of the Age I mix, rounded
+  down); then every 3 minutes or when army pop ≥ 1.3× the last wave. Sappers target buildings; Mages cast Telas Fire on
+  the largest enemy clump.
+- **Retreat:** a wave that has lost 50% falls back; a unit under 30% hp counts as wounded (`retreat`; Hard pulls it back).
 - **Defense:** pull the army home when buildings take damage; Laborers flee to the Garrison Keep.
 
 ## Art notes
@@ -195,7 +237,10 @@ value on both factions, swept 1.5 / 1.4 / 1.3 / 1.2 / 1.1 / 1.0 (the four cells 
 at 1.5, 88 / 94 / 100 / 89 % at 1.4, 88 / 94 / 95 / 89 % at 1.3, 94 / 88 / 100 / 89 % at 1.2, 88 / 88 / 100 / 89 % at
 1.1, 88 / 94 / 84 / 79 % at 1.0). No value reaches the band and Line wins every cell at every value. 1.0 came nearest,
 but it broke a sim stress floor (seed 11 of the Sandstorm fuzz cast 4 storms, its floor is 5), so the shipped value is
-one step back, ×1.1. The counter comes from the line units' hp, armor and cost per body, not the bonus; closing the
+one step back, ×1.1. "Nearest" here means the next step of the sweep, not the best score among the passing values:
+1.3 is a near tie (points over 65 % summed across the four cells, 106 at 1.3 v 105 at 1.1) with the smaller worst
+cell (95 v 100 %) and the closer seats (6 / 6 points apart v 0 / 11), so it is the value to try first when the owner
+revisits the band. The counter comes from the line units' hp, armor and cost per body, not the bonus; closing the
 gap needs one of those levers (a later pass). Shock v Ranged (69-80 %) and Ranged v casters (67-89 %) are 2-24 points
 over. Casters fight without their signature abilities until M4-4, so the Ranged v casters
 rows should be re-measured then before any tuning. Siege has no band: buildings are its job, and 5-9 % of the line

@@ -32,12 +32,37 @@
     }
   },
   "buildOrder": [
-    { "at": { "time": 0 }, "do": "train", "id": "whirlwind_camp_follower", "count": 1 }
+    { "at": { "time": 0 }, "do": "train", "id": "whirlwind_camp_follower", "count": 13 },
+    { "at": { "pop": 6 }, "do": "build", "id": "whirlwind_tent" },
+    { "at": { "pop": 8 }, "do": "build", "id": "whirlwind_raider_camp" },
+    { "at": { "pop": 9 }, "do": "build", "id": "whirlwind_supply_cache" },
+    { "at": { "pop": 11 }, "do": "build", "id": "whirlwind_tent" },
+    { "at": { "pop": 12 }, "do": "build", "id": "whirlwind_archer_camp" },
+    { "at": { "pop": 14 }, "do": "build", "id": "whirlwind_horse_lines" },
+    { "at": { "pop": 16 }, "do": "build", "id": "whirlwind_tent" },
+    { "at": { "pop": 20 }, "do": "build", "id": "whirlwind_smithy" },
+    { "at": { "pop": 20 }, "do": "research", "id": "melee_weapons_1" },
+    { "at": { "pop": 23 }, "do": "build", "id": "whirlwind_tent" },
+    { "at": { "pop": 30 }, "do": "build", "id": "whirlwind_tent" },
+    { "at": { "pop": 37 }, "do": "build", "id": "whirlwind_tent" },
+    { "at": { "pop": 44 }, "do": "build", "id": "whirlwind_tent" },
+    { "at": { "pop": 51 }, "do": "build", "id": "whirlwind_tent" },
+    { "at": { "pop": 58 }, "do": "build", "id": "whirlwind_tent" },
+    { "at": { "pop": 65 }, "do": "build", "id": "whirlwind_tent" },
+    { "at": { "pop": 72 }, "do": "build", "id": "whirlwind_tent" },
+    { "at": { "pop": 79 }, "do": "build", "id": "whirlwind_tent" },
+    { "at": { "time": 450 }, "do": "research", "id": "age_ii" },
+    { "at": { "time": 450 }, "do": "train", "id": "whirlwind_camp_follower", "count": 8 },
+    { "at": { "time": 480 }, "do": "expand" },
+    { "at": { "time": 510 }, "do": "build", "id": "whirlwind_shrine" },
+    { "at": { "time": 540 }, "do": "build", "id": "whirlwind_raider_camp" },
+    { "at": { "time": 570 }, "do": "build", "id": "whirlwind_ram_yard" },
+    { "at": { "time": 600 }, "do": "research", "id": "dryjhnas_prophecy" }
   ],
   "compositions": [
-    { "age": 1, "units": { "whirlwind_raider": 2, "whirlwind_desert_archer": 1 } },
-    { "age": 2, "units": { "whirlwind_raider": 2, "whirlwind_desert_archer": 1, "whirlwind_horse_raider": 1 } }
+    { "age": 1, "units": { "whirlwind_raider": 30, "whirlwind_desert_archer": 20, "whirlwind_horse_raider": 15 } },
+    { "age": 2, "units": { "whirlwind_raider": 30, "whirlwind_desert_archer": 20, "whirlwind_horse_raider": 15, "whirlwind_zealot": 20, "whirlwind_priest": 10, "whirlwind_battering_ram": 5 } }
   ],
-  "attack": { "minArmyPop": 10, "minArmyCost": 800 },
+  "attack": { "minArmyPop": 14, "minArmyCost": 861 },
   "retreat": { "hpFraction": 0.3, "lossFraction": 0.5 }
 }

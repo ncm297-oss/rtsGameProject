@@ -32,12 +32,37 @@
     }
   },
   "buildOrder": [
-    { "at": { "time": 0 }, "do": "train", "id": "malazan_laborer", "count": 1 }
+    { "at": { "time": 0 }, "do": "train", "id": "malazan_laborer", "count": 15 },
+    { "at": { "pop": 6 }, "do": "build", "id": "malazan_billet" },
+    { "at": { "pop": 8 }, "do": "build", "id": "malazan_depot" },
+    { "at": { "pop": 10 }, "do": "build", "id": "malazan_barracks" },
+    { "at": { "pop": 12 }, "do": "build", "id": "malazan_billet" },
+    { "at": { "pop": 14 }, "do": "build", "id": "malazan_crossbow_range" },
+    { "at": { "pop": 16 }, "do": "build", "id": "malazan_armory" },
+    { "at": { "pop": 16 }, "do": "research", "id": "melee_weapons_1" },
+    { "at": { "pop": 18 }, "do": "build", "id": "malazan_billet" },
+    { "at": { "pop": 25 }, "do": "build", "id": "malazan_billet" },
+    { "at": { "pop": 32 }, "do": "build", "id": "malazan_billet" },
+    { "at": { "pop": 39 }, "do": "build", "id": "malazan_billet" },
+    { "at": { "pop": 46 }, "do": "build", "id": "malazan_billet" },
+    { "at": { "pop": 53 }, "do": "build", "id": "malazan_billet" },
+    { "at": { "pop": 60 }, "do": "build", "id": "malazan_billet" },
+    { "at": { "pop": 67 }, "do": "build", "id": "malazan_billet" },
+    { "at": { "pop": 74 }, "do": "build", "id": "malazan_billet" },
+    { "at": { "pop": 81 }, "do": "build", "id": "malazan_billet" },
+    { "at": { "time": 390 }, "do": "research", "id": "age_ii" },
+    { "at": { "time": 390 }, "do": "train", "id": "malazan_laborer", "count": 10 },
+    { "at": { "time": 450 }, "do": "build", "id": "malazan_cadre_tower" },
+    { "at": { "time": 480 }, "do": "build", "id": "malazan_engineers_yard" },
+    { "at": { "time": 480 }, "do": "expand" },
+    { "at": { "time": 510 }, "do": "build", "id": "malazan_wickan_corral" },
+    { "at": { "time": 540 }, "do": "research", "id": "moranth_supply" },
+    { "at": { "time": 570 }, "do": "build", "id": "malazan_watchtower" }
   ],
   "compositions": [
-    { "age": 1, "units": { "malazan_heavy_infantry": 2, "malazan_crossbowman": 1 } },
-    { "age": 2, "units": { "malazan_heavy_infantry": 2, "malazan_crossbowman": 1, "malazan_wickan_lancer": 1 } }
+    { "age": 1, "units": { "malazan_heavy_infantry": 35, "malazan_crossbowman": 30 } },
+    { "age": 2, "units": { "malazan_heavy_infantry": 35, "malazan_crossbowman": 30, "malazan_wickan_lancer": 10, "malazan_cadre_mage": 10, "malazan_sapper": 10, "malazan_catapult": 5 } }
   ],
-  "attack": { "minArmyPop": 10, "minArmyCost": 800 },
+  "attack": { "minArmyPop": 20, "minArmyCost": 1544 },
   "retreat": { "hpFraction": 0.3, "lossFraction": 0.5 }
 }

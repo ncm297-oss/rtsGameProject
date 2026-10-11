@@ -105,28 +105,67 @@ table and the "Faction upgrade" line above to the data.
 - **Weak:** splash damage (Telas Fire, Catapults, Sappers) shreds clumped low-HP units. No ranged
   siege, so a well-defended choke with towers is hard to crack. Loses long, even trades.
 
-## AI build order sketch (Normal)
+## AI build order (Normal)
 
-```
-Workers: 18 in Age I, 26 in Age II (fewer workers, more army).
-Start:   3 workers on gold, 2 on wood.
-pop 6    Tent
-pop 8    Raider Camp
-pop 9    Supply Cache at the nearest forest
-pop 11   Tent
-pop 12   Archer Camp
-pop 14   Horse Lines
-~4:30    First raid: 6 Raiders + 2 Horse Raiders, target workers, retreat at 50% losses
-pop 16+  a Tent every ~7 pop
-~7:30    Age II (later than Malazan; spends on army first)
-Age II   Shrine, Ram Yard, Dryjhna's Prophecy, Zealots from 2 Raider Camps
-Expand   2nd Holy Camp at ~9:00 regardless of threat (relies on army presence)
-```
+The AI opponent's `game/data/factions/whirlwind/ai.json` (docs/03 "For the data track (M5-1)"): one row per `buildOrder`
+step, in file order, read the same way as malazan.md "AI build order (Normal)" (steps run side by side, one command per
+step per think, in this order; **Count** is the `train` commands the step queues over its life). The Whirlwind keep
+fewer workers (18 in Age I, 26 in Age II) and reach Age II later than the Malazan, spending on the army first. The AI
+starts with 5 Camp Followers, 3 on gold and 2 on wood. `Content/AiContentTests` pins this table, the composition table
+and the wave and retreat lines below to the file, both ways.
+
+| # | At | Do | Id | Count | Why |
+| --- | --- | --- | --- | --- | --- |
+| 1 | time 0 | train | `whirlwind_camp_follower` | 13 | Workers to 18 in Age I (5 at the start + 13) |
+| 2 | pop 6 | build | `whirlwind_tent` | 1 | First Tent |
+| 3 | pop 8 | build | `whirlwind_raider_camp` | 1 | Raider Camp |
+| 4 | pop 9 | build | `whirlwind_supply_cache` | 1 | Supply Cache at the nearest forest |
+| 5 | pop 11 | build | `whirlwind_tent` | 1 | Second Tent |
+| 6 | pop 12 | build | `whirlwind_archer_camp` | 1 | Archer Camp |
+| 7 | pop 14 | build | `whirlwind_horse_lines` | 1 | Horse Lines |
+| 8 | pop 16 | build | `whirlwind_tent` | 1 | From pop 16 a Tent every 7 pop |
+| 9 | pop 20 | build | `whirlwind_smithy` | 1 | The Forge, after the first raiding army |
+| 10 | pop 20 | research | `melee_weapons_1` | 1 | Its first upgrade, Melee Weapons: most of the army is melee (refused, and retried, until the Smithy stands) |
+| 11 | pop 23 | build | `whirlwind_tent` | 1 | |
+| 12 | pop 30 | build | `whirlwind_tent` | 1 | |
+| 13 | pop 37 | build | `whirlwind_tent` | 1 | |
+| 14 | pop 44 | build | `whirlwind_tent` | 1 | |
+| 15 | pop 51 | build | `whirlwind_tent` | 1 | |
+| 16 | pop 58 | build | `whirlwind_tent` | 1 | |
+| 17 | pop 65 | build | `whirlwind_tent` | 1 | |
+| 18 | pop 72 | build | `whirlwind_tent` | 1 | |
+| 19 | pop 79 | build | `whirlwind_tent` | 1 | The 12th Tent: Holy Camp 10 + 12 × 8 = 106, past the 100 cap |
+| 20 | time 450 | research | `age_ii` | 1 | Age II at 7:30, later than the Malazan (needs two of the camps, Horse Lines, Smithy) |
+| 21 | time 450 | train | `whirlwind_camp_follower` | 8 | Workers to 26 in Age II |
+| 22 | time 480 | expand | — | 1 | 2nd Holy Camp near the nearest free gold mine, at Normal's `expandAfter` (480 s), regardless of threat |
+| 23 | time 510 | build | `whirlwind_shrine` | 1 | 8:30, when Age II (60 s) is in |
+| 24 | time 540 | build | `whirlwind_raider_camp` | 1 | A second Raider Camp: Zealots from 2 Raider Camps |
+| 25 | time 570 | build | `whirlwind_ram_yard` | 1 | Battering Rams |
+| 26 | time 600 | research | `dryjhnas_prophecy` | 1 | The faction upgrade, at the Smithy |
+
+Not in the file, because the schema has no field for it (requests to the sim track): the sketch's first raid at ~4:30
+(6 Raiders + 2 Horse Raiders against the workers; the first wave goes at 14 army pop, below), and the 3 : 2 gold / wood
+split (the economy manager's `goldShare`, a common rule). The sketch's expansion at ~9:00 is now the step at 8:00,
+Normal's `expandAfter`.
+
+**Army composition (`compositions`), weights by pop.** All three Age I units can be trained in Age I; their weights sum
+to 65.
+
+| Unit | Age I | Age II |
+| --- | --- | --- |
+| `whirlwind_raider` | 30 | 30 |
+| `whirlwind_desert_archer` | 20 | 20 |
+| `whirlwind_horse_raider` | 15 | 15 |
+| `whirlwind_zealot` | — | 20 |
+| `whirlwind_priest` | — | 10 |
+| `whirlwind_battering_ram` | — | 5 |
 
 - **Composition target (by pop):** 30% Raider, 20% Desert Archer, 15% Horse Raider, 20% Zealot,
-  10% Priest, 5% Battering Ram.
-- **Attack waves:** first at 14 army pop; then continuous pressure, a new wave every 2 minutes.
-  Priests cast Sandstorm on the enemy army's center as the melee engages.
+  10% Priest of the Whirlwind, 5% Battering Ram.
+- **Attack waves:** first at 14 army pop and 861 gold + wood (`attack`; the cost of 14 pop of the Age I mix, rounded
+  down); then continuous pressure, a new wave every 2 minutes. Priests cast Sandstorm on the enemy army's center as the
+  melee engages.
+- **Retreat:** a wave that has lost 50% falls back; a unit under 30% hp counts as wounded (`retreat`; Hard pulls it back).
 - **Defense:** counter-attack the enemy base with Horse Raiders when its army is away.
 
 ## Art notes
@@ -180,5 +219,5 @@ Siege beats buildings (one siege unit, ordered to attack, against the same cost 
 
 The target band (winner keeps 40-65 % of its cost, both seats within 15 points; proposed in D6, the Producer's default
 since 2026-10-11, owner may revisit): every Whirlwind row is still above it, Raider v Lancer (89-100 %) most. D13 cut
-the line units' bonus vs Mounted from ×1.5 to ×1.1, the nearest the band that lever could go (the sweep is in
-malazan.md); Raider v Lancer moved from 95-100 % to 89-100 %.
+the line units' bonus vs Mounted from ×1.5 to ×1.1, the nearest value to the band that kept the test suite green (1.0 came
+nearer but broke a stress floor; the sweep and the reason are in malazan.md); Raider v Lancer moved from 95-100 % to 89-100 %.

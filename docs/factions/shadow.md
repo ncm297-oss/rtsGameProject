@@ -41,7 +41,8 @@ Age II, at the Blackwood Forge, 200 G / 150 W, 45 s. K'risnan Sorcerers gain **S
 
 ### Unit notes
 
-- **Edur Warrior:** ×1.5 vs Mounted. Slightly lighter and faster than template line infantry.
+- **Edur Warrior:** ×1.1 vs Mounted (docs/02's template value since D13; the page said ×1.5, the old template value,
+  before any Edur data existed). Slightly lighter and faster than template line infantry.
 - **Shadow Archer:** passive **Shadowed**: becomes Stealthed after 3 s without moving or
   attacking, anywhere (not just forests). The first shot from stealth deals +50% damage.
 - **Aptorian Stalker:** ×1.5 vs Light. A demon scout with long sight (20 m). Raids and spots.
