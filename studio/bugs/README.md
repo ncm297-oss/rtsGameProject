@@ -255,3 +255,4 @@ bugs outrank new features.
 | [BUG-0461](BUG-0461-cast-walk-in-dropped-behind-own-attackers.md) | S3 | open | A cast's walk-in hemmed in by own attacking units gives up after 1 s and drops the cast; on flat ground the caster vibrates in place until then |
 | [BUG-0462](BUG-0462-m4-v6d-nits.md) | S4 | open | M4-V6d nits: selfAura hover ring floats across a cliff, seed-6 sandbox stills missing, marker rows merge at zoom 60, shot frames skip the fog check |
 | [BUG-0463](BUG-0463-m4-playable-flaky-caster-death-and-swing-window.md) | S2 | fixed | M4PlayableTest still flaky: the Telas caster dies on its cast tick (step 5, reported as "took no cast"); a 61-tick swing window lets unhurt Zealot B tie Frenzied A (step 8) |
+| [BUG-0470](BUG-0470-d11-passive-pin-nits.md) | S4 | open | D11 nits: a second same-trigger passive sentence on a page is never compared; docs/03 and STATE.md still quote the pre-D11 text |
