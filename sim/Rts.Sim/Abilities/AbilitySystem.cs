@@ -106,6 +106,9 @@ public static class AbilitySystem
             u.State[i] = UnitState.Idle;
             u.AbilityReadyTick[i * DataLimits.MaxUnitAbilities + slot] = world.TickNumber + CooldownOf(world, i, a);
             world.RecordAbilityEvent(new AbilityEvent(caster, u.Owner[i], a.Id, point, true));
+            // M4-5: a cast resolving from stealth reveals the caster, before its effects (a stealth it casts on itself from
+            // the open doesn't).
+            StealthSystem.OnAttackOrCast(world, i);
             Resolve(world, caster, u.Owner[i], a, point);
         }
     }

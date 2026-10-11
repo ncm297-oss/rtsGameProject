@@ -110,6 +110,9 @@ public sealed class Simulation
         PassiveSystem.Run(World);
         StatusSystem.Run(World);
         ZoneSystem.Run(World);
+        // M4-5: then which players detect each stealthed unit, from this tick's statuses and positions and the last fog
+        // update, so phases 6-12 (casts, scans, towers, swings) read one answer. Nothing to do while no unit carries stealth.
+        StealthSystem.Run(World);
 
         // Phase 6: casters walk into range, cast timers count down, finished casts resolve (M4-4a).
         AbilitySystem.Run(World);
@@ -156,7 +159,7 @@ public sealed class Simulation
     /// <summary>64-bit FNV-1a hash of all gameplay state: tick, units (Hold, order queues, gather loops and cargo, combat state included), RNG streams, flow-field cache metadata, nav grid versions (and the movement pass's last seen block version), resource nodes, buildings, projectiles in flight (production queues, research items and rally points included), the fog's explored and visible bits and high-ground reveals (M4-3a; visible bits BUG-0215), live zones (M4-4b-2), player totals, researched techs, kills and losses, and pending commands.</summary>
     /// <remarks>
     /// Derived state is left out: the spatial hash (rebuilt from the units every tick), the fog's byte map and update versions (M4-3a: copies of its hashed bits),
-    /// Speed/Radius (they follow from TypeId), a unit's blind in force (M4-4b-2: from its statuses), the summoned flag and count (M4-4b-3b: from <c>ExpiresAtTick</c>, which is hashed), and population (M3-4: <see cref="World.HalfPop"/> follows from the live
+    /// Speed/Radius (they follow from TypeId), a unit's blind in force (M4-4b-2: from its statuses), the summoned flag and count (M4-4b-3b: from <c>ExpiresAtTick</c>, which is hashed), the stealth counts and detection bits (M4-5: from the statuses, positions and fog bits), and population (M3-4: <see cref="World.HalfPop"/> follows from the live
     /// units and the started production items, <see cref="World.HalfPopCap"/> from the finished buildings). The flow-field cache's keys, versions and LRU stamps
     /// are in, because they decide which units wait under the build cap (BUG-0021); the fields'
     /// contents are not, since they follow from the grid and the key.

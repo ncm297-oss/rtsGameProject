@@ -79,8 +79,8 @@ public static class DataLimits
     /// </summary>
     public const double MaxAbilityRadius = 16;
 
-    /// <summary>JSON spelling of each <see cref="StatusKind"/>, indexed by the enum value (<c>common/statuses.json</c>, M4-4a).</summary>
-    public static readonly ImmutableArray<string> StatusKindIds = ImmutableArray.Create("damageOverTime", "slow", "blind", "frenzied");
+    /// <summary>JSON spelling of each <see cref="StatusKind"/>, indexed by the enum value (<c>common/statuses.json</c>, M4-4a; stealthed / revealed M4-5).</summary>
+    public static readonly ImmutableArray<string> StatusKindIds = ImmutableArray.Create("damageOverTime", "slow", "blind", "frenzied", "stealthed", "revealed");
 
     /// <summary>JSON spelling of each supported <see cref="AbilityKind"/>, indexed by the enum value (M4-4a; selfAura M4-4b-3a; summon M4-4b-3b).</summary>
     public static readonly ImmutableArray<string> AbilityKindIds = ImmutableArray.Create("targetGround", "selfAura", "summon");

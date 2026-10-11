@@ -51,7 +51,7 @@ public sealed class BuildingDef
     /// aimed projectile, and refuses <c>targets: buildings</c>.
     /// </summary>
     public AttackDef? Attack { get; init; }
-    /// <summary>Detection radius in meters (M4-3b: <c>detector</c>, docs/02 "Stealth and detection"; above 0 and at most <see cref="DataLimits.MaxSight"/>); 0 for none. Stored only until stealth (M4-5).</summary>
+    /// <summary>Detection radius in meters (M4-3b: <c>detector</c>, docs/02 "Stealth and detection"; above 0 and at most <see cref="DataLimits.MaxSight"/>); 0 for none. A finished building detects with it since M4-5.</summary>
     public float Detector { get; init; }
     /// <summary>Tech / building ids it requires, as written (M3-5: every id exists, checked at load). Empty when none. Kept for tools; the sim reads <see cref="RequiresTechs"/> / <see cref="RequiresBuildings"/>.</summary>
     public ImmutableArray<string> Requires { get; init; } = ImmutableArray<string>.Empty;

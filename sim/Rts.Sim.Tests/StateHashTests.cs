@@ -1663,4 +1663,45 @@ public class StateHashTests
         }
         Assert.Equal(Run(), Run());
     }
+
+    /// <summary>
+    /// M4-5 criterion 4: stealth adds no hashed field. The Stealthed and Revealed entries are status entries, hashed with every
+    /// other (moving one's ticks moves the hash); the per-slot detection mask (<c>World.IsDetectedBy</c>), the per-slot stealth
+    /// entry count and the live count <c>StealthedUnits</c> are derived from hashed state (positions, statuses, the fog's
+    /// visible bits) and never hashed.
+    /// </summary>
+    [Fact]
+    public void Hash_TheDetectionMaskAndTheStealthCounts_AreDerived_AndNotHashed_TheEntriesAre()
+    {
+        Simulation sim = StealthTests.Scene();
+        World w = sim.World;
+        UnitStore u = w.Units;
+        EntityHandle hidden = CombatScenes.Place(sim, 0, StealthTests.Data.FindUnit("whirlwind_camp_follower"), new Vector2(41f, 41f));
+        CombatScenes.Place(sim, 1, StealthTests.Data.FindUnit("whirlwind_camp_follower"), new Vector2(43f, 41f)); // within 3 m
+        StealthTests.Stealth(sim, hidden, 400);
+        sim.Tick();
+        Assert.True(w.IsDetectedBy(1, hidden.Index));
+        ulong h = sim.StateHash();
+        w.ClearDetected(hidden.Index);
+        Assert.False(w.IsDetectedBy(1, hidden.Index));
+        Assert.Equal(h, sim.StateHash());
+        w.SetDetected(1, hidden.Index);
+        u.Statuses.StealthedUnits += 3;
+        Assert.Equal(h, sim.StateHash());
+        u.Statuses.StealthedUnits -= 3;
+        var perSlot = (byte[])typeof(Abilities.StatusStore).GetField("_stealth", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(u.Statuses)!;
+        perSlot[hidden.Index]++;
+        Assert.Equal(h, sim.StateHash());
+        perSlot[hidden.Index]--;
+        // The entry itself is state.
+        int at = u.Statuses.IndexOf(hidden.Index, StealthTests.Data.FindStatus("stealthed"));
+        u.Statuses.TicksRemaining[at]++;
+        Assert.NotEqual(h, sim.StateHash());
+        u.Statuses.TicksRemaining[at]--;
+        Assert.Equal(h, sim.StateHash());
+        // The World and StatusStore fields stealth added: each is classified here.
+        var classified = new HashSet<string> { "_detectedBy", "_detectBytes", "<DetectorBuildings>k__BackingField" }; // the mask, its stride, a phase-5 scratch
+        foreach (FieldInfo f in typeof(World).GetFields(BindingFlags.NonPublic | BindingFlags.Instance))
+            if (f.Name.Contains("detect", StringComparison.OrdinalIgnoreCase)) Assert.True(classified.Contains(f.Name), $"World.{f.Name} is not classified");
+    }
 }

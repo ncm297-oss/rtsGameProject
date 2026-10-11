@@ -432,12 +432,11 @@ public class SummonQaTests
             $"{row}: no error at {path}: " + string.Join("; ", r.Errors));
     }
 
-    /// <summary>Well-formed edges load: count 8 (the maximum) as 8.0, lifetime of exactly one tick, a radius on a spawn-only summon.</summary>
+    /// <summary>Well-formed edges load: count 8 (the maximum) as 8.0, lifetime of exactly one tick. (A radius on a spawn-only summon is refused since BUG-0452: Data/StealthLoaderTests.)</summary>
     [Fact]
     public void EdgeSummons_Load()
     {
         JsonObject a = Summon("zz_qa_edge", new JsonArray(Spawn("malazan_heavy_infantry", 8.0, 0.05)));
-        a["radius"] = 4;
         DataLoadResult r = LoadWithAbility(a);
         Assert.True(r.Ok, string.Join("; ", r.Errors));
         AbilityEffect e = r.Data!.Abilities[r.Data.FindAbility("zz_qa_edge")].Effects[0];

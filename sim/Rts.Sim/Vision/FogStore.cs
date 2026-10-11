@@ -183,12 +183,15 @@ public sealed class FogStore
     /// (<see cref="VisionSystem"/>). M4-4b-2 / BUG-0360: a unit whose centre stands in another player's live zone that blocks
     /// vision is seen only through the eyes of <paramref name="player"/>'s units inside that zone, whatever its cell's
     /// centre; one outside every such zone is seen where <paramref name="player"/>'s circles covered its cell, also a cell
-    /// the zone hides. False for a dead slot or no such player.
+    /// the zone hides. M4-5: an enemy's stealthed unit the player doesn't detect is not seen (<see cref="World.HiddenFrom"/>),
+    /// whatever its cell or a reveal. False for a dead slot or no such player.
     /// </summary>
     public bool CanSeeUnit(int player, int slot)
     {
         if ((uint)player >= (uint)_players || (uint)slot >= (uint)_units.Capacity || !_units.Alive[slot]) return false;
-        return _units.Owner[slot] == player || SeesUnit(player, slot);
+        if (_units.Owner[slot] == player) return true;
+        if (_units.Statuses.StealthedUnits != 0 && _world.HiddenFrom(player, slot)) return false;
+        return SeesUnit(player, slot);
     }
 
     /// <summary>Whether <paramref name="player"/> sees live building slot <paramref name="slot"/>: its own, any footprint cell visible at the last update, or (BUG-0270) a tower revealed to it by a hit from high ground. False for a dead slot or no such player.</summary>
@@ -255,12 +258,19 @@ public sealed class FogStore
     /// <summary>
     /// Unit slot <paramref name="slot"/>'s cell is visible to <paramref name="player"/>, or the unit is revealed to it. While a
     /// zone that blocks vision lives (BUG-0360) whether such a zone hides the unit goes by the unit's own centre, as its
-    /// statuses do, not by its cell's (<see cref="SeesUnitNearZones"/>).
+    /// statuses do, not by its cell's (<see cref="SeesUnitCell"/>).
     /// </summary>
-    internal bool SeesUnit(int player, int slot)
+    internal bool SeesUnit(int player, int slot) => SeesUnitCell(player, slot) || Revealed(player, slot);
+
+    /// <summary>
+    /// <see cref="SeesUnit"/> without the high-ground reveal (M4-5): unit slot <paramref name="slot"/>'s cell is visible to
+    /// <paramref name="player"/> at the last update, by the zone rule while a zone that blocks vision lives. Detection's
+    /// "in a cell that player can see" (docs/02 "Stealth and detection").
+    /// </summary>
+    internal bool SeesUnitCell(int player, int slot)
     {
-        if (_world.Zones.BlockerCount > 0) return SeesUnitNearZones(player, slot);
-        return Bit(_visible[player], CellOf(_units.Position[slot])) || Revealed(player, slot);
+        if (_world.Zones.BlockerCount > 0) return SeesUnitCellNearZones(player, slot);
+        return Bit(_visible[player], CellOf(_units.Position[slot]));
     }
 
     /// <summary>Any footprint cell of building slot <paramref name="slot"/> is visible to <paramref name="player"/>, or (BUG-0270) the building is revealed to it.</summary>
@@ -497,13 +507,13 @@ public sealed class FogStore
     }
 
     /// <summary>
-    /// BUG-0360: <see cref="SeesUnit"/> while a zone that blocks vision lives. A unit whose own centre stands inside one or
+    /// BUG-0360: <see cref="SeesUnitCell"/> (M4-5: the reveal is <see cref="SeesUnit"/>'s, added after) while a zone that blocks vision lives. A unit whose own centre stands inside one or
     /// more zones that hide cells from <paramref name="player"/> (the statuses' test, live zones) is seen only where, at the
     /// last update, a unit of <paramref name="player"/> standing inside each of those zones saw its cell (a zone made since
     /// has no record yet: it hides at once). A unit outside every such zone is seen where its cell is visible, or where its
     /// cell is one a live zone hides by its centre and <paramref name="player"/>'s circles covered it at the last update.
     /// </summary>
-    private bool SeesUnitNearZones(int player, int slot)
+    private bool SeesUnitCellNearZones(int player, int slot)
     {
         ZoneStore zones = _world.Zones;
         Vector2 pos = _units.Position[slot];
@@ -515,7 +525,7 @@ public sealed class FogStore
             if (!HidesFrom(zones, k, player) || !zones.Contains(k, pos)) continue;
             inside = true;
             int bit = BoxBit(zones, k, x, y);
-            if (bit < 0 || !zones.FogBit(false, k, player, bit)) return Revealed(player, slot);
+            if (bit < 0 || !zones.FogBit(false, k, player, bit)) return false;
         }
         if (inside || Bit(_visible[player], c)) return true;
         var centre = new Vector2((x + 0.5f) * MapConstants.CellSize, (y + 0.5f) * MapConstants.CellSize);
@@ -525,7 +535,7 @@ public sealed class FogStore
             int bit = BoxBit(zones, k, x, y);
             if (bit >= 0 && zones.FogBit(true, k, player, bit)) return true;
         }
-        return Revealed(player, slot);
+        return false;
     }
 
     /// <summary>Cell (<paramref name="x"/>, <paramref name="y"/>)'s bit in live zone <paramref name="k"/>'s fog record, or -1 outside its box.</summary>

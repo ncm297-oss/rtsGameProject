@@ -10,5 +10,6 @@
   "treeWood": 100,
   "nodeSearchRadius": 20,
   "repair": { "rateFactor": 0.5, "costFactor": 0.25 },
-  "buildingSight": 12
+  "buildingSight": 12,
+  "stealth": { "proximity": 3, "revealSeconds": 3 }
 }

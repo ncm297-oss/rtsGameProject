@@ -42,4 +42,11 @@ public sealed class RulesDef
     /// default 12 m, docs/02 gives sight only for the Watch Tower), above 0 and at most <see cref="DataLimits.MaxSight"/>.
     /// </summary>
     public float BuildingSight { get; init; }
+    /// <summary>
+    /// M4-5 (<c>stealth.proximity</c>, docs/02 "Stealth and detection"): every unit detects a stealthed enemy within this many
+    /// meters (centre to centre, the edge counts) whose cell its owner sees; above 0, at most <see cref="DataLimits.MaxSight"/>.
+    /// </summary>
+    public float StealthProximity { get; init; }
+    /// <summary>M4-5 (<c>stealth.revealSeconds</c>, in ticks): how long a stealthed unit stays Revealed after its attack lands or its cast resolves; at least 1.</summary>
+    public int RevealTicks { get; init; }
 }

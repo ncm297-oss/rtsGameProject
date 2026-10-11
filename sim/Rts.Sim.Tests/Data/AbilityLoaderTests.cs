@@ -193,8 +193,9 @@ public class AbilityLoaderTests
         // Every other effect keeps Unit -1 and no count or lifetime.
         foreach (AbilityDef a in TestSim.Data.Abilities)
             foreach (AbilityEffect x in a.Effects) Assert.Equal((-1, 0, 0), (x.Unit, x.Count, x.LifetimeTicks));
-        // A radius is allowed (the summon's other effects land within it), and the count's ends load.
-        Assert.True(LoadWith(a => { Summon(a); a["radius"] = 2; }).Ok);
+        // A radius on a spawn-only summon is refused since BUG-0452 (it has no other effect to land within it; with one it is
+        // required, below), and the count's ends load.
+        Assert.False(LoadWith(a => { Summon(a); a["radius"] = 2; }).Ok);
         Assert.True(LoadWith(a => Summon(a, count: 1, lifetime: 0.05)).Ok);
         Assert.True(LoadWith(a => Summon(a, count: DataLimits.MaxSummonCount)).Ok);
         // Two spawn effects, and a spawn beside an applyStatus (which then needs the radius).

@@ -20,4 +20,17 @@ public enum StatusKind
     /// (magnitude 0.5 = +50 % attack speed); the wind-up is unchanged; the largest magnitude on a unit wins.
     /// </summary>
     Frenzied = 3,
+
+    /// <summary>
+    /// Stealthed (M4-5): unseen and untargetable by every enemy player that doesn't detect the unit (docs/02 "Stealth and
+    /// detection"). No effect while the unit is <see cref="Revealed"/> (the entry stays, dormant) or summoned. No magnitude.
+    /// </summary>
+    Stealthed = 4,
+
+    /// <summary>
+    /// Revealed (M4-5): the unit can't be stealthed while it lasts (it overrides <see cref="Stealthed"/>). A unit carrying a
+    /// Stealthed entry gets it when its attack lands or its cast resolves, for <c>rules.json</c> <c>stealth.revealSeconds</c>.
+    /// No magnitude.
+    /// </summary>
+    Revealed = 5,
 }

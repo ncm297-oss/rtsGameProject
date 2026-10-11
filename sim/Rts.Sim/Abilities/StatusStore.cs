@@ -44,6 +44,16 @@ public sealed class StatusStore
     /// <summary>Unit slots with a blind in force (M4-4b-2), so the fog stamp skips the per-unit look when none; derived, not hashed.</summary>
     internal int BlindedUnits;
 
+    // M4-5: per unit slot, how many of its entries are of the stealthed kind (in force or dormant under a Revealed). Derived
+    // from the entries, kept by StatusSystem as they are added and removed and by Clear; not hashed.
+    private readonly byte[] _stealth;
+
+    /// <summary>
+    /// Unit slots with at least one stealthed entry (M4-5), so phase 5's detection pass and every vision check skip the stealth
+    /// rule when none; derived, not hashed.
+    /// </summary>
+    internal int StealthedUnits;
+
     /// <summary>A store for <paramref name="capacity"/> unit slots, all empty.</summary>
     public StatusStore(int capacity)
     {
@@ -54,6 +64,28 @@ public sealed class StatusStore
         PulseTicks = new int[capacity * PerUnit];
         SourcePlayer = new int[capacity * PerUnit];
         _blind = new int[capacity];
+        _stealth = new byte[capacity];
+    }
+
+    /// <summary>Whether unit slot <paramref name="unit"/> carries a stealthed entry (M4-5; in force or not: <see cref="World.IsStealthed"/> decides). Derived, not hashed.</summary>
+    public bool HasStealth(int unit) => _stealth[unit] != 0;
+
+    /// <summary>Counts a stealthed entry added to (+1) or removed from (-1) unit slot <paramref name="unit"/> (M4-5); true when the slot's count left or reached 0.</summary>
+    internal bool CountStealth(int unit, int delta)
+    {
+        int was = _stealth[unit];
+        _stealth[unit] = (byte)(was + delta);
+        if (was == 0 && delta > 0)
+        {
+            StealthedUnits++;
+            return true;
+        }
+        if (was + delta == 0 && was != 0)
+        {
+            StealthedUnits--;
+            return true;
+        }
+        return false;
     }
 
     /// <summary>
@@ -136,6 +168,8 @@ public sealed class StatusStore
         Count[unit] = 0;
         if (_blind[unit] != 0) BlindedUnits--;
         _blind[unit] = 0;
+        if (_stealth[unit] != 0) StealthedUnits--;
+        _stealth[unit] = 0;
         int head = unit * PerUnit;
         Array.Clear(StatusId, head, PerUnit);
         Array.Clear(Magnitude, head, PerUnit);

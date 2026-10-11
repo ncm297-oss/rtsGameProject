@@ -552,7 +552,29 @@ ten-minute playtest (STATE "For your review", M3-V3 entry) stands as feedback, n
       still use the type's hp as the maximum), BUG-0451 (S3, the `EmptyTick(2500)` gate has no headroom, pre-existing),
       BUG-0452 (S4, summon loader nits), BUG-0461 (S3, sim: a cast's walk-in behind own attackers is dropped), BUG-0462 (S4,
       view nits).)_
-- [ ] Stealth and detection system (tested now, even though Shadow arrives in M8).
+- [x] Stealth and detection system (tested now, even though Shadow arrives in M8).
+      _(**Ticked in session 2026-10-10-1954**, sim M4-5 (0 fix rounds, QA full PASS_WITH_ISSUES): the `stealthed` / `revealed` status
+      kinds (`common/statuses.json`, no magnitude, at most one `revealed`), `rules.json` `stealth { proximity 3, revealSeconds 3 }`, an
+      optional unit `detector` (m; the towers' is on `main` since M4-3b). The rule: `World.IsStealthed(slot)` = a live Stealthed entry
+      and no Revealed entry and not summoned; enemy player p detects it (`World.IsDetectedBy`, a derived per-slot bit mask rebuilt at the
+      end of phase 5 by `StealthSystem.Run`, which returns at once while no unit carries stealth) when its cell is visible to p at the
+      last fog update **and** a live unit of p stands within `proximity` or its own `detector`, or a finished building of p has it
+      within its `detector`. The one hook `World.HiddenFrom(p, slot)` in `VisionSystem.UnitSeesUnit` / `BuildingSeesUnit`, `Fog.CanSeeUnit`
+      and the scan shortcut: no acquisition, no retaliation, an explicit Attack dropped, a kept target lost on the next scan, towers never
+      pick it; area effects still hit it. A unit carrying a Stealthed entry is Revealed for 60 ticks when its hit lands or its cast
+      resolves (refreshed by each; Revealed overrides a dormant Stealthed). Test-only sources (`StealthTests.AddTo`: a selfAura stealth,
+      a 10 m detector on the Laborer); no faction can stealth before M8. Golden `data-hash` 4383EBB9345FABF7 → 889D6BEA3A49F08E, every
+      `k` line equal. QA full: `QA/StealthQaTests` (every targeting path for all ordered pairs of 3 players x slot order; a brute-force
+      detection oracle fuzz over 3 seeds x 2,000 ticks with ~535,000 answers and 0 mismatches; the tower at exactly 16.0 m vs +1 ulp;
+      kept-target drops), `Stress/StealthScaleQaTests` (detection pass linear, 0 B); `EmptyTick(2500)` paired +0.7 % (noise); memory
+      +9,144 B itemised. Producer decisions (docs/01 row 2026-10-10 "Stealth and detection"): proximity is a 3 m detector under the same
+      visible-cell clause; reveal at delivery / resolve; summoned never stealthed; Revealed overrides a stored Stealthed; only a stealth
+      carrier is revealed by attacking. **The view's stealth visuals (own stealthed units translucent, a detected marker, detector rings;
+      docs/03 "For the view (M4-V8)") move to M8**, where the roadmap lists them and the first stealth source ships; `Fog.CanSeeUnit`
+      already hides an undetected stealthed enemy from the screen. **The casters' `detector 10` (docs/02 "Caster" row) is the data
+      track's D12.** Open: BUG-0480 (S3: an `onDeath` passive applying `stealthed` reaches one friend, a scratch-array clash), BUG-0481
+      (S3: data with no `revealed` status loads clean), BUG-0482 (S4: a full status store drops the reveal); none reachable with shipped
+      data; all in the end-of-M4 sim hardening.)_
 - [x] Telas Fire, Sapper Sharpers + Cusser, Sandstorm, Zealot passives all work.
       _(Telas Fire works since M4-4a (session 2026-10-09-0724): 16 m / 3 m / 0.8 s cast / 25 s cooldown, Burning 10 magic a
       second for 4 s on enemy units only (40 on Light, 52 on Heavy / Giant: magic x1.25 per pulse), no effect on buildings.
