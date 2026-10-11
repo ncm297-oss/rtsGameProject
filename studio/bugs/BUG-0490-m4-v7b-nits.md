@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-10-1954, task M4-V7b (QA, view track) |
 | System | `game/tests/M4PlayableTest.cs` (`TickBudget` comment), docs/03 "Implementation (M4-V7)"; `game/scripts/UnitViews.cs`, `CombatViews.cs` |
-| Fixed by | |
+| Fixed by | afa2661 (M4-VH3): item 1 `M4PlayableTest.TickBudget` comment and docs/03 give seed 1 2,869-3,081 and seed 6 3,692-4,493; item 2 one `SlotMaxHp` shared by `UnitViews` and `CombatViews` (`CombatViewTest` 8x fill count, failed first at 838 over 419 frames) |
 
 ## Repro
 1. **The measured range.** Run `res://tests/M4PlayableTest.tscn` headless several times beside a `dotnet test` (QA: the scene
@@ -31,3 +31,10 @@
 For item 1, widen the range to what this QA round measured (seed 1 up to 3,081, seed 6 up to 4,488), or state it as "about
 3,100 / 4,500 worst seen". For item 2, `CombatViews` could read the array `UnitViews` already filled, or the reverse. Low
 priority; fold into the end-of-M4 view hardening.
+
+## Verification (QA 2026-10-10-2334, M4-VH3)
+- Item 1 fixed: the comment and docs/03 "Implementation (M4-V7)" carry QA's 3,081 / 4,488 and the M4-VH3 loop's 4,493,
+  worst margin 1,007 ticks (18 %).
+- Item 2 fixed: `QaVh3Test.tscn` counts `UnitViews.MaxHpFills` per frame through the real scene tree with both views
+  processing, 300 frames each: at 1x 259 frames with no fill and 41 with one (exactly the 41 ticks); at 8x one fill on
+  every frame (329 ticks). Never two in a frame; `UnitViews.MaxHp` and `CombatViews.MaxHp` are the same object.

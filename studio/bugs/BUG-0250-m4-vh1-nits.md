@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open (items 1 and 3 fixed; item 2 open) |
+| Status | fixed (items 1, 3); item 2 wontfix (reason in the comment) |
 | Found | 2026-10-08-2144, task M4-VH1 (QA) |
 | System | view: `sim/Rts.Sim/ViewApi/ProjectileTracker.cs`, `TerrainHeight.cs`; `game/scripts/SelectionController.cs`; docs/03 |
-| Fixed by | items 1, 3: 956eab3 (M4-VH2): item 1 by docs (docs/03 now states the collinear exception and the QA rate); item 3 `SelectionController.ForgetIfNewMatch` clears the Cancel guard and the sent-cast memory when the `Simulation` instance changes (no regression test: BUG-0400 item 2) |
+| Fixed by | items 1, 3: 956eab3 (M4-VH2); item 2: wontfix (M4-VH3, afa2661: `Straddle` keeps its radius term; its comment now gives the reason, a flat 5 cm let discs sink up to 0.26 m beside ramp feet on 4 seeds of QA's wall-aware walk) |
 
 ## Item 1: collinear same-target lob reuse, skipping observer
 Repro: `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~LobReuseHostileQaTests.CollinearReuse" --logger
@@ -57,3 +57,9 @@ None of these is reachable in normal play, and none blocks M4-VH1.
 - Item 3: `CancelSelectedSite` calls `ForgetIfNewMatch(sim)` before the guard check (code read). No test can reach it
   today (one Match per `SelectionController`); see BUG-0400 item 2.
 - Item 2 (`TerrainHeight.Straddle` constant) not reached.
+
+## Re-check (QA 2026-10-10-2334, M4-VH3)
+- Item 2 closed wontfix: the radius term stays, and the comment in `TerrainHeight.cs` (comment-only change) now says why:
+  the developer tried a flat 5 cm and `MaxUnderEdgeWalkQaTests` found discs up to 0.26 m under the ramp ground beside ramp
+  feet on 4 seeds. QA did not repeat that experiment (it needs a production edit); `MaxUnderEdgeWalkQaTests` and
+  `MaxUnderBandsQaTests` are green on the head.

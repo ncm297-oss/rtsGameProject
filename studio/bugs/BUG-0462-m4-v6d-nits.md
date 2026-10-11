@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (items 1, 2, 4, 5); item 3 wontfix (M6 art pass) |
 | Found | 2026-10-10-1314, task M4-V6d (QA) |
 | System | ability views (`AbilityViews.SyncSelfRing`), `game/tests/M4PlayableTest.cs` |
-| Fixed by | |
+| Fixed by | item 2, 4: bf3c75e; item 5: M4-V7b (residual BUG-0490 item 1); item 1: afa2661 (M4-VH3, the hover and targeting rings are `GroundDisc`s on the terrain; `AbilityViewTest` hover and targeting rows check every ring point on the ground, failed first at 27 / 72 and 59 / 72 points off); item 3: wontfix, an M6 art-pass note in docs/03 "Implementation (M4-VH3)" |
 
 ## Repro / Actual
 1. **Hover ring across a cliff.** `build/shots/m4-v6d/ability-seed6-aura-hover.png` (the developer's windowed still):
@@ -50,3 +50,12 @@ the run checked, as docs/03 states ("on each frame of the whole run").
   (S4), not reopened here.
 - Items 1 and 3 not in this task's scope (end-of-M4 view hardening).
 
+
+## Verification (QA 2026-10-10-2334, M4-VH3)
+- Item 1 fixed: the selfAura hover ring and the targeting rings are `GroundDisc` bands on the terrain cells (BUG-0430's
+  fix). `AbilityViewTest`'s hover row checks the ring on the ground every run; QA's `QaVh3Test.tscn` puts the cursor on a
+  cliff lip, one cell either side and a ramp (seeds 1, 6): every point of the radius ring's band on the terrain + 0.12 m,
+  every mesh triangle inside one cell. Looked at `qa-vh3-seed6-cliff-rings-zoom30.png`: the orange radius ring and the
+  pale-blue range ring lie on both levels.
+- Item 3 closed wontfix: two units' marker rows touching at zoom 60 is left to the M6 art pass (the brief allowed "fix or
+  an M6 note"; docs/03 "Implementation (M4-VH3)" records it). Not re-measured.

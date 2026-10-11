@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open (items 1-4 fixed) |
+| Status | fixed (items 1-5); item 6 wontfix (M6 HUD pass) |
 | Found | 2026-10-07-1715, task M3-V3b (QA) |
 | System | HUD / command card / build ghost / props (view), `game/data/common/ui.json`, perf rows |
-| Fixed by | items 1-2: df37a8c (M3-V4); item 4: 08dc8e3 (M4-VH1); item 3: 956eab3 (M4-VH2, the props relist on the fog's last-seen copy version, not `NavGrid.Version`; `PropsViewTest` now runs with bases); items 5, 6 open |
+| Fixed by | items 1-2: df37a8c (M3-V4); item 4: 08dc8e3 (M4-VH1); item 3: 956eab3 (M4-VH2); item 5: afa2661 (M4-VH3, `PropsMeasureTests.MinimapRefresh_*` holds dots + forced redraw to the 0.5 ms refresh budget; a new guard, so no fail-first); item 6: wontfix (M6 HUD pass) |
 
 ## Repro
 1. Items 1-2: with D3's `buildings.json` copied in (`git checkout origin/studio/2026-10-07-1415-data --
@@ -73,3 +73,10 @@
   passes in the scene loop (steady frames relist nothing); `SeenResourcesTests` checks a store-key bump with no node
   change relists nothing.
 - Items 5 and 6 not reached.
+
+## Re-check (QA 2026-10-10-2334, M4-VH3)
+- Item 5 fixed: the sum is guarded again, at the whole 0.5 ms refresh budget (the pre-split row held it to 0.3 ms). Alone:
+  0.275 ms. The row failed once in the full suite beside the other tracks' runs (with 8 other wall-clock rows) and passed
+  when rerun alone.
+- Item 6 closed wontfix: the resource bar's text rebuild on a changed total is the documented M2-H2 rule; allocation-free
+  text needs split labels (M6 HUD pass), recorded in docs/03 "Implementation (M4-VH3)".

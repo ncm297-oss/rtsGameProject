@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open (item 1 closed by QA's test) |
+| Status | fixed (item 1 by QA test; items 2, 3 in M4-VH3) |
 | Found | 2026-10-10-0624, task M4-VH2 (QA) |
 | System | view: `sim/Rts.Sim/ViewApi/SeenResources.cs`, `PropLayout.cs`, `MinimapRaster.cs`; `game/scripts/SelectionController.cs` |
-| Fixed by | item 1: QA test `QA/ViewApi/ViewHardening2QaTests.NewViewApiHelpers_VH2_DoNotChangeTheSim_*` (green) |
+| Fixed by | item 1: QA test `QA/ViewApi/ViewHardening2QaTests.NewViewApiHelpers_VH2_DoNotChangeTheSim_*`; item 2: afa2661 `CommandCardTest.RestartMatchCancel` (two sims of one seed under one `SelectionController`; with the reset removed the second press sent none); item 3: afa2661 `SeenResources.Update` takes only the removal when just the old footprint is seen (`SeenResourcesTests.AReusedSlot_SeeingOnlyTheOldFootprint_*`, failed first; QA `ViewHardening3QaTests.ReusedSlots_*`) |
 
 ## Item 1: the hash twin didn't cover every new ViewApi read
 Acceptance criterion 5 asks for the hash twin to cover any new helper. The developer extended
@@ -34,3 +34,12 @@ Every new ViewApi read is in a hash twin; every fix has a test; the last-seen co
 
 ## Notes
 None of these is reachable in normal play or affects the sim.
+
+## Verification (QA 2026-10-10-2334, M4-VH3)
+- Item 2 fixed: `CommandCardTest.RestartMatchCancel` (green in the scene loop) starts two sims in turn under one
+  `SelectionController` and cancels the same site (slot, generation, tick) in each; one Cancel each.
+- Item 3 fixed: QA `QA/ViewApi/ViewHardening3QaTests.ReusedSlots_TheCopyShowsOnlySeenNodes_*` (4 seeds x 2,500 ticks,
+  250 slot reuses at random cells each, a scout walking): every node the copy shows was the store's node in that slot
+  when its footprint was visible (or at the first fill); 14-29 removal-only steps per run. The hash twin with slot reuse
+  (`SeenResources_WithSlotReuse_*`, 2 seeds x 1,200 ticks, fog on and off) is equal every tick. The reverse case (a seen
+  new node drops the old remembered one unseen) is filed as BUG-0521 item 2 (not reachable).

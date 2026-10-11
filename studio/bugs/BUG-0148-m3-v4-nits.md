@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | partly fixed: items 2, 3 and 4 fixed; item 1 open |
+| Status | fixed (items 2, 3, 4); item 1 wontfix (M6 props) |
 | Found | 2026-10-07-2014, task M3-V4 (QA) |
 | System | right-click node pick (`ViewApi/ResourcePicker.PickRay`), M3 Playable scene (`game/tests/M3PlayableTest.cs`) |
-| Fixed by | items 2, 4: ec28ee4; item 3: 08dc8e3 (M4-VH1, `M3PlayableTest.TrainedAndChopping` checks the rally tree or a tree within `nodeSearchRadius` of it) |
+| Fixed by | items 2, 4: ec28ee4; item 3: 08dc8e3 (M4-VH1); item 1: wontfix (M4-VH3: the placeholder props are replaced in the M6 art pass; docs/03 notes the 0.7-1.7 % sliver rate) |
 
 ## Repro / Actual
 1. **Facet slivers.** `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~PickRayV4QaTests" --logger
@@ -44,3 +44,7 @@ None of these blocks M3-V4.
   `rules.json nodeSearchRadius` of it (where a Gather on a felled tree resolves), and prints which. Both scene loops:
   "laborer 10 gathers the rally tree" on seeds 1 and 6.
 - Item 1 (facet slivers) is still open, as before (a documented approximation until M6).
+
+## Re-check (QA 2026-10-10-2334, M4-VH3)
+- Item 1 closed wontfix: the facet-sliver approximation stays until the M6 props replace the placeholder meshes; docs/03
+  now records the measured rate (0.7-1.7 % of rays through a sliver). `PickRayV4QaTests` still green.
