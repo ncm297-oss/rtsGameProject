@@ -10,8 +10,8 @@ namespace Rts.Sim.Replays;
 /// Both buffers are preallocated: the checkpoint hash runs inside <see cref="Simulation.Tick"/>, which
 /// must not allocate, so <c>tickCapacity</c> should cover the match (default: one hour). Past it the
 /// checkpoint buffer doubles, the one allocation a tick can make here. The command log doubles when
-/// full inside <c>Enqueue</c>, which input calls between ticks (off-tick); once the AI enqueues during
-/// a tick (M5), size <c>commandCapacity</c> for the match too.
+/// full inside <c>Enqueue</c>; since M5-2 an AI seat enqueues at the start of <c>Tick</c>, so size
+/// <c>commandCapacity</c> for the match when one plays.
 /// </remarks>
 public sealed class ReplayRecorder
 {
@@ -122,8 +122,17 @@ public sealed class ReplayRecorder
         for (int i = 0; i < _checkpointCount; i++) checkpoints.Add(_checkpoints[i]);
 
         SimConfig config = _sim.World.Config;
+        // M5-2: every player's seat as played (the defaults written out), faction by string id.
+        var seats = ImmutableArray.CreateBuilder<ReplaySeat>(config.PlayerCount);
+        for (int p = 0; p < config.PlayerCount; p++)
+        {
+            PlayerSeat seat = config.SeatOf(p);
+            string faction = seat.Faction >= 0 ? config.Data.Factions[seat.Faction].Key : "-";
+            seats.Add(new ReplaySeat(faction, seat.Controller, seat.Difficulty));
+        }
         return new Replay
         {
+            Seats = seats.MoveToImmutable(),
             SimVersion = SimInfo.Version,
             DataHash = _dataHash,
             Map = config.Map,

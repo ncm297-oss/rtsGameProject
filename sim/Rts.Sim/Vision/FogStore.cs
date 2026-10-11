@@ -67,6 +67,13 @@ public sealed class FogStore
     private readonly int[] _ghostCount;
     private readonly int _buildingSlots;
 
+    // M5-2 (BUG-0540): per (player, resource slot) the node last seen there, kept until its ground is seen with it gone.
+    // Not hashed: no sim rule reads it (only PlayerView, for the AI, whose state is outside the hash), and it is a function of
+    // the hashed history (the visible bits at every update and the resource store), so equal runs hold equal memories.
+    private readonly ResourceStore _resources;
+    private readonly NodeMemory[] _nodes;
+    private readonly int _resourceSlots;
+
     // Circle masks, ascending by radius: per mask, the half-width of each row from -R to R, and its squared cell limit.
     private readonly int[][] _halfWidths;
     private readonly int[] _limits;
@@ -117,6 +124,9 @@ public sealed class FogStore
         _buildingRevealGeneration = new int[_buildingSlots * players];
         _ghosts = new BuildingGhost[players * _buildingSlots];
         _ghostCount = new int[players];
+        _resources = world.Resources;
+        _resourceSlots = _resources.Capacity;
+        _nodes = new NodeMemory[players * _resourceSlots];
         for (int i = 0; i < cells; i++)
             if (_levels[i] > 0) MultiLevel = true;
 
@@ -283,8 +293,36 @@ public sealed class FogStore
     }
 
     /// <summary>
+    /// <paramref name="player"/>'s memory of resource slot <paramref name="slot"/> (M5-2, BUG-0540; both in range): the node
+    /// seen there at the last fog update that showed a cell of its footprint, kept while the player doesn't see that ground
+    /// again, also after the node is gone; dropped at the first update that shows the remembered footprint with that node gone.
+    /// Changes only on an update tick (and the explore seam).
+    /// </summary>
+    internal ref readonly NodeMemory NodeAt(int player, int slot) => ref _nodes[player * _resourceSlots + slot];
+
+    /// <summary>Resource slots in the node memory (the resource store's capacity).</summary>
+    internal int ResourceSlots => _resourceSlots;
+
+    /// <summary>Whether any cell of a resource footprint of type <paramref name="typeId"/> anchored at <paramref name="anchor"/> is visible to <paramref name="player"/>.</summary>
+    internal bool SeesNodeFootprint(int player, int typeId, int anchor)
+    {
+        ResourceDef def = _data.Resources[typeId];
+        int vb = 4 * player, bx0 = _visibleBox[vb];
+        if (bx0 == int.MaxValue) return false; // nothing stamped at the last update: nothing visible
+        int ax = anchor % _width, ay = anchor / _width;
+        // Every visible cell lies in the last update's box; a footprint outside it sees nothing (most nodes, cheaply).
+        if (ax + def.FootprintWidth - 1 < bx0 || ax > _visibleBox[vb + 2] || ay + def.FootprintHeight - 1 < _visibleBox[vb + 1] || ay > _visibleBox[vb + 3]) return false;
+        ulong[] vis = _visible[player];
+        for (int dy = 0; dy < def.FootprintHeight; dy++)
+            for (int dx = 0; dx < def.FootprintWidth; dx++)
+                if (Bit(vis, anchor + dy * _width + dx)) return true;
+        return false;
+    }
+
+    /// <summary>
     /// Test seam (M4-3b): every cell explored for every player, as if the whole map had been seen once (visible cells stay
-    /// visible). For the construction scenes whose subject is another placement rule; a match never calls it.
+    /// visible). For the construction scenes whose subject is another placement rule; a match never calls it. M5-2: every
+    /// live node joins every player's node memory too (seen once).
     /// </summary>
     internal void ExploreAllForTests()
     {
@@ -297,6 +335,9 @@ public sealed class FogStore
                 bits[c >> 6] |= 1UL << (c & 63);
                 if (vis[c] == VisionConstants.Unexplored) vis[c] = VisionConstants.Explored;
             }
+            int head = p * _resourceSlots;
+            for (int j = 0; j < _resources.HighWater; j++)
+                if (_resources.Alive[j]) _nodes[head + j] = new NodeMemory(_resources.Generation[j], _resources.TypeId[j], _resources.Cell[j]);
             _version[p]++;
         }
     }
@@ -452,6 +493,7 @@ public sealed class FogStore
             Combine(p, blocked ? zones : null);
             if (blocked) ClearBlocked(zones, p, vis);
             UpdateGhosts(p);
+            UpdateNodes(p);
         }
     }
 
@@ -669,6 +711,36 @@ public sealed class FogStore
             if (!SeesFootprint(p, g.TypeId, g.Cell)) continue; // gone, but the player hasn't looked yet
             g = default;
             _ghostCount[p]--;
+        }
+    }
+
+    /// <summary>
+    /// Player <paramref name="p"/>'s node memory after its fog update (M5-2, BUG-0540; the view's <c>SeenResources</c> rule):
+    /// a live node with a footprint cell visible now is recorded in its slot's entry; an entry whose node is gone (its slot
+    /// free, or holding a newer node) is kept until a cell of the remembered footprint is visible, which drops it. Slots past
+    /// the store's high-water mark never held a node. One pass; allocation-free.
+    /// </summary>
+    private void UpdateNodes(int p)
+    {
+        ReadOnlySpan<bool> alive = _resources.Alive;
+        ReadOnlySpan<int> generation = _resources.Generation;
+        ReadOnlySpan<int> type = _resources.TypeId;
+        ReadOnlySpan<int> cell = _resources.Cell;
+        int head = p * _resourceSlots, high = _resources.HighWater;
+        for (int j = 0; j < high; j++)
+        {
+            ref NodeMemory m = ref _nodes[head + j];
+            if (alive[j])
+            {
+                if (m.Generation == generation[j]) continue; // known, and nodes don't move
+                if (SeesNodeFootprint(p, type[j], cell[j]))
+                {
+                    m = new NodeMemory(generation[j], type[j], cell[j]);
+                    continue;
+                }
+            }
+            if (m.Generation == 0) continue;
+            if (SeesNodeFootprint(p, m.TypeId, m.Cell)) m = default; // gone, and now the player sees its ground
         }
     }
 

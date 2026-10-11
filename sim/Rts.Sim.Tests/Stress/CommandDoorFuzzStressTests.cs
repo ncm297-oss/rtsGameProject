@@ -1,5 +1,7 @@
+using System.Collections.Immutable;
 using System.Numerics;
 using Rts.Sim.Commands;
+using Rts.Sim.Data;
 using Rts.Sim.Determinism;
 using Rts.Sim.Entities;
 using Rts.Sim.Map;
@@ -18,6 +20,9 @@ namespace Rts.Sim.Tests.Stress;
 /// exception and change nothing (hash, pending count, sequence numbers); accepted ones queue exactly one.
 /// After every tick: twin hashes equal, units finite on passable ground, owners valid, holders Idle with no
 /// goal, queues in range, pending within capacity. The recording reads back and replays to every checkpoint.
+/// M5-2: player 1 is an AI seat (Hard) playing through the same door under the random commands (many of them for its own
+/// units and buildings): every command it sends is legal for what it saw at its think (<see cref="CheckAiCommand"/>), the
+/// twins stay equal, and the replay (its commands logged, played back without the AI) still matches every checkpoint.
 /// </summary>
 public class CommandDoorFuzzStressTests
 {
@@ -170,6 +175,76 @@ public class CommandDoorFuzzStressTests
         }
     }
 
+    /// <summary>M5-2: what the AI seat (player 1) could see at its think: the units and buildings as the previous tick left them.</summary>
+    private sealed class AiSnapshot
+    {
+        public readonly bool[] UnitAlive;
+        public readonly int[] UnitOwner, UnitGeneration;
+        public readonly bool[] BuildingAlive, BuildingSite;
+        public readonly int[] BuildingOwner, BuildingType, BuildingCell;
+        public readonly int Tick;
+
+        public AiSnapshot(World w)
+        {
+            Tick = w.TickNumber;
+            UnitAlive = w.Units.Alive.ToArray();
+            UnitOwner = w.Units.Owner.ToArray();
+            UnitGeneration = w.Units.Generation.ToArray();
+            BuildingAlive = w.Buildings.Alive.ToArray();
+            BuildingSite = w.Buildings.UnderConstruction.ToArray();
+            BuildingOwner = w.Buildings.Owner.ToArray();
+            BuildingType = w.Buildings.TypeId.ToArray();
+            BuildingCell = w.Buildings.Cell.ToArray();
+        }
+    }
+
+    /// <summary>
+    /// M5-2: an AI command is legal for what its seat saw: its own player, one of the kinds it sends (Build, Train, Research,
+    /// Gather), stamped for the next tick; a unit order names a live unit of its own; a Train or Research points into one of
+    /// its own finished buildings that trains the unit or may research the tech; a Build names a building of its faction on
+    /// ground its player had explored, at a cell inside the map.
+    /// </summary>
+    private static void CheckAiCommand(World w, AiSnapshot seen, in Command c, string at)
+    {
+        Assert.True(c.Player == 1, $"{at}: the AI sent a command for player {c.Player}");
+        Assert.True(c.IsWellFormed(), $"{at}: a malformed AI command");
+        Assert.True(c.Tick == seen.Tick + 1, $"{at}: stamped {c.Tick}");
+        Assert.True(c.Kind is CommandKind.Build or CommandKind.Train or CommandKind.Research or CommandKind.Gather, $"{at}: kind {c.Kind}");
+        NavGrid g = w.NavGrid;
+        Assert.True(g.WorldToCell(c.Position, out int x, out int y), $"{at}: {c.Kind} off the map at {c.Position}");
+        if (c.Kind is CommandKind.Build or CommandKind.Gather)
+        {
+            int i = c.Unit.Index;
+            Assert.True((uint)i < (uint)seen.UnitAlive.Length && seen.UnitAlive[i] && seen.UnitOwner[i] == 1 && seen.UnitGeneration[i] == c.Unit.Generation,
+                $"{at}: {c.Kind} for unit {c.Unit}, not a live unit of its own");
+            Assert.True(w.Data.Units[w.Units.TypeId[i]].Slot == UnitSlot.Worker || !w.Units.Alive[i] || w.Units.Generation[i] != c.Unit.Generation, $"{at}: {c.Kind} for a non-worker");
+        }
+        if (c.Kind == CommandKind.Build)
+        {
+            Assert.True((uint)c.TypeId < (uint)w.Data.Buildings.Length && w.Data.Buildings[c.TypeId].Faction == w.FactionOf(1), $"{at}: Build of type {c.TypeId}");
+            BuildingDef def = w.Data.Buildings[c.TypeId];
+            for (int dy = 0; dy < def.FootprintHeight; dy++)
+                for (int dx = 0; dx < def.FootprintWidth; dx++)
+                    Assert.True(w.Fog.IsExplored(1, (y + dy) * g.Width + x + dx), $"{at}: Build on unexplored ground");
+        }
+        if (c.Kind is CommandKind.Train or CommandKind.Research)
+        {
+            int k = -1;
+            for (int s = 0; s < seen.BuildingAlive.Length; s++)
+            {
+                if (!seen.BuildingAlive[s]) continue;
+                BuildingDef d = w.Data.Buildings[seen.BuildingType[s]];
+                int ax = seen.BuildingCell[s] % g.Width, ay = seen.BuildingCell[s] / g.Width;
+                if (x >= ax && y >= ay && x < ax + d.FootprintWidth && y < ay + d.FootprintHeight) k = s;
+            }
+            Assert.True(k >= 0 && seen.BuildingOwner[k] == 1 && !seen.BuildingSite[k], $"{at}: {c.Kind} not at an own finished building");
+            if (c.Kind == CommandKind.Train)
+                Assert.True(w.Data.Units[c.TypeId].TrainedAtTypeId == seen.BuildingType[k], $"{at}: Train of {c.TypeId} where it isn't trained");
+            else
+                Assert.Contains(c.TypeId, w.Data.TechsResearchableAt(seen.BuildingType[k]));
+        }
+    }
+
     [Theory]
     [InlineData(1UL)]
     [InlineData(2UL)]
@@ -184,7 +259,12 @@ public class CommandDoorFuzzStressTests
         const int ticks = 2000, unitCapacity = 64, commandCapacity = 40;
         // M3-2: with mines and forests, so Gather orders land on nodes and SpawnBuilding meets them.
         SimConfig config = TestSim.Config(Seed: seed, PlayerCount: Players, UnitCapacity: unitCapacity, CommandCapacity: commandCapacity)
-            with { Map = MapGenParams.Default with { Forests = 6, GoldMines = 4 } };
+            with
+            {
+                Map = MapGenParams.Default with { Forests = 6, GoldMines = 4 },
+                // M5-2: player 1 is played by the AI too.
+                Seats = ImmutableArray.Create(new PlayerSeat(0, SeatController.Human, AiDifficulty.Normal), new PlayerSeat(1, SeatController.Ai, AiDifficulty.Hard)),
+            };
         var a = new Simulation(config);
         var rec = new ReplayRecorder(a, checkpointInterval: 50);
         var b = new Simulation(config);
@@ -201,7 +281,7 @@ public class CommandDoorFuzzStressTests
         Array.Fill(born, -1);
         var bornAt = new Vector2[unitCapacity];
         var bornOnGround = new bool[unitCapacity];
-        int accepted = 0, malformed = 0, badPlayer = 0, full = 0;
+        int accepted = 0, malformed = 0, badPlayer = 0, full = 0, aiCommands = 0;
         var perKind = new int[18];
         for (int t = 0; t < ticks; t++)
         {
@@ -244,19 +324,29 @@ public class CommandDoorFuzzStressTests
                 Assert.True(a.StateHash() == hashA && b.StateHash() == hashB, $"seed {seed} tick {t}: a refused {c.Kind} (flags {c.Flags}, player {c.Player}) changed the state");
                 Assert.Equal(pending, a.PendingCommandCount);
             }
+            var seen = new AiSnapshot(a.World);
+            int logged = rec.CommandCount;
             a.Tick();
             b.Tick();
+            // M5-2: the AI's commands are the ones logged during the tick (its think runs at the tick's start).
+            for (int i = logged; i < rec.CommandCount; i++)
+            {
+                CheckAiCommand(a.World, seen, rec.CommandAt(i), $"seed {seed} tick {a.TickNumber - 1}");
+                aiCommands++;
+            }
             Assert.True(a.StateHash() == b.StateHash(), $"seed {seed}: twins differ after tick {a.TickNumber}");
             CheckInvariants(a, born, bornAt, bornOnGround);
         }
         _out.WriteLine($"seed {seed}: {a.World.Buildings.Count} buildings, gold {a.World.Gold[0]} / {a.World.Gold[1]}, wood {a.World.Wood[0]} / {a.World.Wood[1]}");
         Replay r = rec.ToReplay();
-        Assert.Equal(accepted, r.Commands.Length);
+        Assert.Equal(accepted + aiCommands, r.Commands.Length);
+        Assert.Equal(a.AiOf(1)!.CommandsSent, aiCommands);
+        Assert.True(aiCommands > 0, $"seed {seed}: the AI seat sent nothing");
         Assert.Equal(ReplayError.None, ReplayFormat.TryRead(ReplayFormat.Write(r), out Replay? back));
         ReplayResult res = ReplayPlayer.Run(back!, TestSim.Data);
         Assert.True(res.Ok, $"seed {seed}: replay {res.Error} at tick {res.Tick}");
         Assert.Equal(ticks, res.TicksRun);
-        _out.WriteLine($"seed {seed}: {accepted} accepted, {malformed} malformed refused, {badPlayer} unknown players refused, {full} refused full; {a.World.Units.Count} units alive at the end; replay of {r.Checkpoints.Length} checkpoints matched");
+        _out.WriteLine($"seed {seed}: {accepted} accepted, {malformed} malformed refused, {badPlayer} unknown players refused, {full} refused full; {aiCommands} AI commands; {a.World.Units.Count} units alive at the end; replay of {r.Checkpoints.Length} checkpoints matched");
         Assert.True(accepted > 1000 && malformed > 100 && badPlayer > 20 && full > 20, "precondition: every door path exercised");
         // M3-H2: every defined kind, 0 to 16 (M4-2a: Attack), went through the door accepted.
         Assert.True(perKind.All(n => n > 0), "accepted per kind: " + string.Join(", ", perKind));

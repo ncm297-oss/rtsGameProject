@@ -1454,13 +1454,17 @@ public class StateHashTests
         vis[0][seen] = Vision.VisionConstants.Explored; // the byte only: the packed bits are unchanged
         FogField<int[]>(w, "_version")[0] += 5;
         FogField<int[]>(w, "_visibleBox")[0]--;
+        // M5-2 (BUG-0540): the node memory is deliberately unhashed (only the AI's view reads it; it follows from the
+        // hashed history): an entry changed leaves the hash.
+        FogField<Vision.NodeMemory[]>(w, "_nodes")[0] = new Vision.NodeMemory(7, 0, 5);
         Assert.Equal(b.StateHash(), a.StateHash());
         // The audit: every FogStore array is one of these or hashed (above); a new one must be classified here.
         var classified = new HashSet<string> { "_visibility", "_version", "_visibleBox", "_explored", "_visible", "_revealUntil", "_revealGeneration",
             "_ghosts", "_ghostCount", // M4-3b: hashed (Hash_CoversEveryGhostField)
             "_buildingRevealUntil", "_buildingRevealGeneration", // BUG-0270: hashed while in force (Hash_CoversATowersReveal_OnlyWhileInForce)
             "_levels", "_halfWidths", "_unitMask", "_buildingMask", "_lipMask", "_scratch", "_levelUsed", "_box",
-            "_limits", "_statusMask" }; // M4-4b-2: derived from the data
+            "_limits", "_statusMask", // M4-4b-2: derived from the data
+            "_nodes" }; // M5-2: the node memory, unhashed by decision (docs/03 "Implementation (M5-1)", Lifetime)
         foreach (FieldInfo f in typeof(Vision.FogStore).GetFields(BindingFlags.NonPublic | BindingFlags.Instance))
             if (f.FieldType.IsArray) Assert.True(classified.Contains(f.Name), $"FogStore.{f.Name} is not classified as hashed or derived");
     }

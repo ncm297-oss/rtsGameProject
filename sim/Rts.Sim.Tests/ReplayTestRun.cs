@@ -89,6 +89,7 @@ public static class ReplayTestRun
     {
         Assert.Equal(expected.FormatVersion, actual.FormatVersion);
         Assert.Equal(expected.Combat, actual.Combat);
+        Assert.Equal(expected.Seats.IsDefault ? Array.Empty<ReplaySeat>() : expected.Seats.ToArray(), actual.Seats.IsDefault ? Array.Empty<ReplaySeat>() : actual.Seats.ToArray());
         Assert.Equal(expected.SimVersion, actual.SimVersion);
         Assert.Equal(expected.DataHash, actual.DataHash);
         Assert.Equal(expected.Map, actual.Map);
@@ -121,13 +122,20 @@ public static class ReplayTestRun
         Assert.Equal(expected.Checkpoints.ToArray(), actual.Checkpoints.ToArray());
     }
 
+    /// <summary>M5-2: <paramref name="players"/> human seats of the shipped factions (p mod 2), as a format 5 header needs.</summary>
+    public static ImmutableArray<ReplaySeat> HumanSeats(int players) =>
+        Enumerable.Range(0, players).Select(p => new ReplaySeat(p % 2 == 0 ? "malazan" : "whirlwind", SeatController.Human, Data.AiDifficulty.Normal)).ToImmutableArray();
+
     /// <summary>A copy of <paramref name="r"/> with some fields replaced.</summary>
     public static Replay With(Replay r, int? formatVersion = null, ulong? dataHash = null,
         int? players = null, IEnumerable<Command>? commands = null, IEnumerable<ReplayCheckpoint>? checkpoints = null, string? simVersion = null,
-        bool? combat = null) => new()
+        bool? combat = null, IEnumerable<ReplaySeat>? seats = null) => new()
     {
         FormatVersion = formatVersion ?? r.FormatVersion,
         Combat = combat ?? r.Combat,
+        // M5-2: seats are format 5's; an older format holds none. A player count changed without new seats keeps the
+        // replay's (so the seat rule, not a missing seat, decides).
+        Seats = seats != null ? seats.ToImmutableArray() : (formatVersion ?? r.FormatVersion) >= 5 ? r.Seats : ImmutableArray<ReplaySeat>.Empty,
         SimVersion = simVersion ?? r.SimVersion,
         DataHash = dataHash ?? r.DataHash,
         Map = r.Map,

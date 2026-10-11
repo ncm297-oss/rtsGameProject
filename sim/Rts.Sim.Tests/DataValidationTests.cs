@@ -307,6 +307,68 @@ public class DataValidationTests
         Assert.Equal((0.5f, 0.25f), (r.RepairRateFactor, r.RepairCostFactor)); // 50% of the build rate, 25% of the cost
     }
 
+    // ---------- M5-2: rules.json ai (the AI's generic tunables) ----------
+
+    [Theory]
+    [InlineData(null, null, "ai", "missing required field")]
+    [InlineData("goldShare", null, "ai.goldShare", "missing required field")]
+    [InlineData("goldShare", "1.5", "ai.goldShare", "outside 0-1")]
+    [InlineData("goldShare", "-0.1", "ai.goldShare", "outside 0-1")]
+    [InlineData("houseWhenPopWithin", "-1", "ai.houseWhenPopWithin", "must not be negative")]
+    [InlineData("houseWhenPopWithin", "1.25", "ai.houseWhenPopWithin", "multiple of 0.5")]
+    [InlineData("houseWhenPopWithin", "100.5", "ai.houseWhenPopWithin", "above the population cap 100")]
+    [InlineData("placementSearchRadius", "0", "ai.placementSearchRadius", "must be positive")]
+    [InlineData("placementSearchRadius", "64.5", "ai.placementSearchRadius", "above the maximum 64 m")]
+    [InlineData("buildingSpacing", "-2", "ai.buildingSpacing", "must not be negative")]
+    [InlineData("buildingSpacing", "9", "ai.buildingSpacing", "above the maximum 8 m")]
+    [InlineData("expandHallReach", null, "ai.expandHallReach", "missing required field")]
+    [InlineData("expandHallReach", "1e300", "ai.expandHallReach", "above the maximum")]
+    public void AiRulesBlock_MissingOrOutOfRange_IsOneError(string? field, string? value, string path, string message)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("common/rules.json", r =>
+        {
+            if (field == null) r.Remove("ai");
+            else if (value == null) r["ai"]!.AsObject().Remove(field);
+            else r["ai"]![field] = JsonNode.Parse(value);
+        });
+        DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
+        Assert.Equal("common/rules.json", e.File);
+        Assert.Equal(path, e.Path);
+        Assert.Contains(message, e.Message);
+    }
+
+    [Fact]
+    public void AiRulesBlock_UnknownField_IsReported()
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("common/rules.json", r => r["ai"]!["aggression"] = 1);
+        DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
+        Assert.Contains("aggression", e.Path + e.Message);
+    }
+
+    [Fact]
+    public void ShippedData_AiRules_InSimUnits()
+    {
+        AiRulesDef a = Load(TestDataDir.Shipped).AiRules;
+        Assert.Equal(0.6f, a.GoldShare);
+        Assert.Equal(4, a.HouseHalfPopMargin); // 2 pop
+        Assert.Equal(16, a.PlacementSearchCells); // 32 m of 2 m cells
+        Assert.Equal(1, a.SpacingCells); // 2 m
+        Assert.Equal(20, a.ExpandReachCells); // 40 m
+    }
+
+    /// <summary>The AI tunables are not in the content hash (with ai.json, M5-3): a tuning edit leaves the golden's data hash.</summary>
+    [Fact]
+    public void AnAiRulesEdit_LeavesTheContentHash()
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("common/rules.json", r => r["ai"]!["goldShare"] = 0.5);
+        GameData edited = Load(dir.Path);
+        Assert.Equal(0.5f, edited.AiRules.GoldShare);
+        Assert.Equal(TestSim.Data.ContentHash(), edited.ContentHash());
+    }
+
     // ---------- M3-1: common/resources.json ----------
 
     private const string ResourcesFile = "common/resources.json";

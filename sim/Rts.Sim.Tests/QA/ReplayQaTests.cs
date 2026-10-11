@@ -368,7 +368,8 @@ public class ReplayQaTests
     public void HeaderLinesInAnotherOrder_AreRefused()
     {
         string text = Text(Fuzz);
-        string swapped = text.Replace("players 3\nunit-capacity 96\n", "unit-capacity 96\nplayers 3\n");
+        // M5-2: the seat lines follow players in format 5; move players after unit-capacity.
+        string swapped = text.Replace("players 3\n", "").Replace("unit-capacity 96\n", "unit-capacity 96\nplayers 3\n");
         Assert.NotEqual(text, swapped);
         Assert.Equal(ReplayError.Malformed, Read(Reseal(swapped)));
     }
@@ -569,6 +570,7 @@ public class ReplayQaTests
             cmds.Add(new Command { Kind = CommandKind.Move, Player = 0, Tick = 1, Sequence = i, Position = new Vector2(specials[i], specials[^(i + 1)]), Unit = new EntityHandle(int.MinValue + i, int.MaxValue - i) });
         Replay r = new()
         {
+            Seats = ReplayTestRun.HumanSeats(1), // M5-2
             SimVersion = SimInfo.Version, DataHash = 0, Map = MapGenParams.Default, Seed = 0, PlayerCount = 1,
             UnitCapacity = 1, CommandCapacity = specials.Length, CheckpointInterval = 1, TickCount = 1,
             Commands = cmds.ToImmutableArray(), Checkpoints = ImmutableArray.Create(new ReplayCheckpoint(1, 0)),

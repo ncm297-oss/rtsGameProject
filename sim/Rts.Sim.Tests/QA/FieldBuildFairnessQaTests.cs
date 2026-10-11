@@ -424,7 +424,7 @@ public class FieldBuildFairnessQaTests
             Assert.True(p99 < 8.0, $"p99 {p99:F2} ms (docs/03: p99 < 8 ms)");
         }
 
-        /// <summary>A 1024 x 1024 world keeps the 32-field floor and doesn't grow past M1-4b's 221 MB by more than the documented index (4.2 MB) and fog (2.4 MB).</summary>
+        /// <summary>A 1024 x 1024 world keeps the 32-field floor and doesn't grow past M1-4b's 221 MB by more than the documented index (4.2 MB), fog (2.4 MB) and the itemised steps since.</summary>
         [Fact]
         public void World_1024Map_CacheStays32_MemoryBounded()
         {
@@ -474,7 +474,15 @@ public class FieldBuildFairnessQaTests
             //   references and two ints, 72 B a view, built by its reader, not by the world; Ai/PlayerViewPerfTests measures
             //   it) and the world gains no array; GameData.Ai is load-time data, outside this measurement (docs/03
             //   "Implementation (M5-1)", Memory). 231,900,840 measured alone on M5-1's tree (the probe's rounding: -8 KB).
-            Assert.True(bytes < 231_920_000, $"{bytes / 1e6:F1} MB");
+            // M5-2 re-baselines (BUG-0540), every step itemised:
+            // - the fog's per-player resource-node memory (FogStore._nodes, docs/03 "Implementation (M5-1)", Lifetime): one
+            //   12-byte NodeMemory (generation, type, anchor cell) per resource slot per player: 12 x 4,096 x 2 = 98,304 bytes
+            //   + a 24-byte array header = 98,328. The AI itself adds nothing here: an AiPlayer is built by the Simulation for
+            //   an AI seat only (this test builds a World with none); its buffers are per AI (docs/03 "Implementation (M5-2)",
+            //   Memory).
+            // - the rest, +8,088, the probe's rounding coming back (M5-1's figure sat 8 KB under its tree's usual).
+            // 232,007,256 measured on M5-2's tree; the bound keeps the same 72 KB margin over it.
+            Assert.True(bytes < 232_080_000, $"{bytes / 1e6:F1} MB");
         }
     }
 }

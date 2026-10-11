@@ -1,0 +1,174 @@
+using System;
+using Rts.Sim.Data;
+
+namespace Rts.Sim.Ai;
+
+/// <summary>
+/// Walks the faction's <c>ai.json</c> build order (M5-2, docs/03 "Implementation (M5-2)", the executor's semantics the data
+/// track writes against). Every think, every step whose trigger has been reached and that is not complete is worked, in
+/// file order, at most one command per step: steps run side by side.
+/// </summary>
+/// <remarks>
+/// <list type="bullet">
+/// <item>A step is due from the first think its trigger holds (<c>time</c>: the tick number reaches it; <c>workers</c>: the
+/// player's live workers; <c>pop</c>: its population, half-pop) and stays due. Its first command waits
+/// <c>buildOrderSlack</c> after that (an <c>expand</c> also waits for <c>expandAfter</c>).</item>
+/// <item><c>train</c>: <c>count</c> Train commands accepted over the step's life, one per think; <c>build</c>,
+/// <c>research</c> and <c>expand</c>: complete on the first accepted command (a research also once the tech is researched or
+/// queued by anyone).</item>
+/// <item>A command is judged at the first think after it applied (<see cref="PendingOrder"/>); until then the step sends
+/// nothing. A refused one is sent again at a later think (a refused Build's anchor gets a retry mark, so the site search moves
+/// on); a step that can't act (no gold, no site, no building, no worker) simply waits. Never more than one command per step
+/// per think, so a refusal is retried, not spammed.</item>
+/// <item><c>build</c> searches round the player's Town Hall (a camp round the known tree nearest it); <c>expand</c> places a
+/// Town Hall round the known gold mine nearest the player's hall with no own or seen hall within
+/// <see cref="AiRulesDef.ExpandReachCells"/>, else waits.</item>
+/// </list>
+/// </remarks>
+internal static class BuildOrderExecutor
+{
+    /// <summary>Works every due step once (see the type's remarks).</summary>
+    internal static void Run(AiPlayer ai)
+    {
+        Blackboard board = ai.Board;
+        var steps = ai.Def.BuildOrder;
+        int slack = ai.Knobs.BuildOrderSlackTicks;
+        for (int i = 0; i < steps.Length; i++)
+        {
+            if (board.StepDone[i]) continue;
+            AiStep step = steps[i];
+            if (board.StepDueTick[i] < 0)
+            {
+                if (!Triggered(ai, step)) continue;
+                board.StepDueTick[i] = step.Trigger == AiStepTrigger.Time ? step.At : ai.Now;
+            }
+            if (ai.Now < board.StepDueTick[i] + slack) continue;
+            if (step.Action == AiStepAction.Expand && ai.Now < ai.Knobs.ExpandAfterTicks) continue;
+
+            ref PendingOrder pending = ref board.StepPending[i];
+            if (pending.Kind != PendingKind.None)
+            {
+                if (ai.Now <= pending.AppliesAt) continue; // not applied yet
+                Judge(ai, i, step, ref pending);
+                if (board.StepDone[i]) continue;
+            }
+            if (step.Action == AiStepAction.Research && ai.TechResearchedOrQueued(step.Target))
+            {
+                board.StepDone[i] = true;
+                continue;
+            }
+            if (Act(ai, step, ref pending)) ai.ExecutorSent = true;
+        }
+    }
+
+    /// <summary>Whether <paramref name="step"/>'s trigger holds now.</summary>
+    private static bool Triggered(AiPlayer ai, in AiStep step) => step.Trigger switch
+    {
+        AiStepTrigger.Time => ai.Now >= step.At,
+        AiStepTrigger.Workers => ai.WorkerCount >= step.At,
+        _ => ai.View.HalfPop >= step.At,
+    };
+
+    /// <summary>Judges step <paramref name="i"/>'s applied command: accepted counts (and may complete the step); a refused Build marks its anchor.</summary>
+    private static void Judge(AiPlayer ai, int i, in AiStep step, ref PendingOrder pending)
+    {
+        Blackboard board = ai.Board;
+        bool accepted = pending.Kind switch
+        {
+            PendingKind.Build => ai.BuildAccepted(pending),
+            PendingKind.Train => ai.TrainAccepted(pending),
+            _ => ai.TechResearchedOrQueued(pending.TypeId),
+        };
+        if (!accepted && pending.Kind == PendingKind.Build) board.MarkBad(pending.TypeId, pending.Cell);
+        pending = default;
+        if (!accepted) return;
+        board.StepQueued[i]++;
+        if (step.Action != AiStepAction.Train || board.StepQueued[i] >= step.Count) board.StepDone[i] = true;
+    }
+
+    /// <summary>Sends the step's next command, if it can now; true when one was sent.</summary>
+    private static bool Act(AiPlayer ai, in AiStep step, ref PendingOrder pending)
+    {
+        switch (step.Action)
+        {
+            case AiStepAction.Train:
+                return ai.TryTrain(step.Target, emptyQueueOnly: false, ref pending);
+            case AiStepAction.Research:
+                return ai.TryResearch(step.Target, ref pending);
+            case AiStepAction.Build:
+                return ai.TryBuild(step.Target, BuildCentre(ai, step.Target), ref pending);
+            default:
+                int mine = ExpansionMine(ai);
+                return mine >= 0 && ai.TryBuild(ai.TownHallType, mine, ref pending);
+        }
+    }
+
+    /// <summary>Where a build step searches: round the player's Town Hall; a camp round the known tree nearest it.</summary>
+    private static int BuildCentre(AiPlayer ai, int type)
+    {
+        int hall = HallCentre(ai);
+        if (hall < 0 || type != ai.CampType) return hall;
+        return NearestNode(ai, ResourceKind.Wood, hall, -1);
+    }
+
+    /// <summary>The cell the player's Town Hall is centred on (its first building when it has no hall); -1 with none.</summary>
+    internal static int HallCentre(AiPlayer ai)
+    {
+        if (ai.TownHallCell >= 0)
+        {
+            BuildingDef d = ai.Data.Buildings[ai.TownHallType];
+            return ai.CentreCellOf(d.FootprintWidth, d.FootprintHeight, ai.TownHallCell);
+        }
+        if (ai.OwnBuildingCount == 0) return -1;
+        BuildingDef b = ai.Data.Buildings[ai.OwnBuildingTypes[0]];
+        return ai.CentreCellOf(b.FootprintWidth, b.FootprintHeight, ai.OwnBuildingCells[0]);
+    }
+
+    /// <summary>
+    /// The anchor cell of the known node of <paramref name="kind"/> nearest <paramref name="fromCell"/> (squared cell distance,
+    /// slot order on ties); with <paramref name="clearOfHalls"/> &gt;= 0 only one with no own or seen Town Hall within that many
+    /// cells. -1 for none.
+    /// </summary>
+    internal static int NearestNode(AiPlayer ai, ResourceKind kind, int fromCell, int clearOfHalls)
+    {
+        int w = ai.View.MapWidth, fx = fromCell % w, fy = fromCell / w;
+        int best = -1;
+        long bestDistance = long.MaxValue;
+        int s = -1;
+        while (ai.View.NextResource(ref s, out SeenResource node))
+        {
+            if (ai.Data.Resources[node.TypeId].Resource != kind) continue;
+            long dx = node.Cell % w - fx, dy = node.Cell / w - fy, d = dx * dx + dy * dy;
+            if (d >= bestDistance) continue;
+            if (clearOfHalls >= 0 && HallNear(ai, node.Cell, clearOfHalls)) continue;
+            best = node.Cell;
+            bestDistance = d;
+        }
+        return best;
+    }
+
+    /// <summary>The known gold mine an expand step builds by: the nearest the player's hall with no own or seen hall within reach; -1 for none.</summary>
+    private static int ExpansionMine(AiPlayer ai)
+    {
+        if (ai.TownHallType < 0) return -1;
+        int hall = HallCentre(ai);
+        return hall < 0 ? -1 : NearestNode(ai, ResourceKind.Gold, hall, ai.Rules.ExpandReachCells);
+    }
+
+    /// <summary>Whether an own Town Hall, or an enemy one the player sees or remembers, stands within <paramref name="reach"/> cells (Chebyshev, anchor to anchor) of <paramref name="cell"/>.</summary>
+    private static bool HallNear(AiPlayer ai, int cell, int reach)
+    {
+        int w = ai.View.MapWidth, x = cell % w, y = cell / w;
+        for (int k = 0; k < ai.OwnBuildingCount; k++)
+            if (ai.Data.Buildings[ai.OwnBuildingTypes[k]].Slot == BuildingSlot.TownHall && Near(ai.OwnBuildingCells[k], x, y, reach, w)) return true;
+        int s = -1;
+        while (ai.View.NextBuilding(ref s, out SeenBuilding b))
+            if (b.Owner != ai.Player && ai.Data.Buildings[b.TypeId].Slot == BuildingSlot.TownHall && Near(b.Cell, x, y, reach, w)) return true;
+        s = -1;
+        while (ai.View.NextGhost(ref s, out Vision.BuildingGhost g))
+            if (ai.Data.Buildings[g.TypeId].Slot == BuildingSlot.TownHall && Near(g.Cell, x, y, reach, w)) return true;
+        return false;
+    }
+
+    private static bool Near(int cell, int x, int y, int reach, int w) => Math.Abs(cell % w - x) <= reach && Math.Abs(cell / w - y) <= reach;
+}

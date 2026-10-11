@@ -7,7 +7,7 @@ namespace Rts.Sim.Tests;
 /// <summary>
 /// M5-1 criterion 1 (M5 criterion 1): <see cref="PlayerView"/> exposes nothing the fog hides. Three seeds x 2,000 ticks of
 /// <see cref="PlayerViewScene"/> (four players, stealth cast mid-run, detectors, towers, Sandstorms, buildings dying in and out
-/// of sight): after every tick, every answer of every player's view (a kept one, and on every 50th tick a fresh one) equals
+/// of sight, nodes felled in and out of sight, M5-2): after every tick, every answer of every player's view (a kept one, and on every 50th tick a fresh one) equals
 /// <see cref="PlayerViewOracle"/>'s: 0 leaks, 0 misses, every field equal.
 /// </summary>
 public class PlayerViewOracleFuzzTests
@@ -55,5 +55,6 @@ public class PlayerViewOracleFuzzTests
         Assert.True(tally.GhostsOfDeadBuildings > 0, "no ghost outlived its building");
         Assert.True(tally.ResourcesUnknownAmount > 0 && tally.Resources > tally.ResourcesUnknownAmount, "no resource node both in and out of sight");
         Assert.True(tally.QueueItems > 0, "no queue was read");
+        Assert.True(tally.ResourcesRemembered > 0, "no node gone out of sight was answered from memory (BUG-0540)");
     }
 }

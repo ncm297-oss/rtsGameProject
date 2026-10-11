@@ -56,6 +56,9 @@ public sealed class ResourceStore
         _freeCount = capacity;
     }
 
+    /// <summary>One past the highest slot ever used: no node was ever in a slot from here on (M5-2: the fog's node memory skips them).</summary>
+    internal int HighWater => _highWater;
+
     /// <summary>Whether the slot holds a live node.</summary>
     public ReadOnlySpan<bool> Alive => _alive;
 
