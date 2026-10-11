@@ -240,15 +240,15 @@ public class DataContentHashTests
 
     /// <summary>
     /// M4-4b-3b criterion 5: the summon kind and every field of a spawn effect move the hash, for an in-memory ability (no
-    /// shipped ability has either, so the shipped data's hash stays D22C849A175F9ED5: the spawn fields are hashed only on that
-    /// kind). The kind's "no target" ripples nowhere else: the summon's Range and Radius are the hashed fields they were.
+    /// shipped ability has either, so the spawn fields are hashed only on that kind and the shipped data's hash is untouched;
+    /// the shipped hash itself is pinned by the golden replay alone, never here: rule 8). The kind's "no target" ripples
+    /// nowhere else: the summon's Range and Radius are the hashed fields they were.
     /// </summary>
     [Fact]
     public void EverySpawnField_AndTheSummonKind_ChangeTheHash()
     {
         GameData d = TestSim.Data;
         ulong baseline = d.ContentHash();
-        Assert.Equal(0xD22C849A175F9ED5UL, baseline);
         AbilityDef ability = d.Abilities[d.FindAbility("telas_fire")];
         AbilityDef summon = Clone(ability);
         typeof(AbilityDef).GetProperty(nameof(AbilityDef.Kind))!.SetValue(summon, AbilityKind.Summon);
