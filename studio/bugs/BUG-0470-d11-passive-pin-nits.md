@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | fixed (item 1, D-H3); item 2 already fixed on `main`; item 3 is the Producer's (`studio/STATE.md`) |
+| Status | fixed (item 1, D-H3; item 2 already on `main`; item 3, `studio/STATE.md`, at the 1314 ACCEPT: line 280 carries the D11 text; confirmed by QA 2026-10-10-2334) |
 | Found | 2026-10-10-1314, task D11 |
 | System | content tests (`Content/PassiveContentTests.Compare`), docs/03 "Implementation (M4-4b-3a)", `studio/STATE.md` |
 | Fixed by | D-H3 (session 2026-10-10-1954, data track) |

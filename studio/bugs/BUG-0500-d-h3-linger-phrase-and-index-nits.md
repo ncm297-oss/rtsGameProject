@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (D12, session 2026-10-10-2334; verified by QA) |
 | Found | 2026-10-10-1954, task D-H3 |
 | System | content tests (`Content/AbilityContentTests.DurationRole`, `LingerBefore` / `LingerAfter`), `studio/bugs/README.md` |
-| Fixed by | |
+| Fixed by | D12 8fbede1: `LingerBefore` up to four words, `LingerAfter` accepts the linger noun right after the number; regression `QA/Content/DescriptionWordingQaTests.LingerPhrasings_ThatPassedAtTheBase_StillPass` un-skipped (3 rows) + `Content/AbilityContentTests.BUG0500_ALingerWordAfterTheNumberOrFourWordsBefore_ReadsAsLingering` (7 rows, wrong number still fails); item 3 resolved by setting BUG-0470 to fixed (STATE.md line 280 carries the D11 text, fixed at the 1314 ACCEPT) |
 
 No shipped description uses these wordings: the shipped pin is correct and `DescriptionProblems` is 0 on shipped text.
 
