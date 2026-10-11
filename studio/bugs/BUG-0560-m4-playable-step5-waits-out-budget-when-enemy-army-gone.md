@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (verified by QA 2026-10-11-0634) |
 | Found | 2026-10-11-0314, task D13 (QA, the data branch's M4PlayableTest gate) |
 | System | test scene `game/tests/M4PlayableTest.cs` (view track), step 5 / `CastOnBlob` |
-| Fixed by | |
+| Fixed by | 0d58553 (M6-V1): step 5 done on the cast's resolve, `CastOnBlob` fails fast when `_enemyArmy` is all dead, step 8 asserts the Burning marker on staged Zealot A (none on B) |
 
 ## Repro
 1. `dotnet build RtsGame.sln` on the D13 data branch (`f740736`).
@@ -51,3 +51,10 @@ Suggested fix (view track, test code only): in step 5, if no Whirlwind unit of `
 for N ticks) when a recast is due, either fail at once with "the fight ended before Telas Fire burned anyone" or, better,
 accept the step on the first cast's resolve event (the cast resolved; the Burning marker is what the view shows) and check
 the marker on a staged target like the step-8 duel does. Related: BUG-0460, BUG-0463 (same scene, same frame-clock timing class).
+
+## Verification (QA, 2026-10-11-0634)
+`M4PlayableTest` (seeds 1 and 6 per run) 8 runs in a row with the full `dotnet test` suite running beside it: 8 / 8 PASS,
+16 seed-runs. Seed 1 step 5 done in 82-86 ticks (one cast, a Burning marker seen each time), whole run 2,900-3,083 ticks;
+seed 6 step 5 in 23-36 ticks, whole run 3,429-4,284 ticks (budget 5,500). Step 8 printed "the Burning marker over Zealot A"
+2-3 ticks after the duel's cast resolved in every run. The fail-fast path itself was not reproduced by QA (the dev's
+negative check killed the enemy before step 5 and saw the message at tick 686).
