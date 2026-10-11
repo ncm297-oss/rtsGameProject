@@ -30,3 +30,9 @@ scratch (phase 6's resolve and phase 11's splash hold the first)" and runs `Spat
 `stealthed` before M8), but the loader accepts the shape, and Shadow's M8 content builds on these hooks. Any future
 `StatusSystem.Apply` caller that holds `ShoveNeighbors` has the same hazard. Fix idea: give detection its own scratch (one
 more int[UnitCapacity], itemise the memory) or defer the "detect at once" to the end of the caller's loop.
+
+## Producer triage (2026-10-10-1954 ACCEPT)
+S3 confirmed; not reachable with shipped data (no stealth source before M8) but a wrong rule on a shipped hook, so it goes to the
+**end-of-M4 sim hardening** (M4-H3), right after BUG-0461. Direction: give detection its own `int[UnitCapacity]` scratch (about
+16 KB: itemise it in the memory row; the margin is 29,560 B, so this is the last per-slot array before a re-baseline) rather than
+deferring the "detect at once" step; un-skip the QA row.

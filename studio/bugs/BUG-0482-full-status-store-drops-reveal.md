@@ -23,3 +23,8 @@ stays stealthed while it attacks: no enemy sees, targets or retaliates against i
 Not reachable with shipped data: six status ids in all, so a unit carries at most six. An M8 edge (Shadow content plus
 more statuses). Fix options: Revealed always fits (it replaces the oldest non-stealth entry, or the store keeps a slot for
 it), or docs/03 "Implementation (M4-5)" states the exception.
+
+## Producer triage (2026-10-10-1954 ACCEPT)
+S4 confirmed (six shipped status ids, so unreachable until M8 adds more). **End-of-M4 sim hardening** (M4-H3) if a few lines: a reveal
+replaces the oldest non-stealth entry when the store is full (document the exception in docs/03 either way); un-skip the QA row or keep
+it skipped with the documented limit.

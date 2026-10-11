@@ -25,3 +25,8 @@ and loaded but has no effect.
 ## Notes
 Not reachable with shipped data (it ships `revealed`). A one-line rule fixes it: when any status is of kind `stealthed`,
 exactly one of kind `revealed` is required (error at `statuses`, naming the missing kind).
+
+## Producer triage (2026-10-10-1954 ACCEPT)
+S3 confirmed (a silent default, against the loader rule); not reachable with shipped data. **End-of-M4 sim hardening** (M4-H3): the
+one-line rule (a `stealthed` kind requires exactly one `revealed` kind, error at `statuses`), a `Data/StealthLoaderTests` row, the QA row
+un-skipped, docs/03 "Implementation (M4-5)" data bullet.

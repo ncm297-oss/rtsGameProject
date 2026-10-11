@@ -4,40 +4,40 @@ The dashboard. The Producer rewrites it at the end of every session. **Owner: re
 you" first.** "For your review" (further down) is non-blocking: what the studio built or decided
 on its own, explained in terms of what you'd see in the game.
 
-_Last updated: 2026-10-10 (session 2026-10-10-1314, all three tracks accepted): **hit-point upgrades are real** (M4-4b-3b: Dryjhna's Prophecy gives every Zealot 83 hit points, hurt ones included, and summons exist in the rules for M8's Wraiths), **the M4 battle is proven by a scripted sandbox fight under fog through the real HUD** (M4-V7: `game/tests/M4PlayableTest.tscn`, both seeds, 0 fog slips; the Frenzied marker is magenta and a self-cast spell is one click, M4-V6d) and the Zealot's passives and the Frenzied / Blinded texts are pinned to their pages (D11, accepted but **held on its branch**: a sim test pins the old replay fingerprint as a literal and D11 moved it on purpose; a one-line fix lands it next session). **M4 9 / 10**: criteria 6, 8 and 10 ticked; only stealth (criterion 7) is left, then each track's end-of-M4 clean-up and the sign-off. Next session: sim M4-5 stealth / detection, view M4-V7 slice 2 (the health-bar maximum fix first), data your D11 answers or a small clean-up. Still wanted: your balance answer (D6 entry)._
+_Last updated: 2026-10-10 (session 2026-10-10-1954, all three tracks accepted): **stealth is in the rules** (M4-5: a stealthed unit is unseen and untargetable by its enemies unless a detector, a watch tower or a unit standing right beside it catches it on ground they can see; attacking or casting from stealth reveals it for 3 s; no faction can stealth before Shadow in M8, so nothing you play changes yet), **health bars are right after an upgrade, a summon spell is one click, and the sandbox battle weathers an enemy sandstorm** (M4-V7 slice 2), and **the content checks are tighter** (D-H3, tests only; the held D11 landed with it). **M4: all 10 criteria met**; left before the sign-off: each track's end-of-M4 clean-up and the casters' detection numbers (D12). Next session: sim and view hardening, data D12. Still wanted: your balance answer (D6 entry)._
 
 ## Waiting on you
 
-- **Nothing blocking.** `main` is green with sim + view merged (8bb7513: 4,873 / 8 / 0, smoke PASS, loop 41 / 41). **D11 is
-  held** on its branch (accepted; one sim test pins the old replay fingerprint as a literal; the studio fixes that line and lands
-  it first thing next session). No open S1 / S2. The studio continues on its own (session 5 of 8 today is next).
-- **Wanted, not blocking:** (1) your answer on the **balance proposal** (the D6 entry under For your review; the fog-on sandbox
-  now exists for its numbers); (2) the **D11 text table** (Frenzied and Blinded wording, Martyrdom's "+50% attack speed" written
-  onto the Whirlwind page as a Producer default): say in the inbox if any should change; (3) play: **watch the M4 sandbox
-  battle** (`& $env:GODOT --path game res://tests/M4PlayableTest.tscn -- --shots build/shots/m4-v7`, about a minute per seed;
-  the M4-V7 entry), **cast a Sandstorm** (M4-V6c), **cast a spell** (M4-V6a); write what felt wrong in the inbox; (4)
-  housekeeping: 15+ entries in `git worktree list` are agents' scratch worktrees they could not remove (`gamedev-base`,
-  `merge362`, `mut-merge`, `qa-sim-clone`, `qa-sim-base`, ...): delete the scratch folders and run `git worktree prune`.
+- **Nothing blocking.** The three session branches are accepted and merge in the order sim → data → view (the conductor records
+  the merged-tree result in the Build row below). No open S1 / S2. The studio continues on its own (session 6 of 8 today, or the
+  first of 2026-10-11, is next: every track's end-of-M4 work, then the M4 sign-off).
+- **Wanted, not blocking:** (1) your answer on the **balance proposal** (the D6 entry under For your review; the Producer defaults to
+  the 40-65 % band at the M4 sign-off if none comes); (2) the **D11 text table** (Frenzied and Blinded wording, Martyrdom's "+50%
+  attack speed" on the Whirlwind page): say in the inbox if any should change; (3) play: **watch the M4 sandbox battle** (`& $env:GODOT
+  --path game res://tests/M4PlayableTest.tscn -- --shots build/shots/m4-v7`, about a minute per seed; it now ends with an enemy
+  sandstorm over your army), **cast a Sandstorm** (M4-V6c), **cast a spell** (M4-V6a); write what felt wrong in the inbox; (4)
+  housekeeping: 15+ entries in `git worktree list` are agents' scratch worktrees they could not remove (`gamedev-base`, `merge362`,
+  `mut-merge`, `qa-sim-clone`, `qa-sim-base`, this session's `base` / `base2`, ...): delete the scratch folders and run `git worktree prune`.
 
 ## Now
 
 | Field | Value |
 | --- | --- |
-| Sim: milestone | **M4 combat, 9 / 10**: M4-1 melee, M4-2a (`Attack(target)`), M4-2b (projectiles, splash, friendly fire, the counter-triangle rows), M4-3a fog + M4-H1, M4-3b (towers, the last-known list, explored placement), M4-4a (statuses, abilities, Telas Fire), M4-4b-1 (the Cusser, `abilityCooldown` techs), M4-4b-2 (zones, Blinded, Sandstorm), M4-H2, M4-4b-3a (Frenzied, unit passives, `selfAura`), **M4-4b-3b on `main` with this integration** (hp techs raise hit points, the exact `whenBelowHp` line, summons: `summon` kind + `spawn` effect + temporary units; `targetUnit` / `autocast` deferred; golden untouched by the sim). **Left: criterion 7 stealth (M4-5)**, then the end-of-M4 hardening (BUG-0461 first) |
-| Sim: next task | **M4-5 stealth / detection** (criterion 7): the `stealthed` / `revealed` status kinds, a unit `detector` field (the towers' is on `main`), the one rule (a stealthed unit is unseen and untargetable by an enemy unless that enemy's detector has it within range and sight; attacking from stealth reveals for a duration; summoned units never stealthed), `Fog.CanSeeUnit` as the single hook so view and combat follow, test-only data (Shadow is M8), a `StealthedUnits` counter so `EmptyTick` stays flat; fold BUG-0452 if the loader is touched · feature · QA full · ~1,200 lines |
+| Sim: milestone | **M4 combat, 10 / 10 criteria**: M4-1 melee, M4-2a (`Attack(target)`), M4-2b (projectiles, splash, friendly fire, the counter-triangle rows), M4-3a fog + M4-H1, M4-3b (towers, the last-known list, explored placement), M4-4a (statuses, abilities, Telas Fire), M4-4b-1 (the Cusser, `abilityCooldown` techs), M4-4b-2 (zones, Blinded, Sandstorm), M4-H2, M4-4b-3a (Frenzied, unit passives, `selfAura`), M4-4b-3b (hp techs raise hit points, summons), **M4-5 on `main` with this integration** (stealth / detection: the `stealthed` / `revealed` kinds, `rules.json` `stealth`, a unit `detector`, `World.IsStealthed` / `IsDetectedBy` / `HiddenFrom` on the one fog hook, the Revealed rule, summoned never stealthed; golden `data-hash` → 889D6BEA3A49F08E; criterion 7 ticked). **Left: the end-of-M4 sim hardening (M4-H3)**, then the sign-off |
+| Sim: next task | **M4-H3, the end-of-M4 sim hardening** · hardening · QA full for the BUG-0461 cast / movement rule, standard for the rest · as many as fit in ~1,500 lines, most valuable first: **BUG-0461** (a cast's walk-in hemmed in by own attackers gives up after 1 s and drops the cast; the direction in the bug file), **BUG-0480** (detection gets its own scratch array, itemised), **BUG-0481** (a `stealthed` kind requires one `revealed` at load), BUG-0482 (if a few lines), the **BUG-0451 decision** (buy back `EmptyTick(2500)` cost or re-baseline to 550 µs itemised), **BUG-0401** (an ordered chase on a reachable building never gives up), BUG-0302 b / c, BUG-0275 items 1-2 (decide; item 1 moves the seed-21 hash), BUG-0271 / 0272 (wontfix as documented limits or fix), BUG-0144, BUG-0142 items 1-2, BUG-0113 item 2, BUG-0094, BUG-0391, BUG-0422 items 2-3; golden untouched unless a re-record is already needed |
 | Sim: gate | **GO** |
-| View: milestone | **M4 views**: M4-V1 (hp bars, flashes, corpses, K / L), M4-V2 (Attack order), M4-V3 (shots), M4-VH1, M4-V4 (the fog on screen), M4-V5 (ghosts), M4-V6a (the ability button, targeting, the cast bar), M4-V6b (markers, the resolve flash), M4-VH2, M4-V6c (zone discs, the Blinded marker), **M4-V6d + M4-V7 slice 1 on `main` with this integration** (the Frenzied marker magenta, the `selfAura` card with the hover ring, `game/tests/M4PlayableTest.tscn`: the fog-on sandbox Playable, criterion 10 ticked) |
-| View: next task | **M4-V7 slice 2**: **BUG-0450 first** (hp bars + the first-sight flash on `World.MaxHp(slot)`; un-skip the QA row), the `AbilityKind.Summon` card arm (the same no-target card; a test-only summon in `AbilityViewTest`; an expiring unit leaves no corpse), the sandbox's enemy-storm step (a scripted enemy Priest's Sandstorm over the player's army), BUG-0462 item 5 (the tick-budget note) · feature · QA standard · ~900 lines. Then M4-V8 stealth visuals once the sim's M4-5 is on `main` |
+| View: milestone | **M4 views**: M4-V1 (hp bars, flashes, corpses, K / L), M4-V2 (Attack order), M4-V3 (shots), M4-VH1, M4-V4 (the fog on screen), M4-V5 (ghosts), M4-V6a (the ability button, targeting, the cast bar), M4-V6b (markers, the resolve flash), M4-VH2, M4-V6c (zone discs, the Blinded marker), M4-V6d + M4-V7 slice 1 (the Frenzied marker, the `selfAura` card, `M4PlayableTest.tscn`), **M4-V7 slice 2 on `main` with this integration** (BUG-0450: hp bars + the first-sight flash on `World.MaxHp`; the `Summon` card arm, an expiry leaves no corpse; the sandbox's enemy-storm step 9; BUG-0462 item 5). **Stealth visuals ("M4-V8", docs/03 "For the view (M4-V8)") move to M8** (Producer decision: no unit can be stealthed before Shadow; `Fog.CanSeeUnit` already hides an undetected one). **Left: the end-of-M4 view hardening (M4-VH3)** |
+| View: next task | **M4-VH3, the end-of-M4 view hardening** · hardening · QA standard · as many as fit in ~1,500 lines: **BUG-0430 + BUG-0462 item 1** (a zone disc / the hover and targeting rings across a cliff: project onto the terrain), **BUG-0490** (the `TickBudget` range as measured; one `FillMaxHp` a frame shared by `UnitViews` / `CombatViews`), BUG-0431 (own vs Whirlwind storm rim colour), BUG-0462 item 3 (marker rows at zoom 60: fix or an M6 note), BUG-0400, BUG-0250 item 2, BUG-0148 item 1, BUG-0126 items 5 / 6, export hygiene (exclude `game/tests/` from the release build; `.pck`-safe data loading); scene loop 41 / 41 and smoke PASS are the gate; no `game/data/**`, replay or `DataContentHashTests.cs` edit |
 | View: gate | **GO** |
-| Data: milestone | M3 Done (D1-D4); D5-D8, D-H1, D10a-c, D-H2 on `main`; **D11 accepted and held** on `origin/studio/2026-10-10-1314-data` @ 9978bd6 (`main` merged in; the Zealot passives + the Frenzied row pinned both ways, Blinded "can't attack", the Frenzied description reworded, Martyrdom "+50% attack speed" on the page; golden `data-hash` D22C849A175F9ED5 → **4383EBB9345FABF7**, every `k` line equal). `main`'s golden is still D22C849A175F9ED5. D9 dropped; nothing numeric changed since M3 |
-| Data: next task | **Land D11 first**: on the held branch replace the literal `0xD22C849A175F9ED5UL` in `sim/Rts.Sim.Tests/DataContentHashTests.cs:251` with the golden's recorded hash (read it from `GatherWedgeQaTests.RecordedDataHash` / the replay header, never a literal; a sim-owned file: named exception, conductor-dispatched), suite green, merge. Then **inbox tweaks from the D11 review table**; else **D-H3 early** (BUG-0470 item 1, BUG-0440's four wordings; tests only) · QA light · ~400 lines; else STOP cheaply. The balance pass waits on your D6 band answer (or a Producer default at the end of M4) |
+| Data: milestone | M3 Done (D1-D4); D5-D8, D-H1, D10a-c, D-H2 on `main`; **D11 and D-H3 on `main` with this integration** (D11: the Zealot passives + the Frenzied row pinned both ways, Blinded "can't attack", the Frenzied description reworded, Martyrdom "+50% attack speed" on the page; D-H3: tests only: a second same-trigger page sentence fails naming both, BUG-0440's four wordings). The golden `data-hash` after this integration is the sim's 889D6BEA3A49F08E. D9 dropped; nothing numeric changed since M3 |
+| Data: next task | **Inbox tweaks from the D11 table first, if any.** Else **D12** · feature · QA light · ~500 lines: `"detector": 10` on every shipped caster-class unit in `game/data/factions/malazan/units.json` and `game/data/factions/whirlwind/units.json` (docs/02 "Caster" class row, "Stealth and detection": casters 10 m; no other `game/data/**` writer that session), a Detector column or cell on both faction pages pinned both ways, the `stealthed` / `revealed` texts pinned against docs/02 "Status effects" (out of `PendingStatuses`), one golden regen (every `k` line equal, the new hash in `SameGameDataHashes`), BUG-0500 if a few lines + the BUG-0470 status line; the review table in the report. The **balance pass** (QA standard) comes after the M4 sign-off on your D6 answer or the Producer default (40-65 %) |
 | Data: gate | **GO** |
 | Tools on this PC | Godot 4.7.2 .NET, .NET SDK 8.0.425, Git 2.53 + LFS 3.7; `GODOT` user variable set |
-| Build | All three session branches 0 warnings. **Integration result: sim merged (736bcd2) → view merged (8bb7513; merged tree: build 0 warnings, non-Perf 4,873 / 8 / 0, smoke PASS, loop 41 / 41) → data ESCALATE** (red after merge: `DataContentHashTests.EverySpawnField_AndTheSummonKind_ChangeTheHash` asserts the shipped hash is D22C849A175F9ED5, D11's is 4383EBB9345FABF7; a cross-track clash, not a defect; held on `origin/studio/2026-10-10-1314-data` @ 9978bd6 with `main` merged, otherwise green: 4,944 / 9 / 1). Planned order was sim → view → data. Expected conflicts (resolved as foreseen): `studio/bugs/README.md` (union by id: sim rows 0420 / 0421 → `fixed` + 0450 / 0451 / 0452; view rows 0460 (fixed) / 0461 / 0462 / 0463 (fixed); data row 0470), `studio/qa/coverage.md` (sim's Abilities row + a paragraph, view's HUD-abilities row + a new M4 Playable row + a paragraph, data's paragraph), docs/03 (sim: "Implementation (M4-4b-3b)" + lines in the M3-5 / M4-4b-3a sections incl. the Producer's Martyrdom-bullet fix; view: "Implementation (M4-V6d)" / "(M4-V7)" + the V6c "Not yet" line), docs/02 (sim: one hp sentence under techs; data: the Frenzied row), docs/01 (sim row only). **Only the data branch moves the golden** (`cross_map_seed1.replay` `data-hash` + `checksum`; 4383EBB9345FABF7 in `SameGameDataHashes`); the sim's `ContentHash` change hashes nothing for shipped data; the view touches no `game/data/**` file. Sim QA: non-Perf 4,827 / 7 / 0, Perf alone 156 / 3 / 0, smoke PASS, loop 40 / 40, clean clone green. View QA r2: non-Perf 4,798 / 8 / 0, smoke PASS, loop 41 / 41, 26 / 26 seed-runs. Data QA: non-Perf 4,838 / 8 / 0 |
-| Tests | Producer: all three diffs read in full (the sim's `UnitStore` / `ProductionSystem.Researched` / `SummonSystem` / `PassiveSystem` / loader / hash; the view's `AbilityViews` / `SelectionController` / `CommandCard` / `AbilityCaster.Lead` / the scene; the data's text, page, golden and pin test); builds 0 warnings in all three worktrees; non-Perf suites run by the Producer side by side: sim **4,869 / 8 skipped / 0 failed (19 m 5 s)**, view **4,798 / 8 / 0 (18 m 46 s)**, data **4,866 / 9 / 0 (18 m 43 s)**; the Producer's own `M4PlayableTest` headless under that load **PASS on seeds 1 and 6** (2,922 / 3,632 of 5,500 ticks, 0 fog violations on 1,228 / 1,914 frames, twins equal), `--seed 1 --break 5` exits 1 naming the step, `AbilityViewTest` PASS. QA: sim decimal-line oracle ~80 M triples 0 mismatches, 39 lethal-pulse offsets each one death, `EmptyTick(2500)` paired 495 / 500 µs head / base, 240 summons live 0 B, memory +33,832 as itemised; view 26 / 26 seed-runs after the fixes, selfAura oracle + hash twin 3 seeds x 1,200 ticks, every still looked at; data 10 page + 6 data mutants fail by name, 8 roles refuse a number on Frenzied, 0 `k` lines changed |
-| Open bugs | **S1: 0, S2: 0**, S3: 16, S4: 23 (by the merged index; partly-fixed multi-item nits counted). **New open:** BUG-0450 (S3, view: hp bars use the type's hp as the maximum; **first item of M4-V7 slice 2**), BUG-0451 (S3, sim, pre-existing: the `EmptyTick(2500)` gate has no headroom; triaged, counts only alone and above base), BUG-0461 (S3, sim: a cast's walk-in behind own attackers is dropped after 1 s; **first item of the end-of-M4 sim hardening**), BUG-0452 (S4, sim summon nits), BUG-0462 (S4, view nits), BUG-0470 (S4, data pin gap; items 2-3 fixed by the Producer). **Closed this session:** BUG-0420 / 0421 (sim), BUG-0460 / 0463 (view, S2, in the fix rounds). Still open from before: BUG-0401 (S3, sim), BUG-0430 (S3, view), BUG-0422 / 0431 / 0440 / 0391 / 0400 (S4) |
-| Sessions today | 4 / 8 on 2026-10-10 (0215, 0624, 1015, 1314 done). Feature sessions since last hardening after this session: **sim 2 / 4, view 2 / 4, data 1 / 4** |
-| Last session | 2026-10-10-1314 · sim M4-4b-3b (feature, 0 fix rounds, ACCEPT, merged) · view M4-V6d + M4-V7 slice 1 (feature, 2 fix rounds, ACCEPT, merged) · data D11 (feature, 0 fix rounds, ACCEPT then **ESCALATE at integration**: held one session for a one-line sim-test fix) · M4 9 / 10 · hp techs real + summons in the rules, the fog-on sandbox Playable + the Frenzied marker + the selfAura card on screen, the Zealot passives pinned |
+| Build | All three session branches 0 warnings. **Integration pending (conductor), order sim → data → view** (whichever of sim / data merges first lands D11). Expected conflicts (`git merge-tree` dry runs by the Producer): `studio/bugs/README.md` (union by id: sim 0452 → fixed + 0480 / 0481 / 0482; view 0450 → fixed + 0490; data 0440 / 0470 → fixed + 0500), `studio/qa/coverage.md` (sim + view only: the sim's Fog row, the view's Combat-views and HUD rows; keep both); docs/03 auto-merges (different sections); `DataContentHashTests.cs` is the identical hunk (blob c25ec46 on both). **Only the sim moves the golden** (`cross_map_seed1.replay` `data-hash` 4383EBB9345FABF7 → 889D6BEA3A49F08E + `checksum`, every `k` line equal; in `SameGameDataHashes`); the data branch's `TheShippedContentHash_IsTheGoldenReplaysHeader` reads the replay header, so it follows; the view touches no `game/data/**` file. Sim QA: non-Perf 4,995 / 9 / 0 (with QA's additions 5,026 / 12 / 0), Perf alone 158 / 3 / 0, smoke PASS, loop 41 / 41, clean clone 0 warnings. View QA: non-Perf 4,885 / 7 / 0 (clean clone the same), smoke PASS, loop 41 / 41, 14 / 14 `M4PlayableTest` seed-runs. Data QA: non-Perf 4,964 / 8 / 0 |
+| Tests | Producer: all three diffs read in full (the sim's `StealthSystem` / `World.Stealth` / `StatusStore` / `FogStore.SeesUnitCell` / `VisionSystem` / `CombatSystem` / `AbilitySystem` hooks / loader / hash / golden; the view's `ViewApi` four files, `UnitViews.FillMaxHp`, `CombatViews`, `CommandCard`, `SelectionController`, `AbilityViews`; the data's `Compare` / `DurationRole` / regexes, the identical hunk, the bug files); builds 0 warnings in all three worktrees; non-Perf suites run by the Producer side by side: sim **5,026 / 12 skipped / 0 failed (18 m 48 s)**, view **4,896 / 7 / 0 (18 m 52 s)**, data **5,027 / 9 / 0 (18 m 34 s)** (each branch with its QA files; the view and data counts are QA's + their new rows). QA: sim hook theory 12 rows 0 acquisitions, the detection oracle fuzz ~535,000 answers 0 mismatches over 3 seeds x 2,000 ticks, `EmptyTick(2500)` paired +0.7 % (both sides above the gate: load), the brawl 2.1 ms / 0 B, memory +9,144 B itemised (29,560 B margin); view 14 / 14 seed-runs 0 fog violations, the disc == `SeesStorm` every frame, read-only twin 3 seeds x 400 ticks; data 56-case wording matrix (42 failed at the base), the shipped hash == the golden header |
+| Open bugs | **S1: 0, S2: 0**, S3: 17, S4: 23 (by the merged index; partly-fixed multi-item nits counted). **New open:** BUG-0480 (S3, sim: an `onDeath` passive applying `stealthed` reaches one friend: a scratch clash), BUG-0481 (S3, sim: data with no `revealed` status loads clean), BUG-0482 (S4, sim: a full status store drops the reveal), BUG-0490 (S4, view: the stated tick range already exceeded; two max-hp fills a frame), BUG-0500 (S4, data: three linger wordings now fail wrongly). **Closed this session:** BUG-0450 (S3, view), BUG-0452 (S4, sim), BUG-0440 / 0470 (S4, data). Still open from before: BUG-0461 (S3, sim, **first item of M4-H3**), BUG-0451 (S3, sim), BUG-0401 (S3, sim), BUG-0430 (S3, view, **first item of M4-VH3**), BUG-0422 / 0431 / 0391 / 0400 / 0462 (S4) |
+| Sessions today | 5 / 8 on 2026-10-10 (0215, 0624, 1015, 1314, 1954 done). Counters after this session: **sim 3 / 4, view 3 / 4, data 0 / 4**; the sim and view take their end-of-M4 hardenings next regardless |
+| Last session | 2026-10-10-1954 · sim M4-5 (feature, 0 fix rounds, ACCEPT) · view M4-V7 slice 2 (feature, 0 fix rounds, ACCEPT) · data D-H3 + the D11 landing (hardening, 0 fix rounds, ACCEPT) · **M4 10 / 10 criteria** · stealth in the rules, hp bars right after upgrades + the Summon card + the enemy storm in the sandbox, the content pins tightened, D11 landed |
 
 ## Milestone progress
 
@@ -47,7 +47,7 @@ _Last updated: 2026-10-10 (session 2026-10-10-1314, all three tracks accepted): 
 | M1 (sim track) | 8 / 8 | **Done** 2026-10-06 (Producer sign-off after the M1-9 hardening; retro in docs/05) |
 | M2 (view track) | 10 / 10 | **Done** 2026-10-07 (Producer sign-off after the M2-H2 hardening; retro in docs/05; your playtest under For your review is feedback, not a gate) |
 | M3 (all three tracks) | 8 / 8 | **Done** 2026-10-08 (Producer sign-off after every track's hardening and the BUG-0146 fix; retro in docs/05; open S3 / S4 listed there; your ten-minute playtest is still wanted as feedback) |
-| M4 (sim + view + data) | **9 / 10** (1 attack / attack-move / chase / retaliation / priorities, sim + view; 2 damage formula; 3 projectiles / splash / friendly fire; 4 death, corpses, rubble; 5 fog: rules, screen, towers, ghosts; 6 abilities: target ground, self / aura, summon, statuses, zones in the rules (M4-4a → M4-4b-3b) and on screen (M4-V6a-d; the `summon` card arm comes with M4-V7 slice 2, no shipped summon before M8); 8 the four signature abilities with their real numbers (hp techs real since M4-4b-3b); 10 the fog-on sandbox Playable (`M4PlayableTest`, M4-V7); the counter-triangle rows). **Left: 7 stealth / detection** (sim M4-5, then view M4-V8 visuals). Mid-milestone hardenings done 2026-10-10 (sim M4-H2, view M4-VH2, data D-H2); each track's end-of-milestone hardening comes before the sign-off (sim: BUG-0461 first) | In progress |
+| M4 (sim + view + data) | **10 / 10 criteria** (1 attack / attack-move / chase / retaliation / priorities, sim + view; 2 damage formula; 3 projectiles / splash / friendly fire; 4 death, corpses, rubble; 5 fog: rules, screen, towers, ghosts; 6 abilities: target ground, self / aura, summon, statuses, zones in the rules (M4-4a → M4-4b-3b) and on screen (M4-V6a-d, the `summon` card arm in M4-V7 slice 2); **7 stealth / detection (M4-5; the view's stealth visuals are M8's)**; 8 the four signature abilities with their real numbers; 10 the fog-on sandbox Playable (`M4PlayableTest`, M4-V7, with the enemy-storm step since slice 2); the counter-triangle rows). **Left before the sign-off:** each track's end-of-M4 hardening (sim M4-H3: BUG-0461 first; view M4-VH3: BUG-0430 first) and the data track's D12 (the casters' `detector 10`); then the Producer signs off (coverage ✅ for stealth: Unit, Invariant fuzz, Determinism present). Mid-milestone hardenings done 2026-10-10 (sim M4-H2, view M4-VH2, data D-H2) | In progress |
 | M5-M9 | — | Planned |
 
 ## For your review
@@ -55,6 +55,92 @@ _Last updated: 2026-10-10 (session 2026-10-10-1314, all three tracks accepted): 
 Non-blocking. Each entry says what was built or decided, what you'd notice in the game, and how
 to change it. To change anything, write it in `studio/inbox.md`, for example "use formations
 instead of clusters" or "make giving up take 2 seconds".
+
+### Stealth is in the rules: a hidden unit can't be seen or attacked unless a detector, a watch tower or a unit standing right beside it catches it (sim track, M4-5, 2026-10-10)
+
+**What was built.**
+- The game now has a rule for hidden units. A **Stealthed** unit is invisible to its enemies and can't be attacked by them: their
+  soldiers won't pick it as a target, won't fight back against it, and a right-click order on it is refused, exactly as if it stood in
+  the dark. You always see your own.
+- **Detection.** An enemy sees through stealth only when two things are both true: the hidden unit stands on ground that enemy can see
+  (fog of war), and it is within reach of one of that enemy's detectors: a finished Watch Tower (16 m), a unit with a detector (the
+  design gives every caster 10 m; that number goes into the data next session, D12), or **any** enemy unit within 3 m (so stealth is
+  beatable before Age II, when nobody has towers or casters). Once detected it is targeted and shot like anything else.
+- **Reveal.** A stealthed unit that lands a hit or finishes casting a spell is **Revealed** for 3 s: every enemy whose sight covers it
+  sees and can attack it, and each new hit restarts the 3 s. A summoned unit (M8's Wraiths) can never be stealthed.
+- **Nothing you play changes yet.** No Malazan or Whirlwind unit can stealth; the first stealth sources are Shadow's (M8: forest stealth
+  and the Shadow Archer standing still). The tests use a stand-in spell and a stand-in detector.
+
+**What you will see in the game.** Nothing new until M8. Because the fog-of-war check is the one place the rule lives, the screen
+already hides an undetected stealthed enemy with no extra work. The proper look (your own hidden units drawn translucent, a mark on
+a detected enemy, detector rings round towers and casters) comes with Shadow in M8, where the roadmap lists it.
+
+**Producer decisions (owner may revisit; `docs/01-vision.md` row 2026-10-10 "Stealth and detection").**
+- *Proximity works like a 3 m detector*, with the same "on ground you can see" condition: a Blinded unit standing next to a hidden
+  enemy in the dark does not detect it. Alternative: proximity always detects, whatever the fog.
+- *The reveal starts when the blow lands or the spell resolves*, not when the swing starts; a shot still in the air reveals nothing.
+- *Only a unit that is actually carrying stealth gets Revealed by attacking.* A plain soldier that attacks and is stealthed a moment
+  later is hidden at once. Alternative: every attacker carries a 3 s "Revealed" mark (one status entry per hit for every unit in every
+  fight, and a different replay fingerprint).
+- *Stealth visuals move to M8* (where the roadmap already lists them), since no unit can be stealthed before then.
+
+**Rough edges (none reachable in play today).** BUG-0480 (S3): a death-triggered passive that applies stealth to several friends
+reaches only the first; BUG-0481 (S3): a data file with a stealth status but no "revealed" status would load without complaint and
+nothing would ever reveal; BUG-0482 (S4): a unit already carrying eight statuses can't be revealed. All three are planned for the
+next sim session (the end-of-M4 clean-up).
+
+**How to change it.** The 3 m proximity and the 3 s reveal are in `game/data/common/rules.json` (`stealth`); the two status texts are
+in `game/data/common/statuses.json`: **Stealthed** "Unseen by enemies, who can't target it unless they detect it: a detector near it,
+or any of their units right beside it." and **Revealed** "Can't be stealthed while it lasts. Attacking or casting from stealth reveals
+a unit for a short while."; a unit's detector radius is a `detector` number in its `units.json` entry (the towers' is already in
+`buildings.json`).
+
+### Health bars are right after an upgrade, a summon spell is one click, and the sandbox battle weathers an enemy sandstorm (view track, M4-V7 slice 2, 2026-10-10)
+
+**What was built.**
+- **Health bars and the hit flash use a unit's real maximum** (BUG-0450 from last session): after Dryjhna's Prophecy a Zealot at 70 of
+  83 shows a bar at 84 %, one at 83 of 83 shows none, and a unit first seen hurt still flashes white once.
+- **Summon spells cast with one click**, like self-cast spells: the button or its key casts at once with the first selected caster that
+  has the spell ready; the tooltip shows only the cooldown (a summon has no range or radius); when the summoned units' time runs out
+  they simply vanish: no corpse disc, and the kill and loss counters don't move. No shipped summon exists before M8; the test uses a
+  stand-in spell.
+- **The sandbox battle got a ninth step:** the enemy Priest calls a Sandstorm over your army; your units inside get the violet Blinded
+  and blue Slowed markers, the orange enemy storm disc is drawn only where one of your units can see into it, and the fog on the ground
+  shrinks round your blinded units. The run still checks every frame that nothing hidden is drawn (0 slips in 14 runs) and ends with
+  the replay-into-a-bare-copy proof.
+- The note on how long the sandbox takes now states the measured range instead of a guessed margin (BUG-0462 item 5).
+
+**What you will see in the game.** Watch the sandbox: `& $env:GODOT --path game res://tests/M4PlayableTest.tscn -- --shots
+build/shots/m4-v7` (about a minute per seed; add `--seed 6` for one): after the Zealot duel, the storm rolls over your army and
+your soldiers go violet and blue under it. In a normal match you will notice the bars once an opponent researches upgrades (the M5
+AI): an upgraded enemy Zealot's bar reads right instead of showing full while hurt.
+
+**Producer decisions.** None new: the summon card follows the self-cast card's rule (M4-V6d).
+
+**Rough edges.** BUG-0490 (S4): the stated length range of the sandbox is already slightly exceeded (the real margin is still 18 %),
+and the per-unit maximum is copied twice a frame; both in the next view session (the end-of-M4 clean-up).
+
+**How to change it.** Nothing here is data; an inbox note.
+
+### The data track's third clean-up, and D11 landed: a design page can't claim two different passives for one trigger, and four more tooltip wordings are read right; nothing in the game changed (data track, D-H3, 2026-10-10)
+
+**What was built.** Tests only.
+- **D11 is on `main`** (last session's Zealot passives and Frenzied / Blinded wording, held one session): the one-line fix the hold
+  needed landed identically from the sim and data branches.
+- If a faction page ever states two "on death" (or two "below half health") passives for one unit, the check fails naming both
+  sentences: the data holds one per trigger, so one of the two would be a lie.
+- Four tooltip wordings that could have hidden a wrong number now bind to the right field: "(cooldown: 45 s)" with a colon,
+  "a 12-second storm", "120 siege dmg", and a lingering effect's seconds read from their own phrase ("Blinded for 1 second after a
+  unit leaves").
+
+**What you will see in the game.** Nothing: no name, description or number changed (data review table: empty).
+
+**Producer decision (owner may revisit).** The lingering seconds are read from the number's own phrase rather than from anywhere in
+the sentence, so "a storm for 12 seconds whose effects linger after it leaves" reads 12 as the storm's length. Cost: three rarer
+phrasings ("a 1 s linger after leaving") now fail wrongly (BUG-0500, S4; no shipped text uses them; the next data clean-up, or D12 if
+a few lines).
+
+**How to change it.** Not applicable (test code: `sim/Rts.Sim.Tests/Content/AbilityContentTests.cs`, `PassiveContentTests.cs`).
 
 ### Upgrades that add hit points now really add them, and the rules can summon temporary units (sim track, M4-4b-3b, 2026-10-10)
 
@@ -92,6 +178,10 @@ must still carry an "affects" field it doesn't use and accepts a "radius" it ign
 **How to change it.** The upgrade amounts are data (`game/data/factions/whirlwind/techs.json`, Prophecy's `hp` 20); a summon
 spell would be an `abilities.json` entry (`kind: summon`, a `spawn` effect with the unit, count and lifetime). The 6 m search
 and the cap of 8 are code constants: an inbox note changes them.
+
+**Update (session 1954).** The health-bar rough edge (BUG-0450) is fixed: bars and the first-sight flash use the real maximum
+(the M4-V7 slice 2 entry above). BUG-0452 is fixed too (a summon spell's data file no longer needs an `affects` field and refuses a
+`radius` it would ignore). BUG-0451 (the speed benchmark on its limit) waits for the end-of-M4 clean-up.
 
 ### The Frenzied marker is magenta, a self-cast spell is one click, and the M4 battle is proven by a scripted sandbox fight under fog (view track, M4-V6d + M4-V7 slice 1, 2026-10-10)
 
@@ -133,6 +223,9 @@ BUG-0450 (S3, the health bar's maximum; the sim entry above). Two flakes QA foun
 
 **Not yet (slice 2).** The summon spell's button (same card, one line), an enemy storm over your own army in the sandbox, the
 health bar fix; stealth visuals after the rules' M4-5.
+
+**Update (session 1954).** The sandbox has a ninth step: an enemy Sandstorm over your army (the M4-V7 slice 2 entry above);
+the two staging caveats stand.
 
 ### The Zealot's two passives and the Frenzied status are pinned to their pages, and two descriptions are reworded (data track, D11, 2026-10-10)
 
@@ -3074,7 +3167,16 @@ track right after S1/S2 bugs).
     walk-in hemmed in by own `Attacking` units gives up after 20 stuck ticks and drops the cast silently (a 0.17 m limit cycle
     on flat ground meanwhile); triaged to the end-of-M4 sim hardening with a direction (sim debt backlog). **For the data
     track:** the `summon` / `spawn` schema is on `main` (docs/03 "For the data track (M4-4b-3b)"); no shipped summon before
-    Shadow (M8).
+    Shadow (M8). Used by M4-V7 slice 2 (session 2026-10-10-1954): BUG-0450 fixed through `UnitViews.FillMaxHp` + the span-only
+    `UnitHpBars.Collect` overload (a `World` can't be passed into `ViewApi`: the source guard).
+32. Available since M4-5 (session 2026-10-10-1954) for the view's **stealth visuals, now an M8 task** (docs/03 "For the view
+    (M4-V8)"): `World.IsStealthed(slot)` (own stealthed units translucent), `World.IsDetectedBy(player, slot)` (a detected-enemy
+    marker), `Units.Statuses.HasStealth(slot)` (a Revealed stealth carrier), `UnitDef.Detector` / `BuildingDef.Detector` (rings;
+    finished buildings only detect). `Fog.CanSeeUnit` already hides an undetected stealthed enemy, so nothing is needed before M8.
+    **For the data track (D12):** the unit `detector` schema (`units[k].detector`, m, above 0, at most 64) and the `stealthed` /
+    `revealed` statuses (numberless texts, no magnitude) are on `main` with this integration (docs/03 "For the data track (M4-5)");
+    both texts sit in `AbilityContentTests.PendingStatuses` until D12 pins them against docs/02 "Status effects". Nothing requested
+    of the sim by the view's M4-V7 slice 2.
 
 ## Feature queue: sim track (feature sessions, in order)
 
@@ -3117,17 +3219,16 @@ track right after S1/S2 bugs).
     `EmptyTick(2500)` gate has no headroom), BUG-0452 S4 filed; `targetUnit` / `autocast` **deferred** by Producer decision
     (docs/01) until a faction's data needs them; golden untouched (`ContentHash` extended only for spawn effects); ~2,990 lines
     incl. QA; criteria 6 and 8 ticked). Counter 2 / 4.
-14. **Next: M4-5 stealth / detection** (criterion 7), QA full: the `stealthed` / `revealed` status kinds from data (docs/02
-    "Status effects": Stealthed is invisible and untargetable to enemies without detection; Revealed overrides it), a
-    `detector` field on units (the towers' `buildings.json` `detector` is on `main` since M4-3b) with its range, the
-    vision rule (an enemy's detector within range reveals; attacking from stealth sets Revealed for a duration), the fog /
-    targeting hooks (`Fog.CanSeeUnit` false for a stealthed unit no detector sees, so the view needs no new rule; combat
-    cannot acquire or retaliate against it), a summoned unit can't be stealthed (`Units.IsSummoned`), stealth as a
-    `whenStanding` / forest passive hook only if cheap (Shadow is M8: test-only units and statuses, no `game/data/**` edit
-    unless a common status entry is needed, then say so for the data track), docs/03 "Implementation (M4-5)" + "For the view
-    (M4-V8)" + "For the data track". Fold BUG-0452 if the loader is touched. Then the end-of-M4 sim hardening (**BUG-0461
-    first**, BUG-0451 decision, BUG-0401, 0452, 0302 b / c, 0275, 0271 / 0272 decision, 0144, 0142, 0113 item 2, 0094, 0391,
-    0422 items 2-3), then the M4 sign-off once every track's hardening is done.
+14. ~~M4-5 stealth / detection (criterion 7)~~ → **done** (session 2026-10-10-1954, 0 fix rounds, QA full PASS_WITH_ISSUES: BUG-0480 /
+    0481 S3, BUG-0482 S4 filed, none reachable with shipped data; BUG-0452 items 1-3 folded in and fixed; the `stealthed` / `revealed`
+    kinds, `rules.json` `stealth`, a unit `detector`, `StealthSystem` at the end of phase 5 with a derived per-slot per-player mask,
+    `World.HiddenFrom` on `UnitSeesUnit` / `BuildingSeesUnit` / `Fog.CanSeeUnit` / the scan shortcut, the Revealed rule at delivery /
+    resolve; test-only sources; golden `data-hash` moved once, `k` lines identical, 889D6BEA3A49F08E in `SameGameDataHashes`; memory
+    +9,144 itemised, 29,560 B margin; ~2,600 lines incl. QA; criterion 7 ticked, **M4 10 / 10**). Counter 3 / 4.
+15. **Next: M4-H3, the end-of-M4 sim hardening** (see the Now table and the debt backlog: BUG-0461 first, then BUG-0480 / 0481 / 0482,
+    the BUG-0451 decision, BUG-0401, 0302 b / c, 0275, 0271 / 0272, 0144, 0142, 0113 item 2, 0094, 0391, 0422 items 2-3), then the **M4
+    sign-off** once the view's M4-VH3 and the data's D12 are on `main`. After M4: **M5 AI** (`PlayerView` fog-filtered facade first;
+    `Fog.CanSeeUnit` already applies stealth), with the data track's `ai.json` build orders.
 4. M6 (far ahead): agents can't download. **Owner note 2026-10-08: the art direction is grounded / realistic
    (Quaternius Universal Base Characters + Modular Outfits + Universal Animation Library 1 / 2, Mixamo packs for gaps;
    KayKit a fallback only; docs/04 and docs/01 updated by the owner), and the packs are already in `asset-sources/`
@@ -3176,14 +3277,15 @@ track right after S1/S2 bugs).
     2026-10-10-1314, 2 fix rounds: BUG-0460 / 0463 S2 (the scene's own timing flakes: fresh units by handle, rubble by any
     footprint cell, the swing window by tick, a second Cadre Mage) fixed; QA PASS_WITH_ISSUES: BUG-0461 S3 (sim), BUG-0462 S4;
     26 / 26 seed-runs + the Producer's 2 PASS; ~2,270 lines incl. QA; criterion 10 ticked). Counter 2 / 4.
-14. **Next: M4-V7 slice 2**, QA standard: **BUG-0450 first** (hp bars + the first-sight flash on `World.MaxHp(slot)`, per
-    slot; un-skip the QA row; `AbilityViewTest` or `CombatViewTest` row with a Prophecy Zealot at 70 / 83), the
-    `AbilityKind.Summon` card arm (the same no-target card as `SelfAura`; a test-only summon in `AbilityViewTest`: the units
-    appear at the resolve, an expiring unit's view goes with `DeathEvent.Expired` and no corpse), the sandbox's enemy-storm step
-    (a scripted enemy Priest's Sandstorm over the player's army: Blinded markers on own units, the enemy disc where seen),
-    BUG-0462 item 5 (the measured range in the `TickBudget` note and docs/03). Then M4-V8 stealth visuals once the sim's M4-5 is
-    on `main` (own stealthed units drawn translucent, enemies not drawn unless detected; a detector ring), then the end-of-M4
-    view hardening (BUG-0430 + 0462 item 1, 0431, 0462 item 3, 0400, 0250 item 2, 0148 item 1, 0126 items 5 / 6, export hygiene).
+14. ~~M4-V7 slice 2: BUG-0450 (hp bars + the first-sight flash on `World.MaxHp` per slot via `UnitViews.FillMaxHp`, the span-only
+    `UnitHpBars.Collect`, `HitFlash.UpdateWithSlotMax`), the `AbilityKind.Summon` card arm (`AbilityCaster.IsNoTarget`, no radius
+    line / ring at 0, `DeathMarkers.Collect` skips `Expired`), the sandbox's enemy-storm step 9, BUG-0462 item 5~~ → **done** (session
+    2026-10-10-1954, 0 fix rounds, QA PASS_WITH_ISSUES: BUG-0490 S4; 14 / 14 seed-runs, loop 41 / 41; ~1,435 lines incl. QA). Counter 3 / 4.
+    **M4-V8 stealth visuals moved to M8** (Producer decision at this ACCEPT: the roadmap lists "stealth visuals for owner and enemies"
+    under M8 and no unit can be stealthed before Shadow; docs/03 "For the view (M4-V8)" is its spec; Requests 32).
+15. **Next: M4-VH3, the end-of-M4 view hardening** (see the Now table and the debt backlog: BUG-0430 + 0462 item 1 first, then BUG-0490,
+    0431, 0462 item 3, 0400, 0250 item 2, 0148 item 1, 0126 items 5 / 6, export hygiene). Then the M4 sign-off; after M4 the view's M5 part
+    (little: dev flags for AI difficulty in the sandbox; the lobby is M6) and the M6 shell.
 
 ## Feature queue: data track (feature sessions, in order; owner reviews every landed task)
 
@@ -3224,15 +3326,26 @@ track right after S1/S2 bugs).
     review table is under For your review) **but held at integration** (ESCALATE, conductor rule: the merged tree fails the
     sim's `DataContentHashTests.EverySpawnField_AndTheSummonKind_ChangeTheHash`, which pins the shipped hash as a literal;
     `origin/studio/2026-10-10-1314-data` @ 9978bd6 with `main` merged). Counter 1 / 4 once landed.
-16. **Next:** inbox tweaks from the D11 review table first, if any. Else **D-H3 early** (QA light, small): BUG-0470 item 1 (a
-    second same-trigger passive sentence on a page fails naming both; un-skip the QA row), BUG-0440's four wordings, the
-    `UnitHpBars` remark the sim flagged is the view's. The **full balance pass** (QA standard) waits on your answer to the D6
-    band proposal (or a Producer default at the end of M4 if none comes: the proposed 40-65 % band); the fog-on sandbox now
-    exists for its numbers. Then `ai.json` build orders (M5), M7-M9 faction data (the `summon` / `spawn` schema is on `main`
-    for Shadow's Wraiths).
+16. ~~D-H3 (one session early) + the D11 landing commit: BUG-0470 item 1 (a second same-trigger page sentence fails naming both),
+    BUG-0440's four wordings (the colon, the hyphen, "dmg", the per-phrase linger)~~ → **done** (session 2026-10-10-1954, 0 fix
+    rounds, QA light PASS_WITH_ISSUES: BUG-0500 S4; tests only, no data / page / golden change; D11 landed with it: the identical
+    `DataContentHashTests.cs` hunk on the sim and data branches; ~330 lines incl. QA). Counter 0 / 4. No inbox tweaks had arrived.
+17. **Next:** inbox tweaks from the D11 review table first, if any. Else **D12** (QA light, ~500 lines): `detector: 10` on every
+    shipped caster in both factions' `units.json` (docs/02 "Caster" row), a Detector cell on both pages pinned both ways, the
+    `stealthed` / `revealed` texts pinned against docs/02 "Status effects" (out of `PendingStatuses`), one golden regen (`k` lines
+    equal; the hash into `SameGameDataHashes`), BUG-0500 + the BUG-0470 status line if a few lines; the review table. Then the **full
+    balance pass** (QA standard) after the M4 sign-off on your D6 answer or the Producer default (the 40-65 % band); then `ai.json`
+    build orders (M5), M7-M9 faction data (the `summon` / `spawn` and stealth schemas are on `main` for Shadow).
 
-## Debt backlog: sim track (hardening sessions only; counter **2 / 4** after M4-4b-3b, session 2026-10-10-1314; the end-of-M4 hardening comes before sign-off)
+## Debt backlog: sim track (hardening sessions only; counter **3 / 4** after M4-5, session 2026-10-10-1954; **the end-of-M4 hardening M4-H3 is the next sim session**)
 
+- **BUG-0480 (S3, M4-5 QA; second item of M4-H3):** `StealthSystem.OnStealthStarted` runs its enemy query into `World.ShoveNeighbors`,
+  the array `PassiveSystem.OnDeath` iterates, so an `onDeath` passive applying `stealthed` reaches 1 of 5 friends (QA's skipped row
+  `AnOnDeathPassiveApplyingStealthed_ReachesEveryListedFriend(true)`). Direction: a detection scratch of its own (`int[UnitCapacity]`,
+  ~16 KB, itemised; the last per-slot array before a memory re-baseline). **BUG-0481 (S3, M4-5 QA):** data with a `stealthed` kind and no
+  `revealed` kind loads clean and nothing ever reveals; one loader rule (exactly one `revealed` when any `stealthed`), the QA row
+  un-skipped. **BUG-0482 (S4, M4-5 QA):** a stealth carrier with 8 statuses is never Revealed (the ninth dropped); a reveal replaces the
+  oldest non-stealth entry, or document the limit. None reachable with shipped data (no stealth source before M8).
 - **BUG-0461 (S3, filed by the view QA at 1314 from the sandbox's saved replays; first item of the end-of-M4 sim hardening):**
   a cast's walk-in hemmed in by own `Attacking` units (never shoved) counts the plain Move give-up (`GiveUpTicks` 20 = 1 s), goes
   Idle and the cast is dropped silently: no cast, no cooldown, no feedback; on flat ground the walker also flips 0.17 m every tick
@@ -3244,9 +3357,8 @@ track right after S1/S2 bugs).
 - **BUG-0451 (S3, pre-existing; M4-4b-3b QA):** `EmptyTick_WithManyUnits_IsCheap(2500)` sits on its 500 µs gate (base 497-502
   µs in paired runs; the head 491-500, not above). Triage in the bug file: buy back idle-path cost first (movement / scan / hash
   of 2,500 idle units), else re-baseline to 550 µs with the trend itemised in the row's comment; until then a failure counts
-  only alone and above the base in a paired run. **BUG-0452 (S4, M4-4b-3b QA):** `affects` required and `radius` accepted on a
-  spawn-only summon though unused; `RecordDeath` drops an event past capacity silently. Fix in the bug file; with M4-5 if the
-  loader is touched, else here.
+  only alone and above the base in a paired run. ~~BUG-0452~~ (S4: `affects` optional on a spawn-only summon, `radius` refused on
+  one, `World.Deaths` capacity documented + a `Debug.Assert`) **fixed in M4-5** (session 2026-10-10-1954).
 - ~~BUG-0421~~ (S3: spawn at the max incl. hp techs, `ProductionSystem.Researched` adds the max change to live units, floor 1)
   and ~~BUG-0420~~ (S3: the `whenBelowHp` line in whole millionths, a 64-bit integer compare; QA's row un-skipped, an 80 M-case
   oracle) fixed in **M4-4b-3b** (session 2026-10-10-1314). **BUG-0422 (S4):** item 1 (docs/03 mojibake) fixed by the Producer at
@@ -3259,9 +3371,11 @@ track right after S1/S2 bugs).
   gives up. Regression scene: the seed-6 `QaGhostViewTest` layout as an xUnit row.
 - **BUG-0391 (S4, M4-H2 QA):** `CombatSystem.GoneButRemembered`'s summary still says "its own sight now"; two `StateHashTests`
   ghost rows on one line.
-- **Memory bound (BUG-0302 b, re-baselined in M4-4b-3a):** 231,873,016 of 231,920,000 bytes on the 1024 map (47 KB margin after
-  M4-4b-3b's +33,832: `ExpiresAtTick` 16,408, `DeathEvent` 32 → 36 B x 4,352 = 17,408, 16 B of store fields); every step since
+- **Memory bound (BUG-0302 b, re-baselined in M4-4b-3a):** 231,890,440 of 231,920,000 bytes on the 1024 map (29,560 B margin after
+  M4-5's +9,144: `StatusStore._stealth` 4,120, `World._detectedBy` 4,120, `DetectorBuildings` 1,048, counters; after M4-4b-3b's
+  +33,832: `ExpiresAtTick` 16,408, `DeathEvent` 32 → 36 B x 4,352 = 17,408, 16 B of store fields); every step since
   M4-4a fix round 1 is itemised in `FieldBuildFairnessQaTests`' comment (M4-4b-2's +18,536, M4-H2's +35,016, M4-4b-3a's +4,144).
+  BUG-0480's scratch (~16 KB) fits once; anything after it re-baselines (itemised, in the brief).
   The next per-slot field re-baselines: say so in the brief. BUG-0302 b's "~65 KB not itemised" refers to the
   M4-4a fix-round baseline itself; close it at the end-of-M4 hardening after checking that comment.
 - ~~BUG-0360~~ (S3: `FogStore.SeesUnitNearZones` + per-zone fog records hashed while live; `ZoneHides` by the point),
@@ -3397,19 +3511,20 @@ track right after S1/S2 bugs).
   recorded but not checked; no depletion events (views poll); .NET 8 support ends 2026-11-10, move
   to the next LTS at M6.
 
-## Debt backlog: view track (hardening sessions only; counter **2 / 4** after M4-V6d, session 2026-10-10-1314; the end-of-M4 hardening comes before sign-off)
+## Debt backlog: view track (hardening sessions only; counter **3 / 4** after M4-V7 slice 2, session 2026-10-10-1954; **the end-of-M4 hardening M4-VH3 is the next view session**)
 
-- **BUG-0450 (S3, filed by the sim QA at 1314; not debt: the first item of M4-V7 slice 2):** `UnitHpBars.Collect` /
-  `CombatViews.SyncBars` / `UnitViews._maxHp` (the first-sight `HitFlash`) take `UnitDef.Hp` as the maximum; a Prophecy Zealot at
-  70 / 83 shows no bar and one at 62 / 83 a 98 % bar. Fix: `World.MaxHp(slot)` per slot (Requests 31); un-skip
-  `QA/ViewApi/UnitHpBarsMaxHpQaTests.AProphecyZealotAt70Of83_ShowsABar`; the `UnitHpBars` remark "hp tech bonuses are not applied
-  by combat yet" goes.
+- **BUG-0490 (S4, M4-V7b QA):** item 1 the `TickBudget` comment / docs/03 range (seed 1 up to 3,028, seed 6 up to 4,372) was exceeded in
+  QA's 14 runs (3,081 / 4,488; margin still 1,012 ticks / 18 %): state "about 3,100 / 4,500 worst seen"; item 2 `UnitViews.Sync` and
+  `CombatViews.Sync` each fill a full per-slot `World.MaxHp` array a frame: share one. M4-VH3.
+- ~~BUG-0450~~ (S3: `UnitViews.FillMaxHp` + the span-only `UnitHpBars.Collect(shown, hp, maxHp, slots)` + `HitFlash.UpdateWithSlotMax`;
+  the QA row un-skipped; QA's `MaxHpExpiryQaTests`) **fixed in M4-V7 slice 2** (session 2026-10-10-1954).
 - ~~BUG-0460~~ (S2) and ~~BUG-0463~~ (S2) fixed in the M4-V6d fix rounds (session 2026-10-10-1314, test code only: fresh units
   by `EntityHandle`, rubble by any footprint cell; the swing window counted by tick over exactly 60 ticks, the caster-dead check
   first, a second Cadre Mage, a Telas recast; 26 / 26 seed-runs). **BUG-0462 (S4, M4-V6d QA):** item 1 the selfAura hover ring
   (and the targeting radius ring) float across a cliff (BUG-0430 class: fold into its fix); item 3 marker rows of units 2.5 m
-  apart merge at zoom 60 (M6 art pass); item 5 the `TickBudget` comment and docs/03 claim 40 % margin, one seed-6 run under
-  load took 4,212 ticks (23 %): re-state the measured range (M4-V7 slice 2). Items 2 and 4 fixed in round 1.
+  apart merge at zoom 60 (M6 art pass); ~~item 5~~ (the `TickBudget` comment and docs/03 now give the measured range incl. the 4,212
+  run, the margin as measured) fixed in M4-V7 slice 2 (session 2026-10-10-1954; its successor is BUG-0490 item 1). Items 2 and 4
+  fixed in round 1. Left here: items 1 and 3.
 - **BUG-0430 (S3, M4-V6c QA):** a zone disc is one flat plane at the terrain height under its centre + 0.1 m, so a storm across
   a cliff (4 m) is hidden under the higher ground on one side and floats on the other (shots `qa-v6c-cliff-zoom30/50.png`).
   Fix: project the disc onto the terrain (a decal, or a shader sampling the heightmap / depth), or a terrain-hugging mesh with
@@ -3487,18 +3602,16 @@ track right after S1/S2 bugs).
   warnings; not errors. Builders: absolute paths for all file I/O.
 - Optional M0 item: Godot MCP server (owner install; not needed since `--screenshot`).
 
-## Debt backlog: data track (counter **1 / 4** after D11, session 2026-10-10-1314)
+## Debt backlog: data track (counter **0 / 4** after D-H3, session 2026-10-10-1954)
 
-- **BUG-0470 (S4, D11 QA):** item 1: `PassiveContentTests.Compare` never reads a second same-trigger passive sentence on a page
-  (page → data only asks that the unit has *a* passive of that trigger; data → page takes `FirstOrDefault`), so a contradicting
-  "Last Rites" sentence passes. Fix: count page sentences per (unit, trigger) and fail the second naming both; un-skip
-  `QA/Content/ZealotPassivePinQaTests.ASecondSameTriggerPageSentence_WithOtherNumbers_Fails`. Items 2 (the docs/03 M4-4b-3a
-  Martyrdom bullet) and 3 (STATE's old quotes) fixed by the Producer at the 1314 ACCEPT. Next data hardening (D-H3), with BUG-0440.
-- **BUG-0440 (S4, D-H2 QA):** four wordings no shipped text uses bind to the wrong role in `DescriptionProblems` ("(cooldown:
-  12 s)" with a colon reads as the duration; "18-second" has no role and falls to the any-field check; "dmg" is not a damage
-  word; the linger phrase is detected per clause, so "Blinded for 1 second after a unit leaves" and "... linger after it leaves"
-  fail wrongly). Fix sketch in the bug file (`[:\s]*` after cooldown / recharge, `-` before the unit word, `dmg`, a narrower
-  linger window). Item 5 (the stale BUG-0410 index row) fixed by the Producer at the 1015 ACCEPT. Next data hardening.
+- **BUG-0500 (S4, D-H3 QA):** the per-phrase linger reader (`LingerBefore` at most 2 words before, `LingerAfter` "after" right after)
+  misses "a 1 s linger after leaving", "a 1-second linger after leaving" and "the effects linger on a unit for 1 s" (passed at the base,
+  now false failures; no shipped text uses them). Fix: also accept a linger word right after the number and 3 words in `LingerBefore`;
+  un-skip QA's `LingerPhrasings_ThatPassedAtTheBase_StillPass`. Item 2 (the README lists BUG-0470 `fixed` while its file says item 3 is
+  the Producer's) is moot: item 3 was fixed at the 1314 ACCEPT; correct the BUG-0470 status line. With D12 if a few lines, else D-H4.
+- ~~BUG-0470~~ (S4: `Compare` fails a second same-trigger sentence naming both passives and quoting both sentences; the QA row
+  un-skipped) and ~~BUG-0440~~ (S4: the colon, the hyphen, "dmg", the linger role per phrase; 15 rows, 11 failed first; QA's 56-case
+  matrix) **fixed in D-H3** (session 2026-10-10-1954). D11 landed the same session (the identical `DataContentHashTests.cs` hunk).
 - Known gaps (D-H2, documented in docs/03): distance words are one role (range vs radius, sight vs reach not told apart); "for
   N s" cannot tell an ability's own duration from an applied status's. Revisit if a shipped text needs it.
 - ~~BUG-0410 (S4, D10c QA)~~ fixed in D-H2 (session 2026-10-10-1015: `DescriptionProblems` checks each number against the field its
@@ -3541,6 +3654,7 @@ track right after S1/S2 bugs).
 
 | Date | Session | Task | Result |
 | --- | --- | --- | --- |
+| 2026-10-10 | [2026-10-10-1954](sessions/2026-10-10-1954.md) | sim M4-5: stealth / detection (`StatusKind.Stealthed` / `Revealed`, `common/statuses.json` `stealthed` / `revealed`, `rules.json` `stealth { proximity 3, revealSeconds 3 }`, `UnitDef.Detector`; `World.IsStealthed` / `IsDetectedBy` / `HiddenFrom` (`World.Stealth.cs`, a derived per-slot per-player mask), `StealthSystem.Run` at the end of phase 5 returning at once while `StatusStore.StealthedUnits` is 0, `OnStealthStarted`, `FogStore.SeesUnitCell`; the hook in `VisionSystem.UnitSeesUnit` / `BuildingSeesUnit`, `Fog.CanSeeUnit`, `CombatSystem.PickTarget`; `StealthSystem.OnAttackOrCast` in `HitUnit` / `HitBuilding` / `AbilitySystem.Run`; BUG-0452 items 1-3; golden `data-hash` → 889D6BEA3A49F08E); view M4-V7 slice 2: BUG-0450 (`UnitViews.FillMaxHp`, the span-only `UnitHpBars.Collect`, `HitFlash.UpdateWithSlotMax`), the `Summon` card arm (`AbilityCaster.IsNoTarget`, `DeathMarkers.Collect` skips `Expired`, the tooltip without radius), the sandbox's enemy-storm step 9, BUG-0462 item 5; data D-H3 + the D11 landing: `PassiveContentTests.Compare` fails a second same-trigger sentence (BUG-0470), `AbilityContentTests` colon / hyphen / "dmg" / per-phrase linger (BUG-0440), the identical `DataContentHashTests.cs` hunk | **all three ACCEPT**, 0 fix rounds each (sim PASS_WITH_ISSUES: BUG-0480 / 0481 S3, BUG-0482 S4, none reachable with shipped data; view PASS_WITH_ISSUES: BUG-0490 S4; data PASS_WITH_ISSUES: BUG-0500 S4). Integration sim → data → view; only the sim moves the golden. **M4 10 / 10 criteria (criterion 7 ticked; stealth visuals moved to M8); counters sim 3 / 4, view 3 / 4, data 0 / 4; no open S1 / S2; next: sim M4-H3 and view M4-VH3 (the end-of-M4 hardenings), data D12, then the M4 sign-off** |
 | 2026-10-10 | [2026-10-10-1314](sessions/2026-10-10-1314.md) | sim M4-4b-3b: hp techs raise hit points (`UnitStore.TrySpawn` at `World.MaxHpOf`, `ProductionSystem.Researched` adds the max change to live units, `TechState.Adds`, BUG-0421), the exact `whenBelowHp` line (`PassiveSystem.LineScale` millionths, 64-bit compare, `UnitPassive.HpLine`, BUG-0420), summons (`AbilityKind.Summon` = 2 cast like `selfAura` via `AbilitySystem.AtCaster`, `AbilityEffectKind.Spawn` = 3 with `unit` / `count` 1-8 / `lifetime`, `SummonSystem.Summon` at the resolve via `FreeCellSearch.NearestWithin` 3 rings, `SummonSystem.Run` first in phase 5 expiring through `RecordDeath` with `DeathEvent.Expired`, `UnitStore.ExpiresAtTick` hashed bit 19, `SummonedUnits` / `IsSummoned` derived, no pop), `targetUnit` / `autocast` deferred, golden untouched; view M4-V6d + M4-V7 slice 1: `AbilityViews.FrenzyColor` magenta, the `selfAura` card (`ViewApi.AbilityCaster.Lead`, `SelectionController.SelfCaster` / `SelfAbilityOrder` / `SendCast`, `CommandCard.HoveredAbility`, the hover ring), `game/tests/M4PlayableTest.tscn` (fog-on sandbox fight through the HUD, 9 steps, fog rule every frame, bare twin), `tools/qa/scene-loop.ps1` both playables last; data D11: `Content/PassiveContentTests` (both Zealot passives pinned both ways, `PendingPassives`), the Frenzied cell pinned + out of `PendingStatuses`, Blinded "can't attack", the Frenzied description reworded, Martyrdom "+50% attack speed" on the page, golden `data-hash` → 4383EBB9345FABF7 | **all three ACCEPT; data then ESCALATE at integration**: sim 0 fix rounds (PASS_WITH_ISSUES: BUG-0450 S3 view, BUG-0451 S3 pre-existing, BUG-0452 S4) merged 736bcd2, view 2 fix rounds (FAIL → FAIL → PASS_WITH_ISSUES: BUG-0460 / 0463 S2 scene flakes fixed; BUG-0461 S3 → sim, BUG-0462 S4) merged 8bb7513 (merged tree 4,873 / 8 / 0, loop 41 / 41), data 0 (PASS_WITH_ISSUES: BUG-0470 S4) **held on its branch**: the merged tree fails the sim's `DataContentHashTests` row that pins the shipped `data-hash` as a literal (D22C849A175F9ED5 vs D11's 4383EBB9345FABF7); a one-line fix lands it next session. **M4 9 / 10 (criteria 6, 8 and 10 ticked); counters sim 2 / 4, view 2 / 4, data 1 / 4; no open S1 / S2; next: sim M4-5 stealth, view M4-V7 slice 2 (BUG-0450 first), data inbox tweaks or D-H3** |
 | 2026-10-10 | [2026-10-10-1015](sessions/2026-10-10-1015.md) | sim M4-4b-3a: the `frenzied` status kind (`StatusKind.Frenzied` = 3; `StatusSystem.AttackCooldown` = `max(1, round(cd / (1 + m)))` at the swing, wind-up unchanged, largest magnitude), unit passives (`units.json` `passives`, `UnitPassive` / `PassiveTrigger`, `DataLoader.Passives`, `PassiveSystem.Run` first in phase 5 re-applying for 2 ticks while `hp < fraction x maxHp`, `PassiveSystem.OnDeath` in `CombatSystem.HitUnit` before the free, death order, `World.ShoveNeighbors` scratch; `UnitStore.BelowHpUnits` derived count), the `selfAura` kind (`AbilityKind.SelfAura` = 1, no `range`, resolves at the caster's position), the Zealot's two passives in `whirlwind/units.json`, `frenzied` in `common/statuses.json`, the memory bound re-baselined and itemised (231,920,000), golden `data-hash` → D22C849A175F9ED5; view M4-V6c: `ViewApi.ZoneDiscs` (`Collect` / `Alpha` / `SeesStorm`: own always, enemy where a visible cell is within radius + 2 m, fade over the last 20 ticks) + `ZoneDisc`, `AbilityViews.SyncZones` (one MultiMesh of `ZoneStore.Capacity`, `zone_disc.gdshader`, sand fill, own / owner-colour rim), `BlindColor` violet, `AbilityViewTest` storm rows, QA's `QaV6cTest`; data D-H2: `AbilityContentTests.DescriptionProblems` by role (duration / lingering / cooldown / cast / distance / percent / damage / damage rate; BUG-0410), `Compare` through the passed status list, `AgesRuleQaTests` on `PageTables.Heading`, QA's `DescriptionRoleQaTests` | **all three ACCEPT**, 0 fix rounds each (sim PASS_WITH_ISSUES: BUG-0420 / 0421 S3, BUG-0422 S4; view PASS_WITH_ISSUES: BUG-0430 S3, BUG-0431 S4 (renumbered by the Producer from the QA's 0420 / 0421); data PASS_WITH_ISSUES: BUG-0440 S4 (renumbered from 0431)). Integration sim → view → data; only the sim moves the golden. **M4 6 / 10 (criteria 6 and 8 advanced: all four signature abilities work in the rules; 8's tick waits on BUG-0421); counters sim 1 / 4, view 1 / 4, data 0 / 4; no open S1 / S2; next: sim M4-4b-3b (BUG-0421 first), view M4-V6d + M4-V7, data D11** |
 | 2026-10-10 | [2026-10-10-0624](sessions/2026-10-10-0624.md) | sim M4-H2 hardening: a storm hides a unit by its own centre (`FogStore.SeesUnitNearZones`, per-zone fog records hashed while live, BUG-0360; a new storm hides at once and `VisionSystem.BlockerNear` keeps the scan shortcut, BUG-0363 1-2), the recorder's `ZoneCapacity` guard (BUG-0361), the death list units + buildings (BUG-0330), a ghost Attack ends on `fog.SeesFootprint` (BUG-0311), `UnitStore.ChaseSwitches` / `ChaseChainBest` give-up (BUG-0241), the kept chase on a redirect for attack-move legs with the mean bound (BUG-0157), a tower's high-ground reveal per (building slot, player) hashed while in force (BUG-0270), containers-first load messages (BUG-0242), docs/01 / 02 / 03; view M4-VH2 hardening: `AbilityCaster.HasQueuedCast` + `ViewApi.SentCasts` (BUG-0370), `SlowColor` deep blue + `ResolveFlashes` first-frame decisions (BUG-0371), `game/tests/SceneExit.cs` in all 44 scripts (BUG-0251), `ViewApi.SeenResources` for props + minimap and `MinimapRaster.DrawnEnemyDotAt` (BUG-0281 1 + 3, BUG-0126 3), BUG-0250 1 + 3; data D10c: Sandstorm (`createZone`) and Blinded (`blind`) pinned by field both ways, `PendingAbilities` empty, BUG-0380, the Slowed / Telas Fire / Cusser descriptions as proposed + Sandstorm's "Your own units are unaffected", golden `data-hash` → EA5CB5A0AFCEEDBE | **all three ACCEPT**, 0 fix rounds each (sim PASS_WITH_ISSUES: BUG-0390 S3 (a view file) + BUG-0391 S4; view PASS_WITH_ISSUES: BUG-0400 S4; data PASS: BUG-0410 S4). Producer's own `QaGhostViewTest` run confirms BUG-0390 (the sim right, the scene's 10 m mean-walk check stale). Integration sim → view (+ a conductor-dispatched `QaGhostViewTest` rewrite before the merged loop) → data. **M4 6 / 10; counters sim 0 / 4, view 0 / 4, data 3 / 4; no open S1 / S2; next: sim M4-4b-3, view M4-V6c, data STOP (planned)** |

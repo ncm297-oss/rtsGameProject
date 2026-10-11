@@ -250,7 +250,7 @@ bugs outrank new features.
 | [BUG-0440](BUG-0440-d-h2-description-role-nits.md) | S4 | open | D-H2 nits: "cooldown: N s" and "N-second" wordings slip past the role check, "dmg" unread, linger bound per clause; index row for BUG-0410 stale |
 | [BUG-0450](BUG-0450-view-hp-bar-ignores-hp-techs.md) | S3 | open | Hp bars and the first-sight hit flash still use the type's hp as the maximum, so an upgraded hurt unit (Prophecy Zealot 63-82 / 83) shows no bar |
 | [BUG-0451](BUG-0451-empty-tick-2500-gate-no-headroom.md) | S3 | open | `EmptyTick_WithManyUnits_IsCheap(2500)` sits on its 500 µs gate; the base commit itself fails it in paired runs |
-| [BUG-0452](BUG-0452-m4-4b-3b-summon-nits.md) | S4 | open | M4-4b-3b summon nits: `affects` required and `radius` accepted on a spawn-only summon though unused; a dropped death event is silent |
+| [BUG-0452](BUG-0452-m4-4b-3b-summon-nits.md) | S4 | fixed | M4-4b-3b summon nits: `affects` required and `radius` accepted on a spawn-only summon though unused; a dropped death event is silent |
 | [BUG-0460](BUG-0460-m4-playable-flaky-slot-reuse-and-rubble-sight.md) | S2 | fixed | M4PlayableTest fails now and then: a recycled slot hides the duel's mage (step 8), the rubble check reads only the footprint's centre cell (step 7) |
 | [BUG-0461](BUG-0461-cast-walk-in-dropped-behind-own-attackers.md) | S3 | open | A cast's walk-in hemmed in by own attacking units gives up after 1 s and drops the cast; on flat ground the caster vibrates in place until then |
 | [BUG-0462](BUG-0462-m4-v6d-nits.md) | S4 | open | M4-V6d nits: selfAura hover ring floats across a cliff, seed-6 sandbox stills missing, marker rows merge at zoom 60, shot frames skip the fog check |

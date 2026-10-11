@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (items 1-3, M4-5; set by the Producer at the 1954 ACCEPT) |
 | Found | 2026-10-10-1314, task M4-4b-3b |
 | System | data loader (abilities), `World.RecordDeath` |
-| Fixed by | |
+| Fixed by | 6223f19 (M4-5, sim branch): `DataLoader.Abilities.cs` `OnlySpawns` (`affects` optional, `own_units`), the radius refusal, `World.Deaths` doc + `Debug.Assert`; proof `Data/StealthLoaderTests.Bug0452_*`, QA-verified below |
 
 ## Repro
 1. A `summon` whose only effects are `spawn` must still give `affects` (the dev report's deviation; docs/03 "For the data
