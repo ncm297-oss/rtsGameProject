@@ -33,3 +33,12 @@ the run checked, as docs/03 states ("on each frame of the whole run").
   frenzied-zealot (magenta marker over the hurt Zealot, none over B).
 - Item 4 fixed by bf3c75e: `Shot()` calls `CheckFog()` after each `FramePostDraw` wait.
 - Items 1 and 3 are still open, as the developer said.
+
+## Re-check (QA, 2026-10-10-1314 round 2)
+- Items 1 and 3 are still open.
+- New item 5. **The tick-budget margin is stated too high.** `M4PlayableTest.TickBudget`'s doc comment and docs/03
+  give seed 6 as 3,424-3,878 ticks "so at least 1,600 ticks (40 %) of margin". In one of QA's 12 round-2 runs (loop 1,
+  run 7, under suite load), seed 6 took 4,212 ticks: step 6 ("kills and losses move") ran 1,554 ticks against the usual
+  650-760, with kills 19 against 18. The margin was still 1,288 ticks (23 %). A worst-case Telas recast that waits for
+  the 25 s cooldown adds about 500 ticks, so the stated margin isn't a guarantee. Update the measured range or the
+  budget note.

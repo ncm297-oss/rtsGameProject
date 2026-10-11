@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-10-1314, task M4-V6d (QA re-check after fix round 1) |
 | System | test scene `game/tests/M4PlayableTest.cs` (M4-V7 slice 1) |
-| Fixed by | |
+| Fixed by | 77c686b (test code only: `game/tests/M4PlayableTest.cs`, docs/03 M4-V7); the scene itself is the regression check |
 
 ## Repro
 1. `dotnet build RtsGame.sln`
@@ -51,3 +51,24 @@ Two more timing-dependent script faults. QA replayed both saved replays in a bar
   rates with a margin that holds for any window of length L (A >= floor(L/13), B <= ceil(L/20)).
 - The BUG-0460 faults are fixed: no slot-reuse or rubble-sight failure in 18 seed-runs.
 - The same "count over a frame-measured window" pattern may exist in other scenes. Worth a grep when fixing.
+
+## Verification (QA, 2026-10-10-1314 round 2)
+- Code read of 77c686b. Step 8: `OnTicked` stores each swing's tick and the count takes only ticks `start+1 .. start+60`,
+  so the window is exactly 60 ticks however far the frame clock runs past it. In 60 ticks a 13-tick period starts at
+  least 4 swings and a 20-tick one at most 3, so the check is sound. The failure message lists both Zealots' swing ticks.
+  Step 5: `CastOnBlob` checks "caster dead and cast not resolved" before "took no cast", clicks again for the next live
+  caster, and fails with "every Cadre Mage died" once none is left. A drop costs no cooldown (`AbilitySystem` sets
+  `AbilityReadyTick` only at the resolve), so a retry within one call never meets a counting-down button. A recast after a
+  resolve waits for the HUD's own `SoonestReady`. Only Telas Fire applies `burning` in the shipped data, so a recast can't
+  pass on some other source. The step still needs a Burning marker over a seen Whirlwind unit, and it fails after three
+  resolved casts that burn no one. Step 4 now ends with an honest message when the storm ends. Input still goes only
+  through `Key` / `LeftClick` on the viewport and HUD, and the new reads (`PrevPosition`, `Target`, `State`,
+  `AbilityReadyTick` through `SoonestReady`) are all reads.
+- 12 scene runs (24 seed-runs) of `M4PlayableTest.tscn`, 7 of them while the non-Perf suite ran: 24 / 24 PASS, 0
+  ERROR lines, twins equal, 0 fog violations. Swing windows: A 4-5, B 3 in every duel. Four duels had the frame clock
+  run past the window (to `start+61`), and they still counted exactly 60 ticks. None of the fallback paths ran (no caster
+  death, recast or cooldown wait in 24 runs), so they are checked by code read only.
+- `--seed 1 --break 5`, `--seed 6 --break 8` and `--seed 6 --break 4` each fail at the named step and exit 1. Scene loop
+  and smoke: see the QA report `studio/qa/2026-10-10-1314-M4-V6d.md`, round 2.
+- One seed-6 run took 4,212 ticks (step 6 ran 1,554 ticks against the usual 650-760). That is outside the 3,424-3,878
+  range in the `TickBudget` doc comment, but still 1,288 ticks under the budget (filed as BUG-0462 item 5).
