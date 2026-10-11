@@ -256,3 +256,6 @@ bugs outrank new features.
 | [BUG-0462](BUG-0462-m4-v6d-nits.md) | S4 | open | M4-V6d nits: selfAura hover ring floats across a cliff, seed-6 sandbox stills missing, marker rows merge at zoom 60, shot frames skip the fog check |
 | [BUG-0463](BUG-0463-m4-playable-flaky-caster-death-and-swing-window.md) | S2 | fixed | M4PlayableTest still flaky: the Telas caster dies on its cast tick (step 5, reported as "took no cast"); a 61-tick swing window lets unhurt Zealot B tie Frenzied A (step 8) |
 | [BUG-0470](BUG-0470-d11-passive-pin-nits.md) | S4 | open | D11 nits: a second same-trigger passive sentence on a page is never compared; docs/03 and STATE.md still quote the pre-D11 text |
+| [BUG-0480](BUG-0480-stealth-start-clobbers-death-passive-scratch.md) | S3 | open | A stealthed status applied from the death path reaches only the first listed friend (OnStealthStarted overwrites the death passive's neighbour scratch) |
+| [BUG-0481](BUG-0481-stealth-data-without-revealed-status-loads.md) | S3 | open | Data with a stealthed status and no revealed status loads clean; attacks and casts from stealth then never reveal |
+| [BUG-0482](BUG-0482-full-status-store-drops-reveal.md) | S4 | open | A stealthed attacker that already carries 8 statuses is never Revealed (the reveal is dropped as a ninth status) |

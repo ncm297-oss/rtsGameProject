@@ -33,3 +33,13 @@ S4, end-of-M4 sim hardening (or with M4-5 if the loader is touched): (1) `affect
 all `spawn` (default `own_units`, documented); (2) `radius` refused on such a summon ("a summon with spawn effects only has
 no radius"); (3) the dropped event documented at `World.Deaths` (the view's read) and a `Debug.Assert` in `RecordDeath`.
 docs/03 "For the data track (M4-4b-3b)" updated with the fix.
+
+## QA verification (2026-10-10-1954, M4-5, commit 6223f19)
+Items 1-3 done as triaged; status left for the Producer to set at ACCEPT.
+1. `affects` optional on a spawn-only summon (`own_units` when absent): `DataLoader.Abilities.cs` `OnlySpawns`;
+   `Data/StealthLoaderTests.Bug0452_ASpawnOnlySummon_NeedsNoAffects_AndDefaultsToOwnUnits` green; a summon with another
+   effect still needs it (`Bug0452_ASummonWithAnotherEffect_StillNeedsAffectsAndRadius`).
+2. `radius` refused on a spawn-only summon at `abilities[k].radius`: `Bug0452_ASpawnOnlySummon_RefusesARadius` green;
+   `AbilityLoaderTests` line 197 and `QA/SummonQaTests.EdgeSummons_Load` changed to match (the radius line removed, the
+   rest of the edge row kept).
+3. Documented at `World.Deaths` and a `Debug.Assert` in `RecordDeath` (docs/03 updated).
