@@ -160,6 +160,13 @@ internal sealed class TechState
         return _bonus[(player * _units + unitType) * StatCount + (int)stat];
     }
 
+    /// <summary>What tech <paramref name="tech"/> alone adds to <paramref name="stat"/> of <paramref name="unitType"/> (M4-4b-3b: an hp tech's change to live units); 0 for out-of-range ids.</summary>
+    public float Adds(int unitType, TechStat stat, int tech)
+    {
+        if ((uint)unitType >= (uint)_units || (uint)stat >= (uint)StatCount || (uint)tech >= (uint)_techs) return 0f;
+        return _table[(unitType * StatCount + (int)stat) * _techs + tech];
+    }
+
     /// <summary>The sum of the player's researched effects on the attack of building type <paramref name="buildingType"/> (M4-3b, <see cref="MatchesBuilding"/>); 0 for out-of-range ids.</summary>
     public float BuildingAttackBonus(int player, int buildingType)
     {

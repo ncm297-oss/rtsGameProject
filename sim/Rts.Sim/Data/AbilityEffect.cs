@@ -25,4 +25,10 @@ public readonly record struct AbilityEffect
     public bool BlocksVision { get; init; }
     /// <summary>CreateZone (M4-4b-2): the statuses the zone applies to the units inside every tick, in file order; empty otherwise.</summary>
     public ImmutableArray<ZoneStatus> ZoneStatuses { get; init; }
+    /// <summary>Spawn (M4-4b-3b): the unit type id summoned (the ability's own faction); -1 otherwise.</summary>
+    public int Unit { get; init; }
+    /// <summary>Spawn (M4-4b-3b): how many units, 1 to <see cref="DataLimits.MaxSummonCount"/>; 0 otherwise.</summary>
+    public int Count { get; init; }
+    /// <summary>Spawn (M4-4b-3b): ticks from the resolve until the summoned units are taken away (at least 1); 0 otherwise.</summary>
+    public int LifetimeTicks { get; init; }
 }

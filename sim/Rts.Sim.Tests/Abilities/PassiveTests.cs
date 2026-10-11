@@ -227,4 +227,41 @@ public class PassiveTests
         Assert.Equal(0, u.BelowHpUnits);
         Assert.False(u.HasBelowHpPassive(z.Index));
     }
+    /// <summary>
+    /// M4-4b-3b criterion 2 (BUG-0420): the line is exact. 0.15 x 100 is 15, which is not below it (single precision made it
+    /// 15.000001); 14 is. 0.3 x 63 is 18.9: 18 is below, 19 is not.
+    /// </summary>
+    [Fact]
+    public void TheLine_IsExact_015Of100Is15NotBelow_03Of63Is18Point9()
+    {
+        Assert.False(PassiveSystem.IsBelow(15, 100, 0.15f));
+        Assert.True(PassiveSystem.IsBelow(14, 100, 0.15f));
+        Assert.True(PassiveSystem.IsBelow(18, 63, 0.3f));
+        Assert.False(PassiveSystem.IsBelow(19, 63, 0.3f));
+        Assert.Equal(150_000, PassiveSystem.LineOf(0.15f));
+        Assert.Equal(300_000, PassiveSystem.LineOf(0.3f));
+        Assert.Equal(500_000, PassiveSystem.LineOf(0.5f));
+    }
+
+    /// <summary>The same rows end to end: a Zealot edited to 100 hp and <c>hpFraction</c> 0.15 is not Frenzied at 15, is at 14; with 0.3 and 63 hp it is at 18, not at 19.</summary>
+    [Theory]
+    [InlineData(100, 0.15, 15, false)]
+    [InlineData(100, 0.15, 14, true)]
+    [InlineData(63, 0.3, 18, true)]
+    [InlineData(63, 0.3, 19, false)]
+    public void TheLine_IsExact_InTheSim(int hp, double fraction, int at, bool frenzied)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.SetUnitField("whirlwind", "whirlwind_zealot", "hp", hp.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        dir.SetUnitField("whirlwind", "whirlwind_zealot", "passives", "[{ \"trigger\": \"whenBelowHp\", \"hpFraction\": "
+            + fraction.ToString(System.Globalization.CultureInfo.InvariantCulture) + ", \"status\": \"frenzied\", \"magnitude\": 0.5 }]");
+        DataLoadResult r = DataLoader.LoadAll(dir.Path);
+        Assert.True(r.Ok, string.Join("; ", r.Errors));
+        var sim = new Simulation(TestSim.ConfigNoCombat(Seed: 1, PlayerCount: 2, UnitCapacity: 16, CommandCapacity: 64) with { Data = r.Data! }, LocalMovementTests.Flat(48));
+        EntityHandle z = Place(sim, 0, r.Data!.FindUnit("whirlwind_zealot"), At(sim, 10, 10));
+        Assert.Equal(hp, sim.World.Units.Hp[z.Index]);
+        sim.World.Units.Hp[z.Index] = at;
+        sim.Tick();
+        Assert.Equal(frenzied, sim.World.Units.Statuses.Count[z.Index] == 1);
+    }
 }

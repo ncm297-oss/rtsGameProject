@@ -123,7 +123,7 @@ public static partial class DataLoader
 
         // M4-4a: abilities (optional per faction), then each unit's list; a broken abilities file is reported once.
         int errorsBeforeAbilities = c.Errors.Count;
-        AbilityDef[] abilities = BuildAbilities(c, folders, table, statuses);
+        AbilityDef[] abilities = BuildAbilities(c, folders, table, statuses, unitKeys, units);
         if (c.Errors.Count == errorsBeforeAbilities)
             ResolveUnitAbilities(c, folders, unitFiles, accepted, unitKeys, units, abilities);
 

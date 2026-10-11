@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-10-1015, task M4-4b-3a |
 | System | techs / combat (hp stat), unit passives |
-| Fixed by | |
+| Fixed by | 11d741c (M4-4b-3b): spawn at the max incl. hp techs; a landing hp tech adds the max change to every live unit of the player (floor 1). Proof: `Abilities/HpTechTests` (dev, fail-first), `QA/PassiveQaTests.ProphecyResearchedMidFight_RaisesItTo61Of83_NotFrenzied_UntilBelowTheNewLine` (re-stated to the rule), `QA/HpTechQaTests` (overlapping techs, either order, negative floor, mid-burn, summoned units, the 41 / 83 line, twins fuzz). Verified by QA 2026-10-10-1314; the view's hp bar still uses the type hp: BUG-0450 |
 
 ## Repro
 1. `Rts.Sim.Tests.QA.PassiveQaTests.ProphecyResearchedMidFight_FrenziesAZealotNowBelowTheNewLine_NextTick`: a Zealot is

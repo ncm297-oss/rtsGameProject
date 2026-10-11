@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-10-1015, task M4-4b-3a |
 | System | unit passives (`PassiveSystem.IsBelow`) |
-| Fixed by | |
+| Fixed by | 11d741c (M4-4b-3b): the line held in whole millionths, 64-bit integer compare. Proof: `PassiveTests.TheLine_IsExact_*` (dev), `QA/PassiveQaTests.ExactlyAtTheLine_IsNeverBelow_ForDecimalFractions` un-skipped and green, `QA/HpTechQaTests.TheLine_MatchesADecimalOracle_ForEveryThreeDecimalFraction_AndSixDecimalSamples` (every k/1000 x max 1-400 x hp 0..max, plus 20,000 six-decimal samples, vs an integer oracle: 0 mismatches). Verified by QA 2026-10-10-1314 |
 
 ## Repro
 1. Un-skip `Rts.Sim.Tests.QA.PassiveQaTests.ExactlyAtTheLine_IsNeverBelow_ForDecimalFractions` and run

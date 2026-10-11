@@ -105,6 +105,8 @@ public sealed class Simulation
         // Phase 5: statuses count down, damage over time lands, the expired end (M4-4a); then zones count down and apply
         // their statuses (M4-4b-2), after the countdown so a zone's status lasts its full duration after the unit leaves.
         // M4-4b-3a: first the whenBelowHp passives (re-applied for 2 ticks before the countdown, so 1 is left after it).
+        // M4-4b-3b: before them, summoned units whose lifetime is over are taken away.
+        SummonSystem.Run(World);
         PassiveSystem.Run(World);
         StatusSystem.Run(World);
         ZoneSystem.Run(World);
@@ -154,7 +156,7 @@ public sealed class Simulation
     /// <summary>64-bit FNV-1a hash of all gameplay state: tick, units (Hold, order queues, gather loops and cargo, combat state included), RNG streams, flow-field cache metadata, nav grid versions (and the movement pass's last seen block version), resource nodes, buildings, projectiles in flight (production queues, research items and rally points included), the fog's explored and visible bits and high-ground reveals (M4-3a; visible bits BUG-0215), live zones (M4-4b-2), player totals, researched techs, kills and losses, and pending commands.</summary>
     /// <remarks>
     /// Derived state is left out: the spatial hash (rebuilt from the units every tick), the fog's byte map and update versions (M4-3a: copies of its hashed bits),
-    /// Speed/Radius (they follow from TypeId), a unit's blind in force (M4-4b-2: from its statuses), and population (M3-4: <see cref="World.HalfPop"/> follows from the live
+    /// Speed/Radius (they follow from TypeId), a unit's blind in force (M4-4b-2: from its statuses), the summoned flag and count (M4-4b-3b: from <c>ExpiresAtTick</c>, which is hashed), and population (M3-4: <see cref="World.HalfPop"/> follows from the live
     /// units and the started production items, <see cref="World.HalfPopCap"/> from the finished buildings). The flow-field cache's keys, versions and LRU stamps
     /// are in, because they decide which units wait under the build cap (BUG-0021); the fields'
     /// contents are not, since they follow from the grid and the key.
@@ -181,9 +183,11 @@ public sealed class Simulation
             // Orders (M1-7) ride in the high half of the state word, which is zero for a unit with
             // no Hold and an empty queue, so such a unit hashes exactly as before the queue existed.
             // M4-1: bit 17 flags combat state, added after the economy words. M4-4a: bit 18 ability state, after the combat words.
+            // M4-4b-3b: bit 19 a summoned unit, whose end tick comes last; a permanent unit hashes as before.
             bool combat = HasCombat(World, i);
             bool ability = HasAbilityState(u, i);
-            h.Add((ulong)(byte)u.State[i] | ((ulong)(OrderBits(u, i) | (combat ? 1u << 17 : 0u) | (ability ? 1u << 18 : 0u)) << 32));
+            bool summoned = u.ExpiresAtTick[i] != 0;
+            h.Add((ulong)(byte)u.State[i] | ((ulong)(OrderBits(u, i) | (combat ? 1u << 17 : 0u) | (ability ? 1u << 18 : 0u) | (summoned ? 1u << 19 : 0u)) << 32));
             h.Add(u.Goal[i]);
             h.Add(u.GoalCell[i]);
             h.Add(u.OrderTick[i]);
@@ -204,6 +208,7 @@ public sealed class Simulation
             }
             if (combat) AddCombatToHash(ref h, u, i);
             if (ability) AddAbilityToHash(ref h, u, i);
+            if (summoned) h.Add(u.ExpiresAtTick[i]);
         }
         h.Add(u.FreeCount);
         for (int i = 0; i < u.FreeCount; i++)

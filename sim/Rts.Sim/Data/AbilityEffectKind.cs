@@ -1,6 +1,6 @@
 namespace Rts.Sim.Data;
 
-/// <summary>One entry of the effect vocabulary (docs/02 "Ability system"); spelled as <see cref="DataLimits.AbilityEffectKindIds"/>. Supported since M4-4a: damage, applyStatus; since M4-4b-2: createZone.</summary>
+/// <summary>One entry of the effect vocabulary (docs/02 "Ability system"); spelled as <see cref="DataLimits.AbilityEffectKindIds"/>. Supported since M4-4a: damage, applyStatus; since M4-4b-2: createZone; since M4-4b-3b: spawn.</summary>
 public enum AbilityEffectKind
 {
     /// <summary>One hit of <see cref="AbilityEffect.Amount"/> of <see cref="AbilityEffect.DamageType"/>, through <c>DamageCalc</c>.</summary>
@@ -15,4 +15,11 @@ public enum AbilityEffectKind
     /// <see cref="AbilityEffect.BlocksVision"/>, hides its cells from the other players' units outside it.
     /// </summary>
     CreateZone = 2,
+
+    /// <summary>
+    /// Summon only (M4-4b-3b): <see cref="AbilityEffect.Count"/> units of type <see cref="AbilityEffect.Unit"/> (the ability's
+    /// faction) appear for the caster's owner on free cells round the caster at the resolve, free (no cost, no population),
+    /// and are taken away <see cref="AbilityEffect.LifetimeTicks"/> ticks later (<c>Abilities.SummonSystem</c>).
+    /// </summary>
+    Spawn = 3,
 }

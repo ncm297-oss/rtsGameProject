@@ -153,7 +153,7 @@ public static class ProductionSystem
         if (progress < ticks) return false;
         bool spawned = false;
         if (b.QueueIsTechAt(k, 0))
-            world.Techs.Set(b.Owner[k], b.QueueTypeAt(k, 0), true); // researched: nothing spawns
+            Researched(world, b.Owner[k], b.QueueTypeAt(k, 0)); // nothing spawns
         else if (Spawn(world, k, world.Data.Units[b.QueueTypeAt(k, 0)]))
             spawned = true;
         else
@@ -162,6 +162,38 @@ public static class ProductionSystem
         // The next item starts in the same tick, so each one takes exactly its train or research ticks.
         if (b.QueueCount[k] > 0) TryStart(world, k);
         return spawned;
+    }
+
+    /// <summary>
+    /// <paramref name="player"/> has researched <paramref name="tech"/> (phase 3, M3-5): its flag is set. M4-4b-3b (BUG-0421):
+    /// when the tech has an <c>hp</c> effect, every live unit of the player whose maximum hit points it changes gains the
+    /// change to its current hit points at once, so maximum and current move together (a 63 / 63 Zealot with Dryjhna's
+    /// Prophecy is 83 / 83, one at 41 / 63 is 61 / 83); a negative change leaves at least 1. A dead unit's slot is not
+    /// touched (a unit at 0 is freed in the hit that took it there). Slot order; no allocation.
+    /// </summary>
+    internal static void Researched(World world, int player, int tech)
+    {
+        bool hp = false;
+        if ((uint)tech < (uint)world.Data.Techs.Length)
+            foreach (TechEffect e in world.Data.Techs[tech].Effects) hp |= e.Stat == TechStat.Hp;
+        if (!hp || world.HasTech(player, tech))
+        {
+            world.Techs.Set(player, tech, true);
+            return;
+        }
+        // The change is the max hp after the flag minus before. Before is the bonus without this tech's own amount for the
+        // type: hp amounts are whole (the loader's rule), so the float sums are exact and nothing needs remembering.
+        world.Techs.Set(player, tech, true);
+        UnitStore u = world.Units;
+        for (int i = 0; i < u.Capacity; i++)
+        {
+            if (!u.Alive[i] || u.Owner[i] != player) continue;
+            int type = u.TypeId[i];
+            float bonus = world.Techs.Bonus(player, type, TechStat.Hp);
+            int after = world.MaxHpOf(player, type);
+            int before = Math.Max(1, world.Data.Units[type].Hp + Combat.DamageCalc.Points(bonus - world.Techs.Adds(type, TechStat.Hp, tech)));
+            if (after != before) u.Hp[i] = Math.Max(1, u.Hp[i] + after - before);
+        }
     }
 
     /// <summary>

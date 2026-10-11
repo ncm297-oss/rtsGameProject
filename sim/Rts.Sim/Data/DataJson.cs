@@ -295,6 +295,9 @@ internal sealed class AbilityEffectJson
     public double? FriendlyFire { get; set; }
     public bool? BlocksVision { get; set; }
     public List<ZoneStatusJson?>? Statuses { get; set; }
+    public string? Unit { get; set; }
+    public double? Count { get; set; }
+    public double? Lifetime { get; set; }
 }
 
 internal sealed class ZoneStatusJson
