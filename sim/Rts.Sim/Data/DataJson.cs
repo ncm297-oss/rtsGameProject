@@ -40,6 +40,17 @@ internal sealed class RulesJson
     public RepairJson? Repair { get; set; }
     public double? BuildingSight { get; set; }
     public StealthJson? Stealth { get; set; }
+    public AiRulesJson? Ai { get; set; }
+}
+
+// M5-2: rules.json "ai", the AI's generic tunables.
+internal sealed class AiRulesJson
+{
+    public double? GoldShare { get; set; }
+    public double? HouseWhenPopWithin { get; set; }
+    public double? PlacementSearchRadius { get; set; }
+    public double? BuildingSpacing { get; set; }
+    public double? ExpandHallReach { get; set; }
 }
 
 internal sealed class StealthJson

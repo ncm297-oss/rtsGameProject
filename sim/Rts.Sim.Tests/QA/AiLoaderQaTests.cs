@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Rts.Sim.Data;
 
 namespace Rts.Sim.Tests;
@@ -33,7 +34,7 @@ public class AiLoaderQaTests
     /// <summary>docs/03 "For the data track (M5-1)": "Unknown fields and repeated keys are errors, as everywhere".</summary>
     [Theory]
     [InlineData("\"easy\": {", "\"easy\": { \"thinkInterval\": 3, ")] // a repeated key inside one difficulty
-    [InlineData("\"malazan_heavy_infantry\": 2, \"malazan_crossbowman\": 1 } },", "\"malazan_heavy_infantry\": 2, \"malazan_crossbowman\": 1, \"malazan_heavy_infantry\": 7 } },")] // a repeated unit in a composition map
+    [InlineData("{ \"age\": 1, \"units\": { ", "{ \"age\": 1, \"units\": { \"malazan_heavy_infantry\": 7, ")] // a repeated unit in a composition map (any shipped Age I mix has the heavy infantry; BUG-0571)
     [InlineData("\"attack\":", "\"retreat\": { \"hpFraction\": 0.9, \"lossFraction\": 0.9 }, \"attack\":")] // a repeated top-level block
     public void ARepeatedKey_IsAnError(string find, string replace)
     {
@@ -46,19 +47,22 @@ public class AiLoaderQaTests
         Assert.All(errors, e => Assert.Equal(MalazanAi, e.File));
     }
 
+    /// <summary>The first value of <paramref name="key"/> in the file, whatever the shipped content writes there (BUG-0571), replaced by the raw literal <paramref name="literal"/>.</summary>
     [Theory]
-    [InlineData("\"gatherBonus\": 0.25", "\"gatherBonus\": NaN")]
-    [InlineData("\"gatherBonus\": 0.25", "\"gatherBonus\": Infinity")]
-    [InlineData("\"gatherBonus\": 0.25", "\"gatherBonus\": \"NaN\"")]
-    [InlineData("\"hpFraction\": 0.3", "\"hpFraction\": -Infinity")]
-    [InlineData("\"minArmyCost\": 800", "\"minArmyCost\": 1e400")]
-    [InlineData("\"count\": 1", "\"count\": 3000000000")]
-    public void NonFiniteAndOverflowingLiterals_AreOneErrorEach_NeverAThrow(string find, string replace)
+    [InlineData("gatherBonus", "NaN")]
+    [InlineData("gatherBonus", "Infinity")]
+    [InlineData("gatherBonus", "\"NaN\"")]
+    [InlineData("hpFraction", "-Infinity")]
+    [InlineData("minArmyCost", "1e400")]
+    [InlineData("count", "3000000000")]
+    public void NonFiniteAndOverflowingLiterals_AreOneErrorEach_NeverAThrow(string key, string literal)
     {
         IReadOnlyList<DataError> errors = ErrorsOfText(t =>
         {
-            Assert.Contains(find, t);
-            return ReplaceFirst(t, find, replace);
+            Match m = Regex.Match(t, "\"" + key + "\": *([-0-9.eE+]+|true|false)");
+            Assert.True(m.Success, $"no number at \"{key}\" in the shipped file");
+            Group v = m.Groups[1];
+            return string.Concat(t.AsSpan(0, v.Index), literal, t.AsSpan(v.Index + v.Length));
         });
         DataError e = Assert.Single(errors);
         Assert.Equal(MalazanAi, e.File);
@@ -158,7 +162,8 @@ public class AiLoaderQaTests
             root["buildOrder"]!.AsArray().Add(JsonNode.Parse("""{ "at": { "time": 60 }, "do": "expand", "count": 2 }"""));
         });
         DataError e = Assert.Single(dup.Errors);
-        Assert.Equal("buildOrder[2]", e.Path);
+        int shipped = TestSim.Data.Ai[TestSim.Data.FindFaction("malazan")].BuildOrder.Length; // whatever the shipped order's length (BUG-0571)
+        Assert.Equal($"buildOrder[{shipped + 1}]", e.Path);
         // time 60 s and workers 60 are different triggers with the same number: not a duplicate.
         DataLoadResult ok = LoadWith(root =>
         {

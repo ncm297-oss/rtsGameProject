@@ -263,9 +263,9 @@ public sealed partial class World
     /// <summary>Scratch for <see cref="ConstructionSystem"/>'s push-out: the units a new site sets down, slot order; derived, not hashed.</summary>
     internal int[] PushedUnits { get; }
 
-    /// <summary>The faction <paramref name="player"/> plays: player p plays faction <c>p mod factions</c> in id order until a lobby picks them (M6); -1 for no such player.</summary>
+    /// <summary>The faction <paramref name="player"/> plays: its seat's (<see cref="SimConfig.SeatOf"/>, M5-2), by default faction <c>p mod factions</c> in id order; -1 for no such player.</summary>
     public int FactionOf(int player) =>
-        _ledger.Has(player) && Data.Factions.Length > 0 ? player % Data.Factions.Length : -1;
+        _ledger.Has(player) && Data.Factions.Length > 0 ? Config.SeatOf(player).Faction : -1;
 
     /// <summary>
     /// Whether <paramref name="player"/> may queue a unit of <paramref name="unitTypeId"/> at building slot

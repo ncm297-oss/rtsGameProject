@@ -282,6 +282,46 @@ public static partial class DataLoader
         return true;
     }
 
+    /// <summary>
+    /// M5-2: <c>rules.json</c> <c>ai</c> (required): <c>goldShare</c> a fraction 0-1; <c>houseWhenPopWithin</c> pop, 0 or more, a
+    /// multiple of 0.5, at most the pop cap; <c>placementSearchRadius</c> and <c>expandHallReach</c> m, above 0, at most
+    /// <see cref="DataLimits.MaxAiSearchRadius"/>; <c>buildingSpacing</c> m, 0 to <see cref="DataLimits.MaxAiSpacing"/>. Meters go
+    /// to whole cells, rounded up. A refused <c>popCap</c> is reported once: the cap rule is skipped then.
+    /// </summary>
+    private static AiRulesDef BuildAiRules(Checker c, AiRulesJson? j, RulesDef? rules)
+    {
+        j = c.Obj(j, "ai");
+        if (j == null) return new AiRulesDef();
+        double within = c.NonNeg(j.HouseWhenPopWithin, "ai.houseWhenPopWithin");
+        int halfPop = 0;
+        if (within * 2 != Math.Floor(within * 2)) c.Error("ai.houseWhenPopWithin", $"{within} is not a multiple of 0.5");
+        else if (rules != null && rules.HalfPopCap > 0 && within * 2 > rules.HalfPopCap) c.Error("ai.houseWhenPopWithin", $"{within} is above the population cap {rules.HalfPopCap / 2}");
+        else halfPop = (int)(within * 2);
+        return new AiRulesDef
+        {
+            GoldShare = (float)Fraction(c, j.GoldShare, "ai.goldShare"),
+            HouseHalfPopMargin = halfPop,
+            PlacementSearchCells = Cells(Distance(c, j.PlacementSearchRadius, "ai.placementSearchRadius", DataLimits.MaxAiSearchRadius, positive: true)),
+            SpacingCells = Cells(Distance(c, j.BuildingSpacing, "ai.buildingSpacing", DataLimits.MaxAiSpacing, positive: false)),
+            ExpandReachCells = Cells(Distance(c, j.ExpandHallReach, "ai.expandHallReach", DataLimits.MaxAiSearchRadius, positive: true)),
+        };
+    }
+
+    /// <summary>A required distance in meters: above 0 (or 0 or more), at most <paramref name="max"/>; 0 when refused.</summary>
+    private static double Distance(Checker c, double? value, string path, double max, bool positive)
+    {
+        double d = positive ? c.Pos(value, path) : c.NonNeg(value, path);
+        if (d > max)
+        {
+            c.Error(path, $"{d} m is above the maximum {max} m");
+            return 0;
+        }
+        return d;
+    }
+
+    /// <summary>Meters to whole map cells, rounded up.</summary>
+    private static int Cells(double meters) => (int)Math.Ceiling(meters / Map.MapConstants.CellSize);
+
     /// <summary>A required fraction, 0 to 1 inclusive.</summary>
     private static double Fraction(Checker c, double? value, string path)
     {

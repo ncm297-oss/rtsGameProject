@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (set by the Producer at the 2026-10-11-0634 ACCEPT; the data dev may not edit `studio/**`) |
 | Found | 2026-10-11-0314, task D13 |
 | System | docs (faction pages) |
-| Fixed by | |
+| Fixed by | D14 (4b0c496): andii.md / shadow.md say ×1.1 with a note that the page held the old template value; whirlwind.md "the nearest value to the band that kept the test suite green"; malazan.md names what "nearest" measured and that 1.3 is the value to try first |
 
 ## Repro
 1. `grep -n "vs Mounted" docs/factions/*.md`

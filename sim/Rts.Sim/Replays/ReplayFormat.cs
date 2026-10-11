@@ -13,7 +13,8 @@ namespace Rts.Sim.Replays;
 
 /// <summary>Reads and writes replays as line-based ASCII text (docs/03 "Save/load and replays").</summary>
 /// <remarks>
-/// One <c>key value</c> line per header field in a fixed order (format 4 adds <c>combat 0 / 1</c> after <c>ticks</c>),
+/// One <c>key value</c> line per header field in a fixed order (format 4 adds <c>combat 0 / 1</c> after <c>ticks</c>; format 5
+/// one <c>seat p faction human|ai easy|normal|hard</c> line per player right after <c>players</c>),
 /// then <c>commands N</c> and N <c>c</c> lines (format 4: 13 fields, the attack target's index, generation and
 /// building flag before the flags; format 3: 10), <c>checkpoints N</c> and N <c>k</c> lines, <c>end</c>, and last a
 /// <c>checksum</c> line: the FNV-1a 64 hash of every byte before it, so any changed byte is caught.
@@ -45,6 +46,14 @@ public static class ReplayFormat
         Line(sb, "data-hash", Hex(replay.DataHash));
         Line(sb, "seed", replay.Seed.ToString(Inv));
         Line(sb, "players", Int(replay.PlayerCount));
+        if (replay.FormatVersion >= 5)
+            for (int p = 0; p < replay.Seats.Length; p++)
+            {
+                ReplaySeat seat = replay.Seats[p];
+                sb.Append("seat ").Append(Int(p)).Append(' ').Append(seat.Faction).Append(' ')
+                    .Append(seat.Controller == SeatController.Ai ? "ai" : "human").Append(' ')
+                    .Append(Data.DataLimits.AiDifficultyIds[(int)seat.Difficulty]).Append('\n');
+            }
         Line(sb, "unit-capacity", Int(replay.UnitCapacity));
         Line(sb, "command-capacity", Int(replay.CommandCapacity));
         Line(sb, "resource-capacity", Int(replay.ResourceCapacity));
@@ -178,6 +187,26 @@ public static class ReplayFormat
         if (!r.Hex("data-hash", out ulong dataHash)) return ReplayError.Malformed;
         if (!r.Fields("seed", 1, out f) || !TryULong(f[0], out ulong seed)) return ReplayError.Malformed;
         if (!r.Int("players", out int players)) return ReplayError.Malformed;
+        // M5-2 (format 5): one seat line per player, players 0, 1, ... in order. The count is checked against the players
+        // (at most Replay.MaxPlayers) before any line is read, so a file can't make the reader loop long.
+        var seats = ImmutableArray<ReplaySeat>.Empty;
+        if (version >= 5)
+        {
+            if (players < 1 || players > Replay.MaxPlayers) return ReplayError.InvalidHeader;
+            var builder = ImmutableArray.CreateBuilder<ReplaySeat>(players);
+            for (int p = 0; p < players; p++)
+            {
+                if (!r.Fields("seat", 4, out f) || !TryInt(f[0], out int seatPlayer) || seatPlayer != p || !Replay.IsFactionToken(f[1])) return ReplayError.Malformed;
+                SeatController controller;
+                if (f[2] == "human") controller = SeatController.Human;
+                else if (f[2] == "ai") controller = SeatController.Ai;
+                else return ReplayError.Malformed;
+                int difficulty = Data.DataLimits.AiDifficultyIds.IndexOf(f[3]);
+                if (difficulty < 0) return ReplayError.Malformed;
+                builder.Add(new ReplaySeat(f[1], controller, (Data.AiDifficulty)difficulty));
+            }
+            seats = builder.MoveToImmutable();
+        }
         if (!r.Int("unit-capacity", out int unitCapacity)) return ReplayError.Malformed;
         if (!r.Int("command-capacity", out int commandCapacity)) return ReplayError.Malformed;
         if (!r.Int("resource-capacity", out int resourceCapacity)) return ReplayError.Malformed;
@@ -277,6 +306,7 @@ public static class ReplayFormat
         {
             FormatVersion = version,
             Combat = combat,
+            Seats = seats,
             SimVersion = simVersion,
             DataHash = dataHash,
             Map = map,

@@ -13,8 +13,8 @@ namespace Rts.Sim.Replays;
 /// </remarks>
 public sealed class Replay
 {
-    /// <summary>The format version this build writes (4 since M4-2a: the <see cref="Combat"/> switch in the header and an attack target on every command line; 3 since M3-1: the resource capacity and the resource placer's map fields; 2 since M1-7: command lines carry <see cref="Command.Flags"/>).</summary>
-    public const int CurrentFormatVersion = 4;
+    /// <summary>The format version this build writes (5 since M5-2: one <see cref="Seats"/> line per player; 4 since M4-2a: the <see cref="Combat"/> switch in the header and an attack target on every command line; 3 since M3-1: the resource capacity and the resource placer's map fields; 2 since M1-7: command lines carry <see cref="Command.Flags"/>).</summary>
+    public const int CurrentFormatVersion = 5;
 
     /// <summary>The oldest format version this build still reads and plays: 3 (M3-1), which has no combat line (combat on) and no attack targets.</summary>
     public const int OldestFormatVersion = 3;
@@ -36,6 +36,12 @@ public sealed class Replay
 
     /// <summary><see cref="SimInfo.Version"/> of the build that recorded it (informational; playback does not check it).</summary>
     public required string SimVersion { get; init; }
+
+    /// <summary>
+    /// M5-2 (format 5): one seat per player, in player order (faction string id, Human / AI, difficulty); empty for a format 3
+    /// or 4 replay, which was recorded with the default seats (<see cref="SimConfig.SeatOf"/>).
+    /// </summary>
+    public ImmutableArray<ReplaySeat> Seats { get; init; } = ImmutableArray<ReplaySeat>.Empty;
 
     /// <summary><see cref="Data.GameData.ContentHash"/> of the data it was recorded with.</summary>
     public required ulong DataHash { get; init; }
@@ -86,6 +92,16 @@ public sealed class Replay
         if (TickCount < 0 || TickCount > MaxTickCount) return ReplayError.InvalidHeader;
         // Not "at most TickCount": the recorder writes replays shorter than one interval (0 checkpoints).
         if (CheckpointInterval < 1 || CheckpointInterval > MaxTickCount) return ReplayError.InvalidHeader;
+        // M5-2: format 5 has exactly one seat per player; older formats have none (they can't write one).
+        if (FormatVersion >= 5)
+        {
+            if (Seats.IsDefault || Seats.Length != PlayerCount) return ReplayError.InvalidHeader;
+            foreach (ReplaySeat seat in Seats)
+                if (!IsFactionToken(seat.Faction) || seat.Controller is not (SeatController.Human or SeatController.Ai)
+                    || seat.Difficulty is not (Data.AiDifficulty.Easy or Data.AiDifficulty.Normal or Data.AiDifficulty.Hard))
+                    return ReplayError.InvalidHeader;
+        }
+        else if (!Seats.IsDefaultOrEmpty) return ReplayError.InvalidHeader;
 
         if (Commands.IsDefault) return ReplayError.InvalidCommand;
         var nextSequence = new int[PlayerCount];
@@ -121,6 +137,16 @@ public sealed class Replay
         if (string.IsNullOrEmpty(s) || s.Length > 64) return false;
         foreach (char ch in s)
             if (ch <= ' ' || ch > '~') return false;
+        return true;
+    }
+
+    /// <summary>A faction id as a seat line holds it: <c>-</c>, or snake_case (lowercase letters, digits, underscores; a letter first), at most 64 characters.</summary>
+    internal static bool IsFactionToken(string? s)
+    {
+        if (s == "-") return true;
+        if (string.IsNullOrEmpty(s) || s.Length > 64 || s[0] < 'a' || s[0] > 'z') return false;
+        foreach (char ch in s)
+            if (!(ch is >= 'a' and <= 'z' or >= '0' and <= '9' or '_')) return false;
         return true;
     }
 

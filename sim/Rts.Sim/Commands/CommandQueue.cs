@@ -18,6 +18,9 @@ public sealed class CommandQueue
     /// <summary>Number of pending commands.</summary>
     public int Count => _count;
 
+    /// <summary>The most commands it holds at once.</summary>
+    public int Capacity => _items.Length;
+
     /// <summary>Pending command at <paramref name="index"/> (insertion order until sorted).</summary>
     public ref readonly Command this[int index]
     {

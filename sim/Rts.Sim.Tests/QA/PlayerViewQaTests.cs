@@ -315,9 +315,9 @@ public class PlayerViewQaTests
     /// docs/02 "AI opponent": "The AI sees only its own fog-of-war view. It never reads hidden enemy state." A tree the player
     /// explored and no longer sees, felled out of its sight, is the world changing where the player can't look: the view
     /// should keep answering it (as the ghost list does for a building that died unseen) until the player sees its ground.
-    /// Today it drops out of the answers at once (docs/03 "Implementation (M5-1)", Lifetime).
+    /// M5-1 dropped it at once (BUG-0540); M5-2 keeps it in the fog's node memory (docs/03 "Implementation (M5-1)", Lifetime).
     /// </summary>
-    [Fact(Skip = "BUG-0540: PlayerView drops a resource node depleted out of the player's sight at once (hidden state leaks)")]
+    [Fact]
     public void ANodeDepletedOutOfSight_IsStillAnswered_UntilItsGroundIsSeen()
     {
         Simulation sim = ResourceScene(out EntityHandle node);
@@ -329,19 +329,6 @@ public class PlayerViewQaTests
         Assert.False(w.Resources.Alive[node.Index]);
         sim.Tick();
         Assert.True(v0.TryGetResource(node.Index, out _), "player 0 learned a node it can't see was felled");
-    }
-
-    /// <summary>The same scene, pinned as today's behaviour: the node leaves the answers at once (what BUG-0540 is about).</summary>
-    [Fact]
-    public void ANodeDepletedOutOfSight_TodayLeavesTheAnswers_AtOnce()
-    {
-        Simulation sim = ResourceScene(out EntityHandle node);
-        World w = sim.World;
-        var v0 = new PlayerView(w, 0);
-        Assert.True(v0.TryGetResource(node.Index, out SeenResource known));
-        Assert.Equal(-1, known.Remaining);
-        w.Resources.Take(node, int.MaxValue);
-        Assert.False(v0.TryGetResource(node.Index, out _));
     }
 
     /// <summary>A flat map with player 0 having explored a node and walked away (the node explored, not visible).</summary>

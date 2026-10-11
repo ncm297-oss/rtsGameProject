@@ -469,7 +469,8 @@ public class DataLoaderQaTests
     // ---------- GameData shape: nothing mutable reaches tick code ----------
 
     private static readonly Type[] DefTypes =
-        { typeof(GameData), typeof(DamageTable), typeof(RulesDef), typeof(FactionDef), typeof(UnitDef), typeof(AttackDef) };
+        { typeof(GameData), typeof(DamageTable), typeof(RulesDef), typeof(FactionDef), typeof(UnitDef), typeof(AttackDef),
+          typeof(AiRulesDef) }; // M5-2: rules.json ai, a member of GameData
 
     [Fact]
     public void GameDataTypes_ExposeOnlyImmutableMembers()

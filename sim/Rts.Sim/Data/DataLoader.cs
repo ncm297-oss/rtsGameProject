@@ -34,6 +34,7 @@ public static partial class DataLoader
         DamageTable? table = tableJson == null ? null : BuildDamageTable(c, tableJson);
         RulesJson? rulesJson = c.Read("common/rules.json", DataJsonContext.Default.RulesJson);
         RulesDef? rules = rulesJson == null ? null : BuildRules(c, rulesJson);
+        AiRulesDef? aiRules = rulesJson == null ? null : BuildAiRules(c, rulesJson.Ai, rules);
         ResourceFileJson? resourcesJson = c.Read("common/resources.json", DataJsonContext.Default.ResourceFileJson);
         ResourceDef[]? resources = resourcesJson == null ? null : BuildResources(c, resourcesJson);
         ProjectileFileJson? projectilesJson = c.Read("common/projectiles.json", DataJsonContext.Default.ProjectileFileJson);
@@ -160,7 +161,7 @@ public static partial class DataLoader
         bool aiRefs = buildingsClean && unitFilesOk && techs.FilesOk && NoErrorIn(c, "/units.json", "/buildings.json", "/techs.json");
         AiDef[] ai = BuildAi(c, folders, aiRefs, unitKeys, units, buildings, techDefs);
 
-        if (c.Errors.Count > 0 || table == null || rules == null || resources == null || projectiles == null || statuses == null)
+        if (c.Errors.Count > 0 || table == null || rules == null || aiRules == null || resources == null || projectiles == null || statuses == null)
             return new DataLoadResult(null, c.Errors);
         var data = new GameData
         {
@@ -179,6 +180,7 @@ public static partial class DataLoader
             Statuses = ImmutableArray.Create(statuses),
             Abilities = ImmutableArray.Create(abilities),
             Ai = ImmutableArray.Create(ai),
+            AiRules = aiRules!,
         };
         return new DataLoadResult(data, c.Errors);
     }
