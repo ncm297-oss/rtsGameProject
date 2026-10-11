@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | open: the cast half fixed (M4-H3); the movement half (the 0.17 m two-tick cycle, case 3) open, documented |
 | Found | 2026-10-10-1314, task M4-V6d (QA, confirming the developer's "seen for the sim track" notes in docs/03 "Implementation (M4-V7)") |
 | System | abilities walk-in (`AbilitySystem.Run`) + local movement give-up (`MovementSystem`, `GiveUpTicks` = 20) |
-| Fixed by | |
+| Fixed by | M4-H3 (sim), cast half: the walk-in patience, the own-fighter wait, `AbilityEvent.Dropped` |
 
 ## Repro
 Replays saved by the M4 sandbox while it was being written, in this machine's Godot user data folder
@@ -46,3 +46,30 @@ player would see.
 - Producer's call whether this is the movement rule (shove or swap with own `Attacking` units, BUG-0035 / 0037 family)
   or the cast rule (a longer patience for a cast's walk-in, or feedback when a cast is dropped). Case 3's limit cycle
   looks like a movement bug in its own right (the oscillation also showed during a chase, before any cast).
+
+## Fix, cast half (M4-H3, 2026-10-11)
+The Producer's cast rule (docs/01 row 2026-10-11; owner may revisit):
+- A caster walking into range (`CastAbility >= 0`, `Moving`) whose tick makes no progress while an own unit that is
+  `Attacking` or `Casting` stands within `SimConfig.CastWalkInBlockerRange` (1.5 m, body edge to body edge) with its centre
+  ahead of its direction of travel counts no stuck tick (the count holds, as behind a flowing group:
+  `MovementSystem.OwnFighterAhead`). A holder or an Idle own unit doesn't count (a holder may never move; an Idle one is
+  shoved, or pushed after `PushAfterStuckTicks`).
+- Any other stuck walk-in gives up after `SimConfig.CastWalkInPatienceSeconds` (3 s, `World.CastWalkInPatienceTicks` = 60
+  stuck ticks), not a Move's 20; then the cast is dropped as before.
+- A cast lost without a new order (the walk stopped short, or something took the caster off `Casting`) records an
+  `AbilityEvent` with `Dropped` true (`Resolved` false, the cast point, the ability). The view ignores it for now.
+Both numbers are `SimConfig` values with defaults (no `game/data` edit this session). Proof (`Abilities/CastWalkInTests`):
+`ACasterBehindItsOwnFightersInAPass_WaitsWithoutCountingStuck_AndCastsWhenTheWayClears` (replay 1's layout: a 1-cell pass,
+two crossbowmen abreast and one behind, attacking a worker across a cliff band; it walks up and waits, 140 ticks with no second stuck tick, then the fight
+ends and the cast resolves) and `ACasterRingedByItsOwnFighters_NeverMoving_WaitsAndCastsWhenTheFightEnds` (replay 2's: the
+Sapper ringed by seven attacking crossbowmen 1 m away, its point 20 m off): both failed on the base 3584a3a ("2 stuck ticks
+behind its own fighters" on tick 91 and tick 5). `AGenuinelyStuckWalkIn_DropsTheCastAfterThreeSeconds_WithADroppedEvent`
+(an enemy wall, an own holder wall, and an own fighter *behind* the caster: the drop comes 60-62 ticks after the last
+progress tick, with the `Dropped` event; on the base the walk ended after about 20 ticks). `ThePatienceAndTheBlockerRange_ComeFromTheConfig`.
+
+## Movement half (case 3), left open
+Not reproduced: six hand-built layouts of a Sapper with three planted own crossbowmen 1.5-2.0 m ahead on flat ground (the
+replay's numbers) walk round them with no velocity flip, and the replay itself no longer loads (data hash). Documented in
+docs/03 "Known limits (M1)" (last item). Note the interaction: where the cycle does happen, the caster now waits in it for
+as long as the fight lasts (it no longer gives up after 1 s). Next step: have the sandbox save a replay of it under the
+current data.

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-10-1954, task M4-5 |
 | System | data loader (statuses), stealth |
-| Fixed by | |
+| Fixed by | M4-H3 (sim): the statuses loader rule |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~QA.StealthQaTests.StealthedWithoutARevealedStatus_IsRefusedAtLoad"`
@@ -30,3 +30,12 @@ exactly one of kind `revealed` is required (error at `statuses`, naming the miss
 S3 confirmed (a silent default, against the loader rule); not reachable with shipped data. **End-of-M4 sim hardening** (M4-H3): the
 one-line rule (a `stealthed` kind requires exactly one `revealed` kind, error at `statuses`), a `Data/StealthLoaderTests` row, the QA row
 un-skipped, docs/03 "Implementation (M4-5)" data bullet.
+
+## Fix (M4-H3, 2026-10-11)
+`DataLoader.BuildStatuses`: when any status is of kind `stealthed`, exactly one of kind `revealed` is required; the error is
+at `common/statuses.json` `statuses`, naming the stealthed status and the missing kind. The shipped data minus `revealed`
+now gives exactly one error (`Data/StealthLoaderTests.AStealthedStatusWithoutARevealedOne_IsRefused_AtStatuses_WithOneError`;
+data with neither kind loads). It also exposed a second, misleading error, now gone: with `statuses.json` failed, a zone
+status written without a `magnitude` (Sandstorm's `blinded`) was reported "missing required field"; the magnitude check now
+defers to the statuses file's own error. QA's `StealthedWithoutARevealedStatus_IsRefusedAtLoad` un-skipped and green.
+docs/03 "Implementation (M4-5)" data bullet.

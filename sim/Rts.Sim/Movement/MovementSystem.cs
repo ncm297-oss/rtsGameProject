@@ -343,6 +343,11 @@ public static class MovementSystem
             // tick in QueueOnWaitStride still counts, so a jam behind waiters ends.
             if (act == ActStuck && queuedOnWait && (world.TickNumber - u.OrderTick[i]) % MovementConstants.QueueOnWaitStride != 0)
                 act = ActQueued;
+            // M4-H3 (BUG-0461): a caster walking into range held up by its own side's fight (an own unit attacking or casting,
+            // never shoved, within CastWalkInBlockerRange ahead) waits: the count holds, as behind a flowing group. The fight
+            // ends and frees the way; a lost cast click is worse than a late one.
+            if (act == ActStuck && u.CastAbility[i] >= 0 && OwnFighterAhead(world, u, i, pos, forward))
+                act = ActQueued;
             bool pushArrived = false;
             // A unit walking back (its walk-back used, Moving again) never pushes a unit off its point:
             // the pair a walker pushed through a corridor walked home and shoved the walker back off its
@@ -367,6 +372,31 @@ public static class MovementSystem
             action[i] = act;
             remaining[i] = act == ActStuck || act == ActQueued ? best : after;
         }
+    }
+
+    /// <summary>
+    /// M4-H3 (BUG-0461): whether an own unit of walker <paramref name="i"/> that is attacking or casting (planted: never
+    /// shoved) stands within <see cref="World.CastWalkInBlockerRange"/> of it, body edge to body edge, with its centre ahead
+    /// of <paramref name="forward"/>. A holder doesn't count (it may never move). Queries into the second movement scratch,
+    /// which nothing holds at this point of the plan; runs only for a stuck caster's walk.
+    /// </summary>
+    private static bool OwnFighterAhead(World world, UnitStore u, int i, Vector2 pos, Vector2 forward)
+    {
+        float range = world.CastWalkInBlockerRange;
+        float ri = u.Radius[i];
+        int owner = u.Owner[i];
+        int[] found = world.ShoveNeighbors;
+        int n = Math.Min(world.Spatial.QueryRadius(pos, ri + world.MaxUnitRadius + range, found), found.Length);
+        for (int m = 0; m < n; m++)
+        {
+            int j = found[m];
+            if (j == i || !u.Alive[j] || u.Owner[j] != owner || u.State[j] is not (UnitState.Attacking or UnitState.Casting)) continue;
+            Vector2 to = u.Position[j] - pos;
+            if (Vector2.Dot(to, forward) <= 0f) continue;
+            float reach = ri + u.Radius[j] + range;
+            if (to.LengthSquared() <= reach * reach) return true;
+        }
+        return false;
     }
 
     /// <summary>
@@ -520,7 +550,8 @@ public static class MovementSystem
                         // has finitely many: a jammed group still gives up.
                         if (u.StuckTicks[i] == 0) u.StuckTicks[i] = 1;
                     }
-                    else if (++u.StuckTicks[i] >= MovementConstants.GiveUpTicks)
+                    // M4-H3 (BUG-0461): a caster's walk into range has its own, longer patience before its cast is dropped.
+                    else if (++u.StuckTicks[i] >= (u.CastAbility[i] < 0 ? MovementConstants.GiveUpTicks : world.CastWalkInPatienceTicks))
                     {
                         bool backingOff = action[i] == ActBackOff;
                         Stop(u, i);

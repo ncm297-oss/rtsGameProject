@@ -98,6 +98,14 @@ public static class CombatSystem
                     u.ChaseBest[i] = gap;
                     u.ChaseStall[i] = 0;
                 }
+                else if (u.ChaseStall[i] >= CombatConstants.GiveUpScans && u.Mode[i] == CombatMode.Ordered && ReachableOnFoot(world, i))
+                {
+                    // M4-H3 (BUG-0401, Producer decision 2026-10-10): the player's own Attack on a target its walk reaches
+                    // keeps on, even while the route first leads away (a ramp round a cliff). The count stays just under the
+                    // limit, so "not gaining" still holds for the lost-from-sight rule below; an Attack whose walk ended (no
+                    // route, or the nearest ground out of reach) gives up by the rule as before, so nobody paces a cliff.
+                    u.ChaseStall[i] = CombatConstants.GiveUpScans - 1;
+                }
                 else if (u.ChaseStall[i] >= CombatConstants.GiveUpScans)
                 {
                     GiveUp(u, i);
@@ -711,6 +719,21 @@ public static class CombatSystem
     }
 
     /// <summary>
+    /// M4-H3 (BUG-0401): whether chaser <paramref name="i"/> walks a route that reaches its goal: it is Moving and the flow
+    /// field of its goal cell is cached with a finite cost at the cell it stands in. Read through
+    /// <see cref="Pathfinding.FlowFieldCache.PeekCached"/> (no LRU touch, so the hashed cache state doesn't move); a missing
+    /// field (still waiting for a build) or a unit that stopped (no route: movement dropped its goal) counts as unreachable.
+    /// </summary>
+    private static bool ReachableOnFoot(World world, int i)
+    {
+        UnitStore u = world.Units;
+        if (u.State[i] != UnitState.Moving || u.GoalCell[i] < 0) return false;
+        Pathfinding.FlowField? field = world.FlowFields.PeekCached(u.GoalCell[i]);
+        if (field == null || !world.NavGrid.WorldToCell(u.Position[i], out int x, out int y)) return false;
+        return field.CostAt(y * world.NavGrid.Width + x) < float.PositiveInfinity;
+    }
+
+    /// <summary>
     /// Whether another unit of <paramref name="i"/>'s owner stands fighting (<c>Attacking</c>) within
     /// <paramref name="i"/>'s own reach of its target unit (BUG-0143): then a standing point in reach exists on foot and
     /// a stalled chase is only queued behind its own side (a brawl's back ranks), not cut off (another plateau, behind a
@@ -841,8 +864,9 @@ public static class CombatSystem
 
     /// <summary>
     /// M4-3b: unit <paramref name="i"/>'s ordered target building is gone, but its owner still remembers it (the
-    /// last-known list) and doesn't see its ground now: the unit keeps walking to where it was. Once the ground is in sight
-    /// (its own sight now, or a footprint cell visible in its owner's fog) the player knows, and the order ends.
+    /// last-known list) and doesn't see its ground now: the unit keeps walking to where it was. Once a footprint cell is
+    /// visible in its owner's fog (BUG-0311: the fog's own rule, the moment the ghost is dropped) the player knows, and the
+    /// order ends.
     /// </summary>
     private static bool GoneButRemembered(World world, int i)
     {

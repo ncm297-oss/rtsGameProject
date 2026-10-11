@@ -42,10 +42,21 @@ public static class ResourceMaps
     public static Simulation NewSim(Heightmap map, int units = 8, int resourceCapacity = ResourceStore.DefaultCapacity, ulong seed = 5) =>
         new(TestSim.Config(Seed: seed, PlayerCount: 1, UnitCapacity: units, CommandCapacity: 64) with { ResourceCapacity = resourceCapacity }, map);
 
-    /// <summary>Spawns a node and asserts it was accepted.</summary>
+    /// <summary>
+    /// Spawns a node and asserts it was accepted. It runs no never-seal check (BUG-0094): a dense hand-built grove can wall
+    /// open cells in before tick 1, a pocket the pocket rule never sees. A scene that asserts every passable cell reaches
+    /// every other uses <see cref="SpawnSealSafe"/>; this one is for hollows built on purpose.
+    /// </summary>
     public static EntityHandle Spawn(World w, int type, int x, int y, int amount)
     {
         Assert.True(w.Resources.Spawn(type, y * w.NavGrid.Width + x, amount, out EntityHandle h), $"spawn of type {type} at ({x}, {y}) refused");
         return h;
     }
+
+    /// <summary>
+    /// BUG-0094 (M4-H3): spawns a node only where it fits and keeps every passable cell connected (the never-seal rule
+    /// placements and the resource placer follow); returns whether it did. For random or dense groves in reachability scenes.
+    /// </summary>
+    public static bool SpawnSealSafe(World w, int type, int x, int y, int amount) =>
+        w.NavGrid.CanTakeResource(x, y) && w.Seal.KeepsConnected(x, y, 1, 1) && w.Resources.Spawn(type, y * w.NavGrid.Width + x, amount, out _);
 }

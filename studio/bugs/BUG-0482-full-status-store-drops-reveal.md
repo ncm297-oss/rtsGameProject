@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-10-1954, task M4-5 |
 | System | stealth (`StealthSystem.OnAttackOrCast`, `StatusStore.Apply`) |
-| Fixed by | |
+| Fixed by | M4-H3 (sim): a reveal always fits |
 
 ## Repro
 1. `QA/StealthQaTests.AStealthedAttackerWithAFullStatusStore_IsStillRevealed` (remove the `Skip`): a stealthed Heavy
@@ -28,3 +28,9 @@ it), or docs/03 "Implementation (M4-5)" states the exception.
 S4 confirmed (six shipped status ids, so unreachable until M8 adds more). **End-of-M4 sim hardening** (M4-H3) if a few lines: a reveal
 replaces the oldest non-stealth entry when the store is full (document the exception in docs/03 either way); un-skip the QA row or keep
 it skipped with the documented limit.
+
+## Fix (M4-H3, 2026-10-11)
+`StealthSystem.OnAttackOrCast`: on a unit already carrying `StatusStore.PerUnit` (8) statuses and no Revealed, the reveal
+replaces the oldest entry that is not a Stealthed one (`StatusSystem.RemoveEntry`, which recomputes the speed for a slow and
+the blind in force for a blind). The one exception to "a ninth status is dropped" (docs/03 "Implementation (M4-4a)"
+Statuses, "Implementation (M4-5)" Reveal). QA's `AStealthedAttackerWithAFullStatusStore_IsStillRevealed` un-skipped and green.

@@ -67,6 +67,21 @@ public sealed record SimConfig(ulong Seed, int PlayerCount, int UnitCapacity, in
     /// </summary>
     public bool Combat { get; init; } = true;
 
+    /// <summary>
+    /// M4-H3 (BUG-0461, Producer decision 2026-10-10): meters between a caster walking into range and an own unit ahead of it
+    /// (body edge to body edge, the unit's centre in front of the caster's direction of travel) within which a tick without
+    /// progress counts as waiting behind its own side, not as stuck. Default 1.5. Not in the replay header: a replay plays
+    /// with the default.
+    /// </summary>
+    public float CastWalkInBlockerRange { get; init; } = 1.5f;
+
+    /// <summary>
+    /// M4-H3 (BUG-0461): seconds of genuinely stuck ticks a caster's walk into range takes before it stops and the cast is
+    /// dropped (a plain Move gives up after <see cref="Movement.MovementConstants.GiveUpTicks"/>). Default 3. Converted to
+    /// ticks by the world (<see cref="World.CastWalkInPatienceTicks"/>). Not in the replay header.
+    /// </summary>
+    public float CastWalkInPatienceSeconds { get; init; } = 3f;
+
     /// <summary>Throws if any size is out of range.</summary>
     public void Validate()
     {
@@ -77,6 +92,8 @@ public sealed record SimConfig(ulong Seed, int PlayerCount, int UnitCapacity, in
         if (BuildingCapacity < 1) throw new ArgumentOutOfRangeException(nameof(BuildingCapacity));
         if (ProjectileCapacity < 0) throw new ArgumentOutOfRangeException(nameof(ProjectileCapacity));
         if (ZoneCapacity < 1) throw new ArgumentOutOfRangeException(nameof(ZoneCapacity));
+        if (!(CastWalkInBlockerRange >= 0f) || float.IsInfinity(CastWalkInBlockerRange)) throw new ArgumentOutOfRangeException(nameof(CastWalkInBlockerRange));
+        if (!(CastWalkInPatienceSeconds > 0f) || CastWalkInPatienceSeconds > 3600f) throw new ArgumentOutOfRangeException(nameof(CastWalkInPatienceSeconds));
         if (Data == null) throw new ArgumentNullException(nameof(Data));
         if (Map == null) throw new ArgumentNullException(nameof(Map));
         Map.Validate();

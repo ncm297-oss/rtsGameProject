@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-10-0624, task M4-H2 |
 | System | combat (ghost orders), tests |
-| Fixed by | |
+| Fixed by | M4-H3 (sim) |
 
 ## Repro / Actual
 1. **Stale summary.** `CombatSystem.GoneButRemembered`'s `<summary>` still says "Once the ground is in sight (its own sight
@@ -23,3 +23,7 @@
 
 ## Notes
 Neither affects behaviour or the suite.
+
+## Fix (M4-H3, 2026-10-11)
+1. `CombatSystem.GoneButRemembered`'s summary states the fog rule only (a footprint cell visible in the owner's fog, BUG-0311).
+2. `StateHashTests`' ghost-field table: one `new object[]` row per line again (plus a `Site` row, BUG-0275 item 1).

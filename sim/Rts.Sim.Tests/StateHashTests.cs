@@ -1552,6 +1552,19 @@ public class StateHashTests
         return sim;
     }
 
+    /// <summary>
+    /// M4-H3 (BUG-0275 item 1): a ghost's <c>Site</c> flag is view-only (no rule reads it) and not hashed, so recorded
+    /// replays keep their checkpoints (the seed-21 playable replay has a remembered site).
+    /// </summary>
+    [Fact]
+    public void Hash_LeavesTheGhostSiteFlagOut_ItIsViewOnly()
+    {
+        Simulation sim = Ghosted();
+        ulong h = sim.StateHash();
+        Ghosts(sim.World)[0] = Ghosts(sim.World)[0] with { Site = !Ghosts(sim.World)[0].Site };
+        Assert.Equal(h, sim.StateHash());
+    }
+
     private static Vision.BuildingGhost[] Ghosts(World w) => FogField<Vision.BuildingGhost[]>(w, "_ghosts");
 
     private static int[] GhostCounts(World w) => FogField<int[]>(w, "_ghostCount");
@@ -1561,7 +1574,8 @@ public class StateHashTests
         new object[] { "Generation", (Action<World>)(w => Ghosts(w)[0] = Ghosts(w)[0] with { Generation = Ghosts(w)[0].Generation + 1 }) },
         new object[] { "TypeId", (Action<World>)(w => Ghosts(w)[0] = Ghosts(w)[0] with { TypeId = Ghosts(w)[0].TypeId + 1 }) },
         new object[] { "Cell", (Action<World>)(w => Ghosts(w)[0] = Ghosts(w)[0] with { Cell = Ghosts(w)[0].Cell + 1 }) },
-        new object[] { "Owner", (Action<World>)(w => Ghosts(w)[0] = Ghosts(w)[0] with { Owner = 0 }) },        new object[] { "the slot", (Action<World>)(w =>
+        new object[] { "Owner", (Action<World>)(w => Ghosts(w)[0] = Ghosts(w)[0] with { Owner = 0 }) },
+        new object[] { "the slot", (Action<World>)(w =>
         {
             Ghosts(w)[1] = Ghosts(w)[0];
             Ghosts(w)[0] = default;
@@ -1700,7 +1714,7 @@ public class StateHashTests
         u.Statuses.TicksRemaining[at]--;
         Assert.Equal(h, sim.StateHash());
         // The World and StatusStore fields stealth added: each is classified here.
-        var classified = new HashSet<string> { "_detectedBy", "_detectBytes", "<DetectorBuildings>k__BackingField" }; // the mask, its stride, a phase-5 scratch
+        var classified = new HashSet<string> { "_detectedBy", "_detectBytes", "<DetectorBuildings>k__BackingField", "<DetectNeighbors>k__BackingField" }; // the mask, its stride, a phase-5 scratch, the stealth-start query scratch (M4-H3)
         foreach (FieldInfo f in typeof(World).GetFields(BindingFlags.NonPublic | BindingFlags.Instance))
             if (f.Name.Contains("detect", StringComparison.OrdinalIgnoreCase)) Assert.True(classified.Contains(f.Name), $"World.{f.Name} is not classified");
     }

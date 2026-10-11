@@ -40,7 +40,7 @@ public class StealthLoaderTests
     }
 
     [Fact]
-    public void Shipped_TheKindsAndRulesLoad_AndNoShippedUnitDetectsYet()
+    public void Shipped_TheKindsAndRulesLoad_AndOnlyTheCastersMayDetect()
     {
         GameData d = TestSim.Data;
         StatusDef stealthed = d.Statuses[d.FindStatus("stealthed")];
@@ -54,8 +54,9 @@ public class StealthLoaderTests
         Assert.Equal("revealed", DataLimits.StatusKindIds[5]);
         Assert.Equal(3f, d.Rules.StealthProximity);
         Assert.Equal(60, d.Rules.RevealTicks);
-        // The casters' 10 m is the data track's (D12): until then no shipped unit has a detector; the towers have theirs.
-        Assert.All(d.Units, u => Assert.Equal(0f, u.Detector));
+        // The casters' 10 m is the data track's (D12, merged in the same session as M4-H3): no other shipped unit has a
+        // detector, and a caster has none or 10 m (Content/UnitContentTests pins which); the towers have theirs.
+        Assert.All(d.Units, u => Assert.True(u.Detector == 0f || (u.Key is "malazan_cadre_mage" or "whirlwind_priest" && u.Detector == 10f), $"{u.Key}: {u.Detector}"));
         Assert.Equal(16f, d.Buildings[d.FindBuilding("malazan_watchtower")].Detector);
     }
 
@@ -113,6 +114,32 @@ public class StealthLoaderTests
             ["id"] = "unmasked", ["displayName"] = "Unmasked", ["description"] = "Test.", ["kind"] = "revealed",
         })));
         AssertErrorAt(r, Statuses, "statuses[6].kind", "already the revealed status");
+    }
+
+    /// <summary>
+    /// BUG-0481: a <c>stealthed</c> status needs exactly one <c>revealed</c> one (an attack or cast from stealth applies it);
+    /// the shipped data minus <c>revealed</c> is refused with one error, at <c>statuses</c>, naming the missing kind. Data
+    /// with neither kind still loads (nothing can be stealthed, so nothing needs revealing).
+    /// </summary>
+    [Fact]
+    public void AStealthedStatusWithoutARevealedOne_IsRefused_AtStatuses_WithOneError()
+    {
+        DataLoadResult r = Load(dir => dir.EditJson(Statuses, root => Remove(root, "revealed")));
+        AssertErrorAt(r, Statuses, "statuses", "no status has kind 'revealed'");
+        Assert.Single(r.Errors);
+        DataLoadResult neither = Load(dir => dir.EditJson(Statuses, root =>
+        {
+            Remove(root, "revealed");
+            Remove(root, "stealthed");
+        }));
+        Assert.True(neither.Ok, string.Join("; ", neither.Errors));
+    }
+
+    private static void Remove(JsonNode root, string id)
+    {
+        JsonArray list = root["statuses"]!.AsArray();
+        for (int i = list.Count - 1; i >= 0; i--)
+            if ((string)list[i]!["id"]! == id) list.RemoveAt(i);
     }
 
     [Theory]

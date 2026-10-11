@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open: items 3-4 fixed in eace378 (`SimConfig.Combat` summary rewritten; retaliation compares `Ignored` only when it is a unit, `CombatTests.HitByAUnitWithTheHandleOfAGivenUpBuilding_StillRetaliates`); items 1-2 open |
+| Status | wontfix |
 | Found | 2026-10-07-2014, task M4-1 |
 | System | construction placement rule, combat scan stagger |
-| Fixed by | |
+| Fixed by | items 3-4: eace378; items 1-2: M4-H3, kept as documented limits |
 
 ## Repro
 1. `CanPlace_AgreesWithBuild_WhenTheIssuingWorkerIsAttackingInsideTheFootprint` (`QA/CombatQaTests`): the player's
@@ -43,3 +43,9 @@ nits from the fix round:
    Harmless (a melee attacker is in reach and the next scan takes it, at most 4 ticks later), but the scan code
    checks the building flag and this does not.
 
+## Decision (M4-H3, 2026-10-11)
+1. **Wontfix** (the BUG-0092 shape, documented in docs/03 "Implementation (M3-3)"): `CanPlace` has no worker, so it can't skip
+   the one the Build will be given; the Build is right. QA's row stays skipped with its reason updated.
+2. **Wontfix** (now documented in docs/03 "Implementation (M4-1)", Acquisition): two equal units already in reach and Idle
+   engage on their own staggered scan ticks; ordered and attack-moved units engage in phase 10 and are symmetric. Only test
+   spawns and a fight's edge meet in reach without a scan.

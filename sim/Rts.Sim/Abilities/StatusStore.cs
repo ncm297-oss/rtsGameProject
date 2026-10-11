@@ -11,7 +11,8 @@ namespace Rts.Sim.Abilities;
 /// <remarks>
 /// Stacking (docs/02 "Status effects"): reapplying a status the unit has keeps the longer of the two remaining durations
 /// (a refresh never shortens it) and the stronger magnitude; the source is the stronger application's (on a tie, the
-/// latest). Different statuses stack. A ninth different status is dropped.
+/// latest). Different statuses stack. A ninth different status is dropped (M4-H3: a Revealed makes room instead, in
+/// <see cref="StealthSystem.OnAttackOrCast"/>).
 /// </remarks>
 public sealed class StatusStore
 {

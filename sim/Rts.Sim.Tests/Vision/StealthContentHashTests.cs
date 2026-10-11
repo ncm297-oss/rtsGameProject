@@ -30,14 +30,24 @@ public class StealthContentHashTests
         var hashes = new List<ulong>
         {
             shipped,
+            // M4-H3 (BUG-0481): a stealthed status needs the revealed one, so the revealed kind changes only with it.
             HashWith(d => d.EditJson("common/statuses.json", r => Status(r, "stealthed")["kind"] = "frenzied")),
-            HashWith(d => d.EditJson("common/statuses.json", r => Status(r, "revealed")["kind"] = "frenzied")),
-            HashWith(d => d.EditJson("common/statuses.json", r => r["statuses"]!.AsArray().RemoveAt(4))), // stealthed gone
-            HashWith(d => d.EditJson("common/statuses.json", r => r["statuses"]!.AsArray().RemoveAt(5))), // revealed gone
+            HashWith(d => d.EditJson("common/statuses.json", r =>
+            {
+                Status(r, "stealthed")["kind"] = "frenzied";
+                Status(r, "revealed")["kind"] = "frenzied";
+            })),
+            HashWith(d => d.EditJson("common/statuses.json", r => r["statuses"]!.AsArray().Remove(Status(r, "stealthed")))),
+            HashWith(d => d.EditJson("common/statuses.json", r =>
+            {
+                r["statuses"]!.AsArray().Remove(Status(r, "stealthed"));
+                r["statuses"]!.AsArray().Remove(Status(r, "revealed"));
+            })),
             HashWith(d => d.EditJson("common/rules.json", r => r["stealth"]!["proximity"] = 3.5)),
             HashWith(d => d.EditJson("common/rules.json", r => r["stealth"]!["revealSeconds"] = 4)),
-            HashWith(d => d.SetUnitField("malazan", "malazan_cadre_mage", "detector", "10")),
-            HashWith(d => d.SetUnitField("malazan", "malazan_cadre_mage", "detector", "11")),
+            // Not 10 m: the shipped casters' own value since D12.
+            HashWith(d => d.SetUnitField("malazan", "malazan_cadre_mage", "detector", "12")),
+            HashWith(d => d.SetUnitField("malazan", "malazan_cadre_mage", "detector", "13")),
         };
         Assert.Equal(hashes.Count, hashes.Distinct().Count());
     }

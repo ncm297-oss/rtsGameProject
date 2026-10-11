@@ -461,7 +461,7 @@ public class StealthQaTests
     /// </summary>
     [Theory]
     [InlineData(false)]
-    [InlineData(true, Skip = "BUG-0480: OnStealthStarted overwrites the death passive's neighbour scratch (World.ShoveNeighbors): 1 of 5 Zealots stealthed")]
+    [InlineData(true)]
     public void AnOnDeathPassiveApplyingStealthed_ReachesEveryListedFriend(bool stealth)
     {
         GameData data = stealth ? ZealotStealthData.Value : TestSim.Data;
@@ -509,7 +509,7 @@ public class StealthQaTests
     /// BUG-0481: data with a <c>stealthed</c> status but no <c>revealed</c> one must not load, since "attacking or casting
     /// reveals" (docs/02) silently stops working (StealthSystem.OnAttackOrCast returns when RevealedStatus is -1).
     /// </summary>
-    [Fact(Skip = "BUG-0481: data with a stealthed status and no revealed status loads clean; attacks from stealth then never reveal")]
+    [Fact]
     public void StealthedWithoutARevealedStatus_IsRefusedAtLoad()
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
@@ -531,7 +531,7 @@ public class StealthQaTests
     /// it is Revealed for 3 s, but the Revealed application is the ninth status and is dropped, so it keeps attacking unseen.
     /// Not reachable with shipped data (six status ids); test-only slows fill the store.
     /// </summary>
-    [Fact(Skip = "BUG-0482: Revealed is dropped when the attacker already carries 8 statuses; it stays stealthed while attacking")]
+    [Fact]
     public void AStealthedAttackerWithAFullStatusStore_IsStillRevealed()
     {
         GameData data = FullStoreData.Value;

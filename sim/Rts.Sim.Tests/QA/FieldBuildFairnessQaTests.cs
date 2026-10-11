@@ -461,6 +461,15 @@ public class FieldBuildFairnessQaTests
             // - M4-4b-3a, +4,144: the per-slot whenBelowHp passive flag (UnitStore._belowHp, bool x 4,096 = 4,096 + a 24-byte
             //   header); 24 bytes of the fog's per-status tables for one more status (frenzied) and their alignment.
             // 231,847,256 measured; the bound keeps the same 72 KB margin over it.
+            // Under the bound since, itemised (BUG-0302 b):
+            // - M4-4b-3b, +25,760 (231,873,016, measured by M4-5 as its base 3bfc6b8): UnitStore.ExpiresAtTick (an int a slot,
+            //   16,408); the other 9.4 KB are the probe's allocation-context rounding (DeathEvent's Expired flag fits its
+            //   32 bytes): this test's figure moves a few KB between runs of one tree (3584a3a: 231,889,912 to 231,897,088).
+            // - M4-5, +17,424 (231,890,440): StatusStore._stealth 4,096 + 24, World._detectedBy 4,120, World.DetectorBuildings
+            //   1,048, about 100 of counters and fog limit entries, the rest rounding (docs/03 "Implementation (M4-5)", Memory).
+            // - M4-H3, +16,408 + rounding (231,908,912 on its head, three runs alike): World.DetectNeighbors, detection's own
+            //   query scratch (BUG-0480), an int a slot: 4,096 x 4 = 16,384 + a 24-byte header. 11,088 bytes left under the
+            //   bound: the next per-slot array (16 KB) crosses it, so that session re-baselines with these items.
             Assert.True(bytes < 231_920_000, $"{bytes / 1e6:F1} MB");
         }
     }
