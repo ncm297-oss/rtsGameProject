@@ -20,8 +20,10 @@ namespace Rts.Game;
 /// <c>--no-bases</c> (dev / tests: no Town Halls and no starting workers, the M2 armies-only match), <c>--no-combat</c>
 /// (dev / tests: <c>SimConfig.Combat = false</c>, units never fight; M4-V1, never a game option), <c>--no-fog</c> (dev / tests:
 /// the view draws no fog and shows every unit and building; the sim's fog and combat's sight rules are unchanged; M4-V4,
-/// never a game option). Bad values are
-/// warned about and ignored; a token starting with <c>--</c> is never taken as a value (BUG-0041).
+/// never a game option), <c>--map-size 128|192|256</c> (square map side in cells, <see cref="MapSizes"/>; default the 128 map; M6-V1),
+/// <c>--skirmish</c> (takes no value: start the default match at once, skipping the main menu; M6-V1). Any of these flags
+/// on the command line skips the main menu (<see cref="HasMatchFlag"/>), so every dev and test run starts its match as
+/// before M6-V1. Bad values are warned about and ignored; a token starting with <c>--</c> is never taken as a value (BUG-0041).
 /// </remarks>
 public sealed class LaunchOptions
 {
@@ -42,6 +44,30 @@ public sealed class LaunchOptions
 
     /// <summary>Gold mines on the match map without <c>--mines</c> (Producer default for the 128 map, M2-3b).</summary>
     public const int DefaultMines = 8;
+
+    /// <summary>The map sides <c>--map-size</c> and the skirmish setup offer, in cells (M6-V1).</summary>
+    public static readonly int[] MapSizes = { 128, 192, 256 };
+
+    /// <summary>The flags that start a match (each also skips the main menu, <see cref="HasMatchFlag"/>): every flag <see cref="Parse"/> reads.</summary>
+    public static readonly string[] MatchFlags =
+    {
+        "--seed", "--speed", "--screenshot", "--screenshot-after", "--units", "--workers", "--forests", "--mines", "--zoom", "--bench",
+        "--vsync", "--no-hud", "--debug-overlay", "--mute", "--no-bases", "--no-combat", "--no-fog", "--map-size", "--skirmish",
+    };
+
+    /// <summary>Whether <paramref name="args"/> holds any of <see cref="MatchFlags"/>: the boot then starts the match at once instead of showing the main menu (M6-V1).</summary>
+    public static bool HasMatchFlag(string[] args)
+    {
+        foreach (string a in args)
+            if (Array.IndexOf(MatchFlags, a) >= 0) return true;
+        return false;
+    }
+
+    /// <summary>Square map side in cells (<c>--map-size</c>, one of <see cref="MapSizes"/>), or null for the default 128 map.</summary>
+    public int? MapSize { get; private set; }
+
+    /// <summary>True for <c>--skirmish</c> (takes no value): the default match without the main menu.</summary>
+    public bool Skirmish { get; private set; }
 
     /// <summary>Forests the map generator places.</summary>
     public int Forests { get; private set; } = DefaultForests;
@@ -163,6 +189,13 @@ public sealed class LaunchOptions
                     if (value is "on" or "off") o.Vsync = value == "on";
                     else Warn(flag, value);
                     break;
+                case "--map-size":
+                    if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int size) && Array.IndexOf(MapSizes, size) >= 0) o.MapSize = size;
+                    else Warn(flag, value);
+                    break;
+                case "--skirmish":
+                    o.Skirmish = true;
+                    continue; // takes no value
                 case "--no-hud":
                     o.NoHud = true;
                     continue; // takes no value

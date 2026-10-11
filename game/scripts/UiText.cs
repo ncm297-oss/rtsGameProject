@@ -17,10 +17,12 @@ namespace Rts.Game;
 /// View-only data: the sim's <c>DataLoader</c> never reads this file. Shape:
 /// <c>{ "commands": { "&lt;id&gt;": { "displayName", "hotkeyHint" } }, "buildMenus": { "basic": [slot ids], "advanced": [slot ids] },
 /// "placement": { "&lt;reason&gt;": text }, "train": { "&lt;reason&gt;": text }, "research": { "&lt;reason&gt;": text },
-/// "states": { "&lt;state&gt;": text }, "hud": { "&lt;label&gt;": text } }</c>. Command ids are <see cref="CommandIds"/>;
+/// "states": { "&lt;state&gt;": text }, "hud": { "&lt;label&gt;": text }, "menu": { "&lt;key&gt;": text }, "setup": { "&lt;key&gt;": text },
+/// "pause": { "&lt;key&gt;": text } }</c>. Command ids are <see cref="CommandIds"/>;
 /// the placement, train and research keys are the snake_case names of every <see cref="PlacementError"/>,
 /// <see cref="TrainError"/> and <see cref="ResearchError"/> member but <c>None</c> (<c>blocked</c>, <c>queue_full</c> ...),
-/// the state keys those of every <see cref="UnitState"/> (M3-V3) plus <see cref="OrderedAttackKey"/> (M4-V2), the hud keys those of <see cref="HudText"/>; so a member
+/// the state keys those of every <see cref="UnitState"/> (M3-V3) plus <see cref="OrderedAttackKey"/> (M4-V2), the hud keys those of <see cref="HudText"/>,
+/// the menu, setup and pause keys (the game shell, M6-V1) those of <see cref="MenuText"/>, <see cref="SetupText"/> and <see cref="PauseText"/>; so a member
 /// the sim adds later is a load error here until the file has its text. Each of the three reason sections must also
 /// carry <see cref="ForwardKey"/> (<c>requires</c>), the reason M3-6's <c>requires</c> gating adds: a key with no enum
 /// member yet is accepted (as is any extra key), so the file loads with or without that sim change. The <c>placement</c>
@@ -57,6 +59,9 @@ public sealed class UiText
     private readonly string[] _research;
     private readonly string[] _states;
     private readonly string[] _hud;
+    private readonly string[] _menu;
+    private readonly string[] _setup;
+    private readonly string[] _pause;
 
     private UiText()
     {
@@ -65,6 +70,9 @@ public sealed class UiText
         _research = Blank(Enum.GetValues<ResearchError>().Length);
         _states = Blank(Enum.GetValues<UnitState>().Length);
         _hud = Blank(Enum.GetValues<HudText>().Length);
+        _menu = Blank(Enum.GetValues<MenuText>().Length);
+        _setup = Blank(Enum.GetValues<SetupText>().Length);
+        _pause = Blank(Enum.GetValues<PauseText>().Length);
         Array.Fill(_names, "");
         Array.Fill(_hints, "");
     }
@@ -98,6 +106,15 @@ public sealed class UiText
 
     /// <summary>A HUD label (<c>ui.json</c> <c>hud</c>): "Pop", the selection panel's stat names, "Needs".</summary>
     public string Hud(HudText label) => (uint)label < (uint)_hud.Length ? _hud[(int)label] : "";
+
+    /// <summary>A main menu text (<c>ui.json</c> <c>menu</c>, M6-V1).</summary>
+    public string Menu(MenuText key) => (uint)key < (uint)_menu.Length ? _menu[(int)key] : "";
+
+    /// <summary>A skirmish setup text (<c>ui.json</c> <c>setup</c>, M6-V1).</summary>
+    public string Setup(SetupText key) => (uint)key < (uint)_setup.Length ? _setup[(int)key] : "";
+
+    /// <summary>A pause menu text (<c>ui.json</c> <c>pause</c>, M6-V1).</summary>
+    public string Pause(PauseText key) => (uint)key < (uint)_pause.Length ? _pause[(int)key] : "";
 
     /// <summary>The <c>requires</c> text of the <c>placement</c> section (<see cref="ForwardKey"/>), readable before the sim has the reason.</summary>
     public string ForwardPlacementText { get; private set; } = "";
@@ -184,8 +201,8 @@ public sealed class UiText
                 ui._hints[c] = Text(entry, "hotkeyHint", $"{at}.hotkeyHint", errors);
             }
             JsonElement menus = Object(root, "buildMenus", "buildMenus", errors);
-            ui.BasicMenu = Menu(menus, "basic", errors);
-            ui.AdvancedMenu = Menu(menus, "advanced", errors);
+            ui.BasicMenu = MenuList(menus, "basic", errors);
+            ui.AdvancedMenu = MenuList(menus, "advanced", errors);
             ui.ForwardPlacementText = Section<PlacementError>(root, "placement", ui._placement, skipZero: true, forward: true, errors);
             ui.UnexploredPlacementText = Forward<PlacementError>(root, "placement", ui._placement, UnexploredKey, errors);
             ui.ForwardTrainText = Section<TrainError>(root, "train", ui._train, skipZero: true, forward: true, errors);
@@ -194,6 +211,9 @@ public sealed class UiText
             if (root.TryGetProperty("states", out JsonElement states))
                 ui.OrderedAttackText = Text(states, OrderedAttackKey, $"states.{OrderedAttackKey}", errors);
             Section<HudText>(root, "hud", ui._hud, skipZero: false, forward: false, errors);
+            Section<MenuText>(root, "menu", ui._menu, skipZero: false, forward: false, errors);
+            Section<SetupText>(root, "setup", ui._setup, skipZero: false, forward: false, errors);
+            Section<PauseText>(root, "pause", ui._pause, skipZero: false, forward: false, errors);
         }
         return errors.Count == before ? ui : null;
     }
@@ -233,7 +253,7 @@ public sealed class UiText
         return a;
     }
 
-    private static BuildingSlot[] Menu(JsonElement menus, string name, List<string> errors)
+    private static BuildingSlot[] MenuList(JsonElement menus, string name, List<string> errors)
     {
         string at = $"buildMenus.{name}";
         if (menus.ValueKind != JsonValueKind.Object || !menus.TryGetProperty(name, out JsonElement list) || list.ValueKind != JsonValueKind.Array

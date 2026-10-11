@@ -561,6 +561,16 @@ public partial class FogViewTest : Node
             && Math.Abs(box.Position.X - hc.X) < 1e-3f && Math.Abs(box.Position.Z - hc.Y) < 1e-3f,
             $"ghosts seed {seed}: hall ghost visible {box.Visible} at {box.Position}, want ({hc.X}, {hc.Y}) in the darkened material");
         Check(_buildings.GhostMaterial(1).AlbedoColor.V < _buildings.PlayerMaterial(1).AlbedoColor.V, $"ghosts seed {seed}: the ghost material is not darker");
+        // M6-V1: the House was a site when last seen, so its ghost is a foundation (the site box at its lowest, the darkened
+        // site colour); the finished hall's stays full height.
+        MeshInstance3D siteBox = _buildings.GhostBoxOf(site)!;
+        float siteBase = Rts.Sim.ViewApi.TerrainHeight.At(W.Heightmap, siteBox.Position.X, siteBox.Position.Z);
+        Check(W.Fog.Ghosts(0)[site].Site && _buildings.GhostShownAsSite(site) && !_buildings.GhostShownAsSite(hall)
+            && siteBox.MaterialOverride == _buildings.GhostSiteMaterial && Math.Abs(siteBox.Scale.Y - BuildingViews.SiteMinHeight) < 1e-4f
+            && Math.Abs(siteBox.Position.Y - (siteBase + BuildingViews.BoxHeight * BuildingViews.SiteMinHeight / 2f)) < 1e-3f
+            && Math.Abs(box.Scale.Y - 1f) < 1e-4f,
+            $"ghosts seed {seed}: remembered site entry {W.Fog.Ghosts(0)[site].Site}, as site {_buildings.GhostShownAsSite(site)}, scale {siteBox.Scale.Y} at {siteBox.Position.Y} (ground {siteBase}); hall as site {_buildings.GhostShownAsSite(hall)} scale {box.Scale.Y}");
+        Check(_buildings.GhostSiteMaterial.AlbedoColor.V < _buildings.SiteMaterial.AlbedoColor.V, $"ghosts seed {seed}: the remembered site's material is not darker");
         await Shot($"ghost-seed{seed}-remembered");
 
         // Player 1 cancels the site out of sight: the sim keeps the entry, the ghost stays.

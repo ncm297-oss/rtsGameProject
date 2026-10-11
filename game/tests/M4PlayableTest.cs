@@ -48,9 +48,8 @@ public partial class M4PlayableTest : Node
     /// <c>dotnet test</c>) and the M4-VH3 scene loop (beside the other tracks' suites) together give seed 1 2,869-3,081 and
     /// seed 6 3,692-4,493 ticks. The seed-6 tops (4,372 to 4,493) are runs whose step 6 (the fight) took 1,360-1,554 ticks
     /// against the usual 650-790, the same long fight as QA's 4,212-tick run before step 9 existed (BUG-0462 item 5). So
-    /// the worst measured margin is 1,007 ticks (18 %); a
-    /// Telas Fire recast that waits out its 25 s cooldown adds about 500, so the margin is what was measured, not a
-    /// guarantee.
+    /// the worst measured margin is 1,007 ticks (18 %), what was measured, not a guarantee. Since BUG-0560 step 5 casts
+    /// Telas Fire once (no recast after its 25 s cooldown) and fails fast when the enemy army is gone.
     /// </summary>
     public const int TickBudget = 5500;
 
@@ -246,22 +245,20 @@ public partial class M4PlayableTest : Node
         await Shot("storm");
         Done();
 
-        // 5. Tab to the Cadre Mages, Q (the HUD picks the nearest ready one), a click on a Whirlwind blob: the cast resolves and
-        // the Burning markers appear. A cast that burns no one (the clicked unit was killed in the fight, often by the mage's
-        // own bolts, before the 0.8 s cast resolved; BUG-0463) is cast again, as a player would: at most twice more.
+        // 5. Tab to the Cadre Mages, Q (the HUD picks the nearest ready one), a click on a Whirlwind blob: the step is done when
+        // the cast resolves. A cast in a live fight may burn no one (its blob killed, often by the mage's own bolts, before the
+        // 0.8 s cast resolved; BUG-0463), and a recast after the 25 s cooldown can find the fight over (BUG-0560), so the
+        // Burning marker is not asserted here: step 8 asserts it on a staged Zealot, where nothing else can take the target.
         Step("Telas Fire on a Whirlwind blob (Tab, Q, click)");
-        for (int cast = 0; ; cast++)
-        {
-            await CastOnBlob(_mageType, _telas, 3f, 1, "Telas Fire", again: cast > 0);
-            int resolvedAt = Tick;
-            // A burning enemy out of sight may still walk into it while it burns; none burning at all is a miss.
-            await Until(() => BurningEnemyMarkers() > 0 || Tick >= resolvedAt + 20 && !EnemyBurning(), "a Burning marker over an enemy",
-                () => $"{EnemyBurning()} enemy burning");
-            if (BurningEnemyMarkers() > 0) break;
-            Expect(cast < 2, "Telas Fire resolved three times and burned no seen Whirlwind unit");
-            GD.Print($"  Telas Fire burned no one (its blob died or walked off before the resolve); casting again on tick {Tick}");
-        }
-        GD.Print($"  {BurningEnemyMarkers()} Burning markers over Whirlwind units");
+        await CastOnBlob(_mageType, _telas, 3f, 1, "Telas Fire");
+        int resolvedAt = Tick;
+        // Bounded: a burn lasts 80 ticks, so an unseen burning enemy ends the wait by then.
+        await Until(() => BurningEnemyMarkers() > 0 || Tick >= resolvedAt + 20 && !EnemyBurning(), "a Burning marker over an enemy, or none burning",
+            () => $"{EnemyBurning()} enemy burning");
+        int burningMarkers = BurningEnemyMarkers();
+        GD.Print(burningMarkers > 0
+            ? $"  {burningMarkers} Burning markers over Whirlwind units"
+            : "  Telas Fire resolved and burned no seen Whirlwind unit (its blob died or walked off first); step 8 checks the Burning marker on a staged Zealot");
         await Shot("telas-fire");
         Done();
 
@@ -321,8 +318,7 @@ public partial class M4PlayableTest : Node
     // drops (the caster's walk in stopped short, as at a cliff edge) is clicked again on a fresh blob, as a player would, at
     // most twice more; each drop is printed. So is a caster killed in the fight before its cast resolves (it can die on the
     // very tick its command applies, BUG-0463): the click goes again, and the HUD picks the next live caster of the type.
-    // `again`: a second cast of the step, so the button may first count down (the HUD's own SoonestReady) before it is pressed.
-    private async Task<System.Numerics.Vector2> CastOnBlob(int casterType, int ability, float within, int others, string what, bool again = false)
+    private async Task<System.Numerics.Vector2> CastOnBlob(int casterType, int ability, float within, int others, string what)
     {
         string casterName = _data.Units[casterType].DisplayName;
         int cell = -1;
@@ -333,19 +329,17 @@ public partial class M4PlayableTest : Node
         int drops = 0, deaths = 0;
         while (drops < 3)
         {
-            if (again && _sel.SoonestReady(ability) > 0)
-            {
-                GD.Print($"  {what}: every live {casterName} cooling down on tick {Tick}; waiting {_sel.SoonestReady(ability)} ticks for the button");
-                await Until(() => _sel.SoonestReady(ability) <= 0, $"{what}'s button ready again");
-            }
             List<EntityHandle> casters = _army.Where(h => U.IsAlive(h) && U.TypeId[h.Index] == casterType).ToList();
             Expect(casters.Count > 0, $"every {casterName} died before {what}{dropped}");
             // The biggest blob of standing units (a cast on a unit on the move lands where it was, and may catch no one:
             // BUG-0463); after 60 ticks without one of `others` + 1, any standing visible enemy in front of a caster will do,
             // and after 120 any visible enemy.
             int target = -1, since = Tick;
-            await Until(() => (target = Blob(casters, within, Tick - since < 60 ? others : 0, reach, Tick - since < 120)) >= 0 || casters.All(h => !U.IsAlive(h)),
+            // BUG-0560: with the enemy army gone and nothing else in sight there is nothing to wait for: fail fast, not at the budget.
+            await Until(() => (target = Blob(casters, within, Tick - since < 60 ? others : 0, reach, Tick - since < 120)) >= 0 || casters.All(h => !U.IsAlive(h))
+                    || _enemyArmy.All(h => !U.IsAlive(h)),
                 $"a visible Whirlwind unit within {reach} m of a {casterName} for {what}");
+            Expect(target >= 0 || casters.All(h => !U.IsAlive(h)), $"the fight ended before {what} {(ability == _telas ? "burned anyone" : "was cast")} (no Whirlwind army unit alive on tick {Tick}){dropped}");
             if (target < 0) continue; // every caster in the list died meanwhile: the top of the loop says so
             GD.Print($"  {what}: a blob round unit {target} ({_data.Units[U.TypeId[target]].Key}) at {U.Position[target]} on tick {Tick}, {casters.Count(h => U.IsAlive(h))} live {casterName}");
             await LookAt(U.Position[target]);
@@ -565,6 +559,15 @@ public partial class M4PlayableTest : Node
         await Ticks(2);
         Expect(U.QueueCount[m] == 1 && U.CastAbility[m] == 0, $"the mage's cast {U.CastAbility[m]}, queue {U.QueueCount[m]}");
         await Until(() => _resolves.Skip(resolves).Any(r => r.Caster == mage), "the duel's Telas Fire resolved");
+        // BUG-0560: step 5's cast may burn no one, so the Burning marker is checked here, on the staged target: Zealot A burns
+        // in the sim and its marker is drawn while it does (80 ticks), Zealot B neither.
+        int burnedAt = Tick;
+        await LookAt(U.Position[za]);
+        await Until(() => Marks(za, _burning) == 1 || !HasStatus(za, _burning) && Tick > burnedAt + 2, "the Burning marker over Zealot A",
+            () => $"burning {HasStatus(za, _burning)}, markers {Marks(za, _burning)}");
+        Expect(Marks(za, _burning) == 1 && Marks(zb, _burning) == 0 && !HasStatus(zb, _burning) && BurningEnemyMarkers() >= 1,
+            $"Zealot A burning {HasStatus(za, _burning)} with {Marks(za, _burning)} Burning markers; B {Marks(zb, _burning)} markers");
+        GD.Print($"  the Burning marker over Zealot A on tick {Tick} (cast resolved on tick {burnedAt})");
         float line = 0.5f * _data.Units[_zealotType].Hp;
         await Until(() => !U.IsAlive(_duelA) || U.Hp[za] < line && HasStatus(za, _frenzied), "Zealot A under half hp and Frenzied",
             () => $"hp {U.Hp[za]}, statuses {U.Statuses.Count[za]}");

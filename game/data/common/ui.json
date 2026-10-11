@@ -70,5 +70,28 @@
     "seconds": "s",
     "meters": "m",
     "cast_lost": "Cast lost"
+  },
+  "menu": {
+    "title": "RtsGame",
+    "skirmish": "Skirmish",
+    "quit": "Quit"
+  },
+  "setup": {
+    "title": "Skirmish",
+    "seed": "Seed",
+    "random": "Random",
+    "map_size": "Map size",
+    "slot_human": "You",
+    "slot_ai": "AI",
+    "faction": "Faction",
+    "difficulty": "Difficulty",
+    "coming_soon": "Coming soon",
+    "start": "Start",
+    "back": "Back"
+  },
+  "pause": {
+    "title": "Paused",
+    "resume": "Resume",
+    "quit_to_menu": "Quit to menu"
   }
 }

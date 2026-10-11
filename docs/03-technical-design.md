@@ -4648,9 +4648,10 @@ right-click on one attacks it.
   box mesh, placed on the remembered footprint's centre at full height, in the owner's colour times
   `FogView.ExploredBrightness` (one material per player, made in `Bind`), no bar; hidden when the entry goes or the
   building is seen again; re-placed only when the entry's generation or anchor changes. `IsGhostShown`,
-  `GhostGeneration`, `GhostBoxOf`, `GhostsShown`, `GhostMaterial` for tests. A remembered site still draws finished, full
-  height (BUG-0275 item 1: since M4-H3 `BuildingGhost.Site` says it was a site when last seen, view-only and not hashed;
-  drawing a remembered site as a foundation is a view item for the next view hardening).
+  `GhostGeneration`, `GhostBoxOf`, `GhostsShown`, `GhostMaterial` for tests. Since M6-V1 a remembered site (BUG-0275 item 1:
+  since M4-H3 `BuildingGhost.Site` says it was a site when last seen, view-only and not hashed) draws as a foundation:
+  the site box at `SiteMinHeight` in the site colour darkened the same way (`GhostShownAsSite`, `GhostSiteMaterial`), and
+  `PickGhostRay`'s `siteShare` overload picks it at that height.
 - **Picking**: `BuildingPicker.PickGhostRay(GhostShown, Ghosts, defs, grid, map, origin, direction, boxHeight, out
   entry)`, the box ray test on each ghost's remembered footprint, full height, terrain occluding as for live boxes.
   `SelectionController.EnemyAt` (right-click and A + click) takes a ghost when the ray enters its box before any drawn
@@ -4687,7 +4688,7 @@ right-click on one attacks it.
   `M3PlayableTest -- --seed 21 --break 19` on the M4-3b tree (data hash C22FBFEA0197CF3E; the scene now builds on
   explored ground; 12,131 ticks), `GatherWedgeQaTests` un-skipped with that `RecordedDataHash` and every checkpoint
   checked (longest out-of-reach stand 343 ticks). A later data-hash move needs another re-record.
-- **Not yet:** a remembered site drawn as a site (BUG-0275 item 1, needs a sim field); ghosts on the minimap; minimap
+- **Not yet:** ghosts on the minimap; minimap
   dots refreshed with the hide rule (BUG-0281 item 3).
 
 ### Implementation (M4-V6a)
@@ -5262,6 +5263,92 @@ game/export_presets.cfg               "Windows Desktop": game/tests/ left out, d
   (looked at): `ability-seedN-cast-lost.png`, `-cliff-cast-ring.png`, `-cliff-flash.png`.
 - **Export preset.** See "Build and export".
 
+### Implementation (M6-V1)
+
+The game's first shell: a main menu, a skirmish setup screen and a pause menu around the unchanged match; remembered
+sites drawn as foundations; BUG-0560. No sim change outside `ViewApi`.
+
+```
+game/scenes/Main.tscn          Main only (Match.tscn is no longer a child: the shell instantiates one per match)
+game/scripts/Main.cs           boot + shell: banner, data, then the menu or the match; Esc / pause / quit to menu
+game/scripts/MainMenu.cs       CanvasLayer: title, Skirmish, Quit
+game/scripts/SkirmishSetup.cs  CanvasLayer: seed (field + Random), map size, two slots, Start, Back
+game/scripts/PauseMenu.cs      CanvasLayer (layer 20, runs while paused): title, Resume, Quit to menu
+game/scripts/ShellUi.cs        the screens' shared controls (backdrop, centred column, heading, button)
+game/scripts/MenuText.cs, SetupText.cs, PauseText.cs   the ui.json keys of the three new sections
+game/tests/ShellTest.tscn      the headless flow test
+```
+
+- **Boot rule.** `Main._Ready` prints the banner and loads `res://data` as before. With any match flag among the user
+  args (`LaunchOptions.HasMatchFlag`: every flag `Parse` reads, listed in `LaunchOptions.MatchFlags`) the match starts at
+  once exactly as before M6-V1, so `--seed`, `--units`, `--screenshot`, `--bench` and every script and test that passes
+  them are unchanged; `--skirmish` (no value) is the flag for "the default match, no menu". With none, the main menu
+  shows. `tools/qa/smoke.ps1` passes no args, so since M6-V1 its 600 frames boot to the menu (banner, data, the three
+  screens built) and no longer tick a match: `-- --skirmish` is the old smoke run. If `ui.json` fails to load there is no
+  menu text: the errors are logged (as before) and the match starts at once. Test scenes instantiate `Match.tscn`
+  themselves and never meet the shell.
+- **Match lifetime.** `Main.StartMatch` instantiates `Match.tscn` (named `Match`, `ProcessMode = Pausable`), adds it
+  (its `_Ready` runs) and calls `Match.Start(data, options)`, the same order as when the match was a child of
+  `Main.tscn`. The setup's Start builds its options through the command-line parser (`--seed <n> --map-size <n>`), so a
+  skirmish and a dev run differ only in their flags. Quit to menu unpauses, removes the match from the tree and frees it:
+  the sim, every view node and the HUD go with it; Skirmish again makes a fresh one. The shell holds only which screen is
+  up and the setup's picks.
+- **Map size.** `--map-size 128|192|256` (`LaunchOptions.MapSize`, `LaunchOptions.MapSizes`) sets `SimRunner.MapSize`,
+  which `SimRunner.Start` puts in `MapGenParams.Width` and `Height`; the generator's other values stay at their defaults,
+  so a bigger map has the same plateau count and sizes, 12 forests and 8 mines (the 128 map's numbers; scaling them is a
+  later map slice). Without the flag the map is `MapGenParams.Default` exactly as before.
+- **Setup screen.** Seed: a text field (digits, 0 to 2^64 - 1; Start is disabled while it holds anything else) starting
+  at 1, the match's default, and Random, which writes a fresh number from a view-side `RandomNumberGenerator` (the seed is
+  the sim's input, so view randomness is fine here). Map size: a list of the three sizes. Two slots, "You" and "AI"
+  (`setup.slot_human`, `setup.slot_ai`): each shows the faction it plays today (player p plays faction p,
+  `World.FactionOf`'s rule, by data `displayName`) and the AI slot a difficulty, both **disabled** with the `coming_soon`
+  text (the difficulty list's one item and both lists' tooltip); M6-V2 wires them to the seats with M5-V2's `--ai`. Back
+  (or Esc) returns to the menu; the picks are kept for the next visit.
+- **Pause.** Esc (`ui_cancel`, in Main's `_Input`, which runs before any `_UnhandledInput`) in a match: when a targeting
+  order is armed (A, M, an ability: `SelectionController.Targeting`), a build menu is open or a placement ghost is up
+  (`CommandCard.MenuOpen` / `GhostActive`), Esc is left to them (`order_cancel`, also Esc, cancels them as before);
+  otherwise it pauses. Pausing sets `SceneTree.Paused`: the match is `Pausable`, so `SimRunner._Process` doesn't run (no
+  tick; the fixed-step clock gets no frame time, so nothing is caught up after), the camera, views and sounds stop, and
+  paused nodes receive no input (`_UnhandledInput`, GUI); the pause menu's full-screen backdrop also takes every click.
+  `Main` runs `Always` (it answers Esc while paused) and the screens inherit that. Esc or Resume unpauses; Quit to menu
+  ends the match. A test scene that hosts the shell must run `Always` itself.
+- **Text.** Every word on the three screens is `ui.json` (CLAUDE.md rule 8): new sections `menu` (`title`, `skirmish`,
+  `quit`), `setup` (`title`, `seed`, `random`, `map_size`, `slot_human`, `slot_ai`, `faction`, `difficulty`,
+  `coming_soon`, `start`, `back`) and `pause` (`title`, `resume`, `quit_to_menu`), read through `UiText.Menu`, `Setup`
+  and `Pause` (enums `MenuText`, `SetupText`, `PauseText`) and required like `hud` (a missing key is one load error naming
+  it). The only C# literal on screen is the map size item, "N × N": numbers and a sign. The title is "RtsGame", the
+  project's name, until the owner names the game.
+- **Tests.** Headless `ShellTest` (in the scene loop): the boot rule rows (no args or an unknown flag show the menu; every
+  flag `Parse` reads is in `MatchFlags`, read from `LaunchOptions.cs`'s `case` labels), the `--map-size` / `--skirmish`
+  parse and the unchanged defaults; the `ui.json` key rows (17 keys, each present, and each missing key or section one
+  error naming it). Then `Main.tscn` with no user args: the menu with its text and no match node; Skirmish -> setup (slot
+  names, both faction lists disabled with the data names and the coming-soon tooltip, difficulty disabled); Back and in
+  again; Random writes a number; the seed field clicked and typed: 7, then x (Start disabled), Backspace; map 192; Start:
+  the sim's seed is 7 and its heightmap and nav grid 192 x 192, and it ticks. A selected unit, A armed, Esc: the targeting
+  ends and nothing pauses. Esc: the tree paused, the pause menu up with its text; over half a second of real time no tick,
+  and A plus a click reach nothing (selection and targeting unchanged). Esc resumes and ticks move. Esc, Quit to menu: no
+  `Match`, `SimRunner`, view, controller or HUD node anywhere under the root, the old match and runner freed, the tree
+  unpaused, the menu up. Skirmish again keeps seed 7 and 192 and starts a fresh match (exactly one `Match`) that ticks.
+  With the pause's `SceneTree.Paused` line removed the test fails 11 rows. Windowed with `-- --shots <dir>` it saves
+  `shell-menu.png`, `shell-setup.png`, `shell-match.png`, `shell-pause.png`.
+- **Remembered sites (BUG-0275 item 1).** A ghost whose `BuildingGhost.Site` is set (it was a construction site when last
+  seen) draws as a foundation: its type's box scaled to `BuildingViews.SiteMinHeight` (0.45 m of the 3 m box; the entry
+  keeps no progress, so the lowest a site can be), standing on the ground, in the site colour darkened by
+  `FogView.ExploredBrightness` (`GhostSiteMaterial`, one for every owner, as live sites share one). It is re-placed when
+  the entry's generation, anchor or site flag changes. Picking matches the drawing: `BuildingPicker.PickGhostRay` has an
+  overload with a `siteShare` that makes a site ghost's box that share of `boxHeight` tall (the old overload, full height
+  for every ghost, is kept for its callers), and `SelectionController` passes `SiteMinHeight`. Tests: xUnit
+  `FogViewTests.GhostPick_ARememberedSite_IsPickedAsAFoundation` (a ray 1 m up meets the remembered box, misses it once the
+  entry is a site, still meets the foundation 0.2 m up; the old overload unchanged); headless `FogViewTest` adds, per seed,
+  that the House seen as a site is drawn as a foundation (flag, material, scale, base on the ground) and the finished
+  hall's ghost stays full height.
+- **BUG-0560 (`M4PlayableTest` step 5).** The step cast Telas Fire up to three times and waited for a Burning marker; a
+  recast after the 25 s cooldown could find the fight over, and `CastOnBlob` then waited for a visible enemy until the
+  5,500-tick budget. Step 5 now casts once and is done when the cast resolves (a Burning marker over a seen enemy is printed
+  when there is one); `CastOnBlob` fails at once with "the fight ended before Telas Fire burned anyone" when the enemy army
+  is gone and nothing is in sight. The Burning marker is asserted in step 8 instead, on the staged Zealot A that the duel's
+  mage burns: the marker over A, none over B, while A burns.
+
 ## AI architecture
 
 The AI lives in `Rts.Sim.Ai`, inside the sim assembly, because it must be deterministic (it uses
@@ -5494,7 +5581,7 @@ and repeated keys are errors, as everywhere. Shape:
 | Determinism | Same scenario twice → same hash; different seeds → different hash | Every change |
 | Replay golden tests | Recorded replays reproduce checkpoint hashes | Sim changes |
 | Perf benchmarks | Tick cost under budget: 500 units, average tick < 4 ms, p99 < 8 ms | `Category=Perf` |
-| Headless smoke | Godot boots the main scene, runs an AI-vs-AI match for 600 frames, exits 0 | `game/` changes |
+| Headless smoke | Godot boots the main scene (the main menu since M6-V1; `-- --skirmish` runs the match) for 600 frames, exits 0 with the banner and no ERROR | `game/` changes |
 | Visual check | Windowed run + screenshot inspected by Claude | Visual changes |
 
 - Golden replays live in `sim/Rts.Sim.Tests/Replays/`. The first (M1-6) is
@@ -5583,6 +5670,9 @@ and repeated keys are errors, as everywhere. Shape:
   (both players' halls, workers and cargo), MinimapTest (every dot of both armies), ProjectileViewTest and QaV7Test (every
   shot in flight drawn), QaV5Test (2,000 hurt units, 2,000 bars), QaV1Test (a full store of 256 buildings over the whole
   map, every one shown). The start-up line ends with ", fog not drawn".
+- **Map size and skirmish flags** (M6-V1): `--map-size 128|192|256` picks the square map's side (default the 128 map);
+  `--skirmish` (no value) starts the default match without the main menu. Any match flag skips the menu; see
+  "Implementation (M6-V1)".
 - **Debug overlay** (M2-5; F12, input action `debug_overlay`; launch flag `--debug-overlay` starts it
   on, so `--screenshot` can capture it): the nav grid on the ground, the flow-field arrows of the
   selection's goal around the camera, a tick-time graph of the last 120 ticks with the 4 ms budget
