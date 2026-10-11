@@ -84,7 +84,7 @@ public class DescriptionWordingQaTests
     /// BUG-0500: the linger word after the number ("a 1 s linger") or three words before it ("linger on a unit for 1 s")
     /// passed at the base (clause search) and now reads as the storm's duration: a false failure on the right number.
     /// </summary>
-    [Theory(Skip = "BUG-0500: per-phrase linger misses a linger word after the number or three words before it")]
+    [Theory] // BUG-0500 fixed in D12: LingerAfter takes the linger noun after the number, LingerBefore four words
     [InlineData(" A 1 s linger after leaving.")]
     [InlineData(" A 1-second linger after leaving.")]
     [InlineData(" The effects linger on a unit for 1 s.")]
