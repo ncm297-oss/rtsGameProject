@@ -275,7 +275,8 @@ bugs outrank new features.
 | [BUG-0550](BUG-0550-m5-v1-nits.md) | S4 | open | M5-V1 nits: a disc pool grows on key churn though no frame needs more nodes; the lost-cast disc hides under the crowd that caused it |
 | [BUG-0560](BUG-0560-m4-playable-step5-waits-out-budget-when-enemy-army-gone.md) | S3 | open | M4PlayableTest step 5 can wait out the tick budget: a Telas Fire that burns no one is recast after its cooldown, and once the fight is over `CastOnBlob` waits for a Whirlwind unit that no longer exists (1 in 12 seed-runs under load) |
 | [BUG-0561](BUG-0561-d13-nits.md) | S4 | open | D13 nits: andii.md / shadow.md still give their line unit the old ×1.5 vs Mounted template value; whirlwind.md calls ×1.1 "the nearest the band that lever could go"; the 1.1-over-1.3 pick is not argued |
-| [BUG-0570](BUG-0570-ai-gather-spam-at-remembered-gone-node.md) | S2 | open | The AI re-sends idle workers every think to a node it remembers but is gone (the Gather is dropped); they never gather again |
-| [BUG-0571](BUG-0571-ai-tests-pinned-to-placeholder-ai-json.md) | S2 | open | Ten M5-2 AiPlayerTests depend on the one-step placeholder ai.json and fail once D14's real build orders merge |
-| [BUG-0572](BUG-0572-ai-think-cost-full-building-store.md) | S3 | open | With the building store full, every AI think searches all 1,089 site candidates to the end: 1.6-2.2 ms a think (Debug) |
+| [BUG-0570](BUG-0570-ai-gather-spam-at-remembered-gone-node.md) | S2 | fixed | The AI re-sends idle workers every think to a node it remembers but is gone (the Gather is dropped); they never gather again |
+| [BUG-0571](BUG-0571-ai-tests-pinned-to-placeholder-ai-json.md) | S2 | fixed | Ten M5-2 AiPlayerTests depend on the one-step placeholder ai.json and fail once D14's real build orders merge |
+| [BUG-0572](BUG-0572-ai-think-cost-full-building-store.md) | S3 | fixed | With the building store full, every AI think searches all 1,089 site candidates to the end: 1.6-2.2 ms a think (Debug) |
 | [BUG-0573](BUG-0573-m5-2-small-findings.md) | S4 | open | M5-2 small findings: CanPlace answers two world-wide facts (store full, pockets); production divides by a weight that can be 0f |
+| [BUG-0574](BUG-0574-ai-marks-live-mine-dropped-when-no-drop-off.md) | S3 | open | A loaded worker with no drop-off makes the AI mark a live mine out of sight as gone, for good |

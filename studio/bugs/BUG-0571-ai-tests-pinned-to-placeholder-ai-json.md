@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-11-0634, task M5-2 |
 | System | sim tests (`Ai/AiPlayerTests`) |
-| Fixed by | |
+| Fixed by | M5-2 fix round 1 (3cd37a1): `Ai/AiPlayerTests` content-independent (quiet / own ai.json per scene, shipped-steps row checks properties); six loader / validation / tech QA rows made content-independent |
 
 ## Repro
 1. In a scratch clone: `git clone --branch studio/2026-10-11-0634-sim <repo> x`, then
@@ -37,3 +37,10 @@ assert the shipped content's first command (step 0's kind and target, the step's
 Train". Separately, 5 older loader tests fail on the data branch alone (`AiLoaderQaTests` x3, `AiLoaderTests.BothShippedFactions_...`,
 `DataValidationTests.BrokenAiJson_...duplicate step`): their find/replace strings target the placeholder file; that is the
 data track's QA to report.
+
+## Verified (QA re-check round 1, 2026-10-11-0634)
+Status set by QA. Independent cross-check: `game/data/factions/{malazan,whirlwind}/ai.json` checked out from 4b0c496 (D14,
+26 malazan steps) in the sim worktree, full non-Perf suite: 5,457 passed, 12 skipped, 0 failed in 15 m 9 s (the tests read
+`game/data` from the repo root, so D14's files were the ones loaded); restored with `git checkout HEAD -- game/data/factions`,
+`git status` shows no `game/` change. On the branch's placeholder files: 5,454 / 11 / 0. Test edits reviewed: no assertion on
+sim behaviour was weakened; the pinned content values (first step count 1, `attackMinHalfPop` 20) are not docs/02 numbers.

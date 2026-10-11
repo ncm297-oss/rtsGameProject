@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-11-0634, task M5-2 |
 | System | AI `EconomyManager` (with BUG-0540's node memory) |
-| Fixed by | |
+| Fixed by | M5-2 fix round 1 (3cd37a1): `EconomyManager` marks a node whose Gather left the worker Idle out of its sight (`Blackboard.NodeDropped`, `GatherNode`); `QA/AiSeatQaTests.IdleWorkers_AreNotSentForever_ToARememberedMineThatIsGone` un-skipped |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~AiSeatQaTests.IdleWorkers_AreNotSentForever_ToARememberedMineThatIsGone"`
@@ -39,3 +39,11 @@ economy manager reads it as a gather target). Possible fixes (dev / Producer cal
 with `Remaining` -1 instead of a `Gather` (the worker then sees the ground and the memory drops it), or mark a node whose
 Gather was dropped (the worker still Idle at the next think) and skip it for the other kind / next node, as the executor's
 retry marks do for Builds. The regression test is in `QA/AiSeatQaTests.cs`.
+
+## Verified (QA re-check round 1, 2026-10-11-0634)
+Status set by QA (the dev can't edit `studio/**`). The un-skipped row passes: `3 Gathers over 41 thinks; most to one worker 1;
+idle workers at the end 0` (was 120 / 40 / 3). QA's `QA/AiGatherMarkQaTests`: every remembered node of both kinds gone (16
+nodes, 5 workers): 55 Gathers in the first 40 thinks (bound 80), 0 more in the next 40, all 16 marked; a live out-of-sight mine
+is never marked over 200 thinks and is mined (gold 200 -> 350); two runs give equal hashes at every think. Mutation "never
+mark" (only the kind flip left) passes the un-skipped row but fails QA's bounded row. Follow-on: BUG-0574 (a live mine can be
+marked when a loaded worker has no drop-off; marks never clear).

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-11-0634, task M5-2 |
 | System | AI placement (`AiPlayer.FindSite`, `PlayerView.CanPlace`) |
-| Fixed by | |
+| Fixed by | M5-2 fix round 1 (3cd37a1): `PlayerView.CanPlaceAnywhere` checked once in `AiPlayer.FindSite`; `QA/AiThinkCostQaTests` rows un-skipped, `Ai/PlayerViewMemoryTests.CanPlaceAnywhere_AnswersAsCanPlace_OnOpenGround` |
 
 ## Repro
 1. Remove the `Skip` on `QA/AiThinkCostQaTests.EightAiSeats_FullBuildingStore_AThinkUnder1Ms`, then
@@ -39,3 +39,9 @@ Reachable late in an 8-player match: the default `BuildingCapacity` 256 is share
 check the store-wide and the cost rules once before the search (they don't depend on the cell), and test the
 remembered-node overlap only for nodes near the candidate (or only after the footprint passes everything else, as now, but
 with the store check hoisted). The gate scene finds a site in the first rings, so it never measures a search that fails.
+
+## Verified (QA re-check round 1, 2026-10-11-0634)
+Status set by QA. Perf rows alone, Debug: full store avg 0.058 ms (200 nodes) / 0.057 ms (374 nodes), worst 0.20 / 0.17 ms
+(was 1.65 / 2.22 ms); gate 8 seats x 2,500 units avg 0.063 ms, p95 0.139, worst 0.279. `CheckPlace` keeps its reason order
+(cell rules first, then cost and store), so `CanPlace` answers are unchanged; the whole Perf category alone 163 / 166, 3
+skipped, 0 failed.
