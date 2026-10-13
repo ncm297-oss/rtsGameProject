@@ -18,6 +18,7 @@ namespace Rts.Game.Tests;
 public partial class QaM24Test : Node
 {
     private readonly List<string> _failures = new();
+    private Match _match = null!;
     private Minimap _mini = null!;
     private RtsCamera _camera = null!;
     private SelectionController _sel = null!;
@@ -58,7 +59,7 @@ public partial class QaM24Test : Node
         DataLoadResult loaded = DataLoader.LoadAll(ProjectSettings.GlobalizePath("res://data"));
         if (!loaded.Ok) throw new InvalidOperationException("data failed to load");
         _data = loaded.Data!;
-        var match = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
+        var match = _match = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
         AddChild(match);
         match.Start(_data, LaunchOptions.Parse(new[] { "--units", "1000", "--no-combat" }));
         _mini = match.GetNode<Minimap>("Hud/Minimap");
@@ -245,7 +246,7 @@ public partial class QaM24Test : Node
         r0 = _mini.Refreshes;
         while (_mini.Refreshes == r0) await Frame();
         Color got = _mini.DotsImage.GetPixel(px, py);
-        Color want = UnitViews.ColorFromRgb(_data.Factions[1].PrimaryColor);
+        Color want = UnitViews.ColorFromRgb(_match.PlayerRgb[1]); // player 1's colour (M6-V3, BUG-0631 item 2)
         Check(dead.A < 0.01f || ColourAtOtherSlot(px, py), $"pixel ({px}, {py}) still opaque {dead} after its only unit died");
         Check(Mathf.Abs(got.R - want.R) < 0.01f && Mathf.Abs(got.G - want.G) < 0.01f && Mathf.Abs(got.B - want.B) < 0.01f && got.A > 0.99f,
             $"respawned enemy in slot {a}: pixel {got}, want {want}");

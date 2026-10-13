@@ -172,7 +172,7 @@ public partial class SkirmishSetup : CanvasLayer
             }
             DifficultyOption = List("Difficulty");
             foreach (SetupText key in DifficultyKeys) DifficultyOption.AddItem(ui.Setup(key));
-            DifficultyOption.Select((int)AiDifficulty.Normal);
+            DifficultyOption.Select((int)LaunchOptions.DefaultAi); // --skirmish's seat too (BUG-0630)
             grid.AddChild(DifficultyOption);
         }
 

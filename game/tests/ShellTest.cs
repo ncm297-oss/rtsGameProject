@@ -22,7 +22,7 @@ namespace Rts.Game.Tests;
 /// M6-V2: the <c>--faction</c> / <c>--ai</c> parse and <see cref="SimRunner.BuildSeats"/> rows; the setup's live faction and
 /// difficulty lists (data and <c>ui.json</c> text only, BUG-0581 item 1); the picks (sides swapped, Easy) kept over Back and
 /// Quit to menu, and each match's seats equal to them.
-/// M6-V3: the menu's match (and <c>--skirmish</c>) is a Town Hall and the starting workers a side, no army (<c>--units 0</c>,
+/// M6-V3: the menu's match (and <c>--skirmish</c>, slot 2 an AI too, BUG-0630) is a Town Hall and the starting workers a side, no army (<c>--units 0</c>,
 /// BUG-0604), the camera on the local hall; each slot's colour list (<c>ui.json</c> names, defaults colour 1 / 2), the picks
 /// kept over Back and Quit, and the match drawn in them (<c>Match.PlayerRgb</c>, unit and building materials, minimap dots);
 /// the <c>--colour</c> parse and its junk; each missing <c>setup.colour_*</c> key one error naming it; BUG-0602 item 1.
@@ -125,6 +125,12 @@ public partial class ShellTest : Node
         Check(LaunchOptions.Parse(new[] { "--skirmish", "--units", "100" }).UnitsPerPlayer == 100
             && LaunchOptions.Parse(new[] { "--units", "7", "--skirmish" }).UnitsPerPlayer == 7, "--skirmish overrode an explicit --units");
         Check(LaunchOptions.Parse(new[] { "--skirmish", "--units", "junk" }).UnitsPerPlayer == 0, "--skirmish --units junk: not the menu's 0");
+        // BUG-0630: --skirmish's slot 2 is the menu's AI seat (default difficulty) unless a valid --ai says otherwise; without it, human.
+        Check(LaunchOptions.Parse(new[] { "--skirmish" }).Ai == LaunchOptions.DefaultAi, $"--skirmish slot 2: {LaunchOptions.Parse(new[] { "--skirmish" }).Ai?.ToString() ?? "human"}");
+        Check(LaunchOptions.Parse(new[] { "--skirmish", "--ai", "hard" }).Ai == AiDifficulty.Hard
+            && LaunchOptions.Parse(new[] { "--ai", "easy", "--skirmish" }).Ai == AiDifficulty.Easy, "--skirmish overrode an explicit --ai");
+        Check(LaunchOptions.Parse(new[] { "--skirmish", "--ai", "junk" }).Ai == LaunchOptions.DefaultAi, "--skirmish --ai junk: not the menu's default");
+        Check(LaunchOptions.Parse(new[] { "--seed", "3" }).Ai == null, "a dev run without --skirmish / --ai got an AI seat");
         Check(LaunchOptions.HasMatchFlag(new[] { "--colour", "1", "3" }), "--colour not a match flag");
         Check(none.ColourIndex(0) == null && none.ColourIndex(1) == null && none.ColourIndex(2) == null && none.ColourIndex(-1) == null, "a colour picked with no flag");
         LaunchOptions colours = LaunchOptions.Parse(new[] { "--colour", "1", "8", "--colour", "2", "1", "--seed", "4" });
@@ -233,6 +239,17 @@ public partial class ShellTest : Node
             root["setup"]![UiText.ColourKey(2)]!["rgb"] = bad;
             var errors = new List<string>();
             Check(UiText.Parse(root.ToJsonString(), errors) == null && errors.Count == 1 && errors[0].Contains("setup.colour_3.rgb"), $"rgb '{bad}': [{string.Join("; ", errors)}]");
+        }
+        // BUG-0631 item 1: two entries with one rgb (either case) are one error naming both keys; three alike, two errors.
+        {
+            var root = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
+            root["setup"]![UiText.ColourKey(6)]!["rgb"] = $"#{_ui.ColourRgb(1):x6}";
+            var errors = new List<string>();
+            Check(UiText.Parse(root.ToJsonString(), errors) == null && errors.Count == 1 && errors[0].Contains("setup.colour_2.rgb") && errors[0].Contains("setup.colour_7.rgb"),
+                $"colours 2 and 7 alike: [{string.Join("; ", errors)}]");
+            root["setup"]![UiText.ColourKey(0)]!["rgb"] = $"#{_ui.ColourRgb(1):X6}";
+            errors.Clear();
+            Check(UiText.Parse(root.ToJsonString(), errors) == null && errors.Count == 2, $"colours 1, 2 and 7 alike: [{string.Join("; ", errors)}]");
         }
         // The table is read from the file (a renamed, recoloured entry shows the new name and value), never from C#.
         var renamedRoot = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
@@ -420,7 +437,8 @@ public partial class ShellTest : Node
         Check(w.FactionOf(0) == f0 && w.FactionOf(1) == f1 && w.Config.HasAiSeat, $"FactionOf {w.FactionOf(0)}, {w.FactionOf(1)}");
     }
 
-    // M6-V3 (BUG-0602 item 2): a --skirmish boot is the menu's Start with the defaults: a hall and workers a side, colours 1 / 2.
+    // M6-V3 (BUG-0602 item 2, BUG-0630): a --skirmish boot is the menu's Start with the defaults: a hall and workers a side,
+    // slot 2 an AI (Normal), colours 1 / 2.
     private async Task SkirmishBoot()
     {
         RemoveChild(_main);
@@ -434,6 +452,7 @@ public partial class ShellTest : Node
         if (_main.CurrentMatch == null) return;
         await Seconds(0.3);
         HallAndWorkers();
+        Seats(0, 1 % _data.Factions.Length, LaunchOptions.DefaultAi); // BUG-0630: slot 2 the menu's AI seat
         await Colours(0, 1);
     }
 

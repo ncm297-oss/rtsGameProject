@@ -1199,7 +1199,7 @@ public partial class AbilityViewTest : Node
         int slot = -1, ticks = 0, hidden = 0, drawn = 0, wrong = 0;
         bool shot = false;
         string firstWrong = "";
-        Color owner = UnitViews.ColorFromRgb(_data.Factions[W.FactionOf(1)].PrimaryColor);
+        Color owner = UnitViews.ColorFromRgb(_match.PlayerRgb[1]); // the owner's player colour (M6-V3, BUG-0631 item 2)
         for (; ticks < 400; ticks++)
         {
             _sim.Tick();
@@ -1408,17 +1408,19 @@ public partial class AbilityViewTest : Node
         }
     }
 
-    // BUG-0431 (M4-VH3): an own zone's rim is far from every faction's colour (an enemy zone's rim), so a Whirlwind
+    // BUG-0431 (M4-VH3): an own zone's rim is far from every player colour (an enemy zone's rim), so a Whirlwind
     // mirror's own and enemy storms read apart: some channel at least 0.4 apart (the marker colours' rule; the old deeper
-    // sand was 0.064 from the Whirlwind's #C8892E at most).
+    // sand was 0.064 from #C8892E at most). Since M6-V3 the owner colour is ui.json's player colour table, not the faction's
+    // primary (BUG-0631 item 2).
     private void OwnRimColourRow()
     {
-        foreach (FactionDef f in _data.Factions)
+        UiText ui = UiText.Shared ?? throw new InvalidOperationException("ui.json failed to load");
+        for (int c = 0; c < UiText.ColourCount; c++)
         {
-            Color enemy = UnitViews.ColorFromRgb(f.PrimaryColor);
+            Color enemy = UnitViews.ColorFromRgb(ui.ColourRgb(c));
             float gap = ChannelGap(AbilityViews.OwnZoneRimColor, enemy);
-            Check(gap >= 0.4f, $"own rim colour: {AbilityViews.OwnZoneRimColor} is only {gap:0.000} from {f.Key}'s {enemy}");
-            GD.Print($"own rim colour: {gap:0.00} from {f.Key}'s primary");
+            Check(gap >= 0.4f, $"own rim colour: {AbilityViews.OwnZoneRimColor} is only {gap:0.000} from player colour {UiText.ColourKey(c)} {enemy}");
+            GD.Print($"own rim colour: {gap:0.00} from player colour {UiText.ColourKey(c)}");
         }
     }
 

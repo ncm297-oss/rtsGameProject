@@ -23,10 +23,11 @@ namespace Rts.Game;
 /// the view draws no fog and shows every unit and building; the sim's fog and combat's sight rules are unchanged; M4-V4,
 /// never a game option), <c>--map-size 128|192|256</c> (square map side in cells, <see cref="MapSizes"/>; default the 128 map; M6-V1),
 /// <c>--skirmish</c> (takes no value: start the menu's default match at once, skipping the main menu; M6-V1; since M6-V3 a Town
-/// Hall and the starting workers a side and no army, like the menu's Start, unless <c>--units</c> is also given), <c>--faction &lt;slot&gt; &lt;id&gt;</c>
+/// Hall and the starting workers a side and no army, and slot 2 an AI seat of difficulty <see cref="DefaultAi"/>, like the menu's
+/// Start, unless <c>--units</c> / <c>--ai</c> are also given), <c>--faction &lt;slot&gt; &lt;id&gt;</c>
 /// (slot 1 or 2 = player 0 or 1 plays the faction with data id <c>id</c>, e.g. <c>--faction 2 whirlwind</c>; an id the data
 /// lacks is warned about by <see cref="Match"/> and ignored; M6-V2) and <c>--ai easy|normal|hard</c> (slot 2 is an AI seat of that
-/// difficulty; without it slot 2 is human, as before; M6-V2) and <c>--colour &lt;slot&gt; &lt;n&gt;</c> (slot 1 or 2 is drawn in
+/// difficulty; without it slot 2 is human, as before, except under <c>--skirmish</c>; M6-V2) and <c>--colour &lt;slot&gt; &lt;n&gt;</c> (slot 1 or 2 is drawn in
 /// player colour n, 1 to <see cref="UiText.ColourCount"/>, of <c>ui.json</c>'s table; without it slot s takes colour s; M6-V3). Any of these flags
 /// on the command line skips the main menu (<see cref="HasMatchFlag"/>), so every dev and test run starts its match as
 /// before M6-V1. Bad values are warned about and ignored; a token starting with <c>--</c> is never taken as a value (BUG-0041).
@@ -50,6 +51,9 @@ public sealed class LaunchOptions
 
     /// <summary>Gold mines on the match map without <c>--mines</c> (Producer default for the 128 map, M2-3b).</summary>
     public const int DefaultMines = 8;
+
+    /// <summary>The skirmish setup's default difficulty for the AI slot, and slot 2's seat under <c>--skirmish</c> without a valid <c>--ai</c> (M6-V3, BUG-0630).</summary>
+    public const AiDifficulty DefaultAi = AiDifficulty.Normal;
 
     /// <summary>The map sides <c>--map-size</c> and the skirmish setup offer, in cells (M6-V1).</summary>
     public static readonly int[] MapSizes = { 128, 192, 256 };
@@ -82,7 +86,7 @@ public sealed class LaunchOptions
     /// <summary>The player colour <c>--colour &lt;slot&gt; &lt;n&gt;</c> picked for slot <paramref name="slot"/> (0-based), as a 0-based index into <c>ui.json</c>'s colour table (<see cref="UiText.ColourRgb"/>), or null for the default (slot s: colour s).</summary>
     public int? ColourIndex(int slot) => (uint)slot < (uint)SlotCount ? _colours[slot] : null;
 
-    /// <summary>Player 1's AI difficulty (<c>--ai</c>), or null when slot 2 is a human seat (every dev run and test before M6-V2).</summary>
+    /// <summary>Player 1's AI difficulty (<c>--ai</c>; <see cref="DefaultAi"/> under <c>--skirmish</c>), or null when slot 2 is a human seat (every dev run and test before M6-V2).</summary>
     public AiDifficulty? Ai { get; private set; }
 
     /// <summary>Square map side in cells (<c>--map-size</c>, one of <see cref="MapSizes"/>), or null for the default 128 map.</summary>
@@ -269,8 +273,10 @@ public sealed class LaunchOptions
             }
             if (hasValue) i++;
         }
-        // M6-V3 (BUG-0602 item 2): --skirmish is the menu's Start, a hall and workers a side with no dev army.
+        // M6-V3 (BUG-0602 item 2, BUG-0630): --skirmish is the menu's Start with nothing changed: a hall and workers a side with
+        // no dev army, and slot 2 an AI seat of the setup's default difficulty. An explicit, valid --units / --ai still wins.
         if (o.Skirmish && !unitsGiven) o.UnitsPerPlayer = 0;
+        if (o.Skirmish && o.Ai == null) o.Ai = DefaultAi;
         return o;
     }
 

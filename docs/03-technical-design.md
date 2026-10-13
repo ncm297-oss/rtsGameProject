@@ -5441,7 +5441,7 @@ no sim change.
 
 ```
 game/scripts/SkirmishSetup.cs   per-slot colour lists; MatchArgs adds --units 0 and --colour <slot> <n>
-game/scripts/LaunchOptions.cs   --colour <slot> <n>; --skirmish defaults --units to 0
+game/scripts/LaunchOptions.cs   --colour <slot> <n>; --skirmish defaults --units to 0 and --ai to DefaultAi (normal)
 game/scripts/Match.cs           no SpawnArmies at 0 units; PlayerColours -> PlayerRgb; StartFocus, UnitsPerPlayer
 game/scripts/UnitViews.cs       per-player body materials (MaterialOverride by owner)
 game/scripts/UiText.cs, SetupText.cs   setup.colour heading and the colour table; the size-format rule
@@ -5451,8 +5451,10 @@ game/data/common/ui.json        setup.colour, setup.colour_1 .. colour_8
 
 - **The menu's match (BUG-0604).** `SkirmishSetup.MatchArgs` passes `--units 0`, so Start opens with each player's Town
   Hall and `rules.json` `startingWorkers` (5) workers and nothing else (`Pop 5 / 10`). `--skirmish` alone does the same
-  (BUG-0602 item 2: `LaunchOptions.Parse` sets `UnitsPerPlayer` to 0 when `--skirmish` is given without a valid `--units`),
-  so the smoke's second pass is the menu's Start. With 0 units `Match.Start` skips `SpawnArmies` and plans the bases
+  (BUG-0602 item 2: `LaunchOptions.Parse` sets `UnitsPerPlayer` to 0 when `--skirmish` is given without a valid `--units`,
+  and, BUG-0630, slot 2 an AI seat of `LaunchOptions.DefaultAi`, Normal, the setup's default difficulty, without a valid
+  `--ai`), so the smoke's second pass is the menu's Start (`seats malazan human, whirlwind ai normal`). An explicit valid
+  `--units` / `--ai` still wins; a dev run without `--skirmish` and `--ai` keeps slot 2 human. With 0 units `Match.Start` skips `SpawnArmies` and plans the bases
   through `StartBase.Plan` with an empty block per player, as `--units 0` always did (the plan stands a one-unit block in
   for an empty one); the camera starts on the local Town Hall (`Match.StartFocus`). Every other dev run and test keeps
   `--units`' default of 100. Until the sim's start locations land, the halls stand at those debug spots, either side of
@@ -5460,7 +5462,8 @@ game/data/common/ui.json        setup.colour, setup.colour_1 .. colour_8
 - **Per-player colours (BUG-0601).** `ui.json` `setup` holds a table of `UiText.ColourCount` (8) colours,
   `colour_1` .. `colour_8`, each `{ "displayName", "rgb": "#RRGGBB" }` (Iron, Ochre, Crimson, Cobalt, Jade, Violet, Rose,
   Bone; colours 1 and 2 are the Malazan and Whirlwind palette primaries, so a default match looks as before), plus the
-  column heading `setup.colour`. Each missing key or field, or an `rgb` not `#RRGGBB`, is one load error naming it. The
+  column heading `setup.colour`. Each missing key or field, or an `rgb` not `#RRGGBB`, is one load error naming it, and
+  two entries with the same `rgb` are one load error naming both keys (BUG-0631 item 1: the table tells players apart). The
   setup shows a colour list per slot (each item a swatch and the name; defaults colour 1 for "You", colour 2 for "AI"),
   kept over Back and Quit like the other picks; two slots may pick the same colour. Start passes `--colour <slot> <n>`
   (n 1-based); the flag takes slot 1 or 2 and one digit 1 to 8, and junk (a bad slot or colour, a missing value, a flag
@@ -5484,7 +5487,9 @@ game/data/common/ui.json        setup.colour, setup.colour_1 .. colour_8
   colour name or value as a C# literal, the table's own-rim gap, `{{0}}` refused; the colour lists (names, swatches,
   defaults), colours 4 and 6 picked and kept over Back and Quit; the menu's match: 0 units, 5 workers and one hall a
   player, no other unit, the camera on the local hall; both matches drawn in the picks (`PlayerRgb`, unit bodies,
-  building materials, local minimap dots); then a `--skirmish` boot equal to the defaults. `MinimapTest`: a press held
+  building materials, local minimap dots); then a `--skirmish` boot equal to the defaults (slot 2 an AI, Normal; the
+  `--skirmish` / `--ai` parse rows), and two equal table colours refused. `AbilityViewTest`, `CombatViewTest`, `QaM24Test`
+  and `QaVh3Test` compare drawn colours with `Match.PlayerRgb` (or the table), not faction primaries (BUG-0631 item 2). `MinimapTest`: a press held
   into a pause is dropped and a motion after it moves nothing; the dot colours are `PlayerRgb`. `AiSeatTest`: the swapped
   sides keep colours 1 and 2; the menu match's "AI worker at work by tick 400" is printed as a probe until the sim's start
   locations land. `QaM6V2Test`'s BUG-0602, mirror-colour and BUG-0600 probes are `Check`s.
@@ -5972,7 +5977,7 @@ six `rules.json` `ai` knobs in `Data/AiRulesDef.cs`; the hash in `GameData.Conte
 | Determinism | Same scenario twice → same hash; different seeds → different hash | Every change |
 | Replay golden tests | Recorded replays reproduce checkpoint hashes | Sim changes |
 | Perf benchmarks | Tick cost under budget: 500 units, average tick < 4 ms, p99 < 8 ms | `Category=Perf` |
-| Headless smoke | `tools/qa/smoke.ps1` runs two passes of 600 frames each: a no-arg boot to the main menu, and `-- --skirmish` (the default match: sim start, every view, the HUD). Both exit 0 with the banner and no ERROR, and the second prints `Match started:` | `game/` changes |
+| Headless smoke | `tools/qa/smoke.ps1` runs two passes of 600 frames each: a no-arg boot to the main menu, and `-- --skirmish` (the menu's default match, slot 2 an AI (Normal): sim start, every view, the HUD, the AI seat). Both exit 0 with the banner and no ERROR, and the second prints `Match started:` | `game/` changes |
 | Visual check | Windowed run + screenshot inspected by Claude | Visual changes |
 
 - Golden replays live in `sim/Rts.Sim.Tests/Replays/`. The first (M1-6) is

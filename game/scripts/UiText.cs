@@ -270,11 +270,13 @@ public sealed class UiText
         return root.TryGetProperty(name, out JsonElement section) ? Text(section, key, $"{name}.{key}", errors) : "";
     }
 
-    // The player colour table (M6-V3): setup.colour_1 .. colour_8, each { "displayName", "rgb": "#RRGGBB" }. Nothing when
-    // the setup section itself is missing (reported once by Section).
+    // The player colour table (M6-V3): setup.colour_1 .. colour_8, each { "displayName", "rgb": "#RRGGBB" }, no two with the
+    // same rgb (the table tells players apart; BUG-0631 item 1). Nothing when the setup section itself is missing (reported
+    // once by Section).
     private static void ReadColours(JsonElement root, UiText ui, List<string> errors)
     {
         if (!root.TryGetProperty("setup", out JsonElement setup) || setup.ValueKind != JsonValueKind.Object) return;
+        var parsed = new bool[ColourCount];
         for (int i = 0; i < ColourCount; i++)
         {
             string at = $"setup.{ColourKey(i)}";
@@ -283,9 +285,21 @@ public sealed class UiText
             ui._colourNames[i] = Text(entry, "displayName", $"{at}.displayName", errors);
             string rgb = Text(entry, "rgb", $"{at}.rgb", errors);
             if (rgb.Length == 0) continue;
-            if (TryRgb(rgb, out uint value)) ui._colourRgb[i] = value;
+            if (TryRgb(rgb, out uint value))
+            {
+                ui._colourRgb[i] = value;
+                parsed[i] = true;
+            }
             else errors.Add($"ui.json: {at}.rgb must be a colour '#RRGGBB': '{rgb}'");
         }
+        // One error per equal pair, naming both keys; the first earlier entry only, so three equal entries give two errors.
+        for (int j = 1; j < ColourCount; j++)
+            for (int i = 0; i < j; i++)
+                if (parsed[i] && parsed[j] && ui._colourRgb[i] == ui._colourRgb[j])
+                {
+                    errors.Add($"ui.json: setup.{ColourKey(i)}.rgb and setup.{ColourKey(j)}.rgb are the same colour ({ui._colourRgb[j]:X6}): players must look different");
+                    break;
+                }
     }
 
     // "#RRGGBB" (hex digits, either case) as 0xRRGGBB, the data's palette form.

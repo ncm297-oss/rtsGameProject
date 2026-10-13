@@ -14,7 +14,7 @@ namespace Rts.Game.Tests;
 /// player one Town Hall and the starting workers, no other unit, <c>UnitsPerPlayer</c> 0, the camera on the local hall; whether
 /// each hall sees a gold mine is printed, not failed: the sim's start locations fix it after the merge); ten quit cycles from
 /// that lean match (nodes flat, no orphans, objects and resources flat); <c>--skirmish</c> against the setup's defaults
-/// (BUG-0630: the AI seat differs, a printed probe); <c>--colour</c> junk and repeated sets through the real <see cref="Match"/>
+/// (the AI seat too, BUG-0630); <c>--colour</c> junk and repeated sets through the real <see cref="Match"/>
 /// (PlayerRgb, unit and building materials, the match ticks); colour flags are hash-neutral; a mirror match draws two colours in
 /// unit bodies, buildings and both players' minimap dots; a press on the minimap held into a pause (Esc twice) with the release
 /// before or after the resume, and a middle drag and a box press held alongside it: the camera moves 0 m after.
@@ -97,11 +97,13 @@ public partial class QaM6V3Test : Node
             Check(ui == null && e.Count == 1 && e[0].Contains(at), $"colour table, {what}: loaded {ui != null}, errors [{string.Join("; ", e)}]");
         }
         // Lower case and an extra colour_9 key load (extra keys are accepted, as everywhere in ui.json).
-        UiText? lower = ParseWith(r => { r["setup"]!["colour_1"]!["rgb"] = "#a3192b"; r["setup"]!["colour_9"] = "x"; }, out List<string> le);
-        Check(lower != null && lower.ColourRgb(0) == 0xA3192Bu, $"lower-case rgb / an extra colour_9: [{string.Join("; ", le)}]");
-        // Two table entries with the same rgb: probe (the loader does not check; the shipped table is checked by ShellTest).
-        UiText? dup = ParseWith(r => r["setup"]!["colour_2"]!["rgb"] = (string)r["setup"]!["colour_1"]!["rgb"]!, out _);
-        GD.Print($"  PROBE colour table: colours 1 and 2 with the same rgb {(dup != null ? "load clean (a default match would draw both sides alike)" : "refused")}");
+        // (Not colour_3's #A3192B: since BUG-0631 two equal entries are a load error.)
+        UiText? lower = ParseWith(r => { r["setup"]!["colour_1"]!["rgb"] = "#a3192c"; r["setup"]!["colour_9"] = "x"; }, out List<string> le);
+        Check(lower != null && lower.ColourRgb(0) == 0xA3192Cu, $"lower-case rgb / an extra colour_9: [{string.Join("; ", le)}]");
+        // Two table entries with the same rgb (BUG-0631 item 1): refused, one error naming both keys.
+        UiText? dup = ParseWith(r => r["setup"]!["colour_2"]!["rgb"] = (string)r["setup"]!["colour_1"]!["rgb"]!, out List<string> de);
+        Check(dup == null && de.Count == 1 && de[0].Contains("setup.colour_1.rgb") && de[0].Contains("setup.colour_2.rgb"),
+            $"colours 1 and 2 with the same rgb: [{string.Join("; ", de)}]");
     }
 
     private UiText? ParseWith(Action<System.Text.Json.Nodes.JsonObject> edit, out List<string> errors)
@@ -136,9 +138,9 @@ public partial class QaM6V3Test : Node
             Check(menuFaction == skFaction && (menu.ColourIndex(s) ?? s) == (skirmish.ColourIndex(s) ?? s),
                 $"--skirmish vs menu defaults, slot {s}: faction {skFaction}/{menuFaction}, colour {skirmish.ColourIndex(s) ?? s}/{menu.ColourIndex(s) ?? s}");
         }
-        // BUG-0630 (S2, open): printed until fixed; flip to Check(menu.Ai == skirmish.Ai, ...) when it is.
-        if (menu.Ai != skirmish.Ai)
-            GD.Print($"  KNOWN BUG-0630 probe: --skirmish slot 2 is {(skirmish.Ai is AiDifficulty a ? $"AI {a}" : "human")}, the menu's Start {(menu.Ai is AiDifficulty b ? $"AI {b}" : "human")} (args '{string.Join(' ', menuArgs)}')");
+        // BUG-0630: slot 2's seat is the menu's too (an AI of the setup's default difficulty).
+        Check(menu.Ai == skirmish.Ai,
+            $"--skirmish slot 2 is {(skirmish.Ai is AiDifficulty a ? $"AI {a}" : "human")}, the menu's Start {(menu.Ai is AiDifficulty b ? $"AI {b}" : "human")} (args '{string.Join(' ', menuArgs)}')");
     }
 
     // --colour through the real Match: junk keeps the default (slot s, colour s), repeated sets keep the last good value.
