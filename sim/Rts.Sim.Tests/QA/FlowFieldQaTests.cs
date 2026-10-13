@@ -133,13 +133,14 @@ public class FlowFieldQaTests
         return new NavGrid(MapGenerator.Generate(p, ref rng));
     }
 
+    // M5-4a: terrain only (no start locations), so the small maps keep their plateaus instead of the flat fallback.
     private static readonly MapGenParams[] FuzzParams =
     {
-        MapGenParams.Default,
-        MapGenParams.Default with { RampWidth = 1, RampLength = 6 },
-        MapGenParams.Default with { Width = 96, Height = 48, Level1Plateaus = 3, Level1MaxSize = 20, Level2MaxSize = 10 },
-        MapGenParams.Default with { Level1Plateaus = 12, Level2Plateaus = 8, RampsPerPlateau = 1 },
-        MapGenParams.Default with { Width = 64, Height = 64, Level1Plateaus = 6, Level1MaxSize = 20, Level2MaxSize = 10, RampWidth = 2 },
+        MapGenParams.Default with { StartLocations = 0 },
+        MapGenParams.Default with { StartLocations = 0, RampWidth = 1, RampLength = 6 },
+        MapGenParams.Default with { StartLocations = 0, Width = 96, Height = 48, Level1Plateaus = 3, Level1MaxSize = 20, Level2MaxSize = 10 },
+        MapGenParams.Default with { StartLocations = 0, Level1Plateaus = 12, Level2Plateaus = 8, RampsPerPlateau = 1 },
+        MapGenParams.Default with { StartLocations = 0, Width = 64, Height = 64, Level1Plateaus = 6, Level1MaxSize = 20, Level2MaxSize = 10, RampWidth = 2 },
     };
 
     /// <summary>A random cell of the requested kind (0 passable, 1 interior blocked, 2 border ring), or -1.</summary>

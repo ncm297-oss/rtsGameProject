@@ -22,10 +22,13 @@ namespace Rts.Game;
 /// (dev / tests: <c>SimConfig.Combat = false</c>, units never fight; M4-V1, never a game option), <c>--no-fog</c> (dev / tests:
 /// the view draws no fog and shows every unit and building; the sim's fog and combat's sight rules are unchanged; M4-V4,
 /// never a game option), <c>--map-size 128|192|256</c> (square map side in cells, <see cref="MapSizes"/>; default the 128 map; M6-V1),
-/// <c>--skirmish</c> (takes no value: start the default match at once, skipping the main menu; M6-V1), <c>--faction &lt;slot&gt; &lt;id&gt;</c>
+/// <c>--skirmish</c> (takes no value: start the menu's default match at once, skipping the main menu; M6-V1; since M6-V3 a Town
+/// Hall and the starting workers a side and no army, and slot 2 an AI seat of difficulty <see cref="DefaultAi"/>, like the menu's
+/// Start, unless <c>--units</c> / <c>--ai</c> are also given), <c>--faction &lt;slot&gt; &lt;id&gt;</c>
 /// (slot 1 or 2 = player 0 or 1 plays the faction with data id <c>id</c>, e.g. <c>--faction 2 whirlwind</c>; an id the data
 /// lacks is warned about by <see cref="Match"/> and ignored; M6-V2) and <c>--ai easy|normal|hard</c> (slot 2 is an AI seat of that
-/// difficulty; without it slot 2 is human, as before; M6-V2). Any of these flags
+/// difficulty; without it slot 2 is human, as before, except under <c>--skirmish</c>; M6-V2) and <c>--colour &lt;slot&gt; &lt;n&gt;</c> (slot 1 or 2 is drawn in
+/// player colour n, 1 to <see cref="UiText.ColourCount"/>, of <c>ui.json</c>'s table; without it slot s takes colour s; M6-V3). Any of these flags
 /// on the command line skips the main menu (<see cref="HasMatchFlag"/>), so every dev and test run starts its match as
 /// before M6-V1. Bad values are warned about and ignored; a token starting with <c>--</c> is never taken as a value (BUG-0041).
 /// </remarks>
@@ -49,6 +52,9 @@ public sealed class LaunchOptions
     /// <summary>Gold mines on the match map without <c>--mines</c> (Producer default for the 128 map, M2-3b).</summary>
     public const int DefaultMines = 8;
 
+    /// <summary>The skirmish setup's default difficulty for the AI slot, and slot 2's seat under <c>--skirmish</c> without a valid <c>--ai</c> (M6-V3, BUG-0630).</summary>
+    public const AiDifficulty DefaultAi = AiDifficulty.Normal;
+
     /// <summary>The map sides <c>--map-size</c> and the skirmish setup offer, in cells (M6-V1).</summary>
     public static readonly int[] MapSizes = { 128, 192, 256 };
 
@@ -57,7 +63,7 @@ public sealed class LaunchOptions
     {
         "--seed", "--speed", "--screenshot", "--screenshot-after", "--units", "--workers", "--forests", "--mines", "--zoom", "--bench",
         "--vsync", "--no-hud", "--debug-overlay", "--mute", "--no-bases", "--no-combat", "--no-fog", "--map-size", "--skirmish",
-        "--faction", "--ai",
+        "--faction", "--ai", "--colour",
     };
 
     /// <summary>Whether <paramref name="args"/> holds any of <see cref="MatchFlags"/>: the boot then starts the match at once instead of showing the main menu (M6-V1).</summary>
@@ -72,11 +78,15 @@ public sealed class LaunchOptions
     public const int SlotCount = 2;
 
     private readonly string?[] _factionIds = new string?[SlotCount];
+    private readonly int?[] _colours = new int?[SlotCount];
 
     /// <summary>The faction data id <c>--faction &lt;slot&gt; &lt;id&gt;</c> picked for slot <paramref name="slot"/> (0-based: player 0 or 1), or null for the default (player p plays faction <c>p mod factions</c>).</summary>
     public string? FactionId(int slot) => (uint)slot < (uint)SlotCount ? _factionIds[slot] : null;
 
-    /// <summary>Player 1's AI difficulty (<c>--ai</c>), or null when slot 2 is a human seat (every dev run and test before M6-V2).</summary>
+    /// <summary>The player colour <c>--colour &lt;slot&gt; &lt;n&gt;</c> picked for slot <paramref name="slot"/> (0-based), as a 0-based index into <c>ui.json</c>'s colour table (<see cref="UiText.ColourRgb"/>), or null for the default (slot s: colour s).</summary>
+    public int? ColourIndex(int slot) => (uint)slot < (uint)SlotCount ? _colours[slot] : null;
+
+    /// <summary>Player 1's AI difficulty (<c>--ai</c>; <see cref="DefaultAi"/> under <c>--skirmish</c>), or null when slot 2 is a human seat (every dev run and test before M6-V2).</summary>
     public AiDifficulty? Ai { get; private set; }
 
     /// <summary>Square map side in cells (<c>--map-size</c>, one of <see cref="MapSizes"/>), or null for the default 128 map.</summary>
@@ -152,6 +162,7 @@ public sealed class LaunchOptions
     public static LaunchOptions Parse(string[] args)
     {
         var o = new LaunchOptions();
+        bool unitsGiven = false;
         for (int i = 0; i < args.Length; i++)
         {
             string flag = args[i];
@@ -178,7 +189,11 @@ public sealed class LaunchOptions
                     else Warn(flag, value);
                     break;
                 case "--units":
-                    if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int units) && units >= 0 && units <= MaxUnitsPerPlayer) o.UnitsPerPlayer = units;
+                    if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int units) && units >= 0 && units <= MaxUnitsPerPlayer)
+                    {
+                        o.UnitsPerPlayer = units;
+                        unitsGiven = true;
+                    }
                     else Warn(flag, value);
                     break;
                 case "--workers":
@@ -223,6 +238,15 @@ public sealed class LaunchOptions
                     if (id != null) i++;
                     break;
                 }
+                case "--colour":
+                {
+                    // Two values, the slot then the colour (1-based, one digit: "02" or "+1" are junk); neither may be a flag (BUG-0041).
+                    string? n = hasValue && i + 2 < args.Length && !args[i + 2].StartsWith("--", StringComparison.Ordinal) ? args[i + 2] : null;
+                    if (value is "1" or "2" && n is { Length: 1 } && n[0] >= '1' && n[0] < '1' + UiText.ColourCount) o._colours[value[0] - '1'] = n[0] - '1';
+                    else Warn(flag, n == null ? value : $"{value} {n}");
+                    if (n != null) i++;
+                    break;
+                }
                 case "--skirmish":
                     o.Skirmish = true;
                     continue; // takes no value
@@ -249,6 +273,10 @@ public sealed class LaunchOptions
             }
             if (hasValue) i++;
         }
+        // M6-V3 (BUG-0602 item 2, BUG-0630): --skirmish is the menu's Start with nothing changed: a hall and workers a side with
+        // no dev army, and slot 2 an AI seat of the setup's default difficulty. An explicit, valid --units / --ai still wins.
+        if (o.Skirmish && !unitsGiven) o.UnitsPerPlayer = 0;
+        if (o.Skirmish && o.Ai == null) o.Ai = DefaultAi;
         return o;
     }
 

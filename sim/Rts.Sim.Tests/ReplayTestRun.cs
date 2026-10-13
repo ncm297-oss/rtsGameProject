@@ -138,7 +138,8 @@ public static class ReplayTestRun
         Seats = seats != null ? seats.ToImmutableArray() : (formatVersion ?? r.FormatVersion) >= 5 ? r.Seats : ImmutableArray<ReplaySeat>.Empty,
         SimVersion = simVersion ?? r.SimVersion,
         DataHash = dataHash ?? r.DataHash,
-        Map = r.Map,
+        // M5-4a: formats 3-5 hold no start locations; their maps were generated without them.
+        Map = (formatVersion ?? r.FormatVersion) >= 6 ? r.Map : r.Map with { StartLocations = 0 },
         Seed = r.Seed,
         PlayerCount = players ?? r.PlayerCount,
         UnitCapacity = r.UnitCapacity,

@@ -489,9 +489,9 @@ public partial class QaVh3Test : Node
         Image img = GetViewport().GetTexture().GetImage();
         Color own = Mean(img, a, _storm.Radius - AbilityViews.ZoneRimWidth / 2f), enemy = Mean(img, b, _storm.Radius - AbilityViews.ZoneRimWidth / 2f);
         Color ownFill = Mean(img, a, _storm.Radius * 0.5f), enemyFill = Mean(img, b, _storm.Radius * 0.5f);
-        Color gold = UnitViews.ColorFromRgb(_data.Factions[W.FactionOf(1)].PrimaryColor);
+        Color gold = UnitViews.ColorFromRgb(_match.PlayerRgb[1]); // player 1's colour (M6-V3, BUG-0631 item 2)
         float gap = ChannelGap(own, enemy), euclid = (float)Math.Sqrt((own.R - enemy.R) * (own.R - enemy.R) + (own.G - enemy.G) * (own.G - enemy.G) + (own.B - enemy.B) * (own.B - enemy.B));
-        GD.Print($"rim pixels: own rim {own.ToHtml(false)}, enemy rim {enemy.ToHtml(false)} (enemy faction {gold.ToHtml(false)}); fills {ownFill.ToHtml(false)} / {enemyFill.ToHtml(false)}; max channel gap {gap:0.000}, euclidean {euclid:0.000}; own rim vs fill {ChannelGap(own, ownFill):0.000}");
+        GD.Print($"rim pixels: own rim {own.ToHtml(false)}, enemy rim {enemy.ToHtml(false)} (enemy colour {gold.ToHtml(false)}); fills {ownFill.ToHtml(false)} / {enemyFill.ToHtml(false)}; max channel gap {gap:0.000}, euclidean {euclid:0.000}; own rim vs fill {ChannelGap(own, ownFill):0.000}");
         Check(gap > 0.06f && euclid > 0.06f, $"rim pixels: own {own.ToHtml(false)} vs enemy {enemy.ToHtml(false)}: gap {gap:0.000}, euclidean {euclid:0.000}");
         Check(ChannelGap(own, ownFill) > 0.06f && ChannelGap(enemy, enemyFill) > 0.06f, $"rim pixels: a rim does not stand out from its fill (own {ChannelGap(own, ownFill):0.000}, enemy {ChannelGap(enemy, enemyFill):0.000})");
         await EndMatch();

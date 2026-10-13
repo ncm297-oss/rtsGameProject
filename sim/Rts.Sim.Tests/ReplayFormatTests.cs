@@ -92,6 +92,7 @@ public class ReplayFormatTests
             Level2Plateaus = 3, Level2MinSize = 8, Level2MaxSize = 12, Level2Inset = 3, RampWidth = 4, RampLength = 5,
             RampsPerPlateau = 3, RampTries = 40, MinPassableFraction = 0.4375f, MaxAttempts = 7,
             Forests = 3, ForestMinTrees = 5, ForestMaxTrees = 9, GoldMines = 2, MineSpacing = 10.5f, // M3-1
+            StartLocations = 0, StartClearRadius = 6, StartEdgeMargin = 7, StartMineDistance = 14.5f, StartForestDistance = 20.5f, // M5-4a
         };
         map.Validate();
         // A new MapGenParams property left at its default here fails: add it to the format and this list.
@@ -209,15 +210,15 @@ public class ReplayFormatTests
         Assert.Throws<ArgumentException>(() => ReplayFormat.Write(bad)); // the writer won't write it either
     }
 
-    /// <summary>M1-7: format 2 added the flags field; M3-1: format 3 the resource lines; M4-2a: format 4 the combat line and attack targets; M5-2: format 5 the seat lines. Any version but 3 to 5 is refused by version first.</summary>
+    /// <summary>M1-7: format 2 added the flags field; M3-1: format 3 the resource lines; M4-2a: format 4 the combat line and attack targets; M5-2: format 5 the seat lines. M5-4a: format 6 the start-location lines. Any version but 3 to 6 is refused by version first.</summary>
     [Theory]
     [InlineData(1)]
     [InlineData(2)]
-    [InlineData(6)]
+    [InlineData(7)]
     [InlineData(0)]
     public void OtherFormatVersion_IsRefusedAsVersionMismatch(int version)
     {
-        Assert.Equal(5, Replay.CurrentFormatVersion);
+        Assert.Equal(6, Replay.CurrentFormatVersion);
         Assert.Equal(3, Replay.OldestFormatVersion);
         string text = Text(Small).Replace($"rts-replay {Replay.CurrentFormatVersion}\n", $"rts-replay {version}\n");
         Assert.Equal(ReplayError.FormatVersionMismatch, Read(Reseal(text)));
@@ -259,7 +260,7 @@ public class ReplayFormatTests
         string[] lines = text[..text.LastIndexOf("checksum ", StringComparison.Ordinal)].Split('\n');
         Assert.Contains("combat 1", lines);
         // M5-2: and no seat lines (format 5's).
-        var format3 = lines.Where(l => l != "combat 1" && !l.StartsWith("seat ", StringComparison.Ordinal)).Select(l =>
+        var format3 = lines.Where(l => l != "combat 1" && !l.StartsWith("seat ", StringComparison.Ordinal) && !l.StartsWith("map.start-", StringComparison.Ordinal)).Select(l =>
             l.StartsWith("rts-replay ", StringComparison.Ordinal) ? "rts-replay 3"
             : l.StartsWith("c ", StringComparison.Ordinal) ? string.Join(' ', l.Split(' ')[..10]) + " " + l.Split(' ')[^1]
             : l);
@@ -296,7 +297,7 @@ public class ReplayFormatTests
     public void Format4_HasTheCombatLine_AndThirteenFieldCommandLines()
     {
         string text = Text(Small);
-        Assert.StartsWith("rts-replay 5\n", text); // M5-2: format 5 keeps format 4's combat line and command lines
+        Assert.StartsWith("rts-replay 6\n", text); // M5-2 / M5-4a: formats 5 and 6 keep format 4's combat line and command lines
         string[] lines = text.Split('\n');
         Assert.Equal("combat 1", lines[Array.FindIndex(lines, l => l.StartsWith("ticks ", StringComparison.Ordinal)) + 1]);
         Assert.All(lines.Where(l => l.StartsWith("c ", StringComparison.Ordinal)), l => Assert.Equal(14, l.Split(' ').Length));
@@ -599,7 +600,7 @@ public class ReplayFormatTests
     public void Format5_HasOneSeatLinePerPlayer_RightAfterPlayers()
     {
         string text = Text(Small);
-        Assert.StartsWith("rts-replay 5\n", text);
+        Assert.StartsWith("rts-replay 6\n", text); // M5-4a: format 6 keeps the seat lines
         Assert.Contains("\nplayers 2\nseat 0 malazan human normal\nseat 1 whirlwind human normal\nunit-capacity ", text);
         Assert.Equal(new[] { new ReplaySeat("malazan", SeatController.Human, AiDifficulty.Normal), new ReplaySeat("whirlwind", SeatController.Human, AiDifficulty.Normal) }, Small.Seats.ToArray());
     }
@@ -610,7 +611,8 @@ public class ReplayFormatTests
         string text = Encoding.ASCII.GetString(File.ReadAllBytes(ReplayTestRun.GoldenPath));
         string[] lines = text[..text.LastIndexOf("checksum ", StringComparison.Ordinal)].Split('\n');
         Assert.Contains(lines, l => l.StartsWith("seat ", StringComparison.Ordinal));
-        return string.Join('\n', lines.Where(l => !l.StartsWith("seat ", StringComparison.Ordinal))
+        // M5-4a: and no start-location lines (format 6's).
+        return string.Join('\n', lines.Where(l => !l.StartsWith("seat ", StringComparison.Ordinal) && !l.StartsWith("map.start-", StringComparison.Ordinal))
             .Select(l => l.StartsWith("rts-replay ", StringComparison.Ordinal) ? "rts-replay 4" : l));
     }
 
@@ -712,5 +714,47 @@ public class ReplayFormatTests
         string text = Text(played).Replace("seat 0 whirlwind ", "seat 0 malazan ");
         Assert.Equal(ReplayError.None, ReplayFormat.TryRead(Reseal(text), out Replay? edited));
         Assert.Equal(ReplayError.CheckpointMismatch, ReplayPlayer.Run(edited!, TestSim.Data).Error);
+    }
+
+    // ---------- M5-4a: format 6 (the start-location lines); formats 3-5 read with none ----------
+
+    [Fact]
+    public void Format6_HasTheStartLines_AfterMineSpacing_AndFormat5HasNone()
+    {
+        string text = Text(Small);
+        Assert.Contains("\nmap.mine-spacing 41C00000\nmap.start-locations 2\nmap.start-clear-radius 8\nmap.start-edge-margin 10\n"
+            + "map.start-mine-distance 41900000\nmap.start-forest-distance 41C00000\ncommands ", text);
+        // A format 5 file has no such lines and reads with StartLocations 0: its map as recorded before M5-4a.
+        Replay r5 = ReplayTestRun.With(Small, formatVersion: 5);
+        Assert.Equal(0, r5.Map.StartLocations);
+        string text5 = Text(r5);
+        Assert.DoesNotContain("map.start-", text5);
+        Assert.Equal(ReplayError.None, ReplayFormat.TryRead(Encoding.ASCII.GetBytes(text5), out Replay? back));
+        Assert.Equal(0, back!.Map.StartLocations);
+        Assert.Equal(Encoding.ASCII.GetBytes(text5), ReplayFormat.Write(back));
+        // A format 5 replay can't say "start locations"; a start line in a format 5 file is an unknown line.
+        var bad5 = new Replay
+        {
+            FormatVersion = 5, Seats = Small.Seats, SimVersion = Small.SimVersion, DataHash = Small.DataHash, Map = Small.Map, Seed = Small.Seed,
+            PlayerCount = Small.PlayerCount, UnitCapacity = Small.UnitCapacity, CommandCapacity = Small.CommandCapacity,
+            ResourceCapacity = Small.ResourceCapacity, CheckpointInterval = Small.CheckpointInterval, TickCount = Small.TickCount,
+            Commands = Small.Commands, Checkpoints = Small.Checkpoints,
+        };
+        Assert.Equal(ReplayError.InvalidHeader, bad5.Validate());
+        string withLine = text5.Replace("\ncommands ", "\nmap.start-locations 2\ncommands ");
+        Assert.Equal(ReplayError.Malformed, Read(Reseal(withLine)));
+    }
+
+    [Theory]
+    [InlineData("map.start-locations 2\n", "")]
+    [InlineData("map.start-locations 2\n", "map.start-locations 1\n")]
+    [InlineData("map.start-clear-radius 8\n", "map.start-clear-radius 99\n")]
+    [InlineData("map.start-mine-distance 41900000\n", "map.start-mine-distance 7FC00000\n")]
+    [InlineData("map.start-forest-distance 41C00000\n", "")]
+    public void Format6_AMissingOrBadStartLine_IsRefused(string find, string replace)
+    {
+        string text = Text(Small);
+        Assert.Contains(find, text);
+        Assert.NotEqual(ReplayError.None, Read(Reseal(text.Replace(find, replace))));
     }
 }

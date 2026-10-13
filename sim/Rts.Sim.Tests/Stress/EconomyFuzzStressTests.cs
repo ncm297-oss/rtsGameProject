@@ -44,7 +44,7 @@ public class EconomyFuzzStressTests
     {
         const int ticks = 3000, capacity = 96, players = 2;
         SimConfig config = TestSim.Config(Seed: seed, PlayerCount: players, UnitCapacity: capacity, CommandCapacity: 512)
-            with { Map = MapGenParams.Default with { Forests = 12, GoldMines = 8 }, Combat = false };
+            with { Map = MapGenParams.Default with { Forests = 12, GoldMines = 8, StartLocations = 0 }, Combat = false }; // M5-4a: the M3-2 map, as recorded
         var a = new Simulation(config);
         var rec = new ReplayRecorder(a, checkpointInterval: 100);
         var b = new Simulation(config);
@@ -259,12 +259,14 @@ public class EconomyFuzzStressTests
 
     private static readonly MapGenParams Small48 = MapGenParams.Default with
     {
+        StartLocations = 0, // M5-4a: too small for start locations
         Width = 48, Height = 48, EdgeMargin = 2, Level1Plateaus = 3, Level1MinSize = 6, Level1MaxSize = 16,
         Level2Plateaus = 2, Level2MinSize = 5, Level2MaxSize = 8, Level2Inset = 1,
     };
 
     private static readonly MapGenParams Rect64x32 = MapGenParams.Default with
     {
+        StartLocations = 0, // M5-4a: too small for start locations
         Width = 64, Height = 32, EdgeMargin = 2, Level1Plateaus = 3, Level1MinSize = 6, Level1MaxSize = 14,
         Level2Plateaus = 2, Level2MinSize = 5, Level2MaxSize = 8, Level2Inset = 1,
     };

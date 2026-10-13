@@ -67,8 +67,8 @@ public partial class QaM6V2Test : Node
             var errors = new List<string>();
             UiText? ui = UiText.Parse(root.ToJsonString(), errors);
             bool refused = ui == null && errors.Count == 1 && errors[0].Contains("setup.map_size_item");
-            // BUG-0602 (open, S4): printed, not failed, until the fix; flip to Check(refused, ...) when BUG-0602 is fixed.
-            GD.Print($"  KNOWN BUG-0602 probe: map_size_item '{bad}' {(refused ? "refused" : $"accepted: items would read '{ui?.MapSizeItem(128)}' / '{ui?.MapSizeItem(256)}'")}");
+            // BUG-0602 item 1 (fixed in M6-V3): a Check since the fix.
+            Check(refused, $"BUG-0602: map_size_item '{bad}' accepted: items would read '{ui?.MapSizeItem(128)}' / '{ui?.MapSizeItem(256)}'; errors [{string.Join("; ", errors)}]");
         }
     }
 
@@ -139,9 +139,14 @@ public partial class QaM6V2Test : Node
         Check(own > 0 && foreign == 0, $"local units {own}, not the Whirlwind's {foreign}");
         var buildings = match.GetNode<BuildingViews>("World3D/BuildingViews");
         Color c0 = buildings.PlayerMaterial(0).AlbedoColor, c1 = buildings.PlayerMaterial(1).AlbedoColor;
-        Check(c0.IsEqualApprox(UnitViews.ColorFromRgb(w.PrimaryColor)) && c1.IsEqualApprox(UnitViews.ColorFromRgb(w.PrimaryColor)),
+        // M6-V3 (BUG-0601): a mirror draws two colours, per slot (ui.json's colour table, slot s colour s), in buildings and units.
+        UiText ui = UiText.Shared!;
+        Check(!c0.IsEqualApprox(c1) && c0.IsEqualApprox(UnitViews.ColorFromRgb(ui.ColourRgb(0))) && c1.IsEqualApprox(UnitViews.ColorFromRgb(ui.ColourRgb(1))),
             $"mirror building colours {c0}, {c1}");
-        GD.Print($"  swapped HUD: bar '{bar.Text}', colours p0 {c0} p1 {c1} (a mirror: alike until M6-V3)");
+        var units = match.GetNode<UnitViews>("World3D/UnitViews");
+        Color? u0 = units.PlayerMaterial(0)?.AlbedoColor, u1 = units.PlayerMaterial(1)?.AlbedoColor;
+        Check(u0 is Color a0 && u1 is Color a1 && !a0.IsEqualApprox(a1) && a0.IsEqualApprox(c0) && a1.IsEqualApprox(c1), $"mirror unit colours {u0}, {u1}");
+        GD.Print($"  swapped HUD: bar '{bar.Text}', colours p0 {c0} p1 {c1}");
         await EndMatch(match);
     }
 
@@ -250,8 +255,8 @@ public partial class QaM6V2Test : Node
         GetViewport().PushInput(new InputEventMouseMotion { Position = b, GlobalPosition = b, Relative = b - a });
         await Frames(3);
         float moved = cam.GlobalPosition.DistanceTo(before);
-        // BUG-0600 (open, S3): printed, not failed, until the fix; flip to Check(moved < 1e-3f, ...) when BUG-0600 is fixed.
-        GD.Print($"  KNOWN BUG-0600 probe (minimap): the camera moved {moved:0.00} m on a motion over the minimap with no button held after resume");
+        // BUG-0600 (fixed in M6-V3): a Check since the fix.
+        Check(moved < 1e-3f, $"BUG-0600 (minimap): the camera moved {moved:0.00} m on a motion over the minimap with no button held after resume");
         // Clean up: a full left click on the minimap ends any drag.
         GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = b, GlobalPosition = b, ButtonMask = MouseButtonMask.Left });
         GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = b, GlobalPosition = b });

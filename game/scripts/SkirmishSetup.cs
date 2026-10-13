@@ -7,13 +7,15 @@ using Rts.Sim.Data;
 namespace Rts.Game;
 
 /// <summary>
-/// The skirmish setup screen (M6-V1, M6-V2; docs/02 "Game flow" 2): the map seed (typed, or Random), the map size
-/// (<see cref="LaunchOptions.MapSizes"/>), and two slots, "You" (player 0) and "AI" (player 1), each with a faction list,
-/// the AI slot with a difficulty list. Text from <c>ui.json</c> <c>setup</c>, faction names from the data's <c>displayName</c>.
+/// The skirmish setup screen (M6-V1, M6-V2, M6-V3; docs/02 "Game flow" 2): the map seed (typed, or Random), the map size
+/// (<see cref="LaunchOptions.MapSizes"/>), and two slots, "You" (player 0) and "AI" (player 1), each with a faction list and
+/// a colour list, the AI slot with a difficulty list. Text from <c>ui.json</c> <c>setup</c> (the colours' names and swatches
+/// from its colour table), faction names from the data's <c>displayName</c>.
 /// </summary>
 /// <remarks>
 /// The faction lists hold every loaded faction in id order (defaults: faction 0 for "You", faction 1 for "AI", the match's
-/// old fixed assignment); the difficulty list Easy, Normal, Hard in <see cref="AiDifficulty"/> order (default Normal). The
+/// old fixed assignment); each colour list the <see cref="UiText.ColourCount"/> colours in table order (defaults: colour 1
+/// for "You", colour 2 for "AI"); the difficulty list Easy, Normal, Hard in <see cref="AiDifficulty"/> order (default Normal). The
 /// screen holds only what the player picked; Start raises <see cref="StartPressed"/> with the picks as match flags
 /// (<see cref="MatchArgs"/>) and <see cref="Main"/> starts the match through <see cref="LaunchOptions.Parse"/>.
 /// </remarks>
@@ -46,6 +48,9 @@ public partial class SkirmishSetup : CanvasLayer
     /// <summary>Each slot's faction list (one item per loaded faction, id order), slot 0 first.</summary>
     public OptionButton[] FactionOptions { get; } = new OptionButton[2];
 
+    /// <summary>Each slot's colour list (one item per <c>ui.json</c> colour, table order), slot 0 first (M6-V3).</summary>
+    public OptionButton[] ColourOptions { get; } = new OptionButton[2];
+
     /// <summary>The AI slot's difficulty list (one item per <see cref="AiDifficulty"/>).</summary>
     public OptionButton DifficultyOption { get; private set; } = null!;
 
@@ -72,24 +77,35 @@ public partial class SkirmishSetup : CanvasLayer
         return list.ItemCount == 0 ? -1 : Math.Clamp(list.Selected, 0, list.ItemCount - 1);
     }
 
+    /// <summary>The colour picked for <paramref name="slot"/> (0-based index into <c>ui.json</c>'s colour table).</summary>
+    public int ColourPick(int slot) => Math.Clamp(ColourOptions[slot].Selected, 0, UiText.ColourCount - 1);
+
     /// <summary>The AI slot's picked difficulty.</summary>
     public AiDifficulty DifficultyPick => (AiDifficulty)Math.Clamp(DifficultyOption.Selected, 0, DifficultyKeys.Length - 1);
 
     /// <summary>
-    /// The picks as the command line a dev run would pass (<c>--seed &lt;n&gt; --map-size &lt;n&gt; --faction 1 &lt;id&gt;
-    /// --faction 2 &lt;id&gt; --ai &lt;difficulty&gt;</c>); null while the seed field holds no number. A slot with no faction (no
-    /// factions loaded) passes no <c>--faction</c>.
+    /// The picks as the command line a dev run would pass (<c>--seed &lt;n&gt; --map-size &lt;n&gt; --units 0 --colour 1 &lt;n&gt;
+    /// --faction 1 &lt;id&gt; --colour 2 &lt;n&gt; --faction 2 &lt;id&gt; --ai &lt;difficulty&gt;</c>); null while the seed field holds no
+    /// number. <c>--units 0</c>: the menu's match opens with a Town Hall and the starting workers a side, no dev army (M6-V3,
+    /// BUG-0604). A slot with no faction (no factions loaded) passes no <c>--faction</c>.
     /// </summary>
     public string[]? MatchArgs()
     {
         if (Seed is not ulong seed) return null;
-        var args = new List<string> { "--seed", seed.ToString(CultureInfo.InvariantCulture), "--map-size", MapSize.ToString(CultureInfo.InvariantCulture) };
+        var args = new List<string>
+        {
+            "--seed", seed.ToString(CultureInfo.InvariantCulture), "--map-size", MapSize.ToString(CultureInfo.InvariantCulture), "--units", "0",
+        };
         for (int slot = 0; slot < FactionOptions.Length; slot++)
         {
+            string slotArg = (slot + 1).ToString(CultureInfo.InvariantCulture);
+            args.Add("--colour");
+            args.Add(slotArg);
+            args.Add((ColourPick(slot) + 1).ToString(CultureInfo.InvariantCulture));
             int f = FactionPick(slot);
             if (f < 0 || f >= _factionKeys.Length) continue;
             args.Add("--faction");
-            args.Add((slot + 1).ToString(CultureInfo.InvariantCulture));
+            args.Add(slotArg);
             args.Add(_factionKeys[f]);
         }
         args.Add("--ai");
@@ -105,7 +121,7 @@ public partial class SkirmishSetup : CanvasLayer
         VBoxContainer column = ShellUi.CentredColumn(this, 20);
         column.AddChild(ShellUi.Heading(ui.Setup(SetupText.Title)));
 
-        var grid = new GridContainer { Name = "Grid", Columns = 3 };
+        var grid = new GridContainer { Name = "Grid", Columns = 4 };
         grid.AddThemeConstantOverride("h_separation", 16);
         grid.AddThemeConstantOverride("v_separation", 12);
         column.AddChild(grid);
@@ -118,6 +134,7 @@ public partial class SkirmishSetup : CanvasLayer
         RandomButton = ShellUi.Button("Random", ui.Setup(SetupText.Random), 160f);
         RandomButton.Pressed += RandomSeed;
         grid.AddChild(RandomButton);
+        grid.AddChild(new Control());
 
         grid.AddChild(ShellUi.Text(ui.Setup(SetupText.MapSize)));
         MapSizeOption = List("MapSize");
@@ -125,10 +142,12 @@ public partial class SkirmishSetup : CanvasLayer
         MapSizeOption.Select(0);
         grid.AddChild(MapSizeOption);
         grid.AddChild(new Control());
+        grid.AddChild(new Control());
 
         // The slots: a heading row, then one row per slot.
         grid.AddChild(new Control());
         grid.AddChild(ShellUi.Text(ui.Setup(SetupText.Faction), 16));
+        grid.AddChild(ShellUi.Text(ui.Setup(SetupText.Colour), 16));
         grid.AddChild(ShellUi.Text(ui.Setup(SetupText.Difficulty), 16));
         _factionKeys = new string[data.Factions.Length];
         for (int f = 0; f < _factionKeys.Length; f++) _factionKeys[f] = data.Factions[f].Key;
@@ -141,6 +160,11 @@ public partial class SkirmishSetup : CanvasLayer
             // The defaults are the match's own seats: player p plays faction p mod factions.
             if (data.Factions.Length > 0) FactionOptions[slot].Select(slot % data.Factions.Length);
             grid.AddChild(FactionOptions[slot]);
+            ColourOptions[slot] = List($"Colour{slot}");
+            for (int c = 0; c < UiText.ColourCount; c++) ColourOptions[slot].AddIconItem(Swatch(ui.ColourRgb(c)), ui.ColourName(c));
+            // The defaults are the match's own: slot s plays colour s.
+            ColourOptions[slot].Select(slot % UiText.ColourCount);
+            grid.AddChild(ColourOptions[slot]);
             if (slot == 0)
             {
                 grid.AddChild(new Control()); // the player's own slot has no difficulty
@@ -148,7 +172,7 @@ public partial class SkirmishSetup : CanvasLayer
             }
             DifficultyOption = List("Difficulty");
             foreach (SetupText key in DifficultyKeys) DifficultyOption.AddItem(ui.Setup(key));
-            DifficultyOption.Select((int)AiDifficulty.Normal);
+            DifficultyOption.Select((int)LaunchOptions.DefaultAi); // --skirmish's seat too (BUG-0630)
             grid.AddChild(DifficultyOption);
         }
 
@@ -175,6 +199,14 @@ public partial class SkirmishSetup : CanvasLayer
     }
 
     private void Validate() => StartButton.Disabled = Seed == null;
+
+    // A small square of the colour for its list item.
+    private static ImageTexture Swatch(uint rgb)
+    {
+        Image image = Image.CreateEmpty(16, 16, false, Image.Format.Rgba8);
+        image.Fill(UnitViews.ColorFromRgb(rgb));
+        return ImageTexture.CreateFromImage(image);
+    }
 
     private static OptionButton List(string name)
     {

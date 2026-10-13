@@ -11,7 +11,8 @@ namespace Rts.Game;
 /// <remarks>
 /// A slot's node is created the first time the slot holds a live unit and hidden while it is dead,
 /// so a unit respawned into the slot reuses it. Meshes (one per unit type, radius from data) and
-/// materials (one per faction, its <c>PrimaryColor</c>) are all made in <see cref="Bind"/>. Views
+/// materials (one per faction, its <c>PrimaryColor</c>; M6-V3: with the match's per-player colours, one per player, set
+/// on a slot's node as its material override when the slot's owner changes) are all made in <see cref="Bind"/>. Views
 /// hold no gameplay state; they only read the unit store.
 /// Worker feedback (M3-V1): a standing worker's <see cref="UnitState"/> (<c>Gathering</c>, <c>Returning</c>,
 /// <c>Building</c>) tints its body through a shared overlay material, and while <c>Cargo</c> &gt; 0 a small marker
@@ -70,6 +71,8 @@ public partial class UnitViews : Node3D
     private float[] _halfHeight = Array.Empty<float>();
     private MeshInstance3D?[] _views = Array.Empty<MeshInstance3D?>();
     private int[] _viewType = Array.Empty<int>();
+    private int[] _viewOwner = Array.Empty<int>();
+    private StandardMaterial3D[] _playerMats = Array.Empty<StandardMaterial3D>();
     private bool[] _shown = Array.Empty<bool>();
 
     // Worker feedback: overlay per UnitState (null for untinted states), marker mesh per ResourceKind.
@@ -103,12 +106,23 @@ public partial class UnitViews : Node3D
     /// <summary>Materials created (one per faction).</summary>
     public int MaterialCount { get; private set; }
 
+    /// <summary>Per-player body materials (M6-V3), one per <c>playerRgb</c> entry given to <see cref="Bind"/>; 0 without.</summary>
+    public int PlayerMaterialCount => _playerMats.Length;
+
+    /// <summary>Player <paramref name="player"/>'s body material (M6-V3), or null without per-player colours.</summary>
+    public StandardMaterial3D? PlayerMaterial(int player) => (uint)player < (uint)_playerMats.Length ? _playerMats[player] : null;
+
     /// <summary>Cargo marker nodes created so far (one per slot that ever carried).</summary>
     public int MarkerCount { get; private set; }
 
     /// <summary>Creates the shared meshes and materials and sizes the slot pool; call once before the first <see cref="Sync"/>.</summary>
-    public void Bind(GameData data, int unitCapacity)
+    /// <param name="playerRgb">Per player, its colour (0xRRGGBB, M6-V3: the match's <c>PlayerRgb</c>); null draws each unit in its type's faction's colour.</param>
+    public void Bind(GameData data, int unitCapacity, uint[]? playerRgb = null)
     {
+        _playerMats = new StandardMaterial3D[playerRgb?.Length ?? 0];
+        for (int p = 0; p < _playerMats.Length; p++)
+            _playerMats[p] = new StandardMaterial3D { AlbedoColor = ColorFromRgb(playerRgb![p]), Roughness = 0.8f };
+
         var materials = new StandardMaterial3D[data.Factions.Length];
         for (int f = 0; f < materials.Length; f++)
             materials[f] = new StandardMaterial3D { AlbedoColor = ColorFromRgb(data.Factions[f].PrimaryColor), Roughness = 0.8f };
@@ -129,6 +143,8 @@ public partial class UnitViews : Node3D
         _views = new MeshInstance3D?[unitCapacity];
         _viewType = new int[unitCapacity];
         Array.Fill(_viewType, -1);
+        _viewOwner = new int[unitCapacity];
+        Array.Fill(_viewOwner, -1);
         _shown = new bool[unitCapacity];
 
         _tints = new StandardMaterial3D?[(int)UnitState.Building + 1];
@@ -218,6 +234,12 @@ public partial class UnitViews : Node3D
             {
                 view.Mesh = _meshes[type];
                 _viewType[i] = type;
+            }
+            int owner = u.Owner[i];
+            if (_viewOwner[i] != owner && _playerMats.Length > 0)
+            {
+                view.MaterialOverride = (uint)owner < (uint)_playerMats.Length ? _playerMats[owner] : null;
+                _viewOwner[i] = owner;
             }
             if (!_shown[i])
             {

@@ -47,6 +47,9 @@ public partial class Minimap : Control
     // The generation of each dot's unit at the last dot refresh (BUG-0281 item 3: a click acts on the dots as drawn).
     private int[] _dotGeneration = Array.Empty<int>();
 
+    /// <summary>True between a left press on the minimap and its release: motions drag the camera (the jump-drag).</summary>
+    public bool Jumping => _jumping;
+
     /// <summary>The minimap's pixels; null until <see cref="Init"/>.</summary>
     public MinimapRaster? Raster { get; private set; }
 
@@ -189,6 +192,13 @@ public partial class Minimap : Control
             _outline[i] = new Vector2(px.X, px.Y);
         }
         _outline[4] = _outline[0];
+    }
+
+    public override void _Notification(int what)
+    {
+        // BUG-0600 (the BUG-0580 class): a paused node gets no input, so a left release during the pause never arrives; the
+        // jump-drag is dropped at the pause, so after Resume a motion with no button held moves nothing.
+        if (what == NotificationPaused || what == NotificationUnpaused) _jumping = false;
     }
 
     public override void _GuiInput(InputEvent e)

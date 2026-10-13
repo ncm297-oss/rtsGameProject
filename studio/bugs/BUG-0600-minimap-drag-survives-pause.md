@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-12-1930, task M6-V2 (QA) |
 | System | view: `Minimap` (`_jumping`) vs the pause menu |
-| Fixed by | |
+| Fixed by | 9ec4a56 (M6-V3, `Minimap._Notification` drops `_jumping` on pause / unpause); regression rows `QaM6V2Test.MinimapHeldIntoPause` (now a Check), `MinimapTest` pause row, `QaM6V3Test.HeldIntoPause` (released during the pause and after Resume: 0 m). QA 2026-10-13-0146 verified. |
 
 ## Repro
 1. `dotnet build RtsGame.sln`, then `& $env:GODOT --headless --path game res://tests/QaM6V2Test.tscn`.

@@ -13,8 +13,8 @@ namespace Rts.Sim.Replays;
 /// </remarks>
 public sealed class Replay
 {
-    /// <summary>The format version this build writes (5 since M5-2: one <see cref="Seats"/> line per player; 4 since M4-2a: the <see cref="Combat"/> switch in the header and an attack target on every command line; 3 since M3-1: the resource capacity and the resource placer's map fields; 2 since M1-7: command lines carry <see cref="Command.Flags"/>).</summary>
-    public const int CurrentFormatVersion = 5;
+    /// <summary>The format version this build writes (6 since M5-4a: the map's start-location fields; 5 since M5-2: one <see cref="Seats"/> line per player; 4 since M4-2a: the <see cref="Combat"/> switch in the header and an attack target on every command line; 3 since M3-1: the resource capacity and the resource placer's map fields; 2 since M1-7: command lines carry <see cref="Command.Flags"/>).</summary>
+    public const int CurrentFormatVersion = 6;
 
     /// <summary>The oldest format version this build still reads and plays: 3 (M3-1), which has no combat line (combat on) and no attack targets.</summary>
     public const int OldestFormatVersion = 3;
@@ -85,6 +85,8 @@ public sealed class Replay
         if (FormatVersion < 4 && !Combat) return ReplayError.InvalidHeader;
         if (!IsToken(SimVersion)) return ReplayError.InvalidHeader;
         if (Map == null || !MapIsValid(Map)) return ReplayError.InvalidHeader;
+        // Formats 3-5 have no start-location lines: they can only say "none" (M5-4a).
+        if (FormatVersion < 6 && Map.StartLocations != 0) return ReplayError.InvalidHeader;
         if (PlayerCount < 1 || PlayerCount > MaxPlayers) return ReplayError.InvalidHeader;
         if (UnitCapacity < 1 || UnitCapacity > MaxCapacity) return ReplayError.InvalidHeader;
         if (CommandCapacity < 1 || CommandCapacity > MaxCapacity) return ReplayError.InvalidHeader;

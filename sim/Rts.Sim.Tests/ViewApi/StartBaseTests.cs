@@ -77,9 +77,8 @@ public class StartBaseTests
             Assert.Equal(plan.HallAnchor[p], b.Cell[slot]);
             Assert.False(b.UnderConstruction[slot]);
             Assert.Equal(def.Hp, b.Hp[slot]);
-            // On the block's level.
-            w.NavGrid.WorldToCell(blocks[p][0], out int bx, out int by);
-            Assert.Equal(w.NavGrid.LevelAt(bx, by), w.NavGrid.LevelAt(plan.HallAnchor[p] % w.NavGrid.Width, plan.HallAnchor[p] / w.NavGrid.Width));
+            // M5-4a: on its start location's level (the generated map has them; before, the block's level).
+            Assert.Equal(w.StartLocations[p].Level, w.NavGrid.LevelAt(plan.HallAnchor[p] % w.NavGrid.Width, plan.HallAnchor[p] / w.NavGrid.Width));
             Assert.Equal(5, plan.Workers[p].Length);
             int workers = 0;
             UnitStore u = w.Units;
@@ -157,6 +156,60 @@ public class StartBaseTests
             Assert.Equal(200 + 5 * halls, w.Units.Count);
         }
         _out.WriteLine($"50 seeds: {noSpot} players without a spot");
+    }
+
+    /// <summary>M5-4a: on the generated map each hall is centred on its player's start location, with or without start armies.</summary>
+    [Fact]
+    public void GeneratedMap_Seeds1To12_EachHallStandsOnItsStartLocation_WorkersFacingAMine()
+    {
+        for (ulong seed = 1; seed <= 12; seed++)
+        {
+            foreach (int army in new[] { 0, 100 })
+            {
+                (Simulation sim, Vector2[][] blocks, StartBasePlan plan) = MatchSetup(seed, army, 5);
+                World w = sim.World;
+                NavGrid g = w.NavGrid;
+                Assert.Equal(2, w.StartLocations.Length);
+                for (int p = 0; p < 2; p++)
+                {
+                    BuildingDef def = w.Data.Buildings[plan.HallType[p]];
+                    int cell = w.StartLocations[p].Cell;
+                    int expected = (cell / g.Width - def.FootprintHeight / 2) * g.Width + cell % g.Width - def.FootprintWidth / 2;
+                    Assert.True(expected == plan.HallAnchor[p], $"seed {seed} army {army} player {p}: hall at {plan.HallAnchor[p]}, start {cell}");
+                    Assert.True(ViewReads.IsHallSpot(w, plan.HallType[p], expected, w.StartLocations[p].Level, null));
+                    Assert.Equal(5, plan.Workers[p].Length);
+                    Vector2 c = StartBase.FootprintCenter(g, def, expected);
+                    Assert.True(ViewReads.NearestMine(w, c, out Vector2 mine) && Vector2.Distance(c, mine) <= w.Config.Map.StartMineDistance + 1.5f);
+                    foreach (Vector2 spot in plan.Workers[p])
+                        Assert.True(Vector2.Distance(spot, mine) < Vector2.Distance(c, mine), $"seed {seed}: worker {spot} faces away from the mine");
+                }
+                Apply(sim, blocks, plan);
+                Assert.Equal(2, w.Buildings.Count);
+            }
+        }
+    }
+
+    /// <summary>M5-4a: a hand-built grid plans as before without start locations, and on its start location with one.</summary>
+    [Fact]
+    public void HandBuiltGrid_PlansAsBefore_WithoutStartLocations_AndOnTheLocation_WithOne()
+    {
+        Heightmap flat = ResourceMaps.Flat(40, 40);
+        Simulation bare = ResourceMaps.NewSim(flat);
+        Vector2[][] blocks = { new[] { bare.World.NavGrid.CellCenter(10, 20) } };
+        StartBasePlan before = ViewReads.Plan(bare.World, blocks, 5, 0.5f);
+        Assert.True(bare.World.StartLocations.IsEmpty);
+        // The same terrain with a start location at (28, 12): the hall goes there instead.
+        var withStart = new Heightmap(40, 40, flat.Levels, flat.Elevations, new[] { new StartLocation(12 * 40 + 28, 0) });
+        Simulation started = ResourceMaps.NewSim(withStart);
+        StartBasePlan after = ViewReads.Plan(started.World, blocks, 5, 0.5f);
+        Assert.NotEqual(before.HallAnchor[0], after.HallAnchor[0]);
+        Assert.Equal(10 * 40 + 26, after.HallAnchor[0]);
+        Assert.Equal(5, after.Workers[0].Length);
+        // A start unit standing on the spot moves the hall to the nearest spot on the location's level.
+        Vector2[][] onIt = { new[] { started.World.NavGrid.CellCenter(28, 12) } };
+        StartBasePlan moved = ViewReads.Plan(started.World, onIt, 5, 0.5f);
+        Assert.True(moved.HallAnchor[0] >= 0 && moved.HallAnchor[0] != after.HallAnchor[0]);
+        Assert.True(ViewReads.IsHallSpot(started.World, moved.HallType[0], moved.HallAnchor[0], 0, null));
     }
 
     [Fact]

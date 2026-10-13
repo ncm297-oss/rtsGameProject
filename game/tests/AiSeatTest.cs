@@ -17,7 +17,9 @@ namespace Rts.Game.Tests;
 /// <summary>
 /// M6-V2: the AI seat, from the menu and from the dev flags. Menu -> Skirmish -> slot 2 Whirlwind, Hard -> Start: the runner's
 /// seats are (malazan, human) and (whirlwind, AI, Hard), the sim's config and <c>World.FactionOf</c> agree, and by tick 400 the
-/// AI has a worker gathering or returning or a queue item; paused, no tick runs; three quit-to-menu cycles with an AI seat leak
+/// AI has a worker gathering or returning or a queue item (M6-V3: the menu's match has no army; whether a worker is at work by
+/// then is a printed probe until the sim's start locations put the bases by their resources, see <see cref="CheckAiActed"/>);
+/// paused, no tick runs; three quit-to-menu cycles with an AI seat leak
 /// nothing (node count flat, no orphans, objects flat). Then <c>Match.tscn</c> with <c>--ai hard --faction 2 whirlwind</c>
 /// and a replay recorder: the same seats, the AI acts, the replay header holds <c>seat 1 whirlwind ai hard</c> and the
 /// replay plays back (every seat human, the AI's commands from the log) to equal checkpoints. <c>--faction 1 whirlwind
@@ -92,7 +94,7 @@ public partial class AiSeatTest : Node
         CheckSeats(runner, _malazan, _whirlwind, AiDifficulty.Hard, "menu");
         runner.GameSpeed = SimRunner.MaxSpeed;
         await UntilTick(sim, ActBy);
-        CheckAiActed(sim, "menu");
+        CheckAiActed(sim, "menu", gathering: true);
 
         // Paused with an AI seat: no tick, so no think either.
         PushKey(Key.Escape);
@@ -165,7 +167,7 @@ public partial class AiSeatTest : Node
         CheckSeats(runner, _malazan, _whirlwind, AiDifficulty.Hard, "--ai hard --faction 2 whirlwind");
         runner.GameSpeed = SimRunner.MaxSpeed;
         await UntilTick(sim, ActBy);
-        CheckAiActed(sim, "--ai hard");
+        CheckAiActed(sim, "--ai hard", gathering: false);
         Check(match.MatchOverLines == 0, $"{match.MatchOverLines} 'Match over:' lines in a normal {sim.TickNumber}-tick match");
         runner.ProcessMode = ProcessModeEnum.Disabled; // the recording ends here
 
@@ -190,10 +192,11 @@ public partial class AiSeatTest : Node
             $"swapped seats [{string.Join(", ", runner.Seats)}], FactionOf {w.FactionOf(0)}, {w.FactionOf(1)}");
         await UntilTick(runner.Simulation!, 2); // the start army and base apply on the first tick (ticks follow real time, not frames)
 
-        // The colours: player 0's buildings in the Whirlwind's colour, player 1's in the Malazans'.
+        // The colours (M6-V3): per slot, not per faction; slot s keeps colour s of ui.json's table when the factions swap.
         var buildings = match.GetNode<BuildingViews>("World3D/BuildingViews");
-        Check(buildings.PlayerMaterial(0).AlbedoColor.IsEqualApprox(UnitViews.ColorFromRgb(_data.Factions[_whirlwind].PrimaryColor))
-            && buildings.PlayerMaterial(1).AlbedoColor.IsEqualApprox(UnitViews.ColorFromRgb(_data.Factions[_malazan].PrimaryColor)),
+        UiText ui = UiText.Shared!;
+        Check(buildings.PlayerMaterial(0).AlbedoColor.IsEqualApprox(UnitViews.ColorFromRgb(ui.ColourRgb(0)))
+            && buildings.PlayerMaterial(1).AlbedoColor.IsEqualApprox(UnitViews.ColorFromRgb(ui.ColourRgb(1))),
             $"building colours {buildings.PlayerMaterial(0).AlbedoColor}, {buildings.PlayerMaterial(1).AlbedoColor}");
 
         // Every unit of each side is its seat's faction's (the army and the workers).
@@ -321,8 +324,11 @@ public partial class AiSeatTest : Node
             $"{how}: FactionOf {w.FactionOf(0)}, {w.FactionOf(1)}; AI seat {w.Config.HasAiSeat}");
     }
 
-    // The AI did something by now: one of its workers gathers or carries, or one of its buildings has a queue item.
-    private void CheckAiActed(Simulation sim, string how)
+    // The AI did something by now: one of its workers gathers or carries, or one of its buildings has a queue item. With
+    // `gathering` (the menu's match, M6-V3) a worker at work is also probed: printed, not failed, while the bases stand at the
+    // debug spots by the map centre, where the AI sees no resource node and keeps its workers idle (no Gather is sent before
+    // its scout finds one); flip to Check(working > 0, ...) once StartBase.Plan uses the sim's start locations (M6, sim track).
+    private void CheckAiActed(Simulation sim, string how, bool gathering)
     {
         World w = sim.World;
         UnitStore u = w.Units;
@@ -333,6 +339,8 @@ public partial class AiSeatTest : Node
         for (int k = 0; k < b.Capacity; k++)
             if (b.Alive[k] && b.Owner[k] == 1) queued += b.QueueCount[k];
         Check(working > 0 || queued > 0, $"{how}: by tick {sim.TickNumber} the AI has no worker gathering or returning and no queue item");
+        if (gathering && working == 0)
+            GD.Print($"  PENDING start locations probe ({how}): by tick {sim.TickNumber} no AI worker is gathering or returning (no node in its sight from the debug start spot)");
         GD.Print($"  {how}: tick {sim.TickNumber}, AI workers gathering / returning {working}, queue items {queued}");
     }
 

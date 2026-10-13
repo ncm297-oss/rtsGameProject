@@ -122,6 +122,9 @@ public sealed partial class World
         SeenBlockVersion = NavGrid.BlockVersion;
     }
 
+    /// <summary>The map's start locations in player order (M5-4a; <see cref="NavGrid.StartLocations"/>); empty on a hand-built map. Not hashed.</summary>
+    public ReadOnlySpan<StartLocation> StartLocations => NavGrid.StartLocations;
+
     private readonly DeathEvent[] _deaths;
     private readonly ProjectileImpact[] _impacts;
     private readonly Abilities.AbilityEvent[] _abilityEvents;

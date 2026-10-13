@@ -10,7 +10,8 @@ namespace Rts.Sim.Map;
 /// Runs once, after the nav grid and before any tick, drawing only from the map stream it is given
 /// (after the heightmap's draws, so the terrain is the same with and without resources); with
 /// <see cref="MapGenParams.GoldMines"/> and <see cref="MapGenParams.Forests"/> at 0 it draws nothing.
-/// Mines go first, then forests. A node only covers "open" cells: passable, flat (no ramp), and with
+/// Mines go first, then forests; each start location's mines and forest (M5-4a) come before the random ones, and no node
+/// covers a start location's clear disc. A node only covers "open" cells: passable, flat (no ramp), and with
 /// no cliff, ramp or border cell among their 8 neighbors; a footprint is one level. A mine's center is
 /// at least <see cref="MapGenParams.MineSpacing"/> from every other mine's. A forest grows from a
 /// random seed cell as a 4-connected blob of a size drawn from the forest range, adding a random
@@ -33,12 +34,22 @@ internal static class ResourcePlacer
     {
         if (p.GoldMines == 0 && p.Forests == 0) return default;
         var s = new Scratch(grid);
+        ReadOnlySpan<StartLocation> starts = grid.StartLocations;
+        foreach (StartLocation st in starts) s.Reserve(st, p.StartClearRadius);
+        // M5-4a: the start locations' mines and forests come out of the counts first.
+        int startMines = Math.Min(p.GoldMines, data.Rules.StartMineCount * starts.Length);
+        int startForests = Math.Min(p.Forests, starts.Length);
         int mines = 0, forests = 0, trees = 0;
 
         int mineType = FirstOfKind(data, ResourceKind.Gold);
         if (mineType >= 0)
         {
-            for (int m = 0; m < p.GoldMines && store.FreeCount > 0; m++)
+            // Round robin over the locations, so a short count shorts every base alike.
+            for (int m = 0; m < startMines && store.FreeCount > 0; m++)
+            {
+                if (TryStartMine(p, grid, store, data, s, mineType, mines, starts[m % starts.Length], ref rng)) mines++;
+            }
+            for (int m = startMines; m < p.GoldMines && store.FreeCount > 0; m++)
             {
                 for (int t = 0; t < TriesPerPlacement; t++)
                 {
@@ -54,7 +65,16 @@ internal static class ResourcePlacer
         int treeType = FirstOfKind(data, ResourceKind.Wood);
         if (treeType >= 0)
         {
-            for (int f = 0; f < p.Forests; f++)
+            for (int f = 0; f < startForests; f++)
+            {
+                int size = rng.NextInt(p.ForestMinTrees, p.ForestMaxTrees + 1);
+                if (store.FreeCount < size) break;
+                int placed = TryStartForest(p, grid, store, data, s, treeType, size, starts[f], ref rng);
+                if (placed == 0) continue;
+                forests++;
+                trees += placed;
+            }
+            for (int f = startForests; f < p.Forests; f++)
             {
                 int size = rng.NextInt(p.ForestMinTrees, p.ForestMaxTrees + 1);
                 if (store.FreeCount < size) break;
@@ -72,6 +92,130 @@ internal static class ResourcePlacer
         return new ResourcePlacement(forests, trees, mines);
     }
 
+    /// <summary>
+    /// One start mine for <paramref name="st"/> (M5-4a): every anchor whose footprint is open, on the location's level, off
+    /// the clear disc (reserved) and touches no node, with its centre within <see cref="MapGenParams.StartMineDistance"/>
+    /// of the location's centre cell and at least <see cref="MapGenParams.MineSpacing"/> from every mine placed so far, is a
+    /// candidate; candidates are drawn at random until one keeps the map connected.
+    /// </summary>
+    private static bool TryStartMine(MapGenParams p, NavGrid grid, ResourceStore store, GameData data, Scratch s, int type, int placed,
+        StartLocation st, ref SimRng rng)
+    {
+        ResourceDef def = data.Resources[type];
+        int w = grid.Width, fw = def.FootprintWidth, fh = def.FootprintHeight, cx = st.Cell % w, cy = st.Cell / w;
+        float sx = (cx + 0.5f) * MapConstants.CellSize, sy = (cy + 0.5f) * MapConstants.CellSize;
+        float max2 = p.StartMineDistance * p.StartMineDistance;
+        int reach = (int)MathF.Ceiling(p.StartMineDistance / MapConstants.CellSize) + Math.Max(fw, fh);
+        int count = 0;
+        for (int ay = cy - reach; ay <= cy + reach; ay++)
+        {
+            for (int ax = cx - reach; ax <= cx + reach; ax++)
+            {
+                float dx = (ax + fw * 0.5f) * MapConstants.CellSize - sx, dy = (ay + fh * 0.5f) * MapConstants.CellSize - sy;
+                if (dx * dx + dy * dy > max2 || !FootprintFree(grid, s, ax, ay, fw, fh, st.Level)) continue;
+                if (!SpacedFromMines(p, s, placed, (ax + fw * 0.5f) * MapConstants.CellSize, (ay + fh * 0.5f) * MapConstants.CellSize)) continue;
+                s.Picks[count++] = ay * w + ax;
+            }
+        }
+        for (int t = 0; t < TriesPerPlacement && count > 0; t++)
+        {
+            int k = rng.NextInt(0, count), anchor = s.Picks[k];
+            s.Picks[k] = s.Picks[--count];
+            int ax = anchor % w, ay = anchor / w;
+            s.BeginCandidates();
+            for (int y = ay; y < ay + fh; y++)
+                for (int x = ax; x < ax + fw; x++)
+                    s.AddCandidate(y * w + x);
+            if (!s.StaysConnected()) continue;
+            if (!store.Spawn(type, anchor, data.Rules.StartMineGold, out _)) return false;
+            s.MineX[placed] = (ax + fw * 0.5f) * MapConstants.CellSize;
+            s.MineY[placed] = (ay + fh * 0.5f) * MapConstants.CellSize;
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// The start forest of <paramref name="st"/> (M5-4a); returns its trees, 0 if none fit. Seeds are open cells off the clear
+    /// disc on the location's level, touching no node, within <see cref="MapGenParams.StartForestDistance"/> of the centre cell
+    /// (centre to centre) and not on the location's exit side (<see cref="ExitDirection"/>); they are drawn at random and grown
+    /// as any forest, at <paramref name="size"/> trees for the first half of the tries and <see cref="MapGenParams.ForestMinTrees"/> after.
+    /// </summary>
+    private static int TryStartForest(MapGenParams p, NavGrid grid, ResourceStore store, GameData data, Scratch s, int type, int size,
+        StartLocation st, ref SimRng rng)
+    {
+        int w = grid.Width, cx = st.Cell % w, cy = st.Cell / w;
+        (float ex, float ey) = ExitDirection(grid, st);
+        float max = p.StartForestDistance / MapConstants.CellSize, max2 = max * max;
+        int reach = (int)MathF.Ceiling(max), count = 0;
+        for (int y = cy - reach; y <= cy + reach; y++)
+        {
+            for (int x = cx - reach; x <= cx + reach; x++)
+            {
+                int dx = x - cx, dy = y - cy;
+                if (dx * dx + dy * dy > max2 || dx * ex + dy * ey > 0f) continue;
+                if (!s.Open(x, y) || grid.LevelAt(x, y) != st.Level || TouchesNode(grid, x, y)) continue;
+                s.Picks[count++] = y * w + x;
+            }
+        }
+        for (int t = 0; t < TriesPerPlacement && count > 0; t++)
+        {
+            int k = rng.NextInt(0, count), seed = s.Picks[k];
+            s.Picks[k] = s.Picks[--count];
+            int want = t < TriesPerPlacement / 2 ? size : p.ForestMinTrees;
+            if (GrowForest(grid, store, data, s, type, want, seed % w, seed / w, ref rng)) return want;
+        }
+        return 0;
+    }
+
+    /// <summary>
+    /// The way out of a start location, in cells: toward the map centre on level 0, else toward the nearest ramp cell (ties
+    /// to the lower cell), the plateau's way down. Zero if a plateau has no ramp.
+    /// </summary>
+    private static (float X, float Y) ExitDirection(NavGrid grid, StartLocation st)
+    {
+        int w = grid.Width, cx = st.Cell % w, cy = st.Cell / w;
+        if (st.Level == 0) return (w * 0.5f - (cx + 0.5f), grid.Height * 0.5f - (cy + 0.5f));
+        int best = -1;
+        long bestD = long.MaxValue;
+        for (int i = 0; i < w * grid.Height; i++)
+        {
+            if ((grid.FlagsAt(i % w, i / w) & NavFlags.Ramp) == 0) continue;
+            long dx = i % w - cx, dy = i / w - cy, d = dx * dx + dy * dy;
+            if (d < bestD)
+            {
+                bestD = d;
+                best = i;
+            }
+        }
+        return best < 0 ? (0f, 0f) : (best % w - cx, best / w - cy);
+    }
+
+    /// <summary>True if a mine centred at (cx, cy) meters is at least <see cref="MapGenParams.MineSpacing"/> from each of the <paramref name="placed"/> mines so far.</summary>
+    private static bool SpacedFromMines(MapGenParams p, Scratch s, int placed, float cx, float cy)
+    {
+        float min2 = p.MineSpacing * p.MineSpacing;
+        for (int i = 0; i < placed; i++)
+        {
+            float dx = s.MineX[i] - cx, dy = s.MineY[i] - cy;
+            if (dx * dx + dy * dy < min2) return false;
+        }
+        return true;
+    }
+
+    /// <summary>True if the footprint from (ax, ay) is all open, on <paramref name="level"/> and touching no node.</summary>
+    private static bool FootprintFree(NavGrid grid, Scratch s, int ax, int ay, int fw, int fh, int level)
+    {
+        for (int y = ay; y < ay + fh; y++)
+        {
+            for (int x = ax; x < ax + fw; x++)
+            {
+                if (!s.Open(x, y) || grid.LevelAt(x, y) != level || TouchesNode(grid, x, y)) return false;
+            }
+        }
+        return true;
+    }
+
     /// <summary>The placer's reachability rule on its own: true if, with <paramref name="cells"/> blocked as well, every other passable cell of the grid still reaches every other. Allocates.</summary>
     internal static bool StaysConnected(NavGrid grid, ReadOnlySpan<int> cells)
     {
@@ -80,6 +224,22 @@ internal static class ResourcePlacer
         foreach (int c in cells)
             s.AddCandidate(c);
         return s.StaysConnected();
+    }
+
+    /// <summary>"Open" ground (x, y not on the border): passable, not a ramp, and no cliff, ramp or border cell among the 8 neighbors. The generator's start rule uses it too (M5-4a).</summary>
+    internal static bool IsOpenGround(NavGrid g, int x, int y)
+    {
+        if (!g.CanTakeResource(x, y)) return false;
+        for (int dy = -1; dy <= 1; dy++)
+        {
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                int nx = x + dx, ny = y + dy;
+                if (nx == 0 || ny == 0 || nx == g.Width - 1 || ny == g.Height - 1) return false;
+                if ((g.FlagsAt(nx, ny) & (NavFlags.Cliff | NavFlags.Ramp)) != 0) return false;
+            }
+        }
+        return true;
     }
 
     /// <summary>The lowest resource type id yielding <paramref name="kind"/>, or -1 if the data has none.</summary>
@@ -113,12 +273,7 @@ internal static class ResourcePlacer
             }
         }
         float cx = (ax + fw * 0.5f) * MapConstants.CellSize, cy = (ay + fh * 0.5f) * MapConstants.CellSize;
-        float min2 = p.MineSpacing * p.MineSpacing;
-        for (int i = 0; i < placed; i++)
-        {
-            float dx = s.MineX[i] - cx, dy = s.MineY[i] - cy;
-            if (dx * dx + dy * dy < min2) return false;
-        }
+        if (!SpacedFromMines(p, s, placed, cx, cy)) return false;
 
         s.BeginCandidates();
         for (int y = ay; y < ay + fh; y++)
@@ -134,9 +289,15 @@ internal static class ResourcePlacer
 
     private static bool TryForest(NavGrid grid, ResourceStore store, GameData data, Scratch s, int type, int size, ref SimRng rng)
     {
-        int w = grid.Width;
-        int sx = rng.NextInt(1, w - 1), sy = rng.NextInt(1, grid.Height - 1);
+        int sx = rng.NextInt(1, grid.Width - 1), sy = rng.NextInt(1, grid.Height - 1);
         if (!s.Open(sx, sy) || TouchesNode(grid, sx, sy)) return false;
+        return GrowForest(grid, store, data, s, type, size, sx, sy, ref rng);
+    }
+
+    /// <summary>Grows a forest of <paramref name="size"/> trees from the open seed cell (sx, sy) touching no node, and places it if it keeps the map connected.</summary>
+    private static bool GrowForest(NavGrid grid, ResourceStore store, GameData data, Scratch s, int type, int size, int sx, int sy, ref SimRng rng)
+    {
+        int w = grid.Width;
         int level = grid.LevelAt(sx, sy);
 
         s.BeginCandidates();
@@ -221,6 +382,7 @@ internal static class ResourcePlacer
             Seen = new int[n];
             Frontier = new int[n];
             Candidates = new int[n];
+            Picks = new int[n];
             MineX = new float[MapGenParams.MaxResourceGroups];
             MineY = new float[MapGenParams.MaxResourceGroups];
             for (int y = 1; y < grid.Height - 1; y++)
@@ -234,6 +396,8 @@ internal static class ResourcePlacer
         public int[] Seen { get; }
         public int[] Frontier { get; }
         public int[] Candidates { get; }
+        /// <summary>A start placement's candidate anchors or seed cells (M5-4a).</summary>
+        public int[] Picks { get; }
         public int CandidateCount { get; private set; }
         /// <summary>The attempt in progress; <see cref="Seen"/> entries equal to it belong to it.</summary>
         public int Attempt { get; private set; }
@@ -243,6 +407,15 @@ internal static class ResourcePlacer
 
         /// <summary>True if a node may cover the cell now: open ground before placement began, and no node on it yet.</summary>
         public bool Open(int x, int y) => _grid.InBounds(x, y) && _openGround[y * _grid.Width + x] && _grid.CanTakeResource(x, y);
+
+        /// <summary>Takes the cells within <paramref name="radius"/> cells of the location's centre (centre to centre) off open ground: no node covers a clear disc (M5-4a).</summary>
+        public void Reserve(StartLocation st, int radius)
+        {
+            int w = _grid.Width, cx = st.Cell % w, cy = st.Cell / w;
+            for (int y = cy - radius; y <= cy + radius; y++)
+                for (int x = cx - radius; x <= cx + radius; x++)
+                    if (_grid.InBounds(x, y) && (x - cx) * (x - cx) + (y - cy) * (y - cy) <= radius * radius) _openGround[y * w + x] = false;
+        }
 
         public void BeginCandidates()
         {
@@ -361,21 +534,5 @@ internal static class ResourcePlacer
         }
 
         private bool IsFree(int i) => _candidateMark[i] != Attempt && _grid.IsPassable(i % _grid.Width, i / _grid.Width);
-
-        /// <summary>Passable, not a ramp, and no cliff, ramp or border cell among the 8 neighbors (x, y is not on the border).</summary>
-        private static bool IsOpenGround(NavGrid g, int x, int y)
-        {
-            if (!g.CanTakeResource(x, y)) return false;
-            for (int dy = -1; dy <= 1; dy++)
-            {
-                for (int dx = -1; dx <= 1; dx++)
-                {
-                    int nx = x + dx, ny = y + dy;
-                    if (nx == 0 || ny == 0 || nx == g.Width - 1 || ny == g.Height - 1) return false;
-                    if ((g.FlagsAt(nx, ny) & (NavFlags.Cliff | NavFlags.Ramp)) != 0) return false;
-                }
-            }
-            return true;
-        }
     }
 }

@@ -16,8 +16,10 @@ public class CommandCardHashTwinTests
     [Fact]
     public void CommandCardReadsEveryTick_HashEqualsABareTwin_400Ticks()
     {
-        (Simulation a, int house, int site, int enemy) = BuildingPickerTests.Base(1);
-        (Simulation b, _, _, _) = BuildingPickerTests.Base(1);
+        // M5-4a: seed 2, not 1: with start locations seed 1's player 0 base is on a plateau by the centre, and the ghost's
+        // sweep round its house met no green spot in 400 ticks (green 0, red 400), so the scene no longer covered both.
+        (Simulation a, int house, int site, int enemy) = BuildingPickerTests.Base(2);
+        (Simulation b, _, _, _) = BuildingPickerTests.Base(2);
         // M4-3b: both twins explored, so the ghost's sweep round the house (up to 22 m off) meets green spots, as before.
         TestSim.Explored(a);
         TestSim.Explored(b);

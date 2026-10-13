@@ -472,7 +472,7 @@ public partial class CombatViewTest : Node
         float[] lum = new float[2];
         for (int p = 0; p < 2; p++)
         {
-            Color c = UnitViews.ColorFromRgb(_data.Factions[W.FactionOf(p)].PrimaryColor);
+            Color c = UnitViews.ColorFromRgb(_match.PlayerRgb[p]); // the owner's player colour (M6-V3, BUG-0631 item 2)
             Color fill = _combat.CorpseColor(p), rim = _combat.CorpseRimColor(p);
             Check(Math.Abs(fill.R - c.R * CombatViews.CorpseShade) < 1e-4f && Math.Abs(fill.G - c.G * CombatViews.CorpseShade) < 1e-4f && Math.Abs(fill.B - c.B * CombatViews.CorpseShade) < 1e-4f,
                 $"seed {seed}: player {p} corpse fill {fill}, owner colour {c}");

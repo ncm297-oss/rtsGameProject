@@ -18,6 +18,7 @@ public sealed class NavGrid
     private readonly byte[] _levels;
     private readonly NavFlags[] _flags;
     private readonly byte[] _cost;
+    private readonly StartLocation[] _starts;
     private int[]? _scratch;
 
     /// <summary>Derives flags, costs and levels from terrain.</summary>
@@ -29,6 +30,7 @@ public sealed class NavGrid
         ReadOnlySpan<byte> levels = map.Levels;
         ReadOnlySpan<float> elevations = map.Elevations;
         _levels = levels.ToArray();
+        _starts = map.StartLocations.ToArray();
         _flags = new NavFlags[n];
         _cost = new byte[n];
 
@@ -70,6 +72,9 @@ public sealed class NavGrid
 
     /// <summary>Width in cells.</summary>
     public int Width { get; }
+
+    /// <summary>The heightmap's start locations in player order (M5-4a); empty for a hand-built grid. Terrain, so not hashed.</summary>
+    public ReadOnlySpan<StartLocation> StartLocations => _starts;
 
     /// <summary>Height in cells.</summary>
     public int Height { get; }

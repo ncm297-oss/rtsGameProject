@@ -10,7 +10,7 @@ using Rts.Sim.ViewApi;
 
 namespace Rts.Game.Tests;
 
-/// <summary>M2-4: the real Match scene's <see cref="Minimap"/> with 2,000 units: dot colours, refresh cost, left-click/drag camera jumps and right-click orders pushed through the viewport, clicks outside the rect, and the camera outline at the zoom limits and map corners.</summary>
+/// <summary>M2-4: the real Match scene's <see cref="Minimap"/> with 2,000 units: dot colours, refresh cost, left-click/drag camera jumps and right-click orders pushed through the viewport, clicks outside the rect, and the camera outline at the zoom limits and map corners. M6-V3: a press held into a pause is dropped (BUG-0600); the dot colours are the match's per-player colours.</summary>
 /// <remarks>
 /// Headless. Run: <c>&amp; $env:GODOT --headless --path game res://tests/MinimapTest.tscn</c>; prints
 /// "MINIMAP TEST PASS" and exits 0, or prints each failure and exits 1.
@@ -71,7 +71,7 @@ public partial class MinimapTest : Node
         {
             if (!u.Alive[i]) continue;
             _mini.Raster.TryPixelOf(u.Position[i], out int x, out int y);
-            Color want = UnitViews.ColorFromRgb(data.Factions[u.Owner[i]].PrimaryColor);
+            Color want = UnitViews.ColorFromRgb(match.PlayerRgb[u.Owner[i]]); // M6-V3: per player, not per faction
             Color got = _mini.DotsImage.GetPixel(x, y);
             if (Mathf.Abs(got.R - want.R) > 0.01f || Mathf.Abs(got.G - want.G) > 0.01f || Mathf.Abs(got.B - want.B) > 0.01f || got.A < 0.99f)
             {
@@ -113,6 +113,18 @@ public partial class MinimapTest : Node
         Push(new InputEventMouseMotion { Position = rect.Position + to, ButtonMask = MouseButtonMask.Left });
         Push(Button(MouseButton.Left, false, rect.Position + to));
         ExpectFocus("drag", want2);
+
+        // BUG-0600: a press held into a pause is dropped there (the release never reaches a paused node); after the pause a
+        // motion with no button held moves nothing.
+        Push(Button(MouseButton.Left, true, rect.Position + from));
+        Check(_mini.Jumping, "a left press on the minimap did not start the jump-drag");
+        GetTree().Paused = true;
+        Check(!_mini.Jumping, "the jump-drag outlived the pause");
+        GetTree().Paused = false;
+        System.Numerics.Vector2 held = _camera.Focus;
+        Push(new InputEventMouseMotion { Position = rect.Position + to, GlobalPosition = rect.Position + to });
+        Check(!_mini.Jumping && _camera.Focus == held, $"after the pause a motion moved the camera {held} -> {_camera.Focus}");
+        Push(Button(MouseButton.Left, false, rect.Position + to));
 
         // A click just outside the minimap rect is not the minimap's: the focus stays and nothing is ordered.
         System.Numerics.Vector2 focusBefore = _camera.Focus;

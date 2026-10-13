@@ -141,23 +141,9 @@ internal static class AiScenes
         NavGrid g = w.NavGrid;
         float maxRadius = 0f;
         foreach (UnitDef d in w.Data.Units) maxRadius = Math.Max(maxRadius, d.Radius);
-        // Each base beside a gold mine of its half of the map (west for player 0, east for player 1, the first in slot order),
-        // so its workers see a mine and trees from the start: the generated map has no start mines yet, and finding far
-        // resources is scouting (M5-3).
+        // M5-4a: each base on its start location (two mines and a forest beside it), so no start block is needed.
         var blocks = new Vector2[seats.Length][];
-        int mineType = w.Data.FindResource("gold_mine");
-        for (int p = 0; p < seats.Length; p++)
-        {
-            blocks[p] = StartLayout.Block(g, 1, west: p == 0, maxRadius);
-            for (int k = 0; k < w.Resources.Capacity; k++)
-            {
-                if (!w.Resources.Alive[k] || w.Resources.TypeId[k] != mineType) continue;
-                int c = w.Resources.Cell[k];
-                if ((c % g.Width < g.Width / 2) != (p % 2 == 0)) continue;
-                blocks[p] = new[] { g.CellCenter(c % g.Width, Math.Min(c / g.Width + 4, g.Height - 2)) };
-                break;
-            }
-        }
+        for (int p = 0; p < seats.Length; p++) blocks[p] = Array.Empty<Vector2>();
         var factions = new int[seats.Length];
         for (int p = 0; p < seats.Length; p++) factions[p] = w.FactionOf(p);
         StartBasePlan plan = StartBase.Plan(g, w.Data, w.Buildings, w.Resources.Alive, w.Resources.TypeId, w.Resources.Cell, factions, blocks, 5, maxRadius);

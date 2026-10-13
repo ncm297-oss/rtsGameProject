@@ -13,9 +13,16 @@ public sealed class Heightmap
 {
     private readonly byte[] _levels;
     private readonly float[] _elevations;
+    private readonly StartLocation[] _starts;
 
     /// <summary>Builds a heightmap from row-major arrays (copied); throws if sizes or values are out of range.</summary>
-    public Heightmap(int width, int height, ReadOnlySpan<byte> levels, ReadOnlySpan<float> elevations)
+    /// <param name="width">Width in cells.</param>
+    /// <param name="height">Height in cells.</param>
+    /// <param name="levels">Per-cell levels.</param>
+    /// <param name="elevations">Per-cell heights in meters.</param>
+    /// <param name="startLocations">The map's start locations in player order (M5-4a; copied); each must name a cell of its level. Empty for none.</param>
+    public Heightmap(int width, int height, ReadOnlySpan<byte> levels, ReadOnlySpan<float> elevations,
+        ReadOnlySpan<StartLocation> startLocations = default)
     {
         if (width < 1) throw new ArgumentOutOfRangeException(nameof(width));
         if (height < 1) throw new ArgumentOutOfRangeException(nameof(height));
@@ -36,7 +43,33 @@ public sealed class Heightmap
         Height = height;
         _levels = levels.ToArray();
         _elevations = elevations.ToArray();
+        foreach (StartLocation st in startLocations)
+        {
+            if ((uint)st.Cell >= (uint)n || levels[st.Cell] != st.Level)
+                throw new ArgumentException($"start location {st} is off the map or not on its cell's level", nameof(startLocations));
+        }
+        _starts = startLocations.ToArray();
     }
+
+    // The generator's copy with start locations: shares the (immutable) terrain arrays.
+    private Heightmap(Heightmap terrain, StartLocation[] starts)
+    {
+        Width = terrain.Width;
+        Height = terrain.Height;
+        _levels = terrain._levels;
+        _elevations = terrain._elevations;
+        _starts = starts;
+    }
+
+    /// <summary>This terrain with <paramref name="starts"/> as its start locations (the generator checked them).</summary>
+    internal Heightmap WithStartLocations(StartLocation[] starts) => new(this, starts);
+
+    /// <summary>
+    /// The start locations the generator chose (M5-4a), in player order; empty for a hand-built map or
+    /// <see cref="MapGenParams.StartLocations"/> 0. Not in <see cref="ContentHash"/> or the state hash: like the terrain,
+    /// they follow from seed and params.
+    /// </summary>
+    public ReadOnlySpan<StartLocation> StartLocations => _starts;
 
     /// <summary>Width in cells.</summary>
     public int Width { get; }
