@@ -5,6 +5,13 @@ ACCEPT: sim M5-4a, view M6-V3, data D-H4). Counters after it: **sim 4 / 4, view 
 **sim's and the view's hardening** (M5-H1, M6-VH1) and the data track's **D16** (a feature). Bug ids next session: **sim from
 BUG-0650, view from BUG-0660, data from BUG-0670.** Inbox: empty at this ACCEPT (no owner answers on D13 / D14 / D11 / D12 / D15 yet).
 
+**PLAN of session 2026-10-13-0527 (2 / 8, from `main` 9d3f068): GO on all three tracks with the briefs below unchanged.** Checks:
+inbox empty; build 0 warnings; smoke PASS (both passes, `0 units per player ... seats malazan human, whirlwind ai normal`); the
+golden header is format 6 with `data-hash` 8409DB7517579FEF; the BUG-0598 / 0620 / 0511 QA rows are still skipped and the
+`AiSeatTest` probe still prints PENDING (so every hardening item below is live); `ai.json` difficulty values and docs/02's "rarely
+uses abilities" line are as D16's brief states. No open S1 / S2. Non-Perf suite on `main`: **5,996 passed / 14 skipped / 0 failed
+(14 m 57 s, alone)**.
+
 ## Where we are
 
 - `main` after this integration (sim 5b366d2 → view 4f9a2fe → data ac58524; the conductor union-merges `studio/bugs/README.md` and

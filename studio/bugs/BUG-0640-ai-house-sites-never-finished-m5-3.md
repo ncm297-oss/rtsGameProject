@@ -37,3 +37,10 @@ last 11 minutes, which stops the AI's army growth.
 - Suspected cause: M5-3's scout / gatherer rebalance retasks the builder before the site is done (the developer flagged the same
   two sites in the D-H4 report). Not root-caused by QA (light tier).
 - Same scene, Whirlwind 10 min: 7 placed, 7 finished; Malazan 10 min: 8 placed, 7 finished, 1 site still open at 10:00.
+
+## Producer triage (2026-10-13-0527 PLAN)
+S3 confirmed, planned as item 2 of the sim's hardening M5-H1 (this session). Root-cause first (QA's suspicion: the scout /
+gatherer rebalance retasks the builder); then a resume path: an own `UnderConstruction` site with no builder for N thinks gets an
+idle worker's `Repair` (join), and `EconomyManager`'s house rule must not stay off because of a site nobody builds. Proof: the
+data track's `AiHouseRuleReportTests` Malazan 36,000-tick row finishes every placed house (11 placed → 11 finished); the sim dev
+reads that file and reports its numbers, it does not edit it.
