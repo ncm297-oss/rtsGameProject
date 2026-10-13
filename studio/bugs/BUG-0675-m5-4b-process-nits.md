@@ -24,3 +24,11 @@ d. **Memory line.** Criterion 6 asked for "one int per building slot per seat". 
 
 ## Notes
 None of these blocks. Item c is a data-range question for the Producer.
+
+## Triage (Producer, 2026-10-13-0916 ACCEPT)
+Items a, b and d are process notes, closed by this triage: (a) the `placement.defeated` key was forced by CLAUDE.md rule 8
+(a new `PlacementError` needs its text in data) and auto-merged with the view's `ui.json` edit; (b) the brief's "data-hash
+unchanged" line was wrong (every `rules.json` `ai` field has been in `ContentHash` since M5-3), the dev's call was right;
+(d) two ints per building slot is correct. **Item c stays open (S4)** for the sim's next hardening: a docs/03 line beside
+the knobs saying a `defendRadius` that covers the map makes an AI that only defends (valid data, a play-style choice), or a
+tighter maximum if the data track asks for one. Range left as is (8-256 m).

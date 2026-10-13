@@ -315,5 +315,5 @@ bugs outrank new features.
 | [BUG-0671](BUG-0671-parked-raider-stops-ai-economy-for-good.md) | S2 | fixed | An enemy unit parked in the base stops the AI's economy for good: fled workers stay idle while it stays |
 | [BUG-0672](BUG-0672-matchover-flips-back-to-false.md) | S3 | fixed | Simulation.MatchOver goes back to false when a player that never built places its first building |
 | [BUG-0673](BUG-0673-two-alternating-raiders-resend-army-every-think.md) | S3 | fixed | Two raiders taking turns on opposite sides of the hall re-send the whole army every think |
-| [BUG-0674](BUG-0674-aiseattest-scene-red-defeated-rebuild.md) | S2 | open | AiSeatTest (view scene) goes red with the defeat rule: its match-over row rebuilds after cancelling the only building |
+| [BUG-0674](BUG-0674-aiseattest-scene-red-defeated-rebuild.md) | S3 | open | AiSeatTest (view scene) goes red with the defeat rule: its match-over row rebuilds after cancelling the only building |
 | [BUG-0675](BUG-0675-m5-4b-process-nits.md) | S4 | open | M5-4b nits: an unplanned ui.json edit, a "data-hash unchanged" line that could not hold, a defendRadius that never waves |

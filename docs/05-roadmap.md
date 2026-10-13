@@ -657,10 +657,13 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       the executor, economy and production managers are in. M5-3, 2026-10-12: the scout and military managers are in,
       `ai.json` + `rules.json` `ai` in `ContentHash`; the ability manager is M5-4.)
 - [ ] Expansion, defense, attack waves, retreat, rebuilding; scouts ramps and high ground before attacking up. (M5-3,
-      2026-10-12: attack waves, retreat and the rally are in; expansion, defense, rebuilding and the high-ground scouting are
-      M5-4.)
+      2026-10-12: attack waves, retreat and the rally are in. M5-4b, 2026-10-13: defense is in (`DefenseManager`: a hit
+      building or an intruder near the hall pulls the army home and the workers to a drop-off; knobs in `rules.json` `ai`).
+      Left for M5-4c: expansion, rebuilding, the high-ground scouting.)
 - [ ] Easy / Normal / Hard per [02 AI](02-game-design.md#ai-opponent).
-- [ ] AI-vs-AI headless test: a 20-minute match completes without errors and one side wins.
+- [ ] AI-vs-AI headless test: a 20-minute match completes without errors and one side wins. (M5-4b, 2026-10-13: the defeat
+      rule and `Simulation.MatchOver` are in, a razed hall ends the match and the loser's AI goes silent on seeds 1-3; the
+      20-minute winner test is M5-5.)
 - [ ] Playable: the owner can win on Easy and lose to a Whirlwind AI on Hard.
 
 ## M6 — Game shell & real art
@@ -671,9 +674,12 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       seed / map size, pause. M6-V2, 2026-10-12: faction and difficulty per slot. M6-V3, 2026-10-13: a colour per slot from
       `ui.json`'s 8-colour table, and the menu's match opens as docs/02 says (a Town Hall and 5 workers a side). Left: 2-4
       slots, team.)
-- [ ] Victory/defeat detection and post-match stats screen.
+- [ ] Victory/defeat detection and post-match stats screen. (M5-4b, 2026-10-13: the sim's detection, `World.IsDefeated` /
+      `DefeatEvents` / `Simulation.MatchOver`; the banner and the stats screen are M6-V4.)
 - [ ] Save/load and replay playback.
-- [ ] Settings: resolution, window mode, VSync, quality, volumes, keybinds.
+- [ ] Settings: resolution, window mode, VSync, quality, volumes, keybinds. (M6-V6, 2026-10-13: resolution, window mode,
+      VSync, quality presets, master / music / SFX volume and edge-pan speed, from the menu and the pause menu, saved in
+      `user://settings.cfg`. Left: keybinds.)
 - [ ] Art look test done (KayKit vs. alternatives, see [04](04-art-pipeline.md)); real models and
       animations for Malazan and Whirlwind; licensing log filled in.
 - [ ] Real SFX and placeholder music; alerts with sound.

@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Severity | S2 |
+| Severity | S3 (filed S2; re-triaged by the Producer at the 0916 ACCEPT, see Triage) |
 | Status | open |
 | Found | 2026-10-13-0916, task M5-4b |
 | System | view tests (game/tests/AiSeatTest.cs), defeat rule |
@@ -29,3 +29,10 @@ AiSeatTest               FAIL  exit 1     9.7 s
 A test expectation made stale by the rule, in a view-owned file the sim track can't edit. Fix in the view track: keep a
 second building of player 0 standing in that row, or make round 2 expect the rebuild to be dropped (one `Match over:`
 line). Merging M5-4b without that fix turns `main`'s scene loop red.
+
+## Triage (Producer, 2026-10-13-0916 ACCEPT)
+S2 → **S3**. The game does what docs/02 "Game flow" 4 and the M5-4b brief say (a cancelled last site defeats; a defeated
+player's `Build` is dropped), the sim's own twin of the row (`ViewApi/MatchOverTests`) was updated, and docs/03
+"Implementation (M5-4b)" states the rule for scenes ("a second building of that player standing"). What is wrong is one
+oracle in `game/tests/AiSeatTest.cs`, a few lines in a view-owned file; nothing a player sees. It still reds `main`'s scene
+loop, so it is **the view's first item next session** (with BUG-0680), before M6-V4 rewrites that row for the real banner.
