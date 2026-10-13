@@ -253,9 +253,9 @@ public class AiLoaderTests
         }
     }
 
-    /// <summary>The Producer's M5-1 decision: ai.json is not in the content hash until the AI sends commands (M5-2 adds it, with one golden regen).</summary>
+    /// <summary>M5-3 (inverted from M5-1's "leaves"): ai.json is in the content hash; a tuning edit moves it (DataContentHashTests has a row per field).</summary>
     [Fact]
-    public void AnAiJsonEdit_LeavesTheContentHash()
+    public void AnAiJsonEdit_ChangesTheContentHash()
     {
         GameData edited = LoadWith(root =>
         {
@@ -263,7 +263,17 @@ public class AiLoaderTests
             root["buildOrder"]![0]!["count"] = 3;
         });
         Assert.Equal(0.5f, edited.Ai[edited.FindFaction("malazan")].Difficulty(AiDifficulty.Hard).GatherBonus);
-        Assert.Equal(TestSim.Data.ContentHash(), edited.ContentHash());
+        Assert.NotEqual(TestSim.Data.ContentHash(), edited.ContentHash());
+    }
+
+    /// <summary>BUG-0541 item 1 / BUG-0573 item 2: a composition weight above 0 that rounds to 0f is one error at its field.</summary>
+    [Fact]
+    public void ACompositionWeightRoundingToZero_IsALoadError()
+    {
+        IReadOnlyList<DataError> errors = ErrorsWith(root => root["compositions"]![0]!["units"]!["malazan_crossbowman"] = 1e-50);
+        DataError e = Assert.Single(errors);
+        Assert.Equal("compositions[0].units.malazan_crossbowman", e.Path);
+        Assert.Contains("rounds to 0", e.Message);
     }
 
     private static GameData LoadWith(Action<JsonObject> edit)

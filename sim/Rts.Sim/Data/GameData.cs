@@ -48,14 +48,13 @@ public sealed class GameData
 
     /// <summary>
     /// Per faction id, its <c>ai.json</c> (M5-1): difficulties, build order, compositions, attack and retreat thresholds. The
-    /// loader always sets one per faction; empty for hand-built data. Not in <see cref="ContentHash"/> until the AI sends
-    /// commands (M5-2): nothing the sim runs reads it yet.
+    /// loader always sets one per faction; empty for hand-built data. In <see cref="ContentHash"/> since M5-3 (every field).
     /// </summary>
     public ImmutableArray<AiDef> Ai { get; init; } = ImmutableArray<AiDef>.Empty;
 
     /// <summary>
     /// The AI's generic tunables (<c>common/rules.json</c> <c>ai</c>, M5-2): gold share, house margin, placement search and
-    /// spacing, expansion reach. Not in <see cref="ContentHash"/> yet (with <see cref="Ai"/>, M5-3); all zero for hand-built data.
+    /// spacing, expansion reach; M5-3's scout, rally and wave knobs. In <see cref="ContentHash"/> since M5-3; all zero for hand-built data.
     /// </summary>
     public AiRulesDef AiRules { get; init; } = new();
 
@@ -317,7 +316,70 @@ public sealed class GameData
                 }
             }
         }
+        AddAi(ref h);
         return h.Value;
+    }
+
+    /// <summary>
+    /// M5-3: every field of <c>rules.json</c> <c>ai</c> and of every faction's <c>ai.json</c> (a replay with an AI seat was
+    /// played by that data; playback runs no AI, but the recording is tied to it like any other data).
+    /// </summary>
+    private void AddAi(ref StateHasher h)
+    {
+        AiRulesDef r = AiRules;
+        h.Add(r.GoldShare);
+        h.Add(r.HouseHalfPopMargin);
+        h.Add(r.PlacementSearchCells);
+        h.Add(r.SpacingCells);
+        h.Add(r.ExpandReachCells);
+        h.Add(r.ScoutAfterTicks);
+        h.Add(r.ScoutRadius);
+        h.Add(r.ScoutReach);
+        h.Add(r.RallyDistance);
+        h.Add(r.RallyReach);
+        h.Add(r.WaveCooldownTicks);
+        h.Add(Ai.Length);
+        foreach (AiDef a in Ai)
+        {
+            h.Add(a.Faction);
+            h.Add(a.Difficulties.IsDefault ? -1 : a.Difficulties.Length);
+            if (!a.Difficulties.IsDefault)
+                foreach (AiDifficultyDef d in a.Difficulties)
+                {
+                    h.Add(d.ThinkTicks);
+                    h.Add(d.BuildOrderSlackTicks);
+                    h.Add(d.WaveSizeMultiplier);
+                    h.Add(d.GatherBonus);
+                    h.Add(d.FocusFire);
+                    h.Add(d.PullBackWounded);
+                    h.Add(d.UseAbilities);
+                    h.Add(d.ExpandAfterTicks);
+                }
+            h.Add(a.BuildOrder.IsDefault ? -1 : a.BuildOrder.Length);
+            if (!a.BuildOrder.IsDefault)
+                foreach (AiStep s in a.BuildOrder)
+                {
+                    h.Add((int)s.Trigger);
+                    h.Add(s.At);
+                    h.Add((int)s.Action);
+                    h.Add(s.Target);
+                    h.Add(s.TargetKey ?? "");
+                    h.Add(s.Count);
+                }
+            h.Add(a.Compositions.IsDefault ? -1 : a.Compositions.Length);
+            if (!a.Compositions.IsDefault)
+                foreach (AiComposition c in a.Compositions)
+                {
+                    h.Add(c.Age);
+                    AddAll(ref h, c.Units);
+                    h.Add(c.Weights.IsDefault ? -1 : c.Weights.Length);
+                    if (!c.Weights.IsDefault) foreach (float w in c.Weights) h.Add(w);
+                }
+            h.Add(a.AttackMinHalfPop);
+            h.Add(a.AttackMinCost);
+            h.Add(a.RetreatHpFraction);
+            h.Add(a.RetreatLossFraction);
+        }
     }
 
     /// <summary>Every field of an attack (a unit's, or since M4-3b a building's).</summary>

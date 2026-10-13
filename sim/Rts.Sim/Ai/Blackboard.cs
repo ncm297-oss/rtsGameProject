@@ -1,4 +1,5 @@
 using System;
+using System.Numerics;
 using Rts.Sim.Entities;
 
 namespace Rts.Sim.Ai;
@@ -7,8 +8,8 @@ namespace Rts.Sim.Ai;
 /// One AI's bookkeeping (M5-2, docs/03 "Implementation (M5-2)"): build-order step progress (when due, how many queued,
 /// done, the command waiting to be judged), the house it is placing, retry marks (anchors a Build was refused at), and per
 /// unit and building slot when its last AI command applies (so a think doesn't order it twice before the first applied) and
-/// which resource a worker was sent to. What the AI believes about the enemy is M5-3's. Not sim state: not hashed, never
-/// read by a sim rule; allocated once, sized from the match.
+/// which resource a worker was sent to; since M5-3 the scout's sweep, the enemy memory and the military's rally and wave. Not
+/// sim state: not hashed, never read by a sim rule; allocated once, sized from the match.
 /// </summary>
 internal sealed class Blackboard
 {
@@ -36,7 +37,79 @@ internal sealed class Blackboard
         BuildingBusyUntil = new int[buildingSlots];
         Array.Fill(BuildingBusyUntil, -1);
         Array.Fill(_badCell, -1);
+        RalliedVersion = new int[unitSlots];
+        WaveGeneration = new int[unitSlots];
+        WaveFlag = new byte[unitSlots];
     }
+
+    // ---------- M5-3: the scout (ScoutManager) ----------
+
+    /// <summary>The sweep's waypoints: the 8 compass points round the hall, the hall's mirror through the map centre, the 4 quadrant centres.</summary>
+    internal const int ScoutWaypoints = 13;
+
+    /// <summary>0 not sent yet, 1 sweeping, 2 done (the sweep ended, or the scout died: it is not replaced).</summary>
+    internal byte ScoutPhase;
+
+    /// <summary>The scout's unit slot and generation while <see cref="ScoutPhase"/> is 1.</summary>
+    internal int ScoutSlot = -1, ScoutGeneration;
+
+    /// <summary>The waypoint the scout was last sent to (-1: none yet).</summary>
+    internal int ScoutTarget = -1;
+
+    /// <summary>The waypoints (m), computed once when the scout is sent.</summary>
+    internal readonly Vector2[] ScoutPoints = new Vector2[ScoutWaypoints];
+
+    /// <summary>Per waypoint, whether it is visited.</summary>
+    internal readonly bool[] ScoutVisited = new bool[ScoutWaypoints];
+
+    // ---------- M5-3: the enemy memory (from the view only, rebuilt each think) ----------
+
+    /// <summary>How many enemy buildings the AI knows this think: those it sees plus its ghosts (the fog's memory, no copy).</summary>
+    internal int KnownEnemyBuildings;
+
+    /// <summary>The last enemy army seen: the centroid (m) and count of the enemy non-worker units seen at <see cref="EnemyArmyTick"/> (-1: never), kept until a think sees some again.</summary>
+    internal Vector2 EnemyArmyCentroid;
+
+    /// <summary>See <see cref="EnemyArmyCentroid"/>.</summary>
+    internal int EnemyArmyCount, EnemyArmyTick = -1;
+
+    // ---------- M5-3: the military (MilitaryManager) ----------
+
+    /// <summary>The rally point (m) and its version, bumped whenever the point moves.</summary>
+    internal Vector2 Rally;
+
+    /// <summary>See <see cref="Rally"/>.</summary>
+    internal int RallyVersion;
+
+    /// <summary>Per unit slot, the rally version the unit (of <see cref="UnitGeneration"/>) was last sent to: it isn't sent again to the same point.</summary>
+    internal int[] RalliedVersion { get; }
+
+    /// <summary>Whether a wave is in progress.</summary>
+    internal bool WaveActive;
+
+    /// <summary>The wave's target building (slot and generation), its type and anchor as known, and its footprint centre (m).</summary>
+    internal EntityHandle WaveTarget;
+
+    /// <summary>See <see cref="WaveTarget"/>.</summary>
+    internal int WaveTargetType, WaveTargetCell;
+
+    /// <summary>See <see cref="WaveTarget"/>.</summary>
+    internal Vector2 WaveTargetPoint;
+
+    /// <summary>The wave's half-pop and tick at its start.</summary>
+    internal int WaveStartHalfPop, WaveStartTick;
+
+    /// <summary>No wave starts before this tick (set at a wave's start and at its retreat).</summary>
+    internal int WaveCooldownUntil;
+
+    /// <summary>Waves started (tests and tooling).</summary>
+    internal int WavesStarted;
+
+    /// <summary>Per unit slot, the generation of the wave member there (0: none).</summary>
+    internal int[] WaveGeneration { get; }
+
+    /// <summary>Per unit slot, the member's next order: 0 none, <c>MilitaryManager.ToAttack</c> an attack-move owed, <c>ToRally</c> a Move home owed (it may outlive the wave).</summary>
+    internal byte[] WaveFlag { get; }
 
     /// <summary>Per step, the tick it became due (its trigger first reached); -1 before.</summary>
     internal int[] StepDueTick { get; }
@@ -74,6 +147,9 @@ internal sealed class Blackboard
     /// workers there. What a human sees too: the worker didn't move.
     /// </summary>
     internal int[] NodeDropped { get; }
+
+    /// <summary>How many <see cref="NodeDropped"/> marks are set (M5-3, BUG-0574: the clear-on-seen pass runs only while some are).</summary>
+    internal int NodeMarks;
 
     /// <summary>Per building slot, the tick the AI's last command to it applies (-1: none): until then its queue doesn't show it.</summary>
     internal int[] BuildingBusyUntil { get; }

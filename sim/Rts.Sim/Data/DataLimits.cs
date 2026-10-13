@@ -144,4 +144,7 @@ public static class DataLimits
 
     /// <summary>M5-2: the largest <c>rules.json</c> <c>ai.buildingSpacing</c>, meters.</summary>
     public const double MaxAiSpacing = 8;
+
+    /// <summary>M5-3: the most <c>rules.json</c> <c>ai.scoutReach</c> and <c>ai.rallyReach</c> may be, in meters.</summary>
+    public const double MaxAiReach = 16;
 }

@@ -4,8 +4,8 @@ namespace Rts.Sim.Ai;
 
 /// <summary>
 /// The AI's army production (M5-2, docs/03 "Implementation (M5-2)"): when the build order sent nothing this think, it trains
-/// the current age's most under-weighted composition unit (fewest own live + queued per unit of weight; composition order on
-/// ties) among those a finished own building with an empty queue may train now, if what is left this think pays for it;
+/// the current age's most under-weighted composition unit (fewest own live + queued half-pop per unit of weight, M5-3:
+/// weights are population shares; composition order on ties) among those a finished own building with an empty queue may train now, if what is left this think pays for it;
 /// else it waits (it doesn't spend on a cheaper unit instead).
 /// </summary>
 internal static class ProductionManager
@@ -23,7 +23,8 @@ internal static class ProductionManager
         for (int k = 0; k < mix.Units.Length; k++)
         {
             int type = mix.Units[k];
-            float share = (ai.Live[type] + ai.Queued[type]) / mix.Weights[k];
+            // Weights are population shares (Requests 36 a): a 3-pop unit fills three times what a 1-pop one does.
+            float share = (ai.Live[type] + ai.Queued[type]) * ai.Data.Units[type].HalfPop / mix.Weights[k];
             if (share >= pickShare || !CanTrainSomewhere(ai, type)) continue;
             pick = type;
             pickShare = share;

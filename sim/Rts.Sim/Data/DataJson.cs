@@ -51,6 +51,12 @@ internal sealed class AiRulesJson
     public double? PlacementSearchRadius { get; set; }
     public double? BuildingSpacing { get; set; }
     public double? ExpandHallReach { get; set; }
+    public double? ScoutAfter { get; set; } // M5-3
+    public double? ScoutRadius { get; set; }
+    public double? ScoutReach { get; set; }
+    public double? RallyDistance { get; set; }
+    public double? RallyReach { get; set; }
+    public double? WaveCooldown { get; set; }
 }
 
 internal sealed class StealthJson

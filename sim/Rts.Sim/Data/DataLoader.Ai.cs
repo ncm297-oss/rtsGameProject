@@ -249,6 +249,12 @@ public static partial class DataLoader
                     c.Error(kp, $"id '{key}' is not snake_case");
                     continue;
                 }
+                // BUG-0541 item 1 / BUG-0573 item 2: a weight the float can't hold (1e-50) would divide by 0 in the production manager.
+                if (w > 0 && (float)w == 0f)
+                {
+                    c.Error(kp, $"weight {w} rounds to 0");
+                    continue;
+                }
                 int u = ids == null ? -1 : AiUnit(c, ids, key, faction, kp);
                 if (u < 0 || w <= 0) continue;
                 unitIds.Add(u);
@@ -286,7 +292,8 @@ public static partial class DataLoader
     /// M5-2: <c>rules.json</c> <c>ai</c> (required): <c>goldShare</c> a fraction 0-1; <c>houseWhenPopWithin</c> pop, 0 or more, a
     /// multiple of 0.5, at most the pop cap; <c>placementSearchRadius</c> and <c>expandHallReach</c> m, above 0, at most
     /// <see cref="DataLimits.MaxAiSearchRadius"/>; <c>buildingSpacing</c> m, 0 to <see cref="DataLimits.MaxAiSpacing"/>. Meters go
-    /// to whole cells, rounded up. A refused <c>popCap</c> is reported once: the cap rule is skipped then.
+    /// to whole cells, rounded up. M5-3: <c>scoutAfter</c> and <c>waveCooldown</c> s (0-3,600, to ticks); <c>scoutRadius</c> and
+    /// <c>rallyDistance</c> m (1-64), <c>scoutReach</c> and <c>rallyReach</c> m (1-16), kept in meters. A refused <c>popCap</c> is reported once: the cap rule is skipped then.
     /// </summary>
     private static AiRulesDef BuildAiRules(Checker c, AiRulesJson? j, RulesDef? rules)
     {
@@ -304,7 +311,22 @@ public static partial class DataLoader
             PlacementSearchCells = Cells(Distance(c, j.PlacementSearchRadius, "ai.placementSearchRadius", DataLimits.MaxAiSearchRadius, positive: true)),
             SpacingCells = Cells(Distance(c, j.BuildingSpacing, "ai.buildingSpacing", DataLimits.MaxAiSpacing, positive: false)),
             ExpandReachCells = Cells(Distance(c, j.ExpandHallReach, "ai.expandHallReach", DataLimits.MaxAiSearchRadius, positive: true)),
+            ScoutAfterTicks = c.Ticks(j.ScoutAfter, "ai.scoutAfter", 0),
+            ScoutRadius = Meters(c, j.ScoutRadius, "ai.scoutRadius", DataLimits.MaxAiSearchRadius),
+            ScoutReach = Meters(c, j.ScoutReach, "ai.scoutReach", DataLimits.MaxAiReach),
+            RallyDistance = Meters(c, j.RallyDistance, "ai.rallyDistance", DataLimits.MaxAiSearchRadius),
+            RallyReach = Meters(c, j.RallyReach, "ai.rallyReach", DataLimits.MaxAiReach),
+            WaveCooldownTicks = c.Ticks(j.WaveCooldown, "ai.waveCooldown", 0),
         };
+    }
+
+    /// <summary>M5-3: a required distance in meters, 1 to <paramref name="max"/> inclusive; 0 when refused.</summary>
+    private static float Meters(Checker c, double? value, string path, double max)
+    {
+        if (value == null) c.Error(path, "missing required field");
+        else if (!(value >= 1 && value <= max)) c.Error(path, $"{value} m is outside 1-{max} m");
+        else return (float)value.Value;
+        return 0f;
     }
 
     /// <summary>A required distance in meters: above 0 (or 0 or more), at most <paramref name="max"/>; 0 when refused.</summary>
