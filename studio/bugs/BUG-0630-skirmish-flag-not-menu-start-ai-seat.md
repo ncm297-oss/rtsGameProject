@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-13-0146, task M6-V3 (QA) |
 | System | view: `LaunchOptions.Parse` (`--skirmish`) vs `SkirmishSetup.MatchArgs` |
-| Fixed by | |
+| Fixed by | 67b1660 (`LaunchOptions.DefaultAi`; `--skirmish` without a valid `--ai` seats slot 2 AI Normal); `QaM6V3Test.SkirmishEqualsMenuDefaults` (now a Check), `ShellTest` parse rows and `SkirmishBoot` seats row. QA 2026-10-13-0146 round 1 verified: smoke prints `seats malazan human, whirlwind ai normal`; removing the default line turns ShellTest (4 rows) and QaM6V3Test red. |
 
 ## Repro
 1. `powershell -File tools/qa/smoke.ps1`: the second pass (`-- --skirmish`) prints

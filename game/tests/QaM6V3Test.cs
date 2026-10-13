@@ -43,6 +43,7 @@ public partial class QaM6V3Test : Node
             SizeFormatVariants();
             ColourTableRobustness();
             SkirmishEqualsMenuDefaults();
+            CorpseRulesOverTable();
             await ColourFlagsThroughMatch();
             await ColourFlagsHashNeutral();
             await MirrorMatchColours();
@@ -141,6 +142,39 @@ public partial class QaM6V3Test : Node
         // BUG-0630: slot 2's seat is the menu's too (an AI of the setup's default difficulty).
         Check(menu.Ai == skirmish.Ai,
             $"--skirmish slot 2 is {(skirmish.Ai is AiDifficulty a ? $"AI {a}" : "human")}, the menu's Start {(menu.Ai is AiDifficulty b ? $"AI {b}" : "human")} (args '{string.Join(' ', menuArgs)}')");
+    }
+
+    // Round 1 re-check (BUG-0632): CombatViewTest's corpse rules (BUG-0160 item 3: fill luminance >= 0.2, rim darker, two
+    // teams' fills >= 0.25 apart) only see the default colours 1 and 2, but the menu offers all eight. A real CombatViews bound
+    // to the whole table applies them to every pick. Printed as a probe until BUG-0632 is decided; flip to Checks then.
+    private void CorpseRulesOverTable()
+    {
+        var rgb = new uint[UiText.ColourCount];
+        for (int c = 0; c < rgb.Length; c++) rgb[c] = _ui.ColourRgb(c);
+        var combat = new CombatViews();
+        AddChild(combat);
+        combat.Bind(_data, 1, rgb);
+        int problems = 0;
+        for (int c = 0; c < rgb.Length; c++)
+        {
+            Color fill = combat.CorpseColor(c), rim = combat.CorpseRimColor(c);
+            float lum = 0.2126f * fill.R + 0.7152f * fill.G + 0.0722f * fill.B;
+            bool ok = lum >= 0.2f && rim.R < fill.R && rim.G < fill.G && rim.B < fill.B;
+            if (!ok) problems++;
+            GD.Print($"  corpse rules, {UiText.ColourKey(c)} {_ui.ColourName(c)}: fill luminance {lum:0.000}{(ok ? "" : "  <- KNOWN BUG-0632 probe: below 0.2 or rim not darker")}");
+        }
+        for (int a = 0; a < rgb.Length; a++)
+            for (int b = a + 1; b < rgb.Length; b++)
+            {
+                Color x = combat.CorpseColor(a), y = combat.CorpseColor(b);
+                float d = MathF.Sqrt((x.R - y.R) * (x.R - y.R) + (x.G - y.G) * (x.G - y.G) + (x.B - y.B) * (x.B - y.B));
+                if (d >= 0.25f) continue;
+                problems++;
+                GD.Print($"  KNOWN BUG-0632 probe: corpse fills of {UiText.ColourKey(a)} and {UiText.ColourKey(b)} only {d:0.000} apart");
+            }
+        GD.Print($"  corpse rules over the colour table: {problems} problem(s)");
+        RemoveChild(combat);
+        combat.Free();
     }
 
     // --colour through the real Match: junk keeps the default (slot s, colour s), repeated sets keep the last good value.

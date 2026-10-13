@@ -6,7 +6,7 @@
 | Status | open |
 | Found | 2026-10-13-0146, task M6-V3 (QA) |
 | System | view: `UiText.ReadColours`, `SkirmishSetup` colour lists, `game/tests` colour rows |
-| Fixed by | |
+| Fixed by | Items 1 and 2: 67b1660 (`UiText.ReadColours` refuses each equal pair as one error naming both keys; the four tests compare with `Match.PlayerRgb` / the table). QA 2026-10-13-0146 round 1 verified both (disabling the pair check turns ShellTest and QaM6V3Test red; a data-only recolour of colours 1 / 2 leaves AbilityViewTest, QaM24Test and QaVh3Test green, and CombatViewTest red only on its corpse legibility rules, BUG-0632). Item 3 (both slots may pick one colour) stays open as a design call. |
 
 ## Repro
 1. `& $env:GODOT --headless --path game res://tests/QaM6V3Test.tscn` prints
