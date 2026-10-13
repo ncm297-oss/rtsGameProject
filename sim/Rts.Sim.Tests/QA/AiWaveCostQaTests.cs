@@ -25,9 +25,16 @@ public class AiWaveCostQaTests
 
     public AiWaveCostQaTests(ITestOutputHelper output) => _out = output;
 
+    /// <summary>
+    /// M5-4b (QA 2026-10-13-0916): the shipped data with <c>ai.defendRadius</c> at its least (8 m). The bands are packed and
+    /// combat is off, so with 48 m every seat sees enemy line units near its hall that never die, defends for good and starts
+    /// no wave; at 8 m none is that near, so the waves this row times still start while the defense pass runs every think.
+    /// </summary>
+    private static readonly Lazy<GameData> s_data = new(() => AiScenes.DataWith(dir => dir.EditJson("common/rules.json", r => r["ai"]!["defendRadius"] = 8)));
+
     private static (Simulation Sim, AiPlayer[] Ais) Scene()
     {
-        GameData d = TestSim.Data;
+        GameData d = s_data.Value;
         var map = MapGenParams.Default with { Forests = 6, GoldMines = 4 };
         var sim = new Simulation(new SimConfig(3, Players, Units + 400, 8192) { Data = d, Map = map, Combat = false });
         NavGrid g = sim.World.NavGrid;

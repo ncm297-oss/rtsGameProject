@@ -311,3 +311,9 @@ bugs outrank new features.
 | [BUG-0663](BUG-0663-m6-vh1-colour-flag-nits.md) | S4 | open | M6-VH1 nits: the duplicate-colour warning says "Ignoring --colour" when only slot 1's flag was given |
 | [BUG-0650](BUG-0650-ai-site-resume-never-gives-up.md) | S4 | open | The AI's site resume path never gives up on a site no worker can reach: a join every 3 thinks, a third of the income (hand-spawned site) |
 | [BUG-0651](BUG-0651-thousand-units-one-gives-up-reachable-building.md) | S3 | open | At 2x the unit budget one of 1,000 units gives up an ordered Attack on a reachable building (a stuck stop's scan) |
+| [BUG-0670](BUG-0670-defense-attackmove-leaves-army-fighting-in-enemy-base.md) | S2 | open | The defense's AttackMove leaves an army that is away fighting in the enemy base: it never comes home |
+| [BUG-0671](BUG-0671-parked-raider-stops-ai-economy-for-good.md) | S2 | open | An enemy unit parked in the base stops the AI's economy for good: fled workers stay idle while it stays |
+| [BUG-0672](BUG-0672-matchover-flips-back-to-false.md) | S3 | open | Simulation.MatchOver goes back to false when a player that never built places its first building |
+| [BUG-0673](BUG-0673-two-alternating-raiders-resend-army-every-think.md) | S3 | open | Two raiders taking turns on opposite sides of the hall re-send the whole army every think |
+| [BUG-0674](BUG-0674-aiseattest-scene-red-defeated-rebuild.md) | S2 | open | AiSeatTest (view scene) goes red with the defeat rule: its match-over row rebuilds after cancelling the only building |
+| [BUG-0675](BUG-0675-m5-4b-process-nits.md) | S4 | open | M5-4b nits: an unplanned ui.json edit, a "data-hash unchanged" line that could not hold, a defendRadius that never waves |
