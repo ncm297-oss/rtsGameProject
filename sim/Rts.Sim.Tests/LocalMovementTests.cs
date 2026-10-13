@@ -205,7 +205,9 @@ public class LocalMovementTests
     {
         int type = TypeWithRadius(0.4f);
         center = new Vector2(31f, 31f);
-        Simulation sim = SimOn(Flat(32), 9, players: 2);
+        // Enemies as walls, not a fight (BUG-0135's convention): touching at 0.8 m, the float gap is a hair under 0, which only
+        // BUG-0590 kept out of reach.
+        Simulation sim = SimOn(Flat(32), 9, players: 2, combat: false);
         sim.Enqueue(Command.SpawnUnit(0, type, center));
         for (int k = 0; k < 8; k++)
         {

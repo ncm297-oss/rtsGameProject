@@ -57,7 +57,9 @@ public class AiPerfTests
             if (sim.World.Buildings.SlotAt(c % g.Width, c / g.Width) >= 0) continue;
             int owner = Math.Min(placed / band, Players - 1);
             FactionDef fd = d.Factions[sim.World.FactionOf(owner)];
-            int type = placed % 5 == 0 ? Rts.Sim.ViewApi.StartBase.UnitOfSlot(d, fd.Id, UnitSlot.Worker) : fd.Units[placed % 3];
+            // M5-3: four in five are army units (the faction's first three non-worker types): an army of over 200 a seat.
+            int[] army = fd.Units.Where(u => d.Units[u].Slot != UnitSlot.Worker).Take(3).ToArray();
+            int type = placed % 5 == 0 ? Rts.Sim.ViewApi.StartBase.UnitOfSlot(d, fd.Id, UnitSlot.Worker) : army[placed % 3];
             CombatScenes.Place(sim, owner, type, g.CellCenter(c % g.Width, c / g.Width));
             placed++;
         }
@@ -91,6 +93,10 @@ public class AiPerfTests
             sim.Tick();
         }
         int sent = ais.Sum(a => a.CommandsSent);
+        // M5-3: every seat thinks with an army of 200 or more (four in five of its units), so the military manager's rally and
+        // wave passes are in the timed thinks.
+        Assert.All(ais, a => Assert.True(a.ArmyCount >= 200, $"player {a.Player}: an army of {a.ArmyCount}"));
+        _out.WriteLine($"armies {string.Join(", ", ais.Select(a => a.ArmyCount))}; waves {string.Join(", ", ais.Select(a => a.Board.WavesStarted))}");
         double avg = times.Average(), worst = times.Max(), p95 = times.OrderBy(x => x).ElementAt((int)(times.Count * 0.95));
         _out.WriteLine($"{Players} AI seats, {sim.World.Units.Count} units: {times.Count} thinks, avg {avg:F3} ms, p95 {p95:F3} ms, worst {worst:F3} ms; {sent} commands sent");
         Assert.True(sent > 0, "the AIs sent nothing");

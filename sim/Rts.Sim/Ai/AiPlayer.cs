@@ -11,9 +11,10 @@ namespace Rts.Sim.Ai;
 /// <summary>
 /// One AI seat (M5-2, docs/03 "Implementation (M5-2)"): every <see cref="ThinkTicks"/> ticks it reads its own
 /// <see cref="PlayerView"/> and sends commands through an <see cref="ICommandSink"/> (the sim's command door), never touching
-/// the world. A think runs the faction's <c>ai.json</c> build order (<see cref="BuildOrderExecutor"/>), then the economy
-/// (<see cref="EconomyManager"/>: idle workers to gold and wood, houses before the cap), then production
-/// (<see cref="ProductionManager"/>: the composition, when the build order sent nothing).
+/// the world. A think runs the faction's <c>ai.json</c> build order (<see cref="BuildOrderExecutor"/>), the scout
+/// (<see cref="ScoutManager"/>, M5-3), the economy (<see cref="EconomyManager"/>: idle workers to gold and wood, houses before
+/// the cap), production (<see cref="ProductionManager"/>: the composition, when the build order sent nothing), then the army
+/// (<see cref="MilitaryManager"/>, M5-3: rally, attack waves, retreat).
 /// </summary>
 /// <remarks>
 /// Built by the sim for each AI seat with a kept view and its own <see cref="SimRng"/> (seed and player). Its state (the
@@ -39,10 +40,12 @@ internal sealed class AiPlayer
         Knobs = def.Difficulty(difficulty);
         Rules = data.AiRules;
         ThinkTicks = Math.Max(1, Knobs.ThinkTicks);
-        Board = new Blackboard(def.BuildOrder.Length, view.UnitSlots, view.BuildingSlots, view.ResourceSlots);
+        Board = new Blackboard(def.BuildOrder.Length, view.UnitSlots, view.BuildingSlots, view.ResourceSlots,
+            ScoutManager.GridLines(view.MapWidth, Rules.ScoutGrid) * ScoutManager.GridLines(view.MapHeight, Rules.ScoutGrid));
         Live = new int[data.Units.Length];
         Queued = new int[data.Units.Length];
         WorkerSlots = new int[view.UnitSlots];
+        ArmySlots = new int[view.UnitSlots];
         OwnBuildingSlots = new int[view.BuildingSlots];
         OwnBuildingTypes = new int[view.BuildingSlots];
         OwnBuildingCells = new int[view.BuildingSlots];
@@ -113,6 +116,15 @@ internal sealed class AiPlayer
     /// <summary>How many live workers the player has.</summary>
     internal int WorkerCount { get; private set; }
 
+    /// <summary>M5-3: the player's live non-worker units' unit slots, slot order (first <see cref="ArmyCount"/>).</summary>
+    internal int[] ArmySlots { get; }
+
+    /// <summary>How many live non-worker units the player has.</summary>
+    internal int ArmyCount { get; private set; }
+
+    /// <summary>M5-3 (BUG-0574): whether the player has a finished drop-off building.</summary>
+    internal bool HasDropOff { get; private set; }
+
     /// <summary>The player's buildings (sites included), slot order (first <see cref="OwnBuildingCount"/>): slot, type, anchor and whether a site.</summary>
     internal int[] OwnBuildingSlots { get; }
 
@@ -165,8 +177,10 @@ internal sealed class AiPlayer
         _plannedCount = 0;
         Census();
         BuildOrderExecutor.Run(this);
+        ScoutManager.Run(this);
         EconomyManager.Run(this);
         ProductionManager.Run(this);
+        MilitaryManager.Run(this);
         Thinks++;
         return true;
     }
@@ -176,20 +190,43 @@ internal sealed class AiPlayer
         Array.Clear(Live);
         Array.Clear(Queued);
         WorkerCount = 0;
+        ArmyCount = 0;
         OwnBuildingCount = 0;
         TownHallCell = -1;
+        HasDropOff = false;
         bool hallFinished = false;
-        int s = -1;
+        int s = -1, enemies = 0;
+        Vector2 sum = Vector2.Zero;
         while (View.NextUnit(ref s, out SeenUnit u))
         {
-            if (u.Owner != Player) continue;
+            if (u.Owner != Player)
+            {
+                // The enemy memory: the enemy army seen this think (workers aside).
+                if (IsWorkerType[u.TypeId]) continue;
+                enemies++;
+                sum += u.Position;
+                continue;
+            }
             Live[u.TypeId]++;
             if (IsWorkerType[u.TypeId]) WorkerSlots[WorkerCount++] = s;
+            else ArmySlots[ArmyCount++] = s;
         }
+        if (enemies > 0)
+        {
+            Board.EnemyArmyCentroid = sum / enemies;
+            Board.EnemyArmyCount = enemies;
+            Board.EnemyArmyTick = Now;
+        }
+        int known = 0;
         s = -1;
         while (View.NextBuilding(ref s, out SeenBuilding b))
         {
-            if (b.Owner != Player) continue;
+            if (b.Owner != Player)
+            {
+                known++;
+                continue;
+            }
+            if (!b.UnderConstruction && Data.Buildings[b.TypeId].DropOff) HasDropOff = true;
             int k = OwnBuildingCount++;
             OwnBuildingSlots[k] = s;
             OwnBuildingTypes[k] = b.TypeId;
@@ -204,6 +241,73 @@ internal sealed class AiPlayer
             for (int item = 0; item < n; item++)
                 if (View.TryGetQueueItem(s, item, out int type, out bool isTech) && !isTech) Queued[type]++;
         }
+        s = -1;
+        while (View.NextGhost(ref s, out _)) known++;
+        Board.KnownEnemyBuildings = known;
+    }
+
+    // ---------- M5-3: the enemy as known, and the base ----------
+
+    /// <summary>Whether own unit slot <paramref name="slot"/> (generation <paramref name="generation"/>) is the scout on its sweep: no other manager orders it.</summary>
+    internal bool IsScout(int slot, int generation) =>
+        Board.ScoutPhase == 1 && Board.ScoutSlot == slot && Board.ScoutGeneration == generation;
+
+    /// <summary>
+    /// The known enemy building nearest <paramref name="from"/> (its footprint centre; slot order on ties, seen ones before
+    /// ghosts): one the player sees now, or a ghost. False when it knows none.
+    /// </summary>
+    internal bool NearestEnemyBuilding(Vector2 from, out EntityHandle handle, out int type, out int cell)
+    {
+        handle = default;
+        type = cell = -1;
+        float best = float.MaxValue;
+        int s = -1;
+        while (View.NextBuilding(ref s, out SeenBuilding b))
+        {
+            if (b.Owner == Player) continue;
+            float d = Vector2.DistanceSquared(BuildingCentre(b.TypeId, b.Cell), from);
+            if (d >= best) continue;
+            best = d;
+            (handle, type, cell) = (b.Handle, b.TypeId, b.Cell);
+        }
+        s = -1;
+        while (View.NextGhost(ref s, out Vision.BuildingGhost g))
+        {
+            float d = Vector2.DistanceSquared(BuildingCentre(g.TypeId, g.Cell), from);
+            if (d >= best) continue;
+            best = d;
+            (handle, type, cell) = (new EntityHandle(s, g.Generation), g.TypeId, g.Cell);
+        }
+        return type >= 0;
+    }
+
+    /// <summary>Whether enemy building <paramref name="building"/> is still known: seen now (<paramref name="seen"/>) or a ghost of that building.</summary>
+    internal bool EnemyBuildingKnown(EntityHandle building, out bool seen)
+    {
+        seen = View.TryGetBuilding(building.Index, out SeenBuilding b) && b.Handle == building && b.Owner != Player;
+        return seen || View.TryGetGhost(building.Index, out Vision.BuildingGhost g) && g.Generation == building.Generation;
+    }
+
+    /// <summary>The centre (m) of the player's Town Hall (as <see cref="BuildOrderExecutor.HallCentre"/> picks it, else its first building); false with no building.</summary>
+    internal bool TryHallPoint(out Vector2 point)
+    {
+        int k = -1;
+        for (int i = 0; i < OwnBuildingCount && k < 0; i++)
+            if (OwnBuildingCells[i] == TownHallCell && OwnBuildingTypes[i] == TownHallType) k = i;
+        if (k < 0 && OwnBuildingCount > 0) k = 0;
+        point = k < 0 ? default : BuildingCentre(OwnBuildingTypes[k], OwnBuildingCells[k]);
+        return k >= 0;
+    }
+
+    /// <summary>The map's size in meters.</summary>
+    internal Vector2 MapSize => new(View.MapWidth * MapConstants.CellSize, View.MapHeight * MapConstants.CellSize);
+
+    /// <summary><paramref name="p"/> clamped half a cell inside the map.</summary>
+    internal Vector2 ClampToMap(Vector2 p)
+    {
+        const float m = MapConstants.CellSize * 0.5f;
+        Vector2 size = MapSize;
+        return new Vector2(Math.Clamp(p.X, m, size.X - m), Math.Clamp(p.Y, m, size.Y - m));
     }
 
     // ---------- sending ----------
@@ -490,7 +594,7 @@ internal sealed class AiPlayer
         return ax < x0 + bw && x0 < ax + aw && ay < y0 + bh && y0 < ay + ah;
     }
 
-    /// <summary>The worker to send to build at <paramref name="at"/>: the nearest idle one, else the nearest gathering or returning one, never one with a command not yet applied; -1 for none.</summary>
+    /// <summary>The worker to send to build at <paramref name="at"/>: the nearest idle one, else the nearest gathering or returning one, never one with a command not yet applied nor the scout; -1 for none.</summary>
     internal int PickBuilder(Vector2 at, out int generation)
     {
         int best = -1, bestRank = int.MaxValue;
@@ -499,7 +603,7 @@ internal sealed class AiPlayer
         for (int k = 0; k < WorkerCount; k++)
         {
             int slot = WorkerSlots[k];
-            if (!View.TryGetUnit(slot, out SeenUnit u) || OrderedNotApplied(slot, u.Handle.Generation)) continue;
+            if (!View.TryGetUnit(slot, out SeenUnit u) || OrderedNotApplied(slot, u.Handle.Generation) || IsScout(slot, u.Handle.Generation)) continue;
             int rank = u.State == UnitState.Idle ? 0 : u.State is UnitState.Gathering or UnitState.Returning ? 1 : 2;
             if (rank == 2) continue;
             float d = Vector2.DistanceSquared(u.Position, at);

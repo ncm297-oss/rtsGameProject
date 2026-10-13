@@ -144,4 +144,10 @@ public static class DataLimits
 
     /// <summary>M5-2: the largest <c>rules.json</c> <c>ai.buildingSpacing</c>, meters.</summary>
     public const double MaxAiSpacing = 8;
+
+    /// <summary>M5-3: the most <c>rules.json</c> <c>ai.scoutReach</c> and <c>ai.rallyReach</c> may be, in meters.</summary>
+    public const double MaxAiReach = 16;
+
+    /// <summary>M5-3 (BUG-0593): the least and the most <c>rules.json</c> <c>ai.scoutGrid</c> may be, in meters (the least bounds the scout's waypoint list: 128 x 128 grid points, about 147 KB a seat, on the largest 1,024-cell map).</summary>
+    public const double MinAiScoutGrid = 16, MaxAiScoutGrid = 256;
 }

@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Reflection;
+using System.Text.Json.Nodes;
 using Rts.Sim.Data;
 
 namespace Rts.Sim.Tests;
@@ -72,6 +73,10 @@ public class DataContentHashTests
             return a.Length > 0 ? a.SetItem(0, a[0] with { DurationTicks = a[0].DurationTicks + 1 })
                 : a.Add(new AbilityEffect { Kind = AbilityEffectKind.Damage, DamageType = 0, Amount = 1, Status = -1 });
         }
+        // M5-3: ai.json's lists (each element's own fields: EveryAiStructField_ChangesTheHash).
+        if (t == typeof(ImmutableArray<AiDifficultyDef>)) return ((ImmutableArray<AiDifficultyDef>)value!).SetItem(0, ((ImmutableArray<AiDifficultyDef>)value!)[0] with { ThinkTicks = 99 });
+        if (t == typeof(ImmutableArray<AiStep>)) return ((ImmutableArray<AiStep>)value!).Add(((ImmutableArray<AiStep>)value!)[0]);
+        if (t == typeof(ImmutableArray<AiComposition>)) return ((ImmutableArray<AiComposition>)value!).RemoveAt(0);
         if (t == typeof(ImmutableArray<UnitPassive>)) // M4-4b-3a (each field: EveryPassiveField_AndTheirCount_ChangeTheHash)
         {
             var a = (ImmutableArray<UnitPassive>)value!;
@@ -83,8 +88,11 @@ public class DataContentHashTests
 
     private static GameData With(GameData d, DamageTable? table = null, RulesDef? rules = null, FactionDef? faction = null, UnitDef? unit = null,
         ResourceDef? resource = null, int resourceSlot = 0, BuildingDef? building = null, int buildingSlot = 0, TechDef? tech = null, int techSlot = 0,
-        ProjectileDef? projectile = null, int projectileSlot = 0, StatusDef? status = null, int statusSlot = 0, AbilityDef? ability = null, int abilitySlot = 0) => new()
+        ProjectileDef? projectile = null, int projectileSlot = 0, StatusDef? status = null, int statusSlot = 0, AbilityDef? ability = null, int abilitySlot = 0,
+        AiRulesDef? aiRules = null, AiDef? ai = null, int aiSlot = 0) => new()
     {
+        AiRules = aiRules ?? d.AiRules, // M5-3
+        Ai = ai == null ? d.Ai : d.Ai.SetItem(aiSlot, ai),
         Statuses = status == null ? d.Statuses : d.Statuses.SetItem(statusSlot, status),
         Abilities = ability == null ? d.Abilities : d.Abilities.SetItem(abilitySlot, ability),
         DamageTable = table ?? d.DamageTable,
@@ -409,7 +417,120 @@ public class DataContentHashTests
         Assert.Contains("UnitDef.Abilities", checkedFields);
         foreach (string f in new[] { "Passives", "BelowHpPassive", "DeathPassive" }) // M4-4b-3a
             Assert.Contains($"UnitDef.{f}", checkedFields);
+        // M5-3: rules.json ai and every faction's ai.json (the list elements' own fields: EveryAiStructField_ChangesTheHash).
+        Check(d.AiRules, r => With(d, aiRules: r));
+        foreach (string f in new[] { "GoldShare", "HouseHalfPopMargin", "PlacementSearchCells", "SpacingCells", "ExpandReachCells", "ScoutAfterTicks",
+            "ScoutRadius", "ScoutReach", "ScoutGrid", "RallyDistance", "RallyReach", "WaveCooldownTicks" })
+            Assert.Contains($"AiRulesDef.{f}", checkedFields);
+        for (int slot = 0; slot < d.Ai.Length; slot++)
+            Check(d.Ai[slot], x => With(d, ai: x, aiSlot: slot));
+        foreach (string f in new[] { "Faction", "Difficulties", "BuildOrder", "Compositions", "AttackMinHalfPop", "AttackMinCost", "RetreatHpFraction", "RetreatLossFraction" })
+            Assert.Contains($"AiDef.{f}", checkedFields);
         Assert.True(checkedFields.Count >= 60, $"only {checkedFields.Count} fields checked");
+    }
+
+    /// <summary>A copy of <paramref name="value"/> with property <paramref name="p"/> changed (a record struct, through a box).</summary>
+    private static T WithField<T>(T value, PropertyInfo p) where T : struct
+    {
+        object? changed = Changed(p.GetValue(value), p.PropertyType);
+        Assert.True(changed != null, $"{typeof(T).Name}.{p.Name}: unknown field type {p.PropertyType}");
+        object boxed = value;
+        p.SetValue(boxed, changed);
+        return (T)boxed;
+    }
+
+    /// <summary>M5-3: every field of an <see cref="AiDifficultyDef"/>, an <see cref="AiStep"/> and an <see cref="AiComposition"/> moves the hash, on each faction.</summary>
+    [Fact]
+    public void EveryAiStructField_ChangesTheHash()
+    {
+        GameData d = TestSim.Data;
+        ulong baseline = d.ContentHash();
+        int fields = 0;
+        for (int slot = 0; slot < d.Ai.Length; slot++)
+        {
+            AiDef ai = d.Ai[slot];
+            void Expect(string what, string property, object list)
+            {
+                AiDef copy = Clone(ai);
+                typeof(AiDef).GetProperty(property)!.SetValue(copy, list);
+                Assert.True(With(d, ai: copy, aiSlot: slot).ContentHash() != baseline, $"faction {slot}: {what} is not in GameData.ContentHash");
+                fields++;
+            }
+            foreach (PropertyInfo p in typeof(AiDifficultyDef).GetProperties())
+                Expect($"AiDifficultyDef.{p.Name}", nameof(AiDef.Difficulties), ai.Difficulties.SetItem(1, WithField(ai.Difficulties[1], p)));
+            foreach (PropertyInfo p in typeof(AiStep).GetProperties())
+                Expect($"AiStep.{p.Name}", nameof(AiDef.BuildOrder), ai.BuildOrder.SetItem(0, WithField(ai.BuildOrder[0], p)));
+            foreach (PropertyInfo p in typeof(AiComposition).GetProperties())
+                Expect($"AiComposition.{p.Name}", nameof(AiDef.Compositions), ai.Compositions.SetItem(0, WithField(ai.Compositions[0], p)));
+        }
+        // A new field must be added to ContentHash (these counts fail first).
+        Assert.Equal((8, 6, 3), (typeof(AiDifficultyDef).GetProperties().Length, typeof(AiStep).GetProperties().Length, typeof(AiComposition).GetProperties().Length));
+        Assert.Equal(17 * d.Ai.Length, fields);
+        GameData noAi = With(d);
+        typeof(GameData).GetProperty(nameof(GameData.Ai))!.SetValue(noAi, ImmutableArray<AiDef>.Empty);
+        Assert.NotEqual(baseline, noAi.ContentHash());
+    }
+
+    /// <summary>M5-3: an edit to any field of <c>rules.json</c> <c>ai</c> moves the hash.</summary>
+    [Theory]
+    [InlineData("goldShare", 0.5)]
+    [InlineData("houseWhenPopWithin", 3)]
+    [InlineData("placementSearchRadius", 24)]
+    [InlineData("buildingSpacing", 4)]
+    [InlineData("expandHallReach", 30)]
+    [InlineData("scoutAfter", 20)]
+    [InlineData("scoutRadius", 30)]
+    [InlineData("scoutReach", 8)]
+    [InlineData("scoutGrid", 40)]
+    [InlineData("rallyDistance", 16)]
+    [InlineData("rallyReach", 8)]
+    [InlineData("waveCooldown", 45)]
+    public void AnAiRulesFieldEdit_ChangesTheHash(string field, double value)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("common/rules.json", r => r["ai"]![field] = value);
+        DataLoadResult load = DataLoader.LoadAll(dir.Path);
+        Assert.True(load.Ok, string.Join("\n", load.Errors));
+        Assert.NotEqual(TestSim.Data.ContentHash(), load.Data!.ContentHash());
+    }
+
+    /// <summary>M5-3: an edit to any field of a faction's <c>ai.json</c> moves the hash (a dotted path; the value as JSON).</summary>
+    [Theory]
+    [InlineData("difficulties.normal.thinkInterval", "2")]
+    [InlineData("difficulties.normal.buildOrderSlack", "7")]
+    [InlineData("difficulties.normal.waveSizeMultiplier", "1.5")]
+    [InlineData("difficulties.normal.gatherBonus", "0.1")]
+    [InlineData("difficulties.normal.focusFire", "true")]
+    [InlineData("difficulties.normal.pullBackWounded", "true")]
+    [InlineData("difficulties.normal.useAbilities", "false")]
+    [InlineData("difficulties.normal.expandAfter", "500")]
+    [InlineData("buildOrder.0.at", "{ \"time\": 1 }")]
+    [InlineData("buildOrder.0.do", "\"build\"")]
+    [InlineData("buildOrder.0.count", "3")]
+    [InlineData("compositions.0.age", "2")]
+    [InlineData("compositions.0.units", "{ \"malazan_heavy_infantry\": 1 }")]
+    [InlineData("attack.minArmyPop", "11")]
+    [InlineData("attack.minArmyCost", "801")]
+    [InlineData("retreat.hpFraction", "0.4")]
+    [InlineData("retreat.lossFraction", "0.6")]
+    public void AnAiJsonFieldEdit_ChangesTheHash(string path, string json)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("factions/malazan/ai.json", root =>
+        {
+            string[] parts = path.Split('.');
+            JsonNode node = root;
+            for (int i = 0; i < parts.Length - 1; i++) node = int.TryParse(parts[i], out int k) ? node[k]! : node[parts[i]]!;
+            if (path == "buildOrder.0.do") node["id"] = "malazan_billet"; // a build step names a building
+            if (path == "compositions.0.age") // two ages swapped: still one per age
+            {
+                root["compositions"]![1]!["age"] = 1;
+            }
+            node[parts[^1]] = JsonNode.Parse(json);
+        });
+        DataLoadResult load = DataLoader.LoadAll(dir.Path);
+        Assert.True(load.Ok, string.Join("\n", load.Errors));
+        Assert.NotEqual(TestSim.Data.ContentHash(), load.Data!.ContentHash());
     }
 
     /// <summary>

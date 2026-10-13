@@ -6,7 +6,8 @@ namespace Rts.Sim.Tests;
 /// <summary>
 /// M5-2 criterion 4: a match with AI seats is deterministic. Two runs of a generated-map match with two AI seats (Hard and
 /// Easy, both factions, combat on), 3 seeds x 2,000 ticks, have equal state hashes after every tick, and their AIs sent the
-/// same number of commands. The AI's own state is not hashed: what it sends is, through the command queue and its effects.
+/// same number of commands. M5-3: with the test's early-wave data (<see cref="AiScenes.EarlyWaves"/>) and six raiders each in
+/// the other's base (<see cref="AiScenes.Generated"/>), the two seats wave, fight and retreat within the run. The AI's own state is not hashed: what it sends is, through the command queue and its effects.
 /// </summary>
 public class AiDeterminismTests
 {
@@ -17,8 +18,8 @@ public class AiDeterminismTests
     public void TwoAiSeats_TwoRuns_SameHashEveryTick(ulong seed)
     {
         PlayerSeat[] seats = { new(0, SeatController.Ai, AiDifficulty.Hard), new(1, SeatController.Ai, AiDifficulty.Easy) };
-        Simulation a = AiScenes.Generated(seats, seed, record: false, out _);
-        Simulation b = AiScenes.Generated(seats, seed, record: false, out _);
+        Simulation a = AiScenes.Generated(seats, seed, record: false, out _, data: s_early.Value, raiders: 6);
+        Simulation b = AiScenes.Generated(seats, seed, record: false, out _, data: s_early.Value, raiders: 6);
         for (int t = 0; t < 2000; t++)
         {
             a.Tick();
@@ -30,8 +31,12 @@ public class AiDeterminismTests
             Assert.True(a.AiOf(p)!.CommandsSent > 0, $"seed {seed}: AI {p} sent nothing");
             Assert.Equal(a.AiOf(p)!.CommandsSent, b.AiOf(p)!.CommandsSent);
             Assert.Equal(a.AiOf(p)!.Thinks, b.AiOf(p)!.Thinks);
+            Assert.True(a.AiOf(p)!.Board.WavesStarted > 0, $"seed {seed}: AI {p} never attacked");
+            Assert.Equal(a.AiOf(p)!.Board.WavesStarted, b.AiOf(p)!.Board.WavesStarted);
         }
     }
+
+    private static readonly Lazy<GameData> s_early = new(() => AiScenes.EarlyWaves());
 
     /// <summary>A think writes nothing but its commands: called between ticks, it adds to the queue exactly the commands it reports sent, and with none the state hash doesn't move.</summary>
     [Fact]

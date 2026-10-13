@@ -97,9 +97,10 @@ public class AiLoaderQaTests
     /// A composition weight is checked as a double (above 0, at most 1e6) and stored as a float: a weight that passes the
     /// check must still be above 0 once stored (docs/03: "weights above 0"; <c>AiComposition.Weights</c>: "above 0").
     /// </summary>
-    [Theory(Skip = "BUG-0541: a composition weight that passes the double check (1e-300, 1e-46) is stored as 0f")]
+    [Theory] // BUG-0541 item 1 fixed in M5-3 (a weight rounding to 0f is a load error); 1e-40 is a subnormal float above 0: it loads
     [InlineData(1e-300)]
     [InlineData(1e-46)]
+    [InlineData(1e-40)]
     public void ATinyCompositionWeight_IsRefused_OrStoredAboveZero(double weight)
     {
         DataLoadResult r = LoadWith(root => root["compositions"]![0]!["units"]!["malazan_crossbowman"] = weight);

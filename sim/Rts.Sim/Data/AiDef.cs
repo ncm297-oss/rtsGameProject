@@ -4,8 +4,8 @@ namespace Rts.Sim.Data;
 
 /// <summary>
 /// One faction's AI data from <c>factions/&lt;id&gt;/ai.json</c> (M5-1, docs/03 "AI architecture"): per difficulty knobs, a
-/// shared build order, an army composition per age, and the attack and retreat thresholds. Not in
-/// <see cref="GameData.ContentHash"/> yet: nothing reads it to change sim state before the AI sends commands (M5-2 adds it).
+/// shared build order, an army composition per age, and the attack and retreat thresholds. In
+/// <see cref="GameData.ContentHash"/> since M5-3, every field.
 /// </summary>
 public sealed class AiDef
 {

@@ -83,7 +83,7 @@ public static class TowerSystem
             float gap = Gap(world, j, t.Index);
             if (windup[j] > 0)
             {
-                if (--windup[j] == 0 && gap <= attack.Range + CombatConstants.WindupGrace && !(gap < attack.MinRange)) Fire(world, j, attack);
+                if (--windup[j] == 0 && gap <= attack.Range + CombatConstants.WindupGrace && !CombatSystem.TooNear(attack, gap)) Fire(world, j, attack);
                 continue;
             }
             if (!InReach(attack, gap))

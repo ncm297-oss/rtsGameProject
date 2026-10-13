@@ -64,14 +64,21 @@ public class AiReplayTests
         Assert.Equal(Ticks / 100, r.Checkpoints.Length);
     }
 
+    /// <summary>M5-3: two AI seats that scout and attack (the early-wave data, six raiders each in the other's base) play back, every seat human, to equal checkpoints.</summary>
     [Fact]
     public void TwoAiSeats_PlayBackWithoutEither()
     {
-        (Simulation sim, ReplayRecorder rec) = Recorded(4, AiDifficulty.Hard, twoAi: true);
+        GameData data = AiScenes.EarlyWaves();
+        PlayerSeat[] seats = AiScenes.Seats(AiDifficulty.Hard, SeatController.Ai, SeatController.Ai);
+        Simulation sim = AiScenes.Generated(seats, 4, record: true, out ReplayRecorder? rec, data: data, raiders: 6);
+        for (int t = 0; t < Ticks; t++) sim.Tick();
         Assert.True(sim.AiOf(0)!.CommandsSent > 0 && sim.AiOf(1)!.CommandsSent > 0);
-        Replay r = rec.ToReplay();
+        Replay r = rec!.ToReplay();
         Assert.All(r.Seats, s => Assert.Equal(SeatController.Ai, s.Controller));
-        Assert.True(ReplayPlayer.Run(r, TestSim.Data).Ok);
+        for (int p = 0; p < 2; p++) Assert.Contains(r.Commands, c => c.Player == p && c.Kind == CommandKind.AttackMove);
+        ReplayResult played = ReplayPlayer.Run(r, data);
+        Assert.True(played.Ok, played.ToString());
+        Assert.Equal(Ticks, played.TicksRun);
     }
 
     /// <summary>The same log played on a sim that runs the AI too diverges (the AI's commands would be sent twice): what playback's no-AI rule avoids.</summary>
