@@ -5306,7 +5306,7 @@ game/tests/ShellTest.tscn      the headless flow test
   the sim's input, so view randomness is fine here). Map size: a list of the three sizes. Two slots, "You" and "AI"
   (`setup.slot_human`, `setup.slot_ai`): each shows the faction it plays today (player p plays faction p,
   `World.FactionOf`'s rule, by data `displayName`) and the AI slot a difficulty, both **disabled** with the `coming_soon`
-  text (the difficulty list's one item and both lists' tooltip); M6-V2 wires them to the seats with M5-V2's `--ai`. Back
+  text (the difficulty list's one item and both lists' tooltip); M6-V2 wired them to the seats ("Implementation (M6-V2)"). Back
   (or Esc) returns to the menu; the picks are kept for the next visit.
 - **Pause.** Esc (`ui_cancel`, in Main's `_Input`, which runs before any `_UnhandledInput`) in a match: when a targeting
   order is armed (A, M, an ability: `SelectionController.Targeting`), a build menu is open or a placement ghost is up
@@ -5352,6 +5352,81 @@ game/tests/ShellTest.tscn      the headless flow test
   when there is one); `CastOnBlob` fails at once with "the fight ended before Telas Fire burned anyone" when the enemy army
   is gone and nothing is in sight. The Burning marker is asserted in step 8 instead, on the staged Zealot A that the duel's
   mage burns: the marker over A, none over B, while A burns.
+
+### Implementation (M6-V2)
+
+The skirmish setup's faction and difficulty lists drive the match's seats, and dev runs get the same through `--faction` and
+`--ai`. Also a dev "match over" line, BUG-0580, and BUG-0581 items 1 and 4. No sim change outside `ViewApi`.
+
+```
+game/scripts/SkirmishSetup.cs   live faction lists (both slots) and the AI slot's difficulty list; MatchArgs()
+game/scripts/LaunchOptions.cs   --faction <slot> <id>, --ai <easy|normal|hard>
+game/scripts/SimRunner.cs       SlotFactions, Player1Ai -> explicit SimConfig.Seats (SimRunner.Seats, BuildSeats)
+game/scripts/Match.cs           resolves the picks against the data; the "Match over:" dev line
+game/scripts/RtsCamera.cs, SelectionController.cs   held buttons dropped on pause / resume (BUG-0580)
+sim/Rts.Sim/ViewApi/MatchOver.cs   per-player building count watch (read-only)
+game/tests/AiSeatTest.tscn      the headless AI seat test (in the scene loop)
+```
+
+- **Setup screen.** Each slot's faction list holds every loaded faction's `displayName` in id order. The defaults are
+  faction 0 for "You" and faction 1 for "AI" (the old fixed assignment). The AI slot's difficulty list holds
+  `setup.difficulty_easy`, `_normal` and `_hard` in `AiDifficulty` order, default Normal (the sim's `AiDifficulty` has no
+  display name). Start passes the picks as a dev command line (`SkirmishSetup.MatchArgs`: `--seed <n> --map-size <n>
+  --faction 1 <id> --faction 2 <id> --ai <difficulty>`, with data ids and `ai.json` difficulty ids) through
+  `LaunchOptions.Parse`, so a skirmish and a dev run still differ only in their flags. The setup screen is built once, so
+  the picks survive Back and Quit to menu. From the menu, slot 2 is always the AI; a human slot 2 is a dev run without
+  `--ai`. 2-4 slots, Human / AI per slot, colour and team are M6-V3.
+- **Flags.** `--faction <slot> <id>` (slot 1 = player 0, the local player; slot 2 = player 1; the id a snake_case token)
+  and `--ai <easy|normal|hard>` (player 1 becomes an AI seat of that difficulty) are in `LaunchOptions.MatchFlags`. Without
+  them the seats are today's (player p plays faction `p mod factions`, every seat human), so every existing scene and test
+  builds the same match. Junk is warned about and ignored like `--seed junk`: an unknown slot, a missing value, a value
+  that is a flag (BUG-0041), an id with other characters, or a difficulty not in `ai.json`'s list. An id-shaped value the
+  data lacks is refused by `Match.Start` with the same warning. An AI pick whose faction has no `ai.json` (which
+  `SimConfig.Validate` would throw on) is warned about and leaves the seat human. The match starts in every case.
+- **Seats.** `SimRunner.Start` always builds explicit `SimConfig.Seats` and keeps them as `SimRunner.Seats`
+  (`SimRunner.BuildSeats`). There are `PlayerCount` entries. Players 0 and 1 take `SlotFactions` when set, every other
+  player plays `p mod factions`. Player 1 is `SeatController.Ai` with `Player1Ai` when that is set; every other seat is
+  Human, Normal. Explicit default seats equal `SimConfig.SeatOf`'s defaults, so the state hash and the replay header (format
+  5 always writes every seat) are unchanged for a run without the flags. `Match.SpawnArmies` now spawns each player's seat
+  faction's roster (`World.FactionOf`; it used `p mod factions`); the start base already did. Colours stay per faction
+  (the `PrimaryColor` of the seat's faction), so a mirror match draws both sides alike until M6-V3's per-player colours.
+  The `Match started:` line ends with the seats (`seats malazan human, whirlwind ai hard`).
+- **Match over (dev line).** After every tick (`SimRunner.Ticked`), `ViewApi/MatchOver` counts each player's live
+  buildings (sites included) over `World.Buildings.Alive` / `Owner` and reports any player whose count went from above 0
+  to 0. `Match` prints `Match over: player p has no buildings left (tick n)` once per such drop. A player that never had a
+  building is never reported; one that rebuilds and loses everything again is reported again. Allocation-free. This is
+  neither the victory screen nor the rule: docs/02 "Victory/defeat" belongs to the sim (Requests 37: `World.IsDefeated(p)`
+  or a match-over event), and the screen and stats come after that.
+- **BUG-0580.** A paused node gets no input, so a button released while the match was paused never reached `RtsCamera`
+  (middle-button drag) or `SelectionController` (left-button press or box). Both now drop their held state on
+  `NotificationPaused` and `NotificationUnpaused`: the press is dropped, nothing is selected by it, and the box hides.
+  After Resume no drag is live until the button is pressed again. `RtsCamera.Dragging` and
+  `SelectionController.Pressing` expose this to tests.
+- **Text (BUG-0581 item 1).** The map size items come from `setup.map_size_item` (`"{0} × {0}"`, with the side for
+  `{0}`; `UiText.MapSizeItem`). `UiText` refuses a format without `{0}` or one that doesn't format, as one error naming the
+  key. `coming_soon` is gone. The `setup` keys are now `title`, `seed`, `random`, `map_size`, `map_size_item`,
+  `slot_human`, `slot_ai`, `faction`, `difficulty`, `difficulty_easy`, `difficulty_normal`, `difficulty_hard`, `start`,
+  `back`.
+- **Tests.**
+  - xUnit `ViewApi/MatchOverTests`. Hand-built spans: 1 -> 0 reported once, 0 from the start never, rebuilt then razed
+    reported again, two players together, stray owners. A hand-built world whose only site is cancelled twice is reported
+    on the tick each Cancel applies. The default match (100 units and a base a side, combat on) runs 400 ticks on two seeds
+    and reports nothing. `Observe` allocates nothing.
+  - `ShellTest` adds the `--faction` / `--ai` parse rows (each value, junk, BUG-0041 swallowing) and `BuildSeats` rows. It
+    checks the 20 shell keys, the missing-key error for each new one, and four bad `map_size_item` formats. It checks the
+    live lists: items, defaults, and no text on the screen outside `ui.json` and faction data. It swaps the sides and picks
+    Easy, checks that the picks survive Back and Quit to menu, and checks both matches' seats (`SimRunner.Seats`,
+    `SimConfig.Seats`, `World.FactionOf`).
+  - `QaShellTest`'s two BUG-0580 probes are now `Check`s. With the fix off they fail: a 150 x 90 box, and the camera moves
+    8.43 m.
+  - Headless `AiSeatTest`:
+    - Menu -> slot 2 Whirlwind, Hard -> Start: the seats are right, the AI has a queue item or a worker at work by tick
+      400, no tick runs while paused, and 3 quit cycles stay flat.
+    - `--ai hard --faction 2 whirlwind` with a recorder: the same seats, `seat 1 whirlwind ai hard` in the header, and
+      playback to equal checkpoints with the AI's commands taken from the log.
+    - `--faction 1 whirlwind --faction 2 malazan`: both seats human; player 0's army, building colour and build menu are
+      the Whirlwind's.
+    - Four junk flag sets: default seats, and the match ticks.
 
 ## AI architecture
 
@@ -5633,7 +5708,7 @@ acting only through commands. Code: `sim/Rts.Sim/Ai/AiPlayer.cs`, `Blackboard.cs
   Gather nodes and 16 KB of node marks). Built only for AI seats, never by `World`. The fog's node memory:
   "Implementation (M5-1)", Memory.
 - **Not yet** (M5-3 and later): military, attack, scout and ability managers and the enemy memory; `ai.json` and
-  `rules.json` `ai` into `ContentHash`; difficulty tuning (M5-4, the gather bonus); the sandbox's AI seat (view, M5-V2).
+  `rules.json` `ai` into `ContentHash`; difficulty tuning (M5-4, the gather bonus). The sandbox's AI seat landed with the view's M6-V2 (`--ai`, the setup's AI slot).
 
 ## Save/load and replays
 
@@ -5729,7 +5804,7 @@ acting only through commands. Code: `sim/Rts.Sim/Ai/AiPlayer.cs`, `Blackboard.cs
 | Determinism | Same scenario twice → same hash; different seeds → different hash | Every change |
 | Replay golden tests | Recorded replays reproduce checkpoint hashes | Sim changes |
 | Perf benchmarks | Tick cost under budget: 500 units, average tick < 4 ms, p99 < 8 ms | `Category=Perf` |
-| Headless smoke | Godot boots the main scene (the main menu since M6-V1; `-- --skirmish` runs the match) for 600 frames, exits 0 with the banner and no ERROR | `game/` changes |
+| Headless smoke | `tools/qa/smoke.ps1` runs two passes of 600 frames each: a no-arg boot to the main menu, and `-- --skirmish` (the default match: sim start, every view, the HUD). Both exit 0 with the banner and no ERROR, and the second prints `Match started:` | `game/` changes |
 | Visual check | Windowed run + screenshot inspected by Claude | Visual changes |
 
 - Golden replays live in `sim/Rts.Sim.Tests/Replays/`. The first (M1-6) is

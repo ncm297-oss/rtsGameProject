@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Immutable;
 using System.Diagnostics;
 using Godot;
 using Rts.Sim;
@@ -77,20 +78,51 @@ public partial class SimRunner : Node
     /// </summary>
     public event Action<Simulation>? Ticked;
 
+    /// <summary>
+    /// The faction ids picked for players 0 and 1 (the setup's two slots, <c>--faction</c>; M6-V2), or -1 for the default
+    /// (<c>p mod factions</c>); set before <see cref="Start"/>. Players past these two always play the default.
+    /// </summary>
+    public int[] SlotFactions { get; } = { -1, -1 };
+
+    /// <summary>Player 1's AI difficulty (the setup's AI slot, <c>--ai</c>; M6-V2), or null for a human seat; set before <see cref="Start"/>.</summary>
+    public AiDifficulty? Player1Ai { get; set; }
+
+    /// <summary>The seats <see cref="Start"/> gave the sim (<see cref="SimConfig.Seats"/>, one per player); empty before it.</summary>
+    public ImmutableArray<PlayerSeat> Seats { get; private set; } = ImmutableArray<PlayerSeat>.Empty;
+
     /// <summary>The recorder attached by <see cref="Start"/> when <see cref="RecordCheckpointInterval"/> is set, else null.</summary>
     public ReplayRecorder? Recorder { get; private set; }
 
-    /// <summary>Creates the simulation from loaded data on a <see cref="MapSize"/> map (the generator's other defaults) with <see cref="Forests"/> and <see cref="GoldMines"/>; ticking starts on the next frame.</summary>
+    /// <summary>Creates the simulation from loaded data on a <see cref="MapSize"/> map (the generator's other defaults) with <see cref="Forests"/> and <see cref="GoldMines"/> and explicit <see cref="Seats"/>; ticking starts on the next frame.</summary>
     public void Start(GameData data)
     {
+        Seats = BuildSeats(PlayerCount, data.Factions.Length, SlotFactions, Player1Ai);
         var config = new SimConfig(unchecked((ulong)Seed), PlayerCount, UnitCapacity, CommandCapacity)
         {
             Data = data,
             Map = MapGenParams.Default with { Width = MapSize, Height = MapSize, Forests = Forests, GoldMines = GoldMines },
             Combat = Combat,
+            Seats = Seats,
         };
         Simulation = new Simulation(config);
         if (RecordCheckpointInterval > 0) Recorder = new ReplayRecorder(Simulation, RecordCheckpointInterval);
+    }
+
+    /// <summary>
+    /// One seat per player (M6-V2): player p plays <paramref name="slotFactions"/>[p] when it is set (not -1), else faction
+    /// <c>p mod factions</c> (<see cref="SimConfig.SeatOf"/>'s default); player 1 is an AI of <paramref name="player1Ai"/> when
+    /// that is set; every other seat is human, difficulty Normal. With no factions every seat's faction is -1.
+    /// </summary>
+    public static ImmutableArray<PlayerSeat> BuildSeats(int playerCount, int factionCount, int[] slotFactions, AiDifficulty? player1Ai)
+    {
+        var seats = ImmutableArray.CreateBuilder<PlayerSeat>(Math.Max(0, playerCount));
+        for (int p = 0; p < playerCount; p++)
+        {
+            int faction = factionCount == 0 ? -1 : p < slotFactions.Length && slotFactions[p] >= 0 ? slotFactions[p] : p % factionCount;
+            bool ai = p == 1 && player1Ai != null;
+            seats.Add(new PlayerSeat(faction, ai ? SeatController.Ai : SeatController.Human, ai ? player1Ai!.Value : AiDifficulty.Normal));
+        }
+        return seats.MoveToImmutable();
     }
 
     public override void _Process(double delta)

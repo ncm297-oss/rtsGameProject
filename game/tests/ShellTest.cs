@@ -19,6 +19,9 @@ namespace Rts.Game.Tests;
 /// again keeps seed 7 and 192 and starts a fresh match that ticks. Also: the boot rule (no user args show the menu, any
 /// match flag starts the match: <see cref="LaunchOptions.HasMatchFlag"/>), the <c>--map-size</c> and <c>--skirmish</c>
 /// parse, and the new <c>ui.json</c> sections (every key present, each missing key one error naming it).
+/// M6-V2: the <c>--faction</c> / <c>--ai</c> parse and <see cref="SimRunner.BuildSeats"/> rows; the setup's live faction and
+/// difficulty lists (data and <c>ui.json</c> text only, BUG-0581 item 1); the picks (sides swapped, Easy) kept over Back and
+/// Quit to menu, and each match's seats equal to them.
 /// </summary>
 /// <remarks>
 /// Headless: <c>&amp; $env:GODOT --headless --path game res://tests/ShellTest.tscn</c>; prints "SHELL TEST PASS" and exits 0,
@@ -77,8 +80,49 @@ public partial class ShellTest : Node
             Check(LaunchOptions.Parse(new[] { "--map-size", size.ToString() }).MapSize == size, $"--map-size {size} not read");
         Check(LaunchOptions.Parse(new[] { "--map-size", "100" }).MapSize == null, "--map-size 100 accepted");
         Check(LaunchOptions.Parse(new[] { "--map-size", "--skirmish" }) is { MapSize: null, Skirmish: true }, "--map-size swallowed --skirmish (BUG-0041)");
-        Check(LaunchOptions.Parse(Array.Empty<string>()) is { MapSize: null, Skirmish: false, Seed: null, UnitsPerPlayer: LaunchOptions.DefaultUnitsPerPlayer },
+        Check(LaunchOptions.Parse(Array.Empty<string>()) is { MapSize: null, Skirmish: false, Seed: null, UnitsPerPlayer: LaunchOptions.DefaultUnitsPerPlayer, Ai: null },
             "defaults changed");
+
+        // M6-V2: --faction <slot> <id> and --ai <difficulty>.
+        Check(LaunchOptions.HasMatchFlag(new[] { "--faction", "2", "whirlwind" }) && LaunchOptions.HasMatchFlag(new[] { "--ai", "hard" }), "--faction / --ai not match flags");
+        LaunchOptions none = LaunchOptions.Parse(Array.Empty<string>());
+        Check(none.FactionId(0) == null && none.FactionId(1) == null && none.FactionId(2) == null && none.FactionId(-1) == null, "a faction picked with no flag");
+        LaunchOptions both = LaunchOptions.Parse(new[] { "--faction", "1", "whirlwind", "--faction", "2", "malazan", "--ai", "easy", "--seed", "4" });
+        Check(both.FactionId(0) == "whirlwind" && both.FactionId(1) == "malazan" && both.Ai == AiDifficulty.Easy && both.Seed == 4,
+            $"--faction 1 whirlwind --faction 2 malazan --ai easy --seed 4: '{both.FactionId(0)}', '{both.FactionId(1)}', {both.Ai}, {both.Seed}");
+        foreach ((string id, AiDifficulty want) in new[] { ("easy", AiDifficulty.Easy), ("normal", AiDifficulty.Normal), ("hard", AiDifficulty.Hard) })
+            Check(LaunchOptions.Parse(new[] { "--ai", id }).Ai == want, $"--ai {id} not read");
+        foreach (string[] junk in new[]
+        {
+            new[] { "--ai", "Hard" }, new[] { "--ai", "insane" }, new[] { "--ai", "1" }, new[] { "--ai" }, new[] { "--ai", "--seed", "3" },
+        })
+        {
+            LaunchOptions o = LaunchOptions.Parse(junk);
+            Check(o.Ai == null, $"'{string.Join(' ', junk)}' accepted as {o.Ai}");
+        }
+        Check(LaunchOptions.Parse(new[] { "--ai", "--seed", "3" }).Seed == 3, "--ai swallowed --seed (BUG-0041)");
+        foreach (string[] junk in new[]
+        {
+            new[] { "--faction", "3", "malazan" }, new[] { "--faction", "0", "malazan" }, new[] { "--faction", "whirlwind" }, new[] { "--faction", "2" },
+            new[] { "--faction", "2", "Whirl wind!" }, new[] { "--faction", "2", "--ai", "hard" }, new[] { "--faction", "--seed", "3" }, new[] { "--faction" },
+        })
+        {
+            LaunchOptions o = LaunchOptions.Parse(junk);
+            Check(o.FactionId(0) == null && o.FactionId(1) == null, $"'{string.Join(' ', junk)}' picked '{o.FactionId(0)}', '{o.FactionId(1)}'");
+        }
+        Check(LaunchOptions.Parse(new[] { "--faction", "2", "--ai", "hard" }).Ai == AiDifficulty.Hard, "--faction 2 swallowed --ai (BUG-0041)");
+        Check(LaunchOptions.Parse(new[] { "--faction", "--seed", "3" }).Seed == 3, "--faction swallowed --seed (BUG-0041)");
+        Check(LaunchOptions.Parse(new[] { "--faction", "2", "zzz", "--seed", "5" }) is { Seed: 5 } z && z.FactionId(1) == "zzz",
+            "an id-shaped unknown faction is Match's to refuse (it needs the data), and must not eat the next flag");
+
+        // SimRunner's seats: explicit, one per player, the old defaults without picks.
+        int factions = _data.Factions.Length;
+        var plain = SimRunner.BuildSeats(3, factions, new[] { -1, -1 }, null);
+        Check(plain.Length == 3 && Enumerable.Range(0, 3).All(p => plain[p] == new PlayerSeat(p % factions, SeatController.Human, AiDifficulty.Normal)),
+            $"default seats {string.Join(", ", plain)}");
+        var picked = SimRunner.BuildSeats(3, factions, new[] { 1, 0 }, AiDifficulty.Hard);
+        Check(picked[0] == new PlayerSeat(1, SeatController.Human, AiDifficulty.Normal) && picked[1] == new PlayerSeat(0, SeatController.Ai, AiDifficulty.Hard)
+            && picked[2] == new PlayerSeat(2 % factions, SeatController.Human, AiDifficulty.Normal), $"picked seats {string.Join(", ", picked)}");
     }
 
     private void UiRows()
@@ -87,7 +131,7 @@ public partial class ShellTest : Node
         foreach (MenuText k in Enum.GetValues<MenuText>()) keys.Add(("menu", UiText.Key(k), _ui.Menu(k)));
         foreach (SetupText k in Enum.GetValues<SetupText>()) keys.Add(("setup", UiText.Key(k), _ui.Setup(k)));
         foreach (PauseText k in Enum.GetValues<PauseText>()) keys.Add(("pause", UiText.Key(k), _ui.Pause(k)));
-        Check(keys.Count == 3 + 11 + 3, $"{keys.Count} shell keys");
+        Check(keys.Count == 3 + 14 + 3, $"{keys.Count} shell keys");
         string json = File.ReadAllText(UiText.DefaultPath).Replace("\r\n", "\n");
         foreach ((string section, string key, string text) in keys)
         {
@@ -107,8 +151,21 @@ public partial class ShellTest : Node
         }
         // The keys the brief names, by their ui.json spelling.
         string[] named = { "menu.title", "menu.skirmish", "menu.quit", "setup.title", "setup.seed", "setup.random", "setup.map_size", "setup.slot_human",
-            "setup.slot_ai", "setup.faction", "setup.difficulty", "setup.coming_soon", "setup.start", "setup.back", "pause.title", "pause.resume", "pause.quit_to_menu" };
+            "setup.slot_ai", "setup.faction", "setup.difficulty", "setup.start", "setup.back", "pause.title", "pause.resume", "pause.quit_to_menu",
+            "setup.map_size_item", "setup.difficulty_easy", "setup.difficulty_normal", "setup.difficulty_hard" };
         foreach (string n in named) Check(keys.Any(k => $"{k.Section}.{k.Key}" == n), $"no key {n}");
+        Check(!keys.Any(k => k.Key == "coming_soon"), "setup.coming_soon is still read (nothing shows it since M6-V2)");
+
+        // BUG-0581 item 1: the map size item is a ui.json format; one that can't format the size is one error naming the key.
+        Check(_ui.MapSizeItem(192).Contains("192"), $"map size item '{_ui.MapSizeItem(192)}'");
+        foreach (string bad in new[] { "{1} x {1}", "size", "{0", "{0} {x}" })
+        {
+            var root = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
+            root["setup"]!["map_size_item"] = bad;
+            var errors = new List<string>();
+            Check(UiText.Parse(root.ToJsonString(), errors) == null && errors.Count == 1 && errors[0].Contains("setup.map_size_item"),
+                $"map_size_item '{bad}': [{string.Join("; ", errors)}]");
+        }
     }
 
     // ---- the flow ----
@@ -135,21 +192,47 @@ public partial class ShellTest : Node
         Check(setup.Visible && !menu.Visible, $"Skirmish: setup {setup.Visible}, menu {menu.Visible}");
         Check(setup.SlotLabels[0].Text == _ui.Setup(SetupText.SlotHuman) && setup.SlotLabels[1].Text == _ui.Setup(SetupText.SlotAi),
             $"slots '{setup.SlotLabels[0].Text}', '{setup.SlotLabels[1].Text}'");
+        // M6-V2: live lists. Each faction list holds every loaded faction's displayName in id order; defaults faction 0 / 1.
         for (int s = 0; s < 2; s++)
-            Check(setup.FactionOptions[s].Disabled && setup.FactionOptions[s].GetItemText(0) == _data.Factions[s].DisplayName
-                && setup.FactionOptions[s].TooltipText == _ui.Setup(SetupText.ComingSoon), $"slot {s} faction: disabled {setup.FactionOptions[s].Disabled}, '{setup.FactionOptions[s].GetItemText(0)}'");
-        Check(setup.DifficultyOption.Disabled && setup.DifficultyOption.GetItemText(0) == _ui.Setup(SetupText.ComingSoon), "difficulty not disabled 'coming soon'");
+        {
+            OptionButton list = setup.FactionOptions[s];
+            var items = Enumerable.Range(0, list.ItemCount).Select(i => list.GetItemText(i)).ToArray();
+            Check(!list.Disabled && items.SequenceEqual(_data.Factions.Select(f => f.DisplayName)) && list.Selected == s && setup.FactionPick(s) == s,
+                $"slot {s} faction list: disabled {list.Disabled}, items [{string.Join("|", items)}], selected {list.Selected}");
+        }
+        OptionButton diff = setup.DifficultyOption;
+        var diffItems = Enumerable.Range(0, diff.ItemCount).Select(i => diff.GetItemText(i)).ToArray();
+        Check(!diff.Disabled && diffItems.SequenceEqual(new[] { SetupText.DifficultyEasy, SetupText.DifficultyNormal, SetupText.DifficultyHard }.Select(_ui.Setup))
+            && setup.DifficultyPick == AiDifficulty.Normal, $"difficulty list: disabled {diff.Disabled}, items [{string.Join("|", diffItems)}], pick {setup.DifficultyPick}");
+        var sizeItems = Enumerable.Range(0, setup.MapSizeOption.ItemCount).Select(i => setup.MapSizeOption.GetItemText(i)).ToArray();
+        Check(sizeItems.SequenceEqual(LaunchOptions.MapSizes.Select(_ui.MapSizeItem)), $"map size items [{string.Join("|", sizeItems)}] not from setup.map_size_item");
+        // No C# literal on the screen (BUG-0581 item 1): every label, button and list item is ui.json or faction data.
+        var allowed = new HashSet<string>(Enum.GetValues<SetupText>().Select(_ui.Setup).Concat(LaunchOptions.MapSizes.Select(_ui.MapSizeItem))
+            .Concat(_data.Factions.Select(f => f.DisplayName))) { "" };
+        foreach (Node n in setup.FindChildren("*", "", true, false))
+        {
+            string? text = n switch { Label l => l.Text, OptionButton o => null, Button b => b.Text, _ => null };
+            if (text != null) Check(allowed.Contains(text), $"setup shows '{text}' ({n.Name}), not from ui.json or data");
+        }
         foreach (SetupText k in new[] { SetupText.Title, SetupText.Seed, SetupText.MapSize, SetupText.Faction, SetupText.Difficulty })
             Check(Labels(setup).Contains(_ui.Setup(k)), $"setup has no label '{_ui.Setup(k)}'");
         Check(setup.StartButton.Text == _ui.Setup(SetupText.Start) && setup.BackButton.Text == _ui.Setup(SetupText.Back) && setup.RandomButton.Text == _ui.Setup(SetupText.Random),
             "setup button text");
         Check(setup.MapSizeOption.ItemCount == LaunchOptions.MapSizes.Length && setup.MapSize == 128, $"map sizes {setup.MapSizeOption.ItemCount}, picked {setup.MapSize}");
 
-        // Back and in again.
+        // The picks: the sides swapped (You play faction 1, the AI faction 0) and Easy.
+        int f0 = 1 % _data.Factions.Length, f1 = 0;
+        setup.FactionOptions[0].Select(f0);
+        setup.FactionOptions[1].Select(f1);
+        setup.DifficultyOption.Select((int)AiDifficulty.Easy);
+
+        // Back and in again: the picks survive.
         await Click(setup.BackButton);
         Check(menu.Visible && !setup.Visible, "Back did not show the menu");
         await Click(menu.SkirmishButton);
         Check(setup.Visible, "Skirmish (second time) did not show the setup");
+        Check(setup.FactionPick(0) == f0 && setup.FactionPick(1) == f1 && setup.DifficultyPick == AiDifficulty.Easy,
+            $"Back lost the picks: {setup.FactionPick(0)}, {setup.FactionPick(1)}, {setup.DifficultyPick}");
 
         // Random writes a number; then the seed is typed: 7, a letter (Start greys), Backspace.
         string before = setup.SeedEdit.Text;
@@ -170,6 +253,7 @@ public partial class ShellTest : Node
         // Start -> the match.
         await Click(setup.StartButton);
         await StartedMatch(7, 192);
+        Seats(f0, f1, AiDifficulty.Easy);
         await Shot("match");
         Match match = _main.CurrentMatch!;
         SimRunner runner = match.GetNode<SimRunner>("SimRunner");
@@ -220,10 +304,23 @@ public partial class ShellTest : Node
         // Skirmish again: the picks are kept, a fresh match.
         await Click(menu.SkirmishButton);
         Check(setup.Visible && setup.Seed == 7 && setup.MapSize == 192, $"setup again: seed '{setup.SeedEdit.Text}', map {setup.MapSize}");
+        Check(setup.FactionPick(0) == f0 && setup.FactionPick(1) == f1 && setup.DifficultyPick == AiDifficulty.Easy,
+            $"Quit to menu lost the picks: {setup.FactionPick(0)}, {setup.FactionPick(1)}, {setup.DifficultyPick}");
         await Click(setup.StartButton);
         await StartedMatch(7, 192);
+        Seats(f0, f1, AiDifficulty.Easy);
         Check(_main.CurrentMatch != match, "the second match is the first one");
         Check(MatchNodes().Count(n => n.StartsWith(nameof(Match) + " ", StringComparison.Ordinal)) == 1, "not exactly one Match in the tree");
+    }
+
+    // M6-V2: the running match's seats are the picks: the runner's, the sim's config's, and World.FactionOf agree.
+    private void Seats(int f0, int f1, AiDifficulty difficulty)
+    {
+        SimRunner runner = _main.CurrentMatch!.GetNode<SimRunner>("SimRunner");
+        World w = runner.Simulation!.World;
+        var want = new[] { new PlayerSeat(f0, SeatController.Human, AiDifficulty.Normal), new PlayerSeat(f1, SeatController.Ai, difficulty) };
+        Check(runner.Seats.SequenceEqual(want) && w.Config.Seats.SequenceEqual(want), $"seats: runner [{string.Join(", ", runner.Seats)}], config [{string.Join(", ", w.Config.Seats)}]");
+        Check(w.FactionOf(0) == f0 && w.FactionOf(1) == f1 && w.Config.HasAiSeat, $"FactionOf {w.FactionOf(0)}, {w.FactionOf(1)}");
     }
 
     // The match is up on `seed` and a `size` map, and ticks.

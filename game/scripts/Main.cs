@@ -1,5 +1,4 @@
 using System;
-using System.Globalization;
 using Godot;
 using Rts.Sim;
 using Rts.Sim.Data;
@@ -107,9 +106,8 @@ public partial class Main : Node3D
         _setup.StartButton.GrabFocus();
     }
 
-    /// <summary>What the setup's Start does: a match on <paramref name="seed"/> and a <paramref name="mapSize"/> map, everything else the match's defaults.</summary>
-    public void StartSkirmish(ulong seed, int mapSize) =>
-        StartMatch(LaunchOptions.Parse(new[] { "--seed", seed.ToString(CultureInfo.InvariantCulture), "--map-size", mapSize.ToString(CultureInfo.InvariantCulture) }));
+    /// <summary>What the setup's Start does: a match from the picks' match flags (<see cref="SkirmishSetup.MatchArgs"/>: seed, map size, each slot's faction, the AI's difficulty), everything else the match's defaults.</summary>
+    public void StartSkirmish(string[] args) => StartMatch(LaunchOptions.Parse(args));
 
     private void StartMatch(LaunchOptions options)
     {

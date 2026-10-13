@@ -62,6 +62,16 @@ public partial class RtsCamera : Camera3D
         }
     }
 
+    public override void _Notification(int what)
+    {
+        // BUG-0580: a paused node gets no input, so a camera_drag release while the match is paused never arrives; a drag
+        // must not outlive the pause (Resume starts with no button held as far as the camera knows).
+        if (what == NotificationPaused || what == NotificationUnpaused) _dragging = false;
+    }
+
+    /// <summary>True while a middle-button (<c>camera_drag</c>) drag is live.</summary>
+    public bool Dragging => _dragging;
+
     public override void _UnhandledInput(InputEvent e)
     {
         if (e.IsActionPressed("camera_zoom_in")) SetZoom(_zoom - CameraLimits.ZoomStep);
