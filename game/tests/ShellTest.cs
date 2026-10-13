@@ -22,6 +22,10 @@ namespace Rts.Game.Tests;
 /// M6-V2: the <c>--faction</c> / <c>--ai</c> parse and <see cref="SimRunner.BuildSeats"/> rows; the setup's live faction and
 /// difficulty lists (data and <c>ui.json</c> text only, BUG-0581 item 1); the picks (sides swapped, Easy) kept over Back and
 /// Quit to menu, and each match's seats equal to them.
+/// M6-V3: the menu's match (and <c>--skirmish</c>) is a Town Hall and the starting workers a side, no army (<c>--units 0</c>,
+/// BUG-0604), the camera on the local hall; each slot's colour list (<c>ui.json</c> names, defaults colour 1 / 2), the picks
+/// kept over Back and Quit, and the match drawn in them (<c>Match.PlayerRgb</c>, unit and building materials, minimap dots);
+/// the <c>--colour</c> parse and its junk; each missing <c>setup.colour_*</c> key one error naming it; BUG-0602 item 1.
 /// </summary>
 /// <remarks>
 /// Headless: <c>&amp; $env:GODOT --headless --path game res://tests/ShellTest.tscn</c>; prints "SHELL TEST PASS" and exits 0,
@@ -53,6 +57,7 @@ public partial class ShellTest : Node
             LaunchRows();
             UiRows();
             await Flow();
+            await SkirmishBoot();
         }
         catch (Exception ex)
         {
@@ -115,6 +120,33 @@ public partial class ShellTest : Node
         Check(LaunchOptions.Parse(new[] { "--faction", "2", "zzz", "--seed", "5" }) is { Seed: 5 } z && z.FactionId(1) == "zzz",
             "an id-shaped unknown faction is Match's to refuse (it needs the data), and must not eat the next flag");
 
+        // M6-V3: --skirmish is the menu's match (no army unless --units says so); --colour <slot> <n>.
+        Check(LaunchOptions.Parse(new[] { "--skirmish" }).UnitsPerPlayer == 0, "--skirmish spawns a dev army");
+        Check(LaunchOptions.Parse(new[] { "--skirmish", "--units", "100" }).UnitsPerPlayer == 100
+            && LaunchOptions.Parse(new[] { "--units", "7", "--skirmish" }).UnitsPerPlayer == 7, "--skirmish overrode an explicit --units");
+        Check(LaunchOptions.Parse(new[] { "--skirmish", "--units", "junk" }).UnitsPerPlayer == 0, "--skirmish --units junk: not the menu's 0");
+        Check(LaunchOptions.HasMatchFlag(new[] { "--colour", "1", "3" }), "--colour not a match flag");
+        Check(none.ColourIndex(0) == null && none.ColourIndex(1) == null && none.ColourIndex(2) == null && none.ColourIndex(-1) == null, "a colour picked with no flag");
+        LaunchOptions colours = LaunchOptions.Parse(new[] { "--colour", "1", "8", "--colour", "2", "1", "--seed", "4" });
+        Check(colours.ColourIndex(0) == 7 && colours.ColourIndex(1) == 0 && colours.Seed == 4, $"--colour 1 8 --colour 2 1: {colours.ColourIndex(0)}, {colours.ColourIndex(1)}");
+        Check(LaunchOptions.Parse(new[] { "--colour", "2", "3", "--colour", "2", "5" }).ColourIndex(1) == 4, "repeated --colour: the last good value does not win");
+        Check(LaunchOptions.Parse(new[] { "--colour", "2", "3", "--colour", "2", "9" }).ColourIndex(1) == 2, "repeated --colour: junk replaced a good value");
+        foreach (string[] junk in new[]
+        {
+            new[] { "--colour", "3", "1" }, new[] { "--colour", "0", "1" }, new[] { "--colour", "1", "0" }, new[] { "--colour", "1", "9" },
+            new[] { "--colour", "1", "02" }, new[] { "--colour", "1", "+1" }, new[] { "--colour", "1", "red" }, new[] { "--colour", "1" },
+            new[] { "--colour" }, new[] { "--colour", "1", "--seed", "3" }, new[] { "--colour", "01", "2" },
+        })
+        {
+            LaunchOptions o = LaunchOptions.Parse(junk);
+            Check(o.ColourIndex(0) == null && o.ColourIndex(1) == null, $"'{string.Join(' ', junk)}' picked {o.ColourIndex(0)}, {o.ColourIndex(1)}");
+        }
+        // A repeated flag as the value: the first is refused, the second read.
+        LaunchOptions twice = LaunchOptions.Parse(new[] { "--colour", "--colour", "1", "2" });
+        Check(twice.ColourIndex(0) == 1 && twice.ColourIndex(1) == null, $"'--colour --colour 1 2' picked {twice.ColourIndex(0)}, {twice.ColourIndex(1)}");
+        Check(LaunchOptions.Parse(new[] { "--colour", "1", "--seed", "3" }).Seed == 3 && LaunchOptions.Parse(new[] { "--colour", "--seed", "3" }).Seed == 3,
+            "--colour swallowed --seed (BUG-0041)");
+
         // SimRunner's seats: explicit, one per player, the old defaults without picks.
         int factions = _data.Factions.Length;
         var plain = SimRunner.BuildSeats(3, factions, new[] { -1, -1 }, null);
@@ -131,7 +163,7 @@ public partial class ShellTest : Node
         foreach (MenuText k in Enum.GetValues<MenuText>()) keys.Add(("menu", UiText.Key(k), _ui.Menu(k)));
         foreach (SetupText k in Enum.GetValues<SetupText>()) keys.Add(("setup", UiText.Key(k), _ui.Setup(k)));
         foreach (PauseText k in Enum.GetValues<PauseText>()) keys.Add(("pause", UiText.Key(k), _ui.Pause(k)));
-        Check(keys.Count == 3 + 14 + 3, $"{keys.Count} shell keys");
+        Check(keys.Count == 3 + 15 + 3, $"{keys.Count} shell keys");
         string json = File.ReadAllText(UiText.DefaultPath).Replace("\r\n", "\n");
         foreach ((string section, string key, string text) in keys)
         {
@@ -152,19 +184,68 @@ public partial class ShellTest : Node
         // The keys the brief names, by their ui.json spelling.
         string[] named = { "menu.title", "menu.skirmish", "menu.quit", "setup.title", "setup.seed", "setup.random", "setup.map_size", "setup.slot_human",
             "setup.slot_ai", "setup.faction", "setup.difficulty", "setup.start", "setup.back", "pause.title", "pause.resume", "pause.quit_to_menu",
-            "setup.map_size_item", "setup.difficulty_easy", "setup.difficulty_normal", "setup.difficulty_hard" };
+            "setup.map_size_item", "setup.difficulty_easy", "setup.difficulty_normal", "setup.difficulty_hard", "setup.colour" };
         foreach (string n in named) Check(keys.Any(k => $"{k.Section}.{k.Key}" == n), $"no key {n}");
         Check(!keys.Any(k => k.Key == "coming_soon"), "setup.coming_soon is still read (nothing shows it since M6-V2)");
 
         // BUG-0581 item 1: the map size item is a ui.json format; one that can't format the size is one error naming the key.
         Check(_ui.MapSizeItem(192).Contains("192"), $"map size item '{_ui.MapSizeItem(192)}'");
-        foreach (string bad in new[] { "{1} x {1}", "size", "{0", "{0} {x}" })
+        // BUG-0602 item 1: an escaped "{{0}}" holds the text "{0}" but names no size.
+        foreach (string bad in new[] { "{1} x {1}", "size", "{0", "{0} {x}", "{{0}}", "{{0}} x {{0}}" })
         {
             var root = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
             root["setup"]!["map_size_item"] = bad;
             var errors = new List<string>();
             Check(UiText.Parse(root.ToJsonString(), errors) == null && errors.Count == 1 && errors[0].Contains("setup.map_size_item"),
                 $"map_size_item '{bad}': [{string.Join("; ", errors)}]");
+        }
+        Check(UiText.Parse(json.Replace("\"{0} × {0}\"", "\"{{0}} × {0}\""), new List<string>()) is UiText partial && partial.MapSizeItem(128) == "{0} × 128",
+            "a format naming the size once, beside a literal '{0}', was refused");
+
+        // M6-V3: the colour table, setup.colour_1 .. colour_8 ({ displayName, rgb }); each missing key or field one error naming it.
+        for (int c = 0; c < UiText.ColourCount; c++)
+        {
+            Check(_ui.ColourName(c).Length > 0, $"colour {c} has no name");
+            Check(UiText.ColourKey(c) == $"colour_{c + 1}", $"colour key {UiText.ColourKey(c)}");
+            foreach (string field in new[] { "", "displayName", "rgb" })
+            {
+                var root = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
+                if (field.Length == 0) root["setup"]!.AsObject().Remove(UiText.ColourKey(c));
+                else root["setup"]![UiText.ColourKey(c)]!.AsObject().Remove(field);
+                string at = field.Length == 0 ? $"setup.{UiText.ColourKey(c)}" : $"setup.{UiText.ColourKey(c)}.{field}";
+                var errors = new List<string>();
+                Check(UiText.Parse(root.ToJsonString(), errors) == null && errors.Count == 1 && errors[0].Contains(at), $"ui.json without {at}: [{string.Join("; ", errors)}]");
+            }
+        }
+        var rgbs = Enumerable.Range(0, UiText.ColourCount).Select(_ui.ColourRgb).ToArray();
+        Check(rgbs.Distinct().Count() == UiText.ColourCount && Enumerable.Range(0, UiText.ColourCount).Select(_ui.ColourName).Distinct().Count() == UiText.ColourCount,
+            $"two colours alike in the table: {string.Join(", ", rgbs.Select(c => c.ToString("X6")))}");
+        // BUG-0431's rule carried to the table: an enemy zone's rim is its owner's colour, so every colour stays far from the own rim.
+        foreach (uint rgb in rgbs)
+        {
+            Color c = UnitViews.ColorFromRgb(rgb), own = AbilityViews.OwnZoneRimColor;
+            float gap = Math.Max(Math.Abs(c.R - own.R), Math.Max(Math.Abs(c.G - own.G), Math.Abs(c.B - own.B)));
+            Check(gap >= 0.4f, $"colour {rgb:X6} is only {gap:0.000} from the own zone rim");
+        }
+        foreach (string bad in new[] { "red", "#12345", "#1234567", "#GG0000", "4B4F55A", "#-12345", "# 12345" })
+        {
+            var root = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
+            root["setup"]![UiText.ColourKey(2)]!["rgb"] = bad;
+            var errors = new List<string>();
+            Check(UiText.Parse(root.ToJsonString(), errors) == null && errors.Count == 1 && errors[0].Contains("setup.colour_3.rgb"), $"rgb '{bad}': [{string.Join("; ", errors)}]");
+        }
+        // The table is read from the file (a renamed, recoloured entry shows the new name and value), never from C#.
+        var renamedRoot = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
+        renamedRoot["setup"]![UiText.ColourKey(4)]!["displayName"] = "Zz Test";
+        renamedRoot["setup"]![UiText.ColourKey(4)]!["rgb"] = "#01a2F3";
+        UiText? renamed = UiText.Parse(renamedRoot.ToJsonString(), new List<string>());
+        Check(renamed != null && renamed.ColourName(4) == "Zz Test" && renamed.ColourRgb(4) == 0x01A2F3u, "the colour table is not read from ui.json");
+        foreach (string script in new[] { "SkirmishSetup.cs", "Match.cs", "UiText.cs", "LaunchOptions.cs" })
+        {
+            string source = File.ReadAllText(ProjectSettings.GlobalizePath($"res://scripts/{script}"));
+            for (int c = 0; c < UiText.ColourCount; c++)
+                Check(!source.Contains($"\"{_ui.ColourName(c)}\"", StringComparison.Ordinal) && !source.Contains($"{_ui.ColourRgb(c):X6}", StringComparison.OrdinalIgnoreCase),
+                    $"{script} has colour {c + 1}'s name or value as a literal");
         }
     }
 
@@ -200,6 +281,15 @@ public partial class ShellTest : Node
             Check(!list.Disabled && items.SequenceEqual(_data.Factions.Select(f => f.DisplayName)) && list.Selected == s && setup.FactionPick(s) == s,
                 $"slot {s} faction list: disabled {list.Disabled}, items [{string.Join("|", items)}], selected {list.Selected}");
         }
+        // M6-V3: each colour list holds the table's names in order, each with a swatch; defaults colour 1 for "You", colour 2 for "AI".
+        for (int s = 0; s < 2; s++)
+        {
+            OptionButton list = setup.ColourOptions[s];
+            var items = Enumerable.Range(0, list.ItemCount).Select(i => list.GetItemText(i)).ToArray();
+            Check(!list.Disabled && items.SequenceEqual(Enumerable.Range(0, UiText.ColourCount).Select(_ui.ColourName)) && setup.ColourPick(s) == s
+                && list.GetItemIcon(0) != null, $"slot {s} colour list: items [{string.Join("|", items)}], pick {setup.ColourPick(s)}");
+        }
+        Check(Labels(setup).Contains(_ui.Setup(SetupText.Colour)), "setup has no colour heading");
         OptionButton diff = setup.DifficultyOption;
         var diffItems = Enumerable.Range(0, diff.ItemCount).Select(i => diff.GetItemText(i)).ToArray();
         Check(!diff.Disabled && diffItems.SequenceEqual(new[] { SetupText.DifficultyEasy, SetupText.DifficultyNormal, SetupText.DifficultyHard }.Select(_ui.Setup))
@@ -225,14 +315,18 @@ public partial class ShellTest : Node
         setup.FactionOptions[0].Select(f0);
         setup.FactionOptions[1].Select(f1);
         setup.DifficultyOption.Select((int)AiDifficulty.Easy);
+        // M6-V3: colours 4 and 6, away from both defaults.
+        const int c0 = 3, c1 = 5;
+        setup.ColourOptions[0].Select(c0);
+        setup.ColourOptions[1].Select(c1);
 
         // Back and in again: the picks survive.
         await Click(setup.BackButton);
         Check(menu.Visible && !setup.Visible, "Back did not show the menu");
         await Click(menu.SkirmishButton);
         Check(setup.Visible, "Skirmish (second time) did not show the setup");
-        Check(setup.FactionPick(0) == f0 && setup.FactionPick(1) == f1 && setup.DifficultyPick == AiDifficulty.Easy,
-            $"Back lost the picks: {setup.FactionPick(0)}, {setup.FactionPick(1)}, {setup.DifficultyPick}");
+        Check(setup.FactionPick(0) == f0 && setup.FactionPick(1) == f1 && setup.DifficultyPick == AiDifficulty.Easy && setup.ColourPick(0) == c0 && setup.ColourPick(1) == c1,
+            $"Back lost the picks: {setup.FactionPick(0)}, {setup.FactionPick(1)}, {setup.DifficultyPick}, colours {setup.ColourPick(0)}, {setup.ColourPick(1)}");
 
         // Random writes a number; then the seed is typed: 7, a letter (Start greys), Backspace.
         string before = setup.SeedEdit.Text;
@@ -254,6 +348,8 @@ public partial class ShellTest : Node
         await Click(setup.StartButton);
         await StartedMatch(7, 192);
         Seats(f0, f1, AiDifficulty.Easy);
+        HallAndWorkers();
+        await Colours(c0, c1);
         await Shot("match");
         Match match = _main.CurrentMatch!;
         SimRunner runner = match.GetNode<SimRunner>("SimRunner");
@@ -304,11 +400,12 @@ public partial class ShellTest : Node
         // Skirmish again: the picks are kept, a fresh match.
         await Click(menu.SkirmishButton);
         Check(setup.Visible && setup.Seed == 7 && setup.MapSize == 192, $"setup again: seed '{setup.SeedEdit.Text}', map {setup.MapSize}");
-        Check(setup.FactionPick(0) == f0 && setup.FactionPick(1) == f1 && setup.DifficultyPick == AiDifficulty.Easy,
-            $"Quit to menu lost the picks: {setup.FactionPick(0)}, {setup.FactionPick(1)}, {setup.DifficultyPick}");
+        Check(setup.FactionPick(0) == f0 && setup.FactionPick(1) == f1 && setup.DifficultyPick == AiDifficulty.Easy && setup.ColourPick(0) == c0 && setup.ColourPick(1) == c1,
+            $"Quit to menu lost the picks: {setup.FactionPick(0)}, {setup.FactionPick(1)}, {setup.DifficultyPick}, colours {setup.ColourPick(0)}, {setup.ColourPick(1)}");
         await Click(setup.StartButton);
         await StartedMatch(7, 192);
         Seats(f0, f1, AiDifficulty.Easy);
+        await Colours(c0, c1);
         Check(_main.CurrentMatch != match, "the second match is the first one");
         Check(MatchNodes().Count(n => n.StartsWith(nameof(Match) + " ", StringComparison.Ordinal)) == 1, "not exactly one Match in the tree");
     }
@@ -321,6 +418,92 @@ public partial class ShellTest : Node
         var want = new[] { new PlayerSeat(f0, SeatController.Human, AiDifficulty.Normal), new PlayerSeat(f1, SeatController.Ai, difficulty) };
         Check(runner.Seats.SequenceEqual(want) && w.Config.Seats.SequenceEqual(want), $"seats: runner [{string.Join(", ", runner.Seats)}], config [{string.Join(", ", w.Config.Seats)}]");
         Check(w.FactionOf(0) == f0 && w.FactionOf(1) == f1 && w.Config.HasAiSeat, $"FactionOf {w.FactionOf(0)}, {w.FactionOf(1)}");
+    }
+
+    // M6-V3 (BUG-0602 item 2): a --skirmish boot is the menu's Start with the defaults: a hall and workers a side, colours 1 / 2.
+    private async Task SkirmishBoot()
+    {
+        RemoveChild(_main);
+        _main.QueueFree();
+        await Frames(2);
+        _main = GD.Load<PackedScene>("res://scenes/Main.tscn").Instantiate<Main>();
+        _main.UserArgs = new[] { "--skirmish", "--mute" };
+        AddChild(_main);
+        await Frames(2);
+        Check(_main.CurrentMatch != null && !_main.Menu!.Visible, "--skirmish did not start a match");
+        if (_main.CurrentMatch == null) return;
+        await Seconds(0.3);
+        HallAndWorkers();
+        await Colours(0, 1);
+    }
+
+    // M6-V3 (BUG-0604): the menu's match is docs/02's opening: per player one Town Hall and the starting workers, no army;
+    // the camera on the local hall.
+    private void HallAndWorkers()
+    {
+        Match match = _main.CurrentMatch!;
+        World w = match.GetNode<SimRunner>("SimRunner").Simulation!.World;
+        Check(match.UnitsPerPlayer == 0 && match.WorkersPerPlayer == _data.Rules.StartingWorkers,
+            $"menu match: {match.UnitsPerPlayer} units, {match.WorkersPerPlayer} workers per player");
+        UnitStore u = w.Units;
+        int[] workers = new int[2], others = new int[2], halls = new int[2], buildings = new int[2];
+        for (int i = 0; i < u.Capacity; i++)
+        {
+            if (!u.Alive[i] || (uint)u.Owner[i] > 1) continue;
+            if (_data.Units[u.TypeId[i]].Slot == UnitSlot.Worker) workers[u.Owner[i]]++;
+            else others[u.Owner[i]]++;
+        }
+        BuildingStore b = w.Buildings;
+        for (int k = 0; k < b.Capacity; k++)
+        {
+            if (!b.Alive[k] || (uint)b.Owner[k] > 1) continue;
+            buildings[b.Owner[k]]++;
+            if (_data.Buildings[b.TypeId[k]].Slot == BuildingSlot.TownHall) halls[b.Owner[k]]++;
+        }
+        // Checked within a second of the start: no worker trained yet (a worker takes longer), never a soldier.
+        for (int p = 0; p < 2; p++)
+            Check(halls[p] == 1 && workers[p] == _data.Rules.StartingWorkers && others[p] == 0,
+                $"player {p}: {halls[p]} halls ({buildings[p]} buildings), {workers[p]} workers, {others[p]} other units");
+        Check(match.Bases != null && match.Bases.HallAnchor[0] >= 0, "no planned hall for player 0");
+        if (match.Bases == null || match.Bases.HallAnchor[0] < 0) return;
+        System.Numerics.Vector2 hall = Rts.Sim.ViewApi.StartBase.FootprintCenter(w.NavGrid, _data.Buildings[match.Bases.HallType[0]], match.Bases.HallAnchor[0]);
+        System.Numerics.Vector2 focus = match.StartFocus; // the edge pan may have moved the camera since
+        Check(System.Numerics.Vector2.Distance(focus, hall) < 1f, $"camera focus {focus}, the local hall at {hall}");
+    }
+
+    // M6-V3: the match draws player p in its pick: Match.PlayerRgb, unit bodies, building materials, the local minimap dots.
+    private async Task Colours(int c0, int c1)
+    {
+        Match match = _main.CurrentMatch!;
+        uint[] want = { _ui.ColourRgb(c0), _ui.ColourRgb(c1) };
+        Check(match.PlayerRgb.Length == 2 && match.PlayerRgb[0] == want[0] && match.PlayerRgb[1] == want[1],
+            $"PlayerRgb [{string.Join(", ", match.PlayerRgb.Select(c => c.ToString("X6")))}], want {want[0]:X6}, {want[1]:X6}");
+        var units = match.GetNode<UnitViews>("World3D/UnitViews");
+        var buildings = match.GetNode<BuildingViews>("World3D/BuildingViews");
+        var mini = match.GetNode<Minimap>("Hud/Minimap");
+        Simulation sim = match.GetNode<SimRunner>("SimRunner").Simulation!;
+        int refreshes = mini.Refreshes;
+        await Seconds(0.3); // a minimap refresh and a view sync past the spawn tick
+        // The dots are drawn from positions as of the last refresh: compare at those, so refresh once now.
+        mini.Refresh(sim);
+        UnitStore u = sim.World.Units;
+        int wrongBody = 0, wrongDot = 0, seen = 0;
+        for (int i = 0; i < u.Capacity; i++)
+        {
+            if (!u.Alive[i] || (uint)u.Owner[i] > 1 || !units.IsShown(i)) continue;
+            seen++;
+            Color c = UnitViews.ColorFromRgb(want[u.Owner[i]]);
+            if (units.ViewOf(i)?.MaterialOverride is not StandardMaterial3D m || !m.AlbedoColor.IsEqualApprox(c)) wrongBody++;
+            if (u.Owner[i] == SelectionController.LocalPlayer && mini.Raster!.TryPixelOf(u.Position[i], out int x, out int y))
+            {
+                Color got = mini.DotsImage.GetPixel(x, y);
+                if (Mathf.Abs(got.R - c.R) > 0.01f || Mathf.Abs(got.G - c.G) > 0.01f || Mathf.Abs(got.B - c.B) > 0.01f) wrongDot++;
+            }
+        }
+        Check(seen > 0 && wrongBody == 0 && wrongDot == 0 && mini.Refreshes > refreshes,
+            $"colours: {seen} units shown, {wrongBody} bodies and {wrongDot} own dots not their player's pick");
+        for (int p = 0; p < 2; p++)
+            Check(buildings.PlayerMaterial(p).AlbedoColor.IsEqualApprox(UnitViews.ColorFromRgb(want[p])), $"player {p} building colour {buildings.PlayerMaterial(p).AlbedoColor}");
     }
 
     // The match is up on `seed` and a `size` map, and ticks.

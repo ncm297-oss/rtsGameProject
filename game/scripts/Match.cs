@@ -23,6 +23,15 @@ public partial class Match : Node3D
     /// <summary>The "Match over:" dev lines printed so far (M6-V2): one each time a player's last building goes.</summary>
     public int MatchOverLines { get; private set; }
 
+    /// <summary>Army units per player this match asked for (<c>--units</c>; 0 from the menu and <c>--skirmish</c>, M6-V3).</summary>
+    public int UnitsPerPlayer { get; private set; }
+
+    /// <summary>Where the camera looked at the start (meters; the local army's centre, or with no army the local Town Hall).</summary>
+    public System.Numerics.Vector2 StartFocus { get; private set; }
+
+    /// <summary>Each player's colour (0xRRGGBB) every view draws it in (<see cref="PlayerColours"/>); empty before <see cref="Start"/>.</summary>
+    public uint[] PlayerRgb { get; private set; } = Array.Empty<uint>();
+
     /// <summary>Starting workers per player this match asked for (<c>--workers</c>, else <c>rules.json</c> <c>startingWorkers</c>).</summary>
     public int WorkersPerPlayer { get; private set; }
 
@@ -41,6 +50,7 @@ public partial class Match : Node3D
         _runner.GoldMines = options.Mines;
         _runner.Combat = !options.NoCombat;
         PickSeats(data, options);
+        UnitsPerPlayer = options.UnitsPerPlayer;
         WorkersPerPlayer = options.NoBases ? 0 : options.Workers ?? data.Rules.StartingWorkers;
         // The start workers come on top of the armies (the bench keeps its 100 / 1,000 a side), so the store grows past 2,000 when needed.
         _runner.UnitCapacity = Math.Max(_runner.UnitCapacity, _runner.PlayerCount * (options.UnitsPerPlayer + WorkersPerPlayer));
@@ -67,15 +77,13 @@ public partial class Match : Node3D
         if (options.Vsync is bool vsync && DisplayServer.GetName() != "headless")
             DisplayServer.WindowSetVsyncMode(vsync ? DisplayServer.VSyncMode.Enabled : DisplayServer.VSyncMode.Disabled);
 
+        uint[] playerRgb = PlayerRgb = PlayerColours(data, sim.World, options, UiText.Shared);
         var units = GetNode<UnitViews>("World3D/UnitViews");
-        units.Bind(data, sim.World.Units.Capacity);
+        units.Bind(data, sim.World.Units.Capacity, playerRgb);
         units.Runner = _runner;
         units.Fog = fog;
         units.Camera = camera;
 
-        // A player's colour is its seat's faction's (World.FactionOf; per-player colours are M6-V3).
-        var playerRgb = new uint[sim.World.Config.PlayerCount];
-        for (int p = 0; p < playerRgb.Length; p++) playerRgb[p] = data.Factions[sim.World.FactionOf(p)].PrimaryColor;
         var buildings = GetNode<BuildingViews>("World3D/BuildingViews");
         buildings.Bind(data, sim.World.Buildings.Capacity, playerRgb);
         buildings.Runner = _runner;
@@ -107,12 +115,23 @@ public partial class Match : Node3D
         abilityViews.Bind(data, sim.World.Units.Capacity, _runner, selection, playerRgb: playerRgb, zoneCapacity: sim.World.Zones.Capacity);
         abilityViews.Sound = GetNode<Sfx>("Sfx"); // M5-V1: the lost-cast sound
 
-        System.Numerics.Vector2[][] blocks = SpawnArmies(sim, options.UnitsPerPlayer, out System.Numerics.Vector2 focus);
+        // M6-V3: no army (the menu's match, --skirmish, --units 0) spawns none; the bases are planned exactly as with one
+        // (StartBase.Plan stands a one-unit block in for an empty one).
+        System.Numerics.Vector2[][] blocks;
+        System.Numerics.Vector2 focus;
+        if (options.UnitsPerPlayer > 0) blocks = SpawnArmies(sim, options.UnitsPerPlayer, out focus);
+        else
+        {
+            blocks = new System.Numerics.Vector2[Math.Min(sim.World.Config.PlayerCount, 2)][];
+            for (int p = 0; p < blocks.Length; p++) blocks[p] = Array.Empty<System.Numerics.Vector2>();
+            focus = new System.Numerics.Vector2(sim.World.NavGrid.Width, sim.World.NavGrid.Height) * MapConstants.CellSize / 2;
+        }
         Bases = options.NoBases ? null : SpawnBases(sim, blocks, WorkersPerPlayer, out _);
         // No army: look at player 0's Town Hall instead of the map centre.
         if (options.UnitsPerPlayer == 0 && Bases != null && Bases.HallAnchor[0] >= 0)
             focus = StartBase.FootprintCenter(sim.World.NavGrid, data.Buildings[Bases.HallType[0]], Bases.HallAnchor[0]);
         camera.SetFocus(focus.X, focus.Y);
+        StartFocus = camera.Focus;
         if (options.Zoom is float zoom) camera.SetZoom(zoom);
 
         var hud = GetNode<CanvasLayer>("Hud");
@@ -165,6 +184,20 @@ public partial class Match : Node3D
             $"forests {placed.Forests} trees {placed.Trees} mines {placed.Mines}, " +
             $"town halls {Halls(Bases)}, {WorkersPerPlayer} workers per player" + (options.NoCombat ? ", combat off" : "") + (options.NoFog ? ", fog not drawn" : "") +
             $", seats {SeatsText(data, _runner.Seats)}");
+    }
+
+    /// <summary>
+    /// Each player's colour (M6-V3, docs/02 "Game flow" 2): slot p's <c>--colour</c> pick (the setup's colour list), else
+    /// colour p, from <paramref name="ui"/>'s table (<see cref="UiText.ColourRgb"/>); players past the table wrap round it.
+    /// Without <c>ui.json</c> a player takes its seat's faction's <c>PrimaryColor</c>, as before M6-V3. The one colour source:
+    /// every view (units, buildings, ghosts, corpses, shots, zone rims, minimap dots) is bound with this array.
+    /// </summary>
+    public static uint[] PlayerColours(GameData data, World world, LaunchOptions options, UiText? ui)
+    {
+        var rgb = new uint[world.Config.PlayerCount];
+        for (int p = 0; p < rgb.Length; p++)
+            rgb[p] = ui != null ? ui.ColourRgb(options.ColourIndex(p) ?? p % UiText.ColourCount) : data.Factions[world.FactionOf(p)].PrimaryColor;
+        return rgb;
     }
 
     // M6-V2 dev line (not the victory screen, which waits on the sim's rule: Requests 37): a player whose last building went this tick.

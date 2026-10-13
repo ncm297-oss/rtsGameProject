@@ -23,7 +23,9 @@ namespace Rts.Game;
 /// <see cref="TrainError"/> and <see cref="ResearchError"/> member but <c>None</c> (<c>blocked</c>, <c>queue_full</c> ...),
 /// the state keys those of every <see cref="UnitState"/> (M3-V3) plus <see cref="OrderedAttackKey"/> (M4-V2), the hud keys those of <see cref="HudText"/>,
 /// the menu, setup and pause keys (the game shell, M6-V1) those of <see cref="MenuText"/>, <see cref="SetupText"/> and <see cref="PauseText"/>
-/// (M6-V2: <c>setup.map_size_item</c> must also be a format naming <c>{0}</c>, else one error naming it); so a member
+/// (M6-V2: <c>setup.map_size_item</c> must also be a format naming <c>{0}</c> that formats to different text for different
+/// sizes, else one error naming it, BUG-0602 item 1; M6-V3: <c>setup</c> also carries the player colour table,
+/// <c>colour_1</c> .. <c>colour_8</c>, each <c>{ "displayName", "rgb": "#RRGGBB" }</c>, <see cref="ColourCount"/>); so a member
 /// the sim adds later is a load error here until the file has its text. Each of the three reason sections must also
 /// carry <see cref="ForwardKey"/> (<c>requires</c>), the reason M3-6's <c>requires</c> gating adds: a key with no enum
 /// member yet is accepted (as is any extra key), so the file loads with or without that sim change. The <c>placement</c>
@@ -47,6 +49,9 @@ public sealed class UiText
     /// <summary>The <c>states</c> key of the panel's text for a unit chasing the target of an explicit Attack order (M4-V2; not a <see cref="UnitState"/>: a chaser is <c>Moving</c>).</summary>
     public const string OrderedAttackKey = "ordered_attack";
 
+    /// <summary>Colours in the player colour table (<c>setup.colour_1</c> .. <c>colour_8</c>; M6-V3).</summary>
+    public const int ColourCount = 8;
+
     /// <summary>Largest number of entries a build menu can show (the 5 x 3 grid).</summary>
     public const int MaxMenuEntries = 15;
 
@@ -63,6 +68,8 @@ public sealed class UiText
     private readonly string[] _menu;
     private readonly string[] _setup;
     private readonly string[] _pause;
+    private readonly string[] _colourNames = Blank(ColourCount);
+    private readonly uint[] _colourRgb = new uint[ColourCount];
 
     private UiText()
     {
@@ -116,6 +123,15 @@ public sealed class UiText
 
     /// <summary>One map size list item: <c>setup.map_size_item</c> with <paramref name="size"/> (cells a side) for its <c>{0}</c> (M6-V2).</summary>
     public string MapSizeItem(int size) => string.Format(CultureInfo.InvariantCulture, Setup(SetupText.MapSizeItem), size);
+
+    /// <summary>The <c>setup</c> key of player colour <paramref name="index"/> (0-based): <c>colour_1</c> .. <c>colour_8</c>.</summary>
+    public static string ColourKey(int index) => $"colour_{index + 1}";
+
+    /// <summary>Player colour <paramref name="index"/>'s name (<c>setup.colour_N.displayName</c>, M6-V3); empty out of range.</summary>
+    public string ColourName(int index) => (uint)index < ColourCount ? _colourNames[index] : "";
+
+    /// <summary>Player colour <paramref name="index"/> as 0xRRGGBB (<c>setup.colour_N.rgb</c>, M6-V3); 0 out of range.</summary>
+    public uint ColourRgb(int index) => (uint)index < ColourCount ? _colourRgb[index] : 0u;
 
     /// <summary>A pause menu text (<c>ui.json</c> <c>pause</c>, M6-V1).</summary>
     public string Pause(PauseText key) => (uint)key < (uint)_pause.Length ? _pause[(int)key] : "";
@@ -220,6 +236,7 @@ public sealed class UiText
             string sizeItem = ui._setup[(int)SetupText.MapSizeItem];
             if (sizeItem.Length > 0 && !IsSizeFormat(sizeItem))
                 errors.Add($"ui.json: setup.{Key(SetupText.MapSizeItem)} must be a format with {{0}} (the map side) and no other placeholder: '{sizeItem}'");
+            ReadColours(root, ui, errors);
             Section<PauseText>(root, "pause", ui._pause, skipZero: false, forward: false, errors);
         }
         return errors.Count == before ? ui : null;
@@ -253,14 +270,42 @@ public sealed class UiText
         return root.TryGetProperty(name, out JsonElement section) ? Text(section, key, $"{name}.{key}", errors) : "";
     }
 
-    // A map size item format: it names {0} and formats (a stray "{1}" or "{" would throw at Build).
+    // The player colour table (M6-V3): setup.colour_1 .. colour_8, each { "displayName", "rgb": "#RRGGBB" }. Nothing when
+    // the setup section itself is missing (reported once by Section).
+    private static void ReadColours(JsonElement root, UiText ui, List<string> errors)
+    {
+        if (!root.TryGetProperty("setup", out JsonElement setup) || setup.ValueKind != JsonValueKind.Object) return;
+        for (int i = 0; i < ColourCount; i++)
+        {
+            string at = $"setup.{ColourKey(i)}";
+            JsonElement entry = Object(setup, ColourKey(i), at, errors);
+            if (entry.ValueKind != JsonValueKind.Object) continue;
+            ui._colourNames[i] = Text(entry, "displayName", $"{at}.displayName", errors);
+            string rgb = Text(entry, "rgb", $"{at}.rgb", errors);
+            if (rgb.Length == 0) continue;
+            if (TryRgb(rgb, out uint value)) ui._colourRgb[i] = value;
+            else errors.Add($"ui.json: {at}.rgb must be a colour '#RRGGBB': '{rgb}'");
+        }
+    }
+
+    // "#RRGGBB" (hex digits, either case) as 0xRRGGBB, the data's palette form.
+    private static bool TryRgb(string text, out uint rgb)
+    {
+        rgb = 0;
+        if (text.Length != 7 || text[0] != '#') return false;
+        foreach (char c in text.AsSpan(1))
+            if (!char.IsAsciiHexDigit(c)) return false;
+        return uint.TryParse(text.AsSpan(1), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out rgb);
+    }
+
+    // A map size item format: it names {0}, formats (a stray "{1}" or "{" would throw at Build), and names the size: two
+    // sizes must format differently (BUG-0602 item 1: an escaped "{{0}}" contains "{0}" but every item would read "{0}").
     private static bool IsSizeFormat(string format)
     {
         if (!format.Contains("{0}", StringComparison.Ordinal)) return false;
         try
         {
-            _ = string.Format(CultureInfo.InvariantCulture, format, 128);
-            return true;
+            return string.Format(CultureInfo.InvariantCulture, format, 128) != string.Format(CultureInfo.InvariantCulture, format, 256);
         }
         catch (FormatException)
         {

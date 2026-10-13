@@ -3258,12 +3258,14 @@ Match
   the one with the roomiest clearing), so a small terrace by the centre line can't split the army.
   No RNG; fewer positions come back (with a warning) if no clearing on that side has room. The CLI's
   march scenario uses the same blocks. The camera starts on player
-  0's block centre. The units appear on the sim's second tick.
+  0's block centre. The units appear on the sim's second tick. Since M6-V3 the menu's match and
+  `--skirmish` pass `--units 0`: no army, only the start base ("Implementation (M6-V3)"); the
+  default of 100 stays for every other dev run and test.
 - **Unit views:** `UnitViews.Bind` makes one `CapsuleMesh` per unit type (radius from
   `UnitDef.Radius`, height `2·radius + 1 m`, 12 radial segments) and one `StandardMaterial3D` per
   faction whose albedo is the faction's `PrimaryColor` (0xRRGGBB, sRGB). The material is per
   faction, not per owner: with player p = faction p they are the same today, and M6's per-player
-  colour replaces it. A slot's node is created the first time the slot is alive and hidden while
+  colour replaces it (M6-V3: a match binds per-player materials, set as each node's override). A slot's node is created the first time the slot is alive and hidden while
   it is dead; a respawn into the slot reuses it (and swaps the mesh if the type changed). After a
   slot's first use nothing is created; the per-frame update of 2,000 units allocates 0 bytes and
   costs about 0.5 ms (`game/tests/UnitViewsTest.tscn`). No physics bodies.
@@ -5391,7 +5393,8 @@ game/tests/AiSeatTest.tscn      the headless AI seat test (in the scene loop)
   Human, Normal. Explicit default seats equal `SimConfig.SeatOf`'s defaults, so the state hash and the replay header (format
   5 always writes every seat) are unchanged for a run without the flags. `Match.SpawnArmies` now spawns each player's seat
   faction's roster (`World.FactionOf`; it used `p mod factions`); the start base already did. Colours stay per faction
-  (the `PrimaryColor` of the seat's faction), so a mirror match draws both sides alike until M6-V3's per-player colours.
+  (the `PrimaryColor` of the seat's faction), so a mirror match draws both sides alike until M6-V3's per-player colours
+  (since M6-V3 colours are per slot: "Implementation (M6-V3)").
   The `Match started:` line ends with the seats (`seats malazan human, whirlwind ai hard`).
 - **Match over (dev line).** After every tick (`SimRunner.Ticked`), `ViewApi/MatchOver` counts each player's live
   buildings (sites included) over `World.Buildings.Alive` / `Owner` and reports any player whose count went from above 0
@@ -5429,6 +5432,62 @@ game/tests/AiSeatTest.tscn      the headless AI seat test (in the scene loop)
     - `--faction 1 whirlwind --faction 2 malazan`: both seats human; player 0's army, building colour and build menu are
       the Whirlwind's.
     - Four junk flag sets: default seats, and the match ticks.
+
+### Implementation (M6-V3)
+
+The menu's match opens as docs/02 says (a Town Hall and the starting workers a side, no dev army; BUG-0604), each slot
+has its own colour (BUG-0601), the minimap drops a held press on pause (BUG-0600), and BUG-0602 items 1 and 2. View only:
+no sim change.
+
+```
+game/scripts/SkirmishSetup.cs   per-slot colour lists; MatchArgs adds --units 0 and --colour <slot> <n>
+game/scripts/LaunchOptions.cs   --colour <slot> <n>; --skirmish defaults --units to 0
+game/scripts/Match.cs           no SpawnArmies at 0 units; PlayerColours -> PlayerRgb; StartFocus, UnitsPerPlayer
+game/scripts/UnitViews.cs       per-player body materials (MaterialOverride by owner)
+game/scripts/UiText.cs, SetupText.cs   setup.colour heading and the colour table; the size-format rule
+game/scripts/Minimap.cs         the jump-drag dropped on pause / resume (BUG-0600)
+game/data/common/ui.json        setup.colour, setup.colour_1 .. colour_8
+```
+
+- **The menu's match (BUG-0604).** `SkirmishSetup.MatchArgs` passes `--units 0`, so Start opens with each player's Town
+  Hall and `rules.json` `startingWorkers` (5) workers and nothing else (`Pop 5 / 10`). `--skirmish` alone does the same
+  (BUG-0602 item 2: `LaunchOptions.Parse` sets `UnitsPerPlayer` to 0 when `--skirmish` is given without a valid `--units`),
+  so the smoke's second pass is the menu's Start. With 0 units `Match.Start` skips `SpawnArmies` and plans the bases
+  through `StartBase.Plan` with an empty block per player, as `--units 0` always did (the plan stands a one-unit block in
+  for an empty one); the camera starts on the local Town Hall (`Match.StartFocus`). Every other dev run and test keeps
+  `--units`' default of 100. Until the sim's start locations land, the halls stand at those debug spots, either side of
+  the map's centre line; the AI sees no resource node from there, so its workers idle until its scout finds one.
+- **Per-player colours (BUG-0601).** `ui.json` `setup` holds a table of `UiText.ColourCount` (8) colours,
+  `colour_1` .. `colour_8`, each `{ "displayName", "rgb": "#RRGGBB" }` (Iron, Ochre, Crimson, Cobalt, Jade, Violet, Rose,
+  Bone; colours 1 and 2 are the Malazan and Whirlwind palette primaries, so a default match looks as before), plus the
+  column heading `setup.colour`. Each missing key or field, or an `rgb` not `#RRGGBB`, is one load error naming it. The
+  setup shows a colour list per slot (each item a swatch and the name; defaults colour 1 for "You", colour 2 for "AI"),
+  kept over Back and Quit like the other picks; two slots may pick the same colour. Start passes `--colour <slot> <n>`
+  (n 1-based); the flag takes slot 1 or 2 and one digit 1 to 8, and junk (a bad slot or colour, a missing value, a flag
+  as a value) is warned about and ignored (BUG-0041), a repeated flag's last good value winning, as `--faction`.
+  `Match.PlayerColours` builds `PlayerRgb` (slot p's pick, else colour p; players past the table wrap round it; without
+  `ui.json` the seat faction's `PrimaryColor`, as before). It is the one colour source: buildings, ghosts, corpses,
+  shots, zone rims and minimap dots were already bound with it, and units now are too (`UnitViews.Bind(..., playerRgb)`
+  makes one material per player and sets it as a node's `MaterialOverride` when the slot's owner changes; the per-faction
+  mesh material stays for views bound without colours). Every table colour keeps BUG-0431's 0.4 channel gap from the own
+  zone rim, since an enemy zone's rim is its owner's colour.
+- **BUG-0600.** `Minimap` drops its left-press jump-drag (`Minimap.Jumping`) on `NotificationPaused` and
+  `NotificationUnpaused`, as `RtsCamera` and `SelectionController` drop theirs (BUG-0580). The sweep of `game/scripts`
+  for press-to-release state: `RtsCamera._dragging` (middle drag) and `SelectionController._pressing` / `_boxing` were
+  already dropped on pause; `Minimap._jumping` was the last held-button field. Every other `IsActionPressed` /
+  `IsActionReleased` use acts on the event at hand or polls `Input` live (`order_queue`, `select_add`, `group_assign`),
+  so it holds nothing across a pause.
+- **BUG-0602 item 1.** `setup.map_size_item` must format two sizes to different text, so an escaped `{{0}}` (which holds
+  the text `{0}` but names no size) is one load error naming the key.
+- **Tests.** `ShellTest`: the `--skirmish` / `--units` rows, the `--colour` parse and junk rows, the 21 shell keys,
+  each missing `setup.colour_*` key or field and six bad `rgb` values one error, a renamed colour read from the file, no
+  colour name or value as a C# literal, the table's own-rim gap, `{{0}}` refused; the colour lists (names, swatches,
+  defaults), colours 4 and 6 picked and kept over Back and Quit; the menu's match: 0 units, 5 workers and one hall a
+  player, no other unit, the camera on the local hall; both matches drawn in the picks (`PlayerRgb`, unit bodies,
+  building materials, local minimap dots); then a `--skirmish` boot equal to the defaults. `MinimapTest`: a press held
+  into a pause is dropped and a motion after it moves nothing; the dot colours are `PlayerRgb`. `AiSeatTest`: the swapped
+  sides keep colours 1 and 2; the menu match's "AI worker at work by tick 400" is printed as a probe until the sim's start
+  locations land. `QaM6V2Test`'s BUG-0602, mirror-colour and BUG-0600 probes are `Check`s.
 
 ## AI architecture
 

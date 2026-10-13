@@ -21,6 +21,8 @@ public enum SetupText
     Faction,
     /// <summary>The difficulty column's heading.</summary>
     Difficulty,
+    /// <summary>The colour column's heading (M6-V3; the colours themselves are <c>setup.colour_1</c> .. <c>colour_8</c>, <see cref="UiText.ColourName"/>).</summary>
+    Colour,
     /// <summary>The Easy AI difficulty's name (M6-V2; the sim's <c>AiDifficulty</c> has no display name).</summary>
     DifficultyEasy,
     /// <summary>The Normal AI difficulty's name (M6-V2).</summary>
