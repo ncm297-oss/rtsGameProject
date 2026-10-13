@@ -58,6 +58,9 @@ internal sealed class AiRulesJson
     public double? RallyDistance { get; set; }
     public double? RallyReach { get; set; }
     public double? WaveCooldown { get; set; }
+    public double? DefendRadius { get; set; } // M5-4b
+    public double? DefendFor { get; set; }
+    public double? WorkerFleeRadius { get; set; }
 }
 
 internal sealed class StealthJson

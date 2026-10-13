@@ -109,6 +109,7 @@ public sealed class Simulation : ICommandSink
         World.ClearDeaths(); // the last tick's death events have been read by now
         World.ClearImpacts(); // and its projectile landings (M4-2b)
         World.ClearAbilityEvents(); // and its cast starts and resolves (M4-4a)
+        World.ClearDefeatEvents(); // and its defeats (M5-4b)
 
         // M4-3a: the initial fog stamp, before the first tick's commands, so units already in the world (placed before
         // the first tick) are seen from tick 0. The first phase-12 update is tick 1's, the tick the start commands apply in.
@@ -116,10 +117,10 @@ public sealed class Simulation : ICommandSink
 
         // M5-2: the AI seats think, in player order, each on its own interval, reading only their views. Their commands are
         // stamped for the next tick exactly as if sent between ticks (the recorder logs them; playback re-enqueues them
-        // between the same ticks), so nothing they send changes this tick.
+        // between the same ticks), so nothing they send changes this tick. M5-4b: a defeated seat's AI thinks no more.
         if (_aiSeats > 0)
             for (int p = 0; p < _ai.Length; p++)
-                _ai[p]?.Think();
+                if (!World.IsDefeated(p)) _ai[p]?.Think();
 
         // Phase 1: apply commands.
         _commands.Sort();
@@ -176,6 +177,10 @@ public sealed class Simulation : ICommandSink
             CombatSystem.Resolve(World);
         }
 
+        // Phase 11b (M5-4b): the defeat rule, after every phase that can take a building away (a cancel in phase 1, an
+        // ability in phase 6, hits and landings in phase 11). A defeated player's commands are dropped from the next tick on.
+        World.UpdateDefeats();
+
         // Phase 12: fog of war (M4-3a), every 4 ticks (1, 5, 9, ...) for every player.
         VisionSystem.Run(World);
 
@@ -186,6 +191,12 @@ public sealed class Simulation : ICommandSink
         _recorder?.OnTicked();
     }
 
+    /// <summary>
+    /// True once the match has a result (M5-4b): at most one player that ever built is undefeated while at least two ever
+    /// built (<see cref="World.MatchOver"/>), and stays true after (BUG-0672). Reads sim state only; the ticks go on after it (units still fight).
+    /// </summary>
+    public bool MatchOver => World.MatchOver;
+
     /// <summary>Connects the one recorder this sim reports accepted commands and finished ticks to.</summary>
     internal void AttachRecorder(ReplayRecorder recorder)
     {
@@ -193,7 +204,7 @@ public sealed class Simulation : ICommandSink
         _recorder = recorder;
     }
 
-    /// <summary>64-bit FNV-1a hash of all gameplay state: tick, units (Hold, order queues, gather loops and cargo, combat state included), RNG streams, flow-field cache metadata, nav grid versions (and the movement pass's last seen block version), resource nodes, buildings, projectiles in flight (production queues, research items and rally points included), the fog's explored and visible bits and high-ground reveals (M4-3a; visible bits BUG-0215), live zones (M4-4b-2), player totals, researched techs, kills and losses, and pending commands.</summary>
+    /// <summary>64-bit FNV-1a hash of all gameplay state: tick, units (Hold, order queues, gather loops and cargo, combat state included), RNG streams, flow-field cache metadata, nav grid versions (and the movement pass's last seen block version), resource nodes, buildings, projectiles in flight (production queues, research items and rally points included), the fog's explored and visible bits and high-ground reveals (M4-3a; visible bits BUG-0215), live zones (M4-4b-2), player totals, researched techs, kills and losses, the defeat flags (M5-4b), and pending commands.</summary>
     /// <remarks>
     /// Derived state is left out: the spatial hash (rebuilt from the units every tick), the fog's byte map and update versions (M4-3a: copies of its hashed bits),
     /// Speed/Radius (they follow from TypeId), a unit's blind in force (M4-4b-2: from its statuses), the summoned flag and count (M4-4b-3b: from <c>ExpiresAtTick</c>, which is hashed), the stealth counts and detection bits (M4-5: from the statuses, positions and fog bits), and population (M3-4: <see cref="World.HalfPop"/> follows from the live
@@ -284,7 +295,12 @@ public sealed class Simulation : ICommandSink
             bool techs = World.Techs.Any(p);
             // M4-1: likewise bit 33 for a player with kills or losses, followed by the two counts.
             bool deaths = World.Kills[p] != 0 || World.Losses[p] != 0;
-            h.Add((ulong)(uint)World.Gold[p] | (techs ? 1UL << 32 : 0UL) | (deaths ? 1UL << 33 : 0UL));
+            // M5-4b: bit 34 a player that has built but has no live building (with one, having built is implied, so a
+            // match without a defeat hashes as before), bit 35 a defeated player, bit 36 (every player's word) the match
+            // result latched (BUG-0672: it outlives the flags that set it).
+            bool builtNone = World.EverBuilt(p) && World.Ledger.LiveBuildings[p] == 0;
+            h.Add((ulong)(uint)World.Gold[p] | (techs ? 1UL << 32 : 0UL) | (deaths ? 1UL << 33 : 0UL)
+                | (builtNone ? 1UL << 34 : 0UL) | (World.IsDefeated(p) ? 1UL << 35 : 0UL) | (World.MatchOverLatched ? 1UL << 36 : 0UL));
             h.Add(World.Wood[p]);
             if (techs) World.Techs.AddToHash(ref h, p);
             if (deaths)
@@ -429,6 +445,9 @@ public sealed class Simulation : ICommandSink
     {
         // Malformed input (e.g. a NaN ray cast) is dropped, like a spawn into a full store (BUG-0006).
         if (!command.IsValid()) return;
+        // M5-4b: a defeated player's commands, every kind, are dropped here, where they apply, not at Enqueue: the recorder
+        // logs them like any other, and playback drops the same ones, so the hashes match.
+        if (World.IsDefeated(command.Player)) return;
         switch (command.Kind)
         {
             case CommandKind.Noop:

@@ -70,6 +70,9 @@ public static class ConstructionSystem
         if (world.Gold[player] < def.CostGold || world.Wood[player] < def.CostWood) return PlacementError.CannotAfford;
         if (world.Buildings.FreeCount == 0) return PlacementError.StoreFull;
         if (sealLast && !world.Seal.KeepsConnected(x0, y0, def.FootprintWidth, def.FootprintHeight)) return PlacementError.SealsGround;
+        // M5-4b: last, so a defeated player's ghost reads every other reason as before. Its new Builds never get here (the door
+        // drops them); a shift-queued Build applied before the defeat is refused here when it pops, as the query says.
+        if (world.IsDefeated(player)) return PlacementError.Defeated;
         return PlacementError.None;
     }
 

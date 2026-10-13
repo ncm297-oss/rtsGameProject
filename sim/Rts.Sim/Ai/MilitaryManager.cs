@@ -28,7 +28,7 @@ namespace Rts.Sim.Ai;
 /// had an order pending or been ordered for more than <c>ai.waveCooldown</c> (BUG-0598: all crowded by a target none strikes).</item>
 /// </list>
 /// One command per unit per think at most; a full queue ends the think and the rest go next think (the per-slot flags keep
-/// what is owed).
+/// what is owed). M5-4b: while the base is defended (<see cref="DefenseManager"/>) no wave starts and nobody is rallied.
 /// </summary>
 internal static class MilitaryManager
 {
@@ -50,7 +50,7 @@ internal static class MilitaryManager
     {
         if (ai.TryHallPoint(out Vector2 hall)) RallyPoint(ai, hall);
         if (ai.Board.WaveActive) Wave(ai);
-        else TryStart(ai);
+        else if (!ai.Board.Defending) TryStart(ai); // M5-4b: no wave while the base is defended
         Orders(ai);
     }
 
@@ -140,8 +140,8 @@ internal static class MilitaryManager
             if (Member(ai, ai.ArmySlots[k], out _)) board.WaveFlag[ai.ArmySlots[k]] = ToAttack;
     }
 
-    /// <summary>Ends the wave: every live member owes a Move to the rally point.</summary>
-    private static void End(AiPlayer ai)
+    /// <summary>Ends the wave: every live member owes a Move to the rally point (also the defense's, M5-4b).</summary>
+    internal static void End(AiPlayer ai)
     {
         Blackboard board = ai.Board;
         for (int k = 0; k < ai.ArmyCount; k++)
@@ -214,7 +214,8 @@ internal static class MilitaryManager
             {
                 // Not in a wave: an idle unit away from the rally point, not yet sent to this point.
                 bool rallied = board.UnitGeneration[slot] == generation && board.RalliedVersion[slot] == board.RallyVersion;
-                if (board.RallyVersion == 0 || u.State != UnitState.Idle || rallied || Vector2.DistanceSquared(u.Position, board.Rally) <= rallyReach) continue;
+                // M5-4b: nobody is rallied while the base is defended (the defense placed the army).
+                if (board.Defending || board.RallyVersion == 0 || u.State != UnitState.Idle || rallied || Vector2.DistanceSquared(u.Position, board.Rally) <= rallyReach) continue;
                 c = Command.Move(ai.Player, u.Handle, board.Rally);
             }
             if (!ai.Send(c)) return; // queue full: the flags keep the rest for the next think

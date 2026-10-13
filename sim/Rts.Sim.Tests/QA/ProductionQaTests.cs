@@ -126,6 +126,9 @@ public class ProductionQaTests
     {
         (Simulation sim, int bar, int keep) = Base();
         World w = sim.World;
+        // M5-4b (QA 2026-10-13-0916): an idle House site of player 0's (no pop provided) in a far corner, so losing the
+        // Barracks and the Keep doesn't defeat it and the slot-reuse check below can still place a building.
+        Assert.True(w.Buildings.Spawn(0, House, 27 * 40 + 37, out _, site: true));
         Apply(sim, Command.SetRally(0, w.Buildings.Cell[bar], At(sim, 30, 25)));
         for (int n = 0; n < 5; n++) sim.Enqueue(Command.Train(0, In(sim, bar), Infantry));
         Run(sim, 12);

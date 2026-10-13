@@ -344,6 +344,15 @@ public class DataValidationTests
     [InlineData("waveCooldown", null, "ai.waveCooldown", "missing required field")]
     [InlineData("waveCooldown", "-0.5", "ai.waveCooldown", "must not be negative")]
     [InlineData("waveCooldown", "3600.5", "ai.waveCooldown", "above the maximum 3600 s")]
+    [InlineData("defendRadius", null, "ai.defendRadius", "missing required field")] // M5-4b's knobs
+    [InlineData("defendRadius", "7.5", "ai.defendRadius", "outside 8-256 m")]
+    [InlineData("defendRadius", "256.5", "ai.defendRadius", "outside 8-256 m")]
+    [InlineData("defendFor", null, "ai.defendFor", "missing required field")]
+    [InlineData("defendFor", "-1", "ai.defendFor", "must not be negative")]
+    [InlineData("defendFor", "600.5", "ai.defendFor", "above the maximum 600 s")]
+    [InlineData("workerFleeRadius", null, "ai.workerFleeRadius", "missing required field")]
+    [InlineData("workerFleeRadius", "0.5", "ai.workerFleeRadius", "outside 1-64 m")]
+    [InlineData("workerFleeRadius", "64.5", "ai.workerFleeRadius", "outside 1-64 m")]
     public void AiRulesBlock_MissingOrOutOfRange_IsOneError(string? field, string? value, string path, string message)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
@@ -392,6 +401,25 @@ public class DataValidationTests
         Assert.Equal(20, a.ExpandReachCells); // 40 m
         Assert.Equal((300, 40f, 6f, 12f, 6f, 1200), (a.ScoutAfterTicks, a.ScoutRadius, a.ScoutReach, a.RallyDistance, a.RallyReach, a.WaveCooldownTicks)); // M5-3: 15 s, 60 s
         Assert.Equal(56f, a.ScoutGrid); // BUG-0593: meters
+        Assert.Equal((48f, 400, 16f), (a.DefendRadius, a.DefendForTicks, a.WorkerFleeRadius)); // M5-4b: meters, 20 s
+    }
+
+    /// <summary>M5-4b: the defense knobs load at their edges (<c>defendFor</c> 0 and 600 s, <c>defendRadius</c> 8 and 256 m, <c>workerFleeRadius</c> 1 and 64 m).</summary>
+    [Theory]
+    [InlineData("defendFor", 0, 0)]
+    [InlineData("defendFor", 600, 12000)]
+    [InlineData("defendRadius", 8, 8)]
+    [InlineData("defendRadius", 256, 256)]
+    [InlineData("workerFleeRadius", 1, 1)]
+    [InlineData("workerFleeRadius", 64, 64)]
+    public void AiDefenseKnobs_AtTheirEdges_Load(string knob, double value, double loaded)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("common/rules.json", r => r["ai"]![knob] = value);
+        DataLoadResult load = DataLoader.LoadAll(dir.Path);
+        Assert.True(load.Ok, string.Join("; ", load.Errors));
+        AiRulesDef a = load.Data!.AiRules;
+        Assert.Equal(loaded, knob switch { "defendFor" => a.DefendForTicks, "defendRadius" => a.DefendRadius, _ => a.WorkerFleeRadius });
     }
 
     /// <summary>M5-3 (inverted): the AI tunables are in the content hash, with ai.json (a row per field: DataContentHashTests).</summary>

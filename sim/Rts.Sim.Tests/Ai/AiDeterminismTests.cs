@@ -7,20 +7,22 @@ namespace Rts.Sim.Tests;
 /// M5-2 criterion 4: a match with AI seats is deterministic. Two runs of a generated-map match with two AI seats (Hard and
 /// Easy, both factions, combat on), 3 seeds x 2,000 ticks, have equal state hashes after every tick, and their AIs sent the
 /// same number of commands. M5-3: with the test's early-wave data (<see cref="AiScenes.EarlyWaves"/>) and six raiders each in
-/// the other's base (<see cref="AiScenes.Generated"/>), the two seats wave, fight and retreat within the run. The AI's own state is not hashed: what it sends is, through the command queue and its effects.
+/// the other's base (<see cref="AiScenes.Generated"/>), the two seats waved, fought and retreated within the run; since M5-4b
+/// they defend their bases against those raiders instead (no wave starts while a threat holds), and a run without raiders
+/// covers the waves. The AI's own state is not hashed: what it sends is, through the command queue and its effects.
 /// </summary>
 public class AiDeterminismTests
 {
-    [Theory]
-    [InlineData(1UL)]
-    [InlineData(7UL)]
-    [InlineData(12UL)]
-    public void TwoAiSeats_TwoRuns_SameHashEveryTick(ulong seed)
+    /// <summary>
+    /// The two runs, <paramref name="ticks"/> long: equal hashes after every tick, the same commands and thinks; each seat
+    /// waved (<paramref name="waves"/>) or defended its base (<paramref name="defends"/>), the same in both runs.
+    /// </summary>
+    private static void TwoRuns(ulong seed, int raiders, int ticks, bool waves, bool defends)
     {
         PlayerSeat[] seats = { new(0, SeatController.Ai, AiDifficulty.Hard), new(1, SeatController.Ai, AiDifficulty.Easy) };
-        Simulation a = AiScenes.Generated(seats, seed, record: false, out _, data: s_early.Value, raiders: 6);
-        Simulation b = AiScenes.Generated(seats, seed, record: false, out _, data: s_early.Value, raiders: 6);
-        for (int t = 0; t < 2000; t++)
+        Simulation a = AiScenes.Generated(seats, seed, record: false, out _, data: s_early.Value, raiders: raiders);
+        Simulation b = AiScenes.Generated(seats, seed, record: false, out _, data: s_early.Value, raiders: raiders);
+        for (int t = 0; t < ticks; t++)
         {
             a.Tick();
             b.Tick();
@@ -31,10 +33,30 @@ public class AiDeterminismTests
             Assert.True(a.AiOf(p)!.CommandsSent > 0, $"seed {seed}: AI {p} sent nothing");
             Assert.Equal(a.AiOf(p)!.CommandsSent, b.AiOf(p)!.CommandsSent);
             Assert.Equal(a.AiOf(p)!.Thinks, b.AiOf(p)!.Thinks);
-            Assert.True(a.AiOf(p)!.Board.WavesStarted > 0, $"seed {seed}: AI {p} never attacked");
+            if (waves) Assert.True(a.AiOf(p)!.Board.WavesStarted > 0, $"seed {seed}: AI {p} never attacked");
             Assert.Equal(a.AiOf(p)!.Board.WavesStarted, b.AiOf(p)!.Board.WavesStarted);
+            if (defends) Assert.True(a.AiOf(p)!.Board.Defenses > 0, $"seed {seed}: AI {p} never defended");
+            Assert.Equal(a.AiOf(p)!.Board.Defenses, b.AiOf(p)!.Board.Defenses);
+            Assert.Equal(a.AiOf(p)!.Board.DefenseVersion, b.AiOf(p)!.Board.DefenseVersion);
         }
     }
+
+    /// <summary>
+    /// M5-4b: a defended base. Six raiders of each seat start in the other's base, so both seats defend from their first
+    /// think: the army is pulled home, the workers flee, no wave starts while the raiders stand there (since M5-4b no wave is
+    /// expected here: before it, these runs waved).
+    /// </summary>
+    [Theory]
+    [InlineData(1UL)]
+    [InlineData(7UL)]
+    [InlineData(12UL)]
+    public void TwoAiSeats_DefendedBases_TwoRuns_SameHashEveryTick(ulong seed) => TwoRuns(seed, raiders: 6, ticks: 2000, waves: false, defends: true);
+
+    /// <summary>M5-3's waves without raiders: both seats build an army and attack within 6,000 ticks; the waves reach the other base, which defends.</summary>
+    [Theory]
+    [InlineData(1UL)]
+    [InlineData(7UL)]
+    public void TwoAiSeats_Waves_TwoRuns_SameHashEveryTick(ulong seed) => TwoRuns(seed, raiders: 0, ticks: 6000, waves: true, defends: false);
 
     private static readonly Lazy<GameData> s_early = new(() => AiScenes.EarlyWaves());
 

@@ -368,4 +368,91 @@ public class CommandDoorFuzzStressTests
         // M3-H2: every defined kind, 0 to 16 (M4-2a: Attack), went through the door accepted.
         Assert.True(perKind.All(n => n > 0), "accepted per kind: " + string.Join(", ", perKind));
     }
+
+    /// <summary>
+    /// M5-4b: a random player is defeated mid-run (its buildings and workers taken away between ticks, so nothing of it can
+    /// stand again) while both players' random commands keep coming. Every later command of the defeated player, of any kind,
+    /// is dropped where it applies: the run hashes equal, after every tick, to a twin fed the same stream with a Noop of
+    /// that player in place of each of them (a command never sent would differ by the player's hashed sequence counter
+    /// alone). The defeated player's other units stay.
+    /// </summary>
+    [Theory]
+    [InlineData(1UL)]
+    [InlineData(2UL)]
+    [InlineData(3UL)]
+    [InlineData(4UL)]
+    public void ADefeatedPlayersLaterCommands_AreAllDropped_HashEqualToTheFilteredStream(ulong seed)
+    {
+        const int ticks = 1200, unitCapacity = 64, commandCapacity = 40;
+        SimConfig config = TestSim.Config(Seed: seed, PlayerCount: Players, UnitCapacity: unitCapacity, CommandCapacity: commandCapacity)
+            with { Map = MapGenParams.Default with { Forests = 6, GoldMines = 4 } };
+        var a = new Simulation(config);
+        var b = new Simulation(config);
+        NavGrid g = a.World.NavGrid;
+        var open = new List<Vector2>();
+        for (int c = 0; c < g.Width * g.Height; c += 7)
+            if (g.IsPassable(c % g.Width, c / g.Width)) open.Add(g.CellCenter(c % g.Width, c / g.Width));
+        var nodes = new List<Vector2>();
+        for (int n = 0; n < a.World.Resources.Capacity; n++)
+            if (a.World.Resources.Alive[n]) nodes.Add(g.CellCenter(a.World.Resources.Cell[n] % g.Width, a.World.Resources.Cell[n] / g.Width));
+        var rng = new SimRng(seed, 4242);
+        int loser = rng.NextInt(0, Players), defeatAt = rng.NextInt(300, 700), dropped = 0, kept = 0;
+        // Each player builds first: a building of its own, through the door (the house of its faction), on both twins.
+        for (int p = 0; p < Players; p++)
+        {
+            int house = Rts.Sim.ViewApi.StartBase.BuildingOfSlot(TestSim.Data, a.World.FactionOf(p), BuildingSlot.House);
+            Command spawn = Command.SpawnBuilding(p, house, open[(p + 1) * open.Count / 3]);
+            a.Enqueue(spawn);
+            b.Enqueue(spawn);
+        }
+        for (int t = 0; t < ticks; t++)
+        {
+            if (t == defeatAt)
+            {
+                // Between ticks: the loser's buildings and workers go, on both twins alike (test seams).
+                foreach (Simulation s in new[] { a, b })
+                {
+                    World w = s.World;
+                    for (int k = 0; k < w.Buildings.Capacity; k++)
+                        if (w.Buildings.Alive[k] && w.Buildings.Owner[k] == loser) w.Buildings.Free(w.Buildings.HandleOf(k));
+                    for (int i = 0; i < w.Units.Capacity; i++)
+                        if (w.Units.Alive[i] && w.Units.Owner[i] == loser && w.Data.Units[w.Units.TypeId[i]].Slot == UnitSlot.Worker)
+                            w.Units.Free(new EntityHandle(i, w.Units.Generation[i]));
+                }
+            }
+            bool gone = a.World.IsDefeated(loser);
+            Assert.Equal(gone, b.World.IsDefeated(loser));
+            // The tick of the defeat itself takes no commands: one applying with it could place a building again.
+            int n = t == defeatAt ? 0 : rng.NextInt(0, 2) == 0 ? rng.NextInt(0, 6) : rng.NextInt(0, 20);
+            for (int k = 0; k < n; k++)
+            {
+                Command c = RandomCommand(ref rng, a, open, nodes);
+                bool loserBeforeDefeat = t > defeatAt && !gone && c.Player == loser; // between the seam and the defeat
+                if ((uint)c.Player >= Players || !OracleWellFormed((int)c.Kind, c.Flags, c.Target != default || c.TargetIsBuilding)
+                    || a.PendingCommandCount >= commandCapacity || loserBeforeDefeat) continue;
+                a.Enqueue(c);
+                if (gone && c.Player == loser)
+                {
+                    b.Enqueue(Command.Noop(loser));
+                    dropped++;
+                }
+                else
+                {
+                    b.Enqueue(c);
+                    kept++;
+                }
+            }
+            a.Tick();
+            b.Tick();
+            if (a.PendingCommandCount == 0)
+                Assert.True(a.StateHash() == b.StateHash(), $"seed {seed}: the twins differ after tick {a.TickNumber} (player {loser} defeated: {gone})");
+        }
+        Assert.True(a.World.IsDefeated(loser), $"seed {seed}: player {loser} was never defeated");
+        Assert.False(a.World.IsDefeated(1 - loser));
+        int left = 0;
+        for (int i = 0; i < a.World.Units.Capacity; i++)
+            if (a.World.Units.Alive[i] && a.World.Units.Owner[i] == loser) left++;
+        _out.WriteLine($"seed {seed}: player {loser} defeated at about tick {defeatAt}; {dropped} of its commands dropped, {kept} applied; {left} of its units left");
+        Assert.True(dropped > 100, $"seed {seed}: only {dropped} commands of the defeated player were sent");
+    }
 }

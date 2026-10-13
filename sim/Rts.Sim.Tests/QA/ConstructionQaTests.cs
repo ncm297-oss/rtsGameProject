@@ -342,6 +342,9 @@ public class ConstructionQaTests
     public void CancelRebuildLoop_ConservesResourcesExactly()
     {
         Simulation sim = BuildMaps.NewSim(Flat(64, 24));
+        // M5-4b (QA 2026-10-13-0916): an idle site of player 0's far off, so cancelling its only building never defeats it
+        // (a defeated player's commands are dropped, docs/02 "Game flow" 4); the loop's intent is the cancel/refund ledger.
+        Assert.True(sim.World.Buildings.Spawn(0, House, 21 * 64 + 60, out _, site: true));
         SetTotals(sim, 0, 5000, 5000);
         EntityHandle[] ws = Enumerable.Range(0, 3).Select(i => Unit(sim, At(sim, 4 + i, 4))).ToArray();
         BuildingStore b = sim.World.Buildings;
@@ -400,12 +403,16 @@ public class ConstructionQaTests
     public void BuildThenCancelInOneTick_RefundsAll_CancelBeforeBuild_IsDropped()
     {
         Simulation sim = BuildMaps.NewSim(Flat(30, 20));
+        // M5-4b (QA 2026-10-13-0916): an idle site of player 0's in a far corner, so the cancel of its only other building
+        // doesn't defeat it (its rebuild would be dropped at the command door); counted as extra below.
+        Assert.True(sim.World.Buildings.Spawn(0, House, 17 * 30 + 26, out _, site: true));
+        const int extra = 1;
         SetTotals(sim, 0, 1000, 1000);
         EntityHandle w = Unit(sim, At(sim, 4, 4));
         sim.Enqueue(Command.Build(0, w, Keep, At(sim, 10, 10)));
         sim.Enqueue(Command.Cancel(0, At(sim, 11, 11)));
         Run(sim, 2);
-        Assert.Equal(0, sim.World.Buildings.Count);
+        Assert.Equal(extra, sim.World.Buildings.Count);
         Assert.Equal((1000, 1000), (sim.World.Gold[0], sim.World.Wood[0]));
         Assert.Equal(UnitState.Idle, sim.World.Units.State[w.Index]);
         Assert.Equal(default, sim.World.Units.BuildTarget[w.Index]);
@@ -413,7 +420,7 @@ public class ConstructionQaTests
         sim.Enqueue(Command.Cancel(0, At(sim, 11, 11)));
         sim.Enqueue(Command.Build(0, w, Keep, At(sim, 10, 10)));
         Run(sim, 2);
-        Assert.Equal(1, sim.World.Buildings.Count);
+        Assert.Equal(extra + 1, sim.World.Buildings.Count);
         Assert.Equal((725, 725), (sim.World.Gold[0], sim.World.Wood[0]));
     }
 

@@ -4,41 +4,40 @@ The dashboard. The Producer rewrites it at the end of every session. **Owner: re
 you" first.** "For your review" (further down) is non-blocking: what the studio built or decided
 on its own, explained in terms of what you'd see in the game.
 
-_Last updated: 2026-10-13 morning (session 2026-10-13-0527, all three tracks accepted): **a clean-up session on every track: twelve sim bugs and six view bugs closed, nothing in the game's numbers changed.** The sim's M5-H1 (the AI finishes every house it starts and no longer freezes a wave by a target it can't reach; both bases start on the same level at least half a map apart; unusual map settings are refused instead of crashing; two movement fixes: a spell-caster's walk is no longer held by a friend standing beside it, and an ordered attack on a reachable building is never dropped), the view's M6-VH1 (the "AI gathers from the menu" and "every base sees a mine" probes are now hard checks; two colours retuned so every corpse is readable; colours unique per match; the sandbox flake fixed) and the data's D16 (the three difficulty settings tabled on both faction pages and pinned to the design doc) land together. One thing is red on `main`: two view test scenes (BUG-0661, since the start locations landed; test-side, fixed first next session). **Wanted from you: the same four reviews (D13, D14, D11 / D12, D15), the colour names, and now the two retuned colours under For your review.** Correction at the 2026-10-13-0916 PLAN: session 0527 died during the data track's integration, so **D16 is accepted but not yet on `main`** (its branch `studio/2026-10-13-0527-data` holds it, verified by the Producer); the conductor finishes that integration in session 0916 (merge `main` again, build + test, push) while the sim builds the defeat rule and the view fixes BUG-0661 and starts the settings screen._
+_Last updated: 2026-10-13 midday (session 2026-10-13-0916, sim and view accepted; data had no task): **the match can now be lost, and the AI defends its base.** The sim's M5-4b: a player whose last building falls (or is cancelled) is defeated, its orders are ignored from then on, its AI goes quiet, and the match is over once only one side still stands; the AI now answers an attack on its base: it pulls its army home, calls off its own attack wave, and sends its workers to safety, then gets back to work. The view's M6-V6: a **Settings screen** (from the main menu and the pause menu: resolution, window mode, VSync, graphics quality, three volumes, edge-pan speed; saved between runs), plus the two test scenes that were red on `main` since the start locations (BUG-0661) fixed. D16 turned out to be on `main` already (pushed between the PLAN and the session's base). Red on `main` after this session: two view test scenes, both small and test-side (BUG-0674: an old test expects a defeated player to rebuild; BUG-0680: QA's new settings test fails on purpose until a 20-digit number in the settings file stops logging an engine error); the view fixes both first next session. **Wanted from you: the same four reviews (D13, D14, D11 / D12, D15), the colour names and values, and now a play of the defense (For your review, M5-4b).**_
 
 ## Waiting on you
 
-- **Nothing blocking.** M5 1 / 6 (criteria 2-3 advanced, criterion 4's data pins in), M6 criterion 1 advanced; counters sim 0 / 4, view
-  0 / 4, data 1 / 4 (sim M5-H1 and view M6-VH1 on `main`; **data D16 accepted, landing in session 0916** after the 0527 integration
-  died at the data step; golden `data-hash` 8409DB7517579FEF, `k` lines equal). No open S1. **One open S2: BUG-0661** (two view test
-  scenes red on `main` since M5-4a; test staging, not the game; the view's first item in session 0916).
+- **Nothing blocking.** M5 1 / 6 (criteria 2, 3, 5 advanced), M6 criteria 1, 2, 4 advanced; counters sim 1 / 4, view 1 / 4, data 1 / 4;
+  golden `data-hash` **72EF431E70C49C39**. **No open S1 / S2.** Two view scenes red on `main` (BUG-0674 / 0680 S3, the view's first item).
 - **Wanted, not blocking:** (1) **D13's choice** (×1.1 vs ×1.5 vs an hp / armor / cost pass); (2) **D14's build orders**; (3) the
-  **D11 / D12 text tables**; (4) **D15's house-rule choice**; (5) **the eight colour names and the two retuned values** (Crimson, Jade:
-  M6-VH1 entry); (6) play: **Skirmish vs the AI** (`& $env:GODOT --path game`, Skirmish, pick a colour, "The Whirlwind" + Hard, Start:
-  a hall and five workers each, the AI's base opposite yours on the same level now); (7) housekeeping: 20+ agents' scratch worktrees
-  in `git worktree list` (this ACCEPT's scratch merge was removed by the Producer): delete the folders, then
-  `git worktree prune`.
+  **D11 / D12 text tables**; (4) **D15's house-rule choice**; (5) **the eight colour names and values** (M6-VH1 entry); (6) play:
+  **raid the AI's base** ("The Whirlwind" + Hard: its army comes home, its workers run; lose every building of yours and you are out:
+  M5-4b entry); (7) try **Settings** from the menu and from Esc in a match (M6-V6 entry); (8) housekeeping: 20+ scratch worktrees in
+  `git worktree list` (incl. the Producer's `producer-0916-merge`, which the permission system wouldn't let it remove): delete the
+  folders, then `git worktree prune`; (9) **the PC was slow all afternoon** (timing benchmarks 34 / 173 red on untouched code, CPU idle
+  at its 2.1 GHz base clock; 170 / 173 in the morning): power plan / battery / thermals worth a look before the next session.
 - **Before M6 (the owner's downloads; docs/04):** the fonts (Cinzel, EB Garamond), music, the Godot 4.7.2 .NET export templates.
 
 ## Now
 
 | Field | Value |
 | --- | --- |
-| Sim: milestone | **M5 AI opponent, 1 / 6 criteria; criteria 2 and 3 advanced; criterion 4's data pins in (D16)** (M5-H1 on `main`: BUG-0598 / 0640 / 0620 / 0621 / 0511 / 0512 fixed + six S4 items; left for M5-4b: Requests 37 (defeat), defense, the ability manager, the difficulty knobs, expansion, rebuilding, high-ground scouting). docs/03 "Implementation (M5-3)" / "(M5-4a)" carry the M5-H1 lines. Golden format 6, `data-hash` **8409DB7517579FEF**, `k` lines unchanged |
-| Sim: next task | **In session 0916: M5-4b slice 1** · feature (counter 0 / 4 → 1 / 4) · QA full: **Requests 37** (`World.IsDefeated` / `DefeatEvents` / `Simulation.MatchOver`, hashed; a defeated player's commands dropped at the door; the AI of a defeated seat silent) **+ the AI's defense** (the army pulled home when own buildings take damage, workers flee to the hall; knobs in `rules.json` `ai`). Brief in `studio/handoff.md` |
+| Sim: milestone | **M5 AI opponent, 1 / 6 criteria; criteria 2, 3 and 5 advanced; criterion 4's data pins in** (M5-4b on `main`: the defeat rule (`World.IsDefeated` / `DefeatEvents` / `Simulation.MatchOver`, hashed, latched; the door drops a defeated player's commands; its AI silent) + the AI's defense (`DefenseManager`; `rules.json` `ai` `defendRadius` 48 / `defendFor` 20 / `workerFleeRadius` 16); left for M5-4c: the ability manager, the difficulty knobs, expansion, rebuilding, high-ground scouting; M5-5 the 20-minute winner test). docs/03 "Implementation (M5-4b)". Golden format 6, `data-hash` **72EF431E70C49C39** (header moved once in M5-4b), `k` lines unchanged |
+| Sim: next task | **M5-4c slice 1** · feature (counter 1 / 4 → 2 / 4) · QA full: the **ability manager** (the AI casts its faction's abilities through `UseAbility`; `useAbilities` per difficulty) and the **difficulty knobs** (`gatherBonus`, `focusFire`, `pullBackWounded` read and applied: criteria 2 and 4); expansion / rebuilding / high-ground scouting as M5-4d; BUG-0675 c's docs line if touched. Brief at the next PLAN in `studio/handoff.md` |
 | Sim: gate | **GO** |
-| View: milestone | **M4 views Done**; M5-V1, M6-V1, M6-V2, M6-V3 and **M6-VH1 on `main`** (the start-location probes are Checks, BUG-0604 / 0632 / 0631 / 0603 / 0660 fixed, colours unique per match, Crimson / Jade retuned). M6 criterion 1 waits on 2-4 slots and team. **Red on `main`: BUG-0661 (S2), `QaH2Test` + `QaM27Test`** (pre-existing since M5-4a; `FogViewTest` / `QaV3Test` turned green with this integration) |
-| View: next task | **In session 0916: BUG-0661 first** (re-derive the two scenes' march thresholds on `main`, no loosening), BUG-0662 if a few lines, then **M6-V6, the settings screen** (criterion 4 minus keybinds: resolution, window mode, VSync, quality, three volumes, edge-pan speed; saved to `user://settings.cfg`, applied at boot) · feature (counter 0 / 4 → 1 / 4) · QA standard. M6-V4 (victory / defeat + stats) is next session, once the sim's defeat rule is on `main`. Brief in `studio/handoff.md` |
+| View: milestone | **M4 views Done**; M5-V1, M6-V1, M6-V2, M6-V3, M6-VH1 and **M6-V6 on `main`** (the settings screen: `GameSettings` / `SettingsApplier` / `SettingsScreen`, `user://settings.cfg`, Music / Sfx buses; BUG-0661 / 0662 / 0682 / 0683 fixed). M6 criterion 1 waits on 2-4 slots and team; criterion 2 on M6-V4; criterion 4 on keybinds. **Red on `main`: `AiSeatTest` (BUG-0674 S3, a stale oracle after the defeat rule) and `QaM6V6Test` (BUG-0680 S3, QA's row fails until the fix)** |
+| View: next task | **BUG-0674 + BUG-0680 first** (the loop green again: the AiSeatTest row keeps a second building or expects the drop; the settings reader's shape check caps digit runs), BUG-0681 if a few lines, then **M6-V4, victory / defeat on screen + the post-match stats** (criterion 2: a banner from `World.DefeatEvents` / `Simulation.MatchOver`, the "Match over:" dev line retired, stats from `Kills` / `Losses` and the ledger) · feature (counter 1 / 4 → 2 / 4) · QA standard. Brief at the next PLAN |
 | View: gate | **GO** |
-| Data: milestone | M3 Done (D1-D4); D5-D8, D-H1-H4, D10a-c, D11-D15 on `main`; **D16 accepted in session 0527, not yet on `main`** (the integration died at the data step; branch `studio/2026-10-13-0527-data` @ 16c6da7 = D16 + `main` a8ebff7 merged, verified by the Producer at the 0916 PLAN: both pages' "Difficulty" tables, `AiContentTests` J-K, QA's 48 file-side rows, docs/02 Easy "doesn't use abilities", BUG-0641 fixed; no data / golden change). Golden `data-hash` **8409DB7517579FEF**. Counter **1 / 4** |
-| Data: next task | **Session 0916: no new task; the conductor lands D16** (merge `main` into the resumed branch, build + `Content` slice + non-Perf, push). **Next session: inbox answers first**, else **D17** (docs/02's Normal line stated outright, "doesn't focus fire or pull back wounded", as a Producer default + a K row; plus any `ai.json` field the sim's M5-4b adds, none planned: the defense knobs go to `rules.json`). The Teblor's `ai.json` is **not** pulled ahead of M7 (Producer decision at the 0916 PLAN: a faction folder needs a whole roster, surfaces in the setup menu and moves the golden; the Giant armor class, regeneration and multi-spawn schemas are M7 sim work) · QA light |
-| Data: gate | **GO** (the D16 landing this session; D17 next) |
+| Data: milestone | M3 Done (D1-D4); D5-D8, D-H1-H4, D10a-c, D11-D16 on `main` (D16 reached `origin/main` as 16c6da7 before session 0916's base dde71a4; verified at the 0916 ACCEPT: both pages' "Difficulty" tables, `AiContentTests` J-K, QA's 48 file-side rows). Golden `data-hash` **72EF431E70C49C39** (moved by the sim's M5-4b knobs, no data change). Counter **1 / 4** |
+| Data: next task | **Inbox answers first**, else **D17** (docs/02's Normal line stated outright, "doesn't focus fire or pull back wounded", as a Producer default + a K row; optionally the faction pages' "Defense" lines checked against M5-4b's rule (workers flee to the nearest drop-off away from the threat, not only the Keep)). No `ai.json` field was added by M5-4b (the knobs are in `rules.json`, sim-owned); the Teblor's `ai.json` stays with M7 (Producer decision, 0916 PLAN) · QA light |
+| Data: gate | **GO** (D17, or inbox tweaks) |
 | Tools on this PC | Godot 4.7.2 .NET, .NET SDK 8.0.425, Git 2.53 + LFS 3.7; `GODOT` user variable set |
-| Build | **0916 PLAN check on `main` a8ebff7: build 0 warnings, non-Perf 6,025 / 10 skipped / 0 failed (30 m 13 s).** Session 0527's integration (sim e1e34c3 → view d2712e9 on `main`; data 520a4d8 landing in 0916): Sim branch: 0 warnings, QA non-Perf 6,014 / 8 skipped / 0 failed (worktree and a clean clone), Perf alone 170 / 3 / 0 (`TightBlob2500` 4.47 / 4.51 ms of 4.6), smoke PASS, golden + `data-hash` rows twice from the clean clone (no golden file in the diff). View branch: 0 warnings, QA non-Perf 5,996 / 14 / 0 twice beside the Godot runs, Perf alone 169 / 3 / 0, smoke PASS both passes, scene loop 42 / 46 (BUG-0661, pre-existing on the base). Data branch: 0 warnings, QA non-Perf 6,112 / 14 / 0, Perf alone 169 / 3 / 0. **Producer:** sim branch build 0 warnings, non-Perf **6,025 / 10 skipped / 0 failed (29 m 37 s, beside the other builds and the Godot runs; QA's 8 new rows included)**; view branch build 0 warnings, smoke **PASS (both passes, `seats malazan human, whirlwind ai normal`)**; data branch build 0 warnings, `Content` slice **933 / 0 / 0 (9 s)**; **scratch merge of all three** (sim → view → data; conflicts: docs/01, `bugs/README.md`, `qa/coverage.md`, `bugs/BUG-0541-*.md`, unions only): build **0 warnings**, `Content` slice **933 / 0 / 0**, scenes `FogViewTest` **PASS**, `QaV3Test` **PASS** (both FAIL on the base), `QaH2Test` **FAIL (19.3 m / 11.3 m)**, `QaM27Test` **FAIL (19.3 m)** (BUG-0661's remainder), `AiSeatTest` **PASS**, `QaM6V3Test` **PASS**, `QaVh1Test` **PASS** |
-| Tests | Producer: all three diffs read (the sim's `Blackboard` site / wave fields, `EconomyManager.Sites` / `Stalled` / `Rebalance`, `MilitaryManager.WaveBusyTick`, `PlayerView.TryGetBuildTarget` / `UnitAt`, `CombatSystem.ReachableOnFoot` / `ChaseCell`, `MapGenParams.Validate`, `MapGenerator.Apart` / `SameLevel` / `Fits`, `ResourcePlacer` whole rounds, `MovementSystem.OwnFighterAhead` + `CastCorridorSlack`, docs/01 + docs/03, the un-skipped QA rows; the view's `SkirmishSetup.PickColour` / `GreyTakenColours`, `LaunchOptions` duplicate rule + `FirstFreeColour`, `GroundDiscPool.Reclaim`, `CombatViews.Bind` / `SlotMaxHp.Capacity`, `UiText`'s `#`, `ui.json`, the four test scenes' diffs, docs/01 / 02 / 03; the data's two pages, docs/02 line, docs/01 row, `AiContentTests` J-K, the report test); the scratch merge built and run. QA: sim fenced-hall waves (2 / 10 HI, a 2-tower variant), 30-minute killed-builder rows on both factions, a 2,464-set `Validate` × `Generate` sweep, the start survey 1-100 × 3 sizes + 3-4 locations × 1-30, 500 / 1,000-unit ordered attacks at 0 B, the golden twice from a clean clone; view 64 ordered colour pairs through `Match`, 800 `--colour` streams, 400 setup picks, 18 menu openings ticked to 500, `CombatViewTest` × 8 colours, `M4PlayableTest` seed 6 × 10 under load, the BUG-0603 replay probe; data 48 page-cell edits + 48 file-side edits each failing by name, 15 docs/02 mutations |
-| Open bugs | **S1: 0, S2: 1 (BUG-0661, view scenes, pre-existing)**, S3: 13, S4: 12 (the merged index). **New open:** sim BUG-0651 (S3: at 2x the crowd one of 1,000 attackers gives up a reachable building), BUG-0650 (S4: the site resume path never gives up on an unreachable hand-spawned site); view BUG-0661 (S2), BUG-0662 (S3: the disc pool's reclaim moves stable discs, extra mesh rebuilds), BUG-0663 (S4: a warning's wording). **Closed this session:** sim BUG-0598 / 0640 / 0620 / 0621 / 0511 / 0512 (S3), 0513 / 0542 / 0573 / 0594 / 0541 (S4); view BUG-0604 / 0632 / 0603 / 0660 (S3), 0631 (S4); data BUG-0641 (S4). Part-fixed, still open: BUG-0622 (item 1), BUG-0550 (item 2), BUG-0521 (item 2) |
-| Sessions today | **2026-10-13: 3 / 8** (0146, 0527 done; **0916 in progress**: sim M5-4b, view BUG-0661 + M6-V6, data = the D16 landing). Counters before it: **sim 0 / 4, view 0 / 4, data 1 / 4** |
-| Last session | 2026-10-13-0527 · sim M5-H1 (hardening, 0 fix rounds, ACCEPT, merged) · view M6-VH1 (hardening, 0 fix rounds, ACCEPT, merged) · data D16 (feature, 0 fix rounds, ACCEPT, merged) · M5 1 / 6 (criterion 4's pins in); 18 bugs closed; golden untouched |
+| Build | **0916 ACCEPT (Producer):** sim branch f13a0cd build 0 warnings, **non-Perf 6,218 / 10 skipped / 0 failed (35 m 40 s)**, Perf alone 15 / 173 timing rows red **vs 34 / 173 on the untouched base dde71a4 minutes later on the same idle machine** (the PC ran at its 2.1 GHz base clock all afternoon; `AiPerfTests` green; ruled environmental, re-run first thing next sim session); view branch 636812e build 0 warnings, smoke **PASS** both passes. **Scratch merge sim + view** (docs/01 + coverage unions): build 0 warnings, smoke PASS, `SettingsTest` / `ShellTest` / `QaH2Test` / `QaM27Test` / `QaH1Test` / `ProductionHudTest` **PASS**, `AiSeatTest` **FAIL** (BUG-0674), `QaM6V6Test` **FAIL** (BUG-0680, on purpose), the MatchOver / Defense / Defeat / golden / content slices 1,158 / 0. QA: sim non-Perf 6,210 / 1 / 10 at 2a3da00 (its own since-rewritten row), smoke PASS, clean clone 338 targeted rows green; view sim non-Perf 6,141 / 0 / 10, Perf alone 167 / 3 (contention, no `sim/` change), smoke PASS both passes, loop 47 / 48 → 48 / 48 after BUG-0682, `M4PlayableTest` 1 / 6 PASS |
+| Tests | Producer: both diffs read (the sim's `World.Defeat.cs` / `DefeatEvent` / `PlayerLedger` flags / `BuildingStore` counts / `Simulation` door + phase 11b + hash bits 34-36 + `MatchOver`, `Ai/DefenseManager` whole, the census split in `AiPlayer`, `Blackboard` fields, the `EconomyManager` / `MilitaryManager` guards, `AiRulesDef` / loader / limits / `GameData` hash, `PlacementError.Defeated` + `ConstructionSystem`, `rules.json`, `ui.json`, the golden header, `ViewApi/MatchOverTests`, docs/01 + docs/03; the view's `GameSettings` / `SettingsApplier` / `Main` boot order + `CommitSettings` / `RtsCamera.PanVector` / `Sfx` bus / `GroundDiscPool.Reclaim(key)` / `BenchMarch` / the three re-derived scenes / `ui.json` / bus layout / docs/01 / 02 / 03); the scratch merge built and run. QA: sim 18 kinds × the door vs a Noop twin, exact-tick cancels, 3-4 seats mixed defeats with playback, 4 AI seats with weak halls 6,000 ticks, radius edges 47 / 48 / 49 m, a flickering threat, the knob edges, a fleeing worker's cargo, 8 Hard seats under attack 0.169 ms / 0 B, the deadlock stress seeds 1 / 6 / 11; view 10 settings-file attacks in-process + child boots, a read-only file, volume 0 under `--mute`, edge pan measured 18.9 / 37.7 / 73.0 m/s, the window-mode cycle under a match with screenshots, QaH2 / QaM27 10 / 10 under load |
+| Open bugs | **S1: 0, S2: 0**, S3: 15, S4: 13 (the merged index). **New open:** sim BUG-0675 (S4: a `defendRadius` covering the map = an AI that only defends; a docs line), BUG-0674 (S3, view file: the AiSeatTest match-over row under the defeat rule; **red on `main`**); view BUG-0680 (S3: a 20-digit settings integer logs an engine ERROR; QA's rows fail until fixed, **red on `main`**), BUG-0681 (S3: the saved window size overrides `--resolution`), BUG-0684 (S4: five settings nits). **Closed this session:** sim BUG-0670 / 0671 (S2), 0672 / 0673 (S3); view BUG-0661 (S2), 0662 / 0682 / 0683 (S3). Part-fixed, still open: BUG-0622 (item 1), BUG-0550 (item 2), BUG-0521 (item 2) |
+| Sessions today | **2026-10-13: 3 / 8** (0146, 0527, 0916 done). Counters: **sim 1 / 4, view 1 / 4, data 1 / 4** |
+| Last session | 2026-10-13-0916 · sim M5-4b (feature, 1 fix round, ACCEPT, merged) · view M6-V6 (feature, 0 fix rounds, ACCEPT, merged) · data no task (D16 was already on `main`) · M5 1 / 6 (criteria 2, 3, 5 advanced), M6 criteria 2, 4 advanced; BUG-0661 / 0662 / 0670-0673 / 0682 / 0683 closed; golden header moved once |
 
 ## Milestone progress
 
@@ -49,8 +48,8 @@ _Last updated: 2026-10-13 morning (session 2026-10-13-0527, all three tracks acc
 | M2 (view track) | 10 / 10 | **Done** 2026-10-07 (Producer sign-off after the M2-H2 hardening; retro in docs/05; your playtest under For your review is feedback, not a gate) |
 | M3 (all three tracks) | 8 / 8 | **Done** 2026-10-08 (Producer sign-off after every track's hardening and the BUG-0146 fix; retro in docs/05; open S3 / S4 listed there; your ten-minute playtest is still wanted as feedback) |
 | M4 (all three tracks) | 10 / 10 | **Done** 2026-10-11 (Producer sign-off in session 2026-10-10-2334 after every track's end-of-M4 hardening (M4-H3, M4-VH3, D-H3); D12, the data track's last M4 content, landed in session 2026-10-11-0314; coverage ✅ Unit / fuzz / Determinism on every M4 row; retro in docs/05 with the open S3 / S4 carried; your windowed run of the sandbox battle is feedback, not a gate) |
-| M5 (sim, with a small view part and the data track's `ai.json`) | 1 / 6 (criteria 2 and 3 advanced; 4's data pins in) | **In progress** since 2026-10-11 (M5-1 to M5-4a and the M5-H1 hardening on `main`: `PlayerView`, seats, the executor / economy / production / scout / military managers, the AI data in the hash, the generator's start locations (same level, half a map apart since M5-H1), the AI's site resume + the idle-wave rule; D14's real build orders, D15's rows, D16's difficulty pins; criterion 2 waits on the ability manager, 3 on expansion / defense / rebuilding / high-ground scouting, 4 on the difficulty knobs, 5 on Requests 37 + M5-5) |
-| M6 (view, with the sim's seats and the owner's downloads) | 0 / 10 (criteria 1 and 7 advanced) | **Started ahead** 2026-10-11 (M6-V1: main menu, skirmish setup with seed / map size, pause menu; M6-V2: faction and difficulty per slot, `--faction` / `--ai`; M6-V3: a colour per slot, the menu's match as a hall + workers; M6-VH1: colours unique per match and corpse-legible; criterion 1 waits on 2-4 slots / team; criterion 2 waits on the sim's defeat rule, Requests 37; criterion 7's generator start locations landed with the sim's M5-4a / M5-H1, the three hand-made maps and mirrored terrain left) |
+| M5 (sim, with a small view part and the data track's `ai.json`) | 1 / 6 (criteria 2, 3 and 5 advanced; 4's data pins in) | **In progress** since 2026-10-11 (M5-1 to M5-4b and the M5-H1 hardening on `main`: `PlayerView`, seats, the executor / economy / production / scout / military / defense managers, the AI data in the hash, the generator's start locations, the AI's site resume + the idle-wave rule, the defeat rule + `MatchOver`; D14's real build orders, D15's rows, D16's difficulty pins; criterion 2 waits on the ability manager, 3 on expansion / rebuilding / high-ground scouting, 4 on the difficulty knobs, 5 on M5-5's 20-minute test) |
+| M6 (view, with the sim's seats and the owner's downloads) | 0 / 10 (criteria 1, 2, 4 and 7 advanced) | **Started ahead** 2026-10-11 (M6-V1: main menu, skirmish setup with seed / map size, pause menu; M6-V2: faction and difficulty per slot, `--faction` / `--ai`; M6-V3: a colour per slot, the menu's match as a hall + workers; M6-VH1: colours unique per match and corpse-legible; M6-V6: the settings screen minus keybinds; criterion 1 waits on 2-4 slots / team; criterion 2 has the sim's detection (M5-4b) and waits on M6-V4's banner + stats; criterion 7's generator start locations landed with the sim's M5-4a / M5-H1, the three hand-made maps and mirrored terrain left) |
 | M7-M9 | — | Planned |
 
 ## For your review
@@ -58,6 +57,77 @@ _Last updated: 2026-10-13 morning (session 2026-10-13-0527, all three tracks acc
 Non-blocking. Each entry says what was built or decided, what you'd notice in the game, and how
 to change it. To change anything, write it in `studio/inbox.md`, for example "use formations
 instead of clusters" or "make giving up take 2 seconds".
+
+### The match can be lost now, and the AI defends its base: its army comes home when you raid it, its workers run for cover, and a player whose last building falls is out (sim track, M5-4b, 2026-10-13)
+
+**What was built.** Two rules. (1) **Defeat.** A player who has no building left (an unfinished one counts as a building) and had at
+least one before is **defeated**: from the next moment every order of theirs is ignored (move, build, train, cancel, everything), their
+AI stops thinking, and the match is **over** once only one of the players who ever built a building is still standing. Their units
+don't vanish: whatever they were already doing (a walk, a fight) they finish, and they fight back if attacked. A side that never had a
+building (a sandbox with only soldiers) can never be defeated, so the old test scenes keep working. (2) **Defense.** Until now the AI
+ignored you hitting its base. Now, when one of its buildings near its hall loses hit points, or any enemy soldier is seen within 48 m of
+its hall, the AI **defends** for the next 20 s (and 20 s after the last hit): its attack wave, if one is out, turns around and comes
+home; it starts no new wave; every free soldier is sent to the threat (the enemy group's centre, or the building that was hit); and
+its workers within 16 m of the threat run to the nearest safe drop-off (a hall or storehouse away from the fight). Twenty seconds after
+each worker fled it goes back to work, but not at a mine or forest right next to the threat. The three distances and the time are
+settings in the rules file, not code.
+
+**What you will see.** Skirmish vs Hard: send a few soldiers at the AI's base early. The moment they hit a house or get near the hall,
+the AI's gatherers scatter to its hall, its army (wherever it was, even marching at you) comes back and attack-moves onto your
+soldiers; once your raid is dead or gone, its workers return to the mines and its next wave comes later than it would have. Lose all
+your own buildings and your clicks do nothing any more ("Match over:" prints in the log; the on-screen banner is the view's next task).
+
+**Producer decisions.** (1) *A defeated player's units stay* (the design doc only says "no buildings left"); the alternative, removing
+them, would hide how the last fight ended. (2) *Orders are dropped where they apply, not refused at the door*: replays stay
+byte-identical and the window never gets an error for a click after the loss. (3) *The defense trigger and point rules* above (48 m /
+20 s / 16 m, the nearest drop-off away from the fight, the threat point only moves when the enemy has really moved twice in a row) were
+set by the brief and the builder; the owner may tune any number. (4) *A soldier walking home to defend does not stop to answer hits
+on the way* (measured: it still gets home alive against three chasers); the alternative (attack-move home) was the bug the first
+round found: the army just stayed in your base fighting.
+
+**Rough edges.** BUG-0674 (S3): one older test scene expected a player to rebuild after cancelling its only building, which now
+counts as a loss; test-side, the view fixes it first next session. BUG-0675 (S4): a `defendRadius` set to the maximum (256 m) makes an
+AI that only ever defends (valid data, a style; a docs line comes with the sim's next clean-up). A raider the AI can't kill keeps it
+"defending" (no attack wave) as long as it stays, by design; its economy no longer stops for that.
+
+**How to change it.** `game/data/common/rules.json` → `ai`: `defendRadius` (m, 8-256), `defendFor` (seconds, 0-600), `workerFleeRadius`
+(m, 1-64). "Units of a defeated player vanish" or "a player with units but no buildings loses after N minutes" would be inbox notes.
+
+### There is a Settings screen now (resolution, window mode, VSync, graphics quality, three volumes, edge-pan speed), saved between runs; the two test scenes red since the start locations are fixed (view track, M6-V6, 2026-10-13)
+
+**What was built.** (1) **Settings**, reachable from the main menu and from the pause menu (Esc in a match → Settings). Fields:
+resolution (a list of common sizes plus your current one), window mode (Windowed / Borderless / Fullscreen), VSync (On / Off),
+graphics quality (Low / Medium / High: Low renders the 3D view at 75 % with hard shadows, Medium is how the game looked until now,
+High adds 4x anti-aliasing and softer shadows), master / music / sound-effects volume (0-100), and edge-pan speed (0.5-2.0, how fast
+the camera scrolls when the mouse touches the screen edge; the arrow keys are unchanged). **Apply** applies at once; **Back** (or Esc)
+applies and returns; **Defaults** restores everything. The picks are saved in `user://settings.cfg` (a small text file in Godot's
+user folder) and read at boot before the menu shows; a missing or damaged file means the defaults, with a note in the log, never a
+crash. Every word on the screen comes from `ui.json`. Keybinds are a later slice. (2) **BUG-0661 fixed:** two bench test scenes had
+been failing since the start locations landed because they measured "the centre of every unit I own" over a 10-second march, and
+since M5-4a your five starting workers stand off-screen by the hall and never march (and on one seed half the army block is off
+screen); they now measure only the units the order was given to, against half of what a free march would cover, with the reason
+written in the test. Two more stale test oracles found on the way were fixed (BUG-0682, BUG-0683), and the ground-disc pool no longer
+rebuilds stable discs when it is full (BUG-0662).
+
+**What you will see.** Main menu → Settings: pick 1920 × 1080 and Fullscreen, Apply: the window changes at once; Back, Quit, run
+again: it starts fullscreen. In a match, Esc → Settings → drag Sound effects to 0: the select / order clicks go silent; set Edge pan to
+2.0: the camera flies when the mouse touches the edge, while the arrow keys scroll as before.
+
+**Producer decisions (builder defaults, owner may revisit).** The defaults are the game as it looked before: 1152 × 648 windowed,
+VSync on, Medium, volumes 100, edge pan 1.0. Volume 0 is true silence (-80 dB), 50 is about half as loud (-6 dB). `--vsync` and
+`--mute` on the command line still win over the file for that run (dev / test flags). The quality presets are the builder's three
+(docs/03 has the table); the alternative, exposing every rendering option, is more than the game needs.
+
+**Rough edges.** BUG-0680 (S3): a settings file with a 20-digit number logs an engine error at boot (the value still falls back to
+its default); QA's new test scene fails on purpose until it is fixed, so the test loop shows one red scene; the view's first item next
+session. BUG-0681 (S3): the saved window size overrides the `--resolution` dev flag, so the benchmark runs at the saved size; next
+session if a few lines. BUG-0684 (S4): four small notes (shared test paths, the screen shows the file's VSync while `--vsync`
+overrides it, a code path no button reaches, the bench orders half of seed 6's army). The sim's one-line addition to `ui.json`
+("Defeated", the build-ghost's reason for a defeated player) merged cleanly beside the new `settings` section.
+
+**How to change it.** The words: `game/data/common/ui.json` → `settings`, `menu.settings`, `pause.settings`. The defaults, ranges and
+presets: code (`GameSettings`, `SettingsApplier`); an inbox note changes them. Your own picks: the screen, or delete
+`settings.cfg` from Godot's user folder (`%APPDATA%\Godot\app_userdata\RtsGame`) to reset.
 
 ### The AI finishes every house it starts and no longer freezes a wave; both bases start on the same level, half a map apart; two movement fixes; twelve bugs closed, nothing in the game's numbers changed (sim track, M5-H1, 2026-10-13)
 
@@ -3780,8 +3850,10 @@ track right after S1/S2 bugs).
     (no live building incl. sites, and the player had one once; never-built players never defeated), `World.DefeatEvents` (player,
     tick) like `AbilityEvents`, `Simulation.MatchOver` (at most one undefeated player among those that ever built); hashed; the AI of a
     defeated seat stops. Until then the view's `ViewApi/MatchOver` watch prints the dev line. → **Not built in M5-4a** (the PLAN's
-    cutoff: only under 700 dev lines; the start locations alone took 972): **M5-4b's first item**, after the sim's hardening; the view's
-    M6-V4 banner / stats screen waits on it. ~~**For the view's M6-V3 (planned):** `World.StartLocations`~~ → **landed in M5-4a**
+    cutoff: only under 700 dev lines; the start locations alone took 972) → **done in M5-4b** (session 2026-10-13-0916): `World.IsDefeated(p)`
+    / `EverBuilt(p)` / `DefeatEvents` (one-tick span of `DefeatEvent { Player, Tick }`), `Simulation.MatchOver` (latched), the door
+    drops a defeated player's commands where they apply, `PlacementError.Defeated`; docs/03 "Implementation (M5-4b)" → "For the view
+    (M6-V4)". The view's M6-V4 keys off them next session. ~~**For the view's M6-V3 (planned):** `World.StartLocations`~~ → **landed in M5-4a**
     (session 2026-10-13-0146): `World.StartLocations` / `NavGrid.StartLocations` (read-only span of `StartLocation { Cell, Level }`,
     player order, empty on hand-built maps, not hashed); `StartBase.Plan` uses them itself, so the view's M6-V3 needed no call change.
 
@@ -3871,11 +3943,19 @@ track right after S1/S2 bugs).
     pairs on every size, closest 129 / 206 / 350 m), BUG-0511 (`OwnFighterAhead` corridor + level), BUG-0512 (`ChaseCell`,
     `ReachableOnFoot` for a stopped chaser: 500 units 0 give-ups), BUG-0594 / 0622 items 2 + 4 / 0573 item 1 / 0541 item 2 / 0513 /
     0542's gated row; BUG-0651 S3, BUG-0650 S4 filed; golden untouched; 563 dev lines + 501 QA). Counter 0 / 4.
-21. **Next: M5-4b slice 1** (the Now table and `studio/handoff.md`): Requests 37 first (`World.IsDefeated` + `DefeatEvents` +
-    `Simulation.MatchOver`, the AI of a defeated seat silent), then at most one more system (defense from the enemy army memory);
-    later slices: the ability manager, `gatherBonus` / `focusFire` / `pullBackWounded`, expansion, rebuilding, periodic re-scouting,
-    ramps / high ground before attacking up; M5-5 the AI-vs-AI 20-minute winner test (criterion 5); M5-6 the playable criterion (win on
-    Easy, lose on Hard) with the view's menu match.
+21. ~~M5-4b slice 1, the defeat rule + the AI's defense~~ → **done** (session 2026-10-13-0916, 1 fix round, QA full FAIL → PASS:
+    `World.Defeat.cs` (`IsDefeated` / `EverBuilt` / `DefeatEvents`, phase 11b, `MatchOver` latched after BUG-0672), the door drop at
+    apply, the AI of a defeated seat silent, `PlacementError.Defeated` + `ui.json` `placement.defeated`, hash bits 34-36;
+    `Ai/DefenseManager` (kept hp per building slot, intruders within `defendRadius`, the point's second-trigger rule BUG-0673, `Move`
+    home then `AttackMove` BUG-0670, workers flee to a drop-off away from the point and are released `defendFor` after their flee
+    BUG-0671), `rules.json` `ai` `defendRadius` / `defendFor` / `workerFleeRadius` in `ContentHash` (golden header →
+    72EF431E70C49C39, `k` lines equal); BUG-0670 / 0671 S2 + 0672 / 0673 S3 fixed in the round; BUG-0674 S3 (view file), BUG-0675 S4
+    filed; ≈ 1,197 dev lines + ~1,100 QA). Counter 1 / 4. **Criteria 3 and 5 advanced; Requests 37 done.**
+22. **Next: M5-4c slice 1** (the Now table and `studio/handoff.md`): the ability manager (the AI casts through `UseAbility`, per
+    `useAbilities`) and the difficulty knobs (`gatherBonus`, `focusFire`, `pullBackWounded`) → criteria 2 and 4; then M5-4d expansion /
+    rebuilding / periodic re-scouting / ramps and high ground before attacking up (criterion 3); M5-5 the AI-vs-AI 20-minute winner
+    test (criterion 5); M5-6 the playable criterion (win on Easy, lose on Hard) with the view's menu match. Teams (Requests 38) when
+    M6's 2-4 slots need them.
 4. M6 (far ahead): agents can't download. **Owner note 2026-10-08: the art direction is grounded / realistic
    (Quaternius Universal Base Characters + Modular Outfits + Universal Animation Library 1 / 2, Mixamo packs for gaps;
    KayKit a fallback only; docs/04 and docs/01 updated by the owner), and the packs are already in `asset-sources/`
@@ -3964,11 +4044,19 @@ track right after S1/S2 bugs).
     (BUG-0603) + seed 6's framing (BUG-0660), `GroundDiscPool.Reclaim` (BUG-0550 item 1), `SlotMaxHp.Capacity` (BUG-0521 item 3), QA's
     `QaVh1Test`; BUG-0661 S2 (pre-existing: four scenes red since M5-4a, two cleared by this integration), BUG-0662 S3, BUG-0663 S4
     filed; 265 dev lines + 358 QA). Counter 0 / 4.
-21. **Next: BUG-0661 first** (S2, red on `main`: `QaH2Test` seeds 1 / 6 + `QaM27Test` re-derived on the merged tree), BUG-0662 if a few
-    lines, then the feature (the Now table and `studio/handoff.md`): M6-V4 victory / defeat + the stats screen (criterion 2) once
-    Requests 37 is on `main`, else M6-V5's slot part (2-4 slots; teams need Requests 38, a team rule) or the settings screen (criterion
-    4); later: save / load + replay playback, the look test (the owner's packs are in `asset-sources/`), `tools/export.ps1` with
-    Requests 33. M5's view part: criterion 6's playable run against the AI once M5-4b makes it defend.
+21. ~~BUG-0661 first, BUG-0662, then M6-V6 the settings screen~~ → **done** (session 2026-10-13-0916, 0 fix rounds, QA standard
+    PASS_WITH_ISSUES: `game/tests/BenchMarch.cs` (the march measured over the units the across order sent, half a free march;
+    BUG-0661 fixed, the root cause the off-screen start workers), `GroundDiscPool.Reclaim(key)` lower-stale-first else highest
+    (BUG-0662), `GameSettings` / `SettingsApplier` / `SettingsScreen` / `SettingsText`, `Main` boot order + `CommitSettings`,
+    `RtsCamera.EdgePanSpeed` / `PanVector`, `Sfx` on the `Sfx` bus, `default_bus_layout.tres`, `ui.json` `settings` (21 keys) +
+    `menu.settings` / `pause.settings`, `SettingsTest.tscn`, `ShellTest` rows, QA's `QaM6V6Test.tscn`, QA's QaH1Test oracle fix
+    (BUG-0682), ProductionHudTest's click (BUG-0683); BUG-0680 / 0681 S3, BUG-0684 S4 filed; +1,310 dev lines + QA). Counter 1 / 4.
+    **M6 criterion 4 advanced (all but keybinds).**
+22. **Next: BUG-0674 + BUG-0680 first** (both red on `main`'s loop: the AiSeatTest match-over row under the defeat rule; the settings
+    reader's digit cap), BUG-0681 if a few lines, then the feature (the Now table and `studio/handoff.md`): **M6-V4 victory / defeat on
+    screen + the post-match stats** (criterion 2; Requests 37 is on `main`), then M6-V5's slot part (2-4 slots; teams need Requests
+    38, a team rule), keybinds (criterion 4's rest), save / load + replay playback, the look test (the owner's packs are in
+    `asset-sources/`), `tools/export.ps1` with Requests 33. M5's view part: criterion 6's playable run against the AI.
 
 ## Feature queue: data track (feature sessions, in order; owner reviews every landed task)
 
@@ -4044,9 +4132,12 @@ track right after S1/S2 bugs).
     `AiDifficultyFileSideQaTests` (48), docs/02 Easy "doesn't use abilities" (Producer default, BUG-0541 item 3), BUG-0641 fixed; no data
     / golden change; ~320 lines + 57 QA; the review table is under For your review). Counter 1 / 4. No inbox tweaks had arrived.
     **Integration note (0916 PLAN):** session 0527 died at the data step, so D16 sat accepted on `studio/2026-10-13-0527-data` (16c6da7,
-    `main` a8ebff7 merged in, diff = exactly the D16 files); the conductor lands it in session 0916 with no new data task that session.
-23. **Next (session after 0916): inbox answers first, else D17** = docs/02's Normal line stated outright ("doesn't focus fire or pull back
-    wounded", the D16 QA note) as a Producer default + a K row, plus any `ai.json` field the sim's M5-4b adds (none planned). **The
+    `main` a8ebff7 merged in, diff = exactly the D16 files). **At the 0916 ACCEPT:** 16c6da7 had reached `origin/main` on its own
+    before session 0916's base (dde71a4 descends from it; verified), so no landing step was needed; session 0916 ran no data task.
+23. **Next: inbox answers first, else D17** = docs/02's Normal line stated outright ("doesn't focus fire or pull back wounded", the D16
+    QA note) as a Producer default + a K row; optionally the faction pages' "Defense" lines checked against M5-4b's rule (docs/03
+    "Implementation (M5-4b)": workers flee to the nearest finished drop-off away from the threat). No `ai.json` field came from M5-4b
+    (its knobs are `rules.json`, sim-owned). **The
     Teblor's `ai.json` is not pulled ahead of M7** (Producer decision, 0916 PLAN: `game/data/factions/` has only `malazan` and
     `whirlwind`; a new faction folder needs a whole roster, appears in the setup's faction lists and moves the golden, and the Giant
     armor class / regeneration / multi-spawn schemas are M7 sim work). Then the Shock v Ranged pass if the owner asks for one, the
@@ -4054,8 +4145,14 @@ track right after S1/S2 bugs).
     changes, and the final assertion both tracks agree on; a sim task written the same session against the same content writes its
     tests content-independent.
 
-## Debt backlog: sim track (hardening sessions only; counter **0 / 4** after M5-H1, session 2026-10-13-0527; next hardening after four feature tasks)
+## Debt backlog: sim track (hardening sessions only; counter **1 / 4** after M5-4b, session 2026-10-13-0916; next hardening after three more feature tasks)
 
+- **BUG-0675 item c (S4, M5-4b QA):** `defendRadius` 256 (the maximum) on a 128-cell map makes an AI that never attacks (every enemy
+  it sees is a threat, the threat never ends, no wave starts): a docs/03 line beside the knobs ("a radius covering the map = an AI that
+  only defends") or a tighter maximum if the data track asks; items a / b / d closed by the Producer's triage. ~~BUG-0670~~,
+  ~~BUG-0671~~ (S2), ~~BUG-0672~~, ~~BUG-0673~~ (S3) **fixed in M5-4b's fix round** (session 2026-10-13-0916). Also from M5-4b's QA,
+  not bugs: three raiders rotating at three spots re-send the army every other think (gated at that level); a seat the other's wave
+  reaches before its own first wave defends instead of waving (`AiVersusAiTests` seed 2).
 - **BUG-0651 (S3, M5-H1 QA):** at 2x the supported crowd (1,000 ordered attackers through the ramp detour) one unit gives up a reachable
   building: a stopped chaser whose chase cell's field isn't cached reads "unreachable" in `CombatSystem.ReachableOnFoot` (the `Moving`
   branch holds the count; the stopped branch should too); un-skip `SimHardeningH3QaTests.ThousandUnits_*`; fold into an M5-4b task
@@ -4264,9 +4361,25 @@ track right after S1/S2 bugs).
   recorded but not checked; no depletion events (views poll); .NET 8 support ends 2026-11-10, move
   to the next LTS at M6.
 
-## Debt backlog: view track (hardening sessions only; counter **0 / 4** after M6-VH1, session 2026-10-13-0527; next hardening after four feature tasks)
+## Debt backlog: view track (hardening sessions only; counter **1 / 4** after M6-V6, session 2026-10-13-0916; next hardening after three more feature tasks)
 
-- **BUG-0661 (S2, M6-VH1 QA; not debt: the view's first item next session, red on `main`):** `QaH2Test` (seed 1: the army centre moves
+- **BUG-0674 (S3, M5-4b QA; not debt: the view's first item next session, red on `main`):** `AiSeatTest.MatchOverLine` cancels
+  player 0's only building and rebuilds; under the defeat rule the cancel defeats player 0 and the rebuild is dropped ("round 2: 0
+  buildings after the Build"). Fix: a second building of player 0 standing in that row, or round 2 expects the drop (one `Match over:`
+  line); M6-V4 rewrites the row for the real banner anyway. **BUG-0680 (S3, M6-V6 QA; with it, red on `main`):** a 20-digit integer in
+  `settings.cfg` makes `ConfigFile.Parse` log an engine ERROR (`String::to_int`); the pre-parse `LineShape` accepts any digit run: cap
+  it (`-?\d{1,18}` for integers; longer only with a fraction or exponent); QA's two `QaM6V6Test` rows are the regression test and
+  print FAIL until then (rule 19: they should print `KNOWN BUG-0680`; the fix turns them into Checks). **BUG-0681 (S3, M6-V6 QA):**
+  the boot's `ApplyWindow` sets the stored size in Windowed, undoing Godot's `--resolution` / `--fullscreen` / `--maximized` /
+  `--position`, so the bench runs at the stored size and depends on the quality preset; fix: skip the window part when an engine
+  window flag is in `OS.GetCmdlineArgs()`, or let a dev / bench run ignore the file's window + quality; document in docs/03
+  "Implementation (M6-V6)". **BUG-0684 (S4, M6-V6 QA):** (1) `SettingsTest` / `ShellTest` write fixed `user://` paths shared by every
+  worktree and loop (a per-process folder as `QaM6V6Test` does); (2) the screen shows the file's VSync while `--vsync` overrides it;
+  (3) `CommitSettings(stay: false)` with a live unpaused match calls `ShowMenu()` (no UI path reaches it; `else if (CurrentMatch ==
+  null)`); (4) `GroundDiscPool.Reclaim` scans every node per call (O(nodes × keys) on a frame of all-new keys; tens of discs today);
+  (5) the bench orders 48 of seed 6's 100 (the column is half on screen). ~~BUG-0661~~ (S2), ~~BUG-0662~~, ~~BUG-0682~~, ~~BUG-0683~~
+  (S3) **fixed in M6-V6** (session 2026-10-13-0916).
+- ~~**BUG-0661 (S2, M6-VH1 QA; not debt: the view's first item next session, red on `main`):**~~ (kept for the record) `QaH2Test` (seed 1: the army centre moves
   19.3 m in 10 s against a 20 m line; seed 6: 11.3 m against 15 m) and `QaM27Test` (19.3 m) fail since the M5-4a merge (`FogViewTest` and
   `QaV3Test` were red too and turned green with M5-H1's start rule). Test staging on the new start geometry: re-derive each threshold
   from the scene's intent (the start block, the unit's speed, a ramp or forest in the seed-6 way), the reason in the test; never loosen
@@ -4475,6 +4588,7 @@ track right after S1/S2 bugs).
 
 | Date | Session | Task | Result |
 | --- | --- | --- | --- |
+| 2026-10-13 | [2026-10-13-0916](sessions/2026-10-13-0916.md) | sim M5-4b: the defeat rule (`World.Defeat.cs`: `IsDefeated` / `EverBuilt` / `DefeatEvents`, phase 11b after combat, `Simulation.MatchOver` latched; the door drops a defeated player's commands where they apply, its AI silent, its units stay; `PlacementError.Defeated` + `ui.json` `placement.defeated`; hash bits 34-36) + the AI's defense (`Ai/DefenseManager` first in the think: kept hp per building slot, intruders within `defendRadius` of the hall, the point = intruders' centroid else the hit building, re-versioned on a fresh threat or the second far trigger in a row; the wave ends like a retreat, no wave / rally while it holds; `AttackMove` inside the base else `Move` home then `AttackMove`; workers within `workerFleeRadius` flee to the nearest drop-off away from the point, released `defendFor` after their flee, no gather at nodes by the point), `rules.json` `ai` `defendRadius` 48 / `defendFor` 20 / `workerFleeRadius` 16 (golden header → 72EF431E70C49C39, `k` equal), docs/03 "Implementation (M5-4b)" + docs/01; view M6-V6: BUG-0661 (`BenchMarch.cs`: the march over the units the order sent vs half a free march), BUG-0662 (`Reclaim(key)`), the settings screen (`GameSettings` / `SettingsApplier` / `SettingsScreen`, `user://settings.cfg`, three quality presets, Music / Sfx buses, `RtsCamera.EdgePanSpeed`, `--vsync` wins for the run), `ui.json` `settings`, `SettingsTest.tscn`, `ShellTest` rows, QA's `QaM6V6Test`, QaH1Test's oracle (BUG-0682), ProductionHudTest's click (BUG-0683), docs/03 "Implementation (M6-V6)" + docs/02 + docs/01; data: no task (D16 was already on `main`) | **sim ACCEPT** (1 fix round, QA full FAIL → PASS: BUG-0670 / 0671 S2 (the army never came home; a parked raider idled the workers for good: an AI-vs-AI deadlock) + 0672 / 0673 S3 fixed in the round; BUG-0674 S2 → **S3 by the Producer** (a stale view-test oracle, the product per spec), BUG-0675 S4), **view ACCEPT** (0 fix rounds, PASS_WITH_ISSUES: BUG-0680 / 0681 S3, BUG-0684 S4). Integration sim → view; the sim moves the golden's header once. Producer's scratch merge (docs/01 + coverage unions): build 0 warnings, smoke PASS, `SettingsTest` / `ShellTest` / `QaH2Test` / `QaM27Test` PASS, `AiSeatTest` FAIL (BUG-0674), `QaM6V6Test` FAIL (BUG-0680, on purpose). **M5 1 / 6 (criteria 2, 3, 5 advanced); M6 criteria 2, 4 advanced; no open S1 / S2; counters sim 1 / 4, view 1 / 4, data 1 / 4; next: sim M5-4c (abilities + difficulty knobs), view BUG-0674 + 0680 then M6-V4, data inbox answers or D17** |
 | 2026-10-13 | [2026-10-13-0527](sessions/2026-10-13-0527.md) | sim M5-H1 hardening: BUG-0598 (`Blackboard.WaveBusyTick`: a wave idle past `waveCooldown` ends like a retreat), BUG-0640 (root cause the builder's one-tick Idle blink; `PlayerView.UnitAt` reads it as Building, `TryGetBuildTarget`, `EconomyManager.Sites` resumes a site nobody builds after `StalledThinks` 3 thinks: Malazan 36,000 11 / 11, cap 98), BUG-0620 (`Validate`'s `max(lo, rs + 2) <= min(W / 2 - 1 - rs, H - 3 - rs)` + a flat-map centre), BUG-0621 (`FindStarts` `SameLevel` + `Apart` half the smaller side: 0 / 100 mismatched pairs per size, closest 129 / 206 / 350 m), BUG-0511 (`OwnFighterAhead` corridor `CastCorridorSlack` 0.1 m + level), BUG-0512 (`CombatSystem.ChaseCell`, `ReachableOnFoot` for a stopped chaser: 500 units 0 give-ups), six S4 items, docs/01 + docs/03; view M6-VH1 hardening: the start-location probes → Checks (BUG-0604), `ui.json` Crimson `#B82633` / Jade `#2EA35A` + a whole-table `ShellTest` row (BUG-0632), colours unique per match (`SkirmishSetup.PickColour` / `GreyTakenColours`, `LaunchOptions.FirstFreeColour`; BUG-0631; docs/02), `M4PlayableTest` step 7 reads the cell before the blast + seed 6's framing (BUG-0603 / 0660), `GroundDiscPool.Reclaim` (BUG-0550 item 1), `SlotMaxHp.Capacity` (BUG-0521 item 3), QA's `QaVh1Test`, docs/03 "Implementation (M6-VH1)"; data D16: a `## Difficulty` table on both pages, `AiContentTests` J-K (both ways + docs/02's numbers), QA's `AiDifficultyFileSideQaTests`, docs/02 Easy "doesn't use abilities", BUG-0641 | **all three ACCEPT**, 0 fix rounds each (sim PASS_WITH_ISSUES: BUG-0651 S3, BUG-0650 S4; view PASS_WITH_ISSUES: **BUG-0661 S2 pre-existing** (four scenes red on `main` since M5-4a; two cleared by this integration), BUG-0662 S3, BUG-0663 S4; data PASS). Integration sim → view → data; golden untouched. Producer's scratch merge: build 0 warnings, `Content` 933 / 0, `FogViewTest` / `QaV3Test` / `AiSeatTest` / `QaM6V3Test` / `QaVh1Test` PASS, `QaH2Test` / `QaM27Test` FAIL (BUG-0661). **M5 1 / 6 (criterion 4's pins in); 18 bugs closed; counters sim 0 / 4, view 0 / 4, data 1 / 4; one open S2 (BUG-0661, view scenes); next: sim M5-4b slice 1 (Requests 37), view BUG-0661 then a feature, data inbox answers or D17** |
 | 2026-10-13 | [2026-10-13-0146](sessions/2026-10-13-0146.md) | sim M5-4a: the generator's start locations (`MapGenParams` `StartLocations` 2 / `StartClearRadius` 8 / `StartEdgeMargin` 10 / `StartMineDistance` 18 m / `StartForestDistance` 24 m; `MapGenerator.FindStarts`: a site disc of open ground, exact point mirror, quarter turns for 3-4, no RNG, redraw through `MaxAttempts`; `Heightmap` / `NavGrid` / `World.StartLocations`, not hashed; `ResourcePlacer` start mines round-robin + a start forest off the exit side; `StartBase.Plan` centred on the location, hand-built maps byte-identical; `AiScenes.Generated` on them; replay format 6, golden header only; BUG-0592 fixed), docs/03 "Implementation (M5-4a)" + docs/01; view M6-V3: `--units 0` from the menu and `--skirmish` (slot 2 AI Normal), a colour per slot (`ui.json` `setup.colour_1..8`: Iron, Ochre, Crimson, Cobalt, Jade, Violet, Rose, Bone) + `--colour`, `Match.PlayerRgb` the one colour source (`UnitViews` per-player materials), `StartFocus`, `Minimap._Notification` (BUG-0600), `UiText.ReadColours` + `IsSizeFormat` (BUG-0602), `AiSeatTest` probe, QA's `QaM6V3Test`, docs/03 "Implementation (M6-V3)"; data D-H4: BUG-0610 (the report's reads named, the assert a precondition), the page cells confirmed, the house-rule report on M5-3's AI | **all three ACCEPT** (sim 0 fix rounds, PASS_WITH_ISSUES: BUG-0620 / 0621 S3, BUG-0622 S4; Requests 37 + BUG-0598 deferred by the PLAN's cutoff; view 1 fix round, FAIL → PASS_WITH_ISSUES: BUG-0630 S2 fixed in the round, BUG-0632 S3, BUG-0631 S4; data 0 rounds, PASS_WITH_ISSUES: BUG-0640 S3 against the sim, BUG-0641 S4). Integration sim → view → data; only the sim moves the golden (header). Producer's scratch merge: build 0 warnings, the slices 2,764 / 4 skipped / 0 failed (7 m 1 s), smoke PASS (both passes), `AiSeatTest` PASS (the menu's AI: 1 worker gathering / returning and 4 queue items at tick 400, no PENDING line) (the menu's AI gathers by tick 400). **M5 1 / 6 (criteria 2-3 advanced; M6 criterion 7's generator half landed); M6 criterion 1 advanced (colour); counters sim 4 / 4, view 4 / 4, data 0 / 4; no open S1 / S2; next: sim M5-H1 + view M6-VH1 (hardenings), data D16** |
 | 2026-10-12/13 | [2026-10-12-1930](sessions/2026-10-12-1930.md) | sim M5-3: `ScoutManager` (the worker nearest the hall at `scoutAfter` 15 s; 8 compass points at `scoutRadius` 40 m, the hall's mirror, then a `scoutGrid` 56 m map grid nearest-unexplored first; released once a forest, a mine and an enemy building are known; a dead scout not replaced), `MilitaryManager` (rally by Moves `rallyDistance` 12 m toward the nearest known enemy building; waves at `attack.minArmyPop` / `minArmyCost` × `waveSizeMultiplier` on the known enemy building nearest the rally; Idle by a seen target → `Attack`; a razed target re-targets or the wave goes home; retreat at `retreat.lossFraction`; `waveCooldown` 60 s; `MaxTries` 3 per member with progress by a cell, a member leaving alive not a loss), the enemy memory (seen buildings + ghosts, the last enemy army's centroid), the rebalance, BUG-0574, pop weights, a 0f weight refused, seven `rules.json` `ai` knobs, every `ai.json` / `rules.json` `ai` field in `ContentHash` (golden `data-hash` 5760E83CB301B62E → 8409DB7517579FEF over two regens, `k` lines equal), BUG-0590 (`CombatSystem.TooNear`) + four page cells (BUG-0597), docs/03 "Implementation (M5-3)" + docs/01; view M6-V2 + M5-V2: live faction lists + the AI's difficulty from `ui.json` `setup.difficulty_*`, `SkirmishSetup.MatchArgs` → `LaunchOptions.Parse`, `--faction` / `--ai`, `SimRunner.BuildSeats` (explicit seats always), `Match.PickSeats`, `ViewApi/MatchOver` + the "Match over:" dev line, Requests 37, BUG-0580 (`_Notification`), BUG-0581 items 1 + 4, `AiSeatTest.tscn`, docs/03 "Implementation (M6-V2)"; data D15: `QA/Content/AiContentQaTests` (87 rows a-i, both factions, `minArmyCost` recomputed from `units.json`) + QA's `AiContentFileSideQaTests` (52), `AiHouseRuleReportTests` (3 report rows: the economy rule never fired; keep the order) | **all three ACCEPT** (sim 2 fix rounds, FAIL → FAIL → FAIL on the carried BUG-0592 alone, **re-triaged S2 → S3 by the Producer** (the criterion's timing was unmeasured; the root cause is the generator's missing start locations: the next sim task); BUG-0590 S2 / 0593 S2 / 0597 S1 / 0591 / 0595 / 0596 S3 fixed in the rounds; BUG-0598 S3, BUG-0594 S4 filed; view 0 rounds, PASS_WITH_ISSUES: BUG-0600 / 0601 / 0603 / 0604 S3, BUG-0602 S4; data 0 rounds, PASS_WITH_ISSUES: BUG-0610 S4). Integration sim → view → data; only the sim moves the golden; the Producer's scratch merge: build 0 warnings, the AI / content / ViewApi / replay slices 2,510 / 1 / 0, smoke PASS; one docs/03 conflict with its resolution in the log. **M5 1 / 6 (criteria 2 and 3 advanced); M6 criterion 1 advanced; counters sim 3 / 4, view 3 / 4, data 4 / 4; no open S1 / S2; next: sim M5-4a (start locations + `IsDefeated` + BUG-0598), view M6-V3 (the menu match as hall + workers, per-player colours, BUG-0600), data D-H4** |

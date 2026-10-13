@@ -46,4 +46,13 @@ public sealed class AiRulesDef
 
     /// <summary>M5-3: ticks from a wave's start, or its retreat, before the next wave may start (<c>waveCooldown</c> s, 0-3,600).</summary>
     public int WaveCooldownTicks { get; init; }
+
+    /// <summary>M5-4b: the AI defends when an own building within this distance of its hall's centre loses hp or an enemy non-worker unit is seen within it, in meters (<c>defendRadius</c>, 8-256).</summary>
+    public float DefendRadius { get; init; }
+
+    /// <summary>M5-4b: ticks the defense holds after its last trigger (<c>defendFor</c> s, 0-600).</summary>
+    public int DefendForTicks { get; init; }
+
+    /// <summary>M5-4b: own workers this close to the defense point flee to a drop-off, in meters (<c>workerFleeRadius</c>, 1-64).</summary>
+    public float WorkerFleeRadius { get; init; }
 }

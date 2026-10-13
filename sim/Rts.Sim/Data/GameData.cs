@@ -339,6 +339,9 @@ public sealed class GameData
         h.Add(r.RallyDistance);
         h.Add(r.RallyReach);
         h.Add(r.WaveCooldownTicks);
+        h.Add(r.DefendRadius); // M5-4b
+        h.Add(r.DefendForTicks);
+        h.Add(r.WorkerFleeRadius);
         h.Add(Ai.Length);
         foreach (AiDef a in Ai)
         {

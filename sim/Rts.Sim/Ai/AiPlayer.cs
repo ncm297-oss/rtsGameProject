@@ -11,9 +11,9 @@ namespace Rts.Sim.Ai;
 /// <summary>
 /// One AI seat (M5-2, docs/03 "Implementation (M5-2)"): every <see cref="ThinkTicks"/> ticks it reads its own
 /// <see cref="PlayerView"/> and sends commands through an <see cref="ICommandSink"/> (the sim's command door), never touching
-/// the world. A think runs the faction's <c>ai.json</c> build order (<see cref="BuildOrderExecutor"/>), the scout
-/// (<see cref="ScoutManager"/>, M5-3), the economy (<see cref="EconomyManager"/>: idle workers to gold and wood, houses before
-/// the cap), production (<see cref="ProductionManager"/>: the composition, when the build order sent nothing), then the army
+/// the world. A think runs the base defense (<see cref="DefenseManager"/>, M5-4b), the faction's <c>ai.json</c> build order
+/// (<see cref="BuildOrderExecutor"/>), the scout (<see cref="ScoutManager"/>, M5-3), the economy (<see cref="EconomyManager"/>:
+/// idle workers to gold and wood, houses before the cap), production (<see cref="ProductionManager"/>: the composition, when the build order sent nothing), then the army
 /// (<see cref="MilitaryManager"/>, M5-3: rally, attack waves, retreat).
 /// </summary>
 /// <remarks>
@@ -140,6 +140,26 @@ internal sealed class AiPlayer
     /// <summary>How many buildings the player has.</summary>
     internal int OwnBuildingCount { get; private set; }
 
+    /// <summary>M5-4b: whether the player has a building, and <see cref="HallPoint"/> is its hall's centre (<see cref="TryHallPoint"/>).</summary>
+    internal bool HasHall { get; private set; }
+
+    /// <summary>See <see cref="HasHall"/>.</summary>
+    internal Vector2 HallPoint { get; private set; }
+
+    /// <summary>M5-4b: the enemy non-worker units seen this think within <c>ai.defendRadius</c> of <see cref="HallPoint"/>, and their centroid (m).</summary>
+    internal int IntruderCount { get; private set; }
+
+    /// <summary>See <see cref="IntruderCount"/>.</summary>
+    internal Vector2 IntruderCentroid { get; private set; }
+
+    /// <summary>
+    /// M5-4b: whether own worker slot <paramref name="slot"/> (generation <paramref name="generation"/>) was sent fleeing during
+    /// the threat in force, at most <c>ai.defendFor</c> ago (BUG-0671: a threat that never ends doesn't idle it for good): no
+    /// other manager orders it.
+    /// </summary>
+    internal bool IsFleeing(int slot, int generation) =>
+        Board.FledGeneration[slot] == generation && Now - Board.FledAt[slot] <= Rules.DefendForTicks;
+
     /// <summary>The player's Town Hall the AI builds round: its first finished one, else its first site; -1 for none.</summary>
     internal int TownHallCell { get; private set; }
 
@@ -176,6 +196,7 @@ internal sealed class AiPlayer
         _queueFull = false;
         _plannedCount = 0;
         Census();
+        DefenseManager.Run(this); // M5-4b: first, docs/02's priority
         BuildOrderExecutor.Run(this);
         ScoutManager.Run(this);
         EconomyManager.Run(this);
@@ -194,9 +215,14 @@ internal sealed class AiPlayer
         OwnBuildingCount = 0;
         TownHallCell = -1;
         HasDropOff = false;
-        bool hallFinished = false;
+        IntruderCount = 0;
+        // M5-4b: the buildings first, so the units' pass knows the hall (the intruders are counted round it).
+        Buildings();
+        HasHall = TryHallPoint(out Vector2 hall);
+        HallPoint = hall;
+        float defend = Rules.DefendRadius * Rules.DefendRadius;
         int s = -1, enemies = 0;
-        Vector2 sum = Vector2.Zero;
+        Vector2 sum = Vector2.Zero, intruders = Vector2.Zero;
         while (View.NextUnit(ref s, out SeenUnit u))
         {
             if (u.Owner != Player)
@@ -205,6 +231,11 @@ internal sealed class AiPlayer
                 if (IsWorkerType[u.TypeId]) continue;
                 enemies++;
                 sum += u.Position;
+                if (HasHall && Vector2.DistanceSquared(u.Position, hall) <= defend)
+                {
+                    IntruderCount++;
+                    intruders += u.Position;
+                }
                 continue;
             }
             Live[u.TypeId]++;
@@ -217,8 +248,15 @@ internal sealed class AiPlayer
             Board.EnemyArmyCount = enemies;
             Board.EnemyArmyTick = Now;
         }
+        IntruderCentroid = IntruderCount > 0 ? intruders / IntruderCount : default;
+    }
+
+    /// <summary>The census's buildings: own ones (sites included) with their queues, the hall, and the known enemy buildings.</summary>
+    private void Buildings()
+    {
+        bool hallFinished = false;
         int known = 0;
-        s = -1;
+        int s = -1;
         while (View.NextBuilding(ref s, out SeenBuilding b))
         {
             if (b.Owner != Player)
@@ -594,7 +632,7 @@ internal sealed class AiPlayer
         return ax < x0 + bw && x0 < ax + aw && ay < y0 + bh && y0 < ay + ah;
     }
 
-    /// <summary>The worker to send to build at <paramref name="at"/>: the nearest idle one, else the nearest gathering or returning one, never one with a command not yet applied nor the scout; -1 for none.</summary>
+    /// <summary>The worker to send to build at <paramref name="at"/>: the nearest idle one, else the nearest gathering or returning one, never one with a command not yet applied, the scout nor one fleeing (M5-4b); -1 for none.</summary>
     internal int PickBuilder(Vector2 at, out int generation)
     {
         int best = -1, bestRank = int.MaxValue;
@@ -603,7 +641,8 @@ internal sealed class AiPlayer
         for (int k = 0; k < WorkerCount; k++)
         {
             int slot = WorkerSlots[k];
-            if (!View.TryGetUnit(slot, out SeenUnit u) || OrderedNotApplied(slot, u.Handle.Generation) || IsScout(slot, u.Handle.Generation)) continue;
+            if (!View.TryGetUnit(slot, out SeenUnit u) || OrderedNotApplied(slot, u.Handle.Generation) || IsScout(slot, u.Handle.Generation)
+                || IsFleeing(slot, u.Handle.Generation)) continue;
             int rank = u.State == UnitState.Idle ? 0 : u.State is UnitState.Gathering or UnitState.Returning ? 1 : 2;
             if (rank == 2) continue;
             float d = Vector2.DistanceSquared(u.Position, at);

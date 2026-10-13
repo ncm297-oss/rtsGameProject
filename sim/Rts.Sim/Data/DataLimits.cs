@@ -150,4 +150,10 @@ public static class DataLimits
 
     /// <summary>M5-3 (BUG-0593): the least and the most <c>rules.json</c> <c>ai.scoutGrid</c> may be, in meters (the least bounds the scout's waypoint list: 128 x 128 grid points, about 147 KB a seat, on the largest 1,024-cell map).</summary>
     public const double MinAiScoutGrid = 16, MaxAiScoutGrid = 256;
+
+    /// <summary>M5-4b: the least and the most <c>rules.json</c> <c>ai.defendRadius</c> may be, in meters (a Producer default).</summary>
+    public const double MinAiDefendRadius = 8, MaxAiDefendRadius = 256;
+
+    /// <summary>M5-4b: the most <c>rules.json</c> <c>ai.defendFor</c> may be, in seconds (a Producer default).</summary>
+    public const double MaxAiDefendSeconds = 600;
 }

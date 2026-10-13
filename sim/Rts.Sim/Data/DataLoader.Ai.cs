@@ -293,7 +293,8 @@ public static partial class DataLoader
     /// multiple of 0.5, at most the pop cap; <c>placementSearchRadius</c> and <c>expandHallReach</c> m, above 0, at most
     /// <see cref="DataLimits.MaxAiSearchRadius"/>; <c>buildingSpacing</c> m, 0 to <see cref="DataLimits.MaxAiSpacing"/>. Meters go
     /// to whole cells, rounded up. M5-3: <c>scoutAfter</c> and <c>waveCooldown</c> s (0-3,600, to ticks); <c>scoutRadius</c> and
-    /// <c>rallyDistance</c> m (1-64), <c>scoutReach</c> and <c>rallyReach</c> m (1-16), <c>scoutGrid</c> m (16-256, BUG-0593), kept in meters. A refused <c>popCap</c> is reported once: the cap rule is skipped then.
+    /// <c>rallyDistance</c> m (1-64), <c>scoutReach</c> and <c>rallyReach</c> m (1-16), <c>scoutGrid</c> m (16-256, BUG-0593), kept in meters. M5-4b: <c>defendRadius</c> m (8-256), <c>defendFor</c> s (0-600, to
+    /// ticks), <c>workerFleeRadius</c> m (1-64). A refused <c>popCap</c> is reported once: the cap rule is skipped then.
     /// </summary>
     private static AiRulesDef BuildAiRules(Checker c, AiRulesJson? j, RulesDef? rules)
     {
@@ -318,7 +319,21 @@ public static partial class DataLoader
             RallyDistance = Meters(c, j.RallyDistance, "ai.rallyDistance", DataLimits.MaxAiSearchRadius),
             RallyReach = Meters(c, j.RallyReach, "ai.rallyReach", DataLimits.MaxAiReach),
             WaveCooldownTicks = c.Ticks(j.WaveCooldown, "ai.waveCooldown", 0),
+            DefendRadius = Meters(c, j.DefendRadius, "ai.defendRadius", DataLimits.MaxAiDefendRadius, DataLimits.MinAiDefendRadius),
+            DefendForTicks = TicksUpTo(c, j.DefendFor, "ai.defendFor", DataLimits.MaxAiDefendSeconds),
+            WorkerFleeRadius = Meters(c, j.WorkerFleeRadius, "ai.workerFleeRadius", DataLimits.MaxAiSearchRadius),
         };
+    }
+
+    /// <summary>M5-4b: a required time in seconds, 0 to <paramref name="maxSeconds"/>, to ticks; 0 when refused.</summary>
+    private static int TicksUpTo(Checker c, double? seconds, string path, double maxSeconds)
+    {
+        if (seconds > maxSeconds)
+        {
+            c.Error(path, $"{seconds} s is above the maximum {maxSeconds} s");
+            return 0;
+        }
+        return c.Ticks(seconds, path, 0);
     }
 
     /// <summary>M5-3: a required distance in meters, <paramref name="min"/> (1 by default) to <paramref name="max"/> inclusive; 0 when refused.</summary>
