@@ -6,7 +6,7 @@
 | Status | open |
 | Found | 2026-10-12-1930, task M6-V2 (QA) |
 | System | view: `UiText` (`setup.map_size_item` check), `LaunchOptions` `--skirmish` vs `SkirmishSetup.MatchArgs` |
-| Fixed by | |
+| Fixed by | Item 1: 9ec4a56 (`UiText.IsSizeFormat` compares two sizes), `QaM6V2Test.SizeFormatEscapes` (a Check), `QaM6V3Test.SizeFormatVariants`; QA 2026-10-13-0146 verified. Item 2: only the army half fixed (`--skirmish` defaults `--units 0`); the AI seat half is BUG-0630 (S2). Stays open until BUG-0630 closes. |
 
 ## Repro
 1. `& $env:GODOT --headless --path game res://tests/QaM6V2Test.tscn` prints (probes, not failures, until the fix)

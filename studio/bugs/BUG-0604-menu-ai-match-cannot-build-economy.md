@@ -6,7 +6,7 @@
 | Status | open |
 | Found | 2026-10-12-1930, task M6-V2 (QA) |
 | System | view: the menu skirmish's start (`Match.Start`: `--units` default 100 a side, `StartBasePlan`); sim: AI economy without scouting (M5-3) |
-| Fixed by | |
+| Fixed by | Partly, 9ec4a56 (M6-V3): the menu's match has no dev army (`--units 0`; QaM6V3Test: 18 openings, 1 hall + 5 workers each, no other unit). Still open: on this branch 4 of 36 halls see a gold mine at the start and `AiSeatTest` prints `PENDING start locations probe (menu): by tick 401 no AI worker is gathering`; closes when the sim's M5-4a start locations merge and the probe flips to a Check. |
 
 ## Repro
 1. Main menu -> Skirmish -> Start (defaults: Malazan vs Whirlwind AI Normal), or `AiSeatTest`. The AI seat test logs

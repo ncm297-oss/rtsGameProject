@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-12-1930, task M6-V2 (QA) |
 | System | view: player colours (`Match` `playerRgb`, `UnitViews` materials per faction) vs the new live faction lists |
-| Fixed by | |
+| Fixed by | 9ec4a56 (M6-V3 per-player colours from `ui.json` `setup.colour_*`); `QaM6V2Test.SwappedHud` mirror row (a Check), `QaM6V3Test.MirrorMatchColours` (bodies, buildings and both players' minimap dots in colours 1 / 2). QA 2026-10-13-0146 verified. Picking one colour for both slots is still allowed: BUG-0631 item 3. |
 
 ## Repro
 1. `& $env:GODOT --path game`, Skirmish, set both faction lists to the same faction (e.g. "The Whirlwind" / "The Whirlwind"), Start.
