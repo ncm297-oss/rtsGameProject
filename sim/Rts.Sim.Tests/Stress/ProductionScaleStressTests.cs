@@ -22,7 +22,8 @@ public class ProductionScaleStressTests
 
     public ProductionScaleStressTests(ITestOutputHelper output) => _out = output;
 
-    private static readonly MapGenParams ResourceMap = new() { Forests = 12, GoldMines = 8 };
+    // M5-4a: the pre-M5-4a map, as ProductionPerfTests (the 1x / 2x ratio was measured on it).
+    private static readonly MapGenParams ResourceMap = new() { Forests = 12, GoldMines = 8, StartLocations = 0 };
 
     private static (Simulation Sim, List<int> Halls) Scene(int marchers, int hallCount)
     {

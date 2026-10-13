@@ -322,7 +322,7 @@ reachable; later changes keep it so (placement never seals ground, freed cells f
 below, M3-H1). A layout with under
 `MinPassableFraction` (50%) passable cells or with a level missing is redrawn, at most
 `MaxAttempts` times, then the generator falls back to the first layout that was passable enough,
-or a flat map: it never loops forever. `MapGenParams.Validate` caps every size at the smaller map side before using it in arithmetic, and caps `RampTries` (128), `MaxAttempts` (8, the default) and plateau counts (32). A ramp try costs O(1) plus O(ramps placed) plus O(`RampWidth`) for the mouth, not O(`RampWidth` × `RampLength`): a summed-area table of off-limits cells (border ring, cells with a lower neighbor) and rectangle overlap tests against the ramps already placed replace the cell-by-cell footprint scan, accepting exactly the same tries (BUG-0015). Each attempt also builds a full nav grid. The worst valid case, a 1024 × 1024 map with every count at its cap and any ramp size, takes about 1 s in a Debug build (how the tests run) and about 0.2 s in Release. Default generation takes about 4 ms. Queries (`InBounds`,
+or a flat map: it never loops forever. Since M5-4a a layout must also have room for the start locations (`MapGenParams.StartLocations` 2 by default, `StartClearRadius` 8 cells, `StartEdgeMargin` 10 cells, `StartMineDistance` 18 m, `StartForestDistance` 24 m; see "Implementation (M5-4a)"), else it is redrawn the same way. `MapGenParams.Validate` caps every size at the smaller map side before using it in arithmetic, and caps `RampTries` (128), `MaxAttempts` (8, the default) and plateau counts (32). A ramp try costs O(1) plus O(ramps placed) plus O(`RampWidth`) for the mouth, not O(`RampWidth` × `RampLength`): a summed-area table of off-limits cells (border ring, cells with a lower neighbor) and rectangle overlap tests against the ramps already placed replace the cell-by-cell footprint scan, accepting exactly the same tries (BUG-0015). Each attempt also builds a full nav grid. The worst valid case, a 1024 × 1024 map with every count at its cap and any ramp size, takes about 1 s in a Debug build (how the tests run) and about 0.2 s in Release. Default generation takes about 4 ms. Queries (`InBounds`,
 `IsPassable`, `LevelAt`, `FlagsAt`, `CostAt`, `WorldToCell`, `CellCenter`) never allocate and read
 cells outside the map as blocked; `WorldToCell` floors (so -0.1 m is outside, not cell 0) and
 rejects NaN and infinities. Cell (x, y) covers meters [2x, 2x + 2) on each axis. Per-cell data is
@@ -356,8 +356,7 @@ allocates nothing. Load-time pockets stay plain `Blocked` and never reopen. Sinc
 clearing included (`ClearResource`, `ClearBuilding`: a node depleted, a building removed; not when the pocket rule
 keeps the cells blocked). The test
 seam `BumpVersionForTests` is a closing change (both bump). So a flow field built at the current
-`BlockVersion` never points into a blocked cell, whatever has opened since (see "Flow fields"). Water, symmetry and
-hand-made maps arrive in M6.
+`BlockVersion` never points into a blocked cell, whatever has opened since (see "Flow fields"). Start locations (mirrored) arrive in M5-4a; water and hand-made maps in M6.
 
 ### Flow fields
 
@@ -1819,7 +1818,7 @@ Resource nodes exist in the sim; workers, gathering and drop-offs are M3-2.
   forest placer grows forests cell by cell (M3-2b, BUG-0074: the loader refuses anything else). Shipped: `gold_mine` (gold, 2 x 2)
   and `tree` (wood, 1 x 1). At least one type of each kind is required (M3-H1, BUG-0076: an empty list, or one
   without a gold or a wood type, is a `DataError`, not a map that silently places nothing). Amounts stay in `rules.json` (docs/02): a placed tree holds `treeWood`
-  (100), a placed mine `startMines.gold` (2,500; every mine until start locations exist, M3-3/M6).
+  (100), a placed mine `startMines.gold` (2,500; every mine, start mines included since M5-4a; expansions' 2,000 come with expansions).
   `GameData.Resources` is indexed by dense ids in ordinal order (`FindResource`); `ContentHash`
   covers every field.
 - **Store.** `Rts.Sim.Entities.ResourceStore` (`World.Resources`): structure of arrays with
@@ -3244,7 +3243,7 @@ Match
   Screenshotter
 ```
 
-- **Start armies (debug until real start locations):** `Match.Start` enqueues `SpawnUnit` for
+- **Start armies (debug; since M5-4a the halls stand on the map's start locations, see "Implementation (M5-4a)"):** `Match.Start` enqueues `SpawnUnit` for
   `--units <n>` per player (0-1000, default 100). Player p plays faction p in data order
   (malazan, whirlwind) until the M6 lobby and spawns its roster round-robin. Positions come from
   the pure `ViewApi.StartLayout.Block(NavGrid, count, west, maxRadius)`: open cell centres
@@ -5819,11 +5818,86 @@ six `rules.json` `ai` knobs in `Data/AiRulesDef.cs`; the hash in `GameData.Conte
   ramps and high ground before attacking up, `focusFire`, `pullBackWounded`, `gatherBonus`, the ability manager; the 20-minute
   winner test (M5-5).
 
+### Implementation (M5-4a)
+
+Generated maps get start locations (docs/02 "Map and terrain": 2 mines per start location, symmetric layouts), and start
+bases stand on them. Code: `Map/StartLocation.cs`, `MapGenerator.FindStarts`, `ResourcePlacer.TryStartMine` /
+`TryStartForest`, `MapGenParams`' five `Start*` fields, `ViewApi/StartBase.Plan`.
+
+- **The start rule** (generator, after the layout and before resources). `MapGenParams.StartLocations` (default 2; 2-4, or
+  0 for none) centre cells, each with a **clear disc** of `StartClearRadius` cells (default 8: centre to centre, the edge
+  counts) and a larger **site disc** of `StartSiteRadius` = max(clear radius, ceil(`StartMineDistance` / 2 m)) + 1 cells
+  (10 by default: room for a 2 x 2 mine just outside the clear disc). Every cell of the site disc must be **open ground**
+  (the resource placer's rule: passable, not a ramp, no cliff, ramp or border cell among its 8 neighbours), which makes the
+  disc flat and one level (level 0 or a single plateau: a level step is a cliff). Player 0's clear disc is at least
+  `StartEdgeMargin` (default 10) cells inside every map edge and its site disc in the west half; player 1's centre is the
+  point mirror `(W - 1 - x, H - 1 - y)`; players 2 and 3 (square maps only) the quarter turns `(W - 1 - y, x)` and
+  `(y, H - 1 - x)` (exact 3-4 player use is M6-V5's); every site disc open and no two overlapping. Among the centres that
+  work, the nearest the middle of the west band (`x = StartEdgeMargin + StartClearRadius`, mid-height) wins, ties to the
+  lower cell. **No RNG**: a layout that fits is the same map, and leaves the RNG where it was, with or without start
+  locations. A layout with no fitting centre is redrawn through the existing `MaxAttempts` loop like one with too little
+  ground; the fallback (the first passable-enough layout with a missing level, else the flat map) also carries start
+  locations. `Validate` makes the pair fit a flat map (player 0's band non-empty; 3-4 players: a square map whose westmost
+  centre and its quarter turn keep their site discs apart), so the flat fallback always has them; `Generate` still throws
+  `InvalidOperationException` if it doesn't. The search uses per-row prefix counts of non-open cells, `2r + 1` row checks a
+  centre: 256-map generation stays at about 11 ms in Debug (`MapGenTests.Generate256_WithStartLocations_IsUnder50Ms`).
+- **Defaults and bounds** (`Validate`, by name): `StartLocations` 0 or 2-4; `StartClearRadius` 2-32; `StartEdgeMargin` 1 to the
+  smaller side; `StartMineDistance` (default 18 m) above the clear radius in meters and at most 16 m past it;
+  `StartForestDistance` (default 24 m) above the clear radius in meters, at most 128 m; NaN refused. With the defaults the
+  smallest square map with start locations is 58 cells; a 32-cell map is refused (`StartClearRadius`) unless
+  `StartLocations` is 0. **0 is a builder addition** to the brief's 2-4: terrain-only tests and the QA equivalence oracles run
+  on maps far too small for bases, and old replays (formats 3-5) rebuild their maps with it exactly.
+- **Output.** `Heightmap.StartLocations` (the generator's output; a hand-built `Heightmap` takes an optional list, checked to
+  name a cell of its level), carried onto `NavGrid.StartLocations` (read-only span of `StartLocation { Cell, Level }`,
+  player order; empty for hand-built grids) and forwarded by `World.StartLocations`. **Not in the state hash, nor in
+  `Heightmap.ContentHash`**: like the heightmap they follow from seed + params, which the replay header carries.
+- **Resources** (`ResourcePlacer`, first, before today's random ones). The clear discs are taken off open ground for every
+  node. Start mines = min(`GoldMines`, `rules.startMines.count` (2) x locations), placed round-robin over the locations
+  (so a short count shorts every base alike): every anchor whose footprint is open, on the location's level, touching no
+  node, with its centre within `StartMineDistance` of the location's centre cell and at least `MineSpacing` (24 m) from
+  every mine placed so far (so a base's two mines stand on different sides), is a candidate, drawn at random
+  (`RngStream.MapGen`) until one passes the connectivity rule (at most `TriesPerPlacement`); `startMines.gold` (2,500) each. Start forests = min(`Forests`, locations), one
+  per location: seed cells open, on the level, touching no node, within `StartForestDistance` (centre to centre) and **not
+  on the exit side** (a non-positive dot product with the exit direction: toward the map centre on level 0, toward the
+  nearest ramp cell on a plateau); grown like any forest at the drawn size for half the tries, `ForestMinTrees` after. The
+  remaining `GoldMines` / `Forests` are placed as before (the counts include the start ones). With 0 locations the placer
+  draws exactly as before.
+- **Start bases** (`StartBase.Plan`, signature unchanged). On a grid with start locations player p's Town Hall is centred on
+  location p (anchor = centre cell minus half the footprint); `IsHallSpot` still checks it (the never-seal ring), and if a
+  start unit stands there the hall moves to the nearest spot on the location's level. Workers face the nearest mine as before.
+  Players past the locations, and grids without them, use the M3-V1 search unchanged. `AiScenes.Generated` now passes no
+  start blocks: its bases are the start locations, mirrored, so the scout's mirror point (M5-3) is the enemy base.
+- **Replays: format 6** adds `map.start-locations`, `map.start-clear-radius`, `map.start-edge-margin`,
+  `map.start-mine-distance`, `map.start-forest-distance` after `map.mine-spacing`. Formats 3-5 read with `StartLocations`
+  0 (their maps as recorded) and can't say otherwise (`InvalidHeader` for a format 3-5 replay object with start locations).
+- **Measured** (`MapGenTests`, seeds 1-12 on 128 / 192 / 256 maps with 12 forests and 8 mines): every map gets its pair,
+  both mines and a forest of at least 12 trees per base; on the 192 and 256 maps the bases sit at the west and east bands;
+  on crowded 128 maps the westmost fitting centre can be near the middle (seed 1: 37 cells apart, player 0 on a plateau).
+  Over seeds 0-199 every 128, 192 and 256 map keeps all three levels; narrow maps pay for the rule: 128 x 64 falls back to
+  the flat map on 49 of 200 seeds, 96 x 96 on 7, and 64 x 64 on all of them (terrain-only tests on such maps use
+  `StartLocations` 0).
+- **The AI on them** (`AiScenes.Generated`, Normal, shipped orders, seeds 1-3): the Malazan seat knows wood at tick 386 / 2 / 2
+  and brings the first in at 902 / 720 / 472 (BUG-0592's target: 1,200 / 2,000, now asserted); in AI vs AI both seats' first
+  wood comes in at 468-902 (asserted by 3,000).
+- **Golden.** Regenerated once, header only: `rts-replay 6`, the five start lines and the checksum. Its `k` lines did not move:
+  the cross-map run (generated seed 1, no resources) keeps its terrain, since seed 1's first layout fits the pair and the
+  search draws nothing, and start locations are not hashed. `data-hash` stays 8409DB7517579FEF.
+- **Tests.** `MapGenTests` (36 seed x size rows, quarter turns, `Validate` rows by name, the tiny map, the flat fallback,
+  the 256-map time gate), `StartBaseTests` (halls on the start locations on seeds 1-12, a hand-built grid with and without
+  one), `ReplayFormatTests` (format 6 lines, formats 3-5 read with none), `ScoutManagerTests` / `AiVersusAiTests` (the wood
+  targets). Scenes measured on the old map keep it with `StartLocations` 0: maps too small for bases, terrain-only oracles
+  (the pre-BUG-0015 equivalence, flow fields), the production / research perf scenes (on the new map their tick doubles from
+  the layout alone, no per-tick code changed) and two fuzzes whose oracles predate BUG-0280's hidden-unit rule or count a
+  same-tick delivery as a discard.
+- **Not yet:** defeat (`World.IsDefeated`, `DefeatEvents`, `Simulation.MatchOver`; Requests 37) is left for M5-4b; 3-4 player
+  base plans in the view (M6-V5); expansion locations; carving start discs instead of redrawing on narrow maps.
+
 ## Save/load and replays
 
 - **Replay file** (M1-6, `Rts.Sim.Replays`): a `Replay` holds a header, the command log, and
   checkpoints.
-  - Header: format version (`Replay.CurrentFormatVersion` = 5 since M5-2, which added one seat line per player; 4
+  - Header: format version (`Replay.CurrentFormatVersion` = 6 since M5-4a, which added the five `map.start-*` lines (formats
+    3-5 read with no start locations); 5 since M5-2, which added one seat line per player; 4
     (M4-2a, which added the `combat` line and an attack target on every command line) and 3 (M3-1) still read and play,
     `Replay.OldestFormatVersion` = 3; 2 was M1-7, without the resource lines, 1 was M1-6, without command flags; both are
     refused with `FormatVersionMismatch`),
@@ -5834,7 +5908,8 @@ six `rules.json` `ai` knobs in `Data/AiRulesDef.cs`; the hash in `GameData.Conte
     resource capacities are in the state hash and a full store drops spawns), checkpoint interval,
     tick count, (format 4) `combat 0 / 1` (`SimConfig.Combat` when recorded, `Replay.Combat`; a format 3 file has no
     such line and was recorded with combat on), and every `MapGenParams` field (M3-1 added `map.forests`,
-    `map.forest-min-trees`, `map.forest-max-trees`, `map.gold-mines`, `map.mine-spacing`). There is no map id yet:
+    `map.forest-min-trees`, `map.forest-max-trees`, `map.gold-mines`, `map.mine-spacing`; format 6, M5-4a, the five
+    `map.start-*` lines). There is no map id yet:
     the map, resource nodes included, is rebuilt from seed + params.
   - Command log: every command `Simulation.Enqueue` accepted, as stamped (tick, player, sequence,
     kind, type id, position, unit handle, (format 4) attack target handle and building flag, flags), in enqueue order. Commands stamped for a tick after the

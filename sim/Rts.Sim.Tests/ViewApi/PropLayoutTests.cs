@@ -14,6 +14,26 @@ public class PropLayoutTests
     internal static Simulation MatchSim(ulong seed, int units = 64, int forests = 12, int mines = 8) =>
         new(TestSim.Config(seed, 2, units, 4096) with { Map = MapGenParams.Default with { Forests = forests, GoldMines = mines } });
 
+    /// <summary>
+    /// The first listed node of <paramref name="type"/> from index <paramref name="from"/> on (wrapping) with a passable cell
+    /// 4-adjacent to its footprint, so taking it to zero reopens its cells (an interior tree stays a pocket, M3-H1, and
+    /// changes nothing a view relists for). M5-4a: the start forests made the middle slot of seed 1 such a tree.
+    /// </summary>
+    internal static int ExposedSlot(PropLayout l, World w, int type, int from)
+    {
+        ReadOnlySpan<int> slots = l.SlotsOf(type);
+        NavGrid g = w.NavGrid;
+        Data.ResourceDef def = w.Data.Resources[type];
+        for (int k = 0; k < slots.Length; k++)
+        {
+            int slot = slots[(from + k) % slots.Length], x0 = w.Resources.Cell[slot] % g.Width, y0 = w.Resources.Cell[slot] / g.Width;
+            for (int y = y0; y < y0 + def.FootprintHeight; y++)
+                for (int x = x0; x < x0 + def.FootprintWidth; x++)
+                    if (g.IsPassable(x - 1, y) || g.IsPassable(x + 1, y) || g.IsPassable(x, y - 1) || g.IsPassable(x, y + 1)) return slot;
+        }
+        throw new InvalidOperationException($"no exposed node of type {type}");
+    }
+
     internal static PropLayout Layout(World w) => new(w.Data.Resources, w.Resources.Capacity);
 
     internal static bool Refresh(PropLayout l, World w) =>
@@ -112,7 +132,7 @@ public class PropLayoutTests
         foreach (int type in new[] { ResourceMaps.Tree, ResourceMaps.Mine })
         {
             int before = l.CountOf(type);
-            int slot = l.SlotsOf(type)[before / 2];
+            int slot = ExposedSlot(l, w, type, before / 2);
             // A partial take changes nothing visible and no version: no relist.
             Assert.Equal(1, r.Take(r.HandleOf(slot), 1));
             Assert.False(Refresh(l, w));
@@ -139,7 +159,7 @@ public class PropLayoutTests
         Assert.True(l.Changed(ResourceMaps.Tree) && l.Changed(ResourceMaps.Mine), "the first fill changes every type");
         foreach ((int felled, int other) in new[] { (ResourceMaps.Tree, ResourceMaps.Mine), (ResourceMaps.Mine, ResourceMaps.Tree) })
         {
-            int slot = l.SlotsOf(felled)[l.CountOf(felled) / 2];
+            int slot = ExposedSlot(l, w, felled, l.CountOf(felled) / 2);
             r.Take(r.HandleOf(slot), int.MaxValue);
             Assert.True(Refresh(l, w));
             Assert.True(l.Changed(felled), $"type {felled} lost a node but is not marked changed");

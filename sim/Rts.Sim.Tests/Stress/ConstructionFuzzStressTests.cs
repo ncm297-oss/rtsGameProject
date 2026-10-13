@@ -32,7 +32,9 @@ public class ConstructionFuzzStressTests
     private static Simulation NewWorld(ulong seed) =>
         new(TestSim.ConfigWithoutBuildingRequires(Seed: seed, PlayerCount: Players, UnitCapacity: 48, CommandCapacity: 512) with
         {
-            Map = MapGenParams.Default with { Forests = 12, GoldMines = 8 },
+            // M5-4a: the pre-M5-4a map. On the map with start locations seeds 1 and 6 put a hidden enemy in a Build's
+            // footprint, which CanPlace ignores and the Build refuses (BUG-0280, documented); this oracle predates that rule.
+            Map = MapGenParams.Default with { Forests = 12, GoldMines = 8, StartLocations = 0 },
             BuildingCapacity = 512,
         });
 

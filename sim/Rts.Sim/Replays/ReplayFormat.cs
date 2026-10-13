@@ -14,7 +14,8 @@ namespace Rts.Sim.Replays;
 /// <summary>Reads and writes replays as line-based ASCII text (docs/03 "Save/load and replays").</summary>
 /// <remarks>
 /// One <c>key value</c> line per header field in a fixed order (format 4 adds <c>combat 0 / 1</c> after <c>ticks</c>; format 5
-/// one <c>seat p faction human|ai easy|normal|hard</c> line per player right after <c>players</c>),
+/// one <c>seat p faction human|ai easy|normal|hard</c> line per player right after <c>players</c>; format 6 five
+/// <c>map.start-*</c> lines after <c>map.mine-spacing</c>),
 /// then <c>commands N</c> and N <c>c</c> lines (format 4: 13 fields, the attack target's index, generation and
 /// building flag before the flags; format 3: 10), <c>checkpoints N</c> and N <c>k</c> lines, <c>end</c>, and last a
 /// <c>checksum</c> line: the FNV-1a 64 hash of every byte before it, so any changed byte is caught.
@@ -83,6 +84,15 @@ public static class ReplayFormat
         Line(sb, "map.forest-max-trees", Int(m.ForestMaxTrees));
         Line(sb, "map.gold-mines", Int(m.GoldMines));
         Line(sb, "map.mine-spacing", Bits(m.MineSpacing));
+        if (replay.FormatVersion >= 6)
+        {
+            // M5-4a (format 6): the start-location rule. Older formats were recorded without start locations.
+            Line(sb, "map.start-locations", Int(m.StartLocations));
+            Line(sb, "map.start-clear-radius", Int(m.StartClearRadius));
+            Line(sb, "map.start-edge-margin", Int(m.StartEdgeMargin));
+            Line(sb, "map.start-mine-distance", Bits(m.StartMineDistance));
+            Line(sb, "map.start-forest-distance", Bits(m.StartForestDistance));
+        }
 
         Line(sb, "commands", Int(replay.Commands.Length));
         foreach (Command c in replay.Commands)
@@ -233,6 +243,16 @@ public static class ReplayFormat
             || !r.Int("map.gold-mines", out int goldMines)
             || !r.Fields("map.mine-spacing", 1, out f) || !TryBits(f[0], out float mineSpacing))
             return ReplayError.Malformed;
+        // Formats 3-5 were recorded before start locations existed: 0 rebuilds their maps exactly.
+        MapGenParams d = MapGenParams.Default;
+        int starts = 0, startClear = d.StartClearRadius, startMargin = d.StartEdgeMargin;
+        float startMine = d.StartMineDistance, startForest = d.StartForestDistance;
+        if (version >= 6
+            && (!r.Int("map.start-locations", out starts) || !r.Int("map.start-clear-radius", out startClear)
+                || !r.Int("map.start-edge-margin", out startMargin)
+                || !r.Fields("map.start-mine-distance", 1, out f) || !TryBits(f[0], out startMine)
+                || !r.Fields("map.start-forest-distance", 1, out f) || !TryBits(f[0], out startForest)))
+            return ReplayError.Malformed;
         var map = new MapGenParams
         {
             Width = width,
@@ -256,6 +276,11 @@ public static class ReplayFormat
             ForestMaxTrees = forestMax,
             GoldMines = goldMines,
             MineSpacing = mineSpacing,
+            StartLocations = starts,
+            StartClearRadius = startClear,
+            StartEdgeMargin = startMargin,
+            StartMineDistance = startMine,
+            StartForestDistance = startForest,
         };
 
         // Counts are checked against the lines actually present, never used to size a buffer up front.

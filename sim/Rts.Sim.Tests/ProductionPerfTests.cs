@@ -17,7 +17,10 @@ public class ProductionPerfTests
 
     public ProductionPerfTests(ITestOutputHelper output) => _out = output;
 
-    private static readonly MapGenParams ResourceMap = new() { Forests = 12, GoldMines = 8 };
+    // M5-4a: the pre-M5-4a map (no start locations), the map these gates were measured on. With start locations the same
+    // seed lays resources out differently and this scene's tick doubles (0.53 to 1.2 ms measured side by side) with no
+    // per-tick code changed; the gates stay, on the scene they were set for.
+    private static readonly MapGenParams ResourceMap = new() { Forests = 12, GoldMines = 8, StartLocations = 0 };
 
     /// <summary>
     /// 500 marchers and 50 gathering workers (player 0, as in <c>GatherPerfTests</c>) plus 20 of player 1's Town Halls

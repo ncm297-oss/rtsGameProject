@@ -54,7 +54,7 @@ public class RampWallQaTests
     {
         MapGenParams d = MapGenParams.Default;
         yield return new object[] { "default", d, 300 };
-        yield return new object[] { "tiny32", d with { Width = 32, Height = 32, EdgeMargin = 2, Level1Plateaus = 3, Level1MinSize = 6, Level1MaxSize = 14, Level2Plateaus = 2, Level2MinSize = 5, Level2MaxSize = 8, Level2Inset = 1 }, 300 };
+        yield return new object[] { "tiny32", d with { StartLocations = 0, Width = 32, Height = 32, EdgeMargin = 2, Level1Plateaus = 3, Level1MinSize = 6, Level1MaxSize = 14, Level2Plateaus = 2, Level2MinSize = 5, Level2MaxSize = 8, Level2Inset = 1 }, 300 };
         yield return new object[] { "rampWidth1", d with { RampWidth = 1 }, 300 };
         yield return new object[] { "rampWidth6 long", d with { RampWidth = 6, RampLength = 9, Level1MinSize = 20, Level2MinSize = 9, Level2MaxSize = 16 }, 200 };
         yield return new object[] { "dense ramps", d with { Level1Plateaus = 20, RampsPerPlateau = 8, Level2Plateaus = 12 }, 200 };

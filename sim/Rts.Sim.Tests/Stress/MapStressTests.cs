@@ -25,6 +25,7 @@ public class MapStressTests
     /// <summary>A 32 x 32 setup QA chose independently of the developer's.</summary>
     private static readonly MapGenParams Tiny = MapGenParams.Default with
     {
+        StartLocations = 0, // M5-4a: too small for start locations
         Width = 32,
         Height = 32,
         EdgeMargin = 2,
@@ -55,7 +56,7 @@ public class MapStressTests
         MapGenParams p = setup switch
         {
             "tiny" => Tiny,
-            "128x64" => MapGenParams.Default with { Width = 128, Height = 64, Level1MaxSize = 30 },
+            "128x64" => MapGenParams.Default with { Width = 128, Height = 64, Level1MaxSize = 30, StartLocations = 0 }, // M5-4a: terrain only (with start locations a quarter of these fall back flat)
             _ => MapGenParams.Default,
         };
         int missingLevels = 0, failures = 0;
