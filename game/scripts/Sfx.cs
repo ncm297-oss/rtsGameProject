@@ -13,8 +13,11 @@ namespace Rts.Game;
 /// </remarks>
 public partial class Sfx : Node
 {
-    /// <summary>Volume of every effect in dB; a placeholder for the SFX volume setting (docs/02 "Settings", M6).</summary>
+    /// <summary>Volume of every effect's player in dB; the player's SFX volume setting is the <c>Sfx</c> bus's gain on top (M6-V6).</summary>
     public const float SfxVolumeDb = -6f;
+
+    /// <summary>The bus every effect plays on (<c>game/default_bus_layout.tres</c>; it sends to Master), so the SFX volume setting reaches them.</summary>
+    public const string Bus = GameSettings.SfxBus;
 
     /// <summary>Clip sample rate (Hz); clips are mono 16-bit PCM.</summary>
     public const int MixRate = 44100;
@@ -63,7 +66,7 @@ public partial class Sfx : Node
         }
         for (int i = 0; i < PoolSize; i++)
         {
-            _pool[i] = new AudioStreamPlayer { Name = $"Player{i}", VolumeDb = SfxVolumeDb };
+            _pool[i] = new AudioStreamPlayer { Name = $"Player{i}", VolumeDb = SfxVolumeDb, Bus = Bus };
             AddChild(_pool[i]);
         }
     }

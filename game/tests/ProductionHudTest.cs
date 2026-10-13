@@ -745,7 +745,10 @@ public partial class ProductionHudTest : Node
         // A click on another green anchor builds there.
         _ghost.ScreenOverride = px1;
         await Frames();
-        Vector2 px2 = _camera.UnprojectPosition(GroundOf(AnchorCentre(house, a2)));
+        // The cursor cell of anchor a2 (its cell centre, as AnchorScreen clicks), not the footprint centre: for an even footprint
+        // that centre is a cell corner, and on main a8ebff7's map the ray from it lands in the cell to the west (found at M6-V6).
+        BuildingDef houseDef = _data.Buildings[house];
+        Vector2 px2 = _camera.UnprojectPosition(GroundOf(G.CellCenter(a2 % G.Width + houseDef.FootprintWidth / 2, a2 / G.Width + houseDef.FootprintHeight / 2)));
         start = _sim.PendingCommandCount;
         Input.ActionPress("order_queue"); // Shift keeps the ghost for the same-frame row
         LeftClick(px2);

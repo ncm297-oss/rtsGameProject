@@ -3698,8 +3698,8 @@ Match
   (`Sfx.MinGapMs`, wall clock) of its last play, so 50 right-clicks in one frame are one sound.
   A play takes the next player of the 8-player pool round-robin (a 9th overlapping sound cuts the
   oldest) and allocates nothing.
-- **Volume and mute:** every player runs at `Sfx.SfxVolumeDb` (-6 dB), a constant standing in for
-  the SFX volume setting (docs/02 "Settings", M6). `--mute` (takes no value) mutes the master bus;
+- **Volume and mute:** every player runs at `Sfx.SfxVolumeDb` (-6 dB) on the `Sfx` bus, whose gain is the
+  SFX volume setting since M6-V6 ("Implementation (M6-V6)"). `--mute` (takes no value) mutes the master bus;
   without it `Match.Start` unmutes it. Counters run either way.
 - **Headless:** the dummy audio driver takes playback without logging errors, so headless runs
   play too (the smoke gate stays clean).
@@ -3748,12 +3748,13 @@ repeatable benchmark, facing interpolation, and a screenshot set. The owner's pl
   of it, ties to the lower cell index; with no passable cell within 8 cells of that point, the
   passable cell nearest the map corner opposite the army. A + click comes before the Move and the
   three moves are queued behind it, so the army marches from 0.75 s until H at 9.5 s; on seed 1 the
-  target is about 109 m away and the army's centre moves about 22 m in 10 s (`QaM27Test`: target at
-  least 100 m, centre at least 20 m). The march runs through the idle enemy block, which roughly
-  halves the army's pace after a few seconds (a bare 10 s sim march moves the centre 24 m, 29 m with
-  no enemy in the way). How far the centre gets is a property of the seed's terrain: 19.1-26.2 m over
-  seeds 1, 6, 7, 21, 23, 31 and 43 (seed 21 least). So the 20 m bound is seed 1's; `QaH2Test` holds
-  any other seed to 15 m, which proves the army marches rather than a pace (BUG-0104). Every action goes
+  target is about 109 m away (`QaM27Test`: at least 100 m). The march runs through the idle enemy block and round
+  terrain, so the ordered units' centre covers 0.60-0.91 of a free march (each unit straight at its own speed for the
+  8.75 s window: about 31 m) over seeds 1, 6, 7, 21 and 31 (seed 21 least). `QaH2Test` and `QaM27Test` hold every seed to
+  half a free march (`game/tests/BenchMarch.cs`), measured from the across order over the units it sent: since M5-4a the
+  start workers stand by the Town Hall off the bench's screen and are never ordered, and a block in a narrow clearing is
+  only partly on screen (seed 6: 48 of 100), so a centre over every local unit measured the staging (BUG-0661; it replaced
+  BUG-0104's fixed 20 m / 15 m bounds). Every action goes
   through the real code: `SelectionController.BoxSelect` / `OrderAt` / `BeginAttackMove` +
   `AttackMoveClick` / `Order` (public since M2-7; the mouse and key handlers call the same
   methods), `Minimap.JumpTo` (the camera directly under `--no-hud`), `RtsCamera.SetZoom`. Edge
@@ -5521,10 +5522,114 @@ game/data/common/ui.json        setup.colour, setup.colour_1 .. colour_8
     before the cast. Since the sim's start locations seed 6 stages the army on ground where, centred on screen, it reached
     into the HUD band and step 2's box failed (BUG-0660): the camera now looks a little south of the army when it would.
   - *BUG-0550 item 1.* `GroundDiscPool.Take` with no free node first takes a node whose key has not been taken yet this
-    frame (a forward cursor, one pass a frame, no allocation) before it grows, so a frame that swaps 16 keys for 16 others
-    stays at 16 nodes (`QaM5V1Test` pool churn).
+    frame (no allocation) before it grows, so a frame that swaps 16 keys for 16 others stays at 16 nodes (`QaM5V1Test` pool
+    churn). Which node is taken changed with BUG-0662 ("Implementation (M6-V6)").
   - *BUG-0521 item 3.* `CombatViews.Bind` replaces a max-hp array shorter than the unit store (`SlotMaxHp.Capacity`) and keeps
     a large enough shared one (`CombatViewTest` re-bind row). Item 2 is a `ViewApi` (sim) change, left for the sim track.
+
+### Implementation (M6-V6)
+
+The settings screen (docs/02 "Game flow" 7, keybinds excepted), BUG-0661 and BUG-0662. View only: no sim change.
+
+```
+game/scripts/GameSettings.cs      the values, defaults, the file (read / write), the dB mapping
+game/scripts/SettingsApplier.cs   window, VSync, quality presets, bus volumes
+game/scripts/SettingsScreen.cs    CanvasLayer (layer 21, runs while paused): the fields, Back, Defaults, Apply
+game/scripts/SettingsText.cs, SettingsWindowMode.cs, SettingsQuality.cs
+game/scripts/Main.cs, MainMenu.cs, PauseMenu.cs   Settings buttons; boot order; Settings / CommitSettings; Esc
+game/scripts/RtsCamera.cs         EdgePanSpeed, PanVector
+game/scripts/Sfx.cs               the players play on the Sfx bus
+game/default_bus_layout.tres      Master, Music, Sfx (Music and Sfx send to Master)
+game/data/common/ui.json          menu.settings, pause.settings, the settings section
+game/tests/SettingsTest.tscn      the headless settings test (in the scene loop)
+```
+
+- **Screens.** The main menu reads Skirmish, Settings, Quit (Load Game comes with save / load); the pause menu Resume,
+  Settings, Quit to menu. The settings screen draws over the pause menu (layer 21), runs `Always`, and its backdrop takes
+  every click; from the pause menu the match stays paused under it. Fields: **resolution** (a list of 1280 x 720,
+  1280 x 800, 1366 x 768, 1440 x 900, 1600 x 900, 1680 x 1050, 1920 x 1080, 1920 x 1200, 2560 x 1440, 2560 x 1600,
+  3840 x 2160, plus the window's size and the stored size, by width then height), **window mode** (Windowed, Borderless,
+  Fullscreen), **VSync** (On, Off), **graphics quality** (Low, Medium, High), **master / music / sound effects volume**
+  (sliders 0-100, step 1), **edge pan speed** (slider 0.5-2.0, step 0.05); each slider shows its number beside it.
+  **Back** (and Esc) applies, saves and closes to where the screen came from (the menu, or the pause menu still paused);
+  **Apply** applies and saves and stays; **Defaults** sets every field to its default, applies and saves. Every word is
+  `ui.json` `settings` (`title`, `resolution`, `resolution_item` = `"{0} × {1}"` (width, height; a format that doesn't name
+  both is one load error naming the key), `window_mode`, `window_windowed`, `window_borderless`, `window_fullscreen`,
+  `vsync`, `vsync_on`, `vsync_off`, `quality`, `quality_low`, `quality_medium`, `quality_high`, `master_volume`,
+  `music_volume`, `sfx_volume`, `edge_pan_speed`, `apply`, `defaults`, `back`) plus `menu.settings` and `pause.settings`,
+  read through `UiText.Settings` (`SettingsText`) and required like the other sections.
+- **The file.** `user://settings.cfg` (`GameSettings.DefaultPath`), a Godot `ConfigFile` in text:
+
+  | Section | Key | Type, range | Default |
+  | --- | --- | --- | --- |
+  | `display` | `width`, `height` | whole numbers, 640-7680 x 360-4320 | 1152, 648 (the project's window size) |
+  | `display` | `window_mode` | `"windowed"`, `"borderless"`, `"fullscreen"` | `"windowed"` |
+  | `display` | `vsync` | `true` / `false` | `true` |
+  | `display` | `quality` | `"low"`, `"medium"`, `"high"` | `"medium"` |
+  | `audio` | `master`, `music`, `sfx` | whole numbers, 0-100 | 100 each |
+  | `camera` | `edge_pan` | number, 0.5-2.0 | 1.0 |
+
+  Written (whole) by Apply, Back, Esc and Defaults, through `System.IO`; a folder that can't be written is one warning
+  and the picks apply for the run. Read at boot: no file is the defaults and one info line; a file that can't be read,
+  or has a line not of the shape the game writes (`key=value` with a number, `true` / `false` or a plain quoted string;
+  sections, comments and blank lines pass), is the defaults and one warning; otherwise each missing, mistyped or
+  out-of-range key takes its default and all of them are named in one warning; extra keys are ignored. Never an error
+  line: Godot's `ConfigFile.Parse` logs an engine ERROR for a value it can't read, so the text is checked before it sees it.
+  The defaults are the game as it looked before settings existed. Tests point `Main.SettingsPath` at their own file and
+  never touch the player's.
+- **Boot order.** `Main._Ready`: the banner, the data, the user args, then the settings are read and applied (window,
+  VSync, quality, buses), then the screens are built and the menu or the match starts. A match takes the edge pan speed
+  as it starts (`RtsCamera.EdgePanSpeed`), and a commit passes it to the running match's camera.
+- **Applying.** Window (skipped headless, where there is no window): Windowed is `WindowMode.Windowed` at the picked size,
+  centred on its screen; Borderless is Godot's `WindowMode.Fullscreen` (a borderless window over the screen); Fullscreen
+  is `ExclusiveFullscreen`; the resolution is the window's size in Windowed and is kept for it in the other two. VSync
+  `Enabled` / `Disabled`. **`--vsync on|off` wins over the file for the run** (`Main.VsyncOverride`,
+  `Main.EffectiveVsync`) and never changes the file; **`--mute`** still mutes the Master bus for the run whatever the
+  volumes say (the mute and the volume are separate bus properties). Quality presets (global shadow settings plus the
+  window viewport's MSAA and 3D scale):
+
+  | Preset | Sun shadow atlas | Soft shadow filter | MSAA (3D) | 3D render scale |
+  | --- | --- | --- | --- | --- |
+  | Low | 2048 | Hard | off | 0.75 |
+  | Medium (default; Godot's defaults, the look before M6-V6) | 4096 | Soft Low | off | 1.0 |
+  | High | 4096 | Soft Medium | 4x | 1.0 |
+
+  Volumes set the `Master`, `Music` and `Sfx` buses' gain to `20 log10(v / 100)` dB (100 = 0 dB, 50 = -6 dB, 10 = -20 dB,
+  1 = -40 dB) and volume 0 to -80 dB (never `-inf` or NaN; `GameSettings.VolumeDb`). The effect players play on `Sfx` at
+  their own -6 dB (`Sfx.SfxVolumeDb`); nothing plays on `Music` yet. **Edge pan:** `RtsCamera.PanVector` adds the keys'
+  direction (length at most 1) and the edge's direction (length at most 1) times the edge pan speed, capped at the larger
+  of 1 and that speed, so the keys keep the old pan speed and the edge pans at 0.5-2x it.
+- **Tests.** Headless `SettingsTest` (in the scene loop): the dB rows, the reader rows (no file, corrupt, a value Godot
+  can't parse, every key missing (9 problems), wrong types, out of range (`width=1`, `quality="ultra"`, `master=999`,
+  `edge_pan=9.0`), extra keys, a round trip), an unwritable path (false, one warning), the resolution list and
+  `PanVector`; then `Main.tscn` with the test path: menu -> Settings shows every label, button and list item from
+  `ui.json` and nothing else but numbers, with the defaults; every field changed, Back: the file read back through
+  `ConfigFile`, `Main.Settings`, `AudioServer.GetBusVolumeDb` of the three buses and the viewport's MSAA and scale equal
+  the picks (window mode, size and VSync through the stored settings and the file, as headless has no window); reopened
+  shows the picks; Defaults restores the defaults and the file; Apply stays; Esc is Back; a skirmish's camera takes the
+  edge pan, every effect player is on `Sfx`, `Music` and `Sfx` send to `Master`; pause -> Settings over the paused match,
+  a new edge pan, Esc: the pause menu, the tree still paused, the running camera at the pick; Esc resumes. A child boot on
+  a corrupt file prints one `WARNING: Settings:` line, no ERROR, and has the defaults. Windowed with `-- --shots <dir>` it
+  saves `settings-menu.png` and `settings-pause.png` and applies Borderless then Windowed under the paused match (the
+  window follows, the match is kept). `ShellTest`: the 23 new keys (44 shell keys), each missing one error naming it,
+  the `settings` section missing one error, six bad `resolution_item` formats refused; `--vsync off --units 0` over a file
+  saying on: `EffectiveVsync` off, the file's value and bytes unchanged, the match's camera at the file's edge pan.
+- **BUG-0661 (four view scenes red since M5-4a).** `FogViewTest` and `QaV3Test` were green again on `main` by this task;
+  `QaH2Test` and `QaM27Test` measured the bench's march as the centre of every local unit against fixed bounds (20 m
+  seed 1, 15 m other seeds). Since M5-4a the 5 start workers stand by the Town Hall on the start location, off the
+  bench's screen, so the box select never takes them; on seed 6 the army block is a column about 80 m tall, of which 48
+  of 100 are on screen and ordered. Both scenes now measure the units the across order sent (the selection right after
+  it) from the order, against half a free march (`game/tests/BenchMarch.cs`: each unit at its own speed for the script's
+  8.75 s march window, about 31 m); the measured share is 0.60-0.91 over seeds 1, 6, 7, 21, 31 (see "Implementation
+  (M2-7)"). Found red on the same base and fixed alike: `ProductionHudTest`'s BUG-0109 row clicked a house's footprint
+  centre, a cell corner for an even footprint, which on the current map resolves to the cell west of the anchor; it now
+  clicks the anchor's cursor cell centre, as its other placement clicks do.
+- **BUG-0662.** `GroundDiscPool.Take` with no free node takes a node from a key not taken yet this frame: first one whose
+  key is below the key being taken (callers take keys in ascending order, so that key was skipped and is stale), else the
+  highest such key's (it comes last, if at all, so the keys between keep their nodes); one pass over the nodes, no
+  allocation. A new low key in a full pool moves no stable key (was all of them, each a mesh rebuild); when no stale node
+  exists, only the highest key moves and the pool grows once. QaM5V1's 16-for-16 swap still stays at 16 nodes.
+  `AbilityViewTest` checks both cases.
 
 ## AI architecture
 

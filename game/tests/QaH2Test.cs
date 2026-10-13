@@ -11,7 +11,7 @@ using Rts.Sim.Map;
 
 namespace Rts.Game.Tests;
 
-/// <summary>QA (M2-H2): the 10 s bench's march across the map on seed 1 and two seeds whose (0.85 W, 0.5 H) cell is blocked, the real Match's start blocks at <c>--units 1000</c>, and PropsView's per-type uploads after a felled tree and a felled mine.</summary>
+/// <summary>QA (M2-H2): the 10 s bench's march across the map on seeds 1, 6 and 31 (a blocked (0.85 W, 0.5 H) cell), the real Match's start blocks at <c>--units 1000</c>, and PropsView's per-type uploads after a felled tree and a felled mine.</summary>
 /// <remarks>
 /// Headless. Run: <c>&amp; $env:GODOT --headless --path game res://tests/QaH2Test.tscn</c>; prints
 /// "QA M2-H2 TEST PASS" and exits 0, or prints each failure and exits 1. Scan the log for ERROR too.
@@ -29,8 +29,9 @@ public partial class QaH2Test : Node
             DataLoadResult loaded = DataLoader.LoadAll(ProjectSettings.GlobalizePath("res://data"));
             if (!loaded.Ok) throw new InvalidOperationException("data failed to load");
             _data = loaded.Data!;
-            // 1 = QaM27's seed; 6 = (0.85 W, 0.5 H) is a forest cell; 31 = it is a cliff cell. Seed 21 (also a cliff
-            // cell) moves the centre the least of the seeds measured (19.1 m; BUG-0104): `-- --seeds 1,6,21`.
+            // 1 = QaM27's seed; 31 = (0.85 W, 0.5 H) is a cliff cell (the target falls back to the nearest open cell); 6 = the
+            // block is a tall column only half on the bench's screen (48 of 100 ordered; it was a forest far cell before M5-4a).
+            // Seed 21 covers the least of a free march of the seeds measured (0.60; BUG-0661): `-- --seeds 1,6,21`.
             string seeds = "1,6,31";
             string[] args = OS.GetCmdlineUserArgs();
             for (int i = 0; i + 1 < args.Length; i++) if (args[i] == "--seeds") seeds = args[i + 1];
@@ -47,12 +48,12 @@ public partial class QaH2Test : Node
         SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
-    // The 10 s bench's march: the centre shift depends on the seed's terrain and on the idle enemy block in the path
-    // (19.1-26.2 m over seeds 1, 6, 7, 21, 23, 31, 43). Seed 1, QaM27's, is held to its 20 m; any other seed to 15 m,
-    // the family floor (the least measured, seed 21's 19.1 m, less ~20 %): the row proves the army marches, not a pace
-    // (BUG-0104; docs/03 "Implementation (M2-7)").
-    private const float Seed1MinShift = 20f, FamilyMinShift = 15f;
-
+    // The 10 s bench's march (BUG-0104, re-derived for BUG-0661): the units the bench ordered across must move their centre at
+    // least BenchMarch.Slack (half) of a free march at their own speeds over the script's march window. The bound comes from
+    // the units and the script, not from a seed's measured distance, so the same rule holds on every seed; the row proves the
+    // army marches, not a pace. Before BUG-0661 the centre was every local unit's and the bounds fixed (20 m on seed 1, 15 m
+    // elsewhere): since M5-4a the start workers stand off screen by the Town Hall and never march, and seed 6's block is a
+    // column only half on screen, so those centres measured the staging (19.3 m and 11.3 m) rather than the march.
     private async Task BenchAcross(string seed)
     {
         Match match = StartMatch("--bench", "10", "--mute", "--speed", "1", "--seed", seed, "--no-combat"); // combat off: a world without fights, as in M2 (M4-V1, BUG-0147)
@@ -60,44 +61,34 @@ public partial class QaH2Test : Node
         bench.QuitOnFinish = false;
         Simulation sim = match.GetNode<SimRunner>("SimRunner").Simulation!;
         var watch = Stopwatch.StartNew();
-        while (!bench.Running && watch.Elapsed.TotalSeconds < 20) await Frame();
+        while (bench.AcrossOrders < 1 && !bench.Finished && watch.Elapsed.TotalSeconds < 20) await Frame();
         UnitStore u = sim.World.Units;
-        System.Numerics.Vector2 c0 = Centre(u);
+        int[] marching = BenchMarch.Marching(match.GetNode<SelectionController>("SelectionController").Selection);
+        System.Numerics.Vector2 c0 = BenchMarch.Centre(u, marching);
+        float minShift = BenchMarch.MinShift(u, marching), free = BenchMarch.FreeMarch(u, marching);
         float maxShift = 0;
         while (!bench.Finished && watch.Elapsed.TotalSeconds < 40)
         {
             await Frame();
-            maxShift = Math.Max(maxShift, System.Numerics.Vector2.Distance(c0, Centre(u)));
+            maxShift = Math.Max(maxShift, System.Numerics.Vector2.Distance(c0, BenchMarch.Centre(u, marching)));
         }
         NavGrid g = sim.World.NavGrid;
         float w = g.Width * MapConstants.CellSize, h = g.Height * MapConstants.CellSize;
         int fx = (int)(0.85f * w / MapConstants.CellSize), fy = (int)(0.5f * h / MapConstants.CellSize);
         float reach = System.Numerics.Vector2.Distance(bench.AcrossFrom, bench.AcrossTarget);
         GD.Print($"QA M2-H2 NOTE: seed {seed}: far cell ({fx}, {fy}) flags {g.FlagsAt(fx, fy)}; {bench.AcrossOrders} across orders; " +
-            $"target {bench.AcrossTarget} {reach:F1} m from {bench.AcrossFrom}; centre moved at most {maxShift:F1} m; {bench.Line}");
+            $"target {bench.AcrossTarget} {reach:F1} m from {bench.AcrossFrom}; {marching.Length} marching, centre moved at most {maxShift:F1} m " +
+            $"of a free {free:F1} m ({(free > 0 ? maxShift / free : 0):F2}); {bench.Line}");
         Check(bench.Finished, $"seed {seed}: 10 s bench never finished");
         Check(bench.AcrossOrders >= 1, $"seed {seed}: no across order");
         Check(reach >= 100f, $"seed {seed}: target only {reach:F1} m away");
-        float minShift = seed == "1" ? Seed1MinShift : FamilyMinShift;
-        Check(maxShift >= minShift, $"seed {seed}: centre moved only {maxShift:F1} m (want >= {minShift} m)");
+        Check(marching.Length > 0, $"seed {seed}: the across order sent no unit");
+        Check(maxShift >= minShift, $"seed {seed}: centre moved only {maxShift:F1} m (want >= {minShift:F1} m, {BenchMarch.Slack} of a free {free:F1} m)");
         Check(g.WorldToCell(bench.AcrossTarget, out int tx, out int ty) && g.IsPassable(tx, ty), $"seed {seed}: target {bench.AcrossTarget} not passable");
         RemoveChild(match);
         match.QueueFree();
         await Frame();
         await Frame();
-    }
-
-    private static System.Numerics.Vector2 Centre(UnitStore u)
-    {
-        var sum = System.Numerics.Vector2.Zero;
-        int n = 0;
-        for (int i = 0; i < u.Capacity; i++)
-        {
-            if (!u.Alive[i] || u.Owner[i] != SelectionController.LocalPlayer) continue;
-            sum += u.Position[i];
-            n++;
-        }
-        return n > 0 ? sum / n : sum;
     }
 
     // The real Match at --units 1000: 1,000 per side spawn, each on an open cell (passable, not a ramp, no

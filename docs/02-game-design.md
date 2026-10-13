@@ -388,8 +388,8 @@ show text, a minimap ping, and a sound.
 5. **Post-match stats:** resources gathered, units trained/lost/killed, buildings built/lost,
    army value over time (graph), time to Age II.
 6. **Save/load** any time during a match. **Replays** are recorded for every match.
-7. **Settings:** resolution, window mode, VSync, graphics quality, master/music/SFX volume, edge
-   pan speed, keybinds.
+7. **Settings:** resolution, window mode (windowed / borderless / fullscreen), VSync, graphics quality
+   (Low / Medium / High presets), master/music/SFX volume, edge pan speed, keybinds.
 
 ## Resolved open items
 

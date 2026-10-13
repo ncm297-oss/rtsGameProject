@@ -3,7 +3,7 @@ using Godot;
 
 namespace Rts.Game;
 
-/// <summary>The pause menu over a match (M6-V1, docs/02 "Game flow" 3): Resume and Quit to menu. Text from <c>ui.json</c> <c>pause</c>.</summary>
+/// <summary>The pause menu over a match (M6-V1, docs/02 "Game flow" 3): Resume, Settings (M6-V6) and Quit to menu. Text from <c>ui.json</c> <c>pause</c>.</summary>
 /// <remarks>
 /// It runs while the tree is paused (<see cref="Node.ProcessModeEnum.Always"/>); its backdrop takes every click, so nothing
 /// under it gets one. It only raises events; <see cref="Main"/> pauses, resumes and ends the match.
@@ -16,11 +16,17 @@ public partial class PauseMenu : CanvasLayer
     /// <summary>Raised by the Resume button.</summary>
     public event Action? ResumePressed;
 
+    /// <summary>Raised by the Settings button.</summary>
+    public event Action? SettingsPressed;
+
     /// <summary>Raised by the Quit to menu button.</summary>
     public event Action? QuitToMenuPressed;
 
     /// <summary>The Resume button.</summary>
     public Button ResumeButton { get; private set; } = null!;
+
+    /// <summary>The Settings button.</summary>
+    public Button SettingsButton { get; private set; } = null!;
 
     /// <summary>The Quit to menu button.</summary>
     public Button QuitToMenuButton { get; private set; } = null!;
@@ -38,6 +44,9 @@ public partial class PauseMenu : CanvasLayer
         ResumeButton = ShellUi.Button("Resume", ui.Pause(PauseText.Resume));
         ResumeButton.Pressed += () => ResumePressed?.Invoke();
         column.AddChild(ResumeButton);
+        SettingsButton = ShellUi.Button("Settings", ui.Pause(PauseText.Settings));
+        SettingsButton.Pressed += () => SettingsPressed?.Invoke();
+        column.AddChild(SettingsButton);
         QuitToMenuButton = ShellUi.Button("QuitToMenu", ui.Pause(PauseText.QuitToMenu));
         QuitToMenuButton.Pressed += () => QuitToMenuPressed?.Invoke();
         column.AddChild(QuitToMenuButton);

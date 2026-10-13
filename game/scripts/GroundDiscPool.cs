@@ -9,8 +9,9 @@ namespace Rts.Game;
 /// while it is taken, so a disc whose centre doesn't move is never rebuilt; a key not taken in a frame gives its node back
 /// (hidden) for any other key. The pool starts with <c>initial</c> nodes and doubles when a frame needs more (a new high
 /// mark: the only time it allocates), up to one node per key. A key that finds no free node first takes one whose key has
-/// not been taken yet this frame (BUG-0550 item 1), so a frame that swaps its keys for as many others doesn't grow it.
-/// View state only.
+/// not been taken yet this frame (BUG-0550 item 1), so a frame that swaps its keys for as many others doesn't grow it: a
+/// lower key's (callers take keys in ascending order, so that key was skipped and is stale), else the highest such key's
+/// (the last to come, so the fewest stable keys lose their nodes; BUG-0662). View state only.
 /// </summary>
 /// <remarks>Each frame: <see cref="Begin"/>, then <see cref="Take"/> per drawn key (place and colour the node it returns, then show it), then <see cref="End"/>.</remarks>
 public sealed class GroundDiscPool
@@ -21,7 +22,7 @@ public sealed class GroundDiscPool
     private GroundDisc[] _nodes = Array.Empty<GroundDisc>();
     private int[] _nodeKey = Array.Empty<int>(), _free = Array.Empty<int>();
     private bool[] _used = Array.Empty<bool>();
-    private int _count, _freeCount, _reclaimFrom;
+    private int _count, _freeCount;
 
     /// <summary>A pool under <paramref name="parent"/> for keys 0 to <paramref name="keys"/> - 1, made with <paramref name="initial"/> hidden nodes named <paramref name="name"/> + index.</summary>
     public GroundDiscPool(Node parent, string name, int keys, int initial)
@@ -53,7 +54,6 @@ public sealed class GroundDiscPool
     public void Begin()
     {
         Array.Clear(_used, 0, _count);
-        _reclaimFrom = 0;
     }
 
     /// <summary>
@@ -65,7 +65,7 @@ public sealed class GroundDiscPool
         int n = _keyNode[key];
         if (n < 0)
         {
-            n = _freeCount > 0 ? _free[--_freeCount] : Reclaim();
+            n = _freeCount > 0 ? _free[--_freeCount] : Reclaim(key);
             if (n < 0)
             {
                 Grow(Math.Min(_keyNode.Length, _count * 2));
@@ -102,20 +102,28 @@ public sealed class GroundDiscPool
         Array.Fill(_keyNode, -1);
     }
 
-    // A node held by a key this frame hasn't taken yet (a stale holder End would free anyway), released from that key; or -1.
-    // The cursor only moves forward within a frame: a node it passed is taken this frame, so the scans cost one pass a frame.
-    private int Reclaim()
+    // A node held by a key this frame hasn't taken yet (a holder End may free), released from that key; or -1. A key below
+    // `key` was skipped (callers take ascending keys), so its node is surely stale and goes first; else the highest untaken key,
+    // which comes last if at all, gives its node, so the keys between keep theirs (BUG-0662: the lowest went first and every
+    // stable key after it moved one node along, rebuilding each mesh). One pass, no allocation.
+    private int Reclaim(int key)
     {
-        for (; _reclaimFrom < _count; _reclaimFrom++)
+        int highest = -1;
+        for (int n = 0; n < _count; n++)
         {
-            int n = _reclaimFrom;
-            if (_used[n] || _nodeKey[n] < 0) continue;
-            _keyNode[_nodeKey[n]] = -1;
-            _nodeKey[n] = -1;
-            _reclaimFrom++;
-            return n;
+            int held = _nodeKey[n];
+            if (_used[n] || held < 0) continue;
+            if (held < key) return Release(n);
+            if (highest < 0 || held > _nodeKey[highest]) highest = n;
         }
-        return -1;
+        return highest < 0 ? -1 : Release(highest);
+    }
+
+    private int Release(int n)
+    {
+        _keyNode[_nodeKey[n]] = -1;
+        _nodeKey[n] = -1;
+        return n;
     }
 
     // Makes nodes up to `to` (more than now), all free.

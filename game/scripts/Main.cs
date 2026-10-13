@@ -12,7 +12,10 @@ namespace Rts.Game;
 /// script keeps working; with none, the main menu shows. Main menu -> skirmish setup -> match; Esc in a match pauses it
 /// (the tree pauses: the sim stops ticking and the match takes no input) unless a targeting order, a build menu or a
 /// placement ghost is armed, which Esc cancels as before. Quit to menu frees the whole match. The shell holds which screen
-/// is up and the player's picks, never game state.
+/// is up and the player's picks, never game state. M6-V6: the settings (<see cref="GameSettings"/>, <c>user://settings.cfg</c>)
+/// are read and applied right after the data, before the menu or the match; the Settings screen opens from the menu and the
+/// pause menu, and its Apply / Defaults / Back apply and save them (<see cref="CommitSettings"/>). <c>--vsync</c> wins over
+/// the file for the run and never changes it.
 /// </remarks>
 public partial class Main : Node3D
 {
@@ -23,9 +26,25 @@ public partial class Main : Node3D
     private MainMenu? _menu;
     private SkirmishSetup? _setup;
     private PauseMenu? _pause;
+    private SettingsScreen? _settingsScreen;
 
     /// <summary>The user args to read instead of the command line's (tests); null for <see cref="OS.GetCmdlineUserArgs"/>.</summary>
     public string[]? UserArgs { get; set; }
+
+    /// <summary>The settings file to read and write (tests point it elsewhere so they never touch the player's); set before the node enters the tree.</summary>
+    public string SettingsPath { get; set; } = GameSettings.DefaultPath;
+
+    /// <summary>The settings in effect (read at boot, then each commit); defaults before <see cref="Node._Ready"/>.</summary>
+    public GameSettings Settings { get; private set; } = new();
+
+    /// <summary><c>--vsync on|off</c> for this run (it wins over <see cref="Settings"/>), or null.</summary>
+    public bool? VsyncOverride { get; private set; }
+
+    /// <summary>The VSync this run uses: the flag, else the settings' (headless has no window, so this is the state tests read).</summary>
+    public bool EffectiveVsync => VsyncOverride ?? Settings.Vsync;
+
+    /// <summary>The settings screen; null without <c>ui.json</c>.</summary>
+    public SettingsScreen? SettingsScreen => _settingsScreen;
 
     /// <summary>The running match, or null on the menu screens.</summary>
     public Match? CurrentMatch { get; private set; }
@@ -61,9 +80,14 @@ public partial class Main : Node3D
         ProcessMode = ProcessModeEnum.Always;
         string[] args = UserArgs ?? OS.GetCmdlineUserArgs();
         UiText? ui = UiText.Shared;
-        if (ui != null) BuildScreens(ui, _data);
         // Without ui.json there is no menu text: the errors are logged and the match starts as it did before the shell.
-        if (LaunchOptions.HasMatchFlag(args) || ui == null) StartMatch(LaunchOptions.Parse(args));
+        LaunchOptions? options = LaunchOptions.HasMatchFlag(args) || ui == null ? LaunchOptions.Parse(args) : null;
+        // M6-V6 boot order: the settings are read and applied before any screen or match exists.
+        VsyncOverride = options?.Vsync;
+        Settings = GameSettings.Load(SettingsPath);
+        SettingsApplier.Apply(Settings, GetTree().Root, VsyncOverride);
+        if (ui != null) BuildScreens(ui, _data);
+        if (options != null) StartMatch(options);
         else ShowMenu();
     }
 
@@ -73,6 +97,7 @@ public partial class Main : Node3D
         AddChild(_menu);
         _menu.Build(ui);
         _menu.SkirmishPressed += ShowSetup;
+        _menu.SettingsPressed += ShowSettings;
         _menu.QuitPressed += () => GetTree().Quit();
 
         _setup = new SkirmishSetup { Name = "SkirmishSetup", Visible = false };
@@ -86,6 +111,52 @@ public partial class Main : Node3D
         _pause.Build(ui);
         _pause.ResumePressed += Resume;
         _pause.QuitToMenuPressed += QuitToMenu;
+        _pause.SettingsPressed += ShowSettings;
+
+        _settingsScreen = new SettingsScreen { Name = "SettingsScreen" };
+        AddChild(_settingsScreen);
+        _settingsScreen.Build(ui);
+        _settingsScreen.ApplyPressed += () => CommitSettings(_settingsScreen.Picks(), stay: true);
+        _settingsScreen.DefaultsPressed += () => CommitSettings(new GameSettings(), stay: true);
+        _settingsScreen.BackPressed += () => CommitSettings(_settingsScreen.Picks(), stay: false);
+    }
+
+    /// <summary>Shows the settings screen with the settings in effect: over the main menu, or over the pause menu (the match stays paused).</summary>
+    public void ShowSettings()
+    {
+        if (_settingsScreen == null || _menu == null) return;
+        if (!Paused) _menu.Visible = false;
+        _settingsScreen.ShowSettings(Settings, GetWindow().Size);
+        _settingsScreen.Visible = true;
+        _settingsScreen.BackButton.GrabFocus();
+    }
+
+    /// <summary>
+    /// Makes <paramref name="picks"/> the settings: saved to <see cref="SettingsPath"/>, then applied (window and VSync, quality,
+    /// buses, the running match's camera). With <paramref name="stay"/> the screen shows them again (Apply, Defaults), else
+    /// it closes to the menu or the pause menu it came from (Back, Esc).
+    /// </summary>
+    public void CommitSettings(GameSettings picks, bool stay)
+    {
+        Settings = picks.Clone();
+        Settings.Save(SettingsPath);
+        SettingsApplier.Apply(Settings, GetTree().Root, VsyncOverride);
+        ApplyCamera();
+        if (_settingsScreen == null) return;
+        if (stay)
+        {
+            _settingsScreen.ShowSettings(Settings, GetWindow().Size);
+            return;
+        }
+        _settingsScreen.Visible = false;
+        if (Paused) _pause!.ResumeButton.GrabFocus();
+        else ShowMenu();
+    }
+
+    // The running match's camera takes the edge pan speed (a new match takes it in StartMatch).
+    private void ApplyCamera()
+    {
+        if (CurrentMatch?.GetNodeOrNull<RtsCamera>("RtsCamera") is RtsCamera camera) camera.EdgePanSpeed = Settings.EdgePan;
     }
 
     /// <summary>Shows the main menu (no match runs on a menu screen).</summary>
@@ -122,6 +193,7 @@ public partial class Main : Node3D
         // Ready before Start, as when the match was a child of Main.tscn: Start wires nodes the match's _Ready looked up.
         match.Start(_data, options);
         CurrentMatch = match;
+        ApplyCamera();
     }
 
     /// <summary>Pauses the running match: the tree stops (no tick, no match input) and the pause menu shows.</summary>
@@ -157,7 +229,13 @@ public partial class Main : Node3D
     public override void _Input(InputEvent e)
     {
         if (!e.IsActionPressed("ui_cancel") || e.IsEcho()) return;
-        if (CurrentMatch != null)
+        if (_settingsScreen is { Visible: true })
+        {
+            // Esc is Back: the picks are kept and the screen closes to where it came from (the pause menu stays paused).
+            CommitSettings(_settingsScreen.Picks(), stay: false);
+            GetViewport().SetInputAsHandled();
+        }
+        else if (CurrentMatch != null)
         {
             if (_pause == null) return;
             if (Paused) Resume();

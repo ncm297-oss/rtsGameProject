@@ -7,6 +7,8 @@ public enum MenuText
     Title,
     /// <summary>The button that opens the skirmish setup.</summary>
     Skirmish,
+    /// <summary>The button that opens the settings screen (M6-V6).</summary>
+    Settings,
     /// <summary>The button that closes the game.</summary>
     Quit,
 }

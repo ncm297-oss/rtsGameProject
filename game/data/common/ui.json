@@ -74,6 +74,7 @@
   "menu": {
     "title": "RtsGame",
     "skirmish": "Skirmish",
+    "settings": "Settings",
     "quit": "Quit"
   },
   "setup": {
@@ -104,6 +105,30 @@
   "pause": {
     "title": "Paused",
     "resume": "Resume",
+    "settings": "Settings",
     "quit_to_menu": "Quit to menu"
+  },
+  "settings": {
+    "title": "Settings",
+    "resolution": "Resolution",
+    "resolution_item": "{0} × {1}",
+    "window_mode": "Window mode",
+    "window_windowed": "Windowed",
+    "window_borderless": "Borderless",
+    "window_fullscreen": "Fullscreen",
+    "vsync": "VSync",
+    "vsync_on": "On",
+    "vsync_off": "Off",
+    "quality": "Graphics quality",
+    "quality_low": "Low",
+    "quality_medium": "Medium",
+    "quality_high": "High",
+    "master_volume": "Master volume",
+    "music_volume": "Music volume",
+    "sfx_volume": "Sound effects volume",
+    "edge_pan_speed": "Edge pan speed",
+    "apply": "Apply",
+    "defaults": "Defaults",
+    "back": "Back"
   }
 }

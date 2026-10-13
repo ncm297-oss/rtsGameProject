@@ -7,6 +7,8 @@ public enum PauseText
     Title,
     /// <summary>The button that unpauses.</summary>
     Resume,
+    /// <summary>The button that opens the settings screen over the paused match (M6-V6).</summary>
+    Settings,
     /// <summary>The button that ends the match and goes back to the main menu.</summary>
     QuitToMenu,
 }

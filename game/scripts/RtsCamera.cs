@@ -14,6 +14,9 @@ public partial class RtsCamera : Camera3D
     /// <summary>Screen-edge panning; turned off for scripted screenshots so the mouse can't move the shot.</summary>
     [Export] public bool EdgePanEnabled { get; set; } = true;
 
+    /// <summary>The edge pan's speed as a multiple of <see cref="CameraLimits.PanSpeed"/> (the settings' edge pan speed, 0.5-2; M6-V6). Keyboard panning keeps 1.</summary>
+    public float EdgePanSpeed { get; set; } = 1f;
+
     /// <summary>A control (the minimap) that sits on the screen edge; edge panning pauses while the mouse is over it.</summary>
     public Control? EdgePanBlocker { get; set; }
 
@@ -52,14 +55,26 @@ public partial class RtsCamera : Camera3D
 
     public override void _Process(double delta)
     {
-        Vector2 dir = Input.GetVector("camera_pan_left", "camera_pan_right", "camera_pan_up", "camera_pan_down");
-        if (EdgePanEnabled && !_dragging) dir += EdgeDirection();
+        Vector2 keys = Input.GetVector("camera_pan_left", "camera_pan_right", "camera_pan_up", "camera_pan_down");
+        Vector2 edge = EdgePanEnabled && !_dragging ? EdgeDirection() : Vector2.Zero;
+        Vector2 dir = PanVector(keys, edge, EdgePanSpeed);
         if (dir != Vector2.Zero)
         {
-            dir = dir.LimitLength(1f);
             float step = CameraLimits.PanSpeed(_zoom) * (float)delta;
             MoveFocus(dir.X * step, dir.Y * step);
         }
+    }
+
+    /// <summary>
+    /// The pan this frame as a multiple of the pan speed: the keys' direction (length at most 1) plus the edge direction
+    /// (length at most 1) times <paramref name="edgeSpeed"/>, together at most the larger of 1 and the edge speed, so the
+    /// keys and the edge pushing the same way are not faster than the faster alone.
+    /// </summary>
+    public static Vector2 PanVector(Vector2 keys, Vector2 edge, float edgeSpeed)
+    {
+        if (!(edgeSpeed > 0f)) edgeSpeed = 0f; // NaN or negative: no edge pan
+        Vector2 sum = keys.LimitLength(1f) + edge.LimitLength(1f) * edgeSpeed;
+        return sum.LimitLength(edge == Vector2.Zero ? 1f : Mathf.Max(1f, edgeSpeed));
     }
 
     public override void _Notification(int what)

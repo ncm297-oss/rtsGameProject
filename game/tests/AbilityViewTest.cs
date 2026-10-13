@@ -1970,6 +1970,7 @@ public partial class AbilityViewTest : Node
         Check(zoneFrames == 300, $"steady: 8 zone discs drawn in {zoneFrames} of 300 frames ({W.Zones.Count} live, {W.Zones.BlockerCount} blocking)");
         Check(bytes == 0, $"steady: 300 frames at --units 500 allocated {bytes} bytes");
         PoolRow();
+        StableKeysRow();
         MinimapRightClicks();
         await EndMatch();
     }
@@ -2010,6 +2011,49 @@ public partial class AbilityViewTest : Node
         Check(sent[0] == 12 && sent[1] == 12 && rings[1] >= 10 && flashes[1] >= 10, $"pool: sent {sent[0]} / {sent[1]}, rings {rings[1]}, flashes {flashes[1]} at once in round 2");
         Check(bytes == 0 && _views.CastRingPool.Nodes == ringNodes && _views.FlashPool.Nodes == flashNodes,
             $"pool: {bytes} B over the second round; ring nodes {ringNodes} -> {_views.CastRingPool.Nodes}, flash nodes {flashNodes} -> {_views.FlashPool.Nodes}");
+    }
+
+    // BUG-0662: in a full pool a new low key takes a stale node (a skipped lower key's, else the highest untaken key's), so the
+    // stable keys keep their nodes and only the new key's mesh is built. Frame 1: keys 10-13 in 4 nodes; frame 2: 5, 10, 11, 12
+    // (13 gone): 5 takes 13's node, nobody moves. Frame 3: 3, 5, 10, 11, 12 (3 new, no stale node): 3 takes the node of the
+    // highest key not taken yet (12, which comes last and then grows the pool), so 5, 10 and 11 keep theirs: one extra mesh,
+    // not the old cascade of every stable key moving one node along. (Growing instead would break QaM5V1's 16-for-16 swap.)
+    private void StableKeysRow()
+    {
+        var holder = new Node3D { Name = "StableKeysPool" };
+        AddChild(holder);
+        var pool = new GroundDiscPool(holder, "StableDisc", 64, 4);
+        var mid = new System.Numerics.Vector2(W.Heightmap.Width * 0.5f, W.Heightmap.Height * 0.5f);
+        int Frame(int[] keys)
+        {
+            int rebuilds = 0;
+            for (int n = 0; n < pool.Nodes; n++) rebuilds -= pool.Node(n).Rebuilds;
+            pool.Begin();
+            foreach (int k in keys)
+            {
+                GroundDisc d = pool.Take(k);
+                d.Place(W.Heightmap, mid + new System.Numerics.Vector2(k * 3f, 0f), 1.5f, 0f, 0.1f);
+                d.Visible = true;
+            }
+            pool.End();
+            for (int n = 0; n < pool.Nodes; n++) rebuilds += pool.Node(n).Rebuilds;
+            return rebuilds;
+        }
+        Frame(new[] { 10, 11, 12, 13 });
+        GroundDisc?[] held = { pool.NodeOf(10), pool.NodeOf(11), pool.NodeOf(12) };
+        int second = Frame(new[] { 5, 10, 11, 12 });
+        int kept2 = 0;
+        for (int k = 0; k < 3; k++) if (ReferenceEquals(pool.NodeOf(10 + k), held[k])) kept2++;
+        GroundDisc? five = pool.NodeOf(5);
+        int third = Frame(new[] { 3, 5, 10, 11, 12 });
+        int kept3 = ReferenceEquals(pool.NodeOf(5), five) ? 1 : 0;
+        for (int k = 0; k < 2; k++) if (ReferenceEquals(pool.NodeOf(10 + k), held[k])) kept3++;
+        GD.Print($"pool stable keys: a new key 5 kept {kept2} of 3 stable nodes ({second} rebuilds); a new key 3 next kept {kept3} of 3 below the highest ({third} rebuilds), pool {pool.Nodes} nodes");
+        Check(kept2 == 3 && second == 1 && pool.NodeOf(13) == null, $"BUG-0662: a new key 5 kept {kept2} of 3 stable keys' nodes, {second} mesh rebuilds (want 3, 1)");
+        Check(kept3 == 3 && third == 2 && pool.Nodes == 8, $"BUG-0662: a new key 3 in a full pool kept {kept3} of keys 5, 10, 11's nodes, {third} mesh rebuilds, {pool.Nodes} nodes (want 3, 2, 8)");
+        pool.Free();
+        RemoveChild(holder);
+        holder.QueueFree();
     }
 
     // Test staging after the twin (M4-V6c): 8 zones over the two armies, alternating owners, two of them Sandstorms (blocking)

@@ -29,6 +29,9 @@ namespace Rts.Game.Tests;
 /// M6-VH1: the corpse legibility rules over the whole colour table (8 fills, 28 pairs; BUG-0632); colours unique per match
 /// (each list greys the other's colour, a colliding pick moves to the first free one, <c>--colour</c> on one colour twice keeps
 /// slot 2's default; BUG-0631 item 3).
+/// M6-V6: the <c>menu.settings</c>, <c>pause.settings</c> and <c>settings.*</c> keys (each missing one an error naming it, a
+/// bad <c>settings.resolution_item</c> refused); <c>--vsync off</c> with a settings file saying on: off for the run, the file
+/// unchanged. The settings screen itself is <c>SettingsTest</c>'s.
 /// </summary>
 /// <remarks>
 /// Headless: <c>&amp; $env:GODOT --headless --path game res://tests/ShellTest.tscn</c>; prints "SHELL TEST PASS" and exits 0,
@@ -61,6 +64,7 @@ public partial class ShellTest : Node
             UiRows();
             await Flow();
             await SkirmishBoot();
+            await VsyncOverride();
         }
         catch (Exception ex)
         {
@@ -187,7 +191,8 @@ public partial class ShellTest : Node
         foreach (MenuText k in Enum.GetValues<MenuText>()) keys.Add(("menu", UiText.Key(k), _ui.Menu(k)));
         foreach (SetupText k in Enum.GetValues<SetupText>()) keys.Add(("setup", UiText.Key(k), _ui.Setup(k)));
         foreach (PauseText k in Enum.GetValues<PauseText>()) keys.Add(("pause", UiText.Key(k), _ui.Pause(k)));
-        Check(keys.Count == 3 + 15 + 3, $"{keys.Count} shell keys");
+        foreach (SettingsText k in Enum.GetValues<SettingsText>()) keys.Add(("settings", UiText.Key(k), _ui.Settings(k)));
+        Check(keys.Count == 4 + 15 + 4 + 21, $"{keys.Count} shell keys");
         string json = File.ReadAllText(UiText.DefaultPath).Replace("\r\n", "\n");
         foreach ((string section, string key, string text) in keys)
         {
@@ -198,7 +203,7 @@ public partial class ShellTest : Node
             Check(UiText.Parse(root.ToJsonString(), errors) == null && errors.Count == 1 && errors[0].Contains($"{section}.{key}"),
                 $"ui.json without {section}.{key}: [{string.Join("; ", errors)}]");
         }
-        foreach (string section in new[] { "menu", "setup", "pause" })
+        foreach (string section in new[] { "menu", "setup", "pause", "settings" })
         {
             var root = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
             root.Remove(section);
@@ -208,7 +213,13 @@ public partial class ShellTest : Node
         // The keys the brief names, by their ui.json spelling.
         string[] named = { "menu.title", "menu.skirmish", "menu.quit", "setup.title", "setup.seed", "setup.random", "setup.map_size", "setup.slot_human",
             "setup.slot_ai", "setup.faction", "setup.difficulty", "setup.start", "setup.back", "pause.title", "pause.resume", "pause.quit_to_menu",
-            "setup.map_size_item", "setup.difficulty_easy", "setup.difficulty_normal", "setup.difficulty_hard", "setup.colour" };
+            "setup.map_size_item", "setup.difficulty_easy", "setup.difficulty_normal", "setup.difficulty_hard", "setup.colour",
+            // M6-V6: the settings screen's keys.
+            "menu.settings", "pause.settings", "settings.title", "settings.resolution", "settings.resolution_item", "settings.window_mode",
+            "settings.window_windowed", "settings.window_borderless", "settings.window_fullscreen", "settings.vsync", "settings.vsync_on",
+            "settings.vsync_off", "settings.quality", "settings.quality_low", "settings.quality_medium", "settings.quality_high",
+            "settings.master_volume", "settings.music_volume", "settings.sfx_volume", "settings.edge_pan_speed", "settings.apply",
+            "settings.defaults", "settings.back" };
         foreach (string n in named) Check(keys.Any(k => $"{k.Section}.{k.Key}" == n), $"no key {n}");
         Check(!keys.Any(k => k.Key == "coming_soon"), "setup.coming_soon is still read (nothing shows it since M6-V2)");
 
@@ -225,6 +236,17 @@ public partial class ShellTest : Node
         }
         Check(UiText.Parse(json.Replace("\"{0} × {0}\"", "\"{{0}} × {0}\""), new List<string>()) is UiText partial && partial.MapSizeItem(128) == "{0} × 128",
             "a format naming the size once, beside a literal '{0}', was refused");
+
+        // M6-V6: the resolution item names the width and the height; anything else is one error naming the key.
+        Check(_ui.ResolutionItem(1920, 1080).Contains("1920") && _ui.ResolutionItem(1920, 1080).Contains("1080"), $"resolution item '{_ui.ResolutionItem(1920, 1080)}'");
+        foreach (string bad in new[] { "{0} x {0}", "{1}", "{0} x {2}", "{0", "{{0}} x {{1}}", "size" })
+        {
+            var root = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
+            root["settings"]!["resolution_item"] = bad;
+            var errors = new List<string>();
+            Check(UiText.Parse(root.ToJsonString(), errors) == null && errors.Count == 1 && errors[0].Contains("settings.resolution_item"),
+                $"resolution_item '{bad}': [{string.Join("; ", errors)}]");
+        }
 
         // M6-V3: the colour table, setup.colour_1 .. colour_8 ({ displayName, rgb }); each missing key or field one error naming it.
         for (int c = 0; c < UiText.ColourCount; c++)
@@ -511,6 +533,30 @@ public partial class ShellTest : Node
         await Colours(c0, c1);
         Check(_main.CurrentMatch != match, "the second match is the first one");
         Check(MatchNodes().Count(n => n.StartsWith(nameof(Match) + " ", StringComparison.Ordinal)) == 1, "not exactly one Match in the tree");
+    }
+
+    // M6-V6: --vsync off over a settings file saying on: off for this run (EffectiveVsync; headless has no window to ask), the
+    // file's own value and bytes unchanged. --vsync is a match flag, so the boot starts the match at once.
+    private async Task VsyncOverride()
+    {
+        const string path = "user://shell-test-settings/settings.cfg";
+        var on = new GameSettings { Vsync = true, EdgePan = 1.25f };
+        Check(on.Save(path), "could not write the test settings file");
+        string full = ProjectSettings.GlobalizePath(path);
+        string before = File.ReadAllText(full);
+        var main = GD.Load<PackedScene>("res://scenes/Main.tscn").Instantiate<Main>();
+        main.UserArgs = new[] { "--vsync", "off", "--units", "0" };
+        main.SettingsPath = path;
+        AddChild(main);
+        await Frames(3);
+        Check(main.CurrentMatch != null && main.VsyncOverride == false && !main.EffectiveVsync && main.Settings.Vsync && main.Settings.EdgePan == 1.25f,
+            $"--vsync off over a file saying on: match {main.CurrentMatch != null}, override {main.VsyncOverride}, effective {main.EffectiveVsync}, file's {main.Settings.Vsync}");
+        Check(main.CurrentMatch?.GetNode<RtsCamera>("RtsCamera").EdgePanSpeed == 1.25f, "a dev-flag match did not take the file's edge pan");
+        Check(File.ReadAllText(full) == before, "the boot rewrote the settings file");
+        RemoveChild(main);
+        main.QueueFree();
+        await Frames(2);
+        File.Delete(full);
     }
 
     // M6-V2: the running match's seats are the picks: the runner's, the sim's config's, and World.FactionOf agree.

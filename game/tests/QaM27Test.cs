@@ -17,10 +17,6 @@ namespace Rts.Game.Tests;
 /// </remarks>
 public partial class QaM27Test : Node
 {
-    // Smallest local-army centre displacement a 10 s bench must reach (see OrderReach). Fitted to seed 1, the only seed
-    // this scene runs (22.1 m there); other seeds march 19.1-26.2 m and QaH2Test holds them to 15 m (BUG-0104).
-    private const float MinCentreShift = 20f;
-
     private readonly List<string> _failures = new();
     private GameData _data = null!;
 
@@ -157,46 +153,37 @@ public partial class QaM27Test : Node
         bench.QuitOnFinish = false;
         Simulation sim = match.GetNode<SimRunner>("SimRunner").Simulation!;
         var watch = Stopwatch.StartNew();
-        while (!bench.Running && watch.Elapsed.TotalSeconds < 20) await Frame();
+        // BUG-0661: measured from the across order over the units it sent (BenchMarch: the start workers by the Town Hall are off
+        // screen and never ordered), held to half a free march at their speeds over the script's window, as QaH2Test does.
+        while (bench.AcrossOrders < 1 && !bench.Finished && watch.Elapsed.TotalSeconds < 20) await Frame();
         UnitStore u = sim.World.Units;
+        int[] marching = BenchMarch.Marching(match.GetNode<SelectionController>("SelectionController").Selection);
         var start = new System.Numerics.Vector2[u.Capacity];
-        System.Numerics.Vector2 c0 = Centre(u, start, record: true);
+        foreach (int i in marching) start[i] = u.Position[i];
+        System.Numerics.Vector2 c0 = BenchMarch.Centre(u, marching);
+        float minShift = BenchMarch.MinShift(u, marching), free = BenchMarch.FreeMarch(u, marching);
         float maxCentreShift = 0, maxUnit = 0;
         while (!bench.Finished && watch.Elapsed.TotalSeconds < 40)
         {
             await Frame();
-            maxCentreShift = Math.Max(maxCentreShift, System.Numerics.Vector2.Distance(c0, Centre(u, start, record: false)));
-            for (int i = 0; i < u.Capacity; i++)
-                if (u.Alive[i] && u.Owner[i] == SelectionController.LocalPlayer)
-                    maxUnit = Math.Max(maxUnit, System.Numerics.Vector2.Distance(start[i], u.Position[i]));
+            maxCentreShift = Math.Max(maxCentreShift, System.Numerics.Vector2.Distance(c0, BenchMarch.Centre(u, marching)));
+            foreach (int i in marching)
+                if (u.Alive[i]) maxUnit = Math.Max(maxUnit, System.Numerics.Vector2.Distance(start[i], u.Position[i]));
         }
         float mapW = sim.World.NavGrid.Width * Rts.Sim.Map.MapConstants.CellSize;
         float reach = System.Numerics.Vector2.Distance(bench.AcrossFrom, bench.AcrossTarget);
-        GD.Print($"QA M2-7 NOTE: 10 s bench sent the army {reach:F1} m (from {bench.AcrossFrom} to {bench.AcrossTarget}) and moved the local army centre at most {maxCentreShift:F1} m and any unit at most {maxUnit:F1} m on a {mapW:F0} m map");
+        GD.Print($"QA M2-7 NOTE: 10 s bench sent the army {reach:F1} m (from {bench.AcrossFrom} to {bench.AcrossTarget}) and moved the centre of the {marching.Length} it sent at most {maxCentreShift:F1} m (a free march: {free:F1} m) and any of them at most {maxUnit:F1} m on a {mapW:F0} m map");
         Check(bench.Finished, "10 s bench never finished");
         // BUG-0101: "order across the map" must go across (was the enemy block ~15 m away; the centre moved 17.4 m).
-        // The march crosses the idle enemy block, which halves its pace after ~5 s: an uninterrupted 10 s sim march
-        // moves seed 1's centre 24.2 m (29.3 m with no enemy), so the bench's 8.75 s march is held to 20 m.
+        // The march crosses the idle enemy block, which slows its front, and bends round terrain: seed 1 covers 0.63 of a
+        // free march; the bound is BenchMarch.Slack (half) of it (BUG-0661: was a fixed 20 m over every local unit).
         Check(bench.AcrossOrders >= 1, "the 10 s bench never ordered the army across");
         Check(reach >= 100f, $"order across targets {bench.AcrossTarget}, only {reach:F1} m from the army at {bench.AcrossFrom}");
-        Check(maxCentreShift >= MinCentreShift, $"the army centre moved at most {maxCentreShift:F1} m in 10 s (want >= {MinCentreShift} m)");
+        Check(marching.Length > 0, "the across order sent no unit");
+        Check(maxCentreShift >= minShift, $"the army centre moved at most {maxCentreShift:F1} m in 10 s (want >= {minShift:F1} m, {BenchMarch.Slack} of a free {free:F1} m)");
         match.QueueFree();
         await Frame();
         await Frame();
-    }
-
-    private static System.Numerics.Vector2 Centre(UnitStore u, System.Numerics.Vector2[] start, bool record)
-    {
-        var sum = System.Numerics.Vector2.Zero;
-        int n = 0;
-        for (int i = 0; i < u.Capacity; i++)
-        {
-            if (!u.Alive[i] || u.Owner[i] != SelectionController.LocalPlayer) continue;
-            if (record) start[i] = u.Position[i];
-            sum += u.Position[i];
-            n++;
-        }
-        return n > 0 ? sum / n : sum;
     }
 
     // The binary's edge cases: every run exits 0 with one bench line and no ERROR.
