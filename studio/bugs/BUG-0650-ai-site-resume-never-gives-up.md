@@ -35,3 +35,6 @@ gathered: **1,160 against the twin's 1,730 (67%)**. Pop is 22 against 29.
   listed here so the Producer can confirm that ruling covers it too.
 - Possible fix: give up on a site after N joins that never got a worker into reach. A per-site join count on the Blackboard,
   next to `SiteStill`, would do it.
+
+## Producer triage (2026-10-13-0527 ACCEPT)
+S4 confirmed (not reachable through play: the never-seal rule keeps a placed site reachable). **Ruling on `EconomyManager.StalledThinks` (3):** a code guard like `MilitaryManager.MaxTries` (docs/01 2026-10-12 (c)): it debounces a Build that just applied and tunes no balance number; it stays in C#. Direction for the next sim hardening: a per-site join count on the Blackboard beside `SiteStill`; give the site up (or back off) after N joins that never got a worker into reach; un-skip the QA row. The tower measurement (5 joins, 4 workers lost, site finished) is left as is until M5-4b's defense logic exists.

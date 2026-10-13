@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-13-0146, task M6-V3 (QA) |
 | System | view: `UiText.ReadColours`, `SkirmishSetup` colour lists, `game/tests` colour rows |
 | Fixed by | Items 1 and 2: 67b1660 (`UiText.ReadColours` refuses each equal pair as one error naming both keys; the four tests compare with `Match.PlayerRgb` / the table). QA 2026-10-13-0146 round 1 verified both (disabling the pair check turns ShellTest and QaM6V3Test red; a data-only recolour of colours 1 / 2 leaves AbilityViewTest, QaM24Test and QaVh3Test green, and CombatViewTest red only on its corpse legibility rules, BUG-0632). Item 3 (both slots may pick one colour) stays open as a design call. |
@@ -32,3 +32,6 @@ As in Repro. Nothing crashes; all three are robustness / wording items.
 
 ## Notes
 Item 3 may be intended (the dev documented it); record the decision in docs/02 either way.
+
+## Producer (2026-10-13-0527 ACCEPT)
+**Fixed.** Item 3 by Producer decision in M6-VH1 (650d423): colours are unique per match (the setup greys the other slot's colour and moves a colliding pick to the first free one; `--colour` with both slots on one colour keeps slot 2's default; docs/02 "Game flow" 2, docs/01 row 2026-10-13). QA: 400 setup picks and 800 `--colour` streams, 0 wrong. The item-1 nit (the `#` in the duplicate-colour error) fixed there too. Follow-up wording nit: BUG-0663.

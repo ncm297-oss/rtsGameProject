@@ -35,3 +35,6 @@ The 500-unit row also peaks at stall 9 of 10 (`max stall 9`), one scan short of 
   are many goal cells, so the chase cell's field may have been evicted or never built. The `Moving` branch holds the count
   when the field is missing; the stopped branch does not.
 - Scale is 2x the 500-unit budget (docs/03). Deterministic, so it fails the same way on every run.
+
+## Producer triage (2026-10-13-0527 ACCEPT)
+S3 confirmed; at 2x the supported crowd, so not a blocker and not an M5-4b item. Direction (the dev's and QA's reading agree): in `CombatSystem.ReachableOnFoot` a stopped chaser whose chase cell's field is not cached should hold the count (as the `Moving` branch does), not read "unreachable"; un-skip `ThousandUnits_OrderedOntoAReachableBuildingThroughARampDetour_NeverGiveUp`. Next sim hardening, or folded into an M5-4b task that touches the chase code if it is a few lines.

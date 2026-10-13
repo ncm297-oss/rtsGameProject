@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-12-1930, task M6-V2 (QA) |
 | System | test scene `game/tests/M4PlayableTest.cs` (step 7, the Cusser on a building) |
-| Fixed by | |
+| Fixed by | 650d423 (M6-VH1): step 7 reads the camp's cell and generation before the cast; step 2 frames the army above the HUD band (BUG-0660). QA 2026-10-13-0527: 10 / 10 seed-6 runs under load; the root cause confirmed by replaying `m4playable-seed6-fail-tick4094.replay` on e41be72 |
 
 ## Repro
 1. Not reproducible alone: 1 failure in 3 runs at this commit. It failed in the full scene loop
@@ -35,3 +35,6 @@ This is BUG-0460's class again: a frame-timed staging step. The M6-V2 change is 
 `--faction` the seats equal the old defaults (`QA/ViewApi/ExplicitSeatsQaTests`: equal hash every tick, byte-equal replays).
 Possible test-side fixes: keep the army out of the enemy base in step 6 (pull it back once the enemy army is gone), or have
 step 7 check sight from a unit kept at the camp.
+
+## Producer (2026-10-13-0527 ACCEPT)
+**Fixed** in M6-VH1 (650d423, verified by QA: 10 / 10 seed-6 runs beside the sim suite; the replay probe confirms the cell -1 read). Status set by the Producer.
