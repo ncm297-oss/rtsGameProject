@@ -7,8 +7,12 @@ using Rts.Sim.Map;
 
 namespace Rts.Sim.ViewApi;
 
-/// <summary>Debug start bases until real start locations exist (M6): where the default match puts each player's Town Hall and starting workers (M3-V1).</summary>
+/// <summary>Start bases (M3-V1, M5-4a): where a match puts each player's Town Hall and starting workers, on the map's start locations when it has them.</summary>
 /// <remarks>
+/// On a grid with start locations (<see cref="NavGrid.StartLocations"/>, M5-4a) player p's hall is centred on location p
+/// (anchor: the centre cell minus half the footprint), still subject to the spot rules below (it moves to the nearest spot
+/// only if a start unit stands there); players past the locations, and every player on a grid without them, use the
+/// search below, unchanged since M3-V1.
 /// Deterministic from the grid, the stores and the data alone (no RNG) and read-only; like the other view reads it takes
 /// the stores' read-only parts, never the world. A Town Hall spot is an anchor whose footprint
 /// <see cref="BuildingStore.Fits"/> (open, flat, one level) on the start block's level, whose 8-ring (the cells
@@ -41,7 +45,7 @@ public static class StartBase
     }
 
     /// <summary>
-    /// Each player's start base beside its start block (<paramref name="blocks"/>[p], the positions
+    /// Each player's start base: on its start location when the grid has one for it (see the remarks of <see cref="StartBase"/>), else beside its start block (<paramref name="blocks"/>[p], the positions
     /// <see cref="StartLayout.Block"/> gave; empty for no army, then a one-unit block stands in for it): player p plays
     /// faction <paramref name="factionOf"/>[p] (the world's <c>FactionOf</c>); its Town Hall goes on the <see cref="HallSpot"/> nearest the block's mean on
     /// the level of its first (best) spot and on its side of the centre gap (player 0 west, player 1 east, as the blocks;
@@ -76,15 +80,34 @@ public static class StartBase
             plan.WorkerType[p] = faction < 0 ? -1 : UnitOfSlot(data, faction, UnitSlot.Worker);
             plan.HallAnchor[p] = -1;
             plan.Workers[p] = Array.Empty<Vector2>();
-            Vector2[] block = blocks[p].Length > 0 ? blocks[p] : StartLayout.Block(g, 1, west: p == 0, maxRadius);
-            if (plan.HallType[p] < 0 || block.Length == 0 || !g.WorldToCell(block[0], out int bx, out int by)) continue;
-            Vector2 near = Vector2.Zero;
-            foreach (Vector2 v in block) near += v;
-            near /= block.Length;
-            int mid = g.Width / 2;
-            int minX = p == 1 ? mid + StartLayout.HalfGapCells : 0;
-            int maxX = p == 0 ? mid - StartLayout.HalfGapCells - 1 : g.Width - 1;
-            int anchor = HallSpot(g, buildings, data.Buildings, plan.HallType[p], near, g.LevelAt(bx, by), taken, minX, maxX);
+            if (plan.HallType[p] < 0) continue;
+            Vector2 near;
+            int anchor;
+            if (p < g.StartLocations.Length)
+            {
+                // M5-4a: the hall is centred on the start location. The clear disc is open ground no node covers, so the
+                // footprint and its ring fit; the ring check still runs, and a start unit standing there moves the hall
+                // to the nearest spot on the location's level.
+                StartLocation st = g.StartLocations[p];
+                BuildingDef hall = data.Buildings[plan.HallType[p]];
+                int sx = st.Cell % g.Width - hall.FootprintWidth / 2, sy = st.Cell / g.Width - hall.FootprintHeight / 2;
+                anchor = sy * g.Width + sx;
+                near = FootprintCenter(g, hall, anchor);
+                if (sx < 0 || sy < 0 || !IsHallSpot(g, buildings, data.Buildings, plan.HallType[p], anchor, st.Level, taken))
+                    anchor = HallSpot(g, buildings, data.Buildings, plan.HallType[p], near, st.Level, taken);
+            }
+            else
+            {
+                Vector2[] block = blocks[p].Length > 0 ? blocks[p] : StartLayout.Block(g, 1, west: p == 0, maxRadius);
+                if (block.Length == 0 || !g.WorldToCell(block[0], out int bx, out int by)) continue;
+                near = Vector2.Zero;
+                foreach (Vector2 v in block) near += v;
+                near /= block.Length;
+                int mid = g.Width / 2;
+                int minX = p == 1 ? mid + StartLayout.HalfGapCells : 0;
+                int maxX = p == 0 ? mid - StartLayout.HalfGapCells - 1 : g.Width - 1;
+                anchor = HallSpot(g, buildings, data.Buildings, plan.HallType[p], near, g.LevelAt(bx, by), taken, minX, maxX);
+            }
             if (anchor < 0) continue;
             plan.HallAnchor[p] = anchor;
             BuildingDef def = data.Buildings[plan.HallType[p]];

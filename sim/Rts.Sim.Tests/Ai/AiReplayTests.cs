@@ -44,7 +44,7 @@ public class AiReplayTests
         (Simulation sim, ReplayRecorder rec) = Recorded(seed, difficulty);
         Assert.True(sim.AiOf(1)!.CommandsSent > 0, "the AI sent nothing");
         Replay r = rec.ToReplay();
-        Assert.Equal(5, r.FormatVersion);
+        Assert.Equal(6, r.FormatVersion); // M5-4a: format 6 (start-location lines)
         Assert.Equal(new[] { new ReplaySeat("malazan", SeatController.Human, difficulty), new ReplaySeat("whirlwind", SeatController.Ai, difficulty) }, r.Seats.ToArray());
         Assert.Contains(r.Commands, c => c.Player == 1 && c.Kind == CommandKind.Train);
         Assert.Contains(r.Commands, c => c.Player == 1 && c.Kind == CommandKind.Gather);

@@ -2,7 +2,7 @@ using System;
 
 namespace Rts.Sim.Map;
 
-/// <summary>Tunables of the terraced map generator and the resource placer. Sizes are in cells (<see cref="MineSpacing"/> in meters); defaults give a docs/02 128 x 128 map without resources.</summary>
+/// <summary>Tunables of the terraced map generator and the resource placer. Sizes are in cells (<see cref="MineSpacing"/> and the start distances in meters); defaults give a docs/02 128 x 128 map with two start locations and no resources.</summary>
 /// <remarks>
 /// Plateaus are rectangles: level-1 ones on open ground, level-2 ones inside a level-1 one.
 /// Overlapping rectangles merge into one plateau.
@@ -75,6 +75,44 @@ public sealed record MapGenParams
     /// <summary>Least distance in meters between two gold mines' centers.</summary>
     public float MineSpacing { get; init; } = 24f;
 
+    /// <summary>
+    /// Start locations the generator picks before resources (M5-4a): 2 (the default; player 1's is player 0's point mirror
+    /// through the map centre) to <see cref="MaxStartLocations"/> (quarter turns of player 0's; square maps only), or 0 for
+    /// none (terrain-only maps, maps too small for bases, and replays older than format 6: the generator then draws and
+    /// builds exactly as before M5-4a).
+    /// </summary>
+    public int StartLocations { get; init; } = 2;
+
+    /// <summary>Radius in cells of each start location's clear disc: open, flat ground on one level that no resource covers.</summary>
+    public int StartClearRadius { get; init; } = 8;
+
+    /// <summary>Least cells between a start location's clear disc and the map edge.</summary>
+    public int StartEdgeMargin { get; init; } = 10;
+
+    /// <summary>Most meters from a start location's centre cell to the centre of each of its start mines (outside the clear disc).</summary>
+    public float StartMineDistance { get; init; } = 18f;
+
+    /// <summary>Most meters from a start location's centre cell to the first tree of its start forest (outside the clear disc).</summary>
+    public float StartForestDistance { get; init; } = 24f;
+
+    /// <summary>Largest <see cref="StartLocations"/> (docs/02: 2-4 players).</summary>
+    public const int MaxStartLocations = 4;
+
+    /// <summary>Largest <see cref="StartClearRadius"/>.</summary>
+    public const int MaxStartClearRadius = 32;
+
+    /// <summary>Most meters <see cref="StartMineDistance"/> may reach past the clear disc (bounds the site disc the generator checks).</summary>
+    public const float MaxStartMineReach = 16f;
+
+    /// <summary>Largest <see cref="StartForestDistance"/> in meters.</summary>
+    public const float MaxStartForestDistance = 128f;
+
+    /// <summary>
+    /// Radius in cells of the disc the generator requires open round a start location: the clear disc, out to the start
+    /// mines' reach, plus a cell, so a 2 x 2 mine always fits beside it.
+    /// </summary>
+    internal int StartSiteRadius => Math.Max(StartClearRadius, (int)MathF.Ceiling(StartMineDistance / MapConstants.CellSize)) + 1;
+
     /// <summary>Largest <see cref="Forests"/> and <see cref="GoldMines"/>: every placement runs a flood fill of the map, so this bounds setup time.</summary>
     public const int MaxResourceGroups = 64;
 
@@ -126,6 +164,25 @@ public sealed record MapGenParams
         // Written so NaN fails; no two cells of the map are further apart than this.
         // -0 is refused like the other odd float encodings (BUG-0076).
         Check(MineSpacing >= 0f && !float.IsNegative(MineSpacing) && MineSpacing <= 2f * MapConstants.CellSize * Math.Max(Width, Height), nameof(MineSpacing));
+
+        Check(StartLocations == 0 || (StartLocations >= 2 && StartLocations <= MaxStartLocations), nameof(StartLocations));
+        Check(StartClearRadius >= 2 && StartClearRadius <= MaxStartClearRadius, nameof(StartClearRadius));
+        Check(StartEdgeMargin >= 1 && StartEdgeMargin <= minDim, nameof(StartEdgeMargin));
+        float clear = StartClearRadius * MapConstants.CellSize;
+        // Written so NaN fails: past the clear disc, and within reach of it.
+        Check(StartMineDistance > clear && StartMineDistance <= clear + MaxStartMineReach, nameof(StartMineDistance));
+        Check(StartForestDistance > clear && StartForestDistance <= MaxStartForestDistance, nameof(StartForestDistance));
+        if (StartLocations == 0) return;
+        // The pair must fit: player 0's clear disc StartEdgeMargin inside the map, its site disc in the west half.
+        int lo = StartEdgeMargin + StartClearRadius;
+        Check(lo <= Width / 2 - 1 - StartSiteRadius && lo <= Height - 1 - lo, nameof(StartClearRadius));
+        if (StartLocations > 2)
+        {
+            Check(Width == Height, nameof(StartLocations)); // quarter turns need a square map
+            // The westmost mid-height centre and its quarter turn keep their site discs apart.
+            float c = (Width - 1) / 2f;
+            Check((c - lo) * MathF.Sqrt(2f) > 2 * StartSiteRadius, nameof(StartClearRadius));
+        }
     }
 
     private static void Check(bool ok, string name)

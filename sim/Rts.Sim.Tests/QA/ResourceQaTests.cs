@@ -735,6 +735,7 @@ public class ResourceQaTests
         Assert.Equal(4, data.Resources[data.FindResource("gold_mine")].FootprintWidth);
         MapGenParams m = MapGenParams.Default with
         {
+            StartLocations = 0, // M5-4a: too small for start locations
             Width = 16, Height = 16, EdgeMargin = 1, Level1Plateaus = 2, Level1MinSize = 3, Level1MaxSize = 12, Level2Plateaus = 1, Level2MinSize = 3,
             Level2MaxSize = 6, Level2Inset = 1, RampWidth = 1, RampLength = 3, GoldMines = 4, MineSpacing = 0f, Forests = 2, ForestMinTrees = 1, ForestMaxTrees = 10,
         };

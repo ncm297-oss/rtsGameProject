@@ -283,7 +283,7 @@ bugs outrank new features.
 | [BUG-0580](BUG-0580-pause-swallows-button-release-drag-stays-live.md) | S3 | fixed | A mouse release swallowed by the pause leaves a drag live: after Resume the camera follows the cursor (middle drag) or a selection box does (left box) with no button held |
 | [BUG-0590](BUG-0590-melee-unit-overlapping-footprint-cannot-strike-building.md) | S2 | fixed | A melee unit whose body overlaps a building's footprint never strikes it (a negative gap reads as inside minRange 0) |
 | [BUG-0591](BUG-0591-ai-wave-resends-attack-forever-to-member-that-cannot-fight.md) | S3 | fixed | A wave member standing Idle by a seen target it can't hurt gets Attack every think, and the wave never ends |
-| [BUG-0592](BUG-0592-ai-scout-finds-wood-late-on-generated-seeds-1-2.md) | S3 | open | M5-3 criterion 1 not met: on generated seeds 1-2 the AI knows wood at ~2,400 and gathers it at ~3,800-4,400 (criterion 1,200 / 2,000) |
+| [BUG-0592](BUG-0592-ai-scout-finds-wood-late-on-generated-seeds-1-2.md) | S3 | fixed | M5-3 criterion 1 not met: on generated seeds 1-2 the AI knows wood at ~2,400 and gathers it at ~3,800-4,400 (criterion 1,200 / 2,000) |
 | [BUG-0593](BUG-0593-ai-vs-ai-proof-not-met-whirlwind-never-finds-enemy.md) | S2 | fixed | M5-3 criterion 9 not met: in AI-vs-AI the Whirlwind seat never finds an enemy building on seeds 1-2; no wave at the shipped thresholds |
 | [BUG-0594](BUG-0594-m5-3-small-findings.md) | S4 | open | M5-3 small findings: the rebalance drops a partial load, an untested scout skip, waveCooldown 0 unbounds the loop |
 | [BUG-0595](BUG-0595-ai-wave-resends-attackmove-forever-to-member-that-cannot-get-there.md) | S3 | fixed | A wave member that can't get to the target (its AttackMove leads nowhere) gets AttackMove every think, and the wave never ends |
@@ -296,7 +296,10 @@ bugs outrank new features.
 | [BUG-0602](BUG-0602-m6-v2-nits.md) | S4 | fixed | M6-V2 nits: an escaped `{{0}}` map size format loads clean and shows "{0}"; `--skirmish` is no longer the menu's default match |
 | [BUG-0603](BUG-0603-m4-playable-rubble-sight-flake-under-load.md) | S3 | open | M4PlayableTest seed 6 step 7 failed once under load: the army razed the Raider Camp to 338 hp in step 6, the Sapper blast finished it and no sight was left on the rubble |
 | [BUG-0604](BUG-0604-menu-ai-match-cannot-build-economy.md) | S3 | open | In the menu skirmish vs the AI, the AI never gets an economy: the dev armies clash at tick 0 over the pop cap, and no mine is in sight of the start base |
-| [BUG-0610](BUG-0610-d15-report-test-nits.md) | S4 | open | D15 small findings: the house-rule report asserts more than "no exception" and is wired to AI internals M5-3 is reworking |
+| [BUG-0610](BUG-0610-d15-report-test-nits.md) | S4 | fixed | D15 small findings: the house-rule report asserts more than "no exception" and is wired to AI internals M5-3 is reworking |
+| [BUG-0620](BUG-0620-start-params-validate-then-generate-throws.md) | S3 | open | MapGenParams.Validate accepts start-location params the flat fallback can't hold; Generate (and a replay's playback) then throws |
+| [BUG-0621](BUG-0621-start-locations-on-different-levels.md) | S3 | open | On 128 maps about 1 seed in 7 puts one base on a plateau and the other on low ground, and bases can start 70 m apart |
+| [BUG-0622](BUG-0622-m5-4a-start-location-nits.md) | S4 | open | M5-4a small findings: an edge start location wraps the hall's anchor, short resource counts favour player 0, two doc claims |
 | [BUG-0630](BUG-0630-skirmish-flag-not-menu-start-ai-seat.md) | S2 | fixed | `--skirmish` is still not the menu's Start: slot 2 is a human seat, the menu's default is an AI (Normal) |
 | [BUG-0631](BUG-0631-m6-v3-colour-table-nits.md) | S4 | open | M6-V3 colour nits: the loader accepts a colour table with two equal colours; four view tests still pin faction primaries; both slots may pick one colour |
 | [BUG-0632](BUG-0632-colour-table-breaks-corpse-legibility-rules.md) | S3 | open | Two menu colour picks break CombatViewTest's corpse legibility rules: Crimson's corpse fill is below luminance 0.2, and Iron v Jade corpses are 0.22 apart (rule 0.25) |

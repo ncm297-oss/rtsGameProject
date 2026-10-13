@@ -177,15 +177,10 @@ public class ScoutManagerTests
     }
 
     /// <summary>
-    /// Criterion 1 on a generated 128 map with the shipped Malazan order, seeds 1-3: the AI (which sees no tree from its base on
-    /// seeds 1 and 2) knows a wood node by tick 3,000 and has wood coming in by tick 6,000; the scout's Moves are one a think,
-    /// each to a waypoint. Measured (the output): the brief's 1,200 / 2,000 ticks hold on seed 3 only; on seeds 1 and 2 the
-    /// nearest forest is 71-72 m out (due north of a hall by the west edge; on seed 2 a plateau fills the east), past the 40 m
-    /// ring and its 14 m sight, and is found on the legs after the ring (2,374 / 2,406). BUG-0592 (fix round 1): a worker sent
-    /// straight to it at tick 1 (knowing where it is) sees wood at 290 / 314 and brings the first in at 1,028 / 1,090, so the
-    /// criterion needs a sweep that heads almost straight for it; none of about 60 measured sweep variants (start 0 or 15 s,
-    /// ring 40-56 m, either direction, a second ring, grids, skipping explored points) did on both seeds without being chosen
-    /// for them. The thresholds stay the measured ones; the Producer decides the criterion.
+    /// Criterion 1 on a generated 128 map with the shipped Malazan order, seeds 1-3: the AI knows a wood node by tick 1,200
+    /// and has wood coming in by tick 2,000; the scout's Moves are one a think, each to a waypoint. Before M5-4a the map had no
+    /// start locations and on seeds 1 and 2 the nearest forest was 71-75 m from the hall (known at 2,374 / 2,406, in at 4,394 /
+    /// 3,816, BUG-0592); since M5-4a the base stands on its start location, with a start forest within 24 m.
     /// </summary>
     [Theory]
     [InlineData(1UL)]
@@ -206,8 +201,10 @@ public class ScoutManagerTests
             lastWood = sim.World.Wood[0];
         }
         _out.WriteLine($"seed {seed}: knew wood at tick {knewWood}, first wood in at {firstWood}, scout phase {ai.Board.ScoutPhase}");
-        Assert.InRange(knewWood, 0, 3000);
-        Assert.InRange(firstWood, 0, 6000);
+        // M5-4a (BUG-0592's measured target): the bases stand on start locations with a forest within 24 m, so known wood
+        // by 1,200 and first wood in by 2,000 (measured: known at 386 / 2 / 2, in at 902 / 720 / 472 on seeds 1 / 2 / 3).
+        Assert.InRange(knewWood, 0, 1200);
+        Assert.InRange(firstWood, 0, 2000);
         List<Command> moves = log.Where(c => c.Kind == CommandKind.Move && IsWorker(sim, c.Unit)).ToList();
         Assert.NotEmpty(moves);
         Assert.All(moves.GroupBy(m => m.Tick), g => Assert.Single(g));

@@ -35,6 +35,7 @@ public class MapGenEquivalenceQaTests
         int l2Max = Pick(ref r, l2Min, l2Min + 20);
         var p = MapGenParams.Default with
         {
+            StartLocations = 0, // M5-4a: the pre-fix oracle has no start-location step
             Width = w,
             Height = h,
             EdgeMargin = margin,
@@ -137,7 +138,8 @@ public class MapGenEquivalenceQaTests
 
     public static IEnumerable<object[]> EdgeSets()
     {
-        MapGenParams d = MapGenParams.Default;
+        // M5-4a: the pre-fix oracle has no start-location step, so it is compared with the generator's terrain alone.
+        MapGenParams d = MapGenParams.Default with { StartLocations = 0 };
         // Minimum map, margin 1: plateaus touch the border ring + 1, so ramps run to the map edge.
         yield return new object[] { "16x16 margin1", d with { Width = 16, Height = 16, EdgeMargin = 1, Level1Plateaus = 8, Level1MinSize = 3, Level1MaxSize = 12, Level2Plateaus = 8, Level2MinSize = 3, Level2MaxSize = 6, Level2Inset = 1, RampWidth = 1, RampLength = 3, RampsPerPlateau = 16, RampTries = 128 } };
         // Very non-square: catches a stride/width-height swap in the summed-area table.

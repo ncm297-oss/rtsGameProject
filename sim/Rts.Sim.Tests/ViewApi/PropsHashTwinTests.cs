@@ -12,7 +12,9 @@ public class PropsHashTwinTests
 {
     private static Simulation Spawned(ulong seed, int perPlayer)
     {
-        Simulation sim = PropLayoutTests.MatchSim(seed, units: 2000);
+        // M5-4a: combat off. On the map with start locations the two armies' marches to the same mine meet and fight (103
+        // dead on seed 1); the proof is about view reads, so the scene keeps its 2,000 units (TestSim.ConfigNoCombat's rule).
+        var sim = new Simulation(TestSim.ConfigNoCombat(seed, 2, 2000, 4096) with { Map = MapGenParams.Default with { Forests = 12, GoldMines = 8 } });
         float maxR = TestSim.Data.Units.Max(u => u.Radius);
         for (int p = 0; p < 2; p++)
         {

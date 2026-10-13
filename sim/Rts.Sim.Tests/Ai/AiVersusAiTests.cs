@@ -9,11 +9,11 @@ namespace Rts.Sim.Tests;
 /// <summary>
 /// M5-3 criterion 9: the headless AI-vs-AI proof. Malazan against Whirlwind, both Normal, a generated 128 map (the match's
 /// 12 forests), 6,000 ticks (5 minutes), seeds 1-3: no exception; each seat's scout finishes its sweep knowing an enemy
-/// building (BUG-0593: the bases of this scene aren't mirrored, so the map grid after the mirror finds them) and each gathers
-/// wood; with the test's own attack threshold (<see cref="AiScenes.EarlyWaves"/>: one unit, rule 12) each seat sends
+/// building and each gathers wood by tick 3,000 (M5-4a: the bases stand on the map's mirrored start locations, each with a
+/// forest in reach); with the test's own attack threshold (<see cref="AiScenes.EarlyWaves"/>: one unit, rule 12) each seat sends
 /// AttackMoves; every recording plays back, every seat human, to equal checkpoints. Measured, not gated (see the output): with
-/// the shipped thresholds (20 / 14 pop) neither seat reaches a wave in 5 minutes; the Malazan seat's first wood comes in at
-/// 3,220 / 3,823 on seeds 1 / 2 (brief: by 3,000), where its nearest forest is out of the scout's 40 m ring (BUG-0592).
+/// the shipped thresholds (20 / 14 pop) neither seat reaches a wave in 5 minutes; since M5-4a the first wood comes in at
+/// 468-902 (before, without start locations, the Malazan seat's came at 3,220 / 3,823 on seeds 1 / 2, BUG-0592).
 /// </summary>
 public class AiVersusAiTests
 {
@@ -62,7 +62,8 @@ public class AiVersusAiTests
         (Simulation sim, _, int[] firstWood, _) = Run(seed, TestSim.Data);
         for (int p = 0; p < 2; p++)
         {
-            Assert.True(firstWood[p] > 0, $"seed {seed}: player {p} gathered no wood");
+            // M5-4a: wood by tick 3,000 on both seats (measured: 479-902 on seeds 1-3).
+            Assert.True(firstWood[p] > 0 && firstWood[p] <= 3000, $"seed {seed}: player {p}'s first wood came in at {firstWood[p]}");
             Assert.Equal(2, sim.AiOf(p)!.Board.ScoutPhase);
             Assert.True(sim.AiOf(p)!.Board.KnownEnemyBuildings > 0, $"seed {seed}: player {p} knows no enemy building");
         }

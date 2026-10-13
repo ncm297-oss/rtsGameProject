@@ -9,9 +9,10 @@ namespace Rts.Sim.Tests;
 [Collection(SerialCollection.Name)]
 public class MapGeneratorTests
 {
-    /// <summary>A 32 x 32 setup scaled down from the defaults.</summary>
+    /// <summary>A 32 x 32 setup scaled down from the defaults; too small for start locations (M5-4a).</summary>
     public static readonly MapGenParams Small = MapGenParams.Default with
     {
+        StartLocations = 0,
         Width = 32,
         Height = 32,
         EdgeMargin = 3,
@@ -229,7 +230,7 @@ public class MapGeneratorTests
             Level2Inset = 128,
         }).Validate();
         // RampLength and RampWidth at the map side: legal, they just never fit (no ramps placed).
-        Heightmap hm = Gen(2, MapGenParams.Default with { Width = 16, Height = 16, EdgeMargin = 1, Level1MinSize = 3, Level1MaxSize = 12, Level2MinSize = 3, Level2MaxSize = 3, RampLength = 16, RampWidth = 1 });
+        Heightmap hm = Gen(2, MapGenParams.Default with { StartLocations = 0, Width = 16, Height = 16, EdgeMargin = 1, Level1MinSize = 3, Level1MaxSize = 12, Level2MinSize = 3, Level2MaxSize = 3, RampLength = 16, RampWidth = 1 });
         Assert.Null(MapAssert.FindViolation(hm, new NavGrid(hm), requireAllLevels: false, minPassableFraction: 0f));
     }
 
@@ -258,11 +259,13 @@ public class MapGeneratorTests
             ("default", d, new[] { 0x03E158ACDF3A220CUL, 0x0148D3746B338EB9UL, 0x5BC8665CC64A40D0UL }),
             ("rampWidth6 long", d with { RampWidth = 6, RampLength = 9, Level1MinSize = 20, Level2MinSize = 9, Level2MaxSize = 16 },
                 new[] { 0xA77F3C38B4DA84BCUL, 0xBBEC4BA1CB5E08B4UL, 0x67864254C5E84CA9UL }),
-            ("dense ramps", d with { Level1Plateaus = 20, RampsPerPlateau = 8, Level2Plateaus = 12 },
+            // M5-4a: the two crowded sets pin the ramp checks on terrain alone (StartLocations 0): with start locations
+            // some of their first layouts have no room for a base and are redrawn.
+            ("dense ramps", d with { StartLocations = 0, Level1Plateaus = 20, RampsPerPlateau = 8, Level2Plateaus = 12 },
                 new[] { 0xC5ADB6D24C56AC1CUL, 0x83C9311E97B7F9A1UL, 0xB687CA9E001423C4UL }),
             ("256 crowded", d with { Width = 256, Height = 256, Level1Plateaus = 32, Level2Plateaus = 32, RampsPerPlateau = 6 },
                 new[] { 0x68AAB979CA9981D1UL, 0xAD02B4E0148CD6EAUL, 0x6F92C636A099C4EDUL }),
-            ("crowded small ramps", d with { Level1Plateaus = 32, Level2Plateaus = 32, RampsPerPlateau = 16, RampTries = 128, Level1MinSize = 5, Level1MaxSize = 20, Level2MinSize = 5, Level2MaxSize = 10, Level2Inset = 1 },
+            ("crowded small ramps", d with { StartLocations = 0, Level1Plateaus = 32, Level2Plateaus = 32, RampsPerPlateau = 16, RampTries = 128, Level1MinSize = 5, Level1MaxSize = 20, Level2MinSize = 5, Level2MaxSize = 10, Level2Inset = 1 },
                 new[] { 0xD403F667960CAE90UL, 0x2C069DF524121B96UL, 0x74E2DB76D7A99557UL }),
         };
         ulong[] seeds = { 1, 7, 42 };

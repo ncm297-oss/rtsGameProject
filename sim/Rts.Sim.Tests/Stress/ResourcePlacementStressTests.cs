@@ -24,12 +24,14 @@ public class ResourcePlacementStressTests
 
     private static readonly MapGenParams Small48 = MapGenParams.Default with
     {
+        StartLocations = 0, // M5-4a: too small for start locations
         Width = 48, Height = 48, EdgeMargin = 2, Level1Plateaus = 3, Level1MinSize = 6, Level1MaxSize = 16,
         Level2Plateaus = 2, Level2MinSize = 5, Level2MaxSize = 8, Level2Inset = 1,
     };
 
     private static readonly MapGenParams Rect64x32 = MapGenParams.Default with
     {
+        StartLocations = 0, // M5-4a: too small for start locations
         Width = 64, Height = 32, EdgeMargin = 2, Level1Plateaus = 3, Level1MinSize = 6, Level1MaxSize = 14,
         Level2Plateaus = 2, Level2MinSize = 5, Level2MaxSize = 8, Level2Inset = 1,
     };

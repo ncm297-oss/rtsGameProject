@@ -20,7 +20,7 @@ public class MinimapQaTests
     public MinimapQaTests(ITestOutputHelper output) => _out = output;
 
     private static SimConfig Config(ulong seed, int w, int h) =>
-        TestSim.ConfigNoCombat(seed, PlayerCount: 2, UnitCapacity: 2000, CommandCapacity: 4096) with { Map = MapGenParams.Default with { Width = w, Height = h } };
+        TestSim.ConfigNoCombat(seed, PlayerCount: 2, UnitCapacity: 2000, CommandCapacity: 4096) with { Map = MapGenParams.Default with { Width = w, Height = h, StartLocations = 0 } }; // M5-4a: terrain only (48-cell sides fit no bases)
 
     private static List<Command> StartArmies(Simulation sim, int perPlayer)
     {

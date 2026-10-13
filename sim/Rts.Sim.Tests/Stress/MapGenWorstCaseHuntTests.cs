@@ -44,8 +44,9 @@ public class MapGenWorstCaseHuntTests
         // Ramp as long as the map side.
         yield return new object[] { "max-length ramp", Base(1024, 1024) with { RampWidth = 1, RampLength = 1024, Level1MinSize = 3, Level1MaxSize = 200, Level2MinSize = 3, Level2MaxSize = 100 } };
         // Non-square extremes.
-        yield return new object[] { "1024x16", Base(1024, 16) with { RampWidth = 1, RampLength = 3, Level1MinSize = 3, Level1MaxSize = 12, Level2MinSize = 3, Level2MaxSize = 8 } };
-        yield return new object[] { "16x1024", Base(16, 1024) with { RampWidth = 1, RampLength = 3, Level1MinSize = 3, Level1MaxSize = 12, Level2MinSize = 3, Level2MaxSize = 8 } };
+        // M5-4a: 16 cells is too narrow for start locations, so these two are terrain only.
+        yield return new object[] { "1024x16", Base(1024, 16) with { StartLocations = 0, RampWidth = 1, RampLength = 3, Level1MinSize = 3, Level1MaxSize = 12, Level2MinSize = 3, Level2MaxSize = 8 } };
+        yield return new object[] { "16x1024", Base(16, 1024) with { StartLocations = 0, RampWidth = 1, RampLength = 3, Level1MinSize = 3, Level1MaxSize = 12, Level2MinSize = 3, Level2MaxSize = 8 } };
         // Developer-style shape with midsize everything, as a control.
         yield return new object[] { "mid 10x40", Base(1024, 1024) with { RampWidth = 10, RampLength = 40, Level1MinSize = 12, Level1MaxSize = 400, Level2MinSize = 12, Level2MaxSize = 300 } };
     }

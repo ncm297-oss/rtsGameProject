@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (filed S2; re-triaged by the Producer at the 2026-10-12-1930 ACCEPT, see below) |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-12-1930, task M5-3 |
 | System | AI `ScoutManager` (the sweep's waypoint list), `Ai/ScoutManagerTests` |
-| Fixed by | |
+| Fixed by | 70479d6 (M5-4a: the generator's start locations put each base beside two mines and a forest within 24 m; `AiScenes.Generated` builds the bases on them). Regression: `ScoutManagerTests.GeneratedMap_TheAiFindsWood_AndGathersIt` now asserts known wood <= 1,200 and first wood in <= 2,000 (measured 386 / 2 / 2 and 902 / 720 / 472 on seeds 1-3), `AiVersusAiTests` first wood <= 3,000 both seats (468-902), QA's `StartLocationAiQaTests` seeds 4-6 (knew wood by 558, first in by 1,169). Producer set at the 2026-10-13-0146 ACCEPT. |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~GeneratedMap_TheAiFindsWood_AndGathersIt" --logger "console;verbosity=detailed"`

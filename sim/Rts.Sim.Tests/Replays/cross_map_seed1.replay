@@ -1,4 +1,4 @@
-rts-replay 5
+rts-replay 6
 sim-version 0.0.1
 data-hash 8409DB7517579FEF
 seed 1
@@ -31,6 +31,11 @@ map.forest-min-trees 12
 map.forest-max-trees 40
 map.gold-mines 0
 map.mine-spacing 41C00000
+map.start-locations 2
+map.start-clear-radius 8
+map.start-edge-margin 10
+map.start-mine-distance 41900000
+map.start-forest-distance 41C00000
 commands 400
 c 1 0 0 1 0 41030F33 430BB8A2 0 0 0 0 0 0
 c 1 0 1 1 1 401FF5FF 430D454F 0 0 0 0 0 0
@@ -449,4 +454,4 @@ k 1300 12D3B3ABD2754171
 k 1400 2D93AA83C62314FA
 k 1500 C3FD467A4D0A93F4
 end
-checksum 09E3EFBB9A772F45
+checksum 9559E62E47386FD4

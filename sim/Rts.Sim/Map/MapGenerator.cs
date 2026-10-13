@@ -7,29 +7,133 @@ namespace Rts.Sim.Map;
 /// <remarks>
 /// Steps: raise level-1 rectangles, raise level-2 rectangles inside them, then cut ramps into
 /// plateau edges where a ramp fits. Every plateau edge without a ramp becomes a cliff in the
-/// <see cref="NavGrid"/>. A layout is rejected and redrawn (at most <see cref="MapGenParams.MaxAttempts"/>
-/// times) if too little ground is passable or a level is missing; after that it falls back to the
-/// best layout seen, or a flat map. Draws only from the <c>rng</c> passed by ref (<c>RngStream.MapGen</c>).
+/// <see cref="NavGrid"/>. Then (M5-4a) it picks the start locations (<see cref="FindStarts"/>). A layout is rejected and
+/// redrawn (at most <see cref="MapGenParams.MaxAttempts"/> times) if too little ground is passable, the start locations
+/// don't fit, or a level is missing; after that it falls back to the best layout seen, or a flat map. Draws only from the <c>rng</c> passed by ref (<c>RngStream.MapGen</c>).
 /// Allocates: call at load time only.
 /// </remarks>
 public static class MapGenerator
 {
     /// <summary>Generates a map; the same params and RNG state always give the same map.</summary>
+    /// <exception cref="InvalidOperationException">Start locations were asked for and not even the flat fallback has room for them (Validate rules this out).</exception>
     public static Heightmap Generate(MapGenParams p, ref SimRng rng)
     {
         p.Validate();
         Heightmap? fallback = null;
         double minPassable = (double)p.MinPassableFraction * p.Width * p.Height;
         var scratch = new RampScratch(p); // reused by every attempt
+        int[]? halfWidth = p.StartLocations > 0 ? SiteHalfWidths(p.StartSiteRadius) : null;
         for (int attempt = 0; attempt < p.MaxAttempts; attempt++)
         {
             Heightmap map = BuildLayout(p, scratch, ref rng);
             var nav = new NavGrid(map);
             if (nav.PassableCount < minPassable) continue;
+            if (halfWidth != null)
+            {
+                // M5-4a: a layout without room for the start locations is redrawn like one with too little ground.
+                StartLocation[]? found = FindStarts(p, nav, scratch.NotFlatSums, halfWidth);
+                if (found == null) continue;
+                map = map.WithStartLocations(found);
+            }
             if (AllLevelsPassable(nav)) return map;
             fallback ??= map;
         }
-        return fallback ?? Flat(p);
+        if (fallback != null) return fallback;
+        Heightmap flat = Flat(p);
+        if (halfWidth == null) return flat;
+        return flat.WithStartLocations(FindStarts(p, new NavGrid(flat), scratch.NotFlatSums, halfWidth)
+            ?? throw new InvalidOperationException($"no room for {p.StartLocations} start locations on a flat {p.Width} x {p.Height} map"));
+    }
+
+    /// <summary>Half-width in cells of each row of a disc of radius <paramref name="r"/> (index dy + r), centre to centre, the edge counting.</summary>
+    private static int[] SiteHalfWidths(int r)
+    {
+        var half = new int[2 * r + 1];
+        for (int dy = -r; dy <= r; dy++)
+        {
+            int k = 0;
+            while ((k + 1) * (k + 1) + dy * dy <= r * r) k++;
+            half[dy + r] = k;
+        }
+        return half;
+    }
+
+    // M5-4a start rule. A start location is a centre cell whose site disc (radius StartSiteRadius: the clear disc out to
+    // the start mines' reach, plus a cell) is all open ground: passable, not a ramp, no cliff, ramp or border cell among
+    // its 8 neighbours (the resource placer's rule). Such a disc is one level, since any level step makes a cliff. Player
+    // 0's centre keeps its clear disc StartEdgeMargin inside the map and its site disc in the west half; player 1's is the
+    // point mirror through the map centre, players 2 and 3 the quarter turns (square maps). Every position's site disc
+    // must be open and the discs apart. Among the centres that work, the one nearest the middle of the west edge band wins
+    // (ties to the lower cell). No RNG: an accepted layout is the same map with or without start locations.
+    // rows: per row, prefix counts of cells that are not open ground ([y * (Width + 1) + x] counts cells 0 to x - 1); the ramp
+    // scratch's summed-area table, idle once a layout is built, lends its storage.
+    private static StartLocation[]? FindStarts(MapGenParams p, NavGrid nav, int[] rows, int[] halfWidth)
+    {
+        int w = p.Width, h = p.Height, stride = w + 1, rs = p.StartSiteRadius;
+        for (int y = 0; y < h; y++)
+        {
+            rows[y * stride] = 0;
+            for (int x = 0; x < w; x++)
+            {
+                bool open = x > 0 && y > 0 && x < w - 1 && y < h - 1 && ResourcePlacer.IsOpenGround(nav, x, y);
+                rows[y * stride + x + 1] = rows[y * stride + x] + (open ? 0 : 1);
+            }
+        }
+        int lo = p.StartEdgeMargin + p.StartClearRadius, hiX = w / 2 - 1 - rs, hiY = h - 1 - lo;
+        float tx = lo, ty = (h - 1) / 2f, bestD = float.PositiveInfinity;
+        int best = -1, n = p.StartLocations;
+        Span<int> xs = stackalloc int[MapGenParams.MaxStartLocations];
+        Span<int> ys = stackalloc int[MapGenParams.MaxStartLocations];
+        for (int cy = lo; cy <= hiY; cy++)
+        {
+            for (int cx = lo; cx <= hiX; cx++)
+            {
+                float d = (cx - tx) * (cx - tx) + (cy - ty) * (cy - ty);
+                if (d >= bestD) continue;
+                Positions(w, h, cx, cy, n, xs, ys);
+                if (Fits(rows, halfWidth, w, h, rs, n, xs, ys))
+                {
+                    best = cy * w + cx;
+                    bestD = d;
+                }
+            }
+        }
+        if (best < 0) return null;
+        Positions(w, h, best % w, best / w, n, xs, ys);
+        var found = new StartLocation[n];
+        for (int i = 0; i < n; i++)
+            found[i] = new StartLocation(ys[i] * w + xs[i], nav.LevelAt(xs[i], ys[i]));
+        return found;
+    }
+
+    /// <summary>Player 0 at (cx, cy); player 1 its point mirror; players 2 and 3 the quarter turns (the map is square then).</summary>
+    private static void Positions(int w, int h, int cx, int cy, int n, Span<int> xs, Span<int> ys)
+    {
+        xs[0] = cx; ys[0] = cy;
+        xs[1] = w - 1 - cx; ys[1] = h - 1 - cy;
+        if (n > 2) { xs[2] = w - 1 - cy; ys[2] = cx; }
+        if (n > 3) { xs[3] = cy; ys[3] = h - 1 - cx; }
+    }
+
+    /// <summary>True if every position's site disc is open ground and no two discs overlap.</summary>
+    private static bool Fits(int[] rows, int[] halfWidth, int w, int h, int rs, int n, Span<int> xs, Span<int> ys)
+    {
+        int stride = w + 1;
+        for (int i = 0; i < n; i++)
+        {
+            for (int j = 0; j < i; j++)
+            {
+                int dx = xs[i] - xs[j], dy = ys[i] - ys[j];
+                if (dx * dx + dy * dy <= 4 * rs * rs) return false;
+            }
+            for (int dy = -rs; dy <= rs; dy++)
+            {
+                int y = ys[i] + dy, hw = halfWidth[dy + rs], x0 = xs[i] - hw, x1 = xs[i] + hw;
+                if (y < 0 || y >= h || x0 < 0 || x1 >= w) return false;
+                if (rows[y * stride + x1 + 1] != rows[y * stride + x0]) return false;
+            }
+        }
+        return true;
     }
 
     private readonly record struct Rect(int X, int Y, int W, int H, int Level);
