@@ -27,7 +27,7 @@ public static class AbilityScenes
     public static bool Had(Simulation sim, EntityHandle caster, bool resolved)
     {
         foreach (AbilityEvent e in sim.World.AbilityEvents)
-            if (e.Caster == caster && e.Resolved == resolved) return true;
+            if (e.Caster == caster && e.Resolved == resolved && !e.Dropped) return true; // a Dropped event is neither (BUG-0513)
         return false;
     }
 

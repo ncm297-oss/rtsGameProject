@@ -94,8 +94,8 @@ public class SimHardeningH3QaTests
     /// </summary>
     [Theory]
     [InlineData(0f)]
-    [InlineData(0.3f, Skip = "BUG-0511: OwnFighterAhead counts the whole forward half-plane, so an own fighter abeam (68-79 deg off the travel line) holds a stuck caster for ever")]
-    [InlineData(0.6f, Skip = "BUG-0511: OwnFighterAhead counts the whole forward half-plane, so an own fighter abeam (68-79 deg off the travel line) holds a stuck caster for ever")]
+    [InlineData(0.3f)]
+    [InlineData(0.6f)]
     public void AnOwnFighterBesideTheCaster_NotInItsWay_DoesNotHoldTheStuckCount(float aheadBy)
     {
         Simulation sim = PassSim();
@@ -504,7 +504,7 @@ public class SimHardeningH3QaTests
     /// 70 m south first, down a 3-wide ramp, across and up the other. No unit may give the order up (BUG-0401's rule) at any
     /// tick of 4,000; the Tent takes blows; ticks during the walk allocate 0 B.
     /// </summary>
-    [Fact(Skip = "BUG-0512: 444 of 500 give up the reachable tent once they reach the crowd round it (a scan on movement's one Idle tick after a stuck stop, or a walk that ends in the crowd)")]
+    [Fact]
     public void FiveHundredUnits_OrderedOntoAReachableBuildingThroughARampDetour_NeverGiveUp_ZeroBytes()
     {
         (Simulation sim, EntityHandle tent, EntityHandle[] army) = ChaseScene(500, blockRamp: false);

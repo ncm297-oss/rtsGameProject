@@ -288,7 +288,7 @@ public class StartLocationQaTests
     /// maximum. BUG-0620: with a small StartEdgeMargin, Validate checks the clear disc against the map but the search needs
     /// the larger site disc two cells off the border, so e.g. 40 x 40 with margin 1 passes Validate and throws.
     /// </summary>
-    [Fact(Skip = "BUG-0620: Validate accepts start params the flat fallback can't hold; Generate throws InvalidOperationException")]
+    [Fact]
     public void EveryValidatedStartParamSet_Generates()
     {
         var failures = new List<string>();
@@ -318,40 +318,20 @@ public class StartLocationQaTests
         Assert.Empty(failures);
     }
 
-    /// <summary>BUG-0620's minimal row: a 40 x 40 map with StartEdgeMargin 1 passes Validate (pinned), then Generate throws.</summary>
-    [Fact]
-    public void Bug0620_Minimal_ValidatesThenThrows_Pinned()
-    {
-        var p = MapGenParams.Default with { Width = 40, Height = 40, EdgeMargin = 1, Level1MaxSize = 30, StartEdgeMargin = 1 };
-        p.Validate();
-        var rng = new SimRng(1, RngStream.MapGen);
-        // Pins today's behaviour so a fix shows up here: either Validate refuses it by name, or a pair comes out.
-        var e = Record.Exception(() => MapGenerator.Generate(p, ref rng));
-        _out.WriteLine(e?.Message ?? "generated");
-        Assert.IsType<InvalidOperationException>(e);
-    }
-
     /// <summary>
     /// BUG-0620 through a replay file: a format 6 header whose map params pass <see cref="MapGenParams.Validate"/> (so
     /// <c>TryRead</c> says None) but leave no room for the pair makes <see cref="ReplayPlayer.Run(Replay, GameData)"/> throw
     /// instead of refusing the replay with an error. Before M5-4a every validated header generated a map.
     /// </summary>
-    [Fact(Skip = "BUG-0620: a validated replay header whose start locations can't fit throws InvalidOperationException out of ReplayPlayer.Run")]
+    // M5-H1 (BUG-0620 fixed): Validate now refuses these params, so the edited header is refused at read; were it read, playback
+    // must still refuse it rather than throw.
+    [Fact]
     public void Bug0620_ReplayHeaderThatValidatesButCannotFit_IsRefusedNotThrown()
     {
         (Replay? bad, ReplayError read) = Bug0620Replay();
-        Assert.Equal(ReplayError.None, read);
+        if (read != ReplayError.None) return; // refused at read: the header no longer validates
         ReplayResult res = ReplayPlayer.Run(bad!, TestSim.Data);
         Assert.False(res.Ok);
-    }
-
-    /// <summary>Pins BUG-0620's replay path as it is today, so a fix shows up: the header reads clean and playback throws.</summary>
-    [Fact]
-    public void Bug0620_ReplayPath_Pinned()
-    {
-        (Replay? bad, ReplayError read) = Bug0620Replay();
-        Assert.Equal(ReplayError.None, read);
-        Assert.Throws<InvalidOperationException>(() => ReplayPlayer.Run(bad!, TestSim.Data));
     }
 
     private static (Replay? Replay, ReplayError Read) Bug0620Replay()

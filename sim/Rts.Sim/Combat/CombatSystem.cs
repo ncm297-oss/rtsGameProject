@@ -726,17 +726,27 @@ public static class CombatSystem
     }
 
     /// <summary>
-    /// M4-H3 (BUG-0401): whether chaser <paramref name="i"/> walks a route that reaches its goal: it is Moving and the flow
-    /// field of its goal cell is cached with a finite cost at the cell it stands in. Read through
-    /// <see cref="Pathfinding.FlowFieldCache.PeekCached"/> (no LRU touch, so the hashed cache state doesn't move); a missing
-    /// field (still waiting for a build) or a unit that stopped (no route: movement dropped its goal) counts as unreachable.
+    /// M4-H3 (BUG-0401): whether chaser <paramref name="i"/> walks a route that reaches its goal: the flow field of its goal
+    /// cell is cached with a finite cost at the cell it stands in. Read through
+    /// <see cref="Pathfinding.FlowFieldCache.PeekCached"/> (no LRU touch, so the hashed cache state doesn't move). Moving, the
+    /// goal is its walk's, and a field still waiting for its build (M5-H1: the chase moved its goal a cell) holds the count. Stopped (M5-H1, BUG-0512):
+    /// a walk that ended at its goal (the goal kept: the nearest ground, the target still out of reach) counts as
+    /// unreachable, so nobody paces a cliff; one movement stopped short (stuck in a crowd, or no route: the goal dropped) is
+    /// judged by the cell its chase walks to next, so a stuck stop among friends round a reachable target is not "no route".
     /// </summary>
     private static bool ReachableOnFoot(World world, int i)
     {
         UnitStore u = world.Units;
-        if (u.State[i] != UnitState.Moving || u.GoalCell[i] < 0) return false;
-        Pathfinding.FlowField? field = world.FlowFields.PeekCached(u.GoalCell[i]);
-        if (field == null || !world.NavGrid.WorldToCell(u.Position[i], out int x, out int y)) return false;
+        int goalCell = u.GoalCell[i];
+        if (u.State[i] != UnitState.Moving)
+        {
+            if (goalCell >= 0 || !ChaseCell(world, i, out goalCell, out _)) return false;
+        }
+        else if (goalCell < 0) return false;
+        Pathfinding.FlowField? field = world.FlowFields.PeekCached(goalCell);
+        // A walk still waiting for its field (the chase just moved its goal a cell) is not judged yet: the count holds.
+        if (field == null) return u.State[i] == UnitState.Moving;
+        if (!world.NavGrid.WorldToCell(u.Position[i], out int x, out int y)) return false;
         return field.CostAt(y * world.NavGrid.Width + x) < float.PositiveInfinity;
     }
 
@@ -818,7 +828,15 @@ public static class CombatSystem
     private static void Chase(World world, int i)
     {
         UnitStore u = world.Units;
-        NavGrid grid = world.NavGrid;
+        if (!ChaseCell(world, i, out int cell, out Vector2 goal)) return;
+        if (u.State[i] == UnitState.Moving && u.GoalCell[i] == cell) return;
+        OrderSystem.Walk(world, i, cell, goal);
+    }
+
+    /// <summary>The cell and point unit <paramref name="i"/>'s chase walks to now; false when it resolves to no passable cell.</summary>
+    private static bool ChaseCell(World world, int i, out int cell, out Vector2 goal)
+    {
+        UnitStore u = world.Units;
         Vector2 point = TargetPoint(world, i);
         if (u.TargetIsBuilding[i])
         {
@@ -827,9 +845,7 @@ public static class CombatSystem
             float d = away.Length();
             if (d > 0f) point += away * ((u.Radius[i] + CombatConstants.BuildingStandOff) / d);
         }
-        if (!OrderSystem.ResolveTarget(grid, point, out int cell, out Vector2 goal)) return;
-        if (u.State[i] == UnitState.Moving && u.GoalCell[i] == cell) return;
-        OrderSystem.Walk(world, i, cell, goal);
+        return OrderSystem.ResolveTarget(world.NavGrid, point, out cell, out goal);
     }
 
     /// <summary>Where unit <paramref name="i"/> heads for its target: a unit's position, or the nearest point of a building's footprint.</summary>

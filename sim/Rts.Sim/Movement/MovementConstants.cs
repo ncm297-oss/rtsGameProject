@@ -108,4 +108,12 @@ public static class MovementConstants
     /// enemies is how two-player crowds flow. Also bounds one search's cost.
     /// </summary>
     public const int MaxPlugCluster = 32;
+
+    /// <summary>
+    /// Meters a stuck caster's swept corridor reaches past the two bodies' radii on each side (M5-H1, BUG-0511): an own
+    /// fighter holds the caster's stuck count only with its centre within the two radii plus this of the line of travel.
+    /// A little slack for jostling; a unit standing beside the caster (its centre a body's width or more off the line) is
+    /// not in the way.
+    /// </summary>
+    public const float CastCorridorSlack = 0.1f;
 }

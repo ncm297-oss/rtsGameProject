@@ -63,7 +63,8 @@ public static class MapGenerator
     // its 8 neighbours (the resource placer's rule). Such a disc is one level, since any level step makes a cliff. Player
     // 0's centre keeps its clear disc StartEdgeMargin inside the map and its site disc in the west half; player 1's is the
     // point mirror through the map centre, players 2 and 3 the quarter turns (square maps). Every position's site disc
-    // must be open and the discs apart. Among the centres that work, the one nearest the middle of the west edge band wins
+    // must be open, the discs apart, every two centres at least half the smaller map side apart, and every position on one
+    // level (M5-H1, BUG-0621; a layout with no such centre is redrawn like one without room). Among the centres that work, the one nearest the middle of the west edge band wins
     // (ties to the lower cell). No RNG: an accepted layout is the same map with or without start locations.
     // rows: per row, prefix counts of cells that are not open ground ([y * (Width + 1) + x] counts cells 0 to x - 1); the ramp
     // scratch's summed-area table, idle once a layout is built, lends its storage.
@@ -91,7 +92,7 @@ public static class MapGenerator
                 float d = (cx - tx) * (cx - tx) + (cy - ty) * (cy - ty);
                 if (d >= bestD) continue;
                 Positions(w, h, cx, cy, n, xs, ys);
-                if (Fits(rows, halfWidth, w, h, rs, n, xs, ys))
+                if (Apart(w, h, rs, n, xs, ys) && Fits(rows, halfWidth, w, h, rs, n, xs, ys) && SameLevel(nav, n, xs, ys))
                 {
                     best = cy * w + cx;
                     bestD = d;
@@ -107,7 +108,7 @@ public static class MapGenerator
     }
 
     /// <summary>Player 0 at (cx, cy); player 1 its point mirror; players 2 and 3 the quarter turns (the map is square then).</summary>
-    private static void Positions(int w, int h, int cx, int cy, int n, Span<int> xs, Span<int> ys)
+    internal static void Positions(int w, int h, int cx, int cy, int n, Span<int> xs, Span<int> ys)
     {
         xs[0] = cx; ys[0] = cy;
         xs[1] = w - 1 - cx; ys[1] = h - 1 - cy;
@@ -115,17 +116,37 @@ public static class MapGenerator
         if (n > 3) { xs[3] = cy; ys[3] = h - 1 - cx; }
     }
 
-    /// <summary>True if every position's site disc is open ground and no two discs overlap.</summary>
+    /// <summary>
+    /// True if no two site discs overlap and (BUG-0621) every two centres are at least half the smaller map side apart
+    /// (cells): no rush across a crowded map's middle. Shared with <see cref="MapGenParams.Validate"/>'s flat-map check.
+    /// </summary>
+    internal static bool Apart(int w, int h, int rs, int n, ReadOnlySpan<int> xs, ReadOnlySpan<int> ys)
+    {
+        long side = Math.Min(w, h);
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j < i; j++)
+            {
+                long dx = xs[i] - xs[j], dy = ys[i] - ys[j], d2 = dx * dx + dy * dy;
+                if (d2 <= 4L * rs * rs || 4 * d2 < side * side) return false;
+            }
+        return true;
+    }
+
+    /// <summary>BUG-0621: true if every position stands on one level (high ground sees down, low ground can't see up).</summary>
+    private static bool SameLevel(NavGrid nav, int n, Span<int> xs, Span<int> ys)
+    {
+        int level = nav.LevelAt(xs[0], ys[0]);
+        for (int i = 1; i < n; i++)
+            if (nav.LevelAt(xs[i], ys[i]) != level) return false;
+        return true;
+    }
+
+    /// <summary>True if every position's site disc is open ground (inside the map).</summary>
     private static bool Fits(int[] rows, int[] halfWidth, int w, int h, int rs, int n, Span<int> xs, Span<int> ys)
     {
         int stride = w + 1;
         for (int i = 0; i < n; i++)
         {
-            for (int j = 0; j < i; j++)
-            {
-                int dx = xs[i] - xs[j], dy = ys[i] - ys[j];
-                if (dx * dx + dy * dy <= 4 * rs * rs) return false;
-            }
             for (int dy = -rs; dy <= rs; dy++)
             {
                 int y = ys[i] + dy, hw = halfWidth[dy + rs], x0 = xs[i] - hw, x1 = xs[i] + hw;

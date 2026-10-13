@@ -386,7 +386,7 @@ public class AiMilitaryQaTests
     /// last order at tick 501 (AttackMove 4, Attack 12), the wave still on at 3,000, hall untouched; 10 members, 9 stand there
     /// (one could not get near and left), last order at 861.
     /// </summary>
-    [Theory(Skip = "BUG-0598: a wave whose members all stand by a target none can strike stays on forever, unordered")]
+    [Theory]
     [InlineData(4)]
     [InlineData(10)]
     public void AWaveWhoseMembersAllStandByATargetNoneCanStrike_DoesNotStayForever(int n)

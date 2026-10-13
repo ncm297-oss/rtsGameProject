@@ -149,8 +149,29 @@ public sealed class PlayerView
         return true;
     }
 
-    private SeenUnit UnitAt(int s) =>
-        new(new EntityHandle(s, _units.Generation[s]), _units.Owner[s], _units.TypeId[s], _units.Position[s], _units.Hp[s], _units.State[s]);
+    /// <summary>
+    /// M5-H1 (BUG-0640): the building the player's own live unit in slot <paramref name="slot"/> is ordered to build or repair
+    /// (walking to it or at work), as the player's own selection shows it; false for none, and for any other player's unit.
+    /// </summary>
+    public bool TryGetBuildTarget(int slot, out EntityHandle building)
+    {
+        building = default;
+        if ((uint)slot >= (uint)_units.Capacity || !_units.Alive[slot] || _units.Owner[slot] != _player) return false;
+        building = _units.BuildTarget[slot];
+        return building.Generation != 0;
+    }
+
+    /// <summary>
+    /// The unit in slot <paramref name="s"/>. BUG-0640: a worker with a building order that stands Idle (its walk to the site
+    /// just ended out of reach) is answered as <see cref="UnitState.Building"/>, which the construction system makes it next
+    /// tick; read as Idle on that one tick, the AI's economy sent it to gather and the site was left unbuilt.
+    /// </summary>
+    private SeenUnit UnitAt(int s)
+    {
+        UnitState state = _units.State[s];
+        if (state == UnitState.Idle && _units.BuildTarget[s].Generation != 0) state = UnitState.Building;
+        return new(new EntityHandle(s, _units.Generation[s]), _units.Owner[s], _units.TypeId[s], _units.Position[s], _units.Hp[s], state);
+    }
 
     // ---------- buildings ----------
 
@@ -336,7 +357,10 @@ public sealed class PlayerView
     /// now, and its ghosts (the remembered footprint, also of a building gone unseen); resource nodes it knows (alive on its
     /// explored ground, or remembered after they went out of its sight); cost; a free building slot. Not checked: units in
     /// the way and the never-seal rule (the Build applies them, and a refused Build costs nothing). A hidden enemy building
-    /// the player never saw doesn't refuse here (the Build will). Read-only and allocation-free.
+    /// the player never saw doesn't refuse here (the Build will). Two answers read world-wide state, as the human's own build
+    /// ghost (<see cref="World.CanPlace"/>) does, so the AI learns no more than a player (BUG-0573): the free building slot
+    /// (the store is shared by every player) and a pocket cell a building or node freed out of sight left (it reads as terrain).
+    /// Read-only and allocation-free.
     /// </summary>
     public bool CanPlace(int typeId, int anchorCell, out PlacementError reason)
     {

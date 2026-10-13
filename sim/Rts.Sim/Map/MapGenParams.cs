@@ -173,16 +173,24 @@ public sealed record MapGenParams
         Check(StartMineDistance > clear && StartMineDistance <= clear + MaxStartMineReach, nameof(StartMineDistance));
         Check(StartForestDistance > clear && StartForestDistance <= MaxStartForestDistance, nameof(StartForestDistance));
         if (StartLocations == 0) return;
-        // The pair must fit: player 0's clear disc StartEdgeMargin inside the map, its site disc in the west half.
-        int lo = StartEdgeMargin + StartClearRadius;
-        Check(lo <= Width / 2 - 1 - StartSiteRadius && lo <= Height - 1 - lo, nameof(StartClearRadius));
-        if (StartLocations > 2)
+        // The pair must fit a flat map: player 0's clear disc StartEdgeMargin inside the map, its site disc in the west half
+        // and on open ground, which starts two cells in from the border (BUG-0620: the site disc, not the clear disc, decides).
+        int lo = StartEdgeMargin + StartClearRadius, rs = StartSiteRadius;
+        int from = Math.Max(lo, rs + 2), hiY = Math.Min(Height - 1 - lo, Height - 3 - rs);
+        Check(lo <= Height - 1 - lo, nameof(StartClearRadius));
+        Check(from <= Math.Min(Width / 2 - 1 - rs, hiY), nameof(StartClearRadius)); // the clear radius sizes the site disc
+        if (StartLocations > 2) Check(Width == Height, nameof(StartLocations)); // quarter turns need a square map
+        // The westmost centres on a flat map: one whose positions keep the discs apart and (BUG-0621) the centres half the
+        // smaller side apart must exist, so the flat fallback always has them.
+        Span<int> xs = stackalloc int[MaxStartLocations];
+        Span<int> ys = stackalloc int[MaxStartLocations];
+        bool apart = false;
+        for (int cy = from; cy <= hiY && !apart; cy++)
         {
-            Check(Width == Height, nameof(StartLocations)); // quarter turns need a square map
-            // The westmost mid-height centre and its quarter turn keep their site discs apart.
-            float c = (Width - 1) / 2f;
-            Check((c - lo) * MathF.Sqrt(2f) > 2 * StartSiteRadius, nameof(StartClearRadius));
+            MapGenerator.Positions(Width, Height, from, cy, StartLocations, xs, ys);
+            apart = MapGenerator.Apart(Width, Height, rs, StartLocations, xs, ys);
         }
+        Check(apart, nameof(StartClearRadius));
     }
 
     private static void Check(bool ok, string name)
