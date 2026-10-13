@@ -5,6 +5,20 @@ ACCEPT: sim M5-3, view M6-V2, data D15). Counters after it: **sim 3 / 4, view 3 
 **D-H4**, a hardening; sim and view have one feature session left before their hardenings). Bug ids next session: **sim from
 BUG-0620, view from BUG-0630, data from BUG-0640.** Inbox: empty at this ACCEPT (no owner answers on D13 / D14 / D11 / D12 / D15 yet).
 
+**Confirmed at the PLAN of session 2026-10-13-0146** (first full session of 2026-10-13, 1 / 8; `main` 82e2d71: build 0 warnings,
+non-Perf **5,829 / 11 skipped / 0 failed** (14 m 39 s), smoke PASS both passes, golden `data-hash` 8409DB7517579FEF verified, inbox
+still empty, no S1 / S2). All three briefs below stand, with these PLAN refinements (the PLAN output is the brief of record):
+- **Sim M5-4a:** the start locations are the one required system. They are **generator output on the `Heightmap`, carried onto the
+  `NavGrid`** (`NavGrid.StartLocations`, `World.StartLocations` forwards), so **`StartBase.Plan` keeps its signature** and reads
+  `grid.StartLocations` when non-empty: no call site changes (`Match.cs:250`, `AiScenes.cs:163`, `ViewReads.cs:21`). Requests 37
+  (`IsDefeated` / `DefeatEvents` / `MatchOver`) is built **only if the dev's count is under 700 lines when it starts it**, else it is
+  M5-4b's first item. **BUG-0598 goes to the sim's hardening next session** (only if under 850 at the report; BUG-0594 not this session).
+- **View M6-V3:** item 1 calls **`StartBase.Plan` exactly as today** (do not read `World.StartLocations`: it is not on `main`; after the
+  merge the sim's `Plan` uses the grid's start locations by itself). **Item 5 (the match-over banner) is dropped**: the sim's rule is
+  not on `main` while the view builds; it is M6-V4's first item. The view may edit `game/data/common/ui.json` this session
+  (`setup.colour_*` names + RGB; the sim does not touch `ui.json`).
+- **Data D-H4:** as written; no inbox tweak arrived, so items 2-4 only.
+
 ## Where we are
 
 - `main` after this integration (sim 68f04d6 → view 39ceb79 → data 9f70371): build 0 warnings; the Producer's scratch merge of all
