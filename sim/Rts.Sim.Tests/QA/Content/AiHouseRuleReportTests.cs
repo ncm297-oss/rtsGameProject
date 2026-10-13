@@ -11,14 +11,18 @@ namespace Rts.Sim.Tests.QA.Content;
 /// (<see cref="AiScenes.Flat"/>: a Garrison Keep, five Laborers, two mines and a forest in sight; player 1 a human that does
 /// nothing), Normal, 12,000 ticks (10 min), this prints who placed each house, when it finished, the cap over time, and
 /// whether the order's later house steps still complete once the cap is reached (and what they cost). Only that the run
-/// finishes is asserted: the numbers are a report for the owner (the proposal is in the D15 session report; no
-/// <c>ai.json</c> edit before M5-3 puts the file in the content hash).
+/// finishes is asserted (plus one documented precondition on the seat's faction): the numbers are a report for the owner
+/// (the proposal is in the D15 session report).
 /// <para>
-/// Read on 2026-10-12 (main's M5-2 AI): every house both orders placed came from a step; the rule sent none (each step's
-/// Billet / Tent lands with the cap 8 pop ahead, outside the rule's 2-pop margin; when wood ran short the step, worked first
-/// each think, and the rule waited on the same 50 wood). The cap never reached 100: on this scene wood runs out (12 trees of
-/// 100 a base), so pop stalls at 82 / 98 (Malazan, 30 min) and the 12th Billet (step 18) stays due without the wood. A due
-/// house step that can't pay costs nothing: the Build is refused at the budget before the site search.
+/// Measured 2026-10-12 on M5-2's AI (nothing checks these; the live numbers are in each session report that re-runs this):
+/// every house both orders placed came from a step and the rule sent none; on this scene wood runs out (12 trees of 100 a
+/// base), so the Malazan cap stalled at 98 after 30 min and the 12th Billet (step 18) stayed due, at no cost (a due house
+/// step that can't pay is refused at the budget before the site search).
+/// </para>
+/// <para>
+/// Reads through the AI's internals: <c>Blackboard.StepDueTick</c>, <c>Blackboard.StepDone</c>, <c>Blackboard.StepPending</c>
+/// and <c>Blackboard.HousePending</c> (no public-to-tests surface carries a step's state or a sent house). Everything else
+/// comes from <see cref="GameData"/> or the world. A sim rename of those four breaks this file at compile time: fix the reads.
 /// </para>
 /// </summary>
 public class AiHouseRuleReportTests
@@ -49,12 +53,16 @@ public class AiHouseRuleReportTests
         controllers[player] = SeatController.Ai;
         Simulation sim = AiScenes.Flat(AiScenes.Seats(AiDifficulty.Normal, controllers));
         GameData d = sim.World.Data;
-        AiPlayer ai = sim.AiOf(player)!;
-        Assert.Equal(player, ai.Faction);
-        int house = ai.HouseType;
+        // Precondition, not a finding: the seat mapping above must give the AI seat this faction, or every row below
+        // reports the other faction's order under this one's name.
+        Assert.Equal(player, sim.World.FactionOf(player));
+        Blackboard board = sim.AiOf(player)!.Board; // reads StepDueTick, StepDone, StepPending, HousePending
+        AiDef def = d.Ai[player];
+        int thinkTicks = Math.Max(1, def.Difficulty(AiDifficulty.Normal).ThinkTicks); // as AiPlayer derives it
+        int house = d.Buildings.ToList().FindIndex(b => b.Faction == player && b.Slot == BuildingSlot.House);
         BuildingDef houseDef = d.Buildings[house];
         int rulesCap = d.Rules.HalfPopCap;
-        var steps = ai.Def.BuildOrder;
+        var steps = def.BuildOrder;
         int tree = d.FindResource("tree"), mine = d.FindResource("gold_mine");
         var houseSteps = Enumerable.Range(0, steps.Length)
             .Where(i => steps[i].Action == AiStepAction.Build && steps[i].Target == house).ToArray();
@@ -75,11 +83,11 @@ public class AiHouseRuleReportTests
 
         for (int t = 0; t < ticks; t++)
         {
-            bool thinks = sim.TickNumber % ai.ThinkTicks == 0;
+            bool thinks = sim.TickNumber % thinkTicks == 0;
             bool anyDue = false;
             if (thinks)
                 foreach (int i in houseSteps)
-                    if (ai.Board.StepDueTick[i] >= 0 && !ai.Board.StepDone[i]) anyDue = true;
+                    if (board.StepDueTick[i] >= 0 && !board.StepDone[i]) anyDue = true;
             clock.Restart();
             sim.Tick();
             clock.Stop();
@@ -89,20 +97,20 @@ public class AiHouseRuleReportTests
             if (capReachedTick < 0 && cap >= rulesCap) capReachedTick = sim.TickNumber;
             foreach (int i in houseSteps)
             {
-                PendingOrder p = ai.Board.StepPending[i];
+                PendingOrder p = board.StepPending[i];
                 if (p.Kind == PendingKind.Build && (p.AppliesAt, p.Cell) != lastStepPending[i])
                 {
                     lastStepPending[i] = (p.AppliesAt, p.Cell);
                     sends.Add(new Send(i + 1, p.Cell, p.AppliesAt));
                 }
-                if (stepDoneTick[i] < 0 && ai.Board.StepDone[i]) (stepDoneTick[i], stepDoneCap[i]) = (sim.TickNumber, cap);
-                if (thinks && ai.Board.StepDueTick[i] >= 0 && !ai.Board.StepDone[i])
+                if (stepDoneTick[i] < 0 && board.StepDone[i]) (stepDoneTick[i], stepDoneCap[i]) = (sim.TickNumber, cap);
+                if (thinks && board.StepDueTick[i] >= 0 && !board.StepDone[i])
                 {
                     stepDueThinks[i]++;
                     if (cap >= rulesCap) stepDueAtCapThinks[i]++;
                 }
             }
-            PendingOrder h = ai.Board.HousePending;
+            PendingOrder h = board.HousePending;
             if (h.Kind == PendingKind.Build && (h.AppliesAt, h.Cell) != lastHousePending)
             {
                 lastHousePending = (h.AppliesAt, h.Cell);
@@ -111,7 +119,7 @@ public class AiHouseRuleReportTests
             if (sim.TickNumber % SampleEvery == 0)
             {
                 (int finished, int sites) = Houses(sim, player, house);
-                samples.Add($"{sim.TickNumber / Tps / 60}:{sim.TickNumber / Tps % 60:00} | {sim.World.HalfPop[player] / 2.0} | {cap / 2.0} | {finished} | {sites} | {ai.View.Gold} | {ai.View.Wood} | {ai.WorkerCount} | {Left(sim, tree)} | {Left(sim, mine)}");
+                samples.Add($"{sim.TickNumber / Tps / 60}:{sim.TickNumber / Tps % 60:00} | {sim.World.HalfPop[player] / 2.0} | {cap / 2.0} | {finished} | {sites} | {sim.World.Gold[player]} | {sim.World.Wood[player]} | {Workers(sim, player)} | {Left(sim, tree)} | {Left(sim, mine)}");
             }
         }
 
@@ -141,7 +149,7 @@ public class AiHouseRuleReportTests
         {
             int done = stepDoneTick[i];
             string capAt = done < 0 ? "-" : (stepDoneCap[i] / 2.0).ToString(System.Globalization.CultureInfo.InvariantCulture);
-            _out.WriteLine($"{i + 1} | {AiContentTestsText(steps[i])} | {ai.Board.StepDueTick[i]} | {(done < 0 ? "never" : done.ToString())} | {capAt} | {stepDueThinks[i]} | {stepDueAtCapThinks[i]}");
+            _out.WriteLine($"{i + 1} | {AiContentTestsText(steps[i])} | {board.StepDueTick[i]} | {(done < 0 ? "never" : done.ToString())} | {capAt} | {stepDueThinks[i]} | {stepDueAtCapThinks[i]}");
         }
         _out.WriteLine("");
         _out.WriteLine("time | pop | cap | houses finished | house sites | gold | wood | workers | wood in trees | gold in mines");
@@ -161,6 +169,16 @@ public class AiHouseRuleReportTests
         for (int k = 0; k < r.Capacity; k++)
             if (r.Alive[k] && r.TypeId[k] == type) left += r.Remaining[k];
         return left;
+    }
+
+    private static int Workers(Simulation sim, int player)
+    {
+        var u = sim.World.Units;
+        GameData d = sim.World.Data;
+        int n = 0;
+        for (int s = 0; s < u.Capacity; s++)
+            if (u.Alive[s] && u.Owner[s] == player && d.Units[u.TypeId[s]].Slot == UnitSlot.Worker) n++;
+        return n;
     }
 
     private static double Mean(List<double> xs) => xs.Count == 0 ? 0 : xs.Average();

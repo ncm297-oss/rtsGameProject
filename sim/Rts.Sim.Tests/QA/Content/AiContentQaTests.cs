@@ -280,6 +280,7 @@ public class AiContentQaTests
         seats[player] = SeatController.Ai;
         Simulation sim = AiScenes.Flat(AiScenes.Seats(AiDifficulty.Normal, seats), d);
         List<Command> log = AiScenes.Log(sim, player);
+        // Reads AiPlayer internals Blackboard.StepDueTick and Blackboard.StepDone (no public-to-tests surface carries a step's state).
         int due = -1;
         for (int t = 0; t < 6000 && (due < 0 || sim.TickNumber < due + 1200); t++)
         {
