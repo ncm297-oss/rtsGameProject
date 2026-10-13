@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-12-1930, task M5-3 (re-check round 1) |
 | System | AI `MilitaryManager` (wave orders); contributing: `OrderSystem` goal snapping (pre-existing) |
-| Fixed by | |
+| Fixed by | 1f46ca9 (M5-3 round 2) |
 
 ## Repro
 1. Remove the `Skip` on `QA/AiMilitaryQaTests.AWaveAtATargetItCantReach_IsNotSentAttackMoveEveryThinkForever`, then
@@ -34,3 +34,8 @@ so no new wave starts: the AI's offence is frozen for the rest of the match.
   has no count. The dev's report names it ("bounded per think, not overall"). A member stuck while walking (blocked path,
   ring of buildings, a unit spawned in a blocked cell) loops the same way.
 - A per-member try count (the `WaveFlag` byte has room), or "Idle at the same place as last think, so give up", would bound it.
+
+## Re-check (round 2, 1f46ca9)
+- Fixed. The QA row is un-skipped and green, both rows: `AttackMove 12, Move 4` to the 4 members over 60 thinks (3 each, then
+  home), the wave ends (all members left), no second wave started in the window.
+- Mutation: `MaxTries` raised to 200 fails both rows and nothing else.

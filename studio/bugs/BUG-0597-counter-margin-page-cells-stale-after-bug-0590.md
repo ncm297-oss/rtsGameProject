@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S1 (red build) |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-12-1930, task M5-3 (re-check round 1) |
 | System | `docs/factions/malazan.md`, `docs/factions/whirlwind.md` "Balance baseline" tables vs `QA/Content/CounterTriangleMargins*` |
-| Fixed by | |
+| Fixed by | 1f46ca9 (M5-3 round 2) |
 
 ## Repro
 `dotnet test sim/Rts.Sim.Tests --filter "Category!=Perf"` on 786c9e4: 7 failures, all in the counter-triangle margin rows that
@@ -30,3 +30,10 @@ the row until the table is re-printed.
 - QA recommendation for the Producer: allow these four cells to be re-printed on this branch, in the fix round or by the
   conductor's commit. The numbers are mechanical (printed by the test), the change is caused by this branch's rule fix, and
   leaving them means main goes red at merge. The other option is a data-track task next session, with main red until then.
+
+## Re-check (round 2, 1f46ca9)
+- Fixed. Only the four "Raider v Wickan Lancer" rows changed (hp left / time; 1546 / 23.5 s to 1502 / 23.0 s, 1451 / 23.0 s to
+  1429 / 23.2 s), the same values QA measured in round 1. Winners, units left and cost kept unchanged.
+- `CounterTriangleMarginsTests` 9 / 9 green; the full non-Perf suite is green (5,670 passed, 10 skipped, 0 failed).
+- The pages are data-track files (`docs/factions/**`); the edit was the one recommended in round 1 for this branch, and the data
+  track's D15 does not touch either page (checked in `.claude/worktrees/studio-data`), so no overlap.

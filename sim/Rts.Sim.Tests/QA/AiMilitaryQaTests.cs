@@ -374,6 +374,90 @@ public class AiMilitaryQaTests
         Assert.Equal(-1, ended);
     }
 
+    /// <summary>
+    /// Re-check round 2 (BUG-0596's fix, the other way): a wave whose members all stand by the target but none can strike it.
+    /// Player 1's hall (cells 52-55, 30-33) is ringed two cells deep by trees, so no passable cell touches its footprint; the
+    /// billet keeps it seen. <paramref name="n"/> Heavy Infantry (melee, combat on) wave at it: each walks to the tree line,
+    /// within <c>near</c> (rallyReach 6 m + half the hall's side) of its centre, and its Attack can't reach the footprint. Since
+    /// round 2 a member Idle by the target after <c>MaxTries</c> orders is read as "crowded off it, friends fight it" and is left
+    /// standing there unordered, a member. When every member is in that state nobody fights the target: the wave can never end
+    /// (no loss, no leave, the target never falls), so the AI never starts another wave. Expected: within 3,000 ticks the wave
+    /// is over (ended, or every member left), not left standing at a target no member can strike. Measured at 1f46ca9: 4 members,
+    /// last order at tick 501 (AttackMove 4, Attack 12), the wave still on at 3,000, hall untouched; 10 members, 9 stand there
+    /// (one could not get near and left), last order at 861.
+    /// </summary>
+    [Theory(Skip = "BUG-0598: a wave whose members all stand by a target none can strike stays on forever, unordered")]
+    [InlineData(4)]
+    [InlineData(10)]
+    public void AWaveWhoseMembersAllStandByATargetNoneCanStrike_DoesNotStayForever(int n)
+    {
+        Simulation sim = Scene(s_onePop.Value, out EntityHandle hall, ghost: false, combat: true);
+        World w = sim.World;
+        AiPlayer ai = sim.AiOf(0)!;
+        int tree = s_onePop.Value.FindResource("tree");
+        for (int y = 28; y <= 35; y++)
+            for (int x = 50; x <= 57; x++)
+            {
+                if (x >= 52 && x <= 55 && y >= 30 && y <= 33) continue;
+                Assert.True(w.Resources.Spawn(tree, y * AiScenes.FlatSize + x, s_onePop.Value.Rules.TreeWood, out _), $"tree ({x}, {y})");
+            }
+        sim.Tick();
+        List<Command> log = AiScenes.Log(sim, 0);
+        List<EntityHandle> army = Army(sim, Unit("malazan_heavy_infantry"), n, 38, 42);
+        int hp = w.Buildings.Hp[hall.Index];
+        while (sim.TickNumber < 3000) sim.Tick();
+        var mine = log.Where(c => army.Contains(c.Unit)).ToList();
+        Vector2 centre = ai.Board.WaveTargetPoint;
+        int members = army.Count(h => w.Units.IsAlive(h) && ai.Board.WaveGeneration[h.Index] == h.Generation);
+        int lastOrder = mine.Count == 0 ? -1 : mine.Max(c => c.Tick);
+        _out.WriteLine($"{n} members; target {ai.Board.WaveTarget} (hall {hall}) hp {w.Buildings.Hp[hall.Index]} / {hp}; wave active {ai.Board.WaveActive}, " +
+            $"waves {ai.Board.WavesStarted}, still members {members}; last order at tick {lastOrder}; commands: " +
+            string.Join(", ", mine.GroupBy(c => c.Kind).Select(g => $"{g.Key} {g.Count()}")) + "; at " +
+            string.Join(" ", army.Select(h => $"{w.Units.State[h.Index]} d={Vector2.Distance(w.Units.Position[h.Index], centre):F1}")));
+        Assert.Equal(hp, w.Buildings.Hp[hall.Index]); // precondition: nobody can strike it
+        Assert.False(ai.Board.WaveActive,
+            $"the wave is still on at tick {sim.TickNumber} with {members} members standing by a target none can strike (last order at {lastOrder})");
+    }
+
+    /// <summary>
+    /// Re-check round 2: a new target restarts each member's try count. Combat off, so members by the first target get
+    /// <c>Attack</c> on it that does nothing. Player 1 also has a tent beside player 0's billet (seen). The first target is razed
+    /// once every member has spent <c>MaxTries</c> - 1 Attacks on it: the wave re-targets the other building and every member,
+    /// its count restarted, walks there and is sent <c>MaxTries</c> Attacks on it (docs/03 "Bounded orders": a new target
+    /// restarts the count, and arriving a cell nearer clears it). Tries spent on the old target must not leave it unordered.
+    /// </summary>
+    [Fact]
+    public void ARetarget_RestartsEachMembersTries_SoEveryMemberAttacksTheNewTarget()
+    {
+        Simulation sim = Scene(s_onePop.Value, out EntityHandle hall, ghost: false);
+        World w = sim.World;
+        AiPlayer ai = sim.AiOf(0)!;
+        Assert.True(w.Buildings.Spawn(1, s_onePop.Value.FindBuilding("whirlwind_tent"), 36 * AiScenes.FlatSize + 44, out EntityHandle tent));
+        sim.Tick();
+        List<Command> log = AiScenes.Log(sim, 0);
+        List<EntityHandle> army = Army(sim, Unit("malazan_heavy_infantry"), 4, 38, 42);
+        NextThink(sim);
+        EntityHandle first = ai.Board.WaveTarget;
+        EntityHandle second = first == hall ? tent : hall;
+        Assert.True(first == hall || first == tent, $"precondition: the wave targets the hall or the tent, not {first}");
+        // Raze it once every member has spent MaxTries - 1 Attacks on it (combat off: they do nothing).
+        for (int k = 0; k < 60 && army.Any(h => log.Count(c => c.Unit == h && c.Kind == CommandKind.Attack && c.Target == first) < MilitaryManager.MaxTries - 1); k++)
+            NextThink(sim);
+        foreach (EntityHandle h in army)
+            Assert.InRange(log.Count(c => c.Unit == h && c.Kind == CommandKind.Attack && c.Target == first), MilitaryManager.MaxTries - 1, MilitaryManager.MaxTries);
+        int before = log.Count;
+        Assert.True(w.Buildings.Free(first));
+        for (int k = 0; k < 60; k++) NextThink(sim);
+        var after = log.Skip(before).ToList();
+        _out.WriteLine($"first {first}, then {ai.Board.WaveTarget} (want {second}); wave active {ai.Board.WaveActive}; after the raze: " +
+            string.Join(", ", after.GroupBy(c => c.Kind).Select(g => $"{g.Key} {g.Count()}")));
+        Assert.Equal(second, ai.Board.WaveTarget);
+        // Each: one AttackMove (count 1), then arriving is a cell nearer (count 0), then MaxTries Attacks (combat off: no effect).
+        foreach (EntityHandle h in army)
+            Assert.True(after.Count(c => c.Unit == h && c.Kind == CommandKind.Attack && c.Target == second) == MilitaryManager.MaxTries,
+                $"member {h} was sent {after.Count(c => c.Unit == h && c.Kind == CommandKind.Attack && c.Target == second)} Attacks on the new target, not {MilitaryManager.MaxTries}");
+    }
+
     /// <summary>The flat AI scene (as <see cref="AiScenes.Flat"/>) on a given heightmap.</summary>
     private static Simulation FlatOn(Heightmap map, PlayerSeat[] seats, GameData data)
     {

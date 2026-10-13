@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-12-1930, task M5-3 (re-check round 1; introduced by the BUG-0591 fix) |
 | System | AI `MilitaryManager` (wave orders) |
-| Fixed by | |
+| Fixed by | 1f46ca9 (M5-3 round 2) |
 
 ## Repro
 1. Remove the `Skip` on `QA/AiMilitaryQaTests.AWaveThatCanFightTheTarget_KeepsItsMembers_WhileNoneDie`, then
@@ -35,3 +35,11 @@ give-up). It stands Idle by the hall and is sent home, and it leaves the wave fo
   the target instead of sending them home.
 - The docs/03 line added in round 1 ("a member Idle there again after its `Attack` can't fight that target") describes the
   intent, not this case.
+
+## Re-check (round 2, 1f46ca9)
+- Fixed. The QA row is un-skipped and green: 12 members, 0 sent home, `AttackMove 12, Attack 11`, hall 1,912 / 2,400 at tick
+  2,000; 24 members, 0 sent home, `AttackMove 24, Attack 32`, hall 1,553. The wave never ends.
+- Mutation: replacing "crowded: stay" by "leave" fails both QA rows and the dev's new
+  `MilitaryManagerTests.MembersThatLeaveAlive_AreNotLosses_AndTheRestFightOn`.
+- Follow-up filed as BUG-0598: when *every* member is in the "crowded, unordered" state (none can actually strike the target),
+  nothing ever ends the wave.
