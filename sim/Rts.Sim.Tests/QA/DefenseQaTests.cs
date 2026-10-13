@@ -184,9 +184,12 @@ public class DefenseQaTests
 
     /// <summary>
     /// BUG-0670: the army is away in the enemy base (attacking player 1's hall, combat on) when a raider holds 20 m from
-    /// player 0's hall. The defense sends each soldier an AttackMove home, but the AttackMove acquires the enemy hall they
-    /// stand by and they fight on there: after 60 s two of the three are still there, outside defendRadius of home, though the
-    /// threat held the whole time. docs/02 "AI opponent": defend the base when attacked, first.
+    /// player 0's hall. Before the fix the defense's AttackMove acquired the enemy hall they stood by and two of the three
+    /// fought on there for the whole 60 s threat. docs/02 "AI opponent": defend the base when attacked, first. The check:
+    /// within 60 s, at a tick **while the threat still holds** (so the rally rule after it can't be what brought them), all
+    /// three are alive within defendRadius of home; and the raider dies (they defended, not just stood home). Round 1
+    /// (fix 2a3da00): the army now comes home and kills the raider, so the threat ends before 60 s; the row samples during
+    /// the threat instead of at its end (the old precondition "still defending at 60 s" no longer holds by design).
     /// </summary>
     [Fact]
     public void TheArmyAwayInTheEnemyBase_ComesHomeToDefend()
@@ -201,13 +204,111 @@ public class DefenseQaTests
         CombatScenes.RunUntil(sim, () => army.All(h => w.Units.State[h.Index] == UnitState.Attacking), 800);
         Assert.True(army.All(h => w.Units.State[h.Index] == UnitState.Attacking),
             "not all attacking the hall: " + string.Join("; ", army.Select(h => $"{w.Units.State[h.Index]} at {w.Units.Position[h.Index]} tgt {w.Units.Target[h.Index]}")));
-        Enemy(sim, Hall(sim) + new Vector2(0f, -20f));
-        for (int t = 0; t < 1200; t++) sim.Tick();
-        Assert.True(ai.Board.Defending, "the threat ended");
-        int home = army.Count(h => w.Units.Alive[h.Index] && Vector2.Distance(w.Units.Position[h.Index], Hall(sim)) <= ai.Rules.DefendRadius);
+        EntityHandle raider = Enemy(sim, Hall(sim) + new Vector2(0f, -20f));
+        int start = sim.TickNumber, homeAt = -1;
+        bool Home(EntityHandle h) => w.Units.Alive[h.Index] && w.Units.Generation[h.Index] == h.Generation
+            && Vector2.Distance(w.Units.Position[h.Index], Hall(sim)) <= ai.Rules.DefendRadius;
+        for (int t = 0; t < 1200; t++)
+        {
+            sim.Tick();
+            if (homeAt < 0 && ai.Board.Defending && army.All(Home)) homeAt = sim.TickNumber;
+        }
         string where = string.Join("; ", army.Select(h => $"{w.Units.State[h.Index]} {Vector2.Distance(w.Units.Position[h.Index], Hall(sim)):F0} m from home"));
-        _out.WriteLine(where);
-        Assert.True(home == army.Count, $"{army.Count - home} of {army.Count} soldiers not home after 60 s of threat: {where}");
+        bool raiderDead = !(w.Units.Alive[raider.Index] && w.Units.Generation[raider.Index] == raider.Generation);
+        _out.WriteLine($"threat from {start}; all home while defending at {homeAt}; raider dead {raiderDead}; defending at the end {ai.Board.Defending}; {where}");
+        Assert.True(homeAt > 0, $"not all {army.Count} soldiers home while the threat held within 60 s: {where}");
+        Assert.True(raiderDead, $"the raider 20 m from the hall still lives after 60 s: {where}");
+    }
+
+    /// <summary>
+    /// BUG-0673 variant: three raiders taking turns at three spots round the hall (120 degrees apart, 30 m out), one think
+    /// each, for twelve thinks. The fix moves the point on the second trigger in a row away from it; with three spots every
+    /// trigger is away from the current point, so it measures how often the army is re-sent. Reported, gated loosely: no
+    /// more than one re-send per two thinks (the two-spot case is gated at 2x by the row above).
+    /// </summary>
+    [Fact]
+    public void ThreeRaidersTakingTurns_ReSendTheArmyAtMostEveryOtherThink()
+    {
+        Simulation sim = Scene(s_quiet.Value);
+        World w = sim.World;
+        List<EntityHandle> army = Army(sim, 3, 2, 50);
+        Vector2 hall = Hall(sim), away = new(120f, 120f);
+        Vector2[] spots = { hall + new Vector2(0f, -30f), hall + new Vector2(26f, 15f), hall + new Vector2(-26f, 15f) };
+        // Keep the spots on the map (the hall is near the west edge).
+        for (int i = 0; i < 3; i++) spots[i] = Vector2.Clamp(spots[i], new Vector2(2f, 2f), new Vector2(AiScenes.FlatSize * MapConstants.CellSize - 2f));
+        var raiders = new EntityHandle[3];
+        for (int i = 0; i < 3; i++) raiders[i] = Enemy(sim, away + new Vector2(i * 2f, 0f));
+        List<Command> log = AiScenes.Log(sim, 0);
+        for (int k = 0; k < 12; k++)
+        {
+            for (int i = 0; i < 3; i++) w.Units.Position[raiders[i].Index] = k % 3 == i ? spots[i] : away + new Vector2(i * 2f, 0f);
+            NextThink(sim);
+        }
+        int sent = log.Count(c => c.Kind is CommandKind.AttackMove or CommandKind.Move && army.Contains(c.Unit));
+        _out.WriteLine($"{sent} army orders to {army.Count} units over 12 thinks; defense versions {sim.AiOf(0)!.Board.DefenseVersion}");
+        Assert.True(sent <= 7 * army.Count, $"{sent} army orders to {army.Count} units in 12 thinks");
+    }
+
+    /// <summary>
+    /// The dev-flagged rule of the BUG-0670 fix: units on the Move home don't answer hits. Three Heavy Infantry are fighting
+    /// three Raiders (not holding) in the enemy base when a fourth Raider holds 20 m from player 0's hall. Reported (the
+    /// Producer's call whether a chased army should turn): the soldiers alive when they get home and the enemy losses on the
+    /// way. Gated only on the scene doing what it says (the Move home is sent).
+    /// </summary>
+    [Fact]
+    public void AnArmyChasedOnItsMoveHome_Reported()
+    {
+        Simulation sim = Scene(s_quiet.Value, combat: true);
+        World w = sim.World;
+        AiPlayer ai = sim.AiOf(0)!;
+        List<EntityHandle> army = Army(sim, 3, 50, 37);
+        NextThink(sim);
+        var chasers = new List<EntityHandle>();
+        for (int k = 0; k < 3; k++)
+        {
+            EntityHandle c = CombatScenes.Place(sim, 1, CombatScenes.Raider, w.NavGrid.CellCenter(50 + k, 35));
+            CombatScenes.Spot(sim, 0, c);
+            chasers.Add(c);
+            sim.Enqueue(Command.Attack(1, c, army[k], isBuilding: false));
+        }
+        for (int t = 0; t < 60; t++) sim.Tick(); // the fight starts
+        Enemy(sim, Hall(sim) + new Vector2(0f, -20f));
+        List<Command> log = AiScenes.Log(sim, 0);
+        int homeAt = -1;
+        for (int t = 0; t < 1200 && homeAt < 0; t++)
+        {
+            sim.Tick();
+            if (army.All(h => !w.Units.Alive[h.Index] || w.Units.Generation[h.Index] != h.Generation
+                    || Vector2.Distance(w.Units.Position[h.Index], Hall(sim)) <= ai.Rules.DefendRadius)) homeAt = sim.TickNumber;
+        }
+        int alive = army.Count(h => w.Units.Alive[h.Index] && w.Units.Generation[h.Index] == h.Generation);
+        int chasersAlive = chasers.Count(h => w.Units.Alive[h.Index] && w.Units.Generation[h.Index] == h.Generation);
+        _out.WriteLine($"orders {string.Join(", ", log.Where(c => army.Contains(c.Unit)).Select(c => $"{c.Kind}@{c.Tick}"))}; "
+            + $"home (or dead) at {homeAt}; soldiers alive {alive}/3; chasers alive {chasersAlive}/3");
+        Assert.Contains(log, c => c.Kind == CommandKind.Move && army.Contains(c.Unit));
+    }
+
+    /// <summary>
+    /// BUG-0670 fix at the knob's low edge: with defendRadius 8 m (the minimum) "inside the base" is 8 m from the hall's
+    /// centre, so an army waiting 20 m out (its usual rally distance) is "outside" and gets the plain Move, which doesn't
+    /// answer hits. A raider holding 6 m from the hall (combat on): within 30 s the army must still kill it.
+    /// </summary>
+    [Fact]
+    public void ASmallDefendRadius_TheArmyOnItsMoveHome_StillKillsTheRaider()
+    {
+        Simulation sim = Scene(Data(defendRadius: 8), combat: true);
+        World w = sim.World;
+        AiPlayer ai = sim.AiOf(0)!;
+        List<EntityHandle> army = Army(sim, 3, 18, 40);
+        NextThink(sim);
+        EntityHandle raider = Enemy(sim, Hall(sim) + new Vector2(6f, 0f));
+        List<Command> log = AiScenes.Log(sim, 0);
+        for (int t = 0; t < 600; t++) sim.Tick();
+        bool dead = !(w.Units.Alive[raider.Index] && w.Units.Generation[raider.Index] == raider.Generation);
+        string orders = string.Join(", ", log.Where(c => army.Contains(c.Unit)).Select(c => $"{c.Kind}@{c.Tick}"));
+        _out.WriteLine($"army orders: {orders}; raider dead {dead}; army states "
+            + string.Join("; ", army.Select(h => $"{w.Units.State[h.Index]} {Vector2.Distance(w.Units.Position[h.Index], Hall(sim)):F0} m")));
+        Assert.True(dead, $"the raider 6 m from the hall lives after 30 s; orders {orders}");
     }
 
     /// <summary>

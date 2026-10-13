@@ -375,4 +375,40 @@ public class DefeatRuleQaTests
         Assert.True(w.EverBuilt(2));
         Assert.True(sim.MatchOver, "MatchOver went back to false after a result: player 2 built its first building");
     }
+
+    /// <summary>
+    /// BUG-0672 round 1: the latch is state the ledger can't rebuild (player 2's first building took the result away from
+    /// the flags), so it must be in the hash. Same scene as the row above; with the result latched and the flags no longer
+    /// giving it, clearing the private latch (reflection, QA only) must change <see cref="Simulation.StateHash"/>; and a twin
+    /// run of the same commands hashes equal, latch included.
+    /// </summary>
+    [Fact]
+    public void MatchOverLatch_IsInTheStateHash_AndDeterministic()
+    {
+        Simulation Make()
+        {
+            var sim = TestSim.Explored(new Simulation(TestSim.ConfigNoCombat(2, 3, 32, 64), LocalMovementTests.Flat(48)));
+            World w = sim.World;
+            Spawn(sim, 0, BuildingType(w, 0, BuildingSlot.TownHall), 4, 4);
+            EntityHandle site1 = Spawn(sim, 1, BuildingType(w, 1, BuildingSlot.House), 30, 6, site: true);
+            BuildMaps.SetTotals(sim, 2, 1000, 1000);
+            EntityHandle worker2 = CombatScenes.Place(sim, 2, UnitType(w, 2, UnitSlot.Worker), At(sim, 20, 36));
+            sim.Enqueue(Command.Cancel(1, Centre(sim, site1)));
+            Applied(sim);
+            sim.Enqueue(Command.Build(2, worker2, BuildingType(w, 2, BuildingSlot.House), At(sim, 22, 40)));
+            Applied(sim);
+            for (int t = 0; t < 20; t++) sim.Tick();
+            return sim;
+        }
+        Simulation a = Make(), b = Make();
+        Assert.True(a.World.EverBuilt(2) && a.MatchOver);
+        Assert.Equal(a.StateHash(), b.StateHash());
+        System.Reflection.FieldInfo latch = typeof(World).GetField("_matchOverLatched", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        Assert.NotNull(latch);
+        Assert.True((bool)latch.GetValue(a.World)!);
+        ulong with = a.StateHash();
+        latch.SetValue(a.World, false);
+        Assert.False(a.MatchOver, "the flags alone still give the result: the scene doesn't isolate the latch");
+        Assert.NotEqual(with, a.StateHash());
+    }
 }

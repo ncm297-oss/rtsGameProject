@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-13-0916, task M5-4b |
 | System | AI (DefenseManager) |
-| Fixed by | |
+| Fixed by | 2a3da00 (the point moves only on the second trigger in a row more than rallyReach away); regression: `QA/DefenseQaTests.TwoRaidersTakingTurns_DoNotReSendTheArmyEveryThink`, `ThreeRaidersTakingTurns_ReSendTheArmyAtMostEveryOtherThink` |
 
 ## Repro
 `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~DefenseQaTests.TwoRaidersTakingTurns_DoNotReSendTheArmyEveryThink"`:
@@ -26,3 +26,6 @@ either raider. Two cheap units dancing at the fog edge pin the whole army.
 A single threat flickering at one spot is fine (`DefenseQaTests.AFlickeringThreat_AtOneSpot_SendsTheArmyOnce`). Options
 (Producer's call): keep the point while a remembered intruder is still near it, hold a sent point for a minimum time, or
 use the blackboard's enemy memory rather than this think's sightings.
+
+## Verification
+QA round 1 (2026-10-13-0916): verified. Two raiders taking turns: 3 AttackMoves to 3 units in 10 thinks, 1 version (was 29). Three raiders rotating at three spots (contrived): 18 orders to 3 units in 12 thinks, 6 versions, i.e. a re-send every other think; gated at that level, not filed.

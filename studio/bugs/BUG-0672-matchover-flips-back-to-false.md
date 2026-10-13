@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-13-0916, task M5-4b |
 | System | defeat rule (World.MatchOver) |
-| Fixed by | |
+| Fixed by | 2a3da00 (`World` latches the result in `UpdateDefeats`, hashed as bit 36); regression: `QA/DefeatRuleQaTests.MatchOver_OnceTrue_StaysTrue_WhenAPlayerThatNeverBuiltBuildsLater`, `MatchOverLatch_IsInTheStateHash_AndDeterministic` |
 
 ## Repro
 `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~DefeatRuleQaTests.MatchOver_OnceTrue_StaysTrue_WhenAPlayerThatNeverBuiltBuildsLater"`:
@@ -26,3 +26,6 @@ Skirmishes start every seat with a hall (all have built from tick 1), so this ne
 setup, `--no-bases`). Fix options: latch the result (a sticky flag set by `UpdateDefeats`), or document the non-sticky
 meaning. Also worth a docs line: in that 3-player setup the match "ends" while player 2 still has a whole army and no
 building.
+
+## Verification
+QA round 1 (2026-10-13-0916): verified. The latch row is green; clearing the private latch (reflection) in that state turns MatchOver false and changes the state hash, and a twin hashes equal. Replay goldens unchanged.

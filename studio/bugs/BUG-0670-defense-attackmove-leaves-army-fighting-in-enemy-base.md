@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-13-0916, task M5-4b |
 | System | AI (DefenseManager, MilitaryManager) |
-| Fixed by | |
+| Fixed by | 2a3da00 (DefenseManager: a Move home for units outside defendRadius of the hall, the AttackMove once inside); regression: `QA/DefenseQaTests.TheArmyAwayInTheEnemyBase_ComesHomeToDefend`, `Ai/DefenseManagerTests.AnArmyAwayInTheEnemyBase_GetsAMoveHome_ThenTheAttackMove`, `Stress/DefenseDeadlockStressTests` (seeds 1/6/11) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~DefenseQaTests.TheArmyAwayInTheEnemyBase_ComesHomeToDefend"`
@@ -38,3 +38,6 @@ With BUG-0671 this is a mutual deadlock in AI-vs-AI play: each side's army sits 
 forever, and nobody gathers or waves. `Stress/DefeatAiStressTests` measured the same in 4-seat runs (weak sets 0110, 1010,
 1001): a strong seat defends from early on to tick 6,000 and never waves. The developer reported this ("defenders already
 fighting in the enemy base don't come back") and left it for QA to judge.
+
+## Verification
+QA round 1 (2026-10-13-0916): verified. The QA row was rewritten to sample **while the threat holds** (its old precondition "still defending at 60 s" can't hold once the army comes home and kills the raider): threat from tick 59, all three home while defending at tick 320, raider dead. `AiWaveStressTests` seeds 1/6/11 green; `Stress/DefenseDeadlockStressTests` per seat: waves 2/3, 2/1, 2/1, neither seat defending through the whole second half. Rule to know (dev-flagged, accepted): units on the Move home don't answer hits (`DefenseQaTests.AnArmyChasedOnItsMoveHome_Reported`: 3/3 soldiers home alive against 3 chasing Raiders); with defendRadius 8 the army only ever gets the Move, and still kills a raider by the hall once idle there (`ASmallDefendRadius_*`).

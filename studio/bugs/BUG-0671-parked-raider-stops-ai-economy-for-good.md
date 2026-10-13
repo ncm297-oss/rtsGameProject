@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-13-0916, task M5-4b |
 | System | AI (DefenseManager, EconomyManager) |
-| Fixed by | |
+| Fixed by | 2a3da00 (fled workers released `defendFor` after their flee; flee to a drop-off away from the point; no gather at nodes within workerFleeRadius of the point while defending); regression: `QA/DefenseQaTests.AParkedRaider_DoesNotStopTheEconomyForGood`, `Ai/DefenseManagerTests.WorkersNearThePoint_Flee_AndGatherAgainDefendForAfterTheirFlee_AwayFromThePoint`, `AFleeingWorker_GoesToADropOffAwayFromThePoint` |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~DefenseQaTests.AParkedRaider_DoesNotStopTheEconomyForGood"`
@@ -32,3 +32,6 @@ release fled workers `defendFor` after their flee rather than after the last tri
 than `workerFleeRadius` from the point; or flee to the drop-off farthest from the point. With BUG-0670 this deadlocks
 AI-vs-AI play (see there). The developer reported this ("fled workers stay idle while the threat holds") and left it for
 QA to judge.
+
+## Verification
+QA round 1 (2026-10-13-0916): verified. `AParkedRaider_*` green (0 fled workers idle 100 s later). `Stress/DefenseDeadlockStressTests`: income after tick 3,000 per seat 750/1060, 600/470, 140/750 (seeds 1/6/11), was 0.
