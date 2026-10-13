@@ -11,8 +11,8 @@ namespace Rts.Game.Tests;
 
 /// <summary>
 /// QA attacks on M6-V3 (session 2026-10-13-0146). The menu's opening on 6 seeds x 3 map sizes through the real setup (each
-/// player one Town Hall and the starting workers, no other unit, <c>UnitsPerPlayer</c> 0, the camera on the local hall; whether
-/// each hall sees a gold mine is printed, not failed: the sim's start locations fix it after the merge); ten quit cycles from
+/// player one Town Hall and the starting workers, no other unit, <c>UnitsPerPlayer</c> 0, the camera on the local hall, and
+/// every hall sees a gold mine: M6-VH1, the sim's start locations, BUG-0604); ten quit cycles from
 /// that lean match (nodes flat, no orphans, objects and resources flat); <c>--skirmish</c> against the setup's defaults
 /// (the AI seat too, BUG-0630); <c>--colour</c> junk and repeated sets through the real <see cref="Match"/>
 /// (PlayerRgb, unit and building materials, the match ticks); colour flags are hash-neutral; a mirror match draws two colours in
@@ -98,7 +98,7 @@ public partial class QaM6V3Test : Node
             Check(ui == null && e.Count == 1 && e[0].Contains(at), $"colour table, {what}: loaded {ui != null}, errors [{string.Join("; ", e)}]");
         }
         // Lower case and an extra colour_9 key load (extra keys are accepted, as everywhere in ui.json).
-        // (Not colour_3's #A3192B: since BUG-0631 two equal entries are a load error.)
+        // (Not a table entry's own value: since BUG-0631 two equal entries are a load error.)
         UiText? lower = ParseWith(r => { r["setup"]!["colour_1"]!["rgb"] = "#a3192c"; r["setup"]!["colour_9"] = "x"; }, out List<string> le);
         Check(lower != null && lower.ColourRgb(0) == 0xA3192Cu, $"lower-case rgb / an extra colour_9: [{string.Join("; ", le)}]");
         // Two table entries with the same rgb (BUG-0631 item 1): refused, one error naming both keys.
@@ -146,7 +146,7 @@ public partial class QaM6V3Test : Node
 
     // Round 1 re-check (BUG-0632): CombatViewTest's corpse rules (BUG-0160 item 3: fill luminance >= 0.2, rim darker, two
     // teams' fills >= 0.25 apart) only see the default colours 1 and 2, but the menu offers all eight. A real CombatViews bound
-    // to the whole table applies them to every pick. Printed as a probe until BUG-0632 is decided; flip to Checks then.
+    // to the whole table applies them to every pick. Checks since M6-VH1 retuned Crimson and Jade (BUG-0632).
     private void CorpseRulesOverTable()
     {
         var rgb = new uint[UiText.ColourCount];
@@ -161,7 +161,8 @@ public partial class QaM6V3Test : Node
             float lum = 0.2126f * fill.R + 0.7152f * fill.G + 0.0722f * fill.B;
             bool ok = lum >= 0.2f && rim.R < fill.R && rim.G < fill.G && rim.B < fill.B;
             if (!ok) problems++;
-            GD.Print($"  corpse rules, {UiText.ColourKey(c)} {_ui.ColourName(c)}: fill luminance {lum:0.000}{(ok ? "" : "  <- KNOWN BUG-0632 probe: below 0.2 or rim not darker")}");
+            Check(ok, $"corpse rules, {UiText.ColourKey(c)} {_ui.ColourName(c)}: fill luminance {lum:0.000} below 0.2 or rim not darker (BUG-0632)");
+            GD.Print($"  corpse rules, {UiText.ColourKey(c)} {_ui.ColourName(c)}: fill luminance {lum:0.000}");
         }
         for (int a = 0; a < rgb.Length; a++)
             for (int b = a + 1; b < rgb.Length; b++)
@@ -170,7 +171,7 @@ public partial class QaM6V3Test : Node
                 float d = MathF.Sqrt((x.R - y.R) * (x.R - y.R) + (x.G - y.G) * (x.G - y.G) + (x.B - y.B) * (x.B - y.B));
                 if (d >= 0.25f) continue;
                 problems++;
-                GD.Print($"  KNOWN BUG-0632 probe: corpse fills of {UiText.ColourKey(a)} and {UiText.ColourKey(b)} only {d:0.000} apart");
+                Check(false, $"corpse fills of {UiText.ColourKey(a)} and {UiText.ColourKey(b)} only {d:0.000} apart (BUG-0632)");
             }
         GD.Print($"  corpse rules over the colour table: {problems} problem(s)");
         RemoveChild(combat);
@@ -193,7 +194,7 @@ public partial class QaM6V3Test : Node
             (new[] { "--colour", "2" }, 0, 1),
             (new[] { "--colour", "1", "4", "--colour", "1", "junk" }, 3, 1),
             (new[] { "--colour", "1", "4", "--colour", "1", "7", "--colour", "2", "2" }, 6, 1),
-            (new[] { "--colour", "2", "1", "--colour", "1", "1" }, 0, 0),
+            (new[] { "--colour", "2", "1", "--colour", "1", "1" }, 0, 1), // M6-VH1: one colour twice is refused, slot 2 keeps colour 2 (BUG-0631 item 3)
             (new[] { "--colour", "2", "8", "--colour", "2", "--seed", "3" }, 0, 7),
         };
         foreach ((string[] args, int c0, int c1) in rows)
@@ -316,6 +317,7 @@ public partial class QaM6V3Test : Node
             }
         }
         GD.Print($"  menu openings: {halls} halls planned of {seeds.Length * sizes * 2}, {sawMine} see a gold mine at the start");
+        Check(halls == seeds.Length * sizes * 2 && sawMine == halls, $"menu openings: {sawMine} of {halls} halls see a gold mine (want all {seeds.Length * sizes * 2}; BUG-0604)");
 
         // Ten quit cycles from the lean match (the last picks: seed 9001, the largest map).
         var rows = new List<(int Nodes, double Objects, double Orphans, double Resources, long Managed)>();
@@ -401,6 +403,7 @@ public partial class QaM6V3Test : Node
                 nearest = Math.Min(nearest, System.Numerics.Vector2.Distance(at, hall));
             }
             if (sees) sawMine++;
+            Check(sees, $"{how}, player {p}: no gold mine in sight at the start (nearest {nearest:0} m; BUG-0604)");
             mineText[p] = $"p{p} {(sees ? "sees a mine" : "no mine in sight")} (nearest {nearest:0} m)";
         }
         if (match.Bases is { } bases && bases.HallAnchor[0] >= 0)

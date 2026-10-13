@@ -36,3 +36,6 @@ None of these is reachable with the shipped launcher defaults (12 forests, 8 min
 
 ## Producer triage (2026-10-13-0146 ACCEPT)
 S4 confirmed; items 1, 2 and 4 go to the sim's hardening if under budget (item 1: clamp the anchor to the map before computing it, keep the hall on the location's side; item 2: round-robin that skips the odd remainder, or the docs reworded; item 4: the dev row asserts the exact mirror). Item 3 (the docs claim) fixed in docs/03 at this ACCEPT ("2.2x on seed 7, within 10 % on seeds 1-6").
+
+## QA re-check (2026-10-13-0527, M5-H1)
+Items 2 and 4 **fixed** in M5-H1 1dfdef3: whole-round start counts (`Map/MapGenTests.ShortStartCounts_ShortEveryBaseAlike`, 3 rows; QA's `ShortCounts_StartResourcesPerBase_Measured` re-run green) and the exact mirror assert. Item 1 (the hall anchor wrap in `ViewApi/StartBase.Plan`) is still open (the row stays skipped), so the bug stays open.

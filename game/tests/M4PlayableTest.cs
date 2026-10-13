@@ -194,6 +194,14 @@ public partial class M4PlayableTest : Node
             $"Shift + H queued {U.QueueCount[_sapper.Index]} orders on the Sapper");
         System.Numerics.Vector2 armyAt = Mean(_army);
         await LookAt(armyAt);
+        // Since the sim's start locations (M5-4a) seed 6 stages the army on a slope where, centred, it reaches past the top of the
+        // HUD band: look a little south so it sits in the open screen above the HUD (BUG-0660).
+        float overflow = _army.Max(h => ScreenOf(h.Index).Y) + 14f - (648 - 200 - 8);
+        if (overflow > 0)
+        {
+            float pxPerMetre = Screen(armyAt + new System.Numerics.Vector2(0f, 1f), 0f).Y - Screen(armyAt, 0f).Y;
+            if (pxPerMetre > 0.1f) await LookAt(armyAt + new System.Numerics.Vector2(0f, overflow / pxPerMetre));
+        }
         await BoxDrag(_army.Select(h => ScreenOf(h.Index)).ToArray());
         Expect(_sel.Selection.Count == _army.Count && _army.All(h => _sel.Selection.Contains(h)), $"selection {_sel.Selection.Count}, army {_army.Count}");
         // Ctrl + 1: the army is control group 1.
@@ -470,6 +478,10 @@ public partial class M4PlayableTest : Node
         float near = System.Numerics.Vector2.Distance(U.Position[_sapper.Index], c);
         Expect(near <= reach, $"the Sapper never got within {reach} m of the {def.DisplayName}: {near:0.0} m");
         Expect(B.Alive[building], $"the {def.DisplayName} fell before the Cusser");
+        // The footprint and generation are read while the building stands (BUG-0603): when the blast itself brings it down (the
+        // army had worn it to 338 hp), the dead slot's cell is -1 and the sight check looked at the map corner.
+        int gen = B.Generation[building], anchor = B.Cell[building];
+        Expect(anchor >= 0, $"the {def.DisplayName} has no footprint cell ({anchor})");
         int hp0 = B.Hp[building], resolves = _resolves.Count, issued = _sel.IssuedCount(CommandKind.UseAbility);
         await LookAt(c);
         Key(Godot.Key.Q);
@@ -498,7 +510,6 @@ public partial class M4PlayableTest : Node
             await RightClick(Screen(c, BuildingViews.BoxHeight * 0.5f));
             await Ticks(2);
         }
-        int gen = B.Generation[building], anchor = B.Cell[building];
         await Until(() => !B.Alive[building] || B.Generation[building] != gen, $"the {def.DisplayName} destroyed", () => $"hp {B.Hp[building]}");
         int rubble = -1;
         await Until(() => (rubble = RubbleAt(c)) >= 0, "rubble shown on its footprint");

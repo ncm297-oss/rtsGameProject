@@ -20,6 +20,9 @@ public sealed class SlotMaxHp
     /// <summary>An array for <paramref name="unitCapacity"/> slots, empty until the first <see cref="Refreshed"/>.</summary>
     public SlotMaxHp(int unitCapacity) => _values = new int[Math.Max(0, unitCapacity)];
 
+    /// <summary>Slots the array holds.</summary>
+    public int Capacity => _values.Length;
+
     /// <summary>Fills of the array so far.</summary>
     public int Fills { get; private set; }
 

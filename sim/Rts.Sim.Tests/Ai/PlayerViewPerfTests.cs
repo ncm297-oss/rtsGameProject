@@ -120,6 +120,23 @@ public class PlayerViewPerfTests
         Assert.True(avg < BudgetMs, $"avg {avg:F3} ms over the {BudgetMs} ms budget");
     }
 
+    /// <summary>
+    /// BUG-0542 (Producer ruling 2026-10-11): the worst case gated by name, every player's units interleaved over the whole map
+    /// so each view answers nearly all 2,500. Its own numbers (Debug): units under 1.0 ms a tick, the whole read under 1.5 ms
+    /// (measured about 0.58 and 0.98 ms at M5-1). An AI reads its view once a think (10-40 ticks), so amortised it stays far
+    /// under the tick budget; the row catches a regression in the per-answer cost.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Perf")]
+    public void EightPlayersViews_Interleaved_WorstCase_UnitsUnder1Ms_WholeReadUnder15Ms()
+    {
+        const double unitsBudgetMs = 1.0, wholeBudgetMs = 1.5;
+        (double avg, double worst, long answers, double whole, _, string scene) = Measure(Scene(bands: false));
+        _out.WriteLine($"{scene}; interleaved: units avg {avg:F3} ms a tick, worst {worst:F3} ms ({answers} answers), the whole read {whole:F3} ms");
+        Assert.True(avg < unitsBudgetMs, $"units avg {avg:F3} ms over the {unitsBudgetMs} ms worst-case budget");
+        Assert.True(whole < wholeBudgetMs, $"whole read {whole:F3} ms over the {wholeBudgetMs} ms worst-case budget");
+    }
+
     private static (double Avg, double Worst, long Answers, double WholeMs, double CellsMs, string Scene) Measure(Simulation sim)
     {
         World w = sim.World;

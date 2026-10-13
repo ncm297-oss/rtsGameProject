@@ -8,7 +8,9 @@ namespace Rts.Game;
 /// rings, a flash slot for the resolve flashes, a cue slot for the lost-cast cues. A key keeps its node from frame to frame
 /// while it is taken, so a disc whose centre doesn't move is never rebuilt; a key not taken in a frame gives its node back
 /// (hidden) for any other key. The pool starts with <c>initial</c> nodes and doubles when a frame needs more (a new high
-/// mark: the only time it allocates), up to one node per key. View state only.
+/// mark: the only time it allocates), up to one node per key. A key that finds no free node first takes one whose key has
+/// not been taken yet this frame (BUG-0550 item 1), so a frame that swaps its keys for as many others doesn't grow it.
+/// View state only.
 /// </summary>
 /// <remarks>Each frame: <see cref="Begin"/>, then <see cref="Take"/> per drawn key (place and colour the node it returns, then show it), then <see cref="End"/>.</remarks>
 public sealed class GroundDiscPool
@@ -19,7 +21,7 @@ public sealed class GroundDiscPool
     private GroundDisc[] _nodes = Array.Empty<GroundDisc>();
     private int[] _nodeKey = Array.Empty<int>(), _free = Array.Empty<int>();
     private bool[] _used = Array.Empty<bool>();
-    private int _count, _freeCount;
+    private int _count, _freeCount, _reclaimFrom;
 
     /// <summary>A pool under <paramref name="parent"/> for keys 0 to <paramref name="keys"/> - 1, made with <paramref name="initial"/> hidden nodes named <paramref name="name"/> + index.</summary>
     public GroundDiscPool(Node parent, string name, int keys, int initial)
@@ -48,16 +50,27 @@ public sealed class GroundDiscPool
     public GroundDisc? NodeOf(int key) => (uint)key < (uint)_keyNode.Length && _keyNode[key] >= 0 ? _nodes[_keyNode[key]] : null;
 
     /// <summary>Starts a frame: no key is taken yet.</summary>
-    public void Begin() => Array.Clear(_used, 0, _count);
+    public void Begin()
+    {
+        Array.Clear(_used, 0, _count);
+        _reclaimFrom = 0;
+    }
 
-    /// <summary>The node for <paramref name="key"/> this frame: the one it held last frame, else a free one (the pool grows if none is free).</summary>
+    /// <summary>
+    /// The node for <paramref name="key"/> this frame: the one it held last frame, else a free one, else one a key not yet taken
+    /// this frame held (that key loses it), else the pool grows.
+    /// </summary>
     public GroundDisc Take(int key)
     {
         int n = _keyNode[key];
         if (n < 0)
         {
-            if (_freeCount == 0) Grow(Math.Min(_keyNode.Length, _count * 2));
-            n = _free[--_freeCount];
+            n = _freeCount > 0 ? _free[--_freeCount] : Reclaim();
+            if (n < 0)
+            {
+                Grow(Math.Min(_keyNode.Length, _count * 2));
+                n = _free[--_freeCount];
+            }
             _keyNode[key] = n;
             _nodeKey[n] = key;
         }
@@ -87,6 +100,22 @@ public sealed class GroundDiscPool
         _count = 0;
         _freeCount = 0;
         Array.Fill(_keyNode, -1);
+    }
+
+    // A node held by a key this frame hasn't taken yet (a stale holder End would free anyway), released from that key; or -1.
+    // The cursor only moves forward within a frame: a node it passed is taken this frame, so the scans cost one pass a frame.
+    private int Reclaim()
+    {
+        for (; _reclaimFrom < _count; _reclaimFrom++)
+        {
+            int n = _reclaimFrom;
+            if (_used[n] || _nodeKey[n] < 0) continue;
+            _keyNode[_nodeKey[n]] = -1;
+            _nodeKey[n] = -1;
+            _reclaimFrom++;
+            return n;
+        }
+        return -1;
     }
 
     // Makes nodes up to `to` (more than now), all free.

@@ -77,7 +77,8 @@ internal static class PlayerViewOracle
             Compare(t, got, expected, $"{at}: unit {j} (owner {u.Owner[j]}, alive {u.Alive[j]})");
             if (got && expected)
             {
-                var want = new SeenUnit(new EntityHandle(j, u.Generation[j]), u.Owner[j], u.TypeId[j], u.Position[j], u.Hp[j], u.State[j]);
+                var want = new SeenUnit(new EntityHandle(j, u.Generation[j]), u.Owner[j], u.TypeId[j], u.Position[j], u.Hp[j],
+                    u.State[j] == UnitState.Idle && u.BuildTarget[j].Generation != 0 ? UnitState.Building : u.State[j]); // BUG-0640: a builder between its stuck stop and its stand
                 Field(t, su == want, $"{at}: unit {j}'s fields");
             }
             if (!got) Field(t, su == default, $"{at}: hidden unit {j}'s out value is not default");

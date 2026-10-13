@@ -17,8 +17,8 @@ namespace Rts.Game.Tests;
 /// <summary>
 /// M6-V2: the AI seat, from the menu and from the dev flags. Menu -> Skirmish -> slot 2 Whirlwind, Hard -> Start: the runner's
 /// seats are (malazan, human) and (whirlwind, AI, Hard), the sim's config and <c>World.FactionOf</c> agree, and by tick 400 the
-/// AI has a worker gathering or returning or a queue item (M6-V3: the menu's match has no army; whether a worker is at work by
-/// then is a printed probe until the sim's start locations put the bases by their resources, see <see cref="CheckAiActed"/>);
+/// AI has a worker gathering or returning or a queue item, and in the menu's match (no army, M6-V3) a worker gathering or
+/// returning (M6-VH1: the sim's start locations put each hall by its mines, BUG-0604; see <see cref="CheckAiActed"/>);
 /// paused, no tick runs; three quit-to-menu cycles with an AI seat leak
 /// nothing (node count flat, no orphans, objects flat). Then <c>Match.tscn</c> with <c>--ai hard --faction 2 whirlwind</c>
 /// and a replay recorder: the same seats, the AI acts, the replay header holds <c>seat 1 whirlwind ai hard</c> and the
@@ -325,9 +325,8 @@ public partial class AiSeatTest : Node
     }
 
     // The AI did something by now: one of its workers gathers or carries, or one of its buildings has a queue item. With
-    // `gathering` (the menu's match, M6-V3) a worker at work is also probed: printed, not failed, while the bases stand at the
-    // debug spots by the map centre, where the AI sees no resource node and keeps its workers idle (no Gather is sent before
-    // its scout finds one); flip to Check(working > 0, ...) once StartBase.Plan uses the sim's start locations (M6, sim track).
+    // `gathering` (the menu's match, M6-V3) a worker must be at work: the sim's start locations put the hall by its two mines
+    // and a forest, so the AI sends Gathers without waiting for its scout (BUG-0604, a printed probe until M6-VH1).
     private void CheckAiActed(Simulation sim, string how, bool gathering)
     {
         World w = sim.World;
@@ -339,8 +338,8 @@ public partial class AiSeatTest : Node
         for (int k = 0; k < b.Capacity; k++)
             if (b.Alive[k] && b.Owner[k] == 1) queued += b.QueueCount[k];
         Check(working > 0 || queued > 0, $"{how}: by tick {sim.TickNumber} the AI has no worker gathering or returning and no queue item");
-        if (gathering && working == 0)
-            GD.Print($"  PENDING start locations probe ({how}): by tick {sim.TickNumber} no AI worker is gathering or returning (no node in its sight from the debug start spot)");
+        if (gathering)
+            Check(working > 0, $"{how}: by tick {sim.TickNumber} no AI worker is gathering or returning (BUG-0604: the start base should see its mines)");
         GD.Print($"  {how}: tick {sim.TickNumber}, AI workers gathering / returning {working}, queue items {queued}");
     }
 

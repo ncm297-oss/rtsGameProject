@@ -678,8 +678,9 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       animations for Malazan and Whirlwind; licensing log filled in.
 - [ ] Real SFX and placeholder music; alerts with sound.
 - [ ] 3 maps (Raraku, Pale Hills, Vathar Crossing) plus the procedural generator in skirmish setup. (M5-4a, 2026-10-13, pulled
-      forward: the generator's mirrored start locations, each with 2 mines and a forest in reach, replay format 6; left: the three
-      hand-made maps, mirrored terrain (BUG-0621), the generator's options in the setup.)
+      forward: the generator's mirrored start locations, each with 2 mines and a forest in reach, replay format 6. M5-H1, 2026-10-13:
+      both bases on one level and at least half a map apart. Left: the three hand-made maps, mirrored terrain, the generator's
+      options in the setup.)
 - [ ] `tools/export.ps1` produces a Windows zip that runs on a machine without Godot or .NET installed.
 - [ ] Revisit the .NET version (see [03 Platform](03-technical-design.md#platform-and-versions)).
 - [ ] Playable: a friend can unzip it and play a match without help.

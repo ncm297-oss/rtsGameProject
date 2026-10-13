@@ -35,7 +35,7 @@ public class MapGenTests
         ReadOnlySpan<StartLocation> starts = w.StartLocations;
         Assert.Equal(2, starts.Length);
         int x0 = starts[0].Cell % size, y0 = starts[0].Cell / size, x1 = starts[1].Cell % size, y1 = starts[1].Cell / size;
-        Assert.True(Math.Abs(x1 - (size - x0)) <= 1 && Math.Abs(y1 - (size - y0)) <= 1, $"({x0},{y0}) and ({x1},{y1}) are not mirrored");
+        Assert.True(x1 == size - 1 - x0 && y1 == size - 1 - y0, $"({x0},{y0}) and ({x1},{y1}) are not mirrored"); // exact (BUG-0622 item 4)
         Assert.True(x0 < size / 2, "player 0 is not in the west half");
         string ctx = $"{size} seed {seed}";
         foreach (StartLocation st in starts)
@@ -199,6 +199,11 @@ public class MapGenTests
         yield return new object[] { d with { StartClearRadius = 28, StartMineDistance = 58f, StartForestDistance = 60f }, nameof(MapGenParams.StartClearRadius) };
         yield return new object[] { d with { StartEdgeMargin = 46 }, nameof(MapGenParams.StartClearRadius) };
         yield return new object[] { d with { Width = 128, Height = 36, Level1MaxSize = 20 }, nameof(MapGenParams.StartClearRadius) };
+        // BUG-0620: the site disc (not the clear disc) on open ground, two cells off the border. A small margin used to pass
+        // and then throw in Generate: 40 x 40 margin 1 (site disc 10 needs x >= 12 > 40 / 2 - 1 - 10), and a short map with
+        // the mines at their farthest (site disc 17 needs 19 <= y <= 38 - 3 - 17 = 18; the old lo 18 <= 38 - 1 - 18 held).
+        yield return new object[] { d with { Width = 40, Height = 40, EdgeMargin = 1, Level1MaxSize = 30, StartEdgeMargin = 1 }, nameof(MapGenParams.StartClearRadius) };
+        yield return new object[] { d with { Width = 128, Height = 38, Level1MaxSize = 20, StartMineDistance = 32f }, nameof(MapGenParams.StartClearRadius) };
     }
 
     [Theory]
@@ -221,6 +226,52 @@ public class MapGenTests
         // The smallest square map the default start rule fits: 2 x (margin 10 + radius 8 + site radius 10 + 1) = 58.
         (MapGenParams.Default with { Width = 58, Height = 58, Level1MaxSize = 30 }).Validate();
         Assert.Throws<ArgumentOutOfRangeException>(() => (MapGenParams.Default with { Width = 57, Height = 57, Level1MaxSize = 30 }).Validate());
+    }
+
+    /// <summary>
+    /// BUG-0622 item 2: a start count short of a whole round over the locations shorts every base alike (the odd mine or
+    /// forest is placed like any other): before M5-H1, seed 2 gave player 0 the odd mine (1 / 0, 2 / 1) and the only forest.
+    /// </summary>
+    [Theory]
+    [InlineData(1, 12)]
+    [InlineData(3, 12)]
+    [InlineData(8, 1)]
+    public void ShortStartCounts_ShortEveryBaseAlike(int mines, int forests)
+    {
+        var sim = new Simulation(TestSim.Config(2, 2, 64, 64) with { Map = MapGenParams.Default with { GoldMines = mines, Forests = forests } });
+        World w = sim.World;
+        StartLocation s0 = w.StartLocations[0], s1 = w.StartLocations[1];
+        Assert.Equal(StartMines(w, s0), StartMines(w, s1));
+        Assert.Equal(LargestNearForest(w, s0) > 0, LargestNearForest(w, s1) > 0);
+    }
+
+    /// <summary>
+    /// BUG-0621: every start location stands on one level and every two centres are at least half the smaller map side
+    /// apart. Before M5-H1, 128 seed 1 put player 0 on a level-1 plateau and player 1 on level 0, 75 m apart.
+    /// </summary>
+    [Theory]
+    [InlineData(128, 2)]
+    [InlineData(192, 2)]
+    [InlineData(128, 4)]
+    public void StartLocations_ShareALevel_AndStandHalfTheMapApart(int size, int n)
+    {
+        var p = MapGenParams.Default with { Width = size, Height = size, StartLocations = n };
+        for (ulong seed = 1; seed <= 25; seed++)
+        {
+            var rng = new SimRng(seed, RngStream.MapGen);
+            Heightmap hm = MapGenerator.Generate(p, ref rng);
+            ReadOnlySpan<StartLocation> s = hm.StartLocations;
+            Assert.Equal(n, s.Length);
+            for (int i = 0; i < n; i++)
+            {
+                Assert.True(s[i].Level == s[0].Level, $"seed {seed}: start {i} on level {s[i].Level}, start 0 on {s[0].Level}");
+                for (int j = 0; j < i; j++)
+                {
+                    int dx = s[i].Cell % size - s[j].Cell % size, dy = s[i].Cell / size - s[j].Cell / size;
+                    Assert.True(4 * (dx * dx + dy * dy) >= size * size, $"seed {seed}: starts {j} and {i} {MathF.Sqrt(dx * dx + dy * dy):F1} cells apart");
+                }
+            }
+        }
     }
 
     [Fact]

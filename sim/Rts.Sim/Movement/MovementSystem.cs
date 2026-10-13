@@ -376,15 +376,22 @@ public static class MovementSystem
 
     /// <summary>
     /// M4-H3 (BUG-0461): whether an own unit of walker <paramref name="i"/> that is attacking or casting (planted: never
-    /// shoved) stands within <see cref="World.CastWalkInBlockerRange"/> of it, body edge to body edge, with its centre ahead
-    /// of <paramref name="forward"/>. A holder doesn't count (it may never move). Queries into the second movement scratch,
-    /// which nothing holds at this point of the plan; runs only for a stuck caster's walk.
+    /// shoved) stands within <see cref="World.CastWalkInBlockerRange"/> of it, body edge to body edge, in its way: its centre
+    /// ahead of <paramref name="forward"/> (a unit vector) and, since M5-H1 (BUG-0511), inside the caster's swept corridor
+    /// (off the line of travel by at most the two radii plus <see cref="MovementConstants.CastCorridorSlack"/>), on the
+    /// caster's level or on a ramp cell either side (a legal step between levels). A holder doesn't count (it may never
+    /// move). Queries into the second movement scratch, which nothing holds at this point of the plan; runs only for a stuck
+    /// caster's walk.
     /// </summary>
     private static bool OwnFighterAhead(World world, UnitStore u, int i, Vector2 pos, Vector2 forward)
     {
         float range = world.CastWalkInBlockerRange;
         float ri = u.Radius[i];
         int owner = u.Owner[i];
+        NavGrid grid = world.NavGrid;
+        if (!grid.WorldToCell(pos, out int cx, out int cy)) return false;
+        int level = grid.LevelAt(cx, cy);
+        bool onRamp = (grid.FlagsAt(cx, cy) & NavFlags.Ramp) != 0;
         int[] found = world.ShoveNeighbors;
         int n = Math.Min(world.Spatial.QueryRadius(pos, ri + world.MaxUnitRadius + range, found), found.Length);
         for (int m = 0; m < n; m++)
@@ -394,7 +401,11 @@ public static class MovementSystem
             Vector2 to = u.Position[j] - pos;
             if (Vector2.Dot(to, forward) <= 0f) continue;
             float reach = ri + u.Radius[j] + range;
-            if (to.LengthSquared() <= reach * reach) return true;
+            if (to.LengthSquared() > reach * reach) continue;
+            float lateral = MathF.Abs(to.X * forward.Y - to.Y * forward.X);
+            if (lateral > ri + u.Radius[j] + MovementConstants.CastCorridorSlack) continue;
+            if (!grid.WorldToCell(u.Position[j], out int jx, out int jy)) continue;
+            if (grid.LevelAt(jx, jy) == level || onRamp || (grid.FlagsAt(jx, jy) & NavFlags.Ramp) != 0) return true;
         }
         return false;
     }

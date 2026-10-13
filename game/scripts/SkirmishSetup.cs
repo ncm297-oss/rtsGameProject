@@ -15,7 +15,8 @@ namespace Rts.Game;
 /// <remarks>
 /// The faction lists hold every loaded faction in id order (defaults: faction 0 for "You", faction 1 for "AI", the match's
 /// old fixed assignment); each colour list the <see cref="UiText.ColourCount"/> colours in table order (defaults: colour 1
-/// for "You", colour 2 for "AI"); the difficulty list Easy, Normal, Hard in <see cref="AiDifficulty"/> order (default Normal). The
+/// for "You", colour 2 for "AI"; colours are unique per match, so each list greys the colour the other slot holds and a pick
+/// of it moves to the first free colour, <see cref="PickColour"/>, BUG-0631 item 3); the difficulty list Easy, Normal, Hard in <see cref="AiDifficulty"/> order (default Normal). The
 /// screen holds only what the player picked; Start raises <see cref="StartPressed"/> with the picks as match flags
 /// (<see cref="MatchArgs"/>) and <see cref="Main"/> starts the match through <see cref="LaunchOptions.Parse"/>.
 /// </remarks>
@@ -79,6 +80,31 @@ public partial class SkirmishSetup : CanvasLayer
 
     /// <summary>The colour picked for <paramref name="slot"/> (0-based index into <c>ui.json</c>'s colour table).</summary>
     public int ColourPick(int slot) => Math.Clamp(ColourOptions[slot].Selected, 0, UiText.ColourCount - 1);
+
+    /// <summary>
+    /// Picks <paramref name="colour"/> (0-based) for <paramref name="slot"/>, as a click on its list does. Colours are unique per
+    /// match (docs/02 "Game flow" 2, BUG-0631 item 3): a colour the other slot holds is refused and the slot takes the first
+    /// colour the other doesn't hold (<see cref="LaunchOptions.FirstFreeColour"/>). Then each list greys the other's colour.
+    /// </summary>
+    public void PickColour(int slot, int colour)
+    {
+        int held = ColourPick(1 - slot);
+        int c = Math.Clamp(colour, 0, UiText.ColourCount - 1);
+        if (c == held) c = LaunchOptions.FirstFreeColour(held);
+        ColourOptions[slot].Select(c);
+        GreyTakenColours();
+    }
+
+    // Each colour list greys (disables) the colour the other slot holds, so the popup can't pick it.
+    private void GreyTakenColours()
+    {
+        for (int slot = 0; slot < ColourOptions.Length; slot++)
+        {
+            int held = ColourPick(1 - slot);
+            OptionButton list = ColourOptions[slot];
+            for (int c = 0; c < list.ItemCount; c++) list.SetItemDisabled(c, c == held);
+        }
+    }
 
     /// <summary>The AI slot's picked difficulty.</summary>
     public AiDifficulty DifficultyPick => (AiDifficulty)Math.Clamp(DifficultyOption.Selected, 0, DifficultyKeys.Length - 1);
@@ -164,6 +190,8 @@ public partial class SkirmishSetup : CanvasLayer
             for (int c = 0; c < UiText.ColourCount; c++) ColourOptions[slot].AddIconItem(Swatch(ui.ColourRgb(c)), ui.ColourName(c));
             // The defaults are the match's own: slot s plays colour s.
             ColourOptions[slot].Select(slot % UiText.ColourCount);
+            int picker = slot;
+            ColourOptions[slot].ItemSelected += index => PickColour(picker, (int)index);
             grid.AddChild(ColourOptions[slot]);
             if (slot == 0)
             {
@@ -188,6 +216,7 @@ public partial class SkirmishSetup : CanvasLayer
             if (MatchArgs() is string[] args) StartPressed?.Invoke(args);
         };
         buttons.AddChild(StartButton);
+        GreyTakenColours();
         Validate();
     }
 

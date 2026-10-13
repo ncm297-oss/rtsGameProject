@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-10-2334, task M4-H3 (QA) |
 | System | sim tests (`Abilities/AbilityScenes`, `QA/TowerGhostQaTests`, `QA/FieldBuildFairnessQaTests`) |
-| Fixed by | |
+| Fixed by | 1dfdef3 (M5-H1): `AbilityScenes.Had` skips Dropped; TowerGhost row tightened; memory comment re-itemised |
 
 ## Repro / items
 1. **`AbilityScenes.Had(sim, caster, resolved: false)` / `TickOf(..., resolved: false)` match a Dropped event as a start.**
@@ -28,3 +28,6 @@ Helpers and QA rows that keep guarding the rule they were written for; itemised 
 
 ## Notes
 None of these changes behaviour; grouped as one S4.
+
+## QA re-check (2026-10-13-0527, M5-H1)
+**Fixed**, verified by QA on 1dfdef3: the rows named in Fixed by are green, they failed or were skipped on 0155205, and the full non-Perf suite is green. See `studio/qa/2026-10-13-0527-M5-H1.md`.

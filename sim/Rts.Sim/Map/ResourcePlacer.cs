@@ -36,15 +36,17 @@ internal static class ResourcePlacer
         var s = new Scratch(grid);
         ReadOnlySpan<StartLocation> starts = grid.StartLocations;
         foreach (StartLocation st in starts) s.Reserve(st, p.StartClearRadius);
-        // M5-4a: the start locations' mines and forests come out of the counts first.
+        // M5-4a: the start locations' mines and forests come out of the counts first. M5-H1 (BUG-0622): in whole rounds over
+        // the locations, so a short count shorts every base alike; the odd remainder is placed like any other node.
         int startMines = Math.Min(p.GoldMines, data.Rules.StartMineCount * starts.Length);
-        int startForests = Math.Min(p.Forests, starts.Length);
+        if (starts.Length > 0) startMines -= startMines % starts.Length;
+        int startForests = p.Forests >= starts.Length ? starts.Length : 0;
         int mines = 0, forests = 0, trees = 0;
 
         int mineType = FirstOfKind(data, ResourceKind.Gold);
         if (mineType >= 0)
         {
-            // Round robin over the locations, so a short count shorts every base alike.
+            // Round robin over the locations, whole rounds only.
             for (int m = 0; m < startMines && store.FreeCount > 0; m++)
             {
                 if (TryStartMine(p, grid, store, data, s, mineType, mines, starts[m % starts.Length], ref rng)) mines++;

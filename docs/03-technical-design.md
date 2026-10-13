@@ -1287,7 +1287,11 @@ unit target while not gaining on it still gives it up (BUG-0150's rule, unchange
 was dropped after 2 s with no feedback (one of three selected units stood Idle 48 m away). Once its walk ends out of reach
 (a target on a cliff-top with no way up: the walk ends on the nearest ground below it, or movement finds no route and drops
 the goal) the unit stands, the scans count and the order is given up by the rule above, so a unit never paces a cliff for
-ever; a field still waiting for its build counts as no route for that scan. Auto-acquired chases (attack-move,
+ever. **M5-H1 (BUG-0512):** a chaser movement stopped short (a stuck stop in the crowd round the target drops its goal for a
+tick before the chase walks again) is judged by the field of the cell its chase walks to next, at the cell it stands in,
+so a scan landing on that tick doesn't give up a reachable target (500 units round a tent: 444 gave up, now none); a walk
+that ended at its goal (the goal kept: the nearest ground, the target out of reach) still counts as no route, and a walk
+whose field is still being built (the chase moved its goal a cell) holds the count for that scan. Auto-acquired chases (attack-move,
 retaliation) keep the 10-scan rule. `Combat/OrderedChaseReachTests` (the seed-6 ramp-detour layout, and a target on a
 sealed cliff-top).
 Known limits of the friend exception: a friend fighting an enemy the chaser can't reach (both on a plateau the chaser
@@ -2334,8 +2338,10 @@ over time came in M4-4b-1 (below).
   M4-H3 (BUG-0461, Producer decision 2026-10-10, owner may revisit): a caster's walk has its own patience,
   `SimConfig.CastWalkInPatienceSeconds` (3 s, `World.CastWalkInPatienceTicks` = 60 stuck ticks, not a Move's 20), and a
   tick without progress in which an own unit that is `Attacking` or `Casting` (planted, never shoved) stands within
-  `SimConfig.CastWalkInBlockerRange` (1.5 m, body edge to body edge) with its centre ahead of the caster's direction of
-  travel counts as waiting behind its own side (the stuck count holds, as behind a flowing group: `MovementSystem.
+  `SimConfig.CastWalkInBlockerRange` (1.5 m, body edge to body edge) in its way counts as waiting behind its own side:
+  since M5-H1 (BUG-0511) its centre ahead of the caster's direction of travel and inside the caster's swept corridor (off
+  the line of travel by at most the two radii plus `MovementConstants.CastCorridorSlack`, 0.1 m), on the caster's level or
+  with either on a ramp cell; one beside the caster, or across a cliff edge, doesn't hold it (the stuck count holds, as behind a flowing group: `MovementSystem.
   OwnFighterAhead`, one spatial query, only for a stuck caster's walk). The fight ends and frees the way, so a caster
   hemmed in by its own army at a ramp waits and casts rather than losing the click after 1 s. A holder doesn't count
   (it may never move), nor does an Idle unit (it is shoved, or pushed after `PushAfterStuckTicks`). A cast lost without
@@ -5456,15 +5462,15 @@ game/data/common/ui.json        setup.colour, setup.colour_1 .. colour_8
   `--units` / `--ai` still wins; a dev run without `--skirmish` and `--ai` keeps slot 2 human. With 0 units `Match.Start` skips `SpawnArmies` and plans the bases
   through `StartBase.Plan` with an empty block per player, as `--units 0` always did (the plan stands a one-unit block in
   for an empty one); the camera starts on the local Town Hall (`Match.StartFocus`). Every other dev run and test keeps
-  `--units`' default of 100. Until the sim's start locations land, the halls stand at those debug spots, either side of
-  the map's centre line; the AI sees no resource node from there, so its workers idle until its scout finds one.
+  `--units`' default of 100. Since the sim's start locations (M5-4a) `StartBase.Plan` centres each hall on its start
+  location, two mines and a forest in reach, so the AI's workers gather from the opening (M6-VH1 below).
 - **Per-player colours (BUG-0601).** `ui.json` `setup` holds a table of `UiText.ColourCount` (8) colours,
   `colour_1` .. `colour_8`, each `{ "displayName", "rgb": "#RRGGBB" }` (Iron, Ochre, Crimson, Cobalt, Jade, Violet, Rose,
   Bone; colours 1 and 2 are the Malazan and Whirlwind palette primaries, so a default match looks as before), plus the
   column heading `setup.colour`. Each missing key or field, or an `rgb` not `#RRGGBB`, is one load error naming it, and
   two entries with the same `rgb` are one load error naming both keys (BUG-0631 item 1: the table tells players apart). The
   setup shows a colour list per slot (each item a swatch and the name; defaults colour 1 for "You", colour 2 for "AI"),
-  kept over Back and Quit like the other picks; two slots may pick the same colour. Start passes `--colour <slot> <n>`
+  kept over Back and Quit like the other picks; colours are unique per match (M6-VH1 below). Start passes `--colour <slot> <n>`
   (n 1-based); the flag takes slot 1 or 2 and one digit 1 to 8, and junk (a bad slot or colour, a missing value, a flag
   as a value) is warned about and ignored (BUG-0041), a repeated flag's last good value winning, as `--faction`.
   `Match.PlayerColours` builds `PlayerRgb` (slot p's pick, else colour p; players past the table wrap round it; without
@@ -5490,8 +5496,35 @@ game/data/common/ui.json        setup.colour, setup.colour_1 .. colour_8
   `--skirmish` / `--ai` parse rows), and two equal table colours refused. `AbilityViewTest`, `CombatViewTest`, `QaM24Test`
   and `QaVh3Test` compare drawn colours with `Match.PlayerRgb` (or the table), not faction primaries (BUG-0631 item 2). `MinimapTest`: a press held
   into a pause is dropped and a motion after it moves nothing; the dot colours are `PlayerRgb`. `AiSeatTest`: the swapped
-  sides keep colours 1 and 2; the menu match's "AI worker at work by tick 400" is printed as a probe until the sim's start
-  locations land. `QaM6V2Test`'s BUG-0602, mirror-colour and BUG-0600 probes are `Check`s.
+  sides keep colours 1 and 2; the menu match's "AI worker at work by tick 400" was a printed probe until M6-VH1. `QaM6V2Test`'s BUG-0602, mirror-colour and BUG-0600 probes are `Check`s.
+
+- **M6-VH1 (view hardening).** View only; files: `AiSeatTest`, `QaM6V3Test`, `ShellTest`, `M4PlayableTest`, `QaM5V1Test`,
+  `CombatViewTest`; `SkirmishSetup`, `LaunchOptions`, `UiText`, `GroundDiscPool`, `CombatViews`, `SlotMaxHp`; `ui.json`.
+  - *Start-location probes are Checks (BUG-0604).* `AiSeatTest` fails unless an AI worker of the menu's match is gathering
+    or returning by tick 400; `QaM6V3Test.MenuOpenings` fails unless every hall of its 6 seeds x 3 sizes (36) sees a gold
+    mine at tick 9.
+  - *The colour table meets the corpse rules (BUG-0632).* Crimson `#A3192B` -> `#B82633` and Jade `#2E8B57` -> `#2EA35A`
+    (names unchanged; Iron stays the Malazan primary): every fill (colour x `CorpseShade`) now has luminance >= 0.2 (lowest
+    Cobalt 0.210, Crimson 0.233) and every pair of fills is >= 0.25 apart (closest Cobalt / Violet 0.253, Iron / Jade 0.297
+    from 0.222). `ShellTest` binds a real `CombatViews` to the whole table and checks the 8 fills, their rims and the 28
+    pairs (BUG-0160 item 3's rules), so a recolour that breaks them fails by key; `QaM6V3Test.CorpseRulesOverTable` checks too.
+    A duplicate-colour load error prints the value with its `#` (BUG-0631 item 1's nit).
+  - *Colours are unique per match (BUG-0631 item 3, docs/02 "Game flow" 2).* Each setup colour list greys (disables) the
+    colour the other slot holds; `SkirmishSetup.PickColour(slot, n)` (also the lists' `ItemSelected`) moves a pick of the
+    other's colour to the first colour the other doesn't hold (`LaunchOptions.FirstFreeColour`: colour 1, or 2 when the
+    other holds 1). `--colour` leaving both slots on one colour (an explicit pick or a default) is warned about and slot 2
+    keeps its default, colour 2, or colour 1 when slot 1 holds colour 2.
+  - *BUG-0603.* `M4PlayableTest` step 7 read the building's footprint cell after the Cusser's blast; when the blast itself
+    brought the building down (the army had worn it to 338 hp), the dead slot's cell was -1 and the sight check looked at
+    the map's corner. The replay `m4playable-seed6-fail-tick4094.replay` (played with its own commit's sim and data) shows the
+    Sapper alive beside the footprint and every footprint cell visible on tick 4094. The cell and generation are now read
+    before the cast. Since the sim's start locations seed 6 stages the army on ground where, centred on screen, it reached
+    into the HUD band and step 2's box failed (BUG-0660): the camera now looks a little south of the army when it would.
+  - *BUG-0550 item 1.* `GroundDiscPool.Take` with no free node first takes a node whose key has not been taken yet this
+    frame (a forward cursor, one pass a frame, no allocation) before it grows, so a frame that swaps 16 keys for 16 others
+    stays at 16 nodes (`QaM5V1Test` pool churn).
+  - *BUG-0521 item 3.* `CombatViews.Bind` replaces a max-hp array shorter than the unit store (`SlotMaxHp.Capacity`) and keeps
+    a large enough shared one (`CombatViewTest` re-bind row). Item 2 is a `ViewApi` (sim) change, left for the sim track.
 
 ## AI architecture
 
@@ -5587,7 +5620,8 @@ enums `AiDifficulty` / `AiStepTrigger` / `AiStepAction`, `Data/DataLoader.Ai.cs`
   the map, every view's unit cursor walked whole each tick: 0.21-0.24 ms for all eight (budget 0.3 ms; 5,260 answers).
   Reported: the whole read (buildings, ghosts, nodes, queues) 0.46 ms, with every cell 1.5 ms; the worst case, every
   player's units interleaved over the whole map so each view answers nearly all of them (19,389 answers): 0.53-0.56 ms for
-  the units, 0.95 ms whole. In that case the cost is the answers themselves (building 19,389 records; `CanSeeUnit` alone
+  the units, 0.95 ms whole; gated by name since M5-H1 (BUG-0542: units under 1.0 ms, whole read under 1.5 ms,
+  `EightPlayersViews_Interleaved_WorstCase_UnitsUnder1Ms_WholeReadUnder15Ms`). In that case the cost is the answers themselves (building 19,389 records; `CanSeeUnit` alone
   over the same slots is 0.44 ms). Reading allocates nothing; building a view allocates the object alone (72 B).
 - **Memory.** No per-player buffer in the view: a `PlayerView` is six references and two ints (72 B), built by whoever reads
   (the M5-2 `AiPlayer`), not by the world. M5-1 added nothing to `World` (itemised as +0 in
@@ -5727,12 +5761,20 @@ acting only through commands. Code: `sim/Rts.Sim/Ai/AiPlayer.cs`, `Blackboard.cs
   terrain, so it reveals nothing of unexplored ground); terrain (passable, no ramp, one level); a cell a building covers
   refuses only if the player knows that building (its own, one it sees now, or its ghost of it), and every ghost's
   remembered footprint refuses (also a building gone unseen); a live node's cell refuses (on explored ground the player saw
-  it), and so does a node it remembers that is gone; then cost and a free building slot. Not checked: units in the way and
+  it), and so does a node it remembers that is gone; then cost and a free building slot (the free slot and a pocket cell left
+  out of sight read world-wide state, as the human's own build ghost does: BUG-0573). Not checked: units in the way and
   the never-seal rule; the Build applies them, a refused Build costs nothing and the executor's retry mark moves it on.
   `CanTrain` / `CanResearch` are `World.CanTrain` / `CanResearch` for the player: they read only its own state.
 - **Economy manager.** The house rule first: a house (the faction's `House` slot) is placed (as `build`, round the hall)
   when `HalfPopCap - HalfPop` is within `houseWhenPopWithin` pop, the cap is below the rules' `popCap`, and no own house is
-  under construction or waiting to be judged. Then every idle worker (Idle, no AI command waiting on it) is sent with
+  under construction or waiting to be judged. **M5-H1 (BUG-0640):** before it, an own site that no own worker has as its
+  build target (`PlayerView.TryGetBuildTarget`, own units only) for `EconomyManager.StalledThinks` (3, a code guard) thinks
+  in a row gets a worker sent to join it (`Build` of its type at its anchor, which joins the site and costs nothing: the
+  idle worker nearest it, else the nearest gatherer; one a think), and such a stalled house site doesn't hold the house rule
+  off. Root cause of the two Billets left unbuilt for 13 minutes (D-H4): a builder pacing short of its site stood `Idle` for
+  one tick between movement's stuck stop and the construction system's stand, and a think landing on it sent the worker to
+  gather; `PlayerView` now answers a worker with a live build target that stands Idle as `Building` (what it is next tick).
+  Then every idle worker (Idle, no AI command waiting on it) is sent with
   `Command.Gather` to the known node nearest it of the wanted kind: gold while fewer than `round(goldShare x gatherers)` are
   on gold (gatherers: the workers the AI last sent to gold or wood that are still at it, plus the idle ones), else wood; the
   other kind when none of that kind is known. With no node known a worker stays idle (finding far resources is scouting,
@@ -5831,12 +5873,15 @@ six `rules.json` `ai` knobs in `Data/AiRulesDef.cs`; the hash in `GameData.Conte
   kept from its first `AttackMove` to this target; a new target restarts both). At `MilitaryManager.MaxTries` (3, a code
   guard, not a balance number) the AI stops ordering it: by the target it was crowded off it (friends fight it), so it stays
   there, still a member; elsewhere it can't get there, so it goes home and leaves the wave. A member that leaves alive is not a
-  loss: its half-pop comes off the start's too, and a wave all of whose members left ends (with the cooldown). A full queue ends the think; the per-slot flags keep what is owed
+  loss: its half-pop comes off the start's too, and a wave all of whose members left ends (with the cooldown). **M5-H1
+  (BUG-0598):** a wave none of whose members has been busy (not `Idle`), had an AI command pending or been sent one for more
+  than `ai.waveCooldown` ends like a retreat (every member home, the cooldown again): members all standing by a target none
+  of them can strike (a hall ringed by forest) no longer freeze the AI's offence. A full queue ends the think; the per-slot flags keep what is owed
   for the next think (a 200-unit wave start that doesn't fit is finished then).
 - **Economy additions.** **Rebalance** (needed once the scout finds a forest late, when every worker already gathers gold and
   the cap stops training, so none is ever idle): on a think with no idle worker, while the gatherers' split is off
-  `round(goldShare x gatherers)` and a node of the short kind is known, one gatherer a think (the first in slot order that is
-  `Gathering` the long kind) is sent to the nearest node of the other kind. **BUG-0574**: a dropped Gather is not judged (and
+  `round(goldShare x gatherers)` and a node of the short kind is known, one gatherer a think (of those `Gathering` the long kind, the
+  one carrying the least, slot order on ties: M5-H1, BUG-0594, since the other kind's Gather drops a load) is sent to the nearest node of the other kind. **BUG-0574**: a dropped Gather is not judged (and
   marks nothing) while the player has no finished drop-off or the worker carries a full load of the kind it was sent to (such a
   Gather goes to a drop-off first and ends at once with none); and a mark on a node the player sees alive again (`Remaining`
   known) is cleared at the next think (the pass runs only while a mark is set). **Production** weighs
@@ -5901,11 +5946,14 @@ bases stand on them. Code: `Map/StartLocation.cs`, `MapGenerator.FindStarts`, `R
   lower cell. **No RNG**: a layout that fits is the same map, and leaves the RNG where it was, with or without start
   locations. A layout with no fitting centre is redrawn through the existing `MaxAttempts` loop like one with too little
   ground; the fallback (the first passable-enough layout with a missing level, else the flat map) also carries start
-  locations. `Validate` makes the pair fit a flat map (player 0's band non-empty; 3-4 players: a square map whose westmost
-  centre and its quarter turn keep their site discs apart), so the flat fallback always has them; `Generate` still throws
-  `InvalidOperationException` if it doesn't. **Known gap (BUG-0620, M5-4a QA):** `Validate` ignores the border ring (open
-  ground starts two cells in), so a validated set with a small `StartEdgeMargin` can still throw (180 of 444 swept sets); the
-  sim's hardening makes `Validate` refuse those by name. The search uses per-row prefix counts of non-open cells, `2r + 1` row checks a
+  locations. **M5-H1 (BUG-0621):** every position must also stand on one level (high ground sees down, low ground can't see
+  up) and every two centres at least half the smaller map side apart (cells; no rush across a crowded map's middle); a layout
+  with no such centre is redrawn like one without room. `Validate` makes the positions fit a flat map, so the flat fallback
+  always has them (M5-H1, BUG-0620): with `lo = StartEdgeMargin + StartClearRadius` and `rs` the site radius, it requires
+  `max(lo, rs + 2) <= min(Width / 2 - 1 - rs, Height - 3 - rs)` (open ground starts two cells in from the border) and a centre
+  at `x = max(lo, rs + 2)` whose positions keep the discs apart and the centres half the smaller side apart (3-4 players: a
+  square map), refused as `StartClearRadius` otherwise; `Generate` still throws `InvalidOperationException` if the flat map
+  has none (unreachable). The search uses per-row prefix counts of non-open cells, `2r + 1` row checks a
   centre: 256-map generation stays at about 11 ms in Debug (`MapGenTests.Generate256_WithStartLocations_IsUnder50Ms`).
 - **Defaults and bounds** (`Validate`, by name): `StartLocations` 0 or 2-4; `StartClearRadius` 2-32; `StartEdgeMargin` 1 to the
   smaller side; `StartMineDistance` (default 18 m) above the clear radius in meters and at most 16 m past it;
@@ -5919,10 +5967,10 @@ bases stand on them. Code: `Map/StartLocation.cs`, `MapGenerator.FindStarts`, `R
   `Heightmap.ContentHash`**: like the heightmap they follow from seed + params, which the replay header carries.
 - **Resources** (`ResourcePlacer`, first, before today's random ones). The clear discs are taken off open ground for every
   node. Start mines = min(`GoldMines`, `rules.startMines.count` (2) x locations), placed round-robin over the locations
-  (so a short count shorts every base alike): every anchor whose footprint is open, on the location's level, touching no
+  (M5-H1, BUG-0622: in whole rounds, the odd remainder placed like the other mines, so a short count shorts every base alike): every anchor whose footprint is open, on the location's level, touching no
   node, with its centre within `StartMineDistance` of the location's centre cell and at least `MineSpacing` (24 m) from
   every mine placed so far (so a base's two mines stand on different sides), is a candidate, drawn at random
-  (`RngStream.MapGen`) until one passes the connectivity rule (at most `TriesPerPlacement`); `startMines.gold` (2,500) each. Start forests = min(`Forests`, locations), one
+  (`RngStream.MapGen`) until one passes the connectivity rule (at most `TriesPerPlacement`); `startMines.gold` (2,500) each. Start forests = locations if `Forests` covers them, else none (M5-H1), one
   per location: seed cells open, on the level, touching no node, within `StartForestDistance` (centre to centre) and **not
   on the exit side** (a non-positive dot product with the exit direction: toward the map centre on level 0, toward the
   nearest ramp cell on a plateau); grown like any forest at the drawn size for half the tries, `ForestMinTrees` after. The
@@ -5938,9 +5986,11 @@ bases stand on them. Code: `Map/StartLocation.cs`, `MapGenerator.FindStarts`, `R
   0 (their maps as recorded) and can't say otherwise (`InvalidHeader` for a format 3-5 replay object with start locations).
 - **Measured** (`MapGenTests`, seeds 1-12 on 128 / 192 / 256 maps with 12 forests and 8 mines): every map gets its pair,
   both mines and a forest of at least 12 trees per base; on the 192 and 256 maps the bases sit at the west and east bands;
-  on crowded 128 maps the westmost fitting centre can be near the middle (seed 1: 37 cells apart, player 0 on a plateau;
-  BUG-0621: 15 of 100 seeds on 128 maps start the two bases on different levels, 1 of 100 on 192 / 256; the terrain itself is
-  not mirrored (M6's generator work), so the hardening adds a same-level rule to the start search).
+  on crowded 128 maps the westmost fitting centre could be near the middle (seed 1: 37 cells apart, player 0 on a plateau).
+  Since M5-H1's same-level and half-side rules (`QA/StartLocationQaTests.Survey_StartLevelsAndSeparation_Seeds1To100`, seeds
+  1-100, default params): different-level pairs 0 / 100 on 128, 192 and 256 (were 15, 1, 1); flat fallbacks 0 / 100 on each
+  size; closest pair 129 m on 128 (was 70 m), 206 m on 192, 350 m on 256. Four locations on 128 fall back to the flat map on
+  2 of 30 seeds. The terrain itself is not mirrored (M6's generator work).
   Over seeds 0-199 every 128, 192 and 256 map keeps all three levels; narrow maps pay for the rule: 128 x 64 falls back to
   the flat map on 49 of 200 seeds, 96 x 96 on 7, and 64 x 64 on all of them (terrain-only tests on such maps use
   `StartLocations` 0).

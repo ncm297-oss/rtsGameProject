@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-11-0634, task M5-2 |
 | System | AI `PlayerView.CanPlace`, `ProductionManager` |
-| Fixed by | |
+| Fixed by | 1dfdef3 (M5-H1): item 1 docs/03 line; item 2 at M5-3 238f261 |
 
 ## Repro / Actual
 1. **`PlayerView.CanPlace` and the building store's free count.** `CheckPlace` ends with
@@ -30,3 +30,6 @@ Both cheap; neither blocks M5-2.
 ## Update (2026-10-12-1930, QA)
 Item 2 **fixed** in M5-3 `238f261` with BUG-0541 item 1 (no weight loads as 0f; production now divides by a weight above 0).
 Item 1 is still open, so the bug stays open.
+
+## QA re-check (2026-10-13-0527, M5-H1)
+**Fixed**, verified by QA on 1dfdef3: the rows named in Fixed by are green, they failed or were skipped on 0155205, and the full non-Perf suite is green. See `studio/qa/2026-10-13-0527-M5-H1.md`.

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-10-2334, task M4-H3 (QA) |
 | System | movement / abilities (`MovementSystem.OwnFighterAhead`, BUG-0461's cast walk-in rule) |
-| Fixed by | |
+| Fixed by | 1dfdef3 (M5-H1); `QA/SimHardeningH3QaTests.AnOwnFighterBesideTheCaster_NotInItsWay_DoesNotHoldTheStuckCount` (0.3, 0.6) un-skipped |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~SimHardeningH3QaTests.AnOwnFighterBesideTheCaster"` with the
@@ -45,3 +45,6 @@ hardening: narrow `OwnFighterAhead` to the caster's swept corridor (lateral offs
 level or a legal step away; reword docs/01 / docs/03 "its centre in front of the direction of travel" with it; un-skip the two
 QA rows. Decided here: a caster ringed by its own attackers in an endless fight waits for good (criterion 1 governs; the QA-focus
 line "must drop after 3 s" was the over-specification).
+
+## QA re-check (2026-10-13-0527, M5-H1)
+**Fixed**, verified by QA on 1dfdef3: the rows named in Fixed by are green, they failed or were skipped on 0155205, and the full non-Perf suite is green. See `studio/qa/2026-10-13-0527-M5-H1.md`.

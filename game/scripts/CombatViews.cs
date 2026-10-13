@@ -77,7 +77,7 @@ public partial class CombatViews : Node3D
     /// <summary>The fog (M4-V4): its hide rule drops hidden units' bars, and its materials draw the markers; set before <see cref="Bind"/>. Null draws everything.</summary>
     public FogOfWar? Fog { get; set; }
 
-    /// <summary>The per-slot maximum hp the bars read (BUG-0490: <c>Match</c> sets <see cref="UnitViews.MaxHp"/> before <see cref="Bind"/>, so one fill a frame serves both); null at <see cref="Bind"/> makes an own one.</summary>
+    /// <summary>The per-slot maximum hp the bars read (BUG-0490: <c>Match</c> sets <see cref="UnitViews.MaxHp"/> before <see cref="Bind"/>, so one fill a frame serves both); null (or shorter than the unit store) at <see cref="Bind"/> makes an own one.</summary>
     public SlotMaxHp? MaxHp { get; set; }
 
     private SimRunner? _runner;
@@ -153,7 +153,8 @@ public partial class CombatViews : Node3D
             _rimColors[p] = new Color(c.R * CorpseRimShade, c.G * CorpseRimShade, c.B * CorpseRimShade);
         }
         _hurt = new int[unitCapacity];
-        MaxHp ??= new SlotMaxHp(unitCapacity);
+        // A shared array from Match is kept; one too short for this unit store (an earlier Bind's own) is replaced (BUG-0521 item 3).
+        if (MaxHp == null || MaxHp.Capacity < unitCapacity) MaxHp = new SlotMaxHp(unitCapacity);
         _shownFill = new float[unitCapacity];
         _shownColor = new Color[unitCapacity];
         _back = Multi("HpBack", new BoxMesh { Size = Vector3.One, Material = Flat(BarBackColor, vertexColor: false) }, unitCapacity, colors: false);

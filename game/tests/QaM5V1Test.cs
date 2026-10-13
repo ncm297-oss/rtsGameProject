@@ -219,6 +219,8 @@ public partial class QaM5V1Test : Node
         for (int n = 0; n < pool.Nodes; n++) if (pool.Node(n).Visible) visible++;
         GD.Print($"pool churn: 16 keys -> {afterFirst} nodes; 16 other keys next frame -> {afterSwap} nodes (grew {pool.Grown}); 10 more alternations -> {afterChurn}; {visible} visible, {pool.InUse} in use");
         Check(afterFirst == 16, $"pool: 16 keys made {afterFirst} nodes");
+        // BUG-0550 item 1 (M6-VH1): Take reclaims the nodes of keys not taken this frame before it grows.
+        Check(afterSwap == 16 && pool.Grown == 0, $"pool: 16 other keys next frame made {afterSwap} nodes (grew {pool.Grown}), want 16");
         Check(afterChurn == afterSwap, $"pool: alternating 16-key frames kept growing ({afterSwap} -> {afterChurn})");
         Check(visible == 16 && pool.InUse == 16, $"pool: {visible} visible, {pool.InUse} in use, want 16");
         pool.Begin();

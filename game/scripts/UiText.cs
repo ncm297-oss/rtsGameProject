@@ -297,7 +297,7 @@ public sealed class UiText
             for (int i = 0; i < j; i++)
                 if (parsed[i] && parsed[j] && ui._colourRgb[i] == ui._colourRgb[j])
                 {
-                    errors.Add($"ui.json: setup.{ColourKey(i)}.rgb and setup.{ColourKey(j)}.rgb are the same colour ({ui._colourRgb[j]:X6}): players must look different");
+                    errors.Add($"ui.json: setup.{ColourKey(i)}.rgb and setup.{ColourKey(j)}.rgb are the same colour (#{ui._colourRgb[j]:X6}, as the data writes it): players must look different");
                     break;
                 }
     }

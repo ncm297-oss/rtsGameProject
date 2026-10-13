@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-12-1930, task M5-3 (re-check round 2; introduced by the BUG-0596 fix, 1f46ca9) |
 | System | AI `MilitaryManager` (wave orders, the `MaxTries` "crowded off the target" branch) |
-| Fixed by | |
+| Fixed by | 1dfdef3 (M5-H1); `QA/AiMilitaryQaTests.AWaveWhoseMembersAllStandByATargetNoneCanStrike_DoesNotStayForever` un-skipped; QA `QA/SimHardeningM5H1QaTests.FencedHall_*` (3 rows) |
 
 ## Repro
 1. Remove the `Skip` on `QA/AiMilitaryQaTests.AWaveWhoseMembersAllStandByATargetNoneCanStrike_DoesNotStayForever`, then
@@ -35,3 +35,6 @@ stands, so neither the retreat nor the re-target fires, and `TryStart` never run
   edge but a reachable spot within `near`: a building wedged into a forest or against cliffs; enclosing buildings would be
   attacked instead. With combat off (test scenes only) any target does it.
 - Round 1's rule (one `Attack` per target, then home) passed this test; round 2 traded it for BUG-0596's fix.
+
+## QA re-check (2026-10-13-0527, M5-H1)
+**Fixed**, verified by QA on 1dfdef3: the rows named in Fixed by are green, they failed or were skipped on 0155205, and the full non-Perf suite is green. See `studio/qa/2026-10-13-0527-M5-H1.md`.

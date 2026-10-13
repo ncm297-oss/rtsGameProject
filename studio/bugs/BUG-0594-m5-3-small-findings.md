@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-12-1930, task M5-3 |
 | System | AI `EconomyManager` (rebalance, scout skip), `rules.json` `ai.waveCooldown` |
-| Fixed by | |
+| Fixed by | 1dfdef3 (M5-H1): items 1-2 (`Ai/EconomyRebalanceTests`, 2); item 3 docs at M5-3 round 1 |
 
 ## Repro / Actual
 1. **The rebalance throws away cargo.** `EconomyManager.Rebalance` (unbriefed, added by the developer) moves the first
@@ -32,3 +32,6 @@ None blocks M5-3.
 - Item 3 is done as docs: docs/03 now says `waveCooldown` 0 is valid and turns the bound off.
 - Items 1 (the rebalance drops a partial load) and 2 (the economy's idle-pass scout skip is untested) are unchanged. The bug
   stays open.
+
+## QA re-check (2026-10-13-0527, M5-H1)
+**Fixed**, verified by QA on 1dfdef3: the rows named in Fixed by are green, they failed or were skipped on 0155205, and the full non-Perf suite is green. See `studio/qa/2026-10-13-0527-M5-H1.md`.

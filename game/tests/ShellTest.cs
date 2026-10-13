@@ -26,6 +26,9 @@ namespace Rts.Game.Tests;
 /// BUG-0604), the camera on the local hall; each slot's colour list (<c>ui.json</c> names, defaults colour 1 / 2), the picks
 /// kept over Back and Quit, and the match drawn in them (<c>Match.PlayerRgb</c>, unit and building materials, minimap dots);
 /// the <c>--colour</c> parse and its junk; each missing <c>setup.colour_*</c> key one error naming it; BUG-0602 item 1.
+/// M6-VH1: the corpse legibility rules over the whole colour table (8 fills, 28 pairs; BUG-0632); colours unique per match
+/// (each list greys the other's colour, a colliding pick moves to the first free one, <c>--colour</c> on one colour twice keeps
+/// slot 2's default; BUG-0631 item 3).
 /// </summary>
 /// <remarks>
 /// Headless: <c>&amp; $env:GODOT --headless --path game res://tests/ShellTest.tscn</c>; prints "SHELL TEST PASS" and exits 0,
@@ -147,9 +150,24 @@ public partial class ShellTest : Node
             LaunchOptions o = LaunchOptions.Parse(junk);
             Check(o.ColourIndex(0) == null && o.ColourIndex(1) == null, $"'{string.Join(' ', junk)}' picked {o.ColourIndex(0)}, {o.ColourIndex(1)}");
         }
-        // A repeated flag as the value: the first is refused, the second read.
+        // A repeated flag as the value: the first is refused, the second read (slot 1 on colour 2, slot 2's default: slot 2 moves to colour 1).
         LaunchOptions twice = LaunchOptions.Parse(new[] { "--colour", "--colour", "1", "2" });
-        Check(twice.ColourIndex(0) == 1 && twice.ColourIndex(1) == null, $"'--colour --colour 1 2' picked {twice.ColourIndex(0)}, {twice.ColourIndex(1)}");
+        Check(twice.ColourIndex(0) == 1 && twice.ColourIndex(1) == 0, $"'--colour --colour 1 2' picked {twice.ColourIndex(0)}, {twice.ColourIndex(1)}");
+        // M6-VH1 (BUG-0631 item 3): colours are unique per match. Both slots on one colour: warned, slot 2 keeps its default
+        // (colour 2), or takes the first free colour (colour 1) when slot 1 holds colour 2. (Effective colour: ColourIndex ?? slot.)
+        foreach ((string[] args, int want0, int want1) in new[]
+        {
+            (new[] { "--colour", "1", "3", "--colour", "2", "3" }, 2, 1), (new[] { "--colour", "2", "1" }, 0, 1),
+            (new[] { "--colour", "1", "2" }, 1, 0), (new[] { "--colour", "1", "2", "--colour", "2", "2" }, 1, 0),
+            (new[] { "--colour", "2", "8", "--colour", "1", "8" }, 7, 1), (new[] { "--colour", "1", "4", "--colour", "2", "6" }, 3, 5),
+            (new[] { "--colour", "1", "2", "--colour", "2", "1" }, 1, 0),
+        })
+        {
+            LaunchOptions o = LaunchOptions.Parse(args);
+            int got0 = o.ColourIndex(0) ?? 0, got1 = o.ColourIndex(1) ?? 1;
+            Check(got0 == want0 && got1 == want1 && got0 != got1, $"'{string.Join(' ', args)}': colours {got0 + 1}, {got1 + 1}, want {want0 + 1}, {want1 + 1}");
+        }
+        Check(LaunchOptions.FirstFreeColour(0) == 1 && LaunchOptions.FirstFreeColour(1) == 0 && LaunchOptions.FirstFreeColour(7) == 0, "FirstFreeColour");
         Check(LaunchOptions.Parse(new[] { "--colour", "1", "--seed", "3" }).Seed == 3 && LaunchOptions.Parse(new[] { "--colour", "--seed", "3" }).Seed == 3,
             "--colour swallowed --seed (BUG-0041)");
 
@@ -233,6 +251,7 @@ public partial class ShellTest : Node
             float gap = Math.Max(Math.Abs(c.R - own.R), Math.Max(Math.Abs(c.G - own.G), Math.Abs(c.B - own.B)));
             Check(gap >= 0.4f, $"colour {rgb:X6} is only {gap:0.000} from the own zone rim");
         }
+        CorpseRulesOverTable(rgbs);
         foreach (string bad in new[] { "red", "#12345", "#1234567", "#GG0000", "4B4F55A", "#-12345", "# 12345" })
         {
             var root = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
@@ -245,7 +264,8 @@ public partial class ShellTest : Node
             var root = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
             root["setup"]![UiText.ColourKey(6)]!["rgb"] = $"#{_ui.ColourRgb(1):x6}";
             var errors = new List<string>();
-            Check(UiText.Parse(root.ToJsonString(), errors) == null && errors.Count == 1 && errors[0].Contains("setup.colour_2.rgb") && errors[0].Contains("setup.colour_7.rgb"),
+            Check(UiText.Parse(root.ToJsonString(), errors) == null && errors.Count == 1 && errors[0].Contains("setup.colour_2.rgb") && errors[0].Contains("setup.colour_7.rgb")
+                && errors[0].Contains($"#{_ui.ColourRgb(1):X6}"), // the value as the data writes it, with its '#' (BUG-0631 item 1's nit)
                 $"colours 2 and 7 alike: [{string.Join("; ", errors)}]");
             root["setup"]![UiText.ColourKey(0)]!["rgb"] = $"#{_ui.ColourRgb(1):X6}";
             errors.Clear();
@@ -267,6 +287,70 @@ public partial class ShellTest : Node
     }
 
     // ---- the flow ----
+
+    // M6-VH1 (BUG-0631 item 3): colours are unique per match. Each list greys only the colour the other slot holds; a pick of
+    // the other's colour (through the API or the list's own ItemSelected, as a click sends) moves to the first free colour.
+    // Leaves the defaults (colours 1 and 2) picked.
+    private void UniqueColourPicks(SkirmishSetup setup)
+    {
+        Check(GreyedOnly(setup, 0, 1) && GreyedOnly(setup, 1, 0), "defaults: each colour list should grey only the other slot's colour");
+        setup.PickColour(0, 5);
+        Check(setup.ColourPick(0) == 5 && GreyedOnly(setup, 1, 5) && GreyedOnly(setup, 0, 1), $"slot 1 on colour 6: picks {setup.ColourPick(0)}, {setup.ColourPick(1)}");
+        setup.PickColour(1, 5);
+        Check(setup.ColourPick(1) == 0 && setup.ColourPick(0) == 5 && GreyedOnly(setup, 0, 0) && GreyedOnly(setup, 1, 5),
+            $"slot 2 picking slot 1's colour 6: picks {setup.ColourPick(0)}, {setup.ColourPick(1)} (want 6, first free 1)");
+        setup.PickColour(0, 0);
+        Check(setup.ColourPick(0) == 1 && setup.ColourPick(1) == 0, $"slot 1 picking slot 2's colour 1: picks {setup.ColourPick(0)}, {setup.ColourPick(1)} (want first free 2, 1)");
+        // The list's own signal (a popup click) on a taken colour.
+        setup.ColourOptions[1].Select(1);
+        setup.ColourOptions[1].EmitSignal(OptionButton.SignalName.ItemSelected, 1L);
+        Check(setup.ColourPick(1) == 0 && setup.ColourPick(0) == 1, $"ItemSelected on the taken colour 2: picks {setup.ColourPick(0)}, {setup.ColourPick(1)}");
+        setup.ColourOptions[1].Select(6);
+        setup.ColourOptions[1].EmitSignal(OptionButton.SignalName.ItemSelected, 6L);
+        Check(setup.ColourPick(1) == 6 && GreyedOnly(setup, 0, 6), $"ItemSelected on colour 7: picks {setup.ColourPick(0)}, {setup.ColourPick(1)}");
+        string[] args = setup.MatchArgs()!;
+        Check(string.Join(' ', args).Contains("--colour 1 2") && string.Join(' ', args).Contains("--colour 2 7"), $"MatchArgs [{string.Join(' ', args)}]");
+        setup.PickColour(0, 0);
+        setup.PickColour(1, 1);
+        Check(setup.ColourPick(0) == 0 && setup.ColourPick(1) == 1 && GreyedOnly(setup, 0, 1) && GreyedOnly(setup, 1, 0), "back to the default colours");
+    }
+
+    // Whether `slot`'s colour list greys exactly the colour `taken`.
+    private static bool GreyedOnly(SkirmishSetup setup, int slot, int taken)
+    {
+        OptionButton list = setup.ColourOptions[slot];
+        for (int c = 0; c < list.ItemCount; c++)
+            if (list.IsItemDisabled(c) != (c == taken)) return false;
+        return list.ItemCount == UiText.ColourCount;
+    }
+
+    // BUG-0632: CombatViewTest's corpse rules (BUG-0160 item 3) over every colour the menu offers, through a real CombatViews
+    // bound to the whole table: each fill (owner colour x CorpseShade) has luminance >= 0.2 and a darker rim, and each of the
+    // 28 pairs of fills is >= 0.25 apart, so any two picks keep both sides' corpses legible.
+    private void CorpseRulesOverTable(uint[] rgbs)
+    {
+        var combat = new CombatViews();
+        AddChild(combat);
+        combat.Bind(_data, 1, rgbs);
+        int pairs = 0;
+        for (int a = 0; a < rgbs.Length; a++)
+        {
+            Color fill = combat.CorpseColor(a), rim = combat.CorpseRimColor(a);
+            float lum = 0.2126f * fill.R + 0.7152f * fill.G + 0.0722f * fill.B;
+            Check(lum >= 0.2f, $"corpse rules: {UiText.ColourKey(a)} {rgbs[a]:X6}'s corpse fill reads black (luminance {lum:0.000})");
+            Check(rim.R < fill.R && rim.G < fill.G && rim.B < fill.B, $"corpse rules: {UiText.ColourKey(a)}'s rim {rim} is not darker than its fill {fill}");
+            for (int b = a + 1; b < rgbs.Length; b++)
+            {
+                Color other = combat.CorpseColor(b);
+                float d = MathF.Sqrt((fill.R - other.R) * (fill.R - other.R) + (fill.G - other.G) * (fill.G - other.G) + (fill.B - other.B) * (fill.B - other.B));
+                Check(d >= 0.25f, $"corpse rules: the fills of {UiText.ColourKey(a)} and {UiText.ColourKey(b)} are only {d:0.000} apart");
+                pairs++;
+            }
+        }
+        Check(pairs == 28, $"corpse rules: {pairs} pairs checked, want 28");
+        RemoveChild(combat);
+        combat.Free();
+    }
 
     private async Task Flow()
     {
@@ -307,6 +391,7 @@ public partial class ShellTest : Node
                 && list.GetItemIcon(0) != null, $"slot {s} colour list: items [{string.Join("|", items)}], pick {setup.ColourPick(s)}");
         }
         Check(Labels(setup).Contains(_ui.Setup(SetupText.Colour)), "setup has no colour heading");
+        UniqueColourPicks(setup);
         OptionButton diff = setup.DifficultyOption;
         var diffItems = Enumerable.Range(0, diff.ItemCount).Select(i => diff.GetItemText(i)).ToArray();
         Check(!diff.Disabled && diffItems.SequenceEqual(new[] { SetupText.DifficultyEasy, SetupText.DifficultyNormal, SetupText.DifficultyHard }.Select(_ui.Setup))
@@ -334,8 +419,8 @@ public partial class ShellTest : Node
         setup.DifficultyOption.Select((int)AiDifficulty.Easy);
         // M6-V3: colours 4 and 6, away from both defaults.
         const int c0 = 3, c1 = 5;
-        setup.ColourOptions[0].Select(c0);
-        setup.ColourOptions[1].Select(c1);
+        setup.PickColour(0, c0);
+        setup.PickColour(1, c1);
 
         // Back and in again: the picks survive.
         await Click(setup.BackButton);
@@ -344,6 +429,7 @@ public partial class ShellTest : Node
         Check(setup.Visible, "Skirmish (second time) did not show the setup");
         Check(setup.FactionPick(0) == f0 && setup.FactionPick(1) == f1 && setup.DifficultyPick == AiDifficulty.Easy && setup.ColourPick(0) == c0 && setup.ColourPick(1) == c1,
             $"Back lost the picks: {setup.FactionPick(0)}, {setup.FactionPick(1)}, {setup.DifficultyPick}, colours {setup.ColourPick(0)}, {setup.ColourPick(1)}");
+        Check(GreyedOnly(setup, 0, c1) && GreyedOnly(setup, 1, c0), "after Back each colour list should grey only the other slot's colour");
 
         // Random writes a number; then the seed is typed: 7, a letter (Start greys), Backspace.
         string before = setup.SeedEdit.Text;

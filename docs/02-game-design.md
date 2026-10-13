@@ -380,7 +380,8 @@ show text, a minimap ping, and a sound.
 
 1. **Main menu:** Skirmish, Load Game, Settings, Quit.
 2. **Skirmish setup:** map, 2-4 player slots (each: human/AI, faction, difficulty, color, team),
-   starting resources (standard / high), game speed. Default: free-for-all.
+   starting resources (standard / high), game speed. Default: free-for-all. Colours are unique per match: a slot can't
+   pick a colour another slot holds.
 3. **Match.** Pause any time (single-player). Game speeds: Slow 0.75×, Normal 1×, Fast 1.5×.
 4. **Victory/defeat:** a player is defeated when they have no buildings left. The last player or
    team standing wins.
