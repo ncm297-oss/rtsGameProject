@@ -11,8 +11,8 @@ namespace Rts.Sim.Tests.QA.Content;
 /// (<see cref="AiScenes.Flat"/>: a Garrison Keep, five Laborers, two mines and a forest in sight; player 1 a human that does
 /// nothing), Normal, 12,000 ticks (10 min), this prints who placed each house, when it finished, the cap over time, and
 /// whether the order's later house steps still complete once the cap is reached (and what they cost). Only that the run
-/// finishes is asserted (plus one documented precondition on the seat's faction): the numbers are a report for the owner
-/// (the proposal is in the D15 session report).
+/// finishes is asserted (plus two documented preconditions: the seat's faction and the AI's house type): the numbers are a
+/// report for the owner (the proposal is in the D15 session report).
 /// <para>
 /// Measured 2026-10-12 on M5-2's AI (nothing checks these; the live numbers are in each session report that re-runs this):
 /// every house both orders placed came from a step and the rule sent none; on this scene wood runs out (12 trees of 100 a
@@ -20,9 +20,16 @@ namespace Rts.Sim.Tests.QA.Content;
 /// step that can't pay is refused at the budget before the site search).
 /// </para>
 /// <para>
-/// Reads through the AI's internals: <c>Blackboard.StepDueTick</c>, <c>Blackboard.StepDone</c>, <c>Blackboard.StepPending</c>
-/// and <c>Blackboard.HousePending</c> (no public-to-tests surface carries a step's state or a sent house). Everything else
-/// comes from <see cref="GameData"/> or the world. A sim rename of those four breaks this file at compile time: fix the reads.
+/// Reads through the AI's internals (all <c>internal</c>, reached through <c>InternalsVisibleTo</c>; no public-to-tests
+/// surface carries a step's state or a sent house): <c>Simulation.AiOf</c>; <c>AiPlayer.Board</c>, <c>AiPlayer.ThinkTicks</c>
+/// and <c>AiPlayer.HouseType</c> (read from the AI, not re-derived beside it, BUG-0641); <c>Blackboard.StepDueTick</c>,
+/// <c>Blackboard.StepDone</c>, <c>Blackboard.StepPending</c> and <c>Blackboard.HousePending</c>; <c>PendingOrder.Kind</c>,
+/// <c>PendingOrder.AppliesAt</c> and <c>PendingOrder.Cell</c>; <c>PendingKind.Build</c>. Everything else comes from
+/// <see cref="GameData"/> or the world. A sim rename of any of those breaks this file at compile time: fix the reads.
+/// </para>
+/// <para>
+/// The "workers" column is a live count of the player's worker units at the sample tick (the world's units store), not
+/// <c>AiPlayer.WorkerCount</c>, which is the AI's census as of its last think; the two can differ by a tick's births and deaths.
 /// </para>
 /// </summary>
 public class AiHouseRuleReportTests
@@ -56,11 +63,15 @@ public class AiHouseRuleReportTests
         // Precondition, not a finding: the seat mapping above must give the AI seat this faction, or every row below
         // reports the other faction's order under this one's name.
         Assert.Equal(player, sim.World.FactionOf(player));
-        Blackboard board = sim.AiOf(player)!.Board; // reads StepDueTick, StepDone, StepPending, HousePending
+        AiPlayer ai = sim.AiOf(player)!;
+        Blackboard board = ai.Board; // reads StepDueTick, StepDone, StepPending, HousePending
         AiDef def = d.Ai[player];
-        int thinkTicks = Math.Max(1, def.Difficulty(AiDifficulty.Normal).ThinkTicks); // as AiPlayer derives it
-        int house = d.Buildings.ToList().FindIndex(b => b.Faction == player && b.Slot == BuildingSlot.House);
+        // The AI's own think interval and house type (BUG-0641): a change to how AiPlayer derives either moves the samples
+        // with it instead of silently sampling other ticks or another building.
+        int thinkTicks = ai.ThinkTicks;
+        int house = ai.HouseType;
         BuildingDef houseDef = d.Buildings[house];
+        Assert.True(houseDef.Faction == player && houseDef.Slot == BuildingSlot.House, $"AiPlayer.HouseType {houseDef.Key} is not {faction}'s House");
         int rulesCap = d.Rules.HalfPopCap;
         var steps = def.BuildOrder;
         int tree = d.FindResource("tree"), mine = d.FindResource("gold_mine");
@@ -171,6 +182,7 @@ public class AiHouseRuleReportTests
         return left;
     }
 
+    /// <summary>The player's live worker units now (not the AI's last-think census, <c>AiPlayer.WorkerCount</c>).</summary>
     private static int Workers(Simulation sim, int player)
     {
         var u = sim.World.Units;
