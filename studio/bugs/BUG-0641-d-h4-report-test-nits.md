@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-13-0146, task D-H4 |
 | System | QA tests (AI content) |
-| Fixed by | |
+| Fixed by | D16 `8f3d1e5` |
 
 ## Repro
 1. Read `sim/Rts.Sim.Tests/QA/Content/AiHouseRuleReportTests.cs`.
@@ -27,3 +27,10 @@
 ## Notes
 None of this changes a number today. Suggest: name every internal the file reaches in the comment, and either read
 `ThinkTicks` / `HouseType` from the AI (they are already reachable the same way as `Board`) or assert the copies equal them once.
+
+## Update (2026-10-13-0527, QA, D16)
+**Fixed** in D16 `8f3d1e5`. Item 1: the class comment names `Simulation.AiOf`, `AiPlayer.Board / ThinkTicks / HouseType`, the four
+`Blackboard` fields, `PendingOrder.Kind / AppliesAt / Cell` and `PendingKind.Build`. Item 2: `thinkTicks` and `house` are read
+from `ai.ThinkTicks` / `ai.HouseType` (both `internal` on `AiPlayer`), with an assert that the house type is the faction's House.
+Item 3: the comment and `Workers` summary say the column is a live count, not `AiPlayer.WorkerCount`. Item 4: BUG-0610 already
+reads `fixed` here and in the README. `AiHouseRuleReportTests` 3/3 green in the full non-Perf run.

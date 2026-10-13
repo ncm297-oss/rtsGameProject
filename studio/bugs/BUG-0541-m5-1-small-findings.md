@@ -43,6 +43,10 @@ Item 1 **fixed** in M5-3 `238f261`: a weight above 0 that rounds to 0f is a load
 un-skipped, with a 1e-40 subnormal row that loads above 0; a mutation that drops the check fails the dev's row). Items 2-3 are
 still open, so the bug stays open.
 
+## Update (2026-10-13-0527, QA, D16)
+Item 3 **fixed** in D16 `8f3d1e5`: docs/02's Easy bullet says "doesn't use abilities" (docs/01 row 2026-10-13), and
+`Content/AiContentTests.K_Docs02_StatesWhatThePinsHold` fails if "rarely uses abilities" comes back or the phrase goes;
+`K_AMutatedDesignField_FailsNamingTheField` fails on `whirlwind easy.useAbilities: true`. Item 2 is still open, so the bug stays open.
 ## QA re-check (2026-10-13-0527, M5-H1)
 Item 2 **fixed** in M5-H1 1dfdef3: `PlayerViewArchitectureTests.Scan` strips `//` and `/* */` comments and scans a code line starting with `*` (`AContinuationLineStartingWithAStar_IsScanned_ABlockCommentIsNot`; QA re-ran the plant from the report and it is now caught). Item 3 (docs/02 Easy wording) is the data track's this session, so the bug stays open.
 

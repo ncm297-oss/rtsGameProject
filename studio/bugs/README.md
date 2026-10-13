@@ -304,7 +304,7 @@ bugs outrank new features.
 | [BUG-0631](BUG-0631-m6-v3-colour-table-nits.md) | S4 | fixed | M6-V3 colour nits: the loader accepts a colour table with two equal colours; four view tests still pin faction primaries; both slots may pick one colour |
 | [BUG-0632](BUG-0632-colour-table-breaks-corpse-legibility-rules.md) | S3 | fixed | Two menu colour picks break CombatViewTest's corpse legibility rules: Crimson's corpse fill is below luminance 0.2, and Iron v Jade corpses are 0.22 apart (rule 0.25) |
 | [BUG-0640](BUG-0640-ai-house-sites-never-finished-m5-3.md) | S3 | fixed | On M5-3's AI two of Malazan's Billet sites are placed and never finished (cap 82 at 30 min, was 98 on M5-2) |
-| [BUG-0641](BUG-0641-d-h4-report-test-nits.md) | S4 | open | D-H4 nits: the house-rule report's list of internal reads is incomplete, and two inputs are re-derived beside the AI |
+| [BUG-0641](BUG-0641-d-h4-report-test-nits.md) | S4 | fixed | D-H4 nits: the house-rule report's list of internal reads is incomplete, and two inputs are re-derived beside the AI |
 | [BUG-0660](BUG-0660-m4-playable-seed6-army-under-hud-band.md) | S3 | fixed | M4PlayableTest seed 6 step 2: the staged army reaches into the HUD band, so the box-select misses units |
 | [BUG-0661](BUG-0661-four-view-scenes-red-since-m5-4a.md) | S2 | open | Four view test scenes fail on main since the M5-4a merge (FogViewTest, QaH2Test, QaM27Test, QaV3Test) |
 | [BUG-0662](BUG-0662-disc-pool-reclaim-moves-stable-keys.md) | S3 | open | GroundDiscPool's reclaim (BUG-0550 item 1) moves stable keys to other nodes, so their meshes are rebuilt |

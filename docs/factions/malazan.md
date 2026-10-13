@@ -165,6 +165,22 @@ waits for Age II), so its weights sum to 65.
 - **Retreat:** a wave that has lost 50% falls back; a unit under 30% hp counts as wounded (`retreat`; Hard pulls it back).
 - **Defense:** pull the army home when buildings take damage; Laborers flee to the Garrison Keep.
 
+## Difficulty
+
+The `difficulties` block of the same `game/data/factions/malazan/ai.json` (docs/02 "AI opponent", docs/03 "For the data
+track (M5-1)"): one row per difficulty, one column per field. Times are in seconds as the file writes them (the loader
+turns them into ticks). **Build-order slack** is how long a step waits after it is due; **wave size ×** scales the
+attack wave's thresholds above; **gather bonus** is extra gather rate (docs/02: Hard's 25%, shown in the skirmish setup);
+**expands after** is the earliest match time the AI expands (the order's `expand` step, due at Normal's 480 s, also
+waits for it). The rows are the same for every faction today. `Content/AiContentTests` pins this table to the file,
+both ways (J), and docs/02's stated numbers to the file (K).
+
+| Difficulty | Thinks every (s) | Build-order slack (s) | Wave size × | Gather bonus | Focus fire | Pulls back wounded | Uses abilities | Expands after (s) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Easy | 2 | 30 | 0.6 | 0% | no | no | no | 900 |
+| Normal | 1 | 5 | 1 | 0% | no | no | yes | 480 |
+| Hard | 0.5 | 0 | 1.25 | 25% | yes | yes | yes | 300 |
+
 ## Art notes
 
 - **Palette:** dark steel grey, oxblood red cloth, dull bronze trim. Team color on shields and

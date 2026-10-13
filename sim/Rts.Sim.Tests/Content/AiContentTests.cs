@@ -340,4 +340,271 @@ public class AiContentTests
             Assert.True(hall + houses >= Data.Rules.HalfPopCap, $"{faction}: the order's halls and houses give {Num((hall + houses) / 2.0)} pop, below the cap");
         }
     }
+
+    // ---- D16: the difficulty blocks (rows J-K) ----
+
+    /// <summary>The heading of each page's difficulty table (after the AI build order).</summary>
+    public const string DifficultySection = "Difficulty";
+
+    /// <summary>The table's row labels, in <see cref="AiDifficulty"/> order.</summary>
+    public static readonly string[] DifficultyRows = { "Easy", "Normal", "Hard" };
+
+    /// <summary>The table's header, one column per <c>ai.json</c> difficulty field (the brief's order).</summary>
+    public static readonly string[] DifficultyColumns =
+    {
+        "Difficulty", "Thinks every (s)", "Build-order slack (s)", "Wave size ×", "Gather bonus", "Focus fire",
+        "Pulls back wounded", "Uses abilities", "Expands after (s)",
+    };
+
+    private static string YesNo(bool b) => b ? "yes" : "no";
+
+    private static string Seconds(int ticks) => Num((double)ticks / SimConstants.TicksPerSecond);
+
+    /// <summary>One difficulty's cells as the page writes them (seconds from ticks, the gather bonus as a percentage).</summary>
+    public static string[] DifficultyCells(AiDifficultyDef k) => new[]
+    {
+        Seconds(k.ThinkTicks), Seconds(k.BuildOrderSlackTicks), Num(k.WaveSizeMultiplier),
+        Num(Math.Round(k.GatherBonus * 100.0, 2)) + "%", YesNo(k.FocusFire), YesNo(k.PullBackWounded), YesNo(k.UseAbilities),
+        Seconds(k.ExpandAfterTicks),
+    };
+
+    /// <summary>
+    /// Every way the page's "Difficulty" table disagrees with <paramref name="d"/>'s difficulty blocks for
+    /// <paramref name="faction"/>, each naming the faction, the row and the column; empty when they match.
+    /// </summary>
+    public static List<string> DifficultyProblems(GameData d, string faction, string[] pageLines)
+    {
+        var problems = new List<string>();
+        AiDef ai = d.Ai[d.FindFaction(faction)];
+        (string[] header, List<string[]> rows) = PageTables.NamedTable(pageLines, DifficultySection, faction + ".md");
+        if (!header.SequenceEqual(DifficultyColumns))
+        {
+            problems.Add($"{faction} difficulty header: page '{string.Join(" | ", header)}' vs '{string.Join(" | ", DifficultyColumns)}'");
+            return problems;
+        }
+        foreach (string row in rows.Select(r => r[0]).Distinct())
+            if (Array.IndexOf(DifficultyRows, row) < 0 || rows.Count(r => r[0] == row) > 1)
+                problems.Add($"{faction} difficulty row '{row}': not Easy / Normal / Hard once each");
+        for (int k = 0; k < DifficultyRows.Length; k++)
+        {
+            string name = DifficultyRows[k];
+            string[]? row = rows.FirstOrDefault(r => r[0] == name);
+            if (row == null)
+            {
+                problems.Add($"{faction} {name}: no row");
+                continue;
+            }
+            string[] data = DifficultyCells(ai.Difficulty((AiDifficulty)k));
+            for (int c = 0; c < data.Length; c++)
+            {
+                string page = c + 1 < row.Length ? row[c + 1] : "(none)";
+                if (page != data[c]) problems.Add($"{faction} {name} {DifficultyColumns[c + 1]}: page '{page}' vs data '{data[c]}'");
+            }
+        }
+        return problems;
+    }
+
+    [Fact]
+    public void J_EachPagesDifficultyTable_IsItsAiFile_BothWays()
+    {
+        foreach (string faction in Factions)
+        {
+            List<string> problems = DifficultyProblems(Data, faction, PageTables.FactionLines(faction));
+            Assert.True(problems.Count == 0, string.Join("\n", problems));
+        }
+    }
+
+    /// <summary>Every cell of both pages' tables, for <see cref="J_AOneCellPageEdit_FailsByFactionDifficultyAndColumn"/>.</summary>
+    public static TheoryData<string, int, int> DifficultyCellsOfBothPages()
+    {
+        var rows = new TheoryData<string, int, int>();
+        foreach (string faction in Factions)
+            for (int k = 0; k < DifficultyRows.Length; k++)
+                for (int c = 1; c < DifficultyColumns.Length; c++)
+                    rows.Add(faction, k, c);
+        return rows;
+    }
+
+    /// <summary>
+    /// The pin is not vacuous: changing any one cell of either page (a yes / no flipped, a number moved) fails with exactly
+    /// one problem, naming the faction, the difficulty and the column.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(DifficultyCellsOfBothPages))]
+    public void J_AOneCellPageEdit_FailsByFactionDifficultyAndColumn(string faction, int difficulty, int column)
+    {
+        string[] lines = PageTables.FactionLines(faction);
+        string name = DifficultyRows[difficulty];
+        int h = PageTables.Heading(lines, "## " + DifficultySection, faction + ".md");
+        int i = Array.FindIndex(lines, h, l => l.StartsWith($"| {name} |", StringComparison.Ordinal));
+        Assert.True(i >= 0, $"{faction}.md has no '{name}' difficulty row");
+        string[] cells = PageTables.Cells(lines[i]);
+        string old = cells[column];
+        cells[column] = old switch
+        {
+            "yes" => "no",
+            "no" => "yes",
+            _ when old.EndsWith('%') => Num(double.Parse(old[..^1], CultureInfo.InvariantCulture) + 5) + "%",
+            _ => Num(double.Parse(old, CultureInfo.InvariantCulture) + 1),
+        };
+        string[] edited = (string[])lines.Clone();
+        edited[i] = "| " + string.Join(" | ", cells) + " |";
+        List<string> problems = DifficultyProblems(Data, faction, edited);
+        string expected = $"{faction} {name} {DifficultyColumns[column]}: page '{cells[column]}' vs data '{old}'";
+        Assert.True(problems.SequenceEqual(new[] { expected }), $"expected only '{expected}', got:\n{string.Join("\n", problems)}");
+    }
+
+    /// <summary>A missing row, a doubled row and a renamed column each fail by name.</summary>
+    [Fact]
+    public void J_AMissingOrDoubledRowOrRenamedColumn_FailsByName()
+    {
+        string[] lines = PageTables.FactionLines("whirlwind");
+        int normal = Array.FindIndex(lines, l => l.StartsWith("| Normal |", StringComparison.Ordinal));
+        Assert.True(normal >= 0, "whirlwind.md has no '| Normal |' row");
+        List<string> without = lines.ToList();
+        without.RemoveAt(normal);
+        Assert.Contains("whirlwind Normal: no row", DifficultyProblems(Data, "whirlwind", without.ToArray()));
+
+        List<string> twice = lines.ToList();
+        twice.Insert(normal, lines[normal]);
+        Assert.Contains("whirlwind difficulty row 'Normal': not Easy / Normal / Hard once each", DifficultyProblems(Data, "whirlwind", twice.ToArray()));
+
+        string[] renamed = (string[])lines.Clone();
+        int header = Array.FindIndex(lines, l => l.StartsWith("| Difficulty |", StringComparison.Ordinal));
+        renamed[header] = lines[header].Replace("| Uses abilities |", "| Abilities |", StringComparison.Ordinal);
+        Assert.Contains(DifficultyProblems(Data, "whirlwind", renamed), p => p.StartsWith("whirlwind difficulty header:", StringComparison.Ordinal));
+    }
+
+    /// <summary>The other way: one-value edits of the file fail against the unchanged page, each naming its cell.</summary>
+    [Fact]
+    public void J_AOneValueFileEdit_FailsByName()
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("factions/malazan/ai.json", root =>
+        {
+            root["difficulties"]!["hard"]!["waveSizeMultiplier"] = 1.5;
+            root["difficulties"]!["easy"]!["thinkInterval"] = 2.5;
+            root["difficulties"]!["normal"]!["expandAfter"] = 500;
+        });
+        DataLoadResult result = DataLoader.LoadAll(dir.Path);
+        Assert.True(result.Ok, string.Join("\n", result.Errors));
+        List<string> problems = DifficultyProblems(result.Data!, "malazan", PageTables.FactionLines("malazan"));
+        Assert.Equal(new[]
+        {
+            "malazan Easy Thinks every (s): page '2' vs data '2.5'",
+            "malazan Normal Expands after (s): page '480' vs data '500'",
+            "malazan Hard Wave size ×: page '1.25' vs data '1.5'",
+        }, problems);
+    }
+
+    /// <summary>
+    /// What docs/02 "AI opponent" states about each difficulty, as <c>ai.json</c> field values: the phrase in that
+    /// difficulty's bullet that says it, the difficulty, the field, the value. Normal's think interval, every slack, wave
+    /// size and expand time are not stated there (builder defaults, docs/01 2026-10-11), so only the pages pin them (J).
+    /// </summary>
+    public static readonly (string Phrase, AiDifficulty Difficulty, string Field, string Value)[] DesignStates =
+    {
+        ("thinks every 2 s", AiDifficulty.Easy, "thinkInterval", "2"),
+        ("thinks every 0.5 s", AiDifficulty.Hard, "thinkInterval", "0.5"),
+        ("25% gather bonus", AiDifficulty.Hard, "gatherBonus", "0.25"),
+        ("doesn't micro", AiDifficulty.Easy, "focusFire", "false"),
+        ("doesn't micro", AiDifficulty.Easy, "pullBackWounded", "false"),
+        ("fair play at a relaxed pace", AiDifficulty.Normal, "focusFire", "false"),
+        ("fair play at a relaxed pace", AiDifficulty.Normal, "pullBackWounded", "false"),
+        ("focus fire", AiDifficulty.Hard, "focusFire", "true"),
+        ("pulls back wounded", AiDifficulty.Hard, "pullBackWounded", "true"),
+        ("doesn't use abilities", AiDifficulty.Easy, "useAbilities", "false"),
+        ("uses abilities", AiDifficulty.Normal, "useAbilities", "true"),
+        ("good ability use", AiDifficulty.Hard, "useAbilities", "true"),
+    };
+
+    /// <summary>A difficulty's field as <c>ai.json</c> writes it (seconds, a fraction, a bool), from the loaded values.</summary>
+    private static string FieldText(AiDifficultyDef k, string field) => field switch
+    {
+        "thinkInterval" => Seconds(k.ThinkTicks),
+        "gatherBonus" => Num(k.GatherBonus),
+        "focusFire" => k.FocusFire ? "true" : "false",
+        "pullBackWounded" => k.PullBackWounded ? "true" : "false",
+        "useAbilities" => k.UseAbilities ? "true" : "false",
+        _ => throw new ArgumentException(field),
+    };
+
+    /// <summary>
+    /// Every difficulty field of <paramref name="d"/> that contradicts <see cref="DesignStates"/>, as
+    /// "faction difficulty.field: data X, docs/02 says Y (phrase)"; empty when both factions hold docs/02's numbers.
+    /// </summary>
+    public static List<string> DesignProblems(GameData d)
+    {
+        var problems = new List<string>();
+        foreach (string faction in Factions)
+        {
+            AiDef ai = d.Ai[d.FindFaction(faction)];
+            foreach (var s in DesignStates)
+            {
+                string data = FieldText(ai.Difficulty(s.Difficulty), s.Field);
+                string at = $"{faction} {DataLimits.AiDifficultyIds[(int)s.Difficulty]}.{s.Field}";
+                if (data != s.Value) problems.Add($"{at}: data {data}, docs/02 says {s.Value} (\"{s.Phrase}\")");
+            }
+        }
+        return problems;
+    }
+
+    /// <summary>
+    /// docs/02's "AI opponent" bullet for each difficulty still says what <see cref="DesignStates"/> pins, so a docs/02 edit
+    /// that changes a stated number fails here until the pin follows it.
+    /// </summary>
+    [Fact]
+    public void K_Docs02_StatesWhatThePinsHold()
+    {
+        string[] lines = PageTables.Lines(Path.Combine("docs", "02-game-design.md"));
+        int h = PageTables.Heading(lines, "## AI opponent", "docs/02");
+        string[] section = lines[h..].TakeWhile((l, k) => k == 0 || !l.StartsWith("## ", StringComparison.Ordinal)).ToArray();
+        List<string> bullets = Bullets(section); // nested bullets too, continuation lines joined
+        foreach (var s in DesignStates)
+        {
+            string label = DataLimits.AiDifficultyIds[(int)s.Difficulty];
+            label = char.ToUpperInvariant(label[0]) + label[1..];
+            string? bullet = Bullet(bullets, label);
+            Assert.True(bullet != null, $"docs/02 'AI opponent' has no '{label}:' bullet");
+            Assert.True(bullet!.Contains(s.Phrase, StringComparison.Ordinal),
+                $"docs/02 '{label}' no longer says \"{s.Phrase}\" ({s.Field} {s.Value}): update DesignStates with the doc");
+        }
+        // A flag can't say "rarely" (BUG-0541 item 3): Easy doesn't use abilities.
+        Assert.DoesNotContain("rarely uses abilities", string.Join(" ", section));
+    }
+
+    [Fact]
+    public void K_BothFactions_HoldDocs02sNumbers()
+    {
+        List<string> problems = DesignProblems(Data);
+        Assert.True(problems.Count == 0, string.Join("\n", problems));
+    }
+
+    /// <summary>A mutation of any field docs/02 states, in either faction's file, fails naming the faction and the field.</summary>
+    [Theory]
+    [InlineData("malazan", "easy", "thinkInterval", "1.5")]
+    [InlineData("whirlwind", "easy", "thinkInterval", "3")]
+    [InlineData("malazan", "hard", "thinkInterval", "1")]
+    [InlineData("whirlwind", "hard", "thinkInterval", "0.45")]
+    [InlineData("malazan", "hard", "gatherBonus", "0.3")]
+    [InlineData("whirlwind", "hard", "gatherBonus", "0")]
+    [InlineData("whirlwind", "easy", "focusFire", "true")]
+    [InlineData("malazan", "normal", "focusFire", "true")]
+    [InlineData("whirlwind", "hard", "focusFire", "false")]
+    [InlineData("malazan", "easy", "pullBackWounded", "true")]
+    [InlineData("whirlwind", "normal", "pullBackWounded", "true")]
+    [InlineData("malazan", "hard", "pullBackWounded", "false")]
+    [InlineData("whirlwind", "easy", "useAbilities", "true")]
+    [InlineData("malazan", "normal", "useAbilities", "false")]
+    [InlineData("whirlwind", "hard", "useAbilities", "false")]
+    public void K_AMutatedDesignField_FailsNamingTheField(string faction, string difficulty, string field, string json)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson($"factions/{faction}/ai.json", root => root["difficulties"]![difficulty]![field] = JsonNode.Parse(json));
+        DataLoadResult result = DataLoader.LoadAll(dir.Path);
+        Assert.True(result.Ok, string.Join("\n", result.Errors));
+        List<string> problems = DesignProblems(result.Data!);
+        Assert.Single(problems);
+        Assert.StartsWith($"{faction} {difficulty}.{field}: data {json}, docs/02 says ", problems[0]);
+    }
 }

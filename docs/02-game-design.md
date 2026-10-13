@@ -367,7 +367,7 @@ show text, a minimap ping, and a sound.
 
 - Three difficulties:
   - **Easy:** thinks every 2 s, follows its build order slowly, attacks with small waves, doesn't
-    micro, rarely uses abilities, expands late.
+    micro, doesn't use abilities, expands late.
   - **Normal:** fair play at a relaxed pace, follows the build order on time, uses abilities.
   - **Hard:** fair play with tighter decisions (thinks every 0.5 s, focus fire, pulls back wounded
     units, good ability use) plus a **25% gather bonus**, shown in the skirmish setup.
