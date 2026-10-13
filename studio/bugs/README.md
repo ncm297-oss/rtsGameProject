@@ -282,3 +282,4 @@ bugs outrank new features.
 | [BUG-0574](BUG-0574-ai-marks-live-mine-dropped-when-no-drop-off.md) | S3 | open | A loaded worker with no drop-off makes the AI mark a live mine out of sight as gone, for good |
 | [BUG-0580](BUG-0580-pause-swallows-button-release-drag-stays-live.md) | S3 | open | A mouse release swallowed by the pause leaves a drag live: after Resume the camera follows the cursor (middle drag) or a selection box does (left box) with no button held |
 | [BUG-0581](BUG-0581-m6-v1-nits.md) | S4 | open | M6-V1 nits: the map size items are a C# literal ("N × N"); a bigger map is only a bigger empty field around the 128 layout; the dev could not set BUG-0560's status |
+| [BUG-0610](BUG-0610-d15-report-test-nits.md) | S4 | open | D15 small findings: the house-rule report asserts more than "no exception" and is wired to AI internals M5-3 is reworking |
