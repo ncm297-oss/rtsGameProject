@@ -29,3 +29,10 @@
    and start placement, so a note for whoever plans the map slice, not a view defect.
 3. The dev's rules forbid `studio/**`, so the brief's "the dev sets the bug's status" for BUG-0560 could not be done.
    QA set it after verifying (see BUG-0560). Producer: align the brief wording with the dev's rules.
+
+## QA verification (2026-10-12-1930, M6-V2)
+- Item 1 (map size items a C# literal): fixed, verified. The items come from `ui.json` `setup.map_size_item`; `ShellTest`'s
+  no-literal row passes. A leftover edge (an escaped `{{0}}` format loads clean) is BUG-0602.
+- The CS8602 warning in `game/tests/QaShellTest.cs` (the brief's "item 4"): fixed, verified. `dotnet build RtsGame.sln
+  --no-incremental` reports 0 warnings, on the worktree and on a fresh clone.
+- Items 2 and 3 are unchanged, so the bug stays open.

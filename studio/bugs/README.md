@@ -280,5 +280,10 @@ bugs outrank new features.
 | [BUG-0572](BUG-0572-ai-think-cost-full-building-store.md) | S3 | fixed | With the building store full, every AI think searches all 1,089 site candidates to the end: 1.6-2.2 ms a think (Debug) |
 | [BUG-0573](BUG-0573-m5-2-small-findings.md) | S4 | open | M5-2 small findings: CanPlace answers two world-wide facts (store full, pockets); production divides by a weight that can be 0f |
 | [BUG-0574](BUG-0574-ai-marks-live-mine-dropped-when-no-drop-off.md) | S3 | open | A loaded worker with no drop-off makes the AI mark a live mine out of sight as gone, for good |
-| [BUG-0580](BUG-0580-pause-swallows-button-release-drag-stays-live.md) | S3 | open | A mouse release swallowed by the pause leaves a drag live: after Resume the camera follows the cursor (middle drag) or a selection box does (left box) with no button held |
+| [BUG-0580](BUG-0580-pause-swallows-button-release-drag-stays-live.md) | S3 | fixed | A mouse release swallowed by the pause leaves a drag live: after Resume the camera follows the cursor (middle drag) or a selection box does (left box) with no button held |
 | [BUG-0581](BUG-0581-m6-v1-nits.md) | S4 | open | M6-V1 nits: the map size items are a C# literal ("N × N"); a bigger map is only a bigger empty field around the 128 layout; the dev could not set BUG-0560's status |
+| [BUG-0600](BUG-0600-minimap-drag-survives-pause.md) | S3 | open | BUG-0580's class on the minimap: a left press on the minimap released during the pause leaves the minimap dragging the camera after Resume |
+| [BUG-0601](BUG-0601-mirror-match-sides-same-colour.md) | S3 | open | A mirror match picked from the setup draws both sides in the same colour |
+| [BUG-0602](BUG-0602-m6-v2-nits.md) | S4 | open | M6-V2 nits: an escaped `{{0}}` map size format loads clean and shows "{0}"; `--skirmish` is no longer the menu's default match |
+| [BUG-0603](BUG-0603-m4-playable-rubble-sight-flake-under-load.md) | S3 | open | M4PlayableTest seed 6 step 7 failed once under load: the army razed the Raider Camp to 338 hp in step 6, the Sapper blast finished it and no sight was left on the rubble |
+| [BUG-0604](BUG-0604-menu-ai-match-cannot-build-economy.md) | S3 | open | In the menu skirmish vs the AI, the AI never gets an economy: the dev armies clash at tick 0 over the pop cap, and no mine is in sight of the start base |

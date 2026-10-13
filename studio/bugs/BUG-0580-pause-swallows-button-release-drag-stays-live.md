@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-11-0634, task M6-V1 (QA) |
 | System | view: pause menu (`Main`) vs held-button state in `RtsCamera` (`_dragging`) and `SelectionController` (`_pressing` / `_boxing`) |
-| Fixed by | |
+| Fixed by | M6-V2 (e41be72): `RtsCamera` / `SelectionController` drop held state on `NotificationPaused` / `NotificationUnpaused`; regression: the two `QaShellTest.PauseBurstAndLeaks` rows are now `Check`s |
 
 ## Repro
 1. `dotnet build RtsGame.sln`, then `& $env:GODOT --headless --path game res://tests/QaShellTest.tscn`.
@@ -34,3 +34,8 @@ Possible fixes (the dev's call): clear held-button state when the match pauses o
 `NotificationUnpaused` handler in the two nodes, or `Main.PauseMatch` telling them), or check `Input.IsMouseButtonPressed`
 on motion. When fixed, change the two `GD.Print` probes in `game/tests/QaShellTest.cs` (`PauseBurstAndLeaks`) into
 `Check`s so the loop guards it.
+
+## QA verification (2026-10-12-1930, M6-V2)
+Fixed, verified: `QaShellTest` PASS in the full scene loop with both rows as `Check`s (no box and `Pressing` false; camera moved
+0 m and `Dragging` false), with the setup's AI seat in the match. The same class of bug remains on the minimap's own
+press-to-release drag (`Minimap._jumping`): filed separately as BUG-0600.
