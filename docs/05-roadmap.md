@@ -654,8 +654,11 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
 - [x] `PlayerView` fog-filtered facade; AI cannot read hidden state (test enforces it). (M5-1 + M5-2, 2026-10-11:
       `Ai/PlayerViewOracleFuzzTests` and `Ai/PlayerViewArchitectureTests`; BUG-0540's node memory closed the last leak.)
 - [ ] Build order executor driven by `ai.json`; economy, production, military, ability, scout managers. (M5-2, 2026-10-11:
-      the executor, economy and production managers are in; military, ability and scout managers are M5-3 / M5-4.)
-- [ ] Expansion, defense, attack waves, retreat, rebuilding; scouts ramps and high ground before attacking up.
+      the executor, economy and production managers are in. M5-3, 2026-10-12: the scout and military managers are in,
+      `ai.json` + `rules.json` `ai` in `ContentHash`; the ability manager is M5-4.)
+- [ ] Expansion, defense, attack waves, retreat, rebuilding; scouts ramps and high ground before attacking up. (M5-3,
+      2026-10-12: attack waves, retreat and the rally are in; expansion, defense, rebuilding and the high-ground scouting are
+      M5-4.)
 - [ ] Easy / Normal / Hard per [02 AI](02-game-design.md#ai-opponent).
 - [ ] AI-vs-AI headless test: a 20-minute match completes without errors and one side wins.
 - [ ] Playable: the owner can win on Easy and lose to a Whirlwind AI on Hard.
@@ -664,7 +667,8 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
 
 **Done when:**
 
-- [ ] Main menu, skirmish setup (map, 2-4 slots, faction, difficulty, color, team), pause menu.
+- [ ] Main menu, skirmish setup (map, 2-4 slots, faction, difficulty, color, team), pause menu. (M6-V1, 2026-10-11: menu,
+      seed / map size, pause. M6-V2, 2026-10-12: faction and difficulty per slot. Left: 2-4 slots, colour, team.)
 - [ ] Victory/defeat detection and post-match stats screen.
 - [ ] Save/load and replay playback.
 - [ ] Settings: resolution, window mode, VSync, quality, volumes, keybinds.
