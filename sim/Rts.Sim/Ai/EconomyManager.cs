@@ -10,7 +10,9 @@ namespace Rts.Sim.Ai;
 /// <see cref="AiRulesDef.GoldShare"/> of the gathering workers are on gold, else to wood (the known node of that kind nearest
 /// the worker; the other kind when none is known); and a house is placed when the population cap is within
 /// <see cref="AiRulesDef.HouseHalfPopMargin"/> of the population (and below the rules' cap) and no house is under
-/// construction or waiting to be judged. M5-4b: a worker sent fleeing by the defense is left alone until the threat ends. M5-H1 (BUG-0640): an own site no worker has as its build target for
+/// construction or waiting to be judged. M5-4b: a worker sent fleeing by the defense is left alone until
+/// <c>ai.defendFor</c> has passed since it fled, and while the threat holds no worker is sent to a node within
+/// <c>ai.workerFleeRadius</c> of the defense point (BUG-0671). M5-H1 (BUG-0640): an own site no worker has as its build target for
 /// <see cref="StalledThinks"/> thinks gets a worker sent to join it (a Build of its type at its anchor: the idle worker
 /// nearest it, else the nearest gatherer), and such a stalled house site does not hold the house rule off.
 /// </summary>
@@ -229,10 +231,14 @@ internal static class EconomyManager
         nodeType = -1;
         handle = default;
         float bestDistance = float.MaxValue;
+        // BUG-0671: while the base is defended, no worker is sent to a node within the flee radius of the defense point.
+        float flee = ai.Board.Defending ? ai.Rules.WorkerFleeRadius * ai.Rules.WorkerFleeRadius : -1f;
         while (ai.View.NextResource(ref s, out SeenResource node))
         {
             if (ai.Data.Resources[node.TypeId].Resource != want || ai.Board.NodeDropped[s] == node.Handle.Generation) continue;
-            float d = System.Numerics.Vector2.DistanceSquared(ai.NodeCentre(node.TypeId, node.Cell), u.Position);
+            System.Numerics.Vector2 centre = ai.NodeCentre(node.TypeId, node.Cell);
+            if (System.Numerics.Vector2.DistanceSquared(centre, ai.Board.DefensePoint) <= flee) continue;
+            float d = System.Numerics.Vector2.DistanceSquared(centre, u.Position);
             if (d >= bestDistance) continue;
             best = node.Cell;
             bestDistance = d;

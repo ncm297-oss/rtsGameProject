@@ -152,8 +152,13 @@ internal sealed class AiPlayer
     /// <summary>See <see cref="IntruderCount"/>.</summary>
     internal Vector2 IntruderCentroid { get; private set; }
 
-    /// <summary>M5-4b: whether own worker slot <paramref name="slot"/> (generation <paramref name="generation"/>) was sent fleeing during the threat in force: no other manager orders it.</summary>
-    internal bool IsFleeing(int slot, int generation) => Board.FledGeneration[slot] == generation;
+    /// <summary>
+    /// M5-4b: whether own worker slot <paramref name="slot"/> (generation <paramref name="generation"/>) was sent fleeing during
+    /// the threat in force, at most <c>ai.defendFor</c> ago (BUG-0671: a threat that never ends doesn't idle it for good): no
+    /// other manager orders it.
+    /// </summary>
+    internal bool IsFleeing(int slot, int generation) =>
+        Board.FledGeneration[slot] == generation && Now - Board.FledAt[slot] <= Rules.DefendForTicks;
 
     /// <summary>The player's Town Hall the AI builds round: its first finished one, else its first site; -1 for none.</summary>
     internal int TownHallCell { get; private set; }

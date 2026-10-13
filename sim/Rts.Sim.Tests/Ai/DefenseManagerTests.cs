@@ -153,10 +153,12 @@ public class DefenseManagerTests
 
     /// <summary>
     /// (c) Workers within workerFleeRadius of the point get one Move to the hall (the only drop-off) and no Gather until defendFor
-    /// (5 s here) after the last trigger; then they gather again.
+    /// (5 s here) after their flee (BUG-0671: not after the last trigger, so a raider parked for good doesn't idle them for
+    /// good); then they gather again, while the threat holds only at nodes farther than workerFleeRadius from the point, and
+    /// they aren't sent fleeing again during this threat.
     /// </summary>
     [Fact]
-    public void WorkersNearThePoint_Flee_AndGatherOnlyOnceTheThreatIsOver()
+    public void WorkersNearThePoint_Flee_AndGatherAgainDefendForAfterTheirFlee_AwayFromThePoint()
     {
         Simulation sim = Scene(Data(defendFor: 5));
         World w = sim.World;
@@ -166,21 +168,81 @@ public class DefenseManagerTests
             if (w.Units.Alive[i] && w.Units.Owner[i] == 0) workers.Add(new EntityHandle(i, w.Units.Generation[i]));
         Assert.Equal(5, workers.Count);
         List<EntityHandle> enemies = Enemies(sim, 1, w.NavGrid.CellCenter(10, 40));
-        Assert.All(workers, h => Assert.True(Vector2.Distance(w.Units.Position[h.Index], w.Units.Position[enemies[0].Index]) <= 16f));
+        Vector2 point = w.Units.Position[enemies[0].Index];
+        Assert.All(workers, h => Assert.True(Vector2.Distance(w.Units.Position[h.Index], point) <= 16f));
         List<Command> log = AiScenes.Log(sim, 0);
-        for (int k = 0; k < 3; k++) NextThink(sim);
-        int lastTrigger = sim.TickNumber - 1;
-        w.Units.Free(enemies[0]);
-        while (sim.TickNumber < lastTrigger + ai.Rules.DefendForTicks + 4 * ai.ThinkTicks) NextThink(sim);
+        // The raider stays: the threat holds the whole run.
+        for (int k = 0; k < 3 * ai.Rules.DefendForTicks / ai.ThinkTicks; k++)
+        {
+            NextThink(sim);
+            Assert.True(ai.Board.Defending);
+        }
         foreach (EntityHandle h in workers)
         {
             Command move = Assert.Single(log, c => c.Unit == h && c.Kind == CommandKind.Move);
             Assert.Equal(Hall(sim), move.Position);
+            int fled = move.Tick - 1;
             Command gather = log.First(c => c.Unit == h && c.Kind == CommandKind.Gather);
-            // Not before the threat is over (its think stamps the next tick), and at the first think after it.
-            Assert.InRange(gather.Tick - 1, lastTrigger + ai.Rules.DefendForTicks + 1, lastTrigger + ai.Rules.DefendForTicks + ai.ThinkTicks);
+            // Not before defendFor after the flee (its think stamps the next tick), and at the first think after that.
+            Assert.InRange(gather.Tick - 1, fled + ai.Rules.DefendForTicks + 1, fled + ai.Rules.DefendForTicks + ai.ThinkTicks);
+            Assert.All(log.Where(c => c.Unit == h && c.Kind == CommandKind.Gather),
+                c => Assert.True(Vector2.Distance(c.Position, point) > ai.Rules.WorkerFleeRadius, $"a Gather {Vector2.Distance(c.Position, point):F1} m from the point"));
         }
-        Assert.False(ai.Board.Defending);
+    }
+
+    /// <summary>
+    /// BUG-0671: a worker flees to the own finished drop-off nearest it that is farther than workerFleeRadius from the point,
+    /// not to the nearer one beside the threat.
+    /// </summary>
+    [Fact]
+    public void AFleeingWorker_GoesToADropOffAwayFromThePoint()
+    {
+        Simulation sim = Scene(s_quiet.Value);
+        World w = sim.World;
+        AiPlayer ai = sim.AiOf(0)!;
+        // A second drop-off (another hall) far from the threat, which comes right beside the first hall.
+        int hallType = w.Buildings.TypeId[w.Buildings.SlotAt(AiScenes.HallAt(0).X, AiScenes.HallAt(0).Y)];
+        Assert.True(w.Buildings.Spawn(0, hallType, 50 * AiScenes.FlatSize + 30, out EntityHandle far));
+        var workers = new List<EntityHandle>();
+        for (int i = 0; i < w.Units.Capacity; i++)
+            if (w.Units.Alive[i] && w.Units.Owner[i] == 0) workers.Add(new EntityHandle(i, w.Units.Generation[i]));
+        Enemies(sim, 1, Hall(sim) + new Vector2(0f, 6f));
+        List<Command> log = AiScenes.Log(sim, 0);
+        NextThink(sim);
+        Vector2 farCentre = ai.BuildingCentre(hallType, w.Buildings.Cell[far.Index]);
+        List<Command> moves = log.Where(c => c.Kind == CommandKind.Move).ToList();
+        Assert.NotEmpty(moves);
+        Assert.All(moves, c => Assert.Equal(farCentre, c.Position));
+    }
+
+    /// <summary>
+    /// BUG-0670: an army away in the enemy base (attacking player 1's hall, combat on) when a raider comes 20 m from home gets
+    /// a Move home (an AttackMove there would fight on by the enemy hall), then the AttackMove once inside defendRadius of
+    /// the hall: all three are home and the raider is dead 45 s later.
+    /// </summary>
+    [Fact]
+    public void AnArmyAwayInTheEnemyBase_GetsAMoveHome_ThenTheAttackMove()
+    {
+        Simulation sim = AiScenes.Flat(AiScenes.Seats(AiDifficulty.Normal, SeatController.Ai, SeatController.Human), s_quiet.Value, combat: true);
+        BuildMaps.SetTotals(sim, 0, 0, 0);
+        World w = sim.World;
+        AiPlayer ai = sim.AiOf(0)!;
+        EntityHandle hall1 = w.Buildings.HandleOf(w.Buildings.SlotAt(AiScenes.HallAt(1).X, AiScenes.HallAt(1).Y));
+        List<EntityHandle> army = Army(sim, 3, 50, 37);
+        for (int t = 0; t < 3; t++) sim.Tick();
+        foreach (EntityHandle h in army) sim.Enqueue(Command.Attack(0, h, hall1, isBuilding: true));
+        CombatScenes.RunUntil(sim, () => army.All(h => w.Units.State[h.Index] == UnitState.Attacking), 800);
+        EntityHandle raider = Enemies(sim, 1, Hall(sim) + new Vector2(0f, -20f))[0];
+        w.Units.Hold[raider.Index] = true;
+        List<Command> log = AiScenes.Log(sim, 0);
+        for (int t = 0; t < 900; t++) sim.Tick();
+        foreach (EntityHandle h in army)
+        {
+            List<Command> orders = log.Where(c => c.Unit == h).ToList();
+            Assert.Equal(new[] { CommandKind.Move, CommandKind.AttackMove }, orders.Select(c => c.Kind));
+            Assert.True(Vector2.Distance(w.Units.Position[h.Index], Hall(sim)) <= ai.Rules.DefendRadius, $"not home: {w.Units.Position[h.Index]}");
+        }
+        Assert.False(w.Units.Alive[raider.Index] && w.Units.Generation[raider.Index] == raider.Generation, "the raider lives");
     }
 
     /// <summary>(d) An enemy seen farther than defendRadius from the hall, or a hit on an own building that far out, triggers nothing.</summary>

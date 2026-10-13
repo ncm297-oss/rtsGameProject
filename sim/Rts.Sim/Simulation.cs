@@ -193,7 +193,7 @@ public sealed class Simulation : ICommandSink
 
     /// <summary>
     /// True once the match has a result (M5-4b): at most one player that ever built is undefeated while at least two ever
-    /// built (<see cref="World.MatchOver"/>). Reads sim state only; the ticks go on after it (units still fight).
+    /// built (<see cref="World.MatchOver"/>), and stays true after (BUG-0672). Reads sim state only; the ticks go on after it (units still fight).
     /// </summary>
     public bool MatchOver => World.MatchOver;
 
@@ -296,10 +296,11 @@ public sealed class Simulation : ICommandSink
             // M4-1: likewise bit 33 for a player with kills or losses, followed by the two counts.
             bool deaths = World.Kills[p] != 0 || World.Losses[p] != 0;
             // M5-4b: bit 34 a player that has built but has no live building (with one, having built is implied, so a
-            // match without a defeat hashes as before), bit 35 a defeated player.
+            // match without a defeat hashes as before), bit 35 a defeated player, bit 36 (every player's word) the match
+            // result latched (BUG-0672: it outlives the flags that set it).
             bool builtNone = World.EverBuilt(p) && World.Ledger.LiveBuildings[p] == 0;
             h.Add((ulong)(uint)World.Gold[p] | (techs ? 1UL << 32 : 0UL) | (deaths ? 1UL << 33 : 0UL)
-                | (builtNone ? 1UL << 34 : 0UL) | (World.IsDefeated(p) ? 1UL << 35 : 0UL));
+                | (builtNone ? 1UL << 34 : 0UL) | (World.IsDefeated(p) ? 1UL << 35 : 0UL) | (World.MatchOverLatched ? 1UL << 36 : 0UL));
             h.Add(World.Wood[p]);
             if (techs) World.Techs.AddToHash(ref h, p);
             if (deaths)

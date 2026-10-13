@@ -50,6 +50,8 @@ internal sealed class Blackboard
         WaveBest = new float[unitSlots];
         DefendedVersion = new int[unitSlots];
         FledGeneration = new int[unitSlots];
+        FledAt = new int[unitSlots];
+        Homing = new bool[unitSlots];
         KeptHp = new int[buildingSlots];
         KeptHpGeneration = new int[buildingSlots];
     }
@@ -74,14 +76,23 @@ internal sealed class Blackboard
     /// <summary>See <see cref="DefensePoint"/>.</summary>
     internal int DefenseVersion;
 
+    /// <summary>BUG-0673: whether the last trigger's point was more than <c>ai.rallyReach</c> from <see cref="DefensePoint"/>: a second such trigger in a row moves the point.</summary>
+    internal bool DefensePointAway;
+
     /// <summary>Threats met (a trigger with none holding; tests and tooling).</summary>
     internal int Defenses;
 
     /// <summary>Per unit slot, the defense version the army unit (of <see cref="UnitGeneration"/>) was last sent to: it isn't sent again to the same point.</summary>
     internal int[] DefendedVersion { get; }
 
-    /// <summary>Per unit slot, the generation of the worker sent fleeing during this threat (0: none): the economy leaves it alone until the threat ends.</summary>
+    /// <summary>Per unit slot, the generation of the worker sent fleeing during this threat (0: none): it isn't sent fleeing again until the threat ends.</summary>
     internal int[] FledGeneration { get; }
+
+    /// <summary>Per unit slot, the think the worker of <see cref="FledGeneration"/> fled at: the economy leaves it alone through <c>ai.defendFor</c> after it (BUG-0671).</summary>
+    internal int[] FledAt { get; }
+
+    /// <summary>Per unit slot, whether the army unit's order for <see cref="DefendedVersion"/> was the <c>Move</c> home (BUG-0670): it gets the <c>AttackMove</c> once inside the base.</summary>
+    internal bool[] Homing { get; }
 
     // ---------- M5-H1: own construction sites (EconomyManager, BUG-0640) ----------
 

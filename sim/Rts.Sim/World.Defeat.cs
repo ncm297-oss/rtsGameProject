@@ -24,23 +24,30 @@ public sealed partial class World
     /// <summary>Number of entries in <see cref="DefeatEvents"/>.</summary>
     internal int DefeatEventCount { get; private set; }
 
+    // BUG-0672: set by UpdateDefeats the first tick the result holds, never cleared (a player that never built placing its
+    // first building later doesn't take the result back). Hashed.
+    private bool _matchOverLatched;
+
     /// <summary>
-    /// True when at most one player that ever built is undefeated while at least two ever built: the match has a winner (or,
-    /// when the last ones fell on the same tick, none). Never true while fewer than two players have built.
+    /// True once at most one player that ever built is undefeated while at least two ever built: the match has a winner (or,
+    /// when the last ones fell on the same tick, none). Never true while fewer than two players have built; once true, true
+    /// for good (latched by the defeat check every tick).
     /// </summary>
-    public bool MatchOver
+    public bool MatchOver => _matchOverLatched || HasResult();
+
+    /// <summary>Whether the match result is latched (<see cref="MatchOver"/>; for the state hash).</summary>
+    internal bool MatchOverLatched => _matchOverLatched;
+
+    private bool HasResult()
     {
-        get
+        int built = 0, standing = 0;
+        for (int p = 0; p < _ledger.EverBuilt.Length; p++)
         {
-            int built = 0, standing = 0;
-            for (int p = 0; p < _ledger.EverBuilt.Length; p++)
-            {
-                if (!_ledger.EverBuilt[p]) continue;
-                built++;
-                if (!_ledger.Defeated[p]) standing++;
-            }
-            return built >= 2 && standing <= 1;
+            if (!_ledger.EverBuilt[p]) continue;
+            built++;
+            if (!_ledger.Defeated[p]) standing++;
         }
+        return built >= 2 && standing <= 1;
     }
 
     /// <summary>Empties <see cref="DefeatEvents"/> (start of a tick).</summary>
@@ -59,5 +66,6 @@ public sealed partial class World
             _ledger.Defeated[p] = true;
             _defeatEvents[DefeatEventCount++] = new DefeatEvent(p, TickNumber);
         }
+        if (!_matchOverLatched && HasResult()) _matchOverLatched = true;
     }
 }

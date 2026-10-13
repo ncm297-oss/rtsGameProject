@@ -13,13 +13,15 @@ namespace Rts.Sim.Ai;
 /// the last think (a building seen for the first time doesn't count), or an enemy non-worker unit is seen within
 /// <c>ai.defendRadius</c> of the hall. The threat holds for <c>ai.defendFor</c> after the last trigger.</item>
 /// <item><b>Point.</b> The centroid of the enemy non-workers seen within the radius, else the footprint centre of the damaged
-/// building (slot order); it moves (a new version) only when the new one is more than <c>ai.rallyReach</c> away, or a new
-/// threat starts.</item>
+/// building (slot order); it moves (a new version) when a new threat starts, or on the second trigger in a row whose point is
+/// more than <c>ai.rallyReach</c> away (BUG-0673).</item>
 /// <item><b>While the threat holds.</b> A wave in progress ends like a retreat (members home, the cooldown); the military
 /// starts no wave and rallies nobody. Every free army unit (not casting, no AI command pending, not owed its Move home)
-/// farther than <c>ai.rallyReach</c> from the point and not yet sent to this version gets one <c>AttackMove</c> there.
-/// Every own worker within <c>ai.workerFleeRadius</c> of the point gets one <c>Move</c> to the nearest own finished drop-off,
-/// and the economy leaves it alone until the threat ends.</item>
+/// farther than <c>ai.rallyReach</c> from the point and not yet sent to this version gets one <c>AttackMove</c> there if it
+/// is within <c>ai.defendRadius</c> of the hall, else a <c>Move</c> there and the <c>AttackMove</c> once it is (BUG-0670).
+/// Every own worker within <c>ai.workerFleeRadius</c> of the point gets one <c>Move</c> to the nearest own finished drop-off
+/// (one outside that radius first), once a threat, and the economy leaves it alone for <c>ai.defendFor</c> after its flee
+/// (BUG-0671), then gathers only at nodes away from the point while the threat holds.</item>
 /// </list>
 /// Reads only the player's view (own buildings' hp are own state; the enemy through <see cref="SeenUnit"/>).
 /// </summary>
@@ -36,18 +38,24 @@ internal static class DefenseManager
             board.DefendTick = ai.Now;
             Vector2 point = ai.IntruderCount > 0 ? ai.IntruderCentroid : hitAt;
             float reach = ai.Rules.RallyReach;
-            if (fresh || Vector2.DistanceSquared(point, board.DefensePoint) > reach * reach)
+            bool away = Vector2.DistanceSquared(point, board.DefensePoint) > reach * reach;
+            // BUG-0673: the point moves only on the second trigger in a row away from it, so threats taking turns at two
+            // spots (the centroid jumping back and forth) don't re-send the army every think.
+            if (fresh || away && board.DefensePointAway)
             {
                 board.DefensePoint = point;
                 board.DefenseVersion++;
+                away = false;
             }
+            board.DefensePointAway = away;
             if (fresh) board.Defenses++;
         }
         if (!Holds(ai, board.DefendTick))
         {
-            // The threat is over: fled workers are the economy's again (idle by now, they get gather orders).
+            // The threat is over: the flee marks go, so the next threat may send those workers fleeing again.
             if (board.Defending) Array.Clear(board.FledGeneration);
             board.Defending = false;
+            board.DefensePointAway = false;
             return;
         }
         board.Defending = true;
@@ -91,11 +99,15 @@ internal static class DefenseManager
         return found;
     }
 
-    /// <summary>One AttackMove to the point per free army unit and version; false when the queue filled.</summary>
+    /// <summary>
+    /// Per free army unit and version: one AttackMove to the point when it is inside the base (within <c>ai.defendRadius</c>
+    /// of the hall's centre), else first a Move to the point and the AttackMove once it is inside (BUG-0670: an AttackMove
+    /// from the enemy base fights on there). False when the queue filled.
+    /// </summary>
     private static bool Army(AiPlayer ai)
     {
         Blackboard board = ai.Board;
-        float reach = ai.Rules.RallyReach;
+        float reach = ai.Rules.RallyReach, radius = ai.Rules.DefendRadius;
         for (int k = 0; k < ai.ArmyCount; k++)
         {
             int slot = ai.ArmySlots[k];
@@ -104,11 +116,16 @@ internal static class DefenseManager
             if (ai.OrderedNotApplied(slot, generation) || ai.IsScout(slot, generation)) continue;
             // A wave member owed its Move home gets it from the military this think; it is sent here at the next.
             if (board.WaveGeneration[slot] == generation && board.WaveFlag[slot] == MilitaryManager.ToRally) continue;
-            if (board.UnitGeneration[slot] == generation && board.DefendedVersion[slot] == board.DefenseVersion) continue;
+            bool inside = !ai.HasHall || Vector2.DistanceSquared(u.Position, ai.HallPoint) <= radius * radius;
+            // Sent to this version already: done, unless it was the Move home and the unit is inside now.
+            if (board.UnitGeneration[slot] == generation && board.DefendedVersion[slot] == board.DefenseVersion
+                && (!board.Homing[slot] || !inside)) continue;
             if (Vector2.DistanceSquared(u.Position, board.DefensePoint) <= reach * reach) continue;
-            if (!ai.Send(Command.AttackMove(ai.Player, u.Handle, board.DefensePoint))) return false;
+            Command c = inside ? Command.AttackMove(ai.Player, u.Handle, board.DefensePoint) : Command.Move(ai.Player, u.Handle, board.DefensePoint);
+            if (!ai.Send(c)) return false;
             ai.MarkOrdered(slot, generation, 0);
             board.DefendedVersion[slot] = board.DefenseVersion;
+            board.Homing[slot] = !inside;
             board.RalliedVersion[slot] = 0; // after the threat the rally rule brings it back
         }
         return true;
@@ -130,21 +147,29 @@ internal static class DefenseManager
             if (!ai.Send(Command.Move(ai.Player, u.Handle, to))) return;
             ai.MarkOrdered(slot, generation, 0);
             board.FledGeneration[slot] = generation;
+            board.FledAt[slot] = ai.Now;
         }
     }
 
-    /// <summary>The footprint centre of the own finished drop-off building nearest <paramref name="from"/> (slot order on ties); false with none.</summary>
+    /// <summary>
+    /// The footprint centre of the own finished drop-off building nearest <paramref name="from"/> (slot order on ties), one
+    /// farther than <c>ai.workerFleeRadius</c> from the point first (BUG-0671: not the building under attack when another
+    /// will do); false with none.
+    /// </summary>
     private static bool NearestDropOff(AiPlayer ai, Vector2 from, out Vector2 at)
     {
         at = default;
-        float best = float.MaxValue;
+        float best = float.MaxValue, flee = ai.Rules.WorkerFleeRadius;
+        bool bestClear = false;
         for (int k = 0; k < ai.OwnBuildingCount; k++)
         {
             if (ai.OwnBuildingSites[k] || !ai.Data.Buildings[ai.OwnBuildingTypes[k]].DropOff) continue;
             Vector2 centre = ai.BuildingCentre(ai.OwnBuildingTypes[k], ai.OwnBuildingCells[k]);
+            bool clear = Vector2.DistanceSquared(centre, ai.Board.DefensePoint) > flee * flee;
             float d = Vector2.DistanceSquared(centre, from);
-            if (d >= best) continue;
+            if (bestClear && !clear || clear == bestClear && d >= best) continue;
             best = d;
+            bestClear = clear;
             at = centre;
         }
         return best < float.MaxValue;

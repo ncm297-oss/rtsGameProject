@@ -6033,7 +6033,9 @@ Slice 1: the defeat rule (STATE "Requests for the sim track" 37) and the AI's ba
   `AbilityEvents` (read between ticks, emptied at the next tick's start; at most one entry per player a tick, sized at
   construction). **`Simulation.MatchOver`** (= `World.MatchOver`): at least two players ever built and at most one of them
   is undefeated (two falling on one tick: both events, in player order, and the match is over with nobody standing). It
-  reads sim state only; ticks go on after it.
+  reads sim state only; ticks go on after it. **Latched** (BUG-0672): phase 11b sets `World`'s match-over flag the first
+  tick the result holds and never clears it, so a player that never built placing its first building later (a units-only
+  seat) doesn't take the result back. In such a 3-player setup the match is over while that player still has its army.
 - **A defeated player's units stay** (Producer default): they keep fighting back and finishing the orders already applied
   (a walk, a shift-queue); docs/02 only says "no buildings left".
 - **The door.** From the tick after its defeat, **every** command of a defeated player (any kind: `Move`, `Build`, `Train`,
@@ -6046,7 +6048,8 @@ Slice 1: the defeat rule (STATE "Requests for the sim track" 37) and the AI's ba
   applied before the defeat is refused when it pops (a defeated player places nothing; QA's "CanPlace and the Build agree"
   oracles hold); `CanTrain` / `CanResearch` already refuse (no own building).
 - **The AI of a defeated seat** stops thinking (`Simulation.Tick` skips it): it sends nothing; its blackboard is left as is.
-- **Hash.** In the per-player gold word: bit 34 "has built but has no live building" and bit 35 "defeated". Having built is
+- **Hash.** In the per-player gold word: bit 34 "has built but has no live building", bit 35 "defeated", and bit 36 (in
+  every player's word) the latched match result (BUG-0672; it can outlive the flags that set it). Having built is
   hashed only while no building stands (with one it is implied), so a match without a defeat hashes exactly as before;
   `LiveBuildings` is derived (from the store), `DefeatEvents` output. **Golden**: the `k` lines did not move (the cross-map
   run has no building); its header moved once for the three new knobs (`data-hash` 8409DB7517579FEF to 72EF431E70C49C39,
@@ -6061,30 +6064,39 @@ Slice 1: the defeat rule (STATE "Requests for the sim track" 37) and the AI's ba
   building seen for the first time, or a reused slot, doesn't trigger). The threat **holds** through `ai.defendFor` after
   the last trigger (`Now - DefendTick <= defendFor`). **The point**: the intruders' centroid (the enemy army seen within the
   radius), else the footprint centre of the first (slot order) building hit this think; it gets a new version when a new
-  threat starts or it moves more than `ai.rallyReach` (a flickering or creeping threat re-sends nothing until then).
+  threat starts, or on the **second trigger in a row** whose point is more than `ai.rallyReach` from it (BUG-0673: two
+  raiders taking turns at opposite sides of the hall make the centroid jump back and forth every think; that re-sends
+  nothing, while a threat that has really moved is followed one think late; `Blackboard.DefensePointAway`).
   **While the threat holds**: a wave in progress ends like a retreat (`MilitaryManager.End`: members owe a `Move` to the
   rally point; `waveCooldownUntil = Now + waveCooldown`) and the military starts no wave and rallies nobody; every free army
   unit (not `Casting`, no AI command pending, not the scout, not a member owed its `Move` home: it is sent at the next
-  think) farther than `rallyReach` from the point and not yet sent to this version gets one `AttackMove` there (and its
-  rally mark is cleared, so the rally rule brings it back after the threat); every own worker within `ai.workerFleeRadius`
-  of the point with no AI command pending gets one `Move` to the footprint centre of the nearest own finished drop-off (the
-  faction pages: "Laborers flee to the Garrison Keep"), and the economy (gathering, the rebalance, `PickBuilder`) leaves it
-  alone (`FledGeneration`) until the threat ends; then the marks are cleared and the idle workers get gather orders as
-  before. Reads only the `PlayerView` (own buildings' hp are own state; the enemy through `SeenUnit`):
+  think) farther than `rallyReach` from the point and not yet sent to this version gets one `AttackMove` there when it is
+  inside the base (within `defendRadius` of the hall's centre); one outside gets a plain `Move` to the point first and the
+  `AttackMove` at the first think it is inside (BUG-0670: an `AttackMove` from the enemy base acquires the enemy beside it
+  and fights on there; a wave's retreat `Move` is likewise followed by this `Move`, not replaced by an `AttackMove`;
+  `Blackboard.Homing`). Its rally mark is cleared, so the rally rule brings it back after the threat. Every own worker
+  within `ai.workerFleeRadius` of the point with no AI command pending, not yet sent fleeing in this threat, gets one
+  `Move` to the footprint centre of the nearest own finished drop-off farther than `workerFleeRadius` from the point, else
+  the nearest one (the faction pages: "Laborers flee to the Garrison Keep"), and the economy (gathering, the rebalance,
+  `PickBuilder`) leaves it alone for `defendFor` after its flee (`FledGeneration`, `FledAt`; BUG-0671: not until the threat
+  ends, which an enemy parked in the base never lets happen). Then it is the economy's again, but while the threat holds no
+  worker is sent to gather at a node whose centre is within `workerFleeRadius` of the point, and a worker that fled isn't
+  sent fleeing again in this threat (the marks are cleared when it ends). Reads only the `PlayerView` (own buildings' hp are own state; the enemy through `SeenUnit`):
   `PlayerViewArchitectureTests` unchanged.
 - **Knobs** (`common/rules.json` `ai`, required, `DataValidationTests` rows, in `ContentHash`): `defendRadius` 48 m (8-256),
   `defendFor` 20 s (0-600, to ticks; 0 holds the threat only on the think it is seen), `workerFleeRadius` 16 m (1-64).
   `focusFire` / `pullBackWounded` stay unread (M5-4c).
-- **Memory.** Per AI seat, new: per unit slot two ints (`DefendedVersion`, `FledGeneration`), **8 B x unit slots**, 20 KB for
-  2,500; per building slot two ints (`KeptHp` and the generation it is for), **8 B x building slots**, 2 KB for 256; a few
-  scalars. About 128 KB per seat for a 2,500-unit, 256-building, 4,096-node match (106 KB before). The world: one
+- **Memory.** Per AI seat, new: per unit slot three ints and a bool (`DefendedVersion`, `FledGeneration`, `FledAt`,
+  `Homing`), **13 B x unit slots**, 32 KB for 2,500; per building slot two ints (`KeptHp` and the generation it is for),
+  **8 B x building slots**, 2 KB for 256; a few scalars. About 140 KB per seat for a 2,500-unit, 256-building, 4,096-node
+  match (106 KB before). The world: one
   `DefeatEvent` per player, and three per-player arrays in the ledger.
 - **Cost.** `Ai/AiPerfTests` with every seat under attack at every think (its buildings lose hp): eight Hard seats over
   2,500 units, avg 0.19 ms a think (gate 1 ms), allocation-free (`AllocationProbe`).
-- **Behaviour to know.** An `AttackMove` to the point doesn't pull back a unit already fighting elsewhere (it finishes its
-  target first). With enemy units parked in a base for good (the raiders of `AiDeterminismTests`, each side's line units
-  beside the other's hall), the threat never ends: no wave starts and the fled workers stay idle, so that seat's economy
-  stalls (measured, not gated; the Producer's call whether a siege should release them). A seat the other's wave reaches
+- **Behaviour to know.** An `AttackMove` to the point doesn't pull back a unit already fighting inside the base (it
+  finishes its target first); one outside comes home on its `Move` and takes hits on the way without answering. With
+  enemy units parked in a base for good that the army can't remove, the threat never ends and no wave starts, but the fled
+  workers go back to work `defendFor` after their flee, at nodes away from the point. A seat the other's wave reaches
   before its own first wave defends instead of waving (`AiVersusAiTests` seed 2: player 0 from tick 4,641 to the end).
   A sandbox's lone builder is no exception: a player whose last building goes is defeated even when nobody else ever built
   (the match isn't over then), so its rebuild after a cancel is dropped; scenes that cancel or raze a player's only
@@ -6095,8 +6107,9 @@ Slice 1: the defeat rule (STATE "Requests for the sim track" 37) and the AI's ba
 - **Tests.** `MatchOverTests` (a finished building razed, a site cancelled, a site razed: the tick of the defeat; units only;
   three players; two on one tick; the door against a Noop twin, and `CanPlace`'s `Defeated`; the AI silent for 2,000 ticks; a recorded human match played
   back past `MatchOver`), `Ai/DefenseManagerTests` (an army 30 m out: the wave ends, every unit pulled once; a building hit
-  with no enemy seen; workers flee and gather only after `defendFor`; outside the radius nothing; the point re-sent only past
-  `rallyReach`), `StateHashTests.Hash_CoversTheDefeatFlags_PerPlayer`, `AiVersusAiTests.AHallAt1Hp_*` (seeds 1-3, the loser
+  with no enemy seen; workers flee and gather again `defendFor` after their flee, at nodes away from the point, with the
+  raider staying; a worker flees to a drop-off away from the point; an army in the enemy base gets a `Move` home then the
+  `AttackMove`; outside the radius nothing; the point re-sent only past `rallyReach`), `StateHashTests.Hash_CoversTheDefeatFlags_PerPlayer`, `AiVersusAiTests.AHallAt1Hp_*` (seeds 1-3, the loser
   silent), `AiDeterminismTests` (defended bases; waves without raiders), `CommandDoorFuzzStressTests.ADefeatedPlayers*`
   (seeds 1-4, every later command of the loser dropped, hash equal to the Noop stream), `AiPerfTests`, `DataValidationTests`
   and `DataContentHashTests` (three knobs).
