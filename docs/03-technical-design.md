@@ -1615,7 +1615,9 @@ friendly-fire kill counts as a kill for the shooter's owner and a loss for the s
 
 **Minimum range** (`attack.minRange`, edge to edge like `range`; the Catapult's 6 m). A target inside it cannot be fired
 at: no swing starts, a wind-up that ends with the target inside it is lost, a planted unit stands Idle and a chasing one
-stops where it is (`CombatSystem.InReach` is "within range and not inside the minimum range"). The scan never takes a
+stops where it is (`CombatSystem.InReach` is "within range and not inside the minimum range"; only an attack with a
+minimum range above 0 has an inside (`CombatSystem.TooNear`), so a body overlapping its target, a negative gap, is in
+reach of every other attack: BUG-0590). The scan never takes a
 unit or building inside it, so an Idle unit, a retaliator or an attack-mover whose target comes too near drops it at its
 next scan and takes one outside it (a nearer enemy of equal priority wins only if outside), and walks its leg on if
 there is none; a unit hit by an enemy inside its minimum range does not retaliate on it. An **explicit Attack** on a
@@ -5306,7 +5308,7 @@ game/tests/ShellTest.tscn      the headless flow test
   the sim's input, so view randomness is fine here). Map size: a list of the three sizes. Two slots, "You" and "AI"
   (`setup.slot_human`, `setup.slot_ai`): each shows the faction it plays today (player p plays faction p,
   `World.FactionOf`'s rule, by data `displayName`) and the AI slot a difficulty, both **disabled** with the `coming_soon`
-  text (the difficulty list's one item and both lists' tooltip); M6-V2 wires them to the seats with M5-V2's `--ai`. Back
+  text (the difficulty list's one item and both lists' tooltip); M6-V2 wired them to the seats ("Implementation (M6-V2)"). Back
   (or Esc) returns to the menu; the picks are kept for the next visit.
 - **Pause.** Esc (`ui_cancel`, in Main's `_Input`, which runs before any `_UnhandledInput`) in a match: when a targeting
   order is armed (A, M, an ability: `SelectionController.Targeting`), a build menu is open or a placement ghost is up
@@ -5353,6 +5355,81 @@ game/tests/ShellTest.tscn      the headless flow test
   is gone and nothing is in sight. The Burning marker is asserted in step 8 instead, on the staged Zealot A that the duel's
   mage burns: the marker over A, none over B, while A burns.
 
+### Implementation (M6-V2)
+
+The skirmish setup's faction and difficulty lists drive the match's seats, and dev runs get the same through `--faction` and
+`--ai`. Also a dev "match over" line, BUG-0580, and BUG-0581 items 1 and 4. No sim change outside `ViewApi`.
+
+```
+game/scripts/SkirmishSetup.cs   live faction lists (both slots) and the AI slot's difficulty list; MatchArgs()
+game/scripts/LaunchOptions.cs   --faction <slot> <id>, --ai <easy|normal|hard>
+game/scripts/SimRunner.cs       SlotFactions, Player1Ai -> explicit SimConfig.Seats (SimRunner.Seats, BuildSeats)
+game/scripts/Match.cs           resolves the picks against the data; the "Match over:" dev line
+game/scripts/RtsCamera.cs, SelectionController.cs   held buttons dropped on pause / resume (BUG-0580)
+sim/Rts.Sim/ViewApi/MatchOver.cs   per-player building count watch (read-only)
+game/tests/AiSeatTest.tscn      the headless AI seat test (in the scene loop)
+```
+
+- **Setup screen.** Each slot's faction list holds every loaded faction's `displayName` in id order. The defaults are
+  faction 0 for "You" and faction 1 for "AI" (the old fixed assignment). The AI slot's difficulty list holds
+  `setup.difficulty_easy`, `_normal` and `_hard` in `AiDifficulty` order, default Normal (the sim's `AiDifficulty` has no
+  display name). Start passes the picks as a dev command line (`SkirmishSetup.MatchArgs`: `--seed <n> --map-size <n>
+  --faction 1 <id> --faction 2 <id> --ai <difficulty>`, with data ids and `ai.json` difficulty ids) through
+  `LaunchOptions.Parse`, so a skirmish and a dev run still differ only in their flags. The setup screen is built once, so
+  the picks survive Back and Quit to menu. From the menu, slot 2 is always the AI; a human slot 2 is a dev run without
+  `--ai`. 2-4 slots, Human / AI per slot, colour and team are M6-V3.
+- **Flags.** `--faction <slot> <id>` (slot 1 = player 0, the local player; slot 2 = player 1; the id a snake_case token)
+  and `--ai <easy|normal|hard>` (player 1 becomes an AI seat of that difficulty) are in `LaunchOptions.MatchFlags`. Without
+  them the seats are today's (player p plays faction `p mod factions`, every seat human), so every existing scene and test
+  builds the same match. Junk is warned about and ignored like `--seed junk`: an unknown slot, a missing value, a value
+  that is a flag (BUG-0041), an id with other characters, or a difficulty not in `ai.json`'s list. An id-shaped value the
+  data lacks is refused by `Match.Start` with the same warning. An AI pick whose faction has no `ai.json` (which
+  `SimConfig.Validate` would throw on) is warned about and leaves the seat human. The match starts in every case.
+- **Seats.** `SimRunner.Start` always builds explicit `SimConfig.Seats` and keeps them as `SimRunner.Seats`
+  (`SimRunner.BuildSeats`). There are `PlayerCount` entries. Players 0 and 1 take `SlotFactions` when set, every other
+  player plays `p mod factions`. Player 1 is `SeatController.Ai` with `Player1Ai` when that is set; every other seat is
+  Human, Normal. Explicit default seats equal `SimConfig.SeatOf`'s defaults, so the state hash and the replay header (format
+  5 always writes every seat) are unchanged for a run without the flags. `Match.SpawnArmies` now spawns each player's seat
+  faction's roster (`World.FactionOf`; it used `p mod factions`); the start base already did. Colours stay per faction
+  (the `PrimaryColor` of the seat's faction), so a mirror match draws both sides alike until M6-V3's per-player colours.
+  The `Match started:` line ends with the seats (`seats malazan human, whirlwind ai hard`).
+- **Match over (dev line).** After every tick (`SimRunner.Ticked`), `ViewApi/MatchOver` counts each player's live
+  buildings (sites included) over `World.Buildings.Alive` / `Owner` and reports any player whose count went from above 0
+  to 0. `Match` prints `Match over: player p has no buildings left (tick n)` once per such drop. A player that never had a
+  building is never reported; one that rebuilds and loses everything again is reported again. Allocation-free. This is
+  neither the victory screen nor the rule: docs/02 "Victory/defeat" belongs to the sim (Requests 37: `World.IsDefeated(p)`
+  or a match-over event), and the screen and stats come after that.
+- **BUG-0580.** A paused node gets no input, so a button released while the match was paused never reached `RtsCamera`
+  (middle-button drag) or `SelectionController` (left-button press or box). Both now drop their held state on
+  `NotificationPaused` and `NotificationUnpaused`: the press is dropped, nothing is selected by it, and the box hides.
+  After Resume no drag is live until the button is pressed again. `RtsCamera.Dragging` and
+  `SelectionController.Pressing` expose this to tests.
+- **Text (BUG-0581 item 1).** The map size items come from `setup.map_size_item` (`"{0} × {0}"`, with the side for
+  `{0}`; `UiText.MapSizeItem`). `UiText` refuses a format without `{0}` or one that doesn't format, as one error naming the
+  key. `coming_soon` is gone. The `setup` keys are now `title`, `seed`, `random`, `map_size`, `map_size_item`,
+  `slot_human`, `slot_ai`, `faction`, `difficulty`, `difficulty_easy`, `difficulty_normal`, `difficulty_hard`, `start`,
+  `back`.
+- **Tests.**
+  - xUnit `ViewApi/MatchOverTests`. Hand-built spans: 1 -> 0 reported once, 0 from the start never, rebuilt then razed
+    reported again, two players together, stray owners. A hand-built world whose only site is cancelled twice is reported
+    on the tick each Cancel applies. The default match (100 units and a base a side, combat on) runs 400 ticks on two seeds
+    and reports nothing. `Observe` allocates nothing.
+  - `ShellTest` adds the `--faction` / `--ai` parse rows (each value, junk, BUG-0041 swallowing) and `BuildSeats` rows. It
+    checks the 20 shell keys, the missing-key error for each new one, and four bad `map_size_item` formats. It checks the
+    live lists: items, defaults, and no text on the screen outside `ui.json` and faction data. It swaps the sides and picks
+    Easy, checks that the picks survive Back and Quit to menu, and checks both matches' seats (`SimRunner.Seats`,
+    `SimConfig.Seats`, `World.FactionOf`).
+  - `QaShellTest`'s two BUG-0580 probes are now `Check`s. With the fix off they fail: a 150 x 90 box, and the camera moves
+    8.43 m.
+  - Headless `AiSeatTest`:
+    - Menu -> slot 2 Whirlwind, Hard -> Start: the seats are right, the AI has a queue item or a worker at work by tick
+      400, no tick runs while paused, and 3 quit cycles stay flat.
+    - `--ai hard --faction 2 whirlwind` with a recorder: the same seats, `seat 1 whirlwind ai hard` in the header, and
+      playback to equal checkpoints with the AI's commands taken from the log.
+    - `--faction 1 whirlwind --faction 2 malazan`: both seats human; player 0's army, building colour and build menu are
+      the Whirlwind's.
+    - Four junk flag sets: default seats, and the match ticks.
+
 ## AI architecture
 
 The AI lives in `Rts.Sim.Ai`, inside the sim assembly, because it must be deterministic (it uses
@@ -5361,13 +5438,13 @@ the replay like a human's; playback re-enqueues them and never runs the AI (Prod
 needs the seed, the seats and every player's commands, the AI's included.
 
 ```
-AiPlayer
-  BuildOrderExecutor    # walks the faction's ai.json build order
-  EconomyManager        # worker targets per resource, houses before cap, expansions
-  ProductionManager     # keeps halls busy toward the target composition
-  MilitaryManager       # army grouping, defense, attack waves, retreat, focus fire (Hard)
-  AbilityManager        # when and where to cast (simple heuristics per ability kind)
-  ScoutManager          # early scout, periodic map checks
+AiPlayer                # a think: census, then the managers in this order
+  BuildOrderExecutor    # walks the faction's ai.json build order (M5-2)
+  ScoutManager          # early scout (M5-3); periodic map checks (M5-4)
+  EconomyManager        # worker targets per resource, houses before cap (M5-2); rebalancing (M5-3)
+  ProductionManager     # keeps halls busy toward the target composition (M5-2; pop shares M5-3)
+  MilitaryManager       # rally, attack waves, retreat (M5-3); defense, focus fire (Hard) (M5-4)
+  AbilityManager        # when and where to cast (simple heuristics per ability kind) (M5-4)
   Blackboard            # what the AI believes about the world (from its PlayerView only)
 ```
 
@@ -5455,11 +5532,10 @@ enums `AiDifficulty` / `AiStepTrigger` / `AiStepAction`, `Data/DataLoader.Ai.cs`
   a 12-byte `NodeMemory` (generation, type, anchor cell) per resource slot per player, **12 B x `ResourceCapacity` x
   players**: 98,304 B for the default 4,096 slots and two players (+ a 24-byte header; that test's figure, re-baselined and
   itemised there), 393 KB for eight. `GameData.Ai` is load-time data, a few hundred bytes a faction, outside the world.
-- **State and hashing.** No sim state, no new `Command`, no phase. `ai.json` is **not** in `GameData.ContentHash` (Producer
-  decision for M5-1: nothing the sim runs reads it yet; `Data/AiLoaderTests.AnAiJsonEdit_LeavesTheContentHash`). The golden is
+- **State and hashing.** No sim state, no new `Command`, no phase. `ai.json` was **not** in `GameData.ContentHash` (Producer
+  decision for M5-1: nothing the sim ran read it yet); it joined in M5-3 ("Implementation (M5-3)", Hash). The golden was
   untouched.
-- **Not yet.** `ai.json` into `ContentHash` (moved to M5-3 by the Producer: after D14 lands, so M5-2's golden regen was
-  header-only); difficulty display names (M5-4 / the M6 lobby). Done in M5-2 ("Implementation (M5-2)"): the managers,
+- **Not yet.** Difficulty display names (M5-4 / the M6 lobby). Done in M5-2 ("Implementation (M5-2)"): the managers,
   `AiPlayer`, the `Blackboard`, the executor's run-time meaning of `count` and `buildOrderSlack`, and a fog-safe placement
   rule (`PlayerView.CanPlace`).
 
@@ -5608,8 +5684,8 @@ acting only through commands. Code: `sim/Rts.Sim/Ai/AiPlayer.cs`, `Blackboard.cs
   busy; the mix then follows the weights while several buildings are free and the buildings once only one is.
 - **Tunables.** `common/rules.json` `ai` (required; `DataValidationTests` rows): `goldShare` 0.6 (a fraction 0-1),
   `houseWhenPopWithin` 2 (pop, a multiple of 0.5, at most `popCap`), `placementSearchRadius` 32 m, `buildingSpacing` 2 m,
-  `expandHallReach` 40 m (meters above 0, at most 64; spacing 0-8; to whole cells rounded up: 16, 1, 20). Not in
-  `ContentHash` yet, with `ai.json` (M5-3): playback runs no AI, so a replay doesn't depend on them.
+  `expandHallReach` 40 m (meters above 0, at most 64; spacing 0-8; to whole cells rounded up: 16, 1, 20). In `ContentHash`
+  since M5-3, with `ai.json`.
 - **Tests.** `Ai/AiPlayerTests` (criterion 3: the shipped steps of both factions run on every difficulty; a 10-step order
   with time / workers / pop triggers, counts, slack and concurrent steps fires in the documented order on Easy and Hard; a
   Build without wood waits and is sent at the first think after the wood, once; a Build the sim refuses (an enemy unit holding
@@ -5632,8 +5708,116 @@ acting only through commands. Code: `sim/Rts.Sim/Ai/AiPlayer.cs`, `Blackboard.cs
   type, and small fixed scratch: about 73 KB for a 2,500-unit, 256-building, 4,096-node match (37 KB before BUG-0570's 20 KB of
   Gather nodes and 16 KB of node marks). Built only for AI seats, never by `World`. The fog's node memory:
   "Implementation (M5-1)", Memory.
-- **Not yet** (M5-3 and later): military, attack, scout and ability managers and the enemy memory; `ai.json` and
-  `rules.json` `ai` into `ContentHash`; difficulty tuning (M5-4, the gather bonus); the sandbox's AI seat (view, M5-V2).
+- **Not yet** (M5-3 and later): the ability manager, defense, difficulty tuning (M5-4, the gather bonus); the sandbox's AI
+  seat landed with the view's M6-V2 (`--ai`, the setup's AI slot). Done in M5-3: the scout, the military manager, the enemy memory, `ai.json` and `rules.json` `ai` in
+  `ContentHash`.
+
+### Implementation (M5-3)
+
+The AI scouts, rallies and attacks. Code: `sim/Rts.Sim/Ai/ScoutManager.cs`, `MilitaryManager.cs`; the census, the enemy
+memory and the shared geometry in `AiPlayer.cs`; the bookkeeping in `Blackboard.cs`; `PlayerView.TryGetCargo` (own units only);
+six `rules.json` `ai` knobs in `Data/AiRulesDef.cs`; the hash in `GameData.ContentHash`. No new `Command` kind: the AI sends
+`Move`, `Stop`, `AttackMove` and `Attack`, which every player has.
+
+- **A think.** Census (own units by type, workers, **army** = own non-worker units, own buildings and queues, whether a finished
+  drop-off stands, the enemy memory), then the executor, **the scout manager**, the economy manager, the production manager,
+  **the military manager**, in that order. The scout is taken before the economy sends idle workers to gather; the military
+  runs last, on what is left of the queue.
+- **Enemy memory** (`Blackboard`, from the view only, rebuilt each think): the known enemy buildings are the ones the view shows
+  now plus its ghosts (the fog's memory; no second copy is kept; `AiPlayer.NearestEnemyBuilding`, `EnemyBuildingKnown`); the
+  last enemy army seen is the centroid, count and tick of the enemy non-worker units the view showed at the last think that
+  showed any (kept until replaced; read by nothing yet, M5-4's defense).
+- **Scout** (`ScoutManager`). At the first think at or after `ai.scoutAfter` the own worker nearest the hall's centre with no
+  AI command pending (an idle one first, else a gathering or returning one: `PickBuilder`'s rule) becomes the scout; its slot
+  and generation are kept, and the economy manager, the rebalance and `PickBuilder` skip it. If a forest, a gold mine and an
+  enemy building are already known then, no scout is sent. The **waypoints**, computed once from the hall's centre and the
+  map. The **head**, walked in order: the 8 compass points `ai.scoutRadius` from it, clamped half a cell inside the map, the
+  first the one most toward the map centre then clockwise; then the point-mirror of the hall through the map centre (docs/02
+  "Map": layouts are symmetric, and a match puts the bases either side of the centre line). Then the **map grid** (BUG-0593,
+  replacing the 4 quadrant centres, which missed a base that isn't at the mirror): the map cut into `ceil(side / ai.scoutGrid)`
+  equal columns and rows, one point at each cell's centre. Each think it is not pending: every waypoint within
+  `ai.scoutReach` of it is visited, and so is every grid point whose cell the player has explored (nothing new to see there)
+  except the one it walks to (explored from 14 m off, it would turn away before seeing past it);
+  the one it was last sent to is visited if it stands Idle (it got as close as it could: a point on a cliff or off the walkable
+  ground); then it gets one `Move` to the next point unless it is already on its way there: the first unvisited point of the
+  head, else the grid point it walks to while unvisited, else the unvisited grid point nearest it (list order on ties; from
+  the mirror that searches the far half first). The sweep **ends** when every point is visited, or as soon as a forest, a
+  gold mine and an enemy building (seen or ghost) are all known: a scout walking to a waypoint is sent `Stop` (one command),
+  and the economy manager sends it to gather at the next think it is Idle. A dead scout is not replaced (periodic
+  re-scouting: M5-4).
+- **Military** (`MilitaryManager`). **Rally point**: `ai.rallyDistance` from the hall's centre toward the footprint centre of
+  the known enemy building nearest the hall (toward the map centre when none is known), clamped inside the map; it is
+  recomputed each think and its version bumps when it moves. An army unit not in a wave that is Idle, farther than
+  `ai.rallyReach` from the point, with no AI command pending, and not yet sent to this version of the point, gets one `Move`
+  (Producer decision: rally by Moves, not `SetRally`, so the point follows what the AI learns; a unit that can't get within
+  reach is not sent again until the point moves). **Wave start**: no wave in progress, `Now >= waveCooldownUntil`, the free
+  army (not `Casting`, no AI command pending) at least `attack.minArmyPop x waveSizeMultiplier` half-pop and
+  `attack.minArmyCost x waveSizeMultiplier` gold + wood, and a known enemy building: every free army unit becomes a member
+  (slot and generation in a per-unit-slot array) owed an `AttackMove` to the footprint centre of the known enemy building
+  nearest the rally point; the start half-pop and tick are kept; `waveCooldownUntil = Now + ai.waveCooldown` (so at most one
+  wave starts per cooldown, whatever ends it). **Each think in a wave**: dead members simply no longer count; live members'
+  half-pop below `(1 - retreat.lossFraction) x start` (or none left) is a **retreat**: every live member is owed a `Move` to the
+  rally point, the wave ends, and `waveCooldownUntil = Now + ai.waveCooldown` again; a target no longer known (not seen alive,
+  no ghost of that slot and generation) is replaced by the known enemy building nearest the members' centroid (every member
+  owed an `AttackMove` again), or with none known the wave ends and the members are owed a `Move` home. **Orders**: each free
+  army unit in slot order gets at most one command a think: what it is owed, else a member standing Idle within `rallyReach`
+  of the target's footprint edge (`rallyReach` + half its larger side) while the target is seen gets `Attack` on it, unless its
+  attack hits units only (BUG-0591): that member can't fight a building, so it is sent `Move` home and leaves the wave; one Idle
+  elsewhere `AttackMove` again; a non-member the rally rule. **Bounded orders** (BUG-0595/0596): per member, the orders
+  toward this target since it last got a cell (`CellSize`) nearer the target's centre are counted (the nearest distance is
+  kept from its first `AttackMove` to this target; a new target restarts both). At `MilitaryManager.MaxTries` (3, a code
+  guard, not a balance number) the AI stops ordering it: by the target it was crowded off it (friends fight it), so it stays
+  there, still a member; elsewhere it can't get there, so it goes home and leaves the wave. A member that leaves alive is not a
+  loss: its half-pop comes off the start's too, and a wave all of whose members left ends (with the cooldown). A full queue ends the think; the per-slot flags keep what is owed
+  for the next think (a 200-unit wave start that doesn't fit is finished then).
+- **Economy additions.** **Rebalance** (needed once the scout finds a forest late, when every worker already gathers gold and
+  the cap stops training, so none is ever idle): on a think with no idle worker, while the gatherers' split is off
+  `round(goldShare x gatherers)` and a node of the short kind is known, one gatherer a think (the first in slot order that is
+  `Gathering` the long kind) is sent to the nearest node of the other kind. **BUG-0574**: a dropped Gather is not judged (and
+  marks nothing) while the player has no finished drop-off or the worker carries a full load of the kind it was sent to (such a
+  Gather goes to a drop-off first and ends at once with none); and a mark on a node the player sees alive again (`Remaining`
+  known) is cleared at the next think (the pass runs only while a mark is set). **Production** weighs
+  `(live + queued) x HalfPop / weight` (Requests 36 a: composition weights are population shares, as the faction pages write
+  them).
+- **Knobs** (`common/rules.json` `ai`, required, `DataValidationTests` rows): `scoutAfter` 15 s (0-3,600, to ticks),
+  `scoutRadius` 40 m (1-64), `scoutReach` 6 m (1-16), `scoutGrid` 56 m (16-256, BUG-0593: 5 x 5 grid points on the 256 m
+  map), `rallyDistance` 12 m (1-64), `rallyReach` 6 m (1-16), `waveCooldown` 60 s (0-3,600, to ticks; 0 is valid data and
+  turns the bound off: a retreat's survivors may be sent back at the next think, BUG-0594); the distances stay meters. A composition weight that rounds to 0 as a float (1e-50) is an error
+  at its field (`compositions[k].units.<id>`, BUG-0541 item 1 / BUG-0573 item 2).
+- **Hash.** Every field of `rules.json` `ai` and of every faction's `ai.json` (`AiDef`, each `AiDifficultyDef`, `AiStep`,
+  `AiComposition`) is in `GameData.ContentHash`, after the abilities (`DataContentHashTests`: every field by reflection, one row
+  per JSON field of both files). One golden regen: only `data-hash` (5760E83CB301B62E to 801A8BC7AA612A21) and the checksum
+  changed, every `k` line equal (the golden has no AI seat). Fix round 1 regenerated it once more for `ai.scoutGrid`
+  (801A8BC7AA612A21 to 8409DB7517579FEF), again only `data-hash` and the checksum; BUG-0590's combat fix moved no `k` line. An `ai.json` edit now changes the shipped hash, so a data-track
+  build-order change regenerates the golden header.
+- **Tests.** `Ai/ScoutManagerTests` (the list, one Move a think to a listed point, release then a Gather, a dead scout not
+  replaced, the generated map; fix round 1: an enemy base off the mirror found by the grid, the grid's nearest-unexplored
+  rule), `MinRangeTests.ANegativeGap_*` (BUG-0590), `Ai/MilitaryManagerTests` (flat scene, combat off: a wave at both thresholds seen and as a ghost,
+  below either none, Easy's 0.6 at a smaller army, a razed target re-targeted or the wave home, retreat and the cooldown, the
+  attack-retreat loop bound with and without the cooldown, the rally rule), `Ai/AiVersusAiTests`, `AiDeterminismTests` and
+  `AiReplayTests` with the early-wave data and raiders (`AiScenes.EarlyWaves`, `Generated(raiders:)`: two AI seats that wave
+  and fight), `AiPlayerTests` (pop weights, a mark cleared on sight), `QA/AiGatherMarkQaTests` (BUG-0574's row un-skipped),
+  `CommandDoorFuzzStressTests` (the AI's Move / Stop / AttackMove / Attack legal).
+- **Measured on the generated test map** (`AiScenes.Generated`, Normal, the shipped orders): the AI that sees no forest from
+  its base finds one on the legs after its 40 m ring (seeds 1 and 2: the nearest trees 73-75 m out; known at tick 2,374 and
+  2,406, wood in at 4,394 and 3,816; seed 3 at 674 and 1,361); with the shipped thresholds (Malazan 20 pop, Whirlwind 14 pop)
+  neither seat reaches a wave in 6,000 ticks (armies of 0-8 at pop 18-27: wood-starved). Without the scout the same AIs never
+  gather wood (pop 18 at tick 6,000). Fix round 1: the test scene's bases aren't mirrored, so the Whirlwind seat's 13-point
+  sweep found no enemy on seeds 1 and 2 (BUG-0593); with the map grid every seat of seeds 1-3 knows an enemy building by
+  tick 6,000 and, at the test's one-unit threshold, attacks. The wood times are unchanged (the head is): a worker sent
+  straight to the seed 1 / 2 forest at tick 1 sees it at 290 / 314 and brings wood in at 1,028 / 1,090, so the brief's 1,200 /
+  2,000 needs a sweep that heads for it, which no measured direction-blind variant did on both seeds (BUG-0592, the
+  Producer's call).
+- **Cost.** `Ai/AiPerfTests`: eight Hard seats, each with an army of over 200 (four in five of its units), the military
+  manager's passes in every timed think; gate 1 ms a think, allocation-free (`AllocationProbe`).
+- **Memory.** Per AI seat, new: per unit slot three ints and a byte (the census's army slots; the blackboard's rallied version,
+  wave member generation and owed-order flag): **13 B x unit slots**, 32.5 KB for 2,500; the scout's waypoints and flags,
+  9 B each: the head's 9 and the map grid's (25 on the 256 m map at the shipped 56 m, 306 B in all; 1,369 on a 1,024-cell
+  map, 12.4 KB; at the 16 m minimum 16,384 there, 147 KB), sized at construction; and a few scalars. About 106 KB per seat for a 2,500-unit, 256-building, 4,096-node match (73 KB before). Built only
+  for AI seats.
+- **Not yet** (M5-4): defense (the enemy army memory's reader), periodic re-scouting and a replacement scout, rebuilding,
+  ramps and high ground before attacking up, `focusFire`, `pullBackWounded`, `gatherBonus`, the ability manager; the 20-minute
+  winner test (M5-5).
 
 ## Save/load and replays
 
@@ -5729,7 +5913,7 @@ acting only through commands. Code: `sim/Rts.Sim/Ai/AiPlayer.cs`, `Blackboard.cs
 | Determinism | Same scenario twice → same hash; different seeds → different hash | Every change |
 | Replay golden tests | Recorded replays reproduce checkpoint hashes | Sim changes |
 | Perf benchmarks | Tick cost under budget: 500 units, average tick < 4 ms, p99 < 8 ms | `Category=Perf` |
-| Headless smoke | Godot boots the main scene (the main menu since M6-V1; `-- --skirmish` runs the match) for 600 frames, exits 0 with the banner and no ERROR | `game/` changes |
+| Headless smoke | `tools/qa/smoke.ps1` runs two passes of 600 frames each: a no-arg boot to the main menu, and `-- --skirmish` (the default match: sim start, every view, the HUD). Both exit 0 with the banner and no ERROR, and the second prints `Match started:` | `game/` changes |
 | Visual check | Windowed run + screenshot inspected by Claude | Visual changes |
 
 - Golden replays live in `sim/Rts.Sim.Tests/Replays/`. The first (M1-6) is

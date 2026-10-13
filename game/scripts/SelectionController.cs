@@ -202,6 +202,23 @@ public partial class SelectionController : Node
         else Outline?.HideOutline();
     }
 
+    public override void _Notification(int what)
+    {
+        // BUG-0580: a paused node gets no input, so a select release while the match is paused never arrives; the press
+        // (and its box) is dropped at the pause rather than left live after Resume. Nothing is selected by the dropped press.
+        if (what == NotificationPaused || what == NotificationUnpaused) DropPress();
+    }
+
+    /// <summary>True between a <c>select</c> press and its release (a click or box under way).</summary>
+    public bool Pressing => _pressing;
+
+    private void DropPress()
+    {
+        _pressing = false;
+        _boxing = false;
+        if (_box != null) _box.Visible = false;
+    }
+
     public override void _UnhandledInput(InputEvent e)
     {
         if (_runner?.Simulation == null) return;

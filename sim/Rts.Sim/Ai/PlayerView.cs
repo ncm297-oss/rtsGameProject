@@ -132,6 +132,23 @@ public sealed class PlayerView
         return true;
     }
 
+    /// <summary>
+    /// M5-3 (BUG-0574): what the player's own live unit in slot <paramref name="slot"/> carries (its load and the kind, as the
+    /// player's own panel shows it); false (0, gold) for any other slot: another player's cargo is never answered.
+    /// </summary>
+    public bool TryGetCargo(int slot, out int amount, out ResourceKind kind)
+    {
+        if ((uint)slot >= (uint)_units.Capacity || !_units.Alive[slot] || _units.Owner[slot] != _player)
+        {
+            amount = 0;
+            kind = ResourceKind.Gold;
+            return false;
+        }
+        amount = _units.Cargo[slot];
+        kind = _units.CargoKind[slot];
+        return true;
+    }
+
     private SeenUnit UnitAt(int s) =>
         new(new EntityHandle(s, _units.Generation[s]), _units.Owner[s], _units.TypeId[s], _units.Position[s], _units.Hp[s], _units.State[s]);
 

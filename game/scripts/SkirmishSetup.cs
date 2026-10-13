@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using Godot;
 using Rts.Sim.Data;
@@ -6,23 +7,29 @@ using Rts.Sim.Data;
 namespace Rts.Game;
 
 /// <summary>
-/// The skirmish setup screen (M6-V1, docs/02 "Game flow" 2): the map seed (typed, or Random), the map size
-/// (<see cref="LaunchOptions.MapSizes"/>), and two slots, "You" and "AI". Text from <c>ui.json</c> <c>setup</c>.
+/// The skirmish setup screen (M6-V1, M6-V2; docs/02 "Game flow" 2): the map seed (typed, or Random), the map size
+/// (<see cref="LaunchOptions.MapSizes"/>), and two slots, "You" (player 0) and "AI" (player 1), each with a faction list,
+/// the AI slot with a difficulty list. Text from <c>ui.json</c> <c>setup</c>, faction names from the data's <c>displayName</c>.
 /// </summary>
 /// <remarks>
-/// Each slot shows the faction it plays today (player p plays faction p, as <c>World.FactionOf</c> rules until the lobby)
-/// and the AI slot a difficulty, both disabled with the <c>coming_soon</c> text: M6-V2 wires them to the seats. The screen
-/// holds only what the player picked; Start raises <see cref="StartPressed"/> and <see cref="Main"/> starts the match.
+/// The faction lists hold every loaded faction in id order (defaults: faction 0 for "You", faction 1 for "AI", the match's
+/// old fixed assignment); the difficulty list Easy, Normal, Hard in <see cref="AiDifficulty"/> order (default Normal). The
+/// screen holds only what the player picked; Start raises <see cref="StartPressed"/> with the picks as match flags
+/// (<see cref="MatchArgs"/>) and <see cref="Main"/> starts the match through <see cref="LaunchOptions.Parse"/>.
 /// </remarks>
 public partial class SkirmishSetup : CanvasLayer
 {
     /// <summary>The seed the screen shows first: the match's own default (<see cref="SimRunner.Seed"/>).</summary>
     public const ulong DefaultSeed = 1;
 
-    private readonly RandomNumberGenerator _rng = new();
+    /// <summary>Each difficulty list item's text key, indexed by <see cref="AiDifficulty"/>.</summary>
+    public static readonly SetupText[] DifficultyKeys = { SetupText.DifficultyEasy, SetupText.DifficultyNormal, SetupText.DifficultyHard };
 
-    /// <summary>Raised by Start with the seed and the map side in cells.</summary>
-    public event Action<ulong, int>? StartPressed;
+    private readonly RandomNumberGenerator _rng = new();
+    private string[] _factionKeys = Array.Empty<string>();
+
+    /// <summary>Raised by Start with the picks as match flags (<see cref="MatchArgs"/>).</summary>
+    public event Action<string[]>? StartPressed;
 
     /// <summary>Raised by Back.</summary>
     public event Action? BackPressed;
@@ -36,10 +43,10 @@ public partial class SkirmishSetup : CanvasLayer
     /// <summary>The map size list, one item per <see cref="LaunchOptions.MapSizes"/> entry.</summary>
     public OptionButton MapSizeOption { get; private set; } = null!;
 
-    /// <summary>Each slot's faction list (disabled until M6-V2), slot 0 first.</summary>
+    /// <summary>Each slot's faction list (one item per loaded faction, id order), slot 0 first.</summary>
     public OptionButton[] FactionOptions { get; } = new OptionButton[2];
 
-    /// <summary>The AI slot's difficulty list (disabled until M6-V2).</summary>
+    /// <summary>The AI slot's difficulty list (one item per <see cref="AiDifficulty"/>).</summary>
     public OptionButton DifficultyOption { get; private set; } = null!;
 
     /// <summary>Each slot's name label ("You", "AI").</summary>
@@ -57,6 +64,38 @@ public partial class SkirmishSetup : CanvasLayer
 
     /// <summary>The picked map side in cells.</summary>
     public int MapSize => LaunchOptions.MapSizes[Math.Clamp(MapSizeOption.Selected, 0, LaunchOptions.MapSizes.Length - 1)];
+
+    /// <summary>The faction id picked for <paramref name="slot"/> (0 = "You", 1 = "AI"), or -1 with no factions loaded.</summary>
+    public int FactionPick(int slot)
+    {
+        OptionButton list = FactionOptions[slot];
+        return list.ItemCount == 0 ? -1 : Math.Clamp(list.Selected, 0, list.ItemCount - 1);
+    }
+
+    /// <summary>The AI slot's picked difficulty.</summary>
+    public AiDifficulty DifficultyPick => (AiDifficulty)Math.Clamp(DifficultyOption.Selected, 0, DifficultyKeys.Length - 1);
+
+    /// <summary>
+    /// The picks as the command line a dev run would pass (<c>--seed &lt;n&gt; --map-size &lt;n&gt; --faction 1 &lt;id&gt;
+    /// --faction 2 &lt;id&gt; --ai &lt;difficulty&gt;</c>); null while the seed field holds no number. A slot with no faction (no
+    /// factions loaded) passes no <c>--faction</c>.
+    /// </summary>
+    public string[]? MatchArgs()
+    {
+        if (Seed is not ulong seed) return null;
+        var args = new List<string> { "--seed", seed.ToString(CultureInfo.InvariantCulture), "--map-size", MapSize.ToString(CultureInfo.InvariantCulture) };
+        for (int slot = 0; slot < FactionOptions.Length; slot++)
+        {
+            int f = FactionPick(slot);
+            if (f < 0 || f >= _factionKeys.Length) continue;
+            args.Add("--faction");
+            args.Add((slot + 1).ToString(CultureInfo.InvariantCulture));
+            args.Add(_factionKeys[f]);
+        }
+        args.Add("--ai");
+        args.Add(DataLimits.AiDifficultyIds[(int)DifficultyPick]);
+        return args.ToArray();
+    }
 
     /// <summary>Builds the screen's controls with <paramref name="ui"/>'s text and <paramref name="data"/>'s faction names.</summary>
     public void Build(UiText ui, GameData data)
@@ -81,9 +120,8 @@ public partial class SkirmishSetup : CanvasLayer
         grid.AddChild(RandomButton);
 
         grid.AddChild(ShellUi.Text(ui.Setup(SetupText.MapSize)));
-        MapSizeOption = new OptionButton { Name = "MapSize", CustomMinimumSize = new Vector2(240f, 40f) };
-        MapSizeOption.AddThemeFontSizeOverride("font_size", 20);
-        foreach (int size in LaunchOptions.MapSizes) MapSizeOption.AddItem($"{size} × {size}");
+        MapSizeOption = List("MapSize");
+        foreach (int size in LaunchOptions.MapSizes) MapSizeOption.AddItem(ui.MapSizeItem(size));
         MapSizeOption.Select(0);
         grid.AddChild(MapSizeOption);
         grid.AddChild(new Control());
@@ -92,21 +130,25 @@ public partial class SkirmishSetup : CanvasLayer
         grid.AddChild(new Control());
         grid.AddChild(ShellUi.Text(ui.Setup(SetupText.Faction), 16));
         grid.AddChild(ShellUi.Text(ui.Setup(SetupText.Difficulty), 16));
-        string coming = ui.Setup(SetupText.ComingSoon);
+        _factionKeys = new string[data.Factions.Length];
+        for (int f = 0; f < _factionKeys.Length; f++) _factionKeys[f] = data.Factions[f].Key;
         for (int slot = 0; slot < 2; slot++)
         {
             SlotLabels[slot] = ShellUi.Text(ui.Setup(slot == 0 ? SetupText.SlotHuman : SetupText.SlotAi));
             grid.AddChild(SlotLabels[slot]);
-            // Today's fixed assignment: player p plays faction p (World.FactionOf).
-            string faction = data.Factions.Length > 0 ? data.Factions[slot % data.Factions.Length].DisplayName : "";
-            FactionOptions[slot] = Disabled($"Faction{slot}", faction, coming);
+            FactionOptions[slot] = List($"Faction{slot}");
+            foreach (FactionDef faction in data.Factions) FactionOptions[slot].AddItem(faction.DisplayName);
+            // The defaults are the match's own seats: player p plays faction p mod factions.
+            if (data.Factions.Length > 0) FactionOptions[slot].Select(slot % data.Factions.Length);
             grid.AddChild(FactionOptions[slot]);
             if (slot == 0)
             {
                 grid.AddChild(new Control()); // the player's own slot has no difficulty
                 continue;
             }
-            DifficultyOption = Disabled("Difficulty", coming, coming);
+            DifficultyOption = List("Difficulty");
+            foreach (SetupText key in DifficultyKeys) DifficultyOption.AddItem(ui.Setup(key));
+            DifficultyOption.Select((int)AiDifficulty.Normal);
             grid.AddChild(DifficultyOption);
         }
 
@@ -119,7 +161,7 @@ public partial class SkirmishSetup : CanvasLayer
         StartButton = ShellUi.Button("Start", ui.Setup(SetupText.Start), 180f);
         StartButton.Pressed += () =>
         {
-            if (Seed is ulong seed) StartPressed?.Invoke(seed, MapSize);
+            if (MatchArgs() is string[] args) StartPressed?.Invoke(args);
         };
         buttons.AddChild(StartButton);
         Validate();
@@ -134,12 +176,10 @@ public partial class SkirmishSetup : CanvasLayer
 
     private void Validate() => StartButton.Disabled = Seed == null;
 
-    private static OptionButton Disabled(string name, string item, string tooltip)
+    private static OptionButton List(string name)
     {
-        var option = new OptionButton { Name = name, Disabled = true, TooltipText = tooltip, CustomMinimumSize = new Vector2(240f, 40f) };
+        var option = new OptionButton { Name = name, CustomMinimumSize = new Vector2(240f, 40f) };
         option.AddThemeFontSizeOverride("font_size", 20);
-        option.AddItem(item);
-        option.Select(0);
         return option;
     }
 }

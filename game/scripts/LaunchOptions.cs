@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using Godot;
+using Rts.Sim.Data;
 using Rts.Sim.Map;
 
 namespace Rts.Game;
@@ -21,7 +22,10 @@ namespace Rts.Game;
 /// (dev / tests: <c>SimConfig.Combat = false</c>, units never fight; M4-V1, never a game option), <c>--no-fog</c> (dev / tests:
 /// the view draws no fog and shows every unit and building; the sim's fog and combat's sight rules are unchanged; M4-V4,
 /// never a game option), <c>--map-size 128|192|256</c> (square map side in cells, <see cref="MapSizes"/>; default the 128 map; M6-V1),
-/// <c>--skirmish</c> (takes no value: start the default match at once, skipping the main menu; M6-V1). Any of these flags
+/// <c>--skirmish</c> (takes no value: start the default match at once, skipping the main menu; M6-V1), <c>--faction &lt;slot&gt; &lt;id&gt;</c>
+/// (slot 1 or 2 = player 0 or 1 plays the faction with data id <c>id</c>, e.g. <c>--faction 2 whirlwind</c>; an id the data
+/// lacks is warned about by <see cref="Match"/> and ignored; M6-V2) and <c>--ai easy|normal|hard</c> (slot 2 is an AI seat of that
+/// difficulty; without it slot 2 is human, as before; M6-V2). Any of these flags
 /// on the command line skips the main menu (<see cref="HasMatchFlag"/>), so every dev and test run starts its match as
 /// before M6-V1. Bad values are warned about and ignored; a token starting with <c>--</c> is never taken as a value (BUG-0041).
 /// </remarks>
@@ -53,6 +57,7 @@ public sealed class LaunchOptions
     {
         "--seed", "--speed", "--screenshot", "--screenshot-after", "--units", "--workers", "--forests", "--mines", "--zoom", "--bench",
         "--vsync", "--no-hud", "--debug-overlay", "--mute", "--no-bases", "--no-combat", "--no-fog", "--map-size", "--skirmish",
+        "--faction", "--ai",
     };
 
     /// <summary>Whether <paramref name="args"/> holds any of <see cref="MatchFlags"/>: the boot then starts the match at once instead of showing the main menu (M6-V1).</summary>
@@ -62,6 +67,17 @@ public sealed class LaunchOptions
             if (Array.IndexOf(MatchFlags, a) >= 0) return true;
         return false;
     }
+
+    /// <summary>Slots <c>--faction</c> accepts: 1 (player 0, the local player) and 2 (player 1).</summary>
+    public const int SlotCount = 2;
+
+    private readonly string?[] _factionIds = new string?[SlotCount];
+
+    /// <summary>The faction data id <c>--faction &lt;slot&gt; &lt;id&gt;</c> picked for slot <paramref name="slot"/> (0-based: player 0 or 1), or null for the default (player p plays faction <c>p mod factions</c>).</summary>
+    public string? FactionId(int slot) => (uint)slot < (uint)SlotCount ? _factionIds[slot] : null;
+
+    /// <summary>Player 1's AI difficulty (<c>--ai</c>), or null when slot 2 is a human seat (every dev run and test before M6-V2).</summary>
+    public AiDifficulty? Ai { get; private set; }
 
     /// <summary>Square map side in cells (<c>--map-size</c>, one of <see cref="MapSizes"/>), or null for the default 128 map.</summary>
     public int? MapSize { get; private set; }
@@ -193,6 +209,20 @@ public sealed class LaunchOptions
                     if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int size) && Array.IndexOf(MapSizes, size) >= 0) o.MapSize = size;
                     else Warn(flag, value);
                     break;
+                case "--ai":
+                    int difficulty = value == null ? -1 : DataLimits.AiDifficultyIds.IndexOf(value);
+                    if (difficulty >= 0) o.Ai = (AiDifficulty)difficulty;
+                    else Warn(flag, value);
+                    break;
+                case "--faction":
+                {
+                    // Two values: the slot, then the faction id. Neither may be a flag (BUG-0041); whatever values are there are consumed.
+                    string? id = hasValue && i + 2 < args.Length && !args[i + 2].StartsWith("--", StringComparison.Ordinal) ? args[i + 2] : null;
+                    if (value is "1" or "2" && id != null && IsId(id)) o._factionIds[value[0] - '1'] = id;
+                    else Warn(flag, id == null ? value : $"{value} {id}");
+                    if (id != null) i++;
+                    break;
+                }
                 case "--skirmish":
                     o.Skirmish = true;
                     continue; // takes no value
@@ -220,6 +250,14 @@ public sealed class LaunchOptions
             if (hasValue) i++;
         }
         return o;
+    }
+
+    // A data id's shape (snake_case: lower-case letters, digits, '_'); whether the data has it is Match's check.
+    private static bool IsId(string id)
+    {
+        foreach (char c in id)
+            if (!(c is >= 'a' and <= 'z' or >= '0' and <= '9' or '_')) return false;
+        return id.Length > 0;
     }
 
     private static bool TryGroups(string? value, out int n) =>

@@ -76,7 +76,14 @@ public class AiPlayerTests
     }));
 
     /// <summary>The 10-step test order (<see cref="TenSteps"/>): triggers of every kind, counts, slack, concurrent steps.</summary>
-    private static GameData TenStepData() => AiScenes.DataWithAi("malazan", root =>
+    /// <remarks>M5-3: the scout stays home (<c>scoutAfter</c> an hour): the order's timing rows need every worker free to build.</remarks>
+    private static GameData TenStepData() => AiScenes.DataWith(dir =>
+    {
+        dir.EditJson("common/rules.json", r => r["ai"]!["scoutAfter"] = 3600);
+        dir.EditJson("factions/malazan/ai.json", root => TenSteps(root));
+    });
+
+    private static void TenSteps(JsonNode root)
     {
         root["buildOrder"] = AiScenes.BuildOrder(
             ("time", 0, "train", "malazan_laborer", 3),          // 0: due at once, three Trains over three thinks
@@ -93,7 +100,7 @@ public class AiPlayerTests
         // step trains and nothing here unlocks (the corral is never built), so every Train below is a step's.
         root["compositions"] = JsonNode.Parse("""[{ "age": 1, "units": { "malazan_wickan_lancer": 1 } }, { "age": 2, "units": { "malazan_wickan_lancer": 1 } }]""");
         foreach (string d in new[] { "easy", "normal", "hard" }) root["difficulties"]![d]!["expandAfter"] = 10;
-    });
+    }
 
     private static readonly Lazy<GameData> s_tenSteps = new(TenStepData);
 
@@ -377,10 +384,67 @@ public class AiPlayerTests
         Assert.True(hc >= 8 && bc >= 8, $"heavy {hc}, crossbow {bc}: a building stood idle");
     }
 
-    /// <summary>The flat scene for player 0 (Hard, the composition tests' own ai.json) with a finished barracks and crossbow range and plenty to spend.</summary>
-    private static Simulation CompositionScene(out int heavy, out int bow)
+    /// <summary>
+    /// M5-3 (Requests 36 a): composition weights are population shares. With Heavy Infantry made a 3-pop unit (the test's own
+    /// units.json) and both weights 1, the production manager trains three Crossbowmen (1 pop) for each Heavy Infantry: with
+    /// one Heavy live it picks the Crossbowman until three stand (a tie at three: composition order, the Crossbowman's lower
+    /// id), then the Heavy Infantry.
+    /// </summary>
+    [Theory]
+    [InlineData(1, 2, "malazan_crossbowman")]
+    [InlineData(1, 3, "malazan_crossbowman")] // 6 v 6 half-pop: a tie
+    [InlineData(1, 4, "malazan_heavy_infantry")]
+    [InlineData(0, 1, "malazan_heavy_infantry")]
+    public void PopWeights_ThreeSmallForOneBig(int heavyLive, int bowLive, string expected)
     {
-        Simulation sim = AiScenes.Flat(AiScenes.Seats(AiDifficulty.Hard, SeatController.Ai, SeatController.Human), s_compositionOrder.Value);
+        Simulation sim = CompositionScene(out int heavy, out int bow, s_popWeights.Value);
+        for (int k = 0; k < 4; k++) Assert.True(sim.World.Buildings.Spawn(0, Building("malazan_billet"), 2 * AiScenes.FlatSize + 20 + 3 * k, out _));
+        Assert.Equal(6, sim.World.Data.Units[heavy].HalfPop);
+        for (int k = 0; k < heavyLive; k++) CombatScenes.Place(sim, 0, heavy, sim.World.NavGrid.CellCenter(40 + k, 50));
+        for (int k = 0; k < bowLive; k++) CombatScenes.Place(sim, 0, bow, sim.World.NavGrid.CellCenter(40 + k, 52));
+        List<Command> log = AiScenes.Log(sim, 0);
+        for (int t = 0; t < sim.AiOf(0)!.ThinkTicks + 1; t++) sim.Tick();
+        Command first = Assert.Single(log, c => c.Kind == CommandKind.Train && c.TypeId != Unit("malazan_laborer"));
+        Assert.Equal(Unit(expected), first.TypeId);
+    }
+
+    private static readonly Lazy<GameData> s_popWeights = new(() => AiScenes.DataWith(dir =>
+    {
+        dir.SetUnitField("malazan", "malazan_heavy_infantry", "pop", "3");
+        dir.EditJson("factions/malazan/ai.json", root =>
+        {
+            root["buildOrder"] = AiScenes.BuildOrder(("time", 0, "train", "malazan_laborer", 1));
+            root["compositions"]![0]!["units"] = new JsonObject { ["malazan_heavy_infantry"] = 1, ["malazan_crossbowman"] = 1 };
+        });
+    }));
+
+    /// <summary>M5-3 (BUG-0574): a dropped-Gather mark on a node the player sees alive clears at the next think; one on a node out of sight stays.</summary>
+    [Fact]
+    public void ADroppedGatherMark_ClearsWhenTheNodeIsSeenAlive()
+    {
+        Simulation sim = AiScenes.Flat(AiScenes.Seats(AiDifficulty.Hard, SeatController.Ai, SeatController.Human), s_quietOrder.Value);
+        sim.Tick();
+        AiPlayer ai = sim.AiOf(0)!;
+        int seen = -1, unseen = -1, s = -1;
+        while (ai.View.NextResource(ref s, out SeenResource n))
+        {
+            if (n.Remaining >= 0 && seen < 0) seen = s;
+            if (n.Remaining < 0 && unseen < 0) unseen = s;
+        }
+        Assert.True(seen >= 0 && unseen >= 0, "precondition: a node in sight and one out of it");
+        ai.Board.NodeDropped[seen] = sim.World.Resources.Generation[seen];
+        ai.Board.NodeDropped[unseen] = sim.World.Resources.Generation[unseen];
+        ai.Board.NodeMarks = 2;
+        for (int t = 0; t < ai.ThinkTicks; t++) sim.Tick();
+        Assert.Equal(0, ai.Board.NodeDropped[seen]);
+        Assert.Equal(sim.World.Resources.Generation[unseen], ai.Board.NodeDropped[unseen]);
+        Assert.Equal(1, ai.Board.NodeMarks);
+    }
+
+    /// <summary>The flat scene for player 0 (Hard, the composition tests' own ai.json) with a finished barracks and crossbow range and plenty to spend.</summary>
+    private static Simulation CompositionScene(out int heavy, out int bow, GameData? data = null)
+    {
+        Simulation sim = AiScenes.Flat(AiScenes.Seats(AiDifficulty.Hard, SeatController.Ai, SeatController.Human), data ?? s_compositionOrder.Value);
         Assert.True(sim.World.Buildings.Spawn(0, Building("malazan_barracks"), 20 * AiScenes.FlatSize + 20, out _));
         Assert.True(sim.World.Buildings.Spawn(0, Building("malazan_crossbow_range"), 20 * AiScenes.FlatSize + 26, out _));
         BuildMaps.SetTotals(sim, 0, 100_000, 100_000);

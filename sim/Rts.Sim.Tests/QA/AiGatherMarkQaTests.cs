@@ -138,7 +138,7 @@ public class AiGatherMarkQaTests
     /// mine as gone. The mark never clears (only a new generation in the slot escapes it), so once a drop-off stands again the
     /// AI never sends a worker to that mine. A live node must not be marked.
     /// </summary>
-    [Fact(Skip = "BUG-0574: a loaded worker with no drop-off leaves a Gather Idle at once, and the live out-of-sight mine is marked for good")]
+    [Fact] // BUG-0574 fixed in M5-3: no Gather is judged while the player has no drop-off or the worker carries a full load of its kind
     public void ALiveMine_IsNotMarked_WhenALoadedWorkerHasNoDropOff()
     {
         PlayerSeat[] seats = AiScenes.Seats(AiDifficulty.Hard, SeatController.Ai, SeatController.Human);

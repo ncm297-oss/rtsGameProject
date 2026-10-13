@@ -56,18 +56,20 @@ public partial class QaShellTest : Node
     private async Task EscOnMenus()
     {
         await Key(Godot.Key.Escape);
-        Check(_main.Menu!.Visible && !_main.Setup!.Visible && _main.CurrentMatch == null && !GetTree().Paused, "Esc on the main menu changed something");
-        _main.Menu.SkirmishButton.EmitSignal(BaseButton.SignalName.Pressed);
+        MainMenu menu = _main.Menu!;
+        SkirmishSetup setup = _main.Setup!; // BUG-0581 item 4: one non-null local, not a `!` that the && short-circuit could skip
+        Check(menu.Visible && !setup.Visible && _main.CurrentMatch == null && !GetTree().Paused, "Esc on the main menu changed something");
+        menu.SkirmishButton.EmitSignal(BaseButton.SignalName.Pressed);
         await Frames(1);
-        Check(_main.Setup.Visible, "Skirmish did not open the setup");
+        Check(setup.Visible, "Skirmish did not open the setup");
         await Key(Godot.Key.Escape);
-        Check(_main.Menu.Visible && !_main.Setup.Visible, "Esc on the setup did not go back to the menu");
+        Check(menu.Visible && !setup.Visible, "Esc on the setup did not go back to the menu");
         // An echo Esc does nothing.
-        _main.Menu.SkirmishButton.EmitSignal(BaseButton.SignalName.Pressed);
+        menu.SkirmishButton.EmitSignal(BaseButton.SignalName.Pressed);
         await Frames(1);
         GetViewport().PushInput(new InputEventKey { Keycode = Godot.Key.Escape, PhysicalKeycode = Godot.Key.Escape, Pressed = true, Echo = true });
         await Frames(1);
-        Check(_main.Setup.Visible, "an echo Esc left the setup");
+        Check(setup.Visible, "an echo Esc left the setup");
     }
 
     private async Task JunkSeeds()
@@ -235,6 +237,7 @@ public partial class QaShellTest : Node
         System.Threading.Thread.Sleep(300);
         int pausedAt = sim.TickNumber;
         int pending = sim.PendingCommandCount;
+        int issued = Issued(sel);
         int selected = sel.Selection.Count;
         Vector3 camPos = cam.GlobalPosition;
         float zoom = cam.Zoom;
@@ -266,14 +269,16 @@ public partial class QaShellTest : Node
         int burst = sim.TickNumber - before;
         Check(burst <= Rts.Sim.ViewApi.FixedStepClock.MaxTicksPerFrame, $"{burst} ticks on the first frame after resume");
         await Seconds(0.3);
-        Check(sim.PendingCommandCount == 0 || sim.PendingCommandCount <= pending, $"pending after resume {sim.PendingCommandCount}");
+        // M6-V2: the setup's slot 2 is an AI seat, whose own commands come and go in the queue after resume, so the local
+        // orders are counted at the controller that sends them (the paused queue check above still covers the sim side).
+        Check(Issued(sel) == issued, $"orders issued after resume: {issued} -> {Issued(sel)}");
         for (int i = 1; i < ticks.Count; i++)
             if (ticks[i].Tick != ticks[i - 1].Tick + 1) { Check(false, $"tick numbers jump {ticks[i - 1].Tick} -> {ticks[i].Tick}"); break; }
         runner.Ticked -= onTick;
         runner.GameSpeed = 1.0;
         GD.Print($"  burst: {ticks.Count} ticks recorded at 8x, {burst} on the first frame after resume, unit {unit.Index}");
 
-        // Pause while a box-drag is half done (press, Esc, release while paused, resume, move): probe the stuck-drag case.
+        // Pause while a box-drag is half done (press, Esc, release while paused, resume, move): BUG-0580, no box after resume.
         Vector2 p0 = mid + new Vector2(-200f, -100f);
         GetViewport().PushInput(new InputEventMouseMotion { Position = p0, GlobalPosition = p0 });
         GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = p0, GlobalPosition = p0, ButtonMask = MouseButtonMask.Left });
@@ -287,9 +292,8 @@ public partial class QaShellTest : Node
         GetViewport().PushInput(new InputEventMouseMotion { Position = p1, GlobalPosition = p1 });
         await Frames(2);
         Control? box = Find<Control>(sel, c => c is ColorRect or Panel or ReferenceRect && c.Visible);
-        // BUG-0580 (open, S3): a release swallowed by the pause leaves the drag live. Printed, not failed, until the fix;
-        // flip to Check(box == null, ...) when BUG-0580 is fixed.
-        GD.Print($"  KNOWN BUG-0580 probe (box-select): a visible selection box after resume with no button held: {(box != null ? box.Name + " " + box.Size : "none")}");
+        // BUG-0580 (fixed in M6-V2): the pause drops the held press, so the release it swallowed leaves no live drag.
+        Check(box == null && !sel.Pressing, $"BUG-0580 (box-select): a visible selection box after resume with no button held: {(box != null ? box.Name + " " + box.Size : "none")}, pressing {sel.Pressing}");
         if (box != null)
         {
             // Clean it up for the next steps.
@@ -306,12 +310,17 @@ public partial class QaShellTest : Node
         await Frames(2);
         PushKey(Godot.Key.Escape);
         await Frames(1);
+        // Headless, the real mouse sits at (0, 0) (pushed motions don't move it) with the window focused, so edge panning drifts
+        // the camera about 0.27 m a frame; it is off for this row, which is about the drag.
+        bool edgePan = cam.EdgePanEnabled;
+        cam.EdgePanEnabled = false;
         Vector3 camBefore = cam.GlobalPosition;
         Vector2 p2 = mid + new Vector2(-120f, 0f);
         GetViewport().PushInput(new InputEventMouseMotion { Position = p2, GlobalPosition = p2, Relative = new Vector2(-120f, 0f) });
         await Frames(2);
         float moved = cam.GlobalPosition.DistanceTo(camBefore);
-        GD.Print($"  KNOWN BUG-0580 probe (camera drag): the camera moved {moved:0.00} m on a motion with no button held after resume");
+        Check(moved < 1e-3f && !cam.Dragging, $"BUG-0580 (camera drag): the camera moved {moved:0.00} m on a motion with no button held after resume (dragging {cam.Dragging})");
+        cam.EdgePanEnabled = edgePan;
         // Clean up: a full middle click ends any drag.
         GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Middle, Pressed = true, Position = p2, GlobalPosition = p2, ButtonMask = MouseButtonMask.Middle });
         GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Middle, Pressed = false, Position = p2, GlobalPosition = p2 });
@@ -368,6 +377,13 @@ public partial class QaShellTest : Node
 
     private SimRunner Runner() => _main.CurrentMatch!.GetNode<SimRunner>("SimRunner");
 
+    private static int Issued(SelectionController sel)
+    {
+        int n = 0;
+        foreach (Rts.Sim.Commands.CommandKind k in Enum.GetValues<Rts.Sim.Commands.CommandKind>()) n += sel.IssuedCount(k);
+        return n;
+    }
+
     private async Task StartFromSetup(string seed, int sizeIndex)
     {
         if (!_main.Setup!.Visible)
@@ -381,6 +397,12 @@ public partial class QaShellTest : Node
         await ClickControl(setup.StartButton);
         await Frames(2);
         Check(_main.CurrentMatch != null && Runner().Simulation!.World.Config.Seed == ulong.Parse(seed.Trim()), $"no match on seed {seed}");
+        // The start army and base apply on the first tick, which follows real time, not frames (under load two frames can pass first).
+        if (_main.CurrentMatch != null)
+        {
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            while (Runner().Simulation!.TickNumber < 2 && clock.Elapsed.TotalSeconds < 10) await Frames(1);
+        }
     }
 
     private EntityHandle FindOwn(Simulation sim, Func<EntityHandle, bool> pick)

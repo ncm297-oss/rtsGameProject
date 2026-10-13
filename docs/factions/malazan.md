@@ -209,8 +209,8 @@ sim change that moves a number fails the test naming the row, seat and column un
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Line beats Shock | Heavy Infantry v Horse Raider | 0 | 16 (1184) v 13 (1248) | 14 / 16 | 1228 | 1036 / 1184 (88 %) | 29.8 s |
 | Line beats Shock | Heavy Infantry v Horse Raider | 1 | 16 (1184) v 13 (1248) | 14 / 16 | 1356 | 1036 / 1184 (88 %) | 33.0 s |
-| Line beats Shock | Raider v Wickan Lancer | 0 | 19 (1216) v 10 (1200) | 19 / 19 | 1546 | 1216 / 1216 (100 %) | 23.5 s |
-| Line beats Shock | Raider v Wickan Lancer | 1 | 19 (1216) v 10 (1200) | 17 / 19 | 1451 | 1088 / 1216 (89 %) | 23.0 s |
+| Line beats Shock | Raider v Wickan Lancer | 0 | 19 (1216) v 10 (1200) | 19 / 19 | 1502 | 1216 / 1216 (100 %) | 23.0 s |
+| Line beats Shock | Raider v Wickan Lancer | 1 | 19 (1216) v 10 (1200) | 17 / 19 | 1429 | 1088 / 1216 (89 %) | 23.2 s |
 | Shock beats Ranged | Wickan Lancer v Desert Archer | 0 | 10 (1200) v 18 (1224) | 7 / 10 | 828 | 840 / 1200 (70 %) | 25.1 s |
 | Shock beats Ranged | Wickan Lancer v Desert Archer | 1 | 10 (1200) v 18 (1224) | 8 / 10 | 888 | 960 / 1200 (80 %) | 22.0 s |
 | Shock beats Ranged | Horse Raider v Crossbowman | 0 | 13 (1248) v 15 (1215) | 9 / 13 | 1152 | 864 / 1248 (69 %) | 20.9 s |

@@ -22,7 +22,8 @@ namespace Rts.Game;
 /// the placement, train and research keys are the snake_case names of every <see cref="PlacementError"/>,
 /// <see cref="TrainError"/> and <see cref="ResearchError"/> member but <c>None</c> (<c>blocked</c>, <c>queue_full</c> ...),
 /// the state keys those of every <see cref="UnitState"/> (M3-V3) plus <see cref="OrderedAttackKey"/> (M4-V2), the hud keys those of <see cref="HudText"/>,
-/// the menu, setup and pause keys (the game shell, M6-V1) those of <see cref="MenuText"/>, <see cref="SetupText"/> and <see cref="PauseText"/>; so a member
+/// the menu, setup and pause keys (the game shell, M6-V1) those of <see cref="MenuText"/>, <see cref="SetupText"/> and <see cref="PauseText"/>
+/// (M6-V2: <c>setup.map_size_item</c> must also be a format naming <c>{0}</c>, else one error naming it); so a member
 /// the sim adds later is a load error here until the file has its text. Each of the three reason sections must also
 /// carry <see cref="ForwardKey"/> (<c>requires</c>), the reason M3-6's <c>requires</c> gating adds: a key with no enum
 /// member yet is accepted (as is any extra key), so the file loads with or without that sim change. The <c>placement</c>
@@ -112,6 +113,9 @@ public sealed class UiText
 
     /// <summary>A skirmish setup text (<c>ui.json</c> <c>setup</c>, M6-V1).</summary>
     public string Setup(SetupText key) => (uint)key < (uint)_setup.Length ? _setup[(int)key] : "";
+
+    /// <summary>One map size list item: <c>setup.map_size_item</c> with <paramref name="size"/> (cells a side) for its <c>{0}</c> (M6-V2).</summary>
+    public string MapSizeItem(int size) => string.Format(CultureInfo.InvariantCulture, Setup(SetupText.MapSizeItem), size);
 
     /// <summary>A pause menu text (<c>ui.json</c> <c>pause</c>, M6-V1).</summary>
     public string Pause(PauseText key) => (uint)key < (uint)_pause.Length ? _pause[(int)key] : "";
@@ -213,6 +217,9 @@ public sealed class UiText
             Section<HudText>(root, "hud", ui._hud, skipZero: false, forward: false, errors);
             Section<MenuText>(root, "menu", ui._menu, skipZero: false, forward: false, errors);
             Section<SetupText>(root, "setup", ui._setup, skipZero: false, forward: false, errors);
+            string sizeItem = ui._setup[(int)SetupText.MapSizeItem];
+            if (sizeItem.Length > 0 && !IsSizeFormat(sizeItem))
+                errors.Add($"ui.json: setup.{Key(SetupText.MapSizeItem)} must be a format with {{0}} (the map side) and no other placeholder: '{sizeItem}'");
             Section<PauseText>(root, "pause", ui._pause, skipZero: false, forward: false, errors);
         }
         return errors.Count == before ? ui : null;
@@ -244,6 +251,21 @@ public sealed class UiText
         foreach (T member in Enum.GetValues<T>())
             if (Key(member) == key) return read[Convert.ToInt32(member, CultureInfo.InvariantCulture)];
         return root.TryGetProperty(name, out JsonElement section) ? Text(section, key, $"{name}.{key}", errors) : "";
+    }
+
+    // A map size item format: it names {0} and formats (a stray "{1}" or "{" would throw at Build).
+    private static bool IsSizeFormat(string format)
+    {
+        if (!format.Contains("{0}", StringComparison.Ordinal)) return false;
+        try
+        {
+            _ = string.Format(CultureInfo.InvariantCulture, format, 128);
+            return true;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
     }
 
     private static string[] Blank(int n)

@@ -1,5 +1,6 @@
 using System.Numerics;
 using Rts.Sim.Combat;
+using Rts.Sim.Data;
 using Rts.Sim.Commands;
 using Rts.Sim.Entities;
 using static Rts.Sim.Tests.CombatScenes;
@@ -24,6 +25,25 @@ public class MinRangeTests
     public void TheShippedCatapult_HasTheTemplates6mMinimumRange()
     {
         Assert.Equal(6f, MinRange);
+    }
+
+    /// <summary>
+    /// BUG-0590: an overlapping body (a negative edge-to-edge gap, unit or footprint) is in reach of an attack with no minimum
+    /// range, and still inside the Catapult's.
+    /// </summary>
+    [Theory]
+    [InlineData(-0.387f)]
+    [InlineData(-0.1f)]
+    [InlineData(0f)]
+    public void ANegativeGap_IsInReachWithoutAMinimumRange_AndInsideTheCatapults(float gap)
+    {
+        AttackDef melee = TestSim.Data.Units[Raider].Attack;
+        Assert.Equal(0f, melee.MinRange);
+        Assert.True(CombatSystem.InReach(melee, gap));
+        Assert.False(CombatSystem.TooNear(melee, gap));
+        AttackDef catapult = TestSim.Data.Units[Catapult].Attack;
+        Assert.False(CombatSystem.InReach(catapult, gap));
+        Assert.True(CombatSystem.TooNear(catapult, gap));
     }
 
     [Theory]

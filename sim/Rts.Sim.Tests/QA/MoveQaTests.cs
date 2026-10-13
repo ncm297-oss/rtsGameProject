@@ -22,7 +22,7 @@ public class MoveQaTests
     {
         Simulation Make()
         {
-            var sim = new Simulation(TestSim.Config(seed, PlayerCount: 2, UnitCapacity: 4, CommandCapacity: 16));
+            var sim = new Simulation(TestSim.ConfigNoCombat(seed, PlayerCount: 2, UnitCapacity: 4, CommandCapacity: 16)); // M5-3 fix round 1: stacked enemies fight since BUG-0590
             NavGrid g = sim.World.NavGrid;
             Vector2 at = MoveScenario.Center(g, MoveScenario.CentralCell(g));
             sim.Enqueue(Command.SpawnUnit(0, 0, at));

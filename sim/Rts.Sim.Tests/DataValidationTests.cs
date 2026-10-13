@@ -323,6 +323,27 @@ public class DataValidationTests
     [InlineData("buildingSpacing", "9", "ai.buildingSpacing", "above the maximum 8 m")]
     [InlineData("expandHallReach", null, "ai.expandHallReach", "missing required field")]
     [InlineData("expandHallReach", "1e300", "ai.expandHallReach", "above the maximum")]
+    [InlineData("scoutAfter", null, "ai.scoutAfter", "missing required field")] // M5-3's knobs
+    [InlineData("scoutAfter", "-1", "ai.scoutAfter", "must not be negative")]
+    [InlineData("scoutAfter", "3601", "ai.scoutAfter", "above the maximum 3600 s")]
+    [InlineData("scoutRadius", null, "ai.scoutRadius", "missing required field")]
+    [InlineData("scoutRadius", "0.5", "ai.scoutRadius", "outside 1-64 m")]
+    [InlineData("scoutRadius", "65", "ai.scoutRadius", "outside 1-64 m")]
+    [InlineData("scoutReach", null, "ai.scoutReach", "missing required field")]
+    [InlineData("scoutReach", "0", "ai.scoutReach", "outside 1-16 m")]
+    [InlineData("scoutReach", "16.5", "ai.scoutReach", "outside 1-16 m")]
+    [InlineData("scoutGrid", null, "ai.scoutGrid", "missing required field")] // BUG-0593
+    [InlineData("scoutGrid", "15.5", "ai.scoutGrid", "outside 16-256 m")]
+    [InlineData("scoutGrid", "256.5", "ai.scoutGrid", "outside 16-256 m")]
+    [InlineData("rallyDistance", null, "ai.rallyDistance", "missing required field")]
+    [InlineData("rallyDistance", "-3", "ai.rallyDistance", "outside 1-64 m")]
+    [InlineData("rallyDistance", "64.5", "ai.rallyDistance", "outside 1-64 m")]
+    [InlineData("rallyReach", null, "ai.rallyReach", "missing required field")]
+    [InlineData("rallyReach", "0.99", "ai.rallyReach", "outside 1-16 m")]
+    [InlineData("rallyReach", "17", "ai.rallyReach", "outside 1-16 m")]
+    [InlineData("waveCooldown", null, "ai.waveCooldown", "missing required field")]
+    [InlineData("waveCooldown", "-0.5", "ai.waveCooldown", "must not be negative")]
+    [InlineData("waveCooldown", "3600.5", "ai.waveCooldown", "above the maximum 3600 s")]
     public void AiRulesBlock_MissingOrOutOfRange_IsOneError(string? field, string? value, string path, string message)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
@@ -336,6 +357,19 @@ public class DataValidationTests
         Assert.Equal("common/rules.json", e.File);
         Assert.Equal(path, e.Path);
         Assert.Contains(message, e.Message);
+    }
+
+    /// <summary>BUG-0593: <c>ai.scoutGrid</c> loads at both edges, in meters.</summary>
+    [Theory]
+    [InlineData(16)]
+    [InlineData(256)]
+    public void AiScoutGrid_AtItsEdges_Loads(double meters)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("common/rules.json", r => r["ai"]!["scoutGrid"] = meters);
+        DataLoadResult load = DataLoader.LoadAll(dir.Path);
+        Assert.True(load.Ok, string.Join("; ", load.Errors));
+        Assert.Equal((float)meters, load.Data!.AiRules.ScoutGrid);
     }
 
     [Fact]
@@ -356,17 +390,19 @@ public class DataValidationTests
         Assert.Equal(16, a.PlacementSearchCells); // 32 m of 2 m cells
         Assert.Equal(1, a.SpacingCells); // 2 m
         Assert.Equal(20, a.ExpandReachCells); // 40 m
+        Assert.Equal((300, 40f, 6f, 12f, 6f, 1200), (a.ScoutAfterTicks, a.ScoutRadius, a.ScoutReach, a.RallyDistance, a.RallyReach, a.WaveCooldownTicks)); // M5-3: 15 s, 60 s
+        Assert.Equal(56f, a.ScoutGrid); // BUG-0593: meters
     }
 
-    /// <summary>The AI tunables are not in the content hash (with ai.json, M5-3): a tuning edit leaves the golden's data hash.</summary>
+    /// <summary>M5-3 (inverted): the AI tunables are in the content hash, with ai.json (a row per field: DataContentHashTests).</summary>
     [Fact]
-    public void AnAiRulesEdit_LeavesTheContentHash()
+    public void AnAiRulesEdit_ChangesTheContentHash()
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
         dir.EditJson("common/rules.json", r => r["ai"]!["goldShare"] = 0.5);
         GameData edited = Load(dir.Path);
         Assert.Equal(0.5f, edited.AiRules.GoldShare);
-        Assert.Equal(TestSim.Data.ContentHash(), edited.ContentHash());
+        Assert.NotEqual(TestSim.Data.ContentHash(), edited.ContentHash());
     }
 
     // ---------- M3-1: common/resources.json ----------

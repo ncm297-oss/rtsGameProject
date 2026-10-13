@@ -12,12 +12,16 @@ namespace Rts.Game;
 public partial class Match : Node3D
 {
     private SimRunner _runner = null!;
+    private MatchOver? _matchOver;
 
     /// <summary>The <c>--bench</c> runner, or null for a normal run.</summary>
     public BenchRunner? Bench { get; private set; }
 
     /// <summary>The start bases placed by <see cref="Start"/> (Town Hall anchor and worker spots per player); null before it and under <c>--no-bases</c>.</summary>
     public StartBasePlan? Bases { get; private set; }
+
+    /// <summary>The "Match over:" dev lines printed so far (M6-V2): one each time a player's last building goes.</summary>
+    public int MatchOverLines { get; private set; }
 
     /// <summary>Starting workers per player this match asked for (<c>--workers</c>, else <c>rules.json</c> <c>startingWorkers</c>).</summary>
     public int WorkersPerPlayer { get; private set; }
@@ -36,11 +40,14 @@ public partial class Match : Node3D
         _runner.Forests = options.Forests;
         _runner.GoldMines = options.Mines;
         _runner.Combat = !options.NoCombat;
+        PickSeats(data, options);
         WorkersPerPlayer = options.NoBases ? 0 : options.Workers ?? data.Rules.StartingWorkers;
         // The start workers come on top of the armies (the bench keeps its 100 / 1,000 a side), so the store grows past 2,000 when needed.
         _runner.UnitCapacity = Math.Max(_runner.UnitCapacity, _runner.PlayerCount * (options.UnitsPerPlayer + WorkersPerPlayer));
         _runner.Start(data);
         Simulation sim = _runner.Simulation!;
+        _matchOver = new MatchOver(sim.World.Config.PlayerCount);
+        _runner.Ticked += OnTicked;
 
         Heightmap map = sim.World.Heightmap;
         // The local player's fog (M4-V4): bound before the views, whose materials and hide rule read it.
@@ -66,7 +73,7 @@ public partial class Match : Node3D
         units.Fog = fog;
         units.Camera = camera;
 
-        // Player p plays faction p until the M6 lobby (World.FactionOf), so a player's colour is that faction's.
+        // A player's colour is its seat's faction's (World.FactionOf; per-player colours are M6-V3).
         var playerRgb = new uint[sim.World.Config.PlayerCount];
         for (int p = 0; p < playerRgb.Length; p++) playerRgb[p] = data.Factions[sim.World.FactionOf(p)].PrimaryColor;
         var buildings = GetNode<BuildingViews>("World3D/BuildingViews");
@@ -156,13 +163,49 @@ public partial class Match : Node3D
         GD.Print($"Match started: seed {unchecked((ulong)_runner.Seed)}, map {map.Width} x {map.Height}, " +
             $"speed {_runner.GameSpeed:0.##}x, {options.UnitsPerPlayer} units per player, " +
             $"forests {placed.Forests} trees {placed.Trees} mines {placed.Mines}, " +
-            $"town halls {Halls(Bases)}, {WorkersPerPlayer} workers per player" + (options.NoCombat ? ", combat off" : "") + (options.NoFog ? ", fog not drawn" : ""));
+            $"town halls {Halls(Bases)}, {WorkersPerPlayer} workers per player" + (options.NoCombat ? ", combat off" : "") + (options.NoFog ? ", fog not drawn" : "") +
+            $", seats {SeatsText(data, _runner.Seats)}");
+    }
+
+    // M6-V2 dev line (not the victory screen, which waits on the sim's rule: Requests 37): a player whose last building went this tick.
+    private void OnTicked(Simulation sim)
+    {
+        if (_matchOver == null || _matchOver.Observe(sim.World.Buildings.Alive, sim.World.Buildings.Owner) == 0) return;
+        for (int p = 0; p < _matchOver.PlayerCount; p++)
+        {
+            if (!_matchOver.JustEmptied(p)) continue;
+            MatchOverLines++;
+            GD.Print($"Match over: player {p} has no buildings left (tick {sim.TickNumber})");
+        }
+    }
+
+    // M6-V2: the setup's (or --faction / --ai's) picks into the runner's seats. An id the data lacks, or an AI seat whose faction
+    // has no ai.json (SimConfig.Validate would throw), is refused with a warning like any bad flag value; the match still starts.
+    private void PickSeats(GameData data, LaunchOptions options)
+    {
+        for (int slot = 0; slot < LaunchOptions.SlotCount; slot++)
+        {
+            _runner.SlotFactions[slot] = -1;
+            if (options.FactionId(slot) is not string id) continue;
+            int faction = data.FindFaction(id);
+            if (faction >= 0) _runner.SlotFactions[slot] = faction;
+            else GD.PushWarning($"Ignoring --faction with bad or missing value '{slot + 1} {id}'.");
+        }
+        _runner.Player1Ai = options.Ai;
+        if (options.Ai != null && _runner.PlayerCount > 1)
+        {
+            int f = _runner.SlotFactions[1] >= 0 ? _runner.SlotFactions[1] : data.Factions.Length > 0 ? 1 % data.Factions.Length : -1;
+            if (f < 0 || f >= data.Ai.Length || data.Ai[f] == null)
+            {
+                GD.PushWarning($"Ignoring --ai: faction {f} has no ai.json; player 1 stays human.");
+                _runner.Player1Ai = null;
+            }
+        }
     }
 
     /// <summary>Enqueues each player's start army in its <see cref="StartLayout"/> block; returns each player's block, and player 0's block centre (meters) in <paramref name="focus"/>.</summary>
     /// <remarks>
-    /// Until the M6 lobby, player p plays faction p (ids in data order: malazan, whirlwind) and
-    /// spawns its roster round-robin. The units appear on the sim's next tick.
+    /// Each player spawns its seat's faction's roster (<c>World.FactionOf</c>, M6-V2) round-robin. The units appear on the sim's next tick.
     /// </remarks>
     private static System.Numerics.Vector2[][] SpawnArmies(Simulation sim, int perPlayer, out System.Numerics.Vector2 focus)
     {
@@ -173,7 +216,7 @@ public partial class Match : Node3D
         var blocks = new System.Numerics.Vector2[players][];
         for (int p = 0; p < players; p++)
         {
-            FactionDef faction = data.Factions[p % data.Factions.Length];
+            FactionDef faction = data.Factions[sim.World.FactionOf(p)];
             float maxRadius = 0f;
             foreach (int t in faction.Units) maxRadius = Math.Max(maxRadius, data.Units[t].Radius);
             System.Numerics.Vector2[] spots = blocks[p] = StartLayout.Block(grid, perPlayer, west: p == 0, maxRadius);
@@ -223,6 +266,20 @@ public partial class Match : Node3D
                 GD.PushWarning($"Player {p}: only {plan.Workers[p].Length} of {workers} workers fit beside the Town Hall.");
         }
         return plan;
+    }
+
+    // "malazan human, whirlwind ai hard": the dev log's seat list (data ids and the replay header's words, not player-facing text).
+    private static string SeatsText(GameData data, System.Collections.Immutable.ImmutableArray<PlayerSeat> seats)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (PlayerSeat seat in seats)
+        {
+            if (sb.Length > 0) sb.Append(", ");
+            sb.Append(seat.Faction >= 0 ? data.Factions[seat.Faction].Key : "-");
+            if (seat.Controller == SeatController.Ai) sb.Append(" ai ").Append(DataLimits.AiDifficultyIds[(int)seat.Difficulty]);
+            else sb.Append(" human");
+        }
+        return sb.ToString();
     }
 
     private static int Halls(StartBasePlan? plan)

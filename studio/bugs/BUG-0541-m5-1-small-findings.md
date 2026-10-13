@@ -36,3 +36,9 @@ As above.
 
 ## Notes
 None of these blocks M5-1.
+
+## Update (2026-10-12-1930, QA)
+Item 1 **fixed** in M5-3 `238f261`: a weight above 0 that rounds to 0f is a load error at `compositions[k].units.<id>`
+(`Data/AiLoaderTests.ACompositionWeightRoundingToZero_IsALoadError`; QA's `AiLoaderQaTests.ATinyCompositionWeight_IsRefused_OrStoredAboveZero`
+un-skipped, with a 1e-40 subnormal row that loads above 0; a mutation that drops the check fails the dev's row). Items 2-3 are
+still open, so the bug stays open.
