@@ -86,8 +86,31 @@ public partial class CombatViewTest : Node
         _ui = UiText.Shared ?? throw new InvalidOperationException("ui.json failed to load");
 
         await LaunchRows();
+        RebindRow();
         foreach (ulong seed in seeds) await Brawl(seed);
         await RealFrames();
+    }
+
+    // BUG-0521 item 3 (M6-VH1): a second Bind with a larger unit store sizes the max-hp array to it (it used to keep the
+    // first Bind's shorter own array); a shared array large enough (Match's) is kept.
+    private void RebindRow()
+    {
+        var combat = new CombatViews();
+        AddChild(combat);
+        uint[] rgb = { _ui.ColourRgb(0), _ui.ColourRgb(1) };
+        combat.Bind(_data, 8, rgb);
+        int first = combat.MaxHp!.Capacity;
+        combat.Bind(_data, 64, rgb);
+        Check(first == 8 && combat.MaxHp!.Capacity == 64, $"re-bind: max-hp array {first} then {combat.MaxHp!.Capacity} slots, want 8 then 64");
+        RemoveChild(combat);
+        combat.Free();
+        var shared = new SlotMaxHp(128);
+        var bound = new CombatViews { MaxHp = shared };
+        AddChild(bound);
+        bound.Bind(_data, 64, rgb);
+        Check(ReferenceEquals(bound.MaxHp, shared), "Bind replaced a shared max-hp array large enough for the unit store");
+        RemoveChild(bound);
+        bound.Free();
     }
 
     // --no-combat: parsed (takes no value, swallows nothing), off by default, and it reaches the match's sim. hud labels from ui.json.

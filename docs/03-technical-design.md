@@ -5456,15 +5456,15 @@ game/data/common/ui.json        setup.colour, setup.colour_1 .. colour_8
   `--units` / `--ai` still wins; a dev run without `--skirmish` and `--ai` keeps slot 2 human. With 0 units `Match.Start` skips `SpawnArmies` and plans the bases
   through `StartBase.Plan` with an empty block per player, as `--units 0` always did (the plan stands a one-unit block in
   for an empty one); the camera starts on the local Town Hall (`Match.StartFocus`). Every other dev run and test keeps
-  `--units`' default of 100. Until the sim's start locations land, the halls stand at those debug spots, either side of
-  the map's centre line; the AI sees no resource node from there, so its workers idle until its scout finds one.
+  `--units`' default of 100. Since the sim's start locations (M5-4a) `StartBase.Plan` centres each hall on its start
+  location, two mines and a forest in reach, so the AI's workers gather from the opening (M6-VH1 below).
 - **Per-player colours (BUG-0601).** `ui.json` `setup` holds a table of `UiText.ColourCount` (8) colours,
   `colour_1` .. `colour_8`, each `{ "displayName", "rgb": "#RRGGBB" }` (Iron, Ochre, Crimson, Cobalt, Jade, Violet, Rose,
   Bone; colours 1 and 2 are the Malazan and Whirlwind palette primaries, so a default match looks as before), plus the
   column heading `setup.colour`. Each missing key or field, or an `rgb` not `#RRGGBB`, is one load error naming it, and
   two entries with the same `rgb` are one load error naming both keys (BUG-0631 item 1: the table tells players apart). The
   setup shows a colour list per slot (each item a swatch and the name; defaults colour 1 for "You", colour 2 for "AI"),
-  kept over Back and Quit like the other picks; two slots may pick the same colour. Start passes `--colour <slot> <n>`
+  kept over Back and Quit like the other picks; colours are unique per match (M6-VH1 below). Start passes `--colour <slot> <n>`
   (n 1-based); the flag takes slot 1 or 2 and one digit 1 to 8, and junk (a bad slot or colour, a missing value, a flag
   as a value) is warned about and ignored (BUG-0041), a repeated flag's last good value winning, as `--faction`.
   `Match.PlayerColours` builds `PlayerRgb` (slot p's pick, else colour p; players past the table wrap round it; without
@@ -5490,8 +5490,35 @@ game/data/common/ui.json        setup.colour, setup.colour_1 .. colour_8
   `--skirmish` / `--ai` parse rows), and two equal table colours refused. `AbilityViewTest`, `CombatViewTest`, `QaM24Test`
   and `QaVh3Test` compare drawn colours with `Match.PlayerRgb` (or the table), not faction primaries (BUG-0631 item 2). `MinimapTest`: a press held
   into a pause is dropped and a motion after it moves nothing; the dot colours are `PlayerRgb`. `AiSeatTest`: the swapped
-  sides keep colours 1 and 2; the menu match's "AI worker at work by tick 400" is printed as a probe until the sim's start
-  locations land. `QaM6V2Test`'s BUG-0602, mirror-colour and BUG-0600 probes are `Check`s.
+  sides keep colours 1 and 2; the menu match's "AI worker at work by tick 400" was a printed probe until M6-VH1. `QaM6V2Test`'s BUG-0602, mirror-colour and BUG-0600 probes are `Check`s.
+
+- **M6-VH1 (view hardening).** View only; files: `AiSeatTest`, `QaM6V3Test`, `ShellTest`, `M4PlayableTest`, `QaM5V1Test`,
+  `CombatViewTest`; `SkirmishSetup`, `LaunchOptions`, `UiText`, `GroundDiscPool`, `CombatViews`, `SlotMaxHp`; `ui.json`.
+  - *Start-location probes are Checks (BUG-0604).* `AiSeatTest` fails unless an AI worker of the menu's match is gathering
+    or returning by tick 400; `QaM6V3Test.MenuOpenings` fails unless every hall of its 6 seeds x 3 sizes (36) sees a gold
+    mine at tick 9.
+  - *The colour table meets the corpse rules (BUG-0632).* Crimson `#A3192B` -> `#B82633` and Jade `#2E8B57` -> `#2EA35A`
+    (names unchanged; Iron stays the Malazan primary): every fill (colour x `CorpseShade`) now has luminance >= 0.2 (lowest
+    Cobalt 0.210, Crimson 0.233) and every pair of fills is >= 0.25 apart (closest Cobalt / Violet 0.253, Iron / Jade 0.297
+    from 0.222). `ShellTest` binds a real `CombatViews` to the whole table and checks the 8 fills, their rims and the 28
+    pairs (BUG-0160 item 3's rules), so a recolour that breaks them fails by key; `QaM6V3Test.CorpseRulesOverTable` checks too.
+    A duplicate-colour load error prints the value with its `#` (BUG-0631 item 1's nit).
+  - *Colours are unique per match (BUG-0631 item 3, docs/02 "Game flow" 2).* Each setup colour list greys (disables) the
+    colour the other slot holds; `SkirmishSetup.PickColour(slot, n)` (also the lists' `ItemSelected`) moves a pick of the
+    other's colour to the first colour the other doesn't hold (`LaunchOptions.FirstFreeColour`: colour 1, or 2 when the
+    other holds 1). `--colour` leaving both slots on one colour (an explicit pick or a default) is warned about and slot 2
+    keeps its default, colour 2, or colour 1 when slot 1 holds colour 2.
+  - *BUG-0603.* `M4PlayableTest` step 7 read the building's footprint cell after the Cusser's blast; when the blast itself
+    brought the building down (the army had worn it to 338 hp), the dead slot's cell was -1 and the sight check looked at
+    the map's corner. The replay `m4playable-seed6-fail-tick4094.replay` (played with its own commit's sim and data) shows the
+    Sapper alive beside the footprint and every footprint cell visible on tick 4094. The cell and generation are now read
+    before the cast. Since the sim's start locations seed 6 stages the army on ground where, centred on screen, it reached
+    into the HUD band and step 2's box failed (BUG-0660): the camera now looks a little south of the army when it would.
+  - *BUG-0550 item 1.* `GroundDiscPool.Take` with no free node first takes a node whose key has not been taken yet this
+    frame (a forward cursor, one pass a frame, no allocation) before it grows, so a frame that swaps 16 keys for 16 others
+    stays at 16 nodes (`QaM5V1Test` pool churn).
+  - *BUG-0521 item 3.* `CombatViews.Bind` replaces a max-hp array shorter than the unit store (`SlotMaxHp.Capacity`) and keeps
+    a large enough shared one (`CombatViewTest` re-bind row). Item 2 is a `ViewApi` (sim) change, left for the sim track.
 
 ## AI architecture
 

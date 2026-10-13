@@ -28,7 +28,7 @@ namespace Rts.Game;
 /// (slot 1 or 2 = player 0 or 1 plays the faction with data id <c>id</c>, e.g. <c>--faction 2 whirlwind</c>; an id the data
 /// lacks is warned about by <see cref="Match"/> and ignored; M6-V2) and <c>--ai easy|normal|hard</c> (slot 2 is an AI seat of that
 /// difficulty; without it slot 2 is human, as before, except under <c>--skirmish</c>; M6-V2) and <c>--colour &lt;slot&gt; &lt;n&gt;</c> (slot 1 or 2 is drawn in
-/// player colour n, 1 to <see cref="UiText.ColourCount"/>, of <c>ui.json</c>'s table; without it slot s takes colour s; M6-V3). Any of these flags
+/// player colour n, 1 to <see cref="UiText.ColourCount"/>, of <c>ui.json</c>'s table; without it slot s takes colour s; M6-V3; both slots on one colour: slot 2 keeps its default, M6-VH1). Any of these flags
 /// on the command line skips the main menu (<see cref="HasMatchFlag"/>), so every dev and test run starts its match as
 /// before M6-V1. Bad values are warned about and ignored; a token starting with <c>--</c> is never taken as a value (BUG-0041).
 /// </remarks>
@@ -277,8 +277,19 @@ public sealed class LaunchOptions
         // no dev army, and slot 2 an AI seat of the setup's default difficulty. An explicit, valid --units / --ai still wins.
         if (o.Skirmish && !unitsGiven) o.UnitsPerPlayer = 0;
         if (o.Skirmish && o.Ai == null) o.Ai = DefaultAi;
+        // Colours are unique per match (docs/02 "Game flow" 2, BUG-0631 item 3): slot 2 on slot 1's colour is warned about and
+        // keeps its default, colour 2, or the first free colour when slot 1 holds colour 2.
+        int c0 = o._colours[0] ?? 0, c1 = o._colours[1] ?? 1;
+        if (c0 == c1)
+        {
+            o._colours[1] = c0 == 1 ? FirstFreeColour(c0) : null;
+            GD.PushWarning($"Ignoring --colour: slots 1 and 2 both on colour {c0 + 1}; slot 2 takes colour {(o._colours[1] ?? 1) + 1} (colours are unique per match).");
+        }
         return o;
     }
+
+    /// <summary>The first colour (0-based) of <c>ui.json</c>'s table other than <paramref name="taken"/>: where a pick that collides with the other slot's moves.</summary>
+    public static int FirstFreeColour(int taken) => taken == 0 ? 1 : 0;
 
     // A data id's shape (snake_case: lower-case letters, digits, '_'); whether the data has it is Match's check.
     private static bool IsId(string id)
