@@ -162,7 +162,7 @@ public static class CombatSystem
             if (u.Target[i].Generation == 0 || u.Hold[i] || u.State[i] == UnitState.Attacking) continue;
             AttackDef attack = data.Units[u.TypeId[i]].Attack;
             // Too near to fire at (M4-2b): never walk closer. No step back either (no kiting in this slice): it waits.
-            if (attack.MinRange > 0f && Gap(world, i) < attack.MinRange) continue;
+            if (TooNear(attack, Gap(world, i))) continue;
             // An ordered attacker standing in reach of a building it doesn't see now (M4-3b: a last-known one; the Catapult
             // outranges its sight) walks on: it attacks when it sees it.
             if (u.State[i] == UnitState.Idle ? Gap(world, i) > Range(world, i, attack) || Blind(world, i) : scanned || (due && u.Mode[i] == CombatMode.Ordered))
@@ -199,7 +199,7 @@ public static class CombatSystem
             // The attack's range, or (M4-4b-2) less when Blinded (the counter test first: Debug doesn't inline the call).
             float range = u.Statuses.BlindedUnits == 0 ? attack.Range : RangeLimit(world, i, attack);
             // Inside the minimum range (M4-2b) it can't fire: no swing, and a chaser or a planted unit stands where it is.
-            bool tooNear = gap < attack.MinRange;
+            bool tooNear = TooNear(attack, gap);
             if (u.WindupTicks[i] > 0)
             {
                 // Mid-swing the unit stands; the hit lands (or the shot flies) at the wind-up point if the target is still
@@ -325,10 +325,17 @@ public static class CombatSystem
     }
 
     /// <summary>Whether an edge-to-edge <paramref name="gap"/> (m) is one <paramref name="attack"/> can strike at: within its range and not inside its minimum range (M4-2b).</summary>
-    internal static bool InReach(AttackDef attack, float gap) => gap <= attack.Range && !(gap < attack.MinRange);
+    internal static bool InReach(AttackDef attack, float gap) => gap <= attack.Range && !TooNear(attack, gap);
+
+    /// <summary>
+    /// Whether an edge-to-edge <paramref name="gap"/> (m) is inside <paramref name="attack"/>'s minimum range. Only an attack
+    /// with one (the Catapult's 6 m) has an inside: a body overlapping its target (a negative gap, as a crowd push leaves a
+    /// melee unit against a footprint) is in reach of an attack without one (BUG-0590).
+    /// </summary>
+    internal static bool TooNear(AttackDef attack, float gap) => attack.MinRange > 0f && gap < attack.MinRange;
 
     /// <summary><see cref="InReach"/> for unit <paramref name="i"/>'s live target, with its range limited by its blind's reach (M4-4b-2, <see cref="RangeLimit"/>).</summary>
-    private static bool InReachOfTarget(World world, int i, AttackDef attack, float gap) => gap <= Range(world, i, attack) && !(gap < attack.MinRange);
+    private static bool InReachOfTarget(World world, int i, AttackDef attack, float gap) => gap <= Range(world, i, attack) && !TooNear(attack, gap);
 
     /// <summary><see cref="RangeLimit"/>, skipping the per-unit look while nobody is Blinded.</summary>
     private static float Range(World world, int i, AttackDef attack) => world.Units.Statuses.BlindedUnits == 0 ? attack.Range : RangeLimit(world, i, attack);

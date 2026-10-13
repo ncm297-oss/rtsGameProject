@@ -13,5 +13,5 @@
   "buildingSight": 12,
   "stealth": { "proximity": 3, "revealSeconds": 3 },
   "ai": { "goldShare": 0.6, "houseWhenPopWithin": 2, "placementSearchRadius": 32, "buildingSpacing": 2, "expandHallReach": 40,
-          "scoutAfter": 15, "scoutRadius": 40, "scoutReach": 6, "rallyDistance": 12, "rallyReach": 6, "waveCooldown": 60 }
+          "scoutAfter": 15, "scoutRadius": 40, "scoutReach": 6, "scoutGrid": 56, "rallyDistance": 12, "rallyReach": 6, "waveCooldown": 60 }
 }

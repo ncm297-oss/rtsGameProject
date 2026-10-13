@@ -40,7 +40,8 @@ internal sealed class AiPlayer
         Knobs = def.Difficulty(difficulty);
         Rules = data.AiRules;
         ThinkTicks = Math.Max(1, Knobs.ThinkTicks);
-        Board = new Blackboard(def.BuildOrder.Length, view.UnitSlots, view.BuildingSlots, view.ResourceSlots);
+        Board = new Blackboard(def.BuildOrder.Length, view.UnitSlots, view.BuildingSlots, view.ResourceSlots,
+            ScoutManager.GridLines(view.MapWidth, Rules.ScoutGrid) * ScoutManager.GridLines(view.MapHeight, Rules.ScoutGrid));
         Live = new int[data.Units.Length];
         Queued = new int[data.Units.Length];
         WorkerSlots = new int[view.UnitSlots];

@@ -335,6 +335,7 @@ public sealed class GameData
         h.Add(r.ScoutAfterTicks);
         h.Add(r.ScoutRadius);
         h.Add(r.ScoutReach);
+        h.Add(r.ScoutGrid);
         h.Add(r.RallyDistance);
         h.Add(r.RallyReach);
         h.Add(r.WaveCooldownTicks);

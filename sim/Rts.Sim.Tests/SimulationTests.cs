@@ -9,8 +9,8 @@ namespace Rts.Sim.Tests;
 
 public class SimulationTests
 {
-    private static Simulation NewSim(int players = 2) =>
-        new(TestSim.Config(Seed: TestSeeds.PreMix(42) /* pre-M1-6 map: open ground east of the center */, PlayerCount: players, UnitCapacity: 64, CommandCapacity: 64));
+    private static Simulation NewSim(int players = 2, bool combat = true) =>
+        new(TestSim.Config(Seed: TestSeeds.PreMix(42) /* pre-M1-6 map: open ground east of the center */, PlayerCount: players, UnitCapacity: 64, CommandCapacity: 64) with { Combat = combat });
 
     [Fact]
     public void TickConstants_Are20Hz()
@@ -212,7 +212,9 @@ public class SimulationTests
     /// <summary>Two identical sims with one unit per player at a passable cell; returns its position.</summary>
     private static (Simulation A, Simulation B, Vector2 Spot) TwinSims()
     {
-        Simulation a = NewSim(), b = NewSim();
+        // Two owners on one spot stand for "a unit of each player", not a fight (BUG-0135's convention; only BUG-0590 kept the
+        // overlapping bodies from striking each other).
+        Simulation a = NewSim(combat: false), b = NewSim(combat: false);
         NavGrid g = a.World.NavGrid;
         Vector2 spot = MoveScenario.Center(g, MoveScenario.CentralCell(g));
         foreach (Simulation s in new[] { a, b })

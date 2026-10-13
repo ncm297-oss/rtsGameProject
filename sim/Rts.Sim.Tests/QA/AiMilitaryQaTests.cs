@@ -251,7 +251,7 @@ public class AiMilitaryQaTests
     /// Attacks in one wave, <c>AiWaveStressTests</c> seed 6). A member should be given up on (or the wave ended) after a bounded
     /// number of tries.
     /// </summary>
-    [Fact(Skip = "BUG-0591: an Idle wave member that can't fight the target gets an Attack every think, forever")]
+    [Fact]
     public void AMemberThatCantHarmTheTarget_IsNotSentAttackEveryThinkForever()
     {
         GameData data = AiScenes.DataWith(dir =>
@@ -280,7 +280,7 @@ public class AiMilitaryQaTests
     /// edge, as a crowd push leaves it) is ordered to attack the building: it never strikes, standing Idle. Its edge-to-edge gap
     /// is negative, and <c>InReach</c>'s <c>!(gap &lt; MinRange)</c> reads that as inside a minimum range of 0. At 0.40 m it hits.
     /// </summary>
-    [Fact(Skip = "BUG-0590: a melee unit overlapping a building's footprint can't strike it (negative gap read as inside minRange 0)")]
+    [Fact]
     public void AMeleeUnitOverlappingAFootprintEdge_StrikesTheBuilding()
     {
         Simulation sim = CombatScenes.Flat(48, 16);

@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+using Rts.Sim.ViewApi;
 using System.Numerics;
 using Rts.Sim.Ai;
 using Rts.Sim.Combat;
@@ -25,7 +27,7 @@ public class ScoutManagerTests
     /// On the flat scene (every node known; the enemy hall not) the scout leaves at the first think from <c>scoutAfter</c>,
     /// gets at most one Move a think, each to a waypoint of the documented list, and the sweep ends once it sees the enemy
     /// hall; then it gathers. The list: the compass points 40 m round the hall (clamped inside the map; the first toward the
-    /// map centre), the hall's mirror, the quadrant centres.
+    /// map centre), the hall's mirror, then the map grid (BUG-0593: the 128 m map in 3 x 3 cells of at most 56 m).
     /// </summary>
     [Fact]
     public void TheScout_LeavesAtScoutAfter_MovesOnlyToItsWaypoints_ThenGathers()
@@ -62,12 +64,98 @@ public class ScoutManagerTests
         }
         Assert.Equal(1f, p[4].X); // west, 40 m off a hall 20 m from the edge: clamped half a cell inside
         Assert.Equal(size - hall, p[8]);
-        Assert.Equal(new[] { size * 0.25f, new(size.X * 0.75f, size.Y * 0.25f), size * 0.75f, new(size.X * 0.25f, size.Y * 0.75f) }, p[9..]);
+        Assert.Equal(9 + 3 * 3, p.Length);
+        for (int y = 0; y < 3; y++)
+            for (int x = 0; x < 3; x++)
+                Assert.Equal(new Vector2((x + 0.5f) * size.X / 3, (y + 0.5f) * size.Y / 3), p[9 + y * 3 + x]);
 
         // Released: the economy sends it to gather.
         for (int t = 0; t < 10 * think; t++) sim.Tick();
         Assert.Contains(log, c => c.Kind == CommandKind.Gather && c.Unit == scout && c.Tick > released);
         Assert.Equal(moves.Count, Moves(log).Count);
+    }
+
+    /// <summary>
+    /// The flat map unexplored, with player 0's hall, a mine, a few trees and workers as on <see cref="AiScenes.Flat"/>, and
+    /// player 1's hall at <paramref name="enemyHall"/> (none when null).
+    /// </summary>
+    private static Simulation Unexplored((int X, int Y)? enemyHall, int workers = 5)
+    {
+        PlayerSeat[] seats = AiScenes.Seats(AiDifficulty.Hard, SeatController.Ai, SeatController.Human);
+        GameData data = s_quiet.Value;
+        var config = new SimConfig(3, seats.Length, 256, 512) { Data = data, Seats = seats.ToImmutableArray(), Combat = false };
+        var sim = new Simulation(config, LocalMovementTests.Flat(AiScenes.FlatSize));
+        World w = sim.World;
+        (int hx, int hy) = AiScenes.HallAt(0);
+        Assert.True(w.Buildings.Spawn(0, StartBase.BuildingOfSlot(data, 0, BuildingSlot.TownHall), hy * AiScenes.FlatSize + hx, out _));
+        int mine = data.FindResource("gold_mine"), tree = data.FindResource("tree");
+        Assert.True(w.Resources.Spawn(mine, (hy - 6) * AiScenes.FlatSize + hx + 2, data.Rules.StartMineGold, out _));
+        for (int t = 0; t < 4; t++) Assert.True(w.Resources.Spawn(tree, (hy + 9) * AiScenes.FlatSize + hx + t, data.Rules.TreeWood, out _));
+        int worker = StartBase.UnitOfSlot(data, 0, UnitSlot.Worker);
+        for (int k = 0; k < workers; k++) CombatScenes.Place(sim, 0, worker, w.NavGrid.CellCenter(hx + k % 4, hy + 5 + k / 4));
+        if (enemyHall is (int ex, int ey))
+            Assert.True(w.Buildings.Spawn(1, StartBase.BuildingOfSlot(data, 1, BuildingSlot.TownHall), ey * AiScenes.FlatSize + ex, out _));
+        return sim;
+    }
+
+    /// <summary>
+    /// BUG-0593: the flat map unexplored, the enemy's only building a hall in the far corner (anchor (56, 56)), neither at the
+    /// mirror of the AI's hall nor seen from the ring or the old quadrant centres. The sweep goes on past its head through the
+    /// map grid, nearest point first, until it sees the hall; each Move after the head is to a grid point, one a think.
+    /// Before the fix the sweep ended at the last quadrant centre knowing no enemy building.
+    /// </summary>
+    [Fact]
+    public void AnEnemyBaseOffTheMirror_IsFound_ByTheMapGrid()
+    {
+        Simulation sim = Unexplored((56, 56));
+        AiPlayer ai = sim.AiOf(0)!;
+        List<Command> log = AiScenes.Log(sim, 0);
+        while (sim.TickNumber < 12000 && ai.Board.ScoutPhase != 2) sim.Tick();
+        List<Command> moves = Moves(log);
+        _out.WriteLine($"phase {ai.Board.ScoutPhase} at tick {sim.TickNumber}, enemy buildings known {ai.Board.KnownEnemyBuildings}; moves: " +
+            string.Join(" ", moves.Select(m => $"{m.Tick}:{Array.IndexOf(ai.Board.ScoutPoints, m.Position)}")));
+        Assert.Equal(2, ai.Board.ScoutPhase);
+        Assert.True(ai.Board.KnownEnemyBuildings > 0, "the sweep ended without finding the enemy hall");
+        Assert.All(moves.GroupBy(m => m.Tick), g => Assert.Single(g));
+        Assert.All(moves, m => Assert.Contains(m.Position, ai.Board.ScoutPoints));
+        Assert.Contains(moves, m => Array.IndexOf(ai.Board.ScoutPoints, m.Position) >= 9);
+    }
+
+    /// <summary>
+    /// BUG-0593: past the head the scout walks to the unvisited grid point nearest it, never to one whose cell the player has
+    /// explored, and never twice in a row to the same point; with no enemy to find the sweep ends with every point visited.
+    /// </summary>
+    [Fact]
+    public void PastTheHead_TheScoutTakesTheNearestUnexploredGridPoint()
+    {
+        Simulation sim = Unexplored(null, workers: 3);
+        World w = sim.World;
+        AiPlayer ai = sim.AiOf(0)!;
+        var view = new PlayerView(w, 0);
+        var moves = new List<Command>();
+        int gridMoves = 0;
+        ai.SentForTests = c =>
+        {
+            if (c.Kind != CommandKind.Move) return;
+            moves.Add(c);
+            int k = Array.IndexOf(ai.Board.ScoutPoints, c.Position);
+            Assert.True(k >= 0, $"Move to {c.Position}, not a waypoint");
+            if (k < 9) return;
+            Vector2 p = ai.Board.ScoutPoints[k];
+            Assert.False(view.IsExplored((int)(p.Y / 2f) * AiScenes.FlatSize + (int)(p.X / 2f)), $"sent to explored {p}");
+            Vector2 at = w.Units.Position[c.Unit.Index];
+            float d = Vector2.DistanceSquared(at, p);
+            for (int j = 9; j < ai.Board.ScoutPoints.Length; j++)
+                if (j != k && !ai.Board.ScoutVisited[j])
+                    Assert.True(Vector2.DistanceSquared(at, ai.Board.ScoutPoints[j]) >= d, $"{ai.Board.ScoutPoints[j]} is nearer than {p}");
+            gridMoves++;
+        };
+        while (sim.TickNumber < 12000 && ai.Board.ScoutPhase != 2) sim.Tick();
+        _out.WriteLine($"{gridMoves} grid Moves checked; phase {ai.Board.ScoutPhase} at tick {sim.TickNumber}");
+        Assert.Equal(2, ai.Board.ScoutPhase);
+        Assert.True(gridMoves >= 2, $"only {gridMoves} Moves past the head");
+        for (int i = 1; i < moves.Count; i++) Assert.NotEqual(moves[i - 1].Position, moves[i].Position);
+        Assert.All(ai.Board.ScoutVisited, v => Assert.True(v));
     }
 
     /// <summary>A scout killed mid-sweep is not replaced: no Move after its death, no crash.</summary>
@@ -92,7 +180,12 @@ public class ScoutManagerTests
     /// Criterion 1 on a generated 128 map with the shipped Malazan order, seeds 1-3: the AI (which sees no tree from its base on
     /// seeds 1 and 2) knows a wood node by tick 3,000 and has wood coming in by tick 6,000; the scout's Moves are one a think,
     /// each to a waypoint. Measured (the output): the brief's 1,200 / 2,000 ticks hold on seed 3 only; on seeds 1 and 2 the
-    /// nearest forest is 73-75 m out, past the 40 m ring and its 14 m sight, and is found on the legs after the ring.
+    /// nearest forest is 71-72 m out (due north of a hall by the west edge; on seed 2 a plateau fills the east), past the 40 m
+    /// ring and its 14 m sight, and is found on the legs after the ring (2,374 / 2,406). BUG-0592 (fix round 1): a worker sent
+    /// straight to it at tick 1 (knowing where it is) sees wood at 290 / 314 and brings the first in at 1,028 / 1,090, so the
+    /// criterion needs a sweep that heads almost straight for it; none of about 60 measured sweep variants (start 0 or 15 s,
+    /// ring 40-56 m, either direction, a second ring, grids, skipping explored points) did on both seeds without being chosen
+    /// for them. The thresholds stay the measured ones; the Producer decides the criterion.
     /// </summary>
     [Theory]
     [InlineData(1UL)]

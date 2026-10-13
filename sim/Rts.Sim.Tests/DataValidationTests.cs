@@ -332,6 +332,9 @@ public class DataValidationTests
     [InlineData("scoutReach", null, "ai.scoutReach", "missing required field")]
     [InlineData("scoutReach", "0", "ai.scoutReach", "outside 1-16 m")]
     [InlineData("scoutReach", "16.5", "ai.scoutReach", "outside 1-16 m")]
+    [InlineData("scoutGrid", null, "ai.scoutGrid", "missing required field")] // BUG-0593
+    [InlineData("scoutGrid", "15.5", "ai.scoutGrid", "outside 16-256 m")]
+    [InlineData("scoutGrid", "256.5", "ai.scoutGrid", "outside 16-256 m")]
     [InlineData("rallyDistance", null, "ai.rallyDistance", "missing required field")]
     [InlineData("rallyDistance", "-3", "ai.rallyDistance", "outside 1-64 m")]
     [InlineData("rallyDistance", "64.5", "ai.rallyDistance", "outside 1-64 m")]
@@ -356,6 +359,19 @@ public class DataValidationTests
         Assert.Contains(message, e.Message);
     }
 
+    /// <summary>BUG-0593: <c>ai.scoutGrid</c> loads at both edges, in meters.</summary>
+    [Theory]
+    [InlineData(16)]
+    [InlineData(256)]
+    public void AiScoutGrid_AtItsEdges_Loads(double meters)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("common/rules.json", r => r["ai"]!["scoutGrid"] = meters);
+        DataLoadResult load = DataLoader.LoadAll(dir.Path);
+        Assert.True(load.Ok, string.Join("; ", load.Errors));
+        Assert.Equal((float)meters, load.Data!.AiRules.ScoutGrid);
+    }
+
     [Fact]
     public void AiRulesBlock_UnknownField_IsReported()
     {
@@ -375,6 +391,7 @@ public class DataValidationTests
         Assert.Equal(1, a.SpacingCells); // 2 m
         Assert.Equal(20, a.ExpandReachCells); // 40 m
         Assert.Equal((300, 40f, 6f, 12f, 6f, 1200), (a.ScoutAfterTicks, a.ScoutRadius, a.ScoutReach, a.RallyDistance, a.RallyReach, a.WaveCooldownTicks)); // M5-3: 15 s, 60 s
+        Assert.Equal(56f, a.ScoutGrid); // BUG-0593: meters
     }
 
     /// <summary>M5-3 (inverted): the AI tunables are in the content hash, with ai.json (a row per field: DataContentHashTests).</summary>

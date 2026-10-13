@@ -1615,7 +1615,9 @@ friendly-fire kill counts as a kill for the shooter's owner and a loss for the s
 
 **Minimum range** (`attack.minRange`, edge to edge like `range`; the Catapult's 6 m). A target inside it cannot be fired
 at: no swing starts, a wind-up that ends with the target inside it is lost, a planted unit stands Idle and a chasing one
-stops where it is (`CombatSystem.InReach` is "within range and not inside the minimum range"). The scan never takes a
+stops where it is (`CombatSystem.InReach` is "within range and not inside the minimum range"; only an attack with a
+minimum range above 0 has an inside (`CombatSystem.TooNear`), so a body overlapping its target, a negative gap, is in
+reach of every other attack: BUG-0590). The scan never takes a
 unit or building inside it, so an Idle unit, a retaliator or an attack-mover whose target comes too near drops it at its
 next scan and takes one outside it (a nearer enemy of equal priority wins only if outside), and walks its leg on if
 there is none; a unit hit by an enemy inside its minimum range does not retaliate on it. An **explicit Attack** on a
@@ -5654,14 +5656,20 @@ six `rules.json` `ai` knobs in `Data/AiRulesDef.cs`; the hash in `GameData.Conte
   AI command pending (an idle one first, else a gathering or returning one: `PickBuilder`'s rule) becomes the scout; its slot
   and generation are kept, and the economy manager, the rebalance and `PickBuilder` skip it. If a forest, a gold mine and an
   enemy building are already known then, no scout is sent. The **waypoints**, computed once from the hall's centre and the
-  map: the 8 compass points `ai.scoutRadius` from it, clamped half a cell inside the map, the first the one most toward the map
-  centre then clockwise; the point-mirror of the hall through the map centre (where a generated match puts the other base);
-  the 4 quadrant centres. Each think it is not pending: every waypoint within `ai.scoutReach` of it is visited; the one it was
-  last sent to is visited if it stands Idle (it got as close as it could: a point on a cliff or off the walkable ground); then
-  it gets one `Move` to the first unvisited point, unless it is already on its way there. The sweep **ends** when every point is
-  visited, or as soon as a forest, a gold mine and an enemy building (seen or ghost) are all known: a scout walking to a
-  waypoint is sent `Stop` (one command), and the economy manager sends it to gather at the next think it is Idle. A dead scout
-  is not replaced (periodic re-scouting: M5-4).
+  map. The **head**, walked in order: the 8 compass points `ai.scoutRadius` from it, clamped half a cell inside the map, the
+  first the one most toward the map centre then clockwise; then the point-mirror of the hall through the map centre (docs/02
+  "Map": layouts are symmetric, and a match puts the bases either side of the centre line). Then the **map grid** (BUG-0593,
+  replacing the 4 quadrant centres, which missed a base that isn't at the mirror): the map cut into `ceil(side / ai.scoutGrid)`
+  equal columns and rows, one point at each cell's centre. Each think it is not pending: every waypoint within
+  `ai.scoutReach` of it is visited, and so is every grid point whose cell the player has explored (nothing new to see there)
+  except the one it walks to (explored from 14 m off, it would turn away before seeing past it);
+  the one it was last sent to is visited if it stands Idle (it got as close as it could: a point on a cliff or off the walkable
+  ground); then it gets one `Move` to the next point unless it is already on its way there: the first unvisited point of the
+  head, else the grid point it walks to while unvisited, else the unvisited grid point nearest it (list order on ties; from
+  the mirror that searches the far half first). The sweep **ends** when every point is visited, or as soon as a forest, a
+  gold mine and an enemy building (seen or ghost) are all known: a scout walking to a waypoint is sent `Stop` (one command),
+  and the economy manager sends it to gather at the next think it is Idle. A dead scout is not replaced (periodic
+  re-scouting: M5-4).
 - **Military** (`MilitaryManager`). **Rally point**: `ai.rallyDistance` from the hall's centre toward the footprint centre of
   the known enemy building nearest the hall (toward the map centre when none is known), clamped inside the map; it is
   recomputed each think and its version bumps when it moves. An army unit not in a wave that is Idle, farther than
@@ -5678,7 +5686,9 @@ six `rules.json` `ai` knobs in `Data/AiRulesDef.cs`; the hash in `GameData.Conte
   no ghost of that slot and generation) is replaced by the known enemy building nearest the members' centroid (every member
   owed an `AttackMove` again), or with none known the wave ends and the members are owed a `Move` home. **Orders**: each free
   army unit in slot order gets at most one command a think: what it is owed, else a member standing Idle within `rallyReach`
-  of the target's footprint edge (`rallyReach` + half its larger side) while the target is seen gets `Attack` on it, one Idle
+  of the target's footprint edge (`rallyReach` + half its larger side) while the target is seen gets `Attack` on it, **once per
+  target** (BUG-0591): a member Idle there again after its `Attack` can't fight that target (an attack that hits units only,
+  a footprint it can't reach), so it is sent `Move` home and leaves the wave (a new target clears the mark); one Idle
   elsewhere `AttackMove` again; a non-member the rally rule. A full queue ends the think; the per-slot flags keep what is owed
   for the next think (a 200-unit wave start that doesn't fit is finished then).
 - **Economy additions.** **Rebalance** (needed once the scout finds a forest late, when every worker already gathers gold and
@@ -5691,16 +5701,19 @@ six `rules.json` `ai` knobs in `Data/AiRulesDef.cs`; the hash in `GameData.Conte
   `(live + queued) x HalfPop / weight` (Requests 36 a: composition weights are population shares, as the faction pages write
   them).
 - **Knobs** (`common/rules.json` `ai`, required, `DataValidationTests` rows): `scoutAfter` 15 s (0-3,600, to ticks),
-  `scoutRadius` 40 m (1-64), `scoutReach` 6 m (1-16), `rallyDistance` 12 m (1-64), `rallyReach` 6 m (1-16), `waveCooldown`
-  60 s (0-3,600, to ticks); the distances stay meters. A composition weight that rounds to 0 as a float (1e-50) is an error
+  `scoutRadius` 40 m (1-64), `scoutReach` 6 m (1-16), `scoutGrid` 56 m (16-256, BUG-0593: 5 x 5 grid points on the 256 m
+  map), `rallyDistance` 12 m (1-64), `rallyReach` 6 m (1-16), `waveCooldown` 60 s (0-3,600, to ticks; 0 is valid data and
+  turns the bound off: a retreat's survivors may be sent back at the next think, BUG-0594); the distances stay meters. A composition weight that rounds to 0 as a float (1e-50) is an error
   at its field (`compositions[k].units.<id>`, BUG-0541 item 1 / BUG-0573 item 2).
 - **Hash.** Every field of `rules.json` `ai` and of every faction's `ai.json` (`AiDef`, each `AiDifficultyDef`, `AiStep`,
   `AiComposition`) is in `GameData.ContentHash`, after the abilities (`DataContentHashTests`: every field by reflection, one row
   per JSON field of both files). One golden regen: only `data-hash` (5760E83CB301B62E to 801A8BC7AA612A21) and the checksum
-  changed, every `k` line equal (the golden has no AI seat). An `ai.json` edit now changes the shipped hash, so a data-track
+  changed, every `k` line equal (the golden has no AI seat). Fix round 1 regenerated it once more for `ai.scoutGrid`
+  (801A8BC7AA612A21 to 8409DB7517579FEF), again only `data-hash` and the checksum; BUG-0590's combat fix moved no `k` line. An `ai.json` edit now changes the shipped hash, so a data-track
   build-order change regenerates the golden header.
 - **Tests.** `Ai/ScoutManagerTests` (the list, one Move a think to a listed point, release then a Gather, a dead scout not
-  replaced, the generated map), `Ai/MilitaryManagerTests` (flat scene, combat off: a wave at both thresholds seen and as a ghost,
+  replaced, the generated map; fix round 1: an enemy base off the mirror found by the grid, the grid's nearest-unexplored
+  rule), `MinRangeTests.ANegativeGap_*` (BUG-0590), `Ai/MilitaryManagerTests` (flat scene, combat off: a wave at both thresholds seen and as a ghost,
   below either none, Easy's 0.6 at a smaller army, a razed target re-targeted or the wave home, retreat and the cooldown, the
   attack-retreat loop bound with and without the cooldown, the rally rule), `Ai/AiVersusAiTests`, `AiDeterminismTests` and
   `AiReplayTests` with the early-wave data and raiders (`AiScenes.EarlyWaves`, `Generated(raiders:)`: two AI seats that wave
@@ -5710,12 +5723,18 @@ six `rules.json` `ai` knobs in `Data/AiRulesDef.cs`; the hash in `GameData.Conte
   its base finds one on the legs after its 40 m ring (seeds 1 and 2: the nearest trees 73-75 m out; known at tick 2,374 and
   2,406, wood in at 4,394 and 3,816; seed 3 at 674 and 1,361); with the shipped thresholds (Malazan 20 pop, Whirlwind 14 pop)
   neither seat reaches a wave in 6,000 ticks (armies of 0-8 at pop 18-27: wood-starved). Without the scout the same AIs never
-  gather wood (pop 18 at tick 6,000).
+  gather wood (pop 18 at tick 6,000). Fix round 1: the test scene's bases aren't mirrored, so the Whirlwind seat's 13-point
+  sweep found no enemy on seeds 1 and 2 (BUG-0593); with the map grid every seat of seeds 1-3 knows an enemy building by
+  tick 6,000 and, at the test's one-unit threshold, attacks. The wood times are unchanged (the head is): a worker sent
+  straight to the seed 1 / 2 forest at tick 1 sees it at 290 / 314 and brings wood in at 1,028 / 1,090, so the brief's 1,200 /
+  2,000 needs a sweep that heads for it, which no measured direction-blind variant did on both seeds (BUG-0592, the
+  Producer's call).
 - **Cost.** `Ai/AiPerfTests`: eight Hard seats, each with an army of over 200 (four in five of its units), the military
   manager's passes in every timed think; gate 1 ms a think, allocation-free (`AllocationProbe`).
 - **Memory.** Per AI seat, new: per unit slot three ints and a byte (the census's army slots; the blackboard's rallied version,
-  wave member generation and owed-order flag): **13 B x unit slots**, 32.5 KB for 2,500; the scout's 13 waypoints (104 B) and
-  flags, and a few scalars. About 106 KB per seat for a 2,500-unit, 256-building, 4,096-node match (73 KB before). Built only
+  wave member generation and owed-order flag): **13 B x unit slots**, 32.5 KB for 2,500; the scout's waypoints and flags,
+  9 B each: the head's 9 and the map grid's (25 on the 256 m map at the shipped 56 m, 306 B in all; 1,369 on a 1,024-cell
+  map, 12.4 KB; at the 16 m minimum 16,384 there, 147 KB), sized at construction; and a few scalars. About 106 KB per seat for a 2,500-unit, 256-building, 4,096-node match (73 KB before). Built only
   for AI seats.
 - **Not yet** (M5-4): defense (the enemy army memory's reader), periodic re-scouting and a replacement scout, rebuilding,
   ramps and high ground before attacking up, `focusFire`, `pullBackWounded`, `gatherBonus`, the ability manager; the 20-minute

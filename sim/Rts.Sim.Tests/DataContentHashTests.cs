@@ -420,7 +420,7 @@ public class DataContentHashTests
         // M5-3: rules.json ai and every faction's ai.json (the list elements' own fields: EveryAiStructField_ChangesTheHash).
         Check(d.AiRules, r => With(d, aiRules: r));
         foreach (string f in new[] { "GoldShare", "HouseHalfPopMargin", "PlacementSearchCells", "SpacingCells", "ExpandReachCells", "ScoutAfterTicks",
-            "ScoutRadius", "ScoutReach", "RallyDistance", "RallyReach", "WaveCooldownTicks" })
+            "ScoutRadius", "ScoutReach", "ScoutGrid", "RallyDistance", "RallyReach", "WaveCooldownTicks" })
             Assert.Contains($"AiRulesDef.{f}", checkedFields);
         for (int slot = 0; slot < d.Ai.Length; slot++)
             Check(d.Ai[slot], x => With(d, ai: x, aiSlot: slot));
@@ -481,6 +481,7 @@ public class DataContentHashTests
     [InlineData("scoutAfter", 20)]
     [InlineData("scoutRadius", 30)]
     [InlineData("scoutReach", 8)]
+    [InlineData("scoutGrid", 40)]
     [InlineData("rallyDistance", 16)]
     [InlineData("rallyReach", 8)]
     [InlineData("waveCooldown", 45)]

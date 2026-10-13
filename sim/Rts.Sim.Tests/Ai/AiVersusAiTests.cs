@@ -8,11 +8,12 @@ namespace Rts.Sim.Tests;
 
 /// <summary>
 /// M5-3 criterion 9: the headless AI-vs-AI proof. Malazan against Whirlwind, both Normal, a generated 128 map (the match's
-/// 12 forests), 6,000 ticks (5 minutes), seeds 1-3: no exception; each seat's scout finishes its sweep and each gathers wood;
-/// with the test's own attack threshold (<see cref="AiScenes.EarlyWaves"/>: one unit, rule 12) every seat that fields an army
-/// and knows an enemy building sends AttackMoves, and in every seed one does; every recording plays back, every seat human, to
-/// equal checkpoints. Measured, not gated (see the output): with the shipped thresholds (20 / 14 pop) neither seat reaches a
-/// wave in 5 minutes; the first wood comes in late where the nearest forest is out of the scout's 40 m ring.
+/// 12 forests), 6,000 ticks (5 minutes), seeds 1-3: no exception; each seat's scout finishes its sweep knowing an enemy
+/// building (BUG-0593: the bases of this scene aren't mirrored, so the map grid after the mirror finds them) and each gathers
+/// wood; with the test's own attack threshold (<see cref="AiScenes.EarlyWaves"/>: one unit, rule 12) each seat sends
+/// AttackMoves; every recording plays back, every seat human, to equal checkpoints. Measured, not gated (see the output): with
+/// the shipped thresholds (20 / 14 pop) neither seat reaches a wave in 5 minutes; the Malazan seat's first wood comes in at
+/// 3,220 / 3,823 on seeds 1 / 2 (brief: by 3,000), where its nearest forest is out of the scout's 40 m ring (BUG-0592).
 /// </summary>
 public class AiVersusAiTests
 {
@@ -63,6 +64,7 @@ public class AiVersusAiTests
         {
             Assert.True(firstWood[p] > 0, $"seed {seed}: player {p} gathered no wood");
             Assert.Equal(2, sim.AiOf(p)!.Board.ScoutPhase);
+            Assert.True(sim.AiOf(p)!.Board.KnownEnemyBuildings > 0, $"seed {seed}: player {p} knows no enemy building");
         }
     }
 
@@ -73,13 +75,11 @@ public class AiVersusAiTests
     public void MalazanVersusWhirlwind_Normal_6000Ticks_TestThresholds_BothAttack(ulong seed)
     {
         (Simulation sim, Replay r, _, int[] army) = Run(seed, s_early.Value);
-        int attackers = 0;
         for (int p = 0; p < 2; p++)
         {
-            bool sent = r.Commands.Any(c => c.Player == p && c.Kind == CommandKind.AttackMove);
-            if (army[p] > 0 && sim.AiOf(p)!.Board.KnownEnemyBuildings > 0) Assert.True(sent, $"seed {seed}: player {p} had an army and a target but sent no AttackMove");
-            if (sent) attackers++;
+            Assert.True(army[p] > 0, $"seed {seed}: player {p} fielded no army");
+            Assert.True(sim.AiOf(p)!.Board.KnownEnemyBuildings > 0, $"seed {seed}: player {p} knows no enemy building");
+            Assert.True(r.Commands.Any(c => c.Player == p && c.Kind == CommandKind.AttackMove), $"seed {seed}: player {p} sent no AttackMove");
         }
-        Assert.True(attackers >= 1, $"seed {seed}: nobody attacked");
     }
 }

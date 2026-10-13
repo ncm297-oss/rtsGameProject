@@ -16,8 +16,9 @@ namespace Rts.Sim.Ai;
 /// at least <c>attack.minArmyPop</c> half-pop and <c>attack.minArmyCost</c> gold + wood, each times the difficulty's
 /// <c>waveSizeMultiplier</c>, with an enemy building known: every such unit becomes a member and is sent
 /// <c>AttackMove</c> to the known enemy building nearest the rally point. The cooldown (<c>ai.waveCooldown</c>) starts.</item>
-/// <item><b>In a wave.</b> Dead members drop out. A member Idle near the target while it is seen gets <c>Attack</c> on it;
-/// Idle elsewhere, <c>AttackMove</c> again. A target no longer known (not seen live, no ghost of it) is replaced by the known
+/// <item><b>In a wave.</b> Dead members drop out. A member Idle near the target while it is seen gets <c>Attack</c> on it,
+/// once per target: Idle there again, it can't fight it, and goes home out of the wave (BUG-0591). Idle elsewhere,
+/// <c>AttackMove</c> again. A target no longer known (not seen live, no ghost of it) is replaced by the known
 /// enemy building nearest the members (all sent again), or with none the wave ends and the members go home.</item>
 /// <item><b>Retreat.</b> Live members' half-pop below <c>(1 - retreat.lossFraction)</c> of the start's: every live member
 /// Moves to the rally point, the wave ends, and the cooldown starts again.</item>
@@ -32,6 +33,13 @@ internal static class MilitaryManager
 
     /// <summary><see cref="Blackboard.WaveFlag"/>: a Move to the rally point is owed (a retreat or a wave's end).</summary>
     internal const byte ToRally = 2;
+
+    /// <summary>
+    /// <see cref="Blackboard.WaveFlag"/>: the member was sent <c>Attack</c> on this target (BUG-0591). Idle by the seen target
+    /// again, it can't fight it (its attack doesn't hit buildings, it can't reach it): it is sent home and leaves the wave.
+    /// A new target clears it, so a member gets one <c>Attack</c> per target.
+    /// </summary>
+    internal const byte AttackSent = 3;
 
     /// <summary>Rally, wave and retreat (see the type's summary).</summary>
     internal static void Run(AiPlayer ai)
@@ -163,9 +171,10 @@ internal static class MilitaryManager
             else if (tagged && board.WaveActive)
             {
                 if (u.State != UnitState.Idle) continue;
-                c = targetSeen && Vector2.Distance(u.Position, board.WaveTargetPoint) <= near
-                    ? Command.Attack(ai.Player, u.Handle, board.WaveTarget, isBuilding: true)
-                    : Command.AttackMove(ai.Player, u.Handle, board.WaveTargetPoint);
+                bool atTarget = targetSeen && Vector2.Distance(u.Position, board.WaveTargetPoint) <= near;
+                if (atTarget && board.WaveFlag[slot] == AttackSent) c = Command.Move(ai.Player, u.Handle, board.Rally); // gave up
+                else if (atTarget) c = Command.Attack(ai.Player, u.Handle, board.WaveTarget, isBuilding: true);
+                else c = Command.AttackMove(ai.Player, u.Handle, board.WaveTargetPoint);
             }
             else
             {
@@ -178,7 +187,7 @@ internal static class MilitaryManager
             ai.MarkOrdered(slot, generation, 0);
             bool home = c.Kind == CommandKind.Move;
             board.RalliedVersion[slot] = home ? board.RallyVersion : 0;
-            if (tagged) board.WaveFlag[slot] = 0;
+            if (tagged) board.WaveFlag[slot] = c.Kind == CommandKind.Attack ? AttackSent : (byte)0;
             if (tagged && home) board.WaveGeneration[slot] = 0; // home: no longer a member
         }
     }

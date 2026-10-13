@@ -185,12 +185,15 @@ public class MilitaryManagerTests
         Assert.All(home, c => Assert.Equal(ai.Board.Rally, c.Position));
         Assert.Equal(retreat + ai.Rules.WaveCooldownTicks, ai.Board.WaveCooldownUntil);
         Army(sim, 6, 18, 40);
-        while (sim.TickNumber <= ai.Board.WaveCooldownUntil - ai.ThinkTicks)
+        // The cooldown's end, fixed now: the next wave moves WaveCooldownUntil on (and with combat off its members give up on
+        // the hall after one Attack each, BUG-0591, so that wave retreats too).
+        int until = ai.Board.WaveCooldownUntil;
+        while (sim.TickNumber <= until - ai.ThinkTicks)
         {
             NextThink(sim);
             Assert.Equal(1, ai.Board.WavesStarted);
         }
-        while (sim.TickNumber <= ai.Board.WaveCooldownUntil) NextThink(sim);
+        while (sim.TickNumber <= until) NextThink(sim);
         Assert.Equal(2, ai.Board.WavesStarted);
     }
 

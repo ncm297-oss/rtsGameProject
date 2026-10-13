@@ -21,8 +21,10 @@ internal sealed class Blackboard
     private int _badNext;
 
     /// <summary>Sizes the bookkeeping for <paramref name="steps"/> build-order steps and the match's unit and building slots.</summary>
-    internal Blackboard(int steps, int unitSlots, int buildingSlots, int resourceSlots)
+    internal Blackboard(int steps, int unitSlots, int buildingSlots, int resourceSlots, int scoutGridPoints)
     {
+        ScoutPoints = new Vector2[ScoutHead + scoutGridPoints];
+        ScoutVisited = new bool[ScoutPoints.Length];
         StepDueTick = new int[steps];
         Array.Fill(StepDueTick, -1);
         StepQueued = new int[steps];
@@ -44,8 +46,8 @@ internal sealed class Blackboard
 
     // ---------- M5-3: the scout (ScoutManager) ----------
 
-    /// <summary>The sweep's waypoints: the 8 compass points round the hall, the hall's mirror through the map centre, the 4 quadrant centres.</summary>
-    internal const int ScoutWaypoints = 13;
+    /// <summary>The sweep's fixed-order head: the 8 compass points round the hall, then the hall's mirror through the map centre. The map grid's points follow (BUG-0593).</summary>
+    internal const int ScoutHead = 9;
 
     /// <summary>0 not sent yet, 1 sweeping, 2 done (the sweep ended, or the scout died: it is not replaced).</summary>
     internal byte ScoutPhase;
@@ -56,11 +58,11 @@ internal sealed class Blackboard
     /// <summary>The waypoint the scout was last sent to (-1: none yet).</summary>
     internal int ScoutTarget = -1;
 
-    /// <summary>The waypoints (m), computed once when the scout is sent.</summary>
-    internal readonly Vector2[] ScoutPoints = new Vector2[ScoutWaypoints];
+    /// <summary>The waypoints (m), computed once when the scout is sent: <see cref="ScoutHead"/> points, then the map grid's (sized at construction from the map and <c>ai.scoutGrid</c>).</summary>
+    internal Vector2[] ScoutPoints { get; }
 
     /// <summary>Per waypoint, whether it is visited.</summary>
-    internal readonly bool[] ScoutVisited = new bool[ScoutWaypoints];
+    internal bool[] ScoutVisited { get; }
 
     // ---------- M5-3: the enemy memory (from the view only, rebuilt each think) ----------
 
@@ -108,7 +110,7 @@ internal sealed class Blackboard
     /// <summary>Per unit slot, the generation of the wave member there (0: none).</summary>
     internal int[] WaveGeneration { get; }
 
-    /// <summary>Per unit slot, the member's next order: 0 none, <c>MilitaryManager.ToAttack</c> an attack-move owed, <c>ToRally</c> a Move home owed (it may outlive the wave).</summary>
+    /// <summary>Per unit slot, the member's next order: 0 none, <c>MilitaryManager.ToAttack</c> an attack-move owed, <c>ToRally</c> a Move home owed (it may outlive the wave), <c>AttackSent</c> its one Attack on this target sent (BUG-0591).</summary>
     internal byte[] WaveFlag { get; }
 
     /// <summary>Per step, the tick it became due (its trigger first reached); -1 before.</summary>

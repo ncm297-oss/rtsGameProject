@@ -35,6 +35,9 @@ public sealed class AiRulesDef
     /// <summary>M5-3: a waypoint counts as visited once the scout is this close, in meters (<c>scoutReach</c>, 1-16).</summary>
     public float ScoutReach { get; init; }
 
+    /// <summary>M5-3 (BUG-0593): after the ring and the mirror the scout covers the map by a grid of cells at most this wide, in meters (<c>scoutGrid</c>, 16-256).</summary>
+    public float ScoutGrid { get; init; }
+
     /// <summary>M5-3: the rally point lies this far from the Town Hall's centre toward the enemy, in meters (<c>rallyDistance</c>, 1-64).</summary>
     public float RallyDistance { get; init; }
 

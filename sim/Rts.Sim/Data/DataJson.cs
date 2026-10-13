@@ -54,6 +54,7 @@ internal sealed class AiRulesJson
     public double? ScoutAfter { get; set; } // M5-3
     public double? ScoutRadius { get; set; }
     public double? ScoutReach { get; set; }
+    public double? ScoutGrid { get; set; } // M5-3, BUG-0593
     public double? RallyDistance { get; set; }
     public double? RallyReach { get; set; }
     public double? WaveCooldown { get; set; }
