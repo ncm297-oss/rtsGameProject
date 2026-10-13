@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-12-1930, task M5-3 |
 | System | AI `MilitaryManager` (wave orders) |
-| Fixed by | |
+| Fixed by | 786c9e4 (M5-3 fix round 1); verified by QA re-check 2026-10-12-1930 |
 
 ## Repro
 1. Remove the `Skip` on `QA/AiMilitaryQaTests.AMemberThatCantHarmTheTarget_IsNotSentAttackEveryThinkForever`, then
@@ -32,3 +32,9 @@ offence is frozen from tick ~460 to the end of the run.
 - The rule follows the brief's wording, so this is a gap in the wave state machine rather than a departure from the brief.
   Any member that can't hurt the target triggers it: BUG-0590's overlap, a unit whose attack targets units only, a target it
   can't reach. A per-member try count (the `WaveFlag` byte has room) or a wave timeout would bound it.
+
+## Re-check (round 1, 786c9e4)
+- The QA row is un-skipped and green. Dropping the `AttackSent` mark fails it, and only it: no dev row covers the rule.
+- Two follow-ups are filed separately. BUG-0595: the "Idle elsewhere, AttackMove again" branch has the same unbounded loop
+  (240 AttackMoves to 4 stuck members in 60 thinks). BUG-0596: the fix sends home members that were only crowded off the target
+  (10 of a 24-member wave, none dead).

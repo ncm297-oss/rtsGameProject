@@ -34,3 +34,12 @@ quadrant centres).
   is, the test should assert the agreed numbers.
 - In AI-vs-AI (`AiVersusAiTests`, seeds 1-2) the Malazan seat's first wood comes at 3,220 / 3,825, so brief item 7's "wood by
   tick 3,000" also fails (BUG-0593).
+
+## Re-check (round 1, 786c9e4)
+- Not fixed; the dev reports NOT MET and leaves it to the Producer. QA measured it independently (see the re-check report).
+- It now also carries criterion 9's wood part (from BUG-0593): the Malazan seat's first wood comes in after tick 3,000 on seeds
+  1 and 2.
+- The dev's argument: the seed 1 / 2 forest is 71-72 m north, outside the 40 m ring. A worker sent straight there brings wood in
+  at 1,028 / 1,090, so meeting 1,200 / 2,000 needs a sweep that heads for wood. About 60 direction-blind variants were measured
+  and none met both seeds. This is a scope / criterion call for the Producer: change the criterion, or give the scout a
+  wood-seeking rule (for example toward unexplored ground nearest the hall first, or a cheaper ring with a larger radius).

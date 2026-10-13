@@ -99,6 +99,7 @@ public class AiWaveCostQaTests
         var sw = new Stopwatch();
         var times = new List<double>();
         double firstWorst = 0;
+        int startMembers = int.MaxValue;
         int think = ais[0].ThinkTicks;
         // Warm up ten thinks with the waves held back (the cooldown), then let them start: the start think is timed alone.
         foreach (AiPlayer ai in ais) ai.Board.WaveCooldownUntil = 10 * think;
@@ -111,17 +112,24 @@ public class AiWaveCostQaTests
                     sw.Restart();
                     Assert.True(ai.Think());
                     sw.Stop();
-                    if (starting && ai.Board.WaveActive) firstWorst = Math.Max(firstWorst, sw.Elapsed.TotalMilliseconds);
+                    if (starting && ai.Board.WaveActive)
+                    {
+                        firstWorst = Math.Max(firstWorst, sw.Elapsed.TotalMilliseconds);
+                        startMembers = Math.Min(startMembers, ai.ArmySlots.Take(ai.ArmyCount).Count(s => ai.Board.WaveGeneration[s] != 0));
+                    }
                     else if (t >= 20 * think) times.Add(sw.Elapsed.TotalMilliseconds);
                 }
             sim.Tick();
         }
         int members = ais.Min(a => a.ArmySlots.Take(a.ArmyCount).Count(s => a.Board.WaveGeneration[s] != 0));
         double avg = times.Average(), worst = times.Max(), p95 = times.OrderBy(x => x).ElementAt((int)(times.Count * 0.95));
-        _out.WriteLine($"waves {string.Join(", ", ais.Select(a => a.Board.WavesStarted))}; fewest members {members}; wave-start think worst {firstWorst:F3} ms; " +
+        _out.WriteLine($"waves {string.Join(", ", ais.Select(a => a.Board.WavesStarted))}; fewest members at the start {startMembers}, at the end {members}; wave-start think worst {firstWorst:F3} ms; " +
             $"{times.Count} wave thinks: avg {avg:F3} ms, p95 {p95:F3} ms, worst {worst:F3} ms; {ais.Sum(a => a.CommandsSent)} commands");
         Assert.All(ais, a => Assert.True(a.Board.WavesStarted >= 1, $"player {a.Player} never waved: the scene proves little"));
-        Assert.True(members >= 150, $"a wave of only {members}");
+        // Re-check round 1: the scene's size is gated at the wave start. Since BUG-0591's fix a combat-off member Idle by the
+        // seen target gets one Attack and then goes home out of the wave, so the end count drains (147 of 200+ measured); the
+        // timed thinks still carry the 200+ waves while the members walk.
+        Assert.True(startMembers >= 200, $"a wave start of only {startMembers}");
         Assert.True(avg < BudgetMs, $"avg {avg:F3} ms over the {BudgetMs} ms budget");
         Assert.True(firstWorst < 5 * BudgetMs, $"a wave start (200+ AttackMoves) took {firstWorst:F3} ms"); // reported; a one-think spike, gated loosely
     }

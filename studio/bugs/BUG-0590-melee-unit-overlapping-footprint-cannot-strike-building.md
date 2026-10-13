@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-12-1930, task M5-3 (pre-existing since M4-2b `b8cc072`; M5-3's AI waves walk into it) |
 | System | combat (`CombatSystem.InReach` / `InReachOfTarget`, building targets) |
-| Fixed by | |
+| Fixed by | 786c9e4 (M5-3 fix round 1); verified by QA re-check 2026-10-12-1930 |
 
 ## Repro
 1. Remove the `Skip` on `QA/AiMilitaryQaTests.AMeleeUnitOverlappingAFootprintEdge_StrikesTheBuilding`, then
@@ -36,3 +36,12 @@ human's units would stand idle the same way.
   Catapult's rule. Check unit targets too: two overlapping unit bodies also give a negative gap.
 - Pre-existing (the combat code is unchanged in M5-3's diff). Severity is S2 as a wrong game rule; the Producer decides
   whether it blocks M5-3 or goes in its own task.
+
+## Re-check (round 1, 786c9e4)
+- `CombatSystem.TooNear` (`MinRange > 0 && gap < MinRange`) is used by `InReach`, the chase stop, the swing and `TowerSystem`'s
+  wind-up. The QA row is un-skipped and green. Reverting `TooNear` to the old rule fails it, the dev's `MinRangeTests` negative-gap
+  rows and the new `QA/OverlapCombatQaTests` row.
+- New attack: every ordered pair of the 14 shipped unit types, one per player on the exact same point, combat on, 400 ticks. No
+  NaN or off-map position, hp in 0..max. Every armed fighter pair deals damage; the 12 quiet pairs are workers against a
+  worker, a Catapult or a Battering Ram.
+- Side effect: 4 printed cells of the counter-margin tables moved, which made the suite red. Filed as BUG-0597.

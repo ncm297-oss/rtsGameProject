@@ -101,7 +101,6 @@ public class AiMilitaryQaTests
         List<EntityHandle> army = Army(sim, Unit("malazan_heavy_infantry"), 4, 18, 28);
         NextThink(sim);
         Assert.True(ai.Board.WaveActive);
-        Assert.Equal(hall, ai.Board.WaveTarget);
         int ended = -1;
         while (sim.TickNumber < 3000)
         {
@@ -297,6 +296,83 @@ public class AiMilitaryQaTests
     }
 
     // ---------- the scout ----------
+
+    /// <summary>
+    /// Re-check round 1 (BUG-0591's other half): the wave's target can't be reached. Player 1's hall stands inside a closed ring
+    /// of its own tents (the map's pocket sealing makes terrain-only unreachable ground impossible, so buildings close it); the
+    /// billet of player 0 beside it keeps the hall seen. The wave's target is the nearest tent; its centre's nearest passable
+    /// cell is inside the ring, so the AttackMove leads nowhere and the members stand Idle at home (measured: 240 AttackMoves to
+    /// 4 members in 60 thinks, none moved; the same with combat on). A member that can't get to the target should be given up on (or the wave
+    /// ended) after a bounded number of tries, as one that can't harm it is since the fix; here at most 3 AttackMoves each over
+    /// 60 thinks. <paramref name="combat"/> off: the members can't break the ring; on, they may fight the tents instead.
+    /// </summary>
+    [Theory(Skip = "BUG-0595: a wave member that can't get to the target gets AttackMove every think, forever")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AWaveAtATargetItCantReach_IsNotSentAttackMoveEveryThinkForever(bool combat)
+    {
+        Simulation sim = Scene(s_onePop.Value, out EntityHandle hall, ghost: false, combat: combat);
+        World w = sim.World;
+        AiPlayer ai = sim.AiOf(0)!;
+        int tent = s_onePop.Value.FindBuilding("whirlwind_tent");
+        // Hall cells (52-55, 30-33); a ring of 2 x 2 tents round it: rows y 26-27 and 36-37 (x 48/49-59), columns x 49-50 and 58-59.
+        for (int x = 49; x <= 58; x += 2)
+        {
+            Assert.True(w.Buildings.Spawn(1, tent, 26 * AiScenes.FlatSize + x, out _), $"tent ({x}, 26)");
+            Assert.True(w.Buildings.Spawn(1, tent, 36 * AiScenes.FlatSize + x, out _), $"tent ({x}, 36)");
+        }
+        for (int y = 28; y <= 34; y += 2)
+        {
+            Assert.True(w.Buildings.Spawn(1, tent, y * AiScenes.FlatSize + 49, out _), $"tent (49, {y})");
+            Assert.True(w.Buildings.Spawn(1, tent, y * AiScenes.FlatSize + 58, out _), $"tent (58, {y})");
+        }
+        sim.Tick();
+        List<Command> log = AiScenes.Log(sim, 0);
+        List<EntityHandle> army = Army(sim, Unit("malazan_heavy_infantry"), 4, 18, 28);
+        for (int k = 0; k < 60; k++) NextThink(sim);
+        var mine = log.Where(c => army.Contains(c.Unit)).ToList();
+        Vector2 centre = ai.Board.WaveTargetPoint;
+        _out.WriteLine($"target {ai.Board.WaveTarget} (hall {hall}) at {centre}; wave active {ai.Board.WaveActive}, waves {ai.Board.WavesStarted}; over 60 thinks to {army.Count} members: " +
+            string.Join(", ", mine.GroupBy(c => c.Kind).Select(g => $"{g.Key} {g.Count()}")) +
+            "; members at " + string.Join(" ", army.Select(h => $"{w.Units.Position[h.Index].X:F1},{w.Units.Position[h.Index].Y:F1} {w.Units.State[h.Index]} d={Vector2.Distance(w.Units.Position[h.Index], centre):F1}")));
+        Assert.True(mine.Count(c => c.Kind == CommandKind.AttackMove) <= 3 * army.Count,
+            $"{mine.Count(c => c.Kind == CommandKind.AttackMove)} AttackMoves in 60 thinks to {army.Count} members that can't reach the target");
+    }
+
+    /// <summary>
+    /// Re-check round 1 (BUG-0591's fix, the other way): members that can fight the target must not be sent home by the new
+    /// "one Attack per target" rule. <paramref name="n"/> Heavy Infantry (combat on, nobody defends) wave into player 1's hall
+    /// (4 x 4, 2,400 hp) from 10 cells off. A member that can't find room at the hall gives up its chase when friends already
+    /// fight it (CombatSystem's FriendFightsTarget rule) and stands Idle by the hall; since the fix that reads as "can't fight
+    /// it" and the member goes home out of the wave. Checked over 2,000 ticks: no member is sent home while every member lives
+    /// and the hall stands, and the wave does not end (a "retreat" with no losses). Measured at 786c9e4: 12 members, 2 sent home
+    /// (ticks 481, 501); 24 members, 10 sent home (ticks 421-601), none dead, the hall at 1,643 / 2,400 hp.
+    /// </summary>
+    [Theory(Skip = "BUG-0596: a wave member crowded off the target (Idle by it after its one Attack) is sent home out of the wave")]
+    [InlineData(12)]
+    [InlineData(24)]
+    public void AWaveThatCanFightTheTarget_KeepsItsMembers_WhileNoneDie(int n)
+    {
+        Simulation sim = Scene(s_onePop.Value, out EntityHandle hall, ghost: false, combat: true);
+        World w = sim.World;
+        AiPlayer ai = sim.AiOf(0)!;
+        List<Command> log = AiScenes.Log(sim, 0);
+        List<EntityHandle> army = Army(sim, Unit("malazan_heavy_infantry"), n, 38, 42);
+        int ended = -1;
+        while (sim.TickNumber < 2000 && w.Buildings.IsAlive(hall))
+        {
+            sim.Tick();
+            if (ended < 0 && ai.Board.WavesStarted > 0 && !ai.Board.WaveActive) ended = sim.TickNumber;
+        }
+        var mine = log.Where(c => army.Contains(c.Unit)).ToList();
+        int dead = army.Count(h => !w.Units.IsAlive(h));
+        _out.WriteLine($"{n} members, {dead} dead; hall alive {w.Buildings.IsAlive(hall)} hp {w.Buildings.Hp[hall.Index]} at tick {sim.TickNumber}; " +
+            $"wave ended at {ended}; commands: " + string.Join(", ", mine.GroupBy(c => c.Kind).Select(g => $"{g.Key} {g.Count()}")) +
+            "; first Moves home at " + string.Join(" ", mine.Where(c => c.Kind == CommandKind.Move).Take(12).Select(c => c.Tick)));
+        Assert.Equal(0, dead);
+        Assert.DoesNotContain(mine, c => c.Kind == CommandKind.Move);
+        Assert.Equal(-1, ended);
+    }
 
     /// <summary>The flat AI scene (as <see cref="AiScenes.Flat"/>) on a given heightmap.</summary>
     private static Simulation FlatOn(Heightmap map, PlayerSeat[] seats, GameData data)

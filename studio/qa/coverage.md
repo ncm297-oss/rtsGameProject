@@ -208,3 +208,12 @@ M6-V1 QA (2026-10-11-0634, view track, QA standard): the game shell and BUG-0560
 
 
 M5-3 QA (2026-10-12-1930, sim track, QA full): the AI scouts, rallies and attacks. Row "AI opponent" extended. Added `QA/AiMilitaryQaTests` (10 cases, 2 skipped with bug ids), `QA/AiWaveCostQaTests` (2), `Stress/AiWaveStressTests` (4); un-skipped `AiLoaderQaTests.ATinyCompositionWeight_*` (+ a 1e-40 row). Found BUG-0590 (S2, combat, pre-existing), BUG-0591 (S3), BUG-0592 (S2, criterion 1), BUG-0593 (S2, criterion 9), BUG-0594 (S4). Set BUG-0574 fixed; BUG-0541 item 1 and BUG-0573 item 2 fixed (bugs stay open).
+
+M5-3 re-check round 1 (2026-10-12-1930, sim track, QA full). Rows "AI opponent" and "Combat & projectiles" extended.
+- `QA/AiMilitaryQaTests`: +2 theories, skipped with bug ids. A wave target nobody can reach (BUG-0595); a crowded wave keeps its members (BUG-0596).
+- New `QA/OverlapCombatQaTests`: every unit-type pair stacked on one point, combat on, 400 ticks, for NaN / hp / damage.
+- New `QA/AiScoutGridCostQaTests`: `scoutGrid` 16 m on the 1,024-cell map; Perf row plus an allocation row.
+- `QA/AiRulesKnobQaTests`: `scoutGrid` hostile and edge rows.
+- `QA/AiWaveCostQaTests`: the member gate moved to the wave start (members now leave by rule).
+- Mutations, 5 of 5 caught: `TooNear` reverted, the `AttackSent` mark dropped (only the QA row catches it), the grid off, `scoutGrid` out of the hash, the explored skip off.
+- Bug statuses: BUG-0590, 0591 and 0593 fixed; BUG-0592 and 0594 open. Filed BUG-0595 (S3), BUG-0596 (S3) and BUG-0597 (S1, red suite from stale page cells).

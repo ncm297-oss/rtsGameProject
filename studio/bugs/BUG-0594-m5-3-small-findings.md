@@ -27,3 +27,8 @@
 
 ## Notes
 None blocks M5-3.
+
+## Re-check (round 1, 786c9e4)
+- Item 3 is done as docs: docs/03 now says `waveCooldown` 0 is valid and turns the bound off.
+- Items 1 (the rebalance drops a partial load) and 2 (the economy's idle-pass scout skip is untested) are unchanged. The bug
+  stays open.
