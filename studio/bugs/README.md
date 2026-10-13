@@ -297,3 +297,5 @@ bugs outrank new features.
 | [BUG-0603](BUG-0603-m4-playable-rubble-sight-flake-under-load.md) | S3 | open | M4PlayableTest seed 6 step 7 failed once under load: the army razed the Raider Camp to 338 hp in step 6, the Sapper blast finished it and no sight was left on the rubble |
 | [BUG-0604](BUG-0604-menu-ai-match-cannot-build-economy.md) | S3 | open | In the menu skirmish vs the AI, the AI never gets an economy: the dev armies clash at tick 0 over the pop cap, and no mine is in sight of the start base |
 | [BUG-0610](BUG-0610-d15-report-test-nits.md) | S4 | open | D15 small findings: the house-rule report asserts more than "no exception" and is wired to AI internals M5-3 is reworking |
+| [BUG-0640](BUG-0640-ai-house-sites-never-finished-m5-3.md) | S3 | open | On M5-3's AI two of Malazan's Billet sites are placed and never finished (cap 82 at 30 min, was 98 on M5-2) |
+| [BUG-0641](BUG-0641-d-h4-report-test-nits.md) | S4 | open | D-H4 nits: the house-rule report's list of internal reads is incomplete, and two inputs are re-derived beside the AI |
