@@ -5839,7 +5839,9 @@ bases stand on them. Code: `Map/StartLocation.cs`, `MapGenerator.FindStarts`, `R
   ground; the fallback (the first passable-enough layout with a missing level, else the flat map) also carries start
   locations. `Validate` makes the pair fit a flat map (player 0's band non-empty; 3-4 players: a square map whose westmost
   centre and its quarter turn keep their site discs apart), so the flat fallback always has them; `Generate` still throws
-  `InvalidOperationException` if it doesn't. The search uses per-row prefix counts of non-open cells, `2r + 1` row checks a
+  `InvalidOperationException` if it doesn't. **Known gap (BUG-0620, M5-4a QA):** `Validate` ignores the border ring (open
+  ground starts two cells in), so a validated set with a small `StartEdgeMargin` can still throw (180 of 444 swept sets); the
+  sim's hardening makes `Validate` refuse those by name. The search uses per-row prefix counts of non-open cells, `2r + 1` row checks a
   centre: 256-map generation stays at about 11 ms in Debug (`MapGenTests.Generate256_WithStartLocations_IsUnder50Ms`).
 - **Defaults and bounds** (`Validate`, by name): `StartLocations` 0 or 2-4; `StartClearRadius` 2-32; `StartEdgeMargin` 1 to the
   smaller side; `StartMineDistance` (default 18 m) above the clear radius in meters and at most 16 m past it;
@@ -5872,7 +5874,9 @@ bases stand on them. Code: `Map/StartLocation.cs`, `MapGenerator.FindStarts`, `R
   0 (their maps as recorded) and can't say otherwise (`InvalidHeader` for a format 3-5 replay object with start locations).
 - **Measured** (`MapGenTests`, seeds 1-12 on 128 / 192 / 256 maps with 12 forests and 8 mines): every map gets its pair,
   both mines and a forest of at least 12 trees per base; on the 192 and 256 maps the bases sit at the west and east bands;
-  on crowded 128 maps the westmost fitting centre can be near the middle (seed 1: 37 cells apart, player 0 on a plateau).
+  on crowded 128 maps the westmost fitting centre can be near the middle (seed 1: 37 cells apart, player 0 on a plateau;
+  BUG-0621: 15 of 100 seeds on 128 maps start the two bases on different levels, 1 of 100 on 192 / 256; the terrain itself is
+  not mirrored (M6's generator work), so the hardening adds a same-level rule to the start search).
   Over seeds 0-199 every 128, 192 and 256 map keeps all three levels; narrow maps pay for the rule: 128 x 64 falls back to
   the flat map on 49 of 200 seeds, 96 x 96 on 7, and 64 x 64 on all of them (terrain-only tests on such maps use
   `StartLocations` 0).
@@ -5886,8 +5890,8 @@ bases stand on them. Code: `Map/StartLocation.cs`, `MapGenerator.FindStarts`, `R
   the 256-map time gate), `StartBaseTests` (halls on the start locations on seeds 1-12, a hand-built grid with and without
   one), `ReplayFormatTests` (format 6 lines, formats 3-5 read with none), `ScoutManagerTests` / `AiVersusAiTests` (the wood
   targets). Scenes measured on the old map keep it with `StartLocations` 0: maps too small for bases, terrain-only oracles
-  (the pre-BUG-0015 equivalence, flow fields), the production / research perf scenes (on the new map their tick doubles from
-  the layout alone, no per-tick code changed) and two fuzzes whose oracles predate BUG-0280's hidden-unit rule or count a
+  (the pre-BUG-0015 equivalence, flow fields), the production / research perf scenes (on the new map their tick changes from
+  the layout alone: 2.2x on seed 7, within 10 % on seeds 1-6 (QA, M5-4a); no per-tick code changed) and two fuzzes whose oracles predate BUG-0280's hidden-unit rule or count a
   same-tick delivery as a discard.
 - **Not yet:** defeat (`World.IsDefeated`, `DefeatEvents`, `Simulation.MatchOver`; Requests 37) is left for M5-4b; 3-4 player
   base plans in the view (M6-V5); expansion locations; carving start discs instead of redrawing on narrow maps.

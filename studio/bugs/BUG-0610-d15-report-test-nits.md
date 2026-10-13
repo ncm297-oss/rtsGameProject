@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-12-1930, task D15 |
 | System | QA tests (AI content) |
-| Fixed by | |
+| Fixed by | 14e03de (D-H4): the faction assert kept only as a documented precondition through `World.FactionOf`; the report reads `Blackboard.StepDueTick` / `StepDone` / `StepPending` / `HousePending` by name (listed in the class comment) and everything else through `GameData` / the world; the measured numbers dated "2026-10-12 on M5-2's AI" and the live ones moved to the session report. QA 2026-10-13-0146 verified the three rows green and printing. The remaining comment nits are BUG-0641 (S4). Producer set at the 2026-10-13-0146 ACCEPT. |
 
 ## Repro
 1. Read `sim/Rts.Sim.Tests/QA/Content/AiHouseRuleReportTests.cs`.

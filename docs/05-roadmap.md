@@ -668,14 +668,18 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
 **Done when:**
 
 - [ ] Main menu, skirmish setup (map, 2-4 slots, faction, difficulty, color, team), pause menu. (M6-V1, 2026-10-11: menu,
-      seed / map size, pause. M6-V2, 2026-10-12: faction and difficulty per slot. Left: 2-4 slots, colour, team.)
+      seed / map size, pause. M6-V2, 2026-10-12: faction and difficulty per slot. M6-V3, 2026-10-13: a colour per slot from
+      `ui.json`'s 8-colour table, and the menu's match opens as docs/02 says (a Town Hall and 5 workers a side). Left: 2-4
+      slots, team.)
 - [ ] Victory/defeat detection and post-match stats screen.
 - [ ] Save/load and replay playback.
 - [ ] Settings: resolution, window mode, VSync, quality, volumes, keybinds.
 - [ ] Art look test done (KayKit vs. alternatives, see [04](04-art-pipeline.md)); real models and
       animations for Malazan and Whirlwind; licensing log filled in.
 - [ ] Real SFX and placeholder music; alerts with sound.
-- [ ] 3 maps (Raraku, Pale Hills, Vathar Crossing) plus the procedural generator in skirmish setup.
+- [ ] 3 maps (Raraku, Pale Hills, Vathar Crossing) plus the procedural generator in skirmish setup. (M5-4a, 2026-10-13, pulled
+      forward: the generator's mirrored start locations, each with 2 mines and a forest in reach, replay format 6; left: the three
+      hand-made maps, mirrored terrain (BUG-0621), the generator's options in the setup.)
 - [ ] `tools/export.ps1` produces a Windows zip that runs on a machine without Godot or .NET installed.
 - [ ] Revisit the .NET version (see [03 Platform](03-technical-design.md#platform-and-versions)).
 - [ ] Playable: a friend can unzip it and play a match without help.

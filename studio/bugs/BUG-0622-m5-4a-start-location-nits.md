@@ -33,3 +33,6 @@ See each item.
 
 ## Notes
 None of these is reachable with the shipped launcher defaults (12 forests, 8 mines, generated starts).
+
+## Producer triage (2026-10-13-0146 ACCEPT)
+S4 confirmed; items 1, 2 and 4 go to the sim's hardening if under budget (item 1: clamp the anchor to the map before computing it, keep the hall on the location's side; item 2: round-robin that skips the odd remainder, or the docs reworded; item 4: the dev row asserts the exact mirror). Item 3 (the docs claim) fixed in docs/03 at this ACCEPT ("2.2x on seed 7, within 10 % on seeds 1-6").

@@ -37,3 +37,6 @@ maximal `StartMineDistance` (clear + 16 m) and a minimal height.
   any `SimConfig` and from a replay file (external input that used to be refused cleanly).
 - Fix options: make `Validate` require `max(lo, StartSiteRadius + 2) <= min(hiX, Height - 3 - StartSiteRadius)` (by name, as
   `StartClearRadius` or `StartEdgeMargin`); or catch the throw in `ReplayPlayer` as `InvalidHeader`. The first keeps the docs true.
+
+## Producer triage (2026-10-13-0146 ACCEPT)
+S3 confirmed; **first item of the sim's hardening next session** (M5-H1): make `Validate` require `max(lo, StartSiteRadius + 2) <= min(Width / 2 - 1 - StartSiteRadius, Height - 3 - StartSiteRadius)`, refused by name (`StartEdgeMargin` or `StartClearRadius`), so every validated set generates and a replay header that validates always plays or is refused; un-skip `EveryValidatedStartParamSet_Generates` and `Bug0620_ReplayHeaderThatValidatesButCannotFit_IsRefusedNotThrown`, drop the two `_Pinned` rows. docs/03 carries the gap until then.
