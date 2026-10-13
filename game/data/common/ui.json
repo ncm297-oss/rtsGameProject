@@ -22,7 +22,8 @@
     "cannot_afford": "Can't afford",
     "store_full": "Too many buildings",
     "requires": "Locked",
-    "unexplored": "Unexplored"
+    "unexplored": "Unexplored",
+    "defeated": "Defeated"
   },
   "train": {
     "no_building": "No building",

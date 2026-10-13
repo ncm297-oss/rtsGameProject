@@ -1142,6 +1142,43 @@ public class StateHashTests
         Assert.Equal(h0, sim.StateHash());
     }
 
+    /// <summary>
+    /// M5-4b: a flipped <c>Defeated</c> or <c>EverBuilt</c> moves the hash. Having built is hashed only while the player has
+    /// no live building (with one it is implied), so a match without a defeat hashes as before; the live count and the
+    /// defeat events are derived / output.
+    /// </summary>
+    [Fact]
+    public void Hash_CoversTheDefeatFlags_PerPlayer()
+    {
+        Simulation sim = CombatScenes.Flat(units: 8);
+        var ledger = sim.World.Ledger;
+        ulong h0 = sim.StateHash();
+        ledger.Defeated[1] = true;
+        ulong d1 = sim.StateHash();
+        Assert.NotEqual(h0, d1);
+        ledger.Defeated[1] = false;
+        ledger.Defeated[0] = true;
+        Assert.NotEqual(h0, sim.StateHash());
+        Assert.NotEqual(d1, sim.StateHash());
+        ledger.Defeated[0] = false;
+        ledger.EverBuilt[0] = true; // built, nothing standing
+        Assert.NotEqual(h0, sim.StateHash());
+        ledger.EverBuilt[0] = false;
+        Assert.Equal(h0, sim.StateHash());
+
+        // With a building standing, having built is implied: flipping the flag back by hand changes nothing, and the
+        // building's own words are what moved the hash.
+        Assert.True(sim.World.Buildings.Spawn(0, 0, 10 * sim.World.NavGrid.Width + 10, out _));
+        Assert.True(sim.World.EverBuilt(0));
+        ulong built = sim.StateHash();
+        ledger.EverBuilt[0] = false;
+        Assert.Equal(built, sim.StateHash());
+        ledger.EverBuilt[0] = true;
+        ledger.LiveBuildings[0] += 2; // derived
+        Assert.Equal(built, sim.StateHash());
+        ledger.LiveBuildings[0] -= 2;
+    }
+
     [Fact]
     public void Hash_ADeathBufferIsOutput_NotState()
     {

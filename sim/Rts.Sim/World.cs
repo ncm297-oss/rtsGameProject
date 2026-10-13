@@ -91,6 +91,7 @@ public sealed partial class World
         Hits = new PendingHit[config.UnitCapacity]; // one swing lands per unit per tick at most
         // Every unit and every building dies at most once a tick, and units and buildings share the list (BUG-0330).
         _deaths = new DeathEvent[config.UnitCapacity + config.BuildingCapacity];
+        _defeatEvents = new DefeatEvent[config.PlayerCount]; // M5-4b: World.Defeat.cs
         _abilityEvents = new Abilities.AbilityEvent[2 * config.UnitCapacity]; // M4-4a: a cast starts and resolves once per unit per tick at most
         Projectiles = new ProjectileStore(config.ProjectileSlots);
         Zones = new Abilities.ZoneStore(config.ZoneCapacity, config.PlayerCount, config.Data); // M4-4b-2

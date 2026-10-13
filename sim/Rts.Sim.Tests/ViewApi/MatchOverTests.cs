@@ -73,9 +73,13 @@ public class MatchOverTests
         Assert.Throws<ArgumentOutOfRangeException>(() => new MatchOver(0));
     }
 
-    /// <summary>A hand-built world: player 0's only building is a site it cancels, twice; player 1 never has one.</summary>
+    /// <summary>
+    /// A hand-built world: player 0's only building is a site it cancels; player 1 never has one. M5-4b: the cancel defeats
+    /// player 0 (the sim's defeat rule), so its rebuild is dropped at the command door and nothing more is reported (the
+    /// watch's own rebuild case: <see cref="Spans_RebuiltThenRazed_IsReportedAgain"/>).
+    /// </summary>
     [Fact]
-    public void World_ACancelledLastSite_IsReportedOnTheTickItGoes_AndAgainAfterARebuild()
+    public void World_ACancelledLastSite_IsReportedOnTheTickItGoes_AndARebuildIsDropped()
     {
         Simulation sim = BuildMaps.NewSim(Flat(30, 20), players: 2);
         EntityHandle w = Unit(sim, At(sim, 5, 5));
@@ -86,14 +90,16 @@ public class MatchOverTests
             SetTotals(sim, 0, 2000, 2000);
             sim.Enqueue(Command.Build(0, w, Keep, At(sim, 10, 10)));
             for (int t = 0; t < 4; t++) Step(sim, watch, reports);
-            Assert.Equal(1, watch.BuildingCount(0));
+            Assert.Equal(1 - round, watch.BuildingCount(0));
+            if (round == 1) break;
             sim.Enqueue(Command.Cancel(0, At(sim, 11, 11)));
             int applies = sim.TickNumber + 2; // queued between ticks, it applies in the second Tick() from here (ConstructionSystemTests.Cancel_*)
             for (int t = 0; t < 6; t++) Step(sim, watch, reports);
             Assert.Equal(0, watch.BuildingCount(0));
-            Assert.Equal(round + 1, reports.Count);
             Assert.Equal((applies, 0), reports[round]);
+            Assert.True(sim.World.IsDefeated(0));
         }
+        Assert.Single(reports);
     }
 
     /// <summary>The default match (100 units and a Town Hall with five workers a side) for 400 ticks: nobody's last building falls.</summary>

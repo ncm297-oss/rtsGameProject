@@ -33,6 +33,9 @@ internal sealed class PlayerLedger
         HalfPopCap = new int[players];
         Kills = new int[players];
         Losses = new int[players];
+        LiveBuildings = new int[players];
+        EverBuilt = new bool[players];
+        Defeated = new bool[players];
         Array.Fill(Gold, rules.StartingGold);
         Array.Fill(Wood, rules.StartingWood);
         _rulesCap = rules.HalfPopCap;
@@ -58,6 +61,23 @@ internal sealed class PlayerLedger
 
     /// <summary>Each player's units and buildings killed (M4-1). Hashed state.</summary>
     public int[] Losses { get; }
+
+    /// <summary>M5-4b: each player's live buildings, construction sites included. Derived from the building store, so not hashed.</summary>
+    public int[] LiveBuildings { get; }
+
+    /// <summary>M5-4b: whether each player has ever had a building (a site counts), set when one is placed. Sticky; hashed (<see cref="Simulation.StateHash"/>).</summary>
+    public bool[] EverBuilt { get; }
+
+    /// <summary>M5-4b: whether each player is defeated (docs/02 "Game flow" 4), set once by <see cref="World.UpdateDefeats"/>. Sticky; hashed.</summary>
+    public bool[] Defeated { get; }
+
+    /// <summary>A building of <paramref name="player"/>'s is placed (+1, which also sets <see cref="EverBuilt"/>) or goes (-1), M5-4b.</summary>
+    public void AddLiveBuilding(int player, int delta)
+    {
+        if (!Has(player)) return;
+        LiveBuildings[player] += delta;
+        if (delta > 0) EverBuilt[player] = true;
+    }
 
     /// <summary>One death: <paramref name="killer"/>'s kills and <paramref name="victim"/>'s losses go up by one (M4-1).</summary>
     public void CountDeath(int killer, int victim)

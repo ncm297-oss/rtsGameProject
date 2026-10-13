@@ -10,7 +10,7 @@ namespace Rts.Sim.Ai;
 /// <see cref="AiRulesDef.GoldShare"/> of the gathering workers are on gold, else to wood (the known node of that kind nearest
 /// the worker; the other kind when none is known); and a house is placed when the population cap is within
 /// <see cref="AiRulesDef.HouseHalfPopMargin"/> of the population (and below the rules' cap) and no house is under
-/// construction or waiting to be judged. M5-H1 (BUG-0640): an own site no worker has as its build target for
+/// construction or waiting to be judged. M5-4b: a worker sent fleeing by the defense is left alone until the threat ends. M5-H1 (BUG-0640): an own site no worker has as its build target for
 /// <see cref="StalledThinks"/> thinks gets a worker sent to join it (a Build of its type at its anchor: the idle worker
 /// nearest it, else the nearest gatherer), and such a stalled house site does not hold the house rule off.
 /// </summary>
@@ -114,7 +114,8 @@ internal static class EconomyManager
         for (int k = 0; k < ai.WorkerCount; k++)
         {
             int slot = ai.WorkerSlots[k];
-            if (!v.TryGetUnit(slot, out SeenUnit u) || ai.OrderedNotApplied(slot, u.Handle.Generation) || ai.IsScout(slot, u.Handle.Generation)) continue;
+            if (!v.TryGetUnit(slot, out SeenUnit u) || ai.OrderedNotApplied(slot, u.Handle.Generation) || ai.IsScout(slot, u.Handle.Generation)
+                || ai.IsFleeing(slot, u.Handle.Generation)) continue;
             if (u.State == UnitState.Idle)
             {
                 idle++;
@@ -137,7 +138,8 @@ internal static class EconomyManager
         for (int k = 0; k < ai.WorkerCount; k++)
         {
             int slot = ai.WorkerSlots[k];
-            if (!v.TryGetUnit(slot, out SeenUnit u) || u.State != UnitState.Idle || ai.OrderedNotApplied(slot, u.Handle.Generation) || ai.IsScout(slot, u.Handle.Generation)) continue;
+            if (!v.TryGetUnit(slot, out SeenUnit u) || u.State != UnitState.Idle || ai.OrderedNotApplied(slot, u.Handle.Generation) || ai.IsScout(slot, u.Handle.Generation)
+                || ai.IsFleeing(slot, u.Handle.Generation)) continue;
             // A worker whose Gather was just dropped tries the other kind first (as with none of that kind known), so it
             // doesn't spend a think on each remembered node that is gone (BUG-0570).
             byte last = board.GatherKind[slot];
@@ -177,7 +179,8 @@ internal static class EconomyManager
         {
             int slot = ai.WorkerSlots[k];
             if (!ai.View.TryGetUnit(slot, out SeenUnit u) || u.State != UnitState.Gathering || board.UnitGeneration[slot] != u.Handle.Generation
-                || board.GatherKind[slot] != from || ai.OrderedNotApplied(slot, u.Handle.Generation) || ai.IsScout(slot, u.Handle.Generation)) continue;
+                || board.GatherKind[slot] != from || ai.OrderedNotApplied(slot, u.Handle.Generation) || ai.IsScout(slot, u.Handle.Generation)
+                || ai.IsFleeing(slot, u.Handle.Generation)) continue;
             ai.View.TryGetCargo(slot, out int load, out _);
             if (load >= least) continue;
             (pick, least, picked) = (slot, load, u);

@@ -12,7 +12,8 @@ namespace Rts.Sim.Tests;
 /// M5-2 criterion 5: what an AI think costs, and that it allocates nothing at steady state. Eight AI seats share 2,500 units
 /// (a fifth of them workers) in eight bands of a generated 128 map with forests and mines; each player has a Town Hall, a
 /// barracks, a crossbow range and a house, and gold and wood to spend. Its population is far over its cap, so the house rule
-/// searches for a site at every think it has no house under construction, the heaviest path. Gated: a think's average under
+/// searches for a site at every think it has no house under construction, the heaviest path. M5-4b: every seat is under
+/// attack (its buildings lose hp before each think), so the defense pass sends orders in every timed think. Gated: a think's average under
 /// 1 ms in the Debug build; the worst is reported.
 /// </summary>
 [Collection(SerialCollection.Name)]
@@ -82,6 +83,7 @@ public class AiPerfTests
         int think = ais[0].ThinkTicks;
         for (int t = 0; t < 60 * think; t++)
         {
+            if (sim.TickNumber % think == 0) UnderAttack(sim);
             if (sim.TickNumber % think == 0)
                 foreach (AiPlayer ai in ais)
                 {
@@ -96,6 +98,8 @@ public class AiPerfTests
         // M5-3: every seat thinks with an army of 200 or more (four in five of its units), so the military manager's rally and
         // wave passes are in the timed thinks.
         Assert.All(ais, a => Assert.True(a.ArmyCount >= 200, $"player {a.Player}: an army of {a.ArmyCount}"));
+        // M5-4b: every seat is under attack at every think (its buildings lose hp), so the defense pass sends in the timed thinks.
+        Assert.All(ais, a => Assert.True(a.Board.Defending && a.Board.DefenseVersion > 0, $"player {a.Player}: not defending"));
         _out.WriteLine($"armies {string.Join(", ", ais.Select(a => a.ArmyCount))}; waves {string.Join(", ", ais.Select(a => a.Board.WavesStarted))}");
         double avg = times.Average(), worst = times.Max(), p95 = times.OrderBy(x => x).ElementAt((int)(times.Count * 0.95));
         _out.WriteLine($"{Players} AI seats, {sim.World.Units.Count} units: {times.Count} thinks, avg {avg:F3} ms, p95 {p95:F3} ms, worst {worst:F3} ms; {sent} commands sent");
@@ -111,12 +115,23 @@ public class AiPerfTests
         int think = ais[0].ThinkTicks;
         for (int t = 0; t < 20 * think; t++)
         {
+            if (sim.TickNumber % think == 0) UnderAttack(sim);
             if (sim.TickNumber % think == 0) foreach (AiPlayer ai in ais) ai.Think();
             sim.Tick();
         }
         while (sim.TickNumber % think != 0) sim.Tick();
+        UnderAttack(sim);
         Action thinkAll = () => { foreach (AiPlayer ai in ais) ai.Think(); };
         AllocationProbe.AssertZero(thinkAll, _out);
+        Assert.All(ais, a => Assert.True(a.Board.Defending, $"player {a.Player}: not defending")); // M5-4b: the defense pass ran
+    }
+
+    /// <summary>M5-4b: every live building loses 1 hp (a test seam), so each seat's defense triggers at its next think.</summary>
+    private static void UnderAttack(Simulation sim)
+    {
+        Rts.Sim.Entities.BuildingStore b = sim.World.Buildings;
+        for (int k = 0; k < b.Capacity; k++)
+            if (b.Alive[k] && b.Hp[k] > 1) b.SetHp(k, b.Hp[k] - 1);
     }
 
     [Fact]

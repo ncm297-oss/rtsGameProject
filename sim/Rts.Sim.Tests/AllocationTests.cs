@@ -463,6 +463,8 @@ public class AllocationTests
     {
         (Simulation sim, int worker) = PlateauTests.ThirtyOnASmallPlateau();
         World w = sim.World;
+        // M5-4b: a second building of player 0's, so cancelling the House never defeats it (a defeated player places nothing).
+        Assert.True(w.Buildings.Spawn(0, BuildMaps.House, 52 * w.NavGrid.Width + 52, out _));
         System.Numerics.Vector2 at = GatherMaps.At(sim, 30, 30);
         (Simulation full, int keep, List<(int X, int Y)> free) = ProductionTests.PlateauKeep(48, 20);
         foreach ((int x, int y) in free) full.Enqueue(Command.SpawnUnit(1, ProductionMaps.Raider, GatherMaps.At(full, x, y)));

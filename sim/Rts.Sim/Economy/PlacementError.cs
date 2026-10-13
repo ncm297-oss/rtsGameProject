@@ -2,7 +2,8 @@ namespace Rts.Sim.Economy;
 
 /// <summary>
 /// Why <see cref="World.CanPlace"/> refuses a building placement (M3-3); the first rule broken, in the order declared here
-/// (<see cref="Unexplored"/>, added in M4-3b, keeps the next free value so no earlier value moves).
+/// (<see cref="Unexplored"/>, added in M4-3b, keeps the next free value so no earlier value moves; so does M5-4b's
+/// <see cref="Defeated"/>, the last).
 /// </summary>
 public enum PlacementError
 {
@@ -38,4 +39,11 @@ public enum PlacementError
 
     /// <summary>The building store has no free slot.</summary>
     StoreFull = 9,
+
+    /// <summary>
+    /// M5-4b: the player is defeated (<see cref="World.IsDefeated"/>): a defeated player places no building (its Build is
+    /// dropped at the command door; a shift-queued one applied before the defeat is refused when it pops). Reported only when
+    /// every other rule passes, so the reasons above read as before.
+    /// </summary>
+    Defeated = 11,
 }

@@ -424,6 +424,7 @@ public sealed class BuildingStore
         _towerTarget[index] = default;
         _towerCooldown[index] = 0;
         _towerWindup[index] = 0;
+        _ledger?.AddLiveBuilding(owner, 1); // M5-4b: the defeat rule's count, and the player has now built
         if (!site)
         {
             _ledger?.AddProvided(owner, def.HalfPopProvided);
@@ -464,6 +465,7 @@ public sealed class BuildingStore
             _ledger?.AddProvided(_owner[index], -def.HalfPopProvided);
             _ledger?.AddFinished(_owner[index], _typeId[index], def.Slot, -1);
         }
+        _ledger?.AddLiveBuilding(_owner[index], -1);
         SetRally(index, false, Vector2.Zero);
         int cell = _cell[index];
         _grid.ClearBuilding(cell % _grid.Width, cell / _grid.Width, def.FootprintWidth, def.FootprintHeight);

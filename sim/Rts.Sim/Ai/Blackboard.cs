@@ -9,7 +9,8 @@ namespace Rts.Sim.Ai;
 /// done, the command waiting to be judged), the house it is placing, retry marks (anchors a Build was refused at), and per
 /// unit and building slot when its last AI command applies (so a think doesn't order it twice before the first applied) and
 /// which resource a worker was sent to; since M5-3 the scout's sweep, the enemy memory and the military's rally and wave. Not
-/// sim state: not hashed, never read by a sim rule; allocated once, sized from the match.
+/// sim state: not hashed, never read by a sim rule; allocated once, sized from the match. Since M5-4b the defense's kept
+/// building hp, point and per-unit marks.
 /// </summary>
 internal sealed class Blackboard
 {
@@ -47,7 +48,40 @@ internal sealed class Blackboard
         WaveFlag = new byte[unitSlots];
         WaveTries = new byte[unitSlots];
         WaveBest = new float[unitSlots];
+        DefendedVersion = new int[unitSlots];
+        FledGeneration = new int[unitSlots];
+        KeptHp = new int[buildingSlots];
+        KeptHpGeneration = new int[buildingSlots];
     }
+
+    // ---------- M5-4b: defense (DefenseManager) ----------
+
+    /// <summary>Per building slot, the own building's hp at the last think (with <see cref="KeptHpGeneration"/>, the building it is for): a drop since is a hit.</summary>
+    internal int[] KeptHp { get; }
+
+    /// <summary>Per building slot, the generation of the own building <see cref="KeptHp"/> is about (0: none; a building seen for the first time doesn't trigger).</summary>
+    internal int[] KeptHpGeneration { get; }
+
+    /// <summary>The think of the last defense trigger (-1: never). The threat holds through <c>ai.defendFor</c> after it.</summary>
+    internal int DefendTick = -1;
+
+    /// <summary>Whether the threat held at the last think (the military starts no wave and rallies nobody meanwhile).</summary>
+    internal bool Defending;
+
+    /// <summary>Where the army defends (m), and its version, bumped when the point moves more than <c>ai.rallyReach</c> or a new threat starts.</summary>
+    internal Vector2 DefensePoint;
+
+    /// <summary>See <see cref="DefensePoint"/>.</summary>
+    internal int DefenseVersion;
+
+    /// <summary>Threats met (a trigger with none holding; tests and tooling).</summary>
+    internal int Defenses;
+
+    /// <summary>Per unit slot, the defense version the army unit (of <see cref="UnitGeneration"/>) was last sent to: it isn't sent again to the same point.</summary>
+    internal int[] DefendedVersion { get; }
+
+    /// <summary>Per unit slot, the generation of the worker sent fleeing during this threat (0: none): the economy leaves it alone until the threat ends.</summary>
+    internal int[] FledGeneration { get; }
 
     // ---------- M5-H1: own construction sites (EconomyManager, BUG-0640) ----------
 
