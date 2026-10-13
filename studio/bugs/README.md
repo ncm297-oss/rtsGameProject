@@ -297,3 +297,6 @@ bugs outrank new features.
 | [BUG-0603](BUG-0603-m4-playable-rubble-sight-flake-under-load.md) | S3 | open | M4PlayableTest seed 6 step 7 failed once under load: the army razed the Raider Camp to 338 hp in step 6, the Sapper blast finished it and no sight was left on the rubble |
 | [BUG-0604](BUG-0604-menu-ai-match-cannot-build-economy.md) | S3 | open | In the menu skirmish vs the AI, the AI never gets an economy: the dev armies clash at tick 0 over the pop cap, and no mine is in sight of the start base |
 | [BUG-0610](BUG-0610-d15-report-test-nits.md) | S4 | open | D15 small findings: the house-rule report asserts more than "no exception" and is wired to AI internals M5-3 is reworking |
+| [BUG-0620](BUG-0620-start-params-validate-then-generate-throws.md) | S3 | open | MapGenParams.Validate accepts start-location params the flat fallback can't hold; Generate (and a replay's playback) then throws |
+| [BUG-0621](BUG-0621-start-locations-on-different-levels.md) | S3 | open | On 128 maps about 1 seed in 7 puts one base on a plateau and the other on low ground, and bases can start 70 m apart |
+| [BUG-0622](BUG-0622-m5-4a-start-location-nits.md) | S4 | open | M5-4a small findings: an edge start location wraps the hall's anchor, short resource counts favour player 0, two doc claims |
