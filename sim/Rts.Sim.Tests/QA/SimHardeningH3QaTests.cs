@@ -582,4 +582,82 @@ public class SimHardeningH3QaTests
         Assert.Equal(0, holding);
         Assert.True(maxMove < 1f, $"a unit still paces ({maxMove} m in 10 s)");
     }
+
+    /// <summary>
+    /// QA M5-H1 (BUG-0512's fix, the other way, at scale): 500 units ordered onto the Tent with the ramp walled off. Since
+    /// M5-H1 a stopped chaser whose goal was dropped is judged by the field of its chase cell (a ResolveTarget a scan) instead
+    /// of "unreachable" at once. All must still give the order up within 120 s, scans must allocate nothing (every tick from the 5th to the last give-up),
+    /// and the tick cost is reported (wall clock, not asserted).
+    /// </summary>
+    [Fact]
+    public void FiveHundredUnits_OrderedOntoAnUnreachableBuilding_AllGiveUp_ZeroBytes()
+    {
+        (Simulation sim, EntityHandle tent, EntityHandle[] army) = ChaseScene(500, blockRamp: true);
+        UnitStore u = sim.World.Units;
+        long bytes = 0;
+        double worst = 0, sum = 0;
+        int allGone = -1;
+        var clock = new System.Diagnostics.Stopwatch();
+        for (int t = 0; t < 2400 && allGone < 0; t++)
+        {
+            long before = t >= 5 ? GC.GetAllocatedBytesForCurrentThread() : 0;
+            clock.Restart();
+            sim.Tick();
+            clock.Stop();
+            if (t >= 5) bytes += GC.GetAllocatedBytesForCurrentThread() - before;
+            worst = Math.Max(worst, clock.Elapsed.TotalMilliseconds);
+            sum += clock.Elapsed.TotalMilliseconds;
+            bool any = false;
+            foreach (EntityHandle h in army)
+                if (u.IsAlive(h) && u.Target[h.Index] == tent) { any = true; break; }
+            if (!any) allGone = sim.TickNumber;
+        }
+        int holding = army.Count(h => u.IsAlive(h) && u.Target[h.Index] == tent);
+        _out.WriteLine($"all gave up at tick {allGone}; still holding {holding}; ticks 5 on allocated {bytes} B; tick mean {sum / Math.Max(1, sim.TickNumber):F2} ms, worst {worst:F2} ms (Debug, wall clock)");
+        Assert.Equal(0, holding);
+        Assert.Equal(0L, bytes);
+    }
+
+    /// <summary>
+    /// QA M5-H1 (scale, 2x the budget): 1,000 units through the same ramp detour onto the reachable Tent. Over 4,000 ticks no
+    /// unit gives the order up; the highest stall count is reported (500 units peak at 9 of the 10 scans). Measured at
+    /// 1dfdef3: slot 503 (Heavy Infantry), Moving and stuck in the crowd at the Tent (stall 9), stops for movement's stuck
+    /// stop (goal dropped) at tick 2269 and gives the order up at the scan of 2270.
+    /// </summary>
+    [Fact(Skip = "BUG-0651: at 2x the unit budget one of 1,000 units gives up the reachable Tent (a stuck stop's scan, BUG-0512's residue)")]
+    public void ThousandUnits_OrderedOntoAReachableBuildingThroughARampDetour_NeverGiveUp()
+    {
+        (Simulation sim, EntityHandle tent, EntityHandle[] army) = ChaseScene(1000, blockRamp: false);
+        UnitStore u = sim.World.Units;
+        int full = sim.World.Buildings.Hp[tent.Index];
+        int gaveUp = 0, first = -1, maxStall = 0;
+        var lost = new bool[army.Length];
+        var hist = new Queue<string>[army.Length];
+        for (int k = 0; k < army.Length; k++) hist[k] = new Queue<string>();
+        string why = "";
+        for (int t = 0; t < 4000; t++)
+        {
+            for (int k = 0; k < army.Length; k++)
+            {
+                int ix = army[k].Index;
+                hist[k].Enqueue($"[{sim.TickNumber} {u.State[ix]} st{u.ChaseStall[ix]} g{u.GoalCell[ix]} stuck{u.StuckTicks[ix]} {u.Position[ix].X:F1},{u.Position[ix].Y:F1}]");
+                if (hist[k].Count > 40) hist[k].Dequeue();
+            }
+            sim.Tick();
+            sim.World.Buildings.SetHp(tent.Index, full);
+            for (int k = 0; k < army.Length; k++)
+            {
+                int ix = army[k].Index;
+                maxStall = Math.Max(maxStall, u.ChaseStall[ix]);
+                if (!lost[k] && u.Target[ix] != tent)
+                {
+                    lost[k] = true;
+                    gaveUp++;
+                    if (first < 0) { first = sim.TickNumber; why = $"slot {ix} ({(k % 2 == 0 ? "HI" : "xbow")}) now {u.State[ix]}: " + string.Join(" ", hist[k]); }
+                }
+            }
+        }
+        _out.WriteLine($"1,000 units: gave up {gaveUp} (first at {first}); max stall {maxStall}; {why}");
+        Assert.Equal(0, gaveUp);
+    }
 }

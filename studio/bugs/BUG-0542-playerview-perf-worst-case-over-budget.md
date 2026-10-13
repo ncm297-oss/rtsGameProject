@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 (filed S3; Producer ruling at the 2026-10-11-0314 ACCEPT, below) |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-11-0314, task M5-1 |
 | System | AI `PlayerView`, perf |
-| Fixed by | |
+| Fixed by | 1dfdef3 (M5-H1): `Ai/PlayerViewPerfTests.EightPlayersViews_Interleaved_WorstCase_UnitsUnder1Ms_WholeReadUnder15Ms` (Perf) |
 
 ## Producer ruling (2026-10-11-0314 ACCEPT)
 The banded gate stands as M5-1's criterion 5 row. The 0.3 ms figure was written as a per-tick budget, but an AI reads its
@@ -38,3 +38,6 @@ a deviation needing a ruling (docs/01 2026-10-11 row (d), docs/03 "Implementatio
 Producer ruling wanted: accept the banded gate (an AI thinks every 10-40 ticks, so per-tick cost is a fraction of this; the
 docs/03 average tick budget is 4 ms), or add a gated worst-case row with its own number. Not filed S2 because the row the
 brief asked for exists and is green, and the layout choice was disclosed.
+
+## QA re-check (2026-10-13-0527, M5-H1)
+**Fixed**, verified by QA on 1dfdef3: the rows named in Fixed by are green, they failed or were skipped on 0155205, and the full non-Perf suite is green. See `studio/qa/2026-10-13-0527-M5-H1.md`.

@@ -42,3 +42,6 @@ Item 1 **fixed** in M5-3 `238f261`: a weight above 0 that rounds to 0f is a load
 (`Data/AiLoaderTests.ACompositionWeightRoundingToZero_IsALoadError`; QA's `AiLoaderQaTests.ATinyCompositionWeight_IsRefused_OrStoredAboveZero`
 un-skipped, with a 1e-40 subnormal row that loads above 0; a mutation that drops the check fails the dev's row). Items 2-3 are
 still open, so the bug stays open.
+
+## QA re-check (2026-10-13-0527, M5-H1)
+Item 2 **fixed** in M5-H1 1dfdef3: `PlayerViewArchitectureTests.Scan` strips `//` and `/* */` comments and scans a code line starting with `*` (`AContinuationLineStartingWithAStar_IsScanned_ABlockCommentIsNot`; QA re-ran the plant from the report and it is now caught). Item 3 (docs/02 Easy wording) is the data track's this session, so the bug stays open.

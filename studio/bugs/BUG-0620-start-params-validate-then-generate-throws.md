@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-13-0146, task M5-4a |
 | System | map generator (`MapGenParams.Validate`, `MapGenerator.Generate` / `FindStarts`), replays |
-| Fixed by | |
+| Fixed by | 1dfdef3 (M5-H1); `QA/StartLocationQaTests.EveryValidatedStartParamSet_Generates` and `Bug0620_ReplayHeaderThatValidatesButCannotFit_IsRefusedNotThrown` un-skipped; QA `QA/SimHardeningM5H1QaTests.ValidateTimesGenerate_WideSweep_*` |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~StartLocationQaTests.Bug0620"`: both pins pass, which shows the bug.
@@ -40,3 +40,6 @@ maximal `StartMineDistance` (clear + 16 m) and a minimal height.
 
 ## Producer triage (2026-10-13-0146 ACCEPT)
 S3 confirmed; **first item of the sim's hardening next session** (M5-H1): make `Validate` require `max(lo, StartSiteRadius + 2) <= min(Width / 2 - 1 - StartSiteRadius, Height - 3 - StartSiteRadius)`, refused by name (`StartEdgeMargin` or `StartClearRadius`), so every validated set generates and a replay header that validates always plays or is refused; un-skip `EveryValidatedStartParamSet_Generates` and `Bug0620_ReplayHeaderThatValidatesButCannotFit_IsRefusedNotThrown`, drop the two `_Pinned` rows. docs/03 carries the gap until then.
+
+## QA re-check (2026-10-13-0527, M5-H1)
+**Fixed**, verified by QA on 1dfdef3: the rows named in Fixed by are green, they failed or were skipped on 0155205, and the full non-Perf suite is green. See `studio/qa/2026-10-13-0527-M5-H1.md`.

@@ -323,15 +323,14 @@ public class StartLocationQaTests
     /// <c>TryRead</c> says None) but leave no room for the pair makes <see cref="ReplayPlayer.Run(Replay, GameData)"/> throw
     /// instead of refusing the replay with an error. Before M5-4a every validated header generated a map.
     /// </summary>
-    // M5-H1 (BUG-0620 fixed): Validate now refuses these params, so the edited header is refused at read; were it read, playback
-    // must still refuse it rather than throw.
+    // M5-H1 (BUG-0620 fixed): Validate now refuses these params, so the edited header is refused at read, by name
+    // (QA re-check 2026-10-13-0527: the developer's "return if refused" made the row pass vacuously on any read error).
     [Fact]
     public void Bug0620_ReplayHeaderThatValidatesButCannotFit_IsRefusedNotThrown()
     {
         (Replay? bad, ReplayError read) = Bug0620Replay();
-        if (read != ReplayError.None) return; // refused at read: the header no longer validates
-        ReplayResult res = ReplayPlayer.Run(bad!, TestSim.Data);
-        Assert.False(res.Ok);
+        Assert.Equal(ReplayError.InvalidHeader, read);
+        Assert.Null(bad);
     }
 
     private static (Replay? Replay, ReplayError Read) Bug0620Replay()
