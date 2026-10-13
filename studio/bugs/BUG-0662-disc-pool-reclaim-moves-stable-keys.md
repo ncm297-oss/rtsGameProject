@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-13-0527, task M6-VH1 (QA) |
 | System | view: `game/scripts/GroundDiscPool.cs` (`Take` / `Reclaim`), used by `AbilityViews` cast rings, flashes, lost-cast cues |
-| Fixed by | |
+| Fixed by | M6-V6 (442a3e6): `GroundDiscPool.Reclaim(key)` takes a lower stale key's node first, else the highest untaken key's; `AbilityViewTest.StableKeysRow` |
 
 ## Repro
 1. `& $env:GODOT --headless --path game res://tests/QaVh1Test.tscn` prints
@@ -30,3 +30,6 @@ Display is correct (each taker re-places and re-colours its node); the cost is t
 BUG-0520 removed. A possible fix without allocation: `Reclaim` only takes a node whose key is lower than the key being
 taken (callers take keys in ascending order, so such a key was skipped this frame and is truly stale); otherwise grow as before.
 That keeps the 16-for-16 swap at 16 nodes and leaves stable keys alone.
+
+## QA verification (2026-10-13-0916, M6-V6)
+`AbilityViewTest` PASS in the scene loop (StableKeysRow: 3 of 3 stable keys kept, 1 rebuild; then 3 of 3 below the highest, 2 rebuilds, 8 nodes); `QaVh1Test` and `QaM5V1Test` (the 16-for-16 swap, no growth) PASS. Traced against the old `Reclaim` (lowest untaken first): frame 2 of the row would move 10 -> 11 -> 12 -> 13 along, kept 0 of 3, so the row fails on the old code. Deviation from the brief ("else grows"): the highest untaken key gives its node instead, so the swap row keeps its pool size; accepted. Per-call scan cost noted in BUG-0684 item 4.

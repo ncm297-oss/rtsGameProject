@@ -306,8 +306,13 @@ bugs outrank new features.
 | [BUG-0640](BUG-0640-ai-house-sites-never-finished-m5-3.md) | S3 | fixed | On M5-3's AI two of Malazan's Billet sites are placed and never finished (cap 82 at 30 min, was 98 on M5-2) |
 | [BUG-0641](BUG-0641-d-h4-report-test-nits.md) | S4 | fixed | D-H4 nits: the house-rule report's list of internal reads is incomplete, and two inputs are re-derived beside the AI |
 | [BUG-0660](BUG-0660-m4-playable-seed6-army-under-hud-band.md) | S3 | fixed | M4PlayableTest seed 6 step 2: the staged army reaches into the HUD band, so the box-select misses units |
-| [BUG-0661](BUG-0661-four-view-scenes-red-since-m5-4a.md) | S2 | open | Four view test scenes fail on main since the M5-4a merge (FogViewTest, QaH2Test, QaM27Test, QaV3Test) |
-| [BUG-0662](BUG-0662-disc-pool-reclaim-moves-stable-keys.md) | S3 | open | GroundDiscPool's reclaim (BUG-0550 item 1) moves stable keys to other nodes, so their meshes are rebuilt |
+| [BUG-0661](BUG-0661-four-view-scenes-red-since-m5-4a.md) | S2 | fixed | Four view test scenes fail on main since the M5-4a merge (FogViewTest, QaH2Test, QaM27Test, QaV3Test) |
+| [BUG-0662](BUG-0662-disc-pool-reclaim-moves-stable-keys.md) | S3 | fixed | GroundDiscPool's reclaim (BUG-0550 item 1) moves stable keys to other nodes, so their meshes are rebuilt |
 | [BUG-0663](BUG-0663-m6-vh1-colour-flag-nits.md) | S4 | open | M6-VH1 nits: the duplicate-colour warning says "Ignoring --colour" when only slot 1's flag was given |
+| [BUG-0680](BUG-0680-settings-int-beyond-64-bits-logs-engine-error.md) | S3 | open | A settings file with an integer beyond 64 bits logs an engine ERROR at boot (the pre-parse shape check lets any digit run through) |
+| [BUG-0681](BUG-0681-settings-override-resolution-flag-bench-viewport.md) | S3 | open | The boot's settings window size overrides Godot's `--resolution`, so the bench always runs at the stored size |
+| [BUG-0682](BUG-0682-qah1-minimap-attack-oracle-gap.md) | S3 | fixed | QaH1Test's oracle wants a Move for every minimap right-click and counts only command kinds 0-7 |
+| [BUG-0683](BUG-0683-production-hud-test-even-footprint-click.md) | S3 | fixed | ProductionHudTest clicked a 2x2 footprint's centre (a cell corner), which landed in the cell to the west |
+| [BUG-0684](BUG-0684-m6-v6-settings-nits.md) | S4 | open | M6-V6 nits: fixed shared test paths under user://, the screen shows the file's VSync under --vsync, Reclaim's scan per call, the bench orders half of seed 6's army |
 | [BUG-0650](BUG-0650-ai-site-resume-never-gives-up.md) | S4 | open | The AI's site resume path never gives up on a site no worker can reach: a join every 3 thinks, a third of the income (hand-spawned site) |
 | [BUG-0651](BUG-0651-thousand-units-one-gives-up-reachable-building.md) | S3 | open | At 2x the unit budget one of 1,000 units gives up an ordered Attack on a reachable building (a stuck stop's scan) |

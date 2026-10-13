@@ -157,13 +157,19 @@ public partial class QaH1Test : Node
                 Check(SameHandles(selBefore), $"{where}: a minimap left click changed the selection");
                 break;
             case "miniRight":
+            {
+                // M4-V4: a right-click on a shown enemy unit's dot (as last drawn) is one Attack per selected unit, else a Move
+                // (QA 2026-10-13-0916: this oracle counted kinds 0-7 only and always wanted a Move, so the Attack read as "Move x0").
+                bool onEnemyDot = MiniEnemyDotAt(inMini);
                 RightClick(inMini);
                 Check(!_sel.Targeting, $"{where}: a minimap right-click left targeting on");
                 if (wasTargeting) ExpectNoCommands(before, pending, where);
                 else if (building >= 0) ExpectRally(before, pending, rallies, where);
+                else if (onEnemyDot) ExpectOnly(before, pending, CommandKind.Attack, live, where);
                 else { ExpectOnly(before, pending, CommandKind.Move, live, where); _moveOrders += live > 0 ? 1 : 0; }
                 Check(SameHandlesLive(selBefore), $"{where}: a minimap right-click changed the selection");
                 break;
+            }
             case "3dRightGround":
             {
                 // M3-V1: ground on a tree or mine with workers selected is a Gather for them and a Move for the rest.
@@ -286,9 +292,25 @@ public partial class QaH1Test : Node
 
     // ---- expectations ----
 
+    // Whether a minimap right-click at global pixel `global` lands on a live, shown enemy unit's dot as last drawn (Minimap.CommandAt's Attack case).
+    private bool MiniEnemyDotAt(Vector2 global)
+    {
+        if (_mini.Raster == null) return false;
+        Vector2 local = global - _mini.GetGlobalRect().Position;
+        if (!_mini.Fit.TryToMap(new(local.X, local.Y), out System.Numerics.Vector2 p)) return false;
+        int dot = _mini.Raster.DrawnEnemyDotAt(p, SelectionController.LocalPlayer);
+        if (dot < 0) return false;
+        int slot = _mini.Raster.DrawnSlot(dot);
+        FogView? fog = _mini.Fog?.Refreshed(_sim.World);
+        return _sim.World.Units.Alive[slot] && (fog == null || fog.ShowsUnit(slot));
+    }
+
+    // Every command kind (Attack is 16): a count past 7 is no longer invisible to ExpectOnly / ExpectNoCommands.
+    private static readonly int KindCount = Enum.GetValues<CommandKind>().Max(k => (int)k) + 1;
+
     private int[] Issued()
     {
-        var a = new int[8];
+        var a = new int[KindCount];
         for (int k = 0; k < a.Length; k++) a[k] = _sel.IssuedCount((CommandKind)k);
         return a;
     }
