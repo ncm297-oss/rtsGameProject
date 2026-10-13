@@ -42,6 +42,8 @@ internal sealed class Blackboard
         RalliedVersion = new int[unitSlots];
         WaveGeneration = new int[unitSlots];
         WaveFlag = new byte[unitSlots];
+        WaveTries = new byte[unitSlots];
+        WaveBest = new float[unitSlots];
     }
 
     // ---------- M5-3: the scout (ScoutManager) ----------
@@ -110,8 +112,14 @@ internal sealed class Blackboard
     /// <summary>Per unit slot, the generation of the wave member there (0: none).</summary>
     internal int[] WaveGeneration { get; }
 
-    /// <summary>Per unit slot, the member's next order: 0 none, <c>MilitaryManager.ToAttack</c> an attack-move owed, <c>ToRally</c> a Move home owed (it may outlive the wave), <c>AttackSent</c> its one Attack on this target sent (BUG-0591).</summary>
+    /// <summary>Per unit slot, the member's next order: 0 none, <c>MilitaryManager.ToAttack</c> an attack-move owed, <c>ToRally</c> a Move home owed (it may outlive the wave).</summary>
     internal byte[] WaveFlag { get; }
+
+    /// <summary>Per unit slot, the member's orders toward this target since it last got a cell nearer it (BUG-0595/0596; bounded by <c>MilitaryManager.MaxTries</c>).</summary>
+    internal byte[] WaveTries { get; }
+
+    /// <summary>Per unit slot, the member's nearest distance (m) to the target's centre when ordered toward it: getting a cell nearer is progress and clears <see cref="WaveTries"/>.</summary>
+    internal float[] WaveBest { get; }
 
     /// <summary>Per step, the tick it became due (its trigger first reached); -1 before.</summary>
     internal int[] StepDueTick { get; }

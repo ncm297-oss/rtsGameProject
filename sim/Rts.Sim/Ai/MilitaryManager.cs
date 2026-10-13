@@ -16,10 +16,13 @@ namespace Rts.Sim.Ai;
 /// at least <c>attack.minArmyPop</c> half-pop and <c>attack.minArmyCost</c> gold + wood, each times the difficulty's
 /// <c>waveSizeMultiplier</c>, with an enemy building known: every such unit becomes a member and is sent
 /// <c>AttackMove</c> to the known enemy building nearest the rally point. The cooldown (<c>ai.waveCooldown</c>) starts.</item>
-/// <item><b>In a wave.</b> Dead members drop out. A member Idle near the target while it is seen gets <c>Attack</c> on it,
-/// once per target: Idle there again, it can't fight it, and goes home out of the wave (BUG-0591). Idle elsewhere,
-/// <c>AttackMove</c> again. A target no longer known (not seen live, no ghost of it) is replaced by the known
-/// enemy building nearest the members (all sent again), or with none the wave ends and the members go home.</item>
+/// <item><b>In a wave.</b> Dead members drop out. A member Idle near the target while it is seen gets <c>Attack</c> on it
+/// (one whose attack hits units only can't fight it: it goes home out of the wave, BUG-0591); Idle elsewhere, <c>AttackMove</c>
+/// again. Orders are bounded (BUG-0595/0596): after <see cref="MaxTries"/> orders toward this target without getting a cell
+/// nearer it, a member by the target (crowded off it) is left standing there, still a member; one elsewhere (it can't get
+/// there) goes home out of the wave. A member that leaves alive is not a loss: its half-pop leaves the start's too. A target
+/// no longer known (not seen live, no ghost of it) is replaced by the known enemy building nearest the members (all sent
+/// again), or with none the wave ends and the members go home.</item>
 /// <item><b>Retreat.</b> Live members' half-pop below <c>(1 - retreat.lossFraction)</c> of the start's: every live member
 /// Moves to the rally point, the wave ends, and the cooldown starts again.</item>
 /// </list>
@@ -35,11 +38,11 @@ internal static class MilitaryManager
     internal const byte ToRally = 2;
 
     /// <summary>
-    /// <see cref="Blackboard.WaveFlag"/>: the member was sent <c>Attack</c> on this target (BUG-0591). Idle by the seen target
-    /// again, it can't fight it (its attack doesn't hit buildings, it can't reach it): it is sent home and leaves the wave.
-    /// A new target clears it, so a member gets one <c>Attack</c> per target.
+    /// Orders (<c>AttackMove</c> or <c>Attack</c>) a member gets toward one target without getting a cell nearer it before the
+    /// AI stops ordering it (BUG-0595/0596). Its nearest distance only falls, by a cell each reset, so a member's orders per
+    /// target are bounded. Not a balance number: a guard against re-sending an order that does nothing.
     /// </summary>
-    internal const byte AttackSent = 3;
+    internal const int MaxTries = 3;
 
     /// <summary>Rally, wave and retreat (see the type's summary).</summary>
     internal static void Run(AiPlayer ai)
@@ -166,15 +169,35 @@ internal static class MilitaryManager
             Command c;
             if (tagged && board.WaveFlag[slot] == ToRally)
                 c = Command.Move(ai.Player, u.Handle, board.Rally);
-            else if (tagged && board.WaveActive && board.WaveFlag[slot] == ToAttack)
-                c = Command.AttackMove(ai.Player, u.Handle, board.WaveTargetPoint);
             else if (tagged && board.WaveActive)
             {
-                if (u.State != UnitState.Idle) continue;
-                bool atTarget = targetSeen && Vector2.Distance(u.Position, board.WaveTargetPoint) <= near;
-                if (atTarget && board.WaveFlag[slot] == AttackSent) c = Command.Move(ai.Player, u.Handle, board.Rally); // gave up
-                else if (atTarget) c = Command.Attack(ai.Player, u.Handle, board.WaveTarget, isBuilding: true);
-                else c = Command.AttackMove(ai.Player, u.Handle, board.WaveTargetPoint);
+                float d = Vector2.Distance(u.Position, board.WaveTargetPoint);
+                if (board.WaveFlag[slot] == ToAttack)
+                {
+                    // A new target (wave start or re-target): progress is measured from here.
+                    board.WaveBest[slot] = d;
+                    board.WaveTries[slot] = 0;
+                    c = Command.AttackMove(ai.Player, u.Handle, board.WaveTargetPoint);
+                }
+                else
+                {
+                    if (u.State != UnitState.Idle) continue;
+                    if (d <= board.WaveBest[slot] - Map.MapConstants.CellSize)
+                    {
+                        board.WaveBest[slot] = d; // a cell nearer since the last order: it is getting somewhere
+                        board.WaveTries[slot] = 0;
+                    }
+                    bool atTarget = targetSeen && d <= near;
+                    UnitDef def = ai.Data.Units[u.TypeId];
+                    if (atTarget && def.Attack.Targets == AttackTargets.Units) c = Leave(ai, slot, u.Handle, def); // can't harm a building
+                    else if (board.WaveTries[slot] >= MaxTries)
+                    {
+                        if (atTarget) continue; // crowded off the target: it stays by it, a member, unordered
+                        c = Leave(ai, slot, u.Handle, def); // it can't get there
+                    }
+                    else if (atTarget) c = Command.Attack(ai.Player, u.Handle, board.WaveTarget, isBuilding: true);
+                    else c = Command.AttackMove(ai.Player, u.Handle, board.WaveTargetPoint);
+                }
             }
             else
             {
@@ -187,9 +210,22 @@ internal static class MilitaryManager
             ai.MarkOrdered(slot, generation, 0);
             bool home = c.Kind == CommandKind.Move;
             board.RalliedVersion[slot] = home ? board.RallyVersion : 0;
-            if (tagged) board.WaveFlag[slot] = c.Kind == CommandKind.Attack ? AttackSent : (byte)0;
+            if (tagged) board.WaveFlag[slot] = 0;
+            if (tagged && !home && board.WaveTries[slot] < byte.MaxValue) board.WaveTries[slot]++;
             if (tagged && home) board.WaveGeneration[slot] = 0; // home: no longer a member
         }
+    }
+
+    /// <summary>
+    /// A member gives up on the wave alive: it is owed a Move home (kept if the queue is full) and its half-pop leaves the
+    /// start's, so it counts neither as live nor as a loss toward the retreat (BUG-0596).
+    /// </summary>
+    private static Command Leave(AiPlayer ai, int slot, EntityHandle unit, UnitDef def)
+    {
+        Blackboard board = ai.Board;
+        board.WaveFlag[slot] = ToRally;
+        board.WaveStartHalfPop -= def.HalfPop;
+        return Command.Move(ai.Player, unit, board.Rally);
     }
 
     /// <summary>Own army unit <paramref name="slot"/> as seen, if it is free for an order: alive, not casting, no AI command pending.</summary>

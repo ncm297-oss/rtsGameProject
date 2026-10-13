@@ -185,8 +185,7 @@ public class MilitaryManagerTests
         Assert.All(home, c => Assert.Equal(ai.Board.Rally, c.Position));
         Assert.Equal(retreat + ai.Rules.WaveCooldownTicks, ai.Board.WaveCooldownUntil);
         Army(sim, 6, 18, 40);
-        // The cooldown's end, fixed now: the next wave moves WaveCooldownUntil on (and with combat off its members give up on
-        // the hall after one Attack each, BUG-0591, so that wave retreats too).
+        // The cooldown's end, fixed now: the next wave moves WaveCooldownUntil on.
         int until = ai.Board.WaveCooldownUntil;
         while (sim.TickNumber <= until - ai.ThinkTicks)
         {
@@ -195,6 +194,58 @@ public class MilitaryManagerTests
         }
         while (sim.TickNumber <= until) NextThink(sim);
         Assert.Equal(2, ai.Board.WavesStarted);
+    }
+
+    /// <summary>
+    /// BUG-0596: a member that leaves the wave alive is not a loss. Three Heavy Infantry whose attack hits units only (the test's
+    /// units.json) and two Crossbowmen wave from beside player 1's hall (combat off). The infantry can't harm the hall: each goes
+    /// home once (a Move, never an Attack) and its half-pop leaves the start's, so the Crossbowmen (under half the start's
+    /// half-pop) are no retreat: they stay members, the wave stays on, none of them is sent home, and their orders stay bounded.
+    /// </summary>
+    [Fact]
+    public void MembersThatLeaveAlive_AreNotLosses_AndTheRestFightOn()
+    {
+        GameData data = AiScenes.DataWith(dir =>
+        {
+            dir.EditJson("factions/malazan/ai.json", root =>
+            {
+                root["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1));
+                root["attack"] = new JsonObject { ["minArmyPop"] = 1, ["minArmyCost"] = 0 };
+                root["retreat"]!["lossFraction"] = 0.5;
+                root["difficulties"]!["normal"]!["waveSizeMultiplier"] = 1;
+            });
+            dir.SetUnitField("malazan", "malazan_heavy_infantry", "attack.targets", "\"units\"");
+        });
+        Simulation sim = Scene(data, AiDifficulty.Normal, out _);
+        AiPlayer ai = sim.AiOf(0)!;
+        int heavy = data.FindUnit("malazan_heavy_infantry"), bow = data.FindUnit("malazan_crossbowman");
+        int heavyHalf = data.Units[heavy].HalfPop, bowHalf = data.Units[bow].HalfPop;
+        Assert.True(3 * heavyHalf > 2 * bowHalf, "precondition: the infantry are over half the start's half-pop");
+        // Beside the hall's west face (anchor (52, 30)).
+        var infantry = new List<EntityHandle>();
+        var bows = new List<EntityHandle>();
+        for (int k = 0; k < 3; k++) infantry.Add(CombatScenes.Place(sim, 0, heavy, sim.World.NavGrid.CellCenter(51, 30 + k)));
+        for (int k = 0; k < 2; k++) bows.Add(CombatScenes.Place(sim, 0, bow, sim.World.NavGrid.CellCenter(50, 30 + k)));
+        List<Command> log = AiScenes.Log(sim, 0);
+        for (int k = 0; k < 20; k++) NextThink(sim);
+        _out.WriteLine($"wave active {ai.Board.WaveActive}, start half-pop {ai.Board.WaveStartHalfPop}; commands " +
+            string.Join(", ", log.GroupBy(c => (c.Kind, infantry.Contains(c.Unit))).Select(g => $"{g.Key} {g.Count()}")));
+        Assert.Equal(1, ai.Board.WavesStarted);
+        Assert.True(ai.Board.WaveActive, "the infantry leaving read as a retreat");
+        Assert.Equal(2 * bowHalf, ai.Board.WaveStartHalfPop);
+        foreach (EntityHandle h in infantry)
+        {
+            Assert.Equal(1, log.Count(c => c.Unit == h && c.Kind == CommandKind.Move));
+            Assert.DoesNotContain(log, c => c.Unit == h && c.Kind == CommandKind.Attack);
+            Assert.NotEqual(h.Generation, ai.Board.WaveGeneration[h.Index]);
+        }
+        foreach (EntityHandle h in bows)
+        {
+            Assert.DoesNotContain(log, c => c.Unit == h && c.Kind == CommandKind.Move);
+            Assert.Equal(h.Generation, ai.Board.WaveGeneration[h.Index]);
+            // MaxTries orders per cell of progress: a bow walking into range gets a cell nearer once or twice.
+            Assert.InRange(log.Count(c => c.Unit == h && c.Kind != CommandKind.Move), 1, 3 * MilitaryManager.MaxTries);
+        }
     }
 
     /// <summary>

@@ -5686,10 +5686,14 @@ six `rules.json` `ai` knobs in `Data/AiRulesDef.cs`; the hash in `GameData.Conte
   no ghost of that slot and generation) is replaced by the known enemy building nearest the members' centroid (every member
   owed an `AttackMove` again), or with none known the wave ends and the members are owed a `Move` home. **Orders**: each free
   army unit in slot order gets at most one command a think: what it is owed, else a member standing Idle within `rallyReach`
-  of the target's footprint edge (`rallyReach` + half its larger side) while the target is seen gets `Attack` on it, **once per
-  target** (BUG-0591): a member Idle there again after its `Attack` can't fight that target (an attack that hits units only,
-  a footprint it can't reach), so it is sent `Move` home and leaves the wave (a new target clears the mark); one Idle
-  elsewhere `AttackMove` again; a non-member the rally rule. A full queue ends the think; the per-slot flags keep what is owed
+  of the target's footprint edge (`rallyReach` + half its larger side) while the target is seen gets `Attack` on it, unless its
+  attack hits units only (BUG-0591): that member can't fight a building, so it is sent `Move` home and leaves the wave; one Idle
+  elsewhere `AttackMove` again; a non-member the rally rule. **Bounded orders** (BUG-0595/0596): per member, the orders
+  toward this target since it last got a cell (`CellSize`) nearer the target's centre are counted (the nearest distance is
+  kept from its first `AttackMove` to this target; a new target restarts both). At `MilitaryManager.MaxTries` (3, a code
+  guard, not a balance number) the AI stops ordering it: by the target it was crowded off it (friends fight it), so it stays
+  there, still a member; elsewhere it can't get there, so it goes home and leaves the wave. A member that leaves alive is not a
+  loss: its half-pop comes off the start's too, and a wave all of whose members left ends (with the cooldown). A full queue ends the think; the per-slot flags keep what is owed
   for the next think (a 200-unit wave start that doesn't fit is finished then).
 - **Economy additions.** **Rebalance** (needed once the scout finds a forest late, when every worker already gathers gold and
   the cap stops training, so none is ever idle): on a think with no idle worker, while the gatherers' split is off

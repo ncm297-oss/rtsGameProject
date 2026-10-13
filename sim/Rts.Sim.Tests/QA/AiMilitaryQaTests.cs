@@ -306,7 +306,7 @@ public class AiMilitaryQaTests
     /// ended) after a bounded number of tries, as one that can't harm it is since the fix; here at most 3 AttackMoves each over
     /// 60 thinks. <paramref name="combat"/> off: the members can't break the ring; on, they may fight the tents instead.
     /// </summary>
-    [Theory(Skip = "BUG-0595: a wave member that can't get to the target gets AttackMove every think, forever")]
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void AWaveAtATargetItCantReach_IsNotSentAttackMoveEveryThinkForever(bool combat)
@@ -348,7 +348,7 @@ public class AiMilitaryQaTests
     /// and the hall stands, and the wave does not end (a "retreat" with no losses). Measured at 786c9e4: 12 members, 2 sent home
     /// (ticks 481, 501); 24 members, 10 sent home (ticks 421-601), none dead, the hall at 1,643 / 2,400 hp.
     /// </summary>
-    [Theory(Skip = "BUG-0596: a wave member crowded off the target (Idle by it after its one Attack) is sent home out of the wave")]
+    [Theory]
     [InlineData(12)]
     [InlineData(24)]
     public void AWaveThatCanFightTheTarget_KeepsItsMembers_WhileNoneDie(int n)
