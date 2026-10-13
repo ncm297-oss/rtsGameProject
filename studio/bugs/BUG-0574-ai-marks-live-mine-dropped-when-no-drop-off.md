@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-11-0634, task M5-2 (re-check round 1, BUG-0570's fix) |
 | System | AI `EconomyManager.NoteDroppedGather` (BUG-0570's dropped-Gather marks) |
-| Fixed by | |
+| Fixed by | M5-3 `238f261` (`NoteDroppedGather` judges nothing without a finished drop-off or with a full load of the kind; marks clear when the node is seen alive); `QA/AiGatherMarkQaTests.ALiveMine_IsNotMarked_WhenALoadedWorkerHasNoDropOff` un-skipped, `Ai/AiPlayerTests.ADroppedGatherMark_ClearsWhenTheNodeIsSeenAlive` |
 
 ## Repro
 1. Remove the `Skip` on `QA/AiGatherMarkQaTests.ALiveMine_IsNotMarked_WhenALoadedWorkerHasNoDropOff`, then
@@ -37,3 +37,7 @@ attack). Every gold mine the AI sends a loaded worker to in that window, out of 
 - Possible directions (the developer's call): don't judge a Gather when the worker carries a full load of the node's kind
   (or has no drop-off), or judge only "the Gather was dropped at apply" (the unit's `GatherNode` stayed default) rather than
   "Idle now", or let a mark expire / clear when the node is next seen alive.
+
+## Verified (2026-10-12-1930, QA)
+Both rows green on `238f261`. Mutations in a scratch clone: removing the drop-off / full-load guard fails the QA row; removing
+`ClearSeenMarks` fails the clear-on-seen row.

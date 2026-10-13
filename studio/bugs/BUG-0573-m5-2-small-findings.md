@@ -26,3 +26,7 @@
 
 ## Notes
 Both cheap; neither blocks M5-2.
+
+## Update (2026-10-12-1930, QA)
+Item 2 **fixed** in M5-3 `238f261` with BUG-0541 item 1 (no weight loads as 0f; production now divides by a weight above 0).
+Item 1 is still open, so the bug stays open.
