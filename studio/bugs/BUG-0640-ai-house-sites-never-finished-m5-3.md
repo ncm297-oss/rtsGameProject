@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-13-0146, task D-H4 |
 | System | AI (build order / construction), sim track |
-| Fixed by | |
+| Fixed by | 1dfdef3 (M5-H1); `Ai/AiSiteResumeTests` (2); QA `QA/SimHardeningM5H1QaTests.HouseSites_FirstBuilderKilled_EverySiteResumedAndFinished_30Min` (2) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~AiHouseRuleReportTests" --logger "console;verbosity=detailed"`
@@ -44,3 +44,6 @@ gatherer rebalance retasks the builder); then a resume path: an own `UnderConstr
 idle worker's `Repair` (join), and `EconomyManager`'s house rule must not stay off because of a site nobody builds. Proof: the
 data track's `AiHouseRuleReportTests` Malazan 36,000-tick row finishes every placed house (11 placed → 11 finished); the sim dev
 reads that file and reports its numbers, it does not edit it.
+
+## QA re-check (2026-10-13-0527, M5-H1)
+**Fixed**, verified by QA on 1dfdef3: the rows named in Fixed by are green, they failed or were skipped on 0155205, and the full non-Perf suite is green. See `studio/qa/2026-10-13-0527-M5-H1.md`.

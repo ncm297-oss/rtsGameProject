@@ -1,192 +1,120 @@
 # Handoff: brief for the next session
 
-Written by the Producer at the ACCEPT of session **2026-10-13-0146** (first full session of 2026-10-13, 1 / 8; all three tracks
-ACCEPT: sim M5-4a, view M6-V3, data D-H4). Counters after it: **sim 4 / 4, view 4 / 4, data 0 / 4**: the next session is the
-**sim's and the view's hardening** (M5-H1, M6-VH1) and the data track's **D16** (a feature). Bug ids next session: **sim from
-BUG-0650, view from BUG-0660, data from BUG-0670.** Inbox: empty at this ACCEPT (no owner answers on D13 / D14 / D11 / D12 / D15 yet).
-
-**PLAN of session 2026-10-13-0527 (2 / 8, from `main` 9d3f068): GO on all three tracks with the briefs below unchanged.** Checks:
-inbox empty; build 0 warnings; smoke PASS (both passes, `0 units per player ... seats malazan human, whirlwind ai normal`); the
-golden header is format 6 with `data-hash` 8409DB7517579FEF; the BUG-0598 / 0620 / 0511 QA rows are still skipped and the
-`AiSeatTest` probe still prints PENDING (so every hardening item below is live); `ai.json` difficulty values and docs/02's "rarely
-uses abilities" line are as D16's brief states. No open S1 / S2. Non-Perf suite on `main`: **5,996 passed / 14 skipped / 0 failed
-(14 m 57 s, alone)**.
+Written by the Producer at the ACCEPT of session **2026-10-13-0527** (second full session of 2026-10-13, 2 / 8; all three tracks
+ACCEPT: sim M5-H1, view M6-VH1, data D16; all three hardening / pin tasks, no golden change). Counters after it: **sim 0 / 4, view
+0 / 4, data 1 / 4**: the next session is a **feature session on every track**. Bug ids next session: **sim from BUG-0670, view from
+BUG-0680, data from BUG-0690.** Inbox: empty at this ACCEPT (no owner answers on D13 / D14 / D11 / D12 / D15 / the colour names yet).
 
 ## Where we are
 
-- `main` after this integration (sim 5b366d2 → view 4f9a2fe → data ac58524; the conductor union-merges `studio/bugs/README.md` and
-  `studio/qa/coverage.md`, no code conflict): the Producer's scratch merge of all three built with 0 warnings and ran the AI /
-  content / ViewApi / map / replay slices, smoke and the two new scenes (the session log's "Merged tree"). Golden
-  `cross_map_seed1.replay` is **format 6** (five `map.start-*` header lines), `data-hash` **8409DB7517579FEF** unchanged, every `k`
-  line unchanged (seed 1's first layout fits the start pair and the start search draws no RNG).
-- **The game from the menu now:** Skirmish → Start opens with a Town Hall and 5 workers a side, each base on a generated start
-  location with 2 gold mines (2,500) within 18 m and a forest within 24 m, player 1's base the point mirror of player 0's; the
-  AI gathers from the first minute and scouts at 15 s; each slot has a colour (8 in `ui.json`); `--skirmish` = the menu's Start
-  (slot 2 AI Normal, no army). Still missing for a real game: the sim's defeat rule (Requests 37, M5-4b's first item), the AI's
-  defense / expansion / abilities / rebuilding, victory / defeat on screen (M6-V4).
-- **M5 1 / 6, criteria 2 and 3 advanced; M6 criterion 1 advanced (colour done; 2-4 slots and team left) and criterion 7's generator
-  half advanced.** No open S1 / S2. Open S3: sim BUG-0598, 0620, 0621, 0640 (filed by the data QA against the AI), 0511, 0512,
-  0461's movement half; view BUG-0603, 0632, 0604 (closes with the probe flip below); others S4.
+- `main` after this integration (sim e1e34c3 → view d2712e9 → data 520a4d8; the conductor union-merges docs/01 (four 2026-10-13 rows),
+  `studio/bugs/README.md` (rows by bug id; keep the `fixed` row where BUG-0541 / BUG-0641 appear twice), `studio/qa/coverage.md` and
+  `studio/bugs/BUG-0541-*.md`; no code conflict). The Producer's scratch merge built with 0 warnings, ran the `Content` slice (933 / 0),
+  and the view scenes: `FogViewTest` + `QaV3Test` now PASS, **`QaH2Test` + `QaM27Test` still FAIL** (BUG-0661, S2, pre-existing).
+- **One open S2 on `main`: BUG-0661** (two view test scenes red since the M5-4a merge: a 10 s march of 19.3 m against a 20 m line on
+  seed 1, 11.3 m against 15 m on seed 6 in `QaH2Test`; `QaM27Test` the same 19.3 m). Test-side staging on the new start geometry; the
+  thresholds must be re-derived from the scene's intent, not loosened. **The view's first item next session.** No open S1.
+- **The game from the menu now:** Skirmish → Start opens with a Town Hall and 5 workers a side on two start locations **on the same
+  level, at least half a map apart**, 2 mines + a forest each; the AI gathers from the first minute, scouts at 15 s, finishes every
+  house it starts (BUG-0640), and a wave that can't reach its target goes home after a cooldown (BUG-0598); each slot has its own
+  colour (8 in `ui.json`, unique per match, all corpse-legible). Still missing for a real game: the sim's defeat rule (Requests 37,
+  **M5-4b's first item**), the AI's defense / expansion / abilities / difficulty knobs, victory / defeat on screen (M6-V4).
+- **M5 1 / 6, criteria 2 and 3 advanced; criterion 4 (difficulties) has its data pins (D16) and waits on the sim's knobs; M6 criterion
+  1 advanced (colour; 2-4 slots and team left) and criterion 7's generator half landed.** Open S3: sim BUG-0651 (2x-scale give-up),
+  BUG-0461's movement half, BUG-0144, 0151, 0046, 0050, 0028 / 0032, 0025, 0005, 0023, 0080; view BUG-0662 (the pool reclaim). S4s:
+  sim BUG-0650, 0622 item 1, 0510, 0184, 0113 item 2, 0002; view BUG-0663, 0550 item 2, 0521 item 2 (a sim file), 0581 items 2-3,
+  0281 item 2; data none open.
 
-## Standing rules (1-16)
+## Standing rules (1-17)
 
-1-15 as in the 1930 / 0146 PLAN handoffs (full suite incl. Perf alone for sim rule changes; a new `Command` kind into
+1-16 as in the 1930 / 0146 / 0527 PLAN handoffs (full suite incl. Perf alone for sim rule changes; a new `Command` kind into
 `CommandDoorFuzzStressTests`; per-slot memory itemised; agents' scratch folders `<track>-<session>-<purpose>` with absolute paths; a
 data brief names every sim-track test that pins a value it changes; bug statuses: dev proposes, QA sets what it verifies, the
 Producer the rest; content-independent sim tests; `git checkout HEAD -- path`; the budget is a line; **one system per brief**, the
-dev's count excludes QA's files and is reported).
-16. **Agents never kill processes by image name** (`taskkill /IM`, `Stop-Process -Name`, `pkill`): only a PID the agent itself
-    started, and only its own Godot / dotnet children. The data QA ran `taskkill /F /IM python.exe` this session and killed two
-    python.exe processes machine-wide (recorded in the session log and For your review). A stuck tool is reported, not swept.
+dev's count excludes QA's files and is reported; **no process killing by image name**).
+17. **A dev never loosens a QA row.** A QA test that fails against the dev's change is either a real finding (fix the code) or a
+    wrong test (say so in the report with the reason and let QA change it). This session the sim dev turned QA's BUG-0620 replay row
+    into a `return` on any read error (a vacuous pass); QA restored the strict assert.
+18. **Producer's merged-tree check runs the whole scene loop** (`tools/qa/scene-loop.ps1 -SkipPlayable`) whenever the sim branch
+    touches the map generator, `ResourcePlacer` or `ViewApi/StartBase`: BUG-0661 sat on `main` for a session because the 0146 check ran
+    only the slices, smoke and two scenes.
 
 ---
 
 ## Sim track
 
-### Current session plan: M5-H1, the sim's hardening (counter 4 / 4) · hardening · QA full · dev ≤ 1,200 lines (QA outside)
+### Next task candidates (feature session; M5-4b, QA full)
 
-**Goal.** Work the sim's debt before M5-4b: the AI's two stalls (a frozen wave, BUG-0598; house sites never finished, BUG-0640),
-the two start-location gaps QA found in M5-4a (BUG-0620, BUG-0621), then the older movement S3s. In priority order; stop at the
-budget and report what's left.
+**M5-4b slice 1, Requests 37 first:** `World.IsDefeated(p)` (no live building incl. sites, and the player had one once; never-built
+players never defeated), `World.DefeatEvents` (player, tick; like `AbilityEvents`), `Simulation.MatchOver` (at most one undefeated
+player among those that ever built), hashed; the AI of a defeated seat stops thinking (sends nothing); replay playback unchanged
+(derived from state, no header field). Docs/02 "Game flow" 4. Then, in the same brief only if the first system is small (it should be
+~300 lines): **defense** from the enemy army memory (pull the army home when own buildings take damage; workers flee to the hall per
+docs/02 "AI opponent" behaviours), or leave defense / expansion / the ability manager / the difficulty knobs (`gatherBonus`,
+`focusFire`, `pullBackWounded`, `useAbilities`) for M5-4c. One system per brief (rule 15): Requests 37 + at most one more.
 
-**Scope (in this order).**
-1. **BUG-0598 (S3):** a wave whose members all stand by a target none can strike ends: when no member has been ordered or made
-   progress for `ai.waveCooldown` ticks the wave goes home (cooldown), or the "crowded" branch stays only while some member is
-   `Attacking` the target. Un-skip `QA/AiMilitaryQaTests.AWaveWhoseMembersAllStandByATargetNoneCanStrike_DoesNotStayForever`.
-2. **BUG-0640 (S3, from the data's D-H4 report):** on M5-3's AI two Malazan Billet sites are placed and never finished (cap 82 at
-   30 min, was 98). Root-cause first (QA's suspicion: the scout / rebalance retasks the builder); then a resume path: an own
-   `UnderConstruction` site with no builder for N thinks gets an idle worker's `Repair` (join), and `EconomyManager`'s house rule
-   is not switched off by a site that nobody builds. Prove it on `AiHouseRuleReportTests`' Malazan 36,000-tick row (11 placed →
-   11 finished; the data track's file: read it, don't edit it; the report's numbers go in your report).
-3. **BUG-0620 (S3):** `MapGenParams.Validate` requires `max(lo, StartSiteRadius + 2) <= min(Width / 2 - 1 - StartSiteRadius,
-   Height - 3 - StartSiteRadius)` (refused by name), so every validated set generates and a replay header that validates always
-   plays or is refused; un-skip QA's `EveryValidatedStartParamSet_Generates` and
-   `Bug0620_ReplayHeaderThatValidatesButCannotFit_IsRefusedNotThrown`, drop the two `_Pinned` rows; docs/03's "Known gap" line goes.
-4. **BUG-0621 (S3, Producer ruling in the bug file):** `FindStarts` requires every position's `Level` equal and the centres at
-   least half the smaller map side apart; a layout with no such centre is redrawn like one without room. Re-run QA's survey
-   (`Survey_StartLevelsAndSeparation_Seeds1To100`) and report the new flat-fallback rate per size (don't tune the generator to
-   it). **The golden may move** (seed 1's player 0 is on level 1 today): regenerate once, say so in the commit; `data-hash` must not move.
-5. **BUG-0511 (S3):** `OwnFighterAhead` takes only a blocker inside the caster's swept corridor (lateral offset ≤ the two radii +
-   slack) on its level or a legal step away; un-skip QA's `AnOwnFighterBesideTheCaster_NotInItsWay_DoesNotHoldTheStuckCount`.
-6. **BUG-0512 (S3):** the ordered-Attack give-up tests the goal field's cost at the unit's cell whatever its state; un-skip QA's
-   `FiveHundredUnits_OrderedOntoAReachableBuildingThroughARampDetour_NeverGiveUp_ZeroBytes`.
-7. If under budget, S4s most valuable first: BUG-0594 items 1-2, BUG-0622 items 1 / 2 / 4, BUG-0541 item 2, BUG-0573 item 1,
-   BUG-0542's gated row, BUG-0513.
-8. docs/03 lines for each fix (the M5-4a "Known gap" and BUG-0621 sentences replaced by the rule); docs/01 row only for item 4.
+Watch-outs (sim): a new `Command` kind, if any, goes into `CommandDoorFuzzStressTests`; `MatchOver` must not read the view's
+`ViewApi/MatchOver` (which prints the dev line today: the view keys off the sim's events once they exist); `AiVersusAiTests` is the
+place for "one side wins" (criterion 5, M5-5); BUG-0651's direction (a stopped chaser with no cached field holds the count) is a
+few-line fold-in if an M5-4b task touches `CombatSystem.ReachableOnFoot`, else the next hardening; `TightBlob2500` sits at 4.47-4.51
+of 4.6 ms alone: any per-tick work in combat / movement needs a measurement.
 
-**Out:** Requests 37 (`IsDefeated` / `MatchOver`: M5-4b's first item, a feature), defense / expansion / abilities / difficulty
-knobs (M5-4b), any `game/data/factions/**` edit, any view file (`StartBase.cs` included: the view's hardening doesn't touch it either).
-
-**Acceptance criteria.** 1. Each fixed bug's QA row un-skipped and green, with a regression test that failed first. 2. BUG-0640:
-the Malazan 36,000-tick report row finishes every placed house (numbers in the report). 3. BUG-0621: the survey shows 0 / 100
-different-level pairs on every size, the fallback rates reported. 4. Golden: `k` lines moved at most once (item 4), `data-hash`
-unchanged, reproduced twice. 5. Full non-Perf green, Perf alone green, smoke PASS; 0 warnings. 6. Statuses: dev proposes, QA sets
-what it verifies. 7. The dev's count ≤ 1,200 reported.
-
-**Design references.** docs/02 "AI opponent" (behaviours: rebuild losses), "Map and terrain" (symmetric layouts); docs/03
-"Implementation (M5-3)" (`MaxTries`, the wave), "Implementation (M5-4a)" (the start rule), "Map generation"; each bug file's
-Producer triage.
-
-**QA focus (full).** Waves against fenced targets (trees two deep, a 2-tower variant); the AI's house sites over 30 minutes on both
-factions with a killed builder; `Validate` × `Generate` sweep green across 444+ sets; the start survey seeds 1-100 × 3 sizes;
-the golden twice from a clean clone; 500-unit ordered attacks through a ramp detour at 0 bytes.
-
-### Watch-outs (sim)
-- Item 4 changes which centre seed 1 picks: `CommandCardHashTwinTests` (seed 2 since M5-4a) and `PropsHashTwinTests` may need
-  re-checking; the production / research Perf scenes stay pinned to `StartLocations` 0.
-- The data track's D16 pins `ai.json` difficulty numbers the same session: don't move any `difficulties` value.
+### Debt for the next sim hardening (counter 0 / 4)
+BUG-0651 (S3), BUG-0650 (S4: a per-site join count, give up / back off), BUG-0622 item 1 (`StartBase.Plan` anchor wrap, a view-owned
+file the sim may take by name), BUG-0510, BUG-0144, BUG-0113 item 2, the 0461 movement half; Requests 33 (a text-taking `DataLoader`
+overload for M6 export).
 
 ---
 
 ## View track
 
-### Current session plan: M6-VH1, the view's hardening (counter 4 / 4) · hardening · QA standard · dev ≤ 1,000 lines (QA outside)
+### Next task candidates (feature session; QA standard)
 
-**Goal.** Close what M6-V3 left open now that the sim's start locations are on `main`, fix the colour table's legibility gap,
-and the sandbox flake. In priority order; stop at the budget.
+1. **BUG-0661 first (S2, red on `main`):** `QaH2Test` seeds 1 / 6 and `QaM27Test` re-staged on the merged tree: re-derive each march
+   threshold from what the scene proves (a 10 s march at the unit's speed from the new start block; the seed-6 11.3 m is a ramp /
+   forest in the way: move the block or the goal), reason written in the test, no threshold loosened without one. Run the whole loop.
+2. **BUG-0662 (S3)** if a few lines: `GroundDiscPool.Reclaim` takes only a node whose key is lower than the key being taken (callers
+   take keys ascending), else grow; a `QaM5V1Test` / `QaVh1Test` Check that stable keys keep their nodes. **BUG-0663** wording.
+3. Then the feature: **M6-V4** (victory / defeat banner + the post-match stats screen, criterion 2) **only if Requests 37 is on
+   `main`** (it won't be until the sim's M5-4b merges: the view can build the screen against `ViewApi/MatchOver`'s current dev watch
+   and switch the trigger when the sim's events land, if the Producer judges that cheap); otherwise **M6-V5's slot part** (2-4 slots
+   in the setup; the generator's 3-4 start locations exist since M5-4a; a team rule is Requests 38 to file for the sim) or the
+   **settings screen** (criterion 4: resolution, window mode, VSync, quality, volumes; keybinds later), which needs nothing from the sim.
 
-**Scope (in this order).**
-1. **The start-location probes → Checks (BUG-0604 closes):** `AiSeatTest.CheckAiActed(gathering: true)` becomes
-   `Check(working > 0, ...)` (on the merged tree the Producer saw the menu match's AI gathering by tick 400: numbers in the session
-   log); `QaM6V3Test.MenuOpenings`' mine-in-sight print becomes a Check that every hall sees a mine; BUG-0604 → fixed.
-2. **BUG-0632 (S3), Producer decision: data first, then a guard.** Retune `ui.json` `setup.colour_3` Crimson brighter and move
-   Iron or Jade so every table colour's corpse fill has luminance ≥ 0.2 and every pair is ≥ 0.25 apart (BUG-0160's rules), names
-   unchanged; then a `ShellTest` row that applies the corpse rules to all 8 colours and 28 pairs so a future recolour fails by
-   name; flip `QaM6V3Test.CorpseRulesOverTable`'s probes to Checks. Quote the new RGB values in the report (owner review).
-3. **BUG-0631 item 3, Producer decision:** a slot can't pick a colour the other slot holds: the setup greys the taken colour in
-   the other list (and moves the pick to the first free colour when the lists collide); `--colour` with both slots on one colour
-   warns and keeps slot 2's default. docs/02 "Game flow" 2: "colours are unique per match"; docs/01 row.
-4. **BUG-0603 (S3):** `M4PlayableTest` seed 6 step 7's flake: pull the army back once the enemy army is gone, or check sight from
-   a unit kept at the camp; replay `m4playable-seed6-fail-tick4094.replay`; 10 seed-runs under load.
-5. If under budget: BUG-0550 item 1 (`GroundDiscPool.Take` reclaims stale nodes), BUG-0521 items 2-3, BUG-0581 item 3 (process:
-   just close it), BUG-0631 item 1's `#` nit.
-6. docs/03 "Implementation (M6-V3)" lines for each change (the probes, the table rule, unique colours); `ShellTest` rows.
+Watch-outs (view): the dev's count excludes QA's files; `ui.json` edits are allowed when the brief names them (sim-owned dir);
+`AiSeatTest`'s gathering Check reads a one-tick snapshot and is stable only on its own Hard match (BUG-0663 note): a new scene
+checks "first gathering tick ≤ 400", not a snapshot.
 
-**Out:** the match-over banner / stats screen (M6-V4: waits on the sim's Requests 37), 2-4 slots and teams (M6-V5), any sim file
-(`ViewApi/` included), the look test, export.
-
-**Acceptance criteria.** 1. `AiSeatTest` and `QaM6V3Test` pass with the probes as Checks (AI gathering by tick 400 from the menu;
-36 / 36 halls see a mine). 2. The 8 colours and 28 pairs meet the corpse rules in a `ShellTest` row; `CombatViewTest` green with
-slot 1 drawn in each table colour (QA sweeps). 3. Duplicate picks refused in the setup and `--colour`; `ShellTest` rows. 4.
-BUG-0603's scene 10 / 10 seed-runs under another suite's load. 5. Scene loop green; smoke PASS both passes; 0 warnings; docs; the
-dev's count ≤ 1,000 reported.
-
-**Design references.** docs/02 "Game flow" 2; docs/03 "Implementation (M6-V3)", BUG-0160 item 3's corpse rules (docs/03 "Combat
-views"); BUG-0604 / 0632 / 0631 / 0603 files.
-
-**QA focus (standard).** Menu openings on 6 seeds × 3 sizes with the AI gathering; `CombatViewTest` with every table colour on
-slot 1 and the 28 pairs; junk `--colour` with duplicates; 10 `M4PlayableTest` seed-runs beside the sim suite.
+### Debt for the next view hardening (counter 0 / 4)
+BUG-0662 (S3, if not folded in), BUG-0663, BUG-0550 item 2 (M6 art), BUG-0581 items 2-3, BUG-0281 item 2 (M6 fog look), the M6
+export items (Requests 33, `tools/export.ps1`).
 
 ---
 
 ## Data track
 
-### Current session plan: D16, the difficulty blocks pinned to docs/02 and the pages · feature · QA light · ~350 lines incl. QA
+### Next task candidates (feature session; counter 1 / 4; QA light)
 
-**Goal.** M5 criterion 4 (Easy / Normal / Hard per docs/02 "AI opponent") needs the three difficulty blocks in both `ai.json`
-files documented and pinned: today nothing checks them against docs/02 (only the house report reads `ThinkTicks`). Inbox answers
-first if any arrived.
+1. **Inbox answers first** (D13's ×1.1 / ×1.5 / hp pass, D14's build orders, the D11 / D12 text tables, D15's house-rule choice, the
+   colour names): each a data edit + page pin + one golden header regen (`data-hash` only; every `k` line equal, asserted).
+2. Else **D17, the Teblor's `ai.json` + faction page AI section** against the schemas on `main` (difficulties, a 26-step build order,
+   compositions by pop, `attack` / `retreat`), pinned by the existing `AiContentTests` A-K rows (they take any faction with an
+   `ai.json`): the first M7 data, allowed ahead because it needs no new schema. **Or**, smaller: the docs/02 "AI opponent" Normal line
+   stating "doesn't focus fire or pull back wounded" (the D16 QA note: Normal's `false` flags rest on "fair play at a relaxed pace") as
+   a Producer default + K row.
+3. STOP cheaply if neither applies and a schema is missing.
 
-**Scope.**
-1. **Inbox answers first** (D13 / D14 / D11 / D12 / D15), each as a data edit + page pin + one golden header regen (`data-hash`
-   only; every `k` line equal, asserted).
-2. **A "Difficulty" table on both faction pages** (`docs/factions/malazan.md`, `whirlwind.md`, after "AI build order (Normal)"):
-   rows Easy / Normal / Hard; columns thinks every (s), build-order slack (s), wave size ×, gather bonus, focus fire, pulls back
-   wounded, uses abilities, expands after (s), filled from the shipped `ai.json` (no number change).
-3. **Pins** (`Content/AiContentTests`, new rows J-K): (a) each page cell equals its `ai.json` field both ways (a one-line page
-   edit fails by faction / difficulty / column); (b) docs/02's stated numbers hold for both factions: Easy thinks every 2 s, Hard
-   every 0.5 s, Hard `gatherBonus` 0.25, Hard `focusFire` and `pullBackWounded` true and Easy / Normal false, Easy `useAbilities`
-   false and Normal / Hard true; a mutation of any fails naming the field.
-4. **docs/02 "AI opponent" Easy wording, Producer default (BUG-0541 item 3):** "rarely uses abilities" → "doesn't use abilities"
-   (the schema's `useAbilities` is a bool; a rate would be a new field nobody asked for). One docs/02 line + one docs/01 change-log
-   row ("Producer decision, owner may revisit"). BUG-0541 item 3 → fixed in your report (the Producer sets the status).
-5. **BUG-0641 (S4):** the report's comment names every internal it reaches (`Simulation.AiOf`, `AiPlayer.Board`, `PendingOrder.*`,
-   `PendingKind`); `thinkTicks` / `house` read from the AI (same reach as `Board`) or asserted equal once; the "workers" column
-   wording.
-
-**Out:** any `ai.json` or `units.json` number change without an inbox answer; `rules.json` (sim-owned); M7-M9 data.
-
-**Acceptance criteria.** 1. Both pages carry the table; rows J-K green and each failing by name on a one-line edit (report the
-message). 2. docs/02's Easy line reads "doesn't use abilities"; docs/01 row. 3. No `sim/Rts.Sim/**` or `game/data/**` change
-(unless an inbox answer); no golden change; build 0 warnings; `Content` + `QA/Content` green and the full non-Perf suite green
-with the sim's and the view's branches merged first. 4. The review table for the owner: the two pages' new tables quoted.
-
-**Design references.** docs/02 "AI opponent"; docs/03 "For the data track (M5-1)" (the eight difficulty fields and their units:
-`thinkInterval` / `buildOrderSlack` / `expandAfter` in seconds, converted to ticks at load); `studio/bugs/BUG-0541` item 3, `BUG-0641`.
-
-**Tests required.** `Content/AiContentTests` J-K; the report rows still green.
-
-**Constraints.** `sim/Rts.Sim.Tests/Content/**`, `QA/Content/**`, `docs/factions/**`, plus one docs/02 line and one docs/01 row;
-no sim-track test pins a difficulty value today (the sim's hardening won't move them: told in its brief).
-
-**QA focus (light).** Each pin fails by name on a one-line edit of either page or either `ai.json` difficulty block.
+Watch-outs (data): no `ai.json` number moves without an inbox answer; `rules.json` is sim-owned; D16's J compares post-tick-conversion
+values (a sub-half-tick file edit passes: documented gap, not a bug); the sim's M5-4b may add `ai.json` fields (defense / expansion
+knobs): if so, the data brief that session names them and the sim ships the minimum entries.
 
 ---
 
 ## Watch-outs (all tracks)
 
 - Three suites at once: wall-clock Perf rows fail under load; rerun alone before filing.
-- `studio/bugs/README.md` and `studio/qa/coverage.md`: each track appends only its own rows (unions at the merge).
-- **Merge order sim → view → data.** The sim's BUG-0621 fix may regenerate the golden (`k` lines, header unchanged); nobody else
-  touches `Replays/`. The view edits `ui.json` (colours) and `game/tests/**`; the data track edits docs/02 one line and docs/01 one row.
-- Rule 16 above: no process killing by name.
+- `studio/bugs/README.md` and `studio/qa/coverage.md`: each track appends only its own rows (unions at the merge); a bug file two
+  tracks both close in one session gets two appended sections (fine) and the Producer sets the status.
+- **Merge order sim → view → data.** The sim's M5-4b will regenerate the golden header if it adds a replay field (format 7) or hashes
+  new state (`k` lines move once, say why); nobody else touches `Replays/`.
+- Rules 16-18 above.

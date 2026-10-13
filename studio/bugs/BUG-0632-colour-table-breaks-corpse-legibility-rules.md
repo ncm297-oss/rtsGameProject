@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-13-0146, task M6-V3 (QA round 1 re-check) |
 | System | view: `ui.json` `setup.colour_*` table vs `CombatViews` corpse colours (BUG-0160 item 3 rules) |
-| Fixed by | |
+| Fixed by | 650d423 (M6-VH1): `ui.json` Crimson `#A3192B` -> `#B82633`, Jade `#2E8B57` -> `#2EA35A`; a `ShellTest` row checks all 8 fills and 28 pairs. QA 2026-10-13-0527: lowest luminance Cobalt 0.210, closest pair Cobalt / Violet 0.253; CombatViewTest green with each colour on slot 1 |
 
 ## Repro
 1. `& $env:GODOT --headless --path game res://tests/QaM6V3Test.tscn` (row `CorpseRulesOverTable`: a real `CombatViews`
@@ -33,3 +33,6 @@ player can easily pick).
 Fix options (Producer's call): retune `ui.json` Crimson a little brighter and Iron or Jade a little further apart (data
 only), or check the rules in `UiText.ReadColours` / a ShellTest row over the whole table. When fixed, flip the
 `QaM6V3Test.CorpseRulesOverTable` probes to Checks. Cobalt (0.210) and Cobalt v Violet are close to the limits.
+
+## Producer (2026-10-13-0527 ACCEPT)
+**Fixed** in M6-VH1 (data first: two `ui.json` values, names unchanged; then the `ShellTest` guard row and `QaM6V3Test.CorpseRulesOverTable` as Checks). The new values are under For your review for the owner.

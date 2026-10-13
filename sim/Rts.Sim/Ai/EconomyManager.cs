@@ -10,7 +10,9 @@ namespace Rts.Sim.Ai;
 /// <see cref="AiRulesDef.GoldShare"/> of the gathering workers are on gold, else to wood (the known node of that kind nearest
 /// the worker; the other kind when none is known); and a house is placed when the population cap is within
 /// <see cref="AiRulesDef.HouseHalfPopMargin"/> of the population (and below the rules' cap) and no house is under
-/// construction or waiting to be judged.
+/// construction or waiting to be judged. M5-H1 (BUG-0640): an own site no worker has as its build target for
+/// <see cref="StalledThinks"/> thinks gets a worker sent to join it (a Build of its type at its anchor: the idle worker
+/// nearest it, else the nearest gatherer), and such a stalled house site does not hold the house rule off.
 /// </summary>
 internal static class EconomyManager
 {
@@ -19,9 +21,16 @@ internal static class EconomyManager
     /// <summary>Set on <see cref="Blackboard.GatherKind"/> for this think when the worker's last Gather was dropped (BUG-0570).</summary>
     private const byte Dropped = 0x80;
 
-    /// <summary>Runs the house rule, then sends the idle workers to gather.</summary>
+    /// <summary>
+    /// Thinks an own site may go without a builder before a worker is sent to it (BUG-0640): a Build that just applied, or a
+    /// worker sent and not yet counted, isn't taken for an abandoned site. Not a balance number: a guard.
+    /// </summary>
+    internal const int StalledThinks = 3;
+
+    /// <summary>Resumes stalled sites, runs the house rule, then sends the idle workers to gather.</summary>
     internal static void Run(AiPlayer ai)
     {
+        Sites(ai);
         House(ai);
         ClearSeenMarks(ai);
         Gatherers(ai);
@@ -57,10 +66,44 @@ internal static class EconomyManager
         PlayerView v = ai.View;
         if (v.HalfPopCap >= ai.Data.Rules.HalfPopCap || v.HalfPopCap - v.HalfPop > ai.Rules.HouseHalfPopMargin) return;
         for (int k = 0; k < ai.OwnBuildingCount; k++)
-            if (ai.OwnBuildingSites[k] && ai.OwnBuildingTypes[k] == ai.HouseType) return; // one under construction
+            if (ai.OwnBuildingSites[k] && ai.OwnBuildingTypes[k] == ai.HouseType && !Stalled(ai, ai.OwnBuildingSlots[k])) return; // one being built
         int centre = BuildOrderExecutor.HallCentre(ai);
         if (centre >= 0) ai.TryBuild(ai.HouseType, centre, ref board.HousePending);
     }
+
+    /// <summary>
+    /// BUG-0640: counts each own site's thinks with no builder (no own worker has it as its build target); one without for
+    /// <see cref="StalledThinks"/> thinks gets a worker sent to join it, and its count restarts. One join a think at most.
+    /// </summary>
+    private static void Sites(AiPlayer ai)
+    {
+        Blackboard board = ai.Board;
+        for (int k = 0; k < ai.WorkerCount; k++)
+            if (ai.View.TryGetBuildTarget(ai.WorkerSlots[k], out EntityHandle target)) board.SiteBuiltAt[target.Index] = ai.Now;
+        bool sent = false;
+        for (int k = 0; k < ai.OwnBuildingCount; k++)
+        {
+            int slot = ai.OwnBuildingSlots[k];
+            if (!ai.OwnBuildingSites[k] || !ai.View.TryGetBuilding(slot, out SeenBuilding site)) continue;
+            if (board.SiteGeneration[slot] != site.Handle.Generation)
+            {
+                board.SiteGeneration[slot] = site.Handle.Generation;
+                board.SiteStill[slot] = 0;
+            }
+            if (board.SiteBuiltAt[slot] == ai.Now) board.SiteStill[slot] = 0;
+            else if (board.SiteStill[slot] < byte.MaxValue) board.SiteStill[slot]++;
+            if (sent || board.SiteStill[slot] < StalledThinks) continue;
+            int worker = ai.PickBuilder(ai.BuildingCentre(site.TypeId, site.Cell), out int generation);
+            if (worker < 0) continue;
+            if (!ai.Send(Command.Build(ai.Player, new EntityHandle(worker, generation), site.TypeId, ai.CellCentre(site.Cell)))) return;
+            ai.MarkOrdered(worker, generation, 0);
+            board.SiteStill[slot] = 0;
+            sent = true;
+        }
+    }
+
+    /// <summary>Whether own site <paramref name="slot"/> has stood still for <see cref="StalledThinks"/> thinks (nobody builds it).</summary>
+    private static bool Stalled(AiPlayer ai, int slot) => ai.Board.SiteStill[slot] >= StalledThinks;
 
     private static void Gatherers(AiPlayer ai)
     {
@@ -116,7 +159,8 @@ internal static class EconomyManager
     /// <summary>
     /// M5-3: with no idle worker, one gatherer a think moves to the other kind while the split is off
     /// <see cref="AiRulesDef.GoldShare"/> (more than <c>round(goldShare x gatherers)</c> on gold, or fewer) and a node of the
-    /// other kind is known: the first in slot order at work on the kind with too many (Gathering, not carrying a load home).
+    /// other kind is known: of those at work on the kind with too many (Gathering, not carrying a load home), the one carrying
+    /// the least (M5-H1, BUG-0594: the other kind's Gather drops the load), slot order on ties.
     /// Without it a base whose workers all went to gold before its scout found a forest never gathers wood (no worker is ever
     /// idle again once the cap stops training).
     /// </summary>
@@ -126,16 +170,22 @@ internal static class EconomyManager
         if (gold == want) return;
         byte from = gold > want ? Gold : Wood, to = gold > want ? Wood : Gold;
         Blackboard board = ai.Board;
-        for (int k = 0; k < ai.WorkerCount; k++)
+        // BUG-0594: the one carrying the least (slot order on ties), since a Gather of the other kind drops its load.
+        int pick = -1, least = int.MaxValue;
+        SeenUnit picked = default;
+        for (int k = 0; k < ai.WorkerCount && least > 0; k++)
         {
             int slot = ai.WorkerSlots[k];
             if (!ai.View.TryGetUnit(slot, out SeenUnit u) || u.State != UnitState.Gathering || board.UnitGeneration[slot] != u.Handle.Generation
                 || board.GatherKind[slot] != from || ai.OrderedNotApplied(slot, u.Handle.Generation) || ai.IsScout(slot, u.Handle.Generation)) continue;
-            int node = NearestNode(ai, to, u, out int nodeType, out EntityHandle nodeHandle);
-            if (node < 0 || !ai.Send(Command.Gather(ai.Player, u.Handle, ai.NodeCentre(nodeType, node)))) return;
-            ai.MarkOrdered(slot, u.Handle.Generation, to, nodeHandle);
-            return;
+            ai.View.TryGetCargo(slot, out int load, out _);
+            if (load >= least) continue;
+            (pick, least, picked) = (slot, load, u);
         }
+        if (pick < 0) return;
+        int node = NearestNode(ai, to, picked, out int nodeType, out EntityHandle nodeHandle);
+        if (node < 0 || !ai.Send(Command.Gather(ai.Player, picked.Handle, ai.NodeCentre(nodeType, node)))) return;
+        ai.MarkOrdered(pick, picked.Handle.Generation, to, nodeHandle);
     }
 
     /// <summary>

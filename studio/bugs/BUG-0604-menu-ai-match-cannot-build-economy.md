@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-12-1930, task M6-V2 (QA) |
 | System | view: the menu skirmish's start (`Match.Start`: `--units` default 100 a side, `StartBasePlan`); sim: AI economy without scouting (M5-3) |
 | Fixed by | Partly, 9ec4a56 (M6-V3): the menu's match has no dev army (`--units 0`; QaM6V3Test: 18 openings, 1 hall + 5 workers each, no other unit). Still open: on this branch 4 of 36 halls see a gold mine at the start and `AiSeatTest` prints `PENDING start locations probe (menu): by tick 401 no AI worker is gathering`; closes when the sim's M5-4a start locations merge and the probe flips to a Check. |
@@ -34,3 +34,6 @@ Partly known: the handoff expects a weak AI until M5-3, BUG-0581 item 2 notes th
 locations (mines at the start) are M6 sim work. Filed so the Producer can decide whether the menu's skirmish should start
 without the dev armies (`--units 0`, the docs/02 opening: hall and workers), and so a later QA can re-check the AI from the menu
 once M5-3 merges. Not an M6-V2 criterion miss.
+
+## Producer (2026-10-13-0527 ACCEPT)
+**Fixed.** The sim half landed in M5-4a (start locations: every hall by two mines and a forest) and the view half in M6-V3 (`--units 0` from the menu); M6-VH1 (650d423) turned both probes into Checks: `AiSeatTest` fails unless an AI worker of the menu's match is gathering or returning by tick 400, `QaM6V3Test.MenuOpenings` unless all 36 halls see a mine. QA 2026-10-13-0527: 18 / 18 openings with the AI gathering by tick 59-66.

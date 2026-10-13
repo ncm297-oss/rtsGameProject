@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-11-0314, task M5-1 |
 | System | ai.json loader, AI architecture guard, AI data |
-| Fixed by | |
+| Fixed by | item 1 M5-3 238f261; item 2 M5-H1 1dfdef3 (`PlayerViewArchitectureTests.Scan` strips comments); item 3 D16 8f3d1e5 (docs/02 Easy "doesn't use abilities", pinned by `AiContentTests.K`) |
 
 ## Repro
 1. **Tiny weight loads as 0.** `QA/AiLoaderQaTests.ATinyCompositionWeight_IsRefused_OrStoredAboveZero` (skipped with this
@@ -42,3 +42,9 @@ Item 1 **fixed** in M5-3 `238f261`: a weight above 0 that rounds to 0f is a load
 (`Data/AiLoaderTests.ACompositionWeightRoundingToZero_IsALoadError`; QA's `AiLoaderQaTests.ATinyCompositionWeight_IsRefused_OrStoredAboveZero`
 un-skipped, with a 1e-40 subnormal row that loads above 0; a mutation that drops the check fails the dev's row). Items 2-3 are
 still open, so the bug stays open.
+
+## QA re-check (2026-10-13-0527, M5-H1)
+Item 2 **fixed** in M5-H1 1dfdef3: `PlayerViewArchitectureTests.Scan` strips `//` and `/* */` comments and scans a code line starting with `*` (`AContinuationLineStartingWithAStar_IsScanned_ABlockCommentIsNot`; QA re-ran the plant from the report and it is now caught). Item 3 (docs/02 Easy wording) is the data track's this session, so the bug stays open.
+
+## Producer (2026-10-13-0527 ACCEPT)
+**Fixed**: all three items are closed after this session's merge (item 2 by the sim's M5-H1, item 3 by the data's D16). Status set by the Producer.

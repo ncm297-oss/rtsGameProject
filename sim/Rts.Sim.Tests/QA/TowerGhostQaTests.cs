@@ -284,8 +284,8 @@ public class TowerGhostQaTests
     /// <summary>
     /// A Crossbowman ordered onto a remembered Tent up a cliff never holds the order for ever below it. M4-H3 (BUG-0401,
     /// Producer decision): an ordered chase whose walk reaches its goal no longer gives up by the stall count, and this map's
-    /// ramp reaches the plateau, so with the Tent still there (<paramref name="gone"/> false) it walks up and shoots it: the
-    /// row accepts the order ending or the Tent taking a hit within 2 minutes.
+    /// ramp reaches the plateau, so with the Tent still there (<paramref name="gone"/> false) it walks up and shoots it, holding
+    /// the order until the hit (BUG-0513: the row used to accept either outcome); with it gone the order ends.
     /// </summary>
     [Theory]
     [InlineData(true)]
@@ -311,5 +311,6 @@ public class TowerGhostQaTests
         int ran = RunUntil(sim, () => w.Units.Target[xb.Index].Generation == 0 || (!gone && w.Buildings.Hp[tent.Index] < full), 2400);
         Assert.True(ran < 2400, $"after {ran} ticks the Crossbowman still holds the order at {w.Units.Position[xb.Index]} "
             + $"(mode {w.Units.Mode[xb.Index]}, state {w.Units.State[xb.Index]})");
+        if (!gone) Assert.True(w.Buildings.Hp[tent.Index] < full, $"the order ended at {ran} before the Tent took a hit");
     }
 }

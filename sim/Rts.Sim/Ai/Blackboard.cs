@@ -38,6 +38,9 @@ internal sealed class Blackboard
         NodeDropped = new int[resourceSlots];
         BuildingBusyUntil = new int[buildingSlots];
         Array.Fill(BuildingBusyUntil, -1);
+        SiteGeneration = new int[buildingSlots];
+        SiteBuiltAt = new int[buildingSlots];
+        SiteStill = new byte[buildingSlots];
         Array.Fill(_badCell, -1);
         RalliedVersion = new int[unitSlots];
         WaveGeneration = new int[unitSlots];
@@ -45,6 +48,17 @@ internal sealed class Blackboard
         WaveTries = new byte[unitSlots];
         WaveBest = new float[unitSlots];
     }
+
+    // ---------- M5-H1: own construction sites (EconomyManager, BUG-0640) ----------
+
+    /// <summary>Per building slot, the own site's generation <see cref="SiteStill"/> counts for (0: none tracked).</summary>
+    internal int[] SiteGeneration { get; }
+
+    /// <summary>Per building slot, the last think an own worker had the building as its build target (scratch, stamped each think).</summary>
+    internal int[] SiteBuiltAt { get; }
+
+    /// <summary>Per building slot, thinks in a row the own site had no builder (no worker walking to it or working on it), capped.</summary>
+    internal byte[] SiteStill { get; }
 
     // ---------- M5-3: the scout (ScoutManager) ----------
 
@@ -102,6 +116,9 @@ internal sealed class Blackboard
 
     /// <summary>The wave's half-pop and tick at its start.</summary>
     internal int WaveStartHalfPop, WaveStartTick;
+
+    /// <summary>The last tick a member was ordered, busy (not Idle) or had an order pending (BUG-0598: a wave idle for <c>ai.waveCooldown</c> ends).</summary>
+    internal int WaveBusyTick;
 
     /// <summary>No wave starts before this tick (set at a wave's start and at its retreat).</summary>
     internal int WaveCooldownUntil;

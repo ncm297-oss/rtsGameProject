@@ -27,15 +27,38 @@ public class PlayerViewArchitectureTests
         foreach ((string name, string[] lines) in files)
         {
             if (name == TheOneFile) continue;
+            bool inBlock = false;
             for (int i = 0; i < lines.Length; i++)
             {
-                string line = lines[i].TrimStart();
-                if (line.StartsWith("//", StringComparison.Ordinal) || line.StartsWith("*", StringComparison.Ordinal)) continue;
+                string line = Code(lines[i], ref inBlock).Trim();
+                if (line.Length == 0) continue;
                 foreach (string p in Forbidden)
                     if (Regex.IsMatch(line, p)) hits.Add($"{name}:{i + 1}: {p}: {line}");
             }
         }
         return hits;
+    }
+
+    /// <summary>
+    /// The code of one line with its comments taken out: <c>//</c> to the end of the line, and <c>/* */</c> blocks, which may
+    /// span lines (<paramref name="inBlock"/>). M5-H1 (BUG-0541): a code line that starts with <c>*</c> (an expression
+    /// continued on a new line) is scanned; only text inside a block comment is skipped. String literals are not parsed.
+    /// </summary>
+    internal static string Code(string line, ref bool inBlock)
+    {
+        var code = new System.Text.StringBuilder();
+        for (int k = 0; k < line.Length; k++)
+        {
+            if (inBlock)
+            {
+                if (line[k] == '*' && k + 1 < line.Length && line[k + 1] == '/') { inBlock = false; k++; }
+                continue;
+            }
+            if (line[k] == '/' && k + 1 < line.Length && line[k + 1] == '/') break;
+            if (line[k] == '/' && k + 1 < line.Length && line[k + 1] == '*') { inBlock = true; k++; continue; }
+            code.Append(line[k]);
+        }
+        return code.ToString();
     }
 
     private static List<(string Name, string[] Lines)> AiSources()
@@ -78,6 +101,30 @@ public class PlayerViewArchitectureTests
         Assert.Equal(2, hits.Count);
         Assert.StartsWith("Managers/Planted.cs:5:", hits[0]);
         Assert.StartsWith("Managers/Planted.cs:6:", hits[1]);
+    }
+
+    /// <summary>
+    /// BUG-0541 item 2: an expression continued on a line that starts with <c>*</c> is code, and is scanned; a block
+    /// comment naming the world (its <c>*</c> lines included) is not.
+    /// </summary>
+    [Fact]
+    public void AContinuationLineStartingWithAStar_IsScanned_ABlockCommentIsNot()
+    {
+        List<(string Name, string[] Lines)> files = AiSources();
+        files.Add(("Planted.cs", new[]
+        {
+            "namespace Rts.Sim.Ai;",
+            "/* The AI never reads",
+            " * Rts.Sim.World directly. */",
+            "internal static class Planted",
+            "{",
+            "    internal static int Peek(object o) => 1",
+            "        * ((Rts.Sim.World)o).Units.Count; /* World */",
+            "}",
+        }));
+        List<string> hits = Scan(files);
+        string hit = Assert.Single(hits);
+        Assert.StartsWith("Planted.cs:7:", hit);
     }
 
     /// <summary>Every public property, return value and out parameter of PlayerView, and every field of what it returns, is a value type with no reference inside (the constructor's world is the only reference in).</summary>

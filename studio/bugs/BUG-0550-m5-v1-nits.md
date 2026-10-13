@@ -37,3 +37,6 @@ command card, as units do. Taste call for the M6 art pass (a disc wider than the
 ## Expected
 1. A pool makes a node only when a frame draws more discs than any frame before. 2. The red flash on the caster reads
 at RTS zoom when the caster is surrounded.
+
+## Update (2026-10-13-0527 ACCEPT, Producer)
+Item 1 **fixed** in M6-VH1 (650d423): `GroundDiscPool.Take` reclaims a node whose key hasn't been taken this frame before it grows (`QaM5V1Test` pool churn: 16 keys for 16 others stays at 16 nodes). Side effect filed as BUG-0662 (S3: the reclaim moves stable keys, so their meshes are rebuilt). Item 2 (the lost-cast disc under the crowd) stays open for the M6 art pass, so the bug stays open.

@@ -31,3 +31,6 @@ read a max-hp array shorter than the unit store. `Match` binds once per instance
 ## Expected
 1. A ring that hasn't moved isn't rebuilt. 2. The copy shows only what was seen in both directions. 3. A re-bind sizes
 the shared array to the new capacity.
+
+## Update (2026-10-13-0527 ACCEPT, Producer)
+Item 3 **fixed** in M6-VH1 (650d423): `CombatViews.Bind` replaces a max-hp array shorter than the unit store (`SlotMaxHp.Capacity`). Item 2 (`ViewApi/SeenResources`, a sim file) stays open for a sim hardening, so the bug stays open.

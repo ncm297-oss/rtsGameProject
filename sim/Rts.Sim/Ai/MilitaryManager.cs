@@ -24,7 +24,8 @@ namespace Rts.Sim.Ai;
 /// no longer known (not seen live, no ghost of it) is replaced by the known enemy building nearest the members (all sent
 /// again), or with none the wave ends and the members go home.</item>
 /// <item><b>Retreat.</b> Live members' half-pop below <c>(1 - retreat.lossFraction)</c> of the start's: every live member
-/// Moves to the rally point, the wave ends, and the cooldown starts again.</item>
+/// Moves to the rally point, the wave ends, and the cooldown starts again. The same when no member has been busy (not Idle),
+/// had an order pending or been ordered for more than <c>ai.waveCooldown</c> (BUG-0598: all crowded by a target none strikes).</item>
 /// </list>
 /// One command per unit per think at most; a full queue ends the think and the rest go next think (the per-slot flags keep
 /// what is owed).
@@ -94,6 +95,7 @@ internal static class MilitaryManager
         board.WaveActive = true;
         board.WaveStartHalfPop = half;
         board.WaveStartTick = ai.Now;
+        board.WaveBusyTick = ai.Now;
         board.WaveCooldownUntil = ai.Now + ai.Rules.WaveCooldownTicks;
         board.WavesStarted++;
     }
@@ -110,11 +112,20 @@ internal static class MilitaryManager
             live++;
             half += ai.Data.Units[u.TypeId].HalfPop;
             sum += u.Position;
+            if (u.State != UnitState.Idle || ai.OrderedNotApplied(slot, u.Handle.Generation)) board.WaveBusyTick = ai.Now;
         }
         if (live == 0 || half < (1f - ai.Def.RetreatLossFraction) * board.WaveStartHalfPop)
         {
             End(ai);
             board.WaveCooldownUntil = ai.Now + ai.Rules.WaveCooldownTicks; // retreat: no new wave for a while
+            return;
+        }
+        // BUG-0598: every member has stood Idle, unordered, for a cooldown (each crowded by a target none of them strikes):
+        // nobody is fighting, so the wave goes home like a retreat rather than freezing the AI's offence.
+        if (ai.Now - board.WaveBusyTick > ai.Rules.WaveCooldownTicks)
+        {
+            End(ai);
+            board.WaveCooldownUntil = ai.Now + ai.Rules.WaveCooldownTicks;
             return;
         }
         if (ai.EnemyBuildingKnown(board.WaveTarget, out _)) return;
@@ -211,6 +222,7 @@ internal static class MilitaryManager
             bool home = c.Kind == CommandKind.Move;
             board.RalliedVersion[slot] = home ? board.RallyVersion : 0;
             if (tagged) board.WaveFlag[slot] = 0;
+            if (tagged && !home) board.WaveBusyTick = ai.Now;
             if (tagged && !home && board.WaveTries[slot] < byte.MaxValue) board.WaveTries[slot]++;
             if (tagged && home) board.WaveGeneration[slot] = 0; // home: no longer a member
         }
