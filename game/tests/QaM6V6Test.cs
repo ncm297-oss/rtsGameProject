@@ -86,14 +86,24 @@ public partial class QaM6V6Test : Node
             ("escaped quote", good.Replace("\"medium\"", "\"med\\\"ium\""), true, s => s.Quality == SettingsQuality.Medium),
             ("empty file", "", true, s => s.SameAs(new GameSettings())),
             ("nan text", good.Replace("edge_pan=1.0", "edge_pan=nan"), true, s => s.EdgePan == 1f),
+            // QA M6-V4 (BUG-0680 boundaries): the 18-digit cap, a 19-digit run that would fit 64 bits, long runs with a fraction
+            // or an exponent (a float: for an int key mistyped, for the float key out of range), exponent extremes.
+            ("19 digits that fit 64 bits", "[display]\nwidth=1000000000000000000\n", true, s => s.Width == GameSettings.DefaultWidth),
+            ("negative 18-digit int", "[audio]\nmaster=-999999999999999999\n", true, s => s.MasterVolume == 100),
+            ("20 digits and a fraction for an int", "[display]\nwidth=99999999999999999999.5\n", true, s => s.Width == GameSettings.DefaultWidth),
+            ("20 digits and an exponent for an int", "[display]\nwidth=99999999999999999999e0\n", true, s => s.Width == GameSettings.DefaultWidth),
+            ("400 digits and a fraction", "[camera]\nedge_pan=" + new string('9', 400) + ".5\n", true, s => s.EdgePan == 1f),
+            ("negative 64 digits and an exponent", "[camera]\nedge_pan=-" + new string('9', 64) + "e5\n", true, s => s.EdgePan == 1f),
+            ("a 300-digit fraction", good.Replace("edge_pan=1.0", "edge_pan=1." + new string('0', 300)), false, s => s.EdgePan == 1f && s.MusicVolume == 40),
+            ("exponent underflow", "[camera]\nedge_pan=1e-999\n", true, s => s.EdgePan == 1f),
+            ("exponent for an int", "[audio]\nsfx=5e+1\n", true, s => s.SfxVolume == 100),
         };
         foreach ((string what, string text, bool wantWarning, Func<GameSettings, bool> ok) in rows)
         {
             string path = PathOf("read.cfg");
             File.WriteAllText(ProjectSettings.GlobalizePath(path), text);
-            // In process: no throw, the right values. Not for the 64-bit rows: until BUG-0680 is fixed Godot's parser logs an
-            // ERROR for them, which would fail the whole scene in the loop's log scan; the child row below names that bug instead.
-            if (!what.Contains("64 bits", StringComparison.Ordinal))
+            // In process: no throw, the right values (since BUG-0680's fix the 64-bit rows too: the line shape refuses them
+            // before Godot's parser sees them, so no engine ERROR reaches this scene's log).
             {
                 var problems = new List<string>();
                 GameSettings s;
@@ -116,7 +126,7 @@ public partial class QaM6V6Test : Node
             var errors = lines.Where(l => l.Contains("ERROR", StringComparison.Ordinal) && !l.TrimStart().StartsWith("[", StringComparison.Ordinal)).ToList();
             int warnings = lines.Count(l => l.StartsWith("WARNING: Settings:", StringComparison.Ordinal));
             Check(exit == 0 && errors.Count == 0 && warnings == (wantWarning ? 1 : 0) && lines.Any(l => l.StartsWith("QA SETTINGS READ", StringComparison.Ordinal)),
-                $"boot read '{what}' (BUG-0680 for the 64-bit rows): exit {exit}, {warnings} settings warnings, errors [{string.Join(" | ", errors)}]");
+                $"boot read '{what}': exit {exit}, {warnings} settings warnings, errors [{string.Join(" | ", errors)}]");
         }
     }
 

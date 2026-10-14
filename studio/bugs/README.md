@@ -309,8 +309,8 @@ bugs outrank new features.
 | [BUG-0661](BUG-0661-four-view-scenes-red-since-m5-4a.md) | S2 | fixed | Four view test scenes fail on main since the M5-4a merge (FogViewTest, QaH2Test, QaM27Test, QaV3Test) |
 | [BUG-0662](BUG-0662-disc-pool-reclaim-moves-stable-keys.md) | S3 | fixed | GroundDiscPool's reclaim (BUG-0550 item 1) moves stable keys to other nodes, so their meshes are rebuilt |
 | [BUG-0663](BUG-0663-m6-vh1-colour-flag-nits.md) | S4 | open | M6-VH1 nits: the duplicate-colour warning says "Ignoring --colour" when only slot 1's flag was given |
-| [BUG-0680](BUG-0680-settings-int-beyond-64-bits-logs-engine-error.md) | S3 | open | A settings file with an integer beyond 64 bits logs an engine ERROR at boot (the pre-parse shape check lets any digit run through) |
-| [BUG-0681](BUG-0681-settings-override-resolution-flag-bench-viewport.md) | S3 | open | The boot's settings window size overrides Godot's `--resolution`, so the bench always runs at the stored size |
+| [BUG-0680](BUG-0680-settings-int-beyond-64-bits-logs-engine-error.md) | S3 | fixed | A settings file with an integer beyond 64 bits logs an engine ERROR at boot (the pre-parse shape check lets any digit run through) |
+| [BUG-0681](BUG-0681-settings-override-resolution-flag-bench-viewport.md) | S3 | fixed | The boot's settings window size overrides Godot's `--resolution`, so the bench always runs at the stored size |
 | [BUG-0682](BUG-0682-qah1-minimap-attack-oracle-gap.md) | S3 | fixed | QaH1Test's oracle wants a Move for every minimap right-click and counts only command kinds 0-7 |
 | [BUG-0683](BUG-0683-production-hud-test-even-footprint-click.md) | S3 | fixed | ProductionHudTest clicked a 2x2 footprint's centre (a cell corner), which landed in the cell to the west |
 | [BUG-0684](BUG-0684-m6-v6-settings-nits.md) | S4 | open | M6-V6 nits: fixed shared test paths under user://, the screen shows the file's VSync under --vsync, Reclaim's scan per call, the bench orders half of seed 6's army |
@@ -320,5 +320,6 @@ bugs outrank new features.
 | [BUG-0671](BUG-0671-parked-raider-stops-ai-economy-for-good.md) | S2 | fixed | An enemy unit parked in the base stops the AI's economy for good: fled workers stay idle while it stays |
 | [BUG-0672](BUG-0672-matchover-flips-back-to-false.md) | S3 | fixed | Simulation.MatchOver goes back to false when a player that never built places its first building |
 | [BUG-0673](BUG-0673-two-alternating-raiders-resend-army-every-think.md) | S3 | fixed | Two raiders taking turns on opposite sides of the hall re-send the whole army every think |
-| [BUG-0674](BUG-0674-aiseattest-scene-red-defeated-rebuild.md) | S3 | open | AiSeatTest (view scene) goes red with the defeat rule: its match-over row rebuilds after cancelling the only building |
+| [BUG-0674](BUG-0674-aiseattest-scene-red-defeated-rebuild.md) | S3 | fixed | AiSeatTest (view scene) goes red with the defeat rule: its match-over row rebuilds after cancelling the only building |
 | [BUG-0675](BUG-0675-m5-4b-process-nits.md) | S4 | open | M5-4b nits: an unplanned ui.json edit, a "data-hash unchanged" line that could not hold, a defendRadius that never waves |
+| [BUG-0710](BUG-0710-m6-v4-banner-nits.md) | S4 | open | M6-V4 nits: the HUD's K / L under the banner lag the stats by the killing tick; `ViewApi/MatchOver` is now dead code |
