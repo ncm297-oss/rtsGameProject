@@ -10,7 +10,7 @@ namespace Rts.Sim.Ai;
 /// unit and building slot when its last AI command applies (so a think doesn't order it twice before the first applied) and
 /// which resource a worker was sent to; since M5-3 the scout's sweep, the enemy memory and the military's rally and wave. Not
 /// sim state: not hashed, never read by a sim rule; allocated once, sized from the match. Since M5-4b the defense's kept
-/// building hp, point and per-unit marks.
+/// building hp, point and per-unit marks; since M5-4c the casters' last casts.
 /// </summary>
 internal sealed class Blackboard
 {
@@ -54,7 +54,39 @@ internal sealed class Blackboard
         Homing = new bool[unitSlots];
         KeptHp = new int[buildingSlots];
         KeptHpGeneration = new int[buildingSlots];
+        CastGeneration = new int[unitSlots];
+        CastIndex = new byte[unitSlots];
+        CastTries = new byte[unitSlots];
+        CastReadyAt = new int[unitSlots];
+        CastAt = new Vector2[unitSlots];
+        SeenEnemies = new Vector2[unitSlots];
     }
+
+    // ---------- M5-4c: abilities (AbilityManager) ----------
+
+    /// <summary>Per unit slot, the generation of the caster the last <c>UseAbility</c> went to (0: none); the next four are about that cast.</summary>
+    internal int[] CastGeneration { get; }
+
+    /// <summary>Per unit slot, the ability (index in the caster's type's list) of the last cast sent.</summary>
+    internal byte[] CastIndex { get; }
+
+    /// <summary>Per unit slot, casts sent at about <see cref="CastAt"/> (within a cell) with no cooldown moving since (bounded by <c>AbilityManager.MaxTries</c>).</summary>
+    internal byte[] CastTries { get; }
+
+    /// <summary>Per unit slot, the ability's ready tick when the last cast was sent: a later one means the cast landed.</summary>
+    internal int[] CastReadyAt { get; }
+
+    /// <summary>Per unit slot, the point (m) the last cast was sent at.</summary>
+    internal Vector2[] CastAt { get; }
+
+    /// <summary>Scratch, filled once a think when a caster is free: the positions (m) of the enemy units seen (first <see cref="SeenEnemyCount"/>), slot order.</summary>
+    internal Vector2[] SeenEnemies { get; }
+
+    /// <summary>See <see cref="SeenEnemies"/>.</summary>
+    internal int SeenEnemyCount;
+
+    /// <summary>Casts sent (tests and tooling).</summary>
+    internal int CastsSent;
 
     // ---------- M5-4b: defense (DefenseManager) ----------
 

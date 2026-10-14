@@ -145,6 +145,8 @@ public class PlayerViewArchitectureTests
                 if (p.ParameterType.IsByRef) outs.Add(($"{m.Name}({p.Name})", p.ParameterType.GetElementType()!));
         }
         Assert.Contains(outs, o => o.Type == typeof(SeenUnit));
+        Assert.Contains(outs, o => o.Where == "TryGetAbilityReady(readyTick)"); // M5-4c: the own cooldown and cast answers
+        Assert.Contains(outs, o => o.Where == "TryGetCast(abilityIndex)");
         foreach ((string where, Type type) in outs)
             Assert.True(IsPlainValue(type, 0), $"PlayerView.{where} hands out {type.FullName}");
     }

@@ -14,7 +14,7 @@ namespace Rts.Sim.Ai;
 /// the world. A think runs the base defense (<see cref="DefenseManager"/>, M5-4b), the faction's <c>ai.json</c> build order
 /// (<see cref="BuildOrderExecutor"/>), the scout (<see cref="ScoutManager"/>, M5-3), the economy (<see cref="EconomyManager"/>:
 /// idle workers to gold and wood, houses before the cap), production (<see cref="ProductionManager"/>: the composition, when the build order sent nothing), then the army
-/// (<see cref="MilitaryManager"/>, M5-3: rally, attack waves, retreat).
+/// (<see cref="MilitaryManager"/>, M5-3: rally, attack waves, retreat), then the abilities (<see cref="AbilityManager"/>, M5-4c).
 /// </summary>
 /// <remarks>
 /// Built by the sim for each AI seat with a kept view and its own <see cref="SimRng"/> (seed and player). Its state (the
@@ -202,6 +202,7 @@ internal sealed class AiPlayer
         EconomyManager.Run(this);
         ProductionManager.Run(this);
         MilitaryManager.Run(this);
+        AbilityManager.Run(this); // M5-4c: last (docs/03 "AI architecture")
         Thinks++;
         return true;
     }

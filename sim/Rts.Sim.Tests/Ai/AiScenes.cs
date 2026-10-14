@@ -128,10 +128,11 @@ internal static class AiScenes
     /// A generated-map match recordable as a replay: <paramref name="seats"/>, the map with forests and mines, each player's
     /// Town Hall and five workers placed by commands (as <c>Match.cs</c> does) from <c>StartBase.Plan</c>. A recorder is
     /// attached first when <paramref name="record"/>. M5-3: <paramref name="forests"/> on the map; <paramref name="raiders"/>
-    /// line units of each player spawned in the next player's base.
+    /// line units of each player spawned in the next player's base. M5-4c: <paramref name="casters"/> of each of its faction's
+    /// unit types with abilities spawned there too.
     /// </summary>
     internal static Simulation Generated(PlayerSeat[] seats, ulong seed, bool record, out ReplayRecorder? recorder, int units = 400, int commands = 1024,
-        GameData? data = null, int forests = 8, int raiders = 0)
+        GameData? data = null, int forests = 8, int raiders = 0, int casters = 0)
     {
         var map = MapGenParams.Default with { Forests = forests, GoldMines = 6 };
         var config = new SimConfig(seed, seats.Length, units, commands) { Data = data ?? TestSim.Data, Map = map, Seats = seats.ToImmutableArray() };
@@ -162,6 +163,15 @@ internal static class AiScenes
             Vector2[] spots = plan.Workers[(p + 1) % seats.Length];
             for (int k = 0; k < raiders; k++)
                 sim.Enqueue(Command.SpawnUnit(p, line, spots[k % spots.Length] + new Vector2(0.4f * (k / spots.Length), 0.3f)));
+        }
+        for (int p = 0; p < seats.Length && casters > 0; p++)
+        {
+            Vector2[] spots = plan.Workers[(p + 1) % seats.Length];
+            int k = 0;
+            foreach (int type in w.Data.Factions[factions[p]].Units)
+                if (w.Data.Units[type].Abilities.Length > 0)
+                    for (int c = 0; c < casters; c++, k++)
+                        sim.Enqueue(Command.SpawnUnit(p, type, spots[k % spots.Length] + new Vector2(-0.5f, 0.6f + 0.4f * (k / spots.Length))));
         }
         return sim;
     }

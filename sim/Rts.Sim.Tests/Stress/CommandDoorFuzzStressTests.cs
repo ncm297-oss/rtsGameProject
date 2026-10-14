@@ -200,7 +200,8 @@ public class CommandDoorFuzzStressTests
 
     /// <summary>
     /// M5-2: an AI command is legal for what its seat saw: its own player, one of the kinds it sends (Build, Train, Research,
-    /// Gather; M5-3 Move, Stop, AttackMove, Attack), stamped for the next tick; a unit order names a live unit of its own; a Train or Research points into one of
+    /// Gather; M5-3 Move, Stop, AttackMove, Attack; M5-4c UseAbility), stamped for the next tick; a unit order names a live unit of its own (a
+    /// UseAbility: one of the abilities its type lists, at a point on the map); a Train or Research points into one of
     /// its own finished buildings that trains the unit or may research the tech; a Build names a building of its faction on
     /// ground its player had explored, at a cell inside the map.
     /// </summary>
@@ -210,8 +211,19 @@ public class CommandDoorFuzzStressTests
         Assert.True(c.IsWellFormed(), $"{at}: a malformed AI command");
         Assert.True(c.Tick == seen.Tick + 1, $"{at}: stamped {c.Tick}");
         Assert.True(c.Kind is CommandKind.Build or CommandKind.Train or CommandKind.Research or CommandKind.Gather
-            or CommandKind.Move or CommandKind.Stop or CommandKind.AttackMove or CommandKind.Attack, $"{at}: kind {c.Kind}");
+            or CommandKind.Move or CommandKind.Stop or CommandKind.AttackMove or CommandKind.Attack or CommandKind.UseAbility, $"{at}: kind {c.Kind}");
         NavGrid g = w.NavGrid;
+        // M5-4c: the ability manager's casts: an own live unit, an ability its type lists, a point on the map.
+        if (c.Kind == CommandKind.UseAbility)
+        {
+            int i = c.Unit.Index;
+            Assert.True((uint)i < (uint)seen.UnitAlive.Length && seen.UnitAlive[i] && seen.UnitOwner[i] == 1 && seen.UnitGeneration[i] == c.Unit.Generation,
+                $"{at}: UseAbility for unit {c.Unit}, not a live unit of its own");
+            Assert.True(!w.Units.Alive[i] || w.Units.Generation[i] != c.Unit.Generation || (uint)c.TypeId < (uint)w.Data.Units[w.Units.TypeId[i]].Abilities.Length,
+                $"{at}: UseAbility of ability {c.TypeId}, not one its type lists");
+            Assert.True(g.WorldToCell(c.Position, out _, out _), $"{at}: UseAbility off the map at {c.Position}");
+            return;
+        }
         // M5-3: the scout's and the army's orders: an own live unit; an attack on a live enemy building.
         if (c.Kind is CommandKind.Move or CommandKind.Stop or CommandKind.AttackMove or CommandKind.Attack)
         {

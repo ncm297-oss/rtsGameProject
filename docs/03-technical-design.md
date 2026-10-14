@@ -5744,7 +5744,7 @@ AiPlayer                # a think: census, then the managers in this order
   EconomyManager        # worker targets per resource, houses before cap (M5-2); rebalancing (M5-3)
   ProductionManager     # keeps halls busy toward the target composition (M5-2; pop shares M5-3)
   MilitaryManager       # rally, attack waves, retreat (M5-3); focus fire (Hard) (M5-4c)
-  AbilityManager        # when and where to cast (simple heuristics per ability kind) (M5-4)
+  AbilityManager        # when and where to cast: the enemy group in reach, an enemy building (M5-4c)
   Blackboard            # what the AI believes about the world (from its PlayerView only)
 ```
 
@@ -6276,7 +6276,7 @@ Slice 1: the defeat rule (STATE "Requests for the sim track" 37) and the AI's ba
   `Blackboard.Homing`). Its rally mark is cleared, so the rally rule brings it back after the threat. Every own worker
   within `ai.workerFleeRadius` of the point with no AI command pending, not yet sent fleeing in this threat, gets one
   `Move` to the footprint centre of the nearest own finished drop-off farther than `workerFleeRadius` from the point, else
-  the nearest one (the faction pages: "Laborers flee to the Garrison Keep"), and the economy (gathering, the rebalance,
+  the nearest one (the faction pages' "Defense" lines state this rule since D17; BUG-0720 item 1), and the economy (gathering, the rebalance,
   `PickBuilder`) leaves it alone for `defendFor` after its flee (`FledGeneration`, `FledAt`; BUG-0671: not until the threat
   ends, which an enemy parked in the base never lets happen). Then it is the economy's again, but while the threat holds no
   worker is sent to gather at a node whose centre is within `workerFleeRadius` of the point, and a worker that fled isn't
@@ -6314,6 +6314,66 @@ Slice 1: the defeat rule (STATE "Requests for the sim track" 37) and the AI's ba
   and `DataContentHashTests` (three knobs).
 - **Not yet** (M5-4c): the AI's abilities, difficulty knobs (`focusFire`, `pullBackWounded`, `gatherBonus`), expansion,
   rebuilding, periodic re-scouting; teams (Requests 38); post-match stats.
+
+### Implementation (M5-4c)
+
+Slice 1: the AI's ability manager. Code: `Ai/AbilityManager.cs` (last in a think, after `MilitaryManager`),
+`Blackboard` (the casters' last casts), two own-unit `PlayerView` answers, one `rules.json` `ai` knob. No `Command` kind:
+the AI casts through `Command.UseAbility`, the player's door. The difficulty knobs the sim still ignores (`gatherBonus`,
+`focusFire`, `pullBackWounded`) are slice 2 (the brief's 700-line hard stop: slice 1 came to about 840 lines with its tests
+and docs).
+
+- **When.** Only when the difficulty's `useAbilities` is on (the shipped Easy is off: it never casts). The **casters** are the
+  player's live units (army, then workers, slot order) whose type lists abilities and that are free: not `Casting` and not
+  walking to a cast (`PlayerView.TryGetCast`), no AI command pending, not the scout, not fleeing (`IsFleeing`), not a wave
+  member owed its `Move` home. Casting is allowed while `Board.Defending`. Each gets **at most one `UseAbility` a think**:
+  its first ability, in list order, that is **ready** (`PlayerView.TryGetAbilityReady`: the ready tick at most the tick the
+  command applies in) and has a target. A full queue ends the pass.
+- **Where** (the enemy as seen: the positions of every enemy unit the view answers, read once a think at the first free
+  caster). *Target ground*: the enemy units within `range + radius` of the caster; their centroid; the centroid of those of
+  them within `radius` of it; that point **pulled back to the range** (0.05 m inside, so float rounding never leaves a
+  walk) and kept half a cell inside the map (BUG-0700: units a dev spawn left off the map moved the centroid off it, and the
+  door refuses such a point; still out of range after that, no cast); cast there when at least **`ai.castMinTargets`** enemies seen stand within `radius` of the pulled-back point. An
+  ability that **hits buildings** (the Cusser) with no such group: the footprint centre of the nearest enemy building seen
+  now (ghosts don't count) within `range + radius`, pulled back alike. *Self / aura* and *summon*: at the caster, when
+  `castMinTargets` enemies stand within `radius` of it (the command's point: the caster's, kept on the map). **Friendly fire**: an ability with a damage effect that reaches own
+  units (`friendlyFire` above 0, or `affects` all units) is never cast with an own unit (the caster included) within
+  `radius` of the point: the Cusser isn't thrown at a group the Sapper is in melee with, nor into the AI's own army.
+- **Judging** (M5-2's pattern). The AI can't hear a refusal; at a later think it reads the ability's ready tick: moved
+  since the cast was sent, the cast landed and its tries start again. A cast that didn't land (refused, dropped, cancelled) is
+  sent again at the next think, at most **`AbilityManager.MaxTries` (3)** times at the same point (within a cell), then left
+  alone until the point moves more than a cell. A code guard like `MilitaryManager.MaxTries`, not data.
+- **`PlayerView`** (own units only; another player's unit, a dead or out-of-range slot answer false with 0 / -1):
+  `TryGetAbilityReady(slot, abilityIndex, out readyTick)` (the cooldown the player's own command card shows) and
+  `TryGetCast(slot, out abilityIndex)` (the cast or walk to one in progress). Values only (`PlayerViewArchitectureTests`
+  lists them); `PlayerViewOracleFuzzTests` compares both with the stores for every unit slot, every index from -1 to the
+  limit, every player, every tick (own cooldowns and casts reached, no enemy answer).
+- **Knob** (`common/rules.json` `ai`, required, `DataValidationTests` rows, in `ContentHash`): `castMinTargets` 2 (a whole
+  number 1-50). **Golden**: the header moved once (`data-hash` 72EF431E70C49C39 to C6FC120A55AE4A0B, and the checksum); its
+  `k` lines did not move (no AI seat in it). `QA/GatherWedgeQaTests` lists the new hash (no AI seat in that match).
+- **Memory.** Per AI seat, new: per unit slot an int generation, two bytes (the ability index and the tries), an int ready
+  tick and two Vector2 (the point sent, and the seen-enemy scratch): **26 B x unit slots**, 65 KB for 2,500. About 205 KB per
+  seat for a 2,500-unit, 256-building, 4,096-node match (140 KB before).
+- **Cost.** `Ai/AiPerfTests` now gives each of the eight Hard seats 16 casters (Cadre Mages, Priests) beside the next seat's
+  units, with every cooldown cleared and every unit healed before each think (test seams), so every free caster searches at
+  every think: avg 0.40-0.44 ms a think over 2,628 units in Debug (gate 1 ms; 0.19 ms with the manager off; about 1,100 casts a Malazan seat, 250 a Whirlwind one, over the run), allocation-free
+  (`AllocationProbe`). Its Sandstorm doesn't block vision there: while blocking zones live, the view's unit cursor tests every
+  unit against every zone (the fog's zone rule, M4-4b-2), so dozens of storms at once make every think's census cost
+  several ms (a fog cost, reported to the Producer).
+- **Behaviour to know.** A caster that a manager earlier in the think ordered (the rally, the defense) casts at the next
+  think, and its cast replaces that order (a `UseAbility` ends the unit's other orders); after the cast it stands, and the
+  rally and defense rules don't re-send a point already sent. A Sapper in melee with its target doesn't throw.
+- **Tests.** `Ai/AbilityManagerTests` (Telas Fire at three enemies within two thinks, not at one; the Cusser at a building
+  with no group; Sandstorm on the centroid and at the range's edge; `castMinTargets` 1 / 50; no re-order on cooldown, the
+  cast judged by the cooldown, `MaxTries` on a cast stopped every time and a re-send once the enemies move; Easy silent for
+  6,000 ticks while its Normal twin casts; the Cusser held with an own unit in its radius; a test-only self / aura; BUG-0700's
+  group off the map), `Stress/CommandDoorFuzzStressTests` (its AI-command oracle now admits a `UseAbility` of an own live
+  unit, an ability its type lists, at a point on the map),
+  `AiDeterminismTests.TwoAiSeats_Casting_*` (Normal, both factions, seeds 1 / 7 / 12, 4,000 ticks, casters in each other's base:
+  hash twins, casts sent and landed), `AiReplayTests.TwoCastingAiSeats_PlayBackWithoutEither`, `AiPerfTests`,
+  `DataValidationTests` / `DataContentHashTests` (the knob).
+- **Not yet:** slice 2 (`gatherBonus`, `focusFire`, `pullBackWounded`); `targetUnit` and `autocast`; own-unit abilities aimed at
+  own units (a heal); expansion, rebuilding, re-scouting (M5-4d).
 
 ## Save/load and replays
 

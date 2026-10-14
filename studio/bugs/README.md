@@ -322,4 +322,7 @@ bugs outrank new features.
 | [BUG-0673](BUG-0673-two-alternating-raiders-resend-army-every-think.md) | S3 | fixed | Two raiders taking turns on opposite sides of the hall re-send the whole army every think |
 | [BUG-0674](BUG-0674-aiseattest-scene-red-defeated-rebuild.md) | S3 | fixed | AiSeatTest (view scene) goes red with the defeat rule: its match-over row rebuilds after cancelling the only building |
 | [BUG-0675](BUG-0675-m5-4b-process-nits.md) | S4 | open | M5-4b nits: an unplanned ui.json edit, a "data-hash unchanged" line that could not hold, a defendRadius that never waves |
+| [BUG-0700](BUG-0700-ai-cast-point-off-the-map.md) | S3 | fixed | The AI's cast point follows a group standing off the map, and the door refuses it again and again |
+| [BUG-0701](BUG-0701-ai-think-cost-grows-with-live-sandstorms.md) | S3 | open | An AI think's cost grows with every live vision-blocking storm, and the AI perf gate turns them off |
+| [BUG-0702](BUG-0702-ai-cast-targeting-nits.md) | S4 | open | AI cast targeting nits: two groups either side get no cast, casters stack on one point, the reach edge never casts |
 | [BUG-0710](BUG-0710-m6-v4-banner-nits.md) | S4 | open | M6-V4 nits: the HUD's K / L under the banner lag the stats by the killing tick; `ViewApi/MatchOver` is now dead code |

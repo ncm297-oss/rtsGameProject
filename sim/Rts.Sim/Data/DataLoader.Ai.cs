@@ -294,7 +294,7 @@ public static partial class DataLoader
     /// <see cref="DataLimits.MaxAiSearchRadius"/>; <c>buildingSpacing</c> m, 0 to <see cref="DataLimits.MaxAiSpacing"/>. Meters go
     /// to whole cells, rounded up. M5-3: <c>scoutAfter</c> and <c>waveCooldown</c> s (0-3,600, to ticks); <c>scoutRadius</c> and
     /// <c>rallyDistance</c> m (1-64), <c>scoutReach</c> and <c>rallyReach</c> m (1-16), <c>scoutGrid</c> m (16-256, BUG-0593), kept in meters. M5-4b: <c>defendRadius</c> m (8-256), <c>defendFor</c> s (0-600, to
-    /// ticks), <c>workerFleeRadius</c> m (1-64). A refused <c>popCap</c> is reported once: the cap rule is skipped then.
+    /// ticks), <c>workerFleeRadius</c> m (1-64). M5-4c: <c>castMinTargets</c> a whole number 1-50. A refused <c>popCap</c> is reported once: the cap rule is skipped then.
     /// </summary>
     private static AiRulesDef BuildAiRules(Checker c, AiRulesJson? j, RulesDef? rules)
     {
@@ -322,7 +322,17 @@ public static partial class DataLoader
             DefendRadius = Meters(c, j.DefendRadius, "ai.defendRadius", DataLimits.MaxAiDefendRadius, DataLimits.MinAiDefendRadius),
             DefendForTicks = TicksUpTo(c, j.DefendFor, "ai.defendFor", DataLimits.MaxAiDefendSeconds),
             WorkerFleeRadius = Meters(c, j.WorkerFleeRadius, "ai.workerFleeRadius", DataLimits.MaxAiSearchRadius),
+            CastMinTargets = WholeNumber(c, j.CastMinTargets, "ai.castMinTargets", 1, DataLimits.MaxAiCastMinTargets),
         };
+    }
+
+    /// <summary>M5-4c: a required whole number, <paramref name="min"/> to <paramref name="max"/> inclusive; 0 when refused.</summary>
+    private static int WholeNumber(Checker c, double? value, string path, int min, int max)
+    {
+        if (value == null) c.Error(path, "missing required field");
+        else if (!(value >= min && value <= max) || value != Math.Floor(value.Value)) c.Error(path, $"{value} is not a whole number in {min}-{max}");
+        else return (int)value.Value;
+        return 0;
     }
 
     /// <summary>M5-4b: a required time in seconds, 0 to <paramref name="maxSeconds"/>, to ticks; 0 when refused.</summary>
