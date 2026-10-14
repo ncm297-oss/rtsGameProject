@@ -163,7 +163,11 @@ waits for Age II), so its weights sum to 65.
   down); then every 3 minutes or when army pop ≥ 1.3× the last wave. Sappers target buildings; Mages cast Telas Fire on
   the largest enemy clump.
 - **Retreat:** a wave that has lost 50% falls back; a unit under 30% hp counts as wounded (`retreat`; Hard pulls it back).
-- **Defense:** pull the army home when buildings take damage; Laborers flee to the Garrison Keep.
+- **Defense** (docs/03 "Implementation (M5-4b)"): the army comes home when an own building (a site too) within the
+  defend radius of the Garrison Keep is hit, or an enemy soldier (not a worker) is seen within it (`rules.json`
+  `ai.defendRadius` 48 m; the threat holds `ai.defendFor` 20 s after the last sign); a wave out ends like a retreat.
+  Laborers within `ai.workerFleeRadius` (16 m) of the threat flee to the nearest finished drop-off away from the
+  threat (the Garrison Keep or a Quartermaster's Depot more than 16 m from it; else the nearest one).
 
 ## Difficulty
 

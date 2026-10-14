@@ -166,7 +166,13 @@ to 65.
   down); then continuous pressure, a new wave every 2 minutes. Priests cast Sandstorm on the enemy army's center as the
   melee engages.
 - **Retreat:** a wave that has lost 50% falls back; a unit under 30% hp counts as wounded (`retreat`; Hard pulls it back).
-- **Defense:** counter-attack the enemy base with Horse Raiders when its army is away.
+- **Defense** (docs/03 "Implementation (M5-4b)"): the army comes home when an own building (a site too) within the
+  defend radius of the Holy Camp is hit, or an enemy soldier (not a worker) is seen within it (`rules.json`
+  `ai.defendRadius` 48 m; the threat holds `ai.defendFor` 20 s after the last sign); a wave out ends like a retreat.
+  Camp Followers within `ai.workerFleeRadius` (16 m) of the threat flee to the nearest finished drop-off away from the
+  threat (the Holy Camp or a Supply Cache more than 16 m from it; else the nearest one).
+- **Later idea (not in M5):** counter-attack the enemy base with Horse Raiders when its army is away. Not built: no
+  AI manager raids today.
 
 ## Difficulty
 

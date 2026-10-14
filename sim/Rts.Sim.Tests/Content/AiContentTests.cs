@@ -509,8 +509,8 @@ public class AiContentTests
         ("25% gather bonus", AiDifficulty.Hard, "gatherBonus", "0.25"),
         ("doesn't micro", AiDifficulty.Easy, "focusFire", "false"),
         ("doesn't micro", AiDifficulty.Easy, "pullBackWounded", "false"),
-        ("fair play at a relaxed pace", AiDifficulty.Normal, "focusFire", "false"),
-        ("fair play at a relaxed pace", AiDifficulty.Normal, "pullBackWounded", "false"),
+        ("doesn't focus fire or pull back wounded", AiDifficulty.Normal, "focusFire", "false"),
+        ("doesn't focus fire or pull back wounded", AiDifficulty.Normal, "pullBackWounded", "false"),
         ("focus fire", AiDifficulty.Hard, "focusFire", "true"),
         ("pulls back wounded", AiDifficulty.Hard, "pullBackWounded", "true"),
         ("doesn't use abilities", AiDifficulty.Easy, "useAbilities", "false"),
@@ -556,7 +556,18 @@ public class AiContentTests
     [Fact]
     public void K_Docs02_StatesWhatThePinsHold()
     {
-        string[] lines = PageTables.Lines(Path.Combine("docs", "02-game-design.md"));
+        List<string> problems = Docs02Problems(PageTables.Lines(Path.Combine("docs", "02-game-design.md")));
+        Assert.True(problems.Count == 0, string.Join("\n", problems));
+    }
+
+    /// <summary>
+    /// Every <see cref="DesignStates"/> phrase docs/02's "AI opponent" bullets (in <paramref name="lines"/>, the whole file;
+    /// tests pass an edited copy) no longer carry, as "docs/02 'Label' no longer says ...", plus a "rarely uses abilities"
+    /// a flag can't hold (BUG-0541 item 3); empty when the doc says what the pins hold.
+    /// </summary>
+    public static List<string> Docs02Problems(string[] lines)
+    {
+        var problems = new List<string>();
         int h = PageTables.Heading(lines, "## AI opponent", "docs/02");
         string[] section = lines[h..].TakeWhile((l, k) => k == 0 || !l.StartsWith("## ", StringComparison.Ordinal)).ToArray();
         List<string> bullets = Bullets(section); // nested bullets too, continuation lines joined
@@ -565,12 +576,36 @@ public class AiContentTests
             string label = DataLimits.AiDifficultyIds[(int)s.Difficulty];
             label = char.ToUpperInvariant(label[0]) + label[1..];
             string? bullet = Bullet(bullets, label);
-            Assert.True(bullet != null, $"docs/02 'AI opponent' has no '{label}:' bullet");
-            Assert.True(bullet!.Contains(s.Phrase, StringComparison.Ordinal),
-                $"docs/02 '{label}' no longer says \"{s.Phrase}\" ({s.Field} {s.Value}): update DesignStates with the doc");
+            if (bullet == null) problems.Add($"docs/02 'AI opponent' has no '{label}:' bullet");
+            else if (!bullet.Contains(s.Phrase, StringComparison.Ordinal))
+                problems.Add($"docs/02 '{label}' no longer says \"{s.Phrase}\" ({s.Field} {s.Value}): update DesignStates with the doc");
         }
-        // A flag can't say "rarely" (BUG-0541 item 3): Easy doesn't use abilities.
-        Assert.DoesNotContain("rarely uses abilities", string.Join(" ", section));
+        if (string.Join(" ", section).Contains("rarely uses abilities", StringComparison.Ordinal))
+            problems.Add("docs/02 'AI opponent' says \"rarely uses abilities\": useAbilities is a flag");
+        return problems;
+    }
+
+    /// <summary>
+    /// D17: Normal's two micro flags rest on the bullet saying it outright, not on "fair play at a relaxed pace" (which
+    /// stays in the bullet and pins nothing): docs/02 with the new phrase cut fails naming both Normal fields, and the old
+    /// phrase pins no row.
+    /// </summary>
+    [Fact]
+    public void K_Docs02WithoutNormalsNoMicroPhrase_FailsNamingBothFields()
+    {
+        const string phrase = "doesn't focus fire or pull back wounded";
+        string[] lines = PageTables.Lines(Path.Combine("docs", "02-game-design.md"));
+        int at = Array.FindIndex(lines, l => l.Contains(phrase, StringComparison.Ordinal));
+        Assert.True(at >= 0, $"docs/02 has no line with \"{phrase}\"");
+        string[] edited = (string[])lines.Clone();
+        edited[at] = edited[at].Replace(phrase, "plays it straight", StringComparison.Ordinal);
+        List<string> problems = Docs02Problems(edited);
+        Assert.Equal(new[]
+        {
+            $"docs/02 'Normal' no longer says \"{phrase}\" (focusFire false): update DesignStates with the doc",
+            $"docs/02 'Normal' no longer says \"{phrase}\" (pullBackWounded false): update DesignStates with the doc",
+        }, problems);
+        Assert.DoesNotContain(DesignStates, s => s.Phrase.Contains("relaxed pace", StringComparison.Ordinal));
     }
 
     [Fact]
