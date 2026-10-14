@@ -12,7 +12,7 @@ Status legend: **Next** = start here, **Planned** = not started, **Done** = acce
 | M2 | Presentation | **Done** (2026-10-07, Producer sign-off after the M2-H2 hardening) | Move an army around a 3D map |
 | M3 | Economy & buildings | **Done** (2026-10-08, Producer sign-off in session 2026-10-08-0313 after every track's end-of-M3 hardening (M3-H1 / H2, M3-V3b, D4) and the BUG-0146 fix; retro below) | Build a Malazan base |
 | M4 | Combat, fog, abilities | **Done** (2026-10-11, Producer sign-off in session 2026-10-10-2334 after every track's end-of-M4 hardening (M4-H3, M4-VH3, D-H3); the data track's D12 is accepted and held on its branch, landing at the next session's data merge; 10 / 10 criteria, in progress since 2026-10-07-2315; retro below) | Malazan vs. Whirlwind armies fight with abilities and fog |
-| M5 | AI opponent | **In progress** (since 2026-10-11; 1 / 6 criteria) | Lose to a Whirlwind AI |
+| M5 | AI opponent | **In progress** (since 2026-10-11; 2 / 6 criteria) | Lose to a Whirlwind AI |
 | M6 | Game shell & real art | Planned | A friend can play it |
 | M7 | Teblor | Planned | Third faction: scale and population systems proven |
 | M8 | Shadow | Planned | Fourth faction: stealth polish, summons |
@@ -653,14 +653,19 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
 
 - [x] `PlayerView` fog-filtered facade; AI cannot read hidden state (test enforces it). (M5-1 + M5-2, 2026-10-11:
       `Ai/PlayerViewOracleFuzzTests` and `Ai/PlayerViewArchitectureTests`; BUG-0540's node memory closed the last leak.)
-- [ ] Build order executor driven by `ai.json`; economy, production, military, ability, scout managers. (M5-2, 2026-10-11:
+- [x] Build order executor driven by `ai.json`; economy, production, military, ability, scout managers. (M5-2, 2026-10-11:
       the executor, economy and production managers are in. M5-3, 2026-10-12: the scout and military managers are in,
-      `ai.json` + `rules.json` `ai` in `ContentHash`; the ability manager is M5-4.)
+      `ai.json` + `rules.json` `ai` in `ContentHash`. M5-4c slice 1, 2026-10-13: the ability manager (`Ai/AbilityManager`:
+      the AI casts through `UseAbility` at the enemy group in reach or an enemy building, when `useAbilities` is on;
+      `rules.json` `ai.castMinTargets`); verified by `Ai/AbilityManagerTests`, QA's `AbilityManagerQaTests` and a 320-scene
+      oracle fuzz.)
 - [ ] Expansion, defense, attack waves, retreat, rebuilding; scouts ramps and high ground before attacking up. (M5-3,
       2026-10-12: attack waves, retreat and the rally are in. M5-4b, 2026-10-13: defense is in (`DefenseManager`: a hit
       building or an intruder near the hall pulls the army home and the workers to a drop-off; knobs in `rules.json` `ai`).
       Left for M5-4c: expansion, rebuilding, the high-ground scouting.)
-- [ ] Easy / Normal / Hard per [02 AI](02-game-design.md#ai-opponent).
+- [ ] Easy / Normal / Hard per [02 AI](02-game-design.md#ai-opponent). (D16, 2026-10-13: the three blocks pinned to docs/02 and
+      the faction pages. M5-4c slice 1, 2026-10-13: `useAbilities` applied (Easy never casts). Left for M5-4c slice 2:
+      `gatherBonus`, `focusFire`, `pullBackWounded`.)
 - [ ] AI-vs-AI headless test: a 20-minute match completes without errors and one side wins. (M5-4b, 2026-10-13: the defeat
       rule and `Simulation.MatchOver` are in, a razed hall ends the match and the loser's AI goes silent on seeds 1-3; the
       20-minute winner test is M5-5.)
@@ -675,7 +680,10 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       `ui.json`'s 8-colour table, and the menu's match opens as docs/02 says (a Town Hall and 5 workers a side). Left: 2-4
       slots, team.)
 - [ ] Victory/defeat detection and post-match stats screen. (M5-4b, 2026-10-13: the sim's detection, `World.IsDefeated` /
-      `DefeatEvents` / `Simulation.MatchOver`; the banner and the stats screen are M6-V4.)
+      `DefeatEvents` / `Simulation.MatchOver`. M6-V4, 2026-10-13: the Victory / Defeat / Draw banner through the pause path
+      and the stats screen with what the sim counts today (kills, losses, gold / wood in hand, length, defeat times). Left:
+      [02 Game flow](02-game-design.md#game-flow) 5's columns (gathered, trained, buildings built / lost, Age II time, the
+      army-value graph) once the sim counts them (STATE Requests 39).)
 - [ ] Save/load and replay playback.
 - [ ] Settings: resolution, window mode, VSync, quality, volumes, keybinds. (M6-V6, 2026-10-13: resolution, window mode,
       VSync, quality presets, master / music / SFX volume and edge-pan speed, from the menu and the pause menu, saved in

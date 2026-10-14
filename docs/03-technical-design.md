@@ -6182,7 +6182,7 @@ Slice 1: the defeat rule (STATE "Requests for the sim track" 37) and the AI's ba
   `Blackboard.Homing`). Its rally mark is cleared, so the rally rule brings it back after the threat. Every own worker
   within `ai.workerFleeRadius` of the point with no AI command pending, not yet sent fleeing in this threat, gets one
   `Move` to the footprint centre of the nearest own finished drop-off farther than `workerFleeRadius` from the point, else
-  the nearest one (the faction pages: "Laborers flee to the Garrison Keep"), and the economy (gathering, the rebalance,
+  the nearest one (the faction pages' "Defense" lines state this rule since D17; BUG-0720 item 1), and the economy (gathering, the rebalance,
   `PickBuilder`) leaves it alone for `defendFor` after its flee (`FledGeneration`, `FledAt`; BUG-0671: not until the threat
   ends, which an enemy parked in the base never lets happen). Then it is the economy's again, but while the threat holds no
   worker is sent to gather at a node whose centre is within `workerFleeRadius` of the point, and a worker that fled isn't
