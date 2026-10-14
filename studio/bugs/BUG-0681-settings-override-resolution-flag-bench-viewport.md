@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-13-0916, task M6-V6 (QA) |
 | System | view: `game/scripts/Main.cs` (`_Ready` boot order), `game/scripts/SettingsApplier.cs` (`ApplyWindow`); the bench (docs/03 "Implementation (M2-7)") |
-| Fixed by | |
+| Fixed by | ae578c2 (M6-V4): the boot apply keeps the engine's window when an engine window flag is on the process command line. QA 2026-10-13-1616: windowed `--resolution 1600x900 -- --bench 2 --units 0 --mute` gives `viewport 1600 x 900`; without the flag, with `--position 50,50`, and with `--resolution` after `--` it is 1152 x 648; `SettingsTest` flag rows. |
 
 ## Repro
 1. No `user://settings.cfg` (or one with the default 1152 x 648).

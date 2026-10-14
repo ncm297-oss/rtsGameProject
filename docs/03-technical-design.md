@@ -5411,7 +5411,8 @@ game/tests/AiSeatTest.tscn      the headless AI seat test (in the scene loop)
   to 0. `Match` prints `Match over: player p has no buildings left (tick n)` once per such drop. A player that never had a
   building is never reported; one that rebuilds and loses everything again is reported again. Allocation-free. This is
   neither the victory screen nor the rule: docs/02 "Victory/defeat" belongs to the sim (Requests 37: `World.IsDefeated(p)`
-  or a match-over event), and the screen and stats come after that.
+  or a match-over event), and the screen and stats come after that. Since M6-V4 the line is printed once per
+  `World.DefeatEvents` entry instead ("Implementation (M6-V4)"); `ViewApi/MatchOver` is no longer used by `Match`.
 - **BUG-0580.** A paused node gets no input, so a button released while the match was paused never reached `RtsCamera`
   (middle-button drag) or `SelectionController` (left-button press or box). Both now drop their held state on
   `NotificationPaused` and `NotificationUnpaused`: the press is dropped, nothing is selected by it, and the box hides.
@@ -5576,14 +5577,19 @@ game/tests/SettingsTest.tscn      the headless settings test (in the scene loop)
   Written (whole) by Apply, Back, Esc and Defaults, through `System.IO`; a folder that can't be written is one warning
   and the picks apply for the run. Read at boot: no file is the defaults and one info line; a file that can't be read,
   or has a line not of the shape the game writes (`key=value` with a number, `true` / `false` or a plain quoted string;
-  sections, comments and blank lines pass), is the defaults and one warning; otherwise each missing, mistyped or
+  sections, comments and blank lines pass; BUG-0680: a whole number has at most 18 digits, so it always fits 64 bits, and
+  a longer digit run passes only with a fraction or an exponent, which Godot reads as a float), is the defaults and one warning; otherwise each missing, mistyped or
   out-of-range key takes its default and all of them are named in one warning; extra keys are ignored. Never an error
   line: Godot's `ConfigFile.Parse` logs an engine ERROR for a value it can't read, so the text is checked before it sees it.
   The defaults are the game as it looked before settings existed. Tests point `Main.SettingsPath` at their own file and
   never touch the player's.
 - **Boot order.** `Main._Ready`: the banner, the data, the user args, then the settings are read and applied (window,
   VSync, quality, buses), then the screens are built and the menu or the match starts. A match takes the edge pan speed
-  as it starts (`RtsCamera.EdgePanSpeed`), and a commit passes it to the running match's camera.
+  as it starts (`RtsCamera.EdgePanSpeed`), and a commit passes it to the running match's camera. **BUG-0681:** when the
+  process command line (`System.Environment.GetCommandLineArgs()` before `--`; Godot's `OS.GetCmdlineArgs()` leaves out the args the engine consumed, so it never shows them) holds a window flag (`SettingsApplier.EngineWindowFlags`:
+  `--resolution`, `--fullscreen`, `-f`, `--maximized`, `-m`, `--position`, `--windowed`, `-w`), the boot apply keeps the
+  window the engine made (mode, size, position; VSync, quality and volumes still apply), so the bench's documented
+  `--resolution 1920x1080` holds again. A later commit from the settings screen applies the window as picked.
 - **Applying.** Window (skipped headless, where there is no window): Windowed is `WindowMode.Windowed` at the picked size,
   centred on its screen; Borderless is Godot's `WindowMode.Fullscreen` (a borderless window over the screen); Fullscreen
   is `ExclusiveFullscreen`; the resolution is the window's size in Windowed and is kept for it in the other two. VSync
@@ -5635,6 +5641,94 @@ game/tests/SettingsTest.tscn      the headless settings test (in the scene loop)
   exists, only the highest key moves and the pool grows once. QaM5V1's 16-for-16 swap still stays at 16 nodes.
   `AbilityViewTest` checks both cases.
 
+### Implementation (M6-V4)
+
+The match's end on screen: a Victory / Defeat / Draw banner from the sim's defeat rule ("Implementation (M5-4b)") and a
+post-match stats screen from what the sim counts today; BUG-0674, BUG-0680, BUG-0681. No sim change.
+
+```
+game/scripts/Match.cs             Outcome (latched), Ended, DefeatedAt; the "Match over:" line from World.DefeatEvents
+game/scripts/MatchOutcome.cs      None, Victory, Defeat, Draw
+game/scripts/MatchOverBanner.cs   CanvasLayer (layer 22, runs while paused): the title, Stats, Continue watching, Main menu
+game/scripts/MatchStats.cs        CanvasLayer (layer 23, runs while paused): length, one row per seat, Columns, Back
+game/scripts/MatchOverText.cs     the ui.json match_over keys
+game/scripts/Main.cs, PauseMenu.cs   the banner through the pause path; the pause menu's Stats; Esc
+game/scripts/SimRunner.cs         a frame's ticks stop once a Ticked handler paused the tree
+game/scripts/GameSettings.cs, SettingsApplier.cs   BUG-0680, BUG-0681 ("Implementation (M6-V6)")
+game/data/common/ui.json          the match_over section
+game/tests/MatchOverViewTest.tscn the headless banner and stats test (in the scene loop)
+```
+
+- **The rule (presentation state, read-only).** After every tick (`SimRunner.Ticked`, so several a frame at speed),
+  `Match` reads `World.DefeatEvents`: each entry prints `Match over: player p has no buildings left (tick n)` (the old
+  text; n is `TickNumber`, the event's tick + 1) and stamps `Match.DefeatedAt(p)` = the event's tick + 1, the match clock at
+  the end of the tick the player fell in. Then, while `Match.Outcome` is `None`, the local result for **the local player,
+  slot 0** (`SelectionController.LocalPlayer`; `Match.ResultFor`): **Draw** when `Simulation.MatchOver` and no player that
+  ever built stands (the last ones fell on one tick); else **Defeat** the moment `World.IsDefeated(0)`, whether or not
+  the match is over (in a 3-seat match the others play on); else **Victory** when `MatchOver`. The first non-`None`
+  result is **latched** in `Outcome` and raises `Match.Ended` once. A local player that never built is never defeated,
+  so with two others it gets Victory when one of them falls (dev runs only; the menu's match gives every seat a hall).
+  Test scenes that instantiate `Match.tscn` themselves compute the outcome and get no banner.
+- **The banner (the pause path).** `Main` subscribes to `Ended` of the match it starts: it sets `SceneTree.Paused` as
+  `PauseMatch` does (the match is `Pausable`: no tick, no match input; held buttons are dropped as on a pause, BUG-0580)
+  and shows `MatchOverBanner` (layer 22, over the HUD, the pause menu's 20 and the settings' 21; `Always`; its backdrop
+  takes every click). `SimRunner` breaks its tick loop when it can no longer process, so the frame's remaining ticks
+  don't run and the banner shows the tick of the result (`TickNumber` = the defeat's tick + 1). Once per match
+  (`Main` keeps a shown flag, reset when a match starts). Buttons: **Stats** (the stats screen over the banner),
+  **Continue watching** (hides the banner for the rest of the match and unpauses: the match runs on, the defeated
+  player's orders are dropped by the sim, no second banner even when `MatchOver` comes later), **Main menu** (Quit to
+  menu: the match freed as before). **Esc** on the banner does nothing (it is answered with its buttons; the pause menu
+  never opens over it); after Continue, Esc is the pause menu again, which from then on shows a **Stats** button too
+  (`match_over.stats`). The banner issues no sim command. BUG-0684 item 3: `CommitSettings(..., stay: false)` shows the
+  main menu only when no match runs.
+- **The stats screen** (`MatchStats`, layer 23, `Always`). Opened from the banner's or the pause menu's Stats; Back or Esc
+  closes it to the screen under it. The numbers are read when it opens (the tree is paused under it): a heading, the
+  match length (`match_over.match_length` with the `TickNumber` as `match_over.clock`, m:ss, `{0}` minutes and `{1:00}`
+  seconds), then one row per player: a colour swatch (`Match.PlayerRgb`), the faction's data `displayName`, the seat
+  ("You" = `setup.slot_human` for slot 0, an AI seat's `setup.difficulty_*`, another human `match_over.human`), and the
+  data columns, `MatchStats.Columns` (a `MatchOverText` label and a getter each):
+
+  | Column (`match_over.*`) | Source |
+  | --- | --- |
+  | `kills` | `World.Kills[p]` (killing blows, units and buildings) |
+  | `losses` | `World.Losses[p]` (units and buildings lost to killing blows) |
+  | `gold_in_hand` | `World.Gold[p]`: what the player holds now, **not** gathered |
+  | `wood_in_hand` | `World.Wood[p]`, likewise |
+  | `defeated_at` | `Match.DefeatedAt(p)` as the clock, else `match_over.standing` |
+
+  docs/02 "Game flow" 5's list needs sim counters; a new column is one `Columns` entry and its `ui.json` label.
+  **Requests 39 (for the sim track):** per player (a) gold and wood **gathered** (delivered to a drop-off) over the
+  match; (b) units trained (finished from a queue; spawns apart); (c) kills and losses split into units and buildings;
+  (d) buildings built (finished, sites apart) and buildings lost; (e) the tick the player reached Age II (-1 before);
+  (f) an army-value sample every N s (the summed cost of the player's live non-worker units, N in `rules.json`), kept for
+  the whole match, for the graph. All read-only spans like `Kills`, hashed or not as the sim decides.
+- **Text.** Every word is `ui.json` `match_over` (`victory`, `defeat`, `draw`, `stats`, `menu`, `continue`, `stats_title`,
+  `match_length`, `clock`, `player`, `kills`, `losses`, `gold_in_hand`, `wood_in_hand`, `defeated_at`, `standing`,
+  `human`, `back`; `UiText.MatchOver`, `MatchOverText`), required like the other sections; `match_length` must be a format
+  naming `{0}` and `clock` one naming `{0}` and `{1}` (one load error naming the key otherwise). Numbers are the only
+  C# text on screen.
+- **`ViewApi/MatchOver` is kept** (not deleted as the brief suggested): QA's `QA/ViewApi/MatchOverQaTests` and the sim's
+  `ViewApi/MatchOverTests` test it, and a dev doesn't delete QA rows; nothing in the game uses it now. Delete it with
+  those tests when QA agrees.
+- **BUG-0674.** `AiSeatTest.MatchOverLine` asserts the real rule: the cancel of player 0's only site defeats it (one
+  `DefeatEvent`, one line, the outcome Defeat, `MatchOver` false: nobody else built), and its second `Build` is dropped at
+  the door (no building, still one line); the dev line count equals the `DefeatEvents` seen.
+- **Tests.** Headless `MatchOverViewTest` (in the scene loop), through `Main.tscn` with `--units 0 --no-bases` dev
+  matches set up by commands (scouting workers, dev `SpawnBuilding` houses, siege units' `Attack`s, workers' `Build` and
+  `Cancel`), a per-process `user://` settings path: **Victory** (player 1's house razed: the banner on the defeat's tick +
+  1, the tree paused and no tick over 0.4 s of real time, title and buttons from `ui.json`, Esc opens nothing; Stats: two
+  rows whose Kills / Losses / gold / wood equal the spans, the length and player 1's defeat time, "You" / "Human", the
+  faction names and swatches; Back; Continue: ticks move, no second banner; Esc: the pause menu with Stats, which opens
+  the screen with the numbers of the moment; Esc, Esc; Quit to menu); **Defeat** (a second skirmish from the same shell,
+  no stale banner; player 0's house razed; Stats; Main menu: no match node left, the old match and runner freed, the tree
+  unpaused); **Draw** (both players' only sites cancelled on one tick: two events, one banner); **three seats** (`Main.
+  BeforeStart` sets the runner's `PlayerCount`: player 0 falls first, Defeat with `MatchOver` false; three stats rows;
+  Continue; player 2 razed later: `MatchOver`, still one banner). With the banner's `Paused = true` line removed the test
+  fails on the paused rows. `ShellTest`: the 18 keys by name (62 shell keys), each missing one and the section one error
+  naming it, seven bad `clock` / `match_length` formats refused. `SettingsTest`: 18-, 19- and 64-digit ints, 20 digits with
+  a fraction and with an exponent (no engine ERROR in the scene's log). Windowed with `-- --shots <dir>` the test saves
+  `matchover-banner.png` and `matchover-stats.png`.
+
 ## AI architecture
 
 The AI lives in `Rts.Sim.Ai`, inside the sim assembly, because it must be deterministic (it uses
@@ -5650,7 +5744,7 @@ AiPlayer                # a think: census, then the managers in this order
   EconomyManager        # worker targets per resource, houses before cap (M5-2); rebalancing (M5-3)
   ProductionManager     # keeps halls busy toward the target composition (M5-2; pop shares M5-3)
   MilitaryManager       # rally, attack waves, retreat (M5-3); focus fire (Hard) (M5-4c)
-  AbilityManager        # when and where to cast (simple heuristics per ability kind) (M5-4)
+  AbilityManager        # when and where to cast: the enemy group in reach, an enemy building (M5-4c)
   Blackboard            # what the AI believes about the world (from its PlayerView only)
 ```
 
@@ -6182,7 +6276,7 @@ Slice 1: the defeat rule (STATE "Requests for the sim track" 37) and the AI's ba
   `Blackboard.Homing`). Its rally mark is cleared, so the rally rule brings it back after the threat. Every own worker
   within `ai.workerFleeRadius` of the point with no AI command pending, not yet sent fleeing in this threat, gets one
   `Move` to the footprint centre of the nearest own finished drop-off farther than `workerFleeRadius` from the point, else
-  the nearest one (the faction pages: "Laborers flee to the Garrison Keep"), and the economy (gathering, the rebalance,
+  the nearest one (the faction pages' "Defense" lines state this rule since D17; BUG-0720 item 1), and the economy (gathering, the rebalance,
   `PickBuilder`) leaves it alone for `defendFor` after its flee (`FledGeneration`, `FledAt`; BUG-0671: not until the threat
   ends, which an enemy parked in the base never lets happen). Then it is the economy's again, but while the threat holds no
   worker is sent to gather at a node whose centre is within `workerFleeRadius` of the point, and a worker that fled isn't
@@ -6220,6 +6314,66 @@ Slice 1: the defeat rule (STATE "Requests for the sim track" 37) and the AI's ba
   and `DataContentHashTests` (three knobs).
 - **Not yet** (M5-4c): the AI's abilities, difficulty knobs (`focusFire`, `pullBackWounded`, `gatherBonus`), expansion,
   rebuilding, periodic re-scouting; teams (Requests 38); post-match stats.
+
+### Implementation (M5-4c)
+
+Slice 1: the AI's ability manager. Code: `Ai/AbilityManager.cs` (last in a think, after `MilitaryManager`),
+`Blackboard` (the casters' last casts), two own-unit `PlayerView` answers, one `rules.json` `ai` knob. No `Command` kind:
+the AI casts through `Command.UseAbility`, the player's door. The difficulty knobs the sim still ignores (`gatherBonus`,
+`focusFire`, `pullBackWounded`) are slice 2 (the brief's 700-line hard stop: slice 1 came to about 840 lines with its tests
+and docs).
+
+- **When.** Only when the difficulty's `useAbilities` is on (the shipped Easy is off: it never casts). The **casters** are the
+  player's live units (army, then workers, slot order) whose type lists abilities and that are free: not `Casting` and not
+  walking to a cast (`PlayerView.TryGetCast`), no AI command pending, not the scout, not fleeing (`IsFleeing`), not a wave
+  member owed its `Move` home. Casting is allowed while `Board.Defending`. Each gets **at most one `UseAbility` a think**:
+  its first ability, in list order, that is **ready** (`PlayerView.TryGetAbilityReady`: the ready tick at most the tick the
+  command applies in) and has a target. A full queue ends the pass.
+- **Where** (the enemy as seen: the positions of every enemy unit the view answers, read once a think at the first free
+  caster). *Target ground*: the enemy units within `range + radius` of the caster; their centroid; the centroid of those of
+  them within `radius` of it; that point **pulled back to the range** (0.05 m inside, so float rounding never leaves a
+  walk) and kept half a cell inside the map (BUG-0700: units a dev spawn left off the map moved the centroid off it, and the
+  door refuses such a point; still out of range after that, no cast); cast there when at least **`ai.castMinTargets`** enemies seen stand within `radius` of the pulled-back point. An
+  ability that **hits buildings** (the Cusser) with no such group: the footprint centre of the nearest enemy building seen
+  now (ghosts don't count) within `range + radius`, pulled back alike. *Self / aura* and *summon*: at the caster, when
+  `castMinTargets` enemies stand within `radius` of it (the command's point: the caster's, kept on the map). **Friendly fire**: an ability with a damage effect that reaches own
+  units (`friendlyFire` above 0, or `affects` all units) is never cast with an own unit (the caster included) within
+  `radius` of the point: the Cusser isn't thrown at a group the Sapper is in melee with, nor into the AI's own army.
+- **Judging** (M5-2's pattern). The AI can't hear a refusal; at a later think it reads the ability's ready tick: moved
+  since the cast was sent, the cast landed and its tries start again. A cast that didn't land (refused, dropped, cancelled) is
+  sent again at the next think, at most **`AbilityManager.MaxTries` (3)** times at the same point (within a cell), then left
+  alone until the point moves more than a cell. A code guard like `MilitaryManager.MaxTries`, not data.
+- **`PlayerView`** (own units only; another player's unit, a dead or out-of-range slot answer false with 0 / -1):
+  `TryGetAbilityReady(slot, abilityIndex, out readyTick)` (the cooldown the player's own command card shows) and
+  `TryGetCast(slot, out abilityIndex)` (the cast or walk to one in progress). Values only (`PlayerViewArchitectureTests`
+  lists them); `PlayerViewOracleFuzzTests` compares both with the stores for every unit slot, every index from -1 to the
+  limit, every player, every tick (own cooldowns and casts reached, no enemy answer).
+- **Knob** (`common/rules.json` `ai`, required, `DataValidationTests` rows, in `ContentHash`): `castMinTargets` 2 (a whole
+  number 1-50). **Golden**: the header moved once (`data-hash` 72EF431E70C49C39 to C6FC120A55AE4A0B, and the checksum); its
+  `k` lines did not move (no AI seat in it). `QA/GatherWedgeQaTests` lists the new hash (no AI seat in that match).
+- **Memory.** Per AI seat, new: per unit slot an int generation, two bytes (the ability index and the tries), an int ready
+  tick and two Vector2 (the point sent, and the seen-enemy scratch): **26 B x unit slots**, 65 KB for 2,500. About 205 KB per
+  seat for a 2,500-unit, 256-building, 4,096-node match (140 KB before).
+- **Cost.** `Ai/AiPerfTests` now gives each of the eight Hard seats 16 casters (Cadre Mages, Priests) beside the next seat's
+  units, with every cooldown cleared and every unit healed before each think (test seams), so every free caster searches at
+  every think: avg 0.40-0.44 ms a think over 2,628 units in Debug (gate 1 ms; 0.19 ms with the manager off; about 1,100 casts a Malazan seat, 250 a Whirlwind one, over the run), allocation-free
+  (`AllocationProbe`). Its Sandstorm doesn't block vision there: while blocking zones live, the view's unit cursor tests every
+  unit against every zone (the fog's zone rule, M4-4b-2), so dozens of storms at once make every think's census cost
+  several ms (a fog cost, reported to the Producer).
+- **Behaviour to know.** A caster that a manager earlier in the think ordered (the rally, the defense) casts at the next
+  think, and its cast replaces that order (a `UseAbility` ends the unit's other orders); after the cast it stands, and the
+  rally and defense rules don't re-send a point already sent. A Sapper in melee with its target doesn't throw.
+- **Tests.** `Ai/AbilityManagerTests` (Telas Fire at three enemies within two thinks, not at one; the Cusser at a building
+  with no group; Sandstorm on the centroid and at the range's edge; `castMinTargets` 1 / 50; no re-order on cooldown, the
+  cast judged by the cooldown, `MaxTries` on a cast stopped every time and a re-send once the enemies move; Easy silent for
+  6,000 ticks while its Normal twin casts; the Cusser held with an own unit in its radius; a test-only self / aura; BUG-0700's
+  group off the map), `Stress/CommandDoorFuzzStressTests` (its AI-command oracle now admits a `UseAbility` of an own live
+  unit, an ability its type lists, at a point on the map),
+  `AiDeterminismTests.TwoAiSeats_Casting_*` (Normal, both factions, seeds 1 / 7 / 12, 4,000 ticks, casters in each other's base:
+  hash twins, casts sent and landed), `AiReplayTests.TwoCastingAiSeats_PlayBackWithoutEither`, `AiPerfTests`,
+  `DataValidationTests` / `DataContentHashTests` (the knob).
+- **Not yet:** slice 2 (`gatherBonus`, `focusFire`, `pullBackWounded`); `targetUnit` and `autocast`; own-unit abilities aimed at
+  own units (a heal); expansion, rebuilding, re-scouting (M5-4d).
 
 ## Save/load and replays
 

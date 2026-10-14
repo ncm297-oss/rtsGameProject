@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (filed S2; re-triaged by the Producer at the 0916 ACCEPT, see Triage) |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-13-0916, task M5-4b |
 | System | view tests (game/tests/AiSeatTest.cs), defeat rule |
-| Fixed by | |
+| Fixed by | ae578c2 (M6-V4): `AiSeatTest.MatchOverLine` asserts the real rule (one DefeatEvent, one line, outcome Defeat, the rebuild dropped). QA 2026-10-13-1616: `AiSeatTest` PASS in `tools/qa/scene-loop.ps1 -SkipPlayable`. |
 
 ## Repro
 On the M5-4b branch (4edcf26): `powershell -File tools/qa/smoke.ps1`, then

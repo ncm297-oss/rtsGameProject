@@ -162,6 +162,32 @@ public sealed class PlayerView
     }
 
     /// <summary>
+    /// M5-4c: the tick from which ability <paramref name="abilityIndex"/> (its index in the unit's type's list, what
+    /// <c>UseAbility</c> names) of the player's own live unit in slot <paramref name="slot"/> may be used again, as the
+    /// player's own command card shows its cooldown (0: never used); false (0) for an index its type lacks, and for any other
+    /// player's unit.
+    /// </summary>
+    public bool TryGetAbilityReady(int slot, int abilityIndex, out int readyTick)
+    {
+        readyTick = 0;
+        if (!IsOwnUnit(slot) || (uint)abilityIndex >= (uint)_data.Units[_units.TypeId[slot]].Abilities.Length) return false;
+        readyTick = _units.AbilityReadyTick[slot * DataLimits.MaxUnitAbilities + abilityIndex];
+        return true;
+    }
+
+    /// <summary>
+    /// M5-4c: the ability (its index in the type's list) the player's own live unit in slot <paramref name="slot"/> is casting
+    /// or walking into range to cast, as its own panel shows it; false (-1) for none, and for any other player's unit.
+    /// </summary>
+    public bool TryGetCast(int slot, out int abilityIndex)
+    {
+        abilityIndex = IsOwnUnit(slot) ? _units.CastAbility[slot] : -1;
+        return abilityIndex >= 0;
+    }
+
+    private bool IsOwnUnit(int slot) => (uint)slot < (uint)_units.Capacity && _units.Alive[slot] && _units.Owner[slot] == _player;
+
+    /// <summary>
     /// The unit in slot <paramref name="s"/>. BUG-0640: a worker with a building order that stands Idle (its walk to the site
     /// just ended out of reach) is answered as <see cref="UnitState.Building"/>, which the construction system makes it next
     /// tick; read as Idle on that one tick, the AI's economy sent it to gather and the site was left unbuilt.

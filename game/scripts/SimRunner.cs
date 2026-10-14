@@ -140,6 +140,9 @@ public partial class SimRunner : Node
             TickTimes.Add(LastTickMs);
             TotalTickMs += LastTickMs;
             Ticked?.Invoke(Simulation);
+            // M6-V4: a Ticked handler paused the tree (the match-over banner): the frame's other ticks don't run, so the
+            // banner shows the tick that ended the match (the clock's time is dropped, as for any pause).
+            if (!CanProcess()) break;
         }
     }
 }

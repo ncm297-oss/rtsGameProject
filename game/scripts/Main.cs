@@ -15,7 +15,9 @@ namespace Rts.Game;
 /// is up and the player's picks, never game state. M6-V6: the settings (<see cref="GameSettings"/>, <c>user://settings.cfg</c>)
 /// are read and applied right after the data, before the menu or the match; the Settings screen opens from the menu and the
 /// pause menu, and its Apply / Defaults / Back apply and save them (<see cref="CommitSettings"/>). <c>--vsync</c> wins over
-/// the file for the run and never changes it.
+/// the file for the run and never changes it. M6-V4: when the match gives the local player a result (<see cref="Match.Ended"/>)
+/// the tree pauses as for the pause menu and the match-over banner shows, once per match; its Continue watching unpauses and
+/// hides it for good, its Stats (and the pause menu's, from then on) opens the stats screen, its Main menu ends the match.
 /// </remarks>
 public partial class Main : Node3D
 {
@@ -27,6 +29,9 @@ public partial class Main : Node3D
     private SkirmishSetup? _setup;
     private PauseMenu? _pause;
     private SettingsScreen? _settingsScreen;
+    private MatchOverBanner? _banner;
+    private MatchStats? _stats;
+    private bool _bannerShown;
 
     /// <summary>The user args to read instead of the command line's (tests); null for <see cref="OS.GetCmdlineUserArgs"/>.</summary>
     public string[]? UserArgs { get; set; }
@@ -45,6 +50,18 @@ public partial class Main : Node3D
 
     /// <summary>The settings screen; null without <c>ui.json</c>.</summary>
     public SettingsScreen? SettingsScreen => _settingsScreen;
+
+    /// <summary>The match-over banner (M6-V4); null without <c>ui.json</c>.</summary>
+    public MatchOverBanner? Banner => _banner;
+
+    /// <summary>The stats screen (M6-V4); null without <c>ui.json</c>.</summary>
+    public MatchStats? Stats => _stats;
+
+    /// <summary>True while the match-over banner is up (the tree is paused under it).</summary>
+    public bool BannerUp => CurrentMatch != null && _banner is { Visible: true };
+
+    /// <summary>Called with each new match after it enters the tree and before <see cref="Match.Start"/> (tests: e.g. a 3-seat runner); null in the game.</summary>
+    public Action<Match>? BeforeStart { get; set; }
 
     /// <summary>The running match, or null on the menu screens.</summary>
     public Match? CurrentMatch { get; private set; }
@@ -85,7 +102,9 @@ public partial class Main : Node3D
         // M6-V6 boot order: the settings are read and applied before any screen or match exists.
         VsyncOverride = options?.Vsync;
         Settings = GameSettings.Load(SettingsPath);
-        SettingsApplier.Apply(Settings, GetTree().Root, VsyncOverride);
+        // BUG-0681: an engine window flag (--resolution, --fullscreen ...) wins over the file's window for the run, as --vsync does.
+        // The process's own command line: OS.GetCmdlineArgs() leaves out the args the engine consumed (it is empty here).
+        SettingsApplier.Apply(Settings, GetTree().Root, VsyncOverride, keepWindow: SettingsApplier.HasEngineWindowFlag(System.Environment.GetCommandLineArgs()));
         if (ui != null) BuildScreens(ui, _data);
         if (options != null) StartMatch(options);
         else ShowMenu();
@@ -112,6 +131,19 @@ public partial class Main : Node3D
         _pause.ResumePressed += Resume;
         _pause.QuitToMenuPressed += QuitToMenu;
         _pause.SettingsPressed += ShowSettings;
+        _pause.StatsPressed += ShowStats;
+
+        _banner = new MatchOverBanner { Name = "MatchOverBanner" };
+        AddChild(_banner);
+        _banner.Build(ui);
+        _banner.StatsPressed += ShowStats;
+        _banner.ContinuePressed += ContinueWatching;
+        _banner.MenuPressed += QuitToMenu;
+
+        _stats = new MatchStats { Name = "MatchStats" };
+        AddChild(_stats);
+        _stats.Build(ui, data);
+        _stats.BackPressed += CloseStats;
 
         _settingsScreen = new SettingsScreen { Name = "SettingsScreen" };
         AddChild(_settingsScreen);
@@ -150,7 +182,7 @@ public partial class Main : Node3D
         }
         _settingsScreen.Visible = false;
         if (Paused) _pause!.ResumeButton.GrabFocus();
-        else ShowMenu();
+        else if (CurrentMatch == null) ShowMenu(); // BUG-0684 item 3: never the menu over a running match
     }
 
     // The running match's camera takes the edge pan speed (a new match takes it in StartMatch).
@@ -190,9 +222,12 @@ public partial class Main : Node3D
         // Main runs Always (it answers Esc while paused); the match must stop with the tree.
         match.ProcessMode = ProcessModeEnum.Pausable;
         AddChild(match);
+        BeforeStart?.Invoke(match);
         // Ready before Start, as when the match was a child of Main.tscn: Start wires nodes the match's _Ready looked up.
         match.Start(_data, options);
         CurrentMatch = match;
+        _bannerShown = false;
+        match.Ended += outcome => OnMatchEnded(match, outcome);
         ApplyCamera();
     }
 
@@ -201,8 +236,44 @@ public partial class Main : Node3D
     {
         if (CurrentMatch == null || _pause == null || Paused) return;
         GetTree().Paused = true;
+        _pause.StatsButton.Visible = _bannerShown && _stats != null;
         _pause.Visible = true;
         _pause.ResumeButton.GrabFocus();
+    }
+
+    // M6-V4: the match's result, once (Match latches it): the banner opens through the pause path (the tree pauses as for the
+    // pause menu; SimRunner runs no more ticks this frame). A match that isn't the current one (freed) is ignored.
+    private void OnMatchEnded(Match match, MatchOutcome outcome)
+    {
+        if (match != CurrentMatch || _banner == null || _bannerShown) return;
+        _bannerShown = true;
+        GetTree().Paused = true;
+        _banner.ShowOutcome(outcome);
+    }
+
+    /// <summary>What the banner's Continue watching does: hides it for the rest of the match and unpauses (Esc is the pause menu again).</summary>
+    public void ContinueWatching()
+    {
+        if (_banner == null || !_banner.Visible) return;
+        _banner.Visible = false;
+        if (_stats != null) _stats.Visible = false;
+        GetTree().Paused = false;
+    }
+
+    /// <summary>Opens the stats screen over the banner or the pause menu (the match stays paused under it).</summary>
+    public void ShowStats()
+    {
+        if (_stats == null || CurrentMatch == null) return;
+        _stats.ShowFor(CurrentMatch);
+    }
+
+    /// <summary>What the stats screen's Back (or Esc) does: closes it to the banner or the pause menu it came from.</summary>
+    public void CloseStats()
+    {
+        if (_stats == null) return;
+        _stats.Visible = false;
+        if (_banner is { Visible: true }) _banner.StatsButton.GrabFocus();
+        else if (Paused) _pause!.ResumeButton.GrabFocus();
     }
 
     /// <summary>What Resume (or Esc on the pause menu) does.</summary>
@@ -216,6 +287,8 @@ public partial class Main : Node3D
     /// <summary>What Quit to menu does: ends the match (its sim and every view node go with it) and shows the main menu.</summary>
     public void QuitToMenu()
     {
+        if (_banner != null) _banner.Visible = false;
+        if (_stats != null) _stats.Visible = false;
         Resume();
         if (CurrentMatch != null)
         {
@@ -233,6 +306,16 @@ public partial class Main : Node3D
         {
             // Esc is Back: the picks are kept and the screen closes to where it came from (the pause menu stays paused).
             CommitSettings(_settingsScreen.Picks(), stay: false);
+            GetViewport().SetInputAsHandled();
+        }
+        else if (CurrentMatch != null && _stats is { Visible: true })
+        {
+            CloseStats();
+            GetViewport().SetInputAsHandled();
+        }
+        else if (BannerUp)
+        {
+            // The banner is answered with its buttons; Esc must not open the pause menu over it.
             GetViewport().SetInputAsHandled();
         }
         else if (CurrentMatch != null)
@@ -261,6 +344,6 @@ public partial class Main : Node3D
     public override void _ExitTree()
     {
         // A tree left paused would freeze whatever runs next in it (a test scene that hosts the shell).
-        if (Paused) GetTree().Paused = false;
+        if (Paused || BannerUp) GetTree().Paused = false;
     }
 }

@@ -60,6 +60,38 @@ public class AiDeterminismTests
 
     private static readonly Lazy<GameData> s_early = new(() => AiScenes.EarlyWaves());
 
+    /// <summary>
+    /// M5-4c criterion 3: a casting match. Two Normal AI seats (both factions, combat on), each with two of every caster type of
+    /// its faction (Cadre Mage and Sapper, Priest) among the other's workers from the start: both seats cast within the run,
+    /// and two runs hash equal after every tick, with the same casts sent.
+    /// </summary>
+    [Theory]
+    [InlineData(1UL)]
+    [InlineData(7UL)]
+    [InlineData(12UL)]
+    public void TwoAiSeats_Casting_TwoRuns_SameHashEveryTick(ulong seed)
+    {
+        PlayerSeat[] seats = AiScenes.Seats(AiDifficulty.Normal, SeatController.Ai, SeatController.Ai);
+        Simulation a = AiScenes.Generated(seats, seed, record: false, out _, casters: 2);
+        Simulation b = AiScenes.Generated(seats, seed, record: false, out _, casters: 2);
+        int landed = 0;
+        for (int t = 0; t < 4000; t++)
+        {
+            a.Tick();
+            b.Tick();
+            Assert.True(a.StateHash() == b.StateHash(), $"seed {seed}: the runs differ after tick {a.TickNumber}");
+            foreach (Abilities.AbilityEvent e in a.World.AbilityEvents)
+                if (e.Resolved) landed++;
+        }
+        for (int p = 0; p < 2; p++)
+        {
+            Assert.True(a.AiOf(p)!.Board.CastsSent > 0, $"seed {seed}: AI {p} never cast");
+            Assert.Equal(a.AiOf(p)!.Board.CastsSent, b.AiOf(p)!.Board.CastsSent);
+            Assert.Equal(a.AiOf(p)!.CommandsSent, b.AiOf(p)!.CommandsSent);
+        }
+        Assert.True(landed > 0, $"seed {seed}: no cast landed");
+    }
+
     /// <summary>A think writes nothing but its commands: called between ticks, it adds to the queue exactly the commands it reports sent, and with none the state hash doesn't move.</summary>
     [Fact]
     public void AThink_ChangesTheStateOnlyThroughItsCommands()

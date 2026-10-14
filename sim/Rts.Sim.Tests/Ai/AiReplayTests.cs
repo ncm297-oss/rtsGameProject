@@ -81,6 +81,20 @@ public class AiReplayTests
         Assert.Equal(Ticks, played.TicksRun);
     }
 
+    /// <summary>M5-4c criterion 3: two Normal AI seats that cast (casters in each other's base) play back, every seat human, to equal checkpoints; the log holds both seats' casts.</summary>
+    [Fact]
+    public void TwoCastingAiSeats_PlayBackWithoutEither()
+    {
+        PlayerSeat[] seats = AiScenes.Seats(AiDifficulty.Normal, SeatController.Ai, SeatController.Ai);
+        Simulation sim = AiScenes.Generated(seats, 5, record: true, out ReplayRecorder? rec, casters: 2);
+        for (int t = 0; t < Ticks; t++) sim.Tick();
+        Replay r = rec!.ToReplay();
+        for (int p = 0; p < 2; p++) Assert.Contains(r.Commands, c => c.Player == p && c.Kind == CommandKind.UseAbility);
+        ReplayResult played = ReplayPlayer.Run(r, TestSim.Data);
+        Assert.True(played.Ok, played.ToString());
+        Assert.Equal(Ticks, played.TicksRun);
+    }
+
     /// <summary>The same log played on a sim that runs the AI too diverges (the AI's commands would be sent twice): what playback's no-AI rule avoids.</summary>
     [Fact]
     public void TheLogReplayedWithTheAiOn_WouldSendItsCommandsTwice()

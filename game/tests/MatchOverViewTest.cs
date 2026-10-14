@@ -1,0 +1,456 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Godot;
+using Rts.Sim;
+using Rts.Sim.Commands;
+using Rts.Sim.Data;
+using Rts.Sim.Entities;
+using Rts.Sim.Map;
+using Rts.Sim.Pathfinding;
+using Rts.Sim.ViewApi;
+
+namespace Rts.Game.Tests;
+
+/// <summary>
+/// M6-V4: the match-over banner and the stats screen, through the shell (<c>Main.tscn</c>, a dev match: <c>--units 0
+/// --no-bases</c>, every seat human) and injected clicks and keys. The scenes are set up with commands only (dev
+/// <c>SpawnBuilding</c> / <c>SpawnUnit</c>, then <c>Attack</c>, <c>Build</c>, <c>Cancel</c>):
+/// <list type="bullet">
+/// <item>Victory: player 0's army razes player 1's only building. The banner shows once, on the tick of the defeat, the tree
+/// paused (no tick over real time), its title <c>match_over.victory</c>; Esc opens no pause menu over it. Stats: two rows,
+/// Kills / Losses / gold / wood equal to the sim's spans, the length and player 1's defeat time to the second, "You" and
+/// "Human"; Back returns to the banner. Continue watching unpauses (ticks move), no second banner; Esc is the pause menu,
+/// which now has Stats (the numbers of the moment); Esc closes it, Esc resumes; Quit to menu.</item>
+/// <item>Defeat (a second skirmish from the same shell, no stale banner): player 1 razes player 0's only building; the
+/// banner's Main menu reaches the menu with the match freed (no match node left, the old match invalid, the tree unpaused).</item>
+/// <item>Draw: both players' only sites cancelled on one tick: one banner, <c>match_over.draw</c>.</item>
+/// <item>Three seats: player 0 falls first: Defeat while the sim's <c>MatchOver</c> is still false; Continue; player 2 falls
+/// later (the match is over), and no second banner shows; the stats have three rows.</item>
+/// </list>
+/// </summary>
+/// <remarks>
+/// Headless: <c>&amp; $env:GODOT --headless --path game res://tests/MatchOverViewTest.tscn</c>; prints "MATCH OVER VIEW TEST
+/// PASS" or "MATCH OVER VIEW TEST FAIL: ..." lines. Windowed with <c>-- --shots &lt;dir&gt;</c> it saves
+/// <c>matchover-banner.png</c> and <c>matchover-stats.png</c>. The settings file is a per-process <c>user://</c> one.
+/// </remarks>
+public partial class MatchOverViewTest : Node
+{
+    private static readonly string[] Args = { "--units", "0", "--no-bases", "--mute", "--seed", "2", "--speed", "8" };
+
+    private readonly List<string> _failures = new();
+    private readonly List<DefeatEvent> _events = new();
+    private GameData _data = null!;
+    private UiText _ui = null!;
+    private Main _main = null!;
+    private string? _shots;
+    private int _ended;
+
+    public override async void _Ready()
+    {
+        ProcessMode = ProcessModeEnum.Always; // the banner pauses the tree
+        try
+        {
+            GetTree().Root.Size = new Vector2I(1152, 648);
+            string[] args = OS.GetCmdlineUserArgs();
+            for (int i = 0; i + 1 < args.Length; i++) if (args[i] == "--shots") _shots = args[i + 1];
+            await Frames(1);
+            DataLoadResult loaded = DataLoader.LoadAll(ProjectSettings.GlobalizePath("res://data"));
+            if (!loaded.Ok) throw new InvalidOperationException("data failed to load");
+            _data = loaded.Data!;
+            _ui = UiText.Shared ?? throw new InvalidOperationException("ui.json failed to load");
+            _main = GD.Load<PackedScene>("res://scenes/Main.tscn").Instantiate<Main>();
+            _main.UserArgs = Args;
+            _main.SettingsPath = $"user://matchover-test-{OS.GetProcessId()}/settings.cfg";
+            AddChild(_main);
+            await Frames(2);
+            await Victory();
+            await Defeat();
+            await Draw();
+            await ThreeSeats();
+        }
+        catch (Exception ex)
+        {
+            _failures.Add($"exception: {ex}");
+        }
+        if (GetTree().Paused) GetTree().Paused = false;
+        foreach (string f in _failures.Take(60)) GD.Print($"MATCH OVER VIEW TEST FAIL: {f}");
+        if (_failures.Count == 0) GD.Print("MATCH OVER VIEW TEST PASS");
+        SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
+    }
+
+    // ---- the cases ----
+
+    private async Task Victory()
+    {
+        Match match = Watch(_main.CurrentMatch);
+        Simulation sim = match.Simulation!;
+        World w = sim.World;
+        await Bases(sim, 2);
+        EntityHandle target = BuildingOf(w, 1);
+        await Army(sim, 0, target, 6);
+        Raze(sim, 0, target);
+        await UntilBanner(sim, "victory");
+        MatchOverBanner banner = _main.Banner!;
+        int tick = sim.TickNumber;
+        Check(_events.Count == 1 && _events[0].Player == 1 && tick == _events[0].Tick + 1,
+            $"victory: events [{string.Join(", ", _events)}], banner at tick {tick} (want the defeat's tick + 1)");
+        Check(GetTree().Paused && banner.Visible && banner.Shown == MatchOutcome.Victory && match.Outcome == MatchOutcome.Victory && sim.MatchOver,
+            $"victory: paused {GetTree().Paused}, banner {banner.Visible} {banner.Shown}, outcome {match.Outcome}, MatchOver {sim.MatchOver}");
+        Check(banner.Title.Text == _ui.MatchOver(MatchOverText.Victory) && banner.StatsButton.Text == _ui.MatchOver(MatchOverText.Stats)
+            && banner.MenuButton.Text == _ui.MatchOver(MatchOverText.Menu) && banner.ContinueButton.Text == _ui.MatchOver(MatchOverText.Continue),
+            $"victory text: '{banner.Title.Text}', '{banner.StatsButton.Text}', '{banner.MenuButton.Text}', '{banner.ContinueButton.Text}'");
+        await Seconds(0.4);
+        Check(sim.TickNumber == tick, $"banner up: ticks {tick} -> {sim.TickNumber}");
+        await Type(Key.Escape);
+        Check(banner.Visible && !_main.Paused && GetTree().Paused, $"Esc on the banner: banner {banner.Visible}, pause menu {_main.Paused}");
+        await Shot("banner");
+
+        // Stats over the banner, Back to it.
+        await Click(banner.StatsButton);
+        MatchStats stats = _main.Stats!;
+        Check(stats.Visible, "Stats did not open the stats screen");
+        CheckStats(match, 2, "victory");
+        Check(stats.Cell(0, DefeatedColumn) == _ui.MatchOver(MatchOverText.Standing) && stats.Cell(1, DefeatedColumn) == _ui.Clock(_events[0].Tick + 1),
+            $"victory: defeated cells '{stats.Cell(0, DefeatedColumn)}', '{stats.Cell(1, DefeatedColumn)}'");
+        Check(stats.SeatName(0) == _ui.Setup(SetupText.SlotHuman) && stats.SeatName(1) == _ui.MatchOver(MatchOverText.Human),
+            $"victory: seats '{stats.SeatName(0)}', '{stats.SeatName(1)}'");
+        await Shot("stats");
+        await Click(stats.BackButton);
+        Check(!stats.Visible && banner.Visible && GetTree().Paused, $"stats Back: stats {stats.Visible}, banner {banner.Visible}");
+
+        // Continue watching: the match runs on, no second banner; Esc is the pause menu again, with Stats.
+        await Click(banner.ContinueButton);
+        Check(!banner.Visible && !GetTree().Paused, $"Continue: banner {banner.Visible}, paused {GetTree().Paused}");
+        await Seconds(0.5);
+        Check(sim.TickNumber > tick && !banner.Visible && _ended == 1, $"after Continue: tick {sim.TickNumber} (banner at {tick}), banner {banner.Visible}, ended {_ended}");
+        await Type(Key.Escape);
+        PauseMenu pause = _main.Pause!;
+        Check(_main.Paused && pause.StatsButton.Visible && pause.StatsButton.Text == _ui.MatchOver(MatchOverText.Stats), $"pause after the banner: paused {_main.Paused}, Stats {pause.StatsButton.Visible}");
+        await Click(pause.StatsButton);
+        Check(stats.Visible, "the pause menu's Stats did not open the stats screen");
+        CheckStats(match, 2, "from the pause menu");
+        await Type(Key.Escape);
+        Check(!stats.Visible && _main.Paused, $"Esc on the stats: stats {stats.Visible}, pause menu {_main.Paused}");
+        await Type(Key.Escape);
+        Check(!_main.Paused && !GetTree().Paused, "Esc did not resume");
+        await Type(Key.Escape);
+        await Click(pause.QuitToMenuButton);
+        Check(_main.CurrentMatch == null && !stats.Visible && !banner.Visible, "Quit to menu after the banner");
+    }
+
+    private async Task Defeat()
+    {
+        _main.StartSkirmish(Args);
+        Match match = Watch(_main.CurrentMatch);
+        Simulation sim = match.Simulation!;
+        World w = sim.World;
+        Check(!_main.Banner!.Visible && !GetTree().Paused, "a second skirmish starts with a banner up");
+        await Bases(sim, 2);
+        EntityHandle own = BuildingOf(w, 0);
+        await Army(sim, 1, own, 6);
+        Raze(sim, 1, own);
+        await UntilBanner(sim, "defeat");
+        MatchOverBanner banner = _main.Banner!;
+        Check(_events.Count == 1 && _events[0].Player == 0 && banner.Title.Text == _ui.MatchOver(MatchOverText.Defeat) && match.Outcome == MatchOutcome.Defeat && GetTree().Paused,
+            $"defeat: events [{string.Join(", ", _events)}], title '{banner.Title.Text}', outcome {match.Outcome}, paused {GetTree().Paused}");
+        await CheckStatsVia(banner, match, 2, "defeat");
+        // Main menu: the match is freed.
+        SimRunner runner = match.GetNode<SimRunner>("SimRunner");
+        await Click(banner.MenuButton);
+        await Frames(2);
+        Check(_main.CurrentMatch == null && _main.Menu is { Visible: true } && !banner.Visible && !GetTree().Paused,
+            $"Main menu: match {_main.CurrentMatch != null}, menu {_main.Menu?.Visible}, banner {banner.Visible}, paused {GetTree().Paused}");
+        List<string> left = MatchNodes();
+        Check(left.Count == 0, $"match nodes left after Main menu: {string.Join(", ", left.Take(10))}");
+        Check(!IsInstanceValid(match) && !IsInstanceValid(runner), "the old match or its runner is still a live object");
+    }
+
+    private async Task Draw()
+    {
+        _main.StartSkirmish(Args);
+        Match match = Watch(_main.CurrentMatch);
+        Simulation sim = match.Simulation!;
+        World w = sim.World;
+        NavGrid g = w.NavGrid;
+        // Each player's only building is a site its worker places; both are cancelled on one tick.
+        await Scouts(sim, 2);
+        var sites = new System.Numerics.Vector2[2];
+        for (int p = 0; p < 2; p++)
+        {
+            int house = StartBase.BuildingOfSlot(_data, w.FactionOf(p), BuildingSlot.House);
+            int anchor = Anchor(w, p, house, Spots(g)[p].X + 3, Spots(g)[p].Y + 3);
+            sites[p] = g.CellCenter(anchor % g.Width, anchor / g.Width);
+            sim.Enqueue(Command.Build(p, UnitsOf(w, p)[0], house, sites[p]));
+        }
+        await Ticks(sim, 3);
+        Check(w.Buildings.Count == 2, $"draw: {w.Buildings.Count} sites placed (want 2)");
+        for (int p = 0; p < 2; p++) sim.Enqueue(Command.Cancel(p, sites[p]));
+        await UntilBanner(sim, "draw");
+        MatchOverBanner banner = _main.Banner!;
+        Check(_events.Count == 2 && _events[0].Tick == _events[1].Tick && banner.Title.Text == _ui.MatchOver(MatchOverText.Draw) && match.Outcome == MatchOutcome.Draw,
+            $"draw: events [{string.Join(", ", _events)}], title '{banner.Title.Text}', outcome {match.Outcome}");
+        await Click(banner.ContinueButton);
+        await Seconds(0.3);
+        Check(_ended == 1 && !banner.Visible, $"draw: ended {_ended}, banner {banner.Visible} after Continue");
+        await QuitMatch();
+    }
+
+    private async Task ThreeSeats()
+    {
+        _main.BeforeStart = m => m.GetNode<SimRunner>("SimRunner").PlayerCount = 3;
+        _main.StartSkirmish(Args);
+        _main.BeforeStart = null;
+        Match match = Watch(_main.CurrentMatch);
+        Simulation sim = match.Simulation!;
+        World w = sim.World;
+        Check(w.Config.PlayerCount == 3, $"three seats: {w.Config.PlayerCount} players");
+        await Bases(sim, 3);
+        EntityHandle own = BuildingOf(w, 0);
+        await Army(sim, 1, own, 6);
+        Raze(sim, 1, own);
+        await UntilBanner(sim, "three seats");
+        MatchOverBanner banner = _main.Banner!;
+        Check(banner.Title.Text == _ui.MatchOver(MatchOverText.Defeat) && match.Outcome == MatchOutcome.Defeat && !sim.MatchOver && w.IsDefeated(0),
+            $"three seats: title '{banner.Title.Text}', outcome {match.Outcome}, MatchOver {sim.MatchOver} (want false: players 1 and 2 stand)");
+        await CheckStatsVia(banner, match, 3, "three seats");
+        await Click(banner.ContinueButton);
+        // Player 1 razes player 2 as well: the match is over now, and still one banner.
+        EntityHandle third = BuildingOf(w, 2);
+        await Army(sim, 1, third, 6);
+        Raze(sim, 1, third);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (!sim.MatchOver && clock.Elapsed.TotalSeconds < 60) await Frames(1);
+        await Seconds(0.3);
+        Check(sim.MatchOver && _events.Count == 2 && _ended == 1 && !banner.Visible && !GetTree().Paused,
+            $"three seats, player 2 down: MatchOver {sim.MatchOver}, events {_events.Count}, ended {_ended}, banner {banner.Visible}, paused {GetTree().Paused}");
+        await QuitMatch();
+    }
+
+    // ---- checks ----
+
+    private static int DefeatedColumn => Array.FindIndex(MatchStats.Columns, c => c.Label == MatchOverText.DefeatedAt);
+
+    // The open stats screen against the sim now: one row per seat, every number its span's, the length and defeat times.
+    private void CheckStats(Match match, int players, string how)
+    {
+        MatchStats stats = _main.Stats!;
+        World w = match.Simulation!.World;
+        Check(stats.RowCount == players, $"{how}: {stats.RowCount} stats rows (want {players})");
+        Check(stats.Title.Text == _ui.MatchOver(MatchOverText.StatsTitle) && stats.Length.Text == _ui.MatchLength(match.Simulation.TickNumber)
+            && stats.BackButton.Text == _ui.MatchOver(MatchOverText.Back),
+            $"{how}: title '{stats.Title.Text}', length '{stats.Length.Text}' at tick {match.Simulation.TickNumber}");
+        int k = Array.FindIndex(MatchStats.Columns, c => c.Label == MatchOverText.Kills), l = Array.FindIndex(MatchStats.Columns, c => c.Label == MatchOverText.Losses);
+        int gold = Array.FindIndex(MatchStats.Columns, c => c.Label == MatchOverText.GoldInHand), wood = Array.FindIndex(MatchStats.Columns, c => c.Label == MatchOverText.WoodInHand);
+        for (int p = 0; p < Math.Min(players, stats.RowCount); p++)
+        {
+            Check(stats.Cell(p, k) == w.Kills[p].ToString() && stats.Cell(p, l) == w.Losses[p].ToString() && stats.Cell(p, gold) == w.Gold[p].ToString()
+                && stats.Cell(p, wood) == w.Wood[p].ToString(),
+                $"{how}: row {p} kills {stats.Cell(p, k)} / {w.Kills[p]}, losses {stats.Cell(p, l)} / {w.Losses[p]}, gold {stats.Cell(p, gold)} / {w.Gold[p]}, wood {stats.Cell(p, wood)} / {w.Wood[p]}");
+            DefeatEvent? e = _events.Where(x => x.Player == p).Select(x => (DefeatEvent?)x).FirstOrDefault();
+            string want = e is DefeatEvent d ? _ui.Clock(d.Tick + 1) : _ui.MatchOver(MatchOverText.Standing);
+            Check(stats.Cell(p, DefeatedColumn) == want, $"{how}: row {p} defeated '{stats.Cell(p, DefeatedColumn)}' (want '{want}')");
+            Check(stats.FactionName(p) == _data.Factions[w.FactionOf(p)].DisplayName, $"{how}: row {p} faction '{stats.FactionName(p)}'");
+            uint rgb = match.PlayerRgb[p];
+            Check(stats.Swatch(p).ToRgba32() >> 8 == rgb, $"{how}: row {p} swatch {stats.Swatch(p).ToHtml(false)} (want {rgb:X6})");
+        }
+        Check(w.Kills[0] + w.Kills[1] > 0, $"{how}: nobody killed anything (the scene's razing counts a killing blow)");
+    }
+
+    private async Task CheckStatsVia(MatchOverBanner banner, Match match, int players, string how)
+    {
+        await Click(banner.StatsButton);
+        CheckStats(match, players, how);
+        await Type(Key.Escape);
+        Check(!_main.Stats!.Visible && banner.Visible, $"{how}: Esc on the stats: stats {_main.Stats.Visible}, banner {banner.Visible}");
+    }
+
+    // ---- scene set-up (commands only) ----
+
+    private Match Watch(Match? match)
+    {
+        if (match?.Simulation == null) throw new InvalidOperationException("the shell started no match");
+        _events.Clear();
+        _ended = 0;
+        match.Ended += _ => _ended++;
+        match.GetNode<SimRunner>("SimRunner").Ticked += s => { foreach (DefeatEvent e in s.World.DefeatEvents) _events.Add(e); };
+        match.GetNode<RtsCamera>("RtsCamera").EdgePanEnabled = false;
+        return match;
+    }
+
+    // One finished house per player (a dev SpawnBuilding), spread over the map: player 0 west, 1 east, 2 north.
+    private async Task Bases(Simulation sim, int players)
+    {
+        World w = sim.World;
+        NavGrid g = w.NavGrid;
+        (int X, int Y)[] at = Spots(g);
+        await Scouts(sim, players);
+        for (int p = 0; p < players; p++)
+        {
+            int house = StartBase.BuildingOfSlot(_data, w.FactionOf(p), BuildingSlot.House);
+            int anchor = Anchor(w, p, house, at[p].X, at[p].Y);
+            sim.Enqueue(Command.SpawnBuilding(p, house, g.CellCenter(anchor % g.Width, anchor / g.Width)));
+        }
+        await Ticks(sim, 3);
+        Check(w.Buildings.Count == players, $"{w.Buildings.Count} buildings placed (want {players})");
+    }
+
+    private static (int X, int Y)[] Spots(NavGrid g) => new[] { (g.Width / 4, g.Height / 2), (g.Width * 3 / 4, g.Height / 2), (g.Width / 2, g.Height / 5) };
+
+    // A worker per player at its spot: placement needs the ground explored (M4-3b), and a worker's sight explores it.
+    private async Task Scouts(Simulation sim, int players)
+    {
+        World w = sim.World;
+        NavGrid g = w.NavGrid;
+        (int X, int Y)[] at = Spots(g);
+        for (int p = 0; p < players; p++)
+        {
+            int c = FlowField.NearestPassable(g, Math.Min(at[p].Y + 7, g.Height - 1) * g.Width + at[p].X); // off the footprint: a dev SpawnBuilding refuses any unit on it
+            sim.Enqueue(Command.SpawnUnit(p, StartBase.UnitOfSlot(_data, w.FactionOf(p), UnitSlot.Worker), g.CellCenter(c % g.Width, c / g.Width)));
+        }
+        await Ticks(sim, 6);
+    }
+
+    // `n` of `player`'s siege units on open cells round `target`'s footprint.
+    private async Task Army(Simulation sim, int player, EntityHandle target, int n)
+    {
+        World w = sim.World;
+        NavGrid g = w.NavGrid;
+        int line = StartBase.UnitOfSlot(_data, w.FactionOf(player), UnitSlot.Siege); // siege: 3x on structures, melee 0.4x
+        int cell = w.Buildings.Cell[target.Index];
+        int cx = cell % g.Width, cy = cell / g.Width;
+        for (int i = 0; i < n; i++)
+        {
+            int x = Math.Clamp(cx - 3 + i % 5 * 2, 0, g.Width - 1), y = Math.Clamp(cy - 4 - i / 5 * 2, 0, g.Height - 1);
+            int c = FlowField.NearestPassable(g, y * g.Width + x);
+            sim.Enqueue(Command.SpawnUnit(player, line, g.CellCenter(c % g.Width, c / g.Width)));
+        }
+        await Ticks(sim, 3);
+    }
+
+    // Every live unit of `player` attacks `target`.
+    private static void Raze(Simulation sim, int player, EntityHandle target)
+    {
+        foreach (EntityHandle u in UnitsOf(sim.World, player)) sim.Enqueue(Command.Attack(player, u, target, isBuilding: true));
+    }
+
+    private static List<EntityHandle> UnitsOf(World w, int player)
+    {
+        var list = new List<EntityHandle>();
+        UnitStore u = w.Units;
+        for (int i = 0; i < u.Capacity; i++) if (u.Alive[i] && u.Owner[i] == player) list.Add(new EntityHandle(i, u.Generation[i]));
+        return list;
+    }
+
+    private static EntityHandle BuildingOf(World w, int player)
+    {
+        BuildingStore b = w.Buildings;
+        for (int i = 0; i < b.Capacity; i++) if (b.Alive[i] && b.Owner[i] == player) return new EntityHandle(i, b.Generation[i]);
+        throw new InvalidOperationException($"player {player} has no building");
+    }
+
+    // The nearest anchor to (x, y) where `player` may place `type`.
+    private static int Anchor(World w, int player, int type, int x0, int y0)
+    {
+        NavGrid g = w.NavGrid;
+        for (int r = 0; r < 30; r++)
+            for (int dy = -r; dy <= r; dy++)
+                for (int dx = -r; dx <= r; dx++)
+                {
+                    if (Math.Max(Math.Abs(dx), Math.Abs(dy)) != r) continue;
+                    int x = x0 + dx, y = y0 + dy;
+                    if (x >= 0 && y >= 0 && x < g.Width && y < g.Height && w.CanPlace(player, type, y * g.Width + x, out _)) return y * g.Width + x;
+                }
+        throw new InvalidOperationException($"no anchor for player {player} near ({x0}, {y0})");
+    }
+
+    private async Task UntilBanner(Simulation sim, string how)
+    {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (!_main.BannerUp && clock.Elapsed.TotalSeconds < 90) await Frames(1);
+        Check(_main.BannerUp && _ended == 1, $"{how}: banner {_main.BannerUp}, ended {_ended} by tick {sim.TickNumber}");
+        if (!_main.BannerUp) throw new InvalidOperationException($"{how}: no banner");
+    }
+
+    private async Task QuitMatch()
+    {
+        if (_main.BannerUp) await Click(_main.Banner!.MenuButton);
+        else
+        {
+            _main.PauseMatch();
+            await Click(_main.Pause!.QuitToMenuButton);
+        }
+        await Frames(2);
+        Check(_main.CurrentMatch == null && !GetTree().Paused, "quit to menu");
+    }
+
+    private async Task Ticks(Simulation sim, int n)
+    {
+        int until = sim.TickNumber + n;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (sim.TickNumber < until && clock.Elapsed.TotalSeconds < 30) await Frames(1);
+        Check(sim.TickNumber >= until, $"tick {sim.TickNumber} after 30 s (want {until})");
+    }
+
+    private List<string> MatchNodes()
+    {
+        var found = new List<string>();
+        Walk(GetTree().Root, found);
+        return found;
+    }
+
+    private static void Walk(Node n, List<string> found)
+    {
+        if (n is Match or SimRunner or UnitViews or BuildingViews or TerrainView or SelectionController or RtsCamera or FogOfWar or Minimap or CommandCard
+            or AbilityViews or CombatViews or ProjectileViews or PropsView or ResourceBar or SelectionPanel or Sfx or DebugOverlay or Screenshotter)
+            found.Add($"{n.GetType().Name} {n.GetPath()}");
+        foreach (Node c in n.GetChildren()) Walk(c, found);
+    }
+
+    // ---- input ----
+
+    private async Task Click(Control c)
+    {
+        Check(c.IsVisibleInTree(), $"{c.Name} is not visible");
+        Vector2 at = c.GetGlobalRect().GetCenter();
+        GetViewport().PushInput(new InputEventMouseMotion { Position = at, GlobalPosition = at });
+        await Frames(1);
+        GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = at, GlobalPosition = at, ButtonMask = MouseButtonMask.Left });
+        GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = at, GlobalPosition = at });
+        await Frames(2);
+    }
+
+    private async Task Type(Key key)
+    {
+        GetViewport().PushInput(new InputEventKey { Keycode = key, PhysicalKeycode = key, Pressed = true });
+        GetViewport().PushInput(new InputEventKey { Keycode = key, PhysicalKeycode = key, Pressed = false });
+        await Frames(2);
+    }
+
+    private async Task Frames(int n)
+    {
+        for (int i = 0; i < n; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+    }
+
+    private async Task Seconds(double seconds)
+    {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (clock.Elapsed.TotalSeconds < seconds) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+    }
+
+    private async Task Shot(string name)
+    {
+        if (_shots == null || DisplayServer.GetName() == "headless") return;
+        for (int i = 0; i < 3; i++) await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+        string path = $"{_shots}/matchover-{name}.png";
+        GetViewport().GetTexture().GetImage().SavePng(path);
+        GD.Print($"  screenshot {path}");
+    }
+
+    private bool Check(bool ok, string message)
+    {
+        if (!ok) _failures.Add(message);
+        return ok;
+    }
+}

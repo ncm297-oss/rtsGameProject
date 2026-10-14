@@ -12,7 +12,7 @@ namespace Rts.Game;
 public partial class Match : Node3D
 {
     private SimRunner _runner = null!;
-    private MatchOver? _matchOver;
+    private int[] _defeatedAt = Array.Empty<int>();
 
     /// <summary>The <c>--bench</c> runner, or null for a normal run.</summary>
     public BenchRunner? Bench { get; private set; }
@@ -20,8 +20,27 @@ public partial class Match : Node3D
     /// <summary>The start bases placed by <see cref="Start"/> (Town Hall anchor and worker spots per player); null before it and under <c>--no-bases</c>.</summary>
     public StartBasePlan? Bases { get; private set; }
 
-    /// <summary>The "Match over:" dev lines printed so far (M6-V2): one each time a player's last building goes.</summary>
+    /// <summary>The "Match over:" dev lines printed so far: one per <c>World.DefeatEvents</c> entry seen (M6-V4; M6-V2 counted building drops).</summary>
     public int MatchOverLines { get; private set; }
+
+    /// <summary>The local player's result, latched the first tick it holds (M6-V4, <see cref="Outcome"/>'s rule); presentation state.</summary>
+    public MatchOutcome Outcome { get; private set; }
+
+    /// <summary>Raised once per match, after the tick that gave <see cref="Outcome"/> its value; the shell opens the banner on it.</summary>
+    public event Action<MatchOutcome>? Ended;
+
+    /// <summary>The running simulation; null before <see cref="Start"/>.</summary>
+    public Simulation? Simulation => _runner?.Simulation;
+
+    /// <summary>The seats the match was started with (one per player); empty before <see cref="Start"/>.</summary>
+    public System.Collections.Immutable.ImmutableArray<PlayerSeat> Seats => _runner?.Seats ?? System.Collections.Immutable.ImmutableArray<PlayerSeat>.Empty;
+
+    /// <summary>
+    /// The match clock (<c>TickNumber</c>, ticks of 50 ms) when player <paramref name="player"/>'s defeat was seen: the end of the
+    /// tick it fell in (<c>DefeatEvent.Tick</c> + 1); -1 while it stands or out of range. Presentation state for the stats screen.
+    /// </summary>
+    public int DefeatedAt(int player) => (uint)player < (uint)_defeatedAt.Length ? _defeatedAt[player] : -1;
+
 
     /// <summary>Army units per player this match asked for (<c>--units</c>; 0 from the menu and <c>--skirmish</c>, M6-V3).</summary>
     public int UnitsPerPlayer { get; private set; }
@@ -56,7 +75,8 @@ public partial class Match : Node3D
         _runner.UnitCapacity = Math.Max(_runner.UnitCapacity, _runner.PlayerCount * (options.UnitsPerPlayer + WorkersPerPlayer));
         _runner.Start(data);
         Simulation sim = _runner.Simulation!;
-        _matchOver = new MatchOver(sim.World.Config.PlayerCount);
+        _defeatedAt = new int[sim.World.Config.PlayerCount];
+        Array.Fill(_defeatedAt, -1);
         _runner.Ticked += OnTicked;
 
         Heightmap map = sim.World.Heightmap;
@@ -200,16 +220,41 @@ public partial class Match : Node3D
         return rgb;
     }
 
-    // M6-V2 dev line (not the victory screen, which waits on the sim's rule: Requests 37): a player whose last building went this tick.
+    // M6-V4: after every tick (several a frame at speed), read-only. Each DefeatEvent prints the dev line and stamps the stats'
+    // defeat time; then the local result, latched: Draw when the match is over and nobody stands (the last ones fell on one
+    // tick), else Defeat the moment the local player is defeated (others may stand on), else Victory when the match is over.
     private void OnTicked(Simulation sim)
     {
-        if (_matchOver == null || _matchOver.Observe(sim.World.Buildings.Alive, sim.World.Buildings.Owner) == 0) return;
-        for (int p = 0; p < _matchOver.PlayerCount; p++)
+        World w = sim.World;
+        foreach (DefeatEvent e in w.DefeatEvents)
         {
-            if (!_matchOver.JustEmptied(p)) continue;
+            if ((uint)e.Player < (uint)_defeatedAt.Length) _defeatedAt[e.Player] = e.Tick + 1;
             MatchOverLines++;
-            GD.Print($"Match over: player {p} has no buildings left (tick {sim.TickNumber})");
+            GD.Print($"Match over: player {e.Player} has no buildings left (tick {sim.TickNumber})");
         }
+        if (Outcome != MatchOutcome.None) return;
+        MatchOutcome now = ResultFor(w, SelectionController.LocalPlayer);
+        if (now == MatchOutcome.None) return;
+        Outcome = now;
+        Ended?.Invoke(now);
+    }
+
+    /// <summary>The local result the sim's state gives now (<see cref="Outcome"/>'s rule, unlatched): Draw, Defeat, Victory or None.</summary>
+    public static MatchOutcome ResultFor(World w, int local)
+    {
+        bool over = w.MatchOver;
+        if (over && Standing(w) == 0) return MatchOutcome.Draw;
+        if (w.IsDefeated(local)) return MatchOutcome.Defeat;
+        return over ? MatchOutcome.Victory : MatchOutcome.None;
+    }
+
+    // Players that ever built and still stand (the sim's MatchOver counts the same ones).
+    private static int Standing(World w)
+    {
+        int n = 0;
+        for (int p = 0; p < w.Config.PlayerCount; p++)
+            if (w.EverBuilt(p) && !w.IsDefeated(p)) n++;
+        return n;
     }
 
     // M6-V2: the setup's (or --faction / --ai's) picks into the runner's seats. An id the data lacks, or an AI seat whose faction

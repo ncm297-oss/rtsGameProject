@@ -85,6 +85,11 @@ public partial class SettingsTest : Node
         Check(RtsCamera.PanVector(Vector2.Zero, Vector2.Right, 0.5f).IsEqualApprox(new Vector2(0.5f, 0f)) && RtsCamera.PanVector(Vector2.Zero, Vector2.Right, 2f).IsEqualApprox(new Vector2(2f, 0f))
             && RtsCamera.PanVector(Vector2.Right, Vector2.Zero, 2f).IsEqualApprox(Vector2.Right) && RtsCamera.PanVector(Vector2.Right, Vector2.Right, 2f).IsEqualApprox(new Vector2(2f, 0f))
             && RtsCamera.PanVector(Vector2.Zero, Vector2.Right, float.NaN) == Vector2.Zero, "PanVector rows");
+        // BUG-0681: an engine window flag keeps the engine's window at boot; one after "--" is a user arg, not the engine's.
+        foreach (string flag in SettingsApplier.EngineWindowFlags)
+            Check(SettingsApplier.HasEngineWindowFlag(new[] { "--path", "game", flag, "1600x900" }), $"engine flag {flag} not seen");
+        Check(!SettingsApplier.HasEngineWindowFlag(new[] { "--path", "game", "--headless" }) && !SettingsApplier.HasEngineWindowFlag(new[] { "--path", "game", "--", "--resolution" })
+            && SettingsApplier.EngineWindowFlags.Contains("--resolution") && SettingsApplier.EngineWindowFlags.Contains("-f"), "engine window flag rows");
     }
 
     private void ReaderRows()
@@ -99,6 +104,13 @@ public partial class SettingsTest : Node
             ("wrong types", "[display]\nwidth=\"wide\"\nvsync=1\nquality=2\n", 9, s => s.SameAs(defaults)),
             ("out of range", "[display]\nwidth=1\nheight=1\nwindow_mode=\"windowed\"\nvsync=true\nquality=\"ultra\"\n[audio]\nmaster=999\nmusic=-1\nsfx=50\n[camera]\nedge_pan=9.0\n", 6,
                 s => s.Width == defaults.Width && s.Height == defaults.Height && s.Quality == defaults.Quality && s.MasterVolume == 100 && s.MusicVolume == 100 && s.SfxVolume == 50 && s.EdgePan == 1f),
+            // BUG-0680: a whole number past 18 digits is refused by the line shape (Godot would log an ERROR parsing it); 18 digits
+            // parse (out of range); a long run with a fraction or an exponent is a float (out of range, or a float for an int).
+            ("an 18-digit int", "[display]\nwidth=999999999999999999\n", 9, s => s.SameAs(defaults)),
+            ("a 19-digit int", "[display]\nwidth=9999999999999999999\n", 1, s => s.SameAs(defaults)),
+            ("a 64-digit int", "[audio]\nmaster=-" + new string('9', 64) + "\n", 1, s => s.SameAs(defaults)),
+            ("20 digits and a fraction", "[camera]\nedge_pan=99999999999999999999.5\n", 9, s => s.SameAs(defaults)),
+            ("20 digits and an exponent", "[camera]\nedge_pan=99999999999999999999e2\n", 9, s => s.SameAs(defaults)),
             ("extra keys", new GameSettings { MusicVolume = 7 }.Encode() + "\n[keys]\nfuture=\"x\"\n[display]\nextra=3\n", 0, s => s.MusicVolume == 7),
         };
         foreach ((string what, string? text, int want, Func<GameSettings, bool> ok) in rows)

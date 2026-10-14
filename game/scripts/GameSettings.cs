@@ -43,8 +43,10 @@ public sealed class GameSettings
     public const string MasterBus = "Master", MusicBus = "Music", SfxBus = "Sfx";
 
     // One "key=value" line of the shape Save writes: a bool, a number or a plain quoted string. Comments and sections pass.
+    // BUG-0680: a whole number has at most 18 digits (it always fits 64 bits; Godot's parser logs an engine ERROR for one
+    // that doesn't); a longer digit run passes only with a fraction or an exponent, which Godot reads as a float.
     private static readonly Regex LineShape = new(
-        @"^\s*(|[;#].*|\[[A-Za-z0-9_]+\]|[A-Za-z0-9_]+\s*=\s*(true|false|-?\d+(\.\d+)?([eE][-+]?\d+)?|""[^""\\]*""))\s*$", RegexOptions.CultureInvariant);
+        @"^\s*(|[;#].*|\[[A-Za-z0-9_]+\]|[A-Za-z0-9_]+\s*=\s*(true|false|-?(\d{1,18}|\d+\.\d+([eE][-+]?\d+)?|\d+[eE][-+]?\d+)|""[^""\\]*""))\s*$", RegexOptions.CultureInvariant);
 
     /// <summary>Window width in pixels (used in <see cref="SettingsWindowMode.Windowed"/>).</summary>
     public int Width { get; set; } = DefaultWidth;

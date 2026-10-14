@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-13-0916, task M6-V6 (QA) |
 | System | view: `game/scripts/GameSettings.cs` (`Read`, the pre-parse `LineShape` check) |
-| Fixed by | |
+| Fixed by | ae578c2 (M6-V4): `GameSettings.LineShape` caps a whole number at 18 digits. QA 2026-10-13-1616: both `QaM6V6Test` 64-bit rows are Checks and pass in a child Godot with no ERROR line, now also in process; 9 more boundary rows (19 digits that fit 64 bits, 20 digits + fraction / exponent, 400 digits + fraction, 1e-999 ...) pass. |
 
 ## Repro
 1. Put `[display]\nwidth=99999999999999999999\n` (or `[audio]\nmaster=-99999999999999999999\n`) in `user://settings.cfg`.

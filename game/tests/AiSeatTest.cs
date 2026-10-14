@@ -24,8 +24,9 @@ namespace Rts.Game.Tests;
 /// and a replay recorder: the same seats, the AI acts, the replay header holds <c>seat 1 whirlwind ai hard</c> and the
 /// replay plays back (every seat human, the AI's commands from the log) to equal checkpoints. <c>--faction 1 whirlwind
 /// --faction 2 malazan</c> (no <c>--ai</c>) swaps the sides: the local player plays the Whirlwind (its army, its build menu,
-/// its colour), player 1 the Malazans, both human. A match whose player 0 builds and cancels its only site twice prints
-/// "Match over:" once per cancel (and a normal 400-tick match none). Junk <c>--ai</c> / <c>--faction</c> values are refused and the match still
+/// its colour), player 1 the Malazans, both human. A match whose player 0 builds and cancels its only site is defeated by the
+/// cancel (docs/03 "Implementation (M5-4b)"): one <c>DefeatEvent</c>, one "Match over:" line, the outcome Defeat; its second
+/// Build is dropped at the door (no building, still one line; BUG-0674). A normal 400-tick match prints none. Junk <c>--ai</c> / <c>--faction</c> values are refused and the match still
 /// starts on the default seats.
 /// </summary>
 /// <remarks>Headless: <c>&amp; $env:GODOT --headless --path game res://tests/AiSeatTest.tscn</c>; prints "AI SEAT TEST PASS" or "AI SEAT TEST FAIL: ..." lines.</remarks>
@@ -232,13 +233,16 @@ public partial class AiSeatTest : Node
         await EndMatch(match);
     }
 
-    // The dev line through the real Match: player 0's only building is a site it cancels; "Match over:" counts once.
+    // The dev line through the real Match (M6-V4: one line per DefeatEvent): player 0's only building is a site it cancels,
+    // which defeats it (M5-4b); the rebuild after it is dropped at the door, so no second line (BUG-0674).
     private async Task MatchOverLine()
     {
         (Match match, SimRunner runner) = StartMatch(new[] { "--units", "0", "--no-bases", "--mute", "--seed", "2", "--speed", "8" }, record: 0);
         Simulation sim = runner.Simulation!;
         World w = sim.World;
         NavGrid g = w.NavGrid;
+        int events = 0;
+        runner.Ticked += s => events += s.World.DefeatEvents.Length;
         int laborer = _data.FindUnit("malazan_laborer"), billet = _data.FindBuilding("malazan_billet");
         int centre = FlowField.NearestPassable(g, g.Height / 2 * g.Width + g.Width / 2);
         sim.Enqueue(Command.SpawnUnit(0, laborer, g.CellCenter(centre % g.Width, centre / g.Width)));
@@ -258,15 +262,22 @@ public partial class AiSeatTest : Node
         if (worker >= 0 && anchor >= 0)
         {
             System.Numerics.Vector2 at = g.CellCenter(anchor % g.Width, anchor / g.Width);
-            for (int round = 1; round <= 2; round++)
-            {
-                sim.Enqueue(Command.Build(0, new EntityHandle(worker, u.Generation[worker]), billet, at));
-                await UntilTick(sim, sim.TickNumber + 3);
-                Check(w.Buildings.Count == 1 && match.MatchOverLines == round - 1, $"round {round}: {w.Buildings.Count} buildings after the Build, {match.MatchOverLines} lines");
-                sim.Enqueue(Command.Cancel(0, at));
-                await UntilTick(sim, sim.TickNumber + 10);
-                Check(w.Buildings.Count == 0 && match.MatchOverLines == round, $"round {round}: {w.Buildings.Count} buildings after the Cancel, {match.MatchOverLines} 'Match over:' lines");
-            }
+            // Round 1: the site stands, then its cancel defeats player 0 (one event, one line, the local result Defeat).
+            sim.Enqueue(Command.Build(0, new EntityHandle(worker, u.Generation[worker]), billet, at));
+            await UntilTick(sim, sim.TickNumber + 3);
+            Check(w.Buildings.Count == 1 && match.MatchOverLines == 0 && events == 0 && !w.IsDefeated(0),
+                $"round 1: {w.Buildings.Count} buildings after the Build, {match.MatchOverLines} lines, {events} events");
+            sim.Enqueue(Command.Cancel(0, at));
+            await UntilTick(sim, sim.TickNumber + 10);
+            Check(w.Buildings.Count == 0 && w.IsDefeated(0) && events == 1 && match.MatchOverLines == events,
+                $"round 1: {w.Buildings.Count} buildings after the Cancel, defeated {w.IsDefeated(0)}, {events} events, {match.MatchOverLines} 'Match over:' lines");
+            Check(match.Outcome == MatchOutcome.Defeat && !sim.MatchOver && match.DefeatedAt(0) > 0,
+                $"round 1: outcome {match.Outcome}, MatchOver {sim.MatchOver}, defeated at {match.DefeatedAt(0)}");
+            // Round 2: a defeated player's Build is dropped where it applies: nothing placed, no second event or line.
+            sim.Enqueue(Command.Build(0, new EntityHandle(worker, u.Generation[worker]), billet, at));
+            await UntilTick(sim, sim.TickNumber + 10);
+            Check(w.Buildings.Count == 0 && events == 1 && match.MatchOverLines == events,
+                $"round 2: {w.Buildings.Count} buildings after the dropped Build, {events} events, {match.MatchOverLines} lines");
         }
         await EndMatch(match);
     }

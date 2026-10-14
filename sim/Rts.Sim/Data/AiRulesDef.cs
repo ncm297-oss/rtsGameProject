@@ -55,4 +55,7 @@ public sealed class AiRulesDef
 
     /// <summary>M5-4b: own workers this close to the defense point flee to a drop-off, in meters (<c>workerFleeRadius</c>, 1-64).</summary>
     public float WorkerFleeRadius { get; init; }
+
+    /// <summary>M5-4c: the AI casts an ability only where at least this many enemy units seen stand within its radius (<c>castMinTargets</c>, a whole number 1-50).</summary>
+    public int CastMinTargets { get; init; }
 }

@@ -156,4 +156,7 @@ public static class DataLimits
 
     /// <summary>M5-4b: the most <c>rules.json</c> <c>ai.defendFor</c> may be, in seconds (a Producer default).</summary>
     public const double MaxAiDefendSeconds = 600;
+
+    /// <summary>M5-4c: the most <c>rules.json</c> <c>ai.castMinTargets</c> may be (a Producer default).</summary>
+    public const int MaxAiCastMinTargets = 50;
 }

@@ -32,6 +32,8 @@ namespace Rts.Game.Tests;
 /// M6-V6: the <c>menu.settings</c>, <c>pause.settings</c> and <c>settings.*</c> keys (each missing one an error naming it, a
 /// bad <c>settings.resolution_item</c> refused); <c>--vsync off</c> with a settings file saying on: off for the run, the file
 /// unchanged. The settings screen itself is <c>SettingsTest</c>'s.
+/// M6-V4: the 18 <c>match_over.*</c> keys, each required by name (a missing one, or the section, one error naming it), and
+/// bad <c>clock</c> / <c>match_length</c> formats refused. The banner and stats screen are <c>MatchOverViewTest</c>'s.
 /// </summary>
 /// <remarks>
 /// Headless: <c>&amp; $env:GODOT --headless --path game res://tests/ShellTest.tscn</c>; prints "SHELL TEST PASS" and exits 0,
@@ -192,7 +194,8 @@ public partial class ShellTest : Node
         foreach (SetupText k in Enum.GetValues<SetupText>()) keys.Add(("setup", UiText.Key(k), _ui.Setup(k)));
         foreach (PauseText k in Enum.GetValues<PauseText>()) keys.Add(("pause", UiText.Key(k), _ui.Pause(k)));
         foreach (SettingsText k in Enum.GetValues<SettingsText>()) keys.Add(("settings", UiText.Key(k), _ui.Settings(k)));
-        Check(keys.Count == 4 + 15 + 4 + 21, $"{keys.Count} shell keys");
+        foreach (MatchOverText k in Enum.GetValues<MatchOverText>()) keys.Add(("match_over", UiText.Key(k), _ui.MatchOver(k)));
+        Check(keys.Count == 4 + 15 + 4 + 21 + 18, $"{keys.Count} shell keys");
         string json = File.ReadAllText(UiText.DefaultPath).Replace("\r\n", "\n");
         foreach ((string section, string key, string text) in keys)
         {
@@ -203,7 +206,7 @@ public partial class ShellTest : Node
             Check(UiText.Parse(root.ToJsonString(), errors) == null && errors.Count == 1 && errors[0].Contains($"{section}.{key}"),
                 $"ui.json without {section}.{key}: [{string.Join("; ", errors)}]");
         }
-        foreach (string section in new[] { "menu", "setup", "pause", "settings" })
+        foreach (string section in new[] { "menu", "setup", "pause", "settings", "match_over" })
         {
             var root = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
             root.Remove(section);
@@ -219,9 +222,26 @@ public partial class ShellTest : Node
             "settings.window_windowed", "settings.window_borderless", "settings.window_fullscreen", "settings.vsync", "settings.vsync_on",
             "settings.vsync_off", "settings.quality", "settings.quality_low", "settings.quality_medium", "settings.quality_high",
             "settings.master_volume", "settings.music_volume", "settings.sfx_volume", "settings.edge_pan_speed", "settings.apply",
-            "settings.defaults", "settings.back" };
+            "settings.defaults", "settings.back",
+            // M6-V4: the match-over banner's and the stats screen's keys.
+            "match_over.victory", "match_over.defeat", "match_over.draw", "match_over.stats", "match_over.menu", "match_over.continue",
+            "match_over.stats_title", "match_over.match_length", "match_over.clock", "match_over.player", "match_over.kills",
+            "match_over.losses", "match_over.gold_in_hand", "match_over.wood_in_hand", "match_over.defeated_at", "match_over.standing",
+            "match_over.human", "match_over.back" };
         foreach (string n in named) Check(keys.Any(k => $"{k.Section}.{k.Key}" == n), $"no key {n}");
         Check(!keys.Any(k => k.Key == "coming_soon"), "setup.coming_soon is still read (nothing shows it since M6-V2)");
+
+        // M6-V4: the two match_over formats; one that can't format (or names nothing) is one error naming its key.
+        Check(_ui.Clock(0) != _ui.Clock(20 * 61) && _ui.Clock(20 * 61).Contains('1') && _ui.MatchLength(20 * 75).Contains(_ui.Clock(20 * 75)),
+            $"clock '{_ui.Clock(20 * 61)}', length '{_ui.MatchLength(20 * 75)}'");
+        foreach ((string key, string bad) in new[] { ("clock", "{0}"), ("clock", "{1:00}"), ("clock", "{0}:{2}"), ("clock", "{{0}}:{{1}}"),
+            ("match_length", "Length"), ("match_length", "{1}"), ("match_length", "{{0}}") })
+        {
+            var root = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
+            root["match_over"]![key] = bad;
+            var errors = new List<string>();
+            Check(UiText.Parse(root.ToJsonString(), errors) == null && errors.Count == 1 && errors[0].Contains($"match_over.{key}"), $"match_over.{key} '{bad}': [{string.Join("; ", errors)}]");
+        }
 
         // BUG-0581 item 1: the map size item is a ui.json format; one that can't format the size is one error naming the key.
         Check(_ui.MapSizeItem(192).Contains("192"), $"map size item '{_ui.MapSizeItem(192)}'");
