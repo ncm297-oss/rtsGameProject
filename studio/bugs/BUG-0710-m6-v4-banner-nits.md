@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-13-1616, task M6-V4 (QA) |
 | System | view: match-over banner (`game/scripts/Main.cs`, `SimRunner.cs`), HUD `ResourceBar` K / L line; `sim/Rts.Sim/ViewApi/MatchOver.cs` |
-| Fixed by | |
+| Fixed by | M6-V7 (9dd6d1f), verified by QA 2026-10-14-0946 |
 
 ## Repro
 1. `& $env:GODOT --path game res://tests/MatchOverViewTest.tscn -- --shots <dir>` (windowed).
@@ -32,3 +32,7 @@ stats screen read the same sim state (the tick that ended the match).
 ## Notes
 Fix idea for 1: have the HUD read the sim when it is shown under the banner (a `Sync()` call from `Main.OnMatchEnded`, as
 the pause path could do for any paused frame), or let `ResourceBar` run `Always` for its text only. Not a criterion of M6-V4.
+
+## Verification (QA 2026-10-14-0946)
+1. `Main.OnMatchEnded` syncs `Hud/ResourceBar` before the banner shows; `MatchOverViewTest` checks the HUD's K / L equal the sim's under the Victory banner (`ShownKills == Kills[0] > 0`). Mutation in a scratch clone: commenting out the `Sync` line makes the scene fail with `victory: HUD K / L 0 / 0 under the banner, sim 1 / 0`.
+2. `sim/Rts.Sim/ViewApi/MatchOver.cs`, `ViewApi/MatchOverTests.cs` and `QA/ViewApi/MatchOverQaTests.cs` are deleted; no reference to `MatchOver` (the class) remains and the solution builds with 0 warnings.
