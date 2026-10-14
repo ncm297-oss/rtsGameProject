@@ -55,7 +55,10 @@ public class FogHostileFuzzQaTests
                 List<int> list = cells[k % cells.Length];
                 int c = list[rng.NextInt(0, list.Count)];
                 string[] army = side == 0 ? Army0 : Army1;
-                sim.Enqueue(Command.SpawnUnit(side, TestSim.Data.FindUnit(army[rng.NextInt(0, army.Length)]), g.CellCenter(c % g.Width, c / g.Width)));
+                // M5-4e: straight into the store, before the towers (a tower alone doesn't keep a side in: spawns applied at
+                // tick 1 would come after both sides fell on tick 0).
+                int type = TestSim.Data.FindUnit(army[rng.NextInt(0, army.Length)]);
+                w.Units.TrySpawn(side, type, TestSim.Data.Units[type], g.CellCenter(c % g.Width, c / g.Width), out _);
             }
         // A tower per side on each level (where one fits), straight into the store.
         for (int side = 0; side < 2; side++)

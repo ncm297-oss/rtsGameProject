@@ -149,7 +149,11 @@ public class AbilityManagerQaTests
         Assert.True(casts.Count <= landed + AbilityManager.MaxTries, $"{casts.Count} casts sent, {landed} landed");
     }
 
-    /// <summary>A defeated AI seat (no building left) never casts, its casters alive beside a group of enemies.</summary>
+    /// <summary>
+    /// A defeated AI seat never casts. M5-4e re-staged: a live unit keeps a side in, so once its hall is down the scene takes
+    /// its units away, casters too (the old scene, casters alive beside enemies after the defeat, can't happen any more);
+    /// enemies are then set beside where the casters stood.
+    /// </summary>
     [Fact]
     public void ADefeatedSeat_NeverCasts()
     {
@@ -166,7 +170,10 @@ public class AbilityManagerQaTests
         EntityHandle raider = CombatScenes.Place(sim, 1, w.Data.FindUnit("whirlwind_raider"), hallAt + new Vector2(-4f, 0f));
         sim.Enqueue(Command.Attack(1, raider, w.Buildings.HandleOf(hall), isBuilding: true));
         int guard = 0;
-        while (!w.IsDefeated(0) && guard++ < 600) sim.Tick();
+        while (w.Buildings.Alive[hall] && guard++ < 600) sim.Tick();
+        for (int i = 0; i < w.Units.Capacity; i++)
+            if (w.Units.Alive[i] && w.Units.Owner[i] == 0) w.Units.Free(new EntityHandle(i, w.Units.Generation[i]));
+        sim.Tick();
         Assert.True(w.IsDefeated(0), "the AI seat was not defeated");
         List<Command> casts = Casts(sim);
         // Enemies the casters see, in reach (their own sight is enough, but spot them anyway); healed every tick (combat is on).

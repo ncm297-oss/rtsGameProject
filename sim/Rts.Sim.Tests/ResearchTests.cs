@@ -403,6 +403,10 @@ public class ResearchTests
         // M4-3b: nor does it need explored ground (no unit has looked yet).
         while (!w.CanPlace(0, ResearchMaps.Armory, c, out PlacementError why) && why != PlacementError.CannotAfford && why != PlacementError.Unexplored) c += 37;
         sim.Enqueue(Command.SpawnBuilding(0, ResearchMaps.Armory, g.CellCenter(c % g.Width, c / g.Width)));
+        // M5-4e: a worker keeps player 0 in (a Forge alone no longer does), through the door so the replay carries it.
+        int keep = g.Width * g.Height - 1;
+        while (!g.IsPassable(keep % g.Width, keep / g.Width)) keep--;
+        sim.Enqueue(Command.SpawnUnit(0, Rts.Sim.ViewApi.StartBase.UnitOfSlot(w.Data, w.FactionOf(0), Data.UnitSlot.Worker), g.CellCenter(keep % g.Width, keep / g.Width)));
         Run(sim, 2);
         Vector2 at = g.CellCenter(c % g.Width + 1, c / g.Width + 1);
         sim.Enqueue(Command.Research(0, at, Armor1));

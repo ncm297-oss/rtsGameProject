@@ -384,8 +384,10 @@ show text, a minimap ping, and a sound.
    starting resources (standard / high), game speed. Default: free-for-all. Colours are unique per match: a slot can't
    pick a colour another slot holds.
 3. **Match.** Pause any time (single-player). Game speeds: Slow 0.75×, Normal 1×, Fast 1.5×.
-4. **Victory/defeat:** a player is defeated when they have no buildings left. The last player or
-   team standing wins.
+4. **Victory/defeat:** a player is out once they have **no unit left and no finished unit-producing building** (a
+   hall that trains units: the Town Hall or one of the five unit halls). Houses, camps, the Forge, towers and unfinished
+   sites don't need to fall. A summoned unit counts while it lives. A player that never had a building is never defeated
+   (sandboxes). The last player or team standing wins. (Owner decision 2026-10-14; until then: no buildings left.)
 5. **Post-match stats:** resources gathered, units trained/lost/killed, buildings built/lost,
    army value over time (graph), time to Age II.
 6. **Save/load** any time during a match. **Replays** are recorded for every match.

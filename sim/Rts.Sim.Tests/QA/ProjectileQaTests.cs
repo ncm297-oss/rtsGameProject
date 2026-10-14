@@ -476,6 +476,7 @@ public class ProjectileQaTests
             World w = sim.World;
             UnitStore u = w.Units;
             Assert.True(w.Buildings.Spawn(1, Tent, 30 * w.NavGrid.Width + 30, out EntityHandle tent));
+            TestSim.KeepIn(sim, 1); // M5-4e: a unit keeps the player in (a House, Forge, depot, tower or site alone no longer does)
             EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 28, 30));
             sim.Enqueue(Command.HoldPosition(0, a));
             sim.Tick();

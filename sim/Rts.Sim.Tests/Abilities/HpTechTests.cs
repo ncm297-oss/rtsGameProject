@@ -30,6 +30,7 @@ public class HpTechTests
     private static Simulation ResearchScene(out int smithy)
     {
         Simulation sim = BuildMaps.NewSim(ResourceMaps.Flat(40, 30), units: 64, players: 2, combat: false);
+        TestSim.KeepIn(sim, 1); // M5-4e: a unit keeps the player in (a House, Forge, depot, tower or site alone no longer does)
         smithy = GatherMaps.Building(sim, 32, 4, player: 1, type: ResearchMaps.Smithy).Index;
         BuildMaps.SetTotals(sim, 1, 5000, 5000);
         sim.World.Techs.Set(1, ResearchMaps.AgeII, true); // the faction upgrade needs Age II (M3-6); Age II has no effects

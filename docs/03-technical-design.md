@@ -123,8 +123,9 @@ phases in this fixed order:
     population, kills and losses counted, death events recorded, stale targets cleared. M4-2b: after the queued hits,
     the projectiles that arrived this tick land in slot order, with their splash, before the stale targets are cleared.)
     **M5-4b: then the defeat rule** (`World.UpdateDefeats`, "phase 11b", run with combat on or off): after every phase that
-    can take a building away (a `Cancel` in phase 1, an ability in phase 6, hits and landings here), every player that ever
-    built, isn't defeated yet and has no live building is defeated, in player order; see "Implementation (M5-4b)".
+    can take a unit or a building away (a `Cancel` in phase 1, a summon's expiry in phase 5, an ability in phase 6, hits and
+    landings here), every player that ever built, isn't defeated yet and has no live unit and no finished unit-producing
+    building is defeated, in player order; see "Implementation (M5-4e)" (the rule) and "(M5-4b)" (the flags, the door).
 12. **Vision and detection:** recompute fog every 4 ticks (5 Hz) per player. (M4-3a: `VisionSystem.Run` rebuilds every
     player's unexplored / explored / visible grid on the ticks where `tick % 4 == 1`, from its own units' and buildings'
     sight with the high-ground rule; an initial stamp also runs at the start of tick 0; see "Vision, detection, fog".
@@ -6222,7 +6223,8 @@ Slice 1: the defeat rule (STATE "Requests for the sim track" 37) and the AI's ba
 `Simulation` (the door, the AI loop, phase 11b, the hash, `MatchOver`); `Ai/DefenseManager.cs`, the census in `AiPlayer`,
 `Blackboard`, `MilitaryManager` / `EconomyManager` (the defense's guards); three `rules.json` `ai` knobs. No `Command` kind.
 
-- **The defeat rule** (docs/02 "Game flow" 4). A player is **defeated** when it has no live building, construction sites
+- **The defeat rule** (docs/02 "Game flow" 4; **replaced by M5-4e**, below: what keeps a side in is now a live unit or a
+  finished unit-producing building; the flags, the event, the latch and the door stay as written here). A player is **defeated** when it has no live building, construction sites
   included, and has had at least one: `EverBuilt` is set when any building of its is placed (`BuildingStore.Spawn`: a
   site, a finished one, a dev `SpawnBuilding`, or a test seam), so a site placed and razed in one tick still counts; a
   player that never built (units only) is **never** defeated. Both flags are sticky per-player state. **Evaluated once a
@@ -6235,7 +6237,7 @@ Slice 1: the defeat rule (STATE "Requests for the sim track" 37) and the AI's ba
   reads sim state only; ticks go on after it. **Latched** (BUG-0672): phase 11b sets `World`'s match-over flag the first
   tick the result holds and never clears it, so a player that never built placing its first building later (a units-only
   seat) doesn't take the result back. In such a 3-player setup the match is over while that player still has its army.
-- **A defeated player's units stay** (Producer default): they keep fighting back and finishing the orders already applied
+- **A defeated player's units stay** (Producer default; moot since M5-4e: a defeated player has no unit left): they keep fighting back and finishing the orders already applied
   (a walk, a shift-queue); docs/02 only says "no buildings left".
 - **The door.** From the tick after its defeat, **every** command of a defeated player (any kind: `Move`, `Build`, `Train`,
   `Cancel`, `CancelTrain`, `SetRally`, `SpawnUnit`, ...) is **dropped where it applies** (`Simulation.Apply`, the check right
@@ -6374,6 +6376,54 @@ and docs).
   `DataValidationTests` / `DataContentHashTests` (the knob).
 - **Not yet:** slice 2 (`gatherBonus`, `focusFire`, `pullBackWounded`); `targetUnit` and `autocast`; own-unit abilities aimed at
   own units (a heal); expansion, rebuilding, re-scouting (M5-4d).
+
+### Implementation (M5-4e)
+
+The new win condition (owner decision 2026-10-14, docs/01; docs/02 "Game flow" 4). Code: `World.Defeat.cs` (the rule and two
+read-only counts), `PlayerLedger` (`LiveUnits`, `ProductionBuildings`), `UnitStore.TrySpawn` / `Free` (the unit
+count). No `Command` kind, no knob, no data change; M5-4b's flags, event, latch, door and AI silence are unchanged.
+
+- **The rule.** A player is **defeated** when it has built (`EverBuilt`, unchanged: set when any building of its is placed,
+  a site too) **and** `LiveUnits[p] == 0` **and** `ProductionBuildings[p] == 0`. **A production building** is a **finished**
+  building whose type trains at least one unit (`GameData.UnitsTrainedAt(type)` non-empty; with today's data the Town Hall
+  and the five unit halls of each faction). Houses, camps, the Forge, towers and every unfinished site don't keep a side in
+  (they stay standing after the defeat). **A unit** is any live unit, a summoned one (M4-4b-3b) included while it lives: its
+  expiry in phase 5 can end a side on that tick. **The never-built exception**: a player that never had a building is never
+  defeated (its units can all die), so units-only sandboxes keep working. Evaluated once a tick in phase 11b, as before, in
+  player order, one `DefeatEvent` each; `MatchOver` latched as before.
+- **The counts** are derived, kept incrementally, not hashed (like `LiveBuildings`): `LiveUnits` +1 in `UnitStore.TrySpawn`
+  (the one spawn path: production, the dev `SpawnUnit`, summons, the start base) and -1 in `Free` (any death: combat, expiry,
+  a test seam), with a per-slot `bool` saying whether the spawn counted it (a raw `Alloc`, a test seam, isn't counted, and
+  `Free` takes back exactly what was added); `ProductionBuildings` moves with `AddFinished` (a building spawned finished or
+  completed: +1; a finished one freed: -1) when its type trains units (a per-type `bool` built at load). O(1) per event; the
+  rule is two int compares per player a tick. `World.LiveUnits(p)`, `World.ProductionBuildings(p)` read them (Requests 40,
+  for the view; 0 for no such player).
+- **Hash.** Unchanged: bit 34 keeps its meaning ("has built, no live building": it is how `EverBuilt` is hashed when no
+  building implies it), bit 35 defeated, bit 36 the latch. The counts are derived from the stores, which are hashed. The
+  golden's `k` lines and header did not move (its cross-map match has no building, so nobody has built; no data change).
+- **Memory.** Per unit slot one `bool` (1 B x unit slots, 2.5 KB for 2,500); per player two ints; per building type one
+  `bool`.
+- **Behaviour to know.** A side whose hall falls keeps playing while any unit of it lives, a worker hidden in a corner too:
+  until the AI hunts the last units (M5-4d) a match can stall on one. A player whose hall is razed but who has workers and
+  money can rebuild (its commands still apply). A defeated player has no unit left by definition, so "orders applied before
+  the defeat play out" (M5-4b) can no longer happen; the door still drops every later command (a `SpawnUnit`, a `Build` at a
+  dead worker, a `Research` at a Forge still standing).
+- **Sandboxes.** The never-built exception does **not** cover a scene whose player places a House, a depot, a Forge, a tower or
+  a site before it has a unit (it is out on the next tick, its later commands dropped). Such scenes call
+  `TestSim.KeepIn(sim, player)`: one summoned worker of the player's faction that never expires and takes no population, on
+  the passable cell nearest the far corner (a store seam; a replay scene spawns its keeper through the door instead).
+- **Tests.** `MatchOverTests` (a hall razed with a worker alive: not out, the worker's death ends it; each building slot that
+  trains nothing with units: out when they die, the building standing; a lone hall site: out; the site finished: in, razed:
+  out; two halls, one razed: in; never built: never out; two sides on one tick; a summon alone keeps a side in until it
+  expires; the door with the dead worker; the AI silent; a recorded match ending by the new rule, its loser's workers killed
+  by shift-queued Attacks, played back past `MatchOver`), `DefeatCountsFuzzTests` (3 seeds x 2,000 ticks x 4 players: spawns,
+  summons and their expiry, fights, frees, sites placed / finished / cancelled, razing, training; the counts equal a recount
+  from the stores after every tick and every seam, and a player defeated on a tick has 0 of both), `StateHashTests` (the counts
+  are derived), re-staged: `CommandDoorFuzzStressTests.ADefeatedPlayers*` (the loser's units go too; each player's first
+  building is its hall), `AiVersusAiTests.AHallAt1Hp_*` (the loser's units taken away once its hall is down: no hunt before
+  M5-4d), `DefeatAiStressTests` (the weak seats start without workers), `QA/DefeatRuleQaTests` (an expiry and a spawn in one
+  tick; a summoned builder on a hall site at the exact tick; the losers of the 3-4 seat match place a House with no unit),
+  `AbilityManagerQaTests.ADefeatedSeat_NeverCasts` (its casters go with the defeat).
 
 ## Save/load and replays
 

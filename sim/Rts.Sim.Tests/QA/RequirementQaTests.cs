@@ -197,6 +197,7 @@ public class RequirementQaTests
         Assert.True(r.Ok, string.Join("\n", r.Errors));
         Simulation sim = NewSim(r.Data, players: 1);
         World w = sim.World;
+        TestSim.KeepIn(sim, 0); // M5-4e: a unit keeps the player in (a House, Forge, depot, tower or site alone no longer does)
         int armory = Building(sim, 4, 4, type: Armory).Index;
         Give(sim, 0, 100_000, 100_000);
         w.Techs.Set(0, AgeII, true);

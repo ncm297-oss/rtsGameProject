@@ -286,6 +286,7 @@ public class TechDataQaTests
         // Research ids 64-69 (word 1) through the queue in one tick: five fit the queue, the sixth is dropped (full);
         // each takes one tick, the next starting in the tick the one before completes.
         int forge = d.FindBuilding("malazan_armory");
+        TestSim.KeepIn(sim, 0); // M5-4e: a unit keeps the player in (a House, Forge, depot, tower or site alone no longer does)
         sim.Enqueue(Command.SpawnBuilding(0, forge, At(sim, 10, 10)));
         Run(sim, 2);
         int k = BuildMaps.SiteAt(sim, 10, 10);

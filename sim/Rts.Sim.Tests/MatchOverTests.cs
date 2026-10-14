@@ -11,8 +11,9 @@ using Rts.Sim.ViewApi;
 namespace Rts.Sim.Tests;
 
 /// <summary>
-/// M5-4b criterion 1-2: the defeat rule (docs/02 "Game flow" 4). A player whose last building (a site too) goes is defeated on
-/// that tick, once, with an event; a player that never built never is; <see cref="Simulation.MatchOver"/> turns true when at
+/// M5-4b criterion 1-2, M5-4e criterion 1-2: the defeat rule (docs/02 "Game flow" 4). A player that has built and has no
+/// live unit and no finished unit-producing building is defeated on that tick, once, with an event; a player that never
+/// built never is; <see cref="Simulation.MatchOver"/> turns true when at
 /// most one player that ever built stands; a defeated player's commands are dropped where they apply (recorded all the same,
 /// so a replay drops the same ones); its AI stops. Scenes build their own buildings (content-independent).
 /// </summary>
@@ -43,68 +44,167 @@ public class MatchOverTests
         return sim.TickNumber - 1;
     }
 
-    /// <summary>Criterion 1 (a): a finished building razed, a site cancelled, a site razed: false to true on that very tick, one event, the match over.</summary>
-    [Theory]
-    [InlineData("finished razed")]
-    [InlineData("site cancelled")]
-    [InlineData("site razed")]
-    public void ThePlayersLastBuildingGoing_DefeatsItOnThatTick(string how)
+    /// <summary>A unit of <paramref name="slot"/> for <paramref name="player"/> at cell (x, y), straight into the store.</summary>
+    private static EntityHandle UnitOf(Simulation sim, int player, int x, int y, UnitSlot slot = UnitSlot.Worker) =>
+        CombatScenes.Place(sim, player, StartBase.UnitOfSlot(sim.World.Data, sim.World.FactionOf(player), slot), CombatScenes.At(sim, x, y));
+
+    /// <summary>
+    /// M5-4e (a): player 0's only hall is razed while its worker lives: not defeated (a unit keeps a side in). The worker
+    /// is killed: defeated on that very tick, one event, the match over; sticky and announced once.
+    /// </summary>
+    [Fact]
+    public void TheLastHallRazed_AWorkerAlive_KeepsTheSideIn_TheWorkersDeathEndsIt()
     {
         Simulation sim = CombatScenes.Flat(48, 64, 2);
         World w = sim.World;
-        EntityHandle own = Building(sim, 0, 10, 10, site: how != "finished razed");
-        Building(sim, 1, 34, 34);
-        if (how == "site cancelled") sim.Enqueue(Command.Cancel(0, Centre(sim, own)));
-        else
-        {
-            if (how == "finished razed") w.Buildings.SetHp(own.Index, 1);
-            EntityHandle raider = CombatScenes.Place(sim, 1, CombatScenes.Raider, CombatScenes.At(sim, 9, 10));
-            sim.Enqueue(Command.Attack(1, raider, own, isBuilding: true));
-        }
-        int ticks = 0;
-        while (w.Buildings.IsAlive(own) && ticks++ < 400)
+        EntityHandle hall = Building(sim, 0, 10, 10, slot: BuildingSlot.TownHall);
+        Building(sim, 1, 34, 34, slot: BuildingSlot.TownHall);
+        EntityHandle worker = UnitOf(sim, 0, 6, 30);
+        Assert.Equal(1, w.ProductionBuildings(0));
+        Assert.Equal(1, w.LiveUnits(0));
+        w.Buildings.SetHp(hall.Index, 1);
+        EntityHandle raider = CombatScenes.Place(sim, 1, CombatScenes.Raider, CombatScenes.At(sim, 9, 10));
+        sim.Enqueue(Command.Attack(1, raider, hall, isBuilding: true));
+        for (int t = 0; t < 400 && w.Buildings.IsAlive(hall); t++) sim.Tick();
+        Assert.False(w.Buildings.IsAlive(hall), "the hall stood");
+        for (int t = 0; t < 20; t++) sim.Tick();
+        Assert.Equal(0, w.ProductionBuildings(0));
+        Assert.False(w.IsDefeated(0));
+        Assert.False(sim.MatchOver);
+        CombatScenes.Spot(sim, 1, worker);
+        sim.Enqueue(Command.Attack(1, raider, worker, isBuilding: false));
+        while (w.Units.IsAlive(worker) && sim.TickNumber < 3000)
         {
             Assert.False(w.IsDefeated(0));
-            Assert.False(sim.MatchOver);
             Assert.Equal(0, w.DefeatEvents.Length);
             sim.Tick();
         }
-        Assert.False(w.Buildings.IsAlive(own), "the building stood");
-        int tick = sim.TickNumber - 1;
+        Assert.False(w.Units.IsAlive(worker), "the worker lived");
+        Assert.Equal(new[] { new DefeatEvent(0, sim.TickNumber - 1) }, w.DefeatEvents.ToArray());
         Assert.True(w.IsDefeated(0));
         Assert.False(w.IsDefeated(1));
-        Assert.Equal(new[] { new DefeatEvent(0, tick) }, w.DefeatEvents.ToArray());
         Assert.True(sim.MatchOver);
-        // Sticky, and announced once.
         sim.Tick();
         Assert.True(w.IsDefeated(0));
         Assert.Equal(0, w.DefeatEvents.Length);
         Assert.True(sim.MatchOver);
     }
 
-    /// <summary>Criterion 1 (b): units and no building from tick 0: never defeated, never the match's end (one player ever built).</summary>
+    /// <summary>
+    /// M5-4e (b): units and only a building that trains nothing (each such slot of the faction in turn: House, Camp, Forge,
+    /// tower): not defeated. The units die: defeated, the building still standing.
+    /// </summary>
     [Fact]
-    public void APlayerThatNeverBuilt_IsNeverDefeated_NorEndsTheMatch()
+    public void UnitsAndOnlyABuildingThatTrainsNothing_TheUnitsDie_Defeated_TheBuildingStanding()
+    {
+        int checkedSlots = 0;
+        foreach (BuildingSlot slot in Enum.GetValues<BuildingSlot>())
+        {
+            Simulation sim = CombatScenes.Flat(48, 64, 2);
+            World w = sim.World;
+            int type = Type(sim, 0, slot);
+            if (type < 0 || !w.Data.UnitsTrainedAt(type).IsEmpty) continue;
+            checkedSlots++;
+            EntityHandle own = Building(sim, 0, 10, 10, slot: slot);
+            Building(sim, 1, 34, 34, slot: BuildingSlot.TownHall);
+            EntityHandle a = UnitOf(sim, 0, 6, 30), b = UnitOf(sim, 0, 8, 30, UnitSlot.Line);
+            for (int t = 0; t < 10; t++) sim.Tick();
+            Assert.False(w.IsDefeated(0), $"{slot}");
+            w.Units.Free(a);
+            sim.Tick();
+            Assert.False(w.IsDefeated(0), $"{slot}: one unit left");
+            w.Units.Free(b);
+            sim.Tick();
+            Assert.True(w.IsDefeated(0), $"{slot}");
+            Assert.Equal(new[] { new DefeatEvent(0, sim.TickNumber - 1) }, w.DefeatEvents.ToArray());
+            Assert.True(w.Buildings.IsAlive(own), $"{slot}: the building went");
+            Assert.True(sim.MatchOver);
+        }
+        Assert.True(checkedSlots >= 2, "precondition: the faction has a house and at least one more slot that trains nothing");
+    }
+
+    /// <summary>M5-4e (c): no unit and an unfinished hall site: defeated (a site never counts); the site stands.</summary>
+    [Fact]
+    public void NoUnitAndAnUnfinishedHallSite_IsDefeated()
     {
         Simulation sim = CombatScenes.Flat(48, 64, 2);
         World w = sim.World;
-        EntityHandle own = Building(sim, 0, 10, 10);
-        CombatScenes.Place(sim, 1, CombatScenes.Raider, CombatScenes.At(sim, 36, 36));
+        EntityHandle site = Building(sim, 0, 10, 10, site: true, slot: BuildingSlot.TownHall);
+        Building(sim, 1, 34, 34, slot: BuildingSlot.TownHall);
+        Assert.Equal(0, w.ProductionBuildings(0));
+        sim.Tick();
+        Assert.True(w.IsDefeated(0));
+        Assert.Equal(new[] { new DefeatEvent(0, sim.TickNumber - 1) }, w.DefeatEvents.ToArray());
+        Assert.True(w.Buildings.IsAlive(site));
+        Assert.True(sim.MatchOver);
+    }
+
+    /// <summary>M5-4e: the same hall site, finished, keeps the side in with no unit; razed, the side is out on that tick.</summary>
+    [Fact]
+    public void AHallSiteFinished_KeepsTheSideIn_WithNoUnit_RazedItIsOut()
+    {
+        Simulation sim = CombatScenes.Flat(48, 64, 2);
+        World w = sim.World;
+        EntityHandle site = Building(sim, 0, 10, 10, site: true, slot: BuildingSlot.TownHall);
+        Building(sim, 1, 34, 34, slot: BuildingSlot.TownHall);
+        w.Buildings.SetWork(site.Index, w.Buildings.WorkNeeded(w.Buildings.TypeId[site.Index]));
+        Assert.Equal(1, w.ProductionBuildings(0));
+        for (int t = 0; t < 10; t++) sim.Tick();
+        Assert.False(w.IsDefeated(0));
+        w.Buildings.Damage(site, int.MaxValue);
+        sim.Tick();
+        Assert.True(w.IsDefeated(0));
+        Assert.Equal(new[] { new DefeatEvent(0, sim.TickNumber - 1) }, w.DefeatEvents.ToArray());
+    }
+
+    /// <summary>M5-4e (d): one of two halls razed, no unit at all: not defeated; the second razed: defeated.</summary>
+    [Fact]
+    public void ARazedHall_WithASecondHallStanding_NotDefeated()
+    {
+        Simulation sim = CombatScenes.Flat(48, 64, 2);
+        World w = sim.World;
+        EntityHandle h1 = Building(sim, 0, 6, 6, slot: BuildingSlot.TownHall), h2 = Building(sim, 0, 20, 6, slot: BuildingSlot.TownHall);
+        Building(sim, 1, 34, 34, slot: BuildingSlot.TownHall);
+        Assert.Equal(2, w.ProductionBuildings(0));
+        w.Buildings.Damage(h1, int.MaxValue);
+        for (int t = 0; t < 10; t++) sim.Tick();
+        Assert.Equal(1, w.ProductionBuildings(0));
+        Assert.False(w.IsDefeated(0));
+        Assert.False(sim.MatchOver);
+        w.Buildings.Damage(h2, int.MaxValue);
+        sim.Tick();
+        Assert.True(w.IsDefeated(0));
+        Assert.True(sim.MatchOver);
+    }
+
+    /// <summary>M5-4e (e): a player that never built, with units that all die, is never defeated and doesn't end the match.</summary>
+    [Fact]
+    public void APlayerThatNeverBuilt_ItsUnitsAllDie_IsNeverDefeated_NorEndsTheMatch()
+    {
+        Simulation sim = CombatScenes.Flat(48, 64, 2);
+        World w = sim.World;
+        EntityHandle own = Building(sim, 0, 10, 10, slot: BuildingSlot.TownHall);
+        EntityHandle raider = CombatScenes.Place(sim, 1, CombatScenes.Raider, CombatScenes.At(sim, 36, 36));
         for (int t = 0; t < 200; t++)
         {
             sim.Tick();
             Assert.False(w.IsDefeated(1));
             Assert.False(sim.MatchOver);
         }
+        w.Units.Free(raider);
+        for (int t = 0; t < 20; t++) sim.Tick();
+        Assert.Equal(0, w.LiveUnits(1));
+        Assert.False(w.IsDefeated(1));
+        Assert.False(w.EverBuilt(1));
+        Assert.False(w.IsDefeated(0));
         Assert.True(w.Buildings.Free(own));
         sim.Tick();
         Assert.True(w.IsDefeated(0));
         Assert.False(w.IsDefeated(1));
-        Assert.False(w.EverBuilt(1));
         Assert.False(sim.MatchOver);
     }
 
-    /// <summary>Criterion 1 (c): three players: one defeat leaves the match on, the second ends it; two on one tick are two events in player order.</summary>
+    /// <summary>Three players: one defeat leaves the match on, the second ends it; two on one tick are two events in player order.</summary>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -112,14 +212,15 @@ public class MatchOverTests
     {
         Simulation sim = CombatScenes.Flat(48, 64, 3);
         World w = sim.World;
-        EntityHandle s0 = Building(sim, 0, 8, 8, site: true), s1 = Building(sim, 1, 30, 8, site: true);
-        Building(sim, 2, 20, 30);
+        EntityHandle h0 = Building(sim, 0, 8, 8, slot: BuildingSlot.TownHall), h1 = Building(sim, 1, 30, 8, slot: BuildingSlot.TownHall);
+        Building(sim, 2, 20, 30, slot: BuildingSlot.TownHall);
         sim.Tick();
         Assert.False(sim.MatchOver);
-        // Player 1's cancel is sent first: the events still come in player order.
-        sim.Enqueue(Command.Cancel(1, Centre(sim, s1)));
-        if (sameTick) sim.Enqueue(Command.Cancel(0, Centre(sim, s0)));
-        int at = Applied(sim);
+        // Player 1's hall goes first: the events still come in player order.
+        w.Buildings.Free(h1);
+        if (sameTick) w.Buildings.Free(h0);
+        sim.Tick();
+        int at = sim.TickNumber - 1;
         if (sameTick)
         {
             Assert.Equal(new[] { new DefeatEvent(0, at), new DefeatEvent(1, at) }, w.DefeatEvents.ToArray());
@@ -128,31 +229,66 @@ public class MatchOverTests
         }
         Assert.Equal(new[] { new DefeatEvent(1, at) }, w.DefeatEvents.ToArray());
         Assert.False(sim.MatchOver);
-        sim.Enqueue(Command.Cancel(0, Centre(sim, s0)));
-        at = Applied(sim);
-        Assert.Equal(new[] { new DefeatEvent(0, at) }, w.DefeatEvents.ToArray());
+        w.Buildings.Free(h0);
+        sim.Tick();
+        Assert.Equal(new[] { new DefeatEvent(0, sim.TickNumber - 1) }, w.DefeatEvents.ToArray());
         Assert.True(sim.MatchOver);
         Assert.False(w.IsDefeated(2));
     }
 
-    /// <summary>Two players losing their last buildings on one tick: both defeated, the match over with nobody standing.</summary>
+    /// <summary>M5-4e (f): two players' last units go on one tick (their halls already gone): both events in player order, the match over with nobody standing.</summary>
     [Fact]
     public void TwoPlayers_BothOnOneTick_MatchOver()
     {
         Simulation sim = CombatScenes.Flat(48, 64, 2);
-        EntityHandle s0 = Building(sim, 0, 8, 8, site: true), s1 = Building(sim, 1, 30, 8, site: true);
-        sim.Enqueue(Command.Cancel(0, Centre(sim, s0)));
-        sim.Enqueue(Command.Cancel(1, Centre(sim, s1)));
-        int at = Applied(sim);
-        Assert.Equal(new[] { new DefeatEvent(0, at), new DefeatEvent(1, at) }, sim.World.DefeatEvents.ToArray());
+        World w = sim.World;
+        EntityHandle h0 = Building(sim, 0, 8, 8, slot: BuildingSlot.TownHall), h1 = Building(sim, 1, 30, 8, slot: BuildingSlot.TownHall);
+        EntityHandle u0 = UnitOf(sim, 0, 8, 30), u1 = UnitOf(sim, 1, 30, 30);
+        w.Buildings.Free(h1);
+        w.Buildings.Free(h0);
+        for (int t = 0; t < 5; t++) sim.Tick();
+        Assert.False(w.IsDefeated(0) || w.IsDefeated(1));
+        w.Units.Free(u1);
+        w.Units.Free(u0);
+        sim.Tick();
+        int at = sim.TickNumber - 1;
+        Assert.Equal(new[] { new DefeatEvent(0, at), new DefeatEvent(1, at) }, w.DefeatEvents.ToArray());
+        Assert.True(sim.MatchOver);
+    }
+
+    /// <summary>
+    /// M5-4e (g): a summoned unit alone (its hall gone) keeps its side in until its lifetime ends (phase 5); it expires:
+    /// defeated on that tick.
+    /// </summary>
+    [Fact]
+    public void ASummonedUnitAlone_KeepsTheSideIn_UntilItExpires()
+    {
+        Simulation sim = CombatScenes.Flat(48, 64, 2);
+        World w = sim.World;
+        EntityHandle hall = Building(sim, 0, 8, 8, slot: BuildingSlot.TownHall);
+        Building(sim, 1, 30, 8, slot: BuildingSlot.TownHall);
+        int line = StartBase.UnitOfSlot(w.Data, w.FactionOf(0), UnitSlot.Line);
+        int ends = sim.TickNumber + 60;
+        Assert.True(w.Units.TrySpawn(0, line, w.Data.Units[line], CombatScenes.At(sim, 8, 30), ends, out EntityHandle summon));
+        Assert.True(w.Units.IsSummoned(summon.Index));
+        w.Buildings.Free(hall);
+        while (w.Units.IsAlive(summon) && sim.TickNumber < ends + 5)
+        {
+            Assert.False(w.IsDefeated(0), $"defeated before tick {sim.TickNumber} with the summon alive");
+            sim.Tick();
+        }
+        Assert.False(w.Units.IsAlive(summon));
+        Assert.Equal(new[] { new DefeatEvent(0, ends) }, w.DefeatEvents.ToArray());
+        Assert.Equal(ends, sim.TickNumber - 1);
         Assert.True(sim.MatchOver);
     }
 
     /// <summary>
     /// Criterion 1 (d): after player 0's defeat its Move, Build and Train (and a SpawnUnit) are dropped where they apply, while
     /// player 1's same commands apply. The hash equals a twin's that sent Noops in their place (a command never sent would
-    /// differ by the player's hashed sequence counter alone). The Move it got before the defeat keeps running; the Build
-    /// shift-queued behind it is refused when it pops, as <see cref="World.CanPlace"/> says (<see cref="PlacementError.Defeated"/>).
+    /// differ by the player's hashed sequence counter alone). <see cref="World.CanPlace"/> agrees (<see cref="PlacementError.Defeated"/>).
+    /// M5-4e: re-staged: the defeat takes the worker killed (a live unit keeps a side in, a site doesn't), so the
+    /// orders name a dead worker; the SpawnUnit and Train are the ones only the defeat stops.
     /// </summary>
     [Fact]
     public void ADefeatedPlayersCommands_AreDropped_AnotherPlayersApply()
@@ -166,13 +302,11 @@ public class MatchOverTests
             int type0 = StartBase.UnitOfSlot(w.Data, w.FactionOf(0), UnitSlot.Worker), type1 = StartBase.UnitOfSlot(w.Data, w.FactionOf(1), UnitSlot.Worker);
             worker0 = CombatScenes.Place(sim, 0, type0, CombatScenes.At(sim, 8, 16));
             worker1 = CombatScenes.Place(sim, 1, type1, CombatScenes.At(sim, 30, 16));
-            sim.Enqueue(Command.Move(0, worker0, CombatScenes.At(sim, 8, 40))); // applies with the cancel, before the defeat
-            // Shift-queued behind the walk, also applied before the defeat: refused when it pops (a defeated player places nothing).
-            sim.Enqueue(Command.Build(0, worker0, Type(sim, 0, BuildingSlot.House), CombatScenes.At(sim, 12, 42), queued: true));
-            sim.Enqueue(Command.Cancel(0, Centre(sim, site0)));
+            // Its worker killed, the site alone is out on the next tick (a site doesn't keep a side in) and stays.
+            w.Units.Free(worker0);
             Applied(sim);
+            Assert.True(w.Buildings.IsAlive(site0));
             Assert.True(w.IsDefeated(0));
-            Assert.Equal(UnitState.Moving, w.Units.State[worker0.Index]);
             // The placement query agrees with the door: the defeated player's ghost is refused (last, after every other rule).
             Assert.False(w.CanPlace(0, Type(sim, 0, BuildingSlot.House), 24 * 48 + 6, out PlacementError why0));
             Assert.Equal(PlacementError.Defeated, why0);
@@ -216,15 +350,16 @@ public class MatchOverTests
         }
         Assert.Equal(1, sites);
         Assert.True(units1 >= 3, $"player 1 has {units1} units: its Train or spawn didn't apply");
-        // Player 0's dropped: no building, its one worker, which finished the walk it had before the defeat (not the later Move).
-        Assert.Equal(0, w.Ledger.LiveBuildings[0]);
-        Assert.Equal(1, units0);
+        // Player 0's dropped: no new building (its site stands), no unit (the SpawnUnit didn't land).
+        Assert.Equal(1, w.Ledger.LiveBuildings[0]);
+        Assert.Equal(0, units0);
+        Assert.Equal(0, w.LiveUnits(0));
         Assert.Equal(0, a.PendingCommandCount);
-        Assert.True(Vector2.Distance(w.Units.Position[a0.Index], CombatScenes.At(a, 8, 40)) < 2f, $"player 0's worker stands at {w.Units.Position[a0.Index]}");
+        Assert.False(w.Units.IsAlive(a0));
         Assert.True(w.Units.Alive[a1.Index]);
     }
 
-    /// <summary>Criterion 1 (e): the AI of a defeated seat sends nothing for 2,000 ticks after its defeat; its units stay.</summary>
+    /// <summary>Criterion 1 (e): the AI of a defeated seat sends nothing for 2,000 ticks after its defeat (M5-4e: its hall and its workers taken away).</summary>
     [Fact]
     public void ADefeatedSeatsAi_SendsNothing()
     {
@@ -235,6 +370,8 @@ public class MatchOverTests
         Assert.True(ai.CommandsSent > 0);
         for (int k = 0; k < w.Buildings.Capacity; k++)
             if (w.Buildings.Alive[k] && w.Buildings.Owner[k] == 0) Assert.True(w.Buildings.Free(w.Buildings.HandleOf(k)));
+        for (int i = 0; i < w.Units.Capacity; i++)
+            if (w.Units.Alive[i] && w.Units.Owner[i] == 0) w.Units.Free(new EntityHandle(i, w.Units.Generation[i]));
         sim.Tick(); // its think at this tick's start came before the defeat
         Assert.True(w.IsDefeated(0));
         int sent = ai.CommandsSent, thinks = ai.Thinks;
@@ -243,16 +380,13 @@ public class MatchOverTests
         Assert.Empty(log);
         Assert.Equal(sent, ai.CommandsSent);
         Assert.Equal(thinks, ai.Thinks);
-        int units = 0;
-        for (int i = 0; i < w.Units.Capacity; i++)
-            if (w.Units.Alive[i] && w.Units.Owner[i] == 0) units++;
-        Assert.Equal(5, units);
+        Assert.Equal(0, w.LiveUnits(0));
     }
 
     /// <summary>
-    /// Criterion 2: a recorded match on the generated map (two human seats) where player 0's infantry raze player 1's hall:
-    /// player 1's commands after the defeat are logged (Enqueue accepts them) and dropped, and the recording plays back to
-    /// equal checkpoints well past <see cref="Simulation.MatchOver"/>.
+    /// Criterion 2: a recorded match on the generated map (two human seats) where player 0's infantry raze player 1's hall
+    /// and then (M5-4e, shift-queued Attacks) its workers: player 1's commands after the defeat are logged (Enqueue accepts
+    /// them) and dropped, and the recording plays back to equal checkpoints well past <see cref="Simulation.MatchOver"/>.
     /// </summary>
     [Fact]
     public void ARecordedMatchThatEndsInADefeat_PlaysBackPastMatchOver()
@@ -272,7 +406,12 @@ public class MatchOverTests
         for (int k = 0; k < 16; k++) sim.Enqueue(Command.SpawnUnit(0, heavy, w.Units.Position[workers1[k % workers1.Count].Index] + new Vector2(0.4f * (k / 5), 0.5f)));
         Applied(sim);
         for (int i = 0; i < w.Units.Capacity; i++)
-            if (w.Units.Alive[i] && w.Units.Owner[i] == 0 && w.Units.TypeId[i] == heavy) sim.Enqueue(Command.Attack(0, new EntityHandle(i, w.Units.Generation[i]), hall, isBuilding: true));
+            if (w.Units.Alive[i] && w.Units.Owner[i] == 0 && w.Units.TypeId[i] == heavy)
+            {
+                var h = new EntityHandle(i, w.Units.Generation[i]);
+                sim.Enqueue(Command.Attack(0, h, hall, isBuilding: true));
+                foreach (EntityHandle worker in workers1) sim.Enqueue(Command.Attack(0, h, worker, isBuilding: false, queued: true));
+            }
         int defeatedAt = -1;
         while (sim.TickNumber < 6000 && (defeatedAt < 0 || sim.TickNumber < defeatedAt + 300))
         {
@@ -281,7 +420,7 @@ public class MatchOverTests
             sim.Tick();
             if (defeatedAt < 0 && w.IsDefeated(1)) defeatedAt = sim.TickNumber;
         }
-        Assert.True(defeatedAt > 0, "player 1's hall stood");
+        Assert.True(defeatedAt > 0, $"player 1 stood: hall {w.Buildings.IsAlive(hall)}, {w.LiveUnits(1)} units");
         Assert.True(sim.MatchOver);
         Replay r = rec!.ToReplay();
         int after = r.Commands.Count(c => c.Player == 1 && c.Tick > defeatedAt);
