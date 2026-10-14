@@ -4,6 +4,8 @@ using Rts.Sim.Data;
 using Rts.Sim.Determinism;
 using Rts.Sim.Entities;
 using Rts.Sim.Map;
+using System.Numerics;
+using System.Text.Json.Nodes;
 using Xunit.Abstractions;
 
 namespace Rts.Sim.Tests;
@@ -13,22 +15,35 @@ namespace Rts.Sim.Tests;
 /// (a fifth of them workers) in eight bands of a generated 128 map with forests and mines; each player has a Town Hall, a
 /// barracks, a crossbow range and a house, and gold and wood to spend. Its population is far over its cap, so the house rule
 /// searches for a site at every think it has no house under construction, the heaviest path. M5-4b: every seat is under
-/// attack (its buildings lose hp before each think), so the defense pass sends orders in every timed think. Gated: a think's average under
+/// attack (its buildings lose hp before each think), so the defense pass sends orders in every timed think. M5-4c: each seat
+/// has <see cref="Casters"/> casters beside the next seat's units, ready at every think. Gated: a think's average under
 /// 1 ms in the Debug build; the worst is reported.
 /// </summary>
 [Collection(SerialCollection.Name)]
 public class AiPerfTests
 {
-    private const int Players = 8, Units = 2500;
+    private const int Players = 8, Units = 2500, Casters = 16;
     private const double BudgetMs = 1.0;
     private readonly ITestOutputHelper _out;
 
     public AiPerfTests(ITestOutputHelper output) => _out = output;
 
+    /// <summary>
+    /// M5-4c: the shipped data with a Sandstorm that doesn't block vision. Each Priest's storm would otherwise make every
+    /// view's unit cursor test each unit against each storm (the fog's zone rule, M4-4b-2), a cost of the fog, not
+    /// of a think, which with dozens of storms swamps what this row measures. What the AI does is the same either way.
+    /// </summary>
+    private static readonly Lazy<GameData> s_data = new(() => AiScenes.DataWith(dir => dir.EditJson("factions/whirlwind/abilities.json", root =>
+    {
+        foreach (JsonNode? a in root["abilities"]!.AsArray())
+            foreach (JsonNode? fx in a!["effects"]!.AsArray())
+                if ((string?)fx!["kind"] == "createZone") fx["blocksVision"] = false;
+    })));
+
     /// <summary>The scene, every seat human, and one <see cref="AiPlayer"/> a player built here on the sim's own command door, so the test can time each think.</summary>
     private static (Simulation Sim, AiPlayer[] Ais) Scene()
     {
-        GameData d = TestSim.Data;
+        GameData d = s_data.Value;
         var map = MapGenParams.Default with { Forests = 6, GoldMines = 4 };
         var sim = new Simulation(new SimConfig(3, Players, Units + 400, 4096) { Data = d, Map = map, Combat = false });
         NavGrid g = sim.World.NavGrid;
@@ -65,6 +80,21 @@ public class AiPerfTests
             placed++;
         }
         Assert.Equal(Units, sim.World.Units.Count);
+        // M5-4c: each seat's casters (its faction's unit types with abilities but the Cusser's one-hit kills, Casters in all)
+        // beside the next seat's units, so every seat has casters with enemies in range at every think (beyond the 2,500).
+        for (int p = 0; p < Players; p++)
+        {
+            int[] casterTypes = d.Factions[sim.World.FactionOf(p)].Units
+                .Where(u => d.Units[u].Abilities.Length > 0 && !d.Abilities[d.Units[u].Abilities[0]].HitsBuildings).ToArray();
+            int next = (p + 1) % Players, k = 0;
+            for (int i = 0; i < sim.World.Units.Capacity && k < Casters; i++)
+            {
+                if (!sim.World.Units.Alive[i] || sim.World.Units.Owner[i] != next || i % 7 != 0) continue;
+                Vector2 at = sim.World.Units.Position[i] + new Vector2(2.5f, 0f);
+                if (sim.World.Units.TrySpawn(p, casterTypes[k % casterTypes.Length], d.Units[casterTypes[k % casterTypes.Length]], at, out _)) k++;
+            }
+            Assert.Equal(Casters, k);
+        }
         for (int t = 0; t < 8; t++) sim.Tick(); // two fog updates
         var ais = new AiPlayer[Players];
         for (int p = 0; p < Players; p++)
@@ -95,14 +125,17 @@ public class AiPerfTests
             sim.Tick();
         }
         int sent = ais.Sum(a => a.CommandsSent);
+        double avg = times.Average(), worst = times.Max(), p95 = times.OrderBy(x => x).ElementAt((int)(times.Count * 0.95));
+        _out.WriteLine($"{Players} AI seats, {sim.World.Units.Count} units: {times.Count} thinks, avg {avg:F3} ms, p95 {p95:F3} ms, worst {worst:F3} ms; {sent} commands sent");
         // M5-3: every seat thinks with an army of 200 or more (four in five of its units), so the military manager's rally and
         // wave passes are in the timed thinks.
         Assert.All(ais, a => Assert.True(a.ArmyCount >= 200, $"player {a.Player}: an army of {a.ArmyCount}"));
         // M5-4b: every seat is under attack at every think (its buildings lose hp), so the defense pass sends in the timed thinks.
         Assert.All(ais, a => Assert.True(a.Board.Defending && a.Board.DefenseVersion > 0, $"player {a.Player}: not defending"));
+        // M5-4c: every seat casts in the timed thinks (its casters' cooldowns are cleared before each think).
+        Assert.All(ais, a => Assert.True(a.Board.CastsSent > 0, $"player {a.Player}: no cast"));
+        _out.WriteLine($"casts {string.Join(", ", ais.Select(a => a.Board.CastsSent))}");
         _out.WriteLine($"armies {string.Join(", ", ais.Select(a => a.ArmyCount))}; waves {string.Join(", ", ais.Select(a => a.Board.WavesStarted))}");
-        double avg = times.Average(), worst = times.Max(), p95 = times.OrderBy(x => x).ElementAt((int)(times.Count * 0.95));
-        _out.WriteLine($"{Players} AI seats, {sim.World.Units.Count} units: {times.Count} thinks, avg {avg:F3} ms, p95 {p95:F3} ms, worst {worst:F3} ms; {sent} commands sent");
         Assert.True(sent > 0, "the AIs sent nothing");
         Assert.True(avg < BudgetMs, $"avg {avg:F3} ms over the {BudgetMs} ms budget");
     }
@@ -126,9 +159,17 @@ public class AiPerfTests
         Assert.All(ais, a => Assert.True(a.Board.Defending, $"player {a.Player}: not defending")); // M5-4b: the defense pass ran
     }
 
-    /// <summary>M5-4b: every live building loses 1 hp (a test seam), so each seat's defense triggers at its next think.</summary>
+    /// <summary>
+    /// M5-4b: every live building loses 1 hp (a test seam), so each seat's defense triggers at its next think. M5-4c: and every
+    /// cooldown is over and every unit at full hp (test seams), so every caster not casting is judged and searched for a target
+    /// at every think, and the burns kill nobody (the armies stay over 200).
+    /// </summary>
     private static void UnderAttack(Simulation sim)
     {
+        Rts.Sim.Entities.UnitStore u = sim.World.Units;
+        Array.Clear(u.AbilityReadyTick);
+        for (int i = 0; i < u.Capacity; i++)
+            if (u.Alive[i]) u.Hp[i] = sim.World.Data.Units[u.TypeId[i]].Hp;
         Rts.Sim.Entities.BuildingStore b = sim.World.Buildings;
         for (int k = 0; k < b.Capacity; k++)
             if (b.Alive[k] && b.Hp[k] > 1) b.SetHp(k, b.Hp[k] - 1);

@@ -25,6 +25,7 @@ internal static class PlayerViewOracle
         public long OwnUnits, EnemyUnitsSeen, EnemyUnitsHidden, StealthHidden, StealthDetected, Revealed, InStorm;
         public long OwnBuildings, EnemyBuildingsSeen, Ghosts, GhostsOfDeadBuildings, GhostSites, Resources, ResourcesUnknownAmount, ResourcesRemembered;
         public long QueueItems;
+        public long AbilityCooldowns, OwnCasts; // M5-4c
         public string First = "";
 
         public void Fail(string what)
@@ -35,7 +36,8 @@ internal static class PlayerViewOracle
         public override string ToString() =>
             $"leaks {Leaks}, misses {Misses}, field mismatches {FieldMismatches}, oracle v fog {OracleDisagreements}; units own {OwnUnits} / enemy seen {EnemyUnitsSeen} / hidden {EnemyUnitsHidden} " +
             $"(stealth hidden {StealthHidden}, detected {StealthDetected}, high-ground revealed {Revealed}, in a storm {InStorm}); buildings own {OwnBuildings} / enemy seen {EnemyBuildingsSeen}; " +
-            $"ghosts {Ghosts} (of dead buildings {GhostsOfDeadBuildings}, sites {GhostSites}); resources {Resources} (amount unknown {ResourcesUnknownAmount}, remembered gone {ResourcesRemembered}); queue items {QueueItems}";
+            $"ghosts {Ghosts} (of dead buildings {GhostsOfDeadBuildings}, sites {GhostSites}); resources {Resources} (amount unknown {ResourcesUnknownAmount}, remembered gone {ResourcesRemembered}); queue items {QueueItems}; " +
+            $"own cooldowns running {AbilityCooldowns}, own casts {OwnCasts}";
     }
 
     /// <summary>Compares every answer of <paramref name="view"/> (player <paramref name="p"/>) with the oracle, adding to <paramref name="t"/>.</summary>
@@ -82,12 +84,14 @@ internal static class PlayerViewOracle
                 Field(t, su == want, $"{at}: unit {j}'s fields");
             }
             if (!got) Field(t, su == default, $"{at}: hidden unit {j}'s out value is not default");
+            Abilities(w, view, p, j, t, at);
             if (!expected) continue;
             bool next = view.NextUnit(ref cursor, out SeenUnit nu);
             Cursor(t, next, cursor, j, nu == su, $"{at}: the unit cursor");
         }
         End(t, view.NextUnit(ref cursor, out SeenUnit end), cursor, u.Capacity, end == default, $"{at}: the unit cursor");
         Field(t, !view.TryGetUnit(-1, out _) && !view.TryGetUnit(u.Capacity, out _) && !view.TryGetUnit(int.MaxValue, out _), $"{at}: a unit slot out of range");
+        Field(t, !view.TryGetAbilityReady(-1, 0, out _) && !view.TryGetAbilityReady(u.Capacity, 0, out _) && !view.TryGetCast(int.MaxValue, out _), $"{at}: an ability answer for a slot out of range");
         int past = int.MaxValue;
         Field(t, !view.NextUnit(ref past, out _), $"{at}: a unit cursor at int.MaxValue");
 
@@ -182,6 +186,32 @@ internal static class PlayerViewOracle
             if (!got) Field(t, sr == default, $"{at}: unknown resource {k}'s out value is not default");
         }
         End(t, view.NextResource(ref rCursor, out SeenResource rEnd), rCursor, r.Capacity, rEnd == default, $"{at}: the resource cursor");
+    }
+
+    /// <summary>
+    /// M5-4c: the own-unit ability answers of unit slot <paramref name="j"/>: a ready tick for each ability its type lists and a
+    /// cast in progress, for a live unit of player <paramref name="p"/> only; false and 0 / -1 for every other slot and index
+    /// (an enemy's cooldown or cast never leaks).
+    /// </summary>
+    private static void Abilities(World w, PlayerView view, int p, int j, Tally t, string at)
+    {
+        UnitStore u = w.Units;
+        bool own = u.Alive[j] && u.Owner[j] == p;
+        int listed = u.Alive[j] ? w.Data.Units[u.TypeId[j]].Abilities.Length : 0;
+        for (int a = -1; a <= DataLimits.MaxUnitAbilities; a++)
+        {
+            bool want = own && a >= 0 && a < listed;
+            int ready = want ? u.AbilityReadyTick[j * DataLimits.MaxUnitAbilities + a] : 0;
+            bool got = view.TryGetAbilityReady(j, a, out int readyTick);
+            Compare(t, got, want, $"{at}: unit {j}'s ability {a} ready tick (owner {u.Owner[j]})");
+            Field(t, readyTick == ready, $"{at}: unit {j}'s ability {a} ready tick {readyTick}, want {ready}");
+            if (want && ready > w.TickNumber) t.AbilityCooldowns++;
+        }
+        int cast = own ? u.CastAbility[j] : -1;
+        bool gotCast = view.TryGetCast(j, out int index);
+        Compare(t, gotCast, cast >= 0, $"{at}: unit {j}'s cast (owner {u.Owner[j]})");
+        Field(t, index == cast, $"{at}: unit {j}'s cast {index}, want {cast}");
+        if (cast >= 0) t.OwnCasts++;
     }
 
     /// <summary>The oracle's unit rule for player <paramref name="p"/> and slot <paramref name="j"/>, tallying why.</summary>

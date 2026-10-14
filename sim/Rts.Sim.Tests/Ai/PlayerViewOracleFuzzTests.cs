@@ -56,5 +56,6 @@ public class PlayerViewOracleFuzzTests
         Assert.True(tally.ResourcesUnknownAmount > 0 && tally.Resources > tally.ResourcesUnknownAmount, "no resource node both in and out of sight");
         Assert.True(tally.QueueItems > 0, "no queue was read");
         Assert.True(tally.ResourcesRemembered > 0, "no node gone out of sight was answered from memory (BUG-0540)");
+        Assert.True(tally.AbilityCooldowns > 0 && tally.OwnCasts > 0, "no own cooldown running or no own cast in progress was read (M5-4c)");
     }
 }

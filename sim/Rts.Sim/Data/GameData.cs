@@ -342,6 +342,7 @@ public sealed class GameData
         h.Add(r.DefendRadius); // M5-4b
         h.Add(r.DefendForTicks);
         h.Add(r.WorkerFleeRadius);
+        h.Add(r.CastMinTargets); // M5-4c
         h.Add(Ai.Length);
         foreach (AiDef a in Ai)
         {
