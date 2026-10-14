@@ -670,6 +670,12 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       rule and `Simulation.MatchOver` are in, a razed hall ends the match and the loser's AI goes silent on seeds 1-3; the
       20-minute winner test is M5-5.)
 - [ ] Playable: the owner can win on Easy and lose to a Whirlwind AI on Hard.
+- [ ] Owner request 2026-10-14 (D14 a): **proportional defense**: a raid pulls home only what it is worth (home army first, then part of the
+      wave, the whole wave only for a real threat or a dying hall); a lone raider never recalls a wave. (M5-4f.)
+- [ ] Owner request 2026-10-14 (D14 b): **a strategy per match**: `ai.json` holds several named openings per faction (build order, army mix,
+      attack thresholds) and the AI picks one with its seeded RNG at the start (Easy always the first); schema age-agnostic.
+- [ ] Owner request 2026-10-14 (D14 c): **counter-composition**: the AI shifts its army mix toward what counters the enemy units it has
+      seen (fog-limited, decayed memory; strength per difficulty, 0 on Easy); think cost stays inside the 1 ms gate.
 
 ## M6 — Game shell & real art
 

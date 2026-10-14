@@ -4,39 +4,37 @@ The dashboard. The Producer rewrites it at the end of every session. **Owner: re
 you" first.** "For your review" (further down) is non-blocking: what the studio built or decided
 on its own, explained in terms of what you'd see in the game.
 
-_Last updated: 2026-10-13 evening (session 2026-10-13-1616, all three tracks accepted): **the AI casts spells now, and the match ends on screen.** The sim's M5-4c slice 1: a Normal or Hard AI throws Telas Fire at your clumps, the Cusser at your buildings and Sandstorm onto your army, through the same door as your clicks; Easy never casts (the three remaining Hard knobs, gather bonus / focus fire / pull back wounded, are the sim's next slice). The view's M6-V4: a **Victory / Defeat / Draw banner** that pauses the match the moment it is decided, with **Stats** (a table per player: kills, losses, gold and wood in hand, when each side fell), **Continue watching** and **Main menu**; plus the two red test scenes fixed, so the whole scene loop is green on `main` again. The data track's D17: the design doc now says outright that Normal doesn't focus fire or pull back wounded; both faction pages describe the real defense rule; and a **spending report** found the AI is short of wood, not gold (a proposal for you under For your review, no numbers changed). **Wanted from you: the same reviews (D13, D14, D11 / D12, D15, the colours), and now two plays: raid the AI's base, and lose or win a match to see the banner.**_
+_Last updated: 2026-10-14 morning (session 2026-10-14-0946 PLAN, a one-off run on your review answers and first playtest): **your notes are answered item by item in the first "For your review" entry** (what changes, which track and session, the D14 verdict: feasible and staged as three new M5 criteria, and the design for a defense that pulls home only what a raid is worth). **This session builds:** sim the **new win condition** (a player is out with no units and no unit-producing building left; houses and camps don't count), view the **edge-pan fix for a second monitor + control groups for buildings** (+ BUG-0710), data the **D18 reports** (wood on a real map, trees near the bases, how long buildings take to kill and what lever fixes it, the Line v Shock hp / armor / cost table). **Next session:** sim the proportional defense, data applies ×1.5 / Easy casts / building damage / quicker gathering, view the resource-remaining click._
 
 ## Waiting on you
 
-- **Nothing blocking.** M5 2 / 6 (criteria 3, 4, 5 advanced), M6 criteria 1, 2, 4 advanced; counters sim 2 / 4, view 2 / 4, data 2 / 4;
-  golden `data-hash` **C6FC120A55AE4A0B**. **No open S1 / S2.** The scene loop is green on `main` (BUG-0674 / 0680 fixed).
-- **Wanted, not blocking:** (1) **D13's choice** (×1.1 vs ×1.5 vs an hp / armor / cost pass); (2) **D14's build orders**; (3) the
-  **D11 / D12 text tables**; (4) **D15's house-rule choice**; (5) **the eight colour names and values** (M6-VH1 entry); (6) play:
-  **raid the AI's base** (M5-4b entry) and **finish a match** either way to see the banner and the stats (M6-V4 entry); (7) **D17's
-  wood finding**: keep the build orders and re-measure on a real map (the Producer's default), or ask for a sim lever now (D17 entry);
-  (8) housekeeping: 20+ scratch worktrees in `git worktree list` (incl. the Producer's `producer-0916-merge` and `producer-1616-merge`
-  in the session scratchpads): delete the folders, then `git worktree prune`; (9) **the PC ran slow again this afternoon** (QA's Perf
-  rows: 28 / 173 red on the untouched base under load, all green alone): power plan / thermals worth a look.
+- **Nothing blocking.** M5 2 / 9 (three owner-requested AI criteria added 2026-10-14; criteria 3, 4, 5 advanced), M6 criteria 1, 2, 4
+  advanced; counters sim 2 / 4, view 2 / 4, data 2 / 4; golden `data-hash` **C6FC120A55AE4A0B**. **No open S1 / S2.** Scene loop green.
+- **Wanted, not blocking:** (1) read the **2026-10-14 assessment** (first For your review entry) and say in the inbox if any choice
+  there is wrong (the win rule's "hunt the last worker" caveat, the building-damage target band, the gather-rate numbers, the defense
+  knobs); (2) housekeeping: 20+ scratch worktrees in `git worktree list` (incl. the Producer's `producer-0916-merge` and
+  `producer-1616-merge` in the session scratchpads): delete the folders, then `git worktree prune`; (3) **the PC ran slow again on
+  2026-10-13** (QA's Perf rows: 28 / 173 red on the untouched base under load, all green alone): power plan / thermals worth a look.
 - **Before M6 (the owner's downloads; docs/04):** the fonts (Cinzel, EB Garamond), music, the Godot 4.7.2 .NET export templates.
 
 ## Now
 
 | Field | Value |
 | --- | --- |
-| Sim: milestone | **M5 AI opponent, 2 / 6 criteria (criterion 2 ticked: the executor and all five managers); criteria 3, 4, 5 advanced** (M5-4c slice 1 on `main`: `Ai/AbilityManager` (last in the think; the enemy group in reach, pulled back to range; an enemy building for the Cusser; friendly-fire guard; judged by the cooldown, `MaxTries` 3), `PlayerView.TryGetAbilityReady` / `TryGetCast`, `rules.json` `ai.castMinTargets` 2; left for slice 2: `gatherBonus` / `focusFire` / `pullBackWounded` (criterion 4); M5-4d expansion / rebuilding / high-ground scouting (3); M5-5 the 20-minute winner test (5)). docs/03 "Implementation (M5-4c)". Golden format 6, `data-hash` **C6FC120A55AE4A0B** (header moved once in M5-4c), `k` lines unchanged |
-| Sim: next task | **M5-4c slice 2** · feature (counter 2 / 4 → 3 / 4) · QA full: the three **difficulty knobs** (`gatherBonus` with an exact carry at the drop-off, hashed; `focusFire` = a wave member's `Attack` on the lowest-hp enemy in reach; `pullBackWounded` = a wounded member's `Move` home, leaving the wave alive) → criterion 4; BUG-0702's first nit if a few lines. Then **Requests 39 (+ 38)**: the stats counters (gathered, trained, kills / losses split, built / lost, Age II tick, army-value samples) and teams. Brief at the next PLAN in `studio/handoff.md` |
+| Sim: milestone | **M5 AI opponent, 2 / 9 criteria** (criteria 1-2 ticked; 3, 4, 5 advanced; three owner-requested criteria added 2026-10-14: proportional defense, a strategy per match, counter-composition). On `main`: `PlayerView`, seats, the executor and six managers (`Defense` / `BuildOrder` / `Scout` / `Economy` / `Production` / `Military` / `Ability`), the defeat rule (`World.Defeat.cs`, phase 11b, hash bits 34-36) + `MatchOver`, start locations, `rules.json` `ai` 15 knobs. Golden format 6, `data-hash` **C6FC120A55AE4A0B**, `k` lines unchanged since M4 |
+| Sim: next task | **M5-4e · the new win condition** (owner, playtest note 9) · feature (counter 2 / 4 → 3 / 4) · QA full: defeated = ever built, **no live unit and no finished unit-producing building**; sites, houses, camps, Forge, towers don't count; the golden may not move. Then **M5-4f proportional defense** (the design in For your review) + D15 C; then pathing slice 1 (surround a building), M5-4c slice 2 (knobs), Requests 39, D14 b (strategies schema), M5-4d (+ hunting the last units), D14 c, M5-5. Brief in `studio/handoff.md` |
 | Sim: gate | **GO** |
-| View: milestone | **M4 views Done**; M5-V1, M6-V1, M6-V2, M6-V3, M6-VH1, M6-V6 and **M6-V4 on `main`** (`Match.Outcome` / `Ended` / `DefeatedAt` from `World.DefeatEvents`; `MatchOverBanner` layer 22 through the pause path, `SimRunner` stops the frame's ticks once paused; `MatchStats` layer 23 with `Columns` = Kills / Losses / Gold in hand / Wood in hand / Defeated at; the pause menu's Stats after the banner; `ui.json` `match_over` 18 keys; BUG-0674 / 0680 / 0681 fixed). M6 criterion 1 waits on 2-4 slots and team (Requests 38); criterion 2 on Requests 39's columns; criterion 4 on keybinds. **The scene loop is green on `main` (51 / 51)** |
-| View: next task | **BUG-0710 first** (a few lines: the HUD's K / L synced when the banner opens; delete the dead `ViewApi/MatchOver` with its two test files, QA agreed), then **keybinds** (criterion 4's rest: names in `ui.json`, bindings in `settings.cfg`, a tab on the settings screen) or **M6-V5's slot part** (2-4 slots, if the generator gives four fair start locations) · feature (counter 2 / 4 → 3 / 4) · QA standard. Brief at the next PLAN |
+| View: milestone | **M4 views Done**; M5-V1, M6-V1, M6-V2, M6-V3, M6-VH1, M6-V6, **M6-V4** on `main` (the banner and the stats screen; the loop 51 / 51). M6 criterion 1 waits on 2-4 slots and team (Requests 38); criterion 2 on Requests 39's columns; criterion 4 on keybinds |
+| View: next task | **M6-V7 · edge-pan on a second monitor + control groups for buildings + BUG-0710** (owner, playtest notes 1 and 7) · feature (counter 2 / 4 → 3 / 4) · QA standard: the cursor confined to the window during a match (a settings toggle), the last pixel counts as the edge; Ctrl + digit stores a selected building, the digit recalls it; the K / L sync and the dead `ViewApi/MatchOver` deleted; **the match-over scenes re-staged** so they hold under the sim's new win rule (the loser has no unit and loses a hall last). Then the resource-remaining click (note 8) + keybinds. Brief in `studio/handoff.md` |
 | View: gate | **GO** |
-| Data: milestone | M3 Done (D1-D4); D5-D8, D-H1-H4, D10a-c, D11-D17 on `main` (D17: docs/02's Normal bullet "doesn't focus fire or pull back wounded units" pinned by `AiContentTests` K + QA's `NormalMicroPhraseQaTests`; both pages' "Defense" lines on M5-4b's rule; `Content/AiSpendingReportTests`, no data change). Golden `data-hash` **C6FC120A55AE4A0B** (moved by the sim's `castMinTargets`, no data change). Counter **2 / 4** |
-| Data: next task | **Inbox answers first**, else **D18** (BUG-0720 item 2: the pages' "more than 16 m from it" → "from the threat"; the spending report re-run on a generated map, seeds 1 / 7, both factions, Normal, 20 min, so the wood finding rests on real trees and mines; the flat row kept). No `ai.json` value change unless the inbox asks; the Teblor's `ai.json` stays with M7 · QA light |
-| Data: gate | **GO** (D18, or inbox tweaks) |
+| Data: milestone | M3 Done (D1-D4); D5-D8, D-H1-H4, D10a-c, D11-D17 on `main`. Golden `data-hash` **C6FC120A55AE4A0B** (no data change since D13). Counter **2 / 4** |
+| Data: next task | **D18 · four reports, no number changed** (counter 2 / 4 → 3 / 4) · QA light: BUG-0720 item 2; the spending report on a generated map (seeds 1 / 7, both factions, Normal, 20 min); trees within 30 / 60 m of every start location (note 2); **how long buildings take to kill** today and under candidate levers, with a proposed value set (note 6); the **Line v Shock hp / armor / cost sweep** with ×1.5 restored, as a table (D13). Then **D19 applies**: ×1.5, Easy `useAbilities`, the building-damage values, `gatherRate` gold 0.85 / wood 0.75, the Line v Shock numbers, one golden regen. Brief in `studio/handoff.md` |
+| Data: gate | **GO** |
 | Tools on this PC | Godot 4.7.2 .NET, .NET SDK 8.0.425, Git 2.53 + LFS 3.7; `GODOT` user variable set |
-| Build | **1616 ACCEPT (Producer):** sim branch 419a9e8 build 0 warnings, **non-Perf 6,258 / 11 skipped / 1 failed (30 m 52 s, beside the Godot runs): `SerialCollectionTests.EveryPerfTest_IsInTheSerialCollection` names QA's new Perf-tagged `Stress/AbilityManagerFuzzStressTests.AThink_WithShippedSandstormsAlive_Measured`, whose class lacks `[Collection(SerialCollection.Name)]` (QA's own full run predates its file); the one-line fix is a required pre-merge fix round (session log "Decisions"), verified by that test alone**; view branch 54b7ef2 build 0 warnings, smoke **PASS** both passes, `MatchOverViewTest` / `QaM6V4Test` / `AiSeatTest` / `QaM6V6Test` / `ShellTest` **PASS**; data branch 6645354 build 0 warnings, the Content + QA/Content + hash + golden slice **945 / 945**. **Scratch merge sim + view + data** (docs/01 / `bugs/README.md` / `coverage.md` unions): build 0 warnings, targeted slices **1,186 / 0 failed / 1 skipped**, smoke PASS, `AiSeatTest` / `MatchOverViewTest` / `QaM6V4Test` **PASS**. QA: sim full non-Perf **6,243 / 10 / 0 (30 m)**, Perf base vs HEAD under load 28 / 31 with every HEAD-only row green alone (no regression), smoke PASS; view sim non-Perf 6,218 / 10 / 0, smoke PASS both passes, loop **51 / 51**; data non-Perf 6,221 / 10 / 0, slice 926 / 926 |
+| Build | **0946 PLAN check on `main` 2e1d3f7 (Producer):** build 0 warnings, non-Perf **6,266 / 11 skipped / 0 failed (23 m 44 s)**, smoke **PASS** (both passes). Verified: the 1616 pre-merge fix (`[Collection(SerialCollection.Name)]` on `AbilityManagerFuzzStressTests`) is on `main`; `Ai/AbilityManager.cs`, `castMinTargets`, the banner / stats files and the golden's `data-hash` C6FC120A55AE4A0B are as logged. **1616 ACCEPT (Producer):** sim branch 419a9e8 build 0 warnings, **non-Perf 6,258 / 11 skipped / 1 failed (30 m 52 s, beside the Godot runs): `SerialCollectionTests.EveryPerfTest_IsInTheSerialCollection` names QA's new Perf-tagged `Stress/AbilityManagerFuzzStressTests.AThink_WithShippedSandstormsAlive_Measured`, whose class lacks `[Collection(SerialCollection.Name)]` (QA's own full run predates its file); the one-line fix is a required pre-merge fix round (session log "Decisions"), verified by that test alone**; view branch 54b7ef2 build 0 warnings, smoke **PASS** both passes, `MatchOverViewTest` / `QaM6V4Test` / `AiSeatTest` / `QaM6V6Test` / `ShellTest` **PASS**; data branch 6645354 build 0 warnings, the Content + QA/Content + hash + golden slice **945 / 945**. **Scratch merge sim + view + data** (docs/01 / `bugs/README.md` / `coverage.md` unions): build 0 warnings, targeted slices **1,186 / 0 failed / 1 skipped**, smoke PASS, `AiSeatTest` / `MatchOverViewTest` / `QaM6V4Test` **PASS**. QA: sim full non-Perf **6,243 / 10 / 0 (30 m)**, Perf base vs HEAD under load 28 / 31 with every HEAD-only row green alone (no regression), smoke PASS; view sim non-Perf 6,218 / 10 / 0, smoke PASS both passes, loop **51 / 51**; data non-Perf 6,221 / 10 / 0, slice 926 / 926 |
 | Tests | Producer: all three diffs read (the sim's `Ai/AbilityManager` whole, `AiPlayer` order, `Blackboard` arrays, `PlayerView` accessors, `AiRulesDef` / loader / limits / `GameData` hash, `rules.json`, the golden header, `AiPerfTests`' data edit, the door fuzz's `UseAbility` branch, docs/03 + docs/01; the view's `Match` / `Main` / `MatchOverBanner` / `MatchStats` / `MatchOverText` / `PauseMenu` / `SimRunner` / `SettingsApplier` / `GameSettings` / `UiText` / `AiSeatTest` / `ui.json` / docs/03 + docs/01, QA's two screenshots looked at; the data's docs/02 bullet, both pages' Defense lines against docs/03, `AiContentTests` K, `AiSpendingReportTests`, docs/01); the scratch merge built and run. QA: sim 320 random scenes / 482 casts under an oracle, 6 / 6 mutants, a 4-seat casting match twin-equal, reach / radius / own-unit edges, three Priests stacking, a wave with mages, think cost vs live storms; view orders on the defeat tick, simultaneous falls in 3 seats, banner vs pause both ways, clicks under the banner, Settings after a banner, a second skirmish, stats after Continue, 9 BUG-0680 boundary rows, an 8x bench; data the K pin attacked four ways, the report's preconditions and runtime |
 | Open bugs | **S1: 0, S2: 0**, S3: 13, S4: 16 (the merged index). **New open:** sim BUG-0701 (S3: an AI think grows 0.028 ms per live vision-blocking storm in the fog cursor; `AiPerfTests` measures with the block off), BUG-0702 (S4: three cast-targeting nits); view BUG-0710 (S4: the HUD's K / L one tick behind the stats under the banner; `ViewApi/MatchOver` dead); data BUG-0720 (S4: wording; item 1 fixed by the Producer in docs/03, item 2 for D18). **Closed this session:** sim BUG-0700 (S3, in the task); view BUG-0674 / 0680 / 0681 (S3). Part-fixed, still open: BUG-0622 (item 1), BUG-0550 (item 2), BUG-0521 (item 2), BUG-0684 (item 3 guarded) |
-| Sessions today | **2026-10-13: 4 / 8** (0146, 0527, 0916, 1616 done). Counters: **sim 2 / 4, view 2 / 4, data 2 / 4** |
+| Sessions today | **2026-10-14: 0 / 8 done** (0946 running, a one-off: not part of a chain). Counters before it: **sim 2 / 4, view 2 / 4, data 2 / 4** |
 | Last session | 2026-10-13-1616 · sim M5-4c slice 1 (feature, 0 fix rounds, ACCEPT, merged) · view BUG-0674 / 0680 / 0681 + M6-V4 (feature, 0 fix rounds, ACCEPT, merged) · data D17 (feature, 0 fix rounds, ACCEPT, merged) · M5 2 / 6 (criterion 2 ticked), M6 criterion 2 advanced; BUG-0674 / 0680 / 0681 / 0700 closed; golden header moved once |
 
 ## Milestone progress
@@ -57,6 +55,88 @@ _Last updated: 2026-10-13 evening (session 2026-10-13-1616, all three tracks acc
 Non-blocking. Each entry says what was built or decided, what you'd notice in the game, and how
 to change it. To change anything, write it in `studio/inbox.md`, for example "use formations
 instead of clusters" or "make giving up take 2 seconds".
+
+### Your review answers and first playtest: what changes, where each item lands, the D14 verdict, and a design for a defense that pulls home only what a raid is worth (Producer assessment, 2026-10-14)
+
+**Short version.** Nothing you asked for is out of reach, and most of it is small. Three things land this session (the new win
+condition, the edge-pan fix with control groups for buildings, and the measurements behind the balance changes), the rest over the
+next three or four sessions, in the order below. One change needs a caveat (the win rule can end with you hunting a last hidden
+worker); one is deferred on purpose (dropping the Ages: design later, but the AI's new strategy files are written so that it costs
+nothing extra); nothing is pushed back.
+
+**Your answers, one by one**
+
+| Item | Changes the plan? | What happens, where, when, size |
+| --- | --- | --- |
+| Easy casts too; aim for the densest cluster | Yes (reverses a Producer default) | Data: `useAbilities` true for Easy in both faction files + the design doc's Easy line (D19, next session, a few lines). Sim: the "densest cluster" target rule replaces today's "middle of the group" with the next ability pass (BUG-0702 item 1, with the proportional defense or the knobs slice; ~100 lines) |
+| Match end screen OK; match can be lost OK; D11 / D12 OK; colours OK | No | Those reviews are closed; the entries stay until their milestone is signed off |
+| The defense must not be trickable (a small raid recalls a wave) | Yes: new M5 criterion | Sim: **proportional defense**, designed below, built next session (M5-4f, ~700 lines + tests, QA full) |
+| D13: back to ×1.5, then the hp / armor / cost pass with a table | Yes | Data: D18 (this session) sweeps Line hp / armor / cost with ×1.5 restored and prints the table; D19 (next) applies ×1.5 and the numbers (yours from the inbox, else the sweep's best) with one fingerprint update. Both pages re-printed |
+| D14: variable strategies, attack and defence at once, counter-picking, vision-limited, think cost | Yes: three new M5 criteria (docs/05) | **Verdict below.** Sim + data over ~3 sessions each, interleaved with M5's remaining criteria |
+| D15: option C | Yes (small) | Sim: the executor skips a house step once the population cap is reached; folded into M5-4f next session (~30 lines + a test). The faction pages' house notes updated by the data track after |
+| D17: wait and re-measure | No (it was the default) | Data: D18 re-runs the spending report on a real generated map this session; a lever only if it still shows wood starvation |
+
+**Your playtest notes, one by one**
+
+| # | Note | Changes the plan? | What happens, where, when, size |
+| --- | --- | --- | --- |
+| 1 | Edge-pan fails on the second-monitor side | Yes (bug) | View, **this session**: the cause is that the mouse leaves the window onto the other monitor, so the game sees no cursor at the edge. Fix: during a match the cursor is **confined to the window** (released on pause, menus, settings and when the window loses focus), with a Settings toggle "Confine cursor to window" (default on), and the very last pixel counts as the edge. ~150 lines. You verify on your two-monitor desk |
+| 2 | Not enough trees near the base | Maybe (seed or generator) | Data, this session: D18 counts the trees within 30 m and 60 m of every start location on seeds 1-7. If it is the generator, the sim's next hardening gives each base a second start forest (`MapGenParams`, ~40 lines); if it is the seed, nothing changes |
+| 3 | Gathering a little quicker | Yes (numbers) | Data, D19 next session: gold 0.7 → **0.85**/s, wood 0.6 → **0.75**/s per worker (about +20 %), docs/02's Economy table, one fingerprint update. Say other numbers in the inbox if you like; it waits a session only because this session's sim task already moves the fingerprint file and two tracks may not |
+| 4 | Drop the Ages; grow a tech tree instead | Yes (direction, later) | Recorded in docs/01's change log as a direction. **Deferred by design**: planned as a design task after M5's AI work (so the AI's build orders aren't rewritten twice), then data + a small sim clean-up (`Age` fields go, the stats' "time to Age II" column becomes "key tech time"). Until then the strategy files (D14 b) are written **age-agnostic** (an army mix switches on a tech or a time, never on "Age II"), so the drop costs no rework there. The `requires` schema already lets a building or tech unlock another, which is most of what a tree needs |
+| 5 | Pathing: infantry stuck behind crossbowmen; units stuck behind each other at a building | Yes (two sim slices) | Sim, after the proportional defense: **slice 1 "surround a building"** (attackers pick a free side of the footprint instead of queueing behind friends; ~800 lines, uncertain, QA full), **slice 2 "flank through your own line"** (a melee unit whose path is blocked by own standing ranged units routes round them; the crowd-routing family BUG-0028 / 0032 / 0046). Each slice gets a measured before / after (how many of 20 attackers reach a hall in 10 s) |
+| 6 | Buildings take forever to kill | Yes (numbers) | Data: D18 this session **measures** (20 Heavy Infantry, 20 Crossbowmen, 10 Raiders, 2 Catapults, 2 Sappers against a House, a hall, a Town Hall; today and under candidate levers) and proposes values that meet this band: **20 Age I line units raze a House in ≤ 20 s, a production hall in ≤ 60 s, a Town Hall in ≤ 2 min; siege stays at least twice as cost-efficient against buildings**. Today a Heavy Infantry does **1 damage** per swing to a Town Hall (10 × 0.4 − armor 5 → the floor of 1), so 20 of them need 3 minutes and 20 Crossbowmen 4.5 minutes; the lever is the damage table's Structure column (melee 0.4, pierce 0.2, magic 0.4) and the buildings' armor. D19 applies next session. Note 5's slice 1 helps too: today half your army stands behind the other half |
+| 7 | Control groups, buildings included | Yes (small) | View, **this session**: Ctrl + 1-9 already stores units; now a selected **building** too (one per group: Ctrl + digit with a Billet selected, then the digit selects it again from anywhere, double-tap centres the camera on it). ~250 lines |
+| 8 | Click a resource to see what's left | Yes (small) | View, next session: left-click a mine or tree → the selection panel shows its name and "2,340 gold left" (only while you can see it; the last amount you saw otherwise). ~250 lines |
+| 9 | New win condition | Yes (rule) | Sim, **this session** (M5-4e, ~500 lines, QA full): a player is out once it has **no unit and no finished unit-producing building**; houses, camps, the Forge, towers and unfinished sites don't count. A side that never had a building (test sandboxes) still can't lose. **Caveat**: as in Age of Empires, a last worker hiding in a corner keeps its side alive; the AI's waves target buildings, so the sim's M5-4d adds "hunt the last units" (attack-move to where they were last seen, then sweep). If the hunt annoys you, an inbox line "a side with no production building for 3 minutes is out" is a 20-line rule |
+
+**D14 feasibility verdict: feasible, worth doing, in stages.** The AI's cost today is 0.4 ms per think for eight Hard seats over 2,600
+units (gate 1 ms), and every AI read goes through its fog-limited window (a test fails the build if AI code names the world directly), so
+every stage below is vision-limited by construction and adds work proportional to the units it can see, not a search.
+(a) **Proportional defense** (next session): below. (b) **A strategy per match** (~1 sim session for the file format, ~1 data session for
+the openings): `ai.json` holds several named openings per faction (build order, army mix, attack thresholds, e.g. Malazan "legion push" /
+"fast casters" / "towers and siege"; Whirlwind "early raid" (the 4:30 Raider raid the page sketched) / "horde" / "priest timing"); the AI
+draws one with its seeded dice at the start (Easy always the first), so matches differ and replays still reproduce. Zero think cost.
+(c) **Counter-composition** (~1 sim session + a small data table): the AI remembers which enemy unit types it has seen in the last few
+minutes (each unit once, fading) and shifts its army mix toward their counters from the template table (Line counters Shock, Ranged
+counters casters and light units, Shock counters Ranged, casters counter clumped Line, siege counters buildings) by a strength per
+difficulty (Easy 0, Normal moderate, Hard strong). Cost: a few hundred operations per think. (d) **Attack and defence at once, not
+discrete waves** (2-3 sim sessions, **after** M5's remaining criteria): squads with roles (a home guard sized by the last raid, a main
+army that gets reinforcements streamed to it instead of waiting for the next wave, a harass squad of fast units sent at undefended
+workers it has scouted). (a)-(c) are new M5 criteria in docs/05; (d) is queued after M5-5 so M5 doesn't balloon; you decide after
+playing (a)-(c) whether (d) is worth it. What I would **not** do: a planner that searches moves ahead (think cost, and it would play
+like a machine, not an opponent).
+
+**Design: proportional defense ("partial recall by threat", M5-4f).** Today any raid (one building hit, or any enemy soldier within 48 m
+of the hall) sends the **whole** army home for 20 s and aborts a wave: exactly the exploit you spotted. The new rule:
+1. **Measure the threat.** Each think the AI already counts the enemy soldiers it can see within 48 m of its hall. It now also adds up
+   what they are worth (their gold + wood cost). A building being hit by something it can't see (a catapult behind the fog) counts as a
+   fixed minimum threat (`ai.defendMinValue`, 150 = about two line units).
+2. **Size the answer.** It commits defenders worth `ai.defendRatio` × the threat (1.5: a 120-cost Horse Raider pulls at most 180 worth,
+   two soldiers), never less than `defendMinValue`.
+3. **Who goes, in order.** First the **home army** (units not in the wave: rallying, fresh from the halls), nearest the threat first.
+   If that isn't enough, **part of the wave**: the members nearest home, as long as the wave keeps at least its start threshold (the size
+   it needed to be sent at all); a wave that would drop below that comes home whole (a half-wave achieves nothing). The **whole wave**
+   also comes home when the hall itself is under attack and below half hp (`ai.recallHallHp`, 0.5). New units from the halls keep
+   joining the defense while the threat holds.
+4. **What stays.** Workers still flee a threat within 16 m and return 20 s later; the 20-second hold after the last hit; defenders
+   attack-move to the threat and go back to the rally point after.
+5. **Why it isn't trickable.** A small raid costs you more than it costs the AI: it answers with 1.5× your raid's worth and keeps its
+   attack going. Dancing a raider in and out re-sends nothing (the point only moves when the threat really moves). A raid it can't catch
+   (kiting cavalry) holds two soldiers at home, not the army. A big raid gets the big answer it deserves. The knobs are three numbers in
+   `rules.json` (`defendRatio`, `defendMinValue`, `recallHallHp`), one fingerprint update, and tests pin: a 2-unit raid against a 20-unit
+   wave out → the wave continues and ≤ 3 units come home; a 15-unit raid → the wave returns; a hit with nobody seen → the minimum.
+   Same rule on every difficulty for now (a per-difficulty ratio is a one-field schema change if Hard should defend tighter).
+
+**Order of work from here** (inbox requests before roadmap items, as the rules say): this session sim M5-4e (win rule), view M6-V7
+(edge-pan + building groups + BUG-0710 + the match-over scenes re-staged for the new rule), data D18 (reports). Next: sim M5-4f
+(proportional defense + D15 C + the densest-cluster target), view the resource click + keybinds, data D19 (apply ×1.5, Easy casts,
+building damage, gather rates, Line v Shock numbers). Then sim pathing slice 1 and 2, the Hard knobs (M5-4c slice 2), the stats counters
+(Requests 39), D14 b's format, M5-4d (expansion, rebuilding, re-scouting, hunting), D14 c, the 20-minute test, your Easy / Hard play.
+The Ages design task after that. Nothing of M6's view work is displaced except by one session.
+
+**How to change any of it.** An inbox line per item: "defendRatio 2", "gather 0.9 / 0.8", "House must take 30 s", "skip the Ages design
+until M6", "do pathing before the defense".
 
 ### The AI casts spells now: a Normal or Hard opponent sets fire to your clumps, blasts your buildings and calls sandstorms onto your army; Easy never casts (sim track, M5-4c slice 1, 2026-10-13)
 
@@ -3977,6 +4057,18 @@ track right after S1/S2 bugs).
     (finished, sites apart) and buildings lost; (e) the tick the player reached Age II (-1 before); (f) an army-value sample every N s
     (the summed cost of the player's live non-worker units; N in `rules.json`), kept for the whole match, for the graph. Hashed or not
     as the sim decides, documented. The view's `MatchStats.Columns` takes each as one getter + one `ui.json` label.
+    **Note (0946 PLAN):** (e) becomes "the tick of the first key tech" once the Ages are dropped (owner direction 2026-10-14); build
+    it as a per-tech researched-tick span, not an Age field.
+40. **From the 0946 PLAN (owner playtest note 9), for the view track:** the sim's M5-4e changes the defeat rule this session (no live
+    unit and no finished unit-producing building; houses / camps / Forge / towers / sites don't count; a never-built player still never
+    defeated). `World.IsDefeated` / `EverBuilt` / `DefeatEvents` / `MatchOver` keep their names; `PlacementError.Defeated` unchanged. New
+    read-only: `World.LiveUnits(p)` and `World.ProductionBuildings(p)` (counts). The view's defeat scenes are re-staged by M6-V7 the same
+    session so they hold under both rules.
+41. **For the sim track (owner playtest note 8, the view's next task):** the selection panel needs a node's remaining amount as the
+    *player* may know it: `World.Resources.Remaining[slot]` while the node is visible; for an explored-but-unseen node the fog's memory
+    keeps presence only (`FogStore.NodeAt`), not the amount. The view will show "last seen: N" from its own per-node cache (view state),
+    unless the sim prefers to add a remembered amount to `NodeMemory` (hashed or not, the sim's call). Not blocking; the view can start
+    with "visible only".
 
 ## Feature queue: sim track (feature sessions, in order)
 
@@ -4077,11 +4169,24 @@ track right after S1/S2 bugs).
     judged by the cooldown with `MaxTries` 3; `PlayerView.TryGetAbilityReady` / `TryGetCast`; 8 Hard seats × 16 casters 0.4 ms / 0 B;
     the golden header moved once; BUG-0700 fixed; BUG-0701 S3 / BUG-0702 S4 left; **the knobs deferred under the 700-line hard stop**;
     criterion 2 ticked).
-23. **Next: M5-4c slice 2** (the Now table and `studio/handoff.md`): the difficulty knobs (`gatherBonus` with an exact hashed carry,
-    `focusFire`, `pullBackWounded`) → criterion 4; then **Requests 39 (+ 38)**, the stats counters and teams; then M5-4d expansion /
-    rebuilding / periodic re-scouting / ramps and high ground before attacking up (criterion 3); M5-5 the AI-vs-AI 20-minute winner
-    test (criterion 5); M5-6 the playable criterion (win on Easy, lose on Hard) with the view's menu match. Teams (Requests 38) when
-    M6's 2-4 slots need them.
+23. **Now (session 2026-10-14-0946): M5-4e, the new win condition** (owner playtest note 9; brief in `studio/handoff.md`): defeated =
+    ever built, no live unit, no finished unit-producing building; the golden may not move; Requests 40 for the view.
+24. **Then, in this order (inbox requests before roadmap work; re-ordered at the 0946 PLAN):** (a) **M5-4f proportional defense**
+    (the design in For your review 2026-10-14: `ai.defendRatio` / `defendMinValue` / `recallHallHp`, home army first, part of the wave
+    above its start threshold, the whole wave for a dying hall) + **D15 C** (the executor skips a house step at the pop cap) + BUG-0702
+    item 1 (the densest cluster) · QA full, ~900 lines; (b) **pathing slice 1 "surround a building"** (attackers take a free footprint
+    side instead of queueing behind friends; measured: of 20 attackers how many strike a hall within 10 s, before / after) · ~800 lines,
+    uncertain; (c) **pathing slice 2 "flank through your own line"** (a melee walker blocked by own standing ranged units routes round
+    them; BUG-0028 / 0032 / 0046 family); (d) **M5-4c slice 2**, the knobs (`gatherBonus` with an exact hashed carry, `focusFire`,
+    `pullBackWounded`) → criterion 4; (e) **Requests 39 (+ 38)**, the stats counters (39 e as a per-tech tick) and teams; (f) **D14 b**,
+    the strategies schema (`ai.json` `strategies[]`, age-agnostic: a mix switches on a tech or a time; the pick by the AI's seeded RNG
+    at start, Easy the first) with minimal entries, the data track fills the openings after; (g) **M5-4d** expansion / rebuilding /
+    periodic re-scouting / high ground before attacking up / **hunting the last enemy units** when no enemy building is known
+    (criterion 3); (h) **D14 c** counter-composition (a decayed per-type enemy memory, the counter table in `rules.json` `ai`, a strength
+    per difficulty); (i) **M5-5** the 20-minute winner test (criterion 5); (j) M5-6 the playable criterion with the view's menu match.
+    Teams (Requests 38) when M6's 2-4 slots need them. **After M5:** D14 d (squads: home guard, streamed reinforcements, harass) if
+    the owner wants it after playing a-c; the **Ages → tech tree** design task (docs first, owner review, then data + a small sim
+    clean-up); a second start forest per base if D18 shows the generator short of trees (`MapGenParams`, next sim hardening).
 4. M6 (far ahead): agents can't download. **Owner note 2026-10-08: the art direction is grounded / realistic
    (Quaternius Universal Base Characters + Modular Outfits + Universal Animation Library 1 / 2, Mixamo packs for gaps;
    KayKit a fallback only; docs/04 and docs/01 updated by the owner), and the packs are already in `asset-sources/`
@@ -4182,10 +4287,16 @@ track right after S1/S2 bugs).
     QA standard PASS_WITH_ISSUES: the loop green again (51 / 51); `Match.Outcome` latched from `DefeatEvents`, `MatchOverBanner` through
     the pause path, `MatchStats` with today's five columns, the pause menu's Stats, `ui.json` `match_over`; Requests 39 written;
     BUG-0710 S4 left; criterion 2 advanced, ticked when Requests 39's columns show).
-23. **Next: BUG-0710 first** (the HUD's K / L synced under the banner; delete the dead `ViewApi/MatchOver` with its two test files), then
-    the feature (the Now table and `studio/handoff.md`): **keybinds** (criterion 4's rest) or **M6-V5's slot part** (2-4 slots; teams need Requests
-    38, a team rule), keybinds (criterion 4's rest), save / load + replay playback, the look test (the owner's packs are in
-    `asset-sources/`), `tools/export.ps1` with Requests 33. M5's view part: criterion 6's playable run against the AI.
+23. **Now (session 2026-10-14-0946): M6-V7** (owner playtest notes 1 and 7; brief in `studio/handoff.md`): BUG-0710 (both items), the
+    cursor confined to the window during a match (a settings toggle, released on pause / menus / focus loss; the last pixel is the
+    edge), control groups that hold a building, and the match-over scenes (`MatchOverViewTest`, `QaM6V4Test`, `AiSeatTest.MatchOverLine`)
+    re-staged to hold under the sim's new win rule (Requests 40).
+24. **Then (re-ordered at the 0946 PLAN):** (a) **the resource-remaining click** (note 8: left-click a mine or tree → its name and amount
+    in the selection panel while visible, the last seen amount otherwise; Requests 41) + **keybinds** (criterion 4's rest: names in
+    `ui.json`, bindings in `settings.cfg`, a tab on the settings screen, every HUD hotkey through one map); (b) **M6-V5's slot part**
+    (2-4 slots; teams need Requests 38); (c) save / load + replay playback (criterion 3); (d) the look test (the owner's packs are in
+    `asset-sources/`); (e) `tools/export.ps1` with Requests 33; (f) M5's view part: criterion 6's playable run against the AI; (g) the
+    stats columns as Requests 39 lands.
 
 ## Feature queue: data track (feature sessions, in order; owner reviews every landed task)
 
@@ -4267,10 +4378,17 @@ track right after S1/S2 bugs).
     "doesn't focus fire or pull back wounded units" pinned by K + QA's `NormalMicroPhraseQaTests`; both pages' Defense lines on M5-4b's
     rule, the Whirlwind counter-raid kept as a later idea; `Content/AiSpendingReportTests` (wood is the limit, no Age II in 20 min on
     the flat scene); no data change; BUG-0720 S4 left, item 1 fixed by the Producer).
-24. **Next: inbox answers first, else D18** = BUG-0720 item 2 (the pages' "more than 16 m from it" → "from the threat") + the spending
-    report on a generated map (seeds 1 / 7, both factions, Normal, 20 min; the flat row kept) so the wood finding rests on real trees
-    and mines; the owner's lever choice (keep, a sim-side reserve, `goldShare`) after it. No `ai.json` value change unless the inbox
-    asks. **The
+24. **Now (session 2026-10-14-0946): D18, four reports and no number changed** (brief in `studio/handoff.md`): BUG-0720 item 2; the
+    spending report on a generated map (seeds 1 / 7, both factions, Normal, 20 min; the flat row kept); trees within 30 / 60 m of every
+    start location on seeds 1-7; the building-kill-time report (today and under candidate Structure multipliers / building armor, with
+    a proposed set meeting the band: 20 Age I line units raze a House ≤ 20 s, a hall ≤ 60 s, a Town Hall ≤ 2 min, siege ≥ 2x as
+    cost-efficient); the Line v Shock hp / armor / cost sweep with ×1.5 restored in memory, as a table.
+25. **Then D19, the owner's numbers applied** (one golden regen; every sim-track pin named in the brief): `bonusVs.mounted` ×1.1 → ×1.5
+    on both line units (D13 reversed); Easy `useAbilities` true in both `ai.json` + docs/02's Easy line (+ `AiContentTests` K /
+    `AiDifficultyFileSideQaTests` / `NormalMicroPhraseQaTests` as they pin it); the building-damage values D18 proposed (or the owner's);
+    `rules.json` `gatherRate` gold 0.7 → 0.85, wood 0.6 → 0.75 + docs/02 Economy (named in the brief: `common/` by exception, the sim
+    track off `rules.json` that session); the Line v Shock numbers (the owner's pick, else D18's best); both pages re-printed; a compact
+    review table. Then the D14 b openings (2-3 per faction) once the schema is on `main`; the house notes after D15 C. **The
     Teblor's `ai.json` is not pulled ahead of M7** (Producer decision, 0916 PLAN: `game/data/factions/` has only `malazan` and
     `whirlwind`; a new faction folder needs a whole roster, appears in the setup's faction lists and moves the golden, and the Giant
     armor class / regeneration / multi-spawn schemas are M7 sim work). Then the Shock v Ranged pass if the owner asks for one, the

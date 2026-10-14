@@ -9,6 +9,8 @@ Commit and push after editing, from either machine (or ask Claude to).
 
 ## New
 
+## Processed
+
 - 2026-10-14 · **Producer's take wanted (owner), one-off session.** Before planning, please read the note below
   (Review answers + first playtest) and put a plain-language assessment at the top of STATE's "For your review":
   for each answer and playtest note, whether it changes the current plan (roadmap, queues, M5/M6 criteria), how you
@@ -16,6 +18,14 @@ Commit and push after editing, from either machine (or ask Claude to).
   D14 feasibility verdict (variable strategies, simultaneous attack and defence, counter-picking, vision-limited,
   think-time cost) and a design for the defense-rule change (partial recall by threat). Then plan the three tracks
   as usual, folding in whatever you judge ready. This session is a single one-off run, not part of a chain.
+  → Done at the 2026-10-14-0946 PLAN: the assessment is the first entry under STATE "For your review" (one line per
+  answer and note: changes the plan or not, track, session, size; the D14 verdict: feasible, staged as three new M5
+  criteria in docs/05 with squads after M5; the proportional-defense design with its knobs). Decisions recorded in
+  docs/01's change log. This session: sim builds the new win condition (M5-4e), view fixes edge-pan on a second
+  monitor + control groups for buildings + BUG-0710 and re-stages the match-over scenes, data runs D18 (the wood report
+  on a real map, trees near the bases, the building-damage and Line v Shock tables). Next session: sim the proportional
+  defense (M5-4f) + D15 C; data D19 applies ×1.5, Easy casts, building damage, quicker gathering and the Line v Shock
+  numbers; view the resource-remaining click + keybinds.
 
 - 2026-10-14 · **Review answers + first real playtest (owner).** Played a skirmish on the default seed (Malazan vs
   Whirlwind AI, Normal) to the end: the AI's workers scattered to its hall when I raided, and I saw the Victory banner.
@@ -54,8 +64,9 @@ Commit and push after editing, from either machine (or ask Claude to).
   8. Clicking a resource (gold mine, tree / forest) should show how much is left.
   9. Change the win condition: a player is out once all their units **and** all their unit-producing buildings are
      destroyed; houses and resource drop-off buildings don't need to be destroyed to end the match.
-
-## Processed
+  → Answered item by item in STATE "For your review" (the 2026-10-14 assessment entry) and recorded in docs/01's change
+  log; the OKs (M6-V4, M5-4b, D11, D12, colours) close those entries' review; D17 stays "wait and re-measure" (D18 this
+  session). Everything else is queued: see the assessment's table for the track and session of each.
 
 - 2026-10-08 · **Art direction + packs downloaded (owner):** I prefer a grounded, realistic art style
   over a cartoonish one. The humanoid base is now Quaternius Universal Base Characters + Modular
