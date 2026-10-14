@@ -388,7 +388,9 @@ show text, a minimap ping, and a sound.
    hall that trains units: the Town Hall or one of the five unit halls; the Whirlwind's Holy Camp, Raider Camp and Archer
    Camp are such halls). Houses, the drop-off camp (Quartermaster's Depot / Supply Cache), the Forge, towers and
    unfinished sites don't need to fall. A summoned unit counts while it lives. A player that never had a building is never defeated
-   (sandboxes). The last player or team standing wins. (Owner decision 2026-10-14; until then: no buildings left.)
+   (sandboxes). The last player or team standing wins. (Owner decision 2026-10-14; until then: no buildings left.) A
+   player that is out loses its remaining buildings on that tick: they collapse like razed ones, nobody is credited the
+   kill (Producer decision 2026-10-14, BUG-0703; built at the sim's M5-H2 hardening: until then they stand and act).
 5. **Post-match stats:** resources gathered, units trained/lost/killed, buildings built/lost,
    army value over time (graph), time to Age II.
 6. **Save/load** any time during a match. **Replays** are recorded for every match.

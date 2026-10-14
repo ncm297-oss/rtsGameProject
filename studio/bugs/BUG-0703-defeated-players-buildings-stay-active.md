@@ -37,3 +37,10 @@ research.
   (b) a defeated player's buildings go neutral / inert (towers stop, queues refunded or frozen); (c) they are destroyed
   on the defeat tick (AoE-style). (b) and (c) touch the tower system and the hash; (a) is a doc line.
 - The `..._Measured` row pins today's behaviour so a change is seen; flip it when the decision lands.
+
+## Producer decision (2026-10-14-0946 ACCEPT)
+Option (c): **a defeated player's remaining buildings collapse on its defeat tick** (freed like razed ones, death events for the
+view's rubble, no kill credited, queues gone). Recorded in docs/01 (Producer decision, owner may revisit) and docs/02 "Game flow" 4.
+Built at the sim's M5-H2 hardening (first item): flip `WinConditionQaTests.ADefeatedPlayersTower_KeepsShooting_Measured` and
+`...CommandsOnItsStandingBuildings_AreDropped(defeated)` to the new rule; `MatchOverTests` gains "the House still standing" → "the
+House gone on the defeat tick"; the hash twin; the view's `MatchOverViewTest` losers own one hall only, so they are unaffected.

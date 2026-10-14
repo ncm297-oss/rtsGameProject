@@ -49,3 +49,9 @@ None of these change the rule's behaviour; items 1 and 2 are wording, 3-5 test h
 - Item 4: open (`DefeatCountsFuzzTests` still one-way).
 - Item 5: fixed. `TestSim.KeepIn` documents its side effects and gained `nearCorner` so two keepers in a combat scene
   don't share a cell. New tiny nit: `TestSim.cs` line ~85 `int worker =Rts.Sim...` lost its space after `=`.
+
+## Producer triage (2026-10-14-0946 ACCEPT)
+- Item 1 **fixed by the view's M6-V7 at the same integration**: `Match.cs` prints `Match over: player p is defeated (tick n)`; docs/03
+  line ~5416 unified at the merge (the sim's "stale" note folded into the view's sentence); docs/03 line ~5667 (the M6-V4 section)
+  reworded by the Producer at the ACCEPT (the new line, the old one named as history).
+- Items 3, 4 and the `TestSim.cs` space: the sim's M5-H2 hardening (counter 4 / 4 after the next feature task). Stays open, S4.

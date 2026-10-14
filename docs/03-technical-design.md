@@ -5663,9 +5663,9 @@ game/tests/MatchOverViewTest.tscn the headless banner and stats test (in the sce
 ```
 
 - **The rule (presentation state, read-only).** After every tick (`SimRunner.Ticked`, so several a frame at speed),
-  `Match` reads `World.DefeatEvents`: each entry prints `Match over: player p has no buildings left (tick n)` (the old
-  text, stale since M5-4e: a defeated player may still have a House, Forge, tower or site standing, see "Implementation
-  (M5-4e)"; the line is the view's to reword; n is `TickNumber`, the event's tick + 1) and stamps `Match.DefeatedAt(p)` = the event's tick + 1, the match clock at
+  `Match` reads `World.DefeatEvents`: each entry prints `Match over: player p is defeated (tick n)` (since M6-V7; before it
+  "has no buildings left", which M5-4e made wrong: a defeated player may still have a House, Forge, tower or site standing, see
+  "Implementation (M5-4e)"; n is `TickNumber`, the event's tick + 1) and stamps `Match.DefeatedAt(p)` = the event's tick + 1, the match clock at
   the end of the tick the player fell in. Then, while `Match.Outcome` is `None`, the local result for **the local player,
   slot 0** (`SelectionController.LocalPlayer`; `Match.ResultFor`): **Draw** when `Simulation.MatchOver` and no player that
   ever built stands (the last ones fell on one tick); else **Defeat** the moment `World.IsDefeated(0)`, whether or not
