@@ -322,3 +322,4 @@ bugs outrank new features.
 | [BUG-0673](BUG-0673-two-alternating-raiders-resend-army-every-think.md) | S3 | fixed | Two raiders taking turns on opposite sides of the hall re-send the whole army every think |
 | [BUG-0674](BUG-0674-aiseattest-scene-red-defeated-rebuild.md) | S3 | open | AiSeatTest (view scene) goes red with the defeat rule: its match-over row rebuilds after cancelling the only building |
 | [BUG-0675](BUG-0675-m5-4b-process-nits.md) | S4 | open | M5-4b nits: an unplanned ui.json edit, a "data-hash unchanged" line that could not hold, a defendRadius that never waves |
+| [BUG-0720](BUG-0720-d17-defense-wording-nits.md) | S4 | open | D17 Defense wording: docs/03 still quotes the removed "Laborers flee to the Garrison Keep"; "more than 16 m from it" reads as from the Keep |
