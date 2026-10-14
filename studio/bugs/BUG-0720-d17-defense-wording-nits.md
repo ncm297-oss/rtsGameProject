@@ -33,3 +33,7 @@ a site too, within `defendRadius` of the hall hit, or an enemy non-worker seen w
 trigger, a wave out ending like a retreat, and workers within `workerFleeRadius` 16 m. The knob values match
 `common/rules.json` (48 / 20 / 16), and the drop-off display names match `buildings.json` (`dropOff: true`: Garrison Keep,
 Quartermaster's Depot; Holy Camp, Supply Cache).
+
+QA 2026-10-14-0946 (D18): item 2 verified fixed in c6bb467. Both pages now carry the suggested wording, which matches
+`DefenseManager.NearestDropOff` (the nearest to the worker among the drop-offs more than `workerFleeRadius` from the
+defense point, else the nearest). `AiContentTests` and `NormalMicroPhraseQaTests` are green. Item 1 (docs/03, sim track) is still open.

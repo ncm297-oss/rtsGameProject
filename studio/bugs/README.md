@@ -327,3 +327,4 @@ bugs outrank new features.
 | [BUG-0702](BUG-0702-ai-cast-targeting-nits.md) | S4 | open | AI cast targeting nits: two groups either side get no cast, casters stack on one point, the reach edge never casts |
 | [BUG-0710](BUG-0710-m6-v4-banner-nits.md) | S4 | open | M6-V4 nits: the HUD's K / L under the banner lag the stats by the killing tick; `ViewApi/MatchOver` is now dead code |
 | [BUG-0720](BUG-0720-d17-defense-wording-nits.md) | S4 | open | D17 Defense wording: docs/03 still quotes the removed "Laborers flee to the Garrison Keep"; "more than 16 m from it" reads as from the Keep |
+| [BUG-0721](BUG-0721-d18-report-method-nits.md) | S4 | open | D18 report method nits: siege ratio checked vs Heavy Infantry only; spending conclusion counts post-win marks; 6 mines, not the menu's 8 |
