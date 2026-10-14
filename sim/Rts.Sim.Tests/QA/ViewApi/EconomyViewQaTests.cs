@@ -353,7 +353,7 @@ public class EconomyViewQaTests
     {
         Simulation sim = BuildMaps.NewSim(ResourceMaps.Flat(128, 128), players: 2);
         TestSim.KeepIn(sim, 0); // M5-4e: a unit keeps the player in (a House, Forge, depot, tower or site alone no longer does)
-        TestSim.KeepIn(sim, 1);
+        TestSim.KeepIn(sim, 1, nearCorner: true); // not the same corner as player 0's keeper: with combat on they would fight
         World w = sim.World;
         NavGrid g = w.NavGrid;
         int house = BuildMaps.House;

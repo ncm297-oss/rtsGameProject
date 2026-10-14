@@ -168,6 +168,7 @@ public class SimHardeningQaTests
 
         Simulation full = LongWall(closedAtTheBottom: false, buildingCapacity: 1);
         Give(full, 0, 1_000_000, 1_000_000);
+        TestSim.KeepIn(full, 0); // BUG-0705 (M5-4e): a House alone doesn't keep player 0 in, and its 100 SpawnUnits would be dropped
         Building(full, 20, 60, type: House);
         Assert.False(full.World.CanPlace(0, House, Cell(full, 64, 1), out why));
         Assert.Equal(PlacementError.StoreFull, why);

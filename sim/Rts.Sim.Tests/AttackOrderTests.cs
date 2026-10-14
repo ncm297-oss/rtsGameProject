@@ -525,6 +525,7 @@ public class AttackOrderTests
     {
         Simulation sim = Flat(units: 8);
         UnitStore u = sim.World.Units;
+        TestSim.KeepIn(sim, 1); // BUG-0706 (M5-4e): a Tent alone doesn't keep player 1 in, and its HoldPosition would be dropped
         EntityHandle tent = PlaceTent(sim, 20, 22);
         EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 17, 23));
         Vector2 first = At(sim, 19, 23);
@@ -539,6 +540,7 @@ public class AttackOrderTests
         Vector2 to = point switch { 0 => first, 1 => At(sim, 19, 23, dx: -0.8f, dy: 0.8f), _ => u.Position[e.Index] };
         sim.Enqueue(Command.AttackMove(0, a, to));
         Apply(sim);
+        Assert.True(u.Hold[e.Index], "BUG-0706: the Raider's HoldPosition was dropped (player 1 out)");
         if (takesRaider)
         {
             Assert.Equal(e, u.Target[a.Index]);
@@ -561,6 +563,7 @@ public class AttackOrderTests
     {
         Simulation sim = Flat(units: 8);
         UnitStore u = sim.World.Units;
+        TestSim.KeepIn(sim, 1); // BUG-0706 (M5-4e): a Tent alone doesn't keep player 1 in, and the Raider's Attack would be dropped
         EntityHandle tent = PlaceTent(sim, 20, 22);
         EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 17, 23));
         sim.Enqueue(Command.AttackMove(0, a, At(sim, 19, 23)));
@@ -575,5 +578,6 @@ public class AttackOrderTests
         Assert.Equal(r, u.LastAttacker[a.Index]);
         RunUntil(sim, () => u.Hp[r.Index] < full, 200);
         Assert.True(u.Hp[r.Index] < full, "it never struck the Raider back");
+        Assert.False(sim.World.IsDefeated(1), "BUG-0706: player 1 was out, so the Raider's Attack was dropped");
     }
 }

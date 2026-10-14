@@ -253,7 +253,7 @@ public class ResearchQaTests
     {
         Simulation sim = BuildMaps.NewSim(Flat(48, 32), units: 16, players: 2);
         TestSim.KeepIn(sim, 0); // M5-4e: a unit keeps the player in (a House, Forge, depot, tower or site alone no longer does)
-        TestSim.KeepIn(sim, 1);
+        TestSim.KeepIn(sim, 1, nearCorner: true); // not the same corner as player 0's keeper: with combat on they would fight
         int a = Building(sim, 10, 10, type: Armory).Index;
         int s = Building(sim, 30, 10, player: 1, type: Smithy).Index;
         SetTotals(sim, 0, Start, Start);
@@ -361,7 +361,7 @@ public class ResearchQaTests
         var oracle = new TechBonusOracle(TestDataDir.Shipped);
         Simulation sim = BuildMaps.NewSim(Flat(48, 32), units: 16, players: 2);
         TestSim.KeepIn(sim, 0); // M5-4e: a unit keeps the player in (a House, Forge, depot, tower or site alone no longer does)
-        TestSim.KeepIn(sim, 1);
+        TestSim.KeepIn(sim, 1, nearCorner: true); // not the same corner as player 0's keeper: with combat on they would fight
         int[] forge = { Building(sim, 10, 10, type: Armory).Index, Building(sim, 30, 10, player: 1, type: Smithy).Index };
         int[] hall = { Building(sim, 10, 20).Index, Building(sim, 30, 20, player: 1, type: HolyCamp).Index };
         // M3-6: Age II needs two hall slots (the Forge is one); research goes in id order, so Age II (id 0) comes first.

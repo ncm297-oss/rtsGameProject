@@ -5413,7 +5413,9 @@ game/tests/AiSeatTest.tscn      the headless AI seat test (in the scene loop)
   building is never reported; one that rebuilds and loses everything again is reported again. Allocation-free. This is
   neither the victory screen nor the rule: docs/02 "Victory/defeat" belongs to the sim (Requests 37: `World.IsDefeated(p)`
   or a match-over event), and the screen and stats come after that. Since M6-V4 the line is printed once per
-  `World.DefeatEvents` entry instead ("Implementation (M6-V4)"); `ViewApi/MatchOver` is no longer used by `Match`.
+  `World.DefeatEvents` entry instead ("Implementation (M6-V4)"); `ViewApi/MatchOver` is no longer used by `Match`. Since
+  M5-4e a defeat no longer means "no buildings left" (a player is out with no unit and no finished unit-producing building),
+  so the line's wording is stale.
 - **BUG-0580.** A paused node gets no input, so a button released while the match was paused never reached `RtsCamera`
   (middle-button drag) or `SelectionController` (left-button press or box). Both now drop their held state on
   `NotificationPaused` and `NotificationUnpaused`: the press is dropped, nothing is selected by it, and the box hides.
@@ -5662,7 +5664,8 @@ game/tests/MatchOverViewTest.tscn the headless banner and stats test (in the sce
 
 - **The rule (presentation state, read-only).** After every tick (`SimRunner.Ticked`, so several a frame at speed),
   `Match` reads `World.DefeatEvents`: each entry prints `Match over: player p has no buildings left (tick n)` (the old
-  text; n is `TickNumber`, the event's tick + 1) and stamps `Match.DefeatedAt(p)` = the event's tick + 1, the match clock at
+  text, stale since M5-4e: a defeated player may still have a House, Forge, tower or site standing, see "Implementation
+  (M5-4e)"; the line is the view's to reword; n is `TickNumber`, the event's tick + 1) and stamps `Match.DefeatedAt(p)` = the event's tick + 1, the match clock at
   the end of the tick the player fell in. Then, while `Match.Outcome` is `None`, the local result for **the local player,
   slot 0** (`SelectionController.LocalPlayer`; `Match.ResultFor`): **Draw** when `Simulation.MatchOver` and no player that
   ever built stands (the last ones fell on one tick); else **Defeat** the moment `World.IsDefeated(0)`, whether or not
@@ -6386,7 +6389,8 @@ count). No `Command` kind, no knob, no data change; M5-4b's flags, event, latch,
 - **The rule.** A player is **defeated** when it has built (`EverBuilt`, unchanged: set when any building of its is placed,
   a site too) **and** `LiveUnits[p] == 0` **and** `ProductionBuildings[p] == 0`. **A production building** is a **finished**
   building whose type trains at least one unit (`GameData.UnitsTrainedAt(type)` non-empty; with today's data the Town Hall
-  and the five unit halls of each faction). Houses, camps, the Forge, towers and every unfinished site don't keep a side in
+  and the five unit halls of each faction, the Whirlwind's Holy / Raider / Archer Camp among them). Houses, the drop-off
+  camp slot (Quartermaster's Depot / Supply Cache), the Forge, towers and every unfinished site don't keep a side in
   (they stay standing after the defeat). **A unit** is any live unit, a summoned one (M4-4b-3b) included while it lives: its
   expiry in phase 5 can end a side on that tick. **The never-built exception**: a player that never had a building is never
   defeated (its units can all die), so units-only sandboxes keep working. Evaluated once a tick in phase 11b, as before, in
