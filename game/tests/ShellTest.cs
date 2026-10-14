@@ -195,7 +195,7 @@ public partial class ShellTest : Node
         foreach (PauseText k in Enum.GetValues<PauseText>()) keys.Add(("pause", UiText.Key(k), _ui.Pause(k)));
         foreach (SettingsText k in Enum.GetValues<SettingsText>()) keys.Add(("settings", UiText.Key(k), _ui.Settings(k)));
         foreach (MatchOverText k in Enum.GetValues<MatchOverText>()) keys.Add(("match_over", UiText.Key(k), _ui.MatchOver(k)));
-        Check(keys.Count == 4 + 15 + 4 + 21 + 18, $"{keys.Count} shell keys");
+        Check(keys.Count == 4 + 15 + 4 + 22 + 18, $"{keys.Count} shell keys"); // settings: 22 since M6-V7 (confine_cursor)
         string json = File.ReadAllText(UiText.DefaultPath).Replace("\r\n", "\n");
         foreach ((string section, string key, string text) in keys)
         {

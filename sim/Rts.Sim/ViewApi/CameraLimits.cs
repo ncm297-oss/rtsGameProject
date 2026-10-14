@@ -44,4 +44,21 @@ public static class CameraLimits
 
     /// <summary>Pan speed in meters per second at a zoom.</summary>
     public static float PanSpeed(float zoom) => ClampZoom(zoom) * PanSpeedPerZoom;
+
+    /// <summary>
+    /// The edge pan's direction for a cursor at <paramref name="mouse"/> in a viewport of <paramref name="size"/> pixels: -1 / +1
+    /// per axis inside a band of <paramref name="band"/> pixels at that edge, else 0; zero outside the viewport (the cursor is
+    /// on another window or monitor) and for NaN. M6-V7: the band is <c>[0, band)</c> and <c>[size - band, size]</c>, so the last
+    /// pixel column / row (<c>size - 1</c>, where a confined cursor stops) and the border itself pan.
+    /// </summary>
+    public static Vector2 EdgeDirection(Vector2 mouse, Vector2 size, float band)
+    {
+        if (!(mouse.X >= 0f && mouse.Y >= 0f && mouse.X <= size.X && mouse.Y <= size.Y)) return Vector2.Zero;
+        var d = Vector2.Zero;
+        if (mouse.X < band) d.X = -1f;
+        else if (mouse.X >= size.X - band) d.X = 1f;
+        if (mouse.Y < band) d.Y = -1f;
+        else if (mouse.Y >= size.Y - band) d.Y = 1f;
+        return d;
+    }
 }

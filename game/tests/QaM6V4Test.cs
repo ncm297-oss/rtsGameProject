@@ -16,17 +16,22 @@ namespace Rts.Game.Tests;
 
 /// <summary>
 /// QA M6-V4 (2026-10-13-1616): attacks on the match-over banner and the stats screen the dev scene doesn't make, through the
-/// shell (<c>Main.tscn</c>, dev matches <c>--units 0 --no-bases --speed 8</c>, set up by commands):
+/// shell (<c>Main.tscn</c>, dev matches <c>--units 0 --no-bases --speed 8</c>, set up by commands). Re-staged by the dev in
+/// M6-V7 (Requests 40, <see cref="DefeatStaging"/>) so every defeat lands on the same tick under the M5-4b rule (the last
+/// building) and the M5-4e one (no unit, no finished unit-producing building): each loser's only building is a finished
+/// training hall and its units are dead before that hall falls. No check was changed but the stats' row count of the
+/// all-three Draw, which now has a fourth seat (the executioner, which never builds).
 /// <list type="bullet">
 /// <item>Orders on the defeat tick: the local player keeps ordering its worker every frame and from the Ticked handler of the
 /// tick it falls in. No exception; after Continue the worker's Move orders (selection and right-click) are dropped (it
 /// doesn't move), the build ghost reads <c>placement.defeated</c>, a ghost click places nothing.</item>
-/// <item>Three seats falling together (sites cancelled on one tick): 0 + 1 (2 stands) → Defeat, 1 + 2 → Victory, all three →
+/// <item>Three seats falling together (their halls, translated copies, shelled by identical batteries of the standing seat, or
+/// for all three of a fourth seat that never builds, on one tick): 0 + 1 (2 stands) → Defeat, 1 + 2 → Victory, all three →
 /// Draw; one banner each, the dev line count equal to the <c>DefeatEvents</c> seen, the stats' defeat cells equal.</item>
 /// <item>Banner vs pause menu: the pause menu up while the killing blow is pending holds the tick and shows no banner; Resume →
 /// the banner with the pause menu hidden; clicks on the HUD area under the banner issue nothing; Continue, then the pause
 /// menu's Settings and back (no main menu over the match, Stats still offered); the stats after Continue follow the sim
-/// (a later kill and the longer clock).</item>
+/// (a later kill, of a third seat's unit, and the longer clock).</item>
 /// <item>The setup screen's Start after a banner match: no banner, no stats, the pause menu without Stats.</item>
 /// </list>
 /// </summary>
@@ -37,6 +42,7 @@ public partial class QaM6V4Test : Node
 
     private readonly List<string> _failures = new();
     private readonly List<DefeatEvent> _events = new();
+    private readonly List<int> _unitsAtDefeat = new(); // each loser's live units on its defeat's tick (M6-V7 staging: 0)
     private GameData _data = null!;
     private UiText _ui = null!;
     private Main _main = null!;
@@ -103,19 +109,37 @@ public partial class QaM6V4Test : Node
                 }
         };
         EntityHandle own = BuildingOf(w, 0);
-        await Army(sim, 1, own, 6);
-        Raze(sim, 1, own);
+        // M6-V7 staging: player 1's line kills the worker first, then its siege razes the hall, so player 0 has no unit when
+        // its only building falls (the defeat's tick is the hall's under both win rules). The orders keep coming every frame
+        // throughout: to the live worker, then to a selection that has lost it.
         var clock = System.Diagnostics.Stopwatch.StartNew();
+        int stage = 0, stageTick = sim.TickNumber;
+        DefeatStaging.SpawnKillers(sim, _data, 1, 0);
         while (!_main.BannerUp && clock.Elapsed.TotalSeconds < 90)
         {
             selection.Order(CommandKind.Move, here, queued: false); // a click every frame up to the defeat: stays put
             await Frames(1);
+            if (stage == 0 && sim.TickNumber >= stageTick + 2 && DefeatStaging.AttackVictims(sim, 1, 0)) stage = 1;
+            else if (stage == 1 && DefeatStaging.UnitsOf(w, 0).Count == 0)
+            {
+                Army(sim, 1, own, 6);
+                stage = 2;
+                stageTick = sim.TickNumber;
+            }
+            else if (stage == 2 && sim.TickNumber >= stageTick + 3)
+            {
+                Raze(sim, 1, own);
+                stage = 3;
+            }
         }
+        Check(stage == 3 && _unitsAtDefeat.Count == 1 && _unitsAtDefeat[0] == 0, $"defeat-tick staging: stage {stage}, player 0's units at its defeat [{string.Join(", ", _unitsAtDefeat)}] (want [0])");
         Check(_main.BannerUp && match.Outcome == MatchOutcome.Defeat && onTheTick == 1 && match.MatchOverLines == _events.Count && _events.Count == 1,
             $"defeat-tick orders: banner {_main.BannerUp}, outcome {match.Outcome}, on-the-tick orders {onTheTick}, lines {match.MatchOverLines}, events {_events.Count}");
         await Click(_main.Banner!.ContinueButton);
         Check(!GetTree().Paused && !_main.Banner.Visible, "Continue after Defeat did not resume");
-        System.Numerics.Vector2 at = w.Units.Position[worker.Index];
+        // The worker is dead by the staging (its slot may hold a killer now): where it stood is its explored home.
+        bool workerAlive = w.Units.Alive[worker.Index] && w.Units.Generation[worker.Index] == worker.Generation;
+        System.Numerics.Vector2 at = workerAlive ? w.Units.Position[worker.Index] : home;
         // Orders after the defeat: every one is dropped by the sim (the worker stays where it was).
         for (int i = 0; i < 5; i++)
         {
@@ -169,25 +193,49 @@ public partial class QaM6V4Test : Node
 
     private async Task TogetherInThreeSeats(int[] fall, MatchOutcome want, string how)
     {
-        _main.BeforeStart = m => m.GetNode<SimRunner>("SimRunner").PlayerCount = 3;
+        // M6-V7 staging: the fallers each own one hall (alike, translated copies) and no unit; one executioner shells them all
+        // with identical batteries ordered on one tick, so they fall together under either win rule. With a seat standing the
+        // executioner is that seat (it owns a hall: it built, so it stands); for all three it is a fourth seat that never
+        // builds (outside the match-over count, so nobody stands: a Draw).
+        int seats = fall.Length == 3 ? 4 : 3;
+        int executioner = Enumerable.Range(0, seats).First(p => !fall.Contains(p));
+        _main.BeforeStart = m => m.GetNode<SimRunner>("SimRunner").PlayerCount = seats;
         _main.StartSkirmish(Args);
         _main.BeforeStart = null;
         Match match = Watch(_main.CurrentMatch);
         Simulation sim = match.Simulation!;
         World w = sim.World;
         NavGrid g = w.NavGrid;
-        await Scouts(sim, 3);
-        var sites = new System.Numerics.Vector2[3];
-        for (int p = 0; p < 3; p++)
+        if (seats == 3)
         {
-            int house = StartBase.BuildingOfSlot(_data, w.FactionOf(p), BuildingSlot.House);
-            int anchor = Anchor(w, p, house, Spots(g)[p].X + 3, Spots(g)[p].Y + 3);
-            sites[p] = g.CellCenter(anchor % g.Width, anchor / g.Width);
-            sim.Enqueue(Command.Build(p, UnitsOf(w, p)[0], house, sites[p]));
+            int own = DefeatStaging.Hall(_data, w, executioner);
+            DefeatStaging.SpawnAt(sim, executioner, own, DefeatStaging.Anchor(w, executioner, own, Spots(g)[executioner].X, Spots(g)[executioner].Y));
+            await Ticks(sim, 3);
+        }
+        int[] halls = DefeatStaging.Halls(_data, w, fall, out bool alike);
+        Check(alike, $"{how}: the fallers' halls differ: no simultaneous fall");
+        int[] anchors = DefeatStaging.Row(w, fall, halls);
+        for (int k = 0; k < fall.Length; k++) DefeatStaging.SpawnAt(sim, fall[k], halls[k], anchors[k]);
+        await Ticks(sim, 3);
+        Check(w.Buildings.Count == 3, $"{how}: {w.Buildings.Count} halls (want 3)");
+        int shooter = DefeatStaging.Shooter(_data);
+        var batteries = new System.Numerics.Vector2[fall.Length][];
+        for (int k = 0; k < fall.Length; k++)
+        {
+            batteries[k] = DefeatStaging.Battery(g, _data.Buildings[halls[k]], anchors[k]);
+            foreach (System.Numerics.Vector2 at in batteries[k]) sim.Enqueue(Command.SpawnUnit(executioner, shooter, at));
         }
         await Ticks(sim, 3);
-        Check(w.Buildings.Count == 3, $"{how}: {w.Buildings.Count} sites (want 3)");
-        foreach (int p in fall) sim.Enqueue(Command.Cancel(p, sites[p]));
+        var guns = new EntityHandle[fall.Length][];
+        for (int k = 0; k < fall.Length; k++)
+        {
+            EntityHandle target = DefeatStaging.BuildingAt(w, fall[k], anchors[k]);
+            guns[k] = batteries[k].Select(at => DefeatStaging.UnitAt(w, executioner, at)).ToArray();
+            Check(target != default && guns[k].All(h => h != default), $"{how}: hall {k} {target}, guns [{string.Join(", ", guns[k])}]");
+            foreach (EntityHandle gun in guns[k]) if (gun != default && target != default) sim.Enqueue(Command.Attack(executioner, gun, target, isBuilding: true));
+        }
+        Check(DefeatStaging.SamePhase(guns) && fall.All(p => DefeatStaging.UnitsOf(w, p).Count == 0) && w.EverBuilt(executioner) == (seats == 3),
+            $"{how} staging: guns [{string.Join(" | ", guns.Select(b => string.Join(",", b.Select(h => h.Index))))}], fallers' units {string.Join("/", fall.Select(p => DefeatStaging.UnitsOf(w, p).Count))}, executioner {executioner} built {w.EverBuilt(executioner)}");
         var clock = System.Diagnostics.Stopwatch.StartNew();
         while (!_main.BannerUp && clock.Elapsed.TotalSeconds < 30) await Frames(1);
         MatchOverBanner banner = _main.Banner!;
@@ -202,13 +250,13 @@ public partial class QaM6V4Test : Node
             await Click(banner.StatsButton);
             MatchStats stats = _main.Stats!;
             int col = Array.FindIndex(MatchStats.Columns, c => c.Label == MatchOverText.DefeatedAt);
-            for (int p = 0; p < 3; p++)
+            for (int p = 0; p < seats; p++)
             {
                 string cell = stats.Cell(p, col);
                 string expect = fall.Contains(p) ? _ui.Clock(_events[0].Tick + 1) : _ui.MatchOver(MatchOverText.Standing);
                 Check(cell == expect, $"{how}: row {p} defeated '{cell}' (want '{expect}')");
             }
-            Check(stats.RowCount == 3, $"{how}: {stats.RowCount} stats rows");
+            Check(stats.RowCount == seats, $"{how}: {stats.RowCount} stats rows (want {seats}, one per seat)");
             await Click(stats.BackButton);
             await Click(banner.ContinueButton);
             await Ticks(sim, 20);
@@ -219,14 +267,28 @@ public partial class QaM6V4Test : Node
 
     private async Task BannerVersusPause()
     {
+        // M6-V7 staging: a third seat that never builds (outside the match-over count) holds the unit the stats' later kill
+        // takes, since a player defeated under the M5-4e rule has no unit left; player 1's scout dies before its hall falls.
+        _main.BeforeStart = m => m.GetNode<SimRunner>("SimRunner").PlayerCount = 3;
         _main.StartSkirmish(Args);
+        _main.BeforeStart = null;
         Match match = Watch(_main.CurrentMatch);
         Simulation sim = match.Simulation!;
         World w = sim.World;
         var selection = match.GetNode<SelectionController>("SelectionController");
         await Bases(sim, 2);
+        DefeatStaging.SpawnKillers(sim, _data, 0, 1);
+        int far = FlowField.NearestPassable(w.NavGrid, Spots(w.NavGrid)[2].Y * w.NavGrid.Width + Spots(w.NavGrid)[2].X);
+        sim.Enqueue(Command.SpawnUnit(2, StartBase.UnitOfSlot(_data, w.FactionOf(2), UnitSlot.Worker), w.NavGrid.CellCenter(far % w.NavGrid.Width, far / w.NavGrid.Width)));
+        await Ticks(sim, 2);
+        DefeatStaging.AttackVictims(sim, 0, 1);
+        var until = System.Diagnostics.Stopwatch.StartNew();
+        while (DefeatStaging.UnitsOf(w, 1).Count > 0 && until.Elapsed.TotalSeconds < 30) await Frames(1);
+        Check(DefeatStaging.UnitsOf(w, 1).Count == 0 && DefeatStaging.UnitsOf(w, 2).Count == 1 && !w.EverBuilt(2),
+            $"banner staging: player 1 units {DefeatStaging.UnitsOf(w, 1).Count} (want 0), seat 2 units {DefeatStaging.UnitsOf(w, 2).Count}, built {w.EverBuilt(2)}");
         EntityHandle target = BuildingOf(w, 1);
-        await Army(sim, 0, target, 6);
+        Army(sim, 0, target, 6);
+        await Ticks(sim, 3);
         Raze(sim, 0, target);
         // Pause at once: the attack is pending, nothing may tick and no banner may open under the pause menu.
         await Type(Key.Escape);
@@ -267,10 +329,10 @@ public partial class QaM6V4Test : Node
         Check(_main.SettingsScreen is { Visible: false } && _main.Paused && _main.Menu is not { Visible: true } && _main.CurrentMatch == match,
             $"settings Back after a banner: settings {_main.SettingsScreen.Visible}, pause {_main.Paused}, menu {_main.Menu?.Visible}");
         await Click(pause.ResumeButton);
-        // The stats after Continue follow the sim: player 0's fresh shock units kill player 1's scout (a defeated player's
-        // units stay), the clock moves on.
-        List<EntityHandle> theirs = UnitsOf(w, 1);
-        Check(theirs.Count > 0, "player 1 has no unit left to kill");
+        // The stats after Continue follow the sim: player 0's fresh shock units kill seat 2's worker (a defeated player has no
+        // unit left under the M5-4e rule, so the later kill is a third seat's), the clock moves on.
+        List<EntityHandle> theirs = UnitsOf(w, 2);
+        Check(theirs.Count > 0, "seat 2 has no unit left to kill");
         if (theirs.Count > 0)
         {
             System.Numerics.Vector2 by = w.Units.Position[theirs[0].Index];
@@ -338,11 +400,21 @@ public partial class QaM6V4Test : Node
         _events.Clear();
         _ended = 0;
         match.Ended += _ => _ended++;
-        match.GetNode<SimRunner>("SimRunner").Ticked += s => { foreach (DefeatEvent e in s.World.DefeatEvents) _events.Add(e); };
+        _unitsAtDefeat.Clear();
+        match.GetNode<SimRunner>("SimRunner").Ticked += s =>
+        {
+            foreach (DefeatEvent e in s.World.DefeatEvents)
+            {
+                _events.Add(e);
+                _unitsAtDefeat.Add(DefeatStaging.UnitsOf(s.World, e.Player).Count);
+            }
+        };
         match.GetNode<RtsCamera>("RtsCamera").EdgePanEnabled = false;
         return match;
     }
 
+    // M6-V7: a scout and one finished training hall per player (not a House: the M5-4e rule doesn't count a House); a test
+    // that lets a player fall kills its scout first (DefeatStaging.SpawnKillers).
     private async Task Bases(Simulation sim, int players)
     {
         World w = sim.World;
@@ -350,9 +422,8 @@ public partial class QaM6V4Test : Node
         await Scouts(sim, players);
         for (int p = 0; p < players; p++)
         {
-            int house = StartBase.BuildingOfSlot(_data, w.FactionOf(p), BuildingSlot.House);
-            int anchor = Anchor(w, p, house, Spots(g)[p].X, Spots(g)[p].Y);
-            sim.Enqueue(Command.SpawnBuilding(p, house, g.CellCenter(anchor % g.Width, anchor / g.Width)));
+            int hall = DefeatStaging.Hall(_data, w, p);
+            DefeatStaging.SpawnAt(sim, p, hall, DefeatStaging.Anchor(w, p, hall, Spots(g)[p].X, Spots(g)[p].Y));
         }
         await Ticks(sim, 3);
         Check(w.Buildings.Count == players, $"{w.Buildings.Count} buildings placed (want {players})");
@@ -372,7 +443,8 @@ public partial class QaM6V4Test : Node
         await Ticks(sim, 6);
     }
 
-    private async Task Army(Simulation sim, int player, EntityHandle target, int n)
+    // Enqueues the spawns; the caller waits a few ticks before ordering them.
+    private void Army(Simulation sim, int player, EntityHandle target, int n)
     {
         World w = sim.World;
         NavGrid g = w.NavGrid;
@@ -385,7 +457,6 @@ public partial class QaM6V4Test : Node
             int c = FlowField.NearestPassable(g, y * g.Width + x);
             sim.Enqueue(Command.SpawnUnit(player, line, g.CellCenter(c % g.Width, c / g.Width)));
         }
-        await Ticks(sim, 3);
     }
 
     private static void Raze(Simulation sim, int player, EntityHandle target)
@@ -406,20 +477,6 @@ public partial class QaM6V4Test : Node
         BuildingStore b = w.Buildings;
         for (int i = 0; i < b.Capacity; i++) if (b.Alive[i] && b.Owner[i] == player) return new EntityHandle(i, b.Generation[i]);
         throw new InvalidOperationException($"player {player} has no building");
-    }
-
-    private static int Anchor(World w, int player, int type, int x0, int y0)
-    {
-        NavGrid g = w.NavGrid;
-        for (int r = 0; r < 30; r++)
-            for (int dy = -r; dy <= r; dy++)
-                for (int dx = -r; dx <= r; dx++)
-                {
-                    if (Math.Max(Math.Abs(dx), Math.Abs(dy)) != r) continue;
-                    int x = x0 + dx, y = y0 + dy;
-                    if (x >= 0 && y >= 0 && x < g.Width && y < g.Height && w.CanPlace(player, type, y * g.Width + x, out _)) return y * g.Width + x;
-                }
-        throw new InvalidOperationException($"no anchor for player {player} near ({x0}, {y0})");
     }
 
     private async Task QuitMatch()

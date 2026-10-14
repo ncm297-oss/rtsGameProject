@@ -3226,7 +3226,8 @@ Godot starts children before parents, so `Main._Ready` loads the data and then c
 - **Camera:** state is a ground focus point and a zoom (height above the focus, 20-60 m, default
   40, 4 m per wheel notch). The camera sits `zoom / tan 55°` behind the focus on +Z, looking
   toward -Z, so screen-up is map -Z. Pan: arrow keys, an 8 px screen-edge band (off for scripted
-  screenshots and when the window is unfocused), middle-mouse drag; speed is `zoom × 1` m/s. The
+  screenshots and when the window is unfocused; since M6-V7 `CameraLimits.EdgeDirection`, the last pixel included, and the
+  cursor confined to the window in a running match: "Implementation (M6-V7)"), middle-mouse drag; speed is `zoom × 1` m/s. The
   focus is clamped to `[0, Width·2] × [0, Height·2]`. Limits live in the pure
   `Rts.Sim.ViewApi.CameraLimits`. Input actions in `project.godot`: `camera_pan_left/right/up/down`
   (arrows), `camera_zoom_in/out` (wheel), `camera_drag` (middle button).
@@ -3380,7 +3381,7 @@ is in `SelectionController`, two pure ViewApi helpers, and the input map.
   a recall of another group in between breaks the pair; times are rounded to whole milliseconds
   before comparing, so a gap of exactly 300 ms is a double-tap at any clock value, BUG-0067) centres the camera on the group's mean
   position (`TryMean`, current tick positions); the double-tap is consumed, so a third press
-  starts a new pair.
+  starts a new pair. Since M6-V7 a group can hold one building instead of units ("Implementation (M6-V7)").
 - **Tab subgroups:** the pure `ViewApi.Subgroups` lists the selection's distinct unit types in
   ascending type id (one pass over the selection and one over the type ids; no sort, no
   allocation after construction) and keeps an active index. Tab advances and wraps; with an
@@ -5378,7 +5379,7 @@ game/scripts/LaunchOptions.cs   --faction <slot> <id>, --ai <easy|normal|hard>
 game/scripts/SimRunner.cs       SlotFactions, Player1Ai -> explicit SimConfig.Seats (SimRunner.Seats, BuildSeats)
 game/scripts/Match.cs           resolves the picks against the data; the "Match over:" dev line
 game/scripts/RtsCamera.cs, SelectionController.cs   held buttons dropped on pause / resume (BUG-0580)
-sim/Rts.Sim/ViewApi/MatchOver.cs   per-player building count watch (read-only)
+sim/Rts.Sim/ViewApi/MatchOver.cs   per-player building count watch (read-only; deleted in M6-V7, BUG-0710)
 game/tests/AiSeatTest.tscn      the headless AI seat test (in the scene loop)
 ```
 
@@ -5412,7 +5413,8 @@ game/tests/AiSeatTest.tscn      the headless AI seat test (in the scene loop)
   building is never reported; one that rebuilds and loses everything again is reported again. Allocation-free. This is
   neither the victory screen nor the rule: docs/02 "Victory/defeat" belongs to the sim (Requests 37: `World.IsDefeated(p)`
   or a match-over event), and the screen and stats come after that. Since M6-V4 the line is printed once per
-  `World.DefeatEvents` entry instead ("Implementation (M6-V4)"); `ViewApi/MatchOver` is no longer used by `Match`.
+  `World.DefeatEvents` entry instead ("Implementation (M6-V4)"); `ViewApi/MatchOver` is no longer used by `Match`
+  (deleted with its tests in M6-V7; the line reads `Match over: player p is defeated (tick n)` since then).
 - **BUG-0580.** A paused node gets no input, so a button released while the match was paused never reached `RtsCamera`
   (middle-button drag) or `SelectionController` (left-button press or box). Both now drop their held state on
   `NotificationPaused` and `NotificationUnpaused`: the press is dropped, nothing is selected by it, and the box hides.
@@ -5424,7 +5426,7 @@ game/tests/AiSeatTest.tscn      the headless AI seat test (in the scene loop)
   `slot_human`, `slot_ai`, `faction`, `difficulty`, `difficulty_easy`, `difficulty_normal`, `difficulty_hard`, `start`,
   `back`.
 - **Tests.**
-  - xUnit `ViewApi/MatchOverTests`. Hand-built spans: 1 -> 0 reported once, 0 from the start never, rebuilt then razed
+  - xUnit `ViewApi/MatchOverTests` (deleted in M6-V7 with the class). Hand-built spans: 1 -> 0 reported once, 0 from the start never, rebuilt then razed
     reported again, two players together, stray owners. A hand-built world whose only site is cancelled twice is reported
     on the tick each Cancel applies. The default match (100 units and a base a side, combat on) runs 400 ticks on two seeds
     and reports nothing. `Observe` allocates nothing.
@@ -5573,6 +5575,7 @@ game/tests/SettingsTest.tscn      the headless settings test (in the scene loop)
   | `display` | `quality` | `"low"`, `"medium"`, `"high"` | `"medium"` |
   | `audio` | `master`, `music`, `sfx` | whole numbers, 0-100 | 100 each |
   | `camera` | `edge_pan` | number, 0.5-2.0 | 1.0 |
+  | `camera` | `confine_cursor` | `true` / `false` (M6-V7; may be missing) | `true` |
 
   Written (whole) by Apply, Back, Esc and Defaults, through `System.IO`; a folder that can't be written is one warning
   and the picks apply for the run. Read at boot: no file is the defaults and one info line; a file that can't be read,
@@ -5709,7 +5712,7 @@ game/tests/MatchOverViewTest.tscn the headless banner and stats test (in the sce
   C# text on screen.
 - **`ViewApi/MatchOver` is kept** (not deleted as the brief suggested): QA's `QA/ViewApi/MatchOverQaTests` and the sim's
   `ViewApi/MatchOverTests` test it, and a dev doesn't delete QA rows; nothing in the game uses it now. Delete it with
-  those tests when QA agrees.
+  those tests when QA agrees. (QA agreed in BUG-0710; deleted with both test files in M6-V7.)
 - **BUG-0674.** `AiSeatTest.MatchOverLine` asserts the real rule: the cancel of player 0's only site defeats it (one
   `DefeatEvent`, one line, the outcome Defeat, `MatchOver` false: nobody else built), and its second `Build` is dropped at
   the door (no building, still one line); the dev line count equals the `DefeatEvents` seen.
@@ -5727,7 +5730,73 @@ game/tests/MatchOverViewTest.tscn the headless banner and stats test (in the sce
   fails on the paused rows. `ShellTest`: the 18 keys by name (62 shell keys), each missing one and the section one error
   naming it, seven bad `clock` / `match_length` formats refused. `SettingsTest`: 18-, 19- and 64-digit ints, 20 digits with
   a fraction and with an exponent (no engine ERROR in the scene's log). Windowed with `-- --shots <dir>` the test saves
-  `matchover-banner.png` and `matchover-stats.png`.
+  `matchover-banner.png` and `matchover-stats.png`. (Re-staged in M6-V7 for the M5-4e win rule: "Implementation (M6-V7)".)
+
+### Implementation (M6-V7)
+
+Edge pan with the cursor confined to the window, control groups that hold a building, BUG-0710, and the match-over scenes
+re-staged for the new win rule (the owner's playtest notes 1 and 7, STATE Requests 40).
+
+- **Cursor confinement.** The owner's second monitor sits beside the window, so on that side the cursor left the window
+  and `RtsCamera`'s edge band never saw it. `Main._Process` (Main runs `Always`, so it sees paused frames) sets
+  `Input.MouseMode = Confined` while `ViewApi.CursorConfine.Wanted(matchRunning, paused, focused, allowed)` holds and
+  `Visible` otherwise: a match exists, the tree is not paused (the pause menu, the banner, the stats screen and settings
+  over the pause menu all pause it; the main menu, setup and settings from the menu have no match), the window has focus
+  (`DisplayServer.WindowIsFocused`, so Alt-Tab frees it), and `Main.ConfineAllowed` (the setting, no `--no-confine`, a real
+  window: never headless). Only changes are applied, each logged as `Cursor: confined` / `Cursor: visible`;
+  `Main.CursorConfined` holds the state, and `_ExitTree` frees the cursor. `--no-confine` is a shell flag read by `Main`,
+  not one of `LaunchOptions.MatchFlags` (alone it still shows the menu). The scripted scenes need no opt-out: headless
+  never confines, and a windowed scene that drives input by events is unaffected by a confined cursor.
+- **The edge band.** `CameraLimits.EdgeDirection(mouse, size, band)` is the rule `RtsCamera` uses: -1 for `x < band`, +1 for
+  `x >= size.X - band` (likewise y), zero outside `[0, size]` or for NaN. The band is 8 px on every side (it was 7 on the
+  right and bottom: `x > size - 8`), so the last pixel column / row, where a confined cursor stops, pans; so does the
+  border itself. The minimap still blocks the band under it.
+- **The setting.** `GameSettings.ConfineCursor` (default on), `camera.confine_cursor` in `settings.cfg`, a check box on the
+  settings screen labelled `settings.confine_cursor` (the box has no text of its own). A file without the key (written
+  before M6-V7) reads clean with the default, so the QA reader rows built on a full M6-V6 file stay warning-free; a
+  value that isn't `true` / `false` is one problem and the default. It applies live (Main reads it every frame).
+- **Control groups hold a building.** `ViewApi.ControlGroups` keeps, per group, its `SelectionSet` of units and one building
+  handle (`Building(g)`, Generation 0 = none). A group is units or one building, never both, as the selection is
+  (M3-V2): `AssignBuilding(g, h)` clears the units; `Assign(g, units)` clears the building; `Add(g, units)` clears it when
+  any unit comes in. `RecallBuilding(g, alive, generation)` (the building store's spans) returns the live slot or drops a
+  dead / recycled handle and returns -1; `PruneBuildings` runs every frame beside `Prune`; the double-tap target is
+  `TryBuildingCentre(g, buildings, defs, grid)` (the building's footprint centre, `StartBase.FootprintCenter`), else
+  `TryMean` (ViewApi names no `World` / `UnitStore`: it takes the stores' spans and the building store). In
+  `SelectionController.GroupKey`: Ctrl or Shift + digit with a building selected makes it the group; with no building,
+  Ctrl replaces with the units (an empty selection never wipes a group) and Shift adds; a plain digit selects the group's
+  building (`SelectBuilding`: the card and the panel follow, units cleared) or recalls its units as before; the double-tap
+  centres on either. Allocation-free.
+- **BUG-0710.** (1) `Main.OnMatchEnded` calls `ResourceBar.Sync(world)` before showing the banner: the HUD is `Pausable` and
+  the tree pauses inside the killing tick, so its K / L showed the frame before the kill under the banner. (2)
+  `ViewApi/MatchOver.cs`, `ViewApi/MatchOverTests` and `QA/ViewApi/MatchOverQaTests` are deleted (QA agreed). The dev
+  line now reads `Match over: player p is defeated (tick n)`: the sim's rule decides why.
+- **The match-over scenes re-staged** (`game/tests/DefeatStaging.cs`, shared). Each defeat must land on the same tick under
+  M5-4b's rule (the last building, sites included) and M5-4e's (no live unit and no finished unit-producing building),
+  because the sim's branch changes the rule in the same session. So every loser owns exactly one building, a finished
+  training hall (its faction's infantry hall: it trains a unit), placed by a dev `SpawnBuilding` (no scout needed: a dev
+  spawn doesn't need explored ground), and has no live unit when it falls; a loser that needed a scout loses it first to
+  the winner's Line units. Each scene checks, on each defeat's tick, that the loser had no live unit. A simultaneous fall
+  (a Draw, "0 + 1 together") is two or three alike halls (same footprint, hp, armor) in a row, translated copies, each
+  shelled by an identical battery of four stationary catapults ordered on one tick: combat has no randomness and ignores
+  height, the guns never move, and four guns spawned back to back put gun k of every battery on the same scan phase
+  (`(tick + slot) % CombatConstants.ScanInterval`), checked by `DefeatStaging.SamePhase` (three-gun batteries fell a tick
+  apart). The executioner is the standing seat or, for a Draw, a seat that never builds (both rules leave a never-built
+  seat out of the match-over count). Per scene: `MatchOverViewTest` (Victory / Defeat / three seats: halls, the loser
+  unit-less; Draw: a third seat's batteries; the HUD's K / L under the Victory banner equal the sim's, BUG-0710);
+  `AiSeatTest.MatchOverLine` (player 0's hall razed by player 1's battery, player 1 never builds so `MatchOver` stays
+  false; round 2 is a dev `SpawnBuilding` of the defeated player on open ground, dropped); QA's `QaM6V4Test` (the worker
+  killed before the hall in the defeat-tick row, so its post-defeat Move rows pass on "the worker is dead"; "together"
+  rows with batteries, the all-three Draw with a fourth, never-built seat, so its stats show four rows; the banner-vs-pause
+  row's later kill takes a never-built third seat's worker, since a defeated player has no unit under the new rule).
+- **Tests.** xUnit `ViewApi/CursorConfineTests` (all true → confined; each of the four false → visible; one of 16
+  combinations), `ViewApi/CameraEdgeTests` (the last pixel, the border, the band's first pixel, corners, outside on each
+  side, NaN), `ViewApi/ControlGroupsTests` (+4: assign a building and recall it, units replace a building and a building
+  replaces units, Shift adds units over a building, a razed and a recycled building pruned and never recalled, the
+  double-tap centre on the footprint, none for a unit group or a razed building). `SettingsTest` (confine default on and written, off round-trips,
+  missing reads clean, a number and a string are one problem each; the check box in every flow; headless never confines;
+  turned off from the pause menu it applies live). New `BuildingGroupsTest` scene: Ctrl + 1 on a Billet, 1 selects it
+  (panel name, card = its production entries), Shift + 2 on a Barracks shows its Train button, Ctrl + 1 with a unit and
+  back, a double-tap centres on the Billet's footprint (0.000 m), a cancelled site leaves group 4.
 
 ## AI architecture
 

@@ -16,16 +16,19 @@ namespace Rts.Game.Tests;
 /// <summary>
 /// M6-V4: the match-over banner and the stats screen, through the shell (<c>Main.tscn</c>, a dev match: <c>--units 0
 /// --no-bases</c>, every seat human) and injected clicks and keys. The scenes are set up with commands only (dev
-/// <c>SpawnBuilding</c> / <c>SpawnUnit</c>, then <c>Attack</c>, <c>Build</c>, <c>Cancel</c>):
+/// <c>SpawnBuilding</c> / <c>SpawnUnit</c>, then <c>Attack</c>). M6-V7 (Requests 40): staged so each defeat lands on the
+/// same tick under the M5-4b rule and the M5-4e one (<see cref="DefeatStaging"/>): every loser's only building is a finished
+/// training hall and it has no live unit when the hall falls (checked on the defeat's tick).
 /// <list type="bullet">
-/// <item>Victory: player 0's army razes player 1's only building. The banner shows once, on the tick of the defeat, the tree
+/// <item>Victory: player 0's army razes player 1's only building. The HUD's K / L under the banner equal the sim's (BUG-0710). The banner shows once, on the tick of the defeat, the tree
 /// paused (no tick over real time), its title <c>match_over.victory</c>; Esc opens no pause menu over it. Stats: two rows,
 /// Kills / Losses / gold / wood equal to the sim's spans, the length and player 1's defeat time to the second, "You" and
 /// "Human"; Back returns to the banner. Continue watching unpauses (ticks move), no second banner; Esc is the pause menu,
 /// which now has Stats (the numbers of the moment); Esc closes it, Esc resumes; Quit to menu.</item>
 /// <item>Defeat (a second skirmish from the same shell, no stale banner): player 1 razes player 0's only building; the
 /// banner's Main menu reaches the menu with the match freed (no match node left, the old match invalid, the tree unpaused).</item>
-/// <item>Draw: both players' only sites cancelled on one tick: one banner, <c>match_over.draw</c>.</item>
+/// <item>Draw: both players' halls shelled by identical batteries of a third seat that never builds (outside the match-over
+/// count): both fall on one tick, one banner, <c>match_over.draw</c>.</item>
 /// <item>Three seats: player 0 falls first: Defeat while the sim's <c>MatchOver</c> is still false; Continue; player 2 falls
 /// later (the match is over), and no second banner shows; the stats have three rows.</item>
 /// </list>
@@ -41,6 +44,7 @@ public partial class MatchOverViewTest : Node
 
     private readonly List<string> _failures = new();
     private readonly List<DefeatEvent> _events = new();
+    private readonly List<int> _unitsAtDefeat = new(); // the loser's live units on its defeat's tick (the staging wants 0)
     private GameData _data = null!;
     private UiText _ui = null!;
     private Main _main = null!;
@@ -98,6 +102,10 @@ public partial class MatchOverViewTest : Node
             $"victory: events [{string.Join(", ", _events)}], banner at tick {tick} (want the defeat's tick + 1)");
         Check(GetTree().Paused && banner.Visible && banner.Shown == MatchOutcome.Victory && match.Outcome == MatchOutcome.Victory && sim.MatchOver,
             $"victory: paused {GetTree().Paused}, banner {banner.Visible} {banner.Shown}, outcome {match.Outcome}, MatchOver {sim.MatchOver}");
+        // BUG-0710 item 1: the HUD under the banner shows the killing tick's K / L, the numbers the stats screen shows.
+        ResourceBar bar = match.GetNode<ResourceBar>("Hud/ResourceBar");
+        Check(bar.ShownKills == w.Kills[0] && bar.ShownLosses == w.Losses[0] && w.Kills[0] > 0,
+            $"victory: HUD K / L {bar.ShownKills} / {bar.ShownLosses} under the banner, sim {w.Kills[0]} / {w.Losses[0]}");
         Check(banner.Title.Text == _ui.MatchOver(MatchOverText.Victory) && banner.StatsButton.Text == _ui.MatchOver(MatchOverText.Stats)
             && banner.MenuButton.Text == _ui.MatchOver(MatchOverText.Menu) && banner.ContinueButton.Text == _ui.MatchOver(MatchOverText.Continue),
             $"victory text: '{banner.Title.Text}', '{banner.StatsButton.Text}', '{banner.MenuButton.Text}', '{banner.ContinueButton.Text}'");
@@ -169,24 +177,44 @@ public partial class MatchOverViewTest : Node
 
     private async Task Draw()
     {
+        // M6-V7: a third seat that never builds (so neither rule counts it for the match's end) holds two identical batteries;
+        // players 0 and 1 each own one hall of the same type, translated copies, and no unit. One order: both fall on one tick.
+        _main.BeforeStart = m => m.GetNode<SimRunner>("SimRunner").PlayerCount = 3;
         _main.StartSkirmish(Args);
+        _main.BeforeStart = null;
         Match match = Watch(_main.CurrentMatch);
         Simulation sim = match.Simulation!;
         World w = sim.World;
         NavGrid g = w.NavGrid;
-        // Each player's only building is a site its worker places; both are cancelled on one tick.
-        await Scouts(sim, 2);
-        var sites = new System.Numerics.Vector2[2];
+        int[] halls = DefeatStaging.Halls(_data, w, new[] { 0, 1 }, out bool alike);
+        Check(alike, $"draw: the two halls differ ({_data.Buildings[halls[0]].Key}, {_data.Buildings[halls[1]].Key}): no simultaneous fall");
+        int[] anchors = DefeatStaging.Row(w, new[] { 0, 1 }, halls);
+        for (int p = 0; p < 2; p++) DefeatStaging.SpawnAt(sim, p, halls[p], anchors[p]);
+        await Ticks(sim, 3);
+        Check(w.Buildings.Count == 2, $"draw: {w.Buildings.Count} halls placed (want 2)");
+        int shooter = DefeatStaging.Shooter(_data);
+        var batteries = new System.Numerics.Vector2[2][];
         for (int p = 0; p < 2; p++)
         {
-            int house = StartBase.BuildingOfSlot(_data, w.FactionOf(p), BuildingSlot.House);
-            int anchor = Anchor(w, p, house, Spots(g)[p].X + 3, Spots(g)[p].Y + 3);
-            sites[p] = g.CellCenter(anchor % g.Width, anchor / g.Width);
-            sim.Enqueue(Command.Build(p, UnitsOf(w, p)[0], house, sites[p]));
+            batteries[p] = DefeatStaging.Battery(g, _data.Buildings[halls[p]], anchors[p]);
+            foreach (System.Numerics.Vector2 at in batteries[p]) sim.Enqueue(Command.SpawnUnit(2, shooter, at));
         }
         await Ticks(sim, 3);
-        Check(w.Buildings.Count == 2, $"draw: {w.Buildings.Count} sites placed (want 2)");
-        for (int p = 0; p < 2; p++) sim.Enqueue(Command.Cancel(p, sites[p]));
+        var guns = new EntityHandle[2][];
+        for (int p = 0; p < 2; p++)
+        {
+            EntityHandle target = DefeatStaging.BuildingAt(w, p, anchors[p]);
+            guns[p] = new EntityHandle[batteries[p].Length];
+            for (int k = 0; k < batteries[p].Length; k++)
+            {
+                EntityHandle gun = guns[p][k] = DefeatStaging.UnitAt(w, 2, batteries[p][k]);
+                Check(gun != default && target != default, $"draw: battery {p} gun {k} at {batteries[p][k]}: {gun}, hall {target}");
+                if (gun != default && target != default) sim.Enqueue(Command.Attack(2, gun, target, isBuilding: true));
+            }
+        }
+        Check(DefeatStaging.SamePhase(guns), $"draw: the batteries' guns scan on different ticks: [{string.Join(" | ", guns.Select(b => string.Join(",", b.Select(h => h.Index))))}]");
+        Check(!w.EverBuilt(2) && DefeatStaging.UnitsOf(w, 0).Count == 0 && DefeatStaging.UnitsOf(w, 1).Count == 0,
+            $"draw staging: seat 2 built {w.EverBuilt(2)}, units of 0 / 1: {DefeatStaging.UnitsOf(w, 0).Count} / {DefeatStaging.UnitsOf(w, 1).Count}");
         await UntilBanner(sim, "draw");
         MatchOverBanner banner = _main.Banner!;
         Check(_events.Count == 2 && _events[0].Tick == _events[1].Tick && banner.Title.Text == _ui.MatchOver(MatchOverText.Draw) && match.Outcome == MatchOutcome.Draw,
@@ -274,43 +302,36 @@ public partial class MatchOverViewTest : Node
         _events.Clear();
         _ended = 0;
         match.Ended += _ => _ended++;
-        match.GetNode<SimRunner>("SimRunner").Ticked += s => { foreach (DefeatEvent e in s.World.DefeatEvents) _events.Add(e); };
+        _unitsAtDefeat.Clear();
+        match.GetNode<SimRunner>("SimRunner").Ticked += s =>
+        {
+            foreach (DefeatEvent e in s.World.DefeatEvents)
+            {
+                _events.Add(e);
+                _unitsAtDefeat.Add(DefeatStaging.UnitsOf(s.World, e.Player).Count);
+            }
+        };
         match.GetNode<RtsCamera>("RtsCamera").EdgePanEnabled = false;
         return match;
     }
 
-    // One finished house per player (a dev SpawnBuilding), spread over the map: player 0 west, 1 east, 2 north.
+    // One finished training hall per player (a dev SpawnBuilding: no explored ground needed, so no scout), spread over the map:
+    // player 0 west, 1 east, 2 north. No player gets a unit here: a loser with no unit falls with its hall under both rules.
     private async Task Bases(Simulation sim, int players)
     {
         World w = sim.World;
         NavGrid g = w.NavGrid;
         (int X, int Y)[] at = Spots(g);
-        await Scouts(sim, players);
         for (int p = 0; p < players; p++)
         {
-            int house = StartBase.BuildingOfSlot(_data, w.FactionOf(p), BuildingSlot.House);
-            int anchor = Anchor(w, p, house, at[p].X, at[p].Y);
-            sim.Enqueue(Command.SpawnBuilding(p, house, g.CellCenter(anchor % g.Width, anchor / g.Width)));
+            int hall = DefeatStaging.Hall(_data, w, p);
+            DefeatStaging.SpawnAt(sim, p, hall, DefeatStaging.Anchor(w, p, hall, at[p].X, at[p].Y));
         }
         await Ticks(sim, 3);
         Check(w.Buildings.Count == players, $"{w.Buildings.Count} buildings placed (want {players})");
     }
 
     private static (int X, int Y)[] Spots(NavGrid g) => new[] { (g.Width / 4, g.Height / 2), (g.Width * 3 / 4, g.Height / 2), (g.Width / 2, g.Height / 5) };
-
-    // A worker per player at its spot: placement needs the ground explored (M4-3b), and a worker's sight explores it.
-    private async Task Scouts(Simulation sim, int players)
-    {
-        World w = sim.World;
-        NavGrid g = w.NavGrid;
-        (int X, int Y)[] at = Spots(g);
-        for (int p = 0; p < players; p++)
-        {
-            int c = FlowField.NearestPassable(g, Math.Min(at[p].Y + 7, g.Height - 1) * g.Width + at[p].X); // off the footprint: a dev SpawnBuilding refuses any unit on it
-            sim.Enqueue(Command.SpawnUnit(p, StartBase.UnitOfSlot(_data, w.FactionOf(p), UnitSlot.Worker), g.CellCenter(c % g.Width, c / g.Width)));
-        }
-        await Ticks(sim, 6);
-    }
 
     // `n` of `player`'s siege units on open cells round `target`'s footprint.
     private async Task Army(Simulation sim, int player, EntityHandle target, int n)
@@ -350,27 +371,14 @@ public partial class MatchOverViewTest : Node
         throw new InvalidOperationException($"player {player} has no building");
     }
 
-    // The nearest anchor to (x, y) where `player` may place `type`.
-    private static int Anchor(World w, int player, int type, int x0, int y0)
-    {
-        NavGrid g = w.NavGrid;
-        for (int r = 0; r < 30; r++)
-            for (int dy = -r; dy <= r; dy++)
-                for (int dx = -r; dx <= r; dx++)
-                {
-                    if (Math.Max(Math.Abs(dx), Math.Abs(dy)) != r) continue;
-                    int x = x0 + dx, y = y0 + dy;
-                    if (x >= 0 && y >= 0 && x < g.Width && y < g.Height && w.CanPlace(player, type, y * g.Width + x, out _)) return y * g.Width + x;
-                }
-        throw new InvalidOperationException($"no anchor for player {player} near ({x0}, {y0})");
-    }
-
     private async Task UntilBanner(Simulation sim, string how)
     {
         var clock = System.Diagnostics.Stopwatch.StartNew();
         while (!_main.BannerUp && clock.Elapsed.TotalSeconds < 90) await Frames(1);
         Check(_main.BannerUp && _ended == 1, $"{how}: banner {_main.BannerUp}, ended {_ended} by tick {sim.TickNumber}");
         if (!_main.BannerUp) throw new InvalidOperationException($"{how}: no banner");
+        // The staging (M6-V7): every loser had no live unit on its defeat's tick, so the old and the new rule agree on that tick.
+        Check(_unitsAtDefeat.Count == _events.Count && _unitsAtDefeat.TrueForAll(n => n == 0), $"{how}: losers' live units on their defeat ticks [{string.Join(", ", _unitsAtDefeat)}] (want all 0)");
     }
 
     private async Task QuitMatch()
