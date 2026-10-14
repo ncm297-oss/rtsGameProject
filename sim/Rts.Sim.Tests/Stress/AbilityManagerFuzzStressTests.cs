@@ -15,6 +15,7 @@ namespace Rts.Sim.Tests;
 /// cast it sends, a four-seat casting match's hash twin, and the cost of a think while the AI's own Sandstorms block vision
 /// (the shipped data).
 /// </summary>
+[Collection(SerialCollection.Name)]
 public class AbilityManagerFuzzStressTests
 {
     private readonly ITestOutputHelper _out;
