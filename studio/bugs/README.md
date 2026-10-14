@@ -325,5 +325,9 @@ bugs outrank new features.
 | [BUG-0700](BUG-0700-ai-cast-point-off-the-map.md) | S3 | fixed | The AI's cast point follows a group standing off the map, and the door refuses it again and again |
 | [BUG-0701](BUG-0701-ai-think-cost-grows-with-live-sandstorms.md) | S3 | open | An AI think's cost grows with every live vision-blocking storm, and the AI perf gate turns them off |
 | [BUG-0702](BUG-0702-ai-cast-targeting-nits.md) | S4 | open | AI cast targeting nits: two groups either side get no cast, casters stack on one point, the reach edge never casts |
+| [BUG-0703](BUG-0703-defeated-players-buildings-stay-active.md) | S3 | open | A defeated player's standing buildings stay active: its towers keep shooting and scoring kills, its research runs on |
+| [BUG-0704](BUG-0704-m5-4e-win-rule-nits.md) | S4 | open | M5-4e nits: stale "no buildings left" console line and docs, an ambiguous "camps", weaker re-staged rows, the keeper seam |
+| [BUG-0705](BUG-0705-perf-row-red-under-new-win-rule.md) | S2 | open | A Perf-tagged QA row goes red for a functional reason under the new win rule (a House-only player's SpawnUnits dropped) |
+| [BUG-0706](BUG-0706-rows-silently-drop-a-defeated-players-orders.md) | S3 | open | 13 green rows now run with a "defeated" enemy whose orders the door drops (a building placed before any unit) |
 | [BUG-0710](BUG-0710-m6-v4-banner-nits.md) | S4 | open | M6-V4 nits: the HUD's K / L under the banner lag the stats by the killing tick; `ViewApi/MatchOver` is now dead code |
 | [BUG-0720](BUG-0720-d17-defense-wording-nits.md) | S4 | open | D17 Defense wording: docs/03 still quotes the removed "Laborers flee to the Garrison Keep"; "more than 16 m from it" reads as from the Keep |
