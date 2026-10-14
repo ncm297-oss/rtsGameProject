@@ -9,6 +9,14 @@ Commit and push after editing, from either machine (or ask Claude to).
 
 ## New
 
+- 2026-10-14 · **Producer's take wanted (owner), one-off session.** Before planning, please read the note below
+  (Review answers + first playtest) and put a plain-language assessment at the top of STATE's "For your review":
+  for each answer and playtest note, whether it changes the current plan (roadmap, queues, M5/M6 criteria), how you
+  intend to address it (which track, which session, rough size), and what you'd defer or push back on. Include the
+  D14 feasibility verdict (variable strategies, simultaneous attack and defence, counter-picking, vision-limited,
+  think-time cost) and a design for the defense-rule change (partial recall by threat). Then plan the three tracks
+  as usual, folding in whatever you judge ready. This session is a single one-off run, not part of a chain.
+
 - 2026-10-14 · **Review answers + first real playtest (owner).** Played a skirmish on the default seed (Malazan vs
   Whirlwind AI, Normal) to the end: the AI's workers scattered to its hall when I raided, and I saw the Victory banner.
 
