@@ -39,3 +39,13 @@ The texts say what the new rule does; the re-staged rows still test what their n
 
 ## Notes
 None of these change the rule's behaviour; items 1 and 2 are wording, 3-5 test hygiene.
+
+## Round 1 status (QA, 9793159)
+- Item 1: docs/03 now marks the console line as stale and the view's to reword; `game/scripts/Match.cs:233` is unchanged
+  (view-owned). Open.
+- Item 2: fixed. docs/01 and docs/02 name the Holy / Raider / Archer Camp as halls and the drop-off camp (Depot / Supply
+  Cache) as not keeping a side in; docs/03 matches.
+- Item 3: open (accepted by QA; covered by `QA/WinConditionQaTests`).
+- Item 4: open (`DefeatCountsFuzzTests` still one-way).
+- Item 5: fixed. `TestSim.KeepIn` documents its side effects and gained `nearCorner` so two keepers in a combat scene
+  don't share a cell. New tiny nit: `TestSim.cs` line ~85 `int worker =Rts.Sim...` lost its space after `=`.

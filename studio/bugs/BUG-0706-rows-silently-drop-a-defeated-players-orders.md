@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-14-0946, task M5-4e |
 | System | tests (defeat rule re-staging) |
-| Fixed by | |
+| Fixed by | 9793159 (M5-4e fix round 1), verified by QA 2026-10-14-0946 round 1 |
 
 ## Repro
 A scratch clone of `947a61a` with one probe line in `Simulation.Apply` (the door): throw when a defeated player's
@@ -44,3 +44,13 @@ they build (a defeated player with live units) can't happen in a match.
   building) hit 155 rows: mostly combat, tower, fog and ghost scenes whose target side owns only a building and is
   defeated on tick 0, but sends no order afterwards, so the defeat changes nothing they check (the rows about the
   defeat itself are among them).
+
+## Verification (QA, round 1, 9793159)
+- All 13 rows re-staged with `TestSim.KeepIn` (CombatViewApi: one keeper per side, opposite corners, after `Start`), and
+  each now asserts the thing it was silently missing (`u.Hold[e]` held, or `!IsDefeated(1)` / neither side defeated).
+- Mutation: with the keepers removed in a scratch clone, all 13 fail on the new BUG-0706 asserts (plus BUG-0705's row
+  on `spawn refused`): 14 / 14 red. With them: green in the full run.
+- The door-drop probe (throw when a defeated player with a live building has a non-Noop command dropped) over the whole
+  suite now hits only the rows about the defeat itself (`MatchOverTests.ADefeatedPlayersCommands_*`,
+  `DefeatCountsFuzzTests` x3, `QA/DefeatRuleQaTests` x6, `QA/WinConditionQaTests.ADefeatedPlayersCommandsOnItsStanding*`).
+- The helper-level guard suggested in the notes was not added (optional).

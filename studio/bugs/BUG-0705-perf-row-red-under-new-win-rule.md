@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-14-0946, task M5-4e |
 | System | tests (defeat rule re-staging) |
-| Fixed by | |
+| Fixed by | 9793159 (M5-4e fix round 1), verified by QA 2026-10-14-0946 round 1 |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~HundredBuildsRefusedForUnitInTheWayOrStoreFull"`
@@ -33,3 +33,9 @@ hides among the wall-clock failures of a loaded machine.
   has a live building (a defeat only the new rule makes), and one that throws when the door drops such a player's
   order, to find other scenes the rule changed silently: no other red row; 13 green rows that now test less are
   BUG-0706.
+
+## Verification (QA, round 1, 9793159)
+- `TestSim.KeepIn(full, 0)` before the House; no bound changed (still 2 ms).
+- Perf alone on a quiet machine: 173 / 176 passed, 3 skipped, 0 failed, this row included.
+- Mutation: with the keeper line removed (scratch clone) the row fails again with `spawn refused`; with it, green.
+- Door-drop probe over the whole suite (scratch clone): this row no longer hits it.
