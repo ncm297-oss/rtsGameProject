@@ -167,7 +167,8 @@ waits for Age II), so its weights sum to 65.
   defend radius of the Garrison Keep is hit, or an enemy soldier (not a worker) is seen within it (`rules.json`
   `ai.defendRadius` 48 m; the threat holds `ai.defendFor` 20 s after the last sign); a wave out ends like a retreat.
   Laborers within `ai.workerFleeRadius` (16 m) of the threat flee to the nearest finished drop-off away from the
-  threat (the Garrison Keep or a Quartermaster's Depot more than 16 m from it; else the nearest one).
+  threat (the Garrison Keep or a Quartermaster's Depot, whichever is nearest among those more than 16 m from the threat;
+  else the nearest one).
 
 ## Difficulty
 
