@@ -9,6 +9,44 @@ Commit and push after editing, from either machine (or ask Claude to).
 
 ## New
 
+- 2026-10-14 · **Review answers + first real playtest (owner).** Played a skirmish on the default seed (Malazan vs
+  Whirlwind AI, Normal) to the end: the AI's workers scattered to its hall when I raided, and I saw the Victory banner.
+
+  **Answers to For your review:**
+  - **AI spells (M5-4c):** Easy should **also** cast spells (today it never does). Target rule: confirmed, aim for the
+    densest cluster.
+  - **Match end screen (M6-V4):** OK.
+  - **Normal doesn't focus fire (D17) / the defense rule (M5-4b):** I want the AI not to be trickable or abusable. Pulling
+    the whole army home on any raid looks exploitable (a small raid can recall a wave). Can it use more judgment, e.g.
+    commit some units to defend while keeping the attack going, or pull back only part of the army, depending on the
+    threat? Producer's call on how.
+  - **Match can be lost (M5-4b):** OK.
+  - **D13:** go back to **×1.5**, and do the **hp / armor / cost** pass (the bigger one, with a table for me).
+  - **D14:** I'd like the AI to be more variable than a fixed build order: different strategies per game, dynamic
+    attack and defence at the same time based on what it has scouted (rather than discrete waves), and adapting its army
+    to counter the units I'm fielding. To confirm: the AI must stay limited by its own vision (no sensing hidden bases or
+    buildings it hasn't scouted). **Evaluate feasibility**: if it's too hard or it would slow the AI's think time in
+    game, it may not be worth doing. I defer to the Producer.
+  - **D11:** OK. **D12:** OK.
+  - **D15:** option **C**: the executor skips a house step once the population cap is reached.
+  - **Player colours (M6-VH1):** look good.
+  - **D17:** wait and re-measure the wood shortage on a real map.
+
+  **Playtest notes:**
+  1. Edge-pan didn't always work, especially on the side where I have a second monitor, even after switching to
+     fullscreen.
+  2. Not enough trees close to the base (maybe just the test map / seed).
+  3. Make resource gathering a little quicker.
+  4. **Drop the Ages idea.** Instead, expand upgrade trees and buildings that unlock or enable more upgrades and units.
+     Longer-term goal, not urgent; update the design docs and the vision change log when you plan it.
+  5. Pathing still needs work: infantry behind crossbowmen get stuck instead of going around them; when attacking a
+     building, units get stuck behind other units instead of moving round to an exposed side.
+  6. Increase damage against buildings: it took forever to kill buildings even with a lot of units.
+  7. Add control groups (Ctrl+number), including for buildings.
+  8. Clicking a resource (gold mine, tree / forest) should show how much is left.
+  9. Change the win condition: a player is out once all their units **and** all their unit-producing buildings are
+     destroyed; houses and resource drop-off buildings don't need to be destroyed to end the match.
+
 ## Processed
 
 - 2026-10-08 · **Art direction + packs downloaded (owner):** I prefer a grounded, realistic art style
