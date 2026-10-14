@@ -1,3 +1,4 @@
+using System;
 using Godot;
 
 namespace Rts.Game;
@@ -28,18 +29,42 @@ public static class SettingsApplier
     /// <summary>False under <c>--headless</c> (no window to size or sync).</summary>
     public static bool HasWindow => DisplayServer.GetName() != "headless";
 
-    /// <summary>Applies everything; <paramref name="vsyncOverride"/> (<c>--vsync on|off</c>) wins over the file for the run.</summary>
-    public static void Apply(GameSettings s, Viewport root, bool? vsyncOverride)
+    /// <summary>Godot's own window flags (before <c>--</c>): with one of them the boot keeps the window the engine made (BUG-0681).</summary>
+    public static readonly string[] EngineWindowFlags = { "--resolution", "--fullscreen", "-f", "--maximized", "-m", "--position", "--windowed", "-w" };
+
+    /// <summary>Whether the process command line <paramref name="args"/> (<c>System.Environment.GetCommandLineArgs()</c>) holds one of <see cref="EngineWindowFlags"/> before <c>--</c>.</summary>
+    public static bool HasEngineWindowFlag(string[] args)
     {
-        ApplyWindow(s, vsyncOverride);
+        foreach (string a in args)
+        {
+            if (a == "--") break; // the user args follow (a --resolution there is the game's, not the engine's)
+            if (Array.IndexOf(EngineWindowFlags, a) >= 0) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Applies everything; <paramref name="vsyncOverride"/> (<c>--vsync on|off</c>) wins over the file for the run. With
+    /// <paramref name="keepWindow"/> (the boot, when an engine window flag was given: BUG-0681) the window's mode, size and
+    /// position are left as the engine made them; VSync, quality and volumes still apply.
+    /// </summary>
+    public static void Apply(GameSettings s, Viewport root, bool? vsyncOverride, bool keepWindow = false)
+    {
+        ApplyWindow(s, vsyncOverride, keepWindow);
         ApplyQuality(s.Quality, root);
         ApplyVolumes(s);
     }
 
     /// <summary>Window mode, size (windowed only, centred on its screen) and VSync; nothing headless.</summary>
-    public static void ApplyWindow(GameSettings s, bool? vsyncOverride)
+    public static void ApplyWindow(GameSettings s, bool? vsyncOverride, bool keepWindow = false)
     {
         if (!HasWindow) return;
+        bool vsync = vsyncOverride ?? s.Vsync;
+        if (keepWindow)
+        {
+            DisplayServer.WindowSetVsyncMode(vsync ? DisplayServer.VSyncMode.Enabled : DisplayServer.VSyncMode.Disabled);
+            return;
+        }
         DisplayServer.WindowMode mode = s.WindowMode switch
         {
             SettingsWindowMode.Borderless => DisplayServer.WindowMode.Fullscreen,
@@ -58,7 +83,6 @@ public static class SettingsApplier
                 DisplayServer.WindowSetPosition(origin + (area - size) / 2);
             }
         }
-        bool vsync = vsyncOverride ?? s.Vsync;
         DisplayServer.WindowSetVsyncMode(vsync ? DisplayServer.VSyncMode.Enabled : DisplayServer.VSyncMode.Disabled);
     }
 

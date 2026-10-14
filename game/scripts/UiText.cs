@@ -18,14 +18,16 @@ namespace Rts.Game;
 /// <c>{ "commands": { "&lt;id&gt;": { "displayName", "hotkeyHint" } }, "buildMenus": { "basic": [slot ids], "advanced": [slot ids] },
 /// "placement": { "&lt;reason&gt;": text }, "train": { "&lt;reason&gt;": text }, "research": { "&lt;reason&gt;": text },
 /// "states": { "&lt;state&gt;": text }, "hud": { "&lt;label&gt;": text }, "menu": { "&lt;key&gt;": text }, "setup": { "&lt;key&gt;": text },
-/// "pause": { "&lt;key&gt;": text }, "settings": { "&lt;key&gt;": text } }</c>. Command ids are <see cref="CommandIds"/>;
+/// "pause": { "&lt;key&gt;": text }, "settings": { "&lt;key&gt;": text }, "match_over": { "&lt;key&gt;": text } }</c>. Command ids are <see cref="CommandIds"/>;
 /// the placement, train and research keys are the snake_case names of every <see cref="PlacementError"/>,
 /// <see cref="TrainError"/> and <see cref="ResearchError"/> member but <c>None</c> (<c>blocked</c>, <c>queue_full</c> ...),
 /// the state keys those of every <see cref="UnitState"/> (M3-V3) plus <see cref="OrderedAttackKey"/> (M4-V2), the hud keys those of <see cref="HudText"/>,
 /// the menu, setup and pause keys (the game shell, M6-V1) those of <see cref="MenuText"/>, <see cref="SetupText"/> and <see cref="PauseText"/>
 /// (M6-V2: <c>setup.map_size_item</c> must also be a format naming <c>{0}</c> that formats to different text for different
 /// sizes, else one error naming it, BUG-0602 item 1; M6-V6: the <c>settings</c> keys those of <see cref="SettingsText"/>, and
-/// <c>settings.resolution_item</c> a format naming <c>{0}</c> (width) and <c>{1}</c> (height) under the same rule; M6-V3: <c>setup</c> also carries the player colour table,
+/// <c>settings.resolution_item</c> a format naming <c>{0}</c> (width) and <c>{1}</c> (height) under the same rule; M6-V4: the <c>match_over</c>
+/// keys those of <see cref="MatchOverText"/>, <c>match_over.match_length</c> a format naming <c>{0}</c> and <c>match_over.clock</c> one naming
+/// <c>{0}</c> (minutes) and <c>{1}</c> (seconds) under the same rule; M6-V3: <c>setup</c> also carries the player colour table,
 /// <c>colour_1</c> .. <c>colour_8</c>, each <c>{ "displayName", "rgb": "#RRGGBB" }</c>, <see cref="ColourCount"/>); so a member
 /// the sim adds later is a load error here until the file has its text. Each of the three reason sections must also
 /// carry <see cref="ForwardKey"/> (<c>requires</c>), the reason M3-6's <c>requires</c> gating adds: a key with no enum
@@ -70,6 +72,7 @@ public sealed class UiText
     private readonly string[] _setup;
     private readonly string[] _pause;
     private readonly string[] _settings;
+    private readonly string[] _matchOver;
     private readonly string[] _colourNames = Blank(ColourCount);
     private readonly uint[] _colourRgb = new uint[ColourCount];
 
@@ -84,6 +87,7 @@ public sealed class UiText
         _setup = Blank(Enum.GetValues<SetupText>().Length);
         _pause = Blank(Enum.GetValues<PauseText>().Length);
         _settings = Blank(Enum.GetValues<SettingsText>().Length);
+        _matchOver = Blank(Enum.GetValues<MatchOverText>().Length);
         Array.Fill(_names, "");
         Array.Fill(_hints, "");
     }
@@ -144,6 +148,19 @@ public sealed class UiText
 
     /// <summary>One resolution list item: <c>settings.resolution_item</c> with the width for <c>{0}</c> and the height for <c>{1}</c> (M6-V6).</summary>
     public string ResolutionItem(int width, int height) => string.Format(CultureInfo.InvariantCulture, Settings(SettingsText.ResolutionItem), width, height);
+
+    /// <summary>A match-over banner or stats screen text (<c>ui.json</c> <c>match_over</c>, M6-V4).</summary>
+    public string MatchOver(MatchOverText key) => (uint)key < (uint)_matchOver.Length ? _matchOver[(int)key] : "";
+
+    /// <summary>A match time as <c>match_over.clock</c> (whole minutes for <c>{0}</c>, the seconds past them for <c>{1}</c>) from a tick count (50 ms each); negative counts read as 0.</summary>
+    public string Clock(int ticks)
+    {
+        int seconds = Math.Max(0, ticks) / Rts.Sim.SimConstants.TicksPerSecond;
+        return string.Format(CultureInfo.InvariantCulture, MatchOver(MatchOverText.Clock), seconds / 60, seconds % 60);
+    }
+
+    /// <summary>The stats screen's length line: <c>match_over.match_length</c> with <see cref="Clock"/> of <paramref name="ticks"/> for its <c>{0}</c>.</summary>
+    public string MatchLength(int ticks) => string.Format(CultureInfo.InvariantCulture, MatchOver(MatchOverText.MatchLength), Clock(ticks));
 
     /// <summary>The <c>requires</c> text of the <c>placement</c> section (<see cref="ForwardKey"/>), readable before the sim has the reason.</summary>
     public string ForwardPlacementText { get; private set; } = "";
@@ -251,6 +268,13 @@ public sealed class UiText
             string resolutionItem = ui._settings[(int)SettingsText.ResolutionItem];
             if (resolutionItem.Length > 0 && !IsResolutionFormat(resolutionItem))
                 errors.Add($"ui.json: settings.{Key(SettingsText.ResolutionItem)} must be a format with {{0}} (the width) and {{1}} (the height) and no other placeholder: '{resolutionItem}'");
+            Section<MatchOverText>(root, "match_over", ui._matchOver, skipZero: false, forward: false, errors);
+            string length = ui._matchOver[(int)MatchOverText.MatchLength];
+            if (length.Length > 0 && !IsTextFormat(length))
+                errors.Add($"ui.json: match_over.{Key(MatchOverText.MatchLength)} must be a format with {{0}} (the clock) and no other placeholder: '{length}'");
+            string clock = ui._matchOver[(int)MatchOverText.Clock];
+            if (clock.Length > 0 && !IsResolutionFormat(clock))
+                errors.Add($"ui.json: match_over.{Key(MatchOverText.Clock)} must be a format with {{0}} (the minutes) and {{1}} (the seconds) and no other placeholder: '{clock}'");
         }
         return errors.Count == before ? ui : null;
     }
@@ -347,6 +371,19 @@ public sealed class UiText
         {
             string a = string.Format(CultureInfo.InvariantCulture, format, 1280, 720);
             return a != string.Format(CultureInfo.InvariantCulture, format, 1920, 720) && a != string.Format(CultureInfo.InvariantCulture, format, 1280, 1080);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
+    // A format with one text placeholder (M6-V4: the match length line): it formats, and names it (two texts differ).
+    private static bool IsTextFormat(string format)
+    {
+        try
+        {
+            return string.Format(CultureInfo.InvariantCulture, format, "1:00") != string.Format(CultureInfo.InvariantCulture, format, "2:00");
         }
         catch (FormatException)
         {

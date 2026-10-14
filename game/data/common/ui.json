@@ -131,5 +131,25 @@
     "apply": "Apply",
     "defaults": "Defaults",
     "back": "Back"
+  },
+  "match_over": {
+    "victory": "Victory",
+    "defeat": "Defeat",
+    "draw": "Draw",
+    "stats": "Stats",
+    "menu": "Main menu",
+    "continue": "Continue watching",
+    "stats_title": "Match statistics",
+    "match_length": "Match length {0}",
+    "clock": "{0}:{1:00}",
+    "player": "Player",
+    "kills": "Kills",
+    "losses": "Losses",
+    "gold_in_hand": "Gold in hand",
+    "wood_in_hand": "Wood in hand",
+    "defeated_at": "Defeated at",
+    "standing": "Standing",
+    "human": "Human",
+    "back": "Back"
   }
 }
