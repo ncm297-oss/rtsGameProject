@@ -151,6 +151,14 @@ public class M6V7QaTests
         Simulation a = BuildMaps.NewSim(ResourceMaps.Flat(40, 30), units: 64, players: 2);
         Simulation bsim = BuildMaps.NewSim(ResourceMaps.Flat(40, 30), units: 64, players: 2);
         int billetType = BuildMaps.House, barracksType = ProductionMaps.Barracks;
+        // BUG-0711: player 0's unit lands before its first building (both twins alike), so a player that has built with no
+        // live unit and no unit-producing building (out under M5-4e) is never player 0 here; a House keeps nobody in.
+        foreach (Simulation s in new[] { a, bsim })
+        {
+            s.Enqueue(Command.SpawnUnit(0, GatherMaps.Infantry, s.World.NavGrid.CellCenter(30, 20)));
+            s.Tick();
+            s.Tick();
+        }
         EntityHandle billet = GatherMaps.Building(a, 10, 10, 0, billetType), barracks = GatherMaps.Building(a, 25, 10, 0, barracksType);
         Assert.Equal(billet, GatherMaps.Building(bsim, 10, 10, 0, billetType));
         Assert.Equal(barracks, GatherMaps.Building(bsim, 25, 10, 0, barracksType));
@@ -160,7 +168,6 @@ public class M6V7QaTests
         NavGrid g = w.NavGrid;
         foreach (Simulation s in new[] { a, bsim })
         {
-            s.Enqueue(Command.SpawnUnit(0, GatherMaps.Infantry, g.CellCenter(30, 20)));
             for (int k = 0; k < attackers; k++) s.Enqueue(Command.SpawnUnit(1, GatherMaps.Infantry, g.CellCenter(8 + k % 10, 15 + k / 10)));
             s.Tick();
             s.Tick();
