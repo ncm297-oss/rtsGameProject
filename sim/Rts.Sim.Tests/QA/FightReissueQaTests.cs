@@ -213,6 +213,7 @@ public class FightReissueQaTests
     {
         Simulation sim = Flat(units: 16);
         UnitStore u = sim.World.Units;
+        TestSim.KeepIn(sim, 1); // BUG-0706 (M5-4e): a Tent alone doesn't keep player 1 in, and the Raider's Attack would be dropped
         int tentType = TestSim.Data.FindBuilding("whirlwind_tent");
         Assert.True(sim.World.Buildings.Spawn(1, tentType, 22 * sim.World.NavGrid.Width + 20, out EntityHandle tent));
         EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 17, 23));
@@ -227,6 +228,7 @@ public class FightReissueQaTests
         int took = RunUntil(sim, () => u.Target[a.Index] == e || !u.IsAlive(a), 3000);
         _out.WriteLine($"took the attacker {took} ticks after the attack-move; alive {u.IsAlive(a)}");
         Assert.True(u.IsAlive(a) && u.Target[a.Index] == e && took <= 20, $"after {took} ticks: alive {u.IsAlive(a)}, target {u.Target[a.Index]}");
+        Assert.False(sim.World.IsDefeated(1), "BUG-0706: player 1 was out, so the Raider's Attack was dropped");
     }
 
     /// <summary>

@@ -667,7 +667,9 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       the faction pages. M5-4c slice 1, 2026-10-13: `useAbilities` applied (Easy never casts). Left for M5-4c slice 2:
       `gatherBonus`, `focusFire`, `pullBackWounded`.)
 - [ ] AI-vs-AI headless test: a 20-minute match completes without errors and one side wins. (M5-4b, 2026-10-13: the defeat
-      rule and `Simulation.MatchOver` are in, a razed hall ends the match and the loser's AI goes silent on seeds 1-3; the
+      rule and `Simulation.MatchOver` are in, a razed hall ends the match and the loser's AI goes silent on seeds 1-3. M5-4e,
+      2026-10-14: the rule is the owner's (out = no unit and no finished unit-producing building; `World.LiveUnits` /
+      `ProductionBuildings`); an AI match can now stall on a hidden worker until M5-4d hunts the last units; the
       20-minute winner test is M5-5.)
 - [ ] Playable: the owner can win on Easy and lose to a Whirlwind AI on Hard.
 - [ ] Owner request 2026-10-14 (D14 a): **proportional defense**: a raid pulls home only what it is worth (home army first, then part of the
@@ -693,7 +695,8 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
 - [ ] Save/load and replay playback.
 - [ ] Settings: resolution, window mode, VSync, quality, volumes, keybinds. (M6-V6, 2026-10-13: resolution, window mode,
       VSync, quality presets, master / music / SFX volume and edge-pan speed, from the menu and the pause menu, saved in
-      `user://settings.cfg`. Left: keybinds.)
+      `user://settings.cfg`. M6-V7, 2026-10-14: "Confine cursor to window" (on by default; the cursor stays in the window
+      during a match so the edges pan beside a second monitor) and control groups that hold a building. Left: keybinds.)
 - [ ] Art look test done (KayKit vs. alternatives, see [04](04-art-pipeline.md)); real models and
       animations for Malazan and Whirlwind; licensing log filled in.
 - [ ] Real SFX and placeholder music; alerts with sound.

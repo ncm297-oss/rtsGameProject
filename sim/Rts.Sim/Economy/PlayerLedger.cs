@@ -18,6 +18,8 @@ internal sealed class PlayerLedger
     // player x types + type, and player x SlotCount + slot: finished, live buildings the player owns.
     private readonly int[] _finishedOfType;
     private readonly int[] _finishedInSlot;
+    // M5-4e: per building type, whether it trains at least one unit (a production building for the defeat rule).
+    private readonly bool[] _trainsUnits;
 
     /// <summary>A ledger for <paramref name="players"/> players starting at <paramref name="data"/>'s rules totals, no population, no cap and no buildings.</summary>
     public PlayerLedger(int players, GameData data)
@@ -26,6 +28,8 @@ internal sealed class PlayerLedger
         _types = data.Buildings.Length;
         _finishedOfType = new int[players * _types];
         _finishedInSlot = new int[players * SlotCount];
+        _trainsUnits = new bool[_types];
+        for (int t = 0; t < _types; t++) _trainsUnits[t] = !data.UnitsTrainedAt(t).IsEmpty;
         Gold = new int[players];
         Wood = new int[players];
         HalfPop = new int[players];
@@ -34,6 +38,8 @@ internal sealed class PlayerLedger
         Kills = new int[players];
         Losses = new int[players];
         LiveBuildings = new int[players];
+        LiveUnits = new int[players];
+        ProductionBuildings = new int[players];
         EverBuilt = new bool[players];
         Defeated = new bool[players];
         Array.Fill(Gold, rules.StartingGold);
@@ -65,6 +71,12 @@ internal sealed class PlayerLedger
     /// <summary>M5-4b: each player's live buildings, construction sites included. Derived from the building store, so not hashed.</summary>
     public int[] LiveBuildings { get; }
 
+    /// <summary>M5-4e: each player's live units, summoned ones included, counted at their spawn (<c>UnitStore.TrySpawn</c>). Derived from the unit store, so not hashed.</summary>
+    public int[] LiveUnits { get; }
+
+    /// <summary>M5-4e: each player's finished buildings whose type trains at least one unit (<see cref="GameData.UnitsTrainedAt"/>). Derived from the building store, so not hashed.</summary>
+    public int[] ProductionBuildings { get; }
+
     /// <summary>M5-4b: whether each player has ever had a building (a site counts), set when one is placed. Sticky; hashed (<see cref="Simulation.StateHash"/>).</summary>
     public bool[] EverBuilt { get; }
 
@@ -77,6 +89,12 @@ internal sealed class PlayerLedger
         if (!Has(player)) return;
         LiveBuildings[player] += delta;
         if (delta > 0) EverBuilt[player] = true;
+    }
+
+    /// <summary>A unit of <paramref name="player"/>'s is spawned (+1) or freed (-1), M5-4e.</summary>
+    public void AddLiveUnit(int player, int delta)
+    {
+        if (Has(player)) LiveUnits[player] += delta;
     }
 
     /// <summary>One death: <paramref name="killer"/>'s kills and <paramref name="victim"/>'s losses go up by one (M4-1).</summary>
@@ -122,13 +140,14 @@ internal sealed class PlayerLedger
 
     /// <summary>
     /// A finished building of <paramref name="type"/> in <paramref name="slot"/> starts (+1: spawned finished or completed)
-    /// or stops (-1: freed) counting for <paramref name="player"/> (M3-6). Derived from the building store, so not hashed.
+    /// or stops (-1: freed) counting for <paramref name="player"/> (M3-6), and in <see cref="ProductionBuildings"/> when its type trains units (M5-4e). Derived from the building store, so not hashed.
     /// </summary>
     public void AddFinished(int player, int type, BuildingSlot slot, int delta)
     {
         if (!Has(player) || (uint)type >= (uint)_types || (uint)slot >= (uint)SlotCount) return;
         _finishedOfType[player * _types + type] += delta;
         _finishedInSlot[player * SlotCount + (int)slot] += delta;
+        if (_trainsUnits[type]) ProductionBuildings[player] += delta;
     }
 
     /// <summary>How many finished buildings of <paramref name="type"/> <paramref name="player"/> owns; 0 for out-of-range ids.</summary>

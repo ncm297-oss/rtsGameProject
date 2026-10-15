@@ -28,6 +28,7 @@ public class ResearchScaleStressTests
         var sim = new Simulation(TestSim.Config(Seed: 5, PlayerCount: 1, UnitCapacity: 64, CommandCapacity: 8192), ResourceMaps.Flat(96, 96));
         World w = sim.World;
         BuildingStore b = w.Buildings;
+        TestSim.KeepIn(sim, 0); // M5-4e: a unit keeps the player in (a House, Forge, depot, tower or site alone no longer does)
         var halls = new List<int>();
         var forges = new List<int>();
         for (int y = 0; y < 8; y++)

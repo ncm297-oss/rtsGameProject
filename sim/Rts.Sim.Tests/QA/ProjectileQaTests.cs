@@ -476,6 +476,7 @@ public class ProjectileQaTests
             World w = sim.World;
             UnitStore u = w.Units;
             Assert.True(w.Buildings.Spawn(1, Tent, 30 * w.NavGrid.Width + 30, out EntityHandle tent));
+            TestSim.KeepIn(sim, 1); // M5-4e: a unit keeps the player in (a House, Forge, depot, tower or site alone no longer does)
             EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 28, 30));
             sim.Enqueue(Command.HoldPosition(0, a));
             sim.Tick();
@@ -526,6 +527,7 @@ public class ProjectileQaTests
         Simulation sim = Flat(size: 64, units: 16);
         World w = sim.World;
         UnitStore u = w.Units;
+        TestSim.KeepIn(sim, 1); // BUG-0706 (M5-4e): a Tent alone doesn't keep player 1 in, and the archer's orders would be dropped
         Assert.True(w.Buildings.Spawn(1, Tent, 30 * w.NavGrid.Width + 30, out EntityHandle tent));
         EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 28, 30));
         sim.Enqueue(Command.AttackMove(0, a, At(sim, 29, 30)));
@@ -541,5 +543,6 @@ public class ProjectileQaTests
         int ran = RunUntil(sim, () => !u.TargetIsBuilding[a.Index] && u.Target[a.Index] == archer, 100);
         _out.WriteLine($"turned on the archer {ran} ticks after its first hit");
         Assert.Equal(archer, u.Target[a.Index]);
+        Assert.False(w.IsDefeated(1), "BUG-0706: player 1 was out, so the archer's orders were dropped");
     }
 }

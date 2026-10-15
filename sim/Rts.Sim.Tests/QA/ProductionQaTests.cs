@@ -129,6 +129,7 @@ public class ProductionQaTests
         // M5-4b (QA 2026-10-13-0916): an idle House site of player 0's (no pop provided) in a far corner, so losing the
         // Barracks and the Keep doesn't defeat it and the slot-reuse check below can still place a building.
         Assert.True(w.Buildings.Spawn(0, House, 27 * 40 + 37, out _, site: true));
+        TestSim.KeepIn(sim, 0); // M5-4e: a unit keeps the player in (a House, Forge, depot, tower or site alone no longer does)
         Apply(sim, Command.SetRally(0, w.Buildings.Cell[bar], At(sim, 30, 25)));
         for (int n = 0; n < 5; n++) sim.Enqueue(Command.Train(0, In(sim, bar), Infantry));
         Run(sim, 12);
@@ -151,7 +152,7 @@ public class ProductionQaTests
         int again = Building(sim, 10, 10, type: ProductionMaps.Barracks).Index;
         Assert.Equal((0, 0, false, Vector2.Zero), (w.Buildings.QueueCount[again], w.Buildings.Progress[again], w.Buildings.HasRally[again], w.Buildings.RallyPosition[again]));
         Run(sim, 400);
-        Assert.Equal(0, w.Units.Count);
+        Assert.Equal(1, w.Units.Count); // the keeper alone (M5-4e): nothing trained
     }
 
     [Fact]

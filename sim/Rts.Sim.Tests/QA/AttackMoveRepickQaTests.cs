@@ -189,6 +189,7 @@ public class AttackMoveRepickQaTests
     {
         Simulation sim = Flat(units: 8);
         UnitStore u = sim.World.Units;
+        TestSim.KeepIn(sim, 1); // BUG-0706 (M5-4e): a Tent alone doesn't keep player 1 in, and the Raider's HoldPosition would be dropped
         int tentType = TestSim.Data.FindBuilding("whirlwind_tent");
         Assert.True(sim.World.Buildings.Spawn(1, tentType, 22 * sim.World.NavGrid.Width + 20, out EntityHandle tent));
         EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 17, 23));
@@ -205,6 +206,7 @@ public class AttackMoveRepickQaTests
         sim.Tick();
         sim.Tick(); // a command enqueued now applies on the second tick
         Assert.False(u.Repick[a.Index]);
+        Assert.True(u.Hold[e.Index], "BUG-0706: the Raider's HoldPosition was dropped (player 1 out)");
         if (then == 2)
         {
             Assert.Equal(e, u.Target[a.Index]);

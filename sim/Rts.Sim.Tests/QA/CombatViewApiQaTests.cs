@@ -29,7 +29,15 @@ public class CombatViewApiQaTests
     public void MultiTickFrames_SlotReuse_Pauses_InvariantsAndHashTwin(ulong seed)
     {
         Simulation a = CombatViewScene.Create(seed), b = CombatViewScene.Create(seed);
+        // BUG-0706 (M5-4e): a Billet or Tent alone doesn't keep a side in, so once a side lost its army its reinforcements
+        // were dropped at the door. A keeper per side in opposite corners, the same in both twins, put in after Start so the
+        // scene's attack-moves (computed in Start) don't send them into the fight.
         CombatViewScene.Start(a, b);
+        foreach (Simulation s in new[] { a, b })
+        {
+            TestSim.KeepIn(s, 0, nearCorner: true);
+            TestSim.KeepIn(s, 1);
+        }
         World w = a.World;
         UnitStore u = w.Units;
         var rng = new Random((int)seed * 7919);
@@ -109,6 +117,7 @@ public class CombatViewApiQaTests
         }
         Assert.True(deaths > CombatViewScene.PerSide, $"{deaths} deaths");
         Assert.True(reused > 0, "no freed slot was re-used: the row proves nothing");
+        Assert.False(a.World.IsDefeated(0) || a.World.IsDefeated(1), "BUG-0706: a side was out, so its reinforcements were dropped");
         _out.WriteLine($"seed {seed}: {frames} frames ({paused} paused, {multiTick} multi-tick), {deaths} deaths, {hits} hits, {reused} slots re-used ({reusedFrames} seen with a new generation), hash equal every frame");
     }
 

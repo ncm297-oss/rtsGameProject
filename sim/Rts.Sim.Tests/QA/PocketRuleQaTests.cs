@@ -51,6 +51,7 @@ public class PocketRuleQaTests
     public void FiveByFiveHouseBlock_HollowedFromInside_PocketsMergeAndReopenExactlyByUnion()
     {
         Simulation sim = BuildMaps.NewSim(Flat(24, 24));
+        TestSim.KeepIn(sim, 0); // M5-4e: a unit keeps the player in (a House, Forge, depot, tower or site alone no longer does)
         NavGrid g = sim.World.NavGrid;
         BuildingStore b = sim.World.Buildings;
         var h = new EntityHandle[5, 5];
@@ -90,6 +91,7 @@ public class PocketRuleQaTests
     public void PocketsAgainstTheBorderAndInACorner_StayBlocked_ThenReopenThroughAWall()
     {
         Simulation sim = BuildMaps.NewSim(Flat(20, 16));
+        TestSim.KeepIn(sim, 0); // M5-4e: a unit keeps the player in (a House, Forge, depot, tower or site alone no longer does)
         NavGrid g = sim.World.NavGrid;
         BuildingStore b = sim.World.Buildings;
         EntityHandle corner = Building(sim, 1, 1, type: House);
@@ -161,6 +163,7 @@ public class PocketRuleQaTests
     public void PocketsEitherSideOfACliff_StaySeparate_AndEachReopensOnlyThroughItsOwnLevel()
     {
         Simulation sim = BuildMaps.NewSim(TwoLevels());
+        TestSim.KeepIn(sim, 0); // M5-4e: a unit keeps the player in (a House, Forge, depot, tower or site alone no longer does)
         NavGrid g = sim.World.NavGrid;
         BuildingStore b = sim.World.Buildings;
         Assert.True((g.FlagsAt(21, 4) & NavFlags.Cliff) != 0 && g.IsPassable(20, 4) && g.IsPassable(22, 4) && g.LevelAt(22, 4) == 1);
@@ -236,6 +239,7 @@ public class PocketRuleQaTests
     private static (Simulation Sim, EntityHandle Tree) CancelFellScene()
     {
         Simulation sim = BuildMaps.NewSim(Flat(30, 20));
+        TestSim.KeepIn(sim, 0); // M5-4e: a unit keeps the player in (a House, Forge, depot, tower or site alone no longer does)
         Give(sim, 0, 10_000, 10_000);
         EntityHandle builder = Unit(sim, At(sim, 16, 15));
         sim.Enqueue(Command.Build(0, builder, House, At(sim, 11, 8)));

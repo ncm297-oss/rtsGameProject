@@ -51,8 +51,9 @@ public class DefeatRuleQaTests
     /// The door, kind by kind: after player 0's defeat one command of **every** <see cref="CommandKind"/> (a row per kind; a
     /// new kind without a row fails here) is sent for it, each with live targets of its own (its walking worker, its
     /// marching soldier) or the enemy's buildings. The run hashes equal, after every tick, to a twin that sent a Noop in
-    /// each one's place; the defeated player places, spawns and trains nothing, and its soldier finishes the walk it got
-    /// before the defeat (Stop / Hold / AttackMove / Attack dropped). Player 1's identical commands apply.
+    /// each one's place; the defeated player places, spawns and trains nothing. Player 1's identical commands apply.
+    /// M5-4e re-staged: a live unit keeps a side in and a site doesn't, so the worker and the soldier are taken away and the
+    /// unit orders name dead units (the walk after the defeat can't happen any more).
     /// </summary>
     [Fact]
     public void EveryCommandKind_OfADefeatedPlayer_IsDropped_HashEqualToANoopTwin()
@@ -70,10 +71,9 @@ public class DefeatRuleQaTests
             EntityHandle worker = CombatScenes.Place(sim, 0, UnitType(w, 0, UnitSlot.Worker), At(sim, 8, 16));
             EntityHandle soldier = CombatScenes.Place(sim, 0, UnitType(w, 0, UnitSlot.Line), At(sim, 4, 44));
             EntityHandle worker1 = CombatScenes.Place(sim, 1, UnitType(w, 1, UnitSlot.Worker), At(sim, 44, 44));
-            // Applied with the cancel, before the defeat: long walks the later orders would change.
-            sim.Enqueue(Command.Move(0, worker, At(sim, 8, 44)));
-            sim.Enqueue(Command.Move(0, soldier, At(sim, 44, 40)));
-            sim.Enqueue(Command.Cancel(0, Centre(sim, site)));
+            // The site alone doesn't keep the side in: out on the next tick, the site standing.
+            w.Units.Free(worker);
+            w.Units.Free(soldier);
             Applied(sim);
             Assert.True(w.IsDefeated(0));
             return (sim, worker, soldier, hall1, house1, worker1);
@@ -132,23 +132,22 @@ public class DefeatRuleQaTests
             b.Sim.Tick();
         }
         Assert.Equal(a.Sim.StateHash(), b.Sim.StateHash());
-        Assert.Equal(0, wa.Ledger.LiveBuildings[0]);
+        Assert.Equal(1, wa.Ledger.LiveBuildings[0]); // its site, nothing new
         Assert.True(wa.IsDefeated(0));
-        Assert.False(wa.Units.Hold[a.Soldier.Index]);
-        Assert.True(Vector2.Distance(wa.Units.Position[a.Soldier.Index], At(a.Sim, 44, 40)) < 3f, $"the soldier stands at {wa.Units.Position[a.Soldier.Index]}");
         int own0 = 0;
         for (int i = 0; i < wa.Units.Capacity; i++)
             if (wa.Units.Alive[i] && wa.Units.Owner[i] == 0) own0++;
-        Assert.Equal(2, own0);
+        Assert.Equal(0, own0);
         Assert.True(wa.Buildings.QueueCount[a.Hall1.Index] > 0 || wa.Units.Count > 3, "player 1's Trains never applied");
     }
 
     /// <summary>
-    /// Orders applied before the defeat run to their end: a worker's Move, shift-queued Moves and an AttackMove behind it all
-    /// play out after the defeat (the queue pops in phase 7), while a new Move sent after the defeat is dropped.
+    /// M5-4e re-staged (a defeated player has no unit left, so orders can't outlive the defeat): the last site cancelled
+    /// while a soldier walks a shift-queue doesn't end the side; the Move, the queued Move and the AttackMove behind it play
+    /// out, and a new Move applies. The soldier taken away: defeated, and a SpawnUnit sent after is dropped.
     /// </summary>
     [Fact]
-    public void ShiftQueuedOrders_AppliedBeforeTheDefeat_PlayOut_ANewOneIsDropped()
+    public void ShiftQueuedOrders_AUnitWalkingKeepsTheSideIn_ItsDeathEndsIt()
     {
         var sim = TestSim.Explored(new Simulation(TestSim.ConfigNoCombat(2, 2, 32, 64), LocalMovementTests.Flat(48)));
         World w = sim.World;
@@ -160,7 +159,7 @@ public class DefeatRuleQaTests
         sim.Enqueue(Command.AttackMove(0, u, At(sim, 6, 40), queued: true));
         sim.Enqueue(Command.Cancel(0, Centre(sim, site)));
         Applied(sim);
-        Assert.True(w.IsDefeated(0));
+        Assert.False(w.IsDefeated(0));
         bool passedSecond = false;
         for (int t = 0; t < 1200; t++)
         {
@@ -171,34 +170,39 @@ public class DefeatRuleQaTests
         Assert.True(Vector2.Distance(w.Units.Position[u.Index], At(sim, 6, 40)) < 2f, $"the queued AttackMove didn't finish: at {w.Units.Position[u.Index]}");
         sim.Enqueue(Command.Move(0, u, At(sim, 40, 10)));
         for (int t = 0; t < 200; t++) sim.Tick();
-        Assert.True(Vector2.Distance(w.Units.Position[u.Index], At(sim, 6, 40)) < 2f, "a Move sent after the defeat applied");
+        Assert.True(Vector2.Distance(w.Units.Position[u.Index], At(sim, 6, 40)) > 2f, "a Move of a side still in was dropped");
+        Assert.False(w.IsDefeated(0));
+        w.Units.Free(u);
+        sim.Tick();
+        Assert.True(w.IsDefeated(0));
+        sim.Enqueue(Command.SpawnUnit(0, UnitType(w, 0, UnitSlot.Line), At(sim, 20, 20)));
+        Applied(sim);
+        Assert.Equal(0, w.LiveUnits(0));
     }
 
     /// <summary>
-    /// The rule is evaluated once a tick, after phase 11: a player who cancels its last site and places a new one in the same
-    /// tick (either order) is never defeated; the same cancel alone defeats it.
+    /// The rule is evaluated once a tick, after phase 11. M5-4e re-staged (a site never counts now, so a cancel and a
+    /// rebuild in one tick no longer decide anything): a side whose only unit, a summon, expires (phase 5) on the tick a
+    /// SpawnUnit of its lands (phase 1) is never defeated; the same expiry alone defeats it.
     /// </summary>
     [Theory]
-    [InlineData("cancel then build", false)]
-    [InlineData("build then cancel", false)]
-    [InlineData("cancel only", true)]
-    public void ACancelAndARebuild_InOneTick_DoNotDefeat(string how, bool defeated)
+    [InlineData("expiry and a spawn", false)]
+    [InlineData("expiry only", true)]
+    public void AnExpiryAndASpawn_InOneTick_DoNotDefeat(string how, bool defeated)
     {
         var sim = TestSim.Explored(new Simulation(TestSim.ConfigNoCombat(2, 2, 32, 64), LocalMovementTests.Flat(48)));
         World w = sim.World;
-        int house = BuildingType(w, 0, BuildingSlot.House);
-        EntityHandle site = Spawn(sim, 0, house, 8, 8, site: true);
+        int house = BuildingType(w, 0, BuildingSlot.House), worker = UnitType(w, 0, UnitSlot.Worker);
+        Spawn(sim, 0, house, 8, 8, site: true);
         Spawn(sim, 1, BuildingType(w, 1, BuildingSlot.TownHall), 34, 34);
-        BuildMaps.SetTotals(sim, 0, 1000, 1000);
-        EntityHandle worker = CombatScenes.Place(sim, 0, UnitType(w, 0, UnitSlot.Worker), At(sim, 16, 16));
-        Command cancel = Command.Cancel(0, Centre(sim, site)), build = Command.Build(0, worker, house, At(sim, 20, 20));
-        if (how == "build then cancel") sim.Enqueue(build);
-        sim.Enqueue(cancel);
-        if (how == "cancel then build") sim.Enqueue(build);
+        // A command queued now applies in the second tick from here: the summon ends in that one.
+        int ends = sim.TickNumber + 1;
+        Assert.True(w.Units.TrySpawn(0, worker, w.Data.Units[worker], At(sim, 16, 16), ends, out EntityHandle summon));
+        if (how == "expiry and a spawn") sim.Enqueue(Command.SpawnUnit(0, worker, At(sim, 20, 20)));
         Applied(sim);
-        Assert.False(w.Buildings.IsAlive(site));
+        Assert.False(w.Units.IsAlive(summon));
         Assert.Equal(defeated, w.IsDefeated(0));
-        Assert.Equal(defeated ? 0 : 1, w.Ledger.LiveBuildings[0]);
+        Assert.Equal(defeated ? 0 : 1, w.LiveUnits(0));
         Assert.Equal(defeated ? 1 : 0, w.DefeatEvents.Length);
         Assert.Equal(defeated, sim.MatchOver);
     }
@@ -206,7 +210,9 @@ public class DefeatRuleQaTests
     /// <summary>
     /// The exact tick: the player's only site, one builder on it, is cancelled by a Cancel that applies (phase 1) on the very
     /// tick its last work would land (phase 4): the cancel wins and the player is defeated on that tick. One tick later the
-    /// site has finished, the Cancel is dropped (a finished building isn't a site) and nobody is defeated.
+    /// site has finished, the Cancel is dropped (a finished building isn't a site) and nobody is defeated. M5-4e re-staged:
+    /// the site is a Town Hall (a finished one keeps a side in) and the builder a summon that expires (phase 5) on the
+    /// cancel's tick, so the hall alone decides.
     /// </summary>
     [Theory]
     [InlineData(0, true)]
@@ -215,10 +221,10 @@ public class DefeatRuleQaTests
     {
         var sim = TestSim.Explored(new Simulation(TestSim.ConfigNoCombat(2, 2, 32, 64), LocalMovementTests.Flat(48)));
         World w = sim.World;
-        int house = BuildingType(w, 0, BuildingSlot.House);
+        int house = BuildingType(w, 0, BuildingSlot.TownHall), workerType = UnitType(w, 0, UnitSlot.Worker);
         Spawn(sim, 1, BuildingType(w, 1, BuildingSlot.TownHall), 34, 34);
-        BuildMaps.SetTotals(sim, 0, 1000, 1000);
-        EntityHandle worker = CombatScenes.Place(sim, 0, UnitType(w, 0, UnitSlot.Worker), At(sim, 12, 12));
+        BuildMaps.SetTotals(sim, 0, 100_000, 100_000);
+        Assert.True(w.Units.TrySpawn(0, workerType, w.Data.Units[workerType], At(sim, 15, 15), int.MaxValue, out EntityHandle worker));
         sim.Enqueue(Command.Build(0, worker, house, At(sim, 10, 10)));
         Applied(sim);
         int s = w.Buildings.SlotAt(10, 10);
@@ -239,16 +245,20 @@ public class DefeatRuleQaTests
         Assert.True(w.Buildings.Work[s] + step < needed, "the site finishes on the next tick: no room for the exact-tick case");
         for (int k = 0; k < late; k++) sim.Tick();
         sim.Enqueue(Command.Cancel(0, Centre(sim, site)));
+        w.Units.ExpiresAtTick[worker.Index] = sim.TickNumber + 1; // the cancel's tick
         Applied(sim);
+        Assert.False(w.Units.IsAlive(worker));
         Assert.Equal(defeated, !w.Buildings.IsAlive(site));
         Assert.Equal(defeated, w.IsDefeated(0));
         if (!defeated) Assert.False(w.Buildings.UnderConstruction[s]);
     }
 
     /// <summary>
-    /// Three and four seats on a generated map with that many start locations, all human, recorded: each player places a
-    /// house site with its worker; player 1's is razed by player 0's spawned soldiers, then (four seats) players 2 and 3
-    /// cancel theirs on one tick, or (three seats) player 2 cancels. The events come in player order on their tick,
+    /// Three and four seats on a generated map with that many start locations, all human, recorded: players 0 and 1 place a
+    /// house site with their worker; player 1's site and then its worker are killed by player 0's spawned soldiers
+    /// (shift-queued Attacks); before that, with those sites, (four seats) players 2 and 3, with no unit, place a finished House
+    /// each on one tick (a house alone doesn't keep a side in, M5-4e: they are out on that tick), or (three seats) player 2
+    /// does. The events come in player order on their tick,
     /// <see cref="Simulation.MatchOver"/> turns true only at the last defeat, the losers keep sending orders (logged, dropped),
     /// and the recording plays back to equal checkpoints well past the end.
     /// </summary>
@@ -276,25 +286,32 @@ public class DefeatRuleQaTests
             factions[p] = w.FactionOf(p);
         }
         StartBasePlan plan = StartBase.Plan(g, w.Data, w.Buildings, w.Resources.Alive, w.Resources.TypeId, w.Resources.Cell, factions, blocks, 1, maxRadius);
+        int[] losers = seats == 4 ? new[] { 2, 3 } : new[] { 2 };
         for (int p = 0; p < seats; p++)
         {
             Assert.True(plan.HallAnchor[p] >= 0, $"no start for player {p}");
-            sim.Enqueue(Command.SpawnUnit(p, plan.WorkerType[p], plan.Workers[p][0]));
+            if (p < 2) sim.Enqueue(Command.SpawnUnit(p, plan.WorkerType[p], plan.Workers[p][0]));
         }
         Applied(sim);
         var workers = new EntityHandle[seats];
         for (int i = 0; i < w.Units.Capacity; i++)
             if (w.Units.Alive[i]) workers[w.Units.Owner[i]] = new EntityHandle(i, w.Units.Generation[i]);
-        for (int p = 0; p < seats; p++)
+        for (int p = 0; p < 2; p++)
         {
             int anchor = plan.HallAnchor[p];
             sim.Enqueue(Command.Build(p, workers[p], BuildingType(w, p, BuildingSlot.House), g.CellCenter(anchor % g.Width, anchor / g.Width)));
         }
+        // The losers' Houses land on the same tick as the sites (so four players have built when they fall).
+        foreach (int p in losers)
+            sim.Enqueue(Command.SpawnBuilding(p, BuildingType(w, p, BuildingSlot.House), g.CellCenter(plan.HallAnchor[p] % g.Width, plan.HallAnchor[p] / g.Width)));
         Applied(sim);
+        var events = new List<DefeatEvent>(w.DefeatEvents.ToArray());
+        Assert.Equal(losers, events.Select(e => e.Player).ToArray());
+        Assert.False(sim.MatchOver);
         var sites = new EntityHandle[seats];
         for (int k = 0; k < w.Buildings.Capacity; k++)
             if (w.Buildings.Alive[k]) sites[w.Buildings.Owner[k]] = w.Buildings.HandleOf(k);
-        for (int p = 0; p < seats; p++) Assert.True(w.Buildings.IsAlive(sites[p]), $"player {p} placed no site");
+        for (int p = 0; p < 2; p++) Assert.True(w.Buildings.IsAlive(sites[p]), $"player {p} placed no site");
         // Player 0's soldiers beside player 1's site, ordered onto it.
         int heavy = CombatScenes.HeavyInfantry;
         Vector2 at1 = Centre(sim, sites[1]);
@@ -302,10 +319,11 @@ public class DefeatRuleQaTests
         Applied(sim);
         for (int i = 0; i < w.Units.Capacity; i++)
             if (w.Units.Alive[i] && w.Units.Owner[i] == 0 && w.Units.TypeId[i] == heavy)
+            {
                 sim.Enqueue(Command.Attack(0, new EntityHandle(i, w.Units.Generation[i]), sites[1], isBuilding: true));
-        var events = new List<DefeatEvent>();
-        int over = -1, cancelAt = -1, lastDefeat = -1;
-        int[] losers = seats == 4 ? new[] { 2, 3 } : new[] { 2 };
+                sim.Enqueue(Command.Attack(0, new EntityHandle(i, w.Units.Generation[i]), workers[1], isBuilding: false, queued: true));
+            }
+        int over = -1, lastDefeat = -1;
         while (sim.TickNumber < 3000 && (over < 0 || sim.TickNumber < over + 400))
         {
             // The others keep ordering their workers about the whole time, and once defeated try to place again.
@@ -317,12 +335,6 @@ public class DefeatRuleQaTests
                     sim.Enqueue(Command.SpawnBuilding(p, BuildingType(w, p, BuildingSlot.House), w.Units.Position[workers[p].Index] + new Vector2(6f, 6f)));
                     sim.Enqueue(Command.Build(p, workers[p], BuildingType(w, p, BuildingSlot.House), w.Units.Position[workers[p].Index] + new Vector2(-6f, 6f)));
                 }
-            if (cancelAt < 0 && w.IsDefeated(1))
-            {
-                // Then the rest cancel theirs on one tick.
-                foreach (int p in losers) sim.Enqueue(Command.Cancel(p, Centre(sim, sites[p])));
-                cancelAt = sim.TickNumber;
-            }
             sim.Tick();
             foreach (DefeatEvent e in w.DefeatEvents)
             {
@@ -336,15 +348,18 @@ public class DefeatRuleQaTests
         _out.WriteLine($"{seats} seats, seed {seed}: events {string.Join(", ", events)}; over at {over}");
         Assert.True(over >= 0, "the match never ended");
         Assert.Equal(1 + losers.Length, events.Count);
-        Assert.Equal(1, events[0].Player);
-        Assert.Equal(losers, events.Skip(1).Select(e => e.Player).ToArray());
-        Assert.True(events.Skip(1).All(e => e.Tick == events[1].Tick), "the same-tick cancels fell on different ticks");
-        Assert.True(events[1].Tick > events[0].Tick);
+        Assert.Equal(1, events[^1].Player);
+        Assert.Equal(losers, events.Take(losers.Length).Select(e => e.Player).ToArray());
+        Assert.True(events.Take(losers.Length).All(e => e.Tick == events[0].Tick), "the same-tick Houses fell on different ticks");
+        Assert.True(events[^1].Tick > events[0].Tick);
         Assert.Equal(lastDefeat, over);
         Assert.False(w.IsDefeated(0));
-        // The defeated players' SpawnBuildings and Builds never landed.
+        // The defeated players' later SpawnBuildings and Builds never landed: player 1 has nothing, the others their House.
+        var owned = new int[seats];
         for (int k = 0; k < w.Buildings.Capacity; k++)
-            if (w.Buildings.Alive[k]) Assert.Equal(0, w.Buildings.Owner[k]);
+            if (w.Buildings.Alive[k]) owned[w.Buildings.Owner[k]]++;
+        Assert.Equal(0, owned[1]);
+        foreach (int p in losers) Assert.Equal(1, owned[p]);
         Replay r = rec.ToReplay();
         Assert.True(r.Commands.Count(c => c.Player != 0 && c.Tick > over) > 20, "the losers' later commands weren't logged");
         ReplayResult played = ReplayPlayer.Run(r, TestSim.Data);

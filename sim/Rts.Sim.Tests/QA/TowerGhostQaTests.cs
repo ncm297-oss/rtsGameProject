@@ -171,6 +171,7 @@ public class TowerGhostQaTests
         int billet = w.Data.FindBuilding("malazan_billet");
         EntityHandle own = TowerTests.PlaceBuilding(sim, 0, billet, 6, 6); // player 0's own, in the enemy Tent's old slot
         Assert.Equal(tent.Index, own.Index);
+        TestSim.KeepIn(sim, 0); // M5-4e: a unit keeps the player in (a House, Forge, depot, tower or site alone no longer does)
         FogMaps.RunThroughNextUpdate(sim);
         Assert.True(w.Fog.Ghosts(0)[tent.Index].Known, "the ghost went without its ground being seen");
         Assert.Equal(tent.Generation, w.Fog.Ghosts(0)[tent.Index].Generation);

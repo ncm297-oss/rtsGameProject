@@ -127,6 +127,7 @@ public class GatherPocketStressTests
             Simulation sim = GatherMaps.NewSim(Flat(MapW, MapH), units: 48, seed: seed);
             World w = sim.World;
             UnitStore u = w.Units;
+            TestSim.KeepIn(sim, 0); // M5-4e: a unit keeps the player in (a House, Forge, depot, tower or site alone no longer does)
             EntityHandle node = BuildPocket(sim, shape);
             Building(sim, 24, 18); // the Keep: a drop-off for both kinds
             var rng = new SimRng(seed, 907);

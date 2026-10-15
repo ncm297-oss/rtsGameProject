@@ -64,4 +64,33 @@ public static class TestSim
         sim.World.Fog.ExploreAllForTests();
         return sim;
     }
+
+    /// <summary>
+    /// M5-4e: keeps <paramref name="player"/> in for a scene about something else. Since the new defeat rule a player that
+    /// has built is out once it has no live unit and no finished unit-producing building, so a scene whose player holds
+    /// only Houses, depots, a Forge, towers or sites (and no unit yet) would see its later commands dropped. This puts one
+    /// summoned worker of the player's faction, which never expires and takes no population, on the passable cell nearest
+    /// the map's far corner (the store seam: no tick runs, and a replay can't carry it). Returns its handle.
+    /// <para>
+    /// Side effects a scene should know about (BUG-0704): the keeper is a live summon for the whole scene, so
+    /// <c>SummonSystem</c> scans the unit slots every tick, and it gives its player sight around that corner. Keep it out of
+    /// fog and perf scenes whose numbers would change. Two players kept in a combat scene must not share a corner (they
+    /// would fight): pass <paramref name="nearCorner"/> for one of them to use the passable cell nearest cell (0, 0).
+    /// </para>
+    /// </summary>
+    public static Rts.Sim.Entities.EntityHandle KeepIn(Simulation sim, int player, bool nearCorner = false)
+    {
+        World w = sim.World;
+        Map.NavGrid g = w.NavGrid;
+        int worker =Rts.Sim.ViewApi.StartBase.UnitOfSlot(w.Data, w.FactionOf(player), UnitSlot.Worker);
+        int cells = g.Width * g.Height;
+        for (int k = 0; k < cells; k++)
+        {
+            int c = nearCorner ? k : cells - 1 - k;
+            if (!g.IsPassable(c % g.Width, c / g.Width)) continue;
+            Assert.True(w.Units.TrySpawn(player, worker, w.Data.Units[worker], g.CellCenter(c % g.Width, c / g.Width), int.MaxValue, out Rts.Sim.Entities.EntityHandle h));
+            return h;
+        }
+        throw new InvalidOperationException("no passable cell");
+    }
 }
