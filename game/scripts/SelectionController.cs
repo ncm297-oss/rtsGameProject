@@ -182,6 +182,7 @@ public partial class SelectionController : Node
         UnitStore u = world.Units;
         Selection.Prune(u.Alive, u.Generation);
         Groups.Prune(u.Alive, u.Generation);
+        Groups.PruneBuildings(world.Buildings.Alive, world.Buildings.Generation);
         // Nothing left to attack-move: the next click must be a normal selection click (BUG-0067).
         if (Selection.Count == 0) Targeting = false;
         // A death keeps the active subgroup while its type is still selected.
@@ -471,25 +472,43 @@ public partial class SelectionController : Node
     public void CancelTargeting() => Targeting = false;
 
     // Ctrl + digit assigns, Shift + digit adds (Ctrl wins when both are held), a plain digit recalls;
-    // a second quick recall of the same group centres the camera on it.
+    // a second quick recall of the same group centres the camera on it. M6-V7: with a building selected, Ctrl or Shift +
+    // digit makes the group that building alone (a group is units or one building, as the selection is); recalling it
+    // selects the building (card and panel follow) and a double-tap centres on its footprint.
     private void GroupKey(int g)
     {
-        UnitStore u = _runner.Simulation!.World.Units;
+        World world = _runner.Simulation!.World;
+        UnitStore u = world.Units;
+        BuildingStore b = world.Buildings;
         Selection.Prune(u.Alive, u.Generation);
-        if (Input.IsActionPressed("group_assign"))
+        int building = SelectedBuilding;
+        if (Input.IsActionPressed("group_assign") || Input.IsActionPressed("group_add"))
         {
-            if (Selection.Count > 0) Groups.Assign(g, Selection.Items); // an empty selection never wipes a group
+            if (building >= 0) Groups.AssignBuilding(g, b.HandleOf(building));
+            else if (Input.IsActionPressed("group_assign"))
+            {
+                if (Selection.Count > 0) Groups.Assign(g, Selection.Items); // an empty selection never wipes a group
+            }
+            else Groups.Add(g, Selection.Items);
+            return;
         }
-        else if (Input.IsActionPressed("group_add")) Groups.Add(g, Selection.Items);
+        int held = Groups.RecallBuilding(g, b.Alive, b.Generation);
+        if (held >= 0)
+        {
+            if (held != building) _sfx?.Play(SfxEvent.Select);
+            SelectBuilding(held);
+        }
         else
         {
             SnapshotSelection();
             if (Groups.Recall(g, Selection, u.Alive, u.Generation) == 0) return;
             SelectionChanged();
             PlaySelectIfChanged();
-            if (Groups.Tap(g, Time.GetTicksMsec() / 1000.0) && Groups.TryMean(g, u.Position, u.Alive, u.Generation, out System.Numerics.Vector2 mean))
-                _camera.SetFocus(mean.X, mean.Y);
         }
+        if (Groups.Tap(g, Time.GetTicksMsec() / 1000.0)
+            && (Groups.TryBuildingCentre(g, b, world.Data.Buildings, world.NavGrid, out System.Numerics.Vector2 centre)
+                || Groups.TryMean(g, u.Position, u.Alive, u.Generation, out centre)))
+            _camera.SetFocus(centre.X, centre.Y);
     }
 
     /// <summary>Screen position (pixels) of a unit's body centre as the picker sees it; false if behind the camera.</summary>

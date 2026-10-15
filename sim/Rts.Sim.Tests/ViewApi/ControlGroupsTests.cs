@@ -150,4 +150,101 @@ public class ControlGroupsTests
         Assert.Equal(new Vector2(20, 30), mean);
         Assert.False(groups.TryMean(1, store.Position, store.Alive, store.Generation, out _));
     }
+
+    // ---- M6-V7: a group holds units or one building ----
+
+    [Fact]
+    public void AssignBuilding_RecallSelectsIt_AndHoldsNoUnits()
+    {
+        (Simulation sim, int house, _, _) = BuildingPickerTests.Base(1);
+        BuildingStore b = sim.World.Buildings;
+        UnitStore u = sim.World.Units;
+        var groups = new ControlGroups(u.Capacity);
+        groups.AssignBuilding(0, b.HandleOf(house));
+        Assert.Equal(b.HandleOf(house), groups.Building(0));
+        Assert.Equal(house, groups.RecallBuilding(0, b.Alive, b.Generation));
+        Assert.Equal(0, groups.Items(0).Length);
+        // The unit recall finds nothing, so the selection it would replace is left alone (the controller selects the building).
+        var selection = new SelectionSet(u.Capacity);
+        Assert.Equal(0, groups.Recall(0, selection, u.Alive, u.Generation));
+        Assert.Equal(-1, groups.RecallBuilding(1, b.Alive, b.Generation)); // groups are independent
+        Assert.Equal(0, groups.Building(1).Generation);
+    }
+
+    [Fact]
+    public void UnitsReplaceABuilding_AndABuildingReplacesUnits()
+    {
+        (Simulation sim, int house, int site, _) = BuildingPickerTests.Base(1);
+        BuildingStore b = sim.World.Buildings;
+        var units = new UnitStore(8);
+        EntityHandle a = units.Alloc(), c = units.Alloc();
+        var groups = new ControlGroups(units.Capacity);
+
+        // Ctrl + digit with units over a building group: units only.
+        groups.AssignBuilding(0, b.HandleOf(house));
+        groups.Assign(0, new[] { a });
+        Assert.Equal(0, groups.Building(0).Generation);
+        Assert.Equal(-1, groups.RecallBuilding(0, b.Alive, b.Generation));
+        Assert.Equal(new[] { a }, groups.Items(0).ToArray());
+
+        // Ctrl (or Shift) + digit with a building over a unit group: the building only.
+        groups.AssignBuilding(0, b.HandleOf(site));
+        Assert.Equal(0, groups.Items(0).Length);
+        Assert.Equal(site, groups.RecallBuilding(0, b.Alive, b.Generation));
+
+        // Shift + digit with units over a building group: the units come in, the building goes; with no units nothing changes.
+        groups.Add(0, ReadOnlySpan<EntityHandle>.Empty);
+        Assert.Equal(site, groups.RecallBuilding(0, b.Alive, b.Generation));
+        groups.Add(0, new[] { a, c });
+        Assert.Equal(0, groups.Building(0).Generation);
+        Assert.Equal(new[] { a, c }, groups.Items(0).ToArray());
+    }
+
+    [Fact]
+    public void ARazedOrRecycledBuilding_IsPrunedAndNeverRecalled()
+    {
+        (Simulation sim, int house, int site, int enemy) = BuildingPickerTests.Base(1);
+        World w = sim.World;
+        BuildingStore b = w.Buildings;
+        var groups = new ControlGroups(w.Units.Capacity);
+        EntityHandle houseHandle = b.HandleOf(house);
+        groups.AssignBuilding(0, houseHandle);
+        groups.AssignBuilding(1, b.HandleOf(site));
+        groups.AssignBuilding(2, houseHandle);
+        int houseType = b.TypeId[house], houseCell = b.Cell[house];
+
+        Assert.True(b.Free(houseHandle)); // razed
+        // Recalled before a frame's prune: dropped, never selected.
+        Assert.Equal(-1, groups.RecallBuilding(0, b.Alive, b.Generation));
+        Assert.Equal(0, groups.Building(0).Generation);
+        // The slot reused by another building (a new generation): still never recalled.
+        Assert.True(b.Spawn(1, houseType, houseCell, out EntityHandle reborn));
+        Assert.Equal(house, reborn.Index);
+        Assert.Equal(1, groups.PruneBuildings(b.Alive, b.Generation)); // group 2's
+        Assert.Equal(-1, groups.RecallBuilding(2, b.Alive, b.Generation));
+        Assert.Equal(site, groups.RecallBuilding(1, b.Alive, b.Generation)); // the site's group is untouched
+        Assert.Equal(0, groups.PruneBuildings(b.Alive, b.Generation));
+        Assert.True(enemy >= 0);
+    }
+
+    [Fact]
+    public void DoubleTapCentre_IsTheBuildingsFootprintCentre()
+    {
+        (Simulation sim, int house, _, _) = BuildingPickerTests.Base(1);
+        World w = sim.World;
+        BuildingStore b = w.Buildings;
+        var groups = new ControlGroups(w.Units.Capacity);
+        groups.AssignBuilding(0, b.HandleOf(house));
+        Assert.True(groups.TryBuildingCentre(0, b, w.Data.Buildings, w.NavGrid, out Vector2 centre));
+        Assert.Equal(StartBase.FootprintCenter(w.NavGrid, w.Data.Buildings[b.TypeId[house]], b.Cell[house]), centre);
+
+        // A unit group or an empty one has no building centre (the controller then takes the units' mean, TryMean).
+        groups.Assign(1, new[] { new EntityHandle(0, 1) });
+        Assert.False(groups.TryBuildingCentre(1, b, w.Data.Buildings, w.NavGrid, out _));
+        Assert.False(groups.TryBuildingCentre(2, b, w.Data.Buildings, w.NavGrid, out _));
+        // Razed: false, and the group lets it go.
+        Assert.True(b.Free(b.HandleOf(house)));
+        Assert.False(groups.TryBuildingCentre(0, b, w.Data.Buildings, w.NavGrid, out _));
+        Assert.Equal(0, groups.Building(0).Generation);
+    }
 }

@@ -2,18 +2,25 @@ using System;
 
 namespace Rts.Sim;
 
-// M5-4b: the defeat rule (docs/02 "Game flow" 4, docs/03 "Implementation (M5-4b)"). A player with no live building (sites
-// included) who had one before is defeated, once and for good; a player who never built is never defeated.
+// The defeat rule (docs/02 "Game flow" 4, docs/03 "Implementation (M5-4e)"; M5-4b's flags and event). A player that has
+// had a building and now has no live unit and no finished unit-producing building is defeated, once and for good; a player
+// that never built is never defeated.
 public sealed partial class World
 {
     // At most one event per player a tick; sized in the constructor.
     private readonly DefeatEvent[] _defeatEvents;
 
-    /// <summary>Whether <paramref name="player"/> is defeated: it had a building and has none left (checked once a tick, after phase 11). Sticky and hashed; false for no such player.</summary>
+    /// <summary>Whether <paramref name="player"/> is defeated: it had a building and has no live unit and no finished unit-producing building left (checked once a tick, after phase 11). Sticky and hashed; false for no such player.</summary>
     public bool IsDefeated(int player) => _ledger.Has(player) && _ledger.Defeated[player];
 
     /// <summary>Whether <paramref name="player"/> has ever had a building (a site counts). Sticky and hashed; false for no such player.</summary>
     public bool EverBuilt(int player) => _ledger.Has(player) && _ledger.EverBuilt[player];
+
+    /// <summary>M5-4e: <paramref name="player"/>'s live units, summoned ones included (what keeps it in, with <see cref="ProductionBuildings"/>); 0 for no such player.</summary>
+    public int LiveUnits(int player) => _ledger.Has(player) ? _ledger.LiveUnits[player] : 0;
+
+    /// <summary>M5-4e: <paramref name="player"/>'s finished buildings whose type trains at least one unit (sites, houses, camps, towers don't count); 0 for no such player.</summary>
+    public int ProductionBuildings(int player) => _ledger.Has(player) ? _ledger.ProductionBuildings[player] : 0;
 
     /// <summary>
     /// The players defeated in the last tick run, in player order, each with its tick. Emptied at the start of every tick like
@@ -54,15 +61,15 @@ public sealed partial class World
     internal void ClearDefeatEvents() => DefeatEventCount = 0;
 
     /// <summary>
-    /// Phase 11b: every player that ever built, isn't defeated yet and has no live building now is defeated, in player order,
-    /// with an event. Runs after every phase that can take a building away (a cancel in phase 1, an ability in phase 6, a hit
-    /// or a landing in phase 11).
+    /// Phase 11b: every player that ever built, isn't defeated yet and has no live unit and no finished unit-producing
+    /// building now is defeated, in player order, with an event (M5-4e). Runs after every phase that can take a unit or a
+    /// building away (a cancel in phase 1, a summon's expiry in phase 5, an ability in phase 6, a hit or a landing in phase 11).
     /// </summary>
     internal void UpdateDefeats()
     {
         for (int p = 0; p < _ledger.Defeated.Length; p++)
         {
-            if (!_ledger.EverBuilt[p] || _ledger.Defeated[p] || _ledger.LiveBuildings[p] > 0) continue;
+            if (!_ledger.EverBuilt[p] || _ledger.Defeated[p] || _ledger.LiveUnits[p] > 0 || _ledger.ProductionBuildings[p] > 0) continue;
             _ledger.Defeated[p] = true;
             _defeatEvents[DefeatEventCount++] = new DefeatEvent(p, TickNumber);
         }

@@ -128,6 +128,7 @@
     "music_volume": "Music volume",
     "sfx_volume": "Sound effects volume",
     "edge_pan_speed": "Edge pan speed",
+    "confine_cursor": "Confine cursor to window",
     "apply": "Apply",
     "defaults": "Defaults",
     "back": "Back"

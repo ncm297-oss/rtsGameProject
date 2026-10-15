@@ -7,7 +7,7 @@ namespace Rts.Game;
 
 /// <summary>
 /// The settings screen (M6-V6, docs/02 "Game flow" 7), from the main menu and the pause menu: resolution, window mode,
-/// VSync, quality, master / music / SFX volume, edge pan speed; Apply, Defaults, Back. Text from <c>ui.json</c> <c>settings</c>.
+/// VSync, quality, master / music / SFX volume, edge pan speed, confine cursor to window (M6-V7); Apply, Defaults, Back. Text from <c>ui.json</c> <c>settings</c>.
 /// </summary>
 /// <remarks>
 /// The controls hold the picks until a button commits them; the screen only raises events and <see cref="Main"/> applies
@@ -68,6 +68,9 @@ public partial class SettingsScreen : CanvasLayer
     /// <summary>The edge pan speed slider (0.5-2).</summary>
     public HSlider EdgePanSlider { get; private set; } = null!;
 
+    /// <summary>The "confine cursor to window" check box (M6-V7); pressed = on.</summary>
+    public CheckBox ConfineCheck { get; private set; } = null!;
+
     /// <summary>The Apply button.</summary>
     public Button ApplyButton { get; private set; } = null!;
 
@@ -103,6 +106,8 @@ public partial class SettingsScreen : CanvasLayer
         MusicSlider = SliderRow(grid, SettingsText.MusicVolume, "Music", 0, GameSettings.MaxVolume, 1);
         SfxSlider = SliderRow(grid, SettingsText.SfxVolume, "Sfx", 0, GameSettings.MaxVolume, 1);
         EdgePanSlider = SliderRow(grid, SettingsText.EdgePanSpeed, "EdgePan", GameSettings.MinEdgePan, GameSettings.MaxEdgePan, EdgePanStep);
+        // No words on the box itself: its label is the row's (ui.json), so the text stays data-only.
+        ConfineCheck = Row(grid, SettingsText.ConfineCursor, new CheckBox { Name = "ConfineCursor", CustomMinimumSize = new Vector2(40f, 40f) });
 
         var buttons = new HBoxContainer { Name = "Buttons", Alignment = BoxContainer.AlignmentMode.Center };
         buttons.AddThemeConstantOverride("separation", 24);
@@ -132,6 +137,7 @@ public partial class SettingsScreen : CanvasLayer
         MusicSlider.Value = s.MusicVolume;
         SfxSlider.Value = s.SfxVolume;
         EdgePanSlider.Value = s.EdgePan;
+        ConfineCheck.ButtonPressed = s.ConfineCursor;
     }
 
     /// <summary>The picks on the screen now.</summary>
@@ -150,6 +156,7 @@ public partial class SettingsScreen : CanvasLayer
             SfxVolume = (int)Math.Round(SfxSlider.Value),
             // The slider's steps are 0.05, so the pick is a round number in the file.
             EdgePan = (float)Math.Round(EdgePanSlider.Value, 2),
+            ConfineCursor = ConfineCheck.ButtonPressed,
         };
     }
 

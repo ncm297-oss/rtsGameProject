@@ -1175,8 +1175,12 @@ public class StateHashTests
         Assert.Equal(built, sim.StateHash());
         ledger.EverBuilt[0] = true;
         ledger.LiveBuildings[0] += 2; // derived
+        ledger.LiveUnits[0] += 2; // M5-4e: derived from the unit store
+        ledger.ProductionBuildings[0] += 2; // M5-4e: derived from the building store
         Assert.Equal(built, sim.StateHash());
         ledger.LiveBuildings[0] -= 2;
+        ledger.LiveUnits[0] -= 2;
+        ledger.ProductionBuildings[0] -= 2;
     }
 
     [Fact]

@@ -14,7 +14,8 @@ namespace Rts.Game.Tests;
 /// text), every field changed, Back: the file (read back through <see cref="ConfigFile"/>), the bus volumes, the quality on the
 /// viewport; reopened shows the picks; Defaults restores the defaults and the file; Apply stays. A skirmish's camera takes the
 /// edge pan; from the pause menu the same screen opens over the paused match and Esc returns to the pause menu still paused.
-/// A child boot on a corrupt file gets the defaults with one warning and no error line.
+/// A child boot on a corrupt file gets the defaults with one warning and no error line. M6-V7: the confine key (default on,
+/// round trip, missing = on without a problem, junk = one problem), its check box, and the shell's confine state in a match.
 /// </summary>
 /// <remarks>
 /// Headless: <c>&amp; $env:GODOT --headless --path game res://tests/SettingsTest.tscn</c>; prints "SETTINGS TEST PASS" and exits 0,
@@ -112,7 +113,14 @@ public partial class SettingsTest : Node
             ("20 digits and a fraction", "[camera]\nedge_pan=99999999999999999999.5\n", 9, s => s.SameAs(defaults)),
             ("20 digits and an exponent", "[camera]\nedge_pan=99999999999999999999e2\n", 9, s => s.SameAs(defaults)),
             ("extra keys", new GameSettings { MusicVolume = 7 }.Encode() + "\n[keys]\nfuture=\"x\"\n[display]\nextra=3\n", 0, s => s.MusicVolume == 7),
+            // M6-V7: camera.confine_cursor. Off reads off; a file from before the key reads clean with the default (on); a value
+            // that isn't true / false is one problem and the default.
+            ("confine off", new GameSettings { ConfineCursor = false }.Encode(), 0, s => !s.ConfineCursor),
+            ("confine missing (an M6-V6 file)", WithoutConfine(new GameSettings { MusicVolume = 9 }.Encode()), 0, s => s.ConfineCursor && s.MusicVolume == 9),
+            ("confine a number", WithoutConfine(new GameSettings().Encode()) + "\nconfine_cursor=0\n", 1, s => s.ConfineCursor),
+            ("confine a string", WithoutConfine(new GameSettings().Encode()) + "\nconfine_cursor=\"off\"\n", 1, s => s.ConfineCursor),
         };
+        Check(defaults.ConfineCursor && new GameSettings { ConfineCursor = false }.Encode().Contains("confine_cursor=false"), $"confine default on, written: [{defaults.Encode()}]");
         foreach ((string what, string? text, int want, Func<GameSettings, bool> ok) in rows)
         {
             DeleteTestFile();
@@ -121,7 +129,7 @@ public partial class SettingsTest : Node
             GameSettings s = GameSettings.Read(TestPath, problems, out bool found);
             Check(found == (text != null) && problems.Count == want && ok(s), $"read '{what}': {problems.Count} problems (want {want}): [{string.Join("; ", problems)}]");
         }
-        var picks = new GameSettings { Width = 1920, Height = 1200, WindowMode = SettingsWindowMode.Fullscreen, Vsync = false, Quality = SettingsQuality.Low, MasterVolume = 0, MusicVolume = 55, SfxVolume = 1, EdgePan = 0.5f };
+        var picks = new GameSettings { Width = 1920, Height = 1200, WindowMode = SettingsWindowMode.Fullscreen, Vsync = false, Quality = SettingsQuality.Low, MasterVolume = 0, MusicVolume = 55, SfxVolume = 1, EdgePan = 0.5f, ConfineCursor = false };
         Check(picks.Save(TestPath), "save failed");
         GameSettings back = GameSettings.Read(TestPath, new List<string>(), out _);
         Check(back.SameAs(picks), $"round trip: wrote [{picks.Encode()}], read [{back.Encode()}]");
@@ -129,6 +137,10 @@ public partial class SettingsTest : Node
         Check(!picks.Save(TestPath + "/inner.cfg"), "a save under a file's name claimed success");
         DeleteTestFile();
     }
+
+    // The encoded file without its confine_cursor line (the camera section stays last, so a line appended after it lands there).
+    private static string WithoutConfine(string text) =>
+        string.Join("\n", text.Split('\n').Where(l => !l.StartsWith("confine_cursor", StringComparison.Ordinal)));
 
     private async Task Flow()
     {
@@ -145,7 +157,7 @@ public partial class SettingsTest : Node
         await Click(menu.SettingsButton);
         Check(screen.Visible && !menu.Visible, $"Settings: screen {screen.Visible}, menu {menu.Visible}");
         foreach (SettingsText k in new[] { SettingsText.Title, SettingsText.Resolution, SettingsText.WindowMode, SettingsText.Vsync, SettingsText.Quality,
-            SettingsText.MasterVolume, SettingsText.MusicVolume, SettingsText.SfxVolume, SettingsText.EdgePanSpeed })
+            SettingsText.MasterVolume, SettingsText.MusicVolume, SettingsText.SfxVolume, SettingsText.EdgePanSpeed, SettingsText.ConfineCursor })
             Check(Labels(screen).Contains(_ui.Settings(k)), $"settings has no label '{_ui.Settings(k)}'");
         Check(screen.ApplyButton.Text == _ui.Settings(SettingsText.Apply) && screen.DefaultsButton.Text == _ui.Settings(SettingsText.Defaults) && screen.BackButton.Text == _ui.Settings(SettingsText.Back), "button text");
         Check(Items(screen.WindowModeOption).SequenceEqual(new[] { SettingsText.WindowWindowed, SettingsText.WindowBorderless, SettingsText.WindowFullscreen }.Select(_ui.Settings))
@@ -163,7 +175,7 @@ public partial class SettingsTest : Node
         await Shot("settings-menu");
 
         // Every field changed, then Back.
-        var picks = new GameSettings { Width = 1920, Height = 1080, WindowMode = SettingsWindowMode.Borderless, Vsync = false, Quality = SettingsQuality.High, MasterVolume = 80, MusicVolume = 30, SfxVolume = 0, EdgePan = 1.5f };
+        var picks = new GameSettings { Width = 1920, Height = 1080, WindowMode = SettingsWindowMode.Borderless, Vsync = false, Quality = SettingsQuality.High, MasterVolume = 80, MusicVolume = 30, SfxVolume = 0, EdgePan = 1.5f, ConfineCursor = false };
         Pick(screen, picks);
         await Click(screen.BackButton);
         Check(!screen.Visible && menu.Visible, $"Back: screen {screen.Visible}, menu {menu.Visible}");
@@ -194,6 +206,10 @@ public partial class SettingsTest : Node
         Check(match != null, "Start made no match");
         if (match == null) return;
         Check(match.GetNode<RtsCamera>("RtsCamera").EdgePanSpeed == 2f, $"the new match's edge pan {match.GetNode<RtsCamera>("RtsCamera").EdgePanSpeed}, want 2");
+        // M6-V7: the setting is on (Apply's picks keep the default) but headless has no window to confine the cursor to.
+        await Frames(2);
+        Check(_main.Settings.ConfineCursor && _main.ConfineAllowed == SettingsApplier.HasWindow && (SettingsApplier.HasWindow || !_main.CursorConfined),
+            $"confine in a match: setting {_main.Settings.ConfineCursor}, allowed {_main.ConfineAllowed}, confined {_main.CursorConfined}, window {SettingsApplier.HasWindow}");
         Check(match.GetNode<Sfx>("Sfx").GetChildren().OfType<AudioStreamPlayer>().All(p => p.Bus == GameSettings.SfxBus), "an effect player is not on the Sfx bus");
         foreach (string bus in new[] { GameSettings.MusicBus, GameSettings.SfxBus })
         {
@@ -212,6 +228,7 @@ public partial class SettingsTest : Node
         await WindowCycle(screen, match);
         var fromPause = _main.Settings.Clone();
         fromPause.EdgePan = 0.5f;
+        fromPause.ConfineCursor = false;
         Pick(screen, fromPause);
         await Type(Key.Escape);
         Check(!screen.Visible && pause.Visible && GetTree().Paused && _main.Paused && _main.CurrentMatch == match, $"Esc on settings over pause: screen {screen.Visible}, pause {pause.Visible}, tree paused {GetTree().Paused}");
@@ -219,6 +236,9 @@ public partial class SettingsTest : Node
         Committed(fromPause, "Esc over pause");
         await Type(Key.Escape);
         Check(!GetTree().Paused && !_main.Paused && !pause.Visible, "the second Esc did not resume");
+        // The setting turned off from the pause menu applies live: never confined, window or not.
+        await Frames(2);
+        Check(!_main.Settings.ConfineCursor && !_main.ConfineAllowed && !_main.CursorConfined, $"confine off live: allowed {_main.ConfineAllowed}, confined {_main.CursorConfined}");
         RemoveChild(_main);
         _main.QueueFree();
         await Frames(2);
@@ -251,7 +271,8 @@ public partial class SettingsTest : Node
             && (string)file.GetValue("display", "window_mode", "") == UiText.Key(want.WindowMode) && (bool)file.GetValue("display", "vsync", !want.Vsync) == want.Vsync
             && (string)file.GetValue("display", "quality", "") == UiText.Key(want.Quality) && (int)file.GetValue("audio", "master", -1) == want.MasterVolume
             && (int)file.GetValue("audio", "music", -1) == want.MusicVolume && (int)file.GetValue("audio", "sfx", -1) == want.SfxVolume
-            && Math.Abs((float)file.GetValue("camera", "edge_pan", 0f) - want.EdgePan) < 1e-4f, $"{what}: the file holds [{FileText()}], want [{want.Encode()}]");
+            && Math.Abs((float)file.GetValue("camera", "edge_pan", 0f) - want.EdgePan) < 1e-4f
+            && (bool)file.GetValue("camera", "confine_cursor", !want.ConfineCursor) == want.ConfineCursor, $"{what}: the file holds [{FileText()}], want [{want.Encode()}]");
         foreach ((string bus, int volume) in new[] { (GameSettings.MasterBus, want.MasterVolume), (GameSettings.MusicBus, want.MusicVolume), (GameSettings.SfxBus, want.SfxVolume) })
         {
             float db = AudioServer.GetBusVolumeDb(AudioServer.GetBusIndex(bus));
@@ -279,6 +300,7 @@ public partial class SettingsTest : Node
         screen.MusicSlider.Value = s.MusicVolume;
         screen.SfxSlider.Value = s.SfxVolume;
         screen.EdgePanSlider.Value = s.EdgePan;
+        screen.ConfineCheck.ButtonPressed = s.ConfineCursor;
     }
 
     // A child process boots Main on a corrupt file: the defaults, one settings warning, no error line.

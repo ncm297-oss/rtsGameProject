@@ -345,6 +345,7 @@ public class ConstructionQaTests
         // M5-4b (QA 2026-10-13-0916): an idle site of player 0's far off, so cancelling its only building never defeats it
         // (a defeated player's commands are dropped, docs/02 "Game flow" 4); the loop's intent is the cancel/refund ledger.
         Assert.True(sim.World.Buildings.Spawn(0, House, 21 * 64 + 60, out _, site: true));
+        TestSim.KeepIn(sim, 0); // M5-4e: a unit keeps the player in (a House, Forge, depot, tower or site alone no longer does)
         SetTotals(sim, 0, 5000, 5000);
         EntityHandle[] ws = Enumerable.Range(0, 3).Select(i => Unit(sim, At(sim, 4 + i, 4))).ToArray();
         BuildingStore b = sim.World.Buildings;
@@ -406,6 +407,7 @@ public class ConstructionQaTests
         // M5-4b (QA 2026-10-13-0916): an idle site of player 0's in a far corner, so the cancel of its only other building
         // doesn't defeat it (its rebuild would be dropped at the command door); counted as extra below.
         Assert.True(sim.World.Buildings.Spawn(0, House, 17 * 30 + 26, out _, site: true));
+        TestSim.KeepIn(sim, 0); // M5-4e: a unit keeps the player in (a House, Forge, depot, tower or site alone no longer does)
         const int extra = 1;
         SetTotals(sim, 0, 1000, 1000);
         EntityHandle w = Unit(sim, At(sim, 4, 4));
@@ -639,6 +641,7 @@ public class ConstructionQaTests
     public void BuildersFreedMidBuild_SiteKeepsItsWork_ASlotReusedDoesNotInheritTheOrder()
     {
         Simulation sim = BuildMaps.NewSim(Flat(30, 24));
+        TestSim.KeepIn(sim, 0); // M5-4e: a unit keeps the player in (a House, Forge, depot, tower or site alone no longer does)
         SetTotals(sim, 0, 1000, 1000);
         EntityHandle[] ws = WorkersRound(sim, 10, 10, 2, 2, 3);
         foreach (EntityHandle w in ws) sim.Enqueue(Command.Build(0, w, House, At(sim, 10, 10)));

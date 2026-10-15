@@ -2,6 +2,7 @@ using System.Numerics;
 using Rts.Sim.Ai;
 using Rts.Sim.Commands;
 using Rts.Sim.Data;
+using Rts.Sim.Entities;
 using Rts.Sim.Replays;
 using Xunit.Abstractions;
 
@@ -97,7 +98,8 @@ public class AiVersusAiTests
     /// stands yet), player 0's first wave razes the hall: the match reaches <see cref="Simulation.MatchOver"/> and player 1's
     /// AI sends nothing after its defeat (none of its commands in the log after it). The hp and totals are test seams a replay
     /// can't carry, so this run isn't played back (MatchOverTests plays a defeat back past MatchOver). The 20-minute "one side
-    /// wins" test is M5-5's.
+    /// wins" test is M5-5's. M5-4e: the razed hall alone no longer ends player 1 (its workers keep it in, and the AI doesn't
+    /// hunt them before M5-4d), so once its hall is down and nothing of it trains, the scene takes its units away (a seam).
     /// </summary>
     [Theory]
     [InlineData(1UL)]
@@ -121,8 +123,15 @@ public class AiVersusAiTests
             if (w.Buildings.Alive[k] && w.Buildings.Owner[k] == 1) w.Buildings.SetHp(k, 1);
         BuildMaps.SetTotals(sim, 1, 0, 0);
         int defeatedAt = -1, sentAtDefeat = 0;
+        int hallDownAt = -1;
         while (sim.TickNumber < 6000 && (defeatedAt < 0 || sim.TickNumber < defeatedAt + 2000))
         {
+            if (hallDownAt < 0 && w.ProductionBuildings(1) == 0)
+            {
+                hallDownAt = sim.TickNumber;
+                for (int i = 0; i < w.Units.Capacity; i++)
+                    if (w.Units.Alive[i] && w.Units.Owner[i] == 1) w.Units.Free(new EntityHandle(i, w.Units.Generation[i]));
+            }
             sim.Tick();
             if (defeatedAt < 0 && w.IsDefeated(1))
             {
@@ -130,7 +139,7 @@ public class AiVersusAiTests
                 sentAtDefeat = sim.AiOf(1)!.CommandsSent;
             }
         }
-        _out.WriteLine($"seed {seed}: player 1 defeated at tick {defeatedAt}; player 0 waves {sim.AiOf(0)!.Board.WavesStarted}; player 1 commands {sentAtDefeat}");
+        _out.WriteLine($"seed {seed}: player 1's hall down at tick {hallDownAt}, defeated at tick {defeatedAt}; player 0 waves {sim.AiOf(0)!.Board.WavesStarted}; player 1 commands {sentAtDefeat}");
         Assert.True(defeatedAt > 0, $"seed {seed}: player 1 was never defeated");
         Assert.True(sim.AiOf(0)!.Board.WavesStarted > 0, $"seed {seed}: player 0 sent no wave");
         Assert.True(sim.MatchOver);

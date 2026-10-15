@@ -217,6 +217,9 @@ public sealed class UnitStore
     private readonly int[] _freeList;
     // Per slot: the half-pop CountPop added for it (M3-4), so Free gives back exactly that; derived, not hashed.
     private readonly int[] _countedHalfPop;
+    // M5-4e: per slot, whether TrySpawn counted the unit in its owner's LiveUnits (the defeat rule), so Free takes back
+    // exactly that (a raw Alloc, a test seam, isn't counted); derived, not hashed.
+    private readonly bool[] _countedLive;
     private readonly Economy.PlayerLedger? _ledger;
     private int _freeCount;
 
@@ -291,6 +294,7 @@ public sealed class UnitStore
         Generation = new int[capacity];
         _freeList = new int[capacity];
         _countedHalfPop = new int[capacity];
+        _countedLive = new bool[capacity];
         // Push in reverse so the first allocations take slots 0, 1, 2...
         for (int i = 0; i < capacity; i++)
         {
@@ -374,6 +378,11 @@ public sealed class UnitStore
         TypeId[i] = typeId;
         Speed[i] = def.SpeedPerTick;
         Radius[i] = def.Radius;
+        if (_ledger != null && _ledger.Has(owner))
+        {
+            _countedLive[i] = true;
+            _ledger.AddLiveUnit(owner, 1);
+        }
         // BUG-0421: a unit starts at its maximum, its owner's hp techs included (World.MaxHpOf; at least 1).
         Hp[i] = _techs == null ? def.Hp : Math.Max(1, def.Hp + Combat.DamageCalc.Points(_techs.Bonus(owner, typeId, TechStat.Hp)));
         if (expiresAtTick != 0)
@@ -430,6 +439,11 @@ public sealed class UnitStore
         {
             _ledger?.AddHalfPop(Owner[handle.Index], -_countedHalfPop[handle.Index]);
             _countedHalfPop[handle.Index] = 0;
+        }
+        if (_countedLive[handle.Index])
+        {
+            _countedLive[handle.Index] = false;
+            _ledger!.AddLiveUnit(Owner[handle.Index], -1);
         }
         if (_belowHp[handle.Index])
         {

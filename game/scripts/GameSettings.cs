@@ -8,14 +8,15 @@ using Godot;
 namespace Rts.Game;
 
 /// <summary>
-/// The player's settings (M6-V6, docs/02 "Game flow" 7): resolution, window mode, VSync, quality, three volumes and the
-/// edge pan speed, stored in <c>user://settings.cfg</c> (a Godot <see cref="ConfigFile"/>, text). View state only: nothing
+/// The player's settings (M6-V6, docs/02 "Game flow" 7): resolution, window mode, VSync, quality, three volumes, the
+/// edge pan speed and (M6-V7) whether the cursor is confined to the window in a match, stored in <c>user://settings.cfg</c> (a Godot <see cref="ConfigFile"/>, text). View state only: nothing
 /// here reaches the sim.
 /// </summary>
 /// <remarks>
 /// <see cref="Load"/> never fails: a missing file is the defaults (one info line), a file it can't read or parse is the
 /// defaults (one warning), and each missing, mistyped or out-of-range key takes its default (all named in one warning);
-/// extra keys are ignored. The text is checked against the shape <see cref="Save"/> writes before <see cref="ConfigFile.Parse"/>
+/// extra keys are ignored. Keys added after M6-V6 (<c>camera.confine_cursor</c>) may be missing without a warning, so a file
+/// from an older build reads clean. The text is checked against the shape <see cref="Save"/> writes before <see cref="ConfigFile.Parse"/>
 /// sees it, because Godot logs an engine ERROR for a value it can't parse. <see cref="Save"/> writes through
 /// <see cref="System.IO"/> and reports a failure (a read-only folder) as a warning, never an error.
 /// </remarks>
@@ -75,13 +76,17 @@ public sealed class GameSettings
     /// <summary>Edge pan speed multiplier, 0.5-2.0.</summary>
     public float EdgePan { get; set; } = 1f;
 
+    /// <summary>Keep the cursor inside the window while a match runs (M6-V7; <c>camera.confine_cursor</c>, default on).</summary>
+    public bool ConfineCursor { get; set; } = true;
+
     /// <summary>A copy.</summary>
     public GameSettings Clone() => (GameSettings)MemberwiseClone();
 
     /// <summary>True when every field equals <paramref name="other"/>'s.</summary>
     public bool SameAs(GameSettings other) =>
         Width == other.Width && Height == other.Height && WindowMode == other.WindowMode && Vsync == other.Vsync && Quality == other.Quality
-        && MasterVolume == other.MasterVolume && MusicVolume == other.MusicVolume && SfxVolume == other.SfxVolume && EdgePan == other.EdgePan;
+        && MasterVolume == other.MasterVolume && MusicVolume == other.MusicVolume && SfxVolume == other.SfxVolume && EdgePan == other.EdgePan
+        && ConfineCursor == other.ConfineCursor;
 
     /// <summary>The bus gain for a 0-100 volume: <c>20 log10(v / 100)</c> dB (50 is -6 dB, 10 is -20 dB), 0 and below <see cref="SilentDb"/>, never NaN.</summary>
     public static float VolumeDb(int volume)
@@ -103,6 +108,7 @@ public sealed class GameSettings
         file.SetValue("audio", "music", MusicVolume);
         file.SetValue("audio", "sfx", SfxVolume);
         file.SetValue("camera", "edge_pan", EdgePan);
+        file.SetValue("camera", "confine_cursor", ConfineCursor);
         return file.EncodeToText();
     }
 
@@ -166,6 +172,8 @@ public sealed class GameSettings
         settings.MusicVolume = Int(file, "audio", "music", 0, MaxVolume, settings.MusicVolume, problems);
         settings.SfxVolume = Int(file, "audio", "sfx", 0, MaxVolume, settings.SfxVolume, problems);
         settings.EdgePan = Float(file, "camera", "edge_pan", MinEdgePan, MaxEdgePan, settings.EdgePan, problems);
+        // M6-V7: a file written before the key existed lacks it; that is the default, not a problem. A wrong value still is.
+        if (file.HasSectionKey("camera", "confine_cursor")) settings.ConfineCursor = Bool(file, "camera", "confine_cursor", settings.ConfineCursor, problems);
         return settings;
     }
 

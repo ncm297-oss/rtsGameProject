@@ -2,6 +2,7 @@ using System;
 using Godot;
 using Rts.Sim;
 using Rts.Sim.Data;
+using Rts.Sim.ViewApi;
 
 namespace Rts.Game;
 
@@ -18,6 +19,9 @@ namespace Rts.Game;
 /// the file for the run and never changes it. M6-V4: when the match gives the local player a result (<see cref="Match.Ended"/>)
 /// the tree pauses as for the pause menu and the match-over banner shows, once per match; its Continue watching unpauses and
 /// hides it for good, its Stats (and the pause menu's, from then on) opens the stats screen, its Main menu ends the match.
+/// M6-V7: every frame the shell confines the cursor to the window while a match runs unpaused in the focused window and the
+/// "Confine cursor to window" setting is on (<see cref="CursorConfine"/>), and frees it otherwise; each change is logged
+/// ("Cursor: confined" / "Cursor: visible"). Never headless, never with <c>--no-confine</c> (a shell flag, not a match flag).
 /// </remarks>
 public partial class Main : Node3D
 {
@@ -32,6 +36,7 @@ public partial class Main : Node3D
     private MatchOverBanner? _banner;
     private MatchStats? _stats;
     private bool _bannerShown;
+    private bool _noConfine;
 
     /// <summary>The user args to read instead of the command line's (tests); null for <see cref="OS.GetCmdlineUserArgs"/>.</summary>
     public string[]? UserArgs { get; set; }
@@ -78,6 +83,15 @@ public partial class Main : Node3D
     /// <summary>True while a match is paused behind the pause menu.</summary>
     public bool Paused => CurrentMatch != null && _pause is { Visible: true };
 
+    /// <summary>The flag that keeps the cursor free for the whole run (dev and scripted scenes; M6-V7).</summary>
+    public const string NoConfineFlag = "--no-confine";
+
+    /// <summary>True while the shell holds the cursor confined to the window (M6-V7); what it last set <see cref="Input.MouseMode"/> to.</summary>
+    public bool CursorConfined { get; private set; }
+
+    /// <summary>Whether confinement may happen at all this run: the setting, no <see cref="NoConfineFlag"/>, a real window.</summary>
+    public bool ConfineAllowed => Settings.ConfineCursor && !_noConfine && SettingsApplier.HasWindow;
+
     public override void _Ready()
     {
         // The smoke gate (tools/qa/smoke.ps1) greps for this banner.
@@ -96,6 +110,7 @@ public partial class Main : Node3D
         // The shell answers Esc while the match under it is paused; the match is set back to Pausable when it is added.
         ProcessMode = ProcessModeEnum.Always;
         string[] args = UserArgs ?? OS.GetCmdlineUserArgs();
+        _noConfine = Array.IndexOf(args, NoConfineFlag) >= 0;
         UiText? ui = UiText.Shared;
         // Without ui.json there is no menu text: the errors are logged and the match starts as it did before the shell.
         LaunchOptions? options = LaunchOptions.HasMatchFlag(args) || ui == null ? LaunchOptions.Parse(args) : null;
@@ -248,6 +263,9 @@ public partial class Main : Node3D
         if (match != CurrentMatch || _banner == null || _bannerShown) return;
         _bannerShown = true;
         GetTree().Paused = true;
+        // BUG-0710 item 1: the HUD is Pausable and the tree pauses inside the killing tick, so it would show the frame before
+        // the kill under the banner; one read of the sim now makes its K / L agree with the stats screen.
+        if (match.Simulation is Simulation sim) match.GetNodeOrNull<ResourceBar>("Hud/ResourceBar")?.Sync(sim.World);
         _banner.ShowOutcome(outcome);
     }
 
@@ -299,6 +317,22 @@ public partial class Main : Node3D
         ShowMenu();
     }
 
+    public override void _Process(double delta)
+    {
+        // Main runs Always, so this sees the paused frames too: the pause menu, the banner and its stats, settings over the
+        // pause menu all pause the tree; the menu screens have no match; Alt-Tab takes the focus.
+        bool want = CursorConfine.Wanted(CurrentMatch != null, GetTree().Paused, DisplayServer.WindowIsFocused(), ConfineAllowed);
+        SetConfined(want);
+    }
+
+    private void SetConfined(bool confined)
+    {
+        if (confined == CursorConfined) return;
+        CursorConfined = confined;
+        Input.MouseMode = confined ? Input.MouseModeEnum.Confined : Input.MouseModeEnum.Visible;
+        GD.Print(confined ? "Cursor: confined" : "Cursor: visible");
+    }
+
     public override void _Input(InputEvent e)
     {
         if (!e.IsActionPressed("ui_cancel") || e.IsEcho()) return;
@@ -345,5 +379,6 @@ public partial class Main : Node3D
     {
         // A tree left paused would freeze whatever runs next in it (a test scene that hosts the shell).
         if (Paused || BannerUp) GetTree().Paused = false;
+        SetConfined(false);
     }
 }

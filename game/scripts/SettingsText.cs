@@ -39,6 +39,8 @@ public enum SettingsText
     SfxVolume,
     /// <summary>The edge pan speed label.</summary>
     EdgePanSpeed,
+    /// <summary>The "confine cursor to window" check box's label (M6-V7).</summary>
+    ConfineCursor,
     /// <summary>The button that applies and saves the picks and stays on the screen.</summary>
     Apply,
     /// <summary>The button that resets every pick to its default (applied and saved).</summary>

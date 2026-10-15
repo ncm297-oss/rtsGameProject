@@ -334,9 +334,9 @@ Shipped maps (working titles):
 | M + click | Move (ignore enemies) |
 | P + click | Patrol |
 | Shift + any command | Queue the command (after an ability key, Shift + click keeps the ability armed for the next cast) |
-| Ctrl + 1-9 | Assign control group |
-| Shift + 1-9 | Add selection to control group |
-| 1-9 | Select group; double-tap to center the camera on it |
+| Ctrl + 1-9 | Assign control group (units, or a building) |
+| Shift + 1-9 | Add selection to control group (a selected building replaces the group) |
+| 1-9 | Select group (its units, or its building with its command card); double-tap to center the camera on it |
 | Tab | Cycle subgroups within a mixed selection (command card follows) |
 | Q W E R | Abilities of the active subgroup |
 | B / V | Worker build menu: basic (Age I) / advanced (Age II) |
@@ -354,6 +354,13 @@ unit commands. All keys are rebindable.
 **Camera:** fixed pitch about 55°, no rotation (readability), zoom with the scroll wheel between
 about 20 m and 60 m from the ground. Pan with screen edges, **arrow keys**, and middle-mouse drag.
 (The plan said WASD; that collides with A, S, and grid hotkeys, so arrows it is. Rebindable.)
+The edge band is 8 pixels on every side, the window's last pixel row and column included. While a match runs
+unpaused in the focused window the cursor is **confined to the window** (so the edges pan even with a second monitor
+beside it); a menu, the pause menu, the match-over banner or Alt-Tab frees it. A setting turns this off.
+
+**Control groups** hold units or one building, never both (a selected building is always alone): Ctrl or Shift + digit
+with a building selected makes that building the group; with units, Ctrl replaces and Shift adds as usual, and a
+building in the group goes. A razed or cancelled building drops out of its group.
 
 **Minimap:** bottom-left. Left-click jumps the camera, right-click issues a move or attack order,
 Alt + click pings. Shows terrain, fog, resources, units as dots in player colors, and alerts.
@@ -384,13 +391,19 @@ show text, a minimap ping, and a sound.
    starting resources (standard / high), game speed. Default: free-for-all. Colours are unique per match: a slot can't
    pick a colour another slot holds.
 3. **Match.** Pause any time (single-player). Game speeds: Slow 0.75×, Normal 1×, Fast 1.5×.
-4. **Victory/defeat:** a player is defeated when they have no buildings left. The last player or
-   team standing wins.
+4. **Victory/defeat:** a player is out once they have **no unit left and no finished unit-producing building** (a
+   hall that trains units: the Town Hall or one of the five unit halls; the Whirlwind's Holy Camp, Raider Camp and Archer
+   Camp are such halls). Houses, the drop-off camp (Quartermaster's Depot / Supply Cache), the Forge, towers and
+   unfinished sites don't need to fall. A summoned unit counts while it lives. A player that never had a building is never defeated
+   (sandboxes). The last player or team standing wins. (Owner decision 2026-10-14; until then: no buildings left.) A
+   player that is out loses its remaining buildings on that tick: they collapse like razed ones, nobody is credited the
+   kill (Producer decision 2026-10-14, BUG-0703; built at the sim's M5-H2 hardening: until then they stand and act).
 5. **Post-match stats:** resources gathered, units trained/lost/killed, buildings built/lost,
    army value over time (graph), time to Age II.
 6. **Save/load** any time during a match. **Replays** are recorded for every match.
 7. **Settings:** resolution, window mode (windowed / borderless / fullscreen), VSync, graphics quality
-   (Low / Medium / High presets), master/music/SFX volume, edge pan speed, keybinds.
+   (Low / Medium / High presets), master/music/SFX volume, edge pan speed, confine cursor to window (on by default),
+   keybinds.
 
 ## Resolved open items
 

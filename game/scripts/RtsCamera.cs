@@ -120,15 +120,10 @@ public partial class RtsCamera : Camera3D
         Viewport vp = GetViewport();
         Vector2 size = vp.GetVisibleRect().Size;
         Vector2 m = vp.GetMousePosition();
-        if (m.X < 0 || m.Y < 0 || m.X > size.X || m.Y > size.Y) return Vector2.Zero; // cursor outside the window
         if (EdgePanBlocker != null && EdgePanBlocker.IsVisibleInTree() && EdgePanBlocker.GetGlobalRect().HasPoint(m)) return Vector2.Zero;
-        float edge = CameraLimits.EdgePanPixels;
-        var d = Vector2.Zero;
-        if (m.X < edge) d.X -= 1;
-        else if (m.X > size.X - edge) d.X += 1;
-        if (m.Y < edge) d.Y -= 1;
-        else if (m.Y > size.Y - edge) d.Y += 1;
-        return d;
+        // The band and the outside-the-window rule (M6-V7: the last pixel pans, so a cursor confined to the window does).
+        System.Numerics.Vector2 d = CameraLimits.EdgeDirection(new(m.X, m.Y), new(size.X, size.Y), CameraLimits.EdgePanPixels);
+        return new Vector2(d.X, d.Y);
     }
 
     // Approximate ground meters under one screen pixel at the focus distance.

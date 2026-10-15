@@ -25,6 +25,7 @@ public class PocketRuleTests
     internal static (Simulation Sim, EntityHandle C, EntityHandle D, EntityHandle RightSite, EntityHandle[] LeftTrees) Enclosure(bool treesLeft = false)
     {
         Simulation sim = BuildMaps.NewSim(Flat(30, 20));
+        TestSim.KeepIn(sim, 0); // M5-4e: a unit keeps the player in (a House, Forge, depot, tower or site alone no longer does)
         Give(sim, 0, 10_000, 10_000);
         EntityHandle c = Building(sim, Cx, Y, type: House);
         EntityHandle d = Building(sim, Dx, Y, type: House);

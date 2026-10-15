@@ -1825,6 +1825,24 @@ public partial class AbilityViewTest : Node
     {
         int zealot = data.FindUnit("whirlwind_zealot"), prophecy = data.FindTech("dryjhnas_prophecy");
         int smithy = StartBase.BuildingOfSlot(data, W.FactionOf(1), BuildingSlot.Forge);
+        // BUG-0711: seat 1 owns no unit in this match, and a player that has built with no live unit and no unit-producing
+        // building is out (M5-4e), its Research dropped. A Camp Follower on the passable cell farthest from the mage keeps
+        // seat 1 in, out of the row's spots and the mages' sight.
+        int keeperCell = -1;
+        float keeperDist = -1f;
+        for (int y = 0; y < G.Height; y++)
+            for (int x = 0; x < G.Width; x++)
+            {
+                if (!G.IsPassable(x, y) || W.Buildings.SlotAt(x, y) >= 0) continue;
+                float d = System.Numerics.Vector2.Distance(G.CellCenter(x, y), c);
+                if (d > keeperDist) { keeperDist = d; keeperCell = y * G.Width + x; }
+            }
+        if (!Check(keeperCell >= 0, $"seed {seed} prophecy: no cell for seat 1's keeper")) return;
+        int keepers = 0;
+        _sim.Enqueue(Command.SpawnUnit(1, data.FindUnit("whirlwind_camp_follower"), G.CellCenter(keeperCell % G.Width, keeperCell / G.Width)));
+        for (int t = 0; t < 3; t++) _sim.Tick();
+        for (int i = 0; i < U.Capacity; i++) if (U.Alive[i] && U.Owner[i] == 1) keepers++;
+        if (!Check(keepers >= 1, $"seed {seed} prophecy: seat 1's keeper did not spawn")) return;
         int site = -1;
         for (int k = 0; k < 16 && site < 0; k++)
         {

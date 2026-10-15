@@ -24,9 +24,9 @@ namespace Rts.Game.Tests;
 /// and a replay recorder: the same seats, the AI acts, the replay header holds <c>seat 1 whirlwind ai hard</c> and the
 /// replay plays back (every seat human, the AI's commands from the log) to equal checkpoints. <c>--faction 1 whirlwind
 /// --faction 2 malazan</c> (no <c>--ai</c>) swaps the sides: the local player plays the Whirlwind (its army, its build menu,
-/// its colour), player 1 the Malazans, both human. A match whose player 0 builds and cancels its only site is defeated by the
-/// cancel (docs/03 "Implementation (M5-4b)"): one <c>DefeatEvent</c>, one "Match over:" line, the outcome Defeat; its second
-/// Build is dropped at the door (no building, still one line; BUG-0674). A normal 400-tick match prints none. Junk <c>--ai</c> / <c>--faction</c> values are refused and the match still
+/// its colour), player 1 the Malazans, both human. A match whose player 0 owns one training hall and no unit is defeated when
+/// player 1 razes it (staged to hold under the M5-4b and M5-4e rules, M6-V7): one <c>DefeatEvent</c>, one "Match over:" line,
+/// the outcome Defeat; its dev SpawnBuilding after it is dropped at the door (no building, still one line; BUG-0674). A normal 400-tick match prints none. Junk <c>--ai</c> / <c>--faction</c> values are refused and the match still
 /// starts on the default seats.
 /// </summary>
 /// <remarks>Headless: <c>&amp; $env:GODOT --headless --path game res://tests/AiSeatTest.tscn</c>; prints "AI SEAT TEST PASS" or "AI SEAT TEST FAIL: ..." lines.</remarks>
@@ -233,53 +233,62 @@ public partial class AiSeatTest : Node
         await EndMatch(match);
     }
 
-    // The dev line through the real Match (M6-V4: one line per DefeatEvent): player 0's only building is a site it cancels,
-    // which defeats it (M5-4b); the rebuild after it is dropped at the door, so no second line (BUG-0674).
+    // The dev line through the real Match (M6-V4: one line per DefeatEvent): player 0's only building is a finished training
+    // hall and it has no unit; player 1, which never builds (so the match is not over: one seat built), shells it with a dev
+    // battery, and its fall defeats player 0. M6-V7 (Requests 40): staged so the defeat lands on the hall's tick under both the
+    // M5-4b rule (the last building) and the M5-4e one (no unit, no finished unit-producing building), see DefeatStaging.
+    // Round 2: a dev SpawnBuilding of the defeated player is dropped at the door, so no building and no second line (BUG-0674).
     private async Task MatchOverLine()
     {
         (Match match, SimRunner runner) = StartMatch(new[] { "--units", "0", "--no-bases", "--mute", "--seed", "2", "--speed", "8" }, record: 0);
         Simulation sim = runner.Simulation!;
         World w = sim.World;
         NavGrid g = w.NavGrid;
-        int events = 0;
-        runner.Ticked += s => events += s.World.DefeatEvents.Length;
-        int laborer = _data.FindUnit("malazan_laborer"), billet = _data.FindBuilding("malazan_billet");
-        int centre = FlowField.NearestPassable(g, g.Height / 2 * g.Width + g.Width / 2);
-        sim.Enqueue(Command.SpawnUnit(0, laborer, g.CellCenter(centre % g.Width, centre / g.Width)));
-        await UntilTick(sim, sim.TickNumber + 3);
-        UnitStore u = w.Units;
-        int worker = -1;
-        for (int i = 0; i < u.Capacity && worker < 0; i++) if (u.Alive[i] && u.Owner[i] == 0) worker = i;
-        int anchor = -1;
-        for (int r = 2; r < 12 && anchor < 0; r++)
-            for (int dy = -r; dy <= r && anchor < 0; dy++)
-                for (int dx = -r; dx <= r && anchor < 0; dx++)
-                {
-                    int x = centre % g.Width + dx, y = centre / g.Width + dy;
-                    if (x >= 0 && y >= 0 && x < g.Width && y < g.Height && w.CanPlace(0, billet, y * g.Width + x, out _)) anchor = y * g.Width + x;
-                }
-        Check(worker >= 0 && anchor >= 0, $"match-over row: worker {worker}, anchor {anchor}");
-        if (worker >= 0 && anchor >= 0)
+        int events = 0, unitsAtDefeat = -1;
+        runner.Ticked += s =>
         {
-            System.Numerics.Vector2 at = g.CellCenter(anchor % g.Width, anchor / g.Width);
-            // Round 1: the site stands, then its cancel defeats player 0 (one event, one line, the local result Defeat).
-            sim.Enqueue(Command.Build(0, new EntityHandle(worker, u.Generation[worker]), billet, at));
-            await UntilTick(sim, sim.TickNumber + 3);
-            Check(w.Buildings.Count == 1 && match.MatchOverLines == 0 && events == 0 && !w.IsDefeated(0),
-                $"round 1: {w.Buildings.Count} buildings after the Build, {match.MatchOverLines} lines, {events} events");
-            sim.Enqueue(Command.Cancel(0, at));
-            await UntilTick(sim, sim.TickNumber + 10);
-            Check(w.Buildings.Count == 0 && w.IsDefeated(0) && events == 1 && match.MatchOverLines == events,
-                $"round 1: {w.Buildings.Count} buildings after the Cancel, defeated {w.IsDefeated(0)}, {events} events, {match.MatchOverLines} 'Match over:' lines");
-            Check(match.Outcome == MatchOutcome.Defeat && !sim.MatchOver && match.DefeatedAt(0) > 0,
-                $"round 1: outcome {match.Outcome}, MatchOver {sim.MatchOver}, defeated at {match.DefeatedAt(0)}");
-            // Round 2: a defeated player's Build is dropped where it applies: nothing placed, no second event or line.
-            sim.Enqueue(Command.Build(0, new EntityHandle(worker, u.Generation[worker]), billet, at));
-            await UntilTick(sim, sim.TickNumber + 10);
-            Check(w.Buildings.Count == 0 && events == 1 && match.MatchOverLines == events,
-                $"round 2: {w.Buildings.Count} buildings after the dropped Build, {events} events, {match.MatchOverLines} lines");
-        }
+            foreach (DefeatEvent e in s.World.DefeatEvents)
+            {
+                events++;
+                if (e.Player == 0) unitsAtDefeat = DefeatStaging.UnitsOf(s.World, 0).Count;
+            }
+        };
+        int hall = DefeatStaging.Hall(_data, w, 0);
+        int anchor = DefeatStaging.Row(w, new[] { 0 }, new[] { hall })[0]; // its battery's cells open too
+        DefeatStaging.SpawnAt(sim, 0, hall, anchor);
+        await UntilTick(sim, sim.TickNumber + 3);
+        EntityHandle target = DefeatStaging.BuildingAt(w, 0, anchor);
+        Check(target != default && Owned(w, 0) == 1 && DefeatStaging.UnitsOf(w, 0).Count == 0 && match.MatchOverLines == 0 && events == 0 && !w.IsDefeated(0),
+            $"round 1: hall {target}, {Owned(w, 0)} buildings of player 0, {DefeatStaging.UnitsOf(w, 0).Count} units, {match.MatchOverLines} lines, {events} events");
+        // Round 1: player 1's battery razes the hall; its fall defeats player 0 (one event, one line, the local result Defeat).
+        int shooter = DefeatStaging.Shooter(_data);
+        foreach (System.Numerics.Vector2 at in DefeatStaging.Battery(g, _data.Buildings[hall], anchor)) sim.Enqueue(Command.SpawnUnit(1, shooter, at));
+        await UntilTick(sim, sim.TickNumber + 3);
+        Check(DefeatStaging.UnitsOf(w, 1).Count == DefeatStaging.BatterySize, $"round 1: {DefeatStaging.UnitsOf(w, 1).Count} guns spawned (want {DefeatStaging.BatterySize})");
+        foreach (EntityHandle gun in DefeatStaging.UnitsOf(w, 1)) sim.Enqueue(Command.Attack(1, gun, target, isBuilding: true));
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (events == 0 && clock.Elapsed.TotalSeconds < 60) await Frames(1);
+        await UntilTick(sim, sim.TickNumber + 10);
+        Check(Owned(w, 0) == 0 && w.IsDefeated(0) && events == 1 && match.MatchOverLines == events && unitsAtDefeat == 0 && !w.EverBuilt(1),
+            $"round 1: {Owned(w, 0)} buildings of player 0 after the raze, defeated {w.IsDefeated(0)}, {events} events, {match.MatchOverLines} 'Match over:' lines, {unitsAtDefeat} units at the defeat, player 1 built {w.EverBuilt(1)}");
+        Check(match.Outcome == MatchOutcome.Defeat && !sim.MatchOver && match.DefeatedAt(0) > 0,
+            $"round 1: outcome {match.Outcome}, MatchOver {sim.MatchOver}, defeated at {match.DefeatedAt(0)}");
+        // Round 2: a defeated player's dev SpawnBuilding is dropped where it applies: on clean ground a live player's would land.
+        int spot = DefeatStaging.Anchor(w, 0, hall, anchor % g.Width + DefeatStaging.Stride, anchor / g.Width);
+        Check(DefeatStaging.SpawnSpot(w, 0, hall, spot), $"round 2: anchor {spot} is not open ground");
+        DefeatStaging.SpawnAt(sim, 0, hall, spot);
+        await UntilTick(sim, sim.TickNumber + 10);
+        Check(Owned(w, 0) == 0 && events == 1 && match.MatchOverLines == events,
+            $"round 2: {Owned(w, 0)} buildings of player 0 after the dropped SpawnBuilding, {events} events, {match.MatchOverLines} lines");
         await EndMatch(match);
+    }
+
+    private static int Owned(World w, int player)
+    {
+        BuildingStore b = w.Buildings;
+        int n = 0;
+        for (int i = 0; i < b.Capacity; i++) if (b.Alive[i] && b.Owner[i] == player) n++;
+        return n;
     }
 
     private async Task JunkFlags()

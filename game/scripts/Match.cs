@@ -230,7 +230,7 @@ public partial class Match : Node3D
         {
             if ((uint)e.Player < (uint)_defeatedAt.Length) _defeatedAt[e.Player] = e.Tick + 1;
             MatchOverLines++;
-            GD.Print($"Match over: player {e.Player} has no buildings left (tick {sim.TickNumber})");
+            GD.Print($"Match over: player {e.Player} is defeated (tick {sim.TickNumber})"); // the sim's rule decides why (M5-4b, M5-4e)
         }
         if (Outcome != MatchOutcome.None) return;
         MatchOutcome now = ResultFor(w, SelectionController.LocalPlayer);

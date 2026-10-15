@@ -7,8 +7,9 @@ namespace Rts.Sim.Tests.Stress;
 
 /// <summary>
 /// QA (M5-4b, session 2026-10-13-0916): four AI seats (Easy, Normal, Hard, Hard) on the flat scene, combat on, the early-wave
-/// data and plenty to spend, with the halls of some seats pre-damaged to 1 hp so defeats happen inside the run. After every
-/// tick: a defeated player stays defeated with no live building; a <see cref="World.DefeatEvents"/> entry comes once per
+/// data and plenty to spend, with the halls of some seats pre-damaged to 1 hp so defeats happen inside the run (M5-4e: and
+/// their workers taken away at the start, a live unit keeping a side in while nobody hunts them, M5-4d). After every
+/// tick: a defeated player stays defeated with no live unit and no finished unit-producing building; a <see cref="World.DefeatEvents"/> entry comes once per
 /// player, on the tick its flag flips; a defeated seat's AI sends nothing and thinks no more; <see cref="Simulation.MatchOver"/>
 /// matches the rule recomputed from the flags; a twin run hashes equal every 50 ticks.
 /// </summary>
@@ -38,6 +39,8 @@ public class DefeatAiStressTests
             for (int p = 0; p < 4; p++) BuildMaps.SetTotals(s, p, (weak >> p & 1) != 0 ? 0 : 3000, (weak >> p & 1) != 0 ? 0 : 3000);
             for (int k = 0; k < s.World.Buildings.Capacity; k++)
                 if (s.World.Buildings.Alive[k] && (weak >> s.World.Buildings.Owner[k] & 1) != 0) s.World.Buildings.SetHp(k, 1);
+            for (int i = 0; i < s.World.Units.Capacity; i++)
+                if (s.World.Units.Alive[i] && (weak >> s.World.Units.Owner[i] & 1) != 0) s.World.Units.Free(new Rts.Sim.Entities.EntityHandle(i, s.World.Units.Generation[i]));
             // The strong seats start with eight line units each beside their hall, toward the middle.
             for (int p = 0; p < 4; p++)
             {
@@ -88,7 +91,7 @@ public class DefeatAiStressTests
                     Assert.Equal(sentAt[p], ai.CommandsSent);
                     Assert.Equal(thinksAt[p], ai.Thinks);
                 }
-                if (now) Assert.Equal(0, w.Ledger.LiveBuildings[p]);
+                if (now) Assert.True(w.LiveUnits(p) == 0 && w.ProductionBuildings(p) == 0, $"seed {seed}: player {p} defeated with {w.LiveUnits(p)} units, {w.ProductionBuildings(p)} production buildings");
                 if (w.EverBuilt(p))
                 {
                     built++;

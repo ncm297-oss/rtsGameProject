@@ -39,6 +39,7 @@ public class GatherWedgeTests
             EntityHandle h = Spawn(w, Tree, x, 6, TreeWood);
             if (x == TreeX) tree = h;
         }
+        TestSim.KeepIn(sim, 0); // M5-4e: a unit keeps the player in (a House, Forge, depot, tower or site alone no longer does)
         Building(sim, 7, 5, type: Depot);
         var hs = new EntityHandle[workers];
         for (int k = 0; k < workers; k++) hs[k] = Unit(sim, At(sim, 10 + k % 3, 10 + k / 3));

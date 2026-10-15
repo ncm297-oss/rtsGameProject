@@ -383,10 +383,11 @@ public class CommandDoorFuzzStressTests
 
     /// <summary>
     /// M5-4b: a random player is defeated mid-run (its buildings and workers taken away between ticks, so nothing of it can
-    /// stand again) while both players' random commands keep coming. Every later command of the defeated player, of any kind,
+    /// stand again; M5-4e re-staged: all its units go too, a live unit of any kind keeping a side in, and again on the
+    /// following ticks until the defeat lands, for a SpawnUnit already queued) while both players' random commands keep coming. Every later command of the defeated player, of any kind,
     /// is dropped where it applies: the run hashes equal, after every tick, to a twin fed the same stream with a Noop of
     /// that player in place of each of them (a command never sent would differ by the player's hashed sequence counter
-    /// alone). The defeated player's other units stay.
+    /// alone). A defeated player has no unit left (M5-4e).
     /// </summary>
     [Theory]
     [InlineData(1UL)]
@@ -412,14 +413,14 @@ public class CommandDoorFuzzStressTests
         // Each player builds first: a building of its own, through the door (the house of its faction), on both twins.
         for (int p = 0; p < Players; p++)
         {
-            int house = Rts.Sim.ViewApi.StartBase.BuildingOfSlot(TestSim.Data, a.World.FactionOf(p), BuildingSlot.House);
+            int house = Rts.Sim.ViewApi.StartBase.BuildingOfSlot(TestSim.Data, a.World.FactionOf(p), BuildingSlot.TownHall);
             Command spawn = Command.SpawnBuilding(p, house, open[(p + 1) * open.Count / 3]);
             a.Enqueue(spawn);
             b.Enqueue(spawn);
         }
         for (int t = 0; t < ticks; t++)
         {
-            if (t == defeatAt)
+            if (t >= defeatAt && !a.World.IsDefeated(loser))
             {
                 // Between ticks: the loser's buildings and workers go, on both twins alike (test seams).
                 foreach (Simulation s in new[] { a, b })
@@ -428,11 +429,12 @@ public class CommandDoorFuzzStressTests
                     for (int k = 0; k < w.Buildings.Capacity; k++)
                         if (w.Buildings.Alive[k] && w.Buildings.Owner[k] == loser) w.Buildings.Free(w.Buildings.HandleOf(k));
                     for (int i = 0; i < w.Units.Capacity; i++)
-                        if (w.Units.Alive[i] && w.Units.Owner[i] == loser && w.Data.Units[w.Units.TypeId[i]].Slot == UnitSlot.Worker)
+                        if (w.Units.Alive[i] && w.Units.Owner[i] == loser)
                             w.Units.Free(new EntityHandle(i, w.Units.Generation[i]));
                 }
             }
             bool gone = a.World.IsDefeated(loser);
+            if (gone) Assert.Equal(0, a.World.LiveUnits(loser));
             Assert.Equal(gone, b.World.IsDefeated(loser));
             // The tick of the defeat itself takes no commands: one applying with it could place a building again.
             int n = t == defeatAt ? 0 : rng.NextInt(0, 2) == 0 ? rng.NextInt(0, 6) : rng.NextInt(0, 20);
