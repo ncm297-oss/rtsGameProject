@@ -351,7 +351,8 @@ Shipped maps (working titles):
 (`Q W E R T / A S D F G / Z X C V B`). They never conflict with A/S/H because those cards have no
 unit commands. All keys are rebindable: **Settings → Keybinds** lists the orders, Tab, B / V, the control group digits and
 the 15 grid keys; click a key and press the new one. Esc, Shift / Ctrl / Alt, the camera's arrow keys, F10 and F12 stay
-fixed, and a key another command (or grid key) already uses is refused with a line saying which. Mouse buttons and the
+fixed, and a key another command (or grid key) already uses is refused with a line saying which. A control group digit or
+Tab never shares a grid key (with a building selected the digit must still recall its group). Mouse buttons and the
 camera keys are not rebindable yet.
 
 **Resources on click:** a left click on a gold mine or a tree selects it alone (no command); the selection panel shows its

@@ -5561,7 +5561,8 @@ game/tests/SettingsTest.tscn      the headless settings test (in the scene loop)
   Fullscreen), **VSync** (On, Off), **graphics quality** (Low, Medium, High), **master / music / sound effects volume**
   (sliders 0-100, step 1), **edge pan speed** (slider 0.5-2.0, step 0.05); each slider shows its number beside it.
   **Back** (and Esc) applies, saves and closes to where the screen came from (the menu, or the pause menu still paused);
-  **Apply** applies and saves and stays; **Defaults** sets every field to its default, applies and saves. Every word is
+  **Apply** applies and saves and stays; **Defaults** sets every field to its default, applies and saves (since M6-V8 not the
+  keys: see "Implementation (M6-V8)"). Every word is
   `ui.json` `settings` (`title`, `resolution`, `resolution_item` = `"{0} × {1}"` (width, height; a format that doesn't name
   both is one load error naming the key), `window_mode`, `window_windowed`, `window_borderless`, `window_fullscreen`,
   `vsync`, `vsync_on`, `vsync_off`, `quality`, `quality_low`, `quality_medium`, `quality_high`, `master_volume`,
@@ -5840,25 +5841,31 @@ game/tests/ResourceClickTest.tscn      the resource click scene (in the scene lo
 - **Keys** (`KeyMap`). 31 actions: `order_attack_move` A, `order_stop` S, `order_hold` H, `order_move` M, `subgroup_next` Tab,
   `build_basic` B, `build_advanced` V, `group_1`..`group_9` 1-9, `card_0`..`card_14` (the grid, `Q W E R T / A S D F G / Z X C V
   B`). The defaults are read from `project.godot` (`input/<action>`), so today's keys stay the source. Fixed (refused):
-  Esc, Shift, Ctrl, Alt, Meta, the four arrows, F10, F12. **Clash rule:** two actions may not share a key when both are
-  commands (the first 16), both are grid keys, or one is a command and the other a top-row grid key (a unit card's ability
-  row sees keys before the orders); a command and a lower grid key may share one (A is the sixth grid key by default: a build
-  menu or a production card owns the whole grid while up). `KeyMap.Apply` erases each action's `InputMap` events and adds one
+  Esc, Shift, Ctrl, Alt, Meta, the four arrows, F10, F12, and anything that is not one plain key (a modifier mask, the bare
+  `Key.Special` flag, `Key.Unknown`; `KeyMap.IsPlainKey`, BUG-0742). **Clash rule:** two actions may not share a key when
+  both are commands (the first 16), both are grid keys, one is a control group digit or Tab (`subgroup_next`) and the other
+  any grid key (BUG-0741: a build menu or a production card owns the whole grid while up, and a digit must recall its group
+  whatever is selected), or one is a command and the other a top-row grid key (a unit card's ability row sees keys before the
+  orders); an order or build key and a lower grid key may share one (A is the sixth grid key by default). `KeyMap.Apply` erases each action's `InputMap` events and adds one
   `InputEventKey` with the physical key and no modifiers (Ctrl + digit still matches a group key); every key handler already
   reads the actions, so nothing else changes. `KeyMap.Version` moves on each apply; the command card re-reads its grid key
   names and the order buttons' hints (now the bound key's name, the `ui.json` `hotkeyHint` only for an unbound action) and
   lays itself out again. The P (patrol) key named in docs/02 does not exist yet (patrol is not built).
 - **The file.** `settings.cfg` `[keys]`: one line per action, the key's Godot name (`order_attack_move="K"`, `group_1="1"`,
   `subgroup_next="Tab"`). A file without the section (before M6-V8) or without a key reads clean with the defaults; a value
-  that is not a key name (`"Blorp"`, a number), a fixed key, or a key that clashes with an action read before it is one
-  problem and that action's default; if a default left in place then clashes with a later key, the whole section is the
-  defaults (one more problem). Extra keys are ignored. Applied at boot with the other settings and on every commit.
+  that is not one plain key name (`"Blorp"`, a number, `"Shift+Q"`, `"Ctrl+1"`) or a fixed key is one problem and that
+  action's default. Then the keys read are checked as one map (BUG-0740: never against the defaults of actions the file also
+  moves, so a swap or a freed default the tab made reads back as written): a key from the file that clashes with a default
+  goes back to its own default, two keys from the file that clash both go back (one problem each time), repeated until no
+  clash is left (a reset can clash with another key from the file; the defaults never clash). Extra keys are ignored.
+  Applied at boot with the other settings and on every commit.
 - **The Keybinds tab.** The settings screen is a `TabContainer`: General (the M6-V6 / M6-V7 fields) and Keybinds (a scrolled
   list: the action's `keys.*` name, a button showing its key). A click on a button shows `keys.press_key` and the next key
   press is its key (`SettingsScreen._Input`, before the GUI and before `Main`'s Esc); a clash shows `keys.conflict`
   (`"{0} is already used by {1}"`), a fixed key `keys.reserved`, and the key stays; Esc stops waiting and leaves the screen
-  open. **Default keys** (`keys.defaults`) puts the tab's keys back. Like every field, keys apply and save with Apply, Back or
-  Esc; Defaults (the screen's) resets them too. Text: `ui.json` `keys` (`tab_general`, `tab_keybinds`, one per order / Tab /
+  open. **Default keys** (`keys.defaults`, at the top of the tab beside the refusal line) puts the tab's keys back. Like every
+  field, keys apply and save with Apply, Back or Esc; the screen's Defaults resets the General fields and keeps the keys the
+  tab shows (BUG-0743). The key buttons have their own framed style so they read as buttons on the dark screen. Text: `ui.json` `keys` (`tab_general`, `tab_keybinds`, one per order / Tab /
   build action named as the action, `group` = `"Control group {0}"`, `card` = `"Command card row {0}, column {1}"`,
   `press_key`, `conflict`, `reserved`, `defaults`), required like the other sections; `group` and `reserved` must name `{0}`,
   `card`, `conflict` and `hud.resource_left` `{0}` and `{1}` (one load error naming the key otherwise). Key names are
@@ -5877,6 +5884,13 @@ game/tests/ResourceClickTest.tscn      the resource click scene (in the scene lo
   card's hint reads K; Default keys and Back put A back in the file and the match. `ShellTest`: the 17 new keys by name
   (80 shell keys), each missing one error naming it, the `keys` section missing one error, eleven bad formats refused.
   Windowed with `-- --shots <dir>`: `resource-click.png`, `resource-last-seen.png`, `settings-keybinds.png`.
+- **QA fixes (BUG-0740..0743).** `KeyMap.Read` checks the read keys as one map (above); `Clash` makes a digit or Tab clash
+  with every grid key; `IsPlainKey` refuses masks and flags in `TrySet` and in the file; the screen's Defaults keeps the keys;
+  Default keys moved to the top of the tab; framed key buttons. `SettingsTest` adds eleven `[keys]` reader rows (a swap and
+  a freed default now read clean, grid keys rotated, digits swapped, two read keys clashing, a reset that clashes again, a
+  digit / Tab on a lower grid key, a moved digit's grid key, "Shift+Q", "Ctrl+1"), `TrySet` refusals (a digit or Tab on a
+  grid key, `Key.Special`, a Shift mask), 1 for "row 2, column 1" refused on the tab with the conflict line, and the screen's
+  Defaults keeping K. The QA scene `QaM6V8Test` is green.
 
 ## AI architecture
 

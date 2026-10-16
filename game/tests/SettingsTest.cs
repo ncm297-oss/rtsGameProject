@@ -134,8 +134,31 @@ public partial class SettingsTest : Node
             ("a key a later action holds", NoKeys + "\n[keys]\norder_attack_move=\"S\"\n", 1, s => s.Keys.Get("order_attack_move") == Key.A),
             ("a command on a top-row grid key", NoKeys + "\n[keys]\ngroup_1=\"Q\"\n", 1, s => s.Keys.Get("group_1") == Key.Key1),
             ("a command on a lower grid key", NoKeys + "\n[keys]\norder_stop=\"D\"\n", 0, s => s.Keys.Get("order_stop") == Key.D),
-            ("two keys swapped", NoKeys + "\n[keys]\norder_stop=\"H\"\norder_hold=\"S\"\n", 2, s => s.Keys.SameAs(new KeyMap())),
+            // BUG-0740: the whole map is checked, not each key against the defaults of actions the file also moves, so any map
+            // the tab makes reads back: a swap, an action taking a later action's freed default.
+            ("two keys swapped", NoKeys + "\n[keys]\norder_stop=\"H\"\norder_hold=\"S\"\n", 0, s => s.Keys.Get("order_stop") == Key.H && s.Keys.Get("order_hold") == Key.S),
+            ("a later action's freed default", NoKeys + "\n[keys]\norder_attack_move=\"H\"\norder_hold=\"J\"\n", 0, s => s.Keys.Get("order_attack_move") == Key.H && s.Keys.Get("order_hold") == Key.J),
+            ("grid keys rotated", NoKeys + "\n[keys]\ncard_0=\"W\"\ncard_1=\"E\"\ncard_2=\"Q\"\n", 0, s => s.Keys.Get("card_0") == Key.W && s.Keys.Get("card_1") == Key.E && s.Keys.Get("card_2") == Key.Q),
+            ("two digits swapped", NoKeys + "\n[keys]\ngroup_1=\"2\"\ngroup_2=\"1\"\n", 0, s => s.Keys.Get("group_1") == Key.Key2 && s.Keys.Get("group_2") == Key.Key1),
+            ("two read keys clash", NoKeys + "\n[keys]\norder_stop=\"J\"\norder_hold=\"J\"\n", 1, s => s.Keys.SameAs(new KeyMap())),
+            // A reset that frees nothing: stop takes Hold's H (Hold unmoved) and goes back to S, so attack-move's S goes back too.
+            ("a reset that clashes again", NoKeys + "\n[keys]\norder_attack_move=\"S\"\norder_stop=\"H\"\n", 2, s => s.Keys.SameAs(new KeyMap())),
+            // BUG-0741: a digit or Tab shares no grid key (a production card owns the whole grid).
+            ("a digit on a lower grid key", NoKeys + "\n[keys]\ncard_5=\"1\"\n", 1, s => s.Keys.Get("card_5") == Key.A && s.Keys.Get("group_1") == Key.Key1),
+            ("a grid key on a moved digit's key", NoKeys + "\n[keys]\ngroup_1=\"D\"\n", 1, s => s.Keys.Get("group_1") == Key.Key1),
+            ("Tab on a lower grid key", NoKeys + "\n[keys]\nsubgroup_next=\"Z\"\n", 1, s => s.Keys.Get("subgroup_next") == Key.Tab),
+            // BUG-0742: a modifier combo is not one key: one problem and the default.
+            ("a Shift combo", NoKeys + "\n[keys]\norder_stop=\"Shift+Q\"\n", 1, s => s.Keys.Get("order_stop") == Key.S),
+            ("a Ctrl combo", NoKeys + "\n[keys]\ngroup_3=\"Ctrl+1\"\n", 1, s => s.Keys.Get("group_3") == Key.Key3),
         };
+        // BUG-0741 / 0742 on the tab's side: a digit refused on a lower grid key, Tab too; a mask or a bare flag is no key.
+        var tab = new KeyMap();
+        Check(tab.TrySet(KeyMap.FirstCard + 5, Key.Key1) == Array.IndexOf(KeyMap.Actions, "group_1")
+            && tab.TrySet(KeyMap.FirstCard + 14, Key.Tab) == KeyMap.SubgroupNext
+            && tab.TrySet(Array.IndexOf(KeyMap.Actions, "group_9"), Key.Special) == KeyMap.IsReserved
+            && tab.TrySet(Array.IndexOf(KeyMap.Actions, "order_stop"), Key.Q | (Key)KeyModifierMask.MaskShift) == KeyMap.IsReserved
+            && tab.TrySet(Array.IndexOf(KeyMap.Actions, "order_stop"), Key.D) == KeyMap.Ok && tab.SameAs(WithStop(Key.D)),
+            "TrySet: a digit or Tab on a grid key, a masked key or Key.Special accepted, or D for Stop refused");
         Check(defaults.ConfineCursor && new GameSettings { ConfineCursor = false }.Encode().Contains("confine_cursor=false"), $"confine default on, written: [{defaults.Encode()}]");
         foreach ((string what, string? text, int want, Func<GameSettings, bool> ok) in rows)
         {
@@ -169,6 +192,13 @@ public partial class SettingsTest : Node
     {
         int at = text.IndexOf("[keys]", StringComparison.Ordinal);
         return at < 0 ? text : text.Substring(0, at);
+    }
+
+    private static KeyMap WithStop(Key key)
+    {
+        var map = new KeyMap();
+        map.TrySet(Array.IndexOf(KeyMap.Actions, "order_stop"), key);
+        return map;
     }
 
     // A default file without its [keys] section, for the key rows to add their own.
@@ -315,6 +345,17 @@ public partial class SettingsTest : Node
             await Type(key);
             Check(screen.KeyButton(stop).Text == "S" && screen.KeyStatus.Text == line && screen.Visible, $"{key} for Stop: '{screen.KeyButton(stop).Text}', status '{screen.KeyStatus.Text}', want '{line}'");
         }
+        // BUG-0741: 1 for a lower grid key is refused with the conflict line naming control group 1.
+        int card5 = KeyMap.FirstCard + 5;
+        // The row is below the fold: scroll it into view first, as a player would.
+        screen.KeyButton(card5).GetParent().GetParent<ScrollContainer>().EnsureControlVisible(screen.KeyButton(card5));
+        await Frames(2);
+        await Click(screen.KeyButton(card5));
+        await Type(Key.Key1);
+        string groupLine = _ui.KeysFormat(KeysText.Conflict, "1", KeyMap.ActionName(_ui, KeyMap.FirstGroup));
+        Check(screen.KeyButton(card5).Text == "A" && screen.KeyStatus.Text == groupLine, $"1 for card_5: '{screen.KeyButton(card5).Text}', status '{screen.KeyStatus.Text}', want '{groupLine}'");
+        screen.KeyButton(card5).GetParent().GetParent<ScrollContainer>().ScrollVertical = 0;
+        await Frames(2);
         await Click(screen.KeyButton(stop));
         await Type(Key.Escape);
         Check(screen.Visible && !screen.Listening && screen.KeyButton(stop).Text == "S" && GetTree().Paused, $"Esc while waiting: screen {screen.Visible}, waiting {screen.Listening}");
@@ -344,13 +385,20 @@ public partial class SettingsTest : Node
         await Frames(2);
         Check(!sel.Targeting && sel.IssuedCount(Rts.Sim.Commands.CommandKind.AttackMove) == before + 1, $"K + click: {sel.IssuedCount(Rts.Sim.Commands.CommandKind.AttackMove) - before} attack-moves");
 
-        // Default keys: A again, in the file and in the match.
+        // BUG-0743: the screen's Defaults resets the General fields and keeps the keys (K stays attack-move).
         await Type(Key.Escape);
         await Click(pause.SettingsButton);
+        int attack = Array.IndexOf(KeyMap.Actions, "order_attack_move");
+        KeyMap rebound = _main.Settings.Keys.Clone();
+        await Click(screen.DefaultsButton);
+        Check(screen.Visible && screen.KeyButton(attack).Text == "K" && _main.Settings.Keys.Get("order_attack_move") == Key.K,
+            $"Defaults: key button '{screen.KeyButton(attack).Text}', in effect {_main.Settings.Keys.Get("order_attack_move")}");
+        Committed(new GameSettings { Keys = rebound }, "Defaults keeps the keys");
+
+        // Default keys: A again, in the file and in the match.
         screen.Tabs.CurrentTab = 1;
         await Frames(1);
         await Click(screen.KeysDefaultsButton);
-        int attack = Array.IndexOf(KeyMap.Actions, "order_attack_move");
         Check(screen.KeyButton(attack).Text == "A" && screen.Picks().Keys.SameAs(new KeyMap()), $"Default keys: '{screen.KeyButton(attack).Text}'");
         GameSettings want = _main.Settings.Clone();
         want.Keys.Reset();

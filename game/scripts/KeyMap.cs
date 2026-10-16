@@ -13,10 +13,12 @@ namespace Rts.Game;
 /// </summary>
 /// <remarks>
 /// Esc, the modifiers (Shift, Ctrl, Alt, Meta), the camera's arrow keys and the F10 / F12 keys stay fixed: binding one is
-/// refused (<see cref="Reserved"/>). Two actions may not share a key when both are commands (orders, Tab, B / V, digits), both
-/// are grid keys, or one is a command and the other a top-row grid key (Q W E R T: a unit card's ability row, which sees keys
-/// before the orders). A command and a lower grid key may share one, as A and the sixth grid key do by default: a build menu
-/// or a production card owns the whole grid while it is up (docs/02 "Grid hotkeys").
+/// refused (<see cref="Reserved"/>), and so is anything that isn't one plain key (a modifier combo). Two actions may not share
+/// a key when both are commands (orders, Tab, B / V, digits), both are grid keys, one is a control group digit or Tab and the
+/// other any grid key (a build menu or a production card owns the whole grid while it is up, and a digit must recall its group
+/// whatever is selected), or one is a command and the other a top-row grid key (Q W E R T: a unit card's ability row, which
+/// sees keys before the orders). An order or build key and a lower grid key may share one, as A and the sixth grid key do by
+/// default (docs/02 "Grid hotkeys").
 /// </remarks>
 public sealed class KeyMap
 {
@@ -28,6 +30,9 @@ public sealed class KeyMap
 
     /// <summary>The index in <see cref="Actions"/> of the first <c>group_N</c> and of <c>card_0</c>.</summary>
     public static readonly int FirstGroup = Array.IndexOf(Actions, "group_1"), FirstCard = Array.IndexOf(Actions, "card_0");
+
+    /// <summary>The index in <see cref="Actions"/> of <c>subgroup_next</c> (Tab).</summary>
+    public static readonly int SubgroupNext = Array.IndexOf(Actions, "subgroup_next");
 
     /// <summary>Keys no action may take.</summary>
     public static readonly Key[] Reserved =
@@ -96,14 +101,24 @@ public sealed class KeyMap
         if (a == b) return false;
         bool gridA = a >= FirstCard, gridB = b >= FirstCard;
         if (gridA == gridB) return true;
-        int card = gridA ? a - FirstCard : b - FirstCard;
+        int card = gridA ? a - FirstCard : b - FirstCard, command = gridA ? b : a;
+        // BUG-0741: a digit or Tab must work whatever is selected, and a build menu or a production card owns the whole grid.
+        if (command >= FirstGroup || command == SubgroupNext) return true;
         return card < CommandCard.Columns;
     }
 
-    /// <summary>The action <paramref name="key"/> would clash with if action <paramref name="i"/> took it, <see cref="IsReserved"/>, or <see cref="Ok"/>.</summary>
+    /// <summary>
+    /// True when <paramref name="key"/> is one plain key: not <see cref="Key.None"/>, no modifier bits (a file's "Shift+Q"
+    /// is Q with the Shift mask, which no key press matches once applied), and not the bare <see cref="Key.Special"/> flag
+    /// or <see cref="Key.Unknown"/> (BUG-0742).
+    /// </summary>
+    public static bool IsPlainKey(Key key) =>
+        key != Key.None && key != Key.Special && key != Key.Unknown && ((long)key & ~(long)KeyModifierMask.CodeMask) == 0;
+
+    /// <summary>The action <paramref name="key"/> would clash with if action <paramref name="i"/> took it, <see cref="IsReserved"/> (a fixed key or not a plain key), or <see cref="Ok"/>.</summary>
     public int ConflictFor(int i, Key key)
     {
-        if (Array.IndexOf(Reserved, key) >= 0) return IsReserved;
+        if (!IsPlainKey(key) || Array.IndexOf(Reserved, key) >= 0) return IsReserved;
         for (int j = 0; j < _keys.Length; j++)
             if (_keys[j] == key && Clash(i, j)) return j;
         return Ok;
@@ -138,44 +153,63 @@ public sealed class KeyMap
 
     /// <summary>
     /// The <c>[keys]</c> section of <paramref name="file"/>: a missing section or key is the default (a file from before
-    /// M6-V8 reads clean); a value that isn't a key name, a reserved key, or a key that clashes with an action read before
-    /// it is one problem in <paramref name="problems"/> and the default. Extra keys are ignored.
+    /// M6-V8 reads clean); a value that isn't one plain key name (junk, a number, a reserved key, a modifier combo such as
+    /// "Shift+Q") is one problem in <paramref name="problems"/> and the default. Extra keys are ignored. The keys read are
+    /// then checked as a whole map, never against the defaults of actions the file also moves (BUG-0740: any map the
+    /// Keybinds tab makes reads back as written): see <see cref="ResolveClashes"/>.
     /// </summary>
     public static KeyMap Read(ConfigFile file, List<string> problems)
     {
         var map = new KeyMap();
         if (!file.HasSection("keys")) return map;
+        var fromFile = new bool[Actions.Length];
         for (int i = 0; i < Actions.Length; i++)
         {
             if (!file.HasSectionKey("keys", Actions[i])) continue;
             Variant v = file.GetValue("keys", Actions[i]);
             Key key = v.VariantType == Variant.Type.String ? OS.FindKeycodeFromString(v.AsString()) : Key.None;
-            if (key == Key.None || Array.IndexOf(Reserved, key) >= 0)
+            if (!IsPlainKey(key) || Array.IndexOf(Reserved, key) >= 0)
             {
-                problems.Add($"keys.{Actions[i]} must be the name of a key that isn't reserved, not {v}");
-                continue;
-            }
-            // The default goes when the key is set; a key that clashes with an earlier action keeps the default.
-            Key was = map._keys[i];
-            map._keys[i] = Key.None;
-            if (map.ConflictFor(i, key) is int j and >= 0)
-            {
-                problems.Add($"keys.{Actions[i]} = \"{v}\" is already keys.{Actions[j]}");
-                map._keys[i] = was;
+                problems.Add($"keys.{Actions[i]} must be the name of one key that isn't reserved, not {v}");
                 continue;
             }
             map._keys[i] = key;
+            fromFile[i] = true;
         }
-        // A default left in place can still clash with a key read later: then the whole section is the defaults.
-        for (int i = 0; i < Actions.Length; i++)
-            for (int j = i + 1; j < Actions.Length; j++)
-                if (map._keys[i] == map._keys[j] && Clash(i, j))
-                {
-                    problems.Add($"keys.{Actions[i]} and keys.{Actions[j]} share a key; all keys are the defaults");
-                    map.Reset();
-                    return map;
-                }
+        map.ResolveClashes(fromFile, problems);
         return map;
+    }
+
+    // Two actions that clash after the read: a key from the file that clashes with a default goes back to its own default
+    // (one problem); two keys from the file that clash both go back (one problem). Resetting can make a new clash with
+    // another key from the file, so it repeats; it ends, as each pass puts at least one key back and the defaults never
+    // clash with each other (if they somehow did, the whole map is the defaults).
+    private void ResolveClashes(bool[] fromFile, List<string> problems)
+    {
+        Key[] defaults = Defaults();
+        bool changed = true;
+        while (changed)
+        {
+            changed = false;
+            for (int i = 0; i < _keys.Length; i++)
+                for (int j = i + 1; j < _keys.Length; j++)
+                {
+                    if (_keys[i] != _keys[j] || !Clash(i, j)) continue;
+                    string name = OS.GetKeycodeString(_keys[i]);
+                    if (fromFile[i] && fromFile[j]) problems.Add($"keys.{Actions[i]} and keys.{Actions[j]} are both \"{name}\"; both are their defaults");
+                    else if (fromFile[i]) problems.Add($"keys.{Actions[i]} = \"{name}\" is already keys.{Actions[j]}");
+                    else if (fromFile[j]) problems.Add($"keys.{Actions[j]} = \"{name}\" is already keys.{Actions[i]}");
+                    else
+                    {
+                        problems.Add($"keys.{Actions[i]} and keys.{Actions[j]} share a key; all keys are the defaults");
+                        Reset();
+                        return;
+                    }
+                    if (fromFile[i]) (_keys[i], fromFile[i]) = (defaults[i], false);
+                    if (fromFile[j]) (_keys[j], fromFile[j]) = (defaults[j], false);
+                    changed = true;
+                }
+        }
     }
 
     /// <summary>The key as the keyboard labels it (the physical key under the current layout; its US name headless, where there is no layout).</summary>

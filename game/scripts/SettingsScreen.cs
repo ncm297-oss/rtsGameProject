@@ -46,7 +46,7 @@ public partial class SettingsScreen : CanvasLayer
     /// <summary>Raised by Apply.</summary>
     public event Action? ApplyPressed;
 
-    /// <summary>Raised by Defaults.</summary>
+    /// <summary>Raised by Defaults (the General fields only; the keys stay as the Keybinds tab shows them, BUG-0743).</summary>
     public event Action? DefaultsPressed;
 
     /// <summary>Raised by Back (and Esc, through <see cref="Main"/>).</summary>
@@ -212,26 +212,10 @@ public partial class SettingsScreen : CanvasLayer
         page.AddThemeConstantOverride("separation", 8);
         Tabs.AddChild(page);
         Tabs.SetTabTitle(1, ui.Keys(KeysText.TabKeybinds));
-        var scroll = new ScrollContainer { Name = "Scroll", CustomMinimumSize = new Vector2(640f, 380f), HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
-        page.AddChild(scroll);
-        var rows = new GridContainer { Name = "Rows", Columns = 2, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        rows.AddThemeConstantOverride("h_separation", 16);
-        rows.AddThemeConstantOverride("v_separation", 4);
-        scroll.AddChild(rows);
-        for (int i = 0; i < KeyMap.Actions.Length; i++)
-        {
-            int index = i;
-            Label name = ShellUi.Text(KeyMap.ActionName(ui, i), 18);
-            name.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-            rows.AddChild(name);
-            var key = new Button { Name = $"Key_{KeyMap.Actions[i]}", CustomMinimumSize = new Vector2(180f, 32f), FocusMode = Control.FocusModeEnum.None };
-            key.Pressed += () => Listen(index);
-            rows.AddChild(key);
-            _keyButtons[i] = key;
-        }
-        KeyStatus = ShellUi.Text("", 18);
-        KeyStatus.Name = "KeyStatus";
-        page.AddChild(KeyStatus);
+        // Default keys on top, beside the refusal line, so it isn't stacked over the screen's own Defaults (BUG-0743).
+        var header = new HBoxContainer { Name = "Header" };
+        header.AddThemeConstantOverride("separation", 16);
+        page.AddChild(header);
         KeysDefaultsButton = ShellUi.Button("KeysDefaults", ui.Keys(KeysText.Defaults), 220f);
         KeysDefaultsButton.Pressed += () =>
         {
@@ -240,7 +224,45 @@ public partial class SettingsScreen : CanvasLayer
             KeyStatus.Text = "";
             ShowKeys();
         };
-        page.AddChild(KeysDefaultsButton);
+        header.AddChild(KeysDefaultsButton);
+        KeyStatus = ShellUi.Text("", 18);
+        KeyStatus.Name = "KeyStatus";
+        KeyStatus.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        KeyStatus.CustomMinimumSize = new Vector2(400f, 0f);
+        KeyStatus.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        header.AddChild(KeyStatus);
+        var scroll = new ScrollContainer { Name = "Scroll", CustomMinimumSize = new Vector2(640f, 380f), HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+        page.AddChild(scroll);
+        var rows = new GridContainer { Name = "Rows", Columns = 2, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        rows.AddThemeConstantOverride("h_separation", 16);
+        rows.AddThemeConstantOverride("v_separation", 4);
+        scroll.AddChild(rows);
+        // The key buttons look like buttons on the dark screen, not only when hovered (BUG-0743).
+        StyleBoxFlat normal = KeyStyle(new Color(0.22f, 0.2f, 0.17f), new Color(0.55f, 0.48f, 0.36f));
+        StyleBoxFlat hover = KeyStyle(new Color(0.32f, 0.29f, 0.23f), new Color(0.85f, 0.75f, 0.5f));
+        for (int i = 0; i < KeyMap.Actions.Length; i++)
+        {
+            int index = i;
+            Label name = ShellUi.Text(KeyMap.ActionName(ui, i), 18);
+            name.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+            rows.AddChild(name);
+            var key = new Button { Name = $"Key_{KeyMap.Actions[i]}", CustomMinimumSize = new Vector2(180f, 32f), FocusMode = Control.FocusModeEnum.None };
+            key.AddThemeStyleboxOverride("normal", normal);
+            key.AddThemeStyleboxOverride("hover", hover);
+            key.AddThemeStyleboxOverride("pressed", hover);
+            key.Pressed += () => Listen(index);
+            rows.AddChild(key);
+            _keyButtons[i] = key;
+        }
+    }
+
+    private static StyleBoxFlat KeyStyle(Color fill, Color border)
+    {
+        var style = new StyleBoxFlat { BgColor = fill, BorderColor = border };
+        style.SetBorderWidthAll(2);
+        style.SetCornerRadiusAll(4);
+        style.SetContentMarginAll(4);
+        return style;
     }
 
     private void Listen(int i)

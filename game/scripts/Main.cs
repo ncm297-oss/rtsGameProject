@@ -164,7 +164,8 @@ public partial class Main : Node3D
         AddChild(_settingsScreen);
         _settingsScreen.Build(ui);
         _settingsScreen.ApplyPressed += () => CommitSettings(_settingsScreen.Picks(), stay: true);
-        _settingsScreen.DefaultsPressed += () => CommitSettings(new GameSettings(), stay: true);
+        // BUG-0743: Defaults resets the General fields; the keys stay as the tab shows them (it has its own Default keys).
+        _settingsScreen.DefaultsPressed += () => CommitSettings(new GameSettings { Keys = _settingsScreen.Picks().Keys }, stay: true);
         _settingsScreen.BackPressed += () => CommitSettings(_settingsScreen.Picks(), stay: false);
     }
 
