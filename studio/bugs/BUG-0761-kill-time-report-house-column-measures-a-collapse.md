@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | fixed (pending QA) |
+| Status | fixed (e8a622e, D-H5 round 1, verified by QA) |
 | Found | 2026-10-16-0847, task M5-H2 (QA) |
 | System | data-track measured report `sim/Rts.Sim.Tests/Content/BuildingKillTimeReportTests.cs` vs the collapse rule (BUG-0703) |
 | Fixed by | D-H5 fix round 1 (data track): `TestSim.KeepIn(sim, 1)` after the attacker loop in `Raze()`, plus a guard that fails any fall not caused by player 0's attackers (a `Collapsed` death or another killer, the building at full hp on its last tick, or no attacker struck) |
@@ -50,3 +50,20 @@ the full-suite run didn't show it.
 - Checked the rest of `Content/` + `QA/Content/` base vs head (895 / 895 green both): `CounterTriangleMarginsTests`,
   `LineShockSweep` and the siege rows print identically; `AiSpendingReportTests` moved (expected from the BUG-0650 /
   BUG-0702 AI changes; a report the data track re-runs at D-H5 anyway).
+
+## Verification (QA, D-H5 fix round 1, e8a622e)
+- Table on head vs a fresh `git archive` of base 8c39c08 (both run with `--logger "console;verbosity=detailed"`): every
+  seconds / struck cell of all three tables is equal except 20 Raiders on the infantry hall 19.4 -> 19.5 s (today and the
+  "today / before" table). The House column is back: 20 HI 11.8 s [19 / 20], 20 Raiders 9.8 s, 20 Crossbowmen 27.4 s,
+  10 Raiders 13.8 s, 2 Catapults 6.3 s, 2 Sappers 13.7 s (before-D19: 44.6 / 42.4 / 54.0 / 78.2 / 6.3 / 13.7 s). The only
+  other diff lines are D-H5's own "/ n.nx Raider per cost" annotations. 12 / 12 band cells; the Raider-miss pin
+  (`malazan_catapult Infantry hall`, `malazan_catapult Town Hall`) is unchanged in source and green.
+- The 19.5 s cell comes from M5-H2, not the keeper: with the keeper and all three guards removed, head prints 19.5 s on the
+  hall too (and 0.1 s [0 / n] on every House).
+- Mutants (scratch copies): keeper removed -> red, "malazan_heavy_infantry v whirlwind_tent: the building fell on tick 1
+  but not to player 0's attackers"; keeper and the killer assert removed -> red, "... fell on tick 1 at full hp, never
+  struck". The guard bites on its own and is layered.
+- No other collapse trap in `Content/` + `QA/Content/`: with `World.Collapse` instrumented to log a stack trace, the 895
+  tests there trigger 0 collapses (control: `QA/CollapseRuleQaTests` logs 27). By source: the kill-time report is the only
+  file there that spawns a building directly; the other ticking scenes are units-only (never built, so never defeated) or
+  `AiScenes.Flat` / generated maps with a Town Hall.
