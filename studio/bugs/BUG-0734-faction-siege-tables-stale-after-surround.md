@@ -3,10 +3,21 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | open (fix dispatched: the data track's merged-tree reprint at the 2026-10-15-2325 integration, Producer decision) |
 | Found | 2026-10-15-2325, task M5-P1 |
 | System | content docs (`docs/factions/malazan.md`, `docs/factions/whirlwind.md` "Balance baseline" siege tables), `Content/CounterTriangleMarginsTests` |
-| Fixed by | |
+| Fixed by | (the reprint commit on the merged tree sim 94a0c1a + view b6c33e4 + data cc3e170; the dev sets this `fixed` with its hash) |
+
+## Producer decision (2026-10-16, ACCEPT of session 2325)
+Sim ACCEPT with no sim change. D19 (the same session) re-printed the same siege cells on the old movement (Catapult on a Tent line
+36.2 s / 47 %, Ram on a Billet 40.0 s / 34 %), so neither branch's numbers survive the merge: on the Producer's scratch merge
+(sim + view + data) the same 8 rows are red. The conductor merges sim → view → data, then runs a data-track fix-mode dev on the
+merged tree that re-prints both pages' siege tables and prose from `AllEightPairs_BothSeats_PrintTheMarginTable_AndTheDocWinnerWins`,
+re-runs `Content/BuildingKillTimeReportTests` (the band 12 / 12 must hold; a failing cell is pinned at the measured count with a dated
+reason and an S3 filed, never loosened silently), updates docs/03 "Implementation (pathing slice 1)"'s last bullet to the merged-tree
+numbers, and pushes only when `CounterTriangleMarginsTests` 9 / 9, `BuildingKillTimeReportTests`, `D19QaTests`, `DataValidationTests`,
+`DataContentHashTests` (hash AB811AD47F68D0AE unchanged: docs and tests only), `ReplayGoldenTests` and `GatherWedgeQaTests` are green
+and the full non-Perf suite is green on the merged tree. Standing rule 25 (handoff) prevents the repeat.
 
 ## Repro
 `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~CounterTriangleMarginsTests"` on `studio/2026-10-15-2325-sim`

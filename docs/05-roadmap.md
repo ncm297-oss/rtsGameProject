@@ -693,10 +693,14 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       [02 Game flow](02-game-design.md#game-flow) 5's columns (gathered, trained, buildings built / lost, Age II time, the
       army-value graph) once the sim counts them (STATE Requests 39).)
 - [ ] Save/load and replay playback.
-- [ ] Settings: resolution, window mode, VSync, quality, volumes, keybinds. (M6-V6, 2026-10-13: resolution, window mode,
+- [x] Settings: resolution, window mode, VSync, quality, volumes, keybinds. (M6-V6, 2026-10-13: resolution, window mode,
       VSync, quality presets, master / music / SFX volume and edge-pan speed, from the menu and the pause menu, saved in
       `user://settings.cfg`. M6-V7, 2026-10-14: "Confine cursor to window" (on by default; the cursor stays in the window
-      during a match so the edges pan beside a second monitor) and control groups that hold a building. Left: keybinds.)
+      during a match so the edges pan beside a second monitor) and control groups that hold a building. M6-V8, 2026-10-16:
+      keybinds: Settings → Keybinds rebinds the 4 orders, Tab, B / V, the 9 control-group digits and the 15 grid keys
+      (`KeyMap`, `settings.cfg` `[keys]`, a clash refused, "Default keys"); Esc, the modifiers, the arrow keys, F10 / F12,
+      mouse buttons and the camera keys stay fixed (docs/02 "Controls and camera"); verified by `SettingsTest`, QA's
+      `QaM6V8Test` / `QaM6V8R1Test` and `ShellTest` on the merged tree. Ticked at the 2026-10-15-2325 ACCEPT.)
 - [ ] Art look test done (KayKit vs. alternatives, see [04](04-art-pipeline.md)); real models and
       animations for Malazan and Whirlwind; licensing log filled in.
 - [ ] Real SFX and placeholder music; alerts with sound.
