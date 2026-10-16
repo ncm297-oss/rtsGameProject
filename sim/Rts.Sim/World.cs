@@ -102,6 +102,10 @@ public sealed partial class World
         foreach (BuildingDef b in config.Data.Buildings) AnyBuildingAttack |= b.Attack != null;
         CombatantType = new bool[config.Data.Units.Length];
         for (int t = 0; t < CombatantType.Length; t++) CombatantType[t] = CombatSystem.IsCombatant(config.Data.Units[t]);
+        SurroundSpots = SurroundRule.MaxSpotsFor(config.Data);
+        SurroundClaim = new int[config.UnitCapacity];
+        Array.Fill(SurroundClaim, -1);
+        SurroundHolder = new int[config.BuildingCapacity * SurroundSpots];
 
         // M4-5: stealth and detection (World.Stealth.cs).
         _detectBytes = (config.PlayerCount + 7) / 8;
@@ -241,6 +245,22 @@ public sealed partial class World
 
     /// <summary>Per unit type: whether it counts as "can attack" in the target priority (<see cref="CombatSystem.IsCombatant"/>), read from the data once.</summary>
     internal bool[] CombatantType { get; }
+
+    /// <summary>Pathing slice 1 (<see cref="SurroundRule"/>): standing spots per building slot, the most any footprint in the data has.</summary>
+    internal int SurroundSpots { get; }
+
+    /// <summary>
+    /// Pathing slice 1: per unit, the spot key (building slot x <see cref="SurroundSpots"/> + spot) it claims, -1 for none.
+    /// Valid only while <see cref="SurroundHolder"/> names the unit back (checked on read, so nothing clears it); not hashed:
+    /// the claims only steer where a chase walks, and the walk is hashed.
+    /// </summary>
+    internal int[] SurroundClaim { get; }
+
+    /// <summary>Pathing slice 1: per spot key, the claiming unit's slot + 1 (0 for none); see <see cref="SurroundClaim"/>.</summary>
+    internal int[] SurroundHolder { get; }
+
+    /// <summary>Test seam: false turns the surround rule off, so a scene can print the before / after counts (pathing slice 1).</summary>
+    internal bool SurroundRuleOn { get; set; } = true;
 
     /// <summary>The armor class buildings take damage as (<see cref="CombatConstants.StructureClassKey"/>); -1 when the data has none.</summary>
     internal int StructureClass { get; }

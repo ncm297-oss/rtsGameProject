@@ -1228,7 +1228,8 @@ target of a unit that may move starts a chase unless it is in reach.
 
 **Chase.** `CombatSystem.Chase` resolves the target's position (a building: the footprint point
 nearest the unit, pushed out by the unit's radius + `CombatConstants.BuildingStandOff` (0.25 m), a
-standing point inside melee reach) like a Move target and gives a fresh walk (`OrderSystem.Walk`)
+standing point inside melee reach; since pathing slice 1 a melee attacker walks to a free standing spot round the
+footprint instead, see "Implementation (pathing slice 1)") like a Move target and gives a fresh walk (`OrderSystem.Walk`)
 through the normal movement path, unless the unit already walks to that cell. A walking chaser's goal
 is refreshed only on its scan ticks, so a fleeing target changes the goal at most every 4 ticks; a
 chaser standing Idle (it reached where the target was, gave up, or stood down) walks again at its
@@ -6495,6 +6496,77 @@ count). No `Command` kind, no knob, no data change; M5-4b's flags, event, latch,
   M5-4d), `DefeatAiStressTests` (the weak seats start without workers), `QA/DefeatRuleQaTests` (an expiry and a spawn in one
   tick; a summoned builder on a hall site at the exact tick; the losers of the 3-4 seat match place a House with no unit),
   `AbilityManagerQaTests.ADefeatedSeat_NeverCasts` (its casters go with the defeat).
+
+### Implementation (pathing slice 1)
+
+"Surround a building" (owner playtest note 5: attackers got stuck behind their own side instead of walking round to an open
+face). Code: `Combat/SurroundRule.cs` (new), hooks in `CombatSystem` (`ChaseCell`, `Chase`, `Attack`, `Acquire`'s stall rule),
+three arrays on `World`, `CombatConstants.SurroundSpotsPerCell`. No `Command`, no data change, no knob in `rules.json`.
+
+- **Who.** A unit chasing a **live** building (an ordered Attack, an attack-move or retaliation that picked it, the AI's waves:
+  every building chase goes through `ChaseCell`) whose attack range is under one cell (2 m): the melee units. Ranged units stop
+  far out, where a spot is no help and their claim would only keep a melee unit out; a remembered (gone or unseen) building
+  keeps the old walk.
+- **The spots.** Round a `w x h` footprint: `SurroundSpotsPerCell` (2) spots per footprint cell along each face, 1 m apart, plus
+  one off each corner on the diagonal: `4 x (w + h + 1)` spots (20 for a 2x2 House, 28 for a 3x3 hall, 36 for a 4x4 Town Hall).
+  Each lies the attacker's radius + `BuildingStandOff` (0.25 m) out from the footprint (in reach of a 0.5 m melee attack), so in
+  the first ring of cells round it, or the second for a body over 1.75 m. A spot whose cell is impassable (a cliff, another
+  building, the map edge) doesn't exist. Why 2 per cell: a cell is 2 m, and one line unit per cell (the brief's first idea)
+  would cap a House at 12 of 20 attackers.
+- **The order.** Fixed: the south face west to east, the north face, the west face south to north, the east face, then the
+  corners SW, SE, NW, NE. A pick takes the nearest free spot by squared distance, the lower index on a tie: a loop over an
+  array, never a dictionary, so it is deterministic.
+- **Claims.** `World.SurroundClaim` (per unit slot: the spot key = building slot x `SurroundSpots` + spot, -1 none) and
+  `World.SurroundHolder` (per spot key: the claimer's slot + 1, 0 none), sized at `World` creation (`SurroundSpots` = the most
+  spots any building in the data has). A claim counts only while both arrays name each other **and** the holder is alive and
+  still chases that building (same handle): a death, a new order or a new target frees the spot on read, with no clearing
+  pass and no per-tick reset (a deviation from the brief's "per-tick scratch cleared by stamping": the claims must outlive the
+  tick so a walker keeps its spot for the 2-5 s of its walk). Not hashed: they only steer where a chase walks, and the walk is
+  hashed; a run is deterministic because they are written in slot order in phase 7.
+- **The rule.** On each re-aim (`Chase`: a walker on its scan ticks, an Idle chaser every tick) the attacker keeps its spot
+  while no other own unit **stands** on it (not walking; centres nearer than both radii; in the attacker's reach of the
+  footprint); else it lets it go and claims the nearest spot nobody claims or stands on. With none free it **waits**: it walks
+  the old way (the footprint point nearest it) and re-picks on every later re-aim, so a spot freed by a death or a retreat is
+  taken by the nearest waiter (in the test: claimed the tick after the death, struck from 5 ticks later).
+- **No planting on the way.** A walker with a spot farther than its radius from it doesn't stop to strike when it passes into
+  reach (phase 10); stopped short (blocked), it strikes from where it stands. Without this the walkers round a face planted
+  between two spots and the House row stayed at 15 / 20.
+- **The claim follows a striker.** On its scan ticks a unit striking the building claims the spot it stands on (a free one
+  within its radius) or lets its claim go, so no spot stays held by someone striking from elsewhere.
+- **No give-up while queued.** A stalled chase of a building whose every existing spot is held by own units (claimed or stood
+  on) keeps on, like BUG-0143's "friend fights the target" for units, in every mode (Ordered, attack-move, retaliation): the
+  building is reachable and a death frees a spot. A walker stalled on the way to a spot it already holds is judged by the old
+  rules (M4-H3 for an ordered Attack), so a spot past a cliff is no reason to pace.
+- **Measured** (`Combat/SurroundTests`, D18 report 4's staging: 20 line units 10 m west of a lone building, flat, the building's
+  hp topped up between ticks so the count doesn't depend on damage; struck within 10 s = 200 ticks, shipped data of 2026-10-15):
+
+  | 20 attackers v (struck, before / after) | House (2x2) | Infantry hall (3x3) | Town Hall (4x4) |
+  | --- | --- | --- | --- |
+  | Heavy Infantry | 11 / 17 | 9 / 20 | 11 / 20 |
+  | Raiders | 10 / 18 | 9 / 20 | 11 / 19 |
+
+  The House misses 20 because the corner and east-face walkers jam each other at the far corners (each 1 m apart): slice 2
+  material, with the crowd routing (BUG-0028 / 0032 / 0046).
+- **Cost.** A re-pick walks the ring once (at most 36 spots with today's data; the brief's bound is `4 x (w + h + 2)`) and
+  queries the spatial hash only for a spot that would win; a kept claim costs one query. No allocation (0 B a tick with 40
+  attackers). The 40-attacker scene's mean tick, rule off v on (`FortyAttackers_TickCost_Report`, Debug, 2026-10-15, other
+  suites running): 0.057 ms v 0.068 ms over its first 400 ticks.
+- **Memory.** Per unit slot one `int` (10 KB for 2,500 slots); per building slot `SurroundSpots` ints (36 x 4 B x 256 = 36 KB).
+- **Determinism.** The golden replay's `k` lines didn't move (its match attacks no building); `GatherWedgeQaTests` unchanged.
+- **Tests.** `Combat/SurroundTests`: the four (a) rows (≥ 16 / 20, before and after printed), the Town Hall report rows, (b) a
+  fuzz (3 seeds x 300 ticks, 30 attackers on a House and a hall, deaths, re-orders between the two, walks away: no spot held
+  twice, no two walkers with one spot point), (c) a death frees a spot a waiter takes and strikes from within 40 ticks, (d) a
+  House walled on three sides by own buildings: its open side fills and the other 15 keep their order for 400 ticks (with the
+  rule off one gives up at tick 78), hash twins of the (a) scene for both groups, a 0 B allocation probe with 40 attackers.
+  `World.SurroundRuleOn` is a test seam (default on) for the before / after counts. Re-staged:
+  `MatchOverTests.ARecordedMatchThatEndsInADefeat_PlaysBackPastMatchOver` (the loser's workers now mill about a fixed point
+  by their hall: the old point followed the first worker, they drifted out of sight, and the queued Attacks on them only
+  found them by luck of where one worker was pushed; the surround moved that luck).
+- **The faction pages' siege tables** (`Content/CounterTriangleMarginsTests`, data-owned) measure the line razing a Tent /
+  Billet: with the rule the line is faster (Catapult on a Tent: line 192.2 s to 155.0 s; Battering Ram on a Billet: line
+  254.5 s to 191.8 s, the Ram 13.8 s to 13.7 s), so both pages need a re-print by the data track on the merged tree.
+- **Not yet (slice 2):** a melee unit blocked by its own standing ranged units routing round them, unit-v-unit crowding away
+  from buildings, smarter fill order (far faces first for the units that arrive last).
 
 ## Save/load and replays
 

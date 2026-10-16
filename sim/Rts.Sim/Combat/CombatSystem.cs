@@ -92,9 +92,10 @@ public static class CombatSystem
                     u.ChaseBest[i] = gap;
                     u.ChaseStall[i] = 0;
                 }
-                else if (++u.ChaseStall[i] >= CombatConstants.GiveUpScans && FriendFightsTarget(world, i))
+                else if (++u.ChaseStall[i] >= CombatConstants.GiveUpScans && (FriendFightsTarget(world, i) || QueuedAtRing(world, i)))
                 {
                     // Queued behind its own side (BUG-0143): a friend is fighting the target, so it is reachable. Keep on.
+                    // Pathing slice 1: likewise one waiting for a spot round a building its own side holds whole.
                     u.ChaseBest[i] = gap;
                     u.ChaseStall[i] = 0;
                 }
@@ -156,6 +157,9 @@ public static class CombatSystem
                 }
             }
             if (lost && u.Target[i].Generation == 0) Settle(world, i);
+            // Pathing slice 1: one striking a building claims the spot it stands on, or lets its claim go.
+            if (due && u.State[i] == UnitState.Attacking && u.Target[i].Generation != 0 && u.TargetIsBuilding[i] && SurroundRule.Applies(world, i))
+                SurroundRule.Planted(world, i);
             // Chase: a unit standing with a target out of reach walks at once; a walking chaser is re-aimed on its scan
             // tick only, so a fleeing target changes its goal at most every ScanInterval ticks. An ordered attacker doesn't
             // scan (its target is held), so it is re-aimed on the ticks it would have scanned.
@@ -219,6 +223,9 @@ public static class CombatSystem
                 else if (u.State[i] == UnitState.Attacking) Stand(u, i, UnitState.Idle);
                 continue;
             }
+            // Pathing slice 1: one walking to its surround spot along the face doesn't plant on the way, where it would stand
+            // between two spots and keep both from the friends behind; stopped short (blocked), it strikes from there.
+            if (gap <= range && u.State[i] == UnitState.Moving && world.SurroundClaim[i] >= 0 && SurroundRule.WalksToSpot(world, i)) continue;
             if (gap <= range)
             {
                 if (u.State[i] != UnitState.Attacking) Plant(u, i);
@@ -780,6 +787,20 @@ public static class CombatSystem
     }
 
     /// <summary>
+    /// Pathing slice 1: whether unit <paramref name="i"/>'s building chase (<see cref="SurroundRule"/>) waits because own
+    /// units hold every standing spot round it: the building is reachable and a death or a new order frees a spot. A spot
+    /// newly free is claimed here, which also restarts the stall count (a new walk). One stalled on the way to the spot it
+    /// already claims is judged by the old rules (a spot past a cliff is no reason to keep on).
+    /// </summary>
+    private static bool QueuedAtRing(World world, int i)
+    {
+        if (!SurroundRule.Applies(world, i)) return false;
+        int before = world.SurroundClaim[i];
+        bool got = SurroundRule.TrySpot(world, i, out _, out bool full);
+        return full || (got && world.SurroundClaim[i] != before);
+    }
+
+    /// <summary>
     /// Phase 7, for unit <paramref name="i"/> with no target: an attack-mover heads for its leg's end again and a
     /// retaliator for its anchor, at once (also one still walking a chase whose target is gone); one standing after it
     /// walked there (its goal is the anchor: arrived, or gave up on the way) ends the engagement, as does a unit the leash
@@ -828,15 +849,25 @@ public static class CombatSystem
     private static void Chase(World world, int i)
     {
         UnitStore u = world.Units;
-        if (!ChaseCell(world, i, out int cell, out Vector2 goal)) return;
-        if (u.State[i] == UnitState.Moving && u.GoalCell[i] == cell) return;
+        if (!ChaseCell(world, i, out int cell, out Vector2 goal, out bool spot)) return;
+        // A surround spot is a point, two to a cell (pathing slice 1): a new spot in the same cell is a new walk.
+        if (u.State[i] == UnitState.Moving && u.GoalCell[i] == cell && (!spot || u.Goal[i] == goal)) return;
         OrderSystem.Walk(world, i, cell, goal);
     }
 
     /// <summary>The cell and point unit <paramref name="i"/>'s chase walks to now; false when it resolves to no passable cell.</summary>
-    private static bool ChaseCell(World world, int i, out int cell, out Vector2 goal)
+    private static bool ChaseCell(World world, int i, out int cell, out Vector2 goal) => ChaseCell(world, i, out cell, out goal, out _);
+
+    /// <summary><see cref="ChaseCell(World, int, out int, out Vector2)"/>; <paramref name="spot"/> when the point is a surround spot the unit claims (<see cref="SurroundRule"/>).</summary>
+    private static bool ChaseCell(World world, int i, out int cell, out Vector2 goal, out bool spot)
     {
         UnitStore u = world.Units;
+        spot = false;
+        if (u.TargetIsBuilding[i] && SurroundRule.Applies(world, i) && SurroundRule.TrySpot(world, i, out Vector2 at, out _))
+        {
+            spot = true;
+            return OrderSystem.ResolveTarget(world.NavGrid, at, out cell, out goal);
+        }
         Vector2 point = TargetPoint(world, i);
         if (u.TargetIsBuilding[i])
         {

@@ -13,6 +13,12 @@ public static class CombatConstants
     public const float BuildingStandOff = 0.25f;
 
     /// <summary>
+    /// Pathing slice 1 (<see cref="SurroundRule"/>): standing spots per footprint cell along each face. A 2 m cell holds
+    /// two 0.4 m line units side by side, 1 m apart, so the 20-spot ring of a 2x2 House takes a 20-unit army whole.
+    /// </summary>
+    public const int SurroundSpotsPerCell = 2;
+
+    /// <summary>
     /// Scans in a row (4 ticks each) a chaser may get no closer to its target before it gives the target up (BUG-0137):
     /// 10 scans = 2 s. Covers a target it can't reach (another plateau, a sealed pocket), one only reachable by a detour
     /// that leads away, and one that runs as fast as it does.

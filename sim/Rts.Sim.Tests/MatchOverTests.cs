@@ -413,10 +413,14 @@ public class MatchOverTests
                 foreach (EntityHandle worker in workers1) sim.Enqueue(Command.Attack(0, h, worker, isBuilding: false, queued: true));
             }
         int defeatedAt = -1;
+        // The loser's workers mill about one fixed point by their hall (pathing slice 1): a point that followed the first
+        // worker let them drift 30 m out of every Heavy Infantry's sight before the hall fell, and whether a queued Attack on
+        // them still found them then hung on where one worker happened to be pushed.
+        Vector2 home = w.Units.Position[workers1[0].Index] + new Vector2(3f, 0f);
         while (sim.TickNumber < 6000 && (defeatedAt < 0 || sim.TickNumber < defeatedAt + 300))
         {
             if (sim.TickNumber % 25 == 0)
-                foreach (EntityHandle h in workers1) sim.Enqueue(Command.Move(1, h, w.Units.Position[workers1[0].Index] + new Vector2(3f, 0f)));
+                foreach (EntityHandle h in workers1) sim.Enqueue(Command.Move(1, h, home));
             sim.Tick();
             if (defeatedAt < 0 && w.IsDefeated(1)) defeatedAt = sim.TickNumber;
         }
