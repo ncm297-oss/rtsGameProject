@@ -287,6 +287,7 @@ public partial class QaM6V3Test : Node
     {
         var main = GD.Load<PackedScene>("res://scenes/Main.tscn").Instantiate<Main>();
         main.UserArgs = Array.Empty<string>(); // no match flag: the menu shows
+        main.SettingsPath = $"user://qa-m6v3-{OS.GetProcessId()}/settings.cfg"; // BUG-0770: never the player's file (missing: the defaults)
         AddChild(main);
         await Frames(2);
         Check(main.Menu is { Visible: true }, "the menu did not show");

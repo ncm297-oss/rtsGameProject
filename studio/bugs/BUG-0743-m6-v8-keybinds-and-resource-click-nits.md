@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-15-2325, task M6-V8 (QA) |
 | System | view: `SettingsScreen` / `Main.CommitSettings`, `FogOfWar.Resources` |
-| Fixed by | Items 1-2 by acdaeef (M6-V8 fix round 1), verified by QA 2026-10-15-2325: the screen's Defaults keeps the tab's keys (`SettingsTest` row: K stays attack-move on screen, in effect and in the file); windowed `settings-keybinds.png` shows framed key buttons and "Default keys" at the top of the tab, away from the screen's Defaults. Item 3 (last-seen amount per frame) not addressed: still open for the Producer to fix or wontfix |
+| Fixed by | Items 1-2 by acdaeef (M6-V8 fix round 1), verified by QA 2026-10-15-2325: the screen's Defaults keeps the tab's keys (`SettingsTest` row: K stays attack-move on screen, in effect and in the file); windowed `settings-keybinds.png` shows framed key buttons and "Default keys" at the top of the tab, away from the screen's Defaults. Item 3 by 2a822ca (M6-VH2): `FogOfWar` takes the runner's `Ticked`; verified by QA 2026-10-16-0847: `ResourceClickTest` 2x row (240 ticks in 120 frames, 0 behind) and `QaM6VH2Test.LastSeenAt2x` (enemy workers mining while our scout leaves at 2x: equal to the sim on every in-sight tick, and to the last in-sight tick's 2478 on 200 unseen ticks while the sim went to 2450) |
 
 ## Repro
 1. Windowed `& $env:GODOT --path game res://tests/SettingsTest.tscn -- --shots <dir>`, look at `settings-keybinds.png`.

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | open (scene half fixed M6-VH2; the sim probe's verdict is M5-H2's) |
 | Found | 2026-10-15-2325, task M6-V8 (QA, fix round 1 re-check) |
 | System | test scene `game/tests/M4PlayableTest.cs` step 7 (the Cusser on a building); possibly movement (sim) |
-| Fixed by | |
+| Fixed by | Scene half by 2a822ca (M6-VH2): `M4PlayableTest` on `SimRunner.FixedFrameDelta` (1/60 s a frame) and a pull-back spot off the Sapper's way; verified by QA 2026-10-16-0847: 6 runs (alone, 3 at once, 2 scene loops under load) give the same step ticks (seed 1 ... 1962 / 2960 / 3181 / 3469, seed 6 ... 1853 / 3093 / 3312 / 3597), PASS each. The scene no longer exercises frame-time variance, so it can no longer show whether the sim pushes a boxed-in unit out |
 
 ## Repro
 1. Not reproducible alone: it failed once in the full scene loop (`powershell -File tools/qa/scene-loop.ps1`, 58 scenes, after

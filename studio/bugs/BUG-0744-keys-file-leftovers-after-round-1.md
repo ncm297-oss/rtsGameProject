@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (items 1-2); item 3 stays documented (docs/03 "The file") |
 | Found | 2026-10-15-2325, task M6-V8 (QA, fix round 1 re-check) |
 | System | view: keybinds (`game/scripts/KeyMap.cs` `Read`, `IsPlainKey`, `ResolveClashes`) |
-| Fixed by | |
+| Fixed by | 2a822ca (M6-VH2), verified by QA 2026-10-16-0847: `SettingsTest` rows + `QaM6VH2Test.HostileKeys` (101 values in a whole saved file: 76 combos / junk refused with one problem and the default, 25 plain names in any case / spacing clean, every other action and field kept, re-save clean) and `QaM6VH2Test.EveryCode` (0-0x10FFFF + every `Key`: 261 plain keys, 0 lost through the file, no "Unicode parsing error"); `QaM6V8R1Test` notes now 6 clean / 38 refused |
 
 ## Repro
 `& $env:GODOT --headless --path game res://tests/QaM6V8R1Test.tscn` prints the notes below (the scene passes; these are

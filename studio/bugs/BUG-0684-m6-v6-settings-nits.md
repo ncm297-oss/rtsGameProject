@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-13-0916, task M6-V6 (QA) |
 | System | view: `game/tests/SettingsTest.cs`, `game/tests/ShellTest.cs`, `game/scripts/SettingsScreen.cs`, `game/scripts/Main.cs`, `game/scripts/GroundDiscPool.cs`, the bench |
-| Fixed by | |
+| Fixed by | 2a822ca (M6-VH2), verified by QA 2026-10-16-0847: item 1 `SettingsTest` / `ShellTest` per-process folders (two of each at once, twice: 8 distinct `settings-test-<pid>` / `shell-test-settings-<pid>` folders, none left, the player's file md5 unchanged); item 2 `ShellTest` (--vsync off over on: shown Off, greyed, Back writes On) + `QaM6VH2Test.VsyncScreen` (both ways, forced picks on the greyed field, live again without the flag); item 3 `ShellTest` row (no menu over the match); item 4 `AbilityViewTest` (3,072 / 2,048 visits for 1,024 keys) + `QaM6VH2Test.DiscPoolFuzz` (2,400 frames, 8,568 reclaims against BUG-0662's rule; a lower untaken key now gives up its node by lowest key, not lowest node index: same outcome, both are freed keys); item 5 `BenchTest` (seeds 1 and 6 box 100 of 100; seed 6 now benches at zoom 60) |
 
 ## Repro / items
 1. **Shared test paths.** `user://` is one folder for every worktree and run (`%APPDATA%\Godot\app_userdata\RtsGame`).

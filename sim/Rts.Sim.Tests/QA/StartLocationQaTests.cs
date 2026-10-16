@@ -240,7 +240,7 @@ public class StartLocationQaTests
     /// centred anchor would start left of x 0; it must fall back to the nearest spot by that location, not wrap onto the
     /// previous row's east end. BUG-0622 item 1.
     /// </summary>
-    [Fact(Skip = "BUG-0622 item 1: a hand-built start location by the west edge wraps the hall's anchor to the east edge")]
+    [Fact] // BUG-0622 item 1 fixed in M6-VH2 (QA un-skipped)
     public void HandBuiltStartByTheWestEdge_HallStaysByIt()
     {
         Heightmap flat = ResourceMaps.Flat(40, 40);

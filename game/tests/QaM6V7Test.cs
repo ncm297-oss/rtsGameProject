@@ -204,6 +204,7 @@ public partial class QaM6V7Test : Node
     {
         var main = GD.Load<PackedScene>("res://scenes/Main.tscn").Instantiate<Main>();
         main.UserArgs = new[] { "--mute" };
+        main.SettingsPath = $"user://qa-m6v7-{OS.GetProcessId()}/settings.cfg"; // BUG-0770: never the player's file (missing: the defaults)
         AddChild(main);
         await Frames(3);
         bool ever = main.CursorConfined;

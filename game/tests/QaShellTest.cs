@@ -32,6 +32,7 @@ public partial class QaShellTest : Node
             await Frames(1);
             _main = GD.Load<PackedScene>("res://scenes/Main.tscn").Instantiate<Main>();
             _main.UserArgs = Array.Empty<string>();
+            _main.SettingsPath = $"user://qa-shell-{OS.GetProcessId()}/settings.cfg"; // BUG-0770: never the player's file (missing: the defaults)
             AddChild(_main);
             await Frames(2);
             Check(_main.Menu is { Visible: true } && _main.CurrentMatch == null, "no-arg boot is not the menu");

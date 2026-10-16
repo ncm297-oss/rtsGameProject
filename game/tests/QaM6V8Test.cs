@@ -30,7 +30,8 @@ namespace Rts.Game.Tests;
 /// <remarks>Headless: <c>&amp; $env:GODOT --headless --path game res://tests/QaM6V8Test.tscn</c>; prints "QA M6-V8 TEST PASS" or each failure.</remarks>
 public partial class QaM6V8Test : Node
 {
-    private const string TestPath = "user://qa_m6v8_settings.cfg";
+    // Per process (QA M6-VH2, the BUG-0684 item 1 rule): two runs at once never share the file.
+    private static readonly string TestPath = $"user://qa_m6v8_settings-{OS.GetProcessId()}.cfg";
     private readonly List<string> _failures = new();
     private GameData _data = null!;
     private Match _match = null!;

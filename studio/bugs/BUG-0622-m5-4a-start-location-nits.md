@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (items 2 and 4 in M5-H1, item 3 in docs at 0146, item 1 in M6-VH2) |
 | Found | 2026-10-13-0146, task M5-4a |
 | System | `ViewApi/StartBase.Plan`, `ResourcePlacer` (start resources), docs/03 "Implementation (M5-4a)" |
-| Fixed by | |
+| Fixed by | Item 1 by 2a822ca (M6-VH2), verified by QA 2026-10-16-0847: `StartBaseTests.HandBuiltStartByAnEdge_HallStaysByIt`, `StartLocationQaTests.HandBuiltStartByTheWestEdge_HallStaysByIt` (un-skipped), `QA/StartBaseEdgeQaTests` (every cell of a 40 x 40 border band: a hall spot within 6 cells, the state hash unchanged; red on the base at (11, 0)) |
 
 ## Repro and findings
 
