@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-15-2325, task M6-V8 (QA) |
 | System | view: keybinds clash rule (`KeyMap.Clash`), `CommandCard.HandleKey` |
-| Fixed by | |
+| Fixed by | acdaeef (M6-V8 fix round 1): `KeyMap.Clash` makes a group digit or Tab clash with every grid key; `SettingsTest` refuses 1 for card_5 on the tab. QA re-check 2026-10-15-2325: `QaM6V8Test` "group digit on a lower grid key" green; `QaM6V8R1Test` checks group_1 and Tab refused on all 15 grid keys and every grid key refused 1 and Tab, orders / build keys still share lower grid keys, a freed grid key can be taken, a file `group_1="Z"` / `subgroup_next="G"` / a pre-fix file with `card_5="1"` each read as one problem and the defaults |
 
 ## Repro
 1. `& $env:GODOT --headless --path game res://tests/QaM6V8Test.tscn`, rows "group_1 shares '1' with card_5 / card_10".

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-15-2325, task M6-V8 (QA) |
 | System | view: keybinds (`game/scripts/KeyMap.cs` `Read`) |
-| Fixed by | |
+| Fixed by | acdaeef (M6-V8 fix round 1): `KeyMap.Read` reads every key, then `ResolveClashes` checks the map as a whole; `SettingsTest` "two keys swapped" now expects the swap. QA re-check 2026-10-15-2325: `QaM6V8Test` rows green; `QaM6V8R1Test` 3,000 seeded tab walks (61,275 accepted `TrySet` calls) all read back as written with 0 problems, orders / 15 grid keys / 9 digits rotated, Tab and 1 swapped, B and V swapped all read clean |
 
 ## Repro
 1. `& $env:GODOT --headless --path game res://tests/QaM6V8Test.tscn` (QA scene), rows "round trip of attack-move=H, hold=J" and

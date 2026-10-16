@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-15-2325, task M6-V8 (QA) |
 | System | view: keybinds (`KeyMap.Read`, `KeyMap.TrySet`) |
-| Fixed by | |
+| Fixed by | acdaeef (M6-V8 fix round 1): `KeyMap.IsPlainKey` refuses modifier masks, `Key.Special`, `Key.Unknown` in `TrySet` and in the file. QA re-check 2026-10-15-2325: `QaM6V8Test` rows green; `QaM6V8R1Test`: every action x every `Key` enum value (4,799 accepted bindings) round-trips; 10 masked / flag values refused by `TrySet` for a command, a digit and a grid key; "Shift+Q", "Ctrl+1", "Alt+A", "Shift+Ctrl+K" refused with one problem. Leftovers (harmless, not reachable from the tab: "Meta+K" reads as K, non-enum codes pass `TrySet`) filed as BUG-0744 (S4) |
 
 ## Repro
 `& $env:GODOT --headless --path game res://tests/QaM6V8Test.tscn`, rows "'Shift+Q' for order_stop", "'Shift+Q' read from the

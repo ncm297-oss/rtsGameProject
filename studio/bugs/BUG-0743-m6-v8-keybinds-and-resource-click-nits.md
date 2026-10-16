@@ -6,7 +6,7 @@
 | Status | open |
 | Found | 2026-10-15-2325, task M6-V8 (QA) |
 | System | view: `SettingsScreen` / `Main.CommitSettings`, `FogOfWar.Resources` |
-| Fixed by | |
+| Fixed by | Items 1-2 by acdaeef (M6-V8 fix round 1), verified by QA 2026-10-15-2325: the screen's Defaults keeps the tab's keys (`SettingsTest` row: K stays attack-move on screen, in effect and in the file); windowed `settings-keybinds.png` shows framed key buttons and "Default keys" at the top of the tab, away from the screen's Defaults. Item 3 (last-seen amount per frame) not addressed: still open for the Producer to fix or wontfix |
 
 ## Repro
 1. Windowed `& $env:GODOT --path game res://tests/SettingsTest.tscn -- --shots <dir>`, look at `settings-keybinds.png`.
