@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Numerics;
 using System.Text.Json.Nodes;
+using Rts.Sim.Combat;
 using Rts.Sim.Commands;
 using Rts.Sim.Data;
 using Rts.Sim.Entities;
@@ -21,7 +22,9 @@ namespace Rts.Sim.Tests.Content;
 /// band cell. Both columns run on today's sim, so since the surround rule (M5-P1, merged 2026-10-16) "before D19" is D18's
 /// data on the new movement and its seconds are not D18's own report's (re-run on the merged tree 2026-10-16: today 20 HI
 /// 11.8 / 23.1 / 45.0 s, 20 Raiders 9.8 / 19.4 / 35.8 s, 12 / 12; D19's branch, before the rule, read 15.6 / 43.8 / 68.7 s
-/// and 13.6 / 36.1 / 57.4 s).
+/// and 13.6 / 36.1 / 57.4 s; after the sim's M5-H2 merge the Raiders' hall cell reads 19.5 s, every other cell unchanged).
+/// Player 1 is kept in by a far-corner worker placed after the attackers (BUG-0761: a lone House trains nothing, so without
+/// it player 1 is out on tick 0 and the House collapses), and a fall that isn't player 0's kill fails the run.
 /// <para>
 /// The band (the Producer's default, D18 brief): 20 Age I line units (the 20 Heavy Infantry and 20 Raider rows) raze a
 /// House in at most 20 s, an infantry hall in 60 s, a Town Hall in 2 min; and each siege group (Catapults, Sappers) does at
@@ -126,21 +129,37 @@ public class BuildingKillTimeReportTests
             attackers[k] = Place(sim, 0, type, at);
             sim.Enqueue(Command.Attack(0, attackers[k], b, isBuilding: true));
         }
+        // BUG-0761 (rule 24): a House trains nothing, so player 1 with no unit would be out on tick 0 and the House collapse
+        // (no attacker involved). Placed after the attackers so their unit slots, and so the measured cells, don't shift.
+        TestSim.KeepIn(sim, 1);
         UnitStore u = w.Units;
         var struck = new bool[n];
         var before = new int[n];
         int t = 0;
+        int hpBefore = w.Buildings.Hp[b.Index];
+        bool razedByAttackers = false;
         while (t < MaxTicks && w.Buildings.IsAlive(b))
         {
             for (int k = 0; k < n; k++) before[k] = u.IsAlive(attackers[k]) ? u.CooldownTicks[attackers[k].Index] : 0;
+            hpBefore = w.Buildings.Hp[b.Index];
             sim.Tick();
             t++;
+            if (!w.Buildings.IsAlive(b))
+                foreach (DeathEvent d in w.Deaths)
+                    if (d.IsBuilding && d.Victim == b) razedByAttackers = !d.Collapsed && d.KillerOwner == 0;
             if (t > StruckWithin) continue;
             // A swing or shot starts the cooldown, so a cooldown that went up this tick is a strike begun.
             for (int k = 0; k < n; k++)
                 if (u.IsAlive(attackers[k]) && u.CooldownTicks[attackers[k].Index] > before[k]) struck[k] = true;
         }
         bool alive = w.Buildings.IsAlive(b);
+        if (!alive)
+        {
+            // BUG-0761: a fall that isn't the attackers' kill (a collapse, say) must fail, never print as a razing.
+            Assert.True(razedByAttackers, $"{attackerKey} v {bd.Key}: the building fell on tick {t} but not to player 0's attackers");
+            Assert.True(hpBefore < bd.Hp, $"{attackerKey} v {bd.Key}: the building fell on tick {t} at full hp, never struck");
+            Assert.True(struck.Any(s => s), $"{attackerKey} v {bd.Key}: razed on tick {t} with no attacker having struck");
+        }
         return new Run(alive ? int.MaxValue : t, alive ? w.Buildings.Hp[b.Index] : 0, struck.Count(s => s), n,
             n * CounterTriangleScene.Cost(data.Units[type]), bd.Hp);
     }

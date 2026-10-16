@@ -256,5 +256,6 @@ put it back to ×1.5 (the owner's decision): Raider v Lancer is 95-100 % again. 
 from 5 % to 34 % in D19: the building damage set (C) (docs/02 "Combat") speeds the Raiders up far more than the Ram.
 The sim's surround rule (M5-P1, 2026-10-16: more Raiders strike the Billet at once) moved it to 44 % (Raiders 40.0 s
 to 31.2 s, the Ram 13.8 s to 13.7 s); the Ram still razes the Billet about 2.3× faster. Kill times (D-H5, 2026-10-16,
-`Content/BuildingKillTimeReportTests`, unchanged since the merged-tree reprint): 20 Raiders raze a lone Malazan House,
-infantry hall and Town Hall in 9.8 / 19.4 / 35.8 s (the band is 20 / 60 / 120 s), 10 Raiders in 13.8 / 33.0 / 62.6 s.
+`Content/BuildingKillTimeReportTests`, re-run after the sim's M5-H2 merge): 20 Raiders raze a lone Malazan House,
+infantry hall and Town Hall in 9.8 / 19.5 / 35.8 s (the band is 20 / 60 / 120 s; the hall was 19.4 s before M5-H2's
+movement change), 10 Raiders in 13.8 / 33.0 / 62.6 s.

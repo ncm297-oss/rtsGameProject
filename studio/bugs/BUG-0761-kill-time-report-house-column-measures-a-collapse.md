@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed (pending QA) |
 | Found | 2026-10-16-0847, task M5-H2 (QA) |
 | System | data-track measured report `sim/Rts.Sim.Tests/Content/BuildingKillTimeReportTests.cs` vs the collapse rule (BUG-0703) |
-| Fixed by | |
+| Fixed by | D-H5 fix round 1 (data track): `TestSim.KeepIn(sim, 1)` after the attacker loop in `Raze()`, plus a guard that fails any fall not caused by player 0's attackers (a `Collapsed` death or another killer, the building at full hp on its last tick, or no attacker struck) |
 
 ## Repro
 1. On the M5-H2 branch (47ca4a2): `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~BuildingKillTimeReportTests" --logger "console;verbosity=detailed"`.

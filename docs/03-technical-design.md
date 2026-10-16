@@ -6729,7 +6729,7 @@ three arrays on `World`, `CombatConstants.SurroundSpotsPerCell`. No `Command`, n
   BUG-0734): Catapult on a Tent, line 36.2 s to 30.2 s, Siege / line 47 % to 56 %; Battering Ram on a Billet, line 40.0 s
   to 31.2 s, the Ram 13.8 s to 13.7 s, Siege / line 34 % to 44 % (the slice's own branch, on D18's data, read 192.2 s to
   155.0 s and 254.5 s to 191.8 s). `Content/BuildingKillTimeReportTests` on the merged tree: 12 / 12 band cells, 20 Heavy
-  Infantry 11.8 / 23.1 / 45.0 s (House / infantry hall / Town Hall), 20 Raiders 9.8 / 19.4 / 35.8 s, the Catapults 2.3-3.9×
+  Infantry 11.8 / 23.1 / 45.0 s (House / infantry hall / Town Hall), 20 Raiders 9.8 / 19.5 / 35.8 s (19.4 s on the hall before M5-H2), the Catapults 2.3-3.9×
   and the Sappers 4.8-5.7× the Heavy Infantry's damage per cost (D19 alone: 15.6 / 43.8 / 68.7 s and 13.6 / 36.1 / 57.4 s).
   Against the 20 Raiders (D-H5, BUG-0721): Catapults 2.8 / 1.7 / 1.6×, Sappers 3.3-4.1×; the two Catapult cells under 2×
   are pinned as measured (BUG-0780), the band's 12 cells stay the Heavy Infantry's.
