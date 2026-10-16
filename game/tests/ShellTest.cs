@@ -583,10 +583,12 @@ public partial class ShellTest : Node
     }
 
     // M6-V6: --vsync off over a settings file saying on: off for this run (EffectiveVsync; headless has no window to ask), the
-    // file's own value and bytes unchanged. --vsync is a match flag, so the boot starts the match at once.
+    // file's own value and bytes unchanged. --vsync is a match flag, so the boot starts the match at once. BUG-0684: the file
+    // is under a per-process folder (item 1); the settings screen shows the run's VSync, greyed, and Back keeps the file's
+    // (item 2); a closing commit over the running match never shows the main menu (item 3).
     private async Task VsyncOverride()
     {
-        const string path = "user://shell-test-settings/settings.cfg";
+        string path = $"user://shell-test-settings-{OS.GetProcessId()}/settings.cfg";
         var on = new GameSettings { Vsync = true, EdgePan = 1.25f };
         Check(on.Save(path), "could not write the test settings file");
         string full = ProjectSettings.GlobalizePath(path);
@@ -600,10 +602,24 @@ public partial class ShellTest : Node
             $"--vsync off over a file saying on: match {main.CurrentMatch != null}, override {main.VsyncOverride}, effective {main.EffectiveVsync}, file's {main.Settings.Vsync}");
         Check(main.CurrentMatch?.GetNode<RtsCamera>("RtsCamera").EdgePanSpeed == 1.25f, "a dev-flag match did not take the file's edge pan");
         Check(File.ReadAllText(full) == before, "the boot rewrote the settings file");
+        SettingsScreen? screen = main.SettingsScreen;
+        if (Check(screen != null, "no settings screen") && screen != null)
+        {
+            main.ShowSettings();
+            await Frames(1);
+            Check(screen.VsyncOption.Selected == 1 && screen.VsyncOption.Disabled && screen.Picks().Vsync,
+                $"--vsync off: the screen shows VSync item {screen.VsyncOption.Selected} (want 1, off), disabled {screen.VsyncOption.Disabled}, picks' VSync {screen.Picks().Vsync} (want the file's, on)");
+            main.CommitSettings(screen.Picks(), stay: false);
+            await Frames(1);
+            Check(!screen.Visible && main.Menu is { Visible: false } && main.CurrentMatch != null && !main.EffectiveVsync && main.Settings.Vsync,
+                $"a closing commit over the running match: screen {screen.Visible}, menu {main.Menu?.Visible}, match {main.CurrentMatch != null}, effective {main.EffectiveVsync}, file's {main.Settings.Vsync}");
+            var file = new ConfigFile();
+            Check(file.Load(path) == Error.Ok && (bool)file.GetValue("display", "vsync", false), $"--vsync off, Back: the file's vsync {file.GetValue("display", "vsync", false)} (want true)");
+        }
         RemoveChild(main);
         main.QueueFree();
         await Frames(2);
-        File.Delete(full);
+        try { Directory.Delete(Path.GetDirectoryName(full)!, true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
     }
 
     // M6-V2: the running match's seats are the picks: the runner's, the sim's config's, and World.FactionOf agree.

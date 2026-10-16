@@ -1989,6 +1989,7 @@ public partial class AbilityViewTest : Node
         Check(bytes == 0, $"steady: 300 frames at --units 500 allocated {bytes} bytes");
         PoolRow();
         StableKeysRow();
+        ReclaimCostRow();
         MinimapRightClicks();
         await EndMatch();
     }
@@ -2069,6 +2070,37 @@ public partial class AbilityViewTest : Node
         GD.Print($"pool stable keys: a new key 5 kept {kept2} of 3 stable nodes ({second} rebuilds); a new key 3 next kept {kept3} of 3 below the highest ({third} rebuilds), pool {pool.Nodes} nodes");
         Check(kept2 == 3 && second == 1 && pool.NodeOf(13) == null, $"BUG-0662: a new key 5 kept {kept2} of 3 stable keys' nodes, {second} mesh rebuilds (want 3, 1)");
         Check(kept3 == 3 && third == 2 && pool.Nodes == 8, $"BUG-0662: a new key 3 in a full pool kept {kept3} of keys 5, 10, 11's nodes, {third} mesh rebuilds, {pool.Nodes} nodes (want 3, 2, 8)");
+        pool.Free();
+        RemoveChild(holder);
+        holder.QueueFree();
+    }
+
+    // BUG-0684 item 4: a frame whose keys are all new in a full pool reclaims each node without scanning the whole pool per
+    // key. 1,024 keys held, then 1,024 others below them (every key reclaims the highest untaken key's node), then 1,024 above
+    // (every key reclaims a lower, skipped key's node): the node visits stay within a few per node and key, and the pool keeps
+    // its 1,024 nodes (it was O(nodes x keys): about a million visits for the first swap).
+    private void ReclaimCostRow()
+    {
+        var holder = new Node3D { Name = "ReclaimCostPool" };
+        AddChild(holder);
+        const int n = 1024;
+        var pool = new GroundDiscPool(holder, "CostDisc", 4 * n, n);
+        void Frame(int from)
+        {
+            pool.Begin();
+            for (int k = from; k < from + n; k++) pool.Take(k);
+            pool.End();
+        }
+        Frame(2 * n);
+        long before = pool.Scanned;
+        Frame(0);
+        long below = pool.Scanned - before;
+        before = pool.Scanned;
+        Frame(3 * n);
+        long above = pool.Scanned - before;
+        GD.Print($"pool reclaim cost: {n} new keys below the held ones visited {below} nodes, {n} above {above}; pool {pool.Nodes} nodes");
+        Check(below <= 4 * n && above <= 4 * n && pool.Nodes == n && pool.InUse == n,
+            $"BUG-0684 item 4: a frame of {n} new keys visited {below} (below) and {above} (above) nodes, want at most {4 * n} each; pool {pool.Nodes} nodes, {pool.InUse} in use (want {n})");
         pool.Free();
         RemoveChild(holder);
         holder.QueueFree();

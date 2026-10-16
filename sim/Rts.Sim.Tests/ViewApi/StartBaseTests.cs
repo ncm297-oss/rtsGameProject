@@ -212,6 +212,34 @@ public class StartBaseTests
         Assert.True(ViewReads.IsHallSpot(started.World, moved.HallType[0], moved.HallAnchor[0], 0, null));
     }
 
+    /// <summary>
+    /// BUG-0622 item 1: a hand-built start location by an edge (legal: the heightmap checks only the cell and level) whose
+    /// centred hall would start off the map falls back to the nearest spot by the location, never to an anchor wrapped onto
+    /// the previous row's far end (the west edge planned the hall at (34, 17), across the map). Every edge and corner.
+    /// </summary>
+    [Theory]
+    [InlineData(1, 20)]
+    [InlineData(0, 20)]
+    [InlineData(20, 1)]
+    [InlineData(1, 1)]
+    [InlineData(38, 20)]
+    [InlineData(20, 38)]
+    [InlineData(38, 38)]
+    public void HandBuiltStartByAnEdge_HallStaysByIt(int x, int y)
+    {
+        Heightmap flat = ResourceMaps.Flat(40, 40);
+        var hm = new Heightmap(40, 40, flat.Levels, flat.Elevations, new[] { new StartLocation(y * 40 + x, 0) });
+        Simulation sim = ResourceMaps.NewSim(hm);
+        StartBasePlan plan = ViewReads.Plan(sim.World, new[] { Array.Empty<Vector2>() }, 5, 0.5f);
+        int anchor = plan.HallAnchor[0], ax = anchor % 40, ay = anchor / 40;
+        _out.WriteLine($"start ({x},{y}): hall anchor ({ax},{ay})");
+        Assert.True(anchor >= 0, "no hall");
+        Assert.True(ViewReads.IsHallSpot(sim.World, plan.HallType[0], anchor, 0, null), $"({ax},{ay}) is no hall spot");
+        // The footprint's centre within 6 cells of the location: by it, not across the map.
+        BuildingDef hall = sim.World.Data.Buildings[plan.HallType[0]];
+        Assert.True(Math.Abs(ax + hall.FootprintWidth / 2f - x) <= 6f && Math.Abs(ay + hall.FootprintHeight / 2f - y) <= 6f, $"start ({x},{y}): hall at ({ax},{ay})");
+    }
+
     [Fact]
     public void NoRoomForAHall_PlanHasNoAnchorAndNoWorkers()
     {

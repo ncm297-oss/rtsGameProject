@@ -109,11 +109,21 @@ public sealed class KeyMap
 
     /// <summary>
     /// True when <paramref name="key"/> is one plain key: not <see cref="Key.None"/>, no modifier bits (a file's "Shift+Q"
-    /// is Q with the Shift mask, which no key press matches once applied), and not the bare <see cref="Key.Special"/> flag
-    /// or <see cref="Key.Unknown"/> (BUG-0742).
+    /// is Q with the Shift mask, which no key press matches once applied), not the bare <see cref="Key.Special"/> flag
+    /// or <see cref="Key.Unknown"/> (BUG-0742), and a code whose Godot name reads back as the same key, so it survives the
+    /// file (BUG-0744: a code inside the code mask that names no key, such as 0x400999, was accepted and lost on read).
     /// </summary>
-    public static bool IsPlainKey(Key key) =>
-        key != Key.None && key != Key.Special && key != Key.Unknown && ((long)key & ~(long)KeyModifierMask.CodeMask) == 0;
+    public static bool IsPlainKey(Key key)
+    {
+        long code = (long)key;
+        if (key == Key.None || key == Key.Special || key == Key.Unknown || (code & ~(long)KeyModifierMask.CodeMask) != 0) return false;
+        // Asked before naming it: OS.GetKeycodeString logs a "Unicode parsing error" for a code that is neither a named key
+        // (the Special range) nor a character.
+        bool named = (code & (long)Key.Special) != 0 ? Enum.IsDefined(key) : code <= 0x10FFFF && (code < 0xD800 || code > 0xDFFF);
+        if (!named) return false;
+        string name = OS.GetKeycodeString(key);
+        return name.Length > 0 && OS.FindKeycodeFromString(name) == key;
+    }
 
     /// <summary>The action <paramref name="key"/> would clash with if action <paramref name="i"/> took it, <see cref="IsReserved"/> (a fixed key or not a plain key), or <see cref="Ok"/>.</summary>
     public int ConflictFor(int i, Key key)
@@ -154,7 +164,8 @@ public sealed class KeyMap
     /// <summary>
     /// The <c>[keys]</c> section of <paramref name="file"/>: a missing section or key is the default (a file from before
     /// M6-V8 reads clean); a value that isn't one plain key name (junk, a number, a reserved key, a modifier combo such as
-    /// "Shift+Q") is one problem in <paramref name="problems"/> and the default. Extra keys are ignored. The keys read are
+    /// "Shift+Q" or "Meta+K": the trimmed value must equal the key's Godot name, any case) is one problem in
+    /// <paramref name="problems"/> and the default. Extra keys are ignored. The keys read are
     /// then checked as a whole map, never against the defaults of actions the file also moves (BUG-0740: any map the
     /// Keybinds tab makes reads back as written): see <see cref="ResolveClashes"/>.
     /// </summary>
@@ -167,8 +178,11 @@ public sealed class KeyMap
         {
             if (!file.HasSectionKey("keys", Actions[i])) continue;
             Variant v = file.GetValue("keys", Actions[i]);
-            Key key = v.VariantType == Variant.Type.String ? OS.FindKeycodeFromString(v.AsString()) : Key.None;
-            if (!IsPlainKey(key) || Array.IndexOf(Reserved, key) >= 0)
+            string text = v.VariantType == Variant.Type.String ? v.AsString().Trim() : "";
+            Key key = text.Length > 0 ? OS.FindKeycodeFromString(text) : Key.None;
+            // BUG-0744: Godot drops a prefix it doesn't read as a modifier ("Meta+K", "Cmd+K", "Kp+K" all give K), so the
+            // value must be the key's own name (any case) or it is a combo the file can't hold.
+            if (!IsPlainKey(key) || Array.IndexOf(Reserved, key) >= 0 || !string.Equals(OS.GetKeycodeString(key), text, StringComparison.OrdinalIgnoreCase))
             {
                 problems.Add($"keys.{Actions[i]} must be the name of one key that isn't reserved, not {v}");
                 continue;

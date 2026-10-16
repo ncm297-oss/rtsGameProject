@@ -174,7 +174,7 @@ public partial class Main : Node3D
     {
         if (_settingsScreen == null || _menu == null) return;
         if (!Paused) _menu.Visible = false;
-        _settingsScreen.ShowSettings(Settings, GetWindow().Size);
+        _settingsScreen.ShowSettings(Settings, GetWindow().Size, VsyncOverride);
         _settingsScreen.Visible = true;
         _settingsScreen.BackButton.GrabFocus();
     }
@@ -193,7 +193,7 @@ public partial class Main : Node3D
         if (_settingsScreen == null) return;
         if (stay)
         {
-            _settingsScreen.ShowSettings(Settings, GetWindow().Size);
+            _settingsScreen.ShowSettings(Settings, GetWindow().Size, VsyncOverride);
             return;
         }
         _settingsScreen.Visible = false;

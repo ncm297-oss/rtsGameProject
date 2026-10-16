@@ -36,6 +36,13 @@ public partial class SimRunner : Node
         set => _speed = double.IsNaN(value) ? 1.0 : Math.Clamp(value, MinSpeed, MaxSpeed);
     }
 
+    /// <summary>
+    /// Scripted runs only (M6-VH2, BUG-0745): when set, each frame advances the clock by this many seconds instead of the
+    /// frame's real delta, so a frame runs the same ticks however loaded the machine is and the run is the same every time;
+    /// null (the game) ticks from frame time.
+    /// </summary>
+    public double? FixedFrameDelta { get; set; }
+
     /// <summary>Interpolation factor between the previous and current tick, in [0, 1).</summary>
     public double Alpha => _clock.Alpha;
 
@@ -128,7 +135,7 @@ public partial class SimRunner : Node
     public override void _Process(double delta)
     {
         if (Simulation == null) return;
-        int ticks = _clock.Advance(delta, _speed);
+        int ticks = _clock.Advance(FixedFrameDelta ?? delta, _speed);
         for (int i = 0; i < ticks; i++)
         {
             _stopwatch.Restart();

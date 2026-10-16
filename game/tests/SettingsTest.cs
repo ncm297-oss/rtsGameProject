@@ -27,12 +27,13 @@ namespace Rts.Game.Tests;
 /// else "SETTINGS TEST FAIL: ..." lines and exits 1. Headless has no window, so the window mode, size and VSync calls are skipped
 /// and asserted through the stored settings and the file. Windowed with <c>-- --shots &lt;dir&gt;</c> it saves
 /// <c>settings-menu.png</c>, <c>settings-pause.png</c> and <c>settings-keybinds.png</c> and cycles the window mode borderless and back under the paused match.
-/// The test never touches the player's <c>user://settings.cfg</c>: <see cref="Main.SettingsPath"/> points at <see cref="TestPath"/>.
+/// The test never touches the player's <c>user://settings.cfg</c>: <see cref="Main.SettingsPath"/> points at <see cref="TestPath"/>,
+/// a per-process folder (BUG-0684 item 1: two runs at once, from two worktrees or a loop beside a rerun, never share a file).
 /// </remarks>
 public partial class SettingsTest : Node
 {
-    /// <summary>The settings file this test reads and writes.</summary>
-    public const string TestPath = "user://settings-test/settings.cfg";
+    /// <summary>The settings file this test reads and writes: under a folder of this process's own (BUG-0684 item 1).</summary>
+    public static readonly string TestPath = $"user://settings-test-{OS.GetProcessId()}/settings.cfg";
 
     private readonly List<string> _failures = new();
     private UiText _ui = null!;
@@ -65,6 +66,7 @@ public partial class SettingsTest : Node
         }
         if (GetTree().Paused) GetTree().Paused = false;
         DeleteTestFile();
+        try { Directory.Delete(Path.GetDirectoryName(ProjectSettings.GlobalizePath(TestPath))!, true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
         foreach (string f in _failures.Take(60)) GD.Print($"SETTINGS TEST FAIL: {f}");
         if (_failures.Count == 0) GD.Print("SETTINGS TEST PASS");
         SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
@@ -150,7 +152,21 @@ public partial class SettingsTest : Node
             // BUG-0742: a modifier combo is not one key: one problem and the default.
             ("a Shift combo", NoKeys + "\n[keys]\norder_stop=\"Shift+Q\"\n", 1, s => s.Keys.Get("order_stop") == Key.S),
             ("a Ctrl combo", NoKeys + "\n[keys]\ngroup_3=\"Ctrl+1\"\n", 1, s => s.Keys.Get("group_3") == Key.Key3),
+            // BUG-0744: a prefix Godot drops without a mask is still a combo: one problem and the default; the key's own name in
+            // any case and with spaces round it reads clean.
+            ("a Meta combo", NoKeys + "\n[keys]\norder_stop=\"Meta+K\"\n", 1, s => s.Keys.Get("order_stop") == Key.S),
+            ("a Command combo", NoKeys + "\n[keys]\norder_stop=\"Command+K\"\n", 1, s => s.Keys.Get("order_stop") == Key.S),
+            ("a Cmd combo", NoKeys + "\n[keys]\norder_stop=\"Cmd+K\"\n", 1, s => s.Keys.Get("order_stop") == Key.S),
+            ("a Kp combo", NoKeys + "\n[keys]\norder_stop=\"Kp+K\"\n", 1, s => s.Keys.Get("order_stop") == Key.S),
+            ("a Meta combo on a grid key", NoKeys + "\n[keys]\ncard_14=\"Meta+N\"\n", 1, s => s.Keys.Get("card_14") == Key.B),
+            ("a key name in lower case, spaced", NoKeys + "\n[keys]\norder_stop=\"  k \"\norder_hold=\"kp 1\"\n", 0, s => s.Keys.Get("order_stop") == Key.K && s.Keys.Get("order_hold") == Key.Kp1),
         };
+        // BUG-0744 item 2: a code inside the code mask that names no key is not one plain key (TrySet refuses it, no log line);
+        // every key the map holds by default, a digit, a keypad key and a punctuation key are.
+        foreach (long code in new long[] { 0x400999, 0x40FFFF, 0x5FFFFF, 0x7FFFFE, 0x110000, 0xD800 })
+            Check(!KeyMap.IsPlainKey((Key)code) && new KeyMap().TrySet(Array.IndexOf(KeyMap.Actions, "group_9"), (Key)code) == KeyMap.IsReserved, $"IsPlainKey / TrySet took the non-key code 0x{code:x}");
+        foreach (Key k in KeyMap.Defaults().Concat(new[] { Key.Key0, Key.Kp1, Key.Backslash, Key.F11, Key.Space, Key.Home }))
+            Check(KeyMap.IsPlainKey(k), $"IsPlainKey refused {k}");
         // BUG-0741 / 0742 on the tab's side: a digit refused on a lower grid key, Tab too; a mask or a bare flag is no key.
         var tab = new KeyMap();
         Check(tab.TrySet(KeyMap.FirstCard + 5, Key.Key1) == Array.IndexOf(KeyMap.Actions, "group_1")

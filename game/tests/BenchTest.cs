@@ -43,6 +43,7 @@ public partial class BenchTest : Node
             ParseRows();
             ProcessRows();
             await ScriptDrivesRealCode();
+            await TallColumnBoxed();
             await PinnedFrameTime();
         }
         catch (Exception ex)
@@ -171,6 +172,33 @@ public partial class BenchTest : Node
         match.QueueFree();
         await Frame();
         await Frame();
+    }
+
+    // BUG-0684 item 5: seed 6 stages its army as a tall column that the start zoom showed only half of (48 of 100 boxed);
+    // FocusArmy now widens the zoom until the whole army is on screen, so the box takes it all, as on seed 1. Both seeds at
+    // the bench's documented 1920 x 1080 and at the headless window's size.
+    private async Task TallColumnBoxed()
+    {
+        Vector2I root = GetTree().Root.Size;
+        foreach (Vector2I size in new[] { root, new Vector2I(1920, 1080) })
+        {
+            GetTree().Root.Size = size;
+            foreach (string seed in new[] { "1", "6" })
+            {
+                Match match = StartMatch("--bench", "3", "--seed", seed, "--mute");
+                BenchRunner bench = match.Bench!;
+                bench.QuitOnFinish = false;
+                var watch = Stopwatch.StartNew();
+                while (bench.LastBoxSelected == 0 && watch.Elapsed.TotalSeconds < 20) await Frame();
+                float zoom = match.GetNode<RtsCamera>("RtsCamera").Zoom;
+                GD.Print($"seed {seed} at {size.X} x {size.Y}: the bench's box took {bench.LastBoxSelected} units at zoom {zoom:0.0}");
+                Check(bench.LastBoxSelected >= 100, $"seed {seed} at {size.X} x {size.Y}: the bench's box took {bench.LastBoxSelected} of the 100-unit army");
+                match.QueueFree();
+                await Frame();
+                await Frame();
+            }
+        }
+        GetTree().Root.Size = root;
     }
 
     // Criterion 3: the 100-unit default with vsync off, HUD and sound on; needs a real renderer.
