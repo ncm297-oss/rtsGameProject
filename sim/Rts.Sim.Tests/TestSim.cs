@@ -77,6 +77,11 @@ public static class TestSim
     /// fog and perf scenes whose numbers would change. Two players kept in a combat scene must not share a corner (they
     /// would fight): pass <paramref name="nearCorner"/> for one of them to use the passable cell nearest cell (0, 0).
     /// </para>
+    /// <para>
+    /// BUG-0763: the keeper is a summon, and a summoned unit can't be stealthed (<c>World.IsStealthed</c> /
+    /// <c>World.IsDetectedBy</c> stay false whatever its statuses), so it is always seen by every player. A stealth scene or
+    /// oracle that adds one must model that exemption or stage its towers after its units so no keeper is needed.
+    /// </para>
     /// </summary>
     public static Rts.Sim.Entities.EntityHandle KeepIn(Simulation sim, int player, bool nearCorner = false) =>
         KeepInAt(sim, player, nearCorner ? 0 : 3);

@@ -20,7 +20,8 @@ namespace Rts.Sim.Ai;
 /// of the point (the caster included).</item>
 /// <item><b>No stacking (BUG-0702).</b> A ground ability whose effects don't add up (no damage and no spawn: its statuses
 /// and zones refresh rather than stack) is not cast within its <c>radius</c> of a point a caster was sent the same ability at
-/// whose effect still runs (sent + cast time + duration); that caster tries its next ability, or waits.</item>
+/// whose effect still runs (sent + cast time + duration); that caster tries its next ability, or waits. A send that never
+/// ran (its caster free again with the cooldown unmoved) is forgotten, so the judging rule can send it again (BUG-0760).</item>
 /// <item><b>Judging.</b> A cast is judged at a later think by the ability's ready tick: moved, it landed. One that didn't is
 /// sent again, at most <see cref="MaxTries"/> times at the same point (within a cell), then left alone until the point moves.</item>
 /// </list>
@@ -45,7 +46,7 @@ internal static class AbilityManager
     {
         if (!ai.Knobs.UseAbilities) return;
         ai.Board.SeenEnemyCount = -1; // filled at the first free caster
-        ForgetEnded(ai.Board, ai.Stamp);
+        ForgetEnded(ai);
         if (Casters(ai, ai.ArmySlots, ai.ArmyCount)) Casters(ai, ai.WorkerSlots, ai.WorkerCount);
     }
 
@@ -83,6 +84,10 @@ internal static class AbilityManager
                     board.RecentCastAbility[n] = def.Abilities[a];
                     board.RecentCastAt[n] = point;
                     board.RecentCastUntil[n] = ai.Stamp + ability.CastTicks + ability.DurationTicks;
+                    board.RecentCastSlot[n] = slot;
+                    board.RecentCastGeneration[n] = generation;
+                    board.RecentCastIndex[n] = (byte)a;
+                    board.RecentCastReadyAt[n] = ready;
                 }
                 ai.MarkOrdered(slot, generation, 0);
                 board.CastGeneration[slot] = generation;
@@ -113,18 +118,38 @@ internal static class AbilityManager
         return false;
     }
 
-    /// <summary>Drops the remembered casts whose effect has ended by tick <paramref name="now"/>, keeping the rest in order.</summary>
-    private static void ForgetEnded(Blackboard board, int now)
+    /// <summary>
+    /// Drops the remembered casts whose effect has ended by now, and those that never ran (BUG-0760): the caster is alive,
+    /// free (not casting or walking to the cast, no command pending) and the ability's ready tick hasn't moved since the send,
+    /// so the cast was refused, dropped or cancelled and no storm holds the point (the judging rule may send it again).
+    /// Keeps the rest in order.
+    /// </summary>
+    private static void ForgetEnded(AiPlayer ai)
     {
+        Blackboard board = ai.Board;
         int kept = 0;
         for (int k = 0; k < board.RecentCastCount; k++)
         {
-            if (board.RecentCastUntil[k] <= now) continue;
+            if (board.RecentCastUntil[k] <= ai.Stamp || NeverRan(ai, k)) continue;
             board.RecentCastAbility[kept] = board.RecentCastAbility[k];
             board.RecentCastAt[kept] = board.RecentCastAt[k];
-            board.RecentCastUntil[kept++] = board.RecentCastUntil[k];
+            board.RecentCastUntil[kept] = board.RecentCastUntil[k];
+            board.RecentCastSlot[kept] = board.RecentCastSlot[k];
+            board.RecentCastGeneration[kept] = board.RecentCastGeneration[k];
+            board.RecentCastIndex[kept] = board.RecentCastIndex[k];
+            board.RecentCastReadyAt[kept++] = board.RecentCastReadyAt[k];
         }
         board.RecentCastCount = kept;
+    }
+
+    /// <summary>Whether remembered cast <paramref name="k"/> is over without landing (see <see cref="ForgetEnded"/>); a dead caster's is kept (it may have landed).</summary>
+    private static bool NeverRan(AiPlayer ai, int k)
+    {
+        Blackboard board = ai.Board;
+        int slot = board.RecentCastSlot[k], generation = board.RecentCastGeneration[k];
+        if (!ai.View.TryGetUnit(slot, out SeenUnit u) || u.Handle.Generation != generation) return false;
+        if (u.State == UnitState.Casting || ai.View.TryGetCast(slot, out _) || ai.OrderedNotApplied(slot, generation)) return false;
+        return ai.View.TryGetAbilityReady(slot, board.RecentCastIndex[k], out int ready) && ready <= board.RecentCastReadyAt[k];
     }
 
     /// <summary>Fills <see cref="Blackboard.SeenEnemies"/> with the enemy units the player sees now.</summary>

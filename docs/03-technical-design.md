@@ -6521,9 +6521,13 @@ and docs).
   of the pulled-back point, so a group at the ring's very edge (more than `range - 0.05 + radius` away) is found and not
   cast at. **No stacking** (M5-H2, BUG-0702 item 2): a ground ability with no damage and no spawn effect (its statuses and
   zones refresh rather than stack: Sandstorm) is not sent within its `radius` of a point a caster was sent the same ability
-  at whose effect still runs (sent tick + cast time + duration); that caster tries its next ability or waits. The running
-  casts sit in a 64-entry list on the Blackboard (`AbilityManager.MaxRecentCasts`, a buffer size: past it a new cast isn't
-  recorded), 16 B x 64 per AI seat; AI state, outside the hash like the rest of the Blackboard.
+  at whose effect still runs (sent tick + cast time + duration); that caster tries its next ability or waits. A send that
+  never ran is forgotten (BUG-0760): once its caster is free again (not casting or walking to the cast, no command pending)
+  with the ability's ready tick unmoved since the send, the record goes, so the judging rule below can send it again (a
+  dead caster's record stays to the end: it may have landed). The running casts sit in a 64-entry list on the Blackboard
+  (`AbilityManager.MaxRecentCasts`, a buffer size: past it a new cast isn't recorded), 29 B x 64 per AI seat (ability,
+  point, end tick, and the caster's slot, generation, ability index and ready tick at the send); AI state, outside the
+  hash like the rest of the Blackboard.
 - **Judging** (M5-2's pattern). The AI can't hear a refusal; at a later think it reads the ability's ready tick: moved
   since the cast was sent, the cast landed and its tries start again. A cast that didn't land (refused, dropped, cancelled) is
   sent again at the next think, at most **`AbilityManager.MaxTries` (3)** times at the same point (within a cell), then left
@@ -6671,12 +6675,15 @@ three arrays on `World`, `CombatConstants.SurroundSpotsPerCell`. No `Command`, n
 - **Two owners, one building (M5-H2, BUG-0732).** Each owner claims in its own layer, and a rival's claim is never "held"
   (`HeldByOther` compares owners); a spot is judged by the ground: a rival's unit standing there and striking the same
   building takes it (`Occupied`), as an own one does. Three seats, two owners on one House: 12 + 8 strike, all 20 spots
-  (before: the second owner skipped the first's claimed spots and walked into its strikers on the free ones).
+  (the same count as before the layers in that scene: the measured change is nil there; the red-then-green proof is the
+  unit test `SurroundTests.TwoOwnersFromOnePoint_*`: each owner's unit now claims the same nearest spot in its own layer,
+  where before the second took another spot as if a rival's claim were its own side's).
 - **Reachable spots only (M5-H2, BUG-0732).** The pick skips a spot the cached flow fields say the unit can't walk to:
   the spot cell's own field if cached (a finite cost at the unit's cell), else the unit's walk's goal field (unit and spot
   both reach the goal or both don't); with neither cached it counts (no field is built for the test). So once a walk to a
-  sealed pocket's spot has failed, nobody claims the pocket again: the pocket scene's 20 Heavy Infantry take the 14
-  reachable spots and none drops the order (before: 12 struck, 8 dropped). No give-up added.
+  sealed pocket's spot has failed, nobody claims the pocket again: in the pocket scene 12 of the 20 Heavy Infantry strike
+  (as before) and none drops the order (before: 8 dropped); attack-moving into it, the pocket hold goes from 40 ticks and
+  9 give-ups to 1 tick and 0. No give-up added.
 - **No planting on the way.** A walker with a spot farther than its radius from it doesn't stop to strike when it passes into
   reach (phase 10); stopped short (blocked), it strikes from where it stands. Without this the walkers round a face planted
   between two spots and the House row stayed at 15 / 20.

@@ -27,7 +27,7 @@ public class SimHardeningM5H2QaTests
     /// record of the Priest's own first send ("a storm runs here until sent + cast + duration") must not stand in for a storm
     /// that never came: it blocks the retries for the whole window.
     /// </summary>
-    [Fact(Skip = "BUG-0760: the no-stacking record of the Priest's own failed send blocks the judging rule's retries (1 send, not 3); red on 47ca4a2, green on 8c39c08")]
+    [Fact]
     public void ASandstormThatNeverLands_IsSentAgain_UpToMaxTries()
     {
         Simulation sim = AbilityManagerQaTests.Scene(s_data.Value, faction: 1);

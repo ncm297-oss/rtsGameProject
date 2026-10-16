@@ -77,6 +77,18 @@ internal sealed class Blackboard
     /// <summary>See <see cref="RecentCastAbility"/>.</summary>
     internal readonly int[] RecentCastUntil = new int[AbilityManager.MaxRecentCasts];
 
+    /// <summary>BUG-0760: per remembered cast, its caster's unit slot (a send that never ran is forgotten; see <c>AbilityManager</c>).</summary>
+    internal readonly int[] RecentCastSlot = new int[AbilityManager.MaxRecentCasts];
+
+    /// <summary>See <see cref="RecentCastSlot"/>: the caster's generation.</summary>
+    internal readonly int[] RecentCastGeneration = new int[AbilityManager.MaxRecentCasts];
+
+    /// <summary>See <see cref="RecentCastSlot"/>: the ability's index in the caster's type's list.</summary>
+    internal readonly byte[] RecentCastIndex = new byte[AbilityManager.MaxRecentCasts];
+
+    /// <summary>See <see cref="RecentCastSlot"/>: the ability's ready tick when sent (moved later: it landed).</summary>
+    internal readonly int[] RecentCastReadyAt = new int[AbilityManager.MaxRecentCasts];
+
     /// <summary>See <see cref="RecentCastAbility"/>.</summary>
     internal int RecentCastCount;
 
