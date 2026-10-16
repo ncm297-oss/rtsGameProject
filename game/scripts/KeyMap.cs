@@ -1,0 +1,204 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using Godot;
+
+namespace Rts.Game;
+
+/// <summary>
+/// The rebindable HUD keys (M6-V8, docs/02 "Controls and camera"): one physical key per action of <see cref="Actions"/>
+/// (the orders, Tab, the build menus, the control group digits and the command card's 15 grid keys), with today's keys
+/// from <c>project.godot</c> as the defaults. Saved in <c>settings.cfg</c> <c>[keys]</c> by <see cref="GameSettings"/>;
+/// <see cref="Apply"/> re-registers the Godot <see cref="InputMap"/> actions, which every key handler reads. View state only.
+/// </summary>
+/// <remarks>
+/// Esc, the modifiers (Shift, Ctrl, Alt, Meta), the camera's arrow keys and the F10 / F12 keys stay fixed: binding one is
+/// refused (<see cref="Reserved"/>). Two actions may not share a key when both are commands (orders, Tab, B / V, digits), both
+/// are grid keys, or one is a command and the other a top-row grid key (Q W E R T: a unit card's ability row, which sees keys
+/// before the orders). A command and a lower grid key may share one, as A and the sixth grid key do by default: a build menu
+/// or a production card owns the whole grid while it is up (docs/02 "Grid hotkeys").
+/// </remarks>
+public sealed class KeyMap
+{
+    /// <summary>Control groups and command card cells.</summary>
+    public const int Groups = 9, Cards = 15;
+
+    /// <summary>The input actions this map binds, in the settings tab's order.</summary>
+    public static readonly string[] Actions = BuildActions();
+
+    /// <summary>The index in <see cref="Actions"/> of the first <c>group_N</c> and of <c>card_0</c>.</summary>
+    public static readonly int FirstGroup = Array.IndexOf(Actions, "group_1"), FirstCard = Array.IndexOf(Actions, "card_0");
+
+    /// <summary>Keys no action may take.</summary>
+    public static readonly Key[] Reserved =
+    {
+        Key.Escape, Key.Shift, Key.Ctrl, Key.Alt, Key.Meta, Key.Left, Key.Right, Key.Up, Key.Down, Key.F10, Key.F12, Key.None,
+    };
+
+    /// <summary>What <see cref="TrySet"/> returns for a reserved key; a conflict returns the other action's index, a success <see cref="Ok"/>.</summary>
+    public const int Ok = -1, IsReserved = -2;
+
+    private static Key[]? _defaults;
+    private readonly Key[] _keys;
+
+    /// <summary>Moves on every <see cref="Apply"/>, so a view that shows key names (the command card) knows to refresh them.</summary>
+    public static int Version { get; private set; }
+
+    /// <summary>A map holding the defaults.</summary>
+    public KeyMap() => _keys = (Key[])Defaults().Clone();
+
+    /// <summary>The bound physical key of action <paramref name="i"/>.</summary>
+    public Key this[int i] => _keys[i];
+
+    /// <summary>The bound physical key of <paramref name="action"/>, or <see cref="Key.None"/> for an action not in the map.</summary>
+    public Key Get(string action)
+    {
+        int i = Array.IndexOf(Actions, action);
+        return i >= 0 ? _keys[i] : Key.None;
+    }
+
+    /// <summary>The project's key for each action (<c>project.godot</c>'s <c>input/&lt;action&gt;</c>, read once): the defaults.</summary>
+    public static Key[] Defaults()
+    {
+        if (_defaults != null) return _defaults;
+        var keys = new Key[Actions.Length];
+        for (int i = 0; i < keys.Length; i++)
+        {
+            Variant setting = ProjectSettings.GetSetting($"input/{Actions[i]}");
+            if (setting.VariantType != Variant.Type.Dictionary) continue;
+            foreach (Variant e in setting.AsGodotDictionary()["events"].AsGodotArray())
+                if (e.As<InputEvent>() is InputEventKey k)
+                {
+                    keys[i] = k.PhysicalKeycode != Key.None ? k.PhysicalKeycode : k.Keycode;
+                    break;
+                }
+        }
+        return _defaults = keys;
+    }
+
+    /// <summary>A copy.</summary>
+    public KeyMap Clone()
+    {
+        var copy = new KeyMap();
+        _keys.CopyTo(copy._keys, 0);
+        return copy;
+    }
+
+    /// <summary>True when every action has the same key as in <paramref name="other"/>.</summary>
+    public bool SameAs(KeyMap other) => ((ReadOnlySpan<Key>)_keys).SequenceEqual(other._keys);
+
+    /// <summary>Every action back to its default.</summary>
+    public void Reset() => Defaults().CopyTo(_keys, 0);
+
+    /// <summary>True when actions <paramref name="a"/> and <paramref name="b"/> may not share a key (see the remarks).</summary>
+    public static bool Clash(int a, int b)
+    {
+        if (a == b) return false;
+        bool gridA = a >= FirstCard, gridB = b >= FirstCard;
+        if (gridA == gridB) return true;
+        int card = gridA ? a - FirstCard : b - FirstCard;
+        return card < CommandCard.Columns;
+    }
+
+    /// <summary>The action <paramref name="key"/> would clash with if action <paramref name="i"/> took it, <see cref="IsReserved"/>, or <see cref="Ok"/>.</summary>
+    public int ConflictFor(int i, Key key)
+    {
+        if (Array.IndexOf(Reserved, key) >= 0) return IsReserved;
+        for (int j = 0; j < _keys.Length; j++)
+            if (_keys[j] == key && Clash(i, j)) return j;
+        return Ok;
+    }
+
+    /// <summary>Binds <paramref name="key"/> to action <paramref name="i"/> unless it is reserved or clashes; returns <see cref="Ok"/> when bound, else what <see cref="ConflictFor"/> says (nothing changes).</summary>
+    public int TrySet(int i, Key key)
+    {
+        int conflict = ConflictFor(i, key);
+        if (conflict == Ok) _keys[i] = key;
+        return conflict;
+    }
+
+    /// <summary>Re-registers each action's <see cref="InputMap"/> events as its one physical key (no modifiers, so Ctrl + digit still matches a group key).</summary>
+    public void Apply()
+    {
+        for (int i = 0; i < Actions.Length; i++)
+        {
+            StringName action = Actions[i];
+            if (!InputMap.HasAction(action)) InputMap.AddAction(action);
+            InputMap.ActionEraseEvents(action);
+            InputMap.ActionAddEvent(action, new InputEventKey { PhysicalKeycode = _keys[i] });
+        }
+        Version++;
+    }
+
+    /// <summary>Writes the <c>[keys]</c> section: each action's key by its Godot name (<c>"A"</c>, <c>"Tab"</c>, <c>"1"</c>).</summary>
+    public void Write(ConfigFile file)
+    {
+        for (int i = 0; i < Actions.Length; i++) file.SetValue("keys", Actions[i], OS.GetKeycodeString(_keys[i]));
+    }
+
+    /// <summary>
+    /// The <c>[keys]</c> section of <paramref name="file"/>: a missing section or key is the default (a file from before
+    /// M6-V8 reads clean); a value that isn't a key name, a reserved key, or a key that clashes with an action read before
+    /// it is one problem in <paramref name="problems"/> and the default. Extra keys are ignored.
+    /// </summary>
+    public static KeyMap Read(ConfigFile file, List<string> problems)
+    {
+        var map = new KeyMap();
+        if (!file.HasSection("keys")) return map;
+        for (int i = 0; i < Actions.Length; i++)
+        {
+            if (!file.HasSectionKey("keys", Actions[i])) continue;
+            Variant v = file.GetValue("keys", Actions[i]);
+            Key key = v.VariantType == Variant.Type.String ? OS.FindKeycodeFromString(v.AsString()) : Key.None;
+            if (key == Key.None || Array.IndexOf(Reserved, key) >= 0)
+            {
+                problems.Add($"keys.{Actions[i]} must be the name of a key that isn't reserved, not {v}");
+                continue;
+            }
+            // The default goes when the key is set; a key that clashes with an earlier action keeps the default.
+            Key was = map._keys[i];
+            map._keys[i] = Key.None;
+            if (map.ConflictFor(i, key) is int j and >= 0)
+            {
+                problems.Add($"keys.{Actions[i]} = \"{v}\" is already keys.{Actions[j]}");
+                map._keys[i] = was;
+                continue;
+            }
+            map._keys[i] = key;
+        }
+        // A default left in place can still clash with a key read later: then the whole section is the defaults.
+        for (int i = 0; i < Actions.Length; i++)
+            for (int j = i + 1; j < Actions.Length; j++)
+                if (map._keys[i] == map._keys[j] && Clash(i, j))
+                {
+                    problems.Add($"keys.{Actions[i]} and keys.{Actions[j]} share a key; all keys are the defaults");
+                    map.Reset();
+                    return map;
+                }
+        return map;
+    }
+
+    /// <summary>The key as the keyboard labels it (the physical key under the current layout; its US name headless, where there is no layout).</summary>
+    public static string KeyName(Key physical)
+    {
+        if (physical == Key.None) return "";
+        Key code = DisplayServer.GetName() != "headless" ? DisplayServer.KeyboardGetKeycodeFromPhysical(physical) : physical;
+        return OS.GetKeycodeString(code == Key.None ? physical : code);
+    }
+
+    /// <summary>The name of action <paramref name="i"/> on the Keybinds tab, from <c>ui.json</c> <c>keys</c>.</summary>
+    public static string ActionName(UiText ui, int i)
+    {
+        if (i >= FirstCard) return ui.KeysFormat(KeysText.Card, (i - FirstCard) / CommandCard.Columns + 1, (i - FirstCard) % CommandCard.Columns + 1);
+        if (i >= FirstGroup) return ui.KeysFormat(KeysText.Group, i - FirstGroup + 1);
+        return Enum.TryParse(Actions[i].Replace("_", ""), ignoreCase: true, out KeysText k) ? ui.Keys(k) : Actions[i];
+    }
+
+    private static string[] BuildActions()
+    {
+        var list = new List<string> { "order_attack_move", "order_stop", "order_hold", "order_move", "subgroup_next", "build_basic", "build_advanced" };
+        for (int g = 1; g <= Groups; g++) list.Add(string.Create(CultureInfo.InvariantCulture, $"group_{g}"));
+        for (int c = 0; c < Cards; c++) list.Add(string.Create(CultureInfo.InvariantCulture, $"card_{c}"));
+        return list.ToArray();
+    }
+}

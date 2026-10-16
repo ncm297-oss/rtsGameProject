@@ -71,6 +71,10 @@ public partial class CommandCard : Control
     private readonly Label[] _costs = new Label[Cells];
     private readonly StringName[] _cardActions = new StringName[Cells];
     private readonly string[] _gridKeys = new string[Cells];
+    // M6-V8: the KeyMap.Version the key names were read at; a rebind re-reads them and lays the card out again.
+    private int _keysVersion = -1;
+    // The input action whose key a command button's hint shows (index = CardCommand; null for none).
+    private static readonly string?[] CommandActions = BuildCommandActions();
     private readonly CardCommand[] _actions = new CardCommand[Cells];
     private readonly int[] _types = new int[Cells];
     private readonly int[] _basic = new int[UiText.MaxMenuEntries], _advanced = new int[UiText.MaxMenuEntries];
@@ -201,8 +205,36 @@ public partial class CommandCard : Control
             _hints[i] = hint;
             _costs[i] = cost;
             _cardActions[i] = new StringName($"card_{i}");
-            _gridKeys[i] = KeyName(_cardActions[i]);
         }
+        ReadKeyNames();
+    }
+
+    // The grid keys' names and the order keys' names from the input map (M6-V8: after a rebind too).
+    private void ReadKeyNames()
+    {
+        _keysVersion = KeyMap.Version;
+        for (int i = 0; i < Cells; i++) _gridKeys[i] = KeyName(_cardActions[i]);
+    }
+
+    private static string?[] BuildCommandActions()
+    {
+        var a = new string?[UiText.CommandIds.Length];
+        a[(int)CardCommand.Move] = "order_move";
+        a[(int)CardCommand.AttackMove] = "order_attack_move";
+        a[(int)CardCommand.Stop] = "order_stop";
+        a[(int)CardCommand.Hold] = "order_hold";
+        a[(int)CardCommand.BuildBasic] = "build_basic";
+        a[(int)CardCommand.BuildAdvanced] = "build_advanced";
+        a[(int)CardCommand.Cancel] = $"card_{CancelCell}";
+        return a;
+    }
+
+    // A command button's hint: its action's key as bound now (M6-V8), else the ui.json hint.
+    private string CommandHintText(CardCommand c)
+    {
+        string? action = (uint)c < (uint)CommandActions.Length ? CommandActions[(int)c] : null;
+        string key = action != null ? KeyName(action) : "";
+        return key.Length > 0 ? key : _ui.CommandHint(c);
     }
 
     /// <summary>Connects the card to the match; call once after the sim exists. <paramref name="ui"/> is the loaded <c>ui.json</c>.</summary>
@@ -273,6 +305,11 @@ public partial class CommandCard : Control
     public void Sync()
     {
         if (_runner?.Simulation is not Simulation sim) return;
+        if (_keysVersion != KeyMap.Version)
+        {
+            ReadKeyNames();
+            _shown = Mode.None; // the hints change: lay the buttons out again
+        }
         Mode want;
         int building = _sel.SelectedBuilding;
         if (building >= 0)
@@ -635,7 +672,7 @@ public partial class CommandCard : Control
                 _names[i].Text = _ui.CommandName(c);
                 SetNameSize(i, NameFontSize);
                 b.TooltipText = "";
-                _hints[i].Text = _ui.CommandHint(c);
+                _hints[i].Text = CommandHintText(c);
                 _costs[i].Text = "";
             }
             // Greying is per frame (Grey); a fresh layout starts enabled in the cost colour.
@@ -691,12 +728,7 @@ public partial class CommandCard : Control
         foreach (InputEvent e in InputMap.ActionGetEvents(action))
         {
             if (e is not InputEventKey k) continue;
-            // The headless display server has no keyboard layout: the physical key's (US) name stands in.
-            bool layout = DisplayServer.GetName() != "headless";
-            Key code = k.PhysicalKeycode == Key.None ? k.Keycode
-                : layout ? DisplayServer.KeyboardGetKeycodeFromPhysical(k.PhysicalKeycode) : k.PhysicalKeycode;
-            if (code == Key.None) code = k.PhysicalKeycode;
-            return OS.GetKeycodeString(code);
+            return k.PhysicalKeycode == Key.None ? OS.GetKeycodeString(k.Keycode) : KeyMap.KeyName(k.PhysicalKeycode);
         }
         return "";
     }

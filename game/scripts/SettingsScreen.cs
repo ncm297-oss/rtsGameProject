@@ -7,12 +7,17 @@ namespace Rts.Game;
 
 /// <summary>
 /// The settings screen (M6-V6, docs/02 "Game flow" 7), from the main menu and the pause menu: resolution, window mode,
-/// VSync, quality, master / music / SFX volume, edge pan speed, confine cursor to window (M6-V7); Apply, Defaults, Back. Text from <c>ui.json</c> <c>settings</c>.
+/// VSync, quality, master / music / SFX volume, edge pan speed, confine cursor to window (M6-V7) on the General tab, the
+/// rebindable keys on the Keybinds tab (M6-V8); Apply, Defaults, Back. Text from <c>ui.json</c> <c>settings</c> and <c>keys</c>.
 /// </summary>
 /// <remarks>
 /// The controls hold the picks until a button commits them; the screen only raises events and <see cref="Main"/> applies
 /// and saves (<see cref="Main.CommitSettings"/>). It runs while the tree is paused and draws over the pause menu
-/// (<see cref="DrawLayer"/>); its backdrop takes every click. Keybinds are a later slice. View state only.
+/// (<see cref="DrawLayer"/>); its backdrop takes every click. Keybinds tab: a row per <see cref="KeyMap.Actions"/> entry (its
+/// <c>keys</c> name and a button showing its key); a click on the button waits for a key (<see cref="Listening"/>), the next
+/// key press binds it unless <see cref="KeyMap.TrySet"/> refuses (the refusal's <c>keys.conflict</c> / <c>keys.reserved</c>
+/// line shows under the rows), Esc stops waiting; Default keys puts the tab's keys back. Like every field, the keys apply
+/// and save only with Apply, Back or Esc. View state only.
 /// </remarks>
 public partial class SettingsScreen : CanvasLayer
 {
@@ -34,6 +39,9 @@ public partial class SettingsScreen : CanvasLayer
 
     private UiText _ui = null!;
     private Vector2I[] _resolutions = Array.Empty<Vector2I>();
+    private KeyMap _keys = new();
+    private readonly Button[] _keyButtons = new Button[KeyMap.Actions.Length];
+    private int _listening = -1;
 
     /// <summary>Raised by Apply.</summary>
     public event Action? ApplyPressed;
@@ -80,6 +88,21 @@ public partial class SettingsScreen : CanvasLayer
     /// <summary>The Back button.</summary>
     public Button BackButton { get; private set; } = null!;
 
+    /// <summary>The General and Keybinds tabs (M6-V8).</summary>
+    public TabContainer Tabs { get; private set; } = null!;
+
+    /// <summary>The key button of action <paramref name="i"/> (<see cref="KeyMap.Actions"/>) on the Keybinds tab.</summary>
+    public Button KeyButton(int i) => _keyButtons[i];
+
+    /// <summary>The Keybinds tab's line for a refused key (empty otherwise).</summary>
+    public Label KeyStatus { get; private set; } = null!;
+
+    /// <summary>The Keybinds tab's Default keys button.</summary>
+    public Button KeysDefaultsButton { get; private set; } = null!;
+
+    /// <summary>True while a key button waits for a key.</summary>
+    public bool Listening => _listening >= 0;
+
     /// <summary>The sizes the resolution list holds now, in its order.</summary>
     public IReadOnlyList<Vector2I> Resolutions => _resolutions;
 
@@ -94,10 +117,13 @@ public partial class SettingsScreen : CanvasLayer
         VBoxContainer column = ShellUi.CentredColumn(this, 18);
         column.AddChild(ShellUi.Heading(ui.Settings(SettingsText.Title)));
 
+        Tabs = new TabContainer { Name = "Tabs" };
+        column.AddChild(Tabs);
         var grid = new GridContainer { Name = "Grid", Columns = 3 };
         grid.AddThemeConstantOverride("h_separation", 16);
-        grid.AddThemeConstantOverride("v_separation", 10);
-        column.AddChild(grid);
+        grid.AddThemeConstantOverride("v_separation", 8);
+        Tabs.AddChild(grid);
+        Tabs.SetTabTitle(0, ui.Keys(KeysText.TabGeneral));
         ResolutionOption = Row(grid, SettingsText.Resolution, List("Resolution"));
         WindowModeOption = Row(grid, SettingsText.WindowMode, List("WindowMode", WindowKeys));
         VsyncOption = Row(grid, SettingsText.Vsync, List("Vsync", new[] { SettingsText.VsyncOn, SettingsText.VsyncOff }));
@@ -108,6 +134,7 @@ public partial class SettingsScreen : CanvasLayer
         EdgePanSlider = SliderRow(grid, SettingsText.EdgePanSpeed, "EdgePan", GameSettings.MinEdgePan, GameSettings.MaxEdgePan, EdgePanStep);
         // No words on the box itself: its label is the row's (ui.json), so the text stays data-only.
         ConfineCheck = Row(grid, SettingsText.ConfineCursor, new CheckBox { Name = "ConfineCursor", CustomMinimumSize = new Vector2(40f, 40f) });
+        BuildKeys(ui);
 
         var buttons = new HBoxContainer { Name = "Buttons", Alignment = BoxContainer.AlignmentMode.Center };
         buttons.AddThemeConstantOverride("separation", 24);
@@ -138,6 +165,10 @@ public partial class SettingsScreen : CanvasLayer
         SfxSlider.Value = s.SfxVolume;
         EdgePanSlider.Value = s.EdgePan;
         ConfineCheck.ButtonPressed = s.ConfineCursor;
+        _keys = s.Keys.Clone();
+        _listening = -1;
+        KeyStatus.Text = "";
+        ShowKeys();
     }
 
     /// <summary>The picks on the screen now.</summary>
@@ -157,6 +188,7 @@ public partial class SettingsScreen : CanvasLayer
             // The slider's steps are 0.05, so the pick is a round number in the file.
             EdgePan = (float)Math.Round(EdgePanSlider.Value, 2),
             ConfineCursor = ConfineCheck.ButtonPressed,
+            Keys = _keys.Clone(),
         };
     }
 
@@ -171,6 +203,76 @@ public partial class SettingsScreen : CanvasLayer
             if (extra.X >= GameSettings.MinWidth && extra.Y >= GameSettings.MinHeight && !list.Contains(extra)) list.Add(extra);
         list.Sort((a, b) => a.X != b.X ? a.X.CompareTo(b.X) : a.Y.CompareTo(b.Y));
         return list.ToArray();
+    }
+
+    // The Keybinds tab: a scrolled two-column list (action name, key button), the refusal line and Default keys.
+    private void BuildKeys(UiText ui)
+    {
+        var page = new VBoxContainer { Name = "Keybinds" };
+        page.AddThemeConstantOverride("separation", 8);
+        Tabs.AddChild(page);
+        Tabs.SetTabTitle(1, ui.Keys(KeysText.TabKeybinds));
+        var scroll = new ScrollContainer { Name = "Scroll", CustomMinimumSize = new Vector2(640f, 380f), HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+        page.AddChild(scroll);
+        var rows = new GridContainer { Name = "Rows", Columns = 2, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        rows.AddThemeConstantOverride("h_separation", 16);
+        rows.AddThemeConstantOverride("v_separation", 4);
+        scroll.AddChild(rows);
+        for (int i = 0; i < KeyMap.Actions.Length; i++)
+        {
+            int index = i;
+            Label name = ShellUi.Text(KeyMap.ActionName(ui, i), 18);
+            name.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+            rows.AddChild(name);
+            var key = new Button { Name = $"Key_{KeyMap.Actions[i]}", CustomMinimumSize = new Vector2(180f, 32f), FocusMode = Control.FocusModeEnum.None };
+            key.Pressed += () => Listen(index);
+            rows.AddChild(key);
+            _keyButtons[i] = key;
+        }
+        KeyStatus = ShellUi.Text("", 18);
+        KeyStatus.Name = "KeyStatus";
+        page.AddChild(KeyStatus);
+        KeysDefaultsButton = ShellUi.Button("KeysDefaults", ui.Keys(KeysText.Defaults), 220f);
+        KeysDefaultsButton.Pressed += () =>
+        {
+            _keys.Reset();
+            _listening = -1;
+            KeyStatus.Text = "";
+            ShowKeys();
+        };
+        page.AddChild(KeysDefaultsButton);
+    }
+
+    private void Listen(int i)
+    {
+        _listening = i;
+        KeyStatus.Text = "";
+        ShowKeys();
+    }
+
+    // Every key button's text: the bound key's name, or keys.press_key on the one waiting.
+    private void ShowKeys()
+    {
+        for (int i = 0; i < _keyButtons.Length; i++)
+            _keyButtons[i].Text = i == _listening ? _ui.Keys(KeysText.PressKey) : KeyMap.KeyName(_keys[i]);
+    }
+
+    /// <summary>While a key button waits, the next key press is its key (Esc stops waiting); the press goes no further.</summary>
+    public override void _Input(InputEvent e)
+    {
+        if (_listening < 0 || !Visible || e is not InputEventKey k || !k.Pressed || k.Echo) return;
+        GetViewport().SetInputAsHandled();
+        Key key = k.PhysicalKeycode != Key.None ? k.PhysicalKeycode : k.Keycode;
+        int action = _listening;
+        _listening = -1;
+        if (key != Key.Escape)
+        {
+            int result = _keys.TrySet(action, key);
+            KeyStatus.Text = result == KeyMap.Ok ? ""
+                : result == KeyMap.IsReserved ? _ui.KeysFormat(KeysText.Reserved, KeyMap.KeyName(key))
+                : _ui.KeysFormat(KeysText.Conflict, KeyMap.KeyName(key), KeyMap.ActionName(_ui, result));
+        }
+        ShowKeys();
     }
 
     private T Row<T>(GridContainer grid, SettingsText label, T control) where T : Control

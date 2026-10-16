@@ -26,7 +26,9 @@ namespace Rts.Game;
 /// command card (<see cref="Card"/>) sees keys and clicks first while its build menu or ghost is up. A right click or an
 /// A + click whose ray meets an enemy unit's drawn body or an enemy building's box first (<see cref="EnemyAt"/>, M4-V2) is an
 /// <c>Attack</c> on it for every selected unit (<see cref="AttackOrder"/>; Shift queues), marked by the red
-/// <see cref="TargetRing"/>; an own unit or building in front hides what is behind it, as the player sees it. Under the fog
+/// <see cref="TargetRing"/>; an own unit or building in front hides what is behind it, as the player sees it. M6-V8: a left
+/// click that hits no unit and no own building selects the resource node whose drawn prop it hits first
+/// (<see cref="SelectedResource"/>: alone, units and building cleared, no command; the panel shows what is left). Under the fog
 /// (M4-V4) only what the screen draws is under the cursor: an enemy the <see cref="Fog"/> hides is neither a target nor a
 /// building to right-click, so a click there means the ground. A fog ghost (M4-V5, a remembered enemy building drawn in
 /// explored fog) is picked like a box: a right click or A + click on it is an Attack on its remembered handle, and a right
@@ -64,6 +66,9 @@ public partial class SelectionController : Node
     // The selected building: slot and generation (view state only; -1 for none).
     private int _building = -1, _buildingGen;
     private int _shownOutline = -1, _shownOutlineGen;
+
+    // The selected resource node (M6-V8): slot, and the type, anchor and generation it had when picked (view state only; -1 for none).
+    private int _resource = -1, _resourceType, _resourceCell, _resourceGen;
 
     // Per unit type: in the worker slot (gathers on a right click on a node).
     private bool[] _isWorkerType = Array.Empty<bool>();
@@ -139,6 +144,72 @@ public partial class SelectionController : Node
             return !b.UnderConstruction[slot] && b.Owner[slot] == LocalPlayer ? slot : -1;
         }
     }
+
+    /// <summary>
+    /// The selected resource node's slot, or -1 (M6-V8). It stays selected while the player's last-seen copy
+    /// (<see cref="FogOfWar.Resources"/>) still draws it: a node felled or mined out where the player can't see it stays
+    /// selected until its ground is seen again. Without a fog node, while the store's node lives.
+    /// </summary>
+    public int SelectedResource
+    {
+        get
+        {
+            if (_resource < 0 || _runner?.Simulation is not Simulation sim) return -1;
+            World world = sim.World;
+            if (Fog?.Resources(world) is SeenResources seen)
+            {
+                if (!seen.Alive[_resource] || seen.TypeId[_resource] != _resourceType || seen.Cell[_resource] != _resourceCell) _resource = -1;
+            }
+            else if (!world.Resources.Alive[_resource] || world.Resources.Generation[_resource] != _resourceGen) _resource = -1;
+            return _resource;
+        }
+    }
+
+    /// <summary>Selects resource node <paramref name="slot"/> alone (units and building cleared, targeting ended; M6-V8); false (nothing changed) when no node is drawn there.</summary>
+    public bool SelectResource(int slot)
+    {
+        if (_runner?.Simulation is not Simulation sim) return false;
+        World world = sim.World;
+        SeenResources? seen = Fog?.Resources(world);
+        ResourceStore r = world.Resources;
+        if ((uint)slot >= (uint)r.Capacity || !(seen != null ? seen.Alive[slot] : r.Alive[slot])) return false;
+        Selection.Clear();
+        Subgroups.Update(Selection.Items, world.Units.TypeId, reset: true);
+        Targeting = false;
+        ClearBuilding();
+        _resource = slot;
+        _resourceType = seen != null ? seen.TypeId[slot] : r.TypeId[slot];
+        _resourceCell = seen != null ? seen.Cell[slot] : r.Cell[slot];
+        _resourceGen = r.Generation[slot];
+        return true;
+    }
+
+    /// <summary>
+    /// The resource node whose drawn prop the camera ray at <paramref name="screen"/> meets first (M6-V8): the nodes as the
+    /// player last saw them (<see cref="FogOfWar.Resources"/>, so a remembered tree in explored fog is clickable and an unseen
+    /// one isn't), hidden by terrain and by any building box or ghost the screen draws in front; -1 for none.
+    /// </summary>
+    public int PickResource(Vector2 screen)
+    {
+        if (_runner?.Simulation is not Simulation sim) return -1;
+        World world = sim.World;
+        Vector3 o = _camera.ProjectRayOrigin(screen), d = _camera.ProjectRayNormal(screen);
+        System.Numerics.Vector3 so = new(o.X, o.Y, o.Z), sd = new(d.X, d.Y, d.Z);
+        SeenResources? seen = Fog?.Resources(world);
+        ResourceStore r = world.Resources;
+        int node = seen != null
+            ? ResourcePicker.PickRay(world.NavGrid, world.Data.Resources, seen.Alive, seen.TypeId, seen.Cell, world.Heightmap, so, sd, PropsView.Shape, out float nodeT)
+            : ResourcePicker.PickRay(world.NavGrid, world.Data.Resources, r.Alive, r.TypeId, r.Cell, world.Heightmap, so, sd, PropsView.Shape, out nodeT);
+        if (node < 0) return -1;
+        FogView? fog = Fog?.Refreshed(world);
+        BuildingPicker.PickRay(world.Buildings, world.Data.Buildings, world.NavGrid, world.Heightmap, -1,
+            so, sd, BuildingViews.BoxHeight, BuildingViews.SiteMinHeight, fog != null ? fog.BuildingShown : ReadOnlySpan<bool>.Empty, out float buildingT);
+        PickGhost(world, fog, so, sd, out float ghostT);
+        return nodeT < buildingT && nodeT <= ghostT ? node : -1;
+    }
+
+    /// <summary>Drops the resource node selection, if any.</summary>
+    public void ClearResource() => _resource = -1;
 
     /// <summary>Orders dropped because the command queue was too full to take a whole order (logged).</summary>
     public int DroppedOrders { get; private set; }
@@ -544,11 +615,21 @@ public partial class SelectionController : Node
         }
         if (slot < 0)
         {
+            // M6-V8: a resource node is selected alone, Shift or not, like a building; it sends no command.
+            int node = PickResource(release);
+            if (node >= 0)
+            {
+                int was = SelectedResource;
+                SelectResource(node);
+                if (was != node) _sfx?.Play(SfxEvent.Select);
+                return;
+            }
             // Shift + click on empty ground keeps the selection, as in most RTS games.
             if (!add)
             {
                 Selection.Clear();
                 ClearBuilding();
+                ClearResource();
             }
         }
         else if (_doubleClick || Input.IsActionPressed("select_type")) SelectType(u.TypeId[slot], add);
@@ -574,6 +655,7 @@ public partial class SelectionController : Node
         {
             Selection.Clear();
             ClearBuilding();
+            ClearResource();
         }
         for (int i = 0; i < n; i++) Selection.Add(new EntityHandle(_picked[i], u.Generation[_picked[i]]));
         SelectionChanged();
@@ -619,7 +701,11 @@ public partial class SelectionController : Node
         UnitStore u = _runner.Simulation!.World.Units;
         PruneSelection();
         Subgroups.Update(Selection.Items, u.TypeId, reset: true);
-        if (Selection.Count > 0) ClearBuilding();
+        if (Selection.Count > 0)
+        {
+            ClearBuilding();
+            ClearResource();
+        }
     }
 
     /// <summary>Selects own building slot <paramref name="slot"/> alone (units cleared, targeting ended); false (nothing changed) for a dead slot or another player's building.</summary>
@@ -631,6 +717,7 @@ public partial class SelectionController : Node
         Selection.Clear();
         Subgroups.Update(Selection.Items, sim.World.Units.TypeId, reset: true);
         Targeting = false;
+        ClearResource();
         _building = slot;
         _buildingGen = b.Generation[slot];
         return true;

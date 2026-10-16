@@ -3333,7 +3333,8 @@ Match
 Order keys, Shift-queue, type select, control groups and Tab subgroups. No new nodes; everything
 is in `SelectionController`, two pure ViewApi helpers, and the input map.
 
-- **Input actions** (`game/project.godot`, all physical keys, each rebindable alone):
+- **Input actions** (`game/project.godot`, all physical keys, each rebindable alone; since M6-V8 the game rebinds them from
+  `settings.cfg` `[keys]`, "Implementation (M6-V8)"):
   `order_attack_move` A, `order_stop` S, `order_hold` H, `order_cancel` Esc, `order_queue` Shift,
   `select_type` Ctrl, `group_assign` Ctrl, `group_add` Shift, `group_1`..`group_9` digits 1-9,
   `subgroup_next` Tab. `order_queue` and `group_add` share Shift with `select_add`, and
@@ -5799,6 +5800,83 @@ re-staged for the new win rule (the owner's playtest notes 1 and 7, STATE Reques
   turned off from the pause menu it applies live). New `BuildingGroupsTest` scene: Ctrl + 1 on a Billet, 1 selects it
   (panel name, card = its production entries), Shift + 2 on a Barracks shows its Train button, Ctrl + 1 with a unit and
   back, a double-tap centres on the Billet's footprint (0.000 m), a cancelled site leaves group 4.
+
+### Implementation (M6-V8)
+
+The resource click (owner playtest note 8, STATE Requests 41) and rebindable keys (M6 criterion 4, docs/02 "Game flow" 7). View
+only: no sim change, no tick or hash moves.
+
+```
+sim/Rts.Sim/ViewApi/SeenResources.cs   Amount (the amount left as last seen), UpdateAmounts, InSight
+game/scripts/FogOfWar.cs               UpdateAmounts once per tick in Resources()
+game/scripts/SelectionController.cs    SelectedResource, SelectResource, PickResource, ClearResource; the left click
+game/scripts/SelectionPanel.cs         ShownKind 4: the node's name and amount line (AmountLabel)
+game/scripts/KeyMap.cs                 the rebindable actions, defaults, the clash rule, [keys] read / write, InputMap
+game/scripts/KeysText.cs, UiText.cs, HudText.cs   ui.json keys section, hud.resource_left, hud.last_seen
+game/scripts/GameSettings.cs, SettingsApplier.cs  Keys in the file; applied with the rest
+game/scripts/SettingsScreen.cs         General / Keybinds tabs, click-to-rebind
+game/scripts/CommandCard.cs            grid keys and order hints follow the bound keys (KeyMap.Version)
+game/scripts/Main.cs                   Esc while a key button waits is that button's
+game/tests/ResourceClickTest.tscn      the resource click scene (in the scene loop)
+```
+
+- **The resource click.** In `SelectionController.FinishSelect`, a click (not a drag) that picks no own unit and no own
+  building asks `PickResource`: `ResourcePicker.PickRay` over the nodes **as the player last saw them** (`FogOfWar.Resources`,
+  the M4-VH2 copy the props draw; without a fog node the live store), kept only when no building box (any owner, as the fog
+  shows them) or fog ghost is nearer on the ray. A hit selects that node alone, Shift or not, like a building: the units, the
+  building and targeting are cleared, `Select` plays if it changed, and **no command is sent** (the card is empty: no unit,
+  no building). Any unit or building selection, a box without Shift or a click on open ground clears it. The selection is a
+  slot plus the type and anchor it had (`SelectedResource` reads -1 once the last-seen copy no longer draws that node: a
+  node felled or mined out where the player sees it goes at once; one emptied out of sight stays selected until its ground
+  is seen). A right click with a node selected orders nothing (nothing is selected to order).
+- **The panel** (`SelectionPanel`, kind 4): a placeholder portrait (hue after the building types), the node's `displayName`
+  (`resources.json`), and one line, `hud.resource_left` (`"{0} {1} left"`: the amount, then the local faction's `goldName` /
+  `woodName`, so a Whirlwind player reads its own word). While a footprint cell is visible (`SeenResources.InSight`; always
+  with `--no-fog`) the amount is `World.Resources.Remaining[slot]`; otherwise `SeenResources.Amount[slot]` after
+  `hud.last_seen` (`"Last seen: 2498 Gold left"`). `SeenResources.UpdateAmounts` (called by `FogOfWar.Resources` once per tick)
+  copies the store's amount into every last-seen node that is still the store's node in that slot and has a footprint cell in
+  sight; its first call takes every node's amount (a match starts with full nodes, and a node is clickable only once explored).
+  The line is rebuilt only when the amount or the seen state changes (a string per change, none on a steady frame).
+- **Keys** (`KeyMap`). 31 actions: `order_attack_move` A, `order_stop` S, `order_hold` H, `order_move` M, `subgroup_next` Tab,
+  `build_basic` B, `build_advanced` V, `group_1`..`group_9` 1-9, `card_0`..`card_14` (the grid, `Q W E R T / A S D F G / Z X C V
+  B`). The defaults are read from `project.godot` (`input/<action>`), so today's keys stay the source. Fixed (refused):
+  Esc, Shift, Ctrl, Alt, Meta, the four arrows, F10, F12. **Clash rule:** two actions may not share a key when both are
+  commands (the first 16), both are grid keys, or one is a command and the other a top-row grid key (a unit card's ability
+  row sees keys before the orders); a command and a lower grid key may share one (A is the sixth grid key by default: a build
+  menu or a production card owns the whole grid while up). `KeyMap.Apply` erases each action's `InputMap` events and adds one
+  `InputEventKey` with the physical key and no modifiers (Ctrl + digit still matches a group key); every key handler already
+  reads the actions, so nothing else changes. `KeyMap.Version` moves on each apply; the command card re-reads its grid key
+  names and the order buttons' hints (now the bound key's name, the `ui.json` `hotkeyHint` only for an unbound action) and
+  lays itself out again. The P (patrol) key named in docs/02 does not exist yet (patrol is not built).
+- **The file.** `settings.cfg` `[keys]`: one line per action, the key's Godot name (`order_attack_move="K"`, `group_1="1"`,
+  `subgroup_next="Tab"`). A file without the section (before M6-V8) or without a key reads clean with the defaults; a value
+  that is not a key name (`"Blorp"`, a number), a fixed key, or a key that clashes with an action read before it is one
+  problem and that action's default; if a default left in place then clashes with a later key, the whole section is the
+  defaults (one more problem). Extra keys are ignored. Applied at boot with the other settings and on every commit.
+- **The Keybinds tab.** The settings screen is a `TabContainer`: General (the M6-V6 / M6-V7 fields) and Keybinds (a scrolled
+  list: the action's `keys.*` name, a button showing its key). A click on a button shows `keys.press_key` and the next key
+  press is its key (`SettingsScreen._Input`, before the GUI and before `Main`'s Esc); a clash shows `keys.conflict`
+  (`"{0} is already used by {1}"`), a fixed key `keys.reserved`, and the key stays; Esc stops waiting and leaves the screen
+  open. **Default keys** (`keys.defaults`) puts the tab's keys back. Like every field, keys apply and save with Apply, Back or
+  Esc; Defaults (the screen's) resets them too. Text: `ui.json` `keys` (`tab_general`, `tab_keybinds`, one per order / Tab /
+  build action named as the action, `group` = `"Control group {0}"`, `card` = `"Command card row {0}, column {1}"`,
+  `press_key`, `conflict`, `reserved`, `defaults`), required like the other sections; `group` and `reserved` must name `{0}`,
+  `card`, `conflict` and `hud.resource_left` `{0}` and `{1}` (one load error naming the key otherwise). Key names are
+  Godot's (`OS.GetKeycodeString`, the physical key under the layout; the US name headless).
+- **Tests.** xUnit `ViewApi/SeenResourcesTests` (+1: the first call takes every amount, a node in sight follows the store,
+  one out of sight keeps its last amount also when emptied, the copy drops it once seen, `InSight` with and without fog,
+  0 bytes over 1,000 calls). New headless `ResourceClickTest` (seed 1, `--no-bases`, a lone worker beside a mine): the click
+  selects the mine alone, the card empty, the panel's name and amount equal the sim's; a right click and a Shift + click on
+  it change nothing; a click on open ground drops it; 60 ticks of gathering, the line equal to the store every tick; the
+  worker walks away: "Last seen:" with the last seen amount; the mine emptied out of sight: unchanged and still selected; seen
+  again: deselected; every click sends 0 commands (the player's command sequence counter and the pending queue unchanged);
+  the hash twin up to the staging (the emptying is a reflection call, not a command). `SettingsTest`: nine `[keys]` reader
+  rows, the round trip with four rebinds, every action's row and key on the tab, the tabs' titles, the buttons inside a
+  648 px window; over the paused match A rebound to K, K for Stop refused (conflict line), Q refused (top-row grid key), Left
+  refused (reserved line), Esc stops a wait; in the match A arms nothing, K arms attack-move and a click orders it, the
+  card's hint reads K; Default keys and Back put A back in the file and the match. `ShellTest`: the 17 new keys by name
+  (80 shell keys), each missing one error naming it, the `keys` section missing one error, eleven bad formats refused.
+  Windowed with `-- --shots <dir>`: `resource-click.png`, `resource-last-seen.png`, `settings-keybinds.png`.
 
 ## AI architecture
 

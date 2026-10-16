@@ -31,4 +31,8 @@ public enum HudText
     Meters,
     /// <summary>The words shown over an own caster whose cast was lost without a new order ("Cast lost"; M5-V1).</summary>
     CastLost,
+    /// <summary>The selection panel's line for a clicked resource node (M6-V8): a format whose <c>{0}</c> is the amount left and <c>{1}</c> the resource's name ("1500 Gold left").</summary>
+    ResourceLeft,
+    /// <summary>The lead-in to that line for a node in explored, not visible ground: the amount is the one last seen (M6-V8).</summary>
+    LastSeen,
 }

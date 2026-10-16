@@ -338,6 +338,7 @@ public partial class Main : Node3D
         if (!e.IsActionPressed("ui_cancel") || e.IsEcho()) return;
         if (_settingsScreen is { Visible: true })
         {
+            if (_settingsScreen.Listening) return; // M6-V8: Esc stops a key button's wait (SettingsScreen._Input), not the screen
             // Esc is Back: the picks are kept and the screen closes to where it came from (the pause menu stays paused).
             CommitSettings(_settingsScreen.Picks(), stay: false);
             GetViewport().SetInputAsHandled();

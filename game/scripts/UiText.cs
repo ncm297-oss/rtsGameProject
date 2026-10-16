@@ -18,7 +18,7 @@ namespace Rts.Game;
 /// <c>{ "commands": { "&lt;id&gt;": { "displayName", "hotkeyHint" } }, "buildMenus": { "basic": [slot ids], "advanced": [slot ids] },
 /// "placement": { "&lt;reason&gt;": text }, "train": { "&lt;reason&gt;": text }, "research": { "&lt;reason&gt;": text },
 /// "states": { "&lt;state&gt;": text }, "hud": { "&lt;label&gt;": text }, "menu": { "&lt;key&gt;": text }, "setup": { "&lt;key&gt;": text },
-/// "pause": { "&lt;key&gt;": text }, "settings": { "&lt;key&gt;": text }, "match_over": { "&lt;key&gt;": text } }</c>. Command ids are <see cref="CommandIds"/>;
+/// "pause": { "&lt;key&gt;": text }, "settings": { "&lt;key&gt;": text }, "match_over": { "&lt;key&gt;": text }, "keys": { "&lt;key&gt;": text } }</c>. Command ids are <see cref="CommandIds"/>;
 /// the placement, train and research keys are the snake_case names of every <see cref="PlacementError"/>,
 /// <see cref="TrainError"/> and <see cref="ResearchError"/> member but <c>None</c> (<c>blocked</c>, <c>queue_full</c> ...),
 /// the state keys those of every <see cref="UnitState"/> (M3-V3) plus <see cref="OrderedAttackKey"/> (M4-V2), the hud keys those of <see cref="HudText"/>,
@@ -27,7 +27,9 @@ namespace Rts.Game;
 /// sizes, else one error naming it, BUG-0602 item 1; M6-V6: the <c>settings</c> keys those of <see cref="SettingsText"/>, and
 /// <c>settings.resolution_item</c> a format naming <c>{0}</c> (width) and <c>{1}</c> (height) under the same rule; M6-V4: the <c>match_over</c>
 /// keys those of <see cref="MatchOverText"/>, <c>match_over.match_length</c> a format naming <c>{0}</c> and <c>match_over.clock</c> one naming
-/// <c>{0}</c> (minutes) and <c>{1}</c> (seconds) under the same rule; M6-V3: <c>setup</c> also carries the player colour table,
+/// <c>{0}</c> (minutes) and <c>{1}</c> (seconds) under the same rule; M6-V8: the <c>keys</c> keys those of <see cref="KeysText"/>
+/// (<c>group</c> and <c>reserved</c> formats naming <c>{0}</c>, <c>card</c> and <c>conflict</c> formats naming <c>{0}</c> and <c>{1}</c>),
+/// and <c>hud.resource_left</c> a format naming <c>{0}</c> (the amount) and <c>{1}</c> (the resource), under the same rule; M6-V3: <c>setup</c> also carries the player colour table,
 /// <c>colour_1</c> .. <c>colour_8</c>, each <c>{ "displayName", "rgb": "#RRGGBB" }</c>, <see cref="ColourCount"/>); so a member
 /// the sim adds later is a load error here until the file has its text. Each of the three reason sections must also
 /// carry <see cref="ForwardKey"/> (<c>requires</c>), the reason M3-6's <c>requires</c> gating adds: a key with no enum
@@ -73,6 +75,7 @@ public sealed class UiText
     private readonly string[] _pause;
     private readonly string[] _settings;
     private readonly string[] _matchOver;
+    private readonly string[] _keys;
     private readonly string[] _colourNames = Blank(ColourCount);
     private readonly uint[] _colourRgb = new uint[ColourCount];
 
@@ -88,6 +91,7 @@ public sealed class UiText
         _pause = Blank(Enum.GetValues<PauseText>().Length);
         _settings = Blank(Enum.GetValues<SettingsText>().Length);
         _matchOver = Blank(Enum.GetValues<MatchOverText>().Length);
+        _keys = Blank(Enum.GetValues<KeysText>().Length);
         Array.Fill(_names, "");
         Array.Fill(_hints, "");
     }
@@ -151,6 +155,15 @@ public sealed class UiText
 
     /// <summary>A match-over banner or stats screen text (<c>ui.json</c> <c>match_over</c>, M6-V4).</summary>
     public string MatchOver(MatchOverText key) => (uint)key < (uint)_matchOver.Length ? _matchOver[(int)key] : "";
+
+    /// <summary>A Keybinds tab text (<c>ui.json</c> <c>keys</c>, M6-V8).</summary>
+    public string Keys(KeysText key) => (uint)key < (uint)_keys.Length ? _keys[(int)key] : "";
+
+    /// <summary>A <c>keys</c> format (<see cref="KeysText.Group"/>, <see cref="KeysText.Card"/>, <see cref="KeysText.Conflict"/>, <see cref="KeysText.Reserved"/>) filled with <paramref name="args"/>.</summary>
+    public string KeysFormat(KeysText key, params object[] args) => string.Format(CultureInfo.InvariantCulture, Keys(key), args);
+
+    /// <summary>The selection panel's amount line for a resource node (M6-V8): <c>hud.resource_left</c> with <paramref name="amount"/> for <c>{0}</c> and the resource's name for <c>{1}</c>.</summary>
+    public string ResourceLeft(int amount, string resource) => string.Format(CultureInfo.InvariantCulture, Hud(HudText.ResourceLeft), amount, resource);
 
     /// <summary>A match time as <c>match_over.clock</c> (whole minutes for <c>{0}</c>, the seconds past them for <c>{1}</c>) from a tick count (50 ms each); negative counts read as 0.</summary>
     public string Clock(int ticks)
@@ -257,6 +270,7 @@ public sealed class UiText
             if (root.TryGetProperty("states", out JsonElement states))
                 ui.OrderedAttackText = Text(states, OrderedAttackKey, $"states.{OrderedAttackKey}", errors);
             Section<HudText>(root, "hud", ui._hud, skipZero: false, forward: false, errors);
+            TwoArgs(ui._hud[(int)HudText.ResourceLeft], $"hud.{Key(HudText.ResourceLeft)}", "the amount", "the resource", errors);
             Section<MenuText>(root, "menu", ui._menu, skipZero: false, forward: false, errors);
             Section<SetupText>(root, "setup", ui._setup, skipZero: false, forward: false, errors);
             string sizeItem = ui._setup[(int)SetupText.MapSizeItem];
@@ -269,6 +283,15 @@ public sealed class UiText
             if (resolutionItem.Length > 0 && !IsResolutionFormat(resolutionItem))
                 errors.Add($"ui.json: settings.{Key(SettingsText.ResolutionItem)} must be a format with {{0}} (the width) and {{1}} (the height) and no other placeholder: '{resolutionItem}'");
             Section<MatchOverText>(root, "match_over", ui._matchOver, skipZero: false, forward: false, errors);
+            Section<KeysText>(root, "keys", ui._keys, skipZero: false, forward: false, errors);
+            foreach (KeysText k in new[] { KeysText.Group, KeysText.Reserved })
+            {
+                string f = ui._keys[(int)k];
+                if (f.Length > 0 && !IsSizeFormat(f))
+                    errors.Add($"ui.json: keys.{Key(k)} must be a format with {{0}} and no other placeholder: '{f}'");
+            }
+            TwoArgs(ui._keys[(int)KeysText.Card], $"keys.{Key(KeysText.Card)}", "the row", "the column", errors);
+            TwoArgs(ui._keys[(int)KeysText.Conflict], $"keys.{Key(KeysText.Conflict)}", "the key", "the other action", errors);
             string length = ui._matchOver[(int)MatchOverText.MatchLength];
             if (length.Length > 0 && !IsTextFormat(length))
                 errors.Add($"ui.json: match_over.{Key(MatchOverText.MatchLength)} must be a format with {{0}} (the clock) and no other placeholder: '{length}'");
@@ -376,6 +399,13 @@ public sealed class UiText
         {
             return false;
         }
+    }
+
+    // M6-V8: a read text that must be a format naming {0} and {1} (and no other placeholder); one error naming the key otherwise.
+    private static void TwoArgs(string format, string at, string first, string second, List<string> errors)
+    {
+        if (format.Length > 0 && !IsResolutionFormat(format))
+            errors.Add($"ui.json: {at} must be a format with {{0}} ({first}) and {{1}} ({second}) and no other placeholder: '{format}'");
     }
 
     // A format with one text placeholder (M6-V4: the match length line): it formats, and names it (two texts differ).
