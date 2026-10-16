@@ -144,7 +144,7 @@ public class CommandDoorFuzzStressTests
     /// <summary>
     /// Per-tick invariants. A raw SpawnUnit may place a unit off the map or on blocked ground (docs/03
     /// "Movement": such a unit stops); <paramref name="born"/> / <paramref name="bornAt"/> track each
-    /// slot's generation and spawn point, and a unit born off passable ground must never move.
+    /// slot's generation and spawn point, and a unit born off passable ground must never move while its cell stays blocked.
     /// </summary>
     private static void CheckInvariants(Simulation sim, int[] born, Vector2[] bornAt, bool[] bornOnGround)
     {
@@ -167,7 +167,14 @@ public class CommandDoorFuzzStressTests
             if (bornOnGround[i])
                 Assert.True(g.WorldToCell(p, out int x, out int y) && g.IsPassable(x, y), $"{at}: on blocked ground or off the map at {p}");
             else
+            {
                 Assert.True(p == bornAt[i], $"{at}: spawned off passable ground at {bornAt[i]}, moved to {p}");
+                // A unit born inside a building's footprint (or on a node) stands on open ground once that building
+                // dies (or the node is felled) and frees the cell (M3-2, docs/03): from the next tick it may walk, like
+                // one born there (seed 7 since D19's faster building deaths). Re-judged after the check, so it still
+                // may not move in the very tick its cell opens; a cliff or the map border never opens.
+                if (g.WorldToCell(p, out int ox, out int oy) && g.IsPassable(ox, oy)) bornOnGround[i] = true;
+            }
             Assert.True((uint)u.Owner[i] < Players, $"{at}: owner {u.Owner[i]}");
             Assert.True((uint)u.QueueCount[i] <= OrderConstants.QueueCapacity, $"{at}: queue {u.QueueCount[i]}");
             // Re-baselined for M4-1 (BUG-0135): a holder fights what comes in reach, so it is Idle or Attacking, never walking.
