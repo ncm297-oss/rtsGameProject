@@ -580,7 +580,7 @@ ten-minute playtest (STATE "For your review", M3-V3 entry) stands as feedback, n
       second for 4 s on enemy units only (40 on Light, 52 on Heavy / Giant: magic x1.25 per pulse), no effect on buildings.
       The other three need slice 2 (zones for Sandstorm; passives / Cusser's launch rule) and the data track's D10 content.)_
       _(**The Cusser works since M4-4b-1** (session 2026-10-09-1155): 6 m / 3.5 m / 1.0 s cast / 45 s cooldown (30 s after
-      Moranth Supply), 120 siege in the circle with no falloff: 355 to a Town Hall at its footprint edge, 60 - armor to a
+      Moranth Supply), 120 siege in the circle with no falloff: 358 to a Town Hall at its footprint edge (D19 armor 2; was 355 at armor 5), 60 - armor to a
       Light unit, own units in the blast (the Sapper too) take half, own buildings never. The page row is on the data
       track's pin list (D10a's allowance; D10b pins it fully, BUG-0350). Sandstorm needs zones + Blinded (M4-4b-2); the
       Zealot passives need passives (M4-4b-3); Sharpers is the Sapper's normal attack (M4-2b).)_
@@ -664,7 +664,7 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       building or an intruder near the hall pulls the army home and the workers to a drop-off; knobs in `rules.json` `ai`).
       Left for M5-4c: expansion, rebuilding, the high-ground scouting.)
 - [ ] Easy / Normal / Hard per [02 AI](02-game-design.md#ai-opponent). (D16, 2026-10-13: the three blocks pinned to docs/02 and
-      the faction pages. M5-4c slice 1, 2026-10-13: `useAbilities` applied (Easy never casts). Left for M5-4c slice 2:
+      the faction pages. M5-4c slice 1, 2026-10-13: `useAbilities` applied (Easy never cast then; D19, 2026-10-15, turned it on for Easy too). Left for M5-4c slice 2:
       `gatherBonus`, `focusFire`, `pullBackWounded`.)
 - [ ] AI-vs-AI headless test: a 20-minute match completes without errors and one side wins. (M5-4b, 2026-10-13: the defeat
       rule and `Simulation.MatchOver` are in, a razed hall ends the match and the loser's AI goes silent on seeds 1-3. M5-4e,

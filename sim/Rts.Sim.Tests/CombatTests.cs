@@ -162,7 +162,7 @@ public class CombatTests
         RunUntil(sim, () => b.Hp[k] < full, 400);
         UnitDef hi = Def(HeavyInfantry);
         int expected = DamageCalc.Compute(TestSim.Data.DamageTable, hi.Attack, 0, sim.World.StructureClass, TestSim.Data.Buildings[tent].Armor);
-        Assert.Equal(1, expected); // 10 x 0.4 - 3 = 1
+        Assert.Equal(6, expected); // 10 x 0.7 - 1 = 6
         Assert.Equal(full - expected, b.Hp[k]);
         Assert.Equal(UnitState.Attacking, u.State[a.Index]);
     }

@@ -251,13 +251,22 @@ public class AbilityManagerTests
         Assert.True(casts.Count > AbilityManager.MaxTries, "not sent again at the new point");
     }
 
-    /// <summary>(f) An Easy seat (useAbilities false) sends no UseAbility in 6,000 ticks; its Normal twin casts.</summary>
+    /// <summary>
+    /// (f) A seat whose difficulty has useAbilities false (Easy, set false in a data copy since D19 ships every level true)
+    /// sends no UseAbility in 6,000 ticks; its Normal twin casts.
+    /// </summary>
     [Fact]
-    public void AnEasySeat_NeverCasts_ItsNormalTwinDoes()
+    public void ASeatWithUseAbilitiesFalse_NeverCasts_ItsNormalTwinDoes()
     {
+        GameData data = Data(more: dir =>
+        {
+            foreach (string f in new[] { "malazan", "whirlwind" })
+                dir.EditJson($"factions/{f}/ai.json", root => root["difficulties"]!["easy"]!["useAbilities"] = false);
+        });
+        Assert.False(data.Ai[0].Difficulty(AiDifficulty.Easy).UseAbilities);
         foreach ((AiDifficulty d, bool casts) in new[] { (AiDifficulty.Easy, false), (AiDifficulty.Normal, true) })
         {
-            Simulation sim = Scene(s_data.Value, d);
+            Simulation sim = Scene(data, d);
             Caster(sim, "malazan_cadre_mage");
             Enemies(sim, "whirlwind_raider", 3, sim.AiOf(0)!.Board.Rally + new Vector2(9f, 0f));
             List<(Command Cast, Vector2 From)> log = Casts(sim);

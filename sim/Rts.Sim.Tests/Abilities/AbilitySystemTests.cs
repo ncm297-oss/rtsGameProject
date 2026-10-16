@@ -263,7 +263,7 @@ public class AbilitySystemTests
     private static readonly Vector2 CusserPoint = new(24.6f, 42f);
 
     /// <summary>
-    /// 3.4 m from an enemy Keep's footprint: the Keep takes 120 x 3.0 - 5 = 355; an enemy Light unit 60 - 0; an own Heavy
+    /// 3.4 m from an enemy Keep's footprint: the Keep takes 120 x 3.0 - 2 = 358; an enemy Light unit 60 - 0; an own Heavy
     /// unit half of 90 - 3 (43.5 rounds to 44); an own Keep 2 m away nothing; units 3.51 m out nothing; the Sapper 4 m away
     /// nothing; a Light unit it kills is the caster owner's kill. Cast 1.0 s, cooldown 45 s.
     /// </summary>
@@ -297,7 +297,7 @@ public class AbilitySystemTests
         }
         Assert.Equal(20, resolve - start + 1); // 1.0 s
         Assert.Equal(resolve + 900, u.AbilityReadyTick[Slot(sapper)]); // 45 s
-        Assert.Equal(hallHp - 355, w.Buildings.Hp[hall.Index]);
+        Assert.Equal(hallHp - 358, w.Buildings.Hp[hall.Index]);
         Assert.Equal(200 - 60, u.Hp[light.Index]);
         Assert.True(doomedDied);
         Assert.False(u.IsAlive(doomed));
@@ -320,7 +320,7 @@ public class AbilitySystemTests
         World w = sim.World;
         UnitStore u = w.Units;
         EntityHandle hall = GatherMaps.Building(sim, 14, 19, player: 1);
-        w.Buildings.Damage(hall, w.Buildings.Hp[hall.Index] - 300); // 300 left: 355 destroys it
+        w.Buildings.Damage(hall, w.Buildings.Hp[hall.Index] - 300); // 300 left: 358 destroys it
         Vector2 p = CusserPoint;
         EntityHandle sapper = Place(sim, 0, Sapper, Off(p, -2f));
         EntityHandle own = Place(sim, 0, Crossbowman, Off(p, 0f, -2f));

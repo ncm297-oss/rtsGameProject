@@ -41,7 +41,7 @@ public class AbilityManagerFuzzStressTests
     /// wander. Every UseAbility the AI sends is checked when sent: an own live caster, not casting, the ability listed and
     /// ready by the tick it applies in, at most one per caster a think; the point on the map and within range; at least
     /// castMinTargets enemy units the AI sees within the radius (or, for an ability that hits buildings, a seen enemy
-    /// building's footprint within it); for a friendly-fire ability no own unit within the radius; Easy never casts.
+    /// building's footprint within it); for a friendly-fire ability no own unit within the radius; a seat whose difficulty has useAbilities false never casts.
     /// The same scene twice hashes equal after every tick.
     /// </summary>
     [Theory]
@@ -117,7 +117,7 @@ public class AbilityManagerFuzzStressTests
             ai.SentForTests = c =>
             {
                 if (c.Kind != CommandKind.UseAbility) return;
-                Assert.NotEqual(AiDifficulty.Easy, difficulty);
+                Assert.True(ai.Knobs.UseAbilities, $"seed {seed}: a {difficulty} seat with useAbilities false cast");
                 string at = $"seed {seed} tick {sim.TickNumber}: UseAbility {c.Unit} #{c.TypeId} at {c.Position}";
                 if (c.Tick != lastStamp) { sentThisThink.Clear(); lastStamp = c.Tick; }
                 UnitStore u = w.Units;

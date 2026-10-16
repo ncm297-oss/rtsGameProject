@@ -578,7 +578,7 @@ public class DataValidationTests
         {
             Assert.Equal(BuildingSlot.TownHall, b.Slot);
             Assert.Equal((4, 4), (b.FootprintWidth, b.FootprintHeight));
-            Assert.Equal((2400, 5), (b.Hp, b.Armor));
+            Assert.Equal((2400, 2), (b.Hp, b.Armor));
             Assert.Equal((275, 275), (b.CostGold, b.CostWood));
             Assert.Equal(90 * SimConstants.TicksPerSecond, b.BuildTicks);
             Assert.Equal(20, b.HalfPopProvided); // +10 pop
