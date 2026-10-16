@@ -476,6 +476,7 @@ public class SimHardeningH3QaTests
         var sim = TestSim.Explored(new Simulation(TestSim.Config(Seed: 6, PlayerCount: 2, UnitCapacity: count + 16, CommandCapacity: count + 64), BigCanyon()));
         World w = sim.World;
         int tentType = w.Data.FindBuilding("whirlwind_tent");
+        TestSim.KeepIn(sim, 1); // M5-H2 (rule 24): else player 1 is out on tick 1 and its Tent collapses (BUG-0703)
         Assert.True(w.Buildings.Spawn(1, tentType, 10 * w.NavGrid.Width + 60, out EntityHandle tent));
         if (blockRamp)
         {
@@ -624,7 +625,7 @@ public class SimHardeningH3QaTests
     /// 1dfdef3: slot 503 (Heavy Infantry), Moving and stuck in the crowd at the Tent (stall 9), stops for movement's stuck
     /// stop (goal dropped) at tick 2269 and gives the order up at the scan of 2270.
     /// </summary>
-    [Fact(Skip = "BUG-0651: at 2x the unit budget one of 1,000 units gives up the reachable Tent (a stuck stop's scan, BUG-0512's residue)")]
+    [Fact] // BUG-0651: no longer reproduces on the M5-H2 tree (0 of 1,000 give up, max stall 9); un-skipped to guard it
     public void ThousandUnits_OrderedOntoAReachableBuildingThroughARampDetour_NeverGiveUp()
     {
         (Simulation sim, EntityHandle tent, EntityHandle[] army) = ChaseScene(1000, blockRamp: false);

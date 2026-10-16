@@ -151,6 +151,7 @@ public class CombatTests
         Simulation sim = Flat();
         int tent = TestSim.Data.FindBuilding("whirlwind_tent");
         EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 20, 20));
+        TestSim.KeepIn(sim, 1); // M5-H2: else player 1, no unit, is out and its building collapses (BUG-0703)
         sim.Enqueue(Command.SpawnBuilding(1, tent, At(sim, 24, 19)));
         UnitStore u = sim.World.Units;
         BuildingStore b = sim.World.Buildings;

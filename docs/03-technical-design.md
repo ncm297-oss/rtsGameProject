@@ -593,7 +593,11 @@ So separation is symmetric and no result depends on which unit is walked first. 
 - **Plan:** `Constrain` treats a shovable unit as a wall that yields as far as its own speed carries
   it along the push (only if that step is legal for it), so the walker may press that far into
   it. A walker stuck for `PushAfterStuckTicks` plans a second step in which lone parked units yield
-  too, and takes it if it moves forward. After its step is final, a walker (also when backing off) adds to `World.ShoveStep[j]` the
+  too, and takes it if it moves forward. M5-H2 (BUG-0745): if that doesn't move it forward either and the step it wants
+  crosses into blocked ground, it tries its flow step alone (no sidestep), every standing unit a wall (no shove), and takes
+  that if it moves forward (the count holds, as for a push): the sidestep round idle friends ahead had cancelled the flow
+  step's way along a cliff, so the slide was nothing and the walker stood pinned for good (the M4 playable scene's Sapper,
+  seed 1, replayed in a bare sim: 0.07 m in 8 Moves; `WallPinTests`). After its step is final, a walker (also when backing off) adds to `World.ShoveStep[j]` the
   overlap its step would leave with each shovable neighbor, past touching, measured on
   start-of-tick centers (so an existing overlap is shoved out too), in that unit's shove
   direction. Shoves accumulate in the sorted walk order, so each sum is the same every run.
@@ -6004,7 +6008,10 @@ enums `AiDifficulty` / `AiStepTrigger` / `AiStepAction`, `Data/DataLoader.Ai.cs`
   At the end the cursor parks at the store's capacity; a cursor at `int.MaxValue` does not wrap. The unit cursor is one loop,
   `FogStore.NextSeenUnit`: `CanSeeUnit`'s rule with the cell and reveal tests written out (each is a call in the tests' Debug
   build, and a player's view walks every slot) and stealth asked only of an enemy already in sight; while a zone blocks
-  vision it asks `CanSeeUnit` itself. The fuzz holds it to `CanSeeUnit` slot for slot.
+  vision it asks `CanSeeUnit` itself only of a unit whose cell lies in a blocking zone's box (M5-H2, BUG-0701: a bit per cell,
+  rebuilt when a blocker is made or freed, `ZoneStore.BlockerVersion`; off every box the zone rule is the plain cell test), so
+  a think no longer pays per storm for every unit (`AiPerfTests`' 8-storm row on the shipped data: 0.98 ms before, 0.33 ms
+  after, alone, Debug). The fuzz holds it to `CanSeeUnit` slot for slot. Memory: 1 bit a map cell.
 - **The rule for AI code** (`Ai/PlayerViewArchitectureTests`, the ViewApi guard's pattern): no file under `sim/Rts.Sim/Ai/` but
   `PlayerView.cs` names `World`, `Simulation`, a store (`UnitStore`, `BuildingStore`, `ResourceStore`, `StatusStore`,
   `ZoneStore`, `ProjectileStore`) or `FogStore` in code (comment lines may); a planted reference fails it.
@@ -6179,7 +6186,10 @@ acting only through commands. Code: `sim/Rts.Sim/Ai/AiPlayer.cs`, `Blackboard.cs
   build target (`PlayerView.TryGetBuildTarget`, own units only) for `EconomyManager.StalledThinks` (3, a code guard) thinks
   in a row gets a worker sent to join it (`Build` of its type at its anchor, which joins the site and costs nothing: the
   idle worker nearest it, else the nearest gatherer; one a think), and such a stalled house site doesn't hold the house rule
-  off. Root cause of the two Billets left unbuilt for 13 minutes (D-H4): a builder pacing short of its site stood `Idle` for
+  off. **M5-H2 (BUG-0650):** after `EconomyManager.MaxJoins` (3, a code guard like `MilitaryManager.MaxTries`) joins with
+  no rise in the site's hit points since (no worker ever got to work it: a site walled off past the placement rules) the
+  site is left alone until its hit points rise; per building slot a byte and an int on the Blackboard (5 B x building
+  slots per AI seat). Root cause of the two Billets left unbuilt for 13 minutes (D-H4): a builder pacing short of its site stood `Idle` for
   one tick between movement's stuck stop and the construction system's stand, and a think landing on it sent the worker to
   gather; `PlayerView` now answers a worker with a live build target that stands Idle as `Building` (what it is next tick).
   Then every idle worker (Idle, no AI command waiting on it) is sent with
@@ -6491,7 +6501,10 @@ Slice 1: the defeat rule (STATE "Requests for the sim track" 37) and the AI's ba
   `PlayerViewArchitectureTests` unchanged.
 - **Knobs** (`common/rules.json` `ai`, required, `DataValidationTests` rows, in `ContentHash`): `defendRadius` 48 m (8-256),
   `defendFor` 20 s (0-600, to ticks; 0 holds the threat only on the think it is seen), `workerFleeRadius` 16 m (1-64).
-  `focusFire` / `pullBackWounded` stay unread (M5-4c).
+  `focusFire` / `pullBackWounded` stay unread (M5-4c). A `defendRadius` that covers the map (256 m on a 128-cell map) is
+  valid data that plays as an AI that only defends: every enemy fighter it sees is an intruder, so the threat is never
+  released and no wave starts (`DefenseQaTests.TheKnobsAtTheirEdges_*(20, 256)`: waves 0 / 0 in 4,000 ticks). A play-style
+  choice, not a bug; a tighter maximum is the data track's call (BUG-0675 c).
 - **Memory.** Per AI seat, new: per unit slot three ints and a bool (`DefendedVersion`, `FledGeneration`, `FledAt`,
   `Homing`), **13 B x unit slots**, 32 KB for 2,500; per building slot two ints (`KeptHp` and the generation it is for),
   **8 B x building slots**, 2 KB for 256; a few scalars. About 140 KB per seat for a 2,500-unit, 256-building, 4,096-node
@@ -6546,6 +6559,17 @@ and docs).
   `castMinTargets` enemies stand within `radius` of it (the command's point: the caster's, kept on the map). **Friendly fire**: an ability with a damage effect that reaches own
   units (`friendlyFire` above 0, or `affects` all units) is never cast with an own unit (the caster included) within
   `radius` of the point: the Cusser isn't thrown at a group the Sapper is in melee with, nor into the AI's own army.
+  `range + radius` is a **search ring**, not the reach of a cast (BUG-0702 item 3): the cast needs its group within `radius`
+  of the pulled-back point, so a group at the ring's very edge (more than `range - 0.05 + radius` away) is found and not
+  cast at. **No stacking** (M5-H2, BUG-0702 item 2): a ground ability with no damage and no spawn effect (its statuses and
+  zones refresh rather than stack: Sandstorm) is not sent within its `radius` of a point a caster was sent the same ability
+  at whose effect still runs (sent tick + cast time + duration); that caster tries its next ability or waits. A send that
+  never ran is forgotten (BUG-0760): once its caster is free again (not casting or walking to the cast, no command pending)
+  with the ability's ready tick unmoved since the send, the record goes, so the judging rule below can send it again (a
+  dead caster's record stays to the end: it may have landed). The running casts sit in a 64-entry list on the Blackboard
+  (`AbilityManager.MaxRecentCasts`, a buffer size: past it a new cast isn't recorded), 29 B x 64 per AI seat (ability,
+  point, end tick, and the caster's slot, generation, ability index and ready tick at the send); AI state, outside the
+  hash like the rest of the Blackboard.
 - **Judging** (M5-2's pattern). The AI can't hear a refusal; at a later think it reads the ability's ready tick: moved
   since the cast was sent, the cast landed and its tries start again. A cast that didn't land (refused, dropped, cancelled) is
   sent again at the next think, at most **`AbilityManager.MaxTries` (3)** times at the same point (within a cell), then left
@@ -6593,7 +6617,7 @@ count). No `Command` kind, no knob, no data change; M5-4b's flags, event, latch,
   building whose type trains at least one unit (`GameData.UnitsTrainedAt(type)` non-empty; with today's data the Town Hall
   and the five unit halls of each faction, the Whirlwind's Holy / Raider / Archer Camp among them). Houses, the drop-off
   camp slot (Quartermaster's Depot / Supply Cache), the Forge, towers and every unfinished site don't keep a side in
-  (they stay standing after the defeat). **A unit** is any live unit, a summoned one (M4-4b-3b) included while it lives: its
+  (since M5-H2 they collapse on the defeat tick: "The collapse" below). **A unit** is any live unit, a summoned one (M4-4b-3b) included while it lives: its
   expiry in phase 5 can end a side on that tick. **The never-built exception**: a player that never had a building is never
   defeated (its units can all die), so units-only sandboxes keep working. Evaluated once a tick in phase 11b, as before, in
   player order, one `DefeatEvent` each; `MatchOver` latched as before.
@@ -6614,12 +6638,28 @@ count). No `Command` kind, no knob, no data change; M5-4b's flags, event, latch,
   money can rebuild (its commands still apply). A defeated player has no unit left by definition, so "orders applied before
   the defeat play out" (M5-4b) can no longer happen; the door still drops every later command (a `SpawnUnit`, a `Build` at a
   dead worker, a `Research` at a Forge still standing).
+- **The collapse (M5-H2, BUG-0703; Producer decision (c), docs/01 2026-10-14).** In phase 11b, right after a player is
+  marked defeated, every building it still has (finished, site, tower, Forge, House) is freed in slot order through
+  `BuildingStore.Free`, the razing path: its queue is refunded and dropped (to a player that is out: the gold no longer
+  matters, the research never completes), its population and requirement counts go, its cells reopen by the pocket rule,
+  its tower state clears. Each gets a `DeathEvent` with `IsBuilding`, killer owner -1 and the new `Collapsed` flag; like an
+  expiry, `RecordDeath` counts **neither a kill nor a loss** for it (Producer decision 2026-10-16: the post-match stats count
+  only what an enemy destroyed), and a view draws rubble as for a razing (only `Expired` skips the marker). Then, if anything
+  collapsed, phase 11's dead-reference sweep (`CombatSystem.DropDeadReferences`) runs once: chasers of a collapsed building
+  stand down, its builders' orders end. Ghosts update as for any razing (the next fog update a cell of the footprint is seen).
+  A projectile a collapsed tower fired before the tick still lands, as a dead archer's does. No allocation (one walk of the
+  building slots per defeated player, stopping at its last building); no new state: the hash sees the freed slots. The
+  golden's `k` lines did not move (no defeat in either recorded match). A defeated player therefore never has a building:
+  the door's drops of `Research` / `Train` at a Forge or hall "still standing" became moot.
 - **Sandboxes.** The never-built exception does **not** cover a scene whose player places a House, a depot, a Forge, a tower or
   a site before it has a unit (it is out on the next tick, its later commands dropped). Such scenes call
   `TestSim.KeepIn(sim, player)`: one summoned worker of the player's faction that never expires and takes no population, on
   the passable cell nearest the far corner (a store seam; a replay scene spawns its keeper through the door instead).
+  Since M5-H2 such a scene also loses the building itself on that tick (the collapse), so the shared staging helpers
+  (`GatherMaps.Building`, `TowerTests.PlaceBuilding`) call `TestSim.KeepInFor` (a keeper at the player's own map corner,
+  `KeepInAt`, only when the staged building would leave the player out), and about 20 older scenes got an explicit keeper.
 - **Tests.** `MatchOverTests` (a hall razed with a worker alive: not out, the worker's death ends it; each building slot that
-  trains nothing with units: out when they die, the building standing; a lone hall site: out; the site finished: in, razed:
+  trains nothing with units: out when they die, the building gone on that tick (M5-H2); a lone hall site: out; the site finished: in, razed:
   out; two halls, one razed: in; never built: never out; two sides on one tick; a summon alone keeps a side in until it
   expires; the door with the dead worker; the AI silent; a recorded match ending by the new rule, its loser's workers killed
   by shift-queued Attacks, played back past `MatchOver`), `DefeatCountsFuzzTests` (3 seeds x 2,000 ticks x 4 players: spawns,
@@ -6629,7 +6669,10 @@ count). No `Command` kind, no knob, no data change; M5-4b's flags, event, latch,
   building is its hall), `AiVersusAiTests.AHallAt1Hp_*` (the loser's units taken away once its hall is down: no hunt before
   M5-4d), `DefeatAiStressTests` (the weak seats start without workers), `QA/DefeatRuleQaTests` (an expiry and a spawn in one
   tick; a summoned builder on a hall site at the exact tick; the losers of the 3-4 seat match place a House with no unit),
-  `AbilityManagerQaTests.ADefeatedSeat_NeverCasts` (its casters go with the defeat).
+  `AbilityManagerQaTests.ADefeatedSeat_NeverCasts` (its casters go with the defeat). M5-H2: `MatchOverTests.TheHouseGoneOnTheDefeatTick_*`
+  (a House, a Forge researching, a tower aiming, a site: four `Collapsed` events, kills and losses unchanged, cells open, the
+  soldier in the old tower's range lives), `ACollapse_HashTwinsEqual`, `FourAiSeats_APlayerCollapsesMidMatch_*` (no defeated
+  player's building after its tick; kills and losses move by exactly the counted deaths); QA's `WinConditionQaTests` rows flipped.
 
 ### Implementation (pathing slice 1)
 
@@ -6650,7 +6693,8 @@ three arrays on `World`, `CombatConstants.SurroundSpotsPerCell`. No `Command`, n
 - **The order.** Fixed: the south face west to east, the north face, the west face south to north, the east face, then the
   corners SW, SE, NW, NE. A pick takes the nearest free spot by squared distance, the lower index on a tie: a loop over an
   array, never a dictionary, so it is deterministic.
-- **Claims.** `World.SurroundClaim` (per unit slot: the spot key = building slot x `SurroundSpots` + spot, -1 none) and
+- **Claims.** `World.SurroundClaim` (per unit slot: the spot key = (owner x building capacity + building slot) x
+  `SurroundSpots` + spot, -1 none; a layer of keys per owner since M5-H2, BUG-0732, so player 0's keys are as before) and
   `World.SurroundHolder` (per spot key: the claimer's slot + 1, 0 none), sized at `World` creation (`SurroundSpots` = the most
   spots any building in the data has). A claim counts only while both arrays name each other **and** the holder is alive and
   still chases that building (same handle): a death, a new order or a new target frees the spot on read, with no clearing
@@ -6670,6 +6714,18 @@ three arrays on `World`, `CombatConstants.SurroundSpotsPerCell`. No `Command`, n
   footprint); else it lets it go and claims the nearest spot nobody claims or stands on. With none free it **waits**: it walks
   the old way (the footprint point nearest it) and re-picks on every later re-aim, so a spot freed by a death or a retreat is
   taken by the nearest waiter (in the test: claimed the tick after the death, struck from 5 ticks later).
+- **Two owners, one building (M5-H2, BUG-0732).** Each owner claims in its own layer, and a rival's claim is never "held"
+  (`HeldByOther` compares owners); a spot is judged by the ground: a rival's unit standing there and striking the same
+  building takes it (`Occupied`), as an own one does. Three seats, two owners on one House: 12 + 8 strike, all 20 spots
+  (the same count as before the layers in that scene: the measured change is nil there; the red-then-green proof is the
+  unit test `SurroundTests.TwoOwnersFromOnePoint_*`: each owner's unit now claims the same nearest spot in its own layer,
+  where before the second took another spot as if a rival's claim were its own side's).
+- **Reachable spots only (M5-H2, BUG-0732).** The pick skips a spot the cached flow fields say the unit can't walk to:
+  the spot cell's own field if cached (a finite cost at the unit's cell), else the unit's walk's goal field (unit and spot
+  both reach the goal or both don't); with neither cached it counts (no field is built for the test). So once a walk to a
+  sealed pocket's spot has failed, nobody claims the pocket again: in the pocket scene 12 of the 20 Heavy Infantry strike
+  (as before) and none drops the order (before: 8 dropped); attack-moving into it, the pocket hold goes from 40 ticks and
+  9 give-ups to 1 tick and 0. No give-up added.
 - **No planting on the way.** A walker with a spot farther than its radius from it doesn't stop to strike when it passes into
   reach (phase 10); stopped short (blocked), it strikes from where it stands. Without this the walkers round a face planted
   between two spots and the House row stayed at 15 / 20.
@@ -6696,7 +6752,8 @@ three arrays on `World`, `CombatConstants.SurroundSpotsPerCell`. No `Command`, n
   queries the spatial hash only for a spot that would win; a kept claim costs one query. No allocation (0 B a tick with 40
   attackers). The 40-attacker scene's mean tick, rule off v on (`FortyAttackers_TickCost_Report`, Debug, 2026-10-15, other
   suites running): 0.057 ms v 0.068 ms over its first 400 ticks.
-- **Memory.** Per unit slot one `int` (10 KB for 2,500 slots); per building slot `SurroundSpots` ints (36 x 4 B x 256 = 36 KB).
+- **Memory.** Per unit slot one `int` (10 KB for 2,500 slots); per player per building slot `SurroundSpots` ints (36 x 4 B x
+  256 = 36 KB a player, 144 KB for four; M5-H2, BUG-0732).
 - **Determinism.** The golden replay's `k` lines didn't move (its match attacks no building); `GatherWedgeQaTests` unchanged.
 - **Tests.** `Combat/SurroundTests`: the four (a) rows (≥ 16 / 20, before and after printed), the Town Hall report rows, (b) a
   fuzz (3 seeds x 300 ticks, 30 attackers on a House and a hall, deaths, re-orders between the two, walks away: no spot held

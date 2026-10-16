@@ -29,10 +29,20 @@ public class AbilityManagerFuzzStressTests
         new(() => AbilityManagerQaTests.Data(castMinTargets: 3)),
     };
 
+    /// <summary>
+    /// BUG-0750 item 4: castMinTargets 1 with both factions' Easy block at <c>useAbilities</c> false (every shipped difficulty
+    /// has it true), so the "an off seat never casts" check below can fail again. Every fourth seed plays on it.
+    /// </summary>
+    private static readonly Lazy<GameData> s_easyOff = new(() => AbilityManagerQaTests.Data(castMinTargets: 1, more: dir =>
+    {
+        foreach (string f in new[] { "malazan", "whirlwind" })
+            dir.EditJson($"factions/{f}/ai.json", root => root["difficulties"]!["easy"]!["useAbilities"] = false);
+    }));
+
     private sealed class Tally
     {
-        public int Scenes, Casts, AtBuildings, Landed, Dropped, Thinks;
-        public override string ToString() => $"{Scenes} scenes, {Thinks} thinks, {Casts} casts ({AtBuildings} at a building), {Landed} landed, {Dropped} dropped";
+        public int Scenes, Casts, AtBuildings, Landed, Dropped, Thinks, OffSeats;
+        public override string ToString() => $"{Scenes} scenes ({OffSeats} with useAbilities off), {Thinks} thinks, {Casts} casts ({AtBuildings} at a building), {Landed} landed, {Dropped} dropped";
     }
 
     /// <summary>
@@ -66,14 +76,17 @@ public class AbilityManagerFuzzStressTests
         _out.WriteLine(tally.ToString());
         Assert.True(tally.Casts > scenes, $"too few casts to mean anything: {tally}");
         Assert.True(tally.AtBuildings > 0, $"no cast at a building: {tally}");
+        Assert.True(tally.OffSeats > 0, $"no scene with a seat whose useAbilities is off: {tally}");
     }
 
     private static ulong RunScene(int seed, Tally tally, bool check, out List<ulong> hashes)
     {
         var rng = new Random(seed);
         GameData data = s_data[rng.Next(3)].Value;
+        if (seed % 4 == 0) data = s_easyOff.Value; // drawn after the pick, so every other seed's scene is as before
         int faction = rng.Next(2);
         AiDifficulty difficulty = (AiDifficulty)rng.Next(3);
+        if (check && seed % 4 == 0 && difficulty == AiDifficulty.Easy) tally.OffSeats++;
         Simulation sim = AbilityManagerQaTests.Scene(data, difficulty, faction, combat: rng.Next(2) == 0);
         World w = sim.World;
         AiPlayer ai = sim.AiOf(0)!;

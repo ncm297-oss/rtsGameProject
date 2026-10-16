@@ -27,7 +27,7 @@ public class TowerPerfTests
     /// </summary>
     public static Simulation Scene(bool towers)
     {
-        var sim = new Simulation(TestSim.Config(Seed: 1, PlayerCount: 2, UnitCapacity: Enemies, CommandCapacity: 2 * Enemies + 32) with { ProjectileCapacity = 64 },
+        var sim = new Simulation(TestSim.Config(Seed: 1, PlayerCount: 2, UnitCapacity: Enemies + 1, CommandCapacity: 2 * Enemies + 32) with { ProjectileCapacity = 64 },
             LocalMovementTests.Flat(128));
         int type = towers ? TowerTests.Watchtower : BuildMaps.House;
         var footprints = new List<(Vector2 Min, Vector2 Max)>();

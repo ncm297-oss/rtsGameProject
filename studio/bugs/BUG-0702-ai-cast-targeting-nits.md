@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open: item 1 (the split groups) only; items 2-3 fixed in M5-H2 (Producer, 2026-10-16-0847 ACCEPT) |
 | Found | 2026-10-13-1616, task M5-4c |
 | System | AI (`Ai/AbilityManager.Target`) |
-| Fixed by | |
+| Fixed by | items 2-3: 47ca4a2 + ac80818 (M5-H2): the no-stacking rule (`AbilityManager.Stacks` / `SentNear` / `ForgetEnded`, the Blackboard's 64-entry recent-cast list; BUG-0760's retry fix in the round), `QA/AbilityManagerQaTests.ThreePriests_OneStormOnOnePoint_TheOthersHoldTheirs` + QA's `SimHardeningM5H2QaTests` rows and 60-scene fuzz; item 3 a docs/03 line ("`range + radius` is a search ring"). Item 1 goes with M5-4f (the densest cluster) |
 
 ## Repro
 1. **Split groups.** `QA/AbilityManagerQaTests.TwoGroupsEitherSide_OneIsCastOn` (skipped, BUG-0702): a Cadre Mage with two
@@ -33,3 +33,6 @@ Possible rules (owner / Producer call): seed the group from the enemy nearest th
 of the centroid of all of them; skip a point another caster was sent to this think (within the radius) for abilities whose
 effect doesn't stack; in docs/03 say that the reach is a search ring and that the cast needs the group within the radius of
 the pulled-back point.
+
+## QA note (2026-10-16-0847, M5-H2)
+Item 2 (no stacking) is in on the branch (`QA/AbilityManagerQaTests.ThreePriests_OneStormOnOnePoint_TheOthersHoldTheirs`), but it broke the judging rule for non-stacking abilities: a storm that never lands is sent once instead of up to MaxTries times (BUG-0760). Item 3 became a docs/03 line ("a search ring"). Item 1 (two groups either side) still skipped (M5-4f).

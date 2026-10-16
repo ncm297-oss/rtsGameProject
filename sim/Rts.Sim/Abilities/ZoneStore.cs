@@ -98,6 +98,9 @@ public sealed class ZoneStore
     /// <summary>Live zones that block vision (derived from <see cref="Count"/>'s zones and their abilities; not hashed).</summary>
     public int BlockerCount { get; private set; }
 
+    /// <summary>BUG-0701: bumped whenever a zone that blocks vision is made or freed, so the fog's "near a blocker" mask knows when to rebuild (derived, not hashed).</summary>
+    internal int BlockerVersion { get; private set; }
+
     /// <summary>Every live slot is below this: a loop over the zones may stop here.</summary>
     internal int End => _end;
 
@@ -140,7 +143,11 @@ public sealed class ZoneStore
         _blocksVision[k] = ability.Effects[ability.ZoneEffect].BlocksVision;
         ClearFogRecord(k); // no fog update has seen it yet: nothing inside it is seen until one has
         Count++;
-        if (_blocksVision[k]) BlockerCount++;
+        if (_blocksVision[k])
+        {
+            BlockerCount++;
+            BlockerVersion++;
+        }
         if (k >= _end) _end = k + 1;
         return k;
     }
@@ -151,7 +158,11 @@ public sealed class ZoneStore
     /// <summary>Frees live slot <paramref name="slot"/> (its time is up).</summary>
     internal void Free(int slot)
     {
-        if (_blocksVision[slot]) BlockerCount--;
+        if (_blocksVision[slot])
+        {
+            BlockerCount--;
+            BlockerVersion++;
+        }
         _alive[slot] = false;
         _owner[slot] = 0;
         _center[slot] = default;

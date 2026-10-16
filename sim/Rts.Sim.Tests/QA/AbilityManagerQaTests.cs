@@ -211,12 +211,13 @@ public class AbilityManagerQaTests
     }
 
     /// <summary>
-    /// Three Priests beside one group: their storms all land on the same point in the same think (no spread, no hold-back).
-    /// Wasteful (one storm blinds and slows the group as well as three: the statuses refresh, they don't stack) but legal;
-    /// pinned here so a change of that rule is seen. Also: each Priest sends one cast, not one a think (no re-cast loop).
+    /// Three Priests beside one group. BUG-0702 item 2 (M5-H2): one storm blinds and slows the group as well as three (the
+    /// statuses refresh, they don't stack), so while it runs only the first Priest casts on the point; the others keep their
+    /// cooldowns (before: all three cast on one point in one think), and one casts again once it is over. Also: no re-cast
+    /// loop over 20 thinks (each Priest casts once at most).
     /// </summary>
     [Fact]
-    public void ThreePriests_StackTheirStorms_OnePoint_OneCastEach()
+    public void ThreePriests_OneStormOnOnePoint_TheOthersHoldTheirs()
     {
         Simulation sim = Scene(s_data.Value, faction: 1);
         Vector2 rally = sim.AiOf(0)!.Board.Rally;
@@ -224,10 +225,11 @@ public class AbilityManagerQaTests
         for (int k = 0; k < 4; k++) Enemy(sim, "malazan_heavy_infantry", rally + new Vector2(10f, k - 1.5f));
         List<Command> casts = Casts(sim);
         for (int t = 0; t < 20; t++) NextThink(sim); // 20 thinks: well inside the 45 s cooldown
-        Assert.Equal(3, casts.Count);
-        Assert.Single(casts.Select(c => c.Tick).Distinct());
-        Assert.All(casts, c => Assert.True(Vector2.Distance(c.Position, casts[0].Position) < 0.01f));
-        Assert.Equal(3, casts.Select(c => c.Unit).Distinct().Count());
+        AbilityDef storm = Ability(sim.World.Data, "sandstorm");
+        Assert.NotEmpty(casts);
+        int ends = casts[0].Tick + storm.CastTicks + storm.DurationTicks;
+        Assert.Single(casts.Where(c => c.Tick < ends && Vector2.Distance(c.Position, casts[0].Position) <= storm.Radius));
+        Assert.Equal(casts.Count, casts.Select(c => c.Unit).Distinct().Count());
     }
 
     /// <summary>

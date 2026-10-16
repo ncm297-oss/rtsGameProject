@@ -14,4 +14,9 @@ namespace Rts.Sim.Combat;
 /// M4-4b-3b: a summoned unit whose lifetime ran out (phase 5), not a kill: no killer (<paramref name="KillerOwner"/> -1), no
 /// kill or loss counted, no <c>onDeath</c> passive. A view may show it differently from a death.
 /// </param>
-public readonly record struct DeathEvent(EntityHandle Victim, bool IsBuilding, int VictimType, int VictimOwner, int KillerOwner, Vector2 Position, bool Expired = false);
+/// <param name="Collapsed">
+/// M5-H2 (BUG-0703): a building of a player that was defeated this tick, freed on its defeat tick (docs/02 "Game flow" 4):
+/// no killer (<paramref name="KillerOwner"/> -1), no kill or loss counted (the stats count only what an enemy destroyed); a
+/// view shows it as a razing (rubble).
+/// </param>
+public readonly record struct DeathEvent(EntityHandle Victim, bool IsBuilding, int VictimType, int VictimOwner, int KillerOwner, Vector2 Position, bool Expired = false, bool Collapsed = false);

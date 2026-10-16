@@ -189,6 +189,7 @@ public class PlayerViewMemoryTests
     {
         Simulation sim = Placement();
         int house = BuildMaps.House;
+        TestSim.KeepIn(sim, 1); // M5-H2: else player 1, no unit, is out and its building collapses (BUG-0703)
         Assert.True(sim.World.Buildings.Spawn(1, BuildMaps.WhirlwindHouse, 2 * Size + 16, out EntityHandle enemy));
         FogMaps.RunThroughNextUpdate(sim); // seen by the top scouts
         UnitStore u = sim.World.Units;

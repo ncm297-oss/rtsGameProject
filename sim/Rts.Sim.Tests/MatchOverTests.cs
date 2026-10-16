@@ -1,5 +1,6 @@
 using System.Numerics;
 using Rts.Sim.Ai;
+using Rts.Sim.Combat;
 using Rts.Sim.Commands;
 using Rts.Sim.Data;
 using Rts.Sim.Economy;
@@ -92,10 +93,10 @@ public class MatchOverTests
 
     /// <summary>
     /// M5-4e (b): units and only a building that trains nothing (each such slot of the faction in turn: House, Camp, Forge,
-    /// tower): not defeated. The units die: defeated, the building still standing.
+    /// tower): not defeated. The units die: defeated, and (M5-H2, BUG-0703) the building collapses on that tick.
     /// </summary>
     [Fact]
-    public void UnitsAndOnlyABuildingThatTrainsNothing_TheUnitsDie_Defeated_TheBuildingStanding()
+    public void UnitsAndOnlyABuildingThatTrainsNothing_TheUnitsDie_Defeated_TheBuildingGoneOnTheDefeatTick()
     {
         int checkedSlots = 0;
         foreach (BuildingSlot slot in Enum.GetValues<BuildingSlot>())
@@ -117,13 +118,158 @@ public class MatchOverTests
             sim.Tick();
             Assert.True(w.IsDefeated(0), $"{slot}");
             Assert.Equal(new[] { new DefeatEvent(0, sim.TickNumber - 1) }, w.DefeatEvents.ToArray());
-            Assert.True(w.Buildings.IsAlive(own), $"{slot}: the building went");
+            Assert.False(w.Buildings.IsAlive(own), $"{slot}: the building stands after the defeat");
             Assert.True(sim.MatchOver);
         }
         Assert.True(checkedSlots >= 2, "precondition: the faction has a house and at least one more slot that trains nothing");
     }
 
-    /// <summary>M5-4e (c): no unit and an unfinished hall site: defeated (a site never counts); the site stands.</summary>
+    /// <summary>
+    /// M5-H2 (BUG-0703) scene: player 0 holds a House, a Forge researching, a Watchtower and a hall site, and one worker (its
+    /// last unit); player 1 a hall and a soldier parked in the tower's range.
+    /// </summary>
+    private static (Simulation Sim, EntityHandle Worker, EntityHandle Soldier, EntityHandle[] Buildings, int Tech) CollapseScene()
+    {
+        Simulation sim = CombatScenes.Flat(48, 64, 2);
+        World w = sim.World;
+        TestSim.Explored(sim);
+        EntityHandle worker = UnitOf(sim, 0, 4, 40);
+        EntityHandle house = Building(sim, 0, 6, 20), forge = Building(sim, 0, 6, 6, slot: BuildingSlot.Forge);
+        EntityHandle tower = Building(sim, 0, 20, 20, slot: BuildingSlot.WatchTower);
+        EntityHandle site = Building(sim, 0, 16, 6, site: true, slot: BuildingSlot.TownHall);
+        Building(sim, 1, 34, 34, slot: BuildingSlot.TownHall);
+        BuildMaps.SetTotals(sim, 0, 50_000, 50_000);
+        int tech = -1;
+        foreach (int t in w.Data.TechsResearchableAt(w.Buildings.TypeId[forge.Index]))
+            if (tech < 0 && w.CanResearch(0, forge.Index, t, out _)) tech = t;
+        Assert.True(tech >= 0, "precondition: a tech researchable at the Forge");
+        sim.Enqueue(Command.Research(0, Centre(sim, forge), tech));
+        EntityHandle soldier = UnitOf(sim, 1, 24, 21, UnitSlot.Line);
+        return (sim, worker, soldier, new[] { house, forge, tower, site }, tech);
+    }
+
+    /// <summary>
+    /// M5-H2 (BUG-0703, docs/02 "Game flow" 4): the House gone on the defeat tick, and with it every other building of the
+    /// side that is out (a Forge researching, a tower aiming at a soldier, a site): one <see cref="DeathEvent.Collapsed"/>
+    /// event each, no killer, neither a kill nor a loss counted, the cells open, the research gone (never researched). The
+    /// tower shoots no more: player 1's soldier parked in its range lives on and player 0's kills stay put.
+    /// </summary>
+    [Fact]
+    public void TheHouseGoneOnTheDefeatTick_EveryBuildingCollapses_NeitherAKillNorALoss()
+    {
+        (Simulation sim, EntityHandle worker, EntityHandle soldier, EntityHandle[] buildings, int tech) = CollapseScene();
+        World w = sim.World;
+        for (int t = 0; t < 400 && w.Buildings.TowerTarget[buildings[2].Index] != soldier; t++) sim.Tick();
+        Assert.True(w.Buildings.TowerTarget[buildings[2].Index] == soldier, "precondition: the tower aims at the soldier");
+        Assert.Equal(1, w.Buildings.QueueCount[buildings[1].Index]);
+        int[] kills = w.Kills.ToArray(), losses = w.Losses.ToArray();
+        var cells = new int[buildings.Length];
+        for (int k = 0; k < buildings.Length; k++) cells[k] = w.Buildings.Cell[buildings[k].Index];
+        w.Units.Free(worker);
+        sim.Tick();
+        Assert.Equal(new[] { new DefeatEvent(0, sim.TickNumber - 1) }, w.DefeatEvents.ToArray());
+        DeathEvent[] collapsed = w.Deaths.ToArray().Where(d => d.Collapsed).ToArray();
+        Assert.Equal(buildings.Length, collapsed.Length);
+        foreach (DeathEvent d in collapsed)
+        {
+            Assert.True(d.IsBuilding && d.VictimOwner == 0 && d.KillerOwner == -1 && !d.Expired, $"{d}");
+            Assert.Contains(d.Victim, buildings);
+        }
+        for (int k = 0; k < buildings.Length; k++)
+        {
+            Assert.False(w.Buildings.IsAlive(buildings[k]), $"building {k} stands after the defeat");
+            Assert.True(w.NavGrid.IsPassable(cells[k] % w.NavGrid.Width, cells[k] / w.NavGrid.Width), $"building {k}'s anchor cell stayed shut");
+        }
+        Assert.Equal(0, w.Ledger.LiveBuildings[0]);
+        Assert.Equal(kills, w.Kills.ToArray());
+        Assert.Equal(losses, w.Losses.ToArray());
+        for (int t = 0; t < 600; t++) sim.Tick();
+        Assert.True(w.Units.IsAlive(soldier), "the soldier died after the tower collapsed");
+        Assert.False(w.HasTech(0, tech));
+        Assert.Equal(kills[0], w.Kills[0]);
+    }
+
+    /// <summary>M5-H2 (BUG-0703): two runs of the collapse scene hash equal after every tick, through the defeat tick and 200 ticks after it.</summary>
+    [Fact]
+    public void ACollapse_HashTwinsEqual()
+    {
+        var a = CollapseScene();
+        var b = CollapseScene();
+        int defeatedAt = -1;
+        for (int t = 0; t < 600 && (defeatedAt < 0 || t < defeatedAt + 200); t++)
+        {
+            if (t == 120)
+            {
+                a.Sim.World.Units.Free(a.Worker);
+                b.Sim.World.Units.Free(b.Worker);
+            }
+            a.Sim.Tick();
+            b.Sim.Tick();
+            Assert.True(a.Sim.StateHash() == b.Sim.StateHash(), $"the twins differ after tick {a.Sim.TickNumber - 1}");
+            if (defeatedAt < 0 && a.Sim.World.IsDefeated(0)) defeatedAt = t;
+        }
+        Assert.Equal(120, defeatedAt);
+        Assert.Equal(0, a.Sim.World.Ledger.LiveBuildings[0]);
+    }
+
+    /// <summary>
+    /// M5-H2 (BUG-0703): four AI seats on the flat scene, combat on, the early-wave data; seat 3's workers gone and a House
+    /// beside its hall, and at tick 600 its hall razed (a store seam), so it falls mid-match and the House collapses. After
+    /// every tick: no building of a defeated player stands (so none acts after
+    /// its tick), and each player's kills and losses moved by exactly the tick's counted deaths (a collapse moves neither).
+    /// </summary>
+    [Fact]
+    public void FourAiSeats_APlayerCollapsesMidMatch_NothingOfItsActsAfter_TheStatsUnmoved()
+    {
+        var seats = new PlayerSeat[]
+        {
+            new(0, SeatController.Ai, AiDifficulty.Normal), new(1, SeatController.Ai, AiDifficulty.Normal),
+            new(0, SeatController.Ai, AiDifficulty.Hard), new(1, SeatController.Ai, AiDifficulty.Easy),
+        };
+        Simulation sim = AiScenes.Flat(seats, AiScenes.EarlyWaves(2), units: 600, commands: 1024, seed: 5, combat: true);
+        World w = sim.World;
+        for (int p = 0; p < 3; p++) BuildMaps.SetTotals(sim, p, 3000, 3000);
+        BuildMaps.SetTotals(sim, 3, 0, 0);
+        EntityHandle hall3 = default;
+        for (int k = 0; k < w.Buildings.Capacity; k++)
+            if (w.Buildings.Alive[k] && w.Buildings.Owner[k] == 3) hall3 = w.Buildings.HandleOf(k);
+        for (int i = 0; i < w.Units.Capacity; i++)
+            if (w.Units.Alive[i] && w.Units.Owner[i] == 3) w.Units.Free(new EntityHandle(i, w.Units.Generation[i]));
+        // A House beside seat 3's hall: still standing when the hall falls, so it collapses.
+        (int h3x, int h3y) = AiScenes.HallAt(3);
+        int house3 = StartBase.BuildingOfSlot(w.Data, w.FactionOf(3), BuildingSlot.House);
+        bool placed = false;
+        for (int d = 6; d < 14 && !placed; d++)
+            foreach ((int dx, int dy) in new[] { (d, 0), (-d, 0), (0, d), (0, -d) })
+                if (!placed) placed = w.Buildings.Spawn(3, house3, (h3y + dy) * w.NavGrid.Width + h3x + dx, out _);
+        Assert.True(placed, "precondition: a House for seat 3");
+        int line = StartBase.UnitOfSlot(w.Data, w.FactionOf(2), UnitSlot.Line);
+        (int hx, int hy) = AiScenes.HallAt(2);
+        for (int k = 0; k < 8; k++) CombatScenes.Place(sim, 2, line, w.NavGrid.CellCenter(hx + k % 4, hy + 6 + k / 4));
+        int[] kills = w.Kills.ToArray(), losses = w.Losses.ToArray();
+        int collapses = 0, defeatTick = -1;
+        for (int t = 0; t < 2000; t++)
+        {
+            if (t == 600) w.Buildings.Damage(hall3, int.MaxValue);
+            sim.Tick();
+            foreach (DeathEvent d in w.Deaths)
+            {
+                if (d.Collapsed) collapses++;
+                if (d.Expired || d.Collapsed) continue;
+                if (d.KillerOwner >= 0) kills[d.KillerOwner]++;
+                losses[d.VictimOwner]++;
+            }
+            Assert.Equal(kills, w.Kills.ToArray());
+            Assert.Equal(losses, w.Losses.ToArray());
+            foreach (DefeatEvent e in w.DefeatEvents) if (e.Player == 3) defeatTick = e.Tick;
+            for (int k = 0; k < w.Buildings.Capacity; k++)
+                if (w.Buildings.Alive[k]) Assert.False(w.IsDefeated(w.Buildings.Owner[k]), $"tick {sim.TickNumber - 1}: defeated player {w.Buildings.Owner[k]}'s building {k} stands");
+        }
+        Assert.Equal(600, defeatTick);
+        Assert.True(collapses >= 1, "precondition: seat 3 had a building left to collapse");
+    }
+
+    /// <summary>M5-4e (c): no unit and an unfinished hall site: defeated (a site never counts); the site collapses on that tick (M5-H2).</summary>
     [Fact]
     public void NoUnitAndAnUnfinishedHallSite_IsDefeated()
     {
@@ -135,7 +281,7 @@ public class MatchOverTests
         sim.Tick();
         Assert.True(w.IsDefeated(0));
         Assert.Equal(new[] { new DefeatEvent(0, sim.TickNumber - 1) }, w.DefeatEvents.ToArray());
-        Assert.True(w.Buildings.IsAlive(site));
+        Assert.False(w.Buildings.IsAlive(site));
         Assert.True(sim.MatchOver);
     }
 
@@ -302,10 +448,10 @@ public class MatchOverTests
             int type0 = StartBase.UnitOfSlot(w.Data, w.FactionOf(0), UnitSlot.Worker), type1 = StartBase.UnitOfSlot(w.Data, w.FactionOf(1), UnitSlot.Worker);
             worker0 = CombatScenes.Place(sim, 0, type0, CombatScenes.At(sim, 8, 16));
             worker1 = CombatScenes.Place(sim, 1, type1, CombatScenes.At(sim, 30, 16));
-            // Its worker killed, the site alone is out on the next tick (a site doesn't keep a side in) and stays.
+            // Its worker killed, the site alone is out on the next tick (a site doesn't keep a side in) and collapses (M5-H2).
             w.Units.Free(worker0);
             Applied(sim);
-            Assert.True(w.Buildings.IsAlive(site0));
+            Assert.False(w.Buildings.IsAlive(site0));
             Assert.True(w.IsDefeated(0));
             // The placement query agrees with the door: the defeated player's ghost is refused (last, after every other rule).
             Assert.False(w.CanPlace(0, Type(sim, 0, BuildingSlot.House), 24 * 48 + 6, out PlacementError why0));
@@ -350,8 +496,8 @@ public class MatchOverTests
         }
         Assert.Equal(1, sites);
         Assert.True(units1 >= 3, $"player 1 has {units1} units: its Train or spawn didn't apply");
-        // Player 0's dropped: no new building (its site stands), no unit (the SpawnUnit didn't land).
-        Assert.Equal(1, w.Ledger.LiveBuildings[0]);
+        // Player 0's dropped: no building (its site collapsed, the Build didn't land), no unit (the SpawnUnit didn't land).
+        Assert.Equal(0, w.Ledger.LiveBuildings[0]);
         Assert.Equal(0, units0);
         Assert.Equal(0, w.LiveUnits(0));
         Assert.Equal(0, a.PendingCommandCount);

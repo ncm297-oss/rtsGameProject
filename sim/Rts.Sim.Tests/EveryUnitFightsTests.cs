@@ -46,9 +46,12 @@ public class EveryUnitFightsTests
         {
             Assert.True(w.Buildings.Spawn(1, data.FindBuilding("whirlwind_tent"), 24 * w.NavGrid.Width + 24, out EntityHandle tent));
             EntityHandle a = Place(sim, 0, type, new Vector2(48f - gap - data.Units[type].Radius, 50f));
+            TestSim.KeepIn(sim, 1); // BUG-0762 (rule 24): else player 1, a Tent and no unit, is out on tick 0 and the Tent collapses
             sim.Enqueue(Command.Attack(0, a, tent, isBuilding: true));
             int full = w.Buildings.Hp[tent.Index];
             ticks = RunUntil(sim, () => w.Buildings.Hp[tent.Index] < full, 400);
+            // BUG-0762: a freed slot reads Hp 0, so a Tent that collapsed (its owner out) would pass as the attacker's damage.
+            Assert.True(w.Buildings.IsAlive(tent), $"{key}: the Tent was freed (collapsed or razed) after {ticks} ticks, nothing measured");
             damage = full - w.Buildings.Hp[tent.Index];
         }
         else

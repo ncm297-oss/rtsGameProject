@@ -62,6 +62,7 @@ public class OrderedChaseReachTests
         Assert.True(sim.World.Buildings.Spawn(1, Tent, 4 * sim.World.NavGrid.Width + 25, out EntityHandle tent));
         Spotter(sim, 0, At(sim, 30, 8)); // the tent stays in player 0's sight
         EntityHandle unit = Place(sim, 0, HeavyInfantry, At(sim, 14, 4));
+        TestSim.KeepIn(sim, 1); // M5-H2: else player 1, no unit, is out and its building collapses (BUG-0703)
         Apply(sim);
         sim.Enqueue(Command.Attack(0, unit, tent, isBuilding: true));
         Apply(sim);

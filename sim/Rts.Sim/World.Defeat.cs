@@ -1,10 +1,13 @@
 using System;
+using System.Numerics;
+using Rts.Sim.Combat;
+using Rts.Sim.Entities;
 
 namespace Rts.Sim;
 
 // The defeat rule (docs/02 "Game flow" 4, docs/03 "Implementation (M5-4e)"; M5-4b's flags and event). A player that has
 // had a building and now has no live unit and no finished unit-producing building is defeated, once and for good; a player
-// that never built is never defeated.
+// that never built is never defeated. M5-H2 (BUG-0703): on its defeat tick every building it still has collapses.
 public sealed partial class World
 {
     // At most one event per player a tick; sized in the constructor.
@@ -67,12 +70,37 @@ public sealed partial class World
     /// </summary>
     internal void UpdateDefeats()
     {
+        bool collapsed = false;
         for (int p = 0; p < _ledger.Defeated.Length; p++)
         {
             if (!_ledger.EverBuilt[p] || _ledger.Defeated[p] || _ledger.LiveUnits[p] > 0 || _ledger.ProductionBuildings[p] > 0) continue;
             _ledger.Defeated[p] = true;
             _defeatEvents[DefeatEventCount++] = new DefeatEvent(p, TickNumber);
+            collapsed |= Collapse(p);
         }
+        // As after phase 11's deaths: chasers of a collapsed building stand down, its builders stop.
+        if (collapsed) CombatSystem.DropDeadReferences(this);
         if (!_matchOverLatched && HasResult()) _matchOverLatched = true;
+    }
+
+    /// <summary>
+    /// M5-H2 (BUG-0703, docs/02 "Game flow" 4): every building <paramref name="player"/> still has (finished, site, tower,
+    /// Forge, House) is freed as a razed one is, in slot order, each with a <see cref="DeathEvent.Collapsed"/> event (no
+    /// killer, neither a kill nor a loss); its queue goes with it (refunded to the player that is out, as any freed
+    /// building's) and its cells reopen. True if any building went.
+    /// </summary>
+    private bool Collapse(int player)
+    {
+        if (_ledger.LiveBuildings[player] == 0) return false;
+        BuildingStore b = Buildings;
+        for (int k = 0; k < b.Capacity && _ledger.LiveBuildings[player] > 0; k++)
+        {
+            if (!b.Alive[k] || b.Owner[k] != player) continue;
+            CombatSystem.BuildingRect(this, k, out Vector2 min, out Vector2 max);
+            EntityHandle h = b.HandleOf(k);
+            RecordDeath(new DeathEvent(h, true, b.TypeId[k], player, -1, (min + max) * 0.5f, Collapsed: true));
+            b.Free(h);
+        }
+        return true;
     }
 }

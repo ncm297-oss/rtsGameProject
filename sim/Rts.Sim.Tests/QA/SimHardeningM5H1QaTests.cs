@@ -306,7 +306,7 @@ public class SimHardeningM5H1QaTests
     /// the twin's 59, gold + wood 1,160 against 1,730 (67%), pop 22 against 29. The site is hand-spawned past the placement
     /// rules (the never-seal rule keeps a placed site reachable), so this is an S4.
     /// </summary>
-    [Fact(Skip = "BUG-0650: the resume path never gives up on a site no worker can reach; a join every 3 thinks costs a third of the income")]
+    [Fact] // BUG-0650, fixed in M5-H2: after EconomyManager.MaxJoins joins with no work done the site is left alone
     public void AnUnreachableOwnSite_ResumeChurnIsBounded_TheEconomyKeepsGoing()
     {
         GameData data = TestSim.Data;

@@ -95,6 +95,7 @@ public class SplashTests
         World w = sim.World;
         BuildingStore b = w.Buildings;
         // An enemy Tent (cells 24-25) and an own Billet (cells 22-23) side by side, the stone aimed at the Tent's west edge.
+        TestSim.KeepIn(sim, 1); // M5-H2: player 1 has no unit, and its Tent would collapse with its defeat (BUG-0703)
         Assert.True(b.Spawn(1, Tent, 24 * w.NavGrid.Width + 24, out EntityHandle tent));
         Assert.True(b.Spawn(0, Billet, 24 * w.NavGrid.Width + 22, out EntityHandle billet));
         EntityHandle c = Place(sim, 0, Catapult, At(sim, 24, 34, dx: -1f));

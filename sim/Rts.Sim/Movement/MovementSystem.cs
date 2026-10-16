@@ -359,12 +359,29 @@ public static class MovementSystem
                 // so walkers that can get round a blob don't plough through it.
                 Vector2 pushing = WalkStep(world, grid, u, i, pos, cx, cy, desired, flowStep, forward, near, count, goalCell, true);
                 float afterPushing = aimRemaining + Vector2.Distance(aim, pos + pushing);
-                if (pushing != step && afterPushing < aimRemaining + Vector2.Distance(aim, pos) - margin)
+                float now = aimRemaining + Vector2.Distance(aim, pos) - margin;
+                if (pushing != step && afterPushing < now)
                 {
                     step = pushing;
                     after = MathF.Min(best, afterPushing);
                     act = ActPush;
                     pushArrived = true;
+                }
+                else if (side != Vector2.Zero && step.LengthSquared() < margin * margin && !OnFootprintWalk(u, i) && !CanStep(grid, cx, cy, pos + desired))
+                {
+                    // BUG-0745: against a wall (the step it wants crosses into blocked ground), the sidestep round idle
+                    // friends ahead can cancel the flow step's way along the wall, so the slide is next to nothing (under
+                    // the progress margin) and the walker stands pinned there for good. Not a worker's walk to a footprint
+                    // (its queue at a node or site has rules of its own: BUG-0146). The flow step alone, with
+                    // every standing unit a wall (no shove), slides it on past them; the count holds as for a push.
+                    Vector2 sliding = WalkStep(world, grid, u, i, pos, cx, cy, ClampLength(flowStep + push, speed), flowStep, forward, near, count, goalCell, false);
+                    float afterSliding = aimRemaining + Vector2.Distance(aim, pos + sliding);
+                    if (sliding != step && afterSliding < now)
+                    {
+                        step = sliding;
+                        after = MathF.Min(best, afterSliding);
+                        act = ActPush;
+                    }
                 }
             }
             planned[i] = step;

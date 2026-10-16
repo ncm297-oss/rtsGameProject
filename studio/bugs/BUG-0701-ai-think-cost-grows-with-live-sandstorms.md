@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (M5-H2, verified by QA 2026-10-16-0847) |
 | Found | 2026-10-13-1616, task M5-4c (the developer's bug candidate; measured by QA) |
 | System | fog / AI view (`FogStore.NextSeenUnit`), `Ai/AiPerfTests` |
-| Fixed by | |
+| Fixed by | 47ca4a2 (M5-H2), `AiPerfTests.EightAiSeats_Over2500Units_EightShippedStormsAlive_AThinkUnder1Ms` |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~AThink_WithShippedSandstormsAlive_Measured" --logger "console;verbosity=detailed"`
@@ -39,3 +39,6 @@ developer measured about 3 ms per seat per think.
 - Suggested: keep the fast path and test only units near a blocking zone (e.g. a per-cell "near a blocker" mask like the
   one `FogStore.Update` builds), and give `Ai/AiPerfTests` a row with shipped storms (a fixed count such as 8, not
   cooldowns cleared every think).
+
+## QA verification (2026-10-16-0847, M5-H2)
+The 8-storm row on base code (head's test file) vs head, alone: avg think 1.368 / 1.127 ms (over the 1 ms budget) -> 0.274 / 0.245 ms. The no-storm cursor rows equal within noise (enumerate 0.247-0.259 ms both trees). The mask is held to `CanSeeUnit` by the oracle fuzzes: a stale-mask mutant turns 5 / 12 of their rows red, a box shrunk by a cell 12 / 12.
