@@ -112,6 +112,7 @@ public class CusserQaTests
         BuildingStore b = w.Buildings;
         int keep = GatherMaps.Keep;
         int width = w.NavGrid.Width;
+        TestSim.KeepIn(sim, 1); // M5-H2: else player 1, no unit, is out and its building collapses (BUG-0703)
         Assert.True(b.Spawn(1, keep, 19 * width + 14, out EntityHandle site, site: true));
         int needed = b.WorkNeeded(keep), max = w.Data.Buildings[keep].Hp;
         b.SetWork(site.Index, needed / 2);

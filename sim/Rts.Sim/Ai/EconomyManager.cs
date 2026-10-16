@@ -14,7 +14,9 @@ namespace Rts.Sim.Ai;
 /// <c>ai.defendFor</c> has passed since it fled, and while the threat holds no worker is sent to a node within
 /// <c>ai.workerFleeRadius</c> of the defense point (BUG-0671). M5-H1 (BUG-0640): an own site no worker has as its build target for
 /// <see cref="StalledThinks"/> thinks gets a worker sent to join it (a Build of its type at its anchor: the idle worker
-/// nearest it, else the nearest gatherer), and such a stalled house site does not hold the house rule off.
+/// nearest it, else the nearest gatherer), and such a stalled house site does not hold the house rule off. M5-H2 (BUG-0650):
+/// after <see cref="MaxJoins"/> joins with no rise in the site's hit points (no worker ever got to work it) it is left
+/// alone until they rise.
 /// </summary>
 internal static class EconomyManager
 {
@@ -28,6 +30,12 @@ internal static class EconomyManager
     /// worker sent and not yet counted, isn't taken for an abandoned site. Not a balance number: a guard.
     /// </summary>
     internal const int StalledThinks = 3;
+
+    /// <summary>
+    /// Joins sent to one site without its hit points rising before the AI stops sending workers to it (BUG-0650: a site no
+    /// worker can reach). Not a balance number: a guard, like <see cref="MilitaryManager.MaxTries"/>.
+    /// </summary>
+    internal const int MaxJoins = 3;
 
     /// <summary>Resumes stalled sites, runs the house rule, then sends the idle workers to gather.</summary>
     internal static void Run(AiPlayer ai)
@@ -91,15 +99,20 @@ internal static class EconomyManager
             {
                 board.SiteGeneration[slot] = site.Handle.Generation;
                 board.SiteStill[slot] = 0;
+                board.SiteJoins[slot] = 0;
             }
             if (board.SiteBuiltAt[slot] == ai.Now) board.SiteStill[slot] = 0;
             else if (board.SiteStill[slot] < byte.MaxValue) board.SiteStill[slot]++;
             if (sent || board.SiteStill[slot] < StalledThinks) continue;
+            if (site.Hp > board.SiteJoinHp[slot]) board.SiteJoins[slot] = 0; // worked since the last join
+            if (board.SiteJoins[slot] >= MaxJoins) continue; // nobody gets there: left alone until it is worked
             int worker = ai.PickBuilder(ai.BuildingCentre(site.TypeId, site.Cell), out int generation);
             if (worker < 0) continue;
             if (!ai.Send(Command.Build(ai.Player, new EntityHandle(worker, generation), site.TypeId, ai.CellCentre(site.Cell)))) return;
             ai.MarkOrdered(worker, generation, 0);
             board.SiteStill[slot] = 0;
+            board.SiteJoins[slot]++;
+            board.SiteJoinHp[slot] = site.Hp;
             sent = true;
         }
     }

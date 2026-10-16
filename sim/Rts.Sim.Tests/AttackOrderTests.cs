@@ -317,6 +317,7 @@ public class AttackOrderTests
         EntityHandle a = Place(sim, 0, HeavyInfantry, At(sim, 10, 24));
         EntityHandle b = Place(sim, 1, Laborer, At(sim, 24, 30));
         EntityHandle tent = PlaceTent(sim, 30, 10);
+        TestSim.KeepIn(sim, 1); // M5-H2: else b's death puts player 1 out and the Tent collapses (BUG-0703)
         sim.Enqueue(Command.HoldPosition(1, b));
         Spot(sim, 0, b); // M4-3a: both targets out of sight: spotted, else the fog drops the orders
         Spotter(sim, 0, At(sim, 36, 11));

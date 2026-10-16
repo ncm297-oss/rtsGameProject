@@ -78,19 +78,39 @@ public static class TestSim
     /// would fight): pass <paramref name="nearCorner"/> for one of them to use the passable cell nearest cell (0, 0).
     /// </para>
     /// </summary>
-    public static Rts.Sim.Entities.EntityHandle KeepIn(Simulation sim, int player, bool nearCorner = false)
+    public static Rts.Sim.Entities.EntityHandle KeepIn(Simulation sim, int player, bool nearCorner = false) =>
+        KeepInAt(sim, player, nearCorner ? 0 : 3);
+
+    /// <summary>
+    /// M5-H2 (standing rule 24, BUG-0703): keeps <paramref name="player"/> in (<see cref="KeepInAt"/>, corner player mod 4)
+    /// when a building of <paramref name="type"/> (a <paramref name="site"/> or not) about to be staged would leave it out on
+    /// the next tick: it has no live unit, no finished unit-producing building, and this one won't be one either.
+    /// </summary>
+    public static void KeepInFor(Simulation sim, int player, int type, bool site = false)
+    {
+        World w = sim.World;
+        if (w.LiveUnits(player) > 0 || w.ProductionBuildings(player) > 0) return;
+        if (!site && (uint)type < (uint)w.Data.Buildings.Length && !w.Data.UnitsTrainedAt(type).IsEmpty) return;
+        KeepInAt(sim, player, player % 4);
+    }
+
+    /// <summary>
+    /// <see cref="KeepIn"/> at map corner <paramref name="corner"/> (bit 0: the high-x side, bit 1: the high-y side; 0 is cell
+    /// (0, 0), 3 the far corner), so up to four players kept in a scene don't share a cell (M5-H2).
+    /// </summary>
+    public static Rts.Sim.Entities.EntityHandle KeepInAt(Simulation sim, int player, int corner)
     {
         World w = sim.World;
         Map.NavGrid g = w.NavGrid;
-        int worker =Rts.Sim.ViewApi.StartBase.UnitOfSlot(w.Data, w.FactionOf(player), UnitSlot.Worker);
-        int cells = g.Width * g.Height;
-        for (int k = 0; k < cells; k++)
-        {
-            int c = nearCorner ? k : cells - 1 - k;
-            if (!g.IsPassable(c % g.Width, c / g.Width)) continue;
-            Assert.True(w.Units.TrySpawn(player, worker, w.Data.Units[worker], g.CellCenter(c % g.Width, c / g.Width), int.MaxValue, out Rts.Sim.Entities.EntityHandle h));
-            return h;
-        }
+        int worker = Rts.Sim.ViewApi.StartBase.UnitOfSlot(w.Data, w.FactionOf(player), UnitSlot.Worker);
+        for (int dy = 0; dy < g.Height; dy++)
+            for (int dx = 0; dx < g.Width; dx++)
+            {
+                int x = (corner & 1) != 0 ? g.Width - 1 - dx : dx, y = (corner & 2) != 0 ? g.Height - 1 - dy : dy;
+                if (!g.IsPassable(x, y)) continue;
+                Assert.True(w.Units.TrySpawn(player, worker, w.Data.Units[worker], g.CellCenter(x, y), int.MaxValue, out Rts.Sim.Entities.EntityHandle h));
+                return h;
+            }
         throw new InvalidOperationException("no passable cell");
     }
 }

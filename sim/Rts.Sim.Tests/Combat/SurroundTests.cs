@@ -108,6 +108,33 @@ public class SurroundTests
         return c >= 0 && w.SurroundHolder[c] == i + 1 ? c : -1;
     }
 
+    // BUG-0732: two owners (three seats) attack one House from one point: each claims in its own layer, so player 2's unit
+    // takes the same nearest spot as player 0's (a rival's claim is not "held"; before, it took another spot as if its own
+    // side held that one). Both keys name the House's slot in their owner's layer.
+    [Fact]
+    public void TwoOwnersFromOnePoint_EachClaimsTheNearestSpotInItsOwnLayer()
+    {
+        var sim = new Simulation(TestSim.Config(7, 3, 16, 64), LocalMovementTests.Flat(MapSize));
+        World w = sim.World;
+        TestSim.KeepIn(sim, 1);
+        Assert.True(w.Buildings.Spawn(1, BuildingFor(HeavyInfantry, BuildingSlot.House), AnchorY * MapSize + AnchorX, out EntityHandle b));
+        Spotter(sim, 0, At(sim, AnchorX + 5, AnchorY));
+        Spotter(sim, 2, At(sim, AnchorX + 5, AnchorY + 1));
+        Vector2 from = At(sim, AnchorX - 6, AnchorY) - new Vector2(0f, 0.4f); // nearest the west face's first spot
+        EntityHandle a0 = Place(sim, 0, HeavyInfantry, from), a2 = Place(sim, 2, HeavyInfantry, from + new Vector2(0f, 0.01f));
+        sim.Enqueue(Command.Attack(0, a0, b, isBuilding: true));
+        sim.Enqueue(Command.Attack(2, a2, b, isBuilding: true));
+        sim.Tick();
+        sim.Tick(); // the orders apply and the chase picks
+        int layer = w.Buildings.Capacity * w.SurroundSpots;
+        int k0 = HeldSpot(w, a0.Index), k2 = HeldSpot(w, a2.Index);
+        Assert.True(k0 >= 0 && k2 >= 0, $"claims {k0}, {k2}");
+        Assert.Equal(b.Index, k0 % layer / w.SurroundSpots);
+        Assert.Equal(b.Index, k2 % layer / w.SurroundSpots);
+        Assert.Equal((0, 2), (k0 / layer, k2 / layer));
+        Assert.Equal(k0 % layer, k2 % layer);
+    }
+
     // (a) 20 line units at a 2x2 and a 3x3 building: at least 16 strike within 10 s (before: 9-11).
     [Theory]
     [InlineData("malazan_heavy_infantry", BuildingSlot.House)]

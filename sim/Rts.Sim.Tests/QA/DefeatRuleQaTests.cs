@@ -132,7 +132,7 @@ public class DefeatRuleQaTests
             b.Sim.Tick();
         }
         Assert.Equal(a.Sim.StateHash(), b.Sim.StateHash());
-        Assert.Equal(1, wa.Ledger.LiveBuildings[0]); // its site, nothing new
+        Assert.Equal(0, wa.Ledger.LiveBuildings[0]); // M5-H2 (BUG-0703): its site collapsed with the defeat, nothing new
         Assert.True(wa.IsDefeated(0));
         int own0 = 0;
         for (int i = 0; i < wa.Units.Capacity; i++)
@@ -354,12 +354,13 @@ public class DefeatRuleQaTests
         Assert.True(events[^1].Tick > events[0].Tick);
         Assert.Equal(lastDefeat, over);
         Assert.False(w.IsDefeated(0));
-        // The defeated players' later SpawnBuildings and Builds never landed: player 1 has nothing, the others their House.
+        // The defeated players' later SpawnBuildings and Builds never landed: player 1 has nothing, nor (M5-H2, BUG-0703: it
+        // collapsed on their defeat tick) the others their House.
         var owned = new int[seats];
         for (int k = 0; k < w.Buildings.Capacity; k++)
             if (w.Buildings.Alive[k]) owned[w.Buildings.Owner[k]]++;
         Assert.Equal(0, owned[1]);
-        foreach (int p in losers) Assert.Equal(1, owned[p]);
+        foreach (int p in losers) Assert.Equal(0, owned[p]);
         Replay r = rec.ToReplay();
         Assert.True(r.Commands.Count(c => c.Player != 0 && c.Tick > over) > 20, "the losers' later commands weren't logged");
         ReplayResult played = ReplayPlayer.Run(r, TestSim.Data);

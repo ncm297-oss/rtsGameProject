@@ -81,7 +81,8 @@ public class SurroundQaTests
             Assert.True(w.NavGrid.WorldToCell(p, out _, out _), $"{where}: unit {i} off the map at {p}");
             if (!u.TargetIsBuilding[i] || !w.Buildings.IsAlive(u.Target[i])) continue;
             int key = HeldSpot(w, i);
-            if (key < 0 || key / w.SurroundSpots != u.Target[i].Index) continue;
+            // A layer of keys per owner since BUG-0732: the building is the key's slot within its owner's layer.
+            if (key < 0 || key % (w.Buildings.Capacity * w.SurroundSpots) / w.SurroundSpots != u.Target[i].Index) continue;
             Assert.True(seen[key] == 0, $"{where}: units {seen[key] - 1} and {i} both hold spot {key}");
             seen[key] = i + 1;
         }
@@ -291,9 +292,11 @@ public class SurroundQaTests
     }
 
     // A sealed pocket on the attackers' side (the west face's cells walled in by the attackers' own Houses, store seam):
-    // its spots are open ground no walk reaches. Measured (BUG-0732): the rule drops fewer orders than without it.
+    // its spots are open ground no walk reaches. BUG-0732 (fixed in M5-H2): once a walk to a pocket spot has failed, the
+    // pick skips the pocket (the cached field says the unit can't reach it), so the attackers take the 14 reachable spots
+    // and nobody drops the order (before: 12 / 20 struck, 8 dropped).
     [Fact]
-    public void ASealedPocketOnTheNearFace_Measured()
+    public void ASealedPocketOnTheNearFace_NoOrderDropped_TheReachableSpotsTaken()
     {
         var struckBy = new int[2];
         var drops = new int[2];
@@ -319,6 +322,8 @@ public class SurroundQaTests
         }
         Assert.True(drops[1] <= drops[0], $"the rule dropped more orders: {drops[1]} with, {drops[0]} without");
         Assert.True(struckBy[1] >= struckBy[0], $"the rule struck fewer: {struckBy[1]} with, {struckBy[0]} without");
+        Assert.True(drops[1] == 0, $"{drops[1]} attackers dropped the order: a pocket spot was claimed again (BUG-0732)");
+        Assert.True(struckBy[1] >= 12, $"only {struckBy[1]} / 20 struck from the 14 reachable spots");
     }
 
     // ---------- footprints: 1x1 (test data) and 4x4 ----------
@@ -624,8 +629,9 @@ public class SurroundQaTests
         Assert.True(claims > 100, $"the infantry held only {claims} claim-ticks: the scene didn't exercise the rule");
     }
 
-    // Two enemies of player 1 raze one House (three seats): both sides strike and keep their orders. Reported: another
-    // owner's claims count as held for this owner (SurroundRule.HeldByOther doesn't check the owner).
+    // Two enemies of player 1 raze one House (three seats): both sides strike and keep their orders. BUG-0732 (fixed in
+    // M5-H2): each owner claims in its own layer and judges a spot by the ground (a rival striking there takes it), so
+    // between them they fill the House's 20 spots.
     [Fact]
     public void TwoOwnersOnOneHouse_BothStrike()
     {
@@ -664,6 +670,7 @@ public class SurroundQaTests
         int s0 = struck.Take(12).Count(x => x), s2 = struck.Skip(12).Count(x => x);
         _out.WriteLine($"two owners on one House: player 0 {s0} / 12 struck, player 2 {s2} / 12 struck");
         Assert.True(s0 >= 6 && s2 >= 6, $"player 0 {s0}, player 2 {s2}");
+        Assert.True(s0 + s2 >= 18, $"only {s0 + s2} of 24 struck round the House's 20 spots (player 0 {s0}, player 2 {s2})");
     }
 
     // ---------- determinism ----------

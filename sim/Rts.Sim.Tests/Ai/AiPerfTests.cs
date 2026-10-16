@@ -22,7 +22,7 @@ namespace Rts.Sim.Tests;
 [Collection(SerialCollection.Name)]
 public class AiPerfTests
 {
-    private const int Players = 8, Units = 2500, Casters = 16;
+    private const int Players = 8, Units = 2500, Casters = 16, Storms = 8;
     private const double BudgetMs = 1.0;
     private readonly ITestOutputHelper _out;
 
@@ -41,9 +41,9 @@ public class AiPerfTests
     })));
 
     /// <summary>The scene, every seat human, and one <see cref="AiPlayer"/> a player built here on the sim's own command door, so the test can time each think.</summary>
-    private static (Simulation Sim, AiPlayer[] Ais) Scene()
+    private static (Simulation Sim, AiPlayer[] Ais) Scene(GameData? data = null)
     {
-        GameData d = s_data.Value;
+        GameData d = data ?? s_data.Value;
         var map = MapGenParams.Default with { Forests = 6, GoldMines = 4 };
         var sim = new Simulation(new SimConfig(3, Players, Units + 400, 4096) { Data = d, Map = map, Combat = false });
         NavGrid g = sim.World.NavGrid;
@@ -140,6 +140,62 @@ public class AiPerfTests
         Assert.True(avg < BudgetMs, $"avg {avg:F3} ms over the {BudgetMs} ms budget");
     }
 
+    /// <summary>
+    /// BUG-0701 (standing rule 21: a Perf gate measures the shipped data): the same scene on the shipped data with
+    /// <see cref="Storms"/> Sandstorms that block vision kept alive over the map (a store seam tops them up as they expire,
+    /// each of another seat), so every view's unit cursor meets the fog's zone rule. Exactly that many: every ability is held
+    /// on cooldown here (with the shipped storm the seats' own casts would add dozens more); the AI's casts are the M5-4c
+    /// row's subject. Gated:
+    /// a think's average under 1 ms in the Debug build, as the row above.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Perf")]
+    public void EightAiSeats_Over2500Units_EightShippedStormsAlive_AThinkUnder1Ms()
+    {
+        (Simulation sim, AiPlayer[] ais) = Scene(TestSim.Data);
+        World w = sim.World;
+        AbilityDef storm = w.Data.Abilities[w.Data.FindAbility("sandstorm")];
+        Assert.True(storm.Effects[storm.ZoneEffect].BlocksVision, "precondition: the shipped Sandstorm blocks vision");
+        float size = w.NavGrid.Width * MapConstants.CellSize;
+        int made = 0;
+        void TopUp()
+        {
+            while (w.Zones.BlockerCount < Storms)
+            {
+                // Spread on a fixed lattice over the map, each storm another seat's.
+                float fx = 0.15f + 0.7f * (made * 37 % 100) / 100f, fy = 0.15f + 0.7f * (made * 61 % 100) / 100f;
+                Assert.True(w.Zones.Add(made % Players, storm, new Vector2(fx * size, fy * size)) >= 0);
+                made++;
+            }
+        }
+        var sw = new Stopwatch();
+        var times = new List<double>();
+        int think = ais[0].ThinkTicks, fewest = int.MaxValue, most = 0;
+        for (int t = 0; t < 60 * think; t++)
+        {
+            TopUp();
+            if (sim.TickNumber % think == 0)
+            {
+                UnderAttack(sim, clearCooldowns: false);
+                Array.Fill(w.Units.AbilityReadyTick, int.MaxValue); // nobody casts: the storms stay the seam's eight
+                fewest = Math.Min(fewest, w.Zones.BlockerCount);
+                most = Math.Max(most, w.Zones.BlockerCount);
+                foreach (AiPlayer ai in ais)
+                {
+                    sw.Restart();
+                    Assert.True(ai.Think());
+                    sw.Stop();
+                    if (t >= 10 * think) times.Add(sw.Elapsed.TotalMilliseconds);
+                }
+            }
+            sim.Tick();
+        }
+        double avg = times.Average(), worst = times.Max();
+        _out.WriteLine($"{Players} AI seats, {w.Units.Count} units, {fewest}-{most} blocking storms at every think ({made} made): {times.Count} thinks, avg {avg:F3} ms, worst {worst:F3} ms");
+        Assert.True(fewest == Storms && most == Storms, $"{fewest}-{most} storms at a think, not {Storms}");
+        Assert.True(avg < BudgetMs, $"avg {avg:F3} ms over the {BudgetMs} ms budget");
+    }
+
     /// <summary>A steady-state think (the house search included) allocates nothing; nor does a tick that runs the sim's own AI seats.</summary>
     [Fact]
     public void ASteadyStateThink_AllocatesNothing()
@@ -164,10 +220,10 @@ public class AiPerfTests
     /// cooldown is over and every unit at full hp (test seams), so every caster not casting is judged and searched for a target
     /// at every think, and the burns kill nobody (the armies stay over 200).
     /// </summary>
-    private static void UnderAttack(Simulation sim)
+    private static void UnderAttack(Simulation sim, bool clearCooldowns = true)
     {
         Rts.Sim.Entities.UnitStore u = sim.World.Units;
-        Array.Clear(u.AbilityReadyTick);
+        if (clearCooldowns) Array.Clear(u.AbilityReadyTick);
         for (int i = 0; i < u.Capacity; i++)
             if (u.Alive[i]) u.Hp[i] = sim.World.Data.Units[u.TypeId[i]].Hp;
         Rts.Sim.Entities.BuildingStore b = sim.World.Buildings;

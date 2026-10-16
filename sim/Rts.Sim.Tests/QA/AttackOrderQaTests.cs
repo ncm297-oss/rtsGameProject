@@ -47,6 +47,7 @@ public class AttackOrderQaTests
 
     private static EntityHandle PlaceBuilding(Simulation sim, int owner, int type, int x, int y)
     {
+        TestSim.KeepInFor(sim, owner, type); // M5-H2 (rule 24, BUG-0703)
         Assert.True(sim.World.Buildings.Spawn(owner, type, y * sim.World.NavGrid.Width + x, out EntityHandle h));
         return h;
     }
@@ -443,6 +444,7 @@ public class AttackOrderQaTests
         Assert.True(u.TrySpawn(0, hi, data.Units[hi], At(sim, 25, 23), out EntityHandle holder));
         Assert.True(u.TrySpawn(0, hi, data.Units[hi], At(sim, 10, 23), out EntityHandle mover));
         Assert.True(u.TrySpawn(0, hi, data.Units[hi], At(sim, 23, 26), out EntityHandle ordered));
+        TestSim.KeepIn(sim, 1); // M5-H2: else player 1, no unit, is out and its building collapses (BUG-0703)
         sim.Enqueue(Command.HoldPosition(0, holder));
         sim.Enqueue(Command.AttackMove(0, mover, At(sim, 40, 23)));
         sim.Enqueue(Command.Attack(0, ordered, tent, true));

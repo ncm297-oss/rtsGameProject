@@ -26,9 +26,15 @@ public class TowerTests
     /// <summary>The Whirlwind House (2 x 2).</summary>
     public static int Tent => TestSim.Data.FindBuilding("whirlwind_tent");
 
-    /// <summary>Places a building of <paramref name="type"/> for <paramref name="owner"/> anchored at cell (x, y), straight into the store (finished, or a site).</summary>
+    /// <summary>
+    /// Places a building of <paramref name="type"/> for <paramref name="owner"/> anchored at cell (x, y), straight into the
+    /// store (finished, or a site). M5-H2 (standing rule 24): an owner with no live unit is kept in first
+    /// (<see cref="TestSim.KeepInAt"/>, each player at its own map corner), else it would be out on the next tick and,
+    /// since BUG-0703, its buildings would collapse with it.
+    /// </summary>
     public static EntityHandle PlaceBuilding(Simulation sim, int owner, int type, int x, int y, bool site = false)
     {
+        TestSim.KeepInFor(sim, owner, type, site);
         Assert.True(sim.World.Buildings.Spawn(owner, type, y * sim.World.NavGrid.Width + x, out EntityHandle h, site));
         return h;
     }

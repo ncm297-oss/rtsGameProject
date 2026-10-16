@@ -58,14 +58,15 @@ internal static class SurroundRule
         UnitStore u = world.Units;
         int b = u.Target[i].Index;
         Ring(world, b, out Vector2 min, out Vector2 max, out int w, out int h);
-        int count = SpotCount(w, h), first = b * world.SurroundSpots;
+        int count = SpotCount(w, h), first = FirstKey(world, i, b);
         int claim = world.SurroundClaim[i];
         if (claim >= first && claim < first + count && world.SurroundHolder[claim] == i + 1)
         {
             point = SpotPoint(min, max, w, h, claim - first, u.Radius[i] + CombatConstants.BuildingStandOff);
             full = false;
-            // Kept while nobody stands there and its ground is still open (a building placed on it since closes it).
-            if (Open(world, point) && !Occupied(world, i, point, min, max)) return true;
+            // Kept while nobody stands there, its ground is still open (a building placed on it since closes it) and its
+            // walk reaches it.
+            if (Open(world, point) && Reachable(world, i, point) && !Occupied(world, i, point, min, max)) return true;
         }
         Release(world, i);
         float s = u.Radius[i] + CombatConstants.BuildingStandOff;
@@ -77,7 +78,7 @@ internal static class SurroundRule
         for (int k = 0; k < count; k++)
         {
             Vector2 p = SpotPoint(min, max, w, h, k, s);
-            if (!Open(world, p)) continue;
+            if (!Open(world, p) || !Reachable(world, i, p)) continue;
             if (HeldByOther(world, i, first + k)) { full = true; continue; }
             float d2 = Vector2.DistanceSquared(pos, p);
             if (!(d2 < bestD2)) continue;
@@ -104,7 +105,7 @@ internal static class SurroundRule
         int b = u.Target[i].Index;
         float r = u.Radius[i], s = r + CombatConstants.BuildingStandOff;
         Ring(world, b, out Vector2 min, out Vector2 max, out int w, out int h);
-        int count = SpotCount(w, h), first = b * world.SurroundSpots;
+        int count = SpotCount(w, h), first = FirstKey(world, i, b);
         Vector2 pos = u.Position[i];
         int claim = world.SurroundClaim[i];
         if (claim >= first && claim < first + count && world.SurroundHolder[claim] == i + 1
@@ -132,7 +133,7 @@ internal static class SurroundRule
         UnitStore u = world.Units;
         int b = u.Target[i].Index;
         Ring(world, b, out Vector2 min, out Vector2 max, out int w, out int h);
-        int count = SpotCount(w, h), first = b * world.SurroundSpots, claim = world.SurroundClaim[i];
+        int count = SpotCount(w, h), first = FirstKey(world, i, b), claim = world.SurroundClaim[i];
         if (claim < first || claim >= first + count || world.SurroundHolder[claim] != i + 1) return false;
         float r = u.Radius[i];
         return Vector2.DistanceSquared(u.Position[i], SpotPoint(min, max, w, h, claim - first, r + CombatConstants.BuildingStandOff)) > r * r;
@@ -147,20 +148,50 @@ internal static class SurroundRule
         world.SurroundClaim[i] = -1;
     }
 
-    /// <summary>Whether spot <paramref name="key"/> is claimed by a live unit other than <paramref name="i"/> that still chases the same building under the rule.</summary>
+    /// <summary>
+    /// The key of spot 0 round building slot <paramref name="b"/> for unit <paramref name="i"/>'s owner: each owner claims in
+    /// its own layer of <see cref="World.SurroundHolder"/> (BUG-0732), so two owners raze one building without taking each
+    /// other's claims for held spots or overwriting them. Player 0's keys are the slot x <see cref="World.SurroundSpots"/> as before.
+    /// </summary>
+    private static int FirstKey(World world, int i, int b) =>
+        (world.Units.Owner[i] * world.Buildings.Capacity + b) * world.SurroundSpots;
+
+    /// <summary>
+    /// BUG-0732: whether unit <paramref name="i"/> can walk to <paramref name="p"/>, judged as <c>ReachableOnFoot</c> judges
+    /// a walk, by cached flow fields only (no LRU touch, no build). The spot's own cell's field, when cached, answers
+    /// directly (a finite cost at the unit's cell). Else its walk's goal cell's field: the unit's cell and the spot's cell
+    /// both reach that goal, or both don't. With neither field cached, or neither cell reaching the goal, nothing can tell
+    /// and the spot counts. So a sealed pocket's open spots, once a walk there has failed, are not claimed again nearest-first.
+    /// </summary>
+    private static bool Reachable(World world, int i, Vector2 p)
+    {
+        UnitStore u = world.Units;
+        NavGrid grid = world.NavGrid;
+        if (!grid.WorldToCell(u.Position[i], out int ux, out int uy) || !grid.WorldToCell(p, out int sx, out int sy)) return true;
+        int unitCell = uy * grid.Width + ux, spotCell = sy * grid.Width + sx;
+        Pathfinding.FlowField? field = world.FlowFields.PeekCached(spotCell);
+        if (field != null) return field.CostAt(unitCell) < float.PositiveInfinity;
+        int goal = u.GoalCell[i];
+        field = goal >= 0 ? world.FlowFields.PeekCached(goal) : null;
+        if (field == null) return true;
+        return field.CostAt(unitCell) < float.PositiveInfinity == field.CostAt(spotCell) < float.PositiveInfinity;
+    }
+
+    /// <summary>Whether spot <paramref name="key"/> is claimed by a live unit of <paramref name="i"/>'s owner, other than <paramref name="i"/>, that still chases the same building under the rule (a rival's claim is never held: BUG-0732).</summary>
     private static bool HeldByOther(World world, int i, int key)
     {
         int h = world.SurroundHolder[key] - 1;
         if (h < 0 || h == i) return false;
         UnitStore u = world.Units;
-        if (!u.Alive[h] || world.SurroundClaim[h] != key || !u.TargetIsBuilding[h]) return false;
+        if (!u.Alive[h] || u.Owner[h] != u.Owner[i] || world.SurroundClaim[h] != key || !u.TargetIsBuilding[h]) return false;
         EntityHandle t = u.Target[h], mine = u.Target[i];
         return t.Index == mine.Index && t.Generation == mine.Generation;
     }
 
     /// <summary>
-    /// Whether another unit of <paramref name="i"/>'s owner stands (not walking) on <paramref name="point"/> (centers nearer
-    /// than both radii) within <paramref name="i"/>'s reach of the footprint: a spot already taken by one striking it.
+    /// Whether another unit of <paramref name="i"/>'s owner, or (BUG-0732) a rival's unit striking the same building, stands
+    /// (not walking) on <paramref name="point"/> (centers nearer than both radii) within <paramref name="i"/>'s reach of the
+    /// footprint: a spot already taken by one striking it. Judged by the ground: a rival's claims are its own layer's.
     /// </summary>
     private static bool Occupied(World world, int i, Vector2 point, Vector2 min, Vector2 max)
     {
@@ -172,7 +203,8 @@ internal static class SurroundRule
         for (int k = 0; k < n; k++)
         {
             int j = found[k];
-            if (j == i || !u.Alive[j] || u.Owner[j] != owner || u.State[j] == UnitState.Moving) continue;
+            if (j == i || !u.Alive[j] || u.State[j] == UnitState.Moving) continue;
+            if (u.Owner[j] != owner && !(u.TargetIsBuilding[j] && u.Target[j] == u.Target[i])) continue;
             float both = ri + u.Radius[j];
             if (!(Vector2.DistanceSquared(point, u.Position[j]) < both * both)) continue;
             Vector2 p = u.Position[j];

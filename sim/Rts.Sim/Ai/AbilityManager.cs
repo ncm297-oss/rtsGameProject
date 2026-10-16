@@ -18,6 +18,9 @@ namespace Rts.Sim.Ai;
 /// <item><b>Self / aura, summon.</b> At the caster, when <c>ai.castMinTargets</c> enemies seen are within <c>radius</c> of it.</item>
 /// <item><b>Friendly fire.</b> An ability whose damage reaches own units is never cast with an own unit within <c>radius</c>
 /// of the point (the caster included).</item>
+/// <item><b>No stacking (BUG-0702).</b> A ground ability whose effects don't add up (no damage and no spawn: its statuses
+/// and zones refresh rather than stack) is not cast within its <c>radius</c> of a point a caster was sent the same ability at
+/// whose effect still runs (sent + cast time + duration); that caster tries its next ability, or waits.</item>
 /// <item><b>Judging.</b> A cast is judged at a later think by the ability's ready tick: moved, it landed. One that didn't is
 /// sent again, at most <see cref="MaxTries"/> times at the same point (within a cell), then left alone until the point moves.</item>
 /// </list>
@@ -34,11 +37,15 @@ internal static class AbilityManager
     // A point pulled back to the range stays this far inside it, so float rounding never leaves the caster a walk.
     private const float RangeSlack = 0.05f;
 
+    /// <summary>Running ground casts the no-stacking rule remembers (BUG-0702); past it a new one isn't recorded. A buffer size, not a balance number.</summary>
+    internal const int MaxRecentCasts = 64;
+
     /// <summary>One cast a think at most per free own caster (see the type's summary).</summary>
     internal static void Run(AiPlayer ai)
     {
         if (!ai.Knobs.UseAbilities) return;
         ai.Board.SeenEnemyCount = -1; // filled at the first free caster
+        ForgetEnded(ai.Board, ai.Stamp);
         if (Casters(ai, ai.ArmySlots, ai.ArmyCount)) Casters(ai, ai.WorkerSlots, ai.WorkerCount);
     }
 
@@ -67,7 +74,16 @@ internal static class AbilityManager
                 bool same = mine && board.CastIndex[slot] == a
                     && Vector2.DistanceSquared(point, board.CastAt[slot]) <= Map.MapConstants.CellSize * Map.MapConstants.CellSize;
                 if (same && board.CastTries[slot] >= MaxTries) continue; // left alone until the point moves
+                bool ground = ability.Kind is not (AbilityKind.SelfAura or AbilityKind.Summon) && !Stacks(ability);
+                if (ground && SentNear(board, def.Abilities[a], point, ability.Radius)) continue;
                 if (!ai.Send(Command.UseAbility(ai.Player, u.Handle, a, point))) return false;
+                if (ground && board.RecentCastCount < MaxRecentCasts)
+                {
+                    int n = board.RecentCastCount++;
+                    board.RecentCastAbility[n] = def.Abilities[a];
+                    board.RecentCastAt[n] = point;
+                    board.RecentCastUntil[n] = ai.Stamp + ability.CastTicks + ability.DurationTicks;
+                }
                 ai.MarkOrdered(slot, generation, 0);
                 board.CastGeneration[slot] = generation;
                 board.CastIndex[slot] = (byte)a;
@@ -79,6 +95,36 @@ internal static class AbilityManager
             }
         }
         return true;
+    }
+
+    /// <summary>Whether two casts of <paramref name="a"/> on one group add up: it deals damage or spawns (BUG-0702).</summary>
+    private static bool Stacks(AbilityDef a)
+    {
+        foreach (AbilityEffect fx in a.Effects)
+            if (fx.Kind is AbilityEffectKind.Damage or AbilityEffectKind.Spawn) return true;
+        return false;
+    }
+
+    /// <summary>Whether a running cast of ability <paramref name="ability"/> was sent to a point within <paramref name="radius"/> of <paramref name="point"/>.</summary>
+    private static bool SentNear(Blackboard board, int ability, Vector2 point, float radius)
+    {
+        for (int k = 0; k < board.RecentCastCount; k++)
+            if (board.RecentCastAbility[k] == ability && Vector2.DistanceSquared(board.RecentCastAt[k], point) <= radius * radius) return true;
+        return false;
+    }
+
+    /// <summary>Drops the remembered casts whose effect has ended by tick <paramref name="now"/>, keeping the rest in order.</summary>
+    private static void ForgetEnded(Blackboard board, int now)
+    {
+        int kept = 0;
+        for (int k = 0; k < board.RecentCastCount; k++)
+        {
+            if (board.RecentCastUntil[k] <= now) continue;
+            board.RecentCastAbility[kept] = board.RecentCastAbility[k];
+            board.RecentCastAt[kept] = board.RecentCastAt[k];
+            board.RecentCastUntil[kept++] = board.RecentCastUntil[k];
+        }
+        board.RecentCastCount = kept;
     }
 
     /// <summary>Fills <see cref="Blackboard.SeenEnemies"/> with the enemy units the player sees now.</summary>

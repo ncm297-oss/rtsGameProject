@@ -111,6 +111,8 @@ public static class CounterTriangleScene
         GameData data = TestSim.Data;
         Simulation sim = Flat(size: SiegeMapSize, units: n + 4);
         World w = sim.World;
+        // M5-H2: the building's owner has no unit; kept in, or its building collapses with its defeat on tick 1 (BUG-0703).
+        TestSim.KeepIn(sim, 1);
         Assert.True(w.Buildings.Spawn(1, data.FindBuilding(buildingKey), 24 * w.NavGrid.Width + 24, out EntityHandle b));
         Spotter(sim, 0, At(sim, 24 + data.Buildings[data.FindBuilding(buildingKey)].FootprintWidth + 3, 24));
         int type = data.FindUnit(attackerKey);

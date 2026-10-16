@@ -137,7 +137,7 @@ public class WinConditionQaTests
     /// <summary>
     /// A hall site, its only builder a summon (the player's last unit): the hall's last work lands in phase 4, the expiry in
     /// phase 5. Expiring on the finishing tick: the hall finished first, the side stays in. Expiring one tick before: the site
-    /// never finishes and the side is out on that tick, the site standing.
+    /// never finishes and the side is out on that tick, the site collapsing with it (M5-H2, BUG-0703).
     /// </summary>
     [Theory]
     [InlineData(0, false)]
@@ -178,8 +178,8 @@ public class WinConditionQaTests
         }
         sim.Tick();
         Assert.False(w.Units.IsAlive(worker));
-        Assert.True(w.Buildings.IsAlive(site), "the site went");
-        Assert.Equal(defeated, w.Buildings.UnderConstruction[s]);
+        Assert.True(w.Buildings.IsAlive(site) != defeated, defeated ? "the site stands after the defeat (BUG-0703)" : "the site went");
+        if (!defeated) Assert.False(w.Buildings.UnderConstruction[s]);
         Assert.Equal(defeated ? 0 : 1, w.ProductionBuildings(0));
         Assert.Equal(0, w.LiveUnits(0));
         Assert.Equal(defeated, w.IsDefeated(0));
@@ -190,11 +190,11 @@ public class WinConditionQaTests
     }
 
     /// <summary>
-    /// The door on the buildings a defeated player keeps: player 0 holds a finished Forge researching, a finished House and a
-    /// Town Hall site, and its last unit (a summon) expires. After the defeat, a Cancel of its own hall site, a CancelTrain
-    /// and a second Research at its own Forge, a SetRally / ClearRally there, a Train at it, a SpawnUnit and a SpawnBuilding
-    /// all hash equal, every tick, to a twin that sent Noops; the site stands, the research stays queued, the gold doesn't
-    /// move. The control (<paramref name="defeated"/> false: a keeper unit keeps the side in) shows the same commands do
+    /// The door on the buildings a defeated player had: player 0 holds a finished Forge researching, a finished House and a
+    /// Town Hall site, and its last unit (a summon) expires. M5-H2 (BUG-0703): they all collapse on the defeat tick, the
+    /// research with the Forge. After the defeat, a Cancel at its old hall site, a CancelTrain and a second Research at its
+    /// old Forge, a SetRally / ClearRally there, a Train at it, a SpawnUnit and a SpawnBuilding all hash equal, every tick, to
+    /// a twin that sent Noops; nothing of it stands again, the tech is never researched, the gold doesn't move. The control (<paramref name="defeated"/> false: a keeper unit keeps the side in) shows the same commands do
     /// apply to a side still in, so the door is what drops them.
     /// </summary>
     [Theory]
@@ -275,12 +275,14 @@ public class WinConditionQaTests
             return;
         }
         Assert.True(wa.IsDefeated(0));
-        Assert.True(wa.Buildings.IsAlive(a.Site), "a defeated player's Cancel took its site");
-        Assert.True(wa.Buildings.UnderConstruction[a.Site.Index]);
+        Assert.False(wa.Buildings.IsAlive(a.Site), "the defeated player's site stands (BUG-0703)");
+        Assert.False(wa.Buildings.IsAlive(a.Forge), "the defeated player's Forge stands (BUG-0703)");
+        Assert.Equal(0, wa.Ledger.LiveBuildings[0]);
+        Assert.False(wa.Techs.Has(0, techA), "the research went on after the defeat");
         Assert.Equal(0, wa.LiveUnits(0));
         Assert.Equal(0, wa.ProductionBuildings(0));
         Assert.Equal((gold, wood), (wa.Gold[0], wa.Wood[0]));
-        _out.WriteLine($"after the defeat: the Forge's queue {wa.Buildings.QueueCount[forgeSlot]}, progress {progressAtDefeat} -> {wa.Buildings.Progress[forgeSlot]} over {rows.Length * 4} ticks, tech A researched {wa.Techs.Has(0, techA)}");
+        _out.WriteLine($"after the defeat: the Forge's slot alive {wa.Buildings.Alive[forgeSlot]}, queue {wa.Buildings.QueueCount[forgeSlot]}, progress {progressAtDefeat} -> {wa.Buildings.Progress[forgeSlot]} over {rows.Length * 4} ticks, tech A researched {wa.Techs.Has(0, techA)}");
         CheckRule(wa, "end");
     }
 
@@ -288,8 +290,8 @@ public class WinConditionQaTests
     /// Four seats, one never built (units only): players 0, 1 and 3 have a hall each, player 2 an army and no building. Player
     /// 1's hall goes: out. Player 2's units all die: not out (never built), the match goes on. Player 3's hall goes: out, and
     /// the match is over (player 0 the last that built standing) while player 2, never built, is ignored. Player 2 then places
-    /// a House and spawns a unit (both apply: it isn't defeated): the result stays latched; its unit dies: out, the House
-    /// standing (a House alone doesn't keep a side in), one event.
+    /// a House and spawns a unit (both apply: it isn't defeated): the result stays latched; its unit dies: out (a House alone
+    /// doesn't keep a side in), one event, the House collapsing with it (M5-H2, BUG-0703).
     /// </summary>
     [Fact]
     public void FourSeats_ANeverBuiltSeatMixedIn_IgnoredByTheResult_ThenBuildsAndFalls()
@@ -343,19 +345,18 @@ public class WinConditionQaTests
         Assert.Equal(new[] { new DefeatEvent(2, sim.TickNumber - 1) }, w.DefeatEvents.ToArray());
         Assert.True(w.IsDefeated(2));
         Assert.False(w.IsDefeated(0));
-        Assert.Equal(1, w.Ledger.LiveBuildings[2]);
+        Assert.Equal(0, w.Ledger.LiveBuildings[2]);
         Assert.True(sim.MatchOver);
         CheckRule(w, "end");
     }
 
     /// <summary>
-    /// Measured, not a rule (BUG-0703): since M5-4e a defeated player can keep buildings standing, and nothing in the sim
-    /// switches them off. Player 0, defeated (its last unit gone; a finished tower and a Forge researching left), still
-    /// shoots: its tower kills player 1's soldier parked in range after the defeat, a kill counted for player 0. The row
-    /// prints what happened and asserts the preconditions (and the current behaviour, so a change is seen).
+    /// BUG-0703 (M5-H2, docs/02 "Game flow" 4): player 0, defeated (its last unit gone, a finished tower left), loses the
+    /// tower on its defeat tick (a collapse: no kill, no loss), so player 1's soldier parked in its range afterwards lives
+    /// through 60 s and player 0's kills don't move. Before the rule the tower shot on and killed it (a kill for player 0).
     /// </summary>
     [Fact]
-    public void ADefeatedPlayersTower_KeepsShooting_Measured()
+    public void ADefeatedPlayersTower_CollapsesOnTheDefeatTick_AndShootsNoMore()
     {
         Simulation sim = CombatScenes.Flat(48, 64, 2);
         World w = sim.World;
@@ -366,17 +367,19 @@ public class WinConditionQaTests
         sim.Tick();
         Assert.False(w.IsDefeated(0));
         w.Units.Free(last);
+        int losses0 = w.Losses[0], kills1 = w.Kills[1];
         sim.Tick();
-        Assert.True(w.IsDefeated(0), "precondition: defeated with the tower standing");
-        Assert.True(w.Buildings.IsAlive(tower));
+        Assert.True(w.IsDefeated(0), "precondition: defeated");
+        Assert.False(w.Buildings.IsAlive(tower), "the tower stands after the defeat");
+        Assert.Equal((losses0, kills1), (w.Losses[0], w.Kills[1]));
         EntityHandle soldier = CombatScenes.Place(sim, 1, UnitType(w, 1, UnitSlot.Line), At(sim, 24, 21));
         int hp0 = w.Units.Hp[soldier.Index];
         int kills0 = w.Kills[0];
         for (int t = 0; t < 1200 && w.Units.IsAlive(soldier); t++) sim.Tick();
         bool dead = !w.Units.IsAlive(soldier);
         _out.WriteLine($"a defeated player's tower vs a soldier parked in range for 60 s: soldier dead {dead} (hp {hp0} -> {(dead ? 0 : w.Units.Hp[soldier.Index])}), player 0's kills {kills0} -> {w.Kills[0]}");
-        Assert.True(dead, "the defeated player's tower stopped shooting (behaviour changed: update BUG-0703)");
-        Assert.Equal(kills0 + 1, w.Kills[0]);
+        Assert.False(dead, "the soldier died near a defeated player's ruins");
+        Assert.Equal(kills0, w.Kills[0]);
     }
 
     /// <summary>

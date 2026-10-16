@@ -679,12 +679,13 @@ public class StealthQaTests
         for (int p = 0; p < 3; p++)
         {
             int cx = 16 + 16 * p, cy = p == 1 ? 40 : 24;
-            TowerTests.PlaceBuilding(sim, p, Watchtower, cx, cy + (p == 1 ? 8 : -10));
             for (int k = 0; k < 22; k++)
             {
                 EntityHandle h = Place(sim, p, types[k % types.Length], At(sim, cx + rng.NextInt(-6, 7), cy + rng.NextInt(-6, 7), rng.NextFloat() - 0.5f, rng.NextFloat() - 0.5f));
                 sim.World.Units.Hp[h.Index] *= 4; // long fights
             }
+            // After the units (M5-H2): the player has a unit, so PlaceBuilding adds no keeper and the scene is as before.
+            TowerTests.PlaceBuilding(sim, p, Watchtower, cx, cy + (p == 1 ? 8 : -10));
         }
         return sim;
     }
