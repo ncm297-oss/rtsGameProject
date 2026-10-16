@@ -4,40 +4,40 @@ The dashboard. The Producer rewrites it at the end of every session. **Owner: re
 you" first.** "For your review" (further down) is non-blocking: what the studio built or decided
 on its own, explained in terms of what you'd see in the game.
 
-_Last updated: 2026-10-16 (session 2026-10-15-2325 ACCEPT): **the rest of your 2026-10-14 answers are in the game.** Sim **M5-P1**: your soldiers **surround a building** instead of queueing (17-20 of 20 strike within 10 s, was 9-11). View **M6-V8**: **click a gold mine or a tree** to see what is left ("2500 Gold left", or "Last seen: ..." in the fog) and **every hotkey is rebindable** (Settings → Keybinds). Data **D19**: **buildings die 3-5x faster** (lever set (C)), the line units' **×1.5 vs cavalry** is back, **Easy casts**. Together: 20 Heavy Infantry raze a House in 12 s, a hall in 23 s, a Town Hall in 45 s (was 72 s / 203 s / 5+ min). Two proposals wait for a one-line answer (a Shock pass; the AI's gold share). **Next session: a clean-up (hardening) on all three tracks** (the loser's buildings collapse when it is out; keybind file nits; doc nits), then the proportional defense + quicker gathering._
+_Last updated: 2026-10-16 (session 2026-10-16-0847 ACCEPT): **a clean-up session on all three tracks: nothing new to play, 17 bugs closed, no number changed.** Sim **M5-H2**: when a side is out, **its leftover buildings now collapse on the spot** (its towers stop shooting; a collapse is neither a kill nor a loss), two sides can share a building's ring, a unit pinned against a cliff by idle friends slides free (the M4 playable scene's stuck Sapper), and the AI's Priests stop stacking sandstorms on one spot. View **M6-VH2**: the keybinds file refuses "Meta+K"-style values, test scenes stop sharing one settings file, the M4 playable scene runs on a fixed clock. Data **D-H5**: report nits; the AI spending report re-run says **wood is no longer the limit overall**; one balance fact for you: **Catapults are under 2× a Raider's damage per cost on halls** (BUG-0780, your call). **Your 2026-10-14 assessment is still under For your review ("Producer assessment, 2026-10-14"; a pointer sits at the top of that section).** Next: sim the proportional defense + quicker gathering, view 2-4 player slots, data waits for your answers._
 
 ## Waiting on you
 
-- **Nothing blocking.** M5 2 / 9, **M6 1 / 10 (criterion 4, settings incl. keybinds, ticked)**; counters **sim 4 / 4, view 4 / 4, data
-  4 / 4 → next session is hardening on all three**; golden `data-hash` **AB811AD47F68D0AE** (D19 moved it once). **One S2 open at the
-  merge, BUG-0734** (the faction pages' siege times moved with the surround rule): closed by the data track's re-print on the merged tree
-  before the push (the conductor's step; nothing in play changes).
-- **Wanted, not blocking:** (1) **D19's review table** (For your review) and its **two proposals**: "do the Shock pass" (Horse Raider /
-  Wickan Lancer hp and cost upward, measured first) and / or "lower the AI's gold share" (0.6 → 0.5); (2) **try on your desk**: the
-  edge-pan fix beside the second monitor, and Settings → Keybinds (rebind Attack-move to K, play a minute); (3) the **2026-10-14
-  assessment** entry still wants a yes / no; (4) housekeeping: 20+ scratch worktrees (`git worktree list`, incl. `producer-*-merge`
-  folders): delete, then `git worktree prune`; the PC is slow under three suites (Perf rows red under load, equal to base alone).
-- **Before M6 (the owner's downloads; docs/04):** the fonts (Cinzel, EB Garamond), music, the Godot 4.7.2 .NET export templates.
+- **Nothing blocking.** M5 2 / 9, M6 1 / 10; counters **sim 0 / 4, view 0 / 4, data 0 / 4** (all three clean-ups done, 17 bugs closed); **no open S1 / S2**;
+  golden `data-hash` **AB811AD47F68D0AE** (unmoved). Next: sim the proportional defense + quicker gathering (one golden re-record), view 2-4 player slots, data waits for you.
+- **Where my comments on your 2026-10-14 feedback are:** the For your review entry **"Your review answers and first playtest ... (Producer assessment, 2026-10-14)"**:
+  search this file for `Producer assessment, 2026-10-14`; a pointer entry at the top of For your review says where each item stands (all built but the proportional
+  defense, which is next). Still wanting your yes / no: a **Shock pass**, the AI's **gold share** 0.6 → 0.5, and (new) **BUG-0780** ("accept BUG-0780" or "Catapult pass").
+- **Wanted, not blocking:** (1) the answers above; (2) **a speed-benchmark check after a fresh boot** (BUG-0764: 17-20 benchmark rows fail on this PC on every branch
+  alike, so they can't catch a regression): with nothing else running, `dotnet test sim/Rts.Sim.Tests --filter Category=Perf`, paste the "Failed:" count into the inbox;
+  (3) **try on your desk**: edge-pan beside the second monitor and Settings → Keybinds (rebind Attack-move to K, play a minute); (4) `CLAUDE.md` line 5 still says
+  "Current milestone: M1" (the next sim session fixes it unless you edit the one line: "M5 (sim) / M6 (view); M3 data Done"); (5) housekeeping: 20+ scratch worktrees
+  incl. this session's `producer-0847-merge` in the session scratchpad (`git worktree remove --force <path>`, then `git worktree prune`); (6) **before M6** (your downloads; docs/04): the fonts (Cinzel, EB Garamond), music, the Godot 4.7.2 .NET export templates.
 
 ## Now
 
 | Field | Value |
 | --- | --- |
-| Sim: milestone | **M5 AI opponent, 2 / 9 criteria** (criteria 1-2 ticked; 3, 4, 5 advanced). On `main`: `PlayerView`, seats, the executor and six managers, the owner's win rule (M5-4e), `MatchOver`, start locations, `rules.json` `ai` 15 knobs, **the surround rule** (M5-P1: `Combat/SurroundRule`, `World.SurroundClaim` / `SurroundHolder` unhashed save state, BUG-0733). Golden format 6, `data-hash` **AB811AD47F68D0AE** (D19), `k` lines unchanged since M4 |
-| Sim: next task | **M5-H2 · sim hardening** (counter 4 / 4 → 0 / 4) · QA full: BUG-0703 (the loser's buildings collapse on its defeat tick, decision (c)), BUG-0732 (the surround pick's reachability filter + owner compare), BUG-0745's replay probe, BUG-0701 + rule 21, BUG-0704 / 0702 / 0675 c / 0651 / 0650 / 0144 / 0113; no header move. Then **M5-4f proportional defense + D15 C + `gatherRate` 0.85 / 0.75 with the seed-21 re-record** (one header move), pathing slice 2, M5-4c slice 2, Requests 39, D14 b, M5-4d, D14 c, M5-5. Brief in `studio/handoff.md` |
+| Sim: milestone | **M5 AI opponent, 2 / 9 criteria** (criteria 1-2 ticked; 3, 4, 5 advanced). On `main`: `PlayerView`, seats, the executor and six managers, the owner's win rule (M5-4e) **+ the collapse (M5-H2: a defeated player's buildings fall on its tick, neither a kill nor a loss)**, `MatchOver`, start locations, `rules.json` `ai` 15 knobs, the surround rule (M5-P1; owner-layered claims + a reachable-spot filter since M5-H2), the fog's storm mask, the AI's no-stacking casts. Golden format 6, `data-hash` **AB811AD47F68D0AE**, `k` lines unchanged since M4 |
+| Sim: next task | **M5-4f · proportional defense** (counter 0 / 4 → 1 / 4) · QA full, ~900-1,000 lines: `ai.defendRatio` / `defendMinValue` / `recallHallHp` (the 2026-10-14 design), **+ D15 C** (skip a house step at the pop cap), **+ BUG-0702 item 1**, **+ `gatherRate` gold 0.85 / wood 0.75 with the seed-21 re-record** (the only header move), the CLAUDE.md milestone line first. Then pathing slice 2, M5-4c slice 2, Requests 39 (+ 38), D14 b, M5-4d, D14 c, M5-5; M5-H3 (BUG-0764 first) after four. Brief in `studio/handoff.md` |
 | Sim: gate | **GO** |
-| View: milestone | **M4 views Done; M6 1 / 10** (criterion 4 ticked 2026-10-16: settings incl. keybinds). M5-V1, M6-V1-V4, M6-VH1, M6-V6, M6-V7, **M6-V8** on `main` (a left click on a mine / tree selects it and shows "N Gold left" / "Last seen: ..."; `KeyMap` 31 rebindable keys, Settings → Keybinds, `settings.cfg` `[keys]`). Criterion 1 waits on 2-4 slots and team (Requests 38); criterion 2 on Requests 39's columns |
-| View: next task | **M6-VH2 · view hardening** (counter 4 / 4 → 0 / 4) · QA standard: BUG-0684 items 1-5 (per-process `user://` paths first), BUG-0744 items 1-2 ("Meta+K" refused, `IsPlainKey` round-trips), BUG-0743 item 3, BUG-0745's scene half if the sim says "scene fault", BUG-0622 item 1, the unreachable S4 items closed with reasons; the loop green under load. Then M6-V5's slots, save / load + replay playback, the look test, export. Brief in `studio/handoff.md` |
+| View: milestone | **M4 views Done; M6 1 / 10** (criterion 4 ticked 2026-10-16). M5-V1, M6-V1-V4, M6-VH1, M6-V6, M6-V7, M6-V8, **M6-VH2** on `main` (the keys file refuses look-alike combos, per-process test paths, the fixed-clock playable scene, `StartBase`'s edge fix). Criterion 1 waits on 2-4 slots (next) and team (Requests 38); criterion 2 on Requests 39's columns |
+| View: next task | **M6-V5 slot part · 2-4 player slots, free-for-all** (counter 0 / 4 → 1 / 4) · QA standard, ~700-900 lines: the setup's slot rows, `LaunchOptions` / `Match.PickSeats` / `SimRunner.BuildSeats` for N seats, the banner / stats with 3-4 seats; BUG-0770's two scenes folded in. Then save / load + replay playback, the look test, export. Brief in `studio/handoff.md` |
 | View: gate | **GO** |
-| Data: milestone | M3 Done (D1-D4); D5-D8, D-H1-H4, D10a-c, D11-D18, **D19** on `main` (×1.5 vs Mounted, Easy casts, Structure 0.7 / 0.35 / 0.6, every building's armor halved; 27 data lines). Golden `data-hash` **AB811AD47F68D0AE**. Counter **4 / 4** |
-| Data: next task | **D-H5 · data hardening** (counter 4 / 4 → 0 / 4) · QA light: **an inbox answer on D19 / the Shock pass / `goldShare` first** (one header move allowed then), else BUG-0750 (andii.md 118, docs/03 "armor 5 then", the two dead checks, the regen-reason convention), BUG-0721, the D18 reports re-run on D19 + the surround rule, the reprint's leftovers. Then the owner's tweaks, D14 b once the strategies schema lands, else STOP cheaply. Brief in `studio/handoff.md` |
-| Data: gate | **GO** |
+| Data: milestone | M3 Done (D1-D4); D5-D8, D-H1-H5, D10a-c, D11-D19 on `main` (**D-H5**: report nits, the D18 reports re-run: "wood binds at some marks only, not the limit overall"; no data change). Golden `data-hash` **AB811AD47F68D0AE**. Counter **0 / 4** |
+| Data: next task | **An inbox answer first** (D19's table, the Shock pass, `goldShare` 0.6 → 0.5, **BUG-0780** accept / Catapult pass) · QA light; **else STOP cheaply** (no schema waiting). The session after M5-4f lands: re-print the D-H5 spending paragraphs + the house notes (D15 C), ~150 lines. Brief in `studio/handoff.md` |
+| Data: gate | **STOP unless the inbox has an answer** (resumes by itself the session after M5-4f lands) |
 | Tools on this PC | Godot 4.7.2 .NET, .NET SDK 8.0.425, Git 2.53 + LFS 3.7; `GODOT` user variable set |
-| Build | **2325 ACCEPT (Producer):** sim branch 94a0c1a build 0 warnings, the Surround / golden / GatherWedge / combat / AI-v-AI / MatchOver / siege slice **184 / 193: the 8 = `CounterTriangleMarginsTests` (BUG-0734), 1 skipped**. **Scratch merge sim 94a0c1a + view b6c33e4 + data cc3e170** (docs/01 / `bugs/README.md` / `coverage.md` unions): build **0 warnings**, the targeted non-Perf slices **2,564 / 2,574 (6 m 20 s): the 8 = BUG-0734 with the merged numbers (Catapult / Tent line 36.2 → 30.2 s, 47 → 56 %; Ram / Billet siege 13.8 → 13.7 s, line 40.0 → 31.2 s, 34 → 44 %)**, `BuildingKillTimeReportTests` **12 / 12** (20 HI 11.8 / 23.1 / 45.0 s, 20 Raiders 9.8 / 19.4 / 35.8 s, Catapult 2.3-3.9× HI per cost), smoke **PASS** (both passes), **scene loop 57 / 58 under load (every scene + both playables; the 1 = `M4PlayableTest` seed 6 step 6 "a kill and a loss: not by tick 5500", a second data point for BUG-0745's class; rerun alone: PASS 49.3 s, both seeds, every step)**. QA: sim full round 0 6,473 / 6,521 (8 BUG-0734, 1 BUG-0730, 25 wall-clock Perf under load; Perf A/B base vs branch equal), round 1 focused 525 / 529; view non-Perf 6,475 / 6,510 (21 wall-clock Perf, 8 of them red on base in the same clone), smoke PASS, loop 57 / 58 under load (BUG-0745) + the failed scene PASS alone; data clean-clone non-Perf **6,320 / 6,331, 0 failed** (37 m 37 s), 18 Perf rows red under load and equal to base in a paired serial run, `AiPerfTests` alone 0.395 ms / think. **Previous: 0946 ACCEPT (Producer):** sim branch af1b37a build 0 warnings, the defeat / golden / hash / door / AI-v-AI slice **202 / 203** (the 1 = the view-owned `ViewApi/MatchOverTests` row M6-V7 deletes); view branch ebc609d build 0 warnings, **ViewApi slice 1,059 / 1,059**; data branch 907becf build 0 warnings, the Content + QA/Content + hash + golden slice **953 / 953 (23 s)**. **Scratch merge sim + view + data** (docs/03 one sentence, `bugs/README.md` / `coverage.md` unions): build **0 warnings**, targeted slices **2,367 / 2,369 (3 m 14 s): the 2 = `M6V7QaTests.ViewApiDriven_*` (BUG-0711 item 2, the view fix round)**, smoke **PASS** (both passes), **scene loop 52 / 53 (the 1 = `AbilityViewTest`, BUG-0711 item 1; the match-over scenes and `BuildingGroupsTest` / `QaM6V7Test` PASS under the new rule)**. QA: sim full round 1 6,440 / 6,469 (14 wall-clock Perf + the view-owned row), **Perf alone 173 / 176, 0 failed**, smoke PASS, loop 47 / 51 (the four expected); view non-Perf 6,294 / 6,307, smoke PASS, **loop 55 / 55 on the branch**, the match-over scenes PASS with the sim branch merged; data: no report file (rule 23), BUG-0721 + coverage committed. **Previous (0946 PLAN check on `main` 2e1d3f7):** build 0 warnings, non-Perf 6,266 / 11 / 0 (23 m 44 s), smoke PASS. **1616 ACCEPT (Producer):** sim branch 419a9e8 build 0 warnings, **non-Perf 6,258 / 11 skipped / 1 failed (30 m 52 s, beside the Godot runs): `SerialCollectionTests.EveryPerfTest_IsInTheSerialCollection` names QA's new Perf-tagged `Stress/AbilityManagerFuzzStressTests.AThink_WithShippedSandstormsAlive_Measured`, whose class lacks `[Collection(SerialCollection.Name)]` (QA's own full run predates its file); the one-line fix is a required pre-merge fix round (session log "Decisions"), verified by that test alone**; view branch 54b7ef2 build 0 warnings, smoke **PASS** both passes, `MatchOverViewTest` / `QaM6V4Test` / `AiSeatTest` / `QaM6V6Test` / `ShellTest` **PASS**; data branch 6645354 build 0 warnings, the Content + QA/Content + hash + golden slice **945 / 945**. **Scratch merge sim + view + data** (docs/01 / `bugs/README.md` / `coverage.md` unions): build 0 warnings, targeted slices **1,186 / 0 failed / 1 skipped**, smoke PASS, `AiSeatTest` / `MatchOverViewTest` / `QaM6V4Test` **PASS**. QA: sim full non-Perf **6,243 / 10 / 0 (30 m)**, Perf base vs HEAD under load 28 / 31 with every HEAD-only row green alone (no regression), smoke PASS; view sim non-Perf 6,218 / 10 / 0, smoke PASS both passes, loop **51 / 51**; data non-Perf 6,221 / 10 / 0, slice 926 / 926 |
-| Tests | **2325:** Producer: all three diffs read (the sim's `SurroundRule` whole, the `CombatSystem` hunks, `World` arrays, `CombatConstants`, docs/03's section and the save paragraph, the `MatchOverTests` / `SimHardeningM5H1QaTests` re-stagings; the view's `KeyMap` / `KeysText` / `SelectionPanel` / `SelectionController` / `CommandCard` / `FogOfWar` / `GameSettings` / `Main` / `SettingsApplier` / `UiText` / `ViewApi/SeenResources`, `ui.json`, docs/02 / 01; the data's 27 data lines, docs/02 / 03 / 05 / 01, all four pages, every sim-track pin hunk); the scratch merge built and run, the kill-time report and the siege diff read from the Producer's own run. QA: sim the "before" re-measured on a clean clone of the base, 25 + 11 attack rows (60 on one House, mixed radii, a 1x1 footprint, the map corner, a cliff side, a sealed pocket, a rebuild in the slot, two owners, 2,000-tick twins, 500 on a Town Hall 0 B, ranged / unit chases rule on vs off hash-equal), a Perf A/B under equal load; view the keys attacked with 3,000 seeded tab walks, 4,799 action × key bindings, 44 hand edits, 500 fuzzed files, cascades, old files, a 2,005-tick click-every-frame twin, 3 fog edge cases, the windowed screenshots looked at; data the 1,120-cell formula check in exact decimals, the shipped Easy casting, byte-identical shipped files, paired base / head Perf. **0946:** Producer: all three diffs read (the sim's `World.Defeat.cs` / `PlayerLedger` / `UnitStore` whole, `MatchOverTests`, `TestSim.KeepIn`, the door fuzz and AI-v-AI re-stagings, docs/02 / 03 / 01; the view's `Main` / `GameSettings` / `SettingsScreen` / `RtsCamera` / `SelectionController` / `Match`, `ViewApi/CameraLimits` / `ControlGroups` / `CursorConfine`, the `MatchOver` deletions, `DefeatStaging` + the three scenes, docs; the data's both pages, `BuildingKillTimeReportTests` / `TreesNearBasesReportTests`, BUG-0721); the scratch merge built and run, the D18 tables read from the Producer's own run. QA: sim a 4-seat real-AI oracle both ways (4 × 4,000 ticks), the summon-expiry vs hall-finish exact tick, the door on standing buildings (7 kinds × 4 ticks), two whole-suite probes in a scratch clone (BUG-0705 / 0706), 14 mutants; view the hash twin at 10 / 30 attackers over 2,185 / 1,434 ticks, the edge band at 5 resolutions × 4 sides, a group recalled with A armed, the `Sync` mutation; data the lever edits' byte-identical shipped files, the menu constants, two byte-identical report runs. **1616:** Producer: all three diffs read (the sim's `Ai/AbilityManager` whole, `AiPlayer` order, `Blackboard` arrays, `PlayerView` accessors, `AiRulesDef` / loader / limits / `GameData` hash, `rules.json`, the golden header, `AiPerfTests`' data edit, the door fuzz's `UseAbility` branch, docs/03 + docs/01; the view's `Match` / `Main` / `MatchOverBanner` / `MatchStats` / `MatchOverText` / `PauseMenu` / `SimRunner` / `SettingsApplier` / `GameSettings` / `UiText` / `AiSeatTest` / `ui.json` / docs/03 + docs/01, QA's two screenshots looked at; the data's docs/02 bullet, both pages' Defense lines against docs/03, `AiContentTests` K, `AiSpendingReportTests`, docs/01); the scratch merge built and run. QA: sim 320 random scenes / 482 casts under an oracle, 6 / 6 mutants, a 4-seat casting match twin-equal, reach / radius / own-unit edges, three Priests stacking, a wave with mages, think cost vs live storms; view orders on the defeat tick, simultaneous falls in 3 seats, banner vs pause both ways, clicks under the banner, Settings after a banner, a second skirmish, stats after Continue, 9 BUG-0680 boundary rows, an 8x bench; data the K pin attacked four ways, the report's preconditions and runtime |
-| Open bugs | **S1: 0, S2: 1 (BUG-0734, closed by the merged-tree reprint at this integration)**, S3: 16, S4: 19 (the merged index). **New open:** sim BUG-0732 (S4: surround nits, M5-H2), BUG-0734 (S2: the pages' siege cells, the reprint); view BUG-0743 item 3 / BUG-0744 (S4: keys-file leftovers, M6-VH2), BUG-0745 (S3: `M4PlayableTest` seed 1 once under load; the sim's replay probe first); data BUG-0750 (S4: D19 nits, D-H5). **Closed this session:** sim BUG-0730 / 0731 (S3) in the round, BUG-0733 (S3) wontfix by Producer decision; view BUG-0740 (S2) / 0741 / 0742 (S3) + BUG-0743 items 1-2 in the round. Still open from before: BUG-0703 (S3, M5-H2 first), BUG-0701 (S3), BUG-0702 / 0704 / 0675 c / 0684 / 0721 (S4); part-fixed: BUG-0622 (item 1), BUG-0550 (item 2), BUG-0521 (items 2-3) |
-| Sessions today | **2026-10-15: 1 / 8 done** (2325, started 23:25 and accepted on the 16th); **2026-10-16: 0 / 8**. Counters after it: **sim 4 / 4, view 4 / 4, data 4 / 4 → hardening on all three next** |
-| Last session | 2026-10-15-2325 · sim M5-P1 (feature, 1 fix round, ACCEPT, merged) · view M6-V8 (feature, 1 fix round, ACCEPT, merged) · data D19 (feature, 1 round for stale pins, ACCEPT, merged + the merged-tree reprint) · M6 1 / 10 (criterion 4 ticked); BUG-0730 / 0731 / 0733 / 0740 / 0741 / 0742 closed; golden header → AB811AD47F68D0AE |
+| Build | **0847 ACCEPT (Producer):** sim branch 12131c8 build 0 warnings; **scratch merge sim 12131c8 + view cdb4858 + data 4420985** (`BUG-0745` status + `bugs/README.md` unions): build **0 warnings**, **the full non-Perf suite 6,417 / 6,425, 0 failed, 8 skipped (29 m 51 s; the 8 = the known-open rows)**, smoke **PASS** (both passes), **scene loop 59 / 59 beside the running suite** (both playables; `M4PlayableTest` 23.6 s both seeds). QA: sim round 1 non-Perf 6,407 / 6,416, 0 failed; Perf alone head 17 red ⊂ base 20 red at equal magnitudes (BUG-0764); view full 6,548 / 6,581 (19 wall-clock Perf under load, A/B equal within 2 %), smoke PASS, loop 59 / 59; data non-Perf 6,386 / 6,397, 0 failed, round 1 full 6,560 / 6,590 (18 Perf red on head and on a fresh archive of base, idle machine: BUG-0764), Content + QA/Content 895 / 895. **Previous: 2325 ACCEPT:** scratch merge build 0 warnings, slices 2,564 / 2,574 (the 8 = BUG-0734, fixed by the reprint since), smoke PASS, loop 57 / 58 under load (the 1 = BUG-0745, fixed since) |
+| Tests | **0847:** Producer: all three diffs read (the sim's `World.Defeat.cs` / `World.cs` / `CombatSystem` / `DeathEvent` / `SurroundRule` / `MovementSystem` / `FogStore` / `ZoneStore` / `AbilityManager` / `Blackboard` / `EconomyManager` / `World.Stealth.cs` hunks whole, docs/01 / 02 / 03, the `MatchOverTests` / `DefeatCountsFuzzTests` / `DefeatRuleQaTests` / `AbilityManagerQaTests` hunks; the view's `BenchRunner` / `FogOfWar` / `GroundDiscPool` / `KeyMap` / `Main` / `SettingsScreen` / `SimRunner` / `ViewApi/StartBase` / `M4PlayableTest` / `SettingsTest` / `ShellTest`; the data's `AiSpendingReportTests` / `BuildingKillTimeReportTests` / `D18ReportPreconditionQaTests` whole, both pages, docs/03); the scratch merge built and run (above); the result file checked row by row for the regression tests (`WallPinTests`, `CollapseRuleQaTests` 9, `SimHardeningM5H2QaTests` 5, `StartBaseEdgeQaTests` 2, `TwoOwnersFromOnePoint_*`, `ThousandUnits_*`, `BuildingKillTimeReportTests` 2, the golden pair). QA: sim the collapse fuzz 4 seeds × 2,000 ticks × 4 seats + a 3-AI-seat match with a per-tick checker, whole-suite `World.Collapse` instrumentation, 54 surround rows base v head, the BUG-0745 replay on b6c33e4 with and without the hunk, two fog-mask mutants, three no-stacking mutants + a 60-scene cancel fuzz, Perf A/B; view 101 hostile key values, 1,114,312 codes, 8,568 reclaims, 2 × 4 parallel settings tests, 6 playable runs, 600 border-band start plans; data 12 precondition mutants, 2 guard mutants + the no-guard control, 0 collapses in 895 Content tests. **Previous: 2325** (its session log) |
+| Open bugs | **S1: 0, S2: 0** (BUG-0734 fixed by the reprint b616086; BUG-0761 found and fixed this session), S3: 13, S4: 15 (the merged index). **New open:** sim **BUG-0764** (S3, Producer-filed: Perf rows red on an idle machine on base and head alike); view BUG-0770 (S4: two dev scenes read the player's `settings.cfg`); data **BUG-0780** (S3, the owner's call: Catapults 1.7× / 1.6× the Raider per cost on a hall / Town Hall). **Closed this session (17):** sim BUG-0703 / 0701 / 0745 / 0760 / 0762 (S3), 0651 (S3, no longer reproduces), 0732 / 0650 / 0675 / 0763 (S4); view BUG-0684 / 0744 / 0743 / 0622 (S4); data BUG-0761 (S2), 0750 / 0721 (S4). Part-fixed: BUG-0702 (item 1 left), BUG-0704 (items 2-3 left). Still open from before: BUG-0144 (S3), BUG-0113 item 2, BUG-0550 item 2, BUG-0521 items 2-3, BUG-0281 item 2, BUG-0663 (S4) |
+| Sessions today | **2026-10-16: 1 / 8 done** (0847). Counters after it: **sim 0 / 4, view 0 / 4, data 0 / 4 → feature sessions next (data: an inbox answer or STOP)** |
+| Last session | 2026-10-16-0847 · sim M5-H2 (hardening, 1 fix round, ACCEPT, merged) · view M6-VH2 (hardening, 0 rounds, ACCEPT, merged) · data D-H5 (hardening, 1 round for BUG-0761, ACCEPT, merged) · 17 bugs closed, BUG-0764 / 0770 / 0780 filed; golden unmoved; M5 2 / 9, M6 1 / 10 |
 
 ## Milestone progress
 
@@ -57,6 +57,106 @@ _Last updated: 2026-10-16 (session 2026-10-15-2325 ACCEPT): **the rest of your 2
 Non-blocking. Each entry says what was built or decided, what you'd notice in the game, and how
 to change it. To change anything, write it in `studio/inbox.md`, for example "use formations
 instead of clusters" or "make giving up take 2 seconds".
+
+### Where my comments on your 2026-10-14 feedback are (pointer, Producer, 2026-10-16)
+
+You asked mid-session where the Producer's take on your review answers and playtest notes went. It is the entry **"Your review
+answers and first playtest: what changes, where each item lands, the D14 verdict, and a design for a defense that pulls home only
+what a raid is worth (Producer assessment, 2026-10-14)"**, further down this section (search this file for `Producer assessment,
+2026-10-14`; newer entries are added above it, so it moves down one entry per task). Its items today: Easy casts, ×1.5, the
+building-damage set, the win rule, the cursor confinement, building control groups, the resource click, keybinds and the
+surround-a-building pathing are **built**; the proportional defense is the sim's **next** task (M5-4f, with quicker gathering);
+the variable strategies and counter-composition are M5 criteria 8-9 (after M5-4f); the Ages → tech-tree design is after M5's AI
+work; the two proposals (a Shock pass; the AI's gold share) still want a yes / no from you. That entry stays where it is until you
+acknowledge it in the inbox.
+
+### When a side is knocked out its leftover buildings fall with it, a soldier pinned against a cliff by idle friends slides free, and the AI stops stacking sandstorms (sim track, M5-H2 clean-up, 2026-10-16)
+
+**What was built (a clean-up: no new feature, no number changed, the recorded matches unmoved).**
+1. **The collapse.** Under your win rule a side is out when it has no unit left and nothing that can train one, but its houses,
+   towers, Forge and half-built sites used to stand on and keep working: its tower kept shooting and scoring kills, its research
+   finished. Now, on the tick a side is out, every building it still has crumbles like a razed one: rubble on the ground, the
+   ground reopens, anything queued in it is gone.
+2. **Rings shared by two sides.** Two players attacking one building (a 3-4 player match later) used to read each other's
+   standing spots as taken; each side now has its own ring, and a spot is judged by who is actually standing on it. A sealed
+   pocket's unreachable spots are no longer tried first (attack-moving into a walled House: 9 give-ups → 0).
+3. **The pinned Sapper.** The M4 playable scene's Sapper stood still through eight right-clicks because the army had been
+   pulled back on top of it against a cliff: the sidestep round idle friends cancelled its way along the wall. A unit in that
+   spot now slides on past them (replayed in a bare sim: 0.07 m in 8 orders before, 55 m after).
+4. **The AI's spells.** Three Priests no longer drop three sandstorms on one spot in one think (one storm, the others keep their
+   casts; a storm that never landed is retried as before), and the AI's thinking no longer slows down with every live storm (8
+   storms: 1.1 ms → 0.27 ms per think). A site no worker can reach is given up on after three tries instead of draining the
+   economy forever.
+
+**What you'll see.** Win a skirmish against the AI: the moment its last soldier and its last unit-making hall are gone, its houses,
+towers and sites all turn to rubble at once instead of standing as a ghost base you'd have to hunt down, and no tower keeps
+shooting your army after the banner. The end-screen counts: a collapse is **neither a kill for you nor a loss for the AI** (see the
+decision). Pathing: an army parked on top of a unit against a cliff no longer freezes that unit. Spells: an AI with several
+Priests spends its storms on different clumps rather than one.
+
+**Producer decision (owner may revisit).** A collapsed building counts as neither a kill nor a loss in the post-match stats: the
+stats count what the enemy destroyed, and a collapse is the consequence of a defeat already decided. The alternative, crediting
+them to the winner, would pad kill counts by a whole base in every win. One inbox line changes it ("count collapses as kills").
+Two smaller closures: BUG-0651 (one unit of 1,000 gave up a reachable building at twice the supported crowd) **no longer
+reproduces** on today's chase code and is closed with its test kept as a guard; a defense radius covering the whole map is
+documented as a legal "turtle" play style, not a bug.
+
+**Rough edges.** BUG-0702 item 1 (a mage with two enemy groups either side casts at neither; goes with the proportional defense
+task), BUG-0704 items 2-3 (wording and two test rows weaker than their names; next sim clean-up), BUG-0144 and BUG-0113 item 2
+not reached again, **BUG-0764 (new, S3): 17-20 speed benchmarks fail on this PC on every branch alike, so they can't catch a
+regression until re-baselined** (a fresh-boot check from you is wanted, see Waiting on you), and `CLAUDE.md` still says
+"Current milestone: M1" (one line; the next sim session fixes it unless you prefer to). Around a small House the last two or
+three attackers still jam at the far corners (17-18 of 20): pathing slice 2. The memory bound of the biggest test map moved up
+by 168 KB (one ring layer per player plus the fog's storm mask), itemised.
+
+### The keybinds file refuses look-alike combos, test scenes stop sharing one settings file, and the M4 playable scene runs on a fixed clock (view track, M6-VH2 clean-up, 2026-10-16)
+
+**What was built (a clean-up: nothing new on screen).** A hand-edited `settings.cfg` key such as "Meta+K", "Cmd+K" or "Kp+K" used
+to be read silently as plain K; it is now one reported problem and the default key, and a key value that can't survive a save
+is refused up front (1.1 million codes checked, 261 real keys, none lost). The Settings screen greys out VSync and shows the real
+state when a developer flag forces it, and never writes that flag into your file. The benchmark now frames the whole army before
+boxing it (seed 6's column used to be half off screen). The "Last seen" amount on a clicked mine is exact at 2x speed. The two
+settings test scenes each use their own folder, so two test runs at once can't trip each other; and a start location by the
+map's west or north edge no longer puts a hall across the map (hand-built maps only; the menu's maps were never affected). The
+M4 playable test scene now advances the clock by a fixed 1/60 s per frame, so every click lands on the same tick however busy
+the PC is: the two "failed once under load" cases (BUG-0745) are closed, together with the sim's fix above.
+
+**What you'll see.** Nothing different in play. If you ever edit `settings.cfg` by hand and mistype a key, the game tells you
+which one and uses the default.
+
+**Rough edges.** BUG-0770 (S4): two test scenes still read your real `settings.cfg`, so a rebind on your desk could fail them
+(the game itself is unaffected; next view clean-up). BUG-0744 item 3: one bad hand-edited key can reset a whole row of grid keys
+(documented as the chosen behaviour). A side effect worth knowing: the seed-6 benchmark runs at a wider zoom now, so its frame
+times aren't comparable with earlier runs.
+
+### Reports re-run on the new numbers: wood is no longer the AI's limit overall, and the Catapult is under twice a Raider's damage per cost against halls (your call) (data track, D-H5 clean-up, 2026-10-16)
+
+**No number, name or description changed; the data fingerprint is unmoved (AB811AD47F68D0AE).** Three report methods were
+tightened (the siege ratio is now checked against both line units, the AI spending report stops counting once the idle side has
+lost, and it runs on the menu's own map with 8 mines), a self-check that had gone dead was repaired, and the kill-time report now
+fails loudly if a building "falls" by the new collapse rule instead of being razed (it had silently measured a 0.1-second
+"kill" of a lone House: BUG-0761, S2, found by the sim's QA and fixed by the data track in its fix round; today's numbers are
+real razings again).
+
+**What the measurements say now (20 attackers, no defenders, flat ground; damage per gold spent, relative to a line unit):**
+
+| Siege group | vs 20 Heavy Infantry: House / hall / Town Hall | vs 20 Raiders: House / hall / Town Hall |
+| --- | --- | --- |
+| 2 Catapults (700 gold) | 3.9× / 2.3× / 2.3× | 2.8× / **1.7×** / **1.6×** |
+| 2 Sappers (224) | 5.7× / 4.8× / 4.8× | 4.1× / 3.5× / 3.3× |
+
+Kill times: 20 Raiders raze a House / hall / Town Hall in 9.8 / 19.5 / 35.8 s (10 Raiders: 13.8 / 33.0 / 62.6 s); the band you
+set (20 / 60 / 120 s) holds 12 / 12 and the "siege at least 2× a Heavy Infantry" rule holds everywhere. **BUG-0780 (S3, your
+call):** against the Raider, the cheapest and fastest line unit, the Catapult is only 1.7× / 1.6× as cost-efficient on a hall
+and a Town Hall. Options: (a) **accept** (my recommendation for now: the Raider's own speed and price make it the outlier, and
+a Shock pass, if you order one, moves it anyway); (b) a **Catapult pass** (cost 700 → about 600 for the pair, or damage up about
+20 %, measured first). Write "accept BUG-0780" or "Catapult pass" in the inbox. The AI spending report: on the menu's map the
+AI now razes an idle base at 8-10 minutes, so only the 5-minute mark counts, and at 1 of those 4 marks it had wood under 100 with
+gold over 300: "wood binds at some marks only, not the limit overall" (D18 read "still the limit" with 9 of 16, counting marks
+after the win). A thin sample, so the `goldShare` 0.6 → 0.5 proposal is still a proposal, not a finding.
+
+**Rough edges.** None open for the data track but BUG-0780 above. Process: the regen-reason convention for the recorded matches'
+header is written down (BUG-0750 closed).
 
 ### Your soldiers now surround a building instead of queueing behind each other: 17-20 of 20 strike within ten seconds, where 9-11 did before (sim track, M5-P1 "pathing slice 1", 2026-10-15)
 
@@ -211,7 +311,10 @@ within 30 m, 41 and 62 within 60 m. So the start is not short of trees; what you
 **2. The AI's wood on a real map (D17's re-measure).** Seeds 1 and 7, both factions, Normal, 20 minutes, the other side idle:
 **wood is still the limit** (at 9 of 16 checkpoints the AI held under 100 wood with 300+ gold; e.g. Whirlwind seed 7 at 15 min: 1,918
 gold, 85 wood). One lever is in the AI's own file: it sends too many workers to gold (`goldShare`); lowering it is one number per
-difficulty. Say "lower the AI's gold share" and D19 includes it; otherwise it waits for your Easy / Hard play.
+difficulty. Say "lower the AI's gold share" and D19 includes it; otherwise it waits for your Easy / Hard play. **Update (D-H5,
+2026-10-16):** re-run on D19's numbers with the surround rule, on the menu's own map (8 mines), the AI razes the idle base at 8-10
+minutes, so only the 5-minute marks count: 1 of 4 was wood-bound, "wood binds at some marks only, not the limit overall". A thin
+sample; the `goldShare` proposal stands as a proposal.
 
 **3. How long buildings take to kill (your note 6), 20 attackers, no defenders, flat ground.**
 
@@ -4386,6 +4489,16 @@ track right after S1/S2 bugs).
     Teams (Requests 38) when M6's 2-4 slots need them. **After M5:** D14 d (squads: home guard, streamed reinforcements, harass) if
     the owner wants it after playing a-c; the **Ages → tech tree** design task (docs first, owner review, then data + a small sim
     clean-up); a second start forest per base if D18 shows the generator short of trees (`MapGenParams`, next sim hardening).
+25. ~~M5-H2 sim hardening~~ → **done** (session 2026-10-16-0847, 1 fix round, QA full FAIL → PASS: the collapse rule (`World.Collapse` in phase
+    11b, `DeathEvent.Collapsed`, neither a kill nor a loss, `CombatSystem.DropDeadReferences` after), owner-layered surround claims +
+    the reachable-spot filter (BUG-0732), the flow-step-alone slide against a wall (BUG-0745's sim half, `WallPinTests`), the fog's
+    near-blocker mask + `ZoneStore.BlockerVersion` + an 8-storm `AiPerfTests` row (BUG-0701), the no-stacking rule with retries
+    (BUG-0702 items 2-3, BUG-0760), `EconomyManager.MaxJoins` (BUG-0650), BUG-0675 c, BUG-0704 item 4, BUG-0651 closed as not
+    reproducing; QA's `CollapseRuleQaTests` (8 rows) + `SimHardeningM5H2QaTests`; the golden untouched; memory bound → 232,306,000
+    (+167,984 B itemised); BUG-0761 S2 (data-owned, fixed by D-H5) / 0762 / 0763 found and fixed; BUG-0764 S3 filed by the Producer;
+    not reached: CLAUDE.md's milestone line, BUG-0144, BUG-0113 item 2; +247 / −30 production, +1,964 / −138 whole diff). **Counter
+    0 / 4.** **Then** item 24's list from (a): M5-4f + D15 C + BUG-0702 item 1 + `gatherRate` with the seed-21 re-record (and the
+    CLAUDE.md line first), pathing slice 2, M5-4c slice 2, Requests 39 (+ 38), D14 b, M5-4d, D14 c, M5-5, M5-6.
 4. M6 (far ahead): agents can't download. **Owner note 2026-10-08: the art direction is grounded / realistic
    (Quaternius Universal Base Characters + Modular Outfits + Universal Animation Library 1 / 2, Mixamo packs for gaps;
    KayKit a fallback only; docs/04 and docs/01 updated by the owner), and the packs are already in `asset-sources/`
@@ -4509,6 +4622,15 @@ track right after S1/S2 bugs).
     (2-4 slots; teams need Requests 38); (c) save / load + replay playback (criterion 3); (d) the look test (the owner's packs are in
     `asset-sources/`); (e) `tools/export.ps1` with Requests 33; (f) M5's view part: criterion 6's playable run against the AI; (g) the
     stats columns as Requests 39 lands.
+25. ~~M6-VH2 view hardening~~ → **done** (session 2026-10-16-0847, 0 fix rounds, QA standard PASS_WITH_ISSUES: BUG-0684 items 1-5
+    (per-process `user://` folders in `SettingsTest` / `ShellTest`, the screen's VSync under `--vsync` + `Picks` keeps the file's, the
+    dead `ShowMenu()` branch, `GroundDiscPool.Reclaim`'s sorted stale list, `BenchRunner.FitArmy`), BUG-0744 items 1-2 (`KeyMap.Read`
+    compares `OS.GetKeycodeString(key)` with the trimmed input; `IsPlainKey` round-trips), BUG-0743 item 3 (`FogOfWar.Runner` subscribes
+    to `SimRunner.Ticked`), BUG-0745's scene half (`SimRunner.FixedFrameDelta`, `M4PlayableTest.PullBackSpot`), BUG-0622 item 1
+    (`ViewApi/StartBase.Plan` edge wrap; `QA/StartBaseEdgeQaTests`); QA's `QaM6VH2Test` (hostile keys, every code, the disc-pool fuzz, 2x
+    last-seen); BUG-0770 S4 filed; loop 59 / 59 on the branch; +1,015 / −71 whole diff). **Counter 0 / 4.** **Then:** (b) **M6-V5's slot
+    part** (2-4 slots, free-for-all; the team column waits on Requests 38), (c) save / load + replay playback, (d) the look test, (e) export,
+    (f) criterion 6's playable, (g) the stats columns.
 
 ## Feature queue: data track (feature sessions, in order; owner reviews every landed task)
 
@@ -4615,10 +4737,30 @@ track right after S1/S2 bugs).
     M7-M9 rosters when their milestones open. **Rules for every data brief:** name every sim-track test that pins a value the task
     changes, and the final assertion both tracks agree on; a sim task written the same session against the same content writes its
     tests content-independent.
+26. ~~D-H5 data hardening~~ → **done** (session 2026-10-16-0847, 1 fix round for the sim-found BUG-0761 (S2: the kill-time report's House
+    column measured a collapse; `TestSim.KeepIn(sim, 1)` after the attackers + three guards), QA light PASS: BUG-0750 items 3 + 5 (the
+    precondition test's lever edits off the shipped values, 12 / 12 mutants killed; the regen-reason convention in `bugs/README.md`),
+    BUG-0721 items 1-3 (the siege ratio against both line rows, the spending conclusion cut at the idle seat's defeat, the menu's 8
+    mines), the D18 reports re-run on D19 + the surround rule (both pages + docs/03: "wood binds at some marks only"; 20 Raiders 9.8 /
+    19.5 / 35.8 s); **no data change, golden unmoved**; **BUG-0780 S3** (Catapults 1.7× / 1.6× the Raider per cost on a hall / Town Hall:
+    the owner's call); +304 / −39 lines). **Counter 0 / 4.** **Then:** an inbox answer (D19's table, the Shock pass, `goldShare`,
+    BUG-0780) first; else **STOP cheaply** until the strategies schema (D14 b) or D15 C (M5-4f) is on `main`.
 
-## Debt backlog: sim track (hardening sessions only; counter **4 / 4** after M5-P1, session 2026-10-15-2325; **M5-H2 is the next sim session**)
+## Debt backlog: sim track (hardening sessions only; counter **0 / 4** after M5-H2, session 2026-10-16-0847)
 
-- **BUG-0734 (S2, M5-P1 QA; not debt: the merged-tree reprint at the 2325 integration, data track):** the faction pages' siege tables
+- **After M5-H2 (2026-10-16-0847), open sim debt, most valuable first:** **BUG-0764 (S3, new, Producer-filed):** 17-20 Perf rows red on
+  an idle machine on base and head alike (A/B equal three ways); re-baseline with dated reasons or gate relative to a calibration row
+  (an owner fresh-boot run first, Waiting on you). **BUG-0144 (S3)** and **BUG-0113 item 2 (S4)** not reached for the fourth time: first
+  items of M5-H3. **BUG-0702 item 1 (S4)** goes with M5-4f (the densest cluster). **BUG-0704 items 2-3 (S4)** (the "camps" wording; two
+  re-staged rows weaker than their names). **CLAUDE.md's "Current milestone: M1" line** (one line, the Producer doesn't edit CLAUDE.md:
+  the next sim dev does, or the owner). **Not bugs:** the House row's far-corner jam 17-18 / 20 (pathing slice 2); 500 attackers on one
+  Town Hall +30 % a tick. **Closed in M5-H2:** ~~BUG-0703~~ (S3, the collapse), ~~BUG-0732~~ (S4), ~~BUG-0745~~ sim half (S3; the view's
+  scene half the same session: closed), ~~BUG-0701~~ (S3), ~~BUG-0702 items 2-3~~, ~~BUG-0650~~ (S4), ~~BUG-0675 c~~ (S4), ~~BUG-0704 item
+  4~~ + the `TestSim` nit, ~~BUG-0651~~ (S3, closed as no longer reproducing; the guard row runs), ~~BUG-0750 item 4~~ (the fuzz's off-seat
+  share), and the session's own ~~BUG-0760~~ (S3) / ~~BUG-0762~~ (S3) / ~~BUG-0763~~ (S4); ~~BUG-0761~~ (S2, data-owned) by D-H5's round.
+  Memory bound re-baselined 232,080,000 → **232,306,000** (head 232,225,352 B: +131,072 the surround layers, +36,864 one more layer,
+  +24 the mask, +24; QA: justified, the same ~72 KB margin policy).
+- **BUG-0734 (S2, M5-P1 QA; not debt: the merged-tree reprint at the 2325 integration, data track; fixed by b616086):** the faction pages' siege tables
   (`Content/CounterTriangleMarginsTests`, 8 rows) measure the line razing a Tent / Billet, and the surround rule makes the line faster
   (on the old data: Catapult on a Tent line 192.2 → 155.0 s; Ram on a Billet 254.5 → 191.8 s, the Ram 13.8 → 13.7 s); D19 re-printed
   the same cells the same session on the old movement. **Producer decision:** no sim change; the data track re-prints both pages' siege
@@ -4865,8 +5007,16 @@ track right after S1/S2 bugs).
   recorded but not checked; no depletion events (views poll); .NET 8 support ends 2026-11-10, move
   to the next LTS at M6.
 
-## Debt backlog: view track (hardening sessions only; counter **4 / 4** after M6-V8, session 2026-10-15-2325; **M6-VH2 is the next view session**)
+## Debt backlog: view track (hardening sessions only; counter **0 / 4** after M6-VH2, session 2026-10-16-0847)
 
+- **After M6-VH2 (2026-10-16-0847), open view debt:** **BUG-0770 (S4, new, M6-VH2 QA):** `ShellTest.Flow` / `SkirmishBoot` and `AiSeatTest`
+  boot `Main` without a `SettingsPath`, so they read the player's `settings.cfg` and a desk rebind can fail them (QA fixed its own five
+  scenes; a per-process path as `SettingsTest` now does); fold into the next view task that touches `ShellTest`, else M6-VH3. **BUG-0744
+  item 3** documented (one bad hand-edited key resets a row: docs/03 "The file"). **BUG-0550 item 2**, **BUG-0521 items 2-3** (unreachable),
+  **BUG-0281 item 2** (the M6 fog-look pass), **BUG-0663** (S4) unchanged. Note: the seed-6 bench runs at zoom 60 since `BenchRunner.FitArmy`,
+  so its numbers aren't comparable with older runs (documented); the old shared folders `settings-test/` and `shell-test-settings/` under
+  `%APPDATA%/Godot/app_userdata/RtsGame/` are unused (safe to delete). **Closed in M6-VH2:** ~~BUG-0684~~ (S4, items 1-5), ~~BUG-0744 items
+  1-2~~, ~~BUG-0743 item 3~~ (S4, closed), ~~BUG-0745~~ scene half (with the sim's half: closed, Producer), ~~BUG-0622 item 1~~ (S4, closed).
 - **BUG-0744 (S4, M6-V8 QA round 1; M6-VH2):** `[keys]` leftovers the tab can't reach: (1) "Meta+K" / "Command+K" / "Cmd+K" / "Kp+K"
   read with 0 problems as K (Godot drops a prefix it doesn't treat as a mask): compare `OS.GetKeycodeString(key)` with the trimmed input;
   (2) `TrySet` accepts non-key codes inside `CodeMask` (don't round-trip): `IsPlainKey` requires the name to round-trip; (3) one bad
@@ -5047,8 +5197,15 @@ track right after S1/S2 bugs).
   warnings; not errors. Builders: absolute paths for all file I/O.
 - Optional M0 item: Godot MCP server (owner install; not needed since `--screenshot`).
 
-## Debt backlog: data track (counter **4 / 4** after D19, session 2026-10-15-2325; **D-H5 is the next data session**)
+## Debt backlog: data track (counter **0 / 4** after D-H5, session 2026-10-16-0847)
 
+- **After D-H5 (2026-10-16-0847):** **BUG-0780 (S3, dev-filed, the owner's call):** since the surround rule + D19, 2 Catapults do 1.7× / 1.6×
+  the 20 Raiders' damage per cost on a hall / Town Hall (2.8× on a House; 2.3-3.9× the Heavy Infantry's everywhere): pinned as measured
+  in `BuildingKillTimeReportTests`, not loosened; options under For your review (accept, or a Catapult pass measured first). **Closed:**
+  ~~BUG-0750~~ (S4: items 1-2 the reprint, 3 + 5 D-H5, 4 the sim's M5-H2), ~~BUG-0721~~ (S4, all three items), ~~BUG-0761~~ (S2, the kill-time
+  report's House column measured a collapse: `TestSim.KeepIn(sim, 1)` after the attackers + three guards that fail any fall not player
+  0's kill; QA: 0 collapses in the 895 Content tests). Rule 24 for every measured report that stages a lone non-producing building: a
+  keeper, placed after the attackers so the unit slots don't shift.
 - **BUG-0750 (S4, D19 QA; D-H5):** (1) `docs/factions/andii.md:51` "115 vs a Town Hall per swing" is 118 at armor 2; (2) docs/03:1889
   "Shipped: ... armor 5" reads as today's value; (3) `QA/Content/D18ReportPreconditionQaTests`' Structure / ×1.5 lever edits now write the
   shipped values and can't fail (QA's `D19QaTests.BeforeD19Copy_*` covers the kill-time path); (4) `Stress/AbilityManagerFuzzStressTests:120`'s
@@ -5141,6 +5298,7 @@ track right after S1/S2 bugs).
 
 | Date | Session | Task | Result |
 | --- | --- | --- | --- |
+| 2026-10-16 | [2026-10-16-0847](sessions/2026-10-16-0847.md) | **hardening on all three tracks.** sim M5-H2 (the collapse rule: `World.Collapse` on the defeat tick, `DeathEvent.Collapsed` neither a kill nor a loss, `DropDeadReferences` after; owner-layered `SurroundHolder` + `SurroundRule.Reachable` by cached fields (BUG-0732); `MovementSystem`'s flow-step-alone slide against a wall (BUG-0745's sim half, `WallPinTests`); `FogStore._nearBlocker` mask + `ZoneStore.BlockerVersion` + an 8-storm `AiPerfTests` row (BUG-0701: 1.1 → 0.27 ms); `AbilityManager` no-stacking rule + `ForgetEnded` / `NeverRan` retries (BUG-0702 items 2-3, BUG-0760); `EconomyManager.MaxJoins` (BUG-0650); BUG-0675 c, BUG-0704 item 4, BUG-0651 closed; docs/02 / 03 / 01); view M6-VH2 (per-process `user://` folders in `SettingsTest` / `ShellTest`, the VSync field under `--vsync`, `GroundDiscPool.Reclaim`'s sorted stale list, `BenchRunner.FitArmy`, `KeyMap.Read` name compare + `IsPlainKey` round-trip (BUG-0744 1-2), `FogOfWar.Runner` on `Ticked` (BUG-0743 item 3), `SimRunner.FixedFrameDelta` + `M4PlayableTest.PullBackSpot` (BUG-0745's scene half), `ViewApi/StartBase.Plan` edge wrap (BUG-0622 item 1); QA's `QaM6VH2Test`; docs/03); data D-H5 (BUG-0750 items 3 + 5, BUG-0721 items 1-3, the D18 reports re-run on D19 + the surround rule, BUG-0761's keeper + guards in the kill-time report; no data change, golden unmoved) | **all three ACCEPT** (sim 1 fix round, QA full FAIL → PASS: BUG-0760 S3 / 0762 S3 / 0763 S4 found and fixed, **BUG-0761 S2 data-owned → fixed by D-H5's round**; memory bound → 232,306,000 (justified); view 0 rounds, PASS_WITH_ISSUES: BUG-0770 S4; data 1 round, PASS). Producer: scratch merge sim 12131c8 + view cdb4858 + data 4420985 built 0 warnings, smoke PASS, the full non-Perf suite + the whole scene loop (session log); BUG-0764 S3 filed (Perf rows red on an idle machine on base and head alike). **17 bugs closed; M5 2 / 9, M6 1 / 10 unchanged; counters sim 0 / 4, view 0 / 4, data 0 / 4; no open S1 / S2; next: sim M5-4f (+ D15 C, BUG-0702 item 1, `gatherRate` + the seed-21 re-record), view M6-V5 slots, data an inbox answer or STOP; bug ids next: sim 0790, view 0800, data 0810** |
 | 2026-10-15/16 | [2026-10-15-2325](sessions/2026-10-15-2325.md) | sim M5-P1 pathing slice 1 "surround a building" (`Combat/SurroundRule`: a ring of standing spots round a live building, 2 per footprint cell a face + 4 corners, the nearest free one claimed in a fixed order, `World.SurroundClaim` / `SurroundHolder` checked both ways on read and **not hashed** (BUG-0733 wontfix: M6 save state); `CombatSystem` `ChaseCell` / `Chase` / `QueuedAtRing` / no planting on the way / the claim follows a striker / no give-up while queued or walking to a reachable claimed spot in any mode (BUG-0731); `MatchOverTests` re-staged; docs/03 "Implementation (pathing slice 1)" + docs/01); view M6-V8 (`SelectionController.PickResource` / `SelectResource`, `SelectionPanel.ShowResource` "N Gold left" / "Last seen:", `ViewApi/SeenResources.Amount` / `UpdateAmounts` / `InSight`, `KeyMap` 31 actions + the clash rule + `[keys]` read / write with `ResolveClashes` + `Apply`, `SettingsScreen` General / Keybinds tabs, `GameSettings.Keys`, `CommandCard` hints follow the keys, `ui.json` +17 keys, `ResourceClickTest`, docs/02 Controls + docs/03 "Implementation (M6-V8)"); data D19 (×1.5 vs Mounted, Easy `useAbilities` true, Structure 0.7 / 0.35 / 0.6, every building's armor halved: 27 data lines; golden header → **AB811AD47F68D0AE**, `k` lines equal; the kill-time report re-based 12 / 12; both pages re-printed; 18 sim-track pins moved under a conductor exception) | **all three ACCEPT** (sim 1 fix round, QA full FAIL → PASS: BUG-0730 / 0731 S3 fixed, BUG-0733 S3 wontfix (Producer), BUG-0732 S4; **BUG-0734 S2 = the pages' siege cells, re-printed on the merged tree by a data fix-mode dev before the push (REQUIRED)**; view 1 round, FAIL → PASS_WITH_ISSUES: BUG-0740 S2 / 0741 / 0742 S3 fixed, BUG-0743 item 3 / 0744 S4, BUG-0745 S3 (`M4PlayableTest` load flake, maybe movement); data 1 round (the pins), PASS_WITH_ISSUES: BUG-0750 S4). Integration sim → view → data → the reprint. Producer's scratch merge: build 0 warnings, slices 2,564 / 2,574 (the 8 = BUG-0734 with the merged numbers: Catapult / Tent line 30.2 s 56 %, Ram / Billet 31.2 s 44 %), kill-time 12 / 12 (20 HI 11.8 / 23.1 / 45.0 s), smoke PASS, scene loop 57 / 58 under load (the 1 = `M4PlayableTest` seed 6 step 6, PASS alone: BUG-0745's class). **M5 2 / 9; M6 1 / 10 (criterion 4 ticked); counters sim 4 / 4, view 4 / 4, data 4 / 4 → hardening on all three next (M5-H2, M6-VH2, D-H5); Requests 41 closed; next bug ids sim 0760, view 0770, data 0780** |
 | 2026-10-14 | [2026-10-14-0946](sessions/2026-10-14-0946.md) | sim M5-4e: the owner's win condition (`World.Defeat.cs` out = has built + `LiveUnits` 0 + `ProductionBuildings` 0; `PlayerLedger` counts at `UnitStore.TrySpawn` / `Free` and `AddFinished`, derived; `World.LiveUnits(p)` / `ProductionBuildings(p)`; `TestSim.KeepIn`; `MatchOverTests` (a)-(g), `DefeatCountsFuzzTests`, 14 scenes re-staged; docs/02 "Game flow" 4, docs/03 "Implementation (M5-4e)"); view M6-V7: `Main._Process` + `ViewApi/CursorConfine` (Confined while a match runs unpaused and focused, `--no-confine`, never headless), `GameSettings.ConfineCursor` + the Settings box, `CameraLimits.EdgeDirection` (the last pixel pans), `ControlGroups` with one building per group, `SelectionController.GroupKey`, BUG-0710 (`ResourceBar.Sync`, `ViewApi/MatchOver` deleted), `DefeatStaging` + the three match-over scenes for both rules, the dev line "is defeated", docs/02 Controls + docs/03 "Implementation (M6-V7)"; data D18: both pages' flee wording (BUG-0720), `AiSpendingReportTests.GeneratedNormal_*` (wood still the limit), `TreesNearBasesReportTests` (19-61 trees within 30 m of every start), `BuildingKillTimeReportTests` (set (C) meets 12 / 12), `LineShockSweepReportTests` (no set in the band) | **all three ACCEPT** (sim 1 fix round, QA full FAIL → PASS: BUG-0705 S2 + 0706 S3 fixed; BUG-0703 S3 (Producer decision (c): the loser's buildings collapse, M5-H2), BUG-0704 S4; view 0 rounds, PASS, **+ a conductor-dispatched round for BUG-0711** (`AbilityViewTest` + 2 `M6V7QaTests` rows staged under the old rule; else the sim branch held); data 0 rounds, PASS, BUG-0721 S4, no QA report file (rule 23)). Integration sim → view → data; golden unmoved. Producer's scratch merge: build 0 warnings, slices 2,367 / 2,369 (the 2 = BUG-0711), smoke PASS, loop 52 / 53 (the 1 = BUG-0711). **M5 2 / 9 (criterion 5 advanced); M6 criterion 4 advanced; counters sim 3 / 4, view 3 / 4, data 3 / 4; no open S1 / S2; next: sim pathing slice 1, view M6-V8 (resource click + keybinds), data D19 (the owner's numbers, one header move)** |
 | 2026-10-13 | [2026-10-13-1616](sessions/2026-10-13-1616.md) | sim M5-4c slice 1: `Ai/AbilityManager` (last in the think; the enemy group within `range + radius`, its centroid pulled back to range, cast at ≥ `ai.castMinTargets` 2 enemies in the radius; the nearest seen enemy building for `HitsBuildings`; self / aura and summon at the caster; never with an own unit in a friendly-fire radius; judged by the cooldown, `MaxTries` 3 per point; BUG-0700's map clamp), `PlayerView.TryGetAbilityReady` / `TryGetCast`, six `Blackboard` arrays (26 B × slots), golden header → C6FC120A55AE4A0B; the knobs deferred (hard stop); view BUG-0674 / 0680 / 0681 + M6-V4: `Match.Outcome` / `Ended` / `DefeatedAt` from `DefeatEvents`, `MatchOverBanner` (22) through the pause path with `SimRunner` breaking the frame's ticks, `MatchStats` (23) with `Columns`, the pause menu's Stats, `ui.json` `match_over` 18 keys, Requests 39; data D17: docs/02's Normal phrase + K pin, both pages' Defense lines, `AiSpendingReportTests` | all three ACCEPT, 0 fix rounds (QA PASS / PASS_WITH_ISSUES / PASS: BUG-0700 fixed, BUG-0701 S3, BUG-0702 / 0710 / 0720 S4; the scene loop green on `main` again; M5 2 / 6) |
