@@ -7,7 +7,7 @@
       "gatherBonus": 0,
       "focusFire": false,
       "pullBackWounded": false,
-      "useAbilities": false,
+      "useAbilities": true,
       "expandAfter": 900
     },
     "normal": {

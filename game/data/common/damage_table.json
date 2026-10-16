@@ -10,12 +10,12 @@
     {
       "id": "melee",
       "displayName": "Melee",
-      "multipliers": { "light": 1.0, "heavy": 1.0, "mounted": 1.0, "giant": 1.0, "structure": 0.4 }
+      "multipliers": { "light": 1.0, "heavy": 1.0, "mounted": 1.0, "giant": 1.0, "structure": 0.7 }
     },
     {
       "id": "pierce",
       "displayName": "Pierce",
-      "multipliers": { "light": 1.25, "heavy": 0.6, "mounted": 1.0, "giant": 1.25, "structure": 0.2 }
+      "multipliers": { "light": 1.25, "heavy": 0.6, "mounted": 1.0, "giant": 1.25, "structure": 0.35 }
     },
     {
       "id": "siege",
@@ -26,7 +26,7 @@
       "id": "magic",
       "displayName": "Magic",
       "ignoresArmor": true,
-      "multipliers": { "light": 1.0, "heavy": 1.25, "mounted": 1.0, "giant": 1.25, "structure": 0.4 }
+      "multipliers": { "light": 1.0, "heavy": 1.25, "mounted": 1.0, "giant": 1.25, "structure": 0.6 }
     }
   ]
 }

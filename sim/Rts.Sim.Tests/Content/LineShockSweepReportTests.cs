@@ -11,7 +11,7 @@ namespace Rts.Sim.Tests.Content;
 
 /// <summary>
 /// D18 report 5 (D13's open end: the Line v Shock counter rests on the line's hp, armor and cost): with the line units'
-/// <c>bonusVs.mounted</c> back at ×1.5 (the owner's decision of 2026-10-14) in in-memory copies of the data, the line
+/// <c>bonusVs.mounted</c> back at ×1.5 (the owner's decision of 2026-10-14, shipped by D19) in in-memory copies of the data, the line
 /// units' hp (100-140 step 10), armor (1-3) and gold cost (50-80 step 10) are swept one at a time and in pairs, the same
 /// value on both line units (Heavy Infantry, Raider), and each set runs the four Line v Shock match-ups of the counter
 /// triangle (Heavy Infantry v Horse Raider, Raider v Wickan Lancer, both seats). The band is docs/factions' "Balance
@@ -116,7 +116,7 @@ public class LineShockSweepReportTests
             for (int seat = 0; seat < 2; seat++)
                 Assert.Equal(Fight(line, shock, seat), FightWith(TestSim.Data, line, shock, seat));
 
-        var sets = new List<(string Name, int? Hp, int? Armor, int? Gold)> { ("x1.5 alone (today's hp / armor / cost)", null, null, null) };
+        var sets = new List<(string Name, int? Hp, int? Armor, int? Gold)> { ("x1.5 alone (the shipped hp / armor / cost)", null, null, null) };
         int[] hps = { 100, 110, 120, 130, 140 }, armors = { 1, 2, 3 }, golds = { 50, 60, 70, 80 };
         foreach (int h in hps) sets.Add(($"hp {h}", h, null, null));
         foreach (int a in armors) sets.Add(($"armor {a}", null, a, null));
@@ -127,11 +127,11 @@ public class LineShockSweepReportTests
 
         int[] today = Cells(TestSim.Data);
         _out.WriteLine("D18 report 5, 2026-10-14: Line v Shock, the line unit's share of its cost kept (band 40-65 %, seats <= 15 apart)");
-        _out.WriteLine("Shipped: Heavy Infantry 130 hp / armor 3 / 54 g, Raider 108 hp / armor 1 / 48 g, both x1.1 v Mounted; every set below has x1.5");
+        _out.WriteLine("Shipped: Heavy Infantry 130 hp / armor 3 / 54 g, Raider 108 hp / armor 1 / 48 g, both x1.5 v Mounted since D19 (x1.1 before); every set below has x1.5");
         _out.WriteLine("");
         _out.WriteLine("| Set (both line units) | HI v Horse Raider seat 0 | seat 1 | off band | Raider v Lancer seat 0 | seat 1 | off band |");
         _out.WriteLine("| --- | --- | --- | --- | --- | --- | --- |");
-        _out.WriteLine(Row("shipped (x1.1)", today));
+        _out.WriteLine(Row("shipped (x1.5 since D19)", today));
         var results = new List<(string Name, int[] Cells, GameData Data)>();
         foreach ((string name, int? hp, int? armor, int? gold) in sets)
         {

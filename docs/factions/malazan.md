@@ -41,8 +41,8 @@ Age II, at the Armory, 200 G / 150 W, 45 s. Sapper **Cusser cooldown 45 → 30 s
 
 ### Unit notes
 
-- **Heavy Infantry:** ×1.1 vs Mounted (×1.5 until D13). Passive **Shield Wall**: +3 armor against pierce attacks
-  while not moving. Slightly slower than the template line.
+- **Heavy Infantry:** ×1.5 vs Mounted (×1.1 from D13 until D19, 2026-10-15).
+  Passive **Shield Wall**: +3 armor against pierce attacks while not moving. Slightly slower than the template line.
 - **Crossbowman:** ×1.3 vs Heavy (bolts punch through armor). Slower rate of fire than a bow.
 - **Wickan Lancer:** ×1.5 vs Light. Passive **Charge**: the first attack after moving at least
   8 m deals +10 damage.
@@ -58,7 +58,7 @@ Age II, at the Armory, 200 G / 150 W, 45 s. Sapper **Cusser cooldown 45 → 30 s
 | Ability | Unit | Kind | Range | Radius | Cast | Cooldown | Duration | Effect |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Telas Fire | Cadre Mage | Target ground | 16 | 3 m | 0.8 s | 25 s | — | Enemy units in the area are Burning: 10 magic damage/s for 4 s. No effect on buildings |
-| Cusser | Sapper | Target ground | 6 | 3.5 m | 1.0 s | 45 s | — | Enemy units in the area take 120 siege damage, full damage to buildings (≈355 to a Town Hall), friendly fire at 50% |
+| Cusser | Sapper | Target ground | 6 | 3.5 m | 1.0 s | 45 s | — | Enemy units in the area take 120 siege damage, full damage to buildings (≈358 to a Town Hall), friendly fire at 50% |
 
 Telas Fire is the faction's signature caster ability: a short, decisive area denial that punishes
 clumped Heavy units. Cusser is the unique unit's identity: a satchel charge that deletes
@@ -68,18 +68,18 @@ buildings and can wreck your own army if you're careless.
 
 | Slot | Name | Id | HP | Armor | Cost (G/W) | Build (s) | Footprint | Sight | Provides | Requires |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Town Hall | Garrison Keep | `malazan_garrison_keep` | 2400 | 5 | 275 / 275 | 90 | 4×4 | 12 | +10 pop, drop-off, trains Laborer, researches Age II | — |
-| House | Billet | `malazan_billet` | 500 | 3 | 0 / 50 | 20 | 2×2 | 12 | +8 pop | — |
-| Camp | Quartermaster's Depot | `malazan_depot` | 600 | 3 | 0 / 75 | 25 | 2×2 | 12 | Drop-off | — |
-| Infantry Hall | Legion Barracks | `malazan_barracks` | 1200 | 4 | 0 / 150 | 40 | 3×3 | 12 | Trains Heavy Infantry | — |
-| Ranged Hall | Crossbow Range | `malazan_crossbow_range` | 1200 | 4 | 0 / 150 | 40 | 3×3 | 12 | Trains Crossbowman | — |
-| Shock Hall | Wickan Corral | `malazan_wickan_corral` | 1200 | 4 | 75 / 150 | 45 | 3×3 | 12 | Trains Wickan Lancer | Legion Barracks |
-| Forge | Armory | `malazan_armory` | 1000 | 4 | 100 / 100 | 40 | 3×3 | 12 | Upgrades, Moranth Supply | — |
-| Caster Hall | Cadre Tower | `malazan_cadre_tower` | 1200 | 4 | 150 / 150 | 50 | 3×3 | 12 | Trains Cadre Mage | Age II |
-| Siege Works | Engineers' Yard | `malazan_engineers_yard` | 1400 | 4 | 150 / 200 | 55 | 3×3 | 12 | Trains Catapult, Sapper | Age II |
-| Watch Tower | Watchtower | `malazan_watchtower` | 800 | 5 | 50 / 125 | 35 | 2×2 | 24 | Attack 10 pierce / 2 s, range 18; sight 24; detector 16 m | Age II |
+| Town Hall | Garrison Keep | `malazan_garrison_keep` | 2400 | 2 | 275 / 275 | 90 | 4×4 | 12 | +10 pop, drop-off, trains Laborer, researches Age II | — |
+| House | Billet | `malazan_billet` | 500 | 1 | 0 / 50 | 20 | 2×2 | 12 | +8 pop | — |
+| Camp | Quartermaster's Depot | `malazan_depot` | 600 | 1 | 0 / 75 | 25 | 2×2 | 12 | Drop-off | — |
+| Infantry Hall | Legion Barracks | `malazan_barracks` | 1200 | 2 | 0 / 150 | 40 | 3×3 | 12 | Trains Heavy Infantry | — |
+| Ranged Hall | Crossbow Range | `malazan_crossbow_range` | 1200 | 2 | 0 / 150 | 40 | 3×3 | 12 | Trains Crossbowman | — |
+| Shock Hall | Wickan Corral | `malazan_wickan_corral` | 1200 | 2 | 75 / 150 | 45 | 3×3 | 12 | Trains Wickan Lancer | Legion Barracks |
+| Forge | Armory | `malazan_armory` | 1000 | 2 | 100 / 100 | 40 | 3×3 | 12 | Upgrades, Moranth Supply | — |
+| Caster Hall | Cadre Tower | `malazan_cadre_tower` | 1200 | 2 | 150 / 150 | 50 | 3×3 | 12 | Trains Cadre Mage | Age II |
+| Siege Works | Engineers' Yard | `malazan_engineers_yard` | 1400 | 2 | 150 / 200 | 55 | 3×3 | 12 | Trains Catapult, Sapper | Age II |
+| Watch Tower | Watchtower | `malazan_watchtower` | 800 | 2 | 50 / 125 | 35 | 2×2 | 24 | Attack 10 pierce / 2 s, range 18; sight 24; detector 16 m | Age II |
 
-Building stats follow the template in [02-game-design.md](../02-game-design.md#buildings).
+Building stats follow the template in [02-game-design.md](../02-game-design.md#buildings). Every building's armor was halved, rounded down, in D19 (2026-10-15, the owner's building damage set (C)): Town Hall and Watch Tower 5 → 2, House and Camp 3 → 1, the rest 4 → 2.
 
 `Content/BuildingContentTests` and `UnitContentTests` pin this page to the data.
 
@@ -182,7 +182,7 @@ both ways (J), and docs/02's stated numbers to the file (K).
 
 | Difficulty | Thinks every (s) | Build-order slack (s) | Wave size × | Gather bonus | Focus fire | Pulls back wounded | Uses abilities | Expands after (s) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Easy | 2 | 30 | 0.6 | 0% | no | no | no | 900 |
+| Easy | 2 | 30 | 0.6 | 0% | no | no | yes | 900 |
 | Normal | 1 | 5 | 1 | 0% | no | no | yes | 480 |
 | Hard | 0.5 | 0 | 1.25 | 25% | yes | yes | yes | 300 |
 
@@ -216,7 +216,7 @@ both ways (J), and docs/02's stated numbers to the file (K).
 
 ## Balance baseline (M4-2b, 2026-10-08)
 
-Measured at sim commit `dd5b5b9` by `Content/CounterTriangleMarginsTests` (D6), re-printed at `1a9925b` (D8) and, for the four Line v Shock rows, in D13 (2026-10-11) from the shared
+Measured at sim commit `dd5b5b9` by `Content/CounterTriangleMarginsTests` (D6), re-printed at `1a9925b` (D8) and, for the four Line v Shock rows, in D13 (2026-10-11), and for those four rows and the siege rows in D19 (2026-10-15), from the shared
 `Scenario/CounterTriangleScene` harness, the scene of
 `Scenario/CounterTriangleTests`: a flat map, 1,200 gold + wood a side (the whole number of units nearest to it), two
 blocks 5 wide whose fronts start 24 m apart, every unit attack-moved into the other block, seed 7, run in both seats.
@@ -228,10 +228,10 @@ sim change that moves a number fails the test naming the row, seat and column un
 
 | Rule | Winner v loser | Winner seat | Fielded (winner v loser) | Winner left | Winner hp left | Winner keeps (cost) | Time to last death |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Line beats Shock | Heavy Infantry v Horse Raider | 0 | 16 (1184) v 13 (1248) | 14 / 16 | 1228 | 1036 / 1184 (88 %) | 29.8 s |
-| Line beats Shock | Heavy Infantry v Horse Raider | 1 | 16 (1184) v 13 (1248) | 14 / 16 | 1356 | 1036 / 1184 (88 %) | 33.0 s |
-| Line beats Shock | Raider v Wickan Lancer | 0 | 19 (1216) v 10 (1200) | 19 / 19 | 1502 | 1216 / 1216 (100 %) | 23.0 s |
-| Line beats Shock | Raider v Wickan Lancer | 1 | 19 (1216) v 10 (1200) | 17 / 19 | 1429 | 1088 / 1216 (89 %) | 23.2 s |
+| Line beats Shock | Heavy Infantry v Horse Raider | 0 | 16 (1184) v 13 (1248) | 15 / 16 | 1462 | 1110 / 1184 (94 %) | 23.1 s |
+| Line beats Shock | Heavy Infantry v Horse Raider | 1 | 16 (1184) v 13 (1248) | 14 / 16 | 1556 | 1036 / 1184 (88 %) | 20.5 s |
+| Line beats Shock | Raider v Wickan Lancer | 0 | 19 (1216) v 10 (1200) | 19 / 19 | 1667 | 1216 / 1216 (100 %) | 16.6 s |
+| Line beats Shock | Raider v Wickan Lancer | 1 | 19 (1216) v 10 (1200) | 18 / 19 | 1581 | 1152 / 1216 (95 %) | 18.3 s |
 | Shock beats Ranged | Wickan Lancer v Desert Archer | 0 | 10 (1200) v 18 (1224) | 7 / 10 | 828 | 840 / 1200 (70 %) | 25.1 s |
 | Shock beats Ranged | Wickan Lancer v Desert Archer | 1 | 10 (1200) v 18 (1224) | 8 / 10 | 888 | 960 / 1200 (80 %) | 22.0 s |
 | Shock beats Ranged | Horse Raider v Crossbowman | 0 | 13 (1248) v 15 (1215) | 9 / 13 | 1152 | 864 / 1248 (69 %) | 20.9 s |
@@ -245,8 +245,8 @@ Siege beats buildings (one siege unit, ordered to attack, against the same cost 
 
 | Siege unit | Same cost of line infantry | Building | Siege time | Line time | Siege / line |
 | --- | --- | --- | --- | --- | --- |
-| 1 Catapult | 5 Heavy Infantry | Tent | 17.0 s | 192.2 s | 9 % |
-| 1 Battering Ram | 4 Raider | Billet | 13.8 s | 254.5 s | 5 % |
+| 1 Catapult | 5 Heavy Infantry | Tent | 17.0 s | 36.2 s | 47 % |
+| 1 Battering Ram | 4 Raider | Billet | 13.8 s | 40.0 s | 34 % |
 
 **Target band (proposed in D6; adopted as the Producer's default on 2026-10-11, owner may revisit):** in this scene
 the counter's winner keeps **40-65 % of its cost**, in both seats, and the two seats differ by at most 15 points.
@@ -257,15 +257,20 @@ is still above the band. **Line v Shock (D13):** the one lever tried was the lin
 value on both factions, swept 1.5 / 1.4 / 1.3 / 1.2 / 1.1 / 1.0 (the four cells above, in order: 94 / 88 / 100 / 95 %
 at 1.5, 88 / 94 / 100 / 89 % at 1.4, 88 / 94 / 95 / 89 % at 1.3, 94 / 88 / 100 / 89 % at 1.2, 88 / 88 / 100 / 89 % at
 1.1, 88 / 94 / 84 / 79 % at 1.0). No value reaches the band and Line wins every cell at every value. 1.0 came nearest,
-but it broke a sim stress floor (seed 11 of the Sandstorm fuzz cast 4 storms, its floor is 5), so the shipped value is
+but it broke a sim stress floor (seed 11 of the Sandstorm fuzz cast 4 storms, its floor is 5), so D13 shipped
 one step back, ×1.1. "Nearest" here means the next step of the sweep, not the best score among the passing values:
 1.3 is a near tie (points over 65 % summed across the four cells, 106 at 1.3 v 105 at 1.1) with the smaller worst
-cell (95 v 100 %) and the closer seats (6 / 6 points apart v 0 / 11), so it is the value to try first when the owner
-revisits the band. The counter comes from the line units' hp, armor and cost per body, not the bonus; closing the
-gap needs one of those levers (a later pass). Shock v Ranged (69-80 %) and Ranged v casters (67-89 %) are 2-24 points
+cell (95 v 100 %) and the closer seats (6 / 6 points apart v 0 / 11). **D19 (2026-10-15):** the owner set the bonus
+back to ×1.5, so the four cells above are the ×1.5 ones (94 / 88 / 100 / 95 %). D18's sweep of the line units' hp
+(100-140), armor (1-3) and gold (50-80) at ×1.5 found no set in the band either (nearest: Heavy Infantry at hp 100 and
+armor 1, 63 / 75 %; Raider at gold 80, 85 / 85 %; `Content/LineShockSweepReportTests`), so the Shock side is the next
+lever, the owner's call. Shock v Ranged (69-80 %) and Ranged v casters (67-89 %) are 2-24 points
 over. Casters fight without their signature abilities until M4-4, so the Ranged v casters
-rows should be re-measured then before any tuning. Siege has no band: buildings are its job, and 5-9 % of the line
-infantry's time is the point of the slot.
+rows should be re-measured then before any tuning. Siege has no band: buildings are its job. Until D19 it razed in
+5-9 % of the same cost of line infantry's time; D19's building damage (the Structure column and the halved building
+armor, the owner's set (C)) speeds the line infantry up far more than siege, so siege now takes 34-47 % of their time,
+still 2-3× faster (and at least 2× their damage per cost against a House, a hall and a Town Hall:
+`Content/BuildingKillTimeReportTests`).
 
 **Sapper self-splash (BUG-0182 item 2; `Content/SapperSplashReportTests`, same commit).** On a flat map, 4 Sappers
 behind 4 Heavy Infantry against 8 Horse Raiders: shipped data, 15 Sharpers thrown, 0 friendly-fire deaths, 41 hit

@@ -513,7 +513,7 @@ public class AiContentTests
         ("doesn't focus fire or pull back wounded", AiDifficulty.Normal, "pullBackWounded", "false"),
         ("focus fire", AiDifficulty.Hard, "focusFire", "true"),
         ("pulls back wounded", AiDifficulty.Hard, "pullBackWounded", "true"),
-        ("doesn't use abilities", AiDifficulty.Easy, "useAbilities", "false"),
+        ("uses abilities", AiDifficulty.Easy, "useAbilities", "true"), // D19: the owner's 2026-10-14 decision
         ("uses abilities", AiDifficulty.Normal, "useAbilities", "true"),
         ("good ability use", AiDifficulty.Hard, "useAbilities", "true"),
     };
@@ -629,7 +629,7 @@ public class AiContentTests
     [InlineData("malazan", "easy", "pullBackWounded", "true")]
     [InlineData("whirlwind", "normal", "pullBackWounded", "true")]
     [InlineData("malazan", "hard", "pullBackWounded", "false")]
-    [InlineData("whirlwind", "easy", "useAbilities", "true")]
+    [InlineData("whirlwind", "easy", "useAbilities", "false")]
     [InlineData("malazan", "normal", "useAbilities", "false")]
     [InlineData("whirlwind", "hard", "useAbilities", "false")]
     public void K_AMutatedDesignField_FailsNamingTheField(string faction, string difficulty, string field, string json)

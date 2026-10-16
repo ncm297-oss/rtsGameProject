@@ -30,7 +30,7 @@
       "armor": 1,
       "armorClass": "heavy",
       "attack": { "value": 11, "type": "melee", "cooldown": 1.5, "range": 0.5, "windup": 0.3,
-                  "bonusVs": { "heavy": 1.2, "mounted": 1.1 } },
+                  "bonusVs": { "heavy": 1.2, "mounted": 1.5 } },
       "speed": 3.4,
       "sight": 14,
       "radius": 0.4,

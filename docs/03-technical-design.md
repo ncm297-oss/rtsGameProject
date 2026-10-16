@@ -6395,7 +6395,7 @@ the AI casts through `Command.UseAbility`, the player's door. The difficulty kno
 `focusFire`, `pullBackWounded`) are slice 2 (the brief's 700-line hard stop: slice 1 came to about 840 lines with its tests
 and docs).
 
-- **When.** Only when the difficulty's `useAbilities` is on (the shipped Easy is off: it never casts). The **casters** are the
+- **When.** Only when the difficulty's `useAbilities` is on (every shipped difficulty has it on since D19, 2026-10-15: Easy casts too). The **casters** are the
   player's live units (army, then workers, slot order) whose type lists abilities and that are free: not `Casting` and not
   walking to a cast (`PlayerView.TryGetCast`), no AI command pending, not the scout, not fleeing (`IsFleeing`), not a wave
   member owed its `Move` home. Casting is allowed while `Board.Defending`. Each gets **at most one `UseAbility` a think**:

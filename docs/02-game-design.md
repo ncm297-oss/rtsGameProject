@@ -48,8 +48,8 @@ balance reference.
 | Caster | 60 | 0 | 9 | Magic | 2.2 | 12 | 3.2 | 16 | 100 / 50 | 2 | 30 |
 | Heavy / siege | 220 | 4 | 50 | Siege | 5.0 | 24 | 2.2 | 18 | 200 / 150 | 3 | 40 |
 
-Template bonuses: Line deals ×1.1 vs Mounted (×1.5 until D13, 2026-10-11: the counter rests mostly on
-the line's hp, armor and cost, faction pages' "Balance baseline"). Shock deals ×1.5 vs Light. Casters splash
+Template bonuses: Line deals ×1.5 vs Mounted (D13 cut it to ×1.1 on 2026-10-11; the owner set it back to ×1.5
+on 2026-10-14, D19). Shock deals ×1.5 vs Light. Casters splash
 (radius 1.5 m) and detect stealth within 10 m. Siege engines with range have a 6 m minimum range
 and 2.5 m splash.
 
@@ -86,17 +86,19 @@ expansions, and making them build a full Town Hall for that is wrong for an AoE-
 
 | Slot | HP | Armor | Cost (G/W) | Build | Footprint | Provides | Requires |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Town Hall | 2400 | 5 | 275 / 275 | 90 | 4×4 cells | +10 pop, drop-off, trains Worker, researches Age II | — |
-| House | 500 | 3 | 0 / 50 | 20 | 2×2 | +8 pop | — |
-| Camp | 600 | 3 | 0 / 75 | 25 | 2×2 | Drop-off | — |
-| Infantry Hall | 1200 | 4 | 0 / 150 | 40 | 3×3 | Trains Line | — |
-| Ranged Hall | 1200 | 4 | 0 / 150 | 40 | 3×3 | Trains Ranged | — |
-| Shock Hall | 1200 | 4 | 75 / 150 | 45 | 3×3 | Trains Shock | Infantry Hall |
-| Forge | 1000 | 4 | 100 / 100 | 40 | 3×3 | Upgrades | — |
-| Caster Hall | 1200 | 4 | 150 / 150 | 50 | 3×3 | Trains Caster | Age II |
-| Siege Works | 1400 | 4 | 150 / 200 | 55 | 3×3 | Trains Heavy/siege | Age II |
-| Watch Tower | 800 | 5 | 50 / 125 | 35 | 2×2 | Attack 10 pierce / 2 s, range 18; sight 24; detector 16 m | Age II |
+| Town Hall | 2400 | 2 | 275 / 275 | 90 | 4×4 cells | +10 pop, drop-off, trains Worker, researches Age II | — |
+| House | 500 | 1 | 0 / 50 | 20 | 2×2 | +8 pop | — |
+| Camp | 600 | 1 | 0 / 75 | 25 | 2×2 | Drop-off | — |
+| Infantry Hall | 1200 | 2 | 0 / 150 | 40 | 3×3 | Trains Line | — |
+| Ranged Hall | 1200 | 2 | 0 / 150 | 40 | 3×3 | Trains Ranged | — |
+| Shock Hall | 1200 | 2 | 75 / 150 | 45 | 3×3 | Trains Shock | Infantry Hall |
+| Forge | 1000 | 2 | 100 / 100 | 40 | 3×3 | Upgrades | — |
+| Caster Hall | 1200 | 2 | 150 / 150 | 50 | 3×3 | Trains Caster | Age II |
+| Siege Works | 1400 | 2 | 150 / 200 | 55 | 3×3 | Trains Heavy/siege | Age II |
+| Watch Tower | 800 | 2 | 50 / 125 | 35 | 2×2 | Attack 10 pierce / 2 s, range 18; sight 24; detector 16 m | Age II |
 
+- Armor was halved and rounded down in D19 (2026-10-15, the owner's lever set (C): Town Hall and Watch Tower 5 → 2,
+  House and Camp 3 → 1, the halls and Forge 4 → 2), so armies raze buildings faster (see "Combat").
 - The unique unit trains at whichever hall fits it (stated on each faction page) and needs Age II.
 - Several workers can build one structure. Build time with *n* workers is `t × 3 / (n + 2)`
   (Age of Empires' formula: diminishing returns).
@@ -151,16 +153,18 @@ damage  = max(1, round(raw))              // Magic ignores armor
 
 | Type ↓ / Class → | Light | Heavy | Mounted | Giant | Structure |
 | --- | --- | --- | --- | --- | --- |
-| Melee | 1.0 | 1.0 | 1.0 | 1.0 | 0.4 |
-| Pierce | 1.25 | 0.6 | 1.0 | 1.25 | 0.2 |
+| Melee | 1.0 | 1.0 | 1.0 | 1.0 | 0.7 |
+| Pierce | 1.25 | 0.6 | 1.0 | 1.25 | 0.35 |
 | Siege | 0.5 | 0.75 | 0.5 | 0.75 | 3.0 |
-| Magic | 1.0 | 1.25 | 1.0 | 1.25 | 0.4 |
+| Magic | 1.0 | 1.25 | 1.0 | 1.25 | 0.6 |
 
 - **Light:** workers, archers, casters, most unarmored units.
 - **Heavy:** armored infantry and siege engines.
 - **Mounted:** cavalry, beasts, and other fast units.
 - **Giant:** Teblor and other huge creatures. Big targets: pierce and magic hurt them more.
-- **Structure:** buildings and towers.
+- **Structure:** buildings and towers. The Structure column was melee 0.4, pierce 0.2, magic 0.4 until D19
+  (2026-10-15, the owner's lever set (C) from D18's kill-time report, together with every building's armor halved).
+  Damage still floors at 1, so a few weak ranged units stay slow against halls by design.
 
 Worked example: a Crossbowman (9 pierce, ×1.3 vs Heavy) shooting Raider line infantry (Heavy,
 armor 1): `9 × 0.6 × 1.3 = 7.0 → 7 - 1 = 6` damage per bolt.
@@ -374,7 +378,7 @@ show text, a minimap ping, and a sound.
 
 - Three difficulties:
   - **Easy:** thinks every 2 s, follows its build order slowly, attacks with small waves, doesn't
-    micro, doesn't use abilities, expands late.
+    micro, uses abilities, expands late.
   - **Normal:** fair play at a relaxed pace, follows the build order on time, uses abilities,
     doesn't focus fire or pull back wounded units.
   - **Hard:** fair play with tighter decisions (thinks every 0.5 s, focus fire, pulls back wounded

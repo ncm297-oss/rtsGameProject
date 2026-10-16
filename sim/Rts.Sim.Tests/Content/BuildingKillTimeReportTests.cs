@@ -14,16 +14,18 @@ namespace Rts.Sim.Tests.Content;
 /// D18 report 4 (the owner's playtest note 6: buildings take too long to kill): each attacker group, as shipped, against a
 /// lone player-1 House, infantry hall and Town Hall (the other faction's; both factions' rows are equal in hp, armor and
 /// footprint), combat on, flat ground, no defenders: seconds to raze and the share of attackers that started a swing or a
-/// shot within 10 s. Then the same under three levers applied to in-memory copies of the data (<see cref="TestDataDir"/>
-/// temp folders, never the shipped files): (A) the Structure multipliers melee 0.4 to 0.7, pierce 0.2 to 0.35, magic 0.4
-/// to 0.6, siege 3.0 kept; (B) every building's armor halved, rounded down; (C) both.
+/// shot within 10 s. D18 measured three levers; the owner took set (C) (the Structure multipliers melee 0.4 to 0.7, pierce
+/// 0.2 to 0.35, magic 0.4 to 0.6, siege 3.0 kept, and every building's armor halved, rounded down), which D19 shipped on
+/// 2026-10-15. So "today" is the shipped data, and "before D19" puts D18's shipped values back in an in-memory copy
+/// (<see cref="TestDataDir"/> temp folder, never the shipped files) for the today-vs-before table. Today must meet every
+/// band cell.
 /// <para>
 /// The band (the Producer's default, D18 brief): 20 Age I line units (the 20 Heavy Infantry and 20 Raider rows) raze a
 /// House in at most 20 s, an infantry hall in 60 s, a Town Hall in 2 min; and each siege group (Catapults, Sappers) does at
 /// least 2x the 20 Heavy Infantry's damage per second per gold + wood spent against the same building. The scene follows
 /// <see cref="CounterTriangleScene"/>'s (seed 7, blocks 5 wide, 1.8 m apart, a player-0 spotter past the building so the
 /// fog keeps the order), with the block's front rank 10 m from the building's west side, every attacker ordered to Attack
-/// it. Only that every run ran is asserted: the tables and the proposed lever are for the owner.
+/// it. Asserted: every run ran, and today meets every band cell (12 / 12); the seconds are for the owner.
 /// </para>
 /// </summary>
 public class BuildingKillTimeReportTests
@@ -59,24 +61,31 @@ public class BuildingKillTimeReportTests
     /// <summary>One run: ticks to raze (<see cref="int.MaxValue"/> if it stood <see cref="MaxTicks"/>), the hp left then, the attackers that struck within 10 s.</summary>
     private readonly record struct Run(int Ticks, int HpLeft, int Struck, int Count, int Cost, int BuildingHp);
 
-    private static GameData Variant(bool structure, bool armor)
+    /// <summary>The building armor D18 shipped, by slot (halving rounded down can't be undone, so it is listed).</summary>
+    public static int ArmorBeforeD19(string slot) => slot switch
+    {
+        "town_hall" or "watch_tower" => 5,
+        "house" or "camp" => 3,
+        _ => 4,
+    };
+
+    /// <summary>The shipped data with D18's building damage put back: Structure melee 0.4, pierce 0.2, magic 0.4, the armor of <see cref="ArmorBeforeD19"/>.</summary>
+    public static GameData BeforeD19()
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
-        if (structure)
-            dir.EditJson("common/damage_table.json", root =>
+        dir.EditJson("common/damage_table.json", root =>
+        {
+            foreach (JsonNode? t in root["damageTypes"]!.AsArray())
             {
-                foreach (JsonNode? t in root["damageTypes"]!.AsArray())
-                {
-                    double? to = (string)t!["id"]! switch { "melee" => 0.7, "pierce" => 0.35, "magic" => 0.6, _ => null };
-                    if (to != null) t["multipliers"]!["structure"] = to.Value;
-                }
+                double? to = (string)t!["id"]! switch { "melee" => 0.4, "pierce" => 0.2, "magic" => 0.4, _ => null };
+                if (to != null) t["multipliers"]!["structure"] = to.Value;
+            }
+        });
+        foreach (string f in new[] { "malazan", "whirlwind" })
+            dir.EditJson($"factions/{f}/buildings.json", root =>
+            {
+                foreach (JsonNode? b in root["buildings"]!.AsArray()) b!["armor"] = ArmorBeforeD19((string)b["slot"]!);
             });
-        if (armor)
-            foreach (string f in new[] { "malazan", "whirlwind" })
-                dir.EditJson($"factions/{f}/buildings.json", root =>
-                {
-                    foreach (JsonNode? b in root["buildings"]!.AsArray()) b!["armor"] = (int)b["armor"]! / 2;
-                });
         DataLoadResult r = DataLoader.LoadAll(dir.Path);
         Assert.True(r.Ok, string.Join(Environment.NewLine, r.Errors));
         return r.Data!;
@@ -139,20 +148,37 @@ public class BuildingKillTimeReportTests
     private static double RatePerCost(Run r) =>
         (r.BuildingHp - r.HpLeft) / (Math.Min(r.Ticks, MaxTicks) / (double)Tps) / r.Cost * 1000.0;
 
+    /// <summary>The "before D19" copy really holds D18's values, and the shipped data is set (C) of them: half the armor, the new Structure column.</summary>
     [Fact]
-    public void AttackerGroups_v_Buildings_TodayAndThreeLevers_Report()
+    public void BeforeD19_HoldsD18sValues_AndTheShippedDataIsSetC()
+    {
+        GameData before = BeforeD19(), today = TestSim.Data;
+        Assert.Equal(today.Buildings.Length, before.Buildings.Length);
+        for (int b = 0; b < today.Buildings.Length; b++)
+        {
+            Assert.InRange(before.Buildings[b].Armor, 3, 5);
+            Assert.Equal(before.Buildings[b].Armor / 2, today.Buildings[b].Armor);
+        }
+        foreach ((string type, float was, float now) in new[] { ("melee", 0.4f, 0.7f), ("pierce", 0.2f, 0.35f), ("magic", 0.4f, 0.6f), ("siege", 3.0f, 3.0f) })
+        {
+            DamageTable bt = before.DamageTable, tt = today.DamageTable;
+            Assert.Equal(was, bt.Multiplier(bt.DamageTypeKeys.IndexOf(type), bt.ArmorClassKeys.IndexOf("structure")));
+            Assert.Equal(now, tt.Multiplier(tt.DamageTypeKeys.IndexOf(type), tt.ArmorClassKeys.IndexOf("structure")));
+        }
+    }
+
+    [Fact]
+    public void AttackerGroups_v_Buildings_TodayAndBeforeD19_Report()
     {
         var variants = new (string Name, GameData Data)[]
         {
-            ("today", TestSim.Data),
-            ("(A) Structure 0.7 / 0.35 / 0.6", Variant(structure: true, armor: false)),
-            ("(B) building armor halved", Variant(structure: false, armor: true)),
-            ("(C) A + B", Variant(structure: true, armor: true)),
+            ("today (D19, set C shipped)", TestSim.Data),
+            ("before D19 (Structure 0.4 / 0.2 / 0.4, armor 5 / 3 / 4)", BeforeD19()),
         };
         var runs = new Run[variants.Length, Groups.Length, Targets.Length];
         var met = new int[variants.Length];
         int cells = 0;
-        _out.WriteLine("D18 report 4, 2026-10-14: seconds to raze a lone building (no defenders, flat, combat on); [struck within 10 s]; band check where one applies");
+        _out.WriteLine("D18 report 4, re-based in D19 (2026-10-15): seconds to raze a lone building (no defenders, flat, combat on); [struck within 10 s]; band check where one applies");
         for (int v = 0; v < variants.Length; v++)
         {
             GameData data = variants[v].Data;
@@ -197,19 +223,13 @@ public class BuildingKillTimeReportTests
             _out.WriteLine($"band cells met: {met[v]} / {vcells}");
         }
 
-        // The smallest set: today, then A (3 numbers in one file), then B (every building's armor), then C.
-        int pick = Array.FindIndex(met, m => m == cells);
-        int nearest = Array.IndexOf(met, met.Max());
         _out.WriteLine("");
-        _out.WriteLine(pick >= 0
-            ? $"Proposed (the smallest lever set that meets every band cell): {variants[pick].Name}"
-            : $"No lever set meets every band cell; nearest: {variants[nearest].Name} ({met[nearest]} / {cells})");
-        int show = pick >= 0 ? pick : nearest;
-        _out.WriteLine("");
-        _out.WriteLine($"| Attackers | " + string.Join(" | ", Targets.Select(x => x.Name + $" today / {(show == 0 ? "today" : variants[show].Name[..3])}")) + " |");
+        _out.WriteLine($"| Attackers | " + string.Join(" | ", Targets.Select(x => x.Name + " today / before")) + " |");
         _out.WriteLine("| --- | --- | --- | --- |");
         for (int g = 0; g < Groups.Length; g++)
             _out.WriteLine($"| {Groups[g].Count} {Groups[g].Key} | " +
-                string.Join(" | ", Enumerable.Range(0, Targets.Length).Select(x => $"{Seconds(runs[0, g, x])} / {Seconds(runs[show, g, x])}")) + " |");
+                string.Join(" | ", Enumerable.Range(0, Targets.Length).Select(x => $"{Seconds(runs[0, g, x])} / {Seconds(runs[1, g, x])}")) + " |");
+        Assert.Equal(12, cells);
+        Assert.True(met[0] == cells, $"the shipped data meets {met[0]} / {cells} band cells, D19 shipped set (C) for {cells} / {cells}");
     }
 }
