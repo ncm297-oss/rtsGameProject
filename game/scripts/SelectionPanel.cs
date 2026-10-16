@@ -23,6 +23,10 @@ namespace Rts.Game;
 /// Hit points are two labels, "now" and "/ max": a building's hp under repair and a unit's in a fight change every tick, so
 /// "now" comes from a table of int strings up to the largest hp in the data, built once in <see cref="Init"/> (BUG-0123: no
 /// string per tick).
+/// M6-V8: a clicked resource node (<see cref="SelectionController.SelectedResource"/>): its <c>displayName</c> and the
+/// amount left (<c>hud.resource_left</c> with the local faction's name for its resource), live while a footprint cell is in
+/// sight, else the amount last seen (<see cref="SeenResources.Amount"/>) after <c>hud.last_seen</c>; that line is rebuilt
+/// only when the amount or the seen state changes.
 /// Holds view state only.
 /// </remarks>
 public partial class SelectionPanel : Control
@@ -33,7 +37,7 @@ public partial class SelectionPanel : Control
     /// <summary>The single-unit portrait's size in pixels.</summary>
     public const float PortraitSize = 72f;
 
-    private enum Kind { None, Unit, Units, Building }
+    private enum Kind { None, Unit, Units, Building, Resource }
 
     private static readonly StringName FontColor = "font_color";
     private static readonly Color BonusColor = new(0.35f, 0.95f, 0.45f);
@@ -61,6 +65,10 @@ public partial class SelectionPanel : Control
     private readonly Label[] _statValue = new Label[StatRows.Length];
     private readonly Label[] _statBonus = new Label[StatRows.Length];
     private Label _hpMax = null!;
+    // M6-V8: a resource node's amount line, and the local faction's names for gold and wood.
+    private Label _amount = null!;
+    private string _goldName = "", _woodName = "";
+    private bool _amountSeen;
     // "0" .. "maxHp" for every hp a unit or building can show; built once (BUG-0123).
     private string[] _intText = Array.Empty<string>();
     // "+N" for every overflow a selection can have, built in Init so a death in a big selection allocates nothing (BUG-0340).
@@ -88,11 +96,14 @@ public partial class SelectionPanel : Control
     /// <summary>Times a text in the panel was rebuilt (only when what it shows changes).</summary>
     public int Rebuilds { get; private set; }
 
-    /// <summary>What the panel shows: 0 nothing, 1 one unit, 2 a grid, 3 a building.</summary>
+    /// <summary>What the panel shows: 0 nothing, 1 one unit, 2 a grid, 3 a building, 4 a resource node (M6-V8).</summary>
     public int ShownKind => (int)_kind;
 
     /// <summary>The name label (one unit or a building).</summary>
     public Label NameLabel => _name;
+
+    /// <summary>The amount line of a resource node (M6-V8).</summary>
+    public Label AmountLabel => _amount;
 
     /// <summary>The state label (one unit).</summary>
     public Label StateLabel => _state;
@@ -173,6 +184,9 @@ public partial class SelectionPanel : Control
         _statValue[Hp].HorizontalAlignment = HorizontalAlignment.Right;
         _hpMax = Text("HpMax", new Vector2(PortraitSize + 134f, 28f), new Vector2(64f, 20f), 14);
         _single.AddChild(_hpMax);
+        _amount = Text("Amount", new Vector2(PortraitSize + 12f, 28f), new Vector2(320f, 20f), 15);
+        _amount.Visible = false;
+        _single.AddChild(_amount);
 
         _grid = new Control { Name = "Grid", Position = new Vector2(8f, 5f), MouseFilter = MouseFilterEnum.Ignore, Visible = false };
         AddChild(_grid);
@@ -225,6 +239,9 @@ public partial class SelectionPanel : Control
         for (int i = 0; i <= maxHp; i++) _intText[i] = i.ToString(CultureInfo.InvariantCulture);
         _overflowText = new string[PortraitGrid.Overflow(runner.Simulation!.World.Units.Capacity) + 1];
         for (int i = 1; i < _overflowText.Length; i++) _overflowText[i] = string.Create(CultureInfo.InvariantCulture, $"+{i}");
+        Rts.Sim.Data.FactionDef local = _data.Factions[Math.Max(runner.Simulation!.World.FactionOf(SelectionController.LocalPlayer), 0)];
+        _goldName = local.GoldName;
+        _woodName = local.WoodName;
         _kind = Kind.None;
         Sync();
     }
@@ -251,6 +268,7 @@ public partial class SelectionPanel : Control
             }
             if (live == 1) ShowUnit(world, first);
             else if (live > 1) ShowGrid(world, live);
+            else if (_sel.SelectedResource is int node and >= 0) ShowResource(world, node);
             else SetKind(Kind.None);
         }
     }
@@ -259,7 +277,8 @@ public partial class SelectionPanel : Control
     {
         if (kind == _kind) return;
         _kind = kind;
-        _single.Visible = kind is Kind.Unit or Kind.Building;
+        _single.Visible = kind is Kind.Unit or Kind.Building or Kind.Resource;
+        _amount.Visible = kind == Kind.Resource;
         _grid.Visible = kind == Kind.Units;
         _backdrop.Visible = kind != Kind.None;
         _slot = -1;
@@ -332,6 +351,39 @@ public partial class SelectionPanel : Control
             Rebuilds++;
         }
         SetStat(Hp, def.Hp, 0f, hpNow: b.Hp[slot]);
+    }
+
+    // M6-V8: a resource node's name and amount; the amount is the live store's while a footprint cell is in sight, else the
+    // one last seen. The line is rebuilt only when the amount or the seen state changes.
+    private void ShowResource(World world, int slot)
+    {
+        SetKind(Kind.Resource);
+        SeenResources? seen = _sel.Fog?.Resources(world);
+        FogView? fog = _sel.Fog?.View;
+        ResourceStore r = world.Resources;
+        int type = seen != null ? seen.TypeId[slot] : r.TypeId[slot];
+        ResourceDef def = _data.Resources[type];
+        if (slot != _slot || type != _type)
+        {
+            _slot = slot;
+            _type = type;
+            _portrait.Color = TypeColor(_data.Units.Length + _data.Buildings.Length + type); // node types after the building types
+            _initial.Text = def.DisplayName.Length > 0 ? def.DisplayName.Substring(0, 1) : "";
+            _name.Text = def.DisplayName;
+            for (int r2 = 0; r2 < StatRows.Length; r2++) _statName[r2].Visible = _statValue[r2].Visible = _statBonus[r2].Visible = false;
+            _hpMax.Visible = false;
+            _state.Visible = false;
+            _hpNow = -1;
+            Rebuilds++;
+        }
+        bool inSight = seen == null || fog == null || seen.InSight(slot, world.Fog, fog.Player, fog.Enabled, world.NavGrid.Width) && r.Alive[slot];
+        int amount = inSight ? r.Remaining[slot] : seen!.Amount[slot];
+        if (amount == _hpNow && inSight == _amountSeen) return;
+        _hpNow = amount;
+        _amountSeen = inSight;
+        string line = _ui.ResourceLeft(amount, def.Resource == ResourceKind.Gold ? _goldName : _woodName);
+        _amount.Text = inSight ? line : $"{_ui.Hud(HudText.LastSeen)} {line}";
+        Rebuilds++;
     }
 
     // Rewrites a stat row only when its value or bonus changed; the hp row shows "now" and "/ max" (max only rebuilt when

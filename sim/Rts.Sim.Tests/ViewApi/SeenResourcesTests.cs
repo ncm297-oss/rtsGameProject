@@ -143,4 +143,51 @@ public class SeenResourcesTests
         Assert.True(seen.Alive[again.Index] && seen.Cell[again.Index] == 40 * 48 + 20);
         Assert.Equal(0, seen.PendingCount);
     }
+
+    private static void Amounts(SeenResources seen, World w, bool fogEnabled = true) =>
+        seen.UpdateAmounts(w.Resources.Alive, w.Resources.TypeId, w.Resources.Cell, w.Resources.Remaining, w.Fog, 0, fogEnabled, w.NavGrid.Width);
+
+    // M6-V8: the amount left as last seen. The first call takes every node's amount; later a node in sight follows the store,
+    // one out of sight keeps the amount last seen (also once felled there, until its ground is seen and the copy drops it).
+    [Fact]
+    public void Amounts_FollowTheStoreInSight_KeepTheLastSeenAmountOutOfSight_AndAllocateNothing()
+    {
+        (Simulation sim, EntityHandle near, EntityHandle far, EntityHandle mine) = Stage();
+        World w = sim.World;
+        var seen = new SeenResources(w.Data.Resources, w.Resources.Capacity);
+        Update(seen, w);
+        Amounts(seen, w);
+        Assert.Equal((50, 50, 500), (seen.Amount[near.Index], seen.Amount[far.Index], seen.Amount[mine.Index]));
+        Assert.True(seen.InSight(near.Index, w.Fog, 0, true, w.NavGrid.Width));
+        Assert.False(seen.InSight(mine.Index, w.Fog, 0, true, w.NavGrid.Width));
+        Assert.True(seen.InSight(mine.Index, w.Fog, 0, false, w.NavGrid.Width)); // --no-fog sees everything
+        Assert.False(seen.InSight(-1, w.Fog, 0, false, w.NavGrid.Width) || seen.InSight(w.Resources.Capacity, w.Fog, 0, false, w.NavGrid.Width));
+
+        w.Resources.Take(near, 20); // in sight
+        w.Resources.Take(mine, 120); // out of sight
+        Update(seen, w);
+        Amounts(seen, w);
+        Assert.Equal((30, 500), (seen.Amount[near.Index], seen.Amount[mine.Index]));
+        Amounts(seen, w, fogEnabled: false); // without fog the copy is the store
+        Assert.Equal(380, seen.Amount[mine.Index]);
+        w.Resources.Take(mine, 80);
+        Amounts(seen, w);
+        Assert.Equal(380, seen.Amount[mine.Index]);
+
+        w.Resources.Take(mine, 300); // mined out unseen: the copy keeps it, with its last amount
+        Update(seen, w);
+        Amounts(seen, w);
+        Assert.True(seen.Alive[mine.Index]);
+        Assert.Equal(380, seen.Amount[mine.Index]);
+        Spotter(sim, 0, w.NavGrid.CellCenter(40, 7)); // its ground comes into sight: the copy drops it
+        Update(seen, w);
+        Amounts(seen, w);
+        Assert.False(seen.Alive[mine.Index]);
+        Assert.False(seen.InSight(mine.Index, w.Fog, 0, true, w.NavGrid.Width));
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 1000; i++) Amounts(seen, w);
+        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
+        _out.WriteLine($"near {seen.Amount[near.Index]}, far {seen.Amount[far.Index]}");
+    }
 }

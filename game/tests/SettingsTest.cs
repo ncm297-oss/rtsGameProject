@@ -16,12 +16,17 @@ namespace Rts.Game.Tests;
 /// edge pan; from the pause menu the same screen opens over the paused match and Esc returns to the pause menu still paused.
 /// A child boot on a corrupt file gets the defaults with one warning and no error line. M6-V7: the confine key (default on,
 /// round trip, missing = on without a problem, junk = one problem), its check box, and the shell's confine state in a match.
+/// M6-V8: the <c>[keys]</c> rows (a round trip, a missing section reads clean, a junk, a reserved and a clashing key each one
+/// problem and the default, a command sharing a lower grid key allowed); the Keybinds tab (every action's <c>keys</c> name
+/// and key, click-to-rebind A to K, a clash and a reserved key refused with their <c>ui.json</c> lines, Esc stops the wait),
+/// then in the running match K arms attack-move and orders it while A does nothing, the card's hint reads K; Default keys
+/// puts A back (file and match).
 /// </summary>
 /// <remarks>
 /// Headless: <c>&amp; $env:GODOT --headless --path game res://tests/SettingsTest.tscn</c>; prints "SETTINGS TEST PASS" and exits 0,
 /// else "SETTINGS TEST FAIL: ..." lines and exits 1. Headless has no window, so the window mode, size and VSync calls are skipped
 /// and asserted through the stored settings and the file. Windowed with <c>-- --shots &lt;dir&gt;</c> it saves
-/// <c>settings-menu.png</c> and <c>settings-pause.png</c> and cycles the window mode borderless and back under the paused match.
+/// <c>settings-menu.png</c>, <c>settings-pause.png</c> and <c>settings-keybinds.png</c> and cycles the window mode borderless and back under the paused match.
 /// The test never touches the player's <c>user://settings.cfg</c>: <see cref="Main.SettingsPath"/> points at <see cref="TestPath"/>.
 /// </remarks>
 public partial class SettingsTest : Node
@@ -119,7 +124,41 @@ public partial class SettingsTest : Node
             ("confine missing (an M6-V6 file)", WithoutConfine(new GameSettings { MusicVolume = 9 }.Encode()), 0, s => s.ConfineCursor && s.MusicVolume == 9),
             ("confine a number", WithoutConfine(new GameSettings().Encode()) + "\nconfine_cursor=0\n", 1, s => s.ConfineCursor),
             ("confine a string", WithoutConfine(new GameSettings().Encode()) + "\nconfine_cursor=\"off\"\n", 1, s => s.ConfineCursor),
+            // M6-V8: [keys]. A file without the section (M6-V7's) reads clean with the defaults; a junk, a reserved or a clashing
+            // key is one problem and that action's default; a command may share a lower grid key (D is the eighth grid key).
+            ("keys missing (an M6-V7 file)", WithoutKeys(new GameSettings { MusicVolume = 8 }.Encode()), 0, s => s.MusicVolume == 8 && s.Keys.SameAs(new KeyMap())),
+            ("a junk key", NoKeys + "\n[keys]\norder_stop=\"Blorp\"\n", 1, s => s.Keys.Get("order_stop") == Key.S),
+            ("a number for a key", NoKeys + "\n[keys]\norder_stop=5\n", 1, s => s.Keys.Get("order_stop") == Key.S),
+            ("a reserved key", NoKeys + "\n[keys]\norder_stop=\"Escape\"\n", 1, s => s.Keys.Get("order_stop") == Key.S),
+            ("a key an earlier action holds", NoKeys + "\n[keys]\norder_stop=\"A\"\n", 1, s => s.Keys.Get("order_stop") == Key.S && s.Keys.Get("order_attack_move") == Key.A),
+            ("a key a later action holds", NoKeys + "\n[keys]\norder_attack_move=\"S\"\n", 1, s => s.Keys.Get("order_attack_move") == Key.A),
+            ("a command on a top-row grid key", NoKeys + "\n[keys]\ngroup_1=\"Q\"\n", 1, s => s.Keys.Get("group_1") == Key.Key1),
+            ("a command on a lower grid key", NoKeys + "\n[keys]\norder_stop=\"D\"\n", 0, s => s.Keys.Get("order_stop") == Key.D),
+            // BUG-0740: the whole map is checked, not each key against the defaults of actions the file also moves, so any map
+            // the tab makes reads back: a swap, an action taking a later action's freed default.
+            ("two keys swapped", NoKeys + "\n[keys]\norder_stop=\"H\"\norder_hold=\"S\"\n", 0, s => s.Keys.Get("order_stop") == Key.H && s.Keys.Get("order_hold") == Key.S),
+            ("a later action's freed default", NoKeys + "\n[keys]\norder_attack_move=\"H\"\norder_hold=\"J\"\n", 0, s => s.Keys.Get("order_attack_move") == Key.H && s.Keys.Get("order_hold") == Key.J),
+            ("grid keys rotated", NoKeys + "\n[keys]\ncard_0=\"W\"\ncard_1=\"E\"\ncard_2=\"Q\"\n", 0, s => s.Keys.Get("card_0") == Key.W && s.Keys.Get("card_1") == Key.E && s.Keys.Get("card_2") == Key.Q),
+            ("two digits swapped", NoKeys + "\n[keys]\ngroup_1=\"2\"\ngroup_2=\"1\"\n", 0, s => s.Keys.Get("group_1") == Key.Key2 && s.Keys.Get("group_2") == Key.Key1),
+            ("two read keys clash", NoKeys + "\n[keys]\norder_stop=\"J\"\norder_hold=\"J\"\n", 1, s => s.Keys.SameAs(new KeyMap())),
+            // A reset that frees nothing: stop takes Hold's H (Hold unmoved) and goes back to S, so attack-move's S goes back too.
+            ("a reset that clashes again", NoKeys + "\n[keys]\norder_attack_move=\"S\"\norder_stop=\"H\"\n", 2, s => s.Keys.SameAs(new KeyMap())),
+            // BUG-0741: a digit or Tab shares no grid key (a production card owns the whole grid).
+            ("a digit on a lower grid key", NoKeys + "\n[keys]\ncard_5=\"1\"\n", 1, s => s.Keys.Get("card_5") == Key.A && s.Keys.Get("group_1") == Key.Key1),
+            ("a grid key on a moved digit's key", NoKeys + "\n[keys]\ngroup_1=\"D\"\n", 1, s => s.Keys.Get("group_1") == Key.Key1),
+            ("Tab on a lower grid key", NoKeys + "\n[keys]\nsubgroup_next=\"Z\"\n", 1, s => s.Keys.Get("subgroup_next") == Key.Tab),
+            // BUG-0742: a modifier combo is not one key: one problem and the default.
+            ("a Shift combo", NoKeys + "\n[keys]\norder_stop=\"Shift+Q\"\n", 1, s => s.Keys.Get("order_stop") == Key.S),
+            ("a Ctrl combo", NoKeys + "\n[keys]\ngroup_3=\"Ctrl+1\"\n", 1, s => s.Keys.Get("group_3") == Key.Key3),
         };
+        // BUG-0741 / 0742 on the tab's side: a digit refused on a lower grid key, Tab too; a mask or a bare flag is no key.
+        var tab = new KeyMap();
+        Check(tab.TrySet(KeyMap.FirstCard + 5, Key.Key1) == Array.IndexOf(KeyMap.Actions, "group_1")
+            && tab.TrySet(KeyMap.FirstCard + 14, Key.Tab) == KeyMap.SubgroupNext
+            && tab.TrySet(Array.IndexOf(KeyMap.Actions, "group_9"), Key.Special) == KeyMap.IsReserved
+            && tab.TrySet(Array.IndexOf(KeyMap.Actions, "order_stop"), Key.Q | (Key)KeyModifierMask.MaskShift) == KeyMap.IsReserved
+            && tab.TrySet(Array.IndexOf(KeyMap.Actions, "order_stop"), Key.D) == KeyMap.Ok && tab.SameAs(WithStop(Key.D)),
+            "TrySet: a digit or Tab on a grid key, a masked key or Key.Special accepted, or D for Stop refused");
         Check(defaults.ConfineCursor && new GameSettings { ConfineCursor = false }.Encode().Contains("confine_cursor=false"), $"confine default on, written: [{defaults.Encode()}]");
         foreach ((string what, string? text, int want, Func<GameSettings, bool> ok) in rows)
         {
@@ -130,6 +169,11 @@ public partial class SettingsTest : Node
             Check(found == (text != null) && problems.Count == want && ok(s), $"read '{what}': {problems.Count} problems (want {want}): [{string.Join("; ", problems)}]");
         }
         var picks = new GameSettings { Width = 1920, Height = 1200, WindowMode = SettingsWindowMode.Fullscreen, Vsync = false, Quality = SettingsQuality.Low, MasterVolume = 0, MusicVolume = 55, SfxVolume = 1, EdgePan = 0.5f, ConfineCursor = false };
+        // M6-V8: the keys round-trip too (a rebind, a digit, a punctuation key, a grid key).
+        Check(picks.Keys.TrySet(Array.IndexOf(KeyMap.Actions, "order_attack_move"), Key.K) == KeyMap.Ok
+            && picks.Keys.TrySet(Array.IndexOf(KeyMap.Actions, "group_1"), Key.Key0) == KeyMap.Ok
+            && picks.Keys.TrySet(Array.IndexOf(KeyMap.Actions, "subgroup_next"), Key.Backslash) == KeyMap.Ok
+            && picks.Keys.TrySet(KeyMap.FirstCard + 14, Key.N) == KeyMap.Ok, "the round trip's rebinds were refused");
         Check(picks.Save(TestPath), "save failed");
         GameSettings back = GameSettings.Read(TestPath, new List<string>(), out _);
         Check(back.SameAs(picks), $"round trip: wrote [{picks.Encode()}], read [{back.Encode()}]");
@@ -138,9 +182,27 @@ public partial class SettingsTest : Node
         DeleteTestFile();
     }
 
-    // The encoded file without its confine_cursor line (the camera section stays last, so a line appended after it lands there).
+    // The encoded file without its confine_cursor line and without the [keys] section (M6-V8; written last), so the camera
+    // section is last again and a line appended after it lands there.
     private static string WithoutConfine(string text) =>
-        string.Join("\n", text.Split('\n').Where(l => !l.StartsWith("confine_cursor", StringComparison.Ordinal)));
+        string.Join("\n", WithoutKeys(text).Split('\n').Where(l => !l.StartsWith("confine_cursor", StringComparison.Ordinal)));
+
+    // The encoded file without its [keys] section: a file written before M6-V8.
+    private static string WithoutKeys(string text)
+    {
+        int at = text.IndexOf("[keys]", StringComparison.Ordinal);
+        return at < 0 ? text : text.Substring(0, at);
+    }
+
+    private static KeyMap WithStop(Key key)
+    {
+        var map = new KeyMap();
+        map.TrySet(Array.IndexOf(KeyMap.Actions, "order_stop"), key);
+        return map;
+    }
+
+    // A default file without its [keys] section, for the key rows to add their own.
+    private static string NoKeys => WithoutKeys(new GameSettings().Encode());
 
     private async Task Flow()
     {
@@ -165,6 +227,20 @@ public partial class SettingsTest : Node
             && Items(screen.QualityOption).SequenceEqual(new[] { SettingsText.QualityLow, SettingsText.QualityMedium, SettingsText.QualityHigh }.Select(_ui.Settings))
             && Items(screen.ResolutionOption).SequenceEqual(screen.Resolutions.Select(r => _ui.ResolutionItem(r.X, r.Y))), "list items not from ui.json");
         var allowed = new HashSet<string>(Enum.GetValues<SettingsText>().Select(_ui.Settings)) { "" };
+        // M6-V8: the Keybinds tab's words are ui.json keys texts and action names; the rest are key names.
+        allowed.UnionWith(Enum.GetValues<KeysText>().Select(_ui.Keys));
+        allowed.UnionWith(Enumerable.Range(0, KeyMap.Actions.Length).Select(i => KeyMap.ActionName(_ui, i)));
+        allowed.UnionWith(KeyMap.Defaults().Select(KeyMap.KeyName));
+        foreach (string name in Enumerable.Range(0, KeyMap.Actions.Length).Select(i => KeyMap.ActionName(_ui, i)))
+            Check(Labels(screen).Contains(name), $"the Keybinds tab has no row '{name}'");
+        Check(screen.Tabs.GetTabCount() == 2 && screen.Tabs.GetTabTitle(0) == _ui.Keys(KeysText.TabGeneral) && screen.Tabs.GetTabTitle(1) == _ui.Keys(KeysText.TabKeybinds)
+            && screen.Tabs.CurrentTab == 0 && screen.KeysDefaultsButton.Text == _ui.Keys(KeysText.Defaults),
+            $"tabs: {screen.Tabs.GetTabCount()} '{screen.Tabs.GetTabTitle(0)}' '{screen.Tabs.GetTabTitle(1)}', current {screen.Tabs.CurrentTab}");
+        for (int i = 0; i < KeyMap.Actions.Length; i++)
+            Check(screen.KeyButton(i).Text == KeyMap.KeyName(KeyMap.Defaults()[i]) && KeyMap.Defaults()[i] != Key.None, $"key button {KeyMap.Actions[i]} reads '{screen.KeyButton(i).Text}'");
+        // Every button of the screen sits inside the window (the tab bar must not push Back off a 648 px window).
+        foreach (Button b in new[] { screen.BackButton, screen.ApplyButton, screen.DefaultsButton })
+            Check(b.GetGlobalRect().End.Y <= GetViewport().GetVisibleRect().Size.Y, $"{b.Name} ends at y {b.GetGlobalRect().End.Y}");
         foreach (Node n in screen.FindChildren("*", "", true, false))
         {
             string? text = n switch { Label l => l.Text, OptionButton => null, Button b => b.Text, _ => null };
@@ -230,6 +306,7 @@ public partial class SettingsTest : Node
         fromPause.EdgePan = 0.5f;
         fromPause.ConfineCursor = false;
         Pick(screen, fromPause);
+        await KeyTab(screen, fromPause);
         await Type(Key.Escape);
         Check(!screen.Visible && pause.Visible && GetTree().Paused && _main.Paused && _main.CurrentMatch == match, $"Esc on settings over pause: screen {screen.Visible}, pause {pause.Visible}, tree paused {GetTree().Paused}");
         Check(match.GetNode<RtsCamera>("RtsCamera").EdgePanSpeed == 0.5f, $"the running match's edge pan {match.GetNode<RtsCamera>("RtsCamera").EdgePanSpeed}, want 0.5");
@@ -239,9 +316,104 @@ public partial class SettingsTest : Node
         // The setting turned off from the pause menu applies live: never confined, window or not.
         await Frames(2);
         Check(!_main.Settings.ConfineCursor && !_main.ConfineAllowed && !_main.CursorConfined, $"confine off live: allowed {_main.ConfineAllowed}, confined {_main.CursorConfined}");
+        await ReboundKeys(match, screen, pause);
         RemoveChild(_main);
         _main.QueueFree();
         await Frames(2);
+    }
+
+    // M6-V8: the Keybinds tab over the paused match: A rebound to K; a clash, a top-row grid key and a reserved key refused
+    // with their lines; Esc stops a wait without leaving the screen. `want` takes the rebind.
+    private async Task KeyTab(SettingsScreen screen, GameSettings want)
+    {
+        int attack = Array.IndexOf(KeyMap.Actions, "order_attack_move"), stop = Array.IndexOf(KeyMap.Actions, "order_stop");
+        screen.Tabs.CurrentTab = 1;
+        await Frames(1);
+        await Click(screen.KeyButton(attack));
+        Check(screen.Listening && screen.KeyButton(attack).Text == _ui.Keys(KeysText.PressKey), $"waiting: {screen.Listening}, '{screen.KeyButton(attack).Text}'");
+        await Type(Key.K);
+        Check(!screen.Listening && screen.KeyButton(attack).Text == "K" && screen.KeyStatus.Text == "" && screen.Visible, $"rebound: '{screen.KeyButton(attack).Text}', status '{screen.KeyStatus.Text}'");
+        await Shot("settings-keybinds");
+        foreach ((Key key, string line) in new[]
+        {
+            (Key.K, _ui.KeysFormat(KeysText.Conflict, "K", KeyMap.ActionName(_ui, attack))),
+            (Key.Q, _ui.KeysFormat(KeysText.Conflict, "Q", KeyMap.ActionName(_ui, KeyMap.FirstCard))),
+            (Key.Left, _ui.KeysFormat(KeysText.Reserved, KeyMap.KeyName(Key.Left))),
+        })
+        {
+            await Click(screen.KeyButton(stop));
+            await Type(key);
+            Check(screen.KeyButton(stop).Text == "S" && screen.KeyStatus.Text == line && screen.Visible, $"{key} for Stop: '{screen.KeyButton(stop).Text}', status '{screen.KeyStatus.Text}', want '{line}'");
+        }
+        // BUG-0741: 1 for a lower grid key is refused with the conflict line naming control group 1.
+        int card5 = KeyMap.FirstCard + 5;
+        // The row is below the fold: scroll it into view first, as a player would.
+        screen.KeyButton(card5).GetParent().GetParent<ScrollContainer>().EnsureControlVisible(screen.KeyButton(card5));
+        await Frames(2);
+        await Click(screen.KeyButton(card5));
+        await Type(Key.Key1);
+        string groupLine = _ui.KeysFormat(KeysText.Conflict, "1", KeyMap.ActionName(_ui, KeyMap.FirstGroup));
+        Check(screen.KeyButton(card5).Text == "A" && screen.KeyStatus.Text == groupLine, $"1 for card_5: '{screen.KeyButton(card5).Text}', status '{screen.KeyStatus.Text}', want '{groupLine}'");
+        screen.KeyButton(card5).GetParent().GetParent<ScrollContainer>().ScrollVertical = 0;
+        await Frames(2);
+        await Click(screen.KeyButton(stop));
+        await Type(Key.Escape);
+        Check(screen.Visible && !screen.Listening && screen.KeyButton(stop).Text == "S" && GetTree().Paused, $"Esc while waiting: screen {screen.Visible}, waiting {screen.Listening}");
+        screen.Tabs.CurrentTab = 0;
+        want.Keys.TrySet(attack, Key.K);
+    }
+
+    // M6-V8: in the running match K is attack-move and A nothing; the card's hint reads K. Then Default keys puts A back.
+    private async Task ReboundKeys(Match match, SettingsScreen screen, PauseMenu pause)
+    {
+        var sel = match.GetNode<SelectionController>("SelectionController");
+        var card = match.GetNode<CommandCard>("Hud/CommandCard");
+        Rts.Sim.Entities.UnitStore units = match.Simulation!.World.Units;
+        int own = -1;
+        for (int i = 0; i < units.Capacity && own < 0; i++) if (units.Alive[i] && units.Owner[i] == SelectionController.LocalPlayer) own = i;
+        if (!Check(own >= 0 && sel.SelectOnly(new Rts.Sim.Entities.EntityHandle(own, units.Generation[own])), "no own unit to order")) return;
+        card.Sync();
+        Check(card.HintAt(5).Text == "K" && card.ActionAt(5) == CardCommand.AttackMove, $"the card's attack hint reads '{card.HintAt(5).Text}'");
+        int before = sel.IssuedCount(Rts.Sim.Commands.CommandKind.AttackMove);
+        await Type(Key.A);
+        Check(!sel.Targeting, "A still arms attack-move after the rebind");
+        await Type(Key.K);
+        Check(sel.Targeting && sel.TargetKind == Rts.Sim.Commands.CommandKind.AttackMove, $"K: targeting {sel.Targeting} {sel.TargetKind}");
+        Vector2 centre = GetViewport().GetVisibleRect().Size / 2f;
+        Push(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = centre, GlobalPosition = centre, ButtonMask = MouseButtonMask.Left });
+        Push(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = centre, GlobalPosition = centre });
+        await Frames(2);
+        Check(!sel.Targeting && sel.IssuedCount(Rts.Sim.Commands.CommandKind.AttackMove) == before + 1, $"K + click: {sel.IssuedCount(Rts.Sim.Commands.CommandKind.AttackMove) - before} attack-moves");
+
+        // BUG-0743: the screen's Defaults resets the General fields and keeps the keys (K stays attack-move).
+        await Type(Key.Escape);
+        await Click(pause.SettingsButton);
+        int attack = Array.IndexOf(KeyMap.Actions, "order_attack_move");
+        KeyMap rebound = _main.Settings.Keys.Clone();
+        await Click(screen.DefaultsButton);
+        Check(screen.Visible && screen.KeyButton(attack).Text == "K" && _main.Settings.Keys.Get("order_attack_move") == Key.K,
+            $"Defaults: key button '{screen.KeyButton(attack).Text}', in effect {_main.Settings.Keys.Get("order_attack_move")}");
+        Committed(new GameSettings { Keys = rebound }, "Defaults keeps the keys");
+
+        // Default keys: A again, in the file and in the match.
+        screen.Tabs.CurrentTab = 1;
+        await Frames(1);
+        await Click(screen.KeysDefaultsButton);
+        Check(screen.KeyButton(attack).Text == "A" && screen.Picks().Keys.SameAs(new KeyMap()), $"Default keys: '{screen.KeyButton(attack).Text}'");
+        GameSettings want = _main.Settings.Clone();
+        want.Keys.Reset();
+        screen.Tabs.CurrentTab = 0;
+        await Frames(1);
+        await Click(screen.BackButton);
+        Committed(want, "Default keys");
+        await Type(Key.Escape);
+        Check(!GetTree().Paused, "Esc did not resume after Default keys");
+        sel.SelectOnly(new Rts.Sim.Entities.EntityHandle(own, units.Generation[own]));
+        await Type(Key.K);
+        Check(!sel.Targeting, "K still arms attack-move after Default keys");
+        await Type(Key.A);
+        Check(sel.Targeting && sel.TargetKind == Rts.Sim.Commands.CommandKind.AttackMove, "A does not arm attack-move after Default keys");
+        sel.CancelTargeting();
     }
 
     // Windowed only: borderless and back with Apply under the paused match; the match survives both.
@@ -272,7 +444,8 @@ public partial class SettingsTest : Node
             && (string)file.GetValue("display", "quality", "") == UiText.Key(want.Quality) && (int)file.GetValue("audio", "master", -1) == want.MasterVolume
             && (int)file.GetValue("audio", "music", -1) == want.MusicVolume && (int)file.GetValue("audio", "sfx", -1) == want.SfxVolume
             && Math.Abs((float)file.GetValue("camera", "edge_pan", 0f) - want.EdgePan) < 1e-4f
-            && (bool)file.GetValue("camera", "confine_cursor", !want.ConfineCursor) == want.ConfineCursor, $"{what}: the file holds [{FileText()}], want [{want.Encode()}]");
+            && (bool)file.GetValue("camera", "confine_cursor", !want.ConfineCursor) == want.ConfineCursor
+            && KeyMap.Actions.All(a => (string)file.GetValue("keys", a, "") == OS.GetKeycodeString(want.Keys.Get(a))), $"{what}: the file holds [{FileText()}], want [{want.Encode()}]");
         foreach ((string bus, int volume) in new[] { (GameSettings.MasterBus, want.MasterVolume), (GameSettings.MusicBus, want.MusicVolume), (GameSettings.SfxBus, want.SfxVolume) })
         {
             float db = AudioServer.GetBusVolumeDb(AudioServer.GetBusIndex(bus));

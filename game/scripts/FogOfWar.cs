@@ -18,7 +18,8 @@ namespace Rts.Game;
 /// node order in the scene doesn't matter.</para>
 /// <para><b>Last-seen resources</b> (M4-VH2, BUG-0281 item 1): <see cref="Resources"/> keeps <see cref="Rts.Sim.ViewApi.SeenResources"/>,
 /// the nodes as the player last saw them, so a tree felled in explored fog stays drawn (darkened) on the map and the
-/// minimap until its footprint is in sight again.</para>
+/// minimap until its footprint is in sight again; since M6-V8 also each node's amount left as last seen, once per tick, for the
+/// selection panel's resource click.</para>
 /// <para><b>Disabled</b> (<c>--no-fog</c>, a dev and test flag): the texture is all visible and every live slot is shown.</para>
 /// Holds no gameplay state; reads the sim only.
 /// </remarks>
@@ -31,6 +32,8 @@ public partial class FogOfWar : Node
 
     private Shader? _terrainShader, _propShader, _markerShader;
     private Vector2 _worldSize;
+    // The tick whose amounts SeenResources holds (M6-V8): amounts move only on a tick, so one pass per tick.
+    private int _amountTick = -1;
 
     /// <summary>The runner whose sim's fog is drawn; null draws nothing new (tests call <see cref="Sync"/> directly).</summary>
     public SimRunner? Runner { get; set; }
@@ -56,6 +59,7 @@ public partial class FogOfWar : Node
     {
         View = new FogView(world.Fog.Width, world.Fog.Height, world.Units.Capacity, world.Buildings.Capacity, player, enabled);
         SeenResources = new SeenResources(world.Data.Resources, world.Resources.Capacity);
+        _amountTick = -1;
         Image = Image.CreateFromData(View.Width, View.Height, false, Image.Format.R8, View.Texture);
         Texture = ImageTexture.CreateFromImage(Image);
         _worldSize = new Vector2(View.Width * MapConstants.CellSize, View.Height * MapConstants.CellSize);
@@ -96,6 +100,11 @@ public partial class FogOfWar : Node
         if (View == null || SeenResources == null) return null;
         Rts.Sim.Entities.ResourceStore r = world.Resources;
         SeenResources.Update(world.NavGrid.Version, r.Alive, r.TypeId, r.Cell, world.Fog, View.Player, View.Enabled, world.NavGrid.Width);
+        if (world.TickNumber != _amountTick)
+        {
+            _amountTick = world.TickNumber;
+            SeenResources.UpdateAmounts(r.Alive, r.TypeId, r.Cell, r.Remaining, world.Fog, View.Player, View.Enabled, world.NavGrid.Width);
+        }
         return SeenResources;
     }
 

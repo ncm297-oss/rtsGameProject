@@ -46,13 +46,14 @@ public static class SettingsApplier
     /// <summary>
     /// Applies everything; <paramref name="vsyncOverride"/> (<c>--vsync on|off</c>) wins over the file for the run. With
     /// <paramref name="keepWindow"/> (the boot, when an engine window flag was given: BUG-0681) the window's mode, size and
-    /// position are left as the engine made them; VSync, quality and volumes still apply.
+    /// position are left as the engine made them; VSync, quality, volumes and (M6-V8) the keys still apply.
     /// </summary>
     public static void Apply(GameSettings s, Viewport root, bool? vsyncOverride, bool keepWindow = false)
     {
         ApplyWindow(s, vsyncOverride, keepWindow);
         ApplyQuality(s.Quality, root);
         ApplyVolumes(s);
+        s.Keys.Apply(); // M6-V8: the InputMap actions take the picked keys
     }
 
     /// <summary>Window mode, size (windowed only, centred on its screen) and VSync; nothing headless.</summary>

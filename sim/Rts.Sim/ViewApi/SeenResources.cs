@@ -17,15 +17,17 @@ namespace Rts.Sim.ViewApi;
 /// every spawn and fell bumps it), keeps the slots that differ in a pending list, and each call checks only those against
 /// the fog. Without fog (<c>--no-fog</c>) every difference is taken at once. The first call copies the whole store
 /// (unexplored ground draws nothing anyway). Reads the spans it is handed only; allocation-free after construction.
+/// M6-V8 (the resource click): <see cref="UpdateAmounts"/> also keeps each node's amount left as last seen
+/// (<see cref="Amount"/>), so the selection panel can show it for a node in explored, not visible ground.
 /// </remarks>
 public sealed class SeenResources
 {
     private readonly bool[] _alive, _isPending;
-    private readonly int[] _type, _cell, _pending;
+    private readonly int[] _type, _cell, _pending, _amount;
     private readonly int[] _width, _height;
     private int _pendingCount;
     private int _storeKey;
-    private bool _filled;
+    private bool _filled, _amountsFilled;
 
     /// <summary>Sizes the copy for a store of <paramref name="capacity"/> slots of the given resource types (only footprints are read).</summary>
     public SeenResources(ImmutableArray<ResourceDef> types, int capacity)
@@ -36,6 +38,7 @@ public sealed class SeenResources
         _type = new int[capacity];
         _cell = new int[capacity];
         _pending = new int[capacity];
+        _amount = new int[capacity];
         _width = new int[types.Length];
         _height = new int[types.Length];
         for (int t = 0; t < types.Length; t++)
@@ -59,6 +62,33 @@ public sealed class SeenResources
 
     /// <summary>Per slot, the last-seen node's footprint anchor cell.</summary>
     public ReadOnlySpan<int> Cell => _cell;
+
+    /// <summary>Per slot, the amount left the player last saw in the last-seen node (M6-V8; see <see cref="UpdateAmounts"/>).</summary>
+    public ReadOnlySpan<int> Amount => _amount;
+
+    /// <summary>
+    /// Brings <see cref="Amount"/> up to what player <paramref name="player"/> sees now (M6-V8): each last-seen live node
+    /// that is still the store's node in that slot (same type and anchor) and has a footprint cell in sight takes the store's
+    /// amount; every other slot keeps the amount last seen. The first call takes every matching slot's amount whether seen
+    /// or not: a match starts with full nodes, and a node can only be clicked once its ground is explored. Call it after
+    /// <see cref="Update"/>, once per tick. Allocation-free.
+    /// </summary>
+    public void UpdateAmounts(ReadOnlySpan<bool> alive, ReadOnlySpan<int> typeId, ReadOnlySpan<int> cell, ReadOnlySpan<int> remaining,
+        FogStore fog, int player, bool fogEnabled, int gridWidth)
+    {
+        int n = Math.Min(_alive.Length, Math.Min(Math.Min(alive.Length, remaining.Length), Math.Min(typeId.Length, cell.Length)));
+        bool all = !_amountsFilled || !fogEnabled;
+        _amountsFilled = true;
+        for (int s = 0; s < n; s++)
+        {
+            if (!_alive[s] || !alive[s] || typeId[s] != _type[s] || cell[s] != _cell[s]) continue;
+            if (all || Sees(fog, player, gridWidth, _type[s], _cell[s])) _amount[s] = remaining[s];
+        }
+    }
+
+    /// <summary>True when the last-seen node in <paramref name="slot"/> has a footprint cell player <paramref name="player"/> sees now (always without fog); false for an empty or out-of-range slot.</summary>
+    public bool InSight(int slot, FogStore fog, int player, bool fogEnabled, int gridWidth) =>
+        (uint)slot < (uint)_alive.Length && _alive[slot] && (!fogEnabled || Sees(fog, player, gridWidth, _type[slot], _cell[slot]));
 
     /// <summary>
     /// Brings the copy up to what player <paramref name="player"/> sees now; true when it changed (<see cref="Version"/> moved).

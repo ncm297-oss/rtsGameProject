@@ -70,7 +70,9 @@
     "cooldown": "Cooldown",
     "seconds": "s",
     "meters": "m",
-    "cast_lost": "Cast lost"
+    "cast_lost": "Cast lost",
+    "resource_left": "{0} {1} left",
+    "last_seen": "Last seen:"
   },
   "menu": {
     "title": "RtsGame",
@@ -152,5 +154,22 @@
     "standing": "Standing",
     "human": "Human",
     "back": "Back"
+  },
+  "keys": {
+    "tab_general": "General",
+    "tab_keybinds": "Keybinds",
+    "order_attack_move": "Attack-move",
+    "order_stop": "Stop",
+    "order_hold": "Hold position",
+    "order_move": "Move",
+    "subgroup_next": "Next subgroup",
+    "build_basic": "Build menu",
+    "build_advanced": "Advanced build menu",
+    "group": "Control group {0}",
+    "card": "Command card row {0}, column {1}",
+    "press_key": "Press a key...",
+    "conflict": "{0} is already used by {1}",
+    "reserved": "{0} can't be rebound",
+    "defaults": "Default keys"
   }
 }

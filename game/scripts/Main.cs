@@ -164,7 +164,8 @@ public partial class Main : Node3D
         AddChild(_settingsScreen);
         _settingsScreen.Build(ui);
         _settingsScreen.ApplyPressed += () => CommitSettings(_settingsScreen.Picks(), stay: true);
-        _settingsScreen.DefaultsPressed += () => CommitSettings(new GameSettings(), stay: true);
+        // BUG-0743: Defaults resets the General fields; the keys stay as the tab shows them (it has its own Default keys).
+        _settingsScreen.DefaultsPressed += () => CommitSettings(new GameSettings { Keys = _settingsScreen.Picks().Keys }, stay: true);
         _settingsScreen.BackPressed += () => CommitSettings(_settingsScreen.Picks(), stay: false);
     }
 
@@ -338,6 +339,7 @@ public partial class Main : Node3D
         if (!e.IsActionPressed("ui_cancel") || e.IsEcho()) return;
         if (_settingsScreen is { Visible: true })
         {
+            if (_settingsScreen.Listening) return; // M6-V8: Esc stops a key button's wait (SettingsScreen._Input), not the screen
             // Esc is Back: the picks are kept and the screen closes to where it came from (the pause menu stays paused).
             CommitSettings(_settingsScreen.Picks(), stay: false);
             GetViewport().SetInputAsHandled();

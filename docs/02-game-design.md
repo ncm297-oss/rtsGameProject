@@ -324,7 +324,7 @@ Shipped maps (working titles):
 
 | Input | Action |
 | --- | --- |
-| Left-click / drag | Select / box select |
+| Left-click / drag | Select / box select (a click on a gold mine or a tree selects it and shows what is left) |
 | Shift + click / drag | Add to or remove from selection |
 | Double-click, or Ctrl + click | Select all units of that type on screen |
 | Right-click | Context command: move, attack, gather, build/repair, set rally point |
@@ -349,11 +349,19 @@ Shipped maps (working titles):
 
 **Grid hotkeys:** building production cards and worker build menus use the full 5×3 grid
 (`Q W E R T / A S D F G / Z X C V B`). They never conflict with A/S/H because those cards have no
-unit commands. All keys are rebindable.
+unit commands. All keys are rebindable: **Settings → Keybinds** lists the orders, Tab, B / V, the control group digits and
+the 15 grid keys; click a key and press the new one. Esc, Shift / Ctrl / Alt, the camera's arrow keys, F10 and F12 stay
+fixed, and a key another command (or grid key) already uses is refused with a line saying which. A control group digit or
+Tab never shares a grid key (with a building selected the digit must still recall its group). Mouse buttons and the
+camera keys are not rebindable yet.
+
+**Resources on click:** a left click on a gold mine or a tree selects it alone (no command); the selection panel shows its
+name and how much is left ("2500 Gold left"), live while you see it, else the amount you last saw ("Last seen: ..."). A
+node you see emptied or felled drops out of the selection.
 
 **Camera:** fixed pitch about 55°, no rotation (readability), zoom with the scroll wheel between
 about 20 m and 60 m from the ground. Pan with screen edges, **arrow keys**, and middle-mouse drag.
-(The plan said WASD; that collides with A, S, and grid hotkeys, so arrows it is. Rebindable.)
+(The plan said WASD; that collides with A, S, and grid hotkeys, so arrows it is. Not rebindable yet.)
 The edge band is 8 pixels on every side, the window's last pixel row and column included. While a match runs
 unpaused in the focused window the cursor is **confined to the window** (so the edges pan even with a second monitor
 beside it); a menu, the pause menu, the match-over banner or Alt-Tab frees it. A setting turns this off.

@@ -195,7 +195,11 @@ public partial class ShellTest : Node
         foreach (PauseText k in Enum.GetValues<PauseText>()) keys.Add(("pause", UiText.Key(k), _ui.Pause(k)));
         foreach (SettingsText k in Enum.GetValues<SettingsText>()) keys.Add(("settings", UiText.Key(k), _ui.Settings(k)));
         foreach (MatchOverText k in Enum.GetValues<MatchOverText>()) keys.Add(("match_over", UiText.Key(k), _ui.MatchOver(k)));
-        Check(keys.Count == 4 + 15 + 4 + 22 + 18, $"{keys.Count} shell keys"); // settings: 22 since M6-V7 (confine_cursor)
+        // M6-V8: the Keybinds tab's keys section and the resource click's two hud lines.
+        foreach (KeysText k in Enum.GetValues<KeysText>()) keys.Add(("keys", UiText.Key(k), _ui.Keys(k)));
+        keys.Add(("hud", UiText.Key(HudText.ResourceLeft), _ui.Hud(HudText.ResourceLeft)));
+        keys.Add(("hud", UiText.Key(HudText.LastSeen), _ui.Hud(HudText.LastSeen)));
+        Check(keys.Count == 4 + 15 + 4 + 22 + 18 + 15 + 2, $"{keys.Count} shell keys"); // settings: 22 since M6-V7 (confine_cursor); keys 15 + hud 2 since M6-V8
         string json = File.ReadAllText(UiText.DefaultPath).Replace("\r\n", "\n");
         foreach ((string section, string key, string text) in keys)
         {
@@ -206,7 +210,7 @@ public partial class ShellTest : Node
             Check(UiText.Parse(root.ToJsonString(), errors) == null && errors.Count == 1 && errors[0].Contains($"{section}.{key}"),
                 $"ui.json without {section}.{key}: [{string.Join("; ", errors)}]");
         }
-        foreach (string section in new[] { "menu", "setup", "pause", "settings", "match_over" })
+        foreach (string section in new[] { "menu", "setup", "pause", "settings", "match_over", "keys" })
         {
             var root = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
             root.Remove(section);
@@ -227,7 +231,11 @@ public partial class ShellTest : Node
             "match_over.victory", "match_over.defeat", "match_over.draw", "match_over.stats", "match_over.menu", "match_over.continue",
             "match_over.stats_title", "match_over.match_length", "match_over.clock", "match_over.player", "match_over.kills",
             "match_over.losses", "match_over.gold_in_hand", "match_over.wood_in_hand", "match_over.defeated_at", "match_over.standing",
-            "match_over.human", "match_over.back" };
+            "match_over.human", "match_over.back",
+            // M6-V8: the resource click's lines and the Keybinds tab's keys.
+            "hud.resource_left", "hud.last_seen", "keys.tab_general", "keys.tab_keybinds", "keys.order_attack_move", "keys.order_stop",
+            "keys.order_hold", "keys.order_move", "keys.subgroup_next", "keys.build_basic", "keys.build_advanced", "keys.group", "keys.card",
+            "keys.press_key", "keys.conflict", "keys.reserved", "keys.defaults" };
         foreach (string n in named) Check(keys.Any(k => $"{k.Section}.{k.Key}" == n), $"no key {n}");
         Check(!keys.Any(k => k.Key == "coming_soon"), "setup.coming_soon is still read (nothing shows it since M6-V2)");
 
@@ -242,6 +250,25 @@ public partial class ShellTest : Node
             var errors = new List<string>();
             Check(UiText.Parse(root.ToJsonString(), errors) == null && errors.Count == 1 && errors[0].Contains($"match_over.{key}"), $"match_over.{key} '{bad}': [{string.Join("; ", errors)}]");
         }
+
+        // M6-V8: the formats of the keys section and hud.resource_left; one that can't format (or names too little) is one
+        // error naming its key. Every order, Tab and build key's name is an input action the key map binds.
+        Check(_ui.ResourceLeft(1500, "Gold").Contains("1500") && _ui.ResourceLeft(1500, "Gold").Contains("Gold")
+            && _ui.KeysFormat(KeysText.Card, 2, 4).Contains('2') && _ui.KeysFormat(KeysText.Card, 2, 4).Contains('4')
+            && _ui.KeysFormat(KeysText.Conflict, "K", "Stop").Contains("Stop") && _ui.KeysFormat(KeysText.Group, 7).Contains('7'),
+            $"formats: '{_ui.ResourceLeft(1500, "Gold")}', '{_ui.KeysFormat(KeysText.Card, 2, 4)}', '{_ui.KeysFormat(KeysText.Conflict, "K", "Stop")}'");
+        foreach ((string section, string key, string bad) in new[] { ("keys", "group", "{1}"), ("keys", "group", "Group"), ("keys", "group", "{{0}}"),
+            ("keys", "reserved", "{0} {1}"), ("keys", "reserved", "Reserved"), ("keys", "card", "{0}"), ("keys", "card", "{0} {2}"),
+            ("keys", "conflict", "{1}"), ("keys", "conflict", "{0"), ("hud", "resource_left", "{0} left"), ("hud", "resource_left", "{2} {1}") })
+        {
+            var root = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
+            root[section]![key] = bad;
+            var errors = new List<string>();
+            Check(UiText.Parse(root.ToJsonString(), errors) == null && errors.Count == 1 && errors[0].Contains($"{section}.{key}"), $"{section}.{key} '{bad}': [{string.Join("; ", errors)}]");
+        }
+        for (int i = 0; i < KeyMap.FirstGroup; i++)
+            Check(Enum.TryParse(KeyMap.Actions[i].Replace("_", ""), ignoreCase: true, out KeysText _) && InputMap.HasAction(KeyMap.Actions[i]),
+                $"action {KeyMap.Actions[i]} has no keys text or no input action");
 
         // BUG-0581 item 1: the map size item is a ui.json format; one that can't format the size is one error naming the key.
         Check(_ui.MapSizeItem(192).Contains("192"), $"map size item '{_ui.MapSizeItem(192)}'");
