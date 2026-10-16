@@ -146,6 +146,38 @@ public partial class ResourceClickTest : Node
         }
         Check(wrong == 0 && r.Remaining[mine] < start, $"gathering: {wrong} frames off the sim; {start} -> {r.Remaining[mine]}");
 
+        // BUG-0743 item 3: at 2x a frame runs two ticks (the runner's own loop, so its Ticked handlers run); the last-seen amount
+        // follows every tick the mine is in sight, not only each frame's last tick. Checked from a Ticked handler added after
+        // the match's own, so the fog has taken the tick first.
+        SeenResources seenAmounts = _match.GetNode<FogOfWar>("World3D/FogOfWar").SeenResources!;
+        int behind = 0, changes = 0, firstOfFrame = 0, prevAmount = r.Remaining[mine], tickInFrame = 0, ticked = 0;
+        void OnTick(Simulation sim)
+        {
+            tickInFrame++;
+            ticked++;
+            if (r.Remaining[mine] != prevAmount)
+            {
+                changes++;
+                if (tickInFrame == 1) firstOfFrame++;
+                prevAmount = r.Remaining[mine];
+            }
+            if (InSight(anchor, def) && seenAmounts.Amount[mine] != r.Remaining[mine]) behind++;
+        }
+        _runner.Ticked += OnTick;
+        _runner.GameSpeed = 2.0;
+        _runner.FixedFrameDelta = 0.05; // a 20 Hz frame's time at 2x: exactly two ticks a frame, from the runner's own _Process
+        _runner.ProcessMode = ProcessModeEnum.Inherit;
+        for (int f = 0; f < 120 && r.Alive[mine]; f++)
+        {
+            tickInFrame = 0;
+            await Frame();
+        }
+        _runner.ProcessMode = ProcessModeEnum.Disabled;
+        _runner.Ticked -= OnTick;
+        _runner.GameSpeed = 1.0;
+        GD.Print($"2x: {ticked} ticks in 120 frames, {changes} amount changes ({firstOfFrame} on a frame's first tick), last-seen amount behind the sim on {behind} ticks in sight");
+        Check(ticked == 240 && changes > 0 && firstOfFrame > 0 && behind == 0, $"2x: {ticked} ticks (want 240), {changes} amount changes, {firstOfFrame} on a frame's first tick, the last-seen amount behind the sim on {behind} ticks in sight");
+
         // Out of sight: the amount last seen.
         _sim.Enqueue(Command.Move(0, workerH, g.CellCenter(farX, farY)));
         int last = r.Remaining[mine];

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open: items 2-3 only; item 1 fixed (M6-V7 + the Producer's docs/03 rewording), item 4 and the `TestSim.cs` space nit fixed in M5-H2 (Producer, 2026-10-16-0847 ACCEPT) |
 | Found | 2026-10-14-0946, task M5-4e |
 | System | defeat rule docs, tests, dev console line |
-| Fixed by | |
+| Fixed by | item 4: 47ca4a2 (M5-H2) `DefeatCountsFuzzTests` checks both ways (a player that built with nothing left is defeated by the end of the tick) and requires `defeats > 0`; the `TestSim.cs` `int worker = Rts...` space. Items 2-3 (the "camps" wording; `DefeatRuleQaTests.EveryCommandKind_*` / `AbilityManagerQaTests.ADefeatedSeat_NeverCasts` weaker than their names) wait for the next sim hardening |
 
 ## Repro
 Read the files named below at `947a61a`.

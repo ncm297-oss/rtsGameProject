@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-16-0847, task M5-H2 (QA) |
 | System | docs/03 "Implementation (pathing slice 1)"; `TestSim.KeepIn`; `World.IsDetectedBy` summary |
-| Fixed by | |
+| Fixed by | ac80818 (docs/03 surround bullets reworded; `TestSim.KeepIn` and `World.IsDetectedBy` summaries) |
 
 ## Repro
 1. Run `FullyQualifiedName~Surround` with detailed output on 8c39c08 and on 47ca4a2 and compare the printed lines.
@@ -33,3 +33,9 @@
 
 ## Notes
 Docs and test-helper comments only; no behaviour changes.
+
+## Verification (QA re-check, 2026-10-16-0847, fix round 1)
+- docs/03 "Reachable spots only" now says 12 of 20 strike as before, 8 dropped -> 0, pocket hold 40 ticks / 9 give-ups -> 1 / 0:
+  the measured numbers. "Two owners" now says the count is unchanged in that scene and names the unit test as the proof.
+- `KeepIn` documents the summon's stealth exemption; `IsDetectedBy` lists a summoned unit. Comment-only change in
+  `World.Stealth.cs` (no code line moved). The new Blackboard bytes ("29 B x 64") match the seven fields (4+8+4+4+4+1+4).

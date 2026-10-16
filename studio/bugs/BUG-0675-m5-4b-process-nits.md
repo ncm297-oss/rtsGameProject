@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (items a, b, d closed by the Producer's triage; item c in M5-H2, set by the Producer at the 2026-10-16-0847 ACCEPT) |
 | Found | 2026-10-13-0916, task M5-4b |
 | System | process, data ranges |
-| Fixed by | |
+| Fixed by | item c: 47ca4a2 (M5-H2), docs/03 "Implementation (M5-4b)" Knobs: a `defendRadius` that covers the map is valid data that plays as an AI that only defends (`DefenseQaTests.TheKnobsAtTheirEdges_*(20, 256)`: waves 0 / 0), a play-style choice; a tighter maximum is the data track's call. Range left 8-256 m |
 
 ## Findings
 a. **ui.json.** The brief gave `game/data/common/ui.json` to the view this session ("the sim does not"). The sim added

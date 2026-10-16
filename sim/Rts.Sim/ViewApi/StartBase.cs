@@ -91,9 +91,12 @@ public static class StartBase
                 StartLocation st = g.StartLocations[p];
                 BuildingDef hall = data.Buildings[plan.HallType[p]];
                 int sx = st.Cell % g.Width - hall.FootprintWidth / 2, sy = st.Cell / g.Width - hall.FootprintHeight / 2;
-                anchor = sy * g.Width + sx;
-                near = FootprintCenter(g, hall, anchor);
-                if (sx < 0 || sy < 0 || !IsHallSpot(g, buildings, data.Buildings, plan.HallType[p], anchor, st.Level, taken))
+                // BUG-0622 item 1: the centre from the column and row, not from a cell index, which wraps a footprint that
+                // starts off the west or north edge onto the far end of another row (the hall went across the map).
+                near = new Vector2((sx + hall.FootprintWidth * 0.5f) * MapConstants.CellSize, (sy + hall.FootprintHeight * 0.5f) * MapConstants.CellSize);
+                bool onMap = sx >= 0 && sy >= 0 && sx + hall.FootprintWidth <= g.Width && sy + hall.FootprintHeight <= g.Height;
+                anchor = onMap ? sy * g.Width + sx : -1;
+                if (!onMap || !IsHallSpot(g, buildings, data.Buildings, plan.HallType[p], anchor, st.Level, taken))
                     anchor = HallSpot(g, buildings, data.Buildings, plan.HallType[p], near, st.Level, taken);
             }
             else

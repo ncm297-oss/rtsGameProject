@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (items 1-2 by the merged-tree reprint b616086; items 3 and 5 in D-H5 a6c23f0, verified by QA 2026-10-16-0847 (12 / 12 mutants killed); item 4 in the sim's M5-H2 47ca4a2 (`Stress/AbilityManagerFuzzStressTests`: every 4th seed plays an Easy-off data copy, `OffSeats > 0` asserted); set by the Producer at the 0847 ACCEPT) |
 | Found | 2026-10-15-2325, task D19 |
 | System | design docs, QA content tests, AI ability fuzz |
 | Fixed by | |

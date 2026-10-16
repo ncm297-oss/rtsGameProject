@@ -53,6 +53,9 @@ public partial class M4PlayableTest : Node
     /// </summary>
     public const int TickBudget = 5500;
 
+    /// <summary>The game time each frame of the run advances the runner by (<see cref="SimRunner.FixedFrameDelta"/>, at 8x).</summary>
+    public const double FrameSeconds = 1.0 / 60.0;
+
     private sealed class StepFailed : Exception
     {
         public StepFailed(string message) : base(message) { }
@@ -272,7 +275,8 @@ public partial class M4PlayableTest : Node
 
         // 6. Kills and losses move, the resource bar with them; then the fight ends with the army standing.
         Step("kills and losses move");
-        await Until(() => W.Kills[0] > 0 && W.Losses[0] > 0, "a kill and a loss");
+        await Until(() => W.Kills[0] > 0 && W.Losses[0] > 0, "a kill and a loss",
+            () => $"kills {W.Kills[0]}, losses {W.Losses[0]}; ours {_army.Count(h => U.IsAlive(h))} round {Mean(_army)} ({string.Join(",", _army.Where(h => U.IsAlive(h)).Select(h => U.State[h.Index]).Distinct())}); theirs {_enemyArmy.Count(h => U.IsAlive(h))} round {Mean(_enemyArmy)} ({string.Join(",", _enemyArmy.Where(h => U.IsAlive(h)).Select(h => U.State[h.Index]).Distinct())})");
         await Frames(1);
         Expect(_bar.ShownKills == W.Kills[0] && _bar.ShownLosses == W.Losses[0], $"bar kills {_bar.ShownKills} losses {_bar.ShownLosses}, sim {W.Kills[0]} / {W.Losses[0]}");
         // Decided: our army stands, at most two of theirs live, and none of those has been in sight for 100 ticks (seed 6
@@ -432,15 +436,14 @@ public partial class M4PlayableTest : Node
     private async Task CusserStep()
     {
         Expect(U.IsAlive(_sapper), "the Sapper died on its way or while it waited");
-        // 1 recalls the army; a right click on the ground 30 m back toward home pulls it off the base (attacking units stand
-        // as walls, and on seed 6 they shut the Sapper's way down a rise).
+        // 1 recalls the army; a right click on the ground pulls it off the base (attacking units stand as walls, and on seed 6
+        // they shut the Sapper's way down a rise) and off the Sapper's way to the base (BUG-0745: 30 m straight back toward
+        // home put the army on top of the waiting Sapper, which then stood boxed in through every Move).
         Key(Godot.Key.Key1);
         await Frames(1);
         int alive = _army.Count(h => U.IsAlive(h));
         Expect(_sel.Selection.Count == alive, $"1 recalled {_sel.Selection.Count} of {alive} live army units");
-        System.Numerics.Vector2 toHome = System.Numerics.Vector2.Normalize(Centre(_hall0) - Centre(_hall1));
-        int backCell = FlowField.NearestPassable(G, CellOf(Mean(_army) + toHome * 30f));
-        System.Numerics.Vector2 back = G.CellCenter(backCell % G.Width, backCell / G.Width);
+        System.Numerics.Vector2 back = PullBackSpot();
         await LookAt(back);
         await RightClick(Screen(back, 0f));
         await Ticks(2);
@@ -518,6 +521,41 @@ public partial class M4PlayableTest : Node
         Expect(SeesFootprint(anchor, def), "the rubble is not in sight (no footprint cell visible)");
         GD.Print($"  {def.DisplayName} destroyed on tick {Tick}; rubble marker {rubble} drawn at {_combat.MarkerTransform(rubble).Origin}, in sight (centre cell {(W.Fog.IsVisible(0, CellOf(c)) ? "visible" : "not visible")})");
         await Shot("cusser-rubble");
+    }
+
+    // Where the army pulls back to before the Sapper walks in: the passable spot 24-36 m from the army, toward home or up to
+    // 90 degrees off it, on the army's level when one is, farthest from the Sapper's straight way to the enemy building it
+    // will go for (at least 12 m off it when any spot is), ties to straight back. Read from the sim, so the same every run.
+    private System.Numerics.Vector2 PullBackSpot()
+    {
+        System.Numerics.Vector2 from = Mean(_army), sapper = U.Position[_sapper.Index];
+        int target = NearestEnemyBuilding(sapper);
+        System.Numerics.Vector2 to = target >= 0 ? Centre(target) : Centre(_hall1);
+        System.Numerics.Vector2 toHome = System.Numerics.Vector2.Normalize(Centre(_hall0) - Centre(_hall1));
+        int level = LevelAt(from);
+        System.Numerics.Vector2 best = default;
+        float bestScore = float.NegativeInfinity;
+        foreach (float d in new[] { 30f, 24f, 36f })
+            foreach (float deg in new[] { 0f, 45f, -45f, 90f, -90f })
+            {
+                float a = deg * MathF.PI / 180f;
+                var dir = new System.Numerics.Vector2(toHome.X * MathF.Cos(a) - toHome.Y * MathF.Sin(a), toHome.X * MathF.Sin(a) + toHome.Y * MathF.Cos(a));
+                int cell = FlowField.NearestPassable(G, CellOf(from + dir * d));
+                System.Numerics.Vector2 p = G.CellCenter(cell % G.Width, cell / G.Width);
+                float off = DistanceToSegment(p, sapper, to);
+                // Off the way by 12 m counts in full; past that only the level and the order (straight back first) decide.
+                float score = MathF.Min(off, 12f) * 10f + (LevelAt(p) == level ? 50f : 0f) + off * 0.01f;
+                if (score > bestScore + 1e-3f) (best, bestScore) = (p, score);
+            }
+        GD.Print($"  pull-back spot {best} (level {LevelAt(best)}), {DistanceToSegment(best, sapper, to):0.0} m off the Sapper's way from {sapper} to {to}");
+        return best;
+    }
+
+    private static float DistanceToSegment(System.Numerics.Vector2 p, System.Numerics.Vector2 a, System.Numerics.Vector2 b)
+    {
+        System.Numerics.Vector2 ab = b - a;
+        float t = ab.LengthSquared() > 0f ? Math.Clamp(System.Numerics.Vector2.Dot(p - a, ab) / ab.LengthSquared(), 0f, 1f) : 0f;
+        return System.Numerics.Vector2.Distance(p, a + ab * t);
     }
 
     // Two fresh Zealots of the enemy's attack two of our buildings (staging Attacks: the enemy has no AI yet); a fresh Cadre
@@ -802,6 +840,10 @@ public partial class M4PlayableTest : Node
         _runner.RecordCheckpointInterval = 1;
         _match.Start(_data, LaunchOptions.Parse(new[] { "--seed", seed.ToString(), "--units", "0", "--no-bases", "--mute", "--speed", "8" }));
         _sim = _runner.Simulation!;
+        // BUG-0745: every frame is 1/60 s of game time at 8x (2.67 ticks), however loaded the machine: each click lands on the
+        // same tick every run, so the run is the same every time (from frame time, a loaded run clicked many ticks later and
+        // played a different fight: seed 1 step 7 and seed 6 step 6 each failed once in the loop and passed alone).
+        _runner.FixedFrameDelta = FrameSeconds;
         _runner.Ticked += OnTicked;
         _sel = _match.GetNode<SelectionController>("SelectionController");
         _camera = _match.GetNode<RtsCamera>("RtsCamera");

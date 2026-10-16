@@ -19,7 +19,8 @@ namespace Rts.Game;
 /// <para><b>Last-seen resources</b> (M4-VH2, BUG-0281 item 1): <see cref="Resources"/> keeps <see cref="Rts.Sim.ViewApi.SeenResources"/>,
 /// the nodes as the player last saw them, so a tree felled in explored fog stays drawn (darkened) on the map and the
 /// minimap until its footprint is in sight again; since M6-V8 also each node's amount left as last seen, once per tick, for the
-/// selection panel's resource click.</para>
+/// selection panel's resource click. BUG-0743 item 3: brought up from the runner's <see cref="SimRunner.Ticked"/>, so a frame
+/// that runs several ticks (2x, a hitch) samples every one of them, not only its last.</para>
 /// <para><b>Disabled</b> (<c>--no-fog</c>, a dev and test flag): the texture is all visible and every live slot is shown.</para>
 /// Holds no gameplay state; reads the sim only.
 /// </remarks>
@@ -35,8 +36,19 @@ public partial class FogOfWar : Node
     // The tick whose amounts SeenResources holds (M6-V8): amounts move only on a tick, so one pass per tick.
     private int _amountTick = -1;
 
-    /// <summary>The runner whose sim's fog is drawn; null draws nothing new (tests call <see cref="Sync"/> directly).</summary>
-    public SimRunner? Runner { get; set; }
+    private SimRunner? _runner;
+
+    /// <summary>The runner whose sim's fog is drawn; null draws nothing new (tests call <see cref="Sync"/> directly). The last-seen resources follow its every tick.</summary>
+    public SimRunner? Runner
+    {
+        get => _runner;
+        set
+        {
+            if (_runner != null) _runner.Ticked -= OnTicked;
+            _runner = value;
+            if (_runner != null) _runner.Ticked += OnTicked;
+        }
+    }
 
     /// <summary>The pure fog state the views read (texture bytes, shown slots); null before <see cref="Bind"/>.</summary>
     public FogView? View { get; private set; }
@@ -70,6 +82,11 @@ public partial class FogOfWar : Node
     {
         if (Runner?.Simulation is Simulation sim) Sync(sim.World);
     }
+
+    public override void _ExitTree() => Runner = null;
+
+    // Each tick the runner runs: the last-seen copy and amounts (the amounts pass runs once a tick, whoever asks first).
+    private void OnTicked(Simulation sim) => Resources(sim.World);
 
     /// <summary>Refreshes the hide rule for this tick and uploads the texture if the fog's version moved; true when it uploaded. Allocation-free.</summary>
     public bool Sync(World world)

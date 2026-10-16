@@ -3,6 +3,7 @@ using System.Globalization;
 using Godot;
 using Rts.Sim;
 using Rts.Sim.Commands;
+using Rts.Sim.Data;
 using Rts.Sim.Entities;
 using Rts.Sim.Map;
 using Rts.Sim.ViewApi;
@@ -140,6 +141,9 @@ public partial class BenchRunner : Node
             case BenchStep.FocusArmy:
                 if (TryArmyCentre(sim.World.Units, out System.Numerics.Vector2 c)) _camera.SetFocus(c.X, c.Y);
                 _camera.SetZoom(_startZoom);
+                // BUG-0684 item 5: seed 6 stages its army as a column taller than the start zoom shows (the box took 48 of
+                // 100); fit the army to the screen. A block that fits (seed 1) keeps the start focus and zoom.
+                FitArmy(sim.World, view);
                 break;
             case BenchStep.BoxSelectArmy:
                 LastBoxSelected = _selection.BoxSelect(new Vector2(1, 1), view - new Vector2(1, 1), add: false);
@@ -196,6 +200,52 @@ public partial class BenchRunner : Node
         }
         JumpFocus[corner] = _camera.Focus;
         Jumps++;
+    }
+
+    // Recentres on the army's screen box and widens the zoom a step at a time until the box is inside the view (or the zoom
+    // is out at its limit); does nothing when it already is.
+    private void FitArmy(World world, Vector2 view)
+    {
+        for (int k = 0; k < 32; k++)
+        {
+            if (!ArmyBox(world, out Vector2 lo, out Vector2 hi)) return;
+            if (lo.X >= 1f && lo.Y >= 1f && hi.X <= view.X - 1f && hi.Y <= view.Y - 1f) return;
+            bool tooBig = hi.X - lo.X > view.X - 2f || hi.Y - lo.Y > view.Y - 2f;
+            if (tooBig && _camera.Zoom < CameraLimits.MaxZoom)
+            {
+                _camera.SetZoom(_camera.Zoom + CameraLimits.ZoomStep);
+                continue;
+            }
+            // Pixels per metre at the focus, from two projected points; the screen's up is the map's -y.
+            System.Numerics.Vector2 f = _camera.Focus;
+            Vector2 at = Project(world, f), dx = Project(world, f + System.Numerics.Vector2.UnitX) - at, dy = Project(world, f + System.Numerics.Vector2.UnitY) - at;
+            if (Math.Abs(dx.X) < 1e-3f || Math.Abs(dy.Y) < 1e-3f) return;
+            Vector2 shift = (lo + hi) * 0.5f - view * 0.5f;
+            _camera.SetFocus(f.X + shift.X / dx.X, f.Y + shift.Y / dy.Y);
+            if (_camera.Focus == f) return; // clamped at the map's edge: nothing more to gain
+        }
+    }
+
+    private Vector2 Project(World world, System.Numerics.Vector2 p) =>
+        _camera.UnprojectPosition(new Vector3(p.X, TerrainHeight.At(world.Heightmap, p.X, p.Y), p.Y));
+
+    // The screen box of every local unit but the workers (they stand by the hall, off the bench's screen since M5-4a); a
+    // unit behind the camera makes it unbounded. False without such a unit.
+    private bool ArmyBox(World world, out Vector2 lo, out Vector2 hi)
+    {
+        UnitStore u = world.Units;
+        lo = new Vector2(float.MaxValue, float.MaxValue);
+        hi = new Vector2(float.MinValue, float.MinValue);
+        bool any = false;
+        for (int i = 0; i < u.Capacity; i++)
+        {
+            if (!u.Alive[i] || u.Owner[i] != SelectionController.LocalPlayer || world.Data.Units[u.TypeId[i]].Slot == UnitSlot.Worker) continue;
+            any = true;
+            if (!_selection.TryScreenPosition(i, out Vector2 p)) p = new Vector2(float.MaxValue, float.MaxValue) * 0.5f;
+            lo = lo.Min(p);
+            hi = hi.Max(p);
+        }
+        return any;
     }
 
     private static bool TryArmyCentre(UnitStore u, out System.Numerics.Vector2 centre)

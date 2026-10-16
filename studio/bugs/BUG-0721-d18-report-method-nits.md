@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (D-H5 a6c23f0, all three items, verified by QA 2026-10-16-0847: the Raider-side ratio printed and pinned (BUG-0780 carries the two cells under 2x), the spending conclusion cut at the idle seat's defeat (mutant killed), the menu's 8 mines; set by the Producer at the 0847 ACCEPT) |
 | Found | 2026-10-14-0946, task D18 |
 | System | content reports (`sim/Rts.Sim.Tests/Content/`) |
 | Fixed by | |

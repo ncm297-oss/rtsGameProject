@@ -3750,7 +3750,9 @@ repeatable benchmark, facing interpolation, and a screenshot set. The owner's pl
   `--screenshot` is saved (the screenshotter then doesn't quit), skips 30 warm-up frames (the
   first draws of new unit nodes compile pipelines: a one-time ~85 ms frame on the dev PC, load time
   rather than play), then plays the pure `Rts.Sim.ViewApi.BenchScript` on frame time until the
-  duration ends. One 10 s loop (M2-H2 order): camera to the local army at the start zoom (0.25 s),
+  duration ends. One 10 s loop (M2-H2 order): camera to the local army at the start zoom (0.25 s; M6-VH2, BUG-0684 item 5: when the
+  army, workers left out, isn't all on screen there, the camera recentres on its screen box and widens a zoom step at a time
+  until it is, so seed 6's tall column is boxed whole, 100 of 100; seed 1 fits and keeps the start focus and zoom),
   box-select the whole screen (0.25 s), A + click (0.25 s), Move across the map (1 s), four minimap
   clicks on the map corners (0.25 s each, all inside the first 3 s), camera back to the army
   (0.25 s), three Shift-queued moves (0.5 s each), zoom 20 m (1.5 s) and 60 m (3.5 s), H (0.25 s),
@@ -3765,7 +3767,7 @@ repeatable benchmark, facing interpolation, and a screenshot set. The owner's pl
   8.75 s window: about 31 m) over seeds 1, 6, 7, 21 and 31 (seed 21 least). `QaH2Test` and `QaM27Test` hold every seed to
   half a free march (`game/tests/BenchMarch.cs`), measured from the across order over the units it sent: since M5-4a the
   start workers stand by the Town Hall off the bench's screen and are never ordered, and a block in a narrow clearing is
-  only partly on screen (seed 6: 48 of 100), so a centre over every local unit measured the staging (BUG-0661; it replaced
+  only partly on screen (seed 6: 48 of 100 until M6-VH2), so a centre over every local unit measured the staging (BUG-0661; it replaced
   BUG-0104's fixed 20 m / 15 m bounds). Every action goes
   through the real code: `SelectionController.BoxSelect` / `OrderAt` / `BeginAttackMove` +
   `AttackMoveClick` / `Order` (public since M2-7; the mouse and key handlers call the same
@@ -5040,7 +5042,10 @@ HUD, as `M3PlayableTest` proved M3. Test code only (`game/tests/M4PlayableTest.t
 - **The scene** (`res://tests/M4PlayableTest.tscn`, "M4 PLAYABLE TEST PASS" / "M4 PLAYABLE TEST FAIL <step> (seed,
   tick): <what>", exit code 0 / 1; seeds 1 and 6, `-- --seed N` for one; `-- --break <n>` makes step n fail once, as
   M3's). A real `Match` (`--units 0 --no-bases --mute --speed 8`, shipped data, the fog on and drawn), the sim ticked by
-  its own `SimRunner` at 8x, every checkpoint recorded. Every action of the local player is input pushed into the
+  its own `SimRunner` at 8x, every checkpoint recorded. Since M6-VH2 (BUG-0745) each frame is 1/60 s of game time
+  (`SimRunner.FixedFrameDelta`, 2.67 ticks a frame) rather than the frame's real delta, so every click lands on the same
+  tick and the run is the same however loaded the machine (from frame time a loaded run played another fight and failed
+  seed 1 step 7 or seed 6 step 6 now and then). Every action of the local player is input pushed into the
   viewport: box drags, clicks, right clicks, grid keys, Tab, Ctrl + 1 and 1, Shift (the `order_queue` action held) and
   minimap clicks to move the camera; never a controller call or a player-0 sim command.
 - **Staging** (dev commands, which ignore requirements and costs; the enemy has no AI before M5): the two start bases
@@ -5104,7 +5109,9 @@ HUD, as `M3PlayableTest` proved M3. Test code only (`game/tests/M4PlayableTest.t
   lands where it was and can catch no one (all BUG-0463); the Sapper is walked to the
   building with plain Moves rather than a long Cusser walk-in, and a Move that stops short is clicked again to the next
   spot round it; the army is pulled back before the Sapper goes in (on seed 6 our attacking units, which stand as walls,
-  shut the Sapper's way down a rise).
+  shut the Sapper's way down a rise), since M6-VH2 to the spot 24-36 m away, toward home or up to 90 degrees off it,
+  farthest from the Sapper's straight way to its building (straight back once put the army on top of the waiting Sapper,
+  BUG-0745).
 - **Tick budget** 5,500 per seed (`M4PlayableTest.TickBudget`, 4 min 35 s of game time); runs headless and windowed.
   Measured with step 9 (the developer's 9 runs of both seeds headless in M4-V7b, QA's 14 seed-runs in BUG-0490 and the
   M4-VH3 scene loop, part of them beside a full `dotnet test` or the other tracks' suites): seed 1 2,869-3,081, seed 6
@@ -5593,7 +5600,8 @@ game/tests/SettingsTest.tscn      the headless settings test (in the scene loop)
   out-of-range key takes its default and all of them are named in one warning; extra keys are ignored. Never an error
   line: Godot's `ConfigFile.Parse` logs an engine ERROR for a value it can't read, so the text is checked before it sees it.
   The defaults are the game as it looked before settings existed. Tests point `Main.SettingsPath` at their own file and
-  never touch the player's.
+  never touch the player's, under a folder of their own process (`user://<test>-<pid>/`, BUG-0684 item 1: `user://` is one
+  folder for every worktree and run, so two runs at once must not share a file).
 - **Boot order.** `Main._Ready`: the banner, the data, the user args, then the settings are read and applied (window,
   VSync, quality, buses), then the screens are built and the menu or the match starts. A match takes the edge pan speed
   as it starts (`RtsCamera.EdgePanSpeed`), and a commit passes it to the running match's camera. **BUG-0681:** when the
@@ -5605,7 +5613,8 @@ game/tests/SettingsTest.tscn      the headless settings test (in the scene loop)
   centred on its screen; Borderless is Godot's `WindowMode.Fullscreen` (a borderless window over the screen); Fullscreen
   is `ExclusiveFullscreen`; the resolution is the window's size in Windowed and is kept for it in the other two. VSync
   `Enabled` / `Disabled`. **`--vsync on|off` wins over the file for the run** (`Main.VsyncOverride`,
-  `Main.EffectiveVsync`) and never changes the file; **`--mute`** still mutes the Master bus for the run whatever the
+  `Main.EffectiveVsync`) and never changes the file (M6-VH2, BUG-0684 item 2: the settings screen shows the run's VSync,
+  greyed, and its picks keep the file's, so Apply / Back / Esc never write the flag); **`--mute`** still mutes the Master bus for the run whatever the
   volumes say (the mute and the volume are separate bus properties). Quality presets (global shadow settings plus the
   window viewport's MSAA and 3D scale):
 
@@ -5839,7 +5848,8 @@ game/tests/ResourceClickTest.tscn      the resource click scene (in the scene lo
   (`resources.json`), and one line, `hud.resource_left` (`"{0} {1} left"`: the amount, then the local faction's `goldName` /
   `woodName`, so a Whirlwind player reads its own word). While a footprint cell is visible (`SeenResources.InSight`; always
   with `--no-fog`) the amount is `World.Resources.Remaining[slot]`; otherwise `SeenResources.Amount[slot]` after
-  `hud.last_seen` (`"Last seen: 2498 Gold left"`). `SeenResources.UpdateAmounts` (called by `FogOfWar.Resources` once per tick)
+  `hud.last_seen` (`"Last seen: 2498 Gold left"`). `SeenResources.UpdateAmounts` (called by `FogOfWar.Resources` once per tick, and since M6-VH2 from the runner's
+  `Ticked` for every tick, so a frame of two ticks at 2x samples both: BUG-0743 item 3)
   copies the store's amount into every last-seen node that is still the store's node in that slot and has a footprint cell in
   sight; its first call takes every node's amount (a match starts with full nodes, and a node is clickable only once explored).
   The line is rebuilt only when the amount or the seen state changes (a string per change, none on a steady frame).
@@ -5859,7 +5869,10 @@ game/tests/ResourceClickTest.tscn      the resource click scene (in the scene lo
 - **The file.** `settings.cfg` `[keys]`: one line per action, the key's Godot name (`order_attack_move="K"`, `group_1="1"`,
   `subgroup_next="Tab"`). A file without the section (before M6-V8) or without a key reads clean with the defaults; a value
   that is not one plain key name (`"Blorp"`, a number, `"Shift+Q"`, `"Ctrl+1"`) or a fixed key is one problem and that
-  action's default. Then the keys read are checked as one map (BUG-0740: never against the defaults of actions the file also
+  action's default. M6-VH2 (BUG-0744): the trimmed value must be the key's own Godot name in any case (`"k"`, `" K "` read
+  as K), so `"Meta+K"`, `"Command+K"`, `"Cmd+K"`, `"Kp+K"` (Godot drops a prefix it doesn't read as a modifier and gives K)
+  are one problem too; and `KeyMap.IsPlainKey` takes only a code whose name reads back as the same key (a named key or a
+  character; a code such as `0x400999` that names nothing is refused before it is named, so no "Unicode parsing error"). Then the keys read are checked as one map (BUG-0740: never against the defaults of actions the file also
   moves, so a swap or a freed default the tab made reads back as written): a key from the file that clashes with a default
   goes back to its own default, two keys from the file that clash both go back (one problem each time), repeated until no
   clash is left (a reset can clash with another key from the file; the defaults never clash). Extra keys are ignored.
@@ -5896,6 +5909,33 @@ game/tests/ResourceClickTest.tscn      the resource click scene (in the scene lo
   digit / Tab on a lower grid key, a moved digit's grid key, "Shift+Q", "Ctrl+1"), `TrySet` refusals (a digit or Tab on a
   grid key, `Key.Special`, a Shift mask), 1 for "row 2, column 1" refused on the tab with the conflict line, and the screen's
   Defaults keeping K. The QA scene `QaM6V8Test` is green.
+
+### Implementation (M6-VH2)
+
+View hardening, no feature: BUG-0684, BUG-0744 items 1-2, BUG-0743 item 3, BUG-0745's scene half, BUG-0622 item 1. The
+behaviour changes are written into the sections above (M2-7 bench, M4-V7 scene, M5-4a start bases, M6-V6 VSync and test
+paths, M6-V8 keys file and amounts); here what else changed and the tests.
+
+- **`GroundDiscPool` reclaim (BUG-0684 item 4).** The nodes a frame may reclaim (held by a key not taken yet) are listed
+  and sorted by key once, at the frame's first reclaim (a frame takes no new holder, so the list holds every candidate),
+  then taken from the low end (a skipped lower key's) or the high end (the highest untaken key's), each entry looked at
+  about twice: O(nodes + keys) a frame, was O(nodes x keys). Same picks as BUG-0662's rule; no allocation.
+- **`CommitSettings(..., stay: false)` over a running match** shows no menu (BUG-0684 item 3, guarded since M6-V4); a
+  `ShellTest` row now holds it.
+- **`SimRunner.FixedFrameDelta`** (scripted runs only): each frame advances the clock by that many seconds instead of the
+  real delta; null in the game. Used by `M4PlayableTest` (1/60 s) and `ResourceClickTest`'s 2x row (0.05 s at 2x: two
+  ticks a frame through the runner's own loop).
+- **Tests.** `SettingsTest` / `ShellTest` on per-process paths (two of each at once green); `SettingsTest` rows "Meta+K",
+  "Command+K", "Cmd+K", "Kp+K", "Meta+N" on a grid key (one problem each, the default), `"  k "` / `"kp 1"` clean, six
+  non-key codes refused by `IsPlainKey` / `TrySet`, every default and a few named keys accepted. `ShellTest`: under
+  `--vsync off` the screen shows Off, greyed, the picks keep the file's On, Back writes On and shows no menu over the
+  match. `AbilityViewTest` reclaim cost: 1,024 new keys below and above 1,024 held ones visit at most 4 nodes per key
+  (3,072 and 2,048; were 1,048,576 and 524,800), the pool stays at 1,024. `BenchTest`: seeds 1 and 6 at the headless size
+  and 1920 x 1080 box all 100 (seed 6 was 48 / 50). `ResourceClickTest` 2x: 240 ticks in 120 frames, the last-seen amount
+  equal to the store on every tick in sight (13 ticks behind before). xUnit
+  `ViewApi/StartBaseTests.HandBuiltStartByAnEdge_HallStaysByIt` (7 edge and corner locations: the hall by the location;
+  the west edge planned it at (34, 17) before). `M4PlayableTest`: three runs at once give the same step ticks (seed 1
+  3,469, seed 6 3,597 of 5,500), PASS each; the old scene in two runs at once gave two traces and one failed seed 6 step 6.
 
 ## AI architecture
 
@@ -6356,7 +6396,9 @@ bases stand on them. Code: `Map/StartLocation.cs`, `MapGenerator.FindStarts`, `R
   draws exactly as before.
 - **Start bases** (`StartBase.Plan`, signature unchanged). On a grid with start locations player p's Town Hall is centred on
   location p (anchor = centre cell minus half the footprint); `IsHallSpot` still checks it (the never-seal ring), and if a
-  start unit stands there the hall moves to the nearest spot on the location's level. Workers face the nearest mine as before.
+  start unit stands there, or (M6-VH2, BUG-0622 item 1) the footprint would start off the map by a hand-built location at
+  an edge, the hall moves to the spot nearest the location on its level (the centre is taken from the column and row, so it
+  never wraps to another row's far end). Workers face the nearest mine as before.
   Players past the locations, and grids without them, use the M3-V1 search unchanged. `AiScenes.Generated` now passes no
   start blocks: its bases are the start locations, mirrored, so the scout's mirror point (M5-3) is the enemy base.
 - **Replays: format 6** adds `map.start-locations`, `map.start-clear-radius`, `map.start-edge-margin`,

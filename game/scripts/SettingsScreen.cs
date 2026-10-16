@@ -42,6 +42,8 @@ public partial class SettingsScreen : CanvasLayer
     private KeyMap _keys = new();
     private readonly Button[] _keyButtons = new Button[KeyMap.Actions.Length];
     private int _listening = -1;
+    // The file's VSync while --vsync holds the field (BUG-0684 item 2): the screen shows the run's, Picks keeps the file's.
+    private bool? _fileVsync;
 
     /// <summary>Raised by Apply.</summary>
     public event Action? ApplyPressed;
@@ -150,15 +152,21 @@ public partial class SettingsScreen : CanvasLayer
         buttons.AddChild(ApplyButton);
     }
 
-    /// <summary>Sets every control to <paramref name="s"/>; the resolution list is the common sizes plus <paramref name="window"/> (the window's size now) and the stored size.</summary>
-    public void ShowSettings(GameSettings s, Vector2I window)
+    /// <summary>
+    /// Sets every control to <paramref name="s"/>; the resolution list is the common sizes plus <paramref name="window"/> (the
+    /// window's size now) and the stored size. With <paramref name="vsyncOverride"/> (<c>--vsync</c>) the VSync field shows the
+    /// run's VSync and is disabled, and <see cref="Picks"/> keeps <paramref name="s"/>'s, so a commit never writes the flag to the file.
+    /// </summary>
+    public void ShowSettings(GameSettings s, Vector2I window, bool? vsyncOverride = null)
     {
         _resolutions = ResolutionList(window, new Vector2I(s.Width, s.Height));
         ResolutionOption.Clear();
         foreach (Vector2I r in _resolutions) ResolutionOption.AddItem(_ui.ResolutionItem(r.X, r.Y));
         ResolutionOption.Select(Array.IndexOf(_resolutions, new Vector2I(s.Width, s.Height)));
         WindowModeOption.Select((int)s.WindowMode);
-        VsyncOption.Select(s.Vsync ? 0 : 1);
+        VsyncOption.Select((vsyncOverride ?? s.Vsync) ? 0 : 1);
+        VsyncOption.Disabled = vsyncOverride != null;
+        _fileVsync = vsyncOverride != null ? s.Vsync : null;
         QualityOption.Select((int)s.Quality);
         MasterSlider.Value = s.MasterVolume;
         MusicSlider.Value = s.MusicVolume;
@@ -180,7 +188,7 @@ public partial class SettingsScreen : CanvasLayer
             Width = r.X,
             Height = r.Y,
             WindowMode = (SettingsWindowMode)Math.Max(0, WindowModeOption.Selected),
-            Vsync = VsyncOption.Selected != 1,
+            Vsync = _fileVsync ?? VsyncOption.Selected != 1,
             Quality = (SettingsQuality)Math.Max(0, QualityOption.Selected),
             MasterVolume = (int)Math.Round(MasterSlider.Value),
             MusicVolume = (int)Math.Round(MusicSlider.Value),

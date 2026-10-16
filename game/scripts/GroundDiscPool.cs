@@ -11,7 +11,9 @@ namespace Rts.Game;
 /// mark: the only time it allocates), up to one node per key. A key that finds no free node first takes one whose key has
 /// not been taken yet this frame (BUG-0550 item 1), so a frame that swaps its keys for as many others doesn't grow it: a
 /// lower key's (callers take keys in ascending order, so that key was skipped and is stale), else the highest such key's
-/// (the last to come, so the fewest stable keys lose their nodes; BUG-0662). View state only.
+/// (the last to come, so the fewest stable keys lose their nodes; BUG-0662). The nodes a frame may reclaim are listed and
+/// sorted by key once, at the frame's first reclaim, and each is looked at about twice after that (BUG-0684 item 4: the
+/// reclaim scanned every node per key). View state only.
 /// </summary>
 /// <remarks>Each frame: <see cref="Begin"/>, then <see cref="Take"/> per drawn key (place and colour the node it returns, then show it), then <see cref="End"/>.</remarks>
 public sealed class GroundDiscPool
@@ -23,6 +25,11 @@ public sealed class GroundDiscPool
     private int[] _nodeKey = Array.Empty<int>(), _free = Array.Empty<int>();
     private bool[] _used = Array.Empty<bool>();
     private int _count, _freeCount;
+    // The frame's reclaimable nodes (held by a key not taken yet when listed), as key << 32 | node, ascending; built at the
+    // frame's first reclaim. Entries go stale as their key is taken or their node reclaimed and are skipped from either end.
+    private long[] _stale = Array.Empty<long>();
+    private int _staleLo, _staleHi;
+    private bool _staleListed;
 
     /// <summary>A pool under <paramref name="parent"/> for keys 0 to <paramref name="keys"/> - 1, made with <paramref name="initial"/> hidden nodes named <paramref name="name"/> + index.</summary>
     public GroundDiscPool(Node parent, string name, int keys, int initial)
@@ -41,6 +48,9 @@ public sealed class GroundDiscPool
     /// <summary>Times the pool grew past its starting nodes.</summary>
     public int Grown { get; private set; }
 
+    /// <summary>Nodes looked at by the reclaim so far (BUG-0684 item 4: a test's measure of its cost).</summary>
+    public long Scanned { get; private set; }
+
     /// <summary>Keys holding a node now.</summary>
     public int InUse => _count - _freeCount;
 
@@ -54,6 +64,7 @@ public sealed class GroundDiscPool
     public void Begin()
     {
         Array.Clear(_used, 0, _count);
+        _staleListed = false;
     }
 
     /// <summary>
@@ -103,20 +114,35 @@ public sealed class GroundDiscPool
     }
 
     // A node held by a key this frame hasn't taken yet (a holder End may free), released from that key; or -1. A key below
-    // `key` was skipped (callers take ascending keys), so its node is surely stale and goes first; else the highest untaken key,
-    // which comes last if at all, gives its node, so the keys between keep theirs (BUG-0662: the lowest went first and every
-    // stable key after it moved one node along, rebuilding each mesh). One pass, no allocation.
+    // `key` was skipped (callers take ascending keys), so its node is surely stale and goes first (the lowest such key); else
+    // the highest untaken key, which comes last if at all, gives its node, so the keys between keep theirs (BUG-0662: the
+    // lowest went first and every stable key after it moved one node along, rebuilding each mesh). No new holder appears
+    // during a frame (a Take marks its node used), so the list made at the first call holds every candidate. No allocation.
     private int Reclaim(int key)
     {
-        int highest = -1;
-        for (int n = 0; n < _count; n++)
+        if (!_staleListed)
         {
-            int held = _nodeKey[n];
-            if (_used[n] || held < 0) continue;
-            if (held < key) return Release(n);
-            if (highest < 0 || held > _nodeKey[highest]) highest = n;
+            int count = 0;
+            for (int n = 0; n < _count; n++)
+            {
+                Scanned++;
+                if (!_used[n] && _nodeKey[n] >= 0) _stale[count++] = (long)_nodeKey[n] << 32 | (uint)n;
+            }
+            Array.Sort(_stale, 0, count);
+            (_staleLo, _staleHi, _staleListed) = (0, count - 1, true);
         }
-        return highest < 0 ? -1 : Release(highest);
+        while (_staleLo <= _staleHi && !Reclaimable(_stale[_staleLo])) _staleLo++;
+        if (_staleLo <= _staleHi && (int)(_stale[_staleLo] >> 32) < key) return Release((int)_stale[_staleLo++]);
+        while (_staleHi >= _staleLo && !Reclaimable(_stale[_staleHi])) _staleHi--;
+        return _staleHi >= _staleLo ? Release((int)_stale[_staleHi--]) : -1;
+    }
+
+    // Whether a listed node is still held by the key it was listed with, and that key hasn't been taken since.
+    private bool Reclaimable(long entry)
+    {
+        Scanned++;
+        int n = (int)entry;
+        return !_used[n] && _nodeKey[n] == (int)(entry >> 32);
     }
 
     private int Release(int n)
@@ -135,6 +161,7 @@ public sealed class GroundDiscPool
         Array.Resize(ref _nodeKey, to);
         Array.Resize(ref _used, to);
         Array.Resize(ref _free, to);
+        Array.Resize(ref _stale, to);
         // Free nodes are taken from the top of the stack: push the new ones highest first, so they are used in index order.
         for (int n = to - 1; n >= _count; n--)
         {
