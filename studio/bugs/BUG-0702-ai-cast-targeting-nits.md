@@ -33,3 +33,6 @@ Possible rules (owner / Producer call): seed the group from the enemy nearest th
 of the centroid of all of them; skip a point another caster was sent to this think (within the radius) for abilities whose
 effect doesn't stack; in docs/03 say that the reach is a search ring and that the cast needs the group within the radius of
 the pulled-back point.
+
+## QA note (2026-10-16-0847, M5-H2)
+Item 2 (no stacking) is in on the branch (`QA/AbilityManagerQaTests.ThreePriests_OneStormOnOnePoint_TheOthersHoldTheirs`), but it broke the judging rule for non-stacking abilities: a storm that never lands is sent once instead of up to MaxTries times (BUG-0760). Item 3 became a docs/03 line ("a search ring"). Item 1 (two groups either side) still skipped (M5-4f).

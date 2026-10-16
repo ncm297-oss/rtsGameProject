@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (M5-H2, verified by QA 2026-10-16-0847) |
 | Found | 2026-10-14-0946, task M5-4e |
 | System | defeat rule (World.Defeat.cs), towers, research |
-| Fixed by | |
+| Fixed by | 47ca4a2 (M5-H2), `MatchOverTests.TheHouseGoneOnTheDefeatTick_*` / `ACollapse_HashTwinsEqual` / `FourAiSeats_APlayerCollapsesMidMatch_*`; QA `QA/CollapseRuleQaTests` |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~WinConditionQaTests.ADefeatedPlayersTower_KeepsShooting_Measured"`
@@ -44,3 +44,6 @@ view's rubble, no kill credited, queues gone). Recorded in docs/01 (Producer dec
 Built at the sim's M5-H2 hardening (first item): flip `WinConditionQaTests.ADefeatedPlayersTower_KeepsShooting_Measured` and
 `...CommandsOnItsStandingBuildings_AreDropped(defeated)` to the new rule; `MatchOverTests` gains "the House still standing" → "the
 House gone on the defeat tick"; the hash twin; the view's `MatchOverViewTest` losers own one hall only, so they are unaffected.
+
+## QA verification (2026-10-16-0847, M5-H2)
+Verified: `QA/CollapseRuleQaTests` (a 4-seat combat fuzz x 4 seeds x 2,000 ticks and a 4-seat match with three AI seats whose weak seats fall in combat, twins equal and a per-tick checker: no building, unit, resource or tech change of an out player after its tick; Collapsed events only on the defeat tick; kills and losses = counted deaths; cells open; no dangling target or builder; no projectile from an out player; two players out on one tick; the last builder killed on its site; a tower mid-wind-up never fires; a collapsed slot reused by a rival). Follow-ups: two tests that stage a lone non-producing building with no unit now measure the collapse instead of what they measured (BUG-0761, BUG-0762).
