@@ -8,6 +8,7 @@ bugs outrank new features.
   session (sim: next free; view: next free + 10); never reuse a number the other track may take
   (session 1446 collided on BUG-0039; the view's became BUG-0041).
 - Status moves `open` â†’ `fixed` (with proof) or `wontfix` (with the Producer's reason).
+- A golden header regen's reason lives in the `GatherWedgeQaTests.SameGameDataHashes` comment and the commit body (BUG-0750).
 
 ## Template
 
@@ -345,3 +346,4 @@ bugs outrank new features.
 | [BUG-0744](BUG-0744-keys-file-leftovers-after-round-1.md) | S4 | open | `[keys]` leftovers: "Meta+K" / "Command+K" read clean as K; non-key codes pass `TrySet`; one bad hand-edited key can reset a whole row |
 | [BUG-0745](BUG-0745-m4-playable-seed1-sapper-stuck-on-rise.md) | S3 | open | M4PlayableTest seed 1 step 7 failed once under load: the Sapper stood still on a rise through all 8 right-clicks |
 | [BUG-0750](BUG-0750-d19-stale-numbers-and-dead-checks.md) | S4 | open | D19 nits: andii.md Champion "115 vs a Town Hall" (118 at armor 2), docs/03 "Shipped ... armor 5", D18 precondition lever edit and the fuzz useAbilities check can no longer fail, no regen reason in the commit |
+| [BUG-0780](BUG-0780-catapult-under-2x-raider-per-cost.md) | S3 | open | Catapults under 2x the Raider's damage per cost on a hall (1.7x) and a Town Hall (1.6x) since the surround rule + D19; pinned as measured in `BuildingKillTimeReportTests` |

@@ -28,7 +28,11 @@ public class D18ReportPreconditionQaTests
         return d;
     }
 
-    /// <summary>The D18 lever edits (A, B, the x1.5 sweep's fields), applied the reports' way, take effect in the loaded copy and leave every shipped file byte-identical.</summary>
+    /// <summary>
+    /// The D18 lever edits (A, B, the x1.5 sweep's fields), applied the reports' way, take effect in the loaded copy and leave every
+    /// shipped file byte-identical. The edit values sit off the shipped ones (BUG-0750 item 3: D19 shipped D18's Structure row and
+    /// the x1.5 bonus, so editing to those values could no longer tell a mistyped key from a working edit).
+    /// </summary>
     [Fact]
     public void D18LeverEdits_ChangeTheLoadedCopy_AndLeaveShippedFilesByteIdentical()
     {
@@ -43,7 +47,7 @@ public class D18ReportPreconditionQaTests
             {
                 foreach (JsonNode? t in root["damageTypes"]!.AsArray())
                 {
-                    double? to = (string)t!["id"]! switch { "melee" => 0.7, "pierce" => 0.35, "magic" => 0.6, _ => null };
+                    double? to = (string)t!["id"]! switch { "melee" => 0.5, "pierce" => 0.25, "magic" => 0.5, _ => null };
                     if (to != null) t["multipliers"]!["structure"] = to.Value;
                 }
             });
@@ -54,7 +58,7 @@ public class D18ReportPreconditionQaTests
                 });
             foreach ((string faction, string id) in new[] { ("malazan", "malazan_heavy_infantry"), ("whirlwind", "whirlwind_raider") })
             {
-                dir.SetUnitField(faction, id, "attack.bonusVs.mounted", "1.5");
+                dir.SetUnitField(faction, id, "attack.bonusVs.mounted", "1.4");
                 dir.SetUnitField(faction, id, "hp", "120");
                 dir.SetUnitField(faction, id, "armor", "2");
                 dir.SetUnitField(faction, id, "cost.gold", "60");
@@ -64,20 +68,30 @@ public class D18ReportPreconditionQaTests
             edited = r.Data!;
         }
 
-        // The edits took (a mistyped key would add a field and leave the lever a no-op).
-        DamageTable dt = edited.DamageTable;
-        int structure = dt.ArmorClassKeys.IndexOf("structure");
-        Assert.Equal(0.7f, dt.Multiplier(dt.DamageTypeKeys.IndexOf("melee"), structure));
-        Assert.Equal(0.35f, dt.Multiplier(dt.DamageTypeKeys.IndexOf("pierce"), structure));
-        Assert.Equal(0.6f, dt.Multiplier(dt.DamageTypeKeys.IndexOf("magic"), structure));
+        // The edits took (a mistyped key would add a field and leave the lever a no-op). Every edited value must differ from the
+        // shipped one, or this check goes dead again the day a lever ships.
+        GameData shipped = TestSim.Data;
+        DamageTable dt = edited.DamageTable, st = shipped.DamageTable;
+        int structure = dt.ArmorClassKeys.IndexOf("structure"), mounted = dt.ArmorClassKeys.IndexOf("mounted");
+        foreach ((string type, float want) in new[] { ("melee", 0.5f), ("pierce", 0.25f), ("magic", 0.5f) })
+        {
+            int t = dt.DamageTypeKeys.IndexOf(type);
+            Assert.NotEqual(want, st.Multiplier(t, structure));
+            Assert.Equal(want, dt.Multiplier(t, structure));
+        }
         Assert.Equal(3.0f, dt.Multiplier(dt.DamageTypeKeys.IndexOf("siege"), structure));
         for (int b = 0; b < edited.Buildings.Length; b++)
-            Assert.Equal(TestSim.Data.Buildings[b].Armor / 2, edited.Buildings[b].Armor);
+            Assert.Equal(shipped.Buildings[b].Armor / 2, edited.Buildings[b].Armor);
         foreach (string id in new[] { "malazan_heavy_infantry", "whirlwind_raider" })
         {
-            UnitDef u = edited.Units[edited.FindUnit(id)];
+            UnitDef u = edited.Units[edited.FindUnit(id)], s = shipped.Units[shipped.FindUnit(id)];
+            Assert.NotEqual(1.4f, s.Attack.BonusVs[mounted]);
+            Assert.Equal(1.4f, u.Attack.BonusVs[mounted]);
+            Assert.NotEqual(120, s.Hp);
             Assert.Equal(120, u.Hp);
+            Assert.NotEqual(2, s.Armor);
             Assert.Equal(2, u.Armor);
+            Assert.NotEqual(60, s.CostGold);
             Assert.Equal(60, u.CostGold);
         }
         Assert.NotEqual(shippedHash, edited.ContentHash());

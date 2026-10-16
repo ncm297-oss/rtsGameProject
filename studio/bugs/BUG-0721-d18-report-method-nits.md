@@ -33,3 +33,15 @@ None of these changes the proposed lever (C) or the "wood is still the limit" co
 when the reports are rerun on the new numbers. Not a bug, but an owner-relevant fact from report 4: Crossbowmen sit on the
 1-damage floor of `DamageCalc` (round(raw) - armor, at least 1) against the hall and Town Hall under every lever, so their
 times (131 s / 263 s) don't move even under (C). Only the House time halves, because its armor drops to 1.
+
+**2026-10-16 (D-H5, developer; proposed status: fixed, for QA to verify).**
+1. `BuildingKillTimeReportTests` prints the siege ratio against both line rows ("x HI / x Raider per cost"). The band's 12
+   cells stay the Heavy Infantry's (12 / 12); against the Raider the Catapults are 2.8 / 1.7 / 1.6x, so two cells fall under
+   2x. Pinned exactly in the report (not loosened) and filed as BUG-0780 (S3) for the Producer.
+2. `AiSpendingReportTests.GeneratedNormal_Spending_Report` counts only the marks before the idle seat's defeat, prints
+   "(after the defeat: not counted)" on the others, and asserts the cut-off (counted marks == marks before the defeat
+   tick; mutation: counting every mark fails "Expected: 1, Actual: 4"). The flat report asserts nobody falls (combat off).
+3. The generated rows run on the menu's map, 12 forests and 8 mines (a local `MenuMap` built as `AiScenes.Generated` but
+   with `GoldMines = 8`; the helper is the sim track's and fixes 6), asserted 8 mines on the map.
+Re-run on D19 + the surround rule: the idle base falls at 496-593 s, so only the 5-min marks count: 1 of 4 wood-bound
+(the Whirlwind, seed 7): "wood binds at some marks only, not the limit overall" (D18 read "still the limit", 9 of 16).

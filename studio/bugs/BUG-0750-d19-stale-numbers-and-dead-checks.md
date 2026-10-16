@@ -40,3 +40,12 @@ in a data copy. Item 3 and 4 are test-only (sim / data test folders), items 1-2 
 
 **2026-10-16 (merged-tree reprint, BUG-0734's commit):** items 1-2 fixed (andii.md "118 vs a Town Hall per swing (armor 2
 since D19)"; docs/03 "armor 5 then (2 since D19)"). Items 3-5 stay open for D-H5.
+
+**2026-10-16 (D-H5, developer; items 3 and 5, proposed fixed; item 4 is the sim track's M5-H2).**
+3. `QA/Content/D18ReportPreconditionQaTests.D18LeverEdits_*` now edits to values off the shipped ones (Structure melee
+   0.5, pierce 0.25, magic 0.5; `bonusVs.mounted` 1.4, which the test now also asserts) and asserts each edited value
+   differs from the shipped one, so the check can't go dead again silently. Mutation: a mistyped damage type id
+   (`"meele"`) fails "Expected: 0.5, Actual: 0.699999988" (the old 0.7 edit passed it); a mistyped field key
+   (`"structur"`, `"mountd"`) is rejected by the loader ("unknown armor class").
+5. Convention written into `studio/bugs/README.md`'s head: a golden header regen's reason lives in the
+   `GatherWedgeQaTests.SameGameDataHashes` comment and the commit body.

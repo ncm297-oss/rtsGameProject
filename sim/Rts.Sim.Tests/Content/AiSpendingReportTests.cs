@@ -1,8 +1,11 @@
+using System.Collections.Immutable;
 using System.Globalization;
 using System.Numerics;
 using Rts.Sim.Ai;
+using Rts.Sim.Commands;
 using Rts.Sim.Data;
 using Rts.Sim.Map;
+using Rts.Sim.ViewApi;
 using Xunit.Abstractions;
 
 namespace Rts.Sim.Tests.Content;
@@ -16,9 +19,14 @@ namespace Rts.Sim.Tests.Content;
 /// owner, and the proposal is in the D17 session report.
 /// <para>
 /// D18 (QA's D17 note: the flat scene's 12 trees run dry, so re-measure on a real map): the same columns on
-/// <see cref="AiScenes.Generated"/> seeds 1 and 7, both factions, with the menu's 12 forests (<c>LaunchOptions.DefaultForests</c>;
-/// the helper's six mines stay), combat on (the helper's default: the idle seat's base can fall, and the report says when),
-/// and a dated conclusion line on whether wood is still the limit.
+/// the generated map, seeds 1 and 7, both factions, combat on (the idle seat's base can fall, and the report says when), and a
+/// dated conclusion line on whether wood is still the limit.
+/// </para>
+/// <para>
+/// D-H5 (BUG-0721 items 2-3): the map is the menu's (12 forests, 8 mines: <c>LaunchOptions.DefaultForests</c> /
+/// <c>DefaultMines</c>, which QA's <c>D18ReportPreconditionQaTests.D18Reports_MenuConstants_MatchTheGameScripts</c> pins),
+/// set up as <see cref="AiScenes.Generated"/> does but with 8 mines (that helper fixes 6); and the conclusion counts only
+/// the marks before the idle seat's defeat (a mark after it is a won match, not a spending question).
 /// </para>
 /// <para>
 /// Reads the AI through its own members (BUG-0641: read from the AI, not re-derived beside it; all <c>internal</c>, reached
@@ -36,6 +44,9 @@ public class AiSpendingReportTests
 
     /// <summary>The game's default forest count (<c>game/scripts/LaunchOptions.DefaultForests</c>, read 2026-10-14).</summary>
     private const int MenuForests = 12;
+
+    /// <summary>The game's default mine count (<c>game/scripts/LaunchOptions.DefaultMines</c>, read 2026-10-16).</summary>
+    private const int MenuMines = 8;
 
     /// <summary>A mark counts as wood-bound when wood in hand is under this while gold in hand is at least <see cref="GoldPiled"/>.</summary>
     private const int WoodShort = 100;
@@ -55,28 +66,70 @@ public class AiSpendingReportTests
         int player = TestSim.Data.FindFaction(faction);
         Simulation sim = AiScenes.Flat(AiScenes.Seats(AiDifficulty.Normal, Controllers(player)));
         _out.WriteLine($"{faction}, flat scene, Normal, {Ticks} ticks ({Ticks / Tps / 60} min), combat off, the other seat idle");
-        Report(sim, player, -1);
+        (_, _, _, int defeatedAt) = Report(sim, player, -1);
+        Assert.Equal(-1, defeatedAt); // combat off: nobody falls, so every mark counts
     }
 
-    /// <summary>D18 item 2: seeds 1 and 7 of the generated map, both factions, and the dated conclusion.</summary>
+    /// <summary>D18 item 2: seeds 1 and 7 of the menu's generated map, both factions, and the dated conclusion (marks before the idle seat's defeat).</summary>
     [Fact]
     public void GeneratedNormal_Spending_Report()
     {
-        int bound = 0, marks = 0;
+        int bound = 0, marks = 0, cut = 0;
         foreach (ulong seed in new ulong[] { 1, 7 })
             foreach (string faction in new[] { "malazan", "whirlwind" })
             {
                 int player = TestSim.Data.FindFaction(faction);
-                Simulation sim = AiScenes.Generated(AiScenes.Seats(AiDifficulty.Normal, Controllers(player)), seed, record: false, out _, forests: MenuForests);
+                Simulation sim = MenuMap(AiScenes.Seats(AiDifficulty.Normal, Controllers(player)), seed);
+                Assert.Equal(MenuMines, Count(sim, "gold_mine"));
                 _out.WriteLine("");
-                _out.WriteLine($"== {faction}, generated 128 map seed {seed} ({MenuForests} forests, 6 mines), Normal, {Ticks} ticks, combat on, the other seat idle");
-                (int b, int m) = Report(sim, player, sim.World.StartLocations[player].Cell);
+                _out.WriteLine($"== {faction}, generated 128 map seed {seed} ({MenuForests} forests, {MenuMines} mines), Normal, {Ticks} ticks, combat on, the other seat idle");
+                (int b, int m, int all, int defeatedAt) = Report(sim, player, sim.World.StartLocations[player].Cell);
+                // The cut-off: exactly the marks that fell before the defeat count (all of them if the seat stood).
+                int before = 0;
+                for (int t = MarkEvery; t <= Ticks; t += MarkEvery) if (defeatedAt < 0 || t < defeatedAt) before++;
+                Assert.Equal(before, m);
+                Assert.Equal(Ticks / MarkEvery, all);
                 bound += b;
                 marks += m;
+                cut += all - m;
             }
         _out.WriteLine("");
         string verdict = 2 * bound >= marks ? "wood is still the limit" : bound > 0 ? "wood binds at some marks only, not the limit overall" : "wood is not the limit";
-        _out.WriteLine($"Conclusion (2026-10-14, shipped data): {verdict} on the generated map: {bound} of {marks} marks had wood in hand < {WoodShort} with gold >= {GoldPiled}.");
+        _out.WriteLine($"Conclusion (2026-10-16, shipped data: D19 + the surround rule): {verdict} on the menu's generated map: {bound} of {marks} marks before the idle seat's defeat had wood in hand < {WoodShort} with gold >= {GoldPiled} ({cut} marks after a defeat not counted).");
+    }
+
+    /// <summary>
+    /// <see cref="AiScenes.Generated"/>'s match (the hall and five workers per player from <c>StartBase.Plan</c>, by command)
+    /// on the menu's map: <see cref="MenuForests"/> forests and <see cref="MenuMines"/> mines.
+    /// </summary>
+    private static Simulation MenuMap(PlayerSeat[] seats, ulong seed)
+    {
+        var map = MapGenParams.Default with { Forests = MenuForests, GoldMines = MenuMines };
+        var sim = new Simulation(new SimConfig(seed, seats.Length, 400, 1024) { Data = TestSim.Data, Map = map, Seats = seats.ToImmutableArray() });
+        World w = sim.World;
+        NavGrid g = w.NavGrid;
+        float maxRadius = 0f;
+        foreach (UnitDef d in w.Data.Units) maxRadius = Math.Max(maxRadius, d.Radius);
+        var blocks = new Vector2[seats.Length][];
+        var factions = new int[seats.Length];
+        for (int p = 0; p < seats.Length; p++) (blocks[p], factions[p]) = (Array.Empty<Vector2>(), w.FactionOf(p));
+        StartBasePlan plan = StartBase.Plan(g, w.Data, w.Buildings, w.Resources.Alive, w.Resources.TypeId, w.Resources.Cell, factions, blocks, 5, maxRadius);
+        for (int p = 0; p < seats.Length; p++)
+        {
+            int anchor = plan.HallAnchor[p];
+            Assert.True(anchor >= 0, $"seed {seed}: no hall spot for player {p}");
+            sim.Enqueue(Command.SpawnBuilding(p, plan.HallType[p], g.CellCenter(anchor % g.Width, anchor / g.Width)));
+            foreach (Vector2 spot in plan.Workers[p]) sim.Enqueue(Command.SpawnUnit(p, plan.WorkerType[p], spot));
+        }
+        return sim;
+    }
+
+    private static int Count(Simulation sim, string key)
+    {
+        int type = sim.World.Data.FindResource(key), n = 0;
+        var r = sim.World.Resources;
+        for (int k = 0; k < r.Capacity; k++) if (r.Alive[k] && r.TypeId[k] == type) n++;
+        return n;
     }
 
     private static SeatController[] Controllers(int aiPlayer)
@@ -88,9 +141,10 @@ public class AiSpendingReportTests
 
     /// <summary>
     /// Runs <see cref="Ticks"/> and prints the report for <paramref name="player"/>'s AI; with a start cell, the last column
-    /// is the wood left in trees within 60 m of it (else on the whole map). Returns the wood-bound marks and the marks.
+    /// is the wood left in trees within 60 m of it (else on the whole map). Returns the wood-bound marks and the marks before
+    /// the idle seat's defeat, all the marks, and the defeat tick (-1: it stood).
     /// </summary>
-    private (int WoodBound, int Marks) Report(Simulation sim, int player, int startCell)
+    private (int WoodBound, int Marks, int AllMarks, int IdleDefeatedAt) Report(Simulation sim, int player, int startCell)
     {
         World w = sim.World;
         GameData d = w.Data;
@@ -113,7 +167,7 @@ public class AiSpendingReportTests
         Array.Fill(firstFinished, -1);
         Array.Fill(typeAt, -1);
         var marks = new List<string>();
-        int woodBound = 0, idleDefeatedAt = -1;
+        int woodBound = 0, counted = 0, idleDefeatedAt = -1;
 
         for (int t = 0; t < Ticks; t++)
         {
@@ -132,8 +186,10 @@ public class AiSpendingReportTests
             if (sim.TickNumber % MarkEvery == 0)
             {
                 (int army, int workers) = Pop(sim, player);
-                if (w.Wood[player] < WoodShort && w.Gold[player] >= GoldPiled) woodBound++;
-                marks.Add($"{sim.TickNumber / Tps / 60} min | {w.Gold[player]} | {w.Wood[player]} | {army / 2.0} | {workers / 2.0} | {w.HalfPop[player] / 2.0} / {w.HalfPopCap[player] / 2.0} | {ai.Board.WavesStarted} | {w.Age(player)} | {StepsDone(ai)} / {ai.Def.BuildOrder.Length} | {Left(sim, "gold_mine", -1)} | {Left(sim, "tree", startCell)}");
+                bool live = idleDefeatedAt < 0;
+                if (live) counted++;
+                if (live && w.Wood[player] < WoodShort && w.Gold[player] >= GoldPiled) woodBound++;
+                marks.Add($"{sim.TickNumber / Tps / 60} min{(live ? "" : " (after the defeat: not counted)")} | {w.Gold[player]} | {w.Wood[player]} | {army / 2.0} | {workers / 2.0} | {w.HalfPop[player] / 2.0} / {w.HalfPopCap[player] / 2.0} | {ai.Board.WavesStarted} | {w.Age(player)} | {StepsDone(ai)} / {ai.Def.BuildOrder.Length} | {Left(sim, "gold_mine", -1)} | {Left(sim, "tree", startCell)}");
             }
         }
         Assert.Equal(Ticks, sim.TickNumber);
@@ -157,7 +213,7 @@ public class AiSpendingReportTests
         for (int i = 0; i < ai.Def.BuildOrder.Length; i++)
             if (!ai.Board.StepDone[i]) open.Add($"{i + 1} {AiContentTests.StepText(ai.Def.BuildOrder[i]).Split(" | ")[0]}");
         _out.WriteLine("order steps not done at the end: " + (open.Count == 0 ? "none" : string.Join("; ", open)));
-        return (woodBound, marks.Count);
+        return (woodBound, counted, marks.Count, idleDefeatedAt);
     }
 
     private static int StepsDone(AiPlayer ai)

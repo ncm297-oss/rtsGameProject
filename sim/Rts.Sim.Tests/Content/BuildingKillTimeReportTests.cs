@@ -28,7 +28,9 @@ namespace Rts.Sim.Tests.Content;
 /// least 2x the 20 Heavy Infantry's damage per second per gold + wood spent against the same building. The scene follows
 /// <see cref="CounterTriangleScene"/>'s (seed 7, blocks 5 wide, 1.8 m apart, a player-0 spotter past the building so the
 /// fog keeps the order), with the block's front rank 10 m from the building's west side, every attacker ordered to Attack
-/// it. Asserted: every run ran, and today meets every band cell (12 / 12); the seconds are for the owner.
+/// it. Asserted: every run ran, and today meets every band cell (12 / 12); the seconds are for the owner. The siege ratio
+/// is also printed against the 20 Raiders (BUG-0721): since the surround rule the Catapults fall under 2x the Raider's damage
+/// per cost on a hall and a Town Hall; those two cells are pinned as measured (BUG-0780), not counted in the band.
 /// </para>
 /// </summary>
 public class BuildingKillTimeReportTests
@@ -180,6 +182,7 @@ public class BuildingKillTimeReportTests
         };
         var runs = new Run[variants.Length, Groups.Length, Targets.Length];
         var met = new int[variants.Length];
+        var raiderMisses = new List<string>();
         int cells = 0;
         _out.WriteLine("D18 report 4, re-based in D19 (2026-10-15): seconds to raze a lone building (no defenders, flat, combat on); [struck within 10 s]; band check where one applies");
         for (int v = 0; v < variants.Length; v++)
@@ -207,9 +210,17 @@ public class BuildingKillTimeReportTests
                     if (Groups[g].Line) ok = r.Ticks != int.MaxValue && r.Ticks <= Targets[x].BandSeconds * Tps;
                     if (Groups[g].Siege)
                     {
-                        double ratio = RatePerCost(r) / RatePerCost(runs[v, 0, x]);
-                        cell += string.Create(CultureInfo.InvariantCulture, $" {ratio:F1}x HI per cost");
-                        ok = ratio >= 2.0;
+                        // Against both line rows (BUG-0721 item 1): the Raider, cheaper and faster, is the harder bar. The band
+                        // cell is the Heavy Infantry's (the D18 brief's wording); the Raider side is counted and pinned apart.
+                        double vsHi = RatePerCost(r) / RatePerCost(runs[v, 0, x]);
+                        double vsRaider = RatePerCost(r) / RatePerCost(runs[v, 1, x]);
+                        cell += string.Create(CultureInfo.InvariantCulture, $" {vsHi:F1}x HI / {vsRaider:F1}x Raider per cost");
+                        ok = vsHi >= 2.0;
+                        if (vsRaider < 2.0)
+                        {
+                            cell += " (MISS vs Raider)";
+                            if (v == 0) raiderMisses.Add($"{Groups[g].Key} {Targets[x].Name}");
+                        }
                     }
                     if (ok is bool b)
                     {
@@ -234,5 +245,9 @@ public class BuildingKillTimeReportTests
                 string.Join(" | ", Enumerable.Range(0, Targets.Length).Select(x => $"{Seconds(runs[0, g, x])} / {Seconds(runs[1, g, x])}")) + " |");
         Assert.Equal(12, cells);
         Assert.True(met[0] == cells, $"the shipped data meets {met[0]} / {cells} band cells, D19 shipped set (C) for {cells} / {cells}");
+        // Measured 2026-10-16 (D19 + the surround rule, D-H5): against the Raider row the Catapults reach 2.8x on a House but
+        // 1.7x / 1.6x on a hall / Town Hall; the Sappers clear 2x everywhere. Pinned, not loosened: BUG-0780 holds the call.
+        _out.WriteLine($"siege cells under 2x the Raider's damage per cost (today): {(raiderMisses.Count == 0 ? "none" : string.Join("; ", raiderMisses))}");
+        Assert.Equal(new[] { "malazan_catapult Infantry hall", "malazan_catapult Town Hall" }, raiderMisses);
     }
 }

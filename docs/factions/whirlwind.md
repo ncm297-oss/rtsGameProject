@@ -148,6 +148,14 @@ Not in the file, because the schema has no field for it (requests to the sim tra
 split (the economy manager's `goldShare`, a common rule). The sketch's expansion at ~9:00 is now the step at 8:00,
 Normal's `expandAfter`.
 
+**Spending on the menu's map (D-H5, 2026-10-16, D19 + the surround rule; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
+Normal against an idle seat, seeds 1 and 7, 12 forests and 8 mines (the menu's): the AI razes the idle base at
+496 s (seed 1) and 575 s (seed 7), so only the 5-minute mark is still a match (the later marks no longer count). At 5 minutes
+the Whirlwind holds 112 gold / 27 wood (seed 1, short of both) and 524 / 73 (seed 7, wood-bound). Across both factions 1 of those 4 marks had wood under 100 with gold at 300 or more (the Whirlwind, seed 7),
+so the report now reads "wood binds at some marks only, not the limit overall"; D18 read "wood is still the limit" (9 of
+16 marks, 6 mines, counting marks after the win). Four marks are a thin sample: a weak input to the `goldShare` proposal
+under For your review, not a verdict.
+
 **Army composition (`compositions`), weights by pop.** All three Age I units can be trained in Age I; their weights sum
 to 65.
 
@@ -247,4 +255,6 @@ nearer but broke a stress floor; the sweep and the reason are in malazan.md); Ra
 put it back to ×1.5 (the owner's decision): Raider v Lancer is 95-100 % again. The Battering Ram's Siege / line share went
 from 5 % to 34 % in D19: the building damage set (C) (docs/02 "Combat") speeds the Raiders up far more than the Ram.
 The sim's surround rule (M5-P1, 2026-10-16: more Raiders strike the Billet at once) moved it to 44 % (Raiders 40.0 s
-to 31.2 s, the Ram 13.8 s to 13.7 s); the Ram still razes the Billet about 2.3× faster.
+to 31.2 s, the Ram 13.8 s to 13.7 s); the Ram still razes the Billet about 2.3× faster. Kill times (D-H5, 2026-10-16,
+`Content/BuildingKillTimeReportTests`, unchanged since the merged-tree reprint): 20 Raiders raze a lone Malazan House,
+infantry hall and Town Hall in 9.8 / 19.4 / 35.8 s (the band is 20 / 60 / 120 s), 10 Raiders in 13.8 / 33.0 / 62.6 s.

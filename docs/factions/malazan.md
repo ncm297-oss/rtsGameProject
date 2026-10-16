@@ -145,6 +145,14 @@ Not in the file, because the schema has no field for it (requests to the sim tra
 choke and the Watchtower's spot at the choke (the executor places every building near the Keep), and the 3 : 2 gold /
 wood split (the economy manager's `goldShare`, a common rule).
 
+**Spending on the menu's map (D-H5, 2026-10-16, D19 + the surround rule; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
+Normal against an idle seat, seeds 1 and 7, 12 forests and 8 mines (the menu's): the AI razes the idle base at
+584 s (seed 1) and 593 s (seed 7), so only the 5-minute mark is still a match (the later marks no longer count). At 5 minutes
+the Malazans hold 210 gold / 0 wood (seed 1) and 100 / 10 (seed 7): short of both, not wood-bound by the report's rule. Across both factions 1 of those 4 marks had wood under 100 with gold at 300 or more (the Whirlwind, seed 7),
+so the report now reads "wood binds at some marks only, not the limit overall"; D18 read "wood is still the limit" (9 of
+16 marks, 6 mines, counting marks after the win). Four marks are a thin sample: a weak input to the `goldShare` proposal
+under For your review, not a verdict.
+
 **Army composition (`compositions`), weights by pop.** Age I lists only the units the Age I steps can train (the Corral
 waits for Age II), so its weights sum to 65.
 
@@ -271,7 +279,10 @@ rows should be re-measured then before any tuning. Siege has no band: buildings 
 armor, the owner's set (C)) speeds the line infantry up far more than siege (34-47 % of their time on D19's movement),
 and the sim's surround rule (M5-P1, 2026-10-16: more of a group strikes a building at once) speeds them up again, so
 siege now takes 44-56 % of their time, still about 1.8-2.3× faster (and at least 2× their damage per cost against a
-House, a hall and a Town Hall: `Content/BuildingKillTimeReportTests`).
+House, a hall and a Town Hall: `Content/BuildingKillTimeReportTests`). Checked against both line rows (D-H5,
+2026-10-16, BUG-0721): 2 Catapults do 3.9 / 2.3 / 2.3× the 20 Heavy Infantry's damage per cost (House / hall / Town
+Hall) but only 2.8 / 1.7 / 1.6× the 20 Raiders' (the cheaper, faster line), so on a hall and a Town Hall the Catapult is
+under 2× the Raider's; 2 Sappers do 4.8-5.7× and 3.3-4.1×. Pinned as measured, the owner's call (BUG-0780).
 
 **Sapper self-splash (BUG-0182 item 2; `Content/SapperSplashReportTests`, same commit).** On a flat map, 4 Sappers
 behind 4 Heavy Infantry against 8 Horse Raiders: shipped data, 15 Sharpers thrown, 0 friendly-fire deaths, 41 hit
