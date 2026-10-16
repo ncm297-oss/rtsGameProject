@@ -104,8 +104,8 @@ public class SplashTests
         Vector2 impact = w.Projectiles.Target[0];
         Assert.True(CombatSystem.BuildingDistanceSquared(w, billet.Index, impact) <= 2.5f * 2.5f, "setup: the Billet is not in the splash");
         ProjectileTests.RunUntilImpact(sim);
-        // 50 siege x 3.0 v structure = 150, less armor 3 = 147, at the footprint: full.
-        Assert.Equal(147, tentHp - b.Hp[tent.Index]);
+        // 50 siege x 3.0 v structure = 150, less armor 1 = 149, at the footprint: full.
+        Assert.Equal(149,tentHp - b.Hp[tent.Index]);
         Assert.Equal(billetHp, b.Hp[billet.Index]);
     }
 
@@ -128,9 +128,9 @@ public class SplashTests
         ProjectileTests.RunUntilImpact(sim);
         float d = MathF.Sqrt(CombatSystem.BuildingDistanceSquared(w, tent.Index, at));
         Assert.Equal(2f, d, 4);
-        // 147 x falloff(2 m of 2.5 m) = 147 x (1 - 0.5 x 1 / 1.5) = 98.
-        Assert.Equal(ProjectileSystem.Scale(147, ProjectileSystem.Falloff(2f, 2.5f)), tentHp - b.Hp[tent.Index]);
-        Assert.Equal(98, tentHp - b.Hp[tent.Index]);
+        // 149 x falloff(2 m of 2.5 m) = 149 x (1 - 0.5 x 1 / 1.5) = 99.33, rounds to 99.
+        Assert.Equal(ProjectileSystem.Scale(149, ProjectileSystem.Falloff(2f, 2.5f)), tentHp - b.Hp[tent.Index]);
+        Assert.Equal(99,tentHp - b.Hp[tent.Index]);
     }
 
     [Fact]

@@ -49,7 +49,7 @@ public class CusserQaTests
 
     /// <summary>
     /// A Cusser thrown on the Sapper's own feet: the Sapper dies to its own half hit (killer and victim its owner, one kill
-    /// and one loss), the enemy Keep beside it still takes the full 355 after the caster is gone, and twins hash-equal.
+    /// and one loss), the enemy Keep beside it still takes the full 358 after the caster is gone, and twins hash-equal.
     /// </summary>
     [Fact]
     public void Cusser_OnItsOwnPosition_KillsTheSapper_CreditsItsOwner_StillHitsTheKeep_TwinsEqual()
@@ -72,7 +72,7 @@ public class CusserQaTests
         Assert.Equal((sapper, false, 0, 0), (d.Victim, d.IsBuilding, d.KillerOwner, d.VictimOwner));
         Assert.False(a.World.Units.IsAlive(sapper));
         Assert.Equal((1, 1, 0, 0), (a.World.Kills[0], a.World.Losses[0], a.World.Kills[1], a.World.Losses[1]));
-        Assert.Equal(hallHp - 355, a.World.Buildings.Hp[hall.Index]);
+        Assert.Equal(hallHp - 358, a.World.Buildings.Hp[hall.Index]);
         // The freed slot's cooldown doesn't leak into the next unit there.
         EntityHandle next = Place(a, 0, Sapper, new Vector2(10f, 10f));
         if (next.Index == sapper.Index) Assert.Equal(0, a.World.Units.AbilityReadyTick[Slot(next)]);
@@ -96,11 +96,11 @@ public class CusserQaTests
         Assert.Equal(cornerDistance < 0 ? 0f : cornerDistance * cornerDistance, CombatSystem.BuildingDistanceSquared(sim.World, hall.Index, p), 3);
         EntityHandle sapper = Place(sim, 0, Sapper, cornerDistance < 0 ? new Vector2(26.5f, 42f) : p - new Vector2(4.5f, 0f));
         CastAndResolve(sim, 0, sapper, p);
-        Assert.Equal(hit ? hp - 355 : hp, sim.World.Buildings.Hp[hall.Index]);
+        Assert.Equal(hit ? hp - 358 : hp, sim.World.Buildings.Hp[hall.Index]);
     }
 
     /// <summary>
-    /// A site under construction takes the hit like a finished building (355) and keeps it when work goes on (BUG-0138:
+    /// A site under construction takes the hit like a finished building (358) and keeps it when work goes on (BUG-0138:
     /// the work adds hit points, it doesn't recompute them); a fresh 1 hp site falls by the normal path (one death, the
     /// owner's loss, no population change since a site provides none, its slot freed).
     /// </summary>
@@ -120,9 +120,9 @@ public class CusserQaTests
         Assert.Equal(max / 2, before);
         EntityHandle sapper = Place(sim, 0, Sapper, new Vector2(21f, 42f));
         CastAndResolve(sim, 0, sapper, new Vector2(25f, 42f)); // 3 m west of the site's edge
-        Assert.Equal(before - 355, b.Hp[site.Index]);
+        Assert.Equal(before - 358, b.Hp[site.Index]);
         b.SetWork(site.Index, needed / 2 + needed / 10);
-        Assert.Equal(before - 355 + max / 10, b.Hp[site.Index]); // damage stays taken
+        Assert.Equal(before - 358 + max / 10, b.Hp[site.Index]); // damage stays taken
 
         // A fresh site (1 hp) on the far side.
         Assert.True(b.Spawn(1, keep, 5 * width + 30, out EntityHandle fresh, site: true)); // x 60-68, y 10-18

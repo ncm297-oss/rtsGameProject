@@ -344,3 +344,4 @@ bugs outrank new features.
 | [BUG-0743](BUG-0743-m6-v8-keybinds-and-resource-click-nits.md) | S4 | open (items 1-2 fixed M6-V8 round 1) | M6-V8 nits: screen Defaults also wipes the keybinds at once; key buttons hard to see; last-seen amount sampled per frame |
 | [BUG-0744](BUG-0744-keys-file-leftovers-after-round-1.md) | S4 | open | `[keys]` leftovers: "Meta+K" / "Command+K" read clean as K; non-key codes pass `TrySet`; one bad hand-edited key can reset a whole row |
 | [BUG-0745](BUG-0745-m4-playable-seed1-sapper-stuck-on-rise.md) | S3 | open | M4PlayableTest seed 1 step 7 failed once under load: the Sapper stood still on a rise through all 8 right-clicks |
+| [BUG-0750](BUG-0750-d19-stale-numbers-and-dead-checks.md) | S4 | open | D19 nits: andii.md Champion "115 vs a Town Hall" (118 at armor 2), docs/03 "Shipped ... armor 5", D18 precondition lever edit and the fuzz useAbilities check can no longer fail, no regen reason in the commit |

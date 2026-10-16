@@ -44,8 +44,8 @@ Age II, at the Smithy, 200 G / 150 W, 45 s. Zealots **+20 HP**; Sandstorm **cool
 
 ### Unit notes
 
-- **Raider:** ×1.1 vs Mounted (×1.5 until D13), ×1.2 vs Heavy (flails wrap around shields). Lighter armor and a
-  bit faster than template line infantry.
+- **Raider:** ×1.5 vs Mounted (×1.1 from D13 until D19, 2026-10-15), ×1.2 vs Heavy (flails wrap around
+  shields). Lighter armor and a bit faster than template line infantry.
 - **Desert Archer:** fires faster but hits softer than the template. Fast on foot.
 - **Horse Raider:** ×1.5 vs Light. The fastest template unit in the vertical slice; built to raid
   worker lines and run.
@@ -73,18 +73,18 @@ can't shoot beyond 3 m and the army can't retreat quickly.
 
 | Slot | Name | Id | HP | Armor | Cost (G/W) | Build (s) | Footprint | Sight | Provides | Requires |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Town Hall | Holy Camp | `whirlwind_holy_camp` | 2400 | 5 | 275 / 275 | 90 | 4×4 | 12 | +10 pop, drop-off, trains Camp Follower, researches Age II | — |
-| House | Tent | `whirlwind_tent` | 500 | 3 | 0 / 50 | 20 | 2×2 | 12 | +8 pop | — |
-| Camp | Supply Cache | `whirlwind_supply_cache` | 600 | 3 | 0 / 75 | 25 | 2×2 | 12 | Drop-off | — |
-| Infantry Hall | Raider Camp | `whirlwind_raider_camp` | 1200 | 4 | 0 / 150 | 40 | 3×3 | 12 | Trains Raider, Zealot | — |
-| Ranged Hall | Archer Camp | `whirlwind_archer_camp` | 1200 | 4 | 0 / 150 | 40 | 3×3 | 12 | Trains Desert Archer | — |
-| Shock Hall | Horse Lines | `whirlwind_horse_lines` | 1200 | 4 | 75 / 150 | 45 | 3×3 | 12 | Trains Horse Raider | Raider Camp |
-| Forge | Smithy | `whirlwind_smithy` | 1000 | 4 | 100 / 100 | 40 | 3×3 | 12 | Upgrades, Dryjhna's Prophecy | — |
-| Caster Hall | Shrine of the Whirlwind | `whirlwind_shrine` | 1200 | 4 | 150 / 150 | 50 | 3×3 | 12 | Trains Priest of the Whirlwind | Age II |
-| Siege Works | Ram Yard | `whirlwind_ram_yard` | 1400 | 4 | 150 / 200 | 55 | 3×3 | 12 | Trains Battering Ram | Age II |
-| Watch Tower | Lookout Tower | `whirlwind_lookout_tower` | 800 | 5 | 50 / 125 | 35 | 2×2 | 24 | Attack 10 pierce / 2 s, range 18; sight 24; detector 16 m | Age II |
+| Town Hall | Holy Camp | `whirlwind_holy_camp` | 2400 | 2 | 275 / 275 | 90 | 4×4 | 12 | +10 pop, drop-off, trains Camp Follower, researches Age II | — |
+| House | Tent | `whirlwind_tent` | 500 | 1 | 0 / 50 | 20 | 2×2 | 12 | +8 pop | — |
+| Camp | Supply Cache | `whirlwind_supply_cache` | 600 | 1 | 0 / 75 | 25 | 2×2 | 12 | Drop-off | — |
+| Infantry Hall | Raider Camp | `whirlwind_raider_camp` | 1200 | 2 | 0 / 150 | 40 | 3×3 | 12 | Trains Raider, Zealot | — |
+| Ranged Hall | Archer Camp | `whirlwind_archer_camp` | 1200 | 2 | 0 / 150 | 40 | 3×3 | 12 | Trains Desert Archer | — |
+| Shock Hall | Horse Lines | `whirlwind_horse_lines` | 1200 | 2 | 75 / 150 | 45 | 3×3 | 12 | Trains Horse Raider | Raider Camp |
+| Forge | Smithy | `whirlwind_smithy` | 1000 | 2 | 100 / 100 | 40 | 3×3 | 12 | Upgrades, Dryjhna's Prophecy | — |
+| Caster Hall | Shrine of the Whirlwind | `whirlwind_shrine` | 1200 | 2 | 150 / 150 | 50 | 3×3 | 12 | Trains Priest of the Whirlwind | Age II |
+| Siege Works | Ram Yard | `whirlwind_ram_yard` | 1400 | 2 | 150 / 200 | 55 | 3×3 | 12 | Trains Battering Ram | Age II |
+| Watch Tower | Lookout Tower | `whirlwind_lookout_tower` | 800 | 2 | 50 / 125 | 35 | 2×2 | 24 | Attack 10 pierce / 2 s, range 18; sight 24; detector 16 m | Age II |
 
-Building stats follow the template in [02-game-design.md](../02-game-design.md#buildings).
+Building stats follow the template in [02-game-design.md](../02-game-design.md#buildings). Every building's armor was halved, rounded down, in D19 (2026-10-15, the owner's building damage set (C)): Town Hall and Watch Tower 5 → 2, House and Camp 3 → 1, the rest 4 → 2.
 
 `Content/BuildingContentTests` and `UnitContentTests` pin this page to the data.
 
@@ -187,7 +187,7 @@ both ways (J), and docs/02's stated numbers to the file (K).
 
 | Difficulty | Thinks every (s) | Build-order slack (s) | Wave size × | Gather bonus | Focus fire | Pulls back wounded | Uses abilities | Expands after (s) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Easy | 2 | 30 | 0.6 | 0% | no | no | no | 900 |
+| Easy | 2 | 30 | 0.6 | 0% | no | no | yes | 900 |
 | Normal | 1 | 5 | 1 | 0% | no | no | yes | 480 |
 | Hard | 0.5 | 0 | 1.25 | 25% | yes | yes | yes | 300 |
 
@@ -217,7 +217,7 @@ both ways (J), and docs/02's stated numbers to the file (K).
 
 ## Balance baseline (M4-2b, 2026-10-08)
 
-Measured at sim commit `dd5b5b9` by `Content/CounterTriangleMarginsTests` (D6), re-printed at `1a9925b` (D8) and, for the two Line v Shock rows, in D13 (2026-10-11) from the shared
+Measured at sim commit `dd5b5b9` by `Content/CounterTriangleMarginsTests` (D6), re-printed at `1a9925b` (D8) and, for the two Line v Shock rows, in D13 (2026-10-11), and for those two rows and the siege row in D19 (2026-10-15), from the shared
 `Scenario/CounterTriangleScene` harness, the scene of
 `Scenario/CounterTriangleTests`: a flat map, 1,200 gold + wood a side, two blocks 5 wide whose fronts start 24 m apart,
 every unit attack-moved into the other block, seed 7, both seats; no abilities, upgrades or terrain. These are the
@@ -227,8 +227,8 @@ asserts only the winner as a rule; the margins are not asserted, but every cell 
 
 | Rule | Winner v loser | Winner seat | Fielded (winner v loser) | Winner left | Winner hp left | Winner keeps (cost) | Time to last death |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Line beats Shock | Raider v Wickan Lancer | 0 | 19 (1216) v 10 (1200) | 19 / 19 | 1502 | 1216 / 1216 (100 %) | 23.0 s |
-| Line beats Shock | Raider v Wickan Lancer | 1 | 19 (1216) v 10 (1200) | 17 / 19 | 1429 | 1088 / 1216 (89 %) | 23.2 s |
+| Line beats Shock | Raider v Wickan Lancer | 0 | 19 (1216) v 10 (1200) | 19 / 19 | 1667 | 1216 / 1216 (100 %) | 16.6 s |
+| Line beats Shock | Raider v Wickan Lancer | 1 | 19 (1216) v 10 (1200) | 18 / 19 | 1581 | 1152 / 1216 (95 %) | 18.3 s |
 | Shock beats Ranged | Horse Raider v Crossbowman | 0 | 13 (1248) v 15 (1215) | 9 / 13 | 1152 | 864 / 1248 (69 %) | 20.9 s |
 | Shock beats Ranged | Horse Raider v Crossbowman | 1 | 13 (1248) v 15 (1215) | 10 / 13 | 1197 | 960 / 1248 (77 %) | 18.2 s |
 | Ranged beats casters | Desert Archer v Cadre Mage | 0 | 18 (1224) v 8 (1200) | 16 / 18 | 602 | 1088 / 1224 (89 %) | 11.4 s |
@@ -238,9 +238,12 @@ Siege beats buildings (one siege unit, ordered to attack, against the same cost 
 
 | Siege unit | Same cost of line infantry | Building | Siege time | Line time | Siege / line |
 | --- | --- | --- | --- | --- | --- |
-| 1 Battering Ram | 4 Raider | Billet | 13.8 s | 254.5 s | 5 % |
+| 1 Battering Ram | 4 Raider | Billet | 13.8 s | 40.0 s | 34 % |
 
 The target band (winner keeps 40-65 % of its cost, both seats within 15 points; proposed in D6, the Producer's default
-since 2026-10-11, owner may revisit): every Whirlwind row is still above it, Raider v Lancer (89-100 %) most. D13 cut
+since 2026-10-11, owner may revisit): every Whirlwind row is still above it, Raider v Lancer (95-100 %) most. D13 cut
 the line units' bonus vs Mounted from ×1.5 to ×1.1, the nearest value to the band that kept the test suite green (1.0 came
-nearer but broke a stress floor; the sweep and the reason are in malazan.md); Raider v Lancer moved from 95-100 % to 89-100 %.
+nearer but broke a stress floor; the sweep and the reason are in malazan.md); Raider v Lancer moved from 95-100 % to 89-100 %. D19 (2026-10-15)
+put it back to ×1.5 (the owner's decision): Raider v Lancer is 95-100 % again. The Battering Ram's Siege / line share went
+from 5 % to 34 % in D19: the building damage set (C) (docs/02 "Combat") speeds the Raiders up far more than the Ram,
+which still razes the Billet about 3× faster.

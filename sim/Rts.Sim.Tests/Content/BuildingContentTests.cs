@@ -49,16 +49,16 @@ public class BuildingContentTests
     // (hp, armor, gold, wood, build seconds, footprint w, footprint h, pop provided, drop-off)
     private static readonly Dictionary<BuildingSlot, (int Hp, int Armor, int Gold, int Wood, int BuildS, int W, int H, int Pop, bool DropOff)> Template = new()
     {
-        [BuildingSlot.TownHall] = (2400, 5, 275, 275, 90, 4, 4, 10, true),
-        [BuildingSlot.House] = (500, 3, 0, 50, 20, 2, 2, 8, false),
-        [BuildingSlot.Camp] = (600, 3, 0, 75, 25, 2, 2, 0, true),
-        [BuildingSlot.InfantryHall] = (1200, 4, 0, 150, 40, 3, 3, 0, false),
-        [BuildingSlot.RangedHall] = (1200, 4, 0, 150, 40, 3, 3, 0, false),
-        [BuildingSlot.ShockHall] = (1200, 4, 75, 150, 45, 3, 3, 0, false),
-        [BuildingSlot.Forge] = (1000, 4, 100, 100, 40, 3, 3, 0, false),
-        [BuildingSlot.CasterHall] = (1200, 4, 150, 150, 50, 3, 3, 0, false),
-        [BuildingSlot.SiegeWorks] = (1400, 4, 150, 200, 55, 3, 3, 0, false),
-        [BuildingSlot.WatchTower] = (800, 5, 50, 125, 35, 2, 2, 0, false),
+        [BuildingSlot.TownHall] = (2400, 2, 275, 275, 90, 4, 4, 10, true),
+        [BuildingSlot.House] = (500, 1, 0, 50, 20, 2, 2, 8, false),
+        [BuildingSlot.Camp] = (600, 1, 0, 75, 25, 2, 2, 0, true),
+        [BuildingSlot.InfantryHall] = (1200, 2, 0, 150, 40, 3, 3, 0, false),
+        [BuildingSlot.RangedHall] = (1200, 2, 0, 150, 40, 3, 3, 0, false),
+        [BuildingSlot.ShockHall] = (1200, 2, 75, 150, 45, 3, 3, 0, false),
+        [BuildingSlot.Forge] = (1000, 2, 100, 100, 40, 3, 3, 0, false),
+        [BuildingSlot.CasterHall] = (1200, 2, 150, 150, 50, 3, 3, 0, false),
+        [BuildingSlot.SiegeWorks] = (1400, 2, 150, 200, 55, 3, 3, 0, false),
+        [BuildingSlot.WatchTower] = (800, 2, 50, 125, 35, 2, 2, 0, false),
     };
 
     // docs/02 "Faction template" + faction pages: where each unit slot trains. Unique units by faction page.

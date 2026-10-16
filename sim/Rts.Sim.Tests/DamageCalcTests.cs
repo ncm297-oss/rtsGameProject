@@ -31,12 +31,12 @@ public class DamageCalcTests
     [InlineData("melee", "heavy", 10)]
     [InlineData("melee", "mounted", 10)]
     [InlineData("melee", "giant", 10)]
-    [InlineData("melee", "structure", 4)]
+    [InlineData("melee", "structure", 7)]
     [InlineData("pierce", "light", 13)]
     [InlineData("pierce", "heavy", 6)]
     [InlineData("pierce", "mounted", 10)]
     [InlineData("pierce", "giant", 13)]
-    [InlineData("pierce", "structure", 2)]
+    [InlineData("pierce", "structure", 4)]
     [InlineData("siege", "light", 5)]
     [InlineData("siege", "heavy", 8)]
     [InlineData("siege", "mounted", 5)]
@@ -46,7 +46,7 @@ public class DamageCalcTests
     [InlineData("magic", "heavy", 13)]
     [InlineData("magic", "mounted", 10)]
     [InlineData("magic", "giant", 13)]
-    [InlineData("magic", "structure", 4)]
+    [InlineData("magic", "structure", 6)]
     public void EveryTableCell_AtArmor0_AndArmorAboveRaw(string type, string armorClass, int expectedAt0)
     {
         int t = Type(type), c = Class(armorClass);
@@ -71,12 +71,12 @@ public class DamageCalcTests
     [Fact]
     public void MissingBonusVs_IsOne_AndAGivenOneApplies()
     {
-        // Heavy Infantry: bonusVs { mounted: 1.1 } only (D13: was 1.5), 10 x 1.0 x 1.1 = 11.
+        // Heavy Infantry: bonusVs { mounted: 1.5 } only (D19: back to 1.5 from D13's 1.1), 10 x 1.0 x 1.5 = 15.
         UnitDef hi = TestSim.Data.Units[TestSim.Data.FindUnit("malazan_heavy_infantry")];
         Assert.Equal(1f, hi.Attack.BonusVs[Class("light")]);
         Assert.Equal(10, DamageCalc.Compute(Table, hi.Attack, 0, Class("light"), 0));
         Assert.Equal(10, DamageCalc.Compute(Table, hi.Attack, 0, Class("heavy"), 0));
-        Assert.Equal(11, DamageCalc.Compute(Table, hi.Attack, 0, Class("mounted"), 0));
+        Assert.Equal(15, DamageCalc.Compute(Table, hi.Attack, 0, Class("mounted"), 0));
         // Two Heavy Infantry: 10 x 1.0 x 1.0 - 3 = 7 (M4-1 criterion 2's hit).
         Assert.Equal(7, DamageCalc.Compute(Table, hi.Attack, 0, hi.ArmorClass, hi.Armor));
     }

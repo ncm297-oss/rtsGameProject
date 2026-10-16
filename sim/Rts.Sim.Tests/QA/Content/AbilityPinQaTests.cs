@@ -68,7 +68,7 @@ public class AbilityPinQaTests
         int h = Array.FindIndex(lines, l => l == AbilityContentTests.Header);
         for (int i = h; i < lines.Length && lines[i].StartsWith('|'); i++)
             lines[i] = "| " + string.Join(" | ", PageTables.Cells(lines[i]).Reverse()) + " |";
-        int row = Row(lines, "Enemy units in the area take 120 siege damage, full damage to buildings (≈355 to a Town Hall), friendly fire at 50%");
+        int row = Row(lines, "Enemy units in the area take 120 siege damage, full damage to buildings (≈358 to a Town Hall), friendly fire at 50%");
         lines[row] = lines[row].Replace("take 120 siege", "take 90 siege", StringComparison.Ordinal);
 
         AbilityContentTests.Result r = Compare(Data.Abilities, lines);

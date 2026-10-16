@@ -2447,7 +2447,7 @@ load rule for damage over time. Code: `AbilitySystem.CooldownOf` and `Resolve`, 
   footprint rectangle is within `radius` of the point (`CombatSystem.BuildingDistanceSquared`, 0 inside it), in slot
   order, takes the effect as one hit of armor class `structure` with the building's armor through `DamageCalc`, applied
   through `CombatSystem.HitBuilding` (the normal destruction path: a death event credited to the caster's owner, the
-  building freed, its cells reopened). Never an own building. The Cusser on a Town Hall: `120 x 3.0 - 5 = 355`. The scan
+  building freed, its cells reopened). Never an own building. The Cusser on a Town Hall: `120 x 3.0 - 2 = 358`. The scan
   walks the building slots (no allocation), only for an ability with such an effect (`AbilityDef.HitsBuildings`).
 - **Friendly fire (`"friendlyFire": f`, 0-1).** On an `enemy_units` ability, each of the caster owner's units in the
   radius (the caster too, when within it) takes the damage effect's hit times `f`, rounded half up, at least 1 (as splash's
@@ -6011,7 +6011,7 @@ and repeated keys are errors, as everywhere. Shape:
 {
   "difficulties": {
     "easy":   { "thinkInterval": 2,   "buildOrderSlack": 30, "waveSizeMultiplier": 0.6,  "gatherBonus": 0,
-                "focusFire": false, "pullBackWounded": false, "useAbilities": false, "expandAfter": 900 },
+                "focusFire": false, "pullBackWounded": false, "useAbilities": true,  "expandAfter": 900 },
     "normal": { "thinkInterval": 1,   "buildOrderSlack": 5,  "waveSizeMultiplier": 1,    "gatherBonus": 0,
                 "focusFire": false, "pullBackWounded": false, "useAbilities": true,  "expandAfter": 480 },
     "hard":   { "thinkInterval": 0.5, "buildOrderSlack": 0,  "waveSizeMultiplier": 1.25, "gatherBonus": 0.25,
@@ -6488,7 +6488,7 @@ the AI casts through `Command.UseAbility`, the player's door. The difficulty kno
 `focusFire`, `pullBackWounded`) are slice 2 (the brief's 700-line hard stop: slice 1 came to about 840 lines with its tests
 and docs).
 
-- **When.** Only when the difficulty's `useAbilities` is on (the shipped Easy is off: it never casts). The **casters** are the
+- **When.** Only when the difficulty's `useAbilities` is on (every shipped difficulty has it on since D19, 2026-10-15: Easy casts too). The **casters** are the
   player's live units (army, then workers, slot order) whose type lists abilities and that are free: not `Casting` and not
   walking to a cast (`PlayerView.TryGetCast`), no AI command pending, not the scout, not fleeing (`IsFleeing`), not a wave
   member owed its `Move` home. Casting is allowed while `Board.Defending`. Each gets **at most one `UseAbility` a think**:
@@ -6530,7 +6530,7 @@ and docs).
   rally and defense rules don't re-send a point already sent. A Sapper in melee with its target doesn't throw.
 - **Tests.** `Ai/AbilityManagerTests` (Telas Fire at three enemies within two thinks, not at one; the Cusser at a building
   with no group; Sandstorm on the centroid and at the range's edge; `castMinTargets` 1 / 50; no re-order on cooldown, the
-  cast judged by the cooldown, `MaxTries` on a cast stopped every time and a re-send once the enemies move; Easy silent for
+  cast judged by the cooldown, `MaxTries` on a cast stopped every time and a re-send once the enemies move; a seat with `useAbilities` false (Easy, set so in a data copy) silent for
   6,000 ticks while its Normal twin casts; the Cusser held with an own unit in its radius; a test-only self / aura; BUG-0700's
   group off the map), `Stress/CommandDoorFuzzStressTests` (its AI-command oracle now admits a `UseAbility` of an own live
   unit, an ability its type lists, at a point on the map),

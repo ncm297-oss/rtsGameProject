@@ -41,8 +41,8 @@ Darkness **duration +5 s**.
 
 ### Unit notes
 
-- **Andii Blade:** ×1.1 vs Mounted (docs/02's template value since D13; the page said ×1.5, the old template value,
-  before any Andii data existed). Beats any template line infantry one-on-one.
+- **Andii Blade:** ×1.5 vs Mounted (docs/02's template value: ×1.1 from D13, back to ×1.5 in D19, 2026-10-15).
+  Beats any template line infantry one-on-one.
 - **Andii Longbow:** the longest standard range in the game (17 m) and long sight.
 - **Andii Rider:** ×1.5 vs Light. Expensive and rare (see the shock-slot decision below).
 - **Galain Sorcerer:** splash 1.5 m, detector 10 m. Signature ability **Darkness**.
