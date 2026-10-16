@@ -251,8 +251,8 @@ public sealed partial class World
 
     /// <summary>
     /// Pathing slice 1: per unit, the spot key (building slot x <see cref="SurroundSpots"/> + spot) it claims, -1 for none.
-    /// Valid only while <see cref="SurroundHolder"/> names the unit back (checked on read, so nothing clears it); not hashed:
-    /// the claims only steer where a chase walks, and the walk is hashed.
+    /// Valid only while <see cref="SurroundHolder"/> names the unit back (checked on read, so nothing clears it). Not hashed,
+    /// yet it decides the next re-pick (BUG-0733): a save must store both arrays whole (docs/03 "Implementation (pathing slice 1)").
     /// </summary>
     internal int[] SurroundClaim { get; }
 

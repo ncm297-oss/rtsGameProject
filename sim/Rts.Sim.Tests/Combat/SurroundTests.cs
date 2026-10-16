@@ -279,6 +279,43 @@ public class SurroundTests
         Assert.True(maxStriking >= 4, $"the open side never filled: {maxStriking} striking");
     }
 
+    // BUG-0731: attack-movers (the AI's waves) on open ground round a lone House. 20 attackers, 20 spots: one stalled behind
+    // the strikers on the way to the free spot it already claims keeps the building (its walk reaches the spot), as an
+    // ordered attacker does. Before the fix 4 of 20 gave it up (QA's SurroundQaTests row, seed 37).
+    [Theory]
+    [InlineData("malazan_heavy_infantry")]
+    [InlineData("whirlwind_raider")]
+    public void AttackMove_StalledOnTheWayToItsClaimedSpot_KeepsTheBuilding(string attacker)
+    {
+        int hi = TestSim.Data.FindUnit(attacker);
+        var sim = new Simulation(TestSim.Config(37, 2, 2 + 40, 16 * 42 + 64), LocalMovementTests.Flat(MapSize));
+        World w = sim.World;
+        UnitStore u = w.Units;
+        TestSim.KeepIn(sim, 1);
+        Assert.True(w.Buildings.Spawn(1, BuildingFor(hi, BuildingSlot.House), AnchorY * MapSize + AnchorX, out EntityHandle b));
+        Spotter(sim, 0, At(sim, 35, 27));
+        var a = new EntityHandle[20];
+        for (int k = 0; k < 20; k++)
+        {
+            a[k] = Place(sim, 0, hi, At(sim, 33 + k % 5, 22 - k / 5));
+            sim.Enqueue(Command.AttackMove(0, a[k], At(sim, 35, 40)));
+        }
+        int engaged = 0;
+        for (int t = 0; t < 400; t++)
+        {
+            Tick(sim, b);
+            foreach (EntityHandle h in a)
+            {
+                int i = h.Index;
+                if (u.GiveUps[i] > 0)
+                    Assert.Fail($"{attacker} tick {sim.TickNumber}: unit {i} gave the House up (state {u.State[i]}, mode {u.Mode[i]}, held spot {HeldSpot(w, i)})");
+                if (t == 399 && u.Target[i] == b) engaged++;
+            }
+        }
+        _out.WriteLine($"{attacker}: {engaged} / 20 on the House at tick 400, no give-up");
+        Assert.True(engaged >= 16, $"only {engaged} / 20 still on the House");
+    }
+
     // Determinism: the same scene twice hashes equal on every tick, both groups.
     [Theory]
     [InlineData("malazan_heavy_infantry")]

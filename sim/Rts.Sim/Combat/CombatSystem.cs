@@ -99,12 +99,16 @@ public static class CombatSystem
                     u.ChaseBest[i] = gap;
                     u.ChaseStall[i] = 0;
                 }
-                else if (u.ChaseStall[i] >= CombatConstants.GiveUpScans && u.Mode[i] == CombatMode.Ordered && ReachableOnFoot(world, i))
+                else if (u.ChaseStall[i] >= CombatConstants.GiveUpScans
+                    && (u.Mode[i] == CombatMode.Ordered || SurroundRule.WalksToSpot(world, i)) && ReachableOnFoot(world, i))
                 {
                     // M4-H3 (BUG-0401, Producer decision 2026-10-10): the player's own Attack on a target its walk reaches
                     // keeps on, even while the route first leads away (a ramp round a cliff). The count stays just under the
                     // limit, so "not gaining" still holds for the lost-from-sight rule below; an Attack whose walk ended (no
                     // route, or the nearest ground out of reach) gives up by the rule as before, so nobody paces a cliff.
+                    // BUG-0731: any building chase (attack-move, retaliation, the AI's waves) walking to the surround spot it
+                    // holds is judged the same way: jammed behind the strikers on the way to a free spot its walk reaches,
+                    // it keeps on; a spot it can't reach (past a cliff, a sealed pocket) still ends the chase.
                     u.ChaseStall[i] = CombatConstants.GiveUpScans - 1;
                 }
                 else if (u.ChaseStall[i] >= CombatConstants.GiveUpScans)
@@ -790,7 +794,8 @@ public static class CombatSystem
     /// Pathing slice 1: whether unit <paramref name="i"/>'s building chase (<see cref="SurroundRule"/>) waits because own
     /// units hold every standing spot round it: the building is reachable and a death or a new order frees a spot. A spot
     /// newly free is claimed here, which also restarts the stall count (a new walk). One stalled on the way to the spot it
-    /// already claims is judged by the old rules (a spot past a cliff is no reason to keep on).
+    /// already claims is judged by whether its walk reaches the spot (<see cref="ReachableOnFoot"/>, BUG-0731): a spot past
+    /// a cliff is no reason to keep on.
     /// </summary>
     private static bool QueuedAtRing(World world, int i)
     {

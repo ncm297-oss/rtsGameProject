@@ -176,7 +176,12 @@ public class SimHardeningM5H1QaTests
             int startHalf = ai.Board.WaveStartHalfPop;
             int before = log.Count;
             sim.Tick();
-            if (ai.Board.WaveActive)
+            // BUG-0730: "busy" is sampled where the AI samples it. The idle rule reads its members through its view at its
+            // thinks (rule 3), and a think at the start of tick N sees the state left by the tick that made TickNumber N. A
+            // retaliation step shorter than a think (7 ticks at 5321-5327 on the surround trajectory) can begin and end
+            // between two thinks; the AI never sees it, and counting from it asked the rule for more than it can know. The
+            // limit stays cooldown - ThinkTicks: the rule still may not end a wave sooner than a cooldown after a busy sample.
+            if (ai.Board.WaveActive && sim.TickNumber % ai.ThinkTicks == 0)
                 foreach (EntityHandle h in army)
                     if (w.Units.IsAlive(h) && ai.Board.WaveGeneration[h.Index] == h.Generation && w.Units.State[h.Index] != UnitState.Idle)
                         lastBusy = sim.TickNumber;

@@ -6521,8 +6521,16 @@ three arrays on `World`, `CombatConstants.SurroundSpotsPerCell`. No `Command`, n
   spots any building in the data has). A claim counts only while both arrays name each other **and** the holder is alive and
   still chases that building (same handle): a death, a new order or a new target frees the spot on read, with no clearing
   pass and no per-tick reset (a deviation from the brief's "per-tick scratch cleared by stamping": the claims must outlive the
-  tick so a walker keeps its spot for the 2-5 s of its walk). Not hashed: they only steer where a chase walks, and the walk is
-  hashed; a run is deterministic because they are written in slot order in phase 7.
+  tick so a walker keeps its spot for the 2-5 s of its walk). **Not hashed, but they are state** (BUG-0733): they decide the
+  next re-pick, so two worlds with equal hashes and different claims part one tick later (QA cleared them at tick 61 of a
+  40-attacker scene; the hashes split at tick 62). Same seed + same commands still give the same hashes (the claims are
+  written in slot order in phase 7 and nothing else writes them), so replays and the goldens are unaffected; what this costs
+  is that a checkpoint hash doesn't see a divergence in the claims until it reaches a position. Kept out of `StateHash` on
+  purpose for now (Producer decision 2026-10-16, M5-P1): hashing them would move every golden checkpoint for no gameplay
+  change. **Known save-state requirement:** the M6 save must store both arrays whole (`SurroundClaim` per unit slot,
+  `SurroundHolder` per spot key, stale entries included, since the read-time check depends on them), see "Save/load and
+  replays"; a save that rebuilt them empty would re-pick every walker's spot at load and part from the unsaved run. If the
+  claims are ever hashed, it is a hash-format change (regenerate the goldens in the same commit).
 - **The rule.** On each re-aim (`Chase`: a walker on its scan ticks, an Idle chaser every tick) the attacker keeps its spot
   while no other own unit **stands** on it (not walking; centres nearer than both radii; in the attacker's reach of the
   footprint); else it lets it go and claims the nearest spot nobody claims or stands on. With none free it **waits**: it walks
@@ -6535,8 +6543,11 @@ three arrays on `World`, `CombatConstants.SurroundSpotsPerCell`. No `Command`, n
   within its radius) or lets its claim go, so no spot stays held by someone striking from elsewhere.
 - **No give-up while queued.** A stalled chase of a building whose every existing spot is held by own units (claimed or stood
   on) keeps on, like BUG-0143's "friend fights the target" for units, in every mode (Ordered, attack-move, retaliation): the
-  building is reachable and a death frees a spot. A walker stalled on the way to a spot it already holds is judged by the old
-  rules (M4-H3 for an ordered Attack), so a spot past a cliff is no reason to pace.
+  building is reachable and a death frees a spot. A walker stalled on the way to a spot it already holds (jammed behind the
+  strikers round a corner) keeps on while its walk reaches the spot, in every mode: M4-H3's `ReachableOnFoot` test, which
+  before applied to an ordered Attack only, now also covers any building chase walking to its claimed spot (BUG-0731: 4 of
+  20 attack-movers round a lone House gave it up, now 0). A spot its walk can't reach (past a cliff, a sealed pocket) still
+  ends the chase by the old rule, so nobody paces a cliff; unit chases and ranged attackers are unchanged.
 - **Measured** (`Combat/SurroundTests`, D18 report 4's staging: 20 line units 10 m west of a lone building, flat, the building's
   hp topped up between ticks so the count doesn't depend on damage; struck within 10 s = 200 ticks, shipped data of 2026-10-15):
 
@@ -6557,7 +6568,9 @@ three arrays on `World`, `CombatConstants.SurroundSpotsPerCell`. No `Command`, n
   fuzz (3 seeds x 300 ticks, 30 attackers on a House and a hall, deaths, re-orders between the two, walks away: no spot held
   twice, no two walkers with one spot point), (c) a death frees a spot a waiter takes and strikes from within 40 ticks, (d) a
   House walled on three sides by own buildings: its open side fills and the other 15 keep their order for 400 ticks (with the
-  rule off one gives up at tick 78), hash twins of the (a) scene for both groups, a 0 B allocation probe with 40 attackers.
+  rule off one gives up at tick 78), hash twins of the (a) scene for both groups, a 0 B allocation probe with 40 attackers,
+  and BUG-0731's row (`AttackMove_StalledOnTheWayToItsClaimedSpot_KeepsTheBuilding`: 20 Heavy Infantry or Raiders
+  attack-moving past a lone House on open ground, no give-up in 400 ticks).
   `World.SurroundRuleOn` is a test seam (default on) for the before / after counts. Re-staged:
   `MatchOverTests.ARecordedMatchThatEndsInADefeat_PlaysBackPastMatchOver` (the loser's workers now mill about a fixed point
   by their hall: the old point followed the first worker, they drifted out of sight, and the queued Attacks on them only
@@ -6650,6 +6663,9 @@ three arrays on `World`, `CombatConstants.SurroundSpotsPerCell`. No `Command`, n
   the fields from their keys at load would route units differently from the unsaved run (QA measured
   positions parting at once). So save then load reproduces the unsaved run exactly. Replays need
   nothing of this: they replay from tick 0, and the cache rebuilds itself on the way.
+  It also stores the surround claims (`World.SurroundClaim` and `World.SurroundHolder`, pathing slice 1, BUG-0733) whole:
+  they are not in `StateHash` but they decide the next tick, so the hash can't catch a save that drops them. The M6 save /
+  load round-trip test must compare them directly, not only the hash.
 - If a replay's data hash doesn't match the current data, the game says it was recorded with
   different balance data and refuses to play it (no silent desync). The sim returns only the
   `ReplayError.DataMismatch` code; the text comes from data (M6 playback UI).
