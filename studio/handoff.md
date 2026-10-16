@@ -1,5 +1,15 @@
 # Handoff: brief for the next session
 
+**PLAN 2026-10-16-0847 (Producer, scheduled; base 53718f4 = origin/main):** GO on all three tracks as a **hardening session** (every
+counter 4 / 4). Checks: inbox empty under New (the 2026-10-14 notes were processed at 0946); build 0 warnings; the reprint's claim verified
+(`CounterTriangleMarginsTests` + `DataContentHashTests` + `ReplayGoldenTests` 59 / 59 on `main`, BUG-0734 fixed); open S1 / S2 **0**; sessions
+today 0 / 8; weekly usage 75 % (stop 95 %) so budgets are trimmed: **sim ~1,000, view ~700, data ~350 lines**. Four refinements to the briefs
+below: (1) BUG-0703's open question is decided: a collapse is **neither a kill nor a loss** (the stats count only what the enemy destroyed;
+docs/03 says so); (2) **BUG-0750 item 4** (`Stress/AbilityManagerFuzzStressTests`' off-seat share) moves from the data track to the sim's item 5
+(it is a sim-owned file and the sim works `AbilityManager` for BUG-0702 anyway): the data track edits **no** C# outside its folders this session;
+(3) the sim's item 5 also fixes CLAUDE.md's stale "Current milestone: M1" line (→ "M5 (sim) / M6 (view); M3 data Done"); (4) bug ids: sim
+from BUG-0760, view from BUG-0770, data from BUG-0780. Everything else in the briefs stands as written.
+
 Written by the Producer at the ACCEPT of session **2026-10-15-2325** (the first full session of 2026-10-15; 1 / 8 after it; 2026-10-16
 has 0 / 8). All three tracks **ACCEPT**: sim **M5-P1** (surround a building, 1 fix round), view **M6-V8** (resource click + keybinds, 1 fix
 round), data **D19** (×1.5, Easy casts, building damage set (C), one golden header move → **AB811AD47F68D0AE**). **Every counter is
@@ -51,7 +61,8 @@ M5-4f session carries the `gatherRate` + seed-21 re-record).
 **Items, in order (batch as many as fit ~1,200 lines; stop at the budget and report the rest):**
 1. **BUG-0703 (S3), the collapse rule, Producer decision (c) in docs/01 2026-10-14:** when a player is out (`UpdateDefeats`), every
    remaining building of its (finished, site, tower, Forge, House) is freed like a razed one on that tick: a `DeathEvent` per
-   building (`IsBuilding`, killer owner -1, no kill credited, no loss? — **loss counted** for the stats, say so in docs/03), cells
+   building (`IsBuilding`, killer owner -1, **no kill credited and no loss counted** (Producer decision at the 0847 PLAN: the stats count
+   only what the enemy destroyed; the view's rubble still comes from the event), say so in docs/03), cells
    reopened, ghosts updated as for a razing, its research / queues gone with the buildings. Flip QA's
    `WinConditionQaTests.ADefeatedPlayersTower_KeepsShooting_Measured` and `...CommandsOnItsStandingBuildings_*(defeated)` to the new
    behaviour; the AI-v-AI rows and `MatchOverTests` (a)-(g) green; the golden `k` lines unmoved (no defeat in either recorded match: if
@@ -69,9 +80,13 @@ M5-4f session carries the `gatherRate` + seed-21 re-record).
    fault" in the bug and hand it to the view's M6-VH2 (its item 4).
 4. **BUG-0701 (S3) + standing rule 21:** `FogStore.NextSeenUnit` tests only units near a blocking zone; `AiPerfTests` gets a
    shipped-data row with 8 storms.
-5. **BUG-0704 items 3-4 + the `TestSim.cs` space nit; BUG-0702 items 2-3; BUG-0675 c (a docs/03 line); BUG-0651; BUG-0650; BUG-0144
-   (`ChasersUnderPlacementChurn_*`); BUG-0113 item 2.** Each: the skipped QA row un-skipped.
-6. OUT: M5-4f, pathing slice 2, any knob, any `game/data/**` edit, `rules.json`, the Ages → tech-tree design.
+5. **BUG-0704 items 3-4 + the `TestSim.cs` space nit; BUG-0702 items 2-3; BUG-0750 item 4** (`Stress/AbilityManagerFuzzStressTests`: a
+   share of scenes whose Easy block has `useAbilities` false in a data copy, so the "an off seat sends nothing" assert can fail again;
+   mutation: flip it and the assert fires); **CLAUDE.md's "Current milestone" line** (one line: M5 sim / M6 view, M3 data Done);
+   **BUG-0675 c (a docs/03 line); BUG-0651; BUG-0650; BUG-0144 (`ChasersUnderPlacementChurn_*`); BUG-0113 item 2.** Each: the skipped QA
+   row un-skipped. Stop at the budget (~1,000 lines) and report the rest by bug id.
+6. OUT: M5-4f, pathing slice 2, any knob, any `game/data/**` edit, `rules.json`, the Ages → tech-tree design, the data track's test
+   folders (`Content/`, `QA/Content/`).
 
 **Files.** `sim/**` except the data track's folders and `ViewApi/**`; docs/02 / 03 / 01; `studio/bugs/*` statuses.
 **Acceptance.** Every fixed bug's regression test red-then-green named; `ReplayGoldenTests` / `GatherWedgeQaTests` green without a regen;
@@ -118,7 +133,7 @@ pick's reachability filter against the cliff / corner / pocket scenes (no give-u
 the playables)**; docs/03 sections touched updated; the line count stated.
 **QA focus (standard):** the keys file with hostile values after item 2 (the 44 hand edits of `QaM6V8R1Test` + "Meta+K" family refused);
 `SettingsTest` / `ShellTest` run twice in parallel (per-process paths); the loop under load twice.
-**Budget.** ~800 lines.
+**Budget.** ~700 lines (items 1-4 first; item 5 as it fits).
 
 ### Next task candidates (after M6-VH2)
 1. **M6-V5's slot part** (2-4 slots; the team column needs Requests 38). 2. Save / load + replay playback (criterion 3; carries
@@ -139,23 +154,23 @@ the playables)**; docs/03 sections touched updated; the line count stated.
 the data track this session since the sim moves nothing: say so in the report and add the hash to `SameGameDataHashes` with the reason).
 
 **Then, in order:**
-1. **BUG-0750 (S4):** andii.md:51 "115" → "118"; docs/03:1889 "armor 5" → "armor 5 then (2 since D19)"; `D18ReportPreconditionQaTests`'
-   lever edit at values off the shipped ones (or dropped, with QA's `D19QaTests.BeforeD19Copy_*` named as the cover); the
-   `AbilityManagerFuzzStressTests` gets a share of scenes whose Easy block has `useAbilities` false in a data copy (sim-owned test:
-   **a named exception for that one file**, tests only); the regen-reason convention written into `studio/bugs/README.md`'s head or
-   docs/07 (one line: "the reason lives in the `SameGameDataHashes` comment and the commit body").
+1. **BUG-0750 (S4), items 3 and 5 only** (items 1-2 were fixed by the merged-tree reprint b616086; **item 4 is the sim track's this
+   session**, no exception needed): `QA/Content/D18ReportPreconditionQaTests`' lever edit at values off the shipped ones (e.g. 0.5 / 0.25 /
+   0.5 and 1.4; or dropped, with QA's `D19QaTests.BeforeD19Copy_*` named as the cover in the file); the regen-reason convention written into
+   `studio/bugs/README.md`'s head or docs/07 (one line: "the reason lives in the `SameGameDataHashes` comment and the commit body").
 2. **BUG-0721 (S4):** the siege ratio checked against both line rows; the spending conclusion stops at the idle seat's defeat; the
    generated rows at the menu's 8 mines (or the 6 stated beside the table).
 3. **The D18 reports re-run on D19 + the surround rule** (`AiSpendingReportTests.GeneratedNormal_*`, the kill-time report's today column
    already re-printed by the merged-tree reprint: confirm, don't redo): dated conclusions on both pages / docs/02 where quoted.
 4. Leftovers of the merged-tree reprint if the conductor's log lists any.
-5. OUT: any number not in the inbox; the Teblor / Shadow / Andii data; `rules.json`; C# outside the test folders and the named exception.
+5. OUT: any number not in the inbox; the Teblor / Shadow / Andii data; `rules.json`; **any C# outside `sim/Rts.Sim.Tests/Content/` and
+   `sim/Rts.Sim.Tests/QA/Content/`** (no exception this session; `Stress/AbilityManagerFuzzStressTests` is the sim's).
 
 **Acceptance.** `DataValidationTests` / `DataContentHashTests` green; the golden untouched unless an owner tweak landed (then one regen,
 `k` lines equal, the hash listed); every Content / QA/Content pin green; the line count stated; `git diff --stat` only the named files.
 **QA focus (light):** the fuzz's new off-seat share really has `UseAbilities` false (mutation: flip it and the assert fires); the
 precondition test fails on a mistyped key again.
-**Budget.** ~400 lines.
+**Budget.** ~350 lines.
 
 ### Next task candidates (after D-H5)
 1. The owner's D19 tweaks / the Shock pass (Horse Raider and Wickan Lancer hp / cost upward; a sweep first, as D18 did) if asked.
