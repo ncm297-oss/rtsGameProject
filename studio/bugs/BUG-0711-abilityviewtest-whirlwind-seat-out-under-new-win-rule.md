@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (one scene of the loop and two unit-test rows red on `main` once the sim's M5-4e and the view's M6-V7 are both merged; no product bug) |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-14-0946, task M5-4e (QA's scene loop on the sim branch) and the Producer's merged-tree check; filed by the Producer at ACCEPT |
 | System | view test scene `game/tests/AbilityViewTest.cs` (`ProphecyBarRow`); view QA `sim/Rts.Sim.Tests/QA/ViewApi/M6V7QaTests.cs` (`ViewApiDriven_HashesEqualABareTwin_*`) |
-| Fixed by | |
+| Fixed by | eb21700 (M6-V7 round 1, at the 0946 merge): `AbilityViewTest` spawns a Whirlwind Camp Follower for seat 1 before the Smithy; both `M6V7QaTests.ViewApiDriven_*` twins call `TestSim.KeepIn`. Status set by the Producer at the 2026-10-15-2325 PLAN (the index row already said fixed) |
 
 ## Repro
 1. `& $env:GODOT --headless --path game res://tests/AbilityViewTest.tscn` on a tree with the sim's M5-4e merged:

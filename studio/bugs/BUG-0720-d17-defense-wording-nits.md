@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-13-1616, task D17 |
 | System | docs (faction pages, docs/03 M5-4b) |
-| Fixed by | |
+| Fixed by | item 1: ba37fa4 (the Producer's docs-drift fix at the 1616 ACCEPT; the stale quote is gone from docs/03); item 2: c6bb467 (D18, verified by QA). Status set by the Producer at the 2026-10-15-2325 PLAN |
 
 ## Repro
 1. `grep -n "Laborers flee to the Garrison Keep" docs/03-technical-design.md docs/factions/malazan.md`
