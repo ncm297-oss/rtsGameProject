@@ -1887,7 +1887,7 @@ closed by rule: only exposed nodes are gathered.
   `cost {gold, wood}`, `buildTime` (seconds, to ticks), `popProvided` (to half-pop) and `dropOff`
   (bool, required). Ids are snake_case and unique across factions; unknown fields are errors. Shipped:
   M3-2 shipped the Town Hall slot only (`malazan_garrison_keep`, `whirlwind_holy_camp`: 4 x 4, 2,400 hp,
-  armor 5, 275 / 275, 90 s, +10 pop, drop-off); the data track's D1 (session 2026-10-06-1744) filled the
+  armor 5 then (2 since D19), 275 / 275, 90 s, +10 pop, drop-off); the data track's D1 (session 2026-10-06-1744) filled the
   other nine slots per faction from the docs/02 "Buildings" table (`Content/BuildingContentTests` pins them).
   `GameData.Buildings` (dense ids, ordinal order), `FindBuilding`; `ContentHash` covers every field.
   `trainedAt` and `requires` stay unresolved strings.
@@ -6668,8 +6668,12 @@ three arrays on `World`, `CombatConstants.SurroundSpotsPerCell`. No `Command`, n
   by their hall: the old point followed the first worker, they drifted out of sight, and the queued Attacks on them only
   found them by luck of where one worker was pushed; the surround moved that luck).
 - **The faction pages' siege tables** (`Content/CounterTriangleMarginsTests`, data-owned) measure the line razing a Tent /
-  Billet: with the rule the line is faster (Catapult on a Tent: line 192.2 s to 155.0 s; Battering Ram on a Billet: line
-  254.5 s to 191.8 s, the Ram 13.8 s to 13.7 s), so both pages need a re-print by the data track on the merged tree.
+  Billet: with the rule the line is faster. Re-printed on the merged tree (sim M5-P1 + D19's building damage, 2026-10-16,
+  BUG-0734): Catapult on a Tent, line 36.2 s to 30.2 s, Siege / line 47 % to 56 %; Battering Ram on a Billet, line 40.0 s
+  to 31.2 s, the Ram 13.8 s to 13.7 s, Siege / line 34 % to 44 % (the slice's own branch, on D18's data, read 192.2 s to
+  155.0 s and 254.5 s to 191.8 s). `Content/BuildingKillTimeReportTests` on the merged tree: 12 / 12 band cells, 20 Heavy
+  Infantry 11.8 / 23.1 / 45.0 s (House / infantry hall / Town Hall), 20 Raiders 9.8 / 19.4 / 35.8 s, the Catapults 2.3-3.9×
+  and the Sappers 4.8-5.7× the Heavy Infantry's damage per cost (D19 alone: 15.6 / 43.8 / 68.7 s and 13.6 / 36.1 / 57.4 s).
 - **Not yet (slice 2):** a melee unit blocked by its own standing ranged units routing round them, unit-v-unit crowding away
   from buildings, smarter fill order (far faces first for the units that arrive last).
 

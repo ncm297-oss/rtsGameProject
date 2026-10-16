@@ -37,3 +37,6 @@ As above. None changes play: no Andii data exists, and the shipped data is corre
 Fixes: 118 on andii.md; "armor 5 then" in docs/03; point item 3's Structure / bonus edit at values off the shipped
 ones (e.g. 0.5 / 0.25 / 0.5, 1.4) or drop it; give the fuzz a share of scenes whose Easy block has `useAbilities` false
 in a data copy. Item 3 and 4 are test-only (sim / data test folders), items 1-2 data track docs.
+
+**2026-10-16 (merged-tree reprint, BUG-0734's commit):** items 1-2 fixed (andii.md "118 vs a Town Hall per swing (armor 2
+since D19)"; docs/03 "armor 5 then (2 since D19)"). Items 3-5 stay open for D-H5.

@@ -216,7 +216,7 @@ both ways (J), and docs/02's stated numbers to the file (K).
 
 ## Balance baseline (M4-2b, 2026-10-08)
 
-Measured at sim commit `dd5b5b9` by `Content/CounterTriangleMarginsTests` (D6), re-printed at `1a9925b` (D8) and, for the four Line v Shock rows, in D13 (2026-10-11), and for those four rows and the siege rows in D19 (2026-10-15), from the shared
+Measured at sim commit `dd5b5b9` by `Content/CounterTriangleMarginsTests` (D6), re-printed at `1a9925b` (D8) and, for the four Line v Shock rows, in D13 (2026-10-11), and for those four rows and the siege rows in D19 (2026-10-15), the siege rows again on the merged tree with the sim's surround rule (M5-P1, 2026-10-16, BUG-0734), from the shared
 `Scenario/CounterTriangleScene` harness, the scene of
 `Scenario/CounterTriangleTests`: a flat map, 1,200 gold + wood a side (the whole number of units nearest to it), two
 blocks 5 wide whose fronts start 24 m apart, every unit attack-moved into the other block, seed 7, run in both seats.
@@ -245,8 +245,8 @@ Siege beats buildings (one siege unit, ordered to attack, against the same cost 
 
 | Siege unit | Same cost of line infantry | Building | Siege time | Line time | Siege / line |
 | --- | --- | --- | --- | --- | --- |
-| 1 Catapult | 5 Heavy Infantry | Tent | 17.0 s | 36.2 s | 47 % |
-| 1 Battering Ram | 4 Raider | Billet | 13.8 s | 40.0 s | 34 % |
+| 1 Catapult | 5 Heavy Infantry | Tent | 17.0 s | 30.2 s | 56 % |
+| 1 Battering Ram | 4 Raider | Billet | 13.7 s | 31.2 s | 44 % |
 
 **Target band (proposed in D6; adopted as the Producer's default on 2026-10-11, owner may revisit):** in this scene
 the counter's winner keeps **40-65 % of its cost**, in both seats, and the two seats differ by at most 15 points.
@@ -268,9 +268,10 @@ lever, the owner's call. Shock v Ranged (69-80 %) and Ranged v casters (67-89 %)
 over. Casters fight without their signature abilities until M4-4, so the Ranged v casters
 rows should be re-measured then before any tuning. Siege has no band: buildings are its job. Until D19 it razed in
 5-9 % of the same cost of line infantry's time; D19's building damage (the Structure column and the halved building
-armor, the owner's set (C)) speeds the line infantry up far more than siege, so siege now takes 34-47 % of their time,
-still 2-3× faster (and at least 2× their damage per cost against a House, a hall and a Town Hall:
-`Content/BuildingKillTimeReportTests`).
+armor, the owner's set (C)) speeds the line infantry up far more than siege (34-47 % of their time on D19's movement),
+and the sim's surround rule (M5-P1, 2026-10-16: more of a group strikes a building at once) speeds them up again, so
+siege now takes 44-56 % of their time, still about 1.8-2.3× faster (and at least 2× their damage per cost against a
+House, a hall and a Town Hall: `Content/BuildingKillTimeReportTests`).
 
 **Sapper self-splash (BUG-0182 item 2; `Content/SapperSplashReportTests`, same commit).** On a flat map, 4 Sappers
 behind 4 Heavy Infantry against 8 Horse Raiders: shipped data, 15 Sharpers thrown, 0 friendly-fire deaths, 41 hit

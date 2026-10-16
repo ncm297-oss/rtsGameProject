@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open (fix dispatched: the data track's merged-tree reprint at the 2026-10-15-2325 integration, Producer decision) |
+| Status | fixed (data-track merged-tree reprint, 2026-10-16; proposed by the dev, for QA / the Producer to verify) |
 | Found | 2026-10-15-2325, task M5-P1 |
 | System | content docs (`docs/factions/malazan.md`, `docs/factions/whirlwind.md` "Balance baseline" siege tables), `Content/CounterTriangleMarginsTests` |
-| Fixed by | (the reprint commit on the merged tree sim 94a0c1a + view b6c33e4 + data cc3e170; the dev sets this `fixed` with its hash) |
+| Fixed by | the conductor's next commit on the merged tree 656d219 (sim 94a0c1a + view b6c33e4 + data cc3e170): "D19: re-print the siege and kill-time cells on the merged tree" |
 
 ## Producer decision (2026-10-16, ACCEPT of session 2325)
 Sim ACCEPT with no sim change. D19 (the same session) re-printed the same siege cells on the old movement (Catapult on a Tent line
@@ -44,3 +44,12 @@ goes through the rule, hence its 0.1 s.
   merges). Producer's sequencing call; until then `main` would be red on these 8 rows.
 - The dev disclosed this in docs/03 "Implementation (pathing slice 1)" with the same numbers.
 - The siege-to-line ratio still holds the design's direction (siege far faster), but the "Siege / line" percentages move up.
+
+## Fix (2026-10-16, merged tree 656d219)
+Re-printed from `AllEightPairs_BothSeats_PrintTheMarginTable_AndTheDocWinnerWins` on the merged tree (equal to the Producer's
+scratch merge): malazan.md Catapult on a Tent line 36.2 -> 30.2 s, 47 -> 56 %; Ram on a Billet 13.8 -> 13.7 s, line
+40.0 -> 31.2 s, 34 -> 44 % (both pages); prose updated (siege 44-56 % of the line's time, about 1.8-2.3x faster; the
+Ram about 2.3x). No group-table (Line v Shock or other) cell moved. `Content/BuildingKillTimeReportTests` re-run: 12 / 12
+(20 HI 11.8 / 23.1 / 45.0 s, 20 Raiders 9.8 / 19.4 / 35.8 s); no page quotes those seconds, so they are stated in the
+test's summary and docs/03 "Implementation (pathing slice 1)", and the "before D19" column is labelled as D18's data on
+today's movement. No `game/data/**` change; data hash AB811AD47F68D0AE unchanged.

@@ -48,7 +48,7 @@ Darkness **duration +5 s**.
 - **Galain Sorcerer:** splash 1.5 m, detector 10 m. Signature ability **Darkness**.
 - **Eleint-blooded Champion:** the Andii heavy slot is a warrior, not an engine. Siege damage with
   ×2 vs all unit classes, so it is effective against units too (40 vs Light, 57 vs Heavy
-  infantry with 3 armor, 115 vs a Town Hall per swing). **At most 2 alive.**
+  infantry with 3 armor, 118 vs a Town Hall per swing (armor 2 since D19)). **At most 2 alive.**
 - **Great Raven (unique, Age II):** flying scout and detector (14 m). No attack. Only pierce,
   magic, and towers can hit it.
 

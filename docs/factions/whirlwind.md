@@ -217,7 +217,7 @@ both ways (J), and docs/02's stated numbers to the file (K).
 
 ## Balance baseline (M4-2b, 2026-10-08)
 
-Measured at sim commit `dd5b5b9` by `Content/CounterTriangleMarginsTests` (D6), re-printed at `1a9925b` (D8) and, for the two Line v Shock rows, in D13 (2026-10-11), and for those two rows and the siege row in D19 (2026-10-15), from the shared
+Measured at sim commit `dd5b5b9` by `Content/CounterTriangleMarginsTests` (D6), re-printed at `1a9925b` (D8) and, for the two Line v Shock rows, in D13 (2026-10-11), and for those two rows and the siege row in D19 (2026-10-15), the siege row again on the merged tree with the sim's surround rule (M5-P1, 2026-10-16, BUG-0734), from the shared
 `Scenario/CounterTriangleScene` harness, the scene of
 `Scenario/CounterTriangleTests`: a flat map, 1,200 gold + wood a side, two blocks 5 wide whose fronts start 24 m apart,
 every unit attack-moved into the other block, seed 7, both seats; no abilities, upgrades or terrain. These are the
@@ -238,12 +238,13 @@ Siege beats buildings (one siege unit, ordered to attack, against the same cost 
 
 | Siege unit | Same cost of line infantry | Building | Siege time | Line time | Siege / line |
 | --- | --- | --- | --- | --- | --- |
-| 1 Battering Ram | 4 Raider | Billet | 13.8 s | 40.0 s | 34 % |
+| 1 Battering Ram | 4 Raider | Billet | 13.7 s | 31.2 s | 44 % |
 
 The target band (winner keeps 40-65 % of its cost, both seats within 15 points; proposed in D6, the Producer's default
 since 2026-10-11, owner may revisit): every Whirlwind row is still above it, Raider v Lancer (95-100 %) most. D13 cut
 the line units' bonus vs Mounted from ×1.5 to ×1.1, the nearest value to the band that kept the test suite green (1.0 came
 nearer but broke a stress floor; the sweep and the reason are in malazan.md); Raider v Lancer moved from 95-100 % to 89-100 %. D19 (2026-10-15)
 put it back to ×1.5 (the owner's decision): Raider v Lancer is 95-100 % again. The Battering Ram's Siege / line share went
-from 5 % to 34 % in D19: the building damage set (C) (docs/02 "Combat") speeds the Raiders up far more than the Ram,
-which still razes the Billet about 3× faster.
+from 5 % to 34 % in D19: the building damage set (C) (docs/02 "Combat") speeds the Raiders up far more than the Ram.
+The sim's surround rule (M5-P1, 2026-10-16: more Raiders strike the Billet at once) moved it to 44 % (Raiders 40.0 s
+to 31.2 s, the Ram 13.8 s to 13.7 s); the Ram still razes the Billet about 2.3× faster.

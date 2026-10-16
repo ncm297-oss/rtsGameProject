@@ -131,7 +131,7 @@ public class CounterTriangleMarginsTests
     [InlineData("malazan", "| Wickan Lancer v Desert Archer | 1 |", "| 22.0 s |", "| 21.5 s |", "Wickan Lancer v Desert Archer seat 1", "Time to last death")]
     [InlineData("malazan", "| Wickan Lancer v Desert Archer | 1 |", "| 888 |", "| 912 |", "Wickan Lancer v Desert Archer seat 1", "Winner hp left")]
     [InlineData("whirlwind", "| Raider v Wickan Lancer | 0 |", "| 19 / 19 |", "| 18 / 19 |", "Raider v Wickan Lancer seat 0", "Winner left")]
-    [InlineData("whirlwind", "| 1 Battering Ram |", "| 40.0 s |", "| 39.5 s |", "1 Battering Ram on a Billet", "Line time")]
+    [InlineData("whirlwind", "| 1 Battering Ram |", "| 31.2 s |", "| 30.7 s |", "1 Battering Ram on a Billet", "Line time")]
     public void AMutatedPageCell_FailsNamingPairSeatAndColumn(string faction, string rowMark, string cell, string mutant, string key, string column)
     {
         Report r = Measured.Value;

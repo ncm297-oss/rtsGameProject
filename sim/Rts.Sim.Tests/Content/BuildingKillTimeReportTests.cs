@@ -18,7 +18,10 @@ namespace Rts.Sim.Tests.Content;
 /// 0.2 to 0.35, magic 0.4 to 0.6, siege 3.0 kept, and every building's armor halved, rounded down), which D19 shipped on
 /// 2026-10-15. So "today" is the shipped data, and "before D19" puts D18's shipped values back in an in-memory copy
 /// (<see cref="TestDataDir"/> temp folder, never the shipped files) for the today-vs-before table. Today must meet every
-/// band cell.
+/// band cell. Both columns run on today's sim, so since the surround rule (M5-P1, merged 2026-10-16) "before D19" is D18's
+/// data on the new movement and its seconds are not D18's own report's (re-run on the merged tree 2026-10-16: today 20 HI
+/// 11.8 / 23.1 / 45.0 s, 20 Raiders 9.8 / 19.4 / 35.8 s, 12 / 12; D19's branch, before the rule, read 15.6 / 43.8 / 68.7 s
+/// and 13.6 / 36.1 / 57.4 s).
 /// <para>
 /// The band (the Producer's default, D18 brief): 20 Age I line units (the 20 Heavy Infantry and 20 Raider rows) raze a
 /// House in at most 20 s, an infantry hall in 60 s, a Town Hall in 2 min; and each siege group (Catapults, Sappers) does at
@@ -173,7 +176,7 @@ public class BuildingKillTimeReportTests
         var variants = new (string Name, GameData Data)[]
         {
             ("today (D19, set C shipped)", TestSim.Data),
-            ("before D19 (Structure 0.4 / 0.2 / 0.4, armor 5 / 3 / 4)", BeforeD19()),
+            ("before D19 (Structure 0.4 / 0.2 / 0.4, armor 5 / 3 / 4; D18's data on today's movement)", BeforeD19()),
         };
         var runs = new Run[variants.Length, Groups.Length, Targets.Length];
         var met = new int[variants.Length];
