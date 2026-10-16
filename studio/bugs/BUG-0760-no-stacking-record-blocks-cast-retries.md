@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-16-0847, task M5-H2 (QA) |
 | System | AI ability manager (`Ai/AbilityManager.cs`, BUG-0702 item 2's no-stacking rule) |
-| Fixed by | |
+| Fixed by | ac80818 (`AbilityManager.ForgetEnded` / `NeverRan`); regression `QA/SimHardeningM5H2QaTests.ASandstormThatNeverLands_IsSentAgain_UpToMaxTries` (red on 47ca4a2, green on ac80818) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~SimHardeningM5H2QaTests.ASandstormThatNeverLands_IsSentAgain_UpToMaxTries"`
@@ -38,3 +38,16 @@ never came. The judging rule's retries (`same && CastTries < MaxTries`) can't ha
 - Regression pinned red on head, green on base: `QA/SimHardeningM5H2QaTests.ASandstormThatNeverLands_IsSentAgain_UpToMaxTries`.
 - Shipped data: Sandstorm is the only ground ability with no damage and no spawn effect, so the Priest is the one caster
   affected today.
+
+## Verification (QA re-check, 2026-10-16-0847, fix round 1)
+- The regression row prints `3 sends in 12 thinks (0 landed)` on ac80818 (1 on 47ca4a2): fixed.
+- No stacking came back: `AbilityManagerQaTests.ThreePriests_OneStormOnOnePoint_TheOthersHoldTheirs` green; new
+  `ThreePriests_TheFirstStormCancelled_IsSentAgain_ThenNoSecondStormOnTheLandedOne` (cancelled at 22, re-sent at 41, landed
+  at 65; the next storm on the point at 321, after the 264-tick window); new seeded fuzz
+  `PriestsWithRandomCancels_NeverStackAStormOnALandedOrRunningOne_TwinsEqual` (60 scenes, 207 storm sends, 74 landed, 115
+  cancels, 195 sends near a cancelled one; oracle at every send, twins equal every tick); `TheRecentCastArrays_StayOutOfTheStateHash`.
+- Three mutants of `NeverRan` in a scratch copy (forget every record; ignore the ready-tick check; forget while casting /
+  walking) each turn the three-Priest row, the new row and both fuzz rows red.
+- Why the moved ready tick is a sound "landed" signal: `AbilitySystem.Run` sets `AbilityReadyTick = tick + CooldownOf` only at
+  the resolve, `CooldownOf` is at least 1 and the loader's `cooldown` floor is 1 tick, so a landed cast always moves it past
+  the send's stamp; a cancel or drop never touches it.

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-16-0847, task M5-H2 (QA) |
 | System | sim-track test `sim/Rts.Sim.Tests/EveryUnitFightsTests.cs` vs the collapse rule (BUG-0703, standing rule 24) |
-| Fixed by | |
+| Fixed by | ac80818 (`TestSim.KeepIn(sim, 1)` after the attacker + an `IsAlive(tent)` guard in `EveryUnitFightsTests`) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~EveryUnit_DealsDamage1v1_ToAHeldLaborerOrTent" --logger "console;verbosity=detailed"`
@@ -36,3 +36,8 @@ on purpose.
   and no unit, so its first Tent collapses on tick 0 / 25 (seeds 1 / 6) and player 1 is defeated for the rest of the run.
   Its later store-seam Tents stand (the collapse happens on the defeat tick only), so the fuzz keeps its coverage and its
   preconditions; a keeper would restore the scene as written.
+
+## Verification (QA re-check, 2026-10-16-0847, fix round 1)
+- ac80818 prints `whirlwind_battering_ram: 179 damage after 7 ticks at a 0.25 m gap (melee)`, the base 8c39c08 line exactly;
+  every other row green. The guard makes a collapsed / freed Tent fail the row instead of passing as damage.
+- `GhostQaTests`' early Tent collapse (the "no fix needed" note) left as is.
