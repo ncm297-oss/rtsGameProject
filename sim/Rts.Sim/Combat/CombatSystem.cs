@@ -276,7 +276,16 @@ public static class CombatSystem
         // Then the projectiles that arrived this tick (M4-2b), slot order: hits and splash in the same phase, so a unit
         // killed by a projectile still lands its own queued hit, and the reverse.
         ProjectileSystem.Land(world);
-        if (world.DeathCount == deathsBefore) return;
+        if (world.DeathCount != deathsBefore) DropDeadReferences(world);
+    }
+
+    /// <summary>
+    /// After deaths (phase 11, or a defeated player's collapse in phase 11b): every target and last attacker that died is
+    /// cleared, and a destroyed building ends its builders' and repairers' orders, in slot order.
+    /// </summary>
+    internal static void DropDeadReferences(World world)
+    {
+        UnitStore u = world.Units;
         BuildingStore b = world.Buildings;
         for (int i = 0; i < u.Capacity; i++)
         {

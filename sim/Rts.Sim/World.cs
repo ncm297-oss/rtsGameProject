@@ -105,7 +105,7 @@ public sealed partial class World
         SurroundSpots = SurroundRule.MaxSpotsFor(config.Data);
         SurroundClaim = new int[config.UnitCapacity];
         Array.Fill(SurroundClaim, -1);
-        SurroundHolder = new int[config.BuildingCapacity * SurroundSpots];
+        SurroundHolder = new int[config.PlayerCount * config.BuildingCapacity * SurroundSpots]; // a layer per owner (BUG-0732)
 
         // M4-5: stealth and detection (World.Stealth.cs).
         _detectBytes = (config.PlayerCount + 7) / 8;
@@ -203,14 +203,15 @@ public sealed partial class World
 
     /// <summary>
     /// Appends a death to this tick's <see cref="Deaths"/> and counts it in the killer's kills and the victim owner's losses
-    /// (M4-4b-3b: an expiry, <see cref="DeathEvent.Expired"/>, counts neither). Past the list's capacity the event is not
+    /// (M4-4b-3b: an expiry, <see cref="DeathEvent.Expired"/>, counts neither; M5-H2: nor a defeated player's collapse,
+    /// <see cref="DeathEvent.Collapsed"/>). Past the list's capacity the event is not
     /// recorded (the counts still are): only a summon reusing slots freed earlier in the same tick could get there.
     /// </summary>
     internal void RecordDeath(in DeathEvent e)
     {
         System.Diagnostics.Debug.Assert(DeathCount < _deaths.Length, "death list full: an event is dropped (BUG-0452)");
         if (DeathCount < _deaths.Length) _deaths[DeathCount++] = e;
-        if (!e.Expired) _ledger.CountDeath(e.KillerOwner, e.VictimOwner);
+        if (!e.Expired && !e.Collapsed) _ledger.CountDeath(e.KillerOwner, e.VictimOwner);
     }
 
     /// <summary>Empties <see cref="Deaths"/> (start of a tick).</summary>
@@ -250,7 +251,8 @@ public sealed partial class World
     internal int SurroundSpots { get; }
 
     /// <summary>
-    /// Pathing slice 1: per unit, the spot key (building slot x <see cref="SurroundSpots"/> + spot) it claims, -1 for none.
+    /// Pathing slice 1: per unit, the spot key ((owner x building capacity + building slot) x <see cref="SurroundSpots"/> + spot;
+    /// a layer per owner since BUG-0732) it claims, -1 for none.
     /// Valid only while <see cref="SurroundHolder"/> names the unit back (checked on read, so nothing clears it). Not hashed,
     /// yet it decides the next re-pick (BUG-0733): a save must store both arrays whole (docs/03 "Implementation (pathing slice 1)").
     /// </summary>

@@ -40,8 +40,9 @@ public sealed partial class World
     /// Whether <paramref name="player"/> detects live unit slot <paramref name="slot"/> (M4-5): the slot carries a Stealthed
     /// status (in force or dormant) and, at this tick's phase 5 (or the moment it became stealthed), its cell was visible to
     /// <paramref name="player"/> and one of the player's units stood within <c>stealth.proximity</c> of it or one of its
-    /// detectors (a unit's or finished building's <c>detector</c>) within that radius. False for a unit with no stealth, the
-    /// unit's own owner (who never needs to), a dead slot, or an unknown player. Derived, not hashed.
+    /// detectors (a unit's or finished building's <c>detector</c>) within that radius. False for a unit with no stealth, a
+    /// summoned unit even with a Stealthed status (it can't be stealthed, so everyone sees it; see <see cref="IsStealthed"/>),
+    /// the unit's own owner (who never needs to), a dead slot, or an unknown player. Derived, not hashed.
     /// </summary>
     public bool IsDetectedBy(int player, int slot)
     {

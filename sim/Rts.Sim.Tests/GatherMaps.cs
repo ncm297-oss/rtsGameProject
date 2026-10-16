@@ -27,9 +27,14 @@ public static class GatherMaps
     /// <summary>World point of cell (x, y)'s center.</summary>
     public static Vector2 At(Simulation sim, int x, int y) => sim.World.NavGrid.CellCenter(x, y);
 
-    /// <summary>Places a building with its anchor at cell (x, y) through the command, runs two ticks, and asserts it stands.</summary>
+    /// <summary>
+    /// Places a building with its anchor at cell (x, y) through the command, runs two ticks, and asserts it stands. M5-H2
+    /// (standing rule 24): a player with no live unit is kept in first (<see cref="TestSim.KeepInAt"/>, its own map corner),
+    /// else it is out on the apply tick and, since BUG-0703, the building collapses with it.
+    /// </summary>
     public static EntityHandle Building(Simulation sim, int x, int y, int player = 0, int type = -1)
     {
+        TestSim.KeepInFor(sim, player, type < 0 ? Keep : type);
         BuildingStore b = sim.World.Buildings;
         int before = b.Count;
         sim.Enqueue(Command.SpawnBuilding(player, type < 0 ? Keep : type, At(sim, x, y)));

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (M5-H2, verified by QA 2026-10-16-0847) |
 | Found | 2026-10-15-2325, task M5-P1 |
 | System | combat / surround rule (`Combat/SurroundRule`) |
-| Fixed by | |
+| Fixed by | 47ca4a2 (M5-H2), `SurroundTests.TwoOwnersFromOnePoint_EachClaimsTheNearestSpotInItsOwnLayer` (red on 8c39c08), `SurroundQaTests.ASealedPocketOnTheNearFace_NoOrderDropped_*` |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~SurroundQaTests.ASealedPocketOnTheNearFace_Measured" --logger "console;verbosity=detailed"`:
@@ -31,3 +31,6 @@
   play; only store-seam scenes make one. A reachability filter on the pick (the cached field at the unit's cell, as
   `ReachableOnFoot`) would fix it and BUG-0731 together.
 - (2) only matters with 3-4 seats; cheap to fix (compare `Owner[h]` in `HeldByOther`).
+
+## QA verification (2026-10-16-0847, M5-H2)
+Every Surround row re-measured base 8c39c08 vs head: pocket 8 dropped orders -> 0 (struck 12 on both: the docs/03 line "take the 14 reachable spots" overstates it); two owners on one House 12 + 8 struck on **both** trees (the owner layers change no number in that scene; the unit test above is the red-then-green proof); 60 on a House 20 striking, 0 unit-ticks without the order on both; corner 11 / cliff 13 / attack-move give-ups 0 unchanged. No give-up added.

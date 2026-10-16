@@ -8,7 +8,9 @@ namespace Rts.Sim.Tests.ViewApi;
 /// M4-V1 test scene, all through commands (so twins and recorders see everything): on a flat 48 x 48 map, 20 Malazan Heavy
 /// Infantry (player 0) and 20 Whirlwind Raiders (player 1) facing each other across the centre, a Billet behind player 0's
 /// line and a Tent behind player 1's, then every unit attack-moved to the far building. Whoever wins the brawl walks on and
-/// knocks the other side's building down, so the run has unit deaths and a building death.
+/// knocks the other side's building down, so the run has unit deaths and a building death. M5-H2 (BUG-0703): each side also
+/// has a worker in its far corner, given no order, which keeps it in: without it the loser would be out with its last
+/// soldier and its building would collapse instead of being knocked down.
 /// </summary>
 internal static class CombatViewScene
 {
@@ -35,20 +37,22 @@ internal static class CombatViewScene
             list.Add(Command.SpawnUnit(0, hi, new Vector2(40f - depth, y)));
             list.Add(Command.SpawnUnit(1, raider, new Vector2(56f + depth, y)));
         }
+        list.Add(Command.SpawnUnit(0, data.FindUnit("malazan_laborer"), new Vector2(3f, 3f)));
+        list.Add(Command.SpawnUnit(1, data.FindUnit("whirlwind_camp_follower"), new Vector2(93f, 93f)));
         return list.ToArray();
     }
 
     /// <summary>Where each side's building stands (its footprint centre near here).</summary>
     public static Vector2 BuildingAt(int player) => new(player == 0 ? 20f : 76f, 48f);
 
-    /// <summary>One attack-move per live unit, to the other side's building.</summary>
+    /// <summary>One attack-move per live soldier (the corner workers stay put), to the other side's building.</summary>
     public static Command[] Orders(Simulation sim)
     {
         UnitStore u = sim.World.Units;
         var list = new List<Command>();
         for (int i = 0; i < u.Capacity; i++)
         {
-            if (!u.Alive[i]) continue;
+            if (!u.Alive[i] || sim.World.Data.Units[u.TypeId[i]].Slot == Data.UnitSlot.Worker) continue;
             int p = u.Owner[i];
             Vector2 goal = BuildingAt(1 - p) + new Vector2(p == 0 ? -4f : 4f, 0f);
             list.Add(Command.AttackMove(p, new EntityHandle(i, u.Generation[i]), goal));

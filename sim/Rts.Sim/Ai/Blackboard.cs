@@ -42,6 +42,8 @@ internal sealed class Blackboard
         SiteGeneration = new int[buildingSlots];
         SiteBuiltAt = new int[buildingSlots];
         SiteStill = new byte[buildingSlots];
+        SiteJoins = new byte[buildingSlots];
+        SiteJoinHp = new int[buildingSlots];
         Array.Fill(_badCell, -1);
         RalliedVersion = new int[unitSlots];
         WaveGeneration = new int[unitSlots];
@@ -61,6 +63,34 @@ internal sealed class Blackboard
         CastAt = new Vector2[unitSlots];
         SeenEnemies = new Vector2[unitSlots];
     }
+
+    /// <summary>
+    /// BUG-0702 item 2: the ground casts of non-stacking abilities sent and still running (first <see cref="RecentCastCount"/>,
+    /// at most <c>AbilityManager.MaxRecentCasts</c>): each one's ability (its <see cref="Data.GameData.Abilities"/> index),
+    /// point, and the tick its effect ends (sent + cast time + duration).
+    /// </summary>
+    internal readonly int[] RecentCastAbility = new int[AbilityManager.MaxRecentCasts];
+
+    /// <summary>See <see cref="RecentCastAbility"/>.</summary>
+    internal readonly Vector2[] RecentCastAt = new Vector2[AbilityManager.MaxRecentCasts];
+
+    /// <summary>See <see cref="RecentCastAbility"/>.</summary>
+    internal readonly int[] RecentCastUntil = new int[AbilityManager.MaxRecentCasts];
+
+    /// <summary>BUG-0760: per remembered cast, its caster's unit slot (a send that never ran is forgotten; see <c>AbilityManager</c>).</summary>
+    internal readonly int[] RecentCastSlot = new int[AbilityManager.MaxRecentCasts];
+
+    /// <summary>See <see cref="RecentCastSlot"/>: the caster's generation.</summary>
+    internal readonly int[] RecentCastGeneration = new int[AbilityManager.MaxRecentCasts];
+
+    /// <summary>See <see cref="RecentCastSlot"/>: the ability's index in the caster's type's list.</summary>
+    internal readonly byte[] RecentCastIndex = new byte[AbilityManager.MaxRecentCasts];
+
+    /// <summary>See <see cref="RecentCastSlot"/>: the ability's ready tick when sent (moved later: it landed).</summary>
+    internal readonly int[] RecentCastReadyAt = new int[AbilityManager.MaxRecentCasts];
+
+    /// <summary>See <see cref="RecentCastAbility"/>.</summary>
+    internal int RecentCastCount;
 
     // ---------- M5-4c: abilities (AbilityManager) ----------
 
@@ -136,6 +166,12 @@ internal sealed class Blackboard
 
     /// <summary>Per building slot, thinks in a row the own site had no builder (no worker walking to it or working on it), capped.</summary>
     internal byte[] SiteStill { get; }
+
+    /// <summary>BUG-0650: per building slot, workers sent to join the own site since its hit points last rose (see <c>EconomyManager.MaxJoins</c>).</summary>
+    internal byte[] SiteJoins { get; }
+
+    /// <summary>BUG-0650: per building slot, the own site's hit points when the last worker was sent to join it.</summary>
+    internal int[] SiteJoinHp { get; }
 
     // ---------- M5-3: the scout (ScoutManager) ----------
 

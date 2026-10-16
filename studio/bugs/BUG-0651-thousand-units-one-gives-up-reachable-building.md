@@ -38,3 +38,6 @@ The 500-unit row also peaks at stall 9 of 10 (`max stall 9`), one scan short of 
 
 ## Producer triage (2026-10-13-0527 ACCEPT)
 S3 confirmed; at 2x the supported crowd, so not a blocker and not an M5-4b item. Direction (the dev's and QA's reading agree): in `CombatSystem.ReachableOnFoot` a stopped chaser whose chase cell's field is not cached should hold the count (as the `Moving` branch does), not read "unreachable"; un-skip `ThousandUnits_OrderedOntoAReachableBuildingThroughARampDetour_NeverGiveUp`. Next sim hardening, or folded into an M5-4b task that touches the chase code if it is a few lines.
+
+## QA note (2026-10-16-0847, M5-H2)
+The dev un-skipped `ThousandUnits_OrderedOntoAReachableBuildingThroughARampDetour_NeverGiveUp` as a guard. QA ran the row against base 8c39c08 code too: it passes there as well (0 of 1,000 give up, max stall 9), so it had stopped reproducing before M5-H2 and nothing in M5-H2 fixed it. Status is the Producer's call (cannot reproduce vs fixed by an earlier change).

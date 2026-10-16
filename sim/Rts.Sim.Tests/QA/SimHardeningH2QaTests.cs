@@ -276,6 +276,11 @@ public class SimHardeningH2QaTests
             NavGrid g = s.World.NavGrid;
             s.Enqueue(Command.SpawnBuilding(0, tower, g.CellCenter(anchor % g.Width, anchor / g.Width)));
             s.Enqueue(Command.SpawnUnit(1, Crossbowman, below));
+            // M5-H2: player 0's keeper, through the door (a replay carries it): else it is out with no unit and its tower
+            // collapses (BUG-0703). On the first passable cell from (0, 0), far from the tower's fight.
+            int first = 0;
+            while (!g.IsPassable(first % g.Width, first / g.Width)) first++;
+            s.Enqueue(Command.SpawnUnit(0, CombatScenes.Laborer, g.CellCenter(first % g.Width, first / g.Width)));
             s.Tick();
             s.Tick();
             return s;

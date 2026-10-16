@@ -483,7 +483,12 @@ public class FieldBuildFairnessQaTests
             //   Memory).
             // - the rest, +8,088, the probe's rounding coming back (M5-1's figure sat 8 KB under its tree's usual).
             // 232,007,256 measured on M5-2's tree; the bound keeps the same 72 KB margin over it.
-            Assert.True(bytes < 232_080_000, $"{bytes / 1e6:F1} MB");
+            // M5-H2 re-baselines (232,064,400 measured on its base 8c39c08, 15.6 KB under the old bound), every step itemised:
+            // - FogStore._nearBlocker (BUG-0701): a bit per map cell, 1,048,576 / 8 = 131,072 bytes + a 24-byte header.
+            // - World.SurroundHolder gains a layer per owner (BUG-0732): one more player's 256 building slots x 36 spots x 4 B
+            //   = 36,864 bytes.
+            // - about 900 bytes of the probe's rounding. 232,233,296 measured; the bound keeps the same 72 KB margin over it.
+            Assert.True(bytes < 232_306_000, $"{bytes / 1e6:F1} MB");
         }
     }
 }

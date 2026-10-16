@@ -89,6 +89,11 @@ public sealed class FogStore
     private readonly int[] _box = new int[4 * MapConstants.LevelCount]; // per level: min x, min y, max x, max y
     private readonly int[] _visibleBox; // per player: the box of the last update's stamps (every visible cell is inside)
 
+    // BUG-0701: a bit per cell inside the box of a live zone that blocks vision (any owner's), rebuilt when the zones'
+    // BlockerVersion moves; NextSeenUnit asks the zone rule only of units on such cells. Derived, not hashed.
+    private readonly ulong[] _nearBlocker;
+    private int _nearBlockerVersion = -1;
+
     /// <summary>Creates the fog for <paramref name="players"/> players on <paramref name="map"/>, every cell unexplored.</summary>
     internal FogStore(World world, int players, Heightmap map, UnitStore units, BuildingStore buildings, GameData data, int[] scratch)
     {
@@ -116,6 +121,7 @@ public sealed class FogStore
         }
         _version = new int[players];
         _visibleBox = new int[4 * players];
+        _nearBlocker = new ulong[(cells + 63) / 64];
         for (int p = 0; p < players; p++) _visibleBox[4 * p] = int.MaxValue; // empty
         _revealUntil = new int[units.Capacity * players];
         _revealGeneration = new int[units.Capacity * players];
@@ -207,20 +213,19 @@ public sealed class FogStore
     /// <summary>
     /// M5-1: the first unit slot at or after <paramref name="from"/> that <paramref name="player"/> sees by
     /// <see cref="CanSeeUnit"/> (a valid player), or the store's capacity when none: <c>PlayerView</c>'s unit cursor as one
-    /// loop. While no zone blocks vision the cell test is inlined and stealth is asked only of an enemy already in sight; the
-    /// answer is <see cref="CanSeeUnit"/>'s, slot for slot (the PlayerView oracle fuzz compares them every tick).
+    /// loop. The cell test is inlined and stealth is asked only of an enemy already in sight; BUG-0701: while a zone blocks
+    /// vision, only a unit whose cell lies in such a zone's box takes <see cref="CanSeeUnit"/>'s zone rule (off every box the
+    /// rule is the plain cell test), so a think no longer pays per storm for every unit. The answer is
+    /// <see cref="CanSeeUnit"/>'s, slot for slot (the PlayerView oracle fuzz compares them every tick).
     /// </summary>
     internal int NextSeenUnit(int player, int from)
     {
         UnitStore u = _units;
         int n = u.Capacity;
         if (from < 0) from = 0;
-        if (_world.Zones.BlockerCount > 0)
-        {
-            for (int s = from; s < n; s++)
-                if (u.Alive[s] && CanSeeUnit(player, s)) return s;
-            return n;
-        }
+        bool blockers = _world.Zones.BlockerCount > 0;
+        if (blockers) RefreshNearBlocker(_world.Zones);
+        ulong[] near = _nearBlocker;
         // CellOf and Revealed written out in the loop: eight players walk every slot each think, and the tests' Debug build
         // pays for each call (M5-1 perf row). The PlayerView oracle fuzz holds this loop to CanSeeUnit slot for slot.
         bool[] alive = u.Alive;
@@ -242,6 +247,11 @@ public sealed class FogStore
             if (!(y >= 0)) y = 0;
             else if (y >= height) y = height - 1;
             int c = y * width + x;
+            if (blockers && (near[c >> 6] & (1UL << (c & 63))) != 0)
+            {
+                if (CanSeeUnit(player, s)) return s;
+                continue;
+            }
             if ((visible[c >> 6] & (1UL << (c & 63))) == 0)
             {
                 int k = s * players + player;
@@ -251,6 +261,26 @@ public sealed class FogStore
             return s;
         }
         return n;
+    }
+
+    /// <summary>
+    /// BUG-0701: rebuilds <see cref="_nearBlocker"/> when the blocking zones changed since the last build: cleared, then every
+    /// live blocking zone's box (<see cref="ZoneBox"/>: every cell a unit inside the zone, or a cell centre it hides, can be
+    /// on) marked. Zones never move, so the mask holds until a blocker is made or freed. Allocation-free.
+    /// </summary>
+    private void RefreshNearBlocker(ZoneStore zones)
+    {
+        if (_nearBlockerVersion == zones.BlockerVersion) return;
+        _nearBlockerVersion = zones.BlockerVersion;
+        Array.Clear(_nearBlocker);
+        for (int k = 0; k < zones.End; k++)
+        {
+            if (!zones.Alive[k] || !zones.BlocksVision(k)) continue;
+            ZoneBox(zones.Center[k], zones.Radius(k), out int x0, out int y0, out int x1, out int y1);
+            for (int y = y0; y <= y1; y++)
+                for (int c = y * _width + x0, end = y * _width + x1; c <= end; c++)
+                    _nearBlocker[c >> 6] |= 1UL << (c & 63);
+        }
     }
 
     /// <summary>Whether <paramref name="player"/> sees live building slot <paramref name="slot"/>: its own, any footprint cell visible at the last update, or (BUG-0270) a tower revealed to it by a hit from high ground. False for a dead slot or no such player.</summary>

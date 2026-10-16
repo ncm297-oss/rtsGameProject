@@ -112,10 +112,16 @@ public class DefeatCountsFuzzTests
             foreach (DefeatEvent e in w.DefeatEvents)
             {
                 Assert.True(units[e.Player] == 0 && production[e.Player] == 0, $"seed {seed}: player {e.Player} defeated with {units[e.Player]} units, {production[e.Player]} production buildings");
+                // M5-H2 (BUG-0703): its buildings collapsed on the defeat tick.
+                Assert.True(w.Ledger.LiveBuildings[e.Player] == 0, $"seed {seed}: player {e.Player} defeated with {w.Ledger.LiveBuildings[e.Player]} buildings standing");
                 defeats++;
             }
+            // BUG-0704 item 4, the other way: a player that built and has neither left is defeated by the end of the tick.
+            for (int p = 0; p < Players; p++)
+                if (w.EverBuilt(p) && units[p] == 0 && production[p] == 0)
+                    Assert.True(w.IsDefeated(p), $"seed {seed} tick {sim.TickNumber - 1}: player {p} built, has nothing left and isn't defeated");
         }
-        Assert.True(summoned > 50 && expired > 20 && cancels > 10 && razed > 20 && finished > 10 && freed > 20 && trainsAt > 20,
+        Assert.True(summoned > 50 && expired > 20 && cancels > 10 && razed > 20 && finished > 10 && freed > 20 && trainsAt > 20 && defeats > 0,
             $"seed {seed}: precondition: summoned {summoned}, expired {expired}, cancels {cancels}, razed {razed}, finished {finished}, freed {freed}, trains {trainsAt}, defeats {defeats}");
     }
 
