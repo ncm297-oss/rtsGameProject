@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-15-2325, task M5-P1 |
 | System | AI wave idle rule / QA test model (`QA/SimHardeningM5H1QaTests`) |
-| Fixed by | |
+| Fixed by | 620ac47 (M5-P1 fix round 1; verified by QA 2026-10-16) |
 
 ## Repro
 `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~FencedHall_TwoTowers_NoWaveEndsByTheIdleRuleWhileItFights"`
@@ -38,3 +38,10 @@ sooner), which put a blip in a think gap. The row is trajectory-sensitive: any m
   non-Idle at any tick since the last think" (would need a per-member tick counter the AI may not read under rule 3).
   Option (a) keeps the row's intent exactly.
 - Until resolved the full suite is red on this row on the sim branch.
+
+## Verification (QA, 2026-10-16, round 1)
+Option (a) as proposed: the row records "busy" only when `TickNumber % ThinkTicks == 0`, which is the state the next think
+reads (`AiPlayer.Think` runs at the start of tick `View.TickNumber`). The limit is unchanged (`cooldown - ThinkTicks` = 580),
+the command-based `lastBusy` and the wave-start reset are unchanged. Not a loosening of the threshold: only the sample
+points moved to where the rule under test can see. Both rows green: `towersInsideTheFence: False` ends at 5901 with idle
+621 (limit 580), `True` ends by loss twice.

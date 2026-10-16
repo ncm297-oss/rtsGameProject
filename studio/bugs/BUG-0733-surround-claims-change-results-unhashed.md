@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | wontfix |
 | Found | 2026-10-15-2325, task M5-P1 |
 | System | combat / determinism (`World.SurroundClaim`, `World.SurroundHolder`, `StateHasher`) |
-| Fixed by | |
+| Fixed by | 620ac47 documents it (Producer decision 2026-10-16: not hashed; the M6 save stores both arrays whole and its round-trip test compares them directly) |
 
 ## Repro
 QA scratch test (not committed; reproduce in a test): two identical sims, 40 Heavy Infantry ordered at a Whirlwind Tent,
@@ -30,3 +30,11 @@ is hashed". The walk is hashed, but the claims decide the next walk: two states 
 - Not a determinism break today (same seed + commands still give the same hashes: QA's 2,000-tick twins at 10 / 40
   attackers pass) and there is no save yet. Fix: hash each live unit's held spot (or -1), in slot order, or document the
   claims as save state that the future save must carry, and say so in docs/03.
+
+## Verification (QA, 2026-10-16, round 1)
+Documented, not fixed (Producer decision 2026-10-16): docs/03 "Implementation (pathing slice 1)" now says the claims are
+state outside the hash, and "Save/load and replays" requires the M6 save to store `SurroundClaim` and `SurroundHolder`
+whole and its round-trip test to compare them directly. `StateHasher` is untouched by 620ac47 (it changes only docs/03,
+a `World.cs` doc comment, `CombatSystem.cs` and tests); `git diff 53e69d7 HEAD -- sim/Rts.Sim.Tests/Replays
+sim/Rts.Sim.Tests/QA/GatherWedgeQaTests.cs` is empty (goldens byte-identical) and `ReplayGoldenTests` / `GatherWedgeQaTests`
+are green without a regen. The M6 save task inherits the requirement.
