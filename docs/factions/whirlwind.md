@@ -157,8 +157,8 @@ of its 8 pop go unused, and no Tent was placed once the cap was 100. The skip sa
 
 **Spending on the menu's map (D20, 2026-10-17, M5-4f: gathering gold 0.85 / wood 0.75 a second and the sized defense; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
 Normal against an idle seat, seeds 1 and 7, 12 forests and 8 mines (the menu's): the AI razes the idle base at
-514 s (seed 1) and 540 s (seed 7), so only the 5-minute mark is still a match (the later marks no longer count; D-H5 read
-496 s and 575 s). At 5 minutes the Whirlwind holds 316 gold / 117 wood (seed 1) and 384 / 103 (seed 7): gold in hand and
+514 s (seed 1) and 539 s (seed 7), so only the 5-minute mark is still a match (the later marks no longer count; seed 7
+read 540 s before the sim's flank rule, re-printed 2026-10-17 for M5-P2, BUG-0900; D-H5 read 496 s and 575 s). At 5 minutes the Whirlwind holds 316 gold / 117 wood (seed 1) and 384 / 103 (seed 7): gold in hand and
 wood just over the report's 100 line, so not wood-bound by its rule. Across both factions 0 of those 4 marks had wood
 under 100 with gold at 300 or more, so the report now reads "wood is not the limit"; D-H5 (2026-10-16, before the
 quicker gathering) read "wood binds at some marks only, not the limit overall" (1 of 4: this faction, seed 7, 524 gold /
@@ -241,7 +241,7 @@ both ways (J), and docs/02's stated numbers to the file (K).
 
 ## Balance baseline (M4-2b, 2026-10-08)
 
-Measured at sim commit `dd5b5b9` by `Content/CounterTriangleMarginsTests` (D6), re-printed at `1a9925b` (D8) and, for the two Line v Shock rows, in D13 (2026-10-11), and for those two rows and the siege row in D19 (2026-10-15), the siege row again on the merged tree with the sim's surround rule (M5-P1, 2026-10-16, BUG-0734), from the shared
+Measured at sim commit `dd5b5b9` by `Content/CounterTriangleMarginsTests` (D6), re-printed at `1a9925b` (D8) and, for the two Line v Shock rows, in D13 (2026-10-11), and for those two rows and the siege row in D19 (2026-10-15), the siege row again on the merged tree with the sim's surround rule (M5-P1, 2026-10-16, BUG-0734), and the group table re-printed with the sim's flank rule (M5-P2, 2026-10-17, BUG-0900), from the shared
 `Scenario/CounterTriangleScene` harness, the scene of
 `Scenario/CounterTriangleTests`: a flat map, 1,200 gold + wood a side, two blocks 5 wide whose fronts start 24 m apart,
 every unit attack-moved into the other block, seed 7, both seats; no abilities, upgrades or terrain. These are the
@@ -251,12 +251,12 @@ asserts only the winner as a rule; the margins are not asserted, but every cell 
 
 | Rule | Winner v loser | Winner seat | Fielded (winner v loser) | Winner left | Winner hp left | Winner keeps (cost) | Time to last death |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Line beats Shock | Raider v Wickan Lancer | 0 | 19 (1216) v 10 (1200) | 19 / 19 | 1667 | 1216 / 1216 (100 %) | 16.6 s |
-| Line beats Shock | Raider v Wickan Lancer | 1 | 19 (1216) v 10 (1200) | 18 / 19 | 1581 | 1152 / 1216 (95 %) | 18.3 s |
-| Shock beats Ranged | Horse Raider v Crossbowman | 0 | 13 (1248) v 15 (1215) | 9 / 13 | 1152 | 864 / 1248 (69 %) | 20.9 s |
-| Shock beats Ranged | Horse Raider v Crossbowman | 1 | 13 (1248) v 15 (1215) | 10 / 13 | 1197 | 960 / 1248 (77 %) | 18.2 s |
-| Ranged beats casters | Desert Archer v Cadre Mage | 0 | 18 (1224) v 8 (1200) | 16 / 18 | 602 | 1088 / 1224 (89 %) | 11.4 s |
-| Ranged beats casters | Desert Archer v Cadre Mage | 1 | 18 (1224) v 8 (1200) | 13 / 18 | 525 | 884 / 1224 (72 %) | 13.0 s |
+| Line beats Shock | Raider v Wickan Lancer | 0 | 19 (1216) v 10 (1200) | 18 / 19 | 1592 | 1152 / 1216 (95 %) | 15.6 s |
+| Line beats Shock | Raider v Wickan Lancer | 1 | 19 (1216) v 10 (1200) | 18 / 19 | 1570 | 1152 / 1216 (95 %) | 15.9 s |
+| Shock beats Ranged | Horse Raider v Crossbowman | 0 | 13 (1248) v 15 (1215) | 12 / 13 | 1332 | 1152 / 1248 (92 %) | 14.8 s |
+| Shock beats Ranged | Horse Raider v Crossbowman | 1 | 13 (1248) v 15 (1215) | 11 / 13 | 1332 | 1056 / 1248 (85 %) | 14.6 s |
+| Ranged beats casters | Desert Archer v Cadre Mage | 0 | 18 (1224) v 8 (1200) | 16 / 18 | 618 | 1088 / 1224 (89 %) | 9.6 s |
+| Ranged beats casters | Desert Archer v Cadre Mage | 1 | 18 (1224) v 8 (1200) | 16 / 18 | 522 | 1088 / 1224 (89 %) | 11.4 s |
 
 Siege beats buildings (one siege unit, ordered to attack, against the same cost of its faction's line infantry):
 
@@ -265,10 +265,16 @@ Siege beats buildings (one siege unit, ordered to attack, against the same cost 
 | 1 Battering Ram | 4 Raider | Billet | 13.7 s | 31.2 s | 44 % |
 
 The target band (winner keeps 40-65 % of its cost, both seats within 15 points; proposed in D6, the Producer's default
-since 2026-10-11, owner may revisit): every Whirlwind row is still above it, Raider v Lancer (95-100 %) most. D13 cut
+since 2026-10-11, owner may revisit): every Whirlwind row is still above it, Raider v Lancer (95 / 95 %) and Horse Raider
+v Crossbowman (92 / 85 %) most. D13 cut
 the line units' bonus vs Mounted from ×1.5 to ×1.1, the nearest value to the band that kept the test suite green (1.0 came
 nearer but broke a stress floor; the sweep and the reason are in malazan.md); Raider v Lancer moved from 95-100 % to 89-100 %. D19 (2026-10-15)
-put it back to ×1.5 (the owner's decision): Raider v Lancer is 95-100 % again. The Battering Ram's Siege / line share went
+put it back to ×1.5 (the owner's decision): Raider v Lancer was 95-100 % again (D13 and D19 measured on the movement
+before pathing slice 2). The sim's flank rule (M5-P2, 2026-10-17, BUG-0900: melee units blocked by their own ranks walk
+round them) ends every Whirlwind fight sooner (Raider v Lancer 16.6 / 18.3 s to 15.6 / 15.9 s, Horse Raider v
+Crossbowman 20.9 / 18.2 s to 14.8 / 14.6 s, Desert Archer v Cadre Mage 11.4 / 13.0 s to 9.6 / 11.4 s); the Horse
+Raiders keep 92 / 85 % (was 69 / 77 %), the Archers 89 / 89 % (was 89 / 72 %), and the Raiders 95 / 95 % (was
+100 / 95 %). Every winner is unchanged. The Battering Ram's Siege / line share went
 from 5 % to 34 % in D19: the building damage set (C) (docs/02 "Combat") speeds the Raiders up far more than the Ram.
 The sim's surround rule (M5-P1, 2026-10-16: more Raiders strike the Billet at once) moved it to 44 % (Raiders 40.0 s
 to 31.2 s, the Ram 13.8 s to 13.7 s); the Ram still razes the Billet about 2.3× faster. Kill times (D-H5, 2026-10-16,

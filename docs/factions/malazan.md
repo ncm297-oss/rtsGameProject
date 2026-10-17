@@ -154,8 +154,8 @@ its 8 pop go unused, and no Billet was placed once the cap was 100. The skip sav
 
 **Spending on the menu's map (D20, 2026-10-17, M5-4f: gathering gold 0.85 / wood 0.75 a second and the sized defense; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
 Normal against an idle seat, seeds 1 and 7, 12 forests and 8 mines (the menu's): the AI razes the idle base at
-509 s (seed 1) and 556 s (seed 7), so only the 5-minute mark is still a match (the later marks no longer count; D-H5 read
-584 s and 593 s). At 5 minutes the Malazans hold 136 gold / 15 wood (seed 1) and 36 / 40 (seed 7): short of both, not
+505 s (seed 1) and 556 s (seed 7), so only the 5-minute mark is still a match (the later marks no longer count; seed 1
+read 509 s before the sim's flank rule, re-printed 2026-10-17 for M5-P2, BUG-0900; D-H5 read 584 s and 593 s). At 5 minutes the Malazans hold 136 gold / 15 wood (seed 1) and 36 / 40 (seed 7): short of both, not
 wood-bound by the report's rule. Across both factions 0 of those 4 marks had wood under 100 with gold at 300 or more, so
 the report now reads "wood is not the limit"; D-H5 (2026-10-16, before the quicker gathering) read "wood binds at some
 marks only, not the limit overall" (1 of 4: the Whirlwind, seed 7) and D18 "wood is still the limit" (9 of 16 marks, 6
@@ -240,7 +240,7 @@ both ways (J), and docs/02's stated numbers to the file (K).
 
 ## Balance baseline (M4-2b, 2026-10-08)
 
-Measured at sim commit `dd5b5b9` by `Content/CounterTriangleMarginsTests` (D6), re-printed at `1a9925b` (D8) and, for the four Line v Shock rows, in D13 (2026-10-11), and for those four rows and the siege rows in D19 (2026-10-15), the siege rows again on the merged tree with the sim's surround rule (M5-P1, 2026-10-16, BUG-0734), from the shared
+Measured at sim commit `dd5b5b9` by `Content/CounterTriangleMarginsTests` (D6), re-printed at `1a9925b` (D8) and, for the four Line v Shock rows, in D13 (2026-10-11), and for those four rows and the siege rows in D19 (2026-10-15), the siege rows again on the merged tree with the sim's surround rule (M5-P1, 2026-10-16, BUG-0734), and the group table re-printed with the sim's flank rule (M5-P2, 2026-10-17, BUG-0900), from the shared
 `Scenario/CounterTriangleScene` harness, the scene of
 `Scenario/CounterTriangleTests`: a flat map, 1,200 gold + wood a side (the whole number of units nearest to it), two
 blocks 5 wide whose fronts start 24 m apart, every unit attack-moved into the other block, seed 7, run in both seats.
@@ -252,18 +252,18 @@ sim change that moves a number fails the test naming the row, seat and column un
 
 | Rule | Winner v loser | Winner seat | Fielded (winner v loser) | Winner left | Winner hp left | Winner keeps (cost) | Time to last death |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Line beats Shock | Heavy Infantry v Horse Raider | 0 | 16 (1184) v 13 (1248) | 15 / 16 | 1462 | 1110 / 1184 (94 %) | 23.1 s |
-| Line beats Shock | Heavy Infantry v Horse Raider | 1 | 16 (1184) v 13 (1248) | 14 / 16 | 1556 | 1036 / 1184 (88 %) | 20.5 s |
-| Line beats Shock | Raider v Wickan Lancer | 0 | 19 (1216) v 10 (1200) | 19 / 19 | 1667 | 1216 / 1216 (100 %) | 16.6 s |
-| Line beats Shock | Raider v Wickan Lancer | 1 | 19 (1216) v 10 (1200) | 18 / 19 | 1581 | 1152 / 1216 (95 %) | 18.3 s |
-| Shock beats Ranged | Wickan Lancer v Desert Archer | 0 | 10 (1200) v 18 (1224) | 7 / 10 | 828 | 840 / 1200 (70 %) | 25.1 s |
-| Shock beats Ranged | Wickan Lancer v Desert Archer | 1 | 10 (1200) v 18 (1224) | 8 / 10 | 888 | 960 / 1200 (80 %) | 22.0 s |
-| Shock beats Ranged | Horse Raider v Crossbowman | 0 | 13 (1248) v 15 (1215) | 9 / 13 | 1152 | 864 / 1248 (69 %) | 20.9 s |
-| Shock beats Ranged | Horse Raider v Crossbowman | 1 | 13 (1248) v 15 (1215) | 10 / 13 | 1197 | 960 / 1248 (77 %) | 18.2 s |
-| Ranged beats casters | Crossbowman v Priest of the Whirlwind | 0 | 15 (1215) v 10 (1200) | 13 / 15 | 444 | 1053 / 1215 (87 %) | 11.6 s |
-| Ranged beats casters | Crossbowman v Priest of the Whirlwind | 1 | 15 (1215) v 10 (1200) | 10 / 15 | 442 | 810 / 1215 (67 %) | 11.9 s |
-| Ranged beats casters | Desert Archer v Cadre Mage | 0 | 18 (1224) v 8 (1200) | 16 / 18 | 602 | 1088 / 1224 (89 %) | 11.4 s |
-| Ranged beats casters | Desert Archer v Cadre Mage | 1 | 18 (1224) v 8 (1200) | 13 / 18 | 525 | 884 / 1224 (72 %) | 13.0 s |
+| Line beats Shock | Heavy Infantry v Horse Raider | 0 | 16 (1184) v 13 (1248) | 16 / 16 | 1544 | 1184 / 1184 (100 %) | 17.9 s |
+| Line beats Shock | Heavy Infantry v Horse Raider | 1 | 16 (1184) v 13 (1248) | 16 / 16 | 1584 | 1184 / 1184 (100 %) | 16.3 s |
+| Line beats Shock | Raider v Wickan Lancer | 0 | 19 (1216) v 10 (1200) | 18 / 19 | 1592 | 1152 / 1216 (95 %) | 15.6 s |
+| Line beats Shock | Raider v Wickan Lancer | 1 | 19 (1216) v 10 (1200) | 18 / 19 | 1570 | 1152 / 1216 (95 %) | 15.9 s |
+| Shock beats Ranged | Wickan Lancer v Desert Archer | 0 | 10 (1200) v 18 (1224) | 8 / 10 | 1044 | 960 / 1200 (80 %) | 15.9 s |
+| Shock beats Ranged | Wickan Lancer v Desert Archer | 1 | 10 (1200) v 18 (1224) | 8 / 10 | 1050 | 960 / 1200 (80 %) | 16.4 s |
+| Shock beats Ranged | Horse Raider v Crossbowman | 0 | 13 (1248) v 15 (1215) | 12 / 13 | 1332 | 1152 / 1248 (92 %) | 14.8 s |
+| Shock beats Ranged | Horse Raider v Crossbowman | 1 | 13 (1248) v 15 (1215) | 11 / 13 | 1332 | 1056 / 1248 (85 %) | 14.6 s |
+| Ranged beats casters | Crossbowman v Priest of the Whirlwind | 0 | 15 (1215) v 10 (1200) | 13 / 15 | 380 | 1053 / 1215 (87 %) | 13.4 s |
+| Ranged beats casters | Crossbowman v Priest of the Whirlwind | 1 | 15 (1215) v 10 (1200) | 9 / 15 | 325 | 729 / 1215 (60 %) | 13.6 s |
+| Ranged beats casters | Desert Archer v Cadre Mage | 0 | 18 (1224) v 8 (1200) | 16 / 18 | 618 | 1088 / 1224 (89 %) | 9.6 s |
+| Ranged beats casters | Desert Archer v Cadre Mage | 1 | 18 (1224) v 8 (1200) | 16 / 18 | 522 | 1088 / 1224 (89 %) | 11.4 s |
 
 Siege beats buildings (one siege unit, ordered to attack, against the same cost of its faction's line infantry):
 
@@ -277,19 +277,27 @@ the counter's winner keeps **40-65 % of its cost**, in both seats, and the two s
 Below about 40 % one Forge level (+1 / +1) or a faction bonus on the loser's side can flip the fight, so the counter
 stops being reliable; above about 65 % the loser trades away almost nothing, which makes the counter a "don't build
 that" decided at build time rather than a fight where positioning matters (docs/01, "Counters matter"). Every row
-is still above the band. **Line v Shock (D13):** the one lever tried was the line units' bonus vs Mounted, the same
-value on both factions, swept 1.5 / 1.4 / 1.3 / 1.2 / 1.1 / 1.0 (the four cells above, in order: 94 / 88 / 100 / 95 %
-at 1.5, 88 / 94 / 100 / 89 % at 1.4, 88 / 94 / 95 / 89 % at 1.3, 94 / 88 / 100 / 89 % at 1.2, 88 / 88 / 100 / 89 % at
+but one is still above the band: Crossbowman v Priest in seat 1 (60 %) is inside it, but its seats are 27 points apart
+(87 / 60 %), over the 15-point limit. **The sim's flank rule (M5-P2, 2026-10-17, BUG-0900):** melee units blocked by
+their own ranks now walk round them, so melee blocks engage sooner and more of them strike at once; every fight with a
+melee winner ends 1.0-9.2 s sooner and most winners keep more (Heavy Infantry v Horse Raider 94 / 88 % to
+100 / 100 %, Wickan Lancer v Desert Archer 70 / 80 % to 80 / 80 %, Horse Raider v Crossbowman 69 / 77 % to 92 / 85 %;
+Raider v Wickan Lancer seat 0 loses one Raider, 100 to 95 %). Desert Archer v Cadre Mage ends 1.6-1.8 s sooner (seat 1
+72 to 89 %). Crossbowman v Priest moves the other way (87 / 67 % to 87 / 60 %, 1.7-1.8 s longer: Crossbowmen flanking
+their own front spread out under the storms). Every winner is unchanged. **Line v Shock (D13):** the one lever tried was the line units' bonus vs Mounted, the same
+value on both factions, swept 1.5 / 1.4 / 1.3 / 1.2 / 1.1 / 1.0 (the four Line v Shock cells, in order, D13, measured
+on the movement before pathing slice 2: 94 / 88 / 100 / 95 % at 1.5, 88 / 94 / 100 / 89 % at 1.4, 88 / 94 / 95 / 89 % at 1.3, 94 / 88 / 100 / 89 % at 1.2, 88 / 88 / 100 / 89 % at
 1.1, 88 / 94 / 84 / 79 % at 1.0). No value reaches the band and Line wins every cell at every value. 1.0 came nearest,
 but it broke a sim stress floor (seed 11 of the Sandstorm fuzz cast 4 storms, its floor is 5), so D13 shipped
 one step back, ×1.1. "Nearest" here means the next step of the sweep, not the best score among the passing values:
 1.3 is a near tie (points over 65 % summed across the four cells, 106 at 1.3 v 105 at 1.1) with the smaller worst
 cell (95 v 100 %) and the closer seats (6 / 6 points apart v 0 / 11). **D19 (2026-10-15):** the owner set the bonus
-back to ×1.5, so the four cells above are the ×1.5 ones (94 / 88 / 100 / 95 %). D18's sweep of the line units' hp
-(100-140), armor (1-3) and gold (50-80) at ×1.5 found no set in the band either (nearest: Heavy Infantry at hp 100 and
-armor 1, 63 / 75 %; Raider at gold 80, 85 / 85 %; `Content/LineShockSweepReportTests`), so the Shock side is the next
-lever, the owner's call. Shock v Ranged (69-80 %) and Ranged v casters (67-89 %) are 2-24 points
-over. Casters fight without their signature abilities until M4-4, so the Ranged v casters
+back to ×1.5, so the four cells were the ×1.5 ones (94 / 88 / 100 / 95 %, D19's movement); with the sim's flank rule
+(M5-P2) they are 100 / 100 / 95 / 95 %. D18's sweep of the line units' hp (100-140), armor (1-3) and gold (50-80) at
+×1.5 found no set in the band either (measured on the movement before pathing slice 2; nearest: Heavy Infantry at hp
+100 and armor 1, 63 / 75 %; Raider at gold 80, 85 / 85 %; `Content/LineShockSweepReportTests`), so the Shock side is
+the next lever, the owner's call. Shock v Ranged (80-92 %) is 15-27 points over; Ranged v casters (60-89 %) is up to
+24 points over, its one in-band cell (60 %) 27 points from its other seat. Casters fight without their signature abilities until M4-4, so the Ranged v casters
 rows should be re-measured then before any tuning. Siege has no band: buildings are its job. Until D19 it razed in
 5-9 % of the same cost of line infantry's time; D19's building damage (the Structure column and the halved building
 armor, the owner's set (C)) speeds the line infantry up far more than siege (34-47 % of their time on D19's movement),

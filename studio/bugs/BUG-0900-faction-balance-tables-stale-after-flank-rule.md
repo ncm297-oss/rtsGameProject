@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (data-owned; `main` would be red on 8 `Content/` rows until the re-print) |
-| Status | open (the data track's merged-tree re-print at the 0554 integration, as BUG-0734; else the data track's first task next session) |
+| Status | fixed (2026-10-17, the data track's merged-tree re-print at the 0554 integration; commit: the conductor's) |
 | Found | 2026-10-17-0554, task M5-P2 (the dev disclosed it in docs/03 "Implementation (pathing slice 2)", "Moved elsewhere"; the Producer filed it at ACCEPT) |
 | System | content docs (`docs/factions/malazan.md`, `docs/factions/whirlwind.md` "Balance baseline" group tables and "Spending on the menu's map"), `Content/CounterTriangleMarginsTests` (7 rows), `Content/AiSpendingReportTests.GeneratedNormal_PagesAndDocs03_QuoteTheReport` |
-| Fixed by | |
+| Fixed by | data-track fix mode on the merged tree (63e3a31 + the re-print; the conductor fills in the commit) |
 
 ## Producer decision (2026-10-17, ACCEPT of session 0554)
 Sim ACCEPT with no sim change: the flank rule is the goal (owner playtest note 5) and the cells are measurements. The sim
@@ -65,6 +65,15 @@ no lever of the line unit's own that reaches it).
 4. No `game/data/**` change; `data-hash` C059AD620DE581F1 unchanged. Push only when `CounterTriangleMarginsTests` 13 / 13,
    `AiSpendingReportTests`, `DataValidationTests`, `ReplayGoldenTests` and the full non-Perf suite are green on the merged tree.
 5. Set this bug `fixed` with the commit; the owner's review table is already under STATE "For your review" (the M5-P2 entry).
+
+## Fix notes (2026-10-17, data fix mode on the merged tree 63e3a31)
+- The harness on the merged tree printed exactly the "Actual" table above; both pages' group tables re-printed from it,
+  siege rows unchanged; spending paragraphs re-printed (malazan 505 / 556 s, whirlwind 514 / 539 s; 5-minute marks and the
+  verdict unchanged). D13's and D18's sweeps labelled as measured on the movement before pathing slice 2 (not re-run; no pin).
+- Correction to "Every row stays above the band": Crossbowman v Priest seat 1 is now 60 %, inside 40-65 %; its seats are 27
+  points apart (87 / 60 %), so the pair still fails the band's 15-point rule. The malazan page says so.
+- `AMutatedPageCell_*` (3 rows) and `BUG0290_AHeaderMismatch_StillReportsTheStaleCells` planted mutations into cells the
+  re-print removed (22.0 s, 888, 19 / 19); their fixtures now name the current cells (16.4 s, 1050, 18 / 19), same assertions.
 
 ## Notes
 - The sim dev could not fix it (track rules) and said so in docs/03 and the report. Standing rule 25 (a sim brief names the

@@ -128,9 +128,11 @@ public class CounterTriangleMarginsTests
     /// Whirlwind ram's line time) gives exactly one problem, naming the page, the pair, the seat and the column.
     /// </summary>
     [Theory]
-    [InlineData("malazan", "| Wickan Lancer v Desert Archer | 1 |", "| 22.0 s |", "| 21.5 s |", "Wickan Lancer v Desert Archer seat 1", "Time to last death")]
-    [InlineData("malazan", "| Wickan Lancer v Desert Archer | 1 |", "| 888 |", "| 912 |", "Wickan Lancer v Desert Archer seat 1", "Winner hp left")]
-    [InlineData("whirlwind", "| Raider v Wickan Lancer | 0 |", "| 19 / 19 |", "| 18 / 19 |", "Raider v Wickan Lancer seat 0", "Winner left")]
+    // The planted cells are the page's current ones (re-printed with the flank rule, M5-P2, BUG-0900); a re-print that moves
+    // one moves its fixture here too.
+    [InlineData("malazan", "| Wickan Lancer v Desert Archer | 1 |", "| 16.4 s |", "| 21.5 s |", "Wickan Lancer v Desert Archer seat 1", "Time to last death")]
+    [InlineData("malazan", "| Wickan Lancer v Desert Archer | 1 |", "| 1050 |", "| 912 |", "Wickan Lancer v Desert Archer seat 1", "Winner hp left")]
+    [InlineData("whirlwind", "| Raider v Wickan Lancer | 0 |", "| 18 / 19 |", "| 19 / 19 |", "Raider v Wickan Lancer seat 0", "Winner left")]
     [InlineData("whirlwind", "| 1 Battering Ram |", "| 31.2 s |", "| 30.7 s |", "1 Battering Ram on a Billet", "Line time")]
     public void AMutatedPageCell_FailsNamingPairSeatAndColumn(string faction, string rowMark, string cell, string mutant, string key, string column)
     {
@@ -148,8 +150,8 @@ public class CounterTriangleMarginsTests
 
     /// <summary>
     /// The Malazan page in memory with one group-table column dropped and, optionally, one Lancer seat-1 cell put back.
-    /// Dropping column 5 ("Winner hp left") and putting 21.5 s back gives the group table as it stood before D8 (1a9925b):
-    /// every other cell is the current page's, which is what that page had.
+    /// Dropping column 5 ("Winner hp left") and putting 21.5 s back gives the group table's shape before D8 (1a9925b) with
+    /// that page's stale Lancer cell; every other cell is the current page's (the later re-prints moved them since).
     /// </summary>
     private static string[] PreD8MalazanPage(int dropColumn, string? staleCell, string? stale)
     {
@@ -179,12 +181,12 @@ public class CounterTriangleMarginsTests
     public void BUG0290_AHeaderMismatch_StillReportsTheStaleCells()
     {
         Report r = Measured.Value;
-        string[] problems = PageProblems("malazan", PreD8MalazanPage(5, "| 22.0 s |", "| 21.5 s |"), r.Group, r.Siege);
+        string[] problems = PageProblems("malazan", PreD8MalazanPage(5, "| 16.4 s |", "| 21.5 s |"), r.Group, r.Siege);
         Assert.True(problems.Length == 2, $"expected the header and one cell, got {problems.Length}:\n" + string.Join("\n", problems));
         Assert.StartsWith("malazan.md group table: header '| Rule | Winner v loser | Winner seat | Fielded (winner v loser) | Winner left | Winner keeps (cost) | Time to last death |'", problems[0]);
         Assert.Contains("page lacks 'Winner hp left'", problems[0]);
         Assert.Contains("rows compared on the shared columns", problems[0]);
-        Assert.Equal("malazan.md group table: Wickan Lancer v Desert Archer seat 1, column 'Time to last death': page '21.5 s' vs sim '22.0 s'", problems[1]);
+        Assert.Equal("malazan.md group table: Wickan Lancer v Desert Archer seat 1, column 'Time to last death': page '21.5 s' vs sim '16.4 s'", problems[1]);
     }
 
     /// <summary>BUG-0290: when the page lacks a column that names a row, the header problem says the rows were not checked.</summary>
