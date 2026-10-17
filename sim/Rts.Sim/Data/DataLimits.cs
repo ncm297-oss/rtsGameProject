@@ -159,4 +159,10 @@ public static class DataLimits
 
     /// <summary>M5-4c: the most <c>rules.json</c> <c>ai.castMinTargets</c> may be (a Producer default).</summary>
     public const int MaxAiCastMinTargets = 50;
+
+    /// <summary>M5-4f: the least and the most <c>rules.json</c> <c>ai.defendRatio</c> may be (the brief's range).</summary>
+    public const double MinAiDefendRatio = 0.5, MaxAiDefendRatio = 10;
+
+    /// <summary>M5-4f: the most <c>rules.json</c> <c>ai.defendMinValue</c> may be, gold + wood (the brief's range).</summary>
+    public const double MaxAiDefendMinValue = 5000;
 }

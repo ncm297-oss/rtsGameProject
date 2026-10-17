@@ -62,6 +62,9 @@ internal sealed class AiRulesJson
     public double? DefendFor { get; set; }
     public double? WorkerFleeRadius { get; set; }
     public double? CastMinTargets { get; set; } // M5-4c
+    public double? DefendRatio { get; set; } // M5-4f
+    public double? DefendMinValue { get; set; }
+    public double? RecallHallHp { get; set; }
 }
 
 internal sealed class StealthJson

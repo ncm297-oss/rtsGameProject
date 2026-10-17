@@ -12,8 +12,8 @@ Status legend: **Next** = start here, **Planned** = not started, **Done** = acce
 | M2 | Presentation | **Done** (2026-10-07, Producer sign-off after the M2-H2 hardening) | Move an army around a 3D map |
 | M3 | Economy & buildings | **Done** (2026-10-08, Producer sign-off in session 2026-10-08-0313 after every track's end-of-M3 hardening (M3-H1 / H2, M3-V3b, D4) and the BUG-0146 fix; retro below) | Build a Malazan base |
 | M4 | Combat, fog, abilities | **Done** (2026-10-11, Producer sign-off in session 2026-10-10-2334 after every track's end-of-M4 hardening (M4-H3, M4-VH3, D-H3); the data track's D12 is accepted and held on its branch, landing at the next session's data merge; 10 / 10 criteria, in progress since 2026-10-07-2315; retro below) | Malazan vs. Whirlwind armies fight with abilities and fog |
-| M5 | AI opponent | **In progress** (since 2026-10-11; 2 / 6 criteria) | Lose to a Whirlwind AI |
-| M6 | Game shell & real art | Planned | A friend can play it |
+| M5 | AI opponent | **In progress** (since 2026-10-11; 3 / 9 criteria, three owner-requested criteria added 2026-10-14) | Lose to a Whirlwind AI |
+| M6 | Game shell & real art | **Started ahead** (view track since 2026-10-11; 1 / 10 criteria) | A friend can play it |
 | M7 | Teblor | Planned | Third faction: scale and population systems proven |
 | M8 | Shadow | Planned | Fourth faction: stealth polish, summons |
 | M9 | Tiste Andii | Planned | Fifth faction: darkness, flying, elite balance |
@@ -672,8 +672,13 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       `ProductionBuildings`); an AI match can now stall on a hidden worker until M5-4d hunts the last units; the
       20-minute winner test is M5-5.)
 - [ ] Playable: the owner can win on Easy and lose to a Whirlwind AI on Hard.
-- [ ] Owner request 2026-10-14 (D14 a): **proportional defense**: a raid pulls home only what it is worth (home army first, then part of the
-      wave, the whole wave only for a real threat or a dying hall); a lone raider never recalls a wave. (M5-4f.)
+- [x] Owner request 2026-10-14 (D14 a): **proportional defense**: a raid pulls home only what it is worth (home army first, then part of the
+      wave, the whole wave only for a real threat or a dying hall); a lone raider never recalls a wave. (M5-4f, 2026-10-16: `Ai/DefenseManager`
+      `Size` / `Pick` / `Recall`: the answer max(`ai.defendRatio` 1.5 × the intruders' gold + wood, `ai.defendMinValue` 150), the home army
+      nearest the point first, then wave members nearest the hall while the wave keeps its start threshold, the whole wave when the threat
+      outweighs everything or the hall is hit below `ai.recallHallHp` 0.5; verified by `Ai/ProportionalDefenseTests` (8), QA's
+      `ProportionalDefenseQaTests` (16, through the command log) and `ProportionalDefenseFuzzStressTests` (12 AI-v-AI matches with a
+      per-think oracle); docs/03 "Implementation (M5-4f)". Ticked at the 2026-10-16-2036 ACCEPT.)
 - [ ] Owner request 2026-10-14 (D14 b): **a strategy per match**: `ai.json` holds several named openings per faction (build order, army mix,
       attack thresholds) and the AI picks one with its seeded RNG at the start (Easy always the first); schema age-agnostic.
 - [ ] Owner request 2026-10-14 (D14 c): **counter-composition**: the AI shifts its army mix toward what counters the enemy units it has
@@ -695,7 +700,13 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       and the stats screen with what the sim counts today (kills, losses, gold / wood in hand, length, defeat times). Left:
       [02 Game flow](02-game-design.md#game-flow) 5's columns (gathered, trained, buildings built / lost, Age II time, the
       army-value graph) once the sim counts them (STATE Requests 39).)
-- [ ] Save/load and replay playback.
+- [ ] Save/load and replay playback. (M6-V9, 2026-10-16: **replay playback**: every match started from the menu or `--skirmish` is
+      recorded (checkpoints every 100 ticks) and written to `user://replays/<yyyyMMdd-HHmmss>-seed<seed>.replay` at the banner, at
+      Quit to menu and on window close, the newest 20 kept; Main menu → Load Game lists them (date, seed, players, length) with
+      Watch / Delete / Back; Watch replays through `SimRunner.StartPlayback` (every seat human, the logged commands fed before
+      their tick, each checkpoint compared; a data mismatch refused with `load.refused`, a divergence stopped with `load.mismatch`,
+      no order reaches the sim); `--replay <path>`; verified by `ReplayPlaybackTest`, `ShellTest` and QA's `QaM6V9Test`; docs/03
+      "Implementation (M6-V9)". Left: **save / load**, after the sim's save format (STATE Requests 42).)
 - [x] Settings: resolution, window mode, VSync, quality, volumes, keybinds. (M6-V6, 2026-10-13: resolution, window mode,
       VSync, quality presets, master / music / SFX volume and edge-pan speed, from the menu and the pause menu, saved in
       `user://settings.cfg`. M6-V7, 2026-10-14: "Confine cursor to window" (on by default; the cursor stays in the window

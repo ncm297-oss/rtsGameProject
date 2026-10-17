@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open: item 1 (the split groups) only; items 2-3 fixed in M5-H2 (Producer, 2026-10-16-0847 ACCEPT) |
+| Status | fixed (item 1 in M5-4f, Producer, 2026-10-16-2036 ACCEPT; items 2-3 in M5-H2) |
 | Found | 2026-10-13-1616, task M5-4c |
 | System | AI (`Ai/AbilityManager.Target`) |
-| Fixed by | items 2-3: 47ca4a2 + ac80818 (M5-H2): the no-stacking rule (`AbilityManager.Stacks` / `SentNear` / `ForgetEnded`, the Blackboard's 64-entry recent-cast list; BUG-0760's retry fix in the round), `QA/AbilityManagerQaTests.ThreePriests_OneStormOnOnePoint_TheOthersHoldTheirs` + QA's `SimHardeningM5H2QaTests` rows and 60-scene fuzz; item 3 a docs/03 line ("`range + radius` is a search ring"). Item 1 goes with M5-4f (the densest cluster) |
+| Fixed by | item 1: 8ac7b43 (M5-4f): the ground cast's group is seeded from the enemy in reach **nearest the caster** (slot order on ties), then grown by the radius, instead of the centroid of every enemy in reach; `QA/AbilityManagerQaTests.TwoGroupsEitherSide_OneIsCastOn` un-skipped and green, `Ai/AbilityManagerTests.TwoGroupsEitherSide_TheNearerIsCastOn`. Not built: the owner's "densest cluster" rule (docs/01 2026-10-14; a lone enemy nearest the caster with a group behind it still gives no ground cast): listed for the owner under For your review (M5-4f), sim feature queue. Items 2-3: 47ca4a2 + ac80818 (M5-H2): the no-stacking rule (`AbilityManager.Stacks` / `SentNear` / `ForgetEnded`, the Blackboard's 64-entry recent-cast list; BUG-0760's retry fix in the round), `QA/AbilityManagerQaTests.ThreePriests_OneStormOnOnePoint_TheOthersHoldTheirs` + QA's `SimHardeningM5H2QaTests` rows and 60-scene fuzz; item 3 a docs/03 line ("`range + radius` is a search ring"). Item 1 goes with M5-4f (the densest cluster) |
 
 ## Repro
 1. **Split groups.** `QA/AbilityManagerQaTests.TwoGroupsEitherSide_OneIsCastOn` (skipped, BUG-0702): a Cadre Mage with two

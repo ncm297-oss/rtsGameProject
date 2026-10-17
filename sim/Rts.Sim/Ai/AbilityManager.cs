@@ -12,7 +12,7 @@ namespace Rts.Sim.Ai;
 /// its first ability, in list order, that is ready and has a target.
 /// <list type="bullet">
 /// <item><b>Target ground.</b> The enemy units seen within <c>range + radius</c> of the caster; the centroid of those of them
-/// within <c>radius</c> of their centroid, pulled back to <c>range</c> of the caster; cast there when at least
+/// within <c>radius</c> of the one nearest the caster (BUG-0702 item 1, M5-4f), pulled back to <c>range</c> of the caster; cast there when at least
 /// <c>ai.castMinTargets</c> enemies seen are within <c>radius</c> of it. An ability that hits buildings, with no such group:
 /// the footprint centre of the nearest enemy building seen now (no ghost) within <c>range + radius</c>, pulled back alike.</item>
 /// <item><b>Self / aura, summon.</b> At the caster, when <c>ai.castMinTargets</c> enemies seen are within <c>radius</c> of it.</item>
@@ -172,22 +172,27 @@ internal static class AbilityManager
         if (a.Kind is AbilityKind.SelfAura or AbilityKind.Summon) return Count(ai, at, r2) >= min && !(friendly && OwnWithin(ai, at, r2));
         Blackboard board = ai.Board;
         float reach = (a.Range + a.Radius) * (a.Range + a.Radius);
-        Vector2 sum = Vector2.Zero;
-        int near = 0;
+        // BUG-0702 item 1 (M5-4f): the group is seeded from the enemy in reach nearest the caster (slot order on ties), not
+        // the centroid of all of them, which falls between two groups either side of the caster and hits neither.
+        int near = 0, seed = -1;
+        float seedDistance = float.MaxValue;
         for (int e = 0; e < board.SeenEnemyCount; e++)
         {
-            if (Vector2.DistanceSquared(board.SeenEnemies[e], at) > reach) continue;
-            sum += board.SeenEnemies[e];
+            float d = Vector2.DistanceSquared(board.SeenEnemies[e], at);
+            if (d > reach) continue;
             near++;
+            if (d >= seedDistance) continue;
+            seedDistance = d;
+            seed = e;
         }
         if (near >= min)
         {
-            Vector2 centroid = sum / near, group = Vector2.Zero;
+            Vector2 seedAt = board.SeenEnemies[seed], group = Vector2.Zero;
             int inGroup = 0;
             for (int e = 0; e < board.SeenEnemyCount; e++)
             {
                 Vector2 p = board.SeenEnemies[e];
-                if (Vector2.DistanceSquared(p, at) > reach || Vector2.DistanceSquared(p, centroid) > r2) continue;
+                if (Vector2.DistanceSquared(p, at) > reach || Vector2.DistanceSquared(p, seedAt) > r2) continue;
                 group += p;
                 inGroup++;
             }

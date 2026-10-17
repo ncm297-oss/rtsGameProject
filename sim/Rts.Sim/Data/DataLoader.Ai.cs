@@ -294,7 +294,8 @@ public static partial class DataLoader
     /// <see cref="DataLimits.MaxAiSearchRadius"/>; <c>buildingSpacing</c> m, 0 to <see cref="DataLimits.MaxAiSpacing"/>. Meters go
     /// to whole cells, rounded up. M5-3: <c>scoutAfter</c> and <c>waveCooldown</c> s (0-3,600, to ticks); <c>scoutRadius</c> and
     /// <c>rallyDistance</c> m (1-64), <c>scoutReach</c> and <c>rallyReach</c> m (1-16), <c>scoutGrid</c> m (16-256, BUG-0593), kept in meters. M5-4b: <c>defendRadius</c> m (8-256), <c>defendFor</c> s (0-600, to
-    /// ticks), <c>workerFleeRadius</c> m (1-64). M5-4c: <c>castMinTargets</c> a whole number 1-50. A refused <c>popCap</c> is reported once: the cap rule is skipped then.
+    /// ticks), <c>workerFleeRadius</c> m (1-64). M5-4c: <c>castMinTargets</c> a whole number 1-50. M5-4f: <c>defendRatio</c> 0.5-10,
+    /// <c>defendMinValue</c> gold + wood 0-5,000, <c>recallHallHp</c> a fraction 0-1. A refused <c>popCap</c> is reported once: the cap rule is skipped then.
     /// </summary>
     private static AiRulesDef BuildAiRules(Checker c, AiRulesJson? j, RulesDef? rules)
     {
@@ -323,7 +324,19 @@ public static partial class DataLoader
             DefendForTicks = TicksUpTo(c, j.DefendFor, "ai.defendFor", DataLimits.MaxAiDefendSeconds),
             WorkerFleeRadius = Meters(c, j.WorkerFleeRadius, "ai.workerFleeRadius", DataLimits.MaxAiSearchRadius),
             CastMinTargets = WholeNumber(c, j.CastMinTargets, "ai.castMinTargets", 1, DataLimits.MaxAiCastMinTargets),
+            DefendRatio = (float)InRange(c, j.DefendRatio, "ai.defendRatio", DataLimits.MinAiDefendRatio, DataLimits.MaxAiDefendRatio),
+            DefendMinValue = (float)InRange(c, j.DefendMinValue, "ai.defendMinValue", 0, DataLimits.MaxAiDefendMinValue),
+            RecallHallHp = (float)Fraction(c, j.RecallHallHp, "ai.recallHallHp"),
         };
+    }
+
+    /// <summary>M5-4f: a required number, <paramref name="min"/> to <paramref name="max"/> inclusive; 0 when refused.</summary>
+    private static double InRange(Checker c, double? value, string path, double min, double max)
+    {
+        if (value == null) c.Error(path, "missing required field");
+        else if (!(value >= min && value <= max)) c.Error(path, $"{value} is outside {min}-{max}");
+        else return value.Value;
+        return 0;
     }
 
     /// <summary>M5-4c: a required whole number, <paramref name="min"/> to <paramref name="max"/> inclusive; 0 when refused.</summary>

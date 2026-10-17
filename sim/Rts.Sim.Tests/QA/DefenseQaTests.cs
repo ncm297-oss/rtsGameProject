@@ -41,6 +41,11 @@ public class DefenseQaTests
             ai["workerFleeRadius"] = 16;
             ai["rallyReach"] = 6;
             ai["scoutAfter"] = 3600;
+            // M5-4f (re-staged by the dev): these rows attack the trigger, the point, BUG-0670 / 0671 / 0673 and the knobs, not
+            // the sized answer, and were written when every free unit answered. The largest defendMinValue (5,000, above any
+            // army here) keeps that: every free unit answers, and an unseen hit outweighs any home army (the wave comes home).
+            // The sizing has its own rows (ProportionalDefenseTests); the knob-edge Theory below keeps the shipped ones.
+            ai["defendMinValue"] = 5000;
         });
     });
 

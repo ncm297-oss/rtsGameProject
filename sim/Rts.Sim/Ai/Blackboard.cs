@@ -10,7 +10,8 @@ namespace Rts.Sim.Ai;
 /// unit and building slot when its last AI command applies (so a think doesn't order it twice before the first applied) and
 /// which resource a worker was sent to; since M5-3 the scout's sweep, the enemy memory and the military's rally and wave. Not
 /// sim state: not hashed, never read by a sim rule; allocated once, sized from the match. Since M5-4b the defense's kept
-/// building hp, point and per-unit marks; since M5-4c the casters' last casts.
+/// building hp, point and per-unit marks; since M5-4c the casters' last casts; since M5-4f the defenders picked and the
+/// wave's start threshold.
 /// </summary>
 internal sealed class Blackboard
 {
@@ -54,6 +55,9 @@ internal sealed class Blackboard
         FledGeneration = new int[unitSlots];
         FledAt = new int[unitSlots];
         Homing = new bool[unitSlots];
+        DefenderGeneration = new int[unitSlots];
+        DefenseOrder = new int[unitSlots];
+        DefenseKey = new float[unitSlots];
         KeptHp = new int[buildingSlots];
         KeptHpGeneration = new int[buildingSlots];
         CastGeneration = new int[unitSlots];
@@ -156,6 +160,29 @@ internal sealed class Blackboard
     /// <summary>Per unit slot, whether the army unit's order for <see cref="DefendedVersion"/> was the <c>Move</c> home (BUG-0670): it gets the <c>AttackMove</c> once inside the base.</summary>
     internal bool[] Homing { get; }
 
+    // ---------- M5-4f: the sized answer (DefenseManager) ----------
+
+    /// <summary>Per unit slot, the generation of the army unit picked to answer the threat in force (0: none); cleared when the threat ends.</summary>
+    internal int[] DefenderGeneration { get; }
+
+    /// <summary>The answer's worth (gold + wood) at the last trigger, kept through the hold: picked units that fell are replaced up to it.</summary>
+    internal float DefendAnswer;
+
+    /// <summary>Whether every free army unit answers the threat in force (the whole wave was called home); cleared when it ends.</summary>
+    internal bool DefendAll;
+
+    /// <summary>Scratch for the defense's picks, rebuilt each think: unit slots (first <see cref="DefenseOrderCount"/>) in pick order.</summary>
+    internal int[] DefenseOrder { get; }
+
+    /// <summary>Scratch: per <see cref="DefenseOrder"/> entry, its sort key (squared distance, m²).</summary>
+    internal float[] DefenseKey { get; }
+
+    /// <summary>See <see cref="DefenseOrder"/>.</summary>
+    internal int DefenseOrderCount;
+
+    /// <summary>Wave members pulled out of a wave to defend, and whole waves called home by a threat (tests and tooling).</summary>
+    internal int WavePulls, WaveRecalls;
+
     // ---------- M5-H1: own construction sites (EconomyManager, BUG-0640) ----------
 
     /// <summary>Per building slot, the own site's generation <see cref="SiteStill"/> counts for (0: none tracked).</summary>
@@ -229,6 +256,9 @@ internal sealed class Blackboard
 
     /// <summary>The wave's half-pop and tick at its start.</summary>
     internal int WaveStartHalfPop, WaveStartTick;
+
+    /// <summary>M5-4f: the start threshold the wave was sent at (<c>attack.minArmyPop</c> half-pop and <c>attack.minArmyCost</c>, each times <c>waveSizeMultiplier</c>): the defense pulls members only while the rest keep both.</summary>
+    internal float WaveMinHalfPop, WaveMinCost;
 
     /// <summary>The last tick a member was ordered, busy (not Idle) or had an order pending (BUG-0598: a wave idle for <c>ai.waveCooldown</c> ends).</summary>
     internal int WaveBusyTick;

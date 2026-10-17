@@ -3,7 +3,7 @@
 Malazan-inspired 3D RTS. Godot 4.7 (.NET build) + C#, Windows desktop, single-player vs AI.
 Hobby/learning project: a codebase the owner understands beats a clever one.
 
-**Current milestone: M1 (core sim, no graphics).** See [docs/05-roadmap.md](docs/05-roadmap.md).
+**Current milestone: M5 (sim) / M6 (view); M3 data Done.** See [docs/05-roadmap.md](docs/05-roadmap.md).
 Live status is in [studio/STATE.md](studio/STATE.md). Don't write gameplay code ahead of the roadmap.
 
 An AI studio works on this repo between the owner's sessions: `producer` (Fable) plans and
