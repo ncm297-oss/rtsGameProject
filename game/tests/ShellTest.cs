@@ -320,8 +320,9 @@ public partial class ShellTest : Node
         keys.Add(("hud", UiText.Key(HudText.LastSeen), _ui.Hud(HudText.LastSeen)));
         // M6-V9: the Load Game screen's and the playback banners' keys.
         foreach (LoadText k in Enum.GetValues<LoadText>()) keys.Add(("load", UiText.Key(k), _ui.LoadGame(k)));
-        // settings: 22 since M6-V7 (confine_cursor); keys 15 + hud 2 since M6-V8; setup 17 since M6-V5 (add_slot, remove_slot); menu 5 + load 16 since M6-V9
-        Check(keys.Count == 5 + 17 + 4 + 22 + 18 + 15 + 2 + 16, $"{keys.Count} shell keys");
+        // settings: 22 since M6-V7 (confine_cursor); keys 15 + hud 2 since M6-V8; setup 17 since M6-V5 (add_slot, remove_slot); menu 5 + load 16 since M6-V9;
+        // match_over 27 since M6-V11 (kills, losses and the two in-hand keys out; nine column labels, not_reached and the graph's three in)
+        Check(keys.Count == 5 + 17 + 4 + 22 + 27 + 15 + 2 + 16, $"{keys.Count} shell keys");
         string json = File.ReadAllText(UiText.DefaultPath).Replace("\r\n", "\n");
         foreach ((string section, string key, string text) in keys)
         {
@@ -351,9 +352,12 @@ public partial class ShellTest : Node
             "settings.defaults", "settings.back",
             // M6-V4: the match-over banner's and the stats screen's keys.
             "match_over.victory", "match_over.defeat", "match_over.draw", "match_over.stats", "match_over.menu", "match_over.continue",
-            "match_over.stats_title", "match_over.match_length", "match_over.clock", "match_over.player", "match_over.kills",
-            "match_over.losses", "match_over.gold_in_hand", "match_over.wood_in_hand", "match_over.defeated_at", "match_over.standing",
-            "match_over.human", "match_over.back",
+            "match_over.stats_title", "match_over.match_length", "match_over.clock", "match_over.player",
+            "match_over.defeated_at", "match_over.standing", "match_over.human", "match_over.back",
+            // M6-V11: the stats columns from the sim's counters and the army value graph.
+            "match_over.gathered_gold", "match_over.gathered_wood", "match_over.units_trained", "match_over.units_killed", "match_over.units_lost",
+            "match_over.buildings_built", "match_over.buildings_killed", "match_over.buildings_lost", "match_over.age_ii_at", "match_over.not_reached",
+            "match_over.army_value", "match_over.graph_time", "match_over.graph_value",
             // M6-V8: the resource click's lines and the Keybinds tab's keys.
             "hud.resource_left", "hud.last_seen", "keys.tab_general", "keys.tab_keybinds", "keys.order_attack_move", "keys.order_stop",
             "keys.order_hold", "keys.order_move", "keys.subgroup_next", "keys.build_basic", "keys.build_advanced", "keys.group", "keys.card",
@@ -363,6 +367,8 @@ public partial class ShellTest : Node
             "load.watch", "load.delete", "load.back", "load.empty", "load.skipped", "load.refused", "load.mismatch", "load.ended" };
         foreach (string n in named) Check(keys.Any(k => $"{k.Section}.{k.Key}" == n), $"no key {n}");
         Check(!keys.Any(k => k.Key == "coming_soon"), "setup.coming_soon is still read (nothing shows it since M6-V2)");
+        foreach (string gone in new[] { "kills", "losses", "gold_in_hand", "wood_in_hand" })
+            Check(!keys.Any(k => k.Section == "match_over" && k.Key == gone), $"match_over.{gone} is still read (the M6-V11 columns replaced it)");
 
         // M6-V4: the two match_over formats; one that can't format (or names nothing) is one error naming its key.
         Check(_ui.Clock(0) != _ui.Clock(20 * 61) && _ui.Clock(20 * 61).Contains('1') && _ui.MatchLength(20 * 75).Contains(_ui.Clock(20 * 75)),

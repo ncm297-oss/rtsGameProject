@@ -23,14 +23,32 @@ public enum MatchOverText
     Clock,
     /// <summary>The stats table's player column heading.</summary>
     Player,
-    /// <summary>The kills column heading (killing blows, units and buildings).</summary>
-    Kills,
-    /// <summary>The losses column heading (units and buildings lost to killing blows).</summary>
-    Losses,
-    /// <summary>The gold column heading: gold in hand now, not gathered.</summary>
-    GoldInHand,
-    /// <summary>The wood column heading: wood in hand now, not gathered.</summary>
-    WoodInHand,
+    /// <summary>M6-V11: the gold gathered column heading (delivered at a drop-off over the match).</summary>
+    GatheredGold,
+    /// <summary>M6-V11: the wood gathered column heading.</summary>
+    GatheredWood,
+    /// <summary>M6-V11: the units trained column heading (finished from a production queue).</summary>
+    UnitsTrained,
+    /// <summary>M6-V11: the units killed column heading (killing blows on units).</summary>
+    UnitsKilled,
+    /// <summary>M6-V11: the units lost column heading.</summary>
+    UnitsLost,
+    /// <summary>M6-V11: the buildings built column heading (construction sites completed).</summary>
+    BuildingsBuilt,
+    /// <summary>M6-V11: the buildings killed column heading (killing blows on buildings and sites).</summary>
+    BuildingsKilled,
+    /// <summary>M6-V11: the buildings lost column heading.</summary>
+    BuildingsLost,
+    /// <summary>M6-V11: the time to Age II column heading.</summary>
+    AgeIiAt,
+    /// <summary>M6-V11: the Age II cell of a player who has not reached it.</summary>
+    NotReached,
+    /// <summary>M6-V11: the army value graph's title.</summary>
+    ArmyValue,
+    /// <summary>M6-V11: the graph's time axis title.</summary>
+    GraphTime,
+    /// <summary>M6-V11: the graph's value axis title.</summary>
+    GraphValue,
     /// <summary>The defeat time column heading.</summary>
     DefeatedAt,
     /// <summary>The defeat time cell of a player who is not defeated.</summary>

@@ -51,6 +51,8 @@ public partial class ReplayPlaybackTest : Node
     private GameData _data = null!;
     private UiText _ui = null!;
     private string _dir = "", _full = "";
+    private string? _shots;
+    private Vector2I _window;
 
     public override async void _Ready()
     {
@@ -58,6 +60,9 @@ public partial class ReplayPlaybackTest : Node
         try
         {
             GetTree().Root.Size = new Vector2I(1152, 648);
+            string[] args = OS.GetCmdlineUserArgs();
+            for (int i = 0; i + 1 < args.Length; i++) if (args[i] == "--shots") _shots = args[i + 1];
+            if (StatsScreenCheck.TryWindow(args, out _window)) GetTree().Root.Size = _window; // M6-V11: the stats screenshots' size
             await Frames(1);
             DataLoadResult loaded = DataLoader.LoadAll(ProjectSettings.GlobalizePath("res://data"));
             if (!loaded.Ok) throw new InvalidOperationException("data failed to load");
@@ -146,6 +151,10 @@ public partial class ReplayPlaybackTest : Node
             int recorded = sim.TickNumber;
             Check(recorded == RecordTicks, $"{label}: stopped at tick {recorded}, want {RecordTicks} (five ticks a frame)");
             ImmutableArray<PlayerSeat> seats = runner.Seats;
+            // M6-V11: the live match's counters at its end, which the watched replay's stats screen must show recomputed.
+            World lw = sim.World;
+            var live = Enumerable.Range(0, lw.Config.PlayerCount)
+                .Select(p => (lw.GatheredGold[p], lw.UnitsTrained[p], lw.ArmyValueSamples(p).ToArray())).ToArray();
             main.QuitToMenu();
             await Frames(2);
             Check(main.CurrentMatch == null && main.Menu is { Visible: true }, $"{label}: Quit to menu state");
@@ -187,7 +196,7 @@ public partial class ReplayPlaybackTest : Node
                 $"{label}: players cell '{wantSeats}'");
             Check(load.Select(row) && !load.WatchButton.Disabled && !load.DeleteButton.Disabled, $"{label}: picking row {row} did not enable Watch / Delete");
 
-            await Watch(main, load, path!, replay, label, ordersRow: scripted);
+            await Watch(main, load, path!, replay, label, ordersRow: scripted, live);
             return (path, replay);
         }
         finally
@@ -199,7 +208,7 @@ public partial class ReplayPlaybackTest : Node
     }
 
     // Watch through the screen's button, play to the end, check every checkpoint, the banner, the log; Main menu back.
-    private async Task Watch(Main main, LoadGameScreen load, string path, Replay replay, string label, bool ordersRow)
+    private async Task Watch(Main main, LoadGameScreen load, string path, Replay replay, string label, bool ordersRow, (int Gold, int Trained, int[] Samples)[] live)
     {
         int files = Directory.GetFiles(_full).Length;
         load.WatchButton.EmitSignal(BaseButton.SignalName.Pressed);
@@ -236,6 +245,23 @@ public partial class ReplayPlaybackTest : Node
         MatchOverBanner banner = main.Banner!;
         Check(banner.Visible && GetTree().Paused && !banner.ContinueButton.Visible && banner.MenuButton.Visible
             && banner.Title.Text == _ui.LoadGame(LoadText.Ended), $"{label}: end banner visible {banner.Visible}, title '{banner.Title.Text}', continue {banner.ContinueButton.Visible}");
+        // M6-V11: the banner's Stats shows the playback sim's counters, recomputed from the log: the live match's at its end.
+        banner.StatsButton.EmitSignal(BaseButton.SignalName.Pressed);
+        await Frames(2);
+        MatchStats stats = main.Stats!;
+        int gold = Array.FindIndex(MatchStats.Columns, c => c.Label == MatchOverText.GatheredGold), trained = Array.FindIndex(MatchStats.Columns, c => c.Label == MatchOverText.UnitsTrained);
+        Check(stats.Visible && stats.RowCount == live.Length, $"{label}: replay stats visible {stats.Visible}, {stats.RowCount} rows (want {live.Length})");
+        for (int p = 0; p < Math.Min(live.Length, stats.RowCount); p++)
+            Check(stats.Cell(p, gold) == live[p].Gold.ToString(CultureInfo.InvariantCulture) && stats.Cell(p, trained) == live[p].Trained.ToString(CultureInfo.InvariantCulture)
+                && stats.Graph.GraphPoints(p).Length == live[p].Samples.Length && sim.World.ArmyValueSamples(p).SequenceEqual(live[p].Samples),
+                $"{label}: replay stats row {p}: gold '{stats.Cell(p, gold)}' (live {live[p].Gold}), trained '{stats.Cell(p, trained)}' (live {live[p].Trained}), {stats.Graph.GraphPoints(p).Length} graph points (live {live[p].Samples.Length} samples)");
+        Check(live.Any(l => l.Gold > 0 && l.Trained > 0) && live.All(l => l.Samples.Length == RecordTicks / sim.World.StatsSampleTicks),
+            $"{label}: the live match gathered / trained nothing or has {string.Join(", ", live.Select(l => l.Samples.Length))} samples (want {RecordTicks / sim.World.StatsSampleTicks} each)");
+        foreach (string f in StatsScreenCheck.Columns(stats, sim.World, _ui, $"{label} replay stats")) Check(false, f);
+        foreach (string f in StatsScreenCheck.Graph(stats, match, drawn: true, $"{label} replay stats")) Check(false, f);
+        await Shot($"replay-stats-{label}");
+        main.CloseStats();
+        Check(!stats.Visible && banner.Visible, $"{label}: closing the replay's stats: stats {stats.Visible}, banner {banner.Visible}");
         main.ContinueWatching();
         Check(banner.Visible && GetTree().Paused, $"{label}: Continue watching closed a finished replay's banner");
         Check(Directory.GetFiles(_full).Length == files, $"{label}: the playback wrote a file");
@@ -599,6 +625,22 @@ public partial class ReplayPlaybackTest : Node
     private async Task Frames(int n)
     {
         for (int i = 0; i < n; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+    }
+
+    // Windowed with `-- --shots <dir> [--size WxH]`: the viewport as <name>.png (M6-V11: a real skirmish's stats screen).
+    private async Task Shot(string name)
+    {
+        if (_shots == null || DisplayServer.GetName() == "headless") return;
+        if (_window != default && DisplayServer.WindowGetSize() != _window)
+        {
+            DisplayServer.WindowSetSize(_window);
+            GetTree().Root.Size = _window;
+            await Frames(2);
+        }
+        for (int i = 0; i < 3; i++) await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+        string path = $"{_shots}/{name}.png";
+        GetViewport().GetTexture().GetImage().SavePng(path);
+        GD.Print($"  screenshot {path}");
     }
 
     private bool Check(bool ok, string message)

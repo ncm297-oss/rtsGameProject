@@ -5717,6 +5717,7 @@ game/tests/MatchOverViewTest.tscn the headless banner and stats test (in the sce
   | `wood_in_hand` | `World.Wood[p]`, likewise |
   | `defeated_at` | `Match.DefeatedAt(p)` as the clock, else `match_over.standing` |
 
+  (M6-V11 replaced these five with docs/02 "Game flow" 5's ten and added the graph: "Implementation (M6-V11)".)
   docs/02 "Game flow" 5's list needs sim counters; a new column is one `Columns` entry and its `ui.json` label.
   **Requests 39 (for the sim track):** per player (a) gold and wood **gathered** (delivered to a drop-off) over the
   match; (b) units trained (finished from a queue; spawns apart); (c) kills and losses split into units and buildings;
@@ -6087,6 +6088,69 @@ game/tests/ReplayPlaybackTest.tscn   the headless scene, (a)-(f) (in the scene l
   moves the tick-200 checkpoint). `ShellTest`: the 17 new keys (each required; bad `date_item` / `seat` / `skipped`
   formats refused) and the menu path by clicks (the empty-folder note, a recorded menu match listed, Watch, Quit to menu,
   Esc).
+
+### Implementation (M6-V11)
+
+The post-match stats screen shows docs/02 "Game flow" 5's list from the sim's M6-S1 counters ("Implementation (M6-S1)"),
+and the army value over time as a graph (M6 criterion 2). View only: the `World` getters are read as they are; `sim/` is
+unchanged.
+
+```
+game/scripts/MatchStats.cs        Columns (ten), AgeIiCell, the graph under the table, the 1280 x 720 layout, Table, Rgb
+game/scripts/ArmyValueGraph.cs    Control: one polyline per player drawn in _Draw; GraphPoints, PlotRect, MaxValue for tests
+game/scripts/MatchOverText.cs     13 keys in, kills / losses / gold_in_hand / wood_in_hand out
+game/data/common/ui.json          match_over: the column labels, not_reached, army_value, graph_time, graph_value
+game/tests/StatsScreenCheck.cs    the shared rows: every column v its span, the graph v the samples, the screen fits
+```
+
+- **Columns** (`MatchStats.Columns`, in order; each cell read once at `ShowFor`, the tree paused under the screen):
+
+  | Column (`match_over.*`) | Source |
+  | --- | --- |
+  | `gathered_gold` | `World.GatheredGold[p]`: delivered at a drop-off (no starting gold, no refund) |
+  | `gathered_wood` | `World.GatheredWood[p]`, likewise |
+  | `units_trained` | `World.UnitsTrained[p]`: finished from a production queue (no summon, no dev spawn) |
+  | `units_killed` | `World.UnitKills[p]` (killing blows on units) |
+  | `units_lost` | `World.UnitLosses[p]` |
+  | `buildings_built` | `World.BuildingsBuilt[p]`: sites completed (the start hall and dev spawns not counted) |
+  | `buildings_killed` | `World.BuildingKills[p]` (sites count as buildings) |
+  | `buildings_lost` | `World.BuildingsLost[p]` |
+  | `age_ii_at` | `World.TechResearchedTick(p, GameData.AgeTechs[0])` through `UiText.Clock` (ticks x 50 ms, m:ss), `match_over.not_reached` while -1 |
+  | `defeated_at` | `Match.DefeatedAt(p)` as the clock, else `match_over.standing` (as in M6-V4) |
+
+  Producer decision: the two "in hand" columns went (docs/02 doesn't list them), and with the unit / building split the
+  whole `kills` / `losses` columns went too; their four keys are no longer read (removed from `ui.json`). Age II is the
+  first entry of `GameData.AgeTechs` (the data's age tech list), so no tech id is named in C#.
+- **The graph** (`ArmyValueGraph`, one `Control` under the table; nothing per sample). `ShowFor` copies each player's
+  `ArmyValueSamples(p)` (the span is valid until the next tick) and passes them with the swatch colours
+  (`MatchStats.Rgb(Match.PlayerRgb[p])`), `World.StatsSampleTicks` and the match's `TickNumber`. Sample k is the value at
+  tick `(k + 1) x StatsSampleTicks` (M6-S1), so its x is that tick over the time span (`max(TickNumber, samples x
+  interval)`, at least 1) across the plot; y is the value over the **largest sample of any player** (`MaxValue`), all on
+  the baseline when every sample is 0. The value axis shows 0, half and the top; the time axis a tick every 1, 2, 5, 10, 15,
+  30, 60 or 120 minutes (the smallest step with at most nine labels), labelled with `match_over.clock`. Title
+  `army_value`, axis titles `graph_value` and `graph_time`. A player with one sample is a dot, with none nothing: a match
+  shorter than one interval draws the axes and the titles only. Points are laid out again on a resize. Lines at the same
+  value overlap (the later player's drawn on top). Sampling stops at `StatsSampleCapacity` (M6-S1): the line ends there.
+- **Layout.** The heading 34 px, the table 17 px with 15 px headings that wrap to two lines in a 74 px column, 10 px
+  apart: four seats, the graph (820 x 220) and Back fit 1152 x 648 (the test window), so 1280 x 720, the smallest resolution
+  the settings offer, too (`StatsScreenCheck.Fits`).
+- **Replays.** The watcher's banner Stats shows the playback sim's counters, recomputed by playing the log: equal to the
+  live match's at its end. The sample interval is a `SimConfig` value not in the replay header (M6-S1), so a replay
+  watched under another `StatsSampleTicks` would draw another graph; not handled (no such config is used today).
+- **Tests.** `MatchOverViewTest`: every stats check runs `StatsScreenCheck` (each column v its span; the graph: a point per
+  sample, the last point's x and y from the last sample's tick and value over the largest, colours = swatches = `PlayerRgb`,
+  lines drawn = players with a sample; heading, table, graph and Back inside the window); Victory: Age II `not_reached` at
+  the banner, then after Continue player 0 researches `age_ii` (a dev Town Hall and ranged hall, a dev grant through the
+  ledger seam QaV3b uses, `Command.Research`) and the pause menu's Stats shows `Clock(TechResearchedTick)` with player 1
+  still `not_reached`; Defeat: the screen opened (`Main.ShowStats`) before tick 200: no point, `DrawnLines` 0, every
+  counter "0". `FreeForAllTest`: the four-seat rows draw four lines in four colours (the defeat-first case now runs to tick
+  401 for two samples). `QaM6V5Test`'s four-seat rows and `QaM6V4Test` (units / buildings killed after Continue; an AI's
+  Age II clock allowed as ui text) run the shared rows. `ReplayPlaybackTest` (a) and (b): the end banner's Stats shows the
+  live match's gathered gold, units trained and samples (3 each at 600 ticks). `ShellTest`: 27 `match_over` keys (108 shell
+  keys), each required, the four old ones no longer read. A mutant placing sample k at tick `k x interval` with half its value
+  fails `FreeForAllTest`. Windowed with `-- --shots <dir> --size 1280x720` (or `1600x900`), `MatchOverViewTest`,
+  `FreeForAllTest` and `ReplayPlaybackTest` save the stats screen (`matchover-stats-late.png`, `ffa-stats-4*.png`,
+  `replay-stats-*.png`).
 
 ## AI architecture
 

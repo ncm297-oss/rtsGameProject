@@ -44,6 +44,7 @@ public partial class FreeForAllTest : Node
     private UiText _ui = null!;
     private Main _main = null!;
     private int _ended;
+    private string? _shots;
 
     public override async void _Ready()
     {
@@ -51,6 +52,8 @@ public partial class FreeForAllTest : Node
         try
         {
             GetTree().Root.Size = new Vector2I(1152, 648);
+            string[] args = OS.GetCmdlineUserArgs();
+            for (int i = 0; i + 1 < args.Length; i++) if (args[i] == "--shots") _shots = args[i + 1];
             await Frames(1);
             DataLoadResult loaded = DataLoader.LoadAll(ProjectSettings.GlobalizePath("res://data"));
             if (!loaded.Ok) throw new InvalidOperationException("data failed to load");
@@ -61,6 +64,13 @@ public partial class FreeForAllTest : Node
             _main.SettingsPath = $"user://ffa-test-{OS.GetProcessId()}/settings.cfg";
             AddChild(_main);
             await Frames(2);
+            // M6-V11: --size 1280x720 for the screenshots, after the shell applied its settings' window size.
+            if (StatsScreenCheck.TryWindow(OS.GetCmdlineUserArgs(), out Vector2I window))
+            {
+                DisplayServer.WindowSetSize(window);
+                GetTree().Root.Size = window;
+                await Frames(2);
+            }
             await FourSeatsVictory();
             await FourSeatsDefeatFirst();
             await ThreeSeatsHumanLast();
@@ -105,6 +115,7 @@ public partial class FreeForAllTest : Node
             $"four seats victory: title '{banner.Title.Text}', outcome {match.Outcome}, MatchOver {sim.MatchOver}, events [{string.Join(", ", _events)}], tick {sim.TickNumber}");
         await Click(banner.StatsButton);
         CheckStats(match, 4, "four seats victory", new[] { "", "", "", "" });
+        await Shot("stats-4");
         await Type(Key.Escape);
         await QuitMatch();
     }
@@ -130,7 +141,7 @@ public partial class FreeForAllTest : Node
         Check(sim.TickNumber == bannerTick, $"defeat first: ticks {bannerTick} -> {sim.TickNumber} under the banner");
         // Continue watching: the AIs and player 1 play on.
         await Click(banner.ContinueButton);
-        await Ticks(sim, 60);
+        await Ticks(sim, Math.Max(60, 2 * w.StatsSampleTicks + 1 - sim.TickNumber)); // M6-V11: two army-value samples for the graph rows
         Check(!banner.Visible && !GetTree().Paused && _ended == 1 && sim.TickNumber > bannerTick + 50 && !sim.MatchOver,
             $"after Continue: banner {banner.Visible}, paused {GetTree().Paused}, ended {_ended}, tick {sim.TickNumber} (banner {bannerTick}), MatchOver {sim.MatchOver}");
         _main.PauseMatch();
@@ -138,6 +149,7 @@ public partial class FreeForAllTest : Node
         Check(_main.Pause!.StatsButton.Visible, "the pause menu after the banner has no Stats");
         await Click(_main.Pause.StatsButton);
         CheckStats(match, 4, "defeat first", new[] { "", _ui.MatchOver(MatchOverText.Human), _ui.Setup(SetupText.DifficultyEasy), _ui.Setup(SetupText.DifficultyHard) });
+        await Shot("stats-4-ai");
         await Type(Key.Escape);
         await Click(_main.Pause.QuitToMenuButton);
         await Frames(2);
@@ -191,6 +203,14 @@ public partial class FreeForAllTest : Node
             Check(stats.SeatName(p) == seat && stats.FactionName(p) == _data.Factions[w.FactionOf(p)].DisplayName && stats.Swatch(p).ToRgba32() >> 8 == match.PlayerRgb[p],
                 $"{how}: row {p} seat '{stats.SeatName(p)}' (want '{seat}'), faction '{stats.FactionName(p)}', swatch {stats.Swatch(p).ToHtml(false)} (want {match.PlayerRgb[p]:X6})");
         }
+        // M6-V11: the counter columns and the graph: one line per seat (every seat has samples past tick 200), in its swatch's colour.
+        foreach (string f in StatsScreenCheck.Columns(stats, w, _ui, how)) Check(false, f);
+        foreach (string f in StatsScreenCheck.Graph(stats, match, drawn: true, how)) Check(false, f);
+        foreach (string f in StatsScreenCheck.Fits(stats, GetViewport().GetVisibleRect(), how)) Check(false, f); // four rows at 1152 x 648, under 1280 x 720
+        ArmyValueGraph g = stats.Graph;
+        Check(w.ArmyValueSamples(players - 1).Length > 0 && g.DrawnLines == players
+            && Enumerable.Range(0, players).Select(p => g.LineColour(p).ToRgba32()).Distinct().Count() == players,
+            $"{how}: graph drew {g.DrawnLines} lines for {players} seats ({w.ArmyValueSamples(players - 1).Length} samples), colours [{string.Join(", ", Enumerable.Range(0, players).Select(p => g.LineColour(p).ToHtml(false)))}]");
     }
 
     // ---- set-up (commands only) ----
@@ -348,6 +368,16 @@ public partial class FreeForAllTest : Node
     {
         var clock = System.Diagnostics.Stopwatch.StartNew();
         while (clock.Elapsed.TotalSeconds < seconds) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+    }
+
+    // Windowed with `-- --shots <dir>`: the viewport as ffa-<name>.png (the stats screen at four seats, M6-V11).
+    private async Task Shot(string name)
+    {
+        if (_shots == null || DisplayServer.GetName() == "headless") return;
+        for (int i = 0; i < 3; i++) await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+        string path = $"{_shots}/ffa-{name}.png";
+        GetViewport().GetTexture().GetImage().SavePng(path);
+        GD.Print($"  screenshot {path}");
     }
 
     private bool Check(bool ok, string message)

@@ -579,6 +579,10 @@ public partial class QaM6V5Test : Node
             string want = e is DefeatEvent d ? _ui.Clock(d.Tick + 1) : _ui.MatchOver(MatchOverText.Standing);
             Check(stats.Cell(p, col) == want && stats.Swatch(p).ToRgba32() >> 8 == match.PlayerRgb[p], $"{how}: row {p} defeated '{stats.Cell(p, col)}' (want '{want}')");
         }
+        // M6-V11: the 4-seat rows' counter columns and graph against the sim (no frame is drawn yet after ShowStats).
+        World w = match.Simulation!.World;
+        foreach (string f in StatsScreenCheck.Columns(stats, w, _ui, how)) Check(false, f);
+        foreach (string f in StatsScreenCheck.Graph(stats, match, drawn: false, how)) Check(false, f);
     }
 
     private Match DevStart(int players, params string[] extra)

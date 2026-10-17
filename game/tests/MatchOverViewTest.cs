@@ -6,6 +6,7 @@ using Godot;
 using Rts.Sim;
 using Rts.Sim.Commands;
 using Rts.Sim.Data;
+using Rts.Sim.Economy;
 using Rts.Sim.Entities;
 using Rts.Sim.Map;
 using Rts.Sim.Pathfinding;
@@ -32,11 +33,16 @@ namespace Rts.Game.Tests;
 /// <item>Three seats: player 0 falls first: Defeat while the sim's <c>MatchOver</c> is still false; Continue; player 2 falls
 /// later (the match is over), and no second banner shows; the stats have three rows.</item>
 /// </list>
+/// M6-V11: every stats check reads every counter column against its span, the Age II cell, the graph (a point per sample, the
+/// last point at the last sample, the line colours the swatches, the lines drawn) and the layout inside the window
+/// (<see cref="StatsScreenCheck"/>). Victory: Age II not_reached at the banner; after Continue player 0 researches it
+/// (dev Town Hall and ranged hall, a dev grant, <c>Command.Research</c>) and the pause menu's Stats shows its clock. Defeat
+/// opens the screen before the first sample: no graph point, no line drawn, no error.
 /// </summary>
 /// <remarks>
 /// Headless: <c>&amp; $env:GODOT --headless --path game res://tests/MatchOverViewTest.tscn</c>; prints "MATCH OVER VIEW TEST
-/// PASS" or "MATCH OVER VIEW TEST FAIL: ..." lines. Windowed with <c>-- --shots &lt;dir&gt;</c> it saves
-/// <c>matchover-banner.png</c> and <c>matchover-stats.png</c>. The settings file is a per-process <c>user://</c> one.
+/// PASS" or "MATCH OVER VIEW TEST FAIL: ..." lines. Windowed with <c>-- --shots &lt;dir&gt; [--size 1280x720]</c> it saves
+/// <c>matchover-banner.png</c>, <c>matchover-stats.png</c> and <c>matchover-stats-late.png</c> (after Age II). The settings file is a per-process <c>user://</c> one.
 /// </remarks>
 public partial class MatchOverViewTest : Node
 {
@@ -69,6 +75,13 @@ public partial class MatchOverViewTest : Node
             _main.SettingsPath = $"user://matchover-test-{OS.GetProcessId()}/settings.cfg";
             AddChild(_main);
             await Frames(2);
+            // M6-V11: --size 1280x720 for the screenshots, after the shell applied its settings' window size.
+            if (StatsScreenCheck.TryWindow(OS.GetCmdlineUserArgs(), out Vector2I window))
+            {
+                DisplayServer.WindowSetSize(window);
+                GetTree().Root.Size = window;
+                await Frames(2);
+            }
             await Victory();
             await Defeat();
             await Draw();
@@ -122,6 +135,8 @@ public partial class MatchOverViewTest : Node
         CheckStats(match, 2, "victory");
         Check(stats.Cell(0, DefeatedColumn) == _ui.MatchOver(MatchOverText.Standing) && stats.Cell(1, DefeatedColumn) == _ui.Clock(_events[0].Tick + 1),
             $"victory: defeated cells '{stats.Cell(0, DefeatedColumn)}', '{stats.Cell(1, DefeatedColumn)}'");
+        Check(stats.Cell(0, AgeColumn) == _ui.MatchOver(MatchOverText.NotReached) && stats.Cell(1, AgeColumn) == _ui.MatchOver(MatchOverText.NotReached)
+            && w.TechResearchedTick(0, _data.AgeTechs[0]) < 0, $"victory: Age II cells before research '{stats.Cell(0, AgeColumn)}', '{stats.Cell(1, AgeColumn)}'");
         Check(stats.SeatName(0) == _ui.Setup(SetupText.SlotHuman) && stats.SeatName(1) == _ui.MatchOver(MatchOverText.Human),
             $"victory: seats '{stats.SeatName(0)}', '{stats.SeatName(1)}'");
         await Shot("stats");
@@ -133,12 +148,21 @@ public partial class MatchOverViewTest : Node
         Check(!banner.Visible && !GetTree().Paused, $"Continue: banner {banner.Visible}, paused {GetTree().Paused}");
         await Seconds(0.5);
         Check(sim.TickNumber > tick && !banner.Visible && _ended == 1, $"after Continue: tick {sim.TickNumber} (banner at {tick}), banner {banner.Visible}, ended {_ended}");
+        // M6-V11: player 0 researches Age II after the banner (dev halls, a dev grant): the cell turns from not_reached to its clock.
+        await AgeTwo(sim, 0);
         await Type(Key.Escape);
         PauseMenu pause = _main.Pause!;
         Check(_main.Paused && pause.StatsButton.Visible && pause.StatsButton.Text == _ui.MatchOver(MatchOverText.Stats), $"pause after the banner: paused {_main.Paused}, Stats {pause.StatsButton.Visible}");
         await Click(pause.StatsButton);
         Check(stats.Visible, "the pause menu's Stats did not open the stats screen");
         CheckStats(match, 2, "from the pause menu");
+        await Shot("stats-late");
+        int ageTick = w.TechResearchedTick(0, _data.AgeTechs[0]);
+        Check(ageTick > tick && stats.Cell(0, AgeColumn) == _ui.Clock(ageTick) && stats.Cell(0, AgeColumn) != _ui.MatchOver(MatchOverText.NotReached)
+            && stats.Cell(1, AgeColumn) == _ui.MatchOver(MatchOverText.NotReached),
+            $"Age II after research: tick {ageTick} (banner {tick}), cells '{stats.Cell(0, AgeColumn)}', '{stats.Cell(1, AgeColumn)}' (want '{_ui.Clock(ageTick)}', not_reached)");
+        Check(w.ArmyValueSamples(0).Length >= 2 && stats.Graph.GraphPoints(0).Length == w.ArmyValueSamples(0).Length && w.ArmyValueSamples(0)[^1] > 0,
+            $"graph after research: {w.ArmyValueSamples(0).Length} samples of player 0, {stats.Graph.GraphPoints(0).Length} points (want 2+ and a live army)");
         await Type(Key.Escape);
         Check(!stats.Visible && _main.Paused, $"Esc on the stats: stats {stats.Visible}, pause menu {_main.Paused}");
         await Type(Key.Escape);
@@ -155,6 +179,7 @@ public partial class MatchOverViewTest : Node
         Simulation sim = match.Simulation!;
         World w = sim.World;
         Check(!_main.Banner!.Visible && !GetTree().Paused, "a second skirmish starts with a banner up");
+        await EmptyGraph(match);
         await Bases(sim, 2);
         EntityHandle own = BuildingOf(w, 0);
         await Army(sim, 1, own, 6);
@@ -260,6 +285,40 @@ public partial class MatchOverViewTest : Node
 
     private static int DefeatedColumn => Array.FindIndex(MatchStats.Columns, c => c.Label == MatchOverText.DefeatedAt);
 
+    private static int AgeColumn => Array.FindIndex(MatchStats.Columns, c => c.Label == MatchOverText.AgeIiAt);
+
+    private static readonly System.Reflection.PropertyInfo LedgerProperty =
+        typeof(World).GetProperty("Ledger", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+
+    // M6-V11: Age II for `player` through Command.Research: a dev Town Hall and a second qualifying hall (the any-of rule wants
+    // two of infantry / ranged / shock / forge; the player has its infantry hall), a dev grant of gold and wood (the QaV3b seam on
+    // the ledger), then the research, run until the sim says HasTech.
+    private async Task AgeTwo(Simulation sim, int player)
+    {
+        World w = sim.World;
+        NavGrid g = w.NavGrid;
+        int age = _data.AgeTechs[0];
+        int faction = w.FactionOf(player);
+        int town = StartBase.BuildingOfSlot(_data, faction, BuildingSlot.TownHall), ranged = StartBase.BuildingOfSlot(_data, faction, BuildingSlot.RangedHall);
+        int x0 = g.Width / 4, y0 = g.Height / 2;
+        int townAt = DefeatStaging.Anchor(w, player, town, x0, y0 - 10);
+        DefeatStaging.SpawnAt(sim, player, town, townAt);
+        await Ticks(sim, 2);
+        DefeatStaging.SpawnAt(sim, player, ranged, DefeatStaging.Anchor(w, player, ranged, x0, y0 + 10));
+        await Ticks(sim, 2);
+        object ledger = LedgerProperty.GetValue(w)!;
+        ((int[])ledger.GetType().GetProperty("Gold")!.GetValue(ledger)!)[player] = 5000;
+        ((int[])ledger.GetType().GetProperty("Wood")!.GetValue(ledger)!)[player] = 5000;
+        EntityHandle hall = DefeatStaging.BuildingAt(w, player, townAt);
+        ResearchError why = ResearchError.None;
+        Check(hall != default && w.CanResearch(player, hall.Index, age, out why), $"Age II: hall {hall}, research refused ({why})");
+        sim.Enqueue(Command.Research(player, SelectionController.SiteCenter(w, hall.Index), age));
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (!w.HasTech(player, age) && clock.Elapsed.TotalSeconds < 60) await Frames(1);
+        Check(w.HasTech(player, age) && w.TechResearchedTick(player, age) > 0, $"Age II not researched by tick {sim.TickNumber} (researched tick {w.TechResearchedTick(player, age)})");
+        await Frames(1);
+    }
+
     // The open stats screen against the sim now: one row per seat, every number its span's, the length and defeat times.
     private void CheckStats(Match match, int players, string how)
     {
@@ -269,13 +328,13 @@ public partial class MatchOverViewTest : Node
         Check(stats.Title.Text == _ui.MatchOver(MatchOverText.StatsTitle) && stats.Length.Text == _ui.MatchLength(match.Simulation.TickNumber)
             && stats.BackButton.Text == _ui.MatchOver(MatchOverText.Back),
             $"{how}: title '{stats.Title.Text}', length '{stats.Length.Text}' at tick {match.Simulation.TickNumber}");
-        int k = Array.FindIndex(MatchStats.Columns, c => c.Label == MatchOverText.Kills), l = Array.FindIndex(MatchStats.Columns, c => c.Label == MatchOverText.Losses);
-        int gold = Array.FindIndex(MatchStats.Columns, c => c.Label == MatchOverText.GoldInHand), wood = Array.FindIndex(MatchStats.Columns, c => c.Label == MatchOverText.WoodInHand);
+        // M6-V11: every counter column equals its span, the Age II cell the researched tick's clock or not_reached; the graph.
+        foreach (string f in StatsScreenCheck.Columns(stats, w, _ui, how)) Check(false, f);
+        foreach (string f in StatsScreenCheck.Graph(stats, match, drawn: true, how)) Check(false, f);
+        foreach (string f in StatsScreenCheck.Fits(stats, GetViewport().GetVisibleRect(), how)) Check(false, f);
+        Check(stats.Graph.Title == _ui.MatchOver(MatchOverText.ArmyValue) && stats.Graph.IsVisibleInTree(), $"{how}: graph title '{stats.Graph.Title}', visible {stats.Graph.IsVisibleInTree()}");
         for (int p = 0; p < Math.Min(players, stats.RowCount); p++)
         {
-            Check(stats.Cell(p, k) == w.Kills[p].ToString() && stats.Cell(p, l) == w.Losses[p].ToString() && stats.Cell(p, gold) == w.Gold[p].ToString()
-                && stats.Cell(p, wood) == w.Wood[p].ToString(),
-                $"{how}: row {p} kills {stats.Cell(p, k)} / {w.Kills[p]}, losses {stats.Cell(p, l)} / {w.Losses[p]}, gold {stats.Cell(p, gold)} / {w.Gold[p]}, wood {stats.Cell(p, wood)} / {w.Wood[p]}");
             DefeatEvent? e = _events.Where(x => x.Player == p).Select(x => (DefeatEvent?)x).FirstOrDefault();
             string want = e is DefeatEvent d ? _ui.Clock(d.Tick + 1) : _ui.MatchOver(MatchOverText.Standing);
             Check(stats.Cell(p, DefeatedColumn) == want, $"{how}: row {p} defeated '{stats.Cell(p, DefeatedColumn)}' (want '{want}')");
@@ -283,7 +342,33 @@ public partial class MatchOverViewTest : Node
             uint rgb = match.PlayerRgb[p];
             Check(stats.Swatch(p).ToRgba32() >> 8 == rgb, $"{how}: row {p} swatch {stats.Swatch(p).ToHtml(false)} (want {rgb:X6})");
         }
-        Check(w.Kills[0] + w.Kills[1] > 0, $"{how}: nobody killed anything (the scene's razing counts a killing blow)");
+        Check(w.Kills[0] + w.Kills[1] > 0 && w.BuildingKills[0] + w.BuildingKills[1] > 0, $"{how}: nobody razed anything (the scene's razing counts a killing blow)");
+    }
+
+    // M6-V11: the screen opened (through Main.ShowStats, the seam ShellTest uses) before the first sample: the graph has no
+    // point, draws the axes and the title and no line, with no error; every counter cell 0, Age II not_reached.
+    private async Task EmptyGraph(Match match)
+    {
+        Simulation sim = match.Simulation!;
+        _main.PauseMatch();
+        await Frames(1);
+        _main.ShowStats();
+        await Frames(2);
+        MatchStats stats = _main.Stats!;
+        World w = sim.World;
+        ArmyValueGraph g = stats.Graph;
+        Check(stats.Visible && sim.TickNumber < w.StatsSampleTicks && w.ArmyValueSamples(0).Length == 0 && w.ArmyValueSamples(1).Length == 0,
+            $"empty graph: stats {stats.Visible} at tick {sim.TickNumber}, samples {w.ArmyValueSamples(0).Length} / {w.ArmyValueSamples(1).Length}");
+        Check(g.LineCount == 2 && g.GraphPoints(0).Length == 0 && g.GraphPoints(1).Length == 0 && g.MaxValue == 0 && g.DrawCount > 0 && g.DrawnLines == 0,
+            $"empty graph: {g.LineCount} lines, points {g.GraphPoints(0).Length} / {g.GraphPoints(1).Length}, scale {g.MaxValue}, drawn {g.DrawCount} times, {g.DrawnLines} lines");
+        foreach (string f in StatsScreenCheck.Columns(stats, w, _ui, "empty graph")) Check(false, f);
+        foreach (string f in StatsScreenCheck.Graph(stats, match, drawn: true, "empty graph")) Check(false, f);
+        for (int c = 0; c < MatchStats.Columns.Length; c++)
+            if (c != AgeColumn && c != DefeatedColumn) Check(stats.Cell(0, c) == "0" && stats.Cell(1, c) == "0", $"empty graph: column {MatchStats.Columns[c].Label} '{stats.Cell(0, c)}', '{stats.Cell(1, c)}' at tick {sim.TickNumber}");
+        _main.CloseStats();
+        _main.Resume();
+        await Frames(1);
+        Check(!stats.Visible && !GetTree().Paused, $"empty graph: stats {stats.Visible}, paused {GetTree().Paused} after closing");
     }
 
     private async Task CheckStatsVia(MatchOverBanner banner, Match match, int players, string how)
@@ -387,6 +472,7 @@ public partial class MatchOverViewTest : Node
         else
         {
             _main.PauseMatch();
+            await Frames(2); // the Stats button shows after a banner: the menu's rects are laid out on the next frame (FreeForAllTest's rule)
             await Click(_main.Pause!.QuitToMenuButton);
         }
         await Frames(2);

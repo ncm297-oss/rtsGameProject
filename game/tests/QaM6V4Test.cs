@@ -351,16 +351,20 @@ public partial class QaM6V4Test : Node
         await Type(Key.Escape);
         await Click(pause.StatsButton);
         MatchStats stats = _main.Stats!;
-        int k = Array.FindIndex(MatchStats.Columns, c => c.Label == MatchOverText.Kills);
-        Check(stats.Visible && w.Kills[0] > bannerKills && stats.Cell(0, k) == w.Kills[0].ToString() && sim.TickNumber > bannerTick
+        // M6-V11: the kills column is now units killed (the later kill is a worker, a unit) and buildings killed.
+        int k = Array.FindIndex(MatchStats.Columns, c => c.Label == MatchOverText.UnitsKilled), kb = Array.FindIndex(MatchStats.Columns, c => c.Label == MatchOverText.BuildingsKilled);
+        Check(stats.Visible && w.Kills[0] > bannerKills && stats.Cell(0, k) == w.UnitKills[0].ToString() && stats.Cell(0, kb) == w.BuildingKills[0].ToString()
+            && w.UnitKills[0] + w.BuildingKills[0] == w.Kills[0] && sim.TickNumber > bannerTick
             && stats.Length.Text == _ui.MatchLength(sim.TickNumber),
-            $"stats after Continue: kills cell {stats.Cell(0, k)} / span {w.Kills[0]} (banner {bannerKills}), length '{stats.Length.Text}' at tick {sim.TickNumber} (banner {bannerTick})");
+            $"stats after Continue: unit kills cell {stats.Cell(0, k)} / span {w.UnitKills[0]}, building kills {stats.Cell(0, kb)} / {w.BuildingKills[0]} (kills {w.Kills[0]}, banner {bannerKills}), length '{stats.Length.Text}' at tick {sim.TickNumber} (banner {bannerTick})");
+        foreach (string f in StatsScreenCheck.Columns(stats, w, _ui, "stats after Continue")) Check(false, f);
         // No C# literal on the banner or the stats screen (the ShellTest rule for the setup, BUG-0581 item 1): ui.json, faction
         // data, numbers and the ui.json clock / length formats only.
         var allowed = new HashSet<string>(Enum.GetValues<MatchOverText>().Select(_ui.MatchOver)
             .Concat(new[] { SetupText.SlotHuman, SetupText.DifficultyEasy, SetupText.DifficultyNormal, SetupText.DifficultyHard }.Select(_ui.Setup))
             .Concat(_data.Factions.Select(f => f.DisplayName))
-            .Concat(new[] { _ui.MatchLength(sim.TickNumber), _ui.Clock(match.DefeatedAt(0)), _ui.Clock(match.DefeatedAt(1)) })) { "" };
+            .Concat(new[] { _ui.MatchLength(sim.TickNumber), _ui.Clock(match.DefeatedAt(0)), _ui.Clock(match.DefeatedAt(1)) })
+            .Concat(Enumerable.Range(0, w.Config.PlayerCount).Select(p => StatsScreenCheck.AgeIi(w, _ui, p)))) { "" }; // M6-V11: an AI's Age II time
         foreach (Node root in new Node[] { stats, _main.Banner! })
             foreach (Node n in root.FindChildren("*", "", true, false))
             {
