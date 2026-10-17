@@ -54,7 +54,7 @@ internal sealed class AiPlayer
         HouseType = OfSlot(BuildingSlot.House);
         CampType = OfSlot(BuildingSlot.Camp);
         IsWorkerType = new bool[data.Units.Length];
-        for (int t = 0; t < data.Units.Length; t++) IsWorkerType[t] = data.Units[t].Slot == UnitSlot.Worker;
+        for (int t = 0; t < data.Units.Length; t++) IsWorkerType[t] = data.Units[t].IsWorker;
     }
 
     /// <summary>The player it plays.</summary>

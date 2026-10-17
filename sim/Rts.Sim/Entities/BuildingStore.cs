@@ -343,6 +343,7 @@ public sealed class BuildingStore
             {
                 _ledger?.AddProvided(_owner[index], _defs[_typeId[index]].HalfPopProvided);
                 _ledger?.AddFinished(_owner[index], _typeId[index], _defs[_typeId[index]].Slot, 1);
+                _ledger?.Stats.CountBuilt(_owner[index]); // M6-S1: a spawned-finished building (Spawn) is not counted
             }
             _underConstruction[index] = false;
             return;
