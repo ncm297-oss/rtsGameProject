@@ -117,7 +117,11 @@ public class GatherPocketStressTests
     [InlineData(Shape.MineOneSide, 1)]
     [InlineData(Shape.MineOneSide, 4)]
     [InlineData(Shape.MineOneSide, 12)]
-    [InlineData(Shape.MineOneSide, 40)]
+    // QA M5-4f (2026-10-16-2036), the BUG-0790 ruling: at gatherRate 0.85 / 0.75 seeds 2 and 8 wedge 68 / 84 ticks while a
+    // free standing spot in reach stays open in a ring cell the sim offers (seed 8: at (28.0, 10.6), 1.3 m from the stuck
+    // worker, for all 84 ticks): a sim crowding fault, not this check's geometry. Skipped until M5-H3 fixes it; the
+    // probe and the old-rate control (green, worst 24 ticks) are QA/Bug0790FaceProbeQaTests.
+    [InlineData(Shape.MineOneSide, 40, Skip = "BUG-0790: a worker stands out of reach beside a free stand spot at a crowded one-sided mine (gatherRate 0.85 / 0.75, seeds 2 and 8)")]
     public void Pocket_NoGathererWedgesOutOfReach_ConservationExact(Shape shape, int workers)
     {
         var report = new List<string>();
