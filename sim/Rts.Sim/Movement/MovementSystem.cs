@@ -78,6 +78,7 @@ public static class MovementSystem
         float[] remaining = world.PlannedRemaining;
         byte[] action = world.PlannedAction;
         Vector2[] shove = world.ShoveStep;
+        int[] flankMark = world.PlannedFlank;
         float queryExtra = world.MaxUnitRadius + MovementConstants.AvoidRange;
         world.PlugEpoch++; // plug answers of the last pass are stale: positions and states moved since
         int plantedOwners = -1; // the flank rule's owners with a planted unit (bit per player), worked out when first needed
@@ -96,6 +97,7 @@ public static class MovementSystem
                 fetched = false;
             }
             planned[i] = Vector2.Zero;
+            flankMark[i] = 0;
             Vector2 pos = u.Position[i];
             Vector2 goal = u.Goal[i];
             if (!grid.WorldToCell(pos, out int cx, out int cy))
@@ -269,7 +271,7 @@ public static class MovementSystem
             if (detourCovers && passage < 0) passage = InPassage(grid, cx, cy) ? 1 : 0;
             if (detourCovers && passage == 0)
             {
-                Vector2 turned = DetourTurn(world, grid, u, i, pos, cx, cy, forward, detourWalls, MovementConstants.MaxDetourTurn, 0);
+                Vector2 turned = DetourTurn(world, grid, u, i, pos, cx, cy, forward, detourWalls, MovementConstants.MaxDetourTurn, 0, MovementConstants.MaxDetourTurn, out _);
                 if (turned != forward)
                 {
                     // The walk follows the detour, and so do the sidestep and queuing: worked out again
@@ -355,12 +357,29 @@ public static class MovementSystem
             // the line is no blob of its own group) and in either mode a walk has (a Move, a chase). Only for a walker that
             // made no progress, and only with such a fighter in its way among the neighbours it already has.
             bool flanked = false;
-            if (!progress && aimForward != Vector2.Zero && world.FlankRuleOn
+            // A flank round a line of at least FlankKeepMinMembers, within FlankMemoryTicks (+ FlankMemoryTicksPerMember a
+            // member: BUG-0881): its side is kept, it is measured against the goal, and its stride still applies.
+            int mark = u.Flank[i];
+            bool recent = mark != 0 && ((mark >> 1) & FlankMembersMask) >= MovementConstants.FlankKeepMinMembers && world.TickNumber - FlankTickOf(mark) <= MovementConstants.FlankMemoryTicks + MovementConstants.FlankMemoryTicksPerMember * ((mark >> 1) & FlankMembersMask);
+            // A step back against the flank it took last tick is no progress worth having while the line still stands between
+            // the walker and its goal (BUG-0881): pressed on the line, the slide along it toward the aim's side gains a few cm
+            // on the estimate, and a re-issued order (a fresh estimate: attack-move spam, BUG-0883) made the walk back down the
+            // line's far side progress, so the walker went one way and flanked the other, and each such step reset its count.
+            // The flank is tried instead (its ticks never reset the count). Not in a crowd of walkers, whose jostle it isn't.
+            bool reversing = progress && recent && FlankTickOf(mark) == world.TickNumber - 1 && Vector2.Dot(step, u.Velocity[i]) < 0f
+                && goal != pos && OwnPlantedInWay(world, u, i, pos, Vector2.Normalize(goal - pos), near, count) && !WalkerNear(u, i, pos, near, count);
+            if ((!progress || reversing) && aimForward != Vector2.Zero && world.FlankRuleOn
                 && (owner >= 31 || ((plantedOwners < 0 ? plantedOwners = PlantedOwners(u) : plantedOwners) & (1 << owner)) != 0)
-                && OwnPlantedInWay(world, u, i, pos, aimForward, near, count))
+                && (recent || OwnPlantedInWay(world, u, i, pos, aimForward, near, count)))
             {
-                Vector2 dir = FlankTurn(world, grid, u, i, pos, cx, cy, aimForward, near, count);
-                if (dir != aimForward)
+                int kept = recent ? ((mark & 1) != 0 ? 1 : -1) : 0;
+                // Mid-flank the line is measured against the way to the goal itself, not the field's next cell (BUG-0881):
+                // the field doesn't know the line is there, and beside its end the next cell often lies straight back along
+                // it, clear of the line, so the walker stepped back down the line one tick and flanked up again the next.
+                Vector2 reference = aimForward;
+                if (recent && goal != pos) reference = Vector2.Normalize(goal - pos);
+                Vector2 dir = FlankTurn(world, grid, u, i, pos, cx, cy, reference, near, count, kept, out int flankSide, out int members);
+                if (dir != reference)
                 {
                     Vector2 flankFlow = dir * speed;
                     Vector2 flankStep = WalkStep(world, grid, u, i, pos, cx, cy, ClampLength(flankFlow + push, speed), flankFlow, dir, near, count, goalCell, false);
@@ -371,12 +390,23 @@ public static class MovementSystem
                         after = aimRemaining + Vector2.Distance(aim, pos + step);
                         progress = after < best - margin;
                         // Walking along the line is seldom progress toward the aim: the count holds (queued), but one tick in
-                        // FlankCountStride counts, so a flank that leads nowhere still ends.
-                        act = progress ? ActWalk
-                            : (world.TickNumber - u.OrderTick[i]) % MovementConstants.FlankCountStride != 0 ? ActQueued : ActStuck;
+                        // the flank's stride counts, so a flank that leads nowhere still ends.
+                        act = progress ? ActWalk : FlankCounts(world, u, i, members) ? ActStuck : ActQueued;
+                        flankMark[i] = ((world.TickNumber + 1) << FlankTickShift) | (Math.Min(members, FlankMembersMask) << 1) | (flankSide > 0 ? 1 : 0);
                     }
                 }
             }
+            // Just past a flank (BUG-0881): the walk from the line's end back toward the goal is no progress on the field's
+            // estimate (the field doesn't know the line was in the way), so it counts by the flank's stride too. The count still
+            // rises, one in the stride, so this ends as a flank does. Only a walk with no fight in it (a Move: a chase is
+            // re-aimed and re-walked by combat, and attack-movers waiting at QA's walled house grew patient enough to squeeze
+            // past the surround rule's spots), and only a step that walks on toward the aim: stuck in a crowd after a flank,
+            // Moves converging on a fight stayed Moving for seconds instead of giving up and joining it (500 converging, tick
+            // 400: 352 Moving, 65 fighting; 198 and 137 before the round, 246 and 125 with this and FlankKeepMinMembers).
+            if (!flanked && recent && act == ActStuck && world.FlankRuleOn && u.Mode[i] == Combat.CombatMode.None
+                && Vector2.Dot(step, aimForward) > margin
+                && !FlankCounts(world, u, i, (mark >> 1) & FlankMembersMask))
+                act = ActQueued;
             bool pushArrived = false;
             // A unit walking back (its walk-back used, Moving again) never pushes a unit off its point:
             // the pair a walker pushed through a corridor walked home and shoved the walker back off its
@@ -511,6 +541,19 @@ public static class MovementSystem
         return Combat.CombatSystem.BuildingDistanceSquared(world, t.Index, u.Position[j]) <= reach * reach;
     }
 
+    /// <summary>Whether another Moving unit is among walker <paramref name="i"/>'s <paramref name="count"/> neighbours, within <see cref="MovementConstants.AvoidRange"/> of touching it.</summary>
+    private static bool WalkerNear(UnitStore u, int i, Vector2 pos, int[] near, int count)
+    {
+        for (int m = 0; m < count; m++)
+        {
+            int j = near[m];
+            if (j == i || !u.Alive[j] || u.State[j] != UnitState.Moving) continue;
+            float reach = u.Radius[i] + u.Radius[j] + MovementConstants.AvoidRange;
+            if (Vector2.DistanceSquared(pos, u.Position[j]) < reach * reach) return true;
+        }
+        return false;
+    }
+
     /// <summary>
     /// Pathing slice 2, the flank rule: the direction round walker <paramref name="i"/>'s own planted line, or
     /// <paramref name="forward"/> (a unit vector toward the aim) when there is none to take. The seeds are its own
@@ -522,13 +565,19 @@ public static class MovementSystem
     /// (below), at most <see cref="MovementConstants.MaxFlankTurn"/>, on open ground by the walkers' own rule
     /// (<see cref="DetourTurn"/>). A block that doesn't cover the straight line no longer lies between: <paramref name="forward"/>.
     /// Members striking the walker's own target building from within its reach are left out (<see cref="StrikesOurTarget"/>).
+    /// A non-zero <paramref name="kept"/> (the side of a recent flank, BUG-0881: negative right, positive left) is tried first,
+    /// up to <see cref="MovementConstants.MaxFlankKeptTurn"/>. Gives the side taken in <paramref name="side"/> (0: none) and the
+    /// largest block's member count in <paramref name="members"/> (the line walked round: summed over a melee's many small
+    /// blocks it made walkers there as patient as round a 32-member line).
     /// </summary>
     /// <remarks>
     /// Each block is a set (a connected component), the turn's edges a min and a max and the side's measure a max, so the
     /// slot order members are visited in changes nothing. Uses the detour scratch, which the detour is done with by now.
     /// </remarks>
-    private static Vector2 FlankTurn(World world, NavGrid grid, UnitStore u, int i, Vector2 pos, int cx, int cy, Vector2 forward, int[] near, int count)
+    private static Vector2 FlankTurn(World world, NavGrid grid, UnitStore u, int i, Vector2 pos, int cx, int cy, Vector2 forward, int[] near, int count, int kept, out int side, out int members)
     {
+        side = 0;
+        members = 0;
         int owner = u.Owner[i];
         float ri = u.Radius[i];
         int[] heads = world.FlankHeads;
@@ -542,12 +591,14 @@ public static class MovementSystem
             if (seed == i || !u.Alive[seed] || u.Owner[seed] != owner || u.State[seed] is not (UnitState.Attacking or UnitState.Casting)) continue;
             float reach = ri + u.Radius[seed] + MovementConstants.AvoidRange;
             if (Vector2.DistanceSquared(u.Position[seed], pos) >= reach * reach || StrikesOurTarget(world, u, i, seed)) continue;
-            if (FlankBlockOf(world, u, i, seed, out int first) < 0) return forward; // an army's front, not a line
+            int size = FlankBlockOf(world, u, i, seed, out int first);
+            if (size < 0) return forward; // an army's front, not a line
             bool seen = false;
             for (int b = 0; b < blocks && !seen; b++) seen = heads[b] == first;
             if (seen) continue;
             if (blocks == heads.Length) return forward;
             heads[blocks++] = first;
+            members = Math.Max(members, size);
             for (int m = first; m >= 0; m = next[m * classes + classOf])
             {
                 if (StrikesOurTarget(world, u, i, m)) continue;
@@ -563,11 +614,35 @@ public static class MovementSystem
         // line both ends lie near 90 degrees, so the shorter arc alone flipped with every jostle of the aim and the walker
         // swung back and forth on the spot. And a walker already walking one way along the line keeps that side (its last
         // step's part across the aim, start-of-tick state), so a turn of the aim mid-way never sends it back.
+        // BUG-0881: one that flanked within FlankMemoryTicks keeps the side it flanked (its flank mark: also across a
+        // re-issued order), up to MaxFlankKeptTurn off the aim: near a long line's end with the goal just beyond it the
+        // end's tangent lies past MaxFlankTurn, and falling through to the other side there sent the walker back the whole
+        // line. Only a kept side with no open ground (a cliff at that end) lets the other side be tried.
         Vector2 last = u.Velocity[i];
         float across = forward.X * last.Y - forward.Y * last.X;
         float slack = MovementConstants.StuckFraction * u.Speed[i];
-        int prefer = across > slack ? 1 : across < -slack ? -1 : rightEnd <= leftEnd ? -1 : 1;
-        return DetourTurn(world, grid, u, i, pos, cx, cy, forward, walls, MovementConstants.MaxFlankTurn, prefer);
+        int moving = across > slack ? 1 : across < -slack ? -1 : 0;
+        int prefer = kept != 0 ? kept : moving != 0 ? moving : rightEnd <= leftEnd ? -1 : 1;
+        return DetourTurn(world, grid, u, i, pos, cx, cy, forward, walls, MovementConstants.MaxFlankTurn, prefer,
+            kept != 0 || moving != 0 ? MovementConstants.MaxFlankKeptTurn : MovementConstants.MaxFlankTurn, out side);
+    }
+
+    // UnitStore.Flank's layout: (tick + 1) << FlankTickShift | members << 1 | side bit.
+    private const int FlankTickShift = 7;
+    private const int FlankMembersMask = 63;
+
+    /// <summary>The tick of the flank step <see cref="UnitStore.Flank"/> mark <paramref name="mark"/> records; meaningless for 0 (never flanked).</summary>
+    internal static int FlankTickOf(int mark) => (mark >> FlankTickShift) - 1;
+
+    /// <summary>
+    /// Whether this flank tick of walker <paramref name="i"/> counts toward its stuck limit: one in max(
+    /// <see cref="MovementConstants.FlankCountStride"/>, <paramref name="members"/> (the largest block's) / <see cref="MovementConstants.FlankMembersPerStride"/>)
+    /// by order age (as <c>QueueOnWaitStride</c>), so the budget grows with the line it walks round (BUG-0881).
+    /// </summary>
+    private static bool FlankCounts(World world, UnitStore u, int i, int members)
+    {
+        int stride = Math.Max(MovementConstants.FlankCountStride, members / MovementConstants.FlankMembersPerStride);
+        return (world.TickNumber - u.OrderTick[i]) % stride == 0;
     }
 
     // World.FlankBlock entries: epoch x 256 + the block's size (1 to MaxPlugCluster), or one of these.
@@ -755,6 +830,7 @@ public static class MovementSystem
         Vector2[] planned = world.PlannedStep;
         float[] remaining = world.PlannedRemaining;
         byte[] action = world.PlannedAction;
+        int[] flankMark = world.PlannedFlank;
         for (int k = 0; k < n; k++)
         {
             int i = (int)(order[k] & 0xFFFFFFFF);
@@ -773,6 +849,7 @@ public static class MovementSystem
                 default:
                     Vector2 step = planned[i];
                     u.Velocity[i] = step;
+                    if (flankMark[i] != 0) u.Flank[i] = flankMark[i];
                     if (step != Vector2.Zero)
                     {
                         u.Position[i] += step;
@@ -1748,8 +1825,9 @@ public static class MovementSystem
     /// The block is a union of intervals and its edges a min and a max, so the result doesn't depend on
     /// the order the walls were collected in (start-of-tick state only): reversed spawns walk bit-equal.
     /// </remarks>
-    private static Vector2 DetourTurn(World world, NavGrid grid, UnitStore u, int i, Vector2 pos, int cx, int cy, Vector2 forward, int walls, float maxTurn, int prefer)
+    private static Vector2 DetourTurn(World world, NavGrid grid, UnitStore u, int i, Vector2 pos, int cx, int cy, Vector2 forward, int walls, float maxTurn, int prefer, float preferMaxTurn, out int taken)
     {
+        taken = 0;
         float[] los = world.DetourLo, his = world.DetourHi;
         float lo = 0f, hi = 0f;
         int loWall = -1, hiWall = -1;
@@ -1776,7 +1854,7 @@ public static class MovementSystem
             bool right = rightFirst == (side == 0);
             float turn = right ? lo : hi;
             int edge = right ? loWall : hiWall;
-            if (edge < 0 || MathF.Abs(turn) > maxTurn) continue;
+            if (edge < 0 || MathF.Abs(turn) > (side == 0 && prefer != 0 ? preferMaxTurn : maxTurn)) continue;
             float c = SimMath.Cos(turn), s = SimMath.Sin(turn);
             var dir = new Vector2(forward.X * c - forward.Y * s, forward.X * s + forward.Y * c);
             int j = world.DetourWall[edge];
@@ -1785,7 +1863,11 @@ public static class MovementSystem
             // Where the walker passes the edge wall: along the tangent, and level with it on this side.
             float passAt = MathF.Max(SimMath.Sqrt(MathF.Max(dist * dist - sum * sum, 0f)), ri);
             Vector2 abreast = u.Position[j] + (right ? rightOf : -rightOf) * sum;
-            if (OpenAlong(grid, cx, cy, pos, dir, ri, passAt, abreast)) return dir;
+            if (OpenAlong(grid, cx, cy, pos, dir, ri, passAt, abreast))
+            {
+                taken = right ? -1 : 1;
+                return dir;
+            }
         }
         return forward;
     }

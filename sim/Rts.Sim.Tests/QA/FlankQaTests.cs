@@ -163,14 +163,14 @@ public class FlankQaTests
     /// </summary>
     [Theory]
     [InlineData(10, 5f)]
-    [InlineData(16, 5f, Skip = "BUG-0881: swings between the ends / runs out of flank budget and gives up")]
-    [InlineData(20, 5f, Skip = "BUG-0881: swings between the ends / runs out of flank budget and gives up")]
-    [InlineData(24, 5f, Skip = "BUG-0881: swings between the ends / runs out of flank budget and gives up")]
-    [InlineData(32, 5f, Skip = "BUG-0881: swings between the ends / runs out of flank budget and gives up")]
+    [InlineData(16, 5f)]
+    [InlineData(20, 5f)]
+    [InlineData(24, 5f)]
+    [InlineData(32, 5f)]
     [InlineData(16, 8f)]
-    [InlineData(32, 8f, Skip = "BUG-0881: swings between the ends / runs out of flank budget and gives up")]
-    [InlineData(16, 13f, Skip = "BUG-0881: swings between the ends / runs out of flank budget and gives up")]
-    [InlineData(32, 13f, Skip = "BUG-0881: swings between the ends / runs out of flank budget and gives up")]
+    [InlineData(32, 8f)]
+    [InlineData(16, 13f)]
+    [InlineData(32, 13f)]
     public void LongOwnRow_UpToTheBlockBound_WalkerFindsAnEnd(int count, float beyond)
     {
         // The targets 14.5 m in front of the row: out of the walker's 14 m sight until it is round, so the count is about
@@ -207,9 +207,9 @@ public class FlankQaTests
     /// left out: M4-H3 keeps a reachable ordered target by design.
     /// </summary>
     [Theory]
-    [InlineData(40, ChaseKind.AttackMove, Skip = "BUG-0880: kept forever behind a front past the block bound")]
-    [InlineData(40, ChaseKind.Retaliate, Skip = "BUG-0880: kept forever behind a front past the block bound")]
-    [InlineData(33, ChaseKind.Retaliate, Skip = "BUG-0880: kept forever behind a front past the block bound")]
+    [InlineData(40, ChaseKind.AttackMove)]
+    [InlineData(40, ChaseKind.Retaliate)]
+    [InlineData(33, ChaseKind.Retaliate)]
     public void ChaseBehindAnOwnRowPastTheBlockBound_IsNotKeptForever(int count, ChaseKind kind)
     {
         (int Held, int Moving, int Flips, int GiveUps) Once(bool f)
@@ -585,12 +585,12 @@ public class FlankQaTests
     /// ticks of a 4,000-tick run (an ordered Attack too: M4-H3's "nobody paces a cliff").
     /// </summary>
     [Theory]
-    [InlineData(ChaseKind.Ordered, 10, 1, Skip = "BUG-0880 (notes: M4-H3's ordered keep paces the cliff foot with the rule off too)")]
-    [InlineData(ChaseKind.Ordered, 10, 5, Skip = "BUG-0880 (notes: M4-H3's ordered keep paces the cliff foot with the rule off too)")]
-    [InlineData(ChaseKind.AttackMove, 10, 5, Skip = "BUG-0880: never given up with the rule on (off: 56-119 ticks)")]
-    [InlineData(ChaseKind.Retaliate, 10, 5, Skip = "BUG-0880: never given up with the rule on (off: 56-107 ticks)")]
-    [InlineData(ChaseKind.AttackMove, 20, 5, Skip = "BUG-0880: never given up with the rule on (off: 58-107 ticks)")]
-    [InlineData(ChaseKind.Ordered, 20, 5, Skip = "BUG-0880 (notes: M4-H3's ordered keep paces the cliff foot with the rule off too)")]
+    [InlineData(ChaseKind.Ordered, 10, 1)]
+    [InlineData(ChaseKind.Ordered, 10, 5)]
+    [InlineData(ChaseKind.AttackMove, 10, 5)]
+    [InlineData(ChaseKind.Retaliate, 10, 5)]
+    [InlineData(ChaseKind.AttackMove, 20, 5)]
+    [InlineData(ChaseKind.Ordered, 20, 5)]
     public void ChaseOfATargetUpASealedCliff_OwnLineShootingItFromTheFoot_StillGivesUp(ChaseKind kind, int rowCount, int chasers)
     {
         (int[] gOff, int[] hOff, int[] mOff) = CliffChase(kind, rowCount, chasers, flank: false, ticks: 4000);

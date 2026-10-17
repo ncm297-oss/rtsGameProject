@@ -126,6 +126,10 @@ public class RangedSplashFuzzQaTests
 
             foreach (DeathEvent e in w.Deaths)
             {
+                // A defeated player's buildings collapse on its defeat tick, and a summon expires: no kill and no loss by
+                // DeathEvent's contract (M5-H2, M4-4b-3b), so they are not in the books (pathing slice 2 fix round 1 moved
+                // the fights: seed 16 saw a player defeated, as CombatFuzzTests' seed 2 did in the first round).
+                if (e.Collapsed || e.Expired) continue;
                 deaths++;
                 if (e.IsBuilding) buildingDeaths++;
                 if (e.KillerOwner == e.VictimOwner) friendly++;

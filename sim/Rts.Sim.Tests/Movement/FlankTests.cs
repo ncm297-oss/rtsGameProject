@@ -357,4 +357,59 @@ public class FlankTests
         };
         AllocationProbe.AssertZero(ticks, _out);
     }
+
+    /// <summary>
+    /// BUG-0881 / BUG-0883 (fix round 1): one Heavy Infantry behind the middle of an own line of 24 Crossbowmen 1 m apart
+    /// (each on its own holding Raider 14.5 m in front, out of the walker's sight), its Move to 5 m beyond the line re-issued
+    /// every <paramref name="every"/> ticks (0: once) to a point a cell over and back (each a new order: a fresh walk, as
+    /// attack-move spam gives). The walker keeps the side it flanked (its flank mark outlives the new order), walks the
+    /// line's 12 m half round its end and arrives; its walk along the line changes direction at most 8 times (before: it
+    /// swung between the ends and gave its walk up at tick 153).
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(3)]
+    [InlineData(7)]
+    public void LongOwnLine_MoveReissued_KeepsItsSideAndArrives(int every)
+    {
+        var sim = new Simulation(TestSim.Config(7, 2, 64, 1024), LocalMovementTests.Flat(80));
+        UnitStore u = sim.World.Units;
+        TestSim.KeepIn(sim, 1);
+        var mid = new Vector2(70f, 80f);
+        const int count = 24;
+        var row = new EntityHandle[count];
+        for (int k = 0; k < count; k++)
+        {
+            Vector2 p = mid + new Vector2(0f, k - (count - 1) / 2f);
+            EntityHandle target = Place(sim, 1, Raider, p + new Vector2(14.5f, 0f));
+            u.Hold[target.Index] = true;
+            Spot(sim, 0, target);
+            row[k] = Place(sim, 0, Crossbowman, p);
+            sim.Enqueue(Command.Attack(0, row[k], target, false));
+        }
+        var staged = new Staged { Sim = sim, Row = row, Melee = new EntityHandle[1] };
+        for (int t = 0; t < 60 && !row.All(h => u.State[h.Index] == UnitState.Attacking); t++) Tick(staged);
+        Assert.True(row.All(h => u.State[h.Index] == UnitState.Attacking), "the row didn't plant");
+        EntityHandle w = Place(sim, 0, HeavyInfantry, mid + new Vector2(-3f, 0.2f));
+        Vector2 goal = mid + new Vector2(5f, 0f);
+        sim.Enqueue(Command.Move(0, w, goal));
+        int arrived = -1, flips = 0, last = 0;
+        float y = u.Position[w.Index].Y;
+        for (int t = 0; t < 600 && arrived < 0; t++)
+        {
+            if (every > 0 && t > 0 && t % every == 0) sim.Enqueue(Command.Move(0, w, goal + new Vector2(0f, t / every % 2 == 1 ? 2f : 0f)));
+            Tick(staged);
+            Vector2 p = u.Position[w.Index];
+            float dy = p.Y - y;
+            y = p.Y;
+            int sign = dy > 0.05f ? 1 : dy < -0.05f ? -1 : 0;
+            if (sign != 0 && last != 0 && sign != last) flips++;
+            if (sign != 0) last = sign;
+            if (Vector2.Distance(p, goal) < 1f || Vector2.Distance(p, goal + new Vector2(0f, 2f)) < 1f) arrived = t;
+            Assert.False(u.State[w.Index] == UnitState.Idle && t > 2 && arrived < 0 && u.GoalCell[w.Index] == -1, $"tick {t}: the walk was given up at {p}");
+        }
+        _out.WriteLine($"Move re-issued every {every} ticks: arrived at tick {arrived}, {flips} turns along the line");
+        Assert.True(arrived >= 0, "never arrived");
+        Assert.True(flips <= 8, $"{flips} turns along the line");
+    }
 }

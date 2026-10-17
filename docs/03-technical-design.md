@@ -1259,8 +1259,9 @@ every brawl gave up three crowd-blocked chases, went reach-only and stood Idle 2
 190 still alive after 5 min). A friend only standing at the target (a ranged unit that can't swing in this slice, a
 worker) does not count: it may never move, and chasers pressing behind it never stopped (a 200-unit cross-map scene).
 Since pathing slice 2 a friend fighting the target from beyond the chaser's reach counts too when the chaser is
-queued behind (or walking round) such friends and its walk reaches its goal (`QueuedBehindOwnLine`, `ReachableOnFoot`; see
-"Implementation (pathing slice 2)"). Nor does a building target, which can take minutes to fall; chasers that find no room
+flanking such friends (a flank step within the stall window, `UnitStore.Flank`), still beside them, its chase walks to a
+standing point in its own reach of the target, and its walk reaches that point (`Flanking`, `QueuedBehindOwnLine`,
+`StandsInReachAtGoal`, `ReachableOnFoot`; BUG-0880; see "Implementation (pathing slice 2)"). Nor does a building target, which can take minutes to fall; chasers that find no room
 at a building give it up as before (slice 1's `QueuedAtRing` keeps those queued at a full ring). A target on another plateau, behind a wall, or outrunning the chaser has no friend of the chaser fighting it,
 so those chases still end. Switching back to the target held just before (`UnitStore.ChasePrev`, set by each straight
 switch, cleared with the target), or to the one it gave up, keeps the stall count: a unit whose scans took two targets
@@ -1305,7 +1306,11 @@ so a scan landing on that tick doesn't give up a reachable target (500 units rou
 that ended at its goal (the goal kept: the nearest ground, the target out of reach) still counts as no route, and a walk
 whose field is still being built (the chase moved its goal a cell) holds the count for that scan. Auto-acquired chases (attack-move,
 retaliation) keep the 10-scan rule. `Combat/OrderedChaseReachTests` (the seed-6 ramp-detour layout, and a target on a
-sealed cliff-top).
+sealed cliff-top). **Pathing slice 2, BUG-0880:** a unit target's chase must also walk to a standing point in the
+chaser's reach (`StandsInReachAtGoal`: the chase's goal, the target's own point or the nearest ground to it, within the
+chaser's range of the target); a walk still under way to the cliff foot below a sealed cliff-top reached by `ReachableOnFoot`
+kept the order alive for ever with the chaser pacing the foot (QA's `FlankQaTests.ChaseOfATargetUpASealedCliff_*` Ordered
+rows, with the flank rule off too). Building targets are unchanged (the stand-off and the surround spots are in reach).
 Known limits of the friend exception: a friend fighting an enemy the chaser can't reach (both on a plateau the chaser
 can't climb) keeps the chaser pressing below for as long as that fight lasts; a target that never dies would keep its
 queued chasers queued. Brawl finish ticks after the fix (QA's scenes; f2879b9, which had no give-up at all, in
@@ -6979,23 +6984,33 @@ chaser's reach). Code: `MovementSystem` (`PlantedOwners`, `OwnPlantedInWay`, `Fl
   brief's "shorter arc": pressed against a long line both edges lie near 90°, the shorter arc flipped with every jostle of
   the aim, and the walker swung 0.15 m back and forth on the spot for a second (measured in a one-walker trace) before it
   gave up. The block no longer covering the straight line is "no longer between": the walker aims at its goal again (the
-  ordinary detour takes over at the line's end, within 90°).
+  ordinary detour takes over at the line's end, within 90°). **Fix round 1 (BUG-0881):** the side a walker flanked is kept
+  for a while (the flank mark, below), ahead of the velocity rule, and a kept or walked side may turn up to
+  `MaxFlankKeptTurn` (180°) off the aim; mid-flank the block is measured against the way to the goal, not the field's next
+  cell; see "Fix round 1".
 - **The step.** The flank direction at full speed plus the overlap push, through the usual `WalkStep` (walls, slides, hard
   walls), taken if it goes at least the progress margin (`StuckFraction` x speed) along the flank direction. It is seldom
   progress toward the aim, so it holds the stuck count like a queued tick, except one tick in
   `MovementConstants.FlankCountStride` (4), which counts (by order age, as `QueueOnWaitStride`): a flank that leads nowhere
   still ends, after about 4 s of flanking (12 m at 3 m/s) instead of 1 s. A flanking walker doesn't push parked friends that
-  tick (`PushAfterStuckTicks`'s rule waits).
-- **No give-up while queued behind its own line** (`CombatSystem`). `FriendFightsTarget` (BUG-0143) also holds when an own
+  tick (`PushAfterStuckTicks`'s rule waits). **Fix round 1 (BUG-0881):** the stride grows with the line
+  (max(`FlankCountStride`, members / `FlankMembersPerStride`)), and the no-progress ticks just after a flank count by it too.
+- **No give-up while flanking its own line** (`CombatSystem`). `FriendFightsTarget` (BUG-0143) also holds when an own
   unit `Attacking` the chaser's **same target unit**, at any range, stands within `QueueRange` (2 m) of the chaser's body
   (queued behind the line, or walking along it: `QueuedBehindOwnLine`, one small query) **and** the chaser's walk reaches its
-  goal on foot (`ReachableOnFoot`, M4-H3 / M5-H1). Building targets keep slice 1's `QueuedAtRing` path unchanged; an ordered
+  goal on foot (`ReachableOnFoot`, M4-H3 / M5-H1); since fix round 1 (BUG-0880) also only when the chaser made a flank step
+  within the stall window (`Flanking`: a front past `MaxPlugCluster` is never flanked, so its back ranks give up as before)
+  and its chase walks to a standing point in its reach (`StandsInReachAtGoal`: not the cliff foot below a target on a
+  sealed cliff). Building targets keep slice 1's `QueuedAtRing` path unchanged; an ordered
   Attack keeps M4-H3's reach rule (it never gave up a reachable target). A chaser stalled for any other reason (another
   plateau, behind a wall, outrun) has no such friend beside it, so those chases still end. A line of own units spanning a
   corridor wall to wall keeps a chaser behind it queued for as long as the line fights that target, as BUG-0143's back ranks.
 - **Constants** (`MovementConstants`, bounded here): `MaxFlankTurn` 135° (the brief's bound is ≤ 150°; pressed against the
   line its ends lie at 90-110°), `FlankCountStride` 4 (≥ 2; 1 would be the old 1 s give-up). The block's bound is
-  `MaxPlugCluster` (32), shared with the plugs.
+  `MaxPlugCluster` (32), shared with the plugs. Fix round 1: `MaxFlankKeptTurn` 180° (a side already kept or walked; at
+  most straight back; a new flank stays within `MaxFlankTurn`), `FlankMembersPerStride` 2 (≥ 1: a 32-member line gets a stride
+  of 16, a 10-member one 5), `FlankMemoryTicks` 20 (≥ 1) and `FlankMemoryTicksPerMember` 3 (≥ 0: 116 ticks after a 32-member
+  line), `FlankKeepMinMembers` 11 (≤ 16, where QA's swings began).
 - **Measured** (`Movement/FlankTests`, flat open ground, every unit's and the hall's hp topped up between ticks; 10 ranged
   units in a row 1 m apart planted on the target from their max range, 10 melee two ranks 3 and 4 m behind the row's middle;
   within 200 ticks = 10 s; before = `FlankRuleOn` off, the same code):
@@ -7070,7 +7085,81 @@ chaser's reach). Code: `MovementSystem` (`PlantedOwners`, `OwnPlantedInWay`, `Fl
   cycle ((-0.044, +0.143) then back, every tick: the sidestep round an Idle friend ahead outweighs the 0.11 m flow step left,
   so it never comes within `ChaseArrival2` of its goal), gives up its walk every 20 ticks, and M4-H3 / M5-H1's ordered-chase
   rule re-walks it, so the wave never ends. No unit is planted then: the flank rule isn't running, it only moved where the
-  unit stands. A pre-existing hole (the cycle is "Known limits (M1)" item BUG-0461), not fixed here.
+  unit stands. A pre-existing hole (the cycle is "Known limits (M1)" item BUG-0461), not fixed here. **Fix round 1:** the
+  spam row (BUG-0883) and the fenced-hall wave rows (BUG-0882) are green; the cycle itself is still there, but a chase whose
+  goal is out of reach no longer keeps on through it (see "Fix round 1" below).
+- **Fix round 1** (QA 2026-10-17-0554: BUG-0880 to BUG-0883).
+  - *The flank mark* (`UnitStore.Flank`, an int a slot): (the tick + 1) x 128 + the largest block's member count x 2 + the
+    side (1 left). The plan pass writes it with each flank step (through `World.PlannedFlank`, applied with the step); it is
+    kept across orders and reset at spawn, and hashed after the unit's other words once non-zero (bit 20 of the state word),
+    so a match with no flank hashes as before (the golden replay is unmoved). A flank round a line of at least
+    `FlankKeepMinMembers` (11) is **recent** for `FlankMemoryTicks` (20) + `FlankMemoryTicksPerMember` (3) a member after its
+    last step. Round a line of up to 10 (the acceptance scenes) the slice-2 rule is as before; QA's swings began at 16; and in
+    a melee's small blocks the memory kept Moves converging on a fight Moving and gave more of them up (QA's 4-point combat
+    rows, seeds 1 / 2: 409 / 413 gave up against 389 / 382 with the rule off; 356 / 362 with the floor).
+  - *Commitment (BUG-0881).* A recent flanker keeps its side ahead of the velocity rule, and a kept or walked side may turn
+    up to `MaxFlankKeptTurn` (180°) off the aim: beside a 24-line's end with the goal 5 m beyond its middle the end lay 170.6°
+    off the field's next cell, past `MaxFlankTurn`, and falling through to the other side sent the walker back down the whole
+    line (QA's trace: up to 1.8 m from one end, back, then again). The other side is taken only where the kept one has no
+    open ground (a cliff at that end). Mid-flank the block is measured against the way to the goal, not the field's next cell
+    (the field doesn't know the line is there: beside its end the next cell lay straight back down the line, clear of it, so
+    the walker stepped back one tick and flanked again the next), and the in-the-way test is skipped. A lone walker's
+    progress step back against the flank it took last tick, while the line still stands between it and its goal, is
+    replaced by the flank: the slide along the line toward the aim's side gained a few cm, and after a re-issued order (a
+    fresh progress estimate: attack-move spam) the walk down the line's far side counted as progress, each such step
+    resetting the count (`Movement/FlankTests.LongOwnLine_MoveReissued_KeepsItsSideAndArrives`: before, 20-50 turns along
+    the line and no arrival; after, 1 turn, arrived at tick 166-169). Not among other walkers, whose jostle it isn't (with
+    it there criterion 1's Heavy Infantry fell to 7 / 10). The 180° bound also holds for a side the walker is walking (its
+    last step, any line size): a re-issued attack-move behind a melee front rank kept walking round it instead of falling
+    through to the other end (with the walked side held to 135°, three of `KeptChase_MeanBound_*`'s rows went red).
+  - *Budget (BUG-0881).* The stride is max(`FlankCountStride`, members of the largest block met / `FlankMembersPerStride`):
+    5 for a 10-member line, 16 for 32 (QA's d = 13 m rows gave up as they reached the end after 4 s). Summed over all the
+    blocks met, a walker in a melee touching many small blocks was as patient as round a 32-member line. And a Move's no-progress ticks while recent
+    count by it too: the walk from the line's end back toward a goal level with where the walker stood is no progress on the
+    field's estimate (it gave up 2 m past a 24-line's end). Only for a walk with no fight in it (combat mode None: a chase
+    is re-aimed and re-walked by combat, and with it attack-movers waiting at QA's walled house, slice 1's
+    `SurroundQaTests.AttackMove_SurroundsTheHouse_OneOpenSideNoGiveUp`, grew patient enough with the surround rule off to
+    squeeze 8 in round the open side's 6 spots, more than the rule's 6), and only for a step that walks on toward the aim
+    (stuck in a crowd after a flank, 500 Moves converging on one point with two owners fighting stayed Moving: 352 Moving and
+    65 fighting at tick 400, against 198 and 137 before the round; 246 and 125 with the round's final rules).
+  - *Keep-alive (BUG-0880).* `FriendFightsTarget`'s slice-2 tail also needs `Flanking` (a flank step within the stall
+    window, `GiveUpScans` x `ScanInterval` ticks: behind a front of 33-40 the walker never flanks, so its chase ends as
+    before) and `StandsInReachAtGoal`: the chase's stand point (the target's own point, or the nearest open ground when that
+    is blocked) within the chaser's range of the target, so a target up a sealed cliff (goal: the cliff foot) is given up.
+    M4-H3's ordered keep and BUG-0731's spot keep take the same test (QA's Ordered cliff rows paced the foot with the rule
+    off too); a building chase holding a surround spot passes it at once (read only: `SurroundRule.HoldsSpot`, nothing
+    claimed).
+  - *BUG-0882.* With the same test a building whose every open cell lies out of reach (a hall ringed two cells deep by
+    trees) ends an ordered or spot-walking chase: the walk is judged by the nearest open ground, 4 m off the footprint. The
+    one Heavy Infantry in BUG-0461's limit cycle by the tree ring was kept for ever by the stopped-short rule (M5-H1), so the
+    AI wave never ended; `Combat/OrderedChaseReachTests.AnOrderedAttackOnAHallRingedByTrees_IsGivenUp_NotPacedForEver`, and
+    QA's `AiMilitaryQaTests.AWaveWhoseMembersAllStandByATargetNoneCanStrike_*(10)` and `SimHardeningM5H1QaTests.FencedHall_*(10)`
+    are green.
+  - *BUG-0883.* The gap-10 spam row is green: one order 2,979 damage in 400 ticks, the spam over intervals 1-20 ticks
+    mean 101.5 %, worst 96 % (bound 90 / 80; before the round 86.6 / 71 %). What carries it is the walked side's 180° bound
+    (above): a spammed attack-move behind its own front rank keeps walking the side it was walking. The other four rows:
+    gap 6 107.4 / 98 %, gap 8 x 4 ranks 93.8 / 88 %, phase 1 95.1 / 86 %, phase 3 95.7 / 86 %.
+  - Measured after the round (the table above re-run, struck / gave up): 1. Attack on the hall 8 / 10 (exactly the bound,
+    as before), 10 / 10, 0 give-ups; 2. attack-move past the hall 9 / 10, 9 / 10; past the siege unit 10 / 10, 10 / 10;
+    retaliation 9 / 10, 9 / 10 (0 give-ups everywhere); 3. Move: arrived 9 / 10, 10 / 10. Criterion 1's Heavy Infantry row
+    sits on its bound and moves with any change to the crowd's timing (7 to 9 / 10 across this round's variants: the last
+    two or three strike at ticks 190-260, on the hall's far faces, slice 3's fill order).
+  - QA's long rows (`FlankQaTests.LongOwnRow_UpToTheBlockBound_WalkerFindsAnEnd`, 1 m apart, targets out of sight; arrived
+    at tick, side flips): 10, 5 m beyond: 57, 3; 16: 72 / 71 / 71 (5 / 8 / 13 m), 1 flip each; 20: 85, 1; 24: 99, 1; 32:
+    125 / 125 / 125, 1 (before the round: 16-32 gave up at ticks 72-153; rule off: all give up at 31). Past the bound (33, 48)
+    still bit-equal to the rule off. QA's cliff rows (`ChaseOfATargetUpASealedCliff_*`): every chaser gives the cliff-top
+    target up at ticks 55-74 and holds nothing over the last 500 of 4,000 ticks (Ordered rows too; with the rule off the
+    Ordered ones now give up at 56-119 as well); behind a front of 33 / 40 (`ChaseBehindAnOwnRowPastTheBlockBound_*`) the
+    chaser gives up 3 times and is Idle, holding nothing, over the last 500 ticks, as with the rule off.
+  - Crowd rows (`FlankCrowdRowsReport`): every combat-off row hash-equal as before; 500 random goals, combat on, seeds 1 / 2:
+    33 / 25 gave up (33 / 29 off); 500 to 4 points, combat on, seeds 1 / 2: arrived 68 / 51, gave up 356 / 362 (32 / 38 and
+    389 / 382 off). Both are chaotic (seeds 1-6 of the 4-point row moved by -42 to +31 between this round's variants) and
+    stay held to the ±5 band on seeds 1-2 only.
+  - Cost (paired base 3ec22ee / this, alternated, a fresh process each, the machine loaded by other tracks): 500 v 500
+    brawl ticks 5-205 3.42, 3.42, 3.40 / 3.39, 3.40, 3.40 ms; ticks 205-605 4.17, 4.08, 4.12 / 3.84, 3.93, 3.98; mixed brawl
+    5-205 3.37, 3.39, 3.41 / 3.38, 3.35, 3.36; 500 moving 1.11, 1.12, 1.11 / 1.15, 1.12, 1.11; 2,500 tight blob 7.38, 7.45,
+    7.36 / 7.43, 7.42, 7.37. Memory: `UnitStore.Flank` and `World.PlannedFlank`, an int a slot each (32,816 bytes on the
+    1,024 map's 4,096 slots, inside QA's memory bound's margin, which is not moved). 0 B a tick (the probes above green).
 - **Not yet (slice 3):** see slice 1's list; also a flank round a block bigger than 32 (an army's front: its back ranks still
   queue behind it, as before).
 

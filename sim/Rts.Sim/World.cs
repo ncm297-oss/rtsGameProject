@@ -82,6 +82,7 @@ public sealed partial class World
         FlankNext = new int[config.UnitCapacity * RadiusClassCount];
         FlankQueue = new int[Movement.MovementConstants.MaxPlugCluster];
         FlankHeads = new int[Movement.MovementConstants.MaxPlugCluster];
+        PlannedFlank = new int[config.UnitCapacity];
         DetourLo = new float[config.UnitCapacity];
         DetourHi = new float[config.UnitCapacity];
         DetourWall = new int[config.UnitCapacity];
@@ -459,6 +460,9 @@ public sealed partial class World
 
     /// <summary>Scratch for the flank rule: the first members of the blocks one walker's test met (each block counted once); derived, not hashed.</summary>
     internal int[] FlankHeads { get; }
+
+    /// <summary>Scratch for the flank rule: per unit, the flank mark the plan pass writes into <see cref="Entities.UnitStore.Flank"/> when the step applies (0: none this tick); derived, not hashed.</summary>
+    internal int[] PlannedFlank { get; }
 
     /// <summary>Number of distinct unit radii in <see cref="Data"/> (the plug test depends on the walker's radius only).</summary>
     internal int RadiusClassCount { get; }

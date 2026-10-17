@@ -139,6 +139,16 @@ internal static class SurroundRule
         return Vector2.DistanceSquared(u.Position[i], SpotPoint(min, max, w, h, claim - first, r + CombatConstants.BuildingStandOff)) > r * r;
     }
 
+    /// <summary>Whether unit <paramref name="i"/> (<see cref="Applies"/>) holds a claim on a spot round its building (read only: no claim is taken or let go).</summary>
+    internal static bool HoldsSpot(World world, int i)
+    {
+        if (!Applies(world, i)) return false;
+        int b = world.Units.Target[i].Index;
+        Ring(world, b, out _, out _, out int w, out int h);
+        int count = SpotCount(w, h), first = FirstKey(world, i, b), claim = world.SurroundClaim[i];
+        return claim >= first && claim < first + count && world.SurroundHolder[claim] == i + 1;
+    }
+
     /// <summary>Unit <paramref name="i"/> lets go of the spot it claims, if any.</summary>
     internal static void Release(World world, int i)
     {

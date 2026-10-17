@@ -65,6 +65,13 @@ public sealed class UnitStore
     /// walk-back per order, so a corridor can't bounce a unit back and forth forever. Reset by a new order.
     /// </summary>
     public readonly int[] WalkBack;
+    /// <summary>
+    /// Pathing slice 2 (BUG-0881): the unit's last flank round its own planted line, 0 if it never flanked: (the tick + 1)
+    /// x 128 + the blocks' member count (0-63) x 2 + the side (1 left, 0 right). For <c>MovementConstants.FlankMemoryTicks</c>
+    /// after it the walker keeps that side and the flank's slower stuck count, across a re-issued order too (BUG-0883); combat
+    /// reads it as "flanking" (BUG-0880). Kept across orders, reset at spawn; hashed when non-zero.
+    /// </summary>
+    public readonly int[] Flank;
     /// <summary>Holding position (<see cref="CommandKind.HoldPosition"/>): never shoved and never walks back. Cleared by the next unqueued order.</summary>
     public readonly bool[] Hold;
     /// <summary>Number of shift-queued orders waiting (0 to <see cref="OrderConstants.QueueCapacity"/>); slot i's queue is entries <c>i * QueueCapacity</c> on.</summary>
@@ -253,6 +260,7 @@ public sealed class UnitStore
         StuckTicks = new int[capacity];
         BestRemaining = new float[capacity];
         WalkBack = new int[capacity];
+        Flank = new int[capacity];
         Hold = new bool[capacity];
         QueueCount = new int[capacity];
         QueueKind = new CommandKind[capacity * OrderConstants.QueueCapacity];
@@ -342,6 +350,7 @@ public sealed class UnitStore
         StuckTicks[index] = 0;
         BestRemaining[index] = float.PositiveInfinity;
         WalkBack[index] = WalkBackNone;
+        Flank[index] = 0;
         Hold[index] = false;
         ClearQueue(index);
         ClearEconomy(index);
