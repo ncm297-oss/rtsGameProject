@@ -219,6 +219,49 @@ tools/
 5. Add the pack to the licensing log below in the same commit.
 6. Check in game at RTS zoom, take a screenshot, compare against the placeholder.
 
+### Look test (M6-V10, 2026-10-17)
+
+`game/tests/LookTest.tscn` puts the owner's humanoid stack beside a stylized stand-in and today's
+capsule on flat level-0 ground under the real `RtsCamera` (55° pitch, default zoom 40 m), 3 m apart.
+Screenshots: [default zoom](images/look-test-2026-10-17.png), [max zoom-out, 60 m](images/look-test-2026-10-17-far.png).
+The files were copied by hand into `game/assets/models/looktest/` (11 files, 22.1 MB) under their
+pack names; the asset manifest and `tools/import-assets.ps1` (steps 2-3 above) land with the art pass,
+which also renames to snake_case. Findings:
+
+- **Universal Base Character (Superhero_Male_FullBody, the only male in the Standard edition):**
+  14,318 triangles (body 12,566, hair/brows 984, eyes 768), about 4.8× the 3k unit budget, so the
+  art pass must decimate. Textures: body base colour, normal and roughness at 2048², hair base colour
+  and normal at 2048², eyes 256². At RTS zoom the 2048² detail is invisible; 512² would do. The
+  glTF names two textures that aren't in the pack under those names (`T_Hair_1_Normal_png.png`,
+  `T_Eye_Normal_png.png`); they were copied from `T_Hair_1_Normal.png` / `T_Eye_Normal.png` under the
+  names the glTF expects. Godot imports the glTF's textures as lossless 2D without mipmaps; their
+  `.import` files were set to VRAM compressed + mipmaps (normal maps flagged), which the art pass's
+  import script should do too.
+- **Scale and facing:** 1.82 m tall as imported (the 1.8 m rule holds with no scale). It faces +Z
+  (glTF's convention, toward the camera), not this doc's -Z: the manifest's rotation fix applies.
+- **Animation:** the UAL1 clips drive the character directly. Both use the same 65-bone rig with the
+  same bone names, and Godot puts both skeletons at `Armature/Skeleton3D`, so the library's track paths
+  resolve with no BoneMap retarget (the pack's `Godot_Setup.png` BoneMap / humanoid profile is needed
+  only to retarget other rigs, e.g. Mixamo). Godot's importer reads the `_Loop` suffix as the loop flag
+  and drops it: the clips are `Idle`, `Walk`, `Sword_Attack`, `Death01`, ... (43 in UAL1 Standard).
+  `Walk` is in place in the non-`_RM` file.
+- **Team colour:** no slot to recolour. The character's materials are `MI_Hair_1`, `MI_Eyes` and one
+  body material `MI_Superhero_Male`; the `team` slot has to come from an outfit material in the art pass.
+- **Outfits not used:** a Modular Outfit (e.g. `Male_Ranger`) would attach without Blender (same
+  65-bone skeleton), but each outfit ships three 4096² textures (about 30 MB) plus its own 2048² body
+  set (about 8.5 MB), which breaks the look test's ~40 MB budget. Downsample them in the art pass.
+- **Stylized stand-in:** Ultimate Fantasy RTS has no characters (buildings and nature only), so the
+  stand-in is `Barracks_FirstAge_Level1.fbx`. Godot 4.7 imports the FBX natively with no errors:
+  1,466 triangles, eight colour-only materials, no textures. The pack is authored about 1 m across,
+  so the test scales it ×5.57 to the barracks' 3-cell footprint (a manifest scale for the whole pack).
+- **The read (dev's):** at the default zoom the character is about 24 px tall, the capsule 27 px.
+  It reads as a person with realistic proportions, the idle pose is visible, and the image isn't
+  soft. But the bare skin-tone body has little contrast on the sand-coloured ground and is thinner
+  than the capsule, so it's harder to spot. At 60 m it's about 15 px, an orange speck: the silhouette
+  alone won't identify a unit slot there. Clothing, team colour and the selection rings will have to
+  carry it. The stylized barracks reads well at both zooms (chunky shapes, flat colours) and doesn't
+  clash with the realistic figure at this distance.
+
 ### Animation setup
 
 - The Quaternius Universal characters and both Universal Animation Libraries share one humanoid
@@ -236,6 +279,6 @@ Every third-party asset in the repo gets a row, added in the same commit that im
 
 | Asset / pack | Author | Source URL | License | Version / date | Used for |
 | --- | --- | --- | --- | --- | --- |
-
-No third-party assets are in the repository yet. The first rows land with the first imported
-pack in M6.
+| Quaternius – Universal Base Characters (Standard) | Quaternius | <https://quaternius.com/packs/universalbasecharacters.html> | CC0 1.0 (pack's `License_Standard.txt`) | Standard (free) edition, no version number; downloaded 2026-10-08 | Look test (M6-V10): `Superhero_Male_FullBody.gltf` + `.bin` + 7 textures in `game/assets/models/looktest/`, from `asset-sources/Universal Base Characters[Standard]/Universal Base Characters[Standard]/Base Characters/Godot - UE/` |
+| Quaternius – Universal Animation Library (Standard) | Quaternius | <https://quaternius.com/packs/universalanimationlibrary.html> | CC0 1.0 (pack's `License.txt`) | UAL1 Standard, no version number; downloaded 2026-10-08 | Look test (M6-V10): `UAL1_Standard.glb` (no root motion), from `asset-sources/Universal Animation Library[Standard]/Universal Animation Library[Standard]/Unreal-Godot/` |
+| Quaternius – Ultimate Fantasy RTS | Quaternius | <https://quaternius.com/packs/ultimatefantasyrts.html> | CC0 1.0 (pack's `License.txt`; its header says "Ultimate Platformer Pack", a slip in the pack) | Aug 2022 (folder `quaternius-ultimate-fantasy-rts-2022-08`) | Look test (M6-V10): `Barracks_FirstAge_Level1.fbx`, from `asset-sources/quaternius-ultimate-fantasy-rts-2022-08/Ultimate Fantasy RTS - Aug 2022/FBX/` |
