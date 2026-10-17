@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-16-0847, task M6-VH2 (QA) |
 | System | view tests: `game/tests/ShellTest.cs` (`Flow`, `SkirmishBoot`), `AiSeatTest` (dev-owned; QA's `QaM6V2Test`, `QaM6V3Test`, `QaM6V7Test`, `QaShellTest`, `QaVh1Test` fixed by QA in M6-VH2) |
-| Fixed by | |
+| Fixed by | 2e4313a (M6-V5, session 2026-10-16-1654): `ShellTest.Flow` / `SkirmishBoot` / `FreeForAll` and `AiSeatTest.FromTheMenu` boot `Main` on a per-process `user://<scene>-<pid>/settings.cfg` that is never written; both scenes read the player's `settings.cfg` bytes before and after the run and fail if they differ. QA (M6-V5): the player's file with a rebound `[keys] order_stop` kept its md5 over the windowed `ShellTest`, the 61-scene loop and the smoke; no per-process folder left behind. Closed by the Producer at the 1654 ACCEPT |
 
 ## Repro
 1. `grep -ln "Main.tscn" game/tests/*.cs` and check each for `SettingsPath`: `AiSeatTest`, `QaM6V2Test`, `QaM6V3Test`,

@@ -685,8 +685,11 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
 
 - [ ] Main menu, skirmish setup (map, 2-4 slots, faction, difficulty, color, team), pause menu. (M6-V1, 2026-10-11: menu,
       seed / map size, pause. M6-V2, 2026-10-12: faction and difficulty per slot. M6-V3, 2026-10-13: a colour per slot from
-      `ui.json`'s 8-colour table, and the menu's match opens as docs/02 says (a Town Hall and 5 workers a side). Left: 2-4
-      slots, team.)
+      `ui.json`'s 8-colour table, and the menu's match opens as docs/02 says (a Town Hall and 5 workers a side). M6-V5,
+      2026-10-16: 2-4 slots (Add player / Remove player; slot 1 the local human, slots 2-4 AI seats each with its own faction,
+      difficulty and colour; `--players 2..4`, per-slot `--ai`; four bases on the generator's four start locations; the
+      N-seat Victory / Defeat / Draw and stats; verified by `ShellTest`, `FreeForAllTest` and QA's `QaM6V5Test`). Left: team
+      (STATE Requests 38, sim).)
 - [ ] Victory/defeat detection and post-match stats screen. (M5-4b, 2026-10-13: the sim's detection, `World.IsDefeated` /
       `DefeatEvents` / `Simulation.MatchOver`. M6-V4, 2026-10-13: the Victory / Defeat / Draw banner through the pause path
       and the stats screen with what the sim counts today (kills, losses, gold / wood in hand, length, defeat times). Left:
