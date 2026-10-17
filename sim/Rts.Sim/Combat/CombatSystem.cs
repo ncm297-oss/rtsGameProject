@@ -775,8 +775,10 @@ public static class CombatSystem
     /// <paramref name="i"/>'s own reach of its target unit (BUG-0143): then a standing point in reach exists on foot and
     /// a stalled chase is only queued behind its own side (a brawl's back ranks), not cut off (another plateau, behind a
     /// wall) or outrun, and the fight there frees the place within a few hits. A friend merely standing there (a worker)
-    /// may never move, so it doesn't count, nor does one shooting from farther than the chaser's own reach (M4-2b); nor
-    /// does a building target, which can take minutes to fall. Runs only when a chase stalls.
+    /// may never move, so it doesn't count, nor does one shooting from farther than the chaser's own reach (M4-2b), unless
+    /// the chaser is queued behind (or walking round) such a friend fighting the same target and its walk reaches its goal
+    /// (pathing slice 2: <see cref="QueuedBehindOwnLine"/>, <see cref="ReachableOnFoot"/>); nor does a building target, which
+    /// can take minutes to fall (slice 1's <see cref="QueuedAtRing"/> handles those). Runs only when a chase stalls.
     /// </summary>
     private static bool FriendFightsTarget(World world, int i)
     {
@@ -795,6 +797,33 @@ public static class CombatSystem
             if (j == i || !u.Alive[j] || u.Owner[j] != owner || u.State[j] != UnitState.Attacking) continue;
             float reach = range + u.Radius[t] + u.Radius[j];
             if (Vector2.DistanceSquared(at, u.Position[j]) <= reach * reach) return true;
+        }
+        // Pathing slice 2: a friend fighting it from beyond the chaser's reach counts too, when the chaser is queued behind
+        // (or flanking along) such friends and its walk reaches its goal: movement walks it round their line.
+        return world.FlankRuleOn && QueuedBehindOwnLine(world, i) && ReachableOnFoot(world, i);
+    }
+
+    /// <summary>
+    /// Pathing slice 2: whether a unit of <paramref name="i"/>'s owner that is <c>Attacking</c> <paramref name="i"/>'s own
+    /// target unit (from any range: a crossbow line shooting it) stands within <see cref="Movement.MovementConstants.QueueRange"/>
+    /// of <paramref name="i"/>'s body: the chaser is queued behind its own planted line, or walking round it (the flank
+    /// rule walks along the line, touching it). One small spatial query, only when a chase stalls.
+    /// </summary>
+    private static bool QueuedBehindOwnLine(World world, int i)
+    {
+        UnitStore u = world.Units;
+        EntityHandle target = u.Target[i];
+        int owner = u.Owner[i];
+        float ri = u.Radius[i];
+        Vector2 pos = u.Position[i];
+        int[] found = world.Neighbors; // movement's scratch: free in phase 7
+        int n = Math.Min(world.Spatial.QueryRadius(pos, ri + world.MaxUnitRadius + Movement.MovementConstants.QueueRange, found), found.Length);
+        for (int k = 0; k < n; k++)
+        {
+            int j = found[k];
+            if (j == i || !u.Alive[j] || u.Owner[j] != owner || u.State[j] != UnitState.Attacking || u.TargetIsBuilding[j] || u.Target[j] != target) continue;
+            float reach = ri + u.Radius[j] + Movement.MovementConstants.QueueRange;
+            if (Vector2.DistanceSquared(pos, u.Position[j]) <= reach * reach) return true;
         }
         return false;
     }

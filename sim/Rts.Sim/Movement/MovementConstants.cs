@@ -116,4 +116,19 @@ public static class MovementConstants
     /// not in the way.
     /// </summary>
     public const float CastCorridorSlack = 0.1f;
+
+    /// <summary>
+    /// Largest turn (radians) the flank rule takes away from the aim (pathing slice 2): 135 degrees. A walker pressed
+    /// against its own planted line sees the line's end at about 90-110 degrees (its own touching neighbour blocks the
+    /// whole half-plane), past <see cref="MaxDetourTurn"/>; much more than this would be walking back the way it came.
+    /// The brief's bound is 150 degrees.
+    /// </summary>
+    public const float MaxFlankTurn = 2.3561945f;
+
+    /// <summary>
+    /// A flank step holds the stuck count, except one tick in this many, which counts (pathing slice 2): walking along the
+    /// line is no progress toward the aim, yet it is how the walker gets there; the count still rises, so a flank that
+    /// leads nowhere ends (4: a walker gives up after about 4 s of flanking, 12 m at 3 m/s, not 1 s).
+    /// </summary>
+    public const int FlankCountStride = 4;
 }

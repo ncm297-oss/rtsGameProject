@@ -77,6 +77,11 @@ public sealed partial class World
         RadiusClassOfType = new int[config.Data.Units.Length];
         RadiusClassCount = RadiusClasses(config.Data, RadiusClassOfType);
         PlugAnswers = new long[config.UnitCapacity * config.PlayerCount * RadiusClassCount];
+        FlankBlock = new long[config.UnitCapacity * RadiusClassCount];
+        FlankFirst = new int[config.UnitCapacity * RadiusClassCount];
+        FlankNext = new int[config.UnitCapacity * RadiusClassCount];
+        FlankQueue = new int[Movement.MovementConstants.MaxPlugCluster];
+        FlankHeads = new int[Movement.MovementConstants.MaxPlugCluster];
         DetourLo = new float[config.UnitCapacity];
         DetourHi = new float[config.UnitCapacity];
         DetourWall = new int[config.UnitCapacity];
@@ -265,6 +270,9 @@ public sealed partial class World
     /// <summary>Test seam: false turns the surround rule off, so a scene can print the before / after counts (pathing slice 1).</summary>
     internal bool SurroundRuleOn { get; set; } = true;
 
+    /// <summary>Test seam: false turns the flank rule off (movement's walk round its own planted line, and combat's "queued behind its own line" keep), so a scene can print the before / after counts (pathing slice 2).</summary>
+    internal bool FlankRuleOn { get; set; } = true;
+
     /// <summary>The armor class buildings take damage as (<see cref="CombatConstants.StructureClassKey"/>); -1 when the data has none.</summary>
     internal int StructureClass { get; }
 
@@ -429,8 +437,28 @@ public sealed partial class World
     /// </summary>
     internal long[] PlugAnswers { get; }
 
-    /// <summary>The movement pass <see cref="PlugAnswers"/> are valid for: bumped at the start of each pass that reads them; derived, not hashed.</summary>
+    /// <summary>The movement pass <see cref="PlugAnswers"/> (and <see cref="FlankBlock"/>) are valid for: bumped at the start of each pass that reads them; derived, not hashed.</summary>
     internal long PlugEpoch { get; set; }
+
+    /// <summary>
+    /// Scratch for <see cref="Movement.MovementSystem"/>'s flank rule (pathing slice 2): per unit and walker radius class, the
+    /// own planted block it belongs to as worked out in pass <see cref="PlugEpoch"/> (epoch x 256 + the block's size, or a
+    /// marker for "bigger than <see cref="Movement.MovementConstants.MaxPlugCluster"/>" / "being searched"), so each block is
+    /// searched about once per pass; derived, not hashed.
+    /// </summary>
+    internal long[] FlankBlock { get; }
+
+    /// <summary>Scratch for the flank rule: per unit and radius class, the first member of its block (the head of the <see cref="FlankNext"/> list); derived, not hashed.</summary>
+    internal int[] FlankFirst { get; }
+
+    /// <summary>Scratch for the flank rule: per unit and radius class, the next member of its block, -1 at the end; derived, not hashed.</summary>
+    internal int[] FlankNext { get; }
+
+    /// <summary>Scratch for the flank rule: one block search's members, in visiting order; derived, not hashed.</summary>
+    internal int[] FlankQueue { get; }
+
+    /// <summary>Scratch for the flank rule: the first members of the blocks one walker's test met (each block counted once); derived, not hashed.</summary>
+    internal int[] FlankHeads { get; }
 
     /// <summary>Number of distinct unit radii in <see cref="Data"/> (the plug test depends on the walker's radius only).</summary>
     internal int RadiusClassCount { get; }

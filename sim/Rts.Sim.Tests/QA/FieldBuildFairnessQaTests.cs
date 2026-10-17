@@ -488,7 +488,13 @@ public class FieldBuildFairnessQaTests
             // - World.SurroundHolder gains a layer per owner (BUG-0732): one more player's 256 building slots x 36 spots x 4 B
             //   = 36,864 bytes.
             // - about 900 bytes of the probe's rounding. 232,233,296 measured; the bound keeps the same 72 KB margin over it.
-            Assert.True(bytes < 232_306_000, $"{bytes / 1e6:F1} MB");
+            // Pathing slice 2 re-baselines (the flank rule's block cache, docs/03 "Implementation (pathing slice 2)"), itemised:
+            // - World.FlankBlock (a long per unit slot per radius class: 3 classes today), FlankFirst and FlankNext (an int
+            //   each, the same): 4,096 x 3 x 16 = 196,608 bytes + three 24-byte headers = 196,680.
+            // - World.FlankQueue and FlankHeads (MaxPlugCluster ints each): 2 x (128 + 24) = 304.
+            // 232,430,952-232,431,384 measured (+197.8 KB: these 196,984 bytes and about 800 of rounding); the bound moves by
+            // the same 196,984 bytes, the same 72 KB margin over it.
+            Assert.True(bytes < 232_502_984, $"{bytes / 1e6:F1} MB");
         }
     }
 }

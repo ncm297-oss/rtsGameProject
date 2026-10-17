@@ -1258,8 +1258,10 @@ keeps the target (its scan still re-picks the best target every 4 ticks). Withou
 every brawl gave up three crowd-blocked chases, went reach-only and stood Idle 2-9 m from the enemy (500 v 500: 213 v
 190 still alive after 5 min). A friend only standing at the target (a ranged unit that can't swing in this slice, a
 worker) does not count: it may never move, and chasers pressing behind it never stopped (a 200-unit cross-map scene).
-Nor does a building target, which can take minutes to fall; chasers that find no room at a building give it up as
-before. A target on another plateau, behind a wall, or outrunning the chaser has no friend of the chaser fighting it,
+Since pathing slice 2 a friend fighting the target from beyond the chaser's reach counts too when the chaser is
+queued behind (or walking round) such friends and its walk reaches its goal (`QueuedBehindOwnLine`, `ReachableOnFoot`; see
+"Implementation (pathing slice 2)"). Nor does a building target, which can take minutes to fall; chasers that find no room
+at a building give it up as before (slice 1's `QueuedAtRing` keeps those queued at a full ring). A target on another plateau, behind a wall, or outrunning the chaser has no friend of the chaser fighting it,
 so those chases still end. Switching back to the target held just before (`UnitStore.ChasePrev`, set by each straight
 switch, cleared with the target), or to the one it gave up, keeps the stall count: a unit whose scans took two targets
 in turn (one drifting in and out of its sight) restarted the count every scan and chased forever. A switch to any
@@ -6927,8 +6929,150 @@ three arrays on `World`, `CombatConstants.SurroundSpotsPerCell`. No `Command`, n
   and the Sappers 4.8-5.7× the Heavy Infantry's damage per cost (D19 alone: 15.6 / 43.8 / 68.7 s and 13.6 / 36.1 / 57.4 s).
   Against the 20 Raiders (D-H5, BUG-0721): Catapults 2.8 / 1.7 / 1.6×, Sappers 3.3-4.1×; the two Catapult cells under 2×
   are pinned as measured (BUG-0780), the band's 12 cells stay the Heavy Infantry's.
-- **Not yet (slice 2):** a melee unit blocked by its own standing ranged units routing round them, unit-v-unit crowding away
-  from buildings, smarter fill order (far faces first for the units that arrive last).
+- **Not yet (slice 3):** unit-v-unit crowding away from buildings, smarter fill order (far faces first for the units that
+  arrive last: the House row's far-corner jam). Slice 2 (below) routes a unit blocked by its own planted line round it.
+
+### Implementation (pathing slice 2)
+
+"Flank through your own line" (owner playtest note 5: "infantry behind crossbowmen get stuck instead of going around them").
+A melee unit queued behind its own planted ranged line (own units `Attacking` or `Casting`: hard walls, never shoved) used to
+press into the line: the detour (M1-4d-3) sees only the 3 m round the walker and turns at most `MaxDetourTurn` (90°), and
+pressed against a 10 m line both of its ends lie past 90°. The walker stalled, gave up its walk after 1 s, and a chase that
+wasn't an ordered Attack gave the target up after 2 s (`FriendFightsTarget` ignored a friend shooting from beyond the
+chaser's reach). Code: `MovementSystem` (`PlantedOwners`, `OwnPlantedInWay`, `FlankTurn`, `FlankBlockOf`,
+`StrikesOurTarget`, the flank step in `Plan`; `DetourTurn` takes the turn bound and a side preference), `CombatSystem`
+(`FriendFightsTarget` widened, `QueuedBehindOwnLine`), two `MovementConstants`, scratch on `World` (`FlankBlock`,
+`FlankFirst`, `FlankNext`, `FlankQueue`, `FlankHeads`: derived, not hashed), the test seam `World.FlankRuleOn`. No
+`Command`, no data field, no `rules.json` knob, nothing new hashed.
+
+- **When.** In the plan pass, for a walker whose planned step made **no progress** (the tick would be stuck or queued), with a
+  direction to its aim, whose owner has a unit `Attacking` or `Casting` at all (`PlantedOwners`: one pass over the slots,
+  once per pass, only once a walker is stuck; a march or a crowd row with no fight skips the rest), and with an own
+  `Attacking` / `Casting` unit **in its way** among the neighbours `Plan` already holds: within `AvoidRange` (1 m) of
+  touching, its centre ahead of the line to the aim and inside the walker's swept corridor (the two radii off the line). No
+  query for that test. Every walk (a Move, a chase, an attack-mover's leg, a walk home), and also near the goal: the
+  near-goal "no detour" exception is about the walker's own group's blob, which this is not.
+- **The block.** The seeds are the walker's own `Attacking` / `Casting` neighbours within `AvoidRange` of touching it; the
+  block is every own planted unit linked to a seed by gaps under the walker's diameter (too close to pass between), the plug
+  clusters' rule (BUG-0045) for own fighters. A block of more than `MaxPlugCluster` (32) is an army's front, not a line to
+  walk round: no flank. **Cached** like the plug answers (BUG-0044): the block depends on its members and the walker's radius
+  only, nothing it reads changes within the plan pass, so `FlankBlockOf` searches it breadth first (one small query per
+  member, stopping at 33) and writes, for every member it visits and per radius class, the block's size (or "too big")
+  stamped with `PlugEpoch`, its first member and a next-member chain; a walker behind a known block makes no query. A search
+  that meets a member already answered has met a block too big to finish (a finished one holds all its members). The block
+  is a set (a connected component), so the slot order changes nothing. First built with one 8 m query per stuck walker and
+  the block grown inside it: the 500 v 500 brawl's front (50 wide) then looked like lines of under 32 inside every 8 m disc,
+  ~430 walkers a tick searched and ~260 flanked along their own front for nothing (the deaths were the same), and the brawl
+  row went from 3.2 to 6.0 ms a tick (11 ms over ticks 205-605): the brief's "one query" bound, kept per walker, was the
+  costly reading. **Left out:** a unit striking the walker's own target **building** from within the walker's reach of its
+  footprint (`StrikesOurTarget`): it holds a surround spot, and walking round a full ring finds none the surround rule
+  hasn't offered (QA's slice-1 rows: the waiters circled the ring and left a spot freed by a retreat untaken,
+  `SurroundQaTests.AStrikerOrderedAway_*`; and walled on three sides the off-rule count rose past the on-rule one,
+  `AttackMove_SurroundsTheHouse_OneOpenSideNoGiveUp`). Strikers round an enemy *unit* stay in the block: walking round them
+  reaches its far side (criterion 2: 4 of 10 struck with them left out, 9-10 with them in). Enemy units are never in the
+  block: they are not the walker's own (BUG-0045's plugs and cones are unchanged).
+- **The turn.** The members' detour intervals (as M1-4d-3, no reach limit) chained to the straight line give the block's two
+  edges; the walker turns toward one, by at most `MovementConstants.MaxFlankTurn` (135°), on open ground by the walkers' own
+  rule (`OpenAlong`), else the other side, else no flank. **Which side:** the nearer end, measured as how far the block reaches
+  across the aim on each side (body edge), ties to the right; and a walker already walking one way along the line (its last
+  step's part across the aim, start-of-tick velocity, above `StuckFraction` x its speed) keeps that side. Deviation from the
+  brief's "shorter arc": pressed against a long line both edges lie near 90°, the shorter arc flipped with every jostle of
+  the aim, and the walker swung 0.15 m back and forth on the spot for a second (measured in a one-walker trace) before it
+  gave up. The block no longer covering the straight line is "no longer between": the walker aims at its goal again (the
+  ordinary detour takes over at the line's end, within 90°).
+- **The step.** The flank direction at full speed plus the overlap push, through the usual `WalkStep` (walls, slides, hard
+  walls), taken if it goes at least the progress margin (`StuckFraction` x speed) along the flank direction. It is seldom
+  progress toward the aim, so it holds the stuck count like a queued tick, except one tick in
+  `MovementConstants.FlankCountStride` (4), which counts (by order age, as `QueueOnWaitStride`): a flank that leads nowhere
+  still ends, after about 4 s of flanking (12 m at 3 m/s) instead of 1 s. A flanking walker doesn't push parked friends that
+  tick (`PushAfterStuckTicks`'s rule waits).
+- **No give-up while queued behind its own line** (`CombatSystem`). `FriendFightsTarget` (BUG-0143) also holds when an own
+  unit `Attacking` the chaser's **same target unit**, at any range, stands within `QueueRange` (2 m) of the chaser's body
+  (queued behind the line, or walking along it: `QueuedBehindOwnLine`, one small query) **and** the chaser's walk reaches its
+  goal on foot (`ReachableOnFoot`, M4-H3 / M5-H1). Building targets keep slice 1's `QueuedAtRing` path unchanged; an ordered
+  Attack keeps M4-H3's reach rule (it never gave up a reachable target). A chaser stalled for any other reason (another
+  plateau, behind a wall, outrun) has no such friend beside it, so those chases still end. A line of own units spanning a
+  corridor wall to wall keeps a chaser behind it queued for as long as the line fights that target, as BUG-0143's back ranks.
+- **Constants** (`MovementConstants`, bounded here): `MaxFlankTurn` 135° (the brief's bound is ≤ 150°; pressed against the
+  line its ends lie at 90-110°), `FlankCountStride` 4 (≥ 2; 1 would be the old 1 s give-up). The block's bound is
+  `MaxPlugCluster` (32), shared with the plugs.
+- **Measured** (`Movement/FlankTests`, flat open ground, every unit's and the hall's hp topped up between ticks; 10 ranged
+  units in a row 1 m apart planted on the target from their max range, 10 melee two ranks 3 and 4 m behind the row's middle;
+  within 200 ticks = 10 s; before = `FlankRuleOn` off, the same code):
+
+  | Row (Heavy Infantry behind Crossbowmen / Raiders behind Desert Archers) | Before: struck, gave up | After: struck, gave up |
+  | --- | --- | --- |
+  | 1. Attack on the enemy Town Hall | 0 / 0, 0 / 0 | 8 / 10, 10 / 10 (0 give-ups) |
+  | 2. Attack-move past the hall | 4 / 3, 0 / 0 | 9 / 10, 10 / 10 (0 give-ups) |
+  | 2. Attack-move past an enemy siege unit 6 m beyond the row | 0 / 0, 10 / 10 gave up | 10 / 10, 10 / 10 (0 give-ups) |
+  | 2. Retaliation (Idle, their own scan takes that unit) | 0 / 0, 10 / 10 gave up | 10 / 9 (0 give-ups) |
+  | 3. Move to 8 m beyond the row: arrived | 0 / 0 | 9 / 10 |
+  | 4. 10 standing enemies in the row, 10 Heavy Infantry Move past it: past the row | Idle (combat off) 1, holders 0 | 1, 0 (combat off: every tick's hash equal with the rule on and off) |
+
+  The target unit is 6 m beyond the row, not 8, so that a retaliator walking round to its far side stays inside its leash
+  (its sight, 14 m from where it stood): at 8 m one of ten was pulled back by the leash, which counts as a give-up.
+- **Crowd rows** (criterion 5; `Movement/FlankCrowdRowsReport`, rule off then on, same scenarios). The M1-4d-3 movement rows
+  run combat off, where nobody is ever `Attacking` or `Casting`: the rule can't fire, and every end state hashes equal (asserted).
+
+  | Row | Before | After |
+  | --- | --- | --- |
+  | 500 to 4 points, one player a point, seeds 1 / 2 / 3: arrived | 227 / 256 / 238 | 227 / 256 / 238 (hash equal) |
+  | 2,500 to 4 points, seed 1: arrived | 845 | 845 (hash equal) |
+  | 128 to 64 goals, seeds 1-5: gave up | 31, 28, 40, 27, 32 | the same (hash equal) |
+  | 200 walkers crossing a settled 300-blob, PreMix(73), same / mixed owner: arrived (`MoveScenario.Arrived`) | 40 / 0 | 40 / 0 (hash equal) |
+  | 500 units to 500 random goals, two owners, combat on, seeds 1 / 2: gave up | 33 / 29 | 35 / 28 (band ±5) |
+  | 500 to 4 points, one player a point, **combat on**, seeds 1 / 2: arrived, gave up | 32, 389 / 38, 382 | 47, 374 / 53, 356 |
+  | Cross-map seeds 1-8 (`ScenarioTests`, one player) | 200 / 200, 0 give-ups | unchanged (no fighter on the map) |
+
+  The golden replay (seed 21, one player, no fight) is byte-identical: no `k` line moved, nothing re-recorded.
+- **Cost.** The flank test runs only for a walker that made no progress, whose owner has a planted unit, with its own planted
+  fighter in its way; it reads a cached block (no query) or searches it once per pass (one small query per member, at most
+  33), walks at most 32 members, and takes one more `WalkStep` when it flanks. Memory: three arrays per unit slot per radius
+  class (a long and two ints: 196,608 bytes on the 1,024 map's 4,096 slots, 3 classes; QA's memory bound re-baselined by that,
+  itemised in the test). A link gap the same for every walker would need one entry a slot; the widest and the smallest
+  body's diameter were both measured, and each moved more QA rows' chaotic outcomes than the walker's own diameter. No
+  allocation (0 B a tick in the owner's scene, mid-flank: `FlankScene_AllocatesNothing`). Paired A/B, base 321d7d6 and this, alternated, one fresh `dotnet test` process per
+  sample, Debug, other tracks' builds on the machine (BUG-0764: read the pairs, not a row against its budget), ms per tick:
+
+  | Row | Base | Slice 2 |
+  | --- | --- | --- |
+  | 500 moving units (`PerfCriterionTests`, budget < 4) | 1.12, 1.10, 1.10 | 1.13, 1.11, 1.13 |
+  | 2,500 tight blob, one player (`CrowdPerfTests`; the machine loaded past its 4.6 target in the first rounds) | 7.36, 7.40, 7.36; 4.44, 4.48, 4.45, 4.86 | 7.58, 7.39, 7.54; 4.38, 4.47, 4.55, 4.62 |
+  | 500 v 500 brawl, ticks 5-205 (`CombatPerfTests`, budget < 4) | 3.18, 3.22, 3.31 | 3.40, 3.57, 3.41 |
+  | 500 v 500 mixed brawl, ticks 5-205 (budget < 4) | 2.82, 2.90, 2.96 | 3.50, 3.41, 3.68 |
+
+  The two rows with no fighter are within noise (no planted unit: one bit test per stuck walker). The brawls cost more because
+  the rule works there: the mixed armies' line and shock units walk round their own crossbow and archer ranks (106 dead at
+  tick 205, 94 before; the melee brawl 223 Attacking at tick 205, 213 before), and each flank takes a second `WalkStep`. Both
+  stay under their 4 ms budget. In a one-process probe of the melee brawl (600 ticks, sequential, three rounds): 3.38 ms off,
+  3.37-3.42 with only the combat half on, 3.86-3.93 with both.
+- **Determinism.** The block is a set and its edges a min and a max; the side preference reads start-of-tick velocity. Two runs
+  of the owner's scene hash equal every tick (both groups); one Heavy Infantry flanking the row walks the bit-equal path with
+  the row spawned in either order (`OneFlanker_ReversedRowSpawnOrder_BitEqualPath`, three rows). The ten-unit scene itself is
+  not spawn-order free, with the rule off as well: the surround claims are taken in slot order, and walls clip in slot order
+  where a walker touches several (BUG-0046): it parts at tick 1 with the melee spawned in reverse and at tick 12-24 with only the
+  row reversed. A lone Raider (0.17 m a tick) parts at tick 12 with the rule off, as it first touches two of the row.
+- **Moved elsewhere.** Fights between melee groups move too: a back rank stalled behind its own front rank, where that front
+  is a block of at most 32 not striking the same building, walks round its end (QA's 40 v 40 brawl, `SimHardeningH2QaTests.
+  KeptChase_MeanBound_*`'s gap-10 row: one attack-move order deals 2,988 damage in 400 ticks, 2,043 before, +46 %). Re-printed
+  or re-baselined here: docs/03's AI spending bullet (the idle seat falls at malazan seed 1 505 s, was 509 s; whirlwind seed 7
+  539 s, was 540 s; the 5-minute marks and the verdict are unchanged); `Stress/CombatFuzzTests` (seed 2 saw player 0 defeated
+  at tick 2,912 on the rule's first version, and its kill book counted the collapsed buildings, which are no kill by
+  `DeathEvent`'s contract: it skips collapsed and expired events now); QA's 1,024-map memory bound (+196,984 bytes, itemised
+  in the test). **Left for the other tracks / QA** (the dev doesn't edit them): the faction pages' "Balance baseline" tables (`Content/CounterTriangleMarginsTests`) and "Spending on the menu's map" paragraphs
+  (`Content/AiSpendingReportTests`), data-owned; BUG-0157's ratio row above (the spam deals more than before in absolute terms,
+  about 2,590 v 1,980, but 86.6 % of the new single order against a 90 % bound, worst interval 71 % against 80 %); QA's
+  200 v 200 generated-map brawl (`CombatGiveUpQaTests.Brawl_IsFoughtToAFinish_*(200, 0)`): it now ends with 16 Wickan Lancers
+  and one enemy 14.5 m apart, all Idle, each out of the other's 14 m sight, so it isn't "decided" by tick 3,500 (no unit
+  stands Idle in sight of an enemy: the row's other bound holds); and QA's fenced-hall AI wave rows
+  (`AiMilitaryQaTests.AWaveWhoseMembersAllStandByATargetNoneCanStrike_*(10)`, `SimHardeningM5H1QaTests.FencedHall_*(10)`): the
+  trajectories moved, and one Heavy Infantry now ends on its ordered chase's goal by the tree ring in BUG-0461's two-tick limit
+  cycle ((-0.044, +0.143) then back, every tick: the sidestep round an Idle friend ahead outweighs the 0.11 m flow step left,
+  so it never comes within `ChaseArrival2` of its goal), gives up its walk every 20 ticks, and M4-H3 / M5-H1's ordered-chase
+  rule re-walks it, so the wave never ends. No unit is planted then: the flank rule isn't running, it only moved where the
+  unit stands. A pre-existing hole (the cycle is "Known limits (M1)" item BUG-0461), not fixed here.
+- **Not yet (slice 3):** see slice 1's list; also a flank round a block bigger than 32 (an army's front: its back ranks still
+  queue behind it, as before).
 
 ### Implementation (M5-4f)
 
@@ -7009,8 +7153,9 @@ rules are unchanged.
   scene and which fails at every think on its crowded map (reported to the Producer).
 - **Spending re-measured (D20, 2026-10-17, data track: M5-4f's gather rates and sized defense)**
   (`Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`, the menu's map, Normal against an idle seat): the idle
-  seat falls at malazan seed 1 509 s (136 gold / 15 wood at 5 min), whirlwind seed 1 514 s (316 gold / 117 wood at 5 min),
-  malazan seed 7 556 s (36 gold / 40 wood at 5 min) and whirlwind seed 7 540 s (384 gold / 103 wood at 5 min). Across both
+  seat falls at malazan seed 1 505 s (136 gold / 15 wood at 5 min), whirlwind seed 1 514 s (316 gold / 117 wood at 5 min),
+  malazan seed 7 556 s (36 gold / 40 wood at 5 min) and whirlwind seed 7 539 s (384 gold / 103 wood at 5 min) (re-printed
+  for pathing slice 2, which moved the waves' fights: 509 s and 540 s before). Across both
   factions 0 of those 4 marks had wood under 100 with gold at 300 or more, so the report now reads "wood is not the
   limit" (D-H5, before M5-4f: 1 of 4). D15 C on the same map (`QA/Content/AiHouseRuleReportTests.MenuMapNormal_*`):
   no house step is skipped, because each order's 12th house is due at a cap of 98, below the hard cap; the faction pages'
