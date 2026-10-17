@@ -394,9 +394,11 @@ show text, a minimap ping, and a sound.
 - Behaviors in priority order: defend the base when attacked → follow the build order → keep
   producing workers and army → expand when safe → scout → send attack waves → rebuild losses.
 - The defense is sized by the threat: the AI answers raiders with defenders worth 1.5× their gold + wood cost (at least
-  150), from the units at home first, then from its attack wave's units nearest home as long as the wave keeps the size
-  it was sent at, and calls the whole wave home only when the raid is worth more than that or its Town Hall is hit and
-  below half hp (`rules.json` `ai.defendRatio` / `defendMinValue` / `recallHallHp`; built in M5-4f).
+  150), from the units at home first (nearest the trouble first), then from its attack wave's members nearest its Town
+  Hall as long as the members left keep the wave's start threshold (`attack.minArmyPop` / `minArmyCost`, so a wave sent
+  above it gives its surplus), and calls the whole wave home only when the raid is worth more than that or its Town Hall
+  is hit and below half hp (`rules.json` `ai.defendRatio` / `defendMinValue` / `recallHallHp`; built in M5-4f; wording
+  aligned with [03 Implementation (M5-4f)](03-technical-design.md#implementation-m5-4f) on 2026-10-17, BUG-0871).
 - Build orders, army compositions, and attack thresholds are per-faction data (`ai.json`), not code.
 - The AI sees only its own fog-of-war view. It never reads hidden enemy state.
 

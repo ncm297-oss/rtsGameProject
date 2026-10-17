@@ -29,7 +29,7 @@ public sealed partial class World
     {
         config.Validate();
         Config = config;
-        _ledger = new PlayerLedger(config.PlayerCount, config.Data);
+        _ledger = new PlayerLedger(config.PlayerCount, config.Data, config.StatsSampleCapacity); // M6-S1: the stats buffers too
         Techs = new TechState(config.PlayerCount, config.Data);
         Units = new UnitStore(config.UnitCapacity, _ledger, Techs);
         _rngs = new SimRng[RngStream.Count(config.PlayerCount)];
@@ -203,6 +203,7 @@ public sealed partial class World
 
     /// <summary>
     /// Appends a death to this tick's <see cref="Deaths"/> and counts it in the killer's kills and the victim owner's losses
+    /// (M6-S1: and in the unit or building half of each, by <see cref="DeathEvent.IsBuilding"/>)
     /// (M4-4b-3b: an expiry, <see cref="DeathEvent.Expired"/>, counts neither; M5-H2: nor a defeated player's collapse,
     /// <see cref="DeathEvent.Collapsed"/>). Past the list's capacity the event is not
     /// recorded (the counts still are): only a summon reusing slots freed earlier in the same tick could get there.
@@ -211,7 +212,7 @@ public sealed partial class World
     {
         System.Diagnostics.Debug.Assert(DeathCount < _deaths.Length, "death list full: an event is dropped (BUG-0452)");
         if (DeathCount < _deaths.Length) _deaths[DeathCount++] = e;
-        if (!e.Expired && !e.Collapsed) _ledger.CountDeath(e.KillerOwner, e.VictimOwner);
+        if (!e.Expired && !e.Collapsed) _ledger.CountDeath(e.KillerOwner, e.VictimOwner, e.IsBuilding);
     }
 
     /// <summary>Empties <see cref="Deaths"/> (start of a tick).</summary>

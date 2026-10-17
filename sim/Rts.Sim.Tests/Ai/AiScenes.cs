@@ -129,13 +129,14 @@ internal static class AiScenes
     /// Town Hall and five workers placed by commands (as <c>Match.cs</c> does) from <c>StartBase.Plan</c>. A recorder is
     /// attached first when <paramref name="record"/>. M5-3: <paramref name="forests"/> on the map; <paramref name="raiders"/>
     /// line units of each player spawned in the next player's base. M5-4c: <paramref name="casters"/> of each of its faction's
-    /// unit types with abilities spawned there too.
+    /// unit types with abilities spawned there too. M6-S1: <paramref name="configure"/> edits the config before the sim is built.
     /// </summary>
     internal static Simulation Generated(PlayerSeat[] seats, ulong seed, bool record, out ReplayRecorder? recorder, int units = 400, int commands = 1024,
-        GameData? data = null, int forests = 8, int raiders = 0, int casters = 0)
+        GameData? data = null, int forests = 8, int raiders = 0, int casters = 0, Func<SimConfig, SimConfig>? configure = null)
     {
         var map = MapGenParams.Default with { Forests = forests, GoldMines = 6 };
         var config = new SimConfig(seed, seats.Length, units, commands) { Data = data ?? TestSim.Data, Map = map, Seats = seats.ToImmutableArray() };
+        if (configure != null) config = configure(config); // M6-S1: e.g. the stats sample interval and capacity
         var sim = new Simulation(config);
         recorder = record ? new ReplayRecorder(sim, checkpointInterval: 100, commandCapacity: 16_384) : null;
         World w = sim.World;

@@ -84,6 +84,16 @@ public sealed record SimConfig(ulong Seed, int PlayerCount, int UnitCapacity, in
     public float CastWalkInPatienceSeconds { get; init; } = 3f;
 
     /// <summary>
+    /// M6-S1: ticks between army-value samples for the stats screen (<see cref="World.ArmyValueSamples"/>), 1 to 1,728,000;
+    /// default 200 (10 s). A config value, not a rules field, so the data hash is untouched (Producer decision); not in the
+    /// replay header (stats are not hashed, so a replay plays the same with any value).
+    /// </summary>
+    public int StatsSampleTicks { get; init; } = 200;
+
+    /// <summary>M6-S1: army-value samples kept per player, 0 to 1,000,000 (allocated with the world; sampling stops when full); default 1,024 (2 h 50 min at the default interval).</summary>
+    public int StatsSampleCapacity { get; init; } = 1024;
+
+    /// <summary>
     /// M5-2: one seat per player (faction, Human / AI, AI difficulty), or empty (the default) for today's seats: player p plays
     /// faction <c>p mod factions</c> in id order, every seat human, difficulty Normal (<see cref="SeatOf"/>). An AI seat makes
     /// the sim run an <c>AiPlayer</c> for that player (<see cref="Simulation"/>). Recorded in the replay header (format 5);
@@ -123,6 +133,8 @@ public sealed record SimConfig(ulong Seed, int PlayerCount, int UnitCapacity, in
         if (ZoneCapacity < 1) throw new ArgumentOutOfRangeException(nameof(ZoneCapacity));
         if (!(CastWalkInBlockerRange >= 0f) || float.IsInfinity(CastWalkInBlockerRange)) throw new ArgumentOutOfRangeException(nameof(CastWalkInBlockerRange));
         if (!(CastWalkInPatienceSeconds > 0f) || CastWalkInPatienceSeconds > 3600f) throw new ArgumentOutOfRangeException(nameof(CastWalkInPatienceSeconds));
+        if (StatsSampleTicks < 1 || StatsSampleTicks > 1_728_000) throw new ArgumentOutOfRangeException(nameof(StatsSampleTicks));
+        if (StatsSampleCapacity < 0 || StatsSampleCapacity > 1_000_000) throw new ArgumentOutOfRangeException(nameof(StatsSampleCapacity));
         if (Data == null) throw new ArgumentNullException(nameof(Data));
         if (Map == null) throw new ArgumentNullException(nameof(Map));
         Map.Validate();

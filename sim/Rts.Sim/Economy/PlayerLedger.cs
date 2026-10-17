@@ -21,9 +21,13 @@ internal sealed class PlayerLedger
     // M5-4e: per building type, whether it trains at least one unit (a production building for the defeat rule).
     private readonly bool[] _trainsUnits;
 
-    /// <summary>A ledger for <paramref name="players"/> players starting at <paramref name="data"/>'s rules totals, no population, no cap and no buildings.</summary>
-    public PlayerLedger(int players, GameData data)
+    /// <summary>
+    /// A ledger for <paramref name="players"/> players starting at <paramref name="data"/>'s rules totals, no population, no cap
+    /// and no buildings, with room for <paramref name="sampleCapacity"/> army-value samples per player (M6-S1).
+    /// </summary>
+    public PlayerLedger(int players, GameData data, int sampleCapacity = 0)
     {
+        Stats = new MatchStats(players, data.Techs.Length, sampleCapacity);
         RulesDef rules = data.Rules;
         _types = data.Buildings.Length;
         _finishedOfType = new int[players * _types];
@@ -97,11 +101,38 @@ internal sealed class PlayerLedger
         if (Has(player)) LiveUnits[player] += delta;
     }
 
-    /// <summary>One death: <paramref name="killer"/>'s kills and <paramref name="victim"/>'s losses go up by one (M4-1).</summary>
-    public void CountDeath(int killer, int victim)
+    /// <summary>
+    /// One death: <paramref name="killer"/>'s kills and <paramref name="victim"/>'s losses go up by one (M4-1), and (M6-S1)
+    /// the unit or building half of each by <paramref name="isBuilding"/>, so the halves always sum to the whole.
+    /// </summary>
+    public void CountDeath(int killer, int victim, bool isBuilding)
     {
-        if (Has(killer)) Kills[killer]++;
-        if (Has(victim)) Losses[victim]++;
+        if (Has(killer))
+        {
+            Kills[killer]++;
+            if (isBuilding) Stats.BuildingKills[killer]++;
+            else Stats.UnitKills[killer]++;
+        }
+        if (Has(victim))
+        {
+            Losses[victim]++;
+            if (isBuilding) Stats.BuildingLosses[victim]++;
+            else Stats.UnitLosses[victim]++;
+        }
+    }
+
+    /// <summary>M6-S1: the post-match stats counters (not hashed); the ledger and the stores write them at their events.</summary>
+    public MatchStats Stats { get; }
+
+    /// <summary>
+    /// M6-S1: a worker's drop-off delivers <paramref name="amount"/> of <paramref name="kind"/>: it goes into the total
+    /// (<see cref="AddToTotal"/>) and is counted as gathered. The only gathered count: a refund or a start total is not.
+    /// </summary>
+    public void Deliver(int player, ResourceKind kind, int amount)
+    {
+        if (!Has(player)) return;
+        AddToTotal(player, kind, amount);
+        Stats.AddGathered(player, kind, amount);
     }
 
     /// <summary>True for a player index this ledger tracks.</summary>

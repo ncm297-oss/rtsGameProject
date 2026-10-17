@@ -7023,6 +7023,57 @@ rules are unchanged.
   `Ai/AbilityManagerTests.TwoGroupsEitherSide_TheNearerIsCastOn`, `DataValidationTests` / `DataContentHashTests` (the three
   knobs), `ReplayGoldenTests`, `QA/GatherWedgeQaTests`.
 
+### Implementation (M6-S1)
+
+The post-match stats counters (Requests 39; docs/02 "Game flow" 5). Code: `Economy/MatchStats` (owned by `PlayerLedger`,
+which writes it at its events), `World.Stats.cs` (the read-only surface), and one call at each counted event. No `Command`
+kind, no data or `rules.json` field, nothing hashed. Every counter is per player, starts at 0 and only goes up.
+
+- **Gathered** (`World.GatheredGold`, `GatheredWood`): a worker's drop-off, `EconomySystem.Deposit`, which now calls
+  `PlayerLedger.Deliver` (the total plus the count; saturating) instead of `AddToTotal`. Not counted: the starting totals,
+  every refund (a cancelled site's unbuilt fraction in `ConstructionSystem.ApplyCancel`, a cancelled queue item or a razed
+  building's queue in `BuildingStore.RemoveQueued`), and the dev / test `AddToTotal`.
+- **Units trained** (`World.UnitsTrained`): a production queue item that finished and spawned (`ProductionSystem.Step`).
+  Not counted: summons (`SummonSystem`), the dev `SpawnUnit` (the start base's workers among them), store seams.
+- **Kills and losses, split** (`World.UnitKills`, `BuildingKills`, `UnitLosses`, `BuildingLosses`): in
+  `World.RecordDeath`, where `Kills` / `Losses` are counted, by `DeathEvent.IsBuilding` (a site counts as a building). An
+  expiry and a collapse count in neither half, as before in the whole, so `UnitKills + BuildingKills == Kills` and the same
+  for losses always hold. `Kills` / `Losses` keep their meaning and stay hashed.
+- **Buildings built / lost** (`World.BuildingsBuilt`, `World.BuildingsLost`): a construction site completing
+  (`BuildingStore.SetWork`, the completion branch). A building spawned finished (`BuildingStore.Spawn` without `site`: the
+  start Town Hall, the dev `SpawnBuilding`) is not counted. "Lost" is the same counter as `BuildingLosses` (killed by an
+  enemy; a collapse on defeat and a cancelled site are not losses).
+- **The researched tick** (`World.TechResearchedTick(player, tech)`): set on the first grant in
+  `ProductionSystem.Researched` to `TickNumber + 1`, the tick count between ticks at which `HasTech` first reads true (x 50 ms
+  is the match time; "time to Age II" is the `age_ii` tech's, per tech rather than an Age field since the owner's
+  2026-10-14 direction that Ages go). -1 before, and for an unknown player or tech. A test's direct `TechState.Set` records
+  nothing.
+- **Army value over time** (`World.ArmyValueSamples(player)` -> `ReadOnlySpan<int>`, oldest first; `World.StatsSampleTicks`,
+  `World.StatsSampleCapacity`): in phase 13, right after `TickNumber` moves on, when the new count is a multiple of
+  `SimConfig.StatsSampleTicks` (default 200 = 10 s, 1 to 1,728,000), one pass over the unit slots sums each player's live
+  non-worker units' `costGold + costWood` (summoned units included while they live, at their type's cost; saturating at
+  `int.MaxValue`). Sample k is the value at tick `(k + 1) x interval`, so there are `min(TickNumber / interval, capacity)`
+  of them. The buffer, `SimConfig.StatsSampleCapacity` per player (default 1,024: 2 h 50 min at the default interval;
+  0 to 1,000,000), is allocated with the world; when it is full sampling stops (the graph ends there; a later task can
+  thin it instead). The cadence is a `SimConfig` value, not a `rules.json` field (Producer decision), so `ContentHash`
+  and every recorded replay are untouched; it is not in the replay header (the stats decide nothing, so playback needs it
+  only to show the same graph, which a later replay format can add).
+- **"Worker"** is now one rule, `UnitDef.IsWorker` (the worker slot), read by the economy (`EconomySystem.IsWorker`), combat's
+  scan rule and `IsCombatant`, the AI's `IsWorkerType` and the army value; behaviour unchanged.
+- **Hash and cost.** Nothing new is hashed (Producer decision: none of it decides a tick); the golden's header and `k` lines
+  did not move. Per tick: one modulo; on a sample tick one walk of the unit slots (the same walk `FillPlateauBox` does); no
+  allocation after construction (all arrays sized by player count, tech count and capacity in the `World` constructor).
+  Memory: 8 ints per player, one int per (player, tech), `capacity` ints per player (4 KB each by default).
+- **Tests.** `Economy/MatchStatsTests` (a gold and a wood delivery v a training refund, a site refund and a dev grant; a
+  trained unit v a summon v a dev spawn; the kill split for a unit and a building, an expiry, and `RecordDeath`'s split
+  with expiries and collapses; a completed House v a hall spawned finished; Age II's tick v the tick `HasTech` first reads
+  true, -1 before and for unknown ids; samples at 200 and 400 with a worker of each faction excluded, a unit freed, one
+  added and a summon; the buffer full at capacity 3 and 0; a 50-tick config; the config's range; the counters change no
+  hash), `Stress/MatchStatsFuzzStressTests` (3 seeds x 2 / 3 / 4 AI seats x 9,000 ticks, early waves, checked every 10
+  ticks: the halves sum to the wholes, every counter monotone, a researched tick fixed once set and set exactly while
+  `HasTech`, `min(tick / interval, capacity)` samples with old ones unchanged, one row with interval 7 and capacity 100;
+  a twin run with the same hash, counters and samples), `ReplayGoldenTests` (unchanged).
+
 ## Save/load and replays
 
 - **Replay file** (M1-6, `Rts.Sim.Replays`): a `Replay` holds a header, the command log, and
@@ -7110,6 +7161,9 @@ rules are unchanged.
   load round-trip test must compare them directly, not only the hash. The same holds for the AI's defense marks (M5-4b's
   kept hp and per-unit marks; M5-4f's `DefenderGeneration`, `DefendAll`, `DefendAnswer`, `WaveMinHalfPop` / `WaveMinCost`):
   Blackboard state, outside the hash, carried by the save.
+  Likewise the M6-S1 stats (`Economy/MatchStats`: gathered gold and wood, units trained, the kill and loss halves, buildings
+  built, each tech's researched tick, and the army-value samples with their count): not hashed, decide nothing, but a
+  loaded match must show the same post-match screen, so the save carries them whole and the round-trip test compares them.
 - If a replay's data hash doesn't match the current data, the game says it was recorded with
   different balance data and refuses to play it (no silent desync). The sim returns only the
   `ReplayError.DataMismatch` code; the text comes from data (`ui.json` `load.refused`, M6-V9).

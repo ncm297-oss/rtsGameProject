@@ -470,7 +470,7 @@ public static class CombatSystem
     }
 
     /// <summary>True for a unit type that counts as "can attack" in the target priority: an attack with a value, workers aside.</summary>
-    internal static bool IsCombatant(UnitDef def) => def.Attack.Value > 0 && def.Slot != UnitSlot.Worker;
+    internal static bool IsCombatant(UnitDef def) => def.Attack.Value > 0 && !def.IsWorker;
 
     /// <summary>
     /// Whether unit <paramref name="i"/> looks for targets: a fighting type that is holding position, on an attack-move
@@ -485,7 +485,7 @@ public static class CombatSystem
         if (!CanFight(def)) return false;
         // Workers never fight on their own (Producer decision, BUG-0147): not Idle, not holding, not hit; only while the
         // player attack-moves them. The data hook is the unit's slot.
-        if (def.Slot == UnitSlot.Worker && u.Mode[i] != CombatMode.AttackMove) return false;
+        if (def.IsWorker && u.Mode[i] != CombatMode.AttackMove) return false;
         // On a gather, build or repair loop (even standing Idle a tick between its legs): the economy moves it, never combat.
         if (u.GatherNode[i].Generation != 0 || u.BuildTarget[i].Generation != 0) return false;
         UnitState s = u.State[i];

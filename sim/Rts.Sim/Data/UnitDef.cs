@@ -17,6 +17,8 @@ public sealed class UnitDef
     public int Faction { get; init; }
     /// <summary>Template slot.</summary>
     public UnitSlot Slot { get; init; }
+    /// <summary>True for the worker slot (<see cref="UnitSlot.Worker"/>): the one "is a worker" rule (gathering, building, combat's scan rule, the AI, the M6-S1 army value).</summary>
+    public bool IsWorker => Slot == UnitSlot.Worker;
     /// <summary>Player-facing name.</summary>
     public required string DisplayName { get; init; }
     /// <summary>Player-facing tooltip text.</summary>
