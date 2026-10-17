@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (data-owned; `main` would be red on 8 `Content/` rows until the re-print) |
-| Status | fixed (2026-10-17, the data track's merged-tree re-print at the 0554 integration; commit: the conductor's) |
+| Status | fixed (2026-10-17, the data track's merged-tree re-print at the 0554 integration; commit **bf8026e** on `main`, verified at the 2026-10-17-1624 PLAN: `CounterTriangleMarginsTests` / `AiSpendingReportTests` in the full non-Perf run) |
 | Found | 2026-10-17-0554, task M5-P2 (the dev disclosed it in docs/03 "Implementation (pathing slice 2)", "Moved elsewhere"; the Producer filed it at ACCEPT) |
 | System | content docs (`docs/factions/malazan.md`, `docs/factions/whirlwind.md` "Balance baseline" group tables and "Spending on the menu's map"), `Content/CounterTriangleMarginsTests` (7 rows), `Content/AiSpendingReportTests.GeneratedNormal_PagesAndDocs03_QuoteTheReport` |
-| Fixed by | data-track fix mode on the merged tree (63e3a31 + the re-print; the conductor fills in the commit) |
+| Fixed by | data-track fix mode on the merged tree (63e3a31 + the re-print bf8026e: `docs/factions/malazan.md` +54 / `whirlwind.md` +28, `Content/CounterTriangleMarginsTests.cs` fixtures re-pointed at the current cells) |
 
 ## Producer decision (2026-10-17, ACCEPT of session 0554)
 Sim ACCEPT with no sim change: the flank rule is the goal (owner playtest note 5) and the cells are measurements. The sim
