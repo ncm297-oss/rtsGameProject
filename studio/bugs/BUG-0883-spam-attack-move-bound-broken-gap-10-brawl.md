@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed (cbeb944, verified by QA 2026-10-17-0554) |
 | Found | 2026-10-17-0554, task M5-P2 |
 | System | combat chase / movement (flank rule) under re-issued attack-moves |
-| Fixed by | |
+| Fixed by | cbeb944 (walked side kept to 180 deg; `reversing` step); regression: QA's `SimHardeningH2QaTests.KeptChase_MeanBound_HoldsOnOtherBrawls(0, 10, 5)` green |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~KeptChase_MeanBound_HoldsOnOtherBrawls"`
@@ -28,3 +28,7 @@ worst 81 %, close to the line).
   progress (a new order resets the walk's `BestRemaining` / order age, and the kept side reads the last step's velocity).
 - QA does not move a Producer-decided bound. Either fix (keep the flank across a re-issued order to the same target) or the
   Producer re-decides the bound with this row's numbers.
+
+## QA re-check (2026-10-17-0554, after fix round 1, cbeb944)
+- Full run: gap 10 gives one order 2,979 and a spam mean of 101.5 %, worst 96 % (bound 90 / 80). The other rows: gap 6
+  107.4 / 98 %, gap 8 x 4 ranks 93.8 / 88 %, phase 1 95.1 / 86 %, phase 3 95.7 / 86 %. All match the dev's numbers.

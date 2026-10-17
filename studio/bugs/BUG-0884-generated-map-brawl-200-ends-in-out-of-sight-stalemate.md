@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (incidentally by cbeb944, verified by QA 2026-10-17-0554) |
 | Found | 2026-10-17-0554, task M5-P2 |
 | System | combat (brawl termination) |
-| Fixed by | |
+| Fixed by | cbeb944 (no targeted change; fix round 1 moved the fight); QA's row `CombatGiveUpQaTests.Brawl_IsFoughtToAFinish_*(200, 0, 3500)` green |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~Brawl_IsFoughtToAFinish_NoUnitStandsIdleInSightOfAnEnemy"`
@@ -26,3 +26,8 @@ one enemy end 14.5 m apart, all Idle, each outside the other's 14 m sight. The "
   S3 and not a blocker. The bound is QA's and QA doesn't loosen it in the same round as the change that moved it: the
   Producer either accepts a re-baseline (e.g. "decided, or every survivor Idle out of sight of every enemy") or asks for a
   look at why the last enemy stops where it does (on its attack-move goal, or a give-up?).
+
+## QA re-check (2026-10-17-0554, after fix round 1, cbeb944)
+- The row is green in the full run: decided on tick 2,417, longest Idle in sight of an enemy 4 ticks. Brawls are
+  chaotic (docs/03 notes the 4-point row moved by -42 to +31 between the round's variants), so a later timing change can
+  bring the stalemate back. If it does, reopen this bug rather than filing a new one.

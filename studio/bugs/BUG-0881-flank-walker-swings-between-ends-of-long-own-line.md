@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed (cbeb944, verified by QA 2026-10-17-0554; residuals filed as BUG-0887, BUG-0888) |
 | Found | 2026-10-17-0554, task M5-P2 |
 | System | movement (flank rule), `MovementSystem.FlankTurn` / `DetourTurn`, `MovementConstants.MaxFlankTurn` / `FlankCountStride` |
-| Fixed by | |
+| Fixed by | cbeb944 (flank mark `UnitStore.Flank`, kept side up to `MaxFlankKeptTurn`, stride by line size, `FlankKeepMinMembers` 11); regression: `QA/FlankQaTests.LongOwnRow_UpToTheBlockBound_WalkerFindsAnEnd` (7 rows un-skipped), `Movement/FlankTests.LongOwnLine_MoveReissued_KeepsItsSideAndArrives` |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~FlankQaTests.LongOwnRow_UpToTheBlockBound_WalkerFindsAnEnd"`
@@ -41,3 +41,13 @@ again**, and gives up at y 83.1 on tick 153: it loops between the two ends and n
   (`FlankCountStride` 4: about 4 s of flanking), so the walker gives up as it reaches the end.
 - Rows of 10 (the acceptance scenes) pass; the owner's playtest note ("infantry behind crossbowmen get stuck instead of
   going around them") is about armies, whose ranged lines are often wider than 10.
+
+## QA re-check (2026-10-17-0554, after fix round 1, cbeb944)
+- The repro rows pass. Arrived tick and side flips: 16 / 20 / 24 / 32 with the goal 5 m beyond arrive at 72 / 85 / 99 /
+  125 with 1 flip each. 16 and 32 with the goal 8 or 13 m beyond arrive at 71 and 125. 33 and 48 are still bit-equal
+  to the rule off.
+- QA's adversarial variants (`QA/FlankFixRound1QaTests`). Lines of 10-32 at 0 / 30 / 45 / 60 deg all arrive with at most
+  4 flips (3ec22ee: 15 / 20 / 24 / 31 / 32 at angles gave up). A re-order to the line's other quarter mid-flank arrives
+  (16 / 24 / 32: 140 / 228 / 342). Spawn-reversed lines under spam walk bit-equal.
+- Residuals, not blocking: Moves re-issued to two points 2 m apart every 2-3 ticks behind 24-32 lines (BUG-0887, S3),
+  and a line whose near end meets a cliff (BUG-0888, S3).
