@@ -76,6 +76,7 @@ public sealed class UiText
     private readonly string[] _settings;
     private readonly string[] _matchOver;
     private readonly string[] _keys;
+    private readonly string[] _load;
     private readonly string[] _colourNames = Blank(ColourCount);
     private readonly uint[] _colourRgb = new uint[ColourCount];
 
@@ -92,6 +93,7 @@ public sealed class UiText
         _settings = Blank(Enum.GetValues<SettingsText>().Length);
         _matchOver = Blank(Enum.GetValues<MatchOverText>().Length);
         _keys = Blank(Enum.GetValues<KeysText>().Length);
+        _load = Blank(Enum.GetValues<LoadText>().Length);
         Array.Fill(_names, "");
         Array.Fill(_hints, "");
     }
@@ -158,6 +160,18 @@ public sealed class UiText
 
     /// <summary>A Keybinds tab text (<c>ui.json</c> <c>keys</c>, M6-V8).</summary>
     public string Keys(KeysText key) => (uint)key < (uint)_keys.Length ? _keys[(int)key] : "";
+
+    /// <summary>A Load Game screen or replay playback text (<c>ui.json</c> <c>load</c>, M6-V9).</summary>
+    public string LoadGame(LoadText key) => (uint)key < (uint)_load.Length ? _load[(int)key] : "";
+
+    /// <summary>A Load Game date cell: <c>load.date_item</c> with <paramref name="when"/> for its <c>{0}</c>.</summary>
+    public string ReplayDate(DateTime when) => string.Format(CultureInfo.InvariantCulture, LoadGame(LoadText.DateItem), when);
+
+    /// <summary>One seat of a Load Game players cell: <c>load.seat</c> with the faction's name for <c>{0}</c> and the seat's kind for <c>{1}</c>.</summary>
+    public string ReplaySeat(string faction, string kind) => string.Format(CultureInfo.InvariantCulture, LoadGame(LoadText.Seat), faction, kind);
+
+    /// <summary>The Load Game note for <paramref name="count"/> unreadable files: <c>load.skipped</c> with the count for its <c>{0}</c>.</summary>
+    public string ReplaysSkipped(int count) => string.Format(CultureInfo.InvariantCulture, LoadGame(LoadText.Skipped), count);
 
     /// <summary>A <c>keys</c> format (<see cref="KeysText.Group"/>, <see cref="KeysText.Card"/>, <see cref="KeysText.Conflict"/>, <see cref="KeysText.Reserved"/>) filled with <paramref name="args"/>.</summary>
     public string KeysFormat(KeysText key, params object[] args) => string.Format(CultureInfo.InvariantCulture, Keys(key), args);
@@ -284,6 +298,15 @@ public sealed class UiText
                 errors.Add($"ui.json: settings.{Key(SettingsText.ResolutionItem)} must be a format with {{0}} (the width) and {{1}} (the height) and no other placeholder: '{resolutionItem}'");
             Section<MatchOverText>(root, "match_over", ui._matchOver, skipZero: false, forward: false, errors);
             Section<KeysText>(root, "keys", ui._keys, skipZero: false, forward: false, errors);
+            // M6-V9: the Load Game screen and the playback banners; three formats.
+            Section<LoadText>(root, "load", ui._load, skipZero: false, forward: false, errors);
+            string dateItem = ui._load[(int)LoadText.DateItem];
+            if (dateItem.Length > 0 && !IsDateFormat(dateItem))
+                errors.Add($"ui.json: load.{Key(LoadText.DateItem)} must be a format with {{0}} (the date) and no other placeholder: '{dateItem}'");
+            TwoArgs(ui._load[(int)LoadText.Seat], $"load.{Key(LoadText.Seat)}", "the faction", "the seat", errors);
+            string skipped = ui._load[(int)LoadText.Skipped];
+            if (skipped.Length > 0 && !IsSizeFormat(skipped))
+                errors.Add($"ui.json: load.{Key(LoadText.Skipped)} must be a format with {{0}} (the count) and no other placeholder: '{skipped}'");
             foreach (KeysText k in new[] { KeysText.Group, KeysText.Reserved })
             {
                 string f = ui._keys[(int)k];
@@ -414,6 +437,21 @@ public sealed class UiText
         try
         {
             return string.Format(CultureInfo.InvariantCulture, format, "1:00") != string.Format(CultureInfo.InvariantCulture, format, "2:00");
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
+    // A date cell format (M6-V9): it formats, and names the date (two dates a day and an hour apart format differently).
+    private static bool IsDateFormat(string format)
+    {
+        try
+        {
+            var a = new DateTime(2026, 10, 16, 20, 36, 0);
+            string text = string.Format(CultureInfo.InvariantCulture, format, a);
+            return text != string.Format(CultureInfo.InvariantCulture, format, a.AddDays(1).AddHours(1));
         }
         catch (FormatException)
         {

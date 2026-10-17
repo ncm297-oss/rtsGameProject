@@ -3,6 +3,7 @@ using System.Collections.Immutable;
 using System.Diagnostics;
 using Godot;
 using Rts.Sim;
+using Rts.Sim.Commands;
 using Rts.Sim.Data;
 using Rts.Sim.Map;
 using Rts.Sim.Replays;
@@ -11,7 +12,12 @@ using Rts.Sim.ViewApi;
 namespace Rts.Game;
 
 /// <summary>Owns the match's <see cref="Simulation"/> and ticks it at 20 Hz from frame time (docs/03 "Presentation timing").</summary>
-/// <remarks>Here the view changes sim state only through <see cref="Simulation.Tick"/>; player orders are enqueued by <see cref="Match"/> and <see cref="SelectionController"/>.</remarks>
+/// <remarks>
+/// Here the view changes sim state only through <see cref="Simulation.Tick"/>; player orders are enqueued by <see cref="Match"/>
+/// and <see cref="SelectionController"/>. M6-V9: <see cref="StartPlayback"/> plays a recorded <see cref="Replay"/> on the same
+/// clock instead (speed and pause as in a live match), feeding the logged commands before the tick each is stamped for, as
+/// <see cref="ReplayPlayer.Run(Replay, GameData)"/> does, and comparing each checkpoint as it passes.
+/// </remarks>
 public partial class SimRunner : Node
 {
     /// <summary>Slowest and fastest game speed.</summary>
@@ -111,8 +117,32 @@ public partial class SimRunner : Node
     /// <summary>The seats <see cref="Start"/> gave the sim (<see cref="SimConfig.Seats"/>, one per player); empty before it.</summary>
     public ImmutableArray<PlayerSeat> Seats { get; private set; } = ImmutableArray<PlayerSeat>.Empty;
 
-    /// <summary>The recorder attached by <see cref="Start"/> when <see cref="RecordCheckpointInterval"/> is set, else null.</summary>
+    /// <summary>The recorder attached by <see cref="Start"/> when <see cref="RecordCheckpointInterval"/> is set, or by <see cref="StartPlayback"/> (the playback sim's own, M6-V9), else null.</summary>
     public ReplayRecorder? Recorder { get; private set; }
+
+    /// <summary>
+    /// The seats as the match was played (M6-V9): <see cref="Seats"/> for a live match; for playback the replay header's (an
+    /// AI seat stays AI here, for the stats screen, while the sim runs it human). Empty before a start.
+    /// </summary>
+    public ImmutableArray<PlayerSeat> PlayedSeats { get; private set; } = ImmutableArray<PlayerSeat>.Empty;
+
+    /// <summary>The replay <see cref="StartPlayback"/> is playing, or null for a live match.</summary>
+    public Replay? Playback { get; private set; }
+
+    /// <summary>Where playback is (<see cref="PlaybackState.None"/> for a live match).</summary>
+    public PlaybackState PlaybackState { get; private set; }
+
+    /// <summary>Why playback stopped (<see cref="ReplayError.CheckpointMismatch"/>, <see cref="ReplayError.SequenceMismatch"/> or <see cref="ReplayError.CommandRejected"/>); <see cref="ReplayError.None"/> otherwise.</summary>
+    public ReplayError PlaybackError { get; private set; }
+
+    /// <summary>Checkpoints compared equal so far in playback.</summary>
+    public int CheckpointsCompared => _compared;
+
+    /// <summary>Raised once when playback ends (<see cref="PlaybackState.Ended"/>) or stops on a mismatch (<see cref="PlaybackState.Stopped"/>), after that tick's <see cref="Ticked"/>.</summary>
+    public event Action<SimRunner>? PlaybackFinished;
+
+    // Playback: the next logged command to feed, and the checkpoints compared so far.
+    private int _next, _compared;
 
     /// <summary>Creates the simulation from loaded data on a <see cref="MapSize"/> map (the generator's other defaults) with <see cref="Forests"/> and <see cref="GoldMines"/> and explicit <see cref="Seats"/>; ticking starts on the next frame.</summary>
     public void Start(GameData data)
@@ -126,7 +156,122 @@ public partial class SimRunner : Node
             Seats = Seats,
         };
         Simulation = new Simulation(config);
+        PlayedSeats = Seats;
         if (RecordCheckpointInterval > 0) Recorder = new ReplayRecorder(Simulation, RecordCheckpointInterval);
+    }
+
+    /// <summary>
+    /// Starts playing <paramref name="replay"/> (M6-V9). Refuses before any sim exists, returning the code, when it breaks
+    /// <see cref="Replay.Validate"/>, was recorded with other data (<see cref="ReplayError.DataMismatch"/>: <c>ContentHash</c>
+    /// differs) or names a faction the data lacks (<see cref="ReplayError.InvalidHeader"/>). Otherwise builds the sim from the
+    /// header (seed, players, capacities, map, combat) with every seat human on the header's faction (no AI runs: its commands
+    /// are in the log), attaches a fresh <see cref="Recorder"/>, queues the commands stamped for tick 1 and returns
+    /// <see cref="ReplayError.None"/>; ticking starts on the next frame.
+    /// </summary>
+    public ReplayError StartPlayback(GameData data, Replay replay)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        ArgumentNullException.ThrowIfNull(replay);
+        ReplayError invalid = replay.Validate();
+        if (invalid != ReplayError.None) return invalid;
+        if (data.ContentHash() != replay.DataHash) return ReplayError.DataMismatch;
+        ImmutableArray<PlayerSeat> seats = ImmutableArray<PlayerSeat>.Empty, played = ImmutableArray<PlayerSeat>.Empty;
+        if (!replay.Seats.IsDefaultOrEmpty)
+        {
+            var human = ImmutableArray.CreateBuilder<PlayerSeat>(replay.Seats.Length);
+            var asPlayed = ImmutableArray.CreateBuilder<PlayerSeat>(replay.Seats.Length);
+            foreach (ReplaySeat seat in replay.Seats)
+            {
+                int faction = seat.Faction == "-" ? -1 : data.FindFaction(seat.Faction);
+                if (faction < 0 && (seat.Faction != "-" || data.Factions.Length > 0)) return ReplayError.InvalidHeader;
+                human.Add(new PlayerSeat(faction, SeatController.Human, seat.Difficulty));
+                asPlayed.Add(new PlayerSeat(faction, seat.Controller, seat.Difficulty));
+            }
+            seats = human.MoveToImmutable();
+            played = asPlayed.MoveToImmutable();
+        }
+        Seed = unchecked((long)replay.Seed);
+        PlayerCount = replay.PlayerCount;
+        UnitCapacity = replay.UnitCapacity;
+        CommandCapacity = replay.CommandCapacity;
+        MapSize = replay.Map.Width;
+        Forests = replay.Map.Forests;
+        GoldMines = replay.Map.GoldMines;
+        StartLocations = replay.Map.StartLocations;
+        Combat = replay.Combat;
+        Seats = seats;
+        PlayedSeats = played;
+        var config = new SimConfig(replay.Seed, replay.PlayerCount, replay.UnitCapacity, replay.CommandCapacity)
+        {
+            Data = data,
+            Map = replay.Map,
+            ResourceCapacity = replay.ResourceCapacity,
+            Combat = replay.Combat,
+            Seats = seats,
+        };
+        Simulation = new Simulation(config);
+        Recorder = new ReplayRecorder(Simulation, replay.CheckpointInterval, replay.TickCount, replay.Commands.Length);
+        Playback = replay;
+        PlaybackState = PlaybackState.Playing;
+        PlaybackError = ReplayError.None;
+        _next = 0;
+        _compared = 0;
+        ReplayError fed = FeedPlayback();
+        if (fed != ReplayError.None) StopPlayback(fed);
+        return ReplayError.None;
+    }
+
+    // Enqueues every logged command stamped for the next tick, in log order, and checks the sim stamped each as logged.
+    private ReplayError FeedPlayback()
+    {
+        Replay replay = Playback!;
+        Simulation sim = Simulation!;
+        while (_next < replay.Commands.Length && replay.Commands[_next].Tick == sim.TickNumber + 1)
+        {
+            Command logged = replay.Commands[_next];
+            try
+            {
+                sim.Enqueue(logged);
+            }
+            catch (InvalidOperationException)
+            {
+                return ReplayError.CommandRejected;
+            }
+            ref readonly Command stamped = ref Recorder!.CommandAt(Recorder.CommandCount - 1);
+            if (stamped.Tick != logged.Tick || stamped.Sequence != logged.Sequence) return ReplayError.SequenceMismatch;
+            _next++;
+        }
+        return ReplayError.None;
+    }
+
+    // After a playback tick: the newest checkpoint against the file's, then the next tick's commands.
+    private ReplayError CheckPlayback()
+    {
+        if (Recorder!.CheckpointCount > _compared)
+        {
+            if (Recorder.CheckpointAt(_compared) != Playback!.Checkpoints[_compared]) return ReplayError.CheckpointMismatch;
+            _compared++;
+        }
+        return FeedPlayback();
+    }
+
+    private void StopPlayback(ReplayError error)
+    {
+        PlaybackState = PlaybackState.Stopped;
+        PlaybackError = error;
+        GD.Print($"Replay stopped at tick {Simulation!.TickNumber}: {error}");
+    }
+
+    // Ends playback (None: the recording's end, every checkpoint equal; else the mismatch) and tells the shell, once.
+    private void FinishPlayback(ReplayError error)
+    {
+        if (error != ReplayError.None) StopPlayback(error);
+        else
+        {
+            PlaybackState = PlaybackState.Ended;
+            GD.Print($"Replay ended at tick {Simulation!.TickNumber}: {_compared} checkpoints equal");
+        }
+        PlaybackFinished?.Invoke(this);
     }
 
     /// <summary>
@@ -160,6 +305,13 @@ public partial class SimRunner : Node
         int ticks = _clock.Advance(FixedFrameDelta ?? delta, _speed);
         for (int i = 0; i < ticks; i++)
         {
+            // M6-V9: a finished or stopped playback runs no more ticks; one already at its end finishes now (a 0-tick file).
+            if (PlaybackState is PlaybackState.Ended or PlaybackState.Stopped) break;
+            if (PlaybackState == PlaybackState.Playing && Simulation.TickNumber >= Playback!.TickCount)
+            {
+                FinishPlayback(ReplayError.None);
+                break;
+            }
             _stopwatch.Restart();
             Ticking = true;
             Simulation.Tick();
@@ -168,7 +320,13 @@ public partial class SimRunner : Node
             LastTickMs = _stopwatch.Elapsed.TotalMilliseconds;
             TickTimes.Add(LastTickMs);
             TotalTickMs += LastTickMs;
+            ReplayError playback = PlaybackState == PlaybackState.Playing ? CheckPlayback() : ReplayError.None;
             Ticked?.Invoke(Simulation);
+            if (PlaybackState == PlaybackState.Playing && (playback != ReplayError.None || Simulation.TickNumber == Playback!.TickCount))
+            {
+                FinishPlayback(playback);
+                break;
+            }
             // M6-V4: a Ticked handler paused the tree (the match-over banner): the frame's other ticks don't run, so the
             // banner shows the tick that ended the match (the clock's time is dropped, as for any pause).
             if (!CanProcess()) break;

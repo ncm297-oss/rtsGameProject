@@ -6007,6 +6007,87 @@ game/tests/FreeForAllTest.tscn  the 3-4 seat match-over scene (in the scene loop
     human's defeat time and the AI rows by difficulty; three seats: player 1 falls (no banner), then the human: "Defeat"
     with the match over.
 
+### Implementation (M6-V9)
+
+Every shell match is recorded and Main menu -> Load Game plays a recording back (M6 criterion 3's replay half; the save half
+waits for the sim's save format, Requests 42). View only: the sim's `Rts.Sim.Replays` API (`ReplayRecorder`, `ReplayFormat`,
+`Replay.Validate`, `ReplayError`) is used as it is, and no `ViewApi` accessor was needed.
+
+```
+game/scripts/ReplayStore.cs      the folder: file names, write (.tmp then move), prune to MaxReplays, list, delete
+game/scripts/ReplayEntry.cs      one listed file: path, start time, seed, seats, tick count
+game/scripts/LoadGameScreen.cs   the Load Game screen: a Tree (date, seed, players, length), the note, Watch / Delete / Back
+game/scripts/SimRunner.cs        StartPlayback, the playback half of the tick loop, PlaybackState / PlaybackError, PlayedSeats
+game/scripts/Match.cs            StartReplay (views wired, nothing spawned, orders off), ReplayFocus
+game/scripts/Main.cs             recording and SaveReplay, ReplayDir, WatchReplay, --replay, the playback banners
+game/scripts/SelectionController.cs, CommandCard.cs   OrdersEnabled / ReadOnly
+game/scripts/MainMenu.cs, MenuText.cs, LoadText.cs, UiText.cs, game/data/common/ui.json   menu.load, load.* (16 keys)
+game/tests/ReplayPlaybackTest.tscn   the headless scene, (a)-(f) (in the scene loop)
+```
+
+- **Recording.** `Main` sets `SimRunner.RecordCheckpointInterval = ReplayRecorder.DefaultCheckpointInterval` (100) for a match
+  started from the setup's Start or with `--skirmish` (a test's `BeforeStart` may still set its own); dev-flag matches
+  (`--seed`, `--units`, `--bench` ...) record nothing, as before. The file is named when the match starts:
+  `<yyyyMMdd-HHmmss>-seed<seed>.replay` in local time (`ReplayStore.NewPath`; `-2`, `-3` ... for a second match in the same
+  second). `DateTime.Now` is read there and nowhere else, in view code; it never reaches the sim (rule 2). `Main.SaveReplay`
+  writes `Recorder.ToReplay()` with `ReplayFormat.WriteFile` (to `<name>.tmp`, then moved over the name, so a crash never
+  leaves a cut file under it) when the banner opens, again at Quit to menu (the file then holds the match up to the later of
+  the two) and when the window is closed mid-match; then `ReplayStore.Prune` deletes the oldest files past
+  `ReplayStore.MaxReplays` = 20 (by the start time in the name; a one-hour four-seat match is a few MB and the list reads
+  every file). A failed write is one warning; the match is unharmed. A replay played back records nothing.
+- **Where.** `Main.ReplayDir`: unset, `user://replays` when `Main` is the booted scene (a child of the root) and null (no file
+  written, nothing listed) when a test scene hosts the shell, so no test touches the player's folder; tests set a
+  per-process folder (BUG-0770's rule).
+- **Load Game.** `menu.load` sits between Skirmish and Settings. The screen reads the folder afresh each time it opens
+  (`ReplayStore.List`): every `*.replay` that `ReplayFormat.TryReadFile` reads is a row, newest first, with the date
+  (`load.date_item` of the name's start time, else the file's write time), the seed, the players (`load.seat` per seat:
+  the faction's `displayName` and You / Human / the AI's difficulty from `setup` and `match_over`, joined by
+  `load.seat_separator`) and the length (`match_over.clock` of `TickCount`, m:ss). Files it can't read are left out and
+  counted in the note (`load.skipped`); an empty folder says `load.empty`. Watch (or a double-click) plays the picked row,
+  Delete deletes its file and re-reads, Back and Esc return to the menu.
+- **Playback.** `Main.WatchReplay(path)` reads the file; a read error starts nothing. Otherwise a match scene is made and
+  `Match.StartReplay` calls `SimRunner.StartPlayback(data, replay)`, which refuses before any sim exists when
+  `Replay.Validate` fails, when `data.ContentHash() != replay.DataHash` (`DataMismatch`) or when a seat names a faction the
+  data lacks; a refusal frees the match and shows the Load Game screen with `load.refused` (the code in the dev log). Else
+  the runner builds the `SimConfig` from the header (seed, players, unit / command / resource capacity, `Map`, `Combat`)
+  with **every seat `SeatController.Human`** on the header's faction (no AI runs; its commands are in the log), attaches a
+  fresh `ReplayRecorder` (`Recorder`) and queues the commands stamped for tick 1. Each tick of `_Process` then runs as
+  `ReplayPlayer.Run` does, through the runner's own clock (game speed, pause, `FixedFrameDelta`): `Tick()`, the newest
+  checkpoint against the file's, then every logged command with `Tick == TickNumber + 1` enqueued in log order with its
+  stamp (tick, sequence) checked, then `Ticked`. A checkpoint or stamp that differs (or a full queue) stops playback
+  (`PlaybackState.Stopped`, `PlaybackError`): no further tick runs, even unpaused. Reaching `TickCount` ends it
+  (`PlaybackState.Ended`). Either raises `PlaybackFinished` once, and `Main` opens the banner through the pause path:
+  `load.mismatch` for a stop, `load.ended` for the end (or the outcome's title when the result fell on the last tick), with
+  Stats and Main menu and no Continue watching. A result mid-replay shows the usual banner, whose Continue watching plays
+  on. `SimRunner.PlayedSeats` keeps the header's seats (AI seats stay AI) for the stats screen and `Match.Seats`.
+- **No orders.** `Match.StartReplay` wires the views as for a live match, spawns no army or base (the log's own
+  `SpawnBuilding` / `SpawnUnit` commands make them), points the camera at player 0's first logged `SpawnBuilding`
+  (`Match.ReplayFocus`), and sets `SelectionController.OrdersEnabled = false` and `CommandCard.ReadOnly = true`. With
+  orders off the right click does nothing, A / M / an ability button arm nothing, S / H send nothing, and every public order
+  call (`Order`, `ContextOrder`, `CommandAt`, `OrderAt`, `AttackOrder`, `AttackMoveClick`, `AbilityOrder`,
+  `SelfAbilityOrder`, `BeginAbility`, `OrderBuild`, `CancelSelectedSite`, `RallyOrder`, `Produce`, `CancelQueueItem`; the
+  minimap and the queue strip go through these) returns without enqueuing; selection, control groups and Tab work. The
+  read-only card follows the selection with every button greyed and dimmed, takes no key and opens no build menu. Fog,
+  minimap, camera and HUD show player 0's view. Colours are each slot's default (`--colour` picks are not in the file).
+- **`--replay <path>`** (a shell flag like `--no-confine`, not a match flag) plays the file at boot; the view's match flags
+  given with it still count (`--speed`, `--mute`, `--no-fog`, `--no-hud`); a refused file shows the Load Game screen.
+- **Tests.** `ReplayPlaybackTest` (headless, `Main` hosted with a per-process `ReplayDir`, every runner on
+  `FixedFrameDelta` 0.25 s = five ticks a frame): (a) a 600-tick `--skirmish` match (one AI) with the human's orders
+  scripted at ticks 100 / 200 / 300 (the S key and a right click as live controls: both send); Quit to menu writes the file
+  (name, header seed / seats / 600 ticks / 6 checkpoints); Load Game lists it (seed, players cell, "0:30"); Watch plays it to
+  tick 600 with all 6 checkpoints equal, `load.ended` and no Continue, the playback sim's command lines byte-equal to the
+  file's, no file written; (b) the same with three seats, two AIs; (c) a copy with the `data-hash` line altered (checksum
+  re-sealed) is refused before any match exists (`load.refused`; `StartPlayback` returns `DataMismatch` with no sim); (d) a
+  copy with the tick-300 checkpoint altered stops at tick 300 with `load.mismatch` and runs no tick unpaused; (e) a junk and
+  a cut `.replay` are skipped and counted (a `.txt` is not looked at), Delete, `Prune` (23 files: the 3 oldest go),
+  `NewPath` beside a taken name; (f) during (a)'s playback the selection works, the card is greyed, and the right click, A
+  (+ click), S, H, every card press and every order call send nothing (the playback log a prefix of the file's); also
+  `--replay` (plays at boot; a missing file refused), a hosted shell with no folder writes nothing, and the player's
+  `user://replays` is unchanged over the run. A mutant with orders left on in playback fails (f) and (a) (a stray order
+  moves the tick-200 checkpoint). `ShellTest`: the 17 new keys (each required; bad `date_item` / `seat` / `skipped`
+  formats refused) and the menu path by clicks (the empty-folder note, a recorded menu match listed, Watch, Quit to menu,
+  Esc).
+
 ## AI architecture
 
 The AI lives in `Rts.Sim.Ai`, inside the sim assembly, because it must be deterministic (it uses
@@ -6935,7 +7016,10 @@ three arrays on `World`, `CombatConstants.SurroundSpotsPerCell`. No `Command`, n
   load round-trip test must compare them directly, not only the hash.
 - If a replay's data hash doesn't match the current data, the game says it was recorded with
   different balance data and refuses to play it (no silent desync). The sim returns only the
-  `ReplayError.DataMismatch` code; the text comes from data (M6 playback UI).
+  `ReplayError.DataMismatch` code; the text comes from data (`ui.json` `load.refused`, M6-V9).
+- **The shell's replays** (M6-V9): every match started from the menu or with `--skirmish` is recorded (checkpoints every 100
+  ticks) and written to `user://replays/<yyyyMMdd-HHmmss>-seed<seed>.replay` at the banner and at Quit to menu, the newest
+  20 kept; Load Game lists and plays them through `SimRunner` (see "Implementation (M6-V9)").
 
 ## Testing strategy
 

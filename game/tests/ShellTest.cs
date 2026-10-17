@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -37,11 +38,15 @@ namespace Rts.Game.Tests;
 /// unchanged. The settings screen itself is <c>SettingsTest</c>'s.
 /// M6-V4: the 18 <c>match_over.*</c> keys, each required by name (a missing one, or the section, one error naming it), and
 /// bad <c>clock</c> / <c>match_length</c> formats refused. The banner and stats screen are <c>MatchOverViewTest</c>'s.
+/// M6-V9: <c>menu.load</c> and the 16 <c>load.*</c> keys (each required, bad <c>date_item</c> / <c>seat</c> / <c>skipped</c>
+/// formats refused); the menu path by clicks: Load Game on an empty folder (the note, Watch / Delete greyed, Back), a recorded
+/// menu match listed with its seed, seats and length, Watch into playback (orders off, card greyed), Quit to menu, Esc back.
+/// Playback itself is <c>ReplayPlaybackTest</c>'s.
 /// </summary>
 /// <remarks>
 /// Headless: <c>&amp; $env:GODOT --headless --path game res://tests/ShellTest.tscn</c>; prints "SHELL TEST PASS" and exits 0,
 /// else "SHELL TEST FAIL: ..." lines and exits 1. Windowed with <c>-- --shots &lt;dir&gt;</c> it saves <c>shell-menu.png</c>,
-/// <c>shell-setup.png</c>, <c>shell-match.png</c> and <c>shell-pause.png</c>.
+/// <c>shell-setup.png</c>, <c>shell-match.png</c>, <c>shell-pause.png</c>, <c>shell-load.png</c> and <c>shell-replay.png</c>.
 /// </remarks>
 public partial class ShellTest : Node
 {
@@ -73,6 +78,7 @@ public partial class ShellTest : Node
             await SkirmishBoot();
             await FreeForAll();
             await VsyncOverride();
+            await LoadGameFlow();
             byte[]? after = PlayerSettings();
             Check(playerSettings == null ? after == null : after != null && after.AsSpan().SequenceEqual(playerSettings),
                 $"the player's {GameSettings.DefaultPath} changed over the run (BUG-0770)");
@@ -312,7 +318,10 @@ public partial class ShellTest : Node
         foreach (KeysText k in Enum.GetValues<KeysText>()) keys.Add(("keys", UiText.Key(k), _ui.Keys(k)));
         keys.Add(("hud", UiText.Key(HudText.ResourceLeft), _ui.Hud(HudText.ResourceLeft)));
         keys.Add(("hud", UiText.Key(HudText.LastSeen), _ui.Hud(HudText.LastSeen)));
-        Check(keys.Count == 4 + 17 + 4 + 22 + 18 + 15 + 2, $"{keys.Count} shell keys"); // settings: 22 since M6-V7 (confine_cursor); keys 15 + hud 2 since M6-V8; setup 17 since M6-V5 (add_slot, remove_slot)
+        // M6-V9: the Load Game screen's and the playback banners' keys.
+        foreach (LoadText k in Enum.GetValues<LoadText>()) keys.Add(("load", UiText.Key(k), _ui.LoadGame(k)));
+        // settings: 22 since M6-V7 (confine_cursor); keys 15 + hud 2 since M6-V8; setup 17 since M6-V5 (add_slot, remove_slot); menu 5 + load 16 since M6-V9
+        Check(keys.Count == 5 + 17 + 4 + 22 + 18 + 15 + 2 + 16, $"{keys.Count} shell keys");
         string json = File.ReadAllText(UiText.DefaultPath).Replace("\r\n", "\n");
         foreach ((string section, string key, string text) in keys)
         {
@@ -323,7 +332,7 @@ public partial class ShellTest : Node
             Check(UiText.Parse(root.ToJsonString(), errors) == null && errors.Count == 1 && errors[0].Contains($"{section}.{key}"),
                 $"ui.json without {section}.{key}: [{string.Join("; ", errors)}]");
         }
-        foreach (string section in new[] { "menu", "setup", "pause", "settings", "match_over", "keys" })
+        foreach (string section in new[] { "menu", "setup", "pause", "settings", "match_over", "keys", "load" })
         {
             var root = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
             root.Remove(section);
@@ -348,7 +357,10 @@ public partial class ShellTest : Node
             // M6-V8: the resource click's lines and the Keybinds tab's keys.
             "hud.resource_left", "hud.last_seen", "keys.tab_general", "keys.tab_keybinds", "keys.order_attack_move", "keys.order_stop",
             "keys.order_hold", "keys.order_move", "keys.subgroup_next", "keys.build_basic", "keys.build_advanced", "keys.group", "keys.card",
-            "keys.press_key", "keys.conflict", "keys.reserved", "keys.defaults" };
+            "keys.press_key", "keys.conflict", "keys.reserved", "keys.defaults",
+            // M6-V9: Load Game and the replay banners.
+            "menu.load", "load.title", "load.date", "load.seed", "load.seats", "load.length", "load.date_item", "load.seat", "load.seat_separator",
+            "load.watch", "load.delete", "load.back", "load.empty", "load.skipped", "load.refused", "load.mismatch", "load.ended" };
         foreach (string n in named) Check(keys.Any(k => $"{k.Section}.{k.Key}" == n), $"no key {n}");
         Check(!keys.Any(k => k.Key == "coming_soon"), "setup.coming_soon is still read (nothing shows it since M6-V2)");
 
@@ -382,6 +394,18 @@ public partial class ShellTest : Node
         for (int i = 0; i < KeyMap.FirstGroup; i++)
             Check(Enum.TryParse(KeyMap.Actions[i].Replace("_", ""), ignoreCase: true, out KeysText _) && InputMap.HasAction(KeyMap.Actions[i]),
                 $"action {KeyMap.Actions[i]} has no keys text or no input action");
+
+        // M6-V9: the three load formats; one that can't format (or names too little) is one error naming its key.
+        Check(_ui.ReplaySeat("Malazan", "AI").Contains("Malazan") && _ui.ReplaySeat("Malazan", "AI").Contains("AI") && _ui.ReplaysSkipped(3).Contains('3')
+            && _ui.ReplayDate(new DateTime(2026, 10, 16, 20, 36, 0)).Contains("2026"), $"load formats: '{_ui.ReplaySeat("Malazan", "AI")}', '{_ui.ReplaysSkipped(3)}'");
+        foreach ((string key, string bad) in new[] { ("date_item", "Date"), ("date_item", "{1}"), ("date_item", "{0:yyyy"), ("seat", "{0}"), ("seat", "{0} {2}"),
+            ("seat", "{{0}} {{1}}"), ("skipped", "skipped"), ("skipped", "{1}"), ("skipped", "{{0}}") })
+        {
+            var root = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
+            root["load"]![key] = bad;
+            var errors = new List<string>();
+            Check(UiText.Parse(root.ToJsonString(), errors) == null && errors.Count == 1 && errors[0].Contains($"load.{key}"), $"load.{key} '{bad}': [{string.Join("; ", errors)}]");
+        }
 
         // BUG-0581 item 1: the map size item is a ui.json format; one that can't format the size is one error naming the key.
         Check(_ui.MapSizeItem(192).Contains("192"), $"map size item '{_ui.MapSizeItem(192)}'");
@@ -748,6 +772,105 @@ public partial class ShellTest : Node
         main.QueueFree();
         await Frames(2);
         try { Directory.Delete(Path.GetDirectoryName(full)!, true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+    }
+
+    // M6-V9: the menu path to a replay, by clicks. Load Game on an empty folder: the empty note, Watch and Delete greyed; Back.
+    // Skirmish -> Start (seed 7) -> a few ticks -> pause -> Quit to menu writes one file; Load Game lists it (seed 7, the two
+    // seats, its length); Watch plays it (orders off, the card greyed, the sim's seats human); Esc -> Quit to menu; Load Game
+    // -> Esc back to the menu. The Main here writes to a per-process folder, never the player's (BUG-0770's rule).
+    private async Task LoadGameFlow()
+    {
+        RemoveChild(_main);
+        _main.QueueFree();
+        await Frames(2);
+        string dir = $"user://shell-test-replays-{OS.GetProcessId()}";
+        string full = ProjectSettings.GlobalizePath(dir);
+        if (Directory.Exists(full)) Directory.Delete(full, true);
+        _main = NewMain(Array.Empty<string>(), "load");
+        _main.ReplayDir = dir;
+        AddChild(_main);
+        await Frames(2);
+        MainMenu menu = _main.Menu!;
+        LoadGameScreen load = _main.LoadScreen!;
+        Check(menu.LoadButton.Text == _ui.Menu(MenuText.Load) && menu.LoadButton.GetIndex() == menu.SkirmishButton.GetIndex() + 1
+            && menu.SettingsButton.GetIndex() == menu.LoadButton.GetIndex() + 1, "menu order: Skirmish, Load Game, Settings, Quit (docs/02 \"Game flow\" 1)");
+
+        // Empty folder.
+        await Click(menu.LoadButton);
+        Check(load.Visible && !menu.Visible && load.Entries.Count == 0 && load.Note.Text == _ui.LoadGame(LoadText.Empty) && load.WatchButton.Disabled && load.DeleteButton.Disabled,
+            $"Load Game on an empty folder: visible {load.Visible}, rows {load.Entries.Count}, note '{load.Note.Text}', Watch disabled {load.WatchButton.Disabled}");
+        var allowed = new HashSet<string>(Enum.GetValues<LoadText>().Select(_ui.LoadGame)) { "" };
+        foreach (Node n in load.FindChildren("*", "", true, false))
+            if (n is Label l) Check(allowed.Contains(l.Text), $"Load Game shows '{l.Text}' ({n.Name}), not from ui.json");
+        Check(Enumerable.Range(0, 4).Select(c => load.List.GetColumnTitle(c)).SequenceEqual(new[] { LoadText.Date, LoadText.Seed, LoadText.Seats, LoadText.Length }.Select(_ui.LoadGame))
+            && load.WatchButton.Text == _ui.LoadGame(LoadText.Watch) && load.DeleteButton.Text == _ui.LoadGame(LoadText.Delete) && load.BackButton.Text == _ui.LoadGame(LoadText.Back),
+            "Load Game column titles and buttons not from ui.json");
+        await Click(load.BackButton);
+        Check(menu.Visible && !load.Visible, "Load Game Back did not show the menu");
+
+        // A recorded match from the menu.
+        await Click(menu.SkirmishButton);
+        SkirmishSetup setup = _main.Setup!;
+        setup.SeedEdit.Text = "7";
+        setup.SeedEdit.EmitSignal(LineEdit.SignalName.TextChanged, "7");
+        await Click(setup.StartButton);
+        await Frames(2);
+        Match? match = _main.CurrentMatch;
+        if (!Check(match != null && _main.ReplayPath != null, $"Load Game flow: no recorded match (match {match != null}, path '{_main.ReplayPath}')")) return;
+        SimRunner runner = match!.GetNode<SimRunner>("SimRunner");
+        runner.GameSpeed = SimRunner.MaxSpeed;
+        await Seconds(0.5);
+        int ticks = runner.Simulation!.TickNumber;
+        ImmutableArray<PlayerSeat> seats = runner.Seats;
+        string path = _main.ReplayPath!;
+        await Type(Key.Escape, '\0');
+        await Click(_main.Pause!.QuitToMenuButton);
+        await Frames(2);
+        Check(_main.CurrentMatch == null && File.Exists(path) && Directory.GetFiles(full).Length == 1, $"Quit to menu: file {File.Exists(path)}, files {Directory.GetFiles(full).Length}");
+
+        // Listed with its seed, seats and length.
+        await Click(menu.LoadButton);
+        Check(load.Visible && load.Entries.Count == 1 && load.Note.Text == "" && !load.WatchButton.Disabled, $"Load Game after one match: rows {load.Entries.Count}, note '{load.Note.Text}'");
+        if (load.Entries.Count == 1)
+        {
+            ReplayEntry e = load.Entries[0];
+            TreeItem row = load.List.GetRoot().GetChild(0);
+            Check(e.Seed == 7 && e.TickCount == ticks && e.Seats.Length == 2 && e.Seats[1].Controller == SeatController.Ai
+                && e.Seats.Select((s, p) => s.Faction == _data.Factions[seats[p].Faction].Key).All(b => b)
+                && row.GetText(1) == "7" && row.GetText(3) == _ui.Clock(ticks) && row.GetText(2) == load.SeatsText(e.Seats),
+                $"row: seed {e.Seed}, ticks {e.TickCount} (want {ticks}), [{row.GetText(0)} | {row.GetText(1)} | {row.GetText(2)} | {row.GetText(3)}]");
+        }
+        await Shot("load");
+
+        // Watch -> playback; Esc -> Quit to menu.
+        await Click(load.WatchButton);
+        await Frames(2);
+        Match? replay = _main.CurrentMatch;
+        Check(replay is { IsPlayback: true } && !load.Visible && !menu.Visible, $"Watch: playback {replay?.IsPlayback}, load {load.Visible}");
+        if (replay != null)
+        {
+            SimRunner pr = replay.GetNode<SimRunner>("SimRunner");
+            Check(!replay.GetNode<SelectionController>("SelectionController").OrdersEnabled && replay.GetNode<CommandCard>("Hud/CommandCard").ReadOnly
+                && pr.Seats.All(s => s.Controller == SeatController.Human) && pr.PlaybackState == PlaybackState.Playing,
+                $"playback: seats [{string.Join(", ", pr.Seats)}], state {pr.PlaybackState}");
+            await Seconds(0.3);
+            Check(pr.Simulation!.TickNumber > 0, "the playback does not tick");
+            await Shot("replay");
+            await Type(Key.Escape, '\0');
+            Check(_main.Paused, "Esc did not pause the playback");
+            await Click(_main.Pause!.QuitToMenuButton);
+            await Frames(2);
+            Check(_main.CurrentMatch == null && menu.Visible && Directory.GetFiles(full).Length == 1, $"Quit to menu from playback: match {_main.CurrentMatch != null}, files {Directory.GetFiles(full).Length}");
+        }
+
+        // Load Game -> Esc back to the menu.
+        await Click(menu.LoadButton);
+        await Type(Key.Escape, '\0');
+        Check(menu.Visible && !load.Visible, "Esc on Load Game did not show the menu");
+        RemoveChild(_main);
+        _main.QueueFree();
+        await Frames(2);
+        try { Directory.Delete(full, true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
     }
 
     // M6-V2: the running match's seats are the picks: the runner's, the sim's config's, and World.FactionOf agree.

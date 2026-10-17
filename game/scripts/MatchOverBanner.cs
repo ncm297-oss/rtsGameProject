@@ -6,7 +6,8 @@ namespace Rts.Game;
 /// <summary>The match-over banner (M6-V4, docs/02 "Game flow" 4): Victory, Defeat or Draw, then Stats, Main menu and Continue watching. Text from <c>ui.json</c> <c>match_over</c>.</summary>
 /// <remarks>
 /// It runs while the tree is paused (the shell opens it through the pause path) and its backdrop takes every click. It only
-/// raises events and issues no sim command; <see cref="Main"/> pauses, resumes and ends the match.
+/// raises events and issues no sim command; <see cref="Main"/> pauses, resumes and ends the match. M6-V9: in replay playback
+/// it also shows "Replay ended" or "Replay out of sync" (<see cref="ShowTitle"/>) without Continue watching.
 /// </remarks>
 public partial class MatchOverBanner : CanvasLayer
 {
@@ -72,7 +73,27 @@ public partial class MatchOverBanner : CanvasLayer
             MatchOutcome.Draw => MatchOverText.Draw,
             _ => MatchOverText.Defeat,
         });
+        ContinueButton.Visible = true;
         Visible = true;
         StatsButton.GrabFocus();
+    }
+
+    /// <summary>
+    /// The replay banners (M6-V9): <paramref name="title"/> (<c>load.ended</c>, <c>load.mismatch</c>) over Stats and Main menu,
+    /// with no Continue watching: playback has nothing more to show. <see cref="Shown"/> keeps the outcome shown before, if any.
+    /// </summary>
+    public void ShowTitle(string title)
+    {
+        Title.Text = title;
+        ContinueButton.Visible = false;
+        Visible = true;
+        MenuButton.GrabFocus();
+    }
+
+    /// <summary>Hides Continue watching on the banner as it stands (M6-V9: playback ended on the tick that gave the outcome).</summary>
+    public void EndOfReplay()
+    {
+        ContinueButton.Visible = false;
+        if (Visible) MenuButton.GrabFocus();
     }
 }

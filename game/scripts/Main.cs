@@ -1,7 +1,9 @@
 using System;
+using System.IO;
 using Godot;
 using Rts.Sim;
 using Rts.Sim.Data;
+using Rts.Sim.Replays;
 using Rts.Sim.ViewApi;
 
 namespace Rts.Game;
@@ -22,6 +24,13 @@ namespace Rts.Game;
 /// M6-V7: every frame the shell confines the cursor to the window while a match runs unpaused in the focused window and the
 /// "Confine cursor to window" setting is on (<see cref="CursorConfine"/>), and frees it otherwise; each change is logged
 /// ("Cursor: confined" / "Cursor: visible"). Never headless, never with <c>--no-confine</c> (a shell flag, not a match flag).
+/// M6-V9: every match started from the menu or with <c>--skirmish</c> is recorded (a <see cref="ReplayRecorder"/>, checkpoints
+/// every <see cref="ReplayRecorder.DefaultCheckpointInterval"/> ticks) and written to <see cref="ReplayDir"/> when it ends
+/// (the banner) and again at Quit to menu (<see cref="SaveReplay"/>), the oldest files pruned past
+/// <see cref="ReplayStore.MaxReplays"/>. Main menu -> Load Game lists them; Watch (or <c>--replay &lt;path&gt;</c>, a shell flag)
+/// plays one through the match scene (<see cref="WatchReplay"/>): a refused file stays on the Load Game screen with
+/// <c>load.refused</c>; the end of the recording shows the banner ("Replay ended", or the outcome when it fell on the last tick)
+/// and a mismatch "Replay out of sync", both without Continue watching.
 /// </remarks>
 public partial class Main : Node3D
 {
@@ -35,8 +44,35 @@ public partial class Main : Node3D
     private SettingsScreen? _settingsScreen;
     private MatchOverBanner? _banner;
     private MatchStats? _stats;
+    private LoadGameScreen? _load;
     private bool _bannerShown;
     private bool _noConfine;
+    private bool _replayDirSet;
+    private string? _replayDir;
+
+    /// <summary>The shell flag that plays a replay file at boot (M6-V9): <c>--replay &lt;path&gt;</c> (a <c>user://</c> or OS path).</summary>
+    public const string ReplayFlag = "--replay";
+
+    /// <summary>
+    /// The folder the shell writes each recorded match to and Load Game lists (M6-V9). Unset, it is
+    /// <see cref="ReplayStore.DefaultDir"/> when this node is the scene the game booted (a child of the root), and null (no file
+    /// written, nothing listed) when a test scene hosts the shell, so no test touches the player's folder; tests set their own.
+    /// </summary>
+    public string? ReplayDir
+    {
+        get => _replayDirSet ? _replayDir : IsInsideTree() && GetParent() == GetTree().Root ? ReplayStore.DefaultDir : null;
+        set
+        {
+            _replayDir = value;
+            _replayDirSet = true;
+        }
+    }
+
+    /// <summary>The file the running (or last) recorded match writes, or null when it records nothing or has no folder.</summary>
+    public string? ReplayPath { get; private set; }
+
+    /// <summary>The Load Game screen (M6-V9); null without <c>ui.json</c>.</summary>
+    public LoadGameScreen? LoadScreen => _load;
 
     /// <summary>The user args to read instead of the command line's (tests); null for <see cref="OS.GetCmdlineUserArgs"/>.</summary>
     public string[]? UserArgs { get; set; }
@@ -121,7 +157,15 @@ public partial class Main : Node3D
         // The process's own command line: OS.GetCmdlineArgs() leaves out the args the engine consumed (it is empty here).
         SettingsApplier.Apply(Settings, GetTree().Root, VsyncOverride, keepWindow: SettingsApplier.HasEngineWindowFlag(System.Environment.GetCommandLineArgs()));
         if (ui != null) BuildScreens(ui, _data);
-        if (options != null) StartMatch(options);
+        // M6-V9: --replay <path> plays the file at once (a refusal shows the Load Game screen with the reason).
+        int replayAt = Array.IndexOf(args, ReplayFlag);
+        string? replayPath = replayAt >= 0 && replayAt + 1 < args.Length && !args[replayAt + 1].StartsWith("--", StringComparison.Ordinal) ? args[replayAt + 1] : null;
+        if (replayAt >= 0 && replayPath == null) GD.PushWarning($"Ignoring {ReplayFlag} with no path.");
+        if (replayPath != null)
+        {
+            if (!WatchReplay(replayPath, LaunchOptions.Parse(args)) && _load == null) GetTree().Quit(1);
+        }
+        else if (options != null) StartMatch(options, record: options.Skirmish);
         else ShowMenu();
     }
 
@@ -131,6 +175,7 @@ public partial class Main : Node3D
         AddChild(_menu);
         _menu.Build(ui);
         _menu.SkirmishPressed += ShowSetup;
+        _menu.LoadPressed += ShowLoadGame;
         _menu.SettingsPressed += ShowSettings;
         _menu.QuitPressed += () => GetTree().Quit();
 
@@ -139,6 +184,12 @@ public partial class Main : Node3D
         _setup.Build(ui, data);
         _setup.BackPressed += ShowMenu;
         _setup.StartPressed += StartSkirmish;
+
+        _load = new LoadGameScreen { Name = "LoadGame", Visible = false };
+        AddChild(_load);
+        _load.Build(ui, data);
+        _load.BackPressed += ShowMenu;
+        _load.WatchPressed += path => WatchReplay(path);
 
         _pause = new PauseMenu { Name = "PauseMenu" };
         AddChild(_pause);
@@ -212,8 +263,114 @@ public partial class Main : Node3D
     {
         if (_menu == null || _setup == null) return;
         _setup.Visible = false;
+        if (_load != null) _load.Visible = false;
         _menu.Visible = true;
         _menu.SkirmishButton.GrabFocus();
+    }
+
+    /// <summary>Shows the Load Game screen (M6-V9) with <see cref="ReplayDir"/>'s replays read afresh.</summary>
+    public void ShowLoadGame()
+    {
+        if (_menu == null || _load == null) return;
+        _menu.Visible = false;
+        _load.Refresh(ReplayDir);
+        _load.Visible = true;
+        if (_load.WatchButton.Disabled) _load.BackButton.GrabFocus();
+        else _load.WatchButton.GrabFocus();
+    }
+
+    /// <summary>
+    /// Plays the replay file at <paramref name="path"/> (M6-V9; a <c>user://</c> or OS path) in a new match scene: true when it
+    /// started. A file <see cref="ReplayFormat.TryReadFile"/> refuses, or one <see cref="SimRunner.StartPlayback"/> refuses
+    /// (other data, an unknown faction), starts nothing: the Load Game screen shows with <c>load.refused</c>. Of
+    /// <paramref name="options"/> (the boot's args for <c>--replay</c>) only the view's flags count.
+    /// </summary>
+    public bool WatchReplay(string path, LaunchOptions? options = null)
+    {
+        if (_data == null || CurrentMatch != null) return false;
+        string full = ProjectSettings.GlobalizePath(path);
+        ReplayError read = ReplayFormat.TryReadFile(full, out Replay? replay);
+        if (read != ReplayError.None || replay == null) return Refused(full, read);
+        if (_menu != null) _menu.Visible = false;
+        if (_setup != null) _setup.Visible = false;
+        if (_load != null) _load.Visible = false;
+        var match = GD.Load<PackedScene>(MatchScenePath).Instantiate<Match>();
+        match.Name = "Match";
+        match.ProcessMode = ProcessModeEnum.Pausable;
+        AddChild(match);
+        BeforeStart?.Invoke(match);
+        ReplayError refused = match.StartReplay(_data, replay, options ?? LaunchOptions.Parse(Array.Empty<string>()), full);
+        if (refused != ReplayError.None)
+        {
+            RemoveChild(match);
+            match.QueueFree();
+            return Refused(full, refused);
+        }
+        CurrentMatch = match;
+        ReplayPath = null; // a replay records nothing
+        _bannerShown = false;
+        match.Ended += outcome => OnMatchEnded(match, outcome);
+        match.GetNode<SimRunner>("SimRunner").PlaybackFinished += runner => OnPlaybackFinished(match, runner);
+        ApplyCamera();
+        return true;
+    }
+
+    // A replay that won't play: the reason in the dev log, the Load Game screen with the refusal note.
+    private bool Refused(string path, ReplayError error)
+    {
+        GD.Print($"Replay refused: {path}: {error}");
+        if (_load != null && _menu != null)
+        {
+            _menu.Visible = false;
+            if (_setup != null) _setup.Visible = false;
+            _load.Refresh(ReplayDir);
+            _load.ShowRefused();
+            _load.Visible = true;
+            _load.BackButton.GrabFocus();
+        }
+        return false;
+    }
+
+    // M6-V9: playback reached the recording's end or stopped on a mismatch: the banner, without Continue watching. The end
+    // on the tick that gave the outcome keeps the outcome's title; a mismatch always says so.
+    private void OnPlaybackFinished(Match match, SimRunner runner)
+    {
+        if (match != CurrentMatch || _banner == null) return;
+        bool stopped = runner.PlaybackState == PlaybackState.Stopped;
+        _bannerShown = true;
+        GetTree().Paused = true;
+        if (match.Simulation is Simulation sim) match.GetNodeOrNull<ResourceBar>("Hud/ResourceBar")?.Sync(sim.World);
+        if (!stopped && _banner.Visible) _banner.EndOfReplay();
+        else _banner.ShowTitle(UiText.Shared?.LoadGame(stopped ? LoadText.Mismatch : LoadText.Ended) ?? "");
+    }
+
+    /// <summary>
+    /// Writes the running recorded match to <see cref="ReplayPath"/> (M6-V9: at the banner and at Quit to menu, so the file
+    /// holds the match up to the latest of the two), then prunes the folder to <see cref="ReplayStore.MaxReplays"/>. False
+    /// (one warning, the match unharmed) when nothing records or the write fails.
+    /// </summary>
+    public bool SaveReplay()
+    {
+        if (CurrentMatch == null || ReplayPath == null || CurrentMatch.IsPlayback) return false;
+        if (CurrentMatch.GetNodeOrNull<SimRunner>("SimRunner")?.Recorder is not ReplayRecorder recorder) return false;
+        Replay replay;
+        try
+        {
+            replay = recorder.ToReplay();
+        }
+        catch (InvalidOperationException e)
+        {
+            GD.PushWarning($"Replay not saved: {e.Message}");
+            return false;
+        }
+        if (!ReplayStore.Write(replay, ReplayPath, out string error))
+        {
+            GD.PushWarning($"Replay not saved to {ReplayPath}: {error}");
+            return false;
+        }
+        GD.Print($"Replay saved: {ReplayPath} ({replay.TickCount} ticks)");
+        if (Path.GetDirectoryName(ReplayPath) is string dir) ReplayStore.Prune(dir, ReplayStore.MaxReplays);
+        return true;
     }
 
     /// <summary>Shows the skirmish setup screen.</summary>
@@ -226,21 +383,29 @@ public partial class Main : Node3D
     }
 
     /// <summary>What the setup's Start does: a match from the picks' match flags (<see cref="SkirmishSetup.MatchArgs"/>: seed, map size, the seat count, each slot's faction and colour, each AI slot's difficulty), everything else the match's defaults.</summary>
-    public void StartSkirmish(string[] args) => StartMatch(LaunchOptions.Parse(args));
+    /// <remarks>M6-V9: the match is recorded (<see cref="SaveReplay"/>).</remarks>
+    public void StartSkirmish(string[] args) => StartMatch(LaunchOptions.Parse(args), record: true);
 
-    private void StartMatch(LaunchOptions options)
+    private void StartMatch(LaunchOptions options, bool record)
     {
         if (_data == null || CurrentMatch != null) return;
         if (_menu != null) _menu.Visible = false;
         if (_setup != null) _setup.Visible = false;
+        if (_load != null) _load.Visible = false;
         var match = GD.Load<PackedScene>(MatchScenePath).Instantiate<Match>();
         match.Name = "Match";
         // Main runs Always (it answers Esc while paused); the match must stop with the tree.
         match.ProcessMode = ProcessModeEnum.Pausable;
         AddChild(match);
+        SimRunner runner = match.GetNode<SimRunner>("SimRunner");
+        // M6-V9: the menu's and --skirmish's matches record; a test's BeforeStart may still set its own interval.
+        if (record) runner.RecordCheckpointInterval = ReplayRecorder.DefaultCheckpointInterval;
         BeforeStart?.Invoke(match);
         // Ready before Start, as when the match was a child of Main.tscn: Start wires nodes the match's _Ready looked up.
         match.Start(_data, options);
+        // The wall clock names the file and nothing else (CLAUDE.md rule 2: it never reaches the sim).
+        ReplayPath = record && runner.Recorder != null && ReplayDir is string dir
+            ? ReplayStore.NewPath(dir, DateTime.Now, unchecked((ulong)runner.Seed)) : null;
         CurrentMatch = match;
         _bannerShown = false;
         match.Ended += outcome => OnMatchEnded(match, outcome);
@@ -264,6 +429,7 @@ public partial class Main : Node3D
         if (match != CurrentMatch || _banner == null || _bannerShown) return;
         _bannerShown = true;
         GetTree().Paused = true;
+        SaveReplay(); // M6-V9: the recording up to the result
         // BUG-0710 item 1: the HUD is Pausable and the tree pauses inside the killing tick, so it would show the frame before
         // the kill under the banner; one read of the sim now makes its K / L agree with the stats screen.
         if (match.Simulation is Simulation sim) match.GetNodeOrNull<ResourceBar>("Hud/ResourceBar")?.Sync(sim.World);
@@ -273,7 +439,7 @@ public partial class Main : Node3D
     /// <summary>What the banner's Continue watching does: hides it for the rest of the match and unpauses (Esc is the pause menu again).</summary>
     public void ContinueWatching()
     {
-        if (_banner == null || !_banner.Visible) return;
+        if (_banner == null || !_banner.Visible || !_banner.ContinueButton.Visible) return; // M6-V9: a finished replay has nothing to continue
         _banner.Visible = false;
         if (_stats != null) _stats.Visible = false;
         GetTree().Paused = false;
@@ -311,6 +477,8 @@ public partial class Main : Node3D
         Resume();
         if (CurrentMatch != null)
         {
+            SaveReplay(); // M6-V9: the whole match so far (a no-op for a replay or an unrecorded match)
+            ReplayPath = null;
             RemoveChild(CurrentMatch);
             CurrentMatch.QueueFree();
             CurrentMatch = null;
@@ -362,7 +530,7 @@ public partial class Main : Node3D
             else return; // Esc is the armed order's cancel (SelectionController / CommandCard)
             GetViewport().SetInputAsHandled();
         }
-        else if (_setup is { Visible: true })
+        else if (_setup is { Visible: true } || _load is { Visible: true })
         {
             ShowMenu();
             GetViewport().SetInputAsHandled();
@@ -375,6 +543,12 @@ public partial class Main : Node3D
         var selection = match.GetNodeOrNull<SelectionController>("SelectionController");
         var card = match.GetNodeOrNull<CommandCard>("Hud/CommandCard");
         return selection is { Targeting: true } || card != null && (card.MenuOpen || card.GhostActive);
+    }
+
+    public override void _Notification(int what)
+    {
+        // M6-V9: closing the window mid-match keeps the recording, as Quit to menu does.
+        if (what == NotificationWMCloseRequest) SaveReplay();
     }
 
     public override void _ExitTree()

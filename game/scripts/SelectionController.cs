@@ -211,6 +211,14 @@ public partial class SelectionController : Node
     /// <summary>Drops the resource node selection, if any.</summary>
     public void ClearResource() => _resource = -1;
 
+    /// <summary>
+    /// False in replay playback (M6-V9): no order of any kind reaches the sim. A right click orders nothing, A / M / an ability
+    /// arm nothing, S / H and the card's keys send nothing, and every public order call (<see cref="Order"/>,
+    /// <see cref="ContextOrder"/>, <see cref="AttackOrder"/>, <see cref="RallyOrder"/>, <see cref="Produce"/>, <see cref="OrderBuild"/>
+    /// ...) returns without enqueuing. Selection, control groups and Tab still work. True in a live match.
+    /// </summary>
+    public bool OrdersEnabled { get; set; } = true;
+
     /// <summary>Orders dropped because the command queue was too full to take a whole order (logged).</summary>
     public int DroppedOrders { get; private set; }
 
@@ -325,6 +333,7 @@ public partial class SelectionController : Node
             }
             else if (mb.IsActionPressed("command"))
             {
+                if (!OrdersEnabled) return; // M6-V9: playback, a right click means nothing
                 if (Card != null && Card.MenuOpen) Card.CloseMenu(); // closes a build menu (and its ghost), orders nothing
                 else if (Targeting) CancelTargeting(); // right click cancels targeting and orders nothing
                 else CommandAt(mb.Position, Input.IsActionPressed(OrderQueue));
@@ -351,7 +360,7 @@ public partial class SelectionController : Node
         if (e.IsActionPressed("order_cancel")) CancelTargeting();
         else if (e.IsActionPressed("order_attack_move")) BeginAttackMove();
         else if (e.IsActionPressed("order_move")) BeginMove();
-        else if (e.IsActionPressed("order_stop") || e.IsActionPressed("order_hold"))
+        else if (OrdersEnabled && (e.IsActionPressed("order_stop") || e.IsActionPressed("order_hold")))
         {
             Targeting = false;
             Order(e.IsActionPressed("order_stop") ? CommandKind.Stop : CommandKind.HoldPosition, null, queued);
@@ -369,10 +378,10 @@ public partial class SelectionController : Node
     }
 
     /// <summary>What A does: arms attack-move targeting, only when something is selected.</summary>
-    public void BeginAttackMove() => _target = Selection.Count > 0 ? CommandKind.AttackMove : CommandKind.Noop;
+    public void BeginAttackMove() => _target = OrdersEnabled && Selection.Count > 0 ? CommandKind.AttackMove : CommandKind.Noop;
 
     /// <summary>What M does (M3-V2): arms Move targeting (a plain move ignoring enemies, today what a right click on ground does), only when something is selected.</summary>
-    public void BeginMove() => _target = Selection.Count > 0 ? CommandKind.Move : CommandKind.Noop;
+    public void BeginMove() => _target = OrdersEnabled && Selection.Count > 0 ? CommandKind.Move : CommandKind.Noop;
 
     /// <summary>
     /// What an ability button or its grid key does (M4-V6a): arms targeting for ability <paramref name="abilityId"/> when
@@ -384,6 +393,7 @@ public partial class SelectionController : Node
     /// </summary>
     public bool BeginAbility(int abilityId, bool queued = false)
     {
+        if (!OrdersEnabled) return false;
         if (_runner?.Simulation is not Simulation sim) return false;
         World world = sim.World;
         if ((uint)abilityId >= (uint)world.Data.Abilities.Length) return false;
@@ -422,6 +432,7 @@ public partial class SelectionController : Node
     /// </summary>
     public bool SelfAbilityOrder(int abilityId, bool queued)
     {
+        if (!OrdersEnabled) return false;
         if (_runner?.Simulation is not Simulation sim) return false;
         Selection.Prune(sim.World.Units.Alive, sim.World.Units.Generation);
         int caster = SelfCaster(abilityId, queued, out int index);
@@ -495,6 +506,7 @@ public partial class SelectionController : Node
     /// </summary>
     public bool AbilityOrder(int abilityId, System.Numerics.Vector2 point, bool queued)
     {
+        if (!OrdersEnabled) return false;
         if (_runner?.Simulation is not Simulation sim || !float.IsFinite(point.X) || !float.IsFinite(point.Y)) return false;
         Selection.Prune(sim.World.Units.Alive, sim.World.Units.Generation);
         int caster = PickCaster(abilityId, point, queued, out int index);
@@ -516,7 +528,7 @@ public partial class SelectionController : Node
     /// <summary>What a left click at <paramref name="screen"/> does while targeting: gives the armed order (<see cref="TargetKind"/>: attack-move after A, move after M) at the ground there (queued while <c>order_queue</c> is held) and disarms; false (still armed) when not targeting or off the map. After A, a click on an enemy unit or building (<see cref="EnemyAt"/>) is an <c>Attack</c> on it instead (M4-V2). After an ability button, the click is one <see cref="AbilityOrder"/> at <see cref="AbilityPoint"/> (M4-V6a), and disarms even when no caster is ready; with <c>order_queue</c> held and the cast sent it stays armed for the next queued cast (M4-V6b, BUG-0342).</summary>
     public bool AttackMoveClick(Vector2 screen)
     {
-        if (!Targeting) return false;
+        if (!Targeting || !OrdersEnabled) return false;
         bool queued = Input.IsActionPressed(OrderQueue);
         if (_target == CommandKind.UseAbility)
         {
@@ -770,6 +782,7 @@ public partial class SelectionController : Node
     /// </summary>
     public int OrderBuild(int typeId, int anchor, bool queued)
     {
+        if (!OrdersEnabled) return 0;
         if (_runner?.Simulation is not Simulation sim) return 0;
         World world = sim.World;
         int workers = SelectedWorkerCount();
@@ -795,6 +808,7 @@ public partial class SelectionController : Node
     /// <summary>What the card's Cancel does (M3-V2): one <c>Cancel</c> at the selected own site's footprint centre; false (nothing enqueued) when no own site is selected, a Cancel for this site is already waiting for the next tick (a second press, BUG-0126), or the command queue is full.</summary>
     public bool CancelSelectedSite()
     {
+        if (!OrdersEnabled) return false;
         if (_runner?.Simulation is not Simulation sim) return false;
         int slot = SelectedBuilding;
         BuildingStore b = sim.World.Buildings;
@@ -853,6 +867,7 @@ public partial class SelectionController : Node
     /// <summary>What a right click (Move) or targeting click (AttackMove) at <paramref name="screen"/> orders: picks the ground there and calls <see cref="Order"/>; false if the ray missed the map.</summary>
     public bool OrderAt(CommandKind kind, Vector2 screen, bool queued)
     {
+        if (!OrdersEnabled) return false;
         Simulation sim = _runner.Simulation!;
         Vector3 origin = _camera.ProjectRayOrigin(screen), dir = _camera.ProjectRayNormal(screen);
         if (!GroundPicker.TryPick(sim.World.Heightmap, new(origin.X, origin.Y, origin.Z), new(dir.X, dir.Y, dir.Z), out System.Numerics.Vector3 hit))
@@ -868,6 +883,7 @@ public partial class SelectionController : Node
     /// </summary>
     public bool CommandAt(Vector2 screen, bool queued)
     {
+        if (!OrdersEnabled) return false;
         // An enemy under the cursor is an Attack (M4-V2); a selected building keeps its rally rule.
         if (SelectedBuilding < 0 && EnemyAt(screen, out EntityHandle enemy, out bool isBuilding))
         {
@@ -942,6 +958,7 @@ public partial class SelectionController : Node
     /// </summary>
     public bool AttackOrder(EntityHandle target, bool isBuilding, bool queued)
     {
+        if (!OrdersEnabled) return false;
         if (_runner?.Simulation is not Simulation sim) return false;
         Selection.Prune(sim.World.Units.Alive, sim.World.Units.Generation);
         if (Selection.Count == 0 || !RoomFor(sim, Selection.Count, "Attack")) return false;
@@ -1011,6 +1028,7 @@ public partial class SelectionController : Node
     /// </summary>
     public bool RallyOrder(System.Numerics.Vector2 point, int building = -1)
     {
+        if (!OrdersEnabled) return false;
         if (_runner?.Simulation is not Simulation sim) return false;
         int slot = SelectedFinishedBuilding;
         if (slot < 0 || !float.IsFinite(point.X) || !float.IsFinite(point.Y)) return false;
@@ -1037,6 +1055,7 @@ public partial class SelectionController : Node
     /// </summary>
     public bool Produce(int typeId, bool isTech)
     {
+        if (!OrdersEnabled) return false;
         if (_runner?.Simulation is not Simulation sim) return false;
         int slot = SelectedFinishedBuilding;
         if (slot < 0) return false;
@@ -1053,6 +1072,7 @@ public partial class SelectionController : Node
     /// <summary>What a click on queue item <paramref name="item"/> of the selected own finished building does (M3-V3): one <c>CancelTrain</c> of it at the footprint centre, one Command sound; nothing past the queue's count.</summary>
     public bool CancelQueueItem(int item)
     {
+        if (!OrdersEnabled) return false;
         if (_runner?.Simulation is not Simulation sim) return false;
         int slot = SelectedFinishedBuilding;
         if (slot < 0 || (uint)item >= (uint)sim.World.Buildings.QueueCount[slot]) return false;
@@ -1097,6 +1117,7 @@ public partial class SelectionController : Node
     /// </summary>
     public void ContextOrder(Vector2 point, bool queued)
     {
+        if (!OrdersEnabled) return;
         if (_runner?.Simulation is not Simulation sim) return;
         if (!float.IsFinite(point.X) || !float.IsFinite(point.Y)) return;
         var target = new System.Numerics.Vector2(point.X, point.Y);
@@ -1160,6 +1181,7 @@ public partial class SelectionController : Node
     /// <param name="queued">Append to each unit's order queue (Shift) instead of replacing it.</param>
     public void Order(CommandKind kind, Vector2? point, bool queued)
     {
+        if (!OrdersEnabled) return;
         if (_runner?.Simulation is not Simulation sim) return;
         if (kind is not (CommandKind.Move or CommandKind.AttackMove or CommandKind.Stop or CommandKind.HoldPosition))
             throw new ArgumentOutOfRangeException(nameof(kind), kind, "not a unit order");

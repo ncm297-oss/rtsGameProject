@@ -77,6 +77,7 @@
   "menu": {
     "title": "RtsGame",
     "skirmish": "Skirmish",
+    "load": "Load Game",
     "settings": "Settings",
     "quit": "Quit"
   },
@@ -173,5 +174,23 @@
     "conflict": "{0} is already used by {1}",
     "reserved": "{0} can't be rebound",
     "defaults": "Default keys"
+  },
+  "load": {
+    "title": "Load Game",
+    "date": "Date",
+    "seed": "Seed",
+    "seats": "Players",
+    "length": "Length",
+    "date_item": "{0:yyyy-MM-dd HH:mm}",
+    "seat": "{0} ({1})",
+    "seat_separator": ", ",
+    "watch": "Watch",
+    "delete": "Delete",
+    "back": "Back",
+    "empty": "No replays yet. Every match you play is recorded here.",
+    "skipped": "{0} unreadable replay file(s) skipped",
+    "refused": "This replay can't be played: it was recorded with different game data, or the file is damaged.",
+    "mismatch": "Replay out of sync",
+    "ended": "Replay ended"
   }
 }

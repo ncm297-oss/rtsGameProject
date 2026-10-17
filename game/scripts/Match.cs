@@ -4,6 +4,7 @@ using Rts.Sim;
 using Rts.Sim.Commands;
 using Rts.Sim.Data;
 using Rts.Sim.Map;
+using Rts.Sim.Replays;
 using Rts.Sim.ViewApi;
 
 namespace Rts.Game;
@@ -33,7 +34,8 @@ public partial class Match : Node3D
     public Simulation? Simulation => _runner?.Simulation;
 
     /// <summary>The seats the match was started with (one per player); empty before <see cref="Start"/>.</summary>
-    public System.Collections.Immutable.ImmutableArray<PlayerSeat> Seats => _runner?.Seats ?? System.Collections.Immutable.ImmutableArray<PlayerSeat>.Empty;
+    /// <remarks>M6-V9: the seats as played (<see cref="SimRunner.PlayedSeats"/>), so a replay's AI seats show as AI though its sim runs them human.</remarks>
+    public System.Collections.Immutable.ImmutableArray<PlayerSeat> Seats => _runner?.PlayedSeats ?? System.Collections.Immutable.ImmutableArray<PlayerSeat>.Empty;
 
     /// <summary>
     /// The match clock (<c>TickNumber</c>, ticks of 50 ms) when player <paramref name="player"/>'s defeat was seen: the end of the
@@ -80,6 +82,37 @@ public partial class Match : Node3D
         // The start workers come on top of the armies (the bench keeps its 100 / 1,000 a side), so the store grows past 2,000 when needed.
         _runner.UnitCapacity = Math.Max(_runner.UnitCapacity, _runner.PlayerCount * (options.UnitsPerPlayer + WorkersPerPlayer));
         _runner.Start(data);
+        Wire(data, options, null);
+    }
+
+    /// <summary>The file a replay match plays (M6-V9), or null for a live match.</summary>
+    public string? ReplayPath { get; private set; }
+
+    /// <summary>True for a replay playback match (M6-V9): the sim plays a recording and no order reaches it.</summary>
+    public bool IsPlayback => _runner?.Playback != null;
+
+    /// <summary>
+    /// Starts a replay playback match (M6-V9): the runner plays <paramref name="replay"/> (<see cref="SimRunner.StartPlayback"/>;
+    /// its refusal code is returned and nothing is wired), then the views are wired as for a live match, with no army or base
+    /// spawned (the recording's own commands make them), the selection's orders off and the command card greyed. Of
+    /// <paramref name="options"/> only the view's flags count (<c>--speed</c>, <c>--no-fog</c>, <c>--no-hud</c>, <c>--mute</c>, colours ...).
+    /// </summary>
+    public ReplayError StartReplay(GameData data, Replay replay, LaunchOptions options, string path)
+    {
+        if (options.Speed is double speed) _runner.GameSpeed = speed;
+        ReplayError refused = _runner.StartPlayback(data, replay);
+        if (refused != ReplayError.None) return refused;
+        ReplayPath = path;
+        UnitsPerPlayer = 0;
+        WorkersPerPlayer = 0;
+        Wire(data, options, replay);
+        return ReplayError.None;
+    }
+
+    // The views, HUD and input wired to the runner's new sim; a live match (replay null) also enqueues its armies and bases.
+    private void Wire(GameData data, LaunchOptions options, Replay? replay)
+    {
+        bool live = replay == null;
         Simulation sim = _runner.Simulation!;
         _defeatedAt = new int[sim.World.Config.PlayerCount];
         Array.Fill(_defeatedAt, -1);
@@ -127,6 +160,7 @@ public partial class Match : Node3D
 
         Sfx.SetMuted(options.Mute);
         var selection = GetNode<SelectionController>("SelectionController");
+        selection.OrdersEnabled = live; // M6-V9: no order of any kind reaches a replay's sim
         selection.Init(_runner, camera, GetNode<SelectionRings>("World3D/SelectionRings"), GetNode<Sfx>("Sfx"));
         selection.Outline = GetNode<BuildingOutline>("World3D/BuildingOutline");
         selection.Fog = fog;
@@ -143,19 +177,23 @@ public partial class Match : Node3D
 
         // M6-V3: no army (the menu's match, --skirmish, --units 0) spawns none; the bases are planned exactly as with one
         // (StartBase.Plan stands a one-unit block in for an empty one).
-        System.Numerics.Vector2[][] blocks;
+        System.Numerics.Vector2[][] blocks = Array.Empty<System.Numerics.Vector2[]>();
         System.Numerics.Vector2 focus;
-        if (options.UnitsPerPlayer > 0) blocks = SpawnArmies(sim, options.UnitsPerPlayer, out focus);
+        if (!live) focus = ReplayFocus(sim, replay!); // M6-V9: the recording's commands spawn everything
+        else if (options.UnitsPerPlayer > 0) blocks = SpawnArmies(sim, options.UnitsPerPlayer, out focus);
         else
         {
             blocks = new System.Numerics.Vector2[sim.World.Config.PlayerCount][]; // M6-V5: a base per player (it was two at most)
             for (int p = 0; p < blocks.Length; p++) blocks[p] = Array.Empty<System.Numerics.Vector2>();
             focus = new System.Numerics.Vector2(sim.World.NavGrid.Width, sim.World.NavGrid.Height) * MapConstants.CellSize / 2;
         }
-        Bases = options.NoBases ? null : SpawnBases(sim, blocks, WorkersPerPlayer, out _);
-        // No army: look at player 0's Town Hall instead of the map centre.
-        if (options.UnitsPerPlayer == 0 && Bases != null && Bases.HallAnchor[0] >= 0)
-            focus = StartBase.FootprintCenter(sim.World.NavGrid, data.Buildings[Bases.HallType[0]], Bases.HallAnchor[0]);
+        if (live)
+        {
+            Bases = options.NoBases ? null : SpawnBases(sim, blocks, WorkersPerPlayer, out _);
+            // No army: look at player 0's Town Hall instead of the map centre.
+            if (options.UnitsPerPlayer == 0 && Bases != null && Bases.HallAnchor[0] >= 0)
+                focus = StartBase.FootprintCenter(sim.World.NavGrid, data.Buildings[Bases.HallType[0]], Bases.HallAnchor[0]);
+        }
         camera.SetFocus(focus.X, focus.Y);
         StartFocus = camera.Focus;
         if (options.Zoom is float zoom) camera.SetZoom(zoom);
@@ -182,6 +220,7 @@ public partial class Match : Node3D
             {
                 var ghost = GetNode<BuildGhost>("World3D/BuildGhost");
                 ghost.Init(_runner, camera, ui, SelectionController.LocalPlayer);
+                card.ReadOnly = !live; // M6-V9: the card follows the selection, greyed
                 card.Init(_runner, selection, ghost, ui);
                 panel.Init(_runner, selection, ui);
             }
@@ -205,11 +244,34 @@ public partial class Match : Node3D
         }
         // The seed printed is the one the sim uses (BUG-0041: the long export printed 2^64-1 as -1).
         ResourcePlacement placed = sim.World.ResourcePlacement;
+        if (!live)
+        {
+            GD.Print($"Replay started: {ReplayPath}, seed {replay!.Seed}, map {map.Width} x {map.Height}, {replay.TickCount} ticks, " +
+                $"{replay.Commands.Length} commands, {replay.Checkpoints.Length} checkpoints, seats {SeatsText(data, _runner.PlayedSeats)}");
+            return;
+        }
         GD.Print($"Match started: seed {unchecked((ulong)_runner.Seed)}, map {map.Width} x {map.Height}, " +
             $"speed {_runner.GameSpeed:0.##}x, {options.UnitsPerPlayer} units per player, " +
             $"forests {placed.Forests} trees {placed.Trees} mines {placed.Mines}, " +
             $"town halls {Halls(Bases)}, {WorkersPerPlayer} workers per player" + (options.NoCombat ? ", combat off" : "") + (options.NoFog ? ", fog not drawn" : "") +
             $", seats {SeatsText(data, _runner.Seats)}");
+    }
+
+    /// <summary>
+    /// Where a replay's camera starts (M6-V9): the footprint centre of player 0's first logged <c>SpawnBuilding</c> (its start
+    /// Town Hall, as a live match looks at it), else the map centre. Read from the log: the hall stands only after tick 1.
+    /// </summary>
+    public static System.Numerics.Vector2 ReplayFocus(Simulation sim, Replay replay)
+    {
+        NavGrid g = sim.World.NavGrid;
+        foreach (Command c in replay.Commands)
+        {
+            if (c.Kind != CommandKind.SpawnBuilding || c.Player != SelectionController.LocalPlayer || (uint)c.TypeId >= (uint)sim.World.Data.Buildings.Length) continue;
+            int x = (int)(c.Position.X / MapConstants.CellSize), y = (int)(c.Position.Y / MapConstants.CellSize);
+            if (!g.InBounds(x, y)) break;
+            return StartBase.FootprintCenter(g, sim.World.Data.Buildings[c.TypeId], y * g.Width + x);
+        }
+        return new System.Numerics.Vector2(g.Width, g.Height) * MapConstants.CellSize / 2;
     }
 
     /// <summary>

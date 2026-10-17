@@ -398,7 +398,8 @@ show text, a minimap ping, and a sound.
 
 ## Game flow
 
-1. **Main menu:** Skirmish, Load Game, Settings, Quit.
+1. **Main menu:** Skirmish, Load Game, Settings, Quit. Until save / load lands, Load Game lists the recorded replays
+   (newest first: date, seed, players, length) and Watch plays one back; Delete removes a file (built in M6-V9).
 2. **Skirmish setup:** map, 2-4 player slots (each: human/AI, faction, difficulty, color, team),
    starting resources (standard / high), game speed. Default: free-for-all. Colours are unique per match: a slot can't
    pick a colour another slot holds. Single-player: slot 1 is always the local human, slots 2-4 are AI seats, each with
@@ -414,7 +415,9 @@ show text, a minimap ping, and a sound.
    only what an enemy destroyed (Producer decisions 2026-10-14 and 2026-10-16, BUG-0703; built in M5-H2).
 5. **Post-match stats:** resources gathered, units trained/lost/killed, buildings built/lost,
    army value over time (graph), time to Age II.
-6. **Save/load** any time during a match. **Replays** are recorded for every match.
+6. **Save/load** any time during a match. **Replays** are recorded for every match (built in M6-V9: every match started
+   from the menu, kept until 20 newer ones push it out; watching one shows the match through player 1's fog, with the
+   camera, minimap, selection and pause as in a match, the game speed of the match screen, and no orders).
 7. **Settings:** resolution, window mode (windowed / borderless / fullscreen), VSync, graphics quality
    (Low / Medium / High presets), master/music/SFX volume, edge pan speed, confine cursor to window (on by default),
    keybinds.

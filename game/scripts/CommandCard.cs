@@ -103,6 +103,15 @@ public partial class CommandCard : Control
     /// <summary>The name label's font size, and the smallest it shrinks to so a long word ("Quartermaster's") never breaks mid-word.</summary>
     public const int NameFontSize = 12, NameMinFontSize = 9;
 
+    /// <summary>
+    /// True in replay playback (M6-V9): the card still follows the selection but every button is greyed and dimmed, a press or a
+    /// grid key does nothing, and no build menu opens. Set before the first <see cref="Sync"/> of the match.
+    /// </summary>
+    public bool ReadOnly { get; set; }
+
+    // The layout (Layouts) the read-only greying was last applied to.
+    private int _greyedLayout = -1;
+
     /// <summary>Times the card's contents were rewritten (only when what it shows changes).</summary>
     public int Layouts { get; private set; }
 
@@ -335,6 +344,11 @@ public partial class CommandCard : Control
         // A unit card's ability row follows the active Tab subgroup's type (M4-V6a).
         if (want is Mode.Units or Mode.Workers && _shown == want && _sel.Subgroups.ActiveType != _abilityType) _shown = Mode.None;
         if (want != _shown) Layout(want, building);
+        if (ReadOnly)
+        {
+            GreyAll();
+            return;
+        }
         if (_shown == Mode.Production) Grey(sim.World, building);
         else if (_shown is Mode.BasicMenu or Mode.AdvancedMenu) GreyPlaces(sim.World);
         else if (_shown is Mode.Units or Mode.Workers) GreyAbilities();
@@ -356,6 +370,19 @@ public partial class CommandCard : Control
             _costs[i].Text = ok ? "" : _secondsText[seconds];
             _costs[i].AddThemeColorOverride(FontColor, CostColor);
             _names[i].Modulate = _hints[i].Modulate = ok ? Colors.White : Dimmed;
+        }
+    }
+
+    // M6-V9: playback greys every shown button and dims its labels, once per layout.
+    private void GreyAll()
+    {
+        if (_greyedLayout == Layouts) return;
+        _greyedLayout = Layouts;
+        for (int i = 0; i < Cells; i++)
+        {
+            if (_actions[i] == CardCommand.None) continue;
+            _buttons[i].Disabled = true;
+            _names[i].Modulate = _hints[i].Modulate = Dimmed;
         }
     }
 
@@ -441,7 +468,7 @@ public partial class CommandCard : Control
     /// <summary>Opens the basic (B) or advanced (V) build menu; only with a worker subgroup active.</summary>
     public bool OpenMenu(bool advanced)
     {
-        if (!_sel.ActiveSubgroupIsWorker || _sel.SelectedBuilding >= 0) return false;
+        if (ReadOnly || !_sel.ActiveSubgroupIsWorker || _sel.SelectedBuilding >= 0) return false;
         _ghost.End();
         _menu = advanced ? Mode.AdvancedMenu : Mode.BasicMenu;
         _sel.CancelTargeting();
@@ -480,7 +507,7 @@ public partial class CommandCard : Control
     /// <summary>The card's keys, seen before the selection controller's: a menu's grid keys and Esc, a site's Cancel, B / V on a worker card. True when the key was the card's.</summary>
     public bool HandleKey(InputEvent e)
     {
-        if (_runner == null || !e.IsPressed() || e.IsEcho()) return false;
+        if (_runner == null || ReadOnly || !e.IsPressed() || e.IsEcho()) return false;
         Sync();
         if (MenuOpen)
         {
@@ -533,7 +560,7 @@ public partial class CommandCard : Control
     /// <summary>What a press of grid cell <paramref name="i"/>'s button does (also its key): the same call the command's key makes.</summary>
     public void Press(int i)
     {
-        if ((uint)i >= Cells || _runner == null) return;
+        if ((uint)i >= Cells || _runner == null || ReadOnly) return;
         bool queued = Input.IsActionPressed(OrderQueue);
         switch (_actions[i])
         {
