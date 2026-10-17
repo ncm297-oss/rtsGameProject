@@ -116,4 +116,62 @@ public static class MovementConstants
     /// not in the way.
     /// </summary>
     public const float CastCorridorSlack = 0.1f;
+
+    /// <summary>
+    /// Largest turn (radians) the flank rule takes away from the aim (pathing slice 2): 135 degrees. A walker pressed
+    /// against its own planted line sees the line's end at about 90-110 degrees (its own touching neighbour blocks the
+    /// whole half-plane), past <see cref="MaxDetourTurn"/>; much more than this would be walking back the way it came.
+    /// The brief's bound is 150 degrees.
+    /// </summary>
+    public const float MaxFlankTurn = 2.3561945f;
+
+    /// <summary>
+    /// A flank step holds the stuck count, except one tick in this many, which counts (pathing slice 2): walking along the
+    /// line is no progress toward the aim, yet it is how the walker gets there; the count still rises, so a flank that
+    /// leads nowhere ends (4: a walker gives up after about 4 s of flanking, 12 m at 3 m/s, not 1 s). The least stride: a
+    /// longer line gets more (<see cref="FlankMembersPerStride"/>, BUG-0881).
+    /// </summary>
+    public const int FlankCountStride = 4;
+
+    /// <summary>
+    /// Ticks a flank is remembered after its last flank step (BUG-0881), plus <see cref="FlankMemoryTicksPerMember"/> a
+    /// member of the line: 20 (1 s). Within it the walker keeps the side it took (also across a re-issued order), measures
+    /// the line against the way to its goal rather than the field's next cell, and its no-progress ticks count one in the
+    /// flank's stride (the walk back toward the goal past the line's end). Long enough to bridge a tick of queuing or jostle.
+    /// </summary>
+    public const int FlankMemoryTicks = GiveUpTicks;
+
+    /// <summary>
+    /// Ticks added to <see cref="FlankMemoryTicks"/> per member of the blocks flanked (BUG-0881): 3. The walk from a long
+    /// line's end back toward a goal just beyond its middle is about half the line's length, none of it progress on the
+    /// field's estimate until the walker is back level with where it stood: a 32-member line 1 m apart gives 116 ticks
+    /// (measured need about 80), a 10-member one 50.
+    /// </summary>
+    public const int FlankMemoryTicksPerMember = 3;
+
+    /// <summary>
+    /// Largest turn (radians) from the aim a walker takes along the side it is already flanking or walking (BUG-0881): 180
+    /// degrees, any turn short of straight back. Walking toward the end of a long line with its goal just beyond it, the
+    /// aim swings back behind the walker and the end's tangent lies 140-171 degrees off it (measured: 170.6 one cell from a
+    /// 24-line's end); under <see cref="MaxFlankTurn"/> the kept side was rejected there and the walker swung to the far
+    /// end. The kept direction is still the tangent past the block's edge, so it walks along the line, never away from it.
+    /// A flank on no side yet (standing, nothing kept) still turns at most <see cref="MaxFlankTurn"/>.
+    /// </summary>
+    public const float MaxFlankKeptTurn = 3.1415927f;
+
+    /// <summary>
+    /// The flank's stride grows with the line (BUG-0881): one count in max(<see cref="FlankCountStride"/>, members of the
+    /// largest block met / this), so the budget is about as long as the walk round: a 32-member line gets 16 (16 s), a
+    /// 10-member one 5.
+    /// </summary>
+    public const int FlankMembersPerStride = 2;
+
+    /// <summary>
+    /// The least member count of the line flanked for the flank to be remembered (<see cref="FlankMemoryTicks"/>: the kept
+    /// side, the goal as reference, the walk back counted by the stride; BUG-0881): 11. Round a line of up to 10 (pathing
+    /// slice 2's acceptance scenes) the walk is short and the slice-2 rule alone takes it; QA's swings began at 16. Kept off
+    /// for a melee's small blocks, where it held Moves converging on a fight Moving and gave more of them up (QA's
+    /// 4-point combat rows, seeds 1 / 2: 409 / 413 gave up against 389 / 382 with the rule off; 356 / 362 with this).
+    /// </summary>
+    public const int FlankKeepMinMembers = 11;
 }

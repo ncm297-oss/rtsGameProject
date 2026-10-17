@@ -239,7 +239,9 @@ public sealed class Simulation : ICommandSink
             bool combat = HasCombat(World, i);
             bool ability = HasAbilityState(u, i);
             bool summoned = u.ExpiresAtTick[i] != 0;
-            h.Add((ulong)(byte)u.State[i] | ((ulong)(OrderBits(u, i) | (combat ? 1u << 17 : 0u) | (ability ? 1u << 18 : 0u) | (summoned ? 1u << 19 : 0u)) << 32));
+            // Pathing slice 2 (BUG-0881): bit 20 a unit that has flanked its own line, whose flank mark comes last.
+            bool flank = u.Flank[i] != 0;
+            h.Add((ulong)(byte)u.State[i] | ((ulong)(OrderBits(u, i) | (combat ? 1u << 17 : 0u) | (ability ? 1u << 18 : 0u) | (summoned ? 1u << 19 : 0u) | (flank ? 1u << 20 : 0u)) << 32));
             h.Add(u.Goal[i]);
             h.Add(u.GoalCell[i]);
             h.Add(u.OrderTick[i]);
@@ -261,6 +263,7 @@ public sealed class Simulation : ICommandSink
             if (combat) AddCombatToHash(ref h, u, i);
             if (ability) AddAbilityToHash(ref h, u, i);
             if (summoned) h.Add(u.ExpiresAtTick[i]);
+            if (flank) h.Add(u.Flank[i]);
         }
         h.Add(u.FreeCount);
         for (int i = 0; i < u.FreeCount; i++)

@@ -111,4 +111,46 @@ public class OrderedChaseReachTests
         Assert.True(Vector2.Distance(start, u.Position[unit.Index]) < 2f, $"walked off: {u.Position[unit.Index]}");
         Assert.Equal(default, u.Target[unit.Index]);
     }
+
+    /// <summary>
+    /// BUG-0882 (pathing slice 2, fix round 1): an ordered Attack on a hall ringed two cells deep by trees (no open cell
+    /// touches its footprint): the chase walks to the nearest open ground, out of a melee unit's reach. Ten Heavy Infantry
+    /// crowd that ground, so some are stopped short every so often and their walk is judged "reaches its goal"; that kept
+    /// the order alive for ever (the AI wave on such a hall never ended). The chase's goal must be a standing point in
+    /// reach (<c>StandsInReachAtGoal</c>): every one gives the hall up within 1,500 ticks, and none still walks.
+    /// </summary>
+    [Fact]
+    public void AnOrderedAttackOnAHallRingedByTrees_IsGivenUp_NotPacedForEver()
+    {
+        var sim = new Simulation(TestSim.Config(7, 2, 40, 256), LocalMovementTests.Flat(64));
+        World w = sim.World;
+        UnitStore u = w.Units;
+        TestSim.KeepIn(sim, 1);
+        int hallType = -1;
+        for (int b = 0; b < w.Data.Buildings.Length; b++)
+            if (w.Data.Buildings[b].Faction == 1 && w.Data.Buildings[b].Slot == Data.BuildingSlot.TownHall) hallType = b;
+        Assert.True(w.Buildings.Spawn(1, hallType, 30 * 64 + 40, out EntityHandle hall)); // footprint cells 40-43, 30-33
+        int tree = w.Data.FindResource("tree");
+        for (int y = 28; y <= 35; y++)
+            for (int x = 38; x <= 45; x++)
+            {
+                if (x >= 40 && x <= 43 && y >= 30 && y <= 33) continue;
+                Assert.True(w.Resources.Spawn(tree, y * 64 + x, w.Data.Rules.TreeWood, out _), $"tree ({x}, {y})");
+            }
+        var army = new EntityHandle[10];
+        for (int k = 0; k < army.Length; k++)
+        {
+            army[k] = Place(sim, 0, HeavyInfantry, new Vector2(60f + k % 5, 50f + k / 5));
+            sim.Enqueue(Command.Attack(0, army[k], hall, isBuilding: true));
+        }
+        int hp = w.Buildings.Hp[hall.Index];
+        for (int t = 0; t < 1500; t++) sim.Tick();
+        Assert.Equal(hp, w.Buildings.Hp[hall.Index]); // precondition: nobody can strike it
+        foreach (EntityHandle h in army)
+        {
+            int i = h.Index;
+            Assert.True(u.Target[i] != hall && u.State[i] != UnitState.Moving,
+                $"unit {i} still holds the hall at tick {sim.TickNumber}: {u.State[i]} at {u.Position[i]}, mode {u.Mode[i]}, stall {u.ChaseStall[i]}");
+        }
+    }
 }

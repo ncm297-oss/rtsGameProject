@@ -152,10 +152,14 @@ public class CombatFuzzTests
             // Deaths of this tick, then the books.
             foreach (DeathEvent e in w.Deaths)
             {
+                Assert.False(e.IsBuilding ? w.Buildings.IsAlive(e.Victim) : u.IsAlive(e.Victim));
+                // A defeated player's buildings collapse on its defeat tick, and a summon expires: no kill and no loss by
+                // DeathEvent's contract (M5-H2, M4-4b-3b), so they are not in the books (pathing slice 2 moved the fights:
+                // seed 2 saw player 0 defeated at tick 2,912 on its first version).
+                if (e.Collapsed || e.Expired) continue;
                 deaths++;
                 lossesSeen[e.VictimOwner]++;
                 if (e.IsBuilding) buildingDeaths++;
-                Assert.False(e.IsBuilding ? w.Buildings.IsAlive(e.Victim) : u.IsAlive(e.Victim));
             }
             Assert.Equal(deaths, (long)w.Kills[0] + w.Kills[1]);
             Assert.Equal(deaths, (long)w.Losses[0] + w.Losses[1]);

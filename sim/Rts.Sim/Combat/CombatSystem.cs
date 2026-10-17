@@ -100,7 +100,7 @@ public static class CombatSystem
                     u.ChaseStall[i] = 0;
                 }
                 else if (u.ChaseStall[i] >= CombatConstants.GiveUpScans
-                    && (u.Mode[i] == CombatMode.Ordered || SurroundRule.WalksToSpot(world, i)) && ReachableOnFoot(world, i))
+                    && (u.Mode[i] == CombatMode.Ordered || SurroundRule.WalksToSpot(world, i)) && ReachableOnFoot(world, i) && StandsInReachAtGoal(world, i))
                 {
                     // M4-H3 (BUG-0401, Producer decision 2026-10-10): the player's own Attack on a target its walk reaches
                     // keeps on, even while the route first leads away (a ramp round a cliff). The count stays just under the
@@ -109,6 +109,9 @@ public static class CombatSystem
                     // BUG-0731: any building chase (attack-move, retaliation, the AI's waves) walking to the surround spot it
                     // holds is judged the same way: jammed behind the strikers on the way to a free spot its walk reaches,
                     // it keeps on; a spot it can't reach (past a cliff, a sealed pocket) still ends the chase.
+                    // BUG-0880 / BUG-0882: and the chase's goal must be a standing point in reach of the target: a unit up a
+                    // sealed cliff (or a hall behind a ring of trees) makes the goal the nearest open ground, which the walk
+                    // reaches but from where no blow lands.
                     u.ChaseStall[i] = CombatConstants.GiveUpScans - 1;
                 }
                 else if (u.ChaseStall[i] >= CombatConstants.GiveUpScans)
@@ -775,8 +778,10 @@ public static class CombatSystem
     /// <paramref name="i"/>'s own reach of its target unit (BUG-0143): then a standing point in reach exists on foot and
     /// a stalled chase is only queued behind its own side (a brawl's back ranks), not cut off (another plateau, behind a
     /// wall) or outrun, and the fight there frees the place within a few hits. A friend merely standing there (a worker)
-    /// may never move, so it doesn't count, nor does one shooting from farther than the chaser's own reach (M4-2b); nor
-    /// does a building target, which can take minutes to fall. Runs only when a chase stalls.
+    /// may never move, so it doesn't count, nor does one shooting from farther than the chaser's own reach (M4-2b), unless
+    /// the chaser is queued behind (or walking round) such a friend fighting the same target and its walk reaches its goal
+    /// (pathing slice 2: <see cref="QueuedBehindOwnLine"/>, <see cref="ReachableOnFoot"/>); nor does a building target, which
+    /// can take minutes to fall (slice 1's <see cref="QueuedAtRing"/> handles those). Runs only when a chase stalls.
     /// </summary>
     private static bool FriendFightsTarget(World world, int i)
     {
@@ -795,6 +800,70 @@ public static class CombatSystem
             if (j == i || !u.Alive[j] || u.Owner[j] != owner || u.State[j] != UnitState.Attacking) continue;
             float reach = range + u.Radius[t] + u.Radius[j];
             if (Vector2.DistanceSquared(at, u.Position[j]) <= reach * reach) return true;
+        }
+        // Pathing slice 2: a friend fighting it from beyond the chaser's reach counts too, when the chaser is flanking such
+        // friends (a flank step in the stall window: movement walks it round their line, which a front past MaxPlugCluster it
+        // never does) and is still beside them, and its chase walks to a standing point in its reach that its walk reaches
+        // (BUG-0880: a target up a sealed cliff makes the goal the cliff foot, reachable but out of reach of the target).
+        return world.FlankRuleOn && Flanking(world, i) && QueuedBehindOwnLine(world, i) && StandsInReachAtGoal(world, i) && ReachableOnFoot(world, i);
+    }
+
+    /// <summary>
+    /// BUG-0880: whether unit <paramref name="i"/> made a flank step round its own planted line (movement's
+    /// <see cref="UnitStore.Flank"/> mark) within the chase's stall window (<see cref="CombatConstants.GiveUpScans"/> scans).
+    /// </summary>
+    private static bool Flanking(World world, int i)
+    {
+        int mark = world.Units.Flank[i];
+        return mark != 0 && world.TickNumber - Movement.MovementSystem.FlankTickOf(mark) <= CombatConstants.GiveUpScans * CombatConstants.ScanInterval;
+    }
+
+    /// <summary>
+    /// BUG-0880 / BUG-0882: whether the point unit <paramref name="i"/>'s chase walks to is in i's reach of its target, so
+    /// standing there it can strike: a surround spot it holds always is; otherwise the chase's stand point
+    /// (<see cref="StandPoint"/>) is, unless the target's ground is blocked and the nearest open ground lies out of reach (a
+    /// unit up a sealed cliff, a hall behind a ring of trees). Read only: no spot is claimed.
+    /// </summary>
+    private static bool StandsInReachAtGoal(World world, int i)
+    {
+        UnitStore u = world.Units;
+        if (u.TargetIsBuilding[i] && SurroundRule.HoldsSpot(world, i)) return true;
+        if (!StandPoint(world, i, out _, out Vector2 goal)) return false;
+        float gap;
+        if (u.TargetIsBuilding[i])
+        {
+            TargetRect(world, i, out Vector2 min, out Vector2 max);
+            gap = Vector2.Distance(goal, Vector2.Clamp(goal, min, max)) - u.Radius[i];
+        }
+        else
+        {
+            int t = u.Target[i].Index;
+            gap = Vector2.Distance(goal, u.Position[t]) - u.Radius[i] - u.Radius[t];
+        }
+        return gap <= Range(world, i, world.Data.Units[u.TypeId[i]].Attack);
+    }
+
+    /// <summary>
+    /// Pathing slice 2: whether a unit of <paramref name="i"/>'s owner that is <c>Attacking</c> <paramref name="i"/>'s own
+    /// target unit (from any range: a crossbow line shooting it) stands within <see cref="Movement.MovementConstants.QueueRange"/>
+    /// of <paramref name="i"/>'s body: the chaser is queued behind its own planted line, or walking round it (the flank
+    /// rule walks along the line, touching it). One small spatial query, only when a chase stalls.
+    /// </summary>
+    private static bool QueuedBehindOwnLine(World world, int i)
+    {
+        UnitStore u = world.Units;
+        EntityHandle target = u.Target[i];
+        int owner = u.Owner[i];
+        float ri = u.Radius[i];
+        Vector2 pos = u.Position[i];
+        int[] found = world.Neighbors; // movement's scratch: free in phase 7
+        int n = Math.Min(world.Spatial.QueryRadius(pos, ri + world.MaxUnitRadius + Movement.MovementConstants.QueueRange, found), found.Length);
+        for (int k = 0; k < n; k++)
+        {
+            int j = found[k];
+            if (j == i || !u.Alive[j] || u.Owner[j] != owner || u.State[j] != UnitState.Attacking || u.TargetIsBuilding[j] || u.Target[j] != target) continue;
+            float reach = ri + u.Radius[j] + Movement.MovementConstants.QueueRange;
+            if (Vector2.DistanceSquared(pos, u.Position[j]) <= reach * reach) return true;
         }
         return false;
     }
@@ -882,10 +951,20 @@ public static class CombatSystem
             spot = true;
             return OrderSystem.ResolveTarget(world.NavGrid, at, out cell, out goal);
         }
+        return StandPoint(world, i, out cell, out goal);
+    }
+
+    /// <summary>
+    /// The chase's point without a surround spot: the target unit's position, or just outside a building's footprint on the
+    /// unit's side (a standing point in reach: the footprint itself is blocked); resolved to the nearest passable cell's
+    /// centre when that ground is blocked (a cliff-top, a ring of trees).
+    /// </summary>
+    private static bool StandPoint(World world, int i, out int cell, out Vector2 goal)
+    {
+        UnitStore u = world.Units;
         Vector2 point = TargetPoint(world, i);
         if (u.TargetIsBuilding[i])
         {
-            // Just outside the footprint, on the unit's side: a standing point in reach (the footprint itself is blocked).
             Vector2 away = u.Position[i] - point;
             float d = away.Length();
             if (d > 0f) point += away * ((u.Radius[i] + CombatConstants.BuildingStandOff) / d);

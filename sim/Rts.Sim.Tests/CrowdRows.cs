@@ -38,18 +38,19 @@ public static class CrowdRows
         return i % 2 == 0 ? 1 : 2;
     }
 
-    /// <summary>Outcome of a crowd row once nothing moves (or the tick limit hit).</summary>
-    public readonly record struct Result(int Arrived, int GaveUp, int StillMoving, int Ticks, int MaxBuildsPerTick, string? Pack);
+    /// <summary>Outcome of a crowd row once nothing moves (or the tick limit hit); <paramref name="Hash"/> is the end state's hash.</summary>
+    public readonly record struct Result(int Arrived, int GaveUp, int StillMoving, int Ticks, int MaxBuildsPerTick, string? Pack, ulong Hash = 0);
 
     /// <summary>
     /// <paramref name="units"/> units (owners alternate, <paramref name="players"/> players) to the 4
     /// points, ticked until none moves or <paramref name="limit"/> ticks. <paramref name="everyTick"/>
     /// (optional) checks invariants after each tick and returns an error or null.
     /// </summary>
-    public static Result ToFourPoints(ulong seed, int units, int limit, bool onePlayerPerPoint, int players = 2, Func<World, string?>? everyTick = null, bool combat = true)
+    public static Result ToFourPoints(ulong seed, int units, int limit, bool onePlayerPerPoint, int players = 2, Func<World, string?>? everyTick = null, bool combat = true, bool flank = true)
     {
         Simulation sim = MoveScenario.Spawn(seed, units, units > 1000 ? 70f : 40f, out int goalCell, players: players, combat: combat);
         World w = sim.World;
+        w.FlankRuleOn = flank; // pathing slice 2's test seam: the before / after rows
         Vector2[] goals = FourPoints(MoveScenario.Center(w.NavGrid, goalCell));
         UnitStore u = w.Units;
         for (int i = 0; i < u.Capacity; i++)
@@ -63,9 +64,10 @@ public static class CrowdRows
     /// Otherwise <c>slot % 64</c>, which gives every goal one unit of each player. Both rows take <c>combat</c> false
     /// (<see cref="SimConfig.Combat"/>, BUG-0135) for the pre-M4 rows whose bounds are about movement, not fights.
     /// </summary>
-    public static Result MoreGoalsThanCacheSlots(ulong seed, bool onePlayerPerGoal = true, Func<World, string?>? everyTick = null, bool combat = true)
+    public static Result MoreGoalsThanCacheSlots(ulong seed, bool onePlayerPerGoal = true, Func<World, string?>? everyTick = null, bool combat = true, bool flank = true)
     {
         Simulation sim = MoveScenario.Spawn(seed, units: 128, maxCost: 15f, out int center, combat: combat);
+        sim.World.FlankRuleOn = flank;
         NavGrid g = sim.World.NavGrid;
         FlowField near = FlowField.Build(g, center);
         var goals = new List<int>();
@@ -107,7 +109,7 @@ public static class CrowdRows
             if (arrived[i]) arrivedCount++;
             else if (u.GoalCell[i] == -1) gaveUp++;
         }
-        return new Result(arrivedCount, gaveUp, moving, ticks, maxBuilds, MoveScenario.FirstPackViolation(w));
+        return new Result(arrivedCount, gaveUp, moving, ticks, maxBuilds, MoveScenario.FirstPackViolation(w), sim.StateHash());
     }
 
     /// <summary>Fails if <see cref="MovementConstants.MaxFieldBuildsPerTick"/> was ever exceeded.</summary>
