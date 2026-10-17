@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-17-0056, task D20 |
 | System | docs (faction pages, AI defense) |
-| Fixed by | |
+| Fixed by | d7201bf (D20 fix round 1), verified by QA 2026-10-17-0056 |
 
 ## Repro
 1. Read `docs/factions/malazan.md` and `docs/factions/whirlwind.md`, section "AI build order", the **Defense** bullet
@@ -31,3 +31,11 @@ clause (they pin the numbers only).
 A one-phrase fix, e.g. "only while the members left keep the wave's start threshold (`attack.minArmyPop` /
 `minArmyCost`)". Minor, same lines: "nearest home first" covers both orders; docs/03 orders the home army by distance
 to the defense point and wave members by distance to the hall.
+
+## Verification (QA, fix round 1)
+Both Defense bullets now read "taken from the army at home first (nearest the defense point first), then from the members
+of a wave out (nearest the Garrison Keep / Holy Camp first), each only while the members left keep the wave's start
+threshold (`attack.minArmyPop` and `minArmyCost` times the difficulty's wave size x, so a wave sent above it gives its
+surplus)", matching docs/03 M5-4f (a) and (b) clause by clause (the hall is each faction's Town Hall per its building
+table). `DefenseLine_WavePull_IsBoundByTheStartThreshold` is un-skipped and green (2 / 2), with the dev's
+`DefenseLine_CandidateOrders_MatchDocs03` (2 / 2). The same old wording in docs/02 is BUG-0871.
