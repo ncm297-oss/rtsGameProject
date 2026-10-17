@@ -229,6 +229,35 @@ public class AiPlayerTests
     }
 
     /// <summary>
+    /// D15 option C (M5-4f): a build step of the faction's House (the Billet) at a population cap already the hard cap is
+    /// complete with no Build sent; below the cap it still builds. The hard cap is the test data's own popCap (10 pop: the
+    /// hall's 10 reaches it; 20 pop: it doesn't), so the economy's house rule (within 2 pop of the cap) stays quiet too.
+    /// </summary>
+    [Theory]
+    [InlineData(10, true)]
+    [InlineData(20, false)]
+    public void AHouseStep_AtTheHardCap_IsDoneWithoutABuild(int popCap, bool atCap)
+    {
+        GameData data = AiScenes.DataWith(dir =>
+        {
+            dir.EditJson("factions/malazan/ai.json", root =>
+                root["buildOrder"] = AiScenes.BuildOrder(("time", 0, "build", "malazan_billet", 0)));
+            dir.EditJson("common/rules.json", r => r["popCap"] = popCap);
+        });
+        Simulation sim = AiScenes.Flat(AiScenes.Seats(AiDifficulty.Hard, SeatController.Ai, SeatController.Human), data);
+        BuildMaps.SetTotals(sim, 0, 1000, 1000);
+        List<Command> rec = AiScenes.Log(sim, 0);
+        AiPlayer ai = sim.AiOf(0)!;
+        Assert.Equal(atCap, sim.World.HalfPopCap[0] >= data.Rules.HalfPopCap);
+        int house = data.FindBuilding("malazan_billet");
+        Assert.Equal(house, ai.HouseType);
+        for (int t = 0; t < 4 * ai.ThinkTicks; t++) sim.Tick();
+        Assert.True(ai.Board.StepDone[0]);
+        if (atCap) Assert.DoesNotContain(rec, c => c.Kind == CommandKind.Build);
+        else Assert.Single(rec, c => c.Kind == CommandKind.Build && c.TypeId == house);
+    }
+
+    /// <summary>
     /// A Build the sim refuses (an enemy unit holding in the footprint: the AI's fog-safe placement doesn't look at units, the
     /// Build does) is judged at the next think, its anchor marked, and sent again at another anchor at that think: one Build
     /// per think, never two at the same refused anchor, and the step then completes. The run never stalls.

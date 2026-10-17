@@ -58,4 +58,13 @@ public sealed class AiRulesDef
 
     /// <summary>M5-4c: the AI casts an ability only where at least this many enemy units seen stand within its radius (<c>castMinTargets</c>, a whole number 1-50).</summary>
     public int CastMinTargets { get; init; }
+
+    /// <summary>M5-4f: the defense answers a threat with defenders worth this many times its gold + wood cost (<c>defendRatio</c>, 0.5-10).</summary>
+    public float DefendRatio { get; init; }
+
+    /// <summary>M5-4f: the least worth (gold + wood) a defense answers with, and what a hit with no enemy seen counts as (<c>defendMinValue</c>, 0-5,000).</summary>
+    public float DefendMinValue { get; init; }
+
+    /// <summary>M5-4f: a hit on the hall that leaves it below this fraction of its max hp calls the whole wave home (<c>recallHallHp</c>, 0-1).</summary>
+    public float RecallHallHp { get; init; }
 }

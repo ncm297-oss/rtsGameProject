@@ -35,6 +35,9 @@ public class DefenseManagerTests
             ai["workerFleeRadius"] = 16;
             ai["rallyReach"] = 6;
             ai["scoutAfter"] = 3600;
+            // M5-4f: these rows pin the M5-4b rules (trigger, point, flee, BUG-0670); the largest defendMinValue keeps every free
+            // unit answering, as then. The sized answer: ProportionalDefenseTests.
+            ai["defendMinValue"] = 5000;
         });
     });
 

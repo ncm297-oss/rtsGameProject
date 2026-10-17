@@ -261,11 +261,11 @@ public class AbilityManagerQaTests
     }
 
     /// <summary>
-    /// BUG-0702 (skipped until the Producer rules): two pairs of enemies either side of a Cadre Mage, 8 m east and 8 m west,
+    /// BUG-0702 item 1 (un-skipped at M5-4f: the group is seeded from the enemy nearest the caster): two pairs of enemies either side of a Cadre Mage, 8 m east and 8 m west,
     /// each pair enough for castMinTargets 2. The centroid of all four is the mage's own spot, with no enemy within the
     /// radius of it, so no cast is ever sent. Expected by this row: one of the pairs is cast on.
     /// </summary>
-    [Fact(Skip = "BUG-0702: the centroid of all the enemies in reach misses two groups either side")]
+    [Fact]
     public void TwoGroupsEitherSide_OneIsCastOn()
     {
         Simulation sim = Scene(s_data.Value);

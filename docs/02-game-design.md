@@ -67,7 +67,7 @@ resources for flavor in their display text (e.g. Teblor "Bloodwood" for wood).
 | --- | --- |
 | Starting state | Town Hall, 5 workers, 200 Gold, 200 Wood, pop 5/10 |
 | Worker carry capacity | 10 (some factions differ) |
-| Gather rate | Gold 0.7/s, Wood 0.6/s while working at the node |
+| Gather rate | Gold 0.85/s, Wood 0.75/s while working at the node (raised from 0.7 / 0.6 on 2026-10-16, the owner's playtest note: gathering felt slow) |
 | Gold mine | 2 mines of 2,500 at each start location; 2 mines of 2,000 at each expansion |
 | Tree | 100 Wood each; the cell becomes passable when a tree is depleted |
 | Drop-off | Town Hall (Gold + Wood) and Camp (Gold + Wood) |
@@ -393,6 +393,10 @@ show text, a minimap ping, and a sound.
     units, good ability use) plus a **25% gather bonus**, shown in the skirmish setup.
 - Behaviors in priority order: defend the base when attacked → follow the build order → keep
   producing workers and army → expand when safe → scout → send attack waves → rebuild losses.
+- The defense is sized by the threat: the AI answers raiders with defenders worth 1.5× their gold + wood cost (at least
+  150), from the units at home first, then from its attack wave's units nearest home as long as the wave keeps the size
+  it was sent at, and calls the whole wave home only when the raid is worth more than that or its Town Hall is hit and
+  below half hp (`rules.json` `ai.defendRatio` / `defendMinValue` / `recallHallHp`; built in M5-4f).
 - Build orders, army compositions, and attack thresholds are per-faction data (`ai.json`), not code.
 - The AI sees only its own fog-of-war view. It never reads hidden enemy state.
 

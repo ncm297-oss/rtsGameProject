@@ -28,7 +28,8 @@ namespace Rts.Sim.Ai;
 /// had an order pending or been ordered for more than <c>ai.waveCooldown</c> (BUG-0598: all crowded by a target none strikes).</item>
 /// </list>
 /// One command per unit per think at most; a full queue ends the think and the rest go next think (the per-slot flags keep
-/// what is owed). M5-4b: while the base is defended (<see cref="DefenseManager"/>) no wave starts and nobody is rallied.
+/// what is owed). M5-4b: while the base is defended (<see cref="DefenseManager"/>) no wave starts and nobody is rallied;
+/// M5-4f: a wave in progress goes on (the defense may pull members out of it, or end it), and its start threshold is kept.
 /// </summary>
 internal static class MilitaryManager
 {
@@ -94,6 +95,8 @@ internal static class MilitaryManager
         SetTarget(ai, target, type, cell);
         board.WaveActive = true;
         board.WaveStartHalfPop = half;
+        board.WaveMinHalfPop = ai.Def.AttackMinHalfPop * scale;
+        board.WaveMinCost = ai.Def.AttackMinCost * scale;
         board.WaveStartTick = ai.Now;
         board.WaveBusyTick = ai.Now;
         board.WaveCooldownUntil = ai.Now + ai.Rules.WaveCooldownTicks;
@@ -245,7 +248,7 @@ internal static class MilitaryManager
     private static bool Free(AiPlayer ai, int slot, out SeenUnit u) =>
         ai.View.TryGetUnit(slot, out u) && u.State != UnitState.Casting && !ai.OrderedNotApplied(slot, u.Handle.Generation);
 
-    /// <summary>Whether own unit slot <paramref name="slot"/> holds a live member of the wave in progress.</summary>
-    private static bool Member(AiPlayer ai, int slot, out SeenUnit u) =>
+    /// <summary>Whether own unit slot <paramref name="slot"/> holds a live member of the wave in progress (or just ended, not yet sent home).</summary>
+    internal static bool Member(AiPlayer ai, int slot, out SeenUnit u) =>
         ai.View.TryGetUnit(slot, out u) && ai.Board.WaveGeneration[slot] == u.Handle.Generation && ai.Board.WaveFlag[slot] != ToRally;
 }

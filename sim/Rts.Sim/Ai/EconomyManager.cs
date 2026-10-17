@@ -150,7 +150,11 @@ internal static class EconomyManager
         }
         int total = gold + wood + idle;
         int wantGold = (int)MathF.Floor(ai.Rules.GoldShare * total + 0.5f);
-        for (int k = 0; k < ai.WorkerCount; k++)
+        // M5-4f: which nodes qualify (kind, not dropped, away from the defense point) doesn't depend on the worker, so a kind
+        // with none for one worker has none for the rest this think: not searched again (a defended base whose known nodes
+        // all lie by the point left every idle worker scanning every node twice a think).
+        bool noGold = false, noWood = false;
+        for (int k = 0; k < ai.WorkerCount && !(noGold && noWood); k++)
         {
             int slot = ai.WorkerSlots[k];
             if (!v.TryGetUnit(slot, out SeenUnit u) || u.State != UnitState.Idle || ai.OrderedNotApplied(slot, u.Handle.Generation) || ai.IsScout(slot, u.Handle.Generation)
@@ -159,12 +163,21 @@ internal static class EconomyManager
             // doesn't spend a think on each remembered node that is gone (BUG-0570).
             byte last = board.GatherKind[slot];
             byte kind = (last & Dropped) != 0 ? ((last & Wood) != 0 ? Gold : Wood) : gold < wantGold ? Gold : Wood;
-            int node = NearestNode(ai, kind, u, out int nodeType, out EntityHandle nodeHandle);
+            int nodeType = -1;
+            EntityHandle nodeHandle = default;
+            int node = (kind == Gold ? noGold : noWood) ? -1 : NearestNode(ai, kind, u, out nodeType, out nodeHandle);
             if (node < 0)
             {
+                if (kind == Gold) noGold = true;
+                else noWood = true;
                 kind = kind == Gold ? Wood : Gold;
-                node = NearestNode(ai, kind, u, out nodeType, out nodeHandle);
-                if (node < 0) continue;
+                node = (kind == Gold ? noGold : noWood) ? -1 : NearestNode(ai, kind, u, out nodeType, out nodeHandle);
+                if (node < 0)
+                {
+                    if (kind == Gold) noGold = true;
+                    else noWood = true;
+                    continue;
+                }
             }
             if (!ai.Send(Command.Gather(ai.Player, u.Handle, ai.NodeCentre(nodeType, node)))) return;
             ai.MarkOrdered(slot, u.Handle.Generation, kind, nodeHandle);

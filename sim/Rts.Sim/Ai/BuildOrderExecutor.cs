@@ -15,7 +15,8 @@ namespace Rts.Sim.Ai;
 /// <c>buildOrderSlack</c> after that (an <c>expand</c> also waits for <c>expandAfter</c>).</item>
 /// <item><c>train</c>: <c>count</c> Train commands accepted over the step's life, one per think; <c>build</c>,
 /// <c>research</c> and <c>expand</c>: complete on the first accepted command (a research also once the tech is researched or
-/// queued by anyone).</item>
+/// queued by anyone). D15 C (M5-4f): a <c>build</c> step of the faction's House is complete, no command sent, once the
+/// player's population cap is the hard cap (<c>popCap</c>).</item>
 /// <item>A command is judged at the first think after it applied (<see cref="PendingOrder"/>); until then the step sends
 /// nothing. A refused one is sent again at a later think (a refused Build's anchor gets a retry mark, so the site search moves
 /// on); a step that can't act (no gold, no site, no building, no worker) simply waits. Never more than one command per step
@@ -53,6 +54,12 @@ internal static class BuildOrderExecutor
                 if (board.StepDone[i]) continue;
             }
             if (step.Action == AiStepAction.Research && ai.TechResearchedOrQueued(step.Target))
+            {
+                board.StepDone[i] = true;
+                continue;
+            }
+            // D15 option C (the owner, 2026-10-14): a house adds nothing at the hard cap, so its step is done unsent.
+            if (step.Action == AiStepAction.Build && step.Target == ai.HouseType && ai.View.HalfPopCap >= ai.Data.Rules.HalfPopCap)
             {
                 board.StepDone[i] = true;
                 continue;

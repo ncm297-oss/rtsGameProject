@@ -22,6 +22,14 @@ namespace Rts.Sim.Tests.QA;
 /// <see cref="SameGameDataHashes"/> lists the shipped hashes since then whose changes do not touch this match (the header
 /// is substituted in code: the file is checksummed and lives in studio/).
 /// </para>
+/// <para>
+/// M5-4f: <c>rules.json</c> <c>gatherRate</c> gold 0.7 -> 0.85, wood 0.6 -> 0.75 changes every gathering game, this one too,
+/// so it was re-recorded the same way (<c>M3PlayableTest -- --seed 21 --break 19</c>) on the M5-4f tree: 7,682 ticks (the
+/// quicker economy reaches the scene's "Heavy Infantry panel" step sooner). The new file is
+/// <c>sim/Rts.Sim.Tests/Replays/seed21_playable.replay</c> (the sim dev doesn't write <c>studio/**</c>; the bug's
+/// attachment stays as BUG-0146's history). The scene runs on frame time, so two recordings differ by a few ticks; any
+/// one of them is a valid recording for this row.
+/// </para>
 /// </summary>
 [Collection(SerialCollection.Name)]
 public class GatherWedgeQaTests
@@ -30,8 +38,8 @@ public class GatherWedgeQaTests
 
     public GatherWedgeQaTests(ITestOutputHelper output) => _out = output;
 
-    /// <summary>The replay's recorded data hash (M4-3b's shipped data; re-recorded in M4-V5, BUG-0273).</summary>
-    private const ulong RecordedDataHash = 0xC22FBFEA0197CF3E;
+    /// <summary>The replay's recorded data hash (M5-4f's shipped data; before it M4-3b's C22FBFEA0197CF3E, re-recorded in M4-V5, BUG-0273).</summary>
+    private const ulong RecordedDataHash = 0xC059AD620DE581F1;
 
     /// <summary>
     /// Shipped data hashes that play the recorded match unchanged: the recording's own. Add one only for a data change that
@@ -39,21 +47,28 @@ public class GatherWedgeQaTests
     /// change of the state hash's composition (any newly hashed state) fails every checkpoint: re-record then (docs/03
     /// "Save/load and replays", hash format).
     /// </summary>
-    private static readonly ulong[] SameGameDataHashes = { RecordedDataHash, 0x7E04011FC88881F3, 0x41842085985611BF, 0x5896D3E7C9FD36AD, 0xEA5CB5A0AFCEEDBE, 0xD22C849A175F9ED5, 0x4383EBB9345FABF7, 0x889D6BEA3A49F08E, 0xC4C16BD39408471A, 0x5760E83CB301B62E, 0x801A8BC7AA612A21, 0x8409DB7517579FEF, 0x72EF431E70C49C39, 0xC6FC120A55AE4A0B, 0xAB811AD47F68D0AE }; // M4-4a: statuses/abilities files, BUG-0303; M4-4b-1: the Cusser (no Sapper in this match); M4-4b-2: Blinded, Sandstorm (no Priest casts in it); D10c: description text only; M4-4b-3a: Frenzied, the Zealot's passives (no Zealot in it); D11: Frenzied / Blinded description text only; M4-5: the stealthed / revealed statuses, rules.json stealth, the units' detector word (no stealth in this match); D12: casters' detector (no stealth in this match); D13: the line units' bonusVs.mounted 1.5 -> 1.1 (no line unit hits a mounted one in this match); M5-3: ai.json and rules.json ai joined the hash (no AI seat in this match); M5-3 fix round 1: rules.json ai.scoutGrid (BUG-0593, no AI seat); M5-4b: rules.json ai.defendRadius / defendFor / workerFleeRadius (no AI seat); M5-4c: rules.json ai.castMinTargets (no AI seat); D19: ×1.5, Easy casts, building damage: no line unit hits a mounted one, no AI seat, no building is attacked in the seed-21 match
+    // M5-4f re-record: the list starts again from the new recording. The old one (C22FBFEA0197CF3E) was played by these
+    // shipped hashes, the last AB811AD47F68D0AE (D19); gatherRate 0.85 / 0.75 (plus ai.defendRatio / defendMinValue /
+    // recallHallHp, no AI seat) changes the gathering, so no old hash plays the new recording. Old list, for the record:
+    // 7E04011FC88881F3, 41842085985611BF, 5896D3E7C9FD36AD, EA5CB5A0AFCEEDBE, D22C849A175F9ED5, 4383EBB9345FABF7,
+    // 889D6BEA3A49F08E, C4C16BD39408471A, 5760E83CB301B62E, 801A8BC7AA612A21, 8409DB7517579FEF, 72EF431E70C49C39,
+    // C6FC120A55AE4A0B, AB811AD47F68D0AE, with the reasons below.
+    private static readonly ulong[] SameGameDataHashes = { RecordedDataHash }; // was { RecordedDataHash, 0x7E04011FC88881F3, 0x41842085985611BF, 0x5896D3E7C9FD36AD, 0xEA5CB5A0AFCEEDBE, 0xD22C849A175F9ED5, 0x4383EBB9345FABF7, 0x889D6BEA3A49F08E, 0xC4C16BD39408471A, 0x5760E83CB301B62E, 0x801A8BC7AA612A21, 0x8409DB7517579FEF, 0x72EF431E70C49C39, 0xC6FC120A55AE4A0B, 0xAB811AD47F68D0AE }; // M4-4a: statuses/abilities files, BUG-0303; M4-4b-1: the Cusser (no Sapper in this match); M4-4b-2: Blinded, Sandstorm (no Priest casts in it); D10c: description text only; M4-4b-3a: Frenzied, the Zealot's passives (no Zealot in it); D11: Frenzied / Blinded description text only; M4-5: the stealthed / revealed statuses, rules.json stealth, the units' detector word (no stealth in this match); D12: casters' detector (no stealth in this match); D13: the line units' bonusVs.mounted 1.5 -> 1.1 (no line unit hits a mounted one in this match); M5-3: ai.json and rules.json ai joined the hash (no AI seat in this match); M5-3 fix round 1: rules.json ai.scoutGrid (BUG-0593, no AI seat); M5-4b: rules.json ai.defendRadius / defendFor / workerFleeRadius (no AI seat); M5-4c: rules.json ai.castMinTargets (no AI seat); D19: ×1.5, Easy casts, building damage: no line unit hits a mounted one, no AI seat, no building is attacked in the seed-21 match
 
     /// <summary>
     /// Ticks the replay must still match its recorded checkpoints: all of them (M4-H1, BUG-0211; before the re-recording
     /// only the first 19, the setup before the M4-2a fix changed the match, and from M4-3a none; M4-V5's re-recording,
-    /// BUG-0273, holds 12,131).
+    /// BUG-0273, held 12,131; M5-4f's, 7,682).
     /// </summary>
-    private const int CheckpointPrefixTicks = 12131;
+    private const int CheckpointPrefixTicks = 7682;
 
     // M4-V5 (BUG-0273): re-recorded from M3PlayableTest -- --seed 21 --break 19 on the M4-3b tree, whose scene builds on
     // explored ground (the old recording built a House on unexplored ground at tick 616, which placement refuses since M4-3b).
     [Fact]
     public void Seed21PlayableReplay_NoGathererStandsOutOfReachForever()
     {
-        string path = System.IO.Path.GetFullPath(System.IO.Path.Combine(TestDataDir.Shipped, "..", "..", "studio", "bugs", "BUG-0146-seed21-wood-wedge.replay"));
+        // M5-4f: the re-recording (the studio/bugs attachment is the M4-V5 one, kept as BUG-0146's history).
+        string path = System.IO.Path.Combine(TestDataDir.RepoRoot(), "sim", "Rts.Sim.Tests", "Replays", "seed21_playable.replay");
         Assert.Equal(ReplayError.None, ReplayFormat.TryReadFile(path, out Replay? replay));
         GameData data = DataLoader.LoadAll(TestDataDir.Shipped).Data!;
         // A data-hash mismatch fails loudly rather than returning: a silent return would make the un-skipped row pass
