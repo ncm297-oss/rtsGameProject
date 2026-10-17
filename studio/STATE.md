@@ -4,12 +4,12 @@ The dashboard. The Producer rewrites it at the end of every session. **Owner: re
 you" first.** "For your review" (further down) is non-blocking: what the studio built or decided
 on its own, explained in terms of what you'd see in the game.
 
-_Last updated: 2026-10-17 (session 2026-10-17-0056 ACCEPT): **all three tracks landed.** Sim **M6-S1**: the game now **counts the post-match stats** (gold and wood gathered, units trained, kills and losses split into units and buildings, buildings built and lost, when each tech finished, the army's value every 10 s); nothing on screen yet, the view's columns and graph are its next task. View **M6-V10, the art look test: your call wanted** (For your review, first entry): the Quaternius character beside a stylized building and today's capsule, two screenshots in `docs/images/look-test-2026-10-17*.png`. Data **D20**: the faction pages re-printed on the quicker gathering (wood is no longer the AI's limit at any mark) and their Defense lines re-worded; no number changed. **Your 2026-10-14 assessment is still under For your review ("Producer assessment, 2026-10-14"; a pointer sits near the top of that section).** Next: sim pathing slice 2, view the stats columns, data an inbox answer or STOP._
+_Last updated: 2026-10-17 (session 2026-10-17-0554 ACCEPT): **both active tracks landed** (data was STOP). Sim **M5-P2, pathing slice 2**: your note 5's second half: **infantry stuck behind your own crossbowmen now walk round the end of the line** and keep their target; a plain Move through your own line works too (8-10 of 10 get through within 10 s, where 0 did). Side effect: melee brawls are quicker and more one-sided, so the faction pages' balance tables are re-printed by the data track at this integration (BUG-0900; the table is under For your review); **replays you recorded before today may refuse to play** where the rule fires. View **M6-V11**: the **Victory / Defeat stats screen shows the real match stats** (gold / wood gathered, units trained / killed / lost, buildings built / razed / lost, Age II at, Defeated at) and **an army-value graph**, one line per player; **M6 criterion 2 ticked**. **Your art call is still wanted** (Waiting on you). Next: **hardening on both tracks** (M5-H3, M6-VH3); data the re-print if the integration didn't do it, else an inbox answer or STOP._
 
 ## Waiting on you
 
 - **The art call (blocks only the art pass, M6 criterion 5's second half):** look at `docs/images/look-test-2026-10-17.png` and `-far.png` (or run the scene, see the first For your review entry) and write one of **"look: go"** (keep the Quaternius stack, add outfits + team colour), **"look: outfit first"** (one more test with a Modular Outfit on before deciding) or **"look: stylized"** in the inbox.
-- **Nothing else blocking.** M5 3 / 9, M6 1 / 10 (criterion 2 waits only on the view's columns now); counters **sim 3 / 4, view 3 / 4, data 1 / 4**; **no open S1 / S2**; golden `data-hash` on `main` **C059AD620DE581F1** (unmoved). Next: sim pathing slice 2, view the stats columns, data an inbox answer or STOP.
+- **Nothing else blocking.** M5 3 / 9, **M6 2 / 10** (criterion 2 ticked 2026-10-17-0554); counters **sim 4 / 4, view 4 / 4, data 1 / 4** (hardening next on both); **open S2: BUG-0900 only** (data-owned: the faction pages' balance tables re-printed on the merged tree at this integration, else the data track's first task next session; not yours); golden `data-hash` on `main` **C059AD620DE581F1** (unmoved). Next: sim M5-H3, view M6-VH3, data the re-print / an inbox answer / STOP.
 - **Where my comments on your 2026-10-14 feedback are:** the For your review entry **"Your review answers and first playtest ... (Producer assessment, 2026-10-14)"** (search
   `Producer assessment, 2026-10-14`; the pointer entry at the top of For your review says where each item stands: **all built and on `main` now**). Still wanting your yes / no:
   a **Shock pass**, the AI's **gold share** 0.6 → 0.5, **BUG-0780** ("accept BUG-0780" / "Catapult pass"), and (new) **"densest cluster"** if the AI's mages should aim at the densest enemy group (your 2026-10-14 wording) rather than the nearest one M5-4f built.
@@ -23,21 +23,21 @@ _Last updated: 2026-10-17 (session 2026-10-17-0056 ACCEPT): **all three tracks l
 
 | Field | Value |
 | --- | --- |
-| Sim: milestone | **M5 AI opponent, 3 / 9 criteria** (criteria 1, 2, 7 ticked; 3, 4, 5 advanced); **M6's sim part advanced** (criterion 2's counters). On `main`: `PlayerView`, seats, the executor and six managers, the owner's win rule (M5-4e) + the collapse (M5-H2), `MatchOver`, start locations, the surround rule (M5-P1 / M5-H2), the fog's storm mask, the AI's no-stacking casts, M5-4f (the sized defense, D15 C, `gatherRate` 0.85 / 0.75), **M6-S1 (2026-10-17-0056)**: `Economy/MatchStats` + `World.Stats.cs` (gathered, trained, kill / loss halves, built / lost, `TechResearchedTick`, `ArmyValueSamples` every `SimConfig.StatsSampleTicks` 200 into 1,024 slots; not hashed), `UnitDef.IsWorker`. Golden format 6, `data-hash` **C059AD620DE581F1** (unmoved); the seed-21 recording byte-identical |
-| Sim: next task | **Pathing slice 2** (the owner's note 5 continued: a melee unit routes round its own standing ranged units, unit-v-unit crowding away from buildings, far faces filled first; BUG-0790's stand-point fix folded in only if a few lines) · QA full, ~800-1,000 lines, counter 3 / 4 → 4 / 4. Then **M5-H3** (BUG-0764 first, BUG-0790, BUG-0791, BUG-0850, BUG-0144), M5-4c slice 2 (criterion 4), Requests 38, **Requests 42 (the save format, incl. `MatchStats`)**, D14 b, M5-4d, D14 c, M5-5. Brief in `studio/handoff.md` |
+| Sim: milestone | **M5 AI opponent, 3 / 9 criteria** (criteria 1, 2, 7 ticked; 3, 4, 5 advanced); the owner's note 5 done on the sim side (slices 1-2). On `main`: `PlayerView`, seats, the executor and six managers, the owner's win rule (M5-4e) + the collapse (M5-H2), `MatchOver`, start locations, the surround rule (M5-P1 / M5-H2), the fog's storm mask, the AI's no-stacking casts, M5-4f, M6-S1 (the stats counters), **M5-P2 (2026-10-17-0554)**: the flank rule (`MovementSystem.FlankTurn` / `FlankBlockOf` / `OwnPlantedInWay`, `MovementConstants.MaxFlankTurn` 135° + 6 more, `UnitStore.Flank` hashed once non-zero), `CombatSystem.FriendFightsTarget`'s slice-2 tail (`Flanking` / `QueuedBehindOwnLine` / `StandsInReachAtGoal`, the last also on M4-H3's and BUG-0731's keeps), `World.FlankRuleOn` seam. Golden format 6, `data-hash` **C059AD620DE581F1** (unmoved); the seed-21 recording byte-identical (no flank in it) |
+| Sim: next task | **M5-H3 hardening** (counter 4 / 4): BUG-0764 first (the owner's fresh-boot run if it came; else re-baseline with dated reasons), BUG-0886's test half, BUG-0885 with BUG-0046, BUG-0790, BUG-0887 / 0888 / 0889, BUG-0791, BUG-0850, BUG-0144, BUG-0113 item 2, BUG-0704 items 2-3 · QA full. Then M5-4c slice 2 (criterion 4), Requests 38, **Requests 42 (the save format, incl. `MatchStats` and `UnitStore.Flank`)**, D14 b, M5-4d, D14 c, M5-5. Brief in `studio/handoff.md` |
 | Sim: gate | **GO** |
-| View: milestone | **M4 views Done; M6 1 / 10** (criterion 4 ticked; criterion 1 advanced: 2-4 slots in, team left; criterion 3's replay half built; **criterion 5's look test done 2026-10-17-0056, the art pass on your call**). M5-V1, M6-V1-V9, M6-VH1-VH2, **M6-V10** on `main` (`game/tests/LookTest.tscn`: a Quaternius Universal Base Character playing UAL1 `Idle` / `Walk` beside an Ultimate Fantasy RTS barracks and today's capsule under the real camera; 11 files, 22.1 MB, LFS, in `game/assets/models/looktest/`; docs/04 "Look test (M6-V10)" + three licensing rows; `docs/images/look-test-2026-10-17[-far].png`). Criterion 1 waits on team (Requests 38); criterion 2 on the view's columns (the sim's counters landed); criterion 3's save half on Requests 42 |
-| View: next task | **The stats columns** (criterion 2's last half: `MatchStats.Columns` + `ui.json` labels for gathered, trained, the kill / loss split, built / lost, time to Age II from `TechResearchedTick`, and the army-value graph from `ArmyValueSamples`; a windowed screenshot looked at) · QA standard, ~600-900 lines, counter 3 / 4 → 4 / 4; **ticks criterion 2**. Then **M6-VH3** (BUG-0860 first, BUG-0830), save / load when Requests 42 lands, export when the owner's templates arrive, teams (38), criterion 6's playable, the art pass when the owner answers. Brief in `studio/handoff.md` |
+| View: milestone | **M4 views Done; M6 2 / 10** (criteria 2 and 4 ticked; criterion 1 advanced: 2-4 slots in, team left; criterion 3's replay half built; criterion 5's look test done, the art pass on your call). M5-V1, M6-V1-V10, M6-VH1-VH2, **M6-V11 (2026-10-17-0554)** on `main`: `MatchStats.Columns` (ten: gathered gold / wood, units trained / killed / lost, buildings built / razed / lost, Age II at, Defeated at), `ArmyValueGraph` (one `Control`, a polyline per player, scaled to the largest sample, whole-minute ticks), the 1280 × 720 layout, `ui.json` `match_over` +13 keys (the four M6-V4 columns gone), `StatsScreenCheck`, QA's `QaM6V11Test`; docs/03 "Implementation (M6-V11)". Criterion 1 waits on team (Requests 38); criterion 3's save half on Requests 42; criterion 5's art pass on the owner |
+| View: next task | **M6-VH3 hardening** (counter 4 / 4): BUG-0860 first (null-check every `GD.Load` in `LookTest` + a per-scene timeout in `scene-loop.ps1`), BUG-0890 (the stats graph polish), BUG-0830, BUG-0550 item 2, BUG-0281 item 2, BUG-0663, the `--colour` warning's wording, BUG-0861 if the art pass hasn't · QA standard. Then save / load when Requests 42 lands, export when the owner's templates arrive, teams (38), criterion 6's playable, the art pass when the owner answers. Brief in `studio/handoff.md` |
 | View: gate | **GO** |
 | Data: milestone | M3 Done (D1-D4); D5-D8, D-H1-H5, D10a-c, D11-D19, **D20** on `main` (**D20, 2026-10-17-0056**: both pages' spending and house paragraphs re-printed on M5-4f's numbers ("wood is not the limit", 0 of 4 marks; D15 C never fires on the menu's map: the 12th house is due at cap 98), the Defense lines re-worded with 1.5 / 150 / 0.5 quoted and pinned (`D20PinQaTests`, `D20DefenseWordingQaTests`); no data change). Golden `data-hash` **C059AD620DE581F1** (unmoved). Counter **1 / 4** |
-| Data: next task | **An inbox answer first** (D19's table, the Shock pass, `goldShare` 0.6 → 0.5, BUG-0780, "densest cluster"); **else STOP cheaply** (the D14 b openings need the strategies schema, not on `main`; the 12th-house tweak is parked to batch with the next hash-moving data change). Details in `studio/handoff.md` |
+| Data: next task | **BUG-0900's re-print first if the 0554 integration didn't do it** (both pages' "Balance baseline" group tables + "Spending on the menu's map" from the harness on `main`; the cells are in the bug file; QA light); then **an inbox answer** (D19's table, the Shock pass, `goldShare` 0.6 → 0.5, BUG-0780, "densest cluster"); **else STOP cheaply** (the D14 b openings need the strategies schema, not on `main`; the 12th-house tweak is parked to batch with the next hash-moving data change). Details in `studio/handoff.md` |
 | Data: gate | **GO** |
 | Tools on this PC | Godot 4.7.2 .NET, .NET SDK 8.0.425, Git 2.53 + LFS 3.7; `GODOT` user variable set |
-| Build | **0056 ACCEPT (Producer):** sim branch 60c5f7b build **0 warnings** (37 s); the full non-Perf suite on the branch **6,505 / 0 failed / 9 skipped of 6,514 in 30 m 12 s**; data branch a5bde79 build 0 warnings, Content + DataValidation + ReplayGolden **1,158 / 1,158 (54 s)**, `game/data` diff empty; view branch b305cc2 **smoke PASS** (menu + `--skirmish`, `Rts.Sim 0.0.1`, no ERROR), `LookTest` headless **PASS** (14,318 tris, 65 bones, 43 clips, both clips advance), `sim/` diff empty, 13 LFS files. QA (sim): 6,664 / 6,694 full (18 red = BUG-0764's wall-clock rows; paired A/B base = head within 1-2 %), smoke PASS, a fresh clone builds. QA (view): non-Perf 6,475 / 6,484 (0 failed), **loop 64 / 64**, smoke PASS in a fresh `file://` clone. QA (data): 1,451 / 1,451 after the round; non-Perf 6,488 / 6,498 (0 failed) before it. **Previous: 2036** (its session log) |
-| Tests | **0056:** Producer: all three diffs read whole (the sim's `MatchStats` / `PlayerLedger` / `World.Stats` / `ProductionSystem` / `EconomySystem` / `BuildingStore` / `SimConfig` / `Simulation` hunks + docs/03; the view's `LookTest.cs` / `.tscn` / docs/04 + both screenshots; the data's two pages, docs/03, `D20PinQaTests`); the runs above. QA (sim): 6 four-seat AI matches with per-tick oracles for every counter (56-119 injected cancels each), A / twin / every-tick-sampling hash twins, 4 mutants killed, capacity exhaustion, 0 B sampling, the sample-cost A/B. QA (view): LFS pointer fault injection (BUG-0860), the fresh-clone import with no `.import` churn, every glTF URI resolved. QA (data): 3 / 3 knob / rate mutants killed by name. **Previous: 2036** (its session log) |
-| Open bugs | **S1: 0, S2: 0**, S3: 15, S4: 17. **New:** sim **BUG-0850** (S4: dev rows miss the gold site refund + a cast summon; QA covers both; M5-H3); view **BUG-0860** (S3: `LookTest` hangs without `git lfs pull`, no per-scene loop timeout; M6-VH3 first), **BUG-0861** (S4: the export preset would ship the look-test folder); data **BUG-0870** (S2, **fixed** in the round), **BUG-0871** (S3, docs/02 wording: **fixed by the Producer at this ACCEPT**, file status set next PLAN). Still open: BUG-0764 (S3, Perf gates), BUG-0790 (S3), BUG-0780 (S3, the owner's call), BUG-0144 (S3), BUG-0830, BUG-0791, BUG-0113 item 2, BUG-0704 items 2-3, BUG-0550 item 2, BUG-0521 items 2-3, BUG-0281 item 2, BUG-0663 (S4) |
-| Sessions today | **2026-10-17: 1 / 8 done** (0056). Counters after: **sim 3 / 4, view 3 / 4, data 1 / 4** |
-| Last session | 2026-10-17-0056 · sim M6-S1 the match stats counters (feature, QA standard PASS_WITH_ISSUES: BUG-0850 S4, 0 rounds, **ACCEPT**, merged first) · view M6-V10 the art look test (feature, QA light PASS_WITH_ISSUES: BUG-0860 S3 / 0861 S4, 0 rounds, **ACCEPT**, merged second) · data D20 the re-print + re-word (feature, QA light FAIL → PASS_WITH_ISSUES: BUG-0870 S2 fixed in round 1, BUG-0871 S3 fixed by the Producer, **ACCEPT**, merged third) · golden unmoved; M5 3 / 9, M6 1 / 10 (criterion 2's sim half, criterion 5's look test) |
+| Build | **0554 ACCEPT (Producer):** sim branch f99caa3 build **0 warnings** (21 s); the full non-Perf suite on the branch **6,623 passed / 8 failed / 20 skipped of 6,651 in 30 m 44 s** (**the 8 red = BUG-0900's data-owned rows**: `CounterTriangleMarginsTests` ×7 + `AiSpendingReportTests.GeneratedNormal_PagesAndDocs03_QuoteTheReport`, re-printed on the merged tree before the push; nothing else red); view branch 93b24ae build 0 warnings (32 s), **smoke PASS** (menu + `--skirmish`, `Rts.Sim 0.0.1`, no ERROR), `MatchOverViewTest` / `ReplayPlaybackTest` / `ShellTest` headless PASS, **`FreeForAllTest` windowed PASS at 1280 × 720 with both screenshots looked at**, `sim/` diff empty. QA (sim): re-check on a fresh clone 6,752 / 6,788 (24 red = the 8 data rows + 16 wall-clock Perf under load; paired A/B within noise, ticks 205-605 of the melee brawl ~7 % cheaper), smoke PASS. QA (view): non-Perf 6,524 / 6,533 (0 failed), **loop 65 / 65**, smoke PASS. **Previous: 0056** (its session log) |
+| Tests | **0554:** Producer: both diffs read whole (the sim's `MovementSystem` / `CombatSystem` / `SurroundRule` / `UnitStore` / `MovementConstants` / `World` / `Simulation` hunks + docs/03's 248 lines; the view's `MatchStats` / `ArmyValueGraph` / `MatchOverText` / `ui.json` / docs/03); the runs above; the 8 data rows' messages captured for BUG-0900. QA (sim): `FlankQaTests` 49 + `FlankFixRound1QaTests` 42 + `FlankMarkQaTests` 3 (lines 10-48 at 0-60°, one-body-width gaps, cliff-foot rows, tree rings, the spam grid, halls ringed by friends, a ramped plateau, 6-seed flank fuzz twins, cross-map seeds 1-30, 0 B at 500 v 500, the mark hashed / reset in a reused slot). QA (view): `QaM6V11Test` (a per-tick oracle over 17,600 ticks × 4 seats, every cell at 3 checkpoints, the replay re-watched equal, 0 redraws paused, 999,999 layout). **Previous: 0056** (its session log) |
+| Open bugs | **S1: 0, S2: 1 (BUG-0900, data-owned, closes at this integration or next session)**, S3: 20, S4: 18. **New (sim, M5-P2):** BUG-0880 / 0881 / 0882 / 0883 (S2, **fixed** in round 1), BUG-0884 (S3, **fixed** with them), **BUG-0885** (S3: the 10 v 10 scene parts between spawn orders, rule off too: BUG-0046's class), **BUG-0886** (S3: the BUG-0882 regression test never takes its order; docs half fixed by the Producer), **BUG-0887** (S3: alternating-point Move spam behind a 24-32 line swings), **BUG-0888** (S3: a 24-line against a cliff, gives up on the walk back), **BUG-0889** (S3, pre-existing: an ordered chaser on a hall kept Moving, never strikes); **view (M6-V11):** **BUG-0890** (S4: stats graph / heading polish); **Producer:** **BUG-0900** (S2, above). Still open: BUG-0764 (S3, Perf gates), BUG-0790 (S3), BUG-0780 (S3, the owner's call), BUG-0144 (S3), BUG-0860 (S3), BUG-0850, BUG-0861, BUG-0830, BUG-0791, BUG-0113 item 2, BUG-0704 items 2-3, BUG-0550 item 2, BUG-0521 items 2-3, BUG-0281 item 2, BUG-0663 (S4) |
+| Sessions today | **2026-10-17: 2 / 8 done** (0056, 0554). Counters after: **sim 4 / 4, view 4 / 4, data 1 / 4** |
+| Last session | 2026-10-17-0554 · sim M5-P2 pathing slice 2, flank through your own line (feature, QA full FAIL → PASS_WITH_ISSUES: BUG-0880-0883 S2 fixed in round 1, BUG-0884 S3 fixed, BUG-0885-0889 S3 open, 1 round, **ACCEPT**, merged first; **BUG-0900 S2 data-owned: the merged-tree re-print before the push**) · view M6-V11 the stats columns + the army-value graph (feature, QA standard PASS_WITH_ISSUES: BUG-0890 S4, 0 rounds, **ACCEPT**, merged second; **M6 criterion 2 ticked**) · data STOP (planned) · golden unmoved; M5 3 / 9, M6 2 / 10 |
 
 ## Milestone progress
 
@@ -49,7 +49,7 @@ _Last updated: 2026-10-17 (session 2026-10-17-0056 ACCEPT): **all three tracks l
 | M3 (all three tracks) | 8 / 8 | **Done** 2026-10-08 (Producer sign-off after every track's hardening and the BUG-0146 fix; retro in docs/05; open S3 / S4 listed there; your ten-minute playtest is still wanted as feedback) |
 | M4 (all three tracks) | 10 / 10 | **Done** 2026-10-11 (Producer sign-off in session 2026-10-10-2334 after every track's end-of-M4 hardening (M4-H3, M4-VH3, D-H3); D12, the data track's last M4 content, landed in session 2026-10-11-0314; coverage ✅ Unit / fuzz / Determinism on every M4 row; retro in docs/05 with the open S3 / S4 carried; your windowed run of the sandbox battle is feedback, not a gate) |
 | M5 (sim, with a small view part and the data track's `ai.json`) | 3 / 9 (criteria 1, 2, 7 ticked; 3, 4 and 5 advanced; three owner-requested criteria added 2026-10-14) | **In progress** since 2026-10-11 (M5-1 to M5-4f and the M5-H1 / M5-H2 hardenings on `main`: `PlayerView`, seats, the executor / economy / production / scout / military / defense / ability managers (criterion 2 ticked 2026-10-13), the AI data in the hash, the generator's start locations, the defeat rule + `MatchOver` (M5-4b), **the owner's win rule (M5-4e, 2026-10-14)**, the surround rule (M5-P1), the collapse (M5-H2), **the proportional defense (M5-4f, 2026-10-16: criterion 7 ticked; `gatherRate` 0.85 / 0.75 and D15 C with it)**; D14's real build orders, D15's rows, D16's difficulty pins, D17's wording, D18's measurements, D19's numbers; criterion 3 waits on expansion / rebuilding / high-ground scouting / hunting the last units (M5-4d), 4 on the three Hard knobs (M5-4c slice 2), 5 on M5-5's 20-minute test, 6 on the owner's play, 8-9 on D14 b / D14 c) |
-| M6 (view, with the sim's seats and the owner's downloads) | 1 / 10 (criterion 4 ticked 2026-10-16; criteria 1, 2, 3, 5 and 7 advanced; **M6-S1 2026-10-17: the sim's stats counters, criterion 2 waits only on the view's columns; M6-V10 2026-10-17: the look test done, criterion 5 waits on the owner's art call**) | **Started ahead** 2026-10-11 (M6-V1: main menu, skirmish setup with seed / map size, pause menu; M6-V2: faction and difficulty per slot, `--faction` / `--ai`; M6-V3: a colour per slot, the menu's match as a hall + workers; M6-VH1: colours unique per match and corpse-legible; M6-V6: the settings screen minus keybinds; M6-V4: the Victory / Defeat / Draw banner and the stats screen with today's counters; M6-V7 (2026-10-14): the cursor confined during a match + its setting, control groups hold a building; **M6-V8 (2026-10-16): keybinds (Settings → Keybinds, 31 keys, `settings.cfg` `[keys]`) + the resource click: criterion 4 ticked**; **M6-V5 (2026-10-16): 2-4 player slots** (Add player / Remove player; each AI slot its own faction, difficulty and colour; four bases on the generator's four start locations; `--players`, per-slot `--ai`; BUG-0770 closed); **M6-V9 (2026-10-16): replay recording + Load Game playback** (every menu match recorded to `user://replays/`, the newest 20 kept; Watch replays it with every checkpoint compared, no orders; `--replay`): criterion 1 waits only on team (Requests 38); criterion 2 on Requests 39's columns (gathered, trained, built / lost, Age II time, the army graph); criterion 3's save half on the sim's Requests 42; criterion 7's generator start locations landed with the sim's M5-4a / M5-H1, the three hand-made maps and mirrored terrain left) |
+| M6 (view, with the sim's seats and the owner's downloads) | 2 / 10 (criterion 4 ticked 2026-10-16; **criterion 2 ticked 2026-10-17-0554: M6-S1's counters + M6-V11's columns and graph**; criteria 1, 3, 5 and 7 advanced; M6-V10 2026-10-17: the look test done, criterion 5 waits on the owner's art call) | **Started ahead** 2026-10-11 (**M6-V11 (2026-10-17): the stats screen's ten columns and the army-value graph: criterion 2 ticked.** M6-V1: main menu, skirmish setup with seed / map size, pause menu; M6-V2: faction and difficulty per slot, `--faction` / `--ai`; M6-V3: a colour per slot, the menu's match as a hall + workers; M6-VH1: colours unique per match and corpse-legible; M6-V6: the settings screen minus keybinds; M6-V4: the Victory / Defeat / Draw banner and the stats screen with today's counters; M6-V7 (2026-10-14): the cursor confined during a match + its setting, control groups hold a building; **M6-V8 (2026-10-16): keybinds (Settings → Keybinds, 31 keys, `settings.cfg` `[keys]`) + the resource click: criterion 4 ticked**; **M6-V5 (2026-10-16): 2-4 player slots** (Add player / Remove player; each AI slot its own faction, difficulty and colour; four bases on the generator's four start locations; `--players`, per-slot `--ai`; BUG-0770 closed); **M6-V9 (2026-10-16): replay recording + Load Game playback** (every menu match recorded to `user://replays/`, the newest 20 kept; Watch replays it with every checkpoint compared, no orders; `--replay`): criterion 1 waits only on team (Requests 38); criterion 2 on Requests 39's columns (gathered, trained, built / lost, Age II time, the army graph); criterion 3's save half on the sim's Requests 42; criterion 7's generator start locations landed with the sim's M5-4a / M5-H1, the three hand-made maps and mirrored terrain left) |
 | M7-M9 | — | Planned |
 
 ## For your review
@@ -65,10 +65,92 @@ answers and first playtest: what changes, where each item lands, the D14 verdict
 what a raid is worth (Producer assessment, 2026-10-14)"**, further down this section (search this file for `Producer assessment,
 2026-10-14`; newer entries are added above it, so it moves down one entry per task). Its items today: Easy casts, ×1.5, the
 building-damage set, the win rule, the cursor confinement, building control groups, the resource click, keybinds, the
-surround-a-building pathing **and the proportional defense with quicker gathering (M5-4f, on `main` since 2026-10-16-2036; the entry
-just below)** are **built**; the variable strategies and counter-composition are M5 criteria 8-9 (next in the sim's queue after
-pathing slice 2 and the Hard knobs); the Ages → tech-tree design is after M5's AI work; the two proposals (a Shock pass; the AI's gold
-share) still want a yes / no from you. That entry stays where it is until you acknowledge it in the inbox.
+surround-a-building pathing **and the proportional defense with quicker gathering (M5-4f, on `main` since 2026-10-16-2036)** and now
+**the walk round your own line (pathing slice 2, M5-P2, 2026-10-17-0554; the entry just below)** are **built**; the variable strategies
+and counter-composition are M5 criteria 8-9 (next in the sim's queue after its hardening and the Hard knobs); the Ages → tech-tree
+design is after M5's AI work; the two proposals (a Shock pass; the AI's gold share) still want a yes / no from you. That entry stays
+where it is until you acknowledge it in the inbox.
+
+### Your infantry now walk round your own crossbow line instead of standing stuck behind it, and they keep their target while they do; the faction pages' balance tables move with it (sim track, M5-P2 "pathing slice 2", 2026-10-17)
+
+**What was built.** The second half of your playtest note 5 ("infantry behind crossbowmen get stuck instead of going around them").
+A soldier whose way is blocked by its own side's standing fighters (units that are shooting or casting: they never get pushed) now
+walks round the **nearer end** of that line, turning up to 135° off its course, and once it has picked a side it keeps it. While it
+walks round friends who are fighting the same enemy it **does not give the enemy up** (before, it gave up after 2 s and stood idle). A
+plain right-click Move through your own line does the same, so a group sent past its archers gets there. Two limits on purpose: a
+block of more than 32 touching fighters is an army's front, not a line (the back ranks queue behind it as before), and **enemy** lines
+are never walked round (the old rule that an enemy wall holds is untouched). One fix inside the same work: an attack order on a
+target nobody can reach (a unit up a sealed cliff, a hall ringed by trees) is now given up instead of pacing below it forever.
+
+**What you will see.** Plant 10 Crossbowmen in a row shooting an enemy Town Hall, put 10 Heavy Infantry behind them and order them to
+attack the hall: 8 of 10 strike within 10 s (before: 0; they stood behind the row and gave up). Whirlwind Raiders behind Desert
+Archers: 10 of 10. Attack-move past the row, or an enemy unit walking up behind your line: 9-10 of 10 reach it, nobody gives up.
+Move 10 infantry to a point beyond your crossbow row: 9 of 10 arrive. In a melee between two armies the back ranks walk round their
+own front rank's ends instead of pressing behind it, so **brawls between melee groups are quicker and more one-sided** (one
+attack-move in a 40 v 40 test brawl now deals 46 % more damage than before).
+
+**Balance tables moved (for your review; the data track re-prints the pages).** The counter-triangle fights on the faction pages
+(Malazan vs Whirlwind pairs, both seats) were re-measured. **Every winner is unchanged.** The margins:
+
+| Fight | Winner keeps (cost), old → new | Time to last death, old → new |
+| --- | --- | --- |
+| Heavy Infantry v Horse Raider (seat 0 / 1) | 94 / 88 % → **100 / 100 %** | 23.1 / 20.5 s → 17.9 / 16.3 s |
+| Raider v Wickan Lancer | 100 / 95 % → 95 / 95 % | 16.6 / 18.3 s → 15.6 / 15.9 s |
+| Wickan Lancer v Desert Archer | 70 / 80 % → 80 / 80 % | 25.1 / 22.0 s → 15.9 / 16.4 s |
+| Horse Raider v Crossbowman | 69 / 77 % → **92 / 85 %** | 20.9 / 18.2 s → 14.8 / 14.6 s |
+| Crossbowman v Priest of the Whirlwind | 87 / 67 % → 87 / 60 % | 11.6 / 11.9 s → 13.4 / 13.6 s |
+| Desert Archer v Cadre Mage | 89 / 72 % → 89 / 89 % | 11.4 / 13.0 s → 9.6 / 11.4 s |
+
+Reading it: melee winners now win faster and lose fewer (they stop queueing behind their own front); the two ranged-v-caster rows move
+a little the other way. Every row was already above the 40-65 % target band (a Producer default from D6; D13 / D18 found no lever of
+the line unit's own that reaches it), and this pushes the melee rows further from it. If you want the margins pulled back toward the
+band, that is a data task (unit numbers), not a pathing one: say so in the inbox. The AI's spending paragraphs moved by 1-4 s (the
+idle base falls at 505 s, not 509 s). No data file changed.
+
+**Producer decisions (yours to revisit).** (a) The walk round the line is remembered for a while, so a unit keeps the side it took
+and doesn't swing between the two ends (that memory is part of the game's fingerprint). (b) A line of 11 or more is remembered; round
+a line of 10 or fewer the simple rule alone does the job (the memory made units converging on a melee give up more). (c) The
+determinism proof uses one walker in nine layouts (bit-equal whichever order the row was spawned in); the full 10 v 10 scene was never
+spawn-order free, even before this change (BUG-0885, to be looked at in the sim's clean-up).
+
+**Replays.** The rule changes where units walk, and the "fingerprint" grew a word for a unit that has walked round its line, so **a
+replay recorded before today may refuse to play** (Main menu → Load Game → Watch stops with a mismatch) wherever a melee unit flanked
+its own line. New recordings are fine. Nothing to do unless you want an old one kept: say so and the studio can keep it with the old
+build.
+
+**Rough edges.** BUG-0887 (S3): a Move re-issued every 2-3 ticks (click spam) to two points 2 m apart behind a line of 24-32 swings for
+ever (the old behaviour never arrived either). BUG-0888 (S3): behind a long line that ends against a cliff, the walker goes round the
+open end and gives its Move up 14 m short on the way back. BUG-0889 (S3, older than this change): a Crossbowman ordered onto a hall
+behind its own Crossbowmen, or a Heavy Infantry a hair out of reach at a corner, keeps walking and never strikes. BUG-0885 (S3, above).
+BUG-0886 (S3): one of the dev's regression tests doesn't test what it says (QA's own does). All in the sim's next clean-up (M5-H3,
+next session). The 8-of-10 result in the Heavy Infantry scene sits exactly on its bound: the last two strike late on the hall's far
+faces, which is the next pathing slice ("far faces first").
+
+**How to change it.** The turn limit, the memory and the 32-unit line bound are movement constants in code (`MovementConstants`,
+documented in docs/03 "Implementation (pathing slice 2)"); an inbox note changes any of them. Balance: an inbox note to the data track.
+
+### The Victory / Defeat screen shows your real match stats and an army-value graph (view track, M6-V11, 2026-10-17)
+
+**What was built.** The stats table after a match (and under Stats in the pause menu once the banner has shown, and at the end of a
+watched replay) now shows what docs/02 lists: **Gold gathered, Wood gathered, Units trained, Units killed, Units lost, Buildings
+built, Buildings razed, Buildings lost, Age II at, Defeated at**, one row per seat with its colour swatch, faction and "You" / the
+AI's difficulty. Under the table, **"Army value over time"**: one line per player in its colour, the value of every live fighting
+unit (its gold + wood cost) sampled every 10 s, scaled so the biggest army of the match touches the top; the time axis is marked in
+whole minutes. A match shorter than 10 s shows empty axes. The four old columns (Kills, Losses, Gold in hand, Wood in hand) are gone:
+docs/02 doesn't list them and the split by units / buildings replaces the first two (Producer decision; "in hand" is on the resource
+bar during the match anyway).
+
+**What you will see.** Finish a skirmish (or quit one through the banner's Stats): a 1280 × 720 window fits all ten columns, the graph
+and Back with four seats; the headings wrap to two lines. "Age II at" reads "—" for a side that never got there, else the match clock
+when it did (e.g. "14:11"). Watch a recorded replay to its end: the same screen, with the same numbers.
+
+**Rough edges (BUG-0890, S4, the view's next clean-up).** A match under a minute labels the time axis "0:00" only; a line that stays at
+0 (or two sides with the same value) hides under another; the grey seat's line is hard to see on the black background; the one
+heading that fits on one line ("Units lost") sits mid-row rather than on the baseline. Not staged: a seat that reached Age II and
+was then defeated (the cell doesn't depend on defeat).
+
+**How to change it.** Column names and the graph's texts: `game/data/common/ui.json` (`match_over`). Column order or a column back:
+an inbox note.
 
 ### Your art call: the realistic Quaternius character, seen at the game's zoom, next to a stylized building and today's capsule (view track, M6-V10, 2026-10-17)
 
@@ -4565,7 +4647,8 @@ track right after S1/S2 bugs).
     `WaveMinHalfPop` / `WaveMinCost`), the `BuildingGhost.Site` memory. A round-trip test compares those arrays directly, not only
     the hash (docs/03 "Save/load and replays"). Text (a version / data mismatch) stays in `ui.json`. Not blocking the view: its
     criterion-3 half that needs no sim change is replay playback (the public `Rts.Sim.Replays` API), planned first. Planned for
-    the sim after M5-4f lands and before M5-4d, or with M5-H3 if the Blackboard layout is still moving.
+    the sim after M5-4f lands and before M5-4d, or with M5-H3 if the Blackboard layout is still moving. Added since: `MatchStats`
+    whole (M6-S1, not hashed) and `UnitStore.Flank` (M5-P2, hashed once non-zero: it decides the kept side and the stride).
 
 ## Feature queue: sim track (feature sessions, in order)
 
@@ -4731,6 +4814,18 @@ track right after S1/S2 bugs).
     (M6-S1)" + the save list; **BUG-0850** S4 (dev-row gaps, QA-covered); +1,518 / −15, production ~270 lines). **Counter 3 / 4.**
     **Then:** pathing slice 2, then **M5-H3** (BUG-0764 first, BUG-0790, BUG-0791, BUG-0850, BUG-0144), M5-4c slice 2, Requests 38,
     Requests 42 (incl. `MatchStats`), D14 b, M5-4d, D14 c, M5-5, M5-6.
+29. ~~M5-P2 pathing slice 2, "flank through your own line" (owner note 5, second half)~~ → **done** (session 2026-10-17-0554, 1 fix round,
+    QA full FAIL → PASS_WITH_ISSUES: the flank rule in `MovementSystem` (`PlantedOwners` / `OwnPlantedInWay` / `FlankTurn` / `FlankBlockOf`
+    cached per `PlugEpoch` and radius class, blocks ≤ `MaxPlugCluster` 32, `StrikesOurTarget` left out; `DetourTurn` with a bound and a
+    side), the flank mark `UnitStore.Flank` (kept side, growing stride, hashed once non-zero), `CombatSystem.FriendFightsTarget`'s slice-2
+    tail (`Flanking` / `QueuedBehindOwnLine` / `StandsInReachAtGoal` / `ReachableOnFoot`; `StandsInReachAtGoal` also on the ordered and spot
+    keeps: sealed cliffs and tree-ringed halls are given up), `SurroundRule.HoldsSpot`, `World.FlankRuleOn`, 7 `MovementConstants`; owner's
+    scene 0 → 8-10 / 10 struck, Move through the line 0 → 9-10 / 10, enemy lines untouched, crowd rows hash-equal, golden unmoved, 0 B a
+    tick, paired A/B within noise; BUG-0880-0883 S2 fixed in the round, BUG-0884 S3 fixed, **BUG-0885-0889 S3 open**; **BUG-0900 S2
+    data-owned** (the pages' group tables + spending paragraphs re-printed on the merged tree); docs/03 "Implementation (pathing slice 2)"
+    + docs/01; +3,499 / −28, production ~520 lines). **Counter 4 / 4 → M5-H3 next.** **Then:** M5-4c slice 2, Requests 38, Requests 42 (incl.
+    `MatchStats` + `UnitStore.Flank`), D14 b, M5-4d, D14 c, M5-5, M5-6; pathing slice 3 (the far-corner fill order, unit-v-unit crowding
+    away from buildings) when the owner's next playtest asks for it.
 4. M6 (far ahead): agents can't download. **Owner note 2026-10-08: the art direction is grounded / realistic
    (Quaternius Universal Base Characters + Modular Outfits + Universal Animation Library 1 / 2, Mixamo packs for gaps;
    KayKit a fallback only; docs/04 and docs/01 updated by the owner), and the packs are already in `asset-sources/`
@@ -4896,6 +4991,17 @@ track right after S1/S2 bugs).
     lines, 32 files). **Counter 3 / 4.** **The owner's art call is under Waiting on you / For your review.** **Then:** (g) **the stats
     columns** (criterion 2's last half, over M6-S1's getters), then **M6-VH3** (BUG-0860 first, BUG-0830), (c2) save / load when Requests 42
     lands, (e) export, (h) teams, (f) criterion 6's playable, the art pass when the owner answers.
+29. ~~M6-V11 the stats columns + the army-value graph (criterion 2's last half)~~ → **done** (session 2026-10-17-0554, 0 fix rounds, QA
+    standard PASS_WITH_ISSUES: `MatchStats.Columns` ten (`gathered_gold` … `age_ii_at` through `TechResearchedTick(p, AgeTechs[0])` and
+    `UiText.Clock`, `defeated_at`), the four M6-V4 columns and keys removed (Producer decision, docs/01), `ArmyValueGraph` (one `Control`,
+    `_Draw`, a polyline per player in `MatchStats.Rgb(PlayerRgb)`, x = (k + 1) × `StatsSampleTicks` over the span, y over the largest
+    sample, minute steps 1-120 with ≤ 9 labels, `GraphPoints` / `DrawnLines` / `MaxValue` / `PlotRect`), the 1280 × 720 layout (74 px
+    columns, 15 px wrapped headings, the graph 820 × 220, `StatsScreenCheck.Fits`), `ui.json` `match_over` +13, `MatchOverText` +13,
+    `StatsScreenCheck.cs`, `MatchOverViewTest` / `FreeForAllTest` / `ReplayPlaybackTest` / `ShellTest` / `QaM6V4Test` / `QaM6V5Test` on the
+    new columns, QA's `QaM6V11Test.tscn` (a per-tick oracle over 17,600 ticks × 4 seats); docs/03 "Implementation (M6-V11)"; `sim/` diff
+    empty; loop 65 / 65; **BUG-0890** S4; +1,346 / −61, 21 files). **Counter 4 / 4 → M6-VH3 next.** **M6 criterion 2 ticked.** **Then:**
+    (c2) save / load when Requests 42 lands, (e) export (the owner's templates), (h) teams (Requests 38), (f) criterion 6's playable, the
+    art pass when the owner answers the look call.
 
 ## Feature queue: data track (feature sessions, in order; owner reviews every landed task)
 
@@ -5018,9 +5124,32 @@ track right after S1/S2 bugs).
     unmoved**; **BUG-0871** S3 (docs/02's old phrase: fixed by the Producer at the ACCEPT); +598 / −66 lines). **Counter 1 / 4.** **Then:** an
     inbox answer first (D19's table, the Shock pass, `goldShare`, BUG-0780); else **STOP cheaply** (D14 b's schema not on `main`; the
     12th-house tweak parked to batch with the next hash-moving data change).
+28. STOP at the 0554 PLAN (nothing unblocked). **BUG-0900 (S2, data-owned, filed by the Producer at the 0554 ACCEPT):** the sim's flank
+    rule (M5-P2) moves both pages' "Balance baseline" group tables (12 rows' winner-left / hp / keeps / time cells; every winner unchanged;
+    the cells are in the bug file) and the "Spending on the menu's map" seconds (505 / 539 s). **The conductor's data fix-mode dev re-prints
+    them on the merged tree at the 0554 integration (as BUG-0734); if that didn't happen, the re-print is the data track's first task
+    next session (D21, QA light; `BuildingKillTimeReportTests` 12 / 12 must hold, no `game/data` change, golden unmoved).** Then an inbox
+    answer, else STOP.
 
-## Debt backlog: sim track (hardening sessions only; counter **3 / 4** after M6-S1, session 2026-10-17-0056)
+## Debt backlog: sim track (hardening sessions only; counter **4 / 4** after M5-P2, session 2026-10-17-0554: **M5-H3 next**)
 
+- **After M5-P2 (2026-10-17-0554), new sim debt, in M5-H3's order:** **BUG-0764 (S3)** first (the owner's fresh-boot Perf run if it came;
+  else re-baseline the red wall-clock rows with dated reasons or gate them to a calibration row); **BUG-0886 (S3):** the dev's
+  `OrderedChaseReachTests.AnOrderedAttackOnAHallRingedByTrees_*` never takes its order (no spotter: add `CombatScenes.Spotter`, assert the
+  order was taken before asserting the give-up; QA's `FlankFixRound1QaTests.HallRingedByTrees_*` is the real regression; the docs half
+  fixed by the Producer); **BUG-0885 (S3):** the 10 v 10 flank scene parts between spawn orders with the rule off too (slice 1's claims
+  in slot order at tick 1, BUG-0046's wall clips at 24-28): fix with BUG-0046 or document as the slot-order class; **BUG-0790 (S3)** the
+  stand-point fix (not folded into slice 2: not a few lines); **BUG-0887 (S3):** alternating-point Move spam every 2-3 ticks behind a
+  24-32 line swings 180-285 times (rule off never arrives either); **BUG-0888 (S3):** behind the cliff end of an own 24-line the walker
+  takes the open end and gives up 14 m short on the walk back (the budget is sized for half the line); **BUG-0889 (S3, pre-existing):**
+  an ordered Crossbowman queued behind own Crossbowmen on the same hall, or a HI 0.02 m out of reach at a corner, kept Moving 2,000 ticks
+  and never strikes; then **BUG-0791 (S4)**, **BUG-0850 (S4)**, **BUG-0144 (S3)**, **BUG-0113 item 2 (S4)**, **BUG-0704 items 2-3 (S4)**.
+  QA notes (not bugs): the flank mark's tick field overflows at 2^24 ticks (9.7 days); `StandsInReachAtGoal` judges a blocked target point
+  by the nearest open cell's centre (a unit on blocked ground within 0.5 m of an open edge is given up; only sealed-in units stand on
+  blocked ground); criterion 1's HI row sits on its 8 / 10 bound (7-9 across the round's variants: the far faces, slice 3). **Closed by
+  M5-P2's round:** ~~BUG-0880~~ / ~~0881~~ / ~~0882~~ / ~~0883~~ (S2), ~~BUG-0884~~ (S3); M4-H3's "nobody paces a cliff" hole closed with
+  BUG-0880 (`StandsInReachAtGoal` on the ordered keep). **Not sim debt:** BUG-0900 (S2, the data track's merged-tree re-print; see the data
+  backlog). Open sim debt otherwise unchanged (below).
 - **After M6-S1 (2026-10-17-0056), new sim debt: BUG-0850 (S4, M6-S1 QA; M5-H3):** `Economy/MatchStatsTests.Refunds_AndADevGrant_AreNotGathered`
   cancels a House (wood only), so a mutant counting a site's **gold** refund as gathered passes the dev suite; the dev rows' "summon" goes
   through `UnitStore.TrySpawn(expiresAtTick)`, never `SummonSystem.Summon`. QA's `QA/MatchStatsQaTests` and `Stress/MatchStatsQaFuzzStressTests`
@@ -5304,8 +5433,16 @@ track right after S1/S2 bugs).
   recorded but not checked; no depletion events (views poll); .NET 8 support ends 2026-11-10, move
   to the next LTS at M6.
 
-## Debt backlog: view track (hardening sessions only; counter **3 / 4** after M6-V10, session 2026-10-17-0056)
+## Debt backlog: view track (hardening sessions only; counter **4 / 4** after M6-V11, session 2026-10-17-0554: **M6-VH3 next**)
 
+- **After M6-V11 (2026-10-17-0554), new view debt: BUG-0890 (S4, M6-V11 QA; M6-VH3 after BUG-0860):** the stats screen: (1) a sub-minute
+  match's time axis has only "0:00" (a sub-minute step, or the match length as the last label); (2) equal-value (zero) lines hide each
+  other and the 1-sample 3 px dot is hard to see, the grey seat worst against the black backdrop (a thicker line, a faint outline, or the
+  swatch colour lightened for the line); (3) one-line headings (`Units lost`) sit mid-row: bottom-align every heading. QA notes (not bugs):
+  every counter at `int.MaxValue` grows the columns to 98 px (fits 1280 × 720, runs off 1152 × 648); a replay watched under another
+  `StatsSampleTicks` draws another graph (documented); a seat that reached Age II and was then defeated is not staged (add a row). Open
+  view debt otherwise unchanged (below): **BUG-0860 first**, BUG-0830, BUG-0550 item 2, BUG-0281 item 2, BUG-0663, the `--colour` wording,
+  BUG-0861 if the art pass hasn't.
 - **After M6-V10 (2026-10-17-0056), new view debt (first items of M6-VH3): BUG-0860 (S3, M6-V10 QA):** `LookTest` hangs forever when an LFS
   model is a pointer (a clone without `git lfs pull`): `GD.Load` returns null, `_Ready` throws before `_player` is set, `_Process` throws
   every frame, `SceneExit.Quit` is never reached; fix: null-check every `GD.Load` through `Fail(...)` and reach phase 4, the unguarded
@@ -5516,8 +5653,16 @@ track right after S1/S2 bugs).
   warnings; not errors. Builders: absolute paths for all file I/O.
 - Optional M0 item: Godot MCP server (owner install; not needed since `--screenshot`).
 
-## Debt backlog: data track (counter **1 / 4** after D20, session 2026-10-17-0056)
+## Debt backlog: data track (counter **1 / 4** after D20, session 2026-10-17-0056; STOP at 0554)
 
+- **BUG-0900 (S2, M5-P2, Producer-filed; data-owned, not debt: the merged-tree re-print at the 0554 integration, as BUG-0734):** the
+  flank rule moves both pages' "Balance baseline" **group** tables (12 rows: e.g. HI v Horse Raider keeps 94 / 88 → 100 / 100 %, 23.1 /
+  20.5 → 17.9 / 16.3 s; Horse Raider v Crossbowman 69 / 77 → 92 / 85 %; Crossbowman v Priest 67 → 60 % seat 1; every winner unchanged;
+  the siege tables unchanged) and the "Spending on the menu's map" seconds (malazan seed 1 509 → 505 s, whirlwind seed 7 540 → 539 s;
+  the 5-minute marks and the verdict unchanged). `CounterTriangleMarginsTests` ×7 + `AiSpendingReportTests.GeneratedNormal_PagesAndDocs03_QuoteTheReport`
+  red until re-printed; `BuildingKillTimeReportTests` 12 / 12 must hold; D13's sweep paragraph is labelled as measured on the old
+  movement, not re-run; no `game/data` change, golden unmoved. **Standing rule 25 addendum (handoff):** a movement or chasing brief names
+  the counter-triangle tables and the spending paragraphs as cells it can move.
 - **After D20 (2026-10-17-0056):** ~~BUG-0870~~ (S2, **fixed** in the round, d7201bf: the Defense bullets' wave-pull clause). **BUG-0871 (S3,
   docs/02, outside the data track's files): fixed by the Producer in docs/02 at the ACCEPT**; set the bug file's status at the next PLAN.
   QA note (not a bug): the second `defendMinValue` quote and the paragraph titles' gather rates were pinned by QA's rows, not the dev's.
@@ -5622,6 +5767,7 @@ track right after S1/S2 bugs).
 
 | Date | Session | Task | Result |
 | --- | --- | --- | --- |
+| 2026-10-17 | [2026-10-17-0554](sessions/2026-10-17-0554.md) | sim **M5-P2** pathing slice 2, "flank through your own line" (the flank rule in `MovementSystem`: `PlantedOwners` / `OwnPlantedInWay` / `FlankTurn` / `FlankBlockOf` cached per `PlugEpoch`, blocks ≤ 32, `StrikesOurTarget` left out, `DetourTurn` with a bound and a side; the flank mark `UnitStore.Flank` (kept side, growing stride, hashed once non-zero); `CombatSystem.FriendFightsTarget`'s slice-2 tail `Flanking` / `QueuedBehindOwnLine` / `StandsInReachAtGoal` / `ReachableOnFoot`, the last-but-one also on the ordered and spot keeps; `SurroundRule.HoldsSpot`; `World.FlankRuleOn`; 7 `MovementConstants`; `Movement/FlankTests` + `FlankCrowdRowsReport`; QA's `FlankQaTests` 49 + `FlankFixRound1QaTests` 42 + `FlankMarkQaTests` 3 + `FlankCrossMapQaTests` + `FlankAbReport`; docs/03 "Implementation (pathing slice 2)" + docs/01); view **M6-V11** the stats columns + the army-value graph (`MatchStats.Columns` ten, `ArmyValueGraph`, the 1280 × 720 layout, `ui.json` `match_over` +13 / −4, `StatsScreenCheck`, QA's `QaM6V11Test`; docs/03 "Implementation (M6-V11)" + docs/01); data STOP (planned) | **sim ACCEPT** (1 fix round, QA full FAIL → PASS_WITH_ISSUES: **BUG-0880-0883 S2 fixed** in the round, BUG-0884 S3 fixed, **BUG-0885-0889 S3** open; owner's scene 0 → 8-10 / 10, Move through the line 0 → 9-10 / 10, enemy lines untouched, crowd rows hash-equal, golden unmoved, 0 B a tick, A/B within noise; **BUG-0900 S2 data-owned, Producer-filed: the pages' group tables + spending seconds re-printed on the merged tree by a data fix-mode dev before the push, as BUG-0734**), **view ACCEPT** (0 rounds, QA PASS_WITH_ISSUES: **BUG-0890 S4**; loop 65 / 65; `sim/` diff empty; **M6 criterion 2 ticked**). Integration sim → view → the re-print. Producer: sim build 0 warnings + the 8 data rows' messages captured + the full non-Perf suite (session log); view smoke PASS, three scenes headless PASS, `FreeForAllTest` windowed PASS with two 1280 × 720 screenshots looked at. **M5 3 / 9; M6 2 / 10; counters sim 4 / 4, view 4 / 4, data 1 / 4 → M5-H3 + M6-VH3 next; open S2: BUG-0900 only (closes at the integration); bug ids next: sim 0910, view 0920, data 0930** |
 | 2026-10-17 | [2026-10-17-0056](sessions/2026-10-17-0056.md) | sim **M6-S1** the match stats counters (Requests 39: `Economy/MatchStats` owned by `PlayerLedger`, `World.Stats.cs` getters (gathered, trained, kill / loss halves, built / lost, `TechResearchedTick`, `ArmyValueSamples` every `SimConfig.StatsSampleTicks` 200 × `StatsSampleCapacity` 1,024), `UnitDef.IsWorker`, nothing hashed, no data field, docs/03 "Implementation (M6-S1)" + the save list; QA's `MatchStatsQaFuzzStressTests` (6 oracle matches) + `MatchStatsQaTests` (8)); view **M6-V10** the art look test (`game/assets/models/looktest/` 11 Quaternius files 22.1 MB LFS, `LookTest.tscn` / `.cs`, `docs/images/look-test-2026-10-17[-far].png`, docs/04 "Look test (M6-V10)" + three licensing rows); data **D20** the re-print + re-word (both pages' spending / house paragraphs on M5-4f's numbers, the Defense bullets with 1.5 / 150 / 0.5 quoted, docs/03's bullet, `D20PinQaTests` + `D20DefenseWordingQaTests`) | **all three ACCEPT** (sim 0 rounds, QA standard PASS_WITH_ISSUES: **BUG-0850 S4**; view 0 rounds, QA light PASS_WITH_ISSUES: **BUG-0860 S3, BUG-0861 S4**; data 1 round, QA light FAIL → PASS_WITH_ISSUES: **BUG-0870 S2 fixed**, **BUG-0871 S3 fixed by the Producer in docs/02**). Integration sim → view → data; golden unmoved. Producer: sim build 0 warnings + the full non-Perf suite (session log); data Content / DataValidation / golden 1,158 / 1,158; view smoke PASS + `LookTest` PASS + both screenshots looked at. **M5 3 / 9; M6 1 / 10 (criterion 2's sim half, criterion 5's look test; the art call on the owner); counters sim 3 / 4, view 3 / 4, data 1 / 4; no open S1 / S2; next: sim pathing slice 2, view the stats columns, data an inbox answer or STOP; bug ids next: sim 0880, view 0890, data 0900** |
 | 2026-10-16/17 | [2026-10-16-2036](sessions/2026-10-16-2036.md) | sim **M5-4f's QA round** on the held branch (QA full: `QA/ProportionalDefenseQaTests` 16 command-log rows, `Stress/ProportionalDefenseFuzzStressTests` 12 AI-v-AI oracle matches with hash / log twins, `QA/ProportionalDefenseCostQaTests` 1 ms Perf row, `QA/Bug0790FaceProbeQaTests` (the BUG-0790 ruling: a free ring-cell spot in reach every wedged tick → a sim crowding fault; `GatherPocketStressTests (MineOneSide, 40)` skipped with the id, the old-rate control live), the `defendMinValue` 5,000 re-stagings read row by row, the cache A/B, a second seed-21 recording diffed, Perf paired A/B alone); view **M6-V9** replay recording + Load Game playback (`ReplayStore` write / prune / list, `LoadGameScreen`, `SimRunner.StartPlayback` with every seat human and each checkpoint compared, `Match.StartReplay`, `SelectionController.OrdersEnabled` + `CommandCard.ReadOnly`, `--replay`, `ui.json` `menu.load` + 16 `load.*` keys, `ReplayPlaybackTest.tscn`, `ShellTest` +131, QA's `QaM6V9Test.tscn`, docs/02 + docs/03 "Implementation (M6-V9)"); data STOP (planned) | **sim ACCEPT** (QA PASS, no new bugs; the held 8ac7b43 lands: criterion 7 ticked, BUG-0702 closed, golden → **C059AD620DE581F1**), **view ACCEPT** (0 rounds, QA PASS_WITH_ISSUES: **BUG-0830 S4**; `sim/` diff empty). Integration sim → view; the Producer's scratch merge a8029a2 (one conflict, `coverage.md`, union): build 0 warnings, smoke PASS, loop **63 / 63 PASS** (24 min under load; `M3PlayableTest` 119 s, `M4PlayableTest` 23.7 s); the sim branch's full non-Perf suite **6,475 / 0 failed / 9 skipped in 30 m 1 s** (QA's numbers exactly). **M5 3 / 9, M6 1 / 10 (criterion 3's replay half); counters sim 2 / 4, view 2 / 4, data 0 / 4; no open S1 / S2; next: sim pathing slice 2, view the look test, data the re-print; bug ids next: sim 0850, view 0860, data 0870** |
 | 2026-10-16 | [2026-10-16-1654](sessions/2026-10-16-1654.md) | sim M5-4f: the proportional defense (`DefenseManager.Size` / `Pick` / `Recall`: the intruders' worth from `GameData.Units`, the answer max(`defendRatio` × threat, `defendMinValue`), home army nearest the point first off an in-place min-heap, then wave members nearest the hall while the rest keep the wave's start threshold (`Blackboard.WaveMinHalfPop` / `WaveMinCost`), the whole wave when the threat outweighs everything or the hall is hit under `recallHallHp`; `DefenderGeneration` / `DefendAll` / `DefendAnswer` outside the hash), the three knobs validated + hashed, D15 C (a House step done unsent at the hard cap), BUG-0702 item 1 (the cast group seeded from the nearest enemy), `gatherRate` 0.85 / 0.75 + the seed-21 re-record (`Replays/seed21_playable.replay`, 7,682 ticks; `data-hash` C059AD620DE581F1), `EconomyManager`'s per-think no-node cache, CLAUDE.md's milestone line, docs 01 / 02 / 03; view M6-V5: 2-4 player slots (`SkirmishSetup` Add / Remove player, a difficulty list per AI slot, unique colours over the shown slots; `LaunchOptions` `--players`, slots 1-4, `--ai <slot> <d>`; `Match` / `SimRunner.SlotAi` + `SeatsFor`, a base per player on N start locations; BUG-0770; `ShellTest` +413, `FreeForAllTest.tscn`, QA's `QaM6V5Test.tscn`; docs/02 + docs/03 "Implementation (M6-V5)"); data STOP (planned) | **sim REJECT = held for its QA round** (the dev stopped BLOCKED: `GatherPocketStressTests` `(MineOneSide, 40)` red at the quicker gathering, **BUG-0790 S3**; QA full never ran; Producer: build 0 warnings, the slice 407 / 407, the red row reproduced, the diff read whole and sound; **BUG-0791 S4** filed; one round requested, then re-judged), **view ACCEPT** (0 rounds, QA PASS, no bugs; Producer: build 0 warnings, smoke PASS, the four new / touched scenes PASS alone; `sim/` diff empty → merges alone; **BUG-0770 closed**). **M5 2 / 9 (criterion 7 built, not landed); M6 1 / 10 (criterion 1 advanced: slots in, team left); counters sim 1 / 4, view 1 / 4, data 0 / 4; no open S1 / S2; Requests 42 (the save format) added; next: sim M5-4f's round, view replay playback (or the look test), data waits; bug ids next: sim 0820, view 0830, data 0840** |

@@ -695,14 +695,18 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       difficulty and colour; `--players 2..4`, per-slot `--ai`; four bases on the generator's four start locations; the
       N-seat Victory / Defeat / Draw and stats; verified by `ShellTest`, `FreeForAllTest` and QA's `QaM6V5Test`). Left: team
       (STATE Requests 38, sim).)
-- [ ] Victory/defeat detection and post-match stats screen. (M5-4b, 2026-10-13: the sim's detection, `World.IsDefeated` /
+- [x] Victory/defeat detection and post-match stats screen. (M5-4b, 2026-10-13: the sim's detection, `World.IsDefeated` /
       `DefeatEvents` / `Simulation.MatchOver`. M6-V4, 2026-10-13: the Victory / Defeat / Draw banner through the pause path
-      and the stats screen with what the sim counts today (kills, losses, gold / wood in hand, length, defeat times). Left:
-      [02 Game flow](02-game-design.md#game-flow) 5's columns (gathered, trained, buildings built / lost, Age II time, the
-      army-value graph) once the sim counts them (STATE Requests 39). M6-S1, 2026-10-17: **the sim counts them** (`World.GatheredGold`
-      / `GatheredWood` / `UnitsTrained` / `UnitKills` / `BuildingKills` / `UnitLosses` / `BuildingLosses` / `BuildingsBuilt` /
-      `BuildingsLost`, `TechResearchedTick`, `ArmyValueSamples` every 200 ticks; not hashed; docs/03 "Implementation (M6-S1)").
-      Left: the view's columns and the graph.)
+      and the stats screen with what the sim counted then (kills, losses, gold / wood in hand, length, defeat times). M6-S1,
+      2026-10-17: **the sim counts** [02 Game flow](02-game-design.md#game-flow) 5's list (`World.GatheredGold` / `GatheredWood` /
+      `UnitsTrained` / `UnitKills` / `BuildingKills` / `UnitLosses` / `BuildingLosses` / `BuildingsBuilt` / `BuildingsLost`,
+      `TechResearchedTick`, `ArmyValueSamples` every 200 ticks; not hashed; docs/03 "Implementation (M6-S1)"). M6-V11, 2026-10-17:
+      **the screen shows it**: ten columns (gold / wood gathered, units trained / killed / lost, buildings built / razed / lost, Age II
+      at, Defeated at) and the army-value graph (one line per player in its colour, scaled to the largest sample, whole-minute
+      ticks), fitting 1280 × 720 with four seats; the pause menu's Stats and a watched replay's banner show the same screen; verified
+      by `MatchOverViewTest`, `FreeForAllTest`, `ReplayPlaybackTest`, QA's `QaM6V11Test` (a per-tick oracle over a 17,600-tick 4-seat
+      match) and the Producer's own 1280 × 720 screenshots; docs/03 "Implementation (M6-V11)". Ticked at the 2026-10-17-0554 ACCEPT.
+      Polish left: BUG-0890 (S4).)
 - [ ] Save/load and replay playback. (M6-V9, 2026-10-16: **replay playback**: every match started from the menu or `--skirmish` is
       recorded (checkpoints every 100 ticks) and written to `user://replays/<yyyyMMdd-HHmmss>-seed<seed>.replay` at the banner, at
       Quit to menu and on window close, the newest 20 kept; Main menu → Load Game lists them (date, seed, players, length) with

@@ -1310,7 +1310,9 @@ sealed cliff-top). **Pathing slice 2, BUG-0880:** a unit target's chase must als
 chaser's reach (`StandsInReachAtGoal`: the chase's goal, the target's own point or the nearest ground to it, within the
 chaser's range of the target); a walk still under way to the cliff foot below a sealed cliff-top reached by `ReachableOnFoot`
 kept the order alive for ever with the chaser pacing the foot (QA's `FlankQaTests.ChaseOfATargetUpASealedCliff_*` Ordered
-rows, with the flank rule off too). Building targets are unchanged (the stand-off and the surround spots are in reach).
+rows, with the flank rule off too). Building targets take the same test: a held surround spot or the stand-off point is in
+reach and passes at once, but a building whose every open cell lies out of reach (a hall ringed two cells deep by trees,
+BUG-0882) ends an ordered or spot-walking chase (Producer, 2026-10-17, BUG-0886's docs half).
 Known limits of the friend exception: a friend fighting an enemy the chaser can't reach (both on a plateau the chaser
 can't climb) keeps the chaser pressing below for as long as that fight lasts; a target that never dies would keep its
 queued chasers queued. Brawl finish ticks after the fix (QA's scenes; f2879b9, which had no give-up at all, in

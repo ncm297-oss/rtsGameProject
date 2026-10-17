@@ -36,3 +36,5 @@ trivially.
   needs rewording.
 - Fix direction (developer's call): add `CombatScenes.Spotter` (or `Spot`-equivalent sight) so the order is taken, and
   assert that it was taken (some unit held the hall and walked) before asserting that it was given up.
+- **The docs half is fixed by the Producer at the 0554 ACCEPT** (docs/03 line 1313 now says building targets take the same
+  test and a hall ringed out of reach ends the chase). The test half stays open: first items of M5-H3.
