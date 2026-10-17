@@ -7,29 +7,36 @@ using Rts.Sim.Data;
 namespace Rts.Game;
 
 /// <summary>
-/// The skirmish setup screen (M6-V1, M6-V2, M6-V3; docs/02 "Game flow" 2): the map seed (typed, or Random), the map size
-/// (<see cref="LaunchOptions.MapSizes"/>), and two slots, "You" (player 0) and "AI" (player 1), each with a faction list and
-/// a colour list, the AI slot with a difficulty list. Text from <c>ui.json</c> <c>setup</c> (the colours' names and swatches
-/// from its colour table), faction names from the data's <c>displayName</c>.
+/// The skirmish setup screen (M6-V1, M6-V2, M6-V3, M6-V5; docs/02 "Game flow" 2): the map seed (typed, or Random), the map
+/// size (<see cref="LaunchOptions.MapSizes"/>), and 2 to <see cref="MaxSlots"/> player slots (free-for-all): slot 1 "You"
+/// (player 0, always the local human), each other slot "AI" (player s - 1), each with a faction list and a colour list, the
+/// AI slots with a difficulty list. Add player / Remove player show or hide the last slot. Text from <c>ui.json</c>
+/// <c>setup</c> (the colours' names and swatches from its colour table), faction names from the data's <c>displayName</c>.
 /// </summary>
 /// <remarks>
-/// The faction lists hold every loaded faction in id order (defaults: faction 0 for "You", faction 1 for "AI", the match's
-/// old fixed assignment); each colour list the <see cref="UiText.ColourCount"/> colours in table order (defaults: colour 1
-/// for "You", colour 2 for "AI"; colours are unique per match, so each list greys the colour the other slot holds and a pick
-/// of it moves to the first free colour, <see cref="PickColour"/>, BUG-0631 item 3); the difficulty list Easy, Normal, Hard in <see cref="AiDifficulty"/> order (default Normal). The
-/// screen holds only what the player picked; Start raises <see cref="StartPressed"/> with the picks as match flags
-/// (<see cref="MatchArgs"/>) and <see cref="Main"/> starts the match through <see cref="LaunchOptions.Parse"/>.
+/// The faction lists hold every loaded faction in id order (defaults: slot s plays faction <c>s mod factions</c>, the match's
+/// old fixed assignment); each colour list the <see cref="UiText.ColourCount"/> colours in table order (default: slot s plays
+/// colour s; colours are unique per match, so each list greys the colours the other shown slots hold and a pick of one moves
+/// to the first free colour, <see cref="PickColour"/>, BUG-0631 item 3); each difficulty list Easy, Normal, Hard in
+/// <see cref="AiDifficulty"/> order (default Normal). All four rows are built once and a removed slot is only hidden, so its
+/// picks come back with it (its colour moved if a shown slot took it meanwhile). The screen holds only what the player
+/// picked; Start raises <see cref="StartPressed"/> with the picks as match flags (<see cref="MatchArgs"/>) and
+/// <see cref="Main"/> starts the match through <see cref="LaunchOptions.Parse"/>.
 /// </remarks>
 public partial class SkirmishSetup : CanvasLayer
 {
     /// <summary>The seed the screen shows first: the match's own default (<see cref="SimRunner.Seed"/>).</summary>
     public const ulong DefaultSeed = 1;
 
+    /// <summary>Most slots the screen offers (the generator's most start locations, <see cref="LaunchOptions.SlotCount"/>).</summary>
+    public const int MaxSlots = LaunchOptions.SlotCount;
+
     /// <summary>Each difficulty list item's text key, indexed by <see cref="AiDifficulty"/>.</summary>
     public static readonly SetupText[] DifficultyKeys = { SetupText.DifficultyEasy, SetupText.DifficultyNormal, SetupText.DifficultyHard };
 
     private readonly RandomNumberGenerator _rng = new();
     private string[] _factionKeys = Array.Empty<string>();
+    private readonly Control[][] _rows = new Control[MaxSlots][];
 
     /// <summary>Raised by Start with the picks as match flags (<see cref="MatchArgs"/>).</summary>
     public event Action<string[]>? StartPressed;
@@ -46,17 +53,29 @@ public partial class SkirmishSetup : CanvasLayer
     /// <summary>The map size list, one item per <see cref="LaunchOptions.MapSizes"/> entry.</summary>
     public OptionButton MapSizeOption { get; private set; } = null!;
 
-    /// <summary>Each slot's faction list (one item per loaded faction, id order), slot 0 first.</summary>
-    public OptionButton[] FactionOptions { get; } = new OptionButton[2];
+    /// <summary>Each slot's faction list (one item per loaded faction, id order), slot 0 first; all <see cref="MaxSlots"/>, shown or not.</summary>
+    public OptionButton[] FactionOptions { get; } = new OptionButton[MaxSlots];
 
     /// <summary>Each slot's colour list (one item per <c>ui.json</c> colour, table order), slot 0 first (M6-V3).</summary>
-    public OptionButton[] ColourOptions { get; } = new OptionButton[2];
+    public OptionButton[] ColourOptions { get; } = new OptionButton[MaxSlots];
 
-    /// <summary>The AI slot's difficulty list (one item per <see cref="AiDifficulty"/>).</summary>
-    public OptionButton DifficultyOption { get; private set; } = null!;
+    /// <summary>Each AI slot's difficulty list (one item per <see cref="AiDifficulty"/>); null for slot 0, the local player (M6-V5).</summary>
+    public OptionButton?[] DifficultyOptions { get; } = new OptionButton?[MaxSlots];
+
+    /// <summary>Slot 1's (the first AI slot's) difficulty list.</summary>
+    public OptionButton DifficultyOption => DifficultyOptions[1]!;
 
     /// <summary>Each slot's name label ("You", "AI").</summary>
-    public Label[] SlotLabels { get; } = new Label[2];
+    public Label[] SlotLabels { get; } = new Label[MaxSlots];
+
+    /// <summary>Slots shown, 2 to <see cref="MaxSlots"/> (M6-V5): the match's players.</summary>
+    public int SlotCount { get; private set; } = LaunchOptions.MinPlayers;
+
+    /// <summary>The button that shows one more slot (disabled at <see cref="MaxSlots"/>).</summary>
+    public Button AddSlotButton { get; private set; } = null!;
+
+    /// <summary>The button that hides the last slot (disabled at two).</summary>
+    public Button RemoveSlotButton { get; private set; } = null!;
 
     /// <summary>The Start button.</summary>
     public Button StartButton { get; private set; } = null!;
@@ -71,7 +90,7 @@ public partial class SkirmishSetup : CanvasLayer
     /// <summary>The picked map side in cells.</summary>
     public int MapSize => LaunchOptions.MapSizes[Math.Clamp(MapSizeOption.Selected, 0, LaunchOptions.MapSizes.Length - 1)];
 
-    /// <summary>The faction id picked for <paramref name="slot"/> (0 = "You", 1 = "AI"), or -1 with no factions loaded.</summary>
+    /// <summary>The faction id picked for <paramref name="slot"/> (0 = "You"), or -1 with no factions loaded.</summary>
     public int FactionPick(int slot)
     {
         OptionButton list = FactionOptions[slot];
@@ -83,37 +102,79 @@ public partial class SkirmishSetup : CanvasLayer
 
     /// <summary>
     /// Picks <paramref name="colour"/> (0-based) for <paramref name="slot"/>, as a click on its list does. Colours are unique per
-    /// match (docs/02 "Game flow" 2, BUG-0631 item 3): a colour the other slot holds is refused and the slot takes the first
-    /// colour the other doesn't hold (<see cref="LaunchOptions.FirstFreeColour"/>). Then each list greys the other's colour.
+    /// match (docs/02 "Game flow" 2, BUG-0631 item 3): a colour another shown slot holds is refused and the slot takes the first
+    /// colour no other shown slot holds (<see cref="LaunchOptions.FirstFreeColour(ReadOnlySpan{bool})"/>; with two slots,
+    /// <see cref="LaunchOptions.FirstFreeColour(int)"/>). Then each list greys the colours the other shown slots hold.
     /// </summary>
     public void PickColour(int slot, int colour)
     {
-        int held = ColourPick(1 - slot);
+        Span<bool> held = stackalloc bool[UiText.ColourCount];
+        HeldByOthers(slot, held);
         int c = Math.Clamp(colour, 0, UiText.ColourCount - 1);
-        if (c == held) c = LaunchOptions.FirstFreeColour(held);
+        if (held[c]) c = LaunchOptions.FirstFreeColour(held);
         ColourOptions[slot].Select(c);
         GreyTakenColours();
     }
 
-    // Each colour list greys (disables) the colour the other slot holds, so the popup can't pick it.
+    /// <summary>Shows one more slot (an AI slot), up to <see cref="MaxSlots"/>; its colour moves to the first free one if a shown slot holds it.</summary>
+    public void AddSlot()
+    {
+        if (SlotCount >= MaxSlots) return;
+        int slot = SlotCount++;
+        foreach (Control cell in _rows[slot]) cell.Visible = true;
+        PickColour(slot, ColourPick(slot));
+        UpdateSlotButtons();
+    }
+
+    /// <summary>Hides the last slot, down to two; its picks are kept for when it is shown again.</summary>
+    public void RemoveSlot()
+    {
+        if (SlotCount <= LaunchOptions.MinPlayers) return;
+        int slot = --SlotCount;
+        foreach (Control cell in _rows[slot]) cell.Visible = false;
+        GreyTakenColours();
+        UpdateSlotButtons();
+    }
+
+    // Marks the colours the shown slots other than `slot` hold.
+    private void HeldByOthers(int slot, Span<bool> held)
+    {
+        held.Clear();
+        for (int s = 0; s < SlotCount; s++)
+            if (s != slot) held[ColourPick(s)] = true;
+    }
+
+    // Each colour list greys (disables) the colours the other shown slots hold, so the popup can't pick them.
     private void GreyTakenColours()
     {
+        Span<bool> held = stackalloc bool[UiText.ColourCount];
         for (int slot = 0; slot < ColourOptions.Length; slot++)
         {
-            int held = ColourPick(1 - slot);
+            HeldByOthers(slot, held);
             OptionButton list = ColourOptions[slot];
-            for (int c = 0; c < list.ItemCount; c++) list.SetItemDisabled(c, c == held);
+            for (int c = 0; c < list.ItemCount; c++) list.SetItemDisabled(c, held[c]);
         }
     }
 
-    /// <summary>The AI slot's picked difficulty.</summary>
-    public AiDifficulty DifficultyPick => (AiDifficulty)Math.Clamp(DifficultyOption.Selected, 0, DifficultyKeys.Length - 1);
+    private void UpdateSlotButtons()
+    {
+        AddSlotButton.Disabled = SlotCount >= MaxSlots;
+        RemoveSlotButton.Disabled = SlotCount <= LaunchOptions.MinPlayers;
+    }
+
+    /// <summary>The first AI slot's (slot 1's) picked difficulty.</summary>
+    public AiDifficulty DifficultyPick => DifficultyPickOf(1);
+
+    /// <summary>AI slot <paramref name="slot"/>'s (1 to <see cref="MaxSlots"/> - 1) picked difficulty.</summary>
+    public AiDifficulty DifficultyPickOf(int slot) =>
+        (AiDifficulty)Math.Clamp(DifficultyOptions[slot]?.Selected ?? (int)LaunchOptions.DefaultAi, 0, DifficultyKeys.Length - 1);
 
     /// <summary>
-    /// The picks as the command line a dev run would pass (<c>--seed &lt;n&gt; --map-size &lt;n&gt; --units 0 --colour 1 &lt;n&gt;
-    /// --faction 1 &lt;id&gt; --colour 2 &lt;n&gt; --faction 2 &lt;id&gt; --ai &lt;difficulty&gt;</c>); null while the seed field holds no
-    /// number. <c>--units 0</c>: the menu's match opens with a Town Hall and the starting workers a side, no dev army (M6-V3,
-    /// BUG-0604). A slot with no faction (no factions loaded) passes no <c>--faction</c>.
+    /// The picks as the command line a dev run would pass (<c>--seed &lt;n&gt; --map-size &lt;n&gt; --units 0 --players &lt;n&gt;</c>,
+    /// then per shown slot <c>--colour &lt;slot&gt; &lt;n&gt; --faction &lt;slot&gt; &lt;id&gt;</c>, then per AI slot
+    /// <c>--ai &lt;slot&gt; &lt;difficulty&gt;</c>); null while the seed field holds no number. <c>--units 0</c>: the menu's match
+    /// opens with a Town Hall and the starting workers a side, no dev army (M6-V3, BUG-0604). A slot with no faction (no
+    /// factions loaded) passes no <c>--faction</c>.
     /// </summary>
     public string[]? MatchArgs()
     {
@@ -121,8 +182,9 @@ public partial class SkirmishSetup : CanvasLayer
         var args = new List<string>
         {
             "--seed", seed.ToString(CultureInfo.InvariantCulture), "--map-size", MapSize.ToString(CultureInfo.InvariantCulture), "--units", "0",
+            "--players", SlotCount.ToString(CultureInfo.InvariantCulture),
         };
-        for (int slot = 0; slot < FactionOptions.Length; slot++)
+        for (int slot = 0; slot < SlotCount; slot++)
         {
             string slotArg = (slot + 1).ToString(CultureInfo.InvariantCulture);
             args.Add("--colour");
@@ -134,8 +196,12 @@ public partial class SkirmishSetup : CanvasLayer
             args.Add(slotArg);
             args.Add(_factionKeys[f]);
         }
-        args.Add("--ai");
-        args.Add(DataLimits.AiDifficultyIds[(int)DifficultyPick]);
+        for (int slot = 1; slot < SlotCount; slot++)
+        {
+            args.Add("--ai");
+            args.Add((slot + 1).ToString(CultureInfo.InvariantCulture));
+            args.Add(DataLimits.AiDifficultyIds[(int)DifficultyPickOf(slot)]);
+        }
         return args.ToArray();
     }
 
@@ -170,39 +236,53 @@ public partial class SkirmishSetup : CanvasLayer
         grid.AddChild(new Control());
         grid.AddChild(new Control());
 
-        // The slots: a heading row, then one row per slot.
+        // The slots: a heading row, then one row per slot (all built; the ones past SlotCount hidden, which the grid skips).
         grid.AddChild(new Control());
         grid.AddChild(ShellUi.Text(ui.Setup(SetupText.Faction), 16));
         grid.AddChild(ShellUi.Text(ui.Setup(SetupText.Colour), 16));
         grid.AddChild(ShellUi.Text(ui.Setup(SetupText.Difficulty), 16));
         _factionKeys = new string[data.Factions.Length];
         for (int f = 0; f < _factionKeys.Length; f++) _factionKeys[f] = data.Factions[f].Key;
-        for (int slot = 0; slot < 2; slot++)
+        for (int slot = 0; slot < MaxSlots; slot++)
         {
             SlotLabels[slot] = ShellUi.Text(ui.Setup(slot == 0 ? SetupText.SlotHuman : SetupText.SlotAi));
-            grid.AddChild(SlotLabels[slot]);
             FactionOptions[slot] = List($"Faction{slot}");
             foreach (FactionDef faction in data.Factions) FactionOptions[slot].AddItem(faction.DisplayName);
             // The defaults are the match's own seats: player p plays faction p mod factions.
             if (data.Factions.Length > 0) FactionOptions[slot].Select(slot % data.Factions.Length);
-            grid.AddChild(FactionOptions[slot]);
             ColourOptions[slot] = List($"Colour{slot}");
             for (int c = 0; c < UiText.ColourCount; c++) ColourOptions[slot].AddIconItem(Swatch(ui.ColourRgb(c)), ui.ColourName(c));
             // The defaults are the match's own: slot s plays colour s.
             ColourOptions[slot].Select(slot % UiText.ColourCount);
             int picker = slot;
             ColourOptions[slot].ItemSelected += index => PickColour(picker, (int)index);
-            grid.AddChild(ColourOptions[slot]);
-            if (slot == 0)
+            Control difficulty;
+            if (slot == 0) difficulty = new Control(); // the player's own slot has no difficulty
+            else
             {
-                grid.AddChild(new Control()); // the player's own slot has no difficulty
-                continue;
+                OptionButton list = List(slot == 1 ? "Difficulty" : $"Difficulty{slot}");
+                foreach (SetupText key in DifficultyKeys) list.AddItem(ui.Setup(key));
+                list.Select((int)LaunchOptions.DefaultAi); // --skirmish's seats too (BUG-0630)
+                DifficultyOptions[slot] = list;
+                difficulty = list;
             }
-            DifficultyOption = List("Difficulty");
-            foreach (SetupText key in DifficultyKeys) DifficultyOption.AddItem(ui.Setup(key));
-            DifficultyOption.Select((int)LaunchOptions.DefaultAi); // --skirmish's seat too (BUG-0630)
-            grid.AddChild(DifficultyOption);
+            _rows[slot] = new Control[] { SlotLabels[slot], FactionOptions[slot], ColourOptions[slot], difficulty };
+            foreach (Control cell in _rows[slot])
+            {
+                cell.Visible = slot < SlotCount;
+                grid.AddChild(cell);
+            }
         }
+
+        var slotButtons = new HBoxContainer { Name = "SlotButtons", Alignment = BoxContainer.AlignmentMode.Center };
+        slotButtons.AddThemeConstantOverride("separation", 24);
+        column.AddChild(slotButtons);
+        AddSlotButton = ShellUi.Button("AddSlot", ui.Setup(SetupText.AddSlot), 220f);
+        AddSlotButton.Pressed += AddSlot;
+        slotButtons.AddChild(AddSlotButton);
+        RemoveSlotButton = ShellUi.Button("RemoveSlot", ui.Setup(SetupText.RemoveSlot), 220f);
+        RemoveSlotButton.Pressed += RemoveSlot;
+        slotButtons.AddChild(RemoveSlotButton);
 
         var buttons = new HBoxContainer { Name = "Buttons", Alignment = BoxContainer.AlignmentMode.Center };
         buttons.AddThemeConstantOverride("separation", 24);
@@ -217,6 +297,7 @@ public partial class SkirmishSetup : CanvasLayer
         };
         buttons.AddChild(StartButton);
         GreyTakenColours();
+        UpdateSlotButtons();
         Validate();
     }
 

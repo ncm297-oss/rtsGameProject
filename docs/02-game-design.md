@@ -401,7 +401,8 @@ show text, a minimap ping, and a sound.
 1. **Main menu:** Skirmish, Load Game, Settings, Quit.
 2. **Skirmish setup:** map, 2-4 player slots (each: human/AI, faction, difficulty, color, team),
    starting resources (standard / high), game speed. Default: free-for-all. Colours are unique per match: a slot can't
-   pick a colour another slot holds.
+   pick a colour another slot holds. Single-player: slot 1 is always the local human, slots 2-4 are AI seats, each with
+   its own difficulty (built in M6-V5: Add player / Remove player, 2-4 slots, free-for-all; teams not yet).
 3. **Match.** Pause any time (single-player). Game speeds: Slow 0.75×, Normal 1×, Fast 1.5×.
 4. **Victory/defeat:** a player is out once they have **no unit left and no finished unit-producing building** (a
    hall that trains units: the Town Hall or one of the five unit halls; the Whirlwind's Holy Camp, Raider Camp and Archer

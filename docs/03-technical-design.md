@@ -5404,7 +5404,7 @@ game/tests/AiSeatTest.tscn      the headless AI seat test (in the scene loop)
   --faction 1 <id> --faction 2 <id> --ai <difficulty>`, with data ids and `ai.json` difficulty ids) through
   `LaunchOptions.Parse`, so a skirmish and a dev run still differ only in their flags. The setup screen is built once, so
   the picks survive Back and Quit to menu. From the menu, slot 2 is always the AI; a human slot 2 is a dev run without
-  `--ai`. 2-4 slots, Human / AI per slot, colour and team are M6-V3.
+  `--ai`. 2-4 slots, Human / AI per slot, colour and team are M6-V3 (colour since M6-V3, 2-4 slots since M6-V5, team not yet).
 - **Flags.** `--faction <slot> <id>` (slot 1 = player 0, the local player; slot 2 = player 1; the id a snake_case token)
   and `--ai <easy|normal|hard>` (player 1 becomes an AI seat of that difficulty) are in `LaunchOptions.MatchFlags`. Without
   them the seats are today's (player p plays faction `p mod factions`, every seat human), so every existing scene and test
@@ -5493,7 +5493,7 @@ game/data/common/ui.json        setup.colour, setup.colour_1 .. colour_8
   two entries with the same `rgb` are one load error naming both keys (BUG-0631 item 1: the table tells players apart). The
   setup shows a colour list per slot (each item a swatch and the name; defaults colour 1 for "You", colour 2 for "AI"),
   kept over Back and Quit like the other picks; colours are unique per match (M6-VH1 below). Start passes `--colour <slot> <n>`
-  (n 1-based); the flag takes slot 1 or 2 and one digit 1 to 8, and junk (a bad slot or colour, a missing value, a flag
+  (n 1-based); the flag takes slot 1 or 2 (1-4 since M6-V5) and one digit 1 to 8, and junk (a bad slot or colour, a missing value, a flag
   as a value) is warned about and ignored (BUG-0041), a repeated flag's last good value winning, as `--faction`.
   `Match.PlayerColours` builds `PlayerRgb` (slot p's pick, else colour p; players past the table wrap round it; without
   `ui.json` the seat faction's `PrimaryColor`, as before). It is the one colour source: buildings, ghosts, corpses,
@@ -5535,7 +5535,7 @@ game/data/common/ui.json        setup.colour, setup.colour_1 .. colour_8
     colour the other slot holds; `SkirmishSetup.PickColour(slot, n)` (also the lists' `ItemSelected`) moves a pick of the
     other's colour to the first colour the other doesn't hold (`LaunchOptions.FirstFreeColour`: colour 1, or 2 when the
     other holds 1). `--colour` leaving both slots on one colour (an explicit pick or a default) is warned about and slot 2
-    keeps its default, colour 2, or colour 1 when slot 1 holds colour 2.
+    keeps its default, colour 2, or colour 1 when slot 1 holds colour 2 (since M6-V5 slot by slot over four slots: "Implementation (M6-V5)").
   - *BUG-0603.* `M4PlayableTest` step 7 read the building's footprint cell after the Cusser's blast; when the blast itself
     brought the building down (the army had worn it to 338 hp), the dead slot's cell was -1 and the sight check looked at
     the map's corner. The replay `m4playable-seed6-fail-tick4094.replay` (played with its own commit's sim and data) shows the
@@ -5936,6 +5936,76 @@ paths, M6-V8 keys file and amounts); here what else changed and the tests.
   `ViewApi/StartBaseTests.HandBuiltStartByAnEdge_HallStaysByIt` (7 edge and corner locations: the hall by the location;
   the west edge planned it at (34, 17) before). `M4PlayableTest`: three runs at once give the same step ticks (seed 1
   3,469, seed 6 3,597 of 5,500), PASS each; the old scene in two runs at once gave two traces and one failed seed 6 step 6.
+
+### Implementation (M6-V5)
+
+The skirmish setup's 2-4 player slots, free-for-all (M6 criterion 1 without the team column, which waits for the sim's
+Requests 38), and BUG-0770. View only: no sim change (the sim already takes any `SimConfig.Seats` count, 2-4
+`MapGenParams.StartLocations`, and `StartBase.Plan` for N players).
+
+```
+game/scripts/SkirmishSetup.cs   four slot rows (2-4 shown), Add player / Remove player, unique colours over the shown slots
+game/scripts/LaunchOptions.cs   --players 2..4; --faction / --colour slots 1-4; --ai <slot> <difficulty> beside --ai <difficulty>
+game/scripts/SimRunner.cs       SlotFactions / SlotAi for four slots, SeatsFor, StartLocations
+game/scripts/Match.cs           --players -> PlayerCount and start locations; PickSeats per slot; a base per player
+game/scripts/SetupText.cs, game/data/common/ui.json   setup.add_slot, setup.remove_slot
+game/tests/FreeForAllTest.tscn  the 3-4 seat match-over scene (in the scene loop)
+```
+
+- **Setup screen.** All four slot rows are built once; the setup opens on two (as before) and Add player / Remove player
+  (`setup.add_slot`, `setup.remove_slot`) show or hide the last row, 2 to 4 (`SkirmishSetup.SlotCount`; Add greys at four,
+  Remove at two). A hidden row keeps its picks for when it is shown again. Slot 1 ("You") is always the local human; every
+  other slot is "AI" with its own difficulty list (`DifficultyOptions[s]`, default Normal; `DifficultyOption` is slot 2's,
+  as before). Defaults: slot s plays faction `s mod factions` and colour s. Colours are unique over the shown slots: each
+  list greys the colours the other shown slots hold, and a pick of one of them (or a row shown again on a colour taken
+  meanwhile) moves to the first colour no other shown slot holds (`LaunchOptions.FirstFreeColour(held)`; with two slots
+  this is M6-VH1's `FirstFreeColour(other)`). `MatchArgs` now carries the seat count and one `--ai` per AI slot:
+  `--seed <n> --map-size <n> --units 0 --players <n>`, then per slot `--colour <s> <n> --faction <s> <id>`, then
+  `--ai <s> <difficulty>` for slots 2 to n.
+- **Flags.** `--players 2|3|4` (one digit; `02`, `+3`, 1 and 5 are junk). `--faction` and `--colour` take slots 1-4.
+  `--ai` has two forms: one value (`--ai hard`, slot 2, M6-V2's form: every existing scene and the smoke's `--skirmish`) or
+  a slot digit and a value (`--ai 3 hard`, slots 2-4; `--ai 1 hard` is refused: slot 1 is the local human); the last good
+  value per slot wins either way. `--skirmish` makes every slot of the match past the first an AI of `DefaultAi` unless
+  `--ai` says otherwise (with two players: slot 2 Normal, the smoke's seats line unchanged). A pick for a slot past
+  `--players` (2 without it) is warned about once and unused. BUG-0041's rule holds for every two-value form: a flag is
+  never taken as a value. Colours stay unique slot by slot: a slot on a colour an earlier slot holds keeps its default
+  (colour s), or the first free colour when an earlier slot holds that too; warned about for the match's slots. With two
+  slots this is M6-VH1's rule exactly.
+- **Seats and start.** `Match.Start` sets `SimRunner.PlayerCount` and `SimRunner.StartLocations` (passed to
+  `MapGenParams.StartLocations`) to `--players` when it is given, so a 3- or 4-seat match is generated with that many start
+  locations (quarter turns of player 0's, M5-4a) and their mines. Without `--players` both stay 2 (a runner whose
+  `PlayerCount` a test raised by hand, as `MatchOverViewTest` and `QaM6V4Test` do for a never-building seat, keeps its
+  two-location map). `PickSeats` fills `SimRunner.SlotFactions` and `SlotAi` for four slots and refuses an AI pick whose
+  faction has no `ai.json` per slot; `SimRunner.SeatsFor(players, factions, slotFactions, slotAi)` builds the seats
+  (`BuildSeats(..., player1Ai)` is kept for the old callers). With no army (the menu's match) `Match` plans a base for every
+  player (it was at most two): `StartBase.Plan` centres hall p on start location p, so each base has its two start mines
+  and forest in reach and in sight. The dev army (`--units` above 0) still has two blocks, west and east; a third or
+  fourth player gets its base and a warning, no army.
+- **Colours, minimap, banner, stats.** Unchanged code: `Match.PlayerColours` already gives one colour per player (the
+  slot's pick), and every view and the minimap are bound with it; `Match.ResultFor` is already the N-player rule ("Victory"
+  when the match is over and the local player stands, "Defeat" the moment it is out even while others fight on, then
+  Continue watching, "Draw" when the last ones fall together); `MatchStats` has a row per seat.
+- **BUG-0770.** `ShellTest.Flow`, `ShellTest.SkirmishBoot` (and the new `FreeForAll`) and `AiSeatTest`'s menu run boot
+  `Main` on a per-process `user://...-<pid>/settings.cfg` that is never written (missing: the defaults). Both scenes read
+  the player's `user://settings.cfg` bytes before and after the run and fail if they differ.
+- **Tests.**
+  - `ShellTest`: `--players` (2-4 read; 1, 5, 0, `03`, `+3`, words, missing, a flag as the value refused), `--faction` /
+    `--colour` for slots 3 and 4 (0, 5, `03`, `+3` junk), `--ai` per slot (both forms, the last good value wins, slot 1 / 0 /
+    5 / missing / bad case / a flag as the value refused, the refused pair consuming its values), `--skirmish --players 4`
+    (three AI seats, an explicit `--ai` winning), seven four-slot colour rows and a 400-stream four-slot `--colour` fuzz
+    (always four distinct colours; a pick no earlier slot holds is kept), `SeatsFor` rows, the two new keys. The
+    four-slot flow from the menu: Add twice (Add greys), rows' text and defaults, unique colours through `PickColour` and a
+    list's `ItemSelected` (each list greys exactly the other shown slots' colours), Remove / Add keeping a slot's picks and
+    moving its colour when taken meanwhile, the picks over Back; Start: four seats (You, Easy, Hard, Normal; two factions
+    twice), four start locations, a hall and five workers each, each hall within 1.5 cells of its own start location and
+    20 m from the others, each seeing a gold mine, four colours (bodies, buildings, minimap dots); the local player's dev
+    army wipes out slot 4 (defeated at tick 257 on seed 1): no banner, the match ticks on, the stats list four rows with
+    slot 4's defeat time; then three slots the same way.
+  - Headless `FreeForAllTest` (Main with `--players`, every seat Malazan, staged as `DefeatStaging`): four seats, the human
+    razes 1, 2, 3 in turn: no banner until the last, then "Victory"; four seats with slots 3 and 4 AI (Easy, Hard): the
+    human's hall falls first: "Defeat" with `MatchOver` false, Continue, 60 more ticks, the pause menu's stats with the
+    human's defeat time and the AI rows by difficulty; three seats: player 1 falls (no banner), then the human: "Defeat"
+    with the match over.
 
 ## AI architecture
 

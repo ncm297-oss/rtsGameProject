@@ -103,7 +103,9 @@
     "difficulty_normal": "Normal",
     "difficulty_hard": "Hard",
     "start": "Start",
-    "back": "Back"
+    "back": "Back",
+    "add_slot": "Add player",
+    "remove_slot": "Remove player"
   },
   "pause": {
     "title": "Paused",

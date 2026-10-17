@@ -68,6 +68,12 @@ public partial class Match : Node3D
         _runner.Forests = options.Forests;
         _runner.GoldMines = options.Mines;
         _runner.Combat = !options.NoCombat;
+        // M6-V5: --players seats that many players on as many generator start locations (free-for-all).
+        if (options.Players is int players)
+        {
+            _runner.PlayerCount = players;
+            _runner.StartLocations = players;
+        }
         PickSeats(data, options);
         UnitsPerPlayer = options.UnitsPerPlayer;
         WorkersPerPlayer = options.NoBases ? 0 : options.Workers ?? data.Rules.StartingWorkers;
@@ -142,7 +148,7 @@ public partial class Match : Node3D
         if (options.UnitsPerPlayer > 0) blocks = SpawnArmies(sim, options.UnitsPerPlayer, out focus);
         else
         {
-            blocks = new System.Numerics.Vector2[Math.Min(sim.World.Config.PlayerCount, 2)][];
+            blocks = new System.Numerics.Vector2[sim.World.Config.PlayerCount][]; // M6-V5: a base per player (it was two at most)
             for (int p = 0; p < blocks.Length; p++) blocks[p] = Array.Empty<System.Numerics.Vector2>();
             focus = new System.Numerics.Vector2(sim.World.NavGrid.Width, sim.World.NavGrid.Height) * MapConstants.CellSize / 2;
         }
@@ -259,6 +265,7 @@ public partial class Match : Node3D
 
     // M6-V2: the setup's (or --faction / --ai's) picks into the runner's seats. An id the data lacks, or an AI seat whose faction
     // has no ai.json (SimConfig.Validate would throw), is refused with a warning like any bad flag value; the match still starts.
+    // M6-V5: every slot (2-4), one AI difficulty per slot past the first.
     private void PickSeats(GameData data, LaunchOptions options)
     {
         for (int slot = 0; slot < LaunchOptions.SlotCount; slot++)
@@ -269,14 +276,15 @@ public partial class Match : Node3D
             if (faction >= 0) _runner.SlotFactions[slot] = faction;
             else GD.PushWarning($"Ignoring --faction with bad or missing value '{slot + 1} {id}'.");
         }
-        _runner.Player1Ai = options.Ai;
-        if (options.Ai != null && _runner.PlayerCount > 1)
+        for (int slot = 0; slot < LaunchOptions.SlotCount; slot++)
         {
-            int f = _runner.SlotFactions[1] >= 0 ? _runner.SlotFactions[1] : data.Factions.Length > 0 ? 1 % data.Factions.Length : -1;
+            AiDifficulty? ai = _runner.SlotAi[slot] = options.AiOf(slot);
+            if (ai == null || slot >= _runner.PlayerCount) continue;
+            int f = _runner.SlotFactions[slot] >= 0 ? _runner.SlotFactions[slot] : data.Factions.Length > 0 ? slot % data.Factions.Length : -1;
             if (f < 0 || f >= data.Ai.Length || data.Ai[f] == null)
             {
-                GD.PushWarning($"Ignoring --ai: faction {f} has no ai.json; player 1 stays human.");
-                _runner.Player1Ai = null;
+                GD.PushWarning($"Ignoring --ai: faction {f} has no ai.json; player {slot} stays human.");
+                _runner.SlotAi[slot] = null;
             }
         }
     }
@@ -290,10 +298,17 @@ public partial class Match : Node3D
         GameData data = sim.World.Data;
         NavGrid grid = sim.World.NavGrid;
         focus = new System.Numerics.Vector2(grid.Width, grid.Height) * MapConstants.CellSize / 2;
-        int players = Math.Min(sim.World.Config.PlayerCount, 2); // two start blocks: west and east
+        int players = sim.World.Config.PlayerCount;
         var blocks = new System.Numerics.Vector2[players][];
         for (int p = 0; p < players; p++)
         {
+            // Two dev start blocks, west and east; a third or fourth player (M6-V5) gets its base and no dev army.
+            if (p >= 2)
+            {
+                blocks[p] = Array.Empty<System.Numerics.Vector2>();
+                GD.PushWarning($"Player {p}: the dev start army has two blocks (west and east); no army past two players.");
+                continue;
+            }
             FactionDef faction = data.Factions[sim.World.FactionOf(p)];
             float maxRadius = 0f;
             foreach (int t in faction.Units) maxRadius = Math.Max(maxRadius, data.Units[t].Radius);

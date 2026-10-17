@@ -33,4 +33,8 @@ public enum SetupText
     Start,
     /// <summary>The button back to the main menu.</summary>
     Back,
+    /// <summary>The button that adds a player slot (M6-V5: 2-4 slots).</summary>
+    AddSlot,
+    /// <summary>The button that removes the last player slot (M6-V5).</summary>
+    RemoveSlot,
 }

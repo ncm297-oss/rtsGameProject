@@ -52,11 +52,15 @@ public partial class AiSeatTest : Node
             _malazan = _data.FindFaction("malazan");
             _whirlwind = _data.FindFaction("whirlwind");
             if (_malazan < 0 || _whirlwind < 0) throw new InvalidOperationException("the malazan / whirlwind factions are not loaded");
+            string playerFile = ProjectSettings.GlobalizePath(GameSettings.DefaultPath);
+            byte[]? before = System.IO.File.Exists(playerFile) ? System.IO.File.ReadAllBytes(playerFile) : null;
             await FromTheMenu();
             await FromTheFlags();
             await SwappedSides();
             await MatchOverLine();
             await JunkFlags();
+            byte[]? after = System.IO.File.Exists(playerFile) ? System.IO.File.ReadAllBytes(playerFile) : null;
+            Check(before == null ? after == null : after != null && after.AsSpan().SequenceEqual(before), $"the player's {GameSettings.DefaultPath} changed over the run (BUG-0770)");
         }
         catch (Exception ex)
         {
@@ -74,6 +78,8 @@ public partial class AiSeatTest : Node
     {
         var main = GD.Load<PackedScene>("res://scenes/Main.tscn").Instantiate<Main>();
         main.UserArgs = Array.Empty<string>();
+        // BUG-0770: a per-process file (missing: the defaults, never written), never the player's settings.cfg.
+        main.SettingsPath = $"user://ai-seat-test-{OS.GetProcessId()}/settings.cfg";
         AddChild(main);
         await Frames(2);
         Check(main.Menu is { Visible: true } && main.CurrentMatch == null, "no-arg boot is not the menu");

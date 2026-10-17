@@ -86,13 +86,27 @@ public partial class SimRunner : Node
     public event Action<Simulation>? Ticked;
 
     /// <summary>
-    /// The faction ids picked for players 0 and 1 (the setup's two slots, <c>--faction</c>; M6-V2), or -1 for the default
-    /// (<c>p mod factions</c>); set before <see cref="Start"/>. Players past these two always play the default.
+    /// The faction ids picked for players 0 to 3 (the setup's slots, <c>--faction</c>; M6-V2, M6-V5), or -1 for the default
+    /// (<c>p mod factions</c>); set before <see cref="Start"/>. Players past these always play the default.
     /// </summary>
-    public int[] SlotFactions { get; } = { -1, -1 };
+    public int[] SlotFactions { get; } = { -1, -1, -1, -1 };
 
-    /// <summary>Player 1's AI difficulty (the setup's AI slot, <c>--ai</c>; M6-V2), or null for a human seat; set before <see cref="Start"/>.</summary>
-    public AiDifficulty? Player1Ai { get; set; }
+    /// <summary>Per player 0 to 3, its AI difficulty (the setup's AI slots, <c>--ai</c>; M6-V5), or null for a human seat; set before <see cref="Start"/>. Player 0 is the local human whatever this holds.</summary>
+    public AiDifficulty?[] SlotAi { get; } = new AiDifficulty?[LaunchOptions.SlotCount];
+
+    /// <summary>Player 1's AI difficulty (<see cref="SlotAi"/>[1]; the setup's AI slot, <c>--ai</c>; M6-V2), or null for a human seat; set before <see cref="Start"/>.</summary>
+    public AiDifficulty? Player1Ai
+    {
+        get => SlotAi[1];
+        set => SlotAi[1] = value;
+    }
+
+    /// <summary>
+    /// Start locations the map generator picks (<see cref="MapGenParams.StartLocations"/>, 2 to 4; M6-V5): <c>Match</c> sets it
+    /// to the match's <c>--players</c>. A runner whose <see cref="PlayerCount"/> a test raised by hand keeps the default 2,
+    /// so those scenes keep their map; players past the locations get the old start-base search.
+    /// </summary>
+    public int StartLocations { get; set; } = MapGenParams.Default.StartLocations;
 
     /// <summary>The seats <see cref="Start"/> gave the sim (<see cref="SimConfig.Seats"/>, one per player); empty before it.</summary>
     public ImmutableArray<PlayerSeat> Seats { get; private set; } = ImmutableArray<PlayerSeat>.Empty;
@@ -103,11 +117,11 @@ public partial class SimRunner : Node
     /// <summary>Creates the simulation from loaded data on a <see cref="MapSize"/> map (the generator's other defaults) with <see cref="Forests"/> and <see cref="GoldMines"/> and explicit <see cref="Seats"/>; ticking starts on the next frame.</summary>
     public void Start(GameData data)
     {
-        Seats = BuildSeats(PlayerCount, data.Factions.Length, SlotFactions, Player1Ai);
+        Seats = SeatsFor(PlayerCount, data.Factions.Length, SlotFactions, SlotAi);
         var config = new SimConfig(unchecked((ulong)Seed), PlayerCount, UnitCapacity, CommandCapacity)
         {
             Data = data,
-            Map = MapGenParams.Default with { Width = MapSize, Height = MapSize, Forests = Forests, GoldMines = GoldMines },
+            Map = MapGenParams.Default with { Width = MapSize, Height = MapSize, Forests = Forests, GoldMines = GoldMines, StartLocations = StartLocations },
             Combat = Combat,
             Seats = Seats,
         };
@@ -120,14 +134,22 @@ public partial class SimRunner : Node
     /// <c>p mod factions</c> (<see cref="SimConfig.SeatOf"/>'s default); player 1 is an AI of <paramref name="player1Ai"/> when
     /// that is set; every other seat is human, difficulty Normal. With no factions every seat's faction is -1.
     /// </summary>
-    public static ImmutableArray<PlayerSeat> BuildSeats(int playerCount, int factionCount, int[] slotFactions, AiDifficulty? player1Ai)
+    public static ImmutableArray<PlayerSeat> BuildSeats(int playerCount, int factionCount, int[] slotFactions, AiDifficulty? player1Ai) =>
+        SeatsFor(playerCount, factionCount, slotFactions, new AiDifficulty?[] { null, player1Ai });
+
+    /// <summary>
+    /// One seat per player (M6-V5): player p plays <paramref name="slotFactions"/>[p] when it is set (not -1), else faction
+    /// <c>p mod factions</c>; player p &gt; 0 is an AI of <paramref name="slotAi"/>[p] when that is set; every other seat (player 0
+    /// always, the local human) is human, difficulty Normal. With no factions every seat's faction is -1.
+    /// </summary>
+    public static ImmutableArray<PlayerSeat> SeatsFor(int playerCount, int factionCount, int[] slotFactions, AiDifficulty?[] slotAi)
     {
         var seats = ImmutableArray.CreateBuilder<PlayerSeat>(Math.Max(0, playerCount));
         for (int p = 0; p < playerCount; p++)
         {
             int faction = factionCount == 0 ? -1 : p < slotFactions.Length && slotFactions[p] >= 0 ? slotFactions[p] : p % factionCount;
-            bool ai = p == 1 && player1Ai != null;
-            seats.Add(new PlayerSeat(faction, ai ? SeatController.Ai : SeatController.Human, ai ? player1Ai!.Value : AiDifficulty.Normal));
+            AiDifficulty? ai = p > 0 && p < slotAi.Length ? slotAi[p] : null;
+            seats.Add(new PlayerSeat(faction, ai != null ? SeatController.Ai : SeatController.Human, ai ?? AiDifficulty.Normal));
         }
         return seats.MoveToImmutable();
     }

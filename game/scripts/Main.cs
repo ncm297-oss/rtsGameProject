@@ -225,7 +225,7 @@ public partial class Main : Node3D
         _setup.StartButton.GrabFocus();
     }
 
-    /// <summary>What the setup's Start does: a match from the picks' match flags (<see cref="SkirmishSetup.MatchArgs"/>: seed, map size, each slot's faction, the AI's difficulty), everything else the match's defaults.</summary>
+    /// <summary>What the setup's Start does: a match from the picks' match flags (<see cref="SkirmishSetup.MatchArgs"/>: seed, map size, the seat count, each slot's faction and colour, each AI slot's difficulty), everything else the match's defaults.</summary>
     public void StartSkirmish(string[] args) => StartMatch(LaunchOptions.Parse(args));
 
     private void StartMatch(LaunchOptions options)

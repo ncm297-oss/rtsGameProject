@@ -24,11 +24,15 @@ namespace Rts.Game;
 /// never a game option), <c>--map-size 128|192|256</c> (square map side in cells, <see cref="MapSizes"/>; default the 128 map; M6-V1),
 /// <c>--skirmish</c> (takes no value: start the menu's default match at once, skipping the main menu; M6-V1; since M6-V3 a Town
 /// Hall and the starting workers a side and no army, and slot 2 an AI seat of difficulty <see cref="DefaultAi"/>, like the menu's
-/// Start, unless <c>--units</c> / <c>--ai</c> are also given), <c>--faction &lt;slot&gt; &lt;id&gt;</c>
-/// (slot 1 or 2 = player 0 or 1 plays the faction with data id <c>id</c>, e.g. <c>--faction 2 whirlwind</c>; an id the data
+/// Start, unless <c>--units</c> / <c>--ai</c> are also given), <c>--players 2|3|4</c> (the match's seats, one per slot; default 2;
+/// M6-V5), <c>--faction &lt;slot&gt; &lt;id&gt;</c>
+/// (slot 1 to <see cref="SlotCount"/> = player 0 to 3 plays the faction with data id <c>id</c>, e.g. <c>--faction 2 whirlwind</c>; an id the data
 /// lacks is warned about by <see cref="Match"/> and ignored; M6-V2) and <c>--ai easy|normal|hard</c> (slot 2 is an AI seat of that
-/// difficulty; without it slot 2 is human, as before, except under <c>--skirmish</c>; M6-V2) and <c>--colour &lt;slot&gt; &lt;n&gt;</c> (slot 1 or 2 is drawn in
-/// player colour n, 1 to <see cref="UiText.ColourCount"/>, of <c>ui.json</c>'s table; without it slot s takes colour s; M6-V3; both slots on one colour: slot 2 keeps its default, M6-VH1). Any of these flags
+/// difficulty; without it slot 2 is human, as before, except under <c>--skirmish</c>; M6-V2) or <c>--ai &lt;slot&gt; easy|normal|hard</c>
+/// (slot 2 to <see cref="SlotCount"/>; slot 1 is always the local human; M6-V5) and <c>--colour &lt;slot&gt; &lt;n&gt;</c> (slot 1 to
+/// <see cref="SlotCount"/> is drawn in player colour n, 1 to <see cref="UiText.ColourCount"/>, of <c>ui.json</c>'s table; without it
+/// slot s takes colour s; M6-V3; a slot on a colour an earlier slot holds keeps its default, or the first free colour, M6-VH1, M6-V5). A slot past
+/// the match's players is warned about and unused. Any of these flags
 /// on the command line skips the main menu (<see cref="HasMatchFlag"/>), so every dev and test run starts its match as
 /// before M6-V1. Bad values are warned about and ignored; a token starting with <c>--</c> is never taken as a value (BUG-0041).
 /// </remarks>
@@ -63,7 +67,7 @@ public sealed class LaunchOptions
     {
         "--seed", "--speed", "--screenshot", "--screenshot-after", "--units", "--workers", "--forests", "--mines", "--zoom", "--bench",
         "--vsync", "--no-hud", "--debug-overlay", "--mute", "--no-bases", "--no-combat", "--no-fog", "--map-size", "--skirmish",
-        "--faction", "--ai", "--colour",
+        "--faction", "--ai", "--colour", "--players",
     };
 
     /// <summary>Whether <paramref name="args"/> holds any of <see cref="MatchFlags"/>: the boot then starts the match at once instead of showing the main menu (M6-V1).</summary>
@@ -74,20 +78,30 @@ public sealed class LaunchOptions
         return false;
     }
 
-    /// <summary>Slots <c>--faction</c> accepts: 1 (player 0, the local player) and 2 (player 1).</summary>
-    public const int SlotCount = 2;
+    /// <summary>Slots the flags accept (M6-V5: the generator's most start locations): 1 is player 0, the local player; slot s is player s - 1.</summary>
+    public const int SlotCount = MapGenParams.MaxStartLocations;
+
+    /// <summary>Fewest players <c>--players</c> accepts (and the match's default).</summary>
+    public const int MinPlayers = 2;
 
     private readonly string?[] _factionIds = new string?[SlotCount];
     private readonly int?[] _colours = new int?[SlotCount];
+    private readonly AiDifficulty?[] _ai = new AiDifficulty?[SlotCount];
 
-    /// <summary>The faction data id <c>--faction &lt;slot&gt; &lt;id&gt;</c> picked for slot <paramref name="slot"/> (0-based: player 0 or 1), or null for the default (player p plays faction <c>p mod factions</c>).</summary>
+    /// <summary>The faction data id <c>--faction &lt;slot&gt; &lt;id&gt;</c> picked for slot <paramref name="slot"/> (0-based: player 0 to 3), or null for the default (player p plays faction <c>p mod factions</c>).</summary>
     public string? FactionId(int slot) => (uint)slot < (uint)SlotCount ? _factionIds[slot] : null;
 
     /// <summary>The player colour <c>--colour &lt;slot&gt; &lt;n&gt;</c> picked for slot <paramref name="slot"/> (0-based), as a 0-based index into <c>ui.json</c>'s colour table (<see cref="UiText.ColourRgb"/>), or null for the default (slot s: colour s).</summary>
     public int? ColourIndex(int slot) => (uint)slot < (uint)SlotCount ? _colours[slot] : null;
 
     /// <summary>Player 1's AI difficulty (<c>--ai</c>; <see cref="DefaultAi"/> under <c>--skirmish</c>), or null when slot 2 is a human seat (every dev run and test before M6-V2).</summary>
-    public AiDifficulty? Ai { get; private set; }
+    public AiDifficulty? Ai => _ai[1];
+
+    /// <summary>Slot <paramref name="slot"/>'s (0-based) AI difficulty (<c>--ai</c>; <see cref="DefaultAi"/> for each of the match's slots past the first under <c>--skirmish</c>), or null for a human seat; always null for slot 0, the local player (M6-V5).</summary>
+    public AiDifficulty? AiOf(int slot) => (uint)slot < (uint)SlotCount ? _ai[slot] : null;
+
+    /// <summary>The match's players (<c>--players</c>, <see cref="MinPlayers"/> to <see cref="SlotCount"/>), or null for the runner's own count (2; M6-V5).</summary>
+    public int? Players { get; private set; }
 
     /// <summary>Square map side in cells (<c>--map-size</c>, one of <see cref="MapSizes"/>), or null for the default 128 map.</summary>
     public int? MapSize { get; private set; }
@@ -224,16 +238,35 @@ public sealed class LaunchOptions
                     if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int size) && Array.IndexOf(MapSizes, size) >= 0) o.MapSize = size;
                     else Warn(flag, value);
                     break;
-                case "--ai":
-                    int difficulty = value == null ? -1 : DataLimits.AiDifficultyIds.IndexOf(value);
-                    if (difficulty >= 0) o.Ai = (AiDifficulty)difficulty;
+                case "--players":
+                    // One digit, MinPlayers to SlotCount ("02" or "+3" are junk, as --colour's).
+                    if (value is { Length: 1 } && value[0] >= '0' + MinPlayers && value[0] <= '0' + SlotCount) o.Players = value[0] - '0';
                     else Warn(flag, value);
+                    break;
+                case "--ai":
+                    if (value is { Length: 1 } && char.IsAsciiDigit(value[0]))
+                    {
+                        // M6-V5: two values, a slot (2 to SlotCount: slot 1 is the local human) then the difficulty; neither a flag (BUG-0041).
+                        string? id = SecondValue(args, i, hasValue);
+                        int slot = Slot(value), d = id == null ? -1 : DataLimits.AiDifficultyIds.IndexOf(id);
+                        if (slot >= 1 && d >= 0) o._ai[slot] = (AiDifficulty)d;
+                        else Warn(flag, id == null ? value : $"{value} {id}");
+                        if (id != null) i++;
+                    }
+                    else
+                    {
+                        // One value, the difficulty: slot 2 (M6-V2's form, which every scene and the smoke's --skirmish use).
+                        int difficulty = value == null ? -1 : DataLimits.AiDifficultyIds.IndexOf(value);
+                        if (difficulty >= 0) o._ai[1] = (AiDifficulty)difficulty;
+                        else Warn(flag, value);
+                    }
                     break;
                 case "--faction":
                 {
                     // Two values: the slot, then the faction id. Neither may be a flag (BUG-0041); whatever values are there are consumed.
-                    string? id = hasValue && i + 2 < args.Length && !args[i + 2].StartsWith("--", StringComparison.Ordinal) ? args[i + 2] : null;
-                    if (value is "1" or "2" && id != null && IsId(id)) o._factionIds[value[0] - '1'] = id;
+                    string? id = SecondValue(args, i, hasValue);
+                    int slot = Slot(value);
+                    if (slot >= 0 && id != null && IsId(id)) o._factionIds[slot] = id;
                     else Warn(flag, id == null ? value : $"{value} {id}");
                     if (id != null) i++;
                     break;
@@ -241,8 +274,9 @@ public sealed class LaunchOptions
                 case "--colour":
                 {
                     // Two values, the slot then the colour (1-based, one digit: "02" or "+1" are junk); neither may be a flag (BUG-0041).
-                    string? n = hasValue && i + 2 < args.Length && !args[i + 2].StartsWith("--", StringComparison.Ordinal) ? args[i + 2] : null;
-                    if (value is "1" or "2" && n is { Length: 1 } && n[0] >= '1' && n[0] < '1' + UiText.ColourCount) o._colours[value[0] - '1'] = n[0] - '1';
+                    string? n = SecondValue(args, i, hasValue);
+                    int slot = Slot(value);
+                    if (slot >= 0 && n is { Length: 1 } && n[0] >= '1' && n[0] < '1' + UiText.ColourCount) o._colours[slot] = n[0] - '1';
                     else Warn(flag, n == null ? value : $"{value} {n}");
                     if (n != null) i++;
                     break;
@@ -273,23 +307,53 @@ public sealed class LaunchOptions
             }
             if (hasValue) i++;
         }
+        int players = o.Players ?? MinPlayers;
         // M6-V3 (BUG-0602 item 2, BUG-0630): --skirmish is the menu's Start with nothing changed: a hall and workers a side with
-        // no dev army, and slot 2 an AI seat of the setup's default difficulty. An explicit, valid --units / --ai still wins.
+        // no dev army, and every slot past the first an AI seat of the setup's default difficulty (M6-V5: each of the match's
+        // slots). An explicit, valid --units / --ai still wins.
         if (o.Skirmish && !unitsGiven) o.UnitsPerPlayer = 0;
-        if (o.Skirmish && o.Ai == null) o.Ai = DefaultAi;
-        // Colours are unique per match (docs/02 "Game flow" 2, BUG-0631 item 3): slot 2 on slot 1's colour is warned about and
-        // keeps its default, colour 2, or the first free colour when slot 1 holds colour 2.
-        int c0 = o._colours[0] ?? 0, c1 = o._colours[1] ?? 1;
-        if (c0 == c1)
+        for (int s = 1; s < players && o.Skirmish; s++) o._ai[s] ??= DefaultAi;
+        for (int s = players; s < SlotCount; s++)
+            if (o._factionIds[s] != null || o._colours[s] != null || o._ai[s] != null)
+                GD.PushWarning($"Ignoring slot {s + 1}'s --faction / --colour / --ai: the match has {players} players (--players).");
+        // Colours are unique per match (docs/02 "Game flow" 2, BUG-0631 item 3), slot by slot: one on a colour an earlier slot
+        // holds is warned about and keeps its default (slot s: colour s), or takes the first free colour when an earlier slot
+        // holds that too. Slots past the match are moved the same way, unwarned (they are unused).
+        Span<bool> held = stackalloc bool[UiText.ColourCount];
+        for (int s = 0; s < SlotCount; s++)
         {
-            o._colours[1] = c0 == 1 ? FirstFreeColour(c0) : null;
-            GD.PushWarning($"Ignoring --colour: slots 1 and 2 both on colour {c0 + 1}; slot 2 takes colour {(o._colours[1] ?? 1) + 1} (colours are unique per match).");
+            int c = o._colours[s] ?? s % UiText.ColourCount;
+            if (held[c])
+            {
+                int own = s % UiText.ColourCount;
+                int moved = held[own] ? FirstFreeColour(held) : own;
+                o._colours[s] = moved == own ? null : moved;
+                if (s < players)
+                    GD.PushWarning($"Ignoring --colour: slot {s + 1} on colour {c + 1}, which an earlier slot holds; slot {s + 1} takes colour {moved + 1} (colours are unique per match).");
+                c = moved;
+            }
+            held[c] = true;
         }
         return o;
     }
 
     /// <summary>The first colour (0-based) of <c>ui.json</c>'s table other than <paramref name="taken"/>: where a pick that collides with the other slot's moves.</summary>
     public static int FirstFreeColour(int taken) => taken == 0 ? 1 : 0;
+
+    /// <summary>The first colour (0-based) of <c>ui.json</c>'s table not marked in <paramref name="held"/> (M6-V5: where a pick that collides with another slot's moves); 0 if every one is held.</summary>
+    public static int FirstFreeColour(ReadOnlySpan<bool> held)
+    {
+        for (int c = 0; c < held.Length; c++)
+            if (!held[c]) return c;
+        return 0;
+    }
+
+    // The 0-based slot a "1" .. "4" names, else -1 ("01", "+1", "5" are junk).
+    private static int Slot(string? value) => value is { Length: 1 } && value[0] >= '1' && value[0] < '1' + SlotCount ? value[0] - '1' : -1;
+
+    // A two-value flag's second value: the token after the first, unless the first is missing or either is a flag (BUG-0041).
+    private static string? SecondValue(string[] args, int i, bool hasValue) =>
+        hasValue && i + 2 < args.Length && !args[i + 2].StartsWith("--", StringComparison.Ordinal) ? args[i + 2] : null;
 
     // A data id's shape (snake_case: lower-case letters, digits, '_'); whether the data has it is Match's check.
     private static bool IsId(string id)

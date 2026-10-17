@@ -5,8 +5,11 @@ using System.Linq;
 using System.Threading.Tasks;
 using Godot;
 using Rts.Sim;
+using Rts.Sim.Commands;
 using Rts.Sim.Data;
 using Rts.Sim.Entities;
+using Rts.Sim.Map;
+using Rts.Sim.Pathfinding;
 
 namespace Rts.Game.Tests;
 
@@ -62,11 +65,17 @@ public partial class ShellTest : Node
             if (!loaded.Ok) throw new InvalidOperationException("data failed to load");
             _data = loaded.Data!;
             _ui = UiText.Shared ?? throw new InvalidOperationException("ui.json failed to load");
+            // BUG-0770: every Main here reads and writes a per-process file, so the player's settings.cfg is left as it was.
+            byte[]? playerSettings = PlayerSettings();
             LaunchRows();
             UiRows();
             await Flow();
             await SkirmishBoot();
+            await FreeForAll();
             await VsyncOverride();
+            byte[]? after = PlayerSettings();
+            Check(playerSettings == null ? after == null : after != null && after.AsSpan().SequenceEqual(playerSettings),
+                $"the player's {GameSettings.DefaultPath} changed over the run (BUG-0770)");
         }
         catch (Exception ex)
         {
@@ -177,6 +186,8 @@ public partial class ShellTest : Node
         Check(LaunchOptions.Parse(new[] { "--colour", "1", "--seed", "3" }).Seed == 3 && LaunchOptions.Parse(new[] { "--colour", "--seed", "3" }).Seed == 3,
             "--colour swallowed --seed (BUG-0041)");
 
+        SlotRows();
+
         // SimRunner's seats: explicit, one per player, the old defaults without picks.
         int factions = _data.Factions.Length;
         var plain = SimRunner.BuildSeats(3, factions, new[] { -1, -1 }, null);
@@ -185,6 +196,108 @@ public partial class ShellTest : Node
         var picked = SimRunner.BuildSeats(3, factions, new[] { 1, 0 }, AiDifficulty.Hard);
         Check(picked[0] == new PlayerSeat(1, SeatController.Human, AiDifficulty.Normal) && picked[1] == new PlayerSeat(0, SeatController.Ai, AiDifficulty.Hard)
             && picked[2] == new PlayerSeat(2 % factions, SeatController.Human, AiDifficulty.Normal), $"picked seats {string.Join(", ", picked)}");
+        // M6-V5: one AI difficulty per slot; slot 0 is the local human whatever the array holds.
+        var four = SimRunner.SeatsFor(4, factions, new[] { 1 % factions, 0, -1, 0 }, new AiDifficulty?[] { AiDifficulty.Hard, AiDifficulty.Easy, AiDifficulty.Hard, null });
+        Check(four.Length == 4 && four[0] == new PlayerSeat(1 % factions, SeatController.Human, AiDifficulty.Normal)
+            && four[1] == new PlayerSeat(0, SeatController.Ai, AiDifficulty.Easy) && four[2] == new PlayerSeat(2 % factions, SeatController.Ai, AiDifficulty.Hard)
+            && four[3] == new PlayerSeat(0, SeatController.Human, AiDifficulty.Normal), $"four seats {string.Join(", ", four)}");
+        Check(SimRunner.SeatsFor(3, factions, new[] { -1, -1, -1, -1 }, new AiDifficulty?[4]).SequenceEqual(plain), "SeatsFor without picks is not BuildSeats' defaults");
+    }
+
+    // M6-V5: --players, and --faction / --ai / --colour for slots 1-4 (junk refused, BUG-0041's rule: a flag is never a value).
+    private void SlotRows()
+    {
+        Check(LaunchOptions.HasMatchFlag(new[] { "--players", "3" }), "--players not a match flag");
+        Check(LaunchOptions.Parse(Array.Empty<string>()).Players == null, "--players set with no flag");
+        for (int n = 2; n <= 4; n++) Check(LaunchOptions.Parse(new[] { "--players", n.ToString() }).Players == n, $"--players {n} not read");
+        foreach (string[] junk in new[]
+        {
+            new[] { "--players", "1" }, new[] { "--players", "5" }, new[] { "--players", "0" }, new[] { "--players", "03" }, new[] { "--players", "+3" },
+            new[] { "--players", "three" }, new[] { "--players", "" }, new[] { "--players" }, new[] { "--players", "--seed", "3" },
+        })
+            Check(LaunchOptions.Parse(junk).Players == null, $"'{string.Join(' ', junk)}' accepted as {LaunchOptions.Parse(junk).Players}");
+        Check(LaunchOptions.Parse(new[] { "--players", "--seed", "3" }).Seed == 3, "--players swallowed --seed (BUG-0041)");
+        Check(LaunchOptions.Parse(new[] { "--players", "4", "--players", "9" }).Players == 4, "a junk --players replaced a good one");
+
+        // --faction / --colour for slots 3 and 4; slot 0 and 5 are junk.
+        LaunchOptions many = LaunchOptions.Parse(new[] { "--players", "4", "--faction", "3", "whirlwind", "--faction", "4", "malazan", "--colour", "3", "6", "--colour", "4", "8" });
+        Check(many.FactionId(2) == "whirlwind" && many.FactionId(3) == "malazan" && many.ColourIndex(2) == 5 && many.ColourIndex(3) == 7 && many.FactionId(4) == null,
+            $"slots 3 / 4: factions '{many.FactionId(2)}', '{many.FactionId(3)}', colours {many.ColourIndex(2)}, {many.ColourIndex(3)}");
+        foreach (string[] junk in new[] { new[] { "--faction", "5", "malazan" }, new[] { "--faction", "0", "malazan" }, new[] { "--faction", "03", "malazan" },
+            new[] { "--colour", "5", "1" }, new[] { "--colour", "0", "1" }, new[] { "--colour", "+3", "1" } })
+        {
+            LaunchOptions o = LaunchOptions.Parse(junk);
+            Check(Enumerable.Range(0, 5).All(s => o.FactionId(s) == null && o.ColourIndex(s) == null), $"'{string.Join(' ', junk)}' picked something");
+        }
+
+        // --ai <slot> <difficulty>: slots 2-4; the one-value form stays slot 2; slot 1 is always the local human.
+        LaunchOptions ais = LaunchOptions.Parse(new[] { "--ai", "3", "hard", "--ai", "4", "easy", "--ai", "2", "normal", "--players", "4" });
+        Check(ais.AiOf(0) == null && ais.AiOf(1) == AiDifficulty.Normal && ais.Ai == AiDifficulty.Normal && ais.AiOf(2) == AiDifficulty.Hard && ais.AiOf(3) == AiDifficulty.Easy
+            && ais.AiOf(4) == null && ais.AiOf(-1) == null, $"--ai per slot: {ais.AiOf(1)}, {ais.AiOf(2)}, {ais.AiOf(3)}");
+        Check(LaunchOptions.Parse(new[] { "--ai", "hard", "--ai", "2", "easy" }).Ai == AiDifficulty.Easy
+            && LaunchOptions.Parse(new[] { "--ai", "2", "easy", "--ai", "hard" }).Ai == AiDifficulty.Hard, "--ai's two forms on slot 2: the last good value does not win");
+        foreach (string[] junk in new[]
+        {
+            new[] { "--ai", "1", "hard" }, new[] { "--ai", "5", "hard" }, new[] { "--ai", "0", "easy" }, new[] { "--ai", "3" }, new[] { "--ai", "3", "Hard" },
+            new[] { "--ai", "3", "insane" }, new[] { "--ai", "3", "--seed", "3" }, new[] { "--ai", "--ai", "3" },
+        })
+        {
+            LaunchOptions o = LaunchOptions.Parse(junk);
+            Check(Enumerable.Range(0, 4).All(s => o.AiOf(s) == null), $"'{string.Join(' ', junk)}' made an AI seat: {o.AiOf(1)}, {o.AiOf(2)}, {o.AiOf(3)}");
+        }
+        Check(LaunchOptions.Parse(new[] { "--ai", "3", "--seed", "3" }).Seed == 3 && LaunchOptions.Parse(new[] { "--ai", "3", "--players", "3" }).Players == 3,
+            "--ai <slot> swallowed the next flag (BUG-0041)");
+        Check(LaunchOptions.Parse(new[] { "--ai", "1", "hard", "--seed", "6" }).Seed == 6, "--ai 1 hard: the refused pair did not consume its two values");
+        // --skirmish: every slot of the match past the first an AI of the default difficulty; an explicit --ai wins; slots past the match none.
+        LaunchOptions sk4 = LaunchOptions.Parse(new[] { "--skirmish", "--players", "4", "--ai", "3", "hard" });
+        Check(sk4.AiOf(1) == LaunchOptions.DefaultAi && sk4.AiOf(2) == AiDifficulty.Hard && sk4.AiOf(3) == LaunchOptions.DefaultAi && sk4.AiOf(0) == null,
+            $"--skirmish --players 4 --ai 3 hard: {sk4.AiOf(1)}, {sk4.AiOf(2)}, {sk4.AiOf(3)}");
+        LaunchOptions sk2 = LaunchOptions.Parse(new[] { "--skirmish" });
+        Check(sk2.Players == null && sk2.AiOf(1) == LaunchOptions.DefaultAi && sk2.AiOf(2) == null && sk2.AiOf(3) == null, $"--skirmish alone: slots 3 / 4 {sk2.AiOf(2)}, {sk2.AiOf(3)}");
+
+        // Colours unique over four slots, slot by slot: a slot on an earlier slot's colour keeps its default, else the first free one.
+        foreach ((string[] args, int[] want) in new[]
+        {
+            (new[] { "--players", "4" }, new[] { 0, 1, 2, 3 }),
+            (new[] { "--players", "4", "--colour", "1", "3" }, new[] { 2, 1, 0, 3 }),
+            (new[] { "--players", "4", "--colour", "2", "1", "--colour", "3", "1", "--colour", "4", "1" }, new[] { 0, 1, 2, 3 }),
+            (new[] { "--players", "4", "--colour", "1", "2", "--colour", "2", "3", "--colour", "3", "4", "--colour", "4", "1" }, new[] { 1, 2, 3, 0 }),
+            (new[] { "--players", "3", "--colour", "1", "2", "--colour", "2", "1", "--colour", "3", "1" }, new[] { 1, 0, 2, 3 }),
+            (new[] { "--players", "4", "--colour", "1", "3", "--colour", "2", "4", "--colour", "3", "4" }, new[] { 2, 3, 0, 1 }),
+            (new[] { "--players", "4", "--colour", "1", "8", "--colour", "2", "8", "--colour", "3", "8", "--colour", "4", "8" }, new[] { 7, 1, 2, 3 }),
+        })
+        {
+            LaunchOptions o = LaunchOptions.Parse(args);
+            int[] got = Enumerable.Range(0, 4).Select(s => o.ColourIndex(s) ?? s).ToArray();
+            Check(got.SequenceEqual(want) && got.Distinct().Count() == 4, $"'{string.Join(' ', args)}': colours {string.Join(", ", got.Select(c => c + 1))}, want {string.Join(", ", want.Select(c => c + 1))}");
+        }
+        // A fuzz of four-slot --colour streams: the four effective colours always differ, and a slot's pick no earlier slot holds is kept.
+        var rng = new Random(5705);
+        int wrong = 0;
+        for (int run = 0; run < 400; run++)
+        {
+            var args = new List<string> { "--players", "4" };
+            var last = new int?[4];
+            for (int k = rng.Next(0, 7); k > 0; k--)
+            {
+                int s = rng.Next(0, 6), c = rng.Next(0, 10); // slots 0 and 5, colours 0 and 9 are junk
+                args.AddRange(new[] { "--colour", s.ToString(), c.ToString() });
+                if (s >= 1 && s <= 4 && c >= 1 && c <= 8) last[s - 1] = c - 1;
+            }
+            LaunchOptions o = LaunchOptions.Parse(args.ToArray());
+            int[] got = Enumerable.Range(0, 4).Select(s => o.ColourIndex(s) ?? s).ToArray();
+            bool ok = got.Distinct().Count() == 4 && got.All(c => (uint)c < UiText.ColourCount);
+            var earlier = new HashSet<int>();
+            for (int s = 0; s < 4; s++)
+            {
+                if (last[s] is int pick && !earlier.Contains(pick)) ok &= got[s] == pick;
+                earlier.Add(got[s]);
+            }
+            if (!ok && wrong++ < 5) Check(false, $"--colour fuzz '{string.Join(' ', args)}': colours {string.Join(", ", got.Select(c => c + 1))}");
+        }
+        Check(wrong == 0, $"--colour fuzz over four slots: {wrong} of 400 wrong");
+        Check(LaunchOptions.FirstFreeColour(stackalloc bool[] { true, false, true }) == 1 && LaunchOptions.FirstFreeColour(stackalloc bool[] { false, true }) == 0
+            && LaunchOptions.FirstFreeColour(stackalloc bool[] { true, true }) == 0, "FirstFreeColour(held)");
     }
 
     private void UiRows()
@@ -199,7 +312,7 @@ public partial class ShellTest : Node
         foreach (KeysText k in Enum.GetValues<KeysText>()) keys.Add(("keys", UiText.Key(k), _ui.Keys(k)));
         keys.Add(("hud", UiText.Key(HudText.ResourceLeft), _ui.Hud(HudText.ResourceLeft)));
         keys.Add(("hud", UiText.Key(HudText.LastSeen), _ui.Hud(HudText.LastSeen)));
-        Check(keys.Count == 4 + 15 + 4 + 22 + 18 + 15 + 2, $"{keys.Count} shell keys"); // settings: 22 since M6-V7 (confine_cursor); keys 15 + hud 2 since M6-V8
+        Check(keys.Count == 4 + 17 + 4 + 22 + 18 + 15 + 2, $"{keys.Count} shell keys"); // settings: 22 since M6-V7 (confine_cursor); keys 15 + hud 2 since M6-V8; setup 17 since M6-V5 (add_slot, remove_slot)
         string json = File.ReadAllText(UiText.DefaultPath).Replace("\r\n", "\n");
         foreach ((string section, string key, string text) in keys)
         {
@@ -220,7 +333,7 @@ public partial class ShellTest : Node
         // The keys the brief names, by their ui.json spelling.
         string[] named = { "menu.title", "menu.skirmish", "menu.quit", "setup.title", "setup.seed", "setup.random", "setup.map_size", "setup.slot_human",
             "setup.slot_ai", "setup.faction", "setup.difficulty", "setup.start", "setup.back", "pause.title", "pause.resume", "pause.quit_to_menu",
-            "setup.map_size_item", "setup.difficulty_easy", "setup.difficulty_normal", "setup.difficulty_hard", "setup.colour",
+            "setup.map_size_item", "setup.difficulty_easy", "setup.difficulty_normal", "setup.difficulty_hard", "setup.colour", "setup.add_slot", "setup.remove_slot",
             // M6-V6: the settings screen's keys.
             "menu.settings", "pause.settings", "settings.title", "settings.resolution", "settings.resolution_item", "settings.window_mode",
             "settings.window_windowed", "settings.window_borderless", "settings.window_fullscreen", "settings.vsync", "settings.vsync_on",
@@ -421,10 +534,25 @@ public partial class ShellTest : Node
         combat.Free();
     }
 
+    // BUG-0770: a Main on a per-process settings file (missing: the defaults, never written), so a rebind on the desk can't change the run.
+    private static Main NewMain(string[] args, string scene)
+    {
+        var main = GD.Load<PackedScene>("res://scenes/Main.tscn").Instantiate<Main>();
+        main.UserArgs = args;
+        main.SettingsPath = $"user://shell-test-{scene}-{OS.GetProcessId()}/settings.cfg";
+        return main;
+    }
+
+    private static byte[]? PlayerSettings()
+    {
+        string path = ProjectSettings.GlobalizePath(GameSettings.DefaultPath);
+        return File.Exists(path) ? File.ReadAllBytes(path) : null;
+    }
+
     private async Task Flow()
     {
-        _main = GD.Load<PackedScene>("res://scenes/Main.tscn").Instantiate<Main>();
-        _main.UserArgs = Array.Empty<string>();
+        _main = NewMain(Array.Empty<string>(), "flow");
+        Check(_main.SettingsPath != GameSettings.DefaultPath, "Flow's Main reads the player's settings (BUG-0770)");
         AddChild(_main);
         await Frames(2);
 
@@ -639,8 +767,7 @@ public partial class ShellTest : Node
         RemoveChild(_main);
         _main.QueueFree();
         await Frames(2);
-        _main = GD.Load<PackedScene>("res://scenes/Main.tscn").Instantiate<Main>();
-        _main.UserArgs = new[] { "--skirmish", "--mute" };
+        _main = NewMain(new[] { "--skirmish", "--mute" }, "skirmish");
         AddChild(_main);
         await Frames(2);
         Check(_main.CurrentMatch != null && !_main.Menu!.Visible, "--skirmish did not start a match");
@@ -651,33 +778,260 @@ public partial class ShellTest : Node
         await Colours(0, 1);
     }
 
+    // M6-V5: the setup's 2-4 slots through the shell. Add player twice (Add greys at four, Remove at two), the rows' text
+    // and defaults, unique colours over four slots (the API and the lists' own signal), Remove then Add keeps the slot's
+    // picks (its colour moved if a shown slot took it meanwhile), the picks kept over Back. Start: a four-seat match (the
+    // human and three AIs of three difficulties, two factions) on the generator's four start locations, each hall seeing a
+    // mine, four colours; the local player's army then wipes AI slot 4: its defeat time in the stats, no banner, the match
+    // runs on. Then Remove to three slots: a three-seat match the same way.
+    private async Task FreeForAll()
+    {
+        RemoveChild(_main);
+        _main.QueueFree();
+        await Frames(2);
+        _main = NewMain(Array.Empty<string>(), "ffa");
+        AddChild(_main);
+        await Frames(2);
+        MainMenu menu = _main.Menu!;
+        SkirmishSetup setup = _main.Setup!;
+        await Click(menu.SkirmishButton);
+        Check(setup.SlotCount == 2 && Shown(setup) == 2 && !setup.AddSlotButton.Disabled && setup.RemoveSlotButton.Disabled
+            && setup.AddSlotButton.Text == _ui.Setup(SetupText.AddSlot) && setup.RemoveSlotButton.Text == _ui.Setup(SetupText.RemoveSlot),
+            $"setup opens on {setup.SlotCount} slots ({Shown(setup)} shown), Add disabled {setup.AddSlotButton.Disabled}, Remove disabled {setup.RemoveSlotButton.Disabled}");
+        int factions = _data.Factions.Length;
+        await Click(setup.AddSlotButton);
+        await Click(setup.AddSlotButton);
+        Check(setup.SlotCount == 4 && Shown(setup) == 4 && setup.AddSlotButton.Disabled && !setup.RemoveSlotButton.Disabled,
+            $"Add twice: {setup.SlotCount} slots, {Shown(setup)} shown, Add disabled {setup.AddSlotButton.Disabled}");
+        await Click(setup.AddSlotButton); // disabled: nothing
+        Check(setup.SlotCount == 4, $"a fifth slot: {setup.SlotCount}");
+        for (int s = 2; s < 4; s++)
+            Check(setup.SlotLabels[s].Text == _ui.Setup(SetupText.SlotAi) && setup.FactionPick(s) == s % factions && setup.ColourPick(s) == s
+                && setup.DifficultyPickOf(s) == LaunchOptions.DefaultAi && setup.DifficultyOptions[s]!.ItemCount == 3,
+                $"slot {s + 1}: '{setup.SlotLabels[s].Text}', faction {setup.FactionPick(s)}, colour {setup.ColourPick(s)}, {setup.DifficultyPickOf(s)}");
+        Check(Enumerable.Range(0, 4).All(s => GreyedExactly(setup, s)), "four slots: a colour list greys other than the other slots' colours");
+
+        // Unique colours over four slots: a held colour is refused and moves to the first colour no other shown slot holds.
+        setup.PickColour(0, 4);
+        setup.PickColour(3, 4);
+        Check(setup.ColourPick(0) == 4 && setup.ColourPick(3) == 0, $"slot 4 picking slot 1's colour 5: picks {Picks(setup)} (want 5, 2, 3, 1)");
+        setup.PickColour(1, 3);
+        setup.ColourOptions[2].Select(4);
+        setup.ColourOptions[2].EmitSignal(OptionButton.SignalName.ItemSelected, 4L);
+        Check(setup.ColourPick(1) == 3 && setup.ColourPick(2) == 1, $"slot 3's list picking slot 1's colour 5: picks {Picks(setup)} (want 5, 4, 2, 1)");
+        Check(Enumerable.Range(0, 4).All(s => GreyedExactly(setup, s)) && Enumerable.Range(0, 4).Select(setup.ColourPick).Distinct().Count() == 4,
+            $"after the picks: {Picks(setup)}");
+        // Factions (both used twice) and the three AI difficulties.
+        int[] f = { 1 % factions, 0, 1 % factions, 0 };
+        for (int s = 0; s < 4; s++) setup.FactionOptions[s].Select(f[s]);
+        setup.DifficultyOptions[1]!.Select((int)AiDifficulty.Easy);
+        setup.DifficultyOptions[2]!.Select((int)AiDifficulty.Hard);
+        setup.DifficultyOptions[3]!.Select((int)AiDifficulty.Normal);
+
+        // Remove hides slot 4 (its colour 1 free for the others); Add brings it back with its picks.
+        await Click(setup.RemoveSlotButton);
+        Check(setup.SlotCount == 3 && Shown(setup) == 3 && !setup.AddSlotButton.Disabled && Enumerable.Range(0, 3).All(s => GreyedExactly(setup, s))
+            && !setup.ColourOptions[0].IsItemDisabled(0), $"Remove: {setup.SlotCount} slots, colour 1 greyed for slot 1 {setup.ColourOptions[0].IsItemDisabled(0)}");
+        string three = string.Join(' ', setup.MatchArgs()!);
+        Check(three.Contains("--players 3") && !three.Contains("--colour 4") && !three.Contains("--ai 4") && three.Contains("--ai 3 hard"), $"three slots' args [{three}]");
+        await Click(setup.AddSlotButton);
+        Check(setup.SlotCount == 4 && setup.ColourPick(3) == 0 && setup.FactionPick(3) == f[3] && setup.DifficultyPickOf(3) == AiDifficulty.Normal,
+            $"Add again: slot 4 colour {setup.ColourPick(3)}, faction {setup.FactionPick(3)}, {setup.DifficultyPickOf(3)}");
+        // Hidden, its colour can be taken; shown again, it moves to the first free colour.
+        await Click(setup.RemoveSlotButton);
+        setup.PickColour(0, 0);
+        Check(setup.ColourPick(0) == 0, $"slot 1 on the hidden slot's colour 1: {setup.ColourPick(0)}");
+        await Click(setup.AddSlotButton);
+        Check(setup.ColourPick(3) == 2 && setup.ColourPick(0) == 0 && Enumerable.Range(0, 4).All(s => GreyedExactly(setup, s)),
+            $"slot 4 shown again on a taken colour: picks {Picks(setup)} (want 1, 4, 2, 3)");
+        setup.PickColour(0, 4);
+        int[] c = { 4, 3, 1, 2 };
+        Check(Enumerable.Range(0, 4).All(s => setup.ColourPick(s) == c[s]), $"final colours {Picks(setup)}");
+        string four = string.Join(' ', setup.MatchArgs()!);
+        Check(four.Contains("--players 4") && four.Contains("--ai 2 easy") && four.Contains("--ai 3 hard") && four.Contains("--ai 4 normal")
+            && four.Contains("--colour 4 3") && four.Contains($"--faction 4 {_data.Factions[f[3]].Key}"), $"four slots' args [{four}]");
+
+        // Back and in again: the slots and picks survive.
+        await Click(setup.BackButton);
+        await Click(menu.SkirmishButton);
+        Check(setup.SlotCount == 4 && Shown(setup) == 4 && Enumerable.Range(0, 4).All(s => setup.ColourPick(s) == c[s] && setup.FactionPick(s) == f[s])
+            && setup.DifficultyPickOf(2) == AiDifficulty.Hard, $"Back lost the slots: {setup.SlotCount}, colours {Picks(setup)}");
+        await Shot("setup-four");
+
+        // Start: four seats.
+        var ai = new AiDifficulty?[] { null, AiDifficulty.Easy, AiDifficulty.Hard, AiDifficulty.Normal };
+        await Click(setup.StartButton);
+        await StartedMatch(setup.Seed!.Value, setup.MapSize);
+        SeatsAre(f, ai);
+        HallAndWorkers(4);
+        await Colours(c);
+        await Shot("match-four");
+        await WipeOut(4, ai);
+        await QuitFromPause();
+
+        // Three slots: Remove, Start.
+        await Click(menu.SkirmishButton);
+        await Click(setup.RemoveSlotButton);
+        await Click(setup.StartButton);
+        await StartedMatch(setup.Seed!.Value, setup.MapSize);
+        SeatsAre(f[..3], ai[..3]);
+        HallAndWorkers(3);
+        await Colours(c[..3]);
+        await QuitFromPause();
+    }
+
+    // The local player's dev army (a dev spawn: Line units and siege beside the hall, every few ticks sent at the victim's
+    // first live unit, else its first building) wipes out the last seat. The seat's defeat is stamped (Match.DefeatedAt), no
+    // banner opens (the local player stands, two others too), the match runs on; the stats list every seat.
+    private async Task WipeOut(int players, AiDifficulty?[] ai)
+    {
+        Match match = _main.CurrentMatch!;
+        SimRunner runner = match.GetNode<SimRunner>("SimRunner");
+        Simulation sim = runner.Simulation!;
+        World w = sim.World;
+        NavGrid g = w.NavGrid;
+        int victim = players - 1;
+        match.GetNode<RtsCamera>("RtsCamera").EdgePanEnabled = false;
+        runner.FixedFrameDelta = 1.0 / 20; // a tick a frame times the speed, however loaded the machine (the scripted-run seam)
+        runner.GameSpeed = SimRunner.MaxSpeed;
+        int st = w.StartLocations[victim].Cell;
+        int line = Rts.Sim.ViewApi.StartBase.UnitOfSlot(_data, w.FactionOf(0), UnitSlot.Line);
+        int siege = Rts.Sim.ViewApi.StartBase.UnitOfSlot(_data, w.FactionOf(0), UnitSlot.Siege);
+        for (int k = 0; k < 24; k++)
+        {
+            double a = k * Math.PI * 2 / 24;
+            int x = Math.Clamp(st % g.Width + (int)Math.Round(Math.Cos(a) * 9), 0, g.Width - 1), y = Math.Clamp(st / g.Width + (int)Math.Round(Math.Sin(a) * 9), 0, g.Height - 1);
+            int cell = FlowField.NearestPassable(g, y * g.Width + x);
+            sim.Enqueue(Command.SpawnUnit(0, k % 4 == 0 ? siege : line, g.CellCenter(cell % g.Width, cell / g.Width)));
+        }
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        int lastOrder = -100;
+        while (!w.IsDefeated(victim) && clock.Elapsed.TotalSeconds < 120)
+        {
+            if (sim.TickNumber - lastOrder >= 20)
+            {
+                lastOrder = sim.TickNumber;
+                EntityHandle unitTarget = DefeatStaging.UnitsOf(w, victim).FirstOrDefault();
+                EntityHandle buildingTarget = default;
+                for (int k = 0; k < w.Buildings.Capacity && buildingTarget.Generation == 0; k++)
+                    if (w.Buildings.Alive[k] && w.Buildings.Owner[k] == victim) buildingTarget = new EntityHandle(k, w.Buildings.Generation[k]);
+                foreach (EntityHandle u in DefeatStaging.UnitsOf(w, 0))
+                {
+                    bool isSiege = w.Units.TypeId[u.Index] == siege;
+                    bool atBuilding = buildingTarget.Generation != 0 && (isSiege || unitTarget.Generation == 0);
+                    if (atBuilding) sim.Enqueue(Command.Attack(0, u, buildingTarget, isBuilding: true));
+                    else if (unitTarget.Generation != 0) sim.Enqueue(Command.Attack(0, u, unitTarget, isBuilding: false));
+                }
+            }
+            await Frames(1);
+        }
+        Check(w.IsDefeated(victim) && match.DefeatedAt(victim) > 0, $"{players} seats: player {victim} not wiped out by tick {sim.TickNumber} (defeated {w.IsDefeated(victim)})");
+        await Frames(3);
+        Check(!_main.BannerUp && match.Outcome == MatchOutcome.None && !sim.MatchOver && Enumerable.Range(0, victim).All(p => !w.IsDefeated(p)),
+            $"{players} seats after player {victim} fell: banner {_main.BannerUp}, outcome {match.Outcome}, MatchOver {sim.MatchOver}");
+        int tick = sim.TickNumber;
+        await Frames(4);
+        Check(sim.TickNumber > tick, "the match stopped after a seat fell");
+        runner.FixedFrameDelta = null;
+        runner.GameSpeed = 1.0;
+        _main.ShowStats();
+        MatchStats stats = _main.Stats!;
+        int col = Array.FindIndex(MatchStats.Columns, x => x.Label == MatchOverText.DefeatedAt);
+        Check(stats.Visible && stats.RowCount == players, $"stats: visible {stats.Visible}, {stats.RowCount} rows (want {players})");
+        for (int p = 0; p < Math.Min(players, stats.RowCount); p++)
+        {
+            string want = p == victim ? _ui.Clock(match.DefeatedAt(victim)) : _ui.MatchOver(MatchOverText.Standing);
+            string seat = p == 0 ? _ui.Setup(SetupText.SlotHuman) : _ui.Setup(MatchStatsDifficulty(ai[p]!.Value));
+            Check(stats.Cell(p, col) == want && stats.SeatName(p) == seat && stats.FactionName(p) == _data.Factions[w.FactionOf(p)].DisplayName
+                && stats.Swatch(p).ToRgba32() >> 8 == match.PlayerRgb[p],
+                $"stats row {p}: defeated '{stats.Cell(p, col)}' (want '{want}'), seat '{stats.SeatName(p)}' (want '{seat}'), faction '{stats.FactionName(p)}'");
+        }
+        await Shot("stats-four");
+        _main.CloseStats();
+        Check(!stats.Visible, "the stats did not close");
+    }
+
+    private static SetupText MatchStatsDifficulty(AiDifficulty d) => SkirmishSetup.DifficultyKeys[(int)d];
+
+    private async Task QuitFromPause()
+    {
+        await Type(Key.Escape, '\0');
+        Check(_main.Paused, "Esc did not pause the match");
+        await Click(_main.Pause!.QuitToMenuButton);
+        await Frames(2);
+        Check(_main.CurrentMatch == null && !GetTree().Paused && _main.Menu!.Visible, "Quit to menu");
+    }
+
+    // M6-V5: the match's seats for N players: slot 0 the local human, slot p an AI of ai[p] (null: human).
+    private void SeatsAre(int[] factions, AiDifficulty?[] ai)
+    {
+        SimRunner runner = _main.CurrentMatch!.GetNode<SimRunner>("SimRunner");
+        World w = runner.Simulation!.World;
+        var want = factions.Select((f, p) => new PlayerSeat(f, ai[p] != null ? SeatController.Ai : SeatController.Human, ai[p] ?? AiDifficulty.Normal)).ToArray();
+        Check(runner.Seats.SequenceEqual(want) && w.Config.Seats.SequenceEqual(want) && Enumerable.Range(0, want.Length).All(p => w.FactionOf(p) == factions[p]),
+            $"{want.Length} seats: runner [{string.Join(", ", runner.Seats)}], want [{string.Join(", ", want)}]");
+    }
+
+    private static int Shown(SkirmishSetup setup) => setup.SlotLabels.Count(l => l.Visible);
+
+    private static string Picks(SkirmishSetup setup) => string.Join(", ", Enumerable.Range(0, setup.SlotCount).Select(s => setup.ColourPick(s) + 1));
+
+    // Whether `slot`'s colour list greys exactly the colours the other shown slots hold.
+    private static bool GreyedExactly(SkirmishSetup setup, int slot)
+    {
+        OptionButton list = setup.ColourOptions[slot];
+        for (int c = 0; c < list.ItemCount; c++)
+        {
+            bool held = Enumerable.Range(0, setup.SlotCount).Any(s => s != slot && setup.ColourPick(s) == c);
+            if (list.IsItemDisabled(c) != held) return false;
+        }
+        return list.ItemCount == UiText.ColourCount;
+    }
+
     // M6-V3 (BUG-0604): the menu's match is docs/02's opening: per player one Town Hall and the starting workers, no army;
     // the camera on the local hall.
-    private void HallAndWorkers()
+    // M6-V5: with `players` seats, each hall is centred on its own start location of the generator's `players` and sees a
+    // gold mine (M6-VH1's check, BUG-0604, for every seat); the halls are apart.
+    private void HallAndWorkers(int players = 2)
     {
         Match match = _main.CurrentMatch!;
         World w = match.GetNode<SimRunner>("SimRunner").Simulation!.World;
         Check(match.UnitsPerPlayer == 0 && match.WorkersPerPlayer == _data.Rules.StartingWorkers,
             $"menu match: {match.UnitsPerPlayer} units, {match.WorkersPerPlayer} workers per player");
+        Check(w.Config.PlayerCount == players && w.StartLocations.Length == players,
+            $"{players} seats: {w.Config.PlayerCount} players, {w.StartLocations.Length} start locations");
         UnitStore u = w.Units;
-        int[] workers = new int[2], others = new int[2], halls = new int[2], buildings = new int[2];
+        int[] workers = new int[players], others = new int[players], halls = new int[players], buildings = new int[players];
         for (int i = 0; i < u.Capacity; i++)
         {
-            if (!u.Alive[i] || (uint)u.Owner[i] > 1) continue;
+            if (!u.Alive[i] || (uint)u.Owner[i] >= (uint)players) continue;
             if (_data.Units[u.TypeId[i]].Slot == UnitSlot.Worker) workers[u.Owner[i]]++;
             else others[u.Owner[i]]++;
         }
         BuildingStore b = w.Buildings;
         for (int k = 0; k < b.Capacity; k++)
         {
-            if (!b.Alive[k] || (uint)b.Owner[k] > 1) continue;
+            if (!b.Alive[k] || (uint)b.Owner[k] >= (uint)players) continue;
             buildings[b.Owner[k]]++;
             if (_data.Buildings[b.TypeId[k]].Slot == BuildingSlot.TownHall) halls[b.Owner[k]]++;
         }
         // Checked within a second of the start: no worker trained yet (a worker takes longer), never a soldier.
-        for (int p = 0; p < 2; p++)
+        for (int p = 0; p < players; p++)
             Check(halls[p] == 1 && workers[p] == _data.Rules.StartingWorkers && others[p] == 0,
-                $"player {p}: {halls[p]} halls ({buildings[p]} buildings), {workers[p]} workers, {others[p]} other units");
+                $"{players} seats, player {p}: {halls[p]} halls ({buildings[p]} buildings), {workers[p]} workers, {others[p]} other units");
+        var centres = new List<System.Numerics.Vector2>();
+        for (int p = 0; p < players && match.Bases != null; p++)
+        {
+            if (!Check(match.Bases.HallAnchor[p] >= 0, $"{players} seats: no planned hall for player {p}")) continue;
+            System.Numerics.Vector2 at = Rts.Sim.ViewApi.StartBase.FootprintCenter(w.NavGrid, _data.Buildings[match.Bases.HallType[p]], match.Bases.HallAnchor[p]);
+            int st = w.StartLocations[Math.Min(p, w.StartLocations.Length - 1)].Cell;
+            System.Numerics.Vector2 start = w.NavGrid.CellCenter(st % w.NavGrid.Width, st / w.NavGrid.Width);
+            Check(System.Numerics.Vector2.Distance(at, start) < 1.5f * MapConstants.CellSize,
+                $"{players} seats, player {p}: hall at {at}, its start location at {start}");
+            Check(centres.TrueForAll(c => System.Numerics.Vector2.Distance(c, at) > 20f), $"{players} seats, player {p}: hall at {at} beside another's");
+            centres.Add(at);
+            Check(SeesMine(w, p, out float nearest), $"{players} seats, player {p}: no gold mine in sight at the start (nearest {nearest:0} m; BUG-0604)");
+        }
         Check(match.Bases != null && match.Bases.HallAnchor[0] >= 0, "no planned hall for player 0");
         if (match.Bases == null || match.Bases.HallAnchor[0] < 0) return;
         System.Numerics.Vector2 hall = Rts.Sim.ViewApi.StartBase.FootprintCenter(w.NavGrid, _data.Buildings[match.Bases.HallType[0]], match.Bases.HallAnchor[0]);
@@ -685,13 +1039,36 @@ public partial class ShellTest : Node
         Check(System.Numerics.Vector2.Distance(focus, hall) < 1f, $"camera focus {focus}, the local hall at {hall}");
     }
 
+    // Whether `player` sees any cell of a gold mine now, and the nearest mine's distance from its hall's start location.
+    private bool SeesMine(World w, int player, out float nearest)
+    {
+        bool sees = false;
+        nearest = float.MaxValue;
+        int st = w.StartLocations[Math.Min(player, w.StartLocations.Length - 1)].Cell;
+        System.Numerics.Vector2 home = w.NavGrid.CellCenter(st % w.NavGrid.Width, st / w.NavGrid.Width);
+        ResourceStore r = w.Resources;
+        for (int k = 0; k < r.Capacity; k++)
+        {
+            if (!r.Alive[k]) continue;
+            ResourceDef def = _data.Resources[r.TypeId[k]];
+            if (def.Resource != ResourceKind.Gold) continue;
+            int ax = r.Cell[k] % w.NavGrid.Width, ay = r.Cell[k] / w.NavGrid.Width;
+            for (int dy = 0; dy < def.FootprintHeight; dy++)
+                for (int dx = 0; dx < def.FootprintWidth; dx++)
+                    if (w.Fog.IsVisible(player, (ay + dy) * w.NavGrid.Width + ax + dx)) sees = true;
+            nearest = Math.Min(nearest, System.Numerics.Vector2.Distance(w.NavGrid.CellCenter(ax, ay), home));
+        }
+        return sees;
+    }
+
     // M6-V3: the match draws player p in its pick: Match.PlayerRgb, unit bodies, building materials, the local minimap dots.
-    private async Task Colours(int c0, int c1)
+    // M6-V5: for every seat (`picks` one per player), the colours all different.
+    private async Task Colours(params int[] picks)
     {
         Match match = _main.CurrentMatch!;
-        uint[] want = { _ui.ColourRgb(c0), _ui.ColourRgb(c1) };
-        Check(match.PlayerRgb.Length == 2 && match.PlayerRgb[0] == want[0] && match.PlayerRgb[1] == want[1],
-            $"PlayerRgb [{string.Join(", ", match.PlayerRgb.Select(c => c.ToString("X6")))}], want {want[0]:X6}, {want[1]:X6}");
+        uint[] want = picks.Select(_ui.ColourRgb).ToArray();
+        Check(match.PlayerRgb.SequenceEqual(want) && want.Distinct().Count() == want.Length,
+            $"PlayerRgb [{string.Join(", ", match.PlayerRgb.Select(c => c.ToString("X6")))}], want [{string.Join(", ", want.Select(c => c.ToString("X6")))}]");
         var units = match.GetNode<UnitViews>("World3D/UnitViews");
         var buildings = match.GetNode<BuildingViews>("World3D/BuildingViews");
         var mini = match.GetNode<Minimap>("Hud/Minimap");
@@ -704,7 +1081,7 @@ public partial class ShellTest : Node
         int wrongBody = 0, wrongDot = 0, seen = 0;
         for (int i = 0; i < u.Capacity; i++)
         {
-            if (!u.Alive[i] || (uint)u.Owner[i] > 1 || !units.IsShown(i)) continue;
+            if (!u.Alive[i] || (uint)u.Owner[i] >= (uint)want.Length || !units.IsShown(i)) continue;
             seen++;
             Color c = UnitViews.ColorFromRgb(want[u.Owner[i]]);
             if (units.ViewOf(i)?.MaterialOverride is not StandardMaterial3D m || !m.AlbedoColor.IsEqualApprox(c)) wrongBody++;
@@ -716,7 +1093,7 @@ public partial class ShellTest : Node
         }
         Check(seen > 0 && wrongBody == 0 && wrongDot == 0 && mini.Refreshes > refreshes,
             $"colours: {seen} units shown, {wrongBody} bodies and {wrongDot} own dots not their player's pick");
-        for (int p = 0; p < 2; p++)
+        for (int p = 0; p < want.Length; p++)
             Check(buildings.PlayerMaterial(p).AlbedoColor.IsEqualApprox(UnitViews.ColorFromRgb(want[p])), $"player {p} building colour {buildings.PlayerMaterial(p).AlbedoColor}");
     }
 
