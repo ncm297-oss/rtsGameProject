@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Rts.Sim.Ai;
 using Rts.Sim.Data;
+using Rts.Sim.Tests.Content;
 using Xunit.Abstractions;
 
 namespace Rts.Sim.Tests.QA.Content;
@@ -18,6 +19,12 @@ namespace Rts.Sim.Tests.QA.Content;
 /// every house both orders placed came from a step and the rule sent none; on this scene wood runs out (12 trees of 100 a
 /// base), so the Malazan cap stalled at 98 after 30 min and the 12th Billet (step 18) stayed due, at no cost (a due house
 /// step that can't pay is refused at the budget before the site search).
+/// </para>
+/// <para>
+/// Re-run 2026-10-17 (D20, after M5-4f's D15 C and gather rates 0.85 / 0.75): on the flat scene the cap still stalls below
+/// 100 (Malazan 98 at 30 min, wood gone), so D15 C never applies there; the menu-map rows added then reach the cap, and
+/// <c>D20PinQaTests.HouseNote_SaysWhatTheMenuMapRunsShow</c> pins the pages' "Houses at the cap" notes to them (and asserts
+/// the D15 C behaviour itself: no house Build sent at the hard cap).
 /// </para>
 /// <para>
 /// Reads through the AI's internals (all <c>internal</c>, reached through <c>InternalsVisibleTo</c>; no public-to-tests
@@ -56,9 +63,66 @@ public class AiHouseRuleReportTests
     {
         // Player p plays faction p mod 2 (AiScenes.Seats): the AI seat is the faction's, the other a human that does nothing.
         int player = TestSim.Data.FindFaction(faction);
-        SeatController[] controllers = { SeatController.Human, SeatController.Human };
-        controllers[player] = SeatController.Ai;
-        Simulation sim = AiScenes.Flat(AiScenes.Seats(AiDifficulty.Normal, controllers));
+        Simulation sim = AiScenes.Flat(AiScenes.Seats(AiDifficulty.Normal, AiSpendingReportTests.Controllers(player)));
+        Run(sim, player, ticks, $"{faction}, flat scene", _out.WriteLine);
+    }
+
+    /// <summary>
+    /// D20 (2026-10-17, M5-4f's D15 C): the flat scene's 12 trees a base run dry before the cap is 100, so none of its rows
+    /// reaches the rule "a house step due at the hard cap is done with no command sent". The menu's generated map (12 forests,
+    /// 8 mines, combat on, the other seat idle: <see cref="AiSpendingReportTests.MenuMap"/>), 24,000 ticks, reaches it; this
+    /// prints the same table plus, per house step, whether it was done at the hard cap without a Build.
+    /// </summary>
+    [Theory]
+    [InlineData("malazan", 1ul)]
+    [InlineData("malazan", 7ul)]
+    [InlineData("whirlwind", 1ul)]
+    [InlineData("whirlwind", 7ul)]
+    public void MenuMapNormal_HouseSources_Report(string faction, ulong seed)
+    {
+        Print(MenuMapRun(faction, seed), faction, seed);
+    }
+
+    private void Print(HouseRun r, string faction, ulong seed)
+    {
+        foreach (string line in r.Lines) _out.WriteLine(line);
+        Assert.True(r.Faction == faction && r.Seed == seed);
+    }
+
+    /// <summary>The menu-map run for one faction and seed (deterministic; computed once per test process and shared with the pin row).</summary>
+    internal static HouseRun MenuMapRun(string faction, ulong seed)
+    {
+        lock (MenuRuns)
+        {
+            if (MenuRuns.TryGetValue((faction, seed), out HouseRun? done)) return done;
+            int player = TestSim.Data.FindFaction(faction);
+            Simulation sim = AiSpendingReportTests.MenuMap(AiScenes.Seats(AiDifficulty.Normal, AiSpendingReportTests.Controllers(player)), seed);
+            var lines = new List<string>();
+            HouseRun r = Run(sim, player, MenuTicks, $"{faction}, menu map seed {seed} (12 forests, 8 mines, combat on)", lines.Add) with { Faction = faction, Seed = seed, Lines = lines };
+            MenuRuns[(faction, seed)] = r;
+            return r;
+        }
+    }
+
+    private const int MenuTicks = 24_000;
+
+    private static readonly Dictionary<(string, ulong), HouseRun> MenuRuns = new();
+
+    /// <summary>
+    /// One house step's life: its 1-based number, the Builds it sent, those sent while the cap was already the rules' cap
+    /// (D15 C says none), when it was done (-1: never) and the cap then (half-pop).
+    /// </summary>
+    internal sealed record HouseStep(int Step, int Sends, int SendsAtCap, int DoneTick, int CapAtDone);
+
+    /// <summary>What a run printed and measured: the house steps, the rules' cap (half-pop), the tick the cap reached it (-1: never).</summary>
+    internal sealed record HouseRun(string Faction, ulong Seed, HouseStep[] Steps, int RulesCap, int CapReachedTick, List<string> Lines)
+    {
+        /// <summary>The steps done at the hard cap with no Build sent: the executor's D15 C skip.</summary>
+        public HouseStep[] SkippedAtCap => Steps.Where(x => x.DoneTick >= 0 && x.Sends == 0 && x.CapAtDone >= RulesCap).ToArray();
+    }
+
+    private static HouseRun Run(Simulation sim, int player, int ticks, string label, Action<string> write)
+    {
         GameData d = sim.World.Data;
         // Precondition, not a finding: the seat mapping above must give the AI seat this faction, or every row below
         // reports the other faction's order under this one's name.
@@ -71,7 +135,7 @@ public class AiHouseRuleReportTests
         int thinkTicks = ai.ThinkTicks;
         int house = ai.HouseType;
         BuildingDef houseDef = d.Buildings[house];
-        Assert.True(houseDef.Faction == player && houseDef.Slot == BuildingSlot.House, $"AiPlayer.HouseType {houseDef.Key} is not {faction}'s House");
+        Assert.True(houseDef.Faction == player && houseDef.Slot == BuildingSlot.House, $"AiPlayer.HouseType {houseDef.Key} is not the House of {label}");
         int rulesCap = d.Rules.HalfPopCap;
         var steps = def.BuildOrder;
         int tree = d.FindResource("tree"), mine = d.FindResource("gold_mine");
@@ -86,6 +150,8 @@ public class AiHouseRuleReportTests
         var stepDoneCap = new int[steps.Length];
         var stepDueThinks = new int[steps.Length];       // thinks a house step was due and not done
         var stepDueAtCapThinks = new int[steps.Length];  // ... of which the cap was already the rules' cap
+        var stepSends = new int[steps.Length];
+        var stepSendsAtCap = new int[steps.Length];      // D15 C: a step's Build sent while the cap was the rules' cap
         int capReachedTick = -1;
         var samples = new List<string>();
         var thinkMsDue = new List<double>();
@@ -113,6 +179,8 @@ public class AiHouseRuleReportTests
                 {
                     lastStepPending[i] = (p.AppliesAt, p.Cell);
                     sends.Add(new Send(i + 1, p.Cell, p.AppliesAt));
+                    stepSends[i]++;
+                    if (cap >= rulesCap) stepSendsAtCap[i]++;
                 }
                 if (stepDoneTick[i] < 0 && board.StepDone[i]) (stepDoneTick[i], stepDoneCap[i]) = (sim.TickNumber, cap);
                 if (thinks && board.StepDueTick[i] >= 0 && !board.StepDone[i])
@@ -148,26 +216,32 @@ public class AiHouseRuleReportTests
         for (int s = 0; s < b.Capacity; s++)
             if (b.Alive[s] && b.Owner[s] == player && !b.UnderConstruction[s]) provided += d.Buildings[b.TypeId[s]].HalfPopProvided;
 
-        _out.WriteLine($"{faction}, flat scene, Normal, {ticks} ticks; {houseDef.Key} gives {houseDef.HalfPopProvided / 2.0} pop for {houseDef.CostGold} gold + {houseDef.CostWood} wood, rules cap {rulesCap / 2}");
-        _out.WriteLine($"house Builds sent: order steps {sends.Count(x => x.Step > 0)}, economy rule {sends.Count(x => x.Step == 0)}");
-        _out.WriteLine($"houses standing: {placedBy.Count} (placed by order steps {byOrder}, by the rule {byRule}, unknown {placedBy.Count(x => x.Step < 0)}); finished {placedBy.Count(x => x.Finished)}");
-        _out.WriteLine($"cap reached {rulesCap / 2} at tick {capReachedTick} ({(capReachedTick < 0 ? "never" : $"{capReachedTick / Tps} s")}); pop provided at the end {provided / 2.0} (cap {sim.World.HalfPopCap[player] / 2.0}), pop {sim.World.HalfPop[player] / 2.0}");
+        write($"{label}, Normal, {ticks} ticks; {houseDef.Key} gives {houseDef.HalfPopProvided / 2.0} pop for {houseDef.CostGold} gold + {houseDef.CostWood} wood, rules cap {rulesCap / 2}");
+        write($"house Builds sent: order steps {sends.Count(x => x.Step > 0)}, economy rule {sends.Count(x => x.Step == 0)}");
+        write($"houses standing: {placedBy.Count} (placed by order steps {byOrder}, by the rule {byRule}, unknown {placedBy.Count(x => x.Step < 0)}); finished {placedBy.Count(x => x.Finished)}");
+        write($"cap reached {rulesCap / 2} at tick {capReachedTick} ({(capReachedTick < 0 ? "never" : $"{capReachedTick / Tps} s")}); pop provided at the end {provided / 2.0} (cap {sim.World.HalfPopCap[player] / 2.0}), pop {sim.World.HalfPop[player] / 2.0}");
         int wasted = Math.Max(0, provided - rulesCap) / Math.Max(1, houseDef.HalfPopProvided);
-        _out.WriteLine($"houses past the cap (provided beyond {rulesCap / 2}): {wasted}, {wasted * houseDef.CostWood} wood + {wasted * houseDef.CostGold} gold");
-        _out.WriteLine("");
-        _out.WriteLine("step | at | due tick | done tick | cap at done | thinks due | thinks due at the cap");
+        write($"houses past the cap (provided beyond {rulesCap / 2}): {wasted}, {wasted * houseDef.CostWood} wood + {wasted * houseDef.CostGold} gold");
+        write("");
+        write("step | at | due tick | done tick | cap at done | thinks due | thinks due at the cap | Builds sent | sent at the cap");
+        var result = new List<HouseStep>();
         foreach (int i in houseSteps)
         {
             int done = stepDoneTick[i];
             string capAt = done < 0 ? "-" : (stepDoneCap[i] / 2.0).ToString(System.Globalization.CultureInfo.InvariantCulture);
-            _out.WriteLine($"{i + 1} | {AiContentTestsText(steps[i])} | {board.StepDueTick[i]} | {(done < 0 ? "never" : done.ToString())} | {capAt} | {stepDueThinks[i]} | {stepDueAtCapThinks[i]}");
+            write($"{i + 1} | {AiContentTestsText(steps[i])} | {board.StepDueTick[i]} | {(done < 0 ? "never" : done.ToString())} | {capAt} | {stepDueThinks[i]} | {stepDueAtCapThinks[i]} | {stepSends[i]} | {stepSendsAtCap[i]}");
+            result.Add(new HouseStep(i + 1, stepSends[i], stepSendsAtCap[i], done, done < 0 ? -1 : stepDoneCap[i]));
         }
-        _out.WriteLine("");
-        _out.WriteLine("time | pop | cap | houses finished | house sites | gold | wood | workers | wood in trees | gold in mines");
-        foreach (string row in samples) _out.WriteLine(row);
-        _out.WriteLine("");
-        _out.WriteLine("house Builds in order (step 0 = economy rule): " + string.Join(", ", sends.Select(x => $"{x.Step}@{x.Tick}")));
-        _out.WriteLine($"think-tick cost (Debug, wall clock, noisy): with a house step due {Mean(thinkMsDue):0.000} ms over {thinkMsDue.Count}; none due {Mean(thinkMsNone):0.000} ms over {thinkMsNone.Count}");
+        HouseRun run = new("", 0, result.ToArray(), rulesCap, capReachedTick, new List<string>());
+        HouseStep[] skipped = run.SkippedAtCap;
+        write($"D15 C: house steps done at the hard cap {rulesCap / 2} with no Build sent: {(skipped.Length == 0 ? "none" : string.Join(", ", skipped.Select(x => x.Step)))}; house Builds sent at the hard cap: {result.Sum(x => x.SendsAtCap)}");
+        write("");
+        write("time | pop | cap | houses finished | house sites | gold | wood | workers | wood in trees | gold in mines");
+        foreach (string row in samples) write(row);
+        write("");
+        write("house Builds in order (step 0 = economy rule): " + string.Join(", ", sends.Select(x => $"{x.Step}@{x.Tick}")));
+        write($"think-tick cost (Debug, wall clock, noisy): with a house step due {Mean(thinkMsDue):0.000} ms over {thinkMsDue.Count}; none due {Mean(thinkMsNone):0.000} ms over {thinkMsNone.Count}");
+        return run;
     }
 
     private static string AiContentTestsText(AiStep s) => Rts.Sim.Tests.Content.AiContentTests.StepText(s).Split(" | ")[0];

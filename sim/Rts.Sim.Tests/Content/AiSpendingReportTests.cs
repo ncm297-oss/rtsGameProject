@@ -29,6 +29,11 @@ namespace Rts.Sim.Tests.Content;
 /// the marks before the idle seat's defeat (a mark after it is a won match, not a spending question).
 /// </para>
 /// <para>
+/// D20 (2026-10-17, M5-4f's gather rates gold 0.85 / wood 0.75, the sized defense and D15 C): re-run, and the menu-map
+/// numbers the pages and docs/03 quote are now pinned to this run by <see cref="GeneratedNormal_PagesAndDocs03_QuoteTheReport"/>
+/// (the four runs are computed once and shared by both rows).
+/// </para>
+/// <para>
 /// Reads the AI through its own members (BUG-0641: read from the AI, not re-derived beside it; all <c>internal</c>, reached
 /// through <c>InternalsVisibleTo</c>): <c>Simulation.AiOf</c>, <c>AiPlayer.Faction</c>, <c>AiPlayer.Def.BuildOrder</c>,
 /// <c>AiPlayer.Board.WavesStarted</c> and <c>AiPlayer.Board.StepDone</c>.
@@ -66,7 +71,7 @@ public class AiSpendingReportTests
         int player = TestSim.Data.FindFaction(faction);
         Simulation sim = AiScenes.Flat(AiScenes.Seats(AiDifficulty.Normal, Controllers(player)));
         _out.WriteLine($"{faction}, flat scene, Normal, {Ticks} ticks ({Ticks / Tps / 60} min), combat off, the other seat idle");
-        (_, _, _, int defeatedAt) = Report(sim, player, -1);
+        (_, _, _, int defeatedAt, _, _) = Report(sim, player, -1, _out.WriteLine);
         Assert.Equal(-1, defeatedAt); // combat off: nobody falls, so every mark counts
     }
 
@@ -74,6 +79,85 @@ public class AiSpendingReportTests
     [Fact]
     public void GeneratedNormal_Spending_Report()
     {
+        GeneratedRun run = Generated.Value;
+        foreach (string line in run.Lines) _out.WriteLine(line);
+        foreach (SeatRun r in run.Seats)
+        {
+            // The cut-off: exactly the marks that fell before the defeat count (all of them if the seat stood).
+            int before = 0;
+            for (int t = MarkEvery; t <= Ticks; t += MarkEvery) if (r.DefeatedAt < 0 || t < r.DefeatedAt) before++;
+            Assert.Equal(before, r.Marks);
+            Assert.Equal(Ticks / MarkEvery, r.AllMarks);
+        }
+    }
+
+    /// <summary>
+    /// D20 (the report-conformance row): both faction pages' "Spending on the menu's map" paragraphs and docs/03's
+    /// "Implementation (M5-4f)" spending bullet quote what <see cref="GeneratedNormal_Spending_Report"/> prints on the shipped
+    /// data (the defeat times, the 5-minute gold / wood, the wood-bound count and the verdict) and carry the re-print's date
+    /// and reason. A number the data or the sim moves fails here, by page, until the paragraphs are re-printed.
+    /// </summary>
+    [Fact]
+    public void GeneratedNormal_PagesAndDocs03_QuoteTheReport()
+    {
+        GeneratedRun run = Generated.Value;
+        string verdictLine = $"Across both factions {run.WoodBound} of those {run.Marks} marks had wood under {WoodShort} with gold at {GoldPiled} or more";
+        string verdictQuote = $"the report now reads \"{run.Verdict}\"";
+        foreach (string faction in new[] { "malazan", "whirlwind" })
+        {
+            SeatRun s1 = run.Seat(faction, 1), s7 = run.Seat(faction, 7);
+            string page = BoldParagraph(PageTables.FactionLines(faction), "**Spending on the menu's map", faction + ".md");
+            Assert.True(s1.DefeatedAt >= 0 && s7.DefeatedAt >= 0, $"{faction}: the idle seat stood; the page's 'razes the idle base' sentence no longer holds: re-word it");
+            Assert.True(s1.Marks == 1 && s7.Marks == 1, $"{faction}: {s1.Marks} / {s7.Marks} marks before the defeat; the page's 'only the 5-minute mark' clause no longer holds: re-word it");
+            string subject = faction == "malazan" ? "the Malazans hold" : "the Whirlwind holds";
+            foreach (string want in new[]
+            {
+                "(D20, 2026-10-17, M5-4f",
+                $"the AI razes the idle base at {s1.DefeatedAt / Tps} s (seed 1) and {s7.DefeatedAt / Tps} s (seed 7), so only the 5-minute mark is still a match",
+                $"At 5 minutes {subject} {s1.Gold5} gold / {s1.Wood5} wood (seed 1) and {s7.Gold5} / {s7.Wood5} (seed 7)",
+                verdictLine,
+                verdictQuote,
+            })
+                Assert.True(page.Contains(want, StringComparison.Ordinal), $"{faction}.md 'Spending on the menu's map' lacks the report's \"{want}\"; it reads: {page}");
+        }
+
+        string docs03 = BoldParagraph(PageTables.Lines(Path.Combine("docs", "03-technical-design.md")), "- **Spending re-measured (D20, 2026-10-17", "docs/03");
+        var wants = new List<string> { "M5-4f", verdictLine, verdictQuote };
+        foreach (SeatRun s in run.Seats) wants.Add($"{s.Faction} seed {s.Seed} {s.DefeatedAt / Tps} s ({s.Gold5} gold / {s.Wood5} wood at 5 min)");
+        foreach (string want in wants)
+            Assert.True(docs03.Contains(want, StringComparison.Ordinal), $"docs/03's spending bullet lacks the report's \"{want}\"; it reads: {docs03}");
+    }
+
+    /// <summary>
+    /// The paragraph (or bullet) whose first line starts with <paramref name="start"/>, up to a blank line, the next bullet or
+    /// a heading, its lines trimmed and joined with spaces, bold removed.
+    /// </summary>
+    private static string BoldParagraph(string[] lines, string start, string where)
+    {
+        int i = Array.FindIndex(lines, l => l.StartsWith(start, StringComparison.Ordinal));
+        Assert.True(i >= 0, $"{where} has no line starting '{start}'");
+        var text = new List<string> { lines[i].Trim() };
+        for (i++; i < lines.Length && lines[i].Trim().Length > 0 && !lines[i].StartsWith("- ", StringComparison.Ordinal) && !lines[i].StartsWith('#'); i++)
+            text.Add(lines[i].Trim());
+        return string.Join(" ", text).Replace("**", "");
+    }
+
+    /// <summary>One AI seat's run on the menu map: when the idle seat fell, the 5-minute gold / wood, and its mark counts.</summary>
+    private sealed record SeatRun(string Faction, ulong Seed, int DefeatedAt, int Gold5, int Wood5, int WoodBound, int Marks, int AllMarks);
+
+    /// <summary>The four menu-map runs, the printed lines, and the conclusion over the marks before each defeat.</summary>
+    private sealed record GeneratedRun(SeatRun[] Seats, List<string> Lines, int WoodBound, int Marks, string Verdict)
+    {
+        public SeatRun Seat(string faction, ulong seed) => Seats.Single(s => s.Faction == faction && s.Seed == seed);
+    }
+
+    /// <summary>Run once per test process: the report and its conformance row read the same four deterministic runs.</summary>
+    private static readonly Lazy<GeneratedRun> Generated = new(RunGenerated);
+
+    private static GeneratedRun RunGenerated()
+    {
+        var lines = new List<string>();
+        var seats = new List<SeatRun>();
         int bound = 0, marks = 0, cut = 0;
         foreach (ulong seed in new ulong[] { 1, 7 })
             foreach (string faction in new[] { "malazan", "whirlwind" })
@@ -81,28 +165,25 @@ public class AiSpendingReportTests
                 int player = TestSim.Data.FindFaction(faction);
                 Simulation sim = MenuMap(AiScenes.Seats(AiDifficulty.Normal, Controllers(player)), seed);
                 Assert.Equal(MenuMines, Count(sim, "gold_mine"));
-                _out.WriteLine("");
-                _out.WriteLine($"== {faction}, generated 128 map seed {seed} ({MenuForests} forests, {MenuMines} mines), Normal, {Ticks} ticks, combat on, the other seat idle");
-                (int b, int m, int all, int defeatedAt) = Report(sim, player, sim.World.StartLocations[player].Cell);
-                // The cut-off: exactly the marks that fell before the defeat count (all of them if the seat stood).
-                int before = 0;
-                for (int t = MarkEvery; t <= Ticks; t += MarkEvery) if (defeatedAt < 0 || t < defeatedAt) before++;
-                Assert.Equal(before, m);
-                Assert.Equal(Ticks / MarkEvery, all);
+                lines.Add("");
+                lines.Add($"== {faction}, generated 128 map seed {seed} ({MenuForests} forests, {MenuMines} mines), Normal, {Ticks} ticks, combat on, the other seat idle");
+                (int b, int m, int all, int defeatedAt, int gold5, int wood5) = Report(sim, player, sim.World.StartLocations[player].Cell, lines.Add);
+                seats.Add(new SeatRun(faction, seed, defeatedAt, gold5, wood5, b, m, all));
                 bound += b;
                 marks += m;
                 cut += all - m;
             }
-        _out.WriteLine("");
+        lines.Add("");
         string verdict = 2 * bound >= marks ? "wood is still the limit" : bound > 0 ? "wood binds at some marks only, not the limit overall" : "wood is not the limit";
-        _out.WriteLine($"Conclusion (2026-10-16, shipped data: D19 + the surround rule): {verdict} on the menu's generated map: {bound} of {marks} marks before the idle seat's defeat had wood in hand < {WoodShort} with gold >= {GoldPiled} ({cut} marks after a defeat not counted).");
+        lines.Add($"Conclusion (2026-10-17, shipped data: M5-4f's gather rates and sized defense): {verdict} on the menu's generated map: {bound} of {marks} marks before the idle seat's defeat had wood in hand < {WoodShort} with gold >= {GoldPiled} ({cut} marks after a defeat not counted).");
+        return new GeneratedRun(seats.ToArray(), lines, bound, marks, verdict);
     }
 
     /// <summary>
     /// <see cref="AiScenes.Generated"/>'s match (the hall and five workers per player from <c>StartBase.Plan</c>, by command)
     /// on the menu's map: <see cref="MenuForests"/> forests and <see cref="MenuMines"/> mines.
     /// </summary>
-    private static Simulation MenuMap(PlayerSeat[] seats, ulong seed)
+    internal static Simulation MenuMap(PlayerSeat[] seats, ulong seed)
     {
         var map = MapGenParams.Default with { Forests = MenuForests, GoldMines = MenuMines };
         var sim = new Simulation(new SimConfig(seed, seats.Length, 400, 1024) { Data = TestSim.Data, Map = map, Seats = seats.ToImmutableArray() });
@@ -132,7 +213,7 @@ public class AiSpendingReportTests
         return n;
     }
 
-    private static SeatController[] Controllers(int aiPlayer)
+    internal static SeatController[] Controllers(int aiPlayer)
     {
         SeatController[] controllers = { SeatController.Human, SeatController.Human };
         controllers[aiPlayer] = SeatController.Ai;
@@ -142,9 +223,9 @@ public class AiSpendingReportTests
     /// <summary>
     /// Runs <see cref="Ticks"/> and prints the report for <paramref name="player"/>'s AI; with a start cell, the last column
     /// is the wood left in trees within 60 m of it (else on the whole map). Returns the wood-bound marks and the marks before
-    /// the idle seat's defeat, all the marks, and the defeat tick (-1: it stood).
+    /// the idle seat's defeat, all the marks, the defeat tick (-1: it stood), and the gold and wood in hand at the first mark.
     /// </summary>
-    private (int WoodBound, int Marks, int AllMarks, int IdleDefeatedAt) Report(Simulation sim, int player, int startCell)
+    private static (int WoodBound, int Marks, int AllMarks, int IdleDefeatedAt, int Gold5, int Wood5) Report(Simulation sim, int player, int startCell, Action<string> write)
     {
         World w = sim.World;
         GameData d = w.Data;
@@ -167,7 +248,7 @@ public class AiSpendingReportTests
         Array.Fill(firstFinished, -1);
         Array.Fill(typeAt, -1);
         var marks = new List<string>();
-        int woodBound = 0, counted = 0, idleDefeatedAt = -1;
+        int woodBound = 0, counted = 0, idleDefeatedAt = -1, gold5 = -1, wood5 = -1;
 
         for (int t = 0; t < Ticks; t++)
         {
@@ -186,6 +267,7 @@ public class AiSpendingReportTests
             if (sim.TickNumber % MarkEvery == 0)
             {
                 (int army, int workers) = Pop(sim, player);
+                if (gold5 < 0) (gold5, wood5) = (w.Gold[player], w.Wood[player]);
                 bool live = idleDefeatedAt < 0;
                 if (live) counted++;
                 if (live && w.Wood[player] < WoodShort && w.Gold[player] >= GoldPiled) woodBound++;
@@ -194,26 +276,26 @@ public class AiSpendingReportTests
         }
         Assert.Equal(Ticks, sim.TickNumber);
 
-        _out.WriteLine($"waves started {ai.Board.WavesStarted}; the idle seat defeated: {(idleDefeatedAt < 0 ? "no" : $"at {idleDefeatedAt / Tps} s")}");
-        _out.WriteLine("");
-        _out.WriteLine($"time | gold | wood | army pop | worker pop | pop / cap | waves started | age | order steps done | gold in mines | wood in trees{(startCell >= 0 ? " within 60 m of the start" : "")}");
-        foreach (string row in marks) _out.WriteLine(row);
-        _out.WriteLine("");
-        _out.WriteLine("building | slot | finished at (s) | finished ticks | empty-queue share");
+        write($"waves started {ai.Board.WavesStarted}; the idle seat defeated: {(idleDefeatedAt < 0 ? "no" : $"at {idleDefeatedAt / Tps} s")}");
+        write("");
+        write($"time | gold | wood | army pop | worker pop | pop / cap | waves started | age | order steps done | gold in mines | wood in trees{(startCell >= 0 ? " within 60 m of the start" : "")}");
+        foreach (string row in marks) write(row);
+        write("");
+        write("building | slot | finished at (s) | finished ticks | empty-queue share");
         int reused = 0;
         for (int s = 0; s < b.Capacity; s++)
         {
             if (typeAt[s] < 0) continue;
             if (b.Alive[s] && b.Generation[s] != generationAt[s]) reused++;
             string share = (100.0 * emptyTicks[s] / Math.Max(1, finishedTicks[s])).ToString("0.0", CultureInfo.InvariantCulture);
-            _out.WriteLine($"{d.Buildings[typeAt[s]].Key} | {s} | {firstFinished[s] / Tps} | {finishedTicks[s]} | {share} %");
+            write($"{d.Buildings[typeAt[s]].Key} | {s} | {firstFinished[s] / Tps} | {finishedTicks[s]} | {share} %");
         }
-        _out.WriteLine($"slot reused by another building: {reused}");
+        write($"slot reused by another building: {reused}");
         var open = new List<string>();
         for (int i = 0; i < ai.Def.BuildOrder.Length; i++)
             if (!ai.Board.StepDone[i]) open.Add($"{i + 1} {AiContentTests.StepText(ai.Def.BuildOrder[i]).Split(" | ")[0]}");
-        _out.WriteLine("order steps not done at the end: " + (open.Count == 0 ? "none" : string.Join("; ", open)));
-        return (woodBound, counted, marks.Count, idleDefeatedAt);
+        write("order steps not done at the end: " + (open.Count == 0 ? "none" : string.Join("; ", open)));
+        return (woodBound, counted, marks.Count, idleDefeatedAt, gold5, wood5);
     }
 
     private static int StepsDone(AiPlayer ai)

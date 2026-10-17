@@ -130,7 +130,7 @@ the composition table and the wave and retreat lines below to the file, both way
 | 15 | pop 60 | build | `malazan_billet` | 1 | |
 | 16 | pop 67 | build | `malazan_billet` | 1 | |
 | 17 | pop 74 | build | `malazan_billet` | 1 | |
-| 18 | pop 81 | build | `malazan_billet` | 1 | The 12th Billet: Keep 10 + 12 × 8 = 106, past the 100 cap |
+| 18 | pop 81 | build | `malazan_billet` | 1 | The 12th Billet: Keep 10 + 12 × 8 = 106, past the 100 cap (due at 98, so placed: "Houses at the cap" below) |
 | 19 | time 390 | research | `age_ii` | 1 | Age II at 6:30 (needs two of Barracks, Range, Armory: all three stand) |
 | 20 | time 390 | train | `malazan_laborer` | 10 | Workers to 30 in Age II |
 | 21 | time 450 | build | `malazan_cadre_tower` | 1 | 7:30, when Age II (60 s) is in |
@@ -145,13 +145,22 @@ Not in the file, because the schema has no field for it (requests to the sim tra
 choke and the Watchtower's spot at the choke (the executor places every building near the Keep), and the 3 : 2 gold /
 wood split (the economy manager's `goldShare`, a common rule).
 
-**Spending on the menu's map (D-H5, 2026-10-16, D19 + the surround rule; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
+**Houses at the cap (D20, 2026-10-17, M5-4f's D15 C; `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report`).**
+Since M5-4f the executor skips a house step once the population cap is the hard cap (100): the step is done with no
+command sent and no Billet placed. On the menu's map (seeds 1 and 7, 20 minutes, the other seat idle) no house step was
+skipped: the 12th Billet (step 18) is due at a cap of 98 (Keep 10 + 11 × 8), below the hard cap, so it is placed and 6 of
+its 8 pop go unused, and no Billet was placed once the cap was 100. The skip saves a Billet only when the second Keep
+(step 23, the expansion) brings the cap to 100 before the last Billet steps are due.
+
+**Spending on the menu's map (D20, 2026-10-17, M5-4f: gathering gold 0.85 / wood 0.75 a second and the sized defense; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
 Normal against an idle seat, seeds 1 and 7, 12 forests and 8 mines (the menu's): the AI razes the idle base at
-584 s (seed 1) and 593 s (seed 7), so only the 5-minute mark is still a match (the later marks no longer count). At 5 minutes
-the Malazans hold 210 gold / 0 wood (seed 1) and 100 / 10 (seed 7): short of both, not wood-bound by the report's rule. Across both factions 1 of those 4 marks had wood under 100 with gold at 300 or more (the Whirlwind, seed 7),
-so the report now reads "wood binds at some marks only, not the limit overall"; D18 read "wood is still the limit" (9 of
-16 marks, 6 mines, counting marks after the win). Four marks are a thin sample: a weak input to the `goldShare` proposal
-under For your review, not a verdict.
+509 s (seed 1) and 556 s (seed 7), so only the 5-minute mark is still a match (the later marks no longer count; D-H5 read
+584 s and 593 s). At 5 minutes the Malazans hold 136 gold / 15 wood (seed 1) and 36 / 40 (seed 7): short of both, not
+wood-bound by the report's rule. Across both factions 0 of those 4 marks had wood under 100 with gold at 300 or more, so
+the report now reads "wood is not the limit"; D-H5 (2026-10-16, before the quicker gathering) read "wood binds at some
+marks only, not the limit overall" (1 of 4: the Whirlwind, seed 7) and D18 "wood is still the limit" (9 of 16 marks, 6
+mines, counting marks after the win). Four marks are a thin sample: a weak input to the `goldShare` proposal under For
+your review, not a verdict.
 
 **Army composition (`compositions`), weights by pop.** Age I lists only the units the Age I steps can train (the Corral
 waits for Age II), so its weights sum to 65.
@@ -171,10 +180,16 @@ waits for Age II), so its weights sum to 65.
   down); then every 3 minutes or when army pop ≥ 1.3× the last wave. Sappers target buildings; Mages cast Telas Fire on
   the largest enemy clump.
 - **Retreat:** a wave that has lost 50% falls back; a unit under 30% hp counts as wounded (`retreat`; Hard pulls it back).
-- **Defense** (docs/03 "Implementation (M5-4b)"): the army comes home when an own building (a site too) within the
-  defend radius of the Garrison Keep is hit, or an enemy soldier (not a worker) is seen within it (`rules.json`
-  `ai.defendRadius` 48 m; the threat holds `ai.defendFor` 20 s after the last sign); a wave out ends like a retreat.
-  Laborers within `ai.workerFleeRadius` (16 m) of the threat flee to the nearest finished drop-off away from the
+- **Defense** (docs/02 "AI opponent", docs/03 "Implementation (M5-4b)" and "(M5-4f)"; re-worded in D20, 2026-10-17, for
+  M5-4f's sized answer): a threat starts when an own building (a site too) within the defend radius of the Garrison Keep
+  is hit, or an enemy soldier (not a worker) is seen within it (`rules.json` `ai.defendRadius` 48 m; the threat holds
+  `ai.defendFor` 20 s after the last sign). The AI answers with defenders worth `ai.defendRatio` 1.5 times the
+  intruders' gold + wood cost, at least `ai.defendMinValue` 150 (a building hit with nobody seen gets 150), taken from
+  the army at home first, then from a wave out, nearest home first, only while the wave keeps the size it was sent at.
+  One Raider (64 gold + wood) is answered with 150 worth, e.g. two Heavy Infantry from home (148), and a wave out keeps
+  going. A raid worth more than the home army and the wave's spare units together calls the whole wave home (it ends
+  like a retreat) and every free army unit answers. A hit that leaves the Garrison Keep below `ai.recallHallHp` 0.5 of
+  its max hp does the same, however small the raid. Laborers within `ai.workerFleeRadius` (16 m) of the threat flee to the nearest finished drop-off away from the
   threat (the Garrison Keep or a Quartermaster's Depot, whichever is nearest among those more than 16 m from the threat;
   else the nearest one).
 

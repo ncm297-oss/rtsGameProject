@@ -7007,6 +7007,14 @@ rules are unchanged.
   went 0.47-0.62 to 1.57-1.64 ms: about 0.1 ms of it is the defense (two seats with 1,170 army units each, under attack
   every think), the rest the build-order executor's site search, which the quicker gathering makes affordable in that
   scene and which fails at every think on its crowded map (reported to the Producer).
+- **Spending re-measured (D20, 2026-10-17, data track: M5-4f's gather rates and sized defense)**
+  (`Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`, the menu's map, Normal against an idle seat): the idle
+  seat falls at malazan seed 1 509 s (136 gold / 15 wood at 5 min), whirlwind seed 1 514 s (316 gold / 117 wood at 5 min),
+  malazan seed 7 556 s (36 gold / 40 wood at 5 min) and whirlwind seed 7 540 s (384 gold / 103 wood at 5 min). Across both
+  factions 0 of those 4 marks had wood under 100 with gold at 300 or more, so the report now reads "wood is not the
+  limit" (D-H5, before M5-4f: 1 of 4). D15 C on the same map (`QA/Content/AiHouseRuleReportTests.MenuMapNormal_*`):
+  no house step is skipped, because each order's 12th house is due at a cap of 98, below the hard cap; the faction pages'
+  "Houses at the cap" and "Spending on the menu's map" paragraphs carry these numbers, pinned to the runs.
 - **Tests.** `Ai/ProportionalDefenseTests` (a 12-pop wave out with a 6-pop threshold and three home units: one Raider, the
   wave goes on and two home units answer; eight Raiders, every home unit and the six members nearest the hall, the other
   six keep the threshold and the target; twelve Raiders, the whole wave; the hall hit to 0.4 / 0.6 of its hp, the whole

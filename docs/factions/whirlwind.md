@@ -134,7 +134,7 @@ and the wave and retreat lines below to the file, both ways.
 | 16 | pop 58 | build | `whirlwind_tent` | 1 | |
 | 17 | pop 65 | build | `whirlwind_tent` | 1 | |
 | 18 | pop 72 | build | `whirlwind_tent` | 1 | |
-| 19 | pop 79 | build | `whirlwind_tent` | 1 | The 12th Tent: Holy Camp 10 + 12 × 8 = 106, past the 100 cap |
+| 19 | pop 79 | build | `whirlwind_tent` | 1 | The 12th Tent: Holy Camp 10 + 12 × 8 = 106, past the 100 cap (due at 98, so placed: "Houses at the cap" below) |
 | 20 | time 450 | research | `age_ii` | 1 | Age II at 7:30, later than the Malazan (needs two of the camps, Horse Lines, Smithy) |
 | 21 | time 450 | train | `whirlwind_camp_follower` | 8 | Workers to 26 in Age II |
 | 22 | time 480 | expand | — | 1 | 2nd Holy Camp near the nearest free gold mine, at Normal's `expandAfter` (480 s), regardless of threat |
@@ -148,13 +148,22 @@ Not in the file, because the schema has no field for it (requests to the sim tra
 split (the economy manager's `goldShare`, a common rule). The sketch's expansion at ~9:00 is now the step at 8:00,
 Normal's `expandAfter`.
 
-**Spending on the menu's map (D-H5, 2026-10-16, D19 + the surround rule; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
+**Houses at the cap (D20, 2026-10-17, M5-4f's D15 C; `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report`).**
+Since M5-4f the executor skips a house step once the population cap is the hard cap (100): the step is done with no
+command sent and no Tent placed. On the menu's map (seeds 1 and 7, 20 minutes, the other seat idle) no house step was
+skipped: the 12th Tent (step 19) is due at a cap of 98 (Holy Camp 10 + 11 × 8), below the hard cap, so it is placed and 6
+of its 8 pop go unused, and no Tent was placed once the cap was 100. The skip saves a Tent only when the second Holy Camp
+(step 22, the expansion) brings the cap to 100 before the last Tent steps are due.
+
+**Spending on the menu's map (D20, 2026-10-17, M5-4f: gathering gold 0.85 / wood 0.75 a second and the sized defense; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
 Normal against an idle seat, seeds 1 and 7, 12 forests and 8 mines (the menu's): the AI razes the idle base at
-496 s (seed 1) and 575 s (seed 7), so only the 5-minute mark is still a match (the later marks no longer count). At 5 minutes
-the Whirlwind holds 112 gold / 27 wood (seed 1, short of both) and 524 / 73 (seed 7, wood-bound). Across both factions 1 of those 4 marks had wood under 100 with gold at 300 or more (the Whirlwind, seed 7),
-so the report now reads "wood binds at some marks only, not the limit overall"; D18 read "wood is still the limit" (9 of
-16 marks, 6 mines, counting marks after the win). Four marks are a thin sample: a weak input to the `goldShare` proposal
-under For your review, not a verdict.
+514 s (seed 1) and 540 s (seed 7), so only the 5-minute mark is still a match (the later marks no longer count; D-H5 read
+496 s and 575 s). At 5 minutes the Whirlwind holds 316 gold / 117 wood (seed 1) and 384 / 103 (seed 7): gold in hand and
+wood just over the report's 100 line, so not wood-bound by its rule. Across both factions 0 of those 4 marks had wood
+under 100 with gold at 300 or more, so the report now reads "wood is not the limit"; D-H5 (2026-10-16, before the
+quicker gathering) read "wood binds at some marks only, not the limit overall" (1 of 4: this faction, seed 7, 524 gold /
+73 wood) and D18 "wood is still the limit" (9 of 16 marks, 6 mines, counting marks after the win). Four marks are a thin
+sample: a weak input to the `goldShare` proposal under For your review, not a verdict.
 
 **Army composition (`compositions`), weights by pop.** All three Age I units can be trained in Age I; their weights sum
 to 65.
@@ -174,10 +183,16 @@ to 65.
   down); then continuous pressure, a new wave every 2 minutes. Priests cast Sandstorm on the enemy army's center as the
   melee engages.
 - **Retreat:** a wave that has lost 50% falls back; a unit under 30% hp counts as wounded (`retreat`; Hard pulls it back).
-- **Defense** (docs/03 "Implementation (M5-4b)"): the army comes home when an own building (a site too) within the
-  defend radius of the Holy Camp is hit, or an enemy soldier (not a worker) is seen within it (`rules.json`
-  `ai.defendRadius` 48 m; the threat holds `ai.defendFor` 20 s after the last sign); a wave out ends like a retreat.
-  Camp Followers within `ai.workerFleeRadius` (16 m) of the threat flee to the nearest finished drop-off away from the
+- **Defense** (docs/02 "AI opponent", docs/03 "Implementation (M5-4b)" and "(M5-4f)"; re-worded in D20, 2026-10-17, for
+  M5-4f's sized answer): a threat starts when an own building (a site too) within the defend radius of the Holy Camp is
+  hit, or an enemy soldier (not a worker) is seen within it (`rules.json` `ai.defendRadius` 48 m; the threat holds
+  `ai.defendFor` 20 s after the last sign). The AI answers with defenders worth `ai.defendRatio` 1.5 times the
+  intruders' gold + wood cost, at least `ai.defendMinValue` 150 (a building hit with nobody seen gets 150), taken from
+  the army at home first, then from a wave out, nearest home first, only while the wave keeps the size it was sent at.
+  One Heavy Infantry (74 gold + wood) is answered with 150 worth, e.g. two Raiders from home (128), and a wave out keeps
+  going. A raid worth more than the home army and the wave's spare units together calls the whole wave home (it ends
+  like a retreat) and every free army unit answers. A hit that leaves the Holy Camp below `ai.recallHallHp` 0.5 of its
+  max hp does the same, however small the raid. Camp Followers within `ai.workerFleeRadius` (16 m) of the threat flee to the nearest finished drop-off away from the
   threat (the Holy Camp or a Supply Cache, whichever is nearest among those more than 16 m from the threat; else the
   nearest one).
 - **Later idea (not in M5):** counter-attack the enemy base with Horse Raiders when its army is away. Not built: no
