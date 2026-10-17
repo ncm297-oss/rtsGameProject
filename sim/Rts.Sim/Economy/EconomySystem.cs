@@ -41,7 +41,7 @@ public static class EconomySystem
     public static bool OnLoop(UnitStore units, int i) => units.GatherNode[i].Generation != 0;
 
     /// <summary>True if the unit's type fills the worker slot (only workers gather).</summary>
-    internal static bool IsWorker(World world, int i) => world.Data.Units[world.Units.TypeId[i]].Slot == UnitSlot.Worker;
+    internal static bool IsWorker(World world, int i) => world.Data.Units[world.Units.TypeId[i]].IsWorker;
 
     private static void Step(World world, int i)
     {
@@ -128,7 +128,8 @@ public static class EconomySystem
     private static void Deposit(World world, int i)
     {
         UnitStore u = world.Units;
-        world.AddToTotal(u.Owner[i], u.CargoKind[i], u.Cargo[i]);
+        // M6-S1: the delivery is the only gathered-resources count (refunds and starting totals add to the total only).
+        world.Ledger.Deliver(u.Owner[i], u.CargoKind[i], u.Cargo[i]);
         u.Cargo[i] = 0;
         // Back to the same node if it still stands exposed, else the depleted-node rule.
         EntityHandle node = u.GatherNode[i];

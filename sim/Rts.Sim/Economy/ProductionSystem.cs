@@ -155,7 +155,10 @@ public static class ProductionSystem
         if (b.QueueIsTechAt(k, 0))
             Researched(world, b.Owner[k], b.QueueTypeAt(k, 0)); // nothing spawns
         else if (Spawn(world, k, world.Data.Units[b.QueueTypeAt(k, 0)]))
+        {
             spawned = true;
+            world.Ledger.Stats.CountTrained(b.Owner[k]); // M6-S1: only a finished queue item counts as trained
+        }
         else
             return false;
         b.PopTrained(k);
@@ -173,6 +176,8 @@ public static class ProductionSystem
     /// </summary>
     internal static void Researched(World world, int player, int tech)
     {
+        // M6-S1: the first grant's tick count, the one HasTech first reads true at between ticks.
+        if (!world.HasTech(player, tech)) world.Ledger.Stats.MarkResearched(player, tech, world.TickNumber + 1);
         bool hp = false;
         if ((uint)tech < (uint)world.Data.Techs.Length)
             foreach (TechEffect e in world.Data.Techs[tech].Effects) hp |= e.Stat == TechStat.Hp;

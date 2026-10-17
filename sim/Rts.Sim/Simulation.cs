@@ -186,6 +186,7 @@ public sealed class Simulation : ICommandSink
 
         // Phase 13: cleanup.
         World.TickNumber++;
+        World.SampleStats(); // M6-S1: the army-value sample, on its interval (not hashed)
 
         // Phase 14: replay checkpoint hash, when a recorder is attached and the tick is due.
         _recorder?.OnTicked();

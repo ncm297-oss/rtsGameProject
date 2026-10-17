@@ -699,7 +699,10 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       `DefeatEvents` / `Simulation.MatchOver`. M6-V4, 2026-10-13: the Victory / Defeat / Draw banner through the pause path
       and the stats screen with what the sim counts today (kills, losses, gold / wood in hand, length, defeat times). Left:
       [02 Game flow](02-game-design.md#game-flow) 5's columns (gathered, trained, buildings built / lost, Age II time, the
-      army-value graph) once the sim counts them (STATE Requests 39).)
+      army-value graph) once the sim counts them (STATE Requests 39). M6-S1, 2026-10-17: **the sim counts them** (`World.GatheredGold`
+      / `GatheredWood` / `UnitsTrained` / `UnitKills` / `BuildingKills` / `UnitLosses` / `BuildingLosses` / `BuildingsBuilt` /
+      `BuildingsLost`, `TechResearchedTick`, `ArmyValueSamples` every 200 ticks; not hashed; docs/03 "Implementation (M6-S1)").
+      Left: the view's columns and the graph.)
 - [ ] Save/load and replay playback. (M6-V9, 2026-10-16: **replay playback**: every match started from the menu or `--skirmish` is
       recorded (checkpoints every 100 ticks) and written to `user://replays/<yyyyMMdd-HHmmss>-seed<seed>.replay` at the banner, at
       Quit to menu and on window close, the newest 20 kept; Main menu → Load Game lists them (date, seed, players, length) with
@@ -716,7 +719,11 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       mouse buttons and the camera keys stay fixed (docs/02 "Controls and camera"); verified by `SettingsTest`, QA's
       `QaM6V8Test` / `QaM6V8R1Test` and `ShellTest` on the merged tree. Ticked at the 2026-10-15-2325 ACCEPT.)
 - [ ] Art look test done (KayKit vs. alternatives, see [04](04-art-pipeline.md)); real models and
-      animations for Malazan and Whirlwind; licensing log filled in.
+      animations for Malazan and Whirlwind; licensing log filled in. (M6-V10, 2026-10-17: **the look test is done**: `game/tests/LookTest.tscn`
+      puts a Quaternius Universal Base Character playing a UAL1 clip beside an Ultimate Fantasy RTS building (the stylized stand-in; the
+      pack has no characters) and today's capsule under the real camera; screenshots `docs/images/look-test-2026-10-17[-far].png`;
+      docs/04 "Look test (M6-V10)" and the first three licensing rows (Quaternius, CC0). Left: the owner's art call, then the real
+      models and animations through the manifest / import script.)
 - [ ] Real SFX and placeholder music; alerts with sound.
 - [ ] 3 maps (Raraku, Pale Hills, Vathar Crossing) plus the procedural generator in skirmish setup. (M5-4a, 2026-10-13, pulled
       forward: the generator's mirrored start locations, each with 2 mines and a forest in reach, replay format 6. M5-H1, 2026-10-13:
