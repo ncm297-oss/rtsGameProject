@@ -185,8 +185,9 @@ waits for Age II), so its weights sum to 65.
   is hit, or an enemy soldier (not a worker) is seen within it (`rules.json` `ai.defendRadius` 48 m; the threat holds
   `ai.defendFor` 20 s after the last sign). The AI answers with defenders worth `ai.defendRatio` 1.5 times the
   intruders' gold + wood cost, at least `ai.defendMinValue` 150 (a building hit with nobody seen gets 150), taken from
-  the army at home first, then from a wave out, nearest home first, only while the wave keeps the size it was sent at.
-  One Raider (64 gold + wood) is answered with 150 worth, e.g. two Heavy Infantry from home (148), and a wave out keeps
+  the army at home first (nearest the defense point first), then from the members of a wave out (nearest the Garrison
+  Keep first), each only while the members left keep the wave's start threshold (`attack.minArmyPop` and `minArmyCost`
+  times the difficulty's wave size ×, so a wave sent above it gives its surplus). One Raider (64 gold + wood) is answered with 150 worth, e.g. two Heavy Infantry from home (148), and a wave out keeps
   going. A raid worth more than the home army and the wave's spare units together calls the whole wave home (it ends
   like a retreat) and every free army unit answers. A hit that leaves the Garrison Keep below `ai.recallHallHp` 0.5 of
   its max hp does the same, however small the raid. Laborers within `ai.workerFleeRadius` (16 m) of the threat flee to the nearest finished drop-off away from the
