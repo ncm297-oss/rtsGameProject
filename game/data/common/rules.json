@@ -4,7 +4,7 @@
   "startingWorkers": 5,
   "popCap": 100,
   "workerCarry": 10,
-  "gatherRate": { "gold": 0.7, "wood": 0.6 },
+  "gatherRate": { "gold": 0.85, "wood": 0.75 },
   "startMines": { "count": 2, "gold": 2500 },
   "expansionMines": { "count": 2, "gold": 2000 },
   "treeWood": 100,
@@ -14,6 +14,6 @@
   "stealth": { "proximity": 3, "revealSeconds": 3 },
   "ai": { "goldShare": 0.6, "houseWhenPopWithin": 2, "placementSearchRadius": 32, "buildingSpacing": 2, "expandHallReach": 40,
           "scoutAfter": 15, "scoutRadius": 40, "scoutReach": 6, "scoutGrid": 56, "rallyDistance": 12, "rallyReach": 6, "waveCooldown": 60,
-          "defendRadius": 48, "defendFor": 20, "workerFleeRadius": 16,
+          "defendRadius": 48, "defendFor": 20, "workerFleeRadius": 16, "defendRatio": 1.5, "defendMinValue": 150, "recallHallHp": 0.5,
           "castMinTargets": 2 }
 }

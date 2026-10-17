@@ -6553,7 +6553,8 @@ Slice 1: the defeat rule (STATE "Requests for the sim track" 37) and the AI's ba
   threat starts, or on the **second trigger in a row** whose point is more than `ai.rallyReach` from it (BUG-0673: two
   raiders taking turns at opposite sides of the hall make the centroid jump back and forth every think; that re-sends
   nothing, while a threat that has really moved is followed one think late; `Blackboard.DefensePointAway`).
-  **While the threat holds**: a wave in progress ends like a retreat (`MilitaryManager.End`: members owe a `Move` to the
+  **While the threat holds** (**sized by M5-4f**, below: only the defenders picked for the threat's worth are sent, and a
+  wave ends only when the whole wave is called): a wave in progress ends like a retreat (`MilitaryManager.End`: members owe a `Move` to the
   rally point; `waveCooldownUntil = Now + waveCooldown`) and the military starts no wave and rallies nobody; every free army
   unit (not `Casting`, no AI command pending, not the scout, not a member owed its `Move` home: it is sent at the next
   think) farther than `rallyReach` from the point and not yet sent to this version gets one `AttackMove` there when it is
@@ -6620,8 +6621,8 @@ and docs).
   its first ability, in list order, that is **ready** (`PlayerView.TryGetAbilityReady`: the ready tick at most the tick the
   command applies in) and has a target. A full queue ends the pass.
 - **Where** (the enemy as seen: the positions of every enemy unit the view answers, read once a think at the first free
-  caster). *Target ground*: the enemy units within `range + radius` of the caster; their centroid; the centroid of those of
-  them within `radius` of it; that point **pulled back to the range** (0.05 m inside, so float rounding never leaves a
+  caster). *Target ground*: the enemy units within `range + radius` of the caster; the one nearest the caster (M5-4f,
+  BUG-0702 item 1; until then the centroid of them all); the centroid of those of them within `radius` of it; that point **pulled back to the range** (0.05 m inside, so float rounding never leaves a
   walk) and kept half a cell inside the map (BUG-0700: units a dev spawn left off the map moved the centroid off it, and the
   door refuses such a point; still out of range after that, no cast); cast there when at least **`ai.castMinTargets`** enemies seen stand within `radius` of the pulled-back point. An
   ability that **hits buildings** (the Cusser) with no such group: the footprint centre of the nearest enemy building seen
@@ -6848,6 +6849,91 @@ three arrays on `World`, `CombatConstants.SurroundSpotsPerCell`. No `Command`, n
 - **Not yet (slice 2):** a melee unit blocked by its own standing ranged units routing round them, unit-v-unit crowding away
   from buildings, smarter fill order (far faces first for the units that arrive last).
 
+### Implementation (M5-4f)
+
+The proportional defense (roadmap M5 criterion 7; the owner's 2026-10-14 request, STATE "Design: proportional defense"),
+with three small items: D15 option C, BUG-0702 item 1, and quicker gathering. Code: `Ai/DefenseManager.cs` (the sizing),
+the census in `AiPlayer` (`IntruderWorth`, `HallSlot`), `Blackboard`, `MilitaryManager` (the wave's start threshold kept),
+`Ai/BuildOrderExecutor.cs`, `Ai/AbilityManager.cs`, `Data/AiRulesDef` + `DataLoader.Ai` (three knobs), `common/rules.json`.
+No `Command` kind. M5-4b's trigger, point (BUG-0673), hold, worker flee (BUG-0671) and `Move`-then-`AttackMove` (BUG-0670)
+rules are unchanged.
+
+- **The threat's worth.** The census adds up the gold + wood cost (`GameData.Units`, by `SeenUnit.TypeId`) of the
+  intruders, the enemy non-workers seen within `ai.defendRadius` of the hall (fog-limited like the count). On a trigger
+  think the answer's worth is `max(defendRatio x worth, defendMinValue)`. A hit on an own building with **nobody seen**
+  (a catapult in the fog) counts as `defendMinValue` of threat and is answered with `defendMinValue`. The answer is kept
+  (`Blackboard.DefendAnswer`) through the hold, so a defender that falls while the threat holds is replaced up to it.
+- **Who answers** (`DefenseManager.Pick`, every think the threat holds). Units picked earlier in this threat stay picked
+  (`Blackboard.DefenderGeneration` per unit slot) and count first. Then the candidates, each free (not casting, no AI
+  command pending, not the scout, not a member owed its `Move` home): (a) **the home army**, army units outside the wave in
+  progress, nearest the defense point first; (b) **members of the wave**, nearest the hall first, each only if the members
+  left keep the wave's **start threshold** (`attack.minArmyPop` half-pop and `attack.minArmyCost`, each times
+  `waveSizeMultiplier`, kept at the wave's start as `Blackboard.WaveMinHalfPop` / `WaveMinCost`). A candidate is picked
+  while the picked worth is short of the answer by **more than half its cost** (the first is always picked), so the answer
+  lands within half a unit of the target (one 64-worth Raider: answer 150, two 74-worth Heavy Infantry, 148). A pulled
+  member leaves the wave (its `WaveGeneration` / `WaveFlag` cleared, so the wave's rule doesn't send it back) and its
+  half-pop leaves the start's, like a member that gives up alive (BUG-0596), so a pull is no loss toward the retreat; the
+  wave stays `WaveActive` with the rest and keeps its target. Distance ties keep slot order: the candidates sit in a fixed
+  scratch array (`Blackboard.DefenseOrder` / `DefenseKey`), the home army popped nearest first off an in-place min-heap
+  only as far as the picks need, the members heapsorted when they are reached; (distance, slot) orders every pair, so the
+  order is deterministic; no allocation, no `Dictionary`. Nothing is sorted when the answer is already met (the picked
+  plus half the cheapest candidate's cost reaches it), the steady state of a long threat. (An insertion sort cost about
+  4 ms a think with 1,200 units at home, `AbilityManagerFuzzStressTests.AThink_*`.)
+- **The whole wave** comes home (`MilitaryManager.End`, `waveCooldownUntil = Now + waveCooldown`, as M5-4b did on every
+  threat) when (c1) a wave is in progress and the threat's worth exceeds what the picked units, the free home army and the
+  members the threshold lets go are worth together, or (c2) the hall (`HallSlot`, the building `HallPoint` is the centre
+  of) lost hp this think and is below `recallHallHp` of its type's max hp. From then until the threat ends every free army
+  unit answers (`Blackboard.DefendAll`; M5-4b's rule). Without a wave out, (c2) does the same for the home army.
+- **The economy's idle-worker pass** (`EconomyManager.Gatherers`) remembers, for the rest of the think, a kind with no
+  qualifying node (not dropped, not within `workerFleeRadius` of the defense point: worker-independent): it isn't searched
+  again for the next idle worker. Same picks; the cost it removes: with only the picked defenders sent, a defended base
+  whose known nodes all lay by the point left every idle worker scanning every node twice a think
+  (`AiThinkCostQaTests.*(forests: 6)` went 0.37 to 1.3 ms a think, paired; 0.35-0.39 ms with the cache).
+- **The military** is unchanged but for the threshold kept at a wave's start: while the base is defended it starts no wave
+  and rallies nobody (units at home that weren't picked stand), and a wave in progress goes on with its members.
+- **Knobs** (`common/rules.json` `ai`, required, `DataValidationTests` rows at each range edge, in `ContentHash`):
+  `defendRatio` 1.5 (0.5-10), `defendMinValue` 150 gold + wood (0-5,000), `recallHallHp` 0.5 (a fraction 0-1). Same on
+  every difficulty (a per-difficulty ratio would be one schema field). The M5-4b test rows that pin the trigger / point /
+  flee rules (`Ai/DefenseManagerTests`, `QA/DefenseQaTests`) set `defendMinValue` 5,000 in their own data, so every free
+  unit answers there as before (the re-staging is commented in each file); the knob-edge Theory keeps the shipped values.
+- **D15 option C** (owner, 2026-10-14). A `build` step whose target is the faction's House (`ai.HouseType`) is complete with
+  no command sent once the player's population cap is the hard cap (`PlayerView.HalfPopCap >= rules.popCap`), checked
+  after a pending command is judged.
+- **BUG-0702 item 1.** A ground cast's group is seeded from the enemy in reach (`range + radius`) **nearest the caster**
+  (slot order on ties), then grown by the ability's radius (the enemies in reach within `radius` of that one; their
+  centroid, pulled back to the range as before), instead of the centroid of every enemy in reach, which fell between two
+  groups either side of the caster and hit neither (`QA/AbilityManagerQaTests.TwoGroupsEitherSide_OneIsCastOn` un-skipped).
+  A lone enemy nearest the caster with a group behind it gives no ground cast (the group test fails at the lone one); the
+  owner's "densest cluster" rule (docs/01, 2026-10-14) would cover that and is not built.
+- **Gathering** (owner playtest note 3): `gatherRate` gold 0.7 to **0.85**/s, wood 0.6 to **0.75**/s (docs/02 Economy).
+- **Golden and recordings.** The data hash moved once (AB811AD47F68D0AE to C059AD620DE581F1: the three knobs and the
+  gather rates). The cross-map golden: header only (`data-hash` and the checksum); its `k` lines did not move (nobody
+  gathers in it). The seed-21 playable recording (`QA/GatherWedgeQaTests`) gathers, so its game changed: re-recorded from
+  `M3PlayableTest -- --seed 21 --break 19` on this tree, 7,682 ticks (12,131 before: the quicker economy reaches the
+  scene's "Heavy Infantry panel" step sooner), now at `sim/Rts.Sim.Tests/Replays/seed21_playable.replay` (the M4-V5
+  recording stays attached to BUG-0146); `CheckpointPrefixTicks` re-pinned to 7,682 and `SameGameDataHashes` restarted
+  from the new recording's hash. The scene runs on frame time, so two recordings differ by a few ticks (a second run:
+  7,671); any one is a valid recording for the row.
+- **Save state** (outside the hash, like M5-4b's marks; the M6 save stores the Blackboard whole): `DefenderGeneration`,
+  `DefendAll`, `DefendAnswer`, `WaveMinHalfPop`, `WaveMinCost`. `DefenseOrder` / `DefenseKey` are per-think scratch.
+- **Memory.** Per AI seat, new: per unit slot two ints and a float (`DefenderGeneration`, `DefenseOrder`, `DefenseKey`),
+  **12 B x unit slots**, 30 KB for 2,500; a few scalars. About 235 KB per seat for a 2,500-unit, 256-building, 4,096-node
+  match (205 KB before).
+- **Cost** (paired base / head Perf runs, the same machine state, twice; BUG-0764's rule). The gate rows on the shipped data
+  match the base: `Ai/AiPerfTests` 0.77 / 0.77 ms a think (8 seats, 2,628 units, every seat attacked every think) and
+  0.36 / 0.40 ms with eight storms; `AiThinkCostQaTests` 0.30-0.33 / 0.29-0.38 ms; `AiWaveCostQaTests` 0.36 / 0.33 ms;
+  allocation-free (`AllocationProbe`). Ungated, `AbilityManagerFuzzStressTests.AThink_WithShippedSandstormsAlive_Measured`
+  went 0.47-0.62 to 1.57-1.64 ms: about 0.1 ms of it is the defense (two seats with 1,170 army units each, under attack
+  every think), the rest the build-order executor's site search, which the quicker gathering makes affordable in that
+  scene and which fails at every think on its crowded map (reported to the Producer).
+- **Tests.** `Ai/ProportionalDefenseTests` (a 12-pop wave out with a 6-pop threshold and three home units: one Raider, the
+  wave goes on and two home units answer; eight Raiders, every home unit and the six members nearest the hall, the other
+  six keep the threshold and the target; twelve Raiders, the whole wave; the hall hit to 0.4 / 0.6 of its hp, the whole
+  wave / the minimum; a hit with nobody seen, the minimum only; a fallen defender replaced from the halls; determinism),
+  `Ai/AiPlayerTests.AHouseStep_AtTheHardCap_IsDoneWithoutABuild` (pop cap 10 / 20),
+  `Ai/AbilityManagerTests.TwoGroupsEitherSide_TheNearerIsCastOn`, `DataValidationTests` / `DataContentHashTests` (the three
+  knobs), `ReplayGoldenTests`, `QA/GatherWedgeQaTests`.
+
 ## Save/load and replays
 
 - **Replay file** (M1-6, `Rts.Sim.Replays`): a `Replay` holds a header, the command log, and
@@ -6932,7 +7018,9 @@ three arrays on `World`, `CombatConstants.SurroundSpotsPerCell`. No `Command`, n
   nothing of this: they replay from tick 0, and the cache rebuilds itself on the way.
   It also stores the surround claims (`World.SurroundClaim` and `World.SurroundHolder`, pathing slice 1, BUG-0733) whole:
   they are not in `StateHash` but they decide the next tick, so the hash can't catch a save that drops them. The M6 save /
-  load round-trip test must compare them directly, not only the hash.
+  load round-trip test must compare them directly, not only the hash. The same holds for the AI's defense marks (M5-4b's
+  kept hp and per-unit marks; M5-4f's `DefenderGeneration`, `DefendAll`, `DefendAnswer`, `WaveMinHalfPop` / `WaveMinCost`):
+  Blackboard state, outside the hash, carried by the save.
 - If a replay's data hash doesn't match the current data, the game says it was recorded with
   different balance data and refuses to play it (no silent desync). The sim returns only the
   `ReplayError.DataMismatch` code; the text comes from data (M6 playback UI).

@@ -152,6 +152,12 @@ internal sealed class AiPlayer
     /// <summary>See <see cref="IntruderCount"/>.</summary>
     internal Vector2 IntruderCentroid { get; private set; }
 
+    /// <summary>M5-4f: the intruders' worth, the sum of their types' gold + wood cost (<see cref="GameData.Units"/>).</summary>
+    internal int IntruderWorth { get; private set; }
+
+    /// <summary>M5-4f: the building slot of the building <see cref="HallPoint"/> is the centre of (-1 with none).</summary>
+    internal int HallSlot { get; private set; }
+
     /// <summary>
     /// M5-4b: whether own worker slot <paramref name="slot"/> (generation <paramref name="generation"/>) was sent fleeing during
     /// the threat in force, at most <c>ai.defendFor</c> ago (BUG-0671: a threat that never ends doesn't idle it for good): no
@@ -217,10 +223,12 @@ internal sealed class AiPlayer
         TownHallCell = -1;
         HasDropOff = false;
         IntruderCount = 0;
+        IntruderWorth = 0;
         // M5-4b: the buildings first, so the units' pass knows the hall (the intruders are counted round it).
         Buildings();
-        HasHall = TryHallPoint(out Vector2 hall);
+        HasHall = TryHallPoint(out Vector2 hall, out int hallSlot);
         HallPoint = hall;
+        HallSlot = hallSlot;
         float defend = Rules.DefendRadius * Rules.DefendRadius;
         int s = -1, enemies = 0;
         Vector2 sum = Vector2.Zero, intruders = Vector2.Zero;
@@ -236,6 +244,8 @@ internal sealed class AiPlayer
                 {
                     IntruderCount++;
                     intruders += u.Position;
+                    UnitDef def = Data.Units[u.TypeId];
+                    IntruderWorth += def.CostGold + def.CostWood;
                 }
                 continue;
             }
@@ -328,13 +338,17 @@ internal sealed class AiPlayer
     }
 
     /// <summary>The centre (m) of the player's Town Hall (as <see cref="BuildOrderExecutor.HallCentre"/> picks it, else its first building); false with no building.</summary>
-    internal bool TryHallPoint(out Vector2 point)
+    internal bool TryHallPoint(out Vector2 point) => TryHallPoint(out point, out _);
+
+    /// <summary>See <see cref="TryHallPoint(out Vector2)"/>; <paramref name="slot"/> is that building's slot (-1 with none).</summary>
+    private bool TryHallPoint(out Vector2 point, out int slot)
     {
         int k = -1;
         for (int i = 0; i < OwnBuildingCount && k < 0; i++)
             if (OwnBuildingCells[i] == TownHallCell && OwnBuildingTypes[i] == TownHallType) k = i;
         if (k < 0 && OwnBuildingCount > 0) k = 0;
         point = k < 0 ? default : BuildingCentre(OwnBuildingTypes[k], OwnBuildingCells[k]);
+        slot = k < 0 ? -1 : OwnBuildingSlots[k];
         return k >= 0;
     }
 

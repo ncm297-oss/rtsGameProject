@@ -96,7 +96,8 @@ public class DataValidationTests
         Assert.Equal(5, r.StartingWorkers);
         Assert.Equal(200, r.HalfPopCap); // hard cap 100
         Assert.Equal(10, r.WorkerCarry);
-        Assert.Equal(0.7f / SimConstants.TicksPerSecond, r.GoldPerTick, 6);
+        Assert.Equal(0.85f / SimConstants.TicksPerSecond, r.GoldPerTick, 6); // M5-4f: 0.7 -> 0.85 (docs/02 Economy)
+        Assert.Equal(0.75f / SimConstants.TicksPerSecond, r.WoodPerTick, 6);
         Assert.Equal(2500, r.StartMineGold);
     }
 
@@ -357,6 +358,15 @@ public class DataValidationTests
     [InlineData("castMinTargets", "0", "ai.castMinTargets", "not a whole number in 1-50")]
     [InlineData("castMinTargets", "51", "ai.castMinTargets", "not a whole number in 1-50")]
     [InlineData("castMinTargets", "2.5", "ai.castMinTargets", "not a whole number in 1-50")]
+    [InlineData("defendRatio", null, "ai.defendRatio", "missing required field")] // M5-4f
+    [InlineData("defendRatio", "0.49", "ai.defendRatio", "outside 0.5-10")]
+    [InlineData("defendRatio", "10.01", "ai.defendRatio", "outside 0.5-10")]
+    [InlineData("defendMinValue", null, "ai.defendMinValue", "missing required field")]
+    [InlineData("defendMinValue", "-0.5", "ai.defendMinValue", "outside 0-5000")]
+    [InlineData("defendMinValue", "5000.5", "ai.defendMinValue", "outside 0-5000")]
+    [InlineData("recallHallHp", null, "ai.recallHallHp", "missing required field")]
+    [InlineData("recallHallHp", "-0.01", "ai.recallHallHp", "outside 0-1")]
+    [InlineData("recallHallHp", "1.01", "ai.recallHallHp", "outside 0-1")]
     public void AiRulesBlock_MissingOrOutOfRange_IsOneError(string? field, string? value, string path, string message)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
@@ -407,6 +417,7 @@ public class DataValidationTests
         Assert.Equal(56f, a.ScoutGrid); // BUG-0593: meters
         Assert.Equal((48f, 400, 16f), (a.DefendRadius, a.DefendForTicks, a.WorkerFleeRadius)); // M5-4b: meters, 20 s
         Assert.Equal(2, a.CastMinTargets); // M5-4c
+        Assert.Equal((1.5f, 150f, 0.5f), (a.DefendRatio, a.DefendMinValue, a.RecallHallHp)); // M5-4f
     }
 
     /// <summary>M5-4b: the defense knobs load at their edges (<c>defendFor</c> 0 and 600 s, <c>defendRadius</c> 8 and 256 m, <c>workerFleeRadius</c> 1 and 64 m).</summary>
@@ -419,6 +430,12 @@ public class DataValidationTests
     [InlineData("workerFleeRadius", 64, 64)]
     [InlineData("castMinTargets", 1, 1)] // M5-4c
     [InlineData("castMinTargets", 50, 50)]
+    [InlineData("defendRatio", 0.5, 0.5)] // M5-4f
+    [InlineData("defendRatio", 10, 10)]
+    [InlineData("defendMinValue", 0, 0)]
+    [InlineData("defendMinValue", 5000, 5000)]
+    [InlineData("recallHallHp", 0, 0)]
+    [InlineData("recallHallHp", 1, 1)]
     public void AiDefenseKnobs_AtTheirEdges_Load(string knob, double value, double loaded)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
@@ -426,7 +443,11 @@ public class DataValidationTests
         DataLoadResult load = DataLoader.LoadAll(dir.Path);
         Assert.True(load.Ok, string.Join("; ", load.Errors));
         AiRulesDef a = load.Data!.AiRules;
-        Assert.Equal(loaded, knob switch { "defendFor" => a.DefendForTicks, "defendRadius" => a.DefendRadius, "castMinTargets" => a.CastMinTargets, _ => a.WorkerFleeRadius });
+        Assert.Equal(loaded, knob switch
+        {
+            "defendFor" => a.DefendForTicks, "defendRadius" => a.DefendRadius, "castMinTargets" => a.CastMinTargets,
+            "defendRatio" => a.DefendRatio, "defendMinValue" => a.DefendMinValue, "recallHallHp" => a.RecallHallHp, _ => a.WorkerFleeRadius,
+        }, 5);
     }
 
     /// <summary>M5-3 (inverted): the AI tunables are in the content hash, with ai.json (a row per field: DataContentHashTests).</summary>

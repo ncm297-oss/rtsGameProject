@@ -114,6 +114,25 @@ public class AbilityManagerTests
         Assert.True(sim.World.Units.AbilityReadyTick[mage.Index * DataLimits.MaxUnitAbilities] > 0, "the cast did not land");
     }
 
+    /// <summary>
+    /// BUG-0702 item 1 (M5-4f): two pairs of enemies either side of a Cadre Mage, 4 m east and 12 m west: one cast, on the
+    /// nearer pair's centroid, within two thinks (the group is seeded from the enemy nearest the caster, not the centroid of all four).
+    /// </summary>
+    [Fact]
+    public void TwoGroupsEitherSide_TheNearerIsCastOn()
+    {
+        Simulation sim = Scene(s_data.Value);
+        Vector2 rally = sim.AiOf(0)!.Board.Rally;
+        Caster(sim, "malazan_cadre_mage");
+        List<EntityHandle> east = Enemies(sim, "whirlwind_raider", 2, rally + new Vector2(4f, 0f));
+        Enemies(sim, "whirlwind_raider", 2, rally + new Vector2(-12f, 0f));
+        List<(Command Cast, Vector2 From)> casts = Casts(sim);
+        NextThink(sim);
+        if (casts.Count == 0) NextThink(sim);
+        (Command cast, Vector2 from) = Assert.Single(casts);
+        Assert.True(Vector2.Distance(cast.Position, Centroid(sim, east)) < 0.5f, $"cast at {cast.Position} from {from}, the nearer pair at {Centroid(sim, east)}, rally {rally}");
+    }
+
     /// <summary>(a) A lone enemy in range is no target at the shipped castMinTargets (2): no cast in five thinks.</summary>
     [Fact]
     public void ACadreMage_DoesNotCast_AtALoneEnemy()

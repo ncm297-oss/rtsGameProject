@@ -420,7 +420,8 @@ public class DataContentHashTests
         // M5-3: rules.json ai and every faction's ai.json (the list elements' own fields: EveryAiStructField_ChangesTheHash).
         Check(d.AiRules, r => With(d, aiRules: r));
         foreach (string f in new[] { "GoldShare", "HouseHalfPopMargin", "PlacementSearchCells", "SpacingCells", "ExpandReachCells", "ScoutAfterTicks",
-            "ScoutRadius", "ScoutReach", "ScoutGrid", "RallyDistance", "RallyReach", "WaveCooldownTicks", "DefendRadius", "DefendForTicks", "WorkerFleeRadius", "CastMinTargets" })
+            "ScoutRadius", "ScoutReach", "ScoutGrid", "RallyDistance", "RallyReach", "WaveCooldownTicks", "DefendRadius", "DefendForTicks", "WorkerFleeRadius", "CastMinTargets",
+            "DefendRatio", "DefendMinValue", "RecallHallHp" })
             Assert.Contains($"AiRulesDef.{f}", checkedFields);
         for (int slot = 0; slot < d.Ai.Length; slot++)
             Check(d.Ai[slot], x => With(d, ai: x, aiSlot: slot));
@@ -489,6 +490,9 @@ public class DataContentHashTests
     [InlineData("defendFor", 25)]
     [InlineData("workerFleeRadius", 12)]
     [InlineData("castMinTargets", 3)] // M5-4c
+    [InlineData("defendRatio", 2)] // M5-4f
+    [InlineData("defendMinValue", 200)]
+    [InlineData("recallHallHp", 0.4)]
     public void AnAiRulesFieldEdit_ChangesTheHash(string field, double value)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
