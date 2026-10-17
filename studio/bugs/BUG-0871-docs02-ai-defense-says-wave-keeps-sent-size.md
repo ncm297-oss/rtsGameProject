@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-17-0056, task D20 (fix round 1; the dev's note, confirmed by QA) |
 | System | docs (02 game design, AI opponent) |
-| Fixed by | |
+| Fixed by | The Producer at the 2026-10-17-0056 ACCEPT (commit 547ac44): docs/02 "AI opponent" line 398 now reads "as long as the members left keep the wave's start threshold (`attack.minArmyPop` / `minArmyCost` ...)"; verified on `main` 4d5af86 at the 2026-10-17-0554 PLAN |
 
 ## Repro
 Read `docs/02-game-design.md`, "AI opponent", the bullet starting "The defense is sized by the threat" (lines 396-399):
