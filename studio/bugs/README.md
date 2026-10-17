@@ -325,7 +325,7 @@ bugs outrank new features.
 | [BUG-0675](BUG-0675-m5-4b-process-nits.md) | S4 | fixed (item c M5-H2; a, b, d by triage) | M5-4b nits: an unplanned ui.json edit, a "data-hash unchanged" line that could not hold, a defendRadius that never waves |
 | [BUG-0700](BUG-0700-ai-cast-point-off-the-map.md) | S3 | fixed | The AI's cast point follows a group standing off the map, and the door refuses it again and again |
 | [BUG-0701](BUG-0701-ai-think-cost-grows-with-live-sandstorms.md) | S3 | fixed (M5-H2) | An AI think's cost grows with every live vision-blocking storm, and the AI perf gate turns them off |
-| [BUG-0702](BUG-0702-ai-cast-targeting-nits.md) | S4 | open (item 1 only; items 2-3 fixed M5-H2) | AI cast targeting nits: two groups either side get no cast, casters stack on one point, the reach edge never casts |
+| [BUG-0702](BUG-0702-ai-cast-targeting-nits.md) | S4 | fixed (item 1 M5-4f 8ac7b43: the nearest-enemy seed; items 2-3 M5-H2) | AI cast targeting nits: two groups either side get no cast, casters stack on one point, the reach edge never casts |
 | [BUG-0703](BUG-0703-defeated-players-buildings-stay-active.md) | S3 | fixed (M5-H2) | A defeated player's standing buildings stay active: its towers keep shooting and scoring kills, its research runs on |
 | [BUG-0704](BUG-0704-m5-4e-win-rule-nits.md) | S4 | open (items 2-3; items 1, 4 + the TestSim nit fixed) | M5-4e nits: stale "no buildings left" console line and docs, an ambiguous "camps", weaker re-staged rows, the keeper seam |
 | [BUG-0705](BUG-0705-perf-row-red-under-new-win-rule.md) | S2 | fixed (9793159, M5-4e round 1, verified by QA) | A Perf-tagged QA row goes red for a functional reason under the new win rule (a House-only player's SpawnUnits dropped) |
