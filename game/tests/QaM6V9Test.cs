@@ -460,7 +460,8 @@ public partial class QaM6V9Test : Node
             LoadGameScreen load = main.LoadScreen!;
             _notes.Add($"Load Game with 50 x {new FileInfo(source).Length} B replays + junk: opened in {watch.Elapsed.TotalMilliseconds:0} ms");
             var want = dated.OrderByDescending(n => n, StringComparer.Ordinal).ToList();
-            Check(load.Entries.Count == 50 && load.Skipped == 2 && load.Note.Text == _ui.ReplaysSkipped(2) && load.List.GetRoot().GetChildCount() == 50
+            // M6-VH3 (BUG-0830): the two unreadable files are listed after the 50 replays, so Delete can remove them.
+            Check(load.Entries.Count == 50 && load.Skipped == 2 && load.Note.Text == _ui.ReplaysSkipped(2) && load.List.GetRoot().GetChildCount() == 52
                 && load.Entries.Select(e => Path.GetFileName(e.Path)).SequenceEqual(want) && load.SelectedIndex == 0,
                 $"fifty: {load.Entries.Count} rows, {load.Skipped} skipped, note '{load.Note.Text}', order ok {load.Entries.Select(e => Path.GetFileName(e.Path)).SequenceEqual(want)}");
             for (int i = 0; i < Math.Min(3, load.Entries.Count); i++)

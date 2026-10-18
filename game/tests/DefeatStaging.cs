@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using System.Threading.Tasks;
 using Rts.Sim;
 using Rts.Sim.Combat;
 using Rts.Sim.Commands;
@@ -195,6 +196,42 @@ public static class DefeatStaging
         if (theirs.Count == 0) return false;
         foreach (EntityHandle u in UnitsOf(sim.World, killer)) sim.Enqueue(Command.Attack(killer, u, theirs[0], isBuilding: false));
         return true;
+    }
+
+    private static readonly System.Reflection.PropertyInfo LedgerProperty =
+        typeof(World).GetProperty("Ledger", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+
+    /// <summary>
+    /// Age II for <paramref name="player"/> through <c>Command.Research</c> (M6-V11): a dev Town Hall 10 cells north of
+    /// (<paramref name="x0"/>, <paramref name="y0"/>) and a ranged hall 10 cells south (the any-of rule wants two of infantry /
+    /// ranged / shock / forge; the player has its infantry hall), a dev grant of gold and wood (the QaV3b seam on the ledger),
+    /// then the research, run (through the scene's <paramref name="ticks"/> / <paramref name="frame"/>) until the sim says
+    /// HasTech. The player then owns two more buildings. Returns the failure, or null.
+    /// </summary>
+    public static async Task<string?> AgeTwo(Simulation sim, GameData data, int player, int x0, int y0, Func<int, Task> ticks, Func<Task> frame)
+    {
+        World w = sim.World;
+        int age = data.AgeTechs[0];
+        int faction = w.FactionOf(player);
+        int town = StartBase.BuildingOfSlot(data, faction, BuildingSlot.TownHall), ranged = StartBase.BuildingOfSlot(data, faction, BuildingSlot.RangedHall);
+        int townAt = Anchor(w, player, town, x0, y0 - 10);
+        SpawnAt(sim, player, town, townAt);
+        await ticks(2);
+        SpawnAt(sim, player, ranged, Anchor(w, player, ranged, x0, y0 + 10));
+        await ticks(2);
+        object ledger = LedgerProperty.GetValue(w)!;
+        ((int[])ledger.GetType().GetProperty("Gold")!.GetValue(ledger)!)[player] = 5000;
+        ((int[])ledger.GetType().GetProperty("Wood")!.GetValue(ledger)!)[player] = 5000;
+        EntityHandle hall = BuildingAt(w, player, townAt);
+        ResearchError why = ResearchError.None;
+        if (hall == default || !w.CanResearch(player, hall.Index, age, out why)) return $"Age II for player {player}: hall {hall}, research refused ({why})";
+        sim.Enqueue(Command.Research(player, Rts.Game.SelectionController.SiteCenter(w, hall.Index), age));
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (!w.HasTech(player, age) && clock.Elapsed.TotalSeconds < 60) await frame();
+        if (!w.HasTech(player, age) || w.TechResearchedTick(player, age) <= 0)
+            return $"Age II for player {player} not researched by tick {sim.TickNumber} (researched tick {w.TechResearchedTick(player, age)})";
+        await frame();
+        return null;
     }
 
     private static int[] Anchors(NavGrid g, int n, int bx, int by)

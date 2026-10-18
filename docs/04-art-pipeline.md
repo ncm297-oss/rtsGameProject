@@ -261,6 +261,11 @@ which also renames to snake_case. Findings:
   alone won't identify a unit slot there. Clothing, team colour and the selection rings will have to
   carry it. The stylized barracks reads well at both zooms (chunky shapes, flat colours) and doesn't
   clash with the realistic figure at this distance.
+- **A clone without the LFS objects (M6-VH3, BUG-0860):** these files are Git LFS objects. On a machine
+  that cloned without `git lfs pull`, a model is a pointer file whose import fails; `LookTest` then prints
+  `LookTest: FAIL could not load <path> (missing, or an LFS pointer: run git lfs pull and re-import)` and
+  exits 1 (it used to hang). `--character <res path>` swaps the character. The release preset leaves
+  `assets/models/looktest/` out (BUG-0861).
 
 ### Animation setup
 

@@ -346,7 +346,7 @@ public partial class Main : Node3D
 
     /// <summary>
     /// Writes the running recorded match to <see cref="ReplayPath"/> (M6-V9: at the banner and at Quit to menu, so the file
-    /// holds the match up to the latest of the two), then prunes the folder to <see cref="ReplayStore.MaxReplays"/>. False
+    /// holds the match up to the latest of the two), then prunes the folder to <see cref="ReplayStore.MaxReplays"/> (keeping this file). False
     /// (one warning, the match unharmed) when nothing records or the write fails.
     /// </summary>
     public bool SaveReplay()
@@ -369,7 +369,8 @@ public partial class Main : Node3D
             return false;
         }
         GD.Print($"Replay saved: {ReplayPath} ({replay.TickCount} ticks)");
-        if (Path.GetDirectoryName(ReplayPath) is string dir) ReplayStore.Prune(dir, ReplayStore.MaxReplays);
+        // BUG-0830: the file just written is never pruned, whatever the other names' dates say.
+        if (Path.GetDirectoryName(ReplayPath) is string dir) ReplayStore.Prune(dir, ReplayStore.MaxReplays, ReplayPath);
         return true;
     }
 

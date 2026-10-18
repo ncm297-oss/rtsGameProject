@@ -230,6 +230,8 @@ public partial class Match : Node3D
                 panel.Visible = false;
             }
             hud.GetNode<ProductionQueueStrip>("QueueStrip").Init(_runner, selection);
+            // BUG-0830: a replay is marked on screen (load.playing), so playback doesn't pass for a match ignoring its orders.
+            if (!live && ui != null) hud.AddChild(ReplayMark(ui.LoadGame(LoadText.Playing)));
         }
 
         GetNode<DebugOverlay>("DebugOverlay").Init(_runner, selection, camera,
@@ -421,6 +423,22 @@ public partial class Match : Node3D
                 GD.PushWarning($"Player {p}: only {plan.Workers[p].Length} of {workers} workers fit beside the Town Hall.");
         }
         return plan;
+    }
+
+    // The playback mark (BUG-0830): a label at the top centre of the HUD, clear of the resource bar (top right) and the debug label.
+    private static Label ReplayMark(string text)
+    {
+        var mark = new Label { Name = "ReplayMark", Text = text, HorizontalAlignment = HorizontalAlignment.Center, MouseFilter = Control.MouseFilterEnum.Ignore };
+        mark.AddThemeFontSizeOverride("font_size", 22);
+        mark.AddThemeColorOverride("font_color", new Color(1f, 0.93f, 0.75f));
+        mark.AddThemeColorOverride("font_outline_color", Colors.Black);
+        mark.AddThemeConstantOverride("outline_size", 4);
+        mark.SetAnchorsPreset(Control.LayoutPreset.CenterTop);
+        mark.OffsetLeft = -120f;
+        mark.OffsetRight = 120f;
+        mark.OffsetTop = 8f;
+        mark.OffsetBottom = 40f;
+        return mark;
     }
 
     // "malazan human, whirlwind ai hard": the dev log's seat list (data ids and the replay header's words, not player-facing text).

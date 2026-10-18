@@ -424,6 +424,17 @@ public partial class FogViewTest : Node
         if (!Check(!W.Fog.IsVisible(0, cell) && W.Fog.IsExplored(0, cell) && Listed(props, type, tree) && MiniPixel(cell),
             $"last-seen tree: after the walk visible {W.Fog.IsVisible(0, cell)} explored {W.Fog.IsExplored(0, cell)}, listed {Listed(props, type, tree)}, minimap {MiniPixel(cell)}"))
         { await EndMatch(); return; }
+        // M6-VH3 (BUG-0281 item 2): rubble added while its ground is explored but not visible is not drawn until the ground is
+        // seen (the player didn't see the building fall).
+        System.Numerics.Vector2 rubbleAt = g.CellCenter(cell % g.Width, cell / g.Width); // the tree's cell: explored, not visible
+        int rubbleCell = cell;
+        _combat.AddDeaths(W, new[] { new Rts.Sim.Combat.DeathEvent(default, true, _data.FindBuilding("malazan_barracks"), 1, 0, rubbleAt) }, W.TickNumber);
+        int rubble = -1;
+        for (int k = 0; k < _combat.Markers.Capacity; k++)
+            if (_combat.Markers.Active[k] && _combat.Markers.IsBuilding[k] && _combat.Markers.Position[k] == rubbleAt) rubble = k;
+        await Frame();
+        Check(rubble >= 0 && !W.Fog.IsVisible(0, rubbleCell) && W.Fog.IsExplored(0, rubbleCell) && _combat.MarkerShown(rubble) == 0,
+            $"unseen rubble: marker {rubble}, ground visible {W.Fog.IsVisible(0, rubbleCell)} explored {W.Fog.IsExplored(0, rubbleCell)}, drawn as {(rubble >= 0 ? _combat.MarkerShown(rubble) : -1)} (want 0 until seen)");
         int rebuilds = props.Layout!.Rebuilds, draws = _mini.Raster!.ResourceDraws;
         typeof(ResourceStore).GetMethod("Take", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
             .Invoke(r, new object[] { r.HandleOf(tree), r.Remaining[tree] });
@@ -443,7 +454,10 @@ public partial class FogViewTest : Node
         _mini.Refresh(_sim);
         Check(W.Fog.IsVisible(0, cell) && !Listed(props, type, tree) && !MiniPixel(cell) && props.Layout.Rebuilds == rebuilds + 1 && _mini.Raster.ResourceDraws == draws + 1,
             $"last-seen tree: seen again: visible {W.Fog.IsVisible(0, cell)}, listed {Listed(props, type, tree)}, minimap {MiniPixel(cell)}, relists {props.Layout.Rebuilds - rebuilds}, minimap redraws {_mini.Raster.ResourceDraws - draws}");
-        GD.Print($"last-seen tree (seed {seed}): tree slot {tree} felled in explored fog stayed drawn and on the minimap with no relist; gone in one relist once seen");
+        await Frame();
+        Check(rubble >= 0 && W.Fog.IsVisible(0, rubbleCell) && _combat.MarkerShown(rubble) == 2 && _combat.Markers.Active[rubble],
+            $"unseen rubble once seen: ground visible {W.Fog.IsVisible(0, rubbleCell)}, drawn as {(rubble >= 0 ? _combat.MarkerShown(rubble) : -1)} (want 2)");
+        GD.Print($"last-seen tree (seed {seed}): tree slot {tree} felled in explored fog stayed drawn and on the minimap with no relist; gone in one relist once seen; rubble added there unseen drawn only once seen");
         await EndMatch();
     }
 

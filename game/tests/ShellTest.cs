@@ -189,6 +189,14 @@ public partial class ShellTest : Node
             Check(got0 == want0 && got1 == want1 && got0 != got1, $"'{string.Join(' ', args)}': colours {got0 + 1}, {got1 + 1}, want {want0 + 1}, {want1 + 1}");
         }
         Check(LaunchOptions.FirstFreeColour(0) == 1 && LaunchOptions.FirstFreeColour(1) == 0 && LaunchOptions.FirstFreeColour(7) == 0, "FirstFreeColour");
+        // BUG-0663: the warning says whose colour moved. Slot 2 had no flag: its default moved, nothing was ignored.
+        var defaultMoved = LaunchOptions.Parse(new[] { "--colour", "1", "2" }).ColourWarnings;
+        Check(defaultMoved.Count == 1 && defaultMoved[0].StartsWith("Slot 2's default colour 2 is taken", StringComparison.Ordinal) && !defaultMoved[0].Contains("Ignoring")
+            && defaultMoved[0].Contains("takes colour 1"), $"'--colour 1 2' warned [{string.Join(" | ", defaultMoved)}]");
+        var pickIgnored = LaunchOptions.Parse(new[] { "--colour", "1", "3", "--colour", "2", "3" }).ColourWarnings;
+        Check(pickIgnored.Count == 1 && pickIgnored[0].StartsWith("Ignoring slot 2's --colour 3", StringComparison.Ordinal) && pickIgnored[0].Contains("takes colour 2"),
+            $"'--colour 1 3 --colour 2 3' warned [{string.Join(" | ", pickIgnored)}]");
+        Check(LaunchOptions.Parse(new[] { "--colour", "1", "4", "--colour", "2", "6" }).ColourWarnings.Count == 0, "distinct --colour picks warned");
         Check(LaunchOptions.Parse(new[] { "--colour", "1", "--seed", "3" }).Seed == 3 && LaunchOptions.Parse(new[] { "--colour", "--seed", "3" }).Seed == 3,
             "--colour swallowed --seed (BUG-0041)");
 
@@ -320,9 +328,9 @@ public partial class ShellTest : Node
         keys.Add(("hud", UiText.Key(HudText.LastSeen), _ui.Hud(HudText.LastSeen)));
         // M6-V9: the Load Game screen's and the playback banners' keys.
         foreach (LoadText k in Enum.GetValues<LoadText>()) keys.Add(("load", UiText.Key(k), _ui.LoadGame(k)));
-        // settings: 22 since M6-V7 (confine_cursor); keys 15 + hud 2 since M6-V8; setup 17 since M6-V5 (add_slot, remove_slot); menu 5 + load 16 since M6-V9;
+        // settings: 22 since M6-V7 (confine_cursor); keys 15 + hud 2 since M6-V8; setup 17 since M6-V5 (add_slot, remove_slot); menu 5 + load 16 since M6-V9 (18 since M6-VH3: playing, unreadable);
         // match_over 27 since M6-V11 (kills, losses and the two in-hand keys out; nine column labels, not_reached and the graph's three in)
-        Check(keys.Count == 5 + 17 + 4 + 22 + 27 + 15 + 2 + 16, $"{keys.Count} shell keys");
+        Check(keys.Count == 5 + 17 + 4 + 22 + 27 + 15 + 2 + 18, $"{keys.Count} shell keys");
         string json = File.ReadAllText(UiText.DefaultPath).Replace("\r\n", "\n");
         foreach ((string section, string key, string text) in keys)
         {
@@ -364,7 +372,9 @@ public partial class ShellTest : Node
             "keys.press_key", "keys.conflict", "keys.reserved", "keys.defaults",
             // M6-V9: Load Game and the replay banners.
             "menu.load", "load.title", "load.date", "load.seed", "load.seats", "load.length", "load.date_item", "load.seat", "load.seat_separator",
-            "load.watch", "load.delete", "load.back", "load.empty", "load.skipped", "load.refused", "load.mismatch", "load.ended" };
+            "load.watch", "load.delete", "load.back", "load.empty", "load.skipped", "load.refused", "load.mismatch", "load.ended",
+            // M6-VH3 (BUG-0830): the playback mark and an unreadable file's row.
+            "load.playing", "load.unreadable" };
         foreach (string n in named) Check(keys.Any(k => $"{k.Section}.{k.Key}" == n), $"no key {n}");
         Check(!keys.Any(k => k.Key == "coming_soon"), "setup.coming_soon is still read (nothing shows it since M6-V2)");
         foreach (string gone in new[] { "kills", "losses", "gold_in_hand", "wood_in_hand" })

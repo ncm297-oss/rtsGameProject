@@ -17,13 +17,15 @@ namespace Rts.Game.Tests;
 /// Windowed: <c>&amp; $env:GODOT --path game --resolution 1600x900 res://tests/LookTest.tscn -- --out-dir C:\temp\look [--clip walk] [--zoom 20]</c>
 /// also saves <c>look-test.png</c> (default zoom, or <c>--zoom &lt;m&gt;</c>) and <c>look-test-far.png</c> (max zoom-out). <c>--stay</c> keeps the window open
 /// (wheel zooms, arrows pan). The assets are the hand-copied files under <c>assets/models/looktest/</c> (no manifest yet).
+/// A model that doesn't load (an LFS pointer on a clone without <c>git lfs pull</c>, BUG-0860) is a FAIL line and exit 1,
+/// never a hang; <c>--character &lt;res path&gt;</c> swaps the character (a missing path is that regression row).
 /// The UAL clips drive the character directly: both packs share the Universal rig's bone names and the importer puts each
 /// skeleton at <c>Armature/Skeleton3D</c>, so the library's track paths resolve against the character root unchanged.
 /// </remarks>
 public partial class LookTest : Node3D
 {
     private const string Dir = "res://assets/models/looktest/";
-    private const string CharacterPath = Dir + "Superhero_Male_FullBody.gltf";
+    private const string DefaultCharacterPath = Dir + "Superhero_Male_FullBody.gltf";
     private const string LibraryPath = Dir + "UAL1_Standard.glb";
     private const string StandInPath = Dir + "Barracks_FirstAge_Level1.fbx";
     // The glb's Idle_Loop / Walk_Loop: Godot's importer reads the _Loop suffix as the loop flag and drops it from the name.
@@ -39,9 +41,10 @@ public partial class LookTest : Node3D
     public const int GroundCells = 96;
 
     private RtsCamera _camera = null!;
-    private Node3D _universal = null!;
-    private AnimationPlayer _player = null!;
-    private Skeleton3D _skeleton = null!;
+    private Node3D? _universal;
+    private AnimationPlayer? _player;
+    private Skeleton3D? _skeleton;
+    private string _characterPath = DefaultCharacterPath;
     private int _bone;
     private Quaternion _restPose;
     private string _clip = IdleClip;
@@ -60,6 +63,7 @@ public partial class LookTest : Node3D
             else if (i + 1 < args.Length && args[i] == "--out-dir") _outDir = args[i + 1];
             else if (i + 1 < args.Length && args[i] == "--zoom") _zoom = float.Parse(args[i + 1], System.Globalization.CultureInfo.InvariantCulture);
             else if (i + 1 < args.Length && args[i] == "--clip") _clip = args[i + 1] == "walk" ? WalkClip : IdleClip;
+            else if (i + 1 < args.Length && args[i] == "--character") _characterPath = args[i + 1];
         }
         DataLoadResult loaded = DataLoader.LoadAll(ProjectSettings.GlobalizePath("res://data"));
         if (!loaded.Ok) throw new InvalidOperationException("data failed to load");
@@ -90,22 +94,26 @@ public partial class LookTest : Node3D
         };
         figures.AddChild(capsule);
 
-        // Centre: the Universal character with the UAL library on its own AnimationPlayer.
-        _universal = GD.Load<PackedScene>(CharacterPath).Instantiate<Node3D>();
-        _universal.Name = "Universal";
-        _universal.Position = new Vector3(c, 0f, c);
-        figures.AddChild(_universal);
-        Node ual = GD.Load<PackedScene>(LibraryPath).Instantiate();
-        AnimationPlayer? source = FindFirst<AnimationPlayer>(ual);
+        // Centre: the Universal character with the UAL library on its own AnimationPlayer. Either missing skips the clip
+        // phases: the scene goes straight to its FAIL line.
+        _universal = LoadScene<Node3D>(_characterPath);
+        Node? ual = LoadScene<Node>(LibraryPath);
+        AnimationPlayer? source = ual == null ? null : FindFirst<AnimationPlayer>(ual);
         AnimationLibrary? library = source?.GetAnimationLibrary("");
-        ual.Free();
-        _skeleton = FindFirst<Skeleton3D>(_universal)!;
-        if (library == null) Fail("UAL1 has no default animation library");
-        if (_skeleton == null) Fail("the Universal character has no Skeleton3D");
-        _player = new AnimationPlayer { Name = "AnimationPlayer" };
-        _universal.AddChild(_player);
-        _player.RootNode = _player.GetPathTo(_universal);
-        if (library != null) _player.AddAnimationLibrary("", library);
+        ual?.Free();
+        if (ual != null && library == null) Fail("UAL1 has no default animation library");
+        if (_universal != null)
+        {
+            _universal.Name = "Universal";
+            _universal.Position = new Vector3(c, 0f, c);
+            figures.AddChild(_universal);
+            _skeleton = FindFirst<Skeleton3D>(_universal);
+            if (_skeleton == null) Fail("the Universal character has no Skeleton3D");
+            _player = new AnimationPlayer { Name = "AnimationPlayer" };
+            _universal.AddChild(_player);
+            _player.RootNode = _player.GetPathTo(_universal);
+            if (library != null) _player.AddAnimationLibrary("", library);
+        }
         if (_skeleton != null)
         {
             _bone = _skeleton.FindBone(WatchedBone);
@@ -119,27 +127,50 @@ public partial class LookTest : Node3D
                 GD.Print($"LookTest: universal toes point {(toes.Z > 0 ? "+Z" : "-Z")} ({toes.X:F2}, {toes.Y:F2}, {toes.Z:F2})");
             }
         }
-        foreach (string clip in new[] { IdleClip, WalkClip })
-            if (!_player.HasAnimation(clip)) Fail($"UAL1 has no {clip}");
-        if (_player.HasAnimation(IdleClip)) _player.Play(IdleClip);
+        if (_player != null && library != null)
+        {
+            foreach (string clip in new[] { IdleClip, WalkClip })
+                if (!_player.HasAnimation(clip)) Fail($"UAL1 has no {clip}");
+            if (_player.HasAnimation(IdleClip)) _player.Play(IdleClip);
+        }
+        else _phase = 4;
 
         // Right: the stylized stand-in, its near edge one gap past the character. The pack is authored at about 1 m across,
         // so it is scaled to fill the barracks footprint the way BuildingViews' placeholder box does (the manifest's
         // scale field will carry this in the art pass).
-        Node3D standIn = GD.Load<PackedScene>(StandInPath).Instantiate<Node3D>();
-        standIn.Name = "StandIn";
-        figures.AddChild(standIn);
-        Aabb box = LocalBounds(standIn);
-        Report("stand-in as imported", standIn);
-        BuildingDef barracks = data.Buildings[data.FindBuilding(StandInBuilding)];
-        float scale = barracks.FootprintWidth * MapConstants.CellSize / Mathf.Max(box.Size.X, box.Size.Z);
-        standIn.Scale = new Vector3(scale, scale, scale);
-        standIn.Position = new Vector3(c + Spacing - box.Position.X * scale, -box.Position.Y * scale, c - box.GetCenter().Z * scale);
-        GD.Print($"LookTest: stand-in scaled x{scale:F2} to the {StandInBuilding} footprint ({barracks.FootprintWidth} cells)");
+        Node3D? standIn = LoadScene<Node3D>(StandInPath);
+        if (standIn != null)
+        {
+            standIn.Name = "StandIn";
+            figures.AddChild(standIn);
+            Aabb box = LocalBounds(standIn);
+            Report("stand-in as imported", standIn);
+            BuildingDef barracks = data.Buildings[data.FindBuilding(StandInBuilding)];
+            float scale = barracks.FootprintWidth * MapConstants.CellSize / Mathf.Max(Mathf.Max(box.Size.X, box.Size.Z), 0.001f);
+            standIn.Scale = new Vector3(scale, scale, scale);
+            standIn.Position = new Vector3(c + Spacing - box.Position.X * scale, -box.Position.Y * scale, c - box.GetCenter().Z * scale);
+            GD.Print($"LookTest: stand-in scaled x{scale:F2} to the {StandInBuilding} footprint ({barracks.FootprintWidth} cells)");
+        }
 
         Report("primitive", capsule);
-        Report("universal", _universal);
-        GD.Print($"LookTest: universal skeleton at {_universal.GetPathTo(_skeleton!)}, {_skeleton?.GetBoneCount()} bones; clips {_player.GetAnimationList().Length} [{string.Join(' ', _player.GetAnimationList())}]; team slot: {(HasTeamMaterial(_universal) ? "yes" : "none")}");
+        if (_universal != null && _player != null)
+        {
+            Report("universal", _universal);
+            string skeletonAt = _skeleton == null ? "(none)" : _universal.GetPathTo(_skeleton).ToString();
+            GD.Print($"LookTest: universal skeleton at {skeletonAt}, {_skeleton?.GetBoneCount() ?? 0} bones; clips {_player.GetAnimationList().Length} [{string.Join(' ', _player.GetAnimationList())}]; team slot: {(HasTeamMaterial(_universal) ? "yes" : "none")}");
+        }
+    }
+
+    // A model the scene needs, or a Fail and null: a path that doesn't exist is checked first (no engine ERROR line), and a
+    // file that exists but won't load (an LFS pointer: its import failed) comes back null from GD.Load.
+    private T? LoadScene<T>(string path) where T : Node
+    {
+        PackedScene? scene = ResourceLoader.Exists(path) ? GD.Load<PackedScene>(path) : null;
+        Node? node = scene?.Instantiate();
+        if (node is T typed) return typed;
+        node?.Free();
+        Fail($"could not load {path} (missing, or an LFS pointer: run git lfs pull and re-import)");
+        return null;
     }
 
     public override void _Process(double delta)
@@ -149,14 +180,14 @@ public partial class LookTest : Node3D
             case 0: // the idle has run a while: it must have moved and bent the watched bone
                 if (++_frames < 30) return;
                 CheckClip(IdleClip);
-                if (_player.HasAnimation(WalkClip)) _player.Play(WalkClip);
+                if (_player!.HasAnimation(WalkClip)) _player.Play(WalkClip);
                 _frames = 0;
                 _phase = 1;
                 return;
             case 1: // the in-place walk too
                 if (++_frames < 30) return;
                 CheckClip(WalkClip);
-                if (_player.HasAnimation(_clip)) _player.Play(_clip);
+                if (_player!.HasAnimation(_clip)) _player.Play(_clip);
                 _frames = 0;
                 _phase = DisplayServer.GetName() == "headless" ? 4 : 2;
                 if (_phase == 4) GD.Print("LookTest: capture unavailable in headless mode.");
@@ -186,7 +217,7 @@ public partial class LookTest : Node3D
 
     private void CheckClip(string clip)
     {
-        if (!_player.HasAnimation(clip)) return; // already failed in _Ready
+        if (_player == null || !_player.HasAnimation(clip)) return; // already failed in _Ready
         double pos = _player.CurrentAnimationPosition;
         float turned = _skeleton == null || _bone < 0 ? 0f : _skeleton.GetBonePoseRotation(_bone).AngleTo(_restPose);
         GD.Print($"LookTest: {clip} at {pos:F2} s of {_player.GetAnimation(clip).Length:F2} s (loop {_player.GetAnimation(clip).LoopMode}), {WatchedBone} {Mathf.RadToDeg(turned):F1} deg from its rest pose");

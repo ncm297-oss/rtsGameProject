@@ -164,9 +164,11 @@ public partial class FreeForAllTest : Node
         Check(w.Config.PlayerCount == 3 && w.StartLocations.Length == 3 && match.PlayerRgb.Distinct().Count() == 3,
             $"three seats: {w.Config.PlayerCount} players, {w.StartLocations.Length} start locations");
         await Halls(sim, 3);
-        EntityHandle first = BuildingOf(w, 1);
-        await Army(sim, 2, first, 6);
-        Raze(sim, 2, first);
+        // BUG-0890: player 1 reaches Age II (two more halls by its own), then falls: its row shows both clocks.
+        NavGrid g = w.NavGrid;
+        string? aged = await DefeatStaging.AgeTwo(sim, _data, 1, g.Width * 3 / 4, g.Height / 2, n => Ticks(sim, n), () => Frames(1));
+        Check(aged == null, aged ?? "");
+        await RazeAll(sim, 2, 1);
         await UntilDefeated(sim, 1);
         await Ticks(sim, 10);
         Check(!_main.BannerUp && match.Outcome == MatchOutcome.None && !sim.MatchOver, $"three seats, player 1 down: banner {_main.BannerUp}, outcome {match.Outcome}");
@@ -179,6 +181,11 @@ public partial class FreeForAllTest : Node
             $"three seats human last: title '{banner.Title.Text}', outcome {match.Outcome}, MatchOver {sim.MatchOver}");
         await Click(banner.StatsButton);
         CheckStats(match, 3, "three seats human last", new[] { "", "", "" });
+        int ageCol = StatsScreenCheck.Column(MatchOverText.AgeIiAt), defeatCol = StatsScreenCheck.Column(MatchOverText.DefeatedAt);
+        int ageTick = w.TechResearchedTick(1, _data.AgeTechs[0]);
+        Check(ageTick > 0 && match.DefeatedAt(1) > ageTick && _main.Stats!.Cell(1, ageCol) == _ui.Clock(ageTick) && _main.Stats.Cell(1, defeatCol) == _ui.Clock(match.DefeatedAt(1)),
+            $"three seats: player 1 Age II at tick {ageTick} then defeated at {match.DefeatedAt(1)}: cells '{_main.Stats!.Cell(1, ageCol)}', '{_main.Stats.Cell(1, defeatCol)}'");
+        await Shot("stats-3-age");
         await Type(Key.Escape);
         await QuitMatch();
     }
@@ -281,6 +288,28 @@ public partial class FreeForAllTest : Node
     private static void Raze(Simulation sim, int player, EntityHandle target)
     {
         foreach (EntityHandle u in DefeatStaging.UnitsOf(sim.World, player)) sim.Enqueue(Command.Attack(player, u, target, isBuilding: true));
+    }
+
+    // `killer` razes `victim`'s buildings one after another, six fresh shooters round each (on its level: see Army).
+    private async Task RazeAll(Simulation sim, int killer, int victim)
+    {
+        BuildingStore b = sim.World.Buildings;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (HasBuilding(sim.World, victim) && clock.Elapsed.TotalSeconds < 120)
+        {
+            EntityHandle target = BuildingOf(sim.World, victim);
+            await Army(sim, killer, target, 6);
+            Raze(sim, killer, target);
+            while (b.Alive[target.Index] && b.Generation[target.Index] == target.Generation && clock.Elapsed.TotalSeconds < 120) await Frames(1);
+        }
+        Check(!HasBuilding(sim.World, victim), $"player {victim}'s buildings still stand at tick {sim.TickNumber}");
+    }
+
+    private static bool HasBuilding(World w, int player)
+    {
+        BuildingStore b = w.Buildings;
+        for (int i = 0; i < b.Capacity; i++) if (b.Alive[i] && b.Owner[i] == player) return true;
+        return false;
     }
 
     private static EntityHandle BuildingOf(World w, int player)
