@@ -245,12 +245,15 @@ public class TechDataQaTests
             root["techs"] = new JsonArray();
         });
         // A shipped build order may research a faction tech; with the techs gone such a step names an unknown tech, so it
-        // goes too (BUG-0571: whatever the shipped ai.json holds).
+        // goes too (BUG-0571: whatever the shipped ai.json holds), in every opening (BUG-0980).
         dir.EditJson("factions/malazan/ai.json", root =>
         {
-            JsonArray steps = AiScenes.Opening(root)["buildOrder"]!.AsArray();
-            for (int i = steps.Count - 1; i >= 0; i--)
-                if ((string?)steps[i]!["do"] == "research" && removed.Contains((string)steps[i]!["id"]!)) steps.RemoveAt(i);
+            foreach (JsonNode? opening in root["openings"]!.AsArray())
+            {
+                JsonArray steps = opening!["buildOrder"]!.AsArray();
+                for (int i = steps.Count - 1; i >= 0; i--)
+                    if ((string?)steps[i]!["do"] == "research" && removed.Contains((string)steps[i]!["id"]!)) steps.RemoveAt(i);
+            }
         });
         GameData d = Loads(dir);
         Assert.Equal(8, d.Techs.Length);

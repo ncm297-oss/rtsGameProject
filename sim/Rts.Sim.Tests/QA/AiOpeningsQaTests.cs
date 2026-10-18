@@ -44,6 +44,17 @@ public class AiOpeningsQaTests
         return r;
     }
 
+    /// <summary>
+    /// The shipped openings list cut to its first opening (BUG-0980), so a fixture that appends openings has exactly the
+    /// indices and count it pins, whatever count the shipped file holds.
+    /// </summary>
+    private static JsonArray FirstOnly(JsonObject root)
+    {
+        JsonArray openings = root["openings"]!.AsArray();
+        while (openings.Count > 1) openings.RemoveAt(openings.Count - 1);
+        return openings;
+    }
+
     private static JsonNode CopyOf(JsonObject root, string id)
     {
         JsonNode copy = root["openings"]![0]!.DeepClone();
@@ -147,7 +158,7 @@ public class AiOpeningsQaTests
     {
         DataLoadResult r = LoadWith(root =>
         {
-            JsonArray openings = root["openings"]!.AsArray();
+            JsonArray openings = FirstOnly(root);
             openings.Add(CopyOf(root, "second"));
             openings.Add(CopyOf(root, id));
         });
@@ -163,7 +174,7 @@ public class AiOpeningsQaTests
     {
         DataLoadResult r = LoadWith(root =>
         {
-            JsonArray openings = root["openings"]!.AsArray();
+            JsonArray openings = FirstOnly(root);
             JsonNode second = CopyOf(root, "second"), third = CopyOf(root, "third");
             second["compositions"]![0]!["units"] = new JsonObject { ["malazan_ghost"] = 1 };
             third.AsObject().Remove("buildOrder");
@@ -192,7 +203,7 @@ public class AiOpeningsQaTests
     {
         DataLoadResult r = LoadWith(root =>
         {
-            JsonArray openings = root["openings"]!.AsArray();
+            JsonArray openings = FirstOnly(root);
             for (int k = 1; k < DataLimits.MaxAiOpenings; k++) openings.Add(CopyOf(root, $"opening_{k}"));
         });
         Assert.True(r.Ok, Dump(r));
@@ -213,7 +224,7 @@ public class AiOpeningsQaTests
         {
             JsonNode b = CopyOf(root.AsObject(), "rush");
             b["buildOrder"] = AiScenes.BuildOrder(("time", 0, "build", "malazan_billet", 0));
-            root["openings"]!.AsArray().Add(b);
+            FirstOnly(root.AsObject()).Add(b);
         });
         GameData ba = AiScenes.DataWithAi("malazan", root =>
         {
@@ -262,7 +273,8 @@ public class AiOpeningsQaTests
             for (int p = 0; p < 2; p++)
             {
                 var fresh = new SimRng(5, (ulong)RngStream.Ai(p));
-                if (difficulty != AiDifficulty.Easy) fresh.NextInt(0, 1);
+                // The pick draws over the seat's faction's shipped openings (BUG-0980: no longer 1; the bound can move the draw).
+                if (difficulty != AiDifficulty.Easy) fresh.NextInt(0, TestSim.Data.Ai[p % 2].Openings.Length);
                 Assert.Equal(fresh.State, sim.AiOf(p)!.Rng.State);
                 after[p] = sim.AiOf(p)!.Rng.State;
             }
@@ -286,7 +298,7 @@ public class AiOpeningsQaTests
         foreach (string f in new[] { "malazan", "whirlwind" })
             dir.EditJson($"factions/{f}/ai.json", root =>
             {
-                JsonArray openings = root["openings"]!.AsArray();
+                JsonArray openings = FirstOnly(root);
                 JsonNode standard = openings[0]!;
                 string worker = f == "malazan" ? "malazan_laborer" : "whirlwind_camp_follower";
                 string barracks = f == "malazan" ? "malazan_barracks" : "whirlwind_raider_camp";

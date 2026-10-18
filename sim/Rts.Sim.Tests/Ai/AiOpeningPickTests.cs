@@ -12,8 +12,8 @@ using Xunit.Abstractions;
 namespace Rts.Sim.Tests;
 
 /// <summary>
-/// M5-8a (docs/03 "AI architecture", "Openings"): the shipped files hold one opening, <c>standard</c>, equal to the pre-M5-8a
-/// top-level order (criterion 1); the seat picks an opening at construction, Easy the first, Normal and Hard a uniform draw
+/// M5-8a (docs/03 "AI architecture", "Openings"): the shipped files' first opening, <c>standard</c>, equals the pre-M5-8a
+/// top-level order (criterion 1; D21 added two more after it); the seat picks an opening at construction, Easy the first, Normal and Hard a uniform draw
 /// from the AI's own stream, the same for the same seed (criterion 3); and the AI plays the opening it picked: its build
 /// order, its compositions' units and its attack thresholds (criterion 4).
 /// </summary>
@@ -83,15 +83,22 @@ public class AiOpeningPickTests
         "age 2: whirlwind_battering_ram 5, whirlwind_desert_archer 20, whirlwind_horse_raider 15, whirlwind_priest 10, whirlwind_raider 30, whirlwind_zealot 20",
     };
 
+    // The attack pins: whirlwind's is the pre-M5-8a 28 half-pop / 861; malazan's moved from 40 / 1,544 to 32 / 1,235 in D21 on
+    // purpose (docs/factions/malazan.md, "Openings": the wave pop is the Age I mix's cost at 16 army pop).
     [Theory]
-    [InlineData("malazan", 40, 1544)]
+    [InlineData("malazan", 32, 1235)]
     [InlineData("whirlwind", 28, 861)]
-    public void BothShippedFiles_HoldOneOpening_Standard_EqualToThePreM58aOrder(string faction, int attackHalfPop, int attackCost)
+    public void BothShippedFiles_OpeningZero_IsStandard_EqualToThePreM58aOrder(string faction, int attackHalfPop, int attackCost)
     {
         GameData d = TestSim.Data;
         AiDef ai = d.Ai[d.FindFaction(faction)];
-        AiOpening o = Assert.Single(ai.Openings);
-        Assert.Equal(("standard", "Standard", "The faction's standard build"), (o.Id, o.DisplayName, o.Description));
+        // D21 ships three openings per faction; opening 0 (the one Easy plays) is the re-wrapped pre-M5-8a order.
+        Assert.Equal(3, ai.Openings.Length);
+        AiOpening o = ai.Openings[0];
+        Assert.Equal("standard", o.Id);
+        // The player-facing text is the data track's (D21 renamed both); it only has to be there.
+        Assert.False(string.IsNullOrWhiteSpace(o.DisplayName));
+        Assert.False(string.IsNullOrWhiteSpace(o.Description));
         Assert.Equal(faction == "malazan" ? MalazanSteps : WhirlwindSteps, o.BuildOrder.Select(StepText));
         Assert.Equal(faction == "malazan" ? MalazanCompositions : WhirlwindCompositions, o.Compositions.Select(c => CompositionText(d, c)));
         Assert.Equal((attackHalfPop, attackCost), (o.AttackMinHalfPop, o.AttackMinCost));
@@ -107,10 +114,12 @@ public class AiOpeningPickTests
 
     // ---------- criterion 3: the pick ----------
 
-    /// <summary>The shipped data with malazan's ai.json holding <paramref name="count"/> openings: the shipped one, then copies named <c>opening_k</c>, each edited by <paramref name="edit"/>.</summary>
+    /// <summary>The shipped data with malazan's ai.json holding <paramref name="count"/> openings: the shipped first one, then copies named <c>opening_k</c>, each edited by <paramref name="edit"/>.</summary>
     private static GameData WithOpenings(int count, Action<int, JsonNode>? edit = null) => AiScenes.DataWithAi("malazan", root =>
     {
         JsonArray openings = root["openings"]!.AsArray();
+        // Keep only the first shipped opening, so the count is exactly `count` whatever the file ships.
+        while (openings.Count > 1) openings.RemoveAt(openings.Count - 1);
         JsonNode first = openings[0]!;
         for (int k = 1; k < count; k++)
         {

@@ -788,10 +788,12 @@ public class DataValidationTests
         dir.EditJson(MalazanAi, root =>
         {
             JsonArray openings = root["openings"]!.AsArray();
+            // Only the first shipped opening is kept (BUG-0980), so the indices and counts below hold whatever the file ships.
+            while (openings.Count > 1) openings.RemoveAt(openings.Count - 1);
             JsonNode first = openings[0]!;
             JsonNode second = first.DeepClone();
             second["id"] = "second";
-            openings.Add(second); // a valid second opening to break (the shipped one stays as it is)
+            openings.Add(second); // a valid second opening to break (the shipped first one stays as it is)
             switch (fault)
             {
                 case "no openings": root.Remove("openings"); break;
@@ -834,13 +836,16 @@ public class DataValidationTests
         using TestDataDir dir = TestDataDir.CopyOfShipped();
         dir.EditJson("factions/malazan/ai.json", root =>
         {
-            JsonNode first = root["openings"]![0]!;
+            JsonArray openings = root["openings"]!.AsArray();
+            // Only the first shipped opening is kept (BUG-0980), so the count of 2 holds whatever the file ships.
+            while (openings.Count > 1) openings.RemoveAt(openings.Count - 1);
+            JsonNode first = openings[0]!;
             JsonNode second = first.DeepClone();
             second["id"] = "second";
             second.AsObject().Remove("description");
             first["displayName"] = new string('n', 40);
             first["description"] = new string('d', 200);
-            root["openings"]!.AsArray().Add(second);
+            openings.Add(second);
         });
         GameData d = Load(dir.Path);
         AiDef ai = d.Ai[d.FindFaction("malazan")];

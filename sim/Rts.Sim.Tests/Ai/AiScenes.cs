@@ -85,12 +85,16 @@ internal static class AiScenes
 
     /// <summary>
     /// M5-3: data whose AIs (both factions) wave early: <paramref name="minArmyPop"/> pop and no cost, so two AI seats fight
-    /// within a short run.
+    /// within a short run. Every opening is edited (BUG-0980): a Normal / Hard seat may pick any of them.
     /// </summary>
     internal static GameData EarlyWaves(double minArmyPop = 2) => DataWith(dir =>
     {
         foreach (string f in new[] { "malazan", "whirlwind" })
-            dir.EditJson($"factions/{f}/ai.json", root => Opening(root)["attack"] = new JsonObject { ["minArmyPop"] = minArmyPop, ["minArmyCost"] = 0 });
+            dir.EditJson($"factions/{f}/ai.json", root =>
+            {
+                foreach (JsonNode? o in root["openings"]!.AsArray())
+                    o!["attack"] = new JsonObject { ["minArmyPop"] = minArmyPop, ["minArmyCost"] = 0 };
+            });
     });
 
     /// <summary>M5-8a: opening <paramref name="index"/> (the first by default) of an ai.json root, where its buildOrder, compositions and attack live.</summary>
