@@ -130,7 +130,7 @@ the composition table and the wave and retreat lines below to the file, both way
 | 15 | pop 60 | build | `malazan_billet` | 1 | |
 | 16 | pop 67 | build | `malazan_billet` | 1 | |
 | 17 | pop 74 | build | `malazan_billet` | 1 | |
-| 18 | pop 81 | build | `malazan_billet` | 1 | The 12th Billet: Keep 10 + 12 × 8 = 106, past the 100 cap (due at 98, so placed: "Houses at the cap" below) |
+| 18 | pop 81 | build | `malazan_billet` | 1 | The 12th Billet: Keep 10 + 12 × 8 = 106, past the 100 cap (due at 90 on the menu's map, so placed: "Houses at the cap" below) |
 | 19 | time 390 | research | `age_ii` | 1 | Age II at 6:30 (needs two of Barracks, Range, Armory: all three stand) |
 | 20 | time 390 | train | `malazan_laborer` | 10 | Workers to 30 in Age II |
 | 21 | time 450 | build | `malazan_cadre_tower` | 1 | 7:30, when Age II (60 s) is in |
@@ -148,18 +148,24 @@ wood split (the economy manager's `goldShare`, a common rule).
 **Houses at the cap (D20, 2026-10-17, M5-4f's D15 C; `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report`).**
 Since M5-4f the executor skips a house step once the population cap is the hard cap (100): the step is done with no
 command sent and no Billet placed. On the menu's map (seeds 1 and 7, 20 minutes, the other seat idle) no house step was
-skipped: the 12th Billet (step 18) is due at a cap of 98 (Keep 10 + 11 × 8), below the hard cap, so it is placed and 6 of
-its 8 pop go unused, and no Billet was placed once the cap was 100. The skip saves a Billet only when the second Keep
+skipped: the 12th Billet (step 18) is due at a cap of 90 (Keep 10 + 10 × 8: the 11th Billet, step 17, is still going up
+when step 18 comes due, on both seeds), below the hard cap, so it is placed and 6 of its 8 pop go unused, and no Billet
+was placed once the cap was 100. Re-printed 2026-10-17 for M5-H3 (the sim's stand-point change, BUG-0790): before it the
+12th Billet was due at a cap of 98 (Keep 10 + 11 × 8). The skip saves a Billet only when the second Keep
 (step 23, the expansion) brings the cap to 100 before the last Billet steps are due.
 
 **Spending on the menu's map (D20, 2026-10-17, M5-4f: gathering gold 0.85 / wood 0.75 a second and the sized defense; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
 Normal against an idle seat, seeds 1 and 7, 12 forests and 8 mines (the menu's): the AI razes the idle base at
-505 s (seed 1) and 556 s (seed 7), so only the 5-minute mark is still a match (the later marks no longer count; seed 1
-read 509 s before the sim's flank rule, re-printed 2026-10-17 for M5-P2, BUG-0900; D-H5 read 584 s and 593 s). At 5 minutes the Malazans hold 136 gold / 15 wood (seed 1) and 36 / 40 (seed 7): short of both, not
-wood-bound by the report's rule. Across both factions 0 of those 4 marks had wood under 100 with gold at 300 or more, so
-the report now reads "wood is not the limit"; D-H5 (2026-10-16, before the quicker gathering) read "wood binds at some
-marks only, not the limit overall" (1 of 4: the Whirlwind, seed 7) and D18 "wood is still the limit" (9 of 16 marks, 6
-mines, counting marks after the win). Four marks are a thin sample: a weak input to the `goldShare` proposal under For
+512 s (seed 1) and 536 s (seed 7), so only the 5-minute mark is still a match (the later marks no longer count). At 5
+minutes the Malazans hold 156 gold / 25 wood (seed 1) and 136 / 15 (seed 7): short of both, not wood-bound by the
+report's rule. Across both factions 1 of those 4 marks had wood under 100 with gold at 300 or more (the Whirlwind, seed
+1: 336 gold / 97 wood), so the report now reads "wood binds at some marks only, not the limit overall". Re-printed
+2026-10-17 for M5-H3 (the sim's stand-point change, BUG-0790: corner cells and the worker's own cell's free point), which
+moved every number here: before it the idle base fell at 505 s and 556 s, the Malazans held 136 / 15 and 36 / 40, and
+the verdict read "wood is not the limit" (0 of 4; seed 1 read 509 s before the sim's flank rule, M5-P2, BUG-0900). D-H5
+(2026-10-16, before the quicker gathering) read 584 s and 593 s and "wood binds at some marks only, not the limit
+overall" (1 of 4: the Whirlwind, seed 7), and D18 "wood is still the limit" (9 of 16 marks, 6 mines, counting marks
+after the win). Four marks are a thin sample: a weak input to the `goldShare` proposal under For
 your review, not a verdict.
 
 **Army composition (`compositions`), weights by pop.** Age I lists only the units the Age I steps can train (the Corral
@@ -240,7 +246,7 @@ both ways (J), and docs/02's stated numbers to the file (K).
 
 ## Balance baseline (M4-2b, 2026-10-08)
 
-Measured at sim commit `dd5b5b9` by `Content/CounterTriangleMarginsTests` (D6), re-printed at `1a9925b` (D8) and, for the four Line v Shock rows, in D13 (2026-10-11), and for those four rows and the siege rows in D19 (2026-10-15), the siege rows again on the merged tree with the sim's surround rule (M5-P1, 2026-10-16, BUG-0734), and the group table re-printed with the sim's flank rule (M5-P2, 2026-10-17, BUG-0900), from the shared
+Measured at sim commit `dd5b5b9` by `Content/CounterTriangleMarginsTests` (D6), re-printed at `1a9925b` (D8) and, for the four Line v Shock rows, in D13 (2026-10-11), and for those four rows and the siege rows in D19 (2026-10-15), the siege rows again on the merged tree with the sim's surround rule (M5-P1, 2026-10-16, BUG-0734), and the group table re-printed with the sim's flank rule (M5-P2, 2026-10-17, BUG-0900), and its Desert Archer v Cadre Mage seat-1 "Winner hp left" cell with the sim's stand-point change (M5-H3, 2026-10-17, BUG-0790: 522 to 523, nothing else moved), from the shared
 `Scenario/CounterTriangleScene` harness, the scene of
 `Scenario/CounterTriangleTests`: a flat map, 1,200 gold + wood a side (the whole number of units nearest to it), two
 blocks 5 wide whose fronts start 24 m apart, every unit attack-moved into the other block, seed 7, run in both seats.
@@ -263,7 +269,7 @@ sim change that moves a number fails the test naming the row, seat and column un
 | Ranged beats casters | Crossbowman v Priest of the Whirlwind | 0 | 15 (1215) v 10 (1200) | 13 / 15 | 380 | 1053 / 1215 (87 %) | 13.4 s |
 | Ranged beats casters | Crossbowman v Priest of the Whirlwind | 1 | 15 (1215) v 10 (1200) | 9 / 15 | 325 | 729 / 1215 (60 %) | 13.6 s |
 | Ranged beats casters | Desert Archer v Cadre Mage | 0 | 18 (1224) v 8 (1200) | 16 / 18 | 618 | 1088 / 1224 (89 %) | 9.6 s |
-| Ranged beats casters | Desert Archer v Cadre Mage | 1 | 18 (1224) v 8 (1200) | 16 / 18 | 522 | 1088 / 1224 (89 %) | 11.4 s |
+| Ranged beats casters | Desert Archer v Cadre Mage | 1 | 18 (1224) v 8 (1200) | 16 / 18 | 523 | 1088 / 1224 (89 %) | 11.4 s |
 
 Siege beats buildings (one siege unit, ordered to attack, against the same cost of its faction's line infantry):
 

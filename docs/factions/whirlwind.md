@@ -157,12 +157,16 @@ of its 8 pop go unused, and no Tent was placed once the cap was 100. The skip sa
 
 **Spending on the menu's map (D20, 2026-10-17, M5-4f: gathering gold 0.85 / wood 0.75 a second and the sized defense; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
 Normal against an idle seat, seeds 1 and 7, 12 forests and 8 mines (the menu's): the AI razes the idle base at
-514 s (seed 1) and 539 s (seed 7), so only the 5-minute mark is still a match (the later marks no longer count; seed 7
-read 540 s before the sim's flank rule, re-printed 2026-10-17 for M5-P2, BUG-0900; D-H5 read 496 s and 575 s). At 5 minutes the Whirlwind holds 316 gold / 117 wood (seed 1) and 384 / 103 (seed 7): gold in hand and
-wood just over the report's 100 line, so not wood-bound by its rule. Across both factions 0 of those 4 marks had wood
-under 100 with gold at 300 or more, so the report now reads "wood is not the limit"; D-H5 (2026-10-16, before the
-quicker gathering) read "wood binds at some marks only, not the limit overall" (1 of 4: this faction, seed 7, 524 gold /
-73 wood) and D18 "wood is still the limit" (9 of 16 marks, 6 mines, counting marks after the win). Four marks are a thin
+495 s (seed 1) and 518 s (seed 7), so only the 5-minute mark is still a match (the later marks no longer count). At 5
+minutes the Whirlwind holds 336 gold / 97 wood (seed 1) and 476 / 127 (seed 7): seed 1 has gold piled and wood just
+under the report's 100 line, so it is wood-bound by its rule; seed 7 has wood over the line. Across both factions 1 of
+those 4 marks had wood under 100 with gold at 300 or more (this faction, seed 1), so the report now reads "wood binds at
+some marks only, not the limit overall". Re-printed 2026-10-17 for M5-H3 (the sim's stand-point change, BUG-0790: corner
+cells and the worker's own cell's free point), which moved every number here: before it the idle base fell at 514 s and
+539 s, the Whirlwind held 316 / 117 and 384 / 103, and the verdict read "wood is not the limit" (0 of 4; seed 7 read
+540 s before the sim's flank rule, M5-P2, BUG-0900). D-H5 (2026-10-16, before the quicker gathering) read 496 s and
+575 s and "wood binds at some marks only, not the limit overall" (1 of 4: this faction, seed 7, 524 gold / 73 wood),
+and D18 "wood is still the limit" (9 of 16 marks, 6 mines, counting marks after the win). Four marks are a thin
 sample: a weak input to the `goldShare` proposal under For your review, not a verdict.
 
 **Army composition (`compositions`), weights by pop.** All three Age I units can be trained in Age I; their weights sum
@@ -241,7 +245,7 @@ both ways (J), and docs/02's stated numbers to the file (K).
 
 ## Balance baseline (M4-2b, 2026-10-08)
 
-Measured at sim commit `dd5b5b9` by `Content/CounterTriangleMarginsTests` (D6), re-printed at `1a9925b` (D8) and, for the two Line v Shock rows, in D13 (2026-10-11), and for those two rows and the siege row in D19 (2026-10-15), the siege row again on the merged tree with the sim's surround rule (M5-P1, 2026-10-16, BUG-0734), and the group table re-printed with the sim's flank rule (M5-P2, 2026-10-17, BUG-0900), from the shared
+Measured at sim commit `dd5b5b9` by `Content/CounterTriangleMarginsTests` (D6), re-printed at `1a9925b` (D8) and, for the two Line v Shock rows, in D13 (2026-10-11), and for those two rows and the siege row in D19 (2026-10-15), the siege row again on the merged tree with the sim's surround rule (M5-P1, 2026-10-16, BUG-0734), and the group table re-printed with the sim's flank rule (M5-P2, 2026-10-17, BUG-0900), and its Desert Archer v Cadre Mage seat-1 "Winner hp left" cell with the sim's stand-point change (M5-H3, 2026-10-17, BUG-0790: 522 to 523, nothing else moved), from the shared
 `Scenario/CounterTriangleScene` harness, the scene of
 `Scenario/CounterTriangleTests`: a flat map, 1,200 gold + wood a side, two blocks 5 wide whose fronts start 24 m apart,
 every unit attack-moved into the other block, seed 7, both seats; no abilities, upgrades or terrain. These are the
@@ -256,7 +260,7 @@ asserts only the winner as a rule; the margins are not asserted, but every cell 
 | Shock beats Ranged | Horse Raider v Crossbowman | 0 | 13 (1248) v 15 (1215) | 12 / 13 | 1332 | 1152 / 1248 (92 %) | 14.8 s |
 | Shock beats Ranged | Horse Raider v Crossbowman | 1 | 13 (1248) v 15 (1215) | 11 / 13 | 1332 | 1056 / 1248 (85 %) | 14.6 s |
 | Ranged beats casters | Desert Archer v Cadre Mage | 0 | 18 (1224) v 8 (1200) | 16 / 18 | 618 | 1088 / 1224 (89 %) | 9.6 s |
-| Ranged beats casters | Desert Archer v Cadre Mage | 1 | 18 (1224) v 8 (1200) | 16 / 18 | 522 | 1088 / 1224 (89 %) | 11.4 s |
+| Ranged beats casters | Desert Archer v Cadre Mage | 1 | 18 (1224) v 8 (1200) | 16 / 18 | 523 | 1088 / 1224 (89 %) | 11.4 s |
 
 Siege beats buildings (one siege unit, ordered to attack, against the same cost of its faction's line infantry):
 
