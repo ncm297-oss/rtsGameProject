@@ -92,17 +92,17 @@ public partial class QaM6VH2Test : Node
         foreach (string v in new[] { "Shift+Q", "Ctrl+1", "Alt+A", "Meta+Tab", "Command+Q", "Shift", "Ctrl", "Escape", "F10", "F12", "Q+Shift", "", " ",
                      "Special", "Unknown", "None", "+", "Shift+", "1.5", "0x51", "81", "A A", "é", "Meta+K", "Command+K", "Cmd+K", "Kp+K", "Shift+Ctrl+K" })
             cases.Add((v, null));
-        foreach ((string v, Key k) in new[] { ("Kp 1", Key.Kp1), ("Kp Enter", Key.KpEnter), ("F11", Key.F11), ("TAB", Key.Tab), ("tab", Key.Tab), ("  K  ", Key.K), ("Space", Key.Space), ("Home", Key.Home) })
+        foreach ((string v, Key k) in new[] { ("Kp 1", Key.Kp1), ("Kp Enter", Key.KpEnter), ("F11", Key.F11), ("TAB", Key.Tab), ("tab", Key.Tab), ("  K  ", Key.K), ("Insert", Key.Insert), ("Home", Key.Home) })
             cases.Add((v, k));
-        // "Left" is reserved (the camera's arrow keys).
-        cases.Add(("Left", null));
+        // "Left" is reserved (the camera's arrow keys); since M6-V12 so is Space (jump to the last alert), in any case.
+        foreach (string v in new[] { "Left", "Space", "sPaCe", "SPACE" }) cases.Add((v, null));
         // The Meta family in every case and spacing; prefixes Godot doesn't read as modifiers; combos on digits / named keys.
         foreach (string v in new[] { "META+K", "meta+k", "mEtA+K", "Meta+K ", " Meta+K", "Meta +K", "Meta+ K", "COMMAND+K", "command+k", "Command+K  ", "CMD+K", "cmd+k",
                      "KP+K", "kp+k", "Kp+K ", "Kp+1", "Win+K", "Windows+K", "Super+K", "Option+K", "Opt+K", "AltGr+K", "Fn+K", "Hyper+K", "Meta+1", "Meta+Space",
                      "Meta+Kp 1", "Meta+F1", "K+", "K+K", "+K", "++K", "Shift + K", "Meta", "Command", "Windows", "Super", "Meta+", "Ctrl+Meta+K", "Kp", "Kp ",
                      "Kp1", "Kp  1", "\tK\t+", "K\u00a0+K", "Ｋ", "K\u200b" })
             cases.Add((v, null));
-        foreach ((string v, Key k) in new[] { ("k", Key.K), ("K ", Key.K), (" K", Key.K), ("\tK", Key.K), ("K\t", Key.K), ("\u00a0K\u00a0", Key.K), ("sPaCe", Key.Space), ("SPACE", Key.Space),
+        foreach ((string v, Key k) in new[] { ("k", Key.K), ("K ", Key.K), (" K", Key.K), ("\tK", Key.K), ("K\t", Key.K), ("\u00a0K\u00a0", Key.K), ("hOmE", Key.Home), ("HOME", Key.Home),
                      ("kp 1", Key.Kp1), ("KP 1", Key.Kp1), ("f1", Key.F1), ("F1 ", Key.F1), ("Tab ", Key.Tab), ("kp enter", Key.KpEnter), ("SLASH", Key.Slash), ("y", Key.Y), ("BACKSLASH", Key.Backslash) })
             cases.Add((v, k));
 

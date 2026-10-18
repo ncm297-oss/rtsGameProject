@@ -295,7 +295,9 @@ public partial class CombatViewTest : Node
         Check(buildingDeaths == 1, $"seed {seed}: {buildingDeaths} building deaths (want the losing side's one)");
         Check(_combat.Markers.Count == 0, $"seed {seed}: {_combat.Markers.Count} markers left after their time");
         Check(maxBars >= 6, $"seed {seed}: at most {maxBars} bars at once");
-        Check(_hits > 50 && _hitWhileLit > 0, $"seed {seed}: {_hits} flash hits, {_hitWhileLit} while lit");
+        // BUG-0920: the brawl's own "hit while lit" count is printed, not required: its cadence is the sim's (the M5-P2 flank
+        // rule left seed 1 with none). LitAgain stages that row on its own below.
+        Check(_hits > 50, $"seed {seed}: {_hits} flash hits");
         Check(panelFrames > 50, $"seed {seed}: the selected unit's panel was checked {panelFrames} frames");
         Check(steadyFrames >= 100 && steadyBytes == 0, $"seed {seed}: {steadyFrames} steady brawl frames allocated {steadyBytes} bytes");
         _hits = _hitWhileLit = 0;
@@ -308,6 +310,47 @@ public partial class CombatViewTest : Node
         ReplayResult twin = ReplayPlayer.Run(replay, _data);
         Check(twin.Ok && replay.Checkpoints.Length == replay.TickCount, $"seed {seed}: twin {twin.Error} at tick {twin.Tick} ({twin.ExpectedHash:x} vs {twin.ActualHash:x})");
         GD.Print($"seed {seed}: hash twin {replay.Commands.Length} commands, {replay.Checkpoints.Length} checkpoints equal");
+        await EndMatch();
+        await LitAgain(seed);
+    }
+
+    // BUG-0920: a unit hit again while its flash is lit stays lit (the flash restarts). Staged on its own: one Heavy Infantry
+    // and LitAgainAttackers raiders round it; two blows on consecutive ticks land inside the 0.15 s window. Every frame is
+    // checked by the oracle (CheckFlash); the row wants at least one hit while lit before the target dies or LitAgainTicks pass.
+    private const int LitAgainAttackers = 4, LitAgainTicks = 400;
+
+    private async Task LitAgain(ulong seed)
+    {
+        StartMatch(seed, runnerTicks: false);
+        NavGrid g = W.NavGrid;
+        int center = FlowField.NearestPassable(g, g.Height / 2 * g.Width + g.Width / 2);
+        int cx = center % g.Width, cy = center / g.Width;
+        int hi = _data.FindUnit("malazan_heavy_infantry"), raider = _data.FindUnit("whirlwind_raider");
+        _sim.Enqueue(Command.SpawnUnit(0, hi, g.CellCenter(cx, cy)));
+        EntityHandle target = default;
+        for (int t = 0; t < 5 && target == default; t++)
+        {
+            await TickAndCheck(seed); // a spawn applies on the tick after the one it was sent in (as Brawl's two ticks)
+            for (int i = 0; i < U.Capacity && target == default; i++)
+                if (U.Alive[i] && U.Owner[i] == 0) target = new EntityHandle(i, U.Generation[i]);
+        }
+        if (!Check(target != default, $"seed {seed} lit again: the target did not spawn")) { await EndMatch(); return; }
+        // All in one tick, each already in reach (centres the two radii plus a fifth of a metre apart), so no walk sets the
+        // cadence: each takes the target on its own scan tick, (tick + slot) % ScanInterval, and slots next to each other
+        // scan a tick apart, so their swings (same cooldown) land a tick apart for as long as both live.
+        System.Numerics.Vector2 at = U.Position[target.Index];
+        float reach = _data.Units[hi].Radius + _data.Units[raider].Radius + 0.2f;
+        int spawned = 0, hitsBefore = _hits, litBefore = _hitWhileLit, ticks = 0;
+        for (; spawned < LitAgainAttackers; spawned++)
+        {
+            float a = spawned * MathF.Tau / LitAgainAttackers;
+            _sim.Enqueue(Command.SpawnUnit(1, raider, at + new System.Numerics.Vector2(MathF.Cos(a), MathF.Sin(a)) * reach));
+        }
+        for (; ticks < LitAgainTicks && U.IsAlive(target) && _hitWhileLit == litBefore; ticks++) await TickAndCheck(seed);
+        int lit = _hitWhileLit - litBefore;
+        GD.Print($"seed {seed}: lit again: {spawned} raiders on one Heavy Infantry, {_hits - hitsBefore} flash hits, {lit} while lit by tick {ticks}");
+        Check(lit > 0, $"seed {seed}: lit again: {_hits - hitsBefore} flash hits on the staged target, none while its flash was lit");
+        _hits = _hitWhileLit = 0;
         await EndMatch();
     }
 

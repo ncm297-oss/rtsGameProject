@@ -1,4 +1,4 @@
-[gd_scene load_steps=33 format=3]
+[gd_scene load_steps=35 format=3]
 
 [ext_resource type="Script" path="res://scripts/Match.cs" id="1_match"]
 [ext_resource type="Script" path="res://scripts/SimRunner.cs" id="2_runner"]
@@ -28,6 +28,8 @@
 [ext_resource type="Script" path="res://scripts/ProjectileViews.cs" id="26_shots"]
 [ext_resource type="Script" path="res://scripts/FogOfWar.cs" id="27_fog"]
 [ext_resource type="Script" path="res://scripts/AbilityViews.cs" id="28_ability"]
+[ext_resource type="Script" path="res://scripts/SoundCues.cs" id="29_cues"]
+[ext_resource type="Script" path="res://scripts/AlertHud.cs" id="30_alerts"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMaterial_1"]
 sky_top_color = Color(0.36, 0.52, 0.72, 1)
@@ -228,3 +230,9 @@ script = ExtResource("6_shot")
 
 [node name="Sfx" type="Node" parent="."]
 script = ExtResource("15_sfx")
+
+[node name="SoundCues" type="Node" parent="."]
+script = ExtResource("29_cues")
+
+[node name="Alerts" type="Node" parent="."]
+script = ExtResource("30_alerts")

@@ -12,7 +12,7 @@ namespace Rts.Game;
 /// <see cref="Apply"/> re-registers the Godot <see cref="InputMap"/> actions, which every key handler reads. View state only.
 /// </summary>
 /// <remarks>
-/// Esc, the modifiers (Shift, Ctrl, Alt, Meta), the camera's arrow keys and the F10 / F12 keys stay fixed: binding one is
+/// Esc, the modifiers (Shift, Ctrl, Alt, Meta), the camera's arrow keys, the F10 / F12 keys and Space (M6-V12: jump to the last alert) stay fixed: binding one is
 /// refused (<see cref="Reserved"/>), and so is anything that isn't one plain key (a modifier combo). Two actions may not share
 /// a key when both are commands (orders, Tab, B / V, digits), both are grid keys, one is a control group digit or Tab and the
 /// other any grid key (a build menu or a production card owns the whole grid while it is up, and a digit must recall its group
@@ -37,7 +37,7 @@ public sealed class KeyMap
     /// <summary>Keys no action may take.</summary>
     public static readonly Key[] Reserved =
     {
-        Key.Escape, Key.Shift, Key.Ctrl, Key.Alt, Key.Meta, Key.Left, Key.Right, Key.Up, Key.Down, Key.F10, Key.F12, Key.None,
+        Key.Escape, Key.Shift, Key.Ctrl, Key.Alt, Key.Meta, Key.Left, Key.Right, Key.Up, Key.Down, Key.F10, Key.F12, Key.Space, Key.None,
     };
 
     /// <summary>What <see cref="TrySet"/> returns for a reserved key; a conflict returns the other action's index, a success <see cref="Ok"/>.</summary>

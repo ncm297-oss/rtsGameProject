@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 using Godot;
 using Rts.Sim;
 using Rts.Sim.Commands;
 using Rts.Sim.Data;
 using Rts.Sim.Entities;
+using Rts.Sim.ViewApi;
 
 namespace Rts.Game.Tests;
 
@@ -37,9 +39,17 @@ public partial class SfxTest : Node
             DataLoadResult loaded = DataLoader.LoadAll(ProjectSettings.GlobalizePath("res://data"));
             if (!loaded.Ok) throw new InvalidOperationException("data failed to load");
             _data = loaded.Data!;
+            // M6-V12 first: the move-aside row must run before anything has loaded the clip it hides.
+            FallbackWhenMissing();
+            ClipTable();
+            ManifestAndFiles();
+            WorldCapRows();
+            MusicHook();
             Clips();
             RateLimit();
             ParseMute();
+            await Brawl();
+            await OwnCues();
             await StartMatch(mute: false);
             Check(!Sfx.Muted, "master bus muted without --mute");
             await Selecting();
@@ -62,6 +72,275 @@ public partial class SfxTest : Node
         foreach (string f in _failures) GD.Print($"SFX TEST FAIL: {f}");
         if (_failures.Count == 0) GD.Print("SFX TEST PASS");
         SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
+    }
+
+    // ---- M6-V12 ----
+
+    // Criterion 3: an event whose clip file is gone (the file and its .import moved aside, as a clone without LFS objects or
+    // a deleted file) plays its generated tone, with one warning; every other event still loads its files.
+    private void FallbackWhenMissing()
+    {
+        string wav = ProjectSettings.GlobalizePath(Sfx.ClipPath(SfxEvent.Alert, 1));
+        if (!Check(File.Exists(wav) && File.Exists(wav + ".import"), $"fallback: {wav} (and its .import) missing before the move")) return;
+        bool second = File.Exists(ProjectSettings.GlobalizePath(Sfx.ClipPath(SfxEvent.Alert, 2)) + ".import");
+        Check(!second, "fallback: Alert has a second variant; the row moves only _1 aside");
+        File.Move(wav, wav + ".aside");
+        File.Move(wav + ".import", wav + ".import.aside");
+        try
+        {
+            var sfx = new Sfx();
+            AddChild(sfx);
+            bool played = sfx.Play(SfxEvent.Alert, 1, 10_000_000);
+            GD.Print($"fallback: Alert moved aside -> tone {sfx.UsesTone(SfxEvent.Alert)}, {sfx.Warnings} warning(s), played {played}, stream is the tone {ReferenceEquals(sfx.LastStream(SfxEvent.Alert), sfx.Clip(SfxEvent.Alert))}");
+            Check(sfx.UsesTone(SfxEvent.Alert) && sfx.Warnings == 1, $"fallback: tone {sfx.UsesTone(SfxEvent.Alert)}, {sfx.Warnings} warnings (want the tone, one warning)");
+            Check(played && ReferenceEquals(sfx.LastStream(SfxEvent.Alert), sfx.Clip(SfxEvent.Alert)), "fallback: the Alert play did not start the tone");
+            Check(!sfx.UsesTone(SfxEvent.Select) && sfx.VariantCount(SfxEvent.MeleeHit) > 0, "fallback: other events lost their files too");
+            RemoveChild(sfx);
+            sfx.QueueFree();
+        }
+        finally
+        {
+            File.Move(wav + ".aside", wav);
+            File.Move(wav + ".import.aside", wav + ".import");
+        }
+    }
+
+    // Criterion 3: every SfxEvent has a clip row with at least one file; each loads as AudioStreamWav, mono, 16-bit, at most
+    // 44,100 Hz, at most 3 s; no warning; at most 20 files.
+    private void ClipTable()
+    {
+        var sfx = new Sfx();
+        AddChild(sfx);
+        int files = 0;
+        foreach (SfxEvent e in Enum.GetValues<SfxEvent>())
+        {
+            int n = sfx.VariantCount(e);
+            files += n;
+            Check(n >= 1 && n <= Sfx.MaxVariants, $"{e}: {n} clip files (want 1-{Sfx.MaxVariants})");
+            for (int k = 0; k < n; k++)
+            {
+                AudioStream s = sfx.Variant(e, k);
+                if (s is not AudioStreamWav w)
+                {
+                    Check(false, $"{e} variant {k + 1}: {s.GetClass()}, not AudioStreamWav");
+                    continue;
+                }
+                double seconds = w.GetLength();
+                GD.Print($"clip {Sfx.ClipPath(e, k + 1)}: {w.MixRate} Hz, stereo {w.Stereo}, {w.Format}, {seconds:F3} s, world {Sfx.IsWorld(e)}, gain {Sfx.GainDb(e)} dB");
+                Check(!w.Stereo && w.MixRate <= 44100 && w.Format == AudioStreamWav.FormatEnum.Format16Bits && seconds > 0.03 && seconds <= 3.0,
+                    $"{e} variant {k + 1}: {w.MixRate} Hz, stereo {w.Stereo}, {w.Format}, {seconds:F3} s");
+            }
+        }
+        Check(files <= 20, $"{files} clip files, at most 20");
+        Check(sfx.Warnings == 0, $"{sfx.Warnings} events fell back to the tone with every file in place");
+        // The world / UI split the brief names.
+        foreach (SfxEvent e in new[] { SfxEvent.MeleeHit, SfxEvent.Shot, SfxEvent.UnitDeath, SfxEvent.BuildingRazed, SfxEvent.Cast })
+            Check(Sfx.IsWorld(e), $"{e} is not a world event");
+        foreach (SfxEvent e in new[] { SfxEvent.Select, SfxEvent.Command, SfxEvent.Refused, SfxEvent.Ready, SfxEvent.Alert, SfxEvent.BuildingPlaced, SfxEvent.BuildingDone })
+            Check(!Sfx.IsWorld(e), $"{e} is a world event");
+        // Variants play in turn: MeleeHit's files one after another.
+        int count = sfx.VariantCount(SfxEvent.MeleeHit);
+        for (int k = 0; k < count; k++)
+        {
+            sfx.Play(SfxEvent.MeleeHit, (ulong)(1000 + k), 50_000_000UL + (ulong)k * 1_000_000UL);
+            Check(ReferenceEquals(sfx.LastStream(SfxEvent.MeleeHit), sfx.Variant(SfxEvent.MeleeHit, k)), $"MeleeHit play {k + 1} did not start variant {k + 1}");
+        }
+        sfx.QueueFree();
+    }
+
+    // Criterion 2: every .wav under assets/audio/sfx is in tools/audio/sfx-manifest.json with a Sonniss source, <= 2 MB, and
+    // the manifest lists no file that isn't there.
+    private void ManifestAndFiles()
+    {
+        string game = ProjectSettings.GlobalizePath("res://");
+        string repo = Path.GetFullPath(Path.Combine(game, ".."));
+        string manifest = Path.Combine(repo, "tools", "audio", "sfx-manifest.json");
+        if (!Check(File.Exists(manifest), $"no manifest at {manifest}")) return;
+        using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(manifest));
+        var listed = new HashSet<string>(StringComparer.Ordinal);
+        foreach (System.Text.Json.JsonElement c in doc.RootElement.GetProperty("clips").EnumerateArray())
+        {
+            string dst = c.GetProperty("destination").GetString() ?? "";
+            string src = c.GetProperty("source").GetString() ?? "";
+            Check(src.StartsWith("sonniss-gdc-2026/", StringComparison.Ordinal), $"manifest {dst}: source '{src}' is not from the Sonniss bundle");
+            Check(listed.Add(dst), $"manifest lists {dst} twice");
+            Check(Enum.TryParse(c.GetProperty("event").GetString(), out SfxEvent _), $"manifest {dst}: unknown event");
+        }
+        string root = Path.Combine(game, "assets", "audio", "sfx");
+        int found = 0;
+        foreach (string f in Directory.GetFiles(root, "*.wav", SearchOption.AllDirectories))
+        {
+            found++;
+            string rel = "game/" + Path.GetRelativePath(game, f).Replace('\\', '/');
+            long size = new FileInfo(f).Length;
+            Check(listed.Remove(rel), $"{rel} is not in the manifest");
+            Check(size <= 2 * 1024 * 1024, $"{rel}: {size} bytes, over 2 MB");
+        }
+        Check(listed.Count == 0, $"manifest lists files that aren't there: {string.Join(", ", listed)}");
+        GD.Print($"manifest: {found} clip files, all listed with a Sonniss source");
+    }
+
+    // Criterion 3, the cap on a hand-driven clock: five different world events inside 100 ms play four; UI events never
+    // count against it nor get dropped by it; after the window the next world event plays.
+    private void WorldCapRows()
+    {
+        var sfx = new Sfx();
+        AddChild(sfx);
+        const ulong t = 20_000_000;
+        SfxEvent[] world = { SfxEvent.MeleeHit, SfxEvent.Shot, SfxEvent.UnitDeath, SfxEvent.Cast, SfxEvent.BuildingRazed };
+        int played = 0;
+        for (int k = 0; k < world.Length; k++) if (sfx.Play(world[k], (ulong)(10 + k), t + (ulong)k * 10_000)) played++;
+        Check(played == Sfx.WorldCap && sfx.WorldCapped == 1 && sfx.WorldPlays == Sfx.WorldCap, $"5 world events in 40 ms: {played} played, {sfx.WorldCapped} capped");
+        // UI in the same window: all of them play.
+        int ui = 0;
+        foreach (SfxEvent e in new[] { SfxEvent.Select, SfxEvent.Command, SfxEvent.Refused, SfxEvent.Ready, SfxEvent.Alert, SfxEvent.BuildingPlaced, SfxEvent.BuildingDone })
+            if (sfx.Play(e, 20, t + 45_000)) ui++;
+        Check(ui == 7 && sfx.WorldCapped == 1, $"UI events under a full world window: {ui} of 7 played, capped {sfx.WorldCapped}");
+        // 99 ms after the first world play the window is still full; at 100 ms the oldest has left it.
+        Check(!sfx.Play(SfxEvent.BuildingRazed, 30, t + 99_000), "a world play 99 ms after the first of four was not capped");
+        Check(sfx.Play(SfxEvent.BuildingRazed, 31, t + 100_000), "a world play 100 ms after the first of four was capped");
+        for (int k = 0; k + Sfx.WorldCap < sfx.WorldPlayCount; k++)
+            Check(sfx.WorldPlayUsec(k + Sfx.WorldCap) - sfx.WorldPlayUsec(k) >= 100_000, $"history: plays {k} and {k + Sfx.WorldCap} {sfx.WorldPlayUsec(k + Sfx.WorldCap) - sfx.WorldPlayUsec(k)} µs apart");
+        // The capped play didn't stamp the event's gap: the same event plays on the next frame once the window allows.
+        sfx.QueueFree();
+    }
+
+    // The music hook: a Music bus; with no track shipped the player finds none and stays silent; FindTracks lists .ogg files
+    // (or, exported, their .import files) in name order and nothing else.
+    private void MusicHook()
+    {
+        Check(AudioServer.GetBusIndex(GameSettings.MusicBus) > 0, "no Music bus");
+        var music = new MusicPlayer();
+        AddChild(music);
+        Check(music.Tracks.Length == 0 && !music.Playing && music.Bus == GameSettings.MusicBus, $"music: {music.Tracks.Length} tracks, playing {music.Playing}, bus {music.Bus}");
+        music.QueueFree();
+        string dir = "user://music_probe";
+        DirAccess.MakeDirRecursiveAbsolute(dir);
+        foreach (string name in new[] { "b.ogg", "a.ogg.import", "c.txt", "d.wav" })
+            using (Godot.FileAccess f = Godot.FileAccess.Open($"{dir}/{name}", Godot.FileAccess.ModeFlags.Write)) f.StoreString("x");
+        string[] tracks = MusicPlayer.FindTracks(dir);
+        Check(tracks.Length == 2 && tracks[0] == $"{dir}/a.ogg" && tracks[1] == $"{dir}/b.ogg", $"FindTracks: [{string.Join(", ", tracks)}]");
+        Check(MusicPlayer.FindTracks("user://no_such_music").Length == 0, "FindTracks on a missing folder");
+        foreach (string name in new[] { "b.ogg", "a.ogg.import", "c.txt", "d.wav" }) DirAccess.RemoveAbsolute($"{dir}/{name}");
+        DirAccess.RemoveAbsolute(dir);
+        GD.Print($"music: Music bus {AudioServer.GetBusIndex(GameSettings.MusicBus)}, no track shipped, FindTracks ok");
+    }
+
+    // Criterion 3 under load: a 100 v 100 brawl on screen at 4x. Every 5 world plays span at least 100 ms (no window ever
+    // held 5), world sounds did play (and the cap bit), and a UI sound tried every 120 ms during it always played.
+    private async Task Brawl()
+    {
+        if (IsInstanceValid(_match)) _match.QueueFree();
+        await Frame();
+        _match = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
+        AddChild(_match);
+        _match.Start(_data, LaunchOptions.Parse(new[] { "--units", "100", "--seed", "3", "--speed", "4", "--zoom", "60", "--mute" }));
+        _sfx = _match.GetNode<Sfx>("Sfx");
+        _camera = _match.GetNode<RtsCamera>("RtsCamera");
+        _camera.EdgePanEnabled = false;
+        _sim = _match.GetNode<SimRunner>("SimRunner").Simulation!;
+        var cues = _match.GetNode<SoundCues>("SoundCues");
+        while (_sim.TickNumber < 3) await Frame();
+        UnitStore u = _sim.World.Units;
+        System.Numerics.Vector2 c0 = default, c1 = default;
+        int n0 = 0, n1 = 0;
+        for (int i = 0; i < u.Capacity; i++)
+        {
+            if (!u.Alive[i]) continue;
+            if (u.Owner[i] == 0) { c0 += u.Position[i]; n0++; }
+            else { c1 += u.Position[i]; n1++; }
+        }
+        System.Numerics.Vector2 mid = (c0 / Math.Max(1, n0) + c1 / Math.Max(1, n1)) / 2;
+        for (int i = 0; i < u.Capacity; i++)
+            if (u.Alive[i]) _sim.Enqueue(Command.AttackMove(u.Owner[i], new EntityHandle(i, u.Generation[i]), mid));
+        _camera.SetFocus(mid.X, mid.Y);
+        long plays0 = _sfx.WorldPlays, capped0 = _sfx.WorldCapped;
+        int uiTried = 0, uiPlayed = 0, uiUnderFullWindow = 0;
+        ulong lastUi = 0, start = Time.GetTicksUsec();
+        while (Time.GetTicksUsec() - start < 25_000_000UL && _sim.World.Losses[0] + _sim.World.Losses[1] < 120)
+        {
+            await Frame();
+            ulong now = Time.GetTicksUsec();
+            if (now - lastUi >= 120_000)
+            {
+                lastUi = now;
+                bool full = _sfx.WorldPlayCount >= Sfx.WorldCap && now - _sfx.WorldPlayUsec(_sfx.WorldPlayCount - Sfx.WorldCap) < 100_000;
+                uiTried++;
+                if (full) uiUnderFullWindow++;
+                if (_sfx.Play(SfxEvent.Command)) uiPlayed++;
+            }
+        }
+        long plays = _sfx.WorldPlays - plays0, capped = _sfx.WorldCapped - capped0;
+        int worst = 0, k0 = Math.Max(0, _sfx.WorldPlayCount - (int)Math.Min(plays, Sfx.WorldHistory));
+        for (int k = k0; k + Sfx.WorldCap < _sfx.WorldPlayCount; k++)
+            if (_sfx.WorldPlayUsec(k + Sfx.WorldCap) - _sfx.WorldPlayUsec(k) < 100_000) worst++;
+        GD.Print($"brawl 100 v 100 at 4x: {_sim.World.Losses[0] + _sim.World.Losses[1]} deaths by tick {_sim.TickNumber}; world plays {plays}, capped {capped}; " +
+            $"cued MeleeHit {cues.Cued(SfxEvent.MeleeHit)}, Shot {cues.Cued(SfxEvent.Shot)}, UnitDeath {cues.Cued(SfxEvent.UnitDeath)}, Cast {cues.Cued(SfxEvent.Cast)} " +
+            $"(unseen deaths {cues.Unseen(SfxEvent.UnitDeath)}, shots {cues.Unseen(SfxEvent.Shot)}); windows of 5 under 100 ms: {worst}; " +
+            $"UI tries {uiTried}, played {uiPlayed}, {uiUnderFullWindow} with the world window full");
+        Check(plays >= 20, $"brawl: only {plays} world sounds played");
+        Check(cues.Cued(SfxEvent.MeleeHit) > 0 && cues.Cued(SfxEvent.UnitDeath) > 0 && cues.Cued(SfxEvent.Shot) > 0, "brawl: no melee, death or shot cue");
+        Check(worst == 0, $"brawl: {worst} windows held 5 world plays inside 100 ms");
+        Check(uiTried >= 20 && uiPlayed == uiTried, $"brawl: UI sounds {uiPlayed} of {uiTried} played");
+    }
+
+    // The own-production cues in a match with bases at 8x: a site placed (BuildingPlaced), finished (BuildingDone), and a
+    // worker trained at the Town Hall (Ready); a cancelled train is no Ready.
+    private async Task OwnCues()
+    {
+        if (IsInstanceValid(_match)) _match.QueueFree();
+        await Frame();
+        _match = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
+        AddChild(_match);
+        _match.Start(_data, LaunchOptions.Parse(new[] { "--units", "0", "--seed", "1", "--speed", "8", "--mute" }));
+        _sfx = _match.GetNode<Sfx>("Sfx");
+        _sim = _match.GetNode<SimRunner>("SimRunner").Simulation!;
+        var cues = _match.GetNode<SoundCues>("SoundCues");
+        while (_sim.TickNumber < 5) await Frame();
+        World w = _sim.World;
+        Check(cues.Cued(SfxEvent.BuildingPlaced) == 0 && cues.Cued(SfxEvent.BuildingDone) == 0 && cues.Cued(SfxEvent.Ready) == 0,
+            "the start base cued a placed / done / ready sound");
+        StartBasePlan bases = _match.Bases!;
+        int house = -1;
+        for (int t = 0; t < w.Data.Buildings.Length; t++)
+            if (w.Data.Buildings[t].Faction == w.FactionOf(0) && w.Data.Buildings[t].Slot == BuildingSlot.House) house = t;
+        UnitStore u = w.Units;
+        int worker = -1;
+        for (int i = 0; i < u.Capacity && worker < 0; i++)
+            if (u.Alive[i] && u.Owner[i] == 0 && u.TypeId[i] == bases.WorkerType[0]) worker = i;
+        Rts.Sim.Map.NavGrid g = w.NavGrid;
+        g.WorldToCell(u.Position[Math.Max(0, worker)], out int wx, out int wy);
+        int anchor = -1;
+        for (int r = 2; r < 12 && anchor < 0 && worker >= 0 && house >= 0; r++)
+            for (int dy = -r; dy <= r && anchor < 0; dy++)
+                for (int dx = -r; dx <= r && anchor < 0; dx++)
+                    if (g.InBounds(wx + dx, wy + dy) && w.CanPlace(0, house, (wy + dy) * g.Width + wx + dx, out _)) anchor = (wy + dy) * g.Width + wx + dx;
+        if (!Check(house >= 0 && worker >= 0 && anchor >= 0, $"own cues: house {house}, worker {worker}, anchor {anchor}")) return;
+        _sim.Enqueue(Command.Build(0, new EntityHandle(worker, u.Generation[worker]), house, g.CellCenter(anchor % g.Width, anchor / g.Width)));
+        await Until(() => cues.Cued(SfxEvent.BuildingPlaced) > 0, 10);
+        Check(cues.Cued(SfxEvent.BuildingPlaced) == 1, $"site placed: BuildingPlaced cued {cues.Cued(SfxEvent.BuildingPlaced)}");
+        await Until(() => cues.Cued(SfxEvent.BuildingDone) > 0, 40);
+        Check(cues.Cued(SfxEvent.BuildingDone) == 1 && _sfx.PlayCount(SfxEvent.BuildingDone) == 1, $"site finished: BuildingDone cued {cues.Cued(SfxEvent.BuildingDone)}, played {_sfx.PlayCount(SfxEvent.BuildingDone)}");
+        System.Numerics.Vector2 hall = StartBase.FootprintCenter(g, w.Data.Buildings[bases.HallType[0]], bases.HallAnchor[0]);
+        // A train cancelled at once: the queue shrinks with no new unit, no Ready.
+        _sim.Enqueue(Command.Train(0, hall, bases.WorkerType[0]));
+        int hallSlot = DefeatStaging.BuildingAt(w, 0, bases.HallAnchor[0]).Index;
+        await Until(() => w.Buildings.QueueCount[hallSlot] > 0, 5);
+        _sim.Enqueue(Command.CancelTrain(0, hall, 0));
+        await Until(() => w.Buildings.QueueCount[hallSlot] == 0, 5);
+        await Frame();
+        Check(cues.Cued(SfxEvent.Ready) == 0, $"a cancelled train cued Ready {cues.Cued(SfxEvent.Ready)} times");
+        _sim.Enqueue(Command.Train(0, hall, bases.WorkerType[0]));
+        await Until(() => cues.Cued(SfxEvent.Ready) > 0, 40);
+        Check(cues.Cued(SfxEvent.Ready) == 1 && _sfx.PlayCount(SfxEvent.Ready) == 1, $"worker trained: Ready cued {cues.Cued(SfxEvent.Ready)}, played {_sfx.PlayCount(SfxEvent.Ready)}");
+        GD.Print($"own cues at tick {_sim.TickNumber}: placed {cues.Cued(SfxEvent.BuildingPlaced)}, done {cues.Cued(SfxEvent.BuildingDone)}, ready {cues.Cued(SfxEvent.Ready)}");
+    }
+
+    // Waits frames until the condition holds or the wall-clock limit (s) passes.
+    private async Task Until(Func<bool> done, double seconds)
+    {
+        ulong start = Time.GetTicksUsec();
+        while (!done() && Time.GetTicksUsec() - start < (ulong)(seconds * 1_000_000)) await Frame();
     }
 
     // Criterion 1: length, peak, quiet edges, no NaN, both as floats and as the 16-bit clip.
@@ -320,8 +599,9 @@ public partial class SfxTest : Node
 
     private SignalAwaiter Frame() => ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
 
-    private void Check(bool ok, string message)
+    private bool Check(bool ok, string message)
     {
         if (!ok) _failures.Add(message);
+        return ok;
     }
 }

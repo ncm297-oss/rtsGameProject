@@ -156,6 +156,8 @@ public partial class Main : Node3D
         // BUG-0681: an engine window flag (--resolution, --fullscreen ...) wins over the file's window for the run, as --vsync does.
         // The process's own command line: OS.GetCmdlineArgs() leaves out the args the engine consumed (it is empty here).
         SettingsApplier.Apply(Settings, GetTree().Root, VsyncOverride, keepWindow: SettingsApplier.HasEngineWindowFlag(System.Environment.GetCommandLineArgs()));
+        // M6-V12: the music hook (silent until the owner drops .ogg files in assets/audio/music/).
+        AddChild(new MusicPlayer { Name = "MusicPlayer" });
         if (ui != null) BuildScreens(ui, _data);
         // M6-V9: --replay <path> plays the file at once (a refusal shows the Load Game screen with the reason).
         int replayAt = Array.IndexOf(args, ReplayFlag);

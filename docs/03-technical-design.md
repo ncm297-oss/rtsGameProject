@@ -3724,7 +3724,8 @@ Match
 
 Placeholder sounds for selecting and ordering, so the audio plumbing exists from M2 (docs/04
 "Placeholder art"). Nothing is downloaded or imported: every clip is synthesized in code at start-up.
-New node in `Match.tscn`:
+**Since M6-V12 the events play real clips cut from the Sonniss bundle; the tones below are each event's fallback when
+its file is missing** (see "Implementation (M6-V12)"). New node in `Match.tscn`:
 
 ```
 Match
@@ -5671,7 +5672,7 @@ game/tests/SettingsTest.tscn      the headless settings test (in the scene loop)
 
   Volumes set the `Master`, `Music` and `Sfx` buses' gain to `20 log10(v / 100)` dB (100 = 0 dB, 50 = -6 dB, 10 = -20 dB,
   1 = -40 dB) and volume 0 to -80 dB (never `-inf` or NaN; `GameSettings.VolumeDb`). The effect players play on `Sfx` at
-  their own -6 dB (`Sfx.SfxVolumeDb`); nothing plays on `Music` yet. **Edge pan:** `RtsCamera.PanVector` adds the keys'
+  their own -6 dB (`Sfx.SfxVolumeDb`); since M6-V12 the `MusicPlayer` plays on `Music` once a track exists (none ships). **Edge pan:** `RtsCamera.PanVector` adds the keys'
   direction (length at most 1) and the edge's direction (length at most 1) times the edge pan speed, capped at the larger
   of 1 and that speed, so the keys keep the old pan speed and the edge pans at 0.5-2x it.
 - **Tests.** Headless `SettingsTest` (in the scene loop): the dB rows, the reader rows (no file, corrupt, a value Godot
@@ -6264,6 +6265,94 @@ game/export_presets.cfg            exclude assets/models/looktest/*
   - `ShellTest`: the two new `load` keys (each required; 18 `load` keys); `--colour 1 2` warns "Slot 2's default colour 2 is
     taken by an earlier slot's --colour; slot 2 takes colour 1" (was "Ignoring --colour: ..."), `--colour 1 3 --colour 2 3`
     "Ignoring slot 2's --colour 3: ...", distinct picks none; with the old wording put back the row fails.
+
+### Implementation (M6-V12)
+
+Real sound effects from the owner's Sonniss GDC 2026 bundle, attack alerts (text, minimap ping, sound, Space), the music
+hook, and BUG-0920. The sim is unchanged but for one new read-only ViewApi class.
+
+```
+sim/Rts.Sim/ViewApi/AttackAlerts.cs, AttackAlertKind.cs   the alert rule, from the own stores' spans (like HitFlash)
+game/scripts/SfxEvent.cs        12 events (was 3)
+game/scripts/Sfx.cs             the clip table (folder, world / UI, gain, fallback tone), variants in turn, the world cap
+game/scripts/SoundCues.cs       Node in Match.tscn: sim -> world and own-production sound events
+game/scripts/AlertHud.cs        Node "Alerts" in Match.tscn: alerts -> text (Hud/AlertText), minimap ping, sound; Space
+game/scripts/ScreenCheck.cs     "is this ground point on screen" (camera + terrain height)
+game/scripts/Minimap.cs         Ping(at): a 3 s pulsing ring, drawn over the dots
+game/scripts/MusicPlayer.cs     child of Main: assets/audio/music/*.ogg in name order on the Music bus, round and round
+game/scripts/AlertText.cs, UiText.cs, KeyMap.cs, Main.cs, Match.cs
+game/data/common/ui.json        alert.base_under_attack, alert.units_under_attack
+game/assets/audio/sfx/<category>/<event>_<n>.wav (+ .import)   16 clips; docs/04 "Licensing log"
+tools/audio/trim-wav.ps1, tools/audio/sfx-manifest.json        the cut (docs/04 "Import process", audio)
+game/tests/SfxTest, AlertTest (new), CombatViewTest, ShellTest, QaM6VH2Test (Space is reserved now)
+```
+
+- **Clip table** (`Sfx`, one row per `SfxEvent` in enum order). The file of variant n is
+  `res://assets/audio/sfx/<category>/<event in snake_case>_<n>.wav` (`Sfx.ClipPath`; n = 1-3, every existing one loads, they
+  play in turn): no file name is written in C#. The import (`.import`: `force/mono`, `force/max_rate` 44,100 Hz,
+  `compress/mode=0` = 16-bit PCM) makes every clip mono 16-bit at most 44.1 kHz whatever the cut's source format.
+
+  | Event | Folder | Kind | Gain | Played when | Clip (source pack) |
+  | --- | --- | --- | --- | --- | --- |
+  | `Select` | ui | UI | 0 dB | as M2-6 (`SelectionController`) | Board Game, vintage button click |
+  | `Command` | ui | UI | 0 dB | as M2-6 | UI Interaction Elements, Accept Boing Crunch |
+  | `Refused` | ui | UI | 0 dB | as M5-V1 (`AbilityViews`) | UI Interaction Elements, Deny Muted |
+  | `MeleeHit` | combat | world | -4 dB | a unit the hit flash saw hit this frame, shown and on screen, no projectile impact within 1.5 m since the last frame | Melee Weapons Pack 2 metal swing hit; Cinematic Fight body punch; Historical Weapons spear / stick |
+  | `Shot` | combat | world | -8 dB | a projectile launched (a slot `SoundCues`' own `ProjectileTracker` starts), at its launch point | Melee Weapons Pack 2 swift blade swing |
+  | `UnitDeath` | combat | world | -4 dB | a `World.Deaths` unit entry (not a summon's expiry) | Anime Fight Voices yell; Cinematic Fight body punch |
+  | `BuildingPlaced` | building | UI | -2 dB | a construction site of the local player's appears | Historical Weapons wooden knock |
+  | `BuildingDone` | building | UI | -2 dB | one of their sites finishes (same generation, `UnderConstruction` true -> false) | Board Game wooden pieces |
+  | `BuildingRazed` | building | world | -2 dB | a `World.Deaths` building entry (a collapse too) | Colossal Impacts, Woosh Debris |
+  | `Ready` | ui | UI | -2 dB | a production queue of theirs shrinks on a tick that also brings a new own unit or a new own tech (a cancel: neither) | Organic UI kalimba; UI Interaction Elements, Ting Coins |
+  | `Cast` | combat | world | -5 dB | a resolved, not dropped `World.AbilityEvents` entry, at its point | Fantasy Game 2, magic light spell |
+  | `Alert` | ui | UI | -4 dB | an attack alert (`AlertHud`) | Effective Trailer Alarms Vol. 2, half notes (1.2 s) |
+
+  Each clip is normalized to -1 dBFS by the cut; the gain is on top of `Sfx.SfxVolumeDb` (-6 dB) and the `Sfx` bus.
+- **Missing file.** An event with no loadable file (none on disk, its `.import` gone, or an LFS pointer that failed to
+  import) plays its M2-6-style tone and logs one warning at `_Ready` (`Sfx.Warnings`); `Sfx.Clip(e)` is always the tone. A
+  clone without `git lfs pull` so boots and every scene but `LookTest` stays green.
+- **On screen and seen.** A world event plays only if its point is in front of the camera and projects inside the
+  viewport (`ScreenCheck.OnScreen`, at the terrain height there) and the local fog shows it (`FogView.ShowsPoint`; a hit:
+  `ShowsUnit`). `SoundCues` reads deaths, launches, impacts and casts on every tick the runner runs (`SimRunner.Ticked`),
+  hits and plays once a frame: at most one play per event per frame, then Sfx's per-event 50 ms gap.
+- **World cap.** At most `Sfx.WorldCap` (4) world sounds start in any 100 ms (`Sfx.WorldWindowMs`, the play's clock): a
+  ring of the last four start times; a fifth inside the window is dropped (`WorldCapped`) and stamps nothing. UI events
+  never count and are never dropped by it. `WorldPlayUsec(k)` keeps the last 256 world start times for tests.
+- **Alerts** (`AttackAlerts`, allocation-free): each frame, for the local player's buildings then units, a slot holding the
+  same generation as last frame with less hp is a hit; a hit within 30 m of an alert raised in the last 10 s of view time
+  joins it (`HitsOn`), else raises a new one (`Kind` Base for a building, Units for a unit; `Position` the unit's position
+  or the building's footprint centre). A new generation or a dead slot raises nothing. `AlertHud` per new alert: a minimap
+  ping (`Minimap.Ping`, 3 s, a red ring pulsing every 0.75 s from 3 to 14 px); if the point is off screen, the text for 4 s
+  at the top centre under the replay mark (`ui.json` `alert.base_under_attack` if any new off-screen alert is a building,
+  else `alert.units_under_attack`); and one `Alert` play. **Space** (fixed: `KeyMap.Reserved`, `AlertHud.JumpKey`, handled
+  in `_UnhandledInput`) centres the camera on the newest alert. Replays: the local player is seat 0, the same code runs, so
+  playback shows the same alerts at the same ticks.
+- **Music hook.** `MusicPlayer` (an `AudioStreamPlayer` on the `Music` bus, a child of `Main`, `ProcessMode` Always) lists
+  `res://assets/audio/music/` (`.ogg`, or an exported build's `.ogg.import`), plays them in name order and starts over;
+  with no folder or no file (today) it is silent. The music volume setting already drives the bus (M6-V6).
+- **BUG-0920.** `CombatViewTest`'s "hit while lit" row no longer leans on the brawl's cadence (the M5-P2 flank rule left
+  seed 1 with none): `LitAgain` spawns one Heavy Infantry and four raiders round it in reach in one tick; each takes the
+  target on its own scan tick ((tick + slot) % 4), so neighbouring slots swing a tick apart and the second blow lands while
+  the flash is lit. The brawl's own count is printed. Both seeds: "lit again: 4 raiders ..., 1 while lit by tick 9".
+- **Tests.**
+  - xUnit `ViewApi/AttackAlertsTests`: a hit raises one alert at the unit; hits within 29 m over 9.8 s raise none and count
+    on it; a hit 40 m off raises a second; the same spot after 10 s raises again; a new generation (unit or building, hurt)
+    raises nothing; only the given player's, buildings first (Base); NaN / negative dt; the ring keeps the newest; a frame
+    of 2,000 units and 256 buildings allocates 0 bytes.
+  - `SfxTest`: `alert_1.wav` and its `.import` moved aside -> `Alert` falls back to the tone, one warning, the play starts the
+    tone (restored after); every event has 1-3 files, each `AudioStreamWav` mono 16-bit <= 44,100 Hz <= 3 s, <= 20 files, no
+    warning; variants in turn; every `.wav` in `sfx-manifest.json` with a Sonniss source and <= 2 MB (and the manifest names
+    no missing file); the cap on a hand clock (5 world events in 40 ms -> 4, 7 UI events in the full window all play, 99 ms
+    capped, 100 ms plays); the Music bus, `MusicPlayer` silent with no track, `FindTracks` order; a 100 v 100 brawl on screen
+    at 4x (seed 3): about 190 world plays, 50 capped, no 5 inside 100 ms, a UI play every 120 ms always plays (55 / 55);
+    a house built (`BuildingPlaced` 1, `BuildingDone` 1), a cancelled worker (no `Ready`), a trained worker (`Ready` 1).
+  - `AlertTest` (new, in the loop): workers walked off, the camera 60 m away, four raiders on player 0's Town Hall ->
+    tick 244 a Base alert at the hall, the text, one ping at the hall's minimap pixel, one `Alert`; no second alert or sound
+    for 10 s of view time (the alerts are stepped 0.1 s per tick), the text gone; the next after 10 s; Space -> camera on
+    the alert (0.00 m); the camera on the hall, the next alert pings and sounds with no text; the ping gone after 3 s; the
+    replay of the match shows the same 5 alerts at the same ticks. Windowed `-- --shots <dir>` saves `alert-base.png` and
+    `alert-on-screen.png`.
+  - `ShellTest`: the two `alert` keys (each required, the section required, the brief's wording).
 
 ## AI architecture
 

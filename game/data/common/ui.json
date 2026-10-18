@@ -203,5 +203,9 @@
     "ended": "Replay ended",
     "playing": "Replay",
     "unreadable": "Unreadable file"
+  },
+  "alert": {
+    "base_under_attack": "Your base is under attack",
+    "units_under_attack": "Your units are under attack"
   }
 }

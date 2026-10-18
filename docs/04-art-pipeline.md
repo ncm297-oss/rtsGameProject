@@ -64,7 +64,8 @@ Generated in code so the game is fully playable before any asset is downloaded:
   MultiMesh. Gold mines as yellow rock clusters.
 - **Effects:** simple particles for projectiles, splash, Burning, Sandstorm, Darkness.
 - **Audio:** short generated tones and noise bursts per event (select, command, attack, death,
-  build complete, alert) so audio plumbing exists from M2.
+  build complete, alert) so audio plumbing exists from M2. Since M6-V12 the events play real clips cut from the Sonniss
+  bundle (below, "Import process", audio); each event's tone stays as its fallback when its file is missing.
 
 ## Asset sources
 
@@ -134,7 +135,8 @@ export templates.
 | --- | --- | --- |
 | Kenney – UI Pack + UI Pack: RPG Expansion | <https://kenney.nl/assets> | Panels, buttons, frames for HUD and menus |
 | Kenney – Fonts | <https://kenney.nl/assets/kenney-fonts> | Placeholder UI fonts |
-| Kenney – RPG Audio, Impact Sounds, Interface Sounds | <https://kenney.nl/assets> | SFX: combat, building, UI |
+| Sonniss – GDC 2026 Game Audio Bundle (downloaded, `asset-sources/sonniss-gdc-2026/`) | <https://sonniss.com/gameaudiogdc> | **In use (M6-V12):** every SFX clip, cut by `tools/audio/trim-wav.ps1` |
+| Kenney – RPG Audio, Impact Sounds, Interface Sounds | <https://kenney.nl/assets> | SFX: combat, building, UI (not downloaded; Sonniss covers it) |
 | freesound.org (CC0 filter only) | <https://freesound.org> | Specific SFX gaps (war cries, sandstorm wind) |
 | Kevin MacLeod / incompetech (CC BY, needs attribution) or Kenney music jingles (CC0) | <https://incompetech.com> | Placeholder music |
 | Suno / Udio (paid plans for ownership) | — | Optional original music later |
@@ -219,6 +221,30 @@ tools/
 5. Add the pack to the licensing log below in the same commit.
 6. Check in game at RTS zoom, take a screenshot, compare against the placeholder.
 
+**Audio (SFX, M6-V12).** Sources are long, mostly 96 kHz / 24-bit stereo files; only short cuts enter the repo.
+
+1. The pack is already extracted under `asset-sources/` (the Sonniss bundle: `asset-sources/sonniss-gdc-2026/part1-5/`).
+   Find a cut: `powershell -File tools/audio/trim-wav.ps1 -Info <source.wav> [-WindowMs 25]` prints the header and a peak
+   envelope (dBFS per window) to read where the sound starts and fades.
+2. Add a row to `tools/audio/sfx-manifest.json`: `event` (an `SfxEvent` name), `source` (relative to `asset-sources/`),
+   `destination` (`game/assets/audio/sfx/<category>/<event>_<n>.wav`, n = 1-3, category `ui`, `combat` or `building` as
+   `Sfx`'s clip table says), `start` and `length` in seconds, `normalize` (peak to -1 dBFS) and `fadeMs` (in and out,
+   default 5, so a cut mid-waveform doesn't click).
+3. Run `powershell -File tools/audio/trim-wav.ps1` (no install: PowerShell and .NET): it rebuilds **every** clip from the
+   manifest, byte for byte the same each run (in a git worktree it reads the main checkout's `asset-sources/`; or
+   `-SourceRoot <dir>`). It copies whole sample frames (block align) from the source's data chunk under a fresh header
+   (PCM 8 / 16 / 24 / 32-bit or 32-bit float, the source's rate and channels; no decoding to another format, no
+   resampling), and fails the run for a clip over 3 s or 2 MB, more than 20 clips, or a destination off the pattern.
+4. `& $env:GODOT --headless --path game --import`, then set each new clip's `.import` to `force/mono=true`,
+   `force/max_rate=true`, `force/max_rate_hz=44100`, `compress/mode=0` (16-bit PCM) and import again; commit the `.wav`
+   (LFS, `.gitattributes`) and its `.import`. `SfxTest` checks every clip loads mono, 16-bit, at most 44.1 kHz, at most 3 s,
+   and that every `.wav` is in the manifest.
+5. Licensing log: one row per source pack naming the files cut from it, in the same commit. Never commit a source or an
+   uncut file.
+
+Music: `.ogg` files dropped in `game/assets/audio/music/` play on the `Music` bus in name order, looping the list
+(`MusicPlayer`); none is shipped.
+
 ### Look test (M6-V10, 2026-10-17)
 
 `game/tests/LookTest.tscn` puts the owner's humanoid stack beside a stylized stand-in and today's
@@ -287,3 +313,13 @@ Every third-party asset in the repo gets a row, added in the same commit that im
 | Quaternius – Universal Base Characters (Standard) | Quaternius | <https://quaternius.com/packs/universalbasecharacters.html> | CC0 1.0 (pack's `License_Standard.txt`) | Standard (free) edition, no version number; downloaded 2026-10-08 | Look test (M6-V10): `Superhero_Male_FullBody.gltf` + `.bin` + 7 textures in `game/assets/models/looktest/`, from `asset-sources/Universal Base Characters[Standard]/Universal Base Characters[Standard]/Base Characters/Godot - UE/` |
 | Quaternius – Universal Animation Library (Standard) | Quaternius | <https://quaternius.com/packs/universalanimationlibrary.html> | CC0 1.0 (pack's `License.txt`) | UAL1 Standard, no version number; downloaded 2026-10-08 | Look test (M6-V10): `UAL1_Standard.glb` (no root motion), from `asset-sources/Universal Animation Library[Standard]/Universal Animation Library[Standard]/Unreal-Godot/` |
 | Quaternius – Ultimate Fantasy RTS | Quaternius | <https://quaternius.com/packs/ultimatefantasyrts.html> | CC0 1.0 (pack's `License.txt`; its header says "Ultimate Platformer Pack", a slip in the pack) | Aug 2022 (folder `quaternius-ultimate-fantasy-rts-2022-08`) | Look test (M6-V10): `Barracks_FirstAge_Level1.fbx`, from `asset-sources/quaternius-ultimate-fantasy-rts-2022-08/Ultimate Fantasy RTS - Aug 2022/FBX/` |
+| Epic Stock Media – Board Game: Sound Set Kit for Tabletop and Digital Games (Sonniss GDC 2026) | Epic Stock Media | <https://sonniss.com/gameaudiogdc> | Sonniss GDC Game Audio Bundle licence: royalty-free, commercial use, no attribution; raw files not redistributed or resold (bundle's `License - GDC Game Audio.pdf`, `Readme.txt`) | GDC 2026 bundle, downloaded 2026-10-08 (`asset-sources/sonniss-gdc-2026/`) | SFX (M6-V12): `ui/select_1.wav` from `UIClick_UI Button Analog Vintage Double Click Neutral Dry Press 11_ESM_BG.wav`; `building/building_done_1.wav` from `GAMEBoard_Event Board Reset Organic Multiple Pieces Wood Small 02_ESM_BG.wav` |
+| Cinematic Sound Design – UI Interaction Elements (Sonniss GDC 2026) | Cinematic Sound Design | <https://sonniss.com/gameaudiogdc> | Sonniss GDC Game Audio Bundle licence: royalty-free, commercial use, no attribution; raw files not redistributed or resold (bundle's `License - GDC Game Audio.pdf`, `Readme.txt`) | GDC 2026 bundle, downloaded 2026-10-08 (`asset-sources/sonniss-gdc-2026/`) | SFX (M6-V12): `ui/command_1.wav` from `Accept Boing Crunch.wav`; `ui/refused_1.wav` from `Deny Muted.wav`; `ui/ready_2.wav` from `Ting Coins.wav` |
+| CB_Sounddesign – Applicable Sounds: Organic UI and Building Games SFX (Sonniss GDC 2026) | CB_Sounddesign | <https://sonniss.com/gameaudiogdc> | Sonniss GDC Game Audio Bundle licence: royalty-free, commercial use, no attribution; raw files not redistributed or resold (bundle's `License - GDC Game Audio.pdf`, `Readme.txt`) | GDC 2026 bundle, downloaded 2026-10-08 (`asset-sources/sonniss-gdc-2026/`) | SFX (M6-V12): `ui/ready_1.wav` from `UIMisc_Kalimba 3 Up_CB Sounddesign_APPlicable Sounds.wav` |
+| Federico Soler – Effective Trailer Alarms Vol. 2 (Sonniss GDC 2026) | Federico Soler | <https://sonniss.com/gameaudiogdc> | Sonniss GDC Game Audio Bundle licence: royalty-free, commercial use, no attribution; raw files not redistributed or resold (bundle's `License - GDC Game Audio.pdf`, `Readme.txt`) | GDC 2026 bundle, downloaded 2026-10-08 (`asset-sources/sonniss-gdc-2026/`) | SFX (M6-V12): `ui/alert_1.wav` (the first 1.2 s) from `EffectiveTrailer_Alarms_Vol2_HalfNotes_003.wav` |
+| David Dumais Audio – Melee Weapons Sound Effects Pack 2 (Sonniss GDC 2026) | David Dumais Audio | <https://sonniss.com/gameaudiogdc> | Sonniss GDC Game Audio Bundle licence: royalty-free, commercial use, no attribution; raw files not redistributed or resold (bundle's `License - GDC Game Audio.pdf`, `Readme.txt`) | GDC 2026 bundle, downloaded 2026-10-08 (`asset-sources/sonniss-gdc-2026/`) | SFX (M6-V12): `combat/melee_hit_1.wav` from `METLImpt_METAL SWING HIT Weapon Swing To Metallic Body Impact And Resonant Tail 01_DDUMAIS_MWP2.wav`; `combat/shot_1.wav` from `METLFric_SWING SCRAPE Swift Melee Weapon Swing With A Long Blade 14_DDUMAIS_MWP2.wav` |
+| 344 Audio – Cinematic Fight Vol. 1 (Sonniss GDC 2026) | 344 Audio | <https://sonniss.com/gameaudiogdc> | Sonniss GDC Game Audio Bundle licence: royalty-free, commercial use, no attribution; raw files not redistributed or resold (bundle's `License - GDC Game Audio.pdf`, `Readme.txt`) | GDC 2026 bundle, downloaded 2026-10-08 (`asset-sources/sonniss-gdc-2026/`) | SFX (M6-V12): `combat/melee_hit_2.wav` and `combat/unit_death_2.wav` (two of its four punches) from `FGHTImpt_4 x Punch, Body 02_344 Audio_Cinematic Fight Vol 1.wav` |
+| 344 Audio – Historical Weapons Vol. 2 (Sonniss GDC 2026) | 344 Audio | <https://sonniss.com/gameaudiogdc> | Sonniss GDC Game Audio Bundle licence: royalty-free, commercial use, no attribution; raw files not redistributed or resold (bundle's `License - GDC Game Audio.pdf`, `Readme.txt`) | GDC 2026 bundle, downloaded 2026-10-08 (`asset-sources/sonniss-gdc-2026/`) | SFX (M6-V12): `combat/melee_hit_3.wav` and `building/building_placed_1.wav` (two of its knocks) from `WEAPBlnt_Spear And Stick Impact, Wooden MKH 2_344 Audio_Medieval Weapons Vol 2.wav` |
+| 344 Audio – Anime Fight Voices Vol. 1 (Sonniss GDC 2026) | 344 Audio | <https://sonniss.com/gameaudiogdc> | Sonniss GDC Game Audio Bundle licence: royalty-free, commercial use, no attribution; raw files not redistributed or resold (bundle's `License - GDC Game Audio.pdf`, `Readme.txt`) | GDC 2026 bundle, downloaded 2026-10-08 (`asset-sources/sonniss-gdc-2026/`) | SFX (M6-V12): `combat/unit_death_1.wav` from `VOXMale_Male Adventurer, Active Yell 19_344 Audio_Anime Fight Voices.wav` |
+| Epic Stock Media – Fantasy Game 2: Sound Kit for Enchanted Realms (Sonniss GDC 2026) | Epic Stock Media | <https://sonniss.com/gameaudiogdc> | Sonniss GDC Game Audio Bundle licence: royalty-free, commercial use, no attribution; raw files not redistributed or resold (bundle's `License - GDC Game Audio.pdf`, `Readme.txt`) | GDC 2026 bundle, downloaded 2026-10-08 (`asset-sources/sonniss-gdc-2026/`) | SFX (M6-V12): `combat/cast_1.wav` from `MAGAngl_Magic Light Spell Enchantment Potion Effect Tonal Bright 03_ESM_FG2.wav` |
+| Cinematic Sound Design – Colossal Impacts (Sonniss GDC 2026) | Cinematic Sound Design | <https://sonniss.com/gameaudiogdc> | Sonniss GDC Game Audio Bundle licence: royalty-free, commercial use, no attribution; raw files not redistributed or resold (bundle's `License - GDC Game Audio.pdf`, `Readme.txt`) | GDC 2026 bundle, downloaded 2026-10-08 (`asset-sources/sonniss-gdc-2026/`) | SFX (M6-V12): `building/building_razed_1.wav` from `Woosh Debris.wav` |

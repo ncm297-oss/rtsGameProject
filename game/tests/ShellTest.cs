@@ -328,9 +328,11 @@ public partial class ShellTest : Node
         keys.Add(("hud", UiText.Key(HudText.LastSeen), _ui.Hud(HudText.LastSeen)));
         // M6-V9: the Load Game screen's and the playback banners' keys.
         foreach (LoadText k in Enum.GetValues<LoadText>()) keys.Add(("load", UiText.Key(k), _ui.LoadGame(k)));
+        // M6-V12: the attack alerts' two texts.
+        foreach (AlertText k in Enum.GetValues<AlertText>()) keys.Add(("alert", UiText.Key(k), _ui.Alert(k)));
         // settings: 22 since M6-V7 (confine_cursor); keys 15 + hud 2 since M6-V8; setup 17 since M6-V5 (add_slot, remove_slot); menu 5 + load 16 since M6-V9 (18 since M6-VH3: playing, unreadable);
-        // match_over 27 since M6-V11 (kills, losses and the two in-hand keys out; nine column labels, not_reached and the graph's three in)
-        Check(keys.Count == 5 + 17 + 4 + 22 + 27 + 15 + 2 + 18, $"{keys.Count} shell keys");
+        // match_over 27 since M6-V11 (kills, losses and the two in-hand keys out; nine column labels, not_reached and the graph's three in); alert 2 since M6-V12
+        Check(keys.Count == 5 + 17 + 4 + 22 + 27 + 15 + 2 + 18 + 2, $"{keys.Count} shell keys");
         string json = File.ReadAllText(UiText.DefaultPath).Replace("\r\n", "\n");
         foreach ((string section, string key, string text) in keys)
         {
@@ -341,7 +343,7 @@ public partial class ShellTest : Node
             Check(UiText.Parse(root.ToJsonString(), errors) == null && errors.Count == 1 && errors[0].Contains($"{section}.{key}"),
                 $"ui.json without {section}.{key}: [{string.Join("; ", errors)}]");
         }
-        foreach (string section in new[] { "menu", "setup", "pause", "settings", "match_over", "keys", "load" })
+        foreach (string section in new[] { "menu", "setup", "pause", "settings", "match_over", "keys", "load", "alert" })
         {
             var root = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
             root.Remove(section);
@@ -374,8 +376,13 @@ public partial class ShellTest : Node
             "menu.load", "load.title", "load.date", "load.seed", "load.seats", "load.length", "load.date_item", "load.seat", "load.seat_separator",
             "load.watch", "load.delete", "load.back", "load.empty", "load.skipped", "load.refused", "load.mismatch", "load.ended",
             // M6-VH3 (BUG-0830): the playback mark and an unreadable file's row.
-            "load.playing", "load.unreadable" };
+            "load.playing", "load.unreadable",
+            // M6-V12: the attack alerts.
+            "alert.base_under_attack", "alert.units_under_attack" };
         foreach (string n in named) Check(keys.Any(k => $"{k.Section}.{k.Key}" == n), $"no key {n}");
+        // M6-V12: the brief's wording (docs/02 "HUD layout").
+        Check(_ui.Alert(AlertText.BaseUnderAttack) == "Your base is under attack" && _ui.Alert(AlertText.UnitsUnderAttack) == "Your units are under attack",
+            $"alert texts '{_ui.Alert(AlertText.BaseUnderAttack)}' / '{_ui.Alert(AlertText.UnitsUnderAttack)}'");
         Check(!keys.Any(k => k.Key == "coming_soon"), "setup.coming_soon is still read (nothing shows it since M6-V2)");
         foreach (string gone in new[] { "kills", "losses", "gold_in_hand", "wood_in_hand" })
             Check(!keys.Any(k => k.Section == "match_over" && k.Key == gone), $"match_over.{gone} is still read (the M6-V11 columns replaced it)");

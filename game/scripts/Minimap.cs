@@ -104,8 +104,85 @@ public partial class Minimap : Control
         camera.EdgePanBlocker = this;
     }
 
+    /// <summary>How long an alert ping pulses (s of view time; M6-V12).</summary>
+    public const float PingSeconds = 3f;
+
+    /// <summary>One pulse of a ping: the ring grows from <see cref="PingMinRadius"/> to <see cref="PingMaxRadius"/> pixels and fades, then starts again.</summary>
+    public const float PingPulseSeconds = 0.75f, PingMinRadius = 3f, PingMaxRadius = 14f;
+
+    /// <summary>Pings shown at once; a new one replaces the oldest.</summary>
+    public const int MaxPings = 8;
+
+    private static readonly Color PingColor = new(1f, 0.25f, 0.18f);
+    private readonly System.Numerics.Vector2[] _pingAt = new System.Numerics.Vector2[MaxPings];
+    private readonly float[] _pingAge = new float[MaxPings];
+    private readonly bool[] _pingOn = new bool[MaxPings];
+    private int _pingNext;
+
+    /// <summary>Pings added so far (<see cref="Ping"/>).</summary>
+    public int PingsAdded { get; private set; }
+
+    /// <summary>Pings pulsing now.</summary>
+    public int ActivePings
+    {
+        get
+        {
+            int n = 0;
+            foreach (bool on in _pingOn) if (on) n++;
+            return n;
+        }
+    }
+
+    /// <summary>True while ping slot <paramref name="k"/> (0 .. <see cref="MaxPings"/> - 1) pulses.</summary>
+    public bool PingActive(int k) => _pingOn[k];
+
+    /// <summary>Ping slot <paramref name="k"/>'s map point (m).</summary>
+    public System.Numerics.Vector2 PingAt(int k) => _pingAt[k];
+
+    /// <summary>Seconds ping slot <paramref name="k"/> has pulsed.</summary>
+    public float PingAge(int k) => _pingAge[k];
+
+    /// <summary>Ping slot <paramref name="k"/>'s centre in control pixels (its map point, clamped to the map).</summary>
+    public Vector2 PingPixel(int k)
+    {
+        MinimapTransform fit = Fit;
+        System.Numerics.Vector2 px = fit.ToPixel(fit.ClampToMap(_pingAt[k]));
+        return new Vector2(px.X, px.Y);
+    }
+
+    /// <summary>The ring's radius (px) and opacity of a ping <paramref name="age"/> seconds old: one pulse every <see cref="PingPulseSeconds"/>.</summary>
+    public static (float Radius, float Alpha) PingRing(float age)
+    {
+        float phase = age % PingPulseSeconds / PingPulseSeconds;
+        return (PingMinRadius + (PingMaxRadius - PingMinRadius) * phase, 1f - phase);
+    }
+
+    /// <summary>Starts a <see cref="PingSeconds"/> pulsing ring at map point <paramref name="at"/> (m): an attack alert (M6-V12, docs/02 "Minimap").</summary>
+    public void Ping(System.Numerics.Vector2 at)
+    {
+        int k = _pingNext;
+        _pingNext = (_pingNext + 1) % MaxPings;
+        _pingAt[k] = at;
+        _pingAge[k] = 0f;
+        _pingOn[k] = true;
+        PingsAdded++;
+    }
+
+    // Ages the pings by the frame's view time; one past PingSeconds goes.
+    private void AgePings(float delta)
+    {
+        if (!(delta > 0f)) return;
+        for (int k = 0; k < MaxPings; k++)
+        {
+            if (!_pingOn[k]) continue;
+            _pingAge[k] += delta;
+            if (_pingAge[k] >= PingSeconds) _pingOn[k] = false;
+        }
+    }
+
     public override void _Process(double delta)
     {
+        AgePings((float)delta);
         if (Raster == null || _runner.Simulation is not Simulation sim) return;
         SyncFog(sim.World);
         if (sim.TickNumber - _lastRefreshTick >= RefreshTicks) Refresh(sim);
@@ -174,6 +251,14 @@ public partial class Minimap : Control
         DrawTextureRect(_dotsTexture, rect, false);
         UpdateOutline();
         DrawPolyline(_outline, OutlineColor, 1.5f);
+        for (int k = 0; k < MaxPings; k++)
+        {
+            if (!_pingOn[k]) continue;
+            Vector2 c = PingPixel(k);
+            (float radius, float alpha) = PingRing(_pingAge[k]);
+            DrawArc(c, radius, 0f, Mathf.Tau, 24, new Color(PingColor, alpha), 2f);
+            DrawArc(c, PingMinRadius, 0f, Mathf.Tau, 12, PingColor, 2f);
+        }
     }
 
     /// <summary>Projects the four viewport corners onto the ground plane at the focus height and maps them to control pixels, clamped to the map.</summary>

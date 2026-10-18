@@ -354,8 +354,8 @@ Shipped maps (working titles):
 **Grid hotkeys:** building production cards and worker build menus use the full 5×3 grid
 (`Q W E R T / A S D F G / Z X C V B`). They never conflict with A/S/H because those cards have no
 unit commands. All keys are rebindable: **Settings → Keybinds** lists the orders, Tab, B / V, the control group digits and
-the 15 grid keys; click a key and press the new one. Esc, Shift / Ctrl / Alt, the camera's arrow keys, F10 and F12 stay
-fixed, and a key another command (or grid key) already uses is refused with a line saying which. A control group digit or
+the 15 grid keys; click a key and press the new one. Esc, Shift / Ctrl / Alt, the camera's arrow keys, Space, F10 and F12
+stay fixed, and a key another command (or grid key) already uses is refused with a line saying which. A control group digit or
 Tab never shares a grid key (with a building selected the digit must still recall its group). Mouse buttons and the
 camera keys are not rebindable yet.
 
@@ -380,7 +380,11 @@ Alt + click pings. Shows terrain, fog, resources, units as dots in player colors
 **HUD layout (StarCraft style):** resources and population top-right, game clock and menu
 top-center, minimap bottom-left, selection panel bottom-center (portrait, stats, multi-select
 grid, production queue), command card bottom-right (5×3). Alerts ("Your base is under attack")
-show text, a minimap ping, and a sound.
+show text, a minimap ping, and a sound. An alert is raised when one of your buildings ("Your base is under attack") or
+units ("Your units are under attack") loses hit points, at most one per 30 m per 10 s; off screen it shows its text for
+4 s at the top centre, on screen only the ping (3 s) and the sound. Space jumps the camera to the last one. Combat sounds
+(blows, shots, deaths, razing, spells) play only for what you see on screen, at most four starting in any 100 ms; your
+own cues (select, order, refused, building placed or finished, unit or tech ready, alert) always play.
 
 ## AI opponent
 

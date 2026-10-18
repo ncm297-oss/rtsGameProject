@@ -234,6 +234,11 @@ public partial class Match : Node3D
             if (!live && ui != null) hud.AddChild(ReplayMark(ui.LoadGame(LoadText.Playing)));
         }
 
+        // M6-V12: the sounds of what the player sees and of their own production, and the attack alerts (text, ping, sound, Space).
+        var sfx = GetNode<Sfx>("Sfx");
+        GetNode<SoundCues>("SoundCues").Init(_runner, sfx, camera, fog, units, SelectionController.LocalPlayer);
+        GetNode<AlertHud>("Alerts").Init(_runner, camera, sfx, minimap, options.NoHud ? null : hud, UiText.Shared, SelectionController.LocalPlayer);
+
         GetNode<DebugOverlay>("DebugOverlay").Init(_runner, selection, camera,
             GetNode<NavOverlayView>("World3D/NavOverlay"), GetNode<FlowArrowsView>("World3D/FlowArrows"), options.DebugOverlay);
         var shot = GetNode<Screenshotter>("Screenshotter");

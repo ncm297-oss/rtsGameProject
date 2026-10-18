@@ -18,7 +18,8 @@ namespace Rts.Game;
 /// <c>{ "commands": { "&lt;id&gt;": { "displayName", "hotkeyHint" } }, "buildMenus": { "basic": [slot ids], "advanced": [slot ids] },
 /// "placement": { "&lt;reason&gt;": text }, "train": { "&lt;reason&gt;": text }, "research": { "&lt;reason&gt;": text },
 /// "states": { "&lt;state&gt;": text }, "hud": { "&lt;label&gt;": text }, "menu": { "&lt;key&gt;": text }, "setup": { "&lt;key&gt;": text },
-/// "pause": { "&lt;key&gt;": text }, "settings": { "&lt;key&gt;": text }, "match_over": { "&lt;key&gt;": text }, "keys": { "&lt;key&gt;": text } }</c>. Command ids are <see cref="CommandIds"/>;
+/// "pause": { "&lt;key&gt;": text }, "settings": { "&lt;key&gt;": text }, "match_over": { "&lt;key&gt;": text }, "keys": { "&lt;key&gt;": text },
+/// "load": { "&lt;key&gt;": text }, "alert": { "&lt;key&gt;": text } }</c> (the <c>alert</c> keys those of <see cref="AlertText"/>, M6-V12). Command ids are <see cref="CommandIds"/>;
 /// the placement, train and research keys are the snake_case names of every <see cref="PlacementError"/>,
 /// <see cref="TrainError"/> and <see cref="ResearchError"/> member but <c>None</c> (<c>blocked</c>, <c>queue_full</c> ...),
 /// the state keys those of every <see cref="UnitState"/> (M3-V3) plus <see cref="OrderedAttackKey"/> (M4-V2), the hud keys those of <see cref="HudText"/>,
@@ -77,6 +78,7 @@ public sealed class UiText
     private readonly string[] _matchOver;
     private readonly string[] _keys;
     private readonly string[] _load;
+    private readonly string[] _alert;
     private readonly string[] _colourNames = Blank(ColourCount);
     private readonly uint[] _colourRgb = new uint[ColourCount];
 
@@ -94,6 +96,7 @@ public sealed class UiText
         _matchOver = Blank(Enum.GetValues<MatchOverText>().Length);
         _keys = Blank(Enum.GetValues<KeysText>().Length);
         _load = Blank(Enum.GetValues<LoadText>().Length);
+        _alert = Blank(Enum.GetValues<AlertText>().Length);
         Array.Fill(_names, "");
         Array.Fill(_hints, "");
     }
@@ -163,6 +166,9 @@ public sealed class UiText
 
     /// <summary>A Load Game screen or replay playback text (<c>ui.json</c> <c>load</c>, M6-V9).</summary>
     public string LoadGame(LoadText key) => (uint)key < (uint)_load.Length ? _load[(int)key] : "";
+
+    /// <summary>An attack alert's text (<c>ui.json</c> <c>alert</c>, M6-V12).</summary>
+    public string Alert(AlertText key) => (uint)key < (uint)_alert.Length ? _alert[(int)key] : "";
 
     /// <summary>A Load Game date cell: <c>load.date_item</c> with <paramref name="when"/> for its <c>{0}</c>.</summary>
     public string ReplayDate(DateTime when) => string.Format(CultureInfo.InvariantCulture, LoadGame(LoadText.DateItem), when);
@@ -300,6 +306,7 @@ public sealed class UiText
             Section<KeysText>(root, "keys", ui._keys, skipZero: false, forward: false, errors);
             // M6-V9: the Load Game screen and the playback banners; three formats.
             Section<LoadText>(root, "load", ui._load, skipZero: false, forward: false, errors);
+            Section<AlertText>(root, "alert", ui._alert, skipZero: false, forward: false, errors); // M6-V12: the HUD's attack alerts
             string dateItem = ui._load[(int)LoadText.DateItem];
             if (dateItem.Length > 0 && !IsDateFormat(dateItem))
                 errors.Add($"ui.json: load.{Key(LoadText.DateItem)} must be a format with {{0}} (the date) and no other placeholder: '{dateItem}'");
