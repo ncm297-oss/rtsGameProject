@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-17-0554, task M5-P2 (QA re-check after fix round 1) |
 | System | movement, flank rule budget (`FlankMembersPerStride`, `FlankMemoryTicksPerMember`) |
-| Fixed by | |
+| Fixed by | d048a21 (M5-H3): `Movement/FlankTests.LongOwnLineAgainstACliff_WalkerGoesRoundTheFarEnd_AndArrives` (1, 4) and `QA/FlankFixRound1QaTests.LongLineAgainstACliff_*` (1, 4): red on base, green on head. QA 2026-10-17-1624: `QA/SimHardeningM5H3QaTests.CliffLine_WalkerBehindAnyMember_Arrives` (lines 16 / 24 / 32, 9 positions, with and without spam) green on head, all 6 rows red on base. |
 
 ## Repro
 1. `QA/FlankFixRound1QaTests.LongLineAgainstACliff_WalkerTakesTheOpenEnd` (both rows skipped with this id). The map is

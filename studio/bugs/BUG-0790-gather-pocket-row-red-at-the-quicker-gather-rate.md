@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-16-1654, task M5-4f (the dev's full run; filed by the Producer, the dev can't write `studio/bugs`) |
 | System | economy / movement: gather crowding at a mine face; the QA stress row `Stress/GatherPocketStressTests.Pocket_NoGathererWedgesOutOfReach_ConservationExact` |
-| Fixed by | |
+| Fixed by | d048a21 (M5-H3): `Economy/StandPointTests` (2 rows), `QA/Bug0790FaceProbeQaTests.MineOneSide40_*` (seeds 2, 8), `Stress/GatherPocketStressTests (MineOneSide, 40)`: all red on base bf8026e, green on head (QA 2026-10-17-1624). Seeds 9-40: `QA/SimHardeningM5H3QaTests.OneSidedPockets_Seeds9To40_*` green on head (the mine x40 row red on base). |
 
 ## Repro
 1. On `studio/2026-10-16-1654-sim` (8ac7b43; `rules.json` `gatherRate` gold 0.85, wood 0.75):

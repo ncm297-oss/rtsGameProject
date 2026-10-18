@@ -729,6 +729,11 @@ public class FlankQaTests
     [InlineData(4UL)]
     [InlineData(5UL)]
     [InlineData(6UL)]
+    // QA M5-H3 (2026-10-17-1624): seeds 7-30 after the BUG-0887 / 0888 movement changes.
+    [InlineData(7UL)] [InlineData(8UL)] [InlineData(9UL)] [InlineData(10UL)] [InlineData(11UL)] [InlineData(12UL)]
+    [InlineData(13UL)] [InlineData(14UL)] [InlineData(15UL)] [InlineData(16UL)] [InlineData(17UL)] [InlineData(18UL)]
+    [InlineData(19UL)] [InlineData(20UL)] [InlineData(21UL)] [InlineData(22UL)] [InlineData(23UL)] [InlineData(24UL)]
+    [InlineData(25UL)] [InlineData(26UL)] [InlineData(27UL)] [InlineData(28UL)] [InlineData(29UL)] [InlineData(30UL)]
     public void FlankFuzz_TwinRunsHashEqual_InvariantsHold(ulong seed)
     {
         ulong[] a = FlankFuzz(seed), b = FlankFuzz(seed);

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | closed (known limit, M5-H3 decision: docs/03 "Determinism", the slot-order class) |
 | Found | 2026-10-17-0554, task M5-P2 |
 | System | movement / surround rule (slot-order dependence) |
-| Fixed by | |
+| Fixed by | d048a21 (M5-H3): documented. `QA/FlankQaTests.Criterion1Scene_BothSpawnOrders_FirstParting` gains a same-order row (never parts, rule off or on); the reversed rows keep "no earlier than the rule off". Green at QA 2026-10-17-1624. |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~FlankQaTests.Criterion1Scene_BothSpawnOrders_FirstParting"`

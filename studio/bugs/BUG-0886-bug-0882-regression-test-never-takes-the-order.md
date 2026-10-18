@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-17-0554, task M5-P2 (QA re-check after fix round 1) |
 | System | tests: `Combat/OrderedChaseReachTests.AnOrderedAttackOnAHallRingedByTrees_IsGivenUp_NotPacedForEver` |
-| Fixed by | |
+| Fixed by | d048a21 (M5-H3): `Combat/OrderedChaseReachTests.AnOrderedAttackOnAHallRingedByTrees_IsGivenUp_NotPacedForEver(1, 10)` and `(2, 20)` take the order (spotter, asserted) and are red at 3ec22ee (unit 4 and unit 3 never give the hall up; QA 2026-10-17-1624 ran it there), green on head. |
 
 ## Repro
 1. Check out 3ec22ee (before fix round 1, BUG-0882 still open), copy in the test from cbeb944, and run

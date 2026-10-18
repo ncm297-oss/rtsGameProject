@@ -133,6 +133,11 @@ public class FlankFixRound1QaTests
     [InlineData(Kind.AttackMove, 30, 12, 0)]
     [InlineData(Kind.Ordered, 20, 8, 3, Skip = "BUG-0889: one ordered Crossbowman queued behind its own Crossbowmen on the hall never strikes (pre-existing, 321d7d6 too)")]
     [InlineData(Kind.AttackMove, 20, 8, 3)]
+    // QA M5-H3 (2026-10-17-1624): more ring sizes after the BUG-0887 / 0888 movement changes.
+    [InlineData(Kind.Ordered, 40, 0, 0)]
+    [InlineData(Kind.Ordered, 20, 0, 3)]
+    [InlineData(Kind.AttackMove, 40, 16, 0)]
+    [InlineData(Kind.AttackMove, 10, 4, 3)]
     public void HallRingedByFriends_ReachableChasersNeverGiveItUp(Kind kind, int melee, int ranged, int trees)
     {
         var on = HallScene(kind, melee, ranged, trees, flank: true, ticks: 2000);

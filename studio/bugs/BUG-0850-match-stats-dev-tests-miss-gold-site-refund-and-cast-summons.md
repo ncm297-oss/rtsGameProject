@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-17-0056, task M6-S1 |
 | System | match stats tests (`Economy/MatchStatsTests`, `Stress/MatchStatsFuzzStressTests`) |
-| Fixed by | |
+| Fixed by | d048a21 (M5-H3): `Economy/MatchStatsTests` gains an Armory refund (gold and wood) and `ASummonFromARealCast_IsNotTrained_AndItsExpiryIsNoLoss`. These are coverage additions, so they are green on base too (the code was right). |
 
 ## Repro
 Mutation runs in a scratch copy of the branch (the production code in the worktree was not touched):

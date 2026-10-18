@@ -271,3 +271,9 @@ M6-V9 (2026-10-16-2036, view): shell replay recording / playback row added. `QaM
 M6-V10 (2026-10-17-0056, view, QA light): art look test row added. No new test code (asset-only task); evidence is the fresh-clone import + LookTest run and a pointer-file fault injection. BUG-0860 (S3) LookTest hang without LFS objects, BUG-0861 (S4) export ships look-test assets.
 
 M6-V11 (2026-10-17-0554, view, QA standard): stats screen / graph row added. `QaM6V11Test` (oracle match, replay equality, graph edge rows, 6-digit layout). BUG-0890 (S4) graph and heading polish.
+
+M5-H3 (2026-10-17-1624, sim, QA full): sim hardening. These rows gain tests:
+- **Flank through your own line.** `QA/SimHardeningM5H3QaTests` has the BUG-0887 spam grid (lines 10-32 at 0 / 30 / 45 / 60 degrees, 4 offsets, re-click every 2 / 3 / 7 ticks; the 10-line rows are skipped under BUG-0911) and the BUG-0888 cliff-foot rows (lines 16 / 24 / 32, 9 walker positions, with and without spam). It also has same-order hash twins and reversed-spawn bit-equal paths for both scenes, over-plug-cluster lines of 40 / 48 (report, no corruption), and 0 B a tick mid-flank with spam. `QA/FlankQaTests.FlankFuzz_*` now runs seeds 1-30, and `QA/FlankFixRound1QaTests.HallRingedByFriends_*` has 4 more ring sizes.
+- **Economy & buildings.** BUG-0790's stand points: the one-sided mine and tree pockets at 12 / 40 workers, seeds 9-40, with the wedge rule and exact conservation, and 0 B a tick on a crowded mine face.
+- **AI opponent.** BUG-0910: the no-site wait after a requires failure (skipped with that id).
+- **Perf.** BUG-0764's re-baseline was checked with four idle Category=Perf runs (base, head, base, head) and paired fresh-process A/B on 500 moving, the tight blob, both brawls, the gather row and the far-corner delta (BUG-0912).
