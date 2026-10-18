@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (M6-V12 6a62850, verified by QA 2026-10-17-2344: `CombatViewTest` PASS in the scene loop and alone; "lit again: 4 raiders on one Heavy Infantry, 3 flash hits, 1 while lit by tick 9" on seeds 1 and 6) |
 | Found | 2026-10-17-1624, task M6-VH3 (developer report; reproduced by QA on base) |
 | System | view tests: `game/tests/CombatViewTest.cs` (hit-flash row) on the M5-P2 sim |
-| Fixed by | |
+| Fixed by | M6-V12 (6a62850): `CombatViewTest.LitAgain` stages the row on its own; the brawl's own count is printed, not required |
 
 ## Repro
 1. Base f8036fc (before M6-VH3), built: `& $env:GODOT --headless --path game res://tests/CombatViewTest.tscn`
