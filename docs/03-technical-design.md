@@ -7626,7 +7626,12 @@ kind, no data or `rules.json` field, nothing hashed. Every counter is per player
   pairs (ms, base / head): 500 moving 0.685, 0.705, 0.682 / 0.682, 0.687, 0.714; 2,500 tight blob 4.44, 4.41, 4.40 / 4.45,
   4.42, 4.45; 500 v 500 brawl ticks 5-205 3.40, 3.39, 3.36 / 3.38, 3.41, 3.39; mixed brawl 2.16, 2.16, 2.13 / 2.10, 2.11,
   2.11: within noise. The Windows power plan is "Lenovo Default"; the slowdown under sustained load is the owner's to look
-  at (STATE "Waiting on you"), and if it is fixed these gates can come back down.
+  at (STATE "Waiting on you"), and if it is fixed these gates can come back down. **Producer note at the M5-H3 ACCEPT (BUG-0912):**
+  with the 250 v 250 vision brawl (500 units) gated at 7.5 ms and the 500 v 500 brawl at 6.9 ms, **no Perf row checks the 4 ms
+  500-unit design budget on this PC's sustained clock any more**; until the clock is looked at or a short fresh-process gate row
+  is added (the next sim hardening), the paired A/B is the only guard of that budget. The far-corner scan's 0.64 ms gate was set
+  from one head reading (QA: base never over 0.25 in five samples, the mean difference +0.011 ms): the next sim hardening gives
+  that row more pairs and a bound near 0.35 ms (BUG-0912).
 - The M1 perf criterion is `PerfCriterionTests.FiveHundredMovingUnits_AverageTickUnder4Ms` (M1-7):
   500 units of every type, two players, on the default 128 map, spawned within 12 path cells of the
   center and sent to the farthest passable cell. It asserts that at least 95% are Moving after every
