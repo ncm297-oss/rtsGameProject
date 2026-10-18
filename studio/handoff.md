@@ -1,5 +1,15 @@
 # Handoff: brief for the next session
 
+**PLAN 2026-10-18-1236 (the second full session of 2026-10-18, 2 / 8): GO on all three tracks.** Checks: inbox New empty; `main` 114b32e
+builds 0 warnings (24 s); smoke PASS in the view worktree; the non-Perf suite on `main` **7,250 passed / 0 failed / 14 skipped of 7,264 in
+34 m 35 s**; `SaveFormat.CurrentVersion` 1,
+both `ai.json` 3 openings, golden 554A3832241A0896 and `ui.json` `match_over.opening` verified; one docs drift fixed (docs/02 "Game flow" 5
+quoted the retired name "Standard"). Open S1 / S2: none (S3 18, S4 20 incl. two flakes). Tasks: **sim M6-S3** (save slice 2, the AI seats +
+BUG-0960 item 1; feature, QA full), **view M6-V14** (the Save / Load screen; feature, QA standard), **data D-H6** (an early data hardening:
+BUG-0982, the pairs report's wait length and a third seed; QA standard). Counters after: sim 3 / 4, view 3 / 4, data 0 / 4. Bug ids: sim from
+BUG-0990, view from BUG-1000, data from BUG-1010. The "Current session plan" under each track is the brief; the rest of this file is the
+0516 ACCEPT handoff it was planned from.
+
 Written by the Producer at the ACCEPT of session **2026-10-18-0516** (the first full session of 2026-10-18; cap 8, so **1 / 8 done**).
 **All three tracks ACCEPT**, merge order sim → view → data (the conductor unions `studio/bugs/README.md`, `studio/qa/coverage.md`,
 docs/02 and docs/03: every track appended in its own region). Golden `data-hash` moves once at the data merge: **1CBDE4DBA7D17AE1 →
@@ -48,6 +58,33 @@ Unchanged 1-36 (the 2344 ACCEPT handoff in git history has 35 and points to the 
 
 ## Sim track
 
+### Current session plan (2026-10-18-1236): M6-S3 — save slice 2, the AI seats (+ BUG-0960 item 1)
+
+Feature, QA full, ≤ 1,500 lines. Files: `sim/Rts.Sim/Save/**`, new `sim/Rts.Sim/Ai/*.Save.cs` parts (`AiPlayer`, `Blackboard`), the
+`Simulation.cs` save / load path, `sim/Rts.Sim.Tests/Save/**`, docs/03 "Save format (M6-S2)" (+ a slice-2 paragraph). Not `game/**`, not
+`game/data/**`, not the data track's test folders. **Goal:** a match with AI seats saves and loads hash-equal; lift `AiSeatsUnsupported`.
+- Store per AI seat (a new section tag, after the human sections): `OpeningIndex` (checked against the pick the loaded seat's fresh
+  construction makes from the seed: a mismatch is `Malformed`), the AI RNG's full state after construction (restored over the fresh one;
+  the loaded seat draws the pick exactly once, at construction), `_queueFull`, `NoSiteFound`, `SiteSearches`, `Thinks`, `CommandsSent`,
+  and the `Blackboard` whole: every array and scalar, scratch included (`SeenEnemies`, `DefenseOrder`, `DefenseKey`, `SiteBuiltAt`: cheaper
+  to store than to prove unread), the retry marks (`_badType` / `_badCell` / `_badNext`), `HousePending` / `ProductionPending` /
+  `StepPending`, the recent casts. `PlayerView`: store whatever it holds outside `FogStore` (check; nothing expected).
+- Rule 36: the two signatures and the 8 codes unchanged; `SaveFormat.CurrentVersion` 1 → 2, no reader for 1 (a version-1 file reads
+  `VersionMismatch`). `Tick()` and every `Run` untouched; no `k` line of the golden moves; no per-tick allocation.
+- **BUG-0960 item 1 folded:** a minimum-length pre-check from the header's capacities and map size before `World.ForLoad`: the forged
+  max-capacity header (`SaveForgeryQaTests.AForgedHeader_WithEveryCapacityAtTheFormatMaximum_*`) refuses `Malformed` in microseconds, well
+  under 1 MB allocated.
+- **Content-independent fixtures (rule 37):** the round-trip scenes find "mid-wave / mid-cast / in a no-site wait / during a defense" by
+  probing the Blackboard (`WaveActive`, `RecentCastCount > 0`, `StepNoSiteUntil[k] > now`, `Defending`) and saving at the first such tick,
+  never at a tick literal pinned to the shipped `ai.json` (the data track may move `cadre_rush`'s threshold this session).
+Acceptance: (1) `SaveRoundTripTests` AI scenes: AI-v-AI seeds 1-5, 2-4 seats, every difficulty, Malazan and Whirlwind, saved at {1, the
+first think, 137, the four probed moments, 1,000}, hash-equal every tick to T + 2,000 and `AiOpening(p)` + every Blackboard field equal at
+T / T + 1 / T + 2,000; (2) slice 1's 13 human scenes still green, save → load → save byte-identical; (3) a human + AI (the menu's match)
+saves and loads: `TrySave` true, hash-equal to T + 2,000; (4) `SaveRefusalTests` on a small AI save: every flipped byte and truncation
+refused with its code, nothing thrown, `OpeningIndex` forged → `Malformed`, version 1 → `VersionMismatch`; (5) the BUG-0960 item 1 row
+green with the allocation bound; (6) `SavePerfTests`: the menu match's size and times printed (no gate loosened; < 8 MB / 100 ms alone);
+(7) `ArchitectureTests.SaveSource_*` cover the new parts; (8) docs/03 says what the AI section holds and the version bump.
+
 ### Next task candidates (in order)
 
 1. **M6-S3 — save slice 2: the AI seats** (feature, counter 2 → 3 / 4; QA full; ≤ 1,500 lines; files `sim/Rts.Sim/Save/**`,
@@ -85,6 +122,31 @@ BUG-0144, BUG-0941, BUG-0940, BUG-0914 + BUG-0915 (S4 flakes), BUG-0913 (7 nits)
 ---
 
 ## View track
+
+### Current session plan (2026-10-18-1236): M6-V14 — the Save / Load screen
+
+Feature, QA standard, ≤ 1,200 lines. Files: `game/scripts/**` (`PauseMenu`, `LoadGameScreen`, a new `SaveStore` beside `ReplayStore`,
+`Match` / `SimRunner` / `Main` / `LaunchOptions` resume path), `game/data/common/ui.json` new `save.*` keys and `pause.save` / `load.load`,
+`game/tests/**`, docs/02 "Game flow" 1 and 6, docs/03 "Implementation (M6-V14)". Not `sim/**` outside read-only `ViewApi/` accessors.
+- **Save** from the pause menu to `user://saves/<yyyyMMdd-HHmmss>-seed<seed>.sav` through `Simulation.TrySave` (between ticks, on the
+  main thread), the recording so far written beside it as `<same stem>.replay`; a toast / line with the result (`save.saved` with the
+  file's clock, or the `save.<code>` text). **The Save button is never greyed from `HasAiSeat`:** it calls `TrySave` and shows the code's
+  text on refusal, so it works the moment the sim's slice 2 merges (same session, merged before the view).
+- **Load Game** lists saves beside replays (one list, newest first; a save row reads date, seed, players, tick → clock, a "Save" tag;
+  a replay row "Replay"): Load (saves) / Watch (replays) / Delete / Back. A load resumes the match through `SimRunner` at the saved tick
+  with the HUD, camera, fog view, selection and minimap fresh, the seats from the save's header (faction, controller, difficulty, colours
+  from the slot order); **a loaded match is not recorded** (the recorder attaches at tick 0 only): say so in docs/02 6 and docs/03, and the
+  pause menu shows `save.not_recorded` for it. `--load <path>` flag.
+- Every `SaveError` has a `save.*` text: `bad_magic`, `version_mismatch`, `data_mismatch`, `invalid_header`, `ai_seats_unsupported`,
+  `truncated`, `checksum_mismatch`, `malformed` (plain words; name the keys in the report). Delete and unreadable files as `LoadGameScreen`
+  handles replays today (BUG-0921's rules).
+- **Tests must not pin the AI refusal:** no scene or test asserts that a match with an AI seat is refused (it stops being true at the
+  merge); the AI path is covered by the human twin + the error texts' format rows only.
+Acceptance: (1) `SaveLoadTest` scene: a `--skirmish --players 2` human twin saves at tick 500, quits to menu, loads, ticks 1,000 more beside
+an unsaved twin: hash equal every tick, HUD / camera / selection fresh, `.replay` written beside the `.sav`; (2) the list shows saves and
+replays with the right columns and tags, Delete removes a save, a corrupted `.sav` is refused with the right text and never crowds out good
+rows; (3) `--load <path>` boots into the match; (4) `ShellTest` key rows for every new `ui.json` key (the format checks); (5) the loop
+green, smoke PASS, 0 warnings, `sim/` diff empty or `ViewApi/` read-only; (6) docs/02 1 + 6 and docs/03 updated.
 
 ### Next task candidates (in order)
 
@@ -124,6 +186,28 @@ items 2-3 (unreachable), BUG-0743 item 3 (wontfix candidate).
 ---
 
 ## Data track
+
+### Current session plan (2026-10-18-1236): D-H6 — early data hardening (BUG-0982, the pairs report's wait length, a third seed)
+
+Hardening (counter 2 → 0 / 4, taken early: the inbox holds no D21 answer and no schema the track needs is on `main`), QA standard, ≤ 400
+lines. Files: `game/data/factions/malazan/ai.json` (only if the measure says so), `docs/factions/malazan.md` (+ `whirlwind.md` if a cell
+moves), `sim/Rts.Sim.Tests/Content/AiOpeningPairsReportTests.cs`, `Content/AiContentTests.cs` (the pin, if the number moves),
+`sim/Rts.Sim.Tests/QA/Content/D21OpeningsQaTests.cs`, the golden header
+in `QA/GatherWedgeQaTests.cs` once if `ai.json` moves (reason in the `SameGameDataHashes` comment and the commit body). Not `whirlwind/ai.json`,
+not `common/**`, no other C#.
+- **BUG-0982, decided by measurement (Producer default, owner may revisit):** run `cadre_rush` v `raider_rush` on seeds 7, 8 and a third
+  with `attack.minArmyPop` 18 (today), 16 and 14 (`minArmyCost` = the floor of the Age I mix at that pop, D21's rule). Take the lowest
+  threshold ≤ 16 at which seed 8 waves **and** Age II on the measured seeds comes no more than 60 s later than today; else keep 18 and the
+  page says in plain words that this greedy opening can fall to a rush without attacking. If the number moves: the description's "18" moves
+  with it, the page's `cadre_rush` section and spending cells re-print, the golden regenerates once. Make QA's
+  `EveryPairing_SecondSeed_BothSidesWaveIn20Minutes` row strict (`first[p] >= 0`) if fixed; else keep it printing and say why in the row.
+- **`AiOpeningPairsReportTests`:** a step "legitimately waiting" on gold or wood prints how long it has been due (ticks → m:ss) and the
+  banks at the end; a wait over 5 minutes is flagged in the output as BUG-0981's pattern (not a failure: the fix is the sim's M5-4g).
+- **A third seed per pairing** in `D21OpeningsQaTests` (same allowances as the second); print every row's opening, first wave, Age II.
+Acceptance: (1) the measurement table (threshold × seed: waved at, Age II at, defeated at) in the report and on the malazan page; (2)
+`Content` + `QA/Content` + `DataValidationTests` + `ReplayGoldenTests` green on the branch; (3) no sim-owned test outside the files named
+changes; if `ai.json` moves, `AiContentTests` pins the new number both ways and the golden's two lines only; (4) rule 31: the spending cells
+re-printed if any moved; (5) a review table for the owner (opening / field / old → new / why, quoted description).
 
 ### Next task candidates (in order)
 
