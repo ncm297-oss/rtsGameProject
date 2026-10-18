@@ -4803,6 +4803,13 @@ track right after S1/S2 bugs).
     not hashed)**; **the opening pick (`AiPlayer.OpeningIndex`, M5-8a) and the AI's RNG state after it** (the pick is the stream's first
     draw; a loaded seat must not draw again: store both, or rebuild the seat from the seed before any think; the round-trip test compares
     `Simulation.AiOpening` per seat). **Planned as the sim's next task (slice 1, ~800 lines: the format and the round trip).**
+    **Sliced at the 2026-10-18-0516 PLAN (Producer):** slice 1 (M6-S2, this session) = the format + `Simulation.TrySave(Stream, out
+    SaveError)` / `TryLoad(GameData, Stream, out Simulation?, out SaveError)` + every `World` store for **human-seat matches** (an AI
+    seat is refused with `AiSeatsUnsupported`); slice 2 (next session) = the AI seats (Blackboard, the pick, the AI RNG) and lifts the
+    refusal without changing the signatures (standing rule 36), so the view's Save / Load screen is built against slice 1 the same
+    session. **The replay log so far is the view's:** its Save screen writes the recording beside the save file; the sim's save holds
+    no replay. Derived structures (SpatialHash, the stealth mask, the flow-field cache) are saved whole unless a rebuild is proven
+    tick-for-tick identical.
 
 ## Feature queue: sim track (feature sessions, in order)
 
