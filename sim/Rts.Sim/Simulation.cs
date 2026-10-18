@@ -60,6 +60,13 @@ public sealed class Simulation : ICommandSink
     /// <summary>Player <paramref name="player"/>'s AI, or null for a human seat (tests and tooling).</summary>
     internal AiPlayer? AiOf(int player) => (uint)player < (uint)_ai.Length ? _ai[player] : null;
 
+    /// <summary>
+    /// M5-8a: the index of the opening player <paramref name="player"/>'s AI plays in its faction's
+    /// <see cref="AiDef.Openings"/> (the id and name are there), or -1 for a human seat or an unknown player. Picked at
+    /// construction from the seed (not hashed: a replay rebuilds it).
+    /// </summary>
+    public int AiOpening(int player) => AiOf(player)?.OpeningIndex ?? -1;
+
     /// <summary>The simulated state. Read it; never write it from outside the sim.</summary>
     public World World { get; }
 

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text.Json;
 
 namespace Rts.Sim.Data;
 
@@ -345,10 +346,24 @@ internal sealed class ZoneStatusJson
 internal sealed class AiFileJson
 {
     public AiDifficultiesJson? Difficulties { get; set; }
+    public List<AiOpeningJson?>? Openings { get; set; }
+    public AiRetreatJson? Retreat { get; set; }
+
+    // M5-8a: the pre-openings top-level fields, read as any JSON only to refuse them with one clear error each ("moved into
+    // openings[]") instead of the unknown-field error, so a stale file can't half-load.
+    public JsonElement? BuildOrder { get; set; }
+    public JsonElement? Compositions { get; set; }
+    public JsonElement? Attack { get; set; }
+}
+
+internal sealed class AiOpeningJson
+{
+    public string? Id { get; set; }
+    public string? DisplayName { get; set; }
+    public string? Description { get; set; }
     public List<AiStepJson?>? BuildOrder { get; set; }
     public List<AiCompositionJson?>? Compositions { get; set; }
     public AiAttackJson? Attack { get; set; }
-    public AiRetreatJson? Retreat { get; set; }
 }
 
 internal sealed class AiDifficultiesJson

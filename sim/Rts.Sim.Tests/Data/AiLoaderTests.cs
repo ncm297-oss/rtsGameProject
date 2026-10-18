@@ -32,8 +32,8 @@ public class AiLoaderTests
             Assert.False(ai.Difficulty(AiDifficulty.Easy).FocusFire || ai.Difficulty(AiDifficulty.Easy).PullBackWounded);
             Assert.True(ai.Difficulty(AiDifficulty.Normal).UseAbilities);
             // At least one real step, naming one of the faction's own types, and one composition per age.
-            Assert.NotEmpty(ai.BuildOrder);
-            foreach (AiStep step in ai.BuildOrder)
+            Assert.NotEmpty(ai.Openings[0].BuildOrder);
+            foreach (AiStep step in ai.Openings[0].BuildOrder)
             {
                 if (step.Action == AiStepAction.Expand)
                 {
@@ -49,8 +49,8 @@ public class AiLoaderTests
                 };
                 Assert.Equal(f, owner);
             }
-            Assert.Equal(new[] { 1, 2 }, ai.Compositions.Select(c => c.Age));
-            foreach (AiComposition c in ai.Compositions)
+            Assert.Equal(new[] { 1, 2 }, ai.Openings[0].Compositions.Select(c => c.Age));
+            foreach (AiComposition c in ai.Openings[0].Compositions)
             {
                 Assert.NotEmpty(c.Units);
                 Assert.Equal(c.Units.Length, c.Weights.Length);
@@ -61,18 +61,18 @@ public class AiLoaderTests
         }
         // The steps, counts and thresholds themselves are content (the data track's, D14; BUG-0571): only the shape is pinned
         // here. Every shipped order opens by training its faction's worker at once.
-        AiStep first = d.Ai[d.FindFaction("malazan")].BuildOrder[0];
+        AiStep first = d.Ai[d.FindFaction("malazan")].Openings[0].BuildOrder[0];
         Assert.Equal((AiStepTrigger.Time, 0, AiStepAction.Train, d.FindUnit("malazan_laborer"), "malazan_laborer"),
             (first.Trigger, first.At, first.Action, first.Target, first.TargetKey));
         Assert.True(first.Count >= 1);
-        Assert.All(d.Ai, ai => Assert.True(ai.AttackMinHalfPop > 0));
+        Assert.All(d.Ai, ai => Assert.True(ai.Openings[0].AttackMinHalfPop > 0));
     }
 
     /// <summary>Every step kind and trigger resolves, seconds become ticks and pop half-pop.</summary>
     [Fact]
     public void EveryTriggerAndAction_Resolves()
     {
-        GameData d = LoadWith(root => root["buildOrder"] = JsonNode.Parse("""
+        GameData d = LoadWith(root => AiScenes.Opening(root)["buildOrder"] = JsonNode.Parse("""
             [
               { "at": { "time": 12.5 }, "do": "build", "id": "malazan_billet", "count": 2 },
               { "at": { "workers": 8 }, "do": "train", "id": "malazan_laborer", "count": 4 },
@@ -81,7 +81,7 @@ public class AiLoaderTests
               { "at": { "time": 300 }, "do": "expand" }
             ]
             """));
-        var steps = d.Ai[d.FindFaction("malazan")].BuildOrder;
+        var steps = d.Ai[d.FindFaction("malazan")].Openings[0].BuildOrder;
         Assert.Equal(5, steps.Length);
         Assert.Equal((AiStepTrigger.Time, 250, AiStepAction.Build, d.FindBuilding("malazan_billet"), 2), (steps[0].Trigger, steps[0].At, steps[0].Action, steps[0].Target, steps[0].Count));
         Assert.Equal((AiStepTrigger.Workers, 8, AiStepAction.Train, d.FindUnit("malazan_laborer"), 4), (steps[1].Trigger, steps[1].At, steps[1].Action, steps[1].Target, steps[1].Count));
@@ -92,24 +92,24 @@ public class AiLoaderTests
 
     /// <summary>One error per fault, at the field named, with what the loader says.</summary>
     [Theory]
-    [InlineData("buildOrder[0].do", "\"fortify\"", "buildOrder[0].do", "unknown action 'fortify' (expected one of build, train, research, expand)")]
-    [InlineData("buildOrder[0].do", "\"build\"", "buildOrder[0].id", "unknown building 'malazan_laborer'")]
-    [InlineData("buildOrder[0].id", "\"whirlwind_tent\"", "buildOrder[0].id", "unknown unit 'whirlwind_tent'")]
-    [InlineData("buildOrder[0].id", "\"Malazan_Laborer\"", "buildOrder[0].id", "not snake_case")]
-    [InlineData("buildOrder[0].id", null, "buildOrder[0].id", "missing required text")]
-    [InlineData("buildOrder[0].count", "0", "buildOrder[0].count", "0 is outside 1-200")]
-    [InlineData("buildOrder[0].count", "1000000000", "buildOrder[0].count", "outside 1-200")]
-    [InlineData("buildOrder[0].count", "2.5", "$.buildOrder[0].count", "expected a whole number")]
-    [InlineData("buildOrder[0].at", "{}", "buildOrder[0].at", "set exactly one of time, workers, pop (0 set)")]
-    [InlineData("buildOrder[0].at", "{ \"time\": 5, \"workers\": 3 }", "buildOrder[0].at", "(2 set)")]
-    [InlineData("buildOrder[0].at", "{ \"time\": -5 }", "buildOrder[0].at.time", "must not be negative")]
-    [InlineData("buildOrder[0].at", "{ \"time\": 7200 }", "buildOrder[0].at.time", "above the maximum 3600 s")]
-    [InlineData("buildOrder[0].at", "{ \"pop\": 2.25 }", "buildOrder[0].at.pop", "not a multiple of 0.5")]
-    [InlineData("buildOrder[0].at", "{ \"workers\": -1 }", "buildOrder[0].at.workers", "below the minimum 0")]
-    [InlineData("buildOrder[0].at", "{ \"tick\": 3 }", "$.buildOrder[0].at.tick", "")]
-    [InlineData("buildOrder[0].at", null, "buildOrder[0].at", "missing required field")]
-    [InlineData("buildOrder", "[]", "buildOrder", "no steps")]
-    [InlineData("buildOrder", null, "buildOrder", "missing required field")]
+    [InlineData("openings[0].buildOrder[0].do", "\"fortify\"", "openings[0].buildOrder[0].do", "unknown action 'fortify' (expected one of build, train, research, expand)")]
+    [InlineData("openings[0].buildOrder[0].do", "\"build\"", "openings[0].buildOrder[0].id", "unknown building 'malazan_laborer'")]
+    [InlineData("openings[0].buildOrder[0].id", "\"whirlwind_tent\"", "openings[0].buildOrder[0].id", "unknown unit 'whirlwind_tent'")]
+    [InlineData("openings[0].buildOrder[0].id", "\"Malazan_Laborer\"", "openings[0].buildOrder[0].id", "not snake_case")]
+    [InlineData("openings[0].buildOrder[0].id", null, "openings[0].buildOrder[0].id", "missing required text")]
+    [InlineData("openings[0].buildOrder[0].count", "0", "openings[0].buildOrder[0].count", "0 is outside 1-200")]
+    [InlineData("openings[0].buildOrder[0].count", "1000000000", "openings[0].buildOrder[0].count", "outside 1-200")]
+    [InlineData("openings[0].buildOrder[0].count", "2.5", "$.openings[0].buildOrder[0].count", "expected a whole number")]
+    [InlineData("openings[0].buildOrder[0].at", "{}", "openings[0].buildOrder[0].at", "set exactly one of time, workers, pop (0 set)")]
+    [InlineData("openings[0].buildOrder[0].at", "{ \"time\": 5, \"workers\": 3 }", "openings[0].buildOrder[0].at", "(2 set)")]
+    [InlineData("openings[0].buildOrder[0].at", "{ \"time\": -5 }", "openings[0].buildOrder[0].at.time", "must not be negative")]
+    [InlineData("openings[0].buildOrder[0].at", "{ \"time\": 7200 }", "openings[0].buildOrder[0].at.time", "above the maximum 3600 s")]
+    [InlineData("openings[0].buildOrder[0].at", "{ \"pop\": 2.25 }", "openings[0].buildOrder[0].at.pop", "not a multiple of 0.5")]
+    [InlineData("openings[0].buildOrder[0].at", "{ \"workers\": -1 }", "openings[0].buildOrder[0].at.workers", "below the minimum 0")]
+    [InlineData("openings[0].buildOrder[0].at", "{ \"tick\": 3 }", "$.openings[0].buildOrder[0].at.tick", "")]
+    [InlineData("openings[0].buildOrder[0].at", null, "openings[0].buildOrder[0].at", "missing required field")]
+    [InlineData("openings[0].buildOrder", "[]", "openings[0].buildOrder", "no steps")]
+    [InlineData("openings[0].buildOrder", null, "openings[0].buildOrder", "missing required field")]
     [InlineData("difficulties.normal.thinkInterval", "0.01", "difficulties.normal.thinkInterval", "rounds to 0 ticks")]
     [InlineData("difficulties.normal.thinkInterval", "0", "difficulties.normal.thinkInterval", "must be positive")]
     [InlineData("difficulties.hard.gatherBonus", "1.5", "difficulties.hard.gatherBonus", "outside 0-1")]
@@ -122,27 +122,27 @@ public class AiLoaderTests
     [InlineData("difficulties.easy.focusFire", "1", "$.difficulties.easy.focusFire", "expected true or false")]
     [InlineData("difficulties.insane", "{}", "$.difficulties.insane", "")]
     [InlineData("difficulties", null, "difficulties", "missing required field")]
-    [InlineData("attack.minArmyPop", "-2", "attack.minArmyPop", "must not be negative")]
-    [InlineData("attack.minArmyPop", "7.3", "attack.minArmyPop", "not a multiple of 0.5")]
-    [InlineData("attack.minArmyCost", "-1", "attack.minArmyCost", "below the minimum 0")]
-    [InlineData("attack", null, "attack", "missing required field")]
+    [InlineData("openings[0].attack.minArmyPop", "-2", "openings[0].attack.minArmyPop", "must not be negative")]
+    [InlineData("openings[0].attack.minArmyPop", "7.3", "openings[0].attack.minArmyPop", "not a multiple of 0.5")]
+    [InlineData("openings[0].attack.minArmyCost", "-1", "openings[0].attack.minArmyCost", "below the minimum 0")]
+    [InlineData("openings[0].attack", null, "openings[0].attack", "missing required field")]
     [InlineData("retreat.hpFraction", "1.01", "retreat.hpFraction", "outside 0-1")]
     [InlineData("retreat.lossFraction", null, "retreat.lossFraction", "missing required field")]
-    [InlineData("compositions[0].units", "{}", "compositions[0].units", "no units (at least one)")]
-    [InlineData("compositions[0].units", "{ \"malazan_heavy_infantry\": 0 }", "compositions[0].units.malazan_heavy_infantry", "must be positive")]
-    [InlineData("compositions[0].units", "{ \"malazan_heavy_infantry\": -1 }", "compositions[0].units.malazan_heavy_infantry", "must be positive")]
-    [InlineData("compositions[0].units", "{ \"whirlwind_raider\": 1 }", "compositions[0].units.whirlwind_raider", "belongs to faction 'whirlwind', not 'malazan'")]
-    [InlineData("compositions[0].units", "{ \"malazan_ghost\": 1 }", "compositions[0].units.malazan_ghost", "unknown unit 'malazan_ghost'")]
-    [InlineData("compositions[0].units", "{ \"Malazan\": 1 }", "compositions[0].units.Malazan", "not snake_case")]
-    [InlineData("compositions[0].age", "3", "compositions[0].age", "above the last age, 2")]
-    [InlineData("compositions[0].age", "0", "compositions[0].age", "below the minimum 1")]
-    [InlineData("compositions[1].age", "1", "compositions[1].age", "a second composition for Age 1")]
-    [InlineData("compositions", "[]", "compositions", "no composition for Age 1")]
+    [InlineData("openings[0].compositions[0].units", "{}", "openings[0].compositions[0].units", "no units (at least one)")]
+    [InlineData("openings[0].compositions[0].units", "{ \"malazan_heavy_infantry\": 0 }", "openings[0].compositions[0].units.malazan_heavy_infantry", "must be positive")]
+    [InlineData("openings[0].compositions[0].units", "{ \"malazan_heavy_infantry\": -1 }", "openings[0].compositions[0].units.malazan_heavy_infantry", "must be positive")]
+    [InlineData("openings[0].compositions[0].units", "{ \"whirlwind_raider\": 1 }", "openings[0].compositions[0].units.whirlwind_raider", "belongs to faction 'whirlwind', not 'malazan'")]
+    [InlineData("openings[0].compositions[0].units", "{ \"malazan_ghost\": 1 }", "openings[0].compositions[0].units.malazan_ghost", "unknown unit 'malazan_ghost'")]
+    [InlineData("openings[0].compositions[0].units", "{ \"Malazan\": 1 }", "openings[0].compositions[0].units.Malazan", "not snake_case")]
+    [InlineData("openings[0].compositions[0].age", "3", "openings[0].compositions[0].age", "above the last age, 2")]
+    [InlineData("openings[0].compositions[0].age", "0", "openings[0].compositions[0].age", "below the minimum 1")]
+    [InlineData("openings[0].compositions[1].age", "1", "openings[0].compositions[1].age", "a second composition for Age 1")]
+    [InlineData("openings[0].compositions", "[]", "openings[0].compositions", "no composition for Age 1")]
     public void ABrokenField_IsOneErrorAtIt(string field, string? rawJson, string path, string message)
     {
         IReadOnlyList<DataError> errors = ErrorsWith(root => Set(root, field, rawJson));
         // An empty compositions list misses both ages: one error each, both at the list.
-        if (field == "compositions") Assert.Equal(2, errors.Count);
+        if (field == "openings[0].compositions") Assert.Equal(2, errors.Count);
         else Assert.True(errors.Count == 1, string.Join("\n", errors));
         DataError e = errors[0];
         Assert.Equal(MalazanAi, e.File);
@@ -151,16 +151,16 @@ public class AiLoaderTests
     }
 
     [Theory]
-    [InlineData("{ \"at\": { \"time\": 0 }, \"do\": \"expand\", \"id\": \"malazan_billet\" }", "buildOrder[0].id", "an expand step names no id")]
-    [InlineData("{ \"at\": { \"time\": 0 }, \"do\": \"research\", \"id\": \"age_ii\", \"count\": 1 }", "buildOrder[0].count", "a research step takes no count")]
-    [InlineData("{ \"at\": { \"time\": 0 }, \"do\": \"research\", \"id\": \"dryjhnas_prophecy\" }", "buildOrder[0].id", "tech 'dryjhnas_prophecy' belongs to faction 'whirlwind', not 'malazan'")]
-    [InlineData("{ \"at\": { \"time\": 0 }, \"do\": \"research\", \"id\": \"malazan_laborer\" }", "buildOrder[0].id", "unknown tech 'malazan_laborer'")]
-    [InlineData("{ \"at\": { \"time\": 0 }, \"do\": \"build\", \"id\": \"whirlwind_tent\" }", "buildOrder[0].id", "building 'whirlwind_tent' belongs to faction 'whirlwind', not 'malazan'")]
-    [InlineData("{ \"at\": { \"time\": 0 }, \"do\": \"train\", \"id\": \"malazan_laborer\", \"cuont\": 2 }", "$.buildOrder[0].cuont", "")]
-    [InlineData("null", "buildOrder[0]", "missing required field")]
+    [InlineData("{ \"at\": { \"time\": 0 }, \"do\": \"expand\", \"id\": \"malazan_billet\" }", "openings[0].buildOrder[0].id", "an expand step names no id")]
+    [InlineData("{ \"at\": { \"time\": 0 }, \"do\": \"research\", \"id\": \"age_ii\", \"count\": 1 }", "openings[0].buildOrder[0].count", "a research step takes no count")]
+    [InlineData("{ \"at\": { \"time\": 0 }, \"do\": \"research\", \"id\": \"dryjhnas_prophecy\" }", "openings[0].buildOrder[0].id", "tech 'dryjhnas_prophecy' belongs to faction 'whirlwind', not 'malazan'")]
+    [InlineData("{ \"at\": { \"time\": 0 }, \"do\": \"research\", \"id\": \"malazan_laborer\" }", "openings[0].buildOrder[0].id", "unknown tech 'malazan_laborer'")]
+    [InlineData("{ \"at\": { \"time\": 0 }, \"do\": \"build\", \"id\": \"whirlwind_tent\" }", "openings[0].buildOrder[0].id", "building 'whirlwind_tent' belongs to faction 'whirlwind', not 'malazan'")]
+    [InlineData("{ \"at\": { \"time\": 0 }, \"do\": \"train\", \"id\": \"malazan_laborer\", \"cuont\": 2 }", "$.openings[0].buildOrder[0].cuont", "")]
+    [InlineData("null", "openings[0].buildOrder[0]", "missing required field")]
     public void ABrokenStep_IsOneErrorAtIt(string step, string path, string message)
     {
-        IReadOnlyList<DataError> errors = ErrorsWith(root => root["buildOrder"] = new JsonArray(JsonNode.Parse(step)));
+        IReadOnlyList<DataError> errors = ErrorsWith(root => AiScenes.Opening(root)["buildOrder"] = new JsonArray(JsonNode.Parse(step)));
         DataError e = Assert.Single(errors);
         Assert.Equal(path, e.Path);
         Assert.Contains(message, e.Message);
@@ -170,7 +170,7 @@ public class AiLoaderTests
     [Fact]
     public void ADuplicateStep_IsTheSameAtDoAndId_WhateverTheCount()
     {
-        DataError e = Assert.Single(ErrorsWith(root => root["buildOrder"] = JsonNode.Parse("""
+        DataError e = Assert.Single(ErrorsWith(root => AiScenes.Opening(root)["buildOrder"] = JsonNode.Parse("""
             [
               { "at": { "workers": 4 }, "do": "train", "id": "malazan_laborer", "count": 1 },
               { "at": { "workers": 4 }, "do": "train", "id": "malazan_heavy_infantry" },
@@ -179,8 +179,8 @@ public class AiLoaderTests
               { "at": { "workers": 4 }, "do": "train", "id": "malazan_laborer", "count": 3 }
             ]
             """)));
-        Assert.Equal("buildOrder[4]", e.Path);
-        Assert.Contains("the same step as buildOrder[0]", e.Message);
+        Assert.Equal("openings[0].buildOrder[4]", e.Path);
+        Assert.Contains("the same step as openings[0].buildOrder[0]", e.Message);
     }
 
     /// <summary>Hostile files: 10,000 steps is one error; NaN (not JSON) is one parse error; nothing throws.</summary>
@@ -191,9 +191,9 @@ public class AiLoaderTests
         {
             var steps = new JsonArray();
             for (int i = 0; i < 10_000; i++) steps.Add(JsonNode.Parse($$"""{ "at": { "time": {{i}} }, "do": "expand" }"""));
-            root["buildOrder"] = steps;
+            AiScenes.Opening(root)["buildOrder"] = steps;
         }));
-        Assert.Equal("buildOrder", many.Path);
+        Assert.Equal("openings[0].buildOrder", many.Path);
         Assert.Contains("10000 steps is above the maximum 256", many.Message);
 
         using TestDataDir dir = TestDataDir.CopyOfShipped();
@@ -212,21 +212,21 @@ public class AiLoaderTests
         dir.EditJson(MalazanAi, root =>
         {
             root["difficulties"]!["easy"]!["thinkInterval"] = -1;
-            root["buildOrder"]![0]!["id"] = "whirlwind_raider";
-            root["compositions"]![1]!["units"] = new JsonObject();
+            AiScenes.Opening(root)["buildOrder"]![0]!["id"] = "whirlwind_raider";
+            AiScenes.Opening(root)["compositions"]![1]!["units"] = new JsonObject();
             root["retreat"]!["hpFraction"] = 2;
         });
-        dir.EditJson("factions/whirlwind/ai.json", root => root["attack"]!["minArmyCost"] = -5);
+        dir.EditJson("factions/whirlwind/ai.json", root => AiScenes.Opening(root)["attack"]!["minArmyCost"] = -5);
         IReadOnlyList<DataError> errors = DataLoader.LoadAll(dir.Path).Errors;
         Assert.Equal(new[]
         {
-            (MalazanAi, "difficulties.easy.thinkInterval"), (MalazanAi, "buildOrder[0].id"), (MalazanAi, "compositions[1].units"),
-            (MalazanAi, "retreat.hpFraction"), ("factions/whirlwind/ai.json", "attack.minArmyCost"),
+            (MalazanAi, "difficulties.easy.thinkInterval"), (MalazanAi, "openings[0].buildOrder[0].id"), (MalazanAi, "openings[0].compositions[1].units"),
+            (MalazanAi, "retreat.hpFraction"), ("factions/whirlwind/ai.json", "openings[0].attack.minArmyCost"),
         }, errors.Select(e => (e.File, e.Path)).OrderBy(x => x.File, StringComparer.Ordinal).ThenBy(x => Order(x.Path)));
     }
 
     private static int Order(string path) =>
-        path.StartsWith("difficulties") ? 0 : path.StartsWith("buildOrder") ? 1 : path.StartsWith("compositions") ? 2 : path.StartsWith("attack") ? 3 : 4;
+        path.StartsWith("difficulties") ? 0 : path.StartsWith("openings[0].buildOrder") ? 1 : path.StartsWith("openings[0].compositions") ? 2 : path.StartsWith("openings[0].attack") ? 3 : 4;
 
     /// <summary>
     /// A broken units, buildings or techs file is reported once, not again through every ai.json entry naming its ids: a
@@ -260,7 +260,7 @@ public class AiLoaderTests
         GameData edited = LoadWith(root =>
         {
             root["difficulties"]!["hard"]!["gatherBonus"] = 0.5;
-            root["buildOrder"]![0]!["count"] = 3;
+            AiScenes.Opening(root)["buildOrder"]![0]!["count"] = 3;
         });
         Assert.Equal(0.5f, edited.Ai[edited.FindFaction("malazan")].Difficulty(AiDifficulty.Hard).GatherBonus);
         Assert.NotEqual(TestSim.Data.ContentHash(), edited.ContentHash());
@@ -270,9 +270,9 @@ public class AiLoaderTests
     [Fact]
     public void ACompositionWeightRoundingToZero_IsALoadError()
     {
-        IReadOnlyList<DataError> errors = ErrorsWith(root => root["compositions"]![0]!["units"]!["malazan_crossbowman"] = 1e-50);
+        IReadOnlyList<DataError> errors = ErrorsWith(root => AiScenes.Opening(root)["compositions"]![0]!["units"]!["malazan_crossbowman"] = 1e-50);
         DataError e = Assert.Single(errors);
-        Assert.Equal("compositions[0].units.malazan_crossbowman", e.Path);
+        Assert.Equal("openings[0].compositions[0].units.malazan_crossbowman", e.Path);
         Assert.Contains("rounds to 0", e.Message);
     }
 

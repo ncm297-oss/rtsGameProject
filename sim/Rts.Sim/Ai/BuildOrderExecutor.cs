@@ -4,7 +4,7 @@ using Rts.Sim.Data;
 namespace Rts.Sim.Ai;
 
 /// <summary>
-/// Walks the faction's <c>ai.json</c> build order (M5-2, docs/03 "Implementation (M5-2)", the executor's semantics the data
+/// Walks the build order of the AI's picked <c>ai.json</c> opening (M5-8a) (M5-2, docs/03 "Implementation (M5-2)", the executor's semantics the data
 /// track writes against). Every think, every step whose trigger has been reached and that is not complete is worked, in
 /// file order, at most one command per step: steps run side by side.
 /// </summary>
@@ -20,7 +20,8 @@ namespace Rts.Sim.Ai;
 /// <item>A command is judged at the first think after it applied (<see cref="PendingOrder"/>); until then the step sends
 /// nothing. A refused one is sent again at a later think (a refused Build's anchor gets a retry mark, so the site search moves
 /// on); a step that can't act (no gold, no site, no building, no worker) simply waits (one whose site search found nothing
-/// waits <see cref="NoSiteRetryThinks"/> thinks before it searches again, BUG-0791). Never more than one command per step
+/// waits <see cref="NoSiteRetryThinks"/> thinks before it searches again, BUG-0791; one stopped before any search, its
+/// requires unmet or the building store full, doesn't wait, BUG-0910). Never more than one command per step
 /// per think, so a refusal is retried, not spammed.</item>
 /// <item><c>build</c> searches round the player's Town Hall (a camp round the known tree nearest it); <c>expand</c> places a
 /// Town Hall round the known gold mine nearest the player's hall with no own or seen hall within
@@ -33,7 +34,7 @@ internal static class BuildOrderExecutor
     internal static void Run(AiPlayer ai)
     {
         Blackboard board = ai.Board;
-        var steps = ai.Def.BuildOrder;
+        var steps = ai.Opening.BuildOrder; // M5-8a: the picked opening's
         int slack = ai.Knobs.BuildOrderSlackTicks;
         for (int i = 0; i < steps.Length; i++)
         {

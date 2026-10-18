@@ -438,11 +438,11 @@ public class SimHardeningM5H3QaTests
     /// M5-H3 the step sent its Build at the next think; the BUG-0791 wait must not hold a step whose search never ran (the
     /// fix's reason is the search's cost). Bound: the Build is sent within 2 thinks of the Barracks (view latency).
     /// </summary>
-    [Fact(Skip = "BUG-0910: the BUG-0791 no-site wait also holds a step whose search never ran (requires unmet): Build 1-5 thinks late, base 1-2")]
+    [Fact] // BUG-0910 (fixed in M5-8a): un-skipped as its regression row
     public void ABuildStepWaitingOnARequirement_SendsItsBuildAtTheThinkAfterTheRequirementIsMet()
     {
         var data = AiScenes.DataWithAi("malazan", root =>
-            root["buildOrder"] = AiScenes.BuildOrder(("time", 0, "build", "malazan_wickan_corral", 0)));
+            AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 0, "build", "malazan_wickan_corral", 0)));
         int corral = data.FindBuilding("malazan_wickan_corral");
         // Some thinks with no Barracks, then one; the next thinks may build. Repeated at several phases of the wait.
         var lags = new List<int>();

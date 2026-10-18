@@ -271,7 +271,7 @@ public class AiSpendingReportTests
                 bool live = idleDefeatedAt < 0;
                 if (live) counted++;
                 if (live && w.Wood[player] < WoodShort && w.Gold[player] >= GoldPiled) woodBound++;
-                marks.Add($"{sim.TickNumber / Tps / 60} min{(live ? "" : " (after the defeat: not counted)")} | {w.Gold[player]} | {w.Wood[player]} | {army / 2.0} | {workers / 2.0} | {w.HalfPop[player] / 2.0} / {w.HalfPopCap[player] / 2.0} | {ai.Board.WavesStarted} | {w.Age(player)} | {StepsDone(ai)} / {ai.Def.BuildOrder.Length} | {Left(sim, "gold_mine", -1)} | {Left(sim, "tree", startCell)}");
+                marks.Add($"{sim.TickNumber / Tps / 60} min{(live ? "" : " (after the defeat: not counted)")} | {w.Gold[player]} | {w.Wood[player]} | {army / 2.0} | {workers / 2.0} | {w.HalfPop[player] / 2.0} / {w.HalfPopCap[player] / 2.0} | {ai.Board.WavesStarted} | {w.Age(player)} | {StepsDone(ai)} / {ai.Opening.BuildOrder.Length} | {Left(sim, "gold_mine", -1)} | {Left(sim, "tree", startCell)}");
             }
         }
         Assert.Equal(Ticks, sim.TickNumber);
@@ -292,8 +292,8 @@ public class AiSpendingReportTests
         }
         write($"slot reused by another building: {reused}");
         var open = new List<string>();
-        for (int i = 0; i < ai.Def.BuildOrder.Length; i++)
-            if (!ai.Board.StepDone[i]) open.Add($"{i + 1} {AiContentTests.StepText(ai.Def.BuildOrder[i]).Split(" | ")[0]}");
+        for (int i = 0; i < ai.Opening.BuildOrder.Length; i++)
+            if (!ai.Board.StepDone[i]) open.Add($"{i + 1} {AiContentTests.StepText(ai.Opening.BuildOrder[i]).Split(" | ")[0]}");
         write("order steps not done at the end: " + (open.Count == 0 ? "none" : string.Join("; ", open)));
         return (woodBound, counted, marks.Count, idleDefeatedAt, gold5, wood5);
     }

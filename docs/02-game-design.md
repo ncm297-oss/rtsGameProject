@@ -400,6 +400,10 @@ show text, a minimap ping, and a sound.
   is hit and below half hp (`rules.json` `ai.defendRatio` / `defendMinValue` / `recallHallHp`; built in M5-4f; wording
   aligned with [03 Implementation (M5-4f)](03-technical-design.md#implementation-m5-4f) on 2026-10-17, BUG-0871).
 - Build orders, army compositions, and attack thresholds are per-faction data (`ai.json`), not code.
+- Each faction's `ai.json` holds one to eight named openings (a build order, an army mix and attack thresholds each);
+  at match start an Easy AI always plays the first, and a Normal or Hard AI picks one at random from the match seed, so
+  two matches against the same faction can open differently while a replay or a save still reproduces the pick
+  (built in M5-8a; the shipped files hold one opening, `standard`, until the data track writes more).
 - The AI sees only its own fog-of-war view. It never reads hidden enemy state.
 
 ## Game flow

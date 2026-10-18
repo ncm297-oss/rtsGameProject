@@ -23,8 +23,8 @@ public class AbilityManagerQaTests
         foreach (string f in new[] { "malazan", "whirlwind" })
             dir.EditJson($"factions/{f}/ai.json", root =>
             {
-                root["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", f == "malazan" ? "malazan_laborer" : "whirlwind_camp_follower", 1));
-                root["attack"] = new JsonObject { ["minArmyPop"] = 100, ["minArmyCost"] = 0 };
+                AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", f == "malazan" ? "malazan_laborer" : "whirlwind_camp_follower", 1));
+                AiScenes.Opening(root)["attack"] = new JsonObject { ["minArmyPop"] = 100, ["minArmyCost"] = 0 };
             });
         dir.EditJson("common/rules.json", r =>
         {

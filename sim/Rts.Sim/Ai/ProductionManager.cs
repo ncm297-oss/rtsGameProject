@@ -15,7 +15,7 @@ internal static class ProductionManager
     {
         if (ai.ExecutorSent) return;
         int age = ai.View.Age;
-        var compositions = ai.Def.Compositions;
+        var compositions = ai.Opening.Compositions; // M5-8a: the picked opening's
         if (compositions.Length == 0) return;
         AiComposition mix = compositions[System.Math.Clamp(age, 1, compositions.Length) - 1];
         int pick = -1;

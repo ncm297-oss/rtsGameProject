@@ -11,14 +11,14 @@ namespace Rts.Sim.Ai;
 /// <summary>
 /// One AI seat (M5-2, docs/03 "Implementation (M5-2)"): every <see cref="ThinkTicks"/> ticks it reads its own
 /// <see cref="PlayerView"/> and sends commands through an <see cref="ICommandSink"/> (the sim's command door), never touching
-/// the world. A think runs the base defense (<see cref="DefenseManager"/>, M5-4b), the faction's <c>ai.json</c> build order
-/// (<see cref="BuildOrderExecutor"/>), the scout (<see cref="ScoutManager"/>, M5-3), the economy (<see cref="EconomyManager"/>:
+/// the world. A think runs the base defense (<see cref="DefenseManager"/>, M5-4b), its opening's build order (M5-8a: the
+/// <c>ai.json</c> opening picked at construction; <see cref="BuildOrderExecutor"/>), the scout (<see cref="ScoutManager"/>, M5-3), the economy (<see cref="EconomyManager"/>:
 /// idle workers to gold and wood, houses before the cap), production (<see cref="ProductionManager"/>: the composition, when the build order sent nothing), then the army
 /// (<see cref="MilitaryManager"/>, M5-3: rally, attack waves, retreat), then the abilities (<see cref="AbilityManager"/>, M5-4c).
 /// </summary>
 /// <remarks>
 /// Built by the sim for each AI seat with a kept view and its own <see cref="SimRng"/> (seed and player). Its state (the
-/// <see cref="Blackboard"/>, the census, the RNG) is not sim state: not hashed, and a replay plays back without it (the AI's
+/// <see cref="Blackboard"/>, the census, the RNG, the opening pick) is not sim state: not hashed, and a replay plays back without it (the AI's
 /// commands are in the log). Allocates nothing after construction: every buffer is sized from the match here.
 /// </remarks>
 internal sealed class AiPlayer
@@ -40,7 +40,9 @@ internal sealed class AiPlayer
         Knobs = def.Difficulty(difficulty);
         Rules = data.AiRules;
         ThinkTicks = Math.Max(1, Knobs.ThinkTicks);
-        Board = new Blackboard(def.BuildOrder.Length, view.UnitSlots, view.BuildingSlots, view.ResourceSlots,
+        OpeningIndex = PickOpening(def.Openings.Length, difficulty, ref _rng);
+        Opening = def.Openings[OpeningIndex];
+        Board = new Blackboard(Opening.BuildOrder.Length, view.UnitSlots, view.BuildingSlots, view.ResourceSlots,
             ScoutManager.GridLines(view.MapWidth, Rules.ScoutGrid) * ScoutManager.GridLines(view.MapHeight, Rules.ScoutGrid));
         Live = new int[data.Units.Length];
         Queued = new int[data.Units.Length];
@@ -66,7 +68,7 @@ internal sealed class AiPlayer
     /// <summary>Ticks between thinks (its difficulty's <c>thinkInterval</c>): it thinks when the tick number is a multiple.</summary>
     internal int ThinkTicks { get; }
 
-    /// <summary>Set by <see cref="TryBuild"/> when it could pay but its site search found no anchor (BUG-0791); the caller clears it.</summary>
+    /// <summary>Set by <see cref="TryBuild"/> when it could pay but its ring search ran and found no anchor (BUG-0791; not at the cell-free test, BUG-0910); the caller clears it.</summary>
     internal bool NoSiteFound;
 
     /// <summary>Site searches run (<see cref="FindSite"/> past its can-place-anywhere test), for tests and the cost probes.</summary>
@@ -80,6 +82,23 @@ internal sealed class AiPlayer
 
     /// <summary>Its faction's <c>ai.json</c>.</summary>
     internal AiDef Def { get; }
+
+    /// <summary>M5-8a: the index in <see cref="AiDef.Openings"/> of the opening it plays, picked at construction (<see cref="PickOpening"/>).</summary>
+    internal int OpeningIndex { get; }
+
+    /// <summary>M5-8a: the opening it plays (build order, compositions, attack thresholds); the managers read it, never <see cref="Def"/>'s list.</summary>
+    internal AiOpening Opening { get; }
+
+    /// <summary>
+    /// M5-8a: the opening an AI at <paramref name="difficulty"/> plays among <paramref name="count"/>: Easy always the first
+    /// (a learner meets the same game every time); Normal and Hard one uniform draw from the AI's own stream, the first draw it
+    /// makes, so the pick follows from the seed (a replay or a save rebuilds it) and moves no hashed stream.
+    /// </summary>
+    internal static int PickOpening(int count, AiDifficulty difficulty, ref SimRng rng)
+    {
+        if (count < 1) throw new ArgumentException("an AI needs at least one opening", nameof(count));
+        return difficulty == AiDifficulty.Easy ? 0 : rng.NextInt(0, count);
+    }
 
     /// <summary>Its difficulty's knobs.</summary>
     internal AiDifficultyDef Knobs { get; }
@@ -431,10 +450,13 @@ internal sealed class AiPlayer
         // BUG-0791: no worker to send (or the queue full) fails the Build whatever the site, so don't search for one. In the
         // storms fuzz scene every worker was busy and each of 15 due steps found a site at every think (0.9 of a 0.9 ms think).
         if (_queueFull || !AnyBuilder()) return false;
+        int searchesBefore = SiteSearches;
         int anchor = FindSite(type, centreCell);
         if (anchor < 0)
         {
-            NoSiteFound = true;
+            // BUG-0910: only a ring search that ran and found nothing makes the step wait. FindSite's cell-free test (requires
+            // unmet, a full building store) cost nothing, and the step must act at the next think once the requirement stands.
+            if (SiteSearches != searchesBefore) NoSiteFound = true;
             return false;
         }
         Vector2 at = CellCentre(anchor);

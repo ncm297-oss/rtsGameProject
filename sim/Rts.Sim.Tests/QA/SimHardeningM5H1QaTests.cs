@@ -32,8 +32,8 @@ public class SimHardeningM5H1QaTests
     {
         dir.EditJson("factions/malazan/ai.json", root =>
         {
-            root["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1));
-            root["attack"] = new JsonObject { ["minArmyPop"] = 1, ["minArmyCost"] = 0 };
+            AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1));
+            AiScenes.Opening(root)["attack"] = new JsonObject { ["minArmyPop"] = 1, ["minArmyCost"] = 0 };
             root["retreat"]!["lossFraction"] = 0.5;
             root["difficulties"]!["normal"]!["waveSizeMultiplier"] = 1;
         });

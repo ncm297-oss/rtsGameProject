@@ -14,7 +14,7 @@ public class EconomyRebalanceTests
     private const byte Gold = 1; // EconomyManager's gather kinds on Blackboard.GatherKind
 
     private static readonly Lazy<GameData> s_quietOrder = new(() => AiScenes.DataWithAi("malazan", root =>
-        root["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1))));
+        AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1))));
 
     /// <summary>
     /// Every worker remembered on gold (the split off <c>goldShare</c>), wood known, none idle: the one rebalance Gather of

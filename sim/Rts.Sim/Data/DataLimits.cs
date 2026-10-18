@@ -165,4 +165,13 @@ public static class DataLimits
 
     /// <summary>M5-4f: the most <c>rules.json</c> <c>ai.defendMinValue</c> may be, gold + wood (the brief's range).</summary>
     public const double MaxAiDefendMinValue = 5000;
+
+    /// <summary>M5-8a: the most named openings one <c>ai.json</c> <c>openings</c> may hold (the brief's 8).</summary>
+    public const int MaxAiOpenings = 8;
+
+    /// <summary>M5-8a: the longest an opening's <c>displayName</c> may be, in characters (player-facing: a stats line).</summary>
+    public const int MaxAiOpeningNameLength = 40;
+
+    /// <summary>M5-8a: the longest an opening's optional <c>description</c> may be, in characters.</summary>
+    public const int MaxAiOpeningDescriptionLength = 200;
 }

@@ -19,7 +19,7 @@ public class ScoutManagerTests
 
     /// <summary>A malazan ai.json whose only step can't fire for an hour, so the scene's commands are the managers'.</summary>
     private static readonly Lazy<GameData> s_quiet = new(() => AiScenes.DataWithAi("malazan", root =>
-        root["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1))));
+        AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1))));
 
     private static List<Command> Moves(List<Command> log) => log.Where(c => c.Kind == CommandKind.Move).ToList();
 

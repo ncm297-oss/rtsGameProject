@@ -729,18 +729,18 @@ public class DataValidationTests
     /// another faction's id, a missing difficulty, a negative think interval, a repeated build-order step.
     /// </summary>
     [Theory]
-    [InlineData("unknown id", "buildOrder[0].id", "unknown unit 'malazan_ghost'")]
-    [InlineData("foreign-faction id", "buildOrder[0].id", "unit 'whirlwind_raider' belongs to faction 'whirlwind', not 'malazan'")]
+    [InlineData("unknown id", "openings[0].buildOrder[0].id", "unknown unit 'malazan_ghost'")]
+    [InlineData("foreign-faction id", "openings[0].buildOrder[0].id", "unit 'whirlwind_raider' belongs to faction 'whirlwind', not 'malazan'")]
     [InlineData("missing difficulty", "difficulties.hard", "missing required field")]
     [InlineData("negative interval", "difficulties.easy.thinkInterval", "-1 must be positive")]
-    [InlineData("duplicate step", "buildOrder[1]", "the same step as buildOrder[0]")]
+    [InlineData("duplicate step", "openings[0].buildOrder[1]", "the same step as openings[0].buildOrder[0]")]
     public void BrokenAiJson_YieldsExactlyOneErrorAtTheField(string fault, string path, string message)
     {
         const string MalazanAi = "factions/malazan/ai.json";
         using TestDataDir dir = TestDataDir.CopyOfShipped();
         dir.EditJson(MalazanAi, root =>
         {
-            JsonArray steps = root["buildOrder"]!.AsArray();
+            JsonArray steps = AiScenes.Opening(root)["buildOrder"]!.AsArray();
             switch (fault)
             {
                 case "unknown id": steps[0]!["id"] = "malazan_ghost"; break;
@@ -758,6 +758,97 @@ public class DataValidationTests
         Assert.Equal(MalazanAi, e.File);
         Assert.Equal(path, e.Path);
         Assert.Contains(message, e.Message);
+    }
+
+    /// <summary>
+    /// M5-8a criterion 2: each <c>openings</c> fault is exactly one error at its field: no list, an empty one, one above
+    /// <see cref="DataLimits.MaxAiOpenings"/>, a repeated or non-snake_case id, a missing, blank or too-long
+    /// <c>displayName</c>, a too-long <c>description</c>, each old top-level field (moved into <c>openings[]</c>), and a bad step
+    /// inside the second opening, reported at <c>openings[1].buildOrder[j]</c>.
+    /// </summary>
+    [Theory]
+    [InlineData("no openings", "openings", "missing required field")]
+    [InlineData("empty openings", "openings", "no openings (at least one)")]
+    [InlineData("nine openings", "openings", "9 openings is above the maximum 8")]
+    [InlineData("duplicate id", "openings[1].id", "duplicate id 'standard' (also openings[0])")]
+    [InlineData("camelCase id", "openings[1].id", "id 'rushOpening' is not snake_case")]
+    [InlineData("missing displayName", "openings[1].displayName", "missing required text")]
+    [InlineData("blank displayName", "openings[1].displayName", "missing required text")]
+    [InlineData("long displayName", "openings[1].displayName", "41 characters is above the maximum 40")]
+    [InlineData("long description", "openings[1].description", "201 characters is above the maximum 200")]
+    [InlineData("old buildOrder", "buildOrder", "moved into openings[]")]
+    [InlineData("old compositions", "compositions", "moved into openings[]")]
+    [InlineData("old attack", "attack", "moved into openings[]")]
+    [InlineData("bad inner step", "openings[1].buildOrder[2].id", "unknown building 'malazan_ghost'")]
+    [InlineData("missing inner attack", "openings[1].attack", "missing required field")]
+    public void BrokenAiOpenings_YieldExactlyOneErrorAtTheField(string fault, string path, string message)
+    {
+        const string MalazanAi = "factions/malazan/ai.json";
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson(MalazanAi, root =>
+        {
+            JsonArray openings = root["openings"]!.AsArray();
+            JsonNode first = openings[0]!;
+            JsonNode second = first.DeepClone();
+            second["id"] = "second";
+            openings.Add(second); // a valid second opening to break (the shipped one stays as it is)
+            switch (fault)
+            {
+                case "no openings": root.Remove("openings"); break;
+                case "empty openings": openings.Clear(); break;
+                case "nine openings":
+                    for (int i = 2; i < 9; i++)
+                    {
+                        JsonNode more = first.DeepClone();
+                        more["id"] = $"opening_{i}";
+                        openings.Add(more);
+                    }
+                    break;
+                case "duplicate id": second["id"] = "standard"; break;
+                case "camelCase id": second["id"] = "rushOpening"; break;
+                case "missing displayName": second.AsObject().Remove("displayName"); break;
+                case "blank displayName": second["displayName"] = "   "; break;
+                case "long displayName": second["displayName"] = new string('a', 41); break;
+                case "long description": second["description"] = new string('a', 201); break;
+                case "old buildOrder": root["buildOrder"] = first["buildOrder"]!.DeepClone(); break;
+                case "old compositions": root["compositions"] = first["compositions"]!.DeepClone(); break;
+                case "old attack": root["attack"] = first["attack"]!.DeepClone(); break;
+                case "bad inner step": second["buildOrder"]![2] = JsonNode.Parse("""{ "at": { "time": 1 }, "do": "build", "id": "malazan_ghost" }"""); break;
+                case "missing inner attack": second.AsObject().Remove("attack"); break;
+                default: throw new ArgumentException(fault);
+            }
+        });
+
+        DataLoadResult r = DataLoader.LoadAll(dir.Path);
+        DataError e = Assert.Single(r.Errors);
+        Assert.Null(r.Data);
+        Assert.Equal(MalazanAi, e.File);
+        Assert.Equal(path, e.Path);
+        Assert.Contains(message, e.Message);
+    }
+
+    /// <summary>M5-8a: a description is optional (absent loads as ""), and exactly 40 / 200 characters load.</summary>
+    [Fact]
+    public void AnOpeningDescription_IsOptional_AndTheLimitsAreInclusive()
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("factions/malazan/ai.json", root =>
+        {
+            JsonNode first = root["openings"]![0]!;
+            JsonNode second = first.DeepClone();
+            second["id"] = "second";
+            second.AsObject().Remove("description");
+            first["displayName"] = new string('n', 40);
+            first["description"] = new string('d', 200);
+            root["openings"]!.AsArray().Add(second);
+        });
+        GameData d = Load(dir.Path);
+        AiDef ai = d.Ai[d.FindFaction("malazan")];
+        Assert.Equal(2, ai.Openings.Length);
+        Assert.Equal("", ai.Openings[1].Description);
+        Assert.Equal(40, ai.Openings[0].DisplayName.Length);
+        Assert.Equal(200, ai.Openings[0].Description.Length);
+        Assert.Equal(1, ai.FindOpening("second"));
     }
 
     private static GameData Load(string dir)

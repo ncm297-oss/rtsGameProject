@@ -103,9 +103,9 @@ public class AiLoaderQaTests
     [InlineData(1e-40)]
     public void ATinyCompositionWeight_IsRefused_OrStoredAboveZero(double weight)
     {
-        DataLoadResult r = LoadWith(root => root["compositions"]![0]!["units"]!["malazan_crossbowman"] = weight);
+        DataLoadResult r = LoadWith(root => AiScenes.Opening(root)["compositions"]![0]!["units"]!["malazan_crossbowman"] = weight);
         if (!r.Ok) return; // refused: fine
-        AiComposition c = r.Data!.Ai[r.Data.FindFaction("malazan")].Compositions[0];
+        AiComposition c = r.Data!.Ai[r.Data.FindFaction("malazan")].Openings[0].Compositions[0];
         Assert.All(c.Weights, w => Assert.True(w > 0f, $"a weight of {weight} loaded and is stored as {w}"));
     }
 
@@ -118,20 +118,20 @@ public class AiLoaderQaTests
             var steps = new JsonArray();
             for (int i = 0; i < DataLimits.MaxAiBuildOrderSteps; i++)
                 steps.Add(JsonNode.Parse($$"""{ "at": { "time": {{i}} }, "do": "train", "id": "malazan_laborer", "count": {{DataLimits.MaxAiStepCount}} }"""));
-            root["buildOrder"] = steps;
+            AiScenes.Opening(root)["buildOrder"] = steps;
             root["difficulties"]!["easy"]!["waveSizeMultiplier"] = DataLimits.MaxAiWaveSizeMultiplier;
             root["difficulties"]!["easy"]!["gatherBonus"] = 1;
             root["difficulties"]!["easy"]!["thinkInterval"] = 0.05; // exactly one tick
             root["difficulties"]!["easy"]!["expandAfter"] = 3600;
             root["retreat"]!["hpFraction"] = 0;
             root["retreat"]!["lossFraction"] = 1;
-            root["attack"]!["minArmyPop"] = 0;
-            root["attack"]!["minArmyCost"] = 0;
+            AiScenes.Opening(root)["attack"]!["minArmyPop"] = 0;
+            AiScenes.Opening(root)["attack"]!["minArmyCost"] = 0;
         });
         Assert.True(r.Ok, string.Join("\n", r.Errors));
         AiDef ai = r.Data!.Ai[r.Data.FindFaction("malazan")];
-        Assert.Equal(DataLimits.MaxAiBuildOrderSteps, ai.BuildOrder.Length);
-        Assert.All(ai.BuildOrder, s => Assert.Equal(DataLimits.MaxAiStepCount, s.Count));
+        Assert.Equal(DataLimits.MaxAiBuildOrderSteps, ai.Openings[0].BuildOrder.Length);
+        Assert.All(ai.Openings[0].BuildOrder, s => Assert.Equal(DataLimits.MaxAiStepCount, s.Count));
         Assert.Equal(1, ai.Difficulty(AiDifficulty.Easy).ThinkTicks);
         Assert.Equal(72_000, ai.Difficulty(AiDifficulty.Easy).ExpandAfterTicks);
     }
@@ -144,11 +144,11 @@ public class AiLoaderQaTests
         {
             var list = new JsonArray();
             for (int i = 0; i <= DataLimits.MaxAiBuildOrderSteps; i++) list.Add(JsonNode.Parse($$"""{ "at": { "workers": {{i}} }, "do": "expand" }"""));
-            root["buildOrder"] = list;
+            AiScenes.Opening(root)["buildOrder"] = list;
         });
-        Assert.Equal("buildOrder", Assert.Single(steps.Errors).Path);
-        DataLoadResult count = LoadWith(root => root["buildOrder"]![0]!["count"] = DataLimits.MaxAiStepCount + 1);
-        Assert.Equal("buildOrder[0].count", Assert.Single(count.Errors).Path);
+        Assert.Equal("openings[0].buildOrder", Assert.Single(steps.Errors).Path);
+        DataLoadResult count = LoadWith(root => AiScenes.Opening(root)["buildOrder"]![0]!["count"] = DataLimits.MaxAiStepCount + 1);
+        Assert.Equal("openings[0].buildOrder[0].count", Assert.Single(count.Errors).Path);
         DataLoadResult wave = LoadWith(root => root["difficulties"]!["hard"]!["waveSizeMultiplier"] = 10.001);
         Assert.Equal("difficulties.hard.waveSizeMultiplier", Assert.Single(wave.Errors).Path);
     }
@@ -159,17 +159,17 @@ public class AiLoaderQaTests
     {
         DataLoadResult dup = LoadWith(root =>
         {
-            root["buildOrder"]!.AsArray().Add(JsonNode.Parse("""{ "at": { "time": 60 }, "do": "expand" }"""));
-            root["buildOrder"]!.AsArray().Add(JsonNode.Parse("""{ "at": { "time": 60 }, "do": "expand", "count": 2 }"""));
+            AiScenes.Opening(root)["buildOrder"]!.AsArray().Add(JsonNode.Parse("""{ "at": { "time": 60 }, "do": "expand" }"""));
+            AiScenes.Opening(root)["buildOrder"]!.AsArray().Add(JsonNode.Parse("""{ "at": { "time": 60 }, "do": "expand", "count": 2 }"""));
         });
         DataError e = Assert.Single(dup.Errors);
-        int shipped = TestSim.Data.Ai[TestSim.Data.FindFaction("malazan")].BuildOrder.Length; // whatever the shipped order's length (BUG-0571)
-        Assert.Equal($"buildOrder[{shipped + 1}]", e.Path);
+        int shipped = TestSim.Data.Ai[TestSim.Data.FindFaction("malazan")].Openings[0].BuildOrder.Length; // whatever the shipped order's length (BUG-0571)
+        Assert.Equal($"openings[0].buildOrder[{shipped + 1}]", e.Path);
         // time 60 s and workers 60 are different triggers with the same number: not a duplicate.
         DataLoadResult ok = LoadWith(root =>
         {
-            root["buildOrder"]!.AsArray().Add(JsonNode.Parse("""{ "at": { "time": 60 }, "do": "expand" }"""));
-            root["buildOrder"]!.AsArray().Add(JsonNode.Parse("""{ "at": { "workers": 1200 }, "do": "expand" }"""));
+            AiScenes.Opening(root)["buildOrder"]!.AsArray().Add(JsonNode.Parse("""{ "at": { "time": 60 }, "do": "expand" }"""));
+            AiScenes.Opening(root)["buildOrder"]!.AsArray().Add(JsonNode.Parse("""{ "at": { "workers": 1200 }, "do": "expand" }"""));
         });
         Assert.True(ok.Ok, string.Join("\n", ok.Errors));
     }
@@ -183,11 +183,11 @@ public class AiLoaderQaTests
         for (int f = 0; f < a.Ai.Length; f++)
         {
             Assert.Equal(a.Ai[f].Difficulties, b.Ai[f].Difficulties);
-            Assert.Equal(a.Ai[f].BuildOrder, b.Ai[f].BuildOrder);
-            for (int k = 0; k < a.Ai[f].Compositions.Length; k++)
+            Assert.Equal(a.Ai[f].Openings[0].BuildOrder, b.Ai[f].Openings[0].BuildOrder);
+            for (int k = 0; k < a.Ai[f].Openings[0].Compositions.Length; k++)
             {
-                Assert.Equal(a.Ai[f].Compositions[k].Units, b.Ai[f].Compositions[k].Units);
-                Assert.Equal(a.Ai[f].Compositions[k].Weights, b.Ai[f].Compositions[k].Weights);
+                Assert.Equal(a.Ai[f].Openings[0].Compositions[k].Units, b.Ai[f].Openings[0].Compositions[k].Units);
+                Assert.Equal(a.Ai[f].Openings[0].Compositions[k].Weights, b.Ai[f].Openings[0].Compositions[k].Weights);
             }
         }
     }

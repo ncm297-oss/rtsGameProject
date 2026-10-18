@@ -77,6 +77,8 @@ public class DataContentHashTests
         if (t == typeof(ImmutableArray<AiDifficultyDef>)) return ((ImmutableArray<AiDifficultyDef>)value!).SetItem(0, ((ImmutableArray<AiDifficultyDef>)value!)[0] with { ThinkTicks = 99 });
         if (t == typeof(ImmutableArray<AiStep>)) return ((ImmutableArray<AiStep>)value!).Add(((ImmutableArray<AiStep>)value!)[0]);
         if (t == typeof(ImmutableArray<AiComposition>)) return ((ImmutableArray<AiComposition>)value!).RemoveAt(0);
+        // M5-8a: one more opening (a copy of the first; each opening field: EveryAiStructField_ChangesTheHash).
+        if (t == typeof(ImmutableArray<AiOpening>)) return ((ImmutableArray<AiOpening>)value!).Add(((ImmutableArray<AiOpening>)value!)[0]);
         if (t == typeof(ImmutableArray<UnitPassive>)) // M4-4b-3a (each field: EveryPassiveField_AndTheirCount_ChangeTheHash)
         {
             var a = (ImmutableArray<UnitPassive>)value!;
@@ -425,8 +427,16 @@ public class DataContentHashTests
             Assert.Contains($"AiRulesDef.{f}", checkedFields);
         for (int slot = 0; slot < d.Ai.Length; slot++)
             Check(d.Ai[slot], x => With(d, ai: x, aiSlot: slot));
-        foreach (string f in new[] { "Faction", "Difficulties", "BuildOrder", "Compositions", "AttackMinHalfPop", "AttackMinCost", "RetreatHpFraction", "RetreatLossFraction" })
+        foreach (string f in new[] { "Faction", "Difficulties", "Openings", "RetreatHpFraction", "RetreatLossFraction" })
             Assert.Contains($"AiDef.{f}", checkedFields);
+        // M5-8a: every AiOpening field, on each faction's first opening.
+        for (int slot = 0; slot < d.Ai.Length; slot++)
+        {
+            AiDef ai = d.Ai[slot];
+            Check(ai.Openings[0], o => With(d, ai: WithOpenings(ai, ai.Openings.SetItem(0, o)), aiSlot: slot));
+        }
+        foreach (string f in new[] { "Id", "DisplayName", "Description", "BuildOrder", "Compositions", "AttackMinHalfPop", "AttackMinCost" })
+            Assert.Contains($"AiOpening.{f}", checkedFields);
         Assert.True(checkedFields.Count >= 60, $"only {checkedFields.Count} fields checked");
     }
 
@@ -459,10 +469,18 @@ public class DataContentHashTests
             }
             foreach (PropertyInfo p in typeof(AiDifficultyDef).GetProperties())
                 Expect($"AiDifficultyDef.{p.Name}", nameof(AiDef.Difficulties), ai.Difficulties.SetItem(1, WithField(ai.Difficulties[1], p)));
+            // M5-8a: the steps and compositions live in the openings.
+            AiOpening first = ai.Openings[0];
+            void ExpectInOpening(string what, string property, object list)
+            {
+                AiOpening o = Clone(first);
+                typeof(AiOpening).GetProperty(property)!.SetValue(o, list);
+                Expect(what, nameof(AiDef.Openings), ai.Openings.SetItem(0, o));
+            }
             foreach (PropertyInfo p in typeof(AiStep).GetProperties())
-                Expect($"AiStep.{p.Name}", nameof(AiDef.BuildOrder), ai.BuildOrder.SetItem(0, WithField(ai.BuildOrder[0], p)));
+                ExpectInOpening($"AiStep.{p.Name}", nameof(AiOpening.BuildOrder), first.BuildOrder.SetItem(0, WithField(first.BuildOrder[0], p)));
             foreach (PropertyInfo p in typeof(AiComposition).GetProperties())
-                Expect($"AiComposition.{p.Name}", nameof(AiDef.Compositions), ai.Compositions.SetItem(0, WithField(ai.Compositions[0], p)));
+                ExpectInOpening($"AiComposition.{p.Name}", nameof(AiOpening.Compositions), first.Compositions.SetItem(0, WithField(first.Compositions[0], p)));
         }
         // A new field must be added to ContentHash (these counts fail first).
         Assert.Equal((8, 6, 3), (typeof(AiDifficultyDef).GetProperties().Length, typeof(AiStep).GetProperties().Length, typeof(AiComposition).GetProperties().Length));
@@ -470,6 +488,65 @@ public class DataContentHashTests
         GameData noAi = With(d);
         typeof(GameData).GetProperty(nameof(GameData.Ai))!.SetValue(noAi, ImmutableArray<AiDef>.Empty);
         Assert.NotEqual(baseline, noAi.ContentHash());
+    }
+
+    /// <summary>A copy of <paramref name="ai"/> with <paramref name="openings"/>.</summary>
+    private static AiDef WithOpenings(AiDef ai, ImmutableArray<AiOpening> openings)
+    {
+        AiDef copy = Clone(ai);
+        typeof(AiDef).GetProperty(nameof(AiDef.Openings))!.SetValue(copy, openings);
+        return copy;
+    }
+
+    /// <summary>A copy of <paramref name="o"/> with id <paramref name="id"/>.</summary>
+    private static AiOpening Renamed(AiOpening o, string id)
+    {
+        AiOpening copy = Clone(o);
+        typeof(AiOpening).GetProperty(nameof(AiOpening.Id))!.SetValue(copy, id);
+        return copy;
+    }
+
+    /// <summary>
+    /// M5-8a: the openings' order is content (it is the pick's index): two openings swapped move the hash, and so do an
+    /// opening's id, display name and description, and the opening count (one dropped).
+    /// </summary>
+    [Fact]
+    public void OpeningOrder_Id_Names_AndCount_ChangeTheHash()
+    {
+        GameData d = TestSim.Data;
+        AiDef ai = d.Ai[0];
+        AiOpening a = ai.Openings[0], b = Renamed(a, "second");
+        ulong ab = With(d, ai: WithOpenings(ai, ImmutableArray.Create(a, b))).ContentHash();
+        ulong ba = With(d, ai: WithOpenings(ai, ImmutableArray.Create(b, a))).ContentHash();
+        Assert.NotEqual(ab, ba);
+        Assert.NotEqual(ab, d.ContentHash()); // two openings vs one
+        Assert.NotEqual(ab, With(d, ai: WithOpenings(ai, ImmutableArray.Create(a, Renamed(a, "third")))).ContentHash());
+        Assert.Equal(ab, With(d, ai: WithOpenings(ai, ImmutableArray.Create(a, Renamed(a, "second")))).ContentHash());
+    }
+
+    /// <summary>M5-8a: an edit to an opening's id, displayName or description in the file moves the hash; so does adding one.</summary>
+    [Theory]
+    [InlineData("id", "\"standard_two\"")]
+    [InlineData("displayName", "\"Standard II\"")]
+    [InlineData("description", "\"Another line\"")]
+    [InlineData("add", "")]
+    public void AnOpeningFieldEditInTheFile_ChangesTheHash(string field, string json)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("factions/malazan/ai.json", root =>
+        {
+            JsonArray openings = root["openings"]!.AsArray();
+            if (field == "add")
+            {
+                JsonNode copy = openings[0]!.DeepClone();
+                copy["id"] = "copy";
+                openings.Add(copy);
+            }
+            else openings[0]![field] = JsonNode.Parse(json);
+        });
+        DataLoadResult load = DataLoader.LoadAll(dir.Path);
+        Assert.True(load.Ok, string.Join("\n", load.Errors));
+        Assert.NotEqual(TestSim.Data.ContentHash(), load.Data!.ContentHash());
     }
 
     /// <summary>M5-3: an edit to any field of <c>rules.json</c> <c>ai</c> moves the hash.</summary>
@@ -512,13 +589,13 @@ public class DataContentHashTests
     [InlineData("difficulties.normal.pullBackWounded", "true")]
     [InlineData("difficulties.normal.useAbilities", "false")]
     [InlineData("difficulties.normal.expandAfter", "500")]
-    [InlineData("buildOrder.0.at", "{ \"time\": 1 }")]
-    [InlineData("buildOrder.0.do", "\"build\"")]
-    [InlineData("buildOrder.0.count", "3")]
-    [InlineData("compositions.0.age", "2")]
-    [InlineData("compositions.0.units", "{ \"malazan_heavy_infantry\": 1 }")]
-    [InlineData("attack.minArmyPop", "11")]
-    [InlineData("attack.minArmyCost", "801")]
+    [InlineData("openings.0.buildOrder.0.at", "{ \"time\": 1 }")]
+    [InlineData("openings.0.buildOrder.0.do", "\"build\"")]
+    [InlineData("openings.0.buildOrder.0.count", "3")]
+    [InlineData("openings.0.compositions.0.age", "2")]
+    [InlineData("openings.0.compositions.0.units", "{ \"malazan_heavy_infantry\": 1 }")]
+    [InlineData("openings.0.attack.minArmyPop", "11")]
+    [InlineData("openings.0.attack.minArmyCost", "801")]
     [InlineData("retreat.hpFraction", "0.4")]
     [InlineData("retreat.lossFraction", "0.6")]
     public void AnAiJsonFieldEdit_ChangesTheHash(string path, string json)
@@ -529,10 +606,10 @@ public class DataContentHashTests
             string[] parts = path.Split('.');
             JsonNode node = root;
             for (int i = 0; i < parts.Length - 1; i++) node = int.TryParse(parts[i], out int k) ? node[k]! : node[parts[i]]!;
-            if (path == "buildOrder.0.do") node["id"] = "malazan_billet"; // a build step names a building
-            if (path == "compositions.0.age") // two ages swapped: still one per age
+            if (path == "openings.0.buildOrder.0.do") node["id"] = "malazan_billet"; // a build step names a building
+            if (path == "openings.0.compositions.0.age") // two ages swapped: still one per age
             {
-                root["compositions"]![1]!["age"] = 1;
+                root["openings"]![0]!["compositions"]![1]!["age"] = 1;
             }
             node[parts[^1]] = JsonNode.Parse(json);
         });
