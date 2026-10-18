@@ -1,0 +1,193 @@
+using System;
+using System.Collections.Immutable;
+using Rts.Sim.Data;
+using Rts.Sim.Map;
+
+namespace Rts.Sim.Save;
+
+/// <summary>
+/// The save header (M6-S2, docs/03 "Save/load and replays"): everything a load needs to build the <see cref="SimConfig"/>
+/// before it reads a store, in a fixed order after the magic, the format version and the total length. Written from a
+/// sim's config by <see cref="Write"/>; read and checked by <see cref="TryRead"/>, which returns the config.
+/// </summary>
+internal static class SaveHeader
+{
+    /// <summary>Writes the magic, version, a length placeholder (patched by <see cref="SaveWriter.Finish"/>) and the header fields of <paramref name="sim"/>.</summary>
+    public static void Write(SaveWriter w, Simulation sim)
+    {
+        SimConfig c = sim.World.Config;
+        GameData data = c.Data;
+        foreach (byte b in SaveFormat.Magic) w.Write(b);
+        w.Write(SaveFormat.CurrentVersion);
+        w.Write(0L); // total length, patched at the end
+        w.WriteString(SimInfo.Version);
+        w.Write(data.ContentHash());
+        w.Write(c.Seed);
+        w.Write(c.PlayerCount);
+        for (int p = 0; p < c.PlayerCount; p++)
+        {
+            // Every seat written out (the default ones too), the faction by its string id: ids are mapped to ints at load.
+            PlayerSeat seat = c.SeatOf(p);
+            w.WriteString(seat.Faction >= 0 ? data.Factions[seat.Faction].Key : "-");
+            w.Write((byte)seat.Controller);
+            w.Write((byte)seat.Difficulty);
+        }
+        w.Write(c.UnitCapacity);
+        w.Write(c.CommandCapacity);
+        w.Write(c.ResourceCapacity);
+        w.Write(c.BuildingCapacity);
+        w.Write(c.ProjectileCapacity);
+        w.Write(c.ZoneCapacity);
+        WriteMap(w, c.Map);
+        w.Write(c.Combat);
+        w.Write(c.CastWalkInBlockerRange);
+        w.Write(c.CastWalkInPatienceSeconds);
+        w.Write(c.StatsSampleTicks);
+        w.Write(c.StatsSampleCapacity);
+        w.Write(sim.TickNumber);
+    }
+
+    /// <summary>Every <see cref="MapGenParams"/> field, in declaration order.</summary>
+    private static void WriteMap(SaveWriter w, MapGenParams m)
+    {
+        w.Write(m.Width);
+        w.Write(m.Height);
+        w.Write(m.EdgeMargin);
+        w.Write(m.Level1Plateaus);
+        w.Write(m.Level1MinSize);
+        w.Write(m.Level1MaxSize);
+        w.Write(m.Level2Plateaus);
+        w.Write(m.Level2MinSize);
+        w.Write(m.Level2MaxSize);
+        w.Write(m.Level2Inset);
+        w.Write(m.RampWidth);
+        w.Write(m.RampLength);
+        w.Write(m.RampsPerPlateau);
+        w.Write(m.RampTries);
+        w.Write(m.MinPassableFraction);
+        w.Write(m.MaxAttempts);
+        w.Write(m.Forests);
+        w.Write(m.ForestMinTrees);
+        w.Write(m.ForestMaxTrees);
+        w.Write(m.GoldMines);
+        w.Write(m.MineSpacing);
+        w.Write(m.StartLocations);
+        w.Write(m.StartClearRadius);
+        w.Write(m.StartEdgeMargin);
+        w.Write(m.StartMineDistance);
+        w.Write(m.StartForestDistance);
+    }
+
+    private static MapGenParams ReadMap(SaveReader r) => new()
+    {
+        Width = r.ReadInt32(),
+        Height = r.ReadInt32(),
+        EdgeMargin = r.ReadInt32(),
+        Level1Plateaus = r.ReadInt32(),
+        Level1MinSize = r.ReadInt32(),
+        Level1MaxSize = r.ReadInt32(),
+        Level2Plateaus = r.ReadInt32(),
+        Level2MinSize = r.ReadInt32(),
+        Level2MaxSize = r.ReadInt32(),
+        Level2Inset = r.ReadInt32(),
+        RampWidth = r.ReadInt32(),
+        RampLength = r.ReadInt32(),
+        RampsPerPlateau = r.ReadInt32(),
+        RampTries = r.ReadInt32(),
+        MinPassableFraction = r.ReadFloat(),
+        MaxAttempts = r.ReadInt32(),
+        Forests = r.ReadInt32(),
+        ForestMinTrees = r.ReadInt32(),
+        ForestMaxTrees = r.ReadInt32(),
+        GoldMines = r.ReadInt32(),
+        MineSpacing = r.ReadFloat(),
+        StartLocations = r.ReadInt32(),
+        StartClearRadius = r.ReadInt32(),
+        StartEdgeMargin = r.ReadInt32(),
+        StartMineDistance = r.ReadFloat(),
+        StartForestDistance = r.ReadFloat(),
+    };
+
+    /// <summary>
+    /// Reads the header after the fixed prefix (the caller checked magic, version, length and checksum): the data hash
+    /// (<see cref="SaveError.DataMismatch"/> against <paramref name="data"/>), then every field, each in its range
+    /// (<see cref="SaveError.InvalidHeader"/>), then the seats' controllers (<see cref="SaveError.AiSeatsUnsupported"/> for an
+    /// AI seat in slice 1). On success <paramref name="config"/> is the match's config and <paramref name="tick"/> the tick
+    /// number the save was made at.
+    /// </summary>
+    public static SaveError TryRead(SaveReader r, GameData data, out SimConfig? config, out int tick)
+    {
+        config = null;
+        tick = 0;
+        string? simVersion = r.ReadString(); // informational, not checked (as the replay's)
+        if (simVersion == null) return SaveError.Malformed;
+        ulong dataHash = r.ReadUInt64();
+        if (r.Failed) return SaveError.Malformed;
+        if (dataHash != data.ContentHash()) return SaveError.DataMismatch;
+        ulong seed = r.ReadUInt64();
+        int players = r.ReadInt32();
+        if (r.Failed) return SaveError.Malformed;
+        if (players < 1 || players > SaveFormat.MaxPlayers) return SaveError.InvalidHeader;
+        var seats = ImmutableArray.CreateBuilder<PlayerSeat>(players);
+        bool ai = false;
+        for (int p = 0; p < players; p++)
+        {
+            string? id = r.ReadString();
+            byte controller = r.ReadByte(), difficulty = r.ReadByte();
+            if (r.Failed || id == null) return SaveError.Malformed;
+            int faction = id == "-" ? -1 : data.FindFaction(id);
+            if (faction < 0 && (id != "-" || data.Factions.Length > 0)) return SaveError.InvalidHeader;
+            if (controller > (byte)SeatController.Ai || difficulty > (byte)AiDifficulty.Hard) return SaveError.InvalidHeader;
+            ai |= controller == (byte)SeatController.Ai;
+            seats.Add(new PlayerSeat(faction, (SeatController)controller, (AiDifficulty)difficulty));
+        }
+        int units = r.ReadInt32(), commands = r.ReadInt32(), resources = r.ReadInt32(), buildings = r.ReadInt32();
+        int projectiles = r.ReadInt32(), zones = r.ReadInt32();
+        MapGenParams map = ReadMap(r);
+        bool combat = r.ReadBool();
+        float blockerRange = r.ReadFloat(), patience = r.ReadFloat();
+        int sampleTicks = r.ReadInt32(), sampleCapacity = r.ReadInt32();
+        tick = r.ReadInt32();
+        if (r.Failed) return SaveError.Malformed;
+        if (!InCapacity(units, 1) || !InCapacity(commands, 1) || !InCapacity(resources, 1) || !InCapacity(buildings, 1)
+            || !InCapacity(projectiles, 0) || !InCapacity(zones, 1) || tick < 0 || tick == int.MaxValue)
+            return SaveError.InvalidHeader;
+        var built = new SimConfig(seed, players, units, commands)
+        {
+            Data = data,
+            Map = map,
+            ResourceCapacity = resources,
+            BuildingCapacity = buildings,
+            ProjectileCapacity = projectiles,
+            ZoneCapacity = zones,
+            Combat = combat,
+            CastWalkInBlockerRange = blockerRange,
+            CastWalkInPatienceSeconds = patience,
+            StatsSampleTicks = sampleTicks,
+            StatsSampleCapacity = sampleCapacity,
+            Seats = seats.MoveToImmutable(),
+        };
+        // An AI seat's faction needs a loaded ai.json, which the config's check asks; slice 1 refuses AI seats first.
+        if (ai) return SaveError.AiSeatsUnsupported;
+        if (!Valid(built)) return SaveError.InvalidHeader;
+        config = built;
+        return SaveError.None;
+    }
+
+    private static bool InCapacity(int value, int min) => value >= min && value <= SaveFormat.MaxCapacity;
+
+    /// <summary>The config's own range checks (<see cref="SimConfig.Validate"/>, every map parameter too), as a bool.</summary>
+    private static bool Valid(SimConfig config)
+    {
+        try
+        {
+            config.Validate();
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            // Validate reports a bad value by throwing ArgumentException (or a subclass); the save answers InvalidHeader.
+            return false;
+        }
+    }
+}

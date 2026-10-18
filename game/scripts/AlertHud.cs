@@ -14,6 +14,8 @@ namespace Rts.Game;
 /// <c>alert.base_under_attack</c> for a building, else <c>alert.units_under_attack</c>; under the replay mark); and the
 /// <see cref="SfxEvent.Alert"/> sound, once a frame. Space (a fixed key, <see cref="KeyMap.Reserved"/>) centres the camera on
 /// the newest alert. A replay at any speed shows the same alerts at the same ticks for its first seat (the local player).
+/// M6-V13 (BUG-0954 item 1): a building hit that joins a units alert upgrades it to a base alert (<see cref="AttackAlerts.Upgraded"/>);
+/// if that alert is off screen the base text goes up (<see cref="UpgradeTexts"/>), with no new ping or sound.
 /// Only the text's 4 s and the ping's 3 s run on frame time; nothing here writes the sim.
 /// </remarks>
 public partial class AlertHud : Node
@@ -34,6 +36,7 @@ public partial class AlertHud : Node
     private System.Numerics.Vector2[] _buildingCenter = Array.Empty<System.Numerics.Vector2>();
     private float _textLeft;
     private ulong _textFrame = ulong.MaxValue;
+    private bool _textIsBase;
 
     /// <summary>The alert bookkeeping (read-only for tests); sized at <see cref="Init"/>.</summary>
     public AttackAlerts Alerts { get; private set; } = new(0, 0);
@@ -115,6 +118,7 @@ public partial class AlertHud : Node
             if (b.Alive[i] && b.Owner[i] == _player && (uint)b.TypeId[i] < (uint)w.Data.Buildings.Length)
                 _buildingCenter[i] = StartBase.FootprintCenter(w.NavGrid, w.Data.Buildings[b.TypeId[i]], b.Cell[i]);
         int raised = Alerts.Update(_player, dt, u.Alive, u.Generation, u.Hp, u.Owner, u.Position, b.Alive, b.Generation, b.Hp, b.Owner, _buildingCenter);
+        ShowUpgrades(w);
         if (raised == 0) return;
         bool offScreen = false, offBase = false;
         for (int k = 0; k < raised; k++)
@@ -134,17 +138,42 @@ public partial class AlertHud : Node
                 offBase |= Alerts.Kind(a) == AttackAlertKind.Base;
             }
         }
-        if (offScreen && _label != null && _ui != null)
-        {
-            _label.Text = _ui.Alert(offBase ? AlertText.BaseUnderAttack : AlertText.UnitsUnderAttack);
-            _label.Visible = true;
-            _textLeft = TextSeconds;
-            // A fast frame runs several ticks: the text goes up (and counts) once a frame.
-            ulong frame = Engine.GetProcessFrames();
-            if (frame != _textFrame) TextsShown++;
-            _textFrame = frame;
-        }
+        if (offScreen) ShowText(offBase);
         _sfx?.Play(SfxEvent.Alert);
+    }
+
+    /// <summary>Times an alert's text was put up again because a building hit turned a Units alert into a Base one (BUG-0954 item 1).</summary>
+    public int UpgradeTexts { get; private set; }
+
+    // BUG-0954 item 1: a building hit that joined a Units alert made it Base. If that alert is off screen the player reads
+    // the base text (again, or for the first time if the units' text has gone); on screen nothing changes. No new ping or
+    // sound: the alert is the same one.
+    private void ShowUpgrades(World w)
+    {
+        bool offBase = false;
+        for (int k = 0; k < Alerts.UpgradedCount; k++)
+            offBase |= _camera == null || !ScreenCheck.OnScreen(_camera, w.Heightmap, Alerts.Position(Alerts.Upgraded(k)));
+        if (!offBase) return;
+        UpgradeTexts++;
+        ShowText(true);
+    }
+
+    private void ShowText(bool baseText)
+    {
+        if (_label == null || _ui == null) return;
+        // Base wins within a frame: a later units text never replaces a base one shown on the same frame.
+        ulong frame = Engine.GetProcessFrames();
+        bool sameFrame = frame == _textFrame;
+        if (!(sameFrame && _textIsBase && !baseText))
+        {
+            _label.Text = _ui.Alert(baseText ? AlertText.BaseUnderAttack : AlertText.UnitsUnderAttack);
+            _textIsBase = baseText;
+        }
+        _label.Visible = true;
+        _textLeft = TextSeconds;
+        // A fast frame runs several ticks: the text goes up (and counts) once a frame.
+        if (!sameFrame) TextsShown++;
+        _textFrame = frame;
     }
 
     public override void _UnhandledInput(InputEvent e)

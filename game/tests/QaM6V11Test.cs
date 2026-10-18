@@ -34,7 +34,11 @@ public partial class QaM6V11Test : Node
     // Seed 11: seat 0 (idle human) falls near tick 11,536, seat 2 first has Age II on tick 17,021; 17,600 runs both rows.
     // BUG-0921 (M6-VH3 QA): since M5-P2's flank rule (merged at 63e3a31) seat 0 falls at tick 11,668 and seat 2 first has
     // Age II on tick 21,001 (17:30), so 21,600 runs both rows again (the checks are unchanged; only the match is longer).
+    // BUG-0953 (M6-V13): since M5-H3 the AIs never finish seat 0's workers, so its fall is staged (see StageDefeat).
     private static int MatchTicks = 21600;
+    // BUG-0953 (M6-V13): seat 0 now falls to a staged defeat (StageDefeat), not to the AIs; the match runs on this long past
+    // MatchTicks at most for its banner.
+    private const int StageGraceTicks = 1500;
 
     private readonly List<string> _failures = new();
     private readonly List<string> _notes = new();
@@ -215,6 +219,148 @@ public partial class QaM6V11Test : Node
         public int Ticks, StartUnits;
         public int ResearchTickMismatches;
         public string FirstMismatch = "";
+        // M6-V13 (BUG-0953): the staged defeat's dev spawns, (owner, spawn point): the sim counts them as no one's trained unit.
+        // Matched on the tick they apply by owner, type and the nearest spawn point within 3 m (the tick's separation may
+        // already have nudged them); the matched units' handles are the killers.
+        public List<(int Owner, int Type, System.Numerics.Vector2 At, int Tick)> DevSpawns = new();
+        public List<(EntityHandle Unit, int Type)> DevUnits = new();
+    }
+
+    // M6-V13 (BUG-0953): seat 0 (the idle human) is put out by a staged defeat, not by the AIs: since M5-H3 they never hunt its
+    // workers, so the banner row tracked AI changes. Seat 1 (an AI) gets dev killers: three Line units beside each of seat 0's
+    // units and a catapult ring round each of its buildings (DefeatStaging's shooter, FreeForAllTest's ring), re-ordered every
+    // 20 ticks (the AI may re-task them). The AI-side gap (hunting the last units) stays open: M5-4d, seed 11.
+    private const int Victim = 0, Killer = 1, ReorderTicks = 20;
+
+    private sealed class Staging
+    {
+        public int State; // 0 not staged, 1 spawns queued, 2 driving
+        public int SpawnTick, OrderTick, StagedAt = -1, LineType, SiegeType, Spawned;
+        public List<EntityHandle> Line = new(), Siege = new();
+    }
+
+    private void StageDefeat(Simulation sim, Oracle o, Staging st)
+    {
+        World w = sim.World;
+        Rts.Sim.Map.NavGrid g = w.NavGrid;
+        st.LineType = Rts.Sim.ViewApi.StartBase.UnitOfSlot(_data, w.FactionOf(Killer), UnitSlot.Line);
+        st.SiegeType = DefeatStaging.Shooter(_data);
+        var used = new HashSet<int>();
+        foreach (EntityHandle v in DefeatStaging.UnitsOf(w, Victim))
+        {
+            g.WorldToCell(w.Units.Position[v.Index], out int vx, out int vy);
+            for (int k = 0; k < 3; k++)
+            {
+                int c = FreeCell(w, vx - 1 + k, vy + 1, -1, used);
+                if (c >= 0) Spawn(c, st.LineType);
+            }
+        }
+        BuildingStore b = w.Buildings;
+        for (int i = 0; i < b.Capacity; i++)
+        {
+            if (!b.Alive[i] || b.Owner[i] != Victim) continue;
+            BuildingDef def = _data.Buildings[b.TypeId[i]];
+            int cx = b.Cell[i] % g.Width, cy = b.Cell[i] / g.Width, level = g.LevelAt(cx, cy), placed = 0;
+            for (int r = 4; r <= 5 && placed < 8; r++)
+                for (int y = cy - r; y <= cy + def.FootprintHeight - 1 + r && placed < 8; y++)
+                    for (int x = cx - r; x <= cx + def.FootprintWidth - 1 + r && placed < 8; x++)
+                    {
+                        bool ring = x == cx - r || x == cx + def.FootprintWidth - 1 + r || y == cy - r || y == cy + def.FootprintHeight - 1 + r;
+                        if (!ring || (x + y) % 2 != 0 || !g.InBounds(x, y) || !g.IsPassable(x, y) || g.LevelAt(x, y) != level || !used.Add(y * g.Width + x)) continue;
+                        Spawn(y * g.Width + x, st.SiegeType);
+                        placed++;
+                    }
+        }
+        st.State = 1;
+        st.SpawnTick = sim.TickNumber;
+        st.StagedAt = sim.TickNumber;
+
+        void Spawn(int cell, int type)
+        {
+            System.Numerics.Vector2 p = g.CellCenter(cell % g.Width, cell / g.Width);
+            sim.Enqueue(Rts.Sim.Commands.Command.SpawnUnit(Killer, type, p));
+            o.DevSpawns.Add((Killer, type, p, sim.TickNumber + 1));
+            st.Spawned++;
+        }
+    }
+
+    // The nearest passable cell to (x0, y0) not in used and with no live unit on it (so no two spawns share a cell); -1 if none within 6.
+    private static int FreeCell(World w, int x0, int y0, int level, HashSet<int> used)
+    {
+        Rts.Sim.Map.NavGrid g = w.NavGrid;
+        for (int r = 0; r <= 6; r++)
+            for (int dy = -r; dy <= r; dy++)
+                for (int dx = -r; dx <= r; dx++)
+                {
+                    if (Math.Max(Math.Abs(dx), Math.Abs(dy)) != r) continue;
+                    int x = x0 + dx, y = y0 + dy;
+                    if (!g.InBounds(x, y) || !g.IsPassable(x, y) || (level >= 0 && g.LevelAt(x, y) != level) || used.Contains(y * g.Width + x)) continue;
+                    System.Numerics.Vector2 c = g.CellCenter(x, y);
+                    bool taken = false;
+                    UnitStore u = w.Units;
+                    for (int i = 0; i < u.Capacity && !taken; i++)
+                        taken = u.Alive[i] && System.Numerics.Vector2.Distance(u.Position[i], c) < 0.75f;
+                    if (taken) continue;
+                    used.Add(y * g.Width + x);
+                    return y * g.Width + x;
+                }
+        return -1;
+    }
+
+    // After the spawns land (the oracle matched them): the killers, then every ReorderTicks each ordered at seat 0's nearest unit (Line) or building.
+    private void DriveDefeat(Simulation sim, Oracle o, Staging st)
+    {
+        World w = sim.World;
+        if (st.State == 1)
+        {
+            if (sim.TickNumber < st.SpawnTick + 6) return;
+            foreach ((EntityHandle h, int type) in o.DevUnits) (type == st.SiegeType ? st.Siege : st.Line).Add(h);
+            Check(st.Spawned > 0 && st.Line.Count + st.Siege.Count == st.Spawned && o.DevSpawns.Count == 0,
+                $"staged defeat: {st.Line.Count} Line and {st.Siege.Count} catapults landed of {st.Spawned} spawned ({o.DevSpawns.Count} unmatched)");
+            st.State = 2;
+            st.OrderTick = int.MinValue;
+        }
+        if (st.State != 2 || w.IsDefeated(Victim) || sim.TickNumber < st.OrderTick + ReorderTicks) return;
+        st.OrderTick = sim.TickNumber;
+        UnitStore u = w.Units;
+        foreach (EntityHandle k in st.Line) Order(k, preferUnits: true);
+        foreach (EntityHandle k in st.Siege) Order(k, preferUnits: false);
+
+        void Order(EntityHandle k, bool preferUnits)
+        {
+            if (!u.Alive[k.Index] || u.Generation[k.Index] != k.Generation) return;
+            System.Numerics.Vector2 from = u.Position[k.Index];
+            EntityHandle unit = Nearest(w, from, buildings: false), building = Nearest(w, from, buildings: true);
+            if (preferUnits && unit != default) sim.Enqueue(Rts.Sim.Commands.Command.Attack(Killer, k, unit, isBuilding: false));
+            else if (building != default) sim.Enqueue(Rts.Sim.Commands.Command.Attack(Killer, k, building, isBuilding: true));
+            else if (unit != default) sim.Enqueue(Rts.Sim.Commands.Command.Attack(Killer, k, unit, isBuilding: false));
+        }
+    }
+
+    private static EntityHandle Nearest(World w, System.Numerics.Vector2 from, bool buildings)
+    {
+        EntityHandle best = default;
+        float bestD = float.MaxValue;
+        if (buildings)
+        {
+            BuildingStore b = w.Buildings;
+            Rts.Sim.Map.NavGrid g = w.NavGrid;
+            for (int i = 0; i < b.Capacity; i++)
+            {
+                if (!b.Alive[i] || b.Owner[i] != Victim) continue;
+                float d = System.Numerics.Vector2.DistanceSquared(g.CellCenter(b.Cell[i] % g.Width, b.Cell[i] / g.Width), from);
+                if (d < bestD) { bestD = d; best = new EntityHandle(i, b.Generation[i]); }
+            }
+            return best;
+        }
+        UnitStore u = w.Units;
+        for (int i = 0; i < u.Capacity; i++)
+        {
+            if (!u.Alive[i] || u.Owner[i] != Victim) continue;
+            float d = System.Numerics.Vector2.DistanceSquared(u.Position[i], from);
+            if (d < bestD) { bestD = d; best = new EntityHandle(i, u.Generation[i]); }
+        }
+        return best;
     }
 
     private async Task OracleMatch()
@@ -250,9 +396,16 @@ public partial class QaM6V11Test : Node
 
             var clock = System.Diagnostics.Stopwatch.StartNew();
             bool bannerChecked = false, ageChecked = false;
-            while (sim.TickNumber < MatchTicks && clock.Elapsed.TotalSeconds < 240)
+            var staging = new Staging();
+            // The match runs MatchTicks, and on (at most StageGraceTicks) until the staged defeat's banner.
+            while ((sim.TickNumber < MatchTicks || (!bannerChecked && staging.State > 0 && sim.TickNumber < MatchTicks + StageGraceTicks))
+                && clock.Elapsed.TotalSeconds < 240)
             {
                 await Frames(1);
+                // Staged once the Age II row has run (the extra army can't move that tick), or near the end if it never does.
+                if (staging.State == 0 && !w.IsDefeated(Victim) && ((ageChecked && !stopAtAge) || sim.TickNumber >= MatchTicks - StageGraceTicks))
+                    StageDefeat(sim, o, staging);
+                if (staging.State > 0) DriveDefeat(sim, o, staging);
                 if (stopAtAge && !ageChecked)
                 {
                     ageChecked = true;
@@ -288,6 +441,11 @@ public partial class QaM6V11Test : Node
                 if (main.BannerUp && bannerChecked) main.ContinueWatching();
             }
             Check(sim.TickNumber >= MatchTicks, $"the match reached tick {sim.TickNumber} in {clock.Elapsed.TotalSeconds:0} s (want {MatchTicks})");
+            int endTick = sim.TickNumber;
+            if (staging.State == 0 && w.IsDefeated(Victim)) _notes.Add($"seat {Victim} fell to the AIs at {match.DefeatedAt(Victim)}, before the staging");
+            else Check(staging.State == 2 && w.IsDefeated(Victim) && o.DevSpawns.Count == 0,
+                $"staged defeat: state {staging.State} (staged at tick {staging.StagedAt}), seat {Victim} defeated {w.IsDefeated(Victim)}, {o.DevSpawns.Count} dev spawns the oracle never saw");
+            _notes.Add($"staged defeat of seat {Victim} from tick {staging.StagedAt}: {staging.Line.Count} Line + {staging.Siege.Count} catapults for seat {Killer}; seat {Victim} out at {match.DefeatedAt(Victim)}");
             Check(o.ResearchTickMismatches == 0, $"TechResearchedTick disagreed with the first HasTech tick {o.ResearchTickMismatches} times: {o.FirstMismatch}");
             Check(ageChecked, $"no seat reached Age II by tick {sim.TickNumber}: the exact-tick row did not run (an AI change? raise --ticks or MatchTicks)");
             Check(bannerChecked, $"no banner by tick {sim.TickNumber}: the defeated-seat row did not run");
@@ -300,6 +458,11 @@ public partial class QaM6V11Test : Node
             await Frames(3);
             MatchStats stats = main.Stats!;
             CompareAll(stats, match, o, $"at the end (tick {sim.TickNumber})");
+            // M6-V13: three AI seats' "opened with" lines at 1280 x 720 (Fits, in Layout, holds them too); the replay's are the same.
+            int[] openings = Enumerable.Range(0, players).Select(p => sim.AiOpening(p)).ToArray();
+            foreach (string f in StatsScreenCheck.Openings(stats, _data, w, _ui, openings, "at the end")) Check(false, f);
+            Check(stats.OpeningLines.Count == 3, $"{stats.OpeningLines.Count} opening lines for three AI seats");
+            foreach (string f in StatsScreenCheck.Fits(stats, GetViewport().GetVisibleRect(), "at the end")) Check(false, f);
             await Shot("qa-v11-ai-end");
             int neverSeat = Enumerable.Range(0, players).FirstOrDefault(p => !w.HasTech(p, age), -1);
             if (neverSeat >= 0) Check(stats.Cell(neverSeat, Col(MatchOverText.AgeIiAt)) == _ui.MatchOver(MatchOverText.NotReached), $"seat {neverSeat} never researched: cell '{stats.Cell(neverSeat, Col(MatchOverText.AgeIiAt))}'");
@@ -341,13 +504,14 @@ public partial class QaM6V11Test : Node
             main.ShowStats();
             await Frames(2);
             var replayCells = Cells(main.Stats!, players);
+            foreach (string f in StatsScreenCheck.Openings(main.Stats!, _data, play.Simulation!.World, _ui, openings, "the watched replay")) Check(false, f);
             for (int p = 0; p < players; p++)
             {
                 Check(replayCells[p].SequenceEqual(liveCells[p]), $"replay row {p}: [{string.Join(", ", replayCells[p])}] (live [{string.Join(", ", liveCells[p])}])");
                 Check(play.Simulation!.World.ArmyValueSamples(p).SequenceEqual(liveSamples[p]), $"replay row {p}: samples differ from the live match's");
                 Check(main.Stats!.Graph.GraphPoints(p).ToArray().SequenceEqual(livePoints[p]), $"replay row {p}: graph points differ from the live screen's");
             }
-            Check(main.Stats!.Length.Text == _ui.MatchLength(MatchTicks), $"replay length '{main.Stats.Length.Text}'");
+            Check(main.Stats!.Length.Text == _ui.MatchLength(endTick), $"replay length '{main.Stats.Length.Text}' (want '{_ui.MatchLength(endTick)}')");
             main.CloseStats();
             main.QuitToMenu();
             await Frames(2);
@@ -410,6 +574,7 @@ public partial class QaM6V11Test : Node
                 else o.Wood[u.Owner[i]] += o.PrevCargo[i];
             }
             bool fresh = u.Alive[i] && (!o.PrevAlive[i] || o.PrevGen[i] != u.Generation[i]);
+            if (fresh && DevSpawn(o, s.TickNumber, i, u.Generation[i], u.Owner[i], u.TypeId[i], u.Position[i])) continue; // M6-V13: the staged defeat's killers (dev spawns: not trained)
             if (fresh && !u.IsSummoned(i) && s.TickNumber > 2) o.Trained[u.Owner[i]]++; // ticks 1-2: the start base's workers (dev spawns, not counted; they appear on tick 2)
             if (fresh && s.TickNumber <= 2) o.StartUnits++;
         }
@@ -445,6 +610,23 @@ public partial class QaM6V11Test : Node
         }
         o.Ticks = s.TickNumber;
         Snapshot(o, w);
+    }
+
+    private static bool DevSpawn(Oracle o, int tick, int slot, int generation, int owner, int type, System.Numerics.Vector2 at)
+    {
+        int best = -1;
+        float bestD = 3f;
+        for (int k = 0; k < o.DevSpawns.Count; k++)
+        {
+            var d = o.DevSpawns[k];
+            if (d.Owner != owner || d.Type != type || tick < d.Tick || tick > d.Tick + 4) continue; // applied on the next tick or so
+            float dist = System.Numerics.Vector2.Distance(d.At, at);
+            if (dist <= bestD) { bestD = dist; best = k; }
+        }
+        if (best < 0) return false;
+        o.DevSpawns.RemoveAt(best);
+        o.DevUnits.Add((new EntityHandle(slot, generation), type));
+        return true;
     }
 
     private void CompareAll(MatchStats st, Match match, Oracle o, string how)

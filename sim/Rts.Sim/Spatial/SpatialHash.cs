@@ -19,7 +19,7 @@ namespace Rts.Sim.Spatial;
 /// </para>
 /// Derived state: rebuilt from <see cref="UnitStore"/>, so it does not feed the state hash.
 /// </remarks>
-public sealed class SpatialHash
+public sealed partial class SpatialHash
 {
     /// <summary>Bucket edge in nav cells.</summary>
     public const int BucketCells = 2;

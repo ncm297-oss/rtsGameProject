@@ -679,13 +679,19 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       outweighs everything or the hall is hit below `ai.recallHallHp` 0.5; verified by `Ai/ProportionalDefenseTests` (8), QA's
       `ProportionalDefenseQaTests` (16, through the command log) and `ProportionalDefenseFuzzStressTests` (12 AI-v-AI matches with a
       per-think oracle); docs/03 "Implementation (M5-4f)". Ticked at the 2026-10-16-2036 ACCEPT.)
-- [ ] Owner request 2026-10-14 (D14 b): **a strategy per match**: `ai.json` holds several named openings per faction (build order, army mix,
+- [x] Owner request 2026-10-14 (D14 b): **a strategy per match**: `ai.json` holds several named openings per faction (build order, army mix,
       attack thresholds) and the AI picks one with its seeded RNG at the start (Easy always the first); schema age-agnostic. (M5-8a,
       2026-10-17-2344: **the sim half is in**: `ai.json` `openings[]` (1-8 named entries, each a build order, compositions and attack
       thresholds; `displayName` / `description` in data; the old top-level fields refused), `AiPlayer.PickOpening` (Easy index 0; Normal /
       Hard one draw from the AI's own stream, the first it makes; not hashed, rebuilt from the seed), `Simulation.AiOpening(player)`;
       verified by `Ai/AiOpeningPickTests`, `DataValidationTests`, `DataContentHashTests` and QA's `AiOpeningsQaTests`; docs/03
-      "Implementation (M5-8a)". Left: the openings themselves (the data track's D21: the shipped files hold one, `standard`).)
+      "Implementation (M5-8a)". D21, 2026-10-18-0516: **the openings themselves**: three per faction (Malazan `standard` "Combined arms" /
+      `crossbow_push` "Crossbow push" / `cadre_rush` "Fast Age II"; Whirlwind `standard` "Swarm" / `raider_rush` "Raider rush" / `holy_war`
+      "Holy war"), each ≤ 26 steps with its own compositions and wave threshold, named and described on the faction pages; verified by
+      `Content/AiContentTests` (both ways), `Content/AiOpeningPairsReportTests` (the 9 Normal pairings, 20 minutes: both sides wave, no
+      dead-end step) and QA's `D21OpeningsQaTests`; M6-V13 shows the pick on the stats screen. Ticked at the 2026-10-18-0516 ACCEPT.
+      Open: BUG-0981 (S3, sim: four openings never reach Age II against an active opponent, no reserve for a due step), BUG-0982 (S3,
+      data: `cadre_rush` can fall to `raider_rush` without a wave on seed 8).)
 - [ ] Owner request 2026-10-14 (D14 c): **counter-composition**: the AI shifts its army mix toward what counters the enemy units it has
       seen (fog-limited, decayed memory; strength per difficulty, 0 on Easy); think cost stays inside the 1 ms gate.
 
@@ -718,7 +724,13 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       Watch / Delete / Back; Watch replays through `SimRunner.StartPlayback` (every seat human, the logged commands fed before
       their tick, each checkpoint compared; a data mismatch refused with `load.refused`, a divergence stopped with `load.mismatch`,
       no order reaches the sim); `--replay <path>`; verified by `ReplayPlaybackTest`, `ShellTest` and QA's `QaM6V9Test`; docs/03
-      "Implementation (M6-V9)". Left: **save / load**, after the sim's save format (STATE Requests 42).)
+      "Implementation (M6-V9)". M6-S2, 2026-10-18-0516: **the sim's save format, slice 1**: `Simulation.TrySave(Stream, out SaveError)` /
+      `TryLoad(GameData, Stream, out Simulation?, out SaveError)` (frozen signatures, standing rule 36), a versioned little-endian binary
+      with a checksum holding every store whole (fog, flow-field cache, spatial hash, RNG streams, pending commands, stats); a load
+      is hash-equal to the unsaved run every tick on 13 scenes to T + 2,000 and QA's T + 6,000; refuses bad bytes without throwing;
+      human-seat matches only (`AiSeatsUnsupported` until slice 2 stores the AI); verified by `Save/SaveRoundTripTests`,
+      `SaveRefusalTests`, `SaveFormatTests`, `SavePerfTests` (3.9 MB, 25 / 46 ms) and QA's `SaveRestoreQaTests` / `SaveDeepDiff` /
+      `SaveForgeryQaTests`; docs/03 "Save format (M6-S2)". Left: slice 2 (AI seats) and the view's Save / Load screen.)
 - [x] Settings: resolution, window mode, VSync, quality, volumes, keybinds. (M6-V6, 2026-10-13: resolution, window mode,
       VSync, quality presets, master / music / SFX volume and edge-pan speed, from the menu and the pause menu, saved in
       `user://settings.cfg`. M6-V7, 2026-10-14: "Confine cursor to window" (on by default; the cursor stays in the window

@@ -12,7 +12,7 @@ namespace Rts.Sim.Pathfinding;
 /// to the lowest direction number). A blocked target cell is replaced by the nearest passable cell.
 /// Cells are indexed <c>y * Width + x</c>, like the nav grid.
 /// </remarks>
-public sealed class FlowField
+public sealed partial class FlowField
 {
     /// <summary>Direction of the target cell, of blocked cells, and of cells the target can't reach.</summary>
     public const byte NoDirection = 255;

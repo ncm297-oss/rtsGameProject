@@ -20,7 +20,7 @@ namespace Rts.Sim.Pathfinding;
 /// <see cref="PeekCached"/>, which is not a use.
 /// </para>
 /// </remarks>
-public sealed class FlowFieldCache
+public sealed partial class FlowFieldCache
 {
     /// <summary>Number of fields kept when no capacity is given, and the floor of <see cref="CapacityFor"/> (docs/03).</summary>
     public const int DefaultCapacity = 32;

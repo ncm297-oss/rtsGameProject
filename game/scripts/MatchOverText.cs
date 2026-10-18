@@ -57,4 +57,6 @@ public enum MatchOverText
     Human,
     /// <summary>The stats screen's button back to the banner or the pause menu.</summary>
     Back,
+    /// <summary>M6-V13: an AI seat's line under the stats table, a format naming <c>{0}</c> (the seat's faction name) and <c>{1}</c> (the opening's <c>displayName</c>).</summary>
+    Opening,
 }

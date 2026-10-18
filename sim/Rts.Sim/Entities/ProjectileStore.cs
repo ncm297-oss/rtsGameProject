@@ -10,7 +10,7 @@ namespace Rts.Sim.Entities;
 /// lowest free slot, flies, lands and frees it, and every loop runs in slot order. The read-only spans are the view's
 /// (M4-V3); only the sim writes.
 /// </summary>
-public sealed class ProjectileStore
+public sealed partial class ProjectileStore
 {
     private readonly bool[] _alive;
     private readonly Vector2[] _position;

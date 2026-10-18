@@ -3,7 +3,7 @@ using System;
 namespace Rts.Sim.Commands;
 
 /// <summary>Fixed-capacity buffer of pending commands, sorted in place and drained one tick at a time.</summary>
-public sealed class CommandQueue
+public sealed partial class CommandQueue
 {
     private readonly Command[] _items;
     private int _count;

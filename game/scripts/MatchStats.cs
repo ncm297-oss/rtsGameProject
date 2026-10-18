@@ -9,7 +9,8 @@ namespace Rts.Game;
 /// <summary>
 /// The post-match stats screen (M6-V4, docs/02 "Game flow" 5): the match length, then one row per seat (colour swatch, faction
 /// name, "You" or the AI's difficulty) with the sim's M6-S1 counters (<see cref="Columns"/>), and under the table the army
-/// value graph (<see cref="Graph"/>, M6-V11). Text from <c>ui.json</c> <c>match_over</c> and <c>setup</c>, faction names from data.
+/// value graph (<see cref="Graph"/>, M6-V11); between them, one "opened with" line per AI seat (<see cref="OpeningLines"/>,
+/// M6-V13). Text from <c>ui.json</c> <c>match_over</c> and <c>setup</c>, faction and opening names from data.
 /// </summary>
 /// <remarks>
 /// Opened from the banner's Stats and, once the banner has shown, from the pause menu's; the tree is paused under it, so the
@@ -62,6 +63,9 @@ public partial class MatchStats : CanvasLayer
     private readonly List<Label> _seatLabels = new();
     private readonly List<ColorRect> _swatches = new();
     private readonly List<Label> _headings = new();
+    private VBoxContainer _openings = null!;
+    private readonly List<Label> _openingLines = new();
+    private readonly List<string> _openingText = new();
 
     /// <summary>Raised by the Back button (and Esc, through <see cref="Main"/>).</summary>
     public event Action? BackPressed;
@@ -92,6 +96,27 @@ public partial class MatchStats : CanvasLayer
 
     /// <summary>The table's heading cells (the player column's, the seat column's, then one per data column), for layout checks.</summary>
     public IReadOnlyList<Label> Headings => _headings;
+
+    /// <summary>M6-V13: player <paramref name="row"/>'s "opened with" line (<c>match_over.opening</c>), or "" for a human seat (it shows none).</summary>
+    public string OpeningText(int row) => _openingText[row];
+
+    /// <summary>M6-V13: the "opened with" lines under the table, one per AI seat in seat order, for layout checks.</summary>
+    public IReadOnlyList<Label> OpeningLines => _openingLines;
+
+    /// <summary>
+    /// M6-V13: the index in its faction's <c>ai.json</c> openings that seat <paramref name="player"/> played, or -1 for a human
+    /// seat. A live sim says (<see cref="Simulation.AiOpening"/>); a watched replay's sim runs every seat human, so for a seat
+    /// played as an AI (<see cref="Match.Seats"/>) the pick is worked out from the seed (<see cref="Rts.Sim.ViewApi.AiOpeningLookup"/>).
+    /// </summary>
+    public static int OpeningOf(Simulation sim, GameData data, int player, PlayerSeat seat)
+    {
+        if (seat.Controller != SeatController.Ai) return -1;
+        int live = sim.AiOpening(player);
+        if (live >= 0) return live;
+        int faction = sim.World.FactionOf(player);
+        if ((uint)faction >= (uint)data.Ai.Length || data.Ai[faction] == null || data.Ai[faction].Openings.IsDefaultOrEmpty) return -1;
+        return Rts.Sim.ViewApi.AiOpeningLookup.Pick(sim.World.Config.Seed, player, seat.Difficulty, data.Ai[faction].Openings.Length);
+    }
 
     /// <summary>The screen's opaque backdrop colour (the graph's lines are read against it).</summary>
     public static readonly Color BackdropColour = new(0.06f, 0.05f, 0.05f);
@@ -126,6 +151,11 @@ public partial class MatchStats : CanvasLayer
         var table = new CenterContainer { Name = "TableCentre" };
         table.AddChild(_grid);
         column.AddChild(table);
+        _openings = new VBoxContainer { Name = "Openings" };
+        _openings.AddThemeConstantOverride("separation", 2);
+        var openings = new CenterContainer { Name = "OpeningsCentre" };
+        openings.AddChild(_openings);
+        column.AddChild(openings);
         Graph = new ArmyValueGraph { Name = "ArmyValueGraph", CustomMinimumSize = new Vector2(820f, 220f) };
         Graph.Build(ui);
         column.AddChild(Graph);
@@ -149,6 +179,13 @@ public partial class MatchStats : CanvasLayer
         _seatLabels.Clear();
         _swatches.Clear();
         _headings.Clear();
+        foreach (Node child in _openings.GetChildren())
+        {
+            _openings.RemoveChild(child);
+            child.QueueFree();
+        }
+        _openingLines.Clear();
+        _openingText.Clear();
         Simulation? sim = match.Simulation;
         if (sim == null) return;
         World w = sim.World;
@@ -192,10 +229,36 @@ public partial class MatchStats : CanvasLayer
             _seatLabels.Add(seat);
             _swatches.Add(swatch);
             samples[p] = w.ArmyValueSamples(p).ToArray(); // a copy: the span is valid until the next tick only
+            AddOpening(sim, p, p < seats.Length ? seats[p] : default, name.Text, colours[p]);
         }
         Graph.SetData(samples, colours, w.StatsSampleTicks, sim.TickNumber);
         Visible = true;
         BackButton.GrabFocus();
+    }
+
+    // M6-V13: an AI seat's "<faction> opened with <displayName>" line under the table, behind its swatch (two seats of one
+    // faction tell apart by colour), the opening's description as the tooltip. A human seat gets no line.
+    private void AddOpening(Simulation sim, int p, PlayerSeat seat, string faction, Color colour)
+    {
+        int index = OpeningOf(sim, _data, p, seat);
+        int f = sim.World.FactionOf(p);
+        if (index < 0 || (uint)f >= (uint)_data.Ai.Length || index >= _data.Ai[f].Openings.Length)
+        {
+            _openingText.Add("");
+            return;
+        }
+        Rts.Sim.Data.AiOpening opening = _data.Ai[f].Openings[index];
+        string text = _ui.OpeningLine(faction, opening.DisplayName);
+        _openingText.Add(text);
+        var line = new HBoxContainer { Name = $"Opening{p}" };
+        line.AddThemeConstantOverride("separation", 6);
+        line.AddChild(new ColorRect { Color = colour, CustomMinimumSize = new Vector2(12f, 12f), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter });
+        Label label = ShellUi.Text(text, 15);
+        label.TooltipText = opening.Description;
+        label.MouseFilter = Control.MouseFilterEnum.Stop; // a Label ignores the mouse by default: no tooltip without this
+        line.AddChild(label);
+        _openings.AddChild(line);
+        _openingLines.Add(label);
     }
 
     // "You" for the local player, the difficulty's name for an AI seat, "Human" for another human (dev runs).

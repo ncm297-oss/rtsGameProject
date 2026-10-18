@@ -6384,6 +6384,58 @@ game/tests/SfxTest, AlertTest (new), CombatViewTest, ShellTest, QaM6VH2Test (Spa
     `alert-on-screen.png`.
   - `ShellTest`: the two `alert` keys (each required, the section required, the brief's wording).
 
+### Implementation (M6-V13)
+
+"The AI opened with ..." on the stats screen, a joined alert upgraded to Base (BUG-0954 item 1), and BUG-0953's view half.
+The sim is unchanged but for one new read-only ViewApi class and one rule in `AttackAlerts`.
+
+```
+sim/Rts.Sim/ViewApi/AiOpeningLookup.cs   Pick(seed, player, difficulty, openingCount): an AI seat's opening from the seed
+sim/Rts.Sim/ViewApi/AttackAlerts.cs      a building hit joining a Units alert makes it Base; UpgradedCount / Upgraded(k)
+game/scripts/MatchStats.cs               the "opened with" lines under the table (OpeningOf, OpeningText, OpeningLines)
+game/scripts/AlertHud.cs                 an upgraded alert off screen puts the base text up (UpgradeTexts)
+game/scripts/MatchOverText.cs, UiText.cs match_over.opening, a format naming {0} and {1}
+game/data/common/ui.json                 match_over.opening: "{0} opened with {1}"
+game/tests/QaM6V11Test (staged defeat), StatsScreenCheck, ReplayPlaybackTest, FreeForAllTest, ShellTest
+```
+
+- **Opened with.** Between the stats table and the army value graph, one line per AI seat in seat order: a 12 px swatch
+  in the seat's colour (two seats of one faction tell apart by it) and `match_over.opening` with the seat's faction
+  `displayName` for `{0}` and the opening's `displayName` for `{1}` ("Malazan Empire opened with Standard"); the opening's
+  `description` is the tooltip. A human seat shows no line (the layout needs no cell, so there is no `opening_human` key).
+  Which opening: `MatchStats.OpeningOf` asks the live sim (`Simulation.AiOpening(p)`, picked at construction, M5-8a).
+  A watched replay's sim runs every seat human, so `AiOpening` is -1 there; for a seat the header says was an AI
+  (`Match.Seats`, the seats as played) the view works the pick out with `AiOpeningLookup.Pick(Config.Seed, p, difficulty,
+  openings)`: a fresh `SimRng(seed, RngStream.Ai(p))` handed to `AiPlayer.PickOpening`, the construction `Simulation`
+  makes, so it is the same number; it reads and writes no sim state. With today's data every AI says "Standard".
+- **Alert upgrade** (BUG-0954 item 1). A building hit that joins a recent alert (within 30 m and 10 s, the join rule
+  unchanged) whose `Kind` is `Units` turns it `Base` (its position stays); `UpgradedCount` / `Upgraded(k)` list the
+  alerts the last `Update` upgraded, like `New(k)`. A unit hit never turns a Base alert back, and a building hit that
+  raises an alert of its own is Base from the start (no upgrade). `AlertHud`: for an upgraded alert off screen now, the
+  base text goes up for 4 s (`UpgradeTexts` counts it), with no new ping or sound (it is the same alert); on screen,
+  nothing. Within one frame a base text is not replaced by a later units one.
+- **BUG-0953 (view half).** `QaM6V11Test`'s banner row waited for seed 11's idle human (seat 0) to fall to the AIs; since
+  M5-H3 they never finish its last workers. The fall is now staged once the Age II row has run (or 1,500 ticks before
+  `MatchTicks` if it never does): seat 1 (an AI) gets dev killers, three Line units on free cells beside each of seat 0's
+  units and a ring of eight catapults round each of its buildings, re-ordered every 20 ticks (the AI may re-task them).
+  The oracle counts a dev spawn as no one's trained unit (matched on its owner, type and spawn point within 3 m in the
+  ticks after the spawn; the sim counts only finished queue items). The match runs on past `MatchTicks` (at most 1,500
+  ticks) only if the banner is not up by then. The AI side of the gap (hunting the last units) stays open for M5-4d.
+- **Tests.**
+  - xUnit `ViewApi/AiOpeningLookupTests` on a fixture where both factions hold exactly three openings: `Pick` equals
+    `Simulation.AiOpening(p)` for every seat of seeds 1-200 x three difficulty rotations x 2-4 seats (5,400 seats; Easy
+    always 0, Normal and Hard pick all three); the same every call; one opening is always 0; `Pick` moves no sim state.
+  - xUnit `ViewApi/AttackAlertsTests` (BUG-0954 item 1, the two upgrade rows red before the rule): a building 30 m from a
+    Units alert hit 9.95 s later upgrades it (one alert, two hits, position kept, reported once); 30.5 m or 10 s later it
+    raises its own Base alert and the first stays Units; a unit hit on a Base alert never downgrades and a building first
+    is no upgrade; two building hits in one step upgrade once.
+  - `ReplayPlaybackTest`: the shipped-data recordings' watched stats show the live match's lines; on a 3-opening fixture
+    (a temp copy of `res://data`, never the shipped files) a Normal AI on a seed that picks opening 2, one that picks 0, and
+    four seats Easy / Normal / Hard: the live lines, then the watched replay's (its sim with no AI) equal them.
+  - `QaM6V11Test`: the staged defeat; three AI lines at 1280 x 720 inside the screen between the table and the graph
+    (`StatsScreenCheck.Fits` holds the lines now), the watched replay's the same. `FreeForAllTest`: a line per AI seat.
+  - `ShellTest`: `match_over.opening` required, and a format naming `{0}` and `{1}` (four bad formats, one error each).
+
 ## AI architecture
 
 The AI lives in `Rts.Sim.Ai`, inside the sim assembly, because it must be deterministic (it uses
@@ -7804,7 +7856,9 @@ M5 criterion 8, the sim half: named AI openings (D14 b). Code: `Data/AiOpening.c
   data edit, a balance change or a rename, refuses old replays. A test changes every field of every
   def type in turn, so a new field that isn't hashed fails it.
 - **Save file:** a versioned binary snapshot of the full `World` (stores, RNG states, pending
-  commands, AI blackboards) plus the replay log so far. Loading restores the snapshot directly.
+  commands, AI blackboards) plus the replay log so far. Loading restores the snapshot directly. M6-S2 (slice 1) built it;
+  the format, the entry points and the refusals are in "Save format (M6-S2)" below. The replay log is not inside the save:
+  the view's Save screen writes the recording beside it (Requests 42).
   It stores the flow-field cache's *contents* too, every used slot's direction bytes and costs with
   its keys, version stamps and LRU stamps (Producer decision 2026-10-07, BUG-0081; owner may revisit
   at M6): since M3-2b a usable-but-stale field was built on the grid as it was then, so rebuilding
@@ -7826,6 +7880,94 @@ M5 criterion 8, the sim half: named AI openings (D14 b). Code: `Data/AiOpening.c
 - **The shell's replays** (M6-V9): every match started from the menu or with `--skirmish` is recorded (checkpoints every 100
   ticks) and written to `user://replays/<yyyyMMdd-HHmmss>-seed<seed>.replay` at the banner and at Quit to menu, the newest
   20 kept; Load Game lists and plays them through `SimRunner` (see "Implementation (M6-V9)").
+
+### Save format (M6-S2)
+
+Slice 1 of M6 criterion 3's save half (Requests 42): matches whose seats are all human. Code in `sim/Rts.Sim/Save/`
+(`SaveFormat`, `SaveError`, `SaveHeader`, `SaveWriter`, `SaveReader`) and an internal `WriteTo` / `ReadFrom` pair per store,
+each in its own `<Store>.Save.cs` part of the store's (now `partial`) class.
+
+- **Entry points** (frozen, standing rule 36): `bool Simulation.TrySave(Stream, out SaveError)`, called between ticks, and
+  `static bool Simulation.TryLoad(GameData, Stream, out Simulation?, out SaveError)`. `TrySave` refuses with
+  `AiSeatsUnsupported`, writing nothing, while `SimConfig.HasAiSeat` (slice 2 stores the AI's Blackboard, opening pick and
+  RNG, and lifts it). A stream that fails to read or write throws its own exception; bad bytes never throw.
+- **The load** builds the `SimConfig` from the header and the world on the stored heightmap with the placer skipped (the
+  `World` constructor's load path), so a load draws from no RNG stream; then every store reads its section over the
+  freshly built one. The loaded sim runs no AI (slice 1), so `Simulation.AiOpening(p)` is -1 for every seat. A
+  `ReplayRecorder` attaches to a loaded sim only under the recorder's own rule (tick 0, nothing queued): only a save made
+  before the first tick and before any command. Saves of hand-made maps load too (the heightmap is stored; `HasGeneratedMap`
+  is restored, so the recorder still refuses them).
+- **Encoding:** binary, little-endian (`BinaryWriter` primitives; whole arrays of padding-free element types as their raw
+  bytes, written only on little-endian machines), fixed field order, nothing optional. Floats are their exact bit
+  patterns. Strings are an int32 byte count and printable ASCII (the sim version, snake_case faction ids). An array is its
+  int32 length, then its elements; the reader requires the length the header's capacities give. Structs holding a bool
+  (commands, ghosts, events) go field by field.
+- **Header**, in order: magic `RTSSAVE\0` (8 bytes); format version (int32, `SaveFormat.CurrentVersion` = 1); total length
+  of the file (int64, checksum included); `SimInfo.Version` (string, informational); `GameData.ContentHash()` (uint64); seed
+  (uint64); player count (int32); per player its seat: faction string id (`-` for data without factions), controller
+  (byte: 0 human, 1 AI), difficulty (byte); unit, command, resource, building, projectile (the config value, 0 = from the
+  data) and zone capacities (int32 each); every `MapGenParams` field in declaration order (`Width`, `Height`,
+  `EdgeMargin`, `Level1Plateaus`, `Level1MinSize`, `Level1MaxSize`, `Level2Plateaus`, `Level2MinSize`, `Level2MaxSize`,
+  `Level2Inset`, `RampWidth`, `RampLength`, `RampsPerPlateau`, `RampTries`, `MinPassableFraction`, `MaxAttempts`,
+  `Forests`, `ForestMinTrees`, `ForestMaxTrees`, `GoldMines`, `MineSpacing`, `StartLocations`, `StartClearRadius`,
+  `StartEdgeMargin`, `StartMineDistance`, `StartForestDistance`; int32 or float); `Combat` (byte);
+  `CastWalkInBlockerRange`, `CastWalkInPatienceSeconds` (float); `StatsSampleTicks`, `StatsSampleCapacity` (int32); the
+  tick number (int32). Every seat is written out (the default ones too), so the loaded config has explicit seats.
+- **Sections**, each opening with a four-letter tag, in this order:
+
+  | Tag | Holds |
+  | --- | --- |
+  | `HMAP` | the heightmap: width, height, levels, elevations, start locations (stored, not re-generated) |
+  | `WRLD` | `HasGeneratedMap`, `ResourcePlacement`, `SeenBlockVersion`, the movement scratch epoch `PlugEpoch`, the surround / flank rule seams, the match-over latch |
+  | `RNGS` | every stream's `State` and `Increment`, the never-drawn AI streams too |
+  | `GRID` | the nav grid: every cell's flags and cost, `Version`, `BlockVersion`, `PassableCount` |
+  | `RSSC` | the resource store whole (felled trees' freed slots and generations), free list, high-water mark |
+  | `BLDG` | the building store whole: construction work, queues (tech flags), progress, rally points, repair accumulators, tower state, free list, high-water mark |
+  | `UNIT` | the unit store whole (every array, `Flank`, `PrevPosition` / `PrevFacing`, order queues, cargo, combat and cast state, the counted population and live flags, the free list, the derived counters), then the statuses whole |
+  | `LEDR` | the ledger: gold, wood, half-pop, provided, cap, kills, losses, live buildings and units, production buildings, `EverBuilt`, `Defeated`, the finished-building counts; then `STAT`, the M6-S1 stats whole (every counter, each tech's tick, the samples and their count) |
+  | `TECH` | the researched-tech flags and the bonus sums (stored, not re-summed) |
+  | `PROJ` | the projectiles in flight, count and loop bounds |
+  | `ZONE` | the live zones, their fog records, counts, loop bound, `BlockerVersion` |
+  | `FOG ` | per player the byte map, explored and visible bits, update count; the unit and building reveals; the last-known lists (`BuildingGhost.Site` included); the node memory; the last stamped boxes; the near-blocker mask and its version |
+  | `SPAT` | the spatial hash whole (bucket order and owner codes: phase 1's commands and every read between ticks see the last tick's index) |
+  | `FLOW` | the flow-field cache whole: clock, count, build count, LRU stamps, cell-to-slot index, step masks and their grid version, then every used slot's field |
+  | `SURR` | `SurroundClaim`, `SurroundHolder` |
+  | `SLTH` | the stealth detection mask |
+  | `EVNT` | the last tick's `Deaths`, `Impacts`, `AbilityEvents`, `DefeatEvents` (`Tick()` clears them first, but a view reads them between ticks) |
+  | `CMDS` | each player's next sequence number, then the pending queue: count, every command, every field, in queue order |
+  | `END!` | nothing: the body's end |
+
+  Last, the checksum: FNV-1a 64 over every byte before it (the replay file's). A flow field's slot holds its keys
+  (requested and target cell), both versions, a mode byte and the direction bytes; with mode 0 its costs are left out and
+  rebuilt at load from the directions: Dijkstra gives each reached cell exactly the float cost of the neighbour its
+  direction names plus that step, so the rebuild is bit for bit. The writer checks that rule on every cell first (the
+  outer ring direction-free, the target +0, every other cell without a direction +infinity) and writes mode 1, the raw
+  costs, for any field that breaks it. That keeps the menu match's save near 4 MB instead of about 12 MB (128 fields of a
+  128 map, 64 KB of costs each). The round-trip test compares every cost of every used slot directly.
+- **Not stored**: per-tick scratch (the movement, combat, production and fog-stamp buffers, rewritten before they are read
+  within a tick); the never-seal check's memo (`SealCheck`, BUG-0096), a cache of an answer that follows from the grid
+  alone, which reads between ticks (`CanPlace`) also write; the replay recorder.
+- **Refusals** (`SaveError`, frozen; checked in this order, `TryLoad` false and the sim null): `BadMagic` (the bytes there are
+  don't start the magic: a 1-byte stream of another byte too); `Truncated` (shorter than the fixed prefix or the
+  declared length; an empty stream); `FormatVersionMismatch`; `Malformed` for a declared length out of range or bytes past
+  it; `ChecksumMismatch`; `DataMismatch` (another `ContentHash`, so any data edit refuses a save, as a replay);
+  `InvalidHeader` (a player count outside 1-16, a capacity outside its range, a faction id the data lacks, an unknown
+  controller or difficulty, a map parameter or config value `SimConfig.Validate` refuses); `AiSeatsUnsupported` (slice 1);
+  `Malformed` for a body that doesn't parse (a tag out of place, an array of the wrong length, a count past its capacity, a
+  live entity's type, owner or cell out of range, a bad enum or bool byte, a flow field whose directions leave the map or
+  cycle, a pending command `Enqueue` would refuse, bytes after `END!`). A save whose checksum holds is trusted past these
+  structure checks: a forged file can load into a sim whose later ticks misbehave.
+- **Size and time** (Perf row `SavePerfTests`, Debug build): the menu's match at tick 12,000 is about 3.9 MB, saves in about
+  20-40 ms and loads in about 45-75 ms (gates: 8 MB, 100 ms each); the 4-seat 256 map about 11.4 MB, 125-255 ms to save and
+  225-440 ms to load (printed, no gate; the follow-up that shrinks the flow-field section is due only past 32 MB).
+- **Tests** (`sim/Rts.Sim.Tests/Save/`): `SaveRoundTripTests` saves every scene of the set (the golden replay's scene, the
+  menu match on seeds 1-5 with a scripted gather / build / train / research / attack-move / cast stream, a 4-seat 256 map,
+  a surround brawl, casts and a live Sandstorm, a stealthed unit beside a detector, a site and a 5-deep queue holding a
+  tech, a felled tree and a razed building, a defeated seat) at ticks 1, 137 and 1,000, ticks each load beside the unsaved
+  run on the same commands to T + 2,000 comparing `StateHash` every tick, compares the state outside the hash directly at
+  T, T + 1 and T + 2,000 (and both sims' save bytes), and checks save -> load -> save byte-identical; `SaveRefusalTests`
+  sweeps a flipped byte over every offset and every truncation of a small save, and forges each header refusal;
+  `SaveFormatTests` pins the header order, the version, the checksum and the flow-field encoding.
 
 ## Testing strategy
 

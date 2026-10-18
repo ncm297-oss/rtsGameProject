@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | open (view half **fixed** in M6-V13, a32445b: the scene stages the defeat; the sim half, hunting the last units, waits for M5-4d) |
 | Found | 2026-10-17-2344, task M6-V12 (developer report; reproduced by QA on base and head) |
 | System | view QA test `game/tests/QaM6V11Test.cs` (the defeated-seat / banner row) on the M5-H3 sim; AI behaviour (sim track) |
-| Fixed by | |
+| Fixed by | view half: a32445b (M6-V13; `QaM6V11Test` stages seat 0's defeat with `DefeatStaging` from tick 17,006, banner at 17,065; loop 69 / 69 twice in QA's run). Sim half: open, M5-4d |
 
 ## Repro
 1. Base b30462a (a fresh clone, built): `& $env:GODOT --headless --path game res://tests/QaM6V11Test.tscn`
