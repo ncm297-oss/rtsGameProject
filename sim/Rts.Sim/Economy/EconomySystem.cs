@@ -190,14 +190,17 @@ public static class EconomySystem
 
     /// <summary>
     /// Walks unit <paramref name="i"/> (Move machinery, a fresh order) to a stand point beside the footprint. The cell is
-    /// the passable cell 4-adjacent to the footprint with the least distance from the worker to its center plus
-    /// <c>CellSize</c> for every other unit standing in it (spatial hash), ties to the lower cell index: workers spread
+    /// the passable cell 4-adjacent to the footprint, or (M5-H3, BUG-0790) one of its four diagonal corner cells, with the
+    /// least distance from the worker to its center plus <c>CellSize</c> for every other unit standing in it (spatial
+    /// hash) unless it is the cell the worker stands in and one of its stand points is free (BUG-0790), ties to the lower
+    /// cell index: workers spread
     /// round a crowded mine. In that cell the worker takes one of <see cref="EconomyConstants.StandPointsPerCell"/> stand
     /// points along the shared edge (BUG-0146): the edge's middle and <see cref="EconomyConstants.StandPointSpacing"/>
-    /// walker radii to either side, each <see cref="EconomyConstants.GoalInset"/> outside the edge; the one with the
-    /// fewest other units on it (center within the walker's radius), then the nearest, then the middle first. So several
-    /// workers stand side by side at a node open on one side, and one that waited out of reach takes a free point on
-    /// its next retry. False if no such cell is passable.
+    /// walker radii to either side, each <see cref="EconomyConstants.GoalInset"/> outside the edge (a corner cell has one,
+    /// <c>GoalInset</c> out from the footprint's corner on both axes); the one with the fewest other units on it (center
+    /// within the walker's radius), then the nearest, then the middle first. So several workers stand side by side at a
+    /// node open on one side, and one that waited out of reach takes a free point on its next retry. False if no such
+    /// cell is passable.
     /// </summary>
     internal static bool WalkToFootprint(World world, int i, int anchor, int fw, int fh)
     {
@@ -207,12 +210,19 @@ public static class EconomySystem
         int w = g.Width, x0 = anchor % w, y0 = anchor / w;
         int best = -1;
         float bestScore = float.PositiveInfinity;
-        for (int k = 0; k < 2 * (fw + fh); k++)
+        int ownCell = g.WorldToCell(pos, out int ox, out int oy) ? oy * w + ox : -1;
+        for (int k = 0; k < 2 * (fw + fh) + 4; k++)
         {
-            RingCell(x0, y0, fw, fh, k, out int x, out int y);
+            FaceCell(x0, y0, fw, fh, k, out int x, out int y);
             if (!g.IsPassable(x, y)) continue;
             int cell = y * w + x;
-            float score = Vector2.Distance(pos, g.CellCenter(x, y)) + CellCrowd(world, i, x, y) * MapConstants.CellSize;
+            // BUG-0790: the worker's own cell, crowded but with a stand point still free, costs no more than an empty one.
+            // Counted by units alone, a worker whose own cell had a free point 1.6 m away was sent to the next cell, behind
+            // the queue there, and stood out of reach on every retry. Only its own cell: waived for every cell, a free point
+            // behind a crowd drew walkers into it and four workers gridlocked a one-sided tree for 5,238 ticks (seed 21).
+            int crowd = CellCrowd(world, i, x, y);
+            if (crowd > 0 && cell == ownCell && FreeStandPoint(world, i, x, y, x0, y0, fw, fh)) crowd = 0;
+            float score = Vector2.Distance(pos, g.CellCenter(x, y)) + crowd * MapConstants.CellSize;
             if (score < bestScore || (score == bestScore && cell < best))
             {
                 best = cell;
@@ -231,24 +241,13 @@ public static class EconomySystem
     /// </summary>
     private static Vector2 StandPoint(World world, int i, int bx, int by, int x0, int y0, int fw, int fh)
     {
-        const float cs = MapConstants.CellSize, inset = EconomyConstants.GoalInset;
-        Vector2 middle = world.NavGrid.CellCenter(bx, by);
-        bool vertical = bx < x0 || bx >= x0 + fw; // the cell shares a vertical edge (left or right of the footprint)
-        if (bx < x0) middle.X = x0 * cs - inset;
-        else if (bx >= x0 + fw) middle.X = (x0 + fw) * cs + inset;
-        else if (by < y0) middle.Y = y0 * cs - inset;
-        else middle.Y = (y0 + fh) * cs + inset;
-        // The outer points stay inside the cell, so the goal point is always in the goal cell.
         UnitStore u = world.Units;
-        float gap = MathF.Min(EconomyConstants.StandPointSpacing * u.Radius[i], cs * 0.5f - inset);
-        Vector2 along = vertical ? new Vector2(0f, gap) : new Vector2(gap, 0f);
-        Vector2 pos = u.Position[i], best = middle;
+        Vector2 pos = u.Position[i], best = default;
         int bestCrowd = int.MaxValue;
         float bestDistance = float.PositiveInfinity;
         for (int p = 0; p < EconomyConstants.StandPointsPerCell; p++)
         {
-            // Middle first, then the lower side, then the upper: p = 0, 1, 2 -> offsets 0, -1, +1.
-            Vector2 point = middle + along * (p == 0 ? 0f : p == 1 ? -1f : 1f);
+            Vector2 point = StandPointAt(world, i, bx, by, x0, y0, fw, fh, p);
             int crowd = PointCrowd(world, i, point);
             if (crowd > bestCrowd) continue;
             float distance = Vector2.Distance(pos, point);
@@ -260,6 +259,39 @@ public static class EconomySystem
             }
         }
         return best;
+    }
+
+    /// <summary>
+    /// Stand point <paramref name="p"/> of ring cell (bx, by) for unit <paramref name="i"/>: on the shared edge's middle,
+    /// <see cref="EconomyConstants.GoalInset"/> outside it, then <see cref="EconomyConstants.StandPointSpacing"/> walker radii
+    /// to the lower side (p = 1) and the upper (p = 2), kept inside the cell. A diagonal corner cell has one point for every p.
+    /// </summary>
+    private static Vector2 StandPointAt(World world, int i, int bx, int by, int x0, int y0, int fw, int fh, int p)
+    {
+        const float cs = MapConstants.CellSize, inset = EconomyConstants.GoalInset;
+        bool vertical = bx < x0 || bx >= x0 + fw; // the cell shares a vertical edge (left or right of the footprint)
+        if (vertical && (by < y0 || by >= y0 + fh))
+        {
+            // A diagonal corner cell (BUG-0790): one point, GoalInset out from the footprint's corner along both axes.
+            return new Vector2(bx < x0 ? x0 * cs - inset : (x0 + fw) * cs + inset, by < y0 ? y0 * cs - inset : (y0 + fh) * cs + inset);
+        }
+        Vector2 middle = world.NavGrid.CellCenter(bx, by);
+        if (bx < x0) middle.X = x0 * cs - inset;
+        else if (bx >= x0 + fw) middle.X = (x0 + fw) * cs + inset;
+        else if (by < y0) middle.Y = y0 * cs - inset;
+        else middle.Y = (y0 + fh) * cs + inset;
+        // The outer points stay inside the cell, so the goal point is always in the goal cell.
+        float gap = MathF.Min(EconomyConstants.StandPointSpacing * world.Units.Radius[i], cs * 0.5f - inset);
+        Vector2 along = vertical ? new Vector2(0f, gap) : new Vector2(gap, 0f);
+        return middle + along * (p == 0 ? 0f : p == 1 ? -1f : 1f);
+    }
+
+    /// <summary>Whether some stand point of ring cell (bx, by) has nobody on it (<see cref="PointCrowd"/> 0), BUG-0790.</summary>
+    private static bool FreeStandPoint(World world, int i, int bx, int by, int x0, int y0, int fw, int fh)
+    {
+        for (int p = 0; p < EconomyConstants.StandPointsPerCell; p++)
+            if (PointCrowd(world, i, StandPointAt(world, i, bx, by, x0, y0, fw, fh, p)) == 0) return true;
+        return false;
     }
 
     /// <summary>Live units other than <paramref name="i"/> whose center lies in cell (x, y), from the spatial hash (rebuilt after this tick's commands).</summary>
@@ -294,6 +326,24 @@ public static class EconomySystem
     }
 
     /// <summary>The <paramref name="k"/>-th cell (0 to 2 (w + h) - 1) 4-adjacent to the footprint: the row above, the row below, the column left, the column right.</summary>
+    /// <summary>
+    /// Cell <paramref name="k"/> of the cells a footprint walk may stand in: the <c>2 (fw + fh)</c> 4-adjacent ring cells
+    /// (<see cref="RingCell"/>), then the four diagonal corner cells SW, SE, NW, NE (BUG-0790: a worker stood in a corner
+    /// cell out of reach while the corner's own spot in reach stayed free, since no stand point was ever offered there).
+    /// </summary>
+    private static void FaceCell(int x0, int y0, int fw, int fh, int k, out int x, out int y)
+    {
+        int ring = 2 * (fw + fh);
+        if (k < ring)
+        {
+            RingCell(x0, y0, fw, fh, k, out x, out y);
+            return;
+        }
+        k -= ring;
+        x = (k & 1) == 0 ? x0 - 1 : x0 + fw;
+        y = k < 2 ? y0 - 1 : y0 + fh;
+    }
+
     private static void RingCell(int x0, int y0, int fw, int fh, int k, out int x, out int y)
     {
         if (k < fw) { x = x0 + k; y = y0 - 1; return; }

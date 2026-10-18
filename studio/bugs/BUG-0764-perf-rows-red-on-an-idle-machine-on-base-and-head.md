@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (re-baselined, Producer decision; see BUG-0912) |
 | Found | 2026-10-16-0847 (filed by the Producer at the ACCEPT from the three QA reports) |
 | System | perf gates (`sim/Rts.Sim.Tests`, `[Trait("Category","Perf")]` rows: `Brawl500v500`, `EmptyTick 2,500`, `OneTreeFalls`, `TightBlob2500`, `VisionGate`, the PlayerView enumerate rows, the view's minimap rows, MapGen rows) |
-| Fixed by | |
+| Fixed by | d048a21 (M5-H3): 16 rows re-baselined with old threshold, readings, date and BUG-0764 in each comment; docs/03 "Testing strategy". QA 2026-10-17-1624: four idle Category=Perf runs (base, head, base, head): base red 16 / 15, head 0 / 0. 15 of the 16 dev rows were red on base in QA runs; `CombatScaleQaTests` far corner and the "pile" layout were not (BUG-0912). |
 
 ## Repro
 1. On an idle machine (no other `dotnet` / Godot process): `dotnet test sim/Rts.Sim.Tests --filter "Category=Perf"`.

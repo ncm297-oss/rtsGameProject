@@ -229,6 +229,64 @@ public class AiPlayerTests
     }
 
     /// <summary>
+    /// BUG-0791 (M5-H3): a build step that can pay but finds no site (a placement radius of one cell round the hall, which the
+    /// hall itself fills) searches once and then waits <see cref="BuildOrderExecutor.NoSiteRetryThinks"/> thinks before it
+    /// searches again, instead of scanning at every think; it never sends a Build. Before the fix: one search a think (20 in
+    /// 20 thinks).
+    /// </summary>
+    [Fact]
+    public void ABuildStepWithNoSite_SearchesOnceEveryNoSiteRetryThinks_NotEveryThink()
+    {
+        GameData data = AiScenes.DataWith(dir =>
+        {
+            dir.EditJson("factions/malazan/ai.json", root =>
+                root["buildOrder"] = AiScenes.BuildOrder(("time", 0, "build", "malazan_barracks", 0)));
+            dir.EditJson("common/rules.json", r => r["ai"]!["placementSearchRadius"] = 2);
+        });
+        Simulation sim = AiScenes.Flat(AiScenes.Seats(AiDifficulty.Hard, SeatController.Ai, SeatController.Human), data);
+        BuildMaps.SetTotals(sim, 0, 5000, 5000);
+        List<Command> rec = AiScenes.Log(sim, 0);
+        AiPlayer ai = sim.AiOf(0)!;
+        const int thinks = 20;
+        for (int t = 0; t < thinks * ai.ThinkTicks; t++) sim.Tick();
+        _out.WriteLine($"{ai.Thinks} thinks, {ai.SiteSearches} site searches, step done {ai.Board.StepDone[0]}");
+        Assert.Equal(thinks, ai.Thinks);
+        Assert.DoesNotContain(rec, c => c.Kind == CommandKind.Build && c.TypeId == data.FindBuilding("malazan_barracks"));
+        Assert.False(ai.Board.StepDone[0]);
+        int expected = (thinks + BuildOrderExecutor.NoSiteRetryThinks - 1) / BuildOrderExecutor.NoSiteRetryThinks;
+        Assert.True(ai.SiteSearches <= expected + 1, $"{ai.SiteSearches} searches in {thinks} thinks (expected about {expected}: one every {BuildOrderExecutor.NoSiteRetryThinks} thinks)");
+        Assert.True(ai.SiteSearches >= expected - 1, $"only {ai.SiteSearches} searches: the step stopped retrying");
+    }
+
+    /// <summary>
+    /// BUG-0791 (M5-H3): with no worker the Build could go to (here: none left), an affordable build step doesn't search for a
+    /// site at all: the search would find one and the Build would fail on the builder anyway. In QA's storms fuzz scene every
+    /// worker was busy and 15 due steps each searched at every think (0.9 ms of a 0.9 ms think; 0.35 ms after). Before the
+    /// fix: one search a think here (20 in 20 thinks).
+    /// </summary>
+    [Fact]
+    public void ABuildStepWithNoWorkerToSend_SearchesForNoSite()
+    {
+        GameData data = AiScenes.DataWithAi("malazan", root =>
+            root["buildOrder"] = AiScenes.BuildOrder(("time", 0, "build", "malazan_barracks", 0)));
+        Simulation sim = AiScenes.Flat(AiScenes.Seats(AiDifficulty.Hard, SeatController.Ai, SeatController.Human), data);
+        BuildMaps.SetTotals(sim, 0, 5000, 5000);
+        TestSim.KeepIn(sim, 0);
+        UnitStore u = sim.World.Units;
+        for (int i = 0; i < u.Capacity; i++)
+            if (u.Alive[i] && u.Owner[i] == 0 && data.Units[u.TypeId[i]].IsWorker) u.Free(new EntityHandle(i, u.Generation[i]));
+        List<Command> rec = AiScenes.Log(sim, 0);
+        AiPlayer ai = sim.AiOf(0)!;
+        const int thinks = 20;
+        for (int t = 0; t < thinks * ai.ThinkTicks; t++) sim.Tick();
+        _out.WriteLine($"{ai.Thinks} thinks, {ai.SiteSearches} site searches, {ai.WorkerCount} workers");
+        Assert.Equal(thinks, ai.Thinks);
+        Assert.Equal(0, ai.WorkerCount);
+        Assert.DoesNotContain(rec, c => c.Kind == CommandKind.Build);
+        Assert.Equal(0, ai.SiteSearches);
+    }
+
+    /// <summary>
     /// D15 option C (M5-4f): a build step of the faction's House (the Billet) at a population cap already the hard cap is
     /// complete with no Build sent; below the cap it still builds. The hard cap is the test data's own popCap (10 pop: the
     /// hall's 10 reaches it; 20 pop: it doesn't), so the economy's house rule (within 2 pop of the cap) stays quiet too.

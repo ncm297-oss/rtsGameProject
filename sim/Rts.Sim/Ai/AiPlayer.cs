@@ -66,6 +66,12 @@ internal sealed class AiPlayer
     /// <summary>Ticks between thinks (its difficulty's <c>thinkInterval</c>): it thinks when the tick number is a multiple.</summary>
     internal int ThinkTicks { get; }
 
+    /// <summary>Set by <see cref="TryBuild"/> when it could pay but its site search found no anchor (BUG-0791); the caller clears it.</summary>
+    internal bool NoSiteFound;
+
+    /// <summary>Site searches run (<see cref="FindSite"/> past its can-place-anywhere test), for tests and the cost probes.</summary>
+    internal int SiteSearches { get; private set; }
+
     /// <summary>Its window on the match.</summary>
     internal PlayerView View { get; }
 
@@ -422,8 +428,15 @@ internal sealed class AiPlayer
         if ((uint)type >= (uint)Data.Buildings.Length || centreCell < 0) return false;
         BuildingDef def = Data.Buildings[type];
         if (!CanAfford(def.CostGold, def.CostWood)) return false;
+        // BUG-0791: no worker to send (or the queue full) fails the Build whatever the site, so don't search for one. In the
+        // storms fuzz scene every worker was busy and each of 15 due steps found a site at every think (0.9 of a 0.9 ms think).
+        if (_queueFull || !AnyBuilder()) return false;
         int anchor = FindSite(type, centreCell);
-        if (anchor < 0) return false;
+        if (anchor < 0)
+        {
+            NoSiteFound = true;
+            return false;
+        }
         Vector2 at = CellCentre(anchor);
         int worker = PickBuilder(at, out int generation);
         if (worker < 0) return false;
@@ -551,6 +564,7 @@ internal sealed class AiPlayer
     {
         // A rule no cell can pass (cost, a full building store, the type's requires) fails every candidate: don't search (BUG-0572).
         if (!View.CanPlaceAnywhere(type, out _)) return -1;
+        SiteSearches++;
         BuildingDef def = Data.Buildings[type];
         int w = View.MapWidth, h = View.MapHeight, fw = def.FootprintWidth, fh = def.FootprintHeight;
         int cx = centreCell % w, cy = centreCell / w, radius = Rules.PlacementSearchCells;
@@ -656,9 +670,7 @@ internal sealed class AiPlayer
         for (int k = 0; k < WorkerCount; k++)
         {
             int slot = WorkerSlots[k];
-            if (!View.TryGetUnit(slot, out SeenUnit u) || OrderedNotApplied(slot, u.Handle.Generation) || IsScout(slot, u.Handle.Generation)
-                || IsFleeing(slot, u.Handle.Generation)) continue;
-            int rank = u.State == UnitState.Idle ? 0 : u.State is UnitState.Gathering or UnitState.Returning ? 1 : 2;
+            int rank = BuilderRank(slot, out SeenUnit u);
             if (rank == 2) continue;
             float d = Vector2.DistanceSquared(u.Position, at);
             if (rank > bestRank || rank == bestRank && d >= bestDistance) continue;
@@ -668,6 +680,22 @@ internal sealed class AiPlayer
             generation = u.Handle.Generation;
         }
         return best;
+    }
+
+    /// <summary>Whether <see cref="PickBuilder"/> would find a worker anywhere (BUG-0791: checked before a site search).</summary>
+    internal bool AnyBuilder()
+    {
+        for (int k = 0; k < WorkerCount; k++)
+            if (BuilderRank(WorkerSlots[k], out _) < 2) return true;
+        return false;
+    }
+
+    /// <summary>Worker slot <paramref name="slot"/> as a builder: 0 idle, 1 gathering or returning, 2 not one (unseen, ordered, the scout, fleeing, busy).</summary>
+    private int BuilderRank(int slot, out SeenUnit u)
+    {
+        if (!View.TryGetUnit(slot, out u) || OrderedNotApplied(slot, u.Handle.Generation) || IsScout(slot, u.Handle.Generation)
+            || IsFleeing(slot, u.Handle.Generation)) return 2;
+        return u.State == UnitState.Idle ? 0 : u.State is UnitState.Gathering or UnitState.Returning ? 1 : 2;
     }
 
     // ---------- geometry and data ----------

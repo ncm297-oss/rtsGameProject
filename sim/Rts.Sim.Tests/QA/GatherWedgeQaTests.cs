@@ -30,6 +30,11 @@ namespace Rts.Sim.Tests.QA;
 /// attachment stays as BUG-0146's history). The scene runs on frame time, so two recordings differ by a few ticks; any
 /// one of them is a valid recording for this row.
 /// </para>
+/// <para>
+/// M5-H3 (BUG-0790): the stand-point change (corner cells, the own cell's free point) moves this game from tick 19, so the
+/// file's checkpoints were re-derived from its own recorded commands on the M5-H3 tree (header and commands unchanged; the
+/// <c>k</c> lines and checksum only). Longest out-of-reach stand on a wood loop 478 ticks (332 before), bound 600.
+/// </para>
 /// </summary>
 [Collection(SerialCollection.Name)]
 public class GatherWedgeQaTests

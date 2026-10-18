@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (see BUG-0910 for a side effect) |
 | Found | 2026-10-16-1654, task M5-4f (the dev's paired Perf A/B; filed by the Producer) |
 | System | AI: `Ai/BuildOrderExecutor` (the `build` step's site search), `Stress/AbilityManagerFuzzStressTests.AThink_WithShippedSandstormsAlive_Measured` |
-| Fixed by | |
+| Fixed by | d048a21 (M5-H3): `Ai/AiPlayerTests.ABuildStepWithNoSite_SearchesOnceEveryNoSiteRetryThinks_NotEveryThink`, `ABuildStepWithNoWorkerToSend_SearchesForNoSite`. QA 2026-10-17-1624 paired: storms think 0.91-1.07 ms on base, 0.35-0.41 ms on head. The no-site wait also holds a step whose requires is unmet (BUG-0910). |
 
 ## Repro
 1. On `studio/2026-10-16-1654-sim` (8ac7b43): `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~AThink_WithShippedSandstormsAlive_Measured"`

@@ -53,7 +53,9 @@ public class ConstructionPerfTests
         _out.WriteLine($"500 marching + 50 building 10 sites: avg {ms:F3} ms per tick; {sim.World.Buildings.Count} sites, {building} workers building");
         Assert.Equal(10, sim.World.Buildings.Count);
         Assert.True(building >= 40, $"{building} building");
-        Assert.True(ms < 1.2, $"average tick {ms:F3} ms");
+        // BUG-0764 (M5-H3, 2026-10-17): re-baselined from 1.2 ms to 1.9 ms. Measured 1.532-1.557 ms in four Category=Perf runs
+        // on an idle PC (base bf8026e twice, head twice); +25 % at most. The method's name keeps the old figure.
+        Assert.True(ms < 1.9, $"average tick {ms:F3} ms");
     }
 
     [Fact]

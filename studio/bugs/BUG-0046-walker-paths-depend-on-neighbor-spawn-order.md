@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | closed (known limit, M5-H3 decision: docs/03 "Determinism", the slot-order class) |
 | Found | 2026-10-05-1609, task M1-4d-3 (pre-existing on base 7f741f1) |
 | System | movement (`Constrain` sequential clips; possibly the chain BFS) |
-| Fixed by | |
+| Fixed by | d048a21 (M5-H3): documented, not fixed; the CrowdRoutingQaTests rows stay skipped with the decision in their reason. QA 2026-10-17-1624 checked the docs. |
 
 ## Repro
 1. Remove the `Skip` from the skipped cases of `QA/CrowdRoutingQaTests.DetourPastAMixedEnemyCluster_AnySpawnPermutation_BitEqualWalkerPath`

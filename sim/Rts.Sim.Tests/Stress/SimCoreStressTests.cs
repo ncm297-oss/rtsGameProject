@@ -286,8 +286,10 @@ public class SimCoreStressTests
             // construction 21, and target acquisition 305-327 us (75 %), of which PickTarget 244 us for 149 scans a tick that
             // find no enemy: 2,244 of the 2,500 units spawn off the 256 m map at (i, i) and clamp into the corner bucket, so
             // each of their scans walks that bucket (BUG-0510). No buy-back of 5 % in 200 lines that isn't this scene's
-            // artifact, so the gate moved instead; the scene is QA's to change.
-            double budgetMs = units >= 2500 ? 0.55 : 0.5;
+            // artifact, so the gate moved instead; the scene is QA's to change. BUG-0764 (M5-H3, 2026-10-17): the 2,500 row
+            // re-baselined from 0.55 ms to 1.1 ms: measured 0.877-0.883 ms in four Category=Perf runs on an idle PC (base
+            // bf8026e twice, head twice); +25 % at most. The 500 and 1,000 rows passed there and keep 0.5 ms.
+            double budgetMs = units >= 2500 ? 1.1 : 0.5;
             Assert.True(avgMs < budgetMs, $"avg empty tick {avgMs} ms with {units} units (budget {budgetMs} ms)");
         }
     }

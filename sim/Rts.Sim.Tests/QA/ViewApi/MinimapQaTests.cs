@@ -325,9 +325,12 @@ public class MinimapQaTests
             // Up to three batches of 300; the best batch average must fit. A real regression is slow in every batch; another
             // process taking the core (three worktrees' test runs on one PC) slows one batch, not all three (M4-VH1).
             const int runs = 300;
+            // BUG-0764 (M5-H3, 2026-10-17): re-baselined from 0.25 ms (half the 0.5 ms refresh budget) to 0.31 ms: measured
+            // 0.2536-0.2549 ms in four Category=Perf runs on an idle PC (base bf8026e twice, head twice); +25 % at most.
+            const double limit = 0.31;
             double best = double.MaxValue;
             var sw = new Stopwatch();
-            for (int trial = 0; trial < 3 && best > 0.25; trial++)
+            for (int trial = 0; trial < 3 && best > limit; trial++)
             {
                 double worst = 0, total = 0;
                 for (int r = 0; r < runs; r++)
@@ -342,7 +345,7 @@ public class MinimapQaTests
                 best = Math.Min(best, total / runs);
                 _out.WriteLine($"256x256 bake {swBake.Elapsed.TotalMilliseconds:F2} ms; batch {trial + 1}: DrawDots 2,000 units avg {total / runs:F4} ms, worst {worst:F4} ms");
             }
-            Assert.True(best <= 0.25, $"DrawDots avg {best:F4} ms (best of 3 batches), over half the 0.5 ms refresh budget");
+            Assert.True(best <= limit, $"DrawDots avg {best:F4} ms (best of 3 batches), over the {limit} ms limit (BUG-0764 re-baseline of half the 0.5 ms refresh budget)");
         }
     }
 

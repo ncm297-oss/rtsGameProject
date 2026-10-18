@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-17-0554, task M5-P2 (QA re-check after fix round 1) |
 | System | movement, flank rule (`MovementSystem` flank mark / `reversing` step, BUG-0881 / BUG-0883 fix) |
-| Fixed by | |
+| Fixed by | d048a21 (M5-H3): `Movement/FlankTests.LongOwnLine_MoveSpammedToAlternatePoints_Arrives` (4 rows) and the 5 un-skipped `QA/FlankFixRound1QaTests.LongLine_*` rows and `LineAtAnAngle_*(24, 45, 2)`: red on base, green on head. QA 2026-10-17-1624 grid (lines 16-32, 0-60 degrees, 4 offsets, every 2/3/7): `QA/SimHardeningM5H3QaTests.SpamGrid_*`, 9 rows green on head (7 of them red on base). Lines of 10 fail on both (BUG-0911). |
 
 ## Repro
 1. `QA/FlankFixRound1QaTests.LongLine_MoveReissuedToAlternatePoints_Arrives`. The skipped rows are the failures. Scene:

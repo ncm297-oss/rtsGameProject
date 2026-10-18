@@ -32,6 +32,7 @@ internal sealed class Blackboard
         StepQueued = new int[steps];
         StepDone = new bool[steps];
         StepPending = new PendingOrder[steps];
+        StepNoSiteUntil = new int[steps];
         UnitOrderedUntil = new int[unitSlots];
         Array.Fill(UnitOrderedUntil, -1);
         UnitGeneration = new int[unitSlots];
@@ -292,6 +293,9 @@ internal sealed class Blackboard
 
     /// <summary>Per step, its command waiting to be judged.</summary>
     internal PendingOrder[] StepPending { get; }
+
+    /// <summary>Per step, the tick before which a build or expand step whose site search found nothing doesn't search again (BUG-0791); 0 none.</summary>
+    internal int[] StepNoSiteUntil { get; }
 
     /// <summary>The economy manager's house Build waiting to be judged.</summary>
     internal PendingOrder HousePending;

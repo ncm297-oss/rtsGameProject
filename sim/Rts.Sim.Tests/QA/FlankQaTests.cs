@@ -608,6 +608,10 @@ public class FlankQaTests
     // Criterion 6 as written: criterion 1's scene (10 Crossbowmen on a Town Hall, 10 Heavy Infantry behind, Attack) in both
     // spawn orders. Printed: the first tick the two orders' positions part, rule off and on (the dev reports both part:
     // BUG-0046's slot-order clips). Bound: the rule on parts no earlier than the rule off does.
+    // M5-H3 (BUG-0885 / BUG-0046, decision): spawn order is not part of the sim's input contract. Slot order is a documented
+    // known limit (docs/03 "Determinism", "the slot-order class": surround claims taken in slot order, wall clips, shoves),
+    // not a determinism break, so the reversed rows keep the "no earlier than the rule off" bound, and the same-order row
+    // (false, false) asserts what is promised: the same spawns in the same order never part, rule off or on.
     // ------------------------------------------------------------------------------------------------------------------
 
     private static int FirstParting(bool flank, bool reverseRow, bool reverseMelee, out Vector2[] a)
@@ -667,6 +671,7 @@ public class FlankQaTests
     }
 
     [Theory]
+    [InlineData(false, false)]
     [InlineData(true, false)]
     [InlineData(false, true)]
     [InlineData(true, true)]
@@ -675,6 +680,11 @@ public class FlankQaTests
         int off = FirstParting(false, reverseRow, reverseMelee, out _);
         int on = FirstParting(true, reverseRow, reverseMelee, out _);
         _out.WriteLine($"criterion 1 scene, row reversed {reverseRow}, melee reversed {reverseMelee}: positions part at tick off {off}, on {on} (-1: never in 200)");
+        if (!reverseRow && !reverseMelee)
+        {
+            Assert.True(off < 0 && on < 0, $"the same spawn order parted: off {off}, on {on}");
+            return;
+        }
         Assert.True(on < 0 || (off >= 0 && on >= off), $"the rule parts the spawn orders earlier: on {on}, off {off}");
     }
 
@@ -719,6 +729,11 @@ public class FlankQaTests
     [InlineData(4UL)]
     [InlineData(5UL)]
     [InlineData(6UL)]
+    // QA M5-H3 (2026-10-17-1624): seeds 7-30 after the BUG-0887 / 0888 movement changes.
+    [InlineData(7UL)] [InlineData(8UL)] [InlineData(9UL)] [InlineData(10UL)] [InlineData(11UL)] [InlineData(12UL)]
+    [InlineData(13UL)] [InlineData(14UL)] [InlineData(15UL)] [InlineData(16UL)] [InlineData(17UL)] [InlineData(18UL)]
+    [InlineData(19UL)] [InlineData(20UL)] [InlineData(21UL)] [InlineData(22UL)] [InlineData(23UL)] [InlineData(24UL)]
+    [InlineData(25UL)] [InlineData(26UL)] [InlineData(27UL)] [InlineData(28UL)] [InlineData(29UL)] [InlineData(30UL)]
     public void FlankFuzz_TwinRunsHashEqual_InvariantsHold(ulong seed)
     {
         ulong[] a = FlankFuzz(seed), b = FlankFuzz(seed);

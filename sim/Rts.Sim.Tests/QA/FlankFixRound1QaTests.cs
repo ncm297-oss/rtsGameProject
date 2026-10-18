@@ -133,6 +133,11 @@ public class FlankFixRound1QaTests
     [InlineData(Kind.AttackMove, 30, 12, 0)]
     [InlineData(Kind.Ordered, 20, 8, 3, Skip = "BUG-0889: one ordered Crossbowman queued behind its own Crossbowmen on the hall never strikes (pre-existing, 321d7d6 too)")]
     [InlineData(Kind.AttackMove, 20, 8, 3)]
+    // QA M5-H3 (2026-10-17-1624): more ring sizes after the BUG-0887 / 0888 movement changes.
+    [InlineData(Kind.Ordered, 40, 0, 0)]
+    [InlineData(Kind.Ordered, 20, 0, 3)]
+    [InlineData(Kind.AttackMove, 40, 16, 0)]
+    [InlineData(Kind.AttackMove, 10, 4, 3)]
     public void HallRingedByFriends_ReachableChasersNeverGiveItUp(Kind kind, int melee, int ranged, int trees)
     {
         var on = HallScene(kind, melee, ranged, trees, flank: true, ticks: 2000);
@@ -315,7 +320,7 @@ public class FlankFixRound1QaTests
     [InlineData(32, 30f, 0)]
     [InlineData(24, 0f, 3)]
     [InlineData(16, 0f, 5)]
-    [InlineData(24, 45f, 2, Skip = "BUG-0887: a Move re-issued to points 2 m apart behind a 24-32 line still swings and never arrives")]
+    [InlineData(24, 45f, 2)] // M5-H3: un-skipped, BUG-0887 fixed (was: swings, never arrives)
     public void LineAtAnAngle_MoveMaybeReissued_WalkerArrives(int count, float degrees, int every)
     {
         Walk off = LineWalk(count, degrees, every, 0, flank: false);
@@ -336,11 +341,12 @@ public class FlankFixRound1QaTests
     [InlineData(16, -0.3f, 3)]
     [InlineData(24, -4f, 3)]
     [InlineData(16, 1.5f, 2)]
-    [InlineData(32, -0.3f, 3, Skip = "BUG-0887: never arrives, 178 turns along the line in 900 ticks")]
-    [InlineData(32, 0.2f, 3, Skip = "BUG-0887: never arrives, 252 turns")]
-    [InlineData(24, 1.5f, 2, Skip = "BUG-0887: never arrives, 276 turns")]
-    [InlineData(24, -0.3f, 2, Skip = "BUG-0887: never arrives, 275 turns")]
-    [InlineData(32, 0.2f, 7, Skip = "BUG-0887: arrives at tick 661 after 59 turns")]
+    // M5-H3: the next five un-skipped, BUG-0887 fixed (were: never arrives, 178-276 turns; 661 ticks after 59 turns).
+    [InlineData(32, -0.3f, 3)]
+    [InlineData(32, 0.2f, 3)]
+    [InlineData(24, 1.5f, 2)]
+    [InlineData(24, -0.3f, 2)]
+    [InlineData(32, 0.2f, 7)]
     public void LongLine_MoveReissuedToAlternatePoints_Arrives(int count, float offset, int every)
     {
         Walk on = LineWalk(count, 0f, every, 0, flank: true, offset: offset);
@@ -379,8 +385,8 @@ public class FlankFixRound1QaTests
     /// behind member <paramref name="behindMember"/> (the cliff end nearer). Bound: it arrives by the open end, never on a blocked cell.
     /// </summary>
     [Theory]
-    [InlineData(1, Skip = "BUG-0888: walks round the open end, gives the Move up on the walk back at tick 229")]
-    [InlineData(4, Skip = "BUG-0888: walks round the open end, gives the Move up on the walk back at tick 229")]
+    [InlineData(1)] // M5-H3: both un-skipped, BUG-0888 fixed (were: gives the Move up on the walk back at tick 229)
+    [InlineData(4)]
     public void LongLineAgainstACliff_WalkerTakesTheOpenEnd(int behindMember)
     {
         var rows = new string[64];

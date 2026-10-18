@@ -73,9 +73,13 @@ public class PropsMeasureTests
         var r = new MinimapRaster(w.Heightmap, w.NavGrid, Colors, alive.Length);
         MinimapRasterResourceTests.DrawResources(r, w);
         MinimapRasterResourceTests.AssertResourceLayer(r, w);
-        double dots = Time("minimap dots (2,000 units)", w, () => r.DrawDots(alive, pos, owner), 0.25);
+        // BUG-0764 (M5-H3, 2026-10-17): the dots' limit re-baselined from 0.25 ms to 0.34 ms: measured 0.267-0.275 ms in four
+        // Category=Perf runs on an idle PC (base bf8026e twice, head twice); +25 % at most. Behind it the redraw's limit (never
+        // reached while the dots failed) re-baselined from 0.2 ms to 0.26 ms: measured 0.201 ms (base, with the dots' new limit)
+        // and 0.210 ms (head) in the Category=Perf run. The sum keeps the whole 0.5 ms refresh budget.
+        double dots = Time("minimap dots (2,000 units)", w, () => r.DrawDots(alive, pos, owner), 0.34);
         int draws = r.ResourceDraws;
-        double redraw = Time("minimap forced resource redraw (4,096 nodes)", w, () => MinimapRasterResourceTests.DrawResources(r, w), 0.2);
+        double redraw = Time("minimap forced resource redraw (4,096 nodes)", w, () => MinimapRasterResourceTests.DrawResources(r, w), 0.26);
         Assert.Equal(draws + 50, r.ResourceDraws); // every timed run redrew
         _out.WriteLine($"minimap refresh with a forced redraw (sum): {dots + redraw:F3} ms");
         Assert.True(dots + redraw <= 0.5, $"minimap refresh with a forced redraw: {dots + redraw:F3} ms > the 0.5 ms refresh budget");

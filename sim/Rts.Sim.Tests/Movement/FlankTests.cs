@@ -372,15 +372,101 @@ public class FlankTests
     [InlineData(7)]
     public void LongOwnLine_MoveReissued_KeepsItsSideAndArrives(int every)
     {
-        var sim = new Simulation(TestSim.Config(7, 2, 64, 1024), LocalMovementTests.Flat(80));
+        (int arrived, int flips, int gaveUp) = LongLineWalk(24, 0.2f, every, cliff: false, null);
+        _out.WriteLine($"Move re-issued every {every} ticks: arrived at tick {arrived}, {flips} turns along the line");
+        Assert.True(gaveUp < 0, $"tick {gaveUp}: the walk was given up");
+        Assert.True(arrived >= 0, "never arrived");
+        Assert.True(flips <= 8, $"{flips} turns along the line");
+    }
+
+    /// <summary>
+    /// M5-H3, BUG-0887: the Move re-clicked every 2-3 ticks to two points 2 m apart behind a 24-32 line (QA's rows). Each new
+    /// order is a fresh estimate whose first steps are progress, and the replacement of a step back along the line needed a
+    /// flank the tick before: the chain broke and the walker swung along the line for 900 ticks (178-276 turns) without
+    /// arriving. Now any progress step toward the side not kept is replaced by the flank while the flank is recent and the
+    /// line still covers the way to the goal. Bound as QA's: arrives, at most 8 turns.
+    /// </summary>
+    [Theory]
+    [InlineData(32, 0.2f, 3)]
+    [InlineData(32, -0.3f, 3)]
+    [InlineData(24, 1.5f, 2)]
+    [InlineData(24, -0.3f, 2)]
+    public void LongOwnLine_MoveSpammedToAlternatePoints_Arrives(int count, float offset, int every)
+    {
+        (int arrived, int flips, int gaveUp) = LongLineWalk(count, offset, every, cliff: false, null, ticks: 900);
+        _out.WriteLine($"line {count}, offset {offset}, every {every}: arrived at tick {arrived}, {flips} turns, gave up {gaveUp}");
+        Assert.True(arrived >= 0, $"never arrived ({flips} turns)");
+        Assert.True(flips <= 8, $"{flips} turns along the line");
+    }
+
+    /// <summary>
+    /// M5-H3, BUG-0888: a 24-line whose north end meets a cliff (QA's scene: cells y &lt;= 15 at level 1, the line from y 32.5),
+    /// the walker behind member 1 or 4, its Move 5 m in front of that member. It walks round the far (south) end and back
+    /// along the line's front; the stride sized to half the line ran out on the walk back (given up at tick 229, 14 m short).
+    /// Round the far end the line counts twice (budget and memory): it arrives.
+    /// </summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(4)]
+    public void LongOwnLineAgainstACliff_WalkerGoesRoundTheFarEnd_AndArrives(int behindMember)
+    {
+        (int arrived, int flips, int gaveUp) = LongLineWalk(24, behindMember, 0, cliff: true, null, ticks: 900);
+        _out.WriteLine($"cliff line, behind member {behindMember}: arrived at tick {arrived}, {flips} turns, gave up {gaveUp}");
+        Assert.True(gaveUp < 0, $"the Move was given up at tick {gaveUp}");
+        Assert.True(arrived >= 0, "never arrived");
+    }
+
+    /// <summary>
+    /// M5-H3 determinism twins for the two flank changes (BUG-0887's replaced steps, BUG-0888's doubled budget): the spam scene
+    /// and the cliff scene, each run twice in the same spawn order, hash equal every tick.
+    /// </summary>
+    [Theory]
+    [InlineData(32, 0.2f, 3, false)]
+    [InlineData(24, 1f, 0, true)]
+    public void LongOwnLineScenes_HashTwins_EveryTick(int count, float offset, int every, bool cliff)
+    {
+        var a = new List<ulong>();
+        var b = new List<ulong>();
+        LongLineWalk(count, offset, every, cliff, a, ticks: 400, stopOnArrival: false);
+        LongLineWalk(count, offset, every, cliff, b, ticks: 400, stopOnArrival: false);
+        Assert.Equal(a.Count, b.Count);
+        for (int t = 0; t < a.Count; t++) Assert.True(a[t] == b[t], $"tick {t}: hashes part");
+    }
+
+    /// <summary>
+    /// One Heavy Infantry behind an own line of <paramref name="count"/> Crossbowmen 1 m apart along y (each planted on its own
+    /// holding Raider 14.5 m in front, out of the walker's sight), 3 m behind it, Move to 5 m in front of the line, re-issued
+    /// every <paramref name="every"/> ticks (0: once) alternating with a point 2 m along the line. Open ground: the line's
+    /// middle at (70, 80), the walker <paramref name="offset"/> m along it. <paramref name="cliff"/>: QA's cliff map instead
+    /// (cells y &lt;= 15 at level 1), the line from (60, 32.5) south, the walker behind member <paramref name="offset"/>
+    /// (+0.2 m). Returns the arrival tick (-1 never), the walk's turns along the line and the tick its walk was given up (-1).
+    /// </summary>
+    private static (int Arrived, int Flips, int GaveUp) LongLineWalk(int count, float offset, int every, bool cliff, List<ulong>? hashes, int ticks = 600, bool stopOnArrival = true)
+    {
+        Simulation sim;
+        Vector2 first, behind, goal;
+        if (cliff)
+        {
+            var rows = new string[64];
+            for (int y = 0; y < 64; y++) rows[y] = new string(y <= 15 ? '1' : '0', 64);
+            sim = new Simulation(TestSim.Config(7, 2, 2 * count + 16, 1024), LocalMovementTests.Rows(rows));
+            first = new Vector2(60f, 32.5f);
+            behind = first + new Vector2(-3f, offset + 0.2f);
+            goal = first + new Vector2(5f, offset);
+        }
+        else
+        {
+            sim = new Simulation(TestSim.Config(7, 2, 2 * count + 16, 1024), LocalMovementTests.Flat(80));
+            first = new Vector2(70f, 80f - (count - 1) / 2f);
+            behind = new Vector2(67f, 80f + offset);
+            goal = new Vector2(75f, 80f);
+        }
         UnitStore u = sim.World.Units;
         TestSim.KeepIn(sim, 1);
-        var mid = new Vector2(70f, 80f);
-        const int count = 24;
         var row = new EntityHandle[count];
         for (int k = 0; k < count; k++)
         {
-            Vector2 p = mid + new Vector2(0f, k - (count - 1) / 2f);
+            Vector2 p = first + new Vector2(0f, k);
             EntityHandle target = Place(sim, 1, Raider, p + new Vector2(14.5f, 0f));
             u.Hold[target.Index] = true;
             Spot(sim, 0, target);
@@ -390,26 +476,26 @@ public class FlankTests
         var staged = new Staged { Sim = sim, Row = row, Melee = new EntityHandle[1] };
         for (int t = 0; t < 60 && !row.All(h => u.State[h.Index] == UnitState.Attacking); t++) Tick(staged);
         Assert.True(row.All(h => u.State[h.Index] == UnitState.Attacking), "the row didn't plant");
-        EntityHandle w = Place(sim, 0, HeavyInfantry, mid + new Vector2(-3f, 0.2f));
-        Vector2 goal = mid + new Vector2(5f, 0f);
+        EntityHandle w = Place(sim, 0, HeavyInfantry, behind);
         sim.Enqueue(Command.Move(0, w, goal));
-        int arrived = -1, flips = 0, last = 0;
-        float y = u.Position[w.Index].Y;
-        for (int t = 0; t < 600 && arrived < 0; t++)
+        int arrived = -1, flips = 0, last = 0, gaveUp = -1;
+        float y0 = u.Position[w.Index].Y;
+        bool wasMoving = false;
+        for (int t = 0; t < ticks && (arrived < 0 || !stopOnArrival); t++)
         {
             if (every > 0 && t > 0 && t % every == 0) sim.Enqueue(Command.Move(0, w, goal + new Vector2(0f, t / every % 2 == 1 ? 2f : 0f)));
             Tick(staged);
+            hashes?.Add(sim.StateHash());
             Vector2 p = u.Position[w.Index];
-            float dy = p.Y - y;
-            y = p.Y;
+            float dy = p.Y - y0;
+            y0 = p.Y;
             int sign = dy > 0.05f ? 1 : dy < -0.05f ? -1 : 0;
             if (sign != 0 && last != 0 && sign != last) flips++;
             if (sign != 0) last = sign;
-            if (Vector2.Distance(p, goal) < 1f || Vector2.Distance(p, goal + new Vector2(0f, 2f)) < 1f) arrived = t;
-            Assert.False(u.State[w.Index] == UnitState.Idle && t > 2 && arrived < 0 && u.GoalCell[w.Index] == -1, $"tick {t}: the walk was given up at {p}");
+            if (arrived < 0 && (Vector2.Distance(p, goal) < 1f || (every > 0 && Vector2.Distance(p, goal + new Vector2(0f, 2f)) < 1f))) arrived = t;
+            if (gaveUp < 0 && arrived < 0 && wasMoving && u.State[w.Index] == UnitState.Idle && u.GoalCell[w.Index] == -1) gaveUp = t;
+            wasMoving = u.State[w.Index] == UnitState.Moving;
         }
-        _out.WriteLine($"Move re-issued every {every} ticks: arrived at tick {arrived}, {flips} turns along the line");
-        Assert.True(arrived >= 0, "never arrived");
-        Assert.True(flips <= 8, $"{flips} turns along the line");
+        return (arrived, flips, gaveUp);
     }
 }

@@ -20,7 +20,9 @@ namespace Rts.Sim.Tests;
 public class PlayerViewPerfTests
 {
     private const int Players = 8, Units = 2500, BuildingsEach = 8;
-    private const double BudgetMs = 0.3;
+    // BUG-0764 (M5-H3, 2026-10-17): re-baselined from 0.3 ms to 0.6 ms. Measured 0.466-0.480 ms in four Category=Perf runs on
+    // an idle PC (base bf8026e twice, head twice): the PC's sustained clock (docs/03 "Testing strategy"); +25 % at most.
+    private const double BudgetMs = 0.6;
     private readonly ITestOutputHelper _out;
 
     public PlayerViewPerfTests(ITestOutputHelper output) => _out = output;
@@ -130,7 +132,9 @@ public class PlayerViewPerfTests
     [Trait("Category", "Perf")]
     public void EightPlayersViews_Interleaved_WorstCase_UnitsUnder1Ms_WholeReadUnder15Ms()
     {
-        const double unitsBudgetMs = 1.0, wholeBudgetMs = 1.5;
+        // BUG-0764 (M5-H3, 2026-10-17): re-baselined, units 1.0 to 1.7 ms (measured 1.260-1.397 ms) and the whole read 1.5 to
+        // 2.5 ms (measured 1.943-2.074 ms), four Category=Perf runs on an idle PC (base bf8026e twice, head twice); +25 % at most.
+        const double unitsBudgetMs = 1.7, wholeBudgetMs = 2.5;
         (double avg, double worst, long answers, double whole, _, string scene) = Measure(Scene(bands: false));
         _out.WriteLine($"{scene}; interleaved: units avg {avg:F3} ms a tick, worst {worst:F3} ms ({answers} answers), the whole read {whole:F3} ms");
         Assert.True(avg < unitsBudgetMs, $"units avg {avg:F3} ms over the {unitsBudgetMs} ms worst-case budget");
