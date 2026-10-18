@@ -8,13 +8,13 @@ namespace Rts.Game;
 
 /// <summary>The attack alerts on screen (M6-V12, docs/02 "HUD layout" and "Minimap"): text, a minimap ping and a sound; Space jumps the camera to the last one.</summary>
 /// <remarks>
-/// Each frame <see cref="AttackAlerts"/> reads the local player's units and buildings (hp fell, no alert in the last 10 s
-/// within 30 m). For each new alert: a ping on the minimap (<see cref="Minimap.Ping"/>, 3 s); if the alert's position is off
+/// On every sim tick the runner runs (<see cref="SimRunner.Ticked"/>, BUG-0952) <see cref="AttackAlerts"/> reads the local
+/// player's units and buildings (hp fell, no alert in the last 10 s of game time, 200 ticks, within 30 m). For each new alert: a ping on the minimap (<see cref="Minimap.Ping"/>, 3 s); if the alert's position is off
 /// screen (<see cref="ScreenCheck"/>), the text for <see cref="TextSeconds"/> at the top centre (<c>ui.json</c>
 /// <c>alert.base_under_attack</c> for a building, else <c>alert.units_under_attack</c>; under the replay mark); and the
 /// <see cref="SfxEvent.Alert"/> sound, once a frame. Space (a fixed key, <see cref="KeyMap.Reserved"/>) centres the camera on
-/// the newest alert. A replay shows the same alerts for its first seat (the local player). The alert bookkeeping is view
-/// time and positions; nothing here writes the sim.
+/// the newest alert. A replay at any speed shows the same alerts at the same ticks for its first seat (the local player).
+/// Only the text's 4 s and the ping's 3 s run on frame time; nothing here writes the sim.
 /// </remarks>
 public partial class AlertHud : Node
 {
@@ -33,6 +33,7 @@ public partial class AlertHud : Node
     private int _player;
     private System.Numerics.Vector2[] _buildingCenter = Array.Empty<System.Numerics.Vector2>();
     private float _textLeft;
+    private ulong _textFrame = ulong.MaxValue;
 
     /// <summary>The alert bookkeeping (read-only for tests); sized at <see cref="Init"/>.</summary>
     public AttackAlerts Alerts { get; private set; } = new(0, 0);
@@ -70,6 +71,7 @@ public partial class AlertHud : Node
         World w = runner.Simulation!.World;
         Alerts = new AttackAlerts(w.Units.Capacity, w.Buildings.Capacity);
         _buildingCenter = new System.Numerics.Vector2[w.Buildings.Capacity];
+        runner.Ticked += OnTicked;
         if (hud != null)
         {
             _label = MakeLabel();
@@ -77,20 +79,36 @@ public partial class AlertHud : Node
         }
     }
 
+    /// <summary>Game seconds per sim tick: the alerts' clock advances this much on every tick the runner runs.</summary>
+    public const float TickSeconds = (float)FixedStepClock.TickSeconds;
+
     public override void _Process(double delta)
     {
-        if (_runner?.Simulation is not Simulation sim) return;
-        Step(sim.World, (float)delta);
-    }
-
-    /// <summary>One frame of <paramref name="dt"/> seconds: new alerts ping, sound and (off screen) put the text up; the text counts down. Called by <c>_Process</c>; tests may call it.</summary>
-    public void Step(World w, float dt)
-    {
+        // Only the text's 4 s is frame time; the alerts themselves run on sim ticks (OnTicked).
         if (_textLeft > 0f)
         {
-            _textLeft -= Math.Max(0f, dt);
+            _textLeft -= Math.Max(0f, (float)delta);
             if (_textLeft <= 0f && _label != null) _label.Visible = false;
         }
+    }
+
+    public override void _ExitTree()
+    {
+        if (_runner != null) _runner.Ticked -= OnTicked;
+    }
+
+    // BUG-0952: one step per sim tick with the tick's game time, so the 10 s suppression is 200 ticks at any game speed and
+    // a replay (any speed) sees the same hits on the same ticks: the same alerts.
+    // The clock is set from the tick number rather than summed, so no rounding piles up over a long match.
+    private void OnTicked(Simulation sim)
+    {
+        Alerts.SetNow(sim.TickNumber * TickSeconds);
+        Step(sim.World, 0f);
+    }
+
+    /// <summary>One step, <paramref name="dt"/> seconds on the alerts' clock (the runner's tick handler sets the clock to the tick's game time and passes 0): new alerts ping, sound and (off screen) put the text up. Tests may call it.</summary>
+    public void Step(World w, float dt)
+    {
         UnitStore u = w.Units;
         BuildingStore b = w.Buildings;
         for (int i = 0; i < b.Capacity; i++)
@@ -121,7 +139,10 @@ public partial class AlertHud : Node
             _label.Text = _ui.Alert(offBase ? AlertText.BaseUnderAttack : AlertText.UnitsUnderAttack);
             _label.Visible = true;
             _textLeft = TextSeconds;
-            TextsShown++;
+            // A fast frame runs several ticks: the text goes up (and counts) once a frame.
+            ulong frame = Engine.GetProcessFrames();
+            if (frame != _textFrame) TextsShown++;
+            _textFrame = frame;
         }
         _sfx?.Play(SfxEvent.Alert);
     }

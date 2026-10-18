@@ -105,8 +105,8 @@ public partial class QaM6V12Test : Node
         var starts = new List<ulong>();
         long seenWorld = sfx.WorldPlays;
         SfxEvent[] ui = { SfxEvent.Alert, SfxEvent.Ready, SfxEvent.Command, SfxEvent.BuildingDone };
-        int uiTried = 0, uiStarted = 0, uiCut = 0, uiChecked = 0;
-        var pending = new List<(SfxEvent E, long TotalAt, ulong Usec, double Seconds)>();
+        int uiTried = 0, uiStarted = 0, uiMerged = 0, uiCut = 0, uiChecked = 0;
+        var pending = new List<(SfxEvent E, int Player, long StartsAt, ulong Usec, double Seconds)>();
         var cutBy = new Dictionary<SfxEvent, int>();
         ulong lastUi = 0, start = Time.GetTicksUsec();
         int k = 0;
@@ -118,13 +118,14 @@ public partial class QaM6V12Test : Node
             long fresh = sfx.WorldPlays - seenWorld;
             seenWorld = sfx.WorldPlays;
             for (long j = fresh; j > 0; j--) starts.Add(sfx.WorldPlayUsec(sfx.WorldPlayCount - (int)j));
-            long total = TotalPlays(sfx);
-            // A UI play is cut once PoolSize later plays started before its clip's end (the round robin reached its player).
+            // A UI play is cut once a later play starts on its pool player before its clip's end. (Was: PoolSize later plays of
+            // any kind, the strict round robin's reach; since the fix the UI has players of its own, so the row reads the
+            // player the play took, Sfx.LastPlayer, and that player's start count, Sfx.PlayerStarts.)
             for (int p = pending.Count - 1; p >= 0; p--)
             {
                 var e = pending[p];
                 bool ended = now - e.Usec >= (ulong)(e.Seconds * 1e6);
-                if (total - e.TotalAt >= Sfx.PoolSize && !ended)
+                if (sfx.PlayerStarts(e.Player) != e.StartsAt && !ended)
                 {
                     uiCut++;
                     cutBy[e.E] = cutBy.GetValueOrDefault(e.E) + 1;
@@ -142,10 +143,20 @@ public partial class QaM6V12Test : Node
                 lastUi = now;
                 SfxEvent e = ui[k++ % ui.Length];
                 uiTried++;
-                if (sfx.Play(e))
+                // The match's own UI cues play too (the HUD's Alert: at 8x a raid re-alerts every 10 s of game time, 1.25 s of
+                // wall clock, BUG-0952). A try in the same frame or inside the per-event 50 ms gap of such a play merges into it
+                // (the rate limit's "a burst is one sound"): that is not the cap dropping a UI sound.
+                long frameNow = (long)Engine.GetProcessFrames();
+                bool merges = sfx.LastPlayedFrame(e) >= 0 && (sfx.LastPlayedFrame(e) == frameNow || Time.GetTicksUsec() - sfx.LastPlayedUsec(e) < (ulong)(Sfx.MinGapMs * 1000));
+                if (!sfx.Play(e))
+                {
+                    if (merges) uiMerged++;
+                }
+                else
                 {
                     uiStarted++;
-                    pending.Add((e, TotalPlays(sfx), Time.GetTicksUsec(), sfx.LastStream(e)!.GetLength()));
+                    int player = sfx.LastPlayer(e);
+                    pending.Add((e, player, sfx.PlayerStarts(player), Time.GetTicksUsec(), sfx.LastStream(e)!.GetLength()));
                 }
             }
         }
@@ -161,10 +172,10 @@ public partial class QaM6V12Test : Node
         GD.Print($"brawl 200 v 200 at 8x: {sim.World.Losses[0] + sim.World.Losses[1]} deaths by tick {sim.TickNumber} in {seconds:F1} s; world plays {starts.Count} " +
             $"({starts.Count / Math.Max(0.1, seconds):F1} / s), capped {sfx.WorldCapped}; cued MeleeHit {cues.Cued(SfxEvent.MeleeHit)}, Shot {cues.Cued(SfxEvent.Shot)}, " +
             $"UnitDeath {cues.Cued(SfxEvent.UnitDeath)}; 5 plays inside 100 ms: {windows} (tightest 5-span {tightest / 1000.0:F1} ms); " +
-            $"UI tried {uiTried}, started {uiStarted}, cut short {uiCut} of {uiChecked} [{string.Join(", ", cutBy)}]");
+            $"UI tried {uiTried}, started {uiStarted}, merged into the HUD's own play of the event {uiMerged}, cut short {uiCut} of {uiChecked} [{string.Join(", ", cutBy)}]");
         Check(starts.Count >= 40, $"brawl: only {starts.Count} world plays");
         Check(windows == 0, $"brawl: {windows} windows of 5 world plays inside 100 ms");
-        Check(uiTried >= 10 && uiStarted == uiTried, $"brawl: UI sounds started {uiStarted} of {uiTried}");
+        Check(uiTried >= 10 && uiStarted + uiMerged == uiTried && uiMerged <= uiTried / 4, $"brawl: UI sounds started {uiStarted} of {uiTried} ({uiMerged} merged into the HUD's own play)");
         Check(uiCut == 0, $"BUG-0951: {uiCut} of {uiChecked} UI sounds cut short by later plays reusing their pool player ({string.Join(", ", cutBy)})");
 
         // The per-frame view work the change added, on the same brawl after warm-up: the cues' frame and the alerts' step.
@@ -191,12 +202,6 @@ public partial class QaM6V12Test : Node
         await EndMatch(m);
     }
 
-    private static long TotalPlays(Sfx sfx)
-    {
-        long n = 0;
-        foreach (SfxEvent e in Enum.GetValues<SfxEvent>()) n += sfx.PlayCount(e);
-        return n;
-    }
 
     private SignalAwaiter Frame() => ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
 

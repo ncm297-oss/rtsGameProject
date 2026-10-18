@@ -10,14 +10,16 @@ namespace Rts.Game;
 /// <see cref="AlertHud"/>) decide when an event happened and call <see cref="Play(SfxEvent)"/>. Each event plays at most
 /// once per frame and never within <see cref="MinGapMs"/> of its last play, so a burst is one sound. The world events
 /// (<see cref="IsWorld"/>) also share a cap: at most <see cref="WorldCap"/> of them start in any <see cref="WorldWindowMs"/>
-/// window; the player's own feedback (UI events) is never capped. The counters (for tests) count plays whether or not the bus
+/// window; the player's own feedback (UI events) is never capped and plays on players of its own (<see cref="UiPlayers"/>),
+/// so a busy fight never cuts it short. Each play takes a player of its range whose clip has ended, else the one nearest its end.
+/// The counters (for tests) count plays whether or not the bus
 /// is muted.
 /// <para><b>Clip table.</b> One row per event, in enum order: its folder under <see cref="Root"/> (the file name is the
 /// event's snake_case name and the variant, <see cref="ClipPath"/>: no file is named in C#), whether it is a world event,
 /// a gain on top of <see cref="SfxVolumeDb"/>, and the fallback tone's notes. The files are cut from the owner's Sonniss
 /// bundle by <c>tools/audio/trim-wav.ps1</c> from <c>tools/audio/sfx-manifest.json</c>; the import makes them mono 16-bit at
-/// most 44,100 Hz. An event with no loadable file (a clone without <c>git lfs pull</c>, a file moved aside) plays its tone
-/// and logs one warning; <see cref="Clip"/> is always the tone.</para>
+/// most 44,100 Hz. An event with no loadable file (<see cref="ClipLoadable"/>: a clone without <c>git lfs pull</c>, a file
+/// moved aside) plays its tone and logs one warning, and no engine error; <see cref="Clip"/> is always the tone.</para>
 /// </remarks>
 public partial class Sfx : Node
 {
@@ -30,8 +32,14 @@ public partial class Sfx : Node
     /// <summary>Fallback tone sample rate (Hz); tones are mono 16-bit PCM.</summary>
     public const int MixRate = 44100;
 
-    /// <summary>Players in the pool: the most effects that can sound at once.</summary>
-    public const int PoolSize = 8;
+    /// <summary>Players the world events share: the most world sounds that can sound at once.</summary>
+    public const int WorldPlayers = 8;
+
+    /// <summary>Players kept for the UI events (BUG-0951): a world play never takes one, so the player's own cues play to the end in a brawl.</summary>
+    public const int UiPlayers = 6;
+
+    /// <summary>Players in the pool (<see cref="WorldPlayers"/> then <see cref="UiPlayers"/>): the most effects that can sound at once.</summary>
+    public const int PoolSize = WorldPlayers + UiPlayers;
 
     /// <summary>Shortest time between two plays of the same event.</summary>
     public const double MinGapMs = 50.0;
@@ -83,13 +91,18 @@ public partial class Sfx : Node
     private readonly AudioStream?[] _lastStream = new AudioStream?[Table.Length];
     private readonly int[] _nextVariant = new int[Table.Length];
     private readonly AudioStreamPlayer[] _pool = new AudioStreamPlayer[PoolSize];
+    private readonly long[] _playerStarts = new long[PoolSize];
+    private readonly ulong[] _playerEndUsec = new ulong[PoolSize]; // the play clock when the player's current clip ends
+    private readonly ulong[][] _variantUsec = new ulong[Table.Length][];
+    private readonly ulong[] _toneUsec = new ulong[Table.Length];
+    private readonly int[] _lastPlayer = new int[Table.Length];
     private readonly int[] _plays = new int[Table.Length];
     private readonly long[] _lastFrame = new long[Table.Length];
     private readonly ulong[] _lastUsec = new ulong[Table.Length];
     private readonly ulong[] _worldRecent = new ulong[WorldCap];
     private readonly ulong[] _worldHistory = new ulong[WorldHistory];
     private int _worldNext, _worldFilled, _historyNext, _historyCount;
-    private int _next;
+    private int _nextWorld, _nextUi;
     private ulong _startedUsec; // wall clock of the last sound actually started (not the limiter's test clock)
     // A sound started this recently (the longest clip plus a margin) may still be in the audio server.
     private ulong _recentUsec = (ulong)(LongestToneMs() + 100f) * 1000UL;
@@ -103,12 +116,19 @@ public partial class Sfx : Node
         {
             _clips[e] = ToWav(Synthesize((SfxEvent)e));
             _lastFrame[e] = -1;
-            _variants[e] = LoadVariants((SfxEvent)e);
-            foreach (AudioStream s in _variants[e]) longest = Math.Max(longest, s.GetLength() * 1000.0);
+            _lastPlayer[e] = -1;
+            _variants[e] = LoadVariants((SfxEvent)e, ClipRoot);
+            _toneUsec[e] = Usec(_clips[e].GetLength());
+            _variantUsec[e] = new ulong[_variants[e].Length];
+            for (int k = 0; k < _variants[e].Length; k++)
+            {
+                longest = Math.Max(longest, _variants[e][k].GetLength() * 1000.0);
+                _variantUsec[e][k] = Usec(_variants[e][k].GetLength());
+            }
             if (_variants[e].Length == 0)
             {
                 Warnings++;
-                GD.PushWarning($"Sfx: no clip file for {(SfxEvent)e} ({ClipPath((SfxEvent)e, 1)} .. _{MaxVariants}); the generated tone plays instead.");
+                GD.PushWarning($"Sfx: no loadable clip file for {(SfxEvent)e} ({ClipPath((SfxEvent)e, 1, ClipRoot)} .. _{MaxVariants}: missing, or an LFS pointer without git lfs pull); the generated tone plays instead.");
             }
         }
         _recentUsec = (ulong)(longest + 100.0) * 1000UL;
@@ -120,8 +140,14 @@ public partial class Sfx : Node
     }
 
     /// <summary>The clip file of variant <paramref name="variant"/> (1-based) of <paramref name="e"/>: <c>res://assets/audio/sfx/&lt;category&gt;/&lt;event&gt;_&lt;variant&gt;.wav</c>.</summary>
-    public static string ClipPath(SfxEvent e, int variant) =>
-        string.Create(CultureInfo.InvariantCulture, $"{Root}/{Table[(int)e].Category}/{UiText.Key(e)}_{variant}.wav");
+    public static string ClipPath(SfxEvent e, int variant) => ClipPath(e, variant, Root);
+
+    /// <summary>The clip file of variant <paramref name="variant"/> of <paramref name="e"/> under <paramref name="root"/> instead of <see cref="Root"/>.</summary>
+    public static string ClipPath(SfxEvent e, int variant, string root) =>
+        string.Create(CultureInfo.InvariantCulture, $"{root}/{Table[(int)e].Category}/{UiText.Key(e)}_{variant}.wav");
+
+    /// <summary>The folder this pool loads its clips from: <see cref="Root"/> unless a test sets another before the node enters the tree.</summary>
+    public string ClipRoot { get; set; } = Root;
 
     /// <summary>True for a world event (capped, played by <see cref="SoundCues"/> only for what the player sees on screen).</summary>
     public static bool IsWorld(SfxEvent e) => (uint)e < (uint)Table.Length && Table[(int)e].World;
@@ -156,17 +182,57 @@ public partial class Sfx : Node
     /// <summary>The start time (the play's clock, µs) of kept world play <paramref name="k"/>, oldest first.</summary>
     public ulong WorldPlayUsec(int k) => _worldHistory[(_historyNext - _historyCount + k + 2 * WorldHistory) % WorldHistory];
 
-    // Every existing variant file of the event, loaded; a path that exists but doesn't load (an LFS pointer) counts as missing.
-    private static AudioStream[] LoadVariants(SfxEvent e)
+    // Every loadable variant file of the event, loaded. Only ClipLoadable paths reach ResourceLoader.Load: a failed Load logs
+    // ERROR lines (BUG-0950), which the smoke gate and the scene loop count as a failure.
+    private static AudioStream[] LoadVariants(SfxEvent e, string root)
     {
         var found = new System.Collections.Generic.List<AudioStream>(MaxVariants);
         for (int v = 1; v <= MaxVariants; v++)
         {
-            string path = ClipPath(e, v);
-            if (!ResourceLoader.Exists(path)) continue;
+            string path = ClipPath(e, v, root);
+            if (!ClipLoadable(path)) continue;
             if (ResourceLoader.Load(path) is AudioStream s) found.Add(s);
         }
         return found.ToArray();
+    }
+
+    /// <summary>
+    /// True when the clip at <paramref name="path"/> can load without the engine logging an error (BUG-0950): the resource
+    /// exists; its source file, where present (an exported build has none), starts with <c>RIFF</c> (a clone without
+    /// <c>git lfs pull</c> has a ~130-byte text pointer there); and the imported file its <c>.import</c> names exists (a
+    /// pointer fails to import, so there is none). Reads through <c>FileAccess</c> only, which logs nothing.
+    /// </summary>
+    public static bool ClipLoadable(string path)
+    {
+        if (!ResourceLoader.Exists(path)) return false;
+        if (FileAccess.FileExists(path))
+        {
+            using FileAccess? f = FileAccess.Open(path, FileAccess.ModeFlags.Read);
+            if (f == null || f.GetLength() < 12) return false;
+            byte[] head = f.GetBuffer(4);
+            if (head.Length < 4 || head[0] != 'R' || head[1] != 'I' || head[2] != 'F' || head[3] != 'F') return false;
+        }
+        string import = path + ".import";
+        if (FileAccess.FileExists(import))
+        {
+            string? dest = ImportedPath(FileAccess.GetFileAsString(import));
+            if (dest == null || !FileAccess.FileExists(dest)) return false;
+        }
+        return true;
+    }
+
+    // The [remap] section's path="..." in an .import file's text, or null.
+    private static string? ImportedPath(string importText)
+    {
+        const string Key = "path=\"";
+        foreach (string raw in importText.Split('\n'))
+        {
+            string line = raw.Trim();
+            if (!line.StartsWith(Key, StringComparison.Ordinal)) continue;
+            int end = line.IndexOf('"', Key.Length);
+            return end > Key.Length ? line.Substring(Key.Length, end - Key.Length) : null;
+        }
+        return null;
     }
 
     /// <summary>Longest time <see cref="_ExitTree"/> waits for the audio thread to drop stopped sounds, in milliseconds.</summary>
@@ -233,8 +299,17 @@ public partial class Sfx : Node
     /// <summary>Times <paramref name="e"/> has played (after rate limiting and the world cap).</summary>
     public int PlayCount(SfxEvent e) => (uint)e < (uint)_plays.Length ? _plays[(int)e] : 0;
 
+    /// <summary>The play clock (µs) of <paramref name="e"/>'s last play; meaningful once <see cref="LastPlayedFrame"/> is not -1.</summary>
+    public ulong LastPlayedUsec(SfxEvent e) => (uint)e < (uint)_lastUsec.Length ? _lastUsec[(int)e] : 0;
+
     /// <summary>Process frame of <paramref name="e"/>'s last play, or -1 if it never played.</summary>
     public long LastPlayedFrame(SfxEvent e) => (uint)e < (uint)_lastFrame.Length ? _lastFrame[(int)e] : -1;
+
+    /// <summary>The pool player (0 .. <see cref="PoolSize"/> - 1) that <paramref name="e"/>'s last play started on, or -1.</summary>
+    public int LastPlayer(SfxEvent e) => (uint)e < (uint)_lastPlayer.Length ? _lastPlayer[(int)e] : -1;
+
+    /// <summary>Plays started on pool player <paramref name="index"/> so far: a play was cut short if this moved before its clip ended.</summary>
+    public long PlayerStarts(int index) => _playerStarts[index];
 
     /// <summary>The generated fallback tone for <paramref name="e"/>; null before <c>_Ready</c>.</summary>
     public AudioStreamWav Clip(SfxEvent e) => _clips[(int)e];
@@ -273,17 +348,44 @@ public partial class Sfx : Node
         _lastFrame[i] = (long)frame;
         _lastUsec[i] = nowUsec;
         AudioStream[] files = _variants[i];
-        AudioStream stream = files.Length > 0 ? files[_nextVariant[i]++ % files.Length] : _clips[i];
+        int variant = files.Length > 0 ? _nextVariant[i]++ % files.Length : -1;
+        AudioStream stream = variant >= 0 ? files[variant] : _clips[i];
+        ulong length = variant >= 0 ? _variantUsec[i][variant] : _toneUsec[i];
         _lastStream[i] = stream;
         // Headless runs play too: the dummy audio driver takes playback without logging errors.
-        AudioStreamPlayer player = _pool[_next];
-        _next = (_next + 1) % PoolSize;
+        int p = row.World ? PickPlayer(0, WorldPlayers, ref _nextWorld, nowUsec) : PickPlayer(WorldPlayers, UiPlayers, ref _nextUi, nowUsec);
+        _playerStarts[p]++;
+        _playerEndUsec[p] = nowUsec + length;
+        _lastPlayer[i] = p;
+        AudioStreamPlayer player = _pool[p];
         player.Stream = stream;
         player.VolumeDb = SfxVolumeDb + row.GainDb;
         player.Play();
         _startedUsec = Math.Max(1UL, Time.GetTicksUsec());
         return true;
     }
+
+    // A player of [first, first + count): the first one from `next` on whose clip has ended by the play's clock, else the
+    // one nearest its end. Kept on the play's clock, not AudioStreamPlayer.Playing, which the audio thread updates late (two
+    // plays in one frame could both see one player idle). The world and UI ranges never share a player (BUG-0951).
+    private int PickPlayer(int first, int count, ref int next, ulong nowUsec)
+    {
+        int nearest = first + next;
+        for (int k = 0; k < count; k++)
+        {
+            int c = first + (next + k) % count;
+            if (_playerEndUsec[c] <= nowUsec)
+            {
+                next = (c - first + 1) % count;
+                return c;
+            }
+            if (_playerEndUsec[c] < _playerEndUsec[nearest]) nearest = c;
+        }
+        next = (nearest - first + 1) % count;
+        return nearest;
+    }
+
+    private static ulong Usec(double seconds) => (ulong)Math.Max(0.0, seconds * 1_000_000.0);
 
     /// <summary>The event's fallback tone in [-1, 1] at <see cref="MixRate"/>: its notes back to back, each with its own envelope.</summary>
     public static float[] Synthesize(SfxEvent e)

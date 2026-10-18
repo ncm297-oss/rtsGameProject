@@ -3755,7 +3755,8 @@ Match
 - **Rate limits:** each event plays at most once per process frame and never within 50 ms
   (`Sfx.MinGapMs`, wall clock) of its last play, so 50 right-clicks in one frame are one sound.
   A play takes the next player of the 8-player pool round-robin (a 9th overlapping sound cuts the
-  oldest) and allocates nothing.
+  oldest) and allocates nothing. (Since M6-V12 fix round 1, BUG-0951: 8 world players plus 6 UI players; see
+  "Implementation (M6-V12)", "Player pool".)
 - **Volume and mute:** every player runs at `Sfx.SfxVolumeDb` (-6 dB) on the `Sfx` bus, whose gain is the
   SFX volume setting since M6-V6 ("Implementation (M6-V6)"). `--mute` (takes no value) mutes the master bus;
   without it `Match.Start` unmutes it. Counters run either way.
@@ -6309,8 +6310,22 @@ game/tests/SfxTest, AlertTest (new), CombatViewTest, ShellTest, QaM6VH2Test (Spa
 
   Each clip is normalized to -1 dBFS by the cut; the gain is on top of `Sfx.SfxVolumeDb` (-6 dB) and the `Sfx` bus.
 - **Missing file.** An event with no loadable file (none on disk, its `.import` gone, or an LFS pointer that failed to
-  import) plays its M2-6-style tone and logs one warning at `_Ready` (`Sfx.Warnings`); `Sfx.Clip(e)` is always the tone. A
-  clone without `git lfs pull` so boots and every scene but `LookTest` stays green.
+  import) plays its M2-6-style tone and logs one warning at `_Ready` (`Sfx.Warnings`); `Sfx.Clip(e)` is always the tone.
+  BUG-0950: `ResourceLoader.Exists` is true for a pointer (the committed `.import` is there), and a `Load` that fails
+  logs four `ERROR` lines per clip, which fail smoke and the scene loop. So `Sfx.ClipLoadable(path)` decides first, through
+  `FileAccess` only (it logs nothing): the source, where present (an exported build has none), must start with `RIFF`
+  (a pointer starts `version https://git-lfs`), and the imported file the `.import`'s `path=` names must exist (a
+  pointer's import fails and writes none). Only then does `ResourceLoader.Load` run. In a `GIT_LFS_SKIP_SMUDGE=1` clone a
+  match so starts with 12 warnings and no `ERROR`. **Open:** such a clone still fails `tools/qa/smoke.ps1`, for two reasons
+  outside the runtime code. Godot's own `--import` pass logs 3 `ERROR` lines per pointer (48: "Not a WAV file", "Can't
+  save empty resource", `get_multiple_md5`) on every run. And smoke matches `ERROR` case-insensitively without skipping
+  stack-frame lines, so the `godot_variant_call_error` frame in each warning's backtrace counts too (`scene-loop.ps1` uses
+  `-cmatch` and skips `[n]` frames). `LookTest` needs the LFS art in any case.
+- **Player pool** (BUG-0951). `Sfx.PoolSize` = `WorldPlayers` (8) + `UiPlayers` (6). A world play takes one of the
+  first 8, a UI play one of the last 6, so a busy fight on screen never takes a UI cue's player. In its range a play takes
+  the first player (round from the last pick) whose clip has ended on the play's clock, else the one nearest its end; the
+  end time is kept per player (start + clip length) rather than read from `AudioStreamPlayer.Playing`, which the audio
+  thread updates late. `Sfx.LastPlayer(e)` and `PlayerStarts(i)` let a test see whether a play was cut.
 - **On screen and seen.** A world event plays only if its point is in front of the camera and projects inside the
   viewport (`ScreenCheck.OnScreen`, at the terrain height there) and the local fog shows it (`FogView.ShowsPoint`; a hit:
   `ShowsUnit`). `SoundCues` reads deaths, launches, impacts and casts on every tick the runner runs (`SimRunner.Ticked`),
@@ -6318,15 +6333,19 @@ game/tests/SfxTest, AlertTest (new), CombatViewTest, ShellTest, QaM6VH2Test (Spa
 - **World cap.** At most `Sfx.WorldCap` (4) world sounds start in any 100 ms (`Sfx.WorldWindowMs`, the play's clock): a
   ring of the last four start times; a fifth inside the window is dropped (`WorldCapped`) and stamps nothing. UI events
   never count and are never dropped by it. `WorldPlayUsec(k)` keeps the last 256 world start times for tests.
-- **Alerts** (`AttackAlerts`, allocation-free): each frame, for the local player's buildings then units, a slot holding the
-  same generation as last frame with less hp is a hit; a hit within 30 m of an alert raised in the last 10 s of view time
-  joins it (`HitsOn`), else raises a new one (`Kind` Base for a building, Units for a unit; `Position` the unit's position
+- **Alerts** (`AttackAlerts`, allocation-free): on every sim tick the runner runs (`SimRunner.Ticked`; BUG-0952, was each
+  frame with frame time), `AlertHud` sets the alerts' clock to tick x 0.05 s (`AttackAlerts.SetNow`, so no rounding piles
+  up) and steps them with dt 0. For the local player's buildings then units, a slot holding the same generation as last
+  step with less hp is a hit; a hit within 30 m of an alert raised in the last 10 s of game time (200 ticks, at any game
+  speed) joins it (`HitsOn`), else raises a new one (`Kind` Base for a building, Units for a unit; `Position` the unit's position
   or the building's footprint centre). A new generation or a dead slot raises nothing. `AlertHud` per new alert: a minimap
   ping (`Minimap.Ping`, 3 s, a red ring pulsing every 0.75 s from 3 to 14 px); if the point is off screen, the text for 4 s
   at the top centre under the replay mark (`ui.json` `alert.base_under_attack` if any new off-screen alert is a building,
   else `alert.units_under_attack`); and one `Alert` play. **Space** (fixed: `KeyMap.Reserved`, `AlertHud.JumpKey`, handled
-  in `_UnhandledInput`) centres the camera on the newest alert. Replays: the local player is seat 0, the same code runs, so
-  playback shows the same alerts at the same ticks.
+  in `_UnhandledInput`) centres the camera on the newest alert. Replays: the local player is seat 0 and the alerts see the
+  same hits on the same ticks with the same clock, so playback at any speed shows the same alerts at the same ticks. Only
+  the text's 4 s and the ping's 3 s are frame time. When a frame runs several ticks, the text counts once (`TextsShown`)
+  and `Sfx` plays the `Alert` once.
 - **Music hook.** `MusicPlayer` (an `AudioStreamPlayer` on the `Music` bus, a child of `Main`, `ProcessMode` Always) lists
   `res://assets/audio/music/` (`.ogg`, or an exported build's `.ogg.import`), plays them in name order and starts over;
   with no folder or no file (today) it is silent. The music volume setting already drives the bus (M6-V6).
@@ -6338,19 +6357,28 @@ game/tests/SfxTest, AlertTest (new), CombatViewTest, ShellTest, QaM6VH2Test (Spa
   - xUnit `ViewApi/AttackAlertsTests`: a hit raises one alert at the unit; hits within 29 m over 9.8 s raise none and count
     on it; a hit 40 m off raises a second; the same spot after 10 s raises again; a new generation (unit or building, hurt)
     raises nothing; only the given player's, buildings first (Base); NaN / negative dt; the ring keeps the newest; a frame
-    of 2,000 units and 256 buildings allocates 0 bytes.
-  - `SfxTest`: `alert_1.wav` and its `.import` moved aside -> `Alert` falls back to the tone, one warning, the play starts the
-    tone (restored after); every event has 1-3 files, each `AudioStreamWav` mono 16-bit <= 44,100 Hz <= 3 s, <= 20 files, no
+    of 2,000 units and 256 buildings allocates 0 bytes. Fix round 1 (BUG-0952): stepped per tick with `SetNow(tick x 0.05)`,
+    a raid hitting every tick for 600 ticks raises at ticks 1, 201 and 401 whether a frame groups 1, 3 or 8 ticks;
+    `SetNow` ignores NaN, negative and infinite values.
+  - `SfxTest`: (fix round 1, BUG-0950) a no-LFS clip folder built under `user://sfx_nolfs_probe` (no tracked file is
+    touched, BUG-0954): `alert_1.wav` is the LFS text pointer and its `.import` names an imported file that doesn't exist.
+    `ResourceLoader.Exists` is true for it, `ClipLoadable` is false, every real clip is `ClipLoadable`, a pool on that folder
+    plays the tone with one warning per event, and the log has no `ERROR` (the old `Exists` -> `Load` path printed the bug's
+    four `ERROR` lines, which fail the scene in the loop); every event has 1-3 files, each `AudioStreamWav` mono 16-bit <= 44,100 Hz <= 3 s, <= 20 files, no
     warning; variants in turn; every `.wav` in `sfx-manifest.json` with a Sonniss source and <= 2 MB (and the manifest names
     no missing file); the cap on a hand clock (5 world events in 40 ms -> 4, 7 UI events in the full window all play, 99 ms
     capped, 100 ms plays); the Music bus, `MusicPlayer` silent with no track, `FindTracks` order; a 100 v 100 brawl on screen
     at 4x (seed 3): about 190 world plays, 50 capped, no 5 inside 100 ms, a UI play every 120 ms always plays (55 / 55);
     a house built (`BuildingPlaced` 1, `BuildingDone` 1), a cancelled worker (no `Ready`), a trained worker (`Ready` 1).
-  - `AlertTest` (new, in the loop): workers walked off, the camera 60 m away, four raiders on player 0's Town Hall ->
-    tick 244 a Base alert at the hall, the text, one ping at the hall's minimap pixel, one `Alert`; no second alert or sound
-    for 10 s of view time (the alerts are stepped 0.1 s per tick), the text gone; the next after 10 s; Space -> camera on
-    the alert (0.00 m); the camera on the hall, the next alert pings and sounds with no text; the ping gone after 3 s; the
-    replay of the match shows the same 5 alerts at the same ticks. Windowed `-- --shots <dir>` saves `alert-base.png` and
+  - `AlertTest` (new, in the loop): workers walked off at 4x, the camera 60 m away, then 2x and four raiders on player 0's
+    Town Hall -> tick 244 a Base alert at the hall, the text, one ping at the hall's minimap pixel, one `Alert`; no second
+    alert or sound for 10 s of game time (190 ticks; since fix round 1 the scene runs the HUD's own tick path, not a
+    hand-fed step), the text gone (4 s of frame time < 5 s); the next 200+ ticks after the first; Space -> camera on the
+    alert (0.00 m); the camera on the hall, the next alert pings and sounds with no text; the ping gone after 3 s; the
+    replay of the match **at 8x** shows the same alerts at the same ticks (245 / 455 / 658, a frame-time clock would not).
+  - `QaM6V12Test` (QA's): the BUG-0951 row now reads the player each UI play took (`LastPlayer`, `PlayerStarts`) instead
+    of counting `PoolSize` later plays of any kind; a UI try that merges into the HUD's own play of the same event (same
+    frame or inside 50 ms) counts as merged, not dropped. 200 v 200 at 8x: 26 / 26 started, 0 of 24 cut. Windowed `-- --shots <dir>` saves `alert-base.png` and
     `alert-on-screen.png`.
   - `ShellTest`: the two `alert` keys (each required, the section required, the brief's wording).
 

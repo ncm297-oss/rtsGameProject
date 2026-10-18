@@ -196,6 +196,51 @@ public class AttackAlertsTests
         Assert.Equal(new Vector2(3200, 0), a.Position(a.Recent(0)));
     }
 
+    // BUG-0952: the HUD sets the clock to tick x tick length before each tick's step. A raid hitting one unit every tick for
+    // 30 s of game time raises at ticks 1, 201, 401 (every 10 s of game time) however many ticks a frame ran, and the same
+    // run stepped again (a replay at another speed) raises at the same ticks.
+    [Fact]
+    public void SteppedPerTick_TheTenSecondsAreGameTime_SameTicksOnReplay()
+    {
+        float tick = (float)FixedStepClock.TickSeconds;
+        var first = RaidTicks(tick, ticksPerFrame: 1);
+        Assert.Equal(new[] { 1, 201, 401 }, first);
+        Assert.Equal(first, RaidTicks(tick, ticksPerFrame: 8));   // 8x: eight ticks per frame
+        Assert.Equal(first, RaidTicks(tick, ticksPerFrame: 3));
+    }
+
+    // The tick numbers that raised an alert. Frames only group ticks (the runner raises Ticked per tick), so the grouping
+    // must not matter; it is passed to prove that.
+    private static List<int> RaidTicks(float tickSeconds, int ticksPerFrame)
+    {
+        var s = new Stores(2, 1);
+        s.Unit(0, Me, new Vector2(10, 10), hp: 100_000);
+        var a = new AttackAlerts(2, 1);
+        var raised = new List<int>();
+        for (int t = 0; t <= 600; t += ticksPerFrame)
+        {
+            for (int k = t; k < t + ticksPerFrame && k <= 600; k++)
+            {
+                if (k > 0) s.UnitHp[0] -= 1;
+                a.SetNow(k * tickSeconds);
+                if (s.Frame(a, 0f) > 0) raised.Add(k);
+            }
+        }
+        return raised;
+    }
+
+    [Fact]
+    public void SetNow_IgnoresBadValues()
+    {
+        var a = new AttackAlerts(1, 1);
+        a.SetNow(12.5f);
+        Assert.Equal(12.5f, a.Now);
+        a.SetNow(float.NaN);
+        a.SetNow(-1f);
+        a.SetNow(float.PositiveInfinity);
+        Assert.Equal(12.5f, a.Now);
+    }
+
     [Fact]
     public void AFrame_2000Units256Buildings_AllocatesZeroBytes()
     {

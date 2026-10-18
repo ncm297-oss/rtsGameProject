@@ -15,13 +15,13 @@ namespace Rts.Game.Tests;
 /// <summary>M6-V12: attack alerts on the real Match: an off-screen raid on the local base (text, ping, one Alert sound per 10 s / 30 m), Space to the alert, an on-screen raid (ping and sound, no text), and the same alerts in the replay.</summary>
 /// <remarks>
 /// Headless. Run: <c>&amp; $env:GODOT --headless --path game res://tests/AlertTest.tscn</c>; prints "ALERT TEST PASS" and exits 0,
-/// or prints each failure and exits 1. The alerts' own frame step is disabled and driven from the runner's every tick with a
-/// fixed <see cref="StepSeconds"/> of view time, so the live match and its replay see the same view time at every tick (the
-/// 10 s suppression is 100 ticks). Windowed with <c>-- --shots &lt;dir&gt;</c> it saves the alert text and the minimap ping.
+/// or prints each failure and exits 1. The alerts run as in the game: <see cref="AlertHud"/> steps them on every sim tick with
+/// the tick's game time (BUG-0952; the 10 s suppression is 200 ticks). The live match runs at 4x (2x from the raid on) and its replay at 8x, so the
+/// replay row fails if the alerts depend on frame time. Windowed with <c>-- --shots &lt;dir&gt;</c> it saves the alert text and
+/// the minimap ping.
 /// </remarks>
 public partial class AlertTest : Node
 {
-    private const float StepSeconds = 0.1f;
     private const int Raiders = 4;
 
     private readonly List<string> _failures = new();
@@ -82,22 +82,20 @@ public partial class AlertTest : Node
         _camera = m.GetNode<RtsCamera>("RtsCamera");
         _camera.EdgePanEnabled = false;
         _alerts = m.GetNode<AlertHud>("Alerts");
-        _alerts.SetProcess(false); // stepped from the runner's ticks below (input stays on: Space)
         _minimap = m.GetNode<Minimap>("Hud/Minimap");
         _sfx = m.GetNode<Sfx>("Sfx");
         _runner.Ticked += OnTicked;
     }
 
+    // Subscribed after the HUD's own tick handler (Match.Start ran first), so the alerts already saw this tick.
     private void OnTicked(Simulation sim)
     {
-        int before = (int)_alerts.Alerts.Raised;
-        _alerts.Step(sim.World, StepSeconds);
         for (int k = 0; k < _alerts.Alerts.NewCount; k++)
         {
             int a = _alerts.Alerts.New(k);
             _log.Add((sim.TickNumber, _alerts.Alerts.Kind(a), _alerts.Alerts.Position(a)));
         }
-        if (_alerts.Alerts.Raised > before) GD.Print($"tick {sim.TickNumber}: alert {_alerts.Alerts.Kind(_alerts.Alerts.LastIndex)} at {_alerts.Alerts.Position(_alerts.Alerts.LastIndex)}, text shown {_alerts.TextShown} '{_alerts.TextLabel?.Text}'");
+        if (_alerts.Alerts.NewCount > 0) GD.Print($"tick {sim.TickNumber}: alert {_alerts.Alerts.Kind(_alerts.Alerts.LastIndex)} at {_alerts.Alerts.Position(_alerts.Alerts.LastIndex)}, text shown {_alerts.TextShown} '{_alerts.TextLabel?.Text}'");
     }
 
     private async Task<Replay> Live()
@@ -128,6 +126,8 @@ public partial class AlertTest : Node
         await Frame();
         Check(!ScreenCheck.OnScreen(_camera, W.Heightmap, hall), "the hall is on screen with the camera 60 m off");
         int texts0 = _alerts.TextsShown, sounds0 = _sfx.PlayCount(SfxEvent.Alert), pings0 = _minimap.PingsAdded;
+        // 2x from here: the 10 s of game time between alerts is 5 s of wall clock, longer than the text's 4 s of frame time.
+        _runner.GameSpeed = 2.0;
         int raidTick = W.TickNumber;
         Raid(hallHandle, hall);
         await Until(() => _alerts.Alerts.Raised >= 1, 15);
@@ -148,14 +148,14 @@ public partial class AlertTest : Node
             $"off-screen raid: {_minimap.PingsAdded - pings0} pings, active {ping}, at {(ping >= 0 ? _minimap.PingPixel(ping) : default)} (hall {hallPx})");
         await Shot("alert-base");
 
-        // Hits go on for the next 10 s of view time (100 ticks): no second alert, no second sound; the text goes after 4 s.
+        // Hits go on for the next 10 s of game time (200 ticks): no second alert, no second sound; the text goes after 4 s.
         int firstTick = _live[0].Tick;
-        await Until(() => W.TickNumber >= firstTick + 95, 30);
+        await Until(() => W.TickNumber >= firstTick + 190, 30);
         Check(_alerts.Alerts.Raised == 1 && _sfx.PlayCount(SfxEvent.Alert) == sounds0 + 1 && _alerts.Alerts.HitsOn(first) > 1,
             $"9.5 s of raid: {_alerts.Alerts.Raised} alerts, {_sfx.PlayCount(SfxEvent.Alert) - sounds0} sounds, {_alerts.Alerts.HitsOn(first)} hits on the first");
-        Check(!_alerts.TextShown, "the alert text is still up after 9.5 s (want 4 s)");
+        Check(!_alerts.TextShown, "the alert text is still up after 9.5 s of game time at 2x (want 4 s)");
         await Until(() => _alerts.Alerts.Raised >= 2, 15);
-        Check(_alerts.Alerts.Raised == 2 && _sfx.PlayCount(SfxEvent.Alert) == sounds0 + 2 && W.TickNumber - firstTick >= 100,
+        Check(_alerts.Alerts.Raised == 2 && _sfx.PlayCount(SfxEvent.Alert) == sounds0 + 2 && W.TickNumber - firstTick >= 200,
             $"after 10 s: {_alerts.Alerts.Raised} alerts, {_sfx.PlayCount(SfxEvent.Alert) - sounds0} sounds, {W.TickNumber - firstTick} ticks after the first");
 
         // (b) Space: the camera jumps to the last alert.
@@ -180,7 +180,7 @@ public partial class AlertTest : Node
             $"on-screen raid: {_sfx.PlayCount(SfxEvent.Alert) - sounds1} sounds, {_minimap.PingsAdded - pings1} pings");
         await Shot("alert-on-screen");
         // The newest ping pulses 3 s of the minimap's own frame time (the wall clock here), then goes (the raid goes on: more
-        // alerts may come meanwhile, each 10 s of view time on; the replay must show the same ones).
+        // alerts may come meanwhile, each 10 s of game time on; the replay must show the same ones).
         int newest = -1;
         for (int k = 0; k < Minimap.MaxPings; k++) if (_minimap.PingActive(k) && (newest < 0 || _minimap.PingAge(k) < _minimap.PingAge(newest))) newest = k;
         if (Check(newest >= 0, "no ping pulsing after the on-screen alert"))

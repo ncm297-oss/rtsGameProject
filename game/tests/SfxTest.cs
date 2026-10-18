@@ -39,7 +39,7 @@ public partial class SfxTest : Node
             DataLoadResult loaded = DataLoader.LoadAll(ProjectSettings.GlobalizePath("res://data"));
             if (!loaded.Ok) throw new InvalidOperationException("data failed to load");
             _data = loaded.Data!;
-            // M6-V12 first: the move-aside row must run before anything has loaded the clip it hides.
+            // M6-V12 / BUG-0950: the no-LFS fallback first, before anything has loaded a clip.
             FallbackWhenMissing();
             ClipTable();
             ManifestAndFiles();
@@ -76,32 +76,44 @@ public partial class SfxTest : Node
 
     // ---- M6-V12 ----
 
-    // Criterion 3: an event whose clip file is gone (the file and its .import moved aside, as a clone without LFS objects or
-    // a deleted file) plays its generated tone, with one warning; every other event still loads its files.
+    // Criterion 3 and BUG-0950: a clip folder as a clone without LFS objects has it, built under user:// (no tracked file is
+    // touched, BUG-0954): Alert's file is the LFS text pointer and its committed .import names an imported file the failed
+    // import never wrote. The pool must see it as missing *before* ResourceLoader.Load (which logged four ERROR lines per clip
+    // and failed the smoke gate and this scene in the loop), play the tone, and warn once per event. The real folder: every
+    // clip is loadable.
     private void FallbackWhenMissing()
     {
-        string wav = ProjectSettings.GlobalizePath(Sfx.ClipPath(SfxEvent.Alert, 1));
-        if (!Check(File.Exists(wav) && File.Exists(wav + ".import"), $"fallback: {wav} (and its .import) missing before the move")) return;
-        bool second = File.Exists(ProjectSettings.GlobalizePath(Sfx.ClipPath(SfxEvent.Alert, 2)) + ".import");
-        Check(!second, "fallback: Alert has a second variant; the row moves only _1 aside");
-        File.Move(wav, wav + ".aside");
-        File.Move(wav + ".import", wav + ".import.aside");
+        const string probe = "user://sfx_nolfs_probe";
+        string pointer = Sfx.ClipPath(SfxEvent.Alert, 1, probe);
+        DirAccess.MakeDirRecursiveAbsolute(pointer.GetBaseDir());
+        using (Godot.FileAccess f = Godot.FileAccess.Open(pointer, Godot.FileAccess.ModeFlags.Write))
+            f.StoreString("version https://git-lfs.github.com/spec/v1\noid sha256:4d7a214614ab2935c943f9e0ff69d22eadbb8f32b1258daaa5e2ca24d17e2393\nsize 105836\n");
+        using (Godot.FileAccess f = Godot.FileAccess.Open(pointer + ".import", Godot.FileAccess.ModeFlags.Write))
+            f.StoreString("[remap]\n\nimporter=\"wav\"\ntype=\"AudioStreamWAV\"\npath=\"res://.godot/imported/alert_1.wav-0000000000000000nolfsprobe.sample\"\n\n[deps]\n\nsource_file=\"" + pointer + "\"\n");
         try
         {
-            var sfx = new Sfx();
+            // The engine takes the pointer for an imported resource, as it does in a no-LFS clone (else the row proves nothing).
+            Check(ResourceLoader.Exists(pointer), $"fallback: ResourceLoader.Exists is false for the probe pointer {pointer}");
+            Check(!Sfx.ClipLoadable(pointer), $"fallback: an LFS pointer with a dangling .import counts as loadable ({pointer})");
+            foreach (SfxEvent e in Enum.GetValues<SfxEvent>())
+                for (int v = 1; v <= Sfx.MaxVariants; v++)
+                    if (ResourceLoader.Exists(Sfx.ClipPath(e, v))) Check(Sfx.ClipLoadable(Sfx.ClipPath(e, v)), $"fallback: the real {Sfx.ClipPath(e, v)} counts as not loadable");
+            var sfx = new Sfx { ClipRoot = probe };
             AddChild(sfx);
             bool played = sfx.Play(SfxEvent.Alert, 1, 10_000_000);
-            GD.Print($"fallback: Alert moved aside -> tone {sfx.UsesTone(SfxEvent.Alert)}, {sfx.Warnings} warning(s), played {played}, stream is the tone {ReferenceEquals(sfx.LastStream(SfxEvent.Alert), sfx.Clip(SfxEvent.Alert))}");
-            Check(sfx.UsesTone(SfxEvent.Alert) && sfx.Warnings == 1, $"fallback: tone {sfx.UsesTone(SfxEvent.Alert)}, {sfx.Warnings} warnings (want the tone, one warning)");
+            int events = Enum.GetValues<SfxEvent>().Length;
+            GD.Print($"fallback: no-LFS Alert pointer -> tone {sfx.UsesTone(SfxEvent.Alert)}, {sfx.Warnings} warning(s) for {events} events, played {played}, stream is the tone {ReferenceEquals(sfx.LastStream(SfxEvent.Alert), sfx.Clip(SfxEvent.Alert))}");
+            Check(sfx.UsesTone(SfxEvent.Alert) && sfx.Warnings == events, $"fallback: tone {sfx.UsesTone(SfxEvent.Alert)}, {sfx.Warnings} warnings (want the tone, one warning per event: {events})");
             Check(played && ReferenceEquals(sfx.LastStream(SfxEvent.Alert), sfx.Clip(SfxEvent.Alert)), "fallback: the Alert play did not start the tone");
-            Check(!sfx.UsesTone(SfxEvent.Select) && sfx.VariantCount(SfxEvent.MeleeHit) > 0, "fallback: other events lost their files too");
             RemoveChild(sfx);
             sfx.QueueFree();
         }
         finally
         {
-            File.Move(wav + ".aside", wav);
-            File.Move(wav + ".import.aside", wav + ".import");
+            DirAccess.RemoveAbsolute(pointer + ".import");
+            DirAccess.RemoveAbsolute(pointer);
+            DirAccess.RemoveAbsolute(pointer.GetBaseDir());
+            DirAccess.RemoveAbsolute(probe);
         }
     }
 

@@ -6,7 +6,8 @@ namespace Rts.Sim.ViewApi;
 /// <summary>
 /// Attack alerts for the HUD (M6-V12, docs/02 "HUD layout": "Your base is under attack"): one player's own unit or building
 /// whose hit points fell since the last <see cref="Update"/> raises an alert at its position, unless an alert raised in the
-/// last <see cref="Seconds"/> of view time lies within <see cref="Radius"/> metres of it (then the hit is counted on that
+/// last <see cref="Seconds"/> of the alerts' clock (<see cref="Now"/>: the HUD drives it with game time, one step per sim
+/// tick) lies within <see cref="Radius"/> metres of it (then the hit is counted on that
 /// alert). Buildings are scanned before units, so a raid that hits both raises a <see cref="AttackAlertKind.Base"/> alert.
 /// Like <see cref="HitFlash"/> no sim event is needed: each slot remembers the hp and generation it last saw, a new unit in a
 /// slot (a new generation, trained or rallied hurt) raises nothing, and a dead slot is forgotten. Presentation only;
@@ -17,7 +18,7 @@ public sealed class AttackAlerts
     /// <summary>Default suppression radius in metres: hits this close to a recent alert raise no new one.</summary>
     public const float DefaultRadius = 30f;
 
-    /// <summary>Default suppression time in seconds of view time.</summary>
+    /// <summary>Default suppression time in seconds of the alerts' clock (game time in the HUD).</summary>
     public const float DefaultSeconds = 10f;
 
     /// <summary>Default number of recent alerts kept (oldest replaced).</summary>
@@ -55,11 +56,21 @@ public sealed class AttackAlerts
     /// <summary>Hits within this many metres of a recent alert raise none.</summary>
     public float Radius { get; }
 
-    /// <summary>How long an alert suppresses others near it, in seconds of view time.</summary>
+    /// <summary>How long an alert suppresses others near it, in seconds of the alerts' clock.</summary>
     public float Seconds { get; }
 
-    /// <summary>View time in seconds: the sum of every <see cref="Update"/>'s <c>dt</c>.</summary>
+    /// <summary>The alerts' clock in seconds: the sum of every <see cref="Update"/>'s <c>dt</c>, or the last <see cref="SetNow"/> plus those since.</summary>
     public float Now { get; private set; }
+
+    /// <summary>
+    /// Sets the clock to <paramref name="now"/> seconds (negative, NaN or infinite: ignored). The HUD sets the sim tick times the
+    /// tick length before each tick's <see cref="Update"/> (dt 0), so suppression is game time whatever the game speed or frame
+    /// rate, a replay sees the same alerts at the same ticks (BUG-0952), and no float rounding piles up over a long match.
+    /// </summary>
+    public void SetNow(float now)
+    {
+        if (float.IsFinite(now) && now >= 0f) Now = now;
+    }
 
     /// <summary>Alerts raised so far.</summary>
     public long Raised { get; private set; }
@@ -74,6 +85,8 @@ public sealed class AttackAlerts
     public int NewCount => _newCount;
 
     /// <summary>The <paramref name="k"/>-th alert raised by the last <see cref="Update"/> (0 .. <see cref="NewCount"/> - 1), as an index for <see cref="Kind"/>, <see cref="Position"/>, <see cref="HitsOn"/>, <see cref="RaisedAt"/>.</summary>
+    /// <remarks>If one Update raised more alerts than the ring holds, the indices are the ring's slots, which by then hold the
+    /// newest ones in rotated order: the set is right, the order is not raise order (BUG-0954; capacity 32 makes it rare).</remarks>
     public int New(int k) => _new[k];
 
     /// <summary>True once any alert was raised; then <see cref="LastIndex"/> is the newest.</summary>
@@ -91,14 +104,14 @@ public sealed class AttackAlerts
     /// <summary>Where (m): the hit unit's position or the hit building's footprint centre.</summary>
     public Vector2 Position(int index) => _position[index];
 
-    /// <summary>View time the alert was raised at.</summary>
+    /// <summary>The alerts' clock (<see cref="Now"/>) when the alert was raised.</summary>
     public float RaisedAt(int index) => _raisedAt[index];
 
     /// <summary>Hits counted on the alert: the one that raised it and those near it it suppressed since.</summary>
     public int HitsOn(int index) => _hits[index];
 
     /// <summary>
-    /// One view frame, <paramref name="dt"/> seconds (negative or NaN: 0) after the last: <paramref name="player"/>'s
+    /// One step, <paramref name="dt"/> seconds of the clock (negative or NaN: 0) after the last (the HUD: one per sim tick): <paramref name="player"/>'s
     /// buildings, then units, whose hp fell since the last call raise or join alerts. The spans are the stores' <c>Alive</c>,
     /// <c>Generation</c>, <c>Hp</c>, <c>Owner</c> and positions (units' <c>Position</c>; buildings' footprint centres, which
     /// the view fills). Returns the alerts raised (<see cref="NewCount"/>). No allocation.
