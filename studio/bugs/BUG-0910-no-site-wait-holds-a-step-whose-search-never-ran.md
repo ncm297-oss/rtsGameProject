@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (verified by QA 2026-10-17-2344) |
 | Found | 2026-10-17-1624, task M5-H3 (QA, full tier) |
 | System | AI: `Ai/BuildOrderExecutor` (`StepNoSiteUntil`, `NoSiteRetryThinks`), `AiPlayer.TryBuild` / `FindSite` |
-| Fixed by | |
+| Fixed by | 13d9ad6 (M5-8a): `TryBuild` sets `NoSiteFound` only when `SiteSearches` moved; regression rows `QA/SimHardeningM5H3QaTests.ABuildStepWaitingOnARequirement_*` (Hard) and `QA/AiOpeningsQaTests.ARequirementBlockedBuild_GetsNoWait_*` / `ARealNoSiteSearch_StillWaits*` (Easy, Normal, Hard) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~SimHardeningM5H3QaTests.ABuildStepWaitingOnARequirement"`
