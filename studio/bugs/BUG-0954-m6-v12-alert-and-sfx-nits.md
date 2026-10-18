@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open (items 1-3 done; item 4 left, a hardening nit) |
 | Found | 2026-10-17-2344, task M6-V12 |
 | System | view: `AttackAlerts` / `AlertHud`, `game/tests/SfxTest.cs` |
-| Fixed by | |
+| Fixed by | item 1: a32445b (M6-V13: a building hit joining a `Units` alert turns it `Base`, `AttackAlerts.Upgraded` / `UpgradedCount`, `AlertHud.ShowUpgrades` re-shows the base text off screen; `ViewApi/AttackAlertsTests` rows red on base, green on head; QA's `M6V13QaTests` upgrade fuzz; the ring-full edge is BUG-0970 S4). Items 2-3: M6-V12 round 1 |
 
 ## Repro / items
 1. **Kind is fixed by the first hit.** A raid that hits a worker standing by the Town Hall one frame before it hits the
