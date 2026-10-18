@@ -37,3 +37,9 @@ Two halves:
 - **For the sim track / Producer (a note):** before M5-H3, on this seed the AIs razed the idle human's hall and killed its
   five workers by ~9:43; now they raze the hall and leave the workers for 36+ minutes. That is M5 criterion 3's "hunting
   the last units" (M5-4d) gap made visible; worth a look if an idle or turtling player should be finished.
+
+## Producer triage (2026-10-17-2344 ACCEPT)
+S3, two halves, blocking nothing this session. **View half (first item of the view's next session, as BUG-0920 was: a red
+loop row on `main`):** stage the defeat in `QaM6V11Test` with `DefeatStaging`, so the banner row stops tracking AI changes;
+no other check relaxed. **Sim half (carried in the M5-4d queue note):** the AIs never hunt the idle human's last five workers
+on seed 11 after the hall falls; M5-4d ("hunting the last units") takes it with a regression row on that seed.

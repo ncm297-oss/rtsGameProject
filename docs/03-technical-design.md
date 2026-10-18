@@ -6320,7 +6320,9 @@ game/tests/SfxTest, AlertTest (new), CombatViewTest, ShellTest, QaM6VH2Test (Spa
   outside the runtime code. Godot's own `--import` pass logs 3 `ERROR` lines per pointer (48: "Not a WAV file", "Can't
   save empty resource", `get_multiple_md5`) on every run. And smoke matches `ERROR` case-insensitively without skipping
   stack-frame lines, so the `godot_variant_call_error` frame in each warning's backtrace counts too (`scene-loop.ps1` uses
-  `-cmatch` and skips `[n]` frames). `LookTest` needs the LFS art in any case.
+  `-cmatch` and skips `[n]` frames). `LookTest` and `SfxTest`'s clip rows need the LFS objects in any case (BUG-0955, S3: the
+  Producer's call at the 2344 ACCEPT: smoke adopts `scene-loop.ps1`'s match at the next view hardening; a no-LFS clone stays
+  unsupported, and the clips keep Godot's own importer).
 - **Player pool** (BUG-0951). `Sfx.PoolSize` = `WorldPlayers` (8) + `UiPlayers` (6). A world play takes one of the
   first 8, a UI play one of the last 6, so a busy fight on screen never takes a UI cue's player. In its range a play takes
   the first player (round from the last pick) whose clip has ended on the play's clock, else the one nearest its end; the
@@ -6336,8 +6338,8 @@ game/tests/SfxTest, AlertTest (new), CombatViewTest, ShellTest, QaM6VH2Test (Spa
 - **Alerts** (`AttackAlerts`, allocation-free): on every sim tick the runner runs (`SimRunner.Ticked`; BUG-0952, was each
   frame with frame time), `AlertHud` sets the alerts' clock to tick x 0.05 s (`AttackAlerts.SetNow`, so no rounding piles
   up) and steps them with dt 0. For the local player's buildings then units, a slot holding the same generation as last
-  step with less hp is a hit; a hit within 30 m of an alert raised in the last 10 s of game time (200 ticks, at any game
-  speed) joins it (`HitsOn`), else raises a new one (`Kind` Base for a building, Units for a unit; `Position` the unit's position
+  step with less hp is a hit; a hit within 30 m of an alert raised in the last 10 s of game time (200 ticks, 201 on rare ticks
+  from the float clock's rounding, BUG-0954 item 4; at any game speed) joins it (`HitsOn`), else raises a new one (`Kind` Base for a building, Units for a unit; `Position` the unit's position
   or the building's footprint centre). A new generation or a dead slot raises nothing. `AlertHud` per new alert: a minimap
   ping (`Minimap.Ping`, 3 s, a red ring pulsing every 0.75 s from 3 to 14 px); if the point is off screen, the text for 4 s
   at the top centre under the replay mark (`ui.json` `alert.base_under_attack` if any new off-screen alert is a building,
