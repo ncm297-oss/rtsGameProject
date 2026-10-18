@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S1 (red build: `dotnet test` fails 29 rows once D21 merges; the brief's criterion 1 "`DataValidationTests` green" can't be met inside the data track's files) |
-| Status | open |
+| Status | fixed (ba24aca, D21 fix round 1, verified by QA 2026-10-18-0516) |
 | Found | 2026-10-18-0516, task D21 (data track; the fix is the sim track's, its test files) |
 | System | sim tests: AI opening fixtures (`Ai/`, `QA/`, `DataValidationTests`) |
-| Fixed by | |
+| Fixed by | ba24aca (test-only: 5 sim-owned test files) |
 
 ## Repro
 1. On the D21 branch (`b5710be`): `dotnet test sim/Rts.Sim.Tests --filter Category!=Perf`
@@ -39,3 +39,15 @@ row shows wrong data: each message is an index, count or pick offset that the tw
 - Planning gap: the D21 brief required `DataValidationTests` green but listed only the data track's test folders, so the data
   developer couldn't touch the fixtures. Merge D21 with (or after) the sim track's fix, or `main` goes red.
 - The developer's report proposed this bug and named the same 29 rows; QA reproduced them and checked each message.
+
+## Verification (2026-10-18-0516, after ba24aca)
+- `dotnet build RtsGame.sln` 0 / 0; `dotnet test sim/Rts.Sim.Tests --filter Category!=Perf` -> `Failed: 0, Passed: 7166,
+  Skipped: 13, Total: 7179` (43 m 47 s, shared machine). `ba24aca` touches only `sim/Rts.Sim.Tests/**`.
+- Nothing lost: the old literals moved on purpose. `AiOpeningPickTests` still pins `standard`'s steps and compositions to
+  the pre-M5-8a order and the Malazan wave as 32 / 1,235 (the D21 value). The opening names and descriptions are now only
+  checked as non-blank there, but `AiContentTests.A_EachPage_IsItsAiFile_BothWays` pins every opening's id, name,
+  description and wave against the faction page, in both directions. Its mutation rows show that a one-character edit fails.
+  `D21OpeningsQaTests` pins the count, unique names, the wave cost against the Age I mix, and that each description quotes
+  its own wave pop.
+- Ownership: the fixture files are sim-owned. The fix was made in the data track on this round's routing, so the
+  Producer should check the merge for conflicts with the sim track.
