@@ -28,8 +28,11 @@ namespace Rts.Game.Tests;
 /// (c) A copy whose <c>data-hash</c> line is altered (checksum re-sealed) is refused before any match exists, with
 /// <c>load.refused</c> on the Load Game screen; <see cref="SimRunner.StartPlayback"/> returns <c>DataMismatch</c> and builds no sim.
 /// (d) A copy with the tick-300 checkpoint altered stops at tick 300 with "Replay out of sync" and runs no further tick.
-/// (e) A junk <c>.replay</c> and a cut copy are skipped and counted by the list (a <c>.txt</c> is not looked at); Delete
-/// removes a row's file; <see cref="ReplayStore.Prune"/> keeps the newest <see cref="ReplayStore.MaxReplays"/>.
+/// (e) A junk <c>.replay</c> and a cut copy are counted by the list and listed as unreadable rows (a <c>.txt</c> is not
+/// looked at); Delete removes a row's file; <see cref="ReplayStore.Prune"/> keeps the newest <see cref="ReplayStore.MaxReplays"/>.
+/// (g) BUG-0830, the folder's edge cases: unreadable files hold no cap slot and Load Game deletes one; a recording saved into a
+/// folder of future-dated names survives its own prune; the list reads headers only (a copy with a damaged body is listed,
+/// then refused on Watch); one path separator; the playback shows <c>load.playing</c> and a live match doesn't.
 /// (f) During (a)'s playback: selection works, the card is greyed, and the right click, A (+ click), S, H, the card's presses
 /// and every public order call send nothing (no issued count, the playback log a prefix of the file's all the way).
 /// Also <c>--replay &lt;path&gt;</c> (a file plays at boot; a missing one shows the refusal), a hosted shell with no folder set
@@ -83,6 +86,7 @@ public partial class ReplayPlaybackTest : Node
                 await AlteredCheckpoint(two);
                 await ReplayFlag(two);
                 await JunkDeleteAndPrune(two);
+                await FolderEdgeCases(two);
             }
             await HostedWithoutFolder();
 
@@ -124,6 +128,7 @@ public partial class ReplayPlaybackTest : Node
             SimRunner runner = match!.GetNode<SimRunner>("SimRunner");
             Simulation sim = runner.Simulation!;
             Check(runner.Recorder is { CheckpointInterval: ReplayRecorder.DefaultCheckpointInterval }, $"{label}: the shell match records no replay (interval {runner.Recorder?.CheckpointInterval})");
+            Check(match.GetNodeOrNull("Hud/ReplayMark") == null, $"{label}: a live match shows the replay mark");
             string? path = main.ReplayPath;
             ulong seed = sim.World.Config.Seed;
             if (!Check(path != null && path.StartsWith(_full, StringComparison.Ordinal), $"{label}: replay path '{path}' not in the test folder {_full}")) return (null, null);
@@ -222,6 +227,9 @@ public partial class ReplayPlaybackTest : Node
         Check(runner.PlayedSeats.Select(s => s.Controller).SequenceEqual(replay.Seats.Select(s => s.Controller)) && match.Seats.SequenceEqual(runner.PlayedSeats),
             $"{label}: played seats [{string.Join(", ", runner.PlayedSeats)}]");
         Check(main.ReplayPath == null, $"{label}: the playback records to {main.ReplayPath}");
+        // BUG-0830: the playback is marked on screen with load.playing.
+        Label? mark = match.GetNodeOrNull<Label>("Hud/ReplayMark");
+        Check(mark != null && mark.IsVisibleInTree() && mark.Text == _ui.LoadGame(LoadText.Playing), $"{label}: playback mark '{mark?.Text ?? "(none)"}', visible {mark?.IsVisibleInTree()}");
         bool ordersDone = false;
         var clock = System.Diagnostics.Stopwatch.StartNew();
         while (runner.PlaybackState == PlaybackState.Playing && clock.Elapsed.TotalSeconds < 120)
@@ -476,7 +484,7 @@ public partial class ReplayPlaybackTest : Node
         main.Menu!.LoadButton.EmitSignal(BaseButton.SignalName.Pressed);
         await Frames(1);
         LoadGameScreen load = main.LoadScreen!;
-        Check(load.Entries.Count == 2 && load.Skipped == 2 && load.Note.Text == _ui.ReplaysSkipped(2) && load.List.GetRoot().GetChildCount() == 2,
+        Check(load.Entries.Count == 2 && load.Skipped == 2 && load.Note.Text == _ui.ReplaysSkipped(2) && load.List.GetRoot().GetChildCount() == 4,
             $"(e) junk: {load.Entries.Count} rows, {load.Skipped} skipped, note '{load.Note.Text}' (want 2, 2, '{_ui.ReplaysSkipped(2)}')");
         Check(load.Entries[0].When >= load.Entries[1].When, "(e) the list is not newest first");
 
@@ -517,6 +525,86 @@ public partial class ReplayPlaybackTest : Node
         File.WriteAllText(Path.Combine(pruneFull, ReplayStore.FileName(t, 5)), "x");
         Check(ReplayStore.NewPath(prune, t, 5).EndsWith(ReplayStore.FileName(t, 5, 1), StringComparison.Ordinal), $"(e) NewPath beside a taken name: {ReplayStore.NewPath(prune, t, 5)}");
         foreach (string f in new[] { "junk.replay", "cut.replay", "notes.txt" }) File.Delete(Path.Combine(_full, f));
+    }
+
+    // (g) BUG-0830: the replay folder's edge cases.
+    private async Task FolderEdgeCases(string path)
+    {
+        byte[] good = File.ReadAllBytes(path);
+        int max = ReplayStore.MaxReplays;
+
+        // Unreadable files hold no cap slot: MaxReplays dated replays, a text and an empty .replay, one newer replay, a prune.
+        string cap = $"{_dir}/cap";
+        string capFull = Path.GetFullPath(ProjectSettings.GlobalizePath(cap));
+        Directory.CreateDirectory(capFull);
+        for (int d = 1; d <= max; d++) File.WriteAllBytes(Path.Combine(capFull, ReplayStore.FileName(new DateTime(2020, 1, 1).AddDays(d), (ulong)d)), good);
+        File.WriteAllText(Path.Combine(capFull, "junk.replay"), "not a replay\n");
+        File.WriteAllBytes(Path.Combine(capFull, "zero.replay"), Array.Empty<byte>());
+        string newest = Path.Combine(capFull, ReplayStore.FileName(new DateTime(2021, 1, 1), 77));
+        File.WriteAllBytes(newest, good);
+        string oldest = Path.Combine(capFull, ReplayStore.FileName(new DateTime(2020, 1, 2), 1));
+        ReplayStore.Prune(cap, max);
+        int playable = Directory.GetFiles(capFull, "*.replay").Count(f => ReplayFormat.TryReadFile(f, out _) == ReplayError.None);
+        Check(playable == max && File.Exists(newest) && !File.Exists(oldest) && File.Exists(Path.Combine(capFull, "junk.replay")) && File.Exists(Path.Combine(capFull, "zero.replay")),
+            $"(g) cap with junk: {playable} playable replays kept (want {max}), the newest kept {File.Exists(newest)}, the oldest gone {!File.Exists(oldest)}");
+
+        // Load Game lists the two unreadable files after the replays; one picked: Watch greyed, Delete removes it.
+        Main main = NewMain(Array.Empty<string>(), "cap");
+        main.ReplayDir = cap;
+        AddChild(main);
+        await Frames(2);
+        main.Menu!.LoadButton.EmitSignal(BaseButton.SignalName.Pressed);
+        await Frames(1);
+        LoadGameScreen load = main.LoadScreen!;
+        int rows = load.List.GetRoot().GetChildCount();
+        Check(load.Entries.Count == max && rows == max + 2, $"(g) Load Game on the capped folder: {load.Entries.Count} replays, {rows} rows (want {max}, {max + 2})");
+        bool picked = load.Select(max);
+        string junkCell = picked ? load.List.GetSelected()?.GetText(2) ?? "" : "";
+        Check(picked && load.WatchButton.Disabled && !load.DeleteButton.Disabled && junkCell == _ui.LoadGame(LoadText.Unreadable),
+            $"(g) an unreadable row picked {picked}: Watch greyed {load.WatchButton.Disabled}, Delete greyed {load.DeleteButton.Disabled}, cell '{junkCell}'");
+        if (picked) load.DeleteButton.EmitSignal(BaseButton.SignalName.Pressed);
+        await Frames(1);
+        int unreadableLeft = new[] { "junk.replay", "zero.replay" }.Count(f => File.Exists(Path.Combine(capFull, f)));
+        Check(unreadableLeft == 1 && load.List.GetRoot().GetChildCount() == max + 1 && load.Entries.Count == max,
+            $"(g) Delete on an unreadable row: {unreadableLeft} unreadable files left, {load.List.GetRoot().GetChildCount()} rows");
+        // One separator: every listed path is already in the OS's full form.
+        Check(load.Entries.All(e => e.Path == Path.GetFullPath(e.Path)), $"(g) mixed separators: {load.Entries.FirstOrDefault()?.Path}");
+
+        // Headers only: a copy whose body is damaged after the header (the checksum no longer matches) is listed; Watch refuses it.
+        string damaged = Path.Combine(capFull, ReplayStore.FileName(new DateTime(2022, 1, 1), 88));
+        byte[] bad = (byte[])good.Clone();
+        int k = Encoding.ASCII.GetString(bad).IndexOf("\nk ", StringComparison.Ordinal) + 3;
+        bad[k] = bad[k] == (byte)'1' ? (byte)'2' : (byte)'1';
+        File.WriteAllBytes(damaged, bad);
+        Check(ReplayFormat.TryReadFile(damaged, out _) != ReplayError.None, "(g) the damaged copy still reads whole");
+        load.Refresh(cap);
+        int at = load.Entries.ToList().FindIndex(e => SamePath(e.Path, damaged));
+        Check(at == 0, $"(g) headers only: the damaged copy at row {at} (want 0: listed from its header, newest)");
+        if (at == 0 && load.Select(0)) load.WatchButton.EmitSignal(BaseButton.SignalName.Pressed);
+        await Frames(2);
+        Check(main.CurrentMatch == null && load.Visible && load.Note.Text == _ui.LoadGame(LoadText.Refused) && File.Exists(damaged),
+            $"(g) Watch on the damaged copy: match {main.CurrentMatch != null}, note '{load.Note.Text}'");
+        RemoveChild(main);
+        main.QueueFree();
+        await Frames(2);
+
+        // Future-dated names: MaxReplays files stamped 2099, then a menu match saved into the folder survives its own prune.
+        string future = $"{_dir}/future";
+        string futureFull = Path.GetFullPath(ProjectSettings.GlobalizePath(future));
+        Directory.CreateDirectory(futureFull);
+        for (int d = 1; d <= max; d++) File.WriteAllBytes(Path.Combine(futureFull, ReplayStore.FileName(new DateTime(2099, 1, 1).AddDays(d), (ulong)d)), good);
+        Main live = NewMain(new[] { "--skirmish", "--mute" }, "future");
+        live.ReplayDir = future;
+        AddChild(live);
+        await Frames(4);
+        string? saved = live.ReplayPath;
+        live.QuitToMenu();
+        await Frames(2);
+        int kept = Directory.GetFiles(futureFull, "*.replay").Length;
+        Check(saved != null && File.Exists(saved) && kept == max, $"(g) future-dated folder: the new recording {saved} kept {saved != null && File.Exists(saved)}, {kept} files (want {max})");
+        RemoveChild(live);
+        live.QueueFree();
+        await Frames(2);
     }
 
     // A shell a test scene hosts without a folder writes nothing (the game's own boot uses user://replays).

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open (items 1 and 3 fixed; item 2 deferred to the M6 fog-look pass) |
+| Status | fixed (items 1 and 3 in M4-VH2; item 2 in M6-VH3, verified by QA 2026-10-17-1624) |
 | Found | 2026-10-09-0125, task M4-V4 |
 | System | fog of war view (PropsView, CombatViews markers, Minimap) |
-| Fixed by | items 1, 3: 956eab3 (M4-VH2): `SeenResources` + `FogOfWar.Resources` for the props and the minimap resource layer; `MinimapRaster.DrawnEnemyDotAt` + `Minimap.CommandAt` over the dots as drawn; regression `ViewApi/SeenResourcesTests`, `ViewApi/FogViewTests.MinimapDrawnDotPick_*`, `FogViewTest` last-seen tree row |
+| Fixed by | item 2: c0a8d5b (M6-VH3): `CombatViews` holds back a marker added where the local player's fog doesn't show its position (`MarkerPending`) and draws it the first fog refresh it is visible; proving scene `FogViewTest` last-seen row (rubble on an explored, unseen cell). Items 1, 3: 956eab3 (M4-VH2): `SeenResources` + `FogOfWar.Resources` for the props and the minimap resource layer; `MinimapRaster.DrawnEnemyDotAt` + `Minimap.CommandAt` over the dots as drawn; regression `ViewApi/SeenResourcesTests`, `ViewApi/FogViewTests.MinimapDrawnDotPick_*`, `FogViewTest` last-seen tree row |
 
 ## Repro
 Code reading, plus the QA scene `res://tests/QaFogViewTest.tscn` for item 3's numbers.
@@ -45,3 +45,10 @@ the shown list captured at the last dot refresh, would line the two up.
 - Item 3 fixed: the click picks among the dots as drawn and attacks only a unit still live and shown (code read, the
   `FogViewTests` row, `FogViewTest` minimap clicks).
 - Item 2 not done: docs/03 "Implementation (M4-VH2)" leaves corpses / rubble in explored fog to the M6 fog-look pass.
+
+## Verification (QA 2026-10-17-1624, M6-VH3), item 2
+- `FogViewTest` from c0a8d5b run against base f8036fc's view code (scratch clone): `FOG VIEW TEST FAIL: unseen rubble:
+  marker 0, ground visible False explored True, drawn as 2 (want 0 until seen)`; green on c0a8d5b.
+- QA `QaM6VH3Test` lone-unit row: a lone own Line unit killed in the open by six enemies (four lead-in lengths so the
+  death falls on each fog-refresh phase): its corpse is drawn every time (`MarkerShown` 1, nothing held back), so the
+  hold-back does not hide a death the player watched.

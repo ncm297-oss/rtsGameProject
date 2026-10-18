@@ -135,6 +135,66 @@ public static class StatsScreenCheck
         }
         if (drawn && (g.DrawCount == 0 || g.DrawnLines != withSamples))
             bad.Add($"{how}: graph drawn {g.DrawCount} times, {g.DrawnLines} lines last time (want {withSamples})");
+        bad.AddRange(Readable(stats, players, drawn, how));
+        return bad;
+    }
+
+    /// <summary>The time-axis labels of a span: 0 first, rising, at most ten, all inside it, the last at least half-way once the span reaches 10 s.</summary>
+    public static List<string> TimeAxis(ArmyValueGraph g, string how)
+    {
+        var bad = new List<string>();
+        var t = g.TimeLabelTicks;
+        bool rising = true;
+        for (int i = 1; i < t.Count; i++) rising &= t[i] > t[i - 1];
+        if (t.Count == 0 || t[0] != 0 || !rising || t.Count > 10 || t[^1] > g.SpanTicks
+            || (g.SpanTicks >= 10 * SimConstants.TicksPerSecond && t[^1] * 2 < g.SpanTicks))
+            bad.Add($"{how}: time axis labels at ticks [{string.Join(", ", t)}] over a {g.SpanTicks}-tick span (want 0 first, rising, at most 10, the last past half the span)");
+        return bad;
+    }
+
+    /// <summary>WCAG contrast ratio of two opaque colours (1 to 21).</summary>
+    public static double Contrast(Color a, Color b)
+    {
+        double la = Luminance(a), lb = Luminance(b);
+        return (Math.Max(la, lb) + 0.05) / (Math.Min(la, lb) + 0.05);
+    }
+
+    private static double Luminance(Color c)
+    {
+        static double Lin(float v) => v <= 0.04045 ? v / 12.92 : Math.Pow((v + 0.055) / 1.055, 2.4);
+        return 0.2126 * Lin(c.R) + 0.7152 * Lin(c.G) + 0.0722 * Lin(c.B);
+    }
+
+    // BUG-0890: the time axis has a scale on a short match; lines at one value are drawn apart; every line (or its outline) stands
+    // 3:1 off the backdrop; every heading's text sits on the heading row's bottom line.
+    private static List<string> Readable(MatchStats stats, int players, bool drawn, string how)
+    {
+        ArmyValueGraph g = stats.Graph;
+        var bad = TimeAxis(g, how);
+        for (int p = 0; p < players; p++)
+            for (int q = p + 1; q < players; q++)
+                if (Math.Abs(g.DrawOffset(p) - g.DrawOffset(q)) < 2f)
+                    bad.Add($"{how}: players {p} and {q} drawn {g.DrawOffset(p)} / {g.DrawOffset(q)} px off their points: equal values would overlap");
+        Color back = MatchStats.BackdropColour;
+        Color outline = back.Lerp(new Color(ArmyValueGraph.OutlineColour, 1f), ArmyValueGraph.OutlineColour.A);
+        for (int p = 0; p < players; p++)
+        {
+            double line = Contrast(g.LineColour(p), back), edge = Contrast(outline, back);
+            if (Math.Max(line, edge) < 3.0)
+                bad.Add($"{how}: player {p}'s line {g.LineColour(p).ToHtml(false)} is {line:F2}:1 on the backdrop, its outline {edge:F2}:1 (want 3:1)");
+        }
+        if (drawn && stats.Headings.Count > 0)
+        {
+            float bottom = 0f;
+            foreach (Label h in stats.Headings) bottom = Math.Max(bottom, h.GetGlobalRect().End.Y);
+            foreach (Label h in stats.Headings)
+            {
+                Rect2 r = h.GetGlobalRect();
+                float slack = r.Size.Y - h.GetCombinedMinimumSize().Y;
+                if (h.Text.Length > 0 && (Math.Abs(r.End.Y - bottom) > 1f || slack > 1f))
+                    bad.Add($"{how}: heading '{h.Text}' {r} ({slack:F0} px over its text) is not on the row's bottom line at {bottom}");
+            }
+        }
         return bad;
     }
 }

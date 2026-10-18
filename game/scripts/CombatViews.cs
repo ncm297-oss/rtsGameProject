@@ -32,7 +32,9 @@ namespace Rts.Game;
 /// it leaves no corpse (<see cref="DeathMarkers.Collect"/> skips it).</para>
 /// <para><b>Fog</b> (M4-V4): with <see cref="Fog"/> set (before <see cref="Bind"/>), a unit the local player doesn't see gets no
 /// bar, and the corpse and rubble materials are the fog's: a marker on unexplored ground is not drawn, one on explored
-/// ground is darkened (the GPU reads the cell under each instance).</para>
+/// ground is darkened (the GPU reads the cell under each instance). M6-VH3 (BUG-0281 item 2): a marker added while its
+/// position is not visible to the local player (a death the player didn't see) is held back (<see cref="MarkerPending"/>)
+/// and drawn the first fog refresh its position is visible, so explored fog shows only markers the player has seen.</para>
 /// Views hold no gameplay state: a bar is redrawn from the store each frame, a marker is a position and a timer.
 /// Everything is made in <see cref="Bind"/>, so a steady frame allocates nothing.
 /// </remarks>
@@ -93,6 +95,9 @@ public partial class CombatViews : Node3D
     private int[] _added = Array.Empty<int>(), _removed = Array.Empty<int>();
     // What each marker instance shows: 0 nothing, 1 a corpse, 2 rubble.
     private byte[] _markerShown = Array.Empty<byte>();
+    // Markers added out of the local player's sight, drawn once their position is seen (BUG-0281 item 2).
+    private bool[] _pending = Array.Empty<bool>();
+    private int _pendingCount, _pendingCheckedTick = int.MinValue;
     private float _barScale = 1f;
 
     /// <summary>The marker pool (positions, kinds, expiry ticks).</summary>
@@ -115,6 +120,12 @@ public partial class CombatViews : Node3D
 
     /// <summary>What marker instance <paramref name="slot"/> shows: 0 nothing, 1 a corpse, 2 rubble.</summary>
     public int MarkerShown(int slot) => _markerShown[slot];
+
+    /// <summary>Whether marker <paramref name="slot"/> is held back: added where the local player doesn't see, not drawn until it does.</summary>
+    public bool MarkerPending(int slot) => _pending[slot];
+
+    /// <summary>Markers held back (<see cref="MarkerPending"/>).</summary>
+    public int PendingMarkers => _pendingCount;
 
     /// <summary>The transform written to marker instance <paramref name="slot"/> (a zero basis while unused).</summary>
     public Transform3D MarkerTransform(int slot) => _markerTransform[slot];
@@ -166,6 +177,8 @@ public partial class CombatViews : Node3D
         _added = new int[Math.Max(unitCapacity, markerCapacity)];
         _removed = new int[markerCapacity];
         _markerShown = new byte[markerCapacity];
+        _pending = new bool[markerCapacity];
+        _pendingCount = 0;
         _markerTransform = new Transform3D[markerCapacity];
         Material corpseMat = Fog != null ? Fog.MarkerMaterial()
             : new StandardMaterial3D { VertexColorUseAsAlbedo = true, VertexColorIsSrgb = true, AlbedoColor = Colors.White, ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded };
@@ -224,6 +237,7 @@ public partial class CombatViews : Node3D
         CollectDeaths(world);
         int gone = Markers.Expire(world.TickNumber, _removed);
         for (int k = 0; k < gone && k < _removed.Length; k++) HideMarker(_removed[k]);
+        if (_pendingCount > 0) RevealPending(world);
         if (Camera != null) _barScale = Math.Max(1f, Camera.Zoom / BarFullZoom);
         SyncBars(world, alpha);
     }
@@ -260,8 +274,42 @@ public partial class CombatViews : Node3D
 
     private void ShowMarker(World world, int slot)
     {
+        if (_markerShown[slot] != 0 || _pending[slot]) HideMarker(slot); // the ring replaced the oldest marker
+        if (Fog?.Refreshed(world) is FogView fog && !fog.ShowsPoint(world.Fog, Markers.Position[slot]))
+        {
+            _pending[slot] = true;
+            _pendingCount++;
+            return;
+        }
+        Place(world, slot);
+    }
+
+    // Draws the held-back markers whose position the fog now shows; runs once per fog refresh while any is held.
+    private void RevealPending(World world)
+    {
+        if (Fog?.Refreshed(world) is not FogView fog)
+        {
+            for (int slot = 0; slot < _pending.Length && _pendingCount > 0; slot++)
+                if (_pending[slot]) Reveal(world, slot);
+            return;
+        }
+        if (fog.RefreshedTick == _pendingCheckedTick) return;
+        _pendingCheckedTick = fog.RefreshedTick;
+        for (int slot = 0; slot < _pending.Length && _pendingCount > 0; slot++)
+            if (_pending[slot] && fog.ShowsPoint(world.Fog, Markers.Position[slot])) Reveal(world, slot);
+    }
+
+    private void Reveal(World world, int slot)
+    {
+        _pending[slot] = false;
+        _pendingCount--;
+        Place(world, slot);
+    }
+
+    // Writes marker `slot`'s instance (a corpse or rubble) at its position on the terrain.
+    private void Place(World world, int slot)
+    {
         bool building = Markers.IsBuilding[slot];
-        if (_markerShown[slot] != 0) HideMarker(slot); // the ring replaced the oldest marker
         System.Numerics.Vector2 p = Markers.Position[slot];
         float y = TerrainHeight.At(world.Heightmap, p.X, p.Y);
         int type = Markers.Type[slot];
@@ -292,6 +340,11 @@ public partial class CombatViews : Node3D
 
     private void HideMarker(int slot)
     {
+        if (_pending[slot])
+        {
+            _pending[slot] = false;
+            _pendingCount--;
+        }
         var hidden = new Transform3D(new Basis(Vector3.Zero, Vector3.Zero, Vector3.Zero), Vector3.Zero);
         if (_markerShown[slot] == 1)
         {

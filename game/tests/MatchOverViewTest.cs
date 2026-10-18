@@ -287,36 +287,12 @@ public partial class MatchOverViewTest : Node
 
     private static int AgeColumn => Array.FindIndex(MatchStats.Columns, c => c.Label == MatchOverText.AgeIiAt);
 
-    private static readonly System.Reflection.PropertyInfo LedgerProperty =
-        typeof(World).GetProperty("Ledger", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
-
-    // M6-V11: Age II for `player` through Command.Research: a dev Town Hall and a second qualifying hall (the any-of rule wants
-    // two of infantry / ranged / shock / forge; the player has its infantry hall), a dev grant of gold and wood (the QaV3b seam on
-    // the ledger), then the research, run until the sim says HasTech.
+    // M6-V11: Age II for `player` (DefeatStaging.AgeTwo: a dev Town Hall and ranged hall by player 0's hall, a dev grant, the research).
     private async Task AgeTwo(Simulation sim, int player)
     {
-        World w = sim.World;
-        NavGrid g = w.NavGrid;
-        int age = _data.AgeTechs[0];
-        int faction = w.FactionOf(player);
-        int town = StartBase.BuildingOfSlot(_data, faction, BuildingSlot.TownHall), ranged = StartBase.BuildingOfSlot(_data, faction, BuildingSlot.RangedHall);
-        int x0 = g.Width / 4, y0 = g.Height / 2;
-        int townAt = DefeatStaging.Anchor(w, player, town, x0, y0 - 10);
-        DefeatStaging.SpawnAt(sim, player, town, townAt);
-        await Ticks(sim, 2);
-        DefeatStaging.SpawnAt(sim, player, ranged, DefeatStaging.Anchor(w, player, ranged, x0, y0 + 10));
-        await Ticks(sim, 2);
-        object ledger = LedgerProperty.GetValue(w)!;
-        ((int[])ledger.GetType().GetProperty("Gold")!.GetValue(ledger)!)[player] = 5000;
-        ((int[])ledger.GetType().GetProperty("Wood")!.GetValue(ledger)!)[player] = 5000;
-        EntityHandle hall = DefeatStaging.BuildingAt(w, player, townAt);
-        ResearchError why = ResearchError.None;
-        Check(hall != default && w.CanResearch(player, hall.Index, age, out why), $"Age II: hall {hall}, research refused ({why})");
-        sim.Enqueue(Command.Research(player, SelectionController.SiteCenter(w, hall.Index), age));
-        var clock = System.Diagnostics.Stopwatch.StartNew();
-        while (!w.HasTech(player, age) && clock.Elapsed.TotalSeconds < 60) await Frames(1);
-        Check(w.HasTech(player, age) && w.TechResearchedTick(player, age) > 0, $"Age II not researched by tick {sim.TickNumber} (researched tick {w.TechResearchedTick(player, age)})");
-        await Frames(1);
+        NavGrid g = sim.World.NavGrid;
+        string? why = await DefeatStaging.AgeTwo(sim, _data, player, g.Width / 4, g.Height / 2, n => Ticks(sim, n), () => Frames(1));
+        Check(why == null, why ?? "");
     }
 
     // The open stats screen against the sim now: one row per seat, every number its span's, the length and defeat times.

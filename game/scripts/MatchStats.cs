@@ -61,6 +61,7 @@ public partial class MatchStats : CanvasLayer
     private readonly List<Label> _names = new();
     private readonly List<Label> _seatLabels = new();
     private readonly List<ColorRect> _swatches = new();
+    private readonly List<Label> _headings = new();
 
     /// <summary>Raised by the Back button (and Esc, through <see cref="Main"/>).</summary>
     public event Action? BackPressed;
@@ -89,6 +90,12 @@ public partial class MatchStats : CanvasLayer
     /// <summary>The swatch colour of <paramref name="row"/>.</summary>
     public Color Swatch(int row) => _swatches[row].Color;
 
+    /// <summary>The table's heading cells (the player column's, the seat column's, then one per data column), for layout checks.</summary>
+    public IReadOnlyList<Label> Headings => _headings;
+
+    /// <summary>The screen's opaque backdrop colour (the graph's lines are read against it).</summary>
+    public static readonly Color BackdropColour = new(0.06f, 0.05f, 0.05f);
+
     /// <summary>The table (headings and one row per seat), for layout checks.</summary>
     public Control Table => _grid;
 
@@ -106,7 +113,7 @@ public partial class MatchStats : CanvasLayer
         Layer = DrawLayer;
         ProcessMode = ProcessModeEnum.Always;
         Visible = false;
-        AddChild(ShellUi.Backdrop(new Color(0.06f, 0.05f, 0.05f))); // opaque: the banner or pause menu under it would show through
+        AddChild(ShellUi.Backdrop(BackdropColour)); // opaque: the banner or pause menu under it would show through
         VBoxContainer column = ShellUi.CentredColumn(this, 8);
         Title = ShellUi.Heading(ui.MatchOver(MatchOverText.StatsTitle), 34);
         column.AddChild(Title);
@@ -141,13 +148,15 @@ public partial class MatchStats : CanvasLayer
         _names.Clear();
         _seatLabels.Clear();
         _swatches.Clear();
+        _headings.Clear();
         Simulation? sim = match.Simulation;
         if (sim == null) return;
         World w = sim.World;
         Length.Text = _ui.MatchLength(sim.TickNumber);
-        _grid.AddChild(Header(_ui.MatchOver(MatchOverText.Player), 0f));
-        _grid.AddChild(Header("", 0f));
-        foreach (Column c in Columns) _grid.AddChild(Header(_ui.MatchOver(c.Label), ColumnWidth));
+        _headings.Add(Header(_ui.MatchOver(MatchOverText.Player), 0f));
+        _headings.Add(Header("", 0f));
+        foreach (Column c in Columns) _headings.Add(Header(_ui.MatchOver(c.Label), ColumnWidth));
+        foreach (Label h in _headings) _grid.AddChild(h);
         var seats = match.Seats;
         int players = w.Config.PlayerCount;
         var samples = new int[players][];
@@ -202,11 +211,13 @@ public partial class MatchStats : CanvasLayer
         });
     }
 
-    // A heading cell; with a width it wraps to two lines and right-aligns over its numbers.
+    // A heading cell; with a width it wraps to two lines and right-aligns over its numbers. ShrinkEnd puts a one-line heading on
+    // the row's bottom line beside the two-line ones (the grid centres a cell's minimum height otherwise; BUG-0890).
     private static Label Header(string text, float width)
     {
         Label label = ShellUi.Text(text, 15);
         label.AddThemeColorOverride("font_color", new Color(1f, 0.93f, 0.75f));
+        label.SizeFlagsVertical = Control.SizeFlags.ShrinkEnd;
         if (width > 0f)
         {
             label.CustomMinimumSize = new Vector2(width, 0f);

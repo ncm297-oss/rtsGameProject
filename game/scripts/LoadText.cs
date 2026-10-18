@@ -35,4 +35,8 @@ public enum LoadText
     Mismatch,
     /// <summary>The banner's title when playback reaches the end of the recording.</summary>
     Ended,
+    /// <summary>The mark on screen while a replay plays (BUG-0830: playback looks like a live match otherwise).</summary>
+    Playing,
+    /// <summary>The players cell of a listed file that can't be read (BUG-0830: listed so Delete can remove it).</summary>
+    Unreadable,
 }

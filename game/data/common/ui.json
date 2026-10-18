@@ -197,9 +197,11 @@
     "delete": "Delete",
     "back": "Back",
     "empty": "No replays yet. Every match you play is recorded here.",
-    "skipped": "{0} unreadable replay file(s) skipped",
+    "skipped": "{0} replay file(s) can't be read: pick one and Delete to remove it",
     "refused": "This replay can't be played: it was recorded with different game data, or the file is damaged.",
     "mismatch": "Replay out of sync",
-    "ended": "Replay ended"
+    "ended": "Replay ended",
+    "playing": "Replay",
+    "unreadable": "Unreadable file"
   }
 }

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (M6-VH3, verified by QA 2026-10-17-1624) |
 | Found | 2026-10-13-0527, task M6-VH1 (QA) |
 | System | view: `game/scripts/LaunchOptions.cs` (duplicate-colour rule) |
-| Fixed by | |
+| Fixed by | c0a8d5b (M6-VH3): the warning names a moved default ("Slot 2's default colour 2 is taken by an earlier slot's --colour; slot 2 takes colour 1 ...") or an ignored pick ("Ignoring slot 2's --colour 3: an earlier slot holds it; ..."), kept in `LaunchOptions.ColourWarnings`; proving scene `ShellTest` (three rows: default moved, pick ignored, distinct picks silent). QA: `ShellTest` green headless (scene loop) and windowed |
 
 ## Repro
 1. `& $env:GODOT --path game -- --colour 1 2` (slot 1 picks Ochre; slot 2 has no flag and defaults to Ochre).

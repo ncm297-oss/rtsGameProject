@@ -87,6 +87,10 @@ public sealed class LaunchOptions
     private readonly string?[] _factionIds = new string?[SlotCount];
     private readonly int?[] _colours = new int?[SlotCount];
     private readonly AiDifficulty?[] _ai = new AiDifficulty?[SlotCount];
+    private readonly System.Collections.Generic.List<string> _colourWarnings = new();
+
+    /// <summary>The dev-log warnings <see cref="Parse"/> gave for colour collisions (one per moved slot of the match), for tests.</summary>
+    public System.Collections.Generic.IReadOnlyList<string> ColourWarnings => _colourWarnings;
 
     /// <summary>The faction data id <c>--faction &lt;slot&gt; &lt;id&gt;</c> picked for slot <paramref name="slot"/> (0-based: player 0 to 3), or null for the default (player p plays faction <c>p mod factions</c>).</summary>
     public string? FactionId(int slot) => (uint)slot < (uint)SlotCount ? _factionIds[slot] : null;
@@ -322,6 +326,7 @@ public sealed class LaunchOptions
         Span<bool> held = stackalloc bool[UiText.ColourCount];
         for (int s = 0; s < SlotCount; s++)
         {
+            bool flagged = o._colours[s] != null;
             int c = o._colours[s] ?? s % UiText.ColourCount;
             if (held[c])
             {
@@ -329,7 +334,14 @@ public sealed class LaunchOptions
                 int moved = held[own] ? FirstFreeColour(held) : own;
                 o._colours[s] = moved == own ? null : moved;
                 if (s < players)
-                    GD.PushWarning($"Ignoring --colour: slot {s + 1} on colour {c + 1}, which an earlier slot holds; slot {s + 1} takes colour {moved + 1} (colours are unique per match).");
+                {
+                    // BUG-0663: say whose colour moved, the slot's own --colour pick or its default.
+                    string why = flagged ? $"Ignoring slot {s + 1}'s --colour {c + 1}: an earlier slot holds it"
+                        : $"Slot {s + 1}'s default colour {c + 1} is taken by an earlier slot's --colour";
+                    string warning = $"{why}; slot {s + 1} takes colour {moved + 1} (colours are unique per match).";
+                    o._colourWarnings.Add(warning);
+                    GD.PushWarning(warning);
+                }
                 c = moved;
             }
             held[c] = true;

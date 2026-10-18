@@ -6078,18 +6078,21 @@ game/tests/ReplayPlaybackTest.tscn   the headless scene, (a)-(f) (in the scene l
   second). `DateTime.Now` is read there and nowhere else, in view code; it never reaches the sim (rule 2). `Main.SaveReplay`
   writes `Recorder.ToReplay()` with `ReplayFormat.WriteFile` (to `<name>.tmp`, then moved over the name, so a crash never
   leaves a cut file under it) when the banner opens, again at Quit to menu (the file then holds the match up to the later of
-  the two) and when the window is closed mid-match; then `ReplayStore.Prune` deletes the oldest files past
-  `ReplayStore.MaxReplays` = 20 (by the start time in the name; a one-hour four-seat match is a few MB and the list reads
-  every file). A failed write is one warning; the match is unharmed. A replay played back records nothing.
+  the two) and when the window is closed mid-match; then `ReplayStore.Prune` deletes the oldest readable files past
+  `ReplayStore.MaxReplays` = 20 (by the start time in the name; a one-hour four-seat match is a few MB). Since M6-VH3
+  (BUG-0830) the prune never deletes the file just written, and files whose header doesn't read hold no slot and are never
+  pruned. A failed write is one warning; the match is unharmed. A replay played back records nothing.
 - **Where.** `Main.ReplayDir`: unset, `user://replays` when `Main` is the booted scene (a child of the root) and null (no file
   written, nothing listed) when a test scene hosts the shell, so no test touches the player's folder; tests set a
   per-process folder (BUG-0770's rule).
 - **Load Game.** `menu.load` sits between Skirmish and Settings. The screen reads the folder afresh each time it opens
-  (`ReplayStore.List`): every `*.replay` that `ReplayFormat.TryReadFile` reads is a row, newest first, with the date
+  (`ReplayStore.List`): every `*.replay` whose header reads (M6-VH3: `ReplayStore.TryReadHeader`, was the whole file
+  through `ReplayFormat.TryReadFile`) is a row, newest first, with the date
   (`load.date_item` of the name's start time, else the file's write time), the seed, the players (`load.seat` per seat:
   the faction's `displayName` and You / Human / the AI's difficulty from `setup` and `match_over`, joined by
-  `load.seat_separator`) and the length (`match_over.clock` of `TickCount`, m:ss). Files it can't read are left out and
-  counted in the note (`load.skipped`); an empty folder says `load.empty`. Watch (or a double-click) plays the picked row,
+  `load.seat_separator`) and the length (`match_over.clock` of `TickCount`, m:ss). Files it can't read are counted in the
+  note (`load.skipped`) and, since M6-VH3, listed after the replays as rows of their own (`load.unreadable`) that Delete
+  removes; an empty folder says `load.empty`. Watch (or a double-click) plays the picked row (greyed on an unreadable one),
   Delete deletes its file and re-reads, Back and Esc return to the menu.
 - **Playback.** `Main.WatchReplay(path)` reads the file; a read error starts nothing. Otherwise a match scene is made and
   `Match.StartReplay` calls `SimRunner.StartPlayback(data, replay)`, which refuses before any sim exists when
@@ -6114,7 +6117,7 @@ game/tests/ReplayPlaybackTest.tscn   the headless scene, (a)-(f) (in the scene l
   `SelfAbilityOrder`, `BeginAbility`, `OrderBuild`, `CancelSelectedSite`, `RallyOrder`, `Produce`, `CancelQueueItem`; the
   minimap and the queue strip go through these) returns without enqueuing; selection, control groups and Tab work. The
   read-only card follows the selection with every button greyed and dimmed, takes no key and opens no build menu. Fog,
-  minimap, camera and HUD show player 0's view. Colours are each slot's default (`--colour` picks are not in the file).
+  minimap, camera and HUD show player 0's view; since M6-VH3 the HUD shows `load.playing` ("Replay") at its top centre. Colours are each slot's default (`--colour` picks are not in the file).
 - **`--replay <path>`** (a shell flag like `--no-confine`, not a match flag) plays the file at boot; the view's match flags
   given with it still count (`--speed`, `--mute`, `--no-fog`, `--no-hud`); a refused file shows the Load Game screen.
 - **Tests.** `ReplayPlaybackTest` (headless, `Main` hosted with a per-process `ReplayDir`, every runner on
@@ -6171,13 +6174,16 @@ game/tests/StatsScreenCheck.cs    the shared rows: every column v its span, the 
   (`MatchStats.Rgb(Match.PlayerRgb[p])`), `World.StatsSampleTicks` and the match's `TickNumber`. Sample k is the value at
   tick `(k + 1) x StatsSampleTicks` (M6-S1), so its x is that tick over the time span (`max(TickNumber, samples x
   interval)`, at least 1) across the plot; y is the value over the **largest sample of any player** (`MaxValue`), all on
-  the baseline when every sample is 0. The value axis shows 0, half and the top; the time axis a tick every 1, 2, 5, 10, 15,
-  30, 60 or 120 minutes (the smallest step with at most nine labels), labelled with `match_over.clock`. Title
-  `army_value`, axis titles `graph_value` and `graph_time`. A player with one sample is a dot, with none nothing: a match
-  shorter than one interval draws the axes and the titles only. Points are laid out again on a resize. Lines at the same
-  value overlap (the later player's drawn on top). Sampling stops at `StatsSampleCapacity` (M6-S1): the line ends there.
-- **Layout.** The heading 34 px, the table 17 px with 15 px headings that wrap to two lines in a 74 px column, 10 px
-  apart: four seats, the graph (820 x 220) and Back fit 1152 x 648 (the test window), so 1280 x 720, the smallest resolution
+  the baseline when every sample is 0. The value axis shows 0, half and the top; the time axis a tick every 10, 15, 30
+  seconds, 1, 2, 5, 10, 15, 30, 60 or 120 minutes (M6-VH3: seconds below a few minutes; the smallest step with at most nine
+  labels) and the span's end when no step label is within 56 px of it, labelled with `match_over.clock`. Title
+  `army_value`, axis titles `graph_value` and `graph_time`. A player with one sample is a dot (5 px), with none nothing: a
+  match shorter than one interval draws the axes and the titles only. Points are laid out again on a resize. Since M6-VH3
+  each line is drawn 3 px apart from the others (centred: four seats at -4.5, -1.5, 1.5, 4.5 px) over a light outline, so
+  lines at one value show side by side and the darkest seat colour reads; the points themselves stay exact. Sampling stops
+  at `StatsSampleCapacity` (M6-S1): the line ends there.
+- **Layout.** The heading 34 px, the table 17 px with 15 px headings that wrap to two lines in a 74 px column (each heading
+  `ShrinkEnd`, so a one-line heading sits on the row's bottom line: M6-VH3), 10 px apart: four seats, the graph (820 x 220) and Back fit 1152 x 648 (the test window), so 1280 x 720, the smallest resolution
   the settings offer, too (`StatsScreenCheck.Fits`).
 - **Replays.** The watcher's banner Stats shows the playback sim's counters, recomputed by playing the log: equal to the
   live match's at its end. The sample interval is a `SimConfig` value not in the replay header (M6-S1), so a replay
@@ -6196,6 +6202,68 @@ game/tests/StatsScreenCheck.cs    the shared rows: every column v its span, the 
   fails `FreeForAllTest`. Windowed with `-- --shots <dir> --size 1280x720` (or `1600x900`), `MatchOverViewTest`,
   `FreeForAllTest` and `ReplayPlaybackTest` save the stats screen (`matchover-stats-late.png`, `ffa-stats-4*.png`,
   `replay-stats-*.png`).
+
+### Implementation (M6-VH3)
+
+View hardening, no feature: BUG-0860, BUG-0890, BUG-0830, BUG-0281 item 2, BUG-0663, BUG-0861. The behaviour changes are
+written into the sections above (M6-V9 folder and playback mark, M6-V11 graph and headings, the scene loop under "Debug
+tooling", the preset under "Build and export"); here the rest and the tests. View only: `sim/` is unchanged.
+
+```
+game/tests/LookTest.cs             every model load through LoadScene (Fail, never a null), --character <res path>
+tools/qa/scene-loop.ps1            -TimeoutSec (default 600), a timed-out scene killed and FAIL "timeout"
+game/tests/LoopTimeoutProbe.tscn   a scene that never quits, for the timeout row
+game/scripts/ArmyValueGraph.cs     second steps and the end label (TimeLabelTicks), DrawOffset, OutlineColour, a 5 px dot
+game/scripts/MatchStats.cs         Headings (ShrinkEnd), BackdropColour
+game/scripts/ReplayStore.cs        TryReadHeader, List(dir, unreadable, out skipped), Prune(dir, keep, justWritten), one separator
+game/scripts/LoadGameScreen.cs     unreadable rows (Unreadable), Delete on them, Watch greyed
+game/scripts/Main.cs, Match.cs     the prune keeps ReplayPath; the playback mark (Hud/ReplayMark)
+game/scripts/CombatViews.cs        markers added out of sight held back (MarkerPending) until their position is seen
+game/scripts/LaunchOptions.cs      the colour-collision warning names a moved default or an ignored pick (ColourWarnings)
+game/data/common/ui.json           load.playing, load.unreadable; load.skipped reworded
+game/export_presets.cfg            exclude assets/models/looktest/*
+```
+
+- **LookTest (BUG-0860).** Each model is loaded through `LoadScene`: a path `ResourceLoader.Exists` doesn't know (no engine
+  `ERROR` line) or a file whose import failed (an LFS pointer: `GD.Load` returns null) adds `could not load <path> (missing,
+  or an LFS pointer: run git lfs pull and re-import)` to the failures. Without the character or the UAL library the clip
+  phases are skipped and the scene goes straight to its FAIL line, exit 1, in about a second; the stand-in is skipped the
+  same way; a character without a `Skeleton3D` fails without a null dereference. docs/04 "Look test (M6-V10)".
+- **Header-only list (BUG-0830 item 4).** `TryReadHeader` opens the file, reads its last 64 bytes (the file must end in LF
+  with a last line starting `checksum `: a cut file has none), then the header lines `rts-replay` (a format this build
+  reads), `sim-version`, `data-hash`, `seed`, `players`, the seat lines (format 5 on), and lines up to `ticks`. The commands,
+  checkpoints and the checksum are checked only on Watch (`ReplayFormat.TryReadFile`), so a file damaged past its header is
+  listed and then refused with `load.refused` (it stays listed for Delete). The prune reads headers the same way.
+- **One separator (BUG-0830 item 5).** `ReplayStore.Files` lists from `Path.GetFullPath(GlobalizePath(dir))`, so every path
+  in the list, the log and `ReplayEntry.Path` is in the OS's form (was `C:/Users/...\name.replay`).
+- **Markers in fog (BUG-0281 item 2).** With the fog on, a corpse or rubble added where the local player's fog doesn't show
+  its position (`FogView.ShowsPoint`) is not written; once per fog refresh while any is held the held ones are checked and
+  each is drawn when its position is visible (or dropped when it expires first). Explored fog so shows only markers the
+  player saw appear. `--no-fog` draws them at once, as before.
+- **Tests.**
+  - `LookTest`: with the character replaced by its LFS pointer (QA's repro) the loop row was `LookTest FAIL exit timeout
+    30.5 s` with an NRE every frame before the fix; after it `FAIL exit 1 0.9 s ... LookTest: FAIL could not load ...`.
+    `-- --character res://assets/models/looktest/no_such.gltf` prints the same FAIL with no `ERROR` line. Scene loop:
+    `-Filter LoopTimeoutProbe -TimeoutSec 8`: `LoopTimeoutProbe FAIL exit timeout 8.7 s timeout after 8 s (killed)`, no
+    Godot process left.
+  - `StatsScreenCheck` (every scene that opens the stats screen): the time labels (0 first, rising, at most ten, the last
+    past half the span once it reaches 10 s), every pair of players drawn at least 2 px apart, every line or its outline
+    3:1 against the backdrop (WCAG contrast; Iron `#4B4F55` alone is 2.35:1, Cobalt `#1F3F9F` 2.10:1), and every heading on
+    the row's bottom line with no slack over its text. Before the fix `FreeForAllTest` failed all four (labels `[0]` over a
+    399-tick span; "Player", "Units lost", "Age II at" 35 px above the bottom). `FreeForAllTest`'s three-seat case now has
+    player 1 reach Age II (`DefeatStaging.AgeTwo`, moved from `MatchOverViewTest`) and then be razed (all three halls): its
+    row shows the Age II clock (1:00) and the later defeat clock (1:21); windowed `ffa-stats-3-age.png`.
+  - `ReplayPlaybackTest` (g): 20 dated replays + `junk.replay` + `zero.replay` + one newer, pruned: 20 playable kept (18
+    before), the junk kept; Load Game: 20 rows + 2 unreadable rows, one picked (Watch greyed, `load.unreadable`), Delete
+    removes it; every listed path in full OS form; a copy with a flipped checkpoint digit (whole read refused) listed from
+    its header, Watch refused with `load.refused`; 20 files stamped 2099, then a `--skirmish` match quit to the menu: its
+    file kept (deleted at once before). (a) / (b): the playback shows `Hud/ReplayMark` with `load.playing`, a live match
+    none. (e): the junk and cut files are now two more rows (4).
+  - `FogViewTest` last-seen row: rubble added on the tree's explored, unseen cell is not drawn (was drawn as rubble), and is
+    drawn once the scout sees the cell.
+  - `ShellTest`: the two new `load` keys (each required; 18 `load` keys); `--colour 1 2` warns "Slot 2's default colour 2 is
+    taken by an earlier slot's --colour; slot 2 takes colour 1" (was "Ignoring --colour: ..."), `--colour 1 3 --colour 2 3`
+    "Ignoring slot 2's --colour 3: ...", distinct picks none; with the old wording put back the row fails.
 
 ## AI architecture
 
@@ -7626,7 +7694,12 @@ kind, no data or `rules.json` field, nothing hashed. Every counter is per player
   pairs (ms, base / head): 500 moving 0.685, 0.705, 0.682 / 0.682, 0.687, 0.714; 2,500 tight blob 4.44, 4.41, 4.40 / 4.45,
   4.42, 4.45; 500 v 500 brawl ticks 5-205 3.40, 3.39, 3.36 / 3.38, 3.41, 3.39; mixed brawl 2.16, 2.16, 2.13 / 2.10, 2.11,
   2.11: within noise. The Windows power plan is "Lenovo Default"; the slowdown under sustained load is the owner's to look
-  at (STATE "Waiting on you"), and if it is fixed these gates can come back down.
+  at (STATE "Waiting on you"), and if it is fixed these gates can come back down. **Producer note at the M5-H3 ACCEPT (BUG-0912):**
+  with the 250 v 250 vision brawl (500 units) gated at 7.5 ms and the 500 v 500 brawl at 6.9 ms, **no Perf row checks the 4 ms
+  500-unit design budget on this PC's sustained clock any more**; until the clock is looked at or a short fresh-process gate row
+  is added (the next sim hardening), the paired A/B is the only guard of that budget. The far-corner scan's 0.64 ms gate was set
+  from one head reading (QA: base never over 0.25 in five samples, the mean difference +0.011 ms): the next sim hardening gives
+  that row more pairs and a bound near 0.35 ms (BUG-0912).
 - The M1 perf criterion is `PerfCriterionTests.FiveHundredMovingUnits_AverageTickUnder4Ms` (M1-7):
   500 units of every type, two players, on the default 128 map, spawned within 12 path cells of the
   center and sent to the farthest passable cell. It asserts that at least 95% are Moving after every
@@ -7714,6 +7787,12 @@ kind, no data or `rules.json` field, nothing hashed. Every counter is per player
   so a frame with nothing changed is 0 bytes on and off (BUG-0083). Details in "Implementation (M2-5)". Deferred: per-unit
   state labels (maybe with M2-7), arrows for more than one goal, a window that follows the visible
   trapezoid instead of a fixed square.
+- **Scene loop** (`tools/qa/scene-loop.ps1 [-SkipPlayable] [-Filter <wildcard>] [-LogDir <dir>] [-TimeoutSec <s>]`): runs
+  every headless `game/tests/*Test.tscn` (the two playables last) and fails a scene on a non-zero exit, no `PASS` line, or an
+  `ERROR` / `Unhandled` / `Exception` line. Since M6-VH3 (BUG-0860) each scene runs under a time limit (default 600 s; the
+  slowest scene takes about 2 minutes under load): a scene still running is killed with its process tree and its row reads
+  `FAIL  exit timeout ... timeout after N s (killed)`. `game/tests/LoopTimeoutProbe.tscn` (a bare node that never quits, not
+  matched by `*Test`) shows the row: `-Filter LoopTimeoutProbe -TimeoutSec 5`.
 - **Dev console** (backtick): `spawn <unit> <n>`, `give <gold> <wood>`, `reveal`, `speed <x>`,
   `ai <player> <difficulty>`, `win`, `lose`, `hash`.
 - **Headless CLI** (M1-8, `tools/Rts.Cli`, references `Rts.Sim` only):
@@ -7761,7 +7840,9 @@ kind, no data or `rules.json` field, nothing hashed. Every counter is per player
 ## Build and export
 
 - Godot export preset "Windows Desktop" in `game/export_presets.cfg` (M5-V1; Godot 4.3+ keeps credentials out of it):
-  all resources, include filter `data/*.json` (non-resource files the `.pck`-safe load will read), exclude filter `tests/*`,
+  all resources, include filter `data/*.json` (non-resource files the `.pck`-safe load will read), exclude filter
+  `tests/*, assets/models/looktest/*` (M6-VH3, BUG-0861: the look test's 22 MB of models and textures; a pack-only export
+  went from 21.3 MB to 93 KB),
   x86_64, the `.pck` beside the exe, export path `../build/RtsGame/RtsGame.exe`. Only the options that matter are written;
   Godot fills the rest with its defaults. Checked without export templates (none are installed on this machine) by a
   pack-only export: `& $env:GODOT --headless --path game --export-pack "Windows Desktop" <out>.pck` stores 67 files, none

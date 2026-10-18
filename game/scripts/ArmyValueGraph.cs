@@ -14,12 +14,22 @@ namespace Rts.Game;
 /// gameplay state: the tree is paused under the screen. Sample k is the value at tick <c>(k + 1) x sampleTicks</c> (M6-S1), so
 /// its x is that time over the match length; y is the value over the largest sample of any player (all on the baseline when
 /// every sample is 0). No samples (a match shorter than one interval) draws the axes and the titles only.
+/// BUG-0890: each line is drawn <see cref="OffsetStep"/> px apart from the others (<see cref="DrawOffset"/>; the points, for
+/// tests, stay exact) over a light outline, so players at one value (three at 0) show as parallel lines and a dark colour
+/// (the grey seat) reads on the backdrop; the time axis steps in seconds below a few minutes and labels the span's end.
 /// </remarks>
 public partial class ArmyValueGraph : Control
 {
     private const int FontSize = 14;
     private const float Left = 64f, Right = 28f, Top = 46f, Bottom = 38f;
-    private static readonly int[] MinuteSteps = { 1, 2, 5, 10, 15, 30, 60, 120 };
+    // Label steps in seconds: the smallest with at most eight intervals over the span.
+    private static readonly int[] SecondSteps = { 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200 };
+    // An end label closer than this to the last step label would overlap it.
+    private const float EndLabelGap = 56f;
+    private const float LineWidth = 2f, OutlineWidth = 5f, DotRadius = 5f;
+
+    /// <summary>Pixels between two players' drawn lines (<see cref="DrawOffset"/>).</summary>
+    public const float OffsetStep = 3f;
     private static readonly Color AxisColour = new(0.85f, 0.82f, 0.74f);
     private static readonly Color GridColour = new(1f, 1f, 1f, 0.12f);
     private static readonly Color TextColour = new(1f, 0.93f, 0.75f);
@@ -29,6 +39,7 @@ public partial class ArmyValueGraph : Control
     private Color[] _colours = Array.Empty<Color>();
     private Vector2[][] _points = Array.Empty<Vector2[]>();
     private int _sampleTicks = 1;
+    private readonly System.Collections.Generic.List<int> _timeLabels = new();
 
     /// <summary>The graph's title (<c>match_over.army_value</c>).</summary>
     public string Title => _ui.MatchOver(MatchOverText.ArmyValue);
@@ -47,6 +58,16 @@ public partial class ArmyValueGraph : Control
 
     /// <summary>Lines (polylines, or a dot for a single sample) the last <see cref="_Draw"/> drew.</summary>
     public int DrawnLines { get; private set; }
+
+    /// <summary>The ticks the time axis labels, left to right (0 first), from the last layout.</summary>
+    public System.Collections.Generic.IReadOnlyList<int> TimeLabelTicks => _timeLabels;
+
+    /// <summary>How far player <paramref name="player"/>'s line is drawn off its points, in pixels down (lines at one value apart).</summary>
+    /// <remarks>Centred on the points: player p of n is <c>(p - (n - 1) / 2) x OffsetStep</c>, so at most 4.5 px with four seats.</remarks>
+    public float DrawOffset(int player) => (player - (_samples.Length - 1) / 2f) * OffsetStep;
+
+    /// <summary>The colour drawn under every line as an outline, composited over the backdrop: light enough that the darkest seat colour reads.</summary>
+    public static readonly Color OutlineColour = new(1f, 1f, 1f, 0.4f);
 
     /// <summary>Times <see cref="_Draw"/> ran (tests wait for a draw after <see cref="SetData"/>).</summary>
     public int DrawCount { get; private set; }
@@ -106,6 +127,15 @@ public partial class ArmyValueGraph : Control
             if (_points[p] == null || _points[p].Length != s.Length) _points[p] = new Vector2[s.Length];
             for (int k = 0; k < s.Length; k++) _points[p][k] = new Vector2(XFor((long)(k + 1) * _sampleTicks), YFor(s[k]));
         }
+        _timeLabels.Clear();
+        int perSecond = Rts.Sim.SimConstants.TicksPerSecond;
+        int step = SecondSteps[^1];
+        foreach (int sec in SecondSteps)
+            if ((long)SpanTicks / ((long)sec * perSecond) <= 8) { step = sec; break; }
+        for (long t = 0; t <= SpanTicks; t += (long)step * perSecond) _timeLabels.Add((int)t);
+        // The span's end (the match length) as the last label when no step label is near it: a short match shows its scale.
+        // (Only when it reads another clock: a sub-second span would label 0:00 twice.)
+        if (XFor(SpanTicks) - XFor(_timeLabels[^1]) >= EndLabelGap && SpanTicks / perSecond > _timeLabels[^1] / perSecond) _timeLabels.Add(SpanTicks);
     }
 
     private float XFor(long ticks) => PlotRect.Position.X + (float)((double)ticks / SpanTicks) * PlotRect.Size.X;
@@ -134,27 +164,28 @@ public partial class ArmyValueGraph : Control
             DrawString(font, new Vector2(0f, y + 5f), value.ToString(CultureInfo.InvariantCulture), HorizontalAlignment.Right, Left - 8f, FontSize, AxisColour);
         }
 
-        // Time axis: a tick every `step` whole minutes, at most nine labels; 0:00 at the origin.
-        int perMinute = Rts.Sim.SimConstants.TicksPerSecond * 60;
-        int step = MinuteSteps[^1];
-        foreach (int s in MinuteSteps)
-            if ((long)SpanTicks / ((long)s * perMinute) <= 8) { step = s; break; }
-        for (long t = 0; t <= SpanTicks; t += (long)step * perMinute)
+        // Time axis: the labels Layout chose (0:00 at the origin).
+        foreach (int t in _timeLabels)
         {
             float x = XFor(t);
             DrawLine(new Vector2(x, plot.End.Y), new Vector2(x, plot.End.Y + 5f), AxisColour, 1f);
-            DrawString(font, new Vector2(x - 40f, plot.End.Y + 19f), _ui.Clock((int)t), HorizontalAlignment.Center, 80f, FontSize, AxisColour);
+            DrawString(font, new Vector2(x - 40f, plot.End.Y + 19f), _ui.Clock(t), HorizontalAlignment.Center, 80f, FontSize, AxisColour);
         }
         DrawLine(plot.Position, new Vector2(plot.Position.X, plot.End.Y), AxisColour, 2f);
         DrawLine(new Vector2(plot.Position.X, plot.End.Y), plot.End, AxisColour, 2f);
 
-        for (int p = 0; p < _points.Length; p++)
-        {
-            Vector2[] pts = _points[p];
-            if (pts.Length == 0) continue;
-            if (pts.Length == 1) DrawCircle(pts[0], 3f, LineColour(p));
-            else DrawPolyline(pts, LineColour(p), 2f, antialiased: true);
-            DrawnLines++;
-        }
+        // Outlines first, then the lines, each moved by its offset: a later outline never covers an earlier line.
+        for (int pass = 0; pass < 2; pass++)
+            for (int p = 0; p < _points.Length; p++)
+            {
+                Vector2[] pts = _points[p];
+                if (pts.Length == 0) continue;
+                DrawSetTransform(new Vector2(0f, DrawOffset(p)));
+                Color colour = pass == 0 ? OutlineColour : LineColour(p);
+                if (pts.Length == 1) DrawCircle(pts[0], pass == 0 ? DotRadius + 1.5f : DotRadius, colour);
+                else DrawPolyline(pts, colour, pass == 0 ? OutlineWidth : LineWidth, antialiased: true);
+                if (pass == 1) DrawnLines++;
+            }
+        DrawSetTransform(Vector2.Zero);
     }
 }

@@ -460,7 +460,8 @@ public partial class QaM6V9Test : Node
             LoadGameScreen load = main.LoadScreen!;
             _notes.Add($"Load Game with 50 x {new FileInfo(source).Length} B replays + junk: opened in {watch.Elapsed.TotalMilliseconds:0} ms");
             var want = dated.OrderByDescending(n => n, StringComparer.Ordinal).ToList();
-            Check(load.Entries.Count == 50 && load.Skipped == 2 && load.Note.Text == _ui.ReplaysSkipped(2) && load.List.GetRoot().GetChildCount() == 50
+            // M6-VH3 (BUG-0830): the two unreadable files are listed after the 50 replays, so Delete can remove them.
+            Check(load.Entries.Count == 50 && load.Skipped == 2 && load.Note.Text == _ui.ReplaysSkipped(2) && load.List.GetRoot().GetChildCount() == 52
                 && load.Entries.Select(e => Path.GetFileName(e.Path)).SequenceEqual(want) && load.SelectedIndex == 0,
                 $"fifty: {load.Entries.Count} rows, {load.Skipped} skipped, note '{load.Note.Text}', order ok {load.Entries.Select(e => Path.GetFileName(e.Path)).SequenceEqual(want)}");
             for (int i = 0; i < Math.Min(3, load.Entries.Count); i++)
@@ -493,9 +494,9 @@ public partial class QaM6V9Test : Node
             _notes.Add($"prune: {left.Length} .replay files left: {leftDated.Length} of the 50, the new one {left.Contains(Path.GetFileName(path))}, junk kept [{string.Join(", ", left.Where(n => !dated.Contains(n) && n != Path.GetFileName(path)))}]");
             Check(File.Exists(path) && oldestOnly && File.Exists(Path.Combine(full, "notes.txt")) && File.Exists(Path.Combine(full, "20260101-000000-seed1.replay.tmp")),
                 $"prune: new file {File.Exists(path)}, only the newest kept {oldestOnly}, non-replays kept");
-            // BUG-0830 (S4): unreadable *.replay files count toward the cap and outlive it; a note, not a failure.
+            // BUG-0830 (fixed in M6-VH3): unreadable *.replay files hold no cap slot; a check now, was a note.
             int playable = ReplayStore.List(dir, out int skippedAfter).Count;
-            if (playable != ReplayStore.MaxReplays) _notes.Add($"prune: {playable} playable replays kept, {skippedAfter} unreadable files kept in their place (BUG-0830)");
+            Check(playable == ReplayStore.MaxReplays && skippedAfter == 2, $"prune: {playable} playable replays kept (want {ReplayStore.MaxReplays}), {skippedAfter} unreadable files (want 2)");
         }
         finally
         {
@@ -516,8 +517,10 @@ public partial class QaM6V9Test : Node
         if (ReplayFormat.TryReadFile(source, out Replay? replay) != ReplayError.None) return;
         string path = ReplayStore.NewPath(dir, DateTime.Now, 1);
         Check(ReplayStore.Write(replay!, path, out string error), $"future: write failed: {error}");
-        ReplayStore.Prune(dir, ReplayStore.MaxReplays);
-        if (!File.Exists(path)) _notes.Add($"future-dated names: the replay just saved ({Path.GetFileName(path)}) was pruned at once by {ReplayStore.MaxReplays} files named 2099 (BUG-0830)");
+        // M6-VH3 (BUG-0830 fixed): the prune Main.SaveReplay runs keeps the path just written; a check now, was a note.
+        ReplayStore.Prune(dir, ReplayStore.MaxReplays, path);
+        Check(File.Exists(path) && Directory.GetFiles(full, "*.replay").Length == ReplayStore.MaxReplays,
+            $"future-dated names: the replay just saved ({Path.GetFileName(path)}) kept {File.Exists(path)}, {Directory.GetFiles(full, "*.replay").Length} files (want {ReplayStore.MaxReplays}) beside {ReplayStore.MaxReplays} files named 2099");
     }
 
     // ---- (4) Victory ----
