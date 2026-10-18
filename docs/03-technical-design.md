@@ -6436,6 +6436,85 @@ game/tests/QaM6V11Test (staged defeat), StatsScreenCheck, ReplayPlaybackTest, Fr
     (`StatsScreenCheck.Fits` holds the lines now), the watched replay's the same. `FreeForAllTest`: a line per AI seat.
   - `ShellTest`: `match_over.opening` required, and a format naming `{0}` and `{1}` (four bad formats, one error each).
 
+### Implementation (M6-V14)
+
+The Save / Load screen on the sim's frozen save API (M6-S2, standing rule 36: `Simulation.TrySave(Stream, out SaveError)`,
+`Simulation.TryLoad(GameData, Stream, out Simulation?, out SaveError)`). The sim is unchanged but for one read-only
+`ViewApi` class that reads a save's header for the list.
+
+```
+sim/Rts.Sim/ViewApi/SaveSummary.cs   a save's header for the list: version, seed, seats, map width, tick (no checksum)
+game/scripts/SaveStore.cs            the save folder: names, write (.tmp then move), list, load, delete (with the .replay)
+game/scripts/SaveEntry.cs            one listed save: path, time, seed, seats, tick
+game/scripts/SaveText.cs, UiText.cs  the save section (12 keys), SaveErrorText / SaveTextOf, SavedLine
+game/scripts/PauseMenu.cs            Save (under Resume), the SaveStatus line, the RecordNote
+game/scripts/LoadGameScreen.cs       saves and replays in one list, a kind column, Load / Watch / Delete / Back
+game/scripts/SimRunner.cs            StartLoaded (the loaded sim, its seats, no recorder)
+game/scripts/Match.cs                StartLoaded (views wired, nothing spawned), LoadedFocus, IsLoaded / SavePath
+game/scripts/Main.cs                 SaveDir, SaveGame, LoadSavedGame, --load, the pause menu's Save wiring
+game/scripts/LaunchOptions.cs        --ai <slot> human (dev / tests: a human slot under --skirmish)
+game/data/common/ui.json             pause.save; load.kind / load / save_tag / replay_tag; save.* (12)
+game/tests/SaveLoadTest.tscn         the headless scene (in the scene loop); ShellTest key rows
+```
+
+- **Save.** The pause menu's Save (shown for a live or loaded match when `Main.SaveDir` is set, never for a replay, and
+  never greyed for an AI seat: `TrySave` decides, and a refusal shows its code's text) calls `Main.SaveGame`. The tree is
+  paused under the menu, so the sim is between ticks on the main thread. `SaveStore.NewPath` names the file
+  `<yyyyMMdd-HHmmss>-seed<seed>.sav` in local time (`-2`, `-3` ... for a taken name; `DateTime.Now` is read in view code
+  only and names the file, rule 2). `SaveStore.Write` runs `TrySave` into memory, then writes `<name>.tmp` and moves it
+  over the name. The recording so far (`Recorder.ToReplay()`; Requests 42: the save holds no replay) is written beside it
+  as `<same stem>.replay`; a failed recording write is one warning and the save stands. The pause menu's `SaveStatus` line
+  shows `save.saved` with the match clock ("Saved at 0:25"), the refusal code's text (`UiText.SaveErrorText`), or
+  `save.write_failed` for an I/O error. Saving moves no sim state (the scene checks the hash), and two saves of one moment
+  are byte-identical. Saves are never pruned.
+- **Where.** `Main.SaveDir` mirrors `ReplayDir`: unset, `user://saves` when `Main` is the booted scene and null when a test
+  hosts the shell (no Save button, nothing listed); tests set a per-process folder (BUG-0770's rule).
+- **Load Game.** One list, newest first (date, then path; a save before a replay on a tie): every `*.sav` in `SaveDir` and
+  `*.replay` in `ReplayDir` whose header reads, then the unreadable files of both. Columns: date (`load.date_item` of the
+  name's time), seed, players (`load.seat` per seat, as for replays), length (a save: `match_over.clock` of the tick it was
+  made at; a replay: its length) and kind (`load.kind`: `load.save_tag` / `load.replay_tag`). `SaveSummary.TryRead` reads
+  a save's header from the first 8 KB (magic, version, seed, seats, map width, tick). It checks the shape only, not the
+  version, length, checksum or data hash, so a save damaged past its header is listed and refused on Load with its reason.
+  A file whose header doesn't read (junk, a forged player count) is an unreadable row (`load.unreadable`) that only Delete
+  acts on, counted in `load.skipped`. Load (or a double-click on a save row) resumes the picked save; Watch plays a replay;
+  each is greyed on any other row. Delete of a save also deletes the `.replay` beside it. The `.replay` beside a save is
+  not listed (the Quit's replay in `ReplayDir` holds the same match); `--replay <path>` plays it. `SelectedIndex`,
+  `Select`, `RowPath`, `KindOf` and `RowOf` count in display order; with no save in the list the numbering is M6-V9's.
+- **Load.** `Main.LoadSavedGame(path)` (Load, or `--load <path>`, a shell flag like `--replay`) reads the file with
+  `Simulation.TryLoad` (`SaveStore.Load`). A refusal starts nothing and shows the Load Game screen with the code's
+  `save.*` text (`FormatVersionMismatch` reads `save.version_mismatch`; a file that won't open, `save.read_failed`); the
+  good rows stay listed. Otherwise a match scene is made and `Match.StartLoaded` hands the sim to `SimRunner.StartLoaded`.
+  The runner takes the config (seed, players, capacities, map, combat) and one seat per player from `SimConfig.SeatOf`
+  (the save header's faction, controller, difficulty), and attaches **no recorder**. The views, HUD, fog, minimap, card
+  and selection are wired fresh as for a live match (every view reads the stores, so the saved entities appear on the
+  first frame). Nothing is spawned. The colours are the slot order's (colour p for player p; `--colour` picks are not in
+  the save). The camera looks at `Match.LoadedFocus`: the footprint centre of the local player's lowest-slot live building
+  (its start Town Hall while that stands), else its units' centre, else the map centre. Ticking resumes at the saved tick
+  on the next frame. The log line is `Save loaded: <path>, seed .., map .., tick .., seats .., not recorded`.
+- **A loaded match is not recorded.** A `ReplayRecorder` attaches only to a sim at tick 0 with nothing queued, so
+  `Main.ReplayPath` is null for a loaded match: Quit to menu and the banner write no replay, and the pause menu shows
+  `save.not_recorded` (`PauseMenu.RecordNote`). Its Save still works and writes a `.sav` with no `.replay` beside it. The
+  recording up to the first save is the `.replay` that save wrote beside it.
+- **AI seats.** Nothing in the view greys or refuses an AI seat: `TrySave` / `TryLoad` answer, and
+  `save.ai_seats_unsupported` is the text while they refuse (slice 1). Once the sim's slice 2 lifts the refusal, the same
+  buttons save and load AI matches and the loaded AI runs inside the sim. No test asserts the refusal.
+- **Known limit.** `Match.DefeatedAt` (the stats screen's "defeated at") is presentation state stamped from `DefeatEvents`
+  as they happen, so a player defeated before the save shows "standing" there in the loaded match.
+- **Tests.** `SaveLoadTest` (headless, `Main` hosted with per-process `SaveDir` / `ReplayDir`, `FixedFrameDelta` 0.25 s):
+  a `--skirmish --players 2 --ai 2 human` twin on seed 7 with orders at ticks 100 / 200 / 300 runs to tick 500. Save
+  writes the `.sav` (name pattern) and the 500-tick `.replay` beside it, shows "Saved at 0:25" and leaves the hash
+  unchanged; a second save is byte-identical. Quit to menu; Load Game lists the save first (date, "7", players, "0:25",
+  Save) and the Quit's replay (Replay), with Load / Watch greyed by row. Load resumes at tick 500 with the saved hash, no
+  recorder, the saved seats, the slot colours, the start camera and no selection, then runs 1,000 ticks hash-equal every
+  tick to an unsaved twin (a sim built from the recording's header, fed its commands to tick 500, then the same train at
+  700 and move at 900 as the loaded match). Then the loaded pause menu's note, its Save (no `.replay`), its Quit (no
+  replay) and Delete. Damaged copies: junk and a zero player count are unreadable rows after the good ones; a flipped
+  body byte, a cut copy, version 99, another data hash (re-sealed), a wrong total length and the junk are each refused
+  with their text (seven of the eight codes; never `ai_seats_unsupported`); the good save stays row 0 and loads. `--load`
+  boots into the match; a missing file shows `save.read_failed`; a hosted shell without a save folder shows no Save.
+  `ShellTest`: the 17 new keys (each required), `save.saved` a format naming `{0}` (four bad formats), and every
+  `SaveError` but `None` with its own distinct text.
+
 ## AI architecture
 
 The AI lives in `Rts.Sim.Ai`, inside the sim assembly, because it must be deterministic (it uses

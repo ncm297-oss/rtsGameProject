@@ -82,7 +82,30 @@ public partial class Match : Node3D
         // The start workers come on top of the armies (the bench keeps its 100 / 1,000 a side), so the store grows past 2,000 when needed.
         _runner.UnitCapacity = Math.Max(_runner.UnitCapacity, _runner.PlayerCount * (options.UnitsPerPlayer + WorkersPerPlayer));
         _runner.Start(data);
-        Wire(data, options, null);
+        Wire(data, options, null, loaded: false);
+    }
+
+    /// <summary>The save file a loaded match resumed (M6-V14), or null for a match started fresh or a replay.</summary>
+    public string? SavePath { get; private set; }
+
+    /// <summary>True for a match resumed from a save (M6-V14): it is not recorded (the recorder attaches at tick 0 only).</summary>
+    public bool IsLoaded => SavePath != null;
+
+    /// <summary>
+    /// Resumes a loaded match (M6-V14): the runner takes <paramref name="sim"/> (<see cref="SimRunner.StartLoaded"/>; read by
+    /// <see cref="Simulation.TryLoad"/> from <paramref name="path"/>), then the views, HUD and input are wired fresh as for a
+    /// live match (the camera on the local player's first building, no selection, the local fog), with no army or base
+    /// spawned (they are in the save) and the colours from the slot order. Of <paramref name="options"/> only the view's flags
+    /// count (<c>--speed</c>, <c>--no-fog</c>, <c>--no-hud</c>, <c>--mute</c>, colours ...).
+    /// </summary>
+    public void StartLoaded(GameData data, Simulation sim, LaunchOptions options, string path)
+    {
+        if (options.Speed is double speed) _runner.GameSpeed = speed;
+        _runner.StartLoaded(sim);
+        SavePath = path;
+        UnitsPerPlayer = 0;
+        WorkersPerPlayer = 0;
+        Wire(data, options, null, loaded: true);
     }
 
     /// <summary>The file a replay match plays (M6-V9), or null for a live match.</summary>
@@ -105,14 +128,16 @@ public partial class Match : Node3D
         ReplayPath = path;
         UnitsPerPlayer = 0;
         WorkersPerPlayer = 0;
-        Wire(data, options, replay);
+        Wire(data, options, replay, loaded: false);
         return ReplayError.None;
     }
 
-    // The views, HUD and input wired to the runner's new sim; a live match (replay null) also enqueues its armies and bases.
-    private void Wire(GameData data, LaunchOptions options, Replay? replay)
+    // The views, HUD and input wired to the runner's new sim; a new live match (replay null, not loaded) also enqueues its
+    // armies and bases.
+    private void Wire(GameData data, LaunchOptions options, Replay? replay, bool loaded)
     {
         bool live = replay == null;
+        bool fresh = live && !loaded;
         Simulation sim = _runner.Simulation!;
         _defeatedAt = new int[sim.World.Config.PlayerCount];
         Array.Fill(_defeatedAt, -1);
@@ -180,6 +205,7 @@ public partial class Match : Node3D
         System.Numerics.Vector2[][] blocks = Array.Empty<System.Numerics.Vector2[]>();
         System.Numerics.Vector2 focus;
         if (!live) focus = ReplayFocus(sim, replay!); // M6-V9: the recording's commands spawn everything
+        else if (loaded) focus = LoadedFocus(sim.World, SelectionController.LocalPlayer); // M6-V14: everything is in the save
         else if (options.UnitsPerPlayer > 0) blocks = SpawnArmies(sim, options.UnitsPerPlayer, out focus);
         else
         {
@@ -187,7 +213,7 @@ public partial class Match : Node3D
             for (int p = 0; p < blocks.Length; p++) blocks[p] = Array.Empty<System.Numerics.Vector2>();
             focus = new System.Numerics.Vector2(sim.World.NavGrid.Width, sim.World.NavGrid.Height) * MapConstants.CellSize / 2;
         }
-        if (live)
+        if (fresh)
         {
             Bases = options.NoBases ? null : SpawnBases(sim, blocks, WorkersPerPlayer, out _);
             // No army: look at player 0's Town Hall instead of the map centre.
@@ -257,6 +283,12 @@ public partial class Match : Node3D
                 $"{replay.Commands.Length} commands, {replay.Checkpoints.Length} checkpoints, seats {SeatsText(data, _runner.PlayedSeats)}");
             return;
         }
+        if (loaded)
+        {
+            GD.Print($"Save loaded: {SavePath}, seed {unchecked((ulong)_runner.Seed)}, map {map.Width} x {map.Height}, tick {sim.TickNumber}, " +
+                $"speed {_runner.GameSpeed:0.##}x, seats {SeatsText(data, _runner.Seats)}, not recorded");
+            return;
+        }
         GD.Print($"Match started: seed {unchecked((ulong)_runner.Seed)}, map {map.Width} x {map.Height}, " +
             $"speed {_runner.GameSpeed:0.##}x, {options.UnitsPerPlayer} units per player, " +
             $"forests {placed.Forests} trees {placed.Trees} mines {placed.Mines}, " +
@@ -279,6 +311,28 @@ public partial class Match : Node3D
             return StartBase.FootprintCenter(g, sim.World.Data.Buildings[c.TypeId], y * g.Width + x);
         }
         return new System.Numerics.Vector2(g.Width, g.Height) * MapConstants.CellSize / 2;
+    }
+
+    /// <summary>
+    /// Where a loaded match's camera starts (M6-V14): the footprint centre of <paramref name="player"/>'s lowest-slot live
+    /// building (the start Town Hall while it stands), else the centre of its live units, else the map centre.
+    /// </summary>
+    public static System.Numerics.Vector2 LoadedFocus(World w, int player)
+    {
+        NavGrid g = w.NavGrid;
+        var b = w.Buildings;
+        for (int i = 0; i < b.Capacity; i++)
+            if (b.Alive[i] && b.Owner[i] == player && (uint)b.TypeId[i] < (uint)w.Data.Buildings.Length)
+                return StartBase.FootprintCenter(g, w.Data.Buildings[b.TypeId[i]], b.Cell[i]);
+        var sum = System.Numerics.Vector2.Zero;
+        int n = 0;
+        for (int i = 0; i < w.Units.Capacity; i++)
+        {
+            if (!w.Units.Alive[i] || w.Units.Owner[i] != player) continue;
+            sum += w.Units.Position[i];
+            n++;
+        }
+        return n > 0 ? sum / n : new System.Numerics.Vector2(g.Width, g.Height) * MapConstants.CellSize / 2;
     }
 
     /// <summary>

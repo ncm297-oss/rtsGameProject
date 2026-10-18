@@ -29,7 +29,8 @@ namespace Rts.Game;
 /// (slot 1 to <see cref="SlotCount"/> = player 0 to 3 plays the faction with data id <c>id</c>, e.g. <c>--faction 2 whirlwind</c>; an id the data
 /// lacks is warned about by <see cref="Match"/> and ignored; M6-V2) and <c>--ai easy|normal|hard</c> (slot 2 is an AI seat of that
 /// difficulty; without it slot 2 is human, as before, except under <c>--skirmish</c>; M6-V2) or <c>--ai &lt;slot&gt; easy|normal|hard</c>
-/// (slot 2 to <see cref="SlotCount"/>; slot 1 is always the local human; M6-V5) and <c>--colour &lt;slot&gt; &lt;n&gt;</c> (slot 1 to
+/// (slot 2 to <see cref="SlotCount"/>; slot 1 is always the local human; M6-V5), or <c>--ai &lt;slot&gt; human</c> / <c>--ai human</c> (dev /
+/// tests, M6-V14: that slot stays a human seat, also under <c>--skirmish</c>; the save / load scenes' human twin) and <c>--colour &lt;slot&gt; &lt;n&gt;</c> (slot 1 to
 /// <see cref="SlotCount"/> is drawn in player colour n, 1 to <see cref="UiText.ColourCount"/>, of <c>ui.json</c>'s table; without it
 /// slot s takes colour s; M6-V3; a slot on a colour an earlier slot holds keeps its default, or the first free colour, M6-VH1, M6-V5). A slot past
 /// the match's players is warned about and unused. Any of these flags
@@ -87,6 +88,7 @@ public sealed class LaunchOptions
     private readonly string?[] _factionIds = new string?[SlotCount];
     private readonly int?[] _colours = new int?[SlotCount];
     private readonly AiDifficulty?[] _ai = new AiDifficulty?[SlotCount];
+    private readonly bool[] _human = new bool[SlotCount];
     private readonly System.Collections.Generic.List<string> _colourWarnings = new();
 
     /// <summary>The dev-log warnings <see cref="Parse"/> gave for colour collisions (one per moved slot of the match), for tests.</summary>
@@ -253,7 +255,8 @@ public sealed class LaunchOptions
                         // M6-V5: two values, a slot (2 to SlotCount: slot 1 is the local human) then the difficulty; neither a flag (BUG-0041).
                         string? id = SecondValue(args, i, hasValue);
                         int slot = Slot(value), d = id == null ? -1 : DataLimits.AiDifficultyIds.IndexOf(id);
-                        if (slot >= 1 && d >= 0) o._ai[slot] = (AiDifficulty)d;
+                        if (slot >= 1 && d >= 0) o.SetAi(slot, (AiDifficulty)d);
+                        else if (slot >= 1 && id == HumanValue) o.SetAi(slot, null);
                         else Warn(flag, id == null ? value : $"{value} {id}");
                         if (id != null) i++;
                     }
@@ -261,7 +264,8 @@ public sealed class LaunchOptions
                     {
                         // One value, the difficulty: slot 2 (M6-V2's form, which every scene and the smoke's --skirmish use).
                         int difficulty = value == null ? -1 : DataLimits.AiDifficultyIds.IndexOf(value);
-                        if (difficulty >= 0) o._ai[1] = (AiDifficulty)difficulty;
+                        if (difficulty >= 0) o.SetAi(1, (AiDifficulty)difficulty);
+                        else if (value == HumanValue) o.SetAi(1, null);
                         else Warn(flag, value);
                     }
                     break;
@@ -316,7 +320,8 @@ public sealed class LaunchOptions
         // no dev army, and every slot past the first an AI seat of the setup's default difficulty (M6-V5: each of the match's
         // slots). An explicit, valid --units / --ai still wins.
         if (o.Skirmish && !unitsGiven) o.UnitsPerPlayer = 0;
-        for (int s = 1; s < players && o.Skirmish; s++) o._ai[s] ??= DefaultAi;
+        for (int s = 1; s < players && o.Skirmish; s++)
+            if (!o._human[s]) o._ai[s] ??= DefaultAi;
         for (int s = players; s < SlotCount; s++)
             if (o._factionIds[s] != null || o._colours[s] != null || o._ai[s] != null)
                 GD.PushWarning($"Ignoring slot {s + 1}'s --faction / --colour / --ai: the match has {players} players (--players).");
@@ -347,6 +352,16 @@ public sealed class LaunchOptions
             held[c] = true;
         }
         return o;
+    }
+
+    /// <summary>The <c>--ai</c> value that keeps a slot human (dev / tests, M6-V14), even under <c>--skirmish</c>.</summary>
+    public const string HumanValue = "human";
+
+    // The last good --ai value for a slot wins: a difficulty, or null (with HumanValue) for a human seat.
+    private void SetAi(int slot, AiDifficulty? difficulty)
+    {
+        _ai[slot] = difficulty;
+        _human[slot] = difficulty == null;
     }
 
     /// <summary>The first colour (0-based) of <c>ui.json</c>'s table other than <paramref name="taken"/>: where a pick that collides with the other slot's moves.</summary>

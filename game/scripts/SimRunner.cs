@@ -161,6 +161,33 @@ public partial class SimRunner : Node
     }
 
     /// <summary>
+    /// Resumes a loaded match (M6-V14): <paramref name="sim"/> is what <see cref="Simulation.TryLoad"/> read, at the saved
+    /// tick. The runner takes its config (seed, players, capacities, map, combat) and its seats, one per player
+    /// (<see cref="SimConfig.SeatOf"/>: the save header's faction, controller and difficulty), and attaches no
+    /// <see cref="Recorder"/>: a recorder attaches at tick 0 only, so a loaded match is not recorded. Ticking resumes on the
+    /// next frame.
+    /// </summary>
+    public void StartLoaded(Simulation sim)
+    {
+        ArgumentNullException.ThrowIfNull(sim);
+        SimConfig c = sim.World.Config;
+        Seed = unchecked((long)c.Seed);
+        PlayerCount = c.PlayerCount;
+        UnitCapacity = c.UnitCapacity;
+        CommandCapacity = c.CommandCapacity;
+        MapSize = c.Map.Width;
+        Forests = c.Map.Forests;
+        GoldMines = c.Map.GoldMines;
+        StartLocations = c.Map.StartLocations;
+        Combat = c.Combat;
+        var seats = ImmutableArray.CreateBuilder<PlayerSeat>(c.PlayerCount);
+        for (int p = 0; p < c.PlayerCount; p++) seats.Add(c.SeatOf(p));
+        Seats = PlayedSeats = seats.MoveToImmutable();
+        Recorder = null;
+        Simulation = sim;
+    }
+
+    /// <summary>
     /// Starts playing <paramref name="replay"/> (M6-V9). Refuses before any sim exists, returning the code, when it breaks
     /// <see cref="Replay.Validate"/>, was recorded with other data (<see cref="ReplayError.DataMismatch"/>: <c>ContentHash</c>
     /// differs) or names a faction the data lacks (<see cref="ReplayError.InvalidHeader"/>). Otherwise builds the sim from the

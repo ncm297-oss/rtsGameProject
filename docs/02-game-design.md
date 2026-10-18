@@ -413,8 +413,11 @@ own cues (select, order, refused, building placed or finished, unit or tech read
 
 ## Game flow
 
-1. **Main menu:** Skirmish, Load Game, Settings, Quit. Until save / load lands, Load Game lists the recorded replays
-   (newest first: date, seed, players, length) and Watch plays one back; Delete removes a file (built in M6-V9).
+1. **Main menu:** Skirmish, Load Game, Settings, Quit. Load Game lists the saves and the recorded replays in one list
+   (newest first: date, seed, players, length, and a Save / Replay tag; a save's length is the match time it was made at):
+   Load resumes a save, Watch plays a replay back, Delete removes a file (a save with the recording beside it); a file that
+   can't be read is listed for Delete, and a save that won't load says why (another version, other game data, damaged)
+   (built in M6-V9; saves in M6-V14).
 2. **Skirmish setup:** map, 2-4 player slots (each: human/AI, faction, difficulty, color, team),
    starting resources (standard / high), game speed. Default: free-for-all. Colours are unique per match: a slot can't
    pick a colour another slot holds. Single-player: slot 1 is always the local human, slots 2-4 are AI seats, each with
@@ -432,7 +435,12 @@ own cues (select, order, refused, building placed or finished, unit or tech read
    army value over time (graph), time to Age II, and for each AI seat the opening it played ("Malazan Empire opened with
    Combined arms", the opening's description on hover; a human seat shows none; a watched replay shows the same line; built in
    M6-V13; the opening names are D21's, see [AI opponent](#ai-opponent)).
-6. **Save/load** any time during a match. **Replays** are recorded for every match (built in M6-V9: every match started
+6. **Save/load** any time during a match (built in M6-V14): the pause menu's Save writes the match to a file (with the
+   recording so far beside it) and says "Saved at m:ss" or why it couldn't; Load Game's Load resumes it at that moment,
+   with the camera on the player's base, nothing selected and the player colours in slot order. **A loaded match is not
+   recorded** (a recording starts with the match at tick 0, so a resumed one has none): its pause menu says so, and Quit
+   to menu writes no replay for it; the recording up to the save is the file beside the save. Saves are kept until the
+   player deletes them. **Replays** are recorded for every match (built in M6-V9: every match started
    from the menu, kept until 20 newer ones push it out; watching one shows the match through player 1's fog, with the
    camera, minimap, selection and pause as in a match, the game speed of the match screen, and no orders).
 7. **Settings:** resolution, window mode (windowed / borderless / fullscreen), VSync, graphics quality
