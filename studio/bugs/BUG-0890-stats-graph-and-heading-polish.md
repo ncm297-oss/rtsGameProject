@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (M6-VH3, verified by QA 2026-10-17-1624; residual polish in BUG-0922) |
 | Found | 2026-10-17-0554, task M6-V11 |
 | System | post-match stats screen (`game/scripts/ArmyValueGraph.cs`, `game/scripts/MatchStats.cs`) |
-| Fixed by | |
+| Fixed by | c0a8d5b (M6-VH3): second steps + end label (`TimeLabelTicks`), lines `DrawOffset` 3 px apart over a light outline, 5 px dot, headings `ShrinkEnd`; proving scenes `FreeForAllTest` (`StatsScreenCheck.Readable` in every stats scene) and QA's `QaM6VH3Test` (time axis rows, 20 s four-seat screen at 1280 x 720 and 1152 x 648) |
 
 ## Repro
 1. `dotnet build RtsGame.sln`
@@ -37,3 +37,13 @@ Four small issues, filed together:
 - Possible fixes: label the span's end (or use second steps below 1 minute); draw a small offset or a legend for
   equal-value lines; a bigger dot, or a short horizontal tick for a single sample; bottom-align the heading cells in
   the grid (`SizeFlagsVertical = ShrinkEnd`).
+
+## Verification (QA 2026-10-17-1624, M6-VH3)
+- Item 1: `QaM6VH3Test` time-axis rows over 14 spans (1 tick to 24 h): 0 first, rising, distinct clocks, at least 40 px
+  apart; 20 s labels `0:00 0:10 0:20`, 5 s `0:00 0:05`, 59.95 s `0:00 ... 0:50 0:59`, 1 h `0:00 10:00 ... 60:00`.
+  Windowed: `qa-vh3-stats-20s-1280x720.png` / `-1152x648.png` and `ffa-stats-3-age.png` (`... 1:20 1:28`) looked at.
+- Items 2-3: the four zero lines of a 20 s four-seat match show as four stacked colours (grey, ochre, red, blue; pixel
+  column at x 900: `4B4F55`, `C8892E`, `B82633`, `1F3F9F` cores); the grey seat reads through its outline (3.80:1 on the
+  backdrop; the Iron line itself 2.35:1). Residual polish (the band covers the x axis; the contrast row cannot fail) in BUG-0922.
+- Item 4: one-line headings on the bottom line in both screenshots; `StatsScreenCheck.Readable` checks it.
+- The Age II-then-defeated seat (QA note): `FreeForAllTest` three-seat case, player 1 `1:00` then `1:21`, windowed shot looked at.

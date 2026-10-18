@@ -32,7 +32,9 @@ public partial class QaM6V11Test : Node
 {
     private const double FrameSeconds = 0.25; // 5 ticks a frame (the clock's cap)
     // Seed 11: seat 0 (idle human) falls near tick 11,536, seat 2 first has Age II on tick 17,021; 17,600 runs both rows.
-    private static int MatchTicks = 17600;
+    // BUG-0921 (M6-VH3 QA): since M5-P2's flank rule (merged at 63e3a31) seat 0 falls at tick 11,668 and seat 2 first has
+    // Age II on tick 21,001 (17:30), so 21,600 runs both rows again (the checks are unchanged; only the match is longer).
+    private static int MatchTicks = 21600;
 
     private readonly List<string> _failures = new();
     private readonly List<string> _notes = new();
