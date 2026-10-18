@@ -50,6 +50,40 @@ public static class StatsScreenCheck
             if (!screen.Grow(0.5f).Encloses(r)) bad.Add($"{how}: {c.Name} {r} leaves the {screen.Size} screen");
         }
         if (stats.Table.GetGlobalRect().End.Y > stats.Graph.GetGlobalRect().Position.Y + 0.5f) bad.Add($"{how}: the table overlaps the graph");
+        // M6-V13: the "opened with" lines, between the table and the graph, inside the screen.
+        foreach (Label l in stats.OpeningLines)
+        {
+            Rect2 r = l.GetGlobalRect();
+            if (!screen.Grow(0.5f).Encloses(r)) bad.Add($"{how}: opening line '{l.Text}' {r} leaves the {screen.Size} screen");
+            if (r.Position.Y < stats.Table.GetGlobalRect().End.Y - 0.5f || r.End.Y > stats.Graph.GetGlobalRect().Position.Y + 0.5f)
+                bad.Add($"{how}: opening line '{l.Text}' {r} is not between the table and the graph");
+        }
+        return bad;
+    }
+
+    /// <summary>
+    /// M6-V13: one "opened with" line per AI seat, in seat order: <c>match_over.opening</c> of the seat's faction name and the
+    /// <c>displayName</c> of opening <paramref name="want"/>[p] (-1: a human seat, no line); the tooltip is its description.
+    /// </summary>
+    public static List<string> Openings(MatchStats stats, Rts.Sim.Data.GameData data, World w, UiText ui, int[] want, string how)
+    {
+        var bad = new List<string>();
+        int line = 0;
+        for (int p = 0; p < want.Length; p++)
+        {
+            if (want[p] < 0)
+            {
+                if (stats.OpeningText(p) != "") bad.Add($"{how}: human seat {p} shows '{stats.OpeningText(p)}'");
+                continue;
+            }
+            Rts.Sim.Data.AiOpening o = data.Ai[w.FactionOf(p)].Openings[want[p]];
+            string text = ui.OpeningLine(data.Factions[w.FactionOf(p)].DisplayName, o.DisplayName);
+            if (stats.OpeningText(p) != text) bad.Add($"{how}: seat {p} line '{stats.OpeningText(p)}' (want '{text}')");
+            if (line >= stats.OpeningLines.Count || stats.OpeningLines[line].Text != text || stats.OpeningLines[line].TooltipText != o.Description)
+                bad.Add($"{how}: line {line} for seat {p}: '{(line < stats.OpeningLines.Count ? stats.OpeningLines[line].Text : "<none>")}'");
+            line++;
+        }
+        if (stats.OpeningLines.Count != line) bad.Add($"{how}: {stats.OpeningLines.Count} opening lines (want {line}, one per AI seat)");
         return bad;
     }
 

@@ -214,6 +214,9 @@ public partial class FreeForAllTest : Node
         foreach (string f in StatsScreenCheck.Columns(stats, w, _ui, how)) Check(false, f);
         foreach (string f in StatsScreenCheck.Graph(stats, match, drawn: true, how)) Check(false, f);
         foreach (string f in StatsScreenCheck.Fits(stats, GetViewport().GetVisibleRect(), how)) Check(false, f); // four rows at 1152 x 648, under 1280 x 720
+        // M6-V13: one "opened with" line per AI seat, none for a human one.
+        int[] openings = Enumerable.Range(0, players).Select(p => match.Simulation!.AiOpening(p)).ToArray();
+        foreach (string f in StatsScreenCheck.Openings(stats, _data, w, _ui, openings, how)) Check(false, f);
         ArmyValueGraph g = stats.Graph;
         Check(w.ArmyValueSamples(players - 1).Length > 0 && g.DrawnLines == players
             && Enumerable.Range(0, players).Select(p => g.LineColour(p).ToRgba32()).Distinct().Count() == players,

@@ -56,6 +56,8 @@ public partial class ReplayPlaybackTest : Node
     private string _dir = "", _full = "";
     private string? _shots;
     private Vector2I _window;
+    private int[] _liveOpenings = Array.Empty<int>();
+    private readonly List<string> _notes = new();
 
     public override async void _Ready()
     {
@@ -89,6 +91,7 @@ public partial class ReplayPlaybackTest : Node
                 await FolderEdgeCases(two);
             }
             await HostedWithoutFolder();
+            await OpeningRows();
 
             Check(PlayerFolder() == playerBefore, "the player's user://replays folder changed over the run (BUG-0770's rule)");
             try { Directory.Delete(_full, true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
@@ -98,6 +101,7 @@ public partial class ReplayPlaybackTest : Node
             _failures.Add($"exception: {ex}");
         }
         if (GetTree().Paused) GetTree().Paused = false;
+        foreach (string n in _notes) GD.Print($"  note: {n}");
         foreach (string f in _failures.Take(60)) GD.Print($"REPLAY PLAYBACK TEST FAIL: {f}");
         if (_failures.Count == 0) GD.Print("REPLAY PLAYBACK TEST PASS");
         SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
@@ -160,6 +164,7 @@ public partial class ReplayPlaybackTest : Node
             World lw = sim.World;
             var live = Enumerable.Range(0, lw.Config.PlayerCount)
                 .Select(p => (lw.GatheredGold[p], lw.UnitsTrained[p], lw.ArmyValueSamples(p).ToArray())).ToArray();
+            _liveOpenings = Enumerable.Range(0, lw.Config.PlayerCount).Select(p => sim.AiOpening(p)).ToArray(); // M6-V13
             main.QuitToMenu();
             await Frames(2);
             Check(main.CurrentMatch == null && main.Menu is { Visible: true }, $"{label}: Quit to menu state");
@@ -267,6 +272,9 @@ public partial class ReplayPlaybackTest : Node
             $"{label}: the live match gathered / trained nothing or has {string.Join(", ", live.Select(l => l.Samples.Length))} samples (want {RecordTicks / sim.World.StatsSampleTicks} each)");
         foreach (string f in StatsScreenCheck.Columns(stats, sim.World, _ui, $"{label} replay stats")) Check(false, f);
         foreach (string f in StatsScreenCheck.Graph(stats, match, drawn: true, $"{label} replay stats")) Check(false, f);
+        // M6-V13: the "opened with" lines of the watched replay (every seat human in its sim) are the live match's.
+        Check(_liveOpenings.Count(o => o >= 0) == replay.Seats.Count(x => x.Controller == SeatController.Ai), $"{label}: live openings [{string.Join(", ", _liveOpenings)}]");
+        foreach (string f in StatsScreenCheck.Openings(stats, _data, sim.World, _ui, _liveOpenings, $"{label} replay stats")) Check(false, f);
         await Shot($"replay-stats-{label}");
         main.CloseStats();
         Check(!stats.Visible && banner.Visible, $"{label}: closing the replay's stats: stats {stats.Visible}, banner {banner.Visible}");
@@ -708,6 +716,114 @@ public partial class ReplayPlaybackTest : Node
     {
         Push(new InputEventKey { Keycode = key, PhysicalKeycode = key, Pressed = true });
         Push(new InputEventKey { Keycode = key, PhysicalKeycode = key, Pressed = false });
+    }
+
+    // ---- M6-V13: "the AI opened with ..." on a 3-opening fixture, live and watched ----
+
+    // The shipped data with both factions' ai.json cut to three openings: the first shipped one, then copies "opening_1" /
+    // "Opening 1" and "opening_2" / "Opening 2" (each its own description), loaded from a temp copy, never the shipped files.
+    private GameData ThreeOpenings()
+    {
+        string from = ProjectSettings.GlobalizePath("res://data");
+        string to = Path.Combine(_full, "three-openings-data");
+        foreach (string file in Directory.GetFiles(from, "*.json", SearchOption.AllDirectories))
+        {
+            string dest = Path.Combine(to, Path.GetRelativePath(from, file));
+            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            File.Copy(file, dest, true);
+        }
+        foreach (string f in new[] { "malazan", "whirlwind" })
+        {
+            string ai = Path.Combine(to, "factions", f, "ai.json");
+            var root = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(ai))!;
+            var openings = root["openings"]!.AsArray();
+            var first = openings[0]!.DeepClone();
+            openings.Clear();
+            openings.Add(first);
+            for (int k = 1; k < 3; k++)
+            {
+                var copy = first.DeepClone();
+                copy["id"] = $"opening_{k}";
+                copy["displayName"] = $"Opening {k}";
+                copy["description"] = $"Fixture opening {k} of {f}";
+                openings.Add(copy);
+            }
+            File.WriteAllText(ai, root.ToJsonString());
+        }
+        DataLoadResult r = DataLoader.LoadAll(to);
+        if (!r.Ok) throw new InvalidOperationException($"the 3-opening fixture failed to load: {string.Join("; ", r.Errors)}");
+        return r.Data!;
+    }
+
+    private async Task OpeningRows()
+    {
+        GameData three = ThreeOpenings();
+        Check(three.Ai.All(a => a.Openings.Length == 3), "the fixture holds not three openings per faction");
+        // A Normal AI in seat 1 (slot 2) on a seed that picks opening 2, then one that picks opening 0.
+        foreach (int target in new[] { 2, 0 })
+        {
+            ulong seed = 1;
+            while (Rts.Sim.ViewApi.AiOpeningLookup.Pick(seed, 1, AiDifficulty.Normal, 3) != target) seed++;
+            await OpeningRow(three, new[] { "--seed", seed.ToString(CultureInfo.InvariantCulture), "--ai", "2", "normal", "--mute" }, $"normal-{target} (seed {seed})",
+                new[] { -1, target });
+        }
+        // Four seats, every difficulty (Easy, Normal, Hard in slots 2-4) on a seed where Normal and Hard both pick past the first.
+        ulong s4 = 1;
+        while (Rts.Sim.ViewApi.AiOpeningLookup.Pick(s4, 2, AiDifficulty.Normal, 3) == 0 || Rts.Sim.ViewApi.AiOpeningLookup.Pick(s4, 3, AiDifficulty.Hard, 3) == 0) s4++;
+        await OpeningRow(three, new[] { "--seed", s4.ToString(CultureInfo.InvariantCulture), "--players", "4", "--ai", "2", "easy", "--ai", "3", "normal", "--ai", "4", "hard", "--mute" },
+            $"four-seats (seed {s4})", null);
+    }
+
+    // A live match on the fixture, its stats' opening lines; then its recording watched: the same lines, from the seed (the
+    // playback sim has no AI: AiOpening is -1 for every seat).
+    private async Task OpeningRow(GameData data, string[] args, string label, int[]? want)
+    {
+        var m = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
+        AddChild(m);
+        SimRunner runner = m.GetNode<SimRunner>("SimRunner");
+        runner.RecordCheckpointInterval = 20;
+        runner.FixedFrameDelta = FrameSeconds;
+        m.Start(data, LaunchOptions.Parse(args));
+        Simulation sim = runner.Simulation!;
+        int players = sim.World.Config.PlayerCount;
+        int[] live = Enumerable.Range(0, players).Select(p => sim.AiOpening(p)).ToArray();
+        if (want != null) Check(live.SequenceEqual(want), $"{label}: live picks [{string.Join(", ", live)}] (want [{string.Join(", ", want)}])");
+        Check(live[0] == -1 && live.Skip(1).All(o => o >= 0), $"{label}: live picks [{string.Join(", ", live)}] (seat 0 human, the rest AI)");
+        while (sim.TickNumber < 40) await Frames(1);
+        var stats = new MatchStats { Name = "OpeningStats" };
+        AddChild(stats);
+        stats.Build(_ui, data);
+        stats.ShowFor(m);
+        await Frames(2);
+        foreach (string f in StatsScreenCheck.Openings(stats, data, sim.World, _ui, live, $"{label} live")) Check(false, f);
+        foreach (string f in StatsScreenCheck.Fits(stats, GetViewport().GetVisibleRect(), $"{label} live")) Check(false, f);
+        string[] liveLines = stats.OpeningLines.Select(l => l.Text).ToArray();
+        await Shot($"openings-{label.Split(' ')[0]}");
+        Replay replay = runner.Recorder!.ToReplay();
+        RemoveChild(m);
+        m.QueueFree();
+        await Frames(1);
+
+        var watch = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
+        AddChild(watch);
+        ReplayError refused = watch.StartReplay(data, replay, LaunchOptions.Parse(new[] { "--mute" }), "opening-row");
+        if (Check(refused == ReplayError.None, $"{label}: replay refused ({refused})"))
+        {
+            Simulation psim = watch.GetNode<SimRunner>("SimRunner").Simulation!;
+            await Frames(2);
+            Check(Enumerable.Range(0, players).All(p => psim.AiOpening(p) == -1), $"{label}: the playback sim runs an AI");
+            stats.ShowFor(watch);
+            await Frames(2);
+            foreach (string f in StatsScreenCheck.Openings(stats, data, psim.World, _ui, live, $"{label} watched")) Check(false, f);
+            string[] watched = stats.OpeningLines.Select(l => l.Text).ToArray();
+            Check(watched.SequenceEqual(liveLines) && watched.Length == players - 1, $"{label}: watched lines [{string.Join(" | ", watched)}], live [{string.Join(" | ", liveLines)}]");
+            _notes.Add($"{label}: [{string.Join(" | ", watched)}]");
+        }
+        RemoveChild(stats);
+        stats.QueueFree();
+        RemoveChild(watch);
+        watch.QueueFree();
+        await Frames(1);
     }
 
     private async Task Frames(int n)

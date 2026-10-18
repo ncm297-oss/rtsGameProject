@@ -6384,6 +6384,58 @@ game/tests/SfxTest, AlertTest (new), CombatViewTest, ShellTest, QaM6VH2Test (Spa
     `alert-on-screen.png`.
   - `ShellTest`: the two `alert` keys (each required, the section required, the brief's wording).
 
+### Implementation (M6-V13)
+
+"The AI opened with ..." on the stats screen, a joined alert upgraded to Base (BUG-0954 item 1), and BUG-0953's view half.
+The sim is unchanged but for one new read-only ViewApi class and one rule in `AttackAlerts`.
+
+```
+sim/Rts.Sim/ViewApi/AiOpeningLookup.cs   Pick(seed, player, difficulty, openingCount): an AI seat's opening from the seed
+sim/Rts.Sim/ViewApi/AttackAlerts.cs      a building hit joining a Units alert makes it Base; UpgradedCount / Upgraded(k)
+game/scripts/MatchStats.cs               the "opened with" lines under the table (OpeningOf, OpeningText, OpeningLines)
+game/scripts/AlertHud.cs                 an upgraded alert off screen puts the base text up (UpgradeTexts)
+game/scripts/MatchOverText.cs, UiText.cs match_over.opening, a format naming {0} and {1}
+game/data/common/ui.json                 match_over.opening: "{0} opened with {1}"
+game/tests/QaM6V11Test (staged defeat), StatsScreenCheck, ReplayPlaybackTest, FreeForAllTest, ShellTest
+```
+
+- **Opened with.** Between the stats table and the army value graph, one line per AI seat in seat order: a 12 px swatch
+  in the seat's colour (two seats of one faction tell apart by it) and `match_over.opening` with the seat's faction
+  `displayName` for `{0}` and the opening's `displayName` for `{1}` ("Malazan Empire opened with Standard"); the opening's
+  `description` is the tooltip. A human seat shows no line (the layout needs no cell, so there is no `opening_human` key).
+  Which opening: `MatchStats.OpeningOf` asks the live sim (`Simulation.AiOpening(p)`, picked at construction, M5-8a).
+  A watched replay's sim runs every seat human, so `AiOpening` is -1 there; for a seat the header says was an AI
+  (`Match.Seats`, the seats as played) the view works the pick out with `AiOpeningLookup.Pick(Config.Seed, p, difficulty,
+  openings)`: a fresh `SimRng(seed, RngStream.Ai(p))` handed to `AiPlayer.PickOpening`, the construction `Simulation`
+  makes, so it is the same number; it reads and writes no sim state. With today's data every AI says "Standard".
+- **Alert upgrade** (BUG-0954 item 1). A building hit that joins a recent alert (within 30 m and 10 s, the join rule
+  unchanged) whose `Kind` is `Units` turns it `Base` (its position stays); `UpgradedCount` / `Upgraded(k)` list the
+  alerts the last `Update` upgraded, like `New(k)`. A unit hit never turns a Base alert back, and a building hit that
+  raises an alert of its own is Base from the start (no upgrade). `AlertHud`: for an upgraded alert off screen now, the
+  base text goes up for 4 s (`UpgradeTexts` counts it), with no new ping or sound (it is the same alert); on screen,
+  nothing. Within one frame a base text is not replaced by a later units one.
+- **BUG-0953 (view half).** `QaM6V11Test`'s banner row waited for seed 11's idle human (seat 0) to fall to the AIs; since
+  M5-H3 they never finish its last workers. The fall is now staged once the Age II row has run (or 1,500 ticks before
+  `MatchTicks` if it never does): seat 1 (an AI) gets dev killers, three Line units on free cells beside each of seat 0's
+  units and a ring of eight catapults round each of its buildings, re-ordered every 20 ticks (the AI may re-task them).
+  The oracle counts a dev spawn as no one's trained unit (matched on its owner, type and spawn point within 3 m in the
+  ticks after the spawn; the sim counts only finished queue items). The match runs on past `MatchTicks` (at most 1,500
+  ticks) only if the banner is not up by then. The AI side of the gap (hunting the last units) stays open for M5-4d.
+- **Tests.**
+  - xUnit `ViewApi/AiOpeningLookupTests` on a fixture where both factions hold exactly three openings: `Pick` equals
+    `Simulation.AiOpening(p)` for every seat of seeds 1-200 x three difficulty rotations x 2-4 seats (5,400 seats; Easy
+    always 0, Normal and Hard pick all three); the same every call; one opening is always 0; `Pick` moves no sim state.
+  - xUnit `ViewApi/AttackAlertsTests` (BUG-0954 item 1, the two upgrade rows red before the rule): a building 30 m from a
+    Units alert hit 9.95 s later upgrades it (one alert, two hits, position kept, reported once); 30.5 m or 10 s later it
+    raises its own Base alert and the first stays Units; a unit hit on a Base alert never downgrades and a building first
+    is no upgrade; two building hits in one step upgrade once.
+  - `ReplayPlaybackTest`: the shipped-data recordings' watched stats show the live match's lines; on a 3-opening fixture
+    (a temp copy of `res://data`, never the shipped files) a Normal AI on a seed that picks opening 2, one that picks 0, and
+    four seats Easy / Normal / Hard: the live lines, then the watched replay's (its sim with no AI) equal them.
+  - `QaM6V11Test`: the staged defeat; three AI lines at 1280 x 720 inside the screen between the table and the graph
+    (`StatsScreenCheck.Fits` holds the lines now), the watched replay's the same. `FreeForAllTest`: a line per AI seat.
+  - `ShellTest`: `match_over.opening` required, and a format naming `{0}` and `{1}` (four bad formats, one error each).
+
 ## AI architecture
 
 The AI lives in `Rts.Sim.Ai`, inside the sim assembly, because it must be deterministic (it uses

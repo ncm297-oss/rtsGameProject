@@ -428,7 +428,9 @@ own cues (select, order, refused, building placed or finished, unit or tech read
    queued research and training go with them), and a collapse is **neither a kill nor a loss** in the stats, which count
    only what an enemy destroyed (Producer decisions 2026-10-14 and 2026-10-16, BUG-0703; built in M5-H2).
 5. **Post-match stats:** resources gathered, units trained/lost/killed, buildings built/lost,
-   army value over time (graph), time to Age II.
+   army value over time (graph), time to Age II, and for each AI seat the opening it played ("Malazan Empire opened with
+   Standard", the opening's description on hover; a human seat shows none; a watched replay shows the same line; built in
+   M6-V13).
 6. **Save/load** any time during a match. **Replays** are recorded for every match (built in M6-V9: every match started
    from the menu, kept until 20 newer ones push it out; watching one shows the match through player 1's fog, with the
    camera, minimap, selection and pause as in a match, the game speed of the match screen, and no orders).

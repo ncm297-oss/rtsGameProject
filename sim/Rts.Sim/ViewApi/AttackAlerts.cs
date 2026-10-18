@@ -8,7 +8,9 @@ namespace Rts.Sim.ViewApi;
 /// whose hit points fell since the last <see cref="Update"/> raises an alert at its position, unless an alert raised in the
 /// last <see cref="Seconds"/> of the alerts' clock (<see cref="Now"/>: the HUD drives it with game time, one step per sim
 /// tick) lies within <see cref="Radius"/> metres of it (then the hit is counted on that
-/// alert). Buildings are scanned before units, so a raid that hits both raises a <see cref="AttackAlertKind.Base"/> alert.
+/// alert). Buildings are scanned before units, so a raid that hits both raises a <see cref="AttackAlertKind.Base"/> alert;
+/// a building hit that joins an earlier <see cref="AttackAlertKind.Units"/> alert turns it into a Base one
+/// (<see cref="Upgraded"/>, BUG-0954 item 1), and a unit hit never turns a Base alert back.
 /// Like <see cref="HitFlash"/> no sim event is needed: each slot remembers the hp and generation it last saw, a new unit in a
 /// slot (a new generation, trained or rallied hurt) raises nothing, and a dead slot is forgotten. Presentation only;
 /// allocation-free after construction.
@@ -30,7 +32,8 @@ public sealed class AttackAlerts
     private readonly AttackAlertKind[] _kind;
     private readonly int[] _hits;
     private readonly int[] _new;
-    private int _next, _count, _newCount;
+    private readonly int[] _upgraded;
+    private int _next, _count, _newCount, _upgradedCount;
 
     /// <summary>Creates the bookkeeping for the unit and building stores' capacities.</summary>
     public AttackAlerts(int unitCapacity, int buildingCapacity, float radius = DefaultRadius, float seconds = DefaultSeconds, int capacity = DefaultCapacity)
@@ -51,6 +54,7 @@ public sealed class AttackAlerts
         _kind = new AttackAlertKind[capacity];
         _hits = new int[capacity];
         _new = new int[capacity];
+        _upgraded = new int[capacity];
     }
 
     /// <summary>Hits within this many metres of a recent alert raise none.</summary>
@@ -89,6 +93,12 @@ public sealed class AttackAlerts
     /// newest ones in rotated order: the set is right, the order is not raise order (BUG-0954; capacity 32 makes it rare).</remarks>
     public int New(int k) => _new[k];
 
+    /// <summary>BUG-0954 item 1 (M6-V13): alerts the last <see cref="Update"/> turned from <see cref="AttackAlertKind.Units"/> to <see cref="AttackAlertKind.Base"/>.</summary>
+    public int UpgradedCount => _upgradedCount;
+
+    /// <summary>The <paramref name="k"/>-th alert the last <see cref="Update"/> upgraded to Base (0 .. <see cref="UpgradedCount"/> - 1), an index as <see cref="New"/>'s.</summary>
+    public int Upgraded(int k) => _upgraded[k];
+
     /// <summary>True once any alert was raised; then <see cref="LastIndex"/> is the newest.</summary>
     public bool HasLast => Raised > 0;
 
@@ -122,6 +132,7 @@ public sealed class AttackAlerts
     {
         if (dt > 0f) Now += dt;
         _newCount = 0;
+        _upgradedCount = 0;
         Scan(player, AttackAlertKind.Base, _buildingHp, _buildingGen, buildingAlive, buildingGeneration, buildingHp, buildingOwner, buildingPosition);
         Scan(player, AttackAlertKind.Units, _unitHp, _unitGen, unitAlive, unitGeneration, unitHp, unitOwner, unitPosition);
         return _newCount;
@@ -160,6 +171,13 @@ public sealed class AttackAlerts
             if (Now - _raisedAt[a] < Seconds && Vector2.DistanceSquared(_position[a], at) <= r2)
             {
                 _hits[a]++;
+                // BUG-0954 item 1: a raid that reaches the base joins the units' alert; the alert now says base. Never the
+                // other way, so an alert upgrades at most once.
+                if (kind == AttackAlertKind.Base && _kind[a] == AttackAlertKind.Units)
+                {
+                    _kind[a] = AttackAlertKind.Base;
+                    if (_upgradedCount < _upgraded.Length) _upgraded[_upgradedCount++] = a;
+                }
                 return;
             }
         }

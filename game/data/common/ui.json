@@ -165,7 +165,8 @@
     "defeated_at": "Defeated at",
     "standing": "Standing",
     "human": "Human",
-    "back": "Back"
+    "back": "Back",
+    "opening": "{0} opened with {1}"
   },
   "keys": {
     "tab_general": "General",

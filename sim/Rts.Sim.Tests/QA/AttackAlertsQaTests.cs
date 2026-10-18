@@ -194,7 +194,7 @@ public class AttackAlertsQaTests
         var alerts = new[] { new AttackAlerts(u.Capacity, bs.Capacity, radius, seconds), new AttackAlerts(u.Capacity, bs.Capacity, radius, seconds) };
         var oracle = new[] { new Oracle(u.Capacity, bs.Capacity, radius, seconds), new Oracle(u.Capacity, bs.Capacity, radius, seconds) };
         var centres = new Vector2[bs.Capacity];
-        int frames = 0, multi = 0;
+        int frames = 0, multi = 0, upgrades = 0;
         while (w.TickNumber < 2500)
         {
             int ticks = rng.Next(9);
@@ -217,6 +217,8 @@ public class AttackAlertsQaTests
                 Assert.True(want == raised, $"seed {seed} tick {w.TickNumber} player {p}: {raised} alerts, oracle {want}");
                 Assert.Equal(oracle[p].Raised, alerts[p].Raised);
                 Assert.Equal(oracle[p].Hits, alerts[p].Hits);
+                Assert.Equal(oracle[p].LastUpgrades, alerts[p].UpgradedCount); // M6-V13
+                upgrades += alerts[p].UpgradedCount;
                 if (alerts[p].HasLast)
                 {
                     Assert.Equal(oracle[p].LastAt, alerts[p].Position(alerts[p].LastIndex));
@@ -226,13 +228,14 @@ public class AttackAlertsQaTests
             Assert.Equal(b.StateHash(), a.StateHash());
             frames++;
         }
-        _out.WriteLine($"seed {seed} r {radius} s {seconds}: {frames} frames ({multi} multi-tick) to tick {w.TickNumber}; alerts p0 {alerts[0].Raised} from {alerts[0].Hits} hits, p1 {alerts[1].Raised} from {alerts[1].Hits}");
+        _out.WriteLine($"seed {seed} r {radius} s {seconds}: {frames} frames ({multi} multi-tick) to tick {w.TickNumber}; alerts p0 {alerts[0].Raised} from {alerts[0].Hits} hits, p1 {alerts[1].Raised} from {alerts[1].Hits}; {upgrades} upgraded to Base");
         Assert.True(alerts[0].Raised + alerts[1].Raised >= 2, "the brawl raised fewer than two alerts");
         Assert.True(alerts[0].Hits + alerts[1].Hits > 20, "the brawl had almost no hits");
     }
 
     // An independent restatement of the docs/03 rule: an own slot whose hp fell in the same generation is a hit; a hit within
-    // 30 m of an alert raised less than 10 s ago joins it, else raises one; buildings before units. Lists, no ring tricks.
+    // 30 m of an alert raised less than 10 s ago joins it (a building hit turns a Units alert Base, M6-V13), else raises one;
+    // buildings before units. Lists, no ring tricks.
     private sealed class Oracle
     {
         private readonly int[] _uHp, _uGen, _bHp, _bGen;
@@ -252,17 +255,22 @@ public class AttackAlertsQaTests
 
         public long Raised => _all.Count;
         public long Hits { get; private set; }
+        public long Upgrades { get; private set; }
         public Vector2 LastAt => _all[^1].At;
         public AttackAlertKind LastKind => _all[^1].Kind;
 
         public int Update(int player, float dt, UnitStore u, BuildingStore b, Vector2[] centres)
         {
             if (dt > 0f) _now += dt;
+            long upgradesBefore = Upgrades;
             int before = _all.Count;
             for (int i = 0; i < b.Capacity; i++) Look(b.Alive[i] && b.Owner[i] == player, b.Generation[i], b.Hp[i], _bHp, _bGen, i, centres[i], AttackAlertKind.Base);
             for (int i = 0; i < u.Capacity; i++) Look(u.Alive[i] && u.Owner[i] == player, u.Generation[i], u.Hp[i], _uHp, _uGen, i, u.Position[i], AttackAlertKind.Units);
+            LastUpgrades = (int)(Upgrades - upgradesBefore);
             return _all.Count - before;
         }
+
+        public int LastUpgrades { get; private set; }
 
         private void Look(bool own, int gen, int hp, int[] lastHp, int[] lastGen, int i, Vector2 at, AttackAlertKind kind)
         {
@@ -276,7 +284,15 @@ public class AttackAlertsQaTests
             int from = Math.Max(0, _all.Count - AttackAlerts.DefaultCapacity);
             for (int k = from; k < _all.Count; k++)
                 if (_now - _all[k].When < _seconds && Vector2.DistanceSquared(_all[k].At, at) <= _radius * _radius)
+                {
+                    // M6-V13 (BUG-0954 item 1): a building hit joining a Units alert makes it Base; never the other way.
+                    if (kind == AttackAlertKind.Base && _all[k].Kind == AttackAlertKind.Units)
+                    {
+                        _all[k] = (_all[k].At, _all[k].When, AttackAlertKind.Base);
+                        Upgrades++;
+                    }
                     return;
+                }
             _all.Add((at, _now, kind));
         }
     }

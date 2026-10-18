@@ -178,6 +178,105 @@ public class AttackAlertsTests
         Assert.Equal(1, s.Frame(b, player: Enemy));
     }
 
+    // ---- BUG-0954 item 1 (M6-V13): a building hit joining a Units alert upgrades it to Base; never a downgrade ----
+
+    /// <summary>A unit hit raises a Units alert; a building hit 30 m away 9.95 s later joins it and makes it Base (no second alert).</summary>
+    [Fact]
+    public void ABuildingHitJoiningAUnitsAlert_UpgradesItToBase_AtThe30mAnd10sEdges()
+    {
+        var s = new Stores(4, 2);
+        s.Unit(0, Me, new Vector2(100, 100));
+        s.Building(0, Me, new Vector2(130, 100)); // exactly 30 m: inside (the join is <= Radius)
+        var a = new AttackAlerts(4, 2);
+        s.Frame(a, 0f);
+        s.UnitHp[0] -= 5;
+        Assert.Equal(1, s.Frame(a, 0f));
+        int alert = a.New(0);
+        Assert.Equal(AttackAlertKind.Units, a.Kind(alert));
+        s.BuildingHp[0] -= 5;
+        Assert.Equal(0, s.Frame(a, 9.95f)); // 9.95 s: inside the 10 s
+        Assert.Equal(AttackAlertKind.Base, a.Kind(alert));
+        Assert.Equal(1, a.Raised);
+        Assert.Equal(2, a.HitsOn(alert));
+        Assert.Equal(new Vector2(100, 100), a.Position(alert)); // the kind changes, not the place
+        Assert.Equal(1, a.UpgradedCount);
+        Assert.Equal(alert, a.Upgraded(0));
+        // The next step reports no upgrade again.
+        s.BuildingHp[0] -= 5;
+        Assert.Equal(0, s.Frame(a, 0f));
+        Assert.Equal(0, a.UpgradedCount);
+    }
+
+    /// <summary>Just past the edges the building hit joins nothing: it raises its own Base alert and the Units one stays Units.</summary>
+    [Theory]
+    [InlineData(30.5f, 1f)]  // 30.5 m: outside the radius
+    [InlineData(10f, 10f)]   // 10 s later: the first alert no longer suppresses
+    public void ABuildingHitPastTheEdges_RaisesItsOwnBaseAlert_TheUnitsAlertStaysUnits(float metres, float seconds)
+    {
+        var s = new Stores(4, 2);
+        s.Unit(0, Me, new Vector2(100, 100));
+        s.Building(0, Me, new Vector2(100 + metres, 100));
+        var a = new AttackAlerts(4, 2);
+        s.Frame(a, 0f);
+        s.UnitHp[0] -= 5;
+        Assert.Equal(1, s.Frame(a, 0f));
+        int units = a.New(0);
+        s.BuildingHp[0] -= 5;
+        Assert.Equal(1, s.Frame(a, seconds));
+        Assert.Equal(AttackAlertKind.Units, a.Kind(units));
+        Assert.Equal(AttackAlertKind.Base, a.Kind(a.New(0)));
+        Assert.Equal(0, a.UpgradedCount);
+    }
+
+    /// <summary>A unit hit joining a Base alert leaves it Base: never a downgrade; a building first is Base from the start, no upgrade.</summary>
+    [Fact]
+    public void AUnitHitJoiningABaseAlert_NeverDowngrades_AndABuildingFirstIsNoUpgrade()
+    {
+        var s = new Stores(4, 2);
+        s.Unit(0, Me, new Vector2(105, 100));
+        s.Building(0, Me, new Vector2(100, 100));
+        var a = new AttackAlerts(4, 2);
+        s.Frame(a, 0f);
+        s.BuildingHp[0] -= 5;
+        Assert.Equal(1, s.Frame(a, 0f));
+        int alert = a.New(0);
+        Assert.Equal(AttackAlertKind.Base, a.Kind(alert));
+        Assert.Equal(0, a.UpgradedCount);
+        for (int t = 0; t < 5; t++)
+        {
+            s.UnitHp[0] -= 1;
+            Assert.Equal(0, s.Frame(a, 1f));
+            Assert.Equal(AttackAlertKind.Base, a.Kind(alert));
+            Assert.Equal(0, a.UpgradedCount);
+        }
+        // A second building hit on the Base alert: still no upgrade reported.
+        s.BuildingHp[0] -= 1;
+        s.Frame(a, 1f);
+        Assert.Equal(0, a.UpgradedCount);
+        Assert.Equal(7, a.HitsOn(alert));
+    }
+
+    /// <summary>Two buildings hit in one step on one Units alert: one upgrade reported, once.</summary>
+    [Fact]
+    public void TwoBuildingHitsInOneStep_UpgradeOnce()
+    {
+        var s = new Stores(4, 4);
+        s.Unit(0, Me, new Vector2(100, 100));
+        s.Building(0, Me, new Vector2(110, 100));
+        s.Building(1, Me, new Vector2(90, 100));
+        var a = new AttackAlerts(4, 4);
+        s.Frame(a, 0f);
+        s.UnitHp[0] -= 5;
+        s.Frame(a, 0f);
+        int alert = a.New(0);
+        s.BuildingHp[0] -= 5;
+        s.BuildingHp[1] -= 5;
+        Assert.Equal(0, s.Frame(a, 1f));
+        Assert.Equal(AttackAlertKind.Base, a.Kind(alert));
+        Assert.Equal(1, a.UpgradedCount);
+        Assert.Equal(alert, a.Upgraded(0));
+    }
+
     [Fact]
     public void BadDt_CountsAsZero_AndTheRingKeepsTheNewest()
     {

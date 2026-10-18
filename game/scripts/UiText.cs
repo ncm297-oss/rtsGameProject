@@ -195,6 +195,9 @@ public sealed class UiText
     /// <summary>The stats screen's length line: <c>match_over.match_length</c> with <see cref="Clock"/> of <paramref name="ticks"/> for its <c>{0}</c>.</summary>
     public string MatchLength(int ticks) => string.Format(CultureInfo.InvariantCulture, MatchOver(MatchOverText.MatchLength), Clock(ticks));
 
+    /// <summary>An AI seat's opening line (M6-V13): <c>match_over.opening</c> with <paramref name="faction"/> for <c>{0}</c> and <paramref name="opening"/> (its <c>displayName</c>) for <c>{1}</c>.</summary>
+    public string OpeningLine(string faction, string opening) => string.Format(CultureInfo.InvariantCulture, MatchOver(MatchOverText.Opening), faction, opening);
+
     /// <summary>The <c>requires</c> text of the <c>placement</c> section (<see cref="ForwardKey"/>), readable before the sim has the reason.</summary>
     public string ForwardPlacementText { get; private set; } = "";
 
@@ -325,6 +328,7 @@ public sealed class UiText
             string length = ui._matchOver[(int)MatchOverText.MatchLength];
             if (length.Length > 0 && !IsTextFormat(length))
                 errors.Add($"ui.json: match_over.{Key(MatchOverText.MatchLength)} must be a format with {{0}} (the clock) and no other placeholder: '{length}'");
+            TwoArgs(ui._matchOver[(int)MatchOverText.Opening], $"match_over.{Key(MatchOverText.Opening)}", "the seat's faction", "the opening", errors); // M6-V13
             string clock = ui._matchOver[(int)MatchOverText.Clock];
             if (clock.Length > 0 && !IsResolutionFormat(clock))
                 errors.Add($"ui.json: match_over.{Key(MatchOverText.Clock)} must be a format with {{0}} (the minutes) and {{1}} (the seconds) and no other placeholder: '{clock}'");

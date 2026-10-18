@@ -331,8 +331,8 @@ public partial class ShellTest : Node
         // M6-V12: the attack alerts' two texts.
         foreach (AlertText k in Enum.GetValues<AlertText>()) keys.Add(("alert", UiText.Key(k), _ui.Alert(k)));
         // settings: 22 since M6-V7 (confine_cursor); keys 15 + hud 2 since M6-V8; setup 17 since M6-V5 (add_slot, remove_slot); menu 5 + load 16 since M6-V9 (18 since M6-VH3: playing, unreadable);
-        // match_over 27 since M6-V11 (kills, losses and the two in-hand keys out; nine column labels, not_reached and the graph's three in); alert 2 since M6-V12
-        Check(keys.Count == 5 + 17 + 4 + 22 + 27 + 15 + 2 + 18 + 2, $"{keys.Count} shell keys");
+        // match_over 27 since M6-V11 (kills, losses and the two in-hand keys out; nine column labels, not_reached and the graph's three in); alert 2 since M6-V12; match_over 28 since M6-V13 (opening)
+        Check(keys.Count == 5 + 17 + 4 + 22 + 28 + 15 + 2 + 18 + 2, $"{keys.Count} shell keys");
         string json = File.ReadAllText(UiText.DefaultPath).Replace("\r\n", "\n");
         foreach ((string section, string key, string text) in keys)
         {
@@ -368,6 +368,8 @@ public partial class ShellTest : Node
             "match_over.gathered_gold", "match_over.gathered_wood", "match_over.units_trained", "match_over.units_killed", "match_over.units_lost",
             "match_over.buildings_built", "match_over.buildings_killed", "match_over.buildings_lost", "match_over.age_ii_at", "match_over.not_reached",
             "match_over.army_value", "match_over.graph_time", "match_over.graph_value",
+            // M6-V13: an AI seat's "opened with" line.
+            "match_over.opening",
             // M6-V8: the resource click's lines and the Keybinds tab's keys.
             "hud.resource_left", "hud.last_seen", "keys.tab_general", "keys.tab_keybinds", "keys.order_attack_move", "keys.order_stop",
             "keys.order_hold", "keys.order_move", "keys.subgroup_next", "keys.build_basic", "keys.build_advanced", "keys.group", "keys.card",
@@ -391,7 +393,8 @@ public partial class ShellTest : Node
         Check(_ui.Clock(0) != _ui.Clock(20 * 61) && _ui.Clock(20 * 61).Contains('1') && _ui.MatchLength(20 * 75).Contains(_ui.Clock(20 * 75)),
             $"clock '{_ui.Clock(20 * 61)}', length '{_ui.MatchLength(20 * 75)}'");
         foreach ((string key, string bad) in new[] { ("clock", "{0}"), ("clock", "{1:00}"), ("clock", "{0}:{2}"), ("clock", "{{0}}:{{1}}"),
-            ("match_length", "Length"), ("match_length", "{1}"), ("match_length", "{{0}}") })
+            ("match_length", "Length"), ("match_length", "{1}"), ("match_length", "{{0}}"),
+            ("opening", "{0} opened"), ("opening", "{1}"), ("opening", "{0} {2}"), ("opening", "{{0}} {{1}}") }) // M6-V13
         {
             var root = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
             root["match_over"]![key] = bad;
