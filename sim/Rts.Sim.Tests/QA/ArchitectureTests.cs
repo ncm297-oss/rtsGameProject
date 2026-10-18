@@ -99,6 +99,9 @@ public class ArchitectureTests
             .Distinct()
             .ToList();
         Assert.True(files.Count >= 20, $"only {files.Count} save files found");
+        // M6-S3: the AI seats' parts are save code too.
+        foreach (string part in new[] { "AiPlayer.Save.cs", "Blackboard.Save.cs" })
+            Assert.Contains(files, f => Path.GetRelativePath(simDir, f) == Path.Combine("Ai", part));
         var violations = new List<string>();
         foreach (string file in files)
         {

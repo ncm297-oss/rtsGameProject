@@ -6,7 +6,8 @@ namespace Rts.Sim.Tests.Save;
 
 /// <summary>
 /// M6-S2 criterion 7: the menu's match (128 map, 2 seats) at tick 12,000 saves in at most 100 ms, loads in at most 100 ms,
-/// and its file is at most 8 MB; the 4-seat 256 map's size and times are printed (no gate). The clock is the test's, never
+/// and its file is at most 8 MB (M6-S3: with its second seat played by the AI too); the 4-seat 256 map's size and times are
+/// printed (no gate). The clock is the test's, never
 /// the sim's (rule 2). Each time is the best of three after a warm-up, so the JIT and a one-off GC don't count.
 /// </summary>
 [Collection(SerialCollection.Name)]
@@ -57,6 +58,20 @@ public class SavePerfTests
         Simulation sim = Run(SaveScenes.Menu(1), MatchTicks);
         (double save, double load, long bytes) = Measure(sim);
         _out.WriteLine($"menu match at tick {sim.TickNumber}: {sim.World.Units.Count} units, {sim.World.FlowFields.Count} flow fields; " +
+            $"save {save:F1} ms, load {load:F1} ms, {bytes:N0} bytes");
+        Assert.True(save <= 100, $"save took {save:F1} ms");
+        Assert.True(load <= 100, $"load took {load:F1} ms");
+        Assert.True(bytes <= 8L * 1024 * 1024, $"{bytes:N0} bytes");
+    }
+
+    /// <summary>M6-S3: the menu's match as the game starts it (a scripted human against a Normal AI), the same gates.</summary>
+    [Trait("Category", "Perf")]
+    [Fact]
+    public void MenuMatchHumanVsAi_AtTick12000_SavesAndLoadsUnder100Ms_InUnder8MB()
+    {
+        Simulation sim = Run(AiSaveScenes.HumanVsAi(1), MatchTicks);
+        (double save, double load, long bytes) = Measure(sim);
+        _out.WriteLine($"menu match, human vs AI, at tick {sim.TickNumber}: {sim.World.Units.Count} units, {sim.World.FlowFields.Count} flow fields; " +
             $"save {save:F1} ms, load {load:F1} ms, {bytes:N0} bytes");
         Assert.True(save <= 100, $"save took {save:F1} ms");
         Assert.True(load <= 100, $"load took {load:F1} ms");

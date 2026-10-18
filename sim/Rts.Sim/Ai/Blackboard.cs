@@ -9,11 +9,12 @@ namespace Rts.Sim.Ai;
 /// done, the command waiting to be judged), the house it is placing, retry marks (anchors a Build was refused at), and per
 /// unit and building slot when its last AI command applies (so a think doesn't order it twice before the first applied) and
 /// which resource a worker was sent to; since M5-3 the scout's sweep, the enemy memory and the military's rally and wave. Not
-/// sim state: not hashed, never read by a sim rule; allocated once, sized from the match. Since M5-4b the defense's kept
+/// sim state: not hashed, never read by a sim rule; allocated once, sized from the match; stored whole by a save (M6-S3,
+/// <c>Blackboard.Save.cs</c>). Since M5-4b the defense's kept
 /// building hp, point and per-unit marks; since M5-4c the casters' last casts; since M5-4f the defenders picked and the
 /// wave's start threshold.
 /// </summary>
-internal sealed class Blackboard
+internal sealed partial class Blackboard
 {
     /// <summary>Retry marks kept: the oldest is forgotten past this many.</summary>
     internal const int RetryMarks = 16;
