@@ -680,7 +680,12 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       `ProportionalDefenseQaTests` (16, through the command log) and `ProportionalDefenseFuzzStressTests` (12 AI-v-AI matches with a
       per-think oracle); docs/03 "Implementation (M5-4f)". Ticked at the 2026-10-16-2036 ACCEPT.)
 - [ ] Owner request 2026-10-14 (D14 b): **a strategy per match**: `ai.json` holds several named openings per faction (build order, army mix,
-      attack thresholds) and the AI picks one with its seeded RNG at the start (Easy always the first); schema age-agnostic.
+      attack thresholds) and the AI picks one with its seeded RNG at the start (Easy always the first); schema age-agnostic. (M5-8a,
+      2026-10-17-2344: **the sim half is in**: `ai.json` `openings[]` (1-8 named entries, each a build order, compositions and attack
+      thresholds; `displayName` / `description` in data; the old top-level fields refused), `AiPlayer.PickOpening` (Easy index 0; Normal /
+      Hard one draw from the AI's own stream, the first it makes; not hashed, rebuilt from the seed), `Simulation.AiOpening(player)`;
+      verified by `Ai/AiOpeningPickTests`, `DataValidationTests`, `DataContentHashTests` and QA's `AiOpeningsQaTests`; docs/03
+      "Implementation (M5-8a)". Left: the openings themselves (the data track's D21: the shipped files hold one, `standard`).)
 - [ ] Owner request 2026-10-14 (D14 c): **counter-composition**: the AI shifts its army mix toward what counters the enemy units it has
       seen (fog-limited, decayed memory; strength per difficulty, 0 on Easy); think cost stays inside the 1 ms gate.
 
@@ -728,7 +733,13 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       pack has no characters) and today's capsule under the real camera; screenshots `docs/images/look-test-2026-10-17[-far].png`;
       docs/04 "Look test (M6-V10)" and the first three licensing rows (Quaternius, CC0). Left: the owner's art call, then the real
       models and animations through the manifest / import script.)
-- [ ] Real SFX and placeholder music; alerts with sound.
+- [ ] Real SFX and placeholder music; alerts with sound. (M6-V12, 2026-10-17-2344: **real SFX and the alerts are in**: 16 clips cut from
+      the owner's Sonniss GDC 2026 bundle (`tools/audio/trim-wav.ps1` + `sfx-manifest.json`, LFS, docs/04 licensing rows) for 12 events
+      (`SfxEvent`); world sounds only for what the local player sees on screen, at most 4 per 100 ms; attack alerts (`ViewApi/AttackAlerts`
+      30 m / 10 s on the sim-tick clock, text off screen, a minimap ping, the `Alert` sound, Space jumps to the last one); the `Music` bus
+      hook (`MusicPlayer` plays `assets/audio/music/*.ogg`; none ships); verified by `SfxTest`, `AlertTest`, `CombatViewTest`, `ShellTest`,
+      QA's `QaM6V12Test` and `AttackAlertsQaTests`; docs/03 "Implementation (M6-V12)". Left: a placeholder music track (the owner's
+      download, docs/04) and the owner's ear on the clips.)
 - [ ] 3 maps (Raraku, Pale Hills, Vathar Crossing) plus the procedural generator in skirmish setup. (M5-4a, 2026-10-13, pulled
       forward: the generator's mirrored start locations, each with 2 mines and a forest in reach, replay format 6. M5-H1, 2026-10-13:
       both bases on one level and at least half a map apart. Left: the three hand-made maps, mirrored terrain, the generator's
