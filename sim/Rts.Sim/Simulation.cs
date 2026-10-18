@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Numerics;
 using Rts.Sim.Abilities;
 using Rts.Sim.Ai;
@@ -13,6 +14,7 @@ using Rts.Sim.Movement;
 using Rts.Sim.Orders;
 using Rts.Sim.Pathfinding;
 using Rts.Sim.Replays;
+using Rts.Sim.Save;
 using Rts.Sim.Vision;
 
 namespace Rts.Sim;
@@ -23,7 +25,7 @@ namespace Rts.Sim;
 /// <see cref="Tick"/>. Phase order follows docs/03 "Tick model"; phases after "apply commands"
 /// are added by later milestones.
 /// </remarks>
-public sealed class Simulation : ICommandSink
+public sealed partial class Simulation : ICommandSink
 {
     private readonly CommandQueue _commands;
     private readonly int[] _nextSequence;
@@ -56,6 +58,117 @@ public sealed class Simulation : ICommandSink
             _aiSeats++;
         }
     }
+
+    /// <summary>A loaded simulation (M6-S2): the world <see cref="TryLoad"/> read, no AI (slice 1 loads human seats only), the queue still to be read.</summary>
+    private Simulation(World world)
+    {
+        World = world;
+        _commands = new CommandQueue(world.Config.CommandCapacity);
+        _nextSequence = new int[world.Config.PlayerCount];
+        _ai = new AiPlayer?[world.Config.PlayerCount];
+    }
+
+    /// <summary>
+    /// M6-S2: writes this match to <paramref name="stream"/> as a save (docs/03 "Save/load and replays"): call it between
+    /// ticks. <see cref="TryLoad"/> of the bytes gives a sim whose <see cref="StateHash"/> equals this one's at every later
+    /// tick fed the same commands. Slice 1: false with <see cref="SaveError.AiSeatsUnsupported"/>, and nothing written, when
+    /// any seat is played by the AI (<see cref="SimConfig.HasAiSeat"/>). A stream that fails to write throws its own exception.
+    /// </summary>
+    public bool TrySave(Stream stream, out SaveError error)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        if (World.Config.HasAiSeat)
+        {
+            error = SaveError.AiSeatsUnsupported;
+            return false;
+        }
+        var w = new SaveWriter();
+        SaveHeader.Write(w, this);
+        World.WriteHeightmap(w, World.Heightmap);
+        World.WriteTo(w);
+        w.Tag(SaveFormat.TagCommands);
+        w.WriteArray(_nextSequence);
+        _commands.WriteTo(w);
+        w.Tag(SaveFormat.TagEnd);
+        stream.Write(w.Finish());
+        error = SaveError.None;
+        return true;
+    }
+
+    /// <summary>
+    /// M6-S2: reads a save <see cref="TrySave"/> wrote into a new simulation for <paramref name="data"/>, which must be the
+    /// data it was made with. Never throws on bad bytes: false, <paramref name="sim"/> null and the <see cref="SaveError"/>
+    /// (checked in that order: <see cref="SaveError.BadMagic"/>, <see cref="SaveError.Truncated"/>,
+    /// <see cref="SaveError.FormatVersionMismatch"/>, the length, <see cref="SaveError.ChecksumMismatch"/>,
+    /// <see cref="SaveError.DataMismatch"/>, <see cref="SaveError.InvalidHeader"/>, <see cref="SaveError.AiSeatsUnsupported"/>,
+    /// then <see cref="SaveError.Malformed"/> for the body). The load builds the world on the stored map without generating
+    /// or placing anything, so it draws from no RNG stream. A replay recorder can attach to the loaded sim only while it is
+    /// at tick 0 with nothing queued (the recorder's own rule), i.e. only a save made before the first tick.
+    /// </summary>
+    public static bool TryLoad(GameData data, Stream stream, out Simulation? sim, out SaveError error)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        ArgumentNullException.ThrowIfNull(stream);
+        sim = null;
+        error = Load(data, ReadAll(stream), out Simulation? loaded);
+        if (error != SaveError.None) return false;
+        sim = loaded;
+        return true;
+    }
+
+    /// <summary>The stream's bytes, at most one past <see cref="SaveFormat.MaxBytes"/> (a longer stream is refused as malformed).</summary>
+    private static byte[] ReadAll(Stream stream)
+    {
+        using var buffer = new MemoryStream();
+        var chunk = new byte[81920];
+        int n;
+        while ((n = stream.Read(chunk, 0, chunk.Length)) > 0)
+        {
+            buffer.Write(chunk, 0, n);
+            if (buffer.Length > SaveFormat.MaxBytes) break;
+        }
+        return buffer.ToArray();
+    }
+
+    private static SaveError Load(GameData data, byte[] bytes, out Simulation? sim)
+    {
+        sim = null;
+        ReadOnlySpan<byte> magic = SaveFormat.Magic;
+        int prefix = Math.Min(bytes.Length, magic.Length);
+        if (!bytes.AsSpan(0, prefix).SequenceEqual(magic[..prefix])) return SaveError.BadMagic;
+        if (bytes.Length < SaveFormat.FixedPrefix) return SaveError.Truncated;
+        if (System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(SaveFormat.MagicLength)) != SaveFormat.CurrentVersion)
+            return SaveError.FormatVersionMismatch;
+        long declared = System.Buffers.Binary.BinaryPrimitives.ReadInt64LittleEndian(bytes.AsSpan(SaveFormat.LengthOffset));
+        if (declared < SaveFormat.FixedPrefix + SaveFormat.ChecksumLength || declared > SaveFormat.MaxBytes) return SaveError.Malformed;
+        if (bytes.Length < declared) return SaveError.Truncated;
+        if (bytes.Length > declared) return SaveError.Malformed;
+        int body = bytes.Length - SaveFormat.ChecksumLength;
+        ulong stored = System.Buffers.Binary.BinaryPrimitives.ReadUInt64LittleEndian(bytes.AsSpan(body));
+        if (SaveFormat.Checksum(bytes.AsSpan(0, body)) != stored) return SaveError.ChecksumMismatch;
+
+        var r = new SaveReader(bytes, SaveFormat.FixedPrefix, body);
+        SaveError header = SaveHeader.TryRead(r, data, out SimConfig? config, out int tick);
+        if (header != SaveError.None) return header;
+        Heightmap? map = World.ReadHeightmap(r);
+        if (map == null || r.Failed) return SaveError.Malformed;
+        var loaded = new Simulation(World.ForLoad(config!, map));
+        loaded.World.TickNumber = tick;
+        loaded.World.ReadFrom(r);
+        if (!r.Expect(SaveFormat.TagCommands)) return SaveError.Malformed;
+        r.ReadArray(loaded._nextSequence);
+        foreach (int next in loaded._nextSequence) r.Check(next >= 0);
+        loaded._commands.ReadFrom(r, config!.PlayerCount);
+        if (!r.Expect(SaveFormat.TagEnd) || r.Remaining != 0) return SaveError.Malformed;
+        sim = loaded;
+        return SaveError.None;
+    }
+
+    /// <summary>Test seam (M6-S2's direct compares): pending command <paramref name="index"/> in queue order, as stamped.</summary>
+    internal ref readonly Command PendingAt(int index) => ref _commands[index];
+
+    /// <summary>Test seam (M6-S2): the sequence number <paramref name="player"/>'s next accepted command gets.</summary>
+    internal int NextSequenceOf(int player) => _nextSequence[player];
 
     /// <summary>Player <paramref name="player"/>'s AI, or null for a human seat (tests and tooling).</summary>
     internal AiPlayer? AiOf(int player) => (uint)player < (uint)_ai.Length ? _ai[player] : null;

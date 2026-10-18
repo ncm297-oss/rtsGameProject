@@ -13,7 +13,7 @@ namespace Rts.Sim.Economy;
 /// Which effects match which unit type is worked out once here, from the effects' load-time int filters, into a
 /// (unit, stat, tech) table; nothing in a tick walks effects or allocates.
 /// </remarks>
-internal sealed class TechState
+internal sealed partial class TechState
 {
     private static readonly int StatCount = DataLimits.TechStatIds.Length;
 

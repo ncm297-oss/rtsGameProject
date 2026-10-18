@@ -25,7 +25,16 @@ public sealed partial class World
     }
 
     /// <summary>Test seam: a world on a hand-made map (null generates one from the seed, as in a match).</summary>
-    internal World(SimConfig config, Heightmap? map)
+    internal World(SimConfig config, Heightmap? map) : this(config, map, placeResources: true)
+    {
+    }
+
+    /// <summary>
+    /// The world on <paramref name="map"/> (null generates one from the seed). <paramref name="placeResources"/> false is a
+    /// save's load (M6-S2): the stored map comes in, the placer doesn't run, so construction draws from no stream, and the
+    /// load then reads every store (<see cref="ReadFrom"/>).
+    /// </summary>
+    private World(SimConfig config, Heightmap? map, bool placeResources)
     {
         config.Validate();
         Config = config;
@@ -43,7 +52,7 @@ public sealed partial class World
         // Resources before the flow-field cache, so its step mask starts from the grid with them.
         // The placer draws from the map stream after the terrain did, and nothing when counts are 0.
         Resources = new ResourceStore(config.ResourceCapacity, NavGrid, config.Data);
-        ResourcePlacement = ResourcePlacer.Place(config.Map, NavGrid, Resources, config.Data, ref _rngs[RngStream.MapGen]);
+        if (placeResources) ResourcePlacement = ResourcePlacer.Place(config.Map, NavGrid, Resources, config.Data, ref _rngs[RngStream.MapGen]);
         Buildings = new BuildingStore(config.BuildingCapacity, NavGrid, config.Data, _ledger);
         SiteWorkers = new int[config.BuildingCapacity];
         PushedUnits = new int[config.UnitCapacity];
@@ -526,7 +535,7 @@ public sealed partial class World
     internal int SeenBlockVersion { get; set; }
 
     /// <summary>False for the test seam's hand-made maps, which a replay (seed + map params) can't rebuild.</summary>
-    internal bool HasGeneratedMap { get; }
+    internal bool HasGeneratedMap { get; private set; }
 
     /// <summary>
     /// M4-H3 (BUG-0461): stuck ticks a caster walking into range takes before it stops and its cast is dropped
@@ -584,7 +593,7 @@ public sealed partial class World
     internal void AddToTotal(int player, ResourceKind kind, int amount) => _ledger.AddToTotal(player, kind, amount);
 
     /// <summary>What the resource placer put on the map at construction (counts can fall short of <see cref="SimConfig.Map"/>'s request).</summary>
-    public ResourcePlacement ResourcePlacement { get; }
+    public ResourcePlacement ResourcePlacement { get; private set; }
 
     /// <summary>Number of the next tick to run (0 before the first tick).</summary>
     public int TickNumber { get; internal set; }

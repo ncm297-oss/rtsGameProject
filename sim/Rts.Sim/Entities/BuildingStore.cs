@@ -22,7 +22,7 @@ namespace Rts.Sim.Entities;
 /// world's ledger counts each player's finished buildings per type and slot as they spawn finished, complete or go
 /// (derived, for the requirement gates).
 /// </remarks>
-public sealed class BuildingStore
+public sealed partial class BuildingStore
 {
     /// <summary>Default <see cref="SimConfig.BuildingCapacity"/>.</summary>
     public const int DefaultCapacity = 256;

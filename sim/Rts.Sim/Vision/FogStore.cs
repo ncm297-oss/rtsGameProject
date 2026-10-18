@@ -36,7 +36,7 @@ namespace Rts.Sim.Vision;
 /// view), <see cref="Version"/> and the stamp boxes.
 /// </para>
 /// </remarks>
-public sealed class FogStore
+public sealed partial class FogStore
 {
     private readonly World _world;
     private readonly UnitStore _units;

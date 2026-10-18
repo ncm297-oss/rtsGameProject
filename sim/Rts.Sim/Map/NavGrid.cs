@@ -13,7 +13,7 @@ namespace Rts.Sim.Map;
 /// passable cell is reachable from every other. Queries never allocate and treat cells outside
 /// the map as blocked. Cell (x, y) covers world meters [x*CellSize, (x+1)*CellSize) on each axis.
 /// </remarks>
-public sealed class NavGrid
+public sealed partial class NavGrid
 {
     private readonly byte[] _levels;
     private readonly NavFlags[] _flags;

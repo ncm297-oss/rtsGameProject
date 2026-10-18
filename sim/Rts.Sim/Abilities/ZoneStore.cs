@@ -12,7 +12,7 @@ namespace Rts.Sim.Abilities;
 /// ability's data. No handles: a zone takes the lowest free slot and every loop runs in slot order. The read-only spans
 /// and the per-slot reads are the view's (M4-V6c); only the sim writes.
 /// </summary>
-public sealed class ZoneStore
+public sealed partial class ZoneStore
 {
     /// <summary>Default <see cref="SimConfig.ZoneCapacity"/>: far above what a match casts at once (a 12 s zone on a 45 s cooldown is about a quarter of the casters).</summary>
     public const int DefaultCapacity = 64;
