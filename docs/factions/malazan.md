@@ -116,7 +116,8 @@ manager's split, not a step). On Easy each step waits `buildOrderSlack` (30 s) a
 `Content/AiContentTests` pins the openings table, every opening's step table, composition table and wave line, and the
 retreat line below to the file, both ways; `Content/AiOpeningPairsReportTests` plays every Malazan opening against every
 Whirlwind opening (9 Normal AI-v-AI matches, 20 minutes each, the menu's map) and fails unless both sides send a wave and
-no step is a dead end.
+no step is a dead end. A step still short of gold or wood at 20:00 prints how long it has been due and the banks; a
+wait over 5 minutes is marked as BUG-0981's pattern (the missing reserve above), printed but not failed.
 
 | # | Id | Name (shown to the player) | Description (shown to the player) |
 | --- | --- | --- | --- |
@@ -339,6 +340,13 @@ train), so its weights sum to 30.
 - **Attack waves:** first at 18 army pop and 1,332 gold + wood (`attack`; the cost of 18 pop of the Age I mix, Heavy
   Infantry at 74 a pop). Mages cast Telas Fire on the largest enemy clump.
 
+**This opening can fall to a rush without ever attacking (BUG-0982, D-H6, 2026-10-18).** It is the greedy opening: one
+Barracks in Age I and the gold saved for Age II. Against the Whirlwind's raider rush, the Malazan army stayed small
+while the base was defended, and on two of three measured seeds it was destroyed (at 13:14 and 11:19) without sending a
+wave. A lower wave threshold doesn't help: at 16 or 14 army pop the same two seeds still send no wave, because the army
+never grows past 11 pop (seed 8) or 8 pop (seed 14). So the wave stays at 18 (the Producer's default, measured; the owner may revisit). The
+measurement is under "Fast Age II against the raider rush" at the end of this page.
+
 ## Difficulty
 
 The `difficulties` block of the same `game/data/factions/malazan/ai.json` (docs/02 "AI opponent", docs/03 "For the data
@@ -460,3 +468,36 @@ Heavy Infantry live, the riders are wiped out (22.6 s). With `minRange` 2 m: 0 d
 thrower), same outcome. With splash 1 m: 0 own splash, 2 Sappers and 1 Heavy Infantry left (29.4 s). 4 Sappers alone
 lose to the 8 riders in every variant (12 / 3 / 0 own splash). The self-splash is small next to what the riders do;
 the Sapper stays "Fragile; wants an escort".
+
+## Fast Age II against the raider rush (BUG-0982, D-H6, 2026-10-18)
+
+Measured by `Content/AiOpeningPairsReportTests.Bug0982_CadreRushVersusRaiderRush_WaveThresholdTable`, which pins this
+table to its output cell for cell. Malazan `cadre_rush` (Fast Age II) against Whirlwind `raider_rush`, two Normal AI
+seats on the menu's map (12 forests, 8 mines), 20 minutes, on the three smallest seeds in 1-500 that make the pair (7,
+8, 14). `attack.minArmyPop` is set to 18 (shipped), 16 and 14, and `minArmyCost` is the cost of that pop of the Age I
+mix, rounded down (Heavy Infantry at 74 a pop). The columns are the Malazan side's: the first wave (and the number of
+waves), Age II, the defeat, and the largest army it had (read once a second).
+
+| minArmyPop / minArmyCost | seed | waved at (waves) | Age II at | defeated at | peak army pop |
+| --- | --- | --- | --- | --- | --- |
+| 18 / 1,332 | 7 | 8:42 (3) | 8:24 | never | 25 |
+| 18 / 1,332 | 8 | never (0) | 8:44 | 13:14 | 11 |
+| 18 / 1,332 | 14 | never (0) | never | 11:19 | 8 |
+| 16 / 1,184 | 7 | 8:24 (4) | 8:24 | never | 43 |
+| 16 / 1,184 | 8 | never (0) | 8:44 | 13:14 | 11 |
+| 16 / 1,184 | 14 | never (0) | never | 11:19 | 8 |
+| 14 / 1,036 | 7 | 7:54 (5) | 8:24 | never | 31 |
+| 14 / 1,036 | 8 | never (0) | 8:44 | 13:14 | 11 |
+| 14 / 1,036 | 14 | never (0) | never | 11:19 | 8 |
+
+**The rule (the Producer's default for D-H6, the owner may revisit):** take the lowest threshold of 16 or less at which
+seed 8 waves and Age II comes on every measured seed no more than 60 s later than at 18; else keep 18. Age II is not
+delayed at either lower threshold, but seed 8 sends no wave at 16 or at 14, so the wave stays at 18. Lowering it only
+brings seed 7's first wave earlier (8:42 to 7:54). On seeds 8 and 14 the army never reaches 14 pop, so no threshold in
+this range would send a wave. A fix would have to be something other than this number, for example the sim-side
+"send what you have when the base is being lost" that BUG-0982's notes name. That is a new mechanic, so it is not data.
+
+The same thing happens to `crossbow_push` (D-H6's third seed per pairing, `QA/Content/D21OpeningsQaTests`). Against
+`raider_rush` on seed 19 its army peaks at 8 pop, under its 14-pop wave, while it holds the base. At 20:00 it is down to
+6 pop with a cap of 16, 670 gold and 60 wood, never having attacked, and its last buildings are still standing. On
+the 27 measured pairing seeds, `standard` sent a wave every time.

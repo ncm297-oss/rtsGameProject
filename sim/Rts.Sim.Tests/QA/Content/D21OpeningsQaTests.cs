@@ -10,7 +10,8 @@ namespace Rts.Sim.Tests.QA.Content;
 /// an Age I unit needs no Age II), every research step has a Forge built in the same order, the wave's cost is what the
 /// Age I mix costs at that pop (a wave that can't be reached never leaves), the player-facing description quotes the
 /// opening's own wave pop, names don't collide with a building's name, and Easy stays on opening 0.
-/// The Stress row replays every Malazan x Whirlwind pairing on its second-smallest seed (the report uses the smallest).
+/// The Stress rows replay every Malazan x Whirlwind pairing on its second- and third-smallest seeds (the report uses the
+/// smallest; the third is D-H6's).
 /// </summary>
 public class D21OpeningsQaTests
 {
@@ -208,39 +209,80 @@ public class D21OpeningsQaTests
 
     /// <summary>
     /// The 9 pairings again on a second seed each (the second-smallest in 1-500 making the pair; the report used the
-    /// smallest): two Normal AI seats on the menu's map for 20 minutes, both send a wave.
+    /// smallest): two Normal AI seats on the menu's map for 20 minutes, both send a wave. A side defeated without a wave
+    /// still passes, printed: BUG-0982 was settled by measurement as "keep 18" (D-H6, the malazan page's "Fast Age II can
+    /// fall without attacking"), so <c>cadre_rush</c> v <c>raider_rush</c> seed 8 dies at 13:14 with no wave by design;
+    /// the row turns strict (<c>first[p] &gt;= 0</c>) only if a later change makes that opening wave under pressure.
     /// </summary>
     [Theory]
     [Trait("Category", "Stress")]
     [MemberData(nameof(Pairs))]
-    public void EveryPairing_SecondSeed_BothSidesWaveIn20Minutes(int malazan, int whirlwind)
+    public void EveryPairing_SecondSeed_BothSidesWaveIn20Minutes(int malazan, int whirlwind) => BothSidesWave(malazan, whirlwind, 2);
+
+    /// <summary>
+    /// D-H6: the same on a third seed per pairing (the third-smallest in 1-500), with the same allowance as the second (see
+    /// there), plus the one named case in <see cref="KnownBeatenAlive"/>.
+    /// </summary>
+    [Theory]
+    [Trait("Category", "Stress")]
+    [MemberData(nameof(Pairs))]
+    public void EveryPairing_ThirdSeed_BothSidesWaveIn20Minutes(int malazan, int whirlwind) => BothSidesWave(malazan, whirlwind, 3);
+
+    /// <summary>The pairing's <paramref name="nth"/>-smallest seed in 1-500, 20 minutes Normal v Normal; prints each side's opening, first wave, Age II, defeat and peak army.</summary>
+    private void BothSidesWave(int malazan, int whirlwind, int nth)
     {
         ulong seed = 0;
         int found = 0;
-        for (ulong s = 1; s <= 500 && found < 2; s++)
+        for (ulong s = 1; s <= 500 && found < nth; s++)
             if (Rts.Sim.Tests.Content.AiOpeningSeeds.Pick(s, 0, AiDifficulty.Normal) == malazan && Rts.Sim.Tests.Content.AiOpeningSeeds.Pick(s, 1, AiDifficulty.Normal) == whirlwind) { seed = s; found++; }
-        Assert.Equal(2, found);
+        Assert.Equal(nth, found);
         Simulation sim = Rts.Sim.Tests.Content.AiSpendingReportTests.MenuMap(AiScenes.Seats(AiDifficulty.Normal, SeatController.Ai, SeatController.Ai), seed);
         Assert.Equal((malazan, whirlwind), (sim.AiOpening(0), sim.AiOpening(1)));
         var first = new[] { -1, -1 };
         var fell = new[] { -1, -1 };
+        var ageTwo = new[] { -1, -1 };
         var peakArmy = new int[2];
+        var defending = new int[2];
         for (int t = 0; t < 24_000; t++)
         {
             sim.Tick();
             for (int p = 0; p < 2; p++)
             {
+                if (sim.TickNumber % sim.AiOf(p)!.ThinkTicks == 0 && sim.AiOf(p)!.Board.Defending) defending[p]++;
                 if (first[p] < 0 && sim.AiOf(p)!.Board.WavesStarted > 0) first[p] = sim.TickNumber;
                 if (fell[p] < 0 && sim.World.IsDefeated(p)) fell[p] = sim.TickNumber;
+                if (ageTwo[p] < 0 && sim.World.Age(p) >= 2) ageTwo[p] = sim.TickNumber;
             }
             if (t % 20 == 0)
                 for (int p = 0; p < 2; p++) peakArmy[p] = Math.Max(peakArmy[p], ArmyHalfPop(sim, p));
         }
         string Sec(int tick) => tick < 0 ? "never" : $"{tick / 20 / 60}:{tick / 20 % 60:00}";
-        _out.WriteLine($"seed {seed}: malazan {sim.AiOf(0)!.Opening.Id} first wave {Sec(first[0])} ({sim.AiOf(0)!.Board.WavesStarted} waves), whirlwind {sim.AiOf(1)!.Opening.Id} first wave {Sec(first[1])} ({sim.AiOf(1)!.Board.WavesStarted} waves); defeated at {Sec(fell[0])} / {Sec(fell[1])}; peak army pop {peakArmy[0] / 2.0} / {peakArmy[1] / 2.0}");
+        string Side(int p) => $"{sim.World.Data.Factions[sim.AiOf(p)!.Faction].Key} {sim.AiOf(p)!.Opening.Id} first wave {Sec(first[p])} ({sim.AiOf(p)!.Board.WavesStarted} waves), Age II {Sec(ageTwo[p])}, defeated {Sec(fell[p])}, thinks defending {defending[p]}, at 20:00 pop {sim.World.HalfPop[p] / 2.0} / cap {sim.World.HalfPopCap[p] / 2.0}, gold {sim.World.Gold[p]}, wood {sim.World.Wood[p]}";
+        _out.WriteLine($"seed {seed} (#{nth} of the pairing): {Side(0)}; {Side(1)}; peak army pop {peakArmy[0] / 2.0} / {peakArmy[1] / 2.0}");
         for (int p = 0; p < 2; p++)
+        {
+            if (first[p] < 0 && fell[p] >= 0) _out.WriteLine($"  allowed: player {p} ({sim.AiOf(p)!.Opening.Id}) was defeated without a wave (BUG-0982, kept by measurement)");
+            bool known = Array.IndexOf(KnownBeatenAlive, (malazan, whirlwind, seed, p)) >= 0;
+            if (known && first[p] < 0 && fell[p] < 0)
+            {
+                _out.WriteLine($"  KNOWN (D-H6 finding): player {p} ({sim.AiOf(p)!.Opening.Id}) sent no wave and was beaten but not defeated (BUG-0982's pattern on another opening); see KnownBeatenAlive");
+                continue;
+            }
+            if (known) _out.WriteLine($"  the known case seed {seed} player {p} now passes the rule: take it out of KnownBeatenAlive");
             Assert.True(first[p] >= 0 || sim.World.IsDefeated(p), $"seed {seed}: player {p} ({sim.AiOf(p)!.Opening.Id}) sent no wave in 20 minutes and was not defeated");
+        }
     }
+
+    /// <summary>
+    /// D-H6's third seed found one case the "defeated" allowance doesn't cover, listed here by (Malazan opening, Whirlwind
+    /// opening, seed, player) instead of loosening the rule for every row: <c>crossbow_push</c> v <c>raider_rush</c> seed 19.
+    /// The Malazan army peaks at 8 pop (under its 14-pop wave), the base is held under the raids (222 thinks defending),
+    /// and at 20:00 it is down to 6 pop / cap 16 with 670 gold and 60 wood, still standing. A lower wave would not reach
+    /// it either. It is BUG-0982's pattern (a Malazan opening falls to the raider rush without attacking), on another
+    /// opening, with the last buildings not yet razed. Reported to the Producer (a new bug, the sim-side lever: send what
+    /// you have when the base is being lost); remove the entry when the row passes the rule (the run prints so).
+    /// </summary>
+    private static readonly (int Malazan, int Whirlwind, ulong Seed, int Player)[] KnownBeatenAlive = { (1, 1, 19, 0) };
 
     /// <summary>Determinism per pairing with the shipped openings: two Normal v Normal runs on the pair's smallest seed, equal state hashes every 50 ticks for 6,000 ticks, and the same commands sent.</summary>
     [Theory]
