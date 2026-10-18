@@ -363,31 +363,43 @@ public sealed class GameData
                     h.Add(d.UseAbilities);
                     h.Add(d.ExpandAfterTicks);
                 }
-            h.Add(a.BuildOrder.IsDefault ? -1 : a.BuildOrder.Length);
-            if (!a.BuildOrder.IsDefault)
-                foreach (AiStep s in a.BuildOrder)
-                {
-                    h.Add((int)s.Trigger);
-                    h.Add(s.At);
-                    h.Add((int)s.Action);
-                    h.Add(s.Target);
-                    h.Add(s.TargetKey ?? "");
-                    h.Add(s.Count);
-                }
-            h.Add(a.Compositions.IsDefault ? -1 : a.Compositions.Length);
-            if (!a.Compositions.IsDefault)
-                foreach (AiComposition c in a.Compositions)
-                {
-                    h.Add(c.Age);
-                    AddAll(ref h, c.Units);
-                    h.Add(c.Weights.IsDefault ? -1 : c.Weights.Length);
-                    if (!c.Weights.IsDefault) foreach (float w in c.Weights) h.Add(w);
-                }
-            h.Add(a.AttackMinHalfPop);
-            h.Add(a.AttackMinCost);
+            // M5-8a: every opening, in file order (the order is the pick's index, so it is content too).
+            h.Add(a.Openings.IsDefault ? -1 : a.Openings.Length);
+            if (!a.Openings.IsDefault)
+                foreach (AiOpening o in a.Openings) AddOpening(ref h, o);
             h.Add(a.RetreatHpFraction);
             h.Add(a.RetreatLossFraction);
         }
+    }
+
+    /// <summary>M5-8a: every field of an AI opening (its id and names too: a stats screen shows them).</summary>
+    private static void AddOpening(ref StateHasher h, AiOpening o)
+    {
+        h.Add(o.Id ?? "");
+        h.Add(o.DisplayName ?? "");
+        h.Add(o.Description ?? "");
+        h.Add(o.BuildOrder.IsDefault ? -1 : o.BuildOrder.Length);
+        if (!o.BuildOrder.IsDefault)
+            foreach (AiStep s in o.BuildOrder)
+            {
+                h.Add((int)s.Trigger);
+                h.Add(s.At);
+                h.Add((int)s.Action);
+                h.Add(s.Target);
+                h.Add(s.TargetKey ?? "");
+                h.Add(s.Count);
+            }
+        h.Add(o.Compositions.IsDefault ? -1 : o.Compositions.Length);
+        if (!o.Compositions.IsDefault)
+            foreach (AiComposition c in o.Compositions)
+            {
+                h.Add(c.Age);
+                AddAll(ref h, c.Units);
+                h.Add(c.Weights.IsDefault ? -1 : c.Weights.Length);
+                if (!c.Weights.IsDefault) foreach (float w in c.Weights) h.Add(w);
+            }
+        h.Add(o.AttackMinHalfPop);
+        h.Add(o.AttackMinCost);
     }
 
     /// <summary>Every field of an attack (a unit's, or since M4-3b a building's).</summary>

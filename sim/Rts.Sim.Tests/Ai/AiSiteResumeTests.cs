@@ -15,7 +15,7 @@ namespace Rts.Sim.Tests;
 public class AiSiteResumeTests
 {
     private static readonly Lazy<GameData> s_quietOrder = new(() => AiScenes.DataWithAi("malazan", root =>
-        root["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1))));
+        AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1))));
 
     /// <summary>
     /// An own Billet site with no builder (spawned straight into the store, as if its builder had been taken away): within

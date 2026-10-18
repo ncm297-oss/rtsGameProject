@@ -137,7 +137,7 @@ public class AiHouseRuleReportTests
         BuildingDef houseDef = d.Buildings[house];
         Assert.True(houseDef.Faction == player && houseDef.Slot == BuildingSlot.House, $"AiPlayer.HouseType {houseDef.Key} is not the House of {label}");
         int rulesCap = d.Rules.HalfPopCap;
-        var steps = def.BuildOrder;
+        var steps = def.Openings[0].BuildOrder;
         int tree = d.FindResource("tree"), mine = d.FindResource("gold_mine");
         var houseSteps = Enumerable.Range(0, steps.Length)
             .Where(i => steps[i].Action == AiStepAction.Build && steps[i].Target == house).ToArray();

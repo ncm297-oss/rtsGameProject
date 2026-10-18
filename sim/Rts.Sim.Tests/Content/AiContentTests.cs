@@ -81,12 +81,12 @@ public class AiContentTests
 
         // Steps, row for row.
         string[][] rows = tables[0].Skip(2).Select(r => PageTables.Cells(r, stripBackticks: true)).ToArray();
-        if (rows.Length != ai.BuildOrder.Length)
-            problems.Add($"{faction} steps: page {rows.Length} vs data {ai.BuildOrder.Length}");
-        for (int i = 0; i < Math.Max(rows.Length, ai.BuildOrder.Length); i++)
+        if (rows.Length != ai.Openings[0].BuildOrder.Length)
+            problems.Add($"{faction} steps: page {rows.Length} vs data {ai.Openings[0].BuildOrder.Length}");
+        for (int i = 0; i < Math.Max(rows.Length, ai.Openings[0].BuildOrder.Length); i++)
         {
             string page = i < rows.Length ? string.Join(" | ", rows[i].Skip(1).Take(4)) : "(none)";
-            string data = i < ai.BuildOrder.Length ? StepText(ai.BuildOrder[i]) : "(none)";
+            string data = i < ai.Openings[0].BuildOrder.Length ? StepText(ai.Openings[0].BuildOrder[i]) : "(none)";
             if (i < rows.Length && rows[i][0] != (i + 1).ToString(CultureInfo.InvariantCulture))
                 problems.Add($"{faction} step {i + 1}: the page numbers it '{rows[i][0]}'");
             if (page != data) problems.Add($"{faction} step {i + 1}: page '{page}' vs data '{data}'");
@@ -94,9 +94,9 @@ public class AiContentTests
 
         // Composition table: unit | Age I | Age II, "—" for none.
         string[][] comp = tables[1].Skip(2).Select(r => PageTables.Cells(r, stripBackticks: true)).ToArray();
-        for (int age = 1; age <= ai.Compositions.Length; age++)
+        for (int age = 1; age <= ai.Openings[0].Compositions.Length; age++)
         {
-            AiComposition c = ai.Compositions[age - 1];
+            AiComposition c = ai.Openings[0].Compositions[age - 1];
             string data = string.Join(", ", c.Units.Select((u, k) => $"{d.Units[u].Key} {Num(c.Weights[k])}").OrderBy(x => x, StringComparer.Ordinal));
             string page = string.Join(", ", comp.Where(r => r.Length > age && r[age] != "—").Select(r => $"{r[0]} {r[age]}").OrderBy(x => x, StringComparer.Ordinal));
             if (page != data) problems.Add($"{faction} composition age {age}: page '{page}' vs data '{data}'");
@@ -109,7 +109,7 @@ public class AiContentTests
         if (target == null) problems.Add($"{faction}: no 'Composition target (by pop)' line");
         else
         {
-            AiComposition last = ai.Compositions[^1];
+            AiComposition last = ai.Openings[0].Compositions[^1];
             string data = string.Join(", ", last.Units.Select((u, k) => $"{Num(last.Weights[k])}% {d.Units[u].DisplayName}").OrderBy(x => x, StringComparer.Ordinal));
             string page = string.Join(", ", Regex.Matches(target, @"(\d+(?:\.\d+)?)% ([^,]+)")
                 .Select(m => $"{m.Groups[1].Value}% {m.Groups[2].Value.Trim().TrimEnd('.')}").OrderBy(x => x, StringComparer.Ordinal));
@@ -122,7 +122,7 @@ public class AiContentTests
         else
         {
             string page = $"{a.Groups[1].Value} pop, {a.Groups[2].Value.Replace(",", "")} cost";
-            string data = $"{Num(ai.AttackMinHalfPop / 2.0)} pop, {ai.AttackMinCost.ToString(CultureInfo.InvariantCulture)} cost";
+            string data = $"{Num(ai.Openings[0].AttackMinHalfPop / 2.0)} pop, {ai.Openings[0].AttackMinCost.ToString(CultureInfo.InvariantCulture)} cost";
             if (page != data) problems.Add($"{faction} attack: page '{page}' vs data '{data}'");
         }
 
@@ -181,8 +181,8 @@ public class AiContentTests
         using TestDataDir dir = TestDataDir.CopyOfShipped();
         dir.EditJson("factions/whirlwind/ai.json", root =>
         {
-            root["buildOrder"]![3]!["at"] = JsonNode.Parse("""{ "pop": 10 }""");
-            root["attack"]!["minArmyPop"] = 15;
+            AiScenes.Opening(root)["buildOrder"]![3]!["at"] = JsonNode.Parse("""{ "pop": 10 }""");
+            AiScenes.Opening(root)["attack"]!["minArmyPop"] = 15;
         });
         DataLoadResult result = DataLoader.LoadAll(dir.Path);
         Assert.True(result.Ok, string.Join("\n", result.Errors));
@@ -205,13 +205,13 @@ public class AiContentTests
         {
             int f = Data.FindFaction(faction);
             AiDef ai = Data.Ai[f];
-            var built = new HashSet<int>(ai.BuildOrder.Where(s => s.Action == AiStepAction.Build).Select(s => s.Target));
+            var built = new HashSet<int>(ai.Openings[0].BuildOrder.Where(s => s.Action == AiStepAction.Build).Select(s => s.Target));
             built.Add(Data.Buildings.Select((b, i) => (b, i)).Single(x => x.b.Faction == f && x.b.Slot == BuildingSlot.TownHall).i);
-            var researched = new HashSet<int>(ai.BuildOrder.Where(s => s.Action == AiStepAction.Research).Select(s => s.Target));
+            var researched = new HashSet<int>(ai.Openings[0].BuildOrder.Where(s => s.Action == AiStepAction.Research).Select(s => s.Target));
             var builtSlots = new HashSet<BuildingSlot>(built.Select(b => Data.Buildings[b].Slot));
-            for (int i = 0; i < ai.BuildOrder.Length; i++)
+            for (int i = 0; i < ai.Openings[0].BuildOrder.Length; i++)
             {
-                AiStep s = ai.BuildOrder[i];
+                AiStep s = ai.Openings[0].BuildOrder[i];
                 string where = $"{faction} step {i + 1} ({s.TargetKey})";
                 switch (s.Action)
                 {
@@ -237,7 +237,7 @@ public class AiContentTests
                         break;
                 }
             }
-            foreach (AiComposition c in ai.Compositions)
+            foreach (AiComposition c in ai.Openings[0].Compositions)
                 foreach (int u in c.Units)
                 {
                     Assert.True(Data.Units[u].Faction == f, $"{faction} age {c.Age}: {Data.Units[u].Key} is another faction's");
@@ -259,12 +259,12 @@ public class AiContentTests
         foreach (string faction in Factions)
         {
             AiDef ai = Data.Ai[Data.FindFaction(faction)];
-            AiStep ageStep = ai.BuildOrder.Single(s => s.Action == AiStepAction.Research && s.Target == age2);
+            AiStep ageStep = ai.Openings[0].BuildOrder.Single(s => s.Action == AiStepAction.Research && s.Target == age2);
             Assert.Equal(AiStepTrigger.Time, ageStep.Trigger);
-            var ageOne = new HashSet<int>(ai.BuildOrder
+            var ageOne = new HashSet<int>(ai.Openings[0].BuildOrder
                 .Where(s => s.Action == AiStepAction.Build && (s.Trigger != AiStepTrigger.Time || s.At < ageStep.At))
                 .Select(s => s.Target));
-            AiComposition one = ai.Compositions[0], two = ai.Compositions[1];
+            AiComposition one = ai.Openings[0].Compositions[0], two = ai.Openings[0].Compositions[1];
             foreach (int u in one.Units)
             {
                 UnitDef unit = Data.Units[u];
@@ -296,7 +296,7 @@ public class AiContentTests
         {
             int f = Data.FindFaction(faction);
             AiDef ai = Data.Ai[f];
-            AiComposition one = ai.Compositions[0];
+            AiComposition one = ai.Openings[0].Compositions[0];
             double perPop = 0;
             for (int k = 0; k < one.Units.Length; k++)
             {
@@ -304,14 +304,14 @@ public class AiContentTests
                 perPop += one.Weights[k] * (u.CostGold + u.CostWood) / (u.HalfPop / 2.0);
             }
             perPop /= one.Weights.Sum();
-            Assert.True((int)Math.Floor(ai.AttackMinHalfPop / 2.0 * perPop) == ai.AttackMinCost,
-                $"{faction}: minArmyCost {ai.AttackMinCost} vs {Num(ai.AttackMinHalfPop / 2.0)} pop x {Num(perPop)} per pop");
+            Assert.True((int)Math.Floor(ai.Openings[0].AttackMinHalfPop / 2.0 * perPop) == ai.Openings[0].AttackMinCost,
+                $"{faction}: minArmyCost {ai.Openings[0].AttackMinCost} vs {Num(ai.Openings[0].AttackMinHalfPop / 2.0)} pop x {Num(perPop)} per pop");
 
             string[][] rows = FactionPage.Table(faction, Section);
             int workers = Data.Rules.StartingWorkers;
-            for (int i = 0; i < ai.BuildOrder.Length; i++)
+            for (int i = 0; i < ai.Openings[0].BuildOrder.Length; i++)
             {
-                AiStep s = ai.BuildOrder[i];
+                AiStep s = ai.Openings[0].BuildOrder[i];
                 string why = rows[i][5];
                 if (s.Action == AiStepAction.Train && Data.Units[s.Target].Slot == UnitSlot.Worker)
                 {
@@ -335,7 +335,7 @@ public class AiContentTests
             }
 
             int hall = Data.Buildings.Single(b => b.Faction == f && b.Slot == BuildingSlot.TownHall).HalfPopProvided;
-            int houses = ai.BuildOrder.Where(s => s.Action == AiStepAction.Build && Data.Buildings[s.Target].Slot == BuildingSlot.House)
+            int houses = ai.Openings[0].BuildOrder.Where(s => s.Action == AiStepAction.Build && Data.Buildings[s.Target].Slot == BuildingSlot.House)
                 .Sum(s => Data.Buildings[s.Target].HalfPopProvided);
             Assert.True(hall + houses >= Data.Rules.HalfPopCap, $"{faction}: the order's halls and houses give {Num((hall + houses) / 2.0)} pop, below the cap");
         }

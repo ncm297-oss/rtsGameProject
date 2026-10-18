@@ -31,7 +31,7 @@ public class AiScoutGridCostQaTests
             r["ai"]!["scoutGrid"] = 16;
             r["ai"]!["scoutAfter"] = 0;
         });
-        dir.EditJson("factions/malazan/ai.json", root => root["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1)));
+        dir.EditJson("factions/malazan/ai.json", root => AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1)));
     }));
 
     private static (Simulation Sim, AiPlayer Ai) Scene()

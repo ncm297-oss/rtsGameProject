@@ -31,7 +31,7 @@ public class AiSeatQaTests
 
     /// <summary>An ai.json for malazan whose only step can't fire for an hour, so a scene's commands are the economy's.</summary>
     private static readonly Lazy<GameData> s_quietOrder = new(() => AiScenes.DataWithAi("malazan", root =>
-        root["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1))));
+        AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1))));
 
     // ---------- BUG-0570: the economy and a remembered node that is gone ----------
 
@@ -262,7 +262,7 @@ public class AiSeatQaTests
     {
         GameData data = AiScenes.DataWithAi("malazan", root =>
         {
-            root["buildOrder"] = AiScenes.BuildOrder(
+            AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(
                 ("time", 0, "train", "malazan_wickan_lancer", 5),
                 ("time", 0, "research", "armor_1", 0),
                 ("time", 0, "build", RequiringBuilding(), 0),

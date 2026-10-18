@@ -21,7 +21,7 @@ public class AiGatherMarkQaTests
 
     /// <summary>An ai.json for malazan whose only step can't fire for an hour, so a scene's commands are the economy's.</summary>
     private static readonly Lazy<GameData> s_quietOrder = new(() => AiScenes.DataWithAi("malazan", root =>
-        root["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1))));
+        AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1))));
 
     private static bool FarHalf(int cell) => cell % AiScenes.FlatSize >= AiScenes.FlatSize / 2;
 

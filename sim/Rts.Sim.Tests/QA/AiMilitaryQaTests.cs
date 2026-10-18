@@ -34,8 +34,8 @@ public class AiMilitaryQaTests
     {
         dir.EditJson("factions/malazan/ai.json", root =>
         {
-            root["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1));
-            root["attack"] = new JsonObject { ["minArmyPop"] = pop, ["minArmyCost"] = cost };
+            AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1));
+            AiScenes.Opening(root)["attack"] = new JsonObject { ["minArmyPop"] = pop, ["minArmyCost"] = cost };
             root["retreat"]!["lossFraction"] = loss;
             root["difficulties"]!["normal"]!["waveSizeMultiplier"] = 1;
         });
@@ -257,8 +257,8 @@ public class AiMilitaryQaTests
         {
             dir.EditJson("factions/malazan/ai.json", root =>
             {
-                root["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1));
-                root["attack"] = new JsonObject { ["minArmyPop"] = 1, ["minArmyCost"] = 0 };
+                AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1));
+                AiScenes.Opening(root)["attack"] = new JsonObject { ["minArmyPop"] = 1, ["minArmyCost"] = 0 };
                 root["difficulties"]!["normal"]!["waveSizeMultiplier"] = 1;
             });
             dir.SetUnitField("malazan", "malazan_heavy_infantry", "attack.targets", "\"units\"");
@@ -481,7 +481,7 @@ public class AiMilitaryQaTests
     }
 
     private static readonly Lazy<GameData> s_quiet = new(() => AiScenes.DataWithAi("malazan", root =>
-        root["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1))));
+        AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1))));
 
     /// <summary>
     /// The scout's first waypoint (east, 40 m from the hall) lies on a plateau no ramp reaches. The scout walks as near as it can,

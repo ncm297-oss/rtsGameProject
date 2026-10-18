@@ -6394,7 +6394,7 @@ needs the seed, the seats and every player's commands, the AI's included.
 ```
 AiPlayer                # a think: census, then the managers in this order
   DefenseManager        # defend the base: army to the threat, workers flee (M5-4b)
-  BuildOrderExecutor    # walks the faction's ai.json build order (M5-2)
+  BuildOrderExecutor    # walks the picked ai.json opening's build order (M5-2; openings M5-8a)
   ScoutManager          # early scout (M5-3); periodic map checks (M5-4)
   EconomyManager        # worker targets per resource, houses before cap (M5-2); rebalancing (M5-3)
   ProductionManager     # keeps halls busy toward the target composition (M5-2; pop shares M5-3)
@@ -6499,7 +6499,9 @@ enums `AiDifficulty` / `AiStepTrigger` / `AiStepAction`, `Data/DataLoader.Ai.cs`
   rule (`PlayerView.CanPlace`).
 
 **For the data track (M5-1).** `factions/<id>/ai.json`, required for every faction (a missing file is one error). Unknown fields
-and repeated keys are errors, as everywhere. Shape:
+and repeated keys are errors, as everywhere. **Since M5-8a** `buildOrder`, `compositions` and `attack` live inside each entry
+of `openings[]` (the shape and rules below are per opening; paths read `openings[i].buildOrder[j]...`), and the top-level
+fields are refused: see "Implementation (M5-8a)". Shape as of M5-1:
 
 ```json
 {
@@ -6578,7 +6580,7 @@ acting only through commands. Code: `sim/Rts.Sim/Ai/AiPlayer.cs`, `Blackboard.cs
   `ReplayRecorder` logs them in enqueue order like a human's; playback re-enqueues each when `TickNumber == Tick - 1`, i.e.
   between the same ticks, and builds the sim with the header's factions and **every seat human**: the AI never runs on
   playback (if it did, its commands would be sent twice: `Ai/AiReplayTests`). Replay format 5 carries the seats.
-- **AI state is not sim state.** Not in `StateHash`: the `Blackboard`, the census, the AI's RNG, its retry marks. What it
+- **AI state is not sim state.** Not in `StateHash`: the `Blackboard`, the census, the AI's RNG, its retry marks, its opening pick (M5-8a). What it
   does reaches the hash only through its commands (the queue, the sequence numbers, their effects). A save (M6) will store
   the blackboards (as "Save/load and replays" lists).
 - **A think.** A census of the view (own live units per type and the workers, own buildings with their queues, the Town
@@ -6618,6 +6620,10 @@ acting only through commands. Code: `sim/Rts.Sim/Ai/AiPlayer.cs`, `Blackboard.cs
     thinks late (2.5 s on Hard, 5 s on Normal, 10 s on Easy). An engine pacing constant, like the 16 retry marks, not a data
     knob. `AiPlayer.SiteSearches` counts the searches
     (`AiPlayerTests.ABuildStepWithNoSite_SearchesOnceEveryNoSiteRetryThinks_NotEveryThink`: 4 in 20 thinks, was 20).
+    **M5-8a (BUG-0910):** the wait applies only after a ring search that ran (`FindSite` past its cell-free test, so
+    `SiteSearches` moved). A step stopped at `PlayerView.CanPlaceAnywhere` (its requires unmet, a full building store) cost
+    nothing and re-checks at every think, so its Build goes out 1-2 thinks after the requirement stands, as before M5-H3
+    (`QA/SimHardeningM5H3QaTests.ABuildStepWaitingOnARequirement_SendsItsBuildAtTheThinkAfterTheRequirementIsMet`).
   - `build`: a site found by **`PlayerView.CanPlace`** searched outward from the own Town Hall (its first finished one, else
     its first site; without a hall its first building), a `camp` from the known tree nearest the hall. The search walks
     Chebyshev rings out to `placementSearchRadius` (not at all when a cell-free rule fails: `PlayerView.CanPlaceAnywhere`,
@@ -7654,6 +7660,57 @@ kind, no data or `rules.json` field, nothing hashed. Every counter is per player
   `HasTech`, `min(tick / interval, capacity)` samples with old ones unchanged, one row with interval 7 and capacity 100;
   a twin run with the same hash, counters and samples), `ReplayGoldenTests` (unchanged).
 
+### Implementation (M5-8a)
+
+M5 criterion 8, the sim half: named AI openings (D14 b). Code: `Data/AiOpening.cs`, `AiDef.Openings` / `FindOpening`,
+`DataLoader.Ai.cs` (`BuildAiOpenings`), `DataLimits.MaxAiOpenings` / `MaxAiOpeningNameLength` / `MaxAiOpeningDescriptionLength`,
+`GameData.ContentHash` (`AddOpening`), `AiPlayer.PickOpening` / `Opening` / `OpeningIndex`, `Simulation.AiOpening(player)`.
+
+- **Schema.** `ai.json` keeps `difficulties` and `retreat` at the top (shared by every opening) and adds `openings`, a list of
+  1 to 8 entries in file order:
+
+  ```json
+  "openings": [
+    { "id": "standard", "displayName": "Standard", "description": "The faction's standard build",
+      "buildOrder": [ ... ], "compositions": [ ... ], "attack": { "minArmyPop": 20, "minArmyCost": 1544 } }
+  ]
+  ```
+
+  `id` snake_case, unique within the file (a repeat: "duplicate id 'x' (also openings[k])" at the second); `displayName`
+  required, 1-40 characters; `description` optional (absent loads as ""), at most 200. Both are player-facing (a stats line
+  may name the opening), so they live in data only. `buildOrder`, `compositions` and `attack` keep the M5-1 rules unchanged,
+  reported at `openings[i].buildOrder[j].id`, `openings[i].compositions[k]...`, `openings[i].attack.minArmyPop`. No list, an
+  empty one, or more than 8 is one error at `openings`. The pre-M5-8a top-level `buildOrder`, `compositions` and `attack`
+  are each one error ("moved into openings[]"), so a stale file can't half-load. Age-agnostic: no new age-keyed field (the
+  compositions keep their per-age form). The shipped files hold one opening, `standard` (`Standard` / "The faction's standard
+  build"), equal step for step to the old top-level order; the data track writes the real openings (D21).
+- **The pick.** At seat construction (`new AiPlayer`, built by `Simulation`'s constructor): Easy plays opening 0; Normal and
+  Hard make one draw, `NextInt(0, count)`, the first draw of the AI's own `SimRng` (`RngStream.Ai(p)`, a copy of the world's
+  stream that the world never draws: no hashed stream moves). Same seed and seats, same pick. A one-opening faction still
+  draws on Normal / Hard; no AI manager drew from that stream before, so nothing else moves. The AI keeps a reference to the
+  chosen `AiOpening` (`AiPlayer.Opening`); `BuildOrderExecutor`, `ProductionManager` and `MilitaryManager` read
+  `ai.Opening.*`, and the `Blackboard`'s step arrays are sized by its build order. Nothing per think: the reference is held
+  from construction.
+- **Read-only access.** `Simulation.AiOpening(player)`: the index into its faction's `GameData.Ai[f].Openings` (the id and
+  name are there), -1 for a human seat or an unknown player.
+- **State and hashing.** The pick is AI state, not sim state: not hashed ("Implementation (M5-2)", "AI state is not sim state"), rebuilt from
+  the seed. A replay plays back with no AI, so its checkpoints never depended on it; a save (Requests 42) must store the
+  pick and the AI's RNG with the rest of the AI state, or rebuild the seat from the seed before any think. `ContentHash`
+  covers every opening field, the ids, names and description included, and the order (it is the pick's index). The
+  re-wrap moved the shipped hash (`C059AD620DE581F1` to `1CBDE4DBA7D17AE1`: the opening count, id and names joined it);
+  the golden's header and checksum were regenerated, no `k` line moved, and `QA/GatherWedgeQaTests` lists the new hash
+  (no AI seat in that match).
+- **BUG-0910** (folded in, same executor code): the BUG-0791 no-site wait applies only after a ring search ran (see
+  "Implementation (M5-2)", the executor).
+- **Tests.** `Ai/AiOpeningPickTests` (the shipped `standard` equals the old order, numbers and ids; Easy 0 on seeds 1-50;
+  Normal and Hard hit each of 3 openings over seeds 1-200 and equal the stream's first draw; same seed same pick; no hash
+  moved; a Normal replay plays back and the same setup picks again; the executor sends the picked opening's first step;
+  the military manager's thresholds and the production manager's mix are the picked opening's),
+  `DataValidationTests.BrokenAiOpenings_YieldExactlyOneErrorAtTheField` (14 rows) and
+  `AnOpeningDescription_IsOptional_AndTheLimitsAreInclusive`, `DataContentHashTests` (every `AiOpening` field, the order,
+  the count, file edits of id / displayName / description), `Data/AiLoaderTests` (paths under `openings[0]`),
+  `QA/SimHardeningM5H3QaTests.ABuildStepWaitingOnARequirement_*` (BUG-0910, un-skipped), `ReplayGoldenTests`.
+
 ## Save/load and replays
 
 - **Replay file** (M1-6, `Rts.Sim.Replays`): a `Replay` holds a header, the command log, and
@@ -7740,7 +7797,8 @@ kind, no data or `rules.json` field, nothing hashed. Every counter is per player
   they are not in `StateHash` but they decide the next tick, so the hash can't catch a save that drops them. The M6 save /
   load round-trip test must compare them directly, not only the hash. The same holds for the AI's defense marks (M5-4b's
   kept hp and per-unit marks; M5-4f's `DefenderGeneration`, `DefendAll`, `DefendAnswer`, `WaveMinHalfPop` / `WaveMinCost`):
-  Blackboard state, outside the hash, carried by the save.
+  Blackboard state, outside the hash, carried by the save. M5-8a adds each AI seat's opening pick (`AiPlayer.OpeningIndex`)
+  and its RNG state after the pick: the save stores both, and the round-trip test compares `Simulation.AiOpening` per seat.
   Likewise the M6-S1 stats (`Economy/MatchStats`: gathered gold and wood, units trained, the kill and loss halves, buildings
   built, each tech's researched tick, and the army-value samples with their count): not hashed, decide nothing, but a
   loaded match must show the same post-match screen, so the save carries them whole and the round-trip test compares them.

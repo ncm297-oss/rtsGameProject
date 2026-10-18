@@ -90,8 +90,11 @@ internal static class AiScenes
     internal static GameData EarlyWaves(double minArmyPop = 2) => DataWith(dir =>
     {
         foreach (string f in new[] { "malazan", "whirlwind" })
-            dir.EditJson($"factions/{f}/ai.json", root => root["attack"] = new JsonObject { ["minArmyPop"] = minArmyPop, ["minArmyCost"] = 0 });
+            dir.EditJson($"factions/{f}/ai.json", root => Opening(root)["attack"] = new JsonObject { ["minArmyPop"] = minArmyPop, ["minArmyCost"] = 0 });
     });
+
+    /// <summary>M5-8a: opening <paramref name="index"/> (the first by default) of an ai.json root, where its buildOrder, compositions and attack live.</summary>
+    internal static JsonNode Opening(JsonNode root, int index = 0) => root["openings"]![index]!;
 
     /// <summary>A build order as ai.json writes it, from (trigger, value, do, id, count) rows (count 0: none written).</summary>
     internal static JsonArray BuildOrder(params (string Trigger, double At, string Do, string? Id, int Count)[] steps)

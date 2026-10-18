@@ -3,9 +3,9 @@ using System.Collections.Immutable;
 namespace Rts.Sim.Data;
 
 /// <summary>
-/// One faction's AI data from <c>factions/&lt;id&gt;/ai.json</c> (M5-1, docs/03 "AI architecture"): per difficulty knobs, a
-/// shared build order, an army composition per age, and the attack and retreat thresholds. In
-/// <see cref="GameData.ContentHash"/> since M5-3, every field.
+/// One faction's AI data from <c>factions/&lt;id&gt;/ai.json</c> (M5-1, docs/03 "AI architecture"): per difficulty knobs, the
+/// named openings (M5-8a: each a build order, an army composition per age and the attack thresholds), and the shared retreat
+/// thresholds. In <see cref="GameData.ContentHash"/> since M5-3, every field.
 /// </summary>
 public sealed class AiDef
 {
@@ -19,17 +19,8 @@ public sealed class AiDef
     /// <summary>Per difficulty, indexed by <see cref="AiDifficulty"/> (all three present).</summary>
     public required ImmutableArray<AiDifficultyDef> Difficulties { get; init; }
 
-    /// <summary>The build order, in file order (at least one step).</summary>
-    public required ImmutableArray<AiStep> BuildOrder { get; init; }
-
-    /// <summary>The army mix per age, indexed by age - 1 (one per age: Age I and Age II).</summary>
-    public required ImmutableArray<AiComposition> Compositions { get; init; }
-
-    /// <summary>The army population, in half-pop, it gathers before sending a wave (<c>attack.minArmyPop</c>).</summary>
-    public int AttackMinHalfPop { get; init; }
-
-    /// <summary>The army's total cost (gold + wood) it gathers before sending a wave (<c>attack.minArmyCost</c>).</summary>
-    public int AttackMinCost { get; init; }
+    /// <summary>M5-8a: the named openings, in file order (1 to <see cref="DataLimits.MaxAiOpenings"/>); Easy always plays the first.</summary>
+    public required ImmutableArray<AiOpening> Openings { get; init; }
 
     /// <summary>The hp fraction below which a unit counts as wounded (<c>retreat.hpFraction</c>, 0-1).</summary>
     public float RetreatHpFraction { get; init; }
@@ -39,4 +30,12 @@ public sealed class AiDef
 
     /// <summary>The knobs of difficulty <paramref name="difficulty"/>.</summary>
     public AiDifficultyDef Difficulty(AiDifficulty difficulty) => Difficulties[(int)difficulty];
+
+    /// <summary>The index of opening <paramref name="id"/> in <see cref="Openings"/>, or -1.</summary>
+    public int FindOpening(string id)
+    {
+        for (int i = 0; i < Openings.Length; i++)
+            if (Openings[i].Id == id) return i;
+        return -1;
+    }
 }

@@ -51,19 +51,78 @@ public static partial class DataLoader
             difficulties.Add(one == null ? default : BuildAiDifficulty(c, one, p));
         }
 
-        AiAttackJson? attack = c.Obj(j.Attack, "attack");
+        // M5-8a: the old top-level fields, one error each, so a stale file can't half-load.
+        if (j.BuildOrder != null) c.Error("buildOrder", MovedIntoOpenings);
+        if (j.Compositions != null) c.Error("compositions", MovedIntoOpenings);
+        if (j.Attack != null) c.Error("attack", MovedIntoOpenings);
+
         AiRetreatJson? retreat = c.Obj(j.Retreat, "retreat");
         return new AiDef
         {
             Faction = faction,
             Difficulties = difficulties.MoveToImmutable(),
-            BuildOrder = BuildAiSteps(c, j.BuildOrder, faction, ids),
-            Compositions = BuildAiCompositions(c, j.Compositions, faction, ids),
-            AttackMinHalfPop = attack == null ? 0 : HalfPopField(c, attack.MinArmyPop, "attack.minArmyPop"),
-            AttackMinCost = attack == null ? 0 : c.Int(attack.MinArmyCost, "attack.minArmyCost", 0),
+            Openings = BuildAiOpenings(c, j.Openings, faction, ids),
             RetreatHpFraction = retreat == null ? 0f : (float)Fraction(c, retreat.HpFraction, "retreat.hpFraction"),
             RetreatLossFraction = retreat == null ? 0f : (float)Fraction(c, retreat.LossFraction, "retreat.lossFraction"),
         };
+    }
+
+    private const string MovedIntoOpenings = "moved into openings[] (M5-8a): each opening holds its own buildOrder, compositions and attack";
+
+    /// <summary>
+    /// M5-8a: <c>openings</c>, 1 to <see cref="DataLimits.MaxAiOpenings"/> entries in file order: a snake_case <c>id</c> unique
+    /// in the file, a <c>displayName</c> (1 to <see cref="DataLimits.MaxAiOpeningNameLength"/> characters), an optional
+    /// <c>description</c> (at most <see cref="DataLimits.MaxAiOpeningDescriptionLength"/>), and a build order, compositions and
+    /// attack thresholds under the M5-1 rules, reported at <c>openings[i]...</c>.
+    /// </summary>
+    private static ImmutableArray<AiOpening> BuildAiOpenings(Checker c, List<AiOpeningJson?>? list, int faction, AiIds? ids)
+    {
+        if (c.Obj(list, "openings") == null) return ImmutableArray<AiOpening>.Empty;
+        if (list!.Count == 0)
+        {
+            c.Error("openings", "no openings (at least one)");
+            return ImmutableArray<AiOpening>.Empty;
+        }
+        if (list.Count > DataLimits.MaxAiOpenings)
+        {
+            // One error, not one per opening: a runaway file is reported once.
+            c.Error("openings", $"{list.Count} openings is above the maximum {DataLimits.MaxAiOpenings}");
+            return ImmutableArray<AiOpening>.Empty;
+        }
+        var result = ImmutableArray.CreateBuilder<AiOpening>(list.Count);
+        var seen = new string[list.Count]; // load-time only; at most 8, a linear scan
+        for (int i = 0; i < list.Count; i++)
+        {
+            string p = $"openings[{i}]";
+            AiOpeningJson? o = c.Obj(list[i], p);
+            if (o == null) continue;
+            string id = c.Id(o.Id, p + ".id");
+            seen[i] = id;
+            for (int k = 0; k < i && id.Length > 0; k++)
+                if (seen[k] == id)
+                {
+                    c.Error(p + ".id", $"duplicate id '{id}' (also openings[{k}])");
+                    break;
+                }
+            string name = c.Text(o.DisplayName, p + ".displayName");
+            if (name.Length > DataLimits.MaxAiOpeningNameLength)
+                c.Error(p + ".displayName", $"{name.Length} characters is above the maximum {DataLimits.MaxAiOpeningNameLength}");
+            string description = o.Description ?? "";
+            if (description.Length > DataLimits.MaxAiOpeningDescriptionLength)
+                c.Error(p + ".description", $"{description.Length} characters is above the maximum {DataLimits.MaxAiOpeningDescriptionLength}");
+            AiAttackJson? attack = c.Obj(o.Attack, p + ".attack");
+            result.Add(new AiOpening
+            {
+                Id = id,
+                DisplayName = name,
+                Description = description,
+                BuildOrder = BuildAiSteps(c, o.BuildOrder, faction, ids, p + ".buildOrder"),
+                Compositions = BuildAiCompositions(c, o.Compositions, faction, ids, p + ".compositions"),
+                AttackMinHalfPop = attack == null ? 0 : HalfPopField(c, attack.MinArmyPop, p + ".attack.minArmyPop"),
+                AttackMinCost = attack == null ? 0 : c.Int(attack.MinArmyCost, p + ".attack.minArmyCost", 0),
+            });
+        }
+        return result.ToImmutable();
     }
 
     private static AiDifficultyDef BuildAiDifficulty(Checker c, AiDifficultyJson j, string p)
@@ -87,25 +146,26 @@ public static partial class DataLoader
         };
     }
 
-    private static ImmutableArray<AiStep> BuildAiSteps(Checker c, List<AiStepJson?>? list, int faction, AiIds? ids)
+    /// <summary>A build order at <paramref name="path"/> (M5-8a: <c>openings[i].buildOrder</c>).</summary>
+    private static ImmutableArray<AiStep> BuildAiSteps(Checker c, List<AiStepJson?>? list, int faction, AiIds? ids, string path)
     {
-        if (c.Obj(list, "buildOrder") == null) return ImmutableArray<AiStep>.Empty;
+        if (c.Obj(list, path) == null) return ImmutableArray<AiStep>.Empty;
         if (list!.Count == 0)
         {
-            c.Error("buildOrder", "the build order has no steps (at least one)");
+            c.Error(path, "the build order has no steps (at least one)");
             return ImmutableArray<AiStep>.Empty;
         }
         if (list.Count > DataLimits.MaxAiBuildOrderSteps)
         {
             // One error, not one per step past the limit: a runaway file is reported once.
-            c.Error("buildOrder", $"{list.Count} steps is above the maximum {DataLimits.MaxAiBuildOrderSteps}");
+            c.Error(path, $"{list.Count} steps is above the maximum {DataLimits.MaxAiBuildOrderSteps}");
             return ImmutableArray<AiStep>.Empty;
         }
         var steps = ImmutableArray.CreateBuilder<AiStep>(list.Count);
         var first = new Dictionary<(AiStepTrigger, int, AiStepAction, string), int>(); // load-time only
         for (int i = 0; i < list.Count; i++)
         {
-            string p = $"buildOrder[{i}]";
+            string p = $"{path}[{i}]";
             AiStepJson? s = c.Obj(list[i], p);
             if (s == null) continue;
             int errors = c.Errors.Count;
@@ -139,7 +199,7 @@ public static partial class DataLoader
             if (c.Errors.Count != errors) continue;
             if (first.TryGetValue((trigger, at, action, key), out int earlier))
             {
-                c.Error(p, $"the same step as buildOrder[{earlier}] (same at, do and id): merge them into one count");
+                c.Error(p, $"the same step as {path}[{earlier}] (same at, do and id): merge them into one count");
                 continue;
             }
             first.Add((trigger, at, action, key), i);
@@ -218,15 +278,15 @@ public static partial class DataLoader
     }
 
     /// <summary>One composition per age (Age I, then one per <see cref="DataLimits.AgeTechIds"/> entry), each a non-empty map of own unit ids to weights above 0.</summary>
-    private static ImmutableArray<AiComposition> BuildAiCompositions(Checker c, List<AiCompositionJson?>? list, int faction, AiIds? ids)
+    private static ImmutableArray<AiComposition> BuildAiCompositions(Checker c, List<AiCompositionJson?>? list, int faction, AiIds? ids, string path)
     {
         int ages = 1 + DataLimits.AgeTechIds.Length;
         var byAge = new AiComposition?[ages];
         bool badAge = false; // an entry's age already reported: a missing age then is that same mistake, not a second one
-        if (c.Obj(list, "compositions") == null) return ImmutableArray<AiComposition>.Empty;
+        if (c.Obj(list, path) == null) return ImmutableArray<AiComposition>.Empty;
         for (int i = 0; i < list!.Count; i++)
         {
-            string p = $"compositions[{i}]";
+            string p = $"{path}[{i}]";
             AiCompositionJson? e = c.Obj(list[i], p);
             if (e == null) continue;
             int age = c.Int(e.Age, p + ".age", 1);
@@ -273,7 +333,7 @@ public static partial class DataLoader
         var result = ImmutableArray.CreateBuilder<AiComposition>(ages);
         for (int a = 0; a < ages; a++)
         {
-            if (byAge[a] == null && !badAge) c.Error("compositions", $"no composition for Age {a + 1} (one per age, 1-{ages})");
+            if (byAge[a] == null && !badAge) c.Error(path, $"no composition for Age {a + 1} (one per age, 1-{ages})");
             result.Add(byAge[a] ?? new AiComposition { Age = a + 1, Units = ImmutableArray<int>.Empty, Weights = ImmutableArray<float>.Empty });
         }
         return result.MoveToImmutable();

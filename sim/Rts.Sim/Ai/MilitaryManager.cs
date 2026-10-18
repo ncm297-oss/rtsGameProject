@@ -81,7 +81,7 @@ internal static class MilitaryManager
             count++;
         }
         float scale = ai.Knobs.WaveSizeMultiplier;
-        if (count == 0 || half < ai.Def.AttackMinHalfPop * scale || cost < ai.Def.AttackMinCost * scale) return;
+        if (count == 0 || half < ai.Opening.AttackMinHalfPop * scale || cost < ai.Opening.AttackMinCost * scale) return;
         if (!ai.NearestEnemyBuilding(board.Rally, out EntityHandle target, out int type, out int cell)) return;
         Array.Clear(board.WaveGeneration);
         Array.Clear(board.WaveFlag);
@@ -95,8 +95,8 @@ internal static class MilitaryManager
         SetTarget(ai, target, type, cell);
         board.WaveActive = true;
         board.WaveStartHalfPop = half;
-        board.WaveMinHalfPop = ai.Def.AttackMinHalfPop * scale;
-        board.WaveMinCost = ai.Def.AttackMinCost * scale;
+        board.WaveMinHalfPop = ai.Opening.AttackMinHalfPop * scale;
+        board.WaveMinCost = ai.Opening.AttackMinCost * scale;
         board.WaveStartTick = ai.Now;
         board.WaveBusyTick = ai.Now;
         board.WaveCooldownUntil = ai.Now + ai.Rules.WaveCooldownTicks;

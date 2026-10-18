@@ -16,7 +16,7 @@ public class AiContentFileSideQaTests
     {
         var rows = new TheoryData<string, int>();
         foreach (string faction in new[] { "malazan", "whirlwind" })
-            for (int n = 1; n <= TestSim.Data.Ai[TestSim.Data.FindFaction(faction)].BuildOrder.Length; n++) rows.Add(faction, n);
+            for (int n = 1; n <= TestSim.Data.Ai[TestSim.Data.FindFaction(faction)].Openings[0].BuildOrder.Length; n++) rows.Add(faction, n);
         return rows;
     }
 
@@ -26,7 +26,7 @@ public class AiContentFileSideQaTests
     {
         GameData d = AiScenes.DataWithAi(faction, root =>
         {
-            JsonObject at = root["buildOrder"]![n - 1]!["at"]!.AsObject();
+            JsonObject at = AiScenes.Opening(root)["buildOrder"]![n - 1]!["at"]!.AsObject();
             if (at["pop"] != null) at["pop"] = (double)at["pop"]! + 0.5;
             else if (at["time"] != null) at["time"] = (double)at["time"]! + 1;
             else at["workers"] = (int)at["workers"]! + 1;

@@ -48,7 +48,7 @@ public class AiContentQaTests
             $"expected '{AiFile(faction)}: {path}: {message}...', got:\n{all}");
     }
 
-    private static JsonArray Steps(JsonObject root) => root["buildOrder"]!.AsArray();
+    private static JsonArray Steps(JsonObject root) => AiScenes.Opening(root)["buildOrder"]!.AsArray();
 
     /// <summary>The index of the first step of <paramref name="action"/> (and id, when given) in the file.</summary>
     private static int StepIndex(JsonObject root, string action, string? id = null)
@@ -64,7 +64,7 @@ public class AiContentQaTests
         StepIndex(JsonNode.Parse(File.ReadAllText(Path.Combine(TestDataDir.Shipped, AiFile(faction))))!.AsObject(), action, id);
 
     private static JsonObject Composition(JsonObject root, int age) =>
-        root["compositions"]!.AsArray().Single(c => (int)c!["age"]! == age)!["units"]!.AsObject();
+        AiScenes.Opening(root)["compositions"]!.AsArray().Single(c => (int)c!["age"]! == age)!["units"]!.AsObject();
 
     // ---------- the oracles (AiContentTests D, E, F for any data) ----------
 
@@ -77,10 +77,10 @@ public class AiContentQaTests
         var problems = new List<string>();
         AiDef ai = d.Ai[d.FindFaction(faction)];
         int age2 = d.FindTech(DataLimits.AgeTechIds[0]);
-        AiStep ageStep = ai.BuildOrder.Single(s => s.Action == AiStepAction.Research && s.Target == age2);
-        var ageOne = ai.BuildOrder.Where(s => s.Action == AiStepAction.Build && (s.Trigger != AiStepTrigger.Time || s.At < ageStep.At))
+        AiStep ageStep = ai.Openings[0].BuildOrder.Single(s => s.Action == AiStepAction.Research && s.Target == age2);
+        var ageOne = ai.Openings[0].BuildOrder.Where(s => s.Action == AiStepAction.Build && (s.Trigger != AiStepTrigger.Time || s.At < ageStep.At))
             .Select(s => s.Target).ToHashSet();
-        AiComposition one = ai.Compositions[0], two = ai.Compositions[1];
+        AiComposition one = ai.Openings[0].Compositions[0], two = ai.Openings[0].Compositions[1];
         for (int k = 0; k < one.Units.Length; k++)
         {
             UnitDef u = d.Units[one.Units[k]];
@@ -102,11 +102,11 @@ public class AiContentQaTests
         var problems = new List<string>();
         int f = d.FindFaction(faction);
         AiDef ai = d.Ai[f];
-        var slots = ai.BuildOrder.Where(s => s.Action == AiStepAction.Build).Select(s => d.Buildings[s.Target].Slot).ToHashSet();
+        var slots = ai.Openings[0].BuildOrder.Where(s => s.Action == AiStepAction.Build).Select(s => d.Buildings[s.Target].Slot).ToHashSet();
         slots.Add(BuildingSlot.TownHall);
-        for (int i = 0; i < ai.BuildOrder.Length; i++)
+        for (int i = 0; i < ai.Openings[0].BuildOrder.Length; i++)
         {
-            AiStep s = ai.BuildOrder[i];
+            AiStep s = ai.Openings[0].BuildOrder[i];
             if (s.Action != AiStepAction.Research) continue;
             TechDef t = d.Techs[s.Target];
             if (!slots.Contains(t.ResearchedAtSlot)) problems.Add($"{faction} step {i + 1} ({s.TargetKey}): no step places a {t.ResearchedAtSlot}");
@@ -130,13 +130,13 @@ public class AiContentQaTests
             perPop += (double)w! * cost / (double)u["pop"]!;
             weights += (double)w!;
         }
-        return (int)Math.Floor((double)ai["attack"]!["minArmyPop"]! * perPop / weights);
+        return (int)Math.Floor((double)AiScenes.Opening(ai)["attack"]!["minArmyPop"]! * perPop / weights);
     }
 
     /// <summary>Null when the loaded <c>minArmyCost</c> is the recomputed one, else the mismatch with the recomputed number.</summary>
     internal static string? MinArmyCostProblem(GameData d, string dataDir, string faction)
     {
-        int file = d.Ai[d.FindFaction(faction)].AttackMinCost, recomputed = RecomputedMinArmyCost(dataDir, faction);
+        int file = d.Ai[d.FindFaction(faction)].Openings[0].AttackMinCost, recomputed = RecomputedMinArmyCost(dataDir, faction);
         return file == recomputed ? null : $"{faction}: minArmyCost {file} vs recomputed {recomputed}";
     }
 
@@ -169,7 +169,7 @@ public class AiContentQaTests
         // The research step swapped is the faction's own tech's, so the order stays one step per (at, do, id).
         int i = StepIndex(faction, action, action == "research" ? Data.Techs.First(t => t.Faction == Data.FindFaction(faction)).Key : null);
         DataLoadResult r = LoadWithAi(faction, root => Steps(root)[i]!["id"] = id);
-        AssertRefused(r, faction, $"buildOrder[{i}].id", $"{kind} '{id}' belongs to faction '{Other(faction)}', not '{faction}'");
+        AssertRefused(r, faction, $"openings[0].buildOrder[{i}].id", $"{kind} '{id}' belongs to faction '{Other(faction)}', not '{faction}'");
     }
 
     [Theory]
@@ -179,7 +179,7 @@ public class AiContentQaTests
         int other = Data.FindFaction(Other(faction));
         string id = Data.Units.First(u => u.Faction == other && u.Slot == UnitSlot.Line).Key;
         DataLoadResult r = LoadWithAi(faction, root => Composition(root, 1)[id] = 10);
-        AssertRefused(r, faction, $"compositions[0].units.{id}", $"unit '{id}' belongs to faction '{Other(faction)}', not '{faction}'");
+        AssertRefused(r, faction, $"openings[0].compositions[0].units.{id}", $"unit '{id}' belongs to faction '{Other(faction)}', not '{faction}'");
     }
 
     // ---------- (b) an Age II unit in the Age I mix ----------
@@ -190,7 +190,7 @@ public class AiContentQaTests
         foreach (string faction in new[] { "malazan", "whirlwind" })
         {
             AiDef ai = Data.Ai[Data.FindFaction(faction)];
-            foreach (int u in ai.Compositions[1].Units.Except(ai.Compositions[0].Units)) rows.Add(faction, Data.Units[u].Key);
+            foreach (int u in ai.Openings[0].Compositions[1].Units.Except(ai.Openings[0].Compositions[0].Units)) rows.Add(faction, Data.Units[u].Key);
         }
         return rows;
     }
@@ -227,7 +227,7 @@ public class AiContentQaTests
             Steps(root).Add(copy);
             n = Steps(root).Count - 1;
         });
-        AssertRefused(r, faction, $"buildOrder[{n}]", $"the same step as buildOrder[{i}]");
+        AssertRefused(r, faction, $"openings[0].buildOrder[{n}]", $"the same step as openings[0].buildOrder[{i}]");
     }
 
     // ---------- (d) a pop off the half-pop grid ----------
@@ -239,10 +239,10 @@ public class AiContentQaTests
         JsonObject shipped = JsonNode.Parse(File.ReadAllText(Path.Combine(TestDataDir.Shipped, AiFile(faction))))!.AsObject();
         int i = Enumerable.Range(0, Steps(shipped).Count).First(k => Steps(shipped)[k]!["at"]!["pop"] != null);
         double pop = (double)Steps(shipped)[i]!["at"]!["pop"]!;
-        AssertRefused(LoadWithAi(faction, root => Steps(root)[i]!["at"]!["pop"] = pop + 0.25), faction, $"buildOrder[{i}].at.pop",
+        AssertRefused(LoadWithAi(faction, root => Steps(root)[i]!["at"]!["pop"] = pop + 0.25), faction, $"openings[0].buildOrder[{i}].at.pop",
             $"{Num(pop + 0.25)} is not a multiple of 0.5");
-        double army = Data.Ai[Data.FindFaction(faction)].AttackMinHalfPop / 2.0 + 0.25;
-        AssertRefused(LoadWithAi(faction, root => root["attack"]!["minArmyPop"] = army), faction, "attack.minArmyPop",
+        double army = Data.Ai[Data.FindFaction(faction)].Openings[0].AttackMinHalfPop / 2.0 + 0.25;
+        AssertRefused(LoadWithAi(faction, root => AiScenes.Opening(root)["attack"]!["minArmyPop"] = army), faction, "openings[0].attack.minArmyPop",
             $"{Num(army)} is not a multiple of 0.5");
         // The control: half a pop is on the grid.
         Assert.True(LoadWithAi(faction, root => Steps(root)[i]!["at"]!["pop"] = pop + 0.5).Ok);
@@ -265,11 +265,11 @@ public class AiContentQaTests
             Assert.True(Data.Buildings.Any(b => b.Faction == f && b.Slot == t.ResearchedAtSlot), $"{faction}: no building researches {t.Key}");
 
         // The order's first research outside the hall (its Forge upgrade) loses the step that places its building.
-        AiStep pick = Data.Ai[f].BuildOrder.First(s => s.Action == AiStepAction.Research && Data.Techs[s.Target].ResearchedAtSlot != BuildingSlot.TownHall);
+        AiStep pick = Data.Ai[f].Openings[0].BuildOrder.First(s => s.Action == AiStepAction.Research && Data.Techs[s.Target].ResearchedAtSlot != BuildingSlot.TownHall);
         string tech = pick.TargetKey;
         int research = StepIndex(faction, "research", tech);
         BuildingSlot slot = Data.Techs[pick.Target].ResearchedAtSlot;
-        int forge = Data.Ai[f].BuildOrder.ToList().FindIndex(s => s.Action == AiStepAction.Build && Data.Buildings[s.Target].Slot == slot);
+        int forge = Data.Ai[f].Openings[0].BuildOrder.ToList().FindIndex(s => s.Action == AiStepAction.Build && Data.Buildings[s.Target].Slot == slot);
         Assert.True(forge >= 0 && forge < research, $"{faction}: the order places no {slot} before step {research + 1}");
         GameData d = AiScenes.DataWithAi(faction, root => Steps(root.AsObject()).RemoveAt(forge));
         int at = research - 1; // the step after the removed one moved up
@@ -298,7 +298,7 @@ public class AiContentQaTests
     {
         var rows = new TheoryData<string, int>();
         foreach (string faction in new[] { "malazan", "whirlwind" })
-            for (int n = 1; n <= Data.Ai[Data.FindFaction(faction)].BuildOrder.Length; n++) rows.Add(faction, n);
+            for (int n = 1; n <= Data.Ai[Data.FindFaction(faction)].Openings[0].BuildOrder.Length; n++) rows.Add(faction, n);
         return rows;
     }
 
@@ -346,8 +346,8 @@ public class AiContentQaTests
         string section = string.Join(" ", lines.Skip(heading).TakeWhile((l, k) => k == 0 || !l.StartsWith("## ", StringComparison.Ordinal)));
         Match stated = Regex.Match(section, @"weights sum\s+to (\d+)");
         Assert.True(stated.Success, $"{faction}.md: no 'weights sum to N' line");
-        Assert.Equal(float.Parse(stated.Groups[1].Value, CultureInfo.InvariantCulture), ai.Compositions[0].Weights.Sum());
-        Assert.Equal(100f, ai.Compositions[1].Weights.Sum());
+        Assert.Equal(float.Parse(stated.Groups[1].Value, CultureInfo.InvariantCulture), ai.Openings[0].Compositions[0].Weights.Sum());
+        Assert.Equal(100f, ai.Openings[0].Compositions[1].Weights.Sum());
 
         int table = Array.FindIndex(lines, heading, l => l.StartsWith("| Unit | Age I | Age II |", StringComparison.Ordinal));
         Assert.True(table > heading, $"{faction}.md: no composition table");
@@ -363,7 +363,7 @@ public class AiContentQaTests
             }
 
         // The file side: an Age I weight edited alone breaks the subset rule and the page.
-        string first = Data.Units[ai.Compositions[0].Units[0]].Key;
+        string first = Data.Units[ai.Openings[0].Compositions[0].Units[0]].Key;
         GameData d = AiScenes.DataWithAi(faction, root => Composition(root.AsObject(), 1)[first] = (double)Composition(root.AsObject(), 1)[first]! + 1);
         Assert.Contains(CompositionProblems(d, faction), p => p.StartsWith($"{faction} Age I {first}: weight", StringComparison.Ordinal));
         Assert.Contains(AiContentTests.Problems(d, faction, lines), p => p.StartsWith($"{faction} composition age 1:", StringComparison.Ordinal));
@@ -382,7 +382,7 @@ public class AiContentQaTests
         Assert.Equal(expected.ToString("#,0", CultureInfo.InvariantCulture), page.Groups[1].Value);
 
         // A unit of the Age I mix costing one gold more moves the recomputed number off the file's, and the check says by what.
-        string unit = Data.Units[ai.Compositions[0].Units[0]].Key;
+        string unit = Data.Units[ai.Openings[0].Compositions[0].Units[0]].Key;
         using TestDataDir dir = TestDataDir.CopyOfShipped();
         dir.SetUnitField(faction, unit, "cost.gold", (Data.Units[Data.FindUnit(unit)].CostGold + 1).ToString(CultureInfo.InvariantCulture));
         int moved = RecomputedMinArmyCost(dir.Path, faction);
@@ -401,7 +401,7 @@ public class AiContentQaTests
         int i = StepIndex(faction, "train");
         Assert.True(LoadWithAi(faction, root => Steps(root)[i]!["count"] = DataLimits.MaxAiStepCount).Ok);
         AssertRefused(LoadWithAi(faction, root => Steps(root)[i]!["count"] = DataLimits.MaxAiStepCount + 1),
-            faction, $"buildOrder[{i}].count", $"{DataLimits.MaxAiStepCount + 1} is outside 1-{DataLimits.MaxAiStepCount}");
+            faction, $"openings[0].buildOrder[{i}].count", $"{DataLimits.MaxAiStepCount + 1} is outside 1-{DataLimits.MaxAiStepCount}");
 
         string house = Data.Buildings.First(b => b.Faction == Data.FindFaction(faction) && b.Slot == BuildingSlot.House).Key;
         void PadTo(JsonObject root, int count)
@@ -411,6 +411,6 @@ public class AiContentQaTests
         }
         Assert.True(LoadWithAi(faction, root => PadTo(root, DataLimits.MaxAiBuildOrderSteps)).Ok);
         AssertRefused(LoadWithAi(faction, root => PadTo(root, DataLimits.MaxAiBuildOrderSteps + 1)),
-            faction, "buildOrder", $"{DataLimits.MaxAiBuildOrderSteps + 1} steps is above the maximum {DataLimits.MaxAiBuildOrderSteps}");
+            faction, "openings[0].buildOrder", $"{DataLimits.MaxAiBuildOrderSteps + 1} steps is above the maximum {DataLimits.MaxAiBuildOrderSteps}");
     }
 }

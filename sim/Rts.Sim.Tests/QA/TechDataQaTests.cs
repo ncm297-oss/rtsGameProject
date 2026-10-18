@@ -248,7 +248,7 @@ public class TechDataQaTests
         // goes too (BUG-0571: whatever the shipped ai.json holds).
         dir.EditJson("factions/malazan/ai.json", root =>
         {
-            JsonArray steps = root["buildOrder"]!.AsArray();
+            JsonArray steps = AiScenes.Opening(root)["buildOrder"]!.AsArray();
             for (int i = steps.Count - 1; i >= 0; i--)
                 if ((string?)steps[i]!["do"] == "research" && removed.Contains((string)steps[i]!["id"]!)) steps.RemoveAt(i);
         });
