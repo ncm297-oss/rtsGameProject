@@ -25,3 +25,16 @@
 
 ## Notes
 None blocks; item 1 is the one a player would notice.
+
+## Re-verify (2026-10-17-2344, fix round 1, QA)
+- Item 1 (Kind fixed by the first hit): **still open**, not addressed in round 1.
+- Item 2 (SfxTest moves a tracked file): **fixed**. `FallbackWhenMissing` builds its pointer under
+  `user://sfx_nolfs_probe` and removes it; after the full loop and three extra `QaM6V12Test` runs `git status` shows no
+  change under `game/assets/`.
+- Item 3 (`New(k)` order past the ring): **documented** in `AttackAlerts.New`'s remarks (BUG-0954, capacity 32 makes it
+  rare); QA's ring test still pins the set and the newest last. Acceptable as a comment.
+- Item 4 (new, round 1): docs/03 says the 10 s suppression is "200 ticks"; with `SetNow(tick x 0.05f)` the float
+  difference of two tick times sometimes rounds just under 10 s, so a raid hit every tick re-alerts after 201 ticks
+  (2 of 19 gaps from tick 0 in QA's `TickClock_HitEveryTick_ReAlertsEvery200Ticks_Or201FromFloatRounding`). Harmless
+  and deterministic; an integer tick clock (`RaisedAtTick`, compare `tick - raised < 200`) or the docs saying "200-201"
+  would make the claim exact.

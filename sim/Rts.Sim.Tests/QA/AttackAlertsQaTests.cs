@@ -138,6 +138,40 @@ public class AttackAlertsQaTests
         Assert.Contains(new Vector2(1100, 0), seen);
     }
 
+    // QA M6-V12 fix round 1 (BUG-0952): driven as AlertHud does it now, SetNow(tick x 0.05 s) then a dt-0 step per tick,
+    // a unit hit on every tick re-alerts every 200 ticks (10 s of game time). The clock is a float product, so the
+    // difference of two tick times can round just under 10 s (2 of 19 gaps in the first 4,000 ticks): the gap is then 201,
+    // never 199 or 202+. A pure function of the tick, so a replay agrees.
+    [Theory]
+    [InlineData(0)]
+    [InlineData(72_000)] // 1 h of game time
+    [InlineData(288_000)] // 4 h
+    public void TickClock_HitEveryTick_ReAlertsEvery200Ticks_Or201FromFloatRounding(int startTick)
+    {
+        var s = new Units(new Vector2(10, 10));
+        s.Hp[0] = 1_000_000;
+        var a = new AttackAlerts(1, 4);
+        a.SetNow(startTick * 0.05f);
+        s.Frame(a, 0f);
+        int last = -1, gaps200 = 0, gaps201 = 0;
+        for (int t = startTick + 1; t <= startTick + 4_000; t++)
+        {
+            s.Hp[0]--; // a hit on every tick
+            a.SetNow(t * 0.05f);
+            if (s.Frame(a, 0f) == 0) continue;
+            if (last >= 0)
+            {
+                int gap = t - last;
+                Assert.True(gap is 200 or 201, $"start {startTick}: alerts at ticks {last} and {t}, {gap} apart");
+                if (gap == 200) gaps200++;
+                if (gap == 201) gaps201++;
+            }
+            last = t;
+        }
+        _out.WriteLine($"start tick {startTick}: gaps of 200 ticks {gaps200}, of 201 ticks {gaps201}");
+        Assert.True(gaps200 + gaps201 >= 15, $"start {startTick}: only {gaps200 + gaps201} re-alerts in 4,000 ticks");
+    }
+
     [Theory]
     [InlineData(1UL, AttackAlerts.DefaultRadius, AttackAlerts.DefaultSeconds)]
     [InlineData(5UL, AttackAlerts.DefaultRadius, AttackAlerts.DefaultSeconds)]

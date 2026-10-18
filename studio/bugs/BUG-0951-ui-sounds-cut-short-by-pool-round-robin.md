@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-17-2344, task M6-V12 |
 | System | view: `game/scripts/Sfx.cs` (`Play`, the player pool) |
-| Fixed by | |
+| Fixed by | M6-V12 fix round 1 (9555c93): 8 world players + 6 UI players (`Sfx.WorldPlayers` / `UiPlayers`), a play takes an idle player of its range or the one ending first; regression rows `QaM6V12Test` brawl (`LastPlayer` / `PlayerStarts`) and QA's `PoolSplit` (test clock) |
 
 ## Repro
 1. `& $env:GODOT --headless --path game res://tests/QaM6V12Test.tscn` (QA, 200 v 200 at 8x, camera on the fight; a UI
@@ -34,3 +34,19 @@ Fix ideas (the developer's call): reserve players for UI events (e.g. 2 of the p
 playing (or the one with the least time left) instead of the strict round robin, and never steal a UI event's player
 for a world play. `SfxTest`'s brawl row checks only `Play`'s return value, which is why it passes. The QA row
 (`QaM6V12Test`, "BUG-0951: ...") stays red until fixed.
+
+## Re-verify (2026-10-17-2344, fix round 1, QA)
+- `QaM6V12Test` brawl, 200 v 200 at 8x, four runs (one in the full loop): UI cut short **0 of 72, 0 of 23, 0 of 23,
+  0 of 24** (was 25 / 26, 27 / 72, 23 / 71). UI started 74 / 74, 25 / 26 (+1 merged into the HUD's own Alert play in
+  the same 50 ms), 25 / 26 (+1), 26 / 26. The world cap still holds: 0 windows of 5 plays in 100 ms.
+- The developer changed this QA row's metric from "PoolSize later plays of any kind" (the old round robin's reach, no
+  longer meaningful once the UI has its own players) to "a later start on the same player before the clip ends"
+  (`LastPlayer`, `PlayerStarts`), and allowed a UI try to merge into the HUD's own play of the same event (at most a
+  quarter). QA reviewed both: the new metric is the right one for the new pool, and a merge is the documented rate limit
+  ("a burst is one sound"), not a drop. Not a loosening.
+- QA's own row, independent of the brawl's timing (`QaM6V12Test.PoolSplit`, a test clock): an Alert then 2 s of world
+  plays every 10 ms: 80 world plays, 0 on a UI player, the Alert's player reused 0 times while it sounded. Seven UI plays
+  in 70 ms on 6 UI players: the seventh (BuildingPlaced) took player 8, whose Select (70 ms) ended first; the 1.2 s Alert
+  on player 9 was not cut.
+- By design a UI play can still cut another UI play when more than 6 UI clips sound at once (the one nearest its end
+  goes); no realistic input reaches that.

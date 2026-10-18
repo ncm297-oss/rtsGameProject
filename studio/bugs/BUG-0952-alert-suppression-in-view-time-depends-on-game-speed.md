@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-17-2344, task M6-V12 |
 | System | view: `game/scripts/AlertHud.cs` (`_Process` -> `Step(w, (float)delta)`), `sim/Rts.Sim/ViewApi/AttackAlerts.cs` (`Now` = sum of `dt`) |
-| Fixed by | |
+| Fixed by | M6-V12 fix round 1 (9555c93): `AlertHud` steps the alerts from `SimRunner.Ticked` with `AttackAlerts.SetNow(tick x 0.05 s)`; `AlertTest` now runs the HUD's own path, live at 4x / 2x and the replay at 8x; `AttackAlertsTests` 1 / 3 / 8 ticks per frame |
 
 ## Repro
 `AttackAlerts` with one own unit hit on every tick for 600 ticks (30 s of game time), stepped once per tick:
@@ -32,3 +32,12 @@ The brief did say "10 s of view time", so this may be an intended reading; the d
 Simplest fix: step the alerts from `SimRunner.Ticked` with the tick length (`1 / 20` s of game time), i.e. suppression in
 game time (and the frame-time hit detection becomes per tick, which also makes live and replay identical). The text's 4 s
 and the ping's 3 s can stay in frame time. Producer / owner call on which time the 10 s is.
+
+## Re-verify (2026-10-17-2344, fix round 1, QA)
+- `AlertTest` (full loop): live alerts at ticks 244 / 454 / 664 (live run at 4x then 2x), the replay at 8x the same
+  three at the same ticks, kinds and positions. The scene no longer disables `_Process` or feeds its own dt.
+- QA's `AttackAlertsQaTests.TickClock_HitEveryTick_ReAlertsEvery200Ticks_Or201FromFloatRounding` (start ticks 0,
+  72,000, 288,000): a unit hit every tick, driven as the HUD does (SetNow then a dt-0 step), re-alerts every 200 ticks;
+  the gap is 201 on some ticks (the float clock: `(t + 200) x 0.05f - t x 0.05f` can round just under 10 s; 2 of 19 gaps
+  from tick 0, 0 of 19 from 72,000 and from 288,000), never 199 or 202+. Deterministic (a pure function of the tick), so replays agree; docs/03
+  says "200 ticks". Noted in BUG-0954, not a defect.

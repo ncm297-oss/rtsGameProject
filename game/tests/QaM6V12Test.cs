@@ -13,6 +13,8 @@ namespace Rts.Game.Tests;
 /// QA M6-V12 (2026-10-17-2344): Space before any alert moves nothing; the world-sound cap under a 200 v 200 brawl at 8x on
 /// screen (no five world plays inside any 100 ms, every one recorded, not only the last 256); UI sounds tried through the
 /// brawl all start, and (BUG-0951) are not cut short by later plays taking their pool player before the clip ends.
+/// Fix round 1: a test-clock row on a pool of its own (world plays never take a UI player; a UI play beyond the UI players
+/// takes the one ending first).
 /// </summary>
 /// <remarks>
 /// Headless. Run: <c>&amp; $env:GODOT --headless --path game res://tests/QaM6V12Test.tscn</c>; prints "QA M6-V12 TEST PASS"
@@ -31,6 +33,7 @@ public partial class QaM6V12Test : Node
             if (!loaded.Ok) throw new InvalidOperationException("data failed to load");
             _data = loaded.Data!;
             await SpaceBeforeAnyAlert();
+            await PoolSplit();
             await Brawl();
         }
         catch (Exception ex)
@@ -202,6 +205,71 @@ public partial class QaM6V12Test : Node
         await EndMatch(m);
     }
 
+
+    // Fix round 1 (BUG-0951), on a pool of its own driven by a test clock, independent of the brawl's timing:
+    // (a) an Alert, then 2 s of world plays every 10 ms: every world play lands on players 0 .. WorldPlayers - 1, and the
+    //     Alert's player starts nothing else while the Alert sounds;
+    // (b) seven UI plays inside 60 ms (more than UiPlayers): each lands on UiPlayers' range, and the seventh takes the UI
+    //     player whose clip ends first (an own model of the end times), so the long Alert is not the one cut.
+    private async Task PoolSplit()
+    {
+        var sfx = new Sfx();
+        AddChild(sfx);
+        await Frame();
+        ulong frame = 1_000_000, t = 5_000_000_000UL; // far from the real clock
+        SfxEvent[] world = { SfxEvent.MeleeHit, SfxEvent.Shot, SfxEvent.UnitDeath, SfxEvent.BuildingRazed, SfxEvent.Cast };
+
+        // (a)
+        bool alertOk = sfx.Play(SfxEvent.Alert, frame++, t);
+        int pA = sfx.LastPlayer(SfxEvent.Alert);
+        long startsA = pA >= 0 ? sfx.PlayerStarts(pA) : -1;
+        ulong alertEnd = t + (ulong)(sfx.LastStream(SfxEvent.Alert)!.GetLength() * 1e6);
+        Check(alertOk && pA >= Sfx.WorldPlayers && pA < Sfx.PoolSize, $"pool (a): the Alert played {alertOk} on player {pA}, want a UI player {Sfx.WorldPlayers}..{Sfx.PoolSize - 1}");
+        int worldPlays = 0, worldWrong = 0, aTouched = 0;
+        for (int k = 0; k < 200; k++)
+        {
+            t += 10_000;
+            SfxEvent e = world[k % world.Length];
+            if (!sfx.Play(e, frame++, t)) continue;
+            worldPlays++;
+            if (sfx.LastPlayer(e) < 0 || sfx.LastPlayer(e) >= Sfx.WorldPlayers) worldWrong++;
+            if (t < alertEnd && pA >= 0 && sfx.PlayerStarts(pA) != startsA) aTouched++;
+        }
+        GD.Print($"pool (a): Alert on player {pA}, {worldPlays} world plays in 2 s, {worldWrong} on a UI player, Alert player reused while it sounded: {aTouched}");
+        Check(worldPlays >= 40 && worldWrong == 0 && aTouched == 0, $"pool (a): {worldPlays} world plays, {worldWrong} on a UI player, Alert's player reused {aTouched} times while it sounded");
+
+        // (b) A fresh second after (a): every UI player is idle on the test clock.
+        t += 5_000_000;
+        SfxEvent[] ui = { SfxEvent.Alert, SfxEvent.BuildingDone, SfxEvent.Ready, SfxEvent.Refused, SfxEvent.Command, SfxEvent.Select, SfxEvent.BuildingPlaced };
+        var end = new Dictionary<int, ulong>();
+        int uiWrong = 0, plays = 0;
+        string detail = "";
+        for (int k = 0; k < ui.Length; k++)
+        {
+            t += 10_000;
+            // Expected player for the play: any UI player idle by now, else the one ending first (own model).
+            int want = -1;
+            ulong wantEnd = ulong.MaxValue;
+            bool anyIdle = end.Count < Sfx.UiPlayers;
+            foreach (var kv in end) if (kv.Value <= t) anyIdle = true;
+            if (!anyIdle)
+                foreach (var kv in end) if (kv.Value < wantEnd) { wantEnd = kv.Value; want = kv.Key; }
+            if (!sfx.Play(ui[k], frame++, t)) { detail += $" {ui[k]} refused;"; uiWrong++; continue; }
+            plays++;
+            int p = sfx.LastPlayer(ui[k]);
+            ulong len = (ulong)(sfx.LastStream(ui[k])!.GetLength() * 1e6);
+            detail += $" {ui[k]}->{p} ({len / 1000} ms);";
+            if (p < Sfx.WorldPlayers || p >= Sfx.PoolSize) uiWrong++;
+            else if (!anyIdle && p != want) { uiWrong++; detail += $" (want {want}, ends first)"; }
+            else if (anyIdle && end.TryGetValue(p, out ulong was) && was > t) { uiWrong++; detail += " (took a sounding player while one was idle)"; }
+            end[p] = t + len;
+        }
+        GD.Print($"pool (b): {plays} UI plays in 70 ms on {Sfx.UiPlayers} UI players:{detail}");
+        Check(plays == ui.Length && uiWrong == 0, $"pool (b): {plays} of {ui.Length} UI plays, {uiWrong} on the wrong player:{detail}");
+        RemoveChild(sfx);
+        sfx.QueueFree();
+        await Frame();
+    }
 
     private SignalAwaiter Frame() => ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
 
