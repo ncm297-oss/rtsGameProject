@@ -11,7 +11,7 @@ namespace Rts.Sim.Entities;
 /// Arrays are sized once from the configured capacity and never grow. Freed slots go on a LIFO
 /// free list; each free bumps the slot's generation so old handles stop resolving.
 /// </remarks>
-public sealed class UnitStore
+public sealed partial class UnitStore
 {
     /// <summary>Current position (x, z) in meters.</summary>
     public readonly Vector2[] Position;

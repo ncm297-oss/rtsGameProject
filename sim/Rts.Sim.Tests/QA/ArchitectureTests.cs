@@ -78,6 +78,42 @@ public class ArchitectureTests
         Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
     }
 
+    // M6-S2 (criterion 6): the save code, Save/** and every store's *.Save.cs part, writes and reads fields by name in a fixed
+    // order: no reflection (a field list that follows the type's declaration would change the format silently), no wall
+    // clock, no System.Random, and no Dictionary or HashSet at all (iterating one would make the byte order unstable).
+    private static readonly (string Pattern, string Why)[] ForbiddenInSave =
+    {
+        (@"\bSystem\.Reflection\b|\bGetType\s*\(|\btypeof\s*\(|\bActivator\.|\bGetFields\b|\bGetProperties\b", "no reflection in the save code"),
+        (@"\bDateTime\b|\bDateTimeOffset\b|\bStopwatch\b|\bEnvironment\.TickCount", "no wall clock in the save code"),
+        (@"\bSystem\.Random\b|\bnew\s+Random\s*\(", "no System.Random in the save code"),
+        (@"\bDictionary\b|\bHashSet\b|\bSortedDictionary\b|\bConcurrentDictionary\b", "no Dictionary / HashSet in the save code"),
+    };
+
+    [Fact]
+    public void SaveSource_UsesNoReflectionClockRandomOrDictionary()
+    {
+        string simDir = Path.Combine(RepoRoot(), "sim", "Rts.Sim");
+        var files = Directory.EnumerateFiles(Path.Combine(simDir, "Save"), "*.cs", SearchOption.AllDirectories)
+            .Concat(Directory.EnumerateFiles(simDir, "*.Save.cs", SearchOption.AllDirectories))
+            .Where(f => !Path.GetRelativePath(simDir, f).StartsWith("bin", StringComparison.Ordinal) && !Path.GetRelativePath(simDir, f).StartsWith("obj", StringComparison.Ordinal))
+            .Distinct()
+            .ToList();
+        Assert.True(files.Count >= 20, $"only {files.Count} save files found");
+        var violations = new List<string>();
+        foreach (string file in files)
+        {
+            string[] lines = File.ReadAllLines(file);
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string line = lines[i].TrimStart();
+                if (line.StartsWith("//", StringComparison.Ordinal) || line.StartsWith("*", StringComparison.Ordinal)) continue;
+                foreach ((string pattern, string why) in ForbiddenInSave)
+                    if (Regex.IsMatch(line, pattern)) violations.Add($"{Path.GetRelativePath(simDir, file)}:{i + 1}: {why}: {line}");
+            }
+        }
+        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
+    }
+
     private static string RepoRoot()
     {
         DirectoryInfo? dir = new DirectoryInfo(AppContext.BaseDirectory);

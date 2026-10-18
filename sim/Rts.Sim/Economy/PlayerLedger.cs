@@ -9,7 +9,7 @@ namespace Rts.Sim.Economy;
 /// settles its own population and refunds without the stores knowing the world. Since M3-6 it also counts each player's
 /// finished buildings per type and per slot, for the requirement gates (derived from the building store, not hashed).
 /// </summary>
-internal sealed class PlayerLedger
+internal sealed partial class PlayerLedger
 {
     private static readonly int SlotCount = DataLimits.BuildingSlotIds.Length;
 

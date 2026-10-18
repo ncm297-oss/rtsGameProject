@@ -14,7 +14,7 @@ namespace Rts.Sim.Abilities;
 /// latest). Different statuses stack. A ninth different status is dropped (M4-H3: a Revealed makes room instead, in
 /// <see cref="StealthSystem.OnAttackOrCast"/>).
 /// </remarks>
-public sealed class StatusStore
+public sealed partial class StatusStore
 {
     /// <summary>Most statuses one unit carries at once.</summary>
     public const int PerUnit = 8;

@@ -9,7 +9,7 @@ namespace Rts.Sim.Determinism;
 /// or draws are lost. Seeding follows O'Neill's reference <c>pcg32_srandom_r</c>, except that the
 /// seed goes through <see cref="MixSeed"/> first (BUG-0014).
 /// </remarks>
-public struct SimRng
+public partial struct SimRng
 {
     private const ulong Multiplier = 6364136223846793005UL;
 

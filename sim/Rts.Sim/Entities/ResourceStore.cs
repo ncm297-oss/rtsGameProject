@@ -15,7 +15,7 @@ namespace Rts.Sim.Entities;
 /// A node taken to 0 is freed: its cells reopen, the grid's version bumps once, its slot goes on a LIFO
 /// free list and its generation moves on, so old handles stop resolving.
 /// </remarks>
-public sealed class ResourceStore
+public sealed partial class ResourceStore
 {
     /// <summary>Default <see cref="SimConfig.ResourceCapacity"/>: room for every tree and mine of a full map.</summary>
     public const int DefaultCapacity = 4096;

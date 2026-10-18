@@ -8,7 +8,7 @@ namespace Rts.Sim.Economy;
 /// Owned by <see cref="PlayerLedger"/> and written at the events they count; every array is allocated here, once. None of it
 /// decides a tick, so none of it is hashed: it is save state outside the hash (docs/03 "Save/load and replays").
 /// </summary>
-internal sealed class MatchStats
+internal sealed partial class MatchStats
 {
     private readonly int _players;
     private readonly int _techs;
