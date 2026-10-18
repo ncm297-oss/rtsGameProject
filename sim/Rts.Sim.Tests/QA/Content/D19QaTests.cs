@@ -137,8 +137,13 @@ public class D19QaTests
             foreach (string f in new[] { "malazan", "whirlwind" })
                 dir.EditJson($"factions/{f}/ai.json", root =>
                 {
-                    AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", f == "malazan" ? "malazan_laborer" : "whirlwind_camp_follower", 1));
-                    AiScenes.Opening(root)["attack"] = new JsonObject { ["minArmyPop"] = 100, ["minArmyCost"] = 0 };
+                    // D21: every opening quieted, not the first only (Easy plays the first; the loop keeps the scene
+                    // the same if a later edit made the seat pick another).
+                    for (int k = 0; k < root["openings"]!.AsArray().Count; k++)
+                    {
+                        AiScenes.Opening(root, k)["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", f == "malazan" ? "malazan_laborer" : "whirlwind_camp_follower", 1));
+                        AiScenes.Opening(root, k)["attack"] = new JsonObject { ["minArmyPop"] = 100, ["minArmyCost"] = 0 };
+                    }
                 });
             dir.EditJson("common/rules.json", r =>
             {
@@ -149,6 +154,7 @@ public class D19QaTests
         for (int a = 0; a < data.Ai.Length; a++) Assert.True(data.Ai[a].Difficulty(AiDifficulty.Easy).UseAbilities);
         PlayerSeat[] seats = { new(faction, SeatController.Ai, AiDifficulty.Easy), new(1 - faction, SeatController.Human, AiDifficulty.Easy) };
         Simulation sim = AiScenes.Flat(seats, data, workers: 0);
+        Assert.Equal(0, sim.AiOpening(0)); // Easy plays the first opening (docs/02 "AI opponent")
         BuildMaps.SetTotals(sim, 0, 0, 0);
         AiPlayer ai = sim.AiOf(0)!;
         do sim.Tick(); while (ai.Board.RallyVersion == 0 && sim.TickNumber < 400);

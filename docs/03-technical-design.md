@@ -7600,7 +7600,21 @@ rules are unchanged.
   those numbers again, so nothing else in M5-H3 moves them). D15 C on the same map
   (`QA/Content/AiHouseRuleReportTests.MenuMapNormal_*`): no house step is skipped; the faction pages' "Houses at the cap"
   and "Spending on the menu's map" paragraphs carry these numbers, pinned to the runs (re-printed by the data track for
-  M5-H3, rule 31).
+  M5-H3, rule 31). Superseded by the D21 bullet below (history; no longer pinned).
+- **Spending per opening (D21, 2026-10-18, data track: three openings per faction)**
+  (`Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`, the menu's map against an idle seat, 20 minutes: one
+  Normal run per opening on the smallest seed in 1-50 whose Normal pick it is, plus Easy on seed 1): the idle seat falls
+  at malazan standard Normal seed 1 498 s, malazan crossbow_push Normal seed 5 474 s, malazan cadre_rush Normal seed 7
+  619 s, malazan standard Easy seed 1 497 s, whirlwind standard Normal seed 1 495 s, whirlwind raider_rush Normal seed 2
+  416 s, whirlwind holy_war Normal seed 3 573 s and whirlwind standard Easy seed 1 518 s. Across both factions 2 of those
+  9 marks had wood under 100 with gold at 300 or more, so the report reads "wood binds at some marks only, not the limit
+  overall". Age II comes in late on every opening (its step due at 5:00-8:00, in at 509-1,098 s; the Whirlwind's Easy run never in 20
+  minutes): the AI keeps no reserve for a due step and the production manager spends first ("Implementation (M5-2)";
+  reported to the Producer as a sim-side lever). The faction pages give each opening's runs in its own "Spending" and
+  "Houses at the cap" notes (`QA/Content/D20PinQaTests.HouseNote_SaysWhatTheMenuMapRunsShow`); the 12th house step stays
+  in every opening (taken out, the cap reaches 100 later on both factions and the house rule places it anyway).
+  `Content/AiOpeningPairsReportTests` plays the 9 Malazan × Whirlwind pairings Normal against Normal for 20 minutes
+  (50-110 s in all, Debug, the machine shared): both sides send a wave in every pairing and no step is a dead end.
 - **Tests.** `Ai/ProportionalDefenseTests` (a 12-pop wave out with a 6-pop threshold and three home units: one Raider, the
   wave goes on and two home units answer; eight Raiders, every home unit and the six members nearest the hall, the other
   six keep the threshold and the target; twelve Raiders, the whole wave; the hall hit to 0.4 / 0.6 of its hp, the whole
@@ -7683,7 +7697,9 @@ M5 criterion 8, the sim half: named AI openings (D14 b). Code: `Data/AiOpening.c
   empty one, or more than 8 is one error at `openings`. The pre-M5-8a top-level `buildOrder`, `compositions` and `attack`
   are each one error ("moved into openings[]"), so a stale file can't half-load. Age-agnostic: no new age-keyed field (the
   compositions keep their per-age form). The shipped files hold one opening, `standard` (`Standard` / "The faction's standard
-  build"), equal step for step to the old top-level order; the data track writes the real openings (D21).
+  build"), equal step for step to the old top-level order; the data track writes the real openings (D21). **D21
+  (2026-10-18):** three per faction, `standard` first (Easy plays it): Malazan `standard` / `crossbow_push` / `cadre_rush`,
+  Whirlwind `standard` / `raider_rush` / `holy_war`; names, descriptions and the per-opening reports on the faction pages.
 - **The pick.** At seat construction (`new AiPlayer`, built by `Simulation`'s constructor): Easy plays opening 0; Normal and
   Hard make one draw, `NextInt(0, count)`, the first draw of the AI's own `SimRng` (`RngStream.Ai(p)`, a copy of the world's
   stream that the world never draws: no hashed stream moves). Same seed and seats, same pick. A one-opening faction still
@@ -7699,7 +7715,9 @@ M5 criterion 8, the sim half: named AI openings (D14 b). Code: `Data/AiOpening.c
   covers every opening field, the ids, names and description included, and the order (it is the pick's index). The
   re-wrap moved the shipped hash (`C059AD620DE581F1` to `1CBDE4DBA7D17AE1`: the opening count, id and names joined it);
   the golden's header and checksum were regenerated, no `k` line moved, and `QA/GatherWedgeQaTests` lists the new hash
-  (no AI seat in that match).
+  (no AI seat in that match). D21 moved it once more (`1CBDE4DBA7D17AE1` to `554A3832241A0896`: the new openings, the
+  standard openings' names and descriptions, the Malazan standard wave 20 / 1,544 to 16 / 1,235); header and checksum
+  regenerated again, no `k` line moved.
 - **BUG-0910** (folded in, same executor code): the BUG-0791 no-site wait applies only after a ring search ran (see
   "Implementation (M5-2)", the executor).
 - **Tests.** `Ai/AiOpeningPickTests` (the shipped `standard` equals the old order, numbers and ids; Easy 0 on seeds 1-50;

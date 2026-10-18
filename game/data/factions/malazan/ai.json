@@ -34,8 +34,8 @@
   "openings": [
     {
       "id": "standard",
-      "displayName": "Standard",
-      "description": "The faction's standard build",
+      "displayName": "Combined arms",
+      "description": "Barracks, Crossbow Range and Armory first; waves of shields and crossbows from 16 army pop, then mages, siege and Wickan cavalry in Age II.",
       "buildOrder": [
         { "at": { "time": 0 }, "do": "train", "id": "malazan_laborer", "count": 15 },
         { "at": { "pop": 6 }, "do": "build", "id": "malazan_billet" },
@@ -68,7 +68,82 @@
         { "age": 1, "units": { "malazan_heavy_infantry": 35, "malazan_crossbowman": 30 } },
         { "age": 2, "units": { "malazan_heavy_infantry": 35, "malazan_crossbowman": 30, "malazan_wickan_lancer": 10, "malazan_cadre_mage": 10, "malazan_sapper": 10, "malazan_catapult": 5 } }
       ],
-      "attack": { "minArmyPop": 20, "minArmyCost": 1544 }
+      "attack": { "minArmyPop": 16, "minArmyCost": 1235 }
+    },
+    {
+      "id": "crossbow_push",
+      "displayName": "Crossbow push",
+      "description": "A Crossbow Range before the Barracks, then a second: an early wave of crossbows behind a thin shield line at 14 army pop.",
+      "buildOrder": [
+        { "at": { "time": 0 }, "do": "train", "id": "malazan_laborer", "count": 18 },
+        { "at": { "pop": 6 }, "do": "build", "id": "malazan_billet" },
+        { "at": { "pop": 8 }, "do": "build", "id": "malazan_depot" },
+        { "at": { "pop": 9 }, "do": "build", "id": "malazan_crossbow_range" },
+        { "at": { "pop": 11 }, "do": "build", "id": "malazan_billet" },
+        { "at": { "pop": 13 }, "do": "build", "id": "malazan_barracks" },
+        { "at": { "pop": 18 }, "do": "build", "id": "malazan_billet" },
+        { "at": { "pop": 20 }, "do": "build", "id": "malazan_crossbow_range" },
+        { "at": { "pop": 22 }, "do": "build", "id": "malazan_armory" },
+        { "at": { "pop": 22 }, "do": "research", "id": "ranged_weapons_1" },
+        { "at": { "pop": 25 }, "do": "build", "id": "malazan_billet" },
+        { "at": { "pop": 32 }, "do": "build", "id": "malazan_billet" },
+        { "at": { "pop": 39 }, "do": "build", "id": "malazan_billet" },
+        { "at": { "pop": 46 }, "do": "build", "id": "malazan_billet" },
+        { "at": { "pop": 53 }, "do": "build", "id": "malazan_billet" },
+        { "at": { "pop": 60 }, "do": "build", "id": "malazan_billet" },
+        { "at": { "pop": 67 }, "do": "build", "id": "malazan_billet" },
+        { "at": { "pop": 74 }, "do": "build", "id": "malazan_billet" },
+        { "at": { "pop": 81 }, "do": "build", "id": "malazan_billet" },
+        { "at": { "time": 420 }, "do": "research", "id": "age_ii" },
+        { "at": { "time": 420 }, "do": "train", "id": "malazan_laborer", "count": 7 },
+        { "at": { "time": 480 }, "do": "build", "id": "malazan_engineers_yard" },
+        { "at": { "time": 480 }, "do": "expand" },
+        { "at": { "time": 510 }, "do": "build", "id": "malazan_cadre_tower" },
+        { "at": { "time": 540 }, "do": "build", "id": "malazan_wickan_corral" },
+        { "at": { "time": 570 }, "do": "research", "id": "moranth_supply" }
+      ],
+      "compositions": [
+        { "age": 1, "units": { "malazan_crossbowman": 36, "malazan_heavy_infantry": 24 } },
+        { "age": 2, "units": { "malazan_crossbowman": 36, "malazan_heavy_infantry": 24, "malazan_wickan_lancer": 10, "malazan_cadre_mage": 10, "malazan_sapper": 10, "malazan_catapult": 10 } }
+      ],
+      "attack": { "minArmyPop": 14, "minArmyCost": 1094 }
+    },
+    {
+      "id": "cadre_rush",
+      "displayName": "Fast Age II",
+      "description": "Only a Barracks and an Armory before racing to Age II, then two Cadre Towers: few soldiers early, many mages later. The first wave waits for 18 army pop.",
+      "buildOrder": [
+        { "at": { "time": 0 }, "do": "train", "id": "malazan_laborer", "count": 15 },
+        { "at": { "pop": 6 }, "do": "build", "id": "malazan_billet" },
+        { "at": { "pop": 8 }, "do": "build", "id": "malazan_depot" },
+        { "at": { "pop": 10 }, "do": "build", "id": "malazan_barracks" },
+        { "at": { "pop": 12 }, "do": "build", "id": "malazan_billet" },
+        { "at": { "pop": 14 }, "do": "build", "id": "malazan_armory" },
+        { "at": { "pop": 18 }, "do": "build", "id": "malazan_billet" },
+        { "at": { "pop": 25 }, "do": "build", "id": "malazan_billet" },
+        { "at": { "pop": 32 }, "do": "build", "id": "malazan_billet" },
+        { "at": { "pop": 39 }, "do": "build", "id": "malazan_billet" },
+        { "at": { "pop": 46 }, "do": "build", "id": "malazan_billet" },
+        { "at": { "pop": 53 }, "do": "build", "id": "malazan_billet" },
+        { "at": { "pop": 60 }, "do": "build", "id": "malazan_billet" },
+        { "at": { "pop": 67 }, "do": "build", "id": "malazan_billet" },
+        { "at": { "pop": 74 }, "do": "build", "id": "malazan_billet" },
+        { "at": { "pop": 81 }, "do": "build", "id": "malazan_billet" },
+        { "at": { "time": 300 }, "do": "research", "id": "age_ii" },
+        { "at": { "time": 300 }, "do": "train", "id": "malazan_laborer", "count": 10 },
+        { "at": { "time": 360 }, "do": "build", "id": "malazan_cadre_tower" },
+        { "at": { "time": 390 }, "do": "build", "id": "malazan_crossbow_range" },
+        { "at": { "time": 420 }, "do": "build", "id": "malazan_cadre_tower" },
+        { "at": { "time": 480 }, "do": "build", "id": "malazan_engineers_yard" },
+        { "at": { "time": 480 }, "do": "expand" },
+        { "at": { "time": 540 }, "do": "build", "id": "malazan_wickan_corral" },
+        { "at": { "time": 570 }, "do": "research", "id": "moranth_supply" }
+      ],
+      "compositions": [
+        { "age": 1, "units": { "malazan_heavy_infantry": 30 } },
+        { "age": 2, "units": { "malazan_heavy_infantry": 30, "malazan_crossbowman": 20, "malazan_cadre_mage": 30, "malazan_wickan_lancer": 10, "malazan_sapper": 5, "malazan_catapult": 5 } }
+      ],
+      "attack": { "minArmyPop": 18, "minArmyCost": 1332 }
     }
   ],
   "retreat": { "hpFraction": 0.3, "lossFraction": 0.5 }

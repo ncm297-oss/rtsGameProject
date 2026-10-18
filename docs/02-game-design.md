@@ -407,7 +407,8 @@ own cues (select, order, refused, building placed or finished, unit or tech read
 - Each faction's `ai.json` holds one to eight named openings (a build order, an army mix and attack thresholds each);
   at match start an Easy AI always plays the first, and a Normal or Hard AI picks one at random from the match seed, so
   two matches against the same faction can open differently while a replay or a save still reproduces the pick
-  (built in M5-8a; the shipped files hold one opening, `standard`, until the data track writes more).
+  (built in M5-8a; since D21, 2026-10-18, each faction ships three, listed on its page under "AI build order (Normal)":
+  the Malazans Combined arms, Crossbow push and Fast Age II, the Whirlwind Swarm, Raider rush and Holy war).
 - The AI sees only its own fog-of-war view. It never reads hidden enemy state.
 
 ## Game flow

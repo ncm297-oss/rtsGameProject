@@ -43,7 +43,7 @@ public class D20DefenseWordingQaTests
     }
 
     /// <summary>
-    /// D20's spending paragraph title quotes the gather rates the report ran at; pin them to <c>rules.json</c>
+    /// D20's spending paragraph title (one per opening since D21) quotes the gather rates the report ran at; pin them to <c>rules.json</c>
     /// <c>gatherRate</c> so a rate change turns the title red directly, not only through the report numbers.
     /// </summary>
     [Theory]
@@ -55,8 +55,11 @@ public class D20DefenseWordingQaTests
             File.ReadAllText(Path.Combine(TestDataDir.Shipped, "common", "rules.json")))!;
         double gold = rules["gatherRate"]!["gold"]!.GetValue<double>();
         double wood = rules["gatherRate"]!["wood"]!.GetValue<double>();
-        string title = PageTables.FactionLines(faction).Single(l => l.StartsWith("**Spending on the menu's map (D20", StringComparison.Ordinal));
-        Assert.Contains($"gathering gold {FactionPage.Text(gold)} / wood {FactionPage.Text(wood)} a second", title);
+        // D21 (2026-10-18): one spending paragraph per opening, each titled with the rates its run used.
+        string[] titles = PageTables.FactionLines(faction).Where(l => l.StartsWith("**Spending on the menu's map (D21", StringComparison.Ordinal)).ToArray();
+        Assert.Equal(TestSim.Data.Ai[TestSim.Data.FindFaction(faction)].Openings.Length, titles.Length);
+        foreach (string title in titles)
+            Assert.Contains($"gathering gold {FactionPage.Text(gold)} / wood {FactionPage.Text(wood)} a second", title);
     }
 
     /// <summary>docs/03 (M5-4f): the whole-wave recall (c1) compares the threat's worth, not the 1.5x answer, and needs a wave out; the hall rule (c2) needs the hall hit below <c>recallHallHp</c>.</summary>

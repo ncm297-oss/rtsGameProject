@@ -27,6 +27,11 @@ namespace Rts.Sim.Tests.QA.Content;
 /// the D15 C behaviour itself: no house Build sent at the hard cap).
 /// </para>
 /// <para>
+/// D21 (2026-10-18): the menu-map rows run per opening (the seat's pick, read from the AI: <c>AiPlayer.Opening</c>), on the
+/// smallest seed in 1-50 whose Normal pick is that opening; the 12th-house row measures the standard opening without its
+/// 12th house step on the same seed.
+/// </para>
+/// <para>
 /// Reads through the AI's internals (all <c>internal</c>, reached through <c>InternalsVisibleTo</c>; no public-to-tests
 /// surface carries a step's state or a sent house): <c>Simulation.AiOf</c>; <c>AiPlayer.Board</c>, <c>AiPlayer.ThinkTicks</c>
 /// and <c>AiPlayer.HouseType</c> (read from the AI, not re-derived beside it, BUG-0641); <c>Blackboard.StepDueTick</c>,
@@ -68,45 +73,94 @@ public class AiHouseRuleReportTests
     }
 
     /// <summary>
-    /// D20 (2026-10-17, M5-4f's D15 C): the flat scene's 12 trees a base run dry before the cap is 100, so none of its rows
-    /// reaches the rule "a house step due at the hard cap is done with no command sent". The menu's generated map (12 forests,
-    /// 8 mines, combat on, the other seat idle: <see cref="AiSpendingReportTests.MenuMap"/>), 24,000 ticks, reaches it; this
-    /// prints the same table plus, per house step, whether it was done at the hard cap without a Build.
+    /// D20 (2026-10-17, M5-4f's D15 C), per opening since D21 (2026-10-18): the flat scene's 12 trees a base run dry before
+    /// the cap is 100, so none of its rows reaches the rule "a house step due at the hard cap is done with no command sent".
+    /// The menu's generated map (12 forests, 8 mines, combat on, the other seat idle: <see cref="AiSpendingReportTests.MenuMap"/>),
+    /// 24,000 ticks, reaches it; this prints the same table plus, per house step, whether it was done at the hard cap without
+    /// a Build. One row per opening, on Normal, on the smallest seed in 1-50 whose Normal pick is that opening
+    /// (<see cref="AiOpeningSeeds.Smallest"/>; asserted on the run); plus <see cref="MenuMapNormal_TwelfthHouse_Report"/>.
     /// </summary>
     [Theory]
-    [InlineData("malazan", 1ul)]
-    [InlineData("malazan", 7ul)]
-    [InlineData("whirlwind", 1ul)]
-    [InlineData("whirlwind", 7ul)]
-    public void MenuMapNormal_HouseSources_Report(string faction, ulong seed)
+    [InlineData("malazan", 0)]
+    [InlineData("malazan", 1)]
+    [InlineData("malazan", 2)]
+    [InlineData("whirlwind", 0)]
+    [InlineData("whirlwind", 1)]
+    [InlineData("whirlwind", 2)]
+    public void MenuMapNormal_HouseSources_Report(string faction, int opening)
     {
-        Print(MenuMapRun(faction, seed), faction, seed);
-    }
-
-    private void Print(HouseRun r, string faction, ulong seed)
-    {
+        HouseRun r = MenuMapRun(faction, opening);
         foreach (string line in r.Lines) _out.WriteLine(line);
-        Assert.True(r.Faction == faction && r.Seed == seed);
+        _out.WriteLine("page: " + NoteSentence(r));
+        Assert.True(r.Faction == faction && r.Opening == opening);
     }
 
-    /// <summary>The menu-map run for one faction and seed (deterministic; computed once per test process and shared with the pin row).</summary>
-    internal static HouseRun MenuMapRun(string faction, ulong seed)
+    /// <summary>
+    /// D21's measured decision on the parked D15 C finding (the standard opening's 12th house step, Malazan step 18
+    /// <c>pop 81</c>, Whirlwind step 19 <c>pop 79</c>, is due at a cap of 90 or 98 and leaves 6 of its 8 pop unused): this
+    /// row takes it out of a copy of the data (the same seed as the standard opening's row) and prints the same table, so
+    /// the faction pages compare the two. Measured 2026-10-18: without it the cap reaches 100 later and the economy
+    /// manager's house rule places the 12th house anyway, so the step stays (in every opening).
+    /// </summary>
+    [Theory]
+    [InlineData("malazan")]
+    [InlineData("whirlwind")]
+    public void MenuMapNormal_TwelfthHouse_Report(string faction)
+    {
+        HouseRun r = TwelfthHouseRun(faction);
+        foreach (string line in r.Lines) _out.WriteLine(line);
+        _out.WriteLine("page: " + TwelfthSentence(r));
+    }
+
+    /// <summary>The standard opening's 12th house step: its index in the order and its pop trigger.</summary>
+    internal static (int Index, double Pop) TwelfthHouse(string faction) => faction == "malazan" ? (17, 81) : (18, 79);
+
+    /// <summary>The menu-map run for one faction's opening (deterministic; computed once per test process and shared with the pin row).</summary>
+    internal static HouseRun MenuMapRun(string faction, int opening)
     {
         lock (MenuRuns)
         {
-            if (MenuRuns.TryGetValue((faction, seed), out HouseRun? done)) return done;
-            int player = TestSim.Data.FindFaction(faction);
-            Simulation sim = AiSpendingReportTests.MenuMap(AiScenes.Seats(AiDifficulty.Normal, AiSpendingReportTests.Controllers(player)), seed);
-            var lines = new List<string>();
-            HouseRun r = Run(sim, player, MenuTicks, $"{faction}, menu map seed {seed} (12 forests, 8 mines, combat on)", lines.Add) with { Faction = faction, Seed = seed, Lines = lines };
-            MenuRuns[(faction, seed)] = r;
+            if (MenuRuns.TryGetValue((faction, opening), out HouseRun? done)) return done;
+            ulong seed = AiOpeningSeeds.Smallest(faction, opening, AiDifficulty.Normal);
+            HouseRun r = MenuRun(faction, opening, seed, TestSim.Data, "");
+            MenuRuns[(faction, opening)] = r;
             return r;
         }
     }
 
+    /// <summary>The standard opening's run with its 12th house step taken out (a data copy; same seed).</summary>
+    internal static HouseRun TwelfthHouseRun(string faction)
+    {
+        lock (MenuRuns)
+        {
+            if (MenuRuns.TryGetValue((faction, -1), out HouseRun? done)) return done;
+            (int index, double pop) = TwelfthHouse(faction);
+            string house = TestSim.Data.Buildings.First(b => b.Faction == TestSim.Data.FindFaction(faction) && b.Slot == BuildingSlot.House).Key;
+            Assert.Equal($"pop {pop.ToString(System.Globalization.CultureInfo.InvariantCulture)} | build | {house} | 1", AiContentTests.StepText(TestSim.Data.Ai[TestSim.Data.FindFaction(faction)].Openings[0].BuildOrder[index]));
+            GameData d = AiScenes.DataWithAi(faction, root => AiScenes.Opening(root)["buildOrder"]!.AsArray().RemoveAt(index));
+            ulong seed = AiOpeningSeeds.Smallest(faction, 0, AiDifficulty.Normal);
+            HouseRun r = MenuRun(faction, 0, seed, d, ", the 12th house step taken out");
+            MenuRuns[(faction, -1)] = r;
+            return r;
+        }
+    }
+
+    private static HouseRun MenuRun(string faction, int opening, ulong seed, GameData data, string what)
+    {
+        int player = data.FindFaction(faction);
+        PlayerSeat[] seats = AiScenes.Seats(AiDifficulty.Normal, AiSpendingReportTests.Controllers(player));
+        Simulation sim = AiSpendingReportTests.MenuMap(seats, seed, data);
+        Assert.Equal(opening, sim.AiOpening(player)); // the pick this run measures
+        var lines = new List<string>();
+        string name = AiOpeningSeeds.Name(data.Ai[player].Openings[opening]);
+        HouseRun r = Run(sim, player, MenuTicks, $"{faction} opening {opening + 1} {name}{what}, menu map seed {seed} (12 forests, 8 mines, combat on)", lines.Add)
+            with { Faction = faction, Opening = opening, Seed = seed, Lines = lines };
+        return r;
+    }
+
     private const int MenuTicks = 24_000;
 
-    private static readonly Dictionary<(string, ulong), HouseRun> MenuRuns = new();
+    private static readonly Dictionary<(string, int), HouseRun> MenuRuns = new();
 
     /// <summary>
     /// One house step's life: its 1-based number, the Builds it sent, those sent while the cap was already the rules' cap
@@ -114,13 +168,38 @@ public class AiHouseRuleReportTests
     /// </summary>
     internal sealed record HouseStep(int Step, int Sends, int SendsAtCap, int DoneTick, int CapAtDone);
 
-    /// <summary>What a run printed and measured: the house steps, the rules' cap (half-pop), the tick the cap reached it (-1: never).</summary>
-    internal sealed record HouseRun(string Faction, ulong Seed, HouseStep[] Steps, int RulesCap, int CapReachedTick, List<string> Lines)
+    /// <summary>
+    /// What a run printed and measured: the house steps, the rules' cap (half-pop), the tick the cap reached it (-1: never),
+    /// the cap at the end, the houses standing at the end and how many of them are past the cap (their pop unusable).
+    /// </summary>
+    internal sealed record HouseRun(string Faction, int Opening, ulong Seed, HouseStep[] Steps, int RulesCap, int CapReachedTick, int CapAtEnd,
+        int HousesStanding, int HousesPastCap, string HouseName, List<string> Lines)
     {
         /// <summary>The steps done at the hard cap with no Build sent: the executor's D15 C skip.</summary>
         public HouseStep[] SkippedAtCap => Steps.Where(x => x.DoneTick >= 0 && x.Sends == 0 && x.CapAtDone >= RulesCap).ToArray();
     }
 
+    /// <summary>
+    /// A run as its opening's "Houses at the cap" note says it: "Normal, seed 2: the cap reaches 100 at 702 s; the last
+    /// Billet step (step 17) is done at a cap of 90; skipped at the hard cap: none; 11 Billets stand at 20:00, 0 past the cap".
+    /// </summary>
+    internal static string NoteSentence(HouseRun r)
+    {
+        HouseStep last = r.Steps[^1];
+        string cap = r.CapReachedTick < 0 ? $"the cap stays below {r.RulesCap / 2} ({FactionPage.Text(r.CapAtEnd / 2.0)} at 20:00)" : $"the cap reaches {r.RulesCap / 2} at {r.CapReachedTick / Tps} s";
+        string lastText = last.DoneTick < 0 ? $"the last {r.HouseName} step (step {last.Step}) is never done" : $"the last {r.HouseName} step (step {last.Step}) is done at a cap of {FactionPage.Text(last.CapAtDone / 2.0)}";
+        HouseStep[] skipped = r.SkippedAtCap;
+        string skip = skipped.Length == 0 ? "none" : "step" + (skipped.Length > 1 ? "s " : " ") + string.Join(", ", skipped.Select(x => x.Step));
+        return $"Normal, seed {r.Seed}: {cap}; {lastText}; skipped at the hard cap: {skip}; {r.HousesStanding} {r.HouseName}s stand at 20:00, {r.HousesPastCap} past the cap";
+    }
+
+    /// <summary>The 12th-house comparison as the standard opening's note says it (<paramref name="r"/> is <see cref="TwelfthHouseRun"/>).</summary>
+    internal static string TwelfthSentence(HouseRun r)
+    {
+        string cap = r.CapReachedTick < 0 ? $"the cap stays below {r.RulesCap / 2}" : $"the cap reaches {r.RulesCap / 2} at {r.CapReachedTick / Tps} s";
+        int step = TwelfthHouse(r.Faction).Index + 1;
+        return $"without the 12th {r.HouseName} step (step {step}) on the same seed, {cap}, and {r.HousesStanding} {r.HouseName}s stand at 20:00, {r.HousesPastCap} past the cap";
+    }
     private static HouseRun Run(Simulation sim, int player, int ticks, string label, Action<string> write)
     {
         GameData d = sim.World.Data;
@@ -129,7 +208,6 @@ public class AiHouseRuleReportTests
         Assert.Equal(player, sim.World.FactionOf(player));
         AiPlayer ai = sim.AiOf(player)!;
         Blackboard board = ai.Board; // reads StepDueTick, StepDone, StepPending, HousePending
-        AiDef def = d.Ai[player];
         // The AI's own think interval and house type (BUG-0641): a change to how AiPlayer derives either moves the samples
         // with it instead of silently sampling other ticks or another building.
         int thinkTicks = ai.ThinkTicks;
@@ -137,7 +215,7 @@ public class AiHouseRuleReportTests
         BuildingDef houseDef = d.Buildings[house];
         Assert.True(houseDef.Faction == player && houseDef.Slot == BuildingSlot.House, $"AiPlayer.HouseType {houseDef.Key} is not the House of {label}");
         int rulesCap = d.Rules.HalfPopCap;
-        var steps = def.Openings[0].BuildOrder;
+        var steps = ai.Opening.BuildOrder; // D21: the opening the seat picked (read from the AI, BUG-0641)
         int tree = d.FindResource("tree"), mine = d.FindResource("gold_mine");
         var houseSteps = Enumerable.Range(0, steps.Length)
             .Where(i => steps[i].Action == AiStepAction.Build && steps[i].Target == house).ToArray();
@@ -216,7 +294,7 @@ public class AiHouseRuleReportTests
         for (int s = 0; s < b.Capacity; s++)
             if (b.Alive[s] && b.Owner[s] == player && !b.UnderConstruction[s]) provided += d.Buildings[b.TypeId[s]].HalfPopProvided;
 
-        write($"{label}, Normal, {ticks} ticks; {houseDef.Key} gives {houseDef.HalfPopProvided / 2.0} pop for {houseDef.CostGold} gold + {houseDef.CostWood} wood, rules cap {rulesCap / 2}");
+        write($"{label}, Normal, {ticks} ticks, opening {AiOpeningSeeds.Name(ai.Opening)}; {houseDef.Key} gives {houseDef.HalfPopProvided / 2.0} pop for {houseDef.CostGold} gold + {houseDef.CostWood} wood, rules cap {rulesCap / 2}");
         write($"house Builds sent: order steps {sends.Count(x => x.Step > 0)}, economy rule {sends.Count(x => x.Step == 0)}");
         write($"houses standing: {placedBy.Count} (placed by order steps {byOrder}, by the rule {byRule}, unknown {placedBy.Count(x => x.Step < 0)}); finished {placedBy.Count(x => x.Finished)}");
         write($"cap reached {rulesCap / 2} at tick {capReachedTick} ({(capReachedTick < 0 ? "never" : $"{capReachedTick / Tps} s")}); pop provided at the end {provided / 2.0} (cap {sim.World.HalfPopCap[player] / 2.0}), pop {sim.World.HalfPop[player] / 2.0}");
@@ -232,7 +310,7 @@ public class AiHouseRuleReportTests
             write($"{i + 1} | {AiContentTestsText(steps[i])} | {board.StepDueTick[i]} | {(done < 0 ? "never" : done.ToString())} | {capAt} | {stepDueThinks[i]} | {stepDueAtCapThinks[i]} | {stepSends[i]} | {stepSendsAtCap[i]}");
             result.Add(new HouseStep(i + 1, stepSends[i], stepSendsAtCap[i], done, done < 0 ? -1 : stepDoneCap[i]));
         }
-        HouseRun run = new("", 0, result.ToArray(), rulesCap, capReachedTick, new List<string>());
+        HouseRun run = new("", ai.OpeningIndex, 0, result.ToArray(), rulesCap, capReachedTick, sim.World.HalfPopCap[player], placedBy.Count, wasted, houseDef.DisplayName, new List<string>());
         HouseStep[] skipped = run.SkippedAtCap;
         write($"D15 C: house steps done at the hard cap {rulesCap / 2} with no Build sent: {(skipped.Length == 0 ? "none" : string.Join(", ", skipped.Select(x => x.Step)))}; house Builds sent at the hard cap: {result.Sum(x => x.SendsAtCap)}");
         write("");

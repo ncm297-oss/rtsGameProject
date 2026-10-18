@@ -102,14 +102,58 @@ table and the "Faction upgrade" line above to the data.
 
 ## AI build order (Normal)
 
-The AI opponent's `game/data/factions/malazan/ai.json` (docs/03 "For the data track (M5-1)"): one row per `buildOrder`
-step, in file order. The steps run side by side, not one after another: each think the executor works every step whose
-trigger is reached and which is not done, in this order, one command per step (a step earlier in the list gets the gold
-first). **At** is the trigger: `time` in seconds of match time, `pop` the AI's population (workers and army). **Count**
-is how many `train` commands the step queues over its life; a `build`, `research` or `expand` is done once its command
-is accepted (1). The AI starts with 5 Laborers, 3 on gold and 2 on wood (the economy manager's split, not a step). On
-Easy each step waits `buildOrderSlack` (30 s) after it is due, on Hard none. `Content/AiContentTests` pins this table,
-the composition table and the wave and retreat lines below to the file, both ways.
+The AI opponent's `game/data/factions/malazan/ai.json` (docs/03 "For the data track (M5-1)" and "Implementation (M5-8a)")
+holds three **openings**, each a build order, an army mix per age and an attack threshold. **An Easy AI always plays
+opening 1, `standard`**; a Normal or Hard AI picks one of the three from the match seed at the start (docs/02 "AI
+opponent"), so two matches against the Malazans can open differently, and a replay or a save plays the same one again.
+The name and description below are what the player may read (a stats line "the AI opened with …"). Each step table has
+one row per `buildOrder` step, in file order. The steps run side by side, not one after another: each think the executor
+works every step whose trigger is reached and which is not done, in this order, one command per step (a step earlier in
+the list gets the gold first). **At** is the trigger: `time` in seconds of match time, `pop` the AI's population
+(workers and army). **Count** is how many `train` commands the step queues over its life; a `build`, `research` or
+`expand` is done once its command is accepted (1). The AI starts with 5 Laborers, 3 on gold and 2 on wood (the economy
+manager's split, not a step). On Easy each step waits `buildOrderSlack` (30 s) after it is due, on Hard none.
+`Content/AiContentTests` pins the openings table, every opening's step table, composition table and wave line, and the
+retreat line below to the file, both ways; `Content/AiOpeningPairsReportTests` plays every Malazan opening against every
+Whirlwind opening (9 Normal AI-v-AI matches, 20 minutes each, the menu's map) and fails unless both sides send a wave and
+no step is a dead end.
+
+| # | Id | Name (shown to the player) | Description (shown to the player) |
+| --- | --- | --- | --- |
+| 1 | `standard` | Combined arms | Barracks, Crossbow Range and Armory first; waves of shields and crossbows from 16 army pop, then mages, siege and Wickan cavalry in Age II. |
+| 2 | `crossbow_push` | Crossbow push | A Crossbow Range before the Barracks, then a second: an early wave of crossbows behind a thin shield line at 14 army pop. |
+| 3 | `cadre_rush` | Fast Age II | Only a Barracks and an Armory before racing to Age II, then two Cadre Towers: few soldiers early, many mages later. The first wave waits for 18 army pop. |
+
+Not in the file, because the schema has no field for it (requests to the sim track): the sketch's expansion condition
+(army ≥ 12 pop and no enemy army near the base for 60 s; the step fires at its time), the Barracks rally to the base
+choke and the Watchtower's spot at the choke (the executor places every building near the Keep), the 3 : 2 gold /
+wood split (the economy manager's `goldShare`, a common rule), and a reserve for a due step: the AI saves nothing for
+Age II (400 gold / 200 wood), so production spends first and Age II comes in minutes after its step is due (each
+opening's spending note gives the time; docs/03 "Implementation (M5-2)", the production manager).
+
+- **Retreat:** a wave that has lost 50% falls back; a unit under 30% hp counts as wounded (`retreat`, shared by the
+  openings; Hard pulls it back).
+- **Later waves** (every opening): one wave at a time; a new one starts when none is out, at least `ai.waveCooldown`
+  after the last began, at the opening's threshold, and never while the base is defended.
+- **Defense** (docs/02 "AI opponent", docs/03 "Implementation (M5-4b)" and "(M5-4f)"; re-worded in D20, 2026-10-17, for
+  M5-4f's sized answer): a threat starts when an own building (a site too) within the defend radius of the Garrison Keep
+  is hit, or an enemy soldier (not a worker) is seen within it (`rules.json` `ai.defendRadius` 48 m; the threat holds
+  `ai.defendFor` 20 s after the last sign). The AI answers with defenders worth `ai.defendRatio` 1.5 times the
+  intruders' gold + wood cost, at least `ai.defendMinValue` 150 (a building hit with nobody seen gets 150), taken from
+  the army at home first (nearest the defense point first), then from the members of a wave out (nearest the Garrison
+  Keep first), each only while the members left keep the wave's start threshold (`attack.minArmyPop` and `minArmyCost`
+  times the difficulty's wave size ×, so a wave sent above it gives its surplus). One Raider (64 gold + wood) is answered with 150 worth, e.g. two Heavy Infantry from home (148), and a wave out keeps
+  going. A raid worth more than the home army and the wave's spare units together calls the whole wave home (it ends
+  like a retreat) and every free army unit answers. A hit that leaves the Garrison Keep below `ai.recallHallHp` 0.5 of
+  its max hp does the same, however small the raid. Laborers within `ai.workerFleeRadius` (16 m) of the threat flee to the nearest finished drop-off away from the
+  threat (the Garrison Keep or a Quartermaster's Depot, whichever is nearest among those more than 16 m from the threat;
+  else the nearest one).
+
+### Opening 1: `standard` (Combined arms)
+
+The order the AI has played since D14, step for step; Easy plays only this one. D21 (2026-10-18) gave it its name and
+description and lowered the wave from 20 army pop / 1,544 to 16 / 1,235: at 20 the Malazans never sent a wave against the
+Whirlwind's raider rush (seed 2: the base was defended at 779 of its 1,200 thinks and the army peaked at 15 pop).
 
 | # | At | Do | Id | Count | Why |
 | --- | --- | --- | --- | --- | --- |
@@ -130,7 +174,7 @@ the composition table and the wave and retreat lines below to the file, both way
 | 15 | pop 60 | build | `malazan_billet` | 1 | |
 | 16 | pop 67 | build | `malazan_billet` | 1 | |
 | 17 | pop 74 | build | `malazan_billet` | 1 | |
-| 18 | pop 81 | build | `malazan_billet` | 1 | The 12th Billet: Keep 10 + 12 × 8 = 106, past the 100 cap (due at 90 on the menu's map, so placed: "Houses at the cap" below) |
+| 18 | pop 81 | build | `malazan_billet` | 1 | The 12th Billet: Keep 10 + 12 × 8 = 106, past the 100 cap, kept on the measure below ("Houses at the cap") |
 | 19 | time 390 | research | `age_ii` | 1 | Age II at 6:30 (needs two of Barracks, Range, Armory: all three stand) |
 | 20 | time 390 | train | `malazan_laborer` | 10 | Workers to 30 in Age II |
 | 21 | time 450 | build | `malazan_cadre_tower` | 1 | 7:30, when Age II (60 s) is in |
@@ -140,33 +184,22 @@ the composition table and the wave and retreat lines below to the file, both way
 | 25 | time 540 | research | `moranth_supply` | 1 | The faction upgrade, at the Armory |
 | 26 | time 570 | build | `malazan_watchtower` | 1 | Watchtower |
 
-Not in the file, because the schema has no field for it (requests to the sim track): the sketch's expansion condition
-(army ≥ 12 pop and no enemy army near the base for 60 s; the step fires at its time), the Barracks rally to the base
-choke and the Watchtower's spot at the choke (the executor places every building near the Keep), and the 3 : 2 gold /
-wood split (the economy manager's `goldShare`, a common rule).
-
-**Houses at the cap (D20, 2026-10-17, M5-4f's D15 C; `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report`).**
+**Houses at the cap (D21, 2026-10-18, D15 C's parked finding measured; `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report` and `MenuMapNormal_TwelfthHouse_Report`).**
 Since M5-4f the executor skips a house step once the population cap is the hard cap (100): the step is done with no
-command sent and no Billet placed. On the menu's map (seeds 1 and 7, 20 minutes, the other seat idle) no house step was
-skipped: the 12th Billet (step 18) is due at a cap of 90 (Keep 10 + 10 × 8: the 11th Billet, step 17, is still going up
-when step 18 comes due, on both seeds), below the hard cap, so it is placed and 6 of its 8 pop go unused, and no Billet
-was placed once the cap was 100. Re-printed 2026-10-17 for M5-H3 (the sim's stand-point change, BUG-0790): before it the
-12th Billet was due at a cap of 98 (Keep 10 + 11 × 8). The skip saves a Billet only when the second Keep
-(step 23, the expansion) brings the cap to 100 before the last Billet steps are due.
+command sent and no Billet placed. On the menu's map (20 minutes, the other seat idle): Normal, seed 1: the cap reaches
+100 at 727 s; the last Billet step (step 18) is done at a cap of 90; skipped at the hard cap: none; 12 Billets stand at
+20:00, 0 past the cap. The 12th Billet is due at a cap of 90 and leaves 6 of its 8 pop unused, so D21 measured taking it
+out: without the 12th Billet step (step 18) on the same seed, the cap reaches 100 at 985 s, and 12 Billets stand at
+20:00, 0 past the cap. The economy manager's house rule places the 12th Billet anyway (the expansion's Keep rarely
+stands: it waits for a known free mine), only later, so the step stays, in every opening.
 
-**Spending on the menu's map (D20, 2026-10-17, M5-4f: gathering gold 0.85 / wood 0.75 a second and the sized defense; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
-Normal against an idle seat, seeds 1 and 7, 12 forests and 8 mines (the menu's): the AI razes the idle base at
-512 s (seed 1) and 536 s (seed 7), so only the 5-minute mark is still a match (the later marks no longer count). At 5
-minutes the Malazans hold 156 gold / 25 wood (seed 1) and 136 / 15 (seed 7): short of both, not wood-bound by the
-report's rule. Across both factions 1 of those 4 marks had wood under 100 with gold at 300 or more (the Whirlwind, seed
-1: 336 gold / 97 wood), so the report now reads "wood binds at some marks only, not the limit overall". Re-printed
-2026-10-17 for M5-H3 (the sim's stand-point change, BUG-0790: corner cells and the worker's own cell's free point), which
-moved every number here: before it the idle base fell at 505 s and 556 s, the Malazans held 136 / 15 and 36 / 40, and
-the verdict read "wood is not the limit" (0 of 4; seed 1 read 509 s before the sim's flank rule, M5-P2, BUG-0900). D-H5
-(2026-10-16, before the quicker gathering) read 584 s and 593 s and "wood binds at some marks only, not the limit
-overall" (1 of 4: the Whirlwind, seed 7), and D18 "wood is still the limit" (9 of 16 marks, 6 mines, counting marks
-after the win). Four marks are a thin sample: a weak input to the `goldShare` proposal under For
-your review, not a verdict.
+**Spending on the menu's map (D21, 2026-10-18, gathering gold 0.85 / wood 0.75 a second; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
+Against an idle seat, 12 forests and 8 mines (the menu's), 20 minutes. Normal, seed 1 (the smallest seed in 1-50 whose
+Normal pick is this opening): the idle base falls at 498 s; in hand at 5 min 156 gold / 25 wood; the first wave at 338
+s; Age II in at 938 s. Easy, seed 1 (Easy always plays the first opening): the idle base falls at 497 s; in hand at 5
+min 72 gold / 0 wood; the first wave at 332 s; Age II in at 844 s. Age II comes in about 8 minutes after its step is due
+at 6:30: the production manager spends the gold first (no reserve, see above). D20's two-seed note (512 s / 536 s,
+seeds 1 and 7) measured the old 20-pop wave and both seeds; the per-seed runs are now one per opening.
 
 **Army composition (`compositions`), weights by pop.** Age I lists only the units the Age I steps can train (the Corral
 waits for Age II), so its weights sum to 65.
@@ -182,23 +215,129 @@ waits for Age II), so its weights sum to 65.
 
 - **Composition target (by pop):** 35% Heavy Infantry, 30% Crossbowman, 10% Wickan Lancer,
   10% Cadre Mage, 10% Sapper, 5% Catapult.
-- **Attack waves:** first at 20 army pop and 1,544 gold + wood (`attack`; the cost of 20 pop of the Age I mix, rounded
-  down); then every 3 minutes or when army pop ≥ 1.3× the last wave. Sappers target buildings; Mages cast Telas Fire on
-  the largest enemy clump.
-- **Retreat:** a wave that has lost 50% falls back; a unit under 30% hp counts as wounded (`retreat`; Hard pulls it back).
-- **Defense** (docs/02 "AI opponent", docs/03 "Implementation (M5-4b)" and "(M5-4f)"; re-worded in D20, 2026-10-17, for
-  M5-4f's sized answer): a threat starts when an own building (a site too) within the defend radius of the Garrison Keep
-  is hit, or an enemy soldier (not a worker) is seen within it (`rules.json` `ai.defendRadius` 48 m; the threat holds
-  `ai.defendFor` 20 s after the last sign). The AI answers with defenders worth `ai.defendRatio` 1.5 times the
-  intruders' gold + wood cost, at least `ai.defendMinValue` 150 (a building hit with nobody seen gets 150), taken from
-  the army at home first (nearest the defense point first), then from the members of a wave out (nearest the Garrison
-  Keep first), each only while the members left keep the wave's start threshold (`attack.minArmyPop` and `minArmyCost`
-  times the difficulty's wave size ×, so a wave sent above it gives its surplus). One Raider (64 gold + wood) is answered with 150 worth, e.g. two Heavy Infantry from home (148), and a wave out keeps
-  going. A raid worth more than the home army and the wave's spare units together calls the whole wave home (it ends
-  like a retreat) and every free army unit answers. A hit that leaves the Garrison Keep below `ai.recallHallHp` 0.5 of
-  its max hp does the same, however small the raid. Laborers within `ai.workerFleeRadius` (16 m) of the threat flee to the nearest finished drop-off away from the
-  threat (the Garrison Keep or a Quartermaster's Depot, whichever is nearest among those more than 16 m from the threat;
-  else the nearest one).
+- **Attack waves:** first at 16 army pop and 1,235 gold + wood (`attack`; the cost of 16 pop of the Age I mix, rounded
+  down). Sappers target buildings; Mages cast Telas Fire on the largest enemy clump.
+
+### Opening 2: `crossbow_push` (Crossbow push)
+
+Crossbows first: a Crossbow Range before the Barracks and a second Range at pop 20, Ranged Weapons at the Armory, and
+an Age I mix of 60% Crossbowmen to 40% Heavy Infantry (36 : 24) that waves at 14 army pop. More Laborers than the
+standard (23 in Age I): two Ranges and a crossbow army eat the wood.
+
+| # | At | Do | Id | Count | Why |
+| --- | --- | --- | --- | --- | --- |
+| 1 | time 0 | train | `malazan_laborer` | 18 | Workers to 23 in Age I (5 at the start + 18): the Ranges and the crossbows need the wood |
+| 2 | pop 6 | build | `malazan_billet` | 1 | First Billet |
+| 3 | pop 8 | build | `malazan_depot` | 1 | Quartermaster's Depot at the nearest forest |
+| 4 | pop 9 | build | `malazan_crossbow_range` | 1 | The first Crossbow Range, before the Barracks |
+| 5 | pop 11 | build | `malazan_billet` | 1 | Second Billet |
+| 6 | pop 13 | build | `malazan_barracks` | 1 | Legion Barracks: the shield line |
+| 7 | pop 18 | build | `malazan_billet` | 1 | From pop 18 a Billet every 7 pop |
+| 8 | pop 20 | build | `malazan_crossbow_range` | 1 | The second Crossbow Range |
+| 9 | pop 22 | build | `malazan_armory` | 1 | The Forge |
+| 10 | pop 22 | research | `ranged_weapons_1` | 1 | Its first upgrade, Ranged Weapons: most of the army shoots (refused, and retried, until the Armory stands) |
+| 11 | pop 25 | build | `malazan_billet` | 1 | |
+| 12 | pop 32 | build | `malazan_billet` | 1 | |
+| 13 | pop 39 | build | `malazan_billet` | 1 | |
+| 14 | pop 46 | build | `malazan_billet` | 1 | |
+| 15 | pop 53 | build | `malazan_billet` | 1 | |
+| 16 | pop 60 | build | `malazan_billet` | 1 | |
+| 17 | pop 67 | build | `malazan_billet` | 1 | |
+| 18 | pop 74 | build | `malazan_billet` | 1 | |
+| 19 | pop 81 | build | `malazan_billet` | 1 | The 12th Billet, as in the standard opening |
+| 20 | time 420 | research | `age_ii` | 1 | Age II at 7:00, after the push (needs two of Range, Barracks, Armory) |
+| 21 | time 420 | train | `malazan_laborer` | 7 | Workers to 30 in Age II |
+| 22 | time 480 | build | `malazan_engineers_yard` | 1 | Catapults and Sappers to break what the crossbows can't |
+| 23 | time 480 | expand | — | 1 | 2nd Garrison Keep near the nearest free gold mine, at Normal's `expandAfter` (480 s) |
+| 24 | time 510 | build | `malazan_cadre_tower` | 1 | Cadre Mages |
+| 25 | time 540 | build | `malazan_wickan_corral` | 1 | Wickan Lancers |
+| 26 | time 570 | research | `moranth_supply` | 1 | The faction upgrade (Catapult range + 4 m) |
+
+**Houses at the cap (D21, 2026-10-18; `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report`).** On the
+menu's map (20 minutes, the other seat idle): Normal, seed 5: the cap reaches 100 at 650 s; the last Billet step (step
+19) is done at a cap of 98; skipped at the hard cap: none; 12 Billets stand at 20:00, 0 past the cap.
+
+**Spending on the menu's map (D21, 2026-10-18, gathering gold 0.85 / wood 0.75 a second; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
+Against an idle seat, the menu's map, 20 minutes. Normal, seed 5 (the smallest seed in 1-50 whose Normal pick is this
+opening): the idle base falls at 474 s; in hand at 5 min 282 gold / 30 wood; the first wave at 341 s; Age II in at 943 s.
+
+**Army composition (`compositions`), weights by pop.** Age I is the two units the Age I steps train, 36 : 24 (60% /
+40%), so its weights sum to 60.
+
+| Unit | Age I | Age II |
+| --- | --- | --- |
+| `malazan_crossbowman` | 36 | 36 |
+| `malazan_heavy_infantry` | 24 | 24 |
+| `malazan_wickan_lancer` | — | 10 |
+| `malazan_cadre_mage` | — | 10 |
+| `malazan_sapper` | — | 10 |
+| `malazan_catapult` | — | 10 |
+
+- **Composition target (by pop):** 36% Crossbowman, 24% Heavy Infantry, 10% Wickan Lancer,
+  10% Cadre Mage, 10% Sapper, 10% Catapult.
+- **Attack waves:** first at 14 army pop and 1,094 gold + wood (`attack`; the cost of 14 pop of the Age I mix, rounded
+  down: the lowest Malazan threshold).
+
+### Opening 3: `cadre_rush` (Fast Age II)
+
+Age II first: only the Barracks and the Armory (Age II's two kinds of building) before the Age II step at 5:00, so one
+hall's queue spends while the gold piles up; then two Cadre Towers, and an Age II mix of 30% Cadre Mages. The Crossbow
+Range waits for Age II, so Age I trains Heavy Infantry only.
+
+| # | At | Do | Id | Count | Why |
+| --- | --- | --- | --- | --- | --- |
+| 1 | time 0 | train | `malazan_laborer` | 15 | Workers to 20 in Age I (5 at the start + 15) |
+| 2 | pop 6 | build | `malazan_billet` | 1 | First Billet |
+| 3 | pop 8 | build | `malazan_depot` | 1 | Quartermaster's Depot at the nearest forest |
+| 4 | pop 10 | build | `malazan_barracks` | 1 | Legion Barracks: the one hall of Age I |
+| 5 | pop 12 | build | `malazan_billet` | 1 | Second Billet |
+| 6 | pop 14 | build | `malazan_armory` | 1 | The Forge: Age II's second kind of building, and no queue to spend the gold |
+| 7 | pop 18 | build | `malazan_billet` | 1 | From pop 18 a Billet every 7 pop |
+| 8 | pop 25 | build | `malazan_billet` | 1 | |
+| 9 | pop 32 | build | `malazan_billet` | 1 | |
+| 10 | pop 39 | build | `malazan_billet` | 1 | |
+| 11 | pop 46 | build | `malazan_billet` | 1 | |
+| 12 | pop 53 | build | `malazan_billet` | 1 | |
+| 13 | pop 60 | build | `malazan_billet` | 1 | |
+| 14 | pop 67 | build | `malazan_billet` | 1 | |
+| 15 | pop 74 | build | `malazan_billet` | 1 | |
+| 16 | pop 81 | build | `malazan_billet` | 1 | The 12th Billet, as in the standard opening |
+| 17 | time 300 | research | `age_ii` | 1 | Age II at 5:00, 90 s before the standard's step (needs two kinds: the Barracks and the Armory) |
+| 18 | time 300 | train | `malazan_laborer` | 10 | Workers to 30 in Age II |
+| 19 | time 360 | build | `malazan_cadre_tower` | 1 | The first Cadre Tower, as soon as Age II (60 s) can be in |
+| 20 | time 390 | build | `malazan_crossbow_range` | 1 | Crossbowmen for Age II |
+| 21 | time 420 | build | `malazan_cadre_tower` | 1 | The second Cadre Tower: mages from two towers |
+| 22 | time 480 | build | `malazan_engineers_yard` | 1 | Catapults and Sappers |
+| 23 | time 480 | expand | — | 1 | 2nd Garrison Keep near the nearest free gold mine, at Normal's `expandAfter` (480 s) |
+| 24 | time 540 | build | `malazan_wickan_corral` | 1 | Wickan Lancers |
+| 25 | time 570 | research | `moranth_supply` | 1 | The faction upgrade, at the Armory |
+
+**Houses at the cap (D21, 2026-10-18; `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report`).** On the
+menu's map (20 minutes, the other seat idle): Normal, seed 7: the cap reaches 100 at 835 s; the last Billet step (step
+16) is done at a cap of 98; skipped at the hard cap: none; 12 Billets stand at 20:00, 0 past the cap.
+
+**Spending on the menu's map (D21, 2026-10-18, gathering gold 0.85 / wood 0.75 a second; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
+Against an idle seat, the menu's map, 20 minutes. Normal, seed 7 (the smallest seed in 1-50 whose Normal pick is this
+opening): the idle base falls at 619 s; in hand at 5 min 198 gold / 455 wood, at 10 min 99 / 490; the first wave at 487
+s; Age II in at 509 s. The fastest Malazan Age II by far (the others: 938 s and 943 s), though not the step's 6:00: the
+one Barracks still spends gold before 400 piles up.
+
+**Army composition (`compositions`), weights by pop.** Age I lists only Heavy Infantry (the one unit the Age I steps can
+train), so its weights sum to 30.
+
+| Unit | Age I | Age II |
+| --- | --- | --- |
+| `malazan_heavy_infantry` | 30 | 30 |
+| `malazan_crossbowman` | — | 20 |
+| `malazan_cadre_mage` | — | 30 |
+| `malazan_wickan_lancer` | — | 10 |
+| `malazan_sapper` | — | 5 |
+| `malazan_catapult` | — | 5 |
+
+- **Composition target (by pop):** 30% Heavy Infantry, 20% Crossbowman, 30% Cadre Mage,
+  10% Wickan Lancer, 5% Sapper, 5% Catapult.
+- **Attack waves:** first at 18 army pop and 1,332 gold + wood (`attack`; the cost of 18 pop of the Age I mix, Heavy
+  Infantry at 74 a pop). Mages cast Telas Fire on the largest enemy clump.
 
 ## Difficulty
 

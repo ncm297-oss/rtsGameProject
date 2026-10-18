@@ -6,12 +6,14 @@ using Rts.Sim.Data;
 namespace Rts.Sim.Tests.Content;
 
 /// <summary>
-/// Content (D14): each shipped faction's <c>ai.json</c> is its page's "AI build order (Normal)" section, both ways: the
-/// step table row for row (trigger, action, id, count), the composition table weight for weight, the "Composition target"
-/// percentages (Age II), the wave threshold (pop and cost) and the retreat fractions. Every id belongs to the faction and
-/// can be acted on: a unit is trained at a building the order places, a tech at a building slot the faction fills, and the
-/// Age I composition only names units the Age I steps can train. <see cref="Problems"/> returns every mismatch as text
-/// naming the faction and the row, so a one-sided edit says which side moved.
+/// Content (D14, per opening since D21): each shipped faction's <c>ai.json</c> is its page's "AI build order (Normal)"
+/// section, both ways. The section's openings table lists every opening in file order (id, the player-facing name and
+/// description); the retreat line is shared. Under each opening's own heading (<see cref="OpeningHeading"/>): the step
+/// table row for row (trigger, action, id, count), the composition table weight for weight, the "Composition target"
+/// percentages (Age II) and the wave threshold (pop and cost). Every id belongs to the faction and can be acted on: a unit
+/// is trained at a building the opening places, a tech at a building slot the faction fills, and the Age I composition only
+/// names units the opening's Age I steps can train. <see cref="Problems"/> returns every mismatch as text naming the
+/// faction, the opening and the row, so a one-sided edit says which side moved.
 /// </summary>
 public class AiContentTests
 {
@@ -20,9 +22,15 @@ public class AiContentTests
     /// <summary>The heading of each page's AI section.</summary>
     public const string Section = "AI build order (Normal)";
 
+    /// <summary>The openings table's header (the section's first table, before the first opening heading).</summary>
+    public static readonly string[] OpeningColumns = { "#", "Id", "Name (shown to the player)", "Description (shown to the player)" };
+
     private static GameData Data => TestSim.Data;
 
     private static string Num(double v) => v.ToString("0.##", CultureInfo.InvariantCulture);
+
+    /// <summary>The heading of opening <paramref name="k"/> (0-based) on its faction page: "### Opening 1: `standard` (Combined arms)".</summary>
+    public static string OpeningHeading(int k, AiOpening o) => $"### Opening {k + 1}: `{o.Id}` ({o.DisplayName})";
 
     /// <summary>A step as the page's table writes it: "pop 6 | build | malazan_billet | 1".</summary>
     public static string StepText(AiStep s)
@@ -46,7 +54,18 @@ public class AiContentTests
         return pageLines[h..end];
     }
 
-    /// <summary>The section's bullets ("- **Attack waves:** ..."), continuation lines joined, bold markers removed.</summary>
+    /// <summary>The lines under opening <paramref name="k"/>'s heading (heading included) up to the next heading of level 2 or 3; fails naming the page and opening if the heading is missing.</summary>
+    public static string[] OpeningLines(string[] pageLines, string faction, int k, AiOpening o)
+    {
+        string heading = OpeningHeading(k, o);
+        int h = Array.IndexOf(pageLines, heading);
+        Assert.True(h >= 0, $"{faction}.md has no '{heading}' heading");
+        int end = h + 1;
+        while (end < pageLines.Length && !pageLines[end].StartsWith("## ", StringComparison.Ordinal) && !pageLines[end].StartsWith("### ", StringComparison.Ordinal)) end++;
+        return pageLines[h..end];
+    }
+
+    /// <summary>The lines' bullets ("- **Attack waves:** ..."), continuation lines joined, bold markers removed.</summary>
     private static List<string> Bullets(string[] section)
     {
         var bullets = new List<string>();
@@ -62,6 +81,9 @@ public class AiContentTests
     private static string? Bullet(List<string> bullets, string label) =>
         bullets.FirstOrDefault(b => b.StartsWith(label + ":", StringComparison.Ordinal));
 
+    /// <summary>An opening's table row as the openings table writes it: "standard | Combined arms | Barracks, ...".</summary>
+    public static string OpeningRowText(AiOpening o) => $"{o.Id} | {o.DisplayName} | {o.Description}";
+
     /// <summary>
     /// Every way the page section disagrees with <paramref name="d"/>'s AI data for <paramref name="faction"/>; empty when
     /// they match. <paramref name="pageLines"/> is the whole page (tests pass an edited copy).
@@ -72,61 +94,45 @@ public class AiContentTests
         int f = d.FindFaction(faction);
         AiDef ai = d.Ai[f];
         string[] section = SectionLines(faction, pageLines);
-        List<List<string>> tables = PageTables.TablesInSection(section, 0);
-        if (tables.Count != 2)
-        {
-            problems.Add($"{faction}: the section has {tables.Count} tables, expected 2 (steps, composition)");
-            return problems;
-        }
+        int firstOpening = Array.FindIndex(section, l => l.StartsWith("### ", StringComparison.Ordinal));
+        string[] shared = firstOpening < 0 ? section : section[..firstOpening];
 
-        // Steps, row for row.
-        string[][] rows = tables[0].Skip(2).Select(r => PageTables.Cells(r, stripBackticks: true)).ToArray();
-        if (rows.Length != ai.Openings[0].BuildOrder.Length)
-            problems.Add($"{faction} steps: page {rows.Length} vs data {ai.Openings[0].BuildOrder.Length}");
-        for (int i = 0; i < Math.Max(rows.Length, ai.Openings[0].BuildOrder.Length); i++)
-        {
-            string page = i < rows.Length ? string.Join(" | ", rows[i].Skip(1).Take(4)) : "(none)";
-            string data = i < ai.Openings[0].BuildOrder.Length ? StepText(ai.Openings[0].BuildOrder[i]) : "(none)";
-            if (i < rows.Length && rows[i][0] != (i + 1).ToString(CultureInfo.InvariantCulture))
-                problems.Add($"{faction} step {i + 1}: the page numbers it '{rows[i][0]}'");
-            if (page != data) problems.Add($"{faction} step {i + 1}: page '{page}' vs data '{data}'");
-        }
-
-        // Composition table: unit | Age I | Age II, "—" for none.
-        string[][] comp = tables[1].Skip(2).Select(r => PageTables.Cells(r, stripBackticks: true)).ToArray();
-        for (int age = 1; age <= ai.Openings[0].Compositions.Length; age++)
-        {
-            AiComposition c = ai.Openings[0].Compositions[age - 1];
-            string data = string.Join(", ", c.Units.Select((u, k) => $"{d.Units[u].Key} {Num(c.Weights[k])}").OrderBy(x => x, StringComparer.Ordinal));
-            string page = string.Join(", ", comp.Where(r => r.Length > age && r[age] != "—").Select(r => $"{r[0]} {r[age]}").OrderBy(x => x, StringComparer.Ordinal));
-            if (page != data) problems.Add($"{faction} composition age {age}: page '{page}' vs data '{data}'");
-        }
-
-        List<string> bullets = Bullets(section);
-
-        // "Composition target (by pop): 35% Heavy Infantry, ..." is the Age II mix by display name.
-        string? target = Bullet(bullets, "Composition target (by pop)");
-        if (target == null) problems.Add($"{faction}: no 'Composition target (by pop)' line");
+        // The openings table: one row per opening, in file order.
+        List<List<string>> sharedTables = PageTables.TablesInSection(shared, 0);
+        if (sharedTables.Count != 1) problems.Add($"{faction}: the section's shared part has {sharedTables.Count} tables, expected 1 (the openings)");
         else
         {
-            AiComposition last = ai.Openings[0].Compositions[^1];
-            string data = string.Join(", ", last.Units.Select((u, k) => $"{Num(last.Weights[k])}% {d.Units[u].DisplayName}").OrderBy(x => x, StringComparer.Ordinal));
-            string page = string.Join(", ", Regex.Matches(target, @"(\d+(?:\.\d+)?)% ([^,]+)")
-                .Select(m => $"{m.Groups[1].Value}% {m.Groups[2].Value.Trim().TrimEnd('.')}").OrderBy(x => x, StringComparer.Ordinal));
-            if (page != data) problems.Add($"{faction} composition target: page '{page}' vs data '{data}'");
+            string[] header = PageTables.Cells(sharedTables[0][0]);
+            if (!header.SequenceEqual(OpeningColumns)) problems.Add($"{faction} openings header: page '{string.Join(" | ", header)}'");
+            string[][] rows = sharedTables[0].Skip(2).Select(r => PageTables.Cells(r, stripBackticks: true)).ToArray();
+            if (rows.Length != ai.Openings.Length) problems.Add($"{faction} openings: page {rows.Length} vs data {ai.Openings.Length}");
+            for (int k = 0; k < Math.Max(rows.Length, ai.Openings.Length); k++)
+            {
+                string page = k < rows.Length ? string.Join(" | ", rows[k].Skip(1)) : "(none)";
+                string data = k < ai.Openings.Length ? OpeningRowText(ai.Openings[k]) : "(none)";
+                if (k < rows.Length && rows[k][0] != (k + 1).ToString(CultureInfo.InvariantCulture))
+                    problems.Add($"{faction} opening {k + 1}: the page numbers it '{rows[k][0]}'");
+                if (page != data) problems.Add($"{faction} opening {k + 1}: page '{page}' vs data '{data}'");
+            }
         }
 
-        string? attack = Bullet(bullets, "Attack waves");
-        Match a = attack == null ? Match.Empty : Regex.Match(attack, @"first at (\d+(?:\.\d+)?) army pop and ([\d,]+) gold \+ wood");
-        if (!a.Success) problems.Add($"{faction}: no 'Attack waves: first at N army pop and N gold + wood' line");
-        else
+        // The opening headings: exactly one per opening, in file order, and no other level-3 heading in the section.
+        string[] headings = section.Where(l => l.StartsWith("### ", StringComparison.Ordinal)).ToArray();
+        string[] expected = ai.Openings.Select((o, k) => OpeningHeading(k, o)).ToArray();
+        if (!headings.SequenceEqual(expected))
+            problems.Add($"{faction} opening headings: page '{string.Join("; ", headings)}' vs data '{string.Join("; ", expected)}'");
+
+        for (int k = 0; k < ai.Openings.Length; k++)
         {
-            string page = $"{a.Groups[1].Value} pop, {a.Groups[2].Value.Replace(",", "")} cost";
-            string data = $"{Num(ai.Openings[0].AttackMinHalfPop / 2.0)} pop, {ai.Openings[0].AttackMinCost.ToString(CultureInfo.InvariantCulture)} cost";
-            if (page != data) problems.Add($"{faction} attack: page '{page}' vs data '{data}'");
+            AiOpening o = ai.Openings[k];
+            int h = Array.IndexOf(section, expected[k]);
+            if (h < 0) continue; // reported above
+            int end = h + 1;
+            while (end < section.Length && !section[end].StartsWith("### ", StringComparison.Ordinal)) end++;
+            OpeningProblems(d, faction, o, section[h..end], problems);
         }
 
-        string? retreat = Bullet(bullets, "Retreat");
+        string? retreat = Bullet(Bullets(shared), "Retreat");
         Match r = retreat == null ? Match.Empty : Regex.Match(retreat, @"lost (\d+)% falls back; a unit under (\d+)% hp");
         if (!r.Success) problems.Add($"{faction}: no 'Retreat: ... lost N% falls back; a unit under N% hp' line");
         else
@@ -136,6 +142,65 @@ public class AiContentTests
             if (page != data) problems.Add($"{faction} retreat: page '{page}' vs data '{data}'");
         }
         return problems;
+    }
+
+    /// <summary>One opening's subsection against its data: the step table, the composition table and its two bullets.</summary>
+    private static void OpeningProblems(GameData d, string faction, AiOpening o, string[] lines, List<string> problems)
+    {
+        string who = $"{faction} {o.Id}";
+        List<List<string>> tables = PageTables.TablesInSection(lines, 0);
+        if (tables.Count != 2)
+        {
+            problems.Add($"{who}: the opening has {tables.Count} tables, expected 2 (steps, composition)");
+            return;
+        }
+
+        // Steps, row for row.
+        string[][] rows = tables[0].Skip(2).Select(r => PageTables.Cells(r, stripBackticks: true)).ToArray();
+        var steps = o.BuildOrder;
+        if (rows.Length != steps.Length) problems.Add($"{who} steps: page {rows.Length} vs data {steps.Length}");
+        for (int i = 0; i < Math.Max(rows.Length, steps.Length); i++)
+        {
+            string page = i < rows.Length ? string.Join(" | ", rows[i].Skip(1).Take(4)) : "(none)";
+            string data = i < steps.Length ? StepText(steps[i]) : "(none)";
+            if (i < rows.Length && rows[i][0] != (i + 1).ToString(CultureInfo.InvariantCulture))
+                problems.Add($"{who} step {i + 1}: the page numbers it '{rows[i][0]}'");
+            if (page != data) problems.Add($"{who} step {i + 1}: page '{page}' vs data '{data}'");
+        }
+
+        // Composition table: unit | Age I | Age II, "—" for none.
+        string[][] comp = tables[1].Skip(2).Select(r => PageTables.Cells(r, stripBackticks: true)).ToArray();
+        for (int age = 1; age <= o.Compositions.Length; age++)
+        {
+            AiComposition c = o.Compositions[age - 1];
+            string data = string.Join(", ", c.Units.Select((u, k) => $"{d.Units[u].Key} {Num(c.Weights[k])}").OrderBy(x => x, StringComparer.Ordinal));
+            string page = string.Join(", ", comp.Where(r => r.Length > age && r[age] != "—").Select(r => $"{r[0]} {r[age]}").OrderBy(x => x, StringComparer.Ordinal));
+            if (page != data) problems.Add($"{who} composition age {age}: page '{page}' vs data '{data}'");
+        }
+
+        List<string> bullets = Bullets(lines);
+
+        // "Composition target (by pop): 35% Heavy Infantry, ..." is the Age II mix by display name.
+        string? target = Bullet(bullets, "Composition target (by pop)");
+        if (target == null) problems.Add($"{who}: no 'Composition target (by pop)' line");
+        else
+        {
+            AiComposition last = o.Compositions[^1];
+            string data = string.Join(", ", last.Units.Select((u, k) => $"{Num(last.Weights[k])}% {d.Units[u].DisplayName}").OrderBy(x => x, StringComparer.Ordinal));
+            string page = string.Join(", ", Regex.Matches(target, @"(\d+(?:\.\d+)?)% ([^,]+)")
+                .Select(m => $"{m.Groups[1].Value}% {m.Groups[2].Value.Trim().TrimEnd('.')}").OrderBy(x => x, StringComparer.Ordinal));
+            if (page != data) problems.Add($"{who} composition target: page '{page}' vs data '{data}'");
+        }
+
+        string? attack = Bullet(bullets, "Attack waves");
+        Match a = attack == null ? Match.Empty : Regex.Match(attack, @"first at (\d+(?:\.\d+)?) army pop and ([\d,]+) gold \+ wood");
+        if (!a.Success) problems.Add($"{who}: no 'Attack waves: first at N army pop and N gold + wood' line");
+        else
+        {
+            string page = $"{a.Groups[1].Value} pop, {a.Groups[2].Value.Replace(",", "")} cost";
+            string data = $"{Num(o.AttackMinHalfPop / 2.0)} pop, {o.AttackMinCost.ToString(CultureInfo.InvariantCulture)} cost";
+            if (page != data) problems.Add($"{who} attack: page '{page}' vs data '{data}'");
+        }
     }
 
     [Fact]
@@ -148,20 +213,56 @@ public class AiContentTests
         }
     }
 
+    /// <summary>D21: both shipped files hold exactly three openings, the first <c>standard</c> (the one Easy plays).</summary>
+    [Fact]
+    public void A_BothFiles_HoldThreeOpenings_StandardFirst()
+    {
+        foreach (string faction in Factions)
+        {
+            AiDef ai = Data.Ai[Data.FindFaction(faction)];
+            Assert.Equal(3, ai.Openings.Length);
+            Assert.Equal("standard", ai.Openings[0].Id);
+        }
+    }
+
     /// <summary>
-    /// The pin is not vacuous: a one-line page edit (a count, a trigger, an id, a weight, the wave, the retreat) and a
-    /// missing or extra row each fail, naming the faction and the row.
+    /// D21, the pages' "An Easy AI always plays opening 1": on the shipped files an Easy seat of either faction picks
+    /// opening 0 on every seed in 1-50, and a Normal seat picks each of the three somewhere in 1-50 (the reports'
+    /// smallest-seed rule needs one), read from <see cref="Simulation.AiOpening"/>.
+    /// </summary>
+    [Fact]
+    public void A_EasyPlaysTheFirstOpening_NormalReachesEveryOpening()
+    {
+        foreach (string faction in Factions)
+        {
+            int player = Data.FindFaction(faction); // AiScenes.Seats: player p plays faction p mod 2
+            var normal = new HashSet<int>();
+            for (ulong seed = 1; seed <= AiOpeningSeeds.MaxReportSeed; seed++)
+            {
+                Assert.True(AiOpeningSeeds.Pick(seed, player, AiDifficulty.Easy) == 0, $"{faction} Easy seed {seed}: not the first opening");
+                normal.Add(AiOpeningSeeds.Pick(seed, player, AiDifficulty.Normal));
+            }
+            Assert.Equal(Enumerable.Range(0, Data.Ai[player].Openings.Length), normal.OrderBy(x => x));
+        }
+    }
+
+    /// <summary>
+    /// The pin is not vacuous: a one-line page edit (a count, a trigger, an id, a weight, the wave, the retreat, an opening's
+    /// name, description or heading) and a missing or extra row each fail, naming the faction, the opening and the row.
     /// </summary>
     [Theory]
-    [InlineData("| 1 | time 0 | train | `malazan_laborer` | 15 |", "| 1 | time 0 | train | `malazan_laborer` | 14 |", "malazan step 1: page 'time 0 | train | malazan_laborer | 14'")]
-    [InlineData("| 2 | pop 6 | build |", "| 2 | pop 7 | build |", "malazan step 2: page 'pop 7")]
-    [InlineData("| 3 | pop 8 | build | `malazan_depot`", "| 3 | pop 8 | build | `malazan_barracks`", "malazan step 3:")]
-    [InlineData("| 26 | time 570 | build | `malazan_watchtower` | 1 | Watchtower |", "", "malazan steps: page 25 vs data 26")]
-    [InlineData("| `malazan_sapper` | — | 10 |", "| `malazan_sapper` | 10 | 10 |", "malazan composition age 1:")]
-    [InlineData("| `malazan_catapult` | — | 5 |", "| `malazan_catapult` | — | 6 |", "malazan composition age 2:")]
-    [InlineData("10% Cadre Mage, 10% Sapper, 5% Catapult.", "10% Cadre Mage, 10% Sapper, 6% Catapult.", "malazan composition target:")]
-    [InlineData("first at 20 army pop and 1,544 gold", "first at 20 army pop and 1,545 gold", "malazan attack: page '20 pop, 1545 cost'")]
+    [InlineData("| 1 | time 0 | train | `malazan_laborer` | 15 |", "| 1 | time 0 | train | `malazan_laborer` | 14 |", "malazan standard step 1: page 'time 0 | train | malazan_laborer | 14'")]
+    [InlineData("| 2 | pop 6 | build |", "| 2 | pop 7 | build |", "malazan standard step 2: page 'pop 7")]
+    [InlineData("| 3 | pop 8 | build | `malazan_depot`", "| 3 | pop 8 | build | `malazan_barracks`", "malazan standard step 3:")]
+    [InlineData("| 26 | time 570 | build | `malazan_watchtower` | 1 | Watchtower |", "", "malazan standard steps: page 25 vs data 26")]
+    [InlineData("| `malazan_sapper` | — | 10 |", "| `malazan_sapper` | 10 | 10 |", "malazan standard composition age 1:")]
+    [InlineData("| `malazan_catapult` | — | 5 |", "| `malazan_catapult` | — | 6 |", "malazan standard composition age 2:")]
+    [InlineData("10% Cadre Mage, 10% Sapper, 5% Catapult.", "10% Cadre Mage, 10% Sapper, 6% Catapult.", "malazan standard composition target:")]
+    [InlineData("first at 16 army pop and 1,235 gold", "first at 16 army pop and 1,236 gold", "malazan standard attack: page '16 pop, 1236 cost'")]
     [InlineData("lost 50% falls back; a unit under 30% hp", "lost 40% falls back; a unit under 30% hp", "malazan retreat:")]
+    [InlineData("| 2 | `crossbow_push` | Crossbow push |", "| 2 | `crossbow_push` | Crossbow Push |", "malazan opening 2: page 'crossbow_push | Crossbow Push")]
+    [InlineData("then two Cadre Towers: few soldiers early", "then two Cadre Towers: few soldiers at first", "malazan opening 3: page 'cadre_rush | Fast Age II")]
+    [InlineData("### Opening 3: `cadre_rush` (Fast Age II)", "### Opening 3: `cadre_rush` (Fast age II)", "malazan opening headings:")]
     public void B_AOneLinePageEdit_FailsByName(string find, string replace, string expected)
     {
         string[] lines = PageTables.FactionLines("malazan");
@@ -174,7 +275,7 @@ public class AiContentTests
         Assert.Contains(problems, p => p.StartsWith(expected, StringComparison.Ordinal));
     }
 
-    /// <summary>The other way: a one-value edit of the file fails against the unchanged page, naming the row.</summary>
+    /// <summary>The other way: a one-value edit of the file fails against the unchanged page, naming the opening and the row.</summary>
     [Fact]
     public void C_AOneValueFileEdit_FailsByName()
     {
@@ -183,20 +284,30 @@ public class AiContentTests
         {
             AiScenes.Opening(root)["buildOrder"]![3]!["at"] = JsonNode.Parse("""{ "pop": 10 }""");
             AiScenes.Opening(root)["attack"]!["minArmyPop"] = 15;
+            AiScenes.Opening(root, 2)["buildOrder"]![2]!["at"] = JsonNode.Parse("""{ "pop": 9 }""");
+            AiScenes.Opening(root, 1)["displayName"] = "Raider Rush";
         });
         DataLoadResult result = DataLoader.LoadAll(dir.Path);
         Assert.True(result.Ok, string.Join("\n", result.Errors));
         List<string> problems = Problems(result.Data!, "whirlwind", PageTables.FactionLines("whirlwind"));
-        Assert.Contains("whirlwind step 4: page 'pop 9 | build | whirlwind_supply_cache | 1' vs data 'pop 10 | build | whirlwind_supply_cache | 1'", problems);
-        Assert.Contains(problems, p => p.StartsWith("whirlwind attack: page '14 pop, 861 cost' vs data '15 pop", StringComparison.Ordinal));
-        Assert.Equal(2, problems.Count);
+        Assert.Contains("whirlwind standard step 4: page 'pop 9 | build | whirlwind_supply_cache | 1' vs data 'pop 10 | build | whirlwind_supply_cache | 1'", problems);
+        Assert.Contains(problems, p => p.StartsWith("whirlwind standard attack: page '14 pop, 861 cost' vs data '15 pop", StringComparison.Ordinal));
+        Assert.Contains("whirlwind holy_war step 3: page 'pop 8 | build | whirlwind_raider_camp | 1' vs data 'pop 9 | build | whirlwind_raider_camp | 1'", problems);
+        Assert.Contains(problems, p => p.StartsWith("whirlwind opening 2: page 'raider_rush | Raider rush |", StringComparison.Ordinal));
+        // The renamed opening's heading no longer matches either, so its subsection is not read (one problem for both).
+        Assert.Contains(problems, p => p.StartsWith("whirlwind opening headings:", StringComparison.Ordinal));
+        Assert.Equal(5, problems.Count);
     }
 
+    /// <summary>The steps of every shipped opening of <paramref name="faction"/>, with the opening's index.</summary>
+    private static IEnumerable<(int K, AiOpening O)> OpeningsOf(string faction) =>
+        Data.Ai[Data.FindFaction(faction)].Openings.Select((o, k) => (k, o));
+
     /// <summary>
-    /// Every id is the faction's and can be acted on: a train step's unit (and every composition unit) is trained at the
-    /// Town Hall or at a building some step places; a build step's required buildings are placed by a step too; a research
-    /// step's tech is common or the faction's, at a building slot one of its steps fills; an Age II requirement is met by
-    /// the order's own Age II step.
+    /// Every id is the faction's and can be acted on, per opening: a train step's unit (and every composition unit) is
+    /// trained at the Town Hall or at a building some step of the same opening places; a build step's required buildings are
+    /// placed by a step of the opening too; a research step's tech is common or the faction's, at a building slot one of its
+    /// steps fills; an Age II requirement is met by the opening's own Age II step.
     /// </summary>
     [Fact]
     public void D_EveryId_IsTheFactions_AndReachable()
@@ -204,90 +315,141 @@ public class AiContentTests
         foreach (string faction in Factions)
         {
             int f = Data.FindFaction(faction);
-            AiDef ai = Data.Ai[f];
-            var built = new HashSet<int>(ai.Openings[0].BuildOrder.Where(s => s.Action == AiStepAction.Build).Select(s => s.Target));
-            built.Add(Data.Buildings.Select((b, i) => (b, i)).Single(x => x.b.Faction == f && x.b.Slot == BuildingSlot.TownHall).i);
-            var researched = new HashSet<int>(ai.Openings[0].BuildOrder.Where(s => s.Action == AiStepAction.Research).Select(s => s.Target));
-            var builtSlots = new HashSet<BuildingSlot>(built.Select(b => Data.Buildings[b].Slot));
-            for (int i = 0; i < ai.Openings[0].BuildOrder.Length; i++)
+            foreach ((int k, AiOpening o) in OpeningsOf(faction))
             {
-                AiStep s = ai.Openings[0].BuildOrder[i];
-                string where = $"{faction} step {i + 1} ({s.TargetKey})";
-                switch (s.Action)
+                var built = new HashSet<int>(o.BuildOrder.Where(s => s.Action == AiStepAction.Build).Select(s => s.Target));
+                built.Add(Data.Buildings.Select((b, i) => (b, i)).Single(x => x.b.Faction == f && x.b.Slot == BuildingSlot.TownHall).i);
+                var researched = new HashSet<int>(o.BuildOrder.Where(s => s.Action == AiStepAction.Research).Select(s => s.Target));
+                var builtSlots = new HashSet<BuildingSlot>(built.Select(b => Data.Buildings[b].Slot));
+                for (int i = 0; i < o.BuildOrder.Length; i++)
                 {
-                    case AiStepAction.Train:
-                        Assert.True(Data.Units[s.Target].Faction == f, $"{where}: another faction's unit");
-                        Assert.True(built.Contains(Data.Units[s.Target].TrainedAtTypeId), $"{where}: no step places its building");
-                        Assert.All(Data.Units[s.Target].RequiresTechs, t => Assert.True(researched.Contains(t), $"{where}: needs an unresearched tech"));
-                        break;
-                    case AiStepAction.Build:
-                        Assert.True(Data.Buildings[s.Target].Faction == f, $"{where}: another faction's building");
-                        Assert.All(Data.Buildings[s.Target].RequiresBuildings, b => Assert.True(built.Contains(b), $"{where}: needs an unplaced building"));
-                        Assert.All(Data.Buildings[s.Target].RequiresTechs, t => Assert.True(researched.Contains(t), $"{where}: needs an unresearched tech"));
-                        break;
-                    case AiStepAction.Research:
-                        TechDef t = Data.Techs[s.Target];
-                        Assert.True(t.Faction < 0 || t.Faction == f, $"{where}: another faction's tech");
-                        Assert.True(builtSlots.Contains(t.ResearchedAtSlot), $"{where}: no step places a {t.ResearchedAtSlot}");
-                        Assert.All(t.RequiresTechs, x => Assert.True(researched.Contains(x), $"{where}: needs an unresearched tech"));
-                        break;
-                    default:
-                        Assert.Equal(AiStepAction.Expand, s.Action);
-                        Assert.Equal(-1, s.Target);
-                        break;
+                    AiStep s = o.BuildOrder[i];
+                    string where = $"{faction} {o.Id} step {i + 1} ({s.TargetKey})";
+                    switch (s.Action)
+                    {
+                        case AiStepAction.Train:
+                            Assert.True(Data.Units[s.Target].Faction == f, $"{where}: another faction's unit");
+                            Assert.True(built.Contains(Data.Units[s.Target].TrainedAtTypeId), $"{where}: no step places its building");
+                            Assert.All(Data.Units[s.Target].RequiresTechs, t => Assert.True(researched.Contains(t), $"{where}: needs an unresearched tech"));
+                            break;
+                        case AiStepAction.Build:
+                            Assert.True(Data.Buildings[s.Target].Faction == f, $"{where}: another faction's building");
+                            Assert.All(Data.Buildings[s.Target].RequiresBuildings, b => Assert.True(built.Contains(b), $"{where}: needs an unplaced building"));
+                            Assert.All(Data.Buildings[s.Target].RequiresTechs, t => Assert.True(researched.Contains(t), $"{where}: needs an unresearched tech"));
+                            break;
+                        case AiStepAction.Research:
+                            TechDef t = Data.Techs[s.Target];
+                            Assert.True(t.Faction < 0 || t.Faction == f, $"{where}: another faction's tech");
+                            Assert.True(builtSlots.Contains(t.ResearchedAtSlot), $"{where}: no step places a {t.ResearchedAtSlot}");
+                            Assert.All(t.RequiresTechs, x => Assert.True(researched.Contains(x), $"{where}: needs an unresearched tech"));
+                            break;
+                        default:
+                            Assert.Equal(AiStepAction.Expand, s.Action);
+                            Assert.Equal(-1, s.Target);
+                            break;
+                    }
                 }
+                foreach (AiComposition c in o.Compositions)
+                    foreach (int u in c.Units)
+                    {
+                        Assert.True(Data.Units[u].Faction == f, $"{faction} {o.Id} age {c.Age}: {Data.Units[u].Key} is another faction's");
+                        Assert.True(Data.Units[u].Slot != UnitSlot.Worker, $"{faction} {o.Id} age {c.Age}: {Data.Units[u].Key} is a worker");
+                        Assert.True(built.Contains(Data.Units[u].TrainedAtTypeId), $"{faction} {o.Id} age {c.Age}: no step places {Data.Units[u].TrainedAt}");
+                    }
             }
-            foreach (AiComposition c in ai.Openings[0].Compositions)
-                foreach (int u in c.Units)
-                {
-                    Assert.True(Data.Units[u].Faction == f, $"{faction} age {c.Age}: {Data.Units[u].Key} is another faction's");
-                    Assert.True(Data.Units[u].Slot != UnitSlot.Worker, $"{faction} age {c.Age}: {Data.Units[u].Key} is a worker");
-                    Assert.True(built.Contains(Data.Units[u].TrainedAtTypeId), $"{faction} age {c.Age}: no step places {Data.Units[u].TrainedAt}");
-                }
         }
     }
 
     /// <summary>
-    /// Age I's composition names only units the Age I steps can train: the unit and its building need no age tech, and the
-    /// building is placed by a step due before the Age II research (a pop step, or a time step earlier than it). Age II's
-    /// composition is Age I's plus the rest of the army, the same weights for the shared units (the pages' one list).
+    /// D21 (the brief's criterion 1): in every opening, every <c>build</c> or <c>research</c> step's requirement stands earlier
+    /// in the same order or at the start: each required building is the Town Hall or placed by an earlier <c>build</c> step;
+    /// each required tech is researched by an earlier step; a <c>requiresAnyOf</c> (Age II's "two kinds of building") is met
+    /// by the hall and the earlier build steps' slots. The executor runs steps side by side, so file order is not time order,
+    /// but a requirement written after its step reads as a dead end to the owner and is one when its trigger comes later.
+    /// </summary>
+    [Fact]
+    public void D_EveryRequirement_StandsEarlierInTheSameOrder()
+    {
+        foreach (string faction in Factions)
+        {
+            int f = Data.FindFaction(faction);
+            int hall = Data.Buildings.Select((b, i) => (b, i)).Single(x => x.b.Faction == f && x.b.Slot == BuildingSlot.TownHall).i;
+            foreach ((int k, AiOpening o) in OpeningsOf(faction))
+            {
+                var built = new HashSet<int> { hall };
+                var researched = new HashSet<int>();
+                for (int i = 0; i < o.BuildOrder.Length; i++)
+                {
+                    AiStep s = o.BuildOrder[i];
+                    string where = $"{faction} {o.Id} step {i + 1} ({s.TargetKey})";
+                    if (s.Action == AiStepAction.Build)
+                    {
+                        BuildingDef b = Data.Buildings[s.Target];
+                        foreach (int r in b.RequiresBuildings) Assert.True(built.Contains(r), $"{where}: needs {Data.Buildings[r].Key}, placed by no earlier step");
+                        foreach (int t in b.RequiresTechs) Assert.True(researched.Contains(t), $"{where}: needs {Data.Techs[t].Key}, researched by no earlier step");
+                        built.Add(s.Target);
+                    }
+                    else if (s.Action == AiStepAction.Research)
+                    {
+                        TechDef t = Data.Techs[s.Target];
+                        Assert.True(built.Any(b => Data.Buildings[b].Slot == t.ResearchedAtSlot), $"{where}: no earlier step places a {t.ResearchedAtSlot}");
+                        foreach (int x in t.RequiresTechs) Assert.True(researched.Contains(x), $"{where}: needs {Data.Techs[x].Key}, researched by no earlier step");
+                        foreach (int r in t.RequiresBuildings) Assert.True(built.Contains(r), $"{where}: needs {Data.Buildings[r].Key}, placed by no earlier step");
+                        if (t.RequiresAnyOfCount > 0)
+                        {
+                            int kinds = t.RequiresAnyOfSlots.Count(slot => built.Any(b => (int)Data.Buildings[b].Slot == slot));
+                            Assert.True(kinds >= t.RequiresAnyOfCount, $"{where}: {kinds} of the {t.RequiresAnyOfCount} kinds of building it needs stand before it");
+                        }
+                        researched.Add(s.Target);
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Age I's composition names only units the opening's Age I steps can train: the unit and its building need no age tech,
+    /// and the building is placed by a step due before the Age II research (a pop step, or a time step earlier than it).
+    /// Age II's composition is Age I's plus the rest of the army, the same weights for the shared units (the pages' one
+    /// list per opening).
     /// </summary>
     [Fact]
     public void E_AgeI_NamesOnlyWhatAgeICanTrain_AndAgeIIExtendsIt()
     {
         int age2 = Data.FindTech(DataLimits.AgeTechIds[0]);
         foreach (string faction in Factions)
-        {
-            AiDef ai = Data.Ai[Data.FindFaction(faction)];
-            AiStep ageStep = ai.Openings[0].BuildOrder.Single(s => s.Action == AiStepAction.Research && s.Target == age2);
-            Assert.Equal(AiStepTrigger.Time, ageStep.Trigger);
-            var ageOne = new HashSet<int>(ai.Openings[0].BuildOrder
-                .Where(s => s.Action == AiStepAction.Build && (s.Trigger != AiStepTrigger.Time || s.At < ageStep.At))
-                .Select(s => s.Target));
-            AiComposition one = ai.Openings[0].Compositions[0], two = ai.Openings[0].Compositions[1];
-            foreach (int u in one.Units)
+            foreach ((int k, AiOpening o) in OpeningsOf(faction))
             {
-                UnitDef unit = Data.Units[u];
-                string where = $"{faction} Age I {unit.Key}";
-                Assert.False(unit.RequiresTechs.Contains(age2), $"{where}: needs Age II");
-                Assert.False(Data.Buildings[unit.TrainedAtTypeId].RequiresTechs.Contains(age2), $"{where}: its building needs Age II");
-                Assert.True(ageOne.Contains(unit.TrainedAtTypeId), $"{where}: no Age I step places {unit.TrainedAt}");
+                AiStep ageStep = o.BuildOrder.Single(s => s.Action == AiStepAction.Research && s.Target == age2);
+                Assert.Equal(AiStepTrigger.Time, ageStep.Trigger);
+                var ageOne = new HashSet<int>(o.BuildOrder
+                    .Where(s => s.Action == AiStepAction.Build && (s.Trigger != AiStepTrigger.Time || s.At < ageStep.At))
+                    .Select(s => s.Target));
+                AiComposition one = o.Compositions[0], two = o.Compositions[1];
+                foreach (int u in one.Units)
+                {
+                    UnitDef unit = Data.Units[u];
+                    string where = $"{faction} {o.Id} Age I {unit.Key}";
+                    Assert.False(unit.RequiresTechs.Contains(age2), $"{where}: needs Age II");
+                    Assert.False(Data.Buildings[unit.TrainedAtTypeId].RequiresTechs.Contains(age2), $"{where}: its building needs Age II");
+                    Assert.True(ageOne.Contains(unit.TrainedAtTypeId), $"{where}: no Age I step places {unit.TrainedAt}");
+                }
+                for (int j = 0; j < one.Units.Length; j++)
+                {
+                    int at = two.Units.IndexOf(one.Units[j]);
+                    Assert.True(at >= 0, $"{faction} {o.Id}: Age II drops {Data.Units[one.Units[j]].Key}");
+                    Assert.Equal(one.Weights[j], two.Weights[at]);
+                }
+                // The pages' percentages: the Age II mix sums to 100.
+                Assert.Equal(100f, two.Weights.Sum());
             }
-            for (int k = 0; k < one.Units.Length; k++)
-            {
-                int at = two.Units.IndexOf(one.Units[k]);
-                Assert.True(at >= 0, $"{faction}: Age II drops {Data.Units[one.Units[k]].Key}");
-                Assert.Equal(one.Weights[k], two.Weights[at]);
-            }
-            // The pages' percentages: the Age II mix sums to 100.
-            Assert.Equal(100f, two.Weights.Sum());
-        }
     }
 
     /// <summary>
-    /// The wave cost is the cost of the wave's pop at the Age I mix (weights by pop), rounded down; the worker steps take
-    /// the starting workers to each age's target in the step's "Why"; Age II's step is at the time its "Why" says; the
-    /// expand step is at Normal's <c>expandAfter</c>; the order's halls and houses reach the pop cap.
+    /// Per opening: the wave cost is the cost of the wave's pop at the Age I mix (weights by pop), rounded down, so the mix
+    /// reaches it at that pop; the worker steps take the starting workers to each age's target in the step's "Why"; Age II's
+    /// step is at the time its "Why" says; the expand step is at Normal's <c>expandAfter</c>, once; the opening's start hall
+    /// and houses alone reach the pop cap (the expansion is not counted: it waits for a known free mine, D21's pairs report).
     /// </summary>
     [Fact]
     public void F_TheThresholdsAndTargets_FollowFromTheData()
@@ -295,50 +457,65 @@ public class AiContentTests
         foreach (string faction in Factions)
         {
             int f = Data.FindFaction(faction);
-            AiDef ai = Data.Ai[f];
-            AiComposition one = ai.Openings[0].Compositions[0];
-            double perPop = 0;
-            for (int k = 0; k < one.Units.Length; k++)
+            string[] page = PageTables.FactionLines(faction);
+            foreach ((int k, AiOpening o) in OpeningsOf(faction))
             {
-                UnitDef u = Data.Units[one.Units[k]];
-                perPop += one.Weights[k] * (u.CostGold + u.CostWood) / (u.HalfPop / 2.0);
-            }
-            perPop /= one.Weights.Sum();
-            Assert.True((int)Math.Floor(ai.Openings[0].AttackMinHalfPop / 2.0 * perPop) == ai.Openings[0].AttackMinCost,
-                $"{faction}: minArmyCost {ai.Openings[0].AttackMinCost} vs {Num(ai.Openings[0].AttackMinHalfPop / 2.0)} pop x {Num(perPop)} per pop");
+                AiComposition one = o.Compositions[0];
+                double perPop = 0;
+                for (int j = 0; j < one.Units.Length; j++)
+                {
+                    UnitDef u = Data.Units[one.Units[j]];
+                    perPop += one.Weights[j] * (u.CostGold + u.CostWood) / (u.HalfPop / 2.0);
+                }
+                perPop /= one.Weights.Sum();
+                Assert.True((int)Math.Floor(o.AttackMinHalfPop / 2.0 * perPop) == o.AttackMinCost,
+                    $"{faction} {o.Id}: minArmyCost {o.AttackMinCost} vs {Num(o.AttackMinHalfPop / 2.0)} pop x {Num(perPop)} per pop");
 
-            string[][] rows = FactionPage.Table(faction, Section);
-            int workers = Data.Rules.StartingWorkers;
-            for (int i = 0; i < ai.Openings[0].BuildOrder.Length; i++)
-            {
-                AiStep s = ai.Openings[0].BuildOrder[i];
-                string why = rows[i][5];
-                if (s.Action == AiStepAction.Train && Data.Units[s.Target].Slot == UnitSlot.Worker)
+                string[][] rows = PageTables.FirstTableRows(OpeningLines(page, faction, k, o), 0, stripBackticks: true).ToArray();
+                int workers = Data.Rules.StartingWorkers;
+                for (int i = 0; i < o.BuildOrder.Length; i++)
                 {
-                    workers += s.Count;
-                    Match m = Regex.Match(why, @"^Workers to (\d+) in Age I+\b");
-                    Assert.True(m.Success, $"{faction} step {i + 1}: a worker step's 'Why' names no target: '{why}'");
-                    Assert.Equal(int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture), workers);
+                    AiStep s = o.BuildOrder[i];
+                    string why = rows[i][5];
+                    if (s.Action == AiStepAction.Train && Data.Units[s.Target].Slot == UnitSlot.Worker)
+                    {
+                        workers += s.Count;
+                        Match m = Regex.Match(why, @"^Workers to (\d+) in Age I+\b");
+                        Assert.True(m.Success, $"{faction} {o.Id} step {i + 1}: a worker step's 'Why' names no target: '{why}'");
+                        Assert.Equal(int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture), workers);
+                    }
+                    if (s.Action == AiStepAction.Research && s.TargetKey == DataLimits.AgeTechIds[0])
+                    {
+                        Match m = Regex.Match(why, @"^Age II at (\d+):(\d\d)");
+                        Assert.True(m.Success, $"{faction} {o.Id} step {i + 1}: '{why}'");
+                        int seconds = int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture) * 60 + int.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture);
+                        Assert.Equal(seconds * SimConstants.TicksPerSecond, s.At);
+                    }
+                    if (s.Action == AiStepAction.Expand)
+                    {
+                        Assert.Equal(AiStepTrigger.Time, s.Trigger);
+                        Assert.Equal(Data.Ai[f].Difficulty(AiDifficulty.Normal).ExpandAfterTicks, s.At);
+                    }
                 }
-                if (s.Action == AiStepAction.Research && s.TargetKey == DataLimits.AgeTechIds[0])
-                {
-                    Match m = Regex.Match(why, @"^Age II at (\d+):(\d\d)");
-                    Assert.True(m.Success, $"{faction} step {i + 1}: '{why}'");
-                    int seconds = int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture) * 60 + int.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture);
-                    Assert.Equal(seconds * SimConstants.TicksPerSecond, s.At);
-                }
-                if (s.Action == AiStepAction.Expand)
-                {
-                    Assert.Equal(AiStepTrigger.Time, s.Trigger);
-                    Assert.Equal(ai.Difficulty(AiDifficulty.Normal).ExpandAfterTicks, s.At);
-                }
-            }
+                int expands = o.BuildOrder.Count(s => s.Action == AiStepAction.Expand);
+                Assert.True(expands == 1, $"{faction} {o.Id}: {expands} expand steps, the brief's one");
 
-            int hall = Data.Buildings.Single(b => b.Faction == f && b.Slot == BuildingSlot.TownHall).HalfPopProvided;
-            int houses = ai.Openings[0].BuildOrder.Where(s => s.Action == AiStepAction.Build && Data.Buildings[s.Target].Slot == BuildingSlot.House)
-                .Sum(s => Data.Buildings[s.Target].HalfPopProvided);
-            Assert.True(hall + houses >= Data.Rules.HalfPopCap, $"{faction}: the order's halls and houses give {Num((hall + houses) / 2.0)} pop, below the cap");
+                int hall = Data.Buildings.Single(b => b.Faction == f && b.Slot == BuildingSlot.TownHall).HalfPopProvided;
+                int houses = o.BuildOrder.Where(s => s.Action == AiStepAction.Build && Data.Buildings[s.Target].Slot == BuildingSlot.House)
+                    .Sum(s => Data.Buildings[s.Target].HalfPopProvided);
+                Assert.True(hall + houses >= Data.Rules.HalfPopCap,
+                    $"{faction} {o.Id}: the opening's hall and houses give {Num((hall + houses) / 2.0)} pop, below the cap");
+            }
         }
+    }
+
+    /// <summary>D21: every opening is at most 40 steps (the brief's bound, well under the loader's 256).</summary>
+    [Fact]
+    public void F_EveryOpening_IsAtMost40Steps()
+    {
+        foreach (string faction in Factions)
+            foreach ((int k, AiOpening o) in OpeningsOf(faction))
+                Assert.True(o.BuildOrder.Length <= 40, $"{faction} {o.Id}: {o.BuildOrder.Length} steps");
     }
 
     // ---- D16: the difficulty blocks (rows J-K) ----

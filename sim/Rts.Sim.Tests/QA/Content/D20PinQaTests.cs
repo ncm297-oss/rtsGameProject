@@ -9,7 +9,8 @@ namespace Rts.Sim.Tests.QA.Content;
 /// <summary>
 /// D20 (2026-10-17, M5-4f): pins the faction pages' re-worded "Defense" lines to <c>common/rules.json</c> and their
 /// "Houses at the cap" notes to what <see cref="AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report"/> measures, so a
-/// knob, a cost or the executor's D15 C behaviour that moves fails here by name until the page is re-worded.
+/// knob, a cost or the executor's D15 C behaviour that moves fails here by name until the page is re-worded. D21 re-pinned
+/// the house notes per opening (the reason is on <see cref="HouseNote_SaysWhatTheMenuMapRunsShow"/>).
 /// </summary>
 public class D20PinQaTests
 {
@@ -86,47 +87,41 @@ public class D20PinQaTests
     }
 
     /// <summary>
-    /// The page's "Houses at the cap" note says what the menu-map runs (seeds 1 and 7) show: no house Build sent once the cap
-    /// is the hard cap (D15 C, asserted on the run itself), how many steps the skip fired on, and the cap the last house
-    /// step was done at; plus its date and reason.
+    /// Per opening since D21 (re-pinned 2026-10-18: the openings moved every number, and the old two-seed note became one
+    /// note per opening): each opening's "Houses at the cap" note says what its menu-map run shows
+    /// (<see cref="AiHouseRuleReportTests.NoteSentence"/>: when the cap reaches 100, the cap the last house step was done at,
+    /// the steps the D15 C skip fired on, the houses standing and past the cap) and its date; the standard opening's note
+    /// also gives the 12th-house comparison (<see cref="AiHouseRuleReportTests.TwelfthSentence"/>). On every run no house
+    /// Build was sent once the cap was the hard cap (D15 C, asserted on the run itself).
     /// </summary>
     [Theory]
     [InlineData("malazan")]
     [InlineData("whirlwind")]
     public void HouseNote_SaysWhatTheMenuMapRunsShow(string faction)
     {
-        AiHouseRuleReportTests.HouseRun[] runs = { AiHouseRuleReportTests.MenuMapRun(faction, 1), AiHouseRuleReportTests.MenuMapRun(faction, 7) };
-        foreach (AiHouseRuleReportTests.HouseRun r in runs)
+        AiDef ai = TestSim.Data.Ai[TestSim.Data.FindFaction(faction)];
+        string[] lines = PageTables.FactionLines(faction);
+        for (int k = 0; k < ai.Openings.Length; k++)
         {
-            Assert.True(r.CapReachedTick >= 0, $"{faction} seed {r.Seed}: the cap never reached {r.RulesCap / 2}; the run no longer tests D15 C");
-            Assert.True(r.Steps.All(s => s.SendsAtCap == 0), $"{faction} seed {r.Seed}: a house Build was sent at the hard cap (D15 C says none)");
+            AiHouseRuleReportTests.HouseRun r = AiHouseRuleReportTests.MenuMapRun(faction, k);
+            Assert.True(r.Steps.All(s => s.SendsAtCap == 0), $"{faction} {ai.Openings[k].Id} seed {r.Seed}: a house Build was sent at the hard cap (D15 C says none)");
+            string note = Note(AiContentTests.OpeningLines(lines, faction, k, ai.Openings[k]), $"{faction}.md opening {k + 1}");
+            var wants = new List<string> { "(D21, 2026-10-18", AiHouseRuleReportTests.NoteSentence(r) };
+            if (k == 0)
+            {
+                AiHouseRuleReportTests.HouseRun twelfth = AiHouseRuleReportTests.TwelfthHouseRun(faction);
+                Assert.True(twelfth.Steps.All(s => s.SendsAtCap == 0), $"{faction} with the 12th house: a house Build was sent at the hard cap");
+                wants.Add(AiHouseRuleReportTests.TwelfthSentence(twelfth));
+            }
+            foreach (string want in wants)
+                Assert.True(note.Contains(want, StringComparison.Ordinal), $"{faction}.md opening {k + 1} 'Houses at the cap' lacks \"{want}\"; it reads: {note}");
         }
-        int skipped = runs.Sum(r => r.SkippedAtCap.Length);
-        AiHouseRuleReportTests.HouseStep[] lasts = runs.Select(r => r.Steps[^1]).ToArray();
-        Assert.True(lasts.All(x => x.DoneTick >= 0 && x.CapAtDone == lasts[0].CapAtDone),
-            $"{faction}: the last house step's cap at done differs between seeds ({string.Join(", ", lasts.Select(x => x.CapAtDone / 2.0))}): re-word the note");
-
-        string house = TestSim.Data.Buildings[TestSim.Data.Buildings.ToList().FindIndex(b => b.Faction == TestSim.Data.FindFaction(faction) && b.Slot == BuildingSlot.House)].DisplayName;
-        string note = Note(faction);
-        var wants = new List<string>
-        {
-            "(D20, 2026-10-17, M5-4f's D15 C",
-            $"the executor skips a house step once the population cap is the hard cap ({runs[0].RulesCap / 2})",
-            $"the 12th {house} (step {lasts[0].Step}) is due at a cap of {FactionPage.Text(lasts[0].CapAtDone / 2.0)}",
-            $"no {house} was placed once the cap was {runs[0].RulesCap / 2}",
-        };
-        Assert.True(skipped == 0, $"{faction}: the skip fired on {skipped} house steps on the menu map; the note says none: re-word it");
-        wants.Add("no house step was skipped");
-        foreach (string want in wants)
-            Assert.True(note.Contains(want, StringComparison.Ordinal), $"{faction}.md 'Houses at the cap' lacks \"{want}\"; it reads: {note}");
-        Assert.True(lasts[0].CapAtDone < runs[0].RulesCap, $"{faction}: the 12th house was done at the hard cap; 'below the hard cap' no longer holds");
     }
 
-    private static string Note(string faction)
+    private static string Note(string[] lines, string where)
     {
-        string[] lines = PageTables.FactionLines(faction);
         int i = Array.FindIndex(lines, l => l.StartsWith("**Houses at the cap", StringComparison.Ordinal));
-        Assert.True(i >= 0, $"{faction}.md has no '**Houses at the cap' paragraph");
+        Assert.True(i >= 0, $"{where} has no '**Houses at the cap' paragraph");
         var text = new List<string>();
         for (; i < lines.Length && lines[i].Trim().Length > 0; i++) text.Add(lines[i].Trim());
         return string.Join(" ", text).Replace("**", "");
